@@ -63,6 +63,10 @@ class PromptEngine:
             "You are an AUTONOMOUS AGENT. You are NOT a chat bot.",
             "You DO NOT have internal knowledge of real-time events.",
             "You MUST use tools to answer questions about the world."
+       # <--- ADDED: Strict Math Rules
+            "STRICT DATA ADHERENCE: If a tool provides a specific technical indicator (e.g., 'RSI (20)'), you MUST reference that specific period.",
+            "DO NOT HALLUCINATE standard defaults (like '14-day RSI') if the tool data says otherwise.",
+            "Trust the tool's calculated signals (e.g., 'BULLISH', 'PARABOLIC') over your own interpretation."
         ]
         
         if self.persona.directives:

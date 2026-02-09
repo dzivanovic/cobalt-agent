@@ -126,11 +126,13 @@ class CLI:
                     
                     # Format Observation
                     if result.success:
-                        observation = f"System Observation from {tool_name}: {str(result.output)[:1000]}"
+                        observation = f"System Observation from {tool_name}: {str(result.output)[:2000]}" # Increased limit
+                        # <--- ADD THIS: Print the raw observation to console
+                        self.console.print(f"[dim cyan]{str(result.output)[:500]}...[/dim cyan]") 
                     else:
                         observation = f"System Observation: Error - {result.error}"
+                        self.console.print(f"[red]{observation}[/red]")
                     
-                    # --- CRITICAL FIX START ---
                     
                     # 1. Log the agent's request
                     turn_history.append({"role": "assistant", "content": response})
@@ -139,7 +141,6 @@ class CLI:
                     # This tricks the LLM into reading it immediately.
                     turn_history.append({"role": "user", "content": observation})
                     
-                    # --- CRITICAL FIX END ---
                     
                     # Update input to prompt the next step
                     current_input = "(Observation provided above. Analyze it and continue.)"

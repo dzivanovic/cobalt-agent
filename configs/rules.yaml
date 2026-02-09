@@ -1,0 +1,23 @@
+# Cobalt Trading Rules & Thresholds
+# ROOT KEY: trading_rules (Distinguishes these from coding rules or behavioral rules)
+
+trading_rules:
+  momentum:
+    rvol_alert_threshold: 3.0   # Trigger "MOMENTUM ALERT" if RVOL > 3.0
+    rvol_strong_threshold: 1.5  # Consider it "strong volume" above this
+
+  moving_averages:
+    bullish_cross:
+      fast: 10
+      slow: 20
+      logic: "rising" # Check if slopes are positive
+
+  rsi:
+    period: 20
+    overbought: 80
+    oversold: 20
+
+  atr:
+    period: 14
+    expansion_multiplier: 5.0   # 5x ATR in 5 days = Parabolic
+    extension_multiplier: 3.0   # 3x ATR = Extended

@@ -1,122 +1,156 @@
 """
 Configuration Management for Cobalt Agent
-Handles loading and validation of configuration from YAML files.
+Dynamic Loader: Scans 'configs/' for ANY yaml file and merges them into a unified object.
+Supports future extensibility (subagents, new rule sets) without code changes.
 """
 
-import os  # <--- ADDED: Needed to read environment variables
+import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 import yaml
-from dotenv import load_dotenv  # <--- ADDED: Automatically loads .env file
+from dotenv import load_dotenv
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
-# <--- ADDED: Load environment variables at module level
+# Load environment variables
 load_dotenv()
 
+# --- 1. Modular Schema Definitions ---
+
+# Trading Rules Schema (Matches the structure in rules.yaml -> trading_rules)
+class MomentumRules(BaseModel):
+    rvol_alert_threshold: float
+    rvol_strong_threshold: float
+
+class RSIRules(BaseModel):
+    period: int
+    overbought: int
+    oversold: int
+
+class ATRRules(BaseModel):
+    period: int
+    expansion_multiplier: float
+    extension_multiplier: float
+
+class TradingRules(BaseModel):
+    """
+    Schema for 'trading_rules' section.
+    We are strict here to ensure trading logic is type-safe.
+    """
+    momentum: Optional[MomentumRules] = None
+    moving_averages: Optional[dict] = None
+    rsi: Optional[RSIRules] = None
+    atr: Optional[ATRRules] = None
+
+# System Schemas (Matches config.yaml)
 class SystemConfig(BaseModel):
-    """System configuration settings."""
-
-    debug_mode: bool = Field(default=False, description="Enable debug mode")
-    version: str = Field(default="0.1.0", description="System version")
-
+    debug_mode: bool = False
+    version: str = "0.1.0"
 
 class LLMConfig(BaseModel):
-    """LLM configuration settings."""
-
-    # CHANGED: Default to your actual model
-    model_name: str = Field(default="gemini/gemini-1.5-pro", description="LLM model name")
-    #model_name: str = Field(default="openrouter/anthropic/claude-3.5-sonnet", description="LLM model name")
-    
-    # <--- CHANGED: Removed default_factory logic. 
-    # We now default to None so LiteLLM can check os.environ itself.
-    api_key: Optional[str] = Field(default=None, description="API key (optional if using standard env vars)")
+    model_name: str = "gemini/gemini-1.5-pro"
+    api_key: Optional[str] = None
 
 class PersonaConfig(BaseModel):
-    """Persona configuration settings."""
+    name: str = "Cobalt"
+    roles: List[str] = Field(default_factory=list)
+    skills: List[str] = Field(default_factory=list)
+    tone: List[str] = Field(default_factory=list)
+    directives: List[str] = Field(default_factory=list)
 
-    name: str = Field(default="Cobalt", description="Agent name")
-    roles: List[str] = Field(
-        default_factory=list, description="List of roles the agent fulfills"
-    )
-    skills: List[str] = Field(
-        default_factory=list, description="List of agent skills and capabilities"
-    )
-    tone: List[str] = Field(
-        default_factory=list, description="Communication tone characteristics"
-    )
-    directives: List[str] = Field(
-        default_factory=list, description="Core behavioral directives"
-    )
-
+# --- 2. The Dynamic Master Configuration ---
 
 class CobaltConfig(BaseModel):
-    """Main configuration class for Cobalt Agent."""
+    """
+    The Unified Configuration Object.
+    
+    Static Fields: core system requirements (llm, system, persona).
+    Dynamic Fields: trading_rules, subagents, etc.
+    """
+    # Allow arbitrary new keys (e.g., 'subagents', 'coding_rules') to be loaded automatically
+    model_config = ConfigDict(extra='allow')
 
+    # Core Sections (We want validation on these)
     system: SystemConfig = Field(default_factory=SystemConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     persona: PersonaConfig = Field(default_factory=PersonaConfig)
+    
+    # Optional Known Sections (Type-safe access for code that expects them)
+    trading_rules: Optional[TradingRules] = None
 
-    @classmethod
-    def from_yaml(cls, config_path: Path | str) -> "CobaltConfig":
+    def __getattr__(self, item):
         """
-        Load configuration from a YAML file.
-
-        Args:
-            config_path: Path to the YAML configuration file
-
-        Returns:
-            CobaltConfig: Loaded and validated configuration
-
-        Raises:
-            FileNotFoundError: If config file doesn't exist
-            ValueError: If config file is invalid
+        Fallback to allow accessing dynamic keys as attributes safely.
+        Example: config.future_module_settings
         """
-        config_path = Path(config_path)
+        return self.__dict__.get(item, None)
 
-        if not config_path.exists():
-            logger.warning(
-                f"Configuration file not found at {config_path}. Using default configuration."
-            )
-            return cls()
+# --- 3. Dynamic Loading Logic ---
 
+def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively merge dictionary 'update' into 'base'."""
+    for key, value in update.items():
+        if isinstance(value, dict) and key in base and isinstance(base[key], dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+def load_config(config_dir: Optional[Path | str] = None) -> CobaltConfig:
+    """
+    Scans the config directory, loads ALL .yaml files, and merges them.
+    """
+    # 1. Resolve Directory
+    if config_dir is None:
+        # Check Project Root first, then Package Root
+        candidates = [
+            Path.cwd() / "configs",
+            Path(__file__).parent.parent / "configs"
+        ]
+        config_dir = next((p for p in candidates if p.exists()), None)
+
+    if not config_dir:
+        logger.warning("Config directory 'configs/' not found. Using defaults.")
+        return CobaltConfig()
+
+    config_dir = Path(config_dir)
+    logger.info(f"Loading configuration from: {config_dir}")
+
+    # 2. Scan for YAML
+    yaml_files = sorted(list(config_dir.glob("*.yaml")) + list(config_dir.glob("*.yml")))
+    
+    if not yaml_files:
+        logger.warning("No YAML files found in configs/. Using defaults.")
+        return CobaltConfig()
+
+    # 3. Merge All Files
+    master_data = {}
+    
+    for file_path in yaml_files:
         try:
-            with open(config_path, "r") as f:
-                config_data = yaml.safe_load(f)
-
-            if config_data is None:
-                logger.warning(
-                    f"Configuration file {config_path} is empty. Using default configuration."
-                )
-                return cls()
-
-            logger.info(f"Configuration loaded from {config_path}")
-            return cls(**config_data)
-
-        except yaml.YAMLError as e:
-            logger.error(f"Error parsing YAML configuration: {e}")
-            logger.warning("Using default configuration due to parsing error.")
-            return cls()
-
+            with open(file_path, "r") as f:
+                file_data = yaml.safe_load(f) or {}
+                
+            if not file_data:
+                continue
+                
+            # Log what top-level keys we found (e.g., "Found 'trading_rules' in rules.yaml")
+            keys = list(file_data.keys())
+            logger.debug(f"Loaded {file_path.name} -> Keys: {keys}")
+            
+            # Merge into master
+            _deep_merge(master_data, file_data)
+            
         except Exception as e:
-            logger.error(f"Unexpected error loading configuration: {e}")
-            logger.warning("Using default configuration due to error.")
-            return cls()
+            logger.error(f"Failed to load {file_path.name}: {e}")
 
-
-def load_config(config_path: Optional[Path | str] = None) -> CobaltConfig:
-    """
-    Load the Cobalt configuration.
-
-    Args:
-        config_path: Optional path to config file. Defaults to 'config.yaml' in project root.
-
-    Returns:
-        CobaltConfig: Loaded configuration instance
-    """
-    if config_path is None:
-        # Default to config.yaml in project root
-        config_path = Path(__file__).parent.parent / "config.yaml"
-
-    return CobaltConfig.from_yaml(config_path)
+    # 4. Create Object
+    try:
+        # Pydantic will validate known fields (system, trading_rules) 
+        # and accept unknown ones (subagents, skills) due to extra='allow'
+        return CobaltConfig(**master_data)
+    except Exception as e:
+        logger.error(f"Configuration Validation Error: {e}")
+        # Return partial/default config to prevent crash
+        return CobaltConfig()
