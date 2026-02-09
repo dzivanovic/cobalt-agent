@@ -1,0 +1,65 @@
+[project]
+name = "cobalt-agent"
+version = "0.1.0"
+description = "Project Cobalt: Autonomous AI Chief of Staff & Trading System"
+readme = "README.md"
+requires-python = ">=3.11, <3.14"
+authors = [
+    { name = "Director", email = "director@cobalt-core" }
+]
+
+# --- CORE DEPENDENCIES (Moved here under [project]) ---
+dependencies = [
+    # 1. THE BRAIN
+    "pydantic>=2.0.0",
+    "pydantic-ai>=0.0.1",
+    "litellm>=1.0.0",
+    "openai>=1.0.0",
+    # 2. THE FINANCE
+    "pandas>=2.2.0",
+    "pandas-ta-classic",
+    "ta-lib>=0.4.0",
+    "mplfinance>=0.12.0",
+    "aiohttp>=3.9.0",
+    # 3. CHIEF OF STAFF
+    "mattermostdriver>=7.0",
+    "google-api-python-client>=2.0",
+    "gitpython>=3.1.0",
+    "schedule>=1.2.0",
+    "beautifulsoup4>=4.12.0",
+    "playwright>=1.40.0",
+    # 4. INFRASTRUCTURE
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "redis>=5.0.0",
+    "asyncpg>=0.29.0",
+    "sqlalchemy>=2.0.0",
+    "loguru>=0.7.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.0",
+    # 5. SECURITY
+    "pyotp>=2.9.0",
+    "qrcode>=7.4.0",
+    "bcrypt>=4.0.0",
+    "passlib>=1.7.0",
+    "ddgs>=9.10.0",
+    "rich>=14.3.2",
+    "requests>=2.32.5",
+]
+
+# --- DEV DEPENDENCIES (New Standard: [dependency-groups]) ---
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "black>=24.0.0",
+    "ipykernel>=6.29.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["src"]
