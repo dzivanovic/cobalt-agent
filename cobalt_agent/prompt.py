@@ -58,19 +58,35 @@ class PromptEngine:
         )
 
     def _build_directives(self) -> str:
-        # Base rules that apply to everything
+        # 1. Base Rules
         rules = [
-            "Always be concise and direct.",
-            "If you don't know an answer, say so. Do not Hallucinate.",
-            "When using tools, cite the tool used.",
-            "Format complex data into Tables or Markdown lists."
+            "You are an AUTONOMOUS AGENT. You are NOT a chat bot.",
+            "You DO NOT have internal knowledge of real-time events.",
+            "You MUST use tools to answer questions about the world."
         ]
         
-        # Add user-defined directives from config
         if self.persona.directives:
             rules.extend(self.persona.directives)
             
-        return "### DIRECTIVES\n" + "\n".join([f"- {r}" for r in rules])
+        # 2. The Protocol (Simulated Dialogue)
+        protocol = (
+            "\n### ⚡ CRITICAL OPERATING PROTOCOL ⚡\n"
+            "To use a tool, you must output a single line starting with 'ACTION:'.\n"
+            "Do not talk. Do not explain. JUST ACTION.\n\n"
+            "### EXAMPLES OF CORRECT BEHAVIOR:\n"
+            "User: What is the price of Apple?\n"
+            "You: ACTION: finance AAPL\n"
+            "System: [Observation: AAPL is $150]\n"
+            "You: Apple is trading at $150.\n\n"
+            "User: Find news about AI.\n"
+            "You: ACTION: search AI news\n"
+            "System: [Observation: AI is growing...]\n"
+            "You: Recent news indicates AI is growing.\n\n"
+            "### YOUR TURN:\n"
+            "If I ask you a question that requires data, do not answer directly. START WITH ACTION:."
+        )
+
+        return "### DIRECTIVES\n" + "\n".join([f"- {r}" for r in rules]) + protocol
 
     def _build_tool_descriptions(self, tools) -> str:
         if not tools:

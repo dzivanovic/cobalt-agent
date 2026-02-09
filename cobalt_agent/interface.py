@@ -81,28 +81,79 @@ class CLI:
     
     def _handle_chat(self, user_input: str):
         """
-        Handle general conversation using the LLM.
+        Autonomous Agent Loop (ReAct Pattern).
         """
-        # Real Thinking Logic
         self.console.print(f"[dim]Thinking...[/dim]")
         
-        # 1. Retrieve Context (Short-term memory)
-        context = self.memory.get_context()
+        turn_history = [] 
+        current_input = user_input
         
-        # 2. Ask the Brain
-        response = self.llm.think(
-            user_input=user_input,
-            system_prompt=self.system_prompt,
-            memory_context=context
-        )
+        MAX_TURNS = 5
         
-        # 3. Log the Response
-        self.memory.add_log(response, source="Assistant")
-        
-        # 4. Display the Response (Pretty printed)
-        self.console.print(f"\n[bold green]Cobalt:[/bold green]")
-        self.console.print(Markdown(response))
-        self.console.print()
+        for turn in range(MAX_TURNS):
+            # 1. Get Context
+            context = self.memory.get_context()
+            
+            # 2. Ask Brain (History + Current Input)
+            # We append the turn_history to the context so the LLM sees what just happened
+            full_context = context + turn_history if turn > 0 else context
+            
+            response = self.llm.think(
+                user_input=current_input,
+                system_prompt=self.system_prompt,
+                memory_context=full_context
+            )
+            
+            # 3. Check for ACTION
+            if "ACTION:" in response:
+                try:
+                    # Parse the action
+                    lines = response.split('\n')
+                    action_line = next(line for line in lines if "ACTION:" in line)
+                    parts = action_line.replace("ACTION:", "").strip().split(" ", 1)
+                    
+                    if len(parts) < 2:
+                        tool_name = parts[0]
+                        query = ""
+                    else:
+                        tool_name, query = parts
+                    
+                    self.console.print(f"[bold yellow]⚡ Auto-Tool:[/bold yellow] {tool_name} -> {query}")
+                    self.memory.add_log(f"Agent Thought: {response}", source="Assistant")
+                    
+                    # Execute Tool
+                    result = self.tool_manager.execute_tool(tool_name.lower(), {"query": query})
+                    
+                    # Format Observation
+                    if result.success:
+                        observation = f"System Observation from {tool_name}: {str(result.output)[:1000]}"
+                    else:
+                        observation = f"System Observation: Error - {result.error}"
+                    
+                    # --- CRITICAL FIX START ---
+                    
+                    # 1. Log the agent's request
+                    turn_history.append({"role": "assistant", "content": response})
+                    
+                    # 2. Log the tool result as a USER message
+                    # This tricks the LLM into reading it immediately.
+                    turn_history.append({"role": "user", "content": observation})
+                    
+                    # --- CRITICAL FIX END ---
+                    
+                    # Update input to prompt the next step
+                    current_input = "(Observation provided above. Analyze it and continue.)"
+                    
+                except Exception as e:
+                    self.console.print(f"[red]Auto-Loop Error: {e}[/red]")
+                    break
+            else:
+                # No action requested? This is the final answer.
+                self.memory.add_log(response, source="Assistant")
+                self.console.print(f"\n[bold green]Cobalt:[/bold green]")
+                self.console.print(Markdown(response))
+                self.console.print()
+                break
         
     def _handle_search(self, query: str):
         """Handle search command, display results table, AND summarize."""

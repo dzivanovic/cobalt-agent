@@ -44,39 +44,43 @@ class LLM(BaseModel):
               search_context: str = "") -> str:
         """
         Send a prompt to the AI and get a response.
-
-        Args:
-            user_input: What the user just said.
-            system_prompt: Who the agent is (Persona).
-            memory_context: List of previous chat messages.
-            search_context: Results from search tools (optional).
-
-        Returns:
-            str: The AI's text response.
         """
         messages = []
 
         # 1. System Prompt (The Persona)
         messages.append({"role": "system", "content": system_prompt})
 
-        # 2. Memory Context (Short-term history)
+        # 2. Unified Context Handling
         if memory_context:
-            for log in memory_context:
-                # Filter: Only send User or Assistant messages to the brain
-                if log.get("source") in ["User", "Assistant"]:
-                    role = "user" if log["source"] == "User" else "assistant"
-                    content = log.get("message", "")
-                    messages.append({"role": role, "content": content})
+            for item in memory_context:
+                
+                # Case A: It's a Memory Log (from MemorySystem)
+                if "source" in item:
+                    if item["source"] == "User":
+                        messages.append({"role": "user", "content": item["message"]})
+                    elif item["source"] == "Assistant":
+                        messages.append({"role": "assistant", "content": item["message"]})
+                
+                # Case B: It's a Tool Loop Message (from interface.py)
+                elif "role" in item:
+                    messages.append({
+                        "role": item["role"], 
+                        "content": item["content"]
+                    })
 
         # 3. Search Context (Inject data if we have it)
+        # Note: In the new loop, this is mostly handled by observations, 
+        # but we keep it for legacy compatibility.
         if search_context:
-            messages.append({
-                "role": "system", 
-                "content": f"Relevant Information from Search Tools:\n{search_context}"
+             messages.append({
+                "role": "user", 
+                "content": f"Context Information:\n{search_context}"
             })
 
         # 4. Current User Input
-        messages.append({"role": "user", "content": user_input})
+        # Only add if it's not empty (sometimes the loop passes empty input to prompt continuation)
+        if user_input:
+            messages.append({"role": "user", "content": user_input})
 
         try:
             logger.info(f"Sending request to {self.model_name}...")
@@ -93,6 +97,9 @@ class LLM(BaseModel):
             )
             
             # Extract text
+            if not response.choices or not response.choices[0].message:
+                 return "Error: Empty response from brain."
+                 
             reply = response.choices[0].message.content
             return reply
 

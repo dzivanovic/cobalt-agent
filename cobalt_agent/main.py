@@ -84,7 +84,7 @@ def main():
     logger.info(f"Persona Roles: {', '.join(config.persona.roles)}")
     
     # Generate and log the system prompt
-    system_prompt = persona.get_system_prompt()
+    #system_prompt = persona.get_system_prompt()
     logger.info("=" * 80)
     logger.info("SYSTEM PROMPT:")
     logger.info("=" * 80)
