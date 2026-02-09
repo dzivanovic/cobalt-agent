@@ -45,6 +45,7 @@ dependencies = [
     "ddgs>=9.10.0",
     "rich>=14.3.2",
     "requests>=2.32.5",
+    "yfinance>=1.1.0",
 ]
 
 # --- DEV DEPENDENCIES (New Standard: [dependency-groups]) ---

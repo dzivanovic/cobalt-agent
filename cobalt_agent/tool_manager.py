@@ -11,6 +11,8 @@ from pydantic import BaseModel
 from cobalt_agent.tools.search import SearchTool
 # Import Browser
 from cobalt_agent.tools.browser import BrowserTool
+# Import Finance
+from cobalt_agent.tools.finance import FinanceTool
 
 class ToolResult(BaseModel):
     """Standardized output for any tool execution."""
@@ -34,11 +36,13 @@ class ToolManager:
         search = SearchTool()
         self.register_tool("search", search)
 
-        # 2. <--- ADDED: Browser Tool
+        # 2. Browser Tool
         browser = BrowserTool()
         self.register_tool("browser", browser)
         
-        # Future tools (Trading, Memory, Browser) will go here
+        # 3. <--- ADDED: Finance Tool
+        finance = FinanceTool()
+        self.register_tool("finance", finance)
         
     def register_tool(self, name: str, tool_instance: Any):
         """Add a new tool to the registry."""

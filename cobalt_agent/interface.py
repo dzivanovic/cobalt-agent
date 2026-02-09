@@ -60,10 +60,14 @@ class CLI:
                 if user_input.lower().startswith('search '):
                     query = user_input[7:]  # Remove 'search ' prefix
                     self._handle_search(query)
-                # <--- ADDED: Handle 'visit' command
+                # Handle 'visit' command
                 elif user_input.lower().startswith('visit '):
                     url = user_input[6:]
                     self._handle_visit(url)
+                # <--- ADDED : Manual Finance Trigger
+                elif user_input.lower().startswith('ticker '):
+                    symbol = user_input[7:]
+                    self._handle_finance(symbol)
                 # Catch-all for conversation
                 else:
                     self._handle_chat(user_input)
@@ -213,3 +217,36 @@ class CLI:
         self.console.print()
         
         self.memory.add_log(summary, source="Assistant")
+
+    def _handle_finance(self, ticker: str):
+        """Handle manual finance tool request."""
+        self.console.print(f"\n[bold]Checking Market Data:[/bold] {ticker}")
+        self.memory.add_log(f"Executing FinanceTool: {ticker}", source="System")
+
+        # Execute via Manager
+        result = self.tool_manager.execute_tool("finance", {"ticker": ticker})
+        
+        if not result.success:
+             self.console.print(f"[red]Error: {result.error}[/red]")
+             return
+             
+        data = result.output
+        
+        # Display the raw data nicely
+        self.console.print(f"\n[green]--- Market Report ---[/green]")
+        self.console.print(Markdown(data))
+        self.console.print()
+        
+        # Ask Brain to Analyze
+        self.console.print("[dim]Analyzing market data...[/dim]")
+        analysis = self.llm.think(
+            user_input=f"Analyze this stock data for {ticker}. Is it bullish or bearish right now?",
+            system_prompt=self.system_prompt,
+            search_context=data
+        )
+        
+        self.console.print(f"\n[bold green]Cobalt Analysis:[/bold green]")
+        self.console.print(Markdown(analysis))
+        self.console.print()
+        
+        self.memory.add_log(analysis, source="Assistant")
