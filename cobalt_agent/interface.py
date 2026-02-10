@@ -7,8 +7,12 @@ from rich.console import Console
 from rich.table import Table
 from rich.prompt import Prompt
 from loguru import logger
-# <--- ADDED: Import Markdown for pretty printing AI responses
 from rich.markdown import Markdown
+
+# Type hinting to avoid circular imports
+from typing import Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from cobalt_agent.brain.cortex import Cortex
 
 from cobalt_agent.tools.search import SearchTool
 from cobalt_agent.tool_manager import ToolManager
@@ -16,38 +20,33 @@ from cobalt_agent.tool_manager import ToolManager
 class CLI:
     """Interactive command-line interface for Cobalt Agent."""
     
-    # Accept memory, llm,  system_prompt  and tool_manger arguments
-    def __init__(self, memory_system, llm, system_prompt, tool_manager):
-
+    # <--- UPDATE: Added 'cortex' parameter
+    def __init__(self, memory_system, llm, system_prompt, tool_manager, cortex=None):
         """Initialize the CLI with console and tools."""
         self.console = Console()
-
-        # Use the Manager instead of direct tool instantiation
         self.tool_manager = tool_manager
-        
-        # Store memory reference
         self.memory = memory_system
-
-        # Store Brain and Persona
         self.llm = llm
         self.system_prompt = system_prompt
+        self.cortex = cortex  # <--- STORE CORTEX
 
         logger.info("CLI initialized with Brain connected")
     
     def start(self):
         """Start the interactive CLI loop."""
         self.console.print("\n[bold green]🤖 Cobalt Agent Interface[/bold green]")
-        self.console.print(f"[dim]Model: {self.llm.model_name}[/dim]") # <--- ADDED: Show active model
+        self.console.print(f"[dim]Model: {self.llm.model_name}[/dim]")
         self.console.print("[dim]Type 'exit' or 'quit' to leave[/dim]\n")
         
         while True:
             try:
-                # Get user input with rich prompt
+                # Get user input
                 user_input = Prompt.ask("[bold cyan]Cobalt >[/]")
-                
-                # Strip whitespace
                 user_input = user_input.strip()
                 
+                if not user_input:
+                    continue
+
                 # Check for exit commands
                 if user_input.lower() in ['exit', 'quit']:
                     self.console.print("[yellow]Shutting down Cobalt Agent...[/yellow]")
@@ -56,19 +55,40 @@ class CLI:
                 # Log user input to memory
                 self.memory.add_log(user_input, source="User")
 
-                # Check for search command
+                # ---------------------------------------------------------
+                # 1. CORTEX CHECK (The New Logic)
+                # Check if this is a Scribe command (Save/Log) BEFORE checking tools
+                # ---------------------------------------------------------
+                handled_by_cortex = False
+                if self.cortex:
+                    specialist_response = self.cortex.route(user_input)
+                    if specialist_response:
+                        # Cortex handled it (e.g. Saved a note)
+                        self.console.print(f"\n[bold purple]🤖 Cortex:[/bold purple] {specialist_response}")
+                        self.memory.add_log(specialist_response, source="System")
+                        handled_by_cortex = True
+                
+                if handled_by_cortex:
+                    continue  # Skip the rest of the loop
+                
+                # ---------------------------------------------------------
+                # 2. MANUAL COMMANDS (Your Custom Triggers)
+                # ---------------------------------------------------------
                 if user_input.lower().startswith('search '):
-                    query = user_input[7:]  # Remove 'search ' prefix
+                    query = user_input[7:]
                     self._handle_search(query)
-                # Handle 'visit' command
+                
                 elif user_input.lower().startswith('visit '):
                     url = user_input[6:]
                     self._handle_visit(url)
-                # <--- ADDED : Manual Finance Trigger
+                
                 elif user_input.lower().startswith('ticker '):
                     symbol = user_input[7:]
                     self._handle_finance(symbol)
-                # Catch-all for conversation
+                
+                # ---------------------------------------------------------
+                # 3. AUTONOMOUS CHAT (Your ReAct Loop)
+                # ---------------------------------------------------------
                 else:
                     self._handle_chat(user_input)
                     
@@ -95,7 +115,6 @@ class CLI:
             context = self.memory.get_context()
             
             # 2. Ask Brain (History + Current Input)
-            # We append the turn_history to the context so the LLM sees what just happened
             full_context = context + turn_history if turn > 0 else context
             
             response = self.llm.think(
@@ -126,21 +145,19 @@ class CLI:
                     
                     # Format Observation
                     if result.success:
-                        observation = f"System Observation from {tool_name}: {str(result.output)[:2000]}" # Increased limit
-                        # <--- ADD THIS: Print the raw observation to console
-                        self.console.print(f"[dim cyan]{str(result.output)[:500]}...[/dim cyan]") 
+                        # Truncate for console, keep full for LLM
+                        observation_preview = str(result.output)[:500] + "..." if len(str(result.output)) > 500 else str(result.output)
+                        self.console.print(f"[dim cyan]{observation_preview}[/dim cyan]") 
+                        
+                        # Full observation for the LLM
+                        observation = f"System Observation from {tool_name}: {str(result.output)}"
                     else:
                         observation = f"System Observation: Error - {result.error}"
                         self.console.print(f"[red]{observation}[/red]")
                     
-                    
-                    # 1. Log the agent's request
+                    # Log history
                     turn_history.append({"role": "assistant", "content": response})
-                    
-                    # 2. Log the tool result as a USER message
-                    # This tricks the LLM into reading it immediately.
                     turn_history.append({"role": "user", "content": observation})
-                    
                     
                     # Update input to prompt the next step
                     current_input = "(Observation provided above. Analyze it and continue.)"
@@ -149,7 +166,7 @@ class CLI:
                     self.console.print(f"[red]Auto-Loop Error: {e}[/red]")
                     break
             else:
-                # No action requested? This is the final answer.
+                # Final Answer
                 self.memory.add_log(response, source="Assistant")
                 self.console.print(f"\n[bold green]Cobalt:[/bold green]")
                 self.console.print(Markdown(response))
@@ -166,32 +183,21 @@ class CLI:
         logger.info(f"User search query: {query}")
         self.memory.add_log(f"Executing SearchTool: {query}", source="System")
 
-        # Execute via Tool Manager
-        # We pass the tool name "search" and the arguments dict
         tool_result = self.tool_manager.execute_tool("search", {"query": query})
         
-        # Check for failure
         if not tool_result.success:
             self.console.print(f"[red]Tool Execution Failed: {tool_result.error}[/red]")
-            self.memory.add_log(f"Search failed: {tool_result.error}", source="System")
             return
             
         results = tool_result.output
-        
         if not results:
             self.console.print("[yellow]No results found[/yellow]\n")
-            # Log empty result
-            self.memory.add_log("Search returned 0 results", source="System")
             return
         
         # Log full results to memory
-        self.memory.add_log(
-            f"Search returned {len(results)} results", 
-            source="System", 
-            data={"tool": "search", "query": query, "results": results}
-        )
+        self.memory.add_log(f"Search returned {len(results)} results", source="System", data={"tool": "search", "query": query})
 
-        # Create and populate table
+        # Create Table
         table = Table(title=f"Search Results ({len(results)} found)", show_header=True, header_style="bold magenta")
         table.add_column("#", style="dim", width=3)
         table.add_column("Title", style="cyan", width=40)
@@ -203,24 +209,17 @@ class CLI:
             url = result.get('href', 'N/A')
             snippet = result.get('body', 'N/A')
             
-            # Truncate long text
-            if len(snippet) > 150:
-                snippet = snippet[:147] + "..."
-            if len(url) > 60:
-                url = url[:57] + "..."
-            if len(title) > 50:
-                title = title[:47] + "..."
+            if len(snippet) > 150: snippet = snippet[:147] + "..."
+            if len(url) > 60: url = url[:57] + "..."
+            if len(title) > 50: title = title[:47] + "..."
             
             table.add_row(str(i), title, url, snippet)
         
-        # Display table
         self.console.print(table)
         self.console.print()
 
-        # Ask the Brain to Summarize the Search Results --- AI SYNTHESIS ---    
+        # Synthesis
         self.console.print("[dim]Analyzing search results...[/dim]")
-
-        # Create a mini-prompt for synthesis
         search_context_str = "\n".join([f"- {r['title']}: {r['body']}" for r in results])
         
         summary = self.llm.think(
@@ -229,12 +228,9 @@ class CLI:
             search_context=search_context_str
         )
         
-        # Display Summary
         self.console.print(f"\n[bold green]Cobalt Analysis:[/bold green]")
         self.console.print(Markdown(summary))
         self.console.print()
-        
-        # Log the summary
         self.memory.add_log(summary, source="Assistant")
 
     def _handle_visit(self, url: str):
@@ -242,7 +238,6 @@ class CLI:
         self.console.print(f"\n[bold]Visiting:[/bold] {url}")
         self.memory.add_log(f"Executing BrowserTool: {url}", source="System")
 
-        # Execute Browser Tool via Manager
         result = self.tool_manager.execute_tool("browser", {"url": url})
         
         if not result.success:
@@ -251,23 +246,19 @@ class CLI:
              
         content = result.output
         
-        # Display Preview (First 1000 chars)
         self.console.print(f"\n[green]--- Page Content ({len(content)} chars) ---[/green]")
         self.console.print(content[:1000] + "...\n[dim](content truncated)[/dim]")
         
-        # Ask Brain to Summarize
         self.console.print("\n[dim]Reading page...[/dim]")
-        
         summary = self.llm.think(
             user_input=f"Analyze this webpage content from {url}. What are the key points?",
             system_prompt=self.system_prompt,
-            search_context=content  # We inject the full page text here
+            search_context=content
         )
         
         self.console.print(f"\n[bold green]Cobalt Analysis:[/bold green]")
         self.console.print(Markdown(summary))
         self.console.print()
-        
         self.memory.add_log(summary, source="Assistant")
 
     def _handle_finance(self, ticker: str):
@@ -275,7 +266,6 @@ class CLI:
         self.console.print(f"\n[bold]Checking Market Data:[/bold] {ticker}")
         self.memory.add_log(f"Executing FinanceTool: {ticker}", source="System")
 
-        # Execute via Manager
         result = self.tool_manager.execute_tool("finance", {"ticker": ticker})
         
         if not result.success:
@@ -284,12 +274,10 @@ class CLI:
              
         data = result.output
         
-        # Display the raw data nicely
         self.console.print(f"\n[green]--- Market Report ---[/green]")
         self.console.print(Markdown(data))
         self.console.print()
         
-        # Ask Brain to Analyze
         self.console.print("[dim]Analyzing market data...[/dim]")
         analysis = self.llm.think(
             user_input=f"Analyze this stock data for {ticker}. Is it bullish or bearish right now?",
@@ -300,5 +288,4 @@ class CLI:
         self.console.print(f"\n[bold green]Cobalt Analysis:[/bold green]")
         self.console.print(Markdown(analysis))
         self.console.print()
-        
         self.memory.add_log(analysis, source="Assistant")

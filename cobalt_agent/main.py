@@ -7,12 +7,14 @@ import sys
 from loguru import logger
 
 from cobalt_agent.config import load_config
-from cobalt_agent.memory import MemorySystem
+from cobalt_agent.memory.postgres import PostgresMemory
+from cobalt_agent.memory import MemorySystem # Keep this as fallback
 from cobalt_agent.persona import Persona
 from cobalt_agent.interface import CLI
 from cobalt_agent.llm import LLM
 from cobalt_agent.prompt import PromptEngine
 from cobalt_agent.tool_manager import ToolManager
+from cobalt_agent.brain.cortex import Cortex
 
 def configure_logging():
     """Configure loguru logging with INFO level and file rotation."""
@@ -50,8 +52,16 @@ def main():
     persona = Persona(config.persona)
     
     # Initialize Memory System
-    memory = MemorySystem()
+    try:
+        # Try to connect to the Database
+        memory = PostgresMemory()
+    except Exception as e:
+        # Fallback to JSON if Docker is down
+        logger.warning(f"Database offline, falling back to local file: {e}")
+        memory = MemorySystem()
     
+    # Initialize Cortex
+    cortex = Cortex()
 
     # Log initialization
     logger.info("Cobalt Agent - System Initialized")
@@ -99,18 +109,17 @@ def main():
     logger.info("Starting interactive CLI interface...")
     logger.info("=" * 80)
     
-    # <--- CHANGED: Pass tool_manager to CLI
+    # Pass tool_manager to CLI
     cli = CLI(
         memory_system=memory, 
         llm=llm, 
         system_prompt=system_prompt,
-        tool_manager=tool_manager  # <--- NEW ARGUMENT
+        tool_manager=tool_manager,
+        cortex=cortex  # <--- ADD THIS LINE
     )
-    # OLD: cli = CLI(memory_system=memory, llm=llm, system_prompt=system_prompt)
-
-    
+  
     # Enter interactive mode
-    try: # <--- ADDED: Try/Finally block for safety
+    try:
         cli.start()
     except Exception as e:
         logger.error(f"Critical Error: {e}")
@@ -118,9 +127,8 @@ def main():
         # Save memory to disk after exiting
         logger.info("Exiting Cobalt Agent")
         
-        # <--- CHANGED: Added source
+        # Added source
         memory.add_log("CLI session ended", source="System")
-        # OLD: memory.add_log("CLI session ended")
         
         memory.save_memory()
 
