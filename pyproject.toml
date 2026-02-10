@@ -48,6 +48,7 @@ dependencies = [
     "yfinance>=1.1.0",
     "psycopg[binary]>=3.3.2",
     "pgvector>=0.4.2",
+    "apscheduler>=3.11.2",
 ]
 
 # --- DEV DEPENDENCIES (New Standard: [dependency-groups]) ---

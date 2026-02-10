@@ -5,6 +5,7 @@ Project Cobalt: Autonomous AI Chief of Staff & Trading System
 
 import sys
 from loguru import logger
+from datetime import datetime, timedelta
 
 from cobalt_agent.config import load_config
 from cobalt_agent.memory.postgres import PostgresMemory
@@ -15,6 +16,8 @@ from cobalt_agent.llm import LLM
 from cobalt_agent.prompt import PromptEngine
 from cobalt_agent.tool_manager import ToolManager
 from cobalt_agent.brain.cortex import Cortex
+from cobalt_agent.core.scheduler import AgentScheduler
+from cobalt_agent.skills.productivity.briefing import MorningBriefing
 
 def configure_logging():
     """Configure loguru logging with INFO level and file rotation."""
@@ -63,6 +66,19 @@ def main():
     # Initialize Cortex
     cortex = Cortex()
 
+    # Initialize Scheduler
+    scheduler = AgentScheduler(cortex)
+    scheduler.start()
+
+    # Initialize the Skill
+    briefing = MorningBriefing()
+
+    # TEST: Run it 10 seconds from now so you don't have to wait long
+    #scheduler.add_job(briefing.run, 'date', run_date=datetime.now() + timedelta(seconds=10))
+
+    # This sets it to run every morning at 8:00 AM
+    scheduler.add_job(briefing.run, 'cron', hour=8, minute=0)
+
     # Log initialization
     logger.info("Cobalt Agent - System Initialized")
     logger.info(f"Python Version: {sys.version}")
@@ -73,17 +89,17 @@ def main():
     llm = LLM(model_name=config.llm.model_name)
     logger.info(f"Brain Initialized: {config.llm.model_name}")
 
-    # <--- ADDED: Initialize Tool Manager
+    # Initialize Tool Manager
     tool_manager = ToolManager()
 
     # Initialize Prompt Engine instead of static string
     prompt_engine = PromptEngine(config.persona)
     
-    # <--- CHANGED: Pass REAL tools to the Prompt Engine
+    
     # Get the list of tools from the manager
     tools_list = tool_manager.get_tool_descriptions()
+    # Pass REAL tools to the Prompt Engine
     system_prompt = prompt_engine.build_system_prompt(tools=tools_list)
-    # OLD: system_prompt = prompt_engine.build_system_prompt(tools=[])
 
     # Log System Start to Memory
     memory.add_log("Cobalt Agent System Initialized", source="System")
@@ -126,6 +142,10 @@ def main():
     finally:
         # Save memory to disk after exiting
         logger.info("Exiting Cobalt Agent")
+        
+        # Stop Scheduler
+        if 'scheduler' in locals():
+            scheduler.stop()
         
         # Added source
         memory.add_log("CLI session ended", source="System")
