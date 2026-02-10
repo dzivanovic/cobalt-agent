@@ -18,6 +18,7 @@ from cobalt_agent.tool_manager import ToolManager
 from cobalt_agent.brain.cortex import Cortex
 from cobalt_agent.core.scheduler import AgentScheduler
 from cobalt_agent.skills.productivity.briefing import MorningBriefing
+from cobalt_agent.skills.research.deep_dive import DeepResearch
 
 def configure_logging():
     """Configure loguru logging with INFO level and file rotation."""
@@ -70,14 +71,25 @@ def main():
     scheduler = AgentScheduler(cortex)
     scheduler.start()
 
-    # Initialize the Skill
+     # Initialize Skills
     briefing = MorningBriefing()
-
-    # TEST: Run it 10 seconds from now so you don't have to wait long
-    #scheduler.add_job(briefing.run, 'date', run_date=datetime.now() + timedelta(seconds=10))
+    researcher = DeepResearch() 
 
     # This sets it to run every morning at 8:00 AM
     scheduler.add_job(briefing.run, 'cron', hour=8, minute=0)
+    
+    # Schedule to run 60 seconds from now TEST
+    #scheduler.add_job(briefing.run, 'date', run_date=datetime.now() + timedelta(minutes=1))
+    
+    scheduler.start() # You can pause the scheduler for this test
+
+    # --- TEST MODE: DEEP RESEARCH ---
+    # Let's ask it to research something complex
+    #logger.info("🧪 Testing Deep Research Agent...")
+    #report_path = researcher.run("Impact of Solid State Batteries on EV Market")
+    #logger.info(f"✅ Research Complete. Report: {report_path}")
+    
+   
 
     # Log initialization
     logger.info("Cobalt Agent - System Initialized")
