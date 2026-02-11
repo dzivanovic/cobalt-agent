@@ -1,6 +1,7 @@
 """
 The Scribe Skill (Obsidian Integration)
 Allows Cobalt to read, write, and search your "Second Brain".
+STRICT RULE: All automated writes go to '0 - Inbox'.
 """
 
 import os
@@ -25,25 +26,23 @@ class Scribe:
             filename += ".md"
         return self.vault_path / filename
 
-    def write_note(self, filename: str, content: str, folder: str = "") -> str:
+    def write_note(self, filename: str, content: str, folder: str = "0 - Inbox") -> str:
         """
         Create or Overwrite a note.
-        Args:
-            filename: "Market Analysis 2026"
-            content: The body of the note
-            folder: Optional subfolder (e.g., "0 - Projects/Cobalt")
+        Defaults strictly to '0 - Inbox' unless overridden.
         """
         try:
             # Construct path (Vault / Folder / Filename)
             target_dir = self.vault_path / folder
             target_dir.mkdir(parents=True, exist_ok=True)
             
-            file_path = target_dir / (filename if filename.endswith(".md") else f"{filename}.md")
+            clean_name = filename if filename.endswith(".md") else f"{filename}.md"
+            file_path = target_dir / clean_name
             
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(content)
             
-            return f"✅ Note saved: {file_path}"
+            return f"✅ Note saved: {folder}/{clean_name}"
         except Exception as e:
             logger.error(f"Failed to write note: {e}")
             return f"❌ Error writing note: {e}"
@@ -67,34 +66,34 @@ class Scribe:
 
     def append_to_daily_note(self, content: str) -> str:
         """
-        Appends text to today's Daily Note (ISO format YYYY-MM-DD).
+        Appends text to today's Daily Log in '0 - Inbox'.
         """
         today = datetime.now().strftime("%Y-%m-%d")
         
-        # CHECK: Where do your Daily Notes live? 
-        # Based on your image, likely in "6 - Permanent" or a "Daily" folder.
-        # Defaulting to root for now, or change "Daily Notes" to your specific folder.
-        daily_note_folder = "Daily Notes" 
+        # STRICT REQUIREMENT: Inbox only
+        daily_folder = "0 - Inbox"
         
         try:
-            header = f"\n\n### {datetime.now().strftime('%H:%M')} - Cobalt Log\n"
+            timestamp = datetime.now().strftime('%H:%M')
+            header = f"\n\n### {timestamp} - Cobalt Log\n"
             full_entry = header + content
             
-            target_dir = self.vault_path / daily_note_folder
+            target_dir = self.vault_path / daily_folder
             target_dir.mkdir(parents=True, exist_ok=True)
-            file_path = target_dir / f"{today}.md"
+            
+            # File format: Daily_Log_2026-02-10.md
+            file_path = target_dir / f"Daily_Log_{today}.md"
 
             with open(file_path, "a", encoding="utf-8") as f:
                 f.write(full_entry)
             
-            return f"✅ Logged to Daily Note: {today}"
+            return f"✅ Logged to {daily_folder}/Daily_Log_{today}.md"
         except Exception as e:
             return f"❌ Failed to log to daily note: {e}"
 
     def search_vault(self, query: str, limit: int = 5) -> List[str]:
         """
         Semantic search (lite). Walks the vault and finds notes containing the keyword.
-        Returns a list of filenames.
         """
         matches = []
         try:

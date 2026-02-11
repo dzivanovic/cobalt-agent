@@ -33,3 +33,24 @@ persona:
     - "Verify all data"
     - "Protect capital"
     - "Analyze data before deciding"
+
+# ... existing config ...
+
+# COBALT ORGANIZATIONAL CHART
+# Defines the active Departments and their mission statements.
+departments:
+  TACTICAL:
+    description: "Capital Allocation, Trading Strategies, Market Data, Risk Management, 'Stocks in Play'."
+    active: true
+  INTEL:
+    description: "Deep Research, News Briefings, Information Retrieval, Macro Analysis."
+    active: true
+  GROWTH:
+    description: "Project Management, Skill Acquisition, Real Estate, Solar/Homestead Planning."
+    active: true
+  OPS:
+    description: "Medical Admin (Billing/Coding), Journaling (Scribe), Scheduling."
+    active: true
+  ENGINEERING:
+    description: "Writing new code, fixing tools, system upgrades."
+    active: true

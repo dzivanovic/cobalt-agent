@@ -1,110 +1,184 @@
 """
-The Cortex (The Dispatcher)
-Decides which Persona or Skill should handle the user's request.
+The Cortex (Manager Agent) - Config-Driven Architecture
+Routes user intent based on domains defined in config.yaml.
+Includes robust error handling, full Scribe logic, and Medical Admin placeholders.
 """
-from typing import Dict, Any, Optional
+from typing import Optional, Any
 from datetime import datetime
+from pydantic import BaseModel, Field
 from loguru import logger
 
-# Import Skills
-from cobalt_agent.skills.productivity.scribe import Scribe
-from cobalt_agent.tools.finance import FinanceTool  # <--- NEW IMPORT
+from cobalt_agent.llm import LLM
+from cobalt_agent.config import load_config
+
+# --- ROUTING MODEL ---
+class DomainDecision(BaseModel):
+    domain_name: str = Field(description="The exact name of the department (e.g. TACTICAL, OPS).")
+    reasoning: str = Field(description="Why this department fits the request.")
+    task_parameters: str = Field(
+        description="The PRECISE entity or query to act on. For Tactical, this MUST be just the Ticker Symbol (e.g. 'NVDA') OR the command 'STRATEGY'."
+    )
 
 class Cortex:
-    """
-    The Central Nervous System of the Agent.
-    Routes prompts to the correct specialist.
-    """
-    
     def __init__(self):
-        # Initialize Capabilities (The "Hands")
-        self.scribe = Scribe()
-        self.finance = FinanceTool() # <--- INITIALIZE TRADER
+        self.config = load_config()
         
-        # Define keywords that trigger specific personas
-        self.intent_triggers = {
-            "scribe": ["save", "log", "record", "note", "obsidian", "remind", "journal"],
-            "trader": ["price", "buy", "sell", "chart", "trend", "volume", "rsi", "stock"] # Added 'stock'
-        }
-
-    def route(self, prompt: str) -> str:
-        """
-        Analyzes the prompt and executes the correct skill.
-        Returns the result string.
-        """
-        intent = self._detect_intent(prompt)
-        
-        if intent == "scribe":
-            return self._handle_scribe(prompt)
-        elif intent == "trader":
-            return self._handle_trader(prompt) # <--- CALL THE NEW HANDLER
-        else:
-            return None # Return None implies "Pass to General LLM"
-
-    def _detect_intent(self, prompt: str) -> str:
-        """Simple keyword matching to guess intent."""
-        prompt_lower = prompt.lower()
-        
-        for intent, keywords in self.intent_triggers.items():
-            if any(k in prompt_lower for k in keywords):
-                return intent
-        return "general"
-
-    def _handle_scribe(self, prompt: str) -> str:
-        """Logic for the Scribe Persona."""
-        prompt_lower = prompt.lower()
-        
-        # 1. LOGGING (Append to daily note)
-        if "log" in prompt_lower or "journal" in prompt_lower:
-            # Clean the prompt (remove "log this")
-            content = prompt.replace("log", "").replace("journal", "").strip()
-            if not content: return "Please provide text to log."
-            return self.scribe.append_to_daily_note(content)
+        # --- ROBUST LLM CONFIG ---
+        # Try 'model_name' first, then 'model', then default to 'gpt-4o'
+        model_name = getattr(self.config.llm, "model_name", None)
+        if not model_name:
+            model_name = getattr(self.config.llm, "model", "gpt-4o")
             
-        # 2. SAVING (Create new note)
+        self.llm = LLM(model_name=model_name)
+        
+        # --- ROBUST DEPARTMENTS LOAD ---
+        deps = getattr(self.config, "departments", None)
+        if deps is None:
+            deps = {}
+        self.departments = deps
+        
+        logger.info(f"🧠 Cortex Online | Loaded {len(self.departments)} Departments from Config")
+
+    def route(self, user_input: str) -> Optional[str]:
+        """Dynamically routes based on config."""
+        # Fast exit
+        if len(user_input.split()) < 4 and "hi" in user_input.lower():
+            return None
+
+        # 1. Classify
+        decision = self._classify_domain(user_input)
+        
+        # 2. Lazy Load & Execute
+        domain = decision.domain_name.upper()
+        params = decision.task_parameters.strip()
+
+        logger.info(f"👉 Cortex Routing: {domain} | Task: {params}")
+        
+        if domain == "TACTICAL":
+            return self._run_tactical(params)
+        
+        elif domain == "INTEL":
+            return self._run_intel(params)
+            
+        elif domain == "GROWTH":
+            return "👷 The Architect (Growth) is defined but not yet hired."
+            
+        elif domain == "OPS":
+            return self._run_ops(params, user_input) # Pass original input for Scribe context
+            
+        elif domain == "ENGINEERING":
+            return "🛠️ Forge (Engineering) is defined but not yet hired."
+            
+        elif domain == "FOUNDATION":
+            return None # Handle in main chat loop
+            
+        else:
+            return f"⚠️ Unknown Domain: {domain}"
+
+    def _classify_domain(self, user_input: str) -> DomainDecision:
+        """Builds prompt from config.yaml definitions."""
+        options_text = ""
+        
+        # Guard against empty departments
+        if not self.departments:
+            options_text = "- TACTICAL\n- INTEL\n- OPS"
+        else:
+            for name, data in self.departments.items():
+                is_active = False
+                desc = "No description"
+                if isinstance(data, dict):
+                    is_active = data.get('active', False)
+                    desc = data.get('description', desc)
+                elif hasattr(data, 'active'):
+                    is_active = getattr(data, 'active', False)
+                    desc = getattr(data, 'description', desc)
+
+                if is_active:
+                    options_text += f"- {name}: {desc}\n"
+        
+        # UPDATED PROMPT: Explicitly maps "Strategy" to TACTICAL
+        prompt = f"""
+        You are the Chief of Staff (Cortex). Route this user request to the correct Department.
+        
+        USER REQUEST: "{user_input}"
+        
+        ACTIVE DEPARTMENTS:
+        {options_text}
+        - FOUNDATION: General chat, greetings, system questions.
+        
+        CRITICAL INSTRUCTION FOR PARAMETERS:
+        - If TACTICAL (Trading): 
+            - If asking for prices/data: Extract ONLY the ticker (e.g. "NVDA").
+            - If asking for strategies/playbook: Extract the word "STRATEGY".
+        - If OPS (Scribe): Extract the note content.
+        - If INTEL (Research): Extract the search topic.
+        
+        Return the decision structured correctly.
+        """
+        try:
+            return self.llm.ask_structured(prompt, DomainDecision)
+        except Exception:
+            return DomainDecision(domain_name="FOUNDATION", reasoning="Error", task_parameters="")
+
+    # --- DEPARTMENT HANDLERS ---
+    
+    def _run_tactical(self, params: str) -> str:
+        """Handles Trading & Market Data."""
+        from cobalt_agent.brain.tactical import Strategos
+        try:
+            # Clean up params
+            # If the LLM sends "STRATEGY" or "PLAYBOOK", we pass it raw.
+            # If it sends a ticker "NVDA", we clean it.
+            if "STRATEGY" in params.upper() or "PLAYBOOK" in params.upper():
+                task = "STRATEGY"
+            else:
+                task = params.split()[0].strip(".,!?")
+                
+            department_head = Strategos()
+            return department_head.run(task)
+        except Exception as e:
+            return f"Tactical Error: {e}"
+
+    def _run_intel(self, params: str) -> str:
+        """Handles Research & Briefings."""
+        if "briefing" in params.lower():
+            from cobalt_agent.skills.productivity.briefing import MorningBriefing
+            return MorningBriefing().run()
+        else:
+            from cobalt_agent.skills.research.deep_dive import DeepResearch
+            return DeepResearch().run(params)
+
+    def _run_ops(self, params: str, original_input: str) -> str:
+        """
+        Handles Operations (Scribe, Medical, Scheduling).
+        """
+        from cobalt_agent.skills.productivity.scribe import Scribe
+        scribe = Scribe()
+        
+        prompt_lower = original_input.lower()
+        
+        # 1. LOGGING
+        if "log" in prompt_lower or "journal" in prompt_lower:
+            content = original_input.replace("log", "").replace("journal", "").strip()
+            if not content: return "Please provide text to log."
+            return scribe.append_to_daily_note(content)
+            
+        # 2. SAVING (New Note)
         elif "save" in prompt_lower or "note" in prompt_lower:
-            # Heuristic: First 5 words are title? 
-            # For now, let's just save to "Inbox"
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
             filename = f"AutoNote_{timestamp}" 
-            return self.scribe.write_note(filename, prompt, folder="0 - Inbox")
+            content = params if len(params) > 5 else original_input
+            return scribe.write_note(filename, content, folder="0 - Inbox")
             
         # 3. SEARCHING
         elif "search" in prompt_lower or "find" in prompt_lower:
-            query = prompt.replace("search", "").replace("find", "").strip()
-            results = self.scribe.search_vault(query)
+            # Use the LLM extracted param for the query
+            results = scribe.search_vault(params)
+            if not results: return "No notes found."
             return f"🔍 Found these notes:\n- " + "\n- ".join(results)
             
-        return "I'm not sure what you want the Scribe to do (Log/Save/Search)."
-
-    def _handle_trader(self, prompt: str) -> str:
-        """Logic for the Trader Persona (Rule-Based Ticker Extraction)."""
-        # 1. Clean the prompt to find the Ticker
-        # Heuristic: Look for uppercase words that are 1-5 chars long
-        words = prompt.split()
-        candidates = []
-        
-        ignore_words = ["PRICE", "STOCK", "CHECK", "WHAT", "IS", "THE", "OF", "FOR", "CHART", "VOLUME", "TREND", "RSI"]
-        
-        for w in words:
-            # Strip punctuation like "NVDA?" or "NVDA."
-            clean_w = w.upper().strip("?.!,")
-            if clean_w in ignore_words:
-                continue
-            # Tickers are usually 1-5 chars (e.g. F, AAPL, GOOGL)
-            if 1 <= len(clean_w) <= 5 and clean_w.isalpha():
-                candidates.append(clean_w)
-        
-        if not candidates:
-            return "📉 I couldn't identify a stock ticker. Try 'price of NVDA'."
-            
-        ticker = candidates[0] # Pick the first valid candidate
-        
-        # 2. Call the Finance Tool
-        try:
-            # The FinanceTool.run method takes the ticker
-            result = self.finance.run(ticker)
-            return f"📈 [Trader]: {result}"
-        except Exception as e:
-            logger.error(f"Trader Error: {e}")
-            return f"❌ Trading Engine Error: {e}"
+        # 4. MEDICAL (Placeholder for future Steward logic)
+        elif "medical" in prompt_lower or "billing" in prompt_lower:
+             return "🏥 Medical Admin module is not yet implemented. (See Ops Department Plan)"
+             
+        return "Ops processed the request."
