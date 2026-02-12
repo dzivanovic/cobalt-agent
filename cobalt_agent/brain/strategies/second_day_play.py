@@ -1,114 +1,105 @@
 """
-Second Day Play Strategy (Scoring Engine)
-Logic:
-Generates a "Math Package" for the Ion HUD based on Day 1 analysis.
-Does NOT execute trades. It defines the 'Rules of Engagement' for the day.
+Second Day Play - Strategy Logic
+Author: Cobalt AI
+Context: Phase 3 (Tactical)
+
+Refactored to pull scoring rules and thresholds dynamically from strategies.yaml.
 """
-from typing import Dict, Any
-from cobalt_agent.brain.strategy import Strategy
+from datetime import datetime
 
-class SecondDayPlay(Strategy):
-    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+class SecondDayPlay:
+    def __init__(self, config: dict = None):
+        # Fallback to empty dict if None, but usually this comes from strategies.yaml
+        self.config = config or {}
+        
+        # Load Parameters from Config (or defaults if missing)
+        self.params = self.config.get("parameters", {})
+        self.scoring = self.config.get("scoring", {})
+        
+        self.name = self.config.get("name", "SecondDayPlay")
+        self.version = "1.1"
+
+    def analyze(self, ticker: str, market_data: dict) -> dict:
         """
-        Analyzes Day 1 Data to generate a Scoring Profile.
-        Returns a JSON-serializable dict defining the HUD configuration.
+        Takes raw market data and returns the Scoring Profile (JSON).
         """
-        # Initialize the HUD Package
-        profile = {
+        
+        # 1. UNPACK DATA
+        y_close = market_data.get('yesterday_close', 0)
+        y_vol = market_data.get('yesterday_volume', 0)
+        avg_vol = market_data.get('average_volume', 1) 
+        today_open = market_data.get('today_open', 0)
+        pm_high = market_data.get('pre_market_high', 0)
+        
+        # 2. VALIDATION (The Gatekeeper)
+        y_rvol = y_vol / avg_vol if avg_vol else 0
+        
+        # Rule: Min RVOL (from config)
+        min_rvol = self.params.get("min_rvol", 1.5)
+        if y_rvol < min_rvol:
+            return {
+                "ticker": ticker,
+                "strategy": self.name,
+                "status": "REJECTED",
+                "reason": f"Low Relative Volume Yesterday (RVOL: {y_rvol:.2f} < {min_rvol})"
+            }
+
+        # Rule: Gap Down Rejection
+        if today_open < (y_close * 0.98):
+             return {
+                "ticker": ticker,
+                "strategy": self.name,
+                "status": "REJECTED",
+                "reason": "Gap Down - Momentum Lost"
+            }
+
+        # 3. CALCULATE ZONES
+        entry_price = pm_high + 0.05
+        stop_loss = y_close - 0.20
+        risk = entry_price - stop_loss
+        target = entry_price + (risk * 2)
+
+        # 4. SCORING ENGINE (Dynamic)
+        # Instead of hardcoding "50" or "+10", we look them up.
+        current_score = self.scoring.get("base_score", 50)
+        
+        # RVOL Modifiers
+        high_rvol_thresh = self.scoring.get("high_rvol_threshold", 3.0)
+        
+        if y_rvol >= high_rvol_thresh:
+            current_score += self.scoring.get("high_rvol_points", 15)
+        elif y_rvol >= min_rvol:
+            current_score += self.scoring.get("base_rvol_points", 10)
+            
+        # Gap Modifiers
+        if today_open > y_close:
+            current_score += self.scoring.get("gap_up_points", 10)
+        
+        # 5. CONSTRUCT THE MATH PACKAGE
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "ticker": ticker,
             "strategy": self.name,
-            "status": "WATCH",  # Default
-            "base_score": 50,   # Neutral start
-            "setup_quality": "C",
-            "levels": {},
-            "hud_rules": {}     # The 'Math' for Ion
+            "status": "ACTIVE_WATCH",
+            "direction": "LONG",
+            "zones": {
+                "entry": round(entry_price, 2),
+                "stop": round(stop_loss, 2),
+                "target": round(target, 2),
+                "risk_per_share": round(risk, 2)
+            },
+            "scoring_engine": {
+                "base_score": current_score,
+                # Pass instructions to Ion (Windows)
+                "modifiers": {
+                    "live_rvol_multiplier": self.scoring.get("live_rvol_multiplier", 5.0),
+                    "spy_correlation_weight": self.scoring.get("spy_correlation_weight", 10.0),
+                    "resistance_penalty": self.scoring.get("resistance_penalty", -20.0),
+                    "time_decay_per_min": self.scoring.get("time_decay_per_min", -0.5)
+                }
+            },
+            "abort_conditions": [
+                f"price < {stop_loss}",
+                "volume_run_rate < 50%" 
+            ]
         }
-
-        # 1. Check Time Window
-        if not self.check_time_window():
-            profile["status"] = "SLEEP"
-            profile["reason"] = "Outside Execution Window"
-            return profile
-
-        # 2. Extract Data (Safe Parsing)
-        try:
-            prev_high = data.get('prev_high', 0)
-            prev_low = data.get('prev_low', 0)
-            prev_close = data.get('previous_close', 0)
-            prev_vol = data.get('prev_volume', 0)
-            avg_vol = data.get('avg_volume', 1) 
-            atr = data.get('atr', 0)
-            
-            # Day 2 Open (Current Data)
-            day_open = data.get('open', 0)
-            # cur_price = data.get('current_price', 0) # Unused in prep phase
-        except Exception as e:
-            profile["status"] = "ERROR"
-            profile["reason"] = f"Data Error: {e}"
-            return profile
-
-        # --- STEP A: CALCULATE BASE SCORE (Static Quality) ---
-        
-        score = 50 # Start at 50
-        reasons = []
-
-        # 1. RVOL Check (Momentum)
-        day1_rvol = 0
-        if avg_vol > 0:
-            day1_rvol = prev_vol / avg_vol
-            
-        if day1_rvol > 2.0:
-            score += 15
-            reasons.append("High RVOL (>2.0)")
-        elif day1_rvol > 1.5:
-            score += 10
-            reasons.append("Decent RVOL (>1.5)")
-        else:
-            score -= 10
-            reasons.append("Low Volume")
-
-        # 2. Extension Check (Closing Strength)
-        day1_range = prev_high - prev_low
-        if day1_range > 0:
-            rel_close = (prev_close - prev_low) / day1_range
-            if rel_close > 0.8:
-                score += 10
-                reasons.append("Strong Close (Top 20%)")
-            elif rel_close < 0.5:
-                score -= 20
-                reasons.append("Weak Close (Bottom 50%)")
-
-        # 3. Gap Check (Day 2 Context)
-        gap_size = abs(day_open - prev_close)
-        max_gap = day1_range * 0.33
-        if gap_size < max_gap:
-            score += 10 # Good, small gap
-            reasons.append("Healthy Small Gap")
-        else:
-            score -= 30 # Gap too big (Chase risk)
-            reasons.append("Extended Gap (Chase Risk)")
-
-        profile["base_score"] = min(max(score, 0), 100)
-        profile["reason"] = ", ".join(reasons)
-        
-        # Grading
-        if score >= 80: profile["setup_quality"] = "A+"
-        elif score >= 70: profile["setup_quality"] = "A"
-        elif score >= 60: profile["setup_quality"] = "B"
-        else: profile["setup_quality"] = "C"
-
-        # --- STEP B: DEFINE HUD RULES (The Dynamic Math) ---
-        # Ion will use these multipliers on live data
-        
-        profile["levels"] = {
-            "trigger": prev_high,
-            "invalidation": prev_low + (day1_range * 0.5), # Lose half the day
-            "target_1": prev_high + day1_range
-        }
-        
-        profile["hud_rules"] = {
-            "rvol_multiplier": {"threshold": 3.0, "bonus": 10},
-            "vwap_check": {"condition": "price > vwap", "penalty_if_false": -15},
-            "proximity_alert": 0.05
-        }
-        
-        return profile

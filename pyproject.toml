@@ -58,6 +58,7 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "black>=24.0.0",
     "ipykernel>=6.29.0",
+    "python-dotenv>=1.2.1",
 ]
 
 [build-system]
@@ -66,4 +67,7 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-pythonpath = ["src"]
+testpaths = ["tests"]
+norecursedirs = ["data", "logs", "plans", "scripts", "dev_utils"]
+python_files = "test_*.py"
+markers = ["integration: marks tests that require external systems (like Docker)"]

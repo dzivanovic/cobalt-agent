@@ -4,7 +4,11 @@
 strategies:
   second_day_play:
     name: "Second Day Play"
+    active: true
     direction: "BOTH" # Long or Short
+    description: "Continuation play for stocks with strong Day 1 momentum."
+    
+    # EXISTING FILTERS (Preserved)
     time_window:
       start: "09:30"
       end: "10:30" # "Trade trigger before 10:30 am EST"
@@ -27,8 +31,28 @@ strategies:
       stop_buffer: 0.02 # "$0.02 below the low"
       target_multiplier: 2.0 # "Target twice the height of day 1 range"
 
+    # NEW SCORING BLOCK (Added for Logic Lab & Ion)
+    scoring:
+      # The base score if all hard filters are met
+      base_score: 50
+      
+      # Relative Volume (RVOL) Logic
+      high_rvol_threshold: 3.0
+      high_rvol_points: 10
+      base_rvol_points: 10 # Points for just meeting min_rvol
+      
+      # Price Action Logic
+      gap_up_points: 10
+      
+      # Ion (Real-Time) Modifiers - Instructions for the Windows HUD
+      live_rvol_multiplier: 5.0
+      spy_correlation_weight: 10.0
+      resistance_penalty: -20.0
+      time_decay_per_min: -0.5
+
   fashionably_late_scalp:
     name: "Fashionably Late Scalp"
+    active: false
     direction: "BOTH"
     time_window:
       start: "10:00"
@@ -44,6 +68,7 @@ strategies:
 
   second_chance_scalp:
     name: "Second Chance Scalp"
+    active: false
     direction: "BOTH"
     time_window:
       start: "09:59"

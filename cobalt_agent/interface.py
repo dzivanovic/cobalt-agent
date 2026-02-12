@@ -1,6 +1,6 @@
 """
 Cobalt Agent - Interactive CLI Interface
-Refactored: Centralized Routing via Cortex Manager.
+Refactored: Centralized Routing + RAG (Retrieval Augmented Generation)
 """
 
 from rich.console import Console
@@ -9,7 +9,7 @@ from loguru import logger
 from rich.markdown import Markdown
 
 # Type hinting
-from typing import Optional, TYPE_CHECKING, Any
+from typing import Optional, TYPE_CHECKING, Any, List
 if TYPE_CHECKING:
     from cobalt_agent.brain.cortex import Cortex
 
@@ -45,6 +45,7 @@ class CLI:
                     self.console.print("[yellow]Shutting down Cobalt Agent...[/yellow]")
                     break
                 
+                # Save to Short-Term Memory immediately
                 self.memory.add_log(user_input, source="User")
 
                 # 1. CORTEX ROUTING (The Primary Brain)
@@ -83,6 +84,77 @@ class CLI:
             return "\n".join([str(item) for item in output])
         return str(output)
 
+    def _retrieve_long_term_memory(self, query: str) -> str:
+        """
+        RAG HOOK: Searches the Postgres DB for relevant past context.
+        """
+        if not hasattr(self.memory, "search"):
+            return ""
+
+        try:
+            self.console.print("[dim]🧠 Recalling...[/dim]")
+            
+            # 1. Fetch MORE (10 instead of 3) to break through the "Echo Chamber"
+            results = self.memory.search(query, limit=10)
+            
+            if not results:
+                return ""
+            
+            # 2. Deduplicate & Format
+            seen_content = set()
+            unique_memories = []
+            
+            for mem in results:
+                # Extract content safely
+                if hasattr(mem, "content"):
+                    content = mem.content
+                    timestamp = getattr(mem, "timestamp", "Unknown")
+                elif isinstance(mem, dict):
+                    content = mem.get("content", "")
+                    timestamp = mem.get("timestamp", "Unknown")
+                else:
+                    content = str(mem)
+                    timestamp = "Unknown"
+                
+                # CLEANUP: Remove whitespace and skip if empty
+                content = content.strip()
+                if not content: continue
+                
+                # DEDUPLICATION: If we already saw this exact sentence, skip it.
+                # This prevents "What is my favorite stock?" appearing 5 times.
+                if content in seen_content:
+                    continue
+                
+                # SELF-FILTER: Don't show the user's *current* question as a memory
+                if content == query.strip():
+                    continue
+
+                seen_content.add(content)
+                unique_memories.append((timestamp, content))
+            
+            # 3. Limit the final output to the top 5 UNIQUE results
+            final_memories = unique_memories[:5]
+            
+            if not final_memories:
+                return ""
+
+            self.console.print(f"[dim green]Found {len(final_memories)} unique memories:[/dim green]")
+            
+            memory_block = "\n\n=== RELEVANT LONG-TERM MEMORY ===\n"
+            for ts, text in final_memories:
+                # Print preview for you
+                clean_preview = text.replace("\n", " ")[:80]
+                self.console.print(f"[dim]  - [{ts}] {clean_preview}...[/dim]")
+                
+                # Add to context
+                memory_block += f"- [{ts}] {text}\n"
+            
+            return memory_block
+            
+        except Exception as e:
+            logger.warning(f"Memory retrieval failed: {e}")
+            return ""
+
     def _handle_chat(self, user_input: str):
         """Autonomous Agent Loop (ReAct Pattern) for general analysis."""
         self.console.print(f"[dim]Thinking...[/dim]")
@@ -91,16 +163,32 @@ class CLI:
         current_input = user_input
         MAX_TURNS = 5
         
+        # --- STEP 1: RAG (Retrieval) ---
+        # Fetch past memories relevant to this specific input
+        long_term_context = self._retrieve_long_term_memory(user_input)
+        
+        # --- CRITICAL FIX: INJECT MEMORY INTO SYSTEM PROMPT ---
+        # We modify the system prompt for THIS RUN ONLY.
+        # This forces the LLM to treat the memory as an absolute rule/fact.
+        run_specific_system_prompt = self.system_prompt
+        if long_term_context:
+            run_specific_system_prompt += f"\n\n{long_term_context}"
+        
         for turn in range(MAX_TURNS):
-            # 1. Get Context
-            context = self.memory.get_context()
-            full_context = context + turn_history if turn > 0 else context
+            # 1. Get Short Term RAM
+            short_term_context = self.memory.get_context()
+            
+            # Combine RAM + History (But NOT Long Term, that's in System Prompt now)
+            full_history = str(short_term_context)
+            if turn > 0:
+                for t in turn_history:
+                    full_history += f"\n{t['role']}: {t['content']}"
             
             # 2. Ask Brain
             response = self.llm.think(
                 user_input=current_input,
-                system_prompt=self.system_prompt,
-                memory_context=full_context
+                system_prompt=run_specific_system_prompt, # <--- The "Memory-Enhanced" Prompt
+                memory_context=full_history
             )
             
             # 3. Check for ACTION (Tool Use by the LLM itself)

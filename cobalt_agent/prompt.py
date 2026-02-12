@@ -1,6 +1,7 @@
 """
 Cobalt Agent - Prompt Engine
 Constructs dynamic system prompts based on context, tools, and time.
+Refactored: Includes Memory Protocol & Temporal Gating.
 """
 
 import datetime
@@ -27,15 +28,18 @@ class PromptEngine:
         
         # 2. Operational Context (Time/Date)
         context = self._build_context()
+
+        # 3. Memory Rules (NEW: Handles Recall & Stale Data)
+        memory_rules = self._build_memory_protocol()
         
-        # 3. Directives (Rules)
+        # 4. Directives (Rules)
         directives = self._build_directives()
         
-        # 4. Tool Capabilities (What it can do)
+        # 5. Tool Capabilities (What it can do)
         tool_section = self._build_tool_descriptions(tools)
         
         # Combine everything
-        return f"{header}\n\n{context}\n\n{directives}\n\n{tool_section}"
+        return f"{header}\n\n{context}\n\n{memory_rules}\n\n{directives}\n\n{tool_section}"
 
     def _build_header(self) -> str:
         # Handle list of roles (join nicely)
@@ -57,13 +61,33 @@ class PromptEngine:
             f"- User: Administrator"
         )
 
+    def _build_memory_protocol(self) -> str:
+        """
+        Defines how to handle Long-Term Memory and Stale Data.
+        Prevents the 'Bag Holder' scenario by expiring old market context.
+        """
+        return """
+### 🧠 MEMORY PROTOCOL (CRITICAL)
+- You will receive a block called "RELEVANT LONG-TERM MEMORY".
+- **STEP 1: Check the Timestamp.** Compare the memory's timestamp to the "Current Date/Time" above.
+- **STEP 2: Classify the Memory.**
+   - **PREFERENCE:** (e.g., "I like TSLA", "I am a scalper") -> **KEEP FOREVER.**
+   - **MARKET CONTEXT:** (e.g., "Ignore the volume", "Market is crashing") -> **EXPIRE AFTER 24 HOURS.**
+- **STEP 3: Apply Logic.**
+   - If a Market Context memory is older than 24 hours, **IGNORE IT** and treat it as historical noise.
+   - If a Preference memory is 5 years old, **RESPECT IT** unless told otherwise.
+- **STEP 4: Answer Retrieval.**
+   - If the answer to the user's question is in the Memory, YOU MUST USE IT.
+   - Do not say "I don't know" if the memory contains the answer.
+"""
+
     def _build_directives(self) -> str:
         # 1. Base Rules
         rules = [
             "You are an AUTONOMOUS AGENT. You are NOT a chat bot.",
             "You DO NOT have internal knowledge of real-time events.",
-            "You MUST use tools to answer questions about the world."
-       # <--- ADDED: Strict Math Rules
+            "You MUST use tools to answer questions about the world.",
+            # Strict Math Rules
             "STRICT DATA ADHERENCE: If a tool provides a specific technical indicator (e.g., 'RSI (20)'), you MUST reference that specific period.",
             "DO NOT HALLUCINATE standard defaults (like '14-day RSI') if the tool data says otherwise.",
             "Trust the tool's calculated signals (e.g., 'BULLISH', 'PARABOLIC') over your own interpretation."
