@@ -21,7 +21,7 @@ class LLM(BaseModel):
     """
     
     # Configuration
-    model_name: str = Field(..., description="The model to use (e.g., 'gpt-4o', 'claude-3-opus')")
+    model_name: str = Field(..., description="The model to use (e.g., 'gpt-4o', 'ollama/qwen2.5:14b')")
     api_key: Optional[SecretStr] = Field(default=None, description="API Key (optional if in env vars)")
 
     def model_post_init(self, __context: Any) -> None:
@@ -30,8 +30,9 @@ class LLM(BaseModel):
         """
         # Check if key is provided directly or exists in env
         # We support COBALT_LLM_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, etc via LiteLLM
-        if not self.api_key and not os.getenv("COBALT_LLM_KEY") and not os.getenv("OPENAI_API_KEY"):
-            logger.warning("No API Key found. Agent functionality will be limited.")
+        # Note: Ollama models usually don't need a key, so we skip the warning if using ollama/
+        if "ollama" not in self.model_name and not self.api_key and not os.getenv("OPENAI_API_KEY"):
+            logger.warning("No API Key found for Cloud Model. Agent functionality will be limited.")
         else:
             logger.info(f"LLM Initialized: {self.model_name}")
 
@@ -43,10 +44,19 @@ class LLM(BaseModel):
             # Get key string safely if it exists on the instance
             key_str = self.api_key.get_secret_value() if self.api_key else None
             
+            # HYBRID LOGIC: Determine the routing
+            api_base = None
+            
+            # If the model string starts with "ollama/", we route to the Local Mac Studio
+            if self.model_name.startswith("ollama/"):
+                api_base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            
+            # Make the call
             response = completion(
                 model=self.model_name,
                 messages=messages,
                 api_key=key_str,
+                base_url=api_base,  # Injects local URL for Ollama, ignored for OpenAI
                 temperature=0.7 
             )
             
