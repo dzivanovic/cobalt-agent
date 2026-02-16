@@ -70,18 +70,19 @@ class LLM(BaseModel):
             raise e
 
     # --- 1. THE CHAT INTERFACE (For Main Loop) ---
-    def think(self, 
-              user_input: str, 
-              system_prompt: str, 
-              memory_context: List[Dict] = None,
-              search_context: str = "") -> str:
+    def generate_response(self,
+                          system_prompt: str,
+                          user_input: Optional[str] = None,
+                          memory_context: List[Dict] = None,
+                          search_context: str = "") -> str:
         """
         Main conversational loop method. Handles history and context injection.
         """
         messages = []
 
         # A. System Prompt
-        messages.append({"role": "system", "content": system_prompt})
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
 
         # B. Memory Context
         if memory_context:
@@ -107,28 +108,49 @@ class LLM(BaseModel):
             messages.append({"role": "user", "content": user_input})
 
         try:
-            return self._call_provider(messages)
-        except Exception:
-            return "Error: My brain is not working. Check logs."
+            response = self._call_provider(messages)
+            logger.info(f"Cobalt, LLM model version: {self.model_name}")
+            logger.info(f"Persona Roles: Chief of Staff, Software Architect, Senior Developer, Business Analyst")
+            return response
+        except Exception as e:
+            logger.error(f"LLM Call Failed: {str(e)}")
+            raise e
 
     # --- 2. THE SKILL INTERFACE (For Tools & Research) ---
-    def ask(self, prompt: str, system_message: Optional[str] = None) -> str:
+    def generate_response_skill(self, prompt: str) -> str:
+        return self.generate_response(
+            system_prompt=prompt,
+            user_input=None,
+            memory_context=None,
+            search_context=""
+        )
+
+    def ask(self, 
+            system_message: str,
+            user_input: Optional[str] = None) -> str:
         """
         Direct one-off query. Used by skills like Research or Briefing.
         """
-        messages = []
-        if system_message:
-            messages.append({"role": "system", "content": system_message})
-        
-        messages.append({"role": "user", "content": prompt})
-        
+        messages = [
+            {"role": "system", "content": system_message},
+        ]
+
+        if user_input:
+            messages.append({"role": "user", "content": user_input})
+
         try:
             return self._call_provider(messages)
         except Exception as e:
-            return f"Error: {e}"
+            logger.error(f"Ask Failed: {str(e)}")
+            raise e
 
     # --- 3. THE STRUCTURED INTERFACE (For Strict Data) ---
-    def ask_structured(self, prompt: str, response_model: Type[T]) -> T:
+    def ask_structured(self, 
+                       system_prompt: str, 
+                       response_model: Type[T],
+                       memory_context: List[Dict] = None,
+                       search_context: str = "", 
+                       user_input: Optional[str] = None) -> T:
         """
         Forces the LLM to output JSON conforming to a Pydantic model.
         Returns the instantiated Pydantic object.
@@ -145,8 +167,27 @@ class LLM(BaseModel):
 
         messages = [
             {"role": "system", "content": system_instruction},
-            {"role": "user", "content": prompt}
         ]
+
+        if memory_context:
+            for item in memory_context:
+                # Case 1: Memory Log (Standard)
+                if "source" in item:
+                    role = "user" if item["source"] == "User" else "assistant"
+                    messages.append({"role": role, "content": item["message"]})
+                
+                # Case 2: Tool Loop Message (Raw)
+                elif "role" in item:
+                    messages.append({"role": item["role"], "content": item["content"]})
+
+        if search_context:
+            messages.append({
+                "role": "user", 
+                "content": f"Context Information:\n{search_context}"
+            })
+
+        if user_input:
+            messages.append({"role": "user", "content": user_input})
 
         try:
             raw_response = self._call_provider(messages)

@@ -3,9 +3,9 @@ name = "cobalt-agent"
 version = "0.1.0"
 description = "Project Cobalt: Autonomous AI Chief of Staff & Trading System"
 readme = "README.md"
-requires-python = ">=3.11, <3.14"
+requires-python = ">=3.11"
 authors = [
-    { name = "Director", email = "director@cobalt-core" }
+    { name = "Director", email = "director@cobalt-core.com" }
 ]
 
 # --- CORE DEPENDENCIES (Moved here under [project]) ---
@@ -62,8 +62,10 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61.0", "uv.build"]
+build-backend = "setuptools.build_meta"
+[tool.uv.extra-build-dependencies]
+cobalt-agent = ["uv.build"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -71,3 +73,6 @@ testpaths = ["tests"]
 norecursedirs = ["data", "logs", "plans", "scripts", "dev_utils"]
 python_files = "test_*.py"
 markers = ["integration: marks tests that require external systems (like Docker)"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

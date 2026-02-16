@@ -3,3 +3,6 @@ logs/
 __pycache__/
 .venv/
 data/
+docs/
+docs/**
+architecture_assessments/
