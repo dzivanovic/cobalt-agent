@@ -46,9 +46,9 @@ class CobaltAgent:
         logger.info(f"Python Version: {sys.version}")
         logger.info(f"Configuration Loaded: Debug Mode = {self.config.system.debug_mode}")
 
-        # Initialize the Brain (LLM)
-        self.llm = LLM(model_name=self.config.llm.model_name)
-        logger.info(f"Brain Initialized: {self.config.llm.model_name}")
+        # Initialize the Brain (LLM) with Intent-Based Routing
+        self.llm = LLM(role="default")
+        logger.info("Brain Initialized: Role-Based Routing Active (default)")
 
         # Initialize Tool Manager
         self.tool_manager = ToolManager()

@@ -2,17 +2,86 @@
 
 system:
   debug_mode: true
-  version: "0.2.0"
+  version: "0.5.0"
   obsidian_vault_path: /Users/cobalt/cobalt/docs/Cobalt
 
-llm:
-  # Options: "gpt-4o", "gemini/gemini-1.5-pro", "claude-3-opus"
-  #model_name: "openai/gpt-5.2"
-  model_name: "ollama/qwen2.5-coder:32b"
-  #model_name: "gemini/gemini-2.5-flash"
-  #model_name: "openrouter/anthropic/claude-3.5-sonnet"
-  #model_name: "openrouter/xiaomi/mimo-v2-flash"
-  api_key: null
+# 1. NETWORK TOPOLOGY (Hardware Abstraction)
+network:
+  nodes:
+    cortex:
+      role: primary_inference
+      ip: localhost
+      port: 11434
+      protocol: http
+    edge_mobile:
+      role: client
+      ip: localhost
+      port: 8080
+    edge_dev:
+      role: hot_spare
+      ip: localhost
+      port: 8081
+    station_trading:
+      role: execution
+      ip: localhost
+      port: 8082
+
+# 2. CREDENTIALS
+keys:
+  openai: "OPENAI_API_KEY"
+  anthropic: "ANTHROPIC_API_KEY"
+  gemini: "GEMINI_API_KEY"
+  openrouter: "OPENROUTER_API_KEY"
+
+# 3. UNIVERSAL MODEL REGISTRY (2026 Edition)
+models:
+  # --- LOCAL ---
+  local_coder_32b:
+    provider: "ollama"
+    model_name: "qwen2.5-coder:32b"
+    node_ref: "cortex"
+    context: 32768
+  local_strategist_r1:
+    provider: "ollama"
+    model_name: "deepseek-r1:70b"
+    node_ref: "cortex"
+    context: 16384
+  local_bleeding_edge:
+    provider: "ollama"
+    model_name: "qwen3-coder-next"
+    node_ref: "cortex"
+    context: 65536
+
+  # --- CLOUD BLEEDING EDGE ---
+  cloud_gpt5_2:
+    provider: "openai"
+    model_name: "gpt-5.2" 
+    env_key_ref: "openai"
+  cloud_claude_4_6_opus:
+    provider: "openrouter"
+    model_name: "anthropic/claude-4.6-opus"
+    env_key_ref: "openrouter"
+  cloud_claude_4_6_sonnet:
+    provider: "openrouter"
+    model_name: "anthropic/claude-4.6-sonnet"
+    env_key_ref: "openrouter"
+  cloud_gemini_2_5_pro:
+    provider: "gemini"
+    model_name: "gemini/gemini-2.5-pro"
+    env_key_ref: "gemini"
+  cloud_gemini_2.5_flash:
+    provider: "gemini"
+    model_name: "gemini/gemini-2.5-flash"
+    env_key_ref: "gemini"
+
+# 4. ACTIVE SWITCHBOARD
+active_profile:
+  default: "local_bleeding_edge"
+  coder: "local_bleeding_edge"
+  architect: "local_bleeding_edge"
+  strategist: "local_strategist_r1"
+  researcher: "cloud_gemini_2.5_pro"
+  fast_chat: "local_coder_32b"
 
 persona:
   name: "Cobalt"
@@ -35,8 +104,6 @@ persona:
     - "Verify all data"
     - "Protect capital"
     - "Analyze data before deciding"
-
-# ... existing config ...
 
 # COBALT ORGANIZATIONAL CHART
 # Defines the active Departments and their mission statements.

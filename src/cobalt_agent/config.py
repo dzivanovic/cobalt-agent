@@ -61,6 +61,15 @@ class PersonaConfig(BaseModel):
 
 # --- 2. The Dynamic Master Configuration ---
 
+class NodeConfig(BaseModel):
+    role: str
+    ip: str
+    port: int
+    protocol: str = "http"
+
+class NetworkConfig(BaseModel):
+    nodes: Dict[str, NodeConfig]
+
 class CobaltConfig(BaseModel):
     """
     The Unified Configuration Object.
@@ -78,6 +87,9 @@ class CobaltConfig(BaseModel):
     
     # Optional Known Sections (Type-safe access for code that expects them)
     trading_rules: Optional[TradingRules] = None
+    active_profile: Optional[Dict[str, str]] = None
+    models: Optional[Dict[str, Any]] = None
+    network: Optional[NetworkConfig] = None
 
     def __getattr__(self, item):
         """
@@ -96,6 +108,48 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
         else:
             base[key] = value
     return base
+
+def get_current_node_role() -> Optional[str]:
+    """
+    Determine the role of the current node based on the 'network' section in config.yaml.
+    Returns the role if found, otherwise returns None.
+    """
+    try:
+        with open("configs/config.yaml", "r") as f:
+            config_data = yaml.safe_load(f) or {}
+        
+        network_config = config_data.get('network', {})
+        nodes = network_config.get('nodes', {})
+        
+        import socket
+        hostname = socket.gethostname()
+        
+        for node, details in nodes.items():
+            if 'ip' in details and details['ip'] == socket.gethostbyname(hostname):
+                return details.get('role')
+    
+    except Exception as e:
+        logger.error(f"Failed to determine current node role: {e}")
+    
+    return None
+
+class Config:
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Config, cls).__new__(cls)
+            cls._instance._config = load_config()
+        return cls._instance
+
+    @staticmethod
+    def get_instance():
+        if Config._instance is None:
+            Config._instance = Config()
+        return Config._instance
+
+    def load(self) -> CobaltConfig:
+        return self._config
 
 def load_config(config_dir: Optional[Path | str] = None) -> CobaltConfig:
     """
@@ -147,6 +201,9 @@ def load_config(config_dir: Optional[Path | str] = None) -> CobaltConfig:
 
     # 4. Create Object
     try:
+        # Debugging: Print the final merged configuration data
+        logger.debug(f"Merged Configuration Data: {master_data}")
+
         # Pydantic will validate known fields (system, trading_rules) 
         # and accept unknown ones (subagents, skills) due to extra='allow'
         return CobaltConfig(**master_data)

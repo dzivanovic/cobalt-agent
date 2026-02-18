@@ -42,14 +42,29 @@ class PromptEngine:
         return f"{header}\n\n{context}\n\n{memory_rules}\n\n{directives}\n\n{tool_section}"
 
     def _build_header(self) -> str:
-        # Handle list of roles (join nicely)
+        """
+        Build the identity section of the system prompt.
+        Includes: Identity, Roles, Tone, and Directives.
+        """
+        # Format roles
         roles_str = ", ".join(self.persona.roles)
-        # Handle list of tones
+        # Format tone
         tone_str = ", ".join(self.persona.tone)
+        # Format directives as bullet points
+        directives_str = "\n".join([f"- {d}" for d in self.persona.directives]) if self.persona.directives else "No specific directives defined."
         
         return (
-            f"You are {self.persona.name}, a {roles_str}.\n"
-            f"Your Tone: {tone_str}."
+            f"### IDENTITY\n"
+            f"You are {self.persona.name}.\n"
+            f"\n"
+            f"### ROLES\n"
+            f"Your roles are: {roles_str}.\n"
+            f"\n"
+            f"### OPERATIONAL DIRECTIVES\n"
+            f"{directives_str}\n"
+            f"\n"
+            f"### TONE\n"
+            f"Maintain a tone that is: {tone_str}."
         )
 
     def _build_context(self) -> str:

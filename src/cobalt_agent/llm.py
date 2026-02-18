@@ -21,21 +21,86 @@ class LLM(BaseModel):
     """
     
     # Configuration
-    model_name: str = Field(..., description="The model to use (e.g., 'gpt-4o', 'ollama/qwen2.5:14b')")
+    role: str = Field("default", description="The role to use for model selection")
     api_key: Optional[SecretStr] = Field(default=None, description="API Key (optional if in env vars)")
+    
+    def __init__(self, **data: Any) -> None:
+        super().__init__(**data)
+        self._resolve_model_config()
+        
+    # Model name property
+    @property
+    def model_name(self) -> str:
+        """Public property to access the resolved model name."""
+        return self._model_name
+    
+    def switch_role(self, new_role: str) -> None:
+        """
+        Switch to a new role and re-resolve the model configuration.
+        This allows hot-swapping between different models (e.g., Qwen 80B -> DeepSeek 70B).
+        """
+        self.role = new_role
+        self._resolve_model_config()
+        logger.info(f"Role switched to '{new_role}', model updated to: {self._model_name}")
+    
+    def _resolve_model_config(self) -> None:
+        from cobalt_agent.config import load_config
+        # Load the configuration object
+        config = load_config()
+        
+        # Debugging: Print the config object to verify its attributes
+        logger.debug(f"Config Object: {config.__dict__}")
+        # 1. Resolve the Model Alias (Intent -> Alias)
+        active_profile = config.active_profile
+        
+        model_alias = active_profile.get(self.role, active_profile.get("default"))
 
-    def model_post_init(self, __context: Any) -> None:
-        """
-        Post-initialization hook to validate API key.
-        """
-        # Check if key is provided directly or exists in env
-        # We support COBALT_LLM_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, etc via LiteLLM
-        # Note: Ollama models usually don't need a key, so we skip the warning if using ollama/
-        if "ollama" not in self.model_name and not self.api_key and not os.getenv("OPENAI_API_KEY"):
-            logger.warning("No API Key found for Cloud Model. Agent functionality will be limited.")
+        # 2. Retrieve Model Config (Alias -> Config)
+        if model_alias not in config.models:
+            raise ValueError(f"Model alias '{model_alias}' not found in registry.")
+            
+        model_config = config.models[model_alias]
+        
+        # 3. Construct Model String
+        if isinstance(model_config, dict):
+            provider = model_config.get("provider")
+            name = model_config.get("model_name")
+            node_ref = model_config.get("node_ref")
+            env_key_ref = model_config.get("env_key_ref")
         else:
-            logger.info(f"LLM Initialized: {self.model_name}")
+            provider = model_config.provider
+            name = model_config.model_name
+            node_ref = getattr(model_config, "node_ref", None)
+            env_key_ref = getattr(model_config, "env_key_ref", None)
 
+        self._model_name = f"{provider}/{name}"
+
+        # 4. Resolve Network or Keys
+        if node_ref:
+            nodes = config.network.nodes
+            target_node = nodes.get(node_ref) if isinstance(nodes, dict) else getattr(nodes, node_ref, None)
+            
+            if not target_node:
+                raise ValueError(f"Node reference '{node_ref}' not found in network topology.")
+            
+            if isinstance(target_node, dict):
+                ip = target_node.get("ip")
+                port = target_node.get("port")
+                protocol = target_node.get("protocol", "http")
+            else:
+                ip = target_node.ip
+                port = target_node.port
+                protocol = getattr(target_node, "protocol", "http")
+
+            self._api_base = f"{protocol}://{ip}:{port}"
+            
+        elif env_key_ref:
+            keys = config.keys
+            env_var_name = keys.get(env_key_ref) if isinstance(keys, dict) else getattr(keys, env_key_ref, None)
+            
+            if env_var_name:
+                self.api_key = SecretStr(os.getenv(env_var_name, ""))
+        
     def _call_provider(self, messages: List[Dict[str, str]]) -> str:
         """
         Internal helper to send messages to the provider via LiteLLM.
@@ -44,19 +109,14 @@ class LLM(BaseModel):
             # Get key string safely if it exists on the instance
             key_str = self.api_key.get_secret_value() if self.api_key else None
             
-            # HYBRID LOGIC: Determine the routing
-            api_base = None
-            
-            # If the model string starts with "ollama/", we route to the Local Mac Studio
-            if self.model_name.startswith("ollama/"):
-                api_base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            api_base = self._api_base
             
             # Make the call
             response = completion(
-                model=self.model_name,
+                model=self._model_name,
                 messages=messages,
                 api_key=key_str,
-                base_url=api_base,  # Injects local URL for Ollama, ignored for OpenAI
+                base_url=api_base,  
                 temperature=0.7 
             )
             
