@@ -95,6 +95,15 @@ class NetworkConfig(BaseModel):
     nodes: Dict[str, NodeConfig]
 
 
+class PostgresConfig(BaseModel):
+    """Schema for PostgreSQL database configuration."""
+    host: str = "localhost"
+    port: int = 5432
+    db: str = "cobalt_memory"
+    user: str = "postgres"
+    password: Optional[str] = None
+
+
 # --- 2. Main Configuration Class with ENV Override Support ---
 
 
@@ -124,6 +133,7 @@ class CobaltSettings(BaseSettings):
     active_profile: Optional[Dict[str, str]] = None
     models: Optional[Dict[str, Any]] = None
     network: Optional[NetworkConfig] = None
+    postgres: PostgresConfig = Field(default_factory=PostgresConfig)
 
     @classmethod
     def settings_customise_sources(
@@ -181,6 +191,11 @@ def _merge_yaml_with_env(yaml_data: Dict[str, Any]) -> Dict[str, Any]:
         "COBALT_CORTEX_IP": ("network", ["nodes", "cortex", "ip"]),
         "COBALT_CORTEX_PORT": ("network", ["nodes", "cortex", "port"]),
         "COBALT_VAULT_PATH": ("system", ["obsidian_vault_path"]),
+        "POSTGRES_HOST": ("postgres", ["host"]),
+        "POSTGRES_PORT": ("postgres", ["port"]),
+        "POSTGRES_DB": ("postgres", ["db"]),
+        "POSTGRES_USER": ("postgres", ["user"]),
+        "POSTGRES_PASSWORD": ("postgres", ["password"]),
     }
     
     # Process special cases first

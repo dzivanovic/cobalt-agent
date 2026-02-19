@@ -1,6 +1,10 @@
 """
 Postgres Memory Adapter (The Hippocampus)
 Hybrid: Combines Persistent Logging with Vector Embeddings for Semantic Search.
+
+Configuration Sources (highest to lowest priority):
+1. Environment variables (POSTGRES_HOST, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+2. YAML config in configs/*.yaml
 """
 import os
 import json
@@ -9,31 +13,27 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from loguru import logger
 from litellm import embedding
+from ..config import get_config
 from .base import MemoryProvider
 
 class PostgresMemory(MemoryProvider):
     def __init__(self):
-        # 1. Load Credentials
-        self.host = os.getenv("POSTGRES_HOST", "localhost")
-        self.db = os.getenv("POSTGRES_DB", "cobalt_memory")
-        self.user = os.getenv("POSTGRES_USER", "postgres")
-        self.password = os.getenv("POSTGRES_PASSWORD", "cobalt_password")
+        # 1. Load Credentials from config object
+        config = get_config()
+        postgres_config = config.postgres
         
-        # Connection String (Localhost for host-based execution)
-        self.conn_str = f"postgresql://{self.user}:{self.password}@{self.host}:5432/{self.db}"
+        self.host = postgres_config.host
+        self.port = postgres_config.port
+        self.db = postgres_config.db
+        self.user = postgres_config.user
+        self.password = postgres_config.password or os.getenv("POSTGRES_PASSWORD", "cobalt_password")
+        
+        # Connection String (using config-based host for proper host-based execution)
+        self.conn_str = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.db}"
         self.table_name = "memory_logs"
         
         # 2. Initialize DB (Auto-create vector table)
-        self._init_db()
-
-    def _get_conn(self):
-        """Helper to get a fresh connection."""
-        return psycopg.connect(self.conn_str, autocommit=True)
-
-    def _init_db(self):
-        """Creates the Vector Table if it doesn't exist."""
-        try:
-            with self._get_conn() as conn:
+        self._init_db
                 # Enable Vector Extension
                 conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
                 
