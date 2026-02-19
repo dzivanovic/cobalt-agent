@@ -10,7 +10,7 @@ network:
   nodes:
     cortex:
       role: primary_inference
-      ip: localhost
+      ip: "10.200.2.196"
       port: 11434
       protocol: http
     edge_mobile:
