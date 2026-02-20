@@ -17,6 +17,10 @@ from ..config import get_config
 from .base import MemoryProvider
 
 class PostgresMemory(MemoryProvider):
+    def _get_conn(self):
+        """Get a database connection."""
+        return psycopg.connect(self.conn_str)
+    
     def __init__(self):
         # 1. Load Credentials from config object
         config = get_config()
@@ -33,7 +37,12 @@ class PostgresMemory(MemoryProvider):
         self.table_name = "memory_logs"
         
         # 2. Initialize DB (Auto-create vector table)
-        self._init_db
+        self._init_db()
+    
+    def _init_db(self):
+        """Initialize database connection and create tables."""
+        try:
+            with self._get_conn() as conn:
                 # Enable Vector Extension
                 conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
                 

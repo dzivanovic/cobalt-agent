@@ -13,7 +13,7 @@ from typing import Optional, TYPE_CHECKING, Any, List
 if TYPE_CHECKING:
     from cobalt_agent.brain.cortex import Cortex
 
-from cobalt_agent.tool_manager import ToolManager
+from cobalt_agent.tools.tool_manager import ToolManager
 
 class CLI:
     """Interactive command-line interface for Cobalt Agent."""
@@ -66,7 +66,7 @@ class CLI:
                 
                 # If Cortex handled it, we loop back to let user ask follow-up (e.g. "Analyze this")
                 if handled_by_cortex: continue 
-                
+      	      	
                 # 2. AUTONOMOUS CHAT (The Fallback / Analyst)
                 # Handles "Analyze that", "Hi", or generic questions Cortex didn't claim.
                 self._handle_chat(user_input)
@@ -211,7 +211,7 @@ class CLI:
                         output_str = self._format_tool_output(result.output)
                         preview = output_str[:500] + "..." if len(output_str) > 500 else output_str
                         self.console.print(f"[dim cyan]{preview}[/dim cyan]") 
-                        
+      	      	
                         observation = f"System Observation from {tool_name}: {output_str}"
                     else:
                         observation = f"System Observation: Error - {result.error}"

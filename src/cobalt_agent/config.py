@@ -8,22 +8,30 @@ Loading Priority (highest to lowest):
 
 Environment Variable Mapping:
 - Simple fields: UPPER_CASE converts to lower_case_with_underscores
-- Nested fields: NODES_CORTEX_IP maps to network.nodes.cortex.ip
+- Nested fields: POSTGRES_HOST maps to postgres.host via env_nested_delimiter="_"
 """
 
 import os
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-from collections.abc import Mapping
+from typing import Any, Optional
 
 import yaml
 from dotenv import load_dotenv
 from loguru import logger
 from pydantic import BaseModel, Field, ConfigDict
-from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
+from pydantic_settings import BaseSettings
+from pydantic_settings.sources import PydanticBaseSettingsSource
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file (explicit path)
+# Get the directory where config.py is located
+config_dir = Path(__file__).parent
+# Look for .env in the project root (parent of src/)
+env_path = config_dir.parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    # Fallback to current working directory
+    load_dotenv()  # Fallback to default behavior (looks in cwd)
 
 
 # --- 1. Modular Schema Definitions ---
@@ -76,10 +84,10 @@ class LLMConfig(BaseModel):
 class PersonaConfig(BaseModel):
     """Schema for agent persona configuration."""
     name: str = "Cobalt"
-    roles: List[str] = Field(default_factory=list)
-    skills: List[str] = Field(default_factory=list)
-    tone: List[str] = Field(default_factory=list)
-    directives: List[str] = Field(default_factory=list)
+    roles: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+    tone: list[str] = Field(default_factory=list)
+    directives: list[str] = Field(default_factory=list)
 
 
 class NodeConfig(BaseModel):
@@ -92,7 +100,7 @@ class NodeConfig(BaseModel):
 
 class NetworkConfig(BaseModel):
     """Schema for network topology configuration."""
-    nodes: Dict[str, NodeConfig]
+    nodes: dict[str, NodeConfig]
 
 
 class PostgresConfig(BaseModel):
@@ -104,36 +112,46 @@ class PostgresConfig(BaseModel):
     password: Optional[str] = None
 
 
-# --- 2. Main Configuration Class with ENV Override Support ---
+class MattermostConfig(BaseModel):
+    """Schema for Mattermost communication configuration."""
+    url: Optional[str] = None
+    token: Optional[str] = None
+    scheme: str = "http"
+    port: int = 8065
+
+
+# --- 2. Main Configuration Class ---
 
 
 class CobaltSettings(BaseSettings):
     """
     Pydantic Settings class that loads YAML config and allows ENV overrides.
     
-    Environment variable naming convention:
-    - Top-level keys: UPPER_SNAKE_CASE
-    - Nested keys: NODES_CORTEX_IP (all caps, dots -> underscores)
-    
-    YAML is loaded first, then ENV variables recursively override values.
+    Environment Variable Naming Convention:
+    - Nested keys: POSTGRES_HOST -> postgres.host (using env_nested_delimiter="_")
+    - The env_nested_delimiter setting allows Pydantic to automatically
+      map POSTGRES_HOST to postgres.host via the "_" delimiter.
     """
     model_config = ConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="allow",  # Allow extra fields not defined in schema
+        env_prefix="",  # No prefix for environment variables
+        env_nested_delimiter="_",  # Use underscore to separate nested keys
     )
 
-    # Core Sections
+    # Core Sections with defaults from YAML
     system: SystemConfig = Field(default_factory=SystemConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     persona: PersonaConfig = Field(default_factory=PersonaConfig)
     
     # Optional Known Sections
     trading_rules: Optional[TradingRules] = None
-    active_profile: Optional[Dict[str, str]] = None
-    models: Optional[Dict[str, Any]] = None
+    active_profile: Optional[dict[str, str]] = None
+    models: Optional[dict[str, Any]] = None
     network: Optional[NetworkConfig] = None
     postgres: PostgresConfig = Field(default_factory=PostgresConfig)
+    mattermost: MattermostConfig = Field(default_factory=MattermostConfig)
 
     @classmethod
     def settings_customise_sources(
@@ -145,16 +163,19 @@ class CobaltSettings(BaseSettings):
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         """
-        Custom source order: ENV overrides YAML config.
-        We load YAML first, then ENV overrides.
+        Custom source order: ENV variables override YAML values.
+        Source order (highest to lowest priority):
+        1. ENV settings (including .env file)
+        2. File secret settings
+        3. Init settings (YAML data passed as kwargs)
         """
-        return (init_settings, env_settings, dotenv_settings, file_secret_settings)
+        return (env_settings, dotenv_settings, file_secret_settings, init_settings)
 
 
-# --- 3. Configuration Loader with YAML + ENV Merging ---
+# --- 3. Helper Functions ---
 
 
-def _load_yaml_config(yaml_path: Path) -> Dict[str, Any]:
+def _load_yaml_config(yaml_path: Path) -> dict[str, Any]:
     """Load and return YAML configuration as dictionary."""
     if not yaml_path.exists():
         logger.warning(f"Config file not found: {yaml_path}")
@@ -168,150 +189,7 @@ def _load_yaml_config(yaml_path: Path) -> Dict[str, Any]:
         return {}
 
 
-def _merge_yaml_with_env(yaml_data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Merge YAML data with environment variables.
-    ENV variables take precedence and recursively override YAML values.
-    
-    Supported ENV variable formats:
-    - SYSTEM_DEBUG_MODE -> system.debug_mode
-    - SYSTEM_OBSIDIAN_VAULT_PATH -> system.obsidian_vault_path
-    - NETWORK_NODES_CORTEX_IP -> network.nodes.cortex.ip
-    - NETWORK_NODES_CORTEX_PORT -> network.nodes.cortex.port
-    - COBALT_CORTEX_IP -> network.nodes.cortex.ip (special case)
-    - COBALT_VAULT_PATH -> system.obsidian_vault_path (special case)
-    """
-    # Get all environment variables
-    env_vars = {k: v for k, v in os.environ.items() if k.isupper()}
-    
-    result = yaml_data.copy()
-    
-    # Special cases for Cobalt-specific environment variables
-    special_cases = {
-        "COBALT_CORTEX_IP": ("network", ["nodes", "cortex", "ip"]),
-        "COBALT_CORTEX_PORT": ("network", ["nodes", "cortex", "port"]),
-        "COBALT_VAULT_PATH": ("system", ["obsidian_vault_path"]),
-        "POSTGRES_HOST": ("postgres", ["host"]),
-        "POSTGRES_PORT": ("postgres", ["port"]),
-        "POSTGRES_DB": ("postgres", ["db"]),
-        "POSTGRES_USER": ("postgres", ["user"]),
-        "POSTGRES_PASSWORD": ("postgres", ["password"]),
-    }
-    
-    # Process special cases first
-    for env_key, (root_key, nested_path) in special_cases.items():
-        if env_key in env_vars:
-            env_value = env_vars[env_key]
-            if root_key in yaml_data:
-                current = result[root_key]
-                for part in nested_path[:-1]:
-                    if isinstance(current, dict) and part not in current:
-                        current[part] = {}
-                    current = current.get(part, {})
-                
-                if isinstance(current, dict) and nested_path[-1] not in ["", None]:
-                    current[nested_path[-1]] = _convert_env_value(env_value)
-                    logger.debug(f"ENV override (special): {env_key} -> {env_value}")
-    
-    # Process each ENV variable
-    for env_key, env_value in env_vars.items():
-        # Skip special cases that were already processed
-        if env_key in special_cases:
-            continue
-            
-        # Convert ENV key to nested path
-        # e.g., NETWORK_NODES_CORTEX_IP -> ["network", "nodes", "cortex", "ip"]
-        parts = env_key.lower().split("_")
-        
-        # Skip if not enough parts for nested path
-        if len(parts) < 2:
-            continue
-        
-        # Determine the root key and nested path
-        # Handle special case: SYSTEM_ prefix
-        if parts[0] == "system":
-            root_key = "system"
-            nested_path = parts[1:]
-        elif parts[0] == "network":
-            root_key = "network"
-            nested_path = parts[1:]
-        elif parts[0] == "llm":
-            root_key = "llm"
-            nested_path = parts[1:]
-        elif parts[0] == "persona":
-            root_key = "persona"
-            nested_path = parts[1:]
-        elif parts[0] == "trading":
-            root_key = "trading_rules"
-            nested_path = parts[1:]
-        else:
-            # General case: treat first part as root key
-            root_key = parts[0]
-            nested_path = parts[1:]
-        
-        # Skip if root key not in yaml_data
-        if root_key not in yaml_data:
-            continue
-        
-        # Navigate/create nested structure and set value
-        current = result[root_key]
-        
-        # If nested_path is empty, set value directly on root
-        if not nested_path:
-            result[root_key] = _convert_env_value(env_value)
-            continue
-        
-        # Navigate to the target location
-        path_parts = nested_path[:-1]
-        target_key = nested_path[-1]
-        
-        try:
-            for part in path_parts:
-                if isinstance(current, dict):
-                    if part not in current:
-                        current[part] = {}
-                    current = current[part]
-                else:
-                    break
-            
-            if isinstance(current, dict):
-                current[target_key] = _convert_env_value(env_value)
-                logger.debug(f"ENV override: {env_key} -> {env_value}")
-        except Exception as e:
-            logger.warning(f"Failed to apply ENV override {env_key}: {e}")
-    
-    return result
-
-
-def _convert_env_value(value: str) -> Any:
-    """Convert string environment value to appropriate Python type."""
-    # Boolean
-    if value.lower() in ("true", "yes", "1"):
-        return True
-    if value.lower() in ("false", "no", "0"):
-        return False
-    
-    # Integer
-    try:
-        return int(value)
-    except ValueError:
-        pass
-    
-    # Float
-    try:
-        return float(value)
-    except ValueError:
-        pass
-    
-    # Remove surrounding quotes if present
-    if (value.startswith('"') and value.endswith('"')) or \
-       (value.startswith("'") and value.endswith("'")):
-        return value[1:-1]
-    
-    return value
-
-
-def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
+def _deep_merge(base: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
     """Recursively merge dictionary 'update' into 'base'."""
     result = base.copy()
     
@@ -380,7 +258,7 @@ def load_config(config_dir: Optional[Path | str] = None) -> CobaltSettings:
     Load configuration from YAML files and merge with environment variables.
     
     Priority (highest to lowest):
-    1. Environment variables
+    1. Environment variables (via Pydantic's env_nested_delimiter)
     2. YAML files in configs directory
     3. Default values
     
@@ -430,13 +308,11 @@ def load_config(config_dir: Optional[Path | str] = None) -> CobaltSettings:
         except Exception as e:
             logger.error(f"Failed to load {file_path.name}: {e}")
 
-    # 4. Merge YAML with ENV overrides
-    merged_data = _merge_yaml_with_env(master_data)
-    
-    # 5. Create Pydantic Settings Object
+    # 4. Create Pydantic Settings Object
+    # Pydantic will automatically handle ENV overrides via env_nested_delimiter="_"
     try:
-        logger.debug(f"Final merged configuration: {merged_data}")
-        return CobaltSettings(**merged_data)
+        logger.debug(f"Final merged configuration: {master_data}")
+        return CobaltSettings(**master_data)
     except Exception as e:
         logger.error(f"Configuration Validation Error: {e}")
         return CobaltSettings()

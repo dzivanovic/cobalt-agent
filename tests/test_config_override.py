@@ -26,7 +26,8 @@ def test_config_override():
     # Get configuration instance
     config = get_config()
     
-    # Test 1: Check cortex IP (should be 'localhost' from .env, not '10.200.2.196' from yaml)
+    # Test 1: Check cortex IP (should be 'localhost' from .env)
+    # Pydantic env_nested_delimiter="_" maps: NETWORK_NODES_CORTEX_IP -> network.nodes.cortex.ip
     print("\n[Test 1] Cortex IP Override")
     print("-" * 40)
     expected_yaml_ip = "10.200.2.196"
@@ -42,6 +43,7 @@ def test_config_override():
         print("  [PASS] Environment variable override works!")
     else:
         print(f"  [FAIL] Expected '{expected_env_ip}' but got '{cortex_ip}'")
+        print("  NOTE: Use NETWORK_NODES_CORTEX_IP in .env for Pydantic env_nested_delimiter")
     
     # Test 2: Check Obsidian Vault Path (should be from .env)
     print("\n[Test 2] Obsidian Vault Path Override")

@@ -11,10 +11,10 @@ from cobalt_agent.config import load_config
 from cobalt_agent.memory.postgres import PostgresMemory
 from cobalt_agent.memory import MemorySystem  # Keep this as fallback
 from cobalt_agent.persona import Persona
-from cobalt_agent.interface import CLI
+from cobalt_agent.interfaces.cli import CLI
 from cobalt_agent.llm import LLM
 from cobalt_agent.prompt import PromptEngine
-from cobalt_agent.tool_manager import ToolManager
+from cobalt_agent.tools.tool_manager import ToolManager
 from cobalt_agent.brain.cortex import Cortex
 from cobalt_agent.core.scheduler import AgentScheduler
 from cobalt_agent.skills.productivity.briefing import MorningBriefing
