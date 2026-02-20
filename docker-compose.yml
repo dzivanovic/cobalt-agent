@@ -1,5 +1,6 @@
 services:
   db:
+    profiles: ["core"]
     image: pgvector/pgvector:pg16
     container_name: cobalt_memory
     ports:
@@ -28,6 +29,28 @@ services:
     depends_on:
       - db
 
+  mattermost:
+    profiles: ["core"]
+    image: mattermost/mattermost-enterprise-edition:latest
+    platform: linux/amd64
+    ports:
+      - "8065:8065"
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable&connect_timeout=10
+    depends_on:
+      - db
+    volumes:
+      - mattermost_config:/mattermost/config
+      - mattermost_data:/mattermost/data
+    restart: unless-stopped
+    networks:
+      - cobalt_net
+
 networks:
   cobalt_net:
     driver: bridge
+
+volumes:
+  mattermost_config:
+  mattermost_data:
