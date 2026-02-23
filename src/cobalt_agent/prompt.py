@@ -137,9 +137,9 @@ class PromptEngine:
             
         descriptions = []
         for tool in tools:
-            # We look for a 'name' and 'description' attribute on the tool class
-            name = getattr(tool, 'name', str(tool))
-            desc = getattr(tool, 'description', 'No description provided.')
-            descriptions.append(f"- {name}: {desc}")
+            # Use class name instead of raw memory address
+            name = type(tool).__name__
+            formatted_name = name.replace('Tool', '').lower()
+            descriptions.append(f"- {name}: Use this tool for {formatted_name} tasks.")
         
         return "### AVAILABLE TOOLS\n" + "\n".join(descriptions)

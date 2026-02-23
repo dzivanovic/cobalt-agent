@@ -45,7 +45,13 @@ class Cortex:
         if len(user_input.split()) < 4 and "hi" in user_input.lower():
             return None
 
-        # 1. Classify
+        # 1. Hardcoded bypass for questions - routes to FOUNDATION (standard chat with tool access)
+        text_lower = user_input.lower()
+        if "?" in text_lower or "price" in text_lower or "what" in text_lower:
+            logger.info("Direct route bypass triggered: Question detected.")
+            return None
+        
+        # 2. Classify
         decision = self._classify_domain(user_input)
         
         # 2. Lazy Load & Execute
@@ -106,12 +112,44 @@ class Cortex:
         {options_text}
         - FOUNDATION: General chat, greetings, system questions.
         
-        CRITICAL INSTRUCTION FOR PARAMETERS:
-        - If TACTICAL (Trading): 
-            - If asking for prices/data: Extract ONLY the ticker (e.g. "NVDA").
-            - If asking for strategies/playbook: Extract the word "STRATEGY".
-        - If OPS (Scribe): Extract the note content.
-        - If INTEL (Research): Extract the search topic.
+        === ROUTING LOGIC ===
+        1. TACTICAL (Trading/Market Data):
+           - Use for: stock prices, market data, ticker queries (e.g., "AAPL", "TSLA", "NVDA")
+           - Use for: "What is the price of X?", "Give me AAPL data", "Stock price"
+           - Extract ONLY the ticker symbol (e.g. "NVDA", "AAPL") as task_parameters
+           - Use "STRATEGY" ONLY if user explicitly asks about strategies, strategies menu, or playbooks
+        
+        2. INTEL (Research/News):
+           - Use for: news, general research, deep dives, current events
+           - Extract the search topic as task_parameters
+        
+        3. OPS (Operations/Scribe):
+           - Use for: logging, journaling, saving notes, medical billing
+           - Extract relevant content as task_parameters
+        
+        4. FOUNDATION:
+           - Use for: greetings, small talk, system questions
+           - Return task_parameters: "chat"
+        
+        === EXAMPLES ===
+        Input: "What is the current price of AAPL?"
+        → Domain: TACTICAL, Parameters: "AAPL"
+        
+        Input: "What is the price of TSLA?"
+        → Domain: TACTICAL, Parameters: "TSLA"
+        
+        Input: "Show me the strategies"
+        → Domain: TACTICAL, Parameters: "STRATEGY"
+        
+        Input: "What's new in AI?"
+        → Domain: INTEL, Parameters: "AI"
+        
+        Input: "Hi, how are you?"
+        → Domain: FOUNDATION, Parameters: "chat"
+        
+        === INSTRUCTION ===
+        For ANY question asking about a stock price, ticker, or market data, route to TACTICAL with the ticker symbol as the parameter.
+        Do NOT use STRATEGY unless user explicitly mentions strategies or playbooks.
         
         Return the decision structured correctly.
         """

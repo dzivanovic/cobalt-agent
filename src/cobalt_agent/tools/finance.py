@@ -59,6 +59,9 @@ class MarketMetrics(BaseModel):
 
 # --- TOOL ---
 class FinanceTool:
+    name = "finance"
+    description = "Get current stock market data and technical indicators. Use for price queries, e.g., 'What is the price of AAPL?'"
+    
     def __init__(self):
         self.system_config = load_config()
         # We access the raw dictionary or object safely

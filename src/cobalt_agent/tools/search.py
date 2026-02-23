@@ -17,6 +17,9 @@ class SearchResult(BaseModel):
 
 # --- TOOL ---
 class SearchTool:
+    name = "search"
+    description = "Search the internet for news, information, and general knowledge. Use for questions about current events, topics, or general queries."
+    
     def __init__(self):
         pass
 

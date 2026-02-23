@@ -12,6 +12,7 @@ from cobalt_agent.memory.postgres import PostgresMemory
 from cobalt_agent.memory import MemorySystem  # Keep this as fallback
 from cobalt_agent.persona import Persona
 from cobalt_agent.interfaces.cli import CLI
+from cobalt_agent.interfaces.mattermost import MattermostInterface
 from cobalt_agent.llm import LLM
 from cobalt_agent.prompt import PromptEngine
 from cobalt_agent.tools.tool_manager import ToolManager
@@ -130,21 +131,80 @@ class CobaltAgent:
         
             self.memory.save_memory()
 
+    def process_input(self, text: str) -> str:
+        """
+        Process incoming text input and generate a response.
+        Combines Cortex routing with autonomous chat fallback.
+        
+        Args:
+            text: The incoming message text
+            
+        Returns:
+            The response string
+        """
+        try:
+            # 1. Try Cortex routing first (specialized departments)
+            if self.cortex:
+                specialist_response = self.cortex.route(text)
+                if specialist_response:
+                    logger.info(f"Cortex handled: {specialist_response[:100]}")
+                    return specialist_response
+            
+            # 2. Fallback to autonomous chat (LLM)
+            response = self.llm.generate_response(
+                system_prompt=self.system_prompt,
+                user_input=text,
+                memory_context=[],
+                search_context=""
+            )
+            logger.info(f"LLM response generated")
+            return response
+        except Exception as e:
+            logger.error(f"Failed to process input: {e}")
+            return f"Error processing your request: {e}"
+    
     def send_message(self, message):
         """Send a message using the LLM."""
         try:
             response = self.llm.generate_response(
-    system_prompt=self.system_prompt,
-    user_input=message,
-    memory_context=[],
-    search_context=""
-)
+                system_prompt=self.system_prompt,
+                user_input=message,
+                memory_context=[],
+                search_context=""
+            )
             logger.info(f"Message sent: {message}")
             logger.info(f"Response received: {response}")
             return response
         except Exception as e:
             logger.error(f"Failed to send message: {e}")
+    
+    def start_mattermost_interface(self) -> None:
+        """
+        Start the Mattermost WebSocket listener instead of CLI.
+        """
+        mm_interface = MattermostInterface()
+        
+        try:
+            if not mm_interface.connect():
+                logger.error("Failed to connect to Mattermost. Exiting.")
+                return
+            
+            logger.info("=" * 80)
+            logger.info("Cobalt Agent - Mattermost Interface Active")
+            logger.info("=" * 80)
+            
+            # Explicitly attach brain (cortex) to the interface before listening
+            mm_interface.brain = self.cortex
+            
+            # Start listening for messages (blocking)
+            mm_interface.start_listening(self)
+        finally:
+            if hasattr(mm_interface, 'disconnect'):
+                mm_interface.disconnect()
+            self.scheduler.stop()
+            self.memory.add_log("Mattermost session ended", source="System")
+            self.memory.save_memory()
 
 if __name__ == "__main__":
     agent = CobaltAgent()
-    agent.main()
+    agent.start_mattermost_interface()
