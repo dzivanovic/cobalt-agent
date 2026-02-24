@@ -10,6 +10,7 @@ import multiprocessing
 from typing import Optional, Dict, Any, Callable, TYPE_CHECKING
 if TYPE_CHECKING:
     from cobalt_agent.main import CobaltAgent
+    from cobalt_agent.core.proposals import ProposalEngine, Proposal
 from urllib.parse import urlparse
 
 import websockets
@@ -28,6 +29,7 @@ class MattermostInterface:
     """
     
     def __init__(self, config: Optional[MattermostConfig] = None):
+        self.proposal_engine: Optional[Any] = None
         """
         Initialize the Mattermost interface.
         
@@ -235,6 +237,15 @@ class MattermostInterface:
                 return
             
             logger.info(f"Message received in channel {channel_id}: {text}")
+            
+            # Check for approval response first
+            if self.proposal_engine:
+                approved_proposal = self.proposal_engine.handle_approval_response(text, channel_id)
+                if approved_proposal:
+                    logger.info(f"Proposal approved: [{approved_proposal.task_id}]")
+                    # Execute the approved action
+                    self.proposal_engine.execute_approved(approved_proposal)
+                    return  # Don't route to brain for approval responses
             
             # Route to the brain if attached - run LLM inference in background thread
             if hasattr(self, 'brain') and self.brain:

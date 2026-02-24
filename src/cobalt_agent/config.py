@@ -11,6 +11,7 @@ Environment Variable Mapping:
 - Nested fields: POSTGRES_HOST maps to postgres.host via env_nested_delimiter="_"
 """
 
+import json
 import os
 from pathlib import Path
 from typing import Any, Optional
@@ -21,6 +22,8 @@ from loguru import logger
 from pydantic import BaseModel, Field, ConfigDict
 from pydantic_settings import BaseSettings
 from pydantic_settings.sources import PydanticBaseSettingsSource
+
+from cobalt_agent.security.vault import VaultManager
 
 # Load environment variables from .env file (explicit path)
 # Get the directory where config.py is located
@@ -118,6 +121,14 @@ class MattermostConfig(BaseModel):
     token: Optional[str] = None
     scheme: str = "http"
     port: int = 8065
+    approval_channel: str = "cobalt-approvals"
+    approval_team: str = "cobalt-team"
+
+
+class VaultConfig(BaseModel):
+    """Schema for vault configuration."""
+    path: str = "data/.cobalt_vault"
+    enabled: bool = True
 
 
 # --- 2. Main Configuration Class ---
@@ -152,6 +163,7 @@ class CobaltSettings(BaseSettings):
     network: Optional[NetworkConfig] = None
     postgres: PostgresConfig = Field(default_factory=PostgresConfig)
     mattermost: MattermostConfig = Field(default_factory=MattermostConfig)
+    vault: Optional[VaultConfig] = Field(default_factory=VaultConfig)
 
     @classmethod
     def settings_customise_sources(
@@ -187,6 +199,33 @@ def _load_yaml_config(yaml_path: Path) -> dict[str, Any]:
     except Exception as e:
         logger.error(f"Failed to load {yaml_path}: {e}")
         return {}
+
+
+def parse_json_credentials(json_string: str) -> dict[str, Any]:
+    """
+    Parse JSON credentials string into a dictionary.
+    
+    Handles grouped credentials like URLs and Tokens together.
+    Example input: '{"url": "https://api.example.com", "token": "secret123"}'
+    
+    Args:
+        json_string: A JSON-formatted string containing credentials.
+        
+    Returns:
+        A dictionary with the parsed credentials.
+        
+    Raises:
+        json.JSONDecodeError: If the input is not valid JSON.
+    """
+    try:
+        credentials = json.loads(json_string)
+        if not isinstance(credentials, dict):
+            logger.warning("JSON credentials parsed to non-dict type, wrapping in dict")
+            credentials = {"data": credentials}
+        return credentials
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse JSON credentials: {e}")
+        raise
 
 
 def _deep_merge(base: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
@@ -232,8 +271,9 @@ def get_current_node_role() -> Optional[str]:
 
 
 class Config:
-    """Singleton configuration manager."""
+    """Singleton configuration manager with integrated VaultManager."""
     _instance = None
+    _vault_manager: Optional[VaultManager] = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -248,9 +288,107 @@ class Config:
             Config._instance = Config()
         return Config._instance
 
+    @property
+    def vault_manager(self) -> Optional[VaultManager]:
+        """Get or create the VaultManager instance."""
+        if Config._vault_manager is None:
+            config = self._config
+            vault_config = config.vault if config.vault else None
+            vault_path = vault_config.path if vault_config else "data/.cobalt_vault"
+            Config._vault_manager = VaultManager(vault_path)
+        return Config._vault_manager
+
     def load(self) -> CobaltSettings:
         """Load and return the configuration."""
         return self._config
+
+    def unlock_vault(self, master_key: str) -> bool:
+        """
+        Unlock the vault and inject secrets into the runtime configuration.
+        
+        Args:
+            master_key: The AES-256 Fernet key to decrypt the vault.
+            
+        Returns:
+            True if vault was successfully unlocked, False otherwise.
+        """
+        vault_mgr = self.vault_manager
+        if vault_mgr is None:
+            logger.error("Failed to unlock vault: VaultManager not initialized")
+            return False
+            
+        success = vault_mgr.unlock(master_key)
+        if success:
+            logger.info("🔐 Vault unlocked successfully. Secrets injected into runtime configuration.")
+        return success
+
+    def lock_vault(self) -> None:
+        """Lock the vault and wipe secrets from memory."""
+        vault_mgr = self.vault_manager
+        if vault_mgr is not None:
+            vault_mgr.lock()
+            Config._vault_manager = None
+            logger.info("🔒 Vault locked. Secrets wiped from RAM.")
+
+    def inject_secrets(self, config: CobaltSettings) -> CobaltSettings:
+        """
+        Inject secrets from the vault into the runtime configuration.
+        This replaces sensitive fields (like API keys and tokens) with values from the vault.
+        
+        Args:
+            config: The configuration object to inject secrets into.
+            
+        Returns:
+            The configuration object with secrets injected from the vault.
+        """
+        vault_mgr = self.vault_manager
+        if vault_mgr is None:
+            logger.warning("Vault is locked or not initialized. Skipping secret injection.")
+            return config
+            
+        if not vault_mgr._is_unlocked:
+            logger.warning("Vault is locked. Cannot inject secrets.")
+            return config
+
+        # Create a mutable copy of the configuration
+        config_data = config.model_dump()
+        
+        # Inject LLM API keys from vault
+        llm_config = config_data.get('llm', {})
+        vault_keys = vault_mgr.list_secrets()
+        
+        # Check for common API key names in vault
+        llm_key_mapping = {
+            'openai_api_key': 'api_key',
+            'anthropic_api_key': 'api_key',
+            'gemini_api_key': 'api_key',
+            'openrouter_api_key': 'api_key',
+        }
+        
+        for vault_key, config_field in llm_key_mapping.items():
+            if vault_key in vault_keys:
+                secret_value = vault_mgr.get_secret(vault_key)
+                if secret_value:
+                    llm_config[config_field] = secret_value
+                    logger.debug(f"Injected {vault_key} into LLM config")
+        
+        # Inject Mattermost credentials (URL and Token together)
+        mattermost_config = config_data.get('mattermost', {})
+        if 'mattermost_url' in vault_keys and 'mattermost_token' in vault_keys:
+            vault_mgr.get_secret('mattermost_url') and None  # Access to verify
+            mattermost_url = vault_mgr.get_secret('mattermost_url')
+            mattermost_token = vault_mgr.get_secret('mattermost_token')
+            if mattermost_url and mattermost_token:
+                mattermost_config['url'] = mattermost_url
+                mattermost_config['token'] = mattermost_token
+                logger.debug("Injected Mattermost URL and token from vault")
+        
+        # Update the config with injected secrets
+        config_data['llm'] = llm_config
+        config_data['mattermost'] = mattermost_config
+        
+        # Create new config object with injected secrets
+        return CobaltSettings(**config_data)
 
 
 def load_config(config_dir: Optional[Path | str] = None) -> CobaltSettings:
@@ -307,6 +445,47 @@ def load_config(config_dir: Optional[Path | str] = None) -> CobaltSettings:
             
         except Exception as e:
             logger.error(f"Failed to load {file_path.name}: {e}")
+
+    # --- VAULT INTEGRATION (NEW) ---
+    master_key = os.getenv("COBALT_MASTER_KEY")
+    if master_key:
+        logger.info("🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...")
+        vault = VaultManager()
+        if vault.unlock(master_key):
+            # Ensure base sections exist
+            if 'keys' not in master_data: master_data['keys'] = {}
+            if 'mattermost' not in master_data: master_data['mattermost'] = {}
+
+            for key_name in vault.list_secrets():
+                secret_val = vault.get_secret(key_name)
+                
+                # Skip None values
+                if secret_val is None:
+                    continue
+                
+                # Try to parse as JSON for grouped credentials
+                try:
+                    parsed_val = json.loads(secret_val)
+                except (ValueError, TypeError):
+                    parsed_val = secret_val # Fallback to flat string
+                
+                # Routing logic
+                if key_name == "MATTERMOST_CREDS" and isinstance(parsed_val, dict):
+                    master_data['mattermost'].update(parsed_val)
+                else:
+                    # Default flat keys (OpenAI, Gemini, etc.)
+                    master_data['keys'][key_name] = parsed_val
+                    # Inject into runtime environment for external libraries (LiteLLM)
+                    if isinstance(parsed_val, str):
+                        os.environ[key_name] = parsed_val
+                    
+            vault.lock()
+            logger.info("🔒 Vault secrets loaded into runtime RAM and vault locked.")
+        else:
+            logger.error("Failed to unlock vault with provided Master Key!")
+    else:
+        logger.warning("⚠️ No COBALT_MASTER_KEY found. Running in degraded/unsecure mode.")
+    # -------------------------------
 
     # 4. Create Pydantic Settings Object
     # Pydantic will automatically handle ENV overrides via env_nested_delimiter="_"

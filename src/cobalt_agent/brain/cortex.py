@@ -3,6 +3,8 @@ The Cortex (Manager Agent) - Config-Driven Architecture
 Routes user intent based on domains defined in config.yaml.
 Includes robust error handling, full Scribe logic, and Medical Admin placeholders.
 """
+import re
+import json
 from typing import Optional, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -10,6 +12,7 @@ from loguru import logger
 
 from cobalt_agent.llm import LLM
 from cobalt_agent.config import load_config
+from cobalt_agent.core.proposals import Proposal
 
 # --- ROUTING MODEL ---
 class DomainDecision(BaseModel):
@@ -54,6 +57,15 @@ class Cortex:
         # 2. Classify
         decision = self._classify_domain(user_input)
         
+        # --- PRIME DIRECTIVE GATE ---
+        high_risk_keywords = ['delete', 'move', 'remove', 'format', 'execute', 'kill', 'reorganize']
+        is_high_risk = any(word in user_input.lower() for word in high_risk_keywords)
+        
+        if is_high_risk:
+            logger.warning(f"🛡️ Security Intercept: High-risk action detected in input: {user_input}")
+            return self._generate_proposal(user_input)
+        # ----------------------
+        
         # 2. Lazy Load & Execute
         domain = decision.domain_name.upper()
         params = decision.task_parameters.strip()
@@ -80,6 +92,53 @@ class Cortex:
             
         else:
             return f"⚠️ Unknown Domain: {domain}"
+
+    def _generate_proposal(self, user_input: str) -> str:
+        prompt = f"""
+        [SECURITY PROTOCOL: PRIME DIRECTIVE]
+        High-risk action detected: "{user_input}"
+        
+        You are the Chief of Staff. You are FORBIDDEN from executing this autonomously.
+        Generate a JSON response explaining the risk.
+        
+        OUTPUT FORMAT:
+        {{
+          "action": "Summary of what was requested",
+          "justification": "Why the user wants this",
+          "risk_assessment": "Blunt warning about data loss or system instability"
+        }}
+        
+        OUTPUT ONLY JSON. NO EXTRA TEXT.
+        """
+        
+        raw_response = ""
+        try:
+            # Bypass ask_structured to avoid schema confusion; use base ask/generate
+            raw_response = self.llm.ask(prompt)
+            
+            # Bulletproof JSON extraction
+            match = re.search(r'\{.*\}', raw_response, re.DOTALL)
+            if not match:
+                raise ValueError("No JSON block found in LLM response.")
+                
+            data = json.loads(match.group(0))
+            
+            # Manually instantiate the Proposal (task_id and timestamp will auto-generate)
+            proposal = Proposal(
+                action=data.get("action", "Unknown Action"),
+                justification=data.get("justification", "User requested high-stakes operation."),
+                risk_assessment=data.get("risk_assessment", "High risk of system modification.")
+            )
+            return proposal.format_for_mattermost()
+            
+        except Exception as e:
+            logger.error(f"Proposal Generation Failed: {e} | Raw Output: {raw_response}")
+            return (
+                f"### 🛡️ SECURITY INTERCEPT\n"
+                f"**Action Blocked:** Administrative system change.\n\n"
+                f"**Reason:** The Proposal Engine could not validate the risk assessment. "
+                f"Execution is denied by default per the Prime Directive."
+            )
 
     def _classify_domain(self, user_input: str) -> DomainDecision:
         """Builds prompt from config.yaml definitions."""

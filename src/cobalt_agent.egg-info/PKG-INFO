@@ -39,3 +39,4 @@ Requires-Dist: yfinance>=1.1.0
 Requires-Dist: psycopg[binary]>=3.3.2
 Requires-Dist: pgvector>=0.4.2
 Requires-Dist: apscheduler>=3.11.2
+Requires-Dist: cryptography>=46.0.4

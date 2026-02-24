@@ -2,12 +2,10 @@ README.md
 pyproject.toml
 src/cobalt_agent/__init__.py
 src/cobalt_agent/config.py
-src/cobalt_agent/interface.py
 src/cobalt_agent/llm.py
 src/cobalt_agent/main.py
 src/cobalt_agent/persona.py
 src/cobalt_agent/prompt.py
-src/cobalt_agent/tool_manager.py
 src/cobalt_agent.egg-info/PKG-INFO
 src/cobalt_agent.egg-info/SOURCES.txt
 src/cobalt_agent.egg-info/dependency_links.txt
@@ -19,7 +17,12 @@ src/cobalt_agent/brain/strategy.py
 src/cobalt_agent/brain/tactical.py
 src/cobalt_agent/brain/strategies/__init__.py
 src/cobalt_agent/brain/strategies/second_day_play.py
+src/cobalt_agent/core/__init__.py
+src/cobalt_agent/core/proposals.py
 src/cobalt_agent/core/scheduler.py
+src/cobalt_agent/interfaces/__init__.py
+src/cobalt_agent/interfaces/cli.py
+src/cobalt_agent/interfaces/mattermost.py
 src/cobalt_agent/memory/__init__.py
 src/cobalt_agent/memory/base.py
 src/cobalt_agent/memory/core.py
@@ -31,6 +34,11 @@ src/cobalt_agent/tools/__init__.py
 src/cobalt_agent/tools/browser.py
 src/cobalt_agent/tools/finance.py
 src/cobalt_agent/tools/search.py
+src/cobalt_agent/tools/tool_manager.py
+tests/test_brain_connection.py
+tests/test_config_override.py
+tests/test_logic_lab.py
 tests/test_memory_integration.py
+tests/test_role_switch.py
 tests/test_scribe.py
 tests/test_strategies.py

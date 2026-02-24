@@ -18,6 +18,7 @@ from cobalt_agent.prompt import PromptEngine
 from cobalt_agent.tools.tool_manager import ToolManager
 from cobalt_agent.brain.cortex import Cortex
 from cobalt_agent.core.scheduler import AgentScheduler
+from cobalt_agent.core.proposals import ProposalEngine
 from cobalt_agent.skills.productivity.briefing import MorningBriefing
 from cobalt_agent.skills.research.deep_dive import DeepResearch
 
@@ -96,7 +97,6 @@ class CobaltAgent:
             format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
             rotation="00:00",  # Rotate daily at midnight
             retention="7 days",  # Keep logs for 7 days
-            compression="zip",  # Compress rotated logs
         )
     def main(self):
         """Main entry point for Cobalt Agent."""
@@ -189,8 +189,14 @@ class CobaltAgent:
                 logger.error("Failed to connect to Mattermost. Exiting.")
                 return
             
+            # Initialize and attach Proposal Engine for HITL approval workflow
+            self.proposal_engine = ProposalEngine()
+            self.proposal_engine.connect_mattermost()
+            mm_interface.proposal_engine = self.proposal_engine
+            
             logger.info("=" * 80)
             logger.info("Cobalt Agent - Mattermost Interface Active")
+            logger.info("HITL Proposal Engine - Active")
             logger.info("=" * 80)
             
             # Explicitly attach brain (cortex) to the interface before listening
@@ -201,6 +207,8 @@ class CobaltAgent:
         finally:
             if hasattr(mm_interface, 'disconnect'):
                 mm_interface.disconnect()
+            if hasattr(self, 'proposal_engine') and self.proposal_engine:
+                self.proposal_engine.stop_monitoring()
             self.scheduler.stop()
             self.memory.add_log("Mattermost session ended", source="System")
             self.memory.save_memory()
