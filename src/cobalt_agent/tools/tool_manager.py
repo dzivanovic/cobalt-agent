@@ -13,6 +13,8 @@ from cobalt_agent.tools.search import SearchTool
 from cobalt_agent.tools.browser import BrowserTool
 # Import Finance
 from cobalt_agent.tools.finance import FinanceTool
+# Import Filesystem tools
+from cobalt_agent.tools.filesystem import ReadFileTool, WriteFileTool, ListDirectoryTool
 
 class ToolResult(BaseModel):
     """Standardized output for any tool execution."""
@@ -40,9 +42,14 @@ class ToolManager:
         browser = BrowserTool()
         self.register_tool("browser", browser)
         
-        # 3. <--- ADDED: Finance Tool
+        # 3. Finance Tool
         finance = FinanceTool()
         self.register_tool("finance", finance)
+        
+        # 4. Filesystem Tools
+        self.register_tool("read_file", ReadFileTool())
+        self.register_tool("write_file", WriteFileTool())
+        self.register_tool("list_directory", ListDirectoryTool())
         
     def register_tool(self, name: str, tool_instance: Any):
         """Add a new tool to the registry."""

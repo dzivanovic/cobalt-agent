@@ -130,3 +130,6 @@ departments:
   ENGINEERING:
     description: "Writing new code, fixing tools, system upgrades."
     active: true
+  DEFAULT:
+    description: "General chat, web research, web browsing, article summarization. Use for queries that don't fit other domains."
+    active: true

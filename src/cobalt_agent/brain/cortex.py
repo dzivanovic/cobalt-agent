@@ -48,11 +48,22 @@ class Cortex:
         if len(user_input.split()) < 4 and "hi" in user_input.lower():
             return None
 
-        # 1. Hardcoded bypass for questions - routes to FOUNDATION (standard chat with tool access)
-        text_lower = user_input.lower()
-        if "?" in text_lower or "price" in text_lower or "what" in text_lower:
-            logger.info("Direct route bypass triggered: Question detected.")
-            return None
+        # === DETERMINISTIC FAST-PATH ROUTING (TRIAGE) ===
+        message_lower = user_input.lower()
+        
+        # 1. Engineering / Code Triage
+        eng_keywords = ["engineering", "directory", "file", "codebase", "src/", "list the"]
+        if any(keyword in message_lower for keyword in eng_keywords):
+            logger.info("⚡ Fast-Path Routing Triggered: ENGINEERING")
+            from cobalt_agent.brain.engineering import EngineeringDepartment
+            forge = EngineeringDepartment()
+            return forge.run(user_input)
+            
+        # 2. Web / Research Triage
+        web_keywords = ["http://", "https://", "browser", "scrape", "search", "summarize the top"]
+        if any(keyword in message_lower for keyword in web_keywords):
+            logger.info("⚡ Fast-Path Routing Triggered: DEFAULT")
+            return None  # Handle in main chat loop (same as FOUNDATION)
         
         # 2. Classify
         decision = self._classify_domain(user_input)
@@ -85,7 +96,12 @@ class Cortex:
             return self._run_ops(params, user_input) # Pass original input for Scribe context
             
         elif domain == "ENGINEERING":
-            return "🛠️ Forge (Engineering) is defined but not yet hired."
+            from cobalt_agent.brain.engineering import EngineeringDepartment
+            forge = EngineeringDepartment()
+            return forge.run(params)
+            
+        elif domain == "DEFAULT":
+            return None # Handle in main chat loop (same as FOUNDATION)
             
         elif domain == "FOUNDATION":
             return None # Handle in main chat loop
@@ -161,7 +177,7 @@ class Cortex:
                 if is_active:
                     options_text += f"- {name}: {desc}\n"
         
-        # UPDATED PROMPT: Explicitly maps "Strategy" to TACTICAL
+        # STRICT MUTUALLY EXCLUSIVE ROUTING PROMPT
         prompt = f"""
         You are the Chief of Staff (Cortex). Route this user request to the correct Department.
         
@@ -169,25 +185,32 @@ class Cortex:
         
         ACTIVE DEPARTMENTS:
         {options_text}
-        - FOUNDATION: General chat, greetings, system questions.
+        - DEFAULT: General chat, web research, web browsing, article summarization. Use for queries that don't fit other domains.
         
-        === ROUTING LOGIC ===
-        1. TACTICAL (Trading/Market Data):
-           - Use for: stock prices, market data, ticker queries (e.g., "AAPL", "TSLA", "NVDA")
-           - Use for: "What is the price of X?", "Give me AAPL data", "Stock price"
-           - Extract ONLY the ticker symbol (e.g. "NVDA", "AAPL") as task_parameters
-           - Use "STRATEGY" ONLY if user explicitly asks about strategies, strategies menu, or playbooks
+        === STRICT ROUTING RULES (MUST FOLLOW) ===
+        1. WEB RESEARCH / DEFAULT ROUTING:
+           - If the user asks to browse a website, scrape a URL, summarize an article, or perform general web research, you MUST return 'DEFAULT'.
+           - Examples: "What's the weather in Paris?", "Summarize this article", "Look up recent news", "Research X", "Browse Y"
         
-        2. INTEL (Research/News):
-           - Use for: news, general research, deep dives, current events
+        2. TACTICAL (TRADING ONLY - STRICTLY RESTRICTED):
+           - ONLY return 'TACTICAL' if the user explicitly mentions trading, stocks, tickers, playbooks, or expected value (EV).
+           - Valid examples: "What is AAPL trading at?", "TSLA stock price", "Show me playbooks", "Calculate EV for X"
+           - Extract ONLY the ticker symbol (e.g. "NVDA", "AAPL") or "STRATEGY" as task_parameters
+        
+        3. INTEL (Research/News):
+           - Use for: news, deep dives, current events (non-trading focused)
            - Extract the search topic as task_parameters
         
-        3. OPS (Operations/Scribe):
+        4. OPS (Operations/Scribe):
            - Use for: logging, journaling, saving notes, medical billing
            - Extract relevant content as task_parameters
         
-        4. FOUNDATION:
-           - Use for: greetings, small talk, system questions
+        5. ENGINEERING (CODE WORK - STRICTLY RESTRICTED):
+           - ONLY return 'ENGINEERING' if the user explicitly asks to write, edit, or review code.
+           - Examples: "Write a function", "Fix this bug", "Review my code", "Create a new tool"
+        
+        6. DEFAULT:
+           - Use for: general conversation, greetings, system questions, or anything not matching the above
            - Return task_parameters: "chat"
         
         === EXAMPLES ===
@@ -197,20 +220,38 @@ class Cortex:
         Input: "What is the price of TSLA?"
         → Domain: TACTICAL, Parameters: "TSLA"
         
-        Input: "Show me the strategies"
+        Input: "Show me the strategies/playbooks"
         → Domain: TACTICAL, Parameters: "STRATEGY"
         
-        Input: "What's new in AI?"
-        → Domain: INTEL, Parameters: "AI"
+        Input: "What is the expected value of X given Y?"
+        → Domain: TACTICAL, Parameters: "STRATEGY"
+        
+        Input: "Browse https://example.com and summarize it"
+        → Domain: DEFAULT, Parameters: "chat"
+        
+        Input: "Summarize this article about AI"
+        → Domain: DEFAULT, Parameters: "chat"
+        
+        Input: "Write a Python function to do X"
+        → Domain: ENGINEERING, Parameters: "Python function: X"
+        
+        Input: "Fix the routing bug in cortex.py"
+        → Domain: ENGINEERING, Parameters: "Fix routing bug in cortex.py"
+        
+        Input: "What's the weather like?"
+        → Domain: DEFAULT, Parameters: "chat"
         
         Input: "Hi, how are you?"
-        → Domain: FOUNDATION, Parameters: "chat"
+        → Domain: DEFAULT, Parameters: "chat"
         
-        === INSTRUCTION ===
-        For ANY question asking about a stock price, ticker, or market data, route to TACTICAL with the ticker symbol as the parameter.
-        Do NOT use STRATEGY unless user explicitly mentions strategies or playbooks.
+        === FINAL INSTRUCTION ===
+        FOLLOW THESE RULES STRICTLY AND MUTUALLY EXCLUSIVELY:
+        1. Web research/browser/URL/summary queries → DEFAULT
+        2. Trading/stocks/tickers/playbooks/EV → TACTICAL
+        3. Writing/editing/reviewing code → ENGINEERING
+        4. Everything else → DEFAULT
         
-        Return the decision structured correctly.
+        Return the decision structured correctly. DO NOT DEVIATE FROM THESE RULES.
         """
         try:
             return self.llm.ask_structured(prompt, DomainDecision)

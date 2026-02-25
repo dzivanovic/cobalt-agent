@@ -251,31 +251,125 @@ class MattermostInterface:
             if hasattr(self, 'brain') and self.brain:
                 logger.info("Routing message to Cortex in background thread...")
                 
+                # Import tool_manager for the tool loop
+                from cobalt_agent.tools.tool_manager import ToolManager
+                from cobalt_agent.memory import MemorySystem
+                from cobalt_agent.config import get_config
+                
+                # Try to get memory from brain if available (for longer-term context)
+                try:
+                    memory = self.brain.memory if hasattr(self.brain, 'memory') else MemorySystem()
+                except:
+                    memory = MemorySystem()
+                
                 def think_and_reply():
                     try:
                         # Use 'route' method on Cortex for user input
                         response = self.brain.route(text)
                         if response:
-                            # Specialized department response (Tactical, Intel, Ops, etc.)
+                            # Specialized department response (TACTICAL, INTEL, OPS, etc.)
                             self.send_message_to_channel_id(channel_id, response)
                         else:
-                            # No route match - generate conversational response via LLM
-                            logger.info("No route match, generating conversational response...")
-                            try:
-                                # Generate conversational response using Cortex's LLM
-                                conversational_response = self.brain.llm.generate_response(
-                                    system_prompt="You are Cobalt, an AI Chief of Staff and Trading Assistant. Be helpful, concise, and provide value.",
-                                    user_input=text,
-                                    memory_context=[],
+                            # DEFAULT route - use ReAct loop for tool execution
+                            logger.info("DEFAULT route detected, using ReAct loop...")
+                            # Use the agent's LLM with the correct system prompt
+                            from cobalt_agent.config import get_config
+                            config = get_config()
+                            from cobalt_agent.prompt import PromptEngine
+                            prompt_engine = PromptEngine(config.persona)
+                            system_prompt = prompt_engine.build_system_prompt()
+                            
+                            # Initialize conversation history with user input
+                            conversation_history = [
+                                {"role": "user", "content": text}
+                            ]
+                            
+                            # MAX_ITERATIONS to prevent infinite loops
+                            MAX_ITERATIONS = 3
+                            iteration = 0
+                            final_answer = None
+                            
+                            while iteration < MAX_ITERATIONS:
+                                iteration += 1
+                                logger.info(f"ReAct iteration {iteration}/{MAX_ITERATIONS}")
+                                
+                                # Generate response from LLM using conversation history
+                                response = self.brain.llm.generate_response(
+                                    system_prompt=system_prompt,
+                                    user_input=None,  # Already included in conversation history
+                                    memory_context=conversation_history,
                                     search_context=""
                                 )
-                                if conversational_response:
-                                    self.send_message_to_channel_id(channel_id, conversational_response)
-                                    logger.info("Conversational response sent to Mattermost")
-                            except Exception as llm_error:
-                                logger.error(f"Failed to generate conversational response: {llm_error}")
+                                
+                                logger.info(f"LLM Response: {response}")
+                                
+                                # Check if response contains ACTION:
+                                if "ACTION:" in response:
+                                    # Parse the tool name and query
+                                    logger.info("ACTION: detected, parsing tool command...")
+                                    
+                                    # Extract the ACTION line
+                                    action_line = None
+                                    for line in response.split('\n'):
+                                        if 'ACTION:' in line:
+                                            action_line = line
+                                            break
+                                    
+                                    if action_line:
+                                        # Parse "ACTION: tool_name query_string"
+                                        action_parts = action_line.replace('ACTION:', '').strip().split(' ', 1)
+                                        tool_name = action_parts[0].strip().lower()
+                                        query = action_parts[1].strip() if len(action_parts) > 1 else ""
+                                        
+                                        # Fuzzy Match Hack: map "scrape" and "search" to "browser"
+                                        if tool_name in ["scrape", "search"]:
+                                            tool_name = "browser"
+                                            logger.info(f"Fuzzy matched '{tool_name}' -> 'browser'")
+                                        
+                                        # Execute the tool
+                                        tool_manager = ToolManager()
+                                        tool_result = tool_manager.execute_tool(
+                                            tool_name=tool_name,
+                                            args={"query": query}
+                                        )
+                                        
+                                        # Format the observation for LLM
+                                        if tool_result.success:
+                                            observation = f"[Observation: {tool_result.output}]"
+                                        else:
+                                            observation = f"[Observation: Tool execution failed - {tool_result.error}]"
+                                        
+                                        # Append observation to conversation history
+                                        conversation_history.append({
+                                            "role": "assistant",
+                                            "content": response
+                                        })
+                                        conversation_history.append({
+                                            "role": "user",
+                                            "content": observation
+                                        })
+                                        
+                                        logger.info(f"Tool executed: {tool_name}, Observation: {observation}")
+                                    else:
+                                        # No valid ACTION line found, treat as final answer
+                                        final_answer = response
+                                        break
+                                else:
+                                    # No ACTION: found, this is the final conversational answer
+                                    logger.info("No ACTION: detected, returning final answer")
+                                    final_answer = response
+                                    break
+                            
+                            # Send final answer to Mattermost
+                            if final_answer:
+                                # Update memory with assistant's response
+                                memory.add_log(final_answer, source="Assistant")
+                                self.send_message_to_channel_id(channel_id, final_answer)
+                                logger.info("Final response sent to Mattermost")
+                            else:
+                                logger.warning("ReAct loop completed without final answer")
                     except Exception as e:
-                        logger.error(f"Brain inference error: {e}")
+                        logger.error(f"think_and_reply error: {e}", exc_info=True)
                 
                 # Run the sync function in a background thread
                 asyncio.create_task(asyncio.to_thread(think_and_reply))
