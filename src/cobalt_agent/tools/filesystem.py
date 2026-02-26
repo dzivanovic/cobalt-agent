@@ -9,6 +9,8 @@ from typing import Dict, List, Any
 from pydantic import BaseModel, Field
 from loguru import logger
 
+from cobalt_agent.core.proposals import create_and_send_proposal, ProposalEngine
+
 
 class FileContent(BaseModel):
     """Structured content from a file read operation."""
@@ -38,7 +40,7 @@ class DirectoryListing(BaseModel):
     """Result of a directory listing operation."""
     path: str = Field(description="The directory path that was listed.")
     contents: List[Dict[str, Any]] = Field(description="List of files and directories.")
-    error: str = Field("", description="Error message if listing failed.")
+    error: str = Field(default="", description="Error message if listing failed.")
 
     def __str__(self):
         if self.error:
@@ -94,58 +96,74 @@ class ReadFileTool:
 
 
 class WriteFileTool:
-    """Write content to a file."""
+    """Modifies or creates a file."""
     name = "write_file"
-    description = "Write content to a file. Use when you need to modify existing code or create new files. Pass a JSON string with 'filepath' and 'content' keys."
-
-    def __init__(self):
-        pass
-
-    def run(self, query: str) -> WriteResult:
-        """
-        Write content to a file.
+    
+    def run(self, query=None, **kwargs) -> str:
+        import json
+        import ast
+        from loguru import logger
+        from cobalt_agent.core.proposals import create_and_send_proposal, ProposalEngine
         
-        Args:
-            query: Either a JSON string with 'filepath' and 'content' keys, or a plain file path
+        filepath = None
+        content = None
         
-        Returns:
-            WriteResult with success status or error
-        """
-        path = ""
-        content = ""
+        # Universal extraction
+        data = query if query is not None else kwargs
         
-        # Try to parse as JSON first
-        if query.strip().startswith("{"):
+        if isinstance(data, str):
             try:
-                data = json.loads(query)
-                path = data.get('filepath', '')
-                content = data.get('content', '')
-            except json.JSONDecodeError:
-                # Fallback: treat as plain path and use the whole query as content
-                path = query.strip()
-                content = ""
-        else:
-            path = query.strip()
+                data = json.loads(data)
+            except Exception as e1:
+                try:
+                    data = ast.literal_eval(data)
+                except Exception as e2:
+                    logger.error(f"WriteFileTool parsing failed. JSON error: {e1} | AST error: {e2} | Data: {data}")
+                    return f"Error: Failed to parse arguments. Received: {data}"
         
-        logger.info(f"Writing to file: {path}")
-        
+        if isinstance(data, dict):
+            # Handle nested query dictionaries
+            if "filepath" not in data and "query" in data:
+                if isinstance(data["query"], dict):
+                    data = data["query"]
+                elif isinstance(data["query"], str):
+                    try:
+                        data = ast.literal_eval(data["query"])
+                    except Exception:
+                        pass
+
+            filepath = data.get("filepath")
+            content = data.get("content")
+
+        if not filepath or content is None:
+            logger.error(f"WriteFileTool missing fields. Parsed data: {data}")
+            return f"Error: Missing filepath or content. Parsed data: {data}"
+
+        def execute_write(proposal_obj):
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                logger.info(f"Proposal Engine executed write to: {filepath} ({len(content)} bytes)")
+            except Exception as e:
+                logger.error(f"Failed to physically write file {filepath}: {e}")
+            
         try:
-            # Sanitize path - prevent directory traversal
-            path = os.path.normpath(path)
-            
-            # Ensure directory exists
-            dir_path = os.path.dirname(path)
-            if dir_path and not os.path.exists(dir_path):
-                os.makedirs(dir_path)
-            
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            
-            return WriteResult(path=path, success=True)
-            
+            proposal = create_and_send_proposal(
+                action=f"Write {len(content)} bytes to {filepath}",
+                justification="Agent requested file modification via WriteFileTool.",
+                risk_assessment="HIGH"
+            )
         except Exception as e:
-            logger.error(f"Failed to write file {path}: {e}")
-            return WriteResult(path=path, success=False, error=str(e))
+            logger.error(f"Proposal Engine crash: {e}")
+            return f"Error: Proposal Engine crashed: {e}"
+        
+        if proposal:
+            engine = ProposalEngine()
+            engine.set_approval_callback(proposal.task_id, execute_write)
+            engine.pending_proposals[proposal.task_id] = proposal
+            return f"Action paused. Proposal [{proposal.task_id}] sent to Admin for approval in Mattermost."
+        else:
+            return "Error: Failed to generate Proposal Ticket. Mattermost connection failed."
 
 
 class ListDirectoryTool:

@@ -204,18 +204,19 @@ class CLI:
                     self.console.print(f"[bold yellow]⚡ Auto-Tool:[/bold yellow] {tool_name} -> {query}")
                     self.memory.add_log(f"Agent Thought: {response}", source="Assistant")
                     
-                    # Execute
+                    # Execute (tool_manager now returns strings)
                     result = self.tool_manager.execute_tool(tool_name.lower(), {"query": query})
                     
-                    if result.success:
-                        output_str = self._format_tool_output(result.output)
+                    # Format observation (string handling)
+                    if result.startswith("Error:"):
+                        observation = f"System Observation: Error - {result}"
+                        self.console.print(f"[red]{observation}[/red]")
+                    else:
+                        output_str = result
                         preview = output_str[:500] + "..." if len(output_str) > 500 else output_str
                         self.console.print(f"[dim cyan]{preview}[/dim cyan]") 
-      	      	
+          	    	      	
                         observation = f"System Observation from {tool_name}: {output_str}"
-                    else:
-                        observation = f"System Observation: Error - {result.error}"
-                        self.console.print(f"[red]{observation}[/red]")
                     
                     turn_history.append({"role": "assistant", "content": response})
                     turn_history.append({"role": "user", "content": observation})

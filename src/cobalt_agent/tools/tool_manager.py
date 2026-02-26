@@ -60,34 +60,32 @@ class ToolManager:
         """Return the list of tool objects for the Prompt Engine."""
         return list(self.tools.values())
 
-    def execute_tool(self, tool_name: str, args: Dict[str, Any]) -> ToolResult:
-        """
-        Execute a registered tool by name.
+    def execute_tool(self, name: str, args: Any) -> str:
+        from loguru import logger
+        logger.info(f"Executing tool: {name} with args: {args}")
         
-        Args:
-            tool_name: The name of the tool (e.g., 'search')
-            args: Dictionary of arguments for the tool (e.g., {'query': '...'})
-        """
-        if tool_name not in self.tools:
-            return ToolResult(success=False, output=None, error=f"Tool '{tool_name}' not found.")
+        if name not in self.tools:
+            return f"Error: Tool '{name}' not found."
             
-        tool = self.tools[tool_name]
+        tool = self.tools[name]
         
         try:
-            logger.info(f"Executing tool: {tool_name} with args: {args}")
-            
-            # This logic assumes all tools have a .run() method
-            # We might need to adapt this if tools have different signatures
-            if hasattr(tool, 'run'):
-                # Extract the main argument (most tools just take a query string for now)
-                # This is a simplification; later we will make this robust.
-                query = args.get('query') or args.get('q') or list(args.values())[0]
-                
-                result = tool.run(query)
-                return ToolResult(success=True, output=result)
+            if isinstance(args, dict):
+                # Safely pass the full dictionary as kwargs
+                return tool.run(**args)
             else:
-                return ToolResult(success=False, output=None, error=f"Tool '{tool_name}' has no run() method.")
-
+                return tool.run(args)
+        except TypeError as e:
+            # Fallback for legacy tools that strictly only accept a single positional 'query' string
+            logger.warning(f"Tool {name} rejected kwargs, falling back to positional: {e}")
+            if isinstance(args, dict):
+                if "query" in args:
+                    return tool.run(args["query"])
+                elif len(args) == 1:
+                    return tool.run(list(args.values())[0])
+                else:
+                    return tool.run(str(args))
+            return tool.run(str(args))
         except Exception as e:
-            logger.error(f"Tool Execution Failed: {e}")
-            return ToolResult(success=False, output=None, error=str(e))
+            logger.error(f"Error executing tool {name}: {str(e)}")
+            return f"Error executing tool {name}: {str(e)}"

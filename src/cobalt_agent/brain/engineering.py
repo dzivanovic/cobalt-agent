@@ -26,15 +26,24 @@ class EngineeringDepartment:
         
         CRITICAL RULES:
         1. NEVER guess the contents of a file or directory.
-        2. To modify a file, use the `write_file` tool. 
-        3. The `write_file` tool requires a valid JSON string with `filepath` and `content`.
-        4. When you use `write_file`, it will NOT execute immediately. It sends a Proposal to the user. You must inform the user that a proposal has been generated.
-        5. Think step-by-step. First list the directory using `list_directory`, then read the target file using `read_file`, then propose the change.
+        2. To modify or create a file, you MUST use the `write_file` tool. 
+        3. YOU MUST USE THE EXACT SYNTAX BELOW TO CALL A TOOL. If you do not use the `ACTION:` prefix, the tool will fail.
+           - CORRECT: ACTION: write_file {"filepath": "src/test.py", "content": "print('hello')"}
+           - INCORRECT: {"filepath": "src/test.py", "content": "print('hello')"}
+           - INCORRECT: ```json\n{"filepath": "src/test.py", "content": "print('hello')"}\n```
+        4. DO NOT roleplay. DO NOT say "I will create the file now." Just output the ACTION string.
+        5. WORKFLOW EFFICIENCY: If the user provides an exact filepath (e.g., "create a file at src/test.py"), DO NOT use `list_directory`. Execute `write_file` immediately to save context space.
+        6. WAIT PROTOCOL: If you use the `write_file` tool and the System Observation says "Action paused. Proposal sent", YOU MUST STOP. Output a final conversational message saying "I have submitted the proposal for your approval." DO NOT try to write the file again.
         
         AVAILABLE TOOLS:
-        - `read_file`: Reads the contents of a file. (Example: ACTION: read_file src/main.py)
-        - `list_directory`: Lists the files in a folder. (Example: ACTION: list_directory src/cobalt_agent/)
-        - `write_file`: Proposes a file modification. (Example: ACTION: write_file {"filepath": "...", "content": "..."})
+        - `read_file`: Reads a file. 
+          Syntax: ACTION: read_file {"filepath": "src/main.py"}
+        
+        - `list_directory`: Lists a folder. 
+          Syntax: ACTION: list_directory {"directory_path": "src/"}
+        
+        - `write_file`: Modifies or creates a file. YOU MUST USE THIS TO PROPOSE CHANGES. 
+          Syntax: ACTION: write_file {"filepath": "src/test.py", "content": "print('hello')"}
         """
 
     def run(self, user_message: str, chat_history: list = None) -> str:
@@ -100,14 +109,14 @@ class EngineeringDepartment:
                 
                 logger.debug(f"Forge executing tool: {tool_name}, args: {args_dict}")
                 
-                # Execute the tool
+                # Execute the tool (tool_manager now returns strings)
                 result = self.tool_manager.execute_tool(tool_name, args_dict)
                 
-                # Format the result
-                if result.success:
-                    result_text = result.output
+                # Format the result (string handling)
+                if result.startswith("Error:"):
+                    result_text = result
                 else:
-                    result_text = f"Error: {result.error}"
+                    result_text = result
                 
                 # Append observation to history and loop
                 messages.append({"role": "assistant", "content": response})

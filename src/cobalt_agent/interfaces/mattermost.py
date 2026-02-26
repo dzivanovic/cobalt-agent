@@ -232,11 +232,27 @@ class MattermostInterface:
             channel_id = post_data.get("channel_id")
             text = post_data.get("message", "")
             
+            # Ignore Mattermost system messages (joins, leaves, header updates)
+            if post_data.get("type", "") != "":
+                return
+            
             # Ignore the bot's own messages to prevent infinite loops
             if user_id == self.get_my_user_id():
                 return
             
             logger.info(f"Message received in channel {channel_id}: {text}")
+            
+            # === HITL APPROVAL INTERCEPTOR ===
+            text_lower = text.strip().lower()
+            if text_lower.startswith("approve") or text_lower.startswith("reject"):
+                from cobalt_agent.core.proposals import ProposalEngine
+                engine = ProposalEngine()
+                
+                # Handle the response and send the result back to the channel
+                result_msg = engine.handle_approval_response(text)
+                if result_msg:
+                    self.send_message_to_channel_id(channel_id, result_msg)
+                return
             
             # Check for approval response first
             if self.proposal_engine:
@@ -333,11 +349,11 @@ class MattermostInterface:
                                             args={"query": query}
                                         )
                                         
-                                        # Format the observation for LLM
-                                        if tool_result.success:
-                                            observation = f"[Observation: {tool_result.output}]"
+                                        # Format the observation for LLM (tool_manager now returns strings)
+                                        if tool_result.startswith("Error:"):
+                                            observation = f"[Observation: Tool execution failed - {tool_result}]"
                                         else:
-                                            observation = f"[Observation: Tool execution failed - {tool_result.error}]"
+                                            observation = f"[Observation: {tool_result}]"
                                         
                                         # Append observation to conversation history
                                         conversation_history.append({

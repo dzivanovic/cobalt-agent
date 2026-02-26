@@ -85,7 +85,7 @@ active_profile:
 
 mattermost:
   approval_channel: "cobalt-approvals"
-  approval_team: "cobalt-team"
+  approval_team: "cobalt-bridge"
 
 persona:
   name: "Cobalt"

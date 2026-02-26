@@ -32,8 +32,7 @@ class Proposal(BaseModel):
             f"**Action:** `{self.action}`\n\n"
             f"**Justification:** {self.justification}\n"
             f"**Risk:** {self.risk_assessment}\n\n"
-            f"--- \n"
-            f"⚠️ *This action is paused per the Prime Directive. Reply with 'Approve {self.task_id}' to proceed.*"
+            f"### ⚠️ ACTION REQUIRED: Reply exactly with 'Approve {self.task_id}' to execute."
         )
 
 
@@ -44,6 +43,9 @@ class ProposalEngine:
     before executing high-stakes actions. It creates proposals, sends them to
     Mattermost for approval, and only executes approved actions.
     """
+    # Shared state across all instances
+    pending_proposals: Dict[str, Proposal] = {}
+    callbacks: Dict[str, Callable[[Proposal], None]] = {}
     
     def __init__(self):
         self.config = get_config()
@@ -51,7 +53,6 @@ class ProposalEngine:
         self.approval_team = self.config.mattermost.approval_team
         self.mattermost: Optional[Any] = None
         self.approved_proposals: Dict[str, Proposal] = {}
-        self.pending_proposals: Dict[str, Proposal] = {}
         self._approval_callback: Optional[Callable[[Proposal], None]] = None
         self._monitoring = False
         self._monitor_thread: Optional[threading.Thread] = None
@@ -176,42 +177,57 @@ class ProposalEngine:
             logger.error(f"Failed to send proposal: {e}")
             return False
     
-    def handle_approval_response(self, message: str, channel_id: str) -> Optional[Proposal]:
+    def handle_approval_response(self, message: str, channel_id: Optional[str] = None) -> Optional[str]:
         """
-        Check if a message is an approval response for a pending proposal.
+        Check if a message is an approval response for a pending proposal and return a formatted message.
         
         Args:
             message: The message text from Mattermost
-            channel_id: The channel ID where the message was posted
+            channel_id: Optional channel ID where the message was posted
             
         Returns:
-            The approved Proposal if this is a valid approval, None otherwise
+            A formatted message string if this is a valid approval response, None otherwise
         """
         # Check if this is an approval message
         approval_pattern = r"approve\s+(\w{8})"
         match = re.search(approval_pattern, message.lower())
         
         if not match:
+            # Check for reject pattern
+            reject_pattern = r"reject\s+(\w{8})"
+            reject_match = re.search(reject_pattern, message.lower())
+            if reject_match:
+                task_id = reject_match.group(1)
+                return f"❌ Rejection received for task [{task_id}]. The action has been cancelled."
             return None
         
         task_id = match.group(1)
         
-        # Check if this is in the approval channel
-        if channel_id != self.approval_channel:
+        # If channel_id is provided, validate it
+        if channel_id and self.approval_channel and channel_id != self.approval_channel:
             return None
         
         # Look up the pending proposal
-        if task_id not in self.pending_proposals:
+        if task_id in self.pending_proposals:
+            proposal = self.pending_proposals.pop(task_id)
+            proposal.approved = True
+            self.approved_proposals[task_id] = proposal
+            logger.info(f"Proposal approved: [{task_id}]")
+            # Execute the stored callback
+            if task_id in self.callbacks:
+                try:
+                    self.callbacks[task_id](proposal)
+                    return f"✅ Approval received for task [{task_id}]. Action executed successfully."
+                except Exception as e:
+                    logger.error(f"Callback execution failed: {e}")
+                    return f"❌ Approval received, but execution failed: {e}"
+            else:
+                return f"⚠️ Approval received for [{task_id}], but no execution callback was found in memory."
+        elif task_id in self.approved_proposals:
+            return f"ℹ️ Proposal [{task_id}] was already approved."
+        else:
             logger.warning(f"Approval for unknown task_id: {task_id}")
-            return None
-        
-        proposal = self.pending_proposals.pop(task_id)
-        proposal.approved = True
-        self.approved_proposals[task_id] = proposal
-        
-        logger.info(f"Proposal approved: [{task_id}]")
-        
-        return proposal
+            return f"⚠️ No pending approval found for task [{task_id}]."
     
     def wait_for_approval(self, proposal: Proposal, timeout: int = 3600) -> bool:
         """
@@ -268,15 +284,16 @@ class ProposalEngine:
             logger.error(f"Failed to execute approved action [{proposal.task_id}]: {e}")
             return False
     
-    def set_approval_callback(self, callback: Callable[[Proposal], None]) -> None:
+    def set_approval_callback(self, task_id: str, callback: Callable[[Proposal], None]) -> None:
         """
         Set a callback function to be called when a proposal is approved.
         
         Args:
+            task_id: The unique identifier for the task
             callback: Function that takes a Proposal and returns None
         """
-        self._approval_callback = callback
-        logger.info("Approval callback set")
+        self.callbacks[task_id] = callback
+        logger.info(f"Approval callback set for task [{task_id}]")
     
     def start_monitoring(self) -> None:
         """Start monitoring for approval responses in the background."""
