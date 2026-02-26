@@ -51,10 +51,13 @@ class Cortex:
         # === DETERMINISTIC FAST-PATH ROUTING (TRIAGE) ===
         message_lower = user_input.lower()
         
-        # 1. Engineering / Code Triage
-        eng_keywords = ["engineering", "directory", "file", "codebase", "src/", "list the"]
-        if any(keyword in message_lower for keyword in eng_keywords):
-            logger.info("⚡ Fast-Path Routing Triggered: ENGINEERING (Split-Brain Orchestrator)")
+        # 1. Complex Task Routing (Orchestrator)
+        orchestrator_keywords = [
+            "engineering", "directory", "file", "codebase", "src/", "list the",
+            "research", "summarize", "journal", "ops", "read", "write", "search", "prd"
+        ]
+        if any(keyword in message_lower for keyword in orchestrator_keywords):
+            logger.info("⚡ Fast-Path Routing Triggered: ORCHESTRATOR")
             from cobalt_agent.core.orchestrator import OrchestratorEngine
             orchestrator = OrchestratorEngine()
             return orchestrator.plan_and_execute(user_input)

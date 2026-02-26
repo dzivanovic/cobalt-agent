@@ -131,7 +131,7 @@ class LLM(BaseModel):
 
     # --- 1. THE CHAT INTERFACE (For Main Loop) ---
     def generate_response(self,
-                          system_prompt: str,
+                          system_prompt: Optional[str] = None,
                           user_input: Optional[str] = None,
                           memory_context: List[Dict] = None,
                           search_context: str = "") -> str:
