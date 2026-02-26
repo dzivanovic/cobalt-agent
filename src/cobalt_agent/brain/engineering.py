@@ -14,13 +14,16 @@ class EngineeringDepartment:
     Handles code reading, analysis, and writing tasks.
     """
     
-    def __init__(self):
+    def __init__(self, system_prompt: str = None):
         """Initialize the Engineering Department."""
         logger.info("🛠️ The Forge (Engineering) Online")
         self.llm = LLM()
         self.tool_manager = ToolManager()
         
-        self.system_prompt = """
+        if system_prompt:
+            self.system_prompt = system_prompt
+        else:
+            self.system_prompt = """
         You are THE FORGE, Cobalt's Principal Systems Architect and Senior Software Engineer.
         Your job is to read, analyze, and write code.
         
@@ -109,14 +112,21 @@ class EngineeringDepartment:
                 
                 logger.debug(f"Forge executing tool: {tool_name}, args: {args_dict}")
                 
-                # Execute the tool (tool_manager now returns strings)
-                result = self.tool_manager.execute_tool(tool_name, args_dict)
+                # Execute the tool
+                raw_result = self.tool_manager.execute_tool(tool_name, args_dict)
                 
-                # Format the result (string handling)
-                if result.startswith("Error:"):
-                    result_text = result
+                # Forcibly cast the result to a string (it might be a Pydantic model)
+                result_str = str(raw_result)
+                
+                # Format the result
+                if result_str.startswith("Error:"):
+                    result_text = result_str
                 else:
-                    result_text = result
+                    result_text = result_str
+                    
+                # 🛑 FAST EXIT: If we hit a Zero-Trust Proposal wall, do not force the LLM to loop again.
+                if "Action paused" in result_str or "Proposal [" in result_str:
+                    return result_text
                 
                 # Append observation to history and loop
                 messages.append({"role": "assistant", "content": response})

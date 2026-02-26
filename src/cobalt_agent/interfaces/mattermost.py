@@ -251,7 +251,14 @@ class MattermostInterface:
                 # Handle the response and send the result back to the channel
                 result_msg = engine.handle_approval_response(text)
                 if result_msg:
+                    # Reply in the approvals channel
                     self.send_message_to_channel_id(channel_id, result_msg)
+                    
+                    # CLOSE THE LOOP: Broadcast to town-square so the user knows the outcome
+                    if "✅ Approval received" in result_msg:
+                        self.send_message("town-square", self.config.approval_team, "✅ **Task Completed:** The pending action was approved and successfully executed.")
+                    elif "❌ Rejection received" in result_msg:
+                        self.send_message("town-square", self.config.approval_team, "❌ **Task Cancelled:** The pending action was rejected by an Admin.")
                 return
             
             # Check for approval response first

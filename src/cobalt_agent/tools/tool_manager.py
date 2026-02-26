@@ -15,6 +15,8 @@ from cobalt_agent.tools.browser import BrowserTool
 from cobalt_agent.tools.finance import FinanceTool
 # Import Filesystem tools
 from cobalt_agent.tools.filesystem import ReadFileTool, WriteFileTool, ListDirectoryTool
+# Import Knowledge Base
+from cobalt_agent.tools.knowledge import KnowledgeSearchTool
 
 class ToolResult(BaseModel):
     """Standardized output for any tool execution."""
@@ -50,6 +52,9 @@ class ToolManager:
         self.register_tool("read_file", ReadFileTool())
         self.register_tool("write_file", WriteFileTool())
         self.register_tool("list_directory", ListDirectoryTool())
+        
+        # 5. Knowledge Base
+        self.register_tool("search_knowledge", KnowledgeSearchTool())
         
     def register_tool(self, name: str, tool_instance: Any):
         """Add a new tool to the registry."""

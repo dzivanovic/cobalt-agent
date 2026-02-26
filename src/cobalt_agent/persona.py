@@ -94,6 +94,26 @@ class Persona:
 
         return system_prompt
 
+    def create_override(self, name: str, roles: list[str], directives: list[str]) -> "Persona":
+        """
+        Creates a new Persona instance with temporary overrides for Split-Brain agents.
+        This strips away irrelevant global rules (like trading logic) for specialized tasks.
+        
+        Args:
+            name: The new name for the override persona
+            roles: List of roles for the override persona
+            directives: List of directives for the override persona
+            
+        Returns:
+            A new Persona instance with the specified overrides
+        """
+        # Create a deep copy of the underlying Pydantic model
+        new_config = self.config.model_copy(deep=True)
+        new_config.name = name
+        new_config.roles = roles
+        new_config.directives = directives
+        return Persona(new_config)
+
     def __repr__(self) -> str:
         """String representation of the Persona."""
         return (

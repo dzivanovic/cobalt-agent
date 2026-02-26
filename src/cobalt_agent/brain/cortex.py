@@ -54,10 +54,10 @@ class Cortex:
         # 1. Engineering / Code Triage
         eng_keywords = ["engineering", "directory", "file", "codebase", "src/", "list the"]
         if any(keyword in message_lower for keyword in eng_keywords):
-            logger.info("⚡ Fast-Path Routing Triggered: ENGINEERING")
-            from cobalt_agent.brain.engineering import EngineeringDepartment
-            forge = EngineeringDepartment()
-            return forge.run(user_input)
+            logger.info("⚡ Fast-Path Routing Triggered: ENGINEERING (Split-Brain Orchestrator)")
+            from cobalt_agent.core.orchestrator import OrchestratorEngine
+            orchestrator = OrchestratorEngine()
+            return orchestrator.plan_and_execute(user_input)
             
         # 2. Web / Research Triage
         web_keywords = ["http://", "https://", "browser", "scrape", "search", "summarize the top"]

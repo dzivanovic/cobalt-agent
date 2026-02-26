@@ -61,33 +61,47 @@ class ReadFileTool:
     def __init__(self):
         pass
 
-    def run(self, query: str) -> FileContent:
+    def run(self, query=None, **kwargs) -> FileContent:
         """
         Read a file and return its contents.
-        
-        Args:
-            query: The file path to read
-        
-        Returns:
-            FileContent with the file contents or error
         """
-        path = query.strip()
+        import json
+        import ast
         
+        # Universal extraction
+        data = query if query is not None else kwargs
+        
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                try:
+                    data = ast.literal_eval(data)
+                except Exception:
+                    # Fallback: treat the string itself as the path
+                    pass
+
+        path = ""
+        if isinstance(data, dict):
+            # Check common key names
+            path = data.get("filepath", data.get("path", data.get("query", "")))
+        elif isinstance(data, str):
+            path = data.strip()
+            
+        if not path:
+            return FileContent(path="unknown", content="", error=f"Missing filepath. Parsed data: {data}")
+            
         logger.info(f"Reading file: {path}")
         
         try:
-            # Sanitize path - prevent directory traversal
             path = os.path.normpath(path)
-            
             if not os.path.exists(path):
                 return FileContent(path=path, content="", error=f"File not found: {path}")
-            
             if not os.path.isfile(path):
                 return FileContent(path=path, content="", error=f"Not a file: {path}")
-            
+                
             with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            
             return FileContent(path=path, content=content)
             
         except Exception as e:
@@ -139,13 +153,33 @@ class WriteFileTool:
             logger.error(f"WriteFileTool missing fields. Parsed data: {data}")
             return f"Error: Missing filepath or content. Parsed data: {data}"
 
+        from pathlib import Path
+        from cobalt_agent.config import get_config
+
+        # Resolve the path properly
+        target_path = Path(filepath)
+
+        # If it's just a raw markdown filename with no directories, force it to 0 - Inbox
+        if len(target_path.parts) == 1 and target_path.suffix == '.md':
+            target_path = Path(f"0 - Inbox/{target_path.name}")
+
+        # If it's an Obsidian note (like '0 - Inbox/Note.md') and doesn't start with docs/
+        # we should route it to the configured vault path
+        if str(target_path).startswith("0 - ") and not str(target_path).startswith("docs/"):
+            config = get_config()
+            vault_path = Path(config.system.obsidian_vault_path)
+            target_path = vault_path / target_path
+
         def execute_write(proposal_obj):
             try:
-                with open(filepath, 'w', encoding='utf-8') as f:
+                # Ensure the parent directory exists before writing
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+
+                with open(target_path, 'w', encoding='utf-8') as f:
                     f.write(content)
-                logger.info(f"Proposal Engine executed write to: {filepath} ({len(content)} bytes)")
+                logger.info(f"Proposal Engine executed write to: {target_path} ({len(content)} bytes)")
             except Exception as e:
-                logger.error(f"Failed to physically write file {filepath}: {e}")
+                logger.error(f"Failed to physically write file {target_path}: {e}")
             
         try:
             proposal = create_and_send_proposal(
@@ -174,30 +208,44 @@ class ListDirectoryTool:
     def __init__(self):
         pass
 
-    def run(self, query: str) -> DirectoryListing:
+    def run(self, query=None, **kwargs) -> DirectoryListing:
         """
         List directory contents.
-        
-        Args:
-            query: The directory path to list
-        
-        Returns:
-            DirectoryListing with contents or error
         """
-        path = query.strip()
+        import json
+        import ast
         
+        # Universal extraction
+        data = query if query is not None else kwargs
+        
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                try:
+                    data = ast.literal_eval(data)
+                except Exception:
+                    # Fallback: treat the string itself as the path
+                    pass
+
+        path = ""
+        if isinstance(data, dict):
+            path = data.get("directory_path", data.get("path", data.get("query", "")))
+        elif isinstance(data, str):
+            path = data.strip()
+            
+        if not path:
+            return DirectoryListing(path="unknown", contents=[], error=f"Missing directory_path. Parsed data: {data}")
+            
         logger.info(f"Listing directory: {path}")
         
         try:
-            # Sanitize path - prevent directory traversal
             path = os.path.normpath(path)
-            
             if not os.path.exists(path):
                 return DirectoryListing(path=path, contents=[], error=f"Directory not found: {path}")
-            
             if not os.path.isdir(path):
                 return DirectoryListing(path=path, contents=[], error=f"Not a directory: {path}")
-            
+                
             contents = []
             for item in os.listdir(path):
                 item_path = os.path.join(path, item)
@@ -206,7 +254,6 @@ class ListDirectoryTool:
                     'name': item,
                     'type': item_type
                 })
-            
             return DirectoryListing(path=path, contents=contents)
             
         except Exception as e:

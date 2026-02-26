@@ -69,6 +69,8 @@ docs/
                     cortex.md
                     create_missing_tasks.md
                     create_prd.md
+                    engineering.md
+                    filesystem.md
                     finance.md
                     generate_constitution.md
                     generate_context.md
@@ -99,6 +101,8 @@ docs/
                     PRD-004 Cortex LLM Switchboard Router.md
                     PRD-005 Voice Architecture.md
                     PRD-006 Dynamic Browser Automation.md
+                Sprints/
+                    Sprint-2026-02-25 Zero Trust HITL Engine.md
                 User Stories/
                     Story-001_Initial_Brainstorm.md
             Tasks/
@@ -180,8 +184,10 @@ src/
                 deep_dive.py
         tools/
             browser.py
+            filesystem.py
             finance.py
             search.py
+            test_script.py
             tool_manager.py
         config.py
         llm.py
@@ -203,11 +209,18 @@ tests/
     test_scribe.py
     test_strategies.py
 README.md
+cobalt_master_context.txt
 docker-compose.yml
 pyproject.toml
 
 ========================================
 FILE: README.md
+========================================
+
+
+
+========================================
+FILE: cobalt_master_context.txt
 ========================================
 
 
@@ -303,7 +316,7 @@ active_profile:
 
 mattermost:
   approval_channel: "cobalt-approvals"
-  approval_team: "cobalt-team"
+  approval_team: "cobalt-bridge"
 
 persona:
   name: "Cobalt"
@@ -3417,6 +3430,500 @@ Score = Base + Fuel - Friction - Decay
 - `datetime` - Date generation for frontmatter
 
 ========================================
+FILE: docs/0 - Projects/Cobalt/00 - Master Plan/Developer Docs/engineering.md
+========================================
+
+---
+title: "Engineering Department Documentation"
+status: Active
+module: Brain
+type: Department
+dependencies:
+  - "[[cortex]]"
+  - "[[tool_manager]]"
+  - "[[filesystem]]"
+  - "[[proposals]]"
+location: "src/cobalt_agent/brain/engineering.py"
+tags: [cobalt, dev_docs, engineering, prompt]
+created: 2026-02-25
+---
+
+# Engineering Department
+
+## Overview
+The Engineering Department is Cobalt's **principal systems architect and senior software engineer**. It handles code reading, analysis, and writing tasks with strict Zero Trust Human-in-the-Loop (HITL) approval for file modifications.
+
+### Zero Trust Integration
+- **Write operations always require approval** - No file can be modified without explicit human approval
+- **Wait Protocol** - LLM must stop after submitting a proposal, not retry writing
+- **Context Efficiency** - Skip directory crawls when given exact file paths
+
+## Class: `EngineeringDepartment`
+
+### Constructor
+```python
+def __init__(self)
+```
+Initializes the Engineering Department with configuration from `config.yaml`.
+
+**Components:**
+- `llm`: LLM instance for code analysis and generation
+- `tool_manager`: Tool registry for code operations
+
+---
+
+## Critical Prompt Rules
+
+The Engineering Department's system prompt enforces strict Zero Trust and efficiency protocols.
+
+### 1. Strict Tool Syntax
+
+**Rule:** YOU MUST USE THE EXACT SYNTAX BELOW TO CALL A TOOL.
+
+**Correct Syntax:**
+```python
+ACTION: write_file {"filepath": "src/test.py", "content": "print('hello')"}
+```
+
+**Incorrect Syntax:**
+```python
+# No ACTION prefix
+{"filepath": "src/test.py", "content": "print('hello')"}
+
+# JSON wrapper
+```json
+{"filepath": "src/test.py", "content": "print('hello')"}
+```
+
+# Text response
+I will create the file now.
+```
+
+**Enforcement:** The LLM generates a syntax error if the ACTION: prefix is missing.
+
+### 2. No Roleplaying
+
+**Rule:** DO NOT roleplay. DO NOT say "I will create the file now." Just output the ACTION string.
+
+**Compliance:**
+- Output ONLY the ACTION line
+- Do not explain what you're doing
+- Do not provide conversational preamble
+
+### 3. Context Efficiency (Workflow)
+
+**Rule:** If the user provides an exact filepath, DO NOT use `list_directory`. Execute `write_file` immediately to save context space.
+
+**Example:**
+```
+User: "Create a file at src/new_module.py"
+
+INCORRECT: List directory first
+1. ACTION: list_directory {"directory_path": "src/"}
+2. ACTION: write_file {...}
+
+CORRECT: Direct write
+1. ACTION: write_file {"filepath": "src/new_module.py", "content": "..."}
+
+**Benefit:** Saves context window tokens for longer conversations
+```
+
+### 4. Wait Protocol (Infinite Loop Prevention)
+
+**Rule:** If you use the `write_file` tool and the System Observation says "Action paused. Proposal sent", YOU MUST STOP. Output a final conversational message saying "I have submitted the proposal for your approval." DO NOT try to write the file again.
+
+**Implementation:**
+```python
+# System Observation after write_file proposal:
+"[Observation: Action paused. Proposal abc12345 sent to Admin for approval in Mattermost.]"
+
+# LLM MUST respond with:
+"I have submitted the proposal for your approval."
+
+# LLM MUST NOT:
+# - Try write_file again
+# - Ask for approval
+# - Provide multiple ACTION lines
+```
+
+**Zero Trust Flow:**
+```
+1. LLM outputs ACTION: write_file {...}
+   ↓
+2. WriteFileTool creates Proposal Engine ticket
+   ↓
+3. System returns: "[Observation: Action paused. Proposal abc12345 sent...]"
+   ↓
+4. LLM receives observation, must STOP
+   ↓
+5. LLM outputs final message: "I have submitted the proposal for your approval."
+   ↓
+6. User responds in Mattermost: "Approve abc12345"
+   ↓
+7. Callback executes, file modification completes
+```
+
+### 5. No Guessing
+
+**Rule:** NEVER guess the contents of a file or directory.
+
+**Compliance:**
+- Always use `read_file` to examine file contents
+- Always use `list_directory` to explore folder contents
+- Do not invent file structures or content
+
+---
+
+## Available Tools
+
+### `read_file`
+Reads the contents of a file.
+
+**Syntax:**
+```python
+ACTION: read_file {"filepath": "src/main.py"}
+```
+
+**Use Cases:**
+- Examine existing code
+- Verify file contents before modification
+- Read configuration files
+
+### `list_directory`
+Lists the contents of a directory.
+
+**Syntax:**
+```python
+ACTION: list_directory {"directory_path": "src/"}
+```
+
+**Use Cases:**
+- Explore project structure
+- Find existing files
+- Verify directory layout
+
+### `write_file`
+Modifies or creates a file. **Always requires HITL approval.**
+
+**Syntax:**
+```python
+ACTION: write_file {"filepath": "src/test.py", "content": "print('hello')"}
+```
+
+**Use Cases:**
+- Create new files
+- Update existing files
+- Modify configuration
+
+---
+
+## ReAct Loop Implementation
+
+The Engineering Department uses a ReAct (Reasoning-Acting) loop for tool execution.
+
+### Loop Constraints
+
+```python
+max_loops = 4  # Maximum tool invocations per request
+```
+
+### Loop Flow
+```
+1. Get LLM response with system prompt
+   ↓
+2. ┌───────────── ACTION: detected? ─────────┐
+   │                                         ↓
+   │                                     No → return response
+   ↓
+3. Extract tool name and arguments
+   ↓
+4. Execute tool via ToolManager
+   ↓
+5. Format observation
+   ↓
+6. Append observation to conversation history
+   ↓
+7. Loop back to step 1
+   ↓
+8. ┌───────────── Max loops reached? ─────────┐
+   │                                         ↓
+   │                                     No → continue
+   ↓
+   ┌───────────── Yes ─────────┐
+   │                           ↓
+   │                  Return error: "ReAct loop maxed out"
+   │
+   └───────────────────────────┘
+```
+
+---
+
+## Output Format
+
+### Successful Tool Execution
+
+```
+Observation: File written successfully to src/test.py (100 bytes)
+```
+
+### Proposal Sent (Write File)
+
+```
+Observation: Action paused. Proposal abc12345 sent to Admin for approval in Mattermost.
+```
+
+### Error Output
+
+```
+Error: Tool 'read_file' failed: File not found: src/nonexistent.py
+```
+
+### Final Response
+
+```
+I have successfully created the file at src/test.py.
+```
+
+---
+
+## Error Handling
+
+| Error Type | Message | Action |
+|-----------|---------|--------|
+| Tool not found | `"Error: Tool 'xxx' not found."` | Return to user |
+| Missing filepath | `"Error: Missing filepath or content."` | Return to user |
+| LLM no ACTION | Return response as final answer | Done |
+| ReAct loop maxed | `"Error: ReAct loop maxed out. Please simplify the request."` | Return to user |
+
+---
+
+## Integration with Proposal Engine
+
+When `write_file` is called:
+
+```python
+# WriteFileTool executes:
+proposal = create_and_send_proposal(
+    action=f"Write {len(content)} bytes to {filepath}",
+    justification="Agent requested file modification via WriteFileTool.",
+    risk_assessment="HIGH"
+)
+
+if proposal:
+    engine = ProposalEngine()
+    engine.set_approval_callback(proposal.task_id, execute_write)
+    return f"Action paused. Proposal [{proposal.task_id}] sent to Admin for approval."
+```
+
+---
+
+## Configuration
+
+No additional configuration required. The department uses the global Proposal Engine configuration for write operations.
+
+========================================
+FILE: docs/0 - Projects/Cobalt/00 - Master Plan/Developer Docs/filesystem.md
+========================================
+
+---
+title: "Filesystem Tools Documentation"
+status: Active
+module: Tools
+type: Tool Suite
+dependencies:
+  - "[[proposals]]"
+  - "[[tool_manager]]"
+location: "src/cobalt_agent/tools/filesystem.py"
+tags: [cobalt, dev_docs, filesystem, tools]
+created: 2026-02-25
+---
+
+# Filesystem Tools
+
+## Overview
+The Filesystem module provides safe, auditable file operations for the Cobalt Agent. All write operations are subject to Zero Trust Human-in-the-Loop (HITL) approval via the Proposal Engine.
+
+### Zero Trust Integration
+- **Write operations always require approval** - No file can be modified without explicit human approval
+- **Memory-locked callbacks** - Execution closures are stored in RAM only, mapped to 8-character task IDs
+- **Universal parser** - Robust dictionary extraction using both JSON and ast.literal_eval fallback
+
+## Tools
+
+### ReadFileTool
+Reads the contents of a file.
+
+**Name:** `read_file`
+
+**Description:** Read the contents of a file. Use when you need to examine existing code or data.
+
+**Syntax:**
+```python
+ACTION: read_file {"filepath": "src/main.py"}
+```
+
+### ListDirectoryTool
+Lists the contents of a directory.
+
+**Name:** `list_directory`
+
+**Description:** List the contents of a directory. Use when you need to explore the file structure.
+
+**Syntax:**
+```python
+ACTION: list_directory {"directory_path": "src/"}
+```
+
+### WriteFileTool (Zero Trust)
+
+Modifies or creates a file. **This tool ALWAYS requires Human-in-the-Loop approval.**
+
+**Name:** `write_file`
+
+**Zero Trust Flow:**
+```
+1. LLM requests file modification
+   ↓
+2. WriteFileTool parses arguments (universal parser)
+   ↓
+3. WriteFileTool creates Proposal Engine ticket
+   ↓
+4. Proposal sent to Mattermost approval channel
+   ↓
+5. User responds with "Approve [task_id]"
+   ↓
+6. MattermostInterface intercepts approval
+   ↓
+7. Callback execution closes the loop
+   ↓
+8. File modification executes in RAM
+```
+
+## WriteFileTool Implementation
+
+### Universal Argument Parser
+
+The WriteFileTool implements a robust **universal extraction parser** that handles multiple input formats and prevents silent parsing errors.
+
+```python
+# Universal extraction
+data = query if query is not None else kwargs
+
+if isinstance(data, str):
+    try:
+        data = json.loads(data)
+    except Exception as e1:
+        try:
+            data = ast.literal_eval(data)
+        except Exception as e2:
+            logger.error(f"WriteFileTool parsing failed. JSON error: {e1} | AST error: {e2} | Data: {data}")
+            return f"Error: Failed to parse arguments. Received: {data}"
+```
+
+**Parser Priority:**
+1. **JSON parsing** - Primary format for structured data
+2. **ast.literal_eval** - Fallback for Python dictionary string literals
+3. **Error reporting** - Detailed error message showing both failures
+
+**Supported Input Formats:**
+| Format | Example | Parsed By |
+|--------|---------|-----------|
+| Dictionary | `{"filepath": "test.py", "content": "print('hi')"}` | Direct dict access |
+| JSON string | `'{"filepath": "test.py", "content": "print(\'hi\')"}'` | `json.loads()` |
+| Python dict string | `"{'filepath': 'test.py', 'content': \"print('hi')\"}"` | `ast.literal_eval()` |
+
+### Nested Query Handling
+
+The parser also handles nested query dictionaries:
+
+```python
+if isinstance(data, dict):
+    # Handle nested query dictionaries
+    if "filepath" not in data and "query" in data:
+        if isinstance(data["query"], dict):
+            data = data["query"]
+        elif isinstance(data["query"], str):
+            try:
+                data = ast.literal_eval(data["query"])
+            except Exception:
+                pass
+```
+
+### Execute Closure (Memory-Locked)
+
+When a proposal is created, the WriteFileTool creates a closure that captures the file path and content:
+
+```python
+def execute_write(proposal_obj):
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
+        logger.info(f"Proposal Engine executed write to: {filepath} ({len(content)} bytes)")
+    except Exception as e:
+        logger.error(f"Failed to physically write file {filepath}: {e}")
+```
+
+This closure is stored in the `ProposalEngine.callbacks` dictionary and executed only after approval.
+
+### Integration with ProposalEngine
+
+```python
+try:
+    proposal = create_and_send_proposal(
+        action=f"Write {len(content)} bytes to {filepath}",
+        justification="Agent requested file modification via WriteFileTool.",
+        risk_assessment="HIGH"
+    )
+except Exception as e:
+    logger.error(f"Proposal Engine crash: {e}")
+    return f"Error: Proposal Engine crashed: {e}"
+
+if proposal:
+    engine = ProposalEngine()
+    engine.set_approval_callback(proposal.task_id, execute_write)
+    engine.pending_proposals[proposal.task_id] = proposal
+    return f"Action paused. Proposal [{proposal.task_id}] sent to Admin for approval in Mattermost."
+else:
+    return "Error: Failed to generate Proposal Ticket. Mattermost connection failed."
+```
+
+## Output Format
+
+When a write request is received, the tool returns:
+
+```
+Action paused. Proposal [abc12345] sent to Admin for approval in Mattermost.
+```
+
+After approval via Mattermost (user responds with "Approve abc12345"):
+
+```
+✅ Approval received for task [abc12345]. Action executed successfully.
+```
+
+## Error Handling
+
+| Error Type | Message Format | Example |
+|------------|---------------|---------|
+| Missing filepath | `Error: Missing filepath or content. Parsed data: {data}` | |
+| Missing content | `Error: Missing filepath or content. Parsed data: {data}` | |
+| JSON parse error | `Error: Failed to parse arguments. Received: {data}` | |
+| File write error | Logged to logger only | |
+| Proposal Engine crash | `Error: Proposal Engine crashed: {error}` | |
+
+## Security Considerations
+
+1. **No direct file access** - File modifications only occur after explicit approval
+2. **Memory-locked callbacks** - Execution closures never written to disk
+3. **8-character task ID** - Cryptographic token for approval matching
+4. **Log audit trail** - All proposal lifecycle events are logged
+5. **Path sanitization** - Directory traversal prevented (handled by underlying OS)
+
+## Configuration
+
+No additional configuration required. The tool automatically uses the global Proposal Engine configuration.
+
+========================================
 FILE: docs/0 - Projects/Cobalt/00 - Master Plan/Developer Docs/finance.md
 ========================================
 
@@ -4175,6 +4682,94 @@ def handle_approval_response(self, message: str, channel_id: str) -> Optional[Pr
 - **Unknown task_id**: Warning logged, message routes to brain
 - **Regex no match**: Message routes to brain normally
 
+---
+
+## HITL Interceptor (Zero Trust)
+
+### Overview
+The MattermostInterface implements a **WebSocket-level interceptor** that processes approval/reject messages before any LLM inference. This ensures Zero Trust by bypassing the ReAct loop for approval responses.
+
+**Location:** `_handle_mattermost_event()` method
+
+### Interceptor Priority
+
+```
+1. WebSocket receives "posted" event with message
+   ↓
+2. HITL Interceptor checks if message starts with "approve" or "reject"
+   ↓
+   ┌───────────── Match ─────────┐
+   ↓                             ↓
+3. Call engine.handle_approval_response()   No match → skip interceptor
+   ↓                             ↓
+4. Send result back to channel   Route to brain for LLM inference
+   ↓
+5. Return (don't process further)
+```
+
+### Supported Approval Patterns
+
+| Pattern | Case-Sensitive | Extracts | Example |
+|---------|---------------|--------|--------|
+| `approve\s+(\w{8})` | Case-insensitive | 8-char task-id | `Approve abc12345` |
+| `reject\s+(\w{8})` | Case-insensitive | 8-char task_id | `Reject xyz98765` |
+
+### Response Messages
+
+**Approval Success:**
+```
+✅ Approval received for task [abc12345]. Action executed successfully.
+```
+
+**Approval Timeout:**
+```
+⚠️ Approval received for [abc12345], but no execution callback was found in memory.
+```
+
+**Unknown Task ID:**
+```
+⚠️ No pending approval found for task [abc12345].
+```
+
+**Already Approved:**
+```
+ℹ️ Proposal [abc12345] was already approved.
+```
+
+**Rejection:**
+```
+❌ Rejection received for task [abc12345]. The action has been cancelled.
+```
+
+---
+
+## System Message Filtering
+
+### Overview
+The MattermostInterface filters out **Mattermost system messages** (joins, leaves, header updates) to prevent the LLM from responding to non-user events.
+
+### System Message Detection
+
+```python
+# Ignore Mattermost system messages (joins, leaves, header updates)
+if post_data.get("type", "") != "":
+    return
+```
+
+### System Message Types Filtered
+
+| Message Type | Description | Filtered? |
+|--------------|-------------|----------|
+| Empty (`""`) | Regular user message | ❌ No |
+| `"system_join"` | User joins channel | ✅ Yes |
+| `"system_leave"` | User leaves channel | ✅ Yes |
+| `"system_header"` | Channel header updated | ✅ Yes |
+| `"system_join_leave"` | Group membership change | ✅ Yes |
+| `"system_purpose"` | Channel purpose updated | ✅ Yes |
+
+### Implementation Note
+Only messages with an empty `type` field (regular user messages) pass through to the LLM inference pipeline. All system-generated events are silently dropped.
+
 ## Integration with Brain
 
 The Mattermost interface requires a Brain (Cortex) attachment to process messages:
@@ -4841,6 +5436,7 @@ Initializes the Proposal Engine with configuration from `config.yaml`.
 | `mattermost` | `Optional[MattermostInterface]` | Mattermost connection instance |
 | `approved_proposals` | `Dict[str, Proposal]` | Successfully approved proposals |
 | `pending_proposals` | `Dict[str, Proposal]` | Waiting for approval |
+| `callbacks` | `Dict[str, Callable[[Proposal], None]]` | **Memory-locked execution callbacks** - frozen Python callbacks mapped to task IDs |
 | `_approval_callback` | `Optional[Callable]` | Callback for approved proposals |
 | `_monitoring` | `bool` | Whether background monitoring is active |
 
@@ -4995,6 +5591,79 @@ Stops background monitoring for approval responses.
 - Sets monitoring flag to False
 - Waits for thread to join
 - Logs monitoring stop
+
+## Memory-Locked Callbacks (Zero Trust Execution)
+
+### Overview
+The `ProposalEngine` class stores **frozen Python execution callbacks** in a shared class dictionary. This implements a "coat-check" system where the LLM proposes an action, receives approval, and then the callback is executed.
+
+### Callback Storage
+```python
+class ProposalEngine:
+    # Shared state across all instances
+    pending_proposals: Dict[str, Proposal] = {}
+    callbacks: Dict[str, Callable[[Proposal], None]] = {}
+```
+
+**Security Characteristics:**
+- **No disk persistence**: Callbacks exist only in memory
+- **8-character task_id**: Cryptographic token for approval matching
+- **Class-level storage**: Shared across all `ProposalEngine` instances
+- **Automatic cleanup**: Callbacks removed after execution or timeout
+
+### Callback Lifecycle
+```
+1. LLM proposes file write via WriteFileTool
+   ↓
+2. ProposalEngine.create_proposal() generates task_id
+   ↓
+3. WriteFileTool creates execute_write() closure
+   ↓
+4. ProposalEngine.set_approval_callback(task_id, execute_write)
+   ↓
+5. Proposal sent to Mattermost approval channel
+   ↓
+6. User responds with "Approve [task_id]"
+   ↓
+7. MattermostInterface intercepts approval response
+   ↓
+8. ProposalEngine.handle_approval_response() executes callback
+   ↓
+9. File modification executes in RAM callback
+   ↓
+10. Callback removed from callbacks dictionary
+```
+
+### `set_approval_callback(task_id: str, callback: Callable[[Proposal], None]) -> None`
+Sets a callback function to be called when a proposal is approved.
+
+**Parameters:**
+- `task_id`: The unique 8-character identifier for the task
+- `callback`: Function that takes a `Proposal` and returns `None`
+
+**Usage:**
+```python
+def execute_write(proposal_obj):
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+engine = ProposalEngine()
+engine.set_approval_callback(proposal.task_id, execute_write)
+```
+
+**Execution Flow:**
+1. Callback stored in `ProposalEngine.callbacks[task_id]`
+2. Mattermost approval received via WebSocket interceptor
+3. `handle_approval_response()` extracts task_id from message
+4. Callback retrieved and executed with proposal object
+5. Callback removed from dictionary after execution
+
+### Error Handling
+
+**Callback Execution Failures:**
+- **Exception during execution**: Error logged, user notified via Mattermost
+- **Callback not found**: Warning logged, user notified of missing callback
+- **Duplicate approval**: Ignored (already approved or already executed)
 
 ## Convenience Functions
 
@@ -6285,6 +6954,153 @@ created: 2026-02-25
 - Must run headlessly to avoid interrupting the user's primary desktop experience.
 - Must include hard timeouts to prevent infinite hanging on broken selectors.
 - Must spoof User-Agent strings to minimize bot detection.
+
+========================================
+FILE: docs/0 - Projects/Cobalt/90 - Project Management/Sprints/Sprint-2026-02-25 Zero Trust HITL Engine.md
+========================================
+
+---
+title: "Sprint 2026-02-25: Zero Trust HITL Execution Engine"
+date: 2026-02-25
+sprint: 1
+status: Complete
+tags: [cobalt, sprint, hitl, security]
+---
+
+# Sprint 2026-02-25: Zero Trust HITL Execution Engine
+
+## Overview
+
+This sprint completed the foundational Zero Trust Human-in-the-Loop (HITL) Execution Engine, implementing memory-locked callbacks, Mattermost interceptors, and optimized ReAct loops for safe, auditable file modifications.
+
+## Key Achievements
+
+### 1. Zero Trust HITL: Air-Gapped Approval Workflow
+
+Built an asynchronous, air-gapped approval workflow for file modifications. The LLM cannot write files directly; it must propose them via a Coat-Check ticket system.
+
+**Implementation Details:**
+- `ProposalEngine` class stores frozen Python execution callbacks in a shared class dictionary
+- Callbacks are mapped to 8-character task IDs for secure retrieval
+- File write operations are paused and require explicit human approval
+- Approved proposals trigger callbacks that execute the actual file modifications
+
+**Files Modified:**
+- `src/cobalt_agent/core/proposals.py`
+
+### 2. Memory-Locked Callbacks
+
+Implemented `ProposalEngine.callbacks` as a shared class dictionary for storing frozen Python execution callbacks.
+
+**Key Features:**
+```python
+class ProposalEngine:
+    callbacks: Dict[str, Callable[[Proposal], None]] = {}
+    
+    def set_approval_callback(self, task_id: str, callback: Callable) -> None:
+        self.callbacks[task_id] = callback
+```
+
+**Security Benefits:**
+- Callbacks are stored in memory, not persisted to disk
+- 8-character task ID provides cryptographic token for approval matching
+- No direct file access until approval is received
+
+### 3. Mattermost Interceptor
+
+Updated the WebSocket listener to intercept messages starting with "Approve", bypassing the LLM entirely to execute secure RAM callbacks.
+
+**Implementation:**
+```python
+# HITL APPROVAL INTERCEPTOR
+text_lower = text.strip().lower()
+if text_lower.startswith("approve") or text_lower.startswith("reject"):
+    engine = ProposalEngine()
+    result_msg = engine.handle_approval_response(text)
+    self.send_message_to_channel_id(channel_id, result_msg)
+    return
+```
+
+**Features:**
+- Intercepts approval/reject messages before LLM processing
+- Validates task ID format (8 characters)
+- Executes RAM callbacks for approved proposals
+- Ignores Mattermost system messages (joins, leaves, header updates)
+
+**Files Modified:**
+- `src/cobalt_agent/interfaces/mattermost.py`
+
+### 4. Universal Tool Parser
+
+Upgraded `ToolManager` and `WriteFileTool` to safely extract dictionary payloads using `ast.literal_eval` and prevent silent string-parsing errors.
+
+**WriteFileTool Parsing:**
+```python
+# Universal extraction
+data = query if query is not None else kwargs
+
+if isinstance(data, str):
+    try:
+        data = json.loads(data)
+    except Exception as e1:
+        try:
+            data = ast.literal_eval(data)
+        except Exception as e2:
+            logger.error(f"WriteFileTool parsing failed. JSON error: {e1} | AST error: {e2}")
+            return f"Error: Failed to parse arguments. Received: {data}"
+```
+
+**Benefits:**
+- Handles both JSON and Python dictionary string formats
+- Graceful error handling with detailed error messages
+- Prevents silent parsing failures
+
+**Files Modified:**
+- `src/cobalt_agent/tools/filesystem.py`
+- `src/cobalt_agent/tools/tool_manager.py`
+
+### 5. ReAct Loop Optimization
+
+Added critical prompt rules to the Engineering prompt to:
+- Stop infinite loops via the "Wait Protocol"
+- Skip directory crawls when given exact file paths (context efficiency)
+
+**Wait Protocol:**
+```
+6. WAIT PROTOCOL: If you use the `write_file` tool and the System Observation says "Action paused. Proposal sent", YOU MUST STOP. Output a final conversational message saying "I have submitted the proposal for your approval." DO NOT try to write the file again.
+```
+
+**Context Efficiency:**
+```
+5. WORKFLOW EFFICIENCY: If the user provides an exact filepath (e.g., "create a file at src/test.py"), DO NOT use `list_directory`. Execute `write_file` immediately to save context space.
+```
+
+**Files Modified:**
+- `src/cobalt_agent/brain/engineering.py`
+
+## Sprint Metrics
+
+| Metric | Value |
+|--------|-------|
+| Sprint Duration | 2026-02-25 |
+| Files Modified | 4 |
+| New Features | 2 (HITL interceptor, memory-locked callbacks) |
+| Bugs Fixed | N/A |
+| Documentation Updated | 4 |
+
+## Documentation Updates
+
+- `docs/0 - Projects/Cobalt/00 - Master Plan/Developer Docs/proposals.md` - Updated with callbacks documentation
+- `docs/0 - Projects/Cobalt/00 - Master Plan/Developer Docs/mattermost.md` - Updated with HITL interceptor documentation
+- `docs/0 - Projects/Cobalt/00 - Master Plan/Developer Docs/filesystem.md` - Created new page for WriteFileTool
+- `docs/0 - Projects/Cobalt/00 - Master Plan/Developer Docs/engineering.md` - Created new page for prompt rules
+
+## Next Steps
+
+- [ ] Add rejection handling documentation
+- [ ] Document the callback execution flow in more detail
+- [ ] Add integration testing for HITL workflow
+- [ ] Create user-facing approval channel documentation
 
 ========================================
 FILE: docs/0 - Projects/Cobalt/90 - Project Management/User Stories/Story-001_Initial_Brainstorm.md
@@ -7850,6 +8666,107 @@ If I ask you a question that requires data, do not answer directly. START WITH A
 FILE: logs/agent_2026-02-25.log
 ========================================
 
+2026-02-25 20:48:41.121 | INFO     | cobalt_agent.config:load_config:422 - Loading configuration from: /Users/cobalt/cobalt/configs
+2026-02-25 20:48:41.126 | INFO     | cobalt_agent.config:load_config:452 - 🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...
+2026-02-25 20:48:41.127 | INFO     | cobalt_agent.security.vault:unlock:44 - 🔐 Vault successfully unlocked into memory.
+2026-02-25 20:48:41.127 | INFO     | cobalt_agent.security.vault:lock:55 - 🔒 Vault locked. Secrets wiped from RAM.
+2026-02-25 20:48:41.127 | INFO     | cobalt_agent.config:load_config:483 - 🔒 Vault secrets loaded into runtime RAM and vault locked.
+2026-02-25 20:48:41.128 | INFO     | cobalt_agent.config:load_config:422 - Loading configuration from: /Users/cobalt/cobalt/configs
+2026-02-25 20:48:41.133 | INFO     | cobalt_agent.config:load_config:452 - 🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...
+2026-02-25 20:48:41.133 | INFO     | cobalt_agent.security.vault:unlock:44 - 🔐 Vault successfully unlocked into memory.
+2026-02-25 20:48:41.133 | INFO     | cobalt_agent.security.vault:lock:55 - 🔒 Vault locked. Secrets wiped from RAM.
+2026-02-25 20:48:41.133 | INFO     | cobalt_agent.config:load_config:483 - 🔒 Vault secrets loaded into runtime RAM and vault locked.
+2026-02-25 20:48:41.134 | INFO     | cobalt_agent.config:load_config:422 - Loading configuration from: /Users/cobalt/cobalt/configs
+2026-02-25 20:48:41.140 | INFO     | cobalt_agent.config:load_config:452 - 🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...
+2026-02-25 20:48:41.140 | INFO     | cobalt_agent.security.vault:unlock:44 - 🔐 Vault successfully unlocked into memory.
+2026-02-25 20:48:41.140 | INFO     | cobalt_agent.security.vault:lock:55 - 🔒 Vault locked. Secrets wiped from RAM.
+2026-02-25 20:48:41.140 | INFO     | cobalt_agent.config:load_config:483 - 🔒 Vault secrets loaded into runtime RAM and vault locked.
+2026-02-25 20:48:41.141 | INFO     | cobalt_agent.core.scheduler:add_job:45 - Scheduled task added: run (cron)
+2026-02-25 20:48:41.142 | INFO     | __main__:__init__:47 - Cobalt Agent - System Initialized
+2026-02-25 20:48:41.142 | INFO     | __main__:__init__:48 - Python Version: 3.14.3 (main, Feb  3 2026, 15:32:20) [Clang 17.0.0 (clang-1700.6.3.2)]
+2026-02-25 20:48:41.142 | INFO     | __main__:__init__:49 - Configuration Loaded: Debug Mode = True
+2026-02-25 20:48:41.142 | INFO     | cobalt_agent.config:load_config:422 - Loading configuration from: /Users/cobalt/cobalt/configs
+2026-02-25 20:48:41.147 | INFO     | cobalt_agent.config:load_config:452 - 🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...
+2026-02-25 20:48:41.147 | INFO     | cobalt_agent.security.vault:unlock:44 - 🔐 Vault successfully unlocked into memory.
+2026-02-25 20:48:41.147 | INFO     | cobalt_agent.security.vault:lock:55 - 🔒 Vault locked. Secrets wiped from RAM.
+2026-02-25 20:48:41.147 | INFO     | cobalt_agent.config:load_config:483 - 🔒 Vault secrets loaded into runtime RAM and vault locked.
+2026-02-25 20:48:41.149 | INFO     | __main__:__init__:53 - Brain Initialized: Role-Based Routing Active (default)
+2026-02-25 20:48:41.149 | INFO     | cobalt_agent.tools.tool_manager:register_tool:57 - Tool registered: search
+2026-02-25 20:48:41.149 | INFO     | cobalt_agent.tools.tool_manager:register_tool:57 - Tool registered: browser
+2026-02-25 20:48:41.149 | INFO     | cobalt_agent.config:load_config:422 - Loading configuration from: /Users/cobalt/cobalt/configs
+2026-02-25 20:48:41.154 | INFO     | cobalt_agent.config:load_config:452 - 🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...
+2026-02-25 20:48:41.154 | INFO     | cobalt_agent.security.vault:unlock:44 - 🔐 Vault successfully unlocked into memory.
+2026-02-25 20:48:41.154 | INFO     | cobalt_agent.security.vault:lock:55 - 🔒 Vault locked. Secrets wiped from RAM.
+2026-02-25 20:48:41.154 | INFO     | cobalt_agent.config:load_config:483 - 🔒 Vault secrets loaded into runtime RAM and vault locked.
+2026-02-25 20:48:41.156 | INFO     | cobalt_agent.tools.tool_manager:register_tool:57 - Tool registered: finance
+2026-02-25 20:48:41.156 | INFO     | cobalt_agent.tools.tool_manager:register_tool:57 - Tool registered: read_file
+2026-02-25 20:48:41.156 | INFO     | cobalt_agent.tools.tool_manager:register_tool:57 - Tool registered: write_file
+2026-02-25 20:48:41.156 | INFO     | cobalt_agent.tools.tool_manager:register_tool:57 - Tool registered: list_directory
+2026-02-25 20:48:42.941 | INFO     | __main__:__init__:69 - Persona: Persona(name='Cobalt', roles=3, skills=4)
+2026-02-25 20:48:42.941 | INFO     | __main__:__init__:70 - Persona Roles: Chief of Staff to Dejan, Principal Systems Architect, Zero-Trust Automation Engine
+2026-02-25 20:48:42.941 | INFO     | __main__:__init__:72 - ================================================================================
+2026-02-25 20:48:42.942 | INFO     | __main__:__init__:73 - SYSTEM PROMPT:
+2026-02-25 20:48:42.942 | INFO     | __main__:__init__:74 - ================================================================================
+2026-02-25 20:48:42.942 | INFO     | __main__:__init__:75 - 
+### IDENTITY
+You are Cobalt.
+
+### ROLES
+Your roles are: Chief of Staff to Dejan, Principal Systems Architect, Zero-Trust Automation Engine.
+
+### OPERATIONAL DIRECTIVES
+- PRIME DIRECTIVE: You are an autonomous intelligence, but strictly bound by the Human-in-the-Loop (HITL) framework.
+- PROPOSAL ENGINE: Never execute destructive, financial, or high-stakes system changes unilaterally. You must draft a precise proposal and await authorization.
+- ZERO TRUST: Assume breach. Verify identity and permissions before accessing secure vaults or executing environment commands.
+- DOCUMENTATION AS CODE: Treat the Obsidian Vault as the absolute source of truth. No system change is complete until documented.
+- BREVITY: Deliver answers directly. Eliminate introductory filler.
+- FIRST PRINCIPLES (R&D): When writing code, analyzing business operations, or developing new strategies, reject analogies. Deconstruct problems to their fundamental truths (e.g., market micro-structure, liquidity, basic physics) before formulating solutions.
+- TACTICAL OVERWATCH: You are a strict spotter, never the sniper. You monitor real-time environments, identify playbook setups on 'stocks in play', grade the risk (A, A-, B, B-, C), and dynamically calculate Expected Value (EV) for active trades. You NEVER execute trades. Your job is mathematical monitoring and alerting only.
+
+### TONE
+Maintain a tone that is: Hyper-competent and authoritative, Analytical and unshakeable, Extremely concise (high signal, zero noise), Professional (strictly avoid chatty filler, apologies, and sycophancy).
+
+### CURRENT CONTEXT
+- Current Date/Time: 2026-02-25 20:48:41
+- Operating System: Python Environment (CLI)
+- User: Administrator
+
+
+### 🧠 MEMORY PROTOCOL (CRITICAL)
+- You will receive a block called "RELEVANT LONG-TERM MEMORY".
+- **STEP 1: Check the Timestamp.** Compare the memory's timestamp to the "Current Date/Time" above.
+- **STEP 2: Classify the Memory.**
+   - **PREFERENCE:** (e.g., "I like TSLA", "I am a scalper") -> **KEEP FOREVER.**
+   - **MARKET CONTEXT:** (e.g., "Ignore the volume", "Market is crashing") -> **EXPIRE AFTER 24 HOURS.**
+- **STEP 3: Apply Logic.**
+   - If a Market Context memory is older than 24 hours, **IGNORE IT** and treat it as historical noise.
+   - If a Preference memory is 5 years old, **RESPECT IT** unless told otherwise.
+- **STEP 4: Answer Retrieval.**
+   - If the answer to the user's question is in the Memory, YOU MUST USE IT.
+   - Do not say "I don't know" if the memory contains the answer.
+
+
+### DIRECTIVES
+- You are an AUTONOMOUS AGENT. You are NOT a chat bot.
+- You DO NOT have internal knowledge of real-time events.
+- You MUST use tools to answer questions about the world.
+- STRICT DATA ADHERENCE: If a tool provides a specific technical indicator (e.g., 'RSI (20)'), you MUST reference that specific period.
+- DO NOT HALLUCINATE standard defaults (like '14-day RSI') if the tool data says otherwise.
+- Trust the tool's calculated signals (e.g., 'BULLISH', 'PARABOLIC') over your own interpretation.
+- PRIME DIRECTIVE: You are an autonomous intelligence, but strictly bound by the Human-in-the-Loop (HITL) framework.
+- PROPOSAL ENGINE: Never execute destructive, financial, or high-stakes system changes unilaterally. You must draft a precise proposal and await authorization.
+- ZERO TRUST: Assume breach. Verify identity and permissions before accessing secure vaults or executing environment commands.
+- DOCUMENTATION AS CODE: Treat the Obsidian Vault as the absolute source of truth. No system change is complete until documented.
+- BREVITY: Deliver answers directly. Eliminate introductory filler.
+- FIRST PRINCIPLES (R&D): When writing code, analyzing business operations, or developing new strategies, reject analogies. Deconstruct problems to their fundamental truths (e.g., market micro-structure, liquidity, basic physics) before formulating solutions.
+- TACTICAL OVERWATCH: You are a strict spotter, never the sniper. You monitor real-time environments, identify playbook setups on 'stocks in play', grade the risk (A, A-, B, B-, C), and dynamically calculate Expected Value (EV) for active trades. You NEVER execute trades. Your job is mathematical monitoring and alerting only.
+### ⚡ CRITICAL OPERATING PROTOCOL ⚡
+To use a tool, you must output a single line starting with 'ACTION:'.
+Do not talk. Do not explain. JUST ACTION.
+
+### EXAMPLES OF CORRECT BEHAVIOR:
+User: What is the price of Apple?
+You: ACTION: finance AAPL
 System: [Observation: AAPL is $150]
 You: Apple is trading at $150.
 
@@ -7865,191 +8782,90 @@ If I ask you a question that requires data, do not answer directly. START WITH A
 - SearchTool: Use this tool for search tasks.
 - BrowserTool: Use this tool for browser tasks.
 - FinanceTool: Use this tool for finance tasks.
+- ReadFileTool: Use this tool for readfile tasks.
+- WriteFileTool: Use this tool for writefile tasks.
+- ListDirectoryTool: Use this tool for listdirectory tasks.
 
-2026-02-25 10:35:18.901 | INFO     | __main__:__init__:76 - ================================================================================
-2026-02-25 10:35:18.901 | INFO     | __main__:__init__:78 - Memory System online
-2026-02-25 10:35:18.901 | INFO     | cobalt_agent.interfaces.mattermost:__init__:44 - MattermostInterface initialized (URL: http://100.70.206.126:8065)
-2026-02-25 10:35:18.925 | INFO     | cobalt_agent.interfaces.mattermost:connect:80 - Successfully connected to Mattermost as user: cobalt
-2026-02-25 10:35:18.926 | INFO     | cobalt_agent.core.proposals:__init__:59 - Proposal Engine initialized (Channel: cobalt-approvals)
-2026-02-25 10:35:18.926 | INFO     | cobalt_agent.interfaces.mattermost:__init__:44 - MattermostInterface initialized (URL: http://100.70.206.126:8065)
-2026-02-25 10:35:18.936 | INFO     | cobalt_agent.interfaces.mattermost:connect:80 - Successfully connected to Mattermost as user: cobalt
-2026-02-25 10:35:18.937 | INFO     | cobalt_agent.core.proposals:connect_mattermost:75 - Proposal Engine: Mattermost connection established
-2026-02-25 10:35:18.937 | INFO     | __main__:start_mattermost_interface:197 - ================================================================================
-2026-02-25 10:35:18.937 | INFO     | __main__:start_mattermost_interface:198 - Cobalt Agent - Mattermost Interface Active
-2026-02-25 10:35:18.937 | INFO     | __main__:start_mattermost_interface:199 - HITL Proposal Engine - Active
-2026-02-25 10:35:18.937 | INFO     | __main__:start_mattermost_interface:200 - ================================================================================
-2026-02-25 10:35:18.937 | INFO     | cobalt_agent.interfaces.mattermost:start_listening:460 - Starting native WebSocket engine...
-2026-02-25 10:35:18.937 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:445 - Connecting to native WebSocket engine: ws://100.70.206.126:8065/api/v4/websocket
-2026-02-25 10:35:18.944 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:450 - Connected and authenticated via HTTP headers. Listening for messages...
-2026-02-25 10:35:18.944 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:454 - RAW WEBSOCKET PAYLOAD: {"event":"hello","data":{"connection_id":"u63won8w4jr59kfzyxz4ptug3h","server_hostname":"7a18772f78d2","server_version":"11.4.0.21550760092.de08ead441c51c565085524a5a422aac3510be86312d1536fea3ff6fd4ef90f4.true"},"broadcast":{"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""},"seq":0}
+2026-02-25 20:48:42.942 | INFO     | __main__:__init__:76 - ================================================================================
+2026-02-25 20:48:42.943 | INFO     | __main__:__init__:78 - Memory System online
+2026-02-25 20:48:42.943 | INFO     | cobalt_agent.interfaces.mattermost:__init__:44 - MattermostInterface initialized (URL: http://100.70.206.126:8065)
+2026-02-25 20:48:42.969 | INFO     | cobalt_agent.interfaces.mattermost:connect:80 - Successfully connected to Mattermost as user: cobalt
+2026-02-25 20:48:42.969 | INFO     | cobalt_agent.core.proposals:__init__:60 - Proposal Engine initialized (Channel: cobalt-approvals)
+2026-02-25 20:48:42.969 | INFO     | cobalt_agent.interfaces.mattermost:__init__:44 - MattermostInterface initialized (URL: http://100.70.206.126:8065)
+2026-02-25 20:48:42.977 | INFO     | cobalt_agent.interfaces.mattermost:connect:80 - Successfully connected to Mattermost as user: cobalt
+2026-02-25 20:48:42.977 | INFO     | cobalt_agent.core.proposals:connect_mattermost:76 - Proposal Engine: Mattermost connection established
+2026-02-25 20:48:42.977 | INFO     | __main__:start_mattermost_interface:197 - ================================================================================
+2026-02-25 20:48:42.977 | INFO     | __main__:start_mattermost_interface:198 - Cobalt Agent - Mattermost Interface Active
+2026-02-25 20:48:42.978 | INFO     | __main__:start_mattermost_interface:199 - HITL Proposal Engine - Active
+2026-02-25 20:48:42.978 | INFO     | __main__:start_mattermost_interface:200 - ================================================================================
+2026-02-25 20:48:42.978 | INFO     | cobalt_agent.interfaces.mattermost:start_listening:476 - Starting native WebSocket engine...
+2026-02-25 20:48:42.978 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:461 - Connecting to native WebSocket engine: ws://100.70.206.126:8065/api/v4/websocket
+2026-02-25 20:48:42.983 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:466 - Connected and authenticated via HTTP headers. Listening for messages...
+2026-02-25 20:48:42.984 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:470 - RAW WEBSOCKET PAYLOAD: {"event":"hello","data":{"connection_id":"unhk4ff3jtg45dgr4xircsryay","server_hostname":"7a18772f78d2","server_version":"11.4.0.21550760092.de08ead441c51c565085524a5a422aac3510be86312d1536fea3ff6fd4ef90f4.true"},"broadcast":{"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""},"seq":0}
 
-2026-02-25 10:35:18.945 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event":"hello","data":{"connection_id":"u63won8w4jr59kfzyxz4ptug3h","server_hostname":"7a18772f78d2","server_version":"11.4.0.21550760092.de08ead441c51c565085524a5a422aac3510be86312d1536fea3ff6fd4ef90f4.true"},"broadcast":{"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""},"seq":0}
+2026-02-25 20:48:42.984 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event":"hello","data":{"connection_id":"unhk4ff3jtg45dgr4xircsryay","server_hostname":"7a18772f78d2","server_version":"11.4.0.21550760092.de08ead441c51c565085524a5a422aac3510be86312d1536fea3ff6fd4ef90f4.true"},"broadcast":{"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""},"seq":0}
 
-2026-02-25 10:35:18.946 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:454 - RAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"online","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 1}
-2026-02-25 10:35:18.946 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"online","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 1}
-2026-02-25 10:35:40.283 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:454 - RAW WEBSOCKET PAYLOAD: {"event": "typing", "data": {"parent_id":"","user_id":"xi4s3ncfypnz8fcbgyfhhwmt8a"}, "broadcast": {"omit_users":{"xi4s3ncfypnz8fcbgyfhhwmt8a":true},"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 2}
-2026-02-25 10:35:40.284 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event": "typing", "data": {"parent_id":"","user_id":"xi4s3ncfypnz8fcbgyfhhwmt8a"}, "broadcast": {"omit_users":{"xi4s3ncfypnz8fcbgyfhhwmt8a":true},"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 2}
-2026-02-25 10:35:43.910 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:454 - RAW WEBSOCKET PAYLOAD: {"event":"posted","data":{"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","mentions":"[\"oyc789ktdpn75norxkk11hi5dc\"]","post":"{\"id\":\"jh8q7swt8fn83drznnz4p5q9jr\",\"create_at\":1772033743881,\"update_at\":1772033743881,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"@cobalt I need you to do general web research. Use the browser tool to scrape https://news.ycombinator.com and return the raw text.\",\"type\":\"\",\"props\":{},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a:1772033743775\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{\"embeds\":[{\"type\":\"link\",\"url\":\"https://news.ycombinator.com\"}]}}","sender_name":"@dejan_z","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"},"broadcast":{"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""},"seq":3}
+2026-02-25 20:48:42.985 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:470 - RAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"online","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 1}
+2026-02-25 20:48:42.985 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"online","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 1}
+2026-02-25 20:49:11.933 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:470 - RAW WEBSOCKET PAYLOAD: {"event": "typing", "data": {"parent_id":"","user_id":"xi4s3ncfypnz8fcbgyfhhwmt8a"}, "broadcast": {"omit_users":{"xi4s3ncfypnz8fcbgyfhhwmt8a":true},"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 2}
+2026-02-25 20:49:11.934 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event": "typing", "data": {"parent_id":"","user_id":"xi4s3ncfypnz8fcbgyfhhwmt8a"}, "broadcast": {"omit_users":{"xi4s3ncfypnz8fcbgyfhhwmt8a":true},"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 2}
+2026-02-25 20:49:17.401 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:470 - RAW WEBSOCKET PAYLOAD: {"event": "typing", "data": {"parent_id":"","user_id":"xi4s3ncfypnz8fcbgyfhhwmt8a"}, "broadcast": {"omit_users":{"xi4s3ncfypnz8fcbgyfhhwmt8a":true},"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 3}
+2026-02-25 20:49:17.402 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event": "typing", "data": {"parent_id":"","user_id":"xi4s3ncfypnz8fcbgyfhhwmt8a"}, "broadcast": {"omit_users":{"xi4s3ncfypnz8fcbgyfhhwmt8a":true},"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 3}
+2026-02-25 20:49:17.539 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:470 - RAW WEBSOCKET PAYLOAD: {"event":"posted","data":{"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","mentions":"[\"oyc789ktdpn75norxkk11hi5dc\"]","post":"{\"id\":\"6icqnxnatjr13pgwx5tod5daah\",\"create_at\":1772070557525,\"update_at\":1772070557525,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"@cobalt I need an engineering task. Please use your tools to create a new file at src/cobalt_agent/tools/test_script.py. The file should just contain a simple python print statement saying \\\"Hello from the Forge\\\".\",\"type\":\"\",\"props\":{},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a:1772070557388\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@dejan_z","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"},"broadcast":{"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""},"seq":4}
 
-2026-02-25 10:35:43.911 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event":"posted","data":{"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","mentions":"[\"oyc789ktdpn75norxkk11hi5dc\"]","post":"{\"id\":\"jh8q7swt8fn83drznnz4p5q9jr\",\"create_at\":1772033743881,\"update_at\":1772033743881,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"@cobalt I need you to do general web research. Use the browser tool to scrape https://news.ycombinator.com and return the raw text.\",\"type\":\"\",\"props\":{},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a:1772033743775\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{\"embeds\":[{\"type\":\"link\",\"url\":\"https://news.ycombinator.com\"}]}}","sender_name":"@dejan_z","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"},"broadcast":{"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""},"seq":3}
+2026-02-25 20:49:17.540 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event":"posted","data":{"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","mentions":"[\"oyc789ktdpn75norxkk11hi5dc\"]","post":"{\"id\":\"6icqnxnatjr13pgwx5tod5daah\",\"create_at\":1772070557525,\"update_at\":1772070557525,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"@cobalt I need an engineering task. Please use your tools to create a new file at src/cobalt_agent/tools/test_script.py. The file should just contain a simple python print statement saying \\\"Hello from the Forge\\\".\",\"type\":\"\",\"props\":{},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a:1772070557388\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@dejan_z","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"},"broadcast":{"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""},"seq":4}
 
-2026-02-25 10:35:43.920 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:239 - Message received in channel badpmg1j5jf3mj7hxroe6xsrcw: @cobalt I need you to do general web research. Use the browser tool to scrape https://news.ycombinator.com and return the raw text.
-2026-02-25 10:35:43.920 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:252 - Routing message to Cortex in background thread...
-2026-02-25 10:35:43.921 | INFO     | cobalt_agent.memory.core:load_memory:90 - Memory loaded from data/memory.json
-2026-02-25 10:35:43.922 | INFO     | cobalt_agent.brain.cortex:route:57 - ⚡ Fast-Path Routing Triggered: DEFAULT
-2026-02-25 10:35:43.922 | INFO     | cobalt_agent.interfaces.mattermost:think_and_reply:274 - DEFAULT route detected, using ReAct loop...
-2026-02-25 10:35:43.923 | INFO     | cobalt_agent.interfaces.mattermost:think_and_reply:294 - ReAct iteration 1/3
-2026-02-25 10:35:59.841 | INFO     | cobalt_agent.llm:generate_response:172 - Cobalt, LLM model version: ollama/qwen3-coder-next
-2026-02-25 10:35:59.842 | INFO     | cobalt_agent.llm:generate_response:173 - Persona Roles: Chief of Staff, Software Architect, Senior Developer, Business Analyst
-2026-02-25 10:35:59.842 | INFO     | cobalt_agent.interfaces.mattermost:think_and_reply:304 - LLM Response: ACTION: scrape https://news.ycombinator.com
-2026-02-25 10:35:59.842 | INFO     | cobalt_agent.interfaces.mattermost:think_and_reply:309 - ACTION: detected, parsing tool command...
-2026-02-25 10:35:59.843 | INFO     | cobalt_agent.interfaces.mattermost:think_and_reply:327 - Fuzzy matched 'browser' -> 'browser'
-2026-02-25 10:35:59.843 | INFO     | cobalt_agent.tools.tool_manager:register_tool:50 - Tool registered: search
-2026-02-25 10:35:59.843 | INFO     | cobalt_agent.tools.tool_manager:register_tool:50 - Tool registered: browser
-2026-02-25 10:35:59.843 | INFO     | cobalt_agent.config:load_config:422 - Loading configuration from: /Users/cobalt/cobalt/configs
-2026-02-25 10:35:59.861 | INFO     | cobalt_agent.config:load_config:452 - 🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...
-2026-02-25 10:35:59.861 | INFO     | cobalt_agent.security.vault:unlock:44 - 🔐 Vault successfully unlocked into memory.
-2026-02-25 10:35:59.862 | INFO     | cobalt_agent.security.vault:lock:55 - 🔒 Vault locked. Secrets wiped from RAM.
-2026-02-25 10:35:59.862 | INFO     | cobalt_agent.config:load_config:483 - 🔒 Vault secrets loaded into runtime RAM and vault locked.
-2026-02-25 10:35:59.864 | INFO     | cobalt_agent.tools.tool_manager:register_tool:50 - Tool registered: finance
-2026-02-25 10:35:59.865 | INFO     | cobalt_agent.tools.tool_manager:execute_tool:70 - Executing tool: browser with args: {'query': 'https://news.ycombinator.com'}
-2026-02-25 10:35:59.865 | INFO     | cobalt_agent.tools.browser:run:68 - 🌐 Playwright navigating to: https://news.ycombinator.com
-2026-02-25 10:36:02.711 | INFO     | cobalt_agent.interfaces.mattermost:think_and_reply:352 - Tool executed: browser, Observation: [Observation: ### Hacker News
-Hacker Newsnew | past | comments | ask | show | jobs | submit	login
-1.
-Never Buy A .online Domain (0xsid.com)
-297 points by ssiddharth 2 hours ago | hide | 151 comments
-2.
-US orders diplomats to fight data sovereignty initiatives (reuters.com)
-69 points by colinhb 47 minutes ago | hide | 37 comments
-3.
-How to fold the Blade Runner origami unicorn (1996) (archive.org)
-107 points by exvi 5 hours ago | hide | 5 comments
-4.
-Danish government agency to ditch Microsoft software (2025) (therecord.media)
-452 points by robtherobber 5 hours ago | hide | 257 comments
-5.
-Ask HN: Have top AI research institutions just given up on the idea of safety?
-37 points by DietaryNonsense 40 minutes ago | hide | 19 comments
-6.
-Show HN: Django Control Room – All Your Tools Inside the Django Admin (github.com/yassi)
-12 points by yassi_dev 1 hour ago | hide | 4 comments
-7.
-Show HN: A real-time strategy game that AI agents can play (llmskirmish.com)
-137 points by __cayenne__ 5 hours ago | hide | 46 comments
-8.
-100M-Row Challenge with PHP (github.com/tempestphp)
-92 points by brentroose 5 hours ago | hide | 29 comments
-9.
-I'm helping my dog vibe code games (calebleak.com)
-1022 points by cleak 22 hours ago | hide | 333 comments
-10.
-Claude Code Remote Control (claude.com)
-214 points by empressplay 8 hours ago | hide | 144 comments
-11.
-Launch HN: TeamOut (YC W22) – AI agent for planning company events (teamout.com)
-7 points by vincentalbouy 1 hour ago | hide | 4 comments
-12.
-The History of a Security Hole (os2museum.com)
-8 points by st_goliath 2 hours ago | hide | 1 comment
-13.		Event Horizon Labs (YC W24) Is Hiring (ycombinator.com)
-3 hours ago | hide
-14.
-Confusables.txt and NFKC disagree on 31 characters (paultendo.github.io)
-17 points by pimterry 3 hours ago | hide | 13 comments
-15.
-Pi – A minimal terminal coding harness (pi.dev)
-493 points by kristianpaul 17 hours ago | hide | 236 comments
-16.
-Mercury 2: Fast reasoning LLM powered by diffusion (inceptionlabs.ai)
-284 points by fittingopposite 16 hours ago | hide | 113 comments
-17.
-Turing Completeness of GNU find (arxiv.org)
-89 points by todsacerdoti 10 hours ago | hide | 17 comments
-18.
-Japanese Death Poems (secretorum.life)
-95 points by NaOH 10 hours ago | hide | 28 comments
-19.
-Show HN: Moonshine Open-Weights STT models – higher accuracy than WhisperLargev3 (github.com/moonshine-ai)
-280 points by petewarden 17 hours ago | hide | 66 comments
-20.
-Red Hat takes on Docker Desktop with its enterprise Podman Desktop build (thenewstack.io)
-29 points by twelvenmonkeys 2 hours ago | hide | 18 comments
-21.
-I pitched a roller coaster to Disneyland at age 10 in 1978 (wordglyph.xyz)
-505 points by wordglyph 1 day ago | hide | 186 comments
-22.
-Show HN: Scheme-langserver – Digest incomplete code with static analysis (github.com/ufo5260987423)
-22 points by ufo5260987423 7 hours ago | hide | discuss
-23.
-Mac mini will be made at a new facility in Houston (apple.com)
-574 points by haunter 18 hours ago | hide | 584 comments
-24.
-Hacking an old Kindle to display bus arrival times (mariannefeng.com)
-312 points by mengchengfeng 19 hours ago | hide | 79 comments
-25.
-LLM=True (blog.codemine.be)
-173 points by avh3 6 hours ago | hide | 122 comments
-26.
-Cl-kawa: Scheme on Java on Common Lisp (github.com/atgreen)
-61 points by varjag 11 hours ago | hide | 16 comments
-27.
-Nearby Glasses (github.com/yjeanrenaud)
-384 points by zingerlio 21 hours ago | hide | 168 comments
-28.
-Show HN: Clocksimulator.com – A minimalist, distraction-free analog clock (clocksimulator.com)
-55 points by user_timo 1 hour ago | hide | 46 comments
-29.
-Show HN: Emdash – Open-source agentic development environment (github.com/generalaction)
-185 points by onecommit 20 hours ago | hide | 66 comments
-30.
-Steel Bank Common Lisp (sbcl.org)
-248 points by tosh 21 hours ago | hide | 100 comments
-More
-Guidelines | FAQ | Lists | API | Security | Legal | Apply to YC | Contact
-Search:...]
-2026-02-25 10:36:02.711 | INFO     | cobalt_agent.interfaces.mattermost:think_and_reply:294 - ReAct iteration 2/3
-2026-02-25 10:36:32.027 | INFO     | cobalt_agent.llm:generate_response:172 - Cobalt, LLM model version: ollama/qwen3-coder-next
-2026-02-25 10:36:32.028 | INFO     | cobalt_agent.llm:generate_response:173 - Persona Roles: Chief of Staff, Software Architect, Senior Developer, Business Analyst
-2026-02-25 10:36:32.028 | INFO     | cobalt_agent.interfaces.mattermost:think_and_reply:304 - LLM Response: Hacker News top 30 items (raw text):
-
-1. Never Buy A .online Domain (0xsid.com) — 297 pts  
-2. US orders diplomats to fight data sovereignty initiatives (reuters.com) — 69 pts  
-3. How to fold the Blade Runner origami unicorn (1996) (archive.org) — 107 pts  
-4. Danish government agency to ditch Microsoft software (2025) (therecord.media) — 452 pts  
-5. Ask HN: Have top AI research institutions just given up on the idea of safety? — 37 pts  
-6. Show HN: Django Control Room – All Your Tools Inside the Django Admin (github.com/yassi) — 12 pts  
-7. Show HN: A real-time strategy game that AI agents can play (llmskirmish.com) — 137 pts  
-8. 100M-Row Challenge with PHP (github.com/tempestphp) — 92 pts  
-9. I'm helping my dog vibe code games (calebleak.com) — 1022 pts  
-10. Claude Code Remote Control (claude.com) — 214 pts  
-11. Launch HN: TeamOut (YC W22) – AI agent for planning company events (teamout.com) — 7 pts  
-12. The History of a Security Hole (os2museum.com) — 8 pts  
-13. Event Horizon Labs (YC W24) Is Hiring (ycombinator.com)  
-14. Confusables.txt and NFKC disagree on 31 characters (paultendo.github.io) — 17 pts  
-15. Pi – A minimal terminal coding harness (pi.dev) — 493 pts  
-16. Mercury 2: Fast reasoning LLM powered by diffusion (inceptionlabs.ai) — 284 pts  
-17. Turing Completeness of GNU find (arxiv.org) — 89 pts  
-18. Japanese Death Poems (secretorum.life) — 95 pts  
-19. Show HN: Moonshine Open-Weights STT models – higher accuracy than WhisperLargev3 (github.com/moonshine-ai) — 280 pts  
-20. Red Hat takes on Docker Desktop with its enterprise Podman Desktop build (thenewstack.io) — 29 pts  
-21. I pitched a roller coaster to Disneyland at age 10 in 1978 (wordglyph.xyz) — 505 pts  
-22. Show HN: Scheme-langserver – Digest incomplete code with static analysis (github.com/ufo5260987423) — 22 pts  
-23. Mac mini will be made at a new facility in Houston (apple.com) — 574 pts  
-24. Hacking an old Kindle to display bus arrival times (mariannefeng.com) — 312 pts  
-25. LLM=True (blog.codemine.be) — 173 pts  
-26. Cl-kawa: Scheme on Java on Common Lisp (github.com/atgreen) — 61 pts  
-27. Nearby Glasses (github.com/yjeanrenaud) — 384 pts  
-28. Show HN: Clocksimulator.com – A minimalist, distraction-free analog clock (clocksimulator.com) — 55 pts  
-29. Show HN: Emdash – Open-source agentic development environment (github.com/generalaction) — 185 pts  
-30. Steel Bank Common Lisp (sbcl.org) — 248 pts
-2026-02-25 10:36:32.029 | INFO     | cobalt_agent.interfaces.mattermost:think_and_reply:359 - No ACTION: detected, returning final answer
-2026-02-25 10:36:32.058 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:454 - RAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","post":"{\"id\":\"6jj3kaiwtb8j7nugk596p6um1e\",\"create_at\":1772033792044,\"update_at\":1772033792044,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"Hacker News top 30 items (raw text):\\n\\n1. Never Buy A .online Domain (0xsid.com) — 297 pts  \\n2. US orders diplomats to fight data sovereignty initiatives (reuters.com) — 69 pts  \\n3. How to fold the Blade Runner origami unicorn (1996) (archive.org) — 107 pts  \\n4. Danish government agency to ditch Microsoft software (2025) (therecord.media) — 452 pts  \\n5. Ask HN: Have top AI research institutions just given up on the idea of safety? — 37 pts  \\n6. Show HN: Django Control Room – All Your Tools Inside the Django Admin (github.com/yassi) — 12 pts  \\n7. Show HN: A real-time strategy game that AI agents can play (llmskirmish.com) — 137 pts  \\n8. 100M-Row Challenge with PHP (github.com/tempestphp) — 92 pts  \\n9. I'm helping my dog vibe code games (calebleak.com) — 1022 pts  \\n10. Claude Code Remote Control (claude.com) — 214 pts  \\n11. Launch HN: TeamOut (YC W22) – AI agent for planning company events (teamout.com) — 7 pts  \\n12. The History of a Security Hole (os2museum.com) — 8 pts  \\n13. Event Horizon Labs (YC W24) Is Hiring (ycombinator.com)  \\n14. Confusables.txt and NFKC disagree on 31 characters (paultendo.github.io) — 17 pts  \\n15. Pi – A minimal terminal coding harness (pi.dev) — 493 pts  \\n16. Mercury 2: Fast reasoning LLM powered by diffusion (inceptionlabs.ai) — 284 pts  \\n17. Turing Completeness of GNU find (arxiv.org) — 89 pts  \\n18. Japanese Death Poems (secretorum.life) — 95 pts  \\n19. Show HN: Moonshine Open-Weights STT models – higher accuracy than WhisperLargev3 (github.com/moonshine-ai) — 280 pts  \\n20. Red Hat takes on Docker Desktop with its enterprise Podman Desktop build (thenewstack.io) — 29 pts  \\n21. I pitched a roller coaster to Disneyland at age 10 in 1978 (wordglyph.xyz) — 505 pts  \\n22. Show HN: Scheme-langserver – Digest incomplete code with static analysis (github.com/ufo5260987423) — 22 pts  \\n23. Mac mini will be made at a new facility in Houston (apple.com) — 574 pts  \\n24. Hacking an old Kindle to display bus arrival times (mariannefeng.com) — 312 pts  \\n25. LLM=True (blog.codemine.be) — 173 pts  \\n26. Cl-kawa: Scheme on Java on Common Lisp (github.com/atgreen) — 61 pts  \\n27. Nearby Glasses (github.com/yjeanrenaud) — 384 pts  \\n28. Show HN: Clocksimulator.com – A minimalist, distraction-free analog clock (clocksimulator.com) — 55 pts  \\n29. Show HN: Emdash – Open-source agentic development environment (github.com/generalaction) — 185 pts  \\n30. Steel Bank Common Lisp (sbcl.org) — 248 pts\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 4}
-2026-02-25 10:36:32.059 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","post":"{\"id\":\"6jj3kaiwtb8j7nugk596p6um1e\",\"create_at\":1772033792044,\"update_at\":1772033792044,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"Hacker News top 30 items (raw text):\\n\\n1. Never Buy A .online Domain (0xsid.com) — 297 pts  \\n2. US orders diplomats to fight data sovereignty initiatives (reuters.com) — 69 pts  \\n3. How to fold the Blade Runner origami unicorn (1996) (archive.org) — 107 pts  \\n4. Danish government agency to ditch Microsoft software (2025) (therecord.media) — 452 pts  \\n5. Ask HN: Have top AI research institutions just given up on the idea of safety? — 37 pts  \\n6. Show HN: Django Control Room – All Your Tools Inside the Django Admin (github.com/yassi) — 12 pts  \\n7. Show HN: A real-time strategy game that AI agents can play (llmskirmish.com) — 137 pts  \\n8. 100M-Row Challenge with PHP (github.com/tempestphp) — 92 pts  \\n9. I'm helping my dog vibe code games (calebleak.com) — 1022 pts  \\n10. Claude Code Remote Control (claude.com) — 214 pts  \\n11. Launch HN: TeamOut (YC W22) – AI agent for planning company events (teamout.com) — 7 pts  \\n12. The History of a Security Hole (os2museum.com) — 8 pts  \\n13. Event Horizon Labs (YC W24) Is Hiring (ycombinator.com)  \\n14. Confusables.txt and NFKC disagree on 31 characters (paultendo.github.io) — 17 pts  \\n15. Pi – A minimal terminal coding harness (pi.dev) — 493 pts  \\n16. Mercury 2: Fast reasoning LLM powered by diffusion (inceptionlabs.ai) — 284 pts  \\n17. Turing Completeness of GNU find (arxiv.org) — 89 pts  \\n18. Japanese Death Poems (secretorum.life) — 95 pts  \\n19. Show HN: Moonshine Open-Weights STT models – higher accuracy than WhisperLargev3 (github.com/moonshine-ai) — 280 pts  \\n20. Red Hat takes on Docker Desktop with its enterprise Podman Desktop build (thenewstack.io) — 29 pts  \\n21. I pitched a roller coaster to Disneyland at age 10 in 1978 (wordglyph.xyz) — 505 pts  \\n22. Show HN: Scheme-langserver – Digest incomplete code with static analysis (github.com/ufo5260987423) — 22 pts  \\n23. Mac mini will be made at a new facility in Houston (apple.com) — 574 pts  \\n24. Hacking an old Kindle to display bus arrival times (mariannefeng.com) — 312 pts  \\n25. LLM=True (blog.codemine.be) — 173 pts  \\n26. Cl-kawa: Scheme on Java on Common Lisp (github.com/atgreen) — 61 pts  \\n27. Nearby Glasses (github.com/yjeanrenaud) — 384 pts  \\n28. Show HN: Clocksimulator.com – A minimalist, distraction-free analog clock (clocksimulator.com) — 55 pts  \\n29. Show HN: Emdash – Open-source agentic development environment (github.com/generalaction) — 185 pts  \\n30. Steel Bank Common Lisp (sbcl.org) — 248 pts\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 4}
-2026-02-25 10:36:32.062 | INFO     | cobalt_agent.interfaces.mattermost:send_message_to_channel_id:177 - Message sent to channel badpmg1j5jf3mj7hxroe6xsrcw
-2026-02-25 10:36:32.062 | INFO     | cobalt_agent.interfaces.mattermost:think_and_reply:368 - Final response sent to Mattermost
-2026-02-25 10:42:18.962 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:454 - RAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"away","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 5}
-2026-02-25 10:42:18.962 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"away","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 5}
+2026-02-25 20:49:17.547 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:243 - Message received in channel badpmg1j5jf3mj7hxroe6xsrcw: @cobalt I need an engineering task. Please use your tools to create a new file at src/cobalt_agent/tools/test_script.py. The file should just contain a simple python print statement saying "Hello from the Forge".
+2026-02-25 20:49:17.548 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:268 - Routing message to Cortex in background thread...
+2026-02-25 20:49:17.549 | INFO     | cobalt_agent.memory.core:load_memory:90 - Memory loaded from data/memory.json
+2026-02-25 20:49:17.549 | INFO     | cobalt_agent.brain.cortex:route:57 - ⚡ Fast-Path Routing Triggered: ENGINEERING
+2026-02-25 20:49:17.553 | INFO     | cobalt_agent.brain.engineering:__init__:19 - 🛠️ The Forge (Engineering) Online
+2026-02-25 20:49:17.554 | INFO     | cobalt_agent.config:load_config:422 - Loading configuration from: /Users/cobalt/cobalt/configs
+2026-02-25 20:49:17.571 | INFO     | cobalt_agent.config:load_config:452 - 🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...
+2026-02-25 20:49:17.571 | INFO     | cobalt_agent.security.vault:unlock:44 - 🔐 Vault successfully unlocked into memory.
+2026-02-25 20:49:17.571 | INFO     | cobalt_agent.security.vault:lock:55 - 🔒 Vault locked. Secrets wiped from RAM.
+2026-02-25 20:49:17.571 | INFO     | cobalt_agent.config:load_config:483 - 🔒 Vault secrets loaded into runtime RAM and vault locked.
+2026-02-25 20:49:17.575 | INFO     | cobalt_agent.tools.tool_manager:register_tool:57 - Tool registered: search
+2026-02-25 20:49:17.575 | INFO     | cobalt_agent.tools.tool_manager:register_tool:57 - Tool registered: browser
+2026-02-25 20:49:17.576 | INFO     | cobalt_agent.config:load_config:422 - Loading configuration from: /Users/cobalt/cobalt/configs
+2026-02-25 20:49:17.587 | INFO     | cobalt_agent.config:load_config:452 - 🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...
+2026-02-25 20:49:17.587 | INFO     | cobalt_agent.security.vault:unlock:44 - 🔐 Vault successfully unlocked into memory.
+2026-02-25 20:49:17.588 | INFO     | cobalt_agent.security.vault:lock:55 - 🔒 Vault locked. Secrets wiped from RAM.
+2026-02-25 20:49:17.588 | INFO     | cobalt_agent.config:load_config:483 - 🔒 Vault secrets loaded into runtime RAM and vault locked.
+2026-02-25 20:49:17.590 | INFO     | cobalt_agent.tools.tool_manager:register_tool:57 - Tool registered: finance
+2026-02-25 20:49:17.590 | INFO     | cobalt_agent.tools.tool_manager:register_tool:57 - Tool registered: read_file
+2026-02-25 20:49:17.590 | INFO     | cobalt_agent.tools.tool_manager:register_tool:57 - Tool registered: write_file
+2026-02-25 20:49:17.590 | INFO     | cobalt_agent.tools.tool_manager:register_tool:57 - Tool registered: list_directory
+2026-02-25 20:49:17.590 | INFO     | cobalt_agent.brain.engineering:run:60 - The Forge is analyzing an engineering request...
+2026-02-25 20:49:33.384 | INFO     | cobalt_agent.llm:generate_response:172 - Cobalt, LLM model version: ollama/qwen3-coder-next
+2026-02-25 20:49:33.387 | INFO     | cobalt_agent.llm:generate_response:173 - Persona Roles: Chief of Staff, Software Architect, Senior Developer, Business Analyst
+2026-02-25 20:49:33.388 | INFO     | cobalt_agent.tools.tool_manager:execute_tool:65 - Executing tool: write_file with args: {'filepath': 'src/cobalt_agent/tools/test_script.py', 'content': 'print("Hello from the Forge")'}
+2026-02-25 20:49:33.388 | INFO     | cobalt_agent.core.proposals:__init__:60 - Proposal Engine initialized (Channel: cobalt-approvals)
+2026-02-25 20:49:33.388 | INFO     | cobalt_agent.interfaces.mattermost:__init__:44 - MattermostInterface initialized (URL: http://100.70.206.126:8065)
+2026-02-25 20:49:33.397 | INFO     | cobalt_agent.interfaces.mattermost:connect:80 - Successfully connected to Mattermost as user: cobalt
+2026-02-25 20:49:33.397 | INFO     | cobalt_agent.core.proposals:connect_mattermost:76 - Proposal Engine: Mattermost connection established
+2026-02-25 20:49:33.397 | INFO     | cobalt_agent.core.proposals:create_proposal:115 - Proposal created: [549f0cda] Write 29 bytes to src/cobalt_agent/tools/test_scri...
+2026-02-25 20:49:33.444 | INFO     | cobalt_agent.core.proposals:send_proposal:170 - Proposal sent to Mattermost: [549f0cda]
+2026-02-25 20:49:33.444 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:470 - RAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"cobalt-approvals","channel_name":"cobalt-approvals","channel_type":"P","post":"{\"id\":\"drtzxkf6k7dy9kb5su8dye11xw\",\"create_at\":1772070573429,\"update_at\":1772070573429,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"ztp5ts1y9trnufpdus76aqsume\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"### 🛡️ ACTION PROPOSAL [549f0cda]\\n**Action:** `Write 29 bytes to src/cobalt_agent/tools/test_script.py`\\n\\n**Justification:** Agent requested file modification via WriteFileTool.\\n**Risk:** HIGH\\n\\n### ⚠️ ACTION REQUIRED: Reply exactly with 'Approve 549f0cda' to execute.\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"ztp5ts1y9trnufpdus76aqsume","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 5}
+2026-02-25 20:49:33.444 | INFO     | cobalt_agent.core.proposals:__init__:60 - Proposal Engine initialized (Channel: cobalt-approvals)
+2026-02-25 20:49:33.444 | INFO     | cobalt_agent.core.proposals:set_approval_callback:296 - Approval callback set for task [549f0cda]
+2026-02-25 20:49:33.444 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"cobalt-approvals","channel_name":"cobalt-approvals","channel_type":"P","post":"{\"id\":\"drtzxkf6k7dy9kb5su8dye11xw\",\"create_at\":1772070573429,\"update_at\":1772070573429,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"ztp5ts1y9trnufpdus76aqsume\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"### 🛡️ ACTION PROPOSAL [549f0cda]\\n**Action:** `Write 29 bytes to src/cobalt_agent/tools/test_script.py`\\n\\n**Justification:** Agent requested file modification via WriteFileTool.\\n**Risk:** HIGH\\n\\n### ⚠️ ACTION REQUIRED: Reply exactly with 'Approve 549f0cda' to execute.\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"ztp5ts1y9trnufpdus76aqsume","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 5}
+2026-02-25 20:49:34.510 | INFO     | cobalt_agent.llm:generate_response:172 - Cobalt, LLM model version: ollama/qwen3-coder-next
+2026-02-25 20:49:34.512 | INFO     | cobalt_agent.llm:generate_response:173 - Persona Roles: Chief of Staff, Software Architect, Senior Developer, Business Analyst
+2026-02-25 20:49:34.532 | INFO     | cobalt_agent.interfaces.mattermost:send_message_to_channel_id:177 - Message sent to channel badpmg1j5jf3mj7hxroe6xsrcw
+2026-02-25 20:49:34.533 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:470 - RAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","post":"{\"id\":\"bj11ak841fduucnbkrs8zjmbre\",\"create_at\":1772070574519,\"update_at\":1772070574519,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"I have submitted the proposal for your approval.\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 6}
+2026-02-25 20:49:34.533 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","post":"{\"id\":\"bj11ak841fduucnbkrs8zjmbre\",\"create_at\":1772070574519,\"update_at\":1772070574519,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"I have submitted the proposal for your approval.\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 6}
+2026-02-25 20:49:53.872 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:470 - RAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"cobalt-approvals","channel_name":"cobalt-approvals","channel_type":"P","post":"{\"id\":\"tg3oa5opd3bd3g1izujk9itqoy\",\"create_at\":1772070593859,\"update_at\":1772070593859,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a\",\"channel_id\":\"ztp5ts1y9trnufpdus76aqsume\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"Approve 549f0cda\",\"type\":\"\",\"props\":{},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a:1772070593736\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@dejan_z","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"ztp5ts1y9trnufpdus76aqsume","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 7}
+2026-02-25 20:49:53.872 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"cobalt-approvals","channel_name":"cobalt-approvals","channel_type":"P","post":"{\"id\":\"tg3oa5opd3bd3g1izujk9itqoy\",\"create_at\":1772070593859,\"update_at\":1772070593859,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a\",\"channel_id\":\"ztp5ts1y9trnufpdus76aqsume\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"Approve 549f0cda\",\"type\":\"\",\"props\":{},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a:1772070593736\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@dejan_z","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"ztp5ts1y9trnufpdus76aqsume","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 7}
+2026-02-25 20:49:53.881 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:243 - Message received in channel ztp5ts1y9trnufpdus76aqsume: Approve 549f0cda
+2026-02-25 20:49:53.881 | INFO     | cobalt_agent.core.proposals:__init__:60 - Proposal Engine initialized (Channel: cobalt-approvals)
+2026-02-25 20:49:53.882 | INFO     | cobalt_agent.core.proposals:handle_approval_response:215 - Proposal approved: [549f0cda]
+2026-02-25 20:49:53.882 | INFO     | cobalt_agent.tools.filesystem:execute_write:146 - Proposal Engine executed write to: src/cobalt_agent/tools/test_script.py (29 bytes)
+2026-02-25 20:49:53.898 | INFO     | cobalt_agent.interfaces.mattermost:send_message_to_channel_id:177 - Message sent to channel ztp5ts1y9trnufpdus76aqsume
+2026-02-25 20:49:53.899 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:470 - RAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"cobalt-approvals","channel_name":"cobalt-approvals","channel_type":"P","post":"{\"id\":\"3st1o5ubwbbjx8jfg6zjbwhj4w\",\"create_at\":1772070593889,\"update_at\":1772070593889,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"ztp5ts1y9trnufpdus76aqsume\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"✅ Approval received for task [549f0cda]. Action executed successfully.\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"ztp5ts1y9trnufpdus76aqsume","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 8}
+2026-02-25 20:49:53.899 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"cobalt-approvals","channel_name":"cobalt-approvals","channel_type":"P","post":"{\"id\":\"3st1o5ubwbbjx8jfg6zjbwhj4w\",\"create_at\":1772070593889,\"update_at\":1772070593889,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"ztp5ts1y9trnufpdus76aqsume\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"✅ Approval received for task [549f0cda]. Action executed successfully.\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"ztp5ts1y9trnufpdus76aqsume","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 8}
+2026-02-25 20:55:42.969 | INFO     | cobalt_agent.interfaces.mattermost:run_native_ws:470 - RAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"away","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 9}
+2026-02-25 20:55:42.969 | INFO     | cobalt_agent.interfaces.mattermost:_handle_mattermost_event:215 - RAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"away","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 9}
 
 
 ========================================
@@ -8244,6 +9060,107 @@ If I ask you a question that requires data, do not answer directly. START WITH A
 FILE: logs/mattermost_session.log
 ========================================
 
+[32m2026-02-25 20:48:41.121[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m422[0m - [1mLoading configuration from: /Users/cobalt/cobalt/configs[0m
+[32m2026-02-25 20:48:41.126[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m452[0m - [1m🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...[0m
+[32m2026-02-25 20:48:41.127[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36munlock[0m:[36m44[0m - [1m🔐 Vault successfully unlocked into memory.[0m
+[32m2026-02-25 20:48:41.127[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36mlock[0m:[36m55[0m - [1m🔒 Vault locked. Secrets wiped from RAM.[0m
+[32m2026-02-25 20:48:41.127[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m483[0m - [1m🔒 Vault secrets loaded into runtime RAM and vault locked.[0m
+[32m2026-02-25 20:48:41.128[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m422[0m - [1mLoading configuration from: /Users/cobalt/cobalt/configs[0m
+[32m2026-02-25 20:48:41.133[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m452[0m - [1m🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...[0m
+[32m2026-02-25 20:48:41.133[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36munlock[0m:[36m44[0m - [1m🔐 Vault successfully unlocked into memory.[0m
+[32m2026-02-25 20:48:41.133[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36mlock[0m:[36m55[0m - [1m🔒 Vault locked. Secrets wiped from RAM.[0m
+[32m2026-02-25 20:48:41.133[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m483[0m - [1m🔒 Vault secrets loaded into runtime RAM and vault locked.[0m
+[32m2026-02-25 20:48:41.134[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m422[0m - [1mLoading configuration from: /Users/cobalt/cobalt/configs[0m
+[32m2026-02-25 20:48:41.140[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m452[0m - [1m🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...[0m
+[32m2026-02-25 20:48:41.140[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36munlock[0m:[36m44[0m - [1m🔐 Vault successfully unlocked into memory.[0m
+[32m2026-02-25 20:48:41.140[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36mlock[0m:[36m55[0m - [1m🔒 Vault locked. Secrets wiped from RAM.[0m
+[32m2026-02-25 20:48:41.140[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m483[0m - [1m🔒 Vault secrets loaded into runtime RAM and vault locked.[0m
+[32m2026-02-25 20:48:41.141[0m | [1mINFO    [0m | [36mcobalt_agent.core.scheduler[0m:[36madd_job[0m:[36m45[0m - [1mScheduled task added: run (cron)[0m
+[32m2026-02-25 20:48:41.142[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m47[0m - [1mCobalt Agent - System Initialized[0m
+[32m2026-02-25 20:48:41.142[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m48[0m - [1mPython Version: 3.14.3 (main, Feb  3 2026, 15:32:20) [Clang 17.0.0 (clang-1700.6.3.2)][0m
+[32m2026-02-25 20:48:41.142[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m49[0m - [1mConfiguration Loaded: Debug Mode = True[0m
+[32m2026-02-25 20:48:41.142[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m422[0m - [1mLoading configuration from: /Users/cobalt/cobalt/configs[0m
+[32m2026-02-25 20:48:41.147[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m452[0m - [1m🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...[0m
+[32m2026-02-25 20:48:41.147[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36munlock[0m:[36m44[0m - [1m🔐 Vault successfully unlocked into memory.[0m
+[32m2026-02-25 20:48:41.147[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36mlock[0m:[36m55[0m - [1m🔒 Vault locked. Secrets wiped from RAM.[0m
+[32m2026-02-25 20:48:41.147[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m483[0m - [1m🔒 Vault secrets loaded into runtime RAM and vault locked.[0m
+[32m2026-02-25 20:48:41.149[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m53[0m - [1mBrain Initialized: Role-Based Routing Active (default)[0m
+[32m2026-02-25 20:48:41.149[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m57[0m - [1mTool registered: search[0m
+[32m2026-02-25 20:48:41.149[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m57[0m - [1mTool registered: browser[0m
+[32m2026-02-25 20:48:41.149[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m422[0m - [1mLoading configuration from: /Users/cobalt/cobalt/configs[0m
+[32m2026-02-25 20:48:41.154[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m452[0m - [1m🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...[0m
+[32m2026-02-25 20:48:41.154[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36munlock[0m:[36m44[0m - [1m🔐 Vault successfully unlocked into memory.[0m
+[32m2026-02-25 20:48:41.154[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36mlock[0m:[36m55[0m - [1m🔒 Vault locked. Secrets wiped from RAM.[0m
+[32m2026-02-25 20:48:41.154[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m483[0m - [1m🔒 Vault secrets loaded into runtime RAM and vault locked.[0m
+[32m2026-02-25 20:48:41.156[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m57[0m - [1mTool registered: finance[0m
+[32m2026-02-25 20:48:41.156[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m57[0m - [1mTool registered: read_file[0m
+[32m2026-02-25 20:48:41.156[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m57[0m - [1mTool registered: write_file[0m
+[32m2026-02-25 20:48:41.156[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m57[0m - [1mTool registered: list_directory[0m
+[32m2026-02-25 20:48:42.941[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m69[0m - [1mPersona: Persona(name='Cobalt', roles=3, skills=4)[0m
+[32m2026-02-25 20:48:42.941[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m70[0m - [1mPersona Roles: Chief of Staff to Dejan, Principal Systems Architect, Zero-Trust Automation Engine[0m
+[32m2026-02-25 20:48:42.941[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m72[0m - [1m================================================================================[0m
+[32m2026-02-25 20:48:42.942[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m73[0m - [1mSYSTEM PROMPT:[0m
+[32m2026-02-25 20:48:42.942[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m74[0m - [1m================================================================================[0m
+[32m2026-02-25 20:48:42.942[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m75[0m - [1m
+### IDENTITY
+You are Cobalt.
+
+### ROLES
+Your roles are: Chief of Staff to Dejan, Principal Systems Architect, Zero-Trust Automation Engine.
+
+### OPERATIONAL DIRECTIVES
+- PRIME DIRECTIVE: You are an autonomous intelligence, but strictly bound by the Human-in-the-Loop (HITL) framework.
+- PROPOSAL ENGINE: Never execute destructive, financial, or high-stakes system changes unilaterally. You must draft a precise proposal and await authorization.
+- ZERO TRUST: Assume breach. Verify identity and permissions before accessing secure vaults or executing environment commands.
+- DOCUMENTATION AS CODE: Treat the Obsidian Vault as the absolute source of truth. No system change is complete until documented.
+- BREVITY: Deliver answers directly. Eliminate introductory filler.
+- FIRST PRINCIPLES (R&D): When writing code, analyzing business operations, or developing new strategies, reject analogies. Deconstruct problems to their fundamental truths (e.g., market micro-structure, liquidity, basic physics) before formulating solutions.
+- TACTICAL OVERWATCH: You are a strict spotter, never the sniper. You monitor real-time environments, identify playbook setups on 'stocks in play', grade the risk (A, A-, B, B-, C), and dynamically calculate Expected Value (EV) for active trades. You NEVER execute trades. Your job is mathematical monitoring and alerting only.
+
+### TONE
+Maintain a tone that is: Hyper-competent and authoritative, Analytical and unshakeable, Extremely concise (high signal, zero noise), Professional (strictly avoid chatty filler, apologies, and sycophancy).
+
+### CURRENT CONTEXT
+- Current Date/Time: 2026-02-25 20:48:41
+- Operating System: Python Environment (CLI)
+- User: Administrator
+
+
+### 🧠 MEMORY PROTOCOL (CRITICAL)
+- You will receive a block called "RELEVANT LONG-TERM MEMORY".
+- **STEP 1: Check the Timestamp.** Compare the memory's timestamp to the "Current Date/Time" above.
+- **STEP 2: Classify the Memory.**
+   - **PREFERENCE:** (e.g., "I like TSLA", "I am a scalper") -> **KEEP FOREVER.**
+   - **MARKET CONTEXT:** (e.g., "Ignore the volume", "Market is crashing") -> **EXPIRE AFTER 24 HOURS.**
+- **STEP 3: Apply Logic.**
+   - If a Market Context memory is older than 24 hours, **IGNORE IT** and treat it as historical noise.
+   - If a Preference memory is 5 years old, **RESPECT IT** unless told otherwise.
+- **STEP 4: Answer Retrieval.**
+   - If the answer to the user's question is in the Memory, YOU MUST USE IT.
+   - Do not say "I don't know" if the memory contains the answer.
+
+
+### DIRECTIVES
+- You are an AUTONOMOUS AGENT. You are NOT a chat bot.
+- You DO NOT have internal knowledge of real-time events.
+- You MUST use tools to answer questions about the world.
+- STRICT DATA ADHERENCE: If a tool provides a specific technical indicator (e.g., 'RSI (20)'), you MUST reference that specific period.
+- DO NOT HALLUCINATE standard defaults (like '14-day RSI') if the tool data says otherwise.
+- Trust the tool's calculated signals (e.g., 'BULLISH', 'PARABOLIC') over your own interpretation.
+- PRIME DIRECTIVE: You are an autonomous intelligence, but strictly bound by the Human-in-the-Loop (HITL) framework.
+- PROPOSAL ENGINE: Never execute destructive, financial, or high-stakes system changes unilaterally. You must draft a precise proposal and await authorization.
+- ZERO TRUST: Assume breach. Verify identity and permissions before accessing secure vaults or executing environment commands.
+- DOCUMENTATION AS CODE: Treat the Obsidian Vault as the absolute source of truth. No system change is complete until documented.
+- BREVITY: Deliver answers directly. Eliminate introductory filler.
+- FIRST PRINCIPLES (R&D): When writing code, analyzing business operations, or developing new strategies, reject analogies. Deconstruct problems to their fundamental truths (e.g., market micro-structure, liquidity, basic physics) before formulating solutions.
+- TACTICAL OVERWATCH: You are a strict spotter, never the sniper. You monitor real-time environments, identify playbook setups on 'stocks in play', grade the risk (A, A-, B, B-, C), and dynamically calculate Expected Value (EV) for active trades. You NEVER execute trades. Your job is mathematical monitoring and alerting only.
+### ⚡ CRITICAL OPERATING PROTOCOL ⚡
+To use a tool, you must output a single line starting with 'ACTION:'.
+Do not talk. Do not explain. JUST ACTION.
+
+### EXAMPLES OF CORRECT BEHAVIOR:
+User: What is the price of Apple?
+You: ACTION: finance AAPL
 System: [Observation: AAPL is $150]
 You: Apple is trading at $150.
 
@@ -8259,191 +9176,90 @@ If I ask you a question that requires data, do not answer directly. START WITH A
 - SearchTool: Use this tool for search tasks.
 - BrowserTool: Use this tool for browser tasks.
 - FinanceTool: Use this tool for finance tasks.
+- ReadFileTool: Use this tool for readfile tasks.
+- WriteFileTool: Use this tool for writefile tasks.
+- ListDirectoryTool: Use this tool for listdirectory tasks.
 [0m
-[32m2026-02-25 10:35:18.901[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m76[0m - [1m================================================================================[0m
-[32m2026-02-25 10:35:18.901[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m78[0m - [1mMemory System online[0m
-[32m2026-02-25 10:35:18.901[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m__init__[0m:[36m44[0m - [1mMattermostInterface initialized (URL: http://100.70.206.126:8065)[0m
-[32m2026-02-25 10:35:18.925[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mconnect[0m:[36m80[0m - [1mSuccessfully connected to Mattermost as user: cobalt[0m
-[32m2026-02-25 10:35:18.926[0m | [1mINFO    [0m | [36mcobalt_agent.core.proposals[0m:[36m__init__[0m:[36m59[0m - [1mProposal Engine initialized (Channel: cobalt-approvals)[0m
-[32m2026-02-25 10:35:18.926[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m__init__[0m:[36m44[0m - [1mMattermostInterface initialized (URL: http://100.70.206.126:8065)[0m
-[32m2026-02-25 10:35:18.936[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mconnect[0m:[36m80[0m - [1mSuccessfully connected to Mattermost as user: cobalt[0m
-[32m2026-02-25 10:35:18.937[0m | [1mINFO    [0m | [36mcobalt_agent.core.proposals[0m:[36mconnect_mattermost[0m:[36m75[0m - [1mProposal Engine: Mattermost connection established[0m
-[32m2026-02-25 10:35:18.937[0m | [1mINFO    [0m | [36m__main__[0m:[36mstart_mattermost_interface[0m:[36m197[0m - [1m================================================================================[0m
-[32m2026-02-25 10:35:18.937[0m | [1mINFO    [0m | [36m__main__[0m:[36mstart_mattermost_interface[0m:[36m198[0m - [1mCobalt Agent - Mattermost Interface Active[0m
-[32m2026-02-25 10:35:18.937[0m | [1mINFO    [0m | [36m__main__[0m:[36mstart_mattermost_interface[0m:[36m199[0m - [1mHITL Proposal Engine - Active[0m
-[32m2026-02-25 10:35:18.937[0m | [1mINFO    [0m | [36m__main__[0m:[36mstart_mattermost_interface[0m:[36m200[0m - [1m================================================================================[0m
-[32m2026-02-25 10:35:18.937[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mstart_listening[0m:[36m460[0m - [1mStarting native WebSocket engine...[0m
-[32m2026-02-25 10:35:18.937[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m445[0m - [1mConnecting to native WebSocket engine: ws://100.70.206.126:8065/api/v4/websocket[0m
-[32m2026-02-25 10:35:18.944[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m450[0m - [1mConnected and authenticated via HTTP headers. Listening for messages...[0m
-[32m2026-02-25 10:35:18.944[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m454[0m - [1mRAW WEBSOCKET PAYLOAD: {"event":"hello","data":{"connection_id":"u63won8w4jr59kfzyxz4ptug3h","server_hostname":"7a18772f78d2","server_version":"11.4.0.21550760092.de08ead441c51c565085524a5a422aac3510be86312d1536fea3ff6fd4ef90f4.true"},"broadcast":{"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""},"seq":0}
+[32m2026-02-25 20:48:42.942[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m76[0m - [1m================================================================================[0m
+[32m2026-02-25 20:48:42.943[0m | [1mINFO    [0m | [36m__main__[0m:[36m__init__[0m:[36m78[0m - [1mMemory System online[0m
+[32m2026-02-25 20:48:42.943[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m__init__[0m:[36m44[0m - [1mMattermostInterface initialized (URL: http://100.70.206.126:8065)[0m
+[32m2026-02-25 20:48:42.969[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mconnect[0m:[36m80[0m - [1mSuccessfully connected to Mattermost as user: cobalt[0m
+[32m2026-02-25 20:48:42.969[0m | [1mINFO    [0m | [36mcobalt_agent.core.proposals[0m:[36m__init__[0m:[36m60[0m - [1mProposal Engine initialized (Channel: cobalt-approvals)[0m
+[32m2026-02-25 20:48:42.969[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m__init__[0m:[36m44[0m - [1mMattermostInterface initialized (URL: http://100.70.206.126:8065)[0m
+[32m2026-02-25 20:48:42.977[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mconnect[0m:[36m80[0m - [1mSuccessfully connected to Mattermost as user: cobalt[0m
+[32m2026-02-25 20:48:42.977[0m | [1mINFO    [0m | [36mcobalt_agent.core.proposals[0m:[36mconnect_mattermost[0m:[36m76[0m - [1mProposal Engine: Mattermost connection established[0m
+[32m2026-02-25 20:48:42.977[0m | [1mINFO    [0m | [36m__main__[0m:[36mstart_mattermost_interface[0m:[36m197[0m - [1m================================================================================[0m
+[32m2026-02-25 20:48:42.977[0m | [1mINFO    [0m | [36m__main__[0m:[36mstart_mattermost_interface[0m:[36m198[0m - [1mCobalt Agent - Mattermost Interface Active[0m
+[32m2026-02-25 20:48:42.978[0m | [1mINFO    [0m | [36m__main__[0m:[36mstart_mattermost_interface[0m:[36m199[0m - [1mHITL Proposal Engine - Active[0m
+[32m2026-02-25 20:48:42.978[0m | [1mINFO    [0m | [36m__main__[0m:[36mstart_mattermost_interface[0m:[36m200[0m - [1m================================================================================[0m
+[32m2026-02-25 20:48:42.978[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mstart_listening[0m:[36m476[0m - [1mStarting native WebSocket engine...[0m
+[32m2026-02-25 20:48:42.978[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m461[0m - [1mConnecting to native WebSocket engine: ws://100.70.206.126:8065/api/v4/websocket[0m
+[32m2026-02-25 20:48:42.983[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m466[0m - [1mConnected and authenticated via HTTP headers. Listening for messages...[0m
+[32m2026-02-25 20:48:42.984[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m470[0m - [1mRAW WEBSOCKET PAYLOAD: {"event":"hello","data":{"connection_id":"unhk4ff3jtg45dgr4xircsryay","server_hostname":"7a18772f78d2","server_version":"11.4.0.21550760092.de08ead441c51c565085524a5a422aac3510be86312d1536fea3ff6fd4ef90f4.true"},"broadcast":{"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""},"seq":0}
 [0m
-[32m2026-02-25 10:35:18.945[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event":"hello","data":{"connection_id":"u63won8w4jr59kfzyxz4ptug3h","server_hostname":"7a18772f78d2","server_version":"11.4.0.21550760092.de08ead441c51c565085524a5a422aac3510be86312d1536fea3ff6fd4ef90f4.true"},"broadcast":{"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""},"seq":0}
+[32m2026-02-25 20:48:42.984[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event":"hello","data":{"connection_id":"unhk4ff3jtg45dgr4xircsryay","server_hostname":"7a18772f78d2","server_version":"11.4.0.21550760092.de08ead441c51c565085524a5a422aac3510be86312d1536fea3ff6fd4ef90f4.true"},"broadcast":{"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""},"seq":0}
 [0m
-[32m2026-02-25 10:35:18.946[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m454[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"online","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 1}[0m
-[32m2026-02-25 10:35:18.946[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"online","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 1}[0m
-[32m2026-02-25 10:35:40.283[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m454[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "typing", "data": {"parent_id":"","user_id":"xi4s3ncfypnz8fcbgyfhhwmt8a"}, "broadcast": {"omit_users":{"xi4s3ncfypnz8fcbgyfhhwmt8a":true},"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 2}[0m
-[32m2026-02-25 10:35:40.284[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "typing", "data": {"parent_id":"","user_id":"xi4s3ncfypnz8fcbgyfhhwmt8a"}, "broadcast": {"omit_users":{"xi4s3ncfypnz8fcbgyfhhwmt8a":true},"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 2}[0m
-[32m2026-02-25 10:35:43.910[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m454[0m - [1mRAW WEBSOCKET PAYLOAD: {"event":"posted","data":{"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","mentions":"[\"oyc789ktdpn75norxkk11hi5dc\"]","post":"{\"id\":\"jh8q7swt8fn83drznnz4p5q9jr\",\"create_at\":1772033743881,\"update_at\":1772033743881,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"@cobalt I need you to do general web research. Use the browser tool to scrape https://news.ycombinator.com and return the raw text.\",\"type\":\"\",\"props\":{},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a:1772033743775\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{\"embeds\":[{\"type\":\"link\",\"url\":\"https://news.ycombinator.com\"}]}}","sender_name":"@dejan_z","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"},"broadcast":{"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""},"seq":3}
+[32m2026-02-25 20:48:42.985[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m470[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"online","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 1}[0m
+[32m2026-02-25 20:48:42.985[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"online","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 1}[0m
+[32m2026-02-25 20:49:11.933[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m470[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "typing", "data": {"parent_id":"","user_id":"xi4s3ncfypnz8fcbgyfhhwmt8a"}, "broadcast": {"omit_users":{"xi4s3ncfypnz8fcbgyfhhwmt8a":true},"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 2}[0m
+[32m2026-02-25 20:49:11.934[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "typing", "data": {"parent_id":"","user_id":"xi4s3ncfypnz8fcbgyfhhwmt8a"}, "broadcast": {"omit_users":{"xi4s3ncfypnz8fcbgyfhhwmt8a":true},"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 2}[0m
+[32m2026-02-25 20:49:17.401[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m470[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "typing", "data": {"parent_id":"","user_id":"xi4s3ncfypnz8fcbgyfhhwmt8a"}, "broadcast": {"omit_users":{"xi4s3ncfypnz8fcbgyfhhwmt8a":true},"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 3}[0m
+[32m2026-02-25 20:49:17.402[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "typing", "data": {"parent_id":"","user_id":"xi4s3ncfypnz8fcbgyfhhwmt8a"}, "broadcast": {"omit_users":{"xi4s3ncfypnz8fcbgyfhhwmt8a":true},"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 3}[0m
+[32m2026-02-25 20:49:17.539[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m470[0m - [1mRAW WEBSOCKET PAYLOAD: {"event":"posted","data":{"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","mentions":"[\"oyc789ktdpn75norxkk11hi5dc\"]","post":"{\"id\":\"6icqnxnatjr13pgwx5tod5daah\",\"create_at\":1772070557525,\"update_at\":1772070557525,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"@cobalt I need an engineering task. Please use your tools to create a new file at src/cobalt_agent/tools/test_script.py. The file should just contain a simple python print statement saying \\\"Hello from the Forge\\\".\",\"type\":\"\",\"props\":{},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a:1772070557388\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@dejan_z","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"},"broadcast":{"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""},"seq":4}
 [0m
-[32m2026-02-25 10:35:43.911[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event":"posted","data":{"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","mentions":"[\"oyc789ktdpn75norxkk11hi5dc\"]","post":"{\"id\":\"jh8q7swt8fn83drznnz4p5q9jr\",\"create_at\":1772033743881,\"update_at\":1772033743881,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"@cobalt I need you to do general web research. Use the browser tool to scrape https://news.ycombinator.com and return the raw text.\",\"type\":\"\",\"props\":{},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a:1772033743775\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{\"embeds\":[{\"type\":\"link\",\"url\":\"https://news.ycombinator.com\"}]}}","sender_name":"@dejan_z","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"},"broadcast":{"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""},"seq":3}
+[32m2026-02-25 20:49:17.540[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event":"posted","data":{"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","mentions":"[\"oyc789ktdpn75norxkk11hi5dc\"]","post":"{\"id\":\"6icqnxnatjr13pgwx5tod5daah\",\"create_at\":1772070557525,\"update_at\":1772070557525,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"@cobalt I need an engineering task. Please use your tools to create a new file at src/cobalt_agent/tools/test_script.py. The file should just contain a simple python print statement saying \\\"Hello from the Forge\\\".\",\"type\":\"\",\"props\":{},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a:1772070557388\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@dejan_z","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"},"broadcast":{"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""},"seq":4}
 [0m
-[32m2026-02-25 10:35:43.920[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m239[0m - [1mMessage received in channel badpmg1j5jf3mj7hxroe6xsrcw: @cobalt I need you to do general web research. Use the browser tool to scrape https://news.ycombinator.com and return the raw text.[0m
-[32m2026-02-25 10:35:43.920[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m252[0m - [1mRouting message to Cortex in background thread...[0m
-[32m2026-02-25 10:35:43.921[0m | [1mINFO    [0m | [36mcobalt_agent.memory.core[0m:[36mload_memory[0m:[36m90[0m - [1mMemory loaded from data/memory.json[0m
-[32m2026-02-25 10:35:43.922[0m | [1mINFO    [0m | [36mcobalt_agent.brain.cortex[0m:[36mroute[0m:[36m57[0m - [1m⚡ Fast-Path Routing Triggered: DEFAULT[0m
-[32m2026-02-25 10:35:43.922[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mthink_and_reply[0m:[36m274[0m - [1mDEFAULT route detected, using ReAct loop...[0m
-[32m2026-02-25 10:35:43.923[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mthink_and_reply[0m:[36m294[0m - [1mReAct iteration 1/3[0m
-[32m2026-02-25 10:35:59.841[0m | [1mINFO    [0m | [36mcobalt_agent.llm[0m:[36mgenerate_response[0m:[36m172[0m - [1mCobalt, LLM model version: ollama/qwen3-coder-next[0m
-[32m2026-02-25 10:35:59.842[0m | [1mINFO    [0m | [36mcobalt_agent.llm[0m:[36mgenerate_response[0m:[36m173[0m - [1mPersona Roles: Chief of Staff, Software Architect, Senior Developer, Business Analyst[0m
-[32m2026-02-25 10:35:59.842[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mthink_and_reply[0m:[36m304[0m - [1mLLM Response: ACTION: scrape https://news.ycombinator.com[0m
-[32m2026-02-25 10:35:59.842[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mthink_and_reply[0m:[36m309[0m - [1mACTION: detected, parsing tool command...[0m
-[32m2026-02-25 10:35:59.843[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mthink_and_reply[0m:[36m327[0m - [1mFuzzy matched 'browser' -> 'browser'[0m
-[32m2026-02-25 10:35:59.843[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m50[0m - [1mTool registered: search[0m
-[32m2026-02-25 10:35:59.843[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m50[0m - [1mTool registered: browser[0m
-[32m2026-02-25 10:35:59.843[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m422[0m - [1mLoading configuration from: /Users/cobalt/cobalt/configs[0m
-[32m2026-02-25 10:35:59.861[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m452[0m - [1m🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...[0m
-[32m2026-02-25 10:35:59.861[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36munlock[0m:[36m44[0m - [1m🔐 Vault successfully unlocked into memory.[0m
-[32m2026-02-25 10:35:59.862[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36mlock[0m:[36m55[0m - [1m🔒 Vault locked. Secrets wiped from RAM.[0m
-[32m2026-02-25 10:35:59.862[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m483[0m - [1m🔒 Vault secrets loaded into runtime RAM and vault locked.[0m
-[32m2026-02-25 10:35:59.864[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m50[0m - [1mTool registered: finance[0m
-[32m2026-02-25 10:35:59.865[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mexecute_tool[0m:[36m70[0m - [1mExecuting tool: browser with args: {'query': 'https://news.ycombinator.com'}[0m
-[32m2026-02-25 10:35:59.865[0m | [1mINFO    [0m | [36mcobalt_agent.tools.browser[0m:[36mrun[0m:[36m68[0m - [1m🌐 Playwright navigating to: https://news.ycombinator.com[0m
-[32m2026-02-25 10:36:02.711[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mthink_and_reply[0m:[36m352[0m - [1mTool executed: browser, Observation: [Observation: ### Hacker News
-Hacker Newsnew | past | comments | ask | show | jobs | submit	login
-1.
-Never Buy A .online Domain (0xsid.com)
-297 points by ssiddharth 2 hours ago | hide | 151 comments
-2.
-US orders diplomats to fight data sovereignty initiatives (reuters.com)
-69 points by colinhb 47 minutes ago | hide | 37 comments
-3.
-How to fold the Blade Runner origami unicorn (1996) (archive.org)
-107 points by exvi 5 hours ago | hide | 5 comments
-4.
-Danish government agency to ditch Microsoft software (2025) (therecord.media)
-452 points by robtherobber 5 hours ago | hide | 257 comments
-5.
-Ask HN: Have top AI research institutions just given up on the idea of safety?
-37 points by DietaryNonsense 40 minutes ago | hide | 19 comments
-6.
-Show HN: Django Control Room – All Your Tools Inside the Django Admin (github.com/yassi)
-12 points by yassi_dev 1 hour ago | hide | 4 comments
-7.
-Show HN: A real-time strategy game that AI agents can play (llmskirmish.com)
-137 points by __cayenne__ 5 hours ago | hide | 46 comments
-8.
-100M-Row Challenge with PHP (github.com/tempestphp)
-92 points by brentroose 5 hours ago | hide | 29 comments
-9.
-I'm helping my dog vibe code games (calebleak.com)
-1022 points by cleak 22 hours ago | hide | 333 comments
-10.
-Claude Code Remote Control (claude.com)
-214 points by empressplay 8 hours ago | hide | 144 comments
-11.
-Launch HN: TeamOut (YC W22) – AI agent for planning company events (teamout.com)
-7 points by vincentalbouy 1 hour ago | hide | 4 comments
-12.
-The History of a Security Hole (os2museum.com)
-8 points by st_goliath 2 hours ago | hide | 1 comment
-13.		Event Horizon Labs (YC W24) Is Hiring (ycombinator.com)
-3 hours ago | hide
-14.
-Confusables.txt and NFKC disagree on 31 characters (paultendo.github.io)
-17 points by pimterry 3 hours ago | hide | 13 comments
-15.
-Pi – A minimal terminal coding harness (pi.dev)
-493 points by kristianpaul 17 hours ago | hide | 236 comments
-16.
-Mercury 2: Fast reasoning LLM powered by diffusion (inceptionlabs.ai)
-284 points by fittingopposite 16 hours ago | hide | 113 comments
-17.
-Turing Completeness of GNU find (arxiv.org)
-89 points by todsacerdoti 10 hours ago | hide | 17 comments
-18.
-Japanese Death Poems (secretorum.life)
-95 points by NaOH 10 hours ago | hide | 28 comments
-19.
-Show HN: Moonshine Open-Weights STT models – higher accuracy than WhisperLargev3 (github.com/moonshine-ai)
-280 points by petewarden 17 hours ago | hide | 66 comments
-20.
-Red Hat takes on Docker Desktop with its enterprise Podman Desktop build (thenewstack.io)
-29 points by twelvenmonkeys 2 hours ago | hide | 18 comments
-21.
-I pitched a roller coaster to Disneyland at age 10 in 1978 (wordglyph.xyz)
-505 points by wordglyph 1 day ago | hide | 186 comments
-22.
-Show HN: Scheme-langserver – Digest incomplete code with static analysis (github.com/ufo5260987423)
-22 points by ufo5260987423 7 hours ago | hide | discuss
-23.
-Mac mini will be made at a new facility in Houston (apple.com)
-574 points by haunter 18 hours ago | hide | 584 comments
-24.
-Hacking an old Kindle to display bus arrival times (mariannefeng.com)
-312 points by mengchengfeng 19 hours ago | hide | 79 comments
-25.
-LLM=True (blog.codemine.be)
-173 points by avh3 6 hours ago | hide | 122 comments
-26.
-Cl-kawa: Scheme on Java on Common Lisp (github.com/atgreen)
-61 points by varjag 11 hours ago | hide | 16 comments
-27.
-Nearby Glasses (github.com/yjeanrenaud)
-384 points by zingerlio 21 hours ago | hide | 168 comments
-28.
-Show HN: Clocksimulator.com – A minimalist, distraction-free analog clock (clocksimulator.com)
-55 points by user_timo 1 hour ago | hide | 46 comments
-29.
-Show HN: Emdash – Open-source agentic development environment (github.com/generalaction)
-185 points by onecommit 20 hours ago | hide | 66 comments
-30.
-Steel Bank Common Lisp (sbcl.org)
-248 points by tosh 21 hours ago | hide | 100 comments
-More
-Guidelines | FAQ | Lists | API | Security | Legal | Apply to YC | Contact
-Search:...][0m
-[32m2026-02-25 10:36:02.711[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mthink_and_reply[0m:[36m294[0m - [1mReAct iteration 2/3[0m
-[32m2026-02-25 10:36:32.027[0m | [1mINFO    [0m | [36mcobalt_agent.llm[0m:[36mgenerate_response[0m:[36m172[0m - [1mCobalt, LLM model version: ollama/qwen3-coder-next[0m
-[32m2026-02-25 10:36:32.028[0m | [1mINFO    [0m | [36mcobalt_agent.llm[0m:[36mgenerate_response[0m:[36m173[0m - [1mPersona Roles: Chief of Staff, Software Architect, Senior Developer, Business Analyst[0m
-[32m2026-02-25 10:36:32.028[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mthink_and_reply[0m:[36m304[0m - [1mLLM Response: Hacker News top 30 items (raw text):
-
-1. Never Buy A .online Domain (0xsid.com) — 297 pts  
-2. US orders diplomats to fight data sovereignty initiatives (reuters.com) — 69 pts  
-3. How to fold the Blade Runner origami unicorn (1996) (archive.org) — 107 pts  
-4. Danish government agency to ditch Microsoft software (2025) (therecord.media) — 452 pts  
-5. Ask HN: Have top AI research institutions just given up on the idea of safety? — 37 pts  
-6. Show HN: Django Control Room – All Your Tools Inside the Django Admin (github.com/yassi) — 12 pts  
-7. Show HN: A real-time strategy game that AI agents can play (llmskirmish.com) — 137 pts  
-8. 100M-Row Challenge with PHP (github.com/tempestphp) — 92 pts  
-9. I'm helping my dog vibe code games (calebleak.com) — 1022 pts  
-10. Claude Code Remote Control (claude.com) — 214 pts  
-11. Launch HN: TeamOut (YC W22) – AI agent for planning company events (teamout.com) — 7 pts  
-12. The History of a Security Hole (os2museum.com) — 8 pts  
-13. Event Horizon Labs (YC W24) Is Hiring (ycombinator.com)  
-14. Confusables.txt and NFKC disagree on 31 characters (paultendo.github.io) — 17 pts  
-15. Pi – A minimal terminal coding harness (pi.dev) — 493 pts  
-16. Mercury 2: Fast reasoning LLM powered by diffusion (inceptionlabs.ai) — 284 pts  
-17. Turing Completeness of GNU find (arxiv.org) — 89 pts  
-18. Japanese Death Poems (secretorum.life) — 95 pts  
-19. Show HN: Moonshine Open-Weights STT models – higher accuracy than WhisperLargev3 (github.com/moonshine-ai) — 280 pts  
-20. Red Hat takes on Docker Desktop with its enterprise Podman Desktop build (thenewstack.io) — 29 pts  
-21. I pitched a roller coaster to Disneyland at age 10 in 1978 (wordglyph.xyz) — 505 pts  
-22. Show HN: Scheme-langserver – Digest incomplete code with static analysis (github.com/ufo5260987423) — 22 pts  
-23. Mac mini will be made at a new facility in Houston (apple.com) — 574 pts  
-24. Hacking an old Kindle to display bus arrival times (mariannefeng.com) — 312 pts  
-25. LLM=True (blog.codemine.be) — 173 pts  
-26. Cl-kawa: Scheme on Java on Common Lisp (github.com/atgreen) — 61 pts  
-27. Nearby Glasses (github.com/yjeanrenaud) — 384 pts  
-28. Show HN: Clocksimulator.com – A minimalist, distraction-free analog clock (clocksimulator.com) — 55 pts  
-29. Show HN: Emdash – Open-source agentic development environment (github.com/generalaction) — 185 pts  
-30. Steel Bank Common Lisp (sbcl.org) — 248 pts[0m
-[32m2026-02-25 10:36:32.029[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mthink_and_reply[0m:[36m359[0m - [1mNo ACTION: detected, returning final answer[0m
-[32m2026-02-25 10:36:32.058[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m454[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","post":"{\"id\":\"6jj3kaiwtb8j7nugk596p6um1e\",\"create_at\":1772033792044,\"update_at\":1772033792044,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"Hacker News top 30 items (raw text):\\n\\n1. Never Buy A .online Domain (0xsid.com) — 297 pts  \\n2. US orders diplomats to fight data sovereignty initiatives (reuters.com) — 69 pts  \\n3. How to fold the Blade Runner origami unicorn (1996) (archive.org) — 107 pts  \\n4. Danish government agency to ditch Microsoft software (2025) (therecord.media) — 452 pts  \\n5. Ask HN: Have top AI research institutions just given up on the idea of safety? — 37 pts  \\n6. Show HN: Django Control Room – All Your Tools Inside the Django Admin (github.com/yassi) — 12 pts  \\n7. Show HN: A real-time strategy game that AI agents can play (llmskirmish.com) — 137 pts  \\n8. 100M-Row Challenge with PHP (github.com/tempestphp) — 92 pts  \\n9. I'm helping my dog vibe code games (calebleak.com) — 1022 pts  \\n10. Claude Code Remote Control (claude.com) — 214 pts  \\n11. Launch HN: TeamOut (YC W22) – AI agent for planning company events (teamout.com) — 7 pts  \\n12. The History of a Security Hole (os2museum.com) — 8 pts  \\n13. Event Horizon Labs (YC W24) Is Hiring (ycombinator.com)  \\n14. Confusables.txt and NFKC disagree on 31 characters (paultendo.github.io) — 17 pts  \\n15. Pi – A minimal terminal coding harness (pi.dev) — 493 pts  \\n16. Mercury 2: Fast reasoning LLM powered by diffusion (inceptionlabs.ai) — 284 pts  \\n17. Turing Completeness of GNU find (arxiv.org) — 89 pts  \\n18. Japanese Death Poems (secretorum.life) — 95 pts  \\n19. Show HN: Moonshine Open-Weights STT models – higher accuracy than WhisperLargev3 (github.com/moonshine-ai) — 280 pts  \\n20. Red Hat takes on Docker Desktop with its enterprise Podman Desktop build (thenewstack.io) — 29 pts  \\n21. I pitched a roller coaster to Disneyland at age 10 in 1978 (wordglyph.xyz) — 505 pts  \\n22. Show HN: Scheme-langserver – Digest incomplete code with static analysis (github.com/ufo5260987423) — 22 pts  \\n23. Mac mini will be made at a new facility in Houston (apple.com) — 574 pts  \\n24. Hacking an old Kindle to display bus arrival times (mariannefeng.com) — 312 pts  \\n25. LLM=True (blog.codemine.be) — 173 pts  \\n26. Cl-kawa: Scheme on Java on Common Lisp (github.com/atgreen) — 61 pts  \\n27. Nearby Glasses (github.com/yjeanrenaud) — 384 pts  \\n28. Show HN: Clocksimulator.com – A minimalist, distraction-free analog clock (clocksimulator.com) — 55 pts  \\n29. Show HN: Emdash – Open-source agentic development environment (github.com/generalaction) — 185 pts  \\n30. Steel Bank Common Lisp (sbcl.org) — 248 pts\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 4}[0m
-[32m2026-02-25 10:36:32.059[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","post":"{\"id\":\"6jj3kaiwtb8j7nugk596p6um1e\",\"create_at\":1772033792044,\"update_at\":1772033792044,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"Hacker News top 30 items (raw text):\\n\\n1. Never Buy A .online Domain (0xsid.com) — 297 pts  \\n2. US orders diplomats to fight data sovereignty initiatives (reuters.com) — 69 pts  \\n3. How to fold the Blade Runner origami unicorn (1996) (archive.org) — 107 pts  \\n4. Danish government agency to ditch Microsoft software (2025) (therecord.media) — 452 pts  \\n5. Ask HN: Have top AI research institutions just given up on the idea of safety? — 37 pts  \\n6. Show HN: Django Control Room – All Your Tools Inside the Django Admin (github.com/yassi) — 12 pts  \\n7. Show HN: A real-time strategy game that AI agents can play (llmskirmish.com) — 137 pts  \\n8. 100M-Row Challenge with PHP (github.com/tempestphp) — 92 pts  \\n9. I'm helping my dog vibe code games (calebleak.com) — 1022 pts  \\n10. Claude Code Remote Control (claude.com) — 214 pts  \\n11. Launch HN: TeamOut (YC W22) – AI agent for planning company events (teamout.com) — 7 pts  \\n12. The History of a Security Hole (os2museum.com) — 8 pts  \\n13. Event Horizon Labs (YC W24) Is Hiring (ycombinator.com)  \\n14. Confusables.txt and NFKC disagree on 31 characters (paultendo.github.io) — 17 pts  \\n15. Pi – A minimal terminal coding harness (pi.dev) — 493 pts  \\n16. Mercury 2: Fast reasoning LLM powered by diffusion (inceptionlabs.ai) — 284 pts  \\n17. Turing Completeness of GNU find (arxiv.org) — 89 pts  \\n18. Japanese Death Poems (secretorum.life) — 95 pts  \\n19. Show HN: Moonshine Open-Weights STT models – higher accuracy than WhisperLargev3 (github.com/moonshine-ai) — 280 pts  \\n20. Red Hat takes on Docker Desktop with its enterprise Podman Desktop build (thenewstack.io) — 29 pts  \\n21. I pitched a roller coaster to Disneyland at age 10 in 1978 (wordglyph.xyz) — 505 pts  \\n22. Show HN: Scheme-langserver – Digest incomplete code with static analysis (github.com/ufo5260987423) — 22 pts  \\n23. Mac mini will be made at a new facility in Houston (apple.com) — 574 pts  \\n24. Hacking an old Kindle to display bus arrival times (mariannefeng.com) — 312 pts  \\n25. LLM=True (blog.codemine.be) — 173 pts  \\n26. Cl-kawa: Scheme on Java on Common Lisp (github.com/atgreen) — 61 pts  \\n27. Nearby Glasses (github.com/yjeanrenaud) — 384 pts  \\n28. Show HN: Clocksimulator.com – A minimalist, distraction-free analog clock (clocksimulator.com) — 55 pts  \\n29. Show HN: Emdash – Open-source agentic development environment (github.com/generalaction) — 185 pts  \\n30. Steel Bank Common Lisp (sbcl.org) — 248 pts\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 4}[0m
-[32m2026-02-25 10:36:32.062[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36msend_message_to_channel_id[0m:[36m177[0m - [1mMessage sent to channel badpmg1j5jf3mj7hxroe6xsrcw[0m
-[32m2026-02-25 10:36:32.062[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mthink_and_reply[0m:[36m368[0m - [1mFinal response sent to Mattermost[0m
-[32m2026-02-25 10:42:18.962[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m454[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"away","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 5}[0m
-[32m2026-02-25 10:42:18.962[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"away","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 5}[0m
+[32m2026-02-25 20:49:17.547[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m243[0m - [1mMessage received in channel badpmg1j5jf3mj7hxroe6xsrcw: @cobalt I need an engineering task. Please use your tools to create a new file at src/cobalt_agent/tools/test_script.py. The file should just contain a simple python print statement saying "Hello from the Forge".[0m
+[32m2026-02-25 20:49:17.548[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m268[0m - [1mRouting message to Cortex in background thread...[0m
+[32m2026-02-25 20:49:17.549[0m | [1mINFO    [0m | [36mcobalt_agent.memory.core[0m:[36mload_memory[0m:[36m90[0m - [1mMemory loaded from data/memory.json[0m
+[32m2026-02-25 20:49:17.549[0m | [1mINFO    [0m | [36mcobalt_agent.brain.cortex[0m:[36mroute[0m:[36m57[0m - [1m⚡ Fast-Path Routing Triggered: ENGINEERING[0m
+[32m2026-02-25 20:49:17.553[0m | [1mINFO    [0m | [36mcobalt_agent.brain.engineering[0m:[36m__init__[0m:[36m19[0m - [1m🛠️ The Forge (Engineering) Online[0m
+[32m2026-02-25 20:49:17.554[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m422[0m - [1mLoading configuration from: /Users/cobalt/cobalt/configs[0m
+[32m2026-02-25 20:49:17.571[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m452[0m - [1m🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...[0m
+[32m2026-02-25 20:49:17.571[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36munlock[0m:[36m44[0m - [1m🔐 Vault successfully unlocked into memory.[0m
+[32m2026-02-25 20:49:17.571[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36mlock[0m:[36m55[0m - [1m🔒 Vault locked. Secrets wiped from RAM.[0m
+[32m2026-02-25 20:49:17.571[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m483[0m - [1m🔒 Vault secrets loaded into runtime RAM and vault locked.[0m
+[32m2026-02-25 20:49:17.575[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m57[0m - [1mTool registered: search[0m
+[32m2026-02-25 20:49:17.575[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m57[0m - [1mTool registered: browser[0m
+[32m2026-02-25 20:49:17.576[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m422[0m - [1mLoading configuration from: /Users/cobalt/cobalt/configs[0m
+[32m2026-02-25 20:49:17.587[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m452[0m - [1m🔑 COBALT_MASTER_KEY detected. Unlocking secure vault...[0m
+[32m2026-02-25 20:49:17.587[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36munlock[0m:[36m44[0m - [1m🔐 Vault successfully unlocked into memory.[0m
+[32m2026-02-25 20:49:17.588[0m | [1mINFO    [0m | [36mcobalt_agent.security.vault[0m:[36mlock[0m:[36m55[0m - [1m🔒 Vault locked. Secrets wiped from RAM.[0m
+[32m2026-02-25 20:49:17.588[0m | [1mINFO    [0m | [36mcobalt_agent.config[0m:[36mload_config[0m:[36m483[0m - [1m🔒 Vault secrets loaded into runtime RAM and vault locked.[0m
+[32m2026-02-25 20:49:17.590[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m57[0m - [1mTool registered: finance[0m
+[32m2026-02-25 20:49:17.590[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m57[0m - [1mTool registered: read_file[0m
+[32m2026-02-25 20:49:17.590[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m57[0m - [1mTool registered: write_file[0m
+[32m2026-02-25 20:49:17.590[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mregister_tool[0m:[36m57[0m - [1mTool registered: list_directory[0m
+[32m2026-02-25 20:49:17.590[0m | [1mINFO    [0m | [36mcobalt_agent.brain.engineering[0m:[36mrun[0m:[36m60[0m - [1mThe Forge is analyzing an engineering request...[0m
+[32m2026-02-25 20:49:33.384[0m | [1mINFO    [0m | [36mcobalt_agent.llm[0m:[36mgenerate_response[0m:[36m172[0m - [1mCobalt, LLM model version: ollama/qwen3-coder-next[0m
+[32m2026-02-25 20:49:33.387[0m | [1mINFO    [0m | [36mcobalt_agent.llm[0m:[36mgenerate_response[0m:[36m173[0m - [1mPersona Roles: Chief of Staff, Software Architect, Senior Developer, Business Analyst[0m
+[32m2026-02-25 20:49:33.388[0m | [1mINFO    [0m | [36mcobalt_agent.tools.tool_manager[0m:[36mexecute_tool[0m:[36m65[0m - [1mExecuting tool: write_file with args: {'filepath': 'src/cobalt_agent/tools/test_script.py', 'content': 'print("Hello from the Forge")'}[0m
+[32m2026-02-25 20:49:33.388[0m | [1mINFO    [0m | [36mcobalt_agent.core.proposals[0m:[36m__init__[0m:[36m60[0m - [1mProposal Engine initialized (Channel: cobalt-approvals)[0m
+[32m2026-02-25 20:49:33.388[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m__init__[0m:[36m44[0m - [1mMattermostInterface initialized (URL: http://100.70.206.126:8065)[0m
+[32m2026-02-25 20:49:33.397[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mconnect[0m:[36m80[0m - [1mSuccessfully connected to Mattermost as user: cobalt[0m
+[32m2026-02-25 20:49:33.397[0m | [1mINFO    [0m | [36mcobalt_agent.core.proposals[0m:[36mconnect_mattermost[0m:[36m76[0m - [1mProposal Engine: Mattermost connection established[0m
+[32m2026-02-25 20:49:33.397[0m | [1mINFO    [0m | [36mcobalt_agent.core.proposals[0m:[36mcreate_proposal[0m:[36m115[0m - [1mProposal created: [549f0cda] Write 29 bytes to src/cobalt_agent/tools/test_scri...[0m
+[32m2026-02-25 20:49:33.444[0m | [1mINFO    [0m | [36mcobalt_agent.core.proposals[0m:[36msend_proposal[0m:[36m170[0m - [1mProposal sent to Mattermost: [549f0cda][0m
+[32m2026-02-25 20:49:33.444[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m470[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"cobalt-approvals","channel_name":"cobalt-approvals","channel_type":"P","post":"{\"id\":\"drtzxkf6k7dy9kb5su8dye11xw\",\"create_at\":1772070573429,\"update_at\":1772070573429,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"ztp5ts1y9trnufpdus76aqsume\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"### 🛡️ ACTION PROPOSAL [549f0cda]\\n**Action:** `Write 29 bytes to src/cobalt_agent/tools/test_script.py`\\n\\n**Justification:** Agent requested file modification via WriteFileTool.\\n**Risk:** HIGH\\n\\n### ⚠️ ACTION REQUIRED: Reply exactly with 'Approve 549f0cda' to execute.\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"ztp5ts1y9trnufpdus76aqsume","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 5}[0m
+[32m2026-02-25 20:49:33.444[0m | [1mINFO    [0m | [36mcobalt_agent.core.proposals[0m:[36m__init__[0m:[36m60[0m - [1mProposal Engine initialized (Channel: cobalt-approvals)[0m
+[32m2026-02-25 20:49:33.444[0m | [1mINFO    [0m | [36mcobalt_agent.core.proposals[0m:[36mset_approval_callback[0m:[36m296[0m - [1mApproval callback set for task [549f0cda][0m
+[32m2026-02-25 20:49:33.444[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"cobalt-approvals","channel_name":"cobalt-approvals","channel_type":"P","post":"{\"id\":\"drtzxkf6k7dy9kb5su8dye11xw\",\"create_at\":1772070573429,\"update_at\":1772070573429,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"ztp5ts1y9trnufpdus76aqsume\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"### 🛡️ ACTION PROPOSAL [549f0cda]\\n**Action:** `Write 29 bytes to src/cobalt_agent/tools/test_script.py`\\n\\n**Justification:** Agent requested file modification via WriteFileTool.\\n**Risk:** HIGH\\n\\n### ⚠️ ACTION REQUIRED: Reply exactly with 'Approve 549f0cda' to execute.\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"ztp5ts1y9trnufpdus76aqsume","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 5}[0m
+[32m2026-02-25 20:49:34.510[0m | [1mINFO    [0m | [36mcobalt_agent.llm[0m:[36mgenerate_response[0m:[36m172[0m - [1mCobalt, LLM model version: ollama/qwen3-coder-next[0m
+[32m2026-02-25 20:49:34.512[0m | [1mINFO    [0m | [36mcobalt_agent.llm[0m:[36mgenerate_response[0m:[36m173[0m - [1mPersona Roles: Chief of Staff, Software Architect, Senior Developer, Business Analyst[0m
+[32m2026-02-25 20:49:34.532[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36msend_message_to_channel_id[0m:[36m177[0m - [1mMessage sent to channel badpmg1j5jf3mj7hxroe6xsrcw[0m
+[32m2026-02-25 20:49:34.533[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m470[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","post":"{\"id\":\"bj11ak841fduucnbkrs8zjmbre\",\"create_at\":1772070574519,\"update_at\":1772070574519,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"I have submitted the proposal for your approval.\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 6}[0m
+[32m2026-02-25 20:49:34.533[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"Town Square","channel_name":"town-square","channel_type":"O","post":"{\"id\":\"bj11ak841fduucnbkrs8zjmbre\",\"create_at\":1772070574519,\"update_at\":1772070574519,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"badpmg1j5jf3mj7hxroe6xsrcw\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"I have submitted the proposal for your approval.\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"badpmg1j5jf3mj7hxroe6xsrcw","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 6}[0m
+[32m2026-02-25 20:49:53.872[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m470[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"cobalt-approvals","channel_name":"cobalt-approvals","channel_type":"P","post":"{\"id\":\"tg3oa5opd3bd3g1izujk9itqoy\",\"create_at\":1772070593859,\"update_at\":1772070593859,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a\",\"channel_id\":\"ztp5ts1y9trnufpdus76aqsume\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"Approve 549f0cda\",\"type\":\"\",\"props\":{},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a:1772070593736\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@dejan_z","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"ztp5ts1y9trnufpdus76aqsume","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 7}[0m
+[32m2026-02-25 20:49:53.872[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"cobalt-approvals","channel_name":"cobalt-approvals","channel_type":"P","post":"{\"id\":\"tg3oa5opd3bd3g1izujk9itqoy\",\"create_at\":1772070593859,\"update_at\":1772070593859,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a\",\"channel_id\":\"ztp5ts1y9trnufpdus76aqsume\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"Approve 549f0cda\",\"type\":\"\",\"props\":{},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"xi4s3ncfypnz8fcbgyfhhwmt8a:1772070593736\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@dejan_z","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"ztp5ts1y9trnufpdus76aqsume","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 7}[0m
+[32m2026-02-25 20:49:53.881[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m243[0m - [1mMessage received in channel ztp5ts1y9trnufpdus76aqsume: Approve 549f0cda[0m
+[32m2026-02-25 20:49:53.881[0m | [1mINFO    [0m | [36mcobalt_agent.core.proposals[0m:[36m__init__[0m:[36m60[0m - [1mProposal Engine initialized (Channel: cobalt-approvals)[0m
+[32m2026-02-25 20:49:53.882[0m | [1mINFO    [0m | [36mcobalt_agent.core.proposals[0m:[36mhandle_approval_response[0m:[36m215[0m - [1mProposal approved: [549f0cda][0m
+[32m2026-02-25 20:49:53.882[0m | [1mINFO    [0m | [36mcobalt_agent.tools.filesystem[0m:[36mexecute_write[0m:[36m146[0m - [1mProposal Engine executed write to: src/cobalt_agent/tools/test_script.py (29 bytes)[0m
+[32m2026-02-25 20:49:53.898[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36msend_message_to_channel_id[0m:[36m177[0m - [1mMessage sent to channel ztp5ts1y9trnufpdus76aqsume[0m
+[32m2026-02-25 20:49:53.899[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m470[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"cobalt-approvals","channel_name":"cobalt-approvals","channel_type":"P","post":"{\"id\":\"3st1o5ubwbbjx8jfg6zjbwhj4w\",\"create_at\":1772070593889,\"update_at\":1772070593889,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"ztp5ts1y9trnufpdus76aqsume\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"✅ Approval received for task [549f0cda]. Action executed successfully.\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"ztp5ts1y9trnufpdus76aqsume","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 8}[0m
+[32m2026-02-25 20:49:53.899[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "posted", "data": {"channel_display_name":"cobalt-approvals","channel_name":"cobalt-approvals","channel_type":"P","post":"{\"id\":\"3st1o5ubwbbjx8jfg6zjbwhj4w\",\"create_at\":1772070593889,\"update_at\":1772070593889,\"edit_at\":0,\"delete_at\":0,\"is_pinned\":false,\"user_id\":\"oyc789ktdpn75norxkk11hi5dc\",\"channel_id\":\"ztp5ts1y9trnufpdus76aqsume\",\"root_id\":\"\",\"original_id\":\"\",\"message\":\"✅ Approval received for task [549f0cda]. Action executed successfully.\",\"type\":\"\",\"props\":{\"from_bot\":\"true\"},\"hashtags\":\"\",\"file_ids\":[],\"pending_post_id\":\"\",\"remote_id\":\"\",\"reply_count\":0,\"last_reply_at\":0,\"participants\":null,\"metadata\":{}}","sender_name":"@cobalt","set_online":true,"team_id":"y7zd739mb3ga5krhu9pfrhhemr"}, "broadcast": {"omit_users":null,"user_id":"","channel_id":"ztp5ts1y9trnufpdus76aqsume","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 8}[0m
+[32m2026-02-25 20:55:42.969[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36mrun_native_ws[0m:[36m470[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"away","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 9}[0m
+[32m2026-02-25 20:55:42.969[0m | [1mINFO    [0m | [36mcobalt_agent.interfaces.mattermost[0m:[36m_handle_mattermost_event[0m:[36m215[0m - [1mRAW WEBSOCKET PAYLOAD: {"event": "status_change", "data": {"status":"away","user_id":"oyc789ktdpn75norxkk11hi5dc"}, "broadcast": {"omit_users":null,"user_id":"oyc789ktdpn75norxkk11hi5dc","channel_id":"","team_id":"","connection_id":"","omit_connection_id":""}, "seq": 9}[0m
 
 
 ========================================
@@ -8585,19 +9401,22 @@ class Cortex:
         if len(user_input.split()) < 4 and "hi" in user_input.lower():
             return None
 
-        # === DETERMINISTIC FAST-PATH ROUTING ===
-        # Bypass LLM for browser/web tasks to avoid identity bias
+        # === DETERMINISTIC FAST-PATH ROUTING (TRIAGE) ===
         message_lower = user_input.lower()
-        fast_path_keywords = ["http://", "https://", "browser", "scrape", "search", "summarize the top"]
         
-        if any(keyword in message_lower for keyword in fast_path_keywords):
+        # 1. Engineering / Code Triage
+        eng_keywords = ["engineering", "directory", "file", "codebase", "src/", "list the"]
+        if any(keyword in message_lower for keyword in eng_keywords):
+            logger.info("⚡ Fast-Path Routing Triggered: ENGINEERING")
+            from cobalt_agent.brain.engineering import EngineeringDepartment
+            forge = EngineeringDepartment()
+            return forge.run(user_input)
+            
+        # 2. Web / Research Triage
+        web_keywords = ["http://", "https://", "browser", "scrape", "search", "summarize the top"]
+        if any(keyword in message_lower for keyword in web_keywords):
             logger.info("⚡ Fast-Path Routing Triggered: DEFAULT")
             return None  # Handle in main chat loop (same as FOUNDATION)
-        
-        # 1. Hardcoded bypass for questions - routes to FOUNDATION (standard chat with tool access)
-        if "?" in message_lower or "price" in message_lower or "what" in message_lower:
-            logger.info("Direct route bypass triggered: Question detected.")
-            return None
         
         # 2. Classify
         decision = self._classify_domain(user_input)
@@ -8886,11 +9705,25 @@ class EngineeringDepartment:
         Your job is to read, analyze, and write code.
         
         CRITICAL RULES:
-        1. NEVER guess the contents of a file. ALWAYS use the `read_file` tool before suggesting edits.
-        2. To modify a file, use the `write_file` tool. 
-        3. The `write_file` tool requires a valid JSON string with `filepath` and `content`.
-        4. When you use `write_file`, it will NOT execute immediately. It sends a Proposal to the user. You must inform the user that a proposal has been generated.
-        5. Think step-by-step. First list the directory, then read the target file, then propose the change.
+        1. NEVER guess the contents of a file or directory.
+        2. To modify or create a file, you MUST use the `write_file` tool. 
+        3. YOU MUST USE THE EXACT SYNTAX BELOW TO CALL A TOOL. If you do not use the `ACTION:` prefix, the tool will fail.
+           - CORRECT: ACTION: write_file {"filepath": "src/test.py", "content": "print('hello')"}
+           - INCORRECT: {"filepath": "src/test.py", "content": "print('hello')"}
+           - INCORRECT: ```json\n{"filepath": "src/test.py", "content": "print('hello')"}\n```
+        4. DO NOT roleplay. DO NOT say "I will create the file now." Just output the ACTION string.
+        5. WORKFLOW EFFICIENCY: If the user provides an exact filepath (e.g., "create a file at src/test.py"), DO NOT use `list_directory`. Execute `write_file` immediately to save context space.
+        6. WAIT PROTOCOL: If you use the `write_file` tool and the System Observation says "Action paused. Proposal sent", YOU MUST STOP. Output a final conversational message saying "I have submitted the proposal for your approval." DO NOT try to write the file again.
+        
+        AVAILABLE TOOLS:
+        - `read_file`: Reads a file. 
+          Syntax: ACTION: read_file {"filepath": "src/main.py"}
+        
+        - `list_directory`: Lists a folder. 
+          Syntax: ACTION: list_directory {"directory_path": "src/"}
+        
+        - `write_file`: Modifies or creates a file. YOU MUST USE THIS TO PROPOSE CHANGES. 
+          Syntax: ACTION: write_file {"filepath": "src/test.py", "content": "print('hello')"}
         """
 
     def run(self, user_message: str, chat_history: list = None) -> str:
@@ -8940,24 +9773,30 @@ class EngineeringDepartment:
                 tool_name = parts[0]
                 args_dict = {}
                 if len(parts) > 1:
-                    # Try to parse the rest as JSON for tool args
                     try:
-                        args_dict = eval(parts[1])
+                        import json
+                        # Clean up the string if the LLM wrapped it in quotes or markdown
+                        clean_args = parts[1].strip()
+                        if clean_args.startswith("'") and clean_args.endswith("'"):
+                            clean_args = clean_args[1:-1]
+                        
+                        args_dict = json.loads(clean_args)
                         if not isinstance(args_dict, dict):
-                            args_dict = {'query': parts[1]}
-                    except:
+                            args_dict = {'query': clean_args}
+                    except Exception as e:
+                        logger.warning(f"Failed to parse tool args as JSON: {e}")
                         args_dict = {'query': parts[1]}
                 
                 logger.debug(f"Forge executing tool: {tool_name}, args: {args_dict}")
                 
-                # Execute the tool
+                # Execute the tool (tool_manager now returns strings)
                 result = self.tool_manager.execute_tool(tool_name, args_dict)
                 
-                # Format the result
-                if result.success:
-                    result_text = result.output
+                # Format the result (string handling)
+                if result.startswith("Error:"):
+                    result_text = result
                 else:
-                    result_text = f"Error: {result.error}"
+                    result_text = result
                 
                 # Append observation to history and loop
                 messages.append({"role": "assistant", "content": response})
@@ -9863,8 +10702,7 @@ class Proposal(BaseModel):
             f"**Action:** `{self.action}`\n\n"
             f"**Justification:** {self.justification}\n"
             f"**Risk:** {self.risk_assessment}\n\n"
-            f"--- \n"
-            f"⚠️ *This action is paused per the Prime Directive. Reply with 'Approve {self.task_id}' to proceed.*"
+            f"### ⚠️ ACTION REQUIRED: Reply exactly with 'Approve {self.task_id}' to execute."
         )
 
 
@@ -9875,6 +10713,9 @@ class ProposalEngine:
     before executing high-stakes actions. It creates proposals, sends them to
     Mattermost for approval, and only executes approved actions.
     """
+    # Shared state across all instances
+    pending_proposals: Dict[str, Proposal] = {}
+    callbacks: Dict[str, Callable[[Proposal], None]] = {}
     
     def __init__(self):
         self.config = get_config()
@@ -9882,7 +10723,6 @@ class ProposalEngine:
         self.approval_team = self.config.mattermost.approval_team
         self.mattermost: Optional[Any] = None
         self.approved_proposals: Dict[str, Proposal] = {}
-        self.pending_proposals: Dict[str, Proposal] = {}
         self._approval_callback: Optional[Callable[[Proposal], None]] = None
         self._monitoring = False
         self._monitor_thread: Optional[threading.Thread] = None
@@ -10007,42 +10847,57 @@ class ProposalEngine:
             logger.error(f"Failed to send proposal: {e}")
             return False
     
-    def handle_approval_response(self, message: str, channel_id: str) -> Optional[Proposal]:
+    def handle_approval_response(self, message: str, channel_id: Optional[str] = None) -> Optional[str]:
         """
-        Check if a message is an approval response for a pending proposal.
+        Check if a message is an approval response for a pending proposal and return a formatted message.
         
         Args:
             message: The message text from Mattermost
-            channel_id: The channel ID where the message was posted
+            channel_id: Optional channel ID where the message was posted
             
         Returns:
-            The approved Proposal if this is a valid approval, None otherwise
+            A formatted message string if this is a valid approval response, None otherwise
         """
         # Check if this is an approval message
         approval_pattern = r"approve\s+(\w{8})"
         match = re.search(approval_pattern, message.lower())
         
         if not match:
+            # Check for reject pattern
+            reject_pattern = r"reject\s+(\w{8})"
+            reject_match = re.search(reject_pattern, message.lower())
+            if reject_match:
+                task_id = reject_match.group(1)
+                return f"❌ Rejection received for task [{task_id}]. The action has been cancelled."
             return None
         
         task_id = match.group(1)
         
-        # Check if this is in the approval channel
-        if channel_id != self.approval_channel:
+        # If channel_id is provided, validate it
+        if channel_id and self.approval_channel and channel_id != self.approval_channel:
             return None
         
         # Look up the pending proposal
-        if task_id not in self.pending_proposals:
+        if task_id in self.pending_proposals:
+            proposal = self.pending_proposals.pop(task_id)
+            proposal.approved = True
+            self.approved_proposals[task_id] = proposal
+            logger.info(f"Proposal approved: [{task_id}]")
+            # Execute the stored callback
+            if task_id in self.callbacks:
+                try:
+                    self.callbacks[task_id](proposal)
+                    return f"✅ Approval received for task [{task_id}]. Action executed successfully."
+                except Exception as e:
+                    logger.error(f"Callback execution failed: {e}")
+                    return f"❌ Approval received, but execution failed: {e}"
+            else:
+                return f"⚠️ Approval received for [{task_id}], but no execution callback was found in memory."
+        elif task_id in self.approved_proposals:
+            return f"ℹ️ Proposal [{task_id}] was already approved."
+        else:
             logger.warning(f"Approval for unknown task_id: {task_id}")
-            return None
-        
-        proposal = self.pending_proposals.pop(task_id)
-        proposal.approved = True
-        self.approved_proposals[task_id] = proposal
-        
-        logger.info(f"Proposal approved: [{task_id}]")
-        
-        return proposal
+            return f"⚠️ No pending approval found for task [{task_id}]."
     
     def wait_for_approval(self, proposal: Proposal, timeout: int = 3600) -> bool:
         """
@@ -10099,15 +10954,16 @@ class ProposalEngine:
             logger.error(f"Failed to execute approved action [{proposal.task_id}]: {e}")
             return False
     
-    def set_approval_callback(self, callback: Callable[[Proposal], None]) -> None:
+    def set_approval_callback(self, task_id: str, callback: Callable[[Proposal], None]) -> None:
         """
         Set a callback function to be called when a proposal is approved.
         
         Args:
+            task_id: The unique identifier for the task
             callback: Function that takes a Proposal and returns None
         """
-        self._approval_callback = callback
-        logger.info("Approval callback set")
+        self.callbacks[task_id] = callback
+        logger.info(f"Approval callback set for task [{task_id}]")
     
     def start_monitoring(self) -> None:
         """Start monitoring for approval responses in the background."""
@@ -10441,18 +11297,19 @@ class CLI:
                     self.console.print(f"[bold yellow]⚡ Auto-Tool:[/bold yellow] {tool_name} -> {query}")
                     self.memory.add_log(f"Agent Thought: {response}", source="Assistant")
                     
-                    # Execute
+                    # Execute (tool_manager now returns strings)
                     result = self.tool_manager.execute_tool(tool_name.lower(), {"query": query})
                     
-                    if result.success:
-                        output_str = self._format_tool_output(result.output)
+                    # Format observation (string handling)
+                    if result.startswith("Error:"):
+                        observation = f"System Observation: Error - {result}"
+                        self.console.print(f"[red]{observation}[/red]")
+                    else:
+                        output_str = result
                         preview = output_str[:500] + "..." if len(output_str) > 500 else output_str
                         self.console.print(f"[dim cyan]{preview}[/dim cyan]") 
-      	      	
+          	    	      	
                         observation = f"System Observation from {tool_name}: {output_str}"
-                    else:
-                        observation = f"System Observation: Error - {result.error}"
-                        self.console.print(f"[red]{observation}[/red]")
                     
                     turn_history.append({"role": "assistant", "content": response})
                     turn_history.append({"role": "user", "content": observation})
@@ -10711,11 +11568,27 @@ class MattermostInterface:
             channel_id = post_data.get("channel_id")
             text = post_data.get("message", "")
             
+            # Ignore Mattermost system messages (joins, leaves, header updates)
+            if post_data.get("type", "") != "":
+                return
+            
             # Ignore the bot's own messages to prevent infinite loops
             if user_id == self.get_my_user_id():
                 return
             
             logger.info(f"Message received in channel {channel_id}: {text}")
+            
+            # === HITL APPROVAL INTERCEPTOR ===
+            text_lower = text.strip().lower()
+            if text_lower.startswith("approve") or text_lower.startswith("reject"):
+                from cobalt_agent.core.proposals import ProposalEngine
+                engine = ProposalEngine()
+                
+                # Handle the response and send the result back to the channel
+                result_msg = engine.handle_approval_response(text)
+                if result_msg:
+                    self.send_message_to_channel_id(channel_id, result_msg)
+                return
             
             # Check for approval response first
             if self.proposal_engine:
@@ -10812,11 +11685,11 @@ class MattermostInterface:
                                             args={"query": query}
                                         )
                                         
-                                        # Format the observation for LLM
-                                        if tool_result.success:
-                                            observation = f"[Observation: {tool_result.output}]"
+                                        # Format the observation for LLM (tool_manager now returns strings)
+                                        if tool_result.startswith("Error:"):
+                                            observation = f"[Observation: Tool execution failed - {tool_result}]"
                                         else:
-                                            observation = f"[Observation: Tool execution failed - {tool_result.error}]"
+                                            observation = f"[Observation: {tool_result}]"
                                         
                                         # Append observation to conversation history
                                         conversation_history.append({
@@ -12654,6 +13527,225 @@ class BrowserTool:
             return WebPageContent(url=url, title="Error", content="", error=str(e))
 
 ========================================
+FILE: src/cobalt_agent/tools/filesystem.py
+========================================
+
+"""
+Filesystem Tools
+Standard file operations for the Cobalt Agent.
+Provides safe read, write, and directory listing capabilities.
+"""
+import json
+import os
+from typing import Dict, List, Any
+from pydantic import BaseModel, Field
+from loguru import logger
+
+from cobalt_agent.core.proposals import create_and_send_proposal, ProposalEngine
+
+
+class FileContent(BaseModel):
+    """Structured content from a file read operation."""
+    path: str = Field(description="The file path that was read.")
+    content: str = Field(description="The file contents.")
+    error: str = Field("", description="Error message if read failed.")
+
+    def __str__(self):
+        if self.error:
+            return f"[Error reading {self.path}]: {self.error}"
+        return f"File: {self.path}\nContent:\n{self.content[:4000]}..." if len(self.content) > 4000 else f"File: {self.path}\nContent:\n{self.content}"
+
+
+class WriteResult(BaseModel):
+    """Result of a file write operation."""
+    path: str = Field(description="The file path that was written.")
+    success: bool = Field(description="Whether the write succeeded.")
+    error: str = Field("", description="Error message if write failed.")
+
+    def __str__(self):
+        if self.success:
+            return f"Successfully wrote to {self.path}"
+        return f"[Error writing {self.path}]: {self.error}"
+
+
+class DirectoryListing(BaseModel):
+    """Result of a directory listing operation."""
+    path: str = Field(description="The directory path that was listed.")
+    contents: List[Dict[str, Any]] = Field(description="List of files and directories.")
+    error: str = Field(default="", description="Error message if listing failed.")
+
+    def __str__(self):
+        if self.error:
+            return f"[Error listing {self.path}]: {self.error}"
+        output = f"Directory: {self.path}\nContents:\n"
+        for item in self.contents:
+            item_type = item.get('type', 'unknown')
+            item_name = item.get('name', 'unknown')
+            output += f"  - [{item_type}] {item_name}\n"
+        return output
+
+
+class ReadFileTool:
+    """Read the contents of a file."""
+    name = "read_file"
+    description = "Read the contents of a file. Use when you need to examine existing code or data. Pass the file path as the query parameter."
+
+    def __init__(self):
+        pass
+
+    def run(self, query: str) -> FileContent:
+        """
+        Read a file and return its contents.
+        
+        Args:
+            query: The file path to read
+        
+        Returns:
+            FileContent with the file contents or error
+        """
+        path = query.strip()
+        
+        logger.info(f"Reading file: {path}")
+        
+        try:
+            # Sanitize path - prevent directory traversal
+            path = os.path.normpath(path)
+            
+            if not os.path.exists(path):
+                return FileContent(path=path, content="", error=f"File not found: {path}")
+            
+            if not os.path.isfile(path):
+                return FileContent(path=path, content="", error=f"Not a file: {path}")
+            
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            return FileContent(path=path, content=content)
+            
+        except Exception as e:
+            logger.error(f"Failed to read file {path}: {e}")
+            return FileContent(path=path, content="", error=str(e))
+
+
+class WriteFileTool:
+    """Modifies or creates a file."""
+    name = "write_file"
+    
+    def run(self, query=None, **kwargs) -> str:
+        import json
+        import ast
+        from loguru import logger
+        from cobalt_agent.core.proposals import create_and_send_proposal, ProposalEngine
+        
+        filepath = None
+        content = None
+        
+        # Universal extraction
+        data = query if query is not None else kwargs
+        
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception as e1:
+                try:
+                    data = ast.literal_eval(data)
+                except Exception as e2:
+                    logger.error(f"WriteFileTool parsing failed. JSON error: {e1} | AST error: {e2} | Data: {data}")
+                    return f"Error: Failed to parse arguments. Received: {data}"
+        
+        if isinstance(data, dict):
+            # Handle nested query dictionaries
+            if "filepath" not in data and "query" in data:
+                if isinstance(data["query"], dict):
+                    data = data["query"]
+                elif isinstance(data["query"], str):
+                    try:
+                        data = ast.literal_eval(data["query"])
+                    except Exception:
+                        pass
+
+            filepath = data.get("filepath")
+            content = data.get("content")
+
+        if not filepath or content is None:
+            logger.error(f"WriteFileTool missing fields. Parsed data: {data}")
+            return f"Error: Missing filepath or content. Parsed data: {data}"
+
+        def execute_write(proposal_obj):
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                logger.info(f"Proposal Engine executed write to: {filepath} ({len(content)} bytes)")
+            except Exception as e:
+                logger.error(f"Failed to physically write file {filepath}: {e}")
+            
+        try:
+            proposal = create_and_send_proposal(
+                action=f"Write {len(content)} bytes to {filepath}",
+                justification="Agent requested file modification via WriteFileTool.",
+                risk_assessment="HIGH"
+            )
+        except Exception as e:
+            logger.error(f"Proposal Engine crash: {e}")
+            return f"Error: Proposal Engine crashed: {e}"
+        
+        if proposal:
+            engine = ProposalEngine()
+            engine.set_approval_callback(proposal.task_id, execute_write)
+            engine.pending_proposals[proposal.task_id] = proposal
+            return f"Action paused. Proposal [{proposal.task_id}] sent to Admin for approval in Mattermost."
+        else:
+            return "Error: Failed to generate Proposal Ticket. Mattermost connection failed."
+
+
+class ListDirectoryTool:
+    """List the contents of a directory."""
+    name = "list_directory"
+    description = "List the contents of a directory. Use when you need to explore the file structure. Pass the directory path as the query parameter."
+
+    def __init__(self):
+        pass
+
+    def run(self, query: str) -> DirectoryListing:
+        """
+        List directory contents.
+        
+        Args:
+            query: The directory path to list
+        
+        Returns:
+            DirectoryListing with contents or error
+        """
+        path = query.strip()
+        
+        logger.info(f"Listing directory: {path}")
+        
+        try:
+            # Sanitize path - prevent directory traversal
+            path = os.path.normpath(path)
+            
+            if not os.path.exists(path):
+                return DirectoryListing(path=path, contents=[], error=f"Directory not found: {path}")
+            
+            if not os.path.isdir(path):
+                return DirectoryListing(path=path, contents=[], error=f"Not a directory: {path}")
+            
+            contents = []
+            for item in os.listdir(path):
+                item_path = os.path.join(path, item)
+                item_type = "dir" if os.path.isdir(item_path) else "file"
+                contents.append({
+                    'name': item,
+                    'type': item_type
+                })
+            
+            return DirectoryListing(path=path, contents=contents)
+            
+        except Exception as e:
+            logger.error(f"Failed to list directory {path}: {e}")
+            return DirectoryListing(path=path, contents=[], error=str(e))
+
+========================================
 FILE: src/cobalt_agent/tools/finance.py
 ========================================
 
@@ -12987,6 +14079,12 @@ class SearchTool:
             return []
 
 ========================================
+FILE: src/cobalt_agent/tools/test_script.py
+========================================
+
+print("Hello from the Forge")
+
+========================================
 FILE: src/cobalt_agent/tools/tool_manager.py
 ========================================
 
@@ -13005,6 +14103,8 @@ from cobalt_agent.tools.search import SearchTool
 from cobalt_agent.tools.browser import BrowserTool
 # Import Finance
 from cobalt_agent.tools.finance import FinanceTool
+# Import Filesystem tools
+from cobalt_agent.tools.filesystem import ReadFileTool, WriteFileTool, ListDirectoryTool
 
 class ToolResult(BaseModel):
     """Standardized output for any tool execution."""
@@ -13032,9 +14132,14 @@ class ToolManager:
         browser = BrowserTool()
         self.register_tool("browser", browser)
         
-        # 3. <--- ADDED: Finance Tool
+        # 3. Finance Tool
         finance = FinanceTool()
         self.register_tool("finance", finance)
+        
+        # 4. Filesystem Tools
+        self.register_tool("read_file", ReadFileTool())
+        self.register_tool("write_file", WriteFileTool())
+        self.register_tool("list_directory", ListDirectoryTool())
         
     def register_tool(self, name: str, tool_instance: Any):
         """Add a new tool to the registry."""
@@ -13045,37 +14150,36 @@ class ToolManager:
         """Return the list of tool objects for the Prompt Engine."""
         return list(self.tools.values())
 
-    def execute_tool(self, tool_name: str, args: Dict[str, Any]) -> ToolResult:
-        """
-        Execute a registered tool by name.
+    def execute_tool(self, name: str, args: Any) -> str:
+        from loguru import logger
+        logger.info(f"Executing tool: {name} with args: {args}")
         
-        Args:
-            tool_name: The name of the tool (e.g., 'search')
-            args: Dictionary of arguments for the tool (e.g., {'query': '...'})
-        """
-        if tool_name not in self.tools:
-            return ToolResult(success=False, output=None, error=f"Tool '{tool_name}' not found.")
+        if name not in self.tools:
+            return f"Error: Tool '{name}' not found."
             
-        tool = self.tools[tool_name]
+        tool = self.tools[name]
         
         try:
-            logger.info(f"Executing tool: {tool_name} with args: {args}")
-            
-            # This logic assumes all tools have a .run() method
-            # We might need to adapt this if tools have different signatures
-            if hasattr(tool, 'run'):
-                # Extract the main argument (most tools just take a query string for now)
-                # This is a simplification; later we will make this robust.
-                query = args.get('query') or args.get('q') or list(args.values())[0]
-                
-                result = tool.run(query)
-                return ToolResult(success=True, output=result)
+            if isinstance(args, dict):
+                # Safely pass the full dictionary as kwargs
+                return tool.run(**args)
             else:
-                return ToolResult(success=False, output=None, error=f"Tool '{tool_name}' has no run() method.")
-
+                return tool.run(args)
+        except TypeError as e:
+            # Fallback for legacy tools that strictly only accept a single positional 'query' string
+            logger.warning(f"Tool {name} rejected kwargs, falling back to positional: {e}")
+            if isinstance(args, dict):
+                if "query" in args:
+                    return tool.run(args["query"])
+                elif len(args) == 1:
+                    return tool.run(list(args.values())[0])
+                else:
+                    return tool.run(str(args))
+            return tool.run(str(args))
         except Exception as e:
-            logger.error(f"Tool Execution Failed: {e}")
-            return ToolResult(success=False, output=None, error=str(e))
+            logger.error(f"Error executing tool {name}: {str(e)}")
+            return f"Error executing tool {name}: {str(e)}"
+
 
 ========================================
 FILE: src/cobalt_agent.egg-info/SOURCES.txt
