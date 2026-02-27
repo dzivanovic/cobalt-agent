@@ -67,11 +67,11 @@ models:
     env_key_ref: "openrouter"
   cloud_gemini_2_5_pro:
     provider: "gemini"
-    model_name: "gemini/gemini-2.5-pro"
+    model_name: "gemini-2.5-pro"
     env_key_ref: "gemini"
   cloud_gemini_2.5_flash:
     provider: "gemini"
-    model_name: "gemini/gemini-2.5-flash"
+    model_name: "gemini-2.5-flash"
     env_key_ref: "gemini"
 
 # 4. ACTIVE SWITCHBOARD
@@ -80,7 +80,7 @@ active_profile:
   coder: "local_bleeding_edge"
   architect: "local_bleeding_edge"
   strategist: "local_strategist_r1"
-  researcher: "cloud_gemini_2.5_pro"
+  researcher: "cloud_gemini_2_5_pro"
   fast_chat: "local_coder_32b"
 
 mattermost:

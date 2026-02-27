@@ -77,9 +77,13 @@ class BaseDepartment(ABC):
                             args_dict = json.loads(clean_args)
                             if not isinstance(args_dict, dict):
                                 args_dict = {'query': clean_args}
-                        except Exception as e:
+                        except json.JSONDecodeError as e:
+                            # Return explicit error for invalid JSON so LLM can self-correct
                             logger.warning(f"Failed to parse tool args as JSON: {e}")
-                            args_dict = {'query': parts[1] if len(parts) > 1 else ''}
+                            error_msg = "Observation: Invalid JSON format. Please use strict double quotes."
+                            messages.append({"role": "assistant", "content": response})
+                            messages.append({"role": "system", "content": error_msg})
+                            continue
                     
                     # Execute the tool
                     raw_result = self.tool_manager.execute_tool(tool_name, args_dict)
@@ -103,6 +107,7 @@ class BaseDepartment(ABC):
                     messages.append({"role": "assistant", "content": response})
                     messages.append({"role": "system", "content": f"Error parsing JSON arguments: {e}"})
                 except Exception as e:
+                    logger.exception(f"Error executing tool: {e}")
                     messages.append({"role": "assistant", "content": response})
                     messages.append({"role": "system", "content": f"Error executing tool: {e}"})
             else:

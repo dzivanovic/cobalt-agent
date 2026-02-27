@@ -45,10 +45,29 @@ class Persona:
     def get_system_prompt(self) -> str:
         """
         Generate a comprehensive system prompt combining all persona attributes.
+        Uses the system.core_identity prompt from config.yaml if available.
 
         Returns:
             str: Complete system instruction string for the AI agent
         """
+        # Try to load from config first
+        from cobalt_agent.config import get_config
+        config = get_config()
+        
+        if config.prompts and config.prompts.system and config.prompts.system.core_identity:
+            # Use config prompt with dynamic substitution
+            prompt_template = config.prompts.system.core_identity
+            prompt = prompt_template.format(
+                name=self.config.name,
+                roles="\n".join([f"  • {role}" for role in self.config.roles]) if self.config.roles else "No roles defined",
+                skills="\n".join([f"  • {skill}" for skill in self.config.skills]) if self.config.skills else "No skills defined",
+                tone=", ".join(self.config.tone) if self.config.tone else "professional",
+                directives="\n".join([f"  • {directive}" for directive in self.config.directives]) if self.config.directives else "No directives defined"
+            )
+            logger.debug("System prompt loaded from config")
+            return prompt
+        
+        # Fallback to original generation logic
         prompt_parts = []
 
         # Introduction
@@ -90,7 +109,7 @@ class Persona:
         )
 
         system_prompt = "\n".join(prompt_parts)
-        logger.debug("System prompt generated successfully")
+        logger.debug("System prompt generated successfully (fallback)")
 
         return system_prompt
 

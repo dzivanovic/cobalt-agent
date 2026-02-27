@@ -30,7 +30,14 @@ class Cortex:
         # Try 'model_name' first, then 'model', then default to 'gpt-4o'
         model_name = getattr(self.config.llm, "model_name", None)
         if not model_name:
-            model_name = getattr(self.config.llm, "model", "gpt-4o")
+            model_name = getattr(self.config.llm, "model", None)
+        if not model_name:
+            # Fallback to active_profile.default or raise error if missing
+            active_profile = getattr(self.config, "active_profile", None)
+            if active_profile and isinstance(active_profile, dict):
+                model_name = active_profile.get("default")
+            if not model_name:
+                raise ValueError("Missing critical configuration: No model specified in llm.model_name, llm.model, or active_profile.default")
             
         self.llm = LLM(model_name=model_name)
         
@@ -39,6 +46,17 @@ class Cortex:
         if deps is None:
             deps = {}
         self.departments = deps
+        
+        # Load routing keywords from config
+        self.orchestrator_keywords = []
+        self.high_risk_keywords = []
+        
+        rules = getattr(self.config, "rules", None)
+        if rules:
+            cortex_routing = getattr(rules, "cortex_routing", None)
+            if cortex_routing:
+                self.orchestrator_keywords = getattr(cortex_routing, "orchestrator_keywords", [])
+                self.high_risk_keywords = getattr(cortex_routing, "high_risk_keywords", [])
         
         logger.info(f"🧠 Cortex Online | Loaded {len(self.departments)} Departments from Config")
 
@@ -51,12 +69,8 @@ class Cortex:
         # === DETERMINISTIC FAST-PATH ROUTING (TRIAGE) ===
         message_lower = user_input.lower()
         
-        # 1. Complex Task Routing (Orchestrator)
-        orchestrator_keywords = [
-            "engineering", "directory", "file", "codebase", "src/", "list the",
-            "research", "summarize", "journal", "ops", "read", "write", "search", "prd"
-        ]
-        if any(keyword in message_lower for keyword in orchestrator_keywords):
+        # 1. Complex Task Routing (Orchestrator) - use config-defined keywords
+        if any(keyword in message_lower for keyword in self.orchestrator_keywords):
             logger.info("⚡ Fast-Path Routing Triggered: ORCHESTRATOR")
             from cobalt_agent.core.orchestrator import OrchestratorEngine
             orchestrator = OrchestratorEngine()
@@ -71,9 +85,8 @@ class Cortex:
         # 2. Classify
         decision = self._classify_domain(user_input)
         
-        # --- PRIME DIRECTIVE GATE ---
-        high_risk_keywords = ['delete', 'move', 'remove', 'format', 'execute', 'kill', 'reorganize']
-        is_high_risk = any(word in user_input.lower() for word in high_risk_keywords)
+        # --- PRIME DIRECTIVE GATE --- - use config-defined keywords
+        is_high_risk = any(word in user_input.lower() for word in self.high_risk_keywords)
         
         if is_high_risk:
             logger.warning(f"🛡️ Security Intercept: High-risk action detected in input: {user_input}")
@@ -113,22 +126,9 @@ class Cortex:
             return f"⚠️ Unknown Domain: {domain}"
 
     def _generate_proposal(self, user_input: str) -> str:
-        prompt = f"""
-        [SECURITY PROTOCOL: PRIME DIRECTIVE]
-        High-risk action detected: "{user_input}"
-        
-        You are the Chief of Staff. You are FORBIDDEN from executing this autonomously.
-        Generate a JSON response explaining the risk.
-        
-        OUTPUT FORMAT:
-        {{
-          "action": "Summary of what was requested",
-          "justification": "Why the user wants this",
-          "risk_assessment": "Blunt warning about data loss or system instability"
-        }}
-        
-        OUTPUT ONLY JSON. NO EXTRA TEXT.
-        """
+        # Load prompt from config
+        prompt_template = self.config.prompts.proposal.security_intercept
+        prompt = prompt_template.format(user_input=user_input)
         
         raw_response = ""
         try:
@@ -150,8 +150,8 @@ class Cortex:
             )
             return proposal.format_for_mattermost()
             
-        except Exception as e:
-            logger.error(f"Proposal Generation Failed: {e} | Raw Output: {raw_response}")
+        except Exception:
+            logger.exception(f"Proposal Generation Failed | Raw Output: {raw_response}")
             return (
                 f"### 🛡️ SECURITY INTERCEPT\n"
                 f"**Action Blocked:** Administrative system change.\n\n"
@@ -180,82 +180,10 @@ class Cortex:
                 if is_active:
                     options_text += f"- {name}: {desc}\n"
         
-        # STRICT MUTUALLY EXCLUSIVE ROUTING PROMPT
-        prompt = f"""
-        You are the Chief of Staff (Cortex). Route this user request to the correct Department.
+        # STRICT MUTUALLY EXCLUSIVE ROUTING PROMPT - Load from config
+        prompt_template = self.config.prompts.routing.classify_domain
+        prompt = prompt_template.format(user_input=user_input, options_text=options_text)
         
-        USER REQUEST: "{user_input}"
-        
-        ACTIVE DEPARTMENTS:
-        {options_text}
-        - DEFAULT: General chat, web research, web browsing, article summarization. Use for queries that don't fit other domains.
-        
-        === STRICT ROUTING RULES (MUST FOLLOW) ===
-        1. WEB RESEARCH / DEFAULT ROUTING:
-           - If the user asks to browse a website, scrape a URL, summarize an article, or perform general web research, you MUST return 'DEFAULT'.
-           - Examples: "What's the weather in Paris?", "Summarize this article", "Look up recent news", "Research X", "Browse Y"
-        
-        2. TACTICAL (TRADING ONLY - STRICTLY RESTRICTED):
-           - ONLY return 'TACTICAL' if the user explicitly mentions trading, stocks, tickers, playbooks, or expected value (EV).
-           - Valid examples: "What is AAPL trading at?", "TSLA stock price", "Show me playbooks", "Calculate EV for X"
-           - Extract ONLY the ticker symbol (e.g. "NVDA", "AAPL") or "STRATEGY" as task_parameters
-        
-        3. INTEL (Research/News):
-           - Use for: news, deep dives, current events (non-trading focused)
-           - Extract the search topic as task_parameters
-        
-        4. OPS (Operations/Scribe):
-           - Use for: logging, journaling, saving notes, medical billing
-           - Extract relevant content as task_parameters
-        
-        5. ENGINEERING (CODE WORK - STRICTLY RESTRICTED):
-           - ONLY return 'ENGINEERING' if the user explicitly asks to write, edit, or review code.
-           - Examples: "Write a function", "Fix this bug", "Review my code", "Create a new tool"
-        
-        6. DEFAULT:
-           - Use for: general conversation, greetings, system questions, or anything not matching the above
-           - Return task_parameters: "chat"
-        
-        === EXAMPLES ===
-        Input: "What is the current price of AAPL?"
-        → Domain: TACTICAL, Parameters: "AAPL"
-        
-        Input: "What is the price of TSLA?"
-        → Domain: TACTICAL, Parameters: "TSLA"
-        
-        Input: "Show me the strategies/playbooks"
-        → Domain: TACTICAL, Parameters: "STRATEGY"
-        
-        Input: "What is the expected value of X given Y?"
-        → Domain: TACTICAL, Parameters: "STRATEGY"
-        
-        Input: "Browse https://example.com and summarize it"
-        → Domain: DEFAULT, Parameters: "chat"
-        
-        Input: "Summarize this article about AI"
-        → Domain: DEFAULT, Parameters: "chat"
-        
-        Input: "Write a Python function to do X"
-        → Domain: ENGINEERING, Parameters: "Python function: X"
-        
-        Input: "Fix the routing bug in cortex.py"
-        → Domain: ENGINEERING, Parameters: "Fix routing bug in cortex.py"
-        
-        Input: "What's the weather like?"
-        → Domain: DEFAULT, Parameters: "chat"
-        
-        Input: "Hi, how are you?"
-        → Domain: DEFAULT, Parameters: "chat"
-        
-        === FINAL INSTRUCTION ===
-        FOLLOW THESE RULES STRICTLY AND MUTUALLY EXCLUSIVELY:
-        1. Web research/browser/URL/summary queries → DEFAULT
-        2. Trading/stocks/tickers/playbooks/EV → TACTICAL
-        3. Writing/editing/reviewing code → ENGINEERING
-        4. Everything else → DEFAULT
-        
-        Return the decision structured correctly. DO NOT DEVIATE FROM THESE RULES.
-        """
         try:
             return self.llm.ask_structured(prompt, DomainDecision)
         except Exception:
@@ -277,8 +205,9 @@ class Cortex:
                 
             department_head = Strategos()
             return department_head.run(task)
-        except Exception as e:
-            return f"Tactical Error: {e}"
+        except Exception:
+            logger.exception("Tactical department execution failed")
+            return "Tactical Error: Internal error logged"
 
     def _run_intel(self, params: str) -> str:
         """Handles Research & Briefings."""
@@ -307,9 +236,11 @@ class Cortex:
         # 2. SAVING (New Note)
         elif "save" in prompt_lower or "note" in prompt_lower:
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-            filename = f"AutoNote_{timestamp}" 
+            filename = f"AutoNote_{timestamp}.md"  # Explicitly add .md extension
             content = params if len(params) > 5 else original_input
-            return scribe.write_note(filename, content, folder="0 - Inbox")
+            # CRITICAL: Explicitly construct path with "0 - Inbox/" folder
+            relative_path = f"0 - Inbox/{filename}"
+            return scribe.write_note(relative_path, content)
             
         # 3. SEARCHING
         elif "search" in prompt_lower or "find" in prompt_lower:

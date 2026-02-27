@@ -5,18 +5,20 @@ Provides safe read, write, and directory listing capabilities.
 """
 import json
 import os
-from typing import Dict, List, Any
-from pydantic import BaseModel, Field
+from typing import Dict, List, Any, Optional
+from pydantic import BaseModel, Field, ValidationError
 from loguru import logger
+from pathlib import Path
 
 from cobalt_agent.core.proposals import create_and_send_proposal, ProposalEngine
+from cobalt_agent.config import get_config
 
 
 class FileContent(BaseModel):
     """Structured content from a file read operation."""
     path: str = Field(description="The file path that was read.")
     content: str = Field(description="The file contents.")
-    error: str = Field("", description="Error message if read failed.")
+    error: str = Field(default="", description="Error message if read failed.")
 
     def __str__(self):
         if self.error:
@@ -28,7 +30,7 @@ class WriteResult(BaseModel):
     """Result of a file write operation."""
     path: str = Field(description="The file path that was written.")
     success: bool = Field(description="Whether the write succeeded.")
-    error: str = Field("", description="Error message if write failed.")
+    error: str = Field(default="", description="Error message if write failed.")
 
     def __str__(self):
         if self.success:
@@ -53,6 +55,27 @@ class DirectoryListing(BaseModel):
         return output
 
 
+class ReadFileInput(BaseModel):
+    """Pydantic model for read_file tool input validation."""
+    filepath: Optional[str] = Field(default=None, description="The file path to read")
+    path: Optional[str] = Field(default=None, description="Alias for filepath")
+    query: Optional[str] = Field(default=None, description="Alias for filepath")
+
+
+class WriteFileInput(BaseModel):
+    """Pydantic model for write_file tool input validation."""
+    filepath: Optional[str] = Field(default=None, description="The file path to write")
+    path: Optional[str] = Field(default=None, description="Alias for filepath")
+    content: Optional[str] = Field(default=None, description="The content to write")
+
+
+class ListDirectoryInput(BaseModel):
+    """Pydantic model for list_directory tool input validation."""
+    directory_path: Optional[str] = Field(default=None, description="The directory path to list")
+    path: Optional[str] = Field(default=None, description="Alias for directory_path")
+    query: Optional[str] = Field(default=None, description="Alias for directory_path")
+
+
 class ReadFileTool:
     """Read the contents of a file."""
     name = "read_file"
@@ -64,23 +87,19 @@ class ReadFileTool:
     def run(self, query=None, **kwargs) -> FileContent:
         """
         Read a file and return its contents.
+        Accepts either a filepath string directly or a JSON object with filepath key.
         """
-        import json
-        import ast
-        
         # Universal extraction
         data = query if query is not None else kwargs
         
         if isinstance(data, str):
             try:
                 data = json.loads(data)
-            except Exception:
-                try:
-                    data = ast.literal_eval(data)
-                except Exception:
-                    # Fallback: treat the string itself as the path
-                    pass
-
+            except json.JSONDecodeError:
+                # Return explicit error for invalid JSON so LLM can self-correct
+                error_msg = "Observation: Invalid JSON format. Please use strict double quotes."
+                return FileContent(path="unknown", content="", error=error_msg)
+        
         path = ""
         if isinstance(data, dict):
             # Check common key names
@@ -104,9 +123,9 @@ class ReadFileTool:
                 content = f.read()
             return FileContent(path=path, content=content)
             
-        except Exception as e:
-            logger.error(f"Failed to read file {path}: {e}")
-            return FileContent(path=path, content="", error=str(e))
+        except Exception:
+            logger.exception(f"Failed to read file {path}")
+            return FileContent(path=path, content="", error="Failed to read file")
 
 
 class WriteFileTool:
@@ -114,11 +133,6 @@ class WriteFileTool:
     name = "write_file"
     
     def run(self, query=None, **kwargs) -> str:
-        import json
-        import ast
-        from loguru import logger
-        from cobalt_agent.core.proposals import create_and_send_proposal, ProposalEngine
-        
         filepath = None
         content = None
         
@@ -128,12 +142,10 @@ class WriteFileTool:
         if isinstance(data, str):
             try:
                 data = json.loads(data)
-            except Exception as e1:
-                try:
-                    data = ast.literal_eval(data)
-                except Exception as e2:
-                    logger.error(f"WriteFileTool parsing failed. JSON error: {e1} | AST error: {e2} | Data: {data}")
-                    return f"Error: Failed to parse arguments. Received: {data}"
+            except json.JSONDecodeError as e:
+                # Return explicit error for invalid JSON so LLM can self-correct
+                error_msg = f"Observation: Invalid JSON format. Please use strict double quotes. Error: {e}"
+                return error_msg
         
         if isinstance(data, dict):
             # Handle nested query dictionaries
@@ -142,9 +154,9 @@ class WriteFileTool:
                     data = data["query"]
                 elif isinstance(data["query"], str):
                     try:
-                        data = ast.literal_eval(data["query"])
-                    except Exception:
-                        pass
+                        data = json.loads(data["query"])
+                    except json.JSONDecodeError:
+                        return "Observation: Invalid JSON format. Please use strict double quotes."
 
             filepath = data.get("filepath")
             content = data.get("content")
@@ -153,34 +165,35 @@ class WriteFileTool:
             logger.error(f"WriteFileTool missing fields. Parsed data: {data}")
             return f"Error: Missing filepath or content. Parsed data: {data}"
 
-        from pathlib import Path
-        from cobalt_agent.config import get_config
-
         # Resolve the path properly
         target_path = Path(filepath)
-
-        # If it's just a raw markdown filename with no directories, force it to 0 - Inbox
-        if len(target_path.parts) == 1 and target_path.suffix == '.md':
-            target_path = Path(f"0 - Inbox/{target_path.name}")
-
-        # If it's an Obsidian note (like '0 - Inbox/Note.md') and doesn't start with docs/
-        # we should route it to the configured vault path
-        if str(target_path).startswith("0 - ") and not str(target_path).startswith("docs/"):
-            config = get_config()
-            vault_path = Path(config.system.obsidian_vault_path)
-            target_path = vault_path / target_path
-
+        
+        # Get the base vault path from config
+        config = get_config()
+        base_path = Path(config.system.obsidian_vault_path)
+        
+        # CRITICAL: No hardcoded path forcing - accept the path as-is from the LLM
+        # The caller must provide the full relative path within the vault
+        
+        # Path traversal protection: ensure resolved path is within vault
+        resolved_target = target_path.resolve()
+        resolved_base = base_path.resolve()
+        
+        if not resolved_target.is_relative_to(resolved_base):
+            logger.error(f"Path traversal attempt blocked: {target_path} is outside vault {base_path}")
+            raise PermissionError(f"Access denied: Path '{target_path}' is outside the Obsidian vault.")
+        
+        # Ensure the parent directory exists before writing
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        
         def execute_write(proposal_obj):
             try:
-                # Ensure the parent directory exists before writing
-                target_path.parent.mkdir(parents=True, exist_ok=True)
-
                 with open(target_path, 'w', encoding='utf-8') as f:
                     f.write(content)
                 logger.info(f"Proposal Engine executed write to: {target_path} ({len(content)} bytes)")
             except Exception as e:
-                logger.error(f"Failed to physically write file {target_path}: {e}")
-            
+                logger.exception(f"Failed to physically write file {target_path}: {e}")
+        
         try:
             proposal = create_and_send_proposal(
                 action=f"Write {len(content)} bytes to {filepath}",
@@ -188,7 +201,7 @@ class WriteFileTool:
                 risk_assessment="HIGH"
             )
         except Exception as e:
-            logger.error(f"Proposal Engine crash: {e}")
+            logger.exception(f"Proposal Engine crash: {e}")
             return f"Error: Proposal Engine crashed: {e}"
         
         if proposal:
@@ -211,23 +224,19 @@ class ListDirectoryTool:
     def run(self, query=None, **kwargs) -> DirectoryListing:
         """
         List directory contents.
+        Accepts either a directory_path string directly or a JSON object with directory_path key.
         """
-        import json
-        import ast
-        
         # Universal extraction
         data = query if query is not None else kwargs
         
         if isinstance(data, str):
             try:
                 data = json.loads(data)
-            except Exception:
-                try:
-                    data = ast.literal_eval(data)
-                except Exception:
-                    # Fallback: treat the string itself as the path
-                    pass
-
+            except json.JSONDecodeError:
+                # Return explicit error for invalid JSON so LLM can self-correct
+                error_msg = "Observation: Invalid JSON format. Please use strict double quotes."
+                return DirectoryListing(path="unknown", contents=[], error=error_msg)
+        
         path = ""
         if isinstance(data, dict):
             path = data.get("directory_path", data.get("path", data.get("query", "")))
@@ -256,6 +265,6 @@ class ListDirectoryTool:
                 })
             return DirectoryListing(path=path, contents=contents)
             
-        except Exception as e:
-            logger.error(f"Failed to list directory {path}: {e}")
-            return DirectoryListing(path=path, contents=[], error=str(e))
+        except Exception:
+            logger.exception(f"Failed to list directory {path}")
+            return DirectoryListing(path=path, contents=[], error="Failed to list directory")

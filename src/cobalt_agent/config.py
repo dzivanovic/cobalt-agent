@@ -134,6 +134,17 @@ class VaultConfig(BaseModel):
 # --- 2. Main Configuration Class ---
 
 
+class PromptsConfig(BaseModel):
+    """Schema for prompts configuration."""
+    system: Optional[dict] = None
+    scheduler: Optional[dict] = None
+    ops: Optional[dict] = None
+    engineering: Optional[dict] = None
+    proposal: Optional[dict] = None
+    routing: Optional[dict] = None
+    orchestrator: Optional[dict] = None
+
+
 class CobaltSettings(BaseSettings):
     """
     Pydantic Settings class that loads YAML config and allows ENV overrides.
@@ -164,6 +175,7 @@ class CobaltSettings(BaseSettings):
     postgres: PostgresConfig = Field(default_factory=PostgresConfig)
     mattermost: MattermostConfig = Field(default_factory=MattermostConfig)
     vault: Optional[VaultConfig] = Field(default_factory=VaultConfig)
+    prompts: PromptsConfig = Field(default_factory=PromptsConfig)
 
     @classmethod
     def settings_customise_sources(

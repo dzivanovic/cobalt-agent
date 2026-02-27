@@ -177,3 +177,19 @@ class PostgresMemory(MemoryProvider):
     def save_memory(self) -> None:
         """Postgres saves immediately, so this is a no-op."""
         pass
+
+    def close(self) -> None:
+        """Close the database connection (no-op for connection-per-operation pattern)."""
+        # Since we create new connections for each operation via _get_conn(),
+        # there's no persistent connection to close. This method exists for
+        # API consistency with context manager patterns.
+        pass
+
+    def __enter__(self):
+        """Context manager entry - returns self."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - calls close."""
+        self.close()
+        return False

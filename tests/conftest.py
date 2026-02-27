@@ -15,6 +15,24 @@ load_dotenv()
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 @pytest.fixture
+def temp_vault_path():
+    """Create a temporary vault file path for testing (file doesn't exist initially)."""
+    import tempfile
+    from pathlib import Path
+    
+    with tempfile.NamedTemporaryFile(suffix='.vault', delete=False) as f:
+        path = f.name
+    
+    # Delete the file so it doesn't exist when tests run
+    Path(path).unlink(missing_ok=True)
+    
+    yield path
+    
+    # Cleanup after test
+    Path(path).unlink(missing_ok=True)
+
+
+@pytest.fixture
 def mock_config():
     """Provides a standard mock configuration for tests."""
     return {

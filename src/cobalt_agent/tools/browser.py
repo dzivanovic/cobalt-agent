@@ -9,9 +9,15 @@ Features:
 - Clean text extraction
 """
 import json
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from loguru import logger
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
+
+class BrowserCommand(BaseModel):
+    """Pydantic model for browser tool command validation."""
+    url: str = Field(default="", description="The URL to navigate to")
+    actions: list = Field(default_factory=list, description="List of actions to perform")
 
 
 class WebPageContent(BaseModel):
@@ -19,12 +25,12 @@ class WebPageContent(BaseModel):
     url: str = Field(description="The final URL after navigation.")
     title: str = Field(description="The page title.")
     content: str = Field(description="The cleaned text content of the page.")
-    error: str = Field("", description="Error message if fetch failed.")
+    error: str = Field(default="", description="Error message if fetch failed.")
 
     def __str__(self):
         if self.error:
             return f"[Error reading {self.url}]: {self.error}"
-        return f"### {self.title}\n{self.content[:4000]}..."
+        return f"### {self.title}\n{self.content[:4000]}.."
 
 
 class BrowserTool:
@@ -37,27 +43,59 @@ class BrowserTool:
     def __init__(self):
         pass
 
-    def run(self, query: str) -> WebPageContent:
+    def run(self, **kwargs) -> WebPageContent:
         """
         Executes a browsing session. Handles both simple URLs and JSON action sequences.
         
         Args:
-            query: Either a plain URL string, or a JSON object with:
-                - url: The page URL
-                - actions: Array of actions (fill, click)
+            **kwargs: Either a 'query' string (URL) or 'url' and 'actions' parameters
         
         Returns:
             WebPageContent with the extracted data
         """
-        url = query.strip()
+        # Try to parse input through Pydantic model for strict validation
+        try:
+            # Try to validate against BrowserCommand first
+            if kwargs:
+                try:
+                    validated = BrowserCommand(**kwargs)
+                    url = validated.url
+                    actions = validated.actions
+                except ValidationError:
+                    # Fallback: check if there's a 'query' key with string value
+                    query = kwargs.get("query", "")
+                    if isinstance(query, str) and query.strip().startswith("{") and query.strip().endswith("}"):
+                        command = json.loads(query)
+                        url = command.get("url", "")
+                        actions = command.get("actions", [])
+                    else:
+                        # Last resort: use query as URL directly
+                        url = query if query else ""
+                        actions = []
+            else:
+                url = ""
+                actions = []
+        except ValidationError as e:
+            # Return error for invalid Pydantic validation
+            return WebPageContent(url="unknown", title="Validation Error", content="", error=str(e))
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse browser query as JSON: {e}")
+            return WebPageContent(url="unknown", title="Parse Error", content="", error=f"Invalid JSON: {e}")
+        
+        # If url is empty at this point, try to get it from query parameter directly
+        if not url:
+            query = kwargs.get("query", "")
+            if isinstance(query, str):
+                url = query.strip()
+            else:
+                url = ""
+        
         actions = []
-
-        # Check if the LLM passed a JSON command object instead of a raw URL
-        if query.strip().startswith("{") and query.strip().endswith("}"):
+        if isinstance(query, str) and query.strip().startswith("{") and query.strip().endswith("}"):
             try:
                 command = json.loads(query)
-                url = command.get("url", "")
-                actions = command.get("actions", [])
+                url = command.get("url", url)
+                actions = command.get("actions", actions)
             except json.JSONDecodeError:
                 logger.warning("Failed to parse browser query as JSON, treating as raw URL.")
         
@@ -119,5 +157,5 @@ class BrowserTool:
         except PlaywrightTimeoutError:
             return WebPageContent(url=url, title="Timeout", content="", error="Page load or action timed out.")
         except Exception as e:
-            logger.error(f"Playwright error: {e}")
+            logger.exception(f"Playwright error: {e}")
             return WebPageContent(url=url, title="Error", content="", error=str(e))

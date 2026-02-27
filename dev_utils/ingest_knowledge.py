@@ -67,24 +67,24 @@ def ingest_directory(db: PostgresMemory, base_dir: Path, extensions: list[str], 
 
 def main():
     logger.info("🚀 Starting Knowledge Ingestion Pipeline...")
+    db = None
     try:
-        db = PostgresMemory()
+        with PostgresMemory() as db:
+            project_root = Path(__file__).parent.parent
+
+            # 1. Ingest Codebase
+            ingest_directory(db, project_root / "src", [".py"], "python_code")
+            
+            # 2. Ingest Playbooks
+            ingest_directory(db, project_root / "configs", [".yaml", ".yml"], "configuration")
+            
+            # 3. Ingest Obsidian Sandbox
+            ingest_directory(db, project_root / "docs", [".md"], "obsidian_note")
+            
+            logger.info("🎉 Ingestion Complete. The Vector Librarian is ready.")
     except Exception as e:
-        logger.error(f"Database connection failed: {e}")
+        logger.exception(f"Database operation failed: {e}")
         return
-
-    project_root = Path(__file__).parent.parent
-
-    # 1. Ingest Codebase
-    ingest_directory(db, project_root / "src", [".py"], "python_code")
-    
-    # 2. Ingest Playbooks
-    ingest_directory(db, project_root / "configs", [".yaml", ".yml"], "configuration")
-    
-    # 3. Ingest Obsidian Sandbox
-    ingest_directory(db, project_root / "docs", [".md"], "obsidian_note")
-    
-    logger.info("🎉 Ingestion Complete. The Vector Librarian is ready.")
 
 if __name__ == "__main__":
     main()

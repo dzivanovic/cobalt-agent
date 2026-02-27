@@ -231,7 +231,7 @@ class ProposalEngine:
     
     def wait_for_approval(self, proposal: Proposal, timeout: int = 3600) -> bool:
         """
-        Wait for a proposal to be approved (with polling).
+        Wait for a proposal to be approved (non-blocking with threading.Event).
         
         Args:
             proposal: The Proposal to wait for
@@ -240,20 +240,36 @@ class ProposalEngine:
         Returns:
             True if approved, False if timed out
         """
-        start_time = time.time()
+        # Use an event to signal when the proposal is approved or timeout occurs
+        approval_event = threading.Event()
         
-        while time.time() - start_time < timeout:
-            if proposal.task_id in self.approved_proposals:
-                return True
-            
-            time.sleep(5)  # Check every 5 seconds
+        def check_approval():
+            start_time = time.time()
+            while not approval_event.is_set():
+                # Check if proposal was approved
+                if proposal.task_id in self.approved_proposals:
+                    approval_event.set()
+                    return
+                
+                # Check for timeout
+                if time.time() - start_time >= timeout:
+                    # Remove from pending if timeout
+                    if proposal.task_id in self.pending_proposals:
+                        del self.pending_proposals[proposal.task_id]
+                    logger.warning(f"Approval timeout for proposal: [{proposal.task_id}]")
+                    return
+                
+                # Non-blocking wait using threading.Event
+                if approval_event.wait(timeout=0.5):  # Check every 0.5 seconds
+                    return
         
-        # Remove from pending if timeout
-        if proposal.task_id in self.pending_proposals:
-            del self.pending_proposals[proposal.task_id]
+        # Start background thread to monitor approval
+        monitor_thread = threading.Thread(target=check_approval, daemon=True)
+        monitor_thread.start()
         
-        logger.warning(f"Approval timeout for proposal: [{proposal.task_id}]")
-        return False
+        # Wait for approval or timeout
+        approval_event.wait()
+        return proposal.task_id in self.approved_proposals
     
     def execute_approved(self, proposal: Proposal) -> bool:
         """

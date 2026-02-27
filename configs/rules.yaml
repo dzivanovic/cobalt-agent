@@ -21,3 +21,8 @@ trading_rules:
     period: 14
     expansion_multiplier: 5.0   # 5x ATR in 5 days = Parabolic
     extension_multiplier: 3.0   # 3x ATR = Extended
+
+# Cortex Routing Rules
+cortex_routing:
+  orchestrator_keywords: ["engineering", "directory", "file", "codebase", "src/", "list the", "research", "summarize", "ops", "read", "write", "search", "prd"]
+  high_risk_keywords: ["delete", "move", "remove", "format", "execute", "kill", "reorganize"]

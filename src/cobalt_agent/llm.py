@@ -75,7 +75,10 @@ class LLM(BaseModel):
 
         self._model_name = f"{provider}/{name}"
 
-        # 4. Resolve Network or Keys
+        # Store model config for later use in _call_provider
+        self._model_config = model_config
+
+        # 4. Resolve API Base (Local nodes need an IP, Cloud providers do not)
         if node_ref:
             nodes = config.network.nodes
             target_node = nodes.get(node_ref) if isinstance(nodes, dict) else getattr(nodes, node_ref, None)
@@ -93,32 +96,64 @@ class LLM(BaseModel):
                 protocol = getattr(target_node, "protocol", "http")
 
             self._api_base = f"{protocol}://{ip}:{port}"
+        else:
+            # Cloud providers (OpenAI, Gemini, OpenRouter) do not need an API base
+            self._api_base = None
+
+        # 5. Resolve API Key from Vault (RAM-locked secrets)
+        if env_key_ref:
+            keys = config.model_dump().get("keys", {})  # Access extra fields
+            key_name = keys.get(env_key_ref) if isinstance(keys, dict) else getattr(keys, env_key_ref, None)
             
-        elif env_key_ref:
-            keys = config.keys
-            env_var_name = keys.get(env_key_ref) if isinstance(keys, dict) else getattr(keys, env_key_ref, None)
-            
-            if env_var_name:
-                self.api_key = SecretStr(os.getenv(env_var_name, ""))
+            if key_name and isinstance(keys, dict):
+                env_var_name = keys.get(key_name)
+                if env_var_name:
+                    self.api_key = SecretStr(os.getenv(env_var_name, ""))
+            elif key_name and not isinstance(keys, dict):
+                # Handle object-style keys config
+                env_var_name = getattr(keys, key_name, None)
+                if env_var_name:
+                    self.api_key = SecretStr(os.getenv(env_var_name, ""))
         
     def _call_provider(self, messages: List[Dict[str, str]]) -> str:
         """
         Internal helper to send messages to the provider via LiteLLM.
+        Uses Zero-Trust security: API keys are resolved from RAM-locked vault.
         """
         try:
-            # Get key string safely if it exists on the instance
-            key_str = self.api_key.get_secret_value() if self.api_key else None
+            # 1. Resolve API Key securely from RAM (Vault)
+            from cobalt_agent.config import load_config
+            config = load_config()
             
-            api_base = self._api_base
+            # Access keys via model_dump() to handle extra fields
+            keys = config.model_dump().get("keys", {})
             
-            # Make the call
-            response = completion(
-                model=self._model_name,
-                messages=messages,
-                api_key=key_str,
-                base_url=api_base,  
-                temperature=0.7 
-            )
+            api_key = None
+            if "env_key_ref" in self._model_config:
+                key_name = self._model_config["env_key_ref"]  # e.g., "gemini"
+                if key_name in keys:
+                    env_var_name = keys[key_name]  # e.g., "GEMINI_API_KEY"
+                    # env_var_name now contains the actual key name, e.g., "GEMINI_API_KEY"
+                    # The value of that env var is stored in keys under env_var_name
+                    api_key = keys.get(env_var_name)
+
+            # 2. Prepare execution arguments
+            kwargs = {
+                "model": self._model_name,
+                "messages": messages,
+                "temperature": 0.7,
+                "max_tokens": 4000
+            }
+            
+            if self._api_base:
+                kwargs["base_url"] = self._api_base
+            if api_key:
+                kwargs["api_key"] = api_key
+                
+            logger.debug(f"Routing LiteLLM request to exact model string: {kwargs['model']}")
+                
+            # 3. Execute request
+            response = completion(**kwargs)
             
             if not response.choices or not response.choices[0].message:
                  raise ValueError("Empty response from provider")

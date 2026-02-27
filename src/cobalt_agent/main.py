@@ -17,7 +17,7 @@ from cobalt_agent.llm import LLM
 from cobalt_agent.prompt import PromptEngine
 from cobalt_agent.tools.tool_manager import ToolManager
 from cobalt_agent.brain.cortex import Cortex
-from cobalt_agent.core.scheduler import AgentScheduler
+from cobalt_agent.services.scheduler import CobaltScheduler
 from cobalt_agent.core.proposals import ProposalEngine
 from cobalt_agent.skills.productivity.briefing import MorningBriefing
 from cobalt_agent.skills.research.deep_dive import DeepResearch
@@ -35,14 +35,6 @@ class CobaltAgent:
             self.memory = MemorySystem()
 
         self.cortex = Cortex()
-        self.scheduler = AgentScheduler(self.cortex)
-        self.scheduler.start()
-        
-        briefing = MorningBriefing()
-        researcher = DeepResearch() 
-
-        # This sets it to run every morning at 8:00 AM
-        self.scheduler.add_job(briefing.run, 'cron', hour=8, minute=0)
 
         logger.info("Cobalt Agent - System Initialized")
         logger.info(f"Python Version: {sys.version}")
@@ -104,6 +96,10 @@ class CobaltAgent:
         
         briefing = MorningBriefing()
         researcher = DeepResearch() 
+        
+        # Start the Heartbeat (Scheduler)
+        scheduler = CobaltScheduler()
+        scheduler.start()
 
         logger.info("=" * 80)
         logger.info("Starting interactive CLI interface...")
@@ -123,10 +119,9 @@ class CobaltAgent:
             logger.error(f"Critical Error: {e}")
         finally:
             # Save memory to disk after exiting
-            logger.info("Exiting Cobalt Agent")
+            logger.info("Initiating graceful shutdown...")
+            scheduler.shutdown()
             
-            self.scheduler.stop()
-        
             self.memory.add_log("CLI session ended", source="System")
         
             self.memory.save_memory()
@@ -209,10 +204,20 @@ class CobaltAgent:
                 mm_interface.disconnect()
             if hasattr(self, 'proposal_engine') and self.proposal_engine:
                 self.proposal_engine.stop_monitoring()
-            self.scheduler.stop()
             self.memory.add_log("Mattermost session ended", source="System")
             self.memory.save_memory()
 
 if __name__ == "__main__":
     agent = CobaltAgent()
-    agent.start_mattermost_interface()
+    
+    # Start the Heartbeat (Scheduler) BEFORE the Mattermost interface
+    scheduler = CobaltScheduler()
+    scheduler.start()
+    
+    try:
+        agent.start_mattermost_interface()
+    finally:
+        logger.info("Initiating graceful shutdown...")
+        scheduler.shutdown()
+        agent.memory.add_log("Agent shutdown complete", source="System")
+        agent.memory.save_memory()
