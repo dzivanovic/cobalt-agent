@@ -133,3 +133,12 @@ departments:
   DEFAULT:
     description: "General chat, web research, web browsing, article summarization. Use for queries that don't fit other domains."
     active: true
+
+# 5. BROWSER CONFIGURATION
+# Domain whitelist for Zero-Trust Browser Security
+browser:
+  allowed_domains:
+    - "finviz.com"
+    - "tradingview.com"
+    - "sec.gov"
+    - "example.com"

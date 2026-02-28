@@ -125,6 +125,11 @@ class MattermostConfig(BaseModel):
     approval_team: str = "cobalt-team"
 
 
+class BrowserConfig(BaseModel):
+    """Schema for browser/Playwright configuration."""
+    allowed_domains: list[str] = Field(default_factory=lambda: ["example.com"])
+
+
 class VaultConfig(BaseModel):
     """Schema for vault configuration."""
     path: str = "data/.cobalt_vault"
@@ -176,6 +181,7 @@ class CobaltSettings(BaseSettings):
     mattermost: MattermostConfig = Field(default_factory=MattermostConfig)
     vault: Optional[VaultConfig] = Field(default_factory=VaultConfig)
     prompts: PromptsConfig = Field(default_factory=PromptsConfig)
+    browser: Optional[BrowserConfig] = Field(default_factory=BrowserConfig)
 
     @classmethod
     def settings_customise_sources(
