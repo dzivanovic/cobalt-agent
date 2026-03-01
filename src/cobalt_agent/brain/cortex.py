@@ -26,20 +26,10 @@ class Cortex:
     def __init__(self):
         self.config = load_config()
         
-        # --- ROBUST LLM CONFIG ---
-        # Try 'model_name' first, then 'model', then default to 'gpt-4o'
-        model_name = getattr(self.config.llm, "model_name", None)
-        if not model_name:
-            model_name = getattr(self.config.llm, "model", None)
-        if not model_name:
-            # Fallback to active_profile.default or raise error if missing
-            active_profile = getattr(self.config, "active_profile", None)
-            if active_profile and isinstance(active_profile, dict):
-                model_name = active_profile.get("default")
-            if not model_name:
-                raise ValueError("Missing critical configuration: No model specified in llm.model_name, llm.model, or active_profile.default")
-            
-        self.llm = LLM(model_name=model_name)
+        # --- UNIFIED LLM CONFIGURATION ---
+        # Use the unified switchboard profile instead of direct model_name
+        # This ensures Cortex adheres to global config model assignments
+        self.llm = LLM(role="fast_chat")
         
         # --- ROBUST DEPARTMENTS LOAD ---
         deps = getattr(self.config, "departments", None)

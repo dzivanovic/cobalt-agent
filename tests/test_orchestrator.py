@@ -10,6 +10,51 @@ from typing import List
 from cobalt_agent.core.orchestrator import OrchestratorEngine, SubTask, OrchestrationState
 
 
+class MockLLM:
+    """Mock LLM class that returns predefined responses for testing."""
+    def __init__(self, **data):
+        pass
+    
+    def switch_role(self, new_role: str) -> None:
+        pass
+    
+    def _resolve_model_config(self) -> None:
+        pass
+    
+    @property
+    def model_name(self) -> str:
+        return "mock-model"
+    
+    def generate_response(self, system_prompt=None, user_input=None, memory_context=None, search_context=""):
+        """Mock generate_response to return a simple response."""
+        return "Mocked response"
+    
+    def ask_structured(self, system_prompt, response_model, memory_context=None, search_context="", user_input=None):
+        """Mock ask_structured to return a valid state."""
+        return response_model(
+            scratchpad="Test scratchpad",
+            original_request=user_input or "Test request",
+            master_plan=[
+                SubTask(
+                    step_number=1,
+                    assigned_drone="ENGINEERING",
+                    action="Test action",
+                    tool_to_use="write_file",
+                    status="PENDING",
+                    observation=""
+                )
+            ],
+            current_step=1,
+            status="PLANNING"
+        )
+    
+    def generate_response_skill(self, prompt: str) -> str:
+        return self.generate_response(system_prompt=prompt)
+    
+    def ask(self, system_message: str, user_input=None) -> str:
+        return "Mocked ask response"
+
+
 # Note: These are test-specific models, not prefixed with 'Test' to avoid pytest collection warnings
 class MockSubTask(BaseModel):
     """Test SubTask model with different assigned drones."""
@@ -35,8 +80,10 @@ class TestOrchestratorEngineClass:
     
     @pytest.fixture
     def mock_orchestrator(self):
-        """Create an OrchestratorEngine instance."""
-        return OrchestratorEngine()
+        """Create an OrchestratorEngine instance with mocked PostgresMemory connection."""
+        with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
+            with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
+                yield OrchestratorEngine()
     
     @pytest.fixture
     def mock_plan_state(self):
@@ -57,15 +104,25 @@ class TestOrchestratorEngineClass:
             status="PLANNING"
         )
     
+    @patch("cobalt_agent.brain.base.LLM")
     @patch("cobalt_agent.core.orchestrator.LLM")
-    def test_plan_and_execute_creates_plan(self, mock_llm_class, mock_plan_state):
+    def test_plan_and_execute_creates_plan(self, mock_llm_class, mock_llm_base, mock_plan_state):
         """Test that plan_and_execute generates a valid plan."""
         # Configure the mock LLM to return our mock state
         mock_llm_instance = MagicMock()
         mock_llm_instance.ask_structured.return_value = mock_plan_state
         mock_llm_class.return_value = mock_llm_instance
         
-        orchestrator = OrchestratorEngine()
+        # Configure the mock LLM for the base module (used by drones)
+        mock_llm_base_instance = MagicMock()
+        mock_llm_base_instance.generate_response.return_value = "Task completed"
+        mock_llm_base_instance.ask_structured.return_value = mock_plan_state
+        mock_llm_base.return_value = mock_llm_base_instance
+        
+        # Patch PostgresMemory to avoid live DB connection during test
+        with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
+            with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
+                orchestrator = OrchestratorEngine()
         
         result = orchestrator.plan_and_execute("Create a test file")
         
@@ -89,7 +146,9 @@ class TestOrchestratorEngineClass:
         mock_drone_instance.run.return_value = "File created successfully"
         mock_eng_class.return_value = mock_drone_instance
         
-        orchestrator = OrchestratorEngine()
+        with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
+            with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
+                orchestrator = OrchestratorEngine()
         result = orchestrator.plan_and_execute("Write Python code")
         
         # Verify Engineering drone was instantiated
@@ -126,7 +185,9 @@ class TestOrchestratorEngineClass:
         mock_drone_instance.run.return_value = "Information found"
         mock_ops_class.return_value = mock_drone_instance
         
-        orchestrator = OrchestratorEngine()
+        with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
+            with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
+                orchestrator = OrchestratorEngine()
         result = orchestrator.plan_and_execute("Find information")
         
         # Verify Ops drone was instantiated
@@ -140,15 +201,18 @@ class TestOrchestratorEngineClass:
         mock_llm_instance.ask_structured.side_effect = Exception("Parsing failed - empty plan")
         mock_llm_class.return_value = mock_llm_instance
         
-        orchestrator = OrchestratorEngine()
+        with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
+            with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
+                orchestrator = OrchestratorEngine()
         result = orchestrator.plan_and_execute("Test request")
         
         # Verify error message for empty plan
         assert "Architect Error" in result
         assert "failed to generate a valid plan" in result.lower()
     
+    @patch("cobalt_agent.brain.base.LLM")
     @patch("cobalt_agent.core.orchestrator.LLM")
-    def test_plan_and_execute_executes_all_steps(self, mock_llm_class, mock_plan_state):
+    def test_plan_and_execute_executes_all_steps(self, mock_llm_class, mock_llm_base, mock_plan_state):
         """Test that all steps in the plan are executed."""
         # Create a plan with multiple steps
         multi_step_state = OrchestrationState(
@@ -188,7 +252,9 @@ class TestOrchestratorEngineClass:
         mock_llm_instance.ask_structured.return_value = multi_step_state
         mock_llm_class.return_value = mock_llm_instance
         
-        orchestrator = OrchestratorEngine()
+        with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
+            with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
+                orchestrator = OrchestratorEngine()
         result = orchestrator.plan_and_execute("Multi-step task")
         
         # Verify execution output contains all steps
@@ -234,7 +300,9 @@ class TestOrchestratorEngineClass:
         mock_drone_instance.run.return_value = "Error: Something went wrong"
         mock_eng_class.return_value = mock_drone_instance
         
-        orchestrator = OrchestratorEngine()
+        with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
+            with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
+                orchestrator = OrchestratorEngine()
         result = orchestrator.plan_and_execute("Error task")
         
         # Verify error handling - check for error indicator in output
@@ -271,7 +339,9 @@ class TestOrchestratorEngineClass:
         mock_drone_instance.run.return_value = "Action paused. Proposal sent"
         mock_eng_class.return_value = mock_drone_instance
         
-        orchestrator = OrchestratorEngine()
+        with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
+            with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
+                orchestrator = OrchestratorEngine()
         result = orchestrator.plan_and_execute("Pause task")
         
         # Verify Zero-Trust pause message

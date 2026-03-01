@@ -206,3 +206,49 @@ class TestLLM:
             llm = LLM(role="default")
             
             assert llm._api_base is None
+    
+    def test_ask_structured_contains_both_system_prompt_and_json_schema(self, mock_config):
+        """Test that ask_structured combines system_prompt with JSON schema instructions."""
+        from pydantic import BaseModel, Field
+        import json
+        
+        class TestModel(BaseModel):
+            name: str
+            value: int
+        
+        with patch("cobalt_agent.config.load_config") as mock_load:
+            mock_load.return_value = mock_config
+            
+            llm = LLM(role="default")
+            
+            # Personas instructions that should be preserved
+            persona_instructions = "You are a senior software architect. Follow best practices."
+            
+            with patch("cobalt_agent.llm.completion") as mock_completion:
+                mock_response = MagicMock()
+                mock_response.choices = [MagicMock()]
+                mock_response.choices[0].message = MagicMock()
+                mock_response.choices[0].message.content = '{"name": "test", "value": 42}'
+                mock_completion.return_value = mock_response
+                
+                llm.ask_structured(persona_instructions, TestModel)
+                
+                # Verify the messages were passed correctly
+                call_kwargs = mock_completion.call_args[1]
+                messages = call_kwargs["messages"]
+                
+                # Check that we have a system message
+                assert messages[0]["role"] == "system"
+                
+                # Get the combined system message
+                combined_message = messages[0]["content"]
+                
+                # Verify persona instructions are present
+                assert persona_instructions in combined_message
+                
+                # Verify JSON schema instructions are present
+                assert "You are a precise data output engine" in combined_message
+                
+                # Verify the schema is included
+                schema_str = json.dumps(TestModel.model_json_schema(), indent=2)
+                assert schema_str in combined_message

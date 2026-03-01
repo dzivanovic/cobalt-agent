@@ -69,7 +69,7 @@ models:
     provider: "gemini"
     model_name: "gemini-2.5-pro"
     env_key_ref: "gemini"
-  cloud_gemini_2.5_flash:
+  cloud_gemini_2_5_flash:
     provider: "gemini"
     model_name: "gemini-2.5-flash"
     env_key_ref: "gemini"

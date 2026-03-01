@@ -249,19 +249,26 @@ class LLM(BaseModel):
         """
         Forces the LLM to output JSON conforming to a Pydantic model.
         Returns the instantiated Pydantic object.
+        
+        Combines the caller's system_prompt (persona instructions) with
+        JSON schema validation instructions.
         """
         # Get the schema from the model
         schema = response_model.model_json_schema()
         
-        system_instruction = (
+        # Combine system_prompt (persona instructions) with JSON schema instructions
+        json_instruction = (
             f"You are a precise data output engine.\n"
             f"You MUST return ONLY valid JSON that matches this schema:\n"
             f"{json.dumps(schema, indent=2)}\n"
             f"Do not include markdown formatting (like ```json). Return raw JSON only."
         )
+        
+        # Concatenate system_prompt with JSON schema instructions
+        combined_system_message = f"{system_prompt}\n\n{json_instruction}"
 
         messages = [
-            {"role": "system", "content": system_instruction},
+            {"role": "system", "content": combined_system_message},
         ]
 
         if memory_context:

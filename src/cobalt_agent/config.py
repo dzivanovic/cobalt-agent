@@ -7,8 +7,8 @@ Loading Priority (highest to lowest):
 2. YAML Configuration Files (configs/*.yaml)
 
 Environment Variable Mapping:
-- Simple fields: UPPER_CASE converts to lower_case_with_underscores
-- Nested fields: POSTGRES_HOST maps to postgres.host via env_nested_delimiter="_"
+- Simple fields: COBALT_SYSTEM_DEBUG_MODE -> system.debug_mode
+- Nested fields: COBALT_POSTGRES__HOST -> postgres.host (using env_nested_delimiter="__")
 """
 
 import json
@@ -20,7 +20,8 @@ import yaml
 from dotenv import load_dotenv
 from loguru import logger
 from pydantic import BaseModel, Field, ConfigDict
-from pydantic_settings import BaseSettings
+from pydantic import AliasChoices
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import PydanticBaseSettingsSource
 
 from cobalt_agent.security.vault import VaultManager
@@ -108,11 +109,11 @@ class NetworkConfig(BaseModel):
 
 class PostgresConfig(BaseModel):
     """Schema for PostgreSQL database configuration."""
-    host: str = "localhost"
-    port: int = 5432
-    db: str = "cobalt_memory"
-    user: str = "postgres"
-    password: Optional[str] = None
+    host: str = Field(default="localhost", validation_alias=AliasChoices("COBALT_POSTGRES__HOST", "POSTGRES_HOST"))
+    port: int = Field(default=5432, validation_alias=AliasChoices("COBALT_POSTGRES__PORT", "POSTGRES_PORT"))
+    user: str = Field(default="postgres", validation_alias=AliasChoices("COBALT_POSTGRES__USER", "POSTGRES_USER"))
+    password: Optional[str] = Field(default=None, validation_alias=AliasChoices("COBALT_POSTGRES__PASSWORD", "POSTGRES_PASSWORD"))
+    db: str = Field(default="cobalt_memory", validation_alias=AliasChoices("COBALT_POSTGRES__DB", "POSTGRES_DB"))
 
 
 class MattermostConfig(BaseModel):
@@ -155,16 +156,17 @@ class CobaltSettings(BaseSettings):
     Pydantic Settings class that loads YAML config and allows ENV overrides.
     
     Environment Variable Naming Convention:
-    - Nested keys: POSTGRES_HOST -> postgres.host (using env_nested_delimiter="_")
+    - Nested keys: POSTGRES_HOST -> postgres.host (using env_nested_delimiter="__")
     - The env_nested_delimiter setting allows Pydantic to automatically
-      map POSTGRES_HOST to postgres.host via the "_" delimiter.
+      map POSTGRES_HOST to postgres.host via the "__" delimiter.
+    - All environment variables must be prefixed with COBALT_ to avoid conflicts.
     """
-    model_config = ConfigDict(
+    model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="allow",  # Allow extra fields not defined in schema
-        env_prefix="",  # No prefix for environment variables
-        env_nested_delimiter="_",  # Use underscore to separate nested keys
+        extra="ignore",  # Ignore extra fields not defined in schema (prevents env hijacking)
+        env_prefix="COBALT_",  # All env vars must be prefixed with COBALT_
+        env_nested_delimiter="__",  # Use double underscore to separate nested keys
     )
 
     # Core Sections with defaults from YAML

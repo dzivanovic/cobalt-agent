@@ -24,5 +24,5 @@ trading_rules:
 
 # Cortex Routing Rules
 cortex_routing:
-  orchestrator_keywords: ["engineering", "directory", "file", "codebase", "src/", "list the", "research", "summarize", "ops", "read", "write", "search", "prd"]
+  orchestrator_keywords: ["engineering", "directory", "file", "codebase", "src/", "list the", "ops", "prd"]
   high_risk_keywords: ["delete", "move", "remove", "format", "execute", "kill", "reorganize"]

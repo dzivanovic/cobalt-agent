@@ -5,6 +5,7 @@ Allows tests to import modules from the main directory and loads Environment Var
 import sys
 import os
 import pytest
+from unittest.mock import patch
 from dotenv import load_dotenv
 
 # 1. LOAD SECRETS (Crucial Step)
@@ -53,3 +54,12 @@ def mock_config():
             }
         }
     }
+
+
+@pytest.fixture(autouse=True)
+def mock_postgres_memory():
+    """Automatically mock PostgresMemory to prevent live DB connections in tests."""
+    with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
+        with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
+            with patch('cobalt_agent.memory.postgres.PostgresMemory._get_conn'):
+                yield
