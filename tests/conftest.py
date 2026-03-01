@@ -5,7 +5,7 @@ Allows tests to import modules from the main directory and loads Environment Var
 import sys
 import os
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from dotenv import load_dotenv
 
 # 1. LOAD SECRETS (Crucial Step)
@@ -14,6 +14,29 @@ load_dotenv()
 
 # 2. ADD SOURCE CODE TO PATH
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+@pytest.fixture(autouse=True)
+def mock_postgres_memory():
+    """Automatically mock PostgresMemory to prevent live DB connections in tests.
+    
+    This fixture patches the psycopg.connect function at the module level to prevent
+    actual database connections. Tests that need database functionality should use
+    the postgres_memory fixture in test_postgres_graph.py which provides more
+    granular mocking.
+    """
+    with patch('cobalt_agent.memory.postgres.psycopg.connect') as mock_connect:
+        # Create a mock connection that can be used by tests
+        mock_cursor = MagicMock()
+        mock_cursor.execute.return_value = mock_cursor
+        mock_cursor.fetchone.return_value = None
+        mock_cursor.fetchall.return_value = []
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+        mock_conn.execute.return_value = mock_cursor
+        mock_conn.commit.return_value = None
+        mock_connect.return_value = mock_conn
+        yield mock_conn
+
 
 @pytest.fixture
 def temp_vault_path():
@@ -56,10 +79,12 @@ def mock_config():
     }
 
 
-@pytest.fixture(autouse=True)
-def mock_postgres_memory():
-    """Automatically mock PostgresMemory to prevent live DB connections in tests."""
-    with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
-        with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
-            with patch('cobalt_agent.memory.postgres.PostgresMemory._get_conn'):
-                yield
+# Note: The postgres_memory fixture in test_postgres_graph.py handles psycopg.connect mocking
+# This autouse fixture only mocks what's needed for other tests that don't use postgres_memory
+# @pytest.fixture(autouse=True)
+# def mock_postgres_memory():
+#     """Automatically mock PostgresMemory to prevent live DB connections in tests."""
+#     with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
+#         with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
+#             with patch('cobalt_agent.memory.postgres.PostgresMemory._get_conn'):
+#                 yield

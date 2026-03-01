@@ -76,7 +76,10 @@ class SystemConfig(BaseModel):
     """Schema for system-level configuration."""
     debug_mode: bool = False
     version: str = "0.1.0"
-    obsidian_vault_path: str = "/default/obsidian/vault/path"
+    obsidian_vault_path: str = Field(
+        default="/default/obsidian/vault/path",
+        validation_alias=AliasChoices("OBSIDIAN_VAULT_PATH", "COBALT_SYSTEM__OBSIDIAN_VAULT_PATH")
+    )
 
 
 class LLMConfig(BaseModel):
@@ -129,6 +132,81 @@ class MattermostConfig(BaseModel):
 class BrowserConfig(BaseModel):
     """Schema for browser/Playwright configuration."""
     allowed_domains: list[str] = Field(default_factory=lambda: ["example.com"])
+
+
+class StrategyTimeWindow(BaseModel):
+    """Schema for strategy time window configuration."""
+    start: str
+    end: str
+
+
+class StrategyFiltersLiquidity(BaseModel):
+    """Schema for liquidity filter configuration."""
+    min_average_daily_volume: int
+    min_price: float
+
+
+class StrategyFiltersCorrelation(BaseModel):
+    """Schema for correlation filter configuration."""
+    check_sector: bool
+    check_spy: bool
+
+
+class StrategyFilters(BaseModel):
+    """Schema for strategy filter configuration."""
+    min_atr: Optional[float] = None
+    day1_close_zone: Optional[float] = None
+    max_gap: Optional[float] = None
+    min_rvol_day1: Optional[float] = None
+    trend_indicator: Optional[str] = None
+    baseline_indicator: Optional[str] = None
+    min_volume_ratio: Optional[float] = None
+    pattern: Optional[str] = None
+    volume_break: Optional[str] = None
+    volume_retest: Optional[str] = None
+    liquidity: Optional[StrategyFiltersLiquidity] = None
+    correlation: Optional[StrategyFiltersCorrelation] = None
+
+
+class StrategyExecution(BaseModel):
+    """Schema for strategy execution configuration."""
+    entry_trigger: Optional[str] = None
+    stop_buffer: Optional[float] = None
+    target_multiplier: Optional[float] = None
+    stop_rule: Optional[str] = None
+    target_rule: Optional[str] = None
+    exit_strategy: Optional[str] = None
+
+
+class StrategyScoring(BaseModel):
+    """Schema for strategy scoring configuration."""
+    base_score: int
+    
+    # RVOL Logic
+    high_rvol_threshold: float
+    high_rvol_points: int
+    base_rvol_points: int
+    
+    # Price Action Logic
+    gap_up_points: int
+    
+    # Ion (Real-Time) Modifiers
+    live_rvol_multiplier: float
+    spy_correlation_weight: float
+    resistance_penalty: float
+    time_decay_per_min: float
+
+
+class StrategyConfig(BaseModel):
+    """Schema for a single strategy configuration."""
+    name: str
+    active: bool
+    direction: str
+    description: Optional[str] = None
+    time_window: StrategyTimeWindow
+    filters: StrategyFilters
+    execution: StrategyExecution
+    scoring: Optional[StrategyScoring] = None
 
 
 class VaultConfig(BaseModel):
@@ -184,6 +262,9 @@ class CobaltSettings(BaseSettings):
     vault: Optional[VaultConfig] = Field(default_factory=VaultConfig)
     prompts: PromptsConfig = Field(default_factory=PromptsConfig)
     browser: Optional[BrowserConfig] = Field(default_factory=BrowserConfig)
+    
+    # Strategy Playbooks - validated via Pydantic models
+    strategies: Optional[dict[str, StrategyConfig]] = None
 
     @classmethod
     def settings_customise_sources(
@@ -298,7 +379,12 @@ class Config:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(Config, cls).__new__(cls)
-            cls._instance._config = load_config()
+            # Initialize _config - either from load_config or as a placeholder
+            try:
+                cls._instance._config = load_config()
+            except Exception:
+                # If load_config fails (e.g., no configs found), use defaults
+                cls._instance._config = CobaltSettings()
         return cls._instance
 
     @staticmethod
@@ -507,7 +593,20 @@ def load_config(config_dir: Optional[Path | str] = None) -> CobaltSettings:
         logger.warning("⚠️ No COBALT_MASTER_KEY found. Running in degraded/unsecure mode.")
     # -------------------------------
 
-    # 4. Create Pydantic Settings Object
+    # 4. Validate and Transform Strategies
+    # Validate the strategies dictionary through Pydantic models
+    if "strategies" in master_data:
+        validated_strategies: dict[str, StrategyConfig] = {}
+        for strategy_name, strategy_data in master_data["strategies"].items():
+            try:
+                validated_strategies[strategy_name] = StrategyConfig(**strategy_data)
+                logger.debug(f"Validated strategy: {strategy_name}")
+            except Exception as e:
+                logger.error(f"Failed to validate strategy '{strategy_name}': {e}")
+                raise
+        master_data["strategies"] = validated_strategies
+
+    # 5. Create Pydantic Settings Object
     # Pydantic will automatically handle ENV overrides via env_nested_delimiter="_"
     try:
         logger.debug(f"Final merged configuration: {master_data}")

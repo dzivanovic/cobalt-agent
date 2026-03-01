@@ -30,6 +30,7 @@ except ImportError:
 
 from litellm import embedding
 from ..config import get_config
+from ..security.vault import VaultManager
 from .base import MemoryProvider
 
 
@@ -532,6 +533,55 @@ class PostgresMemory(MemoryProvider):
         """Get a database connection."""
         return psycopg.connect(self.conn_str)
     
+    def _scrub_secrets(self, text: str) -> str:
+        """
+        Scrub all secret values from the text.
+        
+        Retrieves active secrets from the VaultManager and replaces any
+        plaintext instances with [REDACTED_SECRET].
+        
+        Args:
+            text: The input text that may contain secret values
+            
+        Returns:
+            The text with all secret values replaced by [REDACTED_SECRET]
+        """
+        # Get vault manager instance
+        vault_mgr = VaultManager()
+        
+        # Try to unlock vault with master key if available
+        master_key = os.getenv("COBALT_MASTER_KEY")
+        if master_key:
+            vault_mgr.unlock(master_key)
+        
+        # Get all secrets from vault
+        secrets_to_scrub = []
+        if vault_mgr._is_unlocked:
+            for secret_name in vault_mgr.list_secrets():
+                secret_value = vault_mgr.get_secret(secret_name)
+                if secret_value:
+                    secrets_to_scrub.append(secret_value)
+        
+        # Also check config for any API keys that might be loaded
+        try:
+            config = get_config()
+            # Check keys section for any secret values
+            if hasattr(config, 'keys') and config.keys:
+                for key_name, key_value in config.keys.items():
+                    if key_value and isinstance(key_value, str):
+                        secrets_to_scrub.append(key_value)
+        except Exception:
+            # If we can't access config, continue without it
+            pass
+        
+        # Replace all secret values with redacted marker
+        result = text
+        for secret in secrets_to_scrub:
+            if secret:
+                result = result.replace(secret, "[REDACTED_SECRET]")
+        
+        return result
+    
     def __init__(self):
         # 1. Load Credentials from config object
         config = get_config()
@@ -606,6 +656,43 @@ class PostgresMemory(MemoryProvider):
             logger.error(f"Failed to init graph tables: {e}")
             raise
     
+    def _init_hitl_tables(self) -> None:
+        """Initialize HITL (Human-in-the-Loop) database tables for pending approvals."""
+        try:
+            with self._get_conn() as conn:
+                # Create hitl_proposals table
+                # Stores pending approvals in persistent Postgres DB instead of RAM
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS hitl_proposals (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        status VARCHAR(50) NOT NULL DEFAULT 'pending',  -- 'pending', 'approved', 'rejected'
+                        tool_name VARCHAR(255) NOT NULL,
+                        tool_kwargs JSONB NOT NULL DEFAULT '{}'::jsonb,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                
+                # Create indexes for performance
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_hitl_proposals_status 
+                    ON hitl_proposals (status);
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_hitl_proposals_created_at 
+                    ON hitl_proposals (created_at);
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_hitl_proposals_status_created 
+                    ON hitl_proposals (status, created_at);
+                """)
+                
+                conn.commit()
+                logger.info("🧠 HITL proposals table initialized (hitl_proposals)")
+        except Exception as e:
+            logger.error(f"Failed to init HITL tables: {e}")
+            raise
+    
     def _init_db(self):
         """Initialize database connection and create tables."""
         try:
@@ -631,6 +718,9 @@ class PostgresMemory(MemoryProvider):
         
         # Initialize graph tables
         self._init_graph_tables()
+        
+        # Initialize HITL tables
+        self._init_hitl_tables()
 
     def _generate_embedding(self, text: str) -> List[float]:
         """Turns text into a list of numbers using LiteLLM."""
@@ -655,9 +745,13 @@ class PostgresMemory(MemoryProvider):
     def add_log(self, message: str, source: str = "System", data: Dict = None):
         """
         Saves a memory AND its vector representation.
+        Scrubs secrets from the message before storing or generating embeddings.
         """
-        # Generate Vector
-        vector = self._generate_embedding(message)
+        # Scrub secrets from the message BEFORE processing
+        scrubbed_message = self._scrub_secrets(message)
+        
+        # Generate Vector from scrubbed content
+        vector = self._generate_embedding(scrubbed_message)
         
         if not data:
             data = {}
@@ -667,13 +761,13 @@ class PostgresMemory(MemoryProvider):
                 if vector:
                     conn.execute(
                         f"INSERT INTO {self.table_name} (source, content, embedding, metadata) VALUES (%s, %s, %s, %s)",
-                        (source, message, str(vector), json.dumps(data))
+                        (source, scrubbed_message, str(vector), json.dumps(data))
                     )
                 else:
                     # Fallback (save without vector if embedding fails)
                     conn.execute(
                         f"INSERT INTO {self.table_name} (source, content, metadata) VALUES (%s, %s, %s)",
-                        (source, message, json.dumps(data))
+                        (source, scrubbed_message, json.dumps(data))
                     )
         except Exception as e:
             logger.error(f"Failed to save memory: {e}")

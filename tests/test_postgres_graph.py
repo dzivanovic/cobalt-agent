@@ -11,7 +11,7 @@ import uuid
 import json
 import pytest
 from typing import Optional, List, Tuple, Any
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, MagicMock, Mock, call
 
 from cobalt_agent.memory.postgres import PostgresMemory
 
@@ -64,8 +64,6 @@ class MockCursor:
         self._current_row = None
         self._all_rows = []
         self.execute_calls = []
-        self._insert_id = None  # Track the last generated UUID from INSERT
-        self._params = None  # Track the last params for fetchall
         self._properties = {}  # In-memory storage for node properties
     
     def execute(self, query: str, params: Tuple = None):
@@ -86,7 +84,6 @@ class MockCursor:
             properties = params[3]  # Fourth param is the properties (JSONB)
             self._data[(entity_type, name)] = node_id
             self._properties[node_id] = json.loads(properties) if properties else {}
-            self._insert_id = node_id
         
         # Handle INSERT INTO graph_edges - store the generated ID
         elif "INSERT INTO GRAPH_EDGES" in query_upper and params:
@@ -95,20 +92,17 @@ class MockCursor:
             target_id = params[2]
             relationship = params[3]
             self._edges[(source_id, target_id, relationship)] = edge_id
-            self._insert_id = edge_id
         
         # Handle UPDATE graph_nodes
         elif "UPDATE GRAPH_NODES" in query_upper and params:
-            # params are: properties, updated_at, id
-            self._insert_id = params[2]  # Return the updated node id
             # Update the properties in our mock storage
-            if params[2] in self._properties:
+            if len(params) >= 3 and params[2] in self._properties:
                 self._properties[params[2]] = json.loads(params[0]) if params[0] else {}
         
         # Handle UPDATE graph_edges
         elif "UPDATE GRAPH_EDGES" in query_upper and params:
             # params are: properties, created_at, id
-            self._insert_id = params[2]  # Return the updated edge id
+            pass
         
         # Simulate SELECT queries for upsert_node first check
         elif "SELECT ID FROM GRAPH_NODES" in query_upper and "WHERE ENTITY_TYPE" in query_upper and params:
@@ -120,6 +114,8 @@ class MockCursor:
                     self._current_row = (uuid.UUID(self._data[node_key]),)
                 else:
                     self._current_row = None
+            else:
+                self._current_row = None
         
         # Simulate SELECT for get_node
         elif "SELECT ID, ENTITY_TYPE, NAME, PROPERTIES, CREATED_AT, UPDATED_AT" in query_upper and params:
@@ -216,33 +212,53 @@ class MockCursor:
     def commit(self):
         """Mock commit method."""
         pass
+
+
+class MockConnection:
+    """Mock connection for testing database operations."""
+    
+    def __init__(self, cursor: MockCursor):
+        self.cursor = cursor
+        
+    def cursor(self):
+        return self.cursor
     
     def __enter__(self):
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
+    
+    def execute(self, query: str, params: Tuple = None):
+        """Mock execute method that delegates to cursor."""
+        return self.cursor.execute(query, params)
+    
+    def commit(self):
+        """Mock commit method."""
+        pass
 
 
 @pytest.fixture
 def postgres_memory(mock_config):
-    """Create a PostgresMemory instance with mocked database connection."""
+    """Create a PostgresMemory instance with mocked database connection.
+    
+    This fixture uses the autouse fixture's patched psycopg.connect to ensure
+    all database operations use the mocked connection without making real DB calls.
+    """
     os.environ["POSTGRES_PASSWORD"] = "cobalt_password"
     
-    # Create mock connection that will be used throughout
-    mock_conn = MagicMock()
+    # Create mock cursor for executing queries
     mock_cursor = MockCursor()
-    mock_conn.__enter__ = Mock(return_value=mock_cursor)
-    mock_conn.__exit__ = Mock(return_value=False)
     
-    with patch("cobalt_agent.memory.postgres.get_config", return_value=mock_config):
-        with patch("psycopg.connect", return_value=mock_conn):
-            pm = PostgresMemory()
-            
-            # Store references for test access
-            pm._mock_cursor = mock_cursor
-            
-            yield pm
+    # Create a mock connection object that behaves like psycopg connection
+    mock_conn = MockConnection(mock_cursor)
+    
+    # Patch psycopg.connect to return our mock connection (this is what _get_conn uses)
+    with patch('cobalt_agent.memory.postgres.psycopg.connect', return_value=mock_conn):
+        pm = PostgresMemory()
+        # Store reference to mock_cursor on pm for tests to access
+        pm._mock_cursor = mock_cursor
+        yield pm
 
 
 class TestGraphDatabaseSchema:
@@ -253,6 +269,7 @@ class TestGraphDatabaseSchema:
         pm = postgres_memory
         
         # Verify that _init_graph_tables was called during __init__
+        # During init, we execute CREATE TABLE statements
         assert len(pm._mock_cursor.execute_calls) > 0, "At least one execute call should be made"
         
         query_strings = [q[0] for q in pm._mock_cursor.execute_calls]
@@ -282,10 +299,11 @@ class TestUpsertNode:
         # Generate a mock UUID for the new node
         test_uuid = "12345678-1234-1234-1234-123456789abc"
         
+        # Mock uuid.uuid4 to return our test UUID
         with patch("cobalt_agent.memory.postgres.uuid.uuid4", return_value=uuid.UUID(test_uuid)):
             node_id = pm.upsert_node('Ticker', 'TEST_TSLA', {'price': 150.0, 'sector': 'Auto'})
         
-        assert node_id == test_uuid
+        assert node_id == test_uuid, f"Expected {test_uuid}, got {node_id}"
         
         # Verify node is stored in mock data
         assert ('Ticker', 'TEST_TSLA') in pm._mock_cursor._data

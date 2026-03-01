@@ -76,13 +76,64 @@ class ListDirectoryInput(BaseModel):
     query: Optional[str] = Field(default=None, description="Alias for directory_path")
 
 
-class ReadFileTool:
+class SecurityError(Exception):
+    """Custom exception for security-related errors."""
+    pass
+
+
+class BaseFileTool:
+    """Base class for filesystem tools with path validation."""
+    
+    def __init__(self):
+        # Get the base vault path from config
+        config = get_config()
+        self.base_path = Path(config.system.obsidian_vault_path).resolve()
+    
+    def _validate_path(self, requested_path: str) -> Path:
+        """
+        Validate that the requested path is within the Obsidian vault.
+        
+        Args:
+            requested_path: The path requested by the user (relative or absolute)
+            
+        Returns:
+            The absolute resolved path within the vault
+            
+        Raises:
+            SecurityError: If the path attempts to traverse outside the vault
+        """
+        # Normalize the path
+        requested_path = os.path.normpath(requested_path)
+        
+        # Compute the absolute path by resolving relative to base_path
+        # If path is already absolute, use it directly but still validate
+        target_path = Path(requested_path)
+        
+        # If relative path, resolve relative to base_path
+        if not target_path.is_absolute():
+            target_path = self.base_path / requested_path
+        
+        # Resolve to get the canonical absolute path (follows symlinks)
+        resolved_target = target_path.resolve()
+        
+        # Validate that resolved path is within base_path
+        try:
+            resolved_target.is_relative_to(self.base_path)
+        except ValueError:
+            # Python < 3.9 compatibility: check manually
+            try:
+                resolved_target.relative_to(self.base_path)
+            except ValueError:
+                logger.error(f"Path traversal attempt blocked: {requested_path} resolves to {resolved_target}")
+                raise SecurityError(f"Access denied: Path '{requested_path}' is outside the Obsidian vault.")
+        
+        return resolved_target
+
+
+class ReadFileTool(BaseFileTool):
     """Read the contents of a file."""
     name = "read_file"
     description = "Read the contents of a file. Use when you need to examine existing code or data. Pass the file path as the query parameter."
-
-    def __init__(self):
-        pass
 
     def run(self, query=None, **kwargs) -> FileContent:
         """
@@ -113,22 +164,27 @@ class ReadFileTool:
         logger.info(f"Reading file: {path}")
         
         try:
-            path = os.path.normpath(path)
-            if not os.path.exists(path):
-                return FileContent(path=path, content="", error=f"File not found: {path}")
-            if not os.path.isfile(path):
-                return FileContent(path=path, content="", error=f"Not a file: {path}")
-                
-            with open(path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            return FileContent(path=path, content=content)
+            # Validate path is within vault
+            resolved_path = self._validate_path(path)
             
+            if not resolved_path.exists():
+                return FileContent(path=str(resolved_path), content="", error=f"File not found: {resolved_path}")
+            if not resolved_path.is_file():
+                return FileContent(path=str(resolved_path), content="", error=f"Not a file: {resolved_path}")
+                
+            with open(resolved_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return FileContent(path=str(resolved_path), content=content)
+            
+        except SecurityError as e:
+            logger.error(f"Security error reading file {path}: {e}")
+            return FileContent(path=path, content="", error=str(e))
         except Exception:
             logger.exception(f"Failed to read file {path}")
             return FileContent(path=path, content="", error="Failed to read file")
 
 
-class WriteFileTool:
+class WriteFileTool(BaseFileTool):
     """Modifies or creates a file."""
     name = "write_file"
     
@@ -165,61 +221,53 @@ class WriteFileTool:
             logger.error(f"WriteFileTool missing fields. Parsed data: {data}")
             return f"Error: Missing filepath or content. Parsed data: {data}"
 
-        # Resolve the path properly
-        target_path = Path(filepath)
-        
-        # Get the base vault path from config
-        config = get_config()
-        base_path = Path(config.system.obsidian_vault_path)
-        
-        # CRITICAL: No hardcoded path forcing - accept the path as-is from the LLM
-        # The caller must provide the full relative path within the vault
-        
-        # Path traversal protection: ensure resolved path is within vault
-        resolved_target = target_path.resolve()
-        resolved_base = base_path.resolve()
-        
-        if not resolved_target.is_relative_to(resolved_base):
-            logger.error(f"Path traversal attempt blocked: {target_path} is outside vault {base_path}")
-            raise PermissionError(f"Access denied: Path '{target_path}' is outside the Obsidian vault.")
-        
-        # Ensure the parent directory exists before writing
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        def execute_write(proposal_obj):
-            try:
-                with open(target_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
-                logger.info(f"Proposal Engine executed write to: {target_path} ({len(content)} bytes)")
-            except Exception as e:
-                logger.exception(f"Failed to physically write file {target_path}: {e}")
+        logger.info(f"Writing to file: {filepath}")
         
         try:
-            proposal = create_and_send_proposal(
-                action=f"Write {len(content)} bytes to {filepath}",
-                justification="Agent requested file modification via WriteFileTool.",
-                risk_assessment="HIGH"
-            )
-        except Exception as e:
-            logger.exception(f"Proposal Engine crash: {e}")
-            return f"Error: Proposal Engine crashed: {e}"
-        
-        if proposal:
-            engine = ProposalEngine()
-            engine.set_approval_callback(proposal.task_id, execute_write)
-            engine.pending_proposals[proposal.task_id] = proposal
-            return f"Action paused. Proposal [{proposal.task_id}] sent to Admin for approval in Mattermost."
-        else:
-            return "Error: Failed to generate Proposal Ticket. Mattermost connection failed."
+            # Validate path is within vault
+            resolved_path = self._validate_path(filepath)
+            
+            # Ensure the parent directory exists before writing
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            def execute_write(proposal_obj):
+                try:
+                    with open(resolved_path, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    logger.info(f"Proposal Engine executed write to: {resolved_path} ({len(content)} bytes)")
+                except Exception as e:
+                    logger.exception(f"Failed to physically write file {resolved_path}: {e}")
+            
+            try:
+                proposal = create_and_send_proposal(
+                    action=f"Write {len(content)} bytes to {filepath}",
+                    justification="Agent requested file modification via WriteFileTool.",
+                    risk_assessment="HIGH"
+                )
+            except Exception as e:
+                logger.exception(f"Proposal Engine crash: {e}")
+                return f"Error: Proposal Engine crashed: {e}"
+            
+            if proposal:
+                engine = ProposalEngine()
+                engine.set_approval_callback(proposal.task_id, execute_write)
+                logger.info(f"Approval callback set for task [{proposal.task_id}]")
+                return f"Action paused. Proposal [{proposal.task_id}] sent to Admin for approval in Mattermost."
+            else:
+                return "Error: Failed to generate Proposal Ticket. Mattermost connection failed."
+                
+        except SecurityError as e:
+            logger.error(f"Security error writing file {filepath}: {e}")
+            return f"Error: Access denied. Path '{filepath}' is outside the Obsidian vault."
+        except Exception:
+            logger.exception(f"Failed to write file {filepath}")
+            return f"Error: Failed to write file {filepath}"
 
 
-class ListDirectoryTool:
+class ListDirectoryTool(BaseFileTool):
     """List the contents of a directory."""
     name = "list_directory"
     description = "List the contents of a directory. Use when you need to explore the file structure. Pass the directory path as the query parameter."
-
-    def __init__(self):
-        pass
 
     def run(self, query=None, **kwargs) -> DirectoryListing:
         """
@@ -249,22 +297,27 @@ class ListDirectoryTool:
         logger.info(f"Listing directory: {path}")
         
         try:
-            path = os.path.normpath(path)
-            if not os.path.exists(path):
+            # Validate path is within vault
+            resolved_path = self._validate_path(path)
+            
+            if not resolved_path.exists():
                 return DirectoryListing(path=path, contents=[], error=f"Directory not found: {path}")
-            if not os.path.isdir(path):
+            if not resolved_path.is_dir():
                 return DirectoryListing(path=path, contents=[], error=f"Not a directory: {path}")
                 
             contents = []
-            for item in os.listdir(path):
-                item_path = os.path.join(path, item)
-                item_type = "dir" if os.path.isdir(item_path) else "file"
+            for item in os.listdir(resolved_path):
+                item_path = resolved_path / item
+                item_type = "dir" if item_path.is_dir() else "file"
                 contents.append({
                     'name': item,
                     'type': item_type
                 })
             return DirectoryListing(path=path, contents=contents)
             
+        except SecurityError as e:
+            logger.error(f"Security error listing directory {path}: {e}")
+            return DirectoryListing(path=path, contents=[], error=str(e))
         except Exception:
             logger.exception(f"Failed to list directory {path}")
             return DirectoryListing(path=path, contents=[], error="Failed to list directory")

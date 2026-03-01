@@ -83,7 +83,10 @@ class TestOrchestratorEngineClass:
         """Create an OrchestratorEngine instance with mocked PostgresMemory connection."""
         with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
             with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
-                yield OrchestratorEngine()
+                with patch('cobalt_agent.memory.postgres.PostgresMemory._init_graph_tables'):
+                    with patch('cobalt_agent.memory.postgres.PostgresMemory._init_hitl_tables'):
+                        with patch('cobalt_agent.memory.postgres.FastPathCache._ensure_table_exists'):
+                            yield OrchestratorEngine()
     
     @pytest.fixture
     def mock_plan_state(self):
@@ -120,9 +123,13 @@ class TestOrchestratorEngineClass:
         mock_llm_base.return_value = mock_llm_base_instance
         
         # Patch PostgresMemory to avoid live DB connection during test
+        # We need to patch __init__ to return None AND patch all DB initialization methods
         with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
             with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
-                orchestrator = OrchestratorEngine()
+                with patch('cobalt_agent.memory.postgres.PostgresMemory._init_graph_tables'):
+                    with patch('cobalt_agent.memory.postgres.PostgresMemory._init_hitl_tables'):
+                        with patch('cobalt_agent.memory.postgres.FastPathCache._ensure_table_exists'):
+                            orchestrator = OrchestratorEngine()
         
         result = orchestrator.plan_and_execute("Create a test file")
         
@@ -148,7 +155,10 @@ class TestOrchestratorEngineClass:
         
         with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
             with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
-                orchestrator = OrchestratorEngine()
+                with patch('cobalt_agent.memory.postgres.PostgresMemory._init_graph_tables'):
+                    with patch('cobalt_agent.memory.postgres.PostgresMemory._init_hitl_tables'):
+                        with patch('cobalt_agent.memory.postgres.FastPathCache._ensure_table_exists'):
+                            orchestrator = OrchestratorEngine()
         result = orchestrator.plan_and_execute("Write Python code")
         
         # Verify Engineering drone was instantiated
@@ -187,7 +197,10 @@ class TestOrchestratorEngineClass:
         
         with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
             with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
-                orchestrator = OrchestratorEngine()
+                with patch('cobalt_agent.memory.postgres.PostgresMemory._init_graph_tables'):
+                    with patch('cobalt_agent.memory.postgres.PostgresMemory._init_hitl_tables'):
+                        with patch('cobalt_agent.memory.postgres.FastPathCache._ensure_table_exists'):
+                            orchestrator = OrchestratorEngine()
         result = orchestrator.plan_and_execute("Find information")
         
         # Verify Ops drone was instantiated
@@ -203,7 +216,10 @@ class TestOrchestratorEngineClass:
         
         with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
             with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
-                orchestrator = OrchestratorEngine()
+                with patch('cobalt_agent.memory.postgres.PostgresMemory._init_graph_tables'):
+                    with patch('cobalt_agent.memory.postgres.PostgresMemory._init_hitl_tables'):
+                        with patch('cobalt_agent.memory.postgres.FastPathCache._ensure_table_exists'):
+                            orchestrator = OrchestratorEngine()
         result = orchestrator.plan_and_execute("Test request")
         
         # Verify error message for empty plan
@@ -254,7 +270,10 @@ class TestOrchestratorEngineClass:
         
         with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
             with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
-                orchestrator = OrchestratorEngine()
+                with patch('cobalt_agent.memory.postgres.PostgresMemory._init_graph_tables'):
+                    with patch('cobalt_agent.memory.postgres.PostgresMemory._init_hitl_tables'):
+                        with patch('cobalt_agent.memory.postgres.FastPathCache._ensure_table_exists'):
+                            orchestrator = OrchestratorEngine()
         result = orchestrator.plan_and_execute("Multi-step task")
         
         # Verify execution output contains all steps
@@ -302,7 +321,10 @@ class TestOrchestratorEngineClass:
         
         with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
             with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
-                orchestrator = OrchestratorEngine()
+                with patch('cobalt_agent.memory.postgres.PostgresMemory._init_graph_tables'):
+                    with patch('cobalt_agent.memory.postgres.PostgresMemory._init_hitl_tables'):
+                        with patch('cobalt_agent.memory.postgres.FastPathCache._ensure_table_exists'):
+                            orchestrator = OrchestratorEngine()
         result = orchestrator.plan_and_execute("Error task")
         
         # Verify error handling - check for error indicator in output
@@ -341,7 +363,10 @@ class TestOrchestratorEngineClass:
         
         with patch('cobalt_agent.memory.postgres.PostgresMemory.__init__', return_value=None):
             with patch('cobalt_agent.memory.postgres.PostgresMemory._init_db'):
-                orchestrator = OrchestratorEngine()
+                with patch('cobalt_agent.memory.postgres.PostgresMemory._init_graph_tables'):
+                    with patch('cobalt_agent.memory.postgres.PostgresMemory._init_hitl_tables'):
+                        with patch('cobalt_agent.memory.postgres.FastPathCache._ensure_table_exists'):
+                            orchestrator = OrchestratorEngine()
         result = orchestrator.plan_and_execute("Pause task")
         
         # Verify Zero-Trust pause message
