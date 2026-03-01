@@ -10,9 +10,11 @@ Features:
 - AOM ID-based element referencing
 - Vault credential injection
 - Fast Path cache lookup and write-back for Phase 3
+- Pre-Flight Protocol (Dual-Path routing with llms.txt/fast path)
 """
 import json
 import time
+import requests
 from typing import Optional, Literal, Union, Dict, Any, List
 from pydantic import BaseModel, Field, ValidationError, Discriminator, Tag
 from loguru import logger
@@ -22,6 +24,7 @@ from .maps import Maps, get_maps
 from ..security.vault import VaultManager
 from ..config import get_config
 from ..memory.postgres import PostgresMemory, compute_task_hash, compute_context_signature
+from ..tools.extractor import UniversalExtractor, compute_delta
 
 # Define BrowserCommand class for backward compatibility
 class BrowserCommand(BaseModel):
@@ -473,6 +476,92 @@ class BrowserTool:
             logger.error(f"Failed to write to Fast Path cache: {e}")
             return False
     
+    def _execute_preflight_fast_path(self, url: str) -> Optional[str]:
+        """
+        Execute the Pre-Flight Protocol: Check for llms.txt and llms-full.txt endpoints.
+        
+        Before launching Playwright, this method:
+        1. Makes a lightweight HTTP GET request to the URL with Accept: text/markdown header
+        2. Checks for domain.com/llms.txt and domain.com/llms-full.txt
+        
+        Args:
+            url: The URL to check
+            
+        Returns:
+            Markdown text if available via fast path, None otherwise
+        """
+        logger.info(f"🚀 Pre-Flight Protocol: Checking fast path for {url}")
+        start_time = time.time()
+        
+        try:
+            # Parse domain from URL
+            import re
+            domain_match = re.match(r'https?://([^/]+)', url)
+            if not domain_match:
+                logger.debug(f"Invalid URL format: {url}")
+                return None
+            domain = domain_match.group(1)
+            
+            # Check fast path endpoints
+            fast_path_urls = [
+                f"https://{domain}/llms.txt",
+                f"https://{domain}/llms-full.txt",
+            ]
+            
+            for fast_path_url in fast_path_urls:
+                try:
+                    response = requests.get(fast_path_url, timeout=5, headers={
+                        "Accept": "text/markdown",
+                        "User-Agent": "Cobalt-Watcher/1.0"
+                    })
+                    
+                    if response.status_code == 200:
+                        content_type = response.headers.get("Content-Type", "").lower()
+                        content = response.text.strip()
+                        
+                        # Check if response is Markdown
+                        if "text/markdown" in content_type or content.startswith("#") or "**" in content:
+                            elapsed = (time.time() - start_time) * 1000
+                            logger.info(f"✅ Pre-Flight fast path HIT: {fast_path_url} ({elapsed:.0f}ms)")
+                            return content
+                        else:
+                            logger.debug(f"Fast path returned non-Markdown: {content_type}")
+                except requests.RequestException as e:
+                    logger.debug(f"Fast path check failed for {fast_path_url}: {e}")
+                    continue
+            
+            # Also try direct URL with Accept: text/markdown header
+            try:
+                response = requests.get(url, timeout=5, headers={
+                    "Accept": "text/markdown",
+                    "User-Agent": "Cobalt-Watcher/1.0"
+                })
+                
+                if response.status_code == 200:
+                    content_type = response.headers.get("Content-Type", "").lower()
+                    content = response.text.strip()
+                    
+                    # Check if response is Markdown
+                    if "text/markdown" in content_type:
+                        elapsed = (time.time() - start_time) * 1000
+                        logger.info(f"✅ Pre-Flight fast path HIT (direct): {url} ({elapsed:.0f}ms)")
+                        return content
+                    elif "<html" not in content.lower() and "<!doctype" not in content.lower():
+                        # Check if content is not HTML
+                        elapsed = (time.time() - start_time) * 1000
+                        logger.info(f"✅ Pre-Flight fast path HIT (non-HTML): {url} ({elapsed:.0f}ms)")
+                        return content
+            except requests.RequestException as e:
+                logger.debug(f"Direct URL check failed: {e}")
+            
+            elapsed = (time.time() - start_time) * 1000
+            logger.info(f"❌ Pre-Flight fast path MISS: {url} ({elapsed:.0f}ms) - Falling back to Playwright")
+            return None
+            
+        except Exception as e:
+            logger.exception(f"Pre-Flight Protocol error: {e}")
+            return None
+    
     def _generate_selector(self, element: Dict[str, Any]) -> Optional[str]:
         """
         Generate a CSS selector for an element based on its properties.
@@ -513,7 +602,9 @@ class BrowserTool:
 
     def run(self, **kwargs) -> WebPageContent:
         """
-        Executes a browsing session. Handles both simple URLs and JSON action sequences.
+        Executes a browsing session. Implements Dual-Path routing architecture:
+        1. Pre-Flight Protocol: Fast path via llms.txt if available
+        2. Fallback: Playwright AOM extraction for complex interactions
         
         Args:
             **kwargs: Either a 'query' string (URL) or 'url' and 'actions' parameters
@@ -571,6 +662,19 @@ class BrowserTool:
         if not url.startswith("http"):
             url = "https://" + url
 
+        # ========== PRE-FLIGHT PROTOCOL (Dual-Path Routing) ==========
+        # Before launching Playwright, check for fast path via llms.txt
+        if not actions:  # Only use fast path for simple URL visits without actions
+            fast_path_content = self._execute_preflight_fast_path(url)
+            if fast_path_content:
+                # Fast Path HIT - return Markdown content directly
+                logger.info(f"✅ Using Pre-Flight fast path for {url}")
+                return WebPageContent(
+                    url=url,
+                    title=f"Fast Path: {url}",
+                    content=fast_path_content
+                )
+        
         logger.info(f"🌐 Playwright navigating to: {url}")
 
         try:

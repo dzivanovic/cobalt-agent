@@ -553,6 +553,59 @@ class PostgresMemory(MemoryProvider):
         # Initialize Fast Path Cache manager
         self.fast_path_cache = FastPathCache(self)
     
+    def _init_graph_tables(self) -> None:
+        """Initialize graph database tables (graph_nodes and graph_edges)."""
+        try:
+            with self._get_conn() as conn:
+                # Create graph_nodes table
+                # Unique constraint on (entity_type, name) prevents duplicate entities
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS graph_nodes (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        entity_type VARCHAR(255) NOT NULL,
+                        name VARCHAR(255) NOT NULL,
+                        properties JSONB DEFAULT '{}'::jsonb,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(entity_type, name)
+                    );
+                """)
+                
+                # Create graph_edges table
+                # Foreign keys with ON DELETE CASCADE ensures orphan edges are removed
+                # Unique constraint on (source_id, target_id, relationship) prevents duplicate edges
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS graph_edges (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        source_id UUID NOT NULL REFERENCES graph_nodes(id) ON DELETE CASCADE,
+                        target_id UUID NOT NULL REFERENCES graph_nodes(id) ON DELETE CASCADE,
+                        relationship VARCHAR(255) NOT NULL,
+                        properties JSONB DEFAULT '{}'::jsonb,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(source_id, target_id, relationship)
+                    );
+                """)
+                
+                # Create indexes for performance
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_graph_nodes_entity_type_name 
+                    ON graph_nodes (entity_type, name);
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_graph_edges_source 
+                    ON graph_edges (source_id);
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_graph_edges_target 
+                    ON graph_edges (target_id);
+                """)
+                
+                conn.commit()
+                logger.info("🧠 Graph database tables initialized (graph_nodes, graph_edges)")
+        except Exception as e:
+            logger.error(f"Failed to init graph tables: {e}")
+            raise
+    
     def _init_db(self):
         """Initialize database connection and create tables."""
         try:
@@ -575,6 +628,9 @@ class PostgresMemory(MemoryProvider):
                 logger.info("🧠 Connected to Postgres Memory (Vector Ready)")
         except Exception as e:
             logger.error(f"Failed to init DB: {e}")
+        
+        # Initialize graph tables
+        self._init_graph_tables()
 
     def _generate_embedding(self, text: str) -> List[float]:
         """Turns text into a list of numbers using LiteLLM."""
@@ -707,3 +763,195 @@ class PostgresMemory(MemoryProvider):
         """Context manager exit - calls close."""
         self.close()
         return False
+
+    # ===== GRAPH DATABASE CRUD OPERATIONS =====
+
+    def upsert_node(self, entity_type: str, name: str, properties: Dict[str, Any] = None) -> str:
+        """
+        Insert or update a graph node.
+        
+        Args:
+            entity_type: The type of entity (e.g., 'Ticker', 'Material', 'Strategy')
+            name: The unique name of the entity (e.g., 'TSLA', 'Cellulose')
+            properties: Optional JSONB properties dictionary
+            
+        Returns:
+            The UUID of the node (as a string)
+        """
+        try:
+            timestamp = datetime.now()
+            
+            with self._get_conn() as conn:
+                # First try to get the existing node by entity_type + name
+                existing = conn.execute("""
+                    SELECT id FROM graph_nodes
+                    WHERE entity_type = %s AND name = %s
+                """, (entity_type, name)).fetchone()
+                
+                if existing:
+                    # Node exists, update it
+                    existing_id = str(existing[0])
+                    conn.execute("""
+                        UPDATE graph_nodes
+                        SET properties = %s,
+                            updated_at = %s
+                        WHERE id = %s
+                    """, (json.dumps(properties) if properties else '{}', timestamp, existing_id))
+                    conn.commit()
+                    return existing_id
+                else:
+                    # Node doesn't exist, insert it
+                    node_id = str(uuid.uuid4())
+                    conn.execute("""
+                        INSERT INTO graph_nodes (id, entity_type, name, properties, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (
+                        node_id,
+                        entity_type,
+                        name,
+                        json.dumps(properties) if properties else '{}',
+                        timestamp,
+                        timestamp
+                    ))
+                    conn.commit()
+                    return node_id
+        except Exception as e:
+            logger.error(f"Failed to upsert node: {e}")
+            raise
+
+    def upsert_edge(self, source_id: str, target_id: str, relationship: str, properties: Dict[str, Any] = None) -> str:
+        """
+        Insert or update a graph edge.
+        
+        Args:
+            source_id: UUID of the source node
+            target_id: UUID of the target node
+            relationship: The type of relationship (e.g., 'TRIGGERED_STRATEGY', 'IS_USED_IN')
+            properties: Optional JSONB properties dictionary
+            
+        Returns:
+            The UUID of the edge (as a string)
+        """
+        try:
+            timestamp = datetime.now()
+            
+            with self._get_conn() as conn:
+                # First try to get the existing edge
+                existing = conn.execute("""
+                    SELECT id FROM graph_edges
+                    WHERE source_id = %s AND target_id = %s AND relationship = %s
+                """, (source_id, target_id, relationship)).fetchone()
+                
+                if existing:
+                    # Edge exists, update it
+                    existing_id = str(existing[0])
+                    conn.execute("""
+                        UPDATE graph_edges
+                        SET properties = %s,
+                            created_at = %s
+                        WHERE id = %s
+                    """, (json.dumps(properties) if properties else '{}', timestamp, existing_id))
+                    conn.commit()
+                    return existing_id
+                else:
+                    # Edge doesn't exist, insert it
+                    edge_id = str(uuid.uuid4())
+                    conn.execute("""
+                        INSERT INTO graph_edges (id, source_id, target_id, relationship, properties, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (
+                        edge_id,
+                        source_id,
+                        target_id,
+                        relationship,
+                        json.dumps(properties) if properties else '{}',
+                        timestamp
+                    ))
+                    conn.commit()
+                    return edge_id
+        except Exception as e:
+            logger.error(f"Failed to upsert edge: {e}")
+            raise
+
+    def get_node(self, entity_type: str, name: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a node by entity type and name.
+        
+        Args:
+            entity_type: The type of entity
+            name: The unique name of the entity
+            
+        Returns:
+            Dictionary with node data, or None if not found
+        """
+        try:
+            with self._get_conn() as conn:
+                result = conn.execute("""
+                    SELECT id, entity_type, name, properties, created_at, updated_at
+                    FROM graph_nodes
+                    WHERE entity_type = %s AND name = %s
+                """, (entity_type, name)).fetchone()
+                
+                if result:
+                    return {
+                        "id": str(result[0]),
+                        "entity_type": result[1],
+                        "name": result[2],
+                        "properties": result[3] if isinstance(result[3], dict) else json.loads(result[3]),
+                        "created_at": result[4],
+                        "updated_at": result[5]
+                    }
+                return None
+        except Exception as e:
+            logger.error(f"Failed to get node: {e}")
+            return None
+
+    def get_edges(self, node_id: str, direction: str = 'both') -> List[Dict[str, Any]]:
+        """
+        Retrieve edges connected to a node.
+        
+        Args:
+            node_id: UUID of the node
+            direction: 'out' for outgoing (source), 'in' for incoming (target), 'both' for both
+            
+        Returns:
+            List of dictionaries with edge data
+        """
+        try:
+            with self._get_conn() as conn:
+                if direction == 'out':
+                    # Edges where node is source
+                    results = conn.execute("""
+                        SELECT id, source_id, target_id, relationship, properties, created_at
+                        FROM graph_edges
+                        WHERE source_id = %s
+                    """, (node_id,)).fetchall()
+                elif direction == 'in':
+                    # Edges where node is target
+                    results = conn.execute("""
+                        SELECT id, source_id, target_id, relationship, properties, created_at
+                        FROM graph_edges
+                        WHERE target_id = %s
+                    """, (node_id,)).fetchall()
+                else:  # 'both'
+                    # Edges where node is either source or target
+                    results = conn.execute("""
+                        SELECT id, source_id, target_id, relationship, properties, created_at
+                        FROM graph_edges
+                        WHERE source_id = %s OR target_id = %s
+                    """, (node_id, node_id)).fetchall()
+                
+                edges = []
+                for row in results:
+                    edges.append({
+                        "id": str(row[0]),
+                        "source_id": str(row[1]),
+                        "target_id": str(row[2]),
+                        "relationship": row[3],
+                        "properties": row[4] if isinstance(row[4], dict) else json.loads(row[4]),
+                        "created_at": row[5]
+                    })
+                return edges
+        except Exception as e:
+            logger.error(f"Failed to get edges: {e}")
+            return []
