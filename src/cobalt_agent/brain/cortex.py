@@ -171,7 +171,12 @@ class Cortex:
                     options_text += f"- {name}: {desc}\n"
         
         # STRICT MUTUALLY EXCLUSIVE ROUTING PROMPT - Load from config
-        prompt_template = self.config.prompts.routing.classify_domain
+        # Use dict access for prompts routing since it's stored as dict in Pydantic model
+        routing_config = getattr(self.config.prompts, 'routing', {}) if self.config.prompts else {}
+        prompt_template = routing_config.get('classify_domain', "")
+        if not prompt_template:
+            logger.warning("classify_domain prompt not found in config, using fallback")
+            prompt_template = "You are the Chief of Staff (Cortex). Route this user request to the correct Department.\n\nUSER REQUEST: \"{user_input}\"\n\nACTIVE DEPARTMENTS:\n{options_text}\n\nReturn the decision structured correctly."
         prompt = prompt_template.format(user_input=user_input, options_text=options_text)
         
         try:

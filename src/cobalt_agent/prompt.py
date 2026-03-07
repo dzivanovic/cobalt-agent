@@ -111,20 +111,21 @@ class PromptEngine:
         if self.persona.directives:
             rules.extend(self.persona.directives)
             
-        # 2. The Protocol (Simulated Dialogue)
+        # 2. The Protocol (Enhanced for strict parameter binding)
         protocol = (
             "\n### ⚡ CRITICAL OPERATING PROTOCOL ⚡\n"
             "To use a tool, you must output a single line starting with 'ACTION:'.\n"
-            "Do not talk. Do not explain. JUST ACTION.\n\n"
-            "### EXAMPLES OF CORRECT BEHAVIOR:\n"
-            "User: What is the price of Apple?\n"
-            "You: ACTION: finance AAPL\n"
-            "System: [Observation: AAPL is $150]\n"
-            "You: Apple is trading at $150.\n\n"
-            "User: Find news about AI.\n"
-            "You: ACTION: search AI news\n"
-            "System: [Observation: AI is growing...]\n"
-            "You: Recent news indicates AI is growing.\n\n"
+            "Do not talk. Do not explain. JUST ACTION.\n"
+            "CRITICAL: You MUST explicitly name the parameters using key=\"value\" syntax. Never pass free text.\n\n"
+            "=== EXAMPLES OF CORRECT TOOL USE ===\n"
+            "Correct: ACTION: browser url=\"https://news.ycombinator.com\" query=\"summarize top 3 headlines\"\n"
+            "Incorrect: ACTION: browser https://news.ycombinator.com top 3 headlines (Do not do this)\n\n"
+            "Correct: ACTION: write_file filepath=\"notes.md\" content=\"hello world\"\n"
+            "Incorrect: ACTION: write_file notes.md hello world (Do not do this)\n\n"
+            "Correct: ACTION: finance ticker=\"AAPL\"\n"
+            "Incorrect: ACTION: finance AAPL (Do not do this)\n\n"
+            "Correct: ACTION: search query=\"AI news\"\n"
+            "Incorrect: ACTION: search AI news (Do not do this)\n\n"
             "### YOUR TURN:\n"
             "If I ask you a question that requires data, do not answer directly. START WITH ACTION:."
         )

@@ -18,25 +18,14 @@ from typing import Any, Optional
 
 import yaml
 from dotenv import load_dotenv
+load_dotenv()
+
 from loguru import logger
-from pydantic import BaseModel, Field, ConfigDict
-from pydantic import AliasChoices
+from pydantic import AliasChoices, BaseModel, Field, ConfigDict
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import PydanticBaseSettingsSource
 
 from cobalt_agent.security.vault import VaultManager
-
-# Load environment variables from .env file (explicit path)
-# Get the directory where config.py is located
-config_dir = Path(__file__).parent
-# Look for .env in the project root (parent of src/)
-env_path = config_dir.parent.parent / ".env"
-if env_path.exists():
-    load_dotenv(env_path)
-else:
-    # Fallback to current working directory
-    load_dotenv()  # Fallback to default behavior (looks in cwd)
-
 
 # --- 1. Modular Schema Definitions ---
 
@@ -77,7 +66,7 @@ class SystemConfig(BaseModel):
     debug_mode: bool = False
     version: str = "0.1.0"
     obsidian_vault_path: str = Field(
-        default="/default/obsidian/vault/path",
+        default_factory=lambda: os.getenv("OBSIDIAN_VAULT_PATH", "/Users/cobalt/cobalt/docs"),
         validation_alias=AliasChoices("OBSIDIAN_VAULT_PATH", "COBALT_SYSTEM__OBSIDIAN_VAULT_PATH")
     )
 
@@ -112,11 +101,11 @@ class NetworkConfig(BaseModel):
 
 class PostgresConfig(BaseModel):
     """Schema for PostgreSQL database configuration."""
-    host: str = Field(default="localhost", validation_alias=AliasChoices("COBALT_POSTGRES__HOST", "POSTGRES_HOST"))
-    port: int = Field(default=5432, validation_alias=AliasChoices("COBALT_POSTGRES__PORT", "POSTGRES_PORT"))
-    user: str = Field(default="postgres", validation_alias=AliasChoices("COBALT_POSTGRES__USER", "POSTGRES_USER"))
-    password: Optional[str] = Field(default=None, validation_alias=AliasChoices("COBALT_POSTGRES__PASSWORD", "POSTGRES_PASSWORD"))
-    db: str = Field(default="cobalt_memory", validation_alias=AliasChoices("COBALT_POSTGRES__DB", "POSTGRES_DB"))
+    host: str = Field(default_factory=lambda: os.getenv("COBALT_POSTGRES__HOST", os.getenv("POSTGRES_HOST", "localhost")))
+    port: int = Field(default_factory=lambda: int(os.getenv("COBALT_POSTGRES__PORT", os.getenv("POSTGRES_PORT", "5432"))))
+    user: str = Field(default_factory=lambda: os.getenv("COBALT_POSTGRES__USER", os.getenv("POSTGRES_USER", "postgres")))
+    password: Optional[str] = Field(default_factory=lambda: os.getenv("COBALT_POSTGRES__PASSWORD", os.getenv("POSTGRES_PASSWORD")))
+    db: str = Field(default_factory=lambda: os.getenv("COBALT_POSTGRES__DB", os.getenv("POSTGRES_DB", "cobalt_memory")))
 
 
 class MattermostConfig(BaseModel):
@@ -265,6 +254,9 @@ class CobaltSettings(BaseSettings):
     
     # Strategy Playbooks - validated via Pydantic models
     strategies: Optional[dict[str, StrategyConfig]] = None
+
+    # Departments (for Cortex routing) - loaded from config.yaml
+    departments: Optional[dict[str, Any]] = None
 
     @classmethod
     def settings_customise_sources(
@@ -547,6 +539,11 @@ def load_config(config_dir: Optional[Path | str] = None) -> CobaltSettings:
             keys = list(file_data.keys())
             logger.debug(f"Loaded {file_path.name} -> Keys: {keys}")
             
+            # Special handling for prompts.yaml: nest its keys under 'prompts' section
+            if file_path.name == "prompts.yaml":
+                file_data = {"prompts": file_data}
+                logger.debug(f"Nested prompts.yaml under 'prompts' section")
+            
             master_data = _deep_merge(master_data, file_data)
             
         except Exception as e:
@@ -606,7 +603,18 @@ def load_config(config_dir: Optional[Path | str] = None) -> CobaltSettings:
                 raise
         master_data["strategies"] = validated_strategies
 
-    # 5. Create Pydantic Settings Object
+    # 5. Explicitly Inject Environment Variables into Postgres Config
+    # PostgresConfig is a BaseModel (not BaseSettings), so AliasChoices doesn't pull from env
+    pg_data = master_data.get('postgres', {})
+    pg_data['password'] = os.getenv('COBALT_POSTGRES__PASSWORD') or os.getenv('POSTGRES_PASSWORD') or pg_data.get('password')
+    pg_data['host'] = os.getenv('COBALT_POSTGRES__HOST') or os.getenv('POSTGRES_HOST') or pg_data.get('host', 'localhost')
+    pg_data['user'] = os.getenv('COBALT_POSTGRES__USER') or os.getenv('POSTGRES_USER') or pg_data.get('user', 'postgres')
+    pg_data['db'] = os.getenv('COBALT_POSTGRES__DB') or os.getenv('POSTGRES_DB') or pg_data.get('db', 'cobalt_memory')
+    pg_data['port'] = os.getenv('COBALT_POSTGRES__PORT') or os.getenv('POSTGRES_PORT') or pg_data.get('port', 5432)
+    # Update master_data with the enriched pg_data
+    master_data['postgres'] = pg_data
+
+    # 6. Create Pydantic Settings Object
     # Pydantic will automatically handle ENV overrides via env_nested_delimiter="_"
     try:
         logger.debug(f"Final merged configuration: {master_data}")

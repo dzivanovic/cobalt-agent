@@ -15,6 +15,9 @@ class BaseDepartment(ABC):
     """
     The Unified ReAct Execution Engine.
     All specialized Drones inherit this execution loop.
+    
+    DECORATED: Handles HITL approval by calling ProposalEngine when ToolManager
+    returns a "requires_approval" status dict.
     """
     def __init__(self, name: str, system_prompt: Optional[str] = None):
         self.name = name
@@ -22,7 +25,7 @@ class BaseDepartment(ABC):
         self.tool_manager = ToolManager()
         self.system_prompt = system_prompt
 
-    def run(self, user_message: str, chat_history: Optional[List[Dict]] = None) -> str:
+    def run(self, user_message: str, chat_history: Optional[List[Dict]] = None) -> str | dict:
         """
         Process a request using the ReAct loop.
         
@@ -87,6 +90,12 @@ class BaseDepartment(ABC):
                     
                     # Execute the tool
                     raw_result = self.tool_manager.execute_tool(tool_name, args_dict)
+                    
+                    # Return the raw dict to caller for centralized proposal handling
+                    if isinstance(raw_result, dict) and raw_result.get("status") == "requires_approval":
+                        return raw_result
+                    
+                    # Convert result to string
                     result_str = str(raw_result)
                     
                     # Format the result

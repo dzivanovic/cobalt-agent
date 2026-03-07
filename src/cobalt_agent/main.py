@@ -177,7 +177,7 @@ class CobaltAgent:
         """
         Start the Mattermost WebSocket listener instead of CLI.
         """
-        mm_interface = MattermostInterface()
+        mm_interface = MattermostInterface(memory=self.memory)
         
         try:
             if not mm_interface.connect():

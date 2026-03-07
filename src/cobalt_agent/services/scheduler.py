@@ -57,8 +57,11 @@ class CobaltScheduler:
         
         today_str = datetime.now().strftime("%B %d, %Y")
         
-        # Load prompt from config
-        prompt_template = self.config.prompts.scheduler.morning_briefing
+        # Load prompt from config (safe access with .get() for None handling)
+        scheduler_config = self.config.prompts.scheduler or {}
+        prompt_template = scheduler_config.get("morning_briefing")
+        if not prompt_template:
+            raise ValueError("Morning briefing prompt not configured in prompts.yaml")
         prompt = prompt_template.format(today_str=today_str)
 
         try:

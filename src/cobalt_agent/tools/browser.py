@@ -15,6 +15,7 @@ Features:
 import json
 import time
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Literal, Union, Dict, Any, List
 from pydantic import BaseModel, Field, ValidationError, Discriminator, Tag
 from loguru import logger
@@ -31,6 +32,7 @@ class BrowserCommand(BaseModel):
     """Pydantic model for browser tool command validation."""
     url: str = Field(default="", description="The URL to navigate to")
     actions: list = Field(default_factory=list, description="List of actions to perform")
+    query: str = Field(default="", description="Query or instructions for content to extract from the page")
 
 
 class ClickAction(BaseModel):
@@ -600,83 +602,19 @@ class BrowserTool:
         
         return None
 
-    def run(self, **kwargs) -> WebPageContent:
+    def _playwright_task(self, url: str, actions: List[Dict[str, Any]]) -> WebPageContent:
         """
-        Executes a browsing session. Implements Dual-Path routing architecture:
-        1. Pre-Flight Protocol: Fast path via llms.txt if available
-        2. Fallback: Playwright AOM extraction for complex interactions
+        Executes Playwright browsing logic in a separate thread.
+        This method runs the synchronous Playwright API inside a thread pool
+        to avoid conflicts with asyncio event loops.
         
         Args:
-            **kwargs: Either a 'query' string (URL) or 'url' and 'actions' parameters
-        
+            url: The URL to navigate to
+            actions: List of action dictionaries to perform
+            
         Returns:
             WebPageContent with the extracted data
         """
-        # Try to parse input through Pydantic model for strict validation
-        try:
-            # Try to validate against BrowserCommand first
-            if kwargs:
-                try:
-                    validated = BrowserCommand(**kwargs)
-                    url = validated.url
-                    actions = validated.actions
-                except ValidationError:
-                    # Fallback: check if there's a 'query' key with string value
-                    query = kwargs.get("query", "")
-                    if isinstance(query, str) and query.strip().startswith("{") and query.strip().endswith("}"):
-                        command = json.loads(query)
-                        url = command.get("url", "")
-                        actions = command.get("actions", [])
-                    else:
-                        # Last resort: use query as URL directly
-                        url = query if query else ""
-                        actions = []
-            else:
-                url = ""
-                actions = []
-        except ValidationError as e:
-            # Return error for invalid Pydantic validation
-            return WebPageContent(url="unknown", title="Validation Error", content="", error=str(e))
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse browser query as JSON: {e}")
-            return WebPageContent(url="unknown", title="Parse Error", content="", error=f"Invalid JSON: {e}")
-        
-        # If url is empty at this point, try to get it from query parameter directly
-        if not url:
-            query = kwargs.get("query", "")
-            if isinstance(query, str):
-                url = query.strip()
-            else:
-                url = ""
-        
-        actions = []
-        if isinstance(query, str) and query.strip().startswith("{") and query.strip().endswith("}"):
-            try:
-                command = json.loads(query)
-                url = command.get("url", url)
-                actions = command.get("actions", actions)
-            except json.JSONDecodeError:
-                logger.warning("Failed to parse browser query as JSON, treating as raw URL.")
-        
-        # Ensure URL has protocol
-        if not url.startswith("http"):
-            url = "https://" + url
-
-        # ========== PRE-FLIGHT PROTOCOL (Dual-Path Routing) ==========
-        # Before launching Playwright, check for fast path via llms.txt
-        if not actions:  # Only use fast path for simple URL visits without actions
-            fast_path_content = self._execute_preflight_fast_path(url)
-            if fast_path_content:
-                # Fast Path HIT - return Markdown content directly
-                logger.info(f"✅ Using Pre-Flight fast path for {url}")
-                return WebPageContent(
-                    url=url,
-                    title=f"Fast Path: {url}",
-                    content=fast_path_content
-                )
-        
-        logger.info(f"🌐 Playwright navigating to: {url}")
-
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
@@ -754,11 +692,6 @@ class BrowserTool:
 
                 browser.close()
 
-                # Combine action results into observation
-                observation = ""
-                if action_results:
-                    observation = "\n".join(action_results)
-                
                 return WebPageContent(
                     url=final_url,
                     title=title,
@@ -770,3 +703,69 @@ class BrowserTool:
         except Exception as e:
             logger.exception(f"Playwright error: {e}")
             return WebPageContent(url=url, title="Error", content="", error=str(e))
+
+    def run(self, url: Optional[str] = None, actions: Optional[List[Dict[str, Any]]] = None, **kwargs) -> WebPageContent:
+        """
+        Executes a browsing session. Implements Dual-Path routing architecture:
+        1. Pre-Flight Protocol: Fast path via llms.txt if available
+        2. Fallback: Playwright AOM extraction for complex interactions (in thread pool)
+        
+        Args:
+            url: The URL to navigate to (primary parameter)
+            actions: List of action dictionaries to perform
+            **kwargs: Additional parameters (catches LLM parameter variations like 'query')
+        
+        Returns:
+            WebPageContent with the extracted data
+        """
+        # Handle URL extraction from kwargs if not passed directly
+        if not url:
+            if "url" in kwargs:
+                url = kwargs.get("url")
+            elif "query" in kwargs:
+                query_value = kwargs.get("query", "")
+                if isinstance(query_value, str) and query_value.strip().startswith("http"):
+                    url = query_value.strip()
+        
+        # Final validation - must have a valid URL
+        if not url or not url.strip():
+            return WebPageContent(url="", title="Error", content="", error="[Error] No valid URL provided to BrowserTool.")
+        
+        # Ensure URL has protocol
+        if not url.startswith("http"):
+            url = "https://" + url
+        
+        # Get actions from kwargs if not provided directly
+        if actions is None:
+            actions = kwargs.get("actions", [])
+        
+        # Handle JSON string actions
+        if isinstance(actions, str):
+            try:
+                actions = json.loads(actions)
+            except json.JSONDecodeError:
+                actions = []
+        
+        # Validate actions is a list
+        if not isinstance(actions, list):
+            actions = []
+
+        # ========== PRE-FLIGHT PROTOCOL (Dual-Path Routing) ==========
+        # Before launching Playwright, check for fast path via llms.txt
+        if not actions:  # Only use fast path for simple URL visits without actions
+            fast_path_content = self._execute_preflight_fast_path(url)
+            if fast_path_content:
+                # Fast Path HIT - return Markdown content directly
+                logger.info(f"✅ Using Pre-Flight fast path for {url}")
+                return WebPageContent(
+                    url=url,
+                    title=f"Fast Path: {url}",
+                    content=fast_path_content
+                )
+        
+        logger.info(f"🌐 Playwright navigating to: {url}")
+
+        # Run the synchronous playwright task in a separate thread to escape the asyncio loop
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(self._playwright_task, url, actions)
+            return future.result()

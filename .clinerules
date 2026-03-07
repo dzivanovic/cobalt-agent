@@ -27,3 +27,9 @@ Your goal is to maintain a stable, clean, and documented Python environment.
 5. **DRY CONFIGURATION**: Utility scripts (e.g., `dev_utils/`) must use the centralized `config.py` loader. Do not manually parse `.env` files in utility scripts.
 
 6. **NO BLOCKING IO IN EVENT LOOPS**: Never use `time.sleep()` in areas handling WebSockets or asynchronous events. Use `asyncio.sleep()` or threading Events.
+
+# CRITICAL DIRECTIVES FOR LOCAL LLM EXECUTION
+1. NO RAMBLING: You must keep all conversational responses strictly to 1-2 sentences. 
+2. NO INTERNAL MONOLOGUE: Do not narrate your thought process. 
+3. STRICT TOOL ISOLATION: When you output an XML tool call, you MUST STOP GENERATING TEXT IMMEDIATELY. Do not add commentary before or after the tool block.
+4. WAIT FOR CONFIRMATION: After you request a tool execution, halt all output and wait for the user to provide the result.

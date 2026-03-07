@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field, ValidationError
 from loguru import logger
 from pathlib import Path
 
-from cobalt_agent.core.proposals import create_and_send_proposal, ProposalEngine
 from cobalt_agent.config import get_config
 
 
@@ -184,6 +183,69 @@ class ReadFileTool(BaseFileTool):
             return FileContent(path=path, content="", error="Failed to read file")
 
 
+class AppendToFileTool(BaseFileTool):
+    """Appends content to an existing file (or creates if new)."""
+    name = "append_to_file"
+    
+    def run(self, query=None, **kwargs) -> str:
+        filepath = None
+        content = None
+        
+        # Universal extraction
+        data = query if query is not None else kwargs
+        
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except json.JSONDecodeError as e:
+                error_msg = f"Observation: Invalid JSON format. Please use strict double quotes. Error: {e}"
+                return error_msg
+        
+        if isinstance(data, dict):
+            if "filepath" not in data and "query" in data:
+                if isinstance(data["query"], dict):
+                    data = data["query"]
+                elif isinstance(data["query"], str):
+                    try:
+                        data = json.loads(data["query"])
+                    except json.JSONDecodeError:
+                        return "Observation: Invalid JSON format. Please use strict double quotes."
+
+            filepath = data.get("filepath")
+            content = data.get("content")
+
+        if not filepath or content is None:
+            logger.error(f"AppendToFileTool missing fields. Parsed data: {data}")
+            return f"Error: Missing filepath or content. Parsed data: {data}"
+
+        logger.info(f"Appending to file: {filepath}")
+        
+        try:
+            resolved_path = self._validate_path(filepath)
+            
+            # Get existing content or create empty
+            existing_content = ""
+            if resolved_path.exists():
+                with open(resolved_path, 'r', encoding='utf-8') as f:
+                    existing_content = f.read()
+            
+            # Append new content
+            full_content = existing_content + content
+            
+            # Direct file append - ToolManager handles HITL approval
+            with open(resolved_path, 'w', encoding='utf-8') as f:
+                f.write(full_content)
+            logger.info(f"Appended {len(content)} bytes to: {resolved_path}")
+            return f"Successfully appended {len(content)} bytes to {filepath}"
+                
+        except SecurityError as e:
+            logger.error(f"Security error appending to file {filepath}: {e}")
+            return f"Error: Access denied. Path '{filepath}' is outside the Obsidian vault."
+        except Exception:
+            logger.exception(f"Failed to append file {filepath}")
+            return f"Error: Failed to append file {filepath}"
+
+
 class WriteFileTool(BaseFileTool):
     """Modifies or creates a file."""
     name = "write_file"
@@ -230,31 +292,11 @@ class WriteFileTool(BaseFileTool):
             # Ensure the parent directory exists before writing
             resolved_path.parent.mkdir(parents=True, exist_ok=True)
             
-            def execute_write(proposal_obj):
-                try:
-                    with open(resolved_path, 'w', encoding='utf-8') as f:
-                        f.write(content)
-                    logger.info(f"Proposal Engine executed write to: {resolved_path} ({len(content)} bytes)")
-                except Exception as e:
-                    logger.exception(f"Failed to physically write file {resolved_path}: {e}")
-            
-            try:
-                proposal = create_and_send_proposal(
-                    action=f"Write {len(content)} bytes to {filepath}",
-                    justification="Agent requested file modification via WriteFileTool.",
-                    risk_assessment="HIGH"
-                )
-            except Exception as e:
-                logger.exception(f"Proposal Engine crash: {e}")
-                return f"Error: Proposal Engine crashed: {e}"
-            
-            if proposal:
-                engine = ProposalEngine()
-                engine.set_approval_callback(proposal.task_id, execute_write)
-                logger.info(f"Approval callback set for task [{proposal.task_id}]")
-                return f"Action paused. Proposal [{proposal.task_id}] sent to Admin for approval in Mattermost."
-            else:
-                return "Error: Failed to generate Proposal Ticket. Mattermost connection failed."
+            # Direct file write - ToolManager handles HITL approval
+            with open(resolved_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            logger.info(f"Wrote {len(content)} bytes to: {resolved_path}")
+            return f"Successfully wrote {len(content)} bytes to {filepath}"
                 
         except SecurityError as e:
             logger.error(f"Security error writing file {filepath}: {e}")

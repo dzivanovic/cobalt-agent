@@ -10,8 +10,8 @@ network:
   nodes:
     cortex:
       role: primary_inference
-      ip: "100.70.206.126"
-      port: 11434
+      ip: localhost
+      port: 1234
       protocol: http
     edge_mobile:
       role: client
@@ -32,25 +32,17 @@ keys:
   anthropic: "ANTHROPIC_API_KEY"
   gemini: "GEMINI_API_KEY"
   openrouter: "OPENROUTER_API_KEY"
+  lmstudio: "LM_STUDIO_API_KEY"
 
 # 3. UNIVERSAL MODEL REGISTRY (2026 Edition)
 models:
-  # --- LOCAL ---
-  local_coder_32b:
-    provider: "ollama"
-    model_name: "qwen2.5-coder:32b"
-    node_ref: "cortex"
-    context: 32768
-  local_strategist_r1:
-    provider: "ollama"
-    model_name: "deepseek-r1:70b"
-    node_ref: "cortex"
-    context: 16384
-  local_bleeding_edge:
-    provider: "ollama"
-    model_name: "qwen3-coder-next"
+  # --- LOCAL (LM Studio) ---
+  mainframe:
+    provider: "openai"
+    model_name: "mainframe"
     node_ref: "cortex"
     context: 65536
+    env_key_ref: "lmstudio"
 
   # --- CLOUD BLEEDING EDGE ---
   cloud_gpt5_2:
@@ -76,12 +68,12 @@ models:
 
 # 4. ACTIVE SWITCHBOARD
 active_profile:
-  default: "local_bleeding_edge"
-  coder: "local_bleeding_edge"
-  architect: "local_bleeding_edge"
-  strategist: "local_strategist_r1"
+  default: "mainframe"
+  coder: "mainframe"
+  architect: "mainframe"
+  strategist: "mainframe"
   researcher: "cloud_gemini_2_5_pro"
-  fast_chat: "local_coder_32b"
+  fast_chat: "mainframe"
 
 mattermost:
   approval_channel: "cobalt-approvals"

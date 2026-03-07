@@ -95,7 +95,7 @@ class LLM(BaseModel):
                 port = target_node.port
                 protocol = getattr(target_node, "protocol", "http")
 
-            self._api_base = f"{protocol}://{ip}:{port}"
+            self._api_base = f"{protocol}://{ip}:{port}/v1"
         else:
             # Cloud providers (OpenAI, Gemini, OpenRouter) do not need an API base
             self._api_base = None
@@ -136,6 +136,12 @@ class LLM(BaseModel):
                     # env_var_name now contains the actual key name, e.g., "GEMINI_API_KEY"
                     # The value of that env var is stored in keys under env_var_name
                     api_key = keys.get(env_var_name)
+
+            # --- SRE Jinja Template Safety Net ---
+            has_user = any(msg.get("role") == "user" for msg in messages)
+            if not has_user:
+                messages.append({"role": "user", "content": "Analyze system prompt and execute."})
+            # -------------------------------------
 
             # 2. Prepare execution arguments
             kwargs = {

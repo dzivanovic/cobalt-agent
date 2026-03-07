@@ -3,6 +3,9 @@ The Scribe Skill (Obsidian Integration)
 Allows Cobalt to read, write, and search your "Second Brain".
 Refactored to use Environment Variables for portability.
 STRICT RULE: All automated writes go to '0 - Inbox'.
+
+SECURITY: All write operations MUST route through ToolManager to trigger
+HITL approval via the Proposal Engine. Direct filesystem access is forbidden.
 """
 
 import os
@@ -11,9 +14,15 @@ from datetime import datetime
 from typing import List, Optional
 from loguru import logger
 
+from cobalt_agent.tools.tool_manager import ToolManager
+
 class Scribe:
     """
     Interface for interacting with an Obsidian Vault.
+    
+    SECURITY NOTE: All write operations must route through ToolManager.execute_tool()
+    to ensure HITL approval is triggered via the Proposal Engine. Direct filesystem
+    access using open() is strictly forbidden for write operations.
     """
     
     def __init__(self, vault_path: Optional[str] = None):
@@ -34,32 +43,75 @@ class Scribe:
         if not self.vault_path.exists():
             logger.warning(f"⚠️ Obsidian Vault not found at {self.vault_path}. Scribe functions will fail.")
 
-    def _resolve_path(self, filename: str) -> Path:
-        """Helper to ensure file has .md extension and is inside the vault."""
+    def _resolve_path(self, filename: str, folder: Optional[str] = None) -> str:
+        """
+        Helper to build a path relative to the vault.
+        
+        Args:
+            filename: The filename (will have .md appended if missing)
+            folder: Optional folder name. If provided, folder is NOT prepended twice.
+                   If None, defaults to "0 - Inbox".
+        
+        Returns:
+            A relative path string like "0 - Inbox/myfile.md" that ToolManager will
+            resolve to vault_root/0 - Inbox/myfile.md
+        """
         if not filename.endswith(".md"):
             filename += ".md"
-        return self.vault_path / filename
+        
+        # Use folder if provided, otherwise default to "0 - Inbox"
+        target_folder = folder if folder else "0 - Inbox"
+        
+        # Return relative path - ToolManager will handle joining with vault root
+        return f"{target_folder}/{filename}"
 
-    def write_note(self, filename: str, content: str, folder: str = "0 - Inbox") -> str:
+    def write_note(self, filename: str, content: str, folder: str = "0 - Inbox"):
         """
         Create or Overwrite a note.
         Defaults strictly to '0 - Inbox' unless overridden.
+        
+        SECURITY: Routes through ToolManager to trigger HITL approval via Proposal Engine.
+        Direct filesystem access is forbidden.
+        
+        Args:
+            filename: The note filename (may include path like "0 - Inbox/filename.md")
+            content: The content to write
+            folder: The folder relative to vault root (e.g., "0 - Inbox")
+            
+        Returns:
+            A message indicating the action is paused for approval with the proposal ID,
+            OR a dict with status=="requires_approval" to be handled by the caller.
         """
         try:
-            # Construct path (Vault / Folder / Filename)
-            target_dir = self.vault_path / folder
-            target_dir.mkdir(parents=True, exist_ok=True)
+            # Build relative path (folder/filename.md)
+            # ToolManager will resolve this relative to the vault root
             
-            clean_name = filename if filename.endswith(".md") else f"{filename}.md"
-            file_path = target_dir / clean_name
+            # FIX: If filename already starts with folder prefix, don't prepend it again
+            # Check if the filename already contains the folder path (like "0 - Inbox/filename.md")
+            prefix = f"{folder}/"
+            if filename.startswith(prefix):
+                # Filename already includes the folder prefix, extract just the filename part
+                # to avoid double prefix (e.g., "0 - Inbox/0 - Inbox/file.md")
+                relative_path = filename if filename.endswith(".md") else f"{filename}.md"
+            else:
+                # Prepend folder prefix to filename
+                relative_path = f"{folder}/{filename}.md" if not filename.endswith(".md") else f"{folder}/{filename}"
             
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(content)
+            # Use ToolManager to execute write_file - this triggers HITL approval
+            tool_manager = ToolManager()
+            args = {"filepath": relative_path, "content": content}
             
-            return f"✅ Note saved: {folder}/{clean_name}"
+            result = tool_manager.execute_tool("write_file", args)
+            
+            # Return the raw dict to caller for centralized proposal handling
+            if isinstance(result, dict) and result.get("status") == "requires_approval":
+                return result
+            
+            return result
+            
         except Exception as e:
-            logger.error(f"Failed to write note: {e}")
-            return f"❌ Error writing note: {e}"
+            logger.exception(f"Failed to execute write_note for {relative_path}: {e}")
+            return f"❌ Error executing write_note: {e}"
 
     def read_note(self, filename: str) -> str:
         """Read the content of a specific note."""
@@ -81,9 +133,19 @@ class Scribe:
         except Exception as e:
             return f"❌ Error reading note: {e}"
 
-    def append_to_daily_note(self, content: str) -> str:
+    def append_to_daily_note(self, content: str):
         """
         Appends text to today's Daily Log in '0 - Inbox'.
+        
+        SECURITY: Routes through ToolManager to trigger HITL approval via Proposal Engine.
+        Direct filesystem access is forbidden.
+        
+        Args:
+            content: The content to append to the daily log
+            
+        Returns:
+            A message indicating the action is paused for approval with the proposal ID,
+            OR a dict with status=="requires_approval" to be handled by the caller.
         """
         today = datetime.now().strftime("%Y-%m-%d")
         
@@ -95,24 +157,24 @@ class Scribe:
             header = f"\n\n### {timestamp} - Cobalt Log\n"
             full_entry = header + content
             
-            target_dir = self.vault_path / daily_folder
-            target_dir.mkdir(parents=True, exist_ok=True)
-            
             # File format: Daily_Log_2026-02-10.md
-            file_path = target_dir / f"Daily_Log_{today}.md"
-
-            # Check if file exists to add title if new
-            is_new = not file_path.exists()
-            mode = "a" if not is_new else "w"
-
-            with open(file_path, mode, encoding="utf-8") as f:
-                if is_new:
-                    f.write(f"# Daily Log: {today}\n")
-                f.write(full_entry)
+            relative_path = f"{daily_folder}/Daily_Log_{today}.md"
             
-            return f"✅ Logged to {daily_folder}/Daily_Log_{today}.md"
+            # Use ToolManager to execute append_to_file - this triggers HITL approval
+            tool_manager = ToolManager()
+            args = {"filepath": relative_path, "content": full_entry}
+            
+            result = tool_manager.execute_tool("append_to_file", args)
+            
+            # Return the raw dict to caller for centralized proposal handling
+            if isinstance(result, dict) and result.get("status") == "requires_approval":
+                return result
+            
+            return result
+            
         except Exception as e:
-            return f"❌ Failed to log to daily note: {e}"
+            logger.exception(f"Failed to execute append_to_daily_note for {relative_path}: {e}")
+            return f"❌ Error executing append_to_daily_note: {e}"
 
     def search_vault(self, query: str, limit: int = 5) -> List[str]:
         """

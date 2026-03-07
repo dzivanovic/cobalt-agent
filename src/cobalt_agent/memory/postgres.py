@@ -530,8 +530,8 @@ class FastPathCache:
 
 class PostgresMemory(MemoryProvider):
     def _get_conn(self):
-        """Get a database connection."""
-        return psycopg.connect(self.conn_str)
+        """Get a database connection with autocommit enabled."""
+        return psycopg.connect(self.conn_str, autocommit=True)
     
     def _scrub_secrets(self, text: str) -> str:
         """
@@ -660,11 +660,10 @@ class PostgresMemory(MemoryProvider):
         """Initialize HITL (Human-in-the-Loop) database tables for pending approvals."""
         try:
             with self._get_conn() as conn:
-                # Create hitl_proposals table
-                # Stores pending approvals in persistent Postgres DB instead of RAM
+                # Create hitl_proposals table if it doesn't exist (preserves existing data)
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS hitl_proposals (
-                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        id VARCHAR(50) PRIMARY KEY,
                         status VARCHAR(50) NOT NULL DEFAULT 'pending',  -- 'pending', 'approved', 'rejected'
                         tool_name VARCHAR(255) NOT NULL,
                         tool_kwargs JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -999,6 +998,90 @@ class PostgresMemory(MemoryProvider):
         except Exception as e:
             logger.error(f"Failed to get node: {e}")
             return None
+
+    def store_hilt_proposal(self, tool_name: str, tool_kwargs: Dict[str, Any]) -> str:
+        """
+        Store a new HITL proposal in the database.
+        
+        Args:
+            tool_name: Name of the tool being executed
+            tool_kwargs: Arguments for the tool
+            
+        Returns:
+            The 8-character short string ID of the created proposal (task_id)
+        """
+        try:
+            # Generate an 8-character short string ID (matching Bouncer format)
+            proposal_id = str(uuid.uuid4())[:8]
+            
+            with self._get_conn() as conn:
+                conn.execute("""
+                    INSERT INTO hitl_proposals (id, status, tool_name, tool_kwargs, created_at, updated_at)
+                    VALUES (%s, 'pending', %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """, (proposal_id, tool_name, json.dumps(tool_kwargs)))
+                conn.commit()
+                logger.info(f"HITL proposal created: [{proposal_id}] for tool '{tool_name}'")
+                return proposal_id
+        except Exception as e:
+            logger.error(f"Failed to store HITL proposal: {e}")
+            raise
+
+    def get_hilt_proposal(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a HITL proposal by its task ID.
+        
+        Args:
+            task_id: The UUID of the proposal
+            
+        Returns:
+            Dictionary with proposal data, or None if not found
+        """
+        try:
+            with self._get_conn() as conn:
+                result = conn.execute("""
+                    SELECT id, status, tool_name, tool_kwargs, created_at
+                    FROM hitl_proposals
+                    WHERE id = %s
+                """, (task_id,)).fetchone()
+                
+                if result:
+                    return {
+                        "id": str(result[0]),
+                        "status": result[1],
+                        "tool_name": result[2],
+                        "tool_kwargs": result[3] if isinstance(result[3], dict) else json.loads(result[3]),
+                        "created_at": result[4]
+                    }
+                return None
+        except Exception as e:
+            logger.error(f"Failed to get HITL proposal: {e}")
+            return None
+
+    def update_hilt_proposal_status(self, task_id: str, status: str) -> bool:
+        """
+        Update the status of a HITL proposal.
+        
+        Args:
+            task_id: The UUID of the proposal
+            status: New status ('pending', 'approved', 'rejected')
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self._get_conn() as conn:
+                conn.execute("""
+                    UPDATE hitl_proposals
+                    SET status = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """, (status, task_id))
+                conn.commit()
+                logger.info(f"HITL proposal [{task_id}] status updated to '{status}'")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to update HITL proposal status: {e}")
+            return False
 
     def get_edges(self, node_id: str, direction: str = 'both') -> List[Dict[str, Any]]:
         """
