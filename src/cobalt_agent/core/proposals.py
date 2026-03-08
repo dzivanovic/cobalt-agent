@@ -215,6 +215,26 @@ class HITLProposalStore:
             return False
 
 
+# --- INTENT ALIGNMENT MODEL ---
+class IntentAlignment(BaseModel):
+    """
+    Intent Engineering: Explicit trade-offs, boundaries, and validation metrics.
+    Replaces open-ended prompt engineering with structured intent specification.
+    """
+    decision_boundaries: str = Field(
+        default="",
+        description="Exact files, systems, or resources authorized to be modified. Example: 'src/cobalt_agent/tools/browser.py, configs/prompts.yaml'"
+    )
+    trade_offs: str = Field(
+        default="",
+        description="Explicit trade-off decisions. Example: 'Readability over latency', 'Accuracy over speed'"
+    )
+    validation_metric: str = Field(
+        default="",
+        description="Exact terminal command or condition to prove success. Example: 'pytest tests/test_browser.py -v' or 'curl -s http://localhost:8000/health'"
+    )
+
+
 # --- PROPOSAL MODEL ---
 class Proposal(BaseModel):
     """Standardized ticket for high-stakes AI actions."""
@@ -222,6 +242,7 @@ class Proposal(BaseModel):
     action: str = Field(description="The specific command or operation to be executed.")
     justification: str = Field(description="The agent's reasoning for why this action is necessary.")
     risk_assessment: str = Field(description="A summary of potential negative impacts (e.g., data loss, capital risk).")
+    intent_alignment: IntentAlignment = Field(default_factory=lambda: IntentAlignment(), description="Intent engineering metadata: boundaries, trade-offs, validation.")
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Technical metadata required for execution.")
     timestamp: datetime = Field(default_factory=datetime.now)
     approved: bool = False
@@ -229,8 +250,23 @@ class Proposal(BaseModel):
     approval_message_id: Optional[str] = None
 
     def format_for_mattermost(self) -> str:
+        """
+        Format proposal for Mattermost display with explicit intent_alignment block.
+        
+        Returns:
+            Formatted Markdown string for Mattermost
+        """
+        # Format intent alignment block prominently at the top
+        intent_block = (
+            f"### 🎯 INTENT ALIGNMENT\n"
+            f"**Decision Boundaries:** `{self.intent_alignment.decision_boundaries}`\n"
+            f"**Trade-offs:** {self.intent_alignment.trade_offs}\n"
+            f"**Validation Metric:** `{self.intent_alignment.validation_metric}`\n\n"
+        )
+        
         return (
-            f"### 🛡️ ACTION PROPOSAL [{self.task_id}]\n"
+            f"### 🛡️ ACTION PROPOSAL [{self.task_id}]\n\n"
+            f"{intent_block}"
             f"**Action:** `{self.action}`\n\n"
             f"**Justification:** {self.justification}\n"
             f"**Risk:** {self.risk_assessment}\n\n"

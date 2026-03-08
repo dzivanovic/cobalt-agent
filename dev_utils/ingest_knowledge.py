@@ -4,12 +4,94 @@ Sweeps the codebase, config files, and docs, chunks them, and embeds them into t
 """
 import os
 import sys
+import ast
 from pathlib import Path
 from loguru import logger
 
 # Add src to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 from cobalt_agent.memory.postgres import PostgresMemory
+
+def ingest_ast_graph(target_dir: str = "src/") -> tuple[int, int]:
+    """Parse .py files via AST and map code dependencies to graph tables.
+    
+    Returns:
+        Tuple of (nodes_created, edges_created) counts
+    """
+    import ast
+    
+    target_path = Path(target_dir)
+    if not target_path.exists():
+        logger.error(f"Target directory {target_path} does not exist")
+        return 0, 0
+    
+    db = PostgresMemory()
+    nodes_created, edges_created = 0, 0
+    
+    try:
+        for py_file in target_path.rglob("*.py"):
+            if any(p.startswith('.') or p == 'venv' for p in py_file.parts):
+                continue
+            
+            try:
+                content = py_file.read_text(encoding='utf-8')
+                tree = ast.parse(content)
+                rel_path = str(py_file.relative_to(target_path.parent))
+                
+                # Create File node
+                file_node_id = db.upsert_node("File", rel_path, {"size_bytes": len(content)})
+                nodes_created += 1
+                
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ClassDef):
+                        class_node_id = db.upsert_node("Class", f"{rel_path}:{node.name}", 
+                            {"decorators": [ast.unparse(d) for d in node.decorator_list]})
+                        nodes_created += 1
+                        db.upsert_edge(file_node_id, class_node_id, "CONTAINS")
+                        edges_created += 1
+                        
+                        for subnode in ast.walk(node):
+                            if isinstance(subnode, ast.FunctionDef):
+                                func_node_id = db.upsert_node("Method", f"{rel_path}:{node.name}.{subnode.name}",
+                                    {"decorators": [ast.unparse(d) for d in subnode.decorator_list]})
+                                nodes_created += 1
+                                db.upsert_edge(class_node_id, func_node_id, "CONTAINS")
+                                edges_created += 1
+                    
+                    elif isinstance(node, ast.FunctionDef):
+                        func_node_id = db.upsert_node("Function", f"{rel_path}:{node.name}",
+                            {"decorators": [ast.unparse(d) for d in node.decorator_list]})
+                        nodes_created += 1
+                        db.upsert_edge(file_node_id, func_node_id, "CONTAINS")
+                        edges_created += 1
+                    
+                    elif isinstance(node, ast.Import):
+                        for mod in node.names:
+                            if mod.name.startswith('cobalt_agent'):
+                                target_file = f"{mod.name.replace('.', '/')}.py"
+                                if (target_path.parent / target_file).exists():
+                                    db.upsert_edge(file_node_id, 
+                                        db.upsert_node("File", target_file, {}), "IMPORTS")
+                                    edges_created += 1
+                    
+                    elif isinstance(node, ast.ImportFrom):
+                        if node.module and node.module.startswith('cobalt_agent'):
+                            target_file = f"{node.module.replace('.', '/')}.py"
+                            if (target_path.parent / target_file).exists():
+                                db.upsert_edge(file_node_id,
+                                    db.upsert_node("File", target_file, {}), "IMPORTS")
+                                edges_created += 1
+                
+                logger.debug(f"✅ {rel_path}: {nodes_created} nodes, {edges_created} edges")
+                
+            except Exception as e:
+                logger.error(f"Failed to parse {py_file}: {e}")
+    
+    finally:
+        db.close()
+    
+    logger.info(f"🧠 AST Graph Ingestion Complete: {nodes_created} nodes, {edges_created} edges")
+    return nodes_created, edges_created
 
 def chunk_text(text: str, max_chars: int = 1500, overlap: int = 200) -> list[str]:
     """Splits text into overlapping chunks."""
