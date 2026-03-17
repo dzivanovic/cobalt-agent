@@ -115,10 +115,14 @@ class LLM(BaseModel):
                 if env_var_name:
                     self.api_key = SecretStr(os.getenv(env_var_name, ""))
         
-    def _call_provider(self, messages: List[Dict[str, str]]) -> str:
+    def _call_provider(self, messages: List[Dict[str, str]], tools: Optional[List[Dict]] = None) -> str:
         """
         Internal helper to send messages to the provider via LiteLLM.
         Uses Zero-Trust security: API keys are resolved from RAM-locked vault.
+        
+        Args:
+            messages: List of message dictionaries for the conversation
+            tools: Optional list of tool definitions (e.g., googleSearch) to enable grounding
         """
         try:
             # 1. Resolve API Key securely from RAM (Vault)
@@ -155,8 +159,14 @@ class LLM(BaseModel):
                 kwargs["base_url"] = self._api_base
             if api_key:
                 kwargs["api_key"] = api_key
+            
+            # Add tools for grounding (e.g., googleSearch)
+            if tools:
+                kwargs["tools"] = tools
                 
             logger.debug(f"Routing LiteLLM request to exact model string: {kwargs['model']}")
+            if tools:
+                logger.debug(f"Tools enabled for grounding: {tools}")
                 
             # 3. Execute request
             response = completion(**kwargs)
@@ -175,9 +185,17 @@ class LLM(BaseModel):
                           system_prompt: Optional[str] = None,
                           user_input: Optional[str] = None,
                           memory_context: List[Dict] = None,
-                          search_context: str = "") -> str:
+                          search_context: str = "",
+                          tools: Optional[List[Dict]] = None) -> str:
         """
         Main conversational loop method. Handles history and context injection.
+        
+        Args:
+            system_prompt: System-level instructions for the LLM
+            user_input: User's current input message
+            memory_context: Optional list of previous messages for conversation history
+            search_context: Legacy context injection (for backward compatibility)
+            tools: Optional list of tool definitions for grounding (e.g., googleSearch)
         """
         messages = []
 
@@ -209,7 +227,7 @@ class LLM(BaseModel):
             messages.append({"role": "user", "content": user_input})
 
         try:
-            response = self._call_provider(messages)
+            response = self._call_provider(messages, tools=tools)
             logger.info(f"Cobalt, LLM model version: {self.model_name}")
             logger.info(f"Persona Roles: Chief of Staff, Software Architect, Senior Developer, Business Analyst")
             return response
@@ -228,9 +246,15 @@ class LLM(BaseModel):
 
     def ask(self, 
             system_message: str,
-            user_input: Optional[str] = None) -> str:
+            user_input: Optional[str] = None,
+            tools: Optional[List[Dict]] = None) -> str:
         """
         Direct one-off query. Used by skills like Research or Briefing.
+        
+        Args:
+            system_message: System-level instructions for the LLM
+            user_input: Optional user input message
+            tools: Optional list of tool definitions for grounding (e.g., googleSearch)
         """
         messages = [
             {"role": "system", "content": system_message},
@@ -240,7 +264,7 @@ class LLM(BaseModel):
             messages.append({"role": "user", "content": user_input})
 
         try:
-            return self._call_provider(messages)
+            return self._call_provider(messages, tools=tools)
         except Exception as e:
             logger.error(f"Ask Failed: {str(e)}")
             raise e
@@ -251,13 +275,22 @@ class LLM(BaseModel):
                        response_model: Type[T],
                        memory_context: List[Dict] = None,
                        search_context: str = "", 
-                       user_input: Optional[str] = None) -> T:
+                       user_input: Optional[str] = None,
+                       tools: Optional[List[Dict]] = None) -> T:
         """
         Forces the LLM to output JSON conforming to a Pydantic model.
         Returns the instantiated Pydantic object.
         
         Combines the caller's system_prompt (persona instructions) with
         JSON schema validation instructions.
+        
+        Args:
+            system_prompt: System-level instructions for the LLM
+            response_model: Pydantic model class to validate output against
+            memory_context: Optional list of previous messages for conversation history
+            search_context: Legacy context injection (for backward compatibility)
+            user_input: Optional user input message
+            tools: Optional list of tool definitions for grounding (e.g., googleSearch)
         """
         # Get the schema from the model
         schema = response_model.model_json_schema()
@@ -298,7 +331,7 @@ class LLM(BaseModel):
             messages.append({"role": "user", "content": user_input})
 
         try:
-            raw_response = self._call_provider(messages)
+            raw_response = self._call_provider(messages, tools=tools)
             
             # Clean up potential markdown leakage
             cleaned_json = raw_response.replace("```json", "").replace("```", "").strip()

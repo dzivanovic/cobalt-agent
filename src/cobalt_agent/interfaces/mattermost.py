@@ -5,6 +5,7 @@ Provides a robust interface for sending and receiving messages via Mattermost.
 
 import asyncio
 import json
+import socket
 import threading
 import multiprocessing
 import re
@@ -791,19 +792,57 @@ class MattermostInterface:
             base_url = self.config.url.rstrip('/')
             ws_url = base_url.replace('http://', 'ws://').replace('https://', 'wss://') + "/api/v4/websocket"
             
-            logger.info(f"Connecting to native WebSocket engine: {ws_url}")
+            # Exponential backoff configuration for reconnect attempts
+            base_delay = 5  # seconds
+            max_delay = 60  # seconds
+            backoff_multiplier = 2.0
             
-            headers = {"Authorization": f"Bearer {self.config.token}"}
-            try:
-                async with websockets.connect(ws_url, ping_interval=20, ping_timeout=20, additional_headers=headers) as ws:
-                    logger.info("Connected and authenticated via HTTP headers. Listening for messages...")
+            current_delay = base_delay
+            reconnect_attempt = 0
+            
+            while True:
+                try:
+                    logger.info(f"Connecting to native WebSocket engine: {ws_url}")
                     
-                    # Listen to the raw data stream forever
-                    async for message in ws:
-                        logger.info(f"RAW WEBSOCKET PAYLOAD: {message}")
-                        await self._handle_mattermost_event(message)
-            except Exception as e:
-                logger.error(f"Native WebSocket connection dropped: {e}", exc_info=True)
+                    headers = {"Authorization": f"Bearer {self.config.token}"}
+                    async with websockets.connect(ws_url, ping_interval=20, ping_timeout=20, additional_headers=headers) as ws:
+                        logger.info("Connected and authenticated via HTTP headers. Listening for messages...")
+                        
+                        # Reset reconnect state on successful connection
+                        current_delay = base_delay
+                        reconnect_attempt = 0
+                        
+                        # Listen to the raw data stream forever
+                        async for message in ws:
+                            logger.info(f"RAW WEBSOCKET PAYLOAD: {message}")
+                            await self._handle_mattermost_event(message)
+                            
+                except websockets.exceptions.ConnectionClosed as e:
+                    # Handle WebSocket connection closed events
+                    logger.error(f"Native WebSocket connection dropped (code={e.code}, reason={e.reason}): no close frame received or sent")
+                    reconnect_attempt += 1
+                    
+                except websockets.exceptions.InvalidHeader as e:
+                    # Handle invalid HTTP headers during handshake
+                    logger.error(f"Native WebSocket connection failed with invalid header: {e}")
+                    reconnect_attempt += 1
+                    
+                except socket.error as e:
+                    # Handle socket-level errors (network unreachable, connection refused, etc.)
+                    logger.error(f"Native WebSocket socket error: {e}")
+                    reconnect_attempt += 1
+                    
+                except Exception as e:
+                    # Catch-all for any other unexpected errors during connection/listening
+                    logger.error(f"Native WebSocket error: {e}")
+                    reconnect_attempt += 1
+                
+                # Calculate exponential backoff delay before next attempt
+                logger.warning(f"Reconnecting in {current_delay}s (attempt #{reconnect_attempt})...")
+                await asyncio.sleep(current_delay)
+                
+                # Exponential backoff: increase delay for next attempt, capped at max_delay
+                current_delay = min(current_delay * backoff_multiplier, max_delay)
 
         # Run the native engine in the main thread
         logger.info("Starting native WebSocket engine...")

@@ -33,3 +33,5 @@ psycopg[binary]>=3.3.2
 pgvector>=0.4.2
 apscheduler>=3.11.2
 cryptography>=46.0.4
+opencv-python>=4.13.0.92
+mss>=10.1.0

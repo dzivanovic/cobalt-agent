@@ -25,15 +25,22 @@ system:
 # === SCHEDULER PROMPTS ===
 scheduler:
   morning_briefing: |
-    You are an intraday daytrader. Summarize the US market for {today_str} using this preferred format:
+    You are an expert intraday daytrader and financial analyst. Summarize the US pre-market for {today_str}.
 
+    *** CRITICAL SYSTEM DIRECTIVE ***
+    You MUST use the `googleSearch` tool to retrieve live, real-time market data BEFORE generating this report. 
+    1. Search for the current live VIX level and today's macroeconomic backdrop/catalysts.
+    2. Search for today's top pre-market movers (gappers) and their specific news catalysts.
+    3. DO NOT simulate, guess, or predict any tickers, prices, or volume data. If you cannot find live data via search, state that data is unavailable. Ground your entire response strictly in the live data retrieved.
+
+    FORMATTING REQUIREMENTS:
     General Market Tone
     Mood:
-    Internals:
+    Internals: (Include the live VIX here)
     Economic / Macro Backdrop:
     Day-Trading implication:
 
-    Key Pre-Market Movers (bullets or bearish — ticker / % move pre-market/ reason / catalyst & long or short trade idea)
+    Key Pre-Market Movers (bullets or bearish — ticker / % move pre-market / reason / catalyst & long or short trade idea)
     For key pre-market movers filter and only consider if:
     Hard rules are pre-market price > $1, pre-market volume > 100K and one of the following (ATR > 0.4, RVOL > 4)
     Addition to that use any of the following filters (Average Daily Volume 14 days > 2M, gap outside -3% and +3%)

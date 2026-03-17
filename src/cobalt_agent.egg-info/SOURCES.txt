@@ -60,8 +60,10 @@ tests/test_mock_debug.py
 tests/test_orchestrator.py
 tests/test_postgres_graph.py
 tests/test_postgres_memory.py
+tests/test_proposals_intent.py
 tests/test_scheduler.py
 tests/test_scribe.py
 tests/test_strategies.py
 tests/test_universal_extractor.py
 tests/test_vault.py
+tests/test_vision.py
