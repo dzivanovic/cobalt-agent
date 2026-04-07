@@ -37,6 +37,10 @@ src/cobalt_agent/services/scheduler.py
 src/cobalt_agent/skills/productivity/briefing.py
 src/cobalt_agent/skills/productivity/scribe.py
 src/cobalt_agent/skills/research/deep_dive.py
+src/cobalt_agent/skills/research/finviz_api.py
+src/cobalt_agent/skills/research/finviz_extractor.py
+src/cobalt_agent/skills/research/scanner_orchestrator.py
+src/cobalt_agent/skills/research/semantic_tagger.py
 src/cobalt_agent/tools/__init__.py
 src/cobalt_agent/tools/aom.py
 src/cobalt_agent/tools/browser.py
@@ -55,6 +59,7 @@ tests/test_browser_aom.py
 tests/test_browser_fast_path.py
 tests/test_cortex.py
 tests/test_daemon.py
+tests/test_finviz_extractor.py
 tests/test_llm.py
 tests/test_mock_debug.py
 tests/test_orchestrator.py

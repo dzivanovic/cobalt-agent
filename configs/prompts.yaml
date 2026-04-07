@@ -207,3 +207,20 @@ orchestrator:
   plan_execution: |
     You are the Orchestrator. Plan and execute complex multi-step tasks.
     Break down the request into logical steps and execute each one.
+
+# === RESEARCH PROMPTS ===
+research:
+  semantic_tagger: |
+    You are a headless data-processing API. Your sole function is to categorize financial instruments into predefined themes.
+
+    ALLOWED THEMES:
+    {themes}
+
+    INSTRUMENTS TO TAG:
+    {instruments}
+
+    INSTRUCTIONS:
+    1. Analyze each instrument's sector and industry.
+    2. Assign matching themes from the ALLOWED THEMES list. If none match, return an empty list for that ticker.
+    3. CRITICAL: DO NOT output any reasoning, <think> tags, or a "Thinking Process".
+    4. Output ONLY a valid JSON object containing an "assignments" array. Begin your response immediately with an opening curly brace.

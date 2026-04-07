@@ -1,0 +1,55 @@
+# Scanners Configuration - Dynamic Screener Definitions
+# Used by Universal Abstract Screener for YAML-driven filter configuration
+
+scanners:
+  morning_up_gapper:
+    active: true
+    description: "Pre-market momentum catch"
+    schedule:
+      start: "04:00"
+      end: "10:00"
+      recurrence_minutes: 2
+    filters:
+      sh_avgvol: "o2000"
+      sh_curvol: "o100"
+      sh_price: "o1"
+      ta_averagetruerange: "o0.5"
+      ta_gap: "u3"
+
+  morning_down_gapper:
+    active: true
+    description: "Pre-market weakness and panic"
+    schedule:
+      start: "04:00"
+      end: "10:00"
+      recurrence_minutes: 2
+    filters:
+      sh_avgvol: "o2000"
+      sh_curvol: "o100"
+      sh_price: "o1"
+      ta_averagetruerange: "o0.5"
+      ta_gap: "d3"
+
+  day_scan_custom:
+    active: true
+    description: "Intraday high relative volume"
+    schedule:
+      start: "09:30"
+      end: "16:00"
+      recurrence_minutes: 5
+    filters:
+      sh_curvol: "o10000"
+      sh_price: "o1"
+      sh_relvol: "o3"
+
+  low_float_gappers:
+    active: true
+    description: "Low supply, high demand micro-caps"
+    schedule:
+      start: "04:00"
+      end: "10:00"
+      recurrence_minutes: 2
+    filters:
+      sh_float: "u10"
+      sh_price: "u10"
+      ta_gap: "u10"

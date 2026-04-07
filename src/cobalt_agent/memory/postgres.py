@@ -29,6 +29,7 @@ except ImportError:
     logger.warning("psycopg not installed, PostgresMemory will fail at runtime")
 
 from litellm import embedding
+from litellm.exceptions import AuthenticationError as LiteLLMAuthenticationError
 from ..config import get_config
 from ..security.vault import VaultManager
 from .base import MemoryProvider
@@ -222,7 +223,7 @@ class FastPathCache:
             logger.error(f"Failed to create browser_fast_path table: {e}")
             raise
     
-    def _generate_task_hash_embedding(self, task_hash: str) -> List[float]:
+    def _generate_task_hash_embedding(self, task_hash: str) -> Optional[List[float]]:
         """
         Generate an embedding for the task hash.
         
@@ -230,7 +231,7 @@ class FastPathCache:
             task_hash: The UUID string hash of the task
             
         Returns:
-            A 1536-dimensional embedding vector
+            A 1536-dimensional embedding vector, or None if embedding fails
         """
         try:
             # We'll use the task hash as a seed to generate a deterministic embedding
@@ -250,9 +251,16 @@ class FastPathCache:
             else:
                 return data_item.embedding
                 
+        except LiteLLMAuthenticationError as e:
+            # CRITICAL FIX: Handle litellm AuthenticationError gracefully
+            # This occurs when no API key is present in zero-trust local environment
+            logger.warning(f"⚠️ LiteLLM AuthenticationError (expected in zero-trust local env): {e}")
+            logger.warning("Returning zero-vector fallback for Fast Path cache")
+            return None  # Return None to signal embedding unavailable
+            
         except Exception as e:
-            logger.error(f"Failed to generate embedding for task hash: {e}")
-            # Return a zero vector as fallback
+            logger.warning(f"⚠️ Failed to generate embedding for task hash (non-fatal): {e}")
+            # Return a zero vector as fallback for other errors
             return [0.0] * 1536
     
     def lookup(
@@ -343,17 +351,20 @@ class FastPathCache:
             logger.error(f"Failed to lookup cached task: {e}")
             return None
     
-    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+    def _cosine_similarity(self, vec1: List[float], vec2: Optional[List[float]]) -> float:
         """
         Calculate cosine similarity between two vectors.
         
         Args:
             vec1: First vector
-            vec2: Second vector
+            vec2: Second vector (can be None)
             
         Returns:
             Cosine similarity (1.0 = identical, 0.0 = orthogonal, -1.0 = opposite)
         """
+        if vec2 is None:
+            return 0.0
+            
         if len(vec1) != len(vec2):
             return 0.0
             
@@ -415,6 +426,10 @@ class FastPathCache:
             task_hash_str = str(task_hash)
             task_embedding = self._generate_task_hash_embedding(task_hash_str)
             
+            # If embedding is None (AuthenticationError), still write cache without vector
+            if task_embedding is None:
+                logger.warning("⚠️ Writing cache entry without embedding (AuthenticationError)")
+            
             with self.postgres._get_conn() as conn:
                 conn.execute("""
                     INSERT INTO browser_fast_path 
@@ -437,7 +452,7 @@ class FastPathCache:
                     0,  # initial execution_time_ms
                     success_rate,
                     datetime.now(),
-                    str(task_embedding)
+                    str(task_embedding) if task_embedding else None  # Handle None embedding
                 ))
                 conn.commit()
                 logger.info(f"✅ Fast Path cache written for task {task_hash}")
@@ -725,9 +740,28 @@ class PostgresMemory(MemoryProvider):
         """Turns text into a list of numbers using LiteLLM."""
         try:
             text = text.replace("\n", " ")
+            
+            # Extract API key from Vault/config for secure access
+            config = get_config()
+            api_key = (
+                config.keys.get("OPENAI_API_KEY")
+                if hasattr(config, "keys") and isinstance(config.keys, dict)
+                else None
+            )
+            
+            # Fallback to environment variable if not in vault dictionary
+            if api_key is None:
+                api_key = os.getenv("OPENAI_API_KEY")
+            
+            # Set dummy key for local endpoints (e.g., LM Studio) to satisfy LiteLLM validation
+            if api_key is None:
+                logger.debug("No OpenAI API key found; using dummy key for local embedding model")
+                api_key = "dummy-local-key"
+            
             response = embedding(
                 model="text-embedding-3-small",
-                input=[text]
+                input=[text],
+                api_key=api_key
             )
             
             # ROBUST PARSING FIX: Handle both Object and Dict responses

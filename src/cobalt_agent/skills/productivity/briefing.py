@@ -8,7 +8,7 @@ from typing import List
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from cobalt_agent.config import load_config
+from cobalt_agent.config import get_config as load_config
 from cobalt_agent.llm import LLM
 from cobalt_agent.skills.productivity.scribe import Scribe
 from cobalt_agent.tools.finance import FinanceTool

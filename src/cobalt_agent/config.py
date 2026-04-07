@@ -14,7 +14,7 @@ Environment Variable Mapping:
 import json
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 import yaml
 from dotenv import load_dotenv
@@ -216,6 +216,7 @@ class PromptsConfig(BaseModel):
     proposal: Optional[dict] = None
     routing: Optional[dict] = None
     orchestrator: Optional[dict] = None
+    research: Optional[dict] = None
 
 
 class CobaltSettings(BaseSettings):
@@ -240,6 +241,9 @@ class CobaltSettings(BaseSettings):
     system: SystemConfig = Field(default_factory=SystemConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     persona: PersonaConfig = Field(default_factory=PersonaConfig)
+    
+    # Decrypted Secrets Storage (retained in memory, not persisted to disk)
+    keys: Dict[str, Any] = Field(default_factory=dict)
     
     # Optional Known Sections
     trading_rules: Optional[TradingRules] = None
@@ -371,11 +375,11 @@ class Config:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(Config, cls).__new__(cls)
-            # Initialize _config - either from load_config or as a placeholder
+            # Initialize _config - either from _load_config or as a placeholder
             try:
-                cls._instance._config = load_config()
+                cls._instance._config = _load_config()
             except Exception:
-                # If load_config fails (e.g., no configs found), use defaults
+                # If _load_config fails (e.g., no configs found), use defaults
                 cls._instance._config = CobaltSettings()
         return cls._instance
 
@@ -489,7 +493,7 @@ class Config:
         return CobaltSettings(**config_data)
 
 
-def load_config(config_dir: Optional[Path | str] = None) -> CobaltSettings:
+def _load_config(config_dir: Optional[Path | str] = None) -> CobaltSettings:
     """
     Load configuration from YAML files and merge with environment variables.
     
@@ -577,10 +581,8 @@ def load_config(config_dir: Optional[Path | str] = None) -> CobaltSettings:
                     master_data['mattermost'].update(parsed_val)
                 else:
                     # Default flat keys (OpenAI, Gemini, etc.)
+                    # Stored ONLY in memory. Global os.environ is strictly protected.
                     master_data['keys'][key_name] = parsed_val
-                    # Inject into runtime environment for external libraries (LiteLLM)
-                    if isinstance(parsed_val, str):
-                        os.environ[key_name] = parsed_val
                     
             vault.lock()
             logger.info("🔒 Vault secrets loaded into runtime RAM and vault locked.")

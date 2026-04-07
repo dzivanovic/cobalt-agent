@@ -7,7 +7,7 @@ Requires-Python: >=3.11
 Description-Content-Type: text/markdown
 Requires-Dist: pydantic>=2.0.0
 Requires-Dist: pydantic-ai>=0.0.1
-Requires-Dist: litellm>=1.0.0
+Requires-Dist: litellm==1.81.8
 Requires-Dist: openai>=1.0.0
 Requires-Dist: pandas>=2.2.0
 Requires-Dist: pandas-ta-classic
@@ -42,3 +42,4 @@ Requires-Dist: apscheduler>=3.11.2
 Requires-Dist: cryptography>=46.0.4
 Requires-Dist: opencv-python>=4.13.0.92
 Requires-Dist: mss>=10.1.0
+Requires-Dist: psycopg2-binary>=2.9.11

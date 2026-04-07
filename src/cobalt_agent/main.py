@@ -7,7 +7,7 @@ import sys
 from loguru import logger
 from datetime import datetime, timedelta
 
-from cobalt_agent.config import load_config
+from cobalt_agent.config import get_config
 from cobalt_agent.memory.postgres import PostgresMemory
 from cobalt_agent.memory import MemorySystem  # Keep this as fallback
 from cobalt_agent.persona import Persona
@@ -25,7 +25,7 @@ from cobalt_agent.skills.research.deep_dive import DeepResearch
 class CobaltAgent:
     def __init__(self):
         self.configure_logging()
-        self.config = load_config()
+        self.config = get_config()
         self.persona = Persona(self.config.persona)
         
         try:
@@ -49,10 +49,6 @@ class CobaltAgent:
 
         # Initialize Prompt Engine instead of static string
         self.prompt_engine = PromptEngine(self.config.persona)
-        
-        tools_list = self.tool_manager.get_tool_descriptions()
-        system_prompt = self.prompt_engine.build_system_prompt(tools=tools_list)
-        self.system_prompt = system_prompt
 
         # Log System Start to Memory
         self.memory.add_log("Cobalt Agent System Initialized", source="System")
@@ -60,12 +56,6 @@ class CobaltAgent:
 
         logger.info(f"Persona: {self.persona}")
         logger.info(f"Persona Roles: {', '.join(self.config.persona.roles)}")
-
-        logger.info("=" * 80)
-        logger.info("SYSTEM PROMPT:")
-        logger.info("=" * 80)
-        logger.info(f"\n{self.system_prompt}\n")
-        logger.info("=" * 80)
 
         logger.info("Memory System online")
 
@@ -105,10 +95,14 @@ class CobaltAgent:
         logger.info("Starting interactive CLI interface...")
         logger.info("=" * 80)
 
+        # Generate dynamic system prompt for CLI session
+        tools_list = self.tool_manager.get_tool_descriptions()
+        dynamic_prompt = self.prompt_engine.build_system_prompt(tools=tools_list)
+
         cli = CLI(
             memory_system=self.memory, 
             llm=self.llm, 
-            system_prompt=self.system_prompt,
+            system_prompt=dynamic_prompt,
             tool_manager=self.tool_manager,
             cortex=self.cortex
         )
@@ -146,13 +140,15 @@ class CobaltAgent:
                     return specialist_response
             
             # 2. Fallback to autonomous chat (LLM)
+            tools_list = self.tool_manager.get_tool_descriptions()
+            dynamic_prompt = self.prompt_engine.build_system_prompt(tools=tools_list)
+            
             response = self.llm.generate_response(
-                system_prompt=self.system_prompt,
+                system_prompt=dynamic_prompt,
                 user_input=text,
                 memory_context=[],
                 search_context=""
             )
-            logger.info(f"LLM response generated")
             return response
         except Exception as e:
             logger.error(f"Failed to process input: {e}")
@@ -161,8 +157,11 @@ class CobaltAgent:
     def send_message(self, message):
         """Send a message using the LLM."""
         try:
+            tools_list = self.tool_manager.get_tool_descriptions()
+            dynamic_prompt = self.prompt_engine.build_system_prompt(tools=tools_list)
+            
             response = self.llm.generate_response(
-                system_prompt=self.system_prompt,
+                system_prompt=dynamic_prompt,
                 user_input=message,
                 memory_context=[],
                 search_context=""

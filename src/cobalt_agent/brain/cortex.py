@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from loguru import logger
 
 from cobalt_agent.llm import LLM
-from cobalt_agent.config import load_config
+from cobalt_agent.config import get_config
 from cobalt_agent.core.proposals import Proposal
 
 # --- ROUTING MODEL ---
@@ -24,7 +24,7 @@ class DomainDecision(BaseModel):
 
 class Cortex:
     def __init__(self):
-        self.config = load_config()
+        self.config = get_config()
         
         # --- UNIFIED LLM CONFIGURATION ---
         # Use the unified switchboard profile instead of direct model_name

@@ -9,7 +9,6 @@ from loguru import logger
 from pydantic import BaseModel, Field, ValidationError
 
 from cobalt_agent.llm import LLM
-from cobalt_agent.config import load_config
 from cobalt_agent.tools.search import SearchTool
 from cobalt_agent.tools.browser import BrowserTool
 from cobalt_agent.skills.productivity.scribe import Scribe
@@ -31,17 +30,8 @@ class ResearchReport(BaseModel):
 # --- AGENT ---
 class DeepResearch:
     def __init__(self):
-        # 1. Load Global Config
-        config = load_config()
-        
-        # 2. Extract Model Name
-        if hasattr(config.llm, "model_name"):
-            self.model_name = config.llm.model_name
-        else:
-            self.model_name = getattr(config.llm, "model", "gpt-4o")
-
-        # 3. Initialize Components
-        self.llm = LLM(model_name=self.model_name)
+        # 1. Initialize Components using Role-Based Routing
+        self.llm = LLM(role="default")
         self.search = SearchTool()
         self.browser = BrowserTool()
         self.scribe = Scribe()
@@ -50,7 +40,7 @@ class DeepResearch:
         """
         Executes a multi-step research plan on a complex topic.
         """
-        logger.info(f"🕵️‍♂️ Starting Deep Dive on: {topic} (Model: {self.model_name})")
+        logger.info(f"🕵️‍♂️ Starting Deep Dive on: {topic}")
         
         # --- PHASE 1: PLANNING ---
         logger.info("🧠 Phase 1: Planning research strategy...")

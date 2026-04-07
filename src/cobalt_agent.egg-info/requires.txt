@@ -1,6 +1,6 @@
 pydantic>=2.0.0
 pydantic-ai>=0.0.1
-litellm>=1.0.0
+litellm==1.81.8
 openai>=1.0.0
 pandas>=2.2.0
 pandas-ta-classic
@@ -35,3 +35,4 @@ apscheduler>=3.11.2
 cryptography>=46.0.4
 opencv-python>=4.13.0.92
 mss>=10.1.0
+psycopg2-binary>=2.9.11

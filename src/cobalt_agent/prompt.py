@@ -68,10 +68,19 @@ class PromptEngine:
         )
 
     def _build_context(self) -> str:
+        import os
         now = datetime.datetime.now()
+        cwd = os.getcwd()
         return (
             f"### CURRENT CONTEXT\n"
             f"- Current Date/Time: {now.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"- System Root (CWD): {cwd}\n"
+            f"- Core Architecture Map: \n"
+            f"  * configs/ (System YAML configurations)\n"
+            f"  * src/cobalt_agent/ (Core application code)\n"
+            f"  * dev_utils/ (Testing and utility scripts)\n"
+            f"  * data/ (Vault and local database storage)\n"
+            f"  * logs/ (System execution logs)\n"
             f"- Operating System: Python Environment (CLI)\n"
             f"- User: Administrator"
         )

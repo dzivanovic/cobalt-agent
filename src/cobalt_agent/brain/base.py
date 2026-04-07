@@ -19,26 +19,20 @@ class BaseDepartment(ABC):
     DECORATED: Handles HITL approval by calling ProposalEngine when ToolManager
     returns a "requires_approval" status dict.
     """
-    def __init__(self, name: str, system_prompt: Optional[str] = None):
+    def __init__(self, name: str, role: str = "default", system_prompt: Optional[str] = None):
         self.name = name
-        self.llm = LLM()
+        self.llm = LLM(role=role)
         self.tool_manager = ToolManager()
         self.system_prompt = system_prompt
 
     def run(self, user_message: str, chat_history: Optional[List[Dict]] = None) -> str | dict:
         """
         Process a request using the ReAct loop.
-        
-        Args:
-            user_message: The user's request
-            chat_history: Optional list of previous messages for context
-            
-        Returns:
-            The final response after tool execution or max loops
         """
         logger.info(f"[{self.name}] Executing task...")
         
-        messages: List[Dict] = [{"role": "system", "content": self.system_prompt}]
+        # FIX 1: Do not append the system prompt here. llm.py handles it.
+        messages: List[Dict] = []
         if chat_history:
             messages.extend(chat_history)
             
@@ -46,7 +40,6 @@ class BaseDepartment(ABC):
         
         max_loops = 4
         for _ in range(max_loops):
-            # Get response from LLM using the unified interface
             memory_context = messages[:-1] if len(messages) > 1 else []
             response = self.llm.generate_response(
                 system_prompt=self.system_prompt,
@@ -57,23 +50,21 @@ class BaseDepartment(ABC):
             
             if "ACTION:" in response:
                 try:
-                    # Extract tool name and arguments from ACTION line
                     action_lines = [line for line in response.split('\n') if line.startswith('ACTION:')]
                     if not action_lines:
                         messages.append({"role": "assistant", "content": response})
-                        messages.append({"role": "system", "content": "Error: Malformed ACTION format. Ensure you use ACTION: tool_name {\"key\": \"value\"}"})
+                        # FIX 2: All observations and errors must be role="user"
+                        messages.append({"role": "user", "content": "Error: Malformed ACTION format. Ensure you use ACTION: tool_name {\"key\": \"value\"}"})
                         continue
                     
                     action_line = action_lines[0]
                     command = action_line.replace('ACTION:', '').strip()
                     
-                    # Parse tool name and arguments
                     parts = command.split(' ', 1)
                     tool_name = parts[0]
                     args_dict = {}
                     if len(parts) > 1:
                         try:
-                            # Clean up the string if the LLM wrapped it in quotes or markdown
                             clean_args = parts[1].strip()
                             if clean_args.startswith("'") and clean_args.endswith("'"):
                                 clean_args = clean_args[1:-1]
@@ -81,46 +72,38 @@ class BaseDepartment(ABC):
                             if not isinstance(args_dict, dict):
                                 args_dict = {'query': clean_args}
                         except json.JSONDecodeError as e:
-                            # Return explicit error for invalid JSON so LLM can self-correct
                             logger.warning(f"Failed to parse tool args as JSON: {e}")
                             error_msg = "Observation: Invalid JSON format. Please use strict double quotes."
                             messages.append({"role": "assistant", "content": response})
-                            messages.append({"role": "system", "content": error_msg})
+                            messages.append({"role": "user", "content": error_msg})
                             continue
                     
-                    # Execute the tool
                     raw_result = self.tool_manager.execute_tool(tool_name, args_dict)
                     
-                    # Return the raw dict to caller for centralized proposal handling
                     if isinstance(raw_result, dict) and raw_result.get("status") == "requires_approval":
                         return raw_result
                     
-                    # Convert result to string
                     result_str = str(raw_result)
                     
-                    # Format the result
                     if result_str.startswith("Error:"):
                         result_text = result_str
                     else:
                         result_text = result_str
                         
-                    # 🛑 FAST EXIT: If we hit a Zero-Trust Proposal wall, stop looping
                     if "Action paused" in result_str or "Proposal [" in result_str:
                         return result_text
                     
-                    # Append observation to history and loop
                     messages.append({"role": "assistant", "content": response})
-                    messages.append({"role": "system", "content": f"[Observation: {result_text}]"})
+                    messages.append({"role": "user", "content": f"[Observation: {result_text}]"})
                     
                 except json.JSONDecodeError as e:
                     messages.append({"role": "assistant", "content": response})
-                    messages.append({"role": "system", "content": f"Error parsing JSON arguments: {e}"})
+                    messages.append({"role": "user", "content": f"Error parsing JSON arguments: {e}"})
                 except Exception as e:
                     logger.exception(f"Error executing tool: {e}")
                     messages.append({"role": "assistant", "content": response})
-                    messages.append({"role": "system", "content": f"Error executing tool: {e}"})
+                    messages.append({"role": "user", "content": f"Error executing tool: {e}"})
             else:
-                # No ACTION found, meaning the drone is finished
                 return response
                 
         return "Error: ReAct loop maxed out. Please simplify the request."

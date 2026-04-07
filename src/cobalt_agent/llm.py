@@ -44,131 +44,112 @@ class LLM(BaseModel):
         logger.info(f"Role switched to '{new_role}', model updated to: {self._model_name}")
     
     def _resolve_model_config(self) -> None:
-        from cobalt_agent.config import load_config
-        # Load the configuration object
-        config = load_config()
+        from cobalt_agent.config import get_config
+        config = get_config()
         
-        # Debugging: Print the config object to verify its attributes
-        logger.debug(f"Config Object: {config.__dict__}")
-        # 1. Resolve the Model Alias (Intent -> Alias)
         active_profile = config.active_profile
-        
         model_alias = active_profile.get(self.role, active_profile.get("default"))
 
-        # 2. Retrieve Model Config (Alias -> Config)
         if model_alias not in config.models:
             raise ValueError(f"Model alias '{model_alias}' not found in registry.")
             
         model_config = config.models[model_alias]
         
-        # 3. Construct Model String
         if isinstance(model_config, dict):
             provider = model_config.get("provider")
             name = model_config.get("model_name")
-            node_ref = model_config.get("node_ref")
-            env_key_ref = model_config.get("env_key_ref")
+            self._node_ref = model_config.get("node_ref")
+            self._env_key_ref = model_config.get("env_key_ref")
         else:
             provider = model_config.provider
             name = model_config.model_name
-            node_ref = getattr(model_config, "node_ref", None)
-            env_key_ref = getattr(model_config, "env_key_ref", None)
+            self._node_ref = getattr(model_config, "node_ref", None)
+            self._env_key_ref = getattr(model_config, "env_key_ref", None)
 
         self._model_name = f"{provider}/{name}"
-
-        # Store model config for later use in _call_provider
         self._model_config = model_config
 
-        # 4. Resolve API Base (Local nodes need an IP, Cloud providers do not)
-        if node_ref:
+        self._api_base = None
+        if self._node_ref:
             nodes = config.network.nodes
-            target_node = nodes.get(node_ref) if isinstance(nodes, dict) else getattr(nodes, node_ref, None)
+            target_node = nodes.get(self._node_ref) if isinstance(nodes, dict) else getattr(nodes, self._node_ref, None)
             
-            if not target_node:
-                raise ValueError(f"Node reference '{node_ref}' not found in network topology.")
-            
-            if isinstance(target_node, dict):
-                ip = target_node.get("ip")
-                port = target_node.get("port")
-                protocol = target_node.get("protocol", "http")
-            else:
-                ip = target_node.ip
-                port = target_node.port
-                protocol = getattr(target_node, "protocol", "http")
+            if target_node:
+                ip = target_node.get("ip") if isinstance(target_node, dict) else target_node.ip
+                port = target_node.get("port") if isinstance(target_node, dict) else target_node.port
+                protocol = target_node.get("protocol", "http") if isinstance(target_node, dict) else getattr(target_node, "protocol", "http")
+                self._api_base = f"{protocol}://{ip}:{port}/v1"
 
-            self._api_base = f"{protocol}://{ip}:{port}/v1"
-        else:
-            # Cloud providers (OpenAI, Gemini, OpenRouter) do not need an API base
-            self._api_base = None
-
-        # 5. Resolve API Key from Vault (RAM-locked secrets)
-        if env_key_ref:
-            keys = config.model_dump().get("keys", {})  # Access extra fields
-            key_name = keys.get(env_key_ref) if isinstance(keys, dict) else getattr(keys, env_key_ref, None)
-            
-            if key_name and isinstance(keys, dict):
-                env_var_name = keys.get(key_name)
-                if env_var_name:
-                    self.api_key = SecretStr(os.getenv(env_var_name, ""))
-            elif key_name and not isinstance(keys, dict):
-                # Handle object-style keys config
-                env_var_name = getattr(keys, key_name, None)
-                if env_var_name:
-                    self.api_key = SecretStr(os.getenv(env_var_name, ""))
-        
-    def _call_provider(self, messages: List[Dict[str, str]], tools: Optional[List[Dict]] = None) -> str:
-        """
-        Internal helper to send messages to the provider via LiteLLM.
-        Uses Zero-Trust security: API keys are resolved from RAM-locked vault.
-        
-        Args:
-            messages: List of message dictionaries for the conversation
-            tools: Optional list of tool definitions (e.g., googleSearch) to enable grounding
-        """
+    def _call_provider(self, messages: List[Dict[str, str]], tools: Optional[List[Dict]] = None, temperature: float = 0.7, max_tokens: int = 4000, response_format: Optional[Dict] = None) -> str:
         try:
-            # 1. Resolve API Key securely from RAM (Vault)
-            from cobalt_agent.config import load_config
-            config = load_config()
+            from cobalt_agent.config import get_config
+            import os
             
-            # Access keys via model_dump() to handle extra fields
-            keys = config.model_dump().get("keys", {})
+            config = get_config()
             
             api_key = None
-            if "env_key_ref" in self._model_config:
-                key_name = self._model_config["env_key_ref"]  # e.g., "gemini"
-                if key_name in keys:
-                    env_var_name = keys[key_name]  # e.g., "GEMINI_API_KEY"
-                    # env_var_name now contains the actual key name, e.g., "GEMINI_API_KEY"
-                    # The value of that env var is stored in keys under env_var_name
-                    api_key = keys.get(env_var_name)
+            if self._env_key_ref:
+                # ZERO-TRUST VAULT EXTRACTION
+                try:
+                    keys_dict = {}
+                    
+                    # Try 1: If config is a dict (or dict-like)
+                    if hasattr(config, "get"):
+                        keys_dict = config.get("keys", {})
+                    # Try 2: If config is a Pydantic object
+                    elif hasattr(config, "model_dump"):
+                        keys_dict = config.model_dump().get("keys", {})
+                    # Try 3: Direct attribute fallback
+                    elif hasattr(config, "keys"):
+                        keys_obj = config.keys
+                        keys_dict = keys_obj.model_dump() if hasattr(keys_obj, "model_dump") else dict(keys_obj)
+                        
+                    # Now extract from the dictionary exactly as we see it in the logs
+                    target_key_name = keys_dict.get(self._env_key_ref, f"{self._env_key_ref.upper()}_API_KEY")
+                    
+                    # Grab the actual AIzaSy... hash!
+                    api_key = keys_dict.get(target_key_name)
+                    
+                    # Fallback to standard OS env if it wasn't in the dict
+                    if not api_key:
+                        api_key = os.getenv(target_key_name)
+                        
+                except Exception as e:
+                    from loguru import logger
+                    logger.error(f"Vault extraction fault: {e}")
+                
+                if not api_key:
+                    from loguru import logger
+                    logger.warning(f"CRITICAL: Failed to extract actual hash for '{self._env_key_ref}' from Vault RAM.")
+            
+            # Local model requires a dummy key for LiteLLM to pass validation
+            if not api_key and self._api_base:
+                api_key = "dummy-local-key"
 
-            # --- SRE Jinja Template Safety Net ---
             has_user = any(msg.get("role") == "user" for msg in messages)
             if not has_user:
                 messages.append({"role": "user", "content": "Analyze system prompt and execute."})
-            # -------------------------------------
 
-            # 2. Prepare execution arguments
             kwargs = {
                 "model": self._model_name,
                 "messages": messages,
-                "temperature": 0.7,
-                "max_tokens": 4000
+                "temperature": temperature,
+                "max_tokens": max_tokens
             }
             
             if self._api_base:
-                kwargs["base_url"] = self._api_base
+                kwargs["api_base"] = self._api_base
             if api_key:
                 kwargs["api_key"] = api_key
-            
-            # Add tools for grounding (e.g., googleSearch)
             if tools:
                 kwargs["tools"] = tools
+            if response_format:
+                kwargs["response_format"] = response_format
                 
-            logger.debug(f"Routing LiteLLM request to exact model string: {kwargs['model']}")
-            if tools:
-                logger.debug(f"Tools enabled for grounding: {tools}")
-                
-            # 3. Execute request
+            from loguru import logger
+            logger.debug(f"Executing: {self._model_name} | Base: {self._api_base}")
+            
+            from litellm import completion
             response = completion(**kwargs)
             
             if not response.choices or not response.choices[0].message:
@@ -177,16 +158,17 @@ class LLM(BaseModel):
             return response.choices[0].message.content.strip()
 
         except Exception as e:
+            from loguru import logger
             logger.error(f"LLM Call Failed: {str(e)}")
             raise e
 
     # --- 1. THE CHAT INTERFACE (For Main Loop) ---
     def generate_response(self,
-                          system_prompt: Optional[str] = None,
-                          user_input: Optional[str] = None,
-                          memory_context: List[Dict] = None,
-                          search_context: str = "",
-                          tools: Optional[List[Dict]] = None) -> str:
+                        system_prompt: Optional[str] = None,
+                        user_input: Optional[str] = None,
+                        memory_context: Optional[List[Dict]] = None,
+                        search_context: str = "",
+                        tools: Optional[List[Dict]] = None) -> str:
         """
         Main conversational loop method. Handles history and context injection.
         
@@ -217,7 +199,7 @@ class LLM(BaseModel):
 
         # C. Search Context (Legacy/Injection)
         if search_context:
-             messages.append({
+            messages.append({
                 "role": "user", 
                 "content": f"Context Information:\n{search_context}"
             })
@@ -247,7 +229,10 @@ class LLM(BaseModel):
     def ask(self, 
             system_message: str,
             user_input: Optional[str] = None,
-            tools: Optional[List[Dict]] = None) -> str:
+            tools: Optional[List[Dict]] = None,
+            temperature: float = 0.7,
+            max_tokens: int = 4000,
+            response_format: Optional[Dict] = None) -> str:
         """
         Direct one-off query. Used by skills like Research or Briefing.
         
@@ -255,28 +240,29 @@ class LLM(BaseModel):
             system_message: System-level instructions for the LLM
             user_input: Optional user input message
             tools: Optional list of tool definitions for grounding (e.g., googleSearch)
+            response_format: Optional response format specification (e.g., {"type": "json_object"})
         """
         messages = [
-            {"role": "system", "content": system_message},
+            {"role": "system", "content": system_message}
         ]
 
         if user_input:
             messages.append({"role": "user", "content": user_input})
 
         try:
-            return self._call_provider(messages, tools=tools)
+            return self._call_provider(messages, tools=tools, temperature=temperature, max_tokens=max_tokens, response_format=response_format)
         except Exception as e:
-            logger.error(f"Ask Failed: {str(e)}")
+            logger.error(f"Ask Failed: {e}")
             raise e
 
     # --- 3. THE STRUCTURED INTERFACE (For Strict Data) ---
     def ask_structured(self, 
-                       system_prompt: str, 
-                       response_model: Type[T],
-                       memory_context: List[Dict] = None,
-                       search_context: str = "", 
-                       user_input: Optional[str] = None,
-                       tools: Optional[List[Dict]] = None) -> T:
+                    system_prompt: str, 
+                    response_model: Type[T],
+                    memory_context: Optional[List[Dict]] = None,
+                    search_context: str = "", 
+                    user_input: Optional[str] = None,
+                    tools: Optional[List[Dict]] = None) -> T:
         """
         Forces the LLM to output JSON conforming to a Pydantic model.
         Returns the instantiated Pydantic object.
@@ -338,9 +324,9 @@ class LLM(BaseModel):
             
             # Parse and Validate
             return response_model.model_validate_json(cleaned_json)
-            
+        
         except ValidationError as e:
-            logger.error(f"Structured Data Validation Failed: {e}")
+            logger.error(f"Structured Data Control Failed: {e}")
             logger.debug(f"Raw Output: {raw_response}")
             raise ValueError(f"LLM failed to generate valid JSON: {e}")
         except Exception as e:

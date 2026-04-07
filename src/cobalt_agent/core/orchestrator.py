@@ -30,7 +30,7 @@ class OrchestratorEngine:
     Coordinates the "Split-Brain" architecture between the Architect (Planner) and specialized Drones (Executors).
     """
     def __init__(self):
-        self.llm = LLM()
+        self.llm = LLM(role="architect")
 
     def plan_and_execute(self, user_input: str) -> str:
         logger.info("Orchestrator: Generating Master Plan...")
@@ -98,6 +98,8 @@ class OrchestratorEngine:
                     previous_context += f"Step {prev_step.step_number} Result:\n{prev_step.observation}\n\n"
             
             # Formulate the localized context for the Drone
+            import os
+            cwd = os.getcwd()
             execution_context = f"""
             YOUR OVERALL MISSION:
             {state.original_request}
@@ -105,10 +107,20 @@ class OrchestratorEngine:
             PREVIOUS CONTEXT (Results of prior steps):
             {previous_context if previous_context else "None (This is the first step)."}
             
+            SYSTEM MAP (Your Current Location is {cwd}):
+            - configs/ (System YAML configurations)
+            - src/cobalt_agent/ (Core application code)
+            - dev_utils/ (Testing and utility scripts)
+            - data/ (Vault and local database storage)
+            - docs/ (Markdown notes and journals)
+            
             SPECIFIC STEP TO EXECUTE NOW:
             {step.action}
             
-            You must use the '{step.tool_to_use}' tool. Generate the ACTION string now.
+            EXECUTION RULES:
+            1. First, use the '{step.tool_to_use}' tool using the ACTION: syntax.
+            2. Once you receive the System Observation with the tool's result, DO NOT use another tool.
+            3. Instead, output a final text summary of the result. Do not include the word 'ACTION' in your final response to complete the task.
             """
             
             # Dynamic Drone Routing

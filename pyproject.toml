@@ -13,7 +13,7 @@ dependencies = [
     # 1. THE BRAIN
     "pydantic>=2.0.0",
     "pydantic-ai>=0.0.1",
-    "litellm>=1.0.0",
+    "litellm == 1.81.8",
     "openai>=1.0.0",
     # 2. THE FINANCE
     "pandas>=2.2.0",
@@ -52,6 +52,7 @@ dependencies = [
     "cryptography>=46.0.4",
     "opencv-python>=4.13.0.92",
     "mss>=10.1.0",
+    "psycopg2-binary>=2.9.11",
 ]
 
 # --- DEV DEPENDENCIES (New Standard: [dependency-groups]) ---

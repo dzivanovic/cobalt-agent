@@ -10,7 +10,7 @@ import numpy as np
 from typing import Optional, Tuple, Any
 from pydantic import BaseModel, Field
 from loguru import logger
-from cobalt_agent.config import load_config
+from cobalt_agent.config import get_config
 
 # --- PYDANTIC MODEL ---
 class MarketMetrics(BaseModel):
@@ -63,7 +63,7 @@ class FinanceTool:
     description = "Get current stock market data and technical indicators. Use for price queries, e.g., 'What is the price of AAPL?'"
     
     def __init__(self):
-        self.system_config = load_config()
+        self.system_config = get_config()
         # We access the raw dictionary or object safely
         self.rules = self.system_config.trading_rules
 
