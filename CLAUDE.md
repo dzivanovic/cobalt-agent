@@ -86,12 +86,17 @@ Cobalt in production must ALWAYS be left working after every sprint.
   start/stop/restart/status.
 - Services (docker-compose, OrbStack): db = pgvector/pg16 on :5432 (bind
   mount ./data/postgres — NEVER inventory or commit), pgadmin :18080,
-  Mattermost :8065. LaunchAgents outside the repo: com.cobalt.node-a/b and
-  com.cobalt.mainframe (runs ~/.lmstudio/start_mainframe.sh serving the
-  local model aliased "mainframe").
-- The playground vault lives INSIDE the repo at docs/Cobalt/ (see
-  configs obsidian_vault_path). Treat it as vault content: out of scope,
-  never committed.
+  Mattermost :8065. LaunchAgents outside the repo (captured in ops/):
+  com.cobalt.agent (runs cobalt.sh start) and com.cobalt.mainframe (runs
+  ~/.lmstudio/start_mainframe.sh serving the local model aliased
+  "mainframe").
+- The playground vault root is docs/ itself, INSIDE the repo (per .env
+  OBSIDIAN_VAULT_PATH; docs/assessment/ is the only un-ignored path under
+  it). Treat everything else under docs/ as vault content: out of scope,
+  never committed. OPEN ITEM: configs/config.yaml:6 also sets
+  obsidian_vault_path; which source wins (.env vs config.yaml vs the
+  hardcoded default in config.py:69, plus scribe.py's own env/~/Documents
+  fallback) is unverified — reconcile in Pass 6/7.
 - cobalt_master_context.txt is a STALE February snapshot — regenerate
   context with dev_utils/generate_context.py before relying on any tree.
 - Destructive utilities exist (dev_utils/wipe_memory.py,
