@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.mainframe</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/cobalt/.lmstudio/start_mainframe.sh</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/.lmstudio/mainframe_boot.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/.lmstudio/mainframe_boot.err</string>
+</dict>
+</plist>

@@ -2,8 +2,15 @@
 logs/
 __pycache__/
 .venv/
+venv/
 data/
-docs/
-docs/**
+docs/*
+!docs/assessment/
+!docs/assessment/**
+docs/Cobalt/
 architecture_assessments/
 logs.vscode/
+cobalt_context.txt
+cobalt_master_context.txt
+*.egg-info/
+.DS_Store
