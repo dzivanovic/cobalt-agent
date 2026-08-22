@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ASET Daily Position Sizer</title>
+  <style>
+    :root{
+      --bg:#080d18;
+      --panel:#111729;
+      --panel2:#0d1322;
+      --line:#20283c;
+      --muted:#7f8ca8;
+      --text:#eef5ff;
+      --cyan:#00e5ff;
+      --green:#24d986;
+      --yellow:#ffd84d;
+      --red:#ff4f71;
+      --orange:#ffb02e;
+      --blue:#64a6ff;
+      --shadow:0 20px 60px rgba(0,0,0,.35);
+      --radius:16px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:
+        radial-gradient(circle at 18% 2%, rgba(0,229,255,.16), transparent 24rem),
+        radial-gradient(circle at 100% 0%, rgba(100,166,255,.12), transparent 22rem),
+        linear-gradient(180deg,#09111f 0%,#070b14 100%);
+      color:var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing:.01em;
+    }
+
+    .wrap{max-width:1180px;margin:0 auto;padding:34px 22px 40px}
+
+    .topline{
+      color:var(--cyan);
+      text-transform:uppercase;
+      font-size:12px;
+      letter-spacing:.35em;
+      font-weight:800;
+      margin-bottom:10px;
+    }
+
+    .hero{
+      padding:30px 28px;
+      border:1px solid rgba(0,229,255,.18);
+      background:linear-gradient(135deg,rgba(17,23,41,.96),rgba(8,13,24,.82));
+      box-shadow:var(--shadow);
+      border-radius:24px;
+      position:relative;
+      overflow:hidden;
+    }
+    .hero:after{
+      content:"ASET";
+      position:absolute;
+      right:22px;
+      top:-22px;
+      font-size:110px;
+      font-weight:900;
+      color:rgba(255,255,255,.035);
+      letter-spacing:.08em;
+    }
+    h1{
+      margin:0;
+      font-size:clamp(40px,7vw,78px);
+      line-height:.92;
+      letter-spacing:.08em;
+      color:#dcecff;
+      text-transform:uppercase;
+      font-weight:950;
+    }
+    .subtitle{margin:16px 0 22px;color:#9dadcc;font-size:16px;max-width:760px}
+    .chips{display:flex;gap:10px;flex-wrap:wrap;position:relative;z-index:1}
+    .chip{
+      border:1px solid currentColor;
+      border-radius:999px;
+      padding:7px 14px;
+      font-size:12px;
+      font-weight:850;
+      letter-spacing:.08em;
+      background:rgba(0,0,0,.2);
+    }
+    .c1{color:var(--cyan)} .c2{color:var(--red)} .c3{color:var(--yellow)} .c4{color:var(--green)}
+
+    .framework{
+      margin-top:24px;
+      display:grid;
+      grid-template-columns:repeat(4,1fr);
+      border:1px solid var(--line);
+      border-radius:20px;
+      overflow:hidden;
+      background:rgba(10,15,27,.86);
+    }
+    .step{
+      min-height:190px;
+      padding:22px;
+      border-right:1px solid var(--line);
+      position:relative;
+    }
+    .step:last-child{border-right:0}
+    .step .num{font-size:10px;text-transform:uppercase;letter-spacing:.28em;font-weight:900;margin-bottom:6px}
+    .step h2{margin:0 0 12px;font-size:22px;letter-spacing:.05em;text-transform:uppercase}
+    .step p{margin:0;color:#8e9bb8;font-size:13px;line-height:1.48}
+    .step ul{padding-left:16px;margin:12px 0 0;color:#a9b7d2;font-size:12px;line-height:1.65}
+    .ghost{
+      position:absolute;right:12px;top:8px;font-size:56px;font-weight:950;color:rgba(255,255,255,.04)
+    }
+
+    .calculator{margin-top:24px;display:grid;grid-template-columns:1.04fr .96fr;gap:22px}
+    .card{
+      border:1px solid var(--line);
+      border-radius:20px;
+      background:rgba(14,20,36,.92);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .card-head{
+      display:flex;align-items:center;gap:10px;
+      padding:18px 20px;
+      border-bottom:1px solid var(--line);
+      color:#b5c2dc;
+      text-transform:uppercase;
+      letter-spacing:.18em;
+      font-size:12px;
+      font-weight:900;
+    }
+    .badge{
+      width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;
+      background:#1a2237;color:#9caccc;font-size:11px;letter-spacing:0;
+    }
+    .card-body{padding:20px}
+
+    label{display:block;color:#9fafca;font-size:11px;text-transform:uppercase;letter-spacing:.14em;font-weight:850;margin-bottom:8px}
+    .input-wrap{position:relative}
+    .prefix{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#6f7c96;font-weight:800}
+    input,select,textarea{
+      width:100%;
+      border:1px solid #232d44;
+      background:#0b1020;
+      color:var(--text);
+      border-radius:10px;
+      padding:13px 14px;
+      outline:none;
+      font-size:16px;
+      transition:.15s border-color,.15s box-shadow,.15s background;
+    }
+    .with-prefix input{padding-left:34px}
+    input:focus,select:focus,textarea:focus{
+      border-color:var(--cyan);
+      box-shadow:0 0 0 3px rgba(0,229,255,.12);
+      background:#0c1325;
+    }
+    textarea{min-height:96px;resize:vertical;line-height:1.4;font-size:13px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+    .row{margin-bottom:18px}.row:last-child{margin-bottom:0}
+    .hint{font-size:12px;color:#74829e;margin-top:7px;line-height:1.45}
+
+    .grade-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+    .grade{
+      border:1px solid #242e46;
+      background:#0b1020;
+      border-radius:12px;
+      padding:14px 10px;
+      cursor:pointer;
+      color:#8794af;
+      text-align:center;
+      transition:.15s transform,.15s border-color,.15s background,.15s color;
+      min-height:92px;
+    }
+    .grade:hover{transform:translateY(-1px);border-color:#3b4967}
+    .grade.active{
+      border-color:var(--cyan);
+      background:linear-gradient(180deg,rgba(0,229,255,.14),rgba(0,229,255,.04));
+      color:#eafaff;
+      box-shadow:0 0 0 3px rgba(0,229,255,.08);
+    }
+    .grade strong{display:block;font-size:23px;margin-bottom:3px}.grade span{display:block;font-size:11px;font-weight:900}.grade small{display:block;font-size:9px;line-height:1.2;margin-top:5px;color:#707f9a}
+    .grade[data-grade="A+"] strong{color:#f1d47a}.grade[data-grade="A"] strong{color:var(--cyan)}.grade[data-grade="B"] strong{color:#dfe6f2}.grade[data-grade="C"] strong{color:var(--yellow)}.grade[data-grade="D"] strong{color:var(--red)}
+
+    .toggle{display:flex;gap:10px}
+    .toggle button,.action button{
+      flex:1;
+      border:1px solid #28334d;
+      border-radius:11px;
+      background:#0b1020;
+      color:#8d9bb6;
+      padding:12px 14px;
+      font-weight:950;
+      cursor:pointer;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      transition:.15s;
+    }
+    .toggle button.active.long{color:var(--green);border-color:rgba(36,217,134,.75);background:rgba(36,217,134,.10)}
+    .toggle button.active.short{color:var(--red);border-color:rgba(255,79,113,.75);background:rgba(255,79,113,.10)}
+    .action{display:flex;gap:12px;flex-wrap:wrap}
+    .action button{flex:none}.action .primary{border-color:rgba(0,229,255,.7);color:var(--cyan);background:rgba(0,229,255,.08)}
+
+    .result{
+      margin-top:24px;
+      border:1px solid rgba(0,229,255,.18);
+      border-radius:22px;
+      background:linear-gradient(180deg,rgba(13,21,39,.98),rgba(8,13,24,.98));
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .big{
+      padding:30px 20px 26px;
+      text-align:center;
+      border-bottom:1px solid var(--line);
+    }
+    .shares{
+      font-size:clamp(62px,10vw,118px);
+      line-height:.88;
+      font-weight:1000;
+      letter-spacing:-.06em;
+      color:var(--green);
+      text-shadow:0 0 28px rgba(36,217,134,.18);
+    }
+    .unit{font-size:18px;letter-spacing:.18em;text-transform:uppercase;font-weight:950;color:#aab8d2;margin-left:8px}
+    .mini-grid{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #11182a}
+    .mini{padding:18px;border-right:1px solid var(--line);text-align:center;min-height:83px}.mini:last-child{border-right:0}
+    .mini label{margin:0 0 6px;font-size:9px;color:#63718d}.mini strong{font-size:18px}.money{color:var(--orange)}.green{color:var(--green)}.red{color:var(--red)}.cyan{color:var(--cyan)}.yellow{color:var(--yellow)}
+
+    .aset-notes{margin-top:22px;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+    .note{border:1px solid var(--line);background:rgba(13,19,34,.86);border-radius:16px;padding:16px}.note h3{margin:0 0 10px;text-transform:uppercase;letter-spacing:.08em;font-size:15px}.note textarea{min-height:112px}
+
+    .checklist{margin-top:22px;display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+    .check{
+      border:1px solid var(--line);background:#101629;border-radius:13px;padding:13px;text-align:center;color:#b4c1dc;
+      font-size:11px;line-height:1.28;
+    }
+    .check b{display:block;color:var(--cyan);font-size:20px;margin-bottom:5px}.check input{width:auto;margin:0 0 8px;accent-color:#00e5ff}
+
+    .warn{display:none;margin-top:12px;padding:12px 14px;border:1px solid rgba(255,79,113,.35);background:rgba(255,79,113,.08);color:#ffc3ce;border-radius:12px;font-size:13px;line-height:1.45}
+    .warn.show{display:block}
+
+    .footer{margin-top:22px;color:#687792;font-size:11px;letter-spacing:.18em;text-transform:uppercase;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+    @media (max-width:980px){
+      .framework,.calculator,.aset-notes{grid-template-columns:1fr 1fr}.step:nth-child(2){border-right:0}.step{border-bottom:1px solid var(--line)}.step:nth-child(3),.step:nth-child(4){border-bottom:0}.checklist{grid-template-columns:repeat(3,1fr)}
+    }
+    @media (max-width:660px){
+      .wrap{padding:22px 14px}.hero{padding:24px 18px}.framework,.calculator,.aset-notes,.grid2,.grid3{grid-template-columns:1fr}.step{border-right:0}.step:nth-child(3){border-bottom:1px solid var(--line)}.grade-grid{grid-template-columns:repeat(2,1fr)}.mini-grid{grid-template-columns:1fr 1fr}.mini:nth-child(2){border-right:0}.checklist{grid-template-columns:1fr 1fr}.shares{font-size:72px}
+    }
+    @media print{
+      body{background:#fff;color:#111}.hero,.card,.result,.note,.check{box-shadow:none;background:#fff;color:#111;border-color:#d7dbe5}.subtitle,.hint,label,.footer,.step p,.step li{color:#333}input,select,textarea{background:#fff;color:#111;border-color:#c6ccd8}.action{display:none}.shares{color:#0a8f55;text-shadow:none}.ghost{display:none}.framework{background:#fff}.topline,.chip,.step h2,.step .num{color:#111!important}
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <div class="topline">SMB Training · Daily Trading Tool</div>
+      <h1>ASET Framework</h1>
+      <p class="subtitle">A systematic trade-structuring discipline. Every position sized by math — not emotion.</p>
+      <div class="chips">
+        <span class="chip c1">A · Allocation</span>
+        <span class="chip c2">S · Stop</span>
+        <span class="chip c3">E · Entry</span>
+        <span class="chip c4">T · Target</span>
+      </div>
+    </section>
+
+    <section class="framework">
+      <article class="step">
+        <span class="ghost">A</span>
+        <div class="num c1">Step 1</div>
+        <h2 class="c1">Allocation</h2>
+        <p>Score the trade by catalyst, setup and trade quality. Grade determines how much of your daily risk budget this trade deserves.</p>
+        <ul><li>Catalyst — is there a meaningful reason?</li><li>Setup — recognized pattern?</li><li>Trade — sector/regime/relative volume confirming?</li></ul>
+      </article>
+      <article class="step">
+        <span class="ghost">S</span>
+        <div class="num c2">Step 2</div>
+        <h2 class="c2">Stop</h2>
+        <p>The price level where the thesis is proven wrong. Structure first, feelings never.</p>
+        <ul><li>Range-break trade: below range low.</li><li>Consolidation trade: below bound.</li><li>Never skip pre-defined risk.</li></ul>
+      </article>
+      <article class="step">
+        <span class="ghost">E</span>
+        <div class="num c3">Step 3</div>
+        <h2 class="c3">Entry</h2>
+        <p>A precise trigger — price level plus confirmation — that turns an idea into a real trade.</p>
+        <ul><li>Break close above/below level.</li><li>Pullback reclaim/reject.</li><li>Continuation after confirmation.</li></ul>
+      </article>
+      <article class="step">
+        <span class="ghost">T</span>
+        <div class="num c4">Step 4</div>
+        <h2 class="c4">Target</h2>
+        <p>Define the reward side. Minimum 2-to-1 R:R. Target can be adjusted only when the structure supports it.</p>
+        <ul><li>1R: measured move / first structure.</li><li>2R: extended move with momentum.</li><li>No target = no trade.</li></ul>
+      </article>
+    </section>
+
+    <section class="calculator">
+      <div class="card">
+        <div class="card-head"><span class="badge">1</span> Daily stop limit</div>
+        <div class="card-body">
+          <div class="row grid2">
+            <div>
+              <label for="dailyStop">Maximum daily loss today</label>
+              <div class="input-wrap with-prefix"><span class="prefix">$</span><input id="dailyStop" type="number" min="0" step="1" value="1000"></div>
+            </div>
+            <div>
+              <label for="mode">Sizing mode</label>
+              <select id="mode">
+                <option value="shares" selected>Shares / stocks</option>
+                <option value="futures">Futures contracts</option>
+              </select>
+            </div>
+          </div>
+          <div class="row grid2 futures-only" style="display:none">
+            <div>
+              <label for="pointValue">Futures $ per point</label>
+              <div class="input-wrap with-prefix"><span class="prefix">$</span><input id="pointValue" type="number" min="0" step="0.01" value="5"></div>
+              <div class="hint">MES = $5/point · ES = $50/point · MNQ = $2/point · NQ = $20/point</div>
+            </div>
+            <div>
+              <label for="futuresPreset">Quick preset</label>
+              <select id="futuresPreset">
+                <option value="5">MES · $5 / point</option>
+                <option value="50">ES · $50 / point</option>
+                <option value="2">MNQ · $2 / point</option>
+                <option value="20">NQ · $20 / point</option>
+                <option value="0.5">M2K · $0.50 / point</option>
+                <option value="5">RTY · $5 / point</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-head"><span class="badge">2</span> Allocation grade</div>
+        <div class="card-body">
+          <div class="grade-grid" id="grades">
+            <button class="grade" type="button" data-grade="A+" data-pct="80"><strong>A+</strong><span>80%</span><small>All variables aligned</small></button>
+            <button class="grade active" type="button" data-grade="A" data-pct="30"><strong>A</strong><span>30%</span><small>Strong catalyst + structure</small></button>
+            <button class="grade" type="button" data-grade="B" data-pct="15"><strong>B</strong><span>15%</span><small>Solid named setup</small></button>
+            <button class="grade" type="button" data-grade="C" data-pct="5"><strong>C</strong><span>5%</span><small>Skill-building rep</small></button>
+            <button class="grade" type="button" data-grade="D" data-pct="0"><strong>D</strong><span>0%</span><small>No trade</small></button>
+          </div>
+          <div class="hint">Risk budget for this trade: <strong class="money" id="riskBudgetInline">$300.00</strong></div>
+        </div>
+
+        <div class="card-head"><span class="badge">3</span> Entry & stop prices</div>
+        <div class="card-body">
+          <div class="row">
+            <label>Trade direction</label>
+            <div class="toggle">
+              <button type="button" id="longBtn" class="long">Long</button>
+              <button type="button" id="shortBtn" class="short active">Short</button>
+            </div>
+          </div>
+          <div class="row grid2">
+            <div>
+              <label for="entry">Entry price</label>
+              <div class="input-wrap with-prefix"><span class="prefix">$</span><input id="entry" type="number" step="0.01" value="49"></div>
+            </div>
+            <div>
+              <label for="stop">Stop price</label>
+              <div class="input-wrap with-prefix"><span class="prefix">$</span><input id="stop" type="number" step="0.01" value="50.09"></div>
+            </div>
+          </div>
+          <div class="hint">Risk per share / point distance: <strong id="distanceInline">$1.09</strong></div>
+          <div class="warn" id="warning"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-head"><span class="badge">4</span> Target plan</div>
+          <div class="card-body">
+            <div class="row grid2">
+              <div>
+                <label for="minRR">Minimum R:R</label>
+                <input id="minRR" type="number" min="0" step="0.25" value="2">
+              </div>
+              <div>
+                <label for="customTarget">Optional custom target</label>
+                <div class="input-wrap with-prefix"><span class="prefix">$</span><input id="customTarget" type="number" step="0.01" placeholder="auto"></div>
+              </div>
+            </div>
+            <div class="grid3">
+              <div class="mini" style="border:1px solid var(--line);border-radius:12px"><label>Target 1R</label><strong id="target1">$47.91</strong></div>
+              <div class="mini" style="border:1px solid var(--line);border-radius:12px"><label>Target 2R</label><strong id="target2">$46.82</strong></div>
+              <div class="mini" style="border:1px solid var(--line);border-radius:12px"><label>Planned R:R</label><strong id="plannedRR" class="green">2.00R</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <section class="result">
+          <div class="big">
+            <span class="shares" id="shares">275</span><span class="unit" id="unitLabel">shares</span>
+          </div>
+          <div class="mini-grid">
+            <div class="mini"><label>Grade</label><strong id="gradeOut" class="cyan">A</strong></div>
+            <div class="mini"><label>$ risk</label><strong id="riskBudget" class="money">$300.00</strong></div>
+            <div class="mini"><label id="riskUnitLabel">Risk / share</label><strong id="riskPerUnit">$1.09</strong></div>
+            <div class="mini"><label>Total used risk</label><strong id="usedRisk">$299.75</strong></div>
+          </div>
+        </section>
+
+        <div class="card" style="margin-top:22px">
+          <div class="card-head"><span class="badge">✓</span> Controls</div>
+          <div class="card-body action">
+            <button class="primary" type="button" onclick="window.print()">Print / Save PDF</button>
+            <button type="button" id="resetBtn">Reset</button>
+            <button type="button" id="copyBtn">Copy summary</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="aset-notes">
+      <div class="note"><h3 class="c1">A · Allocation notes</h3><textarea id="noteA" placeholder="Catalyst, setup quality, market regime..."></textarea></div>
+      <div class="note"><h3 class="c2">S · Stop notes</h3><textarea id="noteS" placeholder="Exact invalidation level and why..."></textarea></div>
+      <div class="note"><h3 class="c3">E · Entry notes</h3><textarea id="noteE" placeholder="Trigger, confirmation, timing..."></textarea></div>
+      <div class="note"><h3 class="c4">T · Target notes</h3><textarea id="noteT" placeholder="1R, 2R, structure target, exit plan..."></textarea></div>
+    </section>
+
+    <section class="checklist">
+      <label class="check"><input type="checkbox"> <b>01</b>Grade allocation</label>
+      <label class="check"><input type="checkbox"> <b>02</b>Set structural stop</label>
+      <label class="check"><input type="checkbox"> <b>03</b>Define entry trigger</label>
+      <label class="check"><input type="checkbox"> <b>04</b>Project ≥2R target</label>
+      <label class="check"><input type="checkbox"> <b>05</b>Calculate units</label>
+      <label class="check"><input type="checkbox"> <b>06</b>Execute math only</label>
+    </section>
+
+    <div class="footer"><span>ASET Framework · Allocation · Stop · Entry · Target</span><span id="dateStamp"></span></div>
+  </main>
+
+  <script>
+    const els = {
+      dailyStop: document.getElementById('dailyStop'),
+      mode: document.getElementById('mode'),
+      pointValue: document.getElementById('pointValue'),
+      futuresPreset: document.getElementById('futuresPreset'),
+      futuresOnly: document.querySelectorAll('.futures-only'),
+      entry: document.getElementById('entry'),
+      stop: document.getElementById('stop'),
+      minRR: document.getElementById('minRR'),
+      customTarget: document.getElementById('customTarget'),
+      grades: document.querySelectorAll('.grade'),
+      longBtn: document.getElementById('longBtn'),
+      shortBtn: document.getElementById('shortBtn'),
+      shares: document.getElementById('shares'),
+      unitLabel: document.getElementById('unitLabel'),
+      gradeOut: document.getElementById('gradeOut'),
+      riskBudget: document.getElementById('riskBudget'),
+      riskBudgetInline: document.getElementById('riskBudgetInline'),
+      distanceInline: document.getElementById('distanceInline'),
+      riskPerUnit: document.getElementById('riskPerUnit'),
+      riskUnitLabel: document.getElementById('riskUnitLabel'),
+      usedRisk: document.getElementById('usedRisk'),
+      target1: document.getElementById('target1'),
+      target2: document.getElementById('target2'),
+      plannedRR: document.getElementById('plannedRR'),
+      warning: document.getElementById('warning'),
+      resetBtn: document.getElementById('resetBtn'),
+      copyBtn: document.getElementById('copyBtn'),
+      dateStamp: document.getElementById('dateStamp')
+    };
+
+    const defaults = {
+      dailyStop: 1000,
+      grade: 'A',
+      pct: 30,
+      entry: 49,
+      stop: 50.09,
+      direction: 'short',
+      mode: 'shares',
+      pointValue: 5,
+      minRR: 2,
+      customTarget: ''
+    };
+
+    let state = {...defaults};
+
+    function money(n){
+      if(!isFinite(n)) return '$0.00';
+      return '$' + n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+    }
+    function price(n){
+      if(!isFinite(n)) return '$0.00';
+      return '$' + n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+    }
+    function num(v){
+      const n = Number(v);
+      return isFinite(n) ? n : 0;
+    }
+    function save(){
+      const notes = ['noteA','noteS','noteE','noteT'].reduce((a,id)=>{a[id]=document.getElementById(id).value;return a;},{});
+      localStorage.setItem('asetSizer', JSON.stringify({...state, notes}));
+    }
+    function load(){
+      try{
+        const raw = JSON.parse(localStorage.getItem('asetSizer'));
+        if(raw){
+          state = {...defaults, ...raw};
+          if(raw.notes){ Object.entries(raw.notes).forEach(([id,v])=>{ const el=document.getElementById(id); if(el) el.value=v; }); }
+        }
+      } catch(e){}
+      renderInputs();
+    }
+    function renderInputs(){
+      els.dailyStop.value = state.dailyStop;
+      els.entry.value = state.entry;
+      els.stop.value = state.stop;
+      els.mode.value = state.mode;
+      els.pointValue.value = state.pointValue;
+      els.futuresPreset.value = String(state.pointValue);
+      els.minRR.value = state.minRR;
+      els.customTarget.value = state.customTarget;
+      setDirection(state.direction);
+      els.grades.forEach(g => g.classList.toggle('active', g.dataset.grade === state.grade));
+      els.futuresOnly.forEach(x => x.style.display = state.mode === 'futures' ? 'grid' : 'none');
+      calc();
+    }
+    function setDirection(dir){
+      state.direction = dir;
+      els.longBtn.classList.toggle('active', dir === 'long');
+      els.shortBtn.classList.toggle('active', dir === 'short');
+    }
+    function calc(){
+      state.dailyStop = num(els.dailyStop.value);
+      state.entry = num(els.entry.value);
+      state.stop = num(els.stop.value);
+      state.mode = els.mode.value;
+      state.pointValue = num(els.pointValue.value) || 0;
+      state.minRR = num(els.minRR.value) || 0;
+      state.customTarget = els.customTarget.value;
+
+      const active = document.querySelector('.grade.active');
+      state.grade = active?.dataset.grade || 'D';
+      state.pct = num(active?.dataset.pct || 0);
+
+      const riskBudget = state.dailyStop * (state.pct / 100);
+      const distance = Math.abs(state.entry - state.stop);
+      const riskPerUnit = state.mode === 'futures' ? distance * state.pointValue : distance;
+      const units = riskPerUnit > 0 ? Math.floor(riskBudget / riskPerUnit) : 0;
+      const usedRisk = units * riskPerUnit;
+      const isLong = state.direction === 'long';
+      const target1 = isLong ? state.entry + distance : state.entry - distance;
+      const target2 = isLong ? state.entry + distance * 2 : state.entry - distance * 2;
+      const autoTarget = isLong ? state.entry + distance * state.minRR : state.entry - distance * state.minRR;
+      const customTarget = num(state.customTarget);
+      const chosenTarget = state.customTarget === '' ? autoTarget : customTarget;
+      const rewardDistance = Math.abs(chosenTarget - state.entry);
+      const plannedRR = distance > 0 ? rewardDistance / distance : 0;
+
+      els.riskBudget.textContent = money(riskBudget);
+      els.riskBudgetInline.textContent = money(riskBudget);
+      els.distanceInline.textContent = state.mode === 'futures' ? `${distance.toFixed(2)} pts` : money(distance);
+      els.riskPerUnit.textContent = money(riskPerUnit);
+      els.usedRisk.textContent = money(usedRisk);
+      els.gradeOut.textContent = state.grade;
+      els.shares.textContent = isFinite(units) ? units.toLocaleString() : '0';
+      els.unitLabel.textContent = state.mode === 'futures' ? 'contracts' : 'shares';
+      els.riskUnitLabel.textContent = state.mode === 'futures' ? 'Risk / contract' : 'Risk / share';
+      els.target1.textContent = price(target1);
+      els.target2.textContent = price(target2);
+      els.plannedRR.textContent = plannedRR.toFixed(2) + 'R';
+      els.plannedRR.className = plannedRR >= state.minRR ? 'green' : 'red';
+
+      let warnings = [];
+      if(state.dailyStop <= 0) warnings.push('Daily stop must be above zero.');
+      if(state.pct === 0) warnings.push('D grade = no trade. Allocation is 0%.');
+      if(distance <= 0) warnings.push('Entry and stop cannot be the same.');
+      if(state.mode === 'futures' && state.pointValue <= 0) warnings.push('Futures point value must be above zero.');
+      if(isLong && state.stop >= state.entry) warnings.push('For a long trade, stop is normally below entry. Check your ASET plan.');
+      if(!isLong && state.stop <= state.entry) warnings.push('For a short trade, stop is normally above entry. Check your ASET plan.');
+      if(state.customTarget !== '' && plannedRR < state.minRR) warnings.push('Custom target is below your minimum R:R requirement.');
+      if(units < 1 && riskBudget > 0 && riskPerUnit > 0) warnings.push('Position size rounds to zero. Risk per unit is larger than allocated risk budget.');
+
+      els.warning.innerHTML = warnings.join('<br>');
+      els.warning.classList.toggle('show', warnings.length > 0);
+      els.futuresOnly.forEach(x => x.style.display = state.mode === 'futures' ? 'grid' : 'none');
+      save();
+    }
+
+    els.grades.forEach(g => g.addEventListener('click', () => {
+      els.grades.forEach(x => x.classList.remove('active'));
+      g.classList.add('active');
+      calc();
+    }));
+    [els.dailyStop,els.entry,els.stop,els.mode,els.pointValue,els.minRR,els.customTarget].forEach(el => el.addEventListener('input', calc));
+    els.mode.addEventListener('change', calc);
+    els.futuresPreset.addEventListener('change', () => { els.pointValue.value = els.futuresPreset.value; calc(); });
+    els.longBtn.addEventListener('click', () => { setDirection('long'); calc(); });
+    els.shortBtn.addEventListener('click', () => { setDirection('short'); calc(); });
+    ['noteA','noteS','noteE','noteT'].forEach(id => document.getElementById(id).addEventListener('input', save));
+    els.resetBtn.addEventListener('click', () => {
+      localStorage.removeItem('asetSizer');
+      state = {...defaults};
+      ['noteA','noteS','noteE','noteT'].forEach(id => document.getElementById(id).value='');
+      renderInputs();
+    });
+    els.copyBtn.addEventListener('click', async () => {
+      const summary = `ASET Position Size\nGrade: ${state.grade} (${state.pct}%)\nDaily Stop: ${money(state.dailyStop)}\nEntry: ${price(state.entry)}\nStop: ${price(state.stop)}\nDirection: ${state.direction.toUpperCase()}\nRisk Budget: ${els.riskBudget.textContent}\nRisk / Unit: ${els.riskPerUnit.textContent}\nSize: ${els.shares.textContent} ${els.unitLabel.textContent}\nTarget 1R: ${els.target1.textContent}\nTarget 2R: ${els.target2.textContent}\nPlanned R:R: ${els.plannedRR.textContent}`;
+      try{ await navigator.clipboard.writeText(summary); els.copyBtn.textContent='Copied'; setTimeout(()=>els.copyBtn.textContent='Copy summary',1100); }
+      catch(e){ alert(summary); }
+    });
+
+    els.dateStamp.textContent = new Date().toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+    load();
+  </script>
+</body>
+</html>

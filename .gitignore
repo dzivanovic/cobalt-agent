@@ -7,6 +7,8 @@ data/
 docs/*
 !docs/assessment/
 !docs/assessment/**
+!docs/references/
+!docs/references/**
 docs/Cobalt/
 architecture_assessments/
 logs.vscode/

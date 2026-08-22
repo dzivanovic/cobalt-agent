@@ -1,0 +1,307 @@
+MIME-Version: 1.0
+Date: Sat, 22 Aug 2026 12:34:57 -0400
+Message-ID: <CADEAGbrZhoO+rGKqUhUM42o0x2eZ1GOkGXmdUhR_7fiEbq4RZw@mail.gmail.com>
+Subject: 
+From: Dejan Zivanovic <dejan.kenkyukai@gmail.com>
+To: Dejan Zivanovic <dejan.kenkyukai@gmail.com>
+Content-Type: multipart/alternative; boundary="00000000000070e2ca0659a55563"
+
+--00000000000070e2ca0659a55563
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+*pathy's Wiki vs. Open Brain. One Fails When You Need It Most.
+<https://www.youtube.com/watch?v=3Ddxq7WtWxi44>* by AI News & Strategy Dail=
+y
+| Nate B Jones.
+Why Karpathy's Setup Fails (According to the Video)
+
+Nate B Jones explains that Andrej Karpathy's LLM Wiki (which uses an AI to
+read raw information and immediately write synthesized Markdown files for
+Obsidian) is a "write-time" system. While it is excellent for solo,
+deep-dive academic research, he argues it breaks down in several specific
+situations:
+
+   -
+
+   *Scale and Multi-Agent Conflicts:* It fails when teams use it or when
+   multiple AI tools (like ChatGPT, Cursor, and automated scripts) try to e=
+dit
+   the same Markdown file simultaneously. This results in file conflicts an=
+d
+   "weird merges" rather than a clear understanding.
+   -
+
+   *High-Velocity Data:* The setup struggles with fast-changing operational
+   data like Slack messages, project status changes, or ticket updates beca=
+use
+   the AI is forced into a punishing cycle of constantly re-synthesizing pa=
+ges.
+   -
+
+   *Complex Database Queries:* A folder of text files cannot effectively
+   answer precise, operational questions, such as pulling every deal over
+   $50,000 from the last quarter or filtering meetings by client name.
+   -
+
+   *Drift and "Active Misinformation":* If a wiki page is neglected and new
+   information isn't integrated, it drifts from reality. Because the AI wri=
+tes
+   these pages in confident, readable prose, outdated summaries can act as
+   "active misinformation" that you might not know to question.
+
+The "Better Example"
+
+Jones proposes his own system, *OpenBrain*, which operates as a
+"query-time" system. Instead of having the AI constantly rewrite and
+summarize documents upon ingest, OpenBrain stores raw facts cleanly in a
+structured SQL database so they can be queried later.
+
+To get the best of both worlds, Jones introduced a hybrid solution:
+
+   -
+
+   *The Compilation Agent:* He launched a plugin that sits on top of
+   OpenBrain's database.
+   -
+
+   *Generated Wiki Pages:* This agent reads the structured data and
+   generates Karpathy-style wiki pages on a schedule.
+   -
+
+   *The Result:* You get the easy, human-readable browsability of
+   Karpathy's Obsidian setup, but your underlying memory remains a factual,
+   scalable, and highly queryable database that won't break at scale.
+   <http://www.youtube.com/watch?v=3DfyHnGHxGuhI>
+   YouTube
+   Nate B Jones Andrew Karpathy
+   <http://www.youtube.com/watch?v=3DfyHnGHxGuhI> Open in YouTube
+   <http://www.youtube.com/watch?v=3DfyHnGHxGuhI>
+   Why Andrej Karpathy Feels "Behind" (And What It Means for Your Career)
+   <http://www.youtube.com/watch?v=3DfyHnGHxGuhI>AI News & Strategy Daily |
+   Nate B Jones Opens in a new window
+   <https://www.youtube.com/channel/UC0C-17n9iuUQPylguM1d-lQ>My site:
+   https://natebjones.com Full Story w/ Prompts: ... Opens in a new window
+   I Summarized Andrej Karpathy's 2.5 Hour Podcast in 20 Min=E2=80=94Grab 4
+   Takeaways No One's Talking About
+   <http://www.youtube.com/watch?v=3D5ioEQigrJOA>AI News & Strategy Daily |
+   Nate B Jones Opens in a new window
+   <https://www.youtube.com/channel/UC0C-17n9iuUQPylguM1d-lQ>My site:
+   https://natebjones.com Full Story: ... Opens in a new window
+   Karpathy's Wiki vs. Open Brain. One Fails When You Need It Most.
+   <http://www.youtube.com/watch?v=3Ddxq7WtWxi44>AI News & Strategy Daily |
+   Nate B Jones Opens in a new window
+   <https://www.youtube.com/channel/UC0C-17n9iuUQPylguM1d-lQ>Full
+   Comparison w/ Prompts & Open Brain Wiki: ... Opens in a new window
+   Andrej Karpathy's Vision for the Future of AI #ai
+   #artificialintelligence #shorts
+   <http://www.youtube.com/watch?v=3D_sn7WAVWC2A>AI News & Strategy Daily |
+   Nate B Jones Opens in a new window
+   <https://www.youtube.com/channel/UC0C-17n9iuUQPylguM1d-lQ>Watch the
+   longer video to grab the whole story! My site: https://natebjones.com
+   Full Story: ... Opens in a new window
+   Karpathy Just Told Us What Startups To Build For 2026
+   <http://www.youtube.com/watch?v=3DrsaaVXg28-8>Rob Shocks Opens in a new
+   window <https://www.youtube.com/channel/UCsVgseBnKuyIGaH54XVoK3Q>Checkou=
+t
+   monday.com vibe - https://bit.ly/4cgHjDN *Andrej Karpathy* just dropped
+   one of the most important AI talks of the year ... Opens in a new window
+
+
+
+--=20
+Thank you
+Dejan Zivanovic
+
+--00000000000070e2ca0659a55563
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+<div dir=3D"ltr"><div><br clear=3D"all"></div>
+<div class=3D"gmail-container"><span id=3D"gmail-message-content-id-r_da316=
+491738358f0" class=3D"gmail-ng-star-inserted"><div class=3D"gmail-markdown =
+gmail-markdown-main-panel gmail-md-content enable-luminous-fast-follows ena=
+ble-updated-hr-color gmail-stronger gmail-tutor-markdown-rendering" id=3D"g=
+mail-model-response-message-contentr_da316491738358f0" dir=3D"ltr"><p><b><s=
+pan class=3D"gmail-no-md"><span class=3D"gmail-ng-star-inserted"><a target=
+=3D"_blank" rel=3D"noopener" href=3D"https://www.youtube.com/watch?v=3Ddxq7=
+WtWxi44" class=3D"gmail-ng-star-inserted">pathy&#39;s Wiki vs. Open Brain. =
+One Fails When You Need It Most.</a></span></span></b> by AI News &amp; Str=
+ategy Daily | Nate B Jones.</p><h3>Why Karpathy&#39;s Setup Fails (Accordin=
+g to the Video)</h3><p>Nate B Jones explains that Andrej Karpathy&#39;s LLM=
+ Wiki (which uses an AI to read raw information and immediately write synth=
+esized Markdown files for Obsidian) is a &quot;write-time&quot; system. Whi=
+le it is excellent for solo, deep-dive academic research, he argues it brea=
+ks down in several specific situations:</p><ul><li><p><b>Scale and Multi-Ag=
+ent Conflicts:</b> It fails when teams use it or when multiple AI tools (li=
+ke ChatGPT, Cursor, and automated scripts) try to edit the same Markdown fi=
+le simultaneously. This results in file conflicts and &quot;weird merges&qu=
+ot; rather than a clear understanding.</p></li><li><p><b>High-Velocity Data=
+:</b> The setup struggles with fast-changing operational data like Slack me=
+ssages, project status changes, or ticket updates because the AI is forced =
+into a punishing cycle of constantly re-synthesizing pages.</p></li><li><p>=
+<b>Complex Database Queries:</b> A folder of text files cannot effectively =
+answer precise, operational questions, such as pulling every deal over $50,=
+000 from the last quarter or filtering meetings by client name.</p></li><li=
+><p><b>Drift and &quot;Active Misinformation&quot;:</b> If a wiki page is n=
+eglected and new information isn&#39;t integrated, it drifts from reality. =
+Because the AI writes these pages in confident, readable prose, outdated su=
+mmaries can act as &quot;active misinformation&quot; that you might not kno=
+w to question.</p></li></ul><h3>The &quot;Better Example&quot;</h3><p>Jones=
+ proposes his own system, <b>OpenBrain</b>, which operates as a &quot;query=
+-time&quot; system. Instead of having the AI constantly rewrite and summari=
+ze documents upon ingest, OpenBrain stores raw facts cleanly in a structure=
+d SQL database so they can be queried later.</p><p>To get the best of both =
+worlds, Jones introduced a hybrid solution:</p><ul><li><p><b>The Compilatio=
+n Agent:</b> He launched a plugin that sits on top of OpenBrain&#39;s datab=
+ase.</p></li><li><p><b>Generated Wiki Pages:</b> This agent reads the struc=
+tured data and generates Karpathy-style wiki pages on a schedule.</p></li><=
+li><p><b>The Result:</b> You get the easy, human-readable browsability of K=
+arpathy&#39;s Obsidian setup, but your underlying memory remains a factual,=
+ scalable, and highly queryable database that won&#39;t break at scale.</p>=
+<div class=3D"gmail-attachment-container gmail-youtube"><span class=3D"gmai=
+l-no-md"><span class=3D"gmail-ng-star-inserted"><span><div class=3D"gmail-t=
+ool-attribution gmail-show-header gmail-hide-from-message-actions"><a targe=
+t=3D"_blank" rel=3D"noopener" class=3D"gmail-link" href=3D"http://www.youtu=
+be.com/watch?v=3DfyHnGHxGuhI"></a><div class=3D"gmail-tool-attribution-cont=
+ent gmail-ng-star-inserted"><a target=3D"_blank" rel=3D"noopener" class=3D"=
+gmail-link" href=3D"http://www.youtube.com/watch?v=3DfyHnGHxGuhI"><div clas=
+s=3D"gmail-tool-attribution-header-container"><div class=3D"gmail-tool-attr=
+ibution-header gmail-gds-body-s"><img alt=3D"" class=3D"gmail-tool-logo gma=
+il-ng-star-inserted" src=3D"https://www.gstatic.com/images/branding/product=
+logos/youtube/v9/192px.svg"><div class=3D"gmail-tool-attribution-title gmai=
+l-ng-star-inserted"><span class=3D"gmail-tool-attribution-title-text">YouTu=
+be</span></div></div><div class=3D"gmail-tool-attribution-label gmail-gds-b=
+ody-m gmail-ng-star-inserted">Nate B Jones Andrew Karpathy</div></div><span=
+ tabindex=3D"-1" type=3D"onSurface" size=3D"small" class=3D"gmail-mcp-open-=
+in-button gmail-gem-button gmail-gem-button-badge-size-small gmail-gem-butt=
+on-size-small gmail-gem-button-type-on-surface gmail-lm-enabled gmail-has-i=
+con gmail-trailing-icon gmail-ng-star-inserted"></span></a><a class=3D"gmai=
+l-mdc-button gmail-mat-mdc-button-base gmail-mat-badge gmail-mat-mdc-button=
+ gmail-mat-unthemed gmail-mat-badge-overlap gmail-mat-badge-above gmail-mat=
+-badge-after gmail-mat-badge-small gmail-mat-badge-hidden gmail-ng-star-ins=
+erted" href=3D"http://www.youtube.com/watch?v=3DfyHnGHxGuhI" rel=3D"noopene=
+r" target=3D"_blank" aria-label=3D"Open in YouTube"><span class=3D"gmail-ma=
+t-mdc-button-persistent-ripple gmail-mdc-button__ripple"></span><span class=
+=3D"gmail-mdc-button__label"><span class=3D"gmail-gem-button-content gmail-=
+ng-star-inserted"><span class=3D"gmail-ng-star-inserted"><span role=3D"img"=
+ class=3D"gmail-mat-icon gmail-notranslate gmail-lm-icon-l gmail-lumi-symbo=
+ls gmail-mat-ligature-font gmail-mat-icon-no-color gmail-ng-star-inserted" =
+aria-hidden=3D"true"></span></span><span class=3D"gmail-gds-body-m"> Open i=
+n YouTube </span></span></span><span class=3D"gmail-mat-focus-indicator"></=
+span><span class=3D"gmail-mat-mdc-button-touch-target"></span></a><span tab=
+index=3D"-1" type=3D"onSurface" class=3D"gmail-mcp-pseudo-fullscreen-close =
+gmail-gem-button gmail-gem-button-badge-size-small gmail-gem-button-size-sm=
+all gmail-gem-button-type-on-surface gmail-lm-enabled"><button class=3D"gma=
+il-mdc-icon-button gmail-mat-mdc-icon-button gmail-mat-mdc-button-base gmai=
+l-mat-badge gmail-mat-unthemed gmail-mat-badge-overlap gmail-mat-badge-abov=
+e gmail-mat-badge-after gmail-mat-badge-small gmail-mat-badge-hidden gmail-=
+ng-star-inserted" aria-label=3D"Exit fullscreen"><span class=3D"gmail-mat-m=
+dc-button-persistent-ripple gmail-mdc-icon-button__ripple"></span><span><sp=
+an role=3D"img" class=3D"gmail-mat-icon gmail-notranslate gmail-lm-icon-l g=
+mail-lumi-symbols gmail-mat-ligature-font gmail-mat-icon-no-color gmail-ng-=
+star-inserted" aria-hidden=3D"true"></span></span><span class=3D"gmail-mat-=
+focus-indicator"></span><span class=3D"gmail-mat-mdc-button-touch-target"><=
+/span></button></span></div><div role=3D"presentation" class=3D"gmail-youtu=
+be-block gmail-ng-star-inserted"><span class=3D"gmail-youtube-item gmail-ng=
+-star-inserted"><div class=3D"gmail-container gmail-ng-star-inserted"><div =
+class=3D"gmail-video-player-container gmail-ng-star-inserted"></div><div cl=
+ass=3D"gmail-details"><a target=3D"_blank" rel=3D"noopener" class=3D"gmail-=
+link" href=3D"http://www.youtube.com/watch?v=3DfyHnGHxGuhI"><span class=3D"=
+gmail-link-content gmail-ng-star-inserted"><span class=3D"gmail-title gmail=
+-gds-title-m">Why Andrej Karpathy Feels &quot;Behind&quot; (And What It Mea=
+ns for Your Career) </span></span></a><a target=3D"_blank" rel=3D"noopener"=
+ class=3D"gmail-link gmail-channel-link gmail-ng-star-inserted" href=3D"htt=
+ps://www.youtube.com/channel/UC0C-17n9iuUQPylguM1d-lQ"><span class=3D"gmail=
+-link-content gmail-ng-star-inserted"><span class=3D"gmail-channel-name">AI=
+ News &amp; Strategy Daily | Nate B Jones</span></span><span class=3D"gmail=
+-cdk-visually-hidden gmail-ng-star-inserted"> Opens in a new window </span>=
+</a><span class=3D"gmail-description gmail-ng-star-inserted">My site: <a hr=
+ef=3D"https://natebjones.com">https://natebjones.com</a> Full Story w/ Prom=
+pts:=C2=A0...</span><span class=3D"gmail-cdk-visually-hidden gmail-ng-star-=
+inserted"> Opens in a new window </span></div><div role=3D"button" tabindex=
+=3D"0" class=3D"gmail-interactive-overlay gmail-ng-star-inserted"></div></d=
+iv></span></div><div role=3D"presentation" class=3D"gmail-youtube-block gma=
+il-ng-star-inserted"><span class=3D"gmail-youtube-item gmail-ng-star-insert=
+ed"><div class=3D"gmail-container gmail-ng-star-inserted"><div class=3D"gma=
+il-video-player-container gmail-ng-star-inserted"></div><div class=3D"gmail=
+-details"><a target=3D"_blank" rel=3D"noopener" class=3D"gmail-link" href=
+=3D"http://www.youtube.com/watch?v=3D5ioEQigrJOA"><span class=3D"gmail-link=
+-content gmail-ng-star-inserted"><span class=3D"gmail-title gmail-gds-title=
+-m">I Summarized Andrej Karpathy&#39;s 2.5 Hour Podcast in 20 Min=E2=80=94G=
+rab 4 Takeaways No One&#39;s Talking About </span></span></a><a target=3D"_=
+blank" rel=3D"noopener" class=3D"gmail-link gmail-channel-link gmail-ng-sta=
+r-inserted" href=3D"https://www.youtube.com/channel/UC0C-17n9iuUQPylguM1d-l=
+Q"><span class=3D"gmail-link-content gmail-ng-star-inserted"><span class=3D=
+"gmail-channel-name">AI News &amp; Strategy Daily | Nate B Jones</span></sp=
+an><span class=3D"gmail-cdk-visually-hidden gmail-ng-star-inserted"> Opens =
+in a new window </span></a><span class=3D"gmail-description gmail-ng-star-i=
+nserted">My site: <a href=3D"https://natebjones.com">https://natebjones.com=
+</a> Full Story:=C2=A0...</span><span class=3D"gmail-cdk-visually-hidden gm=
+ail-ng-star-inserted"> Opens in a new window </span></div><div role=3D"butt=
+on" tabindex=3D"0" class=3D"gmail-interactive-overlay gmail-ng-star-inserte=
+d"></div></div></span></div><div role=3D"presentation" class=3D"gmail-youtu=
+be-block gmail-ng-star-inserted"><span class=3D"gmail-youtube-item gmail-ng=
+-star-inserted"><div class=3D"gmail-container gmail-ng-star-inserted"><div =
+class=3D"gmail-video-player-container gmail-ng-star-inserted"></div><div cl=
+ass=3D"gmail-details"><a target=3D"_blank" rel=3D"noopener" class=3D"gmail-=
+link" href=3D"http://www.youtube.com/watch?v=3Ddxq7WtWxi44"><span class=3D"=
+gmail-link-content gmail-ng-star-inserted"><span class=3D"gmail-title gmail=
+-gds-title-m">Karpathy&#39;s Wiki vs. Open Brain. One Fails When You Need I=
+t Most. </span></span></a><a target=3D"_blank" rel=3D"noopener" class=3D"gm=
+ail-link gmail-channel-link gmail-ng-star-inserted" href=3D"https://www.you=
+tube.com/channel/UC0C-17n9iuUQPylguM1d-lQ"><span class=3D"gmail-link-conten=
+t gmail-ng-star-inserted"><span class=3D"gmail-channel-name">AI News &amp; =
+Strategy Daily | Nate B Jones</span></span><span class=3D"gmail-cdk-visuall=
+y-hidden gmail-ng-star-inserted"> Opens in a new window </span></a><span cl=
+ass=3D"gmail-description gmail-ng-star-inserted">Full Comparison w/ Prompts=
+ &amp; Open Brain Wiki:=C2=A0...</span><span class=3D"gmail-cdk-visually-hi=
+dden gmail-ng-star-inserted"> Opens in a new window </span></div><div role=
+=3D"button" tabindex=3D"0" class=3D"gmail-interactive-overlay gmail-ng-star=
+-inserted"></div></div></span></div><div role=3D"presentation" class=3D"gma=
+il-youtube-block gmail-ng-star-inserted"><span class=3D"gmail-youtube-item =
+gmail-ng-star-inserted"><div class=3D"gmail-container gmail-ng-star-inserte=
+d"><div class=3D"gmail-video-player-container gmail-ng-star-inserted"></div=
+><div class=3D"gmail-details"><a target=3D"_blank" rel=3D"noopener" class=
+=3D"gmail-link" href=3D"http://www.youtube.com/watch?v=3D_sn7WAVWC2A"><span=
+ class=3D"gmail-link-content gmail-ng-star-inserted"><span class=3D"gmail-t=
+itle gmail-gds-title-m">Andrej Karpathy&#39;s Vision for the Future of AI #=
+ai #artificialintelligence #shorts </span></span></a><a target=3D"_blank" r=
+el=3D"noopener" class=3D"gmail-link gmail-channel-link gmail-ng-star-insert=
+ed" href=3D"https://www.youtube.com/channel/UC0C-17n9iuUQPylguM1d-lQ"><span=
+ class=3D"gmail-link-content gmail-ng-star-inserted"><span class=3D"gmail-c=
+hannel-name">AI News &amp; Strategy Daily | Nate B Jones</span></span><span=
+ class=3D"gmail-cdk-visually-hidden gmail-ng-star-inserted"> Opens in a new=
+ window </span></a><span class=3D"gmail-description gmail-ng-star-inserted"=
+>Watch the longer video to grab the whole story! My site: <a href=3D"https:=
+//natebjones.com">https://natebjones.com</a> Full Story:=C2=A0...</span><sp=
+an class=3D"gmail-cdk-visually-hidden gmail-ng-star-inserted"> Opens in a n=
+ew window </span></div><div role=3D"button" tabindex=3D"0" class=3D"gmail-i=
+nteractive-overlay gmail-ng-star-inserted"></div></div></span></div><div ro=
+le=3D"presentation" class=3D"gmail-youtube-block gmail-ng-star-inserted"><s=
+pan class=3D"gmail-youtube-item gmail-last-item gmail-ng-star-inserted"><di=
+v class=3D"gmail-container gmail-ng-star-inserted"><div class=3D"gmail-vide=
+o-player-container gmail-ng-star-inserted"></div><div class=3D"gmail-detail=
+s"><a target=3D"_blank" rel=3D"noopener" class=3D"gmail-link" href=3D"http:=
+//www.youtube.com/watch?v=3DrsaaVXg28-8"><span class=3D"gmail-link-content =
+gmail-ng-star-inserted"><span class=3D"gmail-title gmail-gds-title-m">Karpa=
+thy Just Told Us What Startups To Build For 2026 </span></span></a><a targe=
+t=3D"_blank" rel=3D"noopener" class=3D"gmail-link gmail-channel-link gmail-=
+ng-star-inserted" href=3D"https://www.youtube.com/channel/UCsVgseBnKuyIGaH5=
+4XVoK3Q"><span class=3D"gmail-link-content gmail-ng-star-inserted"><span cl=
+ass=3D"gmail-channel-name">Rob Shocks</span></span><span class=3D"gmail-cdk=
+-visually-hidden gmail-ng-star-inserted"> Opens in a new window </span></a>=
+<span class=3D"gmail-description gmail-ng-star-inserted">Checkout <a href=
+=3D"http://monday.com">monday.com</a> vibe - <a href=3D"https://bit.ly/4cgH=
+jDN">https://bit.ly/4cgHjDN</a> <b>Andrej Karpathy</b> just dropped one of =
+the most important AI talks of the year=C2=A0...</span><span class=3D"gmail=
+-cdk-visually-hidden gmail-ng-star-inserted"> Opens in a new window </span>=
+</div><div role=3D"button" tabindex=3D"0" class=3D"gmail-interactive-overla=
+y gmail-ng-star-inserted"></div></div></span></div></div></span></span></sp=
+an></div><p></p><p></p></li></ul></div></span></div>
+
+<br><span class=3D"gmail_signature_prefix">-- </span><br><div dir=3D"ltr" c=
+lass=3D"gmail_signature" data-smartmail=3D"gmail_signature">Thank you<br>De=
+jan Zivanovic</div></div>
+
+--00000000000070e2ca0659a55563--

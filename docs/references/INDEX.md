@@ -2,7 +2,7 @@
 
 Reference material for the Cobalt rebuild: SMB Capital trading education (setups, trades, playbook decks), Finviz Elite export-API screenshots, ASET grading / Daily Report Card artifacts, and mission-control / Obsidian-OS UI inspiration. Everything here is *input to the product definition* — the source-of-truth for what Cobalt's trading logic, research engine, grading, and front-end must reproduce. Grouped by category; one line per file.
 
-> ⚠️ **Redaction required — see [§ Credentials](#-credentials--redaction-required) at the bottom.** The 9 Finviz screenshots leak a live API token.
+> ℹ️ **Credentials note — see [§ Credentials](#-credentials) at the bottom.** The Finviz token visible in the 9 Finviz screenshots was rotated dead on 2026-08-22; the images are safe in version control.
 
 ---
 
@@ -94,7 +94,7 @@ UI and architecture references for the command-center front-end (§9 Obsidian-pl
 
 ---
 
-## 🔐 Credentials — redaction required
-- **All 9 Finviz screenshots** (`FinvizScannerAPI.png`, `finvizstockapi.png`, `finviznewsapi.png`, `finvizcalendarapi.png`, `finvizlatestfiningsapi.png`, `finvizinsiderapi.png`, `finvizmanagersapi.png`, `finvizfundsapi.png`, `finvizoptionsapi.png`) display a **live Finviz Elite API token in cleartext** in the "Add Authentication" field (same token across all nine). The example-URL `&auth=` portions are already whited-out, but the standalone token box is fully readable. **Action: rotate the token in Finviz (Regenerate Token) and re-crop/redact the token box before this folder is shared or committed to any less-restricted location.** The token belongs in VaultManager (`finviz.com::api_token`), never in a committed image.
+## 🔐 Credentials
+- **All 9 Finviz screenshots** (`FinvizScannerAPI.png`, `finvizstockapi.png`, `finviznewsapi.png`, `finvizcalendarapi.png`, `finvizlatestfiningsapi.png`, `finvizinsiderapi.png`, `finvizmanagersapi.png`, `finvizfundsapi.png`, `finvizoptionsapi.png`) display a Finviz Elite API token in cleartext in the "Add Authentication" field (same token across all nine; the example-URL `&auth=` portions are whited-out). **Historical note: that token was rotated dead on 2026-08-22 (Finviz "Regenerate Token"); the VaultManager entry (`finviz.com::api_token`) was updated to the new token; the images are safe in version control. Redaction of the token box is optional.** The live token lives only in VaultManager, never in a committed image.
 - **natebjonesargueskarpatrhywiki.eml** contains Dejan's own Gmail address in the From/To headers (self-sent). Low sensitivity (already the repo author email), but note it if this folder is ever shared externally.
 - No other API keys, passwords, or tokens were found in the extracted text of the PDFs, PPTX, XLSX, DOCX, RTF transcripts, or the ASET HTML.
