@@ -115,17 +115,12 @@ class BaseFileTool:
         # Resolve to get the canonical absolute path (follows symlinks)
         resolved_target = target_path.resolve()
         
-        # Validate that resolved path is within base_path
-        try:
-            resolved_target.is_relative_to(self.base_path)
-        except ValueError:
-            # Python < 3.9 compatibility: check manually
-            try:
-                resolved_target.relative_to(self.base_path)
-            except ValueError:
-                logger.error(f"Path traversal attempt blocked: {requested_path} resolves to {resolved_target}")
-                raise SecurityError(f"Access denied: Path '{requested_path}' is outside the Obsidian vault.")
-        
+        # Validate that resolved path is within base_path.
+        # is_relative_to() returns a bool (it never raises) — enforce it explicitly.
+        if not resolved_target.is_relative_to(self.base_path):
+            logger.error(f"Path traversal attempt blocked: {requested_path} resolves to {resolved_target}")
+            raise SecurityError(f"Access denied: Path '{requested_path}' is outside the Obsidian vault.")
+
         return resolved_target
 
 
