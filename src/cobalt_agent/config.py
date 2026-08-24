@@ -619,7 +619,9 @@ def _load_config(config_dir: Optional[Path | str] = None) -> CobaltSettings:
     # 6. Create Pydantic Settings Object
     # Pydantic will automatically handle ENV overrides via env_nested_delimiter="_"
     try:
-        logger.debug(f"Final merged configuration: {master_data}")
+        # Never log master_data itself: it contains every vault secret
+        # (TRIAGE 2.7 blanket KILL for secret-printing log sinks).
+        logger.debug(f"Final merged configuration sections: {list(master_data.keys())}")
         return CobaltSettings(**master_data)
     except Exception as e:
         logger.error(f"Configuration Validation Error: {e}")
