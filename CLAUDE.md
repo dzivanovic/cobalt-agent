@@ -102,22 +102,54 @@ Cobalt in production must ALWAYS be left working after every sprint.
 - Destructive utilities exist (dev_utils/wipe_memory.py,
   reset_memory_table.py): never run them; flag that they lack prod guards.
 
-## Current phase: read-only assessment
+## Current phase: pre-beta build (strangler rebuild)
 
-Until Dejan says otherwise, the active task is the assessment:
-- Read-only. No fixes, no refactors, no writes outside docs/assessment/.
-- Chunked passes: Pass 0 repo inventory → one subsystem per pass (memory,
-  browser/Playwright, Mattermost/approval loop, scanners, LLM routing,
-  scribe/vault, config/vault-manager) → final synthesis into ASSESSMENT.md.
-- Categorize RETAIN / BROKEN-FRICTION / KILL — as PROPOSALS with file:line
-  evidence. Dejan makes all KILL decisions. Verify by reading/running, don't
-  trust docs; where docs and code disagree, code wins. Mark anything
-  inferred rather than verified as UNVERIFIED.
-- Additionally flag: any code touching fundamentals, filings, earnings, or
-  news retrieval; every hardcoded vault path and structural assumption
-  (inputs to the research engine and vault redesign).
-- Do not read gitignored content; note only which code reads/writes those
-  paths.
+The assessment is complete (docs/assessment/ASSESSMENT.md) and every
+component disposition is ruled in **docs/assessment/TRIAGE.md**
+(2026-08-22). TRIAGE.md is authoritative — read it before any build or
+design work; the summaries below do not replace it.
+
+Strangler rules (standing):
+- Old tree untouched and stays runnable; no KILL ruling is acted on — KILL
+  code dies in place with the old tree, never crosses.
+- All new work lives in src/cobalt/ (Pydantic-typed, config-driven,
+  fail-loud, tested — never loose scripts).
+- Dev environment only per NN#16: cobalt_dev DB, test vault, configs/dev,
+  dev Mattermost token. Prod DB, prod vault, and the running agent are
+  never touched by build work.
+- KEEP-AS-IS items port only through the test/config gate;
+  KEEP-CONCEPT/REBUILD items are rebuilt in the new core with old code as
+  spec; REDESIGN items need their ADR/design session first.
+
+Cross-cutting laws (from TRIAGE.md — bind all work):
+- Fail-loud: no plausible-empty artifacts; missing data = Pydantic
+  validation failure = loud FAILED; config errors crash, never silently
+  fall back.
+- Watcher standard: deterministic watchers emit typed events; stateless
+  agents invoked on events; never an LLM in a watch loop.
+- One-path rule: no duplicate implementations; second copies are killed on
+  sight.
+- Secrets: never printed/logged; VaultManager only; DSNs composed at
+  runtime from vault parts by ONE connection factory, two-phase boot.
+- Routing law: every LLM call through the routing layer, no out-of-band
+  calls.
+- Agent north star: persistent specialist bots + one chief-of-staff
+  orchestrator (GrokBot pattern), not a monolithic ReAct switchboard.
+- Shadow-mode promotion: nothing flips human-fed → engine-fed without a
+  shadow run, agreement stats, and a HITL token (it IS a trading-logic
+  change).
+- Sample-size law: no EV/auto-grade without its n; n<30 renders
+  "insufficient data".
+- Source-substitution + loud degradation: every source behind a collector
+  interface; dead source = red banner/degraded flag, never silent.
+- Config-as-code: Pydantic schema per config family, in git, with dry-run.
+- Human-only tape dot: every playbook keeps ≥1 human-only variable.
+- Planning hard cap: remaining design work fits two calendar weeks.
+
+Build lane: pre-beta increments 1–3 (ASET semi-auto sheet → DRC/PlayBook
+prefill → Prebell-lite), design sessions per TRIAGE's register (Taxonomy
+first). The sprint ladder is re-derived by the MVP Charter, not by TRIAGE.
+Backlog/kanban: BACKLOG.md at repo root — keep it updated as you work.
 
 ## Communication style with Dejan
 
