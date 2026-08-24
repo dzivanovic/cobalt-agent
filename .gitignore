@@ -10,6 +10,7 @@ docs/*
 !docs/references/
 !docs/references/**
 docs/references/assets/
+configs/dev/aset.local.yaml
 docs/Cobalt/
 architecture_assessments/
 logs.vscode/

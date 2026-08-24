@@ -1,0 +1,6 @@
+# ASET sheet config (dev). Pydantic-validated on load; bad file crashes.
+# account_size here is an EXAMPLE — put the real number in
+# configs/dev/aset.local.yaml (gitignored, same keys); it overrides this
+# file entirely. Daily stop = account_size / 50 (Daily-Stop Model).
+account_size: 10000
+db_name: cobalt_dev
