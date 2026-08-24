@@ -1,7 +1,7 @@
 # Project Cobalt Configuration File
 
 system:
-  debug_mode: true
+  debug_mode: false
   version: "0.5.0"
   obsidian_vault_path: /Users/cobalt/cobalt/docs
 
