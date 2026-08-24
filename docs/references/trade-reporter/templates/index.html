@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BigScalp Edge</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="app">
+  <header class="hdr">
+    <div>
+      <div class="logo"><span>BigScalp</span> Edge</div>
+      <div class="subtitle">SMB template-first trade review</div>
+    </div>
+    <div class="nav">
+      <button class="ntab on" id="tab-drc" onclick="nav('drc', this)"></button>
+      <button class="ntab" id="tab-pb" onclick="nav('pb', this)"></button>
+      <button class="tool" id="lang-btn" onclick="toggleLang()">FR</button>
+      <button class="tool danger" id="reset-btn" onclick="resetAll()"></button>
+      <button class="tool theme" id="theme-btn" onclick="toggleTheme()">🌙</button>
+    </div>
+  </header>
+
+  <div id="alert" class="alert"></div>
+
+  <main id="screen-drc" class="screen on">
+    <section class="card">
+      <h3 data-i18n="header"></h3>
+      <div class="g3">
+        <div><label>Date</label><input id="drc-date" type="date"></div>
+        <div><label data-i18n="day_grade"></label><input id="drc-grade" data-ph="grade_ph"></div>
+        <div><label data-i18n="goal"></label><input id="drc-goal" data-ph="goal_ph"></div>
+      </div>
+      <label data-i18n="reminders"></label>
+      <textarea id="drc-reminders" data-ph="reminders_ph"></textarea>
+    </section>
+
+    <section class="card">
+      <h3>Segments</h3>
+      <div id="drc-segments"></div>
+    </section>
+
+    <section class="card">
+      <h3 data-i18n="wrap_up"></h3>
+      <div class="g2">
+        <div><label data-i18n="learned"></label><textarea id="drc-learned"></textarea></div>
+        <div><label data-i18n="changes"></label><textarea id="drc-changes"></textarea></div>
+        <div><label data-i18n="overview"></label><textarea id="drc-overview"></textarea></div>
+        <div><label data-i18n="easiest"></label><textarea id="drc-easiest"></textarea></div>
+      </div>
+    </section>
+
+    <div class="g2">
+      <section class="card">
+        <h3>Ticker 1</h3>
+        <div class="g2">
+          <div><label>Ticker</label><input id="t1-ticker"></div>
+          <div><label>+/- $</label><input id="t1-pnl" placeholder="+$0"></div>
+        </div>
+        <label data-i18n="writeup"></label><textarea id="t1-writeup"></textarea>
+        <label data-i18n="chart_drop"></label>
+        <div class="drop" data-key="t1-chart"><span class="dz" data-i18n="dz"></span><button class="clear">✕</button></div>
+      </section>
+      <section class="card">
+        <h3>Ticker 2</h3>
+        <div class="g2">
+          <div><label>Ticker</label><input id="t2-ticker"></div>
+          <div><label>+/- $</label><input id="t2-pnl" placeholder="+$0"></div>
+        </div>
+        <label data-i18n="writeup"></label><textarea id="t2-writeup"></textarea>
+        <label data-i18n="chart_drop"></label>
+        <div class="drop" data-key="t2-chart"><span class="dz" data-i18n="dz"></span><button class="clear">✕</button></div>
+      </section>
+    </div>
+
+    <button class="btn" id="drc-build"></button>
+    <div class="dl" id="drc-dl"></div>
+  </main>
+
+  <main id="screen-pb" class="screen">
+    <div class="template-banner">
+      <strong>Template-first:</strong> each block below maps directly to the official SMB slide. Empty optional slides are hidden, not deleted.
+      <span class="autosave">Draft auto-saved locally</span>
+    </div>
+
+    <section class="card slide-card">
+      <div class="section-head"><h3>Title</h3><span class="slide-ref">Slide 3</span></div>
+      <div class="g2">
+        <div><label data-i18n="trade_name"></label><input id="pb-name" placeholder="e.g. OFF-SIDE SCALP"></div>
+        <div><label>Trader — first name only</label><input id="pb-trader" placeholder="e.g. Adrien"></div>
+        <div><label>Ticker</label><input id="pb-ticker" placeholder="e.g. NVDA"></div>
+        <div><label>Date</label><input id="pb-date" type="date"></div>
+      </div>
+    </section>
+
+    <section class="card slide-card">
+      <div class="section-head"><h3>The Big Picture</h3><span class="slide-ref">Slides 4–7 · auto layout</span></div>
+      <label data-i18n="bp_chart"></label>
+      <div class="drop wide" data-key="bp-chart"><span class="dz" data-i18n="dz"></span><button class="clear">✕</button></div>
+      <div class="g2 section-gap">
+        <div>
+          <label>$SPY — context note</label><textarea id="pb-spy-note" class="compact" placeholder="Gap, trend, key levels, market influence…"></textarea>
+          <label>$SPY — chart</label>
+          <div class="drop" data-key="spy-chart"><span class="dz" data-i18n="dz"></span><button class="clear">✕</button></div>
+        </div>
+        <div>
+          <label>$QQQ — context note</label><textarea id="pb-qqq-note" class="compact" placeholder="Gap, trend, key levels, market influence…"></textarea>
+          <label>$QQQ — chart</label>
+          <div class="drop" data-key="qqq-chart"><span class="dz" data-i18n="dz"></span><button class="clear">✕</button></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card slide-card">
+      <div class="section-head"><h3>Intraday Fundamentals</h3><span class="slide-ref">Slide 8</span></div>
+      <div class="fund-grid">
+        <div>
+          <label>Why this ticker is on the radar</label>
+          <textarea id="pb-fund" class="tall" data-ph="fund_ph"></textarea>
+        </div>
+        <div>
+          <label>Key stats — up to 10</label>
+          <div id="pb-stats" class="stats-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card slide-card">
+      <div class="section-head"><h3>Technical Analysis</h3><span class="slide-ref">Slides 9–10</span></div>
+      <div class="g2">
+        <div><label data-i18n="main_chart"></label><div class="drop" data-key="ta-chart"><span class="dz" data-i18n="dz"></span><button class="clear">✕</button></div></div>
+        <div><label data-i18n="extra_chart"></label><div class="drop" data-key="ta-chart2"><span class="dz" data-i18n="dz"></span><button class="clear">✕</button></div></div>
+      </div>
+    </section>
+
+    <section class="card slide-card">
+      <div class="section-head"><h3>Trade Strategy</h3><span class="slide-ref">Slide 11 · max 8 bullets</span></div>
+      <textarea id="pb-strategy" class="tall line-limited" data-max-lines="8" placeholder="One concise key point per line"></textarea>
+      <div class="line-count" data-for="pb-strategy">0 / 8</div>
+    </section>
+
+    <section class="card slide-card">
+      <div class="section-head"><h3>Trade Management</h3><span class="slide-ref">Slide 12</span></div>
+      <p class="hint">Mark Entry · Stop · Add · Exit directly on the chart before dropping it here.</p>
+      <div class="drop wide" data-key="tm-chart"><span class="dz" data-i18n="dz"></span><button class="clear">✕</button></div>
+    </section>
+
+    <section class="card slide-card">
+      <div class="section-head"><h3>Risk Management</h3><span class="slide-ref">Slide 13</span></div>
+      <div class="g2">
+        <div><label>Risk on the trade</label><input id="pb-risk-amount" placeholder="e.g. $150"></div>
+        <div><label>% of daily stop</label><input id="pb-daily-stop-pct" placeholder="e.g. 25%"></div>
+        <div><label>Specific risk logic</label><textarea id="pb-risk-details" placeholder="Position size, invalidation, max loss…"></textarea></div>
+        <div><label>Exact stops for each entry</label><textarea id="pb-stop-details" placeholder="Entry 1 stop…, add stop…, hard stop…"></textarea></div>
+      </div>
+    </section>
+
+    <section class="card slide-card">
+      <div class="section-head"><h3>Reading the Tape</h3><span class="slide-ref">Slide 14 · max 4 bullets</span></div>
+      <div class="g2">
+        <div>
+          <label>Tape screenshot / video thumbnail</label>
+          <div class="drop tape-drop" data-key="tape-chart"><span class="dz" data-i18n="dz"></span><button class="clear">✕</button></div>
+          <label>YouTube URL (optional — makes image clickable)</label><input id="pb-tape-url" type="url" placeholder="https://youtu.be/…">
+        </div>
+        <div>
+          <label>What to watch</label>
+          <textarea id="pb-tape" class="tall line-limited" data-max-lines="4" placeholder="One concise point per line"></textarea>
+          <div class="line-count" data-for="pb-tape">0 / 4</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card slide-card">
+      <div class="section-head"><h3>Technology <small data-i18n="optional"></small></h3><span class="slide-ref">Slide 15 · max 6 bullets</span></div>
+      <div class="g2">
+        <div><label>Technology screenshot</label><div class="drop" data-key="technology-chart"><span class="dz" data-i18n="dz"></span><button class="clear">✕</button></div></div>
+        <div><label>Key points</label><textarea id="pb-tech" class="tall line-limited" data-max-lines="6" data-ph="lines_ph"></textarea><div class="line-count" data-for="pb-tech">0 / 6</div></div>
+      </div>
+    </section>
+
+    <section class="card slide-card">
+      <div class="section-head"><h3>Trade Review</h3><span class="slide-ref">Slide 16 · 3 summary bullets</span></div>
+      <div class="g2">
+        <div><label data-i18n="key_points"></label><textarea id="pb-review-pts" class="tall line-limited" data-max-lines="3" placeholder="One summary point per line"></textarea><div class="line-count" data-for="pb-review-pts">0 / 3</div></div>
+        <div><label data-i18n="detailed_review"></label><textarea id="pb-review-detail" class="tall" placeholder="What happened? What did you learn? What changes next time?"></textarea></div>
+      </div>
+    </section>
+
+    <section class="card slide-card">
+      <div class="section-head"><h3>Score Card (1–10)</h3><span class="slide-ref">Slide 17</span></div>
+      <div class="g3 score-grid" id="pb-grades"></div>
+    </section>
+
+    <button class="btn" id="pb-build"></button>
+    <div class="dl" id="pb-dl"></div>
+  </main>
+
+  <footer>BigScalp Edge · SMB template-first · 100% local</footer>
+</div>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -9,6 +9,7 @@ docs/*
 !docs/assessment/**
 !docs/references/
 !docs/references/**
+docs/references/assets/
 docs/Cobalt/
 architecture_assessments/
 logs.vscode/
