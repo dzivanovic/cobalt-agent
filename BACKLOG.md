@@ -21,6 +21,9 @@ don't duplicate them.
   working local form (trade-reporter Flask pattern). Fail-loud. Tests +
   smoke. Spec: docs/references/aset_daily_position_sizer.html +
   Daily_Stop_Model_Card.pdf. Gate: stop and show Dejan the working sheet.
+  STATUS 2026-08-24: built + tested + smoke-run; awaiting Dejan review.
+  Prefill blocked: finviz.com::api_token in the vault returns 401 (dead) —
+  needs the regenerated token loaded via manage_vault.py.
 
 ## NEXT (immediate lane, in order)
 
