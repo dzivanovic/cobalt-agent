@@ -10,6 +10,27 @@ don't duplicate them.
 
 ---
 
+## INCIDENT LOG
+
+- **2026-08-25 — prod agent down, misdiagnosed as strangler-boundary
+  leak.** Actual root cause: `mattermost` container's baked
+  `MM_SQLSETTINGS_DATASOURCE` env var (docker-compose substitutes
+  `${POSTGRES_PASSWORD}` from `.env` at container CREATE time) went
+  stale after the Postgres password rotation on 2026-08-24 — the
+  container was never recreated, so it kept the old password, degraded
+  to `Database Status: UNHEALTHY`, and the agent's Mattermost login
+  failed ("Invalid or expired session"). Coincided in time with the
+  ASET/role-pack commits but was unrelated — confirmed no import
+  crosses src/cobalt_agent/ ↔ src/cobalt/, and the old config loader's
+  glob (`configs/*.yaml`, non-recursive) never reaches `configs/dev/`.
+  Fix: `docker compose --profile core up -d --no-deps mattermost`
+  (recreate only, re-substitutes current `.env`) — no code or config
+  moved. Also killed an orphaned pre-incident agent process (untracked
+  by the PID file, running since 2026-08-21) before the clean restart.
+  Standing rule from this: recreate `mattermost` (and any other service
+  reading `${POSTGRES_PASSWORD}`-family vars) after every Postgres
+  password rotation — `docker restart` alone does not re-read `.env`.
+
 ## NOW (in build)
 
 - **Pre-beta slice 1 — ASET semi-auto sheet** (days)

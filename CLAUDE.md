@@ -117,6 +117,13 @@ Strangler rules (standing):
 - Dev environment only per NN#16: cobalt_dev DB, test vault, configs/dev,
   dev Mattermost token. Prod DB, prod vault, and the running agent are
   never touched by build work.
+- Config boundary is law: new-core config lives ONLY under configs/dev/
+  (or paths under src/cobalt/) — never directly under configs/*.yaml,
+  which is the old loader's live, non-recursive glob path. Verify with
+  `git check-ignore`/a quick glob check before adding any new-core
+  config file, not after (2026-08-25 incident: this boundary held, but
+  a stale docker-compose-substituted Mattermost DB credential after a
+  password rotation was mistaken for a boundary leak — see BACKLOG.md).
 - KEEP-AS-IS items port only through the test/config gate;
   KEEP-CONCEPT/REBUILD items are rebuilt in the new core with old code as
   spec; REDESIGN items need their ADR/design session first.
