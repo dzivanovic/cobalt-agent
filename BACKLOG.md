@@ -146,6 +146,9 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
       history before any old-tree deletion commit.
 - [ ] Collect Dejan's existing Obsidian DRC/prep Templater templates
       (slice-2 prefill input).
+- [x] docs/roles/ role-pack template + MODELS.md fleet tiering seeded
+      (2026-08-25): planning=Fable, coach=Fable, DRC=Sonnet,
+      logistics=Sonnet; promotion rule = model follows function.
 - [x] TRIAGE.md committed to docs/assessment/ (2026-08-24).
 - [x] New reference artifacts in docs/references/ + INDEX entries; licensed
       PPTX local-only under gitignored assets/ (2026-08-24).

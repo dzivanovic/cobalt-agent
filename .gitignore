@@ -10,6 +10,8 @@ docs/*
 !docs/references/
 !docs/references/**
 docs/references/assets/
+!docs/roles/
+!docs/roles/**
 configs/dev/aset.local.yaml
 docs/Cobalt/
 architecture_assessments/
