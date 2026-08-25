@@ -40,7 +40,7 @@ class SizingInput(BaseModel):
     grade: Grade
     direction: Direction
     daily_stop: Decimal = Field(
-        gt=0, description="Max $ loss for the entire day (account ÷ 50 prefill)"
+        gt=0, description="Max $ loss for the entire day (account ÷ 100 prefill for now, TEMP override)"
     )
     entry: Decimal = Field(gt=0)
     stop: Decimal = Field(gt=0)

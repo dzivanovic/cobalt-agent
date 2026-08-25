@@ -9,7 +9,12 @@ from decimal import Decimal
 
 import pytest
 
-from cobalt.aset.engine import SizingError, compute_sizing, daily_stop_from_account
+from cobalt.aset.engine import (
+    SizingError,
+    compute_sizing,
+    daily_stop_from_account,
+    temp_prefill_daily_stop,
+)
 from cobalt.aset.models import Direction, Grade, SizingInput
 
 
@@ -34,6 +39,18 @@ def test_daily_stop_is_account_over_50():
 def test_daily_stop_rejects_non_positive_account():
     with pytest.raises(SizingError):
         daily_stop_from_account(Decimal("0"))
+
+
+def test_temp_prefill_is_account_over_100():
+    # TEMP override (2026-08-25, "for now"): sheet fallback only,
+    # separate from the ruled account/50 law tested above.
+    assert temp_prefill_daily_stop(Decimal("10000")) == Decimal("100.00")
+    assert temp_prefill_daily_stop(Decimal("43000")) == Decimal("430.00")
+
+
+def test_temp_prefill_rejects_non_positive_account():
+    with pytest.raises(SizingError):
+        temp_prefill_daily_stop(Decimal("0"))
 
 
 def test_reference_worked_example_short_grade_a():

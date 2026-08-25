@@ -34,9 +34,28 @@ def enforce_broker_cap(daily_stop: Decimal, cap: Decimal) -> list[str]:
 
 
 def daily_stop_from_account(account_size: Decimal) -> Decimal:
+    """The ruled Daily-Stop Model law: account ÷ 50. Do not change this
+    divisor — it's the TRIAGE/Daily-Stop-Model-card spec and is tested
+    against the reference sizer's worked example."""
     if account_size <= 0:
         raise SizingError("account_size must be positive")
     return (account_size / DAILY_STOP_DIVISOR).quantize(CENTS)
+
+
+# TEMPORARY OVERRIDE (Dejan, 2026-08-25, "for now"): when no
+# daily_stop_default is configured, the sheet's prefill uses account ÷
+# 100 instead of the ruled account ÷ 50. This does NOT change the ruled
+# Daily-Stop Model law above — only the sheet's auto-fallback value when
+# the morning stop hasn't been set explicitly. Revert to
+# daily_stop_from_account (or remove this function) when the override
+# is no longer wanted.
+TEMP_PREFILL_DIVISOR = Decimal("100")
+
+
+def temp_prefill_daily_stop(account_size: Decimal) -> Decimal:
+    if account_size <= 0:
+        raise SizingError("account_size must be positive")
+    return (account_size / TEMP_PREFILL_DIVISOR).quantize(CENTS)
 
 
 def compute_sizing(inp: SizingInput) -> SizingResult:

@@ -39,8 +39,10 @@ class AsetConfig(BaseModel):
     # Broker-enforced max daily loss. The sheet clamps at this value and
     # REFUSES anything above it, server-side included.
     broker_hard_stop: Decimal = Field(gt=0)
-    # Morning-set daily stop; absent → account_size / 50. Always capped
-    # by broker_hard_stop.
+    # Morning-set daily stop; absent → account_size / 100 (TEMP override
+    # of the ruled account/50 Daily-Stop Model, Dejan 2026-08-25, "for
+    # now" — see engine.temp_prefill_daily_stop). Always capped by
+    # broker_hard_stop.
     daily_stop_default: Optional[Decimal] = Field(default=None, gt=0)
     db_name: str = Field(default="cobalt_dev", min_length=1)
     daily_note: DailyNoteConfig

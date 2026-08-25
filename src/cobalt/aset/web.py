@@ -16,8 +16,8 @@ from .daily_note import DailyNoteRefused, save_card
 from .engine import (
     SizingError,
     compute_sizing,
-    daily_stop_from_account,
     enforce_broker_cap,
+    temp_prefill_daily_stop,
 )
 from .models import GRADE_RISK_PCT, Direction, Grade, SizingInput
 from .prefill import PrefillError, fetch_last_price
@@ -117,7 +117,9 @@ def _options(pairs, selected):
 def _render(banner: str = "", result: str = "", form: dict | None = None) -> str:
     cfg = load_config()
     form = form or {}
-    requested = cfg.daily_stop_default or daily_stop_from_account(cfg.account_size)
+    # TEMP (2026-08-25, "for now"): auto-fallback is account/100, not the
+    # ruled account/50 Daily-Stop Model — see engine.temp_prefill_daily_stop.
+    requested = cfg.daily_stop_default or temp_prefill_daily_stop(cfg.account_size)
     prefill_stop = min(requested, cfg.broker_hard_stop)
     daily = form.get("daily_stop") or str(prefill_stop)
     grade_pairs = [(g.value, f"{g.value} · {int(GRADE_RISK_PCT[g])}%") for g in Grade]
