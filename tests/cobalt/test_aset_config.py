@@ -7,11 +7,21 @@ import pytest
 from cobalt.aset import config as aset_config
 from cobalt.aset.config import AsetConfig, ConfigError, load_config
 
+COMPLETE = """\
+account_size: 10000
+broker_hard_stop: 430
+db_name: cobalt_dev
+daily_note:
+  vault_path: docs
+  inbox_dir: "0 - Inbox"
+"""
+
 
 def test_committed_dev_config_is_valid():
     cfg = load_config()
     assert cfg.account_size > 0
-    assert cfg.db_name
+    assert cfg.broker_hard_stop > 0
+    assert cfg.daily_note.vault_path
 
 
 def test_missing_file_crashes(monkeypatch, tmp_path):
@@ -32,7 +42,16 @@ def test_invalid_yaml_shape_crashes(monkeypatch, tmp_path):
 
 def test_unknown_keys_rejected(monkeypatch, tmp_path):
     bad = tmp_path / "aset.yaml"
-    bad.write_text("account_size: 10000\nsurprise_key: 1\n")
+    bad.write_text(COMPLETE + "surprise_key: 1\n")
+    monkeypatch.setattr(aset_config, "CONFIG_PATH", bad)
+    monkeypatch.setattr(aset_config, "LOCAL_CONFIG_PATH", tmp_path / "absent.yaml")
+    with pytest.raises(ConfigError):
+        load_config()
+
+
+def test_missing_broker_hard_stop_crashes(monkeypatch, tmp_path):
+    bad = tmp_path / "aset.yaml"
+    bad.write_text(COMPLETE.replace("broker_hard_stop: 430\n", ""))
     monkeypatch.setattr(aset_config, "CONFIG_PATH", bad)
     monkeypatch.setattr(aset_config, "LOCAL_CONFIG_PATH", tmp_path / "absent.yaml")
     with pytest.raises(ConfigError):
@@ -41,14 +60,23 @@ def test_unknown_keys_rejected(monkeypatch, tmp_path):
 
 def test_non_positive_account_rejected():
     with pytest.raises(Exception):
-        AsetConfig(account_size=Decimal("0"))
+        AsetConfig(
+            account_size=Decimal("0"),
+            broker_hard_stop=Decimal("430"),
+            daily_note={"vault_path": "docs", "inbox_dir": "0 - Inbox"},
+        )
 
 
-def test_local_override_wins(monkeypatch, tmp_path):
+def test_local_override_wins_and_must_be_complete(monkeypatch, tmp_path):
     base = tmp_path / "aset.yaml"
-    base.write_text("account_size: 10000\n")
+    base.write_text(COMPLETE)
     local = tmp_path / "aset.local.yaml"
-    local.write_text("account_size: 42000\n")
+    local.write_text(COMPLETE.replace("account_size: 10000", "account_size: 42000"))
     monkeypatch.setattr(aset_config, "CONFIG_PATH", base)
     monkeypatch.setattr(aset_config, "LOCAL_CONFIG_PATH", local)
     assert load_config().account_size == Decimal("42000")
+
+    # incomplete local file = crash, not silent merge with the base file
+    local.write_text("account_size: 42000\n")
+    with pytest.raises(ConfigError):
+        load_config()

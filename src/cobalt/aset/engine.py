@@ -18,6 +18,21 @@ class SizingError(ValueError):
     """Invalid sizing input — fail loud, never guess."""
 
 
+def enforce_broker_cap(daily_stop: Decimal, cap: Decimal) -> list[str]:
+    """Broker hard cap: refuse above, warn at the cap exactly.
+
+    Returns warnings to attach to the result; raises SizingError when the
+    requested daily stop exceeds the cap (UI clamps, server refuses).
+    """
+    if daily_stop > cap:
+        raise SizingError(
+            f"Daily stop ${daily_stop} exceeds the broker hard cap ${cap} — refused."
+        )
+    if daily_stop == cap:
+        return [f"Daily stop is AT the broker hard cap (${cap})."]
+    return []
+
+
 def daily_stop_from_account(account_size: Decimal) -> Decimal:
     if account_size <= 0:
         raise SizingError("account_size must be positive")

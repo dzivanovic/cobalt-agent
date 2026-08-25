@@ -1,6 +1,22 @@
 # ASET sheet config (dev). Pydantic-validated on load; bad file crashes.
-# account_size here is an EXAMPLE — put the real number in
-# configs/dev/aset.local.yaml (gitignored, same keys); it overrides this
-# file entirely. Daily stop = account_size / 50 (Daily-Stop Model).
+#
+# account_size below is an EXAMPLE — put real numbers in
+# configs/dev/aset.local.yaml (gitignored). The local file REPLACES this
+# one entirely, so it must be a COMPLETE config (all keys).
+#
+# daily stop prefill = daily_stop_default if set (morning-set value),
+# else account_size / 50 (Daily-Stop Model) — always clamped to
+# broker_hard_stop; anything above the cap is refused.
 account_size: 10000
+broker_hard_stop: 430
+# daily_stop_default: 400
 db_name: cobalt_dev
+
+# "Save to Daily Note" target. Paths/patterns config-only, nothing
+# hardcoded. Currently the docs/ playground vault (live-vault migration
+# is a scheduled design decision). Writes are APPEND-ONLY and gated:
+# the target file must be git-ignored or the write is refused.
+daily_note:
+  vault_path: docs
+  inbox_dir: "0 - Inbox"
+  filename_pattern: "%Y-%m-%d.md"

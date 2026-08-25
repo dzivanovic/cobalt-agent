@@ -2,12 +2,13 @@
 
 Pydantic-validated on load; a bad or missing file CRASHES with the file
 name — no silent defaults. `configs/dev/aset.local.yaml` (gitignored)
-overrides `configs/dev/aset.yaml` so the real account size never has to
-be committed.
+REPLACES `configs/dev/aset.yaml` entirely when present — it must be a
+complete config — so real account numbers never have to be committed.
 """
 
 from decimal import Decimal
 from pathlib import Path
+from typing import Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -21,11 +22,28 @@ class ConfigError(RuntimeError):
     """Config missing or invalid — crash loudly."""
 
 
+class DailyNoteConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Absolute path, or relative to the repo root. Currently the docs/
+    # playground vault; live-vault migration is a scheduled design decision.
+    vault_path: str = Field(min_length=1)
+    inbox_dir: str = Field(min_length=1)
+    filename_pattern: str = Field(default="%Y-%m-%d.md", min_length=1)
+
+
 class AsetConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     account_size: Decimal = Field(gt=0)
+    # Broker-enforced max daily loss. The sheet clamps at this value and
+    # REFUSES anything above it, server-side included.
+    broker_hard_stop: Decimal = Field(gt=0)
+    # Morning-set daily stop; absent → account_size / 50. Always capped
+    # by broker_hard_stop.
+    daily_stop_default: Optional[Decimal] = Field(default=None, gt=0)
     db_name: str = Field(default="cobalt_dev", min_length=1)
+    daily_note: DailyNoteConfig
 
 
 def load_config() -> AsetConfig:

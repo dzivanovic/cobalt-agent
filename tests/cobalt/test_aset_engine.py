@@ -109,6 +109,22 @@ def test_size_rounding_to_zero_warns():
     assert any("rounds to zero" in w for w in r.warnings)
 
 
+def test_broker_cap_refuses_above():
+    from cobalt.aset.engine import enforce_broker_cap
+
+    with pytest.raises(SizingError, match="broker hard cap"):
+        enforce_broker_cap(Decimal("450"), Decimal("430"))
+
+
+def test_broker_cap_warns_at_cap_and_silent_below():
+    from cobalt.aset.engine import enforce_broker_cap
+
+    assert enforce_broker_cap(Decimal("430"), Decimal("430")) == [
+        "Daily stop is AT the broker hard cap ($430)."
+    ]
+    assert enforce_broker_cap(Decimal("200"), Decimal("430")) == []
+
+
 def test_ticker_normalized_and_blank_rejected():
     assert make_input(ticker=" nvda ").ticker == "NVDA"
     with pytest.raises(ValueError):
