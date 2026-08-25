@@ -21,9 +21,16 @@ don't duplicate them.
   working local form (trade-reporter Flask pattern). Fail-loud. Tests +
   smoke. Spec: docs/references/aset_daily_position_sizer.html +
   Daily_Stop_Model_Card.pdf. Gate: stop and show Dejan the working sheet.
-  STATUS 2026-08-24: built + tested + smoke-run; awaiting Dejan review.
+  STATUS 2026-08-25: iteration 2 live (broker hard cap $430 enforced,
+  auto-prefill on ticker tab-out, entry prepopulation, grade default B,
+  LONG/SHORT toggle, append-only Save-to-Daily-Note with git-ignore
+  safety gate). Awaiting Dejan review.
   Prefill blocked: finviz.com::api_token in the vault returns 401 (dead) —
   needs the regenerated token loaded via manage_vault.py.
+  Backlogged follow-on (do not build yet): ticker field autocompletes
+  from the daily in-play list once that pipeline exists; non-list
+  tickers show an inline "not in today's in-play list" note (no popup),
+  still allowed.
 
 ## NEXT (immediate lane, in order)
 
