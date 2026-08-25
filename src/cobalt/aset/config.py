@@ -8,7 +8,7 @@ complete config — so real account numbers never have to be committed.
 
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -32,6 +32,21 @@ class DailyNoteConfig(BaseModel):
     filename_pattern: str = Field(default="%Y-%m-%d.md", min_length=1)
 
 
+class ServerConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # "loopback" (127.0.0.1, default) or "lan" (0.0.0.0 — reachable from
+    # other devices on the home network). LAN bind serves this page with
+    # NO authentication to anyone on the local network — acceptable for
+    # now; an access token is a backlog item (see BACKLOG.md).
+    bind: Literal["loopback", "lan"] = "loopback"
+    port: int = Field(default=5010, gt=0, lt=65536)
+
+    @property
+    def host(self) -> str:
+        return "127.0.0.1" if self.bind == "loopback" else "0.0.0.0"
+
+
 class AsetConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -46,6 +61,7 @@ class AsetConfig(BaseModel):
     daily_stop_default: Optional[Decimal] = Field(default=None, gt=0)
     db_name: str = Field(default="cobalt_dev", min_length=1)
     daily_note: DailyNoteConfig
+    server: ServerConfig = Field(default_factory=ServerConfig)
 
 
 def load_config() -> AsetConfig:

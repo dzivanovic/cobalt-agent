@@ -21,3 +21,14 @@ daily_note:
   vault_path: docs
   inbox_dir: "0 - Inbox"
   filename_pattern: "%Y-%m-%d.md"
+
+# Server bind. "loopback" (default) = 127.0.0.1 only, this machine only.
+# "lan" = 0.0.0.0, reachable from other devices on the home network (e.g.
+# Dejan's Windows trading PC — same home network, NOT Tailscale) at
+# http://<mac-lan-ip>:<port>; the reachable URL(s) print on startup.
+# WARNING: "lan" exposes this page with NO authentication to anyone on
+# the local network. Acceptable for now — an access token is a backlog
+# item (BACKLOG.md).
+server:
+  bind: loopback
+  port: 5010
