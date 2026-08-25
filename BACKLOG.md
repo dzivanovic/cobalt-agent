@@ -48,10 +48,15 @@ don't duplicate them.
   safety gate). Awaiting Dejan review.
   Prefill blocked: finviz.com::api_token in the vault returns 401 (dead) —
   needs the regenerated token loaded via manage_vault.py.
+  STATUS 2026-08-25 (cont.): server bind is config-driven
+  (configs/dev/aset*.yaml server.bind: loopback|lan); Dejan's local
+  config now runs "lan" so the Windows trading PC (same home network,
+  not Tailscale) can reach it — reachable URL(s) print on startup.
   Backlogged follow-on (do not build yet): ticker field autocompletes
   from the daily in-play list once that pipeline exists; non-list
   tickers show an inline "not in today's in-play list" note (no popup),
-  still allowed.
+  still allowed. Access token for the LAN-bound sheet (currently
+  unauthenticated by design/acceptance, see server.bind config comments).
 
 ## NEXT (immediate lane, in order)
 
