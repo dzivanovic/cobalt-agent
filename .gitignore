@@ -4,16 +4,28 @@ __pycache__/
 .venv/
 venv/
 data/
+# D6 documentation standard (CLAUDE.md): docs/ is the gitignored
+# Obsidian playground vault root by default; these are the sanctioned,
+# versioned carve-outs. Every new markdown artifact files into one of
+# these — never at repo root, never in a new ad-hoc folder.
 docs/*
-!docs/assessment/
-!docs/assessment/**
-!docs/references/
-!docs/references/**
-docs/references/assets/
-!docs/roles/
-!docs/roles/**
-!docs/devdocs/
-!docs/devdocs/**
+!docs/00 - Project/
+!docs/00 - Project/**
+!docs/10 - Decisions/
+!docs/10 - Decisions/**
+!docs/20 - Assessment/
+!docs/20 - Assessment/**
+!docs/30 - Design/
+!docs/30 - Design/**
+!docs/40 - DevDocs/
+!docs/40 - DevDocs/**
+!docs/50 - Roles/
+!docs/50 - Roles/**
+!docs/90 - References/
+!docs/90 - References/**
+docs/90 - References/assets/
+!docs/_archive/
+!docs/_archive/**
 configs/dev/aset.local.yaml
 docs/Cobalt/
 architecture_assessments/

@@ -5,7 +5,7 @@ each role as a separate manual chat session (TRIAGE.md's Operating
 Rhythm: project / coach / DRC debrief / day-organizer — "the manual
 prototypes of Cobalt's future agents"). This file is the single source
 of truth for which model tier serves each role. Individual role packs
-(`docs/roles/<role>.md`, built from TEMPLATE.md) reference this table
+(`docs/50 - Roles/<role>.md`, built from TEMPLATE.md) reference this table
 rather than repeating it.
 
 ## Current tiering

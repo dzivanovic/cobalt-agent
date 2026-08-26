@@ -9,7 +9,7 @@ north star (persistent, config-driven specialist bots under one
 chief-of-staff orchestrator — TRIAGE cross-cutting "Agent architecture
 north star").
 
-Copy this file to `docs/roles/<role-name>.md` per role and fill it in.
+Copy this file to `docs/50 - Roles/<role-name>.md` per role and fill it in.
 MODELS.md is the single source of truth for tier assignments — reference
 it here, don't repeat the table.
 

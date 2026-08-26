@@ -1,6 +1,6 @@
 # BACKLOG.md — Cobalt kanban + backlog
 
-Source of truth for work state. Derived from docs/assessment/TRIAGE.md
+Source of truth for work state. Derived from docs/20 - Assessment/TRIAGE.md
 (ruled 2026-08-22). Dispositions live THERE; this board only tracks
 sequencing and progress. Sprint ladder below the pre-beta lane is NOT
 locked — the MVP Charter re-derives it.
@@ -40,7 +40,7 @@ don't duplicate them.
   price via FinvizApiClient path. Every sizing persisted to Postgres
   (cobalt_dev; table may be reshaped by data-model ADR). Surface: simplest
   working local form (trade-reporter Flask pattern). Fail-loud. Tests +
-  smoke. Spec: docs/references/aset_daily_position_sizer.html +
+  smoke. Spec: docs/90 - References/aset_daily_position_sizer.html +
   Daily_Stop_Model_Card.pdf. Gate: stop and show Dejan the working sheet.
   STATUS 2026-08-25: iteration 2 live (broker hard cap $430 enforced,
   auto-prefill on ticker tab-out, entry prepopulation, grade default B,
@@ -61,7 +61,7 @@ don't duplicate them.
 ## NEXT (immediate lane, in order)
 
 - **Pre-beta slice 2 — DRC + PlayBook prefill** (~1–2 wks)
-  Prefill-first inversion of docs/references/trade-reporter/ (keep its
+  Prefill-first inversion of docs/90 - References/trade-reporter/ (keep its
   reportlab DRC builder + PPTX builder nearly wholesale; Cobalt prefill
   engine feeds them). Obsidian front end: structured daily data note +
   Templater pulls. Includes daily rule-adherence checkboxes (Guardian
@@ -166,17 +166,17 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
 
 ## STANDING FOLLOW-UPS
 
-- [ ] COBALT-REQUIREMENTS.md §6 vocabulary amendment — after Taxonomy
-      Session.
+- [ ] docs/00 - Project/COBALT-REQUIREMENTS.md §6 vocabulary amendment —
+      after Taxonomy Session.
 - [ ] Persona strings + vault-seeder content harvested as reference/intent
       history before any old-tree deletion commit.
 - [ ] Collect Dejan's existing Obsidian DRC/prep Templater templates
       (slice-2 prefill input).
-- [x] docs/roles/ role-pack template + MODELS.md fleet tiering seeded
+- [x] docs/50 - Roles/ role-pack template + MODELS.md fleet tiering seeded
       (2026-08-25): planning=Fable, coach=Fable, DRC=Sonnet,
       logistics=Sonnet; promotion rule = model follows function.
-- [x] TRIAGE.md committed to docs/assessment/ (2026-08-24).
-- [x] New reference artifacts in docs/references/ + INDEX entries; licensed
+- [x] TRIAGE.md committed to docs/20 - Assessment/ (2026-08-24).
+- [x] New reference artifacts in docs/90 - References/ + INDEX entries; licensed
       PPTX local-only under gitignored assets/ (2026-08-24).
 - [x] CLAUDE.md "Current phase" rewritten for build phase (2026-08-24).
 
@@ -184,6 +184,10 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
 
 - Assessment passes 0–8 + ASSESSMENT.md synthesis (2026-08-21/22).
 - Path-jail hotfix (06-H1) (2026-08-22).
-- docs/references under version control; Finviz token rotation recorded
-  (2026-08-22/24).
+- docs/90 - References under version control; Finviz token rotation
+  recorded (2026-08-22/24).
+- Docs restructure to the D6 standard: docs/ reorganized into
+  00 - Project / 10 - Decisions / 20 - Assessment / 30 - Design /
+  40 - DevDocs / 50 - Roles / 90 - References / _archive; playground
+  vault (0 - Inbox, 0 - Projects) untouched, out of scope (2026-08-26).
 - TRIAGE ruling session → TRIAGE.md (2026-08-22).

@@ -1,7 +1,7 @@
 """Deterministic ASET engine tests.
 
 Worked example values come from the reference implementation defaults in
-docs/references/aset_daily_position_sizer.html (daily stop 1000, grade A
+docs/90 - References/aset_daily_position_sizer.html (daily stop 1000, grade A
 30%, short, entry 49, stop 50.09 → 275 shares, used risk 299.75).
 """
 

@@ -2,7 +2,7 @@
 
 Token resolution reuses the existing FinvizApiClient vault machinery
 (KEEP-AS-IS seed); the fetch itself targets the documented current
-endpoint /export/stock (see docs/references/finvizstockapi.png) because
+endpoint /export/stock (see docs/90 - References/finvizstockapi.png) because
 the old client's legacy quote_export.ashx now 301-redirects and the old
 tree must stay untouched (strangler rule).
 

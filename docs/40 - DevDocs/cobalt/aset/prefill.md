@@ -15,7 +15,7 @@ untouched; new core is allowed to *read* from it, never the reverse).
 The actual HTTP fetch targets `/export/stock` directly rather than
 reusing `FinvizApiClient.get_quote`, because that method's endpoint
 (`quote_export.ashx`) now 301-redirects and the old client can't be
-edited (strangler rule) — see `docs/references/finvizstockapi.png` for
+edited (strangler rule) — see `docs/90 - References/finvizstockapi.png` for
 the current endpoint shape.
 
 ## Key functions/classes

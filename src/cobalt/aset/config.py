@@ -38,7 +38,7 @@ class ServerConfig(BaseModel):
     # "loopback" (127.0.0.1, default) or "lan" (0.0.0.0 — reachable from
     # other devices on the home network). LAN bind serves this page with
     # NO authentication to anyone on the local network — acceptable for
-    # now; an access token is a backlog item (see BACKLOG.md).
+    # now; an access token is a backlog item (see docs/00 - Project/BACKLOG.md).
     bind: Literal["loopback", "lan"] = "loopback"
     port: int = Field(default=5010, gt=0, lt=65536)
 

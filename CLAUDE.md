@@ -2,8 +2,8 @@
 
 You are working in the Cobalt repo: Dejan's local-first, multi-agent trading
 wingman (Python). Full requirements, vision, and specs live in
-COBALT-REQUIREMENTS.md — read it before any planning or architecture work.
-This file is your standing operating instructions.
+docs/00 - Project/COBALT-REQUIREMENTS.md — read it before any planning or
+architecture work. This file is your standing operating instructions.
 
 ## What Cobalt is (one paragraph)
 
@@ -90,10 +90,12 @@ Cobalt in production must ALWAYS be left working after every sprint.
   com.cobalt.agent (runs cobalt.sh start) and com.cobalt.mainframe (runs
   ~/.lmstudio/start_mainframe.sh serving the local model aliased
   "mainframe").
-- The playground vault root is docs/ itself, INSIDE the repo (per .env
-  OBSIDIAN_VAULT_PATH; docs/assessment/ is the only un-ignored path under
-  it). Treat everything else under docs/ as vault content: out of scope,
-  never committed. OPEN ITEM: configs/config.yaml:6 also sets
+- docs/ is dual-purpose: the D6 documentation tree (see "Documentation
+  standard" below) for versioned engineering artifacts, layered over the
+  gitignored Obsidian playground vault root (per .env OBSIDIAN_VAULT_PATH
+  — the SAME docs/ directory). docs/0 - Inbox/ and docs/0 - Projects/ are
+  that live vault content: out of scope, never committed, untouched by
+  the D6 restructure. OPEN ITEM: configs/config.yaml:6 also sets
   obsidian_vault_path; which source wins (.env vs config.yaml vs the
   hardcoded default in config.py:69, plus scribe.py's own env/~/Documents
   fallback) is unverified — reconcile in Pass 6/7.
@@ -102,12 +104,48 @@ Cobalt in production must ALWAYS be left working after every sprint.
 - Destructive utilities exist (dev_utils/wipe_memory.py,
   reset_memory_table.py): never run them; flag that they lack prod guards.
 
+## Documentation standard (D6)
+
+docs/ is the versioned engineering-documentation tree, gitignored by
+default (`docs/*`) with an explicit carve-out per directory — never
+commit by widening an existing exception, always name the specific
+numbered folder.
+
+- **00 - Project** — BACKLOG.md, COBALT-REQUIREMENTS.md.
+- **10 - Decisions** — ADRs, one file per decision.
+- **20 - Assessment** — the frozen pre-beta assessment corpus (00-08,
+  ASSESSMENT.md, preserved as originally written) + TRIAGE.md (still
+  authoritative — read it before any build or design work).
+- **30 - Design** — design-session outputs (Taxonomy, Data-Model +
+  Vault, Product Definition, Rules Engine, …).
+- **40 - DevDocs** — the per-.py-file wiki, generated at sprint close.
+- **50 - Roles** — role packs + MODELS.md fleet tiering.
+- **90 - References** — input material for the product definition (SMB
+  education, Finviz API screenshots, ASET/DRC artifacts, mission-control
+  inspiration); `docs/90 - References/assets/` is licensed material,
+  local-only, never committed.
+- **_archive** — superseded or misfiled content, organized by why it's
+  there. Nothing under docs/ is ever deleted.
+
+**Law: every new markdown artifact files into one of these — never at
+repo root, never in a new ad-hoc folder.** CLAUDE.md and README.md are
+the only markdown files that stay at repo root. (The lone exception:
+`COBALT-REQUIREMENTS.md` at root is a redirect stub left by the
+2026-08-26 move — a one-time migration artifact, not a precedent.)
+
+Out of scope, untouched: `docs/0 - Inbox/` and `docs/0 - Projects/` —
+the gitignored Obsidian playground vault, live/uncertain prod surfaces
+(the running agent's Scribe/scheduler write there — see Environment
+facts above). These retire from that status only when the old tree's
+writers retire (strangler rule).
+
 ## Current phase: pre-beta build (strangler rebuild)
 
-The assessment is complete (docs/assessment/ASSESSMENT.md) and every
-component disposition is ruled in **docs/assessment/TRIAGE.md**
-(2026-08-22). TRIAGE.md is authoritative — read it before any build or
-design work; the summaries below do not replace it.
+The assessment is complete (docs/20 - Assessment/ASSESSMENT.md) and
+every component disposition is ruled in
+**docs/20 - Assessment/TRIAGE.md** (2026-08-22). TRIAGE.md is
+authoritative — read it before any build or design work; the summaries
+below do not replace it.
 
 Strangler rules (standing):
 - Old tree untouched and stays runnable; no KILL ruling is acted on — KILL
@@ -123,7 +161,8 @@ Strangler rules (standing):
   `git check-ignore`/a quick glob check before adding any new-core
   config file, not after (2026-08-25 incident: this boundary held, but
   a stale docker-compose-substituted Mattermost DB credential after a
-  password rotation was mistaken for a boundary leak — see BACKLOG.md).
+  password rotation was mistaken for a boundary leak — see
+  docs/00 - Project/BACKLOG.md).
 - KEEP-AS-IS items port only through the test/config gate;
   KEEP-CONCEPT/REBUILD items are rebuilt in the new core with old code as
   spec; REDESIGN items need their ADR/design session first.
@@ -156,7 +195,7 @@ Cross-cutting laws (from TRIAGE.md — bind all work):
 Build lane: pre-beta increments 1–3 (ASET semi-auto sheet → DRC/PlayBook
 prefill → Prebell-lite), design sessions per TRIAGE's register (Taxonomy
 first). The sprint ladder is re-derived by the MVP Charter, not by TRIAGE.
-Backlog/kanban: BACKLOG.md at repo root — keep it updated as you work.
+Backlog/kanban: docs/00 - Project/BACKLOG.md — keep it updated as you work.
 
 ## Communication style with Dejan
 

@@ -3,8 +3,8 @@
 ## What it does
 The deterministic sizing math. **Pure functions — no I/O, no LLMs, no
 config reads.** Everything here is a straight port of
-`docs/references/aset_daily_position_sizer.html`'s arithmetic and
-`docs/references/Daily_Stop_Model_Card.pdf`'s rules, in `Decimal` (never
+`docs/90 - References/aset_daily_position_sizer.html`'s arithmetic and
+`docs/90 - References/Daily_Stop_Model_Card.pdf`'s rules, in `Decimal` (never
 float) so money math never drifts.
 
 ## Key functions/classes

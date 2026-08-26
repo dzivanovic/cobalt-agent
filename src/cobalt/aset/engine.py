@@ -1,8 +1,8 @@
 """Deterministic ASET sizing math. Pure functions — no I/O, no LLMs.
 
-Math source of truth: docs/references/aset_daily_position_sizer.html
+Math source of truth: docs/90 - References/aset_daily_position_sizer.html
 (riskBudget = dailyStop × pct/100; shares = floor(riskBudget/distance))
-and docs/references/Daily_Stop_Model_Card.pdf (daily stop = account ÷ 50;
+and docs/90 - References/Daily_Stop_Model_Card.pdf (daily stop = account ÷ 50;
 A+ 80 / A 30 / B 15 / C 5 / D-SAW 0).
 """
 

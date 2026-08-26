@@ -16,7 +16,7 @@ Every module under `src/cobalt/` that touches Postgres goes through
   — builds `postgresql://user:pass@host:port/dbname` from four env vars,
   URL-encoding user/password/dbname (closes the `@`-in-password bug
   class that broke Mattermost's DSN — see the 2026-08-25 incident in
-  BACKLOG.md), and opens an autocommit connection.
+  docs/00 - Project/BACKLOG.md), and opens an autocommit connection.
 
 ## Data flow in/out
 **In:** `POSTGRES_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (required —

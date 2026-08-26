@@ -2,8 +2,8 @@
 
 One short wiki page per `.py` file under `src/cobalt/` (+ its tests),
 generated at sprint close per CLAUDE.md's non-negotiable. Structure
-mirrors the source tree exactly: `docs/devdocs/cobalt/...` for
-`src/cobalt/...`, `docs/devdocs/tests/cobalt/...` for `tests/cobalt/...`.
+mirrors the source tree exactly: `docs/40 - DevDocs/cobalt/...` for
+`src/cobalt/...`, `docs/40 - DevDocs/tests/cobalt/...` for `tests/cobalt/...`.
 
 This first generation covers **pre-beta slice 1 — the ASET semi-auto
 sizing sheet** (2026-08-23 → 2026-08-26).

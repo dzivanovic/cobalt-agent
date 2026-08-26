@@ -76,7 +76,7 @@ The heart of the missing §6 ASET grader / position sizer and the §5 coaching/j
 - **SMB-DRC_Template.pdf** — Official SMB Daily Report Card template: date/grade/goal, reminder checkboxes, time-segment table (Temp, 9:30–11, 11–12, 12–2, 2–4 × Grade/PTD-only/Sizing/In-my-favor/Comments), learnings/changes, per-ticker writeups with charts. The render target for the slice-2 DRC prefill (trade-reporter's `drc_builder.py` reproduces it).
 - **SMB_Inside_Access_Calendar.pdf** — SMB Inside Access weekly live-meetings schedule (Morning GamePlan 9:00, Trader Development 11:00, The PlayBook w/ Bella Wed 1:30, evening electives 4:15+, all ET). Input to the decide-at-skip-time replay policy and the Phase-0 calendar anchors (TRIAGE operating rhythm).
 - **trade-reporter/** — Source of Dejan's "BigScalp Edge" local Flask app (`app.py`, reportlab `drc_builder.py`, template-first `playbook_builder.py`, drag-drop web UI). DRC → 1-page PDF; PlayBook → PPTX filled into the licensed SMB template (hidden-not-deleted slides, Lato Bold CAPS titles, fitted chart zones). **The rendering builders are the reuse target for pre-beta slice 2 (prefill-first inversion); the simple Flask form pattern is the slice-1 surface reference.**
-- **assets/SMB_PlayBook_Template_2024.pptx** — **LOCAL-ONLY, NOT in version control** (licensed SMB material; `docs/references/assets/` is gitignored). The official 17-slide SMB PlayBook template consumed by `trade-reporter/utils/playbook_builder.py`. Place a licensed copy manually on any fresh checkout.
+- **assets/SMB_PlayBook_Template_2024.pptx** — **LOCAL-ONLY, NOT in version control** (licensed SMB material; `docs/90 - References/assets/` is gitignored). The official 17-slide SMB PlayBook template consumed by `trade-reporter/utils/playbook_builder.py`. Place a licensed copy manually on any fresh checkout.
 
 ## Mission-control / Obsidian-OS inspiration
 UI and architecture references for the command-center front-end (§9 Obsidian-plugin command center) and the premarket-briefing model.
@@ -95,7 +95,7 @@ UI and architecture references for the command-center front-end (§9 Obsidian-pl
 
 ## Misc
 - **.DS_Store** — macOS folder metadata; noise, not content (safe to delete/gitignore).
-- **08-documentation-audit.md**, **ASSESSMENT.md** — stray copies of `docs/assessment/` files that were dropped into this folder; **misfiled duplicates**, not references (delete here; the canonical versions live in `docs/assessment/`).
+- **08-documentation-audit.md**, **ASSESSMENT.md** — WERE stray copies of `docs/assessment/` files dropped into this folder; moved to `docs/_archive/references-misfiled-duplicates/` in the 2026-08-26 D6 restructure (nothing under `docs/` is deleted). The canonical, current versions live in `docs/20 - Assessment/`.
 
 ---
 

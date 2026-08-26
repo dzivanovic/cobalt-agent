@@ -28,7 +28,7 @@ daily_note:
 # http://<mac-lan-ip>:<port>; the reachable URL(s) print on startup.
 # WARNING: "lan" exposes this page with NO authentication to anyone on
 # the local network. Acceptable for now — an access token is a backlog
-# item (BACKLOG.md).
+# item (docs/00 - Project/BACKLOG.md).
 server:
   bind: loopback
   port: 5010
