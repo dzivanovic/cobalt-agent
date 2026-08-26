@@ -1,0 +1,13 @@
+# ONE vault-path source for the new core (src/cobalt/*). TRIAGE 2.6
+# ruling — closes CLAUDE.md's OPEN ITEM for new-core code only.
+#
+# This is NEW-CORE only. The old tree's four-way ambiguity (.env
+# OBSIDIAN_VAULT_PATH / configs/config.yaml / config.py:69's hardcoded
+# default / scribe.py's own fallback) is a SEPARATE, untouched thing —
+# do not confuse this file with that resolution chain, and do not set
+# OBSIDIAN_VAULT_PATH expecting it to affect this file (it doesn't;
+# override via COBALT_VAULT_PATH instead, see src/cobalt/vault.py).
+#
+# Not a secret — a local directory path. Read fresh on every call, no
+# caching, so editing this takes effect immediately.
+obsidian_vault_path: /Users/cobalt/Vault/Think

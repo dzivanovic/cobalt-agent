@@ -14,8 +14,11 @@ LAN-bind settings) stay off git while the shape of the config stays
 documented in the committed example.
 
 ## Key functions/classes
-- `DailyNoteConfig` — `vault_path`, `inbox_dir`, `filename_pattern`
-  (default `%Y-%m-%d.md`). Consumed by `daily_note.py`.
+- `DailyNoteConfig` — `daily_notes_dir` (relative to the vault root
+  resolved by `cobalt.vault.resolve_vault_path()` — the vault ROOT
+  itself is deliberately not configurable here, that's the one
+  resolver's job), `filename_pattern` (default `%Y-%m-%d.md`). Consumed
+  by `daily_note.py`.
 - `ServerConfig` — `bind: "loopback" | "lan"` (default `"loopback"`),
   `port` (default `5010`, `1–65535`). `.host` property resolves
   `"loopback"` → `127.0.0.1`, `"lan"` → `0.0.0.0`. `"lan"` is documented
@@ -33,7 +36,8 @@ documented in the committed example.
   (`LOCAL_CONFIG_PATH` if it exists, else `CONFIG_PATH`), parses YAML,
   validates via Pydantic, raises `ConfigError` on any failure.
 - `REPO_ROOT` — computed once (`Path(__file__).resolve().parents[3]`);
-  reused by `daily_note.py` to resolve relative vault paths.
+  reused by `daily_note.py`'s outside-the-repo safety check (not for
+  vault resolution — that's `cobalt.vault`).
 
 ## Data flow in/out
 **In:** `configs/dev/aset.yaml` (committed, example values) or

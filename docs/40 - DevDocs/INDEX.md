@@ -6,7 +6,9 @@ mirrors the source tree exactly: `docs/40 - DevDocs/cobalt/...` for
 `src/cobalt/...`, `docs/40 - DevDocs/tests/cobalt/...` for `tests/cobalt/...`.
 
 This first generation covers **pre-beta slice 1 — the ASET semi-auto
-sizing sheet** (2026-08-23 → 2026-08-26).
+sizing sheet** (2026-08-23 → 2026-08-26), including the 2026-08-26
+vault-path migration (the real Obsidian vault, `cobalt.vault`'s ONE
+resolver).
 
 ---
 
@@ -18,13 +20,14 @@ sizing sheet** (2026-08-23 → 2026-08-26).
 |---|---|
 | `__init__.py` | New-core package marker; states the ground rules (fail-loud, deterministic, config-driven, dev-only). |
 | `db.py` | The ONE Postgres connection factory; refuses `cobalt_brain` (prod) unless explicitly overridden. |
+| `vault.py` | The ONE vault-path resolver (TRIAGE 2.6); `configs/dev/vault.yaml`, overridable by `COBALT_VAULT_PATH`, fail-loud. New-core only — old tree's ambiguity untouched. |
 | `aset/__init__.py` | ASET package marker; states grade/stops are always Dejan's input. |
 | `aset/models.py` | Pydantic `Grade`/`Direction` enums, `GRADE_RISK_PCT` map, `SizingInput`/`SizingResult`. |
 | `aset/engine.py` | Deterministic sizing math — pure functions, no I/O: broker cap, daily-stop law (+ its temp override), `compute_sizing`. |
 | `aset/config.py` | Pydantic config schema + loader (`account_size`, `broker_hard_stop`, `daily_note`, `server` bind). |
 | `aset/store.py` | Persists every sizing to `aset_sizings` in `cobalt_dev`. |
 | `aset/prefill.py` | Fetches last price from Finviz Elite; fail-loud, scrubs the auth token from every error. |
-| `aset/daily_note.py` | Append-only "Save to Daily Note" writer, gated by a real `git check-ignore` safety check. |
+| `aset/daily_note.py` | Append-only "Save to Daily Note" writer, into the real vault (`cobalt.vault`), gated by an outside-the-repo safety check. |
 | `aset/net.py` | LAN-IP detection helper for the startup banner. |
 | `aset/web.py` | The FastAPI single-page sheet — routes, rendering, wiring everything together. |
 | `aset/__main__.py` | Launcher (`uv run python -m cobalt.aset`) — resolves bind config, prints reachable URLs, starts uvicorn. |
@@ -36,6 +39,7 @@ sizing sheet** (2026-08-23 → 2026-08-26).
 | `src/cobalt/aset/migrations/0001_aset_sizings.sql` | The one DDL source for `aset_sizings` (one-path rule — `store.py` executes this file, no second copy). |
 | `configs/dev/aset.yaml` | Committed example config — placeholder account size, real structure. |
 | `configs/dev/aset.local.yaml` | **Gitignored** — Dejan's real account size + LAN bind setting; replaces the example entirely when present. |
+| `configs/dev/vault.yaml` | Committed — the real vault root (not a secret, just a path); `cobalt.vault`'s one config source. |
 
 ### Tests (`tests/cobalt/`)
 
@@ -46,8 +50,9 @@ sizing sheet** (2026-08-23 → 2026-08-26).
 | `test_aset_config.py` | Config loader fail-loud tests + `ServerConfig` (loopback/LAN) tests. |
 | `test_aset_store.py` | Integration test against real `cobalt_dev`; proves the prod-DB refusal. |
 | `test_aset_prefill.py` | Token-scrubbing tests. |
-| `test_aset_daily_note.py` | Safety-gate + append-only tests against real git. |
+| `test_aset_daily_note.py` | Safety-gate (outside-repo), stub-banner, and append-only tests, via a fake vault. |
 | `test_aset_net.py` | LAN-IP helper tests (faked socket, no real network). |
+| `test_aset_vault.py` | Vault resolver fail-loud + env-override-precedence tests. |
 
 ---
 
@@ -73,14 +78,17 @@ together at the end:
    integration test.
 6. **`aset/prefill.md`** + `tests/cobalt/test_aset_prefill.md` — the
    Finviz fetch and why the auth-token scrubbing exists.
-7. **`aset/daily_note.md`** + `tests/cobalt/test_aset_daily_note.md` —
-   the vault writer and its safety gate; read the gate test closely,
-   it's testing against real git, not a mock.
-8. **`aset/net.md`** + `tests/cobalt/test_aset_net.md` — small, quick,
+7. **`cobalt/vault.md`** + `tests/cobalt/test_aset_vault.md` — the ONE
+   vault-path resolver (read this before `daily_note.md`, not after —
+   it's what `daily_note.py` depends on now).
+8. **`aset/daily_note.md`** + `tests/cobalt/test_aset_daily_note.md` —
+   the vault writer, its outside-the-repo safety gate, and the stub-
+   with-banner behavior.
+9. **`aset/net.md`** + `tests/cobalt/test_aset_net.md` — small, quick,
    self-contained.
-9. **`aset/web.md`** — where all of the above gets wired into the
-   actual page and its three routes. Read this after everything it
-   depends on, not before — it won't make sense in isolation.
-10. **`aset/__main__.md`** — how it's actually launched.
-11. **`tests/cobalt/conftest.md`** — last, as an aside explaining why
+10. **`aset/web.md`** — where all of the above gets wired into the
+    actual page and its three routes. Read this after everything it
+    depends on, not before — it won't make sense in isolation.
+11. **`aset/__main__.md`** — how it's actually launched.
+12. **`tests/cobalt/conftest.md`** — last, as an aside explaining why
     the DB isn't mocked in this directory.

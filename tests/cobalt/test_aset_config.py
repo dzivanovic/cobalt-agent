@@ -12,8 +12,7 @@ account_size: 10000
 broker_hard_stop: 430
 db_name: cobalt_dev
 daily_note:
-  vault_path: docs
-  inbox_dir: "0 - Inbox"
+  daily_notes_dir: "1 - Trading/1- Daily Notes"
 """
 
 
@@ -21,7 +20,7 @@ def test_committed_dev_config_is_valid():
     cfg = load_config()
     assert cfg.account_size > 0
     assert cfg.broker_hard_stop > 0
-    assert cfg.daily_note.vault_path
+    assert cfg.daily_note.daily_notes_dir
 
 
 def test_missing_file_crashes(monkeypatch, tmp_path):
@@ -63,7 +62,7 @@ def test_non_positive_account_rejected():
         AsetConfig(
             account_size=Decimal("0"),
             broker_hard_stop=Decimal("430"),
-            daily_note={"vault_path": "docs", "inbox_dir": "0 - Inbox"},
+            daily_note={"daily_notes_dir": "1 - Trading/1- Daily Notes"},
         )
 
 

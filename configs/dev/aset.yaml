@@ -13,13 +13,14 @@ broker_hard_stop: 430
 # daily_stop_default: 400
 db_name: cobalt_dev
 
-# "Save to Daily Note" target. Paths/patterns config-only, nothing
-# hardcoded. Currently the docs/ playground vault (live-vault migration
-# is a scheduled design decision). Writes are APPEND-ONLY and gated:
-# the target file must be git-ignored or the write is refused.
+# "Save to Daily Note" target. Vault ROOT comes from
+# configs/dev/vault.yaml (cobalt.vault — the one resolver), never
+# configured here. daily_notes_dir is relative to that root. Writes are
+# APPEND-ONLY and gated: the resolved target must be OUTSIDE the repo
+# working tree or the write is refused (the vault lives outside the
+# repo — that's the safety property).
 daily_note:
-  vault_path: docs
-  inbox_dir: "0 - Inbox"
+  daily_notes_dir: "1 - Trading/1- Daily Notes"
   filename_pattern: "%Y-%m-%d.md"
 
 # Server bind. "loopback" (default) = 127.0.0.1 only, this machine only.

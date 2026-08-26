@@ -25,10 +25,11 @@ class ConfigError(RuntimeError):
 class DailyNoteConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # Absolute path, or relative to the repo root. Currently the docs/
-    # playground vault; live-vault migration is a scheduled design decision.
-    vault_path: str = Field(min_length=1)
-    inbox_dir: str = Field(min_length=1)
+    # Relative to the resolved vault root (cobalt.vault.resolve_vault_path()
+    # — NOT configured here; vault location is the one resolver's job, not
+    # ASET's). Exact folder name verified on disk, matches the vault's own
+    # .obsidian/daily-notes.json.
+    daily_notes_dir: str = Field(min_length=1)
     filename_pattern: str = Field(default="%Y-%m-%d.md", min_length=1)
 
 

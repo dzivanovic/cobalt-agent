@@ -46,12 +46,28 @@ don't duplicate them.
   auto-prefill on ticker tab-out, entry prepopulation, grade default B,
   LONG/SHORT toggle, append-only Save-to-Daily-Note with git-ignore
   safety gate). Awaiting Dejan review.
-  Prefill blocked: finviz.com::api_token in the vault returns 401 (dead) —
-  needs the regenerated token loaded via manage_vault.py.
   STATUS 2026-08-25 (cont.): server bind is config-driven
   (configs/dev/aset*.yaml server.bind: loopback|lan); Dejan's local
   config now runs "lan" so the Windows trading PC (same home network,
   not Tailscale) can reach it — reachable URL(s) print on startup.
+  Prefill token issue resolved (Finviz token in the vault now valid;
+  prefill confirmed live during the 2026-08-26 smoke test).
+  STATUS 2026-08-26 — vault-path migration: real Obsidian vault is now
+  /Users/cobalt/Vault/Think (config: configs/dev/vault.yaml, resolver:
+  src/cobalt/vault.py — TRIAGE 2.6's ONE resolver, new-core only, old
+  tree's four-way ambiguity untouched). Save-to-Daily-Note now targets
+  "1 - Trading/1- Daily Notes/YYYY-MM-DD.md" under that root; the
+  git-check-ignore safety gate is retired — replaced by an "outside the
+  repo working tree" check, which is now the actual safety property
+  (the vault is genuinely outside the repo, not just gitignored inside
+  it). Stub-with-banner on a missing note added. Smoke-tested end to end
+  into the real vault (card landed in today's real daily note).
+  Old playground-vault writes (docs/0 - Inbox) retired, left as-is —
+  **flagged, not migrated**: two test ```aset cards from prior smoke
+  tests sit in docs/0 - Inbox/2026-08-25.md (both ticker MRNA, fake
+  sizing data) — not real trades, not auto-migrated into the real vault
+  to avoid injecting synthetic entries into Dejan's real trading record.
+  Dejan: delete, ignore, or say if you want them ported by hand.
   Backlogged follow-on (do not build yet): ticker field autocompletes
   from the daily in-play list once that pipeline exists; non-list
   tickers show an inline "not in today's in-play list" note (no popup),
