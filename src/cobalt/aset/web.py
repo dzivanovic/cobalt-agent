@@ -7,6 +7,7 @@ blank or guessed field. Obsidian/mission-control rendering comes later.
 """
 
 import html
+import json
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -43,7 +44,8 @@ CSS = """
  .result{border-color:#24d986}
  .shares{font-size:52px;font-weight:900;color:#24d986}
  .warn{color:#ffd84d;font-size:13px;margin-top:6px}
- #capWarn{display:none}
+ .hint{color:#7f8ca8;font-size:12px;margin-top:4px;font-style:italic}
+ #capWarn,#entryHint{display:none}
  table{width:100%;font-size:13px;border-collapse:collapse} td{padding:4px 8px;border-bottom:1px solid #20283c}
  .muted{color:#7f8ca8;font-size:12px}
 """
@@ -51,8 +53,13 @@ CSS = """
 JS = """
  const CAP = window.BROKER_CAP;
  const $ = id => document.getElementById(id);
- let lastFetched = null;
- let entryDirty = $('entry').value !== '';
+
+ // STATE PRINCIPLE: the ticker defines the decision context. Changing
+ // the ticker = new decision = full reset. Within one ticker, entry
+ // tracks last price until Dejan manually edits entry (entryDirty),
+ // which resets only when the ticker changes.
+ let currentTicker = window.INITIAL_TICKER || null;
+ let entryDirty = window.INITIAL_ENTRY_DIRTY;
 
  function setDir(d){
    $('direction').value = d;
@@ -60,23 +67,72 @@ JS = """
    $('shortBtn').classList.toggle('active-short', d === 'short');
  }
 
- async function prefill(){
-   const t = $('ticker').value.trim();
-   if(!t) return;
+ function markEntryDirty(){
+   entryDirty = true;
+   $('entry_dirty').value = '1';
+   $('entryHint').style.display = 'none';
+ }
+
+ function showEntryHint(freshPrice){
+   $('entryHint').textContent = 'entry differs from last ($' + freshPrice + ')';
+   $('entryHint').style.display = 'block';
+ }
+
+ function clearForNewTicker(){
+   entryDirty = false;
+   $('entry_dirty').value = '';
+   $('resultCard').innerHTML = '';
+   $('banner').innerHTML = '';
+   $('entry').value = '';
+   $('stop').value = '';
+   $('last_price').value = '';
+   $('price_source').value = '';
+   $('entryHint').style.display = 'none';
+ }
+
+ async function doFetch(ticker){
    const out = $('last_price');
    out.value = '...';
    try {
-     const r = await fetch('/api/prefill?ticker=' + encodeURIComponent(t));
+     const r = await fetch('/api/prefill?ticker=' + encodeURIComponent(ticker));
      const j = await r.json();
      if (!r.ok) throw new Error(j.error || r.status);
-     out.value = j.price;
      $('price_source').value = j.source;
-     if (!entryDirty) $('entry').value = j.price;
-     lastFetched = t.toUpperCase();
+     return j.price;
    } catch (e) {
      out.value = 'FAILED';
      $('price_source').value = '';
      alert('Prefill FAILED: ' + e.message);
+     return null;
+   }
+ }
+
+ async function handleTicker(rawTicker){
+   const t = rawTicker.trim().toUpperCase();
+   if (!t) return;
+
+   if (t !== currentTicker) {
+     // Symptom 1: ticker change = new decision = full reset, THEN fetch.
+     currentTicker = t;
+     clearForNewTicker();
+     const price = await doFetch(t);
+     if (price !== null) {
+       $('last_price').value = price;
+       $('entry').value = price;  // always overwritten on a ticker change
+     }
+   } else {
+     // Symptom 2: same-ticker re-fetch.
+     const price = await doFetch(t);
+     if (price === null) return;
+     $('last_price').value = price;
+     if (!entryDirty) {
+       $('entry').value = price;
+       $('entryHint').style.display = 'none';
+     } else if ($('entry').value !== String(price)) {
+       showEntryHint(price);
+     } else {
+       $('entryHint').style.display = 'none';
+     }
    }
  }
 
@@ -90,11 +146,9 @@ JS = """
 
  window.addEventListener('DOMContentLoaded', () => {
    setDir($('direction').value || 'long');
-   $('ticker').addEventListener('blur', () => {
-     const t = $('ticker').value.trim().toUpperCase();
-     if (t && t !== lastFetched) prefill();
-   });
-   $('entry').addEventListener('input', () => { entryDirty = true; });
+   $('ticker').addEventListener('blur', () => handleTicker($('ticker').value));
+   $('fetchBtn').addEventListener('click', () => handleTicker($('ticker').value));
+   $('entry').addEventListener('input', markEntryDirty);
    $('daily_stop').addEventListener('input', clampStop);
    clampStop();
  });
@@ -102,7 +156,7 @@ JS = """
 
 FORM_FIELDS = (
     "ticker", "grade", "direction", "daily_stop", "entry", "stop",
-    "last_price", "price_source",
+    "last_price", "price_source", "entry_dirty",
 )
 
 
@@ -126,14 +180,16 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
     direction = form.get("direction", "long")
 
     e = html.escape
+    initial_ticker = form.get("ticker", "").strip().upper()
+    initial_entry_dirty = bool(form.get("entry_dirty"))
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cobalt · ASET Sheet</title>
 <style>{CSS}</style></head><body><div class="wrap">
 <h1>ASET SEMI-AUTO SHEET <span class="muted">pre-beta slice 1 · dev</span></h1>
-{banner}
-{result}
+<div id="banner">{banner}</div>
+<div id="resultCard">{result}</div>
 <form class="card" method="post" action="/size">
  <div class="row"><div>
   <label>Ticker <span class="muted">(tab out to fetch)</span></label>
@@ -142,8 +198,9 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
   <label>Last price <span class="muted">(prefill)</span></label>
   <input name="last_price" id="last_price" readonly placeholder="—" value="{e(form.get("last_price", ""))}">
   <input type="hidden" name="price_source" id="price_source" value="{e(form.get("price_source", ""))}">
+  <input type="hidden" name="entry_dirty" id="entry_dirty" value="{e(form.get("entry_dirty", ""))}">
  </div></div>
- <button type="button" onclick="prefill()">Re-fetch last price</button>
+ <button type="button" id="fetchBtn">Re-fetch last price</button>
  <div class="row"><div>
   <label>Grade (yours, always)</label>
   <select name="grade">{_options(grade_pairs, form.get("grade", "B"))}</select>
@@ -158,9 +215,10 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
  <div class="row"><div>
   <label>Entry $ <span class="muted">(prefilled from last price, edit freely)</span></label>
   <input name="entry" id="entry" type="number" step="0.0001" required value="{e(form.get("entry", ""))}">
+  <div class="hint" id="entryHint"></div>
  </div><div>
   <label>Stop $ (yours, always)</label>
-  <input name="stop" type="number" step="0.0001" required value="{e(form.get("stop", ""))}">
+  <input name="stop" id="stop" type="number" step="0.0001" required value="{e(form.get("stop", ""))}">
  </div></div>
  <label>Daily stop $ <span class="muted">(prefill {e(str(prefill_stop))} · broker hard cap {e(str(cfg.broker_hard_stop))})</span></label>
  <input name="daily_stop" id="daily_stop" type="number" step="0.01" max="{e(str(cfg.broker_hard_stop))}" required value="{e(daily)}">
@@ -168,7 +226,11 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
  <button class="primary" type="submit">Compute &amp; persist</button>
 </form>
 <div class="muted">Every computed sizing persists to Postgres ({e(cfg.db_name)}). Missing data = FAILED, never guessed.</div>
-<script>window.BROKER_CAP = {float(cfg.broker_hard_stop)};</script>
+<script>
+window.BROKER_CAP = {float(cfg.broker_hard_stop)};
+window.INITIAL_TICKER = {json.dumps(initial_ticker)};
+window.INITIAL_ENTRY_DIRTY = {json.dumps(initial_entry_dirty)};
+</script>
 <script>{JS}</script>
 </div></body></html>"""
 
