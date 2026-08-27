@@ -55,6 +55,10 @@ dependencies = [
     "psycopg2-binary>=2.9.11",
 ]
 
+# --- NEW-CORE ENTRY POINTS (src/cobalt/*, strangler rebuild) ---
+[project.scripts]
+archiver = "cobalt.archiver.runner:main"
+
 # --- DEV DEPENDENCIES (New Standard: [dependency-groups]) ---
 [dependency-groups]
 dev = [

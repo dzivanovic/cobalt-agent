@@ -1,0 +1,333 @@
+# Bar Archiver watchlist tiers — derived from Dejan's raw TradingView
+# exports (Green, Red, SMB Daily Watch, Watchlist), pasted 2026-08-28.
+# Not under configs/dev/ — configs/cobalt/ is a second sanctioned
+# new-core config location (CLAUDE.md's config boundary law), safe for
+# the same reason: the old loader's glob (configs/*.yaml) is top-level
+# only, non-recursive, and never reaches this subdirectory.
+#
+# Derivation rules (exact, reproducible from the raw lists):
+#   tier_a = union(Green, Red) [unfiltered] + SMB Daily Watch's
+#            individual-equity entries (i.e. not in tier_b's explicit
+#            list below, not excluded, not a known non-equity product).
+#   tier_b = the explicit ETF/index list Dejan named directly (not
+#            derived) — wins over tier_a on any overlap (6 symbols:
+#            DRAM, GLD, QQQ, SLV, SOXL, USO appeared in Green/Red's raw
+#            union too; tier_b's explicit classification is authoritative).
+#   tier_c = everything else from Watchlist not already claimed by
+#            tier_a/tier_b, plus SMB entries diverted by the
+#            not-individual-equity override below. No archiving.
+#   Exchange prefixes (NASDAQ:, NYSE:, AMEX:, CBOE:, TSX:, XETR:, …)
+#   stripped throughout; symbol collisions resolved by checking the
+#   FULL "EXCHANGE:SYMBOL" pair against exclusion rules BEFORE
+#   stripping (e.g. NYSE:GOLD the Barrick Gold stock stays; TVC:GOLD
+#   the commodity-price feed is excluded — same bare symbol, different
+#   meaning, correctly split by their exchange prefix).
+#
+# EXCLUDED (logged once each, never archived):
+#   Futures (symbol ends "!"): CME_MINI:ES1!, CME_MINI:NQ1!,
+#     CME_MINI:RTY1!, NYMEX:CL1!, OSE:NK2251!
+#   Forex: OANDA:USDJPY
+#   Bonds/index/macro feed (TVC: prefix): TVC:VIX, TVC:DXY, TVC:GOLD,
+#     TVC:SILVER, TVC:USOIL, TVC:US02Y, TVC:US05Y, TVC:US10Y, TVC:US30Y
+#   Crypto pairs: BITSTAMP:BTCUSD, COINBASE:BTCUSD
+#   VIX (CBOE:VIX) — NAMED DATA-LAYER GAP: VIX is unavailable via
+#     Finviz's stock export under any exchange prefix tried; needs a
+#     different source if/when VIX bars are required.
+#
+# FLAGGED JUDGMENT CALLS (not silently resolved — surfaced for review):
+#   - IBIT and TQQQ are leveraged/trust ETF products that landed in
+#     tier_a (not tier_b) because they came from Green/Red's raw,
+#     unfiltered union and are NOT in tier_b's explicit list. Literal
+#     rule application, not an oversight — flag if you want them in
+#     tier_b instead.
+#   - ETHE (Grayscale Ethereum Trust, from SMB Daily Watch) diverted to
+#     tier_c: not in tier_b's explicit list, not a common-stock
+#     "individual equity" either. Judgment call, not a named rule.
+#   - RSP, URA, YINN, YANG, ETHU (from Watchlist) are ETF-like products
+#     not in tier_b's explicit list — parked in tier_c rather than
+#     assumed into tier_b.
+#   - SAP (XETR:SAP, foreign-listed) — no named rule addresses foreign
+#     exchange listings; parked in tier_c rather than guessed whether
+#     Finviz's stock export resolves it (vs. its NYSE ADR, if any).
+#   - GOOG and GOOGL are both present (different Alphabet share
+#     classes) — not a duplicate, kept as two distinct tickers.
+
+tier_a:
+  description: "Active + tracked stocks"
+  intervals: [i1, i2, i5, i15, i30]
+  tickers:
+    - AA
+    - AAOI
+    - AAPL
+    - ABNB
+    - AEM
+    - AES
+    - ALB
+    - AMAT
+    - AMD
+    - AMT
+    - AMZN
+    - APA
+    - ARM
+    - ARWR
+    - AVGO
+    - AXSM
+    - BA
+    - BABA
+    - BAC
+    - BEAM
+    - BIDU
+    - BILI
+    - C
+    - CAT
+    - CAVA
+    - CCI
+    - CEG
+    - CIFR
+    - CL
+    - CLF
+    - CLSK
+    - COIN
+    - COP
+    - COST
+    - CRCL
+    - CRML
+    - CRSP
+    - CRWD
+    - CRWV
+    - CVNA
+    - CVX
+    - DDOG
+    - DE
+    - DELL
+    - DIS
+    - DKNG
+    - DLR
+    - DUK
+    - DVN
+    - ENPH
+    - EQIX
+    - EXC
+    - F
+    - FANG
+    - FCX
+    - FDX
+    - FSLR
+    - FUTU
+    - GE
+    - GM
+    - GOLD
+    - GOOG
+    - GOOGL
+    - GS
+    - HAL
+    - HD
+    - HIMS
+    - HON
+    - HOOD
+    - HPE
+    - IBIT
+    - INTC
+    - IOVA
+    - IREN
+    - IRM
+    - JD
+    - JPM
+    - KHC
+    - KO
+    - LCID
+    - LI
+    - LMT
+    - LRCX
+    - LULU
+    - LUNR
+    - MARA
+    - MDB
+    - MDLZ
+    - META
+    - MP
+    - MPC
+    - MRNA
+    - MRVL
+    - MS
+    - MSFT
+    - MSTR
+    - MTCH
+    - MU
+    - NBIS
+    - NEE
+    - NEM
+    - NET
+    - NFLX
+    - NKE
+    - NOC
+    - NRG
+    - NTES
+    - NUE
+    - NVAX
+    - NVDA
+    - O
+    - OKLO
+    - "ON"  # ON Semiconductor — quoted: bare ON is a YAML 1.1 boolean literal
+    - ORCL
+    - OXY
+    - PANW
+    - PCG
+    - PDD
+    - PENG
+    - PEP
+    - PG
+    - PINS
+    - PLD
+    - PLTR
+    - PPL
+    - PYPL
+    - QBTS
+    - QUBT
+    - RBLX
+    - RCKT
+    - RDDT
+    - RGTI
+    - RIOT
+    - RIVN
+    - RKLB
+    - RKT
+    - RTX
+    - RUM
+    - RUN
+    - SBUX
+    - SCHW
+    - SDOT
+    - SHOP
+    - SKHY
+    - SLB
+    - SMCI
+    - SMR
+    - SNAP
+    - SNDK
+    - SNOW
+    - SOFI
+    - SPCX
+    - SPG
+    - SRPT
+    - STLD
+    - STZ
+    - T
+    - TAP
+    - TGT
+    - TLN
+    - TME
+    - TQQQ
+    - TSLA
+    - TSM
+    - ULTA
+    - UPS
+    - UPST
+    - USAR
+    - VICI
+    - VKTX
+    - VST
+    - VZ
+    - WAL
+    - WBD
+    - WDC
+    - WELL
+    - WFC
+    - WMT
+    - WULF
+    - XOM
+    - XPEV
+    - YMM
+    - ZION
+    - ZS
+    - ZTO
+
+tier_b:
+  description: "Context ETFs / indexes"
+  intervals: [i5, i30]
+  tickers:
+    - DIA
+    - DRAM
+    - GLD
+    - HYG
+    - IGV
+    - IWM
+    - QQQ
+    - QTUM
+    - SLV
+    - SOXL
+    - SPY
+    - TLT
+    - USO
+    - XBI
+    - XLB
+    - XLC
+    - XLE
+    - XLF
+    - XLI
+    - XLK
+    - XLP
+    - XLRE
+    - XLU
+    - XLV
+    - XLY
+
+tier_c:
+  description: "Browse list — no archiving, present for future use"
+  intervals: []
+  tickers:
+    - AAL
+    - APP
+    - ASML
+    - AXP
+    - CARR
+    - CCJ
+    - CNC
+    - COUR
+    - CVS
+    - DAL
+    - DJT
+    - DNN
+    - DRUG
+    - DXYZ
+    - EL
+    - ETHE
+    - ETHU
+    - GD
+    - HP
+    - IONQ
+    - JNJ
+    - KVUE
+    - LHX
+    - LUMN
+    - LUV
+    - LYFT
+    - MCD
+    - METC
+    - MMM
+    - NB
+    - NIO
+    - NNE
+    - NVO
+    - PATH
+    - PCSA
+    - PHUN
+    - PNC
+    - RCAT
+    - RSP
+    - SAP
+    - SOC
+    - TCOM
+    - TIGR
+    - TMC
+    - TXN
+    - U
+    - UAL
+    - UBER
+    - UEC
+    - UMAC
+    - UNH
+    - URA
+    - UUUU
+    - YANG
+    - YINN

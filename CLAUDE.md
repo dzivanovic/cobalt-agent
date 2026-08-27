@@ -156,13 +156,17 @@ Strangler rules (standing):
   dev Mattermost token. Prod DB, prod vault, and the running agent are
   never touched by build work.
 - Config boundary is law: new-core config lives ONLY under configs/dev/
-  (or paths under src/cobalt/) — never directly under configs/*.yaml,
-  which is the old loader's live, non-recursive glob path. Verify with
-  `git check-ignore`/a quick glob check before adding any new-core
-  config file, not after (2026-08-25 incident: this boundary held, but
-  a stale docker-compose-substituted Mattermost DB credential after a
-  password rotation was mistaken for a boundary leak — see
-  docs/00 - Project/BACKLOG.md).
+  or configs/cobalt/ (or paths under src/cobalt/) — never directly under
+  configs/*.yaml, which is the old loader's live, non-recursive glob
+  path (both subdirectories are safe for the same reason: the glob is
+  top-level only). configs/dev/ = per-component dev settings (ASET);
+  configs/cobalt/ = shared new-core data (the Bar Archiver's watchlist
+  tiers, 2026-08-28 — not "dev" in the NN#16 sense, just outside the old
+  glob). Verify with `git check-ignore`/a quick glob check before adding
+  any new-core config file, not after (2026-08-25 incident: this
+  boundary held, but a stale docker-compose-substituted Mattermost DB
+  credential after a password rotation was mistaken for a boundary leak
+  — see docs/00 - Project/BACKLOG.md).
 - KEEP-AS-IS items port only through the test/config gate;
   KEEP-CONCEPT/REBUILD items are rebuilt in the new core with old code as
   spec; REDESIGN items need their ADR/design session first.

@@ -8,7 +8,9 @@ mirrors the source tree exactly: `docs/40 - DevDocs/cobalt/...` for
 This first generation covers **pre-beta slice 1 — the ASET semi-auto
 sizing sheet** (2026-08-23 → 2026-08-26), including the 2026-08-26
 vault-path migration (the real Obsidian vault, `cobalt.vault`'s ONE
-resolver).
+resolver), plus the **Bar Archiver** (2026-08-28) — a second, sibling
+new-core component under `src/cobalt/archiver/`, unrelated to ASET
+except for sharing `cobalt.db`.
 
 ---
 
@@ -31,6 +33,13 @@ resolver).
 | `aset/net.py` | LAN-IP detection helper for the startup banner. |
 | `aset/web.py` | The FastAPI single-page sheet — routes, rendering, wiring everything together. |
 | `aset/__main__.py` | Launcher (`uv run python -m cobalt.aset`) — resolves bind config, prints reachable URLs, starts uvicorn. |
+| `archiver/__init__.py` | Bar Archiver package marker; states the never-daily/weekly/monthly rule and the standalone-scheduling rule. |
+| `archiver/models.py` | `Interval` enum (i1/i2/i5/i15/i30 only — the footgun-law validated enum) + `Bar`. |
+| `archiver/config.py` | Watchlist tier config loader (`configs/cobalt/watchlists.yaml`) + `archive_targets()`/`backfill_targets()`. |
+| `archiver/collector.py` | Finviz `/export/stock` fetch + fail-loud shape validation (columns, and the daily-fallback-shape detector). |
+| `archiver/store.py` | Idempotent bar upserts into `bars` in `cobalt_dev` (PK `(ticker, interval, ts)`, `ON CONFLICT DO UPDATE`). |
+| `archiver/report.py` | Appends one run-summary row to `docs/30 - Design/archiver-runs.md`; strictly tabular by design. |
+| `archiver/runner.py` | Orchestrates a run (gentle rate, fail-loud per ticker); the `archiver` CLI entry point (`--backfill TICKER`). |
 
 ### Configs / templates
 
@@ -40,6 +49,9 @@ resolver).
 | `configs/dev/aset.yaml` | Committed example config — placeholder account size, real structure. |
 | `configs/dev/aset.local.yaml` | **Gitignored** — Dejan's real account size + LAN bind setting; replaces the example entirely when present. |
 | `configs/dev/vault.yaml` | Committed — the real vault root (not a secret, just a path); `cobalt.vault`'s one config source. |
+| `src/cobalt/archiver/migrations/0001_bars.sql` | The one DDL source for `bars`. |
+| `configs/cobalt/watchlists.yaml` | Committed — the three watchlist tiers (derived from Dejan's TradingView exports) + intervals per tier. |
+| `ops/com.cobalt.archiver.plist` | Standalone launchd template, Mon-Fri 20:30 local — captured here, not auto-installed. |
 
 ### Tests (`tests/cobalt/`)
 
@@ -53,6 +65,10 @@ resolver).
 | `test_aset_daily_note.py` | Safety-gate (outside-repo), stub-banner, and append-only tests, via a fake vault. |
 | `test_aset_net.py` | LAN-IP helper tests (faked socket, no real network). |
 | `test_aset_vault.py` | Vault resolver fail-loud + env-override-precedence tests. |
+| `test_archiver_config.py` | Watchlist config fail-loud tests + tier-derivation sanity checks (no cross-tier ticker, VIX excluded). |
+| `test_archiver_collector.py` | Datetime-quirk parsing + CSV shape validation, incl. the daily-fallback-shape rejection. |
+| `test_archiver_store.py` | Integration test: real upsert idempotency (`DO UPDATE` verified, not just "no duplicate"). |
+| `test_archiver_report.py` | Run-report header/append behavior + the table-stays-contiguous regression guard. |
 
 ---
 
@@ -92,3 +108,21 @@ together at the end:
 11. **`aset/__main__.md`** — how it's actually launched.
 12. **`tests/cobalt/conftest.md`** — last, as an aside explaining why
     the DB isn't mocked in this directory.
+
+## Bar Archiver reading order
+
+A sibling component to ASET, not built on it — shares only `cobalt.db`.
+
+1. **`archiver/models.md`** — `Interval` and `Bar`; the vocabulary.
+2. **`archiver/config.md`** + `configs/cobalt/watchlists.yaml` +
+   `tests/cobalt/test_archiver_config.md` — the three tiers, and how
+   `archive_targets()`/`backfill_targets()` turn them into work.
+3. **`archiver/collector.md`** + `tests/cobalt/test_archiver_collector.md`
+   — the fetch + fail-loud shape validation. Read the datetime-quirk
+   handling closely; it's the part most likely to bite a future change.
+4. **`archiver/store.md`** + `src/cobalt/archiver/migrations/0001_bars.sql`
+   + `tests/cobalt/test_archiver_store.md` — idempotent persistence.
+5. **`archiver/report.md`** + `tests/cobalt/test_archiver_report.md` —
+   the run-report writer; read why it's kept strictly tabular.
+6. **`archiver/runner.md`** — where 2–5 get wired into an actual run,
+   plus the `archiver` CLI. Read last, same reason as `aset/web.md`.
