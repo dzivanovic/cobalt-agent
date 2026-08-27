@@ -73,6 +73,54 @@ don't duplicate them.
   tickers show an inline "not in today's in-play list" note (no popup),
   still allowed. Access token for the LAN-bound sheet (currently
   unauthenticated by design/acceptance, see server.bind config comments).
+  STATUS 2026-08-27 — iteration 4, sizing-model replacement (ruled by
+  Dejan): daily-stop x grade-percentage model RETIRED — replaced by
+  fixed-dollar-per-grade sheet mode (FULL/HALF), mirroring Dejan's DAS
+  hotkey files exactly (configs/cobalt/aset.yaml: full A 135/B 60, half
+  A 70/B 30). Grade selector now offers only A and B (the only
+  sheet-mode-tradeable grades); C/D still fail loud server-side as
+  "not tradeable" if they ever reach compute_sizing, rather than
+  computing a meaningless size — dropdown just never offers them.
+  "Compute & persist" now ALSO appends the card to the daily note in the
+  same action (the separate Save button and POST /note route are gone —
+  a card that isn't in the journal didn't happen). A new "actual fill"
+  field recomputes shares at the real fill price (same grade dollars,
+  same stop) and appends a linked FILL UPDATE block to the note
+  (>=25% distance change vs. the planned card shows a visible, non-popup
+  "stop may no longer be structural" warning) — both the original card
+  and every fill update stay in the audit trail. broker_hard_stop and
+  daily_stop_default retired from AsetConfig (account_size kept for the
+  future 1%-of-account computed mode). New migration
+  0002_aset_sizings_sheet_mode.sql (sheet_mode added, daily_stop/risk_pct
+  dropped); AsetStore.ensure_schema() generalized to run every
+  migrations/*.sql file in order (strips full-line -- comments before
+  splitting on ';' — psycopg executes one statement at a time). All
+  tests updated and green (engine/config/daily_note/store, incl. the
+  live Postgres roundtrip). Live-smoke-tested end to end against the
+  real vault: full-mode B card computed, persisted (id 73), and
+  auto-appended; a 40c-away fill recomputed cleanly with no warning
+  (12.75% distance change); a second, larger fill correctly triggered
+  the structural warning (134.90% distance change) and appended its own
+  linked block; HALF-mode server-side dollar switch verified (B -> $30,
+  correct per config) via direct POST. One piece NOT live-browser
+  verified: physically clicking the FULL/HALF toggle button in this
+  session's browser-automation tool — click delivery failed to reach
+  the button (elementFromPoint confirms correct hit-testing; the same
+  failure reproduces on the pre-existing LONG/SHORT toggle in a fresh
+  tab, so it's a session/tool-level issue, not new-code regression);
+  setMode()'s client logic was verified directly (correct $ hint
+  swap) and the server-side compute path was verified by direct POST.
+  Dejan: please do one real click of the FULL/HALF toggle by hand to
+  close this out. Leftover: a TESTHALF row (id present, ticker
+  TESTHALF) landed in cobalt_dev and one TESTHALF card landed in
+  today's real daily note from that verification POST — flagged, not
+  deleted (same policy as the earlier SMOKETEST/TESTARCH leftovers).
+  Old percentage-model code (GRADE_RISK_PCT, enforce_broker_cap,
+  daily_stop_from_account, temp_prefill_daily_stop) deleted outright,
+  not deprecated in place — one-path rule. DevDocs for the seven
+  touched/new files (models/engine/config/store/daily_note/web.py +
+  the new migration and configs/cobalt/aset.yaml) are now stale and
+  still need regenerating.
 
 ## NEXT (immediate lane, in order)
 

@@ -11,7 +11,7 @@ import pytest
 
 from cobalt import db
 from cobalt.aset.engine import compute_sizing
-from cobalt.aset.models import Direction, Grade, SizingInput
+from cobalt.aset.models import Direction, Grade, SheetMode, SizingInput
 from cobalt.aset.store import AsetStore
 
 pytestmark = pytest.mark.integration
@@ -36,7 +36,8 @@ def test_save_and_read_back_roundtrip():
             ticker="TEST",
             grade=Grade.B,
             direction=Direction.LONG,
-            daily_stop=Decimal("200"),
+            sheet_mode=SheetMode.FULL,
+            risk_dollars=Decimal("60"),
             entry=Decimal("10.00"),
             stop=Decimal("9.50"),
             last_price=Decimal("10.01"),
@@ -52,5 +53,6 @@ def test_save_and_read_back_roundtrip():
     row = match[0]
     assert row["ticker"] == "TEST"
     assert row["grade"] == "B"
-    assert row["shares"] == 60  # 15% of 200 = 30 → 30 / 0.50 = 60
-    assert row["used_risk"] == Decimal("30.00")
+    assert row["sheet_mode"] == "full"
+    assert row["shares"] == 120  # 60 / 0.50 = 120
+    assert row["used_risk"] == Decimal("60.00")

@@ -1,7 +1,13 @@
 """Append-only "Save to Daily Note" writer.
 
-Appends the current sizing card as a timestamped fenced markdown block
-to today's real daily note, under the vault root resolved by the ONE
+Iteration 4 (ruled by Dejan, 2026-08-28): "Compute & persist" now
+appends the card to the daily note in the same action — there is no
+longer a separate save step (a card that isn't in the journal didn't
+happen). A later "actual fill" entry appends a linked FILL UPDATE block
+instead of mutating the original card — both stay in the audit trail.
+
+Appends the sizing card as a timestamped fenced markdown block to
+today's real daily note, under the vault root resolved by the ONE
 vault-path resolver (`cobalt.vault.resolve_vault_path`) — never
 configured here. All paths/patterns beyond the vault root come from
 `AsetConfig.daily_note` — nothing hardcoded. Section targeting comes
@@ -29,7 +35,7 @@ from typing import Optional
 from cobalt.vault import VaultConfigError, resolve_vault_path
 
 from .config import REPO_ROOT, AsetConfig
-from .models import SizingResult
+from .models import FillRecompute, SizingResult
 
 STUB_BANNER = "> ⚠️ Created by Cobalt — apply daily template.\n"
 
@@ -73,10 +79,10 @@ def format_card(result: SizingResult, when: datetime) -> str:
         "```aset",
         f"ticker: {i.ticker}",
         f"direction: {i.direction.value}",
-        f"grade: {i.grade.value} ({result.risk_pct}%)",
+        f"grade: {i.grade.value}",
+        f"sheet_mode: {i.sheet_mode.value}",
         f"entry: {i.entry}",
         f"stop: {i.stop}",
-        f"daily_stop: {i.daily_stop}",
         f"risk_budget: {result.risk_budget}",
         f"shares: {result.shares}",
         f"timestamp: {when.isoformat(timespec='seconds')}",
@@ -86,11 +92,34 @@ def format_card(result: SizingResult, when: datetime) -> str:
     return "\n".join(lines)
 
 
-def save_card(
-    cfg: AsetConfig, result: SizingResult, when: Optional[datetime] = None
-) -> Path:
-    """Append the card to today's note; stub the note (with a banner) if absent."""
-    when = when or datetime.now().astimezone()
+def format_fill_update_card(
+    fill: FillRecompute, when: datetime, orig_timestamp: datetime
+) -> str:
+    i = fill.original.input
+    lines = [
+        "",
+        f"### {when:%H:%M:%S} — {i.ticker} FILL UPDATE "
+        f"(orig {orig_timestamp.isoformat(timespec='seconds')})",
+        "```aset-fill",
+        f"ticker: {i.ticker}",
+        f"orig_timestamp: {orig_timestamp.isoformat(timespec='seconds')}",
+        f"actual_fill: {fill.actual_fill}",
+        f"stop: {i.stop}",
+        f"planned_shares: {fill.original.shares}",
+        f"recomputed_shares: {fill.recomputed_shares}",
+        f"share_delta: {fill.share_delta:+d}",
+        f"recomputed_used_risk: {fill.recomputed_used_risk}",
+        f"distance_change_pct: {fill.distance_change_pct}",
+        f"timestamp: {when.isoformat(timespec='seconds')}",
+        "```",
+    ]
+    if fill.structural_warning:
+        lines.append(f"> ⚠️ {fill.structural_warning}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _append(cfg: AsetConfig, when: datetime, body: str) -> Path:
     path = target_path(cfg, when)
     if not path.parent.is_dir():
         raise DailyNoteRefused(
@@ -102,5 +131,31 @@ def save_card(
     with open(path, "a", encoding="utf-8") as f:
         if is_new:
             f.write(f"# {when:%Y-%m-%d}\n\n{STUB_BANNER}")
-        f.write(format_card(result, when))
+        f.write(body)
     return path
+
+
+def save_card(
+    cfg: AsetConfig, result: SizingResult, when: Optional[datetime] = None
+) -> tuple[Path, datetime]:
+    """Append the card to today's note; stub the note (with a banner) if
+    absent. Returns (path, when) — `when` is the canonical card
+    timestamp, threaded back to the caller so it can be carried forward
+    (e.g. into a hidden orig_timestamp form field) for later fill linkage."""
+    when = when or datetime.now().astimezone()
+    path = _append(cfg, when, format_card(result, when))
+    return path, when
+
+
+def save_fill_update(
+    cfg: AsetConfig,
+    fill: FillRecompute,
+    orig_timestamp: datetime,
+    when: Optional[datetime] = None,
+) -> Path:
+    """Append a FILL UPDATE block linked to the original card's timestamp.
+    Targets the note for `when` (today), not the original card's date —
+    the original card's own date lives in orig_timestamp for cross-day
+    fills, which are expected to be rare but not refused."""
+    when = when or datetime.now().astimezone()
+    return _append(cfg, when, format_fill_update_card(fill, when, orig_timestamp))

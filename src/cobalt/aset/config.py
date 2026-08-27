@@ -4,11 +4,18 @@ Pydantic-validated on load; a bad or missing file CRASHES with the file
 name — no silent defaults. `configs/dev/aset.local.yaml` (gitignored)
 REPLACES `configs/dev/aset.yaml` entirely when present — it must be a
 complete config — so real account numbers never have to be committed.
+
+Iteration 4 (ruled by Dejan, 2026-08-28): sheet-mode dollar risk
+(`configs/cobalt/aset.yaml`) replaces the old daily_stop_default /
+broker_hard_stop fields entirely — see models.py / engine.py. It lives
+under configs/cobalt/ (shared new-core data, same boundary class as the
+Bar Archiver's watchlists.yaml) rather than configs/dev/ because it's
+not per-developer settings, it's Dejan's actual trading rule.
 """
 
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -16,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "configs" / "dev" / "aset.yaml"
 LOCAL_CONFIG_PATH = REPO_ROOT / "configs" / "dev" / "aset.local.yaml"
+SHEET_MODES_CONFIG_PATH = REPO_ROOT / "configs" / "cobalt" / "aset.yaml"
 
 
 class ConfigError(RuntimeError):
@@ -51,15 +59,11 @@ class ServerConfig(BaseModel):
 class AsetConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # Kept for the future computed sizing mode (the real ceiling is 1%
+    # of account, dynamic — see configs/cobalt/aset.yaml's header
+    # comment). Not read anywhere in the current fixed-dollar sheet-mode
+    # math.
     account_size: Decimal = Field(gt=0)
-    # Broker-enforced max daily loss. The sheet clamps at this value and
-    # REFUSES anything above it, server-side included.
-    broker_hard_stop: Decimal = Field(gt=0)
-    # Morning-set daily stop; absent → account_size / 100 (TEMP override
-    # of the ruled account/50 Daily-Stop Model, Dejan 2026-08-25, "for
-    # now" — see engine.temp_prefill_daily_stop). Always capped by
-    # broker_hard_stop.
-    daily_stop_default: Optional[Decimal] = Field(default=None, gt=0)
     db_name: str = Field(default="cobalt_dev", min_length=1)
     daily_note: DailyNoteConfig
     server: ServerConfig = Field(default_factory=ServerConfig)
@@ -78,3 +82,51 @@ def load_config() -> AsetConfig:
         return AsetConfig(**raw)
     except ValidationError as e:
         raise ConfigError(f"{path}: invalid ASET config:\n{e}") from e
+
+
+class SheetModeGrades(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    A: Decimal = Field(gt=0)
+    B: Decimal = Field(gt=0)
+
+
+class SheetModesConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    full: SheetModeGrades
+    half: SheetModeGrades
+
+    def dollars_for(self, mode: "SheetMode | str", grade: "Grade | str") -> Decimal:
+        # Local imports: keep models.py -> config.py free of a reverse
+        # dependency; config.py importing models.py at module scope
+        # would still be a one-directional (config depends on models)
+        # relationship, but the string-typed signature lets callers
+        # pass either enums or raw values without config.py forcing the
+        # import on every caller of load_config().
+        from cobalt.aset.models import Grade, SheetMode
+
+        mode = SheetMode(mode)
+        grade = Grade(grade)
+        grades = self.full if mode is SheetMode.FULL else self.half
+        if grade is Grade.A:
+            return grades.A
+        if grade is Grade.B:
+            return grades.B
+        raise ConfigError(f"no fixed-dollar risk defined for grade {grade!r}")
+
+
+def load_sheet_modes_config() -> SheetModesConfig:
+    path = SHEET_MODES_CONFIG_PATH
+    if not path.exists():
+        raise ConfigError(
+            f"sheet-modes config not found: {path}. "
+            "Create it (see configs/cobalt/aset.yaml)."
+        )
+    raw = yaml.safe_load(path.read_text())
+    if not isinstance(raw, dict) or "sheet_modes" not in raw:
+        raise ConfigError(f"{path}: expected a 'sheet_modes' mapping")
+    try:
+        return SheetModesConfig(**raw["sheet_modes"])
+    except ValidationError as e:
+        raise ConfigError(f"{path}: invalid sheet-modes config:\n{e}") from e

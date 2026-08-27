@@ -1,0 +1,25 @@
+# ASET sheet-mode fixed-dollar risk (iteration 4, ruled by Dejan 2026-08-28).
+#
+# Mirrors Dejan's two DAS Trader Pro hotkey files exactly (full-day vs.
+# half-day key sets). These numbers are NOT derived from account size or
+# any percentage — they are typed straight from the .htk files and must
+# be changed only by re-checking those files, never by recomputing.
+#
+# The real risk ceiling is 1% of account (dynamic — grows with the
+# account as it compounds). Fixed dollars here are an interim
+# pro-mirror mode matching what Dejan's hotkeys already do by hand; a
+# computed 1%-of-account mode returns later once the fixed-dollar sheet
+# has been lived with for a while (AsetConfig.account_size is kept
+# around for that future mode — see src/cobalt/aset/config.py).
+#
+# Grades C and D (SAW) have no entry here on purpose — they are "no
+# trade" grades in the sheet-mode model and the sizer refuses to
+# compute for them (see TRADEABLE_GRADES in src/cobalt/aset/models.py).
+# A+ is reserved/hidden from the sheet for now.
+sheet_modes:
+  full:
+    A: 135
+    B: 60
+  half:
+    A: 70
+    B: 30

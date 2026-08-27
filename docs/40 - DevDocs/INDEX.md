@@ -6,11 +6,13 @@ mirrors the source tree exactly: `docs/40 - DevDocs/cobalt/...` for
 `src/cobalt/...`, `docs/40 - DevDocs/tests/cobalt/...` for `tests/cobalt/...`.
 
 This first generation covers **pre-beta slice 1 — the ASET semi-auto
-sizing sheet** (2026-08-23 → 2026-08-26), including the 2026-08-26
+sizing sheet** (2026-08-23 → 2026-08-28), including the 2026-08-26
 vault-path migration (the real Obsidian vault, `cobalt.vault`'s ONE
-resolver), plus the **Bar Archiver** (2026-08-28) — a second, sibling
-new-core component under `src/cobalt/archiver/`, unrelated to ASET
-except for sharing `cobalt.db`.
+resolver) and the 2026-08-28 iteration-4 sizing-model replacement
+(fixed-dollar sheet mode, auto-append, actual-fill recompute), plus the
+**Bar Archiver** (2026-08-28) — a second, sibling new-core component
+under `src/cobalt/archiver/`, unrelated to ASET except for sharing
+`cobalt.db`.
 
 ---
 
@@ -24,14 +26,14 @@ except for sharing `cobalt.db`.
 | `db.py` | The ONE Postgres connection factory; refuses `cobalt_brain` (prod) unless explicitly overridden. |
 | `vault.py` | The ONE vault-path resolver (TRIAGE 2.6); `configs/dev/vault.yaml`, overridable by `COBALT_VAULT_PATH`, fail-loud. New-core only — old tree's ambiguity untouched. |
 | `aset/__init__.py` | ASET package marker; states grade/stops are always Dejan's input. |
-| `aset/models.py` | Pydantic `Grade`/`Direction` enums, `GRADE_RISK_PCT` map, `SizingInput`/`SizingResult`. |
-| `aset/engine.py` | Deterministic sizing math — pure functions, no I/O: broker cap, daily-stop law (+ its temp override), `compute_sizing`. |
-| `aset/config.py` | Pydantic config schema + loader (`account_size`, `broker_hard_stop`, `daily_note`, `server` bind). |
-| `aset/store.py` | Persists every sizing to `aset_sizings` in `cobalt_dev`. |
+| `aset/models.py` | Pydantic `Grade`/`Direction`/`SheetMode` enums, `TRADEABLE_GRADES`, `SizingInput`/`SizingResult`/`FillRecompute`. |
+| `aset/engine.py` | Deterministic sizing math — pure functions, no I/O: fixed-dollar `compute_sizing` (sheet mode), `compute_fill_recompute` (actual-fill audit). |
+| `aset/config.py` | Pydantic config schemas + loaders: `AsetConfig` (`account_size`, `daily_note`, `server` bind) and `SheetModesConfig` (full/half × A/B dollar table). |
+| `aset/store.py` | Persists every sizing to `aset_sizings` in `cobalt_dev`; `ensure_schema()` runs every `migrations/*.sql` file in order. |
 | `aset/prefill.py` | Fetches last price from Finviz Elite; fail-loud, scrubs the auth token from every error. |
-| `aset/daily_note.py` | Append-only "Save to Daily Note" writer, into the real vault (`cobalt.vault`), gated by an outside-the-repo safety check. |
+| `aset/daily_note.py` | Append-only daily-note writer, into the real vault (`cobalt.vault`), gated by an outside-the-repo safety check. `/size` auto-appends a card; `/fill` appends a linked FILL UPDATE block. |
 | `aset/net.py` | LAN-IP detection helper for the startup banner. |
-| `aset/web.py` | The FastAPI single-page sheet — routes, rendering, wiring everything together. |
+| `aset/web.py` | The FastAPI single-page sheet — routes, rendering, ticker/entry state model, FULL/HALF + LONG/SHORT toggles, wiring everything together. |
 | `aset/__main__.py` | Launcher (`uv run python -m cobalt.aset`) — resolves bind config, prints reachable URLs, starts uvicorn. |
 | `archiver/__init__.py` | Bar Archiver package marker; states the never-daily/weekly/monthly rule and the standalone-scheduling rule. |
 | `archiver/models.py` | `Interval` enum (i1/i2/i5/i15/i30 only — the footgun-law validated enum) + `Bar`. |
@@ -45,9 +47,11 @@ except for sharing `cobalt.db`.
 
 | File | Purpose |
 |---|---|
-| `src/cobalt/aset/migrations/0001_aset_sizings.sql` | The one DDL source for `aset_sizings` (one-path rule — `store.py` executes this file, no second copy). |
+| `src/cobalt/aset/migrations/0001_aset_sizings.sql` | The initial DDL for `aset_sizings` (one-path rule — `store.py` executes migration files, no second copy of the schema). |
+| `src/cobalt/aset/migrations/0002_aset_sizings_sheet_mode.sql` | Adds `sheet_mode`, drops the retired `daily_stop`/`risk_pct` columns (iteration 4). |
 | `configs/dev/aset.yaml` | Committed example config — placeholder account size, real structure. |
 | `configs/dev/aset.local.yaml` | **Gitignored** — Dejan's real account size + LAN bind setting; replaces the example entirely when present. |
+| `configs/cobalt/aset.yaml` | Committed — the sheet-mode fixed-dollar risk table (full/half × A/B), mirrors Dejan's DAS hotkey files exactly (iteration 4). |
 | `configs/dev/vault.yaml` | Committed — the real vault root (not a secret, just a path); `cobalt.vault`'s one config source. |
 | `src/cobalt/archiver/migrations/0001_bars.sql` | The one DDL source for `bars`. |
 | `configs/cobalt/watchlists.yaml` | Committed — the three watchlist tiers (derived from Dejan's TradingView exports) + intervals per tier. |
@@ -78,33 +82,39 @@ Ordered by dependency, not by file path — data model first, math next,
 config and infra after, integrations last, the app that wires it all
 together at the end:
 
-1. **`aset/models.md`** — the vocabulary (Grade, Direction, the two
-   Pydantic models). Read this first; everything else is built on it.
+1. **`aset/models.md`** — the vocabulary (Grade, Direction, SheetMode,
+   the three Pydantic models). Read this first; everything else is
+   built on it.
 2. **`aset/engine.md`** + `tests/cobalt/test_aset_engine.md` — the actual
-   sizing math, and the reference worked example proving it's right.
+   sizing math (fixed-dollar sheet mode) and the actual-fill recompute.
    This is the heart of the feature.
 3. **`aset/config.md`** + `configs/dev/aset.yaml` +
-   `tests/cobalt/test_aset_config.md` — what's configurable, how it's
-   validated, and what "fail-loud" looks like in practice.
+   `configs/cobalt/aset.yaml` + `tests/cobalt/test_aset_config.md` —
+   what's configurable (including the sheet-mode dollar table), how
+   it's validated, and what "fail-loud" looks like in practice.
 4. **`cobalt/db.md`** — the connection factory and its prod-refusal
    guarantee (read this before `store.py` — it's the thing `store.py`
    depends on).
 5. **`aset/store.md`** + `aset/migrations/0001_aset_sizings.sql` +
-   `tests/cobalt/test_aset_store.md` — persistence and its one real
-   integration test.
+   `aset/migrations/0002_aset_sizings_sheet_mode.sql` +
+   `tests/cobalt/test_aset_store.md` — persistence, the multi-file
+   migration runner, and the real bug it caught (comment-splitting —
+   see `store.md`).
 6. **`aset/prefill.md`** + `tests/cobalt/test_aset_prefill.md` — the
    Finviz fetch and why the auth-token scrubbing exists.
 7. **`cobalt/vault.md`** + `tests/cobalt/test_aset_vault.md` — the ONE
    vault-path resolver (read this before `daily_note.md`, not after —
    it's what `daily_note.py` depends on now).
 8. **`aset/daily_note.md`** + `tests/cobalt/test_aset_daily_note.md` —
-   the vault writer, its outside-the-repo safety gate, and the stub-
-   with-banner behavior.
+   the vault writer: its outside-the-repo safety gate, stub-with-banner
+   behavior, and (iteration 4) the auto-append + linked FILL UPDATE
+   blocks.
 9. **`aset/net.md`** + `tests/cobalt/test_aset_net.md` — small, quick,
    self-contained.
 10. **`aset/web.md`** — where all of the above gets wired into the
-    actual page and its three routes. Read this after everything it
-    depends on, not before — it won't make sense in isolation.
+    actual page and its routes (`/`, `/api/prefill`, `/size`, `/fill`).
+    Read this after everything it depends on, not before — it won't
+    make sense in isolation.
 11. **`aset/__main__.md`** — how it's actually launched.
 12. **`tests/cobalt/conftest.md`** — last, as an aside explaining why
     the DB isn't mocked in this directory.
