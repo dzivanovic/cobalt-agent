@@ -324,6 +324,11 @@ tier.
 
 ## 3. Summary table
 
+> Phase A snapshot — **superseded for Portfolio, Groups, News, and
+> Stock** by the "Updated one-page summary table" at the end of the
+> Phase A.2 section below. Left as-written here for the historical
+> record of what Phase A alone found.
+
 | Family | Confirmed capabilities | Gaps (Phase B / follow-up) | MVP relevance |
 |---|---|---|---|
 | **Screener** | Full 151-column field universe; arbitrary filter/column combos; multiple valid `v=` view IDs | `ft=` param meaning unverified | **Pillar 1 backbone** (already validated by existing `FinvizApiClient` usage) |
@@ -349,15 +354,17 @@ Located via the root pointer stub → `docs/00 - Project/COBALT-REQUIREMENTS.md`
    in every `/export/stock` response at every interval tested. The
    flagged open question is closed: yes.
 2. **§7/§5 implicitly assume Finviz news can be scoped per-ticker (the
-   news-monitoring agent, catalyst tagging) — CONTRADICTED as currently
-   testable.** `/export/news?t=<ticker>` does not filter; it silently
-   returns the general market feed regardless. Anything designed around
-   `FinvizApiClient.get_news(ticker)` actually filtering by ticker will
-   silently get the wrong (unfiltered) data, not an error. This needs
-   fixing at design time — either confirm the Screener's `News
-   Time/URL/Title` columns as the real per-ticker path, or accept Finviz
-   news as market-wide only and rely on other sources (FinancialJuice,
-   X) for per-ticker news, per §7's own source list.
+   news-monitoring agent, catalyst tagging) — CONTRADICTED for
+   `/export/news` specifically, but RESOLVED overall.**
+   `/export/news?t=<ticker>` (and `ticker=`/`symbol=`/`s=`) does not
+   filter; it silently returns the general market feed regardless.
+   Anything designed around `FinvizApiClient.get_news(ticker)` actually
+   filtering by ticker will silently get the wrong (unfiltered) data,
+   not an error. **Update (Phase A.2 §A.2.3):** a working per-ticker
+   path was found and confirmed with a decisive A/B test — the Screener
+   export's `News Time`/`News URL`/`News Title` columns (135–137). The
+   design fix is now known, not open: route per-ticker news through the
+   Screener, not `/export/news`.
 3. **§8 Tier-1 "halt/SSR status" — CONFIRMED GAP, Finviz cannot serve
    this.** None of the 151 screener columns nor any of the ten other
    families carry a halt or short-sale-restriction flag. This was
@@ -386,12 +393,174 @@ this memo.
 
 ---
 
+## Phase A.2 — four targeted follow-up probes (2026-08-27)
+
+Same rules: read-only, ~1.2s between requests (17 more requests),
+token never printed. Sections below are numbered to match the four
+asks; Phase A's sections above are left as-written (historical) — the
+**updated summary table at the end of this section supersedes** the
+Portfolio/Groups/News rows of §3's table above.
+
+### A.2.1 — PRIORITY: `/export/stock` with `p=i2` (Dejan's primary timeframe)
+
+`p=i2` **CONFIRMED to exist** — missed in Phase A's interval list.
+
+| `p=` | Rows (MSFT) | Span | Extended hours? |
+|---|---|---|---|
+| `i2` (2-min) | 4871 | 08/13/2026 04:00 AM → 08/27/2026 06:52 AM (**~14 days**) | **Yes** — starts 04:00 AM |
+
+Slots into the same depth tier as `i1`/`i5` (~2 weeks, premarket
+included) — makes sense, it's the same "fine-grained intraday" bucket,
+just a coarser sampling within it. This is good news for the live
+setups engine specifically: Dejan's actual working timeframe has the
+same ~2-week live-detection window as `i1`/`i5`, no depth penalty for
+using `i2` over `i1`.
+
+**Fresh `i1`/`i5` re-pull** (same day, ~50 minutes after the original
+Phase A probe), to re-verify extended-hours start times weren't a
+fluke:
+
+| Interval | Original (Phase A) | Fresh (A.2) | Consistent? |
+|---|---|---|---|
+| `i1` | 9451 rows, starts 04:00 AM | 9499 rows, starts 04:00 AM | ✅ start time unchanged; row count grew by 48 — matches ~48 new 1-min bars accumulating in the ~48-minute gap between probes (a good internal consistency check that this is a live, continuously-updating feed, not a cached/stale snapshot) |
+| `i5` | 2905 rows, starts 04:00 AM | 2915 rows, starts 04:00 AM | ✅ start time unchanged; +10 rows ≈ 48min÷5min, consistent |
+
+**CONFIRMED, high confidence:** the extended-hours cutoff (1/2/5-min
+include premarket from 04:00 AM; 15-min and coarser do not) is a real,
+stable property of the API, not a one-off artifact.
+
+### A.2.2 — Groups: the missing `v=` parameter
+
+Hypothesis confirmed exactly as stated: Phase A's empty `/export/groups`
+result was the missing `v=`. All five combinations tried now return
+real data.
+
+| Request | Rows | Columns |
+|---|---|---|
+| `g=sector&v=120` | 11 (one per GICS-style sector) | 15 — valuation/fundamentals view: `No., Name, Market Cap, P/E, Forward P/E, PEG, P/S, P/B, P/C, P/Free Cash Flow, EPS growth past 5Y, EPS growth next 5Y, Sales growth past 5Y, Change, Volume` |
+| `g=sector&v=140` | 11 | 12 — **different view**, performance-oriented: `No., Name, Performance (Week/Month/Quarter/Half Year/Year/YTD), Average Volume, Relative Volume, Change, Volume` |
+| `g=sector&v=120&o=name` | 11 | same 15 as `v=120` | 
+| `g=industry&v=120` | 143 (one per industry) | same 15-column shape as sector/v=120 |
+| `g=capitalization&v=120` | 6 | same 15-column shape |
+
+- **`v=` behaves exactly like it does on Screener and Stock: a
+  column-preset/view-ID selector**, not a data-scope switch. `v=120` =
+  fundamentals view, `v=140` = performance view — both confirmed by
+  inspecting actual returned column names, not guessed.
+- `o=name` **produced identical row order to the request without it** —
+  inconclusive rather than a negative finding: the eleven sectors were
+  already returned in alphabetical order by default (Basic Materials →
+  Healthcare, …), so this test couldn't distinguish "the param works but
+  the default already matches" from "the param has no effect." Not
+  re-tested with a param combination expected to visibly reorder (e.g.
+  `o=-marketcap`) — cheap follow-up if it matters later.
+- `g=capitalization` returns exactly Finviz's known six-tier taxonomy:
+  **Mega, Large, Mid, Small, Micro, Nano** (all six confirmed present,
+  alphabetically ordered in the response).
+- `g=industry` returns 143 distinct industries (sample: Advertising
+  Agencies, Aerospace & Defense, Agricultural Inputs, …) — a genuinely
+  useful sector→industry rollup for relative-strength/sympathy-mover
+  logic.
+
+**Groups moves from "least confirmed" (Phase A) to fully CONFIRMED.**
+
+### A.2.3 — News per-ticker: resolved, with a working export path found
+
+Ran the hypotheses in the specified order:
+
+**(a) `v=` variants (2, 3, 4):**
+
+| `v=` | Rows | Columns | Notes |
+|---|---|---|---|
+| `1` | 180 | 5: `Title, Source, Date, Url, Category` | Phase A baseline — general market feed |
+| `2` | 463 | same 5 | Larger general feed; still no `Ticker` column |
+| `3` | 100 | **6: adds `Ticker`** | Sample: a Business Wire/PR Newswire-style single-stock article (`BDX`) — this view is stock-news-tagged, not macro |
+| `4` | 100 | **6: adds `Ticker`** | Sample: a different single-stock article (`IBIT`) — also stock-tagged, different content from `v=3`'s sample |
+
+`v=3`/`v=4` add a `Ticker` column on every row without any ticker
+filter applied — i.e. these views are already a **multi-ticker stream
+with per-row ticker tags**, capped at 100 rows. Two distinct tickers
+observed across the two single-sample checks (`BDX`, `IBIT`), consistent
+with a real rotating multi-ticker feed rather than one ticker
+dominating. **This is a second, independent per-ticker-news-adjacent
+path** — fetch the capped 100-row feed, filter client-side by `Ticker`.
+Coverage caveat: a quiet/obscure ticker may simply not appear in the
+current 100-row window at any given moment (not tested — no server-side
+ticker filter to force it in).
+
+**(b) Alternate ticker param names on `/export/news` (`t=`, `ticker=`,
+`symbol=`, `s=`, all against `v=1`):** **all four failed identically** —
+every one returned the exact same 180-row general feed as the bare
+`v=1` request. None of these param names are honored.
+
+**(c) Screener export with the News columns (135–137), NVDA vs. a quiet
+small-cap (SPOK):**
+
+```
+No.,Ticker,News Time,News URL,News Title
+1,NVDA,2026-08-27 06:46:42,…wsj.com/…,"Nvidia's Winning Strategy Could Turn Into a Liability"
+2,SPOK,2026-08-06 08:30:00,…elite.finviz.com/news/378641/…,"Spok-Powered Hospitals Recognized on 2026-2027 U.S. News & World Report's Best Hospitals Honor Roll"
+```
+
+**CONFIRMED, decisively.** NVDA got a fresh (same-morning) headline
+about Nvidia specifically; SPOK got a completely different, three-week
+-old headline about Spok specifically. This is unambiguous per-ticker
+news, genuinely filtered by ticker, via an export path that works
+*today* with no further discovery needed.
+
+**(d) Not reached** — (c) succeeded, so the "UI-only, no export path"
+fallback conclusion does **not** apply. Correcting Phase A's §4 finding
+#2 accordingly: per-ticker news **is** exportable — just not through
+`/export/news`, through the Screener.
+
+**Practical conclusion for design:** two viable per-ticker news paths
+exist, with a real trade-off:
+- **Screener columns `0,1,135,136,137`** — one row per screened ticker,
+  gives only the **single latest** headline per ticker. Best for "what's
+  the top headline right now" across a watchlist in one call.
+- **`/export/news?v=3` or `v=4`, filtered client-side by `Ticker`** —
+  gives a short **history** of recent articles per ticker, but only for
+  whichever ~100 tickers currently occupy that rotating window; no way
+  to force a specific ticker in if it's not already there.
+- `/export/news`'s `t=`/`ticker=`/`symbol=`/`s=` params are all
+  confirmed non-functional — any design assuming server-side per-ticker
+  filtering on that endpoint is wrong and needs to use one of the two
+  paths above instead.
+
+### A.2.4 — Portfolio: removed by ruling
+
+Dejan doesn't use Finviz portfolios. Deleted from the summary table
+below; marked **N/A by ruling** (not a data gap — deliberately out of
+scope).
+
+---
+
+## Updated one-page summary table (Phase A + A.2 combined)
+
+Supersedes §3 above for Portfolio (removed), Groups, News, and Stock.
+
+| Family | Confirmed capabilities | Gaps (Phase B / follow-up) | MVP relevance |
+|---|---|---|---|
+| **Screener** | Full 151-column field universe; arbitrary filter/column combos; multiple valid `v=` view IDs; **also the confirmed per-ticker-news path** (cols 135–137) | `ft=` param meaning unverified | **Pillar 1 backbone**, plus the working per-ticker-news mechanism |
+| ~~Portfolio~~ | — | — | **N/A by ruling** — Dejan doesn't use Finviz portfolios |
+| **Stock** | 6-col OHLCV at **9** real granularities (i1/i2/i5/i15/i30/h/d/w/m); volume present everywhere; depth tiers empirically mapped and re-verified stable across a fresh pull | History-depth param name still unconfirmed (Phase B's top item, unchanged) | **Critical** — `i2` is Dejan's actual trading timeframe and is now confirmed in the same ~2-week live-detection tier as `i1`/`i5` |
+| **Groups** | **Now fully confirmed**: sector (11)/industry (143)/capitalization (6, the standard Mega/Large/Mid/Small/Micro/Nano tiers) breakdowns, multiple `v=` column views (fundamentals vs. performance) | `o=` sort param inconclusive (default order already matched the one case tested) | Relative-strength / sympathy-mover context for the setups/briefing engine |
+| **Options** | Full per-contract chain incl. all 5 Greeks | IV rank/skew/term-structure need computing from repeated pulls | Tier-3, matches spike depth |
+| **Latest Filings** | Per-ticker SEC filing list with `Form` type, sortable | — | Candidate path for §8 dilution-risk (S-3/424B) monitoring |
+| **News** | General feed (`v=1/2`); **stock-tagged multi-ticker feed with a `Ticker` column** (`v=3/4`, 100-row cap); **per-ticker latest headline via Screener cols 135–137 (CONFIRMED, decisive A/B test)** | `/export/news`'s own `t=`/`ticker=`/`symbol=`/`s=` params all confirmed non-functional — do not use them | §5 news-monitoring agent now has two working per-ticker paths (see A.2.3) |
+| **Insider** | Ticker filtering confirmed works; SEC Form 4 fields | `tc=` code meanings unknown | Satisfies §8 Tier-1 "insider transactions" |
+| **Managers** | List (search, documented 500-row cap) + holdings (path-based, both ID forms work) | — | Satisfies §8 Tier-1 "institutional ownership concentration" |
+| **Funds** | Identical mechanics to Managers; 500-row cap directly hit | — | Same as Managers |
+| **Calendar** | Economic/Earnings/Dividends all respond | Near-term window only, not a historical archive; `dateFrom` doesn't reach back | Satisfies §8 "catalyst calendar" (forward-looking, as intended) |
+
+---
+
 ## Appendix — raw probe log
 
-Full request/response log (91 requests across two probe runs, tokens
-scrubbed) preserved at the session scratchpad; not committed to the
-repo (working artifact, not a versioned deliverable). Re-running the
-probe script against this memo's claims is straightforward if Phase B
-raises a specific new hypothesis to test — ask, and it's a ~2-minute
-follow-up given the reusable `FinvizApiClient` token-resolution path
-already in place.
+Full request/response log (108 requests across three probe runs —
+Phase A's 91 plus Phase A.2's 17 — tokens scrubbed) preserved at the
+session scratchpad; not committed to the repo (working artifact, not a
+versioned deliverable). Re-running the probe script against this
+memo's claims is straightforward if Phase B raises a specific new
+hypothesis to test — ask, and it's a ~2-minute follow-up given the
+reusable `FinvizApiClient` token-resolution path already in place.
