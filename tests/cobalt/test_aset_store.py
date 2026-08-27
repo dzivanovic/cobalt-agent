@@ -42,7 +42,8 @@ def test_save_and_read_back_roundtrip():
             stop=Decimal("9.50"),
             last_price=Decimal("10.01"),
             price_source="integration-test",
-        )
+        ),
+        (Grade.A, Grade.B),
     )
     row_id = store.save(result)
     assert row_id > 0

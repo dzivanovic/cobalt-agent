@@ -5,6 +5,16 @@ daily-stop-percentage model to a fixed-dollar-per-grade model mirroring
 Dejan's DAS hotkey files exactly (SheetMode). The old percentage model
 (GRADE_RISK_PCT, daily_stop) is retired, not layered underneath — see
 `engine.py` and `configs/cobalt/aset.yaml`.
+
+Config-completion follow-up (Dejan, 2026-08-28): the grade ladder in
+`configs/cobalt/aset.yaml` now carries the FULL truth (A+/A/B/C/D, every
+grade has a real dollar figure, D always 0 — SAW principle) with UI/
+compute availability tracked as a *separate* config field
+(`enabled_grades`). There is no longer a hardcoded "tradeable grades"
+constant here — `engine.compute_sizing` takes `enabled_grades` as an
+explicit argument (resolved by the caller from
+`SheetModesConfig.enabled_grades`), so enabling a grade later is a
+config edit only, never a code change.
 """
 
 from __future__ import annotations
@@ -17,21 +27,15 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Grade(str, Enum):
-    A_PLUS = "A+"  # reserved, hidden from the sheet for now
+    A_PLUS = "A+"
     A = "A"
     B = "B"
     C = "C"
     # Daily-Stop Model card framing carries over conceptually: "too
-    # risky to feel like a C? It's not a C — it's a SAW trade." Neither
-    # C nor D_SAW has a fixed-dollar figure in the sheet-mode model —
-    # both render as "no trade (SAW)" and refuse to compute.
+    # risky to feel like a C? It's not a C — it's a SAW trade." D always
+    # carries a $0 risk figure in configs/cobalt/aset.yaml — the SAW
+    # principle, enforced there, not here.
     D_SAW = "D"
-
-
-# The only grades with a defined fixed-dollar risk right now. Selecting
-# any other grade is a fail-loud SizingError in engine.compute_sizing,
-# not a silent zero or a guess.
-TRADEABLE_GRADES = (Grade.A, Grade.B)
 
 
 class SheetMode(str, Enum):
@@ -53,7 +57,11 @@ class SizingInput(BaseModel):
     sheet_mode: SheetMode
     # Resolved by the caller from configs/cobalt/aset.yaml (sheet_mode,
     # grade) — engine.py stays config-agnostic, same pattern as before.
-    risk_dollars: Decimal = Field(gt=0)
+    # ge=0, not gt=0: D's dollar figure is always exactly 0 (SAW
+    # principle) and is still a legitimate value to carry through here —
+    # whether D is allowed to *compute* is enabled_grades' job, not this
+    # field's.
+    risk_dollars: Decimal = Field(ge=0)
     entry: Decimal = Field(gt=0)
     stop: Decimal = Field(gt=0)
     last_price: Optional[Decimal] = Field(default=None, gt=0)

@@ -41,6 +41,9 @@ def make_cfg(**note_overrides) -> AsetConfig:
     )
 
 
+ENABLED_GRADES = (Grade.A, Grade.B)
+
+
 def make_result(**overrides):
     base = dict(
         ticker="TEST",
@@ -52,7 +55,7 @@ def make_result(**overrides):
         stop=Decimal("9.50"),
     )
     base.update(overrides)
-    return compute_sizing(SizingInput(**base))
+    return compute_sizing(SizingInput(**base), ENABLED_GRADES)
 
 
 @pytest.fixture

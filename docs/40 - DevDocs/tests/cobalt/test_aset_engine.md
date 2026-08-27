@@ -12,17 +12,32 @@ config file directly (values are inlined — a genuine future config
 change would need this test updated too, deliberately, not silently
 passing).
 
+**Config-completion follow-up (2026-08-28):** `compute_sizing` now
+takes `enabled_grades` explicitly (no more hardcoded `TRADEABLE_GRADES`
+in `engine.py`) — `ENABLED_GRADES = (Grade.A, Grade.B)` here mirrors the
+real config's `enabled_grades`, and the `size()` helper wraps
+`make_input()` + `compute_sizing()` with that default so most tests
+don't have to repeat it.
+
 ## Key functions/classes (what's covered, not defined)
 - `test_full_mode_b_worked_example` — the load-bearing worked example:
   full-mode B ($60), entry 49, stop 50.09, short — asserts every output
   field (55 shares, $59.95 used risk, both targets, no warnings).
 - `test_grade_dollar_map_full_mode` — A ($135) and B ($60) both check
   out against `configs/cobalt/aset.yaml`'s real full-mode values.
-- `test_non_tradeable_grades_refuse_to_compute` /
-  `test_a_plus_is_reserved_and_not_tradeable` — C, D_SAW, and A_PLUS all
-  raise `SizingError` ("not tradeable") rather than computing a
-  meaningless size — the sheet-mode-model replacement for the old
-  D-SAW-"no trade"-warning behavior.
+- `test_non_enabled_grades_refuse_to_compute` /
+  `test_a_plus_is_reserved_and_not_enabled` — C, D_SAW, and A_PLUS all
+  raise `SizingError` ("not enabled") rather than computing a
+  meaningless size.
+- `test_d_saw_risk_dollars_is_always_zero_and_still_refuses` — D's real
+  configured dollar figure is $0; the refusal is about `enabled_grades`
+  membership, not about `risk_dollars` failing a positivity check (it
+  doesn't have one anymore — `ge=0`).
+- `test_enabled_grades_is_config_driven_not_hardcoded` — the load-
+  bearing proof for the whole follow-up: passing a *different*
+  `enabled_grades` set makes grade B refuse (normally tradeable) and
+  grade C compute (normally not) — nothing in `engine.py` treats A/B as
+  structurally special.
 - `test_equal_entry_and_stop_fails_loud`, `test_long_targets_project_upward`,
   `test_long_with_stop_above_entry_warns`,
   `test_short_with_stop_below_entry_warns`,

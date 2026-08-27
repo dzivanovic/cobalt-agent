@@ -24,6 +24,16 @@ lives under `configs/cobalt/` rather than `configs/dev/` because it's
 not per-developer settings, it's Dejan's actual trading rule (same
 boundary class as the Bar Archiver's `watchlists.yaml`).
 
+**Config-completion follow-up (2026-08-28, ruled by Dejan):**
+`SheetModeGrades` grew from A/B-only to the full ladder (A+/A/B/C/D),
+with D's dollar figure enforced at exactly $0 (a `field_validator`, not
+just a convention). `SheetModesConfig` gained `enabled_grades: list[Grade]`
+— UI/compute availability, tracked separately from the dollar truth.
+This is also what pulled `Grade` into a *module-level* import here (it's
+now a real field type, not just a runtime lookup key) — a clean
+one-directional `config.py -> models.py` dependency; `models.py` still
+imports nothing from `config.py`.
+
 ## Key functions/classes
 - `DailyNoteConfig` — `daily_notes_dir` (relative to the vault root
   resolved by `cobalt.vault.resolve_vault_path()` — the vault ROOT
@@ -44,15 +54,28 @@ boundary class as the Bar Archiver's `watchlists.yaml`).
 - `load_config() -> AsetConfig` — resolves which file to read
   (`LOCAL_CONFIG_PATH` if it exists, else `CONFIG_PATH`), parses YAML,
   validates via Pydantic, raises `ConfigError` on any failure.
-- `SheetModeGrades` — `A`, `B` (both `Decimal > 0`); one column (full or
-  half) of the dollar table.
-- `SheetModesConfig` — `full: SheetModeGrades`, `half: SheetModeGrades`.
-  `.dollars_for(mode, grade) -> Decimal` — the one lookup helper; raises
-  `ConfigError` for any grade other than A/B (i.e. a non-tradeable
-  grade), so callers never get a silent `None`/zero. Accepts either
-  enum members or raw strings (imports `Grade`/`SheetMode` from
-  `models.py` locally, inside the method, to avoid a module-level
-  reverse dependency).
+- `SheetModeGrades` — `A_plus`, `A`, `B`, `C` (all `Decimal > 0`), `D`
+  (`Decimal >= 0`, plus a `field_validator` that rejects any nonzero
+  value — "the SAW principle is non-negotiable"); one column (full or
+  half) of the dollar table. Field names use `A_plus` (not `A+`) since
+  Python identifiers can't contain `+`; the YAML keys match exactly.
+- `_FIELD_BY_GRADE` — the `Grade` → `SheetModeGrades` field-name map
+  (`Grade.A_PLUS -> "A_plus"`, `Grade.D_SAW -> "D"`, etc.), module-level
+  so `dollars_for` doesn't need per-grade `if`/`elif` branches.
+- `SheetModesConfig` — `full: SheetModeGrades`, `half: SheetModeGrades`,
+  `enabled_grades: list[Grade]` (`min_length=1` — UI/compute
+  availability, separate from the dollar truth above; enabling a grade
+  is a config edit here, never a code change — see `engine.compute_sizing`,
+  which takes this as an explicit argument).
+  `.dollars_for(mode, grade) -> Decimal` — the one lookup helper;
+  resolves **any** of the five grades now (even disabled ones — the
+  dollar figure is real regardless of whether the grade is live).
+  Accepts either enum members or raw strings (`SheetMode` is imported
+  locally inside the method to avoid forcing every `load_config()`
+  caller through it; `Grade` is a module-level import now, needed for
+  `enabled_grades`' own field type).
+  `.is_enabled(grade) -> bool` — the membership check `web.py` uses to
+  grey out/disable a grade's `<option>`.
 - `load_sheet_modes_config() -> SheetModesConfig` — reads
   `SHEET_MODES_CONFIG_PATH` (`configs/cobalt/aset.yaml`, under the
   `sheet_modes:` key), same fail-loud pattern as `load_config()`. No

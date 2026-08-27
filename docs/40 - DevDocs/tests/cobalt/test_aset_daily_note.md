@@ -10,6 +10,10 @@ without ever touching Dejan's real vault.
 
 **Iteration 4 (2026-08-28):** `make_result()` builds sheet-mode inputs
 (`sheet_mode`, `risk_dollars`) instead of `daily_stop`; every
+call passes `ENABLED_GRADES = (Grade.A, Grade.B)` to `compute_sizing`
+(config-completion follow-up, 2026-08-28 — `compute_sizing` takes
+`enabled_grades` explicitly now, no hardcoded constant in `engine.py`);
+every
 `save_card(...)` call-site updated for its new `(path, when)` return
 value; a new `TestFillUpdate` class covers `save_fill_update` and
 `format_fill_update_card`.

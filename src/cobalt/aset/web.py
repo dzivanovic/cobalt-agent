@@ -13,11 +13,14 @@ a card that isn't in the journal didn't happen); an "actual fill"
 field recomputes shares at the real fill price and appends a linked
 FILL UPDATE block.
 
-Grade selector shows only A and B (the only sheet-mode-tradeable
-grades — TRADEABLE_GRADES). C/D (SAW) are not offered in the dropdown;
-if one reaches the server anyway (e.g. stale hidden-field state from
-before this change), compute_sizing refuses with a fail-loud
-SizingError rather than computing a meaningless size.
+Config-completion follow-up (Dejan, 2026-08-28): the grade selector now
+lists the FULL ladder (A+/A/B/C/D), not just A/B. Grades outside
+`SheetModesConfig.enabled_grades` render as disabled `<option>`s with a
+suffixed label ("no trade (SAW)" for C/D, "reserved" for A+) — greyed,
+unselectable via the native dropdown, and refused server-side too
+(`compute_sizing` takes `enabled_grades` as an explicit argument) in
+case a stale hidden-field POST bypasses the dropdown entirely.
+Enabling a grade is a `configs/cobalt/aset.yaml` edit only.
 """
 
 import html
@@ -31,7 +34,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from .config import ConfigError, load_config, load_sheet_modes_config
 from .daily_note import DailyNoteRefused, save_card, save_fill_update
 from .engine import SizingError, compute_fill_recompute, compute_sizing
-from .models import TRADEABLE_GRADES, SizingInput
+from .models import Grade, SizingInput
 from .prefill import PrefillError, fetch_last_price
 from .store import AsetStore
 
@@ -60,6 +63,7 @@ CSS = """
  #entryHint{display:none}
  table{width:100%;font-size:13px;border-collapse:collapse} td{padding:4px 8px;border-bottom:1px solid #20283c}
  .muted{color:#7f8ca8;font-size:12px}
+ option:disabled{color:#55607a}
 """
 
 JS = """
@@ -182,19 +186,35 @@ FORM_FIELDS = (
 )
 
 
-def _options(pairs, selected):
-    return "".join(
-        f'<option value="{html.escape(v)}"{" selected" if v == selected else ""}>'
-        f"{html.escape(label)}</option>"
-        for v, label in pairs
-    )
+# Suffix appended to a disabled grade's option label — why it's greyed
+# out, not just that it is. C/D share "no trade (SAW)" (the Daily-Stop
+# Model card's framing); A+ gets its own "reserved" since it isn't a
+# no-trade grade, it's just not live yet.
+_GRADE_DISABLED_SUFFIX = {
+    Grade.A_PLUS: "reserved",
+    Grade.C: "no trade (SAW)",
+    Grade.D_SAW: "no trade (SAW)",
+}
+
+
+def _grade_options(sheet_modes_cfg, selected: str) -> str:
+    parts = []
+    for g in Grade:
+        enabled = sheet_modes_cfg.is_enabled(g)
+        label = g.value if enabled else f"{g.value} — {_GRADE_DISABLED_SUFFIX[g]}"
+        attrs = f'value="{html.escape(g.value)}"'
+        if g.value == selected:
+            attrs += " selected"
+        if not enabled:
+            attrs += " disabled"
+        parts.append(f"<option {attrs}>{html.escape(label)}</option>")
+    return "".join(parts)
 
 
 def _render(banner: str = "", result: str = "", form: dict | None = None) -> str:
     cfg = load_config()
     sheet_modes_cfg = load_sheet_modes_config()
     form = form or {}
-    grade_pairs = [(g.value, g.value) for g in TRADEABLE_GRADES]
     direction = form.get("direction", "long")
     sheet_mode = form.get("sheet_mode", "full")
 
@@ -202,8 +222,8 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
     initial_ticker = form.get("ticker", "").strip().upper()
     initial_entry_dirty = bool(form.get("entry_dirty"))
     mode_dollars = {
-        "full": {g.value: float(sheet_modes_cfg.dollars_for("full", g)) for g in TRADEABLE_GRADES},
-        "half": {g.value: float(sheet_modes_cfg.dollars_for("half", g)) for g in TRADEABLE_GRADES},
+        "full": {g.value: float(sheet_modes_cfg.dollars_for("full", g)) for g in Grade},
+        "half": {g.value: float(sheet_modes_cfg.dollars_for("half", g)) for g in Grade},
     }
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -227,7 +247,7 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
  <button type="button" id="fetchBtn">Re-fetch last price</button>
  <div class="row"><div>
   <label>Grade (yours, always)</label>
-  <select name="grade" id="grade">{_options(grade_pairs, form.get("grade", "B"))}</select>
+  <select name="grade" id="grade">{_grade_options(sheet_modes_cfg, form.get("grade", "B"))}</select>
   <div class="hint" id="modeHint"></div>
  </div><div>
   <label>Direction</label>
@@ -268,10 +288,12 @@ def _failed(message: str) -> str:
 
 
 def _resolve_risk_dollars(sheet_modes_cfg, mode: str, grade: str) -> Decimal:
-    """Untradeable grades (C/D) get a placeholder — compute_sizing
-    refuses on TRADEABLE_GRADES before this value is ever used for real
-    math; it only exists so SizingInput's gt=0 validation doesn't itself
-    obscure the real "no trade (SAW)" error with a ValidationError."""
+    """Every real Grade now has a configured dollar figure (D is always
+    0), so this only needs a fallback for a garbage/missing grade or
+    mode string that isn't a valid enum member at all — that placeholder
+    lets SizingInput construction proceed so Pydantic's own field
+    validation (on `grade`/`sheet_mode`) produces the real error,
+    instead of a raw ValueError from Grade()/SheetMode() coercion here."""
     try:
         return sheet_modes_cfg.dollars_for(mode, grade)
     except (ConfigError, ValueError):
@@ -363,7 +385,7 @@ async def size(request: Request) -> str:
         cfg = load_config()
         sheet_modes_cfg = load_sheet_modes_config()
         inp = _parse_input(form, sheet_modes_cfg)
-        result = compute_sizing(inp)
+        result = compute_sizing(inp, sheet_modes_cfg.enabled_grades)
     except (SizingError, ConfigError) as e:
         return _render(banner=_failed(str(e)), form=form)
     except Exception as e:
@@ -403,7 +425,7 @@ async def fill(request: Request) -> str:
         cfg = load_config()
         sheet_modes_cfg = load_sheet_modes_config()
         inp = _parse_input(form, sheet_modes_cfg)
-        original = compute_sizing(inp)  # deterministic recompute; no re-persist
+        original = compute_sizing(inp, sheet_modes_cfg.enabled_grades)  # deterministic recompute; no re-persist
 
         orig_ts_raw = form.get("orig_timestamp", "")
         if not orig_ts_raw:

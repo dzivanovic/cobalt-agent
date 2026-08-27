@@ -5,6 +5,11 @@ daily_stop_default retired from AsetConfig (the daily-stop x percentage
 model they served is gone). Sheet-mode fixed dollar risk moved to its
 own config, configs/cobalt/aset.yaml (SheetModesConfig /
 load_sheet_modes_config) — see the tests at the bottom of this file.
+
+Config-completion follow-up (2026-08-28): the grade ladder is now
+A_plus/A/B/C/D in full, D always $0 (enforced by a field validator, not
+just convention), plus a separate `enabled_grades` field controlling
+UI/compute availability.
 """
 
 from decimal import Decimal
@@ -20,6 +25,7 @@ from cobalt.aset.config import (
     load_config,
     load_sheet_modes_config,
 )
+from cobalt.aset.models import Grade
 
 COMPLETE = """\
 account_size: 10000
@@ -31,11 +37,18 @@ daily_note:
 COMPLETE_SHEET_MODES = """\
 sheet_modes:
   full:
+    A_plus: 345
     A: 135
     B: 60
+    C: 21
+    D: 0
   half:
+    A_plus: 170
     A: 70
     B: 30
+    C: 11
+    D: 0
+  enabled_grades: [A, B]
 """
 
 
@@ -142,10 +155,13 @@ def test_local_override_wins_and_must_be_complete(monkeypatch, tmp_path):
 class TestSheetModesConfig:
     def test_committed_config_is_valid(self):
         cfg = load_sheet_modes_config()
-        assert cfg.full.A > 0
-        assert cfg.full.B > 0
-        assert cfg.half.A > 0
-        assert cfg.half.B > 0
+        for grades in (cfg.full, cfg.half):
+            assert grades.A_plus > 0
+            assert grades.A > 0
+            assert grades.B > 0
+            assert grades.C > 0
+            assert grades.D == 0
+        assert set(cfg.enabled_grades) == {Grade.A, Grade.B}
 
     def test_dollars_for_matches_das_hotkey_values(self):
         cfg = load_sheet_modes_config()
@@ -154,10 +170,23 @@ class TestSheetModesConfig:
         assert cfg.dollars_for("half", "B") == Decimal("30")
         assert cfg.dollars_for("half", "A") == Decimal("70")
 
-    def test_dollars_for_rejects_non_tradeable_grade(self):
+    def test_dollars_for_resolves_the_full_ladder(self):
+        # A+/C/D are real numbers now (D always 0) — dollars_for doesn't
+        # reject them; UI/compute availability is enabled_grades' job.
         cfg = load_sheet_modes_config()
-        with pytest.raises(ConfigError):
-            cfg.dollars_for("full", "C")
+        assert cfg.dollars_for("full", "A+") == Decimal("345")
+        assert cfg.dollars_for("full", "C") == Decimal("21")
+        assert cfg.dollars_for("full", "D") == Decimal("0")
+        assert cfg.dollars_for("half", "A+") == Decimal("170")
+        assert cfg.dollars_for("half", "C") == Decimal("11")
+
+    def test_is_enabled_reflects_committed_config(self):
+        cfg = load_sheet_modes_config()
+        assert cfg.is_enabled("A")
+        assert cfg.is_enabled("B")
+        assert not cfg.is_enabled("A+")
+        assert not cfg.is_enabled("C")
+        assert not cfg.is_enabled("D")
 
     def test_missing_file_crashes(self, monkeypatch, tmp_path):
         monkeypatch.setattr(aset_config, "SHEET_MODES_CONFIG_PATH", tmp_path / "absent.yaml")
@@ -166,7 +195,16 @@ class TestSheetModesConfig:
 
     def test_missing_grade_crashes(self, monkeypatch, tmp_path):
         bad = tmp_path / "aset.yaml"
-        bad.write_text("sheet_modes:\n  full:\n    A: 135\n  half:\n    A: 70\n    B: 30\n")
+        bad.write_text(
+            COMPLETE_SHEET_MODES.replace("    D: 0\n  half:", "  half:", 1)
+        )
+        monkeypatch.setattr(aset_config, "SHEET_MODES_CONFIG_PATH", bad)
+        with pytest.raises(ConfigError):
+            load_sheet_modes_config()
+
+    def test_missing_enabled_grades_crashes(self, monkeypatch, tmp_path):
+        bad = tmp_path / "aset.yaml"
+        bad.write_text(COMPLETE_SHEET_MODES.replace("  enabled_grades: [A, B]\n", ""))
         monkeypatch.setattr(aset_config, "SHEET_MODES_CONFIG_PATH", bad)
         with pytest.raises(ConfigError):
             load_sheet_modes_config()
@@ -174,6 +212,24 @@ class TestSheetModesConfig:
     def test_non_positive_dollars_rejected(self):
         with pytest.raises(Exception):
             SheetModesConfig(
-                full={"A": Decimal("135"), "B": Decimal("0")},
-                half={"A": Decimal("70"), "B": Decimal("30")},
+                full={"A_plus": Decimal("345"), "A": Decimal("135"), "B": Decimal("0"), "C": Decimal("21"), "D": Decimal("0")},
+                half={"A_plus": Decimal("170"), "A": Decimal("70"), "B": Decimal("30"), "C": Decimal("11"), "D": Decimal("0")},
+                enabled_grades=["A", "B"],
+            )
+
+    def test_nonzero_d_rejected(self):
+        # The SAW principle enforced at load time, not just by convention.
+        with pytest.raises(Exception):
+            SheetModesConfig(
+                full={"A_plus": Decimal("345"), "A": Decimal("135"), "B": Decimal("60"), "C": Decimal("21"), "D": Decimal("5")},
+                half={"A_plus": Decimal("170"), "A": Decimal("70"), "B": Decimal("30"), "C": Decimal("11"), "D": Decimal("0")},
+                enabled_grades=["A", "B"],
+            )
+
+    def test_empty_enabled_grades_rejected(self):
+        with pytest.raises(Exception):
+            SheetModesConfig(
+                full={"A_plus": Decimal("345"), "A": Decimal("135"), "B": Decimal("60"), "C": Decimal("21"), "D": Decimal("0")},
+                half={"A_plus": Decimal("170"), "A": Decimal("70"), "B": Decimal("30"), "C": Decimal("11"), "D": Decimal("0")},
+                enabled_grades=[],
             )

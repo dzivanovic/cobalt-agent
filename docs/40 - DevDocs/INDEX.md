@@ -8,11 +8,13 @@ mirrors the source tree exactly: `docs/40 - DevDocs/cobalt/...` for
 This first generation covers **pre-beta slice 1 — the ASET semi-auto
 sizing sheet** (2026-08-23 → 2026-08-28), including the 2026-08-26
 vault-path migration (the real Obsidian vault, `cobalt.vault`'s ONE
-resolver) and the 2026-08-28 iteration-4 sizing-model replacement
-(fixed-dollar sheet mode, auto-append, actual-fill recompute), plus the
-**Bar Archiver** (2026-08-28) — a second, sibling new-core component
-under `src/cobalt/archiver/`, unrelated to ASET except for sharing
-`cobalt.db`.
+resolver), the 2026-08-28 iteration-4 sizing-model replacement
+(fixed-dollar sheet mode, auto-append, actual-fill recompute), and the
+same-day config-completion follow-up (full A+/A/B/C/D grade ladder in
+`configs/cobalt/aset.yaml`, `enabled_grades` as the separate UI/compute
+gate), plus the **Bar Archiver** (2026-08-28) — a second, sibling
+new-core component under `src/cobalt/archiver/`, unrelated to ASET
+except for sharing `cobalt.db`.
 
 ---
 
@@ -26,9 +28,9 @@ under `src/cobalt/archiver/`, unrelated to ASET except for sharing
 | `db.py` | The ONE Postgres connection factory; refuses `cobalt_brain` (prod) unless explicitly overridden. |
 | `vault.py` | The ONE vault-path resolver (TRIAGE 2.6); `configs/dev/vault.yaml`, overridable by `COBALT_VAULT_PATH`, fail-loud. New-core only — old tree's ambiguity untouched. |
 | `aset/__init__.py` | ASET package marker; states grade/stops are always Dejan's input. |
-| `aset/models.py` | Pydantic `Grade`/`Direction`/`SheetMode` enums, `TRADEABLE_GRADES`, `SizingInput`/`SizingResult`/`FillRecompute`. |
-| `aset/engine.py` | Deterministic sizing math — pure functions, no I/O: fixed-dollar `compute_sizing` (sheet mode), `compute_fill_recompute` (actual-fill audit). |
-| `aset/config.py` | Pydantic config schemas + loaders: `AsetConfig` (`account_size`, `daily_note`, `server` bind) and `SheetModesConfig` (full/half × A/B dollar table). |
+| `aset/models.py` | Pydantic `Grade`/`Direction`/`SheetMode` enums, `SizingInput`/`SizingResult`/`FillRecompute`. |
+| `aset/engine.py` | Deterministic sizing math — pure functions, no I/O: fixed-dollar `compute_sizing` (sheet mode, `enabled_grades` passed in), `compute_fill_recompute` (actual-fill audit). |
+| `aset/config.py` | Pydantic config schemas + loaders: `AsetConfig` (`account_size`, `daily_note`, `server` bind) and `SheetModesConfig` (full A+/A/B/C/D ladder × half, plus `enabled_grades`). |
 | `aset/store.py` | Persists every sizing to `aset_sizings` in `cobalt_dev`; `ensure_schema()` runs every `migrations/*.sql` file in order. |
 | `aset/prefill.py` | Fetches last price from Finviz Elite; fail-loud, scrubs the auth token from every error. |
 | `aset/daily_note.py` | Append-only daily-note writer, into the real vault (`cobalt.vault`), gated by an outside-the-repo safety check. `/size` auto-appends a card; `/fill` appends a linked FILL UPDATE block. |

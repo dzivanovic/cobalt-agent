@@ -118,9 +118,28 @@ don't duplicate them.
   Old percentage-model code (GRADE_RISK_PCT, enforce_broker_cap,
   daily_stop_from_account, temp_prefill_daily_stop) deleted outright,
   not deprecated in place — one-path rule. DevDocs for the seven
-  touched/new files (models/engine/config/store/daily_note/web.py +
-  the new migration and configs/cobalt/aset.yaml) are now stale and
-  still need regenerating.
+  touched/new files regenerated and committed (b032691).
+  STATUS 2026-08-27 (cont.) — config completion, same-day follow-up
+  (ruled by Dejan): configs/cobalt/aset.yaml's grade ladder extended to
+  the FULL truth — A_plus/A/B/C/D dollar figures per sheet mode (full A+
+  345/A 135/B 60/C 21/D 0, half A+ 170/A 70/B 30/C 11/D 0; A/B unchanged,
+  match the .htk files; A+/C derived from the canonical ASET percentage
+  map at current bases; D always $0, enforced by a Pydantic field
+  validator, not just convention). UI/compute availability split into a
+  separate enabled_grades: [A, B] field. TRADEABLE_GRADES (the hardcoded
+  models.py constant) is gone — engine.compute_sizing now takes
+  enabled_grades as an explicit argument, so enabling a grade later is a
+  config edit only; a new test (test_enabled_grades_is_config_driven_not_hardcoded)
+  proves this by swapping which grades are enabled and watching the
+  refusal follow the config, not the code. Grade dropdown now lists all
+  five grades; A+/C/D render as disabled <option>s with a suffixed label
+  ("reserved" / "no trade (SAW)") — greyed, structurally unselectable via
+  the native dropdown, and refused server-side too if bypassed by a
+  direct POST. All tests green (incl. live Postgres roundtrip). Live-
+  smoke-tested: full-mode B computed unchanged ($60 budget, 60 shares);
+  direct POSTs for C, A+, and D all correctly refused ("not enabled ...
+  no trade (SAW)") and wrote nothing to Postgres or the daily note.
+  DevDocs regenerated for models/engine/config/web.py + their tests.
 
 ## NEXT (immediate lane, in order)
 

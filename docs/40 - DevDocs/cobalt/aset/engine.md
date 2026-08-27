@@ -15,6 +15,15 @@ files exactly (sheet mode full/half — see `configs/cobalt/aset.yaml`).
 percentage-based `compute_sizing` body were **deleted outright**, not
 deprecated in place — one-path rule.
 
+**Config-completion follow-up (2026-08-28, ruled by Dejan):**
+`compute_sizing` no longer checks a hardcoded `TRADEABLE_GRADES`
+constant (removed from `models.py`) — it takes `enabled_grades` as an
+explicit argument instead, resolved by the caller from
+`SheetModesConfig.enabled_grades`. This module still reads no config
+directly, consistent with "Config it reads: None" below; enabling a
+grade is purely a `configs/cobalt/aset.yaml` edit, propagated in via
+this argument.
+
 ## Key functions/classes
 - `SizingError(ValueError)` — invalid input; the sheet turns this into a
   visible FAILED banner, never a guess.
@@ -22,16 +31,20 @@ deprecated in place — one-path rule.
   change threshold: ≥25% between the planned and actual-fill entry means
   the stop was likely picked against a different price than what was
   actually paid.
-- `compute_sizing(inp: SizingInput) -> SizingResult` — refuses up front
-  (`SizingError`) if `inp.grade not in TRADEABLE_GRADES` ("not
-  tradeable in sheet mode — no trade (SAW)"). Otherwise:
-  `risk_budget = inp.risk_dollars` (flat, no percentage math at all —
-  the config-driven number IS the budget), `shares = floor(risk_budget /
-  |entry - stop|)`, `used_risk = shares × per_share_risk`,
-  `target_1r`/`target_2r` projected from direction. Raises
-  `SizingError` if entry == stop. Appends non-fatal warnings for: stop
-  on the wrong side of entry for the given direction, and shares
-  rounding to zero.
+- `compute_sizing(inp: SizingInput, enabled_grades: Iterable[Grade]) ->
+  SizingResult` — refuses up front (`SizingError`, "not enabled for
+  sheet-mode compute ... — no trade (SAW)") if `inp.grade not in
+  enabled_grades`. Otherwise: `risk_budget = inp.risk_dollars` (flat, no
+  percentage math at all — the config-driven number IS the budget),
+  `shares = floor(risk_budget / |entry - stop|)`, `used_risk = shares ×
+  per_share_risk`, `target_1r`/`target_2r` projected from direction.
+  Raises `SizingError` if entry == stop. Appends non-fatal warnings for:
+  stop on the wrong side of entry for the given direction, and shares
+  rounding to zero (which is exactly what happens if a $0-risk grade
+  like D ever reached this point with `risk_dollars=0` — the refusal
+  above always fires first in practice, since D is never in
+  `enabled_grades`, but the math itself degrades gracefully rather than
+  dividing oddly).
 - `compute_fill_recompute(original: SizingResult, actual_fill: Decimal)
   -> FillRecompute` — recomputes shares at `actual_fill` using the
   **same** `risk_dollars` and the **same** stop as `original` (never a

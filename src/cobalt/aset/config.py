@@ -11,6 +11,11 @@ broker_hard_stop fields entirely — see models.py / engine.py. It lives
 under configs/cobalt/ (shared new-core data, same boundary class as the
 Bar Archiver's watchlists.yaml) rather than configs/dev/ because it's
 not per-developer settings, it's Dejan's actual trading rule.
+
+Config-completion follow-up (Dejan, 2026-08-28): the grade ladder now
+carries the FULL truth (A+/A/B/C/D dollar figures, D always $0) with
+UI/compute availability tracked separately via `enabled_grades` — see
+`SheetModesConfig`.
 """
 
 from decimal import Decimal
@@ -18,7 +23,9 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+
+from .models import Grade
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "configs" / "dev" / "aset.yaml"
@@ -84,11 +91,33 @@ def load_config() -> AsetConfig:
         raise ConfigError(f"{path}: invalid ASET config:\n{e}") from e
 
 
+# Config completion (Dejan, 2026-08-28): the full grade ladder — every
+# grade carries a real dollar figure now, D always $0 (SAW principle,
+# enforced below, not left to convention).
+_FIELD_BY_GRADE = {
+    Grade.A_PLUS: "A_plus",
+    Grade.A: "A",
+    Grade.B: "B",
+    Grade.C: "C",
+    Grade.D_SAW: "D",
+}
+
+
 class SheetModeGrades(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    A_plus: Decimal = Field(gt=0)
     A: Decimal = Field(gt=0)
     B: Decimal = Field(gt=0)
+    C: Decimal = Field(gt=0)
+    D: Decimal = Field(ge=0)
+
+    @field_validator("D")
+    @classmethod
+    def _d_is_always_zero(cls, v: Decimal) -> Decimal:
+        if v != 0:
+            raise ValueError("D (SAW) risk must always be 0 — the SAW principle is non-negotiable")
+        return v
 
 
 class SheetModesConfig(BaseModel):
@@ -96,24 +125,27 @@ class SheetModesConfig(BaseModel):
 
     full: SheetModeGrades
     half: SheetModeGrades
+    # UI/compute availability, separate from the dollar truth above.
+    # Enabling a grade later is a config edit here — never a code
+    # change (see engine.compute_sizing, which takes this as an
+    # explicit argument rather than reading a hardcoded constant).
+    enabled_grades: list[Grade] = Field(min_length=1)
 
     def dollars_for(self, mode: "SheetMode | str", grade: "Grade | str") -> Decimal:
-        # Local imports: keep models.py -> config.py free of a reverse
-        # dependency; config.py importing models.py at module scope
-        # would still be a one-directional (config depends on models)
-        # relationship, but the string-typed signature lets callers
-        # pass either enums or raw values without config.py forcing the
-        # import on every caller of load_config().
-        from cobalt.aset.models import Grade, SheetMode
+        # Local import of SheetMode only (Grade is already a module-level
+        # import, needed for the enabled_grades field's type itself) —
+        # the string-typed signature lets callers pass either enums or
+        # raw values without forcing every load_config() caller through
+        # models.py's SheetMode too.
+        from cobalt.aset.models import SheetMode
 
         mode = SheetMode(mode)
         grade = Grade(grade)
         grades = self.full if mode is SheetMode.FULL else self.half
-        if grade is Grade.A:
-            return grades.A
-        if grade is Grade.B:
-            return grades.B
-        raise ConfigError(f"no fixed-dollar risk defined for grade {grade!r}")
+        return getattr(grades, _FIELD_BY_GRADE[grade])
+
+    def is_enabled(self, grade: "Grade | str") -> bool:
+        return Grade(grade) in self.enabled_grades
 
 
 def load_sheet_modes_config() -> SheetModesConfig:

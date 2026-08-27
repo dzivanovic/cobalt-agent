@@ -11,27 +11,35 @@ selected by a `SheetMode` (FULL/HALF) mirroring Dejan's two DAS Trader
 Pro hotkey files exactly — the actual dollar figures live in
 `configs/cobalt/aset.yaml`, not here (this module stays pure data).
 
+**Config-completion follow-up (2026-08-28, ruled by Dejan):** which
+grades are allowed to compute is no longer a hardcoded constant in this
+module — `TRADEABLE_GRADES` is gone. `configs/cobalt/aset.yaml` now
+carries the FULL grade ladder's dollar truth (every `Grade`, including
+`D_SAW` at a config-enforced $0) plus a separate `enabled_grades` field
+governing UI/compute availability. `engine.compute_sizing` takes
+`enabled_grades` as an explicit argument instead.
+
 ## Key functions/classes
 - `Grade(str, Enum)` — `A_PLUS, A, B, C, D_SAW`. `D_SAW` is deliberately
   named for the Daily-Stop Model card's framing: "too risky to feel like
-  a C? It's not a C — it's a SAW trade."
-- `TRADEABLE_GRADES = (Grade.A, Grade.B)` — the only grades with a
-  defined fixed-dollar risk in sheet mode. `A_PLUS` is reserved/hidden
-  from the sheet for now; `C`/`D_SAW` are "no trade (SAW)" — selecting
-  either makes `engine.compute_sizing` refuse with a `SizingError`
-  rather than compute a meaningless size.
+  a C? It's not a C — it's a SAW trade." Every member has a real dollar
+  figure in `configs/cobalt/aset.yaml` now (D's is always exactly 0);
+  which ones are actually usable is `SheetModesConfig.enabled_grades`'
+  job, not anything in this enum.
 - `SheetMode(str, Enum)` — `FULL, HALF`. Selects which column of
   `configs/cobalt/aset.yaml`'s dollar table applies.
 - `Direction(str, Enum)` — `LONG, SHORT`.
 - `SizingInput` — `ticker` (normalized to stripped-upper by a
   `field_validator`, blank rejected), `grade`, `direction`,
-  `sheet_mode`, `risk_dollars` (`Decimal > 0` — resolved by the caller
-  from `SheetModesConfig.dollars_for(mode, grade)` in `config.py`;
-  `engine.py` stays config-agnostic and just consumes this number),
-  `entry`, `stop` (`Decimal > 0`), optional `last_price` / `price_source`
-  (prefill metadata, never required). `extra="forbid"` — an unexpected
-  field is a validation error, not a silently dropped one. No
-  `daily_stop` field anymore.
+  `sheet_mode`, `risk_dollars` (`Decimal >= 0` — `ge=0`, not `gt=0`,
+  because D's real configured figure is exactly 0 and is still a
+  legitimate value to carry through here; resolved by the caller from
+  `SheetModesConfig.dollars_for(mode, grade)` in `config.py`, `engine.py`
+  stays config-agnostic and just consumes this number), `entry`, `stop`
+  (`Decimal > 0`), optional `last_price` / `price_source` (prefill
+  metadata, never required). `extra="forbid"` — an unexpected field is a
+  validation error, not a silently dropped one. No `daily_stop` field
+  anymore.
 - `SizingResult` — the computed output: `input` (echoes the
   `SizingInput`), `risk_budget`, `per_share_risk`, `shares`,
   `used_risk`, `target_1r`, `target_2r`, `warnings: list[str]`. No
@@ -58,6 +66,6 @@ consumed only by `daily_note.py`'s FILL UPDATE block and `web.py`'s
 result-card rendering.
 
 ## Config it reads
-None — pure data models. `TRADEABLE_GRADES` and the enums are
-compile-time constants, not config; the actual dollar figures per
-grade/mode live in `configs/cobalt/aset.yaml`, read by `config.py`.
+None — pure data models. The enums are compile-time constants, not
+config; the actual dollar figures per grade/mode, and which grades are
+enabled, live in `configs/cobalt/aset.yaml`, read by `config.py`.

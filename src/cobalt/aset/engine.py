@@ -7,11 +7,18 @@ grade-percentage model (docs/90 - References/aset_daily_position_sizer.html,
 docs/90 - References/Daily_Stop_Model_Card.pdf) and its TEMP account÷100
 prefill override are retired — one-path rule. Historical reference only;
 no longer the math this module implements.
+
+Config-completion follow-up (Dejan, 2026-08-28): which grades are
+allowed to compute is no longer a hardcoded constant here — it's an
+explicit `enabled_grades` argument, resolved by the caller from
+`SheetModesConfig.enabled_grades`. This module still reads no config
+directly; enabling a grade is purely a `configs/cobalt/aset.yaml` edit.
 """
 
+from collections.abc import Iterable
 from decimal import Decimal
 
-from .models import Direction, FillRecompute, Grade, SizingInput, SizingResult, TRADEABLE_GRADES
+from .models import Direction, FillRecompute, Grade, SizingInput, SizingResult
 
 CENTS = Decimal("0.01")
 
@@ -26,10 +33,11 @@ class SizingError(ValueError):
     """Invalid sizing input — fail loud, never guess."""
 
 
-def compute_sizing(inp: SizingInput) -> SizingResult:
-    if inp.grade not in TRADEABLE_GRADES:
+def compute_sizing(inp: SizingInput, enabled_grades: Iterable[Grade]) -> SizingResult:
+    if inp.grade not in enabled_grades:
         raise SizingError(
-            f"Grade {inp.grade.value} is not tradeable in sheet mode — no trade (SAW)."
+            f"Grade {inp.grade.value} is not enabled for sheet-mode compute "
+            "(see configs/cobalt/aset.yaml enabled_grades) — no trade (SAW)."
         )
 
     distance = abs(inp.entry - inp.stop)
