@@ -31,6 +31,10 @@ from decimal import Decimal, InvalidOperation
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from cobalt.prefill.config import PrefillConfigError, load_prefill_paths
+from cobalt.prefill.trade_note import upsert_trade_note
+from cobalt.prefill.vault_writer import VaultWriteError
+
 from .config import ConfigError, load_config, load_sheet_modes_config
 from .daily_note import DailyNoteRefused, save_card, save_fill_update
 from .engine import SizingError, compute_fill_recompute, compute_sizing
@@ -411,9 +415,21 @@ async def size(request: Request) -> str:
         return _render(banner=banner, result=_result_card(result, form), form=form)
 
     form["orig_timestamp"] = when.isoformat()
+
+    try:
+        prefill_paths = load_prefill_paths()
+        trade_path, trade_action = upsert_trade_note(result, when, prefill_paths)
+    except (PrefillConfigError, VaultWriteError) as e:
+        banner = _failed(
+            f"Persisted: aset_sizings id {row_id} ({cfg.db_name}) — daily note "
+            f"appended to {note_path} — but trade-note write FAILED: {e}"
+        )
+        return _render(banner=banner, result=_result_card(result, form), form=form)
+
     banner = (
         f'<div class="saved">Persisted: aset_sizings id {row_id} ({html.escape(cfg.db_name)}) '
-        f"· appended to {html.escape(str(note_path))}</div>"
+        f"· appended to {html.escape(str(note_path))} "
+        f"· trade note {trade_action}: {html.escape(str(trade_path))}</div>"
     )
     return _render(banner=banner, result=_result_card(result, form), form=form)
 

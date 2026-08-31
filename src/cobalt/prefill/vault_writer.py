@@ -54,3 +54,12 @@ def append_block(path: Path, content: str) -> None:
     only for the caller's own idempotency-marker check beforehand."""
     with open(path, "a", encoding="utf-8") as f:
         f.write(content)
+
+
+def overwrite(path: Path, content: str) -> None:
+    """Replace a file's full content. Scoped to ONE legitimate case in
+    this package: trade_note.py refreshing its own Cobalt-owned
+    frontmatter keys on an idempotent re-run, after merging them onto
+    whatever the file already had (Dejan's manual edits preserved by the
+    caller before calling this, never by this function)."""
+    path.write_text(content, encoding="utf-8")
