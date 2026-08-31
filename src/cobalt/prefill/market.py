@@ -5,8 +5,10 @@ Country, Market Cap, P/E, Price, Change, Volume`), with `t=` as the
 confirmed direct multi-ticker override.
 
 VIX and BTC are NOT servable by this endpoint — neither is a Finviz
-stock/screener ticker. Callers (daily.py) render "n/a (manual)" for
-those two, loudly, never a blank cell.
+stock/screener ticker — and were never in `MARKET_TICKERS`. SLICE 2.1
+(2026-08-31, ruled by Dejan): those two rows are Dejan's, always, left
+blank in the same table Cobalt fills SPY/QQQ/IWM into — no "n/a
+(manual)" annotation, no second table.
 
 Fail-loud, secret-safe: reuses aset.prefill's token resolution + auth-
 token scrubbing (one-path rule — no second Finviz-auth implementation).
@@ -30,12 +32,6 @@ MARKET_TICKERS: tuple[str, ...] = ("SPY", "QQQ", "IWM")
 # No., Ticker, Company, Sector, Industry, Country, Market Cap, P/E,
 # Price, Change, Volume.
 _SCREENER_VIEW = "111"
-
-UNSERVABLE = {
-    "VIX": "n/a (manual) — VIX is not a Finviz stock/screener ticker",
-    "BTC": "n/a (manual) — BTC is not a Finviz stock/screener ticker",
-}
-
 
 @dataclass(frozen=True)
 class MarketRow:
