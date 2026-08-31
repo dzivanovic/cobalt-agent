@@ -69,6 +69,36 @@ class SystemConfig(BaseModel):
         default_factory=lambda: os.getenv("OBSIDIAN_VAULT_PATH", "/Users/cobalt/cobalt/docs"),
         validation_alias=AliasChoices("OBSIDIAN_VAULT_PATH", "COBALT_SYSTEM__OBSIDIAN_VAULT_PATH")
     )
+    # Subfolder (under obsidian_vault_path) the scheduler's Morning
+    # Briefing writes into (scheduler.py's generate_morning_briefing).
+    # Was hardcoded "0 - Inbox" — collided in name with the real vault's
+    # own top-level "0 - Inbox" (a different folder, since
+    # obsidian_vault_path here resolves to the repo's docs/, mounted
+    # inside the real vault at "0 - Projects/Cobalt"). Retargeted
+    # 2026-08-31 to the D6-numbered "60 - Agent Output" — see CLAUDE.md's
+    # Documentation standard. This is the ONLY old-tree code change made
+    # for that retarget; everything else about this scheduler is
+    # untouched (strangler rule).
+    #
+    # default_factory + os.getenv, deliberately mirroring
+    # obsidian_vault_path's exact pattern just above rather than relying
+    # on configs/config.yaml's system.briefing_inbox_dir key: verified
+    # live (2026-08-31) that a plain-named YAML key is silently dropped
+    # for a field carrying validation_alias — CobaltSettings/SystemConfig
+    # are plain BaseModels, not pydantic-settings BaseSettings, so
+    # validation_alias restricts accepted INPUT keys to the alias itself
+    # and _load_config's dict-merge never supplies that alias key. This
+    # resolves CLAUDE.md's long-flagged "OPEN ITEM" (.env vs
+    # config.yaml vs config.py default precedence, unverified): for any
+    # SystemConfig field with a validation_alias, .env/env-var wins,
+    # config.yaml's plain key is DEAD. (Fields with no validation_alias,
+    # e.g. debug_mode/version, are unaffected — direct dict key, no
+    # alias to conflict with.) configs/config.yaml still carries this
+    # value too, kept in sync for readability — .env is the one that's
+    # actually live.
+    briefing_inbox_dir: str = Field(
+        default_factory=lambda: os.getenv("BRIEFING_INBOX_DIR", "0 - Inbox")
+    )
 
 
 class LLMConfig(BaseModel):

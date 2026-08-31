@@ -89,7 +89,7 @@ class CobaltScheduler:
             # Format the output filepath
             vault_path = self.config.system.obsidian_vault_path
             filename = f"Morning_Briefing_{datetime.now().strftime('%Y-%m-%d')}.md"
-            filepath = os.path.join(vault_path, "0 - Inbox", filename)
+            filepath = os.path.join(vault_path, self.config.system.briefing_inbox_dir, filename)
             
             # Ensure directory exists
             os.makedirs(os.path.dirname(filepath), exist_ok=True)

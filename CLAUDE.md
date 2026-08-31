@@ -93,12 +93,23 @@ Cobalt in production must ALWAYS be left working after every sprint.
 - docs/ is dual-purpose: the D6 documentation tree (see "Documentation
   standard" below) for versioned engineering artifacts, layered over the
   gitignored Obsidian playground vault root (per .env OBSIDIAN_VAULT_PATH
-  — the SAME docs/ directory). docs/0 - Inbox/ and docs/0 - Projects/ are
-  that live vault content: out of scope, never committed, untouched by
-  the D6 restructure. OPEN ITEM: configs/config.yaml:6 also sets
-  obsidian_vault_path; which source wins (.env vs config.yaml vs the
-  hardcoded default in config.py:69, plus scribe.py's own env/~/Documents
-  fallback) is unverified — reconcile in Pass 6/7.
+  — the SAME docs/ directory). docs/60 - Agent Output/ (renamed
+  2026-08-31 from docs/0 - Inbox/ — it collided in name with the real
+  vault's own top-level 0 - Inbox, a different folder; the old
+  scheduler's Morning Briefing output path was retargeted to match via
+  config, not code — see src/cobalt_agent/config.py's
+  briefing_inbox_dir) and docs/0 - Projects/ are that live vault
+  content: out of scope, never committed, untouched by the D6
+  restructure otherwise. RESOLVED (2026-08-31, superseding the prior
+  OPEN ITEM here): for any SystemConfig field carrying a
+  validation_alias (obsidian_vault_path, briefing_inbox_dir),
+  CobaltSettings/SystemConfig are plain Pydantic BaseModels, not
+  BaseSettings — .env/env-var wins, configs/config.yaml's plain key is
+  DEAD (silently ignored, not an error). Fields with no
+  validation_alias (debug_mode, version) read config.yaml normally.
+  scribe.py's own separate env/~/Documents fallback (config.py:69-era
+  numbering) is unaffected by this and remains a third, independent
+  resolution path.
 - cobalt_master_context.txt is a STALE February snapshot — regenerate
   context with dev_utils/generate_context.py before relying on any tree.
 - Destructive utilities exist (dev_utils/wipe_memory.py,
@@ -136,11 +147,14 @@ the only markdown files that stay at repo root. (The lone exception:
 `COBALT-REQUIREMENTS.md` at root is a redirect stub left by the
 2026-08-26 move — a one-time migration artifact, not a precedent.)
 
-Out of scope, untouched: `docs/0 - Inbox/` and `docs/0 - Projects/` —
-the gitignored Obsidian playground vault, live/uncertain prod surfaces
-(the running agent's Scribe/scheduler write there — see Environment
-facts above). These retire from that status only when the old tree's
-writers retire (strangler rule).
+Out of scope, untouched: `docs/60 - Agent Output/` (renamed 2026-08-31
+from `docs/0 - Inbox/` — D6-numbered now, but still not a documentation
+tier; still gitignored, still just the old scheduler's live briefing
+landing folder) and `docs/0 - Projects/` — the gitignored Obsidian
+playground vault, live/uncertain prod surfaces (the running agent's
+Scribe/scheduler write there — see Environment facts above). These
+retire from that status only when the old tree's writers retire
+(strangler rule).
 
 ## Current phase: pre-beta build (strangler rebuild)
 

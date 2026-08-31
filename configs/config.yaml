@@ -4,6 +4,10 @@ system:
   debug_mode: false
   version: "0.5.0"
   obsidian_vault_path: /Users/cobalt/cobalt/docs
+  # Morning Briefing output subfolder, relative to obsidian_vault_path.
+  # Retargeted 2026-08-31 (D6 numbering, collision with the real vault's
+  # own "0 - Inbox") — see src/cobalt_agent/config.py's field comment.
+  briefing_inbox_dir: "60 - Agent Output"
 
 # 1. NETWORK TOPOLOGY (Hardware Abstraction)
 network:
