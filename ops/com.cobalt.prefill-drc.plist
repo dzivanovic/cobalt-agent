@@ -8,6 +8,12 @@
     <dict>
         <key>PATH</key>
         <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+        <!-- NN#16 dev/prod vault split (2026-08-31): configs/dev/vault.yaml's
+             committed default now points at the DEV skeleton vault
+             (~/dev-vault-cobalt) — this is PRODUCTION, so it overrides back
+             to the real vault explicitly. See src/cobalt/vault.py. -->
+        <key>COBALT_VAULT_PATH</key>
+        <string>/Users/cobalt/Vault/Think</string>
     </dict>
     <key>ProgramArguments</key>
     <array>

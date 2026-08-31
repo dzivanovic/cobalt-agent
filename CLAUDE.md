@@ -55,10 +55,17 @@ Obsidian as system of record, Mattermost + voice as interfaces.
 ## Non-negotiable #16 — production is sacred
 
 Cobalt in production must ALWAYS be left working after every sprint.
-- Prod = the running install + live Postgres DB + live Obsidian vault.
-  You never develop against prod.
+- Prod = the running install + live Postgres DB + live Obsidian vault
+  (`/Users/cobalt/Vault/Think`, reached via an explicit `COBALT_VAULT_PATH`
+  override in each production process's own environment — see the
+  vault split below). You never develop against prod.
 - Dev = git worktree checkout + cobalt_dev database + test vault (the
-  playground copy) + configs/dev + dev Mattermost bot token.
+  playground copy — `~/dev-vault-cobalt`, a skeleton of templates +
+  Rules.md only, no personal notes; this is `configs/dev/vault.yaml`'s
+  committed DEFAULT, so a bare `uv run` with no override lands here,
+  never in the real vault) + configs/dev + dev Mattermost bot token.
+  Formalized 2026-08-31 — `src/cobalt/vault.py`'s DevDoc has the full
+  mechanism; `docs/00 - Project/BACKLOG.md` has the session's reasoning.
 - Sprint acceptance = full smoke test of ALL delivered functionality, not
   just the new feature. Red smoke test = sprint not done.
 - Deploys: merge → git tag → deploy → smoke test; one-command rollback to
@@ -81,7 +88,14 @@ Cobalt in production must ALWAYS be left working after every sprint.
   FastPathCache for Playwright script reuse. Known naming inconsistency:
   methods use _hilt_, schema uses hitl_ (log, don't silently fix).
 - Interfaces: Mattermost over Tailscale (DM + approval tokens), 3-tier local
-  voice stack, Obsidian vault (live vs test — dev writes ONLY to test).
+  voice stack, Obsidian vault — new-core (`src/cobalt/*`) resolves it via
+  `cobalt.vault.resolve_vault_path()`: `configs/dev/vault.yaml`'s
+  committed value is the DEV default (`~/dev-vault-cobalt`, template
+  skeletons only); PRODUCTION overrides to the real vault
+  (`/Users/cobalt/Vault/Think`) via an explicit `COBALT_VAULT_PATH` env
+  var, set in `ops/start_aset.sh` and both `ops/com.cobalt.prefill-
+  *.plist` files — dev writes ONLY to the dev vault by default, touching
+  the real one always requires that explicit opt-in.
 - Runner: uv for scripts; pytest for tests. Process management: cobalt.sh
   start/stop/restart/status.
 - Services (docker-compose, OrbStack): db = pgvector/pg16 on :5432 (bind

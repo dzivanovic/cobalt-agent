@@ -12,8 +12,17 @@
 # Python code per this session's scope), rotation happens HERE, once
 # per (re)start — at boot (RunAtLoad) or any KeepAlive relaunch after a
 # crash — not live mid-run. See ops/README.md.
+#
+# NN#16 dev/prod vault split (formalized 2026-08-31): configs/dev/
+# vault.yaml's committed default now points at the DEV skeleton vault
+# (~/dev-vault-cobalt), not the real one — see src/cobalt/vault.py.
+# This is PRODUCTION, so it explicitly overrides back to the real vault
+# via COBALT_VAULT_PATH. Without this line ASET would silently start
+# writing sizing cards into the dev vault instead of Dejan's real one.
 
 set -e
+
+export COBALT_VAULT_PATH="/Users/cobalt/Vault/Think"
 
 REPO_ROOT="/Users/cobalt/cobalt"
 LOG_DIR="$REPO_ROOT/logs"

@@ -10,6 +10,19 @@ config file and no env override) or a path that doesn't exist on disk
 both crash with `VaultConfigError` — never a guess, never a silent
 fallback.
 
+NN#16 dev/prod vault split (formalized 2026-08-31): `configs/dev/
+vault.yaml`'s committed value is the DEV default — `~/dev-vault-cobalt`
+(`PROD_VAULT_PATH_REFERENCE` below), a skeleton copy (Templater
+templates + Rules.md, no personal notes/trades) kept outside the repo,
+same as the real vault. It is NOT auto-created or synced — see its own
+DevDoc entry for how to reseed it. PRODUCTION reaches the real vault
+(`/Users/cobalt/Vault/Think`) by setting `COBALT_VAULT_PATH` explicitly
+in its own environment — `ops/start_aset.sh` (the ASET LaunchAgent's
+wrapper) and the two `ops/com.cobalt.prefill-*.plist` files all do this
+in their `EnvironmentVariables`. A bare interactive `uv run` with no
+override therefore defaults to dev/safe — touching the real vault
+always requires an explicit, visible opt-in, never the default.
+
 Deliberately NOT touching the old tree's four-way ambiguity (.env
 `OBSIDIAN_VAULT_PATH` vs `configs/config.yaml` vs `config.py:69`'s
 hardcoded default vs `scribe.py`'s own env/~/Documents fallback) — that
@@ -28,6 +41,13 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = REPO_ROOT / "configs" / "dev" / "vault.yaml"
 ENV_OVERRIDE = "COBALT_VAULT_PATH"
+
+# Documentation only — never read by resolve_vault_path() itself. The
+# real vault path lives only in the places that actually need to reach
+# it (COBALT_VAULT_PATH in ops/start_aset.sh + the prefill plists);
+# this constant exists so "what does prod actually point at" has one
+# obvious, greppable answer instead of being tribal knowledge.
+PROD_VAULT_PATH_REFERENCE = "/Users/cobalt/Vault/Think"
 
 
 class VaultConfigError(RuntimeError):

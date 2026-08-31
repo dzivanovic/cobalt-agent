@@ -16,11 +16,44 @@ it already does. `COBALT_VAULT_PATH` is a deliberately different env var
 name from `OBSIDIAN_VAULT_PATH` specifically so setting it can never
 bleed into old-tree behavior.
 
+**NN#16 dev/prod vault split, formalized 2026-08-31.** Before this,
+`configs/dev/vault.yaml` pointed straight at the real vault — every
+new-core dev/test run (and every ad-hoc `uv run` from a terminal) was
+one missing override away from writing into Dejan's actual Obsidian
+vault. Now:
+- **Dev default** (the committed `configs/dev/vault.yaml` value):
+  `~/dev-vault-cobalt` — a skeleton copy, seeded once by hand, NOT
+  auto-created or kept in sync:
+  - `5 - Templates/{Daily,DRC,Individual Trade Template,TRADE REPORT CARD}.md`
+    — copies of the real Templater templates.
+  - `1 - Trading/5 - Review/Rules.md` — copy of "THE 12 RULES" (needed
+    for `prefill.rules_gen.regenerate_rules_config()` to have something
+    real to parse in manual/dev smoke runs; it's Dejan's rule canon,
+    not a personal journal entry, so it's in scope for "no personal
+    notes").
+  - `1 - Trading/1- Daily Notes/`, `1 - Trading/2 - Trades/` — empty
+    directories only (so `vault_writer.resolve_target`'s "directory
+    must already exist" check passes) — deliberately no populated daily
+    notes, no trade notes, no personal content of any kind.
+  - Reseed by re-copying from the real vault's `5 - Templates/` and
+    `1 - Trading/5 - Review/Rules.md` if either drifts; there's no
+    script for this yet (small enough to stay manual).
+- **Production** reaches the real vault (`/Users/cobalt/Vault/Think`,
+  `PROD_VAULT_PATH_REFERENCE` below — documentation only, never read by
+  `resolve_vault_path()` itself) by setting `COBALT_VAULT_PATH`
+  explicitly in its own environment: `ops/start_aset.sh` (the ASET
+  LaunchAgent's wrapper) and both `ops/com.cobalt.prefill-*.plist`
+  files all do this. A bare interactive `uv run` with no override — the
+  common case for dev/test work — now defaults to the SAFE dev vault;
+  touching the real one always requires a visible, explicit opt-in.
+
 ## Key functions/classes
 - `VaultConfigError(RuntimeError)` — the one error type for path resolution.
 - `VaultWriteRefused(RuntimeError)` — the one error type for the write-safety gate.
 - `VaultConfig` — one-field Pydantic model, `obsidian_vault_path: str`.
 - `ENV_OVERRIDE = "COBALT_VAULT_PATH"`.
+- `PROD_VAULT_PATH_REFERENCE = "/Users/cobalt/Vault/Think"` — documentation
+  constant only (see dev/prod split above); nothing in this module reads it.
 - `resolve_vault_path() -> Path` — checks the env override first; if
   unset, reads and validates `configs/dev/vault.yaml`. Either way,
   `expanduser()`s the result and requires it to be a real, existing
@@ -47,4 +80,6 @@ returns `None`. Consumed by `aset/daily_note.py` and
 ## Config it reads
 `configs/dev/vault.yaml` — no local/private variant exists (unlike
 `aset.local.yaml`) since the path isn't sensitive; override via env var
-instead if it ever needs to differ per-environment.
+instead if it ever needs to differ per-environment (this is now the
+load-bearing mechanism for the whole dev/prod split above, not just a
+theoretical escape hatch).

@@ -51,6 +51,30 @@ persistence fix until now.
   does not guarantee any particular rotation cadence — if `aset.log`
   grows unbounded between restarts, check it by hand.
 
+## NN#16 dev/prod vault split (2026-08-31)
+
+`configs/dev/vault.yaml`'s committed default no longer points at the
+real vault — it now points at `~/dev-vault-cobalt` (a skeleton copy:
+templates + Rules.md, no personal notes — see `docs/40 - DevDocs/cobalt/
+vault.md`). Every PRODUCTION consumer of `cobalt.vault.resolve_vault_path()`
+must therefore set `COBALT_VAULT_PATH=/Users/cobalt/Vault/Think`
+explicitly in its own environment, or it silently starts writing into
+the dev vault instead. All three plists that touch the vault do this:
+`com.cobalt.aset.plist` (via `ops/start_aset.sh`, so the plist itself
+stays free of it too) and both `com.cobalt.prefill-*.plist` (directly
+in `EnvironmentVariables`, since they have no wrapper script).
+
+**Action required (not done by this change):** `com.cobalt.aset` is
+already installed and running — its CURRENT process started before
+this fix and does not have `COBALT_VAULT_PATH` set. It needs
+`launchctl kickstart -k gui/$(id -u)/com.cobalt.aset` to pick it up;
+until then any card it saves would resolve the vault via the new dev
+default and land in `~/dev-vault-cobalt`, not the real vault. Not run
+automatically here — restarting a live production process during
+market hours needs a human go-ahead, not an agent's own judgment call.
+The two prefill plists are still not installed at all, so they carry
+no such risk yet.
+
 ## uv path discrepancy (found while installing this plist — not fixed here)
 
 `com.cobalt.archiver.plist` and `com.cobalt.mainframe.plist` hardcode
