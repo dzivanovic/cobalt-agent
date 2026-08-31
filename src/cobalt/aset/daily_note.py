@@ -32,9 +32,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from cobalt.vault import VaultConfigError, resolve_vault_path
+from cobalt.vault import VaultConfigError, VaultWriteRefused, assert_within_vault, resolve_vault_path
 
-from .config import REPO_ROOT, AsetConfig
+from .config import AsetConfig
 from .models import FillRecompute, SizingResult
 
 STUB_BANNER = "> ⚠️ Created by Cobalt — apply daily template.\n"
@@ -57,18 +57,16 @@ def target_path(cfg: AsetConfig, when: datetime) -> Path:
 
 
 def assert_safe_target(path: Path) -> None:
-    """Refuse unless `path` resolves OUTSIDE the repo working tree."""
-    resolved = path.resolve()
-    repo_root_resolved = REPO_ROOT.resolve()
+    """Refuse unless `path` resolves OUTSIDE the repo working tree.
+
+    Thin wrapper over the shared gate (cobalt.vault.assert_within_vault,
+    one-path rule) — kept as its own function/exception type here since
+    callers and tests already depend on DailyNoteRefused specifically.
+    """
     try:
-        resolved.relative_to(repo_root_resolved)
-    except ValueError:
-        return  # not inside the repo — safe
-    raise DailyNoteRefused(
-        f"REFUSED: resolved target {resolved} is INSIDE the repo working "
-        f"tree ({repo_root_resolved}) — the vault must live outside the "
-        "repo, never inside it."
-    )
+        assert_within_vault(path)
+    except VaultWriteRefused as e:
+        raise DailyNoteRefused(str(e)) from e
 
 
 def format_card(result: SizingResult, when: datetime) -> str:

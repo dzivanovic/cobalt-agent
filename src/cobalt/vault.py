@@ -34,6 +34,10 @@ class VaultConfigError(RuntimeError):
     """Vault path unset, misconfigured, or missing on disk — crash loudly."""
 
 
+class VaultWriteRefused(RuntimeError):
+    """A resolved write target is unsafe — refuse, never guess."""
+
+
 class VaultConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -68,3 +72,24 @@ def resolve_vault_path() -> Path:
             f"Vault path from {source} does not exist or is not a directory: {path}"
         )
     return path.resolve()
+
+
+def assert_within_vault(path: Path) -> None:
+    """Refuse unless `path` resolves OUTSIDE the repo working tree.
+
+    Shared safety gate (one-path rule) for every new-core module that
+    writes into the vault (aset/daily_note.py, prefill/*). The vault
+    lives outside the repo by design (see the module docstring's
+    "outside the repo" property) — a target resolving INSIDE the repo
+    means vault resolution went wrong somewhere upstream, so refuse
+    rather than risk a write landing in git history.
+    """
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(REPO_ROOT)
+    except ValueError:
+        return  # not inside the repo — safe
+    raise VaultWriteRefused(
+        f"REFUSED: resolved target {resolved} is INSIDE the repo working "
+        f"tree ({REPO_ROOT}) — the vault must live outside the repo, never inside it."
+    )

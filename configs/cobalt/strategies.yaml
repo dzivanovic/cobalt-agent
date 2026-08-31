@@ -1,0 +1,64 @@
+# Strategy taxonomy tags — config-as-code, not hardcoded in drc.py.
+# `reversion: true` marks strategies whose entry thesis is "price is
+# exhausted, expect it to turn" rather than "price is moving, expect it
+# to continue" — these are the ones the DRC's excitement-audit question
+# (Ledger 08-27: "excitement-audit on reversion cards") applies to.
+#
+# SEED LIST: names come verbatim from the Individual Trade Template's
+# own Strategy dropdown (5 - Templates/Individual Trade Template.md);
+# the reversion/continuation split below is Cobalt's best-guess reading
+# of each name, NOT Dejan-confirmed — correct via this file, not code,
+# the first time a tag looks wrong. Any strategy not listed here is
+# treated as reversion: false (no audit question), never a guess either
+# way beyond what's written.
+strategies:
+  - name: "Backside Scalp"
+    reversion: true
+  - name: "Rubber Band Scalp"
+    reversion: true
+  - name: "Hitchhiker Scalp"
+    reversion: false
+  - name: "Fashionable Late Scalp"
+    reversion: false
+  - name: "Second Chance Scalp"
+    reversion: true
+  - name: "VWAP Continuation"
+    reversion: false
+  - name: "First VWAP Pullback"
+    reversion: false
+  - name: "Second Day Play"
+    reversion: false
+  - name: "Gap Give and Go"
+    reversion: false
+  - name: "Puppy Dog Consolidation"
+    reversion: false
+  - name: "Breaking News"
+    reversion: false
+  - name: "Bouncy Ball"
+    reversion: true
+  - name: "Big Dawg"
+    reversion: false
+  - name: "Spencer Scalp"
+    reversion: false
+  - name: "9 EMA Reclaim"
+    reversion: true
+  - name: "330 Trade"
+    reversion: false
+  - name: "9 EMA Scalp"
+    reversion: false
+  - name: "Opening Range Break"
+    reversion: false
+  - name: "Range Break Opening Range Break"
+    reversion: false
+  - name: "Premarket High Break"
+    reversion: false
+  - name: "Bella Fade"
+    reversion: true
+  - name: "Offside Scalp"
+    reversion: true
+  - name: "Back Through Open"
+    reversion: true
+  - name: "First Move Down"
+    reversion: true
+  - name: "Bad Trade Outside of Playbook"
+    reversion: false

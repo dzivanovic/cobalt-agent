@@ -1,0 +1,14 @@
+# Slice 2 (DRC & Daily prefill engine) — shared new-core data, same
+# boundary class as watchlists.yaml (TRIAGE config boundary: not a
+# per-developer setting, Dejan's actual vault folder layout). The daily
+# note's own directory/filename pattern is NOT duplicated here — it
+# already lives in configs/dev/aset*.yaml's `daily_note:` block and the
+# prefill engine reads that directly (one-path rule).
+prefill:
+  trades_dir: "1 - Trading/2 - Trades"
+  review_dir: "1 - Trading/5 - Review"
+  drc_filename_pattern: "DRC-%Y-%m-%d.md"
+  # {ticker} is filled in by trade_note.py, not strftime — the rest of
+  # the pattern IS strftime (matches the vault's own Templater-authored
+  # filenames exactly, e.g. "Trade-2025-09-24 12-51-52 -MU.md").
+  trade_filename_pattern: "Trade-%Y-%m-%d %H-%M-%S -{ticker}.md"
