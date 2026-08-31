@@ -178,6 +178,48 @@ don't duplicate them.
   complete); the two new launchd plists are committed to ops/ only, NOT
   installed to ~/Library/LaunchAgents — Dejan's call, needs a real
   05:15/15:40 unattended run to fully verify before relying on it.
+  STATUS 2026-08-31 (cont.) — **Slice 2.1 correction**, from Dejan's
+  review of the first live note: fill-IN-PLACE inside his actual
+  sections replaces the old append-a-block-below-everything design.
+  rules.yaml is now GENERATED from the vault's Rules.md (not hand-
+  authored) — Rules.md migrated once (each of the 12 lines got exactly
+  one trailing Obsidian tag, `#process/#sizing/#time_window/#re_entry/
+  #circuit_breaker/#hard_stop`, text otherwise verbatim); Daily.md's old
+  Trade Rules list dropped as a source entirely (ruled outdated 08-23,
+  the six merged lines are gone); rules.yaml regenerates on every
+  prefill run (daily AND drc) and fails loud naming the exact line if a
+  tag's missing/wrong/duplicated. The 12 rules render exactly once, as
+  a single tagged checkbox list — no more separate "Guardian rules" +
+  "Rule adherence" split. Sizing rule (#2) is mode-aware at render time:
+  content-detected splice (not tied to rule position) pulls "B = $30
+  half / $60 full, A = $70 half / $135 full" straight from ASET's own
+  sheet-mode config. Daily template rebuilt with three named Cobalt
+  slots (rules/trading/market_calendar), each wrapped in its own
+  `<!-- cobalt-slot:NAME -->` marker; an existing note gets per-slot
+  editing (marker present → skip; blank/prior-FAILED → fill + mark;
+  Dejan's real content already there → skip, report, no mark) instead
+  of a bottom-of-file append. Trading table: SPY/QQQ/IWM only, per-row
+  fill/skip; VIX/BTC always blank (no more "n/a (manual)" text — same
+  table, no second table). A missing anchor (note doesn't match the
+  expected shape at all) fails the WHOLE run loud rather than guessing
+  an insertion point — edit plan built in memory first, so a failure
+  never leaves a half-edited file. Validated against a copy of the real
+  08-31 note in a new outside-repo dev vault (~/dev-vault-cobalt, not
+  Dejan's real one) — confirmed idempotent, confirmed his hand-filled
+  Trading row survives untouched, confirmed the blank Market Calendar
+  slot fills correctly even though the rules slot inserts ahead of the
+  OLD template's still-present stale Risk Profile prose (that prose
+  itself is untouched — only the Jinja template used for fresh notes
+  dropped it; Dejan's own Templater file at 5 - Templates/Daily.md was
+  NOT touched, so a Templater-created note still carries it until he
+  updates that file himself). Both prefill launchd plists' hardcoded
+  /opt/homebrew/bin/uv fixed to a bare `uv` (same bug as archiver/
+  mainframe, ops/README.md) — still not installed. 19 rewritten daily
+  tests + 13 new rules-generator tests + a real DRC test-isolation bug
+  found and fixed along the way (drc.py's tests were silently reading
+  the REAL vault's Rules.md via an unpatched import binding — now
+  patched, and a regression assertion added). 148 non-integration + 5
+  integration tests green.
 
 ## NEXT (immediate lane, in order)
 

@@ -9,6 +9,7 @@ import pytest
 
 from cobalt.aset.config import AsetConfig
 from cobalt.prefill import drc as drc_module
+from cobalt.prefill import rules_gen as rules_gen_module
 from cobalt.prefill import vault_writer as vault_writer_module
 from cobalt.prefill.drc import (
     EntryRender,
@@ -127,13 +128,30 @@ class TestFormatTickersBlock:
         assert "Excitement audit" in block
 
 
+FAKE_RULES_MD = """
+**THE 12 RULES**
+
+1. Card first. #process
+2. Grades: B = $30, A = $70. #sizing
+
+**Tape check:** *In because criteria met — or because it excites me?*
+"""
+
+
 @pytest.fixture
 def fake_vault(monkeypatch, tmp_path):
     vault_root = tmp_path / "vault"
     (vault_root / "1 - Trading" / "1- Daily Notes").mkdir(parents=True)
     (vault_root / "1 - Trading" / "2 - Trades").mkdir(parents=True)
-    (vault_root / "1 - Trading" / "5 - Review").mkdir(parents=True)
+    review_dir = vault_root / "1 - Trading" / "5 - Review"
+    review_dir.mkdir(parents=True)
+    (review_dir / "Rules.md").write_text(FAKE_RULES_MD)
     monkeypatch.setattr(vault_writer_module, "resolve_vault_path", lambda: vault_root)
+    # rules_gen.py imports resolve_vault_path into its own module namespace
+    # (a separate binding from vault_writer's) -- must be patched too, or
+    # regenerate_rules_config() silently falls through to the REAL vault.
+    monkeypatch.setattr(rules_gen_module, "resolve_vault_path", lambda: vault_root)
+    monkeypatch.setattr(rules_gen_module, "RULES_CONFIG_PATH", tmp_path / "rules.yaml")
     return vault_root
 
 
@@ -178,7 +196,11 @@ async def test_create_path_renders_full_template_with_cards(fake_vault, monkeypa
     assert "Entry #1" in content
     assert "$227.98" in content
     assert "FULL —" in content
-    assert "- [ ] Card first" in content
+    # exact fake Rules.md text, proving this read the FAKE vault's Rules.md,
+    # not the real one (regression test for the resolve_vault_path binding
+    # mismatch between drc.py's vault_writer import and rules_gen's own)
+    assert "- [ ] Card first. #process" in content
+    assert "half / $60 full" in content  # mode-aware splice applied here too
     # his sections stay untouched placeholders
     assert "Grade: (A+, A, B, C, etc..)" in content
     assert "### PnL on the day:  $XXXX" in content

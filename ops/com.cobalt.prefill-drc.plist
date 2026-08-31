@@ -11,7 +11,7 @@
     </dict>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/uv</string>
+        <string>uv</string>
         <string>run</string>
         <string>prefill</string>
         <string>drc</string>
@@ -25,7 +25,10 @@
          Dejan sits down to write the DRC, so cards from the whole day
          (including any post-close fill updates) are already in it. A
          re-run (e.g. Dejan already drafted by hand) appends a fenced,
-         idempotency-marked block rather than clobbering his draft. -->
+         idempotency-marked block rather than clobbering his draft.
+         ProgramArguments uses a bare "uv" (see com.cobalt.prefill-
+         daily.plist's note — the hardcoded /opt/homebrew/bin/uv path
+         doesn't exist on this machine; fixed here before install). -->
     <key>StartCalendarInterval</key>
     <array>
         <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>40</integer></dict>

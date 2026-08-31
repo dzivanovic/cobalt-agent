@@ -11,7 +11,7 @@
     </dict>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/uv</string>
+        <string>uv</string>
         <string>run</string>
         <string>prefill</string>
         <string>daily</string>
@@ -25,7 +25,17 @@
          2026-08-27 session-lifecycle kill. Mon-Fri 05:15 local (assumes
          system TZ = ET, same as the archiver's 20:30 job) — before
          premarket so the market table/calendar/rules block are ready
-         when Dejan sits down. -->
+         when Dejan sits down.
+         ProgramArguments uses a bare "uv" (resolved via this plist's own
+         EnvironmentVariables PATH, which includes ~/.local/bin) rather
+         than a hardcoded /opt/homebrew/bin/uv — that path doesn't exist
+         on this machine (see ops/README.md's note on com.cobalt.archiver/
+         mainframe carrying the same bug); fixed here before this plist
+         is ever installed, same fix as ops/start_aset.sh.
+         SLICE 2.1 (2026-08-31): the entrypoint (`uv run prefill daily`)
+         is unchanged, but its behavior is now fill-in-place inside
+         Dejan's actual sections (never append a block below them) — see
+         src/cobalt/prefill/daily.py and docs/40 - DevDocs. -->
     <key>StartCalendarInterval</key>
     <array>
         <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>5</integer><key>Minute</key><integer>15</integer></dict>

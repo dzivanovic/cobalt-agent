@@ -34,8 +34,9 @@ from cobalt.aset.config import load_config as load_aset_config, load_sheet_modes
 from cobalt.aset.models import Grade
 from cobalt.aset.store import AsetStore
 
-from .config import RulesConfig, StrategiesConfig, TEMPLATES_DIR, load_prefill_paths, load_rules_config, load_strategies_config
-from .daily import format_rules_blocks
+from .config import RulesConfig, StrategiesConfig, TEMPLATES_DIR, load_prefill_paths, load_strategies_config
+from .daily import apply_mode_aware_sizing, format_rules_checkbox_block
+from .rules_gen import regenerate_rules_config
 from .vault_writer import VaultWriteError, append_block, read_if_exists, resolve_dir, resolve_target, write_new
 
 _FILL_BLOCK_RE = re.compile(r"```aset-fill\n(.*?)\n```", re.DOTALL)
@@ -247,8 +248,8 @@ def _render_append_block(for_date_: date, context: dict) -> str:
         "### Catalyst + Set Up + Trades (Cobalt-prefilled)",
         context["tickers_block"].rstrip("\n"),
         "",
-        "**Rule adherence (copied from the morning note's checklist — configs/cobalt/rules.yaml):**",
-        context["rule_adherence_block"].rstrip("\n"),
+        "**Rules (copied from the morning note's checklist — Rules.md is the source):**",
+        context["rules_checkbox_block"].rstrip("\n"),
         "",
     ]
     return "\n".join(lines)
@@ -265,7 +266,7 @@ async def run_drc_prefill(for_date_: Optional[date] = None) -> DrcPrefillResult:
     for_date_ = for_date_ or datetime.now().astimezone().date()
     aset_cfg = load_aset_config()
     sheet_modes_cfg = load_sheet_modes_config()
-    rules_cfg: RulesConfig = load_rules_config()
+    rules_cfg: RulesConfig = regenerate_rules_config()
     strategies_cfg = load_strategies_config()
     prefill_paths = load_prefill_paths()
 
@@ -288,12 +289,12 @@ async def run_drc_prefill(for_date_: Optional[date] = None) -> DrcPrefillResult:
         for ticker, ticker_cards in grouped_cards.items()
     }
 
-    _, adherence_block, _ = format_rules_blocks(rules_cfg)
+    mode_aware_rules = apply_mode_aware_sizing(rules_cfg.rules, sheet_modes_cfg)
     context = {
         "date_str": for_date_.isoformat(),
         "risk_parameters_line": format_risk_parameters(cards, sheet_modes_cfg),
         "tickers_block": format_tickers_block(grouped_entries),
-        "rule_adherence_block": adherence_block,
+        "rules_checkbox_block": format_rules_checkbox_block(mode_aware_rules),
     }
 
     filename = for_date_.strftime(prefill_paths.drc_filename_pattern)

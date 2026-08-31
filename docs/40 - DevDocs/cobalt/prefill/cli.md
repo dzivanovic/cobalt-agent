@@ -13,10 +13,14 @@ their log files rather than dying silently.
 
 ## Key functions/classes
 - `main()` — argparse subcommands `daily` / `drc`.
+- `_run_daily()` — Slice 2.1: also prints `filled`/`skipped` slot lists
+  from `DailyPrefillResult` (the "a non-empty slot is skipped and
+  reported" requirement — reported here, on stdout/log, not written
+  into the note itself).
 
 ## Data flow in/out
-**In:** CLI args. **Out:** stdout summary line, or a `FAILED:` stderr
-line + exit code 1.
+**In:** CLI args. **Out:** stdout summary line (+ filled/skipped slot
+lines for `daily`), or a `FAILED:` stderr line + exit code 1.
 
 ## Config it reads
 None directly — delegates entirely to `daily.run_daily_prefill` /

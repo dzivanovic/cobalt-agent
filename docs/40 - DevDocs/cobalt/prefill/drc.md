@@ -30,6 +30,15 @@ numeric/structural facts are prefilled.
 - `format_tickers_block(grouped_entries) -> str`.
 - `run_drc_prefill(for_date_=None) -> DrcPrefillResult`.
 
+**Slice 2.1 (2026-08-31):** the rules block now comes from
+`rules_gen.regenerate_rules_config()` (Rules.md is the source, not the
+static `rules.yaml`) and renders via `daily.format_rules_checkbox_block`
++ `daily.apply_mode_aware_sizing` — the SAME single merged, tagged,
+mode-aware checklist the morning note shows (no more separate
+"Guardian rules" + "Rule adherence" split — see `daily.py`'s own
+DevDoc). "Copied from the morning note's checklist" is now literally
+true byte-for-byte, not just in spirit.
+
 ## Data flow in/out
 **In:** `AsetStore.for_date`, the source day's daily note (read-only,
 for fill lookups), matched trade notes (read-only, for strategy

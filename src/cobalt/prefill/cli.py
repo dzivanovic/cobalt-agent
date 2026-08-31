@@ -22,8 +22,15 @@ from .drc import run_drc_prefill  # noqa: E402
 
 def _run_daily() -> None:
     result = asyncio.run(run_daily_prefill())
-    logger.info(f"Daily prefill: {result.action} — {result.path}")
+    logger.info(
+        f"Daily prefill: {result.action} — {result.path} "
+        f"(filled: {result.filled_slots or 'none'}; skipped: {result.skipped_slots or 'none'})"
+    )
     print(f"{result.action}: {result.path}")
+    if result.filled_slots:
+        print(f"  filled: {', '.join(result.filled_slots)}")
+    if result.skipped_slots:
+        print(f"  skipped (already filled — not touched): {', '.join(result.skipped_slots)}")
 
 
 def _run_drc(target_date: str | None) -> None:
