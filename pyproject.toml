@@ -37,6 +37,7 @@ dependencies = [
     "loguru>=0.7.0",
     "python-dotenv>=1.0.0",
     "pyyaml>=6.0.0",
+    "jinja2>=3.1.0",
     # 5. SECURITY
     "pyotp>=2.9.0",
     "qrcode>=7.4.0",

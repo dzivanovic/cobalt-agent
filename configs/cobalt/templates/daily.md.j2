@@ -1,0 +1,143 @@
+---
+tags:
+  - Daily
+---
+#### {{ date_str }} T {{ time_str }}
+
+## Journal
+
+### How do you feel
+
+Sleep:
+Readiness:
+RHR:
+## Today's Plan
+
+1% goal:
+
+Daily HARD Stop: $420
+STOP TRADING AFTER 11AM until one month green 4 out of 5 days a week
+I WILL NOT TOLERATE THE MISTAKE OF OVERSIZING RISK ON A SINGLE TRADE THAT I DID NOT PLAN JUST TO MAKE A LARGFE POSITION
+I WILL NOT TOLERATE THE MISTAKE OF HAVING MORE THAN 3 LOSSES IN A ROW IN A TRADING DAY
+
+Risk Profile as a percent of daily stop:
+A+: 80%
+A   : 30%
+B   : 15%
+C   : 5%
+
+1. **A+ Trades:**
+
+    - **High Probability:** These trades have the highest likelihood of success.
+    - **Exceptional Setup:** Everything aligns perfectly, such as technical patterns, volume, and market conditions.
+    - **Strong Catalyst:** There is a significant event or news that supports the trade.
+    - **High Risk-Reward Ratio:** Offers a very favorable risk-reward profile.
+    - **Obviousness:** These trades are clear and distinct, often recognized easily by experienced traders.
+    - **Bet Sizing:** Traders are more likely to risk a larger portion of their capital on A+ trades due to their high confidence in the setup.
+2. **A Trades:**
+
+    - **Good Probability:** These trades also have a high likelihood of success, though slightly less than A+ trades.
+    - **Solid Setup:** Technical indicators and patterns support the trade.
+    - **Decent Catalyst:** There is some supporting news or event.
+    - **Good Risk-Reward Ratio:** Offers a favorable risk-reward profile, though not as exceptional as A+ trades.
+    - **Clarity:** These trades are clear, but might require more analysis to identify than A+ trades.
+3. **B Trades:**
+
+    - **Moderate Probability:** These trades have a reasonable chance of success.
+    - **Acceptable Setup:** The setup is present, but may not be as strong or clear as A trades.
+    - **Limited Catalyst:** There might be some supportive factors, but not as compelling.
+    - **Moderate Risk-Reward Ratio:** Offers a decent risk-reward profile.
+    - **Risk Management:** Traders typically allocate a smaller portion of capital compared to A and A+ trades.
+4. **C Trades:**
+
+    - **Lower Probability:** These trades have a lower likelihood of success.
+    - **Weak Setup:** The technical indicators and patterns are less convincing.
+    - **Minimal Catalyst:** Little to no supporting news or events.
+    - **Poor Risk-Reward Ratio:** The risk-reward profile may not be favorable.
+    - **Learning Opportunities:** Often used by developing traders to gain experience, but with small positions to limit risk.
+
+The key to trading successfully is to understand these categories and manage bet sizing accordingly, focusing on improving skills with B trades and capitalizing on A and A+ trades when they appear.
+
+Trade Rules:
+- Take 15 minute break if 2 red trades in a row
+- If all trades are red by 10 AM stop and do analyses and charting
+- Stop trading after 12 if more than 3 lost trade (including wins that are closed early or if more than 30% PNL lost)
+- Do not enter stock after 2 consecutive losses on the stock and idea
+- Read prior day DRC in the morning
+- I objectivity define my edges
+- I predefined the risk of every trade
+- I completely appreciate the risk or I am willing to let go of the trade
+- I act on my edges without reservation or hesitation
+- I pay myself as market makes it available to me
+- I continually monitor my susceptibility to make errors
+- I understand and never violate the necessity of this rules
+
+### Trading
+
+| VIX | {{ vix_col2 }} | {{ vix_col3 }} |
+| --- | --- | --- |
+| SPY | {{ spy_col2 }} | {{ spy_col3 }} |
+| QQQ | {{ qqq_col2 }} | {{ qqq_col3 }} |
+| IWM | {{ iwm_col2 }} | {{ iwm_col3 }} |
+| BTC | {{ btc_col2 }} | {{ btc_col3 }} |
+{% if market_error %}
+> ⚠️ Market fetch FAILED: {{ market_error }}
+{% endif %}
+
+### Market Context:
+-
+
+### Market Calendar:
+{{ market_calendar_block }}
+### Game Plan:
+
+
+### Trade Ideas
+
+| Ticker | Score | Catalyst | Setup | Support | Inflection | Resistance | ATR | RVOL | BIAS |
+| ------ | ----- | -------- | ----- | ------- | ---------- | ---------- | --- | ---- | ---- |
+|        |       |          |       |         |            |            |     |      |      |
+|        |       |          |       |         |            |            |     |      |      |
+|        |       |          |       |         |            |            |     |      |      |
+|        |       |          |       |         |            |            |     |      |      |
+|        |       |          |       |         |            |            |     |      |      |
+|        |       |          |       |         |            |            |     |      |      |
+
+### Trade Execution
+```dataview
+TABLE symbol, profit_loss, strategy, entry_time, direction, profit_loss
+FROM "1 - Trading/2 - Trades"
+WHERE file.cday = this.file.day
+SORT entry_time ASC
+```
+
+### Cobalt Rules Check
+<!-- cobalt-prefill:daily:{{ date_str }} -->
+
+Sheet mode: [ ] FULL [ ] HALF — .htk loaded: [ ] full [ ] half
+
+**Guardian rules (configs/cobalt/rules.yaml):**
+{{ rules_block }}
+**Rule adherence (check off through the day):**
+{{ rule_adherence_block }}
+**Mantras:**
+{{ mantras_block }}
+
+## Notes
+
+Overall Score:
+
+Premarket:
+Score -
+
+9:30 - 11:
+Score -
+
+11 - 1
+Score -
+
+1-3
+Score -
+
+3-4
+Score -
