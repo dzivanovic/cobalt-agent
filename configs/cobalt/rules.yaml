@@ -1,79 +1,56 @@
-# Guardian rule set v1 — config-as-code (TRIAGE cross-cutting law: rules
-# are data, never hardcoded in a template or a prompt). Source-unified
-# from Dejan's own two authored canons, both quoted verbatim:
-#   - the vault's "1 - Trading/5 - Review/Rules.md" ("THE 12 RULES" —
-#     the current Guardian canon; ids below without a `source:` field)
-#   - "5 - Templates/Daily.md"'s inline Trade Rules text, for the items
-#     not already covered by the 12 (tagged `source: daily_md`)
-# Consumed today by the Slice 2 morning-Daily prefill (Rules block +
-# rule-adherence checklist). Future Guardian real-time enforcement reads
-# this SAME file — one-path rule, never a second rules copy.
-#
-# Dollar figures quoted in rule text (e.g. "B = $30, A = $70") are
-# Rules.md's own authored numbers (HALF sheet-mode, iteration 4) — kept
-# as his literal words, not recomputed here. Live sizing math always
-# comes from configs/cobalt/aset.yaml, never from this file.
+# GENERATED — do not hand-edit. Source of truth is the vault's own
+# /Users/cobalt/Vault/Think/1 - Trading/5 - Review/Rules.md
+# ("THE 12 RULES"). Regenerated on every prefill run — see
+# src/cobalt/prefill/rules_gen.py. Hand edits here are overwritten on
+# the next run; edit Rules.md instead.
 
+generated:
+  source: /Users/cobalt/Vault/Think/1 - Trading/5 - Review/Rules.md
+  source_sha256: db5aadd6d6255e5bb64751b6aa5f6c2768dbaecb88b57d46da1f70c7c915b19c
+  generated_at: '2026-08-31T13:14:01+00:00'
 rules:
-  - id: card_first
-    category: process
-    text: "Card first: grade → $ risk → shares written before every entry. No card, no trade."
-  - id: grade_dollar_caps
-    category: sizing
-    text: "Grades: B = $30, A = $70. Nothing bigger. C = pass."
-  - id: stop_at_structure
-    category: process
-    text: "Stop at structure, never a default distance. If R:R < 2:1, pass."
-  - id: prime_window
-    category: time_window
-    text: "Prime window only: 9:30-11:00. Nothing before, nothing after."
-  - id: max_five_trades
-    category: sizing
-    text: "Max 5 trades."
-  - id: reversion_entry_criteria
-    category: process
-    text: "Reversion entry needs all three: my level + exhaustion printed + trigger. Approaching ≠ rejecting."
-  - id: reentry_2_written_info
-    category: re_entry
-    text: "Re-entry #2 same thesis: write what's new — blank or \"better price\" = no trade."
-  - id: reentry_3_stand_down
-    category: re_entry
-    text: "Entry #3 same thesis: stand down. Ticker done for the day."
-  - id: two_losses_cooldown
-    category: circuit_breaker
-    text: "Two straight losses → 10-min cooldown."
-  - id: one_position_while_red
-    category: circuit_breaker
-    text: "One position at a time while red. Never two correlated names."
-  - id: first_partial_to_be
-    category: process
-    text: "First partial at 1R → stop to B/E, immediately."
-  - id: daily_stop_done
-    category: hard_stop
-    text: "Daily stop hit ($215 sim) → done trading. Watch only."
-  - id: per_ticker_two_losses
-    category: circuit_breaker
-    source: daily_md
-    text: "Do not enter a stock after 2 consecutive losses on that stock and idea."
-  - id: all_red_by_10am
-    category: circuit_breaker
-    source: daily_md
-    text: "If all trades are red by 10 AM, stop and do analysis/charting."
-  - id: stop_after_12_three_losses
-    category: circuit_breaker
-    source: daily_md
-    text: "Stop trading after 12 if more than 3 lost trades (including wins closed early, or if more than 30% PNL lost)."
-  - id: stop_after_11am_until_green
-    category: time_window
-    source: daily_md
-    text: "STOP TRADING AFTER 11AM until one month green 4 out of 5 days a week."
-  - id: read_prior_drc
-    category: process
-    source: daily_md
-    text: "Read prior day's DRC in the morning."
-
+- id: rule_01
+  category: process
+  text: 'Card first: grade → $ risk → shares **written before every entry**. No card,
+    no trade.'
+- id: rule_02
+  category: sizing
+  text: 'Grades: **B = $30, A = $70.** Nothing bigger. C = pass.'
+- id: rule_03
+  category: process
+  text: Stop at **structure**, never a default distance. If R:R < 2:1, pass.
+- id: rule_04
+  category: time_window
+  text: 'Prime window only: **9:30–11:00.** Nothing before, nothing after.'
+- id: rule_05
+  category: sizing
+  text: '**Max 5 trades.**'
+- id: rule_06
+  category: process
+  text: 'Reversion entry needs all three: **my level + exhaustion printed + trigger.**
+    Approaching ≠ rejecting.'
+- id: rule_07
+  category: re_entry
+  text: 'Re-entry #2 same thesis: write **what''s new** — blank or "better price"
+    = no trade.'
+- id: rule_08
+  category: re_entry
+  text: 'Entry #3 same thesis: **stand down.** Ticker done for the day.'
+- id: rule_09
+  category: circuit_breaker
+  text: Two straight losses → **10-min cooldown.**
+- id: rule_10
+  category: circuit_breaker
+  text: '**One position at a time** while red. Never two correlated names.'
+- id: rule_11
+  category: process
+  text: First partial at 1R → **stop to B/E**, immediately.
+- id: rule_12
+  category: hard_stop
+  text: Daily stop hit ($215 sim) → **done trading.** Watch only.
 mantras:
-  - id: tape_check
-    text: "Tape check: in because criteria met — or because it excites me?"
-  - id: identity
-    text: "Identity: my sizing is arithmetic, not habit. Stand-down gives me back my eyes."
+- id: tape_check
+  text: 'Tape check: In because criteria met — or because it excites me?'
+- id: identity
+  text: 'Identity: My sizing is arithmetic, not habit. Stand-down gives me back my
+    eyes.'

@@ -24,9 +24,10 @@ class PrefillConfigError(RuntimeError):
     """Missing/invalid prefill config — crash, never fall back."""
 
 
-RuleCategory = Literal[
+RECOGNIZED_TAGS: tuple[str, ...] = (
     "process", "sizing", "time_window", "re_entry", "circuit_breaker", "hard_stop"
-]
+)
+RuleCategory = Literal[RECOGNIZED_TAGS]
 
 
 class RuleItem(BaseModel):
@@ -35,7 +36,6 @@ class RuleItem(BaseModel):
     id: str = Field(min_length=1)
     category: RuleCategory
     text: str = Field(min_length=1)
-    source: Optional[str] = None
 
 
 class MantraItem(BaseModel):
@@ -45,9 +45,18 @@ class MantraItem(BaseModel):
     text: str = Field(min_length=1)
 
 
+class GeneratedMeta(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source: str = Field(min_length=1)
+    source_sha256: str = Field(min_length=64, max_length=64)
+    generated_at: str = Field(min_length=1)
+
+
 class RulesConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    generated: GeneratedMeta
     rules: list[RuleItem] = Field(min_length=1)
     mantras: list[MantraItem] = Field(default_factory=list)
 

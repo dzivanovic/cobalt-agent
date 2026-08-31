@@ -12,10 +12,14 @@ from cobalt.prefill.config import (
 def test_rules_config_loads_and_has_known_ids():
     cfg = load_rules_config()
     ids = {r.id for r in cfg.rules}
-    assert "card_first" in ids
-    assert "reentry_3_stand_down" in ids
-    assert "per_ticker_two_losses" in ids
+    # SLICE 2.1: ids are rule_NN, positional off Rules.md's own numbering
+    # (the source of truth) — no more hand-authored semantic ids.
+    assert "rule_01" in ids
+    assert "rule_12" in ids
+    assert len(cfg.rules) == 12
     assert any(m.id == "tape_check" for m in cfg.mantras)
+    assert cfg.generated.source.endswith("Rules.md")
+    assert len(cfg.generated.source_sha256) == 64
 
 
 def test_rules_have_valid_categories():
