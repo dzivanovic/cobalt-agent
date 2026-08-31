@@ -555,6 +555,105 @@ Supersedes §3 above for Portfolio (removed), Groups, News, and Stock.
 
 ---
 
+## Phase B — 2026-08-31
+
+**Method:** two threads — (1) an API probe of the undocumented `&r=`
+parameter on `/export/stock`, reusing `cobalt.archiver.collector`'s own
+token resolver (no new Finviz-auth code, no old-tree changes); (2) an
+attempt to log into Finviz Elite via Playwright (VaultManager
+credentials) and capture the in-app "Automating Export" documentation
+panels for all 11 export families — **blocked at login**, see below.
+
+### 1. `&r=` parameter — CONFIRMED: does not extend intraday depth
+
+Probed `p=i2` (AAPL) with `r=d5, m1, y1, max` plus a no-`r=` baseline;
+and `p=i30` (AAPL) with `r=y2, max` plus a no-`r=` baseline. One
+ticker, ~1s between calls, single probe run, 2026-08-31.
+
+| Call | Bars | First | Last | Span |
+|---|---|---|---|---|
+| `p=i2`, no `r=` | 4938 | 2026-08-17 04:00 | 2026-08-31 08:40 | 14d 4:40 |
+| `p=i2`, `r=d5` | 1101 | 2026-08-27 04:00 | 2026-08-31 08:40 | 4d 4:40 |
+| `p=i2`, `r=m1` | 4938 | 2026-08-17 04:00 | 2026-08-31 08:40 | identical to baseline |
+| `p=i2`, `r=y1` | 4938 | 2026-08-17 04:00 | 2026-08-31 08:40 | identical to baseline |
+| `p=i2`, `r=max` | 4938 | 2026-08-17 04:00 | 2026-08-31 08:40 | identical to baseline |
+| `p=i30`, no `r=` | 2600 | 2025-11-11 09:30 | 2026-08-28 15:30 | 290d 6:00 |
+| `p=i30`, `r=y2` | 2600 | 2025-11-11 09:30 | 2026-08-28 15:30 | identical to baseline |
+| `p=i30`, `r=max` | 2600 | 2025-11-11 09:30 | 2026-08-28 15:30 | identical to baseline |
+
+**CONFIRMED: `r=` does NOT extend intraday depth beyond whatever
+rolling window the interval already serves.** It behaves as a
+WITHIN-window filter — same mechanics as `/export/calendar`'s
+`dateFrom` (§1 Calendar above): a range shorter than the window
+(`d5`) narrows the returned rows down (4938 → 1101, to just the last
+~4 days); any range at or beyond the window's natural extent (`m1`,
+`y1`, `max` for `i2`; `y2`, `max` for `i30`) returns **byte-identical**
+results to the no-`r=` baseline — clamped, not extended. This closes
+Phase A's "Phase B's top question" (§0, §2b, §3 summary table): `r=`
+is a convenience narrowing filter, not a depth-extension parameter.
+
+**Bonus confirmation (unplanned):** `i30`'s baseline here (2600 bars,
+window start 2025-11-11) lines up exactly with Phase A's own `i30`
+probe (2026-08-27: 2600 bars, window start 2025-11-07) — same bar
+count, start date shifted forward by precisely the 4 calendar days
+between the two probe dates. The `i30`/`h` window is a genuine
+sliding ~9.6-month rolling window, not a fixed historical cutoff date,
+independently reconfirmed.
+
+**INFERRED, not independently tested here:** whether `r=` behaves
+identically on `i1`/`i5`/`i15` (only `i2` and `i30` were probed); the
+exact clamp boundary (only `d5` was tried as a "shorter than window"
+value — where narrowing stops and clamping starts was not bisected).
+
+### 2. Elite API documentation page capture — BLOCKED, not completed
+
+**Blocked at login.** Two Playwright login attempts against
+`https://finviz.com/login-email` using VaultManager's
+`finviz.com::username` / `finviz.com::password` both failed with
+Finviz's own "The email address or password is incorrect" error. Both
+attempts verified the password field actually held the vault secret
+(length-matched against the resolved secret, value never printed or
+logged) immediately before submit, and the DOM was dumped to confirm
+`input[name="password"]` is the correct, present selector — this is a
+rejected credential, not a scripting bug. Per this session's rule,
+login was not retried a third time (account-lockout/suspicious-activity
+risk from repeated failures).
+
+**Hypothesis, not confirmed:** the 08-23/24 security-incident
+credential rotation (Ledger §2, decision log) rotated
+`finviz.com::api_token` (confirmed working throughout this session's
+API-only calls, including the probe above) but the WEBSITE login
+password may not have been rotated the same way, or has drifted since.
+`FinvizExtractor`'s browser-login path — the only consumer of
+`finviz.com::username`/`::password` — is TRIAGE-KILLed and has been
+unused since before the rotation, so nothing would have surfaced a
+stale website password until this probe.
+
+**Consequence:** no page source, no screenshots, no "Learn More"/
+"Customize Parameters" panel captures for any of the 11 export
+families this session — the parameter/filter/column-code dissection
+this section was also meant to do has no new page-source material to
+work from; it stands as-is against the existing 9 in-app screenshots
+already covered by Phase A (§0).
+
+**Also checked:** Dejan's hand-saved copy at
+`docs/0 - Inbox/elite-finviz-com-api-explanation.html` —
+**the `.html` file itself does not exist**; only its companion
+`elite-finviz-com-api-explanation_files/` assets folder synced,
+confirming the "may not have synced" prediction exactly. Nothing to
+redact or move.
+
+**Open item for Dejan:** verify/refresh `finviz.com::username` and
+`finviz.com::password` in VaultManager, then re-run the capture — a
+login script with the verify-before-submit fix is ready. Target page
+(`https://elite.finviz.com/api-explanation`) is an INFERENCE from the
+hand-saved file's browser-generated filename pattern
+(`elite-finviz-com-api-explanation.html` ≈ a Save-As slug of
+`elite.finviz.com/api-explanation`), not independently confirmed
+reachable — first thing to verify once login works.
+
+---
+
 ## Appendix — raw probe log
 
 Full request/response log (108 requests across three probe runs —
