@@ -111,7 +111,10 @@ default (`docs/*`) with an explicit carve-out per directory — never
 commit by widening an existing exception, always name the specific
 numbered folder.
 
-- **00 - Project** — BACKLOG.md, COBALT-REQUIREMENTS.md.
+- **00 - Project** — BACKLOG.md, COBALT-REQUIREMENTS.md,
+  PROJECT-LEDGER.md (the living record of decisions, laws, and project
+  state; appendix-paste workflow — fold appendices in, then delete
+  them).
 - **10 - Decisions** — ADRs, one file per decision.
 - **20 - Assessment** — the frozen pre-beta assessment corpus (00-08,
   ASSESSMENT.md, preserved as originally written) + TRIAGE.md (still
