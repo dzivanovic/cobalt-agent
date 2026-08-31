@@ -59,6 +59,7 @@ dependencies = [
 # --- NEW-CORE ENTRY POINTS (src/cobalt/*, strangler rebuild) ---
 [project.scripts]
 archiver = "cobalt.archiver.runner:main"
+prefill = "cobalt.prefill.cli:main"
 
 # --- DEV DEPENDENCIES (New Standard: [dependency-groups]) ---
 [dependency-groups]

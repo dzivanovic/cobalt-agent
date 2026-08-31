@@ -44,6 +44,13 @@ same line** — only full-line comments are stripped.
     (used by the integration test to verify a round trip; not currently
     exposed in the web UI). Selects `sheet_mode` in place of the old
     `daily_stop`.
+  - `.for_date(day: date) -> list[dict]` — **(Slice 2)** every card
+    whose `created_at` falls on `day` **in America/New_York**, not the
+    DB session's UTC default (`(created_at AT TIME ZONE
+    'America/New_York')::date = %s`) — Dejan's actual trading-day
+    boundary. Ordered oldest-first: `prefill/drc.py`'s re-entry
+    numbering (entry #1/#2/#3+) depends on chronological order within a
+    ticker.
 
 ## Data flow in/out
 **In:** a `SizingResult` (from `engine.compute_sizing`).

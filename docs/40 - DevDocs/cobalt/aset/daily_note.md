@@ -39,11 +39,13 @@ linked by that timestamp. `format_card` drops the retired `grade (%)`/
   any `VaultConfigError` into `DailyNoteRefused` — callers only need to
   catch one exception type), then
   `<vault_root>/<daily_notes_dir>/<when.strftime(filename_pattern)>`.
-- `assert_safe_target(path)` — the safety gate itself: `path.resolve()`
-  vs `REPO_ROOT.resolve()`, refuses if the former is inside the latter
-  (via `Path.relative_to` raising `ValueError` on "not a subpath," which
-  is the success case here — read the logic close, it inverts on first
-  glance).
+- `assert_safe_target(path)` — **(Slice 2 refactor)** now a thin wrapper
+  over the shared gate, `cobalt.vault.assert_within_vault` (one-path
+  rule — the actual "inside the repo" check moved there so
+  `prefill/*`'s writers reuse it too); catches `VaultWriteRefused` and
+  re-raises as `DailyNoteRefused` so existing callers/tests (which
+  depend on that specific exception type) are unaffected. Behavior is
+  byte-identical to the pre-refactor version.
 - `format_card(result, when) -> str` — renders the fenced ` ```aset `
   block: ticker, direction, grade, `sheet_mode`, entry, stop,
   risk_budget, shares, ISO timestamp.

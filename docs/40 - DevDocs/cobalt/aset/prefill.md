@@ -24,9 +24,12 @@ the current endpoint shape.
   (`_AUTH_RE`) an underlying library (httpx) baked into an exception
   message, replacing it with `auth=REDACTED`. Applied to every error
   string before it's raised.
-- `_resolve_token() -> str` — instantiates `FinvizApiClient`, calls its
-  private `_resolve_vault_credentials`, wraps any failure in a scrubbed
-  `PrefillError`.
+- `resolve_token() -> str` — **(renamed from `_resolve_token`, Slice 2)**
+  instantiates `FinvizApiClient`, calls its private
+  `_resolve_vault_credentials`, wraps any failure in a scrubbed
+  `PrefillError`. Made public specifically so `prefill/market.py` and
+  `prefill/calendar.py` can reuse it (one-path rule — no second Finviz-
+  auth implementation) instead of re-resolving the token themselves.
 - `fetch_last_price(ticker) -> tuple[Decimal, str]` — normalizes the
   ticker, resolves the token, GETs `elite.finviz.com/export/stock`
   (`p=d`, daily), parses the CSV response, and returns `(price, source

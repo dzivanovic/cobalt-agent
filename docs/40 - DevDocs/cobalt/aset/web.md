@@ -107,19 +107,25 @@ the engine test suite.
 - `@app.post("/size")` `size(request)` — parses the form into a
   `SizingInput`, calls `compute_sizing(inp, sheet_modes_cfg.enabled_grades)`,
   persists via `AsetStore` (schema ensured first), then calls
-  `daily_note.save_card` — all three steps in one action. Failure
-  ordering is deliberately layered so a partial failure is never silent:
-  a sizing/config error (including a disabled-grade refusal) never
-  reaches persistence; a persistence failure is reported before any note
-  write is attempted; a note-append failure (`DailyNoteRefused`) after a
-  successful persist is reported as "Persisted ... but daily-note append
-  FAILED" rather than losing the fact that the DB row exists. On full
-  success, `orig_timestamp` is set into the form dict (from the
-  `(path, when)` `save_card` now returns) before rendering the result
-  card, so the fill form can link back to this card. Live-verified: a
-  disabled grade posted directly (bypassing the dropdown) writes nothing
-  to Postgres or the note and renders the "not enabled ... no trade
-  (SAW)" FAILED banner.
+  `daily_note.save_card`, then (**Slice 2**)
+  `prefill.trade_note.upsert_trade_note` — four steps in one action.
+  Failure ordering is deliberately layered so a partial failure is never
+  silent: a sizing/config error (including a disabled-grade refusal)
+  never reaches persistence; a persistence failure is reported before
+  any note write is attempted; a note-append failure
+  (`DailyNoteRefused`) after a successful persist is reported as
+  "Persisted ... but daily-note append FAILED" rather than losing the
+  fact that the DB row exists; a trade-note write failure
+  (`PrefillConfigError`/`VaultWriteError`) after a successful daily-note
+  append is reported the same way ("... but trade-note write FAILED"),
+  again without losing the earlier confirmations. On full success,
+  `orig_timestamp` is set into the form dict (from the `(path, when)`
+  `save_card` now returns) before rendering the result card, so the
+  fill form can link back to this card, and the banner names the
+  created/updated trade-note path. Live-verified: a disabled grade
+  posted directly (bypassing the dropdown) writes nothing to Postgres,
+  the daily note, or a trade note, and renders the "not enabled ... no
+  trade (SAW)" FAILED banner.
 - `@app.post("/fill")` `fill(request)` — parses the form the same way,
   **recomputes** the original sizing fresh (no re-read from
   `aset_sizings` — deterministic recompute, same pattern the old
@@ -139,11 +145,14 @@ the engine test suite.
 **Out:** rendered HTML (all routes that return pages), or JSON
 (`/api/prefill`). Delegates all actual work: `engine.py` for math,
 `prefill.py` for the Finviz fetch, `store.py` for persistence,
-`daily_note.py` for the vault write.
+`daily_note.py` for the daily-note vault write, and (Slice 2)
+`cobalt.prefill.trade_note.upsert_trade_note` for the per-card trade
+note.
 
 ## Config it reads
 `AsetConfig` in full, via `load_config()`, and `SheetModesConfig` via
 `load_sheet_modes_config()` — both called fresh on every request (no
 caching), so editing `configs/dev/aset*.yaml` or
 `configs/cobalt/aset.yaml` takes effect on the next page load with no
-server restart.
+server restart. Also (Slice 2) `configs/cobalt/prefill.yaml` via
+`cobalt.prefill.config.load_prefill_paths()`, for the trade-note step.
