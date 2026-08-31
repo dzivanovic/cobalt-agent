@@ -34,7 +34,7 @@ def scrub(text: str) -> str:
     return _AUTH_RE.sub("auth=REDACTED", text)
 
 
-async def _resolve_token() -> str:
+async def resolve_token() -> str:
     client = FinvizApiClient()
     try:
         return await client._resolve_vault_credentials(client.FINVIZ_DOMAIN)
@@ -48,7 +48,7 @@ async def fetch_last_price(ticker: str) -> tuple[Decimal, str]:
     if not ticker:
         raise PrefillError("Empty ticker.")
 
-    token = await _resolve_token()
+    token = await resolve_token()
     url = "https://elite.finviz.com/export/stock"
     params = {"t": ticker, "p": "d", "auth": token}
     try:
