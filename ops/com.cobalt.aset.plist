@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.aset</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/cobalt/cobalt/ops/start_aset.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/cobalt/cobalt</string>
+    <key>AbandonProcessGroup</key>
+    <true/>
+    <!-- Persistence fix (2026-08-31 incident): the ASET widget had no
+         LaunchAgent at all — it was only ever started by hand
+         (`uv run python -m cobalt.aset`, no supervision) and died
+         silently at the Aug 29 10:35 reboot, unnoticed until the
+         trading PC got connection-refused on :5010. RunAtLoad brings
+         it up on login/boot; KeepAlive brings it back if it ever exits
+         (crash, kill) — matches com.cobalt.archiver/prefill's "detached,
+         supervised" posture, upgraded here to persistent since ASET is
+         a live-market-hours tool, not a scheduled batch job. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/cobalt/logs/aset.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/cobalt/logs/aset.err</string>
+</dict>
+</plist>
