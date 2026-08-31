@@ -141,15 +141,46 @@ don't duplicate them.
   no trade (SAW)") and wrote nothing to Postgres or the daily note.
   DevDocs regenerated for models/engine/config/web.py + their tests.
 
+- **Pre-beta slice 2 — DRC & Daily prefill engine** (src/cobalt/prefill/)
+  Templates-as-config: Daily.md + DRC.md ported to Jinja
+  (configs/cobalt/templates/*.md.j2), structure/section names verbatim,
+  Templater `{{ }}` prompts replaced by prefilled fields. Guardian rule
+  set unified into configs/cobalt/rules.yaml (the vault's own Rules.md
+  "THE 12 RULES" + Daily.md's uncovered lines, quoted verbatim) — the
+  single source for the morning rules block, the rule-adherence
+  checklist, and (later) Guardian's own enforcement. Morning Daily Note
+  (`uv run prefill daily`, scheduled 05:15 ET weekdays): SPY/QQQ/IWM via
+  the confirmed Finviz /export/screener v=111; VIX/BTC render "n/a
+  (manual)" loudly (neither is Finviz-servable); today's economic +
+  earnings calendar via /export/calendar; day-mode checkbox line;
+  rule-adherence checklist. Trade notes: every computed ASET card now
+  also creates/updates "1 - Trading/2 - Trades/<Trade-...>.md" (wired
+  into web.py's /size handler) so the daily note's dataview table lights
+  up — Cobalt owns 5 frontmatter keys only, everything else (strategy,
+  RVOL, exit, P&L) stays his, preserved verbatim on any re-run. Evening
+  DRC (`uv run prefill drc`, scheduled 15:40 ET): per-ticker
+  Catalyst/Set-Up/Trade scaffold from the day's cards (AsetStore.for_date,
+  America/New_York boundary), re-entry-rule prompts (#2 needs written
+  info, #3+ stands down), excitement-audit question on reversion-tagged
+  strategies (configs/cobalt/strategies.yaml, seed list), Risk Parameters
+  from today's actual sheet mode. PRINCIPLE enforced throughout:
+  create-if-absent from template, else append a fenced, idempotency-
+  marker-guarded "Cobalt Prefill" block — existing content never read
+  for mutation. 131 tests (incl. Postgres integration for the new
+  AsetStore.for_date). STATUS 2026-08-31: shipped + smoke-tested against
+  the real vault — today's Daily Note (append path, since Templater had
+  already created it), a trade note backfilled from a real card computed
+  before the wiring landed, and a DRC draft from today's real cards (no
+  Friday 08-28 cards existed in cobalt_dev to use as the spec'd smoke
+  case — substituted today's date; flagged, not silently swapped).
+  Known gaps, not closed this sprint: DevDocs for the new tests/cobalt/
+  test_prefill_*.py files (skipped — src/cobalt/prefill/*.py DevDocs are
+  complete); the two new launchd plists are committed to ops/ only, NOT
+  installed to ~/Library/LaunchAgents — Dejan's call, needs a real
+  05:15/15:40 unattended run to fully verify before relying on it.
+
 ## NEXT (immediate lane, in order)
 
-- **Pre-beta slice 2 — DRC + PlayBook prefill** (~1–2 wks)
-  Prefill-first inversion of docs/90 - References/trade-reporter/ (keep its
-  reportlab DRC builder + PPTX builder nearly wholesale; Cobalt prefill
-  engine feeds them). Obsidian front end: structured daily data note +
-  Templater pulls. Includes daily rule-adherence checkboxes (Guardian
-  baseline) + one-line replay ledger. Input to collect: Dejan's existing
-  DRC/prep Templater templates.
 - **Pre-beta slice 3 — Prebell-lite** (2–3 wks thin, then weekly iteration)
   Regime tiles, catalyst calendar, in-play candidates from existing scanner
   data. Fail-loud from line one.
@@ -253,8 +284,10 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
       after Taxonomy Session.
 - [ ] Persona strings + vault-seeder content harvested as reference/intent
       history before any old-tree deletion commit.
-- [ ] Collect Dejan's existing Obsidian DRC/prep Templater templates
-      (slice-2 prefill input).
+- [x] Collect Dejan's existing Obsidian DRC/prep Templater templates
+      (slice-2 prefill input) — found already in the vault's own
+      5 - Templates/ (Daily.md, DRC.md, Individual Trade Template.md,
+      TRADE REPORT CARD.md), ported to Jinja 2026-08-31.
 - [x] docs/50 - Roles/ role-pack template + MODELS.md fleet tiering seeded
       (2026-08-25): planning=Fable, coach=Fable, DRC=Sonnet,
       logistics=Sonnet; promotion rule = model follows function.
