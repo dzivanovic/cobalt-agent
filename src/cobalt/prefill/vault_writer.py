@@ -36,6 +36,18 @@ def resolve_target(vault_relative_dir: str, filename: str) -> Path:
     return path
 
 
+def resolve_dir(vault_relative_dir: str) -> Path:
+    """Resolve a vault-relative directory for read-only use (e.g. listing
+    trade notes to match against cards) — no existence/gate check beyond
+    resolving the vault root itself; callers that list its contents
+    already tolerate a missing directory (empty listing)."""
+    try:
+        vault_root = resolve_vault_path()
+    except VaultConfigError as e:
+        raise VaultWriteError(f"Vault path unresolved: {e}") from e
+    return vault_root / vault_relative_dir
+
+
 def read_if_exists(path: Path) -> Optional[str]:
     return path.read_text(encoding="utf-8") if path.exists() else None
 

@@ -13,6 +13,7 @@ comment after SQL on the same line. The table may be reshaped again by
 the data-model ADR; see the note in 0001.
 """
 
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +71,25 @@ class AsetStore:
         if row is None:
             raise RuntimeError("INSERT returned no id — persistence failed loudly.")
         return int(row[0])
+
+    def for_date(self, day: date) -> list[dict[str, Any]]:
+        """Every card whose created_at falls on `day` in America/New_York
+        (Dejan's trading-day boundary, not the DB session's UTC default),
+        oldest first — the DRC prefill's re-entry numbering depends on
+        chronological order within a ticker."""
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                SELECT id, created_at, ticker, grade, direction, sheet_mode,
+                       risk_budget, entry, stop, per_share_risk, shares, used_risk
+                FROM aset_sizings
+                WHERE (created_at AT TIME ZONE 'America/New_York')::date = %s
+                ORDER BY created_at ASC
+                """,
+                (day,),
+            )
+            columns = [d.name for d in cur.description]
+            return [dict(zip(columns, r)) for r in cur.fetchall()]
 
     def recent(self, limit: int = 10) -> list[dict[str, Any]]:
         with self._connect() as conn:

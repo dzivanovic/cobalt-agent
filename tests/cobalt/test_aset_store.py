@@ -57,3 +57,32 @@ def test_save_and_read_back_roundtrip():
     assert row["sheet_mode"] == "full"
     assert row["shares"] == 120  # 60 / 0.50 = 120
     assert row["used_risk"] == Decimal("60.00")
+
+
+@requires_db
+def test_for_date_returns_todays_cards_oldest_first():
+    from datetime import datetime, timezone
+
+    store = AsetStore("cobalt_dev")
+    store.ensure_schema()
+    result = compute_sizing(
+        SizingInput(
+            ticker="FORDATE",
+            grade=Grade.B,
+            direction=Direction.LONG,
+            sheet_mode=SheetMode.FULL,
+            risk_dollars=Decimal("60"),
+            entry=Decimal("10.00"),
+            stop=Decimal("9.50"),
+        ),
+        (Grade.A, Grade.B),
+    )
+    id1 = store.save(result)
+    id2 = store.save(result)
+
+    today_et = datetime.now(timezone.utc).astimezone().date()
+    rows = store.for_date(today_et)
+    ids = [r["id"] for r in rows]
+    assert id1 in ids and id2 in ids
+    assert ids.index(id1) < ids.index(id2)  # oldest first
+    assert all(r["ticker"] != "" for r in rows)
