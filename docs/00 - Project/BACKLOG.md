@@ -349,3 +349,60 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
   40 - DevDocs / 50 - Roles / 90 - References / _archive; playground
   vault (0 - Inbox, 0 - Projects) untouched, out of scope (2026-08-26).
 - TRIAGE ruling session → TRIAGE.md (2026-08-22).
+
+## Taxonomy replay validation (v0.6 §13)
+
+Dynamic definitions (TAXONOMY-DRAFT-v0_6.md §0 "Dynamic definitions"
+law): each must stand archiver-corpus replay before being counted
+solidified. Corpus for all items below: the Bar Archiver's minute-bar
+history (`src/cobalt/archiver`, `configs/cobalt/watchlists.yaml`
+tickers). Pass criterion for every item is **TBD at n≥30** until a
+replay session sets it.
+
+- **Consolidation 2-touch rule** — validates: intraday consolidation
+  instantiates a micro-scale Range on 2 touches per side (v0.6 §2 item
+  3). Config key: `taxonomy.range.consolidation_touches`. Corpus:
+  archiver minute bars. Pass criterion: TBD at n≥30.
+- **leg=wave alias** — validates: `leg`/`wave` are the same record
+  (v0.6 §3.1); first consumer is Hitchhiker's leg_end(1)/leg_end(2) exit
+  targets. Config key: n/a (data-model alias, not a threshold). Corpus:
+  archiver minute bars, Hitchhiker instances. Pass criterion: TBD at
+  n≥30.
+- **Extension paths A/B thresholds** — validates: Extension
+  instantiates via path A (culminating bar: HV bar ≥ MA+2σ that is also
+  the run's widest body) or path B (≥1.25 ATR from the open,
+  `catalyst_ref: null`) (v0.6 §3.2). Config keys:
+  `taxonomy.extension.culminating_bar_sigma`,
+  `taxonomy.extension.atr_from_open_threshold`. Corpus: archiver minute
+  bars. Pass criterion: TBD at n≥30.
+- **Pivot N=2** — validates: swing pivot N = 2 bars each side (v0.6
+  §3.3). Config key: `taxonomy.pivot.n`. Corpus: archiver minute bars.
+  Pass criterion: TBD at n≥30.
+- **failed_trap N** — validates: a Range Break's `failed_trap` state =
+  close back inside within N bars of the break (v0.6 §3.4). Config key:
+  `taxonomy.range_break.failed_trap_bars`. Corpus: archiver minute bars.
+  Pass criterion: TBD at n≥30.
+- **Range.duration bands (5-20 / >=45 min)** — validates: Hitchhiker's
+  micro-Range precondition band (5–20 min) and Big Dog's (≥45 min
+  default) as the Hitchhiker/Big Dog discriminator (v0.6 §4). Config
+  keys: `taxonomy.trade_defs.hitchhiker.range_duration_band`,
+  `taxonomy.trade_defs.big_dog.range_duration_min`. Corpus: archiver
+  minute bars, Hitchhiker + Big Dog instances. Pass criterion: TBD at
+  n≥30.
+- **flat_threshold per indicator (EMA9, VWAP)** — validates:
+  `flat(indicator, window)` ⇔ `abs(slope_norm) < flat_threshold[indicator]`,
+  separate keys for EMA9 (Fashionably Late avoid window, Back$ide slope
+  precondition) and VWAP (Fashionably Late trigger precondition) (v0.6
+  §3.5). Config keys: `taxonomy.flat_threshold.ema9`,
+  `taxonomy.flat_threshold.vwap`. Corpus: archiver minute bars. Pass
+  criterion: TBD at n≥30.
+- **Range.wick_ratio threshold** — validates: the "choppy consolidation"
+  avoid threshold on `Range.wick_ratio` (avg wick ÷ avg body over the
+  range) (v0.6 §3.0; Hitchhiker avoid, Rubberband quality factor). Config
+  key: `taxonomy.range.wick_ratio_avoid_threshold`. Corpus: archiver
+  minute bars. Pass criterion: TBD at n≥30.
+- **break_volume_sigma_bars** — validates: Big Dog's break-volume
+  quality factor, consecutive bars ≥ MA+2σ (v0.6 §10, Big Dog quality
+  factors). Config key: `taxonomy.big_dog.break_volume_sigma_bars`.
+  Corpus: archiver minute bars, Big Dog instances. Pass criterion: TBD at
+  n≥30.
