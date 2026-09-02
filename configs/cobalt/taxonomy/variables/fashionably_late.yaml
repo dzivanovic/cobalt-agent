@@ -1,0 +1,13 @@
+# Variable registry stub — one entry per fashionably_late.yaml quality_factors[] item.
+trade_id: fashionably_late
+variables:
+  - {name: volume_convergence_vs_divergence, why_template: "", status: stub}
+  - {name: speed_after_turn, why_template: "", status: stub}
+  - {name: pause_at_cross_point, why_template: "", status: stub}
+  - {name: range_wick_ratio_after_turn, why_template: "", status: stub}
+  - {name: measured_move_vs_atr, why_template: "", status: stub}
+  - {name: Extension.leg_count, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: rvol, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: setup_relation, why_template: "", status: stub}
+  - {name: market_alignment, why_template: "", status: stub}
+  - {name: sector_alignment, why_template: "", status: stub}

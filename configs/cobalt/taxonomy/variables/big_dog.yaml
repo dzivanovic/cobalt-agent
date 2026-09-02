@@ -1,0 +1,16 @@
+# Variable registry stub — one entry per big_dog.yaml quality_factors[] item.
+trade_id: big_dog
+variables:
+  - {name: range_low_above_pdh, why_template: "", status: stub}
+  - {name: pct_day_above_open, why_template: "", status: stub}
+  - {name: catalyst_present, why_template: "", status: stub}
+  - {name: rvol, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: Range.duration, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: range_volume_contraction, why_template: "", status: stub}
+  - {name: break_volume_sigma_bars, why_template: "", status: stub}
+  - {name: crescendo_volume_at_pattern_start, why_template: "", status: stub}
+  - {name: location_below_upper_third_or_vwap, why_template: "", status: stub}
+  - {name: pullback_depth_after_leg1, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: setup_relation, why_template: "", status: stub}
+  - {name: market_alignment, why_template: "", status: stub}
+  - {name: sector_alignment, why_template: "", status: stub}

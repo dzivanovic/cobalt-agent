@@ -1,0 +1,104 @@
+# Cameron H grid — TRADE-DEFS-BATCH1-v0_1.md §C, all 21 trades.
+# W = with_trend, C = countertrend. setup_ref enum: gap_and_go ·
+# gap_down_into_support · gap_up_into_resistance · day2_continuation ·
+# overextension · volatility_in_range · range_break (TAXONOMY-DRAFT-v0_6.md
+# §10.1 valid_setups[]). loader.load_trade_defs() cross-checks each
+# populated trade_def's valid_setups[] against its row here.
+#
+# Only the 6 Batch 1 trades have a populated trade_def
+# (configs/cobalt/taxonomy/trade_defs/); the other 15 rows are grid-only
+# data per §D ("15 remaining grid trades — sheets not in hand;
+# valid_setups[] only").
+valid_setups:
+  second_chance:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  fashionably_late:
+    - {setup_ref: gap_down_into_support, relation: countertrend}
+    - {setup_ref: gap_up_into_resistance, relation: countertrend}
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: overextension, relation: countertrend}
+    - {setup_ref: volatility_in_range, relation: countertrend}
+  hitchhiker:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  backside:
+    - {setup_ref: gap_down_into_support, relation: countertrend}
+    - {setup_ref: gap_up_into_resistance, relation: countertrend}
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: overextension, relation: countertrend}
+    - {setup_ref: volatility_in_range, relation: countertrend}
+  rubberband:
+    - {setup_ref: gap_down_into_support, relation: countertrend}
+    - {setup_ref: gap_up_into_resistance, relation: countertrend}
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: overextension, relation: countertrend}
+    - {setup_ref: volatility_in_range, relation: countertrend}
+  back_through_open:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: gap_down_into_support, relation: countertrend}
+    - {setup_ref: gap_up_into_resistance, relation: countertrend}
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  opening_drive_pmh:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  opening_range_break:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: gap_down_into_support, relation: countertrend}
+    - {setup_ref: gap_up_into_resistance, relation: countertrend}
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: overextension, relation: countertrend}
+    - {setup_ref: range_break, relation: with_trend}
+  first_move_down:
+    - {setup_ref: gap_down_into_support, relation: countertrend}
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: overextension, relation: countertrend}
+    - {setup_ref: volatility_in_range, relation: countertrend}
+    - {setup_ref: range_break, relation: with_trend}
+  first_move_up:
+    - {setup_ref: gap_up_into_resistance, relation: countertrend}
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: overextension, relation: countertrend}
+    - {setup_ref: volatility_in_range, relation: countertrend}
+    - {setup_ref: range_break, relation: with_trend}
+  ema9_scalp:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  vwap_continuation:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  spencer_scalp:
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  bella_fade:
+    - {setup_ref: gap_down_into_support, relation: countertrend}
+    - {setup_ref: gap_up_into_resistance, relation: countertrend}
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: overextension, relation: countertrend}
+    - {setup_ref: volatility_in_range, relation: countertrend}
+    - {setup_ref: range_break, relation: with_trend}
+  off_sides:
+    - {setup_ref: gap_down_into_support, relation: countertrend}
+    - {setup_ref: gap_up_into_resistance, relation: countertrend}
+    - {setup_ref: overextension, relation: countertrend}
+    - {setup_ref: volatility_in_range, relation: countertrend}
+  gap_give_and_go:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  first_vwap_pullback:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  big_dog:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  bouncy_ball:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: overextension, relation: countertrend}
+    - {setup_ref: range_break, relation: with_trend}
+  the_330_trade:
+    - {setup_ref: gap_and_go, relation: with_trend}
+  ema9_reclaim:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}

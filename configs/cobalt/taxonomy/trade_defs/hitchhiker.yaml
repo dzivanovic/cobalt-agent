@@ -1,0 +1,66 @@
+# Source: TRADE-DEFS-BATCH1-v0_1.md §B.1 (SMB Hitchhiker Scalp sheet).
+# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
+trade_def:
+  id: hitchhiker
+  name: Hitchhiker Scalp
+  aliases: [HitchHiker, Hitch]
+  family: [opening_drive]
+  class: scalp
+  valid_setups:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  tf_ceiling: 15
+  entry_mode: front_side
+  preconditions:
+    - expr: "InPlay.state == active"
+    - expr: "Leg(opening_drive).terminated_by == consolidation"
+    - expr: "Range(micro).instantiated"
+    - expr: "Range(micro).duration IN [5, 20] min"  # config, dynamic — Hitchhiker/Big Dog discriminator (§13 replay)
+    - expr: "Range(micro).low >= DayRange.upper_third"
+  trigger:
+    type: range_break
+    params: {ref: "Range(micro).bound"}
+    confirmation_policy: {type: intrabar}
+  stop:
+    placement:
+      type: structural_extreme
+      ref: consolidation_low
+      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}
+      floor: config
+    evaluation: touch
+  stop_management:
+    - type: fixed
+      "on": {name: entry}
+  exit:
+    - fraction: 0.5
+      target_type: leg_end
+      params: {leg_index: 1}
+      evaluation: touch
+      computable: cobalt
+    - fraction: 0.5
+      target_type: leg_end
+      params: {leg_index: 2}
+      evaluation: touch
+      computable: cobalt
+  on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
+  max_attempts: {value: 1, dynamic: false}
+  add_policy: {type: none}
+  avoid:
+    - expr: "Leg(opening_drive).terminated_by == pullback"
+    - expr: "Range(micro).wick_ratio > threshold"  # config, dynamic — "choppy consolidation" (§13 replay)
+    - text: "consolidation well beyond ~20 min"
+  quality_factors:
+    - Range.duration
+    - consolidation_height_vs_day_range
+    - consolidation_volume_profile
+    - drive_rvol
+    - break_bar_volume_vs_prior  # +30% guide
+    - consolidation_above_key_level  # PMH/PDH
+    - drive_bar_count  # one big bar = neg
+    - prior_break_attempts  # neg
+    - setup_relation
+    - market_alignment
+    - sector_alignment
+  preferred_windows: [open_drive]
+  preferred_windows_ref: "sheet: sets up before 9:59"
+  reference_stats: {win_rate: "55-60%", rr: 1.9}

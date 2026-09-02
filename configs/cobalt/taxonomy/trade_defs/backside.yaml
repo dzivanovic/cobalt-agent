@@ -1,0 +1,61 @@
+# Source: TRADE-DEFS-BATCH1-v0_1.md §B.4 (SMB Back$ide Scalp sheet).
+# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
+trade_def:
+  id: backside
+  name: "Back$ide Scalp"
+  aliases: ["Backside Scalp"]
+  family: [reversion]
+  class: scalp
+  valid_setups:
+    - {setup_ref: gap_down_into_support, relation: countertrend}
+    - {setup_ref: gap_up_into_resistance, relation: countertrend}
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: overextension, relation: countertrend}
+    - {setup_ref: volatility_in_range, relation: countertrend}
+  tf_ceiling: 15
+  entry_mode: backside
+  preconditions:
+    - expr: "Extension.state == backside"  # >=1 HH + >=1 HL above rising 9 EMA
+    - expr: "Range(micro).instantiated AND Range(micro).low > EMA9 AND EMA9.slope > 0"
+  trigger:
+    type: range_break
+    params: {ref: "Range(micro).top"}
+    confirmation_policy: {type: intrabar}
+  stop:
+    placement:
+      type: structural_extreme
+      ref: recent_higher_low  # micro-Range base pivot
+      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}
+      floor: config
+    evaluation: touch
+  stop_management:
+    - type: time_stop
+      duration_bars: {value: 2, dynamic: false}
+      condition: "no progress from entry in trade direction"
+      "on": {name: entry}
+  exit:
+    - fraction: 1.0
+      target_type: vwap
+      evaluation: touch
+      computable: cobalt
+  on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
+  max_attempts: {value: 1, dynamic: false, note: fixed}
+  add_policy: {type: none}
+  avoid:
+    - expr: "RangeBreak(HTF).day_count == 1"  # never on a day-1 HTF breakout
+  quality_factors:
+    - extension_distance_from_vwap
+    - Extension.leg_count
+    - rvol
+    - Range.duration
+    - hh_hl_count
+    - pct_bars_above_ema9_since_low
+    - range_position_lod_to_vwap  # >0.5 good
+    - price_action_consistency
+    - catalyst_ambiguity  # sheet: increase
+    - setup_relation
+    - market_alignment
+    - sector_alignment
+  preferred_windows: [morning, midday]
+  preferred_windows_ref: "sheet: 10:00-13:30"
+  reference_stats: {win_rate: "50-60%", rr: 1.4}

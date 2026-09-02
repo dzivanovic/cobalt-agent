@@ -1,0 +1,14 @@
+# Variable registry stub — one entry per hitchhiker.yaml quality_factors[] item.
+trade_id: hitchhiker
+variables:
+  - {name: Range.duration, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: consolidation_height_vs_day_range, why_template: "", status: stub}
+  - {name: consolidation_volume_profile, why_template: "", status: stub}
+  - {name: drive_rvol, why_template: "", status: stub}
+  - {name: break_bar_volume_vs_prior, why_template: "", status: stub}
+  - {name: consolidation_above_key_level, why_template: "", status: stub}
+  - {name: drive_bar_count, why_template: "", status: stub}
+  - {name: prior_break_attempts, why_template: "", status: stub}
+  - {name: setup_relation, why_template: "", status: stub}
+  - {name: market_alignment, why_template: "", status: stub}
+  - {name: sector_alignment, why_template: "", status: stub}

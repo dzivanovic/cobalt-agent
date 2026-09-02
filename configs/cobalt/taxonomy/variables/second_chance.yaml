@@ -1,0 +1,12 @@
+# Variable registry stub — one entry per second_chance.yaml quality_factors[] item.
+trade_id: second_chance
+variables:
+  - {name: level_significance, why_template: "", status: stub}
+  - {name: break_leg_strength, why_template: "", status: stub}
+  - {name: retest_volume, why_template: "", status: stub}
+  - {name: retest_depth, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: break_leg_range_vs_range_height, why_template: "", status: stub}
+  - {name: rvol, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: setup_relation, why_template: "", status: stub}
+  - {name: market_alignment, why_template: "", status: stub}
+  - {name: sector_alignment, why_template: "", status: stub}

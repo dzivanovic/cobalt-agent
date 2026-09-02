@@ -1,0 +1,71 @@
+# Source: TRADE-DEFS-BATCH1-v0_1.md §B.2 (SMB Big Dog Consolidation sheet).
+# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
+# RULING IN FORCE applied here: Range has bound_type only, no `shape`
+# field. §B.2's "Range(micro).shape IN {converging, parallel}" clause is
+# dropped — encoded below as `Range(micro).instantiated` only (any
+# bound_type qualifies, v0.6 §14 ruling 1 / §4 amendment [A.12]).
+trade_def:
+  id: big_dog
+  name: Big Dog Consolidation
+  aliases: [Big Dawg]
+  family: [opening_drive]
+  class: move2move
+  valid_setups:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  entry_mode: front_side
+  preconditions:
+    - expr: "InPlay.state == active"
+    - expr: "Leg(impulse).terminated_by == consolidation"
+    - expr: "Range(micro).instantiated"  # shape clause dropped per RULINGS IN FORCE — no bound_type filter
+    - expr: "Range(micro).duration >= 45 min"  # config, dynamic (§13 replay: Range.duration bands)
+    - expr: "volatility_state == contraction"
+    - expr: "Range(micro).height <= 0.5 * DayRange"
+  trigger:
+    type: range_break
+    params: {ref: "Range(micro).top"}
+    confirmation_policy: {type: intrabar}
+  stop:
+    placement:
+      type: structural_extreme
+      ref: range_base
+      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}
+      floor: config
+    evaluation: touch
+  stop_management:
+    - type: raise_to
+      placement:
+        type: measured_fraction
+        anchor_a: entry
+        anchor_b: "leg_end(1)"
+        fraction: 0.5
+      "on": {name: leg_end, n: 1}
+  exit:
+    - fraction: 1.0
+      target_type: bar_break_reverse
+      params: {bars: 2, after: "leg_end(2)"}
+      evaluation: close_through
+      computable: cobalt
+  on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
+  max_attempts: {value: 1, dynamic: false}
+  add_policy: {type: none}
+  avoid:
+    - expr: "Range(micro).top < Level_ref(HTF resistance)"
+    - text: "pullback after move 1 retraces >50% of entry -> leg_end(1) (mechanised via raise_to)"
+  quality_factors:
+    - range_low_above_pdh
+    - pct_day_above_open  # >75% guide — demoted to quality factor per [A.12] (DELL 2026-09-02 exemplar failed both and worked)
+    - catalyst_present
+    - rvol
+    - Range.duration
+    - range_volume_contraction  # <=50% prior avg guide
+    - break_volume_sigma_bars  # consecutive bars >= MA+2sigma
+    - crescendo_volume_at_pattern_start  # neg
+    - location_below_upper_third_or_vwap  # neg
+    - pullback_depth_after_leg1  # upper 1/3 ideal
+    - setup_relation
+    - market_alignment
+    - sector_alignment
+  preferred_windows: [morning, midday]
+  preferred_windows_ref: "sheet: break 11:00-13:30; DELL exemplar broke 14:00 — fit variable only"
+  reference_stats: null

@@ -1,0 +1,17 @@
+# Variable registry stub — one entry per rubberband.yaml quality_factors[] item.
+trade_id: rubberband
+variables:
+  - {name: atrs_from_open, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: rvol, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: last_leg_range_and_volume_expansion, why_template: "", status: stub}
+  - {name: snapback_bar_volume_rank, why_template: "", status: stub}
+  - {name: pause_bar_in_cleared_set, why_template: "", status: stub}
+  - {name: Extension.leg_count, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: htf_level_proximity, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: htf_level_significance, why_template: "", status: stub}
+  - {name: prior_session_rehearsal, why_template: "", status: stub}
+  - {name: short_interest_float, why_template: "", status: stub}
+  - {name: range_wick_ratio, why_template: "", status: stub}
+  - {name: setup_relation, why_template: "", status: stub}
+  - {name: market_alignment, why_template: "", status: stub}
+  - {name: sector_alignment, why_template: "", status: stub}

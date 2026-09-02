@@ -1,0 +1,64 @@
+# Source: TRADE-DEFS-BATCH1-v0_1.md §B.5 (SMB Fashionably Late Scalp sheet).
+# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
+# NOTE (flagged in the population report): stop.anchor_a is transcribed
+# verbatim as "entry_price" from the source sheet; the canonical §3.6
+# structural ref for this concept is `entry` (alias breakeven). anchor_a/
+# anchor_b are free-text anchors (not §3.6-enum-constrained, unlike
+# structural_extreme.ref), so this is preserved as source wording rather
+# than silently renamed.
+trade_def:
+  id: fashionably_late
+  name: Fashionably Late Scalp
+  aliases: ["Fash Late", FL]
+  family: [reversion, continuation]
+  class: scalp
+  valid_setups:
+    - {setup_ref: gap_down_into_support, relation: countertrend}
+    - {setup_ref: gap_up_into_resistance, relation: countertrend}
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: overextension, relation: countertrend}
+    - {setup_ref: volatility_in_range, relation: countertrend}
+  tf_ceiling: 15
+  entry_mode: backside
+  preconditions:
+    - expr: "Extension.state IN {reverting, backside}"
+    - expr: "slope_norm(EMA9) > flat_threshold.ema9 AND slope_norm(VWAP) <= flat_threshold.vwap"
+  trigger:
+    type: indicator_cross
+    params: {a: EMA9, b: VWAP, direction: a_crosses_above_b}  # stamps cross_point
+    confirmation_policy: {type: intrabar}
+  stop:
+    placement:
+      type: measured_fraction
+      anchor_a: entry_price
+      anchor_b: turn_low
+      fraction: 0.33  # stop = entry - 1/3 * (entry - turn_low)
+    evaluation: touch
+  stop_management:
+    - type: fixed
+      "on": {name: entry}
+  exit:
+    - fraction: 1.0
+      target_type: measured_move
+      params: {anchor_a: turn_low, anchor_b: cross_point, projected_from: cross_point, multiple: 1.0}
+      evaluation: touch
+      computable: cobalt
+  on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
+  max_attempts: {value: 1, dynamic: false}
+  add_policy: {type: none}
+  avoid:
+    - expr: "flat(EMA9, window: 15 min / working_tf) between turn and cross"
+  quality_factors:
+    - volume_convergence_vs_divergence
+    - speed_after_turn  # pct bars holding above EMA9
+    - pause_at_cross_point  # neg
+    - range_wick_ratio_after_turn  # neg
+    - measured_move_vs_atr
+    - Extension.leg_count
+    - rvol
+    - setup_relation
+    - market_alignment
+    - sector_alignment
+  preferred_windows: [morning, midday]
+  preferred_windows_ref: "sheet: 10:00-13:30"
+  reference_stats: {win_rate: "60%", rr: 3.0}

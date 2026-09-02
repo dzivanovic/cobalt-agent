@@ -1,0 +1,15 @@
+# Variable registry stub — one entry per backside.yaml quality_factors[] item.
+trade_id: backside
+variables:
+  - {name: extension_distance_from_vwap, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: Extension.leg_count, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: rvol, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: Range.duration, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: hh_hl_count, why_template: "", status: stub}
+  - {name: pct_bars_above_ema9_since_low, why_template: "", status: stub}
+  - {name: range_position_lod_to_vwap, why_template: "", status: stub}
+  - {name: price_action_consistency, why_template: "", status: stub}
+  - {name: catalyst_ambiguity, why_template: "", status: stub}
+  - {name: setup_relation, why_template: "", status: stub}
+  - {name: market_alignment, why_template: "", status: stub}
+  - {name: sector_alignment, why_template: "", status: stub}

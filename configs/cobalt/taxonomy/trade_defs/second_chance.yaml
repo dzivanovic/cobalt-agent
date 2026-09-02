@@ -1,0 +1,73 @@
+# Source: TRADE-DEFS-BATCH1-v0_1.md §B.3 (SMB Second Chance Scalp sheet).
+# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
+# NOTE (flagged in the population report): step 2 (retest) carries no
+# confirmation_policy in the source sheet — trigger.steps[].
+# confirmation_policy is optional in the schema for exactly this reason,
+# rather than inventing a default.
+trade_def:
+  id: second_chance
+  name: Second Chance Scalp
+  aliases: ["2nd Chance"]
+  family: [range_break]
+  class: scalp
+  valid_setups:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  tf_ceiling: 15
+  entry_mode: backside
+  preconditions:
+    - expr: "RangeBreak(level).state == accepted"
+    - expr: "event(retest) on that RangeBreak"
+  trigger:
+    type: sequence
+    steps:
+      - name: break
+        predicate: {expr: "price close_through Level_ref"}
+        confirmation_policy: {type: close_through}
+      - name: retest
+        predicate: {expr: "event(retest)"}
+      - name: turn
+        predicate: {expr: "close_above(prior_bar)"}
+        confirmation_policy: {type: close_through}
+  stop:
+    placement:
+      type: structural_extreme
+      ref: turn_candle
+      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}
+      floor: config
+    evaluation: touch
+  stop_management:
+    - type: trail_ma_close
+      ma: {value: EMA9, dynamic: false, note: "config; 20 by price action"}
+      tf: working
+      "on": {name: exit_leg, n: 1}
+  exit:
+    - fraction: 0.5
+      target_type: leg_end
+      params: {leg_index: break_leg}
+      evaluation: touch
+      computable: cobalt
+    - fraction: 0.5
+      target_type: ma_close
+      params: {ma: "EMA9 (config)"}
+      evaluation: close_through
+      computable: cobalt
+  on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
+  max_attempts: {value: 2, dynamic: false, note: "sheet: 2 strikes, never a 3rd"}
+  add_policy: {type: none}
+  avoid:
+    - expr: "RangeBreak.state == failed_trap after event(retest)"  # sheet: back inside, no recovery next candle (N=1)
+    - expr: "event(stop_hit) AND price inside Range(prior)"  # instance dead, no re-entry on break back up
+  quality_factors:
+    - level_significance
+    - break_leg_strength  # range + volume
+    - retest_volume  # low = good
+    - retest_depth
+    - break_leg_range_vs_range_height  # >1 = neg
+    - rvol
+    - setup_relation
+    - market_alignment
+    - sector_alignment
+  preferred_windows: [morning, midday, afternoon, close]
+  preferred_windows_ref: "sheet: 9:59-4:00"
+  reference_stats: {win_rate: "50-55%", rr: 1.9}

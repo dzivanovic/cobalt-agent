@@ -1,0 +1,86 @@
+# Source: TRADE-DEFS-BATCH1-v0_1.md §B.6 (Rubber Band Playbook Rev1 deck +
+# 09-02 rulings over the raw SMB sheet).
+# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
+# NOTE (flagged in the population report): §B.6's `raise_to {placement:
+# breakeven}` is shorthand, not a full stop-placement object. v0.6 §3.6
+# defines `entry` (alias `breakeven`) as a structural ref, so this is
+# encoded below as `{type: level, level_ref: entry}` — applying the
+# documented alias, not inventing new semantics. Flagged for Dejan to
+# confirm the encoding.
+trade_def:
+  id: rubberband
+  name: Rubber Band Scalp
+  aliases: [Rubberband, RB, snapback]
+  family: [reversion]
+  class: scalp
+  valid_setups:
+    - {setup_ref: gap_down_into_support, relation: countertrend}
+    - {setup_ref: gap_up_into_resistance, relation: countertrend}
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: overextension, relation: countertrend}
+    - {setup_ref: volatility_in_range, relation: countertrend}
+  tf_ceiling: 15
+  entry_mode: front_side
+  preconditions:
+    - expr: "Extension.state == culminating"  # §3.2 path A (bar character) or B (>=1.25 ATR from open, no catalyst)
+  trigger:
+    type: bar_break
+    params: {bars_cleared: 2, both_must_be_cleared: true, direction: any}
+    confirmation_policy: {type: intrabar}
+  stop:
+    placement:
+      type: structural_extreme
+      ref: snapback_candle
+      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}
+      floor: config
+    evaluation: touch
+  stop_management:
+    - type: raise_to
+      placement: {type: level, level_ref: entry}  # "breakeven" per source — see NOTE above
+      "on": {name: exit_leg, n: 1}
+    - type: trail_ma_close
+      ma: {value: EMA9, dynamic: false}
+      tf: working
+      "on": {name: exit_leg, n: 2}  # deck hard exit — a stop, not a target
+  exit:
+    - fraction: 0.33
+      target_type: rr_multiple
+      params: {r: 1}
+      evaluation: touch
+      computable: cobalt
+    - fraction: 0.33
+      target_type: rr_multiple
+      params: {r: 2}
+      evaluation: touch
+      computable: cobalt
+    - fraction: 0.34
+      target_type: vwap
+      evaluation: touch
+      computable: cobalt  # branch may override to level (next prior-day structure)
+  on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
+  max_attempts: {value: 2, dynamic: false, note: "sheet + deck"}
+  add_policy: {type: none}  # puppy-dawg add stays PARKED (§10.6)
+  avoid:
+    - expr: "NOT Extension.instantiated"  # not extended from VWAP / no acceleration
+    - expr: "RangeBreak(HTF).day_count == 1"  # shared with Back$ide
+    - text: "fresh negative news against"
+  quality_factors:
+    - atrs_from_open  # sheet >3 guide
+    - rvol  # sheet 5+ guide; factor not gate
+    - last_leg_range_and_volume_expansion
+    - snapback_bar_volume_rank  # top-5 day
+    - pause_bar_in_cleared_set  # doji = pos
+    - Extension.leg_count
+    - htf_level_proximity
+    - htf_level_significance
+    - prior_session_rehearsal
+    - short_interest_float
+    - range_wick_ratio  # neg
+    - setup_relation
+    - market_alignment
+    - sector_alignment
+  radar_watch:
+    - text: "Extension.culminating near Level_ref(HTF) -> watch state (checkpoint, never entry)"
+  preferred_windows: [morning, midday]
+  preferred_windows_ref: "sheet: 10:00-10:45 / 10:45-13:30; open_drive valid only if already HTF-extended"
+  reference_stats: {win_rate: "60-65%", rr: 1.6, note: "SMB; own stats at n >= 30 / side"}
