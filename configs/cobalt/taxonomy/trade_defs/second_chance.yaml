@@ -1,9 +1,9 @@
 # Source: TRADE-DEFS-BATCH1-v0_1.md §B.3 (SMB Second Chance Scalp sheet).
 # Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
-# NOTE (flagged in the population report): step 2 (retest) carries no
-# confirmation_policy in the source sheet — trigger.steps[].
-# confirmation_policy is optional in the schema for exactly this reason,
-# rather than inventing a default.
+# NOTE: step 2 (retest) carries no confirmation_policy in the source
+# sheet — trigger.steps[].confirmation_policy is optional in the schema
+# for exactly this reason, rather than inventing a default. CONFIRMED
+# 2026-09-02 (TRADE-DEFS-BATCH2-v0_1.md item 0).
 trade_def:
   id: second_chance
   name: Second Chance Scalp
@@ -48,8 +48,11 @@ trade_def:
       evaluation: touch
       computable: cobalt
     - fraction: 0.5
-      target_type: ma_close
-      params: {ma: "EMA9 (config)"}
+      target_type: trail  # retro-fit A.8 DwV, TRADE-DEFS-BATCH2-v0_1.md item 0
+      params:
+        conditions:
+          - {type: ma_close, ma: {value: "ma.slow", dynamic: false, note: "config; 20 by price action"}}
+        mode: any
       evaluation: close_through
       computable: cobalt
   on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory

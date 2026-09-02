@@ -1,0 +1,71 @@
+# Source: TRADE-DEFS-BATCH2-v0_1.md §B.5 (SMB Back-Through Open sheet).
+# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3) + §A amendments
+# (v0.7 extensions, TRADE-DEFS-BATCH2-v0_1.md §A).
+# NOTE: trigger.params.ref = "open" applies A.5 (Level.type gains `open`,
+# the RTH opening print) — encoded as a free-text Level_ref value, same
+# as every other trigger-params anchor; no schema change needed (see
+# ADR-0002).
+trade_def:
+  id: back_through_open
+  name: Back-Through Open
+  aliases: [BTO, "Back Through Open"]
+  family: [opening_drive, continuation]
+  class: move2move  # RULED
+  valid_setups:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: gap_down_into_support, relation: countertrend}
+    - {setup_ref: gap_up_into_resistance, relation: countertrend}
+    - {setup_ref: day2_continuation, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  entry_mode: front_side
+  preconditions:
+    - expr: "InPlay.state == active"
+    - expr: "Gap.instantiated"  # "big gap up"
+    - expr: "Catalyst.grade >= 8"  # avoid entirely if the catalyst is not at least an 8+
+    - expr: "Leg(opening_drive).direction == opposite(Gap.direction)"  # the initial downtick
+  trigger:
+    type: bar_break
+    params: {ref: "Level_ref(open)"}
+    confirmation_policy: {type: intrabar}  # "aggressively when price crosses back through the opening price"
+  stop:
+    placement:
+      type: structural_extreme
+      ref: turn_low
+      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}  # sheet 0.01 -> RULED 0.02 (A.6)
+      floor: config
+    evaluation: touch  # "LOD" = tracked low
+  stop_management:
+    - type: time_stop
+      duration_bars: {value: 2, dynamic: false}
+      condition: "no progress from entry"  # "should work right away — no chop or pause after entry"
+      "on": {name: entry}
+  exit:
+    - fraction: 1.0
+      target_type: trail
+      params:
+        conditions:
+          - {type: prior_bar_break, n: 1}
+          - {type: ma_close, ma: {value: EMA9, dynamic: false}}
+        mode: any
+      evaluation: close_through
+      computable: cobalt  # "close below the 9 EMA or a two-bar break" -> 1-bar trail law
+  on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
+  max_attempts: {value: 1, dynamic: false, note: "sheet: we will only try this trade once"}
+  add_policy: {type: none}
+  avoid:
+    - expr: "Regime.label IN {range_bound, fading}"  # "does not work in a range-bound market or one fading moves"
+    - text: "chop or pause after entry (mechanised via time_stop)"
+  quality_factors:
+    - catalyst_grade
+    - cross_time_since_open  # <=5 min guide
+    - downtick_depth  # small = pos
+    - post_cross_momentum
+    - daily_chart_breakout
+    - market_momentum  # aggressive = pos
+    - rvol
+    - setup_relation
+    - market_alignment  # opposite trend = neg
+    - sector_alignment
+  preferred_windows: [open_drive]
+  preferred_windows_ref: "First 5 minutes of the trading day"
+  reference_stats: null

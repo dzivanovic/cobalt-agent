@@ -1,0 +1,71 @@
+# Source: TRADE-DEFS-BATCH2-v0_1.md §B.3 (SMB First VWAP Pullback sheet).
+# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3) + §A amendments
+# (v0.7 extensions, TRADE-DEFS-BATCH2-v0_1.md §A).
+# NOTE: trigger.params.contact encodes the sheet's "touch | penetrate" as
+# a list — either contact type qualifies the same trigger (the rejection
+# bar that closes trade-side IS the trigger + entry, A.4), it is not a
+# per-instance choice between the two.
+trade_def:
+  id: first_vwap_pullback
+  name: First VWAP Pullback
+  aliases: ["1st VWAP Pullback", FVP]
+  family: [opening_drive, continuation]
+  class: scalp  # single target, one leg out
+  valid_setups:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  tf_ceiling: 15
+  entry_mode: front_side
+  preconditions:
+    - expr: "InPlay.state == active"
+    - expr: "Leg(opening_drive).direction == trade_direction"
+    - expr: "Leg(pullback).index == 1"  # the FIRST pullback since the open
+    - expr: "Leg(pullback) touched VWAP"  # contact, not proximity
+  trigger:
+    type: indicator_rejection
+    params: {indicator: VWAP, contact: [touch, penetrate]}
+    confirmation_policy: {type: close_through}  # the rejection bar is trigger + entry
+  stop:
+    placement:
+      type: indicator
+      indicator: VWAP
+      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}
+      snapshot: at_entry
+      floor: config
+    evaluation: touch  # "just below VWAP"
+  stop_management:
+    - type: fixed
+      "on": {name: entry}
+  exit:
+    - fraction: 1.0
+      target_type: measured_move
+      params:
+        anchor_a: "Leg(opening_drive).start"
+        anchor_b: "Leg(opening_drive).end"
+        projected_from: turn_low
+        multiple: 1.0
+      evaluation: touch
+      computable: cobalt  # "measured move of the first leg"
+  on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
+  max_attempts: {value: 1, dynamic: false}
+  add_policy: {type: none}
+  avoid:
+    - expr: "Extension.instantiated on Leg(opening_drive)"  # "too extended / parabolic"
+    - expr: "close_through(Leg(pullback).low < VWAP)"  # pullback should not close below VWAP
+    - expr: "close_through(Leg(pullback).low < Level_ref(PMH))"  # pull-in below PM high = failed breakout
+    - text: "opening auction choppy or slow"
+  quality_factors:
+    - drive_strength  # range + volume
+    - drive_definitiveness
+    - pullback_speed  # quick = pos
+    - pullback_depth_vs_vwap
+    - pmh_hold_after_pullback
+    - tape_read
+    - catalyst_class
+    - rvol
+    - setup_relation
+    - market_alignment
+    - sector_alignment
+  preferred_windows: [open_drive]
+  preferred_windows_ref: "Open 9:35-9:45 AM"
+  reference_stats: null

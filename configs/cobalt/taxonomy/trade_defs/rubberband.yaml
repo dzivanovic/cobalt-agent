@@ -1,12 +1,11 @@
 # Source: TRADE-DEFS-BATCH1-v0_1.md §B.6 (Rubber Band Playbook Rev1 deck +
 # 09-02 rulings over the raw SMB sheet).
 # Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
-# NOTE (flagged in the population report): §B.6's `raise_to {placement:
-# breakeven}` is shorthand, not a full stop-placement object. v0.6 §3.6
-# defines `entry` (alias `breakeven`) as a structural ref, so this is
-# encoded below as `{type: level, level_ref: entry}` — applying the
-# documented alias, not inventing new semantics. Flagged for Dejan to
-# confirm the encoding.
+# NOTE: §B.6's `raise_to {placement: breakeven}` is shorthand, not a full
+# stop-placement object. v0.6 §3.6 defines `entry` (alias `breakeven`) as
+# a structural ref, so this is encoded below as `{type: level, level_ref:
+# entry}` — applying the documented alias, not inventing new semantics.
+# CONFIRMED 2026-09-02 (TRADE-DEFS-BATCH2-v0_1.md item 0).
 trade_def:
   id: rubberband
   name: Rubber Band Scalp

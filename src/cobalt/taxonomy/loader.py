@@ -11,6 +11,8 @@ config boundary law; see also `archiver/config.py`'s watchlists loader).
 
 from __future__ import annotations
 
+import re
+import warnings
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -18,7 +20,8 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ValidationError
 
-from .trade_def import TradeDef, Tunable
+from .defaults import TaxonomyDefaults
+from .trade_def import StopBuffer, TradeDef, Tunable
 from .variables import VariableRegistry
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -26,6 +29,10 @@ TAXONOMY_DIR = REPO_ROOT / "configs" / "cobalt" / "taxonomy"
 TRADE_DEFS_DIR = TAXONOMY_DIR / "trade_defs"
 VARIABLES_DIR = TAXONOMY_DIR / "variables"
 CAMERON_GRID_PATH = TAXONOMY_DIR / "cameron_grid.yaml"
+DEFAULTS_PATH = TAXONOMY_DIR / "defaults.yaml"
+
+DEFAULT_STOP_BUFFER_CENTS = 0.02  # v0.6 §14 ruling 3 / A.6 flag law
+_MA_REF_PATTERN = re.compile(r"^ma\.(fast|slow)$")
 
 
 class TaxonomyConfigError(RuntimeError):
@@ -60,6 +67,34 @@ def load_cameron_grid(
     return grid
 
 
+def load_defaults(path: Path = DEFAULTS_PATH) -> TaxonomyDefaults:
+    if not path.exists():
+        raise TaxonomyConfigError(f"defaults.yaml not found: {path}")
+    raw = yaml.safe_load(path.read_text())
+    if not isinstance(raw, dict):
+        raise TaxonomyConfigError(
+            f"{path}: expected a YAML mapping, got {type(raw).__name__}"
+        )
+    try:
+        return TaxonomyDefaults(**raw)
+    except ValidationError as e:
+        raise TaxonomyConfigError(f"{path}: invalid defaults:\n{e}") from e
+
+
+def resolve_ma_ref(value: str, defaults: TaxonomyDefaults) -> int:
+    """Resolve an `ma.fast` / `ma.slow` ref string (A.8 MA-period note)
+    against `defaults.yaml`. Any other string is not an `ma.*` ref —
+    callers should check `is_ma_ref` first."""
+    match = _MA_REF_PATTERN.match(value)
+    if not match:
+        raise TaxonomyConfigError(f"not an 'ma.*' ref: {value!r}")
+    return getattr(defaults.ma, match.group(1))
+
+
+def is_ma_ref(value: str) -> bool:
+    return bool(_MA_REF_PATTERN.match(value))
+
+
 def load_variable_registry(
     trade_id: str, directory: Path = VARIABLES_DIR
 ) -> VariableRegistry:
@@ -91,6 +126,7 @@ def load_trade_defs(
         raise TaxonomyConfigError(f"trade_defs directory not found: {trade_defs_dir}")
 
     grid = load_cameron_grid(cameron_grid_path)
+    defaults = load_defaults()
     result: dict[str, TradeDef] = {}
 
     for file in sorted(trade_defs_dir.glob("*.yaml")):
@@ -138,6 +174,18 @@ def load_trade_defs(
                 f"{sorted(missing_in_quality_factors)}"
             )
 
+        for tunable in iter_tunables(td):
+            if isinstance(tunable.value, str) and is_ma_ref(tunable.value):
+                resolve_ma_ref(tunable.value, defaults)  # fail-loud on an unknown ma.* key
+
+        for buf in iter_stop_buffers(td):
+            if buf.cents.value != DEFAULT_STOP_BUFFER_CENTS:
+                warnings.warn(
+                    f"{file}: trade_def {td.id!r} stop buffer {buf.cents.value} "
+                    f"differs from default {DEFAULT_STOP_BUFFER_CENTS} (A.6 flag law)",
+                    stacklevel=2,
+                )
+
         result[td.id] = td
 
     return result
@@ -159,3 +207,20 @@ def iter_tunables(obj: Any) -> Iterator[Tunable]:
     elif isinstance(obj, dict):
         for item in obj.values():
             yield from iter_tunables(item)
+
+
+def iter_stop_buffers(obj: Any) -> Iterator[StopBuffer]:
+    """Walk a TradeDef and yield every StopBuffer found — used by the A.6
+    flag law (loader.load_trade_defs warns when a buffer differs from
+    the 0.02 default)."""
+    if isinstance(obj, StopBuffer):
+        yield obj
+    elif isinstance(obj, BaseModel):
+        for field_name in type(obj).model_fields:
+            yield from iter_stop_buffers(getattr(obj, field_name))
+    elif isinstance(obj, (list, tuple)):
+        for item in obj:
+            yield from iter_stop_buffers(item)
+    elif isinstance(obj, dict):
+        for item in obj.values():
+            yield from iter_stop_buffers(item)

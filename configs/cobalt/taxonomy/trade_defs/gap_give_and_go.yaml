@@ -1,0 +1,73 @@
+# Source: TRADE-DEFS-BATCH2-v0_1.md §B.1 (SMB Gap, Give and Go sheet).
+# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3) + §A amendments
+# (v0.7 extensions, TRADE-DEFS-BATCH2-v0_1.md §A).
+# NOTE (flagged in the population report): stop_management[0].raise_to
+# .placement is transcribed from §B as `structural_extreme {ref:
+# Range(micro).top}`, but `Range(micro).top` is not a §3.6 StructuralRef
+# enum member — it is a parametrized Range field, the same class of
+# thing as `leg_end(n)`/`cross_point{a,b}`, which the schema already
+# routes through free-text anchors rather than the closed enum. Encoded
+# below as `{type: level, level_ref: "Range(micro).top"}`, same
+# precedent as Rubberband's Batch 1 breakeven -> level{level_ref: entry}
+# encoding (ADR-0001) — not silently reworded.
+trade_def:
+  id: gap_give_and_go
+  name: Gap, Give and Go
+  aliases: [GGG, "Gap Give & Go"]
+  family: [opening_drive, continuation]
+  class: move2move
+  valid_setups:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  entry_mode: front_side
+  preconditions:
+    - expr: "InPlay.state == active"  # never on a stock that is not In-Play
+    - expr: "Gap.instantiated"
+    - expr: "Leg(opening_drive).direction == opposite(Gap.direction)"  # the "give"
+    - expr: "Leg(opening_drive).terminated_by == consolidation"
+    - expr: "Range(micro).instantiated"
+    - expr: "Range(micro).duration IN [3, 7] min"  # config, dynamic (§13 replay)
+    - expr: "Range(micro).low > Level_ref(support)"  # PML / HTF resistance-turned-support
+    - expr: "Range(micro).height <= 0.5 * Leg(opening_drive).range"  # consolidation > 50% of opening move = avoid
+  trigger:
+    type: range_break
+    params: {ref: "Range(micro).top"}
+    confirmation_policy: {type: intrabar}  # "don't wait for the bar to close"
+  stop:
+    placement:
+      type: structural_extreme
+      ref: consolidation_low
+      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}
+      floor: config
+    evaluation: touch
+  stop_management:
+    - type: raise_to
+      placement: {type: level, level_ref: "Range(micro).top", buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}}  # see NOTE above; "pullback MUST hold the consolidation highs"
+      "on": {name: leg_end, n: 1}
+  exit:
+    - fraction: 1.0
+      target_type: bar_break_reverse
+      params: {bars: 2, after: "leg_end(2)"}
+      evaluation: close_through
+      computable: cobalt
+  on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
+  max_attempts: {value: 2, dynamic: false, note: "sheet: potential of 2 attempts"}
+  reentry_window: {value: "3 min", dynamic: false, note: "A.1; intersects the 08-27 re-entry rule, stricter wins"}
+  add_policy: {type: none}
+  avoid:
+    - expr: "gap_retrace_pct > 0.5"  # sheet: "very careful"
+  quality_factors:
+    - break_bar_volume_vs_consolidation
+    - Range.volume_contraction  # <=50% guide
+    - Range.duration
+    - Range.height_vs_opening_leg
+    - support_level_significance
+    - gap_retrace_pct  # neg
+    - prior_break_attempts  # neg, before consolidation
+    - Range.position_vs_vwap_ema9
+    - setup_relation
+    - market_alignment
+    - sector_alignment
+  preferred_windows: [open_drive]
+  preferred_windows_ref: "opening drive trade — starts at the open, triggers before 9:45 ET"
+  reference_stats: null

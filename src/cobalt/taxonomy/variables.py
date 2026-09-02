@@ -23,6 +23,10 @@ class VariableRegistryEntry(BaseModel):
     tier: Literal["deterministic", "judgment"] = "judgment"
     why_template: str = ""
     status: str = "stub"
+    # §12 tape-frontier flag: True for a human-only tape-class read that
+    # flips to source: cobalt once an L2/T&S feed is ingested, no schema
+    # change (TRADE-DEFS-BATCH2-v0_1.md).
+    frontier: bool = False
 
 
 class VariableRegistry(BaseModel):

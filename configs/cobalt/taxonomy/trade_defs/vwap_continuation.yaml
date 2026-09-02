@@ -1,0 +1,69 @@
+# Source: TRADE-DEFS-BATCH2-v0_1.md §B.2 (SMB VWAP Continuation sheet).
+# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3) + §A amendments
+# (v0.7 extensions, TRADE-DEFS-BATCH2-v0_1.md §A).
+trade_def:
+  id: vwap_continuation
+  name: VWAP Continuation
+  aliases: ["VWAP Cont", VC]
+  family: [continuation]
+  class: move2move  # RULED: trailing exit = move2move
+  valid_setups:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  entry_mode: backside
+  preconditions:
+    - expr: "InPlay.state == active"
+    - expr: "Leg(opening_drive OR impulse).direction == trade_direction"  # strong move in the morning
+    - expr: "Leg(pullback).direction == opposite(trade_direction) AND dist(Leg(pullback).end, VWAP) <= k * ATR(working_tf)"  # k config
+  trigger:
+    type: trendline_break
+    params:
+      ref: "Level_ref(trendline)"
+      anchor_leg: "Leg(pullback)"
+      pivots: 2  # config; flat case = break of Range(micro).top; a VWAP/base touch never triggers
+    confirmation_policy: {type: intrabar}
+  stop:
+    placement:
+      type: indicator
+      indicator: VWAP
+      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}
+      snapshot: at_entry
+      floor: config
+    evaluation: touch  # "just below VWAP", hard stop
+  stop_management:
+    - type: fixed
+      "on": {name: entry}
+  exit:
+    - fraction: 0.5
+      target_type: level
+      params: {level_ref: high_of_day}
+      evaluation: touch
+      computable: cobalt  # "sell half into the high of the day"
+    - fraction: 0.5
+      target_type: trail
+      params:
+        conditions:
+          - {type: ma_close, ma: {value: "ma.slow", dynamic: false, note: "config 20; sheet 21"}}
+        mode: any
+      evaluation: close_through
+      computable: cobalt  # "trail the rest with the 21 EMA"
+  on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
+  max_attempts: {value: 1, dynamic: false, note: "sheet silent"}
+  add_policy: {type: none}
+  avoid:
+    - text: "opening auction choppy / not definitive"
+    - expr: "Level_ref(resistance).rejected"  # "rejection of an important resistance level"
+  quality_factors:
+    - drive_definitiveness
+    - pullback_depth_vs_vwap
+    - vwap_hold_bar_count
+    - catalyst_class  # changing fundamentals = pos; weak/uneventful = neg
+    - htf_level_breakout
+    - resistance_rejection  # neg
+    - rvol
+    - setup_relation
+    - market_alignment
+    - sector_alignment
+  preferred_windows: [morning, midday]
+  preferred_windows_ref: "late morning 10-11 AM · mid-day 11 AM-2 PM"
+  reference_stats: null

@@ -1,0 +1,71 @@
+# Source: TRADE-DEFS-BATCH2-v0_1.md §B.4 (SMB 9 EMA Scalp sheet).
+# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3) + §A amendments
+# (v0.7 extensions, TRADE-DEFS-BATCH2-v0_1.md §A).
+# NOTE: stop.placement.indicator is EMA21 literal (the enum member), per
+# sheet; "(ma.slow config)" in §B is an annotation that this could route
+# through ma.slow, not an instruction to encode it as a ref — the sheet
+# names EMA21 specifically as the stop indicator, distinct from the exit
+# trail's own EMA9 condition below. trigger.params.contact: see
+# first_vwap_pullback.yaml's NOTE (touch | penetrate both qualify).
+trade_def:
+  id: ema9_scalp
+  name: 9 EMA Scalp
+  aliases: ["9 EMA", "EMA9 Scalp"]
+  family: [continuation]
+  class: scalp  # one leg out; HOD or EMA9 trail = the same single exit (A.8 conditions)
+  valid_setups:
+    - {setup_ref: gap_and_go, relation: with_trend}
+    - {setup_ref: range_break, relation: with_trend}
+  tf_ceiling: 15
+  entry_mode: front_side
+  preconditions:
+    - expr: "InPlay.state == active"
+    - expr: "catalyst_ref != null"  # avoid entirely without a strong catalyst or setup
+    - expr: "Leg(opening_drive OR impulse).direction == trade_direction"
+    - expr: "Leg(pullback) touched EMA9 AND price > EMA21"  # the 9 EMA test, 21 still below
+  trigger:
+    type: indicator_rejection
+    params: {indicator: EMA9, contact: [touch, penetrate]}
+    confirmation_policy: {type: close_through}  # sheet: "when the bids start to hold"
+  stop:
+    placement:
+      type: indicator
+      indicator: EMA21
+      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}
+      snapshot: at_entry
+      floor: config
+    evaluation: touch  # "just below the 21 EMA"
+  stop_management:
+    - type: fixed
+      "on": {name: entry}
+  exit:
+    - fraction: 1.0
+      target_type: trail
+      params:
+        conditions:
+          - {type: level, level_ref: high_of_day}  # close_through = exit into momentum after the break
+          - {type: ma_close, ma: {value: EMA9, dynamic: false}}
+        mode: any
+      evaluation: close_through
+      computable: cobalt  # "after the HOD break or a 9 EMA trail"
+  on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
+  max_attempts: {value: 1, dynamic: false}
+  add_policy: {type: none}
+  avoid:
+    - expr: "Extension.instantiated on Leg(pre_test)"  # "too big of a move before the 9 EMA test"
+    - text: "choppy opening move"
+  quality_factors:
+    - catalyst_class  # changing fundamentals = pos
+    - drive_strength
+    - drive_definitiveness
+    - daily_level_breakout
+    - move_size_before_test  # ATRs, neg
+    - pullback_depth_vs_ema9
+    - bids_hold
+    - rvol
+    - setup_relation
+    - market_alignment
+    - sector_alignment
+  preferred_windows: [open_drive, morning]
+  preferred_windows_ref: "Opening Auction 9:35-9:45 AM · Morning 9:45-11 AM"
+  reference_stats: null

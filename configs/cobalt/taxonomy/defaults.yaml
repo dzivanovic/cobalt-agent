@@ -1,0 +1,10 @@
+# Taxonomy-wide defaults — TRADE-DEFS-BATCH2-v0_1.md §A.9 (working_timeframe,
+# DwV) and §A.8 MA-period note. Schema: src/cobalt/taxonomy/defaults.py.
+# Per-trade `working_timeframe: config` overrides this default; ma.slow /
+# ma.fast are resolved by loader.resolve_ma_ref() wherever a trade_def's
+# Tunable[str] value is an "ma.*" ref (e.g. VWAP Continuation's / Second
+# Chance's trail exit ma_close condition).
+working_timeframe: 2m
+ma:
+  fast: 9
+  slow: 20  # SMB sheets say 21 (9 EMA Scalp, VWAP Continuation); Dejan trades 20

@@ -1,0 +1,15 @@
+# Variable registry stub — one entry per ema9_scalp.yaml quality_factors[] item.
+# bids_hold is human-owned until an L2/T&S feed lands (§12 tape-frontier law).
+trade_id: ema9_scalp
+variables:
+  - {name: catalyst_class, why_template: "", status: stub}
+  - {name: drive_strength, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: drive_definitiveness, why_template: "", status: stub}
+  - {name: daily_level_breakout, why_template: "", status: stub}
+  - {name: move_size_before_test, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: pullback_depth_vs_ema9, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: bids_hold, source: human, tier: judgment, frontier: true, why_template: "", status: stub}
+  - {name: rvol, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: setup_relation, why_template: "", status: stub}
+  - {name: market_alignment, why_template: "", status: stub}
+  - {name: sector_alignment, why_template: "", status: stub}

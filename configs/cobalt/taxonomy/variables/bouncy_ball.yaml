@@ -1,0 +1,14 @@
+# Variable registry stub — one entry per bouncy_ball.yaml quality_factors[] item.
+trade_id: bouncy_ball
+variables:
+  - {name: break_bar_volume_vs_prior, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: post_break_speed, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: post_break_volume, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: bounce_count, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: bounce_shallowing_rate, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: Range.duration, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: extension_distance_from_vwap, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: rvol, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: setup_relation, why_template: "", status: stub}
+  - {name: market_alignment, why_template: "", status: stub}
+  - {name: sector_alignment, why_template: "", status: stub}

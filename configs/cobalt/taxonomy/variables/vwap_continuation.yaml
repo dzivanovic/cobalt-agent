@@ -1,0 +1,13 @@
+# Variable registry stub — one entry per vwap_continuation.yaml quality_factors[] item.
+trade_id: vwap_continuation
+variables:
+  - {name: drive_definitiveness, why_template: "", status: stub}
+  - {name: pullback_depth_vs_vwap, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: vwap_hold_bar_count, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: catalyst_class, why_template: "", status: stub}
+  - {name: htf_level_breakout, why_template: "", status: stub}
+  - {name: resistance_rejection, why_template: "", status: stub}
+  - {name: rvol, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: setup_relation, why_template: "", status: stub}
+  - {name: market_alignment, why_template: "", status: stub}
+  - {name: sector_alignment, why_template: "", status: stub}

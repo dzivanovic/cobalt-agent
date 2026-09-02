@@ -1,0 +1,16 @@
+# Variable registry stub — one entry per bella_fade.yaml quality_factors[] item.
+# tape_flip is human-owned until an L2/T&S feed lands (§12 tape-frontier law).
+trade_id: bella_fade
+variables:
+  - {name: tape_flip, source: human, tier: judgment, frontier: true, why_template: "", status: stub}
+  - {name: speed_away_from_low, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: support_level_proximity, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: support_level_significance, why_template: "", status: stub}
+  - {name: drive_volume_climax, why_template: "", status: stub}
+  - {name: catalyst_grade, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: catalyst_polarity, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: time_near_lows, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: rvol, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: setup_relation, why_template: "", status: stub}
+  - {name: market_alignment, why_template: "", status: stub}
+  - {name: sector_alignment, why_template: "", status: stub}

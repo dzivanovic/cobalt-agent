@@ -1,0 +1,14 @@
+# Variable registry stub — one entry per gap_give_and_go.yaml quality_factors[] item.
+trade_id: gap_give_and_go
+variables:
+  - {name: break_bar_volume_vs_consolidation, why_template: "", status: stub}
+  - {name: Range.volume_contraction, why_template: "", status: stub}
+  - {name: Range.duration, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: Range.height_vs_opening_leg, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: support_level_significance, why_template: "", status: stub}
+  - {name: gap_retrace_pct, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: prior_break_attempts, why_template: "", status: stub}
+  - {name: Range.position_vs_vwap_ema9, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: setup_relation, why_template: "", status: stub}
+  - {name: market_alignment, why_template: "", status: stub}
+  - {name: sector_alignment, why_template: "", status: stub}

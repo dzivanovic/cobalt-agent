@@ -1,0 +1,13 @@
+# Variable registry stub — one entry per back_through_open.yaml quality_factors[] item.
+trade_id: back_through_open
+variables:
+  - {name: catalyst_grade, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: cross_time_since_open, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: downtick_depth, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: post_cross_momentum, why_template: "", status: stub}
+  - {name: daily_chart_breakout, why_template: "", status: stub}
+  - {name: market_momentum, why_template: "", status: stub}
+  - {name: rvol, source: cobalt, tier: deterministic, why_template: "", status: stub}
+  - {name: setup_relation, why_template: "", status: stub}
+  - {name: market_alignment, why_template: "", status: stub}
+  - {name: sector_alignment, why_template: "", status: stub}

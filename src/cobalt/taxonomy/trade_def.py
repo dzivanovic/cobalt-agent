@@ -16,10 +16,18 @@ check shape once.
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import Annotated, Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 # ---------------------------------------------------------------------------
 # Enums — verbatim from v0.6 §10.1 / §10.2 / §3.6. Extend here, never coerce
@@ -87,6 +95,8 @@ class TriggerType(str, Enum):
     RANGE_BREAK = "range_break"
     INDICATOR_CROSS = "indicator_cross"
     SEQUENCE = "sequence"
+    TRENDLINE_BREAK = "trendline_break"  # A.3
+    INDICATOR_REJECTION = "indicator_rejection"  # A.4
 
 
 class ConfirmationPolicyType(str, Enum):
@@ -114,6 +124,7 @@ class StructuralRef(str, Enum):
     RANGE_BASE = "range_base"
     TURN_CANDLE = "turn_candle"
     RECENT_HIGHER_LOW = "recent_higher_low"
+    RECENT_LOWER_HIGH = "recent_lower_high"  # A.7 — side-mirror of recent_higher_low
     ENTRY = "entry"  # alias: breakeven
 
 
@@ -137,6 +148,25 @@ class ExitTargetType(str, Enum):
     MA_CLOSE = "ma_close"
     WINDOW_END = "window_end"
     CIC_EVENT = "cic_event"
+    TRAIL = "trail"  # A.7/A.8 — {conditions[], mode: any}
+
+
+class IndicatorType(str, Enum):
+    """A.2 — indicator stop-placement vocabulary."""
+
+    VWAP = "VWAP"
+    EMA9 = "EMA9"
+    EMA20 = "EMA20"
+    EMA21 = "EMA21"
+
+
+class SnapshotType(str, Enum):
+    """A.2 — default at_entry: the hard stop is the indicator price at
+    fill; live (Cobalt re-warns as the indicator drifts) is not the
+    default."""
+
+    AT_ENTRY = "at_entry"
+    LIVE = "live"
 
 
 class Event(str, Enum):
@@ -288,8 +318,23 @@ class LevelPlacement(BaseModel):
     buffer: StopBuffer | None = None
 
 
+class IndicatorPlacement(BaseModel):
+    """A.2 — VWAP/EMA-anchored stop. Default `snapshot: at_entry`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["indicator"] = "indicator"
+    indicator: IndicatorType
+    buffer: StopBuffer = Field(default_factory=StopBuffer)
+    snapshot: SnapshotType = SnapshotType.AT_ENTRY
+    floor: Literal["config"] | None = "config"
+
+
 StopPlacement = Annotated[
-    StructuralExtremePlacement | MeasuredFractionPlacement | LevelPlacement,
+    StructuralExtremePlacement
+    | MeasuredFractionPlacement
+    | LevelPlacement
+    | IndicatorPlacement,
     Field(discriminator="type"),
 ]
 
@@ -359,6 +404,56 @@ StopManagementEntry = Annotated[
 
 # --- Exit --------------------------------------------------------------------
 
+# A.7/A.8 — trail exit conditions[]. `first condition to fire exits`; MA
+# periods route through Tunable[str] so a condition can carry either a
+# literal indicator ("EMA9") or an `ma.*` ref resolved against
+# defaults.yaml (loader.resolve_ma_ref).
+
+
+class PriorBarBreakCondition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["prior_bar_break"] = "prior_bar_break"
+    n: int = Field(default=1, gt=0)
+
+
+class MaCloseCondition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["ma_close"] = "ma_close"
+    ma: Tunable[str]
+
+
+class VwapCloseCondition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["vwap_close"] = "vwap_close"
+
+
+class LevelCondition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["level"] = "level"
+    level_ref: str = Field(min_length=1)
+
+
+TrailCondition = Annotated[
+    PriorBarBreakCondition | MaCloseCondition | VwapCloseCondition | LevelCondition,
+    Field(discriminator="type"),
+]
+
+
+class TrailExitParams(BaseModel):
+    """A.7 — `trail {conditions[], mode: any}`; first condition to fire
+    exits. Validated out of `ExitLeg.params` only when
+    `target_type == trail` (every other target type keeps its
+    unstructured params dict, as in Batch 1)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    conditions: list[TrailCondition] = Field(min_length=1)
+    mode: Literal["any"] = "any"
+
 
 class ExitLeg(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -368,6 +463,17 @@ class ExitLeg(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
     evaluation: EvaluationType
     computable: Literal["cobalt", "human"] = "cobalt"
+
+    @model_validator(mode="after")
+    def _trail_params_valid(self) -> ExitLeg:
+        if self.target_type == ExitTargetType.TRAIL:
+            try:
+                TrailExitParams(**self.params)
+            except ValidationError as e:
+                raise ValueError(
+                    f"exit leg target_type=trail has invalid params: {e}"
+                ) from e
+        return self
 
 
 class OnCic(BaseModel):
@@ -412,7 +518,13 @@ class TriggerStep(BaseModel):
 class SimpleTrigger(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["bar_break", "range_break", "indicator_cross"]
+    type: Literal[
+        "bar_break",
+        "range_break",
+        "indicator_cross",
+        "trendline_break",
+        "indicator_rejection",
+    ]
     params: dict[str, Any] = Field(default_factory=dict)
     confirmation_policy: ConfirmationPolicy
 
@@ -442,6 +554,7 @@ class AddPolicy(BaseModel):
 
 _STANDARD_QUALITY_FACTORS = {"setup_relation", "market_alignment", "sector_alignment"}
 _FORBIDDEN_REFERENCE_STATS_KEYS = {"ev", "expectancy"}
+_DURATION_PATTERN = re.compile(r"^\d+ min$")  # A.1 — e.g. "3 min"
 
 
 class TradeDef(BaseModel):
@@ -466,12 +579,20 @@ class TradeDef(BaseModel):
     exit: list[ExitLeg] = Field(min_length=1)
     on_cic: OnCic
     max_attempts: Tunable[int]
+    reentry_window: Tunable[str] | None = None  # A.1 — duration, e.g. "3 min"
     add_policy: AddPolicy = Field(default_factory=AddPolicy)
     avoid: list[Predicate] = Field(default_factory=list)
     quality_factors: list[str] = Field(min_length=1)
     preferred_windows: list[RTHWindow] = Field(default_factory=list)
     preferred_windows_ref: str | None = None
     reference_stats: dict[str, Any] | None = None
+
+    @field_validator("reentry_window")
+    @classmethod
+    def _reentry_window_format(cls, v: Tunable[str] | None) -> Tunable[str] | None:
+        if v is not None and not _DURATION_PATTERN.match(v.value):
+            raise ValueError(f"reentry_window must match '<N> min', got {v.value!r}")
+        return v
 
     @model_validator(mode="after")
     def _tf_ceiling_matches_class(self) -> TradeDef:
