@@ -76,4 +76,8 @@ yet — the setups engine that consumes this data is a future sprint.
   `raise_to.placement: breakeven` shorthand, Fashionably Late's
   `entry_price` vs. the canonical `entry` structural ref) are recorded
   as code comments at their source YAML and in the population report —
-  none were silently resolved by inventing a new enum value.
+  none were silently resolved by inventing a new enum value. All three
+  are now CONFIRMED (2026-09-02, TRADE-DEFS-BATCH2-v0_1.md item 0 /
+  ADR-0002): Second Chance's optional step confirmation and Rubberband's
+  `level{level_ref: entry}` encoding stand as originally written;
+  Fashionably Late's `stop.anchor_a` is renamed `entry_price` → `entry`.

@@ -14,7 +14,13 @@ same-day config-completion follow-up (full A+/A/B/C/D grade ladder in
 `configs/cobalt/aset.yaml`, `enabled_grades` as the separate UI/compute
 gate), plus the **Bar Archiver** (2026-08-28) — a second, sibling
 new-core component under `src/cobalt/archiver/`, unrelated to ASET
-except for sharing `cobalt.db`.
+except for sharing `cobalt.db`. Extended 2026-09-02 to cover
+**Taxonomy** (`src/cobalt/taxonomy/`) — the `trade_def` +
+variable-registry Pydantic schema and its config-as-code loader,
+covering both Batch 1 (ADR-0001) and Batch 2 / v0.7 schema extensions
+(ADR-0002); a third sibling component, unrelated to ASET/Archiver
+except for the shared config-boundary convention
+(`configs/cobalt/taxonomy/`).
 
 ---
 
@@ -44,6 +50,12 @@ except for sharing `cobalt.db`.
 | `archiver/store.py` | Idempotent bar upserts into `bars` in `cobalt_dev` (PK `(ticker, interval, ts)`, `ON CONFLICT DO UPDATE`). |
 | `archiver/report.py` | Appends one run-summary row to `docs/30 - Design/archiver-runs.md`; strictly tabular by design. |
 | `archiver/runner.py` | Orchestrates a run (gentle rate, fail-loud per ticker); the `archiver` CLI entry point (`--backfill TICKER`). |
+| `taxonomy/__init__.py` | Taxonomy package marker. |
+| `taxonomy/trade_def.py` | The `trade_def` Pydantic schema (v0.6 §10.1, extended to v0.7 by Batch 2's §A) — enums as the vocabulary source of truth, `Predicate`/`Tunable`/`StopPlacement`/`Trigger`/`TrailCondition` building blocks, no predicate parser. |
+| `taxonomy/variables.py` | The variable-registry stub schema — one file per trade_def, one entry per `quality_factors[]` item; `frontier` flag for tape-class reads (Batch 2). |
+| `taxonomy/defaults.py` | `TaxonomyDefaults` schema for `configs/cobalt/taxonomy/defaults.yaml` (`working_timeframe`, `ma.fast`/`ma.slow` — Batch 2). |
+| `taxonomy/loader.py` | Config-as-code loader: parses + cross-validates every trade_def, its variable registry, defaults, and the Cameron H grid; fail-loud (`TaxonomyConfigError`) except the A.6 stop-buffer check, which warns. |
+| `taxonomy/validate.py` | `python -m cobalt.taxonomy.validate` CLI — loads everything, prints a summary table, exits non-zero on failure. |
 
 ### Configs / templates
 
@@ -58,6 +70,10 @@ except for sharing `cobalt.db`.
 | `src/cobalt/archiver/migrations/0001_bars.sql` | The one DDL source for `bars`. |
 | `configs/cobalt/watchlists.yaml` | Committed — the three watchlist tiers (derived from Dejan's TradingView exports) + intervals per tier. |
 | `ops/com.cobalt.archiver.plist` | Standalone launchd template, Mon-Fri 20:30 local — captured here, not auto-installed. |
+| `configs/cobalt/taxonomy/defaults.yaml` | Committed — `working_timeframe: 2m`, `ma: {fast: 9, slow: 20}` (Batch 2). |
+| `configs/cobalt/taxonomy/cameron_grid.yaml` | Committed — all 21 Cameron H grid rows (`valid_setups[]`); 13 have a populated `trade_def`. |
+| `configs/cobalt/taxonomy/trade_defs/*.yaml` | Committed — 13 populated trade_defs (6 Batch 1 + 7 Batch 2), one file per id. |
+| `configs/cobalt/taxonomy/variables/*.yaml` | Committed — the matching variable registry per trade_def. |
 
 ### Tests (`tests/cobalt/`)
 
@@ -138,3 +154,32 @@ A sibling component to ASET, not built on it — shares only `cobalt.db`.
    the run-report writer; read why it's kept strictly tabular.
 6. **`archiver/runner.md`** — where 2–5 get wired into an actual run,
    plus the `archiver` CLI. Read last, same reason as `aset/web.md`.
+
+## Taxonomy reading order
+
+A sibling component to ASET/Archiver, config-as-code only — no engine
+code, no predicate parser, no bar logic (ADR-0001, ADR-0002).
+
+1. **`taxonomy/trade_def.md`** — the vocabulary: enums, `Predicate`,
+   `Tunable`, `StopPlacement`, `Trigger`, `TrailCondition`, and the
+   `TradeDef` model itself. Read this first.
+2. **`taxonomy/variables.md`** — the per-trade variable-registry stub
+   schema, incl. the `frontier` tape-class flag (Batch 2).
+3. **`taxonomy/defaults.md`** — the two taxonomy-wide knobs
+   (`working_timeframe`, `ma.fast`/`ma.slow`, Batch 2) that
+   `loader.md`'s `resolve_ma_ref` resolves against.
+4. **`taxonomy/loader.md`** + `configs/cobalt/taxonomy/cameron_grid.yaml`
+   + `configs/cobalt/taxonomy/defaults.yaml` +
+   `configs/cobalt/taxonomy/trade_defs/*.yaml` +
+   `configs/cobalt/taxonomy/variables/*.yaml` +
+   `tests/taxonomy/test_trade_defs.py` — where 1–3 get loaded,
+   cross-validated, and fail loud (or, for the A.6 stop-buffer check,
+   warn). Read this after everything it depends on, not before.
+5. **`taxonomy/validate.md`** — the CLI entry point
+   (`python -m cobalt.taxonomy.validate`). Read last, same reason as
+   `aset/web.md`/`archiver/runner.md`.
+6. **ADR-0001** (Batch 1, schema v0.3) and **ADR-0002** (Batch 2, v0.3
+   → v0.7 extensions) — the decision record behind all of the above;
+   read alongside `TAXONOMY-DRAFT-v0_6.md` §10 and
+   `TRADE-DEFS-BATCH1-v0_1.md` / `TRADE-DEFS-BATCH2-v0_1.md` for the
+   source sheets.

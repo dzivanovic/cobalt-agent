@@ -17,7 +17,10 @@ error to stderr and returns before any table is drawn.
 ## Data flow in/out
 **In:** nothing (reads the default `configs/cobalt/taxonomy/` paths via
 `loader.py`). **Out:** stdout table + exit code; stderr + exit 1 on
-failure.
+failure. A.6 stop-buffer warnings (non-fatal, ADR-0002) print to stderr
+via Python's default `warnings` handler, alongside the table — they
+never change the exit code. As of Batch 2, the trailer line reads "13
+trade_def(s) validated OK."
 
 ## Config it reads
 Indirectly, via `loader.load_trade_defs()`'s defaults — see

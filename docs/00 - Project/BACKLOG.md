@@ -406,3 +406,39 @@ replay session sets it.
   factors). Config key: `taxonomy.big_dog.break_volume_sigma_bars`.
   Corpus: archiver minute bars, Big Dog instances. Pass criterion: TBD at
   n≥30.
+- **Range.duration [3,7] min band** — validates: Gap Give and Go's
+  micro-Range duration precondition (TRADE-DEFS-BATCH2-v0_1.md §B.1,
+  §13). Config key: `taxonomy.trade_defs.gap_give_and_go.range_duration_band`.
+  Corpus: archiver minute bars, GGG instances. Pass criterion: TBD at
+  n≥30.
+- **trendline pivots N** — validates: `trendline_break` trigger's pivot
+  count (default 2, A.3) for VWAP Continuation (anchor
+  `Leg(pullback)`) and Bella Fade (anchor `Leg(opening_drive)`). Config
+  key: `taxonomy.trendline_break.pivots`. Corpus: archiver minute bars,
+  VWAP Continuation + Bella Fade instances. Pass criterion: TBD at n≥30.
+- **dist() k per indicator** — validates: `dist(a, b) <= k·ATR(working_tf)`
+  "near VWAP"/"near EMA" thresholds (A.13), first consumer VWAP
+  Continuation's pullback-depth precondition. Config key:
+  `taxonomy.dist.k.<indicator>`. Corpus: archiver minute bars. Pass
+  criterion: TBD at n≥30.
+- **counter_pivot_count threshold** — validates: Bouncy Ball's
+  `Range(micro).counter_pivot_count >= 2` precondition (A.16). Config
+  key: `taxonomy.bouncy_ball.counter_pivot_count_min`. Corpus: archiver
+  minute bars, Bouncy Ball instances. Pass criterion: TBD at n≥30.
+- **gap_retrace_pct threshold** — validates: Gap Give and Go's
+  `gap_retrace_pct > 0.5` avoid + quality factor (A.17). Config key:
+  `taxonomy.gap_give_and_go.gap_retrace_pct_avoid_threshold`. Corpus:
+  archiver minute bars, GGG instances. Pass criterion: TBD at n≥30.
+- **trail-condition sets per trade** — validates: which `trail`
+  exit-condition combination (A.7 — `prior_bar_break` / `ma_close` /
+  `vwap_close` / `level`, `mode: any`) actually fires first,
+  outcome-tuned per trade (VWAP Continuation, 9 EMA Scalp,
+  Back-Through Open, Bouncy Ball, Second Chance leg 2). Config key:
+  `taxonomy.trade_defs.<id>.trail_conditions`. Corpus: archiver minute
+  bars, per-trade instances. Pass criterion: TBD at n≥30.
+- **time_stop 2-bar no-progress** — validates: Back-Through Open's and
+  Bouncy Ball's `time_stop {duration_bars: 2, condition: no progress
+  from entry}` stop management (§B.5, §B.7). Config key:
+  `taxonomy.trade_defs.<id>.time_stop_duration_bars`. Corpus: archiver
+  minute bars, BTO + Bouncy Ball instances. Pass criterion: TBD at
+  n≥30.
