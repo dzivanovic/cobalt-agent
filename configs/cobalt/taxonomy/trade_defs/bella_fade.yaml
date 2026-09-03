@@ -1,6 +1,7 @@
 # Source: TRADE-DEFS-BATCH2-v0_1.md §B.6 (SMB Bella Fade sheet).
-# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3) + §A amendments
+# Schema: TAXONOMY-DRAFT-v0_7.md §10.1 (schema v0.4) + §A amendments
 # (v0.7 extensions, TRADE-DEFS-BATCH2-v0_1.md §A).
+# No trail slot: both exit legs are leg_end targets, not a trail.
 trade_def:
   id: bella_fade
   name: Bella Fade
@@ -24,7 +25,7 @@ trade_def:
     params:
       ref: "Level_ref(trendline)"
       anchor_leg: "Leg(opening_drive)"
-      pivots: 2  # config
+      pivots: "cfg(trendline.min_pivots)"
     confirmation_policy: {type: intrabar}  # "aggressively on the trendline break"
   stop:
     placement:
@@ -52,7 +53,7 @@ trade_def:
   add_policy: {type: none}
   avoid:
     - expr: "RangeBreak(Level_ref(HTF)).state == accepted AND against(trade_direction)"  # "breaking a strong technical level" / "breaks support"
-    - expr: "Range(micro) near turn_low AND Range.duration > threshold"  # config — "consolidates near the lows for long = selling pressure remains"
+    - expr: "Range(micro) near turn_low AND Range.duration > cfg(bella_fade.near_low_duration_max)"  # "consolidates near the lows for long = selling pressure remains"
     - expr: "Catalyst.polarity == against(trade_direction)"  # "negative catalyst weighing on the stock"
   quality_factors:
     - tape_flip

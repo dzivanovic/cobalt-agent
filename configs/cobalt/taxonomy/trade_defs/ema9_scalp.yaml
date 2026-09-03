@@ -1,5 +1,5 @@
 # Source: TRADE-DEFS-BATCH2-v0_1.md §B.4 (SMB 9 EMA Scalp sheet).
-# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3) + §A amendments
+# Schema: TAXONOMY-DRAFT-v0_7.md §10.1 (schema v0.4) + §A amendments
 # (v0.7 extensions, TRADE-DEFS-BATCH2-v0_1.md §A).
 # NOTE: stop.placement.indicator is EMA21 literal (the enum member), per
 # sheet; "(ma.slow config)" in §B is an annotation that this could route
@@ -7,12 +7,15 @@
 # names EMA21 specifically as the stop indicator, distinct from the exit
 # trail's own EMA9 condition below. trigger.params.contact: see
 # first_vwap_pullback.yaml's NOTE (touch | penetrate both qualify).
+# v0.7 §10.1/§10.2: trail on: entry, conditions [level high_of_day,
+# ma_close EMA9] — moved into the trade_def.trail slot; the exit leg
+# below carries no params (one-stop law).
 trade_def:
   id: ema9_scalp
   name: 9 EMA Scalp
   aliases: ["9 EMA", "EMA9 Scalp"]
   family: [continuation]
-  class: scalp  # one leg out; HOD or EMA9 trail = the same single exit (A.8 conditions)
+  class: scalp  # v0.7 §0: sub-15-min TF, seconds to ~45 min (tf_ceiling 15-min the only hard constraint)
   valid_setups:
     - {setup_ref: gap_and_go, relation: with_trend}
     - {setup_ref: range_break, relation: with_trend}
@@ -38,14 +41,16 @@ trade_def:
   stop_management:
     - type: fixed
       "on": {name: entry}
+  trail:
+    conditions:
+      - {type: level, level_ref: high_of_day}  # close_through = exit into momentum after the break
+      - {type: ma_close, ma: {value: EMA9, dynamic: false}}
+    mode: select
+    "on": {name: entry}
   exit:
     - fraction: 1.0
-      target_type: trail
-      params:
-        conditions:
-          - {type: level, level_ref: high_of_day}  # close_through = exit into momentum after the break
-          - {type: ma_close, ma: {value: EMA9, dynamic: false}}
-        mode: any
+      target_type: trail  # no params — trade_def.trail defines the conditions (one-stop law)
+      params: {}
       evaluation: close_through
       computable: cobalt  # "after the HOD break or a 9 EMA trail"
   on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
@@ -63,6 +68,7 @@ trade_def:
     - pullback_depth_vs_ema9
     - bids_hold
     - rvol
+    - trail_fit  # v0.7 §14 c.1 — cobalt-computable, which trail capability the stock cleanly follows
     - setup_relation
     - market_alignment
     - sector_alignment

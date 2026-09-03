@@ -1,10 +1,10 @@
-"""Trade-definition schema — TAXONOMY-DRAFT-v0_6.md §10 (schema v0.3).
+"""Trade-definition schema — TAXONOMY-DRAFT-v0_7.md §10 (schema v0.4).
 
 Config-as-code (TRIAGE cross-cutting law): `trade_def` and its variable
 registry are YAML data, Pydantic-validated on load, never hand-parsed.
 This module carries the schema only — no predicate parser, no setup
 detectors, no bar logic. Enums are the single source of truth for the
-taxonomy vocabulary (v0.6 §10.1/§10.2/§3.6); YAML data must match them
+taxonomy vocabulary (v0.7 §10.1/§10.2/§3.6); YAML data must match them
 exactly or fail loud, never silently coerce.
 
 `Predicate.expr` stores the §10.5 grammar string UNPARSED — grammar
@@ -12,6 +12,16 @@ evaluation is a future setups-engine sprint, not this one. Anywhere the
 taxonomy says "any stop-placement" (raise_to.placement, the top-level
 stop itself) reuses the same `StopPlacement` union so a validator can
 check shape once.
+
+**One-stop law (v0.7 §14 c.1):** a trade has exactly one stop at any
+moment. `trail` is now a single top-level slot (`TradeDef.trail`,
+`TrailSpec`) listing the trade's trail *capabilities*; one is selected
+at trade start (`mode: select`) and, from its `on:` event onward, IS the
+stop — never a second object. `trail_ma_close` / `trail_bar` stop
+management and the standalone `ma_close` exit target were duplicate
+spellings of this and are REMOVED from schema v0.4 — YAML still using
+them fails loud, pointing at the `trail` slot (`TradeDef`'s
+`model_validator` below), never silently coerced.
 """
 
 from __future__ import annotations
@@ -24,13 +34,14 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    ValidationError,
     field_validator,
     model_validator,
 )
 
+SCHEMA_VERSION = "0.4"
+
 # ---------------------------------------------------------------------------
-# Enums — verbatim from v0.6 §10.1 / §10.2 / §3.6. Extend here, never coerce
+# Enums — verbatim from v0.7 §10.1 / §10.2 / §3.6. Extend here, never coerce
 # an out-of-vocabulary value from data.
 # ---------------------------------------------------------------------------
 
@@ -44,7 +55,19 @@ class Family(str, Enum):
 
 
 class TradeClass(str, Enum):
-    """Management shape, not a timeframe (v0.6 §0 timeframe-agnostic-trigger law)."""
+    """Trade shape + horizon, not exit mechanics (v0.7 §0 class
+    definitions, §14 c.2 — supersedes v0.6 row 2 and A.10, both STRUCK):
+    trailing vs hard exit defines no class (any class may trail), and
+    legs-out count defines no class (scalps may scale out: Hitchhiker 2
+    legs, Rubberband 3). `scalp` = usually below the 15-min timeframe,
+    lasting seconds to ~45 minutes; `tf_ceiling: 15-min` stays the only
+    hard constraint. `move2move` = defined entry, stop and target
+    capitalising on a momentum move that can survive consolidation and
+    continue in the same direction to a target usually further away
+    (e.g. two measured moves, high/low of day, or session end) —
+    usually longer, tradeable on 5-min and up; an intraday swing.
+    `swing` / `options` = defined when taken up. Durations are anatomy
+    descriptors, never gates."""
 
     SCALP = "scalp"
     MOVE2MOVE = "move2move"
@@ -112,9 +135,13 @@ class EvaluationType(str, Enum):
 
 
 class StructuralRef(str, Enum):
-    """v0.6 §3.6 flat, literal structural references (excludes the
+    """v0.7 §3.6 flat, literal structural references (excludes the
     parametrized `cross_point{a,b}` and `leg_end(n)` anchors, which carry
-    their own params and are referenced as free-text anchors instead)."""
+    their own params and are referenced as free-text anchors instead).
+    `Range(micro).top` / `.base` are the same class of parametrized ref
+    — encoded via `level {level_ref: "Range(micro).top"}` rather than an
+    enum member (Gap Give and Go / Rubberband precedent, ADR-0002, ruled
+    v0.7 §3.6)."""
 
     SNAPBACK_CANDLE = "snapback_candle"
     TURN_LOW = "turn_low"
@@ -129,26 +156,34 @@ class StructuralRef(str, Enum):
 
 
 class StopManagementType(str, Enum):
+    """`TRAIL_MA_CLOSE` / `TRAIL_BAR` REMOVED in schema v0.4 (v0.7 §14
+    c.1, change log #11) — duplicate spellings of the one-stop-law
+    `trail` slot (`TradeDef.trail`, `TrailSpec`). YAML still using either
+    fails loud in `TradeDef`'s before-validator, pointing at the trail
+    slot, never silently coerced."""
+
     FIXED = "fixed"
     BREAKEVEN_AT = "breakeven_at"
     RAISE_TO = "raise_to"
-    TRAIL_MA_CLOSE = "trail_ma_close"
-    TRAIL_BAR = "trail_bar"
     TIME_STOP = "time_stop"
     PASSIVE = "passive"
 
 
 class ExitTargetType(str, Enum):
+    """Standalone `MA_CLOSE` target REMOVED in schema v0.4 (v0.7 change
+    log #18) — it is a trail *capability* now, expressed as a
+    `ma_close` condition inside `TradeDef.trail`, never a target here.
+    YAML still using it fails loud, pointing at the trail slot."""
+
     RR_MULTIPLE = "rr_multiple"
     VWAP = "vwap"
     LEVEL = "level"
     MEASURED_MOVE = "measured_move"
     LEG_END = "leg_end"
     BAR_BREAK_REVERSE = "bar_break_reverse"
-    MA_CLOSE = "ma_close"
     WINDOW_END = "window_end"
     CIC_EVENT = "cic_event"
-    TRAIL = "trail"  # A.7/A.8 — {conditions[], mode: any}
+    TRAIL = "trail"  # v0.7 §10.2 — the leg exits when trade_def.trail fires; NO params here
 
 
 class IndicatorType(str, Enum):
@@ -369,17 +404,6 @@ class RaiseToMgmt(_StopManagementBase):
     placement: StopPlacement
 
 
-class TrailMaCloseMgmt(_StopManagementBase):
-    type: Literal["trail_ma_close"] = "trail_ma_close"
-    ma: Tunable[str]
-    tf: str = Field(min_length=1)
-
-
-class TrailBarMgmt(_StopManagementBase):
-    type: Literal["trail_bar"] = "trail_bar"
-    n: int = Field(gt=0)
-
-
 class TimeStopMgmt(_StopManagementBase):
     type: Literal["time_stop"] = "time_stop"
     duration_bars: Tunable[int]
@@ -391,30 +415,29 @@ class PassiveMgmt(_StopManagementBase):
 
 
 StopManagementEntry = Annotated[
-    FixedMgmt
-    | BreakevenAtMgmt
-    | RaiseToMgmt
-    | TrailMaCloseMgmt
-    | TrailBarMgmt
-    | TimeStopMgmt
-    | PassiveMgmt,
+    FixedMgmt | BreakevenAtMgmt | RaiseToMgmt | TimeStopMgmt | PassiveMgmt,
     Field(discriminator="type"),
 ]
 
 
-# --- Exit --------------------------------------------------------------------
+# --- Trail (one-stop law, v0.7 §14 c.1) --------------------------------------
 
-# A.7/A.8 — trail exit conditions[]. `first condition to fire exits`; MA
-# periods route through Tunable[str] so a condition can carry either a
+# v0.7 §10.1/§10.2 — trail conditions[], the trade's trail *capabilities*.
+# `mode: select` = ONE picked at trade start (Dejan / Cobalt, from price
+# action) and followed to the end — supersedes A.8's first-to-fire "any".
+# MA periods route through Tunable[str] so a condition can carry either a
 # literal indicator ("EMA9") or an `ma.*` ref resolved against
 # defaults.yaml (loader.resolve_ma_ref).
 
 
 class PriorBarBreakCondition(BaseModel):
+    """1-bar trail law (v0.7 §0): `n` is pinned to 1 wherever a bar
+    trail is expressed — not merely defaulted."""
+
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["prior_bar_break"] = "prior_bar_break"
-    n: int = Field(default=1, gt=0)
+    n: Literal[1] = 1
 
 
 class MaCloseCondition(BaseModel):
@@ -443,16 +466,19 @@ TrailCondition = Annotated[
 ]
 
 
-class TrailExitParams(BaseModel):
-    """A.7 — `trail {conditions[], mode: any}`; first condition to fire
-    exits. Validated out of `ExitLeg.params` only when
-    `target_type == trail` (every other target type keeps its
-    unstructured params dict, as in Batch 1)."""
+class TrailSpec(BaseModel):
+    """v0.7 §10.1/§10.2, one-stop law (§14 c.1) — ONE slot per
+    trade_def. `conditions[]` = the trade's trail capabilities from the
+    sheet; `mode: select` = one picked at trade start by Dejan / Cobalt
+    from price action and followed to the end (selection + WHY persist
+    on the card, not here — that's card data, not taxonomy). From `on:`
+    onward the trail IS the stop. Default `on: entry`."""
 
     model_config = ConfigDict(extra="forbid")
 
     conditions: list[TrailCondition] = Field(min_length=1)
-    mode: Literal["any"] = "any"
+    mode: Literal["select"] = "select"
+    on: EventRef = Field(default_factory=lambda: EventRef(name=Event.ENTRY))
 
 
 class ExitLeg(BaseModel):
@@ -465,14 +491,13 @@ class ExitLeg(BaseModel):
     computable: Literal["cobalt", "human"] = "cobalt"
 
     @model_validator(mode="after")
-    def _trail_params_valid(self) -> ExitLeg:
-        if self.target_type == ExitTargetType.TRAIL:
-            try:
-                TrailExitParams(**self.params)
-            except ValidationError as e:
-                raise ValueError(
-                    f"exit leg target_type=trail has invalid params: {e}"
-                ) from e
+    def _trail_takes_no_params(self) -> ExitLeg:
+        if self.target_type == ExitTargetType.TRAIL and self.params:
+            raise ValueError(
+                "exit leg target_type=trail takes no params in schema v0.4 — "
+                "the trail is defined once in trade_def.trail (one-stop law, "
+                "v0.7 §10.2); this leg just exits when it fires"
+            )
         return self
 
 
@@ -549,12 +574,19 @@ class AddPolicy(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# trade_def registry (v0.6 §10.1)
+# trade_def registry (v0.7 §10.1)
 # ---------------------------------------------------------------------------
 
 _STANDARD_QUALITY_FACTORS = {"setup_relation", "market_alignment", "sector_alignment"}
 _FORBIDDEN_REFERENCE_STATS_KEYS = {"ev", "expectancy"}
 _DURATION_PATTERN = re.compile(r"^\d+ min$")  # A.1 — e.g. "3 min"
+
+# v0.7 §14 c.1 — duplicate spellings of the trail slot, removed from
+# schema v0.4. Checked in a before-validator (raw dict, pre-union-parse)
+# so the error message points at the trail slot instead of pydantic's
+# generic "not a valid discriminator value".
+_REMOVED_STOP_MGMT_TYPES = {"trail_ma_close", "trail_bar"}
+_REMOVED_EXIT_TARGET_TYPES = {"ma_close"}
 
 
 class TradeDef(BaseModel):
@@ -576,6 +608,7 @@ class TradeDef(BaseModel):
     trigger: Trigger
     stop: Stop
     stop_management: list[StopManagementEntry] = Field(min_length=1)
+    trail: TrailSpec | None = None  # v0.7 §14 c.1 — ONE slot per trade_def
     exit: list[ExitLeg] = Field(min_length=1)
     on_cic: OnCic
     max_attempts: Tunable[int]
@@ -587,12 +620,46 @@ class TradeDef(BaseModel):
     preferred_windows_ref: str | None = None
     reference_stats: dict[str, Any] | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_removed_trail_spellings(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        for entry in data.get("stop_management") or []:
+            if isinstance(entry, dict) and entry.get("type") in _REMOVED_STOP_MGMT_TYPES:
+                raise ValueError(
+                    f"stop_management.type={entry.get('type')!r} was REMOVED in schema "
+                    "v0.4 — duplicate spelling of the trail slot (one-stop law, v0.7 "
+                    "§14 c.1). Express this trade_def's trail as trade_def.trail "
+                    "(TrailSpec) instead, not stop_management."
+                )
+        for leg in data.get("exit") or []:
+            if isinstance(leg, dict) and leg.get("target_type") in _REMOVED_EXIT_TARGET_TYPES:
+                raise ValueError(
+                    f"exit.target_type={leg.get('target_type')!r} was DEPRECATED in "
+                    "schema v0.4 (v0.7 change log #18) — it is a trail capability now: "
+                    "add a `ma_close` condition to trade_def.trail (the trail slot) "
+                    "instead of a standalone exit target."
+                )
+        return data
+
     @field_validator("reentry_window")
     @classmethod
     def _reentry_window_format(cls, v: Tunable[str] | None) -> Tunable[str] | None:
         if v is not None and not _DURATION_PATTERN.match(v.value):
             raise ValueError(f"reentry_window must match '<N> min', got {v.value!r}")
         return v
+
+    @model_validator(mode="after")
+    def _trail_slot_required_for_trail_exit(self) -> TradeDef:
+        uses_trail_exit = any(leg.target_type == ExitTargetType.TRAIL for leg in self.exit)
+        if uses_trail_exit and self.trail is None:
+            raise ValueError(
+                f"{self.id}: exit leg target_type=trail requires trade_def.trail to be "
+                "set (one-stop law, v0.7 §14 c.1) — the trail slot defines the "
+                "conditions this leg exits on."
+            )
+        return self
 
     @model_validator(mode="after")
     def _tf_ceiling_matches_class(self) -> TradeDef:

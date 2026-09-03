@@ -1,5 +1,6 @@
 # Source: TRADE-DEFS-BATCH1-v0_1.md §B.4 (SMB Back$ide Scalp sheet).
-# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
+# Schema: TAXONOMY-DRAFT-v0_7.md §10.1 (schema v0.4).
+# No trail slot: single VWAP exit target, not a trail.
 trade_def:
   id: backside
   name: "Back$ide Scalp"

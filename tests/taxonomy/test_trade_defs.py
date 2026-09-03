@@ -17,19 +17,22 @@ from cobalt.taxonomy.defaults import TaxonomyDefaults
 from cobalt.taxonomy.loader import (
     TaxonomyConfigError,
     is_ma_ref,
+    iter_cfg_tokens,
     iter_stop_buffers,
-    iter_tunables,
+    load_defaults,
     load_trade_defs,
+    load_tunables,
+    resolve_cfg,
     resolve_ma_ref,
 )
-from cobalt.taxonomy.trade_def import ExitLeg, IndicatorPlacement, TradeDef, Tunable
+from cobalt.taxonomy.trade_def import ExitLeg, IndicatorPlacement, TradeDef
+from cobalt.taxonomy.tunables import TunableRegistry, TunableStatus, replay_backlog
 from cobalt.taxonomy.variables import VariableRegistryEntry
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TRADE_DEFS_DIR = REPO_ROOT / "configs" / "cobalt" / "taxonomy" / "trade_defs"
 VARIABLES_DIR = REPO_ROOT / "configs" / "cobalt" / "taxonomy" / "variables"
 CAMERON_GRID_PATH = REPO_ROOT / "configs" / "cobalt" / "taxonomy" / "cameron_grid.yaml"
-BACKLOG_PATH = REPO_ROOT / "docs" / "00 - Project" / "BACKLOG.md"
 
 ALL_TRADE_IDS = {
     "hitchhiker",
@@ -159,33 +162,42 @@ def test_new_trigger_types_load(base_trade_def_dict, trigger_type):
     assert td.trigger.type == trigger_type
 
 
-def test_trail_exit_conditions_validate(base_trade_def_dict):
+def test_trail_slot_conditions_validate(base_trade_def_dict):
+    # v0.4: conditions[] live on trade_def.trail (TrailSpec), not on the
+    # exit leg's params — the exit leg just points at target_type=trail
+    # with no params (one-stop law, v0.7 §14 c.1 / §10.2).
+    base_trade_def_dict["trail"] = {
+        "conditions": [
+            {"type": "prior_bar_break", "n": 1},
+            {"type": "ma_close", "ma": {"value": "EMA9", "dynamic": False}},
+            {"type": "vwap_close"},
+            {"type": "level", "level_ref": "high_of_day"},
+        ],
+        "mode": "select",
+    }
     base_trade_def_dict["exit"] = [
         {
             "fraction": 1.0,
             "target_type": "trail",
-            "params": {
-                "conditions": [
-                    {"type": "prior_bar_break", "n": 1},
-                    {"type": "ma_close", "ma": {"value": "EMA9", "dynamic": False}},
-                    {"type": "vwap_close"},
-                    {"type": "level", "level_ref": "high_of_day"},
-                ],
-                "mode": "any",
-            },
+            "params": {},
             "evaluation": "close_through",
         }
     ]
     td = TradeDef(**base_trade_def_dict)
-    assert len(td.exit[0].params["conditions"]) == 4
+    assert len(td.trail.conditions) == 4
+    assert td.trail.mode == "select"
 
 
-def test_trail_exit_rejects_unknown_condition_type(base_trade_def_dict):
+def test_trail_slot_rejects_unknown_condition_type(base_trade_def_dict):
+    base_trade_def_dict["trail"] = {
+        "conditions": [{"type": "moon_phase"}],
+        "mode": "select",
+    }
     base_trade_def_dict["exit"] = [
         {
             "fraction": 1.0,
             "target_type": "trail",
-            "params": {"conditions": [{"type": "moon_phase"}], "mode": "any"},
+            "params": {},
             "evaluation": "close_through",
         }
     ]
@@ -194,7 +206,9 @@ def test_trail_exit_rejects_unknown_condition_type(base_trade_def_dict):
     assert "trail" in str(exc_info.value)
 
 
-def test_trail_exit_directly_via_exit_leg():
+def test_trail_exit_leg_rejects_nonempty_params():
+    # ExitLeg.target_type=trail takes NO params in schema v0.4 — the
+    # trail is defined once in trade_def.trail.
     with pytest.raises(ValidationError):
         ExitLeg(
             fraction=1.0,
@@ -202,6 +216,61 @@ def test_trail_exit_directly_via_exit_leg():
             params={"conditions": [], "mode": "any"},
             evaluation="close_through",
         )
+
+
+def test_trail_exit_leg_accepts_empty_params():
+    leg = ExitLeg(
+        fraction=1.0,
+        target_type="trail",
+        params={},
+        evaluation="close_through",
+    )
+    assert leg.params == {}
+
+
+def test_trail_exit_without_trail_slot_raises_loud(base_trade_def_dict):
+    # one-stop law: an exit leg pointing at target_type=trail requires
+    # trade_def.trail to be set.
+    base_trade_def_dict["trail"] = None
+    base_trade_def_dict["exit"] = [
+        {
+            "fraction": 1.0,
+            "target_type": "trail",
+            "params": {},
+            "evaluation": "close_through",
+        }
+    ]
+    with pytest.raises(ValidationError) as exc_info:
+        TradeDef(**base_trade_def_dict)
+    assert "trade_def.trail" in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "stop_mgmt_type", ["trail_ma_close", "trail_bar"]
+)
+def test_removed_stop_management_trail_spellings_fail_loud(
+    base_trade_def_dict, stop_mgmt_type
+):
+    base_trade_def_dict["stop_management"] = [
+        {"type": stop_mgmt_type, "on": {"name": "entry"}}
+    ]
+    with pytest.raises(ValidationError) as exc_info:
+        TradeDef(**base_trade_def_dict)
+    assert "trail" in str(exc_info.value)
+
+
+def test_standalone_ma_close_exit_target_fails_loud(base_trade_def_dict):
+    base_trade_def_dict["exit"] = [
+        {
+            "fraction": 1.0,
+            "target_type": "ma_close",
+            "params": {"ma": "EMA9"},
+            "evaluation": "close_through",
+        }
+    ]
+    with pytest.raises(ValidationError) as exc_info:
+        TradeDef(**base_trade_def_dict)
+    assert "trail" in str(exc_info.value)
 
 
 def test_reentry_window_accepts_duration_string(base_trade_def_dict):
@@ -278,57 +347,118 @@ def test_iter_stop_buffers_finds_every_buffer_in_a_trade_def():
 
 
 def test_batch2_ma_slow_refs_resolve_at_load_time():
+    # v0.4: trail conditions live on trade_def.trail (TrailSpec), not on
+    # the exit leg's params.
     trade_defs = load_trade_defs()
-    vc_condition = trade_defs["vwap_continuation"].exit[1].params["conditions"][0]
-    assert vc_condition["ma"]["value"] == "ma.slow"
+    vc_condition = trade_defs["vwap_continuation"].trail.conditions[0]
+    assert vc_condition.ma.value == "ma.slow"
 
-    sc_condition = trade_defs["second_chance"].exit[1].params["conditions"][0]
-    assert sc_condition["ma"]["value"] == "ma.slow"
+    sc_conditions = {c.ma.value for c in trade_defs["second_chance"].trail.conditions if c.type == "ma_close"}
+    assert sc_conditions == {"ma.fast", "ma.slow"}
 
 
 def test_dynamic_tunables_appear_in_replay_backlog():
-    """Live-data pass: every dynamic=True Tunable actually loaded from
-    Batch 1 must have a matching entry in the §13 replay backlog.
-
-    Currently vacuous for Batch 1 — every quantity the v0.6 §0 "Dynamic
-    definitions" law names (Range.duration bands, flat_threshold, etc.)
-    lives inside an unparsed Predicate.expr string, not a structured
-    Tunable field, so no Batch 1 trade_def actually produces a
-    dynamic=True Tunable yet. The walk stays in place so it fires the
-    moment a future trade_def (Batch 2+) introduces one.
-    """
-    backlog_text = BACKLOG_PATH.read_text()
-    trade_defs = load_trade_defs()
-    checked = 0
-    for td in trade_defs.values():
-        for tunable in iter_tunables(td):
-            if tunable.dynamic:
-                checked += 1
-                assert tunable.note, (
-                    f"{td.id}: dynamic tunable with no note to cross-check against the backlog"
-                )
-                assert tunable.note in backlog_text, (
-                    f"{td.id}: dynamic tunable {tunable.note!r} has no matching entry in {BACKLOG_PATH}"
-                )
-    assert checked == 0, (
-        "Batch 1 introduced a dynamic tunable — update this test's docstring/assumption"
-    )
+    """v0.7 §13.1: the replay backlog is now a query over tunables.yaml
+    (`dynamic=True AND status != solidified`), not a hand-maintained
+    BACKLOG.md list cross-checked against trade_def Tunable[T] notes
+    (the old mechanism — every §13.1 dynamic row lives in tunables.yaml
+    now, not inside an unparsed Predicate.expr string)."""
+    registry = load_tunables()
+    backlog = replay_backlog(registry)
+    assert backlog, "tunables.yaml seeded no dynamic, non-solidified rows"
+    assert all(row.dynamic for row in backlog)
+    assert all(row.status != TunableStatus.SOLIDIFIED for row in backlog)
+    # spot-check known dynamic rows are present
+    backlog_keys = {row.key for row in backlog}
+    assert "gap_retrace_pct_max" in backlog_keys
+    assert "second_chance.trail_conditions" in backlog_keys
 
 
 def test_dynamic_tunable_backlog_matching_actually_discriminates():
-    """Unit-level proof that the membership check above is real, not
-    vacuously true: a note copied from the backlog matches, a made-up one
-    does not."""
-    backlog_text = BACKLOG_PATH.read_text()
-
-    known = Tunable(
-        value=5, dynamic=True, note="Range.duration bands (5-20 / >=45 min)"
+    """Unit-level proof the backlog query is real, not vacuously true: a
+    solidified or non-dynamic row is excluded."""
+    registry = TunableRegistry(
+        tunables=[
+            {
+                "key": "included.row",
+                "value": 1,
+                "unit": "count",
+                "scope": "global",
+                "dynamic": True,
+                "status": "proposed",
+                "source": "dwv",
+            },
+            {
+                "key": "excluded.solidified",
+                "value": 1,
+                "unit": "count",
+                "scope": "global",
+                "dynamic": True,
+                "status": "solidified",
+                "source": "ruling",
+            },
+            {
+                "key": "excluded.not_dynamic",
+                "value": 1,
+                "unit": "count",
+                "scope": "global",
+                "dynamic": False,
+                "status": "proposed",
+                "source": "sheet",
+            },
+        ]
     )
-    assert known.note in backlog_text
+    keys = {row.key for row in replay_backlog(registry)}
+    assert keys == {"included.row"}
 
-    orphan = Tunable(
-        value=1,
-        dynamic=True,
-        note="a made-up dynamic value with no backlog entry, for testing",
+
+def test_cfg_unknown_key_fails_loud(tmp_path, base_trade_def_dict):
+    trade_defs_dir = tmp_path / "trade_defs"
+    variables_dir = tmp_path / "variables"
+    trade_defs_dir.mkdir()
+    variables_dir.mkdir()
+
+    base_trade_def_dict["avoid"] = [
+        {"expr": "Range(micro).duration >= cfg(no.such.key) min"}
+    ]
+    (trade_defs_dir / "hitchhiker.yaml").write_text(
+        yaml.safe_dump({"trade_def": base_trade_def_dict})
     )
-    assert orphan.note not in backlog_text
+    registry_raw = yaml.safe_load((VARIABLES_DIR / "hitchhiker.yaml").read_text())
+    (variables_dir / "hitchhiker.yaml").write_text(yaml.safe_dump(registry_raw))
+
+    with pytest.raises(TaxonomyConfigError) as exc_info:
+        load_trade_defs(
+            trade_defs_dir=trade_defs_dir,
+            variables_dir=variables_dir,
+            cameron_grid_path=CAMERON_GRID_PATH,
+        )
+    assert "no.such.key" in str(exc_info.value)
+
+
+def test_cfg_key_present_in_tunables_resolves():
+    registry = load_tunables()
+    defaults = load_defaults()
+    assert resolve_cfg("gap_retrace_pct_max", registry.by_key, defaults) == 0.5
+
+
+def test_cfg_key_defaults_only_resolves_via_fallback():
+    # working_timeframe and ma.fast/ma.slow are deliberately NOT
+    # tunables.yaml rows (§13.1) — cfg() must fall back to defaults.yaml.
+    registry = load_tunables()
+    defaults = load_defaults()
+    assert "working_timeframe" not in registry.by_key
+    assert resolve_cfg("working_timeframe", registry.by_key, defaults) == "2m"
+    assert resolve_cfg("ma.slow", registry.by_key, defaults) == 20
+
+
+def test_cfg_tokens_used_across_committed_trade_defs_all_resolve():
+    """Live-data pass: every cfg(key) token actually committed in the 13
+    trade_defs resolves (tunables.yaml first, defaults.yaml fallback) —
+    load_trade_defs() already fails loud on load if not; this asserts
+    the token set is non-empty so the check isn't vacuous."""
+    trade_defs = load_trade_defs()
+    tokens = {key for td in trade_defs.values() for key in iter_cfg_tokens(td)}
+    assert tokens  # not vacuous
+    assert "gap_retrace_pct_max" in tokens
+    assert "trendline.min_pivots" in tokens

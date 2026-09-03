@@ -1,13 +1,18 @@
 # Source: TRADE-DEFS-BATCH2-v0_1.md §B.7 (SMB Bouncy Ball sheet — written
 # short-side/breakdown; def side-symmetric, long = inverted).
-# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3) + §A amendments
+# Schema: TAXONOMY-DRAFT-v0_7.md §10.1 (schema v0.4) + §A amendments
 # (v0.7 extensions, TRADE-DEFS-BATCH2-v0_1.md §A).
+# v0.7 §14 c.2: class = trade shape + horizon, not exit mechanics — this
+# is move2move because it is a momentum breakdown continuing to a
+# further target, not because it exits on a trail alone. v0.7 §10.2:
+# trail on: entry, conditions [prior_bar_break 1, ma_close EMA9] —
+# moved into the trade_def.trail slot; the exit leg carries no params.
 trade_def:
   id: bouncy_ball
   name: Bouncy Ball
   aliases: [BB, "Bouncy Ball Breakdown"]
   family: [continuation, range_break]
-  class: move2move  # trail-only exit
+  class: move2move
   valid_setups:
     - {setup_ref: gap_and_go, relation: with_trend}
     - {setup_ref: overextension, relation: countertrend}
@@ -17,7 +22,7 @@ trade_def:
     - expr: "InPlay.state == active"
     - expr: "Leg(impulse).direction == trade_direction"  # "significant move in one direction"
     - expr: "Range(micro).instantiated AND Range(micro).bound_type == converging"  # shallower bounces against a flat low
-    - expr: "Range(micro).counter_pivot_count >= 2"  # config — >=2 lower highs (short) / higher lows (long)
+    - expr: "Range(micro).counter_pivot_count >= cfg(range.counter_pivot_min)"  # >=2 lower highs (short) / higher lows (long)
   trigger:
     type: range_break
     params: {ref: "Range(micro).base"}
@@ -34,14 +39,16 @@ trade_def:
       duration_bars: {value: 2, dynamic: false}
       condition: "no progress from entry"  # "we do not want to see a rebid once support breaks"
       "on": {name: entry}
+  trail:
+    conditions:
+      - {type: prior_bar_break, n: 1}
+      - {type: ma_close, ma: {value: EMA9, dynamic: false}}
+    mode: select
+    "on": {name: entry}
   exit:
     - fraction: 1.0
-      target_type: trail
-      params:
-        conditions:
-          - {type: prior_bar_break, n: 1}
-          - {type: ma_close, ma: {value: EMA9, dynamic: false}}
-        mode: any
+      target_type: trail  # no params — trade_def.trail defines the conditions (one-stop law)
+      params: {}
       evaluation: close_through
       computable: cobalt  # "new 2-min high or reclaim of the 9 EMA" -> RULED: one working-TF bar
   on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
@@ -59,6 +66,7 @@ trade_def:
     - Range.duration
     - extension_distance_from_vwap  # neg
     - rvol
+    - trail_fit  # v0.7 §14 c.1 — cobalt-computable, which trail capability the stock cleanly follows
     - setup_relation
     - market_alignment
     - sector_alignment

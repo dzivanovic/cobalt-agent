@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import sys
 
-from .loader import TaxonomyConfigError, iter_tunables, load_trade_defs
+from .loader import TaxonomyConfigError, iter_tunables, load_trade_defs, load_tunables
 from .trade_def import TradeDef
+from .tunables import replay_backlog
 
 _HEADERS = ["id", "class", "families", "#preconditions", "#text-fallbacks", "#tunables"]
 
@@ -53,6 +54,13 @@ def main() -> int:
     rows = [_row(td) for td in sorted(trade_defs.values(), key=lambda t: t.id)]
     _print_table(rows)
     print(f"\n{len(trade_defs)} trade_def(s) validated OK.")
+
+    tunables = load_tunables()
+    backlog = replay_backlog(tunables)
+    print(
+        f"{len(tunables.tunables)} tunable(s) loaded "
+        f"({len(backlog)} in replay backlog: dynamic AND status != solidified)."
+    )
     return 0
 
 

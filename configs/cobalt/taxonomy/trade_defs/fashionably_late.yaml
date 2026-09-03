@@ -1,5 +1,6 @@
 # Source: TRADE-DEFS-BATCH1-v0_1.md §B.5 (SMB Fashionably Late Scalp sheet).
-# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
+# Schema: TAXONOMY-DRAFT-v0_7.md §10.1 (schema v0.4).
+# No trail slot: single measured_move exit target, not a trail.
 # stop.anchor_a uses the canonical §3.6 structural ref `entry` (alias
 # breakeven) — CONFIRMED 2026-09-02 (TRADE-DEFS-BATCH2-v0_1.md item 0),
 # superseding the source sheet's "entry_price" wording.
@@ -19,7 +20,7 @@ trade_def:
   entry_mode: backside
   preconditions:
     - expr: "Extension.state IN {reverting, backside}"
-    - expr: "slope_norm(EMA9) > flat_threshold.ema9 AND slope_norm(VWAP) <= flat_threshold.vwap"
+    - expr: "slope_norm(EMA9) > cfg(flat_threshold.ema9) AND slope_norm(VWAP) <= cfg(flat_threshold.vwap)"
   trigger:
     type: indicator_cross
     params: {a: EMA9, b: VWAP, direction: a_crosses_above_b}  # stamps cross_point

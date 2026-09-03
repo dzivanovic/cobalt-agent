@@ -1,9 +1,11 @@
 # Source: TRADE-DEFS-BATCH1-v0_1.md §B.2 (SMB Big Dog Consolidation sheet).
-# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
+# Schema: TAXONOMY-DRAFT-v0_7.md §10.1 (schema v0.4).
 # RULING IN FORCE applied here: Range has bound_type only, no `shape`
 # field. §B.2's "Range(micro).shape IN {converging, parallel}" clause is
 # dropped — encoded below as `Range(micro).instantiated` only (any
 # bound_type qualifies, v0.6 §14 ruling 1 / §4 amendment [A.12]).
+# No trail slot: the move2move exit here is a double-bar break
+# (bar_break_reverse), a TARGET, not a trail (1-bar trail law, v0.7 §0).
 trade_def:
   id: big_dog
   name: Big Dog Consolidation
@@ -18,7 +20,7 @@ trade_def:
     - expr: "InPlay.state == active"
     - expr: "Leg(impulse).terminated_by == consolidation"
     - expr: "Range(micro).instantiated"  # shape clause dropped per RULINGS IN FORCE — no bound_type filter
-    - expr: "Range(micro).duration >= 45 min"  # config, dynamic (§13 replay: Range.duration bands)
+    - expr: "Range(micro).duration >= cfg(big_dog.range_duration_band) min"
     - expr: "volatility_state == contraction"
     - expr: "Range(micro).height <= 0.5 * DayRange"
   trigger:
@@ -43,7 +45,7 @@ trade_def:
   exit:
     - fraction: 1.0
       target_type: bar_break_reverse
-      params: {bars: 2, after: "leg_end(2)"}
+      params: {bars: "cfg(big_dog.bar_break_reverse_bars)", after: "leg_end(2)"}
       evaluation: close_through
       computable: cobalt
   on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory

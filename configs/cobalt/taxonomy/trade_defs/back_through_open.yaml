@@ -1,10 +1,13 @@
 # Source: TRADE-DEFS-BATCH2-v0_1.md §B.5 (SMB Back-Through Open sheet).
-# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3) + §A amendments
+# Schema: TAXONOMY-DRAFT-v0_7.md §10.1 (schema v0.4) + §A amendments
 # (v0.7 extensions, TRADE-DEFS-BATCH2-v0_1.md §A).
 # NOTE: trigger.params.ref = "open" applies A.5 (Level.type gains `open`,
 # the RTH opening print) — encoded as a free-text Level_ref value, same
 # as every other trigger-params anchor; no schema change needed (see
 # ADR-0002).
+# v0.7 §10.1/§10.2: trail on: entry, conditions [prior_bar_break 1,
+# ma_close EMA9] — moved into the trade_def.trail slot; the exit leg
+# below carries no params (one-stop law).
 trade_def:
   id: back_through_open
   name: Back-Through Open
@@ -39,14 +42,16 @@ trade_def:
       duration_bars: {value: 2, dynamic: false}
       condition: "no progress from entry"  # "should work right away — no chop or pause after entry"
       "on": {name: entry}
+  trail:
+    conditions:
+      - {type: prior_bar_break, n: 1}
+      - {type: ma_close, ma: {value: EMA9, dynamic: false}}
+    mode: select
+    "on": {name: entry}
   exit:
     - fraction: 1.0
-      target_type: trail
-      params:
-        conditions:
-          - {type: prior_bar_break, n: 1}
-          - {type: ma_close, ma: {value: EMA9, dynamic: false}}
-        mode: any
+      target_type: trail  # no params — trade_def.trail defines the conditions (one-stop law)
+      params: {}
       evaluation: close_through
       computable: cobalt  # "close below the 9 EMA or a two-bar break" -> 1-bar trail law
   on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
@@ -63,6 +68,7 @@ trade_def:
     - daily_chart_breakout
     - market_momentum  # aggressive = pos
     - rvol
+    - trail_fit  # v0.7 §14 c.1 — cobalt-computable, which trail capability the stock cleanly follows
     - setup_relation
     - market_alignment  # opposite trend = neg
     - sector_alignment

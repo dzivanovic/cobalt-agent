@@ -1,9 +1,14 @@
 # Source: TRADE-DEFS-BATCH1-v0_1.md §B.3 (SMB Second Chance Scalp sheet).
-# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
+# Schema: TAXONOMY-DRAFT-v0_7.md §10.1 (schema v0.4).
 # NOTE: step 2 (retest) carries no confirmation_policy in the source
 # sheet — trigger.steps[].confirmation_policy is optional in the schema
 # for exactly this reason, rather than inventing a default. CONFIRMED
 # 2026-09-02 (TRADE-DEFS-BATCH2-v0_1.md item 0).
+# v0.7 §14 c.1 RULED: one stop at a time — the trail IS the stop once
+# its on: event fires. Second Chance = hard stop -> trail selected on
+# exit_leg(1) -> leg 2 exits on it (§10.2). trail_ma_close is REMOVED
+# (duplicate spelling); trail_conditions here supersede the 00ff853
+# retrofit (single ma.slow condition) with the full v0.7 §10.2 set.
 trade_def:
   id: second_chance
   name: Second Chance Scalp
@@ -37,10 +42,15 @@ trade_def:
       floor: config
     evaluation: touch
   stop_management:
-    - type: trail_ma_close
-      ma: {value: EMA9, dynamic: false, note: "config; 20 by price action"}
-      tf: working
-      "on": {name: exit_leg, n: 1}
+    - type: fixed
+      "on": {name: entry}
+  trail:
+    conditions:
+      - {type: ma_close, ma: {value: "ma.fast", dynamic: false}}
+      - {type: ma_close, ma: {value: "ma.slow", dynamic: false, note: "config; 20 by price action"}}
+      - {type: prior_bar_break, n: 1}
+    mode: select
+    "on": {name: exit_leg, n: 1}
   exit:
     - fraction: 0.5
       target_type: leg_end
@@ -48,11 +58,8 @@ trade_def:
       evaluation: touch
       computable: cobalt
     - fraction: 0.5
-      target_type: trail  # retro-fit A.8 DwV, TRADE-DEFS-BATCH2-v0_1.md item 0
-      params:
-        conditions:
-          - {type: ma_close, ma: {value: "ma.slow", dynamic: false, note: "config; 20 by price action"}}
-        mode: any
+      target_type: trail  # no params — trade_def.trail defines the conditions (one-stop law)
+      params: {}
       evaluation: close_through
       computable: cobalt
   on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
@@ -68,6 +75,7 @@ trade_def:
     - retest_depth
     - break_leg_range_vs_range_height  # >1 = neg
     - rvol
+    - trail_fit  # v0.7 §14 c.1 — cobalt-computable, which trail capability the stock cleanly follows
     - setup_relation
     - market_alignment
     - sector_alignment

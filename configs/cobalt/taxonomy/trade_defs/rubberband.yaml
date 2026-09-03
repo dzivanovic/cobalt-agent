@@ -1,11 +1,14 @@
 # Source: TRADE-DEFS-BATCH1-v0_1.md §B.6 (Rubber Band Playbook Rev1 deck +
 # 09-02 rulings over the raw SMB sheet).
-# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
+# Schema: TAXONOMY-DRAFT-v0_7.md §10.1 (schema v0.4).
 # NOTE: §B.6's `raise_to {placement: breakeven}` is shorthand, not a full
-# stop-placement object. v0.6 §3.6 defines `entry` (alias `breakeven`) as
+# stop-placement object. v0.7 §3.6 defines `entry` (alias `breakeven`) as
 # a structural ref, so this is encoded below as `{type: level, level_ref:
 # entry}` — applying the documented alias, not inventing new semantics.
 # CONFIRMED 2026-09-02 (TRADE-DEFS-BATCH2-v0_1.md item 0).
+# v0.7 §10.2: trail on: exit_leg(2), conditions [ma_close ma.fast] — leg 3
+# keeps its VWAP target, the trail is its STOP only (no trail exit leg
+# here). trail_ma_close is REMOVED (duplicate spelling, one-stop law).
 trade_def:
   id: rubberband
   name: Rubber Band Scalp
@@ -24,7 +27,7 @@ trade_def:
     - expr: "Extension.state == culminating"  # §3.2 path A (bar character) or B (>=1.25 ATR from open, no catalyst)
   trigger:
     type: bar_break
-    params: {bars_cleared: 2, both_must_be_cleared: true, direction: any}
+    params: {bars_cleared: "cfg(rubberband.bars_cleared)", both_must_be_cleared: true, direction: any}
     confirmation_policy: {type: intrabar}
   stop:
     placement:
@@ -37,10 +40,11 @@ trade_def:
     - type: raise_to
       placement: {type: level, level_ref: entry}  # "breakeven" per source — see NOTE above
       "on": {name: exit_leg, n: 1}
-    - type: trail_ma_close
-      ma: {value: EMA9, dynamic: false}
-      tf: working
-      "on": {name: exit_leg, n: 2}  # deck hard exit — a stop, not a target
+  trail:
+    conditions:
+      - {type: ma_close, ma: {value: "ma.fast", dynamic: false}}
+    mode: select
+    "on": {name: exit_leg, n: 2}  # deck hard exit — a stop, not a target; leg 3 keeps its VWAP target
   exit:
     - fraction: 0.33
       target_type: rr_multiple
@@ -75,6 +79,7 @@ trade_def:
     - prior_session_rehearsal
     - short_interest_float
     - range_wick_ratio  # neg
+    - trail_fit  # v0.7 §14 c.1 — cobalt-computable, which trail capability the stock cleanly follows
     - setup_relation
     - market_alignment
     - sector_alignment

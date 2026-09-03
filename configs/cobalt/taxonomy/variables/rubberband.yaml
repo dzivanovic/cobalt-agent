@@ -12,6 +12,7 @@ variables:
   - {name: prior_session_rehearsal, why_template: "", status: stub}
   - {name: short_interest_float, why_template: "", status: stub}
   - {name: range_wick_ratio, why_template: "", status: stub}
+  - {name: trail_fit, source: cobalt, tier: deterministic, why_template: "", status: stub}
   - {name: setup_relation, why_template: "", status: stub}
   - {name: market_alignment, why_template: "", status: stub}
   - {name: sector_alignment, why_template: "", status: stub}

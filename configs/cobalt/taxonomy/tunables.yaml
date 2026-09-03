@@ -1,0 +1,300 @@
+# Tunable registry — TAXONOMY-DRAFT-v0_7.md §13.1 (schema v0.4).
+# Schema: src/cobalt/taxonomy/tunables.py (TunableRow / TunableRegistry).
+#
+# Seeded from the §13.1 table's DYNAMIC rows only (dyn: yes). The three
+# NON-dynamic globals the table also lists — working_timeframe,
+# ma.fast/ma.slow, stop.buffer — are deliberately NOT here: they stay in
+# defaults.yaml as already built (§13.1's own instruction not to
+# duplicate them); loader.resolve_cfg() falls back to defaults.yaml for
+# those. Two other §13.1 rows are also excluded by the same dyn-only
+# rule: catalyst.grade_min/_max (dyn: no (config), per_trade bto /
+# bella_fade — a doctrine literal, not a replay-gated quantity) and
+# <trade>.max_attempts / <trade>.reentry_window (dyn: no (doctrine)) —
+# both already carried as Tunable[T] fields directly on their
+# trade_defs, not duplicated here.
+#
+# `value: null` + `status: proposed` = the table's "—" cells (no number
+# ruled yet). Per-trade keys are `<trade_id>.<field>` (the loader's
+# hoist-key convention, §13.1 rules paragraph); global / per_indicator
+# keys are bare. `consumers[]` carries the table's own consumer text.
+tunables:
+  # --- global structure primitives -------------------------------------
+  - key: range.micro.touches_per_side
+    value: 2
+    unit: count
+    scope: global
+    dynamic: true
+    status: replay_pending
+    source: ruling
+    consumers: ["micro-Range instantiation"]
+
+  - key: pivot.n
+    value: 2
+    unit: bars
+    scope: global
+    dynamic: true
+    status: replay_pending
+    source: ruling
+    consumers: ["swing pivots"]
+
+  - key: trendline.min_pivots
+    value: 2
+    unit: count
+    scope: global
+    dynamic: true
+    status: replay_pending
+    source: ruling
+    consumers: ["vwap_continuation", "bella_fade"]
+
+  - key: range.wick_ratio_max
+    value: null
+    unit: ratio
+    scope: global
+    dynamic: true
+    status: proposed
+    source: dwv
+    consumers: ["hitchhiker"]
+
+  - key: break_volume_sigma_bars
+    value: null
+    unit: count
+    scope: global
+    dynamic: true
+    status: proposed
+    source: dwv
+    consumers: ["big_dog"]
+
+  - key: extension.path_b_atr
+    value: 1.25
+    unit: atr
+    scope: global
+    dynamic: true
+    status: replay_pending
+    source: ruling
+    consumers: ["Extension instantiation"]
+
+  - key: extension.backside_hh_min
+    value: 1
+    unit: count
+    scope: global
+    dynamic: true
+    status: replay_pending
+    source: ruling
+    consumers: ["backside"]
+
+  - key: extension.backside_hl_min
+    value: 1
+    unit: count
+    scope: global
+    dynamic: true
+    status: replay_pending
+    source: ruling
+    consumers: ["backside"]
+
+  - key: range_break.failed_trap_bars
+    value: null
+    unit: bars
+    scope: global
+    dynamic: true
+    status: proposed
+    source: dwv
+    consumers: ["Range Break (primitive)", "second_chance"]
+
+  - key: range.counter_pivot_min
+    value: 2
+    unit: count
+    scope: global
+    dynamic: true
+    status: replay_pending
+    source: ruling
+    consumers: ["bouncy_ball"]
+
+  - key: gap_retrace_pct_max
+    value: 0.5
+    unit: pct
+    scope: global
+    dynamic: true
+    status: replay_pending
+    source: ruling
+    consumers: ["gap_give_and_go"]
+
+  # --- per_indicator ------------------------------------------------------
+  - key: flat_threshold.ema9
+    value: null
+    unit: ratio
+    scope: per_indicator(ema9)
+    dynamic: true
+    status: proposed
+    source: dwv
+    consumers: ["fashionably_late"]
+
+  - key: flat_threshold.vwap
+    value: null
+    unit: ratio
+    scope: per_indicator(vwap)
+    dynamic: true
+    status: proposed
+    source: dwv
+    consumers: ["fashionably_late"]
+
+  - key: dist.k.vwap
+    value: null
+    unit: atr
+    scope: per_indicator(vwap)
+    dynamic: true
+    status: proposed
+    source: dwv
+    consumers: ["vwap_continuation"]
+
+  # --- per_trade: range.duration_band [5,20] / >=45 / [3,7] --------------
+  - key: hitchhiker.range_duration_band
+    value: [5, 20]
+    unit: min
+    scope: per_trade(hitchhiker)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["hitchhiker"]
+
+  # sheet/ruling gives a floor only ("≥45"), not a closed band — value is
+  # the floor; no upper bound recorded.
+  - key: big_dog.range_duration_band
+    value: 45
+    unit: min
+    scope: per_trade(big_dog)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["big_dog"]
+
+  - key: gap_give_and_go.range_duration_band
+    value: [3, 7]
+    unit: min
+    scope: per_trade(gap_give_and_go)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["gap_give_and_go"]
+
+  # --- per_trade: time_stop.bars (backside / bto / bouncy_ball) ----------
+  - key: backside.time_stop_bars
+    value: 2
+    unit: bars
+    scope: per_trade(backside)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["backside"]
+
+  - key: back_through_open.time_stop_bars
+    value: 2
+    unit: bars
+    scope: per_trade(back_through_open)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["back_through_open"]
+
+  - key: bouncy_ball.time_stop_bars
+    value: 2
+    unit: bars
+    scope: per_trade(bouncy_ball)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["bouncy_ball"]
+
+  # --- per_trade: bar_break_reverse.bars (ggg / big_dog) ------------------
+  - key: gap_give_and_go.bar_break_reverse_bars
+    value: 2
+    unit: bars
+    scope: per_trade(gap_give_and_go)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["gap_give_and_go"]
+
+  - key: big_dog.bar_break_reverse_bars
+    value: 2
+    unit: bars
+    scope: per_trade(big_dog)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["big_dog"]
+
+  # --- per_trade: single-trade rows ---------------------------------------
+  - key: rubberband.bars_cleared
+    value: 2
+    unit: bars
+    scope: per_trade(rubberband)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["rubberband"]
+
+  - key: bella_fade.near_low_duration_max
+    value: null
+    unit: min
+    scope: per_trade(bella_fade)
+    dynamic: true
+    status: proposed
+    source: dwv
+    consumers: ["bella_fade"]
+
+  # --- per_trade: trail_conditions (the 6 trail-carrying trade_defs) -----
+  # Capability SET only (the sheet's trail options); per-instance
+  # selection (mode: select) is card data, not a tunable — §13.1 note.
+  - key: second_chance.trail_conditions
+    value: ["ma_close ma.fast", "ma_close ma.slow", "prior_bar_break 1"]
+    unit: label
+    scope: per_trade(second_chance)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["second_chance"]
+
+  - key: rubberband.trail_conditions
+    value: ["ma_close ma.fast"]
+    unit: label
+    scope: per_trade(rubberband)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["rubberband"]
+
+  - key: vwap_continuation.trail_conditions
+    value: ["ma_close ma.slow"]
+    unit: label
+    scope: per_trade(vwap_continuation)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["vwap_continuation"]
+
+  - key: ema9_scalp.trail_conditions
+    value: ["level high_of_day", "ma_close EMA9"]
+    unit: label
+    scope: per_trade(ema9_scalp)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["ema9_scalp"]
+
+  - key: back_through_open.trail_conditions
+    value: ["prior_bar_break 1", "ma_close EMA9"]
+    unit: label
+    scope: per_trade(back_through_open)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["back_through_open"]
+
+  - key: bouncy_ball.trail_conditions
+    value: ["prior_bar_break 1", "ma_close EMA9"]
+    unit: label
+    scope: per_trade(bouncy_ball)
+    dynamic: true
+    status: replay_pending
+    source: sheet
+    consumers: ["bouncy_ball"]

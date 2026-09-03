@@ -1,5 +1,6 @@
 # Source: TRADE-DEFS-BATCH1-v0_1.md §B.1 (SMB Hitchhiker Scalp sheet).
-# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3).
+# Schema: TAXONOMY-DRAFT-v0_7.md §10.1 (schema v0.4).
+# No trail slot: both exit legs are leg_end targets, not a trail.
 trade_def:
   id: hitchhiker
   name: Hitchhiker Scalp
@@ -15,7 +16,7 @@ trade_def:
     - expr: "InPlay.state == active"
     - expr: "Leg(opening_drive).terminated_by == consolidation"
     - expr: "Range(micro).instantiated"
-    - expr: "Range(micro).duration IN [5, 20] min"  # config, dynamic — Hitchhiker/Big Dog discriminator (§13 replay)
+    - expr: "Range(micro).duration IN cfg(hitchhiker.range_duration_band) min"  # Hitchhiker/Big Dog discriminator (§13 replay)
     - expr: "Range(micro).low >= DayRange.upper_third"
   trigger:
     type: range_break
@@ -47,7 +48,7 @@ trade_def:
   add_policy: {type: none}
   avoid:
     - expr: "Leg(opening_drive).terminated_by == pullback"
-    - expr: "Range(micro).wick_ratio > threshold"  # config, dynamic — "choppy consolidation" (§13 replay)
+    - expr: "Range(micro).wick_ratio > cfg(range.wick_ratio_max)"  # "choppy consolidation" (§13 replay)
     - text: "consolidation well beyond ~20 min"
   quality_factors:
     - Range.duration

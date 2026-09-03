@@ -1,12 +1,18 @@
 # Source: TRADE-DEFS-BATCH2-v0_1.md §B.2 (SMB VWAP Continuation sheet).
-# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3) + §A amendments
+# Schema: TAXONOMY-DRAFT-v0_7.md §10.1 (schema v0.4) + §A amendments
 # (v0.7 extensions, TRADE-DEFS-BATCH2-v0_1.md §A).
+# v0.7 §14 c.2: class = trade shape + horizon, not exit mechanics —
+# "trailing exit = move2move" (v0.6 wording) was STRUCK; move2move here
+# because this is a momentum move surviving consolidation to a further
+# target (VWAP hold → HOD → EMA trail continuation), not because it
+# trails. v0.7 §10.2: trail on: exit_leg(1), conditions [ma_close
+# ma.slow]; leg 2 target_type: trail with no params.
 trade_def:
   id: vwap_continuation
   name: VWAP Continuation
   aliases: ["VWAP Cont", VC]
   family: [continuation]
-  class: move2move  # RULED: trailing exit = move2move
+  class: move2move
   valid_setups:
     - {setup_ref: gap_and_go, relation: with_trend}
     - {setup_ref: range_break, relation: with_trend}
@@ -14,13 +20,13 @@ trade_def:
   preconditions:
     - expr: "InPlay.state == active"
     - expr: "Leg(opening_drive OR impulse).direction == trade_direction"  # strong move in the morning
-    - expr: "Leg(pullback).direction == opposite(trade_direction) AND dist(Leg(pullback).end, VWAP) <= k * ATR(working_tf)"  # k config
+    - expr: "Leg(pullback).direction == opposite(trade_direction) AND dist(Leg(pullback).end, VWAP) <= cfg(dist.k.vwap) * ATR(working_tf)"
   trigger:
     type: trendline_break
     params:
       ref: "Level_ref(trendline)"
       anchor_leg: "Leg(pullback)"
-      pivots: 2  # config; flat case = break of Range(micro).top; a VWAP/base touch never triggers
+      pivots: "cfg(trendline.min_pivots)"  # flat case = break of Range(micro).top; a VWAP/base touch never triggers
     confirmation_policy: {type: intrabar}
   stop:
     placement:
@@ -33,6 +39,11 @@ trade_def:
   stop_management:
     - type: fixed
       "on": {name: entry}
+  trail:
+    conditions:
+      - {type: ma_close, ma: {value: "ma.slow", dynamic: false, note: "config 20; sheet 21"}}
+    mode: select
+    "on": {name: exit_leg, n: 1}
   exit:
     - fraction: 0.5
       target_type: level
@@ -40,11 +51,8 @@ trade_def:
       evaluation: touch
       computable: cobalt  # "sell half into the high of the day"
     - fraction: 0.5
-      target_type: trail
-      params:
-        conditions:
-          - {type: ma_close, ma: {value: "ma.slow", dynamic: false, note: "config 20; sheet 21"}}
-        mode: any
+      target_type: trail  # no params — trade_def.trail defines the conditions (one-stop law)
+      params: {}
       evaluation: close_through
       computable: cobalt  # "trail the rest with the 21 EMA"
   on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
@@ -61,6 +69,7 @@ trade_def:
     - htf_level_breakout
     - resistance_rejection  # neg
     - rvol
+    - trail_fit  # v0.7 §14 c.1 — cobalt-computable, which trail capability the stock cleanly follows
     - setup_relation
     - market_alignment
     - sector_alignment

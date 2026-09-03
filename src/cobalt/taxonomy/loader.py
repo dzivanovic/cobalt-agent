@@ -22,6 +22,7 @@ from pydantic import BaseModel, ValidationError
 
 from .defaults import TaxonomyDefaults
 from .trade_def import StopBuffer, TradeDef, Tunable
+from .tunables import TunableRegistry, TunableRow
 from .variables import VariableRegistry
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -30,9 +31,11 @@ TRADE_DEFS_DIR = TAXONOMY_DIR / "trade_defs"
 VARIABLES_DIR = TAXONOMY_DIR / "variables"
 CAMERON_GRID_PATH = TAXONOMY_DIR / "cameron_grid.yaml"
 DEFAULTS_PATH = TAXONOMY_DIR / "defaults.yaml"
+TUNABLES_PATH = TAXONOMY_DIR / "tunables.yaml"
 
 DEFAULT_STOP_BUFFER_CENTS = 0.02  # v0.6 §14 ruling 3 / A.6 flag law
 _MA_REF_PATTERN = re.compile(r"^ma\.(fast|slow)$")
+_CFG_TOKEN_PATTERN = re.compile(r"cfg\(([a-zA-Z0-9_.]+)\)")  # v0.7 §13.1 grammar atom
 
 
 class TaxonomyConfigError(RuntimeError):
@@ -81,6 +84,55 @@ def load_defaults(path: Path = DEFAULTS_PATH) -> TaxonomyDefaults:
         raise TaxonomyConfigError(f"{path}: invalid defaults:\n{e}") from e
 
 
+def load_tunables(path: Path = TUNABLES_PATH) -> TunableRegistry:
+    if not path.exists():
+        raise TaxonomyConfigError(f"tunables.yaml not found: {path}")
+    raw = yaml.safe_load(path.read_text())
+    if not isinstance(raw, dict):
+        raise TaxonomyConfigError(
+            f"{path}: expected a YAML mapping, got {type(raw).__name__}"
+        )
+    try:
+        return TunableRegistry(**raw)
+    except ValidationError as e:
+        raise TaxonomyConfigError(f"{path}: invalid tunables registry:\n{e}") from e
+
+
+def resolve_cfg(
+    key: str, tunables: dict[str, TunableRow], defaults: TaxonomyDefaults
+) -> Any:
+    """The ONE `cfg(key)` resolver (v0.7 §13.1): tunables.yaml first,
+    then defaults.yaml's non-dynamic globals, else fail loud. Never
+    silently falls back to a made-up value."""
+    row = tunables.get(key)
+    if row is not None:
+        return row.value
+    if key == "working_timeframe":
+        return defaults.working_timeframe
+    if is_ma_ref(key):
+        return resolve_ma_ref(key, defaults)
+    raise TaxonomyConfigError(
+        f"cfg({key}) has no row in tunables.yaml and no defaults.yaml fallback"
+    )
+
+
+def iter_cfg_tokens(obj: Any) -> Iterator[str]:
+    """Token-scan (not parsing) every string reachable from `obj` for
+    `cfg(<key>)` atoms — used to fail loud on an unknown key at load
+    time (v0.7 §13.1)."""
+    if isinstance(obj, str):
+        yield from _CFG_TOKEN_PATTERN.findall(obj)
+    elif isinstance(obj, BaseModel):
+        for field_name in type(obj).model_fields:
+            yield from iter_cfg_tokens(getattr(obj, field_name))
+    elif isinstance(obj, (list, tuple)):
+        for item in obj:
+            yield from iter_cfg_tokens(item)
+    elif isinstance(obj, dict):
+        for item in obj.values():
+            yield from iter_cfg_tokens(item)
+
+
 def resolve_ma_ref(value: str, defaults: TaxonomyDefaults) -> int:
     """Resolve an `ma.fast` / `ma.slow` ref string (A.8 MA-period note)
     against `defaults.yaml`. Any other string is not an `ma.*` ref —
@@ -127,6 +179,7 @@ def load_trade_defs(
 
     grid = load_cameron_grid(cameron_grid_path)
     defaults = load_defaults()
+    tunables = load_tunables().by_key
     result: dict[str, TradeDef] = {}
 
     for file in sorted(trade_defs_dir.glob("*.yaml")):
@@ -177,6 +230,12 @@ def load_trade_defs(
         for tunable in iter_tunables(td):
             if isinstance(tunable.value, str) and is_ma_ref(tunable.value):
                 resolve_ma_ref(tunable.value, defaults)  # fail-loud on an unknown ma.* key
+
+        for cfg_key in iter_cfg_tokens(td):
+            try:
+                resolve_cfg(cfg_key, tunables, defaults)
+            except TaxonomyConfigError as e:
+                raise TaxonomyConfigError(f"{file}: trade_def {td.id!r}: {e}") from e
 
         for buf in iter_stop_buffers(td):
             if buf.cents.value != DEFAULT_STOP_BUFFER_CENTS:

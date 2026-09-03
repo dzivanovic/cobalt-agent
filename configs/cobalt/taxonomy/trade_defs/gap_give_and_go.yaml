@@ -1,6 +1,8 @@
 # Source: TRADE-DEFS-BATCH2-v0_1.md §B.1 (SMB Gap, Give and Go sheet).
-# Schema: TAXONOMY-DRAFT-v0_6.md §10.1 (schema v0.3) + §A amendments
+# Schema: TAXONOMY-DRAFT-v0_7.md §10.1 (schema v0.4) + §A amendments
 # (v0.7 extensions, TRADE-DEFS-BATCH2-v0_1.md §A).
+# No trail slot: the move2move exit here is a double-bar break
+# (bar_break_reverse), a TARGET, not a trail (1-bar trail law, v0.7 §0).
 # NOTE (flagged in the population report): stop_management[0].raise_to
 # .placement is transcribed from §B as `structural_extreme {ref:
 # Range(micro).top}`, but `Range(micro).top` is not a §3.6 StructuralRef
@@ -26,7 +28,7 @@ trade_def:
     - expr: "Leg(opening_drive).direction == opposite(Gap.direction)"  # the "give"
     - expr: "Leg(opening_drive).terminated_by == consolidation"
     - expr: "Range(micro).instantiated"
-    - expr: "Range(micro).duration IN [3, 7] min"  # config, dynamic (§13 replay)
+    - expr: "Range(micro).duration IN cfg(gap_give_and_go.range_duration_band) min"
     - expr: "Range(micro).low > Level_ref(support)"  # PML / HTF resistance-turned-support
     - expr: "Range(micro).height <= 0.5 * Leg(opening_drive).range"  # consolidation > 50% of opening move = avoid
   trigger:
@@ -47,7 +49,7 @@ trade_def:
   exit:
     - fraction: 1.0
       target_type: bar_break_reverse
-      params: {bars: 2, after: "leg_end(2)"}
+      params: {bars: "cfg(gap_give_and_go.bar_break_reverse_bars)", after: "leg_end(2)"}
       evaluation: close_through
       computable: cobalt
   on_cic: {triggers: [1, 2, 3, 4], action: exit_all}   # advisory
@@ -55,7 +57,7 @@ trade_def:
   reentry_window: {value: "3 min", dynamic: false, note: "A.1; intersects the 08-27 re-entry rule, stricter wins"}
   add_policy: {type: none}
   avoid:
-    - expr: "gap_retrace_pct > 0.5"  # sheet: "very careful"
+    - expr: "gap_retrace_pct > cfg(gap_retrace_pct_max)"  # sheet: "very careful"
   quality_factors:
     - break_bar_volume_vs_consolidation
     - Range.volume_contraction  # <=50% guide
