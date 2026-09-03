@@ -39,12 +39,12 @@ trade_def:
     placement:
       type: structural_extreme
       ref: consolidation_low
-      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}
+      buffer: {type: fixed, cents: {value: "cfg(stop.buffer)", dynamic: false}}
       floor: config
     evaluation: touch
   stop_management:
     - type: raise_to
-      placement: {type: level, level_ref: "Range(micro).top", buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}}  # see NOTE above; "pullback MUST hold the consolidation highs"
+      placement: {type: level, level_ref: "Range(micro).top", buffer: {type: fixed, cents: {value: "cfg(stop.buffer)", dynamic: false}}}  # see NOTE above; "pullback MUST hold the consolidation highs"
       "on": {name: leg_end, n: 1}
   exit:
     - fraction: 1.0

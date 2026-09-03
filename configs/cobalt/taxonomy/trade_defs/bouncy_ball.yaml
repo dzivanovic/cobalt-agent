@@ -31,7 +31,7 @@ trade_def:
     placement:
       type: structural_extreme
       ref: recent_lower_high  # A.7 — "just above the lower high"; sheet gives no number
-      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}
+      buffer: {type: fixed, cents: {value: "cfg(stop.buffer)", dynamic: false}}
       floor: config
     evaluation: touch
   stop_management:

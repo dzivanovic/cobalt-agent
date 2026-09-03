@@ -12,7 +12,6 @@ config boundary law; see also `archiver/config.py`'s watchlists loader).
 from __future__ import annotations
 
 import re
-import warnings
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -33,7 +32,6 @@ CAMERON_GRID_PATH = TAXONOMY_DIR / "cameron_grid.yaml"
 DEFAULTS_PATH = TAXONOMY_DIR / "defaults.yaml"
 TUNABLES_PATH = TAXONOMY_DIR / "tunables.yaml"
 
-DEFAULT_STOP_BUFFER_CENTS = 0.02  # v0.6 §14 ruling 3 / A.6 flag law
 _MA_REF_PATTERN = re.compile(r"^ma\.(fast|slow)$")
 _CFG_TOKEN_PATTERN = re.compile(r"cfg\(([a-zA-Z0-9_.]+)\)")  # v0.7 §13.1 grammar atom
 
@@ -237,14 +235,6 @@ def load_trade_defs(
             except TaxonomyConfigError as e:
                 raise TaxonomyConfigError(f"{file}: trade_def {td.id!r}: {e}") from e
 
-        for buf in iter_stop_buffers(td):
-            if buf.cents.value != DEFAULT_STOP_BUFFER_CENTS:
-                warnings.warn(
-                    f"{file}: trade_def {td.id!r} stop buffer {buf.cents.value} "
-                    f"differs from default {DEFAULT_STOP_BUFFER_CENTS} (A.6 flag law)",
-                    stacklevel=2,
-                )
-
         result[td.id] = td
 
     return result
@@ -269,9 +259,11 @@ def iter_tunables(obj: Any) -> Iterator[Tunable]:
 
 
 def iter_stop_buffers(obj: Any) -> Iterator[StopBuffer]:
-    """Walk a TradeDef and yield every StopBuffer found — used by the A.6
-    flag law (loader.load_trade_defs warns when a buffer differs from
-    the 0.02 default)."""
+    """Walk a TradeDef and yield every StopBuffer found — introspection
+    helper (CLI table, tests). The A.6 PROPOSAL flag (sheet_value !=
+    value) now lives on the tunable row itself (ruling 09-03:
+    stop.buffer is a tunable, not a Pydantic constant) — visible via
+    `load_tunables()`, not a load-time warning here."""
     if isinstance(obj, StopBuffer):
         yield obj
     elif isinstance(obj, BaseModel):

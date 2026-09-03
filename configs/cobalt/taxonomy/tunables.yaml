@@ -1,13 +1,22 @@
 # Tunable registry — TAXONOMY-DRAFT-v0_7.md §13.1 (schema v0.4).
 # Schema: src/cobalt/taxonomy/tunables.py (TunableRow / TunableRegistry).
 #
-# Seeded from the §13.1 table's DYNAMIC rows only (dyn: yes). The three
-# NON-dynamic globals the table also lists — working_timeframe,
-# ma.fast/ma.slow, stop.buffer — are deliberately NOT here: they stay in
-# defaults.yaml as already built (§13.1's own instruction not to
-# duplicate them); loader.resolve_cfg() falls back to defaults.yaml for
-# those. Two other §13.1 rows are also excluded by the same dyn-only
-# rule: catalyst.grade_min/_max (dyn: no (config), per_trade bto /
+# Seeded from the §13.1 table's DYNAMIC rows, plus `stop.buffer` (ruling
+# 09-03, superseding ADR-0003's exclusion below). The other two
+# NON-dynamic globals the table lists — working_timeframe, ma.fast/
+# ma.slow — stay OUT: they stay in defaults.yaml as already built
+# (§13.1's own instruction not to duplicate them); loader.resolve_cfg()
+# falls back to defaults.yaml for those. `stop.buffer` is IN as of
+# 09-03: RULED (Dejan) — default stop buffer = 0.02 everywhere, preset,
+# tunable per trade, never hardcoded as a Pydantic default. Per-trade
+# override = a `<trade_id>.stop.buffer` row (same hoist convention as
+# every other per-trade key); back_through_open and bella_fade carry
+# one each (`sheet_value: 0.01` — A.6 PROPOSAL record, visible, not
+# applied). `StopBuffer.cents` (trade_def.py) resolves via `cfg(key)`
+# like any other tunable — no inline literal in trade_def YAML.
+#
+# Two other §13.1 rows are also excluded by the same dyn-only rule:
+# catalyst.grade_min/_max (dyn: no (config), per_trade bto /
 # bella_fade — a doctrine literal, not a replay-gated quantity) and
 # <trade>.max_attempts / <trade>.reentry_window (dyn: no (doctrine)) —
 # both already carried as Tunable[T] fields directly on their
@@ -18,6 +27,36 @@
 # hoist-key convention, §13.1 rules paragraph); global / per_indicator
 # keys are bare. `consumers[]` carries the table's own consumer text.
 tunables:
+  # --- stop buffer (ruled 09-03: tunable, not a Pydantic constant) -------
+  - key: stop.buffer
+    value: 0.02
+    unit: cents
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["all stops"]
+
+  - key: back_through_open.stop.buffer
+    value: 0.02
+    unit: cents
+    scope: per_trade(back_through_open)
+    dynamic: false
+    status: solidified
+    source: ruling
+    sheet_value: 0.01
+    consumers: ["back_through_open stop"]
+
+  - key: bella_fade.stop.buffer
+    value: 0.02
+    unit: cents
+    scope: per_trade(bella_fade)
+    dynamic: false
+    status: solidified
+    source: ruling
+    sheet_value: 0.01
+    consumers: ["bella_fade stop"]
+
   # --- global structure primitives -------------------------------------
   - key: range.micro.touches_per_side
     value: 2

@@ -6,7 +6,6 @@ from __future__ import annotations
 import copy
 import subprocess
 import sys
-import warnings
 from pathlib import Path
 
 import pytest
@@ -138,7 +137,7 @@ def test_indicator_placement_accepts_known_indicator(base_trade_def_dict):
     assert isinstance(td.stop.placement, IndicatorPlacement)
     assert td.stop.placement.indicator == "EMA21"
     assert td.stop.placement.snapshot == "live"
-    assert td.stop.placement.buffer.cents.value == 0.02  # default
+    assert td.stop.placement.buffer.cents.value == "cfg(stop.buffer)"  # default cfg ref
 
 
 def test_indicator_placement_rejects_unknown_indicator(base_trade_def_dict):
@@ -314,36 +313,68 @@ def test_variable_registry_entry_frontier_defaults_false_and_round_trips():
     assert frontier_entry.frontier is True
 
 
-def test_stop_buffer_differing_from_default_warns_not_raises(tmp_path):
-    trade_defs_dir = tmp_path / "trade_defs"
-    variables_dir = tmp_path / "variables"
-    trade_defs_dir.mkdir()
-    variables_dir.mkdir()
-
-    raw = yaml.safe_load((TRADE_DEFS_DIR / "hitchhiker.yaml").read_text())
-    raw["trade_def"]["stop"]["placement"]["buffer"]["cents"]["value"] = 0.05
-    (trade_defs_dir / "hitchhiker.yaml").write_text(yaml.safe_dump(raw))
-
-    registry_raw = yaml.safe_load((VARIABLES_DIR / "hitchhiker.yaml").read_text())
-    (variables_dir / "hitchhiker.yaml").write_text(yaml.safe_dump(registry_raw))
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        trade_defs = load_trade_defs(
-            trade_defs_dir=trade_defs_dir,
-            variables_dir=variables_dir,
-            cameron_grid_path=CAMERON_GRID_PATH,
-        )
-    assert "hitchhiker" in trade_defs  # loaded, not rejected — WARNS not fails
-    messages = [str(w.message) for w in caught]
-    assert any("0.05" in m and "A.6" in m for m in messages)
+def test_stop_buffer_cents_must_be_cfg_ref(base_trade_def_dict):
+    # ruling 09-03: stop.buffer is a tunable, never a Pydantic literal —
+    # StopBuffer.cents must be a cfg(key) reference, not a bare float.
+    base_trade_def_dict["stop"]["placement"]["buffer"]["cents"] = {
+        "value": 0.05,
+        "dynamic": False,
+    }
+    with pytest.raises(ValidationError):
+        TradeDef(**base_trade_def_dict)
 
 
 def test_iter_stop_buffers_finds_every_buffer_in_a_trade_def():
     trade_defs = load_trade_defs()
     buffers = list(iter_stop_buffers(trade_defs["gap_give_and_go"]))
     assert len(buffers) >= 2  # stop.placement.buffer + raise_to.placement.buffer
-    assert all(b.cents.value == 0.02 for b in buffers)
+    assert all(b.cents.value == "cfg(stop.buffer)" for b in buffers)
+
+
+# --- stop.buffer tunable (ruling 09-03) -------------------------------------
+
+
+def test_stop_buffer_global_row_resolves():
+    registry = load_tunables()
+    defaults = load_defaults()
+    assert resolve_cfg("stop.buffer", registry.by_key, defaults) == 0.02
+
+
+def test_stop_buffer_per_trade_override_row_wins():
+    # back_through_open.yaml / bella_fade.yaml reference their own
+    # per-trade key directly (same hoist convention as every other
+    # per-trade tunable) — that row, not the global row, is what
+    # resolves for those trades.
+    registry = load_tunables()
+    defaults = load_defaults()
+    trade_defs = load_trade_defs()
+
+    assert (
+        trade_defs["back_through_open"].stop.placement.buffer.cents.value
+        == "cfg(back_through_open.stop.buffer)"
+    )
+    assert (
+        trade_defs["bella_fade"].stop.placement.buffer.cents.value
+        == "cfg(bella_fade.stop.buffer)"
+    )
+    assert resolve_cfg("back_through_open.stop.buffer", registry.by_key, defaults) == 0.02
+    assert resolve_cfg("bella_fade.stop.buffer", registry.by_key, defaults) == 0.02
+
+
+def test_stop_buffer_row_removed_fails_loud():
+    defaults = load_defaults()
+    with pytest.raises(TaxonomyConfigError):
+        resolve_cfg("stop.buffer", {}, defaults)
+
+
+def test_back_through_open_and_bella_fade_carry_sheet_value_0_01():
+    registry = load_tunables()
+    bto_row = registry.by_key["back_through_open.stop.buffer"]
+    bella_row = registry.by_key["bella_fade.stop.buffer"]
+    assert bto_row.value == 0.02
+    assert bto_row.sheet_value == 0.01
+    assert bella_row.value == 0.02
+    assert bella_row.sheet_value == 0.01
 
 
 def test_batch2_ma_slow_refs_resolve_at_load_time():

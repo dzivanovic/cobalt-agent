@@ -304,22 +304,31 @@ class ConfirmationPolicy(BaseModel):
         return self
 
 
+_CFG_REF_PATTERN = re.compile(r"^cfg\([a-zA-Z0-9_.]+\)$")
+
+
 class StopBuffer(BaseModel):
     """v0.6 §14 ruling 3 / RULINGS IN FORCE: `fixed` is the only buffer
-    type; `spread` is not valid. Default 0.02."""
+    type; `spread` is not valid. `cents` is never a literal — it is a
+    `cfg(key)` reference resolved against the tunable registry at load
+    time (ruling 09-03: stop.buffer is a tunable, not a Pydantic
+    constant). Default is the global `cfg(stop.buffer)` row; a trade
+    with its own per-trade override row (e.g. back_through_open,
+    bella_fade) references that key directly — same hoist convention as
+    every other per-trade tunable key."""
 
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["fixed"] = "fixed"
-    cents: Tunable[float] = Field(
-        default_factory=lambda: Tunable[float](value=0.02, dynamic=False)
+    cents: Tunable[str] = Field(
+        default_factory=lambda: Tunable[str](value="cfg(stop.buffer)", dynamic=False)
     )
 
     @model_validator(mode="after")
-    def _positive_cents(self) -> StopBuffer:
-        if self.cents.value <= 0:
+    def _cents_is_cfg_ref(self) -> StopBuffer:
+        if not _CFG_REF_PATTERN.match(self.cents.value):
             raise ValueError(
-                f"stop buffer cents must be positive, got {self.cents.value}"
+                f"stop buffer cents must be a cfg(key) reference, got {self.cents.value!r}"
             )
         return self
 

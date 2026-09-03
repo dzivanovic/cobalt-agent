@@ -34,7 +34,7 @@ trade_def:
     placement:
       type: indicator
       indicator: EMA21
-      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}
+      buffer: {type: fixed, cents: {value: "cfg(stop.buffer)", dynamic: false}}
       snapshot: at_entry
       floor: config
     evaluation: touch  # "just below the 21 EMA"

@@ -11,7 +11,7 @@ trade_def:
   name: First VWAP Pullback
   aliases: ["1st VWAP Pullback", FVP]
   family: [opening_drive, continuation]
-  class: scalp  # single target, one leg out
+  class: scalp  # shape/horizon: sub-15min TF, seconds-to-~45min (§0); not exit-leg count (A.10 STRUCK, §14 c.2)
   valid_setups:
     - {setup_ref: gap_and_go, relation: with_trend}
     - {setup_ref: range_break, relation: with_trend}
@@ -30,7 +30,7 @@ trade_def:
     placement:
       type: indicator
       indicator: VWAP
-      buffer: {type: fixed, cents: {value: 0.02, dynamic: false}}
+      buffer: {type: fixed, cents: {value: "cfg(stop.buffer)", dynamic: false}}
       snapshot: at_entry
       floor: config
     evaluation: touch  # "just below VWAP"

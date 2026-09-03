@@ -63,18 +63,29 @@ untouched (strangler rule).
   registry.tunables if row.dynamic and row.status != solidified]` — the
   §13 backlog as a query, not a hand-maintained list) +
   `configs/cobalt/taxonomy/tunables.yaml`, seeded with the 30 §13.1-table
-  rows whose `dyn` column is `yes`. The three non-dynamic globals the
-  table also lists (`working_timeframe`, `ma.fast`/`ma.slow`,
-  `stop.buffer`) are deliberately excluded — §13.1's own text says they
-  "stay in defaults.yaml as already built"; **`stop.buffer` is not
-  actually a `defaults.yaml`/`TaxonomyDefaults` field** (it is a
-  Pydantic field default on `StopBuffer.cents`, `trade_def.py`) — flagged
-  here rather than silently adding a new defaults.yaml field the task
-  didn't ask for; `resolve_cfg` does not special-case `stop.buffer`.
-  `catalyst.grade_min`/`_max` and `<trade>.max_attempts`/
-  `<trade>.reentry_window` (both `dyn: no` in the table) are also
-  excluded from `tunables.yaml` — they stay exactly where they already
-  lived, as `Tunable[T]` fields directly on their trade_defs.
+  rows whose `dyn` column is `yes`. Two of the three non-dynamic globals
+  the table also lists (`working_timeframe`, `ma.fast`/`ma.slow`) are
+  excluded — §13.1's own text says they "stay in defaults.yaml as
+  already built" — and `resolve_cfg` falls back to `defaults.yaml` for
+  those. **`stop.buffer` is IN as of 09-03**, superseding this ADR's
+  original exclusion of it: RULED (Dejan) — default stop buffer = 0.02
+  everywhere, preset, tunable per trade, never hardcoded as a Pydantic
+  field default. `tunables.yaml` carries a global `stop.buffer` row
+  (`value: 0.02, status: solidified, source: ruling, consumers: [all
+  stops]`) plus a `<trade_id>.stop.buffer` per-trade override row for
+  `back_through_open` and `bella_fade` (`value: 0.02, sheet_value: 0.01`
+  — the A.6 PROPOSAL record stays visible, not applied). `StopBuffer.cents`
+  (`trade_def.py`) is now a `Tunable[str]` cfg(key) reference (default
+  `"cfg(stop.buffer)"`) resolved by the same `resolve_cfg` path as every
+  other tunable — no inline `0.02` literal survives in any trade_def
+  YAML; `back_through_open.yaml` / `bella_fade.yaml` reference their own
+  per-trade key directly (same hoist convention as every other per-trade
+  key), which is how the override "wins" — no special-case precedence
+  logic in `resolve_cfg` itself. `catalyst.grade_min`/`_max` and
+  `<trade>.max_attempts`/`<trade>.reentry_window` (both `dyn: no` in the
+  table) remain excluded from `tunables.yaml` — they stay exactly where
+  they already lived, as `Tunable[T]` fields directly on their
+  trade_defs.
 - **`loader.resolve_cfg(key, tunables, defaults)`** — the ONE `cfg(key)`
   resolver: `tunables.yaml` row first, else `defaults.yaml`'s
   `working_timeframe` / `ma.fast` / `ma.slow` (via the existing

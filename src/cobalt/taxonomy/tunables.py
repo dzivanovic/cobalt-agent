@@ -4,11 +4,16 @@
 Every `config, dynamic` quantity named by the §0 "Dynamic definitions"
 law is a row here, referenced from predicate/param strings by key via
 the `cfg(key)` grammar atom (loader.py's `iter_cfg_tokens` /
-`resolve_cfg`). The three NON-dynamic globals (`working_timeframe`,
-`ma.fast`/`ma.slow`, `stop.buffer`) are deliberately NOT rows here —
-they stay in `defaults.yaml` (`defaults.py`'s `TaxonomyDefaults`) per
-§13.1's own instruction not to duplicate them; `resolve_cfg` falls back
-to `defaults.yaml` for those.
+`resolve_cfg`). Two NON-dynamic globals (`working_timeframe`,
+`ma.fast`/`ma.slow`) are deliberately NOT rows here — they stay in
+`defaults.yaml` (`defaults.py`'s `TaxonomyDefaults`) per §13.1's own
+instruction not to duplicate them; `resolve_cfg` falls back to
+`defaults.yaml` for those. `stop.buffer` IS a row here (ruling 09-03,
+superseding ADR-0003's original exclusion): it is a tunable, never a
+Pydantic literal — `trade_def.py`'s `StopBuffer.cents` resolves it via
+`cfg(stop.buffer)`, with per-trade override rows
+(`<trade_id>.stop.buffer`) taking precedence for the trades that
+reference them directly.
 
 No engine semantics: this module is schema + a pure `dynamic and status
 != solidified` query (`replay_backlog`). Replay writes `status`, never
