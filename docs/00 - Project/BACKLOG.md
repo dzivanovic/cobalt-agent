@@ -350,95 +350,23 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
   vault (0 - Inbox, 0 - Projects) untouched, out of scope (2026-08-26).
 - TRIAGE ruling session → TRIAGE.md (2026-08-22).
 
-## Taxonomy replay validation (v0.6 §13)
+## Taxonomy replay validation (v0.7 §13/§13.1)
 
-Dynamic definitions (TAXONOMY-DRAFT-v0_6.md §0 "Dynamic definitions"
-law): each must stand archiver-corpus replay before being counted
-solidified. Corpus for all items below: the Bar Archiver's minute-bar
-history (`src/cobalt/archiver`, `configs/cobalt/watchlists.yaml`
-tickers). Pass criterion for every item is **TBD at n≥30** until a
-replay session sets it.
+Superseded 2026-09-02 (v0.7 schema v0.4 commit): the itemized list this
+section used to carry is now a query, not a hand-maintained list
+(v0.7 change log #19 — "Tunable slot"). Every `config, dynamic`
+quantity (v0.6/v0.7 §0 "Dynamic definitions" law) is a row in
+`configs/cobalt/taxonomy/tunables.yaml`
+(`src/cobalt/taxonomy/tunables.py`'s `TunableRow`); the backlog is
+`tunables.replay_backlog(registry)` — every row with `dynamic: true`
+and `status != solidified` — surfaced by
+`python -m cobalt.taxonomy.validate`'s summary line and covered by
+`tests/taxonomy/test_trade_defs.py::test_dynamic_tunables_appear_in_replay_backlog`.
+Corpus for every row: the Bar Archiver's minute-bar history
+(`src/cobalt/archiver`, `configs/cobalt/watchlists.yaml` tickers). Pass
+criterion is **TBD at n≥30** per row until a replay session sets it and
+writes `status` (never `value` — a value change stays a Dejan ruling).
 
-- **Consolidation 2-touch rule** — validates: intraday consolidation
-  instantiates a micro-scale Range on 2 touches per side (v0.6 §2 item
-  3). Config key: `taxonomy.range.consolidation_touches`. Corpus:
-  archiver minute bars. Pass criterion: TBD at n≥30.
-- **leg=wave alias** — validates: `leg`/`wave` are the same record
-  (v0.6 §3.1); first consumer is Hitchhiker's leg_end(1)/leg_end(2) exit
-  targets. Config key: n/a (data-model alias, not a threshold). Corpus:
-  archiver minute bars, Hitchhiker instances. Pass criterion: TBD at
-  n≥30.
-- **Extension paths A/B thresholds** — validates: Extension
-  instantiates via path A (culminating bar: HV bar ≥ MA+2σ that is also
-  the run's widest body) or path B (≥1.25 ATR from the open,
-  `catalyst_ref: null`) (v0.6 §3.2). Config keys:
-  `taxonomy.extension.culminating_bar_sigma`,
-  `taxonomy.extension.atr_from_open_threshold`. Corpus: archiver minute
-  bars. Pass criterion: TBD at n≥30.
-- **Pivot N=2** — validates: swing pivot N = 2 bars each side (v0.6
-  §3.3). Config key: `taxonomy.pivot.n`. Corpus: archiver minute bars.
-  Pass criterion: TBD at n≥30.
-- **failed_trap N** — validates: a Range Break's `failed_trap` state =
-  close back inside within N bars of the break (v0.6 §3.4). Config key:
-  `taxonomy.range_break.failed_trap_bars`. Corpus: archiver minute bars.
-  Pass criterion: TBD at n≥30.
-- **Range.duration bands (5-20 / >=45 min)** — validates: Hitchhiker's
-  micro-Range precondition band (5–20 min) and Big Dog's (≥45 min
-  default) as the Hitchhiker/Big Dog discriminator (v0.6 §4). Config
-  keys: `taxonomy.trade_defs.hitchhiker.range_duration_band`,
-  `taxonomy.trade_defs.big_dog.range_duration_min`. Corpus: archiver
-  minute bars, Hitchhiker + Big Dog instances. Pass criterion: TBD at
-  n≥30.
-- **flat_threshold per indicator (EMA9, VWAP)** — validates:
-  `flat(indicator, window)` ⇔ `abs(slope_norm) < flat_threshold[indicator]`,
-  separate keys for EMA9 (Fashionably Late avoid window, Back$ide slope
-  precondition) and VWAP (Fashionably Late trigger precondition) (v0.6
-  §3.5). Config keys: `taxonomy.flat_threshold.ema9`,
-  `taxonomy.flat_threshold.vwap`. Corpus: archiver minute bars. Pass
-  criterion: TBD at n≥30.
-- **Range.wick_ratio threshold** — validates: the "choppy consolidation"
-  avoid threshold on `Range.wick_ratio` (avg wick ÷ avg body over the
-  range) (v0.6 §3.0; Hitchhiker avoid, Rubberband quality factor). Config
-  key: `taxonomy.range.wick_ratio_avoid_threshold`. Corpus: archiver
-  minute bars. Pass criterion: TBD at n≥30.
-- **break_volume_sigma_bars** — validates: Big Dog's break-volume
-  quality factor, consecutive bars ≥ MA+2σ (v0.6 §10, Big Dog quality
-  factors). Config key: `taxonomy.big_dog.break_volume_sigma_bars`.
-  Corpus: archiver minute bars, Big Dog instances. Pass criterion: TBD at
-  n≥30.
-- **Range.duration [3,7] min band** — validates: Gap Give and Go's
-  micro-Range duration precondition (TRADE-DEFS-BATCH2-v0_1.md §B.1,
-  §13). Config key: `taxonomy.trade_defs.gap_give_and_go.range_duration_band`.
-  Corpus: archiver minute bars, GGG instances. Pass criterion: TBD at
-  n≥30.
-- **trendline pivots N** — validates: `trendline_break` trigger's pivot
-  count (default 2, A.3) for VWAP Continuation (anchor
-  `Leg(pullback)`) and Bella Fade (anchor `Leg(opening_drive)`). Config
-  key: `taxonomy.trendline_break.pivots`. Corpus: archiver minute bars,
-  VWAP Continuation + Bella Fade instances. Pass criterion: TBD at n≥30.
-- **dist() k per indicator** — validates: `dist(a, b) <= k·ATR(working_tf)`
-  "near VWAP"/"near EMA" thresholds (A.13), first consumer VWAP
-  Continuation's pullback-depth precondition. Config key:
-  `taxonomy.dist.k.<indicator>`. Corpus: archiver minute bars. Pass
-  criterion: TBD at n≥30.
-- **counter_pivot_count threshold** — validates: Bouncy Ball's
-  `Range(micro).counter_pivot_count >= 2` precondition (A.16). Config
-  key: `taxonomy.bouncy_ball.counter_pivot_count_min`. Corpus: archiver
-  minute bars, Bouncy Ball instances. Pass criterion: TBD at n≥30.
-- **gap_retrace_pct threshold** — validates: Gap Give and Go's
-  `gap_retrace_pct > 0.5` avoid + quality factor (A.17). Config key:
-  `taxonomy.gap_give_and_go.gap_retrace_pct_avoid_threshold`. Corpus:
-  archiver minute bars, GGG instances. Pass criterion: TBD at n≥30.
-- **trail-condition sets per trade** — validates: which `trail`
-  exit-condition combination (A.7 — `prior_bar_break` / `ma_close` /
-  `vwap_close` / `level`, `mode: any`) actually fires first,
-  outcome-tuned per trade (VWAP Continuation, 9 EMA Scalp,
-  Back-Through Open, Bouncy Ball, Second Chance leg 2). Config key:
-  `taxonomy.trade_defs.<id>.trail_conditions`. Corpus: archiver minute
-  bars, per-trade instances. Pass criterion: TBD at n≥30.
-- **time_stop 2-bar no-progress** — validates: Back-Through Open's and
-  Bouncy Ball's `time_stop {duration_bars: 2, condition: no progress
-  from entry}` stop management (§B.5, §B.7). Config key:
-  `taxonomy.trade_defs.<id>.time_stop_duration_bars`. Corpus: archiver
-  minute bars, BTO + Bouncy Ball instances. Pass criterion: TBD at
-  n≥30.
+30 rows seeded at the v0.7 commit, all `replay_pending` or `proposed`
+(none `solidified` yet) — read `tunables.yaml` directly for the current
+set; do not re-duplicate it here.

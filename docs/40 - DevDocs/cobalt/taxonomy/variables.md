@@ -32,4 +32,8 @@ is read by `loader.py`.
 ## Cross-references
 `trade_def.py`'s `TradeDef.quality_factors[]` (loader.py enforces the
 two must name the same set, in both directions) · ADR-0001 · ADR-0002
-(`frontier` field).
+(`frontier` field) · ADR-0003 (`trail_fit` — a `source: cobalt, tier:
+deterministic` entry added, both here and in `quality_factors[]`, to
+every trade_def that carries a `trail` slot: second_chance, rubberband,
+vwap_continuation, ema9_scalp, back_through_open, bouncy_ball — v0.7
+§0's "which capability the stock cleanly follows", no schema change).

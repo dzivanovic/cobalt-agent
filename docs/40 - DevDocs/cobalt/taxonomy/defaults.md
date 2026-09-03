@@ -22,6 +22,8 @@ None directly — pure schema. `configs/cobalt/taxonomy/defaults.yaml`
 
 ## Cross-references
 `loader.py`'s `resolve_ma_ref` / `is_ma_ref` (resolves a `Tunable[str]`
-`"ma.fast"`/`"ma.slow"` value against this) · `trade_def.py`'s
-`MaCloseCondition.ma` and `TrailMaCloseMgmt.ma` (the fields that can
-carry such a ref) · ADR-0002.
+`"ma.fast"`/`"ma.slow"` value against this) and `resolve_cfg` (falls
+back here for `working_timeframe`/`ma.*` when a `cfg(key)` token isn't a
+`tunables.yaml` row) · `trade_def.py`'s `MaCloseCondition.ma` (the field
+that can carry an `ma.*` ref — now reached via `TrailSpec.conditions`,
+ADR-0003; `TrailMaCloseMgmt` was removed) · ADR-0002 · ADR-0003.

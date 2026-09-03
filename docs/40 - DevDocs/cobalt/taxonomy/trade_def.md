@@ -1,82 +1,89 @@
 # `src/cobalt/taxonomy/trade_def.py`
 
 ## What it does
-The `trade_def` Pydantic schema (TAXONOMY-DRAFT-v0_6.md §10.1, schema
-v0.3, extended to v0.7 by TRADE-DEFS-BATCH2-v0_1.md §A / ADR-0002).
-Models only — no predicate parser, no setup detectors, no bar logic.
-Enums are the single source of truth for the taxonomy vocabulary; YAML
-data must match them exactly or fail loud.
+The `trade_def` Pydantic schema (TAXONOMY-DRAFT-v0_7.md §10.1, schema
+**v0.4** — `SCHEMA_VERSION = "0.4"` — extended from v0.3 by Batch 2's
+§A / ADR-0002, then folded to v0.7 / v0.4 by ADR-0003: one-stop trail
+slot, removed `trail_ma_close`/`trail_bar`/standalone `ma_close`, class
+definitions rewritten). Models only — no predicate parser, no setup
+detectors, no bar logic. Enums are the single source of truth for the
+taxonomy vocabulary; YAML data must match them exactly or fail loud.
 
 ## Key functions/classes
-- Enums (verbatim from v0.6 §10.1/§10.2/§3.6, extended per §A): `Family`,
-  `TradeClass`, `Relation`, `EntryMode`, `SetupRef`, `RTHWindow`,
-  `RangeBoundType`, `TriggerType` (gains `trendline_break`,
-  `indicator_rejection` — A.3/A.4), `ConfirmationPolicyType`,
-  `EvaluationType`, `StructuralRef` (the flat, literal §3.6 refs only —
-  `cross_point{a,b}` and `leg_end(n)` are parametrized and carried as
-  free-text anchors instead; gains `recent_lower_high`, A.7),
-  `StopManagementType`, `ExitTargetType` (gains `trail`, A.7/A.8),
-  `Event`, `OnCicActionType`, `IndicatorType` (`VWAP | EMA9 | EMA20 |
-  EMA21`, A.2), `SnapshotType` (`at_entry | live`, A.2).
-- `Predicate {expr | text}` — `expr` stores the §10.5 grammar string
-  UNPARSED; `text` is the human fallback. Exactly one is set (enforced).
-  `.computable` is `True` iff `expr` is set. The A.13–A.18 grammar atoms
-  (`dist()`, `Catalyst.grade/.polarity`, `Regime.label`,
-  `Range.counter_pivot_count`, `gap_retrace_pct`, `Leg(pullback).index`)
-  are unparsed strings here too — no schema change needed for them.
-- `Tunable[T] {value, dynamic, note}` — `dynamic=True` marks a v0.6 §0
-  "Dynamic definitions" law value; must appear in the §13 replay
-  backlog (enforced by `loader.iter_tunables` + a test, not by this
-  model). A `Tunable[str]` whose value matches `ma.fast`/`ma.slow` is
-  resolved by `loader.resolve_ma_ref` against `defaults.py`'s
-  `TaxonomyDefaults` at load time (A.8 MA-period note).
+- Enums (verbatim from v0.7 §10.1/§10.2/§3.6): `Family`, `TradeClass`
+  (docstring = v0.7 §0's class definitions verbatim: trailing vs hard
+  exit defines no class, legs-out count defines no class; `scalp` =
+  usually sub-15-min TF, seconds to ~45 min; `move2move` = a momentum
+  move surviving consolidation to a further target, usually 5-min+),
+  `Relation`, `EntryMode`, `SetupRef`, `RTHWindow`, `RangeBoundType`,
+  `TriggerType`, `ConfirmationPolicyType`, `EvaluationType`,
+  `StructuralRef` (the flat, literal §3.6 refs only —
+  `cross_point{a,b}`, `leg_end(n)`, and now `Range(micro).top`/`.base`
+  are parametrized and carried as free-text anchors instead),
+  `StopManagementType` (`trail_ma_close`/`trail_bar` REMOVED — ADR-0003,
+  one-stop law), `ExitTargetType` (standalone `ma_close` REMOVED; `trail`
+  now takes NO params — the trail slot is the only place conditions
+  live), `Event`, `OnCicActionType`, `IndicatorType`, `SnapshotType`.
+- `Predicate {expr | text}` — unchanged: `expr` stores the §10.5 grammar
+  string UNPARSED; `text` is the human fallback. `cfg(key)` tokens (the
+  v0.7 §13.1 grammar atom) are plain substrings inside `expr` — no
+  parsing here, `loader.iter_cfg_tokens`/`resolve_cfg` do the
+  token-scan + resolution at load time.
+- `Tunable[T] {value, dynamic, note}` — unchanged mechanism for
+  structured per-field values (`max_attempts`, `reentry_window`,
+  `duration_bars`, stop-buffer cents, MA refs). **Not** the same thing
+  as a `tunables.py` `TunableRow`: this stays a per-field marker;
+  `tunables.yaml` is now the canonical registry + replay-status
+  bookkeeping for the v0.6/v0.7 §0 "Dynamic definitions" law values
+  (see `tunables.md`). A `Tunable[str]` whose value matches
+  `ma.fast`/`ma.slow` is still resolved by `loader.resolve_ma_ref`
+  against `defaults.py` at load time (unchanged).
 - `StopPlacement` = discriminated union of `StructuralExtremePlacement
-  | MeasuredFractionPlacement | LevelPlacement | IndicatorPlacement`
-  (A.2) — reused by both the top-level `Stop.placement` and
-  `RaiseToMgmt.placement`, so "any stop-placement" is one type, not
-  two; `IndicatorPlacement` joining the union means it is valid inside
-  `raise_to` too with no extra code.
+  | MeasuredFractionPlacement | LevelPlacement | IndicatorPlacement` —
+  reused by both `Stop.placement` and `RaiseToMgmt.placement`.
 - `StopManagementEntry` = discriminated union over `StopManagementType`
-  (`FixedMgmt`, `BreakevenAtMgmt`, `RaiseToMgmt`, `TrailMaCloseMgmt`,
-  `TrailBarMgmt`, `TimeStopMgmt`, `PassiveMgmt`), each carrying `on:
-  EventRef` (default `entry`).
+  (`FixedMgmt`, `BreakevenAtMgmt`, `RaiseToMgmt`, `TimeStopMgmt`,
+  `PassiveMgmt` — `TrailMaCloseMgmt`/`TrailBarMgmt` deleted), each
+  carrying `on: EventRef` (default `entry`).
 - `Trigger` = discriminated union of `SimpleTrigger` (bar_break /
   range_break / indicator_cross / trendline_break / indicator_rejection
-  — `params` stays an unstructured dict for all five; A.3/A.4's
-  `ref`/`anchor_leg`/`pivots`/`indicator`/`contact` are dict keys, not
-  new fields) and `SequenceTrigger` (steps of `TriggerStep {name,
-  predicate, confirmation_policy}` — `confirmation_policy` is optional:
-  Second Chance's retest step carries none in the source sheet).
-- `TrailCondition` (A.7) = discriminated union of
-  `PriorBarBreakCondition {n=1}`, `MaCloseCondition {ma: Tunable[str]}`,
-  `VwapCloseCondition`, `LevelCondition {level_ref}`. `TrailExitParams
-  {conditions[] (min 1), mode: "any"}` validates an `ExitLeg`'s `params`
-  ONLY when `target_type == trail` — every other target type keeps its
-  unstructured `params` dict, same as Batch 1.
+  — `params` stays an unstructured dict for all five) and
+  `SequenceTrigger` (steps of `TriggerStep {name, predicate,
+  confirmation_policy}` — optional policy).
+- **`TrailSpec` (new, ADR-0003)** — `{conditions: list[TrailCondition]
+  (min 1), mode: Literal["select"] = "select", on: EventRef (default
+  entry)}`. `TrailCondition` = discriminated union of
+  `PriorBarBreakCondition {n: Literal[1] = 1}` (pinned, not merely
+  defaulted — 1-bar trail law), `MaCloseCondition {ma: Tunable[str]}`,
+  `VwapCloseCondition`, `LevelCondition {level_ref}` — unchanged from
+  Batch 2 except `PriorBarBreakCondition.n`'s pin and its new home.
 - `TradeDef` — the full registry entry. `class` is aliased to
-  `trade_class` (Python keyword). `extra="forbid"` everywhere.
-  `reentry_window: Tunable[str] | None = None` (A.1) — validated against
-  `^\d+ min$`. Validators (fail loud, all `ValueError` → surfaces as a
-  Pydantic `ValidationError` with field path):
+  `trade_class`. `extra="forbid"` everywhere. **`trail: TrailSpec | None
+  = None`** (new field — ONE slot per trade_def). Validators (fail
+  loud, all `ValueError` → surfaces as a Pydantic `ValidationError`
+  with field path):
+  - **`model_validator(mode="before")` `_reject_removed_trail_spellings`**
+    (new) — scans the raw `stop_management[]`/`exit[]` dicts for
+    `trail_ma_close`/`trail_bar`/standalone `ma_close` BEFORE the
+    discriminated-union parse runs, so the error names the trail slot
+    directly instead of Pydantic's generic discriminator message.
+  - **`_trail_slot_required_for_trail_exit`** (new) — any exit leg with
+    `target_type == trail` requires `self.trail is not None`.
+  - `ExitLeg._trail_takes_no_params` (rewritten) — `target_type == trail`
+    requires `params == {}`; conditions live only on `trade_def.trail`
+    now, never per-leg (`TrailExitParams` deleted).
   - `tf_ceiling == 15` iff `class == scalp`, else `None`.
   - `exit[].fraction` sums to `1.0 ± 0.01`.
   - `quality_factors[]` contains `setup_relation`, `market_alignment`,
     `sector_alignment`.
   - `reference_stats` carries no `ev`/`expectancy` key (case-insensitive).
-  - `StopBuffer.type` is structurally `Literal["fixed"]` (no `spread` —
-    v0.6 §14 ruling 3) with `cents.value > 0`. (A buffer *value* other
-    than the 0.02 default is legal here — it only WARNS, in
-    `loader.py`, not a schema-level rejection; see A.6 in `loader.md`.)
-  - `raise_to.placement` validity is structural (the `StopPlacement`
-    union itself), not a separate check.
+  - `StopBuffer.type` is structurally `Literal["fixed"]` with
+    `cents.value > 0` (buffer *value* other than 0.02 only WARNS, in
+    `loader.py` — A.6, unchanged).
   - `reentry_window` format (`<N> min`).
-  - `ExitLeg`'s `trail`-params-valid check (above).
 
-`Level.type` gaining `open` (A.5) is **not** a code change here —
-`Level_ref` values are already free strings everywhere they appear
-(`LevelPlacement.level_ref`, trigger `params` dicts); `Level.type` is
-design-tree vocabulary (`TAXONOMY-DRAFT-v0_3.md` line 27), not
-Pydantic-enforced in this module. See ADR-0002.
+`Level.type` gaining `open` (A.5) is still **not** a code change — see
+ADR-0002 (unaffected by this ADR).
 
 ## Data flow in/out
 **In:** a `dict` from `loader.load_trade_defs` (parsed YAML under a
@@ -85,13 +92,15 @@ raised `pydantic.ValidationError`.
 
 ## Config it reads
 None directly — pure schema. `configs/cobalt/taxonomy/trade_defs/*.yaml`
-is read by `loader.py`, which constructs `TradeDef` instances from it.
-`defaults.yaml` (via `loader.resolve_ma_ref`) is the one indirect
-config dependency, for `ma.*` refs.
+is read by `loader.py`. `defaults.yaml` (via `loader.resolve_ma_ref` /
+`resolve_cfg`) and `tunables.yaml` (via `resolve_cfg`) are the indirect
+config dependencies.
 
 ## Cross-references
 `configs/cobalt/taxonomy/cameron_grid.yaml` (valid_setups cross-check,
-enforced in `loader.py` not here) · `variables.py` (quality_factors
-cross-check, also `loader.py`) · `defaults.py` (`TaxonomyDefaults`,
-resolved by `loader.py`) · `docs/00 - Project/BACKLOG.md` § "Taxonomy
-replay validation (v0.6 §13)" (dynamic tunables) · ADR-0001 · ADR-0002.
+in `loader.py`) · `variables.py` (quality_factors cross-check, also
+`loader.py`) · `defaults.py` (`TaxonomyDefaults`) · `tunables.py`
+(`TunableRegistry`, `replay_backlog`) · `docs/00 - Project/BACKLOG.md`
+§ "Taxonomy replay validation (v0.7 §13/§13.1)" (now a pointer to
+`tunables.yaml`) · ADR-0001 · ADR-0002 (superseded for trail) ·
+ADR-0003.

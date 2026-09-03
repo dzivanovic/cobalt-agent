@@ -119,3 +119,12 @@ parser, no new detectors.
   first_move_down, first_move_up, spencer_scalp, off_sides,
   the_330_trade, ema9_reclaim) stay `valid_setups[]`-only until sheets
   are found; Day 3 liquidity trap stays PLACEHOLDER (§11).
+- **Superseded by ADR-0003 for trail** (2026-09-02, v0.7 §14 c.1): this
+  ADR's exit-target `trail` (`mode: "any"`, per-leg `TrailExitParams`
+  validated out of `ExitLeg.params`) and the Second Chance retrofit it
+  describes are replaced by the one-stop-law `TradeDef.trail: TrailSpec`
+  slot (`mode: "select"`) — `ExitTargetType.TRAIL` legs now carry no
+  params at all. Every other decision in this ADR (indicator stop
+  placement, `trendline_break`/`indicator_rejection`, `recent_lower_high`,
+  MA-ref resolution, the A.6 stop-buffer warn-not-fail law, the
+  `frontier` flag) is unaffected and stands as written.
