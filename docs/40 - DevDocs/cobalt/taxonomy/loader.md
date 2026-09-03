@@ -5,10 +5,10 @@ Loads and cross-validates the taxonomy's YAML data: every trade_def,
 its variable registry, the taxonomy-wide defaults, the tunable
 registry, and the Cameron H grid — config-as-code (TRIAGE cross-cutting
 law). A bad or missing file crashes with the file path and field
-detail; no partial loads, no default fallback. Two deliberate
-exceptions to "crashes": the A.6 buffer check WARNS, and an unresolved
-`cfg(key)` token is folded into the same `TaxonomyConfigError`-raises
-family (still fail-loud, not a warning).
+detail; no partial loads, no default fallback — including `stop.buffer`
+as of ruling 09-03: it resolves through the same `cfg(key)` fail-loud
+path as every other tunable, no more load-time warning special-case
+(the old A.6 buffer-mismatch WARN was removed with it — see below).
 
 ## Key functions/classes
 - `TaxonomyConfigError(RuntimeError)` — the one error type.
@@ -44,19 +44,26 @@ family (still fail-loud, not a warning).
   the ADR-0003 `trail_fit` entries are enforced — a trade_def with a
   `trail` slot must list `trail_fit` in both places), (c) every
   `Tunable[str]` value that looks like an `ma.*` ref resolves against
-  `defaults.yaml`, **(d) every `cfg(key)` token found by
-  `iter_cfg_tokens` resolves via `resolve_cfg`** (new — loads
-  `tunables.yaml` once up front, alongside `defaults.yaml`), and (e) —
-  WARN, not raise — every `StopBuffer` matches the 0.02 default (A.6
-  flag law). First *raising* failure crashes immediately; buffer
-  warnings never abort a load.
+  `defaults.yaml`, and **(d) every `cfg(key)` token found by
+  `iter_cfg_tokens` resolves via `resolve_cfg`** (loads `tunables.yaml`
+  once up front, alongside `defaults.yaml`) — this now covers
+  `StopBuffer.cents`'s `cfg(stop.buffer)` / `cfg(<trade_id>.stop.buffer)`
+  refs too (ruling 09-03), picked up for free by the same generic string
+  walk, no special-case code. First *raising* failure crashes
+  immediately; there is no non-raising exception left in this function
+  (the old A.6 buffer-mismatch WARN, keyed off a hardcoded
+  `DEFAULT_STOP_BUFFER_CENTS = 0.02` literal, was removed — that flag
+  now lives structurally on the tunable row itself, `sheet_value !=
+  value` in `tunables.yaml`, not as load-time Python comparison logic).
 - `iter_tunables(obj) -> Iterator[Tunable]` — recursively walks a
   `TradeDef` yielding every `Tunable[T]` field found (unrelated to
   `tunables.yaml`'s `TunableRow`s — see `tunables.md`). Used by
   `validate.py`'s CLI table and `load_trade_defs`'s `ma.*` ref
   resolution.
 - `iter_stop_buffers(obj) -> Iterator[StopBuffer]` — same walk shape,
-  yielding `StopBuffer` instances; used only by the A.6 warning check.
+  yielding `StopBuffer` instances; introspection helper only now (CLI
+  table, tests) — no longer wired into `load_trade_defs` since the A.6
+  warning it fed was removed.
 
 ## Data flow in/out
 **In:** `configs/cobalt/taxonomy/trade_defs/*.yaml`,
@@ -64,8 +71,8 @@ family (still fail-loud, not a warning).
 `configs/cobalt/taxonomy/cameron_grid.yaml`,
 `configs/cobalt/taxonomy/defaults.yaml`,
 `configs/cobalt/taxonomy/tunables.yaml`.
-**Out:** `dict[id, TradeDef]`, or a raised `TaxonomyConfigError`; a
-`UserWarning` on an A.6 buffer mismatch (non-fatal).
+**Out:** `dict[id, TradeDef]`, or a raised `TaxonomyConfigError`. No
+warnings emitted (ruling 09-03 removed the last one).
 
 ## Config it reads
 `configs/cobalt/taxonomy/` (five sub-paths above) — `configs/cobalt/`

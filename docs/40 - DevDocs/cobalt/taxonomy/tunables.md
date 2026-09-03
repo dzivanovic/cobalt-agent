@@ -2,13 +2,16 @@
 
 ## What it does
 Schema for `configs/cobalt/taxonomy/tunables.yaml` (TAXONOMY-DRAFT-v0_7.md
-§13.1, ADR-0003). Every `config, dynamic` quantity named by the v0.6/v0.7
-§0 "Dynamic definitions" law is a row here — status/source/replay
-tracking, referenced from `Predicate.expr` / trigger `params` strings by
-key via the `cfg(key)` grammar atom. No engine semantics: pure schema
-plus a `dynamic AND status != solidified` query (`replay_backlog`).
-Replay writes `status`, never `value` — a value change stays a Dejan
-ruling.
+§13.1, ADR-0003; `stop.buffer` added by ruling 09-03). Every
+`config, dynamic` quantity named by the v0.6/v0.7 §0 "Dynamic
+definitions" law is a row here — status/source/replay tracking,
+referenced by key via the `cfg(key)` grammar atom from `Predicate.expr`
+/ trigger `params` strings, and (as of 09-03) from any `Tunable[str]`
+field's `value` too (`StopBuffer.cents` — same token, same
+`loader.iter_cfg_tokens` walk, no special-casing). No engine semantics:
+pure schema plus a `dynamic AND status != solidified` query
+(`replay_backlog`). Replay writes `status`, never `value` — a value
+change stays a Dejan ruling.
 
 ## Key functions/classes
 - `TunableUnit` — `bars | min | atr | cents | count | pct | ratio |
@@ -37,15 +40,23 @@ ruling.
 validated `TunableRegistry`, or a raised `TaxonomyConfigError`.
 
 ## Config it reads
-`configs/cobalt/taxonomy/tunables.yaml` — 30 rows seeded at the ADR-0003
-commit from the §13.1 table's `dyn: yes` rows only. The table's three
-`dyn: no` global rows (`working_timeframe`, `ma.fast`/`ma.slow`,
-`stop.buffer`) are deliberately excluded — they stay in `defaults.yaml`
+`configs/cobalt/taxonomy/tunables.yaml` — 33 rows: the 30 seeded at the
+ADR-0003 commit from the §13.1 table's `dyn: yes` rows, plus 3 added by
+ruling 09-03 (`stop.buffer` global + `back_through_open.stop.buffer` /
+`bella_fade.stop.buffer` per-trade overrides — all `dynamic: false,
+status: solidified`, so none add to `replay_backlog()`). Two of the
+table's `dyn: no` global rows (`working_timeframe`, `ma.fast`/`ma.slow`)
+remain deliberately excluded — they stay in `defaults.yaml`
 (`defaults.py`); `loader.resolve_cfg` falls back there for
-`working_timeframe`/`ma.*`. `catalyst.grade_min`/`_max` and
-`<trade>.max_attempts`/`<trade>.reentry_window` (also `dyn: no`) are
-excluded too — they stay as `Tunable[T]` fields directly on their
-trade_defs (`trade_def.py`), not duplicated here.
+`working_timeframe`/`ma.*`. `stop.buffer` is IN as of 09-03, superseding
+ADR-0003's original exclusion of it (see ADR-0003's amended paragraph)
+— `trade_def.py`'s `StopBuffer.cents` (`Tunable[str]`) resolves it via
+the same `cfg(key)` path as every other row here, with a per-trade
+override row taking precedence for the two trades that reference it
+directly. `catalyst.grade_min`/`_max` and `<trade>.max_attempts`/
+`<trade>.reentry_window` (also `dyn: no`) remain excluded — they stay
+as `Tunable[T]` fields directly on their trade_defs (`trade_def.py`),
+not duplicated here.
 
 ## Cross-references
 `loader.py` (`load_tunables`, `resolve_cfg`, `iter_cfg_tokens` — the

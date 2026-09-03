@@ -31,16 +31,29 @@ taxonomy vocabulary; YAML data must match them exactly or fail loud.
   token-scan + resolution at load time.
 - `Tunable[T] {value, dynamic, note}` — unchanged mechanism for
   structured per-field values (`max_attempts`, `reentry_window`,
-  `duration_bars`, stop-buffer cents, MA refs). **Not** the same thing
-  as a `tunables.py` `TunableRow`: this stays a per-field marker;
-  `tunables.yaml` is now the canonical registry + replay-status
-  bookkeeping for the v0.6/v0.7 §0 "Dynamic definitions" law values
-  (see `tunables.md`). A `Tunable[str]` whose value matches
-  `ma.fast`/`ma.slow` is still resolved by `loader.resolve_ma_ref`
-  against `defaults.py` at load time (unchanged).
+  `duration_bars`, MA refs). **Not** the same thing as a `tunables.py`
+  `TunableRow`: this stays a per-field marker; `tunables.yaml` is now
+  the canonical registry + replay-status bookkeeping for the v0.6/v0.7
+  §0 "Dynamic definitions" law values (see `tunables.md`). A
+  `Tunable[str]` whose value matches `ma.fast`/`ma.slow` is still
+  resolved by `loader.resolve_ma_ref` against `defaults.py` at load
+  time (unchanged).
 - `StopPlacement` = discriminated union of `StructuralExtremePlacement
   | MeasuredFractionPlacement | LevelPlacement | IndicatorPlacement` —
   reused by both `Stop.placement` and `RaiseToMgmt.placement`.
+- **`StopBuffer.cents: Tunable[str]` (ruling 09-03, was `Tunable[float]`)**
+  — `cents.value` is now a `cfg(key)` reference (default
+  `"cfg(stop.buffer)"`), never a literal; `_cents_is_cfg_ref` (rewritten
+  from the old `_positive_cents`) rejects anything not matching
+  `^cfg\([a-zA-Z0-9_.]+\)$`. Resolved the same way as every other
+  `cfg()` token — generically, by `loader.iter_cfg_tokens`/`resolve_cfg`
+  walking the `TradeDef` tree (no special-case code needed, since
+  `Tunable[str].value` is just another string field). Per-trade
+  override = the trade's own YAML referencing `cfg(<trade_id>.stop.buffer)`
+  directly instead of the global `cfg(stop.buffer)` — `back_through_open`
+  and `bella_fade` do this (their sheets say 0.01; `tunables.yaml`
+  carries the ruled 0.02 as `value` and 0.01 as `sheet_value`, an A.6
+  PROPOSAL record). See `tunables.md` and ADR-0003 (amended).
 - `StopManagementEntry` = discriminated union over `StopManagementType`
   (`FixedMgmt`, `BreakevenAtMgmt`, `RaiseToMgmt`, `TimeStopMgmt`,
   `PassiveMgmt` — `TrailMaCloseMgmt`/`TrailBarMgmt` deleted), each
@@ -77,9 +90,12 @@ taxonomy vocabulary; YAML data must match them exactly or fail loud.
   - `quality_factors[]` contains `setup_relation`, `market_alignment`,
     `sector_alignment`.
   - `reference_stats` carries no `ev`/`expectancy` key (case-insensitive).
-  - `StopBuffer.type` is structurally `Literal["fixed"]` with
-    `cents.value > 0` (buffer *value* other than 0.02 only WARNS, in
-    `loader.py` — A.6, unchanged).
+  - `StopBuffer.type` is structurally `Literal["fixed"]`; `cents.value`
+    must be a `cfg(key)` reference (see above). The A.6 "sheet differs
+    from ruled value" flag now lives structurally on the tunable row
+    (`sheet_value != value` in `tunables.yaml`) — `loader.py` no longer
+    warns at load time (the old `DEFAULT_STOP_BUFFER_CENTS`
+    literal-comparison check is gone; ruling 09-03).
   - `reentry_window` format (`<N> min`).
 
 `Level.type` gaining `open` (A.5) is still **not** a code change — see

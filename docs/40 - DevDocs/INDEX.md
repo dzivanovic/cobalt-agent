@@ -55,8 +55,8 @@ config-boundary convention (`configs/cobalt/taxonomy/`).
 | `taxonomy/trade_def.py` | The `trade_def` Pydantic schema (v0.7 §10.1, schema v0.4 — `SCHEMA_VERSION`) — enums as the vocabulary source of truth, `Predicate`/`Tunable`/`StopPlacement`/`Trigger`/`TrailCondition`/`TrailSpec` building blocks, no predicate parser. One-stop trail slot (`TradeDef.trail`); `trail_ma_close`/`trail_bar`/standalone `ma_close` REMOVED (ADR-0003). |
 | `taxonomy/variables.py` | The variable-registry stub schema — one file per trade_def, one entry per `quality_factors[]` item; `frontier` flag for tape-class reads (Batch 2). |
 | `taxonomy/defaults.py` | `TaxonomyDefaults` schema for `configs/cobalt/taxonomy/defaults.yaml` (`working_timeframe`, `ma.fast`/`ma.slow` — Batch 2; the two NON-dynamic globals `cfg()` falls back to). |
-| `taxonomy/tunables.py` | `TunableRow`/`TunableRegistry` schema for `configs/cobalt/taxonomy/tunables.yaml` (v0.7 §13.1) — every `config, dynamic` quantity as a status/replay-tracked row; `replay_backlog()` query (ADR-0003). |
-| `taxonomy/loader.py` | Config-as-code loader: parses + cross-validates every trade_def, its variable registry, defaults, tunables, and the Cameron H grid; fail-loud (`TaxonomyConfigError`) — incl. `resolve_cfg`/`iter_cfg_tokens` for `cfg(key)` resolution — except the A.6 stop-buffer check, which warns. |
+| `taxonomy/tunables.py` | `TunableRow`/`TunableRegistry` schema for `configs/cobalt/taxonomy/tunables.yaml` (v0.7 §13.1) — every `config, dynamic` quantity as a status/replay-tracked row; `replay_backlog()` query (ADR-0003). `stop.buffer` (global + per-trade override rows) added 09-03 — a tunable, not a Pydantic constant. |
+| `taxonomy/loader.py` | Config-as-code loader: parses + cross-validates every trade_def, its variable registry, defaults, tunables, and the Cameron H grid; fail-loud (`TaxonomyConfigError`) throughout — incl. `resolve_cfg`/`iter_cfg_tokens` for `cfg(key)` resolution (now also how `StopBuffer.cents` resolves). No warnings emitted (the old A.6 stop-buffer warning was removed 09-03 — the flag lives on the tunable row itself now). |
 | `taxonomy/validate.py` | `python -m cobalt.taxonomy.validate` CLI — loads everything, prints a summary table + tunables/backlog counts, exits non-zero on failure. |
 
 ### Configs / templates
@@ -73,7 +73,7 @@ config-boundary convention (`configs/cobalt/taxonomy/`).
 | `configs/cobalt/watchlists.yaml` | Committed — the three watchlist tiers (derived from Dejan's TradingView exports) + intervals per tier. |
 | `ops/com.cobalt.archiver.plist` | Standalone launchd template, Mon-Fri 20:30 local — captured here, not auto-installed. |
 | `configs/cobalt/taxonomy/defaults.yaml` | Committed — `working_timeframe: 2m`, `ma: {fast: 9, slow: 20}` (Batch 2). |
-| `configs/cobalt/taxonomy/tunables.yaml` | Committed — 30 dynamic-tunable rows seeded from v0.7 §13.1's `dyn: yes` rows (ADR-0003). |
+| `configs/cobalt/taxonomy/tunables.yaml` | Committed — 30 dynamic-tunable rows seeded from v0.7 §13.1's `dyn: yes` rows (ADR-0003), plus 3 non-dynamic `stop.buffer` rows (global + back_through_open/bella_fade overrides, ruling 09-03). |
 | `configs/cobalt/taxonomy/cameron_grid.yaml` | Committed — all 21 Cameron H grid rows (`valid_setups[]`); 13 have a populated `trade_def`. |
 | `configs/cobalt/taxonomy/trade_defs/*.yaml` | Committed — 13 populated trade_defs (6 Batch 1 + 7 Batch 2), one file per id; schema v0.4 (trail slot, `cfg()` tokens — ADR-0003). |
 | `configs/cobalt/taxonomy/variables/*.yaml` | Committed — the matching variable registry per trade_def; `trail_fit` entry on the 6 trail-carrying trades (ADR-0003). |
