@@ -350,6 +350,10 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
 
 ## STANDING FOLLOW-UPS
 
+- [ ] Consolidate the Taxonomy draft chain (v0.2–v0.7, committed
+      2026-09-03) into a standalone v0.8. v0.7 is an amendment layer over
+      v0.4/v0.6, not a self-contained document — the chain currently IS
+      the spec; next taxonomy bump should fold it into one clean file.
 - [ ] Heartbeat probe: "every ops/ plist expected loaded is loaded" —
       `launchctl print gui/$UID/<label>` for each committed `ops/*.plist`,
       red + DM alert if a shipped job isn't bootstrapped. An uninstalled
