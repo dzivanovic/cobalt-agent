@@ -14,10 +14,16 @@
              to the real vault explicitly. See src/cobalt/vault.py. -->
         <key>COBALT_VAULT_PATH</key>
         <string>/Users/cobalt/Vault/Think</string>
+        <!-- Defect 1 fix (2026-09-01): declares production intent so
+             cobalt.vault.resolve_vault_path() refuses if this ever resolves
+             to a non-Think root (stale process, wrong override, etc.)
+             instead of silently writing into the wrong vault. -->
+        <key>COBALT_ENV</key>
+        <string>production</string>
     </dict>
     <key>ProgramArguments</key>
     <array>
-        <string>uv</string>
+        <string>/Users/cobalt/.local/bin/uv</string>
         <string>run</string>
         <string>prefill</string>
         <string>daily</string>
@@ -32,12 +38,21 @@
          system TZ = ET, same as the archiver's 20:30 job) — before
          premarket so the market table/calendar/rules block are ready
          when Dejan sits down.
-         ProgramArguments uses a bare "uv" (resolved via this plist's own
-         EnvironmentVariables PATH, which includes ~/.local/bin) rather
-         than a hardcoded /opt/homebrew/bin/uv — that path doesn't exist
-         on this machine (see ops/README.md's note on com.cobalt.archiver/
-         mainframe carrying the same bug); fixed here before this plist
-         is ever installed, same fix as ops/start_aset.sh.
+         Root cause (2026-09-03, 09-03 silence): ProgramArguments used a
+         bare "uv", assuming this plist's own EnvironmentVariables PATH
+         (which includes ~/.local/bin) would resolve it the way a shell
+         does. It does not — launchd's posix_spawn() of ProgramArguments[0]
+         does not reliably search the job's own PATH the way a shell/exec
+         call does; confirmed by an isolated diagnostic LaunchAgent
+         (bare "uv" -> last exit code 78 EX_CONFIG, empty stdout+stderr,
+         identical signature to this job's 05:15 09-03 failure; absolute
+         path -> exit 0). ProgramArguments now uses the absolute path
+         (matches `which uv` on this machine — NOT the
+         /opt/homebrew/bin/uv the older archiver/mainframe note in
+         ops/README.md warned doesn't exist here either). ops/start_aset.sh's
+         bare "uv" is unaffected — that one is resolved by bash's own PATH
+         search inside the wrapper script, a different code path from
+         launchd spawning ProgramArguments[0] directly.
          SLICE 2.1 (2026-08-31): the entrypoint (`uv run prefill daily`)
          is unchanged, but its behavior is now fill-in-place inside
          Dejan's actual sections (never append a block below them) — see

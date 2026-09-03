@@ -11,7 +11,7 @@
     </dict>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/uv</string>
+        <string>/Users/cobalt/.local/bin/uv</string>
         <string>run</string>
         <string>archiver</string>
     </array>
@@ -25,7 +25,14 @@
          background-task lifecycle limit, evidence in BACKLOG.md; not an
          OS memory/sleep/crash event). Mon-Fri only, 20:30 local (assumes system TZ = ET, same as the
          old tree's Mon-Fri 08:00 Morning Briefing job) -- no point
-         re-archiving stale bars on days markets didn't move. -->
+         re-archiving stale bars on days markets didn't move.
+         Root cause fix (2026-09-03): ProgramArguments hardcoded
+         /opt/homebrew/bin/uv, which does not exist on this machine (uv
+         is a standalone install at ~/.local/bin/uv — see ops/README.md's
+         "uv path discrepancy" note); this job was also NOT LOADED at
+         all (`launchctl print` found no service), so the wrong path had
+         never actually been exercised by launchd. Fixed to the absolute
+         real path and installed in this same pass. -->
     <key>StartCalendarInterval</key>
     <array>
         <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>30</integer></dict>

@@ -14,10 +14,16 @@
              to the real vault explicitly. See src/cobalt/vault.py. -->
         <key>COBALT_VAULT_PATH</key>
         <string>/Users/cobalt/Vault/Think</string>
+        <!-- Defect 1 fix (2026-09-01): declares production intent so
+             cobalt.vault.resolve_vault_path() refuses if this ever resolves
+             to a non-Think root (stale process, wrong override, etc.)
+             instead of silently writing into the wrong vault. -->
+        <key>COBALT_ENV</key>
+        <string>production</string>
     </dict>
     <key>ProgramArguments</key>
     <array>
-        <string>uv</string>
+        <string>/Users/cobalt/.local/bin/uv</string>
         <string>run</string>
         <string>prefill</string>
         <string>drc</string>
@@ -32,9 +38,13 @@
          (including any post-close fill updates) are already in it. A
          re-run (e.g. Dejan already drafted by hand) appends a fenced,
          idempotency-marked block rather than clobbering his draft.
-         ProgramArguments uses a bare "uv" (see com.cobalt.prefill-
-         daily.plist's note — the hardcoded /opt/homebrew/bin/uv path
-         doesn't exist on this machine; fixed here before install). -->
+         Root cause (2026-09-03): ProgramArguments used a bare "uv" —
+         see com.cobalt.prefill-daily.plist's note. launchd's
+         posix_spawn() does not reliably resolve a bare program name via
+         the job's own EnvironmentVariables PATH the way a shell does;
+         this job's own 09-02 15:40 run failed identically (exit 78
+         EX_CONFIG, empty stdout+stderr). Fixed to the absolute path
+         (matches `which uv` on this machine). -->
     <key>StartCalendarInterval</key>
     <array>
         <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>40</integer></dict>

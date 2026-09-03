@@ -8,14 +8,17 @@ does not auto-update from git.
 
 ## Inventory
 
-| Plist | Runs | Schedule | Wrapper |
-|---|---|---|---|
-| `com.cobalt.agent.plist` | `cobalt.sh start` (the Mattermost chief-of-staff agent) | RunAtLoad only, no KeepAlive | — |
-| `com.cobalt.mainframe.plist` | `~/.lmstudio/start_mainframe.sh` (local LLM) | RunAtLoad only | `~/.lmstudio/start_mainframe.sh` |
-| `com.cobalt.archiver.plist` | `uv run archiver` (nightly bar archiver) | Mon-Fri 20:30 ET | — |
-| `com.cobalt.prefill-daily.plist` | `uv run prefill daily` | Mon-Fri 05:15 ET | — |
-| `com.cobalt.prefill-drc.plist` | `uv run prefill drc` | Mon-Fri 15:40 ET | — |
-| `com.cobalt.aset.plist` | `ops/start_aset.sh` → `uv run python -m cobalt.aset` (ASET sizing widget, :5010) | RunAtLoad + KeepAlive (persistent) | `ops/start_aset.sh` |
+All six installed and loaded as of 2026-09-03 (confirmed via
+`launchctl print gui/$UID/<label>`).
+
+| Plist | Runs | Schedule | Wrapper | Installed |
+|---|---|---|---|---|
+| `com.cobalt.agent.plist` | `cobalt.sh start` (the Mattermost chief-of-staff agent) | RunAtLoad only, no KeepAlive | — | yes |
+| `com.cobalt.mainframe.plist` | `~/.lmstudio/start_mainframe.sh` (local LLM) | RunAtLoad only | `~/.lmstudio/start_mainframe.sh` | yes |
+| `com.cobalt.archiver.plist` | `/Users/cobalt/.local/bin/uv run archiver` (nightly bar archiver) | Mon-Fri 20:30 ET | — | yes (2026-09-03 — was not loaded before this) |
+| `com.cobalt.prefill-daily.plist` | `/Users/cobalt/.local/bin/uv run prefill daily` | Mon-Fri 05:15 ET | — | yes (reloaded 2026-09-03 with the absolute-path fix) |
+| `com.cobalt.prefill-drc.plist` | `/Users/cobalt/.local/bin/uv run prefill drc` | Mon-Fri 15:40 ET | — | yes (reloaded 2026-09-03 with the absolute-path fix) |
+| `com.cobalt.aset.plist` | `ops/start_aset.sh` → `uv run python -m cobalt.aset` (ASET sizing widget, :5010) | RunAtLoad + KeepAlive (persistent) | `ops/start_aset.sh` | yes |
 
 ## com.cobalt.aset — persistence fix (2026-08-31)
 
@@ -75,28 +78,48 @@ market hours needs a human go-ahead, not an agent's own judgment call.
 The two prefill plists are still not installed at all, so they carry
 no such risk yet.
 
-## uv path discrepancy (found while installing this plist — not fixed here)
+## uv path in ProgramArguments — FIXED 2026-09-03 (was the 09-03 prefill-silence root cause)
 
-`com.cobalt.archiver.plist` and `com.cobalt.mainframe.plist` hardcode
-`/opt/homebrew/bin/uv` in `ProgramArguments`. **That path does not exist
-on this machine** — `uv` is a standalone install at `~/.local/bin/uv`
-(confirmed: `which uv` → `/Users/cobalt/.local/bin/uv`; `/opt/homebrew/bin/uv`
-→ no such file; `brew list uv` → no such keg). `ops/com.cobalt.aset.plist`
-avoids this by resolving `uv` via `PATH` inside `ops/start_aset.sh`
-(the `EnvironmentVariables.PATH` in every plist here already includes
-`~/.local/bin`) instead of hardcoding a binary path.
+**Rule: every `ops/*.plist` that invokes a binary directly in
+`ProgramArguments` (not through a wrapper script's own shebang) must use
+an ABSOLUTE path to that binary.** `uv` on this machine is a standalone
+install at `~/.local/bin/uv` (confirmed: `which uv` →
+`/Users/cobalt/.local/bin/uv`; `/opt/homebrew/bin/uv` → no such file;
+`brew list uv` → no such keg).
 
-**This means `com.cobalt.archiver.plist`'s launchd job has likely been
-failing silently since whenever `/opt/homebrew/bin/uv` stopped
-existing** — `docs/30 - Design/archiver-runs.md` has exactly two rows,
-both dated 2026-08-27, with no nightly rows for 08-28 through 08-31
-despite the Mon-Fri 20:30 schedule and the Ledger's 08-29/31 claim that
-the archiver was "verified running unattended." That verification was
-evidently done by a different check (e.g. `launchctl list` showing a
-label/PID) that doesn't catch an immediate exec failure. **Not fixed
-here** — out of scope for the ASET persistence task; flagged in the
-session recap for a real fix (same one-line `ProgramArguments` path
-swap, or route through a wrapper the way `aset`/`mainframe` do).
+Two different-looking bugs, same rule, found/fixed together:
+- `com.cobalt.archiver.plist` hardcoded the WRONG absolute path
+  (`/opt/homebrew/bin/uv`, doesn't exist here) — and was also simply not
+  loaded at all (`launchctl print` found no service). Its job had
+  therefore never run since 08-27 (`docs/30 - Design/archiver-runs.md`
+  has no nightly rows 08-28 onward) despite the Ledger's 08-29/31 claim
+  it was "verified running unattended" — that check evidently only
+  confirmed the plist file existed/looked right, not that launchd had
+  it loaded.
+- `com.cobalt.prefill-daily.plist` / `com.cobalt.prefill-drc.plist` used
+  a BARE `uv` (the 08-31 fix for the above bug, modeled on
+  `ops/start_aset.sh`'s pattern — see BACKLOG.md's 08-31 slice-2 entry).
+  This looked right but is itself wrong for a plist with no wrapper
+  script: `start_aset.sh`'s bare `uv` works because bash's own shebang
+  does a real PATH search before `exec`ing it; a bare name directly in
+  `ProgramArguments[0]` has no shell in front of it, and launchd's
+  posix_spawn does not reliably search the job's own
+  `EnvironmentVariables.PATH` the way a shell does. Confirmed by an
+  isolated diagnostic LaunchAgent: bare `uv` → `last exit code = 78:
+  EX_CONFIG`, empty stdout+stderr; absolute path → exit 0. This is
+  exactly what happened when `com.cobalt.prefill-daily` fired for real
+  at 05:15 on 09-03 (and `com.cobalt.prefill-drc` the evening before) —
+  loaded, fired, failed instantly, zero output, no alert. Full
+  root-cause writeup: `docs/00 - Project/BACKLOG.md`'s INCIDENT LOG,
+  2026-09-03 entry.
+
+**Fix (this session):** all three now use the absolute
+`/Users/cobalt/.local/bin/uv` in `ProgramArguments`; all three
+installed/reloaded and confirmed exit 0 on a manual `kickstart`.
+`com.cobalt.mainframe.plist` does not actually invoke `uv` at all (its
+`ProgramArguments` is `~/.lmstudio/start_mainframe.sh`, which uses `lms`
+— the earlier note above conflated it with the archiver bug; left
+uninvestigated further since it isn't broken).
 
 ## Install / reload
 

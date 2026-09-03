@@ -31,6 +31,34 @@ don't duplicate them.
   reading `${POSTGRES_PASSWORD}`-family vars) after every Postgres
   password rotation — `docker restart` alone does not re-read `.env`.
 
+- **2026-09-03 — morning prefill silent, root cause: launchd's
+  posix_spawn does not resolve a bare program name via the job's own
+  EnvironmentVariables PATH.** `com.cobalt.prefill-daily.plist` fired on
+  schedule (05:15) and `com.cobalt.prefill-drc.plist` the evening before
+  (09-02 15:40) — both loaded, both exited immediately with `78:
+  EX_CONFIG` and ZERO stdout/stderr, no alert. Confirmed by an isolated
+  diagnostic LaunchAgent: bare `uv` as `ProgramArguments[0]` reproduces
+  the exact signature (exit 78, empty logs); an absolute path exits 0.
+  The 08-31 "fix" (see the slice-2 entry below) that replaced the
+  plists' wrong hardcoded `/opt/homebrew/bin/uv` with a bare `uv`
+  (modeled on `ops/start_aset.sh`'s pattern) was never exercised
+  end-to-end — the plists sat uninstalled from 08-31 until this
+  session — so the fix's own flaw went undetected: `start_aset.sh`'s
+  bare `uv` works because bash's own shebang does the PATH search
+  before `exec`ing it; a bare name directly in a plist's
+  `ProgramArguments` has no shell in front of it, and launchd's
+  posix_spawn does not reliably do that search itself.
+  `com.cobalt.archiver.plist` carried the ORIGINAL wrong-hardcoded-path
+  bug (`/opt/homebrew/bin/uv` doesn't exist on this machine) and was
+  also not loaded at all. Fix: all three now use the absolute
+  `/Users/cobalt/.local/bin/uv`, installed and verified (see
+  `docs/40 - DevDocs` / ops session recap for the day). **Standing
+  rule:** any `ops/*.plist` `ProgramArguments[0]` that invokes a binary
+  directly (not through a wrapper script's own shebang) must be an
+  ABSOLUTE path — a bare name is a launchd footgun regardless of what
+  `EnvironmentVariables.PATH` says. See the heartbeat-probe follow-up
+  below.
+
 ## NOW (in build)
 
 - **Pre-beta slice 1 — ASET semi-auto sheet** (days)
@@ -322,6 +350,18 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
 
 ## STANDING FOLLOW-UPS
 
+- [ ] Heartbeat probe: "every ops/ plist expected loaded is loaded" —
+      `launchctl print gui/$UID/<label>` for each committed `ops/*.plist`,
+      red + DM alert if a shipped job isn't bootstrapped. An uninstalled
+      schedule is a silent failure by construction (this is how
+      `com.cobalt.archiver` sat unloaded and the prefill plists sat
+      uninstalled from 08-31 to 09-03, unnoticed). Note from the 09-03
+      incident (see INCIDENT LOG): loaded-state alone is not sufficient
+      — both prefill plists WERE loaded and still failed silently at the
+      launchd spawn level (exit 78, no output). The probe should also
+      compare each job's `last exit code` against 0/"never exited" and
+      alert on a nonzero code, not just on not-loaded. Thin heartbeat
+      lane (PROJECT-LEDGER 08-29/31).
 - [ ] docs/00 - Project/COBALT-REQUIREMENTS.md §6 vocabulary amendment —
       after Taxonomy Session.
 - [ ] Persona strings + vault-seeder content harvested as reference/intent
