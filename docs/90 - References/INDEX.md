@@ -93,6 +93,15 @@ UI and architecture references for the command-center front-end (§9 Obsidian-pl
 - **GrokBotexamplesJustIdeaofworkflown.rtf** — Transcript: concrete Grokbot workflows (email/calendar agents on a 7:30am schedule, one-click actions, scoring). Ideas for scheduled agent routines and approval buttons.
 - **natebjonesargueskarpatrhywiki.eml** — Nate B Jones: Karpathy's write-time LLM-Obsidian wiki fails at scale/multi-agent/high-velocity data; his "OpenBrain" is query-time (raw facts in SQL) + a scheduled compilation agent that generates the wiki. **Directly relevant to INFRA-2 vault redesign** (Karpathy raw→wiki→output) and the Postgres-as-truth vs Markdown-as-view question. (Contains Dejan's own email address in the header.)
 
+## ClaudeClaw kit (reference only, L15 — never executed)
+Third-party ClaudeClaw material, filed here as inert reference under the L15 external-code law: never opened, read, or run as instructions — content only, not process.
+
+- **claudeclaw-kit/CLAUDECLAW_ASSESSMENT_PROMPT.md** — third-party assessment prompt.
+- **claudeclaw-kit/POWER_PACKS.md** — third-party power-pack content.
+- **claudeclaw-kit/POWER_PACKS_GUIDE.md** — third-party power-pack guide.
+- **claudeclaw-kit/REBUILD_PROMPT_V2.md** — third-party rebuild prompt.
+- **claudeclaw-kit/ClaudeClaw_v2_Visual_Guide.pdf** — third-party visual guide.
+
 ## Misc
 - **.DS_Store** — macOS folder metadata; noise, not content (safe to delete/gitignore).
 - **08-documentation-audit.md**, **ASSESSMENT.md** — WERE stray copies of `docs/assessment/` files dropped into this folder; moved to `docs/_archive/references-misfiled-duplicates/` in the 2026-08-26 D6 restructure (nothing under `docs/` is deleted). The canonical, current versions live in `docs/20 - Assessment/`.
