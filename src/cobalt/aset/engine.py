@@ -13,6 +13,19 @@ allowed to compute is no longer a hardcoded constant here — it's an
 explicit `enabled_grades` argument, resolved by the caller from
 `SheetModesConfig.enabled_grades`. This module still reads no config
 directly; enabling a grade is purely a `configs/cobalt/aset.yaml` edit.
+
+Slice 2.1a (Dejan, 2026-08-31): two typo guards, same pattern as
+enabled_grades — thresholds are resolved by the caller from
+`AsetConfig.validation` (configs/dev/aset.yaml) and passed in explicitly
+rather than read here, so this module stays config-agnostic. Both are
+hard rejects (SizingError), not warnings: a stop-distance guard on
+compute_sizing (D3 — a 32% PCG stop typo nothing flagged) and a
+fill-vs-entry-distance guard on compute_fill_recompute (D2 — a fat-
+fingered 2518.91 fill against a 218.595 entry computed 0 shares and was
+persisted twice before the real fill came in). The stop-vs-entry SIDE
+check (long below / short above) moved to models.py's SizingInput — it
+has no config dependency, so a Pydantic model validator is a better fit
+than an engine argument.
 """
 
 from collections.abc import Iterable
@@ -33,16 +46,27 @@ class SizingError(ValueError):
     """Invalid sizing input — fail loud, never guess."""
 
 
-def compute_sizing(inp: SizingInput, enabled_grades: Iterable[Grade]) -> SizingResult:
+def compute_sizing(
+    inp: SizingInput,
+    enabled_grades: Iterable[Grade],
+    max_stop_distance_pct: Decimal,
+) -> SizingResult:
     if inp.grade not in enabled_grades:
         raise SizingError(
             f"Grade {inp.grade.value} is not enabled for sheet-mode compute "
             "(see configs/cobalt/aset.yaml enabled_grades) — no trade (SAW)."
         )
 
+    # SizingInput's own model validator already refused a stop on the
+    # wrong side of entry, so distance is guaranteed > 0 here.
     distance = abs(inp.entry - inp.stop)
-    if distance == 0:
-        raise SizingError("Entry and stop cannot be the same price.")
+    distance_pct = distance / inp.entry * Decimal("100")
+    if distance_pct > max_stop_distance_pct:
+        raise SizingError(
+            f"Stop is {distance_pct.quantize(CENTS)}% from entry — exceeds the "
+            f"{max_stop_distance_pct}% typo guard (configs/dev/aset.yaml "
+            "validation.max_stop_distance_pct). Refusing, not warning."
+        )
 
     risk_budget = inp.risk_dollars
     shares = int(risk_budget / distance)
@@ -53,14 +77,6 @@ def compute_sizing(inp: SizingInput, enabled_grades: Iterable[Grade]) -> SizingR
     target_2r = inp.entry + distance * 2 if is_long else inp.entry - distance * 2
 
     warnings: list[str] = []
-    if is_long and inp.stop >= inp.entry:
-        warnings.append(
-            "For a long trade the stop is normally below entry. Check the ASET plan."
-        )
-    if not is_long and inp.stop <= inp.entry:
-        warnings.append(
-            "For a short trade the stop is normally above entry. Check the ASET plan."
-        )
     if shares < 1:
         warnings.append(
             "Position size rounds to zero: risk per share exceeds the allocated risk budget."
@@ -78,13 +94,26 @@ def compute_sizing(inp: SizingInput, enabled_grades: Iterable[Grade]) -> SizingR
     )
 
 
-def compute_fill_recompute(original: SizingResult, actual_fill: Decimal) -> FillRecompute:
+def compute_fill_recompute(
+    original: SizingResult,
+    actual_fill: Decimal,
+    max_fill_distance_pct: Decimal,
+) -> FillRecompute:
     """Recompute shares at the actual fill price, same grade dollars and
     same stop. Note-only — never persisted to Postgres as a new row."""
     if actual_fill <= 0:
         raise SizingError("actual_fill must be positive")
 
     inp = original.input
+    fill_vs_entry_pct = abs(actual_fill - inp.entry) / inp.entry * Decimal("100")
+    if fill_vs_entry_pct > max_fill_distance_pct:
+        raise SizingError(
+            f"Fill {actual_fill} is {fill_vs_entry_pct.quantize(CENTS)}% from card "
+            f"entry {inp.entry} — exceeds the {max_fill_distance_pct}% typo guard "
+            "(configs/dev/aset.yaml validation.max_fill_distance_pct). "
+            "Refusing — nothing written."
+        )
+
     new_distance = abs(actual_fill - inp.stop)
     if new_distance == 0:
         raise SizingError("Actual fill and stop cannot be the same price.")

@@ -23,7 +23,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class Grade(str, Enum):
@@ -74,6 +74,27 @@ class SizingInput(BaseModel):
         if not v:
             raise ValueError("ticker must not be blank")
         return v
+
+    @model_validator(mode="after")
+    def _stop_on_correct_side_of_entry(self) -> "SizingInput":
+        # Slice 2.1a (2026-08-31 defect D3, a 32% PCG stop typo that
+        # nothing flagged): this used to be an engine.py WARNING, not a
+        # rejection. Fail-loud means a structurally wrong stop refuses
+        # the card, it does not warn-and-persist it. The threshold-based
+        # typo guard (stop too FAR from entry) is config-driven and lives
+        # in engine.compute_sizing instead — this check has no config
+        # dependency, so it belongs on the model itself.
+        if self.direction is Direction.LONG and self.stop >= self.entry:
+            raise ValueError(
+                f"Long stop ({self.stop}) must be below entry ({self.entry}) — "
+                "refusing, not warning."
+            )
+        if self.direction is Direction.SHORT and self.stop <= self.entry:
+            raise ValueError(
+                f"Short stop ({self.stop}) must be above entry ({self.entry}) — "
+                "refusing, not warning."
+            )
+        return self
 
 
 class SizingResult(BaseModel):

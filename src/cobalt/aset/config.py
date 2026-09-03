@@ -63,6 +63,24 @@ class ServerConfig(BaseModel):
         return "127.0.0.1" if self.bind == "loopback" else "0.0.0.0"
 
 
+class ValidationConfig(BaseModel):
+    """Typo guards for the ASET card (slice 2.1a, 2026-08-31 defects
+    D2/D3) — thresholds only, resolved by callers (web.py) and passed
+    explicitly into engine.compute_sizing / compute_fill_recompute so
+    the engine itself stays config-agnostic. Optional section: a config
+    file that omits it gets these defaults, same pattern as ServerConfig."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # D3: a 32% PCG stop typo (13.72 fat-fingered as 17.72) went
+    # unflagged. Not a trading rule — just a sanity ceiling on how far a
+    # stop can be from entry before it's more likely a typo than a plan.
+    max_stop_distance_pct: Decimal = Field(default=Decimal("10"), gt=0)
+    # D2: a 2518.91 fill against a 218.595 entry computed to 0 shares
+    # and was persisted twice before the real 218.91 fill came in.
+    max_fill_distance_pct: Decimal = Field(default=Decimal("5"), gt=0)
+
+
 class AsetConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -74,6 +92,7 @@ class AsetConfig(BaseModel):
     db_name: str = Field(default="cobalt_dev", min_length=1)
     daily_note: DailyNoteConfig
     server: ServerConfig = Field(default_factory=ServerConfig)
+    validation: ValidationConfig = Field(default_factory=ValidationConfig)
 
 
 def load_config() -> AsetConfig:

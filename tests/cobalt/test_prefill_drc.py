@@ -14,6 +14,7 @@ from cobalt.prefill import vault_writer as vault_writer_module
 from cobalt.prefill.drc import (
     EntryRender,
     find_trade_note_for_card,
+    format_card_reconcile_block,
     format_risk_parameters,
     format_tickers_block,
     parse_fill_updates,
@@ -128,6 +129,41 @@ class TestFormatTickersBlock:
         assert "Excitement audit" in block
 
 
+class TestFormatCardReconcileBlock:
+    """Slice 2.1a (2026-08-31): a card is a written plan; a matching
+    aset-fill block makes it a taken trade. Everything else — a pass, a
+    phantom, a premarket exploration — gets a checklist line. Cobalt
+    surfaces it; Dejan answers it (never guessed, never deleted)."""
+
+    def _entry(self, **overrides):
+        base = dict(
+            number=1, time_str="09:31:05", grade="B", direction="long", sheet_mode="full",
+            entry="227.98", stop="225.00", shares="20", risk_budget="60.00",
+            fill=None, needs_written_info=False, stand_down=False, excitement_audit=False,
+        )
+        base.update(overrides)
+        return EntryRender(**base)
+
+    def test_no_cards_renders_nothing_to_reconcile(self):
+        assert "nothing to reconcile" in format_card_reconcile_block({})
+
+    def test_every_card_filled_renders_nothing_to_reconcile(self):
+        e = self._entry(fill={"actual_fill": "228.00"})
+        assert "nothing to reconcile" in format_card_reconcile_block({"NVDA": [e]})
+
+    def test_unfilled_card_gets_a_checklist_line(self):
+        e = self._entry(fill=None)
+        block = format_card_reconcile_block({"NVDA": [e]})
+        assert "- [ ] 09:31:05 NVDA (B LONG) — taken / passed / discarded?" in block
+
+    def test_mixed_filled_and_unfilled_only_lists_unfilled(self):
+        filled = self._entry(number=1, time_str="09:31:05", fill={"actual_fill": "228.00"})
+        unfilled = self._entry(number=2, time_str="10:05:00", fill=None)
+        block = format_card_reconcile_block({"NVDA": [filled, unfilled]})
+        assert "09:31:05" not in block
+        assert "- [ ] 10:05:00 NVDA (B LONG) — taken / passed / discarded?" in block
+
+
 FAKE_RULES_MD = """
 **THE 12 RULES**
 
@@ -204,6 +240,31 @@ async def test_create_path_renders_full_template_with_cards(fake_vault, monkeypa
     # his sections stay untouched placeholders
     assert "Grade: (A+, A, B, C, etc..)" in content
     assert "### PnL on the day:  $XXXX" in content
+    # slice 2.1a: card has no matching aset-fill block -> reconcile checklist
+    assert "- [ ] 09:31:05 NVDA (B LONG) — taken / passed / discarded?" in content
+
+
+async def test_create_path_filled_card_has_no_reconcile_line(fake_vault, monkeypatch):
+    when = datetime(2026, 8, 28, 9, 31, 5).astimezone()
+    cards = [make_card("NVDA", when)]
+    monkeypatch.setattr(drc_module, "AsetStore", lambda db_name: _FakeStore(cards))
+
+    daily_note_path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-08-28.md"
+    daily_note_path.write_text(
+        "# 2026-08-28\n\n"
+        "### 09:45:00 — NVDA FILL UPDATE (orig 2026-08-28T09:31:05)\n"
+        "```aset-fill\n"
+        "ticker: NVDA\n"
+        "orig_timestamp: 2026-08-28T09:31:05\n"
+        "actual_fill: 228.50\n"
+        "```\n"
+    )
+
+    result = await drc_module.run_drc_prefill(for_date_=date(2026, 8, 28))
+    content = result.path.read_text()
+    assert "Fill update: actual $228.50" in content
+    assert "nothing to reconcile" in content
+    assert "- [ ] 09:31:05 NVDA" not in content
 
 
 async def test_append_path_when_drc_already_exists(fake_vault, monkeypatch):

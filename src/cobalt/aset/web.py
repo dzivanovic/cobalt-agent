@@ -34,6 +34,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from cobalt.prefill.config import PrefillConfigError, load_prefill_paths
 from cobalt.prefill.trade_note import upsert_trade_note
 from cobalt.prefill.vault_writer import VaultWriteError
+from cobalt.vault import VaultConfigError, dev_entry_allowed, is_production, resolve_vault_path
 
 from .config import ConfigError, load_config, load_sheet_modes_config
 from .daily_note import DailyNoteRefused, save_card, save_fill_update
@@ -43,6 +44,24 @@ from .prefill import PrefillError, fetch_last_price
 from .store import AsetStore
 
 app = FastAPI(title="Cobalt ASET Sheet", docs_url=None, redoc_url=None)
+
+
+class DevEntryRefused(RuntimeError):
+    """Non-production instance, no explicit COBALT_ALLOW_DEV_ENTRY=1 opt-in —
+    refuse ticker fetch / sizing / fill so a stale dev tab can't take live
+    entries (2026-09-02 incident follow-up). Mirrors cobalt.vault's inverse
+    guard but at the request layer, since a dev instance whose vault
+    resolves safely to ~/dev-vault-cobalt would otherwise sail through
+    resolve_vault_path() with no refusal at all."""
+
+
+def _check_entry_allowed() -> None:
+    if not is_production() and not dev_entry_allowed():
+        raise DevEntryRefused(
+            "Refused: this is a DEV instance (no COBALT_ENV=production). "
+            "Set COBALT_ALLOW_DEV_ENTRY=1 on this process to allow ticker "
+            "fetch / sizing / fill here — otherwise use the production sheet."
+        )
 
 CSS = """
  body{font-family:system-ui,sans-serif;background:#0b1020;color:#eef5ff;margin:0;padding:24px}
@@ -59,12 +78,14 @@ CSS = """
  .toggle button.active-short{color:#ff4f71;border-color:#ff4f71;background:rgba(255,79,113,.12)}
  .toggle button.active-mode{color:#00e5ff;border-color:#00e5ff;background:rgba(0,229,255,.12)}
  .failed{background:#3a0d18;border:1px solid #ff4f71;color:#ffc3ce;padding:12px;border-radius:8px;margin-bottom:16px;font-weight:700;white-space:pre-wrap}
+ .vaultline{color:#7f8ca8;font-size:12px;margin-bottom:10px}
+ .vaultline.bad{background:#3a0d18;border:1px solid #ff4f71;color:#ffc3ce;padding:8px 12px;border-radius:8px;font-weight:700}
+ .envbanner{background:#3a0d18;border:1px solid #ff4f71;color:#ffc3ce;padding:8px 12px;border-radius:8px;font-weight:700;margin-bottom:10px}
  .saved{background:#0d2a1c;border:1px solid #24d986;color:#b8f5d9;padding:12px;border-radius:8px;margin-bottom:16px;font-weight:700}
  .result{border-color:#24d986}
  .shares{font-size:52px;font-weight:900;color:#24d986}
  .warn{color:#ffd84d;font-size:13px;margin-top:6px}
  .hint{color:#7f8ca8;font-size:12px;margin-top:4px;font-style:italic}
- #entryHint{display:none}
  table{width:100%;font-size:13px;border-collapse:collapse} td{padding:4px 8px;border-bottom:1px solid #20283c}
  .muted{color:#7f8ca8;font-size:12px}
  option:disabled{color:#55607a}
@@ -74,12 +95,33 @@ JS = """
  const MODE_DOLLARS = window.SHEET_MODE_DOLLARS;
  const $ = id => document.getElementById(id);
 
- // STATE PRINCIPLE: the ticker defines the decision context. Changing
- // the ticker = new decision = full reset. Within one ticker, entry
- // tracks last price until Dejan manually edits entry (entryDirty),
- // which resets only when the ticker changes.
+ // STATE PRINCIPLE (Defect 3, 2026-09-01): the ticker box going out of
+ // focus is "new card" intent, full stop — whether or not the ticker
+ // text actually changed. A second trade on the SAME ticker is still a
+ // new decision: card 1's grade/direction/entry/stop/fill-block/
+ // warnings must never leak into it (the old logic only reset on a
+ // ticker CHANGE, so a same-ticker second card kept showing card 1's
+ // values until Compute was hit again — the entryDirty flag it used to
+ // decide "reset or preserve" conflated two different user intents
+ // into one handler). Two distinct, unconditional handlers instead of
+ // one handler with a flag:
+ //   - onTickerBlur     -> ALWAYS full reset, then fetch + prefill entry.
+ //   - refetchLastPrice -> refreshes ONLY last_price + entry; every
+ //                         other field (stop, grade, direction, fill
+ //                         block) is preserved exactly.
+ // Sheet mode (FULL/HALF) is the one field that survives a reset — a
+ // day setting, not a card setting.
+ //
+ // Slice 2.1a (2026-08-31 defect D1): typing a new ticker and hitting
+ // Enter submits the form immediately, with no blur ever firing, so
+ // entry/stop carried over from the PREVIOUS ticker verbatim. The
+ // 'input' listener below clears fields the instant the box diverges
+ // from currentTicker, before Enter can fire; entry_ticker, a hidden
+ // field naming which ticker the entry/stop values actually belong to,
+ // is submitted with the form so the server can refuse a mismatch
+ // outright — belt and suspenders, since client JS is never the only
+ // guard against a stale card.
  let currentTicker = window.INITIAL_TICKER || null;
- let entryDirty = window.INITIAL_ENTRY_DIRTY;
 
  function setDir(d){
    $('direction').value = d;
@@ -104,28 +146,18 @@ JS = """
    hint.style.display = 'block';
  }
 
- function markEntryDirty(){
-   entryDirty = true;
-   $('entry_dirty').value = '1';
-   $('entryHint').style.display = 'none';
- }
-
- function showEntryHint(freshPrice){
-   $('entryHint').textContent = 'entry differs from last ($' + freshPrice + ')';
-   $('entryHint').style.display = 'block';
- }
-
- function clearForNewTicker(){
-   entryDirty = false;
-   $('entry_dirty').value = '';
+ function clearForNewCard(){
+   $('grade').value = 'B';
+   setDir('long');
    $('orig_timestamp').value = '';
+   $('entry_ticker').value = '';
    $('resultCard').innerHTML = '';
    $('banner').innerHTML = '';
    $('entry').value = '';
    $('stop').value = '';
    $('last_price').value = '';
    $('price_source').value = '';
-   $('entryHint').style.display = 'none';
+   updateModeHint();
  }
 
  async function doFetch(ticker){
@@ -145,48 +177,52 @@ JS = """
    }
  }
 
- async function handleTicker(rawTicker){
+ // TAB-OUT of the ticker field: unconditional "new card" reset (Defect
+ // 3) — never gated on whether the ticker text actually changed.
+ async function onTickerBlur(rawTicker){
    const t = rawTicker.trim().toUpperCase();
    if (!t) return;
-
-   if (t !== currentTicker) {
-     // Symptom 1: ticker change = new decision = full reset, THEN fetch.
-     currentTicker = t;
-     clearForNewTicker();
-     const price = await doFetch(t);
-     if (price !== null) {
-       $('last_price').value = price;
-       $('entry').value = price;  // always overwritten on a ticker change
-     }
-   } else {
-     // Symptom 2: same-ticker re-fetch.
-     const price = await doFetch(t);
-     if (price === null) return;
+   currentTicker = t;
+   clearForNewCard();
+   $('entry_ticker').value = t;
+   const price = await doFetch(t);
+   if (price !== null) {
      $('last_price').value = price;
-     if (!entryDirty) {
-       $('entry').value = price;
-       $('entryHint').style.display = 'none';
-     } else if ($('entry').value !== String(price)) {
-       showEntryHint(price);
-     } else {
-       $('entryHint').style.display = 'none';
-     }
+     $('entry').value = price;
    }
+ }
+
+ // RE-FETCH LAST PRICE button: refreshes ONLY last_price + entry.
+ // grade/direction/stop/fill block are left exactly as they are.
+ async function refetchLastPrice(rawTicker){
+   const t = rawTicker.trim().toUpperCase();
+   if (!t) return;
+   $('entry_ticker').value = t;  // reaffirm — fields still belong to this ticker
+   const price = await doFetch(t);
+   if (price === null) return;
+   $('last_price').value = price;
+   $('entry').value = price;
  }
 
  window.addEventListener('DOMContentLoaded', () => {
    setDir($('direction').value || 'long');
    setMode($('sheet_mode').value || 'full');
-   $('ticker').addEventListener('blur', () => handleTicker($('ticker').value));
-   $('fetchBtn').addEventListener('click', () => handleTicker($('ticker').value));
-   $('entry').addEventListener('input', markEntryDirty);
+   $('ticker').addEventListener('blur', () => onTickerBlur($('ticker').value));
+   // Fires on every keystroke, ahead of blur — closes the Enter-to-submit
+   // gap where blur (and clearForNewCard) never runs at all (D1).
+   $('ticker').addEventListener('input', () => {
+     const t = $('ticker').value.trim().toUpperCase();
+     if (t !== currentTicker) clearForNewCard();
+   });
+   $('fetchBtn').addEventListener('click', () => refetchLastPrice($('ticker').value));
    $('grade').addEventListener('change', updateModeHint);
  });
 """
 
 FORM_FIELDS = (
     "ticker", "grade", "direction", "sheet_mode", "entry", "stop",
-    "last_price", "price_source", "entry_dirty", "orig_timestamp",
+    "last_price", "price_source", "orig_timestamp",
+    "entry_ticker",
 )
 
 
@@ -223,8 +259,33 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
     sheet_mode = form.get("sheet_mode", "full")
 
     e = html.escape
+
+    # Defect 1 (2026-09-01): the sheet gave no visible indication it was
+    # writing to the wrong vault for 6+ hours — this line makes the
+    # resolved root always visible, not just discoverable after a write
+    # already went to the wrong place. See src/cobalt/vault.py.
+    try:
+        vault_line = f'<div class="vaultline">Vault: {e(str(resolve_vault_path()))}</div>'
+    except VaultConfigError as exc:
+        vault_line = f'<div class="vaultline bad">⚠ VAULT UNRESOLVED — writes will fail: {e(str(exc))}</div>'
+
+    # 2026-09-02 incident follow-up: the header used to say "· dev" as a
+    # static literal regardless of which instance was actually running —
+    # the real production process (Think vault, COBALT_ENV=production)
+    # printed that same "dev" label, which is exactly what made a live
+    # TSLA card look like it came from a throwaway dev tab. This is now
+    # the actual runtime environment, and a non-production instance gets
+    # a loud red banner in addition (see DevEntryRefused).
+    env_label = "PRODUCTION" if is_production() else "DEV"
+    env_banner = (
+        ""
+        if is_production()
+        else '<div class="envbanner">⚠ DEV INSTANCE — not production. Ticker fetch / '
+        "sizing / fill are refused here unless COBALT_ALLOW_DEV_ENTRY=1 is set on this "
+        "process.</div>"
+    )
+
     initial_ticker = form.get("ticker", "").strip().upper()
-    initial_entry_dirty = bool(form.get("entry_dirty"))
     mode_dollars = {
         "full": {g.value: float(sheet_modes_cfg.dollars_for("full", g)) for g in Grade},
         "half": {g.value: float(sheet_modes_cfg.dollars_for("half", g)) for g in Grade},
@@ -234,7 +295,9 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cobalt · ASET Sheet</title>
 <style>{CSS}</style></head><body><div class="wrap">
-<h1>ASET SEMI-AUTO SHEET <span class="muted">pre-beta slice 1 · dev</span></h1>
+<h1>ASET SEMI-AUTO SHEET <span class="muted">pre-beta slice 1 · {e(env_label)}</span></h1>
+{env_banner}
+{vault_line}
 <div id="banner">{banner}</div>
 <div id="resultCard">{result}</div>
 <form class="card" method="post" action="/size">
@@ -245,8 +308,8 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
   <label>Last price <span class="muted">(prefill)</span></label>
   <input name="last_price" id="last_price" readonly placeholder="—" value="{e(form.get("last_price", ""))}">
   <input type="hidden" name="price_source" id="price_source" value="{e(form.get("price_source", ""))}">
-  <input type="hidden" name="entry_dirty" id="entry_dirty" value="{e(form.get("entry_dirty", ""))}">
   <input type="hidden" name="orig_timestamp" id="orig_timestamp" value="{e(form.get("orig_timestamp", ""))}">
+  <input type="hidden" name="entry_ticker" id="entry_ticker" value="{e(form.get("entry_ticker", ""))}">
  </div></div>
  <button type="button" id="fetchBtn">Re-fetch last price</button>
  <div class="row"><div>
@@ -264,7 +327,6 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
  <div class="row"><div>
   <label>Entry $ <span class="muted">(prefilled from last price, edit freely)</span></label>
   <input name="entry" id="entry" type="number" step="0.0001" required value="{e(form.get("entry", ""))}">
-  <div class="hint" id="entryHint"></div>
  </div><div>
   <label>Stop $ (yours, always)</label>
   <input name="stop" id="stop" type="number" step="0.0001" required value="{e(form.get("stop", ""))}">
@@ -277,11 +339,10 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
  <input type="hidden" name="sheet_mode" id="sheet_mode" value="{e(sheet_mode)}">
  <button class="primary" type="submit">Compute &amp; persist</button>
 </form>
-<div class="muted">Every computed sizing persists to Postgres ({e(cfg.db_name)}) and appends to today's daily note in the same action. Missing data = FAILED, never guessed.</div>
+<div class="muted">Every computed sizing persists to Postgres ({e(cfg.db_name)} — the only ASET database; there is no separate prod/dev split here yet, see BACKLOG.md) and appends to today's daily note in the same action. Missing data = FAILED, never guessed.</div>
 <script>
 window.SHEET_MODE_DOLLARS = {json.dumps(mode_dollars)};
 window.INITIAL_TICKER = {json.dumps(initial_ticker)};
-window.INITIAL_ENTRY_DIRTY = {json.dumps(initial_entry_dirty)};
 </script>
 <script>{JS}</script>
 </div></body></html>"""
@@ -307,6 +368,22 @@ def _resolve_risk_dollars(sheet_modes_cfg, mode: str, grade: str) -> Decimal:
 def _parse_input(form: dict, sheet_modes_cfg) -> SizingInput:
     grade = form.get("grade", "")
     sheet_mode = form.get("sheet_mode", "")
+    ticker_norm = form.get("ticker", "").strip().upper()
+    entry_ticker = (form.get("entry_ticker") or "").strip().upper()
+
+    # Slice 2.1a (2026-08-31 defect D1): entry_ticker is the JS-tracked
+    # "these entry/stop values belong to THIS ticker" marker. A mismatch
+    # means the ticker field changed without the entry/stop fields
+    # clearing (e.g. typed a new ticker then hit Enter, which submits
+    # before the JS blur handler ever runs) — refuse outright rather
+    # than compute against a stale, wrong-symbol price.
+    if entry_ticker != ticker_norm:
+        raise SizingError(
+            f"Ticker changed to {ticker_norm or '(blank)'} but entry/stop still "
+            f"belong to {entry_ticker or '(none)'} — stale carry-over. Re-enter "
+            "entry and stop for the new ticker."
+        )
+
     return SizingInput(
         ticker=form.get("ticker", ""),
         grade=grade,
@@ -376,7 +453,10 @@ def index() -> str:
 @app.get("/api/prefill")
 async def api_prefill(ticker: str):
     try:
+        _check_entry_allowed()
         price, source = await fetch_last_price(ticker)
+    except DevEntryRefused as e:
+        return JSONResponse({"error": str(e)}, status_code=403)
     except PrefillError as e:
         return JSONResponse({"error": str(e)}, status_code=502)
     return {"ticker": ticker.strip().upper(), "price": str(price), "source": source}
@@ -386,11 +466,14 @@ async def api_prefill(ticker: str):
 async def size(request: Request) -> str:
     form = {k: str(v) for k, v in (await request.form()).items()}
     try:
+        _check_entry_allowed()
         cfg = load_config()
         sheet_modes_cfg = load_sheet_modes_config()
         inp = _parse_input(form, sheet_modes_cfg)
-        result = compute_sizing(inp, sheet_modes_cfg.enabled_grades)
-    except (SizingError, ConfigError) as e:
+        result = compute_sizing(
+            inp, sheet_modes_cfg.enabled_grades, cfg.validation.max_stop_distance_pct
+        )
+    except (SizingError, ConfigError, DevEntryRefused) as e:
         return _render(banner=_failed(str(e)), form=form)
     except Exception as e:
         return _render(banner=_failed(f"{type(e).__name__}: {e}"), form=form)
@@ -438,10 +521,13 @@ async def size(request: Request) -> str:
 async def fill(request: Request) -> str:
     form = {k: str(v) for k, v in (await request.form()).items()}
     try:
+        _check_entry_allowed()
         cfg = load_config()
         sheet_modes_cfg = load_sheet_modes_config()
         inp = _parse_input(form, sheet_modes_cfg)
-        original = compute_sizing(inp, sheet_modes_cfg.enabled_grades)  # deterministic recompute; no re-persist
+        original = compute_sizing(
+            inp, sheet_modes_cfg.enabled_grades, cfg.validation.max_stop_distance_pct
+        )  # deterministic recompute; no re-persist
 
         orig_ts_raw = form.get("orig_timestamp", "")
         if not orig_ts_raw:
@@ -456,9 +542,11 @@ async def fill(request: Request) -> str:
         except InvalidOperation as e:
             raise SizingError(f"Invalid actual fill price: {form.get('actual_fill')!r}") from e
 
-        fill_result = compute_fill_recompute(original, actual_fill)
+        fill_result = compute_fill_recompute(
+            original, actual_fill, cfg.validation.max_fill_distance_pct
+        )
         note_path = save_fill_update(cfg, fill_result, orig_timestamp)
-    except (SizingError, ConfigError, DailyNoteRefused) as e:
+    except (SizingError, ConfigError, DailyNoteRefused, DevEntryRefused) as e:
         return _render(banner=_failed(str(e)), form=form)
     except Exception as e:
         return _render(banner=_failed(f"{type(e).__name__}: {e}"), form=form)

@@ -31,3 +31,15 @@ daily_note:
 server:
   bind: loopback
   port: 5010
+
+# Slice 2.1a (2026-08-31) typo guards — hard rejects on the card, not
+# warnings. This section is optional; omitting it takes these same
+# defaults (AsetConfig.validation's Pydantic defaults).
+# max_stop_distance_pct: catches a fat-fingered stop (D3 — a 32% PCG
+#   stop typo, 17.72 meant to be 13.72, went unflagged).
+# max_fill_distance_pct: catches a fat-fingered actual-fill entry (D2 —
+#   2518.91 entered against a 218.595 entry, computed to 0 shares and
+#   was persisted twice before the real 218.91 fill came in).
+validation:
+  max_stop_distance_pct: 10
+  max_fill_distance_pct: 5

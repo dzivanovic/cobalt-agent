@@ -15,6 +15,7 @@ from cobalt.prefill.config import PrefillPathsConfig
 from cobalt.prefill.vault_writer import VaultWriteError
 
 ENABLED_GRADES = (Grade.A, Grade.B)
+MAX_STOP_DISTANCE_PCT = Decimal("10")
 
 
 def make_result(**overrides):
@@ -28,7 +29,7 @@ def make_result(**overrides):
         stop=Decimal("225.00"),
     )
     base.update(overrides)
-    return compute_sizing(SizingInput(**base), ENABLED_GRADES)
+    return compute_sizing(SizingInput(**base), ENABLED_GRADES, MAX_STOP_DISTANCE_PCT)
 
 
 def make_paths() -> PrefillPathsConfig:

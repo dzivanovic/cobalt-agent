@@ -44,6 +44,7 @@ def test_save_and_read_back_roundtrip():
             price_source="integration-test",
         ),
         (Grade.A, Grade.B),
+        Decimal("10"),
     )
     row_id = store.save(result)
     assert row_id > 0
@@ -76,6 +77,7 @@ def test_for_date_returns_todays_cards_oldest_first():
             stop=Decimal("9.50"),
         ),
         (Grade.A, Grade.B),
+        Decimal("10"),
     )
     id1 = store.save(result)
     id2 = store.save(result)

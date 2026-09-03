@@ -42,6 +42,7 @@ def make_cfg(**note_overrides) -> AsetConfig:
 
 
 ENABLED_GRADES = (Grade.A, Grade.B)
+MAX_STOP_DISTANCE_PCT = Decimal("10")
 
 
 def make_result(**overrides):
@@ -55,7 +56,7 @@ def make_result(**overrides):
         stop=Decimal("9.50"),
     )
     base.update(overrides)
-    return compute_sizing(SizingInput(**base), ENABLED_GRADES)
+    return compute_sizing(SizingInput(**base), ENABLED_GRADES, MAX_STOP_DISTANCE_PCT)
 
 
 @pytest.fixture
@@ -143,13 +144,42 @@ def test_pre_existing_note_gets_no_banner(fake_vault):
     assert "09:31:00 — TEST LONG B" in content
 
 
+class TestVerifyAfterWrite:
+    """2026-09-02 ("TSLA id 127") incident: the /size handler reported
+    this write succeeded — no exception — yet the card was never on
+    disk a few minutes later; forensics point to something else (most
+    likely an editor with the note open in a stale buffer) rewriting
+    the file out from under the append. _append() now re-reads
+    immediately after writing and fails loud if the card didn't
+    survive, rather than trusting a clean open()/write()/close()."""
+
+    def test_raises_when_the_write_does_not_survive_on_disk(self, fake_vault, monkeypatch):
+        # Simulate a clobber landing in the gap between the write and the
+        # re-read: patch Path.read_text (this test only) to hand back
+        # content that never saw the appended card.
+        monkeypatch.setattr(
+            daily_note_module.Path,
+            "read_text",
+            lambda self, **kw: "stale content — the append never lands here\n",
+        )
+        with pytest.raises(DailyNoteRefused, match="VERIFY FAILED"):
+            save_card(make_cfg(), make_result())
+
+    def test_passes_when_the_write_survives(self, fake_vault):
+        # Sanity: the ordinary, unclobbered path is unaffected.
+        path, _ = save_card(make_cfg(), make_result())
+        assert "TEST LONG B" in path.read_text()
+
+
 class TestFillUpdate:
     def test_fill_update_appends_linked_block(self, fake_vault):
         orig_when = datetime(2026, 8, 26, 9, 31, 0)
         card_path, orig_timestamp = save_card(make_cfg(), make_result(), when=orig_when)
 
         original = make_result()
-        fill = compute_fill_recompute(original, actual_fill=Decimal("10.30"))
+        fill = compute_fill_recompute(
+            original, actual_fill=Decimal("10.30"), max_fill_distance_pct=Decimal("5")
+        )
         fill_when = datetime(2026, 8, 26, 9, 45, 0)
         fill_path = save_fill_update(make_cfg(), fill, orig_timestamp, when=fill_when)
 
@@ -164,7 +194,12 @@ class TestFillUpdate:
         _, orig_timestamp = save_card(make_cfg(), make_result(), when=orig_when)
 
         original = make_result()
-        fill = compute_fill_recompute(original, actual_fill=Decimal("11.00"))  # big distance jump
+        # 11.00 is 10% from entry 10.00 — beyond the 5% default hard
+        # floor, so widen it here to exercise the softer >=25%
+        # distance_change_pct structural warning instead.
+        fill = compute_fill_recompute(
+            original, actual_fill=Decimal("11.00"), max_fill_distance_pct=Decimal("20")
+        )  # big distance jump
         path = save_fill_update(make_cfg(), fill, orig_timestamp, when=orig_when)
         content = path.read_text()
         assert "stop may no longer be structural" in content
@@ -175,7 +210,9 @@ class TestFillUpdate:
         # before the "inside the repo" safety gate does — never create
         # directories under REPO_ROOT from a test.
         original = make_result()
-        fill = compute_fill_recompute(original, actual_fill=Decimal("10.30"))
+        fill = compute_fill_recompute(
+            original, actual_fill=Decimal("10.30"), max_fill_distance_pct=Decimal("5")
+        )
         monkeypatch.setattr(daily_note_module, "resolve_vault_path", lambda: REPO_ROOT)
         cfg = make_cfg(daily_notes_dir="tests/cobalt")
         with pytest.raises(DailyNoteRefused, match="INSIDE the repo"):

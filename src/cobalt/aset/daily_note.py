@@ -118,6 +118,18 @@ def format_fill_update_card(
 
 
 def _append(cfg: AsetConfig, when: datetime, body: str) -> Path:
+    """Append `body`, then re-read the file and confirm it's actually
+    there (2026-09-02 incident: a TSLA card's /size POST reported this
+    function succeeded — no exception — yet the card was never on disk;
+    something else (most likely an external editor with the note open,
+    per the forensics writeup) rewrote the file out from under this
+    write sometime after it returned). open()/write()/close() not
+    raising only proves the bytes were handed to the OS, not that they
+    survived — fail-loud means checking the one thing that actually
+    matters: is the card readable back right now. Not airtight against
+    a clobber landing in the gap between this write and this re-read,
+    but it turns "silent, undetected data loss" into "loud FAILED
+    banner", which is the whole ask."""
     path = target_path(cfg, when)
     if not path.parent.is_dir():
         raise DailyNoteRefused(
@@ -130,6 +142,16 @@ def _append(cfg: AsetConfig, when: datetime, body: str) -> Path:
         if is_new:
             f.write(f"# {when:%Y-%m-%d}\n\n{STUB_BANNER}")
         f.write(body)
+
+    on_disk = path.read_text(encoding="utf-8")
+    if body not in on_disk:
+        raise DailyNoteRefused(
+            f"VERIFY FAILED: wrote to {path} without error, but the card is "
+            "not there on re-read — something else modified the file after "
+            "this write (a stale editor buffer autosaving over it is the "
+            "prime suspect; see src/cobalt/aset/daily_note.py). The write "
+            "did not survive; treat this card as NOT in the daily note."
+        )
     return path
 
 

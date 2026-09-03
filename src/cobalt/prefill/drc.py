@@ -206,6 +206,24 @@ def format_tickers_block(grouped_entries: dict[str, list[EntryRender]]) -> str:
     return "\n".join(parts)
 
 
+def format_card_reconcile_block(grouped_entries: dict[str, list[EntryRender]]) -> str:
+    """Slice 2.1a (2026-08-31): a card is a written plan; a card with a
+    matching aset-fill block is a taken trade. Everything else is a
+    pass, a phantom, or premarket exploration — and Cobalt does not
+    guess which. One checklist line per card with no matching fill
+    (EntryRender.fill is already None for those — see _build_entries);
+    Dejan answers taken / passed / discarded by hand."""
+    lines = [
+        f"- [ ] {e.time_str} {ticker} ({e.grade} {e.direction.upper()}) — taken / passed / discarded?"
+        for ticker, entries in grouped_entries.items()
+        for e in entries
+        if e.fill is None
+    ]
+    if not lines:
+        return "(every card today has a matching fill — nothing to reconcile)\n"
+    return "\n".join(lines) + "\n"
+
+
 def format_risk_parameters(cards: list[dict], sheet_modes_cfg) -> str:
     modes_used = sorted({c["sheet_mode"] for c in cards if c.get("sheet_mode")})
     if not modes_used:
@@ -251,6 +269,9 @@ def _render_append_block(for_date_: date, context: dict) -> str:
         "**Rules (copied from the morning note's checklist — Rules.md is the source):**",
         context["rules_checkbox_block"].rstrip("\n"),
         "",
+        "**Card reconcile (cards with no matching fill — taken / passed / discarded?):**",
+        context["card_reconcile_block"].rstrip("\n"),
+        "",
     ]
     return "\n".join(lines)
 
@@ -295,6 +316,7 @@ async def run_drc_prefill(for_date_: Optional[date] = None) -> DrcPrefillResult:
         "risk_parameters_line": format_risk_parameters(cards, sheet_modes_cfg),
         "tickers_block": format_tickers_block(grouped_entries),
         "rules_checkbox_block": format_rules_checkbox_block(mode_aware_rules),
+        "card_reconcile_block": format_card_reconcile_block(grouped_entries),
     }
 
     filename = for_date_.strftime(prefill_paths.drc_filename_pattern)
