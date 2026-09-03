@@ -8,11 +8,12 @@ from decimal import Decimal
 import pytest
 
 from cobalt.aset.config import AsetConfig
+from cobalt.aset.daily_note import STUB_BANNER
 from cobalt.prefill import daily as daily_module
 from cobalt.prefill import vault_writer as vault_writer_module
 from cobalt.prefill.calendar import EarningsEvent, EconomicEvent
 from cobalt.prefill.config import GeneratedMeta, MantraItem, RuleItem, RulesConfig
-from cobalt.prefill.daily import SlotAnchorNotFound
+from cobalt.prefill.daily import NoteChangedDuringPrefill, SlotAnchorNotFound
 from cobalt.prefill.market import MarketRow
 
 
@@ -288,3 +289,77 @@ async def test_missing_rules_anchor_fails_loud(fake_vault):
 
     with pytest.raises(SlotAnchorNotFound, match="I WILL NOT TOLERATE"):
         await daily_module.run_daily_prefill(when=when)
+
+
+async def test_aset_bootstrap_stub_upgrades_to_full_template_preserving_cards(fake_vault):
+    """Reproduces the 09-03 report: ASET's own stub-on-create fallback
+    (aset/daily_note.py) creates the note before this job ever runs
+    (e.g. prefill failed/was late that morning). The old code had no
+    anchors to fill against and crashed (SlotAnchorNotFound) — or, if it
+    hadn't crashed, generic overwrite logic risked losing the cards. The
+    fix upgrades the stub to the full template AND keeps every card."""
+    when = datetime(2026, 9, 3, 10, 45, 0)
+    path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-09-03.md"
+    card_block = "\n### 10:02:06 — TSLA LONG B\n```aset\nticker: TSLA\n```\n"
+    path.write_text(f"# 2026-09-03\n\n{STUB_BANNER}{card_block}")
+
+    result = await daily_module.run_daily_prefill(when=when)
+    assert result.action == "upgraded_stub"
+    content = path.read_text()
+    assert "<!-- cobalt-slot:rules -->" in content
+    assert "<!-- cobalt-slot:trading -->" in content
+    assert "<!-- cobalt-slot:market_calendar -->" in content
+    assert "### 10:02:06 — TSLA LONG B" in content
+    assert "ticker: TSLA" in content
+
+
+async def test_card_appended_during_fetch_window_is_not_clobbered(fake_vault, monkeypatch):
+    """Root-cause regression test: a card lands (via ASET's real
+    append-only writer) WHILE this run is mid-fetch. The old code read
+    `existing` before the fetch and blindly wrote that stale snapshot
+    back after, silently discarding the card — this is exactly what
+    wiped every card out of 2026-09-02's real daily note. The fix must
+    see the card (re-read happens after the fetch)."""
+    when = datetime(2026, 8, 31, 8, 45, 0)
+    path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-08-31.md"
+    path.write_text(make_note_text())
+
+    async def _market_then_append(*a, **kw):
+        # Simulates ASET's real writer, which really is synchronous/
+        # blocking (aset/daily_note.py's _append()) — deliberate, not
+        # an oversight.
+        with open(path, "a", encoding="utf-8") as f:  # noqa: ASYNC230
+            f.write("\n### 08:46:00 — NVDA LONG B\n```aset\nticker: NVDA\n```\n")
+        return ROWS
+
+    monkeypatch.setattr(daily_module, "fetch_market_table", _market_then_append)
+
+    result = await daily_module.run_daily_prefill(when=when)
+    content = path.read_text()
+    assert "### 08:46:00 — NVDA LONG B" in content, (
+        "card appended mid-fetch was clobbered by a stale-snapshot overwrite"
+    )
+    assert "$450.55" in content  # the fill-in-place edit still landed
+    assert result.action == "filled"
+
+
+async def test_write_refuses_rather_than_clobbers_on_a_true_race(fake_vault, monkeypatch):
+    """Even the narrow post-re-read window is guarded: if the file
+    changes between the (now-late) read and the write itself, refuse
+    loudly instead of overwriting — never a silent lost update."""
+    when = datetime(2026, 8, 31, 8, 45, 0)
+    path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-08-31.md"
+    path.write_text(make_note_text())
+
+    real_write_if_unchanged = daily_module._write_if_unchanged
+
+    def _racy_write(path_, baseline, new_text):
+        with open(path_, "a", encoding="utf-8") as f:
+            f.write("\n### 08:46:30 — LATE RACE CARD\n")
+        real_write_if_unchanged(path_, baseline, new_text)
+
+    monkeypatch.setattr(daily_module, "_write_if_unchanged", _racy_write)
+
+    with pytest.raises(NoteChangedDuringPrefill):
+        await daily_module.run_daily_prefill(when=when)
+    assert "LATE RACE CARD" in path.read_text()  # the racing write survives untouched

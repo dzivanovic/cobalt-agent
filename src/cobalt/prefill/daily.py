@@ -28,6 +28,22 @@ never leaves a partially-edited file on disk.
 Market/calendar fetch failures render "FAILED: <reason>" text into the
 relevant cells/lines (never blank, never silently guessed) and are
 deliberately left UNMARKED so a later run retries them.
+
+Root cause fix (2026-09-03, "ASET cards not landing" investigation):
+this function used to read the note ONCE at the top, then await several
+seconds of Finviz/calendar network I/O, then write a `new_text` derived
+from that now-stale read — a lost-update race against ASET's own
+(synchronous, near-instant) card-append writer to the SAME file. A card
+appended during the await window would be silently discarded when this
+function's write replaced the whole file. Confirmed against
+2026-09-02's real daily note: 14 cards computed and persisted (trade
+notes + aset_sizings rows all present) but zero landed in the note.
+Fixed two ways: `existing` is now re-read AFTER the awaits (closing
+almost the whole window), and every write goes through
+`_write_if_unchanged()`, which re-verifies the file still matches what
+the edit was computed from and refuses (NoteChangedDuringPrefill) rather
+than clobber if not — fail-loud, one-path rule, never a silent
+overwrite. See `_write_if_unchanged` and `NoteChangedDuringPrefill`.
 """
 
 import re
@@ -38,11 +54,18 @@ from typing import Optional
 
 from jinja2 import Environment, FileSystemLoader
 
-from cobalt.aset.config import load_config as load_aset_config, load_sheet_modes_config
+from cobalt.aset.config import load_config as load_aset_config
+from cobalt.aset.config import load_sheet_modes_config
+from cobalt.aset.daily_note import STUB_BANNER
 from cobalt.aset.models import Grade
 from cobalt.aset.store import AsetStore
-from cobalt.prefill.calendar import EarningsEvent, EconomicEvent, fetch_earnings_events, fetch_economic_events
-from cobalt.prefill.config import RuleItem, RulesConfig, TEMPLATES_DIR
+from cobalt.prefill.calendar import (
+    EarningsEvent,
+    EconomicEvent,
+    fetch_earnings_events,
+    fetch_economic_events,
+)
+from cobalt.prefill.config import TEMPLATES_DIR, RuleItem, RulesConfig
 from cobalt.prefill.errors import PrefillFetchError
 from cobalt.prefill.market import MarketRow, fetch_market_table
 from cobalt.prefill.rules_gen import regenerate_rules_config
@@ -206,6 +229,22 @@ class SlotAnchorNotFound(RuntimeError):
     guess an insertion point."""
 
 
+class NoteChangedDuringPrefill(RuntimeError):
+    """The daily note changed on disk between when this run last read it
+    and when it was about to write (root cause, 2026-09-03 "ASET cards
+    not landing" investigation: run_daily_prefill() used to read
+    `existing` once, then await several seconds of Finviz/calendar
+    network I/O, then write a `new_text` derived from that now-stale
+    snapshot — silently discarding any ASET card appended during the
+    await window, since the write replaces the whole file. `existing` is
+    now re-read fresh after the awaits (closing most of the window), and
+    this is the last-line defense for the remaining synchronous gap:
+    refuse rather than clobber. Fail-loud, one-path rule — never a
+    silent overwrite. The on-disk content, cards included, is left
+    exactly as-is; a later run is idempotent-safe and will retry
+    whatever is still genuinely unfilled."""
+
+
 @dataclass
 class SlotFillPlan:
     filled: list[str] = field(default_factory=list)
@@ -338,9 +377,25 @@ def _rules_slot_content(context: dict) -> str:
 @dataclass
 class DailyPrefillResult:
     path: Path
-    action: str  # "created" | "filled" | "skipped_idempotent"
+    action: str  # "created" | "upgraded_stub" | "filled" | "skipped_idempotent"
     filled_slots: list[str]
     skipped_slots: list[str]
+
+
+def _write_if_unchanged(path: Path, baseline: Optional[str], new_text: str) -> None:
+    """Write `new_text`, but only if the file still matches `baseline` —
+    the snapshot this edit was computed from. Refuses loudly otherwise
+    (NoteChangedDuringPrefill) instead of clobbering a concurrent
+    writer's content (see that class's docstring)."""
+    current = read_if_exists(path)
+    if current != baseline:
+        raise NoteChangedDuringPrefill(
+            f"REFUSED: {path} changed on disk since this run last read it "
+            "— most likely a concurrent ASET card append landed in the "
+            "gap. Not overwriting; the on-disk content (cards included) "
+            "is untouched. Re-run prefill to retry any still-unfilled slot."
+        )
+    path.write_text(new_text, encoding="utf-8")
 
 
 async def run_daily_prefill(when: Optional[datetime] = None) -> DailyPrefillResult:
@@ -351,9 +406,12 @@ async def run_daily_prefill(when: Optional[datetime] = None) -> DailyPrefillResu
 
     filename = when.strftime(aset_cfg.daily_note.filename_pattern)
     path = resolve_target(aset_cfg.daily_note.daily_notes_dir, filename)
-    existing = read_if_exists(path)
 
-    if existing is not None and _all_markers_present(existing):
+    # Cheap early exit on the already-filled common case — skip touching
+    # the network entirely. Re-read fresh below before actually acting;
+    # this snapshot is ONLY used to decide whether it's worth fetching.
+    precheck = read_if_exists(path)
+    if precheck is not None and _all_markers_present(precheck):
         return DailyPrefillResult(
             path=path,
             action="skipped_idempotent",
@@ -390,10 +448,43 @@ async def run_daily_prefill(when: Optional[datetime] = None) -> DailyPrefillResu
         rules_cfg, sheet_modes_cfg, mode_hint,
     )
 
+    # Root-cause fix (2026-09-03): re-read NOW, after the slow fetches
+    # above (network calls can run for seconds), not before them. Every
+    # decision and write below is against THIS snapshot — closing the
+    # window that used to let a concurrent ASET card append vanish
+    # under a stale-read overwrite. _write_if_unchanged() below is the
+    # last-line defense for the remaining (synchronous, near-zero)
+    # gap between this read and the eventual write.
+    existing = read_if_exists(path)
+
+    if existing is not None and _all_markers_present(existing):
+        return DailyPrefillResult(
+            path=path,
+            action="skipped_idempotent",
+            filled_slots=[],
+            skipped_slots=[f"{name} (already filled)" for name in SLOT_NAMES],
+        )
+
     if existing is None:
         write_new(path, _render_template(context))
         return DailyPrefillResult(
             path=path, action="created",
+            filled_slots=list(SLOT_NAMES), skipped_slots=[],
+        )
+
+    if STUB_BANNER in existing:
+        # ASET bootstrapped this note itself (aset/daily_note.py's own
+        # stub-on-create fallback — happens whenever the first card of
+        # the day lands before this job ever runs, e.g. prefill was
+        # broken/late that morning). It has none of the anchors below,
+        # so the normal fill-in-place path would fail loud on the rules
+        # anchor. Upgrade it to the full template instead, preserving
+        # every appended card byte-for-byte after the rendered template.
+        preserved_cards = existing.split(STUB_BANNER, 1)[1]
+        new_text = _render_template(context) + preserved_cards
+        _write_if_unchanged(path, existing, new_text)
+        return DailyPrefillResult(
+            path=path, action="upgraded_stub",
             filled_slots=list(SLOT_NAMES), skipped_slots=[],
         )
 
@@ -409,7 +500,7 @@ async def run_daily_prefill(when: Optional[datetime] = None) -> DailyPrefillResu
     }
     new_text, plan = _fill_all_slots(existing, slots)
     if new_text != existing:
-        path.write_text(new_text, encoding="utf-8")
+        _write_if_unchanged(path, existing, new_text)
 
     action = "filled" if plan.filled else "skipped_idempotent"
     return DailyPrefillResult(path=path, action=action, filled_slots=plan.filled, skipped_slots=plan.skipped)

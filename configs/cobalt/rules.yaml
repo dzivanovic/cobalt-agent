@@ -6,8 +6,8 @@
 
 generated:
   source: /Users/cobalt/Vault/Think/1 - Trading/5 - Review/Rules.md
-  source_sha256: db5aadd6d6255e5bb64751b6aa5f6c2768dbaecb88b57d46da1f70c7c915b19c
-  generated_at: '2026-08-31T13:14:01+00:00'
+  source_sha256: c0c3758aceecf31dfa41fc5a749fc362571f8ce30c0ff780b5765486302afa66
+  generated_at: '2026-09-03T18:22:37+00:00'
 rules:
 - id: rule_01
   category: process
@@ -47,7 +47,7 @@ rules:
   text: First partial at 1R → **stop to B/E**, immediately.
 - id: rule_12
   category: hard_stop
-  text: Daily stop hit ($215 sim) → **done trading.** Watch only.
+  text: Daily stop hit ($215 live) → **done trading.** Watch only.
 mantras:
 - id: tape_check
   text: 'Tape check: In because criteria met — or because it excites me?'
