@@ -1,0 +1,982 @@
+<!DOCTYPE html><html lang="en" class=" dark" style="--fv-scrollbar-width: 0px;"><script async="" crossorigin="anonymous" type="text/javascript" src="https://urbanlaurel.com/build/q8oeodjkavkgimiayhlq1u5/Sticky2,Anchor"></script><script async="" src="https://scripts.clarity.ms/0.8.69/clarity.js"></script><script src="https://connect.facebook.net/signals/config/1307438174199790?v=2.9.385&amp;r=stable&amp;domain=elite.finviz.com&amp;hme=1a72ec78e057d90ba48afa55a82b063b1c9b6ab7c0155009fecc72226a622ed2&amp;ex_m=113%2C218%2C164%2C25%2C78%2C79%2C156%2C74%2C73%2C11%2C174%2C98%2C19%2C148%2C136%2C43%2C81%2C86%2C144%2C169%2C176%2C29%2C17%2C30%2C31%2C32%2C34%2C52%2C157%2C83%2C121%2C21%2C23%2C48%2C44%2C46%2C45%2C91%2C100%2C104%2C119%2C155%2C158%2C50%2C120%2C27%2C24%2C128%2C75%2C40%2C160%2C159%2C161%2C152%2C150%2C28%2C39%2C63%2C118%2C171%2C76%2C20%2C123%2C89%2C72%2C22%2C93%2C94%2C125%2C92%2C146%2C145%2C149%2C105%2C170%2C173%2C38%2C53%2C122%2C51%2C8%2C4%2C5%2C7%2C6%2C3%2C99%2C110%2C177%2C185%2C232%2C80%2C245%2C244%2C243%2C14%2C26%2C37%2C59%2C112%2C65%2C10%2C69%2C106%2C107%2C108%2C114%2C139%2C35%2C33%2C141%2C142%2C143%2C138%2C137%2C165%2C82%2C168%2C166%2C167%2C54%2C64%2C132%2C18%2C172%2C49%2C293%2C294%2C292%2C307%2C329%2C225%2C214%2C66%2C215%2C213%2C332%2C323%2C56%2C226%2C116%2C140%2C88%2C130%2C58%2C129%2C135%2C134%2C62%2C70%2C68%2C162%2C84%2C85%2C124%2C41%2C36%2C57%2C60%2C109%2C175%2C1%2C133%2C16%2C131%2C12%2C2%2C61%2C101%2C15%2C71%2C67%2C127%2C97%2C96%2C178%2C179%2C102%2C103%2C9%2C111%2C55%2C153%2C95%2C87%2C77%2C126%2C115%2C47%2C154%2C0%2C90%2C147%2C151%2C163%2C42%2C117%2C13%2C180" async=""></script><script type="text/javascript" async="" src="https://connect.facebook.net/en_US/fbevents.js"></script><script src="https://rules.quantcount.com/rules-p-c2W8esUZ6Q8oA.js" async=""></script><script id="IC_GTagScript" src="https://www.googletagmanager.com/gtag/js?id=G-5EST90M6PX" type="text/javascript" async=""></script><script id="IC_PrebidScript" src="https://u5.investingchannel.com/prebid/8.24.0/prebid.js" type="text/javascript" async=""></script><script id="IC_UAT_INTERNAL_SCRIPT" src="https://u5.investingchannel.com/static/uat-internal.js" type="text/javascript" async=""></script><head>
+<title>API</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=1024"><meta name="description" content="Stock screener for investors and traders, financial visualizations.">
+<link rel="manifest" href="/manifest.json">
+            <link rel="preload" href="/fonts/ibm-plex-sans-latin-normal.woff2" as="font" type="font/woff2" crossorigin="">
+            <link rel="preload" href="/fonts/ibm-plex-sans-latin-italic.woff2" as="font" type="font/woff2" crossorigin="">
+            <script src="https://secure.quantserve.com/quant.js" async="" type="text/javascript"></script><script async="" src="https://www.clarity.ms/tag/unkwe89mcc"></script><script async="" src="https://urbanlaurel.com/assets/js/q2o3um29vhadcznq.vendor.js"></script><script async="" src="https://www.googletagmanager.com/gtm.js?id=GTM-537M973G"></script><script>
+        window.notificationsArray = [];
+        window.renderScriptNotLoaded = function () {};
+        window.handleScriptNotLoaded = function (element) {
+            window.notificationsArray.push(element);
+            window.sentryDisabled = true;
+            window.handleScriptNotLoaded = function () {};
+        };
+        // window.openEliteFeaturesDialog ... MUST NOT HAVE FALLBACK!
+        window.openGenericAlertDialog ??= (message) => new Promise(resolve => resolve(alert(message)));
+        window.openGenericConfirmDialog ??= (message) => new Promise(resolve => resolve(confirm(message) || undefined));
+        window.openGenericDeleteDialog ??= (message) => new Promise(resolve => resolve(confirm(message) || undefined));
+        window.openGenericPromptDialog ??= (message, value = "") => new Promise(resolve => resolve(prompt(message, value) ?? undefined));
+        window.showFailureNotification ??= (message) => alert(message);
+        window.showSuccessNotification ??= (message) => alert(message);
+        window.showDefaultNotification ??= (message) => alert(message);
+    </script><link rel="stylesheet" href="/assets/dist/redesign.768ecc47.css" type="text/css" onerror="window.handleScriptNotLoaded(this)">
+<link rel="stylesheet" href="/assets/dist/main.c70ec05d.css" type="text/css" onerror="window.handleScriptNotLoaded(this)">
+<script src="/assets/dist/8596.v1.178a32a9.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/finviz_t.v1.9a5de28e.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-537M973G');</script>
+
+<script>
+    window.dataLayer = window.dataLayer || [];
+
+    function getFvt() {
+        var cookie = document.cookie.split('; ').find(function(row) { return row.startsWith('finviz_t='); });
+        if (cookie) return decodeURIComponent(cookie.split('=')[1]);
+        try { return localStorage.getItem('finviz_t'); } catch (e) { return null; }
+    }
+
+    function gtag(command, key, value) {
+        var fvt = getFvt();
+        if (command === 'set' && key === 'page_path') {
+            var pageviewData = {
+                event: 'virtual_pageview',
+                page_path: value,
+                ...(fvt && { anon_id: fvt })
+            };
+            dataLayer.push(pageviewData);
+            return;
+        }
+
+        if (command === 'event') {
+            var eventData = {
+                event: key,
+                ...(value || {}),
+                ...(fvt && { anon_id: fvt })
+            };
+            dataLayer.push(eventData);
+            return;
+        }
+
+        dataLayer.push(arguments);
+    }
+</script><link rel="icon" type="image/png" href="/favicon_2x.png" sizes="32x32">
+<link rel="icon" type="image/png" href="/favicon.png" sizes="16x16">
+<script async="true">
+    !(function(q,_name){q[_name]=q[_name]||function k(){(k.q=k.q||[]).push(arguments)},q[_name].v=q[_name].v||2,q[_name].s="1";!(function(q,k,F,H){function m(F,H){try{m=q.localStorage,(F=JSON.parse(m[decodeURI(decodeURI('%67%25%365%25%37%34I%257%34e%6d'))]("_aQS01OUU2MkU1RURCQzRDMzUyMTIwQkM4ODYtMTE0")).lgk||[])&&(H=q[k].pubads())&&F.forEach((function(q){q&&q[0]&&H.setTargeting(q[0],q[1]||"")}))}catch(N){}var m}try{(H=q[k]=q[k]||{}).cmd=H.cmd||[],typeof H.pubads===F?m():typeof H.cmd.unshift===F?H.cmd.unshift(m):H.cmd.push(m)}catch(N){}})(window,decodeURI(decodeURI('%25%367o%25%36fg%256c%25%36%35%2574%256%31%25%36%37')),"function");;!(function(q){q.__admiral_getConsentForGTM=function(k){function F(q,F){k((function(q,k){const F=q&&q.purpose&&q.purpose.consents||{};return{adConsentGranted:k||!!F[1],adUserData:k||!!F[7],adPersonalization:k||!!F[3],analyticsConsentGranted:k||!!F[1],personalizationConsentGranted:k||!!F[5],functionalityConsentGranted:k||!1,securityConsentGranted:k||!0}})(q,!F))}q[_name]("after","cmp.loaded",(function(k){k&&k.tcData&&k.tcData.gdprApplies?(k.consentKnown&&F(k.tcData,!0),q[_name]("after","cmp.updated",(function(q){F(q.tcData,!0)}))):F({},!1)}))}})(window);})(window,decodeURI(decodeURI('a%256%34m%25%369%25%37%32%256%31l')));!(function(q,k,F,H){F=q.createElement(k),q=q.getElementsByTagName(k)[0],F.async=1,F.src="https://urbanlaurel.com/assets/js/q2o3um29vhadcznq.vendor.js",(H=0)&&H(F),q.parentNode.insertBefore(F,q)})(document,"script");;;!(function(q,k,F,H,m){function N(){for(var q=[],F=0;F<arguments.length;F++)q.push(arguments[F]);if(!q.length)return m;"ping"===q[0]?q[2]({gdprAppliesGlobally:!!k[decodeURI(decodeURI('_%25%35%66c%6d%25%37%30%254%37%25%364%25%370%257%32A%2570%25%370%256%63%2569%65%73%2547%256%63o%25%36%32%25%361%25%36%63%6c%79'))],cmpLoaded:!1,cmpStatus:"stub"}):q.length>0&&m.push(q)}function L(q){if(q&&q.data&&q.source){var H,m=q.source,N="__tcfapiCall",L="string"==typeof q.data&&q.data.indexOf(N)>=0;(H=L?((function(q){try{return JSON.parse(q)}catch(k){}})(q.data)||{})[N]:(q.data||{})[N])&&k[F](H.command,H.version,(function(q,k){var F={__tcfapiReturn:{returnValue:q,success:k,callId:H.callId}};m&&m.postMessage(L?JSON.stringify(F):F,"*")}),H.parameter)}}!(function t(){if(!k.frames[H]){var F=q.body;if(F){var m=q.createElement("iframe");m.style.display="none",m.name=H,F.appendChild(m)}else setTimeout(t,5)}})(),N.v=1,"function"!=typeof k[F]&&(k[F]=k[F]||N,k.addEventListener?k.addEventListener("message",L,!1):k.attachEvent&&k.attachEvent("onmessage",L))})(document,window,"__tcfapi","__tcfapiLocator",[]);;;!(function(q,k,F,H,m,N,L,t,A,K,R){function Y(){for(var q=[],k=arguments.length,F=0;F<k;F++)q.push(arguments[F]);var H,m=q[1],N=typeof m===L,t=q[2],Y={gppVersion:"1.1",cmpStatus:"stub",cmpDisplayStatus:"hidden",signalStatus:"not ready",supportedAPIs:["7:usnat"].reduce((function(q,k){return k&&q.push(k),q}),[]),cmpId:9,sectionList:[],applicableSections:[0],gppString:"",parsedSections:{}};function v(q){N&&m(q,!0)}switch(q[0]){case"ping":return v(Y);case"queue":return A;case"events":return K;case"addEventListener":return N&&(H=++R,K.push({id:H,callback:m,parameter:t})),v({eventName:"listenerRegistered",listenerId:H,data:!0,pingData:Y});case"removeEventListener":for(H=!1,F=0;F<K.length;F++)if(K[F].id===t){K.splice(F,1),H=!0;break}return v(H);case"hasSection":case"getSection":case"getField":return v(null);default:return void A.push(q)}}Y.v=2,typeof k[F]!==L&&(k[F]=k[F]||Y,k[t]&&k[t]("message",(function(q,H){var L="string"==typeof q.data;(H=L?((function(q){try{return JSON.parse(q)}catch(k){}})(q.data)||{})[m]:(q.data||{})[m])&&k[F](H.command,(function(k,F){var m={__gppReturn:{returnValue:k,success:F,callId:H.callId}};q.source&&q.source.postMessage(L?JSON.stringify(m):m,"*")}),N in H?H[N]:null,H.version||1)}),!1),(function v(){if(!k.frames[H]){var F=q.body;if(F){var m=q.createElement("iframe");m.style.display="none",m.name=H,F.appendChild(m)}else setTimeout(v,5)}})())})(document,window,"__gpp","__gppLocator","__gppCall","parameter","function","addEventListener",[],[],0);
+    ;(function () {
+        window.ic_privacySelectorLoaded = false;
+
+        function checkBanners() {
+            if (window.checkBannersLoaded) checkBannersLoaded();
+        }
+
+        window.admiral("after", "candidate.dismissed", checkBanners);
+
+        // A blocked consent script means neither the dialog nor the ads will ever
+        // show up, so empty slots can be filled right away.
+        var consentScript = document.querySelector('script[src*="urbanlaurel.com"]');
+        if (consentScript) consentScript.addEventListener('error', checkBanners);
+
+        window.admiral("after", "cmp.loaded", function (eventArg) {
+            console.log("Admiral CMP Loaded ", eventArg);
+            if (eventArg.euVisitor) return;
+            // Users outside EU don't get a consent dialog. Don't wait for it.
+            checkBanners();
+            try {
+                __gpp("addEventListener", function (tcData) {
+                    window.ic_privacySelectorLoaded = true;
+                });
+            } catch (e) {
+                console.error(e)
+            }
+        });
+    })();
+
+    function openCCPADialog() {
+        document.querySelector('#ic_us_privacy a')?.click()
+    }
+</script><script type="text/javascript">
+    (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "unkwe89mcc");
+</script><script>
+            FinvizSettings = {
+                versionImages: 3459691583,
+                versionLogo: "53b44e68",
+                hasUserPremium: true,
+                userId: "2119656",
+                name: "dejan.kenkyukai",
+                email: "REDACTED-FINVIZ-EMAIL",
+                nodeChartsDomain: "https://charts-node.finviz.com",
+                hasUserStickyHeader: false,
+                adsProvider: 0,
+                hasRedesignEnabled: true,
+                hasRedesignPortfolio: false,
+                hasDarkTheme: true,
+                quoteSearchExt: '',
+                isJoinBannerVisible: false,
+                hasKnowledgeBase: true,
+                showTickerLogos: true,
+                hasDiscountCampaign: false,
+                discountCampaign: null,
+                featureFlags: {"redesign":true,"knowledgebase":true,"stockswhymoving":true,"googleonetap":true,"subscriptionredesign":true,"indexpage":true},
+                featureDiscovery: []
+            };
+        
+FinvizSettings.hoverCharts = { stock: { timeframe: 'd', dateRange: null, patterns: false, studyParams: '\u0026ct=candle_stick\u0026s=linear\u0026pm=240\u0026am=1200\u0026o[0][ot]=sma\u0026o[0][op]=50\u0026o[0][oc]=FF8F33C6\u0026o[1][ot]=sma\u0026o[1][op]=200\u0026o[1][oc]=DCB3326D\u0026o[2][ot]=patterns\u0026o[2][op]=\u0026o[2][oc]=000', width: 466, height: 219, barWidth: 1, barMargin: 1, borderWidth: 1, customColors: {} }, forex: { timeframe: 'd', dateRange: null, studyParams: '', width: 466, height: 219, barWidth: 2, barMargin: 1, borderWidth: 1, customColors: {} }, futures: { timeframe: 'd', dateRange: null, studyParams: '\u0026ct=candle_stick\u0026s=linear\u0026pm=240\u0026am=1200\u0026o[0][ot]=sma\u0026o[0][op]=50\u0026o[0][oc]=FF8F33C6\u0026o[1][ot]=sma\u0026o[1][op]=200\u0026o[1][oc]=DCB3326D\u0026o[2][ot]=patterns\u0026o[2][op]=\u0026o[2][oc]=000', width: 466, height: 219, barWidth: 2, barMargin: 1, borderWidth: 1, customColors: {} } }</script><script src="/assets/dist/script/browser_check.v1.1605ca48.js?v=4"></script><script src="/assets/dist/script/notice.v1.f13b0329.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script>var FinvizSentrySettings = { release: 'js-bcc1badcc', environment: 'production', id: 2119656 };</script><script src="/assets/dist/runtime.v1.00260fe2.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/libs_init.v1.d9ed8c93.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/8596.v1.178a32a9.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/1748.v1.378c78c4.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/7470.v1.d1c95488.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/514.v1.4fff9951.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/548.v1.ec8c69be.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/8570.v1.3b8a593b.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/5514.v1.5a30fd08.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/1793.v1.8a4728da.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/header.v1.3558f660.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/register_alert_notifications_message_listener.v1.95b341fb.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/5179.v1.942c46eb.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/5432.v1.7fb82d89.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/6834.v1.9ff89114.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/4482.v1.a4157480.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/api_explanation.v1.ad0d233d.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><link href="https://u5.investingchannel.com/prebid/8.24.0/prebid.js" rel="preload" as="script"><link href="https://u5.investingchannel.com/static/uat-internal.js" rel="preload" as="script"><link href="https://u5.investingchannel.com/static/uat-tag.js" rel="preload" as="script"><style>div.c51QnewD {
+  min-height: 1px;
+  overflow: hidden;
+}
+div.c51QnewD.fm9IlE1g {
+  width: 100%;
+}
+div.c51QnewD._5Wnsn9G1 {
+  width: 100%;
+}
+div[class]#anuUDQLF {
+  all: unset;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  z-index: 2147483647;
+}
+div[class]#anuUDQLF._6XbDSb5J {
+  flex-direction: column-reverse;
+  top: 0;
+}
+div[class]#anuUDQLF.c8SND4df {
+  bottom: 0;
+}
+div[class]#anuUDQLF._5z21eO9f {
+  --sticky-drawer-height: 50vh;
+}
+@media (max-width: 600px) {
+  div[class]#anuUDQLF._5z21eO9f {
+    --sticky-drawer-height: 80vh;
+  }
+}
+div[class]#anuUDQLF.a6V3GBHX > div[role='button']#_1SS2i7sB,
+div[class]#anuUDQLF.a6V3GBHX > div#_7nMQFD9A {
+  pointer-events: auto;
+}
+@media (max-width: 600px) {
+  div[class]#anuUDQLF.a6V3GBHX {
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+div[class]#anuUDQLF.fm9IlE1g {
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+div[class]#anuUDQLF.fm9IlE1g > div#_7nMQFD9A {
+  pointer-events: auto;
+}
+div[class]#anuUDQLF._5Wnsn9G1 {
+  pointer-events: none;
+}
+div[class]#anuUDQLF.s7_0LvVr {
+  left: 0;
+  align-items: flex-start;
+}
+div[class]#anuUDQLF.s7_0LvVr > div#_7nMQFD9A {
+  left: -4px;
+}
+div[class]#anuUDQLF.b0-MHLMy {
+  right: 0;
+  align-items: flex-end;
+}
+div[class]#anuUDQLF.b0-MHLMy > div#_7nMQFD9A {
+  right: -4px;
+}
+div[class]#anuUDQLF.fm9IlE1g {
+  align-items: stretch;
+}
+div[class]#anuUDQLF.fm9IlE1g > div#_7nMQFD9A {
+  left: auto;
+  right: auto;
+}
+div[class]#anuUDQLF *:not(svg):not(path) {
+  all: unset;
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB,
+div[class]#anuUDQLF > div#_7nMQFD9A {
+  all: unset;
+  box-sizing: border-box;
+}
+div[class]#anuUDQLF.cBpyFOmh > div[role='button']#_1SS2i7sB *:focus,
+div[class]#anuUDQLF.cBpyFOmh > div#_7nMQFD9A *:focus {
+  outline: none;
+}
+div[class]#anuUDQLF.cBpyFOmh > div[role='button']#_1SS2i7sB::-moz-focus-inner,
+div[class]#anuUDQLF.cBpyFOmh > div#_7nMQFD9A::-moz-focus-inner {
+  border: 0;
+}
+div[class]#anuUDQLF.cBpyFOmh > div[role='button']#_1SS2i7sB:focus,
+div[class]#anuUDQLF.cBpyFOmh > div#_7nMQFD9A:focus {
+  outline: 2px solid #2962ff;
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.mr7YZqa4 {
+  height: 44px;
+  width: 56px;
+  border-radius: 22px;
+  flex-direction: row;
+  gap: 4px;
+  padding: 0 6px;
+  transform: translateX(0);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.mr7YZqa4 > svg#_67FpSCCG {
+  display: block;
+  flex-shrink: 0;
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.mr7YZqa4 > svg#_8WjbQ6yC {
+  display: block;
+  flex-shrink: 0;
+  transition: transform 200ms cubic-bezier(0.7, 0, 0.6, 1);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.mr7YZqa4._4Jnw-rAx {
+  transform: translateX(100%);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.mr7YZqa4[data-side='right'][data-state='closed'] > svg#_8WjbQ6yC {
+  transform: none;
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.mr7YZqa4[data-side='right'][data-state='open'] > svg#_8WjbQ6yC,
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.mr7YZqa4[data-side='right'][data-state='loading'] > svg#_8WjbQ6yC {
+  transform: rotate(180deg);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.mr7YZqa4[data-side='left'][data-state='closed'] > svg#_8WjbQ6yC {
+  transform: rotate(180deg);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.mr7YZqa4[data-side='left'][data-state='open'] > svg#_8WjbQ6yC,
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.mr7YZqa4[data-side='left'][data-state='loading'] > svg#_8WjbQ6yC {
+  transform: none;
+}
+div[class]#anuUDQLF.b0-MHLMy.fadwgxhZ > div[role='button']#_1SS2i7sB.mr7YZqa4 {
+  border-radius: 22px 0 0 22px;
+}
+div[class]#anuUDQLF.s7_0LvVr.fadwgxhZ > div[role='button']#_1SS2i7sB.mr7YZqa4 {
+  border-radius: 0 22px 22px 0;
+}
+div[class]#anuUDQLF.s7_0LvVr.fadwgxhZ > div[role='button']#_1SS2i7sB.mr7YZqa4._4Jnw-rAx {
+  transform: translateX(-100%);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.fT28cstQ {
+  height: 44px;
+  width: 56px;
+  border-radius: 22px;
+  flex-direction: row;
+  gap: 4px;
+  padding: 0 6px;
+  transform: translateY(0);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.fT28cstQ > svg#_67FpSCCG {
+  display: block;
+  flex-shrink: 0;
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.fT28cstQ > svg#_8WjbQ6yC {
+  display: block;
+  flex-shrink: 0;
+  transition: transform 200ms cubic-bezier(0.7, 0, 0.6, 1);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.fT28cstQ._4Jnw-rAx {
+  transform: translateY(100%);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.fT28cstQ[data-state='closed'] > svg#_8WjbQ6yC {
+  transform: rotate(90deg);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.fT28cstQ[data-state='open'] > svg#_8WjbQ6yC,
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.fT28cstQ[data-state='loading'] > svg#_8WjbQ6yC {
+  transform: rotate(-90deg);
+}
+div[class]#anuUDQLF.c8SND4df._5z21eO9f > div[role='button']#_1SS2i7sB.fT28cstQ {
+  border-radius: 22px 22px 0 0;
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  width: 56px;
+  border-radius: 1000px;
+  user-select: none;
+  overflow: hidden;
+  box-shadow: 0px 6px 12px rgba(109, 119, 124, 0.35), 0px 2px 4px rgba(109, 119, 124, 0.05);
+  cursor: pointer;
+  transform: scale(1);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB.fHNPMUIh {
+  overflow: visible;
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB > div#_8kOL6Hod {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 1000px;
+  overflow: hidden;
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB > div#_8kOL6Hod > img#b52blOnL {
+  display: block;
+  border-radius: 1000px;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB > span#_47BcZQPf {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 22px;
+  line-height: 1;
+  z-index: 1;
+  pointer-events: none;
+  transform: translate(-24%, -28%) scale(1);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB > div#_8kOL6Hod > svg#_5ej0WRhf {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 44px;
+  height: 44px;
+  margin: auto;
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB > div#_8kOL6Hod > img#b52blOnL,
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB > div#_8kOL6Hod > svg#_5ej0WRhf {
+  visibility: visible;
+  opacity: 1;
+  transform: scale(1);
+  transition-property: visibility, opacity, transform;
+  transition-duration: 320ms;
+  transition-timing-function: cubic-bezier(0.7, 0, 0.6, 1);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB > span#_47BcZQPf {
+  visibility: visible;
+  opacity: 1;
+  transform: translate(-24%, -28%) scale(1);
+  transition-property: visibility, opacity, transform;
+  transition-duration: 320ms;
+  transition-timing-function: cubic-bezier(0.7, 0, 0.6, 1);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB._4Jnw-rAx {
+  visibility: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB._3UaMpjZe > div#_8kOL6Hod > img#b52blOnL,
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB._3UaMpjZe > div#_8kOL6Hod > svg#_5ej0WRhf {
+  visibility: hidden;
+  opacity: 0;
+  transform: scale(2);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB._3UaMpjZe > span#_47BcZQPf {
+  visibility: hidden;
+  opacity: 0;
+  transform: translate(-24%, -28%) scale(2);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB._3UaMpjZe > div#_82Ei16dO {
+  visibility: visible;
+  opacity: 1;
+  transform: rotate(-45deg) scale(1);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB._3UaMpjZe > div#_6dUtdXan {
+  visibility: hidden;
+  opacity: 0;
+  transform: scale(2);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB._4HI6PCEg > div#_8kOL6Hod > img#b52blOnL,
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB._4HI6PCEg > div#_8kOL6Hod > svg#_5ej0WRhf {
+  visibility: hidden;
+  opacity: 0;
+  transform: scale(2);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB._4HI6PCEg > span#_47BcZQPf {
+  visibility: hidden;
+  opacity: 0;
+  transform: translate(-24%, -28%) scale(2);
+}
+div[class]#anuUDQLF > div[role='button']#_1SS2i7sB._4HI6PCEg > div#_6dUtdXan {
+  visibility: visible;
+  opacity: 1;
+  transform: scale(1);
+}
+div[class]#anuUDQLF > div#_1SS2i7sB > div#_82Ei16dO {
+  display: flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  visibility: hidden;
+  opacity: 0;
+  transform: rotate(-45deg) scale(0.318);
+  transition-property: visibility, opacity, transform;
+  transition-duration: 320ms;
+  transition-timing-function: cubic-bezier(0.7, 0, 0.6, 1);
+}
+div[class]#anuUDQLF > div#_1SS2i7sB > div#_82Ei16dO > div {
+  display: block;
+  position: absolute;
+  background-color: currentColor;
+  height: 18px;
+  width: 2px;
+  border-radius: 1000px;
+}
+div[class]#anuUDQLF > div#_1SS2i7sB > div#_82Ei16dO div:last-child {
+  transform: rotate(-90deg);
+}
+@keyframes _9Wu3oYNl {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(720deg);
+  }
+}
+div[class]#anuUDQLF > div#_1SS2i7sB > div#_6dUtdXan {
+  position: absolute;
+  margin: auto;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  height: 24px;
+  visibility: hidden;
+  opacity: 0;
+  transform: scale(0.318);
+  transition-property: visibility, opacity, transform;
+  transition-duration: 320ms;
+  transition-timing-function: cubic-bezier(0.7, 0, 0.6, 1);
+}
+div[class]#anuUDQLF > div#_1SS2i7sB > div#_6dUtdXan > div#_6IaBAbvZ {
+  display: block;
+  border-style: solid;
+  border-radius: 50%;
+  animation: _9Wu3oYNl 640ms cubic-bezier(0.4, 0, 1, 1) infinite;
+  will-change: transform;
+  border-top-color: currentColor;
+  border-right-color: currentColor;
+  border-left-color: currentColor;
+  border-bottom-color: transparent;
+  width: 18px;
+  height: 18px;
+  /* Using em here makes the width of the spinner wheel scale
+         with the size of the spinner */
+  border-width: 0.2em;
+}
+div[class]#anuUDQLF > div#_7nMQFD9A {
+  position: relative;
+  width: 290px;
+}
+div[class]#anuUDQLF > div#_7nMQFD9A iframe {
+  height: 100%;
+  width: 100%;
+}
+div[class]#anuUDQLF > div#_7nMQFD9A._7bGDOqrF {
+  visibility: hidden;
+  z-index: -1;
+  position: absolute;
+}
+div[class]#anuUDQLF > div#_7nMQFD9A.fadwgxhZ {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  left: auto;
+  height: 100vh;
+  width: min(420px, 80vw);
+  /* keep in sync with tokens.js PANEL_WIDTH / PANEL_WIDTH_CSS */
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(18, 30, 64, 0.06), 0 12px 24px rgba(18, 30, 64, 0.18);
+  transform: translateX(0);
+  transition: transform 320ms cubic-bezier(0.7, 0, 0.6, 1);
+}
+div[class]#anuUDQLF > div#_7nMQFD9A.fadwgxhZ iframe {
+  border: none;
+  display: block;
+}
+div[class]#anuUDQLF > div#_7nMQFD9A.fadwgxhZ._7bGDOqrF,
+div[class]#anuUDQLF > div#_7nMQFD9A.fadwgxhZ._4Jnw-rAx {
+  visibility: visible;
+  z-index: 2147483647;
+  position: fixed;
+  transform: translateX(110%);
+}
+div[class]#anuUDQLF.s7_0LvVr > div#_7nMQFD9A.fadwgxhZ {
+  right: auto;
+  left: 0;
+}
+div[class]#anuUDQLF.s7_0LvVr > div#_7nMQFD9A.fadwgxhZ._7bGDOqrF,
+div[class]#anuUDQLF.s7_0LvVr > div#_7nMQFD9A.fadwgxhZ._4Jnw-rAx {
+  transform: translateX(-110%);
+}
+div[class]#anuUDQLF > div#_7nMQFD9A._5z21eO9f {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: var(--sticky-drawer-height);
+  background: linear-gradient(to bottom, transparent 0%, transparent 60%, rgba(255, 255, 255, 0.4) 75%, #fff 90%);
+  box-shadow: 0 0 0 1px rgba(18, 30, 64, 0.06), 0 -12px 24px rgba(18, 30, 64, 0.18);
+  transform: translateY(0);
+  transition: transform 320ms cubic-bezier(0.7, 0, 0.6, 1);
+}
+div[class]#anuUDQLF > div#_7nMQFD9A._5z21eO9f iframe {
+  border: none;
+  display: block;
+}
+div[class]#anuUDQLF > div#_7nMQFD9A._5z21eO9f._7bGDOqrF,
+div[class]#anuUDQLF > div#_7nMQFD9A._5z21eO9f._4Jnw-rAx {
+  visibility: visible;
+  z-index: 2147483647;
+  position: fixed;
+  transform: translateY(100%);
+}
+div[class]#anuUDQLF > div#_7nMQFD9A.a6V3GBHX {
+  position: fixed;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  width: 100%;
+  min-width: 320px;
+  max-width: 1200px;
+  height: 80px;
+  /* initial fallback; overridden by inline style once JS reports size */
+  margin: 0 auto;
+  padding: 0 32px;
+  box-sizing: border-box;
+  background: transparent;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: none;
+  z-index: 2147483647;
+  transition: transform 320ms cubic-bezier(0.7, 0, 0.6, 1), height 200ms ease;
+}
+div[class]#anuUDQLF > div#_7nMQFD9A.a6V3GBHX iframe {
+  border: none;
+  display: block;
+  border-radius: 16px;
+  min-height: 100%;
+}
+div[class]#anuUDQLF > div#_7nMQFD9A.a6V3GBHX._7bGDOqrF,
+div[class]#anuUDQLF > div#_7nMQFD9A.a6V3GBHX._4Jnw-rAx {
+  visibility: visible;
+  z-index: 2147483647;
+  position: fixed;
+  transform: translateX(-50%) translateY(100%);
+}
+@media (max-width: 600px) {
+  div[class]#anuUDQLF > div#_7nMQFD9A.a6V3GBHX {
+    left: 50%;
+    right: auto;
+    width: calc(100% - 32px);
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    transform: translateX(-50%) translateY(0);
+  }
+  div[class]#anuUDQLF > div#_7nMQFD9A.a6V3GBHX._7bGDOqrF,
+  div[class]#anuUDQLF > div#_7nMQFD9A.a6V3GBHX._4Jnw-rAx {
+    transform: translateX(-50%) translateY(100%);
+  }
+}
+div[class]#anuUDQLF > div#_7nMQFD9A.fm9IlE1g {
+  position: relative;
+  width: 100% !important;
+  min-width: 280px;
+  max-width: 100% !important;
+  align-self: stretch;
+  margin: 0 auto;
+  background: transparent;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: none;
+  z-index: 2147483647;
+  will-change: transform, border-radius;
+  transition: width 240ms cubic-bezier(0.7, 0, 0.6, 1), height 240ms cubic-bezier(0.7, 0, 0.6, 1), transform 320ms cubic-bezier(0.7, 0, 0.6, 1), border-radius 320ms cubic-bezier(0.7, 0, 0.6, 1), box-shadow 320ms cubic-bezier(0.7, 0, 0.6, 1), background-color 320ms cubic-bezier(0.7, 0, 0.6, 1);
+}
+div[class]#anuUDQLF > div#_7nMQFD9A.fm9IlE1g iframe {
+  border: none;
+  display: block;
+  width: 100% !important;
+  border-radius: 16px;
+  transition: border-radius 320ms cubic-bezier(0.7, 0, 0.6, 1);
+}
+div[class]#anuUDQLF > div#_7nMQFD9A.fm9IlE1g._7bGDOqrF,
+div[class]#anuUDQLF > div#_7nMQFD9A.fm9IlE1g._4Jnw-rAx {
+  visibility: visible;
+  z-index: 2147483647;
+  position: relative;
+  transform: none;
+}
+div[class]#anuUDQLF > div#_7nMQFD9A._5Wnsn9G1 {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100% !important;
+  min-width: 100%;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  z-index: 2147483647;
+  background: #fff;
+  box-shadow: 0 20px 48px rgba(18, 30, 64, 0.18);
+  transform: translateY(-100%);
+  pointer-events: none;
+  transition: transform 400ms cubic-bezier(0.7, 0, 0.6, 1);
+}
+div[class]#anuUDQLF > div#_7nMQFD9A._5Wnsn9G1 iframe {
+  border: none;
+  display: block;
+  width: 100% !important;
+  height: 100%;
+}
+div[class]#anuUDQLF > div#_7nMQFD9A._5Wnsn9G1._4HI6PCEg::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 0.2em solid rgba(18, 30, 64, 0.15);
+  border-top-color: rgba(18, 30, 64, 0.72);
+  border-radius: 50%;
+  animation: _9Wu3oYNl 640ms cubic-bezier(0.4, 0, 1, 1) infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+div[class]#anuUDQLF > div#_7nMQFD9A._5Wnsn9G1._7bGDOqrF,
+div[class]#anuUDQLF > div#_7nMQFD9A._5Wnsn9G1._4Jnw-rAx {
+  visibility: visible;
+  z-index: 2147483647;
+  position: fixed;
+  transform: translateY(-100%);
+}
+@media (prefers-reduced-motion: reduce) {
+  div[class]#anuUDQLF > div#_7nMQFD9A._5Wnsn9G1 {
+    transition: none;
+  }
+}
+div[class]#anuUDQLF._2jjWDdoN > div#_7nMQFD9A.fm9IlE1g {
+  position: fixed;
+  inset: 0;
+  width: 100% !important;
+  min-width: 100%;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: 0 20px 48px rgba(18, 30, 64, 0.18);
+  transform: none;
+}
+div[class]#anuUDQLF._2jjWDdoN > div#_7nMQFD9A.fm9IlE1g iframe {
+  border-radius: 0;
+  height: 100%;
+}
+div[class]#anuUDQLF._7FiY4VXG > div#_7nMQFD9A._5Wnsn9G1:not(._7bGDOqrF):not( ._4Jnw-rAx) {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+div[class]#anuUDQLF > div#_7dpH0SOc {
+  position: absolute;
+  width: 240px;
+  max-width: 100vw;
+  padding: 14px;
+  color: white;
+  font-family: Arial, sans-serif;
+  font-size: 0.9rem;
+  line-height: 1.2rem;
+  border-radius: 4px;
+  box-shadow: 0px 2px 4px rgba(18, 30, 64, 0.15), 0px 1px 2px rgba(18, 30, 64, 0.04);
+}
+div[class]#anuUDQLF > div#_7dpH0SOc strong {
+  font-weight: bold;
+}
+div[class]#anuUDQLF > div#_7dpH0SOc em {
+  font-style: italic;
+}
+div[class]#anuUDQLF > div#_7dpH0SOc a {
+  cursor: pointer;
+  text-decoration: underline;
+}
+div[class]#anuUDQLF > div#_7dpH0SOc > div._4PoMQc2j {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 15px solid transparent;
+  border-right: 15px solid transparent;
+}
+div[class]#anuUDQLF > div#_7dpH0SOc > div._82Ei16dO {
+  display: flex;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  transform: rotate(-45deg);
+  cursor: pointer;
+}
+div[class]#anuUDQLF > div#_7dpH0SOc > div._82Ei16dO > div {
+  display: block;
+  position: absolute;
+  background-color: white;
+  height: 14px;
+  width: 2px;
+  border-radius: 1000px;
+}
+div[class]#anuUDQLF > div#_7dpH0SOc > div._82Ei16dO div:last-child {
+  transform: rotate(-90deg);
+}
+</style></head>
+<body class="is-elite m-0 "><div id="js-elite-features-root"></div><span class="absolute invisible size-0 overflow-hidden"><span id="ic_us_privacy"><a href="#" role="button" style="">Do Not Sell My Personal Information</a></span></span>    <script>InvestingChannelQueue = window.InvestingChannelQueue || [];</script>
+    <script async="" src="https://u5.investingchannel.com/static/uat.js"></script>
+    <script>
+        var ic_page;
+        InvestingChannelQueue.push(function() {
+            ic_page = InvestingChannel.UAT.Run("90726581-4c6b-4632-bf2b-f6ecc8830c84",{"show_no_ads":true});
+        });
+    </script>
+            <script>
+                (function () {
+                    var detectionEl = document.createElement('div');
+                    detectionEl.style.position='absolute';
+                    detectionEl.style.top='-9999px';
+                    detectionEl.style.width='100px';
+                    detectionEl.style.height='100px';
+                    detectionEl.style.overflow='scroll';
+                    document.body.appendChild(detectionEl);
+                    document.documentElement.style.setProperty('--fv-scrollbar-width', (detectionEl.offsetWidth - detectionEl.clientWidth) + 'px');
+                    document.body.removeChild(detectionEl);
+                })()
+            </script>
+        <div id="notifications-container"></div><div id="notifications-react-root"></div><div id="dialogs-react-root"></div><div id="dialog-portal-root" style="display:contents"></div>
+<div class="header is-elite  flex items-center">
+    <div class="header-container flex items-center">
+        <div class="pr-6.75">
+            <a href="/" class="flex items-center gap-2.5">
+<svg width="150" height="32" class="block">
+    
+<use href="/img/logo.svg?rev=53b44e68#elite-v2-light" class="dark:hidden"></use>
+<use href="/img/logo.svg?rev=53b44e68#elite-v2-dark" class="hidden dark:block"></use>
+</svg>            </a>
+        </div>
+        <div class="flex items-center">
+            <div id="search" class="w-95"><div class="w-full"><label class="flex grow flex-col"><div class="group relative flex"><span class="pointer-events-none top-0 h-full flex w-3 absolute items-center justify-center z-10 left-2.5"><svg class="pointer-events-none block shrink-0 fill-current text-muted-2 dark:text-gray-500" width="1rem" height="1rem"><use href="/assets/dist-icons/icons.svg?rev=3459691583#search"></use></svg></span><input autocomplete="off" autocorrect="off" autocapitalize="off" maxlength="100" placeholder="Search ticker, company or profile" enterkeyhint="go" aria-label="Search" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" data-active-item="true" id="_r_1_" class="border bg-white font-normal placeholder:text-gray-400 dark:bg-gray-750 dark:placeholder:text-gray-500/90 disabled:border-gray-700 disabled:bg-gray-700 disabled:text-gray-400 border-gray-200/30 dark:border-gray-500/30 text-gray-750 dark:text-gray-50 h-8 text-sm rounded-md max-w-95 w-full grow appearance-none outline-none select-text mobile:h-8 mobile:text-base px-2.5 pl-7.5" value=""></div></label></div></div>
+            
+        </div>
+        <div class="flex-1"></div>
+        <div class="flex items-center gap-2.5">
+                <div class="relative">
+        <a data-testid="chart-layout-theme" href="#" class="!flex !bg-transparent !border-b-0 !p-0" title="Toggle Light/Dark mode" onclick="setChartThemeCookie('light', true)">
+            <div class="relative box-content flex rounded-full w-10 h-5 border border-white text-default bg-primary dark:border-gray-750 justify-end">
+                <div class="box-border w-1/2 rounded-full p-px border border-white bg-gray-100 dark:border-gray-800 dark:bg-gray-600 flex justify-center items-center">
+                    <svg width="16" height="16" class="fill-current inline-block -ml-px">
+    <use href="/assets/dist-icons/icons.svg?rev=3459691583#moonOutlined"></use>
+</svg>
+                </div>
+            </div>
+        </a>
+    </div>
+
+            <div class="flex items-center gap-4">
+                    <a href="/alerts" class="flex items-center gap-1.5 rounded px-2 py-1.5 text-xs font-medium whitespace-nowrap hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 hover:text-gray-900 dark:text-gray-50 dark:hover:text-white">
+                        <svg width="16" height="16" class="shrink-0 fill-current">
+    <use href="/assets/dist-icons/icons.svg?rev=3459691583#bellOutlined"></use>
+</svg>
+                        Alerts
+                    </a>
+                    <div id="account-dropdown" class="relative"><button aria-expanded="false" aria-haspopup="menu" id="_r_2_" class="group/button flex items-center justify-center font-medium focus:outline-none rounded shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 py-1.5 pr-2 pl-3.5 text-2xs leading-4 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 hover:text-gray-900 dark:text-gray-50 dark:hover:text-white" type="button"><span class="flex w-3 items-center justify-center"><span class="flex size-6 shrink-0 items-center justify-center rounded-full text-white bg-violet-500"><svg class="pointer-events-none block shrink-0 fill-current" width="0.875rem" height="0.875rem"><use href="/assets/dist-icons/icons.svg?rev=3459691583#userBig"></use></svg></span></span><span class="ml-3 grow text-left ml-1.5">dejan.kenkyukai</span></button></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="navbar is-elite  flex items-center min-h-8.5">
+    <div class="header-container flex items-center">
+            <a class="nav-link is-first" href="/">Home</a>
+            <a class="nav-link" href="/screener">Screener</a>
+            <a class="nav-link" href="/map">Maps</a>
+            <a class="nav-link" href="/charts">Charts</a>
+            <a class="nav-link" href="/news">News</a>
+            <a class="nav-link" href="/groups">Groups</a>
+            <a class="nav-link" href="/insidertrading">Insider</a>
+            <a class="nav-link" href="/futures">Futures</a>
+            <a class="nav-link" href="/forex">Forex</a>
+            <a class="nav-link" href="/crypto">Crypto</a>
+            <a class="nav-link" href="/portfolio">Portfolio</a>
+            <a class="nav-link" href="/compare">Compare</a>
+            <a class="nav-link" href="/calendar/economic">Calendar</a>
+        <div class="relative flex-1">
+            <div class="absolute inset-0 flex items-center justify-end">
+                <div id="time" class="w-full"><div class="w-full text-2xs text-muted-2"><div class="flex items-center justify-end overflow-hidden whitespace-nowrap"><div class="h-1.5 w-1.5 shrink-0 rounded-full mr-2 bg-green-400"></div><span>Markets Open</span><span class="mx-2 h-3.5 w-px shrink-0 bg-gray-200/30 dark:bg-gray-500/30"></span><span>Mon AUG 31, 1:13 PM ET</span></div></div></div>
+            </div>
+        </div>
+        <div class="mx-2 h-3.5 w-px bg-gray-200/30 dark:bg-gray-500/30"></div>
+        <div id="js-knowledge-base-static" class="hidden">
+            <a href="/knowledge-base" class="nav-link is-help px-4">Help</a>
+        </div>
+            <div id="js-knowledge-base-root" class=""><a href="/knowledge-base" class="is-help nav-link px-4">Help</a></div>
+        
+
+    </div>
+</div>
+
+          <script>
+            function reloadPage () { location.reload() }
+            function setChartThemeCookie(chartsTheme) {
+              fetch('/api/set_cookie?cookie=chartsTheme&value=' + chartsTheme ).catch(function(){}).then(function(){
+                window.gtag && window.gtag('event', 'click', { event_category: 'theme', event_label: 'toggle', value: chartsTheme, eventCallback: reloadPage });
+                setTimeout(reloadPage,1000);
+              })
+            }
+          </script><div id="js-feature-discovery-root"></div><div class="content "><div class="flex justify-center items-center myaccount-navigation mb-5">
+    <a href="/myaccount" class="myaccount-navigation_link">Settings</a>
+    <a href="/media_sources" class="myaccount-navigation_link">Media Sources</a>
+    <a href="/newsletter" class="myaccount-navigation_link" data-testid="myaccount-newsletter">Newsletter</a>
+    <a href="/screener_presets" class="myaccount-navigation_link">Screener Presets</a>
+    <a href="/alerts" class="myaccount-navigation_link">Alerts</a>
+    <a href="/feature_preview" class="myaccount-navigation_link">Feature Preview</a>
+    <a href="/api_explanation" class="myaccount-navigation_link is-active font-bold">API</a>
+    <a href="/myaccount_login" class="myaccount-navigation_link">Account</a>
+    <a href="/subscription" class="myaccount-navigation_link">Subscription</a>
+</div>    <div class="fv-container">
+        <div id="api-explanation"><div class="flex flex-col items-center justify-center text-sm"><div class="flex items-center space-x-2 pb-2"><label class="font-medium flex grow flex-col">Automating Export</label><div role="group" class="relative z-0 inline-flex items-center overflow-hidden bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 rounded-md -space-x-px"><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-gray-600 disabled:text-gray-400 disabled:hover:border-gray-200 disabled:hover:bg-primary disabled:hover:text-gray-400 dark:text-gray-200 dark:disabled:text-gray-400 dark:disabled:hover:text-gray-400 dark:disabled:hover:border-gray-600 dark:disabled:hover:bg-primary text-default border-blue-400 bg-blue-50 dark:bg-blue-700 dark:text-white px-2.5 text-sm h-8 min-w-8 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 hover:relative hover:z-1 relative rounded-r-none"><span class="grow text-center">Screener</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-gray-600 disabled:text-gray-400 disabled:hover:border-gray-200 disabled:hover:bg-primary disabled:hover:text-gray-400 dark:text-gray-200 dark:disabled:text-gray-400 dark:disabled:hover:text-gray-400 dark:disabled:hover:border-gray-600 dark:disabled:hover:bg-primary bg-primary border-gray-200 dark:border-primary hover:text-default hover:border-gray-300 hover:bg-gray-50 dark:hover:text-default dark:hover:bg-gray-900 dark:hover:border-gray-400 px-2.5 text-sm h-8 min-w-8 shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 hover:relative hover:z-1"><span class="grow text-center">Portfolio</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-gray-600 disabled:text-gray-400 disabled:hover:border-gray-200 disabled:hover:bg-primary disabled:hover:text-gray-400 dark:text-gray-200 dark:disabled:text-gray-400 dark:disabled:hover:text-gray-400 dark:disabled:hover:border-gray-600 dark:disabled:hover:bg-primary bg-primary border-gray-200 dark:border-primary hover:text-default hover:border-gray-300 hover:bg-gray-50 dark:hover:text-default dark:hover:bg-gray-900 dark:hover:border-gray-400 px-2.5 text-sm h-8 min-w-8 shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 hover:relative hover:z-1"><span class="grow text-center">Stock</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-gray-600 disabled:text-gray-400 disabled:hover:border-gray-200 disabled:hover:bg-primary disabled:hover:text-gray-400 dark:text-gray-200 dark:disabled:text-gray-400 dark:disabled:hover:text-gray-400 dark:disabled:hover:border-gray-600 dark:disabled:hover:bg-primary bg-primary border-gray-200 dark:border-primary hover:text-default hover:border-gray-300 hover:bg-gray-50 dark:hover:text-default dark:hover:bg-gray-900 dark:hover:border-gray-400 px-2.5 text-sm h-8 min-w-8 shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 hover:relative hover:z-1"><span class="grow text-center">Groups</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-gray-600 disabled:text-gray-400 disabled:hover:border-gray-200 disabled:hover:bg-primary disabled:hover:text-gray-400 dark:text-gray-200 dark:disabled:text-gray-400 dark:disabled:hover:text-gray-400 dark:disabled:hover:border-gray-600 dark:disabled:hover:bg-primary bg-primary border-gray-200 dark:border-primary hover:text-default hover:border-gray-300 hover:bg-gray-50 dark:hover:text-default dark:hover:bg-gray-900 dark:hover:border-gray-400 px-2.5 text-sm h-8 min-w-8 shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 hover:relative hover:z-1"><span class="grow text-center">Options</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-gray-600 disabled:text-gray-400 disabled:hover:border-gray-200 disabled:hover:bg-primary disabled:hover:text-gray-400 dark:text-gray-200 dark:disabled:text-gray-400 dark:disabled:hover:text-gray-400 dark:disabled:hover:border-gray-600 dark:disabled:hover:bg-primary bg-primary border-gray-200 dark:border-primary hover:text-default hover:border-gray-300 hover:bg-gray-50 dark:hover:text-default dark:hover:bg-gray-900 dark:hover:border-gray-400 px-2.5 text-sm h-8 min-w-8 shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 hover:relative hover:z-1"><span class="grow text-center">Latest Filings</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-gray-600 disabled:text-gray-400 disabled:hover:border-gray-200 disabled:hover:bg-primary disabled:hover:text-gray-400 dark:text-gray-200 dark:disabled:text-gray-400 dark:disabled:hover:text-gray-400 dark:disabled:hover:border-gray-600 dark:disabled:hover:bg-primary bg-primary border-gray-200 dark:border-primary hover:text-default hover:border-gray-300 hover:bg-gray-50 dark:hover:text-default dark:hover:bg-gray-900 dark:hover:border-gray-400 px-2.5 text-sm h-8 min-w-8 shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 hover:relative hover:z-1"><span class="grow text-center">News</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-gray-600 disabled:text-gray-400 disabled:hover:border-gray-200 disabled:hover:bg-primary disabled:hover:text-gray-400 dark:text-gray-200 dark:disabled:text-gray-400 dark:disabled:hover:text-gray-400 dark:disabled:hover:border-gray-600 dark:disabled:hover:bg-primary bg-primary border-gray-200 dark:border-primary hover:text-default hover:border-gray-300 hover:bg-gray-50 dark:hover:text-default dark:hover:bg-gray-900 dark:hover:border-gray-400 px-2.5 text-sm h-8 min-w-8 shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 hover:relative hover:z-1"><span class="grow text-center">Insider</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-gray-600 disabled:text-gray-400 disabled:hover:border-gray-200 disabled:hover:bg-primary disabled:hover:text-gray-400 dark:text-gray-200 dark:disabled:text-gray-400 dark:disabled:hover:text-gray-400 dark:disabled:hover:border-gray-600 dark:disabled:hover:bg-primary bg-primary border-gray-200 dark:border-primary hover:text-default hover:border-gray-300 hover:bg-gray-50 dark:hover:text-default dark:hover:bg-gray-900 dark:hover:border-gray-400 px-2.5 text-sm h-8 min-w-8 shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 hover:relative hover:z-1"><span class="grow text-center">Managers</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-gray-600 disabled:text-gray-400 disabled:hover:border-gray-200 disabled:hover:bg-primary disabled:hover:text-gray-400 dark:text-gray-200 dark:disabled:text-gray-400 dark:disabled:hover:text-gray-400 dark:disabled:hover:border-gray-600 dark:disabled:hover:bg-primary bg-primary border-gray-200 dark:border-primary hover:text-default hover:border-gray-300 hover:bg-gray-50 dark:hover:text-default dark:hover:bg-gray-900 dark:hover:border-gray-400 px-2.5 text-sm h-8 min-w-8 shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 hover:relative hover:z-1"><span class="grow text-center">Funds</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-gray-600 disabled:text-gray-400 disabled:hover:border-gray-200 disabled:hover:bg-primary disabled:hover:text-gray-400 dark:text-gray-200 dark:disabled:text-gray-400 dark:disabled:hover:text-gray-400 dark:disabled:hover:border-gray-600 dark:disabled:hover:bg-primary bg-primary border-gray-200 dark:border-primary hover:text-default hover:border-gray-300 hover:bg-gray-50 dark:hover:text-default dark:hover:bg-gray-900 dark:hover:border-gray-400 px-2.5 text-sm h-8 min-w-8 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 hover:relative hover:z-1 rounded-l-none"><span class="grow text-center">Calendar</span></button></div></div><div class="mt-10 mb-4 text-center"><p>You can easily automate the export of Screener data to a .csv file using code. Follow these 4 steps to obtain the file URL.</p></div><div class="flex w-192.5 flex-col gap-6"><ul class="flex flex-col gap-2"><li class="flex items-start gap-4 rounded-xl border border-primary p-4"><div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200/30 text-sm font-semibold">1</div><div class="w-0 flex-1"><div class="flex"><div class="flex-1"><p class="text-md mb-1 font-semibold">Configure Screener</p><p class="text-2xs leading-relaxed text-muted">Set up your filters in the main Screener interface</p></div><div class="ml-4 shrink-0"><a href="https://elite.finviz.com/screener?v=111" target="_blank" class="group/button flex items-center justify-center font-medium focus:outline-none border border-transparent active:bg-gray-200/90 disabled:bg-gray-200/30 disabled:text-gray-400 disabled:hover:bg-gray-200/30 disabled:hover:text-gray-400 dark:active:bg-gray-500/90 dark:disabled:bg-gray-500/30 dark:disabled:text-gray-300 dark:disabled:hover:bg-gray-500/30 dark:disabled:hover:text-gray-300 bg-gray-200/30 hover:bg-gray-200/50 dark:bg-gray-500/30 dark:hover:bg-gray-500/50 px-2.5 text-sm h-8 min-w-8 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500"><span class="grow text-center">Open Screener</span></a></div></div></div></li><li class="flex items-start gap-4 rounded-xl border border-primary p-4"><div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200/30 text-sm font-semibold">2</div><div class="w-0 flex-1"><div class="flex"><div class="flex-1"><p class="text-md mb-1 font-semibold">Replace URL Path</p><p class="text-2xs leading-relaxed text-muted"><span>Change <b>"screener"</b> to <b>"export/screener"</b> in your URL</span></p></div></div><div class="mt-4"><div class="flex flex-col gap-5"><div class="flex max-w-full flex-col overflow-hidden rounded-md border border-primary"><div class="flex h-7 items-center justify-between px-3 py-1"><span class="text-3xs text-muted-2">Screener URL</span><div class="flex gap-2"><button class="group/button flex items-center justify-center font-medium focus:outline-none border border-transparent active:bg-gray-200/90 disabled:bg-gray-200/30 disabled:text-gray-400 disabled:hover:bg-gray-200/30 disabled:hover:text-gray-400 dark:active:bg-gray-500/90 dark:disabled:bg-gray-500/30 dark:disabled:text-gray-300 dark:disabled:hover:bg-gray-500/30 dark:disabled:hover:text-gray-300 bg-gray-200/30 hover:bg-gray-200/50 dark:bg-gray-500/30 dark:hover:bg-gray-500/50 px-1 text-2xs h-5 min-w-5 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 -mx-1 bg-transparent dark:bg-transparent"><span class="flex w-3 items-center justify-center"><svg class="pointer-events-none block shrink-0 fill-current" width="1rem" height="1rem"><use href="/assets/dist-icons/icons.svg?rev=3459691583#copy"></use></svg></span></button><a href="https://elite.finviz.com/screener?v=111&amp;f=fa_div_pos,sec_technology" target="_blank" class="group/button flex items-center justify-center font-medium focus:outline-none border border-transparent active:bg-gray-200/90 disabled:bg-gray-200/30 disabled:text-gray-400 disabled:hover:bg-gray-200/30 disabled:hover:text-gray-400 dark:active:bg-gray-500/90 dark:disabled:bg-gray-500/30 dark:disabled:text-gray-300 dark:disabled:hover:bg-gray-500/30 dark:disabled:hover:text-gray-300 bg-gray-200/30 hover:bg-gray-200/50 dark:bg-gray-500/30 dark:hover:bg-gray-500/50 px-1 text-2xs h-5 min-w-5 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 -mx-1 bg-transparent dark:bg-transparent"><span class="flex w-3 items-center justify-center"><svg class="pointer-events-none block shrink-0 fill-current" width="1rem" height="1rem"><use href="/assets/dist-icons/icons.svg?rev=3459691583#openInNew"></use></svg></span></a></div></div><code class="overflow-x-auto bg-secondary px-3 py-2 text-2xs whitespace-nowrap"><div class="contents"><span class="relative z-10">https://elite.finviz.com/</span><span class="rounded-sm bg-violet-100 text-violet-500 dark:bg-violet-800 dark:text-violet-200 p-1 font-semibold">screener</span><span class="relative z-10">?v=111&amp;f=fa_div_pos,sec_technology</span></div></code></div><div class="flex max-w-full flex-col overflow-hidden rounded-md border border-primary"><div class="flex h-7 items-center justify-between px-3 py-1"><span class="text-3xs text-muted-2">Screener Export URL</span><div class="flex gap-2"><button class="group/button flex items-center justify-center font-medium focus:outline-none border border-transparent active:bg-gray-200/90 disabled:bg-gray-200/30 disabled:text-gray-400 disabled:hover:bg-gray-200/30 disabled:hover:text-gray-400 dark:active:bg-gray-500/90 dark:disabled:bg-gray-500/30 dark:disabled:text-gray-300 dark:disabled:hover:bg-gray-500/30 dark:disabled:hover:text-gray-300 bg-gray-200/30 hover:bg-gray-200/50 dark:bg-gray-500/30 dark:hover:bg-gray-500/50 px-1 text-2xs h-5 min-w-5 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 -mx-1 bg-transparent dark:bg-transparent"><span class="flex w-3 items-center justify-center"><svg class="pointer-events-none block shrink-0 fill-current" width="1rem" height="1rem"><use href="/assets/dist-icons/icons.svg?rev=3459691583#copy"></use></svg></span></button><a href="https://elite.finviz.com/export/screener?v=111&amp;f=fa_div_pos,sec_technology" target="_blank" class="group/button flex items-center justify-center font-medium focus:outline-none border border-transparent active:bg-gray-200/90 disabled:bg-gray-200/30 disabled:text-gray-400 disabled:hover:bg-gray-200/30 disabled:hover:text-gray-400 dark:active:bg-gray-500/90 dark:disabled:bg-gray-500/30 dark:disabled:text-gray-300 dark:disabled:hover:bg-gray-500/30 dark:disabled:hover:text-gray-300 bg-gray-200/30 hover:bg-gray-200/50 dark:bg-gray-500/30 dark:hover:bg-gray-500/50 px-1 text-2xs h-5 min-w-5 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 -mx-1 bg-transparent dark:bg-transparent"><span class="flex w-3 items-center justify-center"><svg class="pointer-events-none block shrink-0 fill-current" width="1rem" height="1rem"><use href="/assets/dist-icons/icons.svg?rev=3459691583#openInNew"></use></svg></span></a></div></div><code class="overflow-x-auto bg-secondary px-3 py-2 text-2xs whitespace-nowrap"><div class="contents"><span class="relative z-10">https://elite.finviz.com/</span><span class="rounded-sm bg-violet-100 text-violet-500 dark:bg-violet-800 dark:text-violet-200 p-1 font-semibold">export/screener</span><span class="relative z-10">?v=111&amp;f=fa_div_pos,sec_technology</span></div></code></div><p class="text-2xs text-muted">Use the path shown above (<b>/export/screener</b>). Legacy URLs with a <b>.ashx</b> suffix still work but respond with a 301 redirect — tools that don't follow redirects by default (such as <b>curl</b>) will return an empty body. Pass <b>curl -L</b> (or the equivalent flag in your client) to follow the redirect.</p></div></div></div></li><li class="flex items-start gap-4 rounded-xl border border-primary p-4"><div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200/30 text-sm font-semibold">3</div><div class="w-0 flex-1"><div class="flex"><div class="flex-1"><p class="text-md mb-1 font-semibold"><span>Customize Columns <span class="inline-flex items-center justify-center px-1.5 py-0.5 rounded-sm bg-neutral text-muted font-medium h-5 min-w-5 text-2xs leading-4">Optional</span></span></p><p class="text-2xs leading-relaxed text-muted"><span>Specify which columns to export using the <b>"&amp;c=column1,column2"</b> parameters</span></p></div><div class="ml-4 shrink-0"><button class="group/button flex items-center justify-center font-medium focus:outline-none border border-transparent active:bg-gray-200/90 disabled:bg-gray-200/30 disabled:text-gray-400 disabled:hover:bg-gray-200/30 disabled:hover:text-gray-400 dark:active:bg-gray-500/90 dark:disabled:bg-gray-500/30 dark:disabled:text-gray-300 dark:disabled:hover:bg-gray-500/30 dark:disabled:hover:text-gray-300 bg-gray-200/30 hover:bg-gray-200/50 dark:bg-gray-500/30 dark:hover:bg-gray-500/50 px-2.5 text-sm h-8 min-w-8 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500"><span class="grow text-left mr-2">Learn More</span><span class="flex w-3 items-center justify-center"><svg class="pointer-events-none block shrink-0 fill-current" width="1rem" height="1rem"><use href="/assets/dist-icons/icons.svg?rev=3459691583#chevronDown"></use></svg></span></button></div></div></div></li><li class="flex items-start gap-4 rounded-xl border border-primary p-4"><div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200/30 text-sm font-semibold">4</div><div class="w-0 flex-1"><div class="flex"><div class="flex-1"><p class="text-md mb-1 font-semibold">Add Authentication</p><p class="text-2xs leading-relaxed text-muted">Append your API token to the URL</p></div><div class="ml-4 shrink-0"></div></div><div class="mt-4"><div class="flex w-full gap-2"><code class="flex h-8 items-center justify-between rounded-md bg-secondary px-3 py-2 text-2xs flex-1"><span>REDACTED-FINVIZ-API-TOKEN</span><button class="group/button flex items-center justify-center font-medium focus:outline-none border border-transparent active:bg-gray-200/90 disabled:bg-gray-200/30 disabled:text-gray-400 disabled:hover:bg-gray-200/30 disabled:hover:text-gray-400 dark:active:bg-gray-500/90 dark:disabled:bg-gray-500/30 dark:disabled:text-gray-300 dark:disabled:hover:bg-gray-500/30 dark:disabled:hover:text-gray-300 bg-gray-200/30 hover:bg-gray-200/50 dark:bg-gray-500/30 dark:hover:bg-gray-500/50 px-1 text-2xs h-5 min-w-5 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 -mx-1 bg-transparent dark:bg-transparent"><span class="flex w-3 items-center justify-center"><svg class="pointer-events-none block shrink-0 fill-current" width="1rem" height="1rem"><use href="/assets/dist-icons/icons.svg?rev=3459691583#copy"></use></svg></span></button></code><button class="group/button flex items-center justify-center font-medium focus:outline-none border border-transparent active:bg-gray-200/90 disabled:bg-gray-200/30 disabled:text-gray-400 disabled:hover:bg-gray-200/30 disabled:hover:text-gray-400 dark:active:bg-gray-500/90 dark:disabled:bg-gray-500/30 dark:disabled:text-gray-300 dark:disabled:hover:bg-gray-500/30 dark:disabled:hover:text-gray-300 bg-gray-200/30 hover:bg-gray-200/50 dark:bg-gray-500/30 dark:hover:bg-gray-500/50 px-2.5 text-sm h-8 min-w-8 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500"><span class="grow text-center">Regenerate Token</span></button></div><div class="mt-4"><div class="flex max-w-full flex-col overflow-hidden rounded-md border border-primary"><div class="flex h-7 items-center justify-between px-3 py-1"><span class="text-3xs text-muted-2">Example Export API URL</span><div class="flex gap-2"><button class="group/button flex items-center justify-center font-medium focus:outline-none border border-transparent active:bg-gray-200/90 disabled:bg-gray-200/30 disabled:text-gray-400 disabled:hover:bg-gray-200/30 disabled:hover:text-gray-400 dark:active:bg-gray-500/90 dark:disabled:bg-gray-500/30 dark:disabled:text-gray-300 dark:disabled:hover:bg-gray-500/30 dark:disabled:hover:text-gray-300 bg-gray-200/30 hover:bg-gray-200/50 dark:bg-gray-500/30 dark:hover:bg-gray-500/50 px-1 text-2xs h-5 min-w-5 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 -mx-1 bg-transparent dark:bg-transparent"><span class="flex w-3 items-center justify-center"><svg class="pointer-events-none block shrink-0 fill-current" width="1rem" height="1rem"><use href="/assets/dist-icons/icons.svg?rev=3459691583#copy"></use></svg></span></button><a href="https://elite.finviz.com/export/screener?v=111&amp;f=fa_div_pos,sec_technology&amp;auth=REDACTED-FINVIZ-API-TOKEN" target="_blank" class="group/button flex items-center justify-center font-medium focus:outline-none border border-transparent active:bg-gray-200/90 disabled:bg-gray-200/30 disabled:text-gray-400 disabled:hover:bg-gray-200/30 disabled:hover:text-gray-400 dark:active:bg-gray-500/90 dark:disabled:bg-gray-500/30 dark:disabled:text-gray-300 dark:disabled:hover:bg-gray-500/30 dark:disabled:hover:text-gray-300 bg-gray-200/30 hover:bg-gray-200/50 dark:bg-gray-500/30 dark:hover:bg-gray-500/50 px-1 text-2xs h-5 min-w-5 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 -mx-1 bg-transparent dark:bg-transparent"><span class="flex w-3 items-center justify-center"><svg class="pointer-events-none block shrink-0 fill-current" width="1rem" height="1rem"><use href="/assets/dist-icons/icons.svg?rev=3459691583#openInNew"></use></svg></span></a></div></div><code class="overflow-x-auto bg-secondary px-3 py-2 text-2xs whitespace-nowrap"><div class="contents"><span class="relative z-10">https://elite.finviz.com/export/screener?v=111&amp;f=fa_div_pos,sec_technology</span><span class="rounded-sm bg-violet-100 text-violet-500 dark:bg-violet-800 dark:text-violet-200 p-1 font-semibold">&amp;auth=REDACTED-FINVIZ-API-TOKEN</span><span class="relative z-10"></span></div></code></div></div></div></div></li></ul><div class="rounded-xl border border-primary p-4"><p class="text-md mb-4 font-semibold">Code Examples</p><ul class="mb-2 grid grid-flow-col gap-1 rounded-md text-2xs text-muted"><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-default dark:disabled:hover:bg-gray-700 disabled:hover:bg-gray-50 border-blue-400 bg-blue-50 text-gray-900 dark:border-blue-400 dark:bg-gray-500/30 dark:text-white px-2 text-2xs h-7 min-w-7 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500"><span class="grow text-center">Google Sheets</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-default dark:disabled:hover:bg-gray-700 disabled:hover:bg-gray-50 border-transparent bg-gray-200/30 hover:bg-gray-200/30 dark:bg-gray-700 dark:hover:bg-gray-500/30 px-2 text-2xs h-7 min-w-7 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500"><span class="grow text-center">Excel</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-default dark:disabled:hover:bg-gray-700 disabled:hover:bg-gray-50 border-transparent bg-gray-200/30 hover:bg-gray-200/30 dark:bg-gray-700 dark:hover:bg-gray-500/30 px-2 text-2xs h-7 min-w-7 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500"><span class="grow text-center">Python</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-default dark:disabled:hover:bg-gray-700 disabled:hover:bg-gray-50 border-transparent bg-gray-200/30 hover:bg-gray-200/30 dark:bg-gray-700 dark:hover:bg-gray-500/30 px-2 text-2xs h-7 min-w-7 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500"><span class="grow text-center">Node.js</span></button><button class="group/button flex items-center justify-center font-medium focus:outline-none border text-default dark:disabled:hover:bg-gray-700 disabled:hover:bg-gray-50 border-transparent bg-gray-200/30 hover:bg-gray-200/30 dark:bg-gray-700 dark:hover:bg-gray-500/30 px-2 text-2xs h-7 min-w-7 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500"><span class="grow text-center">C#</span></button></ul><div class="flex max-w-full flex-col overflow-hidden rounded-md border border-primary"><div class="flex h-7 items-center justify-between px-3 py-1"><span class="text-3xs text-muted-2">Google Sheets Code Snippet</span><div class="flex gap-2"><button class="group/button flex items-center justify-center font-medium focus:outline-none border border-transparent active:bg-gray-200/90 disabled:bg-gray-200/30 disabled:text-gray-400 disabled:hover:bg-gray-200/30 disabled:hover:text-gray-400 dark:active:bg-gray-500/90 dark:disabled:bg-gray-500/30 dark:disabled:text-gray-300 dark:disabled:hover:bg-gray-500/30 dark:disabled:hover:text-gray-300 bg-gray-200/30 hover:bg-gray-200/50 dark:bg-gray-500/30 dark:hover:bg-gray-500/50 px-1 text-2xs h-5 min-w-5 rounded-md shrink-0 whitespace-nowrap focus-visible:ring-2 ring-gray-200 dark:ring-gray-500 -mx-1 bg-transparent dark:bg-transparent"><span class="flex w-3 items-center justify-center"><svg class="pointer-events-none block shrink-0 fill-current" width="1rem" height="1rem"><use href="/assets/dist-icons/icons.svg?rev=3459691583#copy"></use></svg></span></button></div></div><code class="overflow-x-auto bg-secondary px-3 py-2 text-2xs whitespace-nowrap"><span><pre class="font-mono font-normal" style="color: rgb(201, 209, 217);">=<span style="color: rgb(255, 123, 114);">IMPORTDATA</span>("https://elite.finviz.com/export/screener?[allYourFilters]&amp;auth=REDACTED-FINVIZ-API-TOKEN")</pre></span></code></div></div></div></div></div>
+         <script id="api-init-data" type="application/json">{"screenerColumns":[{"id":"0","name":"No."},{"id":"1","name":"Ticker"},{"id":"2","name":"Company"},{"id":"3","name":"Sector"},{"id":"4","name":"Industry"},{"id":"5","name":"Country"},{"id":"6","name":"Market Cap"},{"id":"7","name":"P/E"},{"id":"8","name":"Forward P/E"},{"id":"9","name":"PEG"},{"id":"10","name":"P/S"},{"id":"11","name":"P/B"},{"id":"12","name":"P/Cash"},{"id":"13","name":"P/Free Cash Flow"},{"id":"14","name":"Dividend Yield"},{"id":"15","name":"Payout Ratio"},{"id":"16","name":"EPS (ttm)"},{"id":"17","name":"EPS Growth This Year"},{"id":"18","name":"EPS Growth Next Year"},{"id":"19","name":"EPS Growth Past 5 Years"},{"id":"20","name":"EPS Growth Next 5 Years"},{"id":"21","name":"Sales Growth Past 5 Years"},{"id":"22","name":"EPS Growth Quarter Over Quarter"},{"id":"23","name":"Sales Growth Quarter Over Quarter"},{"id":"24","name":"Shares Outstanding"},{"id":"25","name":"Shares Float"},{"id":"26","name":"Insider Ownership"},{"id":"27","name":"Insider Transactions"},{"id":"28","name":"Institutional Ownership"},{"id":"29","name":"Institutional Transactions"},{"id":"30","name":"Short Float"},{"id":"31","name":"Short Ratio"},{"id":"32","name":"Return on Assets"},{"id":"33","name":"Return on Equity"},{"id":"34","name":"Return on Invested Capital"},{"id":"35","name":"Current Ratio"},{"id":"36","name":"Quick Ratio"},{"id":"37","name":"LT Debt/Equity"},{"id":"38","name":"Total Debt/Equity"},{"id":"39","name":"Gross Margin"},{"id":"40","name":"Operating Margin"},{"id":"41","name":"Profit Margin"},{"id":"42","name":"Performance (Week)"},{"id":"43","name":"Performance (Month)"},{"id":"44","name":"Performance (Quarter)"},{"id":"45","name":"Performance (Half Year)"},{"id":"46","name":"Performance (Year)"},{"id":"47","name":"Performance (YTD)"},{"id":"48","name":"Beta"},{"id":"49","name":"Average True Range"},{"id":"50","name":"Volatility (Week)"},{"id":"51","name":"Volatility (Month)"},{"id":"52","name":"20-Day Simple Moving Average"},{"id":"53","name":"50-Day Simple Moving Average"},{"id":"54","name":"200-Day Simple Moving Average"},{"id":"55","name":"50-Day High"},{"id":"56","name":"50-Day Low"},{"id":"57","name":"52-Week High"},{"id":"58","name":"52-Week Low"},{"id":"59","name":"Relative Strength Index (14)"},{"id":"60","name":"Change from Open"},{"id":"61","name":"Gap"},{"id":"62","name":"Analyst Recom"},{"id":"63","name":"Average Volume"},{"id":"64","name":"Relative Volume"},{"id":"65","name":"Price"},{"id":"66","name":"Change"},{"id":"67","name":"Volume"},{"id":"68","name":"Earnings Date"},{"id":"69","name":"Target Price"},{"id":"70","name":"IPO Date"},{"id":"71","name":"After-Hours Close"},{"id":"72","name":"After-Hours Change"},{"id":"73","name":"Book/sh"},{"id":"74","name":"Cash/sh"},{"id":"75","name":"Dividend"},{"id":"76","name":"Employees"},{"id":"77","name":"EPS Next Q"},{"id":"78","name":"Income"},{"id":"79","name":"Index"},{"id":"80","name":"Optionable"},{"id":"81","name":"Prev Close"},{"id":"82","name":"Sales"},{"id":"83","name":"Shortable"},{"id":"84","name":"Short Interest"},{"id":"85","name":"Float %"},{"id":"86","name":"Open"},{"id":"87","name":"High"},{"id":"88","name":"Low"},{"id":"89","name":"Trades"},{"id":"90","name":"Performance (1 Minute)"},{"id":"91","name":"Performance (2 Minutes)"},{"id":"92","name":"Performance (3 Minutes)"},{"id":"93","name":"Performance (5 Minutes)"},{"id":"94","name":"Performance (10 Minutes)"},{"id":"95","name":"Performance (15 Minutes)"},{"id":"96","name":"Performance (30 Minutes)"},{"id":"97","name":"Performance (1 Hour)"},{"id":"98","name":"Performance (2 Hours)"},{"id":"99","name":"Performance (4 Hours)"},{"id":"100","name":"Asset Type"},{"id":"101","name":"ETF Type"},{"id":"102","name":"Region"},{"id":"103","name":"Single Category"},{"id":"104","name":"Sector/Theme"},{"id":"105","name":"Tags"},{"id":"106","name":"Active/Passive"},{"id":"107","name":"Net Expense Ratio"},{"id":"108","name":"Total Holdings"},{"id":"109","name":"Assets Under Management"},{"id":"110","name":"Net Asset Value"},{"id":"111","name":"Net Asset Value %"},{"id":"112","name":"Net Flows (1 Month)"},{"id":"113","name":"Net Flows % (1 Month)"},{"id":"114","name":"Net Flows (3 Month)"},{"id":"115","name":"Net Flows % (3 Month)"},{"id":"116","name":"Net Flows (YTD)"},{"id":"117","name":"Net Flows % (YTD)"},{"id":"118","name":"Net Flows (1 Year)"},{"id":"119","name":"Net Flows % (1 Year)"},{"id":"120","name":"Return 1 Year"},{"id":"121","name":"Return 3 Year"},{"id":"122","name":"Return 5 Year"},{"id":"123","name":"Return 10 Year"},{"id":"124","name":"Return Since Inception"},{"id":"125","name":"All-Time High"},{"id":"126","name":"All-Time Low"},{"id":"127","name":"EPS Surprise"},{"id":"128","name":"Revenue Surprise"},{"id":"129","name":"Exchange"},{"id":"130","name":"Dividend TTM"},{"id":"131","name":"Dividend Ex Date"},{"id":"132","name":"EPS Year Over Year TTM"},{"id":"133","name":"Sales Year Over Year TTM"},{"id":"134","name":"52-Week Range"},{"id":"135","name":"News Time"},{"id":"136","name":"News URL"},{"id":"137","name":"News Title"},{"id":"138","name":"Performance (3 Years)"},{"id":"139","name":"Performance (5 Years)"},{"id":"140","name":"Performance (10 Years)"},{"id":"141","name":"After-Hours Volume"},{"id":"142","name":"EPS Growth Past 3 Years"},{"id":"143","name":"Sales Growth Past 3 Years"},{"id":"144","name":"Enterprise Value"},{"id":"145","name":"EV/EBITDA"},{"id":"146","name":"EV/Sales"},{"id":"147","name":"Dividend Growth 1 Year"},{"id":"148","name":"Dividend Growth 3 Years"},{"id":"149","name":"Dividend Growth 5 Years"},{"id":"150","name":"Daily Digest"},{"id":"151","name":"Security Type"}],"groupsColumns":[{"id":"0","name":"No."},{"id":"1","name":"Name"},{"id":"2","name":"Market Cap"},{"id":"3","name":"P/E"},{"id":"4","name":"Forward P/E"},{"id":"5","name":"PEG"},{"id":"6","name":"P/S"},{"id":"7","name":"P/B"},{"id":"8","name":"P/C"},{"id":"9","name":"P/Free Cash Flow"},{"id":"10","name":"Dividend Yield"},{"id":"11","name":"EPS growth past 5 years"},{"id":"12","name":"EPS growth next 5 years"},{"id":"13","name":"Sales growth past 5 years"},{"id":"14","name":"Float Short"},{"id":"15","name":"Performance (Week)"},{"id":"16","name":"Performance (Month)"},{"id":"17","name":"Performance (Quarter)"},{"id":"18","name":"Performance (Half Year)"},{"id":"19","name":"Performance (Year)"},{"id":"20","name":"Performance (Year To Date)"},{"id":"21","name":"Analyst Recom"},{"id":"22","name":"Average Volume"},{"id":"23","name":"Relative Volume"},{"id":"24","name":"Change"},{"id":"25","name":"Volume"},{"id":"26","name":"Stocks"},{"id":"27","name":"LT Debt/Equity"},{"id":"28","name":"Total Debt/Equity"},{"id":"29","name":"Return on Assets"},{"id":"30","name":"Return on Equity"},{"id":"31","name":"Return on Invested Capital"},{"id":"32","name":"Current Ratio"},{"id":"33","name":"Quick Ratio"},{"id":"34","name":"Gross Margin"},{"id":"35","name":"Operating Margin"},{"id":"36","name":"Net Profit Margin"},{"id":"37","name":"EPS growth past 3 years"},{"id":"38","name":"Sales growth past 3 years"},{"id":"39","name":"Enterprise Value"},{"id":"40","name":"EV/EBITDA"},{"id":"41","name":"EV/Sales"},{"id":"42","name":"Employees"}],"userToken":"REDACTED-FINVIZ-API-TOKEN"}</script>
+    </div></div>
+            <div class="footer" style="margin-top: 30px;padding-bottom: 20px">
+                <div class="footer_links">
+                    <a class="tab-link" href="/affiliate">Affiliate</a>
+                    <span class="footer_dot"> • </span>
+                    <a class="tab-link" href="/advertise">Advertise</a>
+                    <span class="footer_dot"> • </span>
+                    <a class="tab-link" href="/careers">Careers</a>
+                    <span class="footer_dot"> • </span>
+                    <a class="tab-link" href="/contact">Contact</a>
+                    <span class="footer_dot"> • </span>
+                    <a class="tab-link" href="/blog">Blog</a>
+                    <span class="footer_dot"> • </span>
+                    <a class="tab-link" href="/knowledge-base">Help</a>
+                    <span class="footer_dot"> • </span>
+                    <a class="tab-link" href="/privacy">Privacy</a>
+                    <span class="footer_dot"> • </span>
+                    <a class="tab-link" href="https://x.com/finviz_com" target="_blank">Follow us on X</a>    </div>
+    Real-time stock quotes. Futures and options delayed by 15 minutes.
+    <br>
+    Copyright © 2007-2026 Finviz.com. All Rights Reserved.
+    
+    <a href="/api/v1/screener-export-csv" class="internal-data-link" rel="nofollow">Export All Screener Data (CSV)</a>
+</div><noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-537M973G" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>    <script>
+      function getSystemTheme() {
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          return 'Dark';
+        }
+        else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+          return 'Light';
+        }
+        return 'No Preference';
+      }
+
+      var systemTheme = getSystemTheme()
+
+      const webdriver = navigator.webdriver === true
+      const isBotFlagHeadlessChrome = navigator.userAgent.includes('HeadlessChrome')
+      const isBotFlagFvSegmentAudit = document.cookie.includes('fv_segment_audit=true')
+      const isBotFlagNoLanguages = navigator.languages.length === 0
+      const isChrome = navigator.userAgent.includes('Chrome')
+      const isBotFlagChromeWithoutRuntime = isChrome && typeof window.chrome === 'undefined'
+      const isBotFlagChromeWithoutPlugins = isChrome && navigator.plugins.length === 0
+      const isBotFlagChromeWithoutDeviceMemory = isChrome && navigator.deviceMemory === undefined
+      const isBotFlagNoOuterSize = window.outerWidth === 0 && window.innerWidth > 0
+      const isBotFlagAutomationGlobals = (
+        ['__playwright__', '__pw_manual', '__PW_inspect', '_phantom', 'callPhantom', '__nightmare', 'domAutomation', 'domAutomationController', 'Cypress', '__selenium_unwrapped', '__selenium_evaluate', '__webdriver_evaluate', '__webdriver_script_function', '__webdriver_script_func', '__webdriver_script_fn', '__webdriver_unwrapped', '__driver_evaluate', '__driver_unwrapped', '__fxdriver_evaluate', '__fxdriver_unwrapped'].some(function(n) { return n in window }) ||
+        Object.getOwnPropertyNames(document).some(function(n) { return n.indexOf('$cdc_') === 0 || n.indexOf('$chrome_asyncScriptInfo') === 0 })
+      )
+      const fvt = window.getFvt?.()
+
+      dataLayer.push({
+            event: 'ga_context',
+            user_id: '2119656',
+            dimension1: 'Elite',
+            dimension3: window.devicePixelRatio,
+            layoutTheme: 'dark',
+            systemTheme: systemTheme,
+            bundle: 'modern',
+            prefTheme: 'dark',
+            themeFlag: 'modern',
+            innerWidth: window.innerWidth,
+            innerHeight: window.innerHeight,
+            webdriver: webdriver,
+            isBotFlagHeadlessChrome: isBotFlagHeadlessChrome,
+            isBotFlagNoLanguages: isBotFlagNoLanguages,
+            isBotFlagChromeWithoutRuntime: isBotFlagChromeWithoutRuntime,
+            isBotFlagChromeWithoutPlugins: isBotFlagChromeWithoutPlugins,
+            isBotFlagChromeWithoutDeviceMemory: isBotFlagChromeWithoutDeviceMemory,
+            isBotFlagNoOuterSize: isBotFlagNoOuterSize,
+            isBotFlagFvSegmentAudit: isBotFlagFvSegmentAudit,
+            isBotFlagAutomationGlobals: isBotFlagAutomationGlobals,
+            isBot: isBotFlagHeadlessChrome || webdriver || isBotFlagFvSegmentAudit,
+            icAdsVariant: 'control',
+            ...(fvt && { anon_id: fvt })
+          });
+
+      if(window.__fv_deferred_gtag){
+        window.__fv_deferred_gtag.forEach(function(e){
+          if(window.gtag){ window.gtag('event',e[0],e[1]); }
+        });
+      }
+
+    </script>    <script type="text/javascript">
+        window._qevents = window._qevents || [];
+
+        (function() {
+            var elem = document.createElement('script');
+            elem.src = (document.location.protocol == "https:" ? "https://secure" : "http://edge") + ".quantserve.com/quant.js";
+            elem.async = true;
+            elem.type = "text/javascript";
+            var scpt = document.getElementsByTagName('script')[0];
+            scpt.parentNode.insertBefore(elem, scpt);
+        })();
+
+        window._qevents.push({
+            qacct:"p-c2W8esUZ6Q8oA"
+        });
+    </script>
+    <noscript>
+        <div style="display:none;">
+            <img src="//pixel.quantserve.com/pixel/p-c2W8esUZ6Q8oA.gif" border="0" height="1" width="1" alt="Quantcast"/>
+        </div>
+    </noscript><script>window.renderScriptNotLoaded();</script>
+<div id="js-knowledge-base-root"></div><script src="/assets/dist/5179.v1.942c46eb.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/5432.v1.7fb82d89.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/8596.v1.178a32a9.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/1748.v1.378c78c4.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/7470.v1.d1c95488.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/9063.v1.f5192620.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/514.v1.4fff9951.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/548.v1.ec8c69be.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/8570.v1.3b8a593b.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/699.v1.35de8e41.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/4482.v1.a4157480.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/7573.v1.9453aabc.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/1793.v1.8a4728da.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script src="/assets/dist/knowledge_base_dialog.v1.cba27c9f.js" onerror="window.handleScriptNotLoaded(this)" defer=""></script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v3d52b47920f24c319d37e2661827c42b1787588026925" integrity="sha512-d9sL6GJLXn6fInD1+TVXhTcQOsmxeHfmHAvwGDIxp5TO+uo1fiWW7mHomMj4MLRlCsJDTqXzWLHJFFlPCEIj/A==" data-cf-beacon="{&quot;version&quot;:&quot;2024.11.0&quot;,&quot;token&quot;:&quot;e53f08f6c9e04bfd9760701085ec93b4&quot;}" crossorigin="anonymous"></script>
+
+
+<iframe name="__tcfapiLocator" style="display: none;"></iframe><iframe name="__gppLocator" style="display: none;"></iframe><div></div><div class="c51QnewD"><div id="whisper-anchor" style="position: fixed; pointer-events: none; z-index: 2147483647; width: 56px; height: 56px; bottom: 16px; left: 16px;"></div><div id="anuUDQLF" class="
+          c8SND4df
+          s7_0LvVr
+          
+          
+        " style="margin-bottom: 16px; margin-left: 16px;"><div id="_7nMQFD9A" class="_4Jnw-rAx" aria-hidden="true" tabindex="-1" style="width: 0px; height: 0px;"></div><div role="button" tabindex="0" id="_1SS2i7sB" class="_4Jnw-rAx" data-state="hidden" data-side="left" aria-expanded="false" aria-haspopup="true" aria-controls="_7nMQFD9A" style="color: rgb(255, 255, 255); background-color: rgb(41, 98, 255); transition: transform 500ms cubic-bezier(0, 0, 0.2, 1), opacity 400ms ease-out;"><div id="_8kOL6Hod"><svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg" width="44" height="44" id="_5ej0WRhf"><path d="M27.1765 0.614129L15.4375 5.71252L19.027 0.20075C19.9994 0.0692999 20.9916 0 22.0001 0C23.7832 0 25.5162 0.21373 27.1765 0.614129ZM43.7994 24.9731L38.2876 28.5626L43.386 16.8236C43.7864 18.4838 44 20.2169 44 22C44 23.0085 43.9307 24.0007 43.7994 24.9731ZM0.09999 19.9042L8.1169 23.3861L0.50336 26.6928C0.17479 25.1804 0 23.6107 0 22C0 21.293 0.03476 20.5942 0.09999 19.9042ZM17.3073 43.4966L20.6139 35.8831L24.0959 43.9C23.4058 43.9652 22.707 44 22 44C20.3893 44 18.8196 43.8252 17.3073 43.4966Z" style="fill: currentcolor;"></path><path d="M3.03908 19.0127L8.20064 11.087L6.05853 7.79762C6.7978 6.97741 7.59793 6.21314 8.45225 5.51216L21.2879 11.087L3.03908 19.0127ZM25.8232 41.7968L33.749 23.548L39.3236 36.3836C38.6228 37.2379 37.8585 38.038 37.0383 38.7774L33.749 36.6352L25.8232 41.7968ZM33.749 11.087L24.4948 9.13241L35.3917 4.83472C37.1474 6.13391 38.702 7.68855 40.0012 9.44424L35.7035 20.341L33.749 11.087ZM8.86386 39.7753L8.2006 36.6352L5.0605 35.972C4.33944 35.049 3.691 34.0665 3.12284 33.0335L17.4548 27.3811L11.8024 41.713C10.7694 41.1449 9.78695 40.4965 8.86386 39.7753Z" style="fill: currentcolor;"></path><path d="M22.6214 32.6582L20.6839 23.4041L11.5104 21.4495L29.8573 14.15L22.6214 32.6582Z" style="fill: currentcolor;"></path></svg></div><div id="_6dUtdXan"><div id="_6IaBAbvZ"></div></div><div id="_82Ei16dO"><div></div><div></div></div></div></div></div></body></html>
