@@ -19,10 +19,18 @@
 # This is PRODUCTION, so it explicitly overrides back to the real vault
 # via COBALT_VAULT_PATH. Without this line ASET would silently start
 # writing sizing cards into the dev vault instead of Dejan's real one.
+#
+# Defect 1 fix (2026-09-01): COBALT_ENV=production is this launcher's
+# own declaration of intent — cobalt.vault.resolve_vault_path() refuses
+# outright if it ever sees this flag alongside a non-Think root (stale
+# process, wrong override, etc.), so a misconfigured production run
+# fails loud on its next write instead of silently going to dev-vault-
+# cobalt for hours. See src/cobalt/vault.py.
 
 set -e
 
 export COBALT_VAULT_PATH="/Users/cobalt/Vault/Think"
+export COBALT_ENV="production"
 
 REPO_ROOT="/Users/cobalt/cobalt"
 LOG_DIR="$REPO_ROOT/logs"

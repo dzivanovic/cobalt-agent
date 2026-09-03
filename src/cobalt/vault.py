@@ -30,6 +30,34 @@ stays exactly as it is; the old tree's scribe keeps pointing wherever it
 already points. `COBALT_VAULT_PATH` is a deliberately distinct env var
 name from `OBSIDIAN_VAULT_PATH` so setting it can never bleed into old-
 tree behavior.
+
+Defect 1 (2026-09-01): the ASET LaunchAgent kept running for 6+ hours
+against `~/dev-vault-cobalt` after `ops/start_aset.sh` gained its
+COBALT_VAULT_PATH override (79943f6) — that commit's own message
+flagged the running process predated the fix and needed a manual
+`launchctl kickstart`, which never happened. Env vars are fixed at
+process launch; a code/config deploy alone can't fix a live process.
+`COBALT_ENV=production` (set only by ops/start_aset.sh and both
+ops/com.cobalt.prefill-*.plist) is the launchers' own explicit
+declaration of intent — resolve_vault_path() refuses outright when that
+flag is set but the resolved root isn't the real vault, so a stale
+process fails loud on its very next resolve instead of silently
+appending to the wrong vault all day. A dev run (COBALT_ENV unset)
+never sets this flag, so the NN#16 dev-safe default is untouched.
+
+Inverse guard (2026-09-02, "TSLA id 127" incident forensics): the
+2026-09-01 fix above only refused a PRODUCTION-declared process that
+resolved somewhere other than Think. It never refused the opposite —
+a dev-declared process (COBALT_ENV unset/non-production) that somehow
+resolves INTO Think (a manually-exported COBALT_VAULT_PATH, a hand-run
+`uv run` with a stray env var, etc.). That investigation found no
+process had actually done this — the incident's real cause was
+elsewhere (see the daily-note append verification added in
+aset/daily_note.py) — but the gap itself is real and symmetric with
+the forward guard, so it's closed here too: a non-production run that
+resolves under PROD_VAULT_PATH_REFERENCE now refuses the same way,
+unless `COBALT_ALLOW_DEV_ENTRY=1` is set as an explicit, deliberate
+override (e.g. a one-off manual test against the real vault).
 """
 
 import os
@@ -41,6 +69,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = REPO_ROOT / "configs" / "dev" / "vault.yaml"
 ENV_OVERRIDE = "COBALT_VAULT_PATH"
+ENV_MODE = "COBALT_ENV"
+PROD_ENV_VALUE = "production"
+ALLOW_DEV_ENTRY_ENV = "COBALT_ALLOW_DEV_ENTRY"
 
 # Documentation only — never read by resolve_vault_path() itself. The
 # real vault path lives only in the places that actually need to reach
@@ -62,6 +93,14 @@ class VaultConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     obsidian_vault_path: str = Field(min_length=1)
+
+
+def is_production() -> bool:
+    return os.getenv(ENV_MODE) == PROD_ENV_VALUE
+
+
+def dev_entry_allowed() -> bool:
+    return os.getenv(ALLOW_DEV_ENTRY_ENV) == "1"
 
 
 def resolve_vault_path() -> Path:
@@ -91,7 +130,35 @@ def resolve_vault_path() -> Path:
         raise VaultConfigError(
             f"Vault path from {source} does not exist or is not a directory: {path}"
         )
-    return path.resolve()
+    resolved = path.resolve()
+
+    prod_root = Path(PROD_VAULT_PATH_REFERENCE).resolve()
+    if is_production():
+        try:
+            resolved.relative_to(prod_root)
+        except ValueError:
+            raise VaultConfigError(
+                f"REFUSED: {ENV_MODE}={PROD_ENV_VALUE} but the resolved vault "
+                f"root (from {source}) is {resolved}, not {prod_root} or a path "
+                "under it. This process likely predates a vault-config fix and "
+                "needs a restart — see PROD_VAULT_PATH_REFERENCE's DevDoc."
+            )
+    elif not dev_entry_allowed():
+        try:
+            resolved.relative_to(prod_root)
+        except ValueError:
+            pass  # dev run resolved outside prod — the expected, safe case
+        else:
+            raise VaultConfigError(
+                f"REFUSED: a non-production run (no {ENV_MODE}={PROD_ENV_VALUE}) "
+                f"resolved into the production vault ({resolved}, under "
+                f"{prod_root}) from {source}. This looks like a stale tab or "
+                "misconfigured dev process about to write live trading data "
+                f"through a dev instance. Set {ALLOW_DEV_ENTRY_ENV}=1 if this is "
+                "a deliberate one-off."
+            )
+
+    return resolved
 
 
 def assert_within_vault(path: Path) -> None:
