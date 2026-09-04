@@ -196,3 +196,34 @@ code, no predicate parser, no bar logic (ADR-0001, ADR-0002, ADR-0003).
    read alongside `TAXONOMY-DRAFT-v0_7.md` §10/§13.1/§14 and
    `TRADE-DEFS-BATCH1-v0_1.md` / `TRADE-DEFS-BATCH2-v0_1.md` for the
    source sheets.
+
+---
+
+## LAW L28 — the ONE vault write path (2026-09-03)
+
+A fourth sibling component under `src/cobalt/vaultwrite/`, and the one
+every other component now writes through. Added in response to the
+daily-note incident: `docs/00 - Project/INCIDENT-2026-09-03-notes.md`
+has the forensics, **ADR-0004** has the decision, and
+**`cobalt/vaultwrite/README.md`** is its DevDoc — markers, the
+line-anchored three-way merge, the `vault_writes`/`vault_overrides`
+audit trail, the mtime+hash guard and atomic rename, the production-
+vault fences, and `cobalt vault restore`.
+
+| file | one-line role |
+|---|---|
+| `src/cobalt/vaultwrite/markers.py` | `<!-- cobalt:section … -->` / `<!-- cobalt:unit … -->` syntax and parsing; refuses malformed markers. |
+| `src/cobalt/vaultwrite/merge.py` | Deterministic line-anchored three-way merge. No LLM in the write path. |
+| `src/cobalt/vaultwrite/store.py` | `vault_writes` (30-day, self-purging) + `vault_overrides` (never purged). |
+| `src/cobalt/vaultwrite/writer.py` | `VaultWriter`: create-if-absent, upsert_unit/region, restore, fences, guarded atomic write, dry-run. |
+| `src/cobalt/vaultwrite/migrations/0001_vault_writes.sql` | The two tables. |
+| `src/cobalt/cli.py` | `cobalt vault restore --write-id N [--dry-run]`, `cobalt vault writes`, `cobalt vault overrides`. |
+| `src/cobalt/aset/migrations/0003_aset_sizings_status.sql` | Card `status` (`CARD`/`FILLED`) + the actual-fill columns the recompute used to persist nowhere. |
+| `tests/cobalt/test_vaultwrite.py` | 34 cases against the dev vault + dev DB, organised by L28 clause. |
+
+Converted onto it, all whole-file/append writers deleted:
+`prefill/daily.py` (incl. the stub-upgrade branch that discarded
+everything above the banner), `prefill/drc.py`, `prefill/trade_note.py`,
+`aset/daily_note.py`, `aset/web.py`. `prefill/vault_writer.py` keeps
+only path resolution — its `write_new`/`append_block`/`overwrite` are
+gone.
