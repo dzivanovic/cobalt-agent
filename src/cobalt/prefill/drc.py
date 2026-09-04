@@ -321,20 +321,27 @@ def format_tickers_unit(context: dict) -> str:
 
 
 def _risk_span(lines: list[str]) -> Optional[tuple[int, int]]:
-    """Wrap DRC.md's own `Risk Parameters: A:5R, B:1R, C:0.5R` default
-    line so Cobalt's computed line replaces it (recorded, diffed and
-    restorable) instead of sitting beside a stale one. If the template's
-    line isn't there, insert under the PnL heading."""
+    """Insert AFTER `Risk Parameters: ...` (or under the PnL heading).
+
+    An earlier draft WRAPPED that line so Cobalt's computed figures
+    would replace it. That was wrong and the 09-03 production dry-run
+    caught it: in a Templater-created DRC the line reads
+    `Risk Parameters: A:5R, B:1R, C:0.5R` — Dejan's own text, which
+    Cobalt cannot prove it wrote. L28.2 is absolute about that: text it
+    did not write is preserved verbatim, in position. So the section is
+    inserted BELOW it and his line stands. A stale-looking duplicate is
+    the correct price; silently rewriting his line is not.
+    """
     for i, line in enumerate(lines):
         if _RISK_PARAMS_LINE_RE.match(line):
-            return (i, i + 1)
+            return (i + 1, i + 1)
     for i, line in enumerate(lines):
         if _PNL_HEADING_RE.match(line):
             return (i + 1, i + 1)
     return None
 
 
-RISK_PLACEMENT = Placement("the 'Risk Parameters:' line (or under '### PnL on the day')", _risk_span)
+RISK_PLACEMENT = Placement("below the 'Risk Parameters:' line (or under '### PnL on the day')", _risk_span)
 TRADES_PLACEMENT = after_pattern(_TRADES_HEADING_RE, "under '### Catalyst + Set Up + Trades'")
 # No anchor: the rules check is the last thing in the DRC by design, and
 # L28's default placement (end of note, nothing above touched) is exactly
