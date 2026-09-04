@@ -551,3 +551,282 @@ never touches `/Users/cobalt/Vault/Think`) and `com.cobalt.archiver`
 (writes only `docs/30 - Design/archiver-runs.md`, also inside the repo)
 are unchanged, pending the separate ruling requested. Manual process is
 now the only path into the production vault's daily notes.
+
+---
+
+## Fix 2026-09-03
+
+**Status:** LAW L28 implemented, proven in the dev vault, deployed, and
+exercised against production in `--dry-run` only. **No live vault write
+happened in this session.** ADR-0004 has the decision record; the
+DevDoc is `docs/40 - DevDocs/cobalt/vaultwrite/README.md`.
+
+### What was built
+
+`src/cobalt/vaultwrite/` — the ONE vault write path. Everything under
+`src/cobalt/` writes through it; nothing writes a vault file any other
+way. Grep-proof:
+
+```
+$ grep -rn 'write_text\|open(.*"a"\|"w")\|os\.replace' src/cobalt/ --include="*.py"
+src/cobalt/prefill/rules_gen.py:116   -> configs/cobalt/rules.yaml   (repo, not the vault)
+src/cobalt/archiver/report.py:62      -> docs/30 - Design/           (repo, not the vault)
+src/cobalt/vaultwrite/writer.py:328   -> the one write path itself
+```
+
+### Writer table after conversion
+
+| write site | entry point (file:line) | mode |
+|---|---|---|
+| prefill daily — create | `prefill/daily.py:463` `writer.create_if_absent` | whole-file, **only when absent** |
+| prefill daily — 3 slots | `prefill/daily.py:497` `writer.upsert_unit` | merge into `rules` / `trading` / `market_calendar` |
+| prefill drc — create | `prefill/drc.py:429` `writer.create_if_absent` | whole-file, **only when absent** |
+| prefill drc — 3 units | `prefill/drc.py:449` `writer.upsert_unit` | merge into `drc-risk` / `drc-trades` / `drc-rules` |
+| ASET card + fill update | `aset/daily_note.py:184-185` `create_if_absent` → `upsert_unit` | stub if absent, then merge unit `card-…` / `fill-…` |
+| trade note — create | `prefill/trade_note.py:155` `writer.create_if_absent` | whole-file, **only when absent** |
+| trade note — frontmatter | `prefill/trade_note.py:166` `writer.upsert_region` | the one marker-less region (Obsidian requires frontmatter first in file) |
+
+Deleted, not repaired:
+
+- **`daily.py:475-485`, the stub-upgrade branch** — the §5 defect. Both
+  the `existing.split(STUB_BANNER, 1)[1]` prefix-discard *and* the bare
+  `if STUB_BANNER in existing` substring trigger are gone. An existing
+  note now always takes the merge path, 05:15 included.
+- `prefill/vault_writer.py`'s `write_new` / `append_block` / `overwrite`
+  — that module is path resolution only now.
+- `aset/daily_note.py`'s append-mode writer and inline stub creation.
+- `drc.py`'s `_render_append_block` and its `cobalt-prefill:DATE` marker.
+
+### Answering §7's proposals
+
+- **#6/#7 (refuse instead of discarding; tighten the trigger)** —
+  superseded. The branch is deleted rather than guarded, and with it the
+  class of defect rather than the instance.
+- **#8 (test the gap)** — done, and it is the case the old suite could
+  not see: `test_the_exact_0903_shape_loses_nothing` puts human text
+  ABOVE the stub banner and asserts the note still `startswith` it.
+- **#9 (Obsidian is the second writer)** — **NOT solved, and L28 cannot
+  solve it.** L28 makes a *Cobalt* write non-destructive, auditable and
+  reversible; it does nothing about an editor buffer flush. Option (c),
+  the sidecar note, remains the only proposal that removes the race, and
+  it is a Vault-Session decision about note layout. Still open.
+- **#10 (no backup of the production vault)** — **still open, still the
+  largest risk in this document.** Untouched by this session.
+- **#11 (purge the TEST/FORDATE rows)** — done, below.
+- **#12 (amend the record for `0dbc207`)** — ADR-0004 records that its
+  stated root cause is unsupported and that the committed race fix is
+  kept on its own merits.
+- **#13 (the DB's limits as a recovery source)** — designed against.
+  `aset_sizings` gains `status` + the actual-fill columns (migration
+  `0003`), so a FILL UPDATE finally has a row. A "rebuild the note from
+  the DB" tool is still refused permanently: for 09-02 the DB holds 14
+  rows against 17 blocks on disk, so any rebuild would silently drop
+  cards — a fail-loud violation.
+- **#14 (unresolved: what wrote the stub into an already-existing
+  note)** — **still unexplained.** Nothing in this session's reading
+  accounts for it either. Note that it no longer *matters* for data
+  safety — a stub is now merged into, not split on — but the unknown
+  writer is still unknown.
+
+### The FILL UPDATE row that never existed
+
+§4's finding — "the TSLA FILL UPDATE has **no DB row at all**" — is
+closed. The recompute is an UPDATE to the card row it belongs to now
+(`status` FILLED plus `actual_fill` / `recomputed_shares` /
+`recomputed_used_risk` / `share_delta` / `distance_change_pct` /
+`filled_at`), addressed by an explicit `card_row_id` carried on the
+form, never by nearest-timestamp matching. `mark_filled()` raises rather
+than report a fill that touched zero rows.
+
+`status` is deliberately minimal — `CARD` and `FILLED`. The full
+lifecycle ruled on 09-02 is out of scope while the sheet is beta.
+
+The DRC shows **two numbers** now — cards written, and trades taken
+counting `FILLED` only. This is what produced "17 cards" when 2 were
+real.
+
+### §7 #11 — the TEST/FORDATE rows
+
+Sanctioned deletion, in a transaction, guarded on the count:
+
+```
+SELECT count(*) WHERE id BETWEEN 171 AND 185 AND ticker IN ('TEST','FORDATE')  -->  15
+DELETE ... rowcount = 15
+COMMIT
+```
+
+Counts before → after:
+
+| query | before | after |
+|---|---|---|
+| whole table | 199 | 172 |
+| ids 171-185, ticker IN ('TEST','FORDATE') | 15 | 0 |
+| 2026-09-03 (America/New_York) | 29 | **2** |
+
+The 09-03 count was 29, not the 17 this report recorded, because this
+session's own test runs added 12 more (ids 201-212, 20:06-20:13 ET).
+Those were removed in a second, separately-reported transaction — the
+same cleanup `0dbc207` did for its own ids 188-200. What remains for
+09-03 is exactly the two real cards: **186 TSLA 10:02:06, 187 AVGO
+10:42:53.**
+
+**Root cause of the pollution, now fixed:** `tests/cobalt/test_aset_store.py`
+writes REAL rows into the same `aset_sizings` the production sheet
+writes to, and never cleaned up. Every test now deletes exactly the ids
+it created.
+
+**These rows are in `cobalt_dev`, not `cobalt_brain`** — `cobalt_brain`
+has no `aset_sizings` table at all. Production ASET and prefill write
+live trading data into `cobalt_dev` because `configs/dev/aset.yaml` sets
+`db_name: cobalt_dev` for both. That is how test rows and live cards
+came to share a table in the first place. **The prod/dev database split
+needs a ruling** — it is not fixed here.
+
+### Proof, in the dev vault and the dev DB
+
+`tests/cobalt/test_vaultwrite.py`, 34 cases, run in
+`~/dev-vault-cobalt/_l28-tests/` against `cobalt_dev`. Live vault and
+live DB were never test targets. Full suite: **245 passed**; the old
+tree is unchanged (12 failed / 16 errors both with and without this
+work, verified by stashing the working tree against HEAD).
+
+Covered: human content above/below/inside a section survives
+byte-for-byte; the exact 09-03 shape loses nothing; second run = zero
+diff; three runs of a card update = one card; a human-added line inside
+a unit survives while Cobalt's update still lands; a human-modified
+Cobalt line wins, records exactly one override row, and does not
+re-record; create-if-absent creates and never rewrites an existing
+file; an mtime race aborts loud and retries once (a persistent racer
+raises rather than clobbers); dry-run leaves the hash unchanged and
+writes no audit rows; restore restores; and a production vault path is
+refused without `COBALT_ENV=production` — including with
+`COBALT_ALLOW_DEV_ENTRY=1`, which is not a write back door.
+
+### Deploy
+
+The three writers stopped in the Containment section were re-enabled
+with exactly the commands recorded there.
+
+```
+$ launchctl list | grep -i cobalt
+8476	0	com.cobalt.aset
+-	0	com.cobalt.agent
+-	0	com.cobalt.archiver
+-	2	com.cobalt.mainframe
+-	0	com.cobalt.prefill-daily
+-	0	com.cobalt.prefill-drc
+
+$ launchctl print-disabled gui/$(id -u) | grep -i cobalt
+	"com.cobalt.aset" => enabled
+	"com.cobalt.prefill-daily" => enabled
+	"com.cobalt.prefill-drc" => enabled
+```
+
+`com.cobalt.aset` restarted onto the new code (PID 8476/8487, started
+20:19:27) — L28.6, restart-on-deploy. `prefill-daily` next fires
+09-04 05:15; `prefill-drc` 15:40.
+
+### Production dry-runs — no live write
+
+All three ran with `COBALT_ENV=production` against
+`/Users/cobalt/Vault/Think`. Every target's sha256 was identical before
+and after.
+
+1. **`prefill daily` → 2026-09-04.md (absent).** `created`; 119 lines,
+   every one an addition; the file did not exist before and does not
+   exist now.
+2. **`prefill drc` → DRC-2026-09-03.md.** `skipped_idempotent`, note
+   byte-identical — it carries the pre-L28 `<!-- cobalt-prefill:drc:
+   2026-09-03 -->` marker and historical notes are not retro-marked. The
+   run report still shows the corrected figures: **cards written: 2 ·
+   trades taken (FILLED): 0.** To see what the writer *would* emit, the
+   live draft was copied into the dev vault with that marker stripped:
+   the diff is **pure insertion, zero deletion lines**, and lists only
+   TSLA 10:02:06 and AVGO 10:42:53.
+3. **ASET sample card → 2026-09-03.md.** A single `aset-cards` section
+   appended at the end of the note; the 347 lines of Dejan's journal
+   above it appear in the diff as context only. Zero deletion lines.
+
+**One thing found by these dry-runs and fixed before deploy:** the
+`drc-risk` placement originally WRAPPED the existing `Risk Parameters:`
+line so Cobalt's computed figures replaced it. In a Templater-created
+DRC that line is `Risk Parameters: A:5R, B:1R, C:0.5R` — Dejan's own
+text. The section is inserted BELOW it now (commit `fdb7c4a`); a
+stale-looking duplicate is the correct price.
+
+### RULING NEEDED — one judgement call against the stop condition
+
+The instruction was to stop and re-disable if any dry-run showed a
+change outside a Cobalt section. Run 1 and 3 show none. **`prefill
+daily --dry-run` against the live 2026-09-03.md shows two**, and both
+are the fill-in-place behaviour ruled on 08-31, not damage:
+
+```
+ | VIX |     |     |
+ | --- | --- | --- |
+-| SPY |     |     |          +| SPY | $773.17 | +1.05% |
+-| QQQ |     |     |    -->   +| QQQ | $717.67 | +1.19% |
+-| IWM |     |     |          +| IWM | $295.19 | +0.40% |
+ | BTC |     |     |
+```
+```
+ ### Market Calendar:
+-- 
++<the calendar block, inside its markers>
+```
+
+Three blank table cells and an empty `- ` bullet. No character of
+content is replaced; the row labels, the VIX and BTC rows, and every
+other line are untouched. Reading the stop condition to forbid this
+would forbid the feature Dejan asked for on 08-31 ("filled IN PLACE
+inside Dejan's actual section layout, never appended below it"), so the
+writers were left enabled — **flagged here rather than decided
+silently.** To reverse:
+
+```
+launchctl bootout gui/$(id -u)/com.cobalt.prefill-daily
+launchctl disable gui/$(id -u)/com.cobalt.prefill-daily
+```
+
+Note this affects the 09-03 note only in a hand-run; the 05:15 job
+always targets *today*, and 2026-09-04.md does not exist, so tomorrow's
+scheduled run is a clean create.
+
+Two related items also want a ruling:
+- **DRC-2026-09-03.md still says "17 cards"** in its own body and will
+  never self-correct — it is a pre-L28 note. Fix by hand, or accept.
+- **`configs/cobalt/rules.yaml`** carries an uncommitted `generated_at`
+  bump and **`docs/_archive/gemini-era-vault-side/`** (128 files, 720K,
+  untracked) is unstaged. Both were left exactly as found, per
+  instruction. The dry-runs regenerated `rules.yaml`; it was restored
+  byte-for-byte to the state this session found it in.
+
+### Rollback, demonstrated
+
+```
+$ cobalt vault restore --write-id 424 --dry-run
+[DRY-RUN] restored: …/2026-09-03.md · section=aset-cards · unit=card-20260903T100206
+@@ -7,7 +7,7 @@
+ ### 10:02:06 — TSLA LONG B
+ ```aset
+ ticker: TSLA
+-shares: 999   <-- WRONG
++shares: 120
+ ```
+sha256 identical before and after the dry run.
+
+$ cobalt vault restore --write-id 424
+[WRITE] restored: … · write_id=425
+(same diff, applied; the human journal line above the section untouched)
+```
+
+### What this does NOT fix
+
+1. **Obsidian is still an unsynchronised second writer**, and it is the
+   one that has destroyed data — twice. §7 #9(c), the sidecar note, is
+   still the only proposal that removes the race.
+2. **The production vault still has no backup.** No Time Machine, no
+   git, no sync. Unchanged, and still the biggest exposure here.
+3. **§7 #14 is still unexplained** — what wrote a stub banner into an
+   already-existing note.
+4. **Production writes live cards to `cobalt_dev`.** Needs a ruling.
