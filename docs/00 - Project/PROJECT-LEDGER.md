@@ -403,8 +403,6 @@ Product = a profitable trader; Cobalt = leverage. 90d: unbroken review loop, twe
   HOD/LOD, session end), usually longer, 5-min and up — an intraday
   swing. Durations = anatomy descriptors, never gates. All 13
   populated classes stand.
-- Batch 2 Code commit status not reported at fold (opening-prompt
-  blanks unfilled); mismatches, if any, fold into the v0.7 commit.
 - NEXT: Code commit v0.7 (schema v0.4 loader, trail slot, tunables
   registry, Batch 2 YAML) → Product Definition sittings resume.
 
@@ -417,3 +415,91 @@ Product = a profitable trader; Cobalt = leverage. 90d: unbroken review loop, twe
   raise_to ref = level{Range(micro).top} (Rubberband precedent);
   buyers_defending_zone no row (no consumer). Ruff absent → added at
   v0.7 commit. v0.7 Code prompt issued (Sonnet 5, fresh).
+
+
+
+### 09-02 (Product Definition sitting 3, closed)
+- v0.7 Code commit still running at close; mismatch fold owed at
+  next opener.
+- DAY-IN-THE-LIFE frame: Track A = Dejan's day narrated; Track B =
+  Cobalt 24x5 background, surfaces only when it hands Track A
+  something. LAW restated: preferred_windows = fit variable only;
+  radar detects and cards fire in EVERY session incl. premarket,
+  aftermarket, overnight; personal gates are Dejan's until Guardian
+  (advisory). Claude conflated live rules with system design a
+  second time; corrected.
+- In-play 50 = cap on a ROTATING pool, continuous churn from
+  scanners/news/volume/any tracked parameter.
+- DAY MODE: Cobalt proposes full/half w/ reason from prior DRC +
+  running goal + context/calendar/readiness; Dejan approves or
+  overrules w/ reason (persisted); Cobalt sets that risk everywhere
+  except the DAS .htk (his hand; match check refuses mismatch).
+  Future modes full/half/quarter...; 1%-dynamic much later.
+- IF/THEN BRANCHES OUT of MVP: placeholder slot in card + daily
+  template for visual context; arrive with the setups engine.
+- CARD LIFECYCLE ruled: WATCH (lands at radar_watch/precondition,
+  all cobalt fields filled) -> ARMED -> TRIGGERED (strike alert:
+  key+shares+stop) -> FILLED (fill-recompute) -> CLOSED/PASSED/
+  EXPIRED. Card never lands at trigger. Trigger on an unarmed card =
+  missed record, counted not hidden. Card = contract before trigger.
+- CONVICTION VIEW: design question = "what do I need to see to pull
+  the trigger", not "what does the system need". Entry/sizing needs
+  only grade + day mode + trade_def stop; trail type, exits, WHYs =
+  trade management. PRE-ENTRY = accept / up / down on a proposed
+  key; POST-ENTRY = management view (trail type etc.) then reason
+  for up/downgrade; slide-and-reason = optional slow path; reasons
+  skipped mid-trade collected at DRC. Cobalt ranks watch cards by
+  conviction x proximity-to-trigger, two-up layout.
+- PROPOSED GRADE at MVP: computable dots scored w/ WHY, judgment
+  dots neutral; amends 08-22 "human fills grade" -> "human RULES
+  grade"; his taps = the calibration set. Ladder A+/A/B/C/pass;
+  keys outside enabled_grades shown greyed w/ would-be dollars, tap
+  records grade, sizes at nearest enabled key, loud (DwV).
+- trail_fit = management-view field, human at MVP, cobalt suggestion
+  when live bar engine lands, no card change.
+- RULES FINE-TUNING MoSCoW: MUST = miss records + nightly benchmark
+  query + top-N mover auto-archive; SHOULD = miss-pattern aggregation
+  -> proposed config change, only if cheap, else post-MVP (never
+  dropped); COULD = replay engine + shadow configs, post-MVP; WON'T
+  (MVP) = day-replay dashboard, post-MVP lane.
+- TIMEBOX: sittings used 08-26, 08-31, 09-02 = 3 of 5. Sitting 4 =
+  feature inventory + MVP MoSCoW + post-MVP MoSCoW by trader-metric
+  impact + Expansion Ladder rung criteria; sitting 5 = Charter
+  ratification; extension only by explicit call at 5. Card mock ->
+  Claude Design between sittings; validation mornings before 5.
+
+- 09-03: v0.7 Code commit DONE (43a0e31 schema/data/tests,
+  89b627b docs; 33+199 green, validate 13/13, 30 tunables, ruff
+  added). MISMATCH: stop.buffer left as Pydantic constant →
+  re-ruled: tunables row, 0.02 preset, per-trade override,
+  never hardcoded (follow-up prompt issued). Per-trade tunable
+  keys split (hitchhiker.range_duration_band…) accepted; §13.1
+  table wording catches up at next bump.
+- 09-03 morning prefill silent again (no note, no alert) →
+  RULED: Code installs and proves every scheduled job; Dejan's
+  only human task at code-done = git push. Heartbeat gains
+  "expected plists loaded" probe (backlog).
+
+- 09-03 Code permission posture RULED: auto mode per session
+  (Shift+Tab from the Mac terminal; not selectable from Remote
+  Control), never bypassPermissions on the host; ask rule
+  Bash(git push *) keeps push human; classifier = the zero-trust
+  layer between Manual's prompt fatigue and Cline-era auto-approve.
+
+- 09-03 follow-up commits DONE + PUSHED (248b587 stop.buffer rows,
+  410b054 ops plists, 1872a34 docs; 37 green, ruff clean).
+  ROOT CAUSE of 09-03 silence: both prefill plists loaded but exit 78
+  silent — bare `uv` in ProgramArguments (posix_spawn does no PATH
+  search); archiver plist had a dead hardcoded uv path AND was never
+  loaded. All three fixed to /Users/cobalt/.local/bin/uv, loaded;
+  prefill-daily next fire 09-04 05:15, prefill-drc 09-03 15:40,
+  archiver 09-03 20:30. Dev-vault kickstart proof passed.
+- CONTRADICTION flagged: ledger 08-29/31 "archiver verified running"
+  vs never-loaded plist → gap audit + Finviz-window backfill prompt
+  issued 09-03 (recoverable only inside the ~2-week minute window).
+- Heartbeat probe "every ops plist loaded + last exit code" promoted
+  to next build after this audit (silent launchd failure is below
+  app-level fail-loud).
+- Working tree carries pre-existing uncommitted ASET/prefill/ops
+  changes (untouched by Code) — next prompt names them for commit
+  or deliberate discard.
