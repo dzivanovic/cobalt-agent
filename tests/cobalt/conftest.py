@@ -42,10 +42,12 @@ transaction semantics are preserved exactly and a test that asserts
 
 import itertools
 import os
+from datetime import datetime, timezone
 
 import pytest
 
 from cobalt import db, env
+from cobalt.session import clock as session_clock_module
 
 
 @pytest.fixture(autouse=True)
@@ -164,3 +166,33 @@ def dev_db_tx(monkeypatch):
     finally:
         real.rollback()
         real.close()
+
+
+# ---------------------------------------------------------------------
+# F1: the suite runs at a fixed, non-blocked instant
+# ---------------------------------------------------------------------
+
+#: 2026-09-03 10:00 ET — a Thursday, mid-RTH, EDT. Chosen because it is
+#: a full trading day in the shipped calendar and sits far from every
+#: boundary, so a test that does not care about sessions never trips one.
+FROZEN_NOW = datetime(2026, 9, 3, 14, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def frozen_session_clock(monkeypatch):
+    """Freeze `cobalt.session.clock.now_utc` for the whole suite.
+
+    The vault writer and the ASET store now REFUSE to write inside
+    `market_reset` (20:00-21:00 ET). Without this fixture the suite would
+    pass all day and go red for one hour every evening — a test that is
+    a function of when it is run is not a test. Freezing the one
+    system-clock read fixes it for every caller at once: the guard, the
+    writer, and `AsetStore.save`.
+
+    AUTOUSE and unconditional. A test that wants a different instant
+    passes `now=` explicitly (the guard, the writer and the store all
+    take it) or re-patches this same attribute — both of which are
+    visible in the test, which is the point.
+    """
+    monkeypatch.setattr(session_clock_module, "now_utc", lambda: FROZEN_NOW)
+    yield FROZEN_NOW
