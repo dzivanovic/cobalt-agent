@@ -830,3 +830,688 @@ $ cobalt vault restore --write-id 424
 3. **§7 #14 is still unexplained** — what wrote a stub banner into an
    already-existing note.
 4. **Production writes live cards to `cobalt_dev`.** Needs a ruling.
+
+---
+
+## Containment 2026-09-03
+
+**Scope of this session:** ops-only. No code edits, no vault writes, no DB
+writes, no restarts. Only mutations: `launchctl bootout`/`disable` on the
+three named jobs, and this append.
+
+### 1. Inventory
+
+**Before state — `launchctl list | grep -i cobalt`:**
+
+```
+79273	143	com.cobalt.aset
+-	0	com.cobalt.agent
+-	0	com.cobalt.archiver
+-	2	com.cobalt.mainframe
+```
+
+`com.cobalt.prefill-daily` and `com.cobalt.prefill-drc` do not appear at all —
+confirmed still unloaded from the prior forensics session (per this file's
+header). `launchctl print-disabled gui/$(id -u) | grep -i cobalt` returned
+**no rows** before containment — nothing was disabled yet.
+
+**`ps aux` — relevant PIDs (full output too large to paste; filtered):**
+
+```
+cobalt   79281  0.1  0.1  ...  2:21PM  /opt/homebrew/.../Python -m cobalt.aset
+cobalt   79273  0.0  0.0  ...  2:21PM  uv run python -m cobalt.aset
+cobalt   30826  0.0  0.3  ...  Mon06AM /opt/homebrew/.../Python src/cobalt_agent/main.py
+cobalt   30824  0.0  0.0  ...  Mon06AM uv run src/cobalt_agent/main.py
+```
+
+No `prefill`, `archiver`, or `mainframe` process was running at inventory
+time (archiver is calendar-scheduled, Mon-Fri 20:30, `RunAtLoad=false`;
+mainframe is the LM Studio server, not a vault writer).
+
+**Writer table — every process that touches a file under `/Users/cobalt/Vault/Think`:**
+
+| Label | Entrypoint | Note(s) written | Write mode | Loaded Y/N (before) |
+|---|---|---|---|---|
+| `com.cobalt.prefill-daily` | `ops/com.cobalt.prefill-daily.plist` → `uv run prefill daily` → `run_daily_prefill()` | Today's Daily Note (`daily_note.daily_notes_dir`/`filename_pattern`, e.g. `1 - Trading/1- Daily Notes/YYYY-MM-DD.md`) | **create** (`write_new`, `src/cobalt/prefill/daily.py:469`); **whole-file rewrite** on the stub-upgrade branch (`daily.py:475-485`, discards everything before `STUB_BANNER` — this is the defect in §5) via `_write_if_unchanged`→`path.write_text` (`daily.py:398`); **section-replace** (anchor fill-in-place, `_fill_all_slots` at `daily.py:347`) via the same `_write_if_unchanged`/`daily.py:398` | **N** — not in `launchctl list` |
+| `com.cobalt.prefill-drc` | `ops/com.cobalt.prefill-drc.plist` → `uv run prefill drc` → `src/cobalt/prefill/drc.py` | `DRC-YYYY-MM-DD.md` | **create** (`write_new`, `drc.py:327`); **append** (`append_block`, `drc.py:334`, fenced idempotency-marked block) | **N** — not in `launchctl list` |
+| `com.cobalt.aset` | `ops/com.cobalt.aset.plist` → `ops/start_aset.sh` → `uv run python -m cobalt.aset` (Flask sizing sheet, PID 79273/79281) | Today's Daily Note, via `save_card`/`save_fill_update` (`src/cobalt/aset/web.py:466,521`) → `_append` (`src/cobalt/aset/daily_note.py:120-144`) | **create** stub-on-first-write (`daily_note.py:140-143`, writes `# {date}\n\n{STUB_BANNER}` if the file doesn't exist yet); **append** (`daily_note.py:144`, card body) | **Y** — PID 79273, KeepAlive+RunAtLoad |
+| `com.cobalt.agent` (old tree) | `ops/com.cobalt.agent.plist` → `cobalt.sh start` → `uv run src/cobalt_agent/main.py` (PID 30824/30826) | **Nothing under `/Users/cobalt/Vault/Think`.** `scribe.append_to_daily_note()` (`src/cobalt_agent/skills/productivity/scribe.py:136-177`) writes only under `OBSIDIAN_VAULT_PATH`, which `.env:38` sets to `/Users/cobalt/cobalt/docs` (the repo's own D6/gitignored playground tree) — `docs/0 - Inbox/Daily_Log_YYYY-MM-DD.md`. Every write also routes through `ToolManager`/the Proposal Engine, i.e. HITL-gated (`scribe.py:158-165`), not direct filesystem access. **Not a production-vault writer at all** — reported per instruction for a separate ruling, not stopped. | **append** (repo docs tree, not the vault) | **Y** — running since Mon06AM, not shown with a PID in `launchctl list` because `AbandonProcessGroup` detaches it (same pattern as `archiver`) |
+| `com.cobalt.archiver` | `ops/com.cobalt.archiver.plist` → `uv run archiver` → `src/cobalt/archiver/report.py` | **Nothing under `/Users/cobalt/Vault/Think`.** Writes `docs/30 - Design/archiver-runs.md` (`report.py:12,64-65`) — inside the repo's own docs/ tree, not the vault. Reported per instruction for a separate ruling, not stopped. | **create-header-then-append** (`report.py:64` header if new, `:65` row append) | **Y** (loaded, calendar-scheduled Mon-Fri 20:30, not currently running) |
+| `com.cobalt.mainframe` | `ops/com.cobalt.mainframe.plist` → `~/.lmstudio/start_mainframe.sh` | none — LM Studio model server, no vault access | n/a | **Y** (loaded) |
+
+Also touching the vault but **read-only**: `regenerate_rules_config()`
+(`src/cobalt/prefill/rules_gen.py`) reads `Rules.md` from the vault and
+writes the parsed result to `configs/cobalt/rules.yaml` in the repo
+(`rules_gen.py:116`) — not a vault write.
+
+### 2/3. Stop + verify
+
+Commands run:
+
+```
+launchctl bootout gui/501/com.cobalt.prefill-daily   # "Boot-out failed: 3: No such process" — already unloaded
+launchctl bootout gui/501/com.cobalt.prefill-drc     # "Boot-out failed: 3: No such process" — already unloaded
+launchctl bootout gui/501/com.cobalt.aset            # succeeded, no output
+launchctl disable gui/501/com.cobalt.prefill-daily
+launchctl disable gui/501/com.cobalt.prefill-drc
+launchctl disable gui/501/com.cobalt.aset
+```
+
+`com.cobalt.agent` and `com.cobalt.archiver` were **not** touched.
+
+**After — `launchctl list | grep -i cobalt`:**
+
+```
+-	0	com.cobalt.agent
+-	0	com.cobalt.archiver
+-	2	com.cobalt.mainframe
+```
+
+`com.cobalt.aset` no longer appears (was `79273	143	com.cobalt.aset`).
+
+**After — `launchctl print-disabled gui/$(id -u) | grep -i cobalt`:**
+
+```
+"com.cobalt.aset" => disabled
+"com.cobalt.prefill-daily" => disabled
+"com.cobalt.prefill-drc" => disabled
+```
+
+**PID 79273:**
+
+```
+$ ps -p 79273
+  PID TTY           TIME CMD
+$ echo $?
+1
+```
+
+Gone — confirmed via exit code 1 (no matching process) and empty output.
+No survivor; `kill -9` was not needed and was not used.
+
+### 4. ASET question (read-only, no code change)
+
+**Is `com.cobalt.aset` the Flask sizing sheet process itself?** Yes —
+`ops/com.cobalt.aset.plist` runs `ops/start_aset.sh`, which execs
+`uv run python -m cobalt.aset`, the Flask app in `src/cobalt/aset/web.py`
+(confirmed live: PID 79273/79281 was the sheet process before bootout).
+
+**Is there an existing config/env flag that keeps the sheet serving while
+disabling its daily-note write, with no code change? No.**
+
+- `src/cobalt/aset/web.py:466` (`size()`) and `:521` (`fill()`) call
+  `save_card`/`save_fill_update` unconditionally — no config check gates
+  the call.
+- `save_card`/`save_fill_update` (`src/cobalt/aset/daily_note.py:158-181`)
+  call `_append()` (`daily_note.py:120`) unconditionally — no env/flag
+  branch inside it either.
+- `AsetConfig` (`src/cobalt/aset/config.py:84`) has a `daily_note` field
+  (a `DailyNoteConfig`, target dir/filename only) and `enabled_grades`
+  (`config.py:151`, gates which grade *options* the sheet accepts) — no
+  write-enable/dry-run/disable toggle exists anywhere in the schema.
+- `ops/start_aset.sh` sets only `COBALT_VAULT_PATH`, `COBALT_ENV`, and
+  sources the key file — no write-suppression env var.
+
+So under NN#16's current code, "sheet serves, daily-note write disabled" is
+not reachable without a code change. This is why the sheet itself is down
+right now (bootout above) rather than left running — there was no other way
+to honor the ruling. Flagging for the fix session, not implementing.
+
+### 5. Re-enable (for the fix session, after the L28 vault-write fix is proven in dev)
+
+```
+launchctl enable gui/$(id -u)/com.cobalt.prefill-daily
+launchctl enable gui/$(id -u)/com.cobalt.prefill-drc
+launchctl enable gui/$(id -u)/com.cobalt.aset
+
+launchctl bootstrap gui/$(id -u) /Users/cobalt/cobalt/ops/com.cobalt.prefill-daily.plist
+launchctl bootstrap gui/$(id -u) /Users/cobalt/cobalt/ops/com.cobalt.prefill-drc.plist
+launchctl bootstrap gui/$(id -u) /Users/cobalt/cobalt/ops/com.cobalt.aset.plist
+```
+
+(`prefill-daily`/`prefill-drc` are calendar-triggered, `RunAtLoad=false` —
+bootstrap alone re-arms their `StartCalendarInterval`, no immediate run.
+`aset` has `RunAtLoad=true`, so its bootstrap starts the sheet immediately.)
+
+### Status
+
+All three named writers confirmed down and disabled across login/reboot.
+`com.cobalt.agent` (writes only inside the repo's docs/ tree, HITL-gated,
+never touches `/Users/cobalt/Vault/Think`) and `com.cobalt.archiver`
+(writes only `docs/30 - Design/archiver-runs.md`, also inside the repo)
+are unchanged, pending the separate ruling requested. Manual process is
+now the only path into the production vault's daily notes.
+
+---
+
+## Nightly restart 2026-09-04
+
+Read-only forensics session. No writes to the vault, no DB writes, no
+restarts, no `launchctl` changes, no commits other than this file.
+
+### A. Did `com.cobalt.prefill-daily` write `2026-09-04.md` this morning?
+
+**Answer: YES, at 05:15:04 — and Obsidian destroyed it 75 minutes later.
+The bytes on disk right now are Obsidian's, not Cobalt's.**
+
+#### A.1 The live note
+
+```
+$ grep -c 'cobalt:section' "/Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-04.md"
+0
+
+$ stat -f '%N | birth %SB | modified %Sm | size %z' -t '%Y-%m-%d %H:%M:%S' <note>
+/Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-04.md | birth 2026-09-04 06:30:19 | modified 2026-09-04 06:30:19 | size 1423
+
+$ shasum -a 256 <note>
+e4b005ba0d3b3195e2d8af3b75c9f3ce7c7445a33451c3d8d27de800dbc00d36
+```
+
+Zero `cobalt:section` markers. 1423 bytes / 76 lines.
+
+**Decisive content test** — the live note against Obsidian's own daily
+template:
+
+```
+$ diff "/Users/cobalt/Vault/Think/5 - Templates/Daily.md" <note>
+6c6
+< #### {{date:YYYY-MM-DD}}
+---
+> #### 2026-09-04
+```
+
+One line differs, and that line is Obsidian's `{{date:YYYY-MM-DD}}` token
+expanded. The file on disk **is** `5 - Templates/Daily.md` rendered by the
+Obsidian daily-notes core plugin (`.obsidian/daily-notes.json`:
+`{"folder": "1 - Trading/1- Daily Notes", "template": "5 - Templates/Daily.md"}`).
+It is not Cobalt output in any part.
+
+#### A.2 `logs/prefill-daily.log` — every line from 09-04
+
+(The plists write to `logs/`, not `ops/logs/` — `ops/logs/` does not exist.
+`stdout path = /Users/cobalt/cobalt/logs/prefill-daily.log`.) Lines 1-4 are
+the 2026-09-03 14:22 manual runs; lines 5-129 are this morning's run:
+
+````
+Daily prefill [WRITE]: created — /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-04.md
+  filled: rules, trading, market_calendar
+  skipped (not touched): none
+[WRITE] created: /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-04.md · write_id=525
+--- /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-04.md (before)
++++ /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-04.md (after)
+@@ -0,0 +1,118 @@
++---
++tags:
++  - Daily
++---
++#### 2026-09-04 T 05:15
++
++## Journal
++
++### How do you feel
++
++Sleep:
++Readiness:
++RHR:
++## Today's Plan
++
++1% goal:
++
++Daily HARD Stop: $420
++STOP TRADING AFTER 11AM until one month green 4 out of 5 days a week
++I WILL NOT TOLERATE THE MISTAKE OF OVERSIZING RISK ON A SINGLE TRADE THAT I DID NOT PLAN JUST TO MAKE A LARGFE POSITION
++I WILL NOT TOLERATE THE MISTAKE OF HAVING MORE THAN 3 LOSSES IN A ROW IN A TRADING DAY
++
++<!-- cobalt:section rules -->
++<!-- cobalt:unit rules -->
++- [ ] Card first: grade → $ risk → shares **written before every entry**. No card, no trade. #process
++- [ ] Grades: **B = $30 half / $60 full, A = $70 half / $135 full.** Nothing bigger. C = pass. #sizing
++- [ ] Stop at **structure**, never a default distance. If R:R < 2:1, pass. #process
++- [ ] Prime window only: **9:30–11:00.** Nothing before, nothing after. #time_window
++- [ ] **Max 5 trades.** #sizing
++- [ ] Reversion entry needs all three: **my level + exhaustion printed + trigger.** Approaching ≠ rejecting. #process
++- [ ] Re-entry #2 same thesis: write **what's new** — blank or "better price" = no trade. #re_entry
++- [ ] Entry #3 same thesis: **stand down.** Ticker done for the day. #re_entry
++- [ ] Two straight losses → **10-min cooldown.** #circuit_breaker
++- [ ] **One position at a time** while red. Never two correlated names. #circuit_breaker
++- [ ] First partial at 1R → **stop to B/E**, immediately. #process
++- [ ] Daily stop hit ($215 live) → **done trading.** Watch only. #hard_stop
++
++Sheet mode: [ ] FULL [ ] HALF — .htk loaded: [ ] full [ ] half
++
++- Tape check: In because criteria met — or because it excites me?
++- Identity: My sizing is arithmetic, not habit. Stand-down gives me back my eyes.
++<!-- /cobalt:unit rules -->
++<!-- /cobalt:section rules -->
++
++### Trading
++
++<!-- cobalt:section trading -->
++<!-- cobalt:unit market_table -->
++| VIX |     |     |
++| --- | --- | --- |
++| SPY | $773.60 | +0.06% |
++| QQQ | $720.37 | +0.38% |
++| IWM | $295.23 | +0.01% |
++| BTC |     |     |
++<!-- /cobalt:unit market_table -->
++<!-- /cobalt:section trading -->
++
++
++### Market Context:
++-
++
++### Market Calendar:
++<!-- cobalt:section market_calendar -->
++<!-- cobalt:unit market_calendar -->
++- 08:30 ET — Average Hourly Earnings MoM (impact 2, expected 0.3%, prior 0.1%)
++- 08:30 ET — Average Hourly Earnings YoY (impact 2, expected 3%, prior 3.2%)
++- 08:30 ET — Average Weekly Hours (impact 1, expected 34.3, prior 34.3)
++- 08:30 ET — Government Payrolls (impact 1, prior -53K)
++- 08:30 ET — Manufacturing Payrolls (impact 1, expected 5K, prior 5K)
++- 08:30 ET — Non Farm Payrolls (impact 3, expected 58K, prior -23K)
++- 08:30 ET — Nonfarm Payrolls Private (impact 1, expected 58K, prior 30K)
++- 08:30 ET — Participation Rate (impact 2, prior 61.4%)
++- 08:30 ET — U-6 Unemployment Rate (impact 1, prior 7.9%)
++- 08:30 ET — Unemployment Rate (impact 3, expected 4.1%, prior 4.1%)
++- 13:00 ET — Baker Hughes Oil Rig Count (impact 1, prior 447)
++- 13:00 ET — Baker Hughes Total Rigs Count (impact 1, prior 588)
++<!-- /cobalt:unit market_calendar -->
++<!-- /cobalt:section market_calendar -->
++### Game Plan:
++
++
++### Trade Ideas
++
++| Ticker | Score | Catalyst | Setup | Support | Inflection | Resistance | ATR | RVOL | BIAS |
++| ------ | ----- | -------- | ----- | ------- | ---------- | ---------- | --- | ---- | ---- |
++|        |       |          |       |         |            |            |     |      |      |
++|        |       |          |       |         |            |            |     |      |      |
++|        |       |          |       |         |            |            |     |      |      |
++|        |       |          |       |         |            |            |     |      |      |
++|        |       |          |       |         |            |            |     |      |      |
++|        |       |          |       |         |            |            |     |      |      |
++
++### Trade Execution
++```dataview
++TABLE symbol, profit_loss, strategy, entry_time, direction, profit_loss
++FROM "1 - Trading/2 - Trades"
++WHERE file.cday = this.file.day
++SORT entry_time ASC
++```
++
++## Notes
++
++Overall Score:
++
++Premarket:
++Score -
++
++9:30 - 11:
++Score -
++
++11 - 1
++Score -
++
++1-3
++Score -
++
++3-4
++Score -
+````
+
+`logs/prefill-daily.err` timestamps that run precisely:
+
+```
+2026-09-04 05:15:04.462 | INFO | cobalt_agent.config:_load_config:554 - Loading configuration from: /Users/cobalt/cobalt/configs
+... (vault unlock, Finviz token resolve) ...
+```
+
+`prefill-daily.log` and `.err` both have mtime `2026-09-04 05:15:04`.
+Cobalt has not written since.
+
+#### A.3 `launchctl print gui/501/<label>`
+
+```
+gui/501/com.cobalt.prefill-daily
+	path = /Users/cobalt/cobalt/ops/com.cobalt.prefill-daily.plist
+	state = not running          active count = 0
+	program/args = /Users/cobalt/.local/bin/uv run prefill daily
+	environment = COBALT_ENV=production, COBALT_VAULT_PATH=/Users/cobalt/Vault/Think
+	runs = 1                     last exit code = 0
+	event triggers = StartCalendarInterval { Minute 15, Hour 5, Weekday 1..5 }
+
+gui/501/com.cobalt.prefill-drc
+	path = /Users/cobalt/cobalt/ops/com.cobalt.prefill-drc.plist
+	state = not running          active count = 0
+	program/args = /Users/cobalt/.local/bin/uv run prefill drc
+	environment = COBALT_ENV=production, COBALT_VAULT_PATH=/Users/cobalt/Vault/Think
+	runs = 0                     last exit code = (never exited)
+	event triggers = StartCalendarInterval { Minute 40, Hour 15, Weekday 1..5 }
+
+gui/501/com.cobalt.aset
+	path = /Users/cobalt/cobalt/ops/com.cobalt.aset.plist
+	state = running              active count = 1     pid = 8476
+	program = /Users/cobalt/cobalt/ops/start_aset.sh
+	runs = 1                     last exit code = (never exited)
+	properties = keepalive | runatload | abandon process group
+
+$ launchctl print-disabled gui/501 | grep -i cobalt
+		"com.cobalt.aset" => enabled
+		"com.cobalt.prefill-daily" => enabled
+		"com.cobalt.prefill-drc" => enabled
+```
+
+`launchctl print` on this macOS build does not expose a "next fire date"
+field; the calendar descriptors above are the schedule of record. Next
+fires: prefill-daily Mon 2026-09-07 05:15, prefill-drc today 15:40,
+aset is a KeepAlive daemon (no fire time).
+
+`runs = 1 / last exit 0` for prefill-daily is this morning's 05:15 run.
+`runs = 0` for prefill-drc: it has not fired since being re-enabled last
+night (its 15:40 slot has not come round yet today).
+
+#### A.4 `vault_writes`
+
+**Which DB: `cobalt_dev`.** The writer store is constructed as
+`VaultWriteStore(aset_cfg.db_name)` (`src/cobalt/prefill/daily.py:411`,
+`drc.py:423`, `aset/daily_note.py:152`, `cli.py:38`), and `db_name` comes
+from `configs/dev/aset.local.yaml:12` → `db_name: cobalt_dev`. **This is
+the open item already logged at the end of the 09-03 section — production
+writes its audit trail to the dev database.** Query run there:
+
+```
+$ SELECT id, ts, note, section, unit FROM vault_writes WHERE note LIKE '%2026-09-04%';
+
+ id  |              ts               |                                note                                |     section     |      unit
+-----+-------------------------------+--------------------------------------------------------------------+-----------------+-----------------
+ 525 | 2026-09-04 09:15:04.722414+00 | /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-04.md |                 |
+ 526 | 2026-09-04 09:15:04.737616+00 | /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-04.md | rules           | rules
+ 527 | 2026-09-04 09:15:04.748347+00 | /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-04.md | trading         | market_table
+ 528 | 2026-09-04 09:15:04.763012+00 | /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-04.md | market_calendar | market_calendar
+(4 rows)
+```
+
+Timestamps are UTC: 09:15:04 UTC = **05:15:04 EDT**. Writer / run_id /
+hashes:
+
+```
+525|prefill.daily|a83292db9d4d|hash_before=(empty)|hash_after=d6f6e9ab7eaacd97eb1e014a9da140f32746f62d44536e76ce895c251a106cef
+526|prefill.daily|a83292db9d4d|hash_before=(empty)|hash_after=d6f6e9ab...
+527|prefill.daily|a83292db9d4d|hash_before=(empty)|hash_after=d6f6e9ab...
+528|prefill.daily|a83292db9d4d|hash_before=(empty)|hash_after=d6f6e9ab...
+```
+
+`hash_before` empty on row 525 = the note did **not** exist at 05:15;
+Cobalt created it whole. Nothing has written through the ONE writer path
+since 09:15:04 UTC — rows 525-528 are the newest non-pytest rows in the
+table (the next ids down, 488-498, are all `/private/var/folders/.../pytest-of-cobalt/...`
+temp vaults from the 00:24 test run).
+
+#### A.5 Verdict
+
+**Cobalt created it. Obsidian destroyed it.**
+
+| | Cobalt's version | What is on disk now |
+|---|---|---|
+| written | 2026-09-04 05:15:04 | 2026-09-04 06:30:19 |
+| sha256 | `d6f6e9ab…` (vault_writes 525-528) | `e4b005ba…` |
+| shape | 118 lines, `#### 2026-09-04 T 05:15`, `Daily HARD Stop: $420`, filled rules/market table/market calendar, `cobalt:section` markers | 76 lines / 1423 bytes, `#### 2026-09-04`, all sections empty, zero markers |
+| provenance | `prefill.daily`, run_id `a83292db9d4d` | `5 - Templates/Daily.md` with `{{date:YYYY-MM-DD}}` expanded — Obsidian daily-notes plugin |
+
+Supporting timeline (unified log + `obsidian.log`, which logs in UTC):
+
+- `2026-09-03 21:54:23Z` — last Obsidian launch before the reboot.
+- `2026-09-03 18:53` local — shutdown; `19:02` — boot. **No Obsidian
+  instance ran between the reboot and this morning.**
+- `2026-09-04 05:15:04` — prefill-daily creates the note (write_id 525).
+- `2026-09-04 06:22:19` — console login on ttys002.
+- `2026-09-04 06:30:19` — the note's content is replaced by the plain
+  template render. Header line becomes `#### 2026-09-04`.
+- `2026-09-04 06:30:42` — LaunchServices launches Obsidian:
+  `runningboardd: Launch request for app<application.md.obsidian…> …
+  "LS launch md.obsidian" … originator [osservice<com.apple.coreservices.uiagent>:786]`,
+  and `obsidian.log: 2026-09-04 10:30:42 Loaded main app package`. This is
+  the "open a .md with its default app" path, not a Dock/Spotlight launch.
+- `2026-09-04 06:30:44` — the note's ctime bumps (metadata touch by the
+  now-running app).
+- `2026-09-04 06:37:52` — Obsidian relaunched (`obsidian.log 10:37:52`);
+  this is the currently-running instance, pid 38662. `.obsidian/*.json`
+  all rewritten at 06:37:53-54.
+- Yesterday's note has the same fingerprint one day earlier: `2026-09-03.md`
+  birth `2026-09-03 06:29:21` — i.e. the ~06:30 daily-note creation is a
+  standing morning-routine event, and today it landed on top of Cobalt's
+  05:15 write instead of on an empty folder.
+
+**One filesystem detail does not fit and is recorded rather than
+explained away.** The note is mode `-rw-------` — the *only* 0600 markdown
+file in the entire vault (367 others are 0644), and 0600 is the signature
+of `tempfile.mkstemp` in `src/cobalt/vaultwrite/writer.py:326`. The parent
+directory's mtime is also still `05:15:04`, i.e. no directory entry was
+added or removed after Cobalt's write. Both of those say "Cobalt's inode,
+rewritten in place." But the file's birth time reads `06:30:19` from
+`stat`, `mdls` (`kMDItemFSCreationDate`) and `GetFileInfo` alike, and a
+control test in scratchpad confirms an in-place `O_TRUNC` rewrite on this
+APFS volume preserves both birth time and inode (as does Obsidian's own
+save path — `.obsidian/workspace.json` is inode 17911252, birth
+2026-08-26, mtime today 06:37:54). The three signals are mutually
+inconsistent and the exact syscall path that produced the 06:30:19 file is
+**not established**. It does not change the verdict: the *content* on disk
+is unambiguously Obsidian's template render and unambiguously not
+Cobalt's, and `vault_writes` proves nothing went through the ONE writer
+after 05:15.
+
+### B. The nightly restart
+
+#### B.1 Finding: there is no nightly restart on this machine.
+
+Nothing runs between 00:00 and 05:00. No reboot happened last night.
+
+```
+$ last reboot | head -5
+reboot time                                Thu Sep  3 19:00
+shutdown time                              Thu Sep  3 18:55
+reboot time                                Sat Aug 29 10:35
+reboot time                                Tue Aug 18 15:58
+reboot time                                Tue Aug 11 11:27
+
+$ last cobalt | head -5
+cobalt     ttys002                         Fri Sep  4 06:22   still logged in
+cobalt     ttys000                         Thu Sep  3 19:42   still logged in
+cobalt     console                         Thu Sep  3 19:02   still logged in
+cobalt     ttys000                         Thu Sep  3 18:46 - 18:46  (00:00)
+cobalt     ttys003                         Mon Aug 31 12:39 - 12:39  (00:00)
+
+$ uptime
+ 6:57  up 11:57, 3 users, load averages: 1.69 1.47 1.33
+
+$ pmset -g sched
+(no output — no scheduled sleep/wake/restart events)
+
+$ crontab -l
+crontab: no crontab for cobalt
+
+$ ls /etc/periodic
+ls: /etc/periodic: No such file or directory
+$ cat /etc/crontab
+cat: /etc/crontab: No such file or directory
+```
+
+`sudo crontab -l` and `sudo pmset -g sched` could **not** be run — this
+session is non-interactive and `sudo` requires a password. `pmset -g sched`
+without sudo already reports the full scheduled-events list (it needs no
+privilege to read), and it is empty. **The root crontab remains unchecked —
+run `sudo crontab -l` by hand to close that gap.**
+
+Every LaunchAgent/LaunchDaemon on the box, with its calendar interval:
+
+```
+~/Library/LaunchAgents/
+  com.cobalt.agent.plist        (no StartCalendarInterval) → cobalt.sh start
+  com.cobalt.archiver.plist     Weekday 1-5, Hour 20, Minute 30 → uv run archiver
+  com.cobalt.aset.plist         (no StartCalendarInterval) → ops/start_aset.sh
+  com.cobalt.mainframe.plist    (no StartCalendarInterval) → ~/.lmstudio/start_mainframe.sh
+  com.cobalt.prefill-daily.plist  Weekday 1-5, Hour 5,  Minute 15 → uv run prefill daily
+  com.cobalt.prefill-drc.plist    Weekday 1-5, Hour 15, Minute 40 → uv run prefill drc
+  com.google.GoogleUpdater.wake.plist / com.google.keystone.*     (Google updater)
+  homebrew.mxcl.ollama.plist.bak   (.bak — not loaded)
+
+/Library/LaunchAgents/    (empty)
+/Library/LaunchDaemons/   dev.orbstack.OrbStack.privhelper.plist only
+```
+
+**No job anywhere has an Hour between 0 and 5 except prefill-daily at
+05:15.** No `StartInterval` job exists. No label mentions restart, reboot,
+or kickstart. LM Studio has no scheduled-restart setting (`~/.lmstudio/`
+contains `settings.json` and `start_mainframe.sh`; nothing schedules them).
+
+#### B.2 What the Gemini-era "unstick the local model" mechanism actually is
+
+It exists, but it is **boot-triggered, not nightly**:
+`~/.lmstudio/start_mainframe.sh`, run by `com.cobalt.mainframe`
+(RunAtLoad, no calendar interval). What it touches:
+
+```
+ulimit -l unlimited                     # remove macOS locked-RAM limit
+lms server stop                         # stop the LM Studio HTTP server
+lms unload --all                        # unload every loaded model
+pkill -9 -f llmster                     # kill the inference engine
+pkill -9 -f "node.*lmstudio"            # kill the background workers
+pkill -9 -f caffeinate                  # kill the old heartbeat
+sleep 2
+lms daemon up; lms server start         # bring the daemon + server back
+<poll http://localhost:1234/v1/models, 60s timeout, abort on failure>
+lms load qwen3.5-122b-a10b --identifier "mainframe" --gpu max --context-length 32768
+caffeinate -i -m bash -c 'while true; do curl … "model":"mainframe" … ; sleep 60; done'
+```
+
+That is the "refresh services to unstick Qwen" routine: a hard purge of the
+LM Studio process tree plus a caffeinate-held 60-second ping heartbeat to
+stop the model being evicted from VRAM. Note that `pkill -9 -f caffeinate`
+kills *any* caffeinate on the box, not just its own, and the heartbeat loop
+is unsupervised and unlogged — it survives only as long as its parent.
+
+Repo greps for a scheduled restart (`file:line`):
+
+```
+$ grep -rn 'restart\|reboot\|shutdown\|kickstart\|bootstrap' cobalt.sh ops docs/_archive/gemini-era-vault-side
+cobalt.sh:69      "Sending graceful shutdown signal to Cobalt (PID: $PID)..."
+cobalt.sh:96      restart)                       # manual ./cobalt.sh restart only
+cobalt.sh:103     "Usage: ./cobalt.sh {start|stop|status|restart}"
+ops/README.md:27,29,34,44,55   (KeepAlive / log-rotation-on-restart notes)
+ops/README.md:73,118,129,133   (documented MANUAL launchctl kickstart/bootstrap recipes)
+ops/com.cobalt.aset.plist:23   (comment about the Aug 29 reboot)
+docs/_archive/gemini-era-vault-side/Tasks/45 Headless LM Studio LaunchAgent.md:21
+    "- [ ] Implement automatic restart on process failure"   ← UNCHECKED, never built
+docs/_archive/gemini-era-vault-side/90 - Project Management/Requirements/PRD-008 Watcher Daemon.md:39,89
+docs/_archive/gemini-era-vault-side/90 - Project Management/Requirements/PRD-009…:157
+docs/_archive/gemini-era-vault-side/90 - Project Management/Requirements/PRD-010…:102
+docs/_archive/gemini-era-vault-side/00 - Master Plan/Developer Docs/postgres.md:406,411,478,520,535
+docs/_archive/gemini-era-vault-side/00 - Master Plan/Developer Docs/scheduler.md:99
+docs/_archive/gemini-era-vault-side/00 - Master Plan/ADR/ADR-013…:25
+```
+
+`grep -rniE '02:00|03:00|2 ?am|3 ?am|nightly|StartCalendarInterval|crontab'`
+over `docs/_archive/gemini-era-vault-side/` returns **zero hits**. The
+Gemini-era nightly restart was planned (task 45, unchecked) but never
+implemented as a scheduled job; what shipped is the RunAtLoad purge above.
+
+#### B.3 What actually loaded the three writers, and exactly when
+
+Not a restart. A `launchctl enable` from last night's deploy session.
+
+```
+$ log show --last 36h --predicate 'process == "launchd" AND eventMessage CONTAINS "com.cobalt"' --style compact
+
+2026-09-03 05:15:05.457  [gui/501 [100004]:] service inactive: com.cobalt.prefill-daily
+2026-09-03 07:26:22.910  [gui/501 [100004]:] service inactive: com.cobalt.diag
+2026-09-03 07:26:34.901  [gui/501 [100004]:] removing service: com.cobalt.diag
+2026-09-03 07:26:34.943  [gui/501 [100004]:] service inactive: com.cobalt.diag
+2026-09-03 07:26:36.951  [gui/501 [100004]:] removing service: com.cobalt.diag
+2026-09-03 07:27:55.409  [gui/501 [100004]:] removing service: com.cobalt.prefill-daily
+2026-09-03 07:27:55.419  [gui/501 [100004]:] removing service: com.cobalt.prefill-drc
+2026-09-03 07:28:28.510  [gui/501 [100004]:] service inactive: com.cobalt.prefill-daily-devtest
+2026-09-03 07:29:19.957  [gui/501 [100004]:] removing service: com.cobalt.prefill-daily-devtest
+2026-09-03 14:21:35.622  [gui/501 [100004]:] service inactive: com.cobalt.aset
+2026-09-03 14:22:23.770  [gui/501 [100004]:] service inactive: com.cobalt.prefill-daily
+2026-09-03 14:22:37.480  [gui/501 [100004]:] service inactive: com.cobalt.prefill-daily
+2026-09-03 15:40:01.011  [gui/501 [100004]:] service inactive: com.cobalt.prefill-drc
+2026-09-03 17:39:19.892  [gui/501 [100004]:] removing service: com.cobalt.prefill-daily
+2026-09-03 17:39:19.899  [gui/501 [100004]:] removing service: com.cobalt.prefill-drc
+2026-09-03 18:33:40.599  [gui/501 [100004]:] service inactive: com.cobalt.aset
+2026-09-03 18:33:40.599  [gui/501 [100004]:] removing service: com.cobalt.aset
+2026-09-03 18:33:44.562  [gui/501 [100004]:] Setting service com.cobalt.prefill-daily to disabled (initiated by launchctl[92859]<-zsh[92856]<-claude.exe[24239]<-zsh[50633]<-tmux[50632])
+2026-09-03 18:33:44.568  [gui/501 [100004]:] Setting service com.cobalt.prefill-drc to disabled (initiated by launchctl[92861]<-zsh[92856]<-claude.exe[24239]<-zsh[50633]<-tmux[50632])
+2026-09-03 18:33:44.573  [gui/501 [100004]:] Setting service com.cobalt.aset to disabled (initiated by launchctl[92863]<-zsh[92856]<-claude.exe[24239]<-zsh[50633]<-tmux[50632])
+2026-09-03 19:02:07.646  [gui/501 [100012]:] pending spawn, domain in on-demand-only mode: com.cobalt.mainframe
+2026-09-03 19:02:07.647  [gui/501 [100012]:] pending spawn, domain in on-demand-only mode: com.cobalt.agent
+2026-09-03 19:02:43.006  [gui/501 [100012]:] service inactive: com.cobalt.agent
+2026-09-03 19:04:11.502  [gui/501 [100012]:] service inactive: com.cobalt.mainframe
+2026-09-03 20:19:27.113  [gui/501 [100012]:] Setting service com.cobalt.prefill-daily to enabled (initiated by launchctl[8465]<-zsh[8462]<-claude.exe[4130]<-zsh[3960]<-tmux[3959])
+2026-09-03 20:19:27.120  [gui/501 [100012]:] Setting service com.cobalt.prefill-drc to enabled (initiated by launchctl[8467]<-zsh[8462]<-claude.exe[4130]<-zsh[3960]<-tmux[3959])
+2026-09-03 20:19:27.127  [gui/501 [100012]:] Setting service com.cobalt.aset to enabled (initiated by launchctl[8469]<-zsh[8462]<-claude.exe[4130]<-zsh[3960]<-tmux[3959])
+2026-09-03 20:53:11.560  [gui/501 [100012]:] service inactive: com.cobalt.archiver
+2026-09-04 05:15:04.852  [gui/501 [100012]:] service inactive: com.cobalt.prefill-daily
+```
+
+Shutdown/reboot events in the same 36 h — **exactly one**:
+
+```
+$ log show --last 36h --predicate '… loginwindow shutdown …' --style compact
+2026-09-03 18:53:51.335 loginwindow[164] -[SessionLogoutManager saveSoftwareUpdateOptionIfNeeded] | restart or shutdown, checking update flags
+2026-09-03 18:53:51.337 loginwindow[164] … This is a shutdown or restart, setting swap compaction to OFF
+2026-09-03 18:53:52.134 loginwindow[164] … sendBSDNotification: com.apple.loginwindow.shutdownNoReturn
+2026-09-03 18:53:52.281 loginwindow[164] … waiting for the restart
+2026-09-03 19:02:26.338 loginwindow[454] … progress complete, shutdown progress windows
+```
+
+**Exact load timestamps for the three writers — all three, same event, last
+night:**
+
+| Label | Enabled at | By |
+|---|---|---|
+| `com.cobalt.prefill-daily` | **2026-09-03 20:19:27.113** | `launchctl[8465] <- zsh[8462] <- claude.exe[4130] <- zsh[3960] <- tmux[3959]` |
+| `com.cobalt.prefill-drc` | **2026-09-03 20:19:27.120** | `launchctl[8467] <- zsh[8462] <- claude.exe[4130] <- …` |
+| `com.cobalt.aset` | **2026-09-03 20:19:27.127** | `launchctl[8469] <- zsh[8462] <- claude.exe[4130] <- …` |
+
+pid 4130 is `claude --model opus`, started 19:45 in tmux session `cobalt` —
+i.e. **last night's L28 fix/deploy session ran the §5 "Re-enable" recipe
+from this very file**, at 20:19:27, ~77 minutes after the 19:00 reboot.
+`com.cobalt.aset` came up immediately (RunAtLoad): `uvicorn` pid 8487 with
+a start time of 20:19. They have simply stayed loaded since. Nothing loaded
+anything this morning.
+
+The reason it looked like a morning change: the reboot was at 19:00 and the
+three were still `disabled` (set 18:33:44) at that point, so a check
+between 19:02 and 20:19 would see only agent / archiver / mainframe. The
+enable landed at 20:19:27.
+
+### Recommendation — no action taken
+
+1. **Nightly restart: nothing to keep or kill.** It does not exist. No
+   cron, no calendar interval, no `pmset` schedule, no reboot last night.
+   The only surviving Gemini-era artifact is
+   `~/.lmstudio/start_mainframe.sh`'s RunAtLoad purge + heartbeat.
+   *Convert that one to a registered ops job:* it is production
+   infrastructure living outside the repo, it `pkill -9`s by pattern
+   (`caffeinate` globally), and its heartbeat loop is unlogged and
+   unsupervised. It belongs in `ops/` with the other captured LaunchAgents
+   and a log path, like `start_aset.sh`. Not urgent, not this session.
+   Close the last gap first: `sudo crontab -l` by hand.
+
+2. **The real finding is A, and it is a live data-loss path.** Cobalt now
+   writes the daily note at 05:15; Dejan's Obsidian opens/creates the daily
+   note around 06:30; on 09-04 the second clobbered the first and 118 lines
+   of prefill — rules, market table, market calendar — were replaced by an
+   empty template. L28 protects Cobalt from stomping Dejan. Nothing protects
+   Dejan's prefill from Obsidian's daily-notes plugin. Options to rule on,
+   in preference order: (a) point the Obsidian daily-note template at a
+   near-empty stub so a create-on-open cannot destroy content, (b) turn off
+   "open daily note on startup" (`app.json: "openBehavior": "daily"`), or
+   (c) have prefill-daily re-run/repair rather than only create. This needs
+   a ruling before Monday's 05:15 fire.
+
+3. **`vault_writes` in `cobalt_dev` is now load-bearing for prod
+   forensics.** This whole reconstruction depended on rows 525-528, and
+   they live in the dev database next to pytest temp-vault rows. The open
+   item from the 09-03 section stands and should be ruled on.
