@@ -52,7 +52,7 @@ actively confusing in forensics.
 ## Usage
 ```
 uv run python -m cobalt.devdb --list
-uv run python -m cobalt.devdb --truncate aset_sizings,vault_writes,vault_overrides --yes-truncate-cobalt-dev
+uv run python -m cobalt.devdb --truncate aset_sizings,vault_writes,vault_overrides,bars --yes-truncate-cobalt-dev
 ```
 
 ## Tests

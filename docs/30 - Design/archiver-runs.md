@@ -217,3 +217,17 @@ Append-only. One row per run (nightly full run, or a manual
 | 2026-09-03T12:10:33Z | backfill:ZION | 1 | 5 | 10376 | 0 | 0m05s |
 | 2026-09-03T12:10:40Z | backfill:ZS | 1 | 5 | 14854 | 0 | 0m05s |
 | 2026-09-03T12:10:47Z | backfill:ZTO | 1 | 5 | 10444 | 0 | 0m05s |
+| 2026-09-04T00:30:05Z | full | 210 | 975 | 3165838 | 0 | 23m06s |
+
+## Database column added — RULING 9, 2026-09-04
+
+Rows above this line predate the column and were **all written to
+`cobalt_dev`**: the archiver named its own database (`db_name=
+"cobalt_dev"`) instead of asking `COBALT_ENV`, so every nightly run
+above archived production bars into the dev database. RULING 9 migrated
+`bars` to `cobalt_brain` (4,563,539 rows, md5-verified) and deleted the
+override. Rows below name their target.
+
+| Date (UTC) | Mode | Database | Tickers | Requests | Rows Written | Failures | Duration |
+|---|---|---|---|---|---|---|---|
+| 2026-09-04T20:22:52Z | full | cobalt_brain | 210 | 975 | 3132610 | 0 | 23m04s |

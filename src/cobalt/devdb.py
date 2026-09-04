@@ -18,7 +18,7 @@ RULING 9 migrate may be truncated. Every Mattermost and memory-layer
 table is outside the allowlist and cannot be named.
 
     uv run python -m cobalt.devdb --list
-    uv run python -m cobalt.devdb --truncate aset_sizings,vault_writes,vault_overrides --yes-truncate-cobalt-dev
+    uv run python -m cobalt.devdb --truncate aset_sizings,vault_writes,vault_overrides,bars --yes-truncate-cobalt-dev
 """
 
 import argparse

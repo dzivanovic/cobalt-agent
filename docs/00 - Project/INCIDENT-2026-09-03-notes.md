@@ -2036,3 +2036,405 @@ $ launchctl list | grep -i cobalt
    being visible — so if the cause matters, `ops/logs/mainframe.log`
    is where the evidence will accumulate (`heartbeat: reload OK` lines
    are the tell). No TTL is set on the model.
+
+## Rulings 8 + 9 2026-09-04
+
+**Scope:** the test residue RULING 7's exact-copy migration carried into
+`cobalt_brain`, and the `bars` table it left behind in `cobalt_dev`.
+ADR-0006 has the decision record. DevDocs revised: `cobalt/devdb.md`,
+`cobalt/archiver/store.md`, `cobalt/archiver/runner.md`,
+`cobalt/archiver/report.md`. Every claim below is pasted output.
+
+Both are the follow-ups ADR-0005 handed forward. Live vault was never
+touched; the live database was touched exactly where these rulings say
+to touch it, each time dumped first and counted before and after.
+
+### 1. RULING 8 — test residue deleted from `cobalt_brain`
+
+**(a) The rollback dumps**, into the gitignored
+`docs/00 - Project/incident-2026-09-03/` (`git check-ignore` confirmed
+both, and neither appears in `git status`):
+
+```
+ruling8-vault_writes-pytest-20260904T161444.sql
+  853 rows · 979521 bytes
+  sha256 93a68166b9597df2a066031be388fd1bbf6e7d99c1e7686515c5e8836b73af19
+
+ruling8-aset_sizings-testtickers-20260904T161444.sql
+   85 rows ·  11582 bytes
+  sha256 866658761cf91c3cd0152b9cd8d1589dad20fa8cf7e99346b104ec86757e0290
+```
+
+**(b) The abort check, run before anything was deleted.** None of the
+five tickers has ever been filled, which is what the ruling made the
+stop condition:
+
+```
+  ticker   | status | count | min_id | max_id | first_day  |  last_day
+-----------+--------+-------+--------+--------+------------+------------
+ FORDATE   | CARD   |    40 |     80 |    170 | 2026-08-31 | 2026-09-03
+ SMOKEAB   | CARD   |     1 |     77 |     77 | 2026-08-27 | 2026-08-27
+ SMOKETEST | CARD   |     1 |     32 |     32 | 2026-08-26 | 2026-08-26
+ TEST      | CARD   |    42 |      1 |    168 | 2026-08-24 | 2026-09-03
+ TESTHALF  | CARD   |     1 |     74 |     74 | 2026-08-27 | 2026-08-27
+
+FILLED among the five: 0
+```
+
+**(c) One transaction, four guards**, any of which aborts the whole
+thing: the pytest count must be exactly 853; no target row may be
+`FILLED`; each `DELETE`'s `ROW_COUNT` must equal what was counted; and a
+post-condition check *inside the same transaction* rolls everything back
+if one target row survives.
+
+```
+BEGIN
+NOTICE:  vault_writes deleted : 853
+NOTICE:  aset_sizings deleted : 85 (FILLED among them: 0)
+DO
+DO
+COMMIT
+```
+
+**(d) Counts, before and after:**
+
+| Table | Before | Deleted | After | Expected after |
+|---|---|---|---|---|
+| `vault_writes` | 875 | 853 | **22** | 22 (Dejan's only) |
+| `aset_sizings` | 177 | 85 | **92** | 92 (real cards only) |
+| `vault_overrides` | 0 | 0 | 0 | 0 |
+
+The 22 surviving `vault_writes` are ids **525-542** (the 18 the ruling
+names) plus **1784-1787**, which are not round-trip-era rows — those
+were already deleted in the RULING 7 session. 1784-1787 are today's
+`prefill.drc` job writing `DRC-2026-09-04.md` at 15:40 ET, i.e. new
+production activity since RULING 7 closed. Zero pytest rows remain.
+
+**(e) Surviving distinct tickers in `aset_sizings` — 15, all real:**
+
+```
+ ticker | n  | filled |   first    |    last
+--------+----+--------+------------+------------
+ AVGO   |  1 |      0 | 2026-09-03 | 2026-09-03
+ CRM    | 11 |      0 | 2026-08-27 | 2026-08-27
+ DELL   |  2 |      0 | 2026-09-02 | 2026-09-02
+ DKS    |  1 |      0 | 2026-08-26 | 2026-08-26
+ GTLB   | 11 |      0 | 2026-09-02 | 2026-09-02
+ INTC   |  6 |      0 | 2026-08-27 | 2026-09-01
+ LULU   |  2 |      1 | 2026-09-04 | 2026-09-04
+ MRNA   | 16 |      0 | 2026-08-25 | 2026-08-25
+ MSFT   |  1 |      0 | 2026-09-01 | 2026-09-01
+ MU     |  1 |      1 | 2026-09-04 | 2026-09-04
+ NVDA   | 14 |      0 | 2026-08-24 | 2026-08-31
+ OKTA   |  7 |      0 | 2026-08-27 | 2026-08-27
+ PCG    |  1 |      0 | 2026-08-31 | 2026-08-31
+ SPY    |  1 |      0 | 2026-08-24 | 2026-08-24
+ TSLA   | 17 |      2 | 2026-08-25 | 2026-09-04
+```
+
+Four fills across LULU, MU and TSLA — 2026-09-04's real trading day, as
+the DRC dry-run in the RULING 7 report already showed.
+
+### 2. RULING 9 — `bars` moved to `cobalt_brain`
+
+**(a) Sheet down — and a correction to the premise.** The instruction
+assumed that booting the archiver out before 20:00 ET loses extended-
+hours bars. It does not, because **`com.cobalt.archiver` is not a
+resident collector**. It is a `StartCalendarInterval` batch job, Mon-Fri
+20:30 local, `RunAtLoad=false`, that pulls the whole day from Finviz
+history in one pass. Its state immediately before the bootout:
+
+```
+$ TZ=America/New_York date        ->  2026-09-04 16:15:56 EDT (Friday)
+$ launchctl print gui/501/com.cobalt.archiver
+	state = not running
+	runs = 0
+	last exit code = (never exited)
+$ pgrep -fl archiver              ->  none
+$ launchctl bootout gui/501/com.cobalt.archiver   # exit 0
+```
+
+Nothing was running, so nothing was interrupted, and **no bars were
+lost**: the job only has to be loaded *by* 20:30, and it was back up at
+16:22. The last row of the pre-existing log confirms the shape —
+`2026-09-04T00:30:05Z | full | 210 | 975 | 3165838 | 0 | 23m06s`, i.e.
+one 23-minute batch at 20:30 ET the previous evening.
+
+**(b) Baseline in `cobalt_dev`** — see the side-by-side in (e); it is
+identical on both sides, so it is pasted once there.
+
+**(c) The rollback dump:**
+
+```
+path   : docs/00 - Project/incident-2026-09-03/ruling9-bars-cobalt_dev-20260904T161632.dump
+size   : 64356783 bytes (62M, pg_dump -Fc -Z6)
+sha256 : cb24f5375c26a094779e92fd4162eba35274ea05ee1ba3f93f5057b667fa10bb
+TOC    : TABLE bars · TABLE DATA bars · CONSTRAINT bars_pkey
+```
+
+Re-verified byte-identical immediately before the truncate in (h).
+
+**(d) Schema, restore, sequences.** Schema through the store's own
+`ensure_schema()`, so the DDL keeps its one path:
+
+```
+$ COBALT_ENV=production ... BarStore('cobalt_brain').ensure_schema()
+COBALT_ENV           : production
+env.resolve_db_name(): cobalt_brain
+ensure_schema()      : applied 0001_bars.sql to cobalt_brain
+count_rows()         : 0
+```
+
+Column list and index are IDENTICAL on both sides (8 columns; the sole
+index is `bars_pkey UNIQUE btree (ticker, "interval", ts)`).
+
+```
+$ pg_restore -d cobalt_brain --data-only --table=bars --exit-on-error
+exit 0 · 10.9s · count after restore = 4563539
+```
+
+**No sequence needed resetting, and that is a finding rather than an
+omission:** `bars` has a composite PK and no identity column, so it owns
+no sequence at all — unlike RULING 7's three tables. Verified against
+`pg_depend`, which returns nothing for `bars`.
+
+**(e) THE PROOF — counts and md5 over PK-ordered rows, `SET TimeZone='UTC'`:**
+
+```
+############ cobalt_dev (SOURCE) ############    ############ cobalt_brain (TARGET) ############
+ total_rows | symbols | intervals               total_rows | symbols | intervals
+    4563539 |     211 |         5                  4563539 |     211 |         5
+ min_ts 2025-08-08 09:30:00+00                   min_ts 2025-08-08 09:30:00+00
+ max_ts 2026-09-03 19:59:00+00                   max_ts 2026-09-03 19:59:00+00
+
+  session   |  rows  | symbols                    session   |  rows  | symbols
+ 2026-09-03 | 226856 |     210                   2026-09-03 | 226856 |     210
+ 2026-09-02 | 248660 |     210                   2026-09-02 | 248660 |     210
+ 2026-09-01 | 254358 |     210                   2026-09-01 | 254358 |     210
+ 2026-08-31 | 247970 |     210                   2026-08-31 | 247970 |     210
+ 2026-08-28 | 242839 |     211                   2026-08-28 | 242839 |     211
+ 2026-08-27 | 250700 |     210                   2026-08-27 | 250700 |     210
+ 2026-08-26 | 249124 |     210                   2026-08-26 | 249124 |     210
+ 2026-08-25 | 249199 |     210                   2026-08-25 | 249199 |     210
+ 2026-08-24 | 248217 |     210                   2026-08-24 | 248217 |     210
+ 2026-08-21 | 252138 |     210                   2026-08-21 | 252138 |     210
+
+ interval |  rows                                interval |  rows
+ i1       | 2064906                              i1       | 2064906
+ i15      |  112944                              i15      |  112944
+ i2       | 1129886                              i2       | 1129886
+ i30      |  558483                              i30      |  558483
+ i5       |  697320                              i5       |  697320
+
+  rows   |         md5_ordered_rows              rows   |         md5_ordered_rows
+ 4563539 | e72bfed27bb49e827c0eb75c561576f8      4563539 | e72bfed27bb49e827c0eb75c561576f8
+```
+
+**Equal — counts, per-day, per-interval, and content.** The md5 is
+`md5(string_agg(md5(row::text), '' ORDER BY ticker, interval, ts))`,
+which ran in **6.3s / 5.6s** — well inside "reasonable time", so the
+strict ordered checksum was used rather than an order-independent
+approximation.
+
+**(f) The archiver stops naming a database.** `BarStore`'s
+`db_name="cobalt_dev"` default, `run_full`/`run_backfill`'s `db_name`
+parameters and `main()`'s `--db-name` flag are all gone; the parameter
+survives only as the test/tooling seam the other stores keep. The flag
+is **deleted, not re-pointed** — see ADR-0006.
+
+The bars tests were already covered by the autouse `cobalt_dev`
+transaction fixture; they now also stop naming the database
+(`BarStore()`), and `test_env.py` gains two guards: `BarStore` follows
+the resolver in both modes and raises when `COBALT_ENV` is unset, and
+the runner exposes no database override.
+
+```
+=============== BEFORE full test run ===============
+cobalt_dev  : bars 4563539 · aset_sizings 0 · vault_writes 0 · vault_overrides 0
+cobalt_brain: bars 4563539 · aset_sizings 92 · vault_writes 22 · vault_overrides 0
+293 passed in 5.56s
+=============== AFTER full test run ================
+cobalt_dev  : bars 4563539 · aset_sizings 0 · vault_writes 0 · vault_overrides 0
+cobalt_brain: bars 4563539 · aset_sizings 92 · vault_writes 22 · vault_overrides 0
+```
+
+Not one row moved in either database. New core 289 → **294 passing**
+(the extra tests are listed above plus two on the run report). Old tree
+unchanged at its baseline: 12 failed / 17 errors, in modules that import
+nothing this session touched.
+
+**(g) Reloaded, and the landing PROVEN — not deferred.** The plist
+already carried `COBALT_ENV` from RULING 7, so no plist edit was needed:
+
+```
+$ launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.archiver.plist
+	environment = {
+		COBALT_ENV => production
+		PATH => /opt/homebrew/bin:...:/Users/cobalt/.local/bin
+		XPC_SERVICE_NAME => com.cobalt.archiver
+	}
+```
+
+Monday 09-07 is a holiday, so waiting for a scheduled fire would have
+meant no proof until Tuesday. `launchctl kickstart -k` instead runs the
+job **in launchd's own environment**, which proves the plist's
+`COBALT_ENV` reaches the process *and* that rows land in `cobalt_brain`,
+in one observation:
+
+```
+$ launchctl kickstart -k gui/501/com.cobalt.archiver     # 16:22:52 EDT, pid 73489
+Run complete: 210 tickers, 3132610 rows, 0 failures, 23m04s
+	state = not running · runs = 1 · last exit code = 0
+```
+
+The first `archiver-runs.md` line naming the database:
+
+```
+| Date (UTC) | Mode | Database | Tickers | Requests | Rows Written | Failures | Duration |
+|---|---|---|---|---|---|---|---|
+| 2026-09-04T20:22:52Z | full | cobalt_brain | 210 | 975 | 3132610 | 0 | 23m04s |
+```
+
+And where the rows actually went:
+
+```
+cobalt_brain.bars : 4563539 -> 4755478  (+191939 today, 210 symbols)
+cobalt_dev.bars   : 4563539 -> 4563539  (max_ts still 2026-09-03 19:59)
+```
+
+Tonight's scheduled 20:30 fire will refresh today's bars in place
+(`ON CONFLICT DO UPDATE`) and add the 16:45-20:00 ET tail. Dejan's
+check, any time after it:
+
+```sql
+-- expect a row count > 191939 for today and max_ts near 19:59
+SELECT count(*) AS rows_today, min(ts) AS first_bar, max(ts) AS last_bar
+FROM bars WHERE ts::date = DATE '2026-09-04';
+```
+
+**(h) `cobalt_dev` truncated** — only after (e) and (g), through the
+guarded helper rather than raw SQL, which meant adding `bars` to
+`cobalt.devdb`'s allowlist (it was excluded *because* it held production
+data; it no longer does). The database guard is untouched and was
+exercised against production first:
+
+```
+$ ... devdb.truncate(['bars'], db_name='cobalt_brain', confirm=True)
+EnvConfigError: REFUSED: destructive operation targeted 'cobalt_brain'. Destructive
+helpers may only ever touch cobalt_dev (RULING 7.1c) — this is hard-coded and cannot
+be overridden.
+
+$ COBALT_ENV=dev uv run python -m cobalt.devdb --truncate bars --yes-truncate-cobalt-dev
+bars               4563539 -> 0
+```
+
+**`cobalt_dev` is now empty of production data.** Every table it has,
+with counts:
+
+```
+      table      | rows
+-----------------+------
+ aset_sizings    |    0
+ bars            |    0
+ vault_overrides |    0
+ vault_writes    |    0
+(4 rows)
+```
+
+That is the whole database — four tables, all zero. It is what makes
+`env.assert_destructive_target`'s "destructive helpers may only ever
+touch `cobalt_dev`" a safe rule rather than a dangerous one; it was not
+safe while 4.5M production bars lived there.
+
+### 3. `com.cobalt.agent` now carries `COBALT_ENV`
+
+The plist gained the key in RULING 7, but **a plist change does not
+reach a process that is already running** — the same lesson as the
+2026-09-01 defect. The live agent had been up since before that change:
+
+```
+$ ps -o lstart= -p 1362        ->  Thu Sep  3 19:02:43 2026
+$ ps eww -p 1366 | grep COBALT_ENV
+>>> NO COBALT_ENV in the live process environment <<<
+```
+
+`cobalt.sh start` exits 1 if a PID file names a live process — which is
+exactly what `last exit code = 1` on the service was recording — so a
+bare kickstart would have been a no-op. Stop first, then kickstart:
+
+```
+$ ./cobalt.sh stop
+  Sending graceful shutdown signal to Cobalt (PID: 1362)...  Cobalt stopped safely.
+$ launchctl kickstart -k gui/501/com.cobalt.agent            # 16:23:57
+
+	state = not running · runs = 2 · last exit code = 0
+	environment = { COBALT_ENV => production, ... }
+
+$ pgrep -fl cobalt_agent/main.py
+73599 uv run src/cobalt_agent/main.py
+73601 .../Python src/cobalt_agent/main.py
+
+--- pid 73599 (started Fri Sep  4 16:23:57 2026) ---   COBALT_ENV=production
+--- pid 73601 (started Fri Sep  4 16:23:57 2026) ---   COBALT_ENV=production
+```
+
+Fresh pids (1362/1366 → 73599/73601) and the variable is in the live
+process environment, not merely in the plist. `state = not running` with
+`last exit code = 0` is correct for this job: `cobalt.sh start`
+daemonizes and returns, and `AbandonProcessGroup` keeps the child.
+
+### 4. Restart-on-deploy
+
+`grep` for importers of everything changed this session
+(`cobalt.archiver.*`, `cobalt.devdb`) returns **nothing outside the
+archiver package itself**. So `com.cobalt.aset` (pid 66984) and
+`com.cobalt.obsidian` (pid 66104) run no changed code and were correctly
+left alone; `prefill-daily`/`prefill-drc` are scheduled jobs that load
+fresh code at every fire. The two services that needed restarting —
+`archiver` and `agent` — both were, and both are proven above.
+
+### 5. What this does NOT fix — two items for a ruling
+
+**5a. One row of test residue in `cobalt_brain.bars`.**
+
+```
+  ticker  | interval |           ts           |  open   |   high   |   low   |  close   | volume
+ TESTARCH | i5       | 2026-08-28 09:30:00+00 | 99.0000 | 101.0000 | 98.5000 | 105.0000 |   1234
+```
+
+Written by `test_archiver_store.py` before the autouse transaction
+fixture existed (`close=105.0000` is that test's second upsert), so it
+predates this session — it is inside the pre-migration dump. It rode
+into `cobalt_brain` because proof (e) demands a byte-exact copy. It is
+outside RULING 8's named scope, and RULING 8's own precedent is that
+deletions against production are named and ruled *first*, so it was
+**left in place deliberately**. `TESTARCH` is in no watchlist tier, so
+no real run can reproduce it and no ticker-filtered query returns it.
+When ruled:
+
+```sql
+DELETE FROM bars WHERE ticker = 'TESTARCH';   -- expect exactly 1
+```
+
+**5b. `bars.ts` holds Eastern-time values in a UTC-labelled column.**
+Found while verifying the landing proof, pre-existing, and **unchanged
+by this migration** — the copy was byte-exact, so the defect moved
+across intact rather than being introduced.
+
+```
+AAPL/i1, session 2026-09-02:  first_bar 04:00:00+00 · last_bar 19:59:00+00 · 948 bars
+```
+
+04:00-19:59 is the ET premarket-to-extended-close window (4:00am-8:00pm
+ET, 960 minutes), not a UTC one — real UTC would put the 09:30 ET open
+at 13:30Z. So every `ts` in all 4.75M rows is 4 hours (EDT) off what its
+`+00` claims. Nothing downstream reads `bars` yet, so nothing is
+currently wrong *because* of it, but any future time-range query, and
+any join against `aset_sizings.created_at` (which is genuinely UTC),
+will be silently wrong. Not fixed here: it is a data-model correction
+across the whole table, it was not in either ruling, and it wants the
+Data-Model ADR that `0001_bars.sql` already flags as pending.
+
+**Unchanged and still open:** RULING 6.3c's heartbeat probe has no host,
+and **the production vault still has no backup** — still the largest
+open risk in this report.
