@@ -231,3 +231,4 @@ override. Rows below name their target.
 | Date (UTC) | Mode | Database | Tickers | Requests | Rows Written | Failures | Duration |
 |---|---|---|---|---|---|---|---|
 | 2026-09-04T20:22:52Z | full | cobalt_brain | 210 | 975 | 3132610 | 0 | 23m04s |
+| 2026-09-04T22:56:09Z | backfill:AAPL | cobalt_brain | 1 | 5 | 21718 | 0 | 0m05s |
