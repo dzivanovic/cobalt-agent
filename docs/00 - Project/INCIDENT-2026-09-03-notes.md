@@ -1896,6 +1896,45 @@ caffeinate processes: 3 — the control (66157, alive), LM Studio's own, and
 exactly one marked heartbeat. No orphan pile-up.
 ```
 
+**The logging earned its keep within fifteen minutes.** At ~14:45 the
+122B model vanished from LM Studio and every subsequent ping logged
+`heartbeat FAILED: ... "No models loaded"` on a 60-second cadence:
+
+```
+2026-09-04 14:40:04 | heartbeat OK        (x5)
+2026-09-04 14:45:00 | heartbeat FAILED:   (x13, every 60s)
+
+$ lms ps       ->  No models are currently loaded.
+$ /v1/models   ->  the "mainframe" identifier is gone from the list
+```
+
+**Cause of the unload is UNKNOWN and is not guessed at here.** Only
+three script starts are logged (14:39, 14:40, 14:42), none after the
+model loaded successfully at 14:42:45 (64.84 GiB); nothing in the boot
+log or stderr accounts for it; `lms ps` shows no TTL on the model, so it
+was not a TTL expiry. Recorded as unexplained.
+
+What is certain is the design flaw it exposed: **a heartbeat whose only
+action is a ping can observe its own death and nothing else.** Once the
+model is gone the ping can never bring it back. The pre-RULING-6 script
+had exactly this flaw and no log to reveal it — very likely why "the
+local model gets stuck" was folklore rather than a diagnosis.
+
+Fixed, one bounded step beyond "keep its behaviour": on a failed ping
+the heartbeat attempts ONE `lms load` and logs the outcome. Same 60 s
+cadence, no retry storm. NN#16 says production is left working, and a
+supervisor that cannot restore what it supervises does not meet that.
+
+```
+2026-09-04 14:58:48 | model loaded — spawning heartbeat (60s ping, logged, self-healing)
+2026-09-04 14:58:48 | heartbeat running as pid 67820
+2026-09-04 14:58:54 | heartbeat OK
+
+$ lms ps
+IDENTIFIER    MODEL                STATUS    SIZE        CONTEXT    DEVICE    TTL
+mainframe     qwen3.5-122b-a10b    IDLE      69.62 GB    32768      Local
+```
+
 ### 5. Boot contract — READ-ONLY, reported not changed
 
 ```
@@ -1992,3 +2031,8 @@ $ launchctl list | grep -i cobalt
    it makes the Mac's instance reliably present; it does not stop an
    editor buffer flush. §7 #9(c), the sidecar note, remains the only
    proposal that removes the race.
+6. **Why the 122B model unloaded itself at ~14:45 is unexplained.** The
+   heartbeat now recovers from it, which means the symptom will stop
+   being visible — so if the cause matters, `ops/logs/mainframe.log`
+   is where the evidence will accumulate (`heartbeat: reload OK` lines
+   are the tell). No TTL is set on the model.
