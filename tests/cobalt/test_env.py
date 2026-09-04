@@ -218,7 +218,31 @@ class TestStoresFollowTheResolver:
         monkeypatch.setenv(env.ENV_VAR, env.DEV)
         assert VaultWriteStore().db_name == "cobalt_dev"
 
+    def test_bar_store_defaults_to_the_resolved_database(self, monkeypatch):
+        """RULING 9: the archiver was the last store still naming its own
+        database (`db_name="cobalt_dev"`), which is why 4.5M rows of
+        production bars sat in the dev database."""
+        from cobalt.archiver.store import BarStore
+
+        monkeypatch.setenv(env.ENV_VAR, env.PRODUCTION)
+        assert BarStore().db_name == "cobalt_brain"
+        monkeypatch.setenv(env.ENV_VAR, env.DEV)
+        assert BarStore().db_name == "cobalt_dev"
+
+    def test_archiver_runner_exposes_no_database_override(self):
+        """RULING 9 deleted `--db-name` and the `db_name=` parameters
+        rather than re-pointing them: a per-run override of the target
+        database is the hole RULING 7 closed for `AsetConfig.db_name`."""
+        import inspect
+
+        from cobalt.archiver import runner
+
+        assert "db_name" not in inspect.signature(runner.run_full).parameters
+        assert "db_name" not in inspect.signature(runner.run_backfill).parameters
+        assert "--db-name" not in inspect.getsource(runner.main)
+
     def test_stores_raise_rather_than_default_when_env_is_unset(self, monkeypatch):
+        from cobalt.archiver.store import BarStore
         from cobalt.aset.store import AsetStore
         from cobalt.vaultwrite import VaultWriteStore
 
@@ -227,3 +251,5 @@ class TestStoresFollowTheResolver:
             AsetStore()
         with pytest.raises(env.EnvConfigError):
             VaultWriteStore()
+        with pytest.raises(env.EnvConfigError):
+            BarStore()

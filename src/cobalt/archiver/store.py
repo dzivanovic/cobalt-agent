@@ -1,12 +1,22 @@
-"""Persistence for archived bars (cobalt_dev). Idempotent upserts.
+"""Persistence for archived bars. Idempotent upserts.
+
+The database is NOT named here: `COBALT_ENV` chooses it via
+`cobalt.env.resolve_db_name()` (RULING 7/9) — production writes
+`cobalt_brain`, dev and the test suite write `cobalt_dev`.
+
+Until RULING 9 (2026-09-04) this module defaulted to `"cobalt_dev"` as
+a literal, which is how 4.5M rows of PRODUCTION bars came to live in
+the dev database while every other store had already moved onto the
+resolver. `bars` was migrated to `cobalt_brain` in the same ruling.
 
 DDL lives in exactly one place (migrations/0001_bars.sql) — this module
 executes that file, it does not carry a second copy (one-path rule).
 """
 
 from pathlib import Path
+from typing import Optional
 
-from cobalt import db
+from cobalt import db, env
 
 from .models import Bar
 
@@ -14,8 +24,13 @@ MIGRATION_SQL = Path(__file__).parent / "migrations" / "0001_bars.sql"
 
 
 class BarStore:
-    def __init__(self, db_name: str = "cobalt_dev"):
-        self.db_name = db_name
+    def __init__(self, db_name: Optional[str] = None):
+        """`db_name` is a TEST/TOOLING seam only. Production and dev both
+        leave it None and take the database from `COBALT_ENV` via
+        `env.resolve_db_name()` — RULING 9 removed the hard-coded
+        `"cobalt_dev"` default that kept the archiver writing production
+        bars into the dev database."""
+        self.db_name = db_name or env.resolve_db_name()
 
     def _connect(self):
         return db.connect(self.db_name)

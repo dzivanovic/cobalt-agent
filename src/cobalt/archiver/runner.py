@@ -1,6 +1,16 @@
 """Bar Archiver orchestration: the nightly full run and the on-demand
 per-ticker backfill. Sequential, gentle rate, fail-loud per ticker —
 one failure never aborts the run or gets silently skipped.
+
+The database is not an argument anywhere in this module. `COBALT_ENV`
+alone decides it (`cobalt.env.resolve_db_name()`, via `BarStore`) —
+RULING 9 (2026-09-04). Before that this module threaded a
+`db_name="cobalt_dev"` default through every entry point and exposed
+it as a `--db-name` CLI flag, so the archiver kept writing PRODUCTION
+bars into the dev database long after every other store had moved onto
+the resolver. The flag is deleted rather than re-pointed: a per-run
+override of the target database is exactly the hole RULING 7 closed
+for `AsetConfig.db_name`.
 """
 
 import asyncio
@@ -17,9 +27,9 @@ from .store import BarStore
 GENTLE_SLEEP_SECONDS = 1.2
 
 
-async def _run_targets(targets: list[tuple[str, Interval]], mode: str, db_name: str) -> RunSummary:
+async def _run_targets(targets: list[tuple[str, Interval]], mode: str) -> RunSummary:
     summary = RunSummary(mode=mode)
-    store = BarStore(db_name)
+    store = BarStore()
     store.ensure_schema()
     token = await resolve_token()
 
@@ -45,12 +55,14 @@ async def _run_targets(targets: list[tuple[str, Interval]], mode: str, db_name: 
     return summary
 
 
-async def run_full(db_name: str = "cobalt_dev") -> RunSummary:
-    """Nightly job: archive tier_a + tier_b per their configured intervals."""
+async def run_full() -> RunSummary:
+    """Nightly job: archive tier_a + tier_b per their configured intervals.
+
+    Writes to whichever database `COBALT_ENV` names (RULING 9)."""
     cfg = load_config()
     targets = cfg.archive_targets()
     logger.info(f"Bar Archiver full run: {len(targets)} (ticker, interval) targets")
-    summary = await _run_targets(targets, mode="full", db_name=db_name)
+    summary = await _run_targets(targets, mode="full")
     path = append_run_report(summary)
     logger.info(
         f"Run complete: {len(summary.tickers)} tickers, {summary.rows_written} rows, "
@@ -59,13 +71,14 @@ async def run_full(db_name: str = "cobalt_dev") -> RunSummary:
     return summary
 
 
-async def run_backfill(ticker: str, db_name: str = "cobalt_dev") -> RunSummary:
+async def run_backfill(ticker: str) -> RunSummary:
     """On-demand: fetch ALL tier_a intervals for one ticker (a new name
-    joining tier_a, or a manual re-fill)."""
+    joining tier_a, or a manual re-fill). Same database rule as
+    `run_full` — `COBALT_ENV`, never an argument."""
     cfg = load_config()
     targets = cfg.backfill_targets(ticker)
     logger.info(f"Bar Archiver backfill for {ticker}: {len(targets)} targets")
-    summary = await _run_targets(targets, mode=f"backfill:{ticker}", db_name=db_name)
+    summary = await _run_targets(targets, mode=f"backfill:{ticker}")
     path = append_run_report(summary)
     logger.info(
         f"Backfill complete: {summary.rows_written} rows, "
@@ -90,13 +103,12 @@ def main() -> None:
         metavar="TICKER",
         help="Fetch all tier_a intervals for one ticker on demand, instead of the full nightly run.",
     )
-    parser.add_argument("--db-name", default="cobalt_dev", help="Target database (default: cobalt_dev).")
     args = parser.parse_args()
 
     if args.backfill:
-        summary = asyncio.run(run_backfill(args.backfill, db_name=args.db_name))
+        summary = asyncio.run(run_backfill(args.backfill))
     else:
-        summary = asyncio.run(run_full(db_name=args.db_name))
+        summary = asyncio.run(run_full())
 
     if summary.failures:
         sys.exit(1)

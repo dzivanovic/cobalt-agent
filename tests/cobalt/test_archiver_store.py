@@ -1,8 +1,16 @@
 """Integration test: real upsert/idempotency round trip against cobalt_dev.
 
 Runs only when Postgres env settings are present (conftest loads .env).
-Never touches cobalt_brain — the shared connection factory refuses it
-(already proven by test_aset_store.py; not re-tested here).
+
+RULING 9 (2026-09-04): `BarStore()` takes no database argument any
+more — `conftest.dev_env` pins `COBALT_ENV=dev`, so the resolver hands
+it `cobalt_dev`, and `conftest.dev_db_tx` runs the whole test inside a
+transaction that is rolled back. Nothing this file writes survives the
+run, which is what lets `bars` live in `cobalt_brain` (RULING 9) while
+the suite still exercises the real upsert. `cobalt_brain` is
+unreachable twice over: the fixture raises on any database but
+`cobalt_dev`, and the connection factory refuses production to a
+process that has not declared it.
 """
 
 import os
@@ -37,7 +45,7 @@ def make_bar(ts, close="100.00"):
 
 @requires_db
 def test_upsert_is_idempotent_and_refreshes_on_conflict():
-    store = BarStore("cobalt_dev")
+    store = BarStore()
     store.ensure_schema()
     ts = datetime(2026, 8, 28, 9, 30, tzinfo=timezone.utc)
 
@@ -63,6 +71,6 @@ def test_upsert_is_idempotent_and_refreshes_on_conflict():
 
 @requires_db
 def test_upsert_empty_list_is_a_noop():
-    store = BarStore("cobalt_dev")
+    store = BarStore()
     store.ensure_schema()
     assert store.upsert_bars([]) == 0
