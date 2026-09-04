@@ -15,13 +15,28 @@ Per DATA-SOURCE-MEMO.md's confirmed findings:
   intervals (`i1/i2/i5` give clean 12-hour "04:00 AM"; `i15/i30` have
   been observed giving a 24-hour hour with a bolted-on AM/PM suffix
   like "15:45 PM") — `_parse_finviz_datetime` handles both.
+
+TIMEZONE (ADR-0007, 2026-09-04). Finviz's export carries a bare ET
+wall clock with no offset and no tz name — "09/03/2026 09:30 AM" is
+09:30 *America/New_York*. Until ADR-0007 this parser returned that
+naive value unchanged, psycopg handed it to a `timestamptz` column,
+and Postgres (session `TimeZone = Etc/UTC`) stamped it `09:30+00`.
+4.75M rows were therefore ET digits wearing a UTC label: every one of
+them wrong by the ET offset, and every join against them wrong by the
+same. The corpus was reinterpreted in place by ADR-0007; this parser
+is the other half — it localizes to `America/New_York` (DST-aware, so
+the offset is the one that applied on that date) and converts to UTC
+before the value ever reaches a `Bar`. Bars are tz-aware UTC from
+here on; sessions are reasoned about in ET by `cobalt.session`, never
+by wall clock.
 """
 
 import csv
 import io
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -31,6 +46,9 @@ from .models import Bar, Interval
 
 EXPECTED_COLUMNS = ["Date", "Open", "High", "Low", "Close", "Volume"]
 _AUTH_RE = re.compile(r"auth=[^&\s'\"]+")
+
+# Finviz's export timestamps are bare ET wall clock (ADR-0007).
+FINVIZ_TZ = ZoneInfo("America/New_York")
 
 
 class CollectorError(RuntimeError):
@@ -50,6 +68,20 @@ async def resolve_token() -> str:
 
 
 def _parse_finviz_datetime(raw: str) -> datetime:
+    """Parse one Finviz date cell into a tz-aware UTC datetime.
+
+    The string is a bare ET wall clock. It is localized to
+    `America/New_York` and converted to UTC (ADR-0007) — the returned
+    value is ALWAYS tz-aware, never naive.
+    """
+    return _parse_finviz_wall_clock(raw).replace(tzinfo=FINVIZ_TZ).astimezone(
+        timezone.utc
+    )
+
+
+def _parse_finviz_wall_clock(raw: str) -> datetime:
+    """The naive ET wall clock exactly as Finviz wrote it. Format handling
+    only — the timezone is applied by `_parse_finviz_datetime`."""
     raw = raw.strip()
     parts = raw.split(" ")
     if len(parts) < 2:
