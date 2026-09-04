@@ -1,4 +1,8 @@
-"""Persistence for ASET sizings (cobalt_dev).
+"""Persistence for ASET sizings.
+
+The database is NOT named here: `COBALT_ENV` chooses it via
+`cobalt.env.resolve_db_name()` (RULING 7) — production writes
+`cobalt_brain`, dev and the test suite write `cobalt_dev`.
 
 DDL lives under migrations/ (one path — the store executes those files,
 it does not carry a second copy of the schema). ensure_schema() runs
@@ -15,17 +19,22 @@ the data-model ADR; see the note in 0001.
 
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
-from cobalt import db
+from cobalt import db, env
 from .models import FillRecompute, SizingResult
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
 class AsetStore:
-    def __init__(self, db_name: str = "cobalt_dev"):
-        self.db_name = db_name
+    def __init__(self, db_name: Optional[str] = None):
+        """`db_name` is a TEST/TOOLING seam only. Production and dev both
+        leave it None and take the database from `COBALT_ENV` via
+        `env.resolve_db_name()` — RULING 7 removed the per-component
+        `db_name` config that used to route production writes into
+        `cobalt_dev`."""
+        self.db_name = db_name or env.resolve_db_name()
 
     def _connect(self):
         return db.connect(self.db_name)
@@ -130,7 +139,17 @@ class AsetStore:
         """Every card whose created_at falls on `day` in America/New_York
         (Dejan's trading-day boundary, not the DB session's UTC default),
         oldest first — the DRC prefill's re-entry numbering depends on
-        chronological order within a ticker."""
+        chronological order within a ticker.
+
+        Ordered by `(created_at, id)`, not `created_at` alone. `created_at`
+        defaults to `now()`, which in Postgres is the TRANSACTION
+        timestamp: two cards written inside one transaction carry the
+        SAME created_at and the sort between them was arbitrary — so the
+        DRC's re-entry numbering could silently invert. Surfaced by the
+        RULING 7.1d transaction fixture (2026-09-04), but it was always
+        reachable in production by two saves inside one transaction.
+        `id` is an identity column, so it is insertion order by
+        construction and the correct tiebreak."""
         with self._connect() as conn:
             cur = conn.execute(
                 """
@@ -140,7 +159,7 @@ class AsetStore:
                        recomputed_used_risk, share_delta, distance_change_pct
                 FROM aset_sizings
                 WHERE (created_at AT TIME ZONE 'America/New_York')::date = %s
-                ORDER BY created_at ASC
+                ORDER BY created_at ASC, id ASC
                 """,
                 (day,),
             )

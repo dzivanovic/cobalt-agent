@@ -13,7 +13,12 @@ from urllib.parse import quote
 
 import psycopg
 
-PROD_DB_NAME = "cobalt_brain"
+from cobalt import env
+
+# Re-exported so existing importers of db.PROD_DB_NAME keep working;
+# cobalt/env.py is the definition of record (RULING 7).
+PROD_DB_NAME = env.PROD_DB_NAME
+DEV_DB_NAME = env.DEV_DB_NAME
 
 
 class DbConfigError(RuntimeError):
@@ -23,15 +28,29 @@ class DbConfigError(RuntimeError):
 def connect(dbname: str, *, allow_prod: bool = False) -> psycopg.Connection:
     """Open a Postgres connection to `dbname`, composing the DSN from parts.
 
-    Refuses the production database unless `allow_prod` is passed
-    explicitly (NN#16: build work never touches prod).
+    RULING 7: `cobalt_brain` is reachable when this process has declared
+    itself production (`COBALT_ENV=production`) — that declaration is
+    what makes a production entrypoint a production entrypoint, and the
+    stores now take their database name from `env.resolve_db_name()`
+    rather than from a config file. `allow_prod=True` remains for
+    one-off tooling (the migration harness) that must reach prod without
+    flipping the whole process into production mode.
+
+    Everything else still refuses: a dev run, a test, or a process with
+    `COBALT_ENV` unset cannot open `cobalt_brain` (NN#16).
     """
     if dbname == PROD_DB_NAME and not allow_prod:
-        raise DbConfigError(
-            f"Refusing to connect to production database '{PROD_DB_NAME}' "
-            "from build code (NN#16). Pass allow_prod=True only from "
-            "deployed production entrypoints."
-        )
+        try:
+            declared_production = env.is_production()
+        except env.EnvConfigError:
+            declared_production = False  # unset is definitively not production
+        if not declared_production:
+            raise DbConfigError(
+                f"Refusing to connect to production database '{PROD_DB_NAME}': "
+                f"this process has not declared {env.ENV_VAR}={env.PRODUCTION} "
+                "(NN#16 / RULING 7). Pass allow_prod=True only from migration "
+                "tooling that must reach prod deliberately."
+            )
 
     parts = {
         "POSTGRES_HOST": os.getenv("POSTGRES_HOST"),

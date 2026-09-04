@@ -384,7 +384,7 @@ async def run_drc_prefill(
     strategies_cfg = load_strategies_config()
     prefill_paths = load_prefill_paths()
 
-    store = AsetStore(aset_cfg.db_name)
+    store = AsetStore()
     store.ensure_schema()
     cards = store.for_date(for_date_)
     cards_written, trades_taken = store.counts_for_date(for_date_)
@@ -420,7 +420,7 @@ async def run_drc_prefill(
     filename = for_date_.strftime(prefill_paths.drc_filename_pattern)
     path = resolve_target(prefill_paths.review_dir, filename)
 
-    write_store = VaultWriteStore(aset_cfg.db_name)
+    write_store = VaultWriteStore()
     write_store.ensure_schema()
     writer = VaultWriter("prefill.drc", store=write_store, dry_run=dry_run)
 

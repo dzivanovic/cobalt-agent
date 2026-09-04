@@ -125,7 +125,7 @@ def upsert_trade_note(
     prefill_paths: PrefillPathsConfig,
     *,
     writer: Optional[VaultWriter] = None,
-    db_name: str = "cobalt_dev",
+    db_name: Optional[str] = None,
     dry_run: bool = False,
 ) -> tuple[Path, str]:
     """Create or update the trade note for one computed card. Returns

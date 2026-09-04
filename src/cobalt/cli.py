@@ -35,7 +35,7 @@ from cobalt.vaultwrite import VaultWriter, VaultWriteStore  # noqa: E402
 
 
 def _store() -> VaultWriteStore:
-    store = VaultWriteStore(load_aset_config().db_name)
+    store = VaultWriteStore()
     store.ensure_schema()
     return store
 

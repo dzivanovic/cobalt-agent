@@ -9,7 +9,9 @@
 # mode's actual dollar-risk-per-grade table lives in
 # configs/cobalt/aset.yaml (full/half, mirrors Dejan's DAS hotkey files).
 account_size: 10000
-db_name: cobalt_dev
+# db_name REMOVED by RULING 7 (2026-09-04) — the database is chosen by
+# COBALT_ENV alone (production -> cobalt_brain, dev -> cobalt_dev).
+# Re-adding this key is a loud crash (AsetConfig forbids extras).
 
 # "Save to Daily Note" target. Vault ROOT comes from
 # configs/dev/vault.yaml (cobalt.vault — the one resolver), never

@@ -21,7 +21,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
-from cobalt import db
+from cobalt import db, env
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 RETENTION_DAYS = 30
@@ -34,8 +34,13 @@ def sha256_text(text: Optional[str]) -> Optional[str]:
 
 
 class VaultWriteStore:
-    def __init__(self, db_name: str = "cobalt_dev"):
-        self.db_name = db_name
+    def __init__(self, db_name: Optional[str] = None):
+        """`db_name` is a TEST/TOOLING seam only. Production and dev both
+        leave it None and take the database from `COBALT_ENV` via
+        `env.resolve_db_name()` — RULING 7 removed the per-component
+        `db_name` config that used to route production writes into
+        `cobalt_dev`."""
+        self.db_name = db_name or env.resolve_db_name()
 
     def _connect(self):
         return db.connect(self.db_name)

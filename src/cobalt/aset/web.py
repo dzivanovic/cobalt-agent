@@ -34,6 +34,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from cobalt.prefill.config import PrefillConfigError, load_prefill_paths
 from cobalt.prefill.trade_note import upsert_trade_note
 from cobalt.prefill.vault_writer import VaultWriteError
+from cobalt import env
 from cobalt.vault import VaultConfigError, dev_entry_allowed, is_production, resolve_vault_path
 
 from .config import ConfigError, load_config, load_sheet_modes_config
@@ -344,7 +345,7 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
  <input type="hidden" name="sheet_mode" id="sheet_mode" value="{e(sheet_mode)}">
  <button class="primary" type="submit">Compute &amp; persist</button>
 </form>
-<div class="muted">Every computed sizing persists to Postgres ({e(cfg.db_name)} — the only ASET database; there is no separate prod/dev split here yet, see BACKLOG.md) and appends to today's daily note in the same action. Missing data = FAILED, never guessed.</div>
+<div class="muted">Every computed sizing persists to Postgres ({e(env.resolve_db_name())} — chosen by COBALT_ENV alone, RULING 7: production writes cobalt_brain, dev writes cobalt_dev) and appends to today's daily note in the same action. Missing data = FAILED, never guessed.</div>
 <script>
 window.SHEET_MODE_DOLLARS = {json.dumps(mode_dollars)};
 window.INITIAL_TICKER = {json.dumps(initial_ticker)};
@@ -484,7 +485,7 @@ async def size(request: Request) -> str:
         return _render(banner=_failed(f"{type(e).__name__}: {e}"), form=form)
 
     try:
-        store = AsetStore(cfg.db_name)
+        store = AsetStore()
         store.ensure_schema()
         row_id = store.save(result)
     except Exception as e:
@@ -498,7 +499,7 @@ async def size(request: Request) -> str:
         form["orig_timestamp"] = ""
         form["card_row_id"] = str(row_id)
         banner = _failed(
-            f"Persisted: aset_sizings id {row_id} ({cfg.db_name}) — but "
+            f"Persisted: aset_sizings id {row_id} ({store.db_name}) — but "
             f"daily-note write FAILED: {e}"
         )
         return _render(banner=banner, result=_result_card(result, form), form=form)
@@ -508,10 +509,10 @@ async def size(request: Request) -> str:
 
     try:
         prefill_paths = load_prefill_paths()
-        trade_path, trade_action = upsert_trade_note(result, when, prefill_paths, db_name=cfg.db_name)
+        trade_path, trade_action = upsert_trade_note(result, when, prefill_paths)
     except (PrefillConfigError, VaultWriteError) as e:
         banner = _failed(
-            f"Persisted: aset_sizings id {row_id} ({cfg.db_name}) — daily note "
+            f"Persisted: aset_sizings id {row_id} ({store.db_name}) — daily note "
             f"appended to {note_path} — but trade-note write FAILED: {e}"
         )
         return _render(banner=banner, result=_result_card(result, form), form=form)
@@ -519,13 +520,13 @@ async def size(request: Request) -> str:
     if note_write is None:
         banner = (
             f'<div class="warn">Persisted: aset_sizings id {row_id} '
-            f"({html.escape(cfg.db_name)}) · trade note {trade_action}: "
+            f"({html.escape(store.db_name)}) · trade note {trade_action}: "
             f"{html.escape(str(trade_path))} · ⚠ DAILY-NOTE WRITE IS DISABLED "
             "(daily_note.write_enabled=false) — this card is NOT in the journal.</div>"
         )
     else:
         banner = (
-            f'<div class="saved">Persisted: aset_sizings id {row_id} ({html.escape(cfg.db_name)}) '
+            f'<div class="saved">Persisted: aset_sizings id {row_id} ({html.escape(store.db_name)}) '
             f"· {html.escape(note_write.action)} in {html.escape(str(note_path))} "
             f"(unit {html.escape(note_write.unit or '')}) "
             f"· trade note {trade_action}: {html.escape(str(trade_path))}</div>"
@@ -575,7 +576,7 @@ async def fill(request: Request) -> str:
                 "first, then recompute its actual fill. (Refusing to write a fill "
                 "update that cannot be tied to its card row.)"
             )
-        store = AsetStore(cfg.db_name)
+        store = AsetStore()
         store.ensure_schema()
         store.mark_filled(int(card_row_raw), fill_result)
 

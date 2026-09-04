@@ -149,7 +149,7 @@ def format_fill_update_card(
 
 
 def build_writer(cfg: AsetConfig, *, dry_run: bool = False, run_id: Optional[str] = None) -> VaultWriter:
-    store = VaultWriteStore(cfg.db_name)
+    store = VaultWriteStore()
     store.ensure_schema()
     return VaultWriter("aset.daily_note", store=store, run_id=run_id, dry_run=dry_run)
 

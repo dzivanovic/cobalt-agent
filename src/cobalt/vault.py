@@ -4,11 +4,21 @@ TRIAGE 2.6 ruling: `obsidian_vault_path` resolution is KEEP-CONCEPT /
 REBUILD — "ONE resolver; closes CLAUDE.md's OPEN ITEM." This is that
 resolver, for `src/cobalt/*` only.
 
-Single source: `configs/dev/vault.yaml`'s `obsidian_vault_path`,
-overridable by the `COBALT_VAULT_PATH` env var. Fail-loud: unset (no
-config file and no env override) or a path that doesn't exist on disk
-both crash with `VaultConfigError` — never a guess, never a silent
-fallback.
+RULING 7 (2026-09-04) — `COBALT_ENV` now gates this resolver the same
+way it gates the database (`cobalt/env.py`). `resolve_env()` is called
+FIRST: unset or unknown raises `EnvConfigError` before any path work
+happens. There is no longer an implicit "no flag means dev" branch.
+`production` resolves to `PROD_VAULT_PATH_REFERENCE` on its own; `dev`
+resolves from `COBALT_VAULT_PATH` or `configs/dev/vault.yaml`. Every
+sentence below that says "COBALT_ENV unset" describes the pre-RULING-7
+behaviour and is kept for the history of the guards, not as current
+behaviour — unset now simply raises.
+
+Single source for the DEV root: `configs/dev/vault.yaml`'s
+`obsidian_vault_path`, overridable by the `COBALT_VAULT_PATH` env var.
+Fail-loud: unset (no config file and no env override) or a path that
+doesn't exist on disk both crash with `VaultConfigError` — never a
+guess, never a silent fallback.
 
 NN#16 dev/prod vault split (formalized 2026-08-31): `configs/dev/
 vault.yaml`'s committed value is the DEV default — `~/dev-vault-cobalt`
@@ -66,6 +76,8 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from cobalt import env
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = REPO_ROOT / "configs" / "dev" / "vault.yaml"
 ENV_OVERRIDE = "COBALT_VAULT_PATH"
@@ -73,11 +85,12 @@ ENV_MODE = "COBALT_ENV"
 PROD_ENV_VALUE = "production"
 ALLOW_DEV_ENTRY_ENV = "COBALT_ALLOW_DEV_ENTRY"
 
-# Documentation only — never read by resolve_vault_path() itself. The
-# real vault path lives only in the places that actually need to reach
-# it (COBALT_VAULT_PATH in ops/start_aset.sh + the prefill plists);
-# this constant exists so "what does prod actually point at" has one
-# obvious, greppable answer instead of being tribal knowledge.
+# The production vault root. RULING 7 (2026-09-04) promoted this from a
+# documentation-only constant to the value production actually resolves
+# to: with COBALT_ENV=production and no COBALT_VAULT_PATH, this IS the
+# answer. The plists still set COBALT_VAULT_PATH explicitly — belt and
+# braces, and it keeps "what does prod point at" greppable in ops/ — but
+# production no longer DEPENDS on that env var being present.
 PROD_VAULT_PATH_REFERENCE = "/Users/cobalt/Vault/Think"
 
 
@@ -96,7 +109,9 @@ class VaultConfig(BaseModel):
 
 
 def is_production() -> bool:
-    return os.getenv(ENV_MODE) == PROD_ENV_VALUE
+    """True in production. RULING 7: raises if COBALT_ENV is unset — the
+    mode is never inferred from the absence of a flag any more."""
+    return env.is_production()
 
 
 def dev_entry_allowed() -> bool:
@@ -104,10 +119,21 @@ def dev_entry_allowed() -> bool:
 
 
 def resolve_vault_path() -> Path:
-    """Return the new core's single vault root, or raise VaultConfigError."""
+    """Return the new core's single vault root, or raise.
+
+    RULING 7: `COBALT_ENV` is resolved FIRST and unconditionally, so an
+    unset mode fails here exactly as it fails for the database — there
+    is no longer an implicit "no flag means dev" path. In production the
+    root defaults to `PROD_VAULT_PATH_REFERENCE`; in dev it comes from
+    `COBALT_VAULT_PATH` or `configs/dev/vault.yaml`.
+    """
+    mode = env.resolve_env()  # raises EnvConfigError when unset/unknown
+
     env_val = os.getenv(ENV_OVERRIDE)
     if env_val:
         raw, source = env_val, f"env:{ENV_OVERRIDE}"
+    elif mode == env.PRODUCTION:
+        raw, source = PROD_VAULT_PATH_REFERENCE, f"{ENV_MODE}={PROD_ENV_VALUE}"
     else:
         if not CONFIG_PATH.exists():
             raise VaultConfigError(
@@ -133,7 +159,7 @@ def resolve_vault_path() -> Path:
     resolved = path.resolve()
 
     prod_root = Path(PROD_VAULT_PATH_REFERENCE).resolve()
-    if is_production():
+    if mode == env.PRODUCTION:
         try:
             resolved.relative_to(prod_root)
         except ValueError:

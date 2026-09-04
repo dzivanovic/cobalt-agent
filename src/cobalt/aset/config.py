@@ -98,7 +98,14 @@ class AsetConfig(BaseModel):
     # comment). Not read anywhere in the current fixed-dollar sheet-mode
     # math.
     account_size: Decimal = Field(gt=0)
-    db_name: str = Field(default="cobalt_dev", min_length=1)
+    # RULING 7 (2026-09-04): `db_name` is DELETED, not defaulted.
+    # configs/dev/aset.local.yaml pinned it to cobalt_dev for every
+    # caller, so the PRODUCTION sheet and both prefill jobs wrote live
+    # cards and their L28 audit trail into the dev database alongside
+    # pytest rows. The database is not a per-component setting any
+    # more: it comes from COBALT_ENV via cobalt.env.resolve_db_name().
+    # extra="forbid" above means a leftover `db_name:` key in a config
+    # file is now a LOUD crash, not a silently honoured override.
     daily_note: DailyNoteConfig
     server: ServerConfig = Field(default_factory=ServerConfig)
     validation: ValidationConfig = Field(default_factory=ValidationConfig)

@@ -408,7 +408,7 @@ async def run_daily_prefill(
     filename = when.strftime(aset_cfg.daily_note.filename_pattern)
     path = resolve_target(aset_cfg.daily_note.daily_notes_dir, filename)
 
-    store = VaultWriteStore(aset_cfg.db_name)
+    store = VaultWriteStore()
     store.ensure_schema()
     writer = VaultWriter("prefill.daily", store=store, dry_run=dry_run)
 
@@ -445,7 +445,7 @@ async def run_daily_prefill(
 
     cards: list[dict] = []
     try:
-        cards = AsetStore(aset_cfg.db_name).for_date(when.date())
+        cards = AsetStore().for_date(when.date())
     except Exception:
         cards = []  # best-effort only — no live "current mode" to show, not a run failure
 
