@@ -140,8 +140,12 @@ class TestAbsurdFillRejectAtWebLayer:
 
     def test_corrected_fill_passes_the_guard(self):
         # The real corrected fill that followed (218.91) — not asserting
-        # a full success page (save_fill_update is stubbed to raise),
-        # just that the typo guard itself doesn't fire.
+        # a full success page, just that the typo guard itself doesn't
+        # fire. Since 2026-09-03 (L28 step 3) the next thing the handler
+        # demands is the card's aset_sizings row id, because the fill
+        # recompute now UPDATEs that row (it used to persist nothing);
+        # this form has none, so it stops there — still before any DB or
+        # vault I/O, which is what this test is really about.
         form = dict(
             BASE_SIZE_FORM,
             actual_fill="218.91",
@@ -149,7 +153,22 @@ class TestAbsurdFillRejectAtWebLayer:
         )
         r = client.post("/fill", data=form)
         assert "typo guard" not in r.text
-        assert "never reach save_fill_update" in r.text
+        assert "No aset_sizings row id on this form" in r.text
+        assert "never reach save_fill_update" not in r.text
+        assert "never reach AsetStore" not in r.text
+
+    def test_fill_with_a_card_row_id_reaches_the_store(self):
+        """The fill recompute must persist. With a row id present the
+        handler goes on to the store (stubbed here to prove it is
+        reached at all) instead of stopping at the guard."""
+        form = dict(
+            BASE_SIZE_FORM,
+            actual_fill="218.91",
+            orig_timestamp="2026-08-31T09:58:00-04:00",
+            card_row_id="4242",
+        )
+        r = client.post("/fill", data=form)
+        assert "never reach AsetStore" in r.text
 
 
 class TestDefect3TwoDistinctHandlers:
