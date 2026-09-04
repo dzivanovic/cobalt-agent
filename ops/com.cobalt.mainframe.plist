@@ -4,15 +4,43 @@
 <dict>
     <key>Label</key>
     <string>com.cobalt.mainframe</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/cobalt/.lmstudio/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+        <!-- RULING 7 (2026-09-04): the environment law. COBALT_ENV is the
+             ONE switch for BOTH the database and the vault
+             (src/cobalt/env.py): production -> cobalt_brain +
+             /Users/cobalt/Vault/Think, dev -> cobalt_dev + the dev
+             vault. Unset now raises at boot instead of resolving
+             silently, so this key is not optional decoration — a job
+             that loses it fails loud rather than writing live trading
+             data into the dev database, which is exactly what happened
+             before this ruling. This job runs no Cobalt Python today
+             (it is the LM Studio model server), so the key is
+             declarative here — but every ops/ job carries it, so that
+             "which environment is this job in" is never a question
+             anyone has to answer by reading the program. -->
+        <key>COBALT_ENV</key>
+        <string>production</string>
+    </dict>
+    <!-- RULING 6 (2026-09-04): the script moved from
+         ~/.lmstudio/start_mainframe.sh into ops/ — it was the last
+         Gemini-era operational artifact living outside the repo, outside
+         git and outside review. ops/start_mainframe.sh's header has the
+         provenance and the two defects fixed in the move (globally
+         scoped `pkill -9 -f caffeinate`, unlogged heartbeat). -->
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/cobalt/.lmstudio/start_mainframe.sh</string>
+        <string>/Users/cobalt/cobalt/ops/start_mainframe.sh</string>
     </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/cobalt/cobalt</string>
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/Users/cobalt/.lmstudio/mainframe_boot.log</string>
+    <string>/Users/cobalt/cobalt/ops/logs/mainframe-boot.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/cobalt/.lmstudio/mainframe_boot.err</string>
+    <string>/Users/cobalt/cobalt/ops/logs/mainframe-boot.err</string>
 </dict>
 </plist>
