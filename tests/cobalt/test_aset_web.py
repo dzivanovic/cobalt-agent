@@ -20,7 +20,7 @@ client = TestClient(web_module.app)
 
 
 class _NeverCallStore:
-    def __init__(self, db_name: str):
+    def __init__(self, db_name: str | None = None):
         raise AssertionError("a rejected card must never reach AsetStore")
 
 
@@ -233,14 +233,14 @@ class TestDevEntryFence:
     overridden per-test here to exercise the fence itself."""
 
     def test_prefill_refused_when_not_production_and_not_allowed(self, monkeypatch):
-        monkeypatch.delenv("COBALT_ENV", raising=False)
+        monkeypatch.setenv("COBALT_ENV", "dev")  # RULING 7: dev is declared, not inferred
         monkeypatch.delenv("COBALT_ALLOW_DEV_ENTRY", raising=False)
         r = client.get("/api/prefill", params={"ticker": "NVDA"})
         assert r.status_code == 403
         assert "DEV instance" in r.json()["error"]
 
     def test_size_refused_when_not_production_and_not_allowed(self, monkeypatch):
-        monkeypatch.delenv("COBALT_ENV", raising=False)
+        monkeypatch.setenv("COBALT_ENV", "dev")  # RULING 7: dev is declared, not inferred
         monkeypatch.delenv("COBALT_ALLOW_DEV_ENTRY", raising=False)
         r = client.post("/size", data=BASE_SIZE_FORM)
         assert "FAILED" in r.text
@@ -248,7 +248,7 @@ class TestDevEntryFence:
         assert "never reach AsetStore" not in r.text
 
     def test_fill_refused_when_not_production_and_not_allowed(self, monkeypatch):
-        monkeypatch.delenv("COBALT_ENV", raising=False)
+        monkeypatch.setenv("COBALT_ENV", "dev")  # RULING 7: dev is declared, not inferred
         monkeypatch.delenv("COBALT_ALLOW_DEV_ENTRY", raising=False)
         form = dict(
             BASE_SIZE_FORM,
@@ -261,7 +261,7 @@ class TestDevEntryFence:
         assert "never reach save_fill_update" not in r.text
 
     def test_size_allowed_when_explicitly_opted_in(self, monkeypatch):
-        monkeypatch.delenv("COBALT_ENV", raising=False)
+        monkeypatch.setenv("COBALT_ENV", "dev")  # RULING 7: dev is declared, not inferred
         monkeypatch.setenv("COBALT_ALLOW_DEV_ENTRY", "1")
         r = client.post("/size", data=BASE_SIZE_FORM)
         assert "DEV instance" not in r.text
@@ -275,7 +275,7 @@ class TestDevEntryFence:
         assert "never reach AsetStore" in r.text
 
     def test_header_shows_dev_label_and_red_banner_when_not_production(self, monkeypatch):
-        monkeypatch.delenv("COBALT_ENV", raising=False)
+        monkeypatch.setenv("COBALT_ENV", "dev")  # RULING 7: dev is declared, not inferred
         text = web_module._render()
         assert "pre-beta slice 1 · DEV" in text
         assert "DEV INSTANCE" in text

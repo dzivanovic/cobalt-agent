@@ -29,7 +29,6 @@ from cobalt.aset.models import Grade
 
 COMPLETE = """\
 account_size: 10000
-db_name: cobalt_dev
 daily_note:
   daily_notes_dir: "1 - Trading/1- Daily Notes"
 """

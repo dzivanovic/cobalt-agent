@@ -237,7 +237,7 @@ requires_db = pytest.mark.skipif(
 async def test_create_path_renders_full_template_with_cards(fake_vault, monkeypatch):
     when = datetime(2026, 8, 28, 9, 31, 5).astimezone()
     cards = [make_card("NVDA", when)]
-    monkeypatch.setattr(drc_module, "AsetStore", lambda db_name: _FakeStore(cards))
+    monkeypatch.setattr(drc_module, "AsetStore", lambda *a, **k: _FakeStore(cards))
 
     result = await drc_module.run_drc_prefill(for_date_=date(2026, 8, 28))
     assert result.action == "created"
@@ -266,7 +266,7 @@ async def test_create_path_renders_full_template_with_cards(fake_vault, monkeypa
 async def test_create_path_filled_card_has_no_reconcile_line(fake_vault, monkeypatch):
     when = datetime(2026, 8, 28, 9, 31, 5).astimezone()
     cards = [make_card("NVDA", when)]
-    monkeypatch.setattr(drc_module, "AsetStore", lambda db_name: _FakeStore(cards))
+    monkeypatch.setattr(drc_module, "AsetStore", lambda *a, **k: _FakeStore(cards))
 
     daily_note_path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-08-28.md"
     daily_note_path.write_text(
@@ -290,7 +290,7 @@ async def test_create_path_filled_card_has_no_reconcile_line(fake_vault, monkeyp
 async def test_append_path_when_drc_already_exists(fake_vault, monkeypatch):
     when = datetime(2026, 8, 28, 9, 31, 5).astimezone()
     cards = [make_card("NVDA", when)]
-    monkeypatch.setattr(drc_module, "AsetStore", lambda db_name: _FakeStore(cards))
+    monkeypatch.setattr(drc_module, "AsetStore", lambda *a, **k: _FakeStore(cards))
 
     path = fake_vault / "1 - Trading" / "5 - Review" / "DRC-2026-08-28.md"
     path.write_text("# Dejan's own DRC draft\n\nAlready started writing this.\n")
@@ -309,7 +309,7 @@ async def test_append_path_when_drc_already_exists(fake_vault, monkeypatch):
 async def test_second_run_same_day_is_idempotent(fake_vault, monkeypatch):
     when = datetime(2026, 8, 28, 9, 31, 5).astimezone()
     cards = [make_card("NVDA", when)]
-    monkeypatch.setattr(drc_module, "AsetStore", lambda db_name: _FakeStore(cards))
+    monkeypatch.setattr(drc_module, "AsetStore", lambda *a, **k: _FakeStore(cards))
 
     first = await drc_module.run_drc_prefill(for_date_=date(2026, 8, 28))
     before = first.path.read_text()
@@ -323,7 +323,7 @@ async def test_legacy_prefill_marker_is_skipped_not_duplicated(fake_vault, monke
     """Historical DRC notes carrying the PRE-L28 marker are left alone —
     they are not retro-marked and must not get a second block."""
     when = datetime(2026, 8, 28, 9, 31, 5).astimezone()
-    monkeypatch.setattr(drc_module, "AsetStore", lambda db_name: _FakeStore([make_card("NVDA", when)]))
+    monkeypatch.setattr(drc_module, "AsetStore", lambda *a, **k: _FakeStore([make_card("NVDA", when)]))
     path = fake_vault / "1 - Trading" / "5 - Review" / "DRC-2026-08-28.md"
     original = f"# old DRC\n\n{drc_module.legacy_marker(date(2026, 8, 28))}\n\n- Ticker: NVDA\n"
     path.write_text(original)
@@ -336,7 +336,7 @@ async def test_legacy_prefill_marker_is_skipped_not_duplicated(fake_vault, monke
 @requires_db
 async def test_dry_run_writes_nothing(fake_vault, monkeypatch):
     when = datetime(2026, 8, 28, 9, 31, 5).astimezone()
-    monkeypatch.setattr(drc_module, "AsetStore", lambda db_name: _FakeStore([make_card("NVDA", when)]))
+    monkeypatch.setattr(drc_module, "AsetStore", lambda *a, **k: _FakeStore([make_card("NVDA", when)]))
     path = fake_vault / "1 - Trading" / "5 - Review" / "DRC-2026-08-28.md"
     path.write_text("# Dejan's own DRC draft\n")
     before = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -356,7 +356,7 @@ async def test_trades_taken_counts_filled_only(fake_vault, monkeypatch):
         make_card("NVDA", when),
         make_card("TSLA", when, id=2, status="FILLED"),
     ]
-    monkeypatch.setattr(drc_module, "AsetStore", lambda db_name: _FakeStore(cards))
+    monkeypatch.setattr(drc_module, "AsetStore", lambda *a, **k: _FakeStore(cards))
     result = await drc_module.run_drc_prefill(for_date_=date(2026, 8, 28))
     assert (result.cards_written, result.trades_taken) == (2, 1)
     assert "Cards written: 2 · Trades taken (FILLED): 1" in result.path.read_text()
@@ -364,7 +364,7 @@ async def test_trades_taken_counts_filled_only(fake_vault, monkeypatch):
 
 @requires_db
 async def test_no_cards_renders_no_tickers_traded(fake_vault, monkeypatch):
-    monkeypatch.setattr(drc_module, "AsetStore", lambda db_name: _FakeStore([]))
+    monkeypatch.setattr(drc_module, "AsetStore", lambda *a, **k: _FakeStore([]))
     result = await drc_module.run_drc_prefill(for_date_=date(2026, 8, 29))
     content = result.path.read_text()
     assert "(no tickers traded today)" in content

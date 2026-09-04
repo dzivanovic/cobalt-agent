@@ -158,7 +158,7 @@ def fake_fetchers(monkeypatch):
         return []
 
     class _FakeStore:
-        def __init__(self, db_name):
+        def __init__(self, db_name=None):
             pass
 
         def for_date(self, day):

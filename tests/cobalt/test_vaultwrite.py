@@ -47,7 +47,11 @@ requires_dev_vault = pytest.mark.skipif(
     not DEV_VAULT.is_dir(), reason=f"dev vault {DEV_VAULT} not present"
 )
 
-pytestmark = [requires_db, requires_dev_vault]
+# RULING 7.1d: the whole module runs inside one cobalt_dev transaction
+# per test, rolled back afterwards. Before this, a single full-suite
+# run left +146 rows in vault_writes — the module cleaned up at SETUP
+# (by note prefix), so every run's rows survived it.
+pytestmark = [requires_db, requires_dev_vault, pytest.mark.usefixtures("dev_db_tx")]
 
 
 def _purge_rows(prefix: str) -> None:
@@ -440,8 +444,8 @@ def test_restore_refuses_a_whole_file_create(writer, store, dev_dir):
 # ---------------------------------------------------------------------------
 
 
-def test_production_path_refused_without_cobalt_env(monkeypatch):
-    monkeypatch.delenv("COBALT_ENV", raising=False)
+def test_production_path_refused_without_production_env(monkeypatch):
+    monkeypatch.setenv("COBALT_ENV", "dev")  # RULING 7: dev is declared, not inferred
     target = Path(PROD_VAULT_PATH_REFERENCE) / "1 - Trading" / "1- Daily Notes" / "2026-09-04.md"
     with pytest.raises(VaultWriteRefused, match="did not declare COBALT_ENV=production"):
         assert_write_target(target)
@@ -456,14 +460,14 @@ def test_production_process_refused_a_non_production_path(monkeypatch, dev_dir):
 def test_dev_allow_flag_does_not_unlock_production_writes(monkeypatch):
     """COBALT_ALLOW_DEV_ENTRY is a read/entry opt-in. It must not be a
     back door into writing the live vault — only COBALT_ENV=production is."""
-    monkeypatch.delenv("COBALT_ENV", raising=False)
+    monkeypatch.setenv("COBALT_ENV", "dev")  # RULING 7: dev is declared, not inferred
     monkeypatch.setenv("COBALT_ALLOW_DEV_ENTRY", "1")
     with pytest.raises(VaultWriteRefused):
         assert_write_target(Path(PROD_VAULT_PATH_REFERENCE) / "note.md")
 
 
 def test_repo_path_refused(monkeypatch):
-    monkeypatch.delenv("COBALT_ENV", raising=False)
+    monkeypatch.setenv("COBALT_ENV", "dev")  # RULING 7: dev is declared, not inferred
     repo_note = Path(__file__).resolve().parents[2] / "README.md"
     with pytest.raises(VaultWriteRefused, match="INSIDE the repo"):
         assert_write_target(repo_note)

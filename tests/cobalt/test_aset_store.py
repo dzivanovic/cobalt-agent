@@ -17,12 +17,15 @@ from decimal import Decimal
 
 import pytest
 
-from cobalt import db
 from cobalt.aset.engine import compute_sizing
 from cobalt.aset.models import Direction, Grade, SheetMode, SizingInput
 from cobalt.aset.store import AsetStore
 
-pytestmark = pytest.mark.integration
+# RULING 7.1d: every DB test runs inside a cobalt_dev transaction that
+# is rolled back (tests/cobalt/conftest.py). The per-test id cleanup
+# below is kept as a second belt — it documents which rows a test
+# owns — but it is no longer what keeps the database clean.
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("dev_db_tx")]
 
 requires_db = pytest.mark.skipif(
     not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
@@ -37,11 +40,6 @@ def _delete_rows(store: AsetStore, ids: list[int]) -> None:
     counts (2026-09-03: 15 stray TEST/FORDATE rows did exactly that)."""
     with store._connect() as conn:
         conn.execute("DELETE FROM aset_sizings WHERE id = ANY(%s)", (ids,))
-
-
-def test_factory_refuses_prod_db():
-    with pytest.raises(db.DbConfigError):
-        db.connect("cobalt_brain")
 
 
 @requires_db

@@ -89,7 +89,7 @@ class TestProductionGate:
     def test_dev_env_unaffected_by_gate(self, monkeypatch, tmp_path):
         # COBALT_ENV unset (the dev default) — a non-Think root must
         # still resolve cleanly, or the NN#16 dev-safe default breaks.
-        monkeypatch.delenv(vault_module.ENV_MODE, raising=False)
+        monkeypatch.setenv(vault_module.ENV_MODE, "dev")  # RULING 7: dev is declared, not inferred
         monkeypatch.setenv(vault_module.ENV_OVERRIDE, str(tmp_path))
         assert resolve_vault_path() == tmp_path.resolve()
 
@@ -102,7 +102,7 @@ class TestInverseGate:
     COBALT_ALLOW_DEV_ENTRY=1 for a deliberate override."""
 
     def test_dev_env_refuses_the_prod_root(self, monkeypatch):
-        monkeypatch.delenv(vault_module.ENV_MODE, raising=False)
+        monkeypatch.setenv(vault_module.ENV_MODE, "dev")  # RULING 7: dev is declared, not inferred
         monkeypatch.delenv(vault_module.ALLOW_DEV_ENTRY_ENV, raising=False)
         monkeypatch.setenv(
             vault_module.ENV_OVERRIDE, vault_module.PROD_VAULT_PATH_REFERENCE
@@ -111,7 +111,7 @@ class TestInverseGate:
             resolve_vault_path()
 
     def test_dev_env_with_explicit_override_allows_the_prod_root(self, monkeypatch):
-        monkeypatch.delenv(vault_module.ENV_MODE, raising=False)
+        monkeypatch.setenv(vault_module.ENV_MODE, "dev")  # RULING 7: dev is declared, not inferred
         monkeypatch.setenv(vault_module.ALLOW_DEV_ENTRY_ENV, "1")
         monkeypatch.setenv(
             vault_module.ENV_OVERRIDE, vault_module.PROD_VAULT_PATH_REFERENCE
@@ -122,7 +122,7 @@ class TestInverseGate:
 
     def test_dev_env_resolving_outside_prod_is_unaffected(self, monkeypatch, tmp_path):
         # The ordinary, expected dev case must not be caught by the new gate.
-        monkeypatch.delenv(vault_module.ENV_MODE, raising=False)
+        monkeypatch.setenv(vault_module.ENV_MODE, "dev")  # RULING 7: dev is declared, not inferred
         monkeypatch.delenv(vault_module.ALLOW_DEV_ENTRY_ENV, raising=False)
         monkeypatch.setenv(vault_module.ENV_OVERRIDE, str(tmp_path))
         assert resolve_vault_path() == tmp_path.resolve()
