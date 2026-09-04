@@ -21,7 +21,13 @@ covering Batch 1 (ADR-0001), Batch 2 / v0.7 schema extensions
 (ADR-0002), and the v0.7 fold's schema v0.4 migration — one-stop trail
 slot, tunable registry, class definitions (ADR-0003); a third sibling
 component, unrelated to ASET/Archiver except for the shared
-config-boundary convention (`configs/cobalt/taxonomy/`).
+config-boundary convention (`configs/cobalt/taxonomy/`). Extended
+2026-09-04 (Sprint 1, S1-P1) to cover **the F1 session clock**
+(`src/cobalt/session/`) — the resolver, the NYSE calendar as config, the
+`market_reset` hard block and its counter table, and the `cobalt
+session` CLI; a fourth sibling component, and the first one every other
+component now depends on (the vault writer and the ASET sheet both gate
+on it, and both stores stamp its answer).
 
 ---
 
