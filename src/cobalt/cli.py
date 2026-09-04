@@ -1,16 +1,25 @@
 """`cobalt` — the new core's top-level CLI.
 
-Today it carries one command group, `vault`, whose job is the LAW L28
-rollback path:
+Two command groups:
 
     cobalt vault restore --write-id N [--dry-run]
     cobalt vault writes [--limit N]
     cobalt vault overrides --note PATH
 
+    cobalt session now [--at ISO8601]
+    cobalt session backfill [--dry-run]
+    cobalt session blocks [--limit N]
+
+    cobalt validate
+
 `restore` puts a section back to the before-state recorded in
 `vault_writes` id N, and it does so THROUGH THE SAME WRITER — same
 markers, same mtime/hash guard, same atomic rename, and its own audit
 row. There is no second write path, not even for undo.
+
+`session` is the F1 clock (Charter §3 F1). `validate` is the config gate
+(F16) — the same `python -m cobalt.taxonomy.validate` the tests run,
+given a name an operator can remember.
 """
 
 import os
@@ -31,6 +40,8 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 from cobalt.aset.config import load_config as load_aset_config  # noqa: E402
+from cobalt.session import cli as session_cli  # noqa: E402
+from cobalt.taxonomy import validate as taxonomy_validate  # noqa: E402
 from cobalt.vaultwrite import VaultWriter, VaultWriteStore  # noqa: E402
 
 
@@ -70,6 +81,36 @@ def _cmd_overrides(args: argparse.Namespace) -> None:
         )
 
 
+def _cmd_validate(args: argparse.Namespace) -> None:
+    """F16: `cobalt validate`. One name for the config gate, wrapping the
+    taxonomy validator (which owns the checks) plus the two config
+    families it does not cover — the NYSE calendar and the session
+    boundaries, both introduced by F1. No second implementation: this
+    calls the same loaders the runtime does, so a config that passes here
+    is a config the runtime can boot on."""
+    from cobalt.session.calendar import load_calendar
+    from cobalt.session.clock import BOUNDARY_KEYS, SessionClock
+
+    rc = taxonomy_validate.main()
+    if rc != 0:
+        sys.exit(rc)
+
+    calendar = load_calendar()
+    print(
+        f"\nNYSE calendar: years {calendar.covered_years} loaded OK "
+        f"({calendar.holiday_count} holidays, "
+        f"{calendar.early_close_count} early closes)."
+    )
+    # Building the clock IS the check: from_config() fails loud on a
+    # missing row, a wrong unit, an unparseable time, or an ordering that
+    # would produce a negative-length window.
+    SessionClock.from_config(calendar)
+    print(
+        f"Session boundaries: {len(BOUNDARY_KEYS)} tunables rows resolved, "
+        "ordering OK."
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="cobalt", description="Cobalt new-core CLI")
     sub = parser.add_subparsers(dest="group", required=True)
@@ -89,6 +130,13 @@ def main() -> None:
     overrides = vsub.add_parser("overrides", help="List recorded human overrides for a note.")
     overrides.add_argument("--note", required=True, help="Absolute note path as recorded")
     overrides.set_defaults(func=_cmd_overrides)
+
+    session_cli.add_parser(sub)
+
+    validate = sub.add_parser(
+        "validate", help="Validate every config family (F16 sweep gate)."
+    )
+    validate.set_defaults(func=_cmd_validate)
 
     args = parser.parse_args()
     try:
