@@ -38,3 +38,13 @@ cobalt_context.txt
 cobalt_master_context.txt
 *.egg-info/
 .DS_Store
+
+# RULING 7 (2026-09-04) — the cobalt_dev -> cobalt_brain migration dump.
+# This directory sits inside the "!docs/00 - Project/**" carve-out above,
+# so without this rule its contents are tracked. The dump is a
+# --data-only pg_dump of vault_writes, whose before/after/unit_before/
+# unit_after columns hold VERBATIM production note text: Dejan's daily
+# notes, journal entries and trade cards. Committing it would put vault
+# contents into git history, which CLAUDE.md forbids absolutely. The
+# dump is the migration's ROLLBACK and it stays local, on disk, only.
+docs/00 - Project/incident-2026-09-03/

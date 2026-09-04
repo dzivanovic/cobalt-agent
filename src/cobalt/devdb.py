@@ -23,8 +23,18 @@ memory-layer table are outside the allowlist and cannot be named.
 
 import argparse
 import sys
+from pathlib import Path
 
-from cobalt import db, env
+from dotenv import load_dotenv
+
+# The Postgres parts db.connect() composes its DSN from live in the repo
+# .env. The prefill/aset entrypoints get them by ACCIDENT — a transitive
+# old-tree import calls load_dotenv() somewhere down their chain. This
+# module has no such chain, so it loads the same file deliberately and
+# visibly, exactly as cobalt/cli.py does.
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
+from cobalt import db, env  # noqa: E402
 
 # The ONLY tables this helper may empty. Everything else — `bars`, the
 # memory layer's five pillars, Mattermost's 116 tables — is out of reach
