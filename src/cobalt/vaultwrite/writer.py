@@ -34,6 +34,7 @@ What the law buys, mechanically:
    loud; never resolve silently to either vault.
 """
 
+import functools
 import os
 import re
 import tempfile
@@ -62,6 +63,8 @@ from .markers import (
     validate_name,
 )
 from .merge import Override, merge3
+from cobalt import obsidian
+
 from .store import VaultWriteStore, sha256_text
 
 __all__ = [
@@ -204,6 +207,11 @@ class WriteResult:
     hash_after: Optional[str] = None
     baseline_missing: bool = False
     notes: list[str] = field(default_factory=list)
+    # RULING 6.3d: conditions that make a SUCCESSFUL write untrustworthy.
+    # Today the only member is "Obsidian is not running, so these bytes
+    # will not sync" — the exact failure that made prefill's correct
+    # 05:15 write on 2026-09-04 invisible. Printed as ERROR, never NOTE.
+    errors: list[str] = field(default_factory=list)
 
     @property
     def changed(self) -> bool:
@@ -219,6 +227,8 @@ class WriteResult:
         if self.write_id is not None:
             head += f" · write_id={self.write_id}"
         parts = [head]
+        for err in self.errors:
+            parts.append(f"  ERROR: {err}")
         for note in self.notes:
             parts.append(f"  NOTE: {note}")
         if self.baseline_missing:
@@ -264,6 +274,27 @@ def _ensure_trailing_newline(text: str) -> str:
     return text if text.endswith("\n") else text + "\n"
 
 
+# Actions that put (or would put) bytes on disk. "unchanged", "skipped"
+# and "skipped_exists" wrote nothing, so an absent Obsidian is irrelevant
+# to them and must not raise a false alarm.
+_BYTES_ACTIONS = frozenset({"created", "updated", "restored"})
+
+
+def _reports_sync_status(method):
+    """Annotate every WriteResult a public writer method returns with the
+    Obsidian-sync condition (RULING 6.3d). Applied at the four public
+    entry points rather than the ten `return WriteResult(...)` sites, so
+    a future return site cannot forget it."""
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        result = method(self, *args, **kwargs)
+        self._annotate_sync(result)
+        return result
+
+    return wrapper
+
+
 class VaultWriter:
     """One instance per run. `run_id` ties every row this run wrote
     together in `vault_writes`."""
@@ -296,6 +327,27 @@ class VaultWriter:
                 "to be persisted before it lands. Refusing to write blind."
             )
         return self.store
+
+    def _annotate_sync(self, result: WriteResult) -> None:
+        """RULING 6.3d. Bytes that land in the vault while no Obsidian
+        process is running do not reach Sync, do not reach Dejan's other
+        devices, and — as 2026-09-04 proved — can be silently overwritten
+        by whichever device DOES have Obsidian open. The write succeeded;
+        its delivery did not. That is an ERROR line, not a note, and the
+        heartbeat reads the same probe so the two can never disagree."""
+        if result.action not in _BYTES_ACTIONS:
+            return
+        try:
+            running, message = obsidian.sync_status()
+        except obsidian.ObsidianProbeError as e:
+            # "the probe broke" is NOT "Obsidian is down" — say which.
+            detail = f"Obsidian probe FAILED — sync state UNKNOWN: {e}"
+            result.errors.append(detail)
+            logger.error(f"{result.path}: {detail}")
+            return
+        if not running:
+            result.errors.append(message)
+            logger.error(f"{result.path}: {message}")
 
     def _purge_once(self) -> None:
         """Retention is the writer's own job (L28.3) — one purge per run.
@@ -408,6 +460,7 @@ class VaultWriter:
 
     # -- API ---------------------------------------------------------
 
+    @_reports_sync_status
     def create_if_absent(self, path: Path, template: str) -> WriteResult:
         """L28.1: write a note whole ONLY when it does not exist. An
         existing file is never rewritten from a template — it is left
@@ -490,6 +543,7 @@ class VaultWriter:
                 ):
                     pass
 
+    @_reports_sync_status
     def upsert_unit(
         self,
         path: Path,
@@ -653,6 +707,7 @@ class VaultWriter:
             return None
         return self.store.last_after(str(path), section, unit_id)
 
+    @_reports_sync_status
     def upsert_region(
         self,
         path: Path,
@@ -748,6 +803,7 @@ class VaultWriter:
 
     # -- rollback ----------------------------------------------------
 
+    @_reports_sync_status
     def restore(self, write_id: int) -> WriteResult:
         """L28: `cobalt vault restore --write-id N` — put that section
         back to its before-state, through this same writer (guard, atomic
