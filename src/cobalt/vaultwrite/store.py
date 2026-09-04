@@ -1,5 +1,10 @@
 """Postgres audit trail for the ONE vault write path (LAW L28.3).
 
+Every row also carries the SESSION it was written in (F1, 2026-09-04) —
+stamped by the writer from the same resolver call that decided whether
+the write was allowed at all, so a row can never claim a session the
+gate did not see.
+
 Every write persists the touched section's before/after plus the FULL
 FILE hashes, and every human override gets its own non-expiring row.
 The writer purges `vault_writes` rows older than 30 days itself — no
@@ -83,7 +88,7 @@ class VaultWriteStore:
                 """
                 SELECT id, ts, note, section, unit, before, after,
                        unit_before, unit_after, hash_before, hash_after,
-                       writer, run_id
+                       writer, run_id, session
                 FROM vault_writes WHERE id = %s
                 """,
                 (write_id,),
@@ -97,7 +102,8 @@ class VaultWriteStore:
         with self._connect() as conn:
             cur = conn.execute(
                 """
-                SELECT id, ts, note, section, unit, hash_before, hash_after, writer, run_id
+                SELECT id, ts, note, section, unit, hash_before, hash_after,
+                       writer, run_id, session
                 FROM vault_writes ORDER BY id DESC LIMIT %s
                 """,
                 (limit,),
@@ -120,6 +126,7 @@ class VaultWriteStore:
         hash_after: str,
         writer: str,
         run_id: str,
+        session: str,
         unit_before: Optional[str] = None,
         unit_after: Optional[str] = None,
         overrides: Optional[list[dict[str, Any]]] = None,
@@ -134,12 +141,12 @@ class VaultWriteStore:
                     INSERT INTO vault_writes (
                         note, section, unit, before, after,
                         unit_before, unit_after,
-                        hash_before, hash_after, writer, run_id
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        hash_before, hash_after, writer, run_id, session
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
                     (note, section, unit, before, after, unit_before, unit_after,
-                     hash_before, hash_after, writer, run_id),
+                     hash_before, hash_after, writer, run_id, session),
                 ).fetchone()
                 if row is None:
                     raise RuntimeError("vault_writes INSERT returned no id — audit trail failed.")

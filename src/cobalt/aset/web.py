@@ -35,6 +35,7 @@ from cobalt.prefill.config import PrefillConfigError, load_prefill_paths
 from cobalt.prefill.trade_note import upsert_trade_note
 from cobalt.prefill.vault_writer import VaultWriteError
 from cobalt import env
+from cobalt.session import SessionBlocked, assert_writable
 from cobalt.vault import VaultConfigError, dev_entry_allowed, is_production, resolve_vault_path
 
 from .config import ConfigError, load_config, load_sheet_modes_config
@@ -473,13 +474,18 @@ async def size(request: Request) -> str:
     form = {k: str(v) for k, v in (await request.form()).items()}
     try:
         _check_entry_allowed()
+        # F1 market_reset hard block (Charter §3 F1): no card is created
+        # in the 20:00-21:00 ET window. Checked BEFORE the sizing math so
+        # the refusal is the only thing that happens — a card refused
+        # here leaves no aset_sizings row and no note write to unwind.
+        assert_writable("aset.card", target=form.get("ticker") or None)
         cfg = load_config()
         sheet_modes_cfg = load_sheet_modes_config()
         inp = _parse_input(form, sheet_modes_cfg)
         result = compute_sizing(
             inp, sheet_modes_cfg.enabled_grades, cfg.validation.max_stop_distance_pct
         )
-    except (SizingError, ConfigError, DevEntryRefused) as e:
+    except (SizingError, ConfigError, DevEntryRefused, SessionBlocked) as e:
         return _render(banner=_failed(str(e)), form=form)
     except Exception as e:
         return _render(banner=_failed(f"{type(e).__name__}: {e}"), form=form)
@@ -539,6 +545,12 @@ async def fill(request: Request) -> str:
     form = {k: str(v) for k, v in (await request.form()).items()}
     try:
         _check_entry_allowed()
+        # Same block as /size, and for a sharper reason: a fill is a DB
+        # UPDATE *plus* a note write. The note write would be refused by
+        # the vaultwrite gate anyway, which would leave the card marked
+        # FILLED in Postgres with nothing in the journal. Refuse the whole
+        # thing up front instead of half of it.
+        assert_writable("aset.fill", target=form.get("ticker") or None)
         cfg = load_config()
         sheet_modes_cfg = load_sheet_modes_config()
         inp = _parse_input(form, sheet_modes_cfg)
@@ -581,7 +593,7 @@ async def fill(request: Request) -> str:
         store.mark_filled(int(card_row_raw), fill_result)
 
         note_path, note_write = save_fill_update(cfg, fill_result, orig_timestamp)
-    except (SizingError, ConfigError, DailyNoteRefused, DevEntryRefused) as e:
+    except (SizingError, ConfigError, DailyNoteRefused, DevEntryRefused, SessionBlocked) as e:
         return _render(banner=_failed(str(e)), form=form)
     except Exception as e:
         return _render(banner=_failed(f"{type(e).__name__}: {e}"), form=form)

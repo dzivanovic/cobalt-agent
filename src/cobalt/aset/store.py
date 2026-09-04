@@ -17,11 +17,13 @@ comment after SQL on the same line. The table may be reshaped again by
 the data-model ADR; see the note in 0001.
 """
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Optional
 
 from cobalt import db, env
+from cobalt.session import clock as session_clock_mod
+from cobalt.session import session_clock
 from .models import FillRecompute, SizingResult
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
@@ -49,16 +51,27 @@ class AsetStore:
                     if statement:
                         conn.execute(statement)
 
-    def save(self, result: SizingResult) -> int:
+    def save(self, result: SizingResult, *, now: Optional[datetime] = None) -> int:
+        """Persist a card, stamped with the session it was created in.
+
+        F1 (Charter §3): "every card, alert and note carries the session."
+        The session is resolved HERE, in Python, and not derived in SQL
+        from `created_at` — the answer depends on the NYSE calendar, and
+        the calendar is config. `now` is the test seam; production passes
+        nothing. `created_at` keeps its server-side `now()` default: both
+        clocks are on this one host, and the alternative (a client
+        timestamp) trades a nonexistent skew for a real one.
+        """
         inp = result.input
+        session = session_clock().session(now or session_clock_mod.now_utc())
         with self._connect() as conn:
             row = conn.execute(
                 """
                 INSERT INTO aset_sizings (
                     ticker, grade, direction, sheet_mode,
                     risk_budget, entry, stop, per_share_risk, shares,
-                    used_risk, last_price, price_source, warnings
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    used_risk, last_price, price_source, warnings, session
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
@@ -75,6 +88,7 @@ class AsetStore:
                     inp.last_price,
                     inp.price_source,
                     result.warnings,
+                    session.value,
                 ),
             ).fetchone()
         if row is None:
@@ -153,7 +167,7 @@ class AsetStore:
         with self._connect() as conn:
             cur = conn.execute(
                 """
-                SELECT id, created_at, ticker, grade, direction, sheet_mode,
+                SELECT id, created_at, session, ticker, grade, direction, sheet_mode,
                        risk_budget, entry, stop, per_share_risk, shares, used_risk,
                        status, filled_at, actual_fill, recomputed_shares,
                        recomputed_used_risk, share_delta, distance_change_pct
@@ -170,7 +184,7 @@ class AsetStore:
         with self._connect() as conn:
             cur = conn.execute(
                 """
-                SELECT id, created_at, ticker, grade, direction, sheet_mode,
+                SELECT id, created_at, session, ticker, grade, direction, sheet_mode,
                        risk_budget, entry, stop, shares, used_risk, status
                 FROM aset_sizings ORDER BY id DESC LIMIT %s
                 """,

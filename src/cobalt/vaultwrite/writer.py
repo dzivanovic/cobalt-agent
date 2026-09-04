@@ -32,6 +32,15 @@ What the law buys, mechanically:
    refused unless `COBALT_ENV=production` is set explicitly, and a
    production-declared process is refused a target outside it. Fail
    loud; never resolve silently to either vault.
+6. **Never at the wrong time (F1, 2026-09-04).** Every write entry point
+   is gated on `cobalt.session`: inside `market_reset` (20:00-21:00 ET)
+   the write is REFUSED with one loud message naming the window, a log
+   line, and a `session_blocks` counter row. Two carve-outs, both
+   deliberate and both narrow: `--dry-run` (it writes nothing, and
+   diagnosing a problem during the window is exactly when you want it)
+   and `restore` (the L28 rollback path — a recovery must not be locked
+   out for an hour, and it is a human action, not a scheduled one).
+   Every write also STAMPS its session into `vault_writes.session`.
 """
 
 import functools
@@ -40,12 +49,15 @@ import re
 import tempfile
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from difflib import unified_diff
 from pathlib import Path
 from typing import Callable, Optional
 
 from loguru import logger
 
+from cobalt.session import Session, SessionClock, assert_writable, session_clock
+from cobalt.session import clock as session_clock_mod
 from cobalt.vault import (
     PROD_VAULT_PATH_REFERENCE,
     VaultWriteRefused,
@@ -307,11 +319,18 @@ class VaultWriter:
         run_id: Optional[str] = None,
         dry_run: bool = False,
         precommit_hook: Optional[Callable[[Path], None]] = None,
+        clock: Optional[SessionClock] = None,
+        now: Optional[Callable[[], "datetime"]] = None,
     ):
         self.writer = writer
         self.run_id = run_id or uuid.uuid4().hex[:12]
         self.dry_run = dry_run
         self.store = store
+        # F1 seam: tests freeze time by passing `now`; nothing in
+        # production passes either of these. `session_clock()` is
+        # lru_cached, so this costs one config read per process.
+        self.clock = clock or session_clock()
+        self._now = now or session_clock_mod.now_utc
         # Test seam ONLY: called after the guard read and before the
         # rename, so a test can simulate a concurrent writer landing in
         # the gap. Never set in production code.
@@ -327,6 +346,31 @@ class VaultWriter:
                 "to be persisted before it lands. Refusing to write blind."
             )
         return self.store
+
+    def _session_gate(self, action: str, path: Path) -> Session:
+        """LAW L28.6 / Charter F1: refuse a write inside `market_reset`.
+
+        Returns the session so the caller can stamp it on the audit row —
+        the SAME resolution that made the allow/refuse decision, so a row
+        can never claim a session the gate did not see.
+
+        A dry run is not gated: it writes nothing, and `--dry-run` during
+        the window is how you find out what a job WOULD have done.
+        """
+        session = self.clock.session(self._now())
+        if self.dry_run:
+            return session
+        return assert_writable(
+            f"vaultwrite:{self.writer}:{action}",
+            target=str(path),
+            now=self._now(),
+            clock=self.clock,
+        )
+
+    def _current_session(self) -> Session:
+        """The session to stamp on an audit row when no gate ran (dry
+        run, or `restore`'s carve-out)."""
+        return self.clock.session(self._now())
 
     def _annotate_sync(self, result: WriteResult) -> None:
         """RULING 6.3d. Bytes that land in the vault while no Obsidian
@@ -423,6 +467,7 @@ class VaultWriter:
             hash_after=sha256_text(new_text),
             writer=self.writer,
             run_id=self.run_id,
+            session=self._current_session().value,
             overrides=override_rows,
         ) as write_id:
             # An override-only run advances the baseline without touching
@@ -467,6 +512,7 @@ class VaultWriter:
         untouched and reported as `skipped_exists`."""
         path = Path(path)
         assert_write_target(path)
+        self._session_gate("create_if_absent", path)
         self._purge_once()
 
         if path.exists():
@@ -540,6 +586,7 @@ class VaultWriter:
                     hash_after=sha256_text(text),
                     writer=self.writer,
                     run_id=self.run_id,
+                    session=self._current_session().value,
                 ):
                     pass
 
@@ -564,6 +611,7 @@ class VaultWriter:
         """
         path = Path(path)
         assert_write_target(path)
+        self._session_gate("upsert_unit", path)
         validate_name(section, "section")
         validate_name(unit_id, "unit")
         self._purge_once()
@@ -735,6 +783,7 @@ class VaultWriter:
         """
         path = Path(path)
         assert_write_target(path)
+        self._session_gate("upsert_region", path)
         self._purge_once()
         if not path.exists():
             raise VaultWriteError(
@@ -826,6 +875,11 @@ class VaultWriter:
 
         path = Path(row["note"])
         assert_write_target(path)
+        # NO session gate here, on purpose (L28.6 carve-out). `restore` is
+        # the rollback path and a human action; locking recovery out for
+        # the 20:00-21:00 window would mean the one hour you most want to
+        # undo a bad write is the one hour you cannot. The write is still
+        # audited and still stamps the session it happened in.
         self._purge_once()
         if not path.exists():
             raise VaultWriteError(f"REFUSED: {path} no longer exists — nothing to restore into.")

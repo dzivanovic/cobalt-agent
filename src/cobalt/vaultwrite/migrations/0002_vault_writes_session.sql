@@ -1,0 +1,16 @@
+-- 0002: vault_writes.session — F1 session clock (Charter §3 F1).
+--
+-- "Every card, alert and note carries the session." The audit row is
+-- where a note's session lives: `ts` alone cannot answer it, because the
+-- answer depends on the NYSE calendar (a 14:00 UTC write is `rth` on a
+-- Thursday, `overnight` on Thanksgiving) and that calendar is config,
+-- not something SQL can derive. So it is stamped at write time, from the
+-- same resolver call that decided whether the write was allowed at all.
+--
+-- Added nullable here; `0003` sets NOT NULL. The backfill runs between
+-- them (`cobalt session backfill`) — it has to, because computing the
+-- session of an existing row means running the calendar over its `ts`,
+-- which is Python, not SQL. Splitting the DDL is what lets that happen
+-- without either a NULL-tolerant column forever or a migration that
+-- crashes on a populated table.
+ALTER TABLE vault_writes ADD COLUMN IF NOT EXISTS session TEXT;
