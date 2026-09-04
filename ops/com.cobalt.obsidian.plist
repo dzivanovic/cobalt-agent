@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.obsidian</string>
+
+    <!-- RULING 6 (2026-09-04): Obsidian is a SUPERVISED SERVICE on this
+         Mac, not an app Dejan happens to have open.
+
+         WHY. The vault reaches Dejan's other devices only through
+         Obsidian Sync, which means only through a RUNNING Obsidian
+         process on this machine. On 2026-09-04 prefill-daily wrote
+         2026-09-04.md correctly at 05:15 — 118 lines, vault_writes rows
+         525-528, exit 0 — but no Obsidian had run on the Mac since the
+         15.7.9 reboot the evening before. Nothing synced. At 06:30 the
+         trading PC's daily-notes plugin created its own bare template
+         for the same date and Sync carried that back over the top. The
+         Mac being the always-on server is the whole premise; an
+         Obsidian that is merely usually running breaks it silently.
+
+         Program, NOT `open -a Obsidian`: `open` execs, hands off to
+         LaunchServices and EXITS immediately. Under KeepAlive that is a
+         relaunch loop — launchd would see the job die every second and
+         respawn it forever. The app binary itself stays in the
+         foreground for the life of the app, which is what KeepAlive
+         needs to supervise. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/Obsidian.app/Contents/MacOS/Obsidian</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+        <!-- RULING 7: every ops/ job declares its environment. Obsidian
+             runs no Cobalt code, so this is declarative here — but the
+             answer to "which environment is this job in" is never left
+             to whoever is reading the program. -->
+        <key>COBALT_ENV</key>
+        <string>production</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/cobalt/ops/logs/obsidian.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/cobalt/ops/logs/obsidian.err</string>
+</dict>
+</plist>
