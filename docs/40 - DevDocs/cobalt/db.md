@@ -25,10 +25,27 @@ default `5432`). All read from `os.environ` (populated by `.env` via
 whatever loads it upstream — this module doesn't load `.env` itself).
 **Out:** a live `psycopg.Connection`, or raises.
 
-**Safety property:** calling `connect("cobalt_brain")` without
-`allow_prod=True` raises immediately — NN#16 (build work never touches
-prod) enforced in code, not just by convention. Every ASET call site
-(`AsetStore`) calls this with `db_name="cobalt_dev"`, never prod.
+**Safety property (revised by RULING 7, 2026-09-04 — ADR-0005):**
+calling `connect("cobalt_brain")` raises unless this process has
+declared `COBALT_ENV=production`, or the caller passes
+`allow_prod=True`. The declaration is what makes a production
+entrypoint a production entrypoint — previously it was an `allow_prod`
+kwarg each call site had to remember, and no call site did, because
+there was no production database to reach.
+
+`allow_prod=True` remains for migration tooling that must reach
+production deliberately without flipping the whole process into
+production mode. A dev run, a test, or a process with `COBALT_ENV`
+unset cannot open `cobalt_brain` (unset is definitively not production:
+`connect()` catches `EnvConfigError` and refuses).
+
+**No call site names a database any more.** `AsetStore` and
+`VaultWriteStore` default `db_name=None` and ask
+`cobalt.env.resolve_db_name()`. The old shape —
+`AsetStore(aset_cfg.db_name)` reading `configs/dev/aset.local.yaml` —
+is what routed PRODUCTION writes into `cobalt_dev`; `db_name` is now
+deleted from `AsetConfig` entirely and re-adding the key is a loud
+crash.
 
 ## Config it reads
 No YAML config — reads Postgres connection parts directly from the
