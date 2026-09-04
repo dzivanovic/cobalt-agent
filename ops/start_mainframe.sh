@@ -25,6 +25,14 @@
 #    model still warm?" had no answer short of asking the API by hand.
 #    Every ping now appends its outcome to ops/logs/mainframe.log.
 #
+#    Logging it immediately earned its keep: within minutes the log
+#    showed the 122B model had vanished from LM Studio (~14:45 on
+#    2026-09-04, cause unknown — no second script run, nothing in the
+#    boot log) and that a ping-only heartbeat can never recover from
+#    that. It would have logged FAILED every 60 s forever while the
+#    mainframe stayed down; before this change it would have done so
+#    silently. The heartbeat now attempts ONE reload per cycle.
+#
 # The heartbeat exists because the model is evicted from VRAM when idle;
 # `caffeinate -i -m` additionally stops the machine idle-sleeping and
 # the disk spinning down under it.
@@ -37,6 +45,7 @@ OPS_DIR="/Users/cobalt/cobalt/ops"
 LOG_DIR="$OPS_DIR/logs"
 LOG_FILE="$LOG_DIR/mainframe.log"
 PID_FILE="$LOG_DIR/mainframe-heartbeat.pid"
+MODEL="qwen3.5-122b-a10b"
 MODEL_ID="mainframe"
 API="http://localhost:1234"
 
@@ -128,22 +137,38 @@ while ! curl -s "$API/v1/models" > /dev/null; do
 done
 
 log "API online — loading model into VRAM"
-lms load qwen3.5-122b-a10b --identifier "$MODEL_ID" --gpu max --context-length 32768
+lms load "$MODEL" --identifier "$MODEL_ID" --gpu max --context-length 32768
 
-log "model loaded — spawning heartbeat (60s ping, logged)"
+log "model loaded — spawning heartbeat (60s ping, logged, self-healing)"
 caffeinate -i -m bash -c '
   MARKER="'"$HEARTBEAT_MARKER"'"   # identifies this process as ours
   LOG_FILE="'"$LOG_FILE"'"
   API="'"$API"'"
   MODEL_ID="'"$MODEL_ID"'"
+  MODEL="'"$MODEL"'"
+  export PATH="'"$PATH"'"
+  hb() { echo "$(date "+%Y-%m-%d %H:%M:%S") | $*" >> "$LOG_FILE"; }
   while true; do
     reply=$(curl -s --max-time 30 "$API/v1/chat/completions" \
       -H "Content-Type: application/json" \
       -d "{\"model\":\"$MODEL_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":1}")
     if [ -n "$reply" ] && ! printf "%s" "$reply" | grep -q "\"error\""; then
-      echo "$(date "+%Y-%m-%d %H:%M:%S") | heartbeat OK" >> "$LOG_FILE"
+      hb "heartbeat OK"
     else
-      echo "$(date "+%Y-%m-%d %H:%M:%S") | heartbeat FAILED: ${reply:-no response}" >> "$LOG_FILE"
+      hb "heartbeat FAILED: $(printf "%s" "${reply:-no response}" | tr -d "\n" | cut -c1-160)"
+      # SELF-HEAL, once per cycle. A ping alone cannot bring a model
+      # back: on 2026-09-04 the 122B model vanished from LM Studio at
+      # ~14:45 (cause unknown — no second script run, nothing in the
+      # boot log) and the old ping-only heartbeat would have logged
+      # FAILED every 60s forever while the mainframe stayed down. The
+      # pre-RULING-6 script had the same flaw and no log to show it.
+      hb "heartbeat: attempting reload of $MODEL"
+      if lms load "$MODEL" --identifier "$MODEL_ID" --gpu max --context-length 32768 \
+           >> "$LOG_FILE" 2>&1; then
+        hb "heartbeat: reload OK"
+      else
+        hb "heartbeat: reload FAILED — mainframe is DOWN"
+      fi
     fi
     sleep 60
   done
