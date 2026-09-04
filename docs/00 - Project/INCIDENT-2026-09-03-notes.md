@@ -1515,3 +1515,480 @@ enable landed at 20:19:27.
    forensics.** This whole reconstruction depended on rows 525-528, and
    they live in the dev database next to pytest temp-vault rows. The open
    item from the 09-03 section stands and should be ruled on.
+
+---
+
+## Ruling 7 + boot contract 2026-09-04
+
+**Scope:** the environment law in code, the `cobalt_dev` → `cobalt_brain`
+migration, Obsidian as a supervised service, `start_mainframe.sh` into
+`ops/`, and a read-only boot-contract report. ADR-0005 has the decision
+record. DevDocs: `cobalt/env.md`, `cobalt/obsidian.md`, `cobalt/devdb.md`,
+and a revised `cobalt/db.md`. Every claim below is pasted command output.
+
+Live vault and live DB were never test targets (L28.5): every proof ran in
+`~/dev-vault-cobalt` + `cobalt_dev` except the four steps that name
+production explicitly — the migration itself, the PROBE round-trip, the
+production dry-runs, and the Obsidian service.
+
+### 1. Environment law in code
+
+`COBALT_ENV` ∈ {`production`, `dev`} is now the ONE resolver for the
+database and the vault. Unset or unknown raises at boot.
+
+```
+$ COBALT_ENV=production uv run python -c "..."
+COBALT_ENV           : production
+env.resolve_db_name(): cobalt_brain
+VaultWriteStore      : cobalt_brain
+AsetStore            : cobalt_brain
+vault root           : /Users/cobalt/Vault/Think
+```
+
+`db_name` is **deleted** from `AsetConfig` and from both
+`configs/dev/aset.yaml` and the gitignored `aset.local.yaml`. With
+`extra="forbid"`, re-adding the key is a loud crash. The routing this
+ruling names — `configs/dev/aset.local.yaml:12` and
+`VaultWriteStore(aset_cfg.db_name)` — is gone from all seven call sites
+(`cli.py`, `prefill/daily.py` ×2, `prefill/drc.py` ×2,
+`prefill/trade_note.py`, `aset/daily_note.py`, `aset/web.py` ×2).
+
+**1b — every ops/ plist declares it.** `prefill-daily`/`prefill-drc`
+already did; `aset` declared it only inside `ops/start_aset.sh`;
+`agent`, `archiver`, `mainframe` and the new `obsidian` gained it.
+
+```
+$ launchctl print gui/501/com.cobalt.aset | grep -A4 'environment = {'
+	environment = {
+		COBALT_ENV => production
+		PATH => /opt/homebrew/bin:...:/Users/cobalt/.local/bin
+		XPC_SERVICE_NAME => com.cobalt.aset
+	}
+```
+
+**1c — destructive helpers are hard-coded to `cobalt_dev`.** Exercised
+against production before the truncate that follows:
+
+```
+$ COBALT_ENV=production ... devdb.truncate(['aset_sizings'], db_name='cobalt_brain', confirm=True)
+EnvConfigError: REFUSED: destructive operation targeted 'cobalt_brain'. Destructive
+helpers may only ever touch cobalt_dev (RULING 7.1c) — this is hard-coded and cannot
+be overridden.
+
+$ COBALT_ENV=dev uv run python -m cobalt.devdb --truncate aset_sizings
+FAILED: DestructiveRefused: REFUSED: destructive call without explicit confirmation
+(confirm=True / --yes-truncate-cobalt-dev).
+```
+
+**1d — the test suite runs in a transaction and rolls back.** The
+measured problem first: one full suite run grew `vault_writes` **383 →
+529**, +146 rows of pytest temp-vault paths into the table the 09-03/04
+forensics depended on. Per-test cleanup could not fix this —
+`test_vaultwrite.py` cleaned up at *setup*, by note prefix, so every
+run's rows survived.
+
+The ruling names the ASET-store and vaultwrite tests. Measuring the
+actual delta found four more leaking modules — `test_prefill_daily`
+(+29), `test_prefill_drc` (+23), `test_aset_daily_note` (+18),
+`test_prefill_trade_note` (+3) — so the fixture is **autouse** across
+`tests/cobalt/`; opt-in would have left +73 rows per run and failed the
+proof this ruling asks for.
+
+```
+=============== BEFORE full test run ===============
+aset_sizings=177   vault_writes=871   vault_overrides=0
+289 passed in 5.77s
+=============== AFTER full test run ================
+aset_sizings=177   vault_writes=871   vault_overrides=0
+```
+
+New core 245 → **289 passing**. Old tree unchanged at its baseline
+(12 failed / 17 errors, identical before and after this work).
+
+**Bug found by the fixture, fixed here.** `AsetStore.for_date()` ordered
+by `created_at` alone. `created_at` defaults to `now()` — the
+TRANSACTION timestamp — so two cards written in one transaction tie and
+the sort between them was arbitrary: the DRC's re-entry numbering could
+silently invert. Now `ORDER BY created_at, id`. Reachable in production,
+not just in tests.
+
+### 2. Migration `cobalt_dev` → `cobalt_brain`
+
+**(a) Sheet down.**
+
+```
+$ launchctl bootout gui/501/com.cobalt.aset          # 14:45:00
+$ launchctl list | grep -i cobalt
+-	0	com.cobalt.agent
+-	0	com.cobalt.archiver
+66535	-15	com.cobalt.mainframe
+-	0	com.cobalt.prefill-daily
+66104	0	com.cobalt.obsidian
+-	0	com.cobalt.prefill-drc
+$ curl -m 3 http://127.0.0.1:5010/   ->  connection refused
+```
+
+**(b) The rollback dump.**
+
+```
+path        : docs/00 - Project/incident-2026-09-03/dump-20260904T144514.sql
+size        : 1055474 bytes (1.0M)
+sha256      : 8e786d9d62df12ed0976af9f9d6725582e9f123422ce2c578900e1857ab8da7b
+rows inside : aset_sizings 177 · vault_overrides 0 · vault_writes 871
+```
+
+> **The dump is NOT committed and must never be.** `vault_writes.before/
+> after/unit_before/unit_after` hold VERBATIM production note text —
+> Dejan's daily notes, journal and trade cards. The directory sits inside
+> the `!docs/00 - Project/**` carve-out, so without a rule it would have
+> been tracked: `git add --dry-run` confirmed it *would* have been added.
+> `.gitignore` now names `docs/00 - Project/incident-2026-09-03/`
+> explicitly (narrowing an exception, never widening one).
+
+**(c) Schema onto `cobalt_brain`**, through the stores' own
+`ensure_schema()` so the DDL keeps its one path:
+
+```
+aset migrations applied      : 0001_aset_sizings.sql, 0002_aset_sizings_sheet_mode.sql, 0003_aset_sizings_status.sql
+vaultwrite migrations applied: 0001_vault_writes.sql
+
+aset_sizings   : IDENTICAL column list  (22 cols, `status` present)
+vault_writes   : IDENTICAL column list  (13 cols)
+vault_overrides: IDENTICAL column list  (12 cols)
+```
+
+**(d) Restore, ids preserved, sequences reset.**
+
+```
+COPY 177 · COPY 0 · COPY 871
+setval: aset_sizings_id_seq -> 283 (max id 233)
+setval: vault_overrides_id_seq -> 18 (no rows)
+setval: vault_writes_id_seq -> 1780 (max id 1186)
+```
+
+All three sequences are ahead of `max(id)` — no collision possible.
+
+**(e) THE PROOF — counts and md5 over ordered row contents, `SET TimeZone='UTC'`:**
+
+```
+################ cobalt_dev (SOURCE) ################        ################ cobalt_brain (TARGET) ################
+       tbl       | rows |         md5_ordered_rows                    tbl       | rows |         md5_ordered_rows
+-----------------+------+----------------------------------   -----------------+------+----------------------------------
+ aset_sizings    |  177 | ab75130b3c6cd2461bef723c2b21d2ac     aset_sizings    |  177 | ab75130b3c6cd2461bef723c2b21d2ac
+ vault_overrides |    0 | (empty)                              vault_overrides |    0 | (empty)
+ vault_writes    |  871 | 082d72d82c6adc6e579d628c5bb051c9     vault_writes    |  871 | 082d72d82c6adc6e579d628c5bb051c9
+```
+
+**Equal, per table, counts and content.**
+
+> **What the exact copy also carried — flagged, not fixed.** Of the 871
+> `vault_writes` rows, **18 are production** (ids 525-542, under
+> `/Users/cobalt/Vault/Think`) and **853 are pytest temp-vault rows**.
+> `aset_sizings` is ~95 real cards (2026-08-24 → 09-04) plus
+> `TEST`/`FORDATE`/`SMOKETEST`/`SMOKEAB`/`TESTHALF`. The copy was exact
+> because (e) demands equality and because filtering `aset_sizings`
+> would mean *guessing* which tickers were tests, interleaved with real
+> cards across three weeks, with deleted trading history as the price of
+> guessing wrong. So `cobalt_brain` now carries 853 pytest rows.
+> **This wants its own cleanup ruling** — the rows are identifiable with
+> certainty by note path (`%pytest-of-cobalt%`), and the precedent is
+> 09-03's sanctioned, counted, transactional delete of ids 171-185. Not
+> a data-loss risk, and bounded: the transaction fixture means no new
+> test row can reach either database.
+
+**(f) Sheet back up, round-trip through the live sheet.**
+
+```
+$ launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist
+	path = /Users/cobalt/cobalt/ops/com.cobalt.aset.plist
+	state = running      pid = 66984      runs = 1
+	properties = keepalive | runatload | abandon process group
+	environment = { COBALT_ENV => production, ... }
+```
+
+The sheet's own page banner now names the database it will write to:
+
+```
+Every computed sizing persists to Postgres (cobalt_brain — chosen by COBALT_ENV
+alone, RULING 7: production writes cobalt_brain, dev writes cobalt_dev)
+```
+
+POST `/size` with `ticker=PROBE`:
+
+```
+Persisted: aset_sizings id 284 (cobalt_brain) · updated in .../2026-09-04.md
+(unit card-20260904T144829) · trade note created: Trade-2026-09-04 14-48-29 -PROBE.md
+
+cobalt_brain.aset_sizings:  id 284 | PROBE | B | long | full | 120 sh | 60.00 | CARD
+cobalt_brain.vault_writes:  1781 aset-cards/card-20260904T144829 (aset.daily_note)
+                            1782 (trade note, prefill.trade_note)
+cobalt_dev: probe_rows_in_dev = 0 · probe_vault_writes_in_dev = 0
+```
+
+Removed in the same session, through the ONE write path (L28) — not by
+hand-editing the note:
+
+```
+$ COBALT_ENV=production uv run cobalt vault restore --write-id 1781
+[WRITE] restored: .../2026-09-04.md · section=aset-cards · unit=card-20260904T144829 · write_id=1783
+  (diff: 14 deletion lines, ALL of them the PROBE block; zero other changes)
+```
+
+then the trade note deleted and rows 284 / 1781 / 1782 / 1783 deleted in
+one guarded transaction. **Back to baseline, md5 identical to (e):**
+
+```
+ aset_sizings    |  177 | ab75130b3c6cd2461bef723c2b21d2ac
+ vault_overrides |    0 | (empty)
+ vault_writes    |  871 | 082d72d82c6adc6e579d628c5bb051c9
+
+live note: PROBE occurrences = 0 · aset card units still present = 10 (Dejan's, untouched)
+```
+
+**(g) Truncate `cobalt_dev`** — only after (e) and (f), through the
+guarded helper:
+
+```
+$ COBALT_ENV=dev uv run python -m cobalt.devdb --truncate aset_sizings,vault_writes,vault_overrides --yes-truncate-cobalt-dev
+aset_sizings       177 -> 0
+vault_writes       871 -> 0
+vault_overrides    0 -> 0
+
+cobalt_dev  : aset_sizings 0 · vault_writes 0 · vault_overrides 0
+cobalt_brain: aset_sizings 177 · vault_writes 871 · vault_overrides 0
+cobalt_dev.bars = 4563539   <-- NOT migrated, NOT truncated (outside the allowlist)
+```
+
+> **`bars` did not move.** 4.56M rows are still in `cobalt_dev` and the
+> archiver still names its database explicitly instead of asking the
+> resolver. RULING 7 named three tables; migrating a 4.5M-row table was
+> not in scope and doing it silently would have been worse. A real
+> inconsistency with "cobalt_dev = dev only" — second item handed
+> forward.
+
+**(h) Production dry-run.**
+
+```
+$ COBALT_ENV=production uv run prefill daily --dry-run
+Daily prefill [DRY-RUN]: skipped_idempotent — /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-04.md
+  filled: none
+  skipped (not touched): rules (already filled), trading (already filled), market_calendar (already filled)
+```
+
+**The diff is empty and that is the correct result** — today's note
+already carries all three `cobalt:section` markers filled (rules 23-45,
+trading 49-60, market_calendar 67-84). Nothing was written: the note's
+sha256 is unchanged and `vault_writes` stayed at 871 / 0 (a dry run
+writes nothing, Postgres included).
+
+Since an empty diff cannot by itself prove *which* database was
+consulted, the DRC dry-run does — `cobalt_dev` now holds **zero**
+`aset_sizings` rows, so a non-zero card count can only have come from
+`cobalt_brain`:
+
+```
+$ COBALT_ENV=production uv run prefill drc --dry-run
+  cards written: 5 · trades taken (FILLED): 4
+[DRY-RUN] created: /Users/cobalt/Vault/Think/1 - Trading/5 - Review/DRC-2026-09-04.md
+```
+
+Five cards and four fills is exactly 2026-09-04's real trading day.
+
+### 3. Obsidian as a service
+
+`ops/com.cobalt.obsidian.plist` — `RunAtLoad` + `KeepAlive`, `Program` =
+the app binary directly. **Not `open -a`**: that execs, hands off to
+LaunchServices and exits immediately, which under `KeepAlive` is a
+relaunch loop.
+
+```
+$ launchctl print gui/501/com.cobalt.obsidian
+	program = /Applications/Obsidian.app/Contents/MacOS/Obsidian
+	state = running      pid = 65889      runs = 1
+	properties = keepalive | runatload | inferred program
+
+=== relaunch proof ===
+14:37:21.539   pid 65889 (started 14:37:03), 1 instance
+14:37:21       pkill -x Obsidian
+14:37:23       instances: 1
+14:37:33       pid 65928 (started 14:37:21), runs = 2, instances: 1
+
+vault open: /Users/cobalt/Vault/Think   (obsidian.json "open": true)
+obsidian.log 18:37:22Z "Loaded main app package"
+```
+
+**No note was harmed by either kill.** Today's daily note's mtime stayed
+`14:36:38` across both — which *pre-dates* the first kill at 14:36:59.
+The only change to it during this session was Dejan's own edit at
+14:36:38 (+3/−2 lines, 10966 → 11172 bytes, content grew: a sentence
+extended, Setup/Grade/Catalyst filled in, an "Answer:" line added). A
+safety copy of all 270 daily notes was taken to the session scratchpad
+first, because this vault still has no backup.
+
+**(c) The heartbeat probe is BUILT but has nothing to attach to.**
+`src/cobalt/obsidian.py::sync_status()` is the probe RULING 6.3c asks
+for, tested (16 cases). **There is no heartbeat on this machine** — it
+is an unchecked BACKLOG item ("Heartbeat probe: every ops/ plist
+expected loaded is loaded", STANDING FOLLOW-UPS), sequenced after slice
+2 in PROJECT-LEDGER 08-29/31. The writer and the future heartbeat call
+the same function so they can never disagree about the wording. Flagged
+rather than invented.
+
+**(d) The writer's ERROR line — proven in the dev vault.** With
+`com.cobalt.obsidian` booted out and Obsidian killed (the service is
+`KeepAlive`, so the job must be booted out first):
+
+```
+$ COBALT_ENV=dev uv run prefill daily --dry-run
+... | ERROR | cobalt.vaultwrite.writer:_annotate_sync:350 -
+      /Users/cobalt/dev-vault-cobalt/.../2026-09-04.md: written; Obsidian not running — will not sync
+[DRY-RUN] created: /Users/cobalt/dev-vault-cobalt/1 - Trading/1- Daily Notes/2026-09-04.md
+  ERROR: written; Obsidian not running — will not sync
+```
+
+The identical command with Obsidian running emits neither line.
+
+`WriteResult` gained `errors`, printed as `ERROR:` and never `NOTE:`.
+Attached via a decorator on the four public writer methods rather than
+at the ten `return WriteResult(...)` sites, so a future return site
+cannot forget it — and a test asserts all four still carry it. Only
+byte-producing actions (`created`/`updated`/`restored`) are annotated;
+`unchanged`/`skipped` raise no false alarm. A *broken* probe reports
+`UNKNOWN`, never "not running" — "the probe is broken" and "Obsidian is
+down" are different facts.
+
+### 4. Mainframe script → registered job
+
+`~/.lmstudio/start_mainframe.sh` → `ops/start_mainframe.sh`;
+`com.cobalt.mainframe` points at it; logs to `ops/logs/`.
+
+**The global `pkill -9 -f caffeinate` is scoped.** A control
+`caffeinate -i -t 3600` (pid 66157) was started before the change and
+**survived three restarts** of the job — under the old script it would
+have died on the first.
+
+**A second defect surfaced while proving the first.** `$!` after
+`caffeinate ... &` is **not** the caffeinate: measured here, `$!` was
+66399 (a bash wrapper) and the real caffeinate was its child 66401. The
+first fix's `comm`-based "is it still a caffeinate?" check therefore
+never matched, logged `left alone`, and **leaked the old heartbeat on
+every restart** — a regression against the over-broad `pkill` it
+replaced. Fixed properly: a unique `COBALT_MAINFRAME_HEARTBEAT` marker
+in the heartbeat's own command line, `kill_tree()` on the recorded pid,
+and a marker-scoped orphan sweep as backstop.
+
+```
+$ launchctl kickstart -k gui/501/com.cobalt.mainframe
+2026-09-04 14:42:15 | === start_mainframe.sh starting (pid 66535) ===
+2026-09-04 14:42:15 | purging lingering LM Studio processes for warm-boot safety
+2026-09-04 14:42:16 | heartbeat pid 66399 is not one of ours — left alone
+2026-09-04 14:42:16 | swept orphaned heartbeat pids: 66523
+2026-09-04 14:42:20 | API online — loading model into VRAM
+2026-09-04 14:42:45 | model loaded — spawning heartbeat (60s ping, logged)
+2026-09-04 14:42:45 | heartbeat running as pid 66633 (pidfile ops/logs/mainframe-heartbeat.pid)
+2026-09-04 14:42:51 | heartbeat OK
+
+$ curl .../v1/chat/completions  -d '{"model":"mainframe", ... "7 times 6" ...}'
+model : mainframe   finish: stop   tokens: 214
+content: 42
+
+caffeinate processes: 3 — the control (66157, alive), LM Studio's own, and
+exactly one marked heartbeat. No orphan pile-up.
+```
+
+### 5. Boot contract — READ-ONLY, reported not changed
+
+```
+$ pmset -g
+ standby              0
+ sleep                0 (sleep prevented by caffeinate, powerd, screensharingd, ...)
+ disksleep            10
+ displaysleep         0
+ autorestart          1
+ womp                 1
+
+$ defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser
+cobalt
+
+$ fdesetup status
+FileVault is Off.
+
+$ sysadminctl -screenLock status
+screenLock delay is 300 seconds
+```
+
+- **Never sleeps — MET, with one exception.** `sleep 0`, `standby 0`,
+  `displaysleep 0`, and `autorestart 1` (comes back by itself after a
+  power failure). **`disksleep 10` is the one non-zero value** — the
+  disk is allowed to spin down after 10 minutes. On this internal SSD
+  that is close to meaningless, but it is not literally "never sleeps"
+  and it is the one line of `pmset` that does not match the contract.
+- **Automatic login — MET.** `autoLoginUser = cobalt`, so an unattended
+  reboot reaches a logged-in GUI session, which is what the `gui/501`
+  LaunchAgents (ASET, Obsidian, the prefill jobs) need to exist at all.
+- **FileVault — OFF.** Reported, not judged: FileVault being off is
+  what *permits* the automatic login above; with it on, a reboot stops
+  at the unlock screen and no LaunchAgent runs until someone types a
+  password. The two settings are a single trade — an always-on
+  unattended server, bought with an unencrypted disk that holds the
+  vault, the trading record and `~/.cobalt_key`.
+- **Lock screen: 300 s** — allowed by RULING 6.
+
+**Dejan changes these himself. Nothing here was modified.**
+
+### 6. Restart-on-deploy
+
+Every job whose plist or code changed was reloaded and verified:
+`archiver`, `mainframe`, `obsidian` (new), `aset` (restarted onto the
+new code at 14:47, pid 66984), and `agent`.
+
+**One honest gap.** `com.cobalt.agent`'s job now declares
+`COBALT_ENV=production`, but the *running* process (pid 1362, started
+09-03 19:02) survived the bootout — `AbandonProcessGroup` detaches it —
+and its environment has no `COBALT_ENV`:
+
+```
+$ ps eww 1362 | grep -c '^COBALT_ENV='   ->  0
+$ tail -1 ~/cobalt_agent_boot.log        ->  Cobalt is already running (PID: 1362).
+```
+
+No duplicate was spawned (`cobalt.sh start` is idempotent). This is
+inert — the old tree imports nothing from `src/cobalt/` and reads no
+`COBALT_ENV` (verified by grep) — and the old tree's code did not change
+in this session, so per the strangler rule it was left running rather
+than force-killed. It is the same class as Defect 1 (2026-09-01): env
+vars are fixed at process launch and a config deploy cannot fix a live
+process. It will pick the flag up at its next natural restart.
+
+`configs/cobalt/rules.yaml` and `docs/_archive/gemini-era-vault-side/`
+were left exactly as found, per instruction. Nothing was pushed.
+
+### Final state
+
+```
+$ launchctl list | grep -i cobalt
+66984	0	com.cobalt.aset
+-	0	com.cobalt.agent
+-	0	com.cobalt.archiver
+66535	-15	com.cobalt.mainframe
+-	0	com.cobalt.prefill-daily
+66104	0	com.cobalt.obsidian
+-	0	com.cobalt.prefill-drc
+```
+
+### What this does NOT fix
+
+1. **853 pytest rows now live in `cobalt_brain`'s `vault_writes`.**
+   Wants a cleanup ruling (§2e).
+2. **`bars` (4.56M rows) is still in `cobalt_dev`** and the archiver
+   still passes an explicit `db_name` (§2g).
+3. **There is no heartbeat**, so RULING 6.3c's probe has no red light to
+   turn (§3c).
+4. **The production vault still has no backup.** No Time Machine, no
+   git, no sync. Untouched by this session and still the largest open
+   risk in this document — and this session's own Obsidian kills were
+   only safe because a manual scratchpad copy was taken first.
+5. **Obsidian is still an unsynchronised second writer.** Supervising
+   it makes the Mac's instance reliably present; it does not stop an
+   editor buffer flush. §7 #9(c), the sidecar note, remains the only
+   proposal that removes the race.
