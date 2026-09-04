@@ -8,6 +8,17 @@
     <dict>
         <key>PATH</key>
         <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+        <!-- RULING 7 (2026-09-04): the environment law. COBALT_ENV is the
+             ONE switch for BOTH the database and the vault
+             (src/cobalt/env.py): production -> cobalt_brain +
+             /Users/cobalt/Vault/Think, dev -> cobalt_dev + the dev
+             vault. Unset now raises at boot instead of resolving
+             silently, so this key is not optional decoration — a job
+             that loses it fails loud rather than writing live trading
+             data into the dev database, which is exactly what happened
+             before this ruling. -->
+        <key>COBALT_ENV</key>
+        <string>production</string>
     </dict>
     <key>ProgramArguments</key>
     <array>
