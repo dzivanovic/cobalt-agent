@@ -1,49 +1,49 @@
-"""Morning Daily Note prefill (Slice 2.1, corrected 2026-08-31 from
-Dejan's review of the first live note): market table (SPY/QQQ/IWM
-only), market calendar, and a config-driven, mode-aware rules block —
-all filled IN PLACE inside Dejan's actual section layout, never
-appended below it.
+"""Morning Daily Note prefill (Slice 2.1) — a caller of the ONE write
+path since 2026-09-03 (LAW L28).
 
-PRINCIPLE (never modify existing note content): if today's note
-doesn't exist yet, render the full Jinja template (configs/cobalt/
-templates/daily.md.j2) and create it — every Cobalt slot is filled,
-each wrapped in its own `<!-- cobalt-slot:NAME -->...<!-- /cobalt-slot:
-NAME -->` marker. If the note already exists (Templater got there
-first, or a prior prefill run already created it), each of the three
-slots is handled independently:
-  - marker already present anywhere in the file -> already handled,
-    skip, report.
-  - marker absent -> the slot's value is empty/still-blank (or a prior
-    unmarked FAILED attempt, retryable) -> fill it in place and add the
-    marker.
-  - marker absent but the slot already holds real (non-blank, non-
-    FAILED) content -> that's Dejan's, or an already-successful run
-    predating markers -> skip, report, no marker added (leaves the
-    door open for a later run if it's ever cleared).
-A slot whose anchor (the fixed heading/line Cobalt looks for) can't be
-found at all fails the WHOLE run loudly rather than guessing where to
-insert — the edit plan is built entirely in memory first, so a failure
-never leaves a partially-edited file on disk.
+Three slots: a config-driven, mode-aware rules block; the SPY/QQQ/IWM
+market table; the market calendar. Each is a marker-bounded section
+holding exactly one unit:
+
+    rules            / unit rules
+    trading          / unit market_table
+    market_calendar  / unit market_calendar
+
+WHAT L28 CHANGED HERE, and why it mattered:
+
+* **The stub-upgrade branch is DELETED.** It used to do
+  `existing.split(STUB_BANNER, 1)[1]` and render a fresh template in
+  front of the remainder — discarding, unconditionally and silently,
+  everything above that banner: frontmatter, journal, plan, Market
+  Context, Trade Ideas. It reported `action=upgraded_stub`, exit 0. On
+  2026-09-03 the prefix happened to be two lines, so nothing was lost;
+  had Dejan typed into the stub before 14:22 it would all have gone.
+  Its trigger was worse than the branch: a bare `if STUB_BANNER in
+  existing` substring test, matching that line anywhere at any depth
+  for the whole life of the note. Both are gone. A note that exists
+  ALWAYS takes the merge path now — 05:15 included.
+* **Nothing is overwritten.** `create_if_absent` renders the template
+  only into a file that does not exist. Every other write is
+  `upsert_unit`, which three-way merges: Cobalt's lines update, human
+  lines are carried in position, and a human edit to a Cobalt line wins
+  and is recorded as an override.
+* **A missing anchor is no longer a run failure.** It used to raise
+  SlotAnchorNotFound and fail the whole run. Under L28 the section is
+  appended at the END of the note instead — nothing above it is
+  touched, and the placement used is in the run report.
+* **Every write is audited and diffed.** before/after + full-file
+  hashes in `vault_writes`, the unified diff in the run report, and
+  `--dry-run` on the entrypoint.
+
+Idempotency: a slot Cobalt has already written is skipped (a second run
+is a zero-diff no-op). A body carrying a FAILED line from a dead source
+is retried, through the merge like any other write. Notes carrying the
+PRE-L28 `<!-- cobalt-slot:NAME -->` markers read as already-filled —
+historical notes are not retro-marked, and a second copy of a block
+Dejan already has is precisely the damage this law exists to prevent.
 
 Market/calendar fetch failures render "FAILED: <reason>" text into the
-relevant cells/lines (never blank, never silently guessed) and are
-deliberately left UNMARKED so a later run retries them.
-
-Root cause fix (2026-09-03, "ASET cards not landing" investigation):
-this function used to read the note ONCE at the top, then await several
-seconds of Finviz/calendar network I/O, then write a `new_text` derived
-from that now-stale read — a lost-update race against ASET's own
-(synchronous, near-instant) card-append writer to the SAME file. A card
-appended during the await window would be silently discarded when this
-function's write replaced the whole file. Confirmed against
-2026-09-02's real daily note: 14 cards computed and persisted (trade
-notes + aset_sizings rows all present) but zero landed in the note.
-Fixed two ways: `existing` is now re-read AFTER the awaits (closing
-almost the whole window), and every write goes through
-`_write_if_unchanged()`, which re-verifies the file still matches what
-the edit was computed from and refuses (NoteChangedDuringPrefill) rather
-than clobber if not — fail-loud, one-path rule, never a silent
-overwrite. See `_write_if_unchanged` and `NoteChangedDuringPrefill`.
+relevant cells/lines — never blank, never silently guessed.
 """
 
 import re
@@ -56,7 +56,6 @@ from jinja2 import Environment, FileSystemLoader
 
 from cobalt.aset.config import load_config as load_aset_config
 from cobalt.aset.config import load_sheet_modes_config
-from cobalt.aset.daily_note import STUB_BANNER
 from cobalt.aset.models import Grade
 from cobalt.aset.store import AsetStore
 from cobalt.prefill.calendar import (
@@ -69,12 +68,13 @@ from cobalt.prefill.config import TEMPLATES_DIR, RuleItem, RulesConfig
 from cobalt.prefill.errors import PrefillFetchError
 from cobalt.prefill.market import MarketRow, fetch_market_table
 from cobalt.prefill.rules_gen import regenerate_rules_config
-from cobalt.prefill.vault_writer import read_if_exists, resolve_target, write_new
+from cobalt.prefill.vault_writer import read_if_exists, resolve_target
+from cobalt.vaultwrite import VaultWriteStore, VaultWriter, WriteResult, after_pattern, wrap_span
+from cobalt.vaultwrite.markers import find_section, legacy_slot_present
 
 MARKET_TICKERS = ("SPY", "QQQ", "IWM")
 SHEET_MODE_LINE = "Sheet mode: [ ] FULL [ ] HALF — .htk loaded: [ ] full [ ] half"
 
-SLOT_NAMES = ("rules", "trading", "market_calendar")
 
 _GRADE_DOLLAR_RE = re.compile(r"B\s*=\s*\$\d+(?:\.\d+)?,\s*A\s*=\s*\$\d+(?:\.\d+)?")
 _WILL_NOT_TOLERATE_LOSSES_RE = re.compile(
@@ -84,14 +84,6 @@ _TRADING_HEADING_RE = re.compile(r"^### Trading\s*$")
 _MARKET_CALENDAR_HEADING_RE = re.compile(r"^### Market Calendar:?\s*$")
 _ANY_HEADING_RE = re.compile(r"^#{1,6}\s")
 _BLANK_OR_FAILED_RE = re.compile(r"^\s*(-\s*(FAILED:.*)?)?\s*$")
-
-
-def _slot_marker(name: str) -> str:
-    return f"<!-- cobalt-slot:{name} -->"
-
-
-def _slot_marker_close(name: str) -> str:
-    return f"<!-- /cobalt-slot:{name} -->"
 
 
 # ---------------------------------------------------------------------------
@@ -219,36 +211,16 @@ def _render_template(context: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Fill-in-place editing of an existing note
+# Slot bodies + placement (LAW L28: markers, never anchors-and-overwrite)
 # ---------------------------------------------------------------------------
 
 
 class SlotAnchorNotFound(RuntimeError):
-    """An existing note doesn't have a slot's expected anchor line/heading
-    — its shape doesn't match what Cobalt expects. Fail loud rather than
-    guess an insertion point."""
-
-
-class NoteChangedDuringPrefill(RuntimeError):
-    """The daily note changed on disk between when this run last read it
-    and when it was about to write (root cause, 2026-09-03 "ASET cards
-    not landing" investigation: run_daily_prefill() used to read
-    `existing` once, then await several seconds of Finviz/calendar
-    network I/O, then write a `new_text` derived from that now-stale
-    snapshot — silently discarding any ASET card appended during the
-    await window, since the write replaces the whole file. `existing` is
-    now re-read fresh after the awaits (closing most of the window), and
-    this is the last-line defense for the remaining synchronous gap:
-    refuse rather than clobber. Fail-loud, one-path rule — never a
-    silent overwrite. The on-disk content, cards included, is left
-    exactly as-is; a later run is idempotent-safe and will retry
-    whatever is still genuinely unfilled."""
-
-
-@dataclass
-class SlotFillPlan:
-    filled: list[str] = field(default_factory=list)
-    skipped: list[str] = field(default_factory=list)
+    """Kept as a type for callers/tests that reference it. It is no longer
+    raised: under L28 a missing anchor is not a run failure — the section
+    is appended at the END of the note instead, nothing above it touched,
+    and the writer reports which placement it used. Guessing an insertion
+    point is what the law forbids; appending at the end guesses nothing."""
 
 
 def _find_line(lines: list[str], pattern: re.Pattern) -> Optional[int]:
@@ -265,96 +237,93 @@ def _section_end(lines: list[str], start: int) -> int:
     return len(lines)
 
 
-def _fill_rules_slot(lines: list[str], content: str, plan: SlotFillPlan) -> list[str]:
-    marker = _slot_marker("rules")
-    if any(marker in line for line in lines):
-        plan.skipped.append("rules (already filled)")
-        return lines
+RULES_PLACEMENT = after_pattern(
+    _WILL_NOT_TOLERATE_LOSSES_RE,
+    "after the second 'I WILL NOT TOLERATE...' line",
+)
 
-    anchor = _find_line(lines, _WILL_NOT_TOLERATE_LOSSES_RE)
-    if anchor is None:
-        raise SlotAnchorNotFound(
-            "rules slot: couldn't find the second 'I WILL NOT TOLERATE...' line to insert after."
+
+def _trading_table_span(lines: list[str]) -> Optional[tuple[int, int]]:
+    """The contiguous markdown table under '### Trading'. Wrapping it (as
+    opposed to inserting beside it) is what lets the merge keep every cell
+    Dejan already typed — VIX and BTC are always his."""
+    heading = _find_line(lines, _TRADING_HEADING_RE)
+    if heading is None:
+        return None
+    end = _section_end(lines, heading)
+    start = None
+    for i in range(heading + 1, end):
+        if lines[i].lstrip().startswith("|"):
+            start = i
+            break
+    if start is None:
+        return None
+    stop = start
+    while stop < end and lines[stop].lstrip().startswith("|"):
+        stop += 1
+    return (start, stop)
+
+
+TRADING_PLACEMENT = wrap_span(_trading_table_span, "the market table under '### Trading'")
+
+
+def _market_calendar_span(lines: list[str]) -> Optional[tuple[int, int]]:
+    """The still-blank body under '### Market Calendar:'. Trailing blank
+    lines are left outside the section so the note keeps its spacing."""
+    heading = _find_line(lines, _MARKET_CALENDAR_HEADING_RE)
+    if heading is None:
+        return None
+    end = _section_end(lines, heading)
+    stop = end
+    while stop > heading + 1 and lines[stop - 1].strip() == "":
+        stop -= 1
+    return (heading + 1, stop)
+
+
+MARKET_CALENDAR_PLACEMENT = wrap_span(
+    _market_calendar_span, "the body under '### Market Calendar:'"
+)
+
+
+def calendar_body_is_available(lines: list[str]) -> bool:
+    """True when the Market Calendar body is blank / '-' / a previous
+    FAILED line — i.e. Cobalt's to fill. Real human text there means the
+    slot is his and is skipped, exactly as before L28."""
+    span = _market_calendar_span(lines)
+    if span is None:
+        return True  # no anchor at all -> the section appends at the end
+    return all(_BLANK_OR_FAILED_RE.match(line) for line in lines[span[0] : span[1]])
+
+
+def build_market_table_body(lines: list[str], row_values: dict[str, tuple[str, str]]) -> str:
+    """The market table as Cobalt wants it to read.
+
+    Derived FROM what is on disk, not from the template: only genuinely
+    blank SPY/QQQ/IWM cells are filled, so a value Dejan already typed is
+    never replaced (and never even reaches the merge as a change). If
+    there is no table on disk at all, the three rows are rendered fresh.
+    """
+    span = _trading_table_span(lines)
+    if span is None:
+        return "\n".join(
+            f"| {t} | {row_values[t][0]} | {row_values[t][1]} |" for t in MARKET_TICKERS
         )
-    insertion = ["", marker, content, _slot_marker_close("rules")]
-    plan.filled.append("rules")
-    return lines[: anchor + 1] + insertion + lines[anchor + 1 :]
+    table = list(lines[span[0] : span[1]])
+    for ticker in MARKET_TICKERS:
+        row_re = re.compile(_ROW_RE_TEMPLATE.format(ticker=ticker))
+        for i, line in enumerate(table):
+            m = row_re.match(line)
+            if not m:
+                continue
+            if m.group(1).strip() or m.group(2).strip():
+                break  # already filled — his, or an earlier successful run
+            col2, col3 = row_values[ticker]
+            table[i] = f"| {ticker} | {col2} | {col3} |"
+            break
+    return "\n".join(table)
 
 
 _ROW_RE_TEMPLATE = r"^\|\s*{ticker}\s*\|([^|]*)\|([^|]*)\|\s*$"
-
-
-def _fill_trading_slot(lines: list[str], row_values: dict[str, tuple[str, str]], plan: SlotFillPlan) -> list[str]:
-    marker = _slot_marker("trading")
-    if any(marker in line for line in lines):
-        plan.skipped.append("trading (already filled)")
-        return lines
-
-    heading = _find_line(lines, _TRADING_HEADING_RE)
-    if heading is None:
-        raise SlotAnchorNotFound("trading slot: couldn't find the '### Trading' heading.")
-    end = _section_end(lines, heading)
-
-    any_filled = False
-    out = list(lines)
-    for ticker in MARKET_TICKERS:
-        row_re = re.compile(_ROW_RE_TEMPLATE.format(ticker=ticker))
-        row_idx = None
-        for i in range(heading, end):
-            if row_re.match(out[i]):
-                row_idx = i
-                break
-        if row_idx is None:
-            raise SlotAnchorNotFound(f"trading slot: couldn't find the {ticker} row under '### Trading'.")
-        m = row_re.match(out[row_idx])
-        col2, col3 = m.group(1), m.group(2)
-        if col2.strip() or col3.strip():
-            plan.skipped.append(f"trading:{ticker} (already filled)")
-            continue
-        new_col2, new_col3 = row_values[ticker]
-        out[row_idx] = f"| {ticker} | {new_col2} | {new_col3} |"
-        plan.filled.append(f"trading:{ticker}")
-        any_filled = True
-
-    if not any_filled:
-        return lines  # nothing written -> no marker (see module docstring)
-
-    out = out[: heading + 1] + [marker] + out[heading + 1 : end] + [_slot_marker_close("trading")] + out[end:]
-    return out
-
-
-def _fill_market_calendar_slot(lines: list[str], content: str, plan: SlotFillPlan) -> list[str]:
-    marker = _slot_marker("market_calendar")
-    if any(marker in line for line in lines):
-        plan.skipped.append("market_calendar (already filled)")
-        return lines
-
-    heading = _find_line(lines, _MARKET_CALENDAR_HEADING_RE)
-    if heading is None:
-        raise SlotAnchorNotFound("market_calendar slot: couldn't find the '### Market Calendar:' heading.")
-    end = _section_end(lines, heading)
-    body_lines = lines[heading + 1 : end]
-
-    if not all(_BLANK_OR_FAILED_RE.match(line) for line in body_lines):
-        plan.skipped.append("market_calendar (already filled)")
-        return lines
-
-    plan.filled.append("market_calendar")
-    new_body = [marker, content, _slot_marker_close("market_calendar")]
-    return lines[: heading + 1] + new_body + lines[end:]
-
-
-def _fill_all_slots(existing_text: str, slots: dict) -> tuple[str, SlotFillPlan]:
-    lines = existing_text.split("\n")
-    plan = SlotFillPlan()
-    lines = _fill_rules_slot(lines, slots["rules_content"], plan)
-    lines = _fill_trading_slot(lines, slots["row_values"], plan)
-    lines = _fill_market_calendar_slot(lines, slots["market_calendar_block"], plan)
-    return "\n".join(lines), plan
-
-
-def _all_markers_present(text: str) -> bool:
-    return all(_slot_marker(name) in text for name in SLOT_NAMES)
 
 
 def _rules_slot_content(context: dict) -> str:
@@ -369,6 +338,32 @@ def _rules_slot_content(context: dict) -> str:
     )
 
 
+def slot_state(text: str, section: str, unit: str) -> str:
+    """"absent" | "filled" | "retry".
+
+    A slot Cobalt already wrote is left alone (that is what makes the
+    05:15 job idempotent — a second run is a zero-diff no-op). The one
+    exception is a body carrying a FAILED line from a dead data source:
+    that is retried, and the retry goes through the merge like any other
+    write, so a human note added beside it survives.
+
+    Pre-L28 notes carrying the old `<!-- cobalt-slot:NAME -->` markers
+    read as "filled": historical notes are NOT retro-marked, and adding
+    a second copy of a block Dejan already has would be the exact class
+    of damage this law exists to prevent.
+    """
+    if legacy_slot_present(text, section):
+        return "filled"
+    block = find_section(text.split("\n"), section)
+    if block is None:
+        return "absent"
+    unit_block = block.units.get(unit)
+    if unit_block is None:
+        return "absent"
+    body = "\n".join(unit_block.body(text.split("\n")))
+    return "retry" if "FAILED" in body else "filled"
+
+
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
@@ -377,28 +372,34 @@ def _rules_slot_content(context: dict) -> str:
 @dataclass
 class DailyPrefillResult:
     path: Path
-    action: str  # "created" | "upgraded_stub" | "filled" | "skipped_idempotent"
+    action: str  # "created" | "filled" | "skipped_idempotent"
     filled_slots: list[str]
     skipped_slots: list[str]
+    writes: list[WriteResult] = field(default_factory=list)
+    dry_run: bool = False
+
+    def report(self) -> str:
+        """Run report: every unified diff, every override (L28.4)."""
+        lines = [
+            f"Daily prefill [{'DRY-RUN' if self.dry_run else 'WRITE'}]: {self.action} — {self.path}",
+            f"  filled: {', '.join(self.filled_slots) or 'none'}",
+            f"  skipped (not touched): {', '.join(self.skipped_slots) or 'none'}",
+        ]
+        lines.extend(w.report() for w in self.writes)
+        return "\n".join(lines)
 
 
-def _write_if_unchanged(path: Path, baseline: Optional[str], new_text: str) -> None:
-    """Write `new_text`, but only if the file still matches `baseline` —
-    the snapshot this edit was computed from. Refuses loudly otherwise
-    (NoteChangedDuringPrefill) instead of clobbering a concurrent
-    writer's content (see that class's docstring)."""
-    current = read_if_exists(path)
-    if current != baseline:
-        raise NoteChangedDuringPrefill(
-            f"REFUSED: {path} changed on disk since this run last read it "
-            "— most likely a concurrent ASET card append landed in the "
-            "gap. Not overwriting; the on-disk content (cards included) "
-            "is untouched. Re-run prefill to retry any still-unfilled slot."
-        )
-    path.write_text(new_text, encoding="utf-8")
+SLOT_SPECS = (
+    # (slot name == section name, unit id, placement)
+    ("rules", "rules", RULES_PLACEMENT),
+    ("trading", "market_table", TRADING_PLACEMENT),
+    ("market_calendar", "market_calendar", MARKET_CALENDAR_PLACEMENT),
+)
 
 
-async def run_daily_prefill(when: Optional[datetime] = None) -> DailyPrefillResult:
+async def run_daily_prefill(
+    when: Optional[datetime] = None, *, dry_run: bool = False
+) -> DailyPrefillResult:
     when = when or datetime.now().astimezone()
     aset_cfg = load_aset_config()
     sheet_modes_cfg = load_sheet_modes_config()
@@ -407,16 +408,23 @@ async def run_daily_prefill(when: Optional[datetime] = None) -> DailyPrefillResu
     filename = when.strftime(aset_cfg.daily_note.filename_pattern)
     path = resolve_target(aset_cfg.daily_note.daily_notes_dir, filename)
 
+    store = VaultWriteStore(aset_cfg.db_name)
+    store.ensure_schema()
+    writer = VaultWriter("prefill.daily", store=store, dry_run=dry_run)
+
     # Cheap early exit on the already-filled common case — skip touching
-    # the network entirely. Re-read fresh below before actually acting;
-    # this snapshot is ONLY used to decide whether it's worth fetching.
+    # the network entirely. Re-read fresh below before acting; this
+    # snapshot is ONLY used to decide whether it's worth fetching.
     precheck = read_if_exists(path)
-    if precheck is not None and _all_markers_present(precheck):
+    if precheck is not None and all(
+        slot_state(precheck, section, unit) == "filled" for section, unit, _ in SLOT_SPECS
+    ):
         return DailyPrefillResult(
             path=path,
             action="skipped_idempotent",
             filled_slots=[],
-            skipped_slots=[f"{name} (already filled)" for name in SLOT_NAMES],
+            skipped_slots=[f"{name} (already filled)" for name, _, _ in SLOT_SPECS],
+            dry_run=dry_run,
         )
 
     market_rows: Optional[list[MarketRow]] = None
@@ -437,70 +445,64 @@ async def run_daily_prefill(when: Optional[datetime] = None) -> DailyPrefillResu
 
     cards: list[dict] = []
     try:
-        store = AsetStore(aset_cfg.db_name)
-        cards = store.for_date(when.date())
+        cards = AsetStore(aset_cfg.db_name).for_date(when.date())
     except Exception:
         cards = []  # best-effort only — no live "current mode" to show, not a run failure
 
-    mode_hint = format_mode_hint(cards)
     context = build_slot_contents(
         when, market_rows, market_error, economic, earnings, calendar_error,
-        rules_cfg, sheet_modes_cfg, mode_hint,
+        rules_cfg, sheet_modes_cfg, format_mode_hint(cards),
     )
 
-    # Root-cause fix (2026-09-03): re-read NOW, after the slow fetches
-    # above (network calls can run for seconds), not before them. Every
-    # decision and write below is against THIS snapshot — closing the
-    # window that used to let a concurrent ASET card append vanish
-    # under a stale-read overwrite. _write_if_unchanged() below is the
-    # last-line defense for the remaining (synchronous, near-zero)
-    # gap between this read and the eventual write.
-    existing = read_if_exists(path)
-
-    if existing is not None and _all_markers_present(existing):
-        return DailyPrefillResult(
-            path=path,
-            action="skipped_idempotent",
-            filled_slots=[],
-            skipped_slots=[f"{name} (already filled)" for name in SLOT_NAMES],
-        )
-
-    if existing is None:
-        write_new(path, _render_template(context))
+    # L28.1: a note that does not exist is created whole from the
+    # template. A note that DOES exist always takes the merge path below
+    # — there is no stub-upgrade branch any more, and no code path that
+    # renders a template over an existing file. That branch
+    # (`existing.split(STUB_BANNER, 1)[1]`) discarded everything above
+    # the banner and is deleted, not repaired.
+    created = writer.create_if_absent(path, _render_template(context))
+    if created.action == "created":
         return DailyPrefillResult(
             path=path, action="created",
-            filled_slots=list(SLOT_NAMES), skipped_slots=[],
+            filled_slots=[name for name, _, _ in SLOT_SPECS], skipped_slots=[],
+            writes=[created], dry_run=dry_run,
         )
 
-    if STUB_BANNER in existing:
-        # ASET bootstrapped this note itself (aset/daily_note.py's own
-        # stub-on-create fallback — happens whenever the first card of
-        # the day lands before this job ever runs, e.g. prefill was
-        # broken/late that morning). It has none of the anchors below,
-        # so the normal fill-in-place path would fail loud on the rules
-        # anchor. Upgrade it to the full template instead, preserving
-        # every appended card byte-for-byte after the rendered template.
-        preserved_cards = existing.split(STUB_BANNER, 1)[1]
-        new_text = _render_template(context) + preserved_cards
-        _write_if_unchanged(path, existing, new_text)
-        return DailyPrefillResult(
-            path=path, action="upgraded_stub",
-            filled_slots=list(SLOT_NAMES), skipped_slots=[],
-        )
-
+    existing = read_if_exists(path) or ""
+    existing_lines = existing.split("\n")
     row_values = {
         "SPY": (context["spy_col2"], context["spy_col3"]),
         "QQQ": (context["qqq_col2"], context["qqq_col3"]),
         "IWM": (context["iwm_col2"], context["iwm_col3"]),
     }
-    slots = {
-        "rules_content": _rules_slot_content(context),
-        "row_values": row_values,
-        "market_calendar_block": context["market_calendar_block"],
+    bodies = {
+        "rules": _rules_slot_content(context),
+        "trading": build_market_table_body(existing_lines, row_values),
+        "market_calendar": context["market_calendar_block"],
     }
-    new_text, plan = _fill_all_slots(existing, slots)
-    if new_text != existing:
-        _write_if_unchanged(path, existing, new_text)
 
-    action = "filled" if plan.filled else "skipped_idempotent"
-    return DailyPrefillResult(path=path, action=action, filled_slots=plan.filled, skipped_slots=plan.skipped)
+    filled: list[str] = []
+    skipped: list[str] = []
+    writes: list[WriteResult] = []
+    for section, unit, placement in SLOT_SPECS:
+        state = slot_state(existing, section, unit)
+        if state == "filled":
+            skipped.append(f"{section} (already filled)")
+            continue
+        if section == "market_calendar" and state == "absent" and not calendar_body_is_available(
+            existing_lines
+        ):
+            skipped.append("market_calendar (his content — not touched)")
+            continue
+        result = writer.upsert_unit(path, section, unit, bodies[section], placement=placement)
+        writes.append(result)
+        if result.action in ("updated", "created"):
+            filled.append(section if state == "absent" else f"{section} (retried)")
+        else:
+            skipped.append(f"{section} ({result.action})")
+
+    action = "filled" if filled else "skipped_idempotent"
+    return DailyPrefillResult(
+        path=path, action=action, filled_slots=filled, skipped_slots=skipped,
+        writes=writes, dry_run=dry_run,
+    )

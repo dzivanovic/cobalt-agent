@@ -46,6 +46,15 @@ class DailyNoteConfig(BaseModel):
     # .obsidian/daily-notes.json.
     daily_notes_dir: str = Field(min_length=1)
     filename_pattern: str = Field(default="%Y-%m-%d.md", min_length=1)
+    # LAW L28 containment lever (2026-09-03). The 09-03 containment
+    # session had to stop the whole ASET LaunchAgent to stop its
+    # daily-note writes, because no flag existed to separate "serve the
+    # sheet" from "write the journal". With this false, sizing, the
+    # Postgres persist and the whole sheet keep working and the note
+    # write becomes a LOUD, logged no-op (aset/daily_note.py) with a
+    # visible banner on the page. Default true — off is a deliberate,
+    # visible act, never the silent state.
+    write_enabled: bool = True
 
 
 class ServerConfig(BaseModel):

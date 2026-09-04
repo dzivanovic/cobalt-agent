@@ -23,8 +23,10 @@ import yaml
 
 from cobalt.aset.models import SizingResult
 
+from cobalt.vaultwrite import VaultWriter, VaultWriteStore
+
 from .config import PrefillPathsConfig
-from .vault_writer import VaultWriteError, overwrite, read_if_exists, resolve_target, write_new
+from .vault_writer import VaultWriteError, read_if_exists, resolve_target
 
 COBALT_OWNED_FIELDS = ("date", "symbol", "direction", "stop_price", "entry_price")
 FIELD_ORDER = (
@@ -96,23 +98,64 @@ def _split_frontmatter(content: str) -> tuple[Optional[dict], str]:
     return (parsed or {}), content[m.end():]
 
 
+FRONTMATTER_SECTION = "trade-frontmatter"
+FRONTMATTER_REGION = "frontmatter"
+
+
+def frontmatter_span(lines: list[str]) -> Optional[tuple[int, int]]:
+    """The `---` ... `---` block at the head of the file, as a line span.
+
+    Markers cannot bound it: Obsidian requires frontmatter to be the very
+    first bytes of the note, so an HTML comment above the opening `---`
+    stops it being frontmatter and one inside stops it being YAML. This
+    is the ONE structurally-located region in the whole write path — see
+    VaultWriter.upsert_region.
+    """
+    if not lines or lines[0].strip() != "---":
+        return None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            return (0, i + 1)
+    return None
+
+
 def upsert_trade_note(
-    result: SizingResult, when: datetime, prefill_paths: PrefillPathsConfig
+    result: SizingResult,
+    when: datetime,
+    prefill_paths: PrefillPathsConfig,
+    *,
+    writer: Optional[VaultWriter] = None,
+    db_name: str = "cobalt_dev",
+    dry_run: bool = False,
 ) -> tuple[Path, str]:
     """Create or update the trade note for one computed card. Returns
-    (path, action) where action is "created" or "updated"."""
+    (path, action).
+
+    Converted to the ONE write path 2026-09-03 (LAW L28): a note that
+    does not exist is created whole; one that does takes the merge path
+    through `VaultWriter.upsert_region`, guarded, audited and diffed like
+    every other vault write. Dejan's own frontmatter keys are merged
+    key-wise here (as before), and the writer's three-way merge is the
+    second line of defence — if he edited one of Cobalt's own five keys,
+    HIS value wins and an override row records it.
+    """
     ticker = result.input.ticker
     filename = _trade_note_filename(prefill_paths, ticker, when)
     title = filename[:-3] if filename.endswith(".md") else filename
     path = resolve_target(prefill_paths.trades_dir, filename)
     fresh = _cobalt_fields(result, when)
 
+    if writer is None:
+        store = VaultWriteStore(db_name)
+        store.ensure_schema()
+        writer = VaultWriter("prefill.trade_note", store=store, dry_run=dry_run)
+
     existing = read_if_exists(path)
     if existing is None:
-        write_new(path, _render_frontmatter(fresh) + _render_body(title))
+        writer.create_if_absent(path, _render_frontmatter(fresh) + _render_body(title))
         return path, "created"
 
-    fm, body = _split_frontmatter(existing)
+    fm, _body = _split_frontmatter(existing)
     if fm is None:
         raise VaultWriteError(
             f"{path}: existing file has no recognizable frontmatter block — "
@@ -120,5 +163,11 @@ def upsert_trade_note(
         )
     merged = dict(fm)
     merged.update(fresh)  # Cobalt's five keys refreshed; every other key/value untouched
-    overwrite(path, _render_frontmatter(merged) + body)
+    writer.upsert_region(
+        path,
+        FRONTMATTER_SECTION,
+        FRONTMATTER_REGION,
+        _render_frontmatter(merged).rstrip("\n"),
+        locate=frontmatter_span,
+    )
     return path, "updated"

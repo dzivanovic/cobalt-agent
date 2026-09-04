@@ -20,42 +20,46 @@ from .daily import run_daily_prefill  # noqa: E402
 from .drc import run_drc_prefill  # noqa: E402
 
 
-def _run_daily() -> None:
-    result = asyncio.run(run_daily_prefill())
-    logger.info(
-        f"Daily prefill: {result.action} — {result.path} "
-        f"(filled: {result.filled_slots or 'none'}; skipped: {result.skipped_slots or 'none'})"
-    )
-    print(f"{result.action}: {result.path}")
-    if result.filled_slots:
-        print(f"  filled: {', '.join(result.filled_slots)}")
-    if result.skipped_slots:
-        print(f"  skipped (already filled — not touched): {', '.join(result.skipped_slots)}")
+def _run_daily(dry_run: bool) -> None:
+    result = asyncio.run(run_daily_prefill(dry_run=dry_run))
+    # L28.4: every report and run log shows the unified diff.
+    report = result.report()
+    logger.info(report)
+    print(report)
 
 
-def _run_drc(target_date: str | None) -> None:
+def _run_drc(target_date: str | None, dry_run: bool) -> None:
     for_date_ = date.fromisoformat(target_date) if target_date else None
-    result = asyncio.run(run_drc_prefill(for_date_=for_date_))
-    logger.info(f"DRC prefill: {result.action} — {result.path} ({result.card_count} cards)")
-    print(f"{result.action}: {result.path} ({result.card_count} cards)")
+    result = asyncio.run(run_drc_prefill(for_date_=for_date_, dry_run=dry_run))
+    report = result.report()
+    logger.info(report)
+    print(report)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="prefill", description="Cobalt DRC & Daily prefill engine")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("daily", help="Prefill (or append to) today's Daily Note.")
+    # --dry-run on EVERY entrypoint (L28): compute the whole edit, print
+    # the unified diff, write nothing — not to the note, not to Postgres.
+    daily_parser = sub.add_parser("daily", help="Prefill today's Daily Note.")
+    daily_parser.add_argument(
+        "--dry-run", action="store_true", help="Show the unified diff; write nothing."
+    )
 
-    drc_parser = sub.add_parser("drc", help="Prefill (or append to) the evening DRC draft.")
+    drc_parser = sub.add_parser("drc", help="Prefill the evening DRC draft.")
     drc_parser.add_argument("--date", help="Target date YYYY-MM-DD (default: today).")
+    drc_parser.add_argument(
+        "--dry-run", action="store_true", help="Show the unified diff; write nothing."
+    )
 
     args = parser.parse_args()
 
     try:
         if args.command == "daily":
-            _run_daily()
+            _run_daily(args.dry_run)
         else:
-            _run_drc(args.date)
+            _run_drc(args.date, args.dry_run)
     except Exception as e:
         logger.error(f"prefill {args.command} FAILED: {type(e).__name__}: {e}")
         print(f"FAILED: {type(e).__name__}: {e}", file=sys.stderr)

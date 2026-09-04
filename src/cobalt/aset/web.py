@@ -223,6 +223,11 @@ FORM_FIELDS = (
     "ticker", "grade", "direction", "sheet_mode", "entry", "stop",
     "last_price", "price_source", "orig_timestamp",
     "entry_ticker",
+    # 2026-09-03 (L28 step 3): the aset_sizings row this card created.
+    # /fill UPDATEs exactly that row (status FILLED + actual-fill
+    # figures) instead of matching by nearest timestamp — the fill
+    # recompute used to persist nothing at all.
+    "card_row_id",
 )
 
 
@@ -488,20 +493,22 @@ async def size(request: Request) -> str:
         )
 
     try:
-        note_path, when = save_card(cfg, result)
+        note_path, when, note_write = save_card(cfg, result)
     except DailyNoteRefused as e:
         form["orig_timestamp"] = ""
+        form["card_row_id"] = str(row_id)
         banner = _failed(
             f"Persisted: aset_sizings id {row_id} ({cfg.db_name}) — but "
-            f"daily-note append FAILED: {e}"
+            f"daily-note write FAILED: {e}"
         )
         return _render(banner=banner, result=_result_card(result, form), form=form)
 
     form["orig_timestamp"] = when.isoformat()
+    form["card_row_id"] = str(row_id)
 
     try:
         prefill_paths = load_prefill_paths()
-        trade_path, trade_action = upsert_trade_note(result, when, prefill_paths)
+        trade_path, trade_action = upsert_trade_note(result, when, prefill_paths, db_name=cfg.db_name)
     except (PrefillConfigError, VaultWriteError) as e:
         banner = _failed(
             f"Persisted: aset_sizings id {row_id} ({cfg.db_name}) — daily note "
@@ -509,11 +516,20 @@ async def size(request: Request) -> str:
         )
         return _render(banner=banner, result=_result_card(result, form), form=form)
 
-    banner = (
-        f'<div class="saved">Persisted: aset_sizings id {row_id} ({html.escape(cfg.db_name)}) '
-        f"· appended to {html.escape(str(note_path))} "
-        f"· trade note {trade_action}: {html.escape(str(trade_path))}</div>"
-    )
+    if note_write is None:
+        banner = (
+            f'<div class="warn">Persisted: aset_sizings id {row_id} '
+            f"({html.escape(cfg.db_name)}) · trade note {trade_action}: "
+            f"{html.escape(str(trade_path))} · ⚠ DAILY-NOTE WRITE IS DISABLED "
+            "(daily_note.write_enabled=false) — this card is NOT in the journal.</div>"
+        )
+    else:
+        banner = (
+            f'<div class="saved">Persisted: aset_sizings id {row_id} ({html.escape(cfg.db_name)}) '
+            f"· {html.escape(note_write.action)} in {html.escape(str(note_path))} "
+            f"(unit {html.escape(note_write.unit or '')}) "
+            f"· trade note {trade_action}: {html.escape(str(trade_path))}</div>"
+        )
     return _render(banner=banner, result=_result_card(result, form), form=form)
 
 
@@ -545,13 +561,42 @@ async def fill(request: Request) -> str:
         fill_result = compute_fill_recompute(
             original, actual_fill, cfg.validation.max_fill_distance_pct
         )
-        note_path = save_fill_update(cfg, fill_result, orig_timestamp)
+
+        # L28 step 3 (2026-09-03): the recompute is an UPDATE to the card
+        # row it belongs to — status FILLED + the actual-fill figures.
+        # Before this it created no row at all, which is why the 09-03
+        # TSLA FILL UPDATE (10:02:36) was unrecoverable from Postgres.
+        # DB first: a fill reported in the note but missing from the DB
+        # is exactly the failure mode being closed.
+        card_row_raw = form.get("card_row_id", "")
+        if not card_row_raw.isdigit():
+            raise SizingError(
+                "No aset_sizings row id on this form — compute & persist a card "
+                "first, then recompute its actual fill. (Refusing to write a fill "
+                "update that cannot be tied to its card row.)"
+            )
+        store = AsetStore(cfg.db_name)
+        store.ensure_schema()
+        store.mark_filled(int(card_row_raw), fill_result)
+
+        note_path, note_write = save_fill_update(cfg, fill_result, orig_timestamp)
     except (SizingError, ConfigError, DailyNoteRefused, DevEntryRefused) as e:
         return _render(banner=_failed(str(e)), form=form)
     except Exception as e:
         return _render(banner=_failed(f"{type(e).__name__}: {e}"), form=form)
 
-    banner = f'<div class="saved">Fill update appended to {html.escape(str(note_path))}</div>'
+    if note_write is None:
+        banner = (
+            f'<div class="warn">aset_sizings id {html.escape(card_row_raw)} marked '
+            "FILLED · ⚠ DAILY-NOTE WRITE IS DISABLED (daily_note.write_enabled="
+            "false) — the FILL UPDATE is NOT in the journal.</div>"
+        )
+    else:
+        banner = (
+            f'<div class="saved">aset_sizings id {html.escape(card_row_raw)} marked '
+            f"FILLED · fill update {html.escape(note_write.action)} in "
+            f"{html.escape(str(note_path))}</div>"
+        )
     return _render(
         banner=banner,
         result=_result_card(original, form, fill=fill_result),

@@ -20,33 +20,39 @@ STOP TRADING AFTER 11AM until one month green 4 out of 5 days a week
 I WILL NOT TOLERATE THE MISTAKE OF OVERSIZING RISK ON A SINGLE TRADE THAT I DID NOT PLAN JUST TO MAKE A LARGFE POSITION
 I WILL NOT TOLERATE THE MISTAKE OF HAVING MORE THAN 3 LOSSES IN A ROW IN A TRADING DAY
 
-<!-- cobalt-slot:rules -->
+<!-- cobalt:section rules -->
+<!-- cobalt:unit rules -->
 {{ rules_checkbox_block }}
 
 {{ sheet_mode_line }}
 
 {{ mantras_block }}
-<!-- /cobalt-slot:rules -->
+<!-- /cobalt:unit rules -->
+<!-- /cobalt:section rules -->
 
 ### Trading
 
-<!-- cobalt-slot:trading -->
+<!-- cobalt:section trading -->
+<!-- cobalt:unit market_table -->
 | VIX |     |     |
 | --- | --- | --- |
 | SPY | {{ spy_col2 }} | {{ spy_col3 }} |
 | QQQ | {{ qqq_col2 }} | {{ qqq_col3 }} |
 | IWM | {{ iwm_col2 }} | {{ iwm_col3 }} |
 | BTC |     |     |
-<!-- /cobalt-slot:trading -->
+<!-- /cobalt:unit market_table -->
+<!-- /cobalt:section trading -->
 
 
 ### Market Context:
 -
 
 ### Market Calendar:
-<!-- cobalt-slot:market_calendar -->
+<!-- cobalt:section market_calendar -->
+<!-- cobalt:unit market_calendar -->
 {{ market_calendar_block }}
-<!-- /cobalt-slot:market_calendar -->
+<!-- /cobalt:unit market_calendar -->
+<!-- /cobalt:section market_calendar -->
 ### Game Plan:
 
 

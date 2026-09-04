@@ -1,11 +1,16 @@
-"""Shared vault-write plumbing for the prefill engine (one-path rule —
-daily.py, trade_note.py, and drc.py all go through this, not three
-copies of the same resolve/gate/write logic).
+"""Vault path RESOLUTION for the prefill engine — no longer a writer.
 
-Every write passes through cobalt.vault's ONE resolver and shared
-"outside the repo" safety gate before touching disk. Directory creation
-is refused, same as aset/daily_note.py — folder policy is a Vault
-Session decision, not something Cobalt improvises.
+Renamed in role (not in file, to keep the diff honest) on 2026-09-03 by
+LAW L28: `write_new`, `append_block` and `overwrite` are DELETED. They
+were three separate ways to put bytes into a vault file, which is
+exactly the shape the law abolishes — there is now one, and it is
+`cobalt.vaultwrite.VaultWriter`. What remains here is the path work
+daily.py / drc.py / trade_note.py still need: resolve a vault-relative
+target through cobalt.vault's ONE resolver, apply the shared "outside
+the repo" gate, and read a file if it exists.
+
+Directory creation is still refused — folder policy is a Vault Session
+decision, not something Cobalt improvises.
 """
 
 from pathlib import Path
@@ -50,28 +55,3 @@ def resolve_dir(vault_relative_dir: str) -> Path:
 
 def read_if_exists(path: Path) -> Optional[str]:
     return path.read_text(encoding="utf-8") if path.exists() else None
-
-
-def write_new(path: Path, content: str) -> None:
-    """Write a brand-new file. Refuses to clobber an existing one — the
-    caller (e.g. daily.py) must already have branched on read_if_exists()
-    being None; this is a second, cheap guard against a race."""
-    if path.exists():
-        raise VaultWriteError(f"REFUSED: {path} already exists — use append_block, not write_new.")
-    path.write_text(content, encoding="utf-8")
-
-
-def append_block(path: Path, content: str) -> None:
-    """Append-only forever: existing content is never read for mutation,
-    only for the caller's own idempotency-marker check beforehand."""
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(content)
-
-
-def overwrite(path: Path, content: str) -> None:
-    """Replace a file's full content. Scoped to ONE legitimate case in
-    this package: trade_note.py refreshing its own Cobalt-owned
-    frontmatter keys on an idempotent re-run, after merging them onto
-    whatever the file already had (Dejan's manual edits preserved by the
-    caller before calling this, never by this function)."""
-    path.write_text(content, encoding="utf-8")

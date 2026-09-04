@@ -20,6 +20,12 @@ db_name: cobalt_dev
 daily_note:
   daily_notes_dir: "1 - Trading/1- Daily Notes"
   filename_pattern: "%Y-%m-%d.md"
+  # LAW L28 containment lever (2026-09-03): false keeps the sheet
+  # serving and the card persisting to Postgres, and turns the
+  # daily-note write into a loud, logged no-op with a banner on the
+  # page. There was no way to do that on 09-03 — the whole LaunchAgent
+  # had to be stopped. Default true.
+  write_enabled: true
 
 # Server bind. "loopback" (default) = 127.0.0.1 only, this machine only.
 # "lan" = 0.0.0.0, reachable from other devices on the home network (e.g.

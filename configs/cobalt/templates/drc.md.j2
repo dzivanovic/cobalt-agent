@@ -48,7 +48,11 @@ Grade: (A+, A, B, C, etc..)
 
 ### PnL on the day:  $XXXX
 
+<!-- cobalt:section drc-risk -->
+<!-- cobalt:unit risk_parameters -->
 Risk Parameters: {{ risk_parameters_line }}
+<!-- /cobalt:unit risk_parameters -->
+<!-- /cobalt:section drc-risk -->
 
 - Your pre-determined risk allocation (pulled from your Premarket GamePlan)
 
@@ -57,7 +61,11 @@ Risk Parameters: {{ risk_parameters_line }}
 
 ### Catalyst + Set Up + Trades
 
-{{ tickers_block }}
+<!-- cobalt:section drc-trades -->
+<!-- cobalt:unit tickers -->
+{{ tickers_unit }}
+<!-- /cobalt:unit tickers -->
+<!-- /cobalt:section drc-trades -->
 ---
 
 ### Technology:
@@ -122,10 +130,9 @@ Because: (Identity statement)
 ---
 
 ### Cobalt Rules Check
-<!-- cobalt-prefill:drc:{{ date_str }} -->
 
-**Rules (copied from the morning note's checklist — Rules.md is the source):**
-{{ rules_checkbox_block }}
-
-**Card reconcile (cards with no matching fill — taken / passed / discarded?):**
-{{ card_reconcile_block }}
+<!-- cobalt:section drc-rules -->
+<!-- cobalt:unit rules_check -->
+{{ rules_check_block }}
+<!-- /cobalt:unit rules_check -->
+<!-- /cobalt:section drc-rules -->

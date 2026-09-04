@@ -6,9 +6,26 @@ mode risk parameters, and the same rule-adherence checklist the morning
 note used. Goal/grade/learnings/selectivity/1%-better/PnL stay exactly
 as DRC.md's own instructional placeholders — Cobalt never touches them.
 
-Same create-vs-append principle as daily.py: full template render if
-the DRC note doesn't exist yet, otherwise a fenced, idempotency-marked
-append.
+Same ONE write path as daily.py since 2026-09-03 (LAW L28): the full
+template render only when the DRC note does not exist, otherwise
+marker-bounded unit upserts through `cobalt.vaultwrite` — merged, never
+appended blind, never overwritten. Three units:
+
+    drc-risk   / risk_parameters  the computed sheet-mode risk line
+    drc-trades / tickers          the counts + traded-ticker scaffold
+    drc-rules  / rules_check      rule checklist + card reconcile
+
+`_render_append_block`'s fenced "## Cobalt Prefill — DRC draft" block
+and its `<!-- cobalt-prefill:drc:DATE -->` marker are retired: the
+markers now carry identity, so a re-run updates the same three units
+instead of appending a second block. Notes already carrying the old
+marker are skipped whole (`legacy_marker`) — historical notes are not
+retro-marked.
+
+COUNTS (L28 step 3): "cards written" and "trades taken" are two
+numbers, shown as two. Trades taken counts `aset_sizings.status =
+'FILLED'` only. DRC-2026-09-03 reported "17 cards" when 2 were real
+and none were filled.
 
 Cards (aset_sizings rows) don't carry Catalyst/Set-Up text or a
 strategy tag — those live only in the Trade Ideas table (his, always
@@ -22,7 +39,7 @@ just without a strategy/fill lookup.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
@@ -37,9 +54,15 @@ from cobalt.aset.store import AsetStore
 from .config import RulesConfig, StrategiesConfig, TEMPLATES_DIR, load_prefill_paths, load_strategies_config
 from .daily import apply_mode_aware_sizing, format_rules_checkbox_block
 from .rules_gen import regenerate_rules_config
-from .vault_writer import VaultWriteError, append_block, read_if_exists, resolve_dir, resolve_target, write_new
+from .vault_writer import VaultWriteError, read_if_exists, resolve_dir, resolve_target
+from cobalt.vaultwrite import VaultWriteStore, VaultWriter, WriteResult, Placement, after_pattern
+from cobalt.vaultwrite.markers import find_section
 
 _FILL_BLOCK_RE = re.compile(r"```aset-fill\n(.*?)\n```", re.DOTALL)
+_PNL_HEADING_RE = re.compile(r"^###\s*PnL on the day.*$")
+_RISK_PARAMS_LINE_RE = re.compile(r"^Risk Parameters:.*$")
+_TRADES_HEADING_RE = re.compile(r"^###\s*Catalyst \+ Set Up \+ Trades\s*$")
+LEGACY_MARKER_TEMPLATE = "<!-- cobalt-prefill:drc:{date} -->"
 _TRADE_FILENAME_RE = re.compile(r"^Trade-(\d{4}-\d{2}-\d{2}) (\d{2}-\d{2}-\d{2}) -(.+)\.md$")
 _FRONTMATTER_RE = re.compile(r"\A---\n(.*?\n)---\n", re.DOTALL)
 FILL_MATCH_TOLERANCE_SECONDS = 30
@@ -251,39 +274,102 @@ def _render_template(context: dict) -> str:
     return env.get_template("drc.md.j2").render(**context)
 
 
-def _idempotency_marker(for_date_: date) -> str:
-    return f"<!-- cobalt-prefill:drc:{for_date_.isoformat()} -->"
 
 
-def _render_append_block(for_date_: date, context: dict) -> str:
-    lines = [
-        "",
-        "## Cobalt Prefill — DRC draft",
-        _idempotency_marker(for_date_),
-        "",
-        f"Risk Parameters: {context['risk_parameters_line']}",
-        "",
-        "### Catalyst + Set Up + Trades (Cobalt-prefilled)",
-        context["tickers_block"].rstrip("\n"),
-        "",
-        "**Rules (copied from the morning note's checklist — Rules.md is the source):**",
-        context["rules_checkbox_block"].rstrip("\n"),
-        "",
-        "**Card reconcile (cards with no matching fill — taken / passed / discarded?):**",
-        context["card_reconcile_block"].rstrip("\n"),
-        "",
-    ]
-    return "\n".join(lines)
+def legacy_marker(for_date_: date) -> str:
+    """The PRE-L28 idempotency marker. Read-only compatibility: a DRC
+    note already prefilled by the old writer is left completely alone —
+    historical notes are not retro-marked (L28), and a second copy of a
+    block Dejan already has is the damage this law prevents."""
+    return LEGACY_MARKER_TEMPLATE.format(date=for_date_.isoformat())
+
+
+def format_rules_check_block(context: dict) -> str:
+    return "\n".join(
+        [
+            "**Rules (copied from the morning note's checklist — Rules.md is the source):**",
+            context["rules_checkbox_block"].rstrip("\n"),
+            "",
+            "**Card reconcile (cards with no matching fill — taken / passed / discarded?):**",
+            context["card_reconcile_block"].rstrip("\n"),
+        ]
+    )
+
+
+def format_tickers_unit(context: dict) -> str:
+    """The traded-tickers scaffold, headed by the two counts.
+
+    "Cards written" and "trades taken" are DIFFERENT numbers and are
+    shown as two (L28 step 3). Trades taken counts aset_sizings rows
+    with status='FILLED' ONLY — a card is a written plan; it becomes a
+    trade when the fill recompute says so. DRC-2026-09-03 reported
+    "17 cards" when 2 were real and 0 were filled; that conflation is
+    what this line replaces."""
+    return "\n".join(
+        [
+            f"Cards written: {context['cards_written']} · "
+            f"Trades taken (FILLED): {context['trades_taken']}",
+            "",
+            context["tickers_block"].rstrip("\n"),
+        ]
+    )
+
+
+# ---------------------------------------------------------------------------
+# Placement of each section the first time it lands in an existing note
+# ---------------------------------------------------------------------------
+
+
+def _risk_span(lines: list[str]) -> Optional[tuple[int, int]]:
+    """Wrap DRC.md's own `Risk Parameters: A:5R, B:1R, C:0.5R` default
+    line so Cobalt's computed line replaces it (recorded, diffed and
+    restorable) instead of sitting beside a stale one. If the template's
+    line isn't there, insert under the PnL heading."""
+    for i, line in enumerate(lines):
+        if _RISK_PARAMS_LINE_RE.match(line):
+            return (i, i + 1)
+    for i, line in enumerate(lines):
+        if _PNL_HEADING_RE.match(line):
+            return (i + 1, i + 1)
+    return None
+
+
+RISK_PLACEMENT = Placement("the 'Risk Parameters:' line (or under '### PnL on the day')", _risk_span)
+TRADES_PLACEMENT = after_pattern(_TRADES_HEADING_RE, "under '### Catalyst + Set Up + Trades'")
+# No anchor: the rules check is the last thing in the DRC by design, and
+# L28's default placement (end of note, nothing above touched) is exactly
+# where it belongs.
+RULES_PLACEMENT = None
 
 
 @dataclass
 class DrcPrefillResult:
     path: Path
-    action: str  # "created" | "appended" | "skipped_idempotent"
-    card_count: int
+    action: str  # "created" | "filled" | "skipped_idempotent"
+    cards_written: int
+    trades_taken: int
+    writes: list[WriteResult] = field(default_factory=list)
+    dry_run: bool = False
+
+    @property
+    def card_count(self) -> int:
+        """Back-compat alias. Prefer cards_written/trades_taken — they
+        are different numbers and conflating them is what produced
+        DRC-2026-09-03's "17 cards"."""
+        return self.cards_written
+
+    def report(self) -> str:
+        lines = [
+            f"DRC prefill [{'DRY-RUN' if self.dry_run else 'WRITE'}]: {self.action} — {self.path}",
+            f"  cards written: {self.cards_written} · trades taken (FILLED): {self.trades_taken}",
+        ]
+        lines.extend(w.report() for w in self.writes)
+        return "\n".join(lines)
 
 
-async def run_drc_prefill(for_date_: Optional[date] = None) -> DrcPrefillResult:
+async def run_drc_prefill(
+    for_date_: Optional[date] = None, *, dry_run: bool = False
+) -> DrcPrefillResult:
     for_date_ = for_date_ or datetime.now().astimezone().date()
     aset_cfg = load_aset_config()
     sheet_modes_cfg = load_sheet_modes_config()
@@ -294,6 +380,7 @@ async def run_drc_prefill(for_date_: Optional[date] = None) -> DrcPrefillResult:
     store = AsetStore(aset_cfg.db_name)
     store.ensure_schema()
     cards = store.for_date(for_date_)
+    cards_written, trades_taken = store.counts_for_date(for_date_)
 
     daily_filename = for_date_.strftime(aset_cfg.daily_note.filename_pattern)
     try:
@@ -317,19 +404,46 @@ async def run_drc_prefill(for_date_: Optional[date] = None) -> DrcPrefillResult:
         "tickers_block": format_tickers_block(grouped_entries),
         "rules_checkbox_block": format_rules_checkbox_block(mode_aware_rules),
         "card_reconcile_block": format_card_reconcile_block(grouped_entries),
+        "cards_written": cards_written,
+        "trades_taken": trades_taken,
     }
+    context["rules_check_block"] = format_rules_check_block(context)
+    context["tickers_unit"] = format_tickers_unit(context)
 
     filename = for_date_.strftime(prefill_paths.drc_filename_pattern)
     path = resolve_target(prefill_paths.review_dir, filename)
-    existing = read_if_exists(path)
 
-    if existing is None:
-        write_new(path, _render_template(context))
-        return DrcPrefillResult(path=path, action="created", card_count=len(cards))
+    write_store = VaultWriteStore(aset_cfg.db_name)
+    write_store.ensure_schema()
+    writer = VaultWriter("prefill.drc", store=write_store, dry_run=dry_run)
 
-    marker = _idempotency_marker(for_date_)
-    if marker in existing:
-        return DrcPrefillResult(path=path, action="skipped_idempotent", card_count=len(cards))
+    # L28.1: created whole only when absent; an existing note always
+    # takes the merge path below.
+    created = writer.create_if_absent(path, _render_template(context))
+    if created.action == "created":
+        return DrcPrefillResult(
+            path=path, action="created", cards_written=cards_written,
+            trades_taken=trades_taken, writes=[created], dry_run=dry_run,
+        )
 
-    append_block(path, _render_append_block(for_date_, context))
-    return DrcPrefillResult(path=path, action="appended", card_count=len(cards))
+    existing = read_if_exists(path) or ""
+    if legacy_marker(for_date_) in existing:
+        return DrcPrefillResult(
+            path=path, action="skipped_idempotent", cards_written=cards_written,
+            trades_taken=trades_taken, dry_run=dry_run,
+        )
+
+    units = (
+        ("drc-risk", "risk_parameters", f"Risk Parameters: {context['risk_parameters_line']}", RISK_PLACEMENT),
+        ("drc-trades", "tickers", context["tickers_unit"], TRADES_PLACEMENT),
+        ("drc-rules", "rules_check", context["rules_check_block"], RULES_PLACEMENT),
+    )
+    writes = [
+        writer.upsert_unit(path, section, unit, body, placement=placement)
+        for section, unit, body, placement in units
+    ]
+    action = "filled" if any(w.action == "updated" for w in writes) else "skipped_idempotent"
+    return DrcPrefillResult(
+        path=path, action=action, cards_written=cards_written,
+        trades_taken=trades_taken, writes=writes, dry_run=dry_run,
+    )
