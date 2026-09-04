@@ -39,6 +39,12 @@ class TunableUnit(str, Enum):
     RATIO = "ratio"
     LABEL = "label"
     DURATION = "duration"
+    # ET wall-clock time-of-day, "HH:MM" (F1 session clock, 2026-09-04).
+    # The session boundaries are wall-clock instants in America/New_York,
+    # not counts or durations, and F16 forbids an inline literal in a
+    # predicate — so they need a unit of their own rather than being bent
+    # into `min` or `label`.
+    TIME = "time"
 
 
 class TunableStatus(str, Enum):

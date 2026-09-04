@@ -1,0 +1,63 @@
+# NYSE trading calendar — 2026. F1 session clock (Charter §3 F1).
+#
+# Schema: src/cobalt/session/calendar.py (CalendarYear / TradingCalendar),
+# loaded through the Pydantic config path like every other new-core config
+# (config-as-code law). `configs/cobalt/` is a sanctioned new-core config
+# location — the old loader's glob (configs/*.yaml) is top-level only and
+# never reaches this subdirectory (CLAUDE.md config boundary law).
+#
+# WHY THIS IS A LIST AND NOT A TUNABLE: the session BOUNDARIES are
+# thresholds and live in tunables.yaml as `session.*` rows (F16). The
+# calendar is neither a threshold nor a replay-gated quantity — it is an
+# exchange fact table. A holiday is not something a backtest moves.
+#
+# COVERAGE IS EXPLICIT AND FAIL-LOUD. `year` below is the ONLY year this
+# file answers for. A session query for a date in a year with no calendar
+# file raises `CalendarError` naming the missing year — it never guesses
+# "probably a normal trading day", because a wrong guess silently turns a
+# holiday into an RTH session and every downstream count with it. Adding a
+# year is adding a file: nyse-2025.yaml, nyse-2027.yaml, loaded by glob.
+#
+# NEEDS DEJAN'S CONFIRMATION (2026-09-04): the dates below are derived,
+# not fetched from an exchange feed. They are config, so a correction is a
+# one-line edit and no code change. Cross-check that held: the 09-04
+# ledger line "Defer the landing proof to Tuesday 09-08. Available (Monday
+# is a holiday)" agrees with 2026-09-07 Labor Day below.
+year: 2026
+
+# Weekends are not listed — they are derived (Saturday/Sunday are never
+# trading days). Only exchange holidays go here.
+holidays:
+  - date: 2026-01-01
+    name: New Year's Day
+  - date: 2026-01-19
+    name: Martin Luther King Jr. Day
+  - date: 2026-02-16
+    name: Washington's Birthday (Presidents' Day)
+  - date: 2026-04-03
+    name: Good Friday
+  - date: 2026-05-25
+    name: Memorial Day
+  - date: 2026-06-19
+    name: Juneteenth National Independence Day
+  - date: 2026-07-03
+    name: Independence Day (observed — July 4 falls on a Saturday)
+  - date: 2026-09-07
+    name: Labor Day
+  - date: 2026-11-26
+    name: Thanksgiving Day
+  - date: 2026-12-25
+    name: Christmas Day
+
+# Early closes ("half days"): RTH ends at session.early_close.rth_close
+# (13:00 ET) and aftermarket at session.early_close.aftermarket_close
+# (17:00 ET). The times are tunables rows, NOT written here — this file
+# says WHICH days, tunables.yaml says WHAT TIME.
+#
+# No July 3 early close in 2026: July 4 falls on a Saturday, so July 3 is
+# the observed holiday itself (a full close, listed above), not a half day.
+early_closes:
+  - date: 2026-11-27
+    name: Day after Thanksgiving
+  - date: 2026-12-24
+    name: Christmas Eve

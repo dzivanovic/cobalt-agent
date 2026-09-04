@@ -337,3 +337,112 @@ tunables:
     status: replay_pending
     source: sheet
     consumers: ["bouncy_ball"]
+
+  # --- F1 session clock (Sprint 1, 2026-09-04) --------------------------
+  # Charter §3 F1 / SPRINT-LADDER §S1. Every session boundary is a row
+  # here with a named consumer — F16's law: no inline literal in a
+  # predicate, and `cobalt.session` has nothing BUT boundary predicates.
+  #
+  # unit: time = an ET WALL-CLOCK time-of-day, "HH:MM", 24-hour. The
+  # boundaries are defined in America/New_York and nowhere else; storage
+  # is UTC timestamptz and the resolver converts (ADR-0007). A boundary
+  # is INCLUSIVE of its own minute and exclusive of the next: 09:29:59 is
+  # premarket, 09:30:00 is rth.
+  #
+  # dynamic: false / status: solidified — these are exchange facts, not
+  # replay-gated quantities. They are rows because they must be
+  # config-editable and consumer-traceable, not because a backtest will
+  # move them. The NYSE calendar (holidays, early closes) is NOT here:
+  # it is a list, not a threshold, and lives in
+  # configs/cobalt/calendar/nyse-<year>.yaml.
+  - key: session.premarket_open
+    value: "04:00"
+    unit: time
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.session.SessionClock (premarket start)"]
+
+  - key: session.rth_open
+    value: "09:30"
+    unit: time
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.session.SessionClock (rth start)"]
+
+  - key: session.rth_close
+    value: "16:00"
+    unit: time
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.session.SessionClock (rth end / aftermarket start)"]
+
+  - key: session.aftermarket_close
+    value: "20:00"
+    unit: time
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.session.SessionClock (aftermarket end)"]
+
+  - key: session.market_reset_open
+    value: "20:00"
+    unit: time
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.session.SessionClock (market_reset start)",
+                "cobalt.session.guard (hard block window)"]
+
+  - key: session.market_reset_close
+    value: "21:00"
+    unit: time
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.session.SessionClock (market_reset end)",
+                "cobalt.session.guard (hard block window)"]
+
+  # Early-close days (half days). SPRINT-LADDER §S1 / F1: rth ends 13:00
+  # and aftermarket ends 17:00. market_reset is NOT moved — the archiver
+  # still runs 20:30, so 17:00-20:00 on a half day resolves to overnight
+  # by the ordinary boundary walk, not by a special case.
+  - key: session.early_close.rth_close
+    value: "13:00"
+    unit: time
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.session.SessionClock (rth end, early-close days)"]
+
+  - key: session.early_close.aftermarket_close
+    value: "17:00"
+    unit: time
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.session.SessionClock (aftermarket end, early-close days)"]
+
+  # F16 sweep (2026-09-04): the one genuine threshold F1 introduced
+  # besides the boundaries themselves. `SessionBlockStore.count_last_24h`
+  # had `timedelta(hours=24)` inline — the window the heartbeat asks
+  # "how many writes were refused?" over. F18 (S1-P3) is the consumer;
+  # the row ships now so the literal never exists.
+  - key: session.blocks.heartbeat_window
+    value: 1440
+    unit: min
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.session.SessionBlockStore.count_over_window (F18 heartbeat)"]
