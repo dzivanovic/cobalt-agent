@@ -13,9 +13,9 @@ reads and writes; it must never be able to decide where a truncate
 lands, because the failure mode of getting that wrong is unbounded and
 `cobalt_brain` now holds the live trading record.
 
-Second guard, orthogonal to the first: only the three tables RULING 7
-migrates may be truncated. `bars` (4.5M rows) and every Mattermost and
-memory-layer table are outside the allowlist and cannot be named.
+Second guard, orthogonal to the first: only the tables RULING 7 and
+RULING 9 migrate may be truncated. Every Mattermost and memory-layer
+table is outside the allowlist and cannot be named.
 
     uv run python -m cobalt.devdb --list
     uv run python -m cobalt.devdb --truncate aset_sizings,vault_writes,vault_overrides --yes-truncate-cobalt-dev
@@ -36,10 +36,19 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 from cobalt import db, env  # noqa: E402
 
-# The ONLY tables this helper may empty. Everything else — `bars`, the
-# memory layer's five pillars, Mattermost's 116 tables — is out of reach
-# by name, independent of the database guard.
-TRUNCATABLE_TABLES = ("aset_sizings", "vault_writes", "vault_overrides")
+# The ONLY tables this helper may empty. Everything else — the memory
+# layer's five pillars, Mattermost's 116 tables — is out of reach by
+# name, independent of the database guard.
+#
+# `bars` joined the list under RULING 9 (2026-09-04). It was excluded
+# before *because it held production data*: 4.5M rows of live market
+# history lived in `cobalt_dev` while the archiver named its own
+# database. Now that RULING 9 has moved `bars` to `cobalt_brain`, the
+# exclusion protects nothing and only pushes the truncate outside the
+# one guarded path this module exists to be. The database guard is what
+# makes this safe and it is unchanged: `cobalt_dev`, hard-coded, not
+# overridable — a `bars` truncate aimed at `cobalt_brain` still refuses.
+TRUNCATABLE_TABLES = ("aset_sizings", "vault_writes", "vault_overrides", "bars")
 
 CONFIRM_FLAG = "--yes-truncate-cobalt-dev"
 

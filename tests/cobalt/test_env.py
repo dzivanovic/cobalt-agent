@@ -140,8 +140,25 @@ class TestDestructiveGuard:
             devdb.truncate(["aset_sizings"], db_name=env.PROD_DB_NAME, confirm=True)
 
     def test_truncate_refuses_a_table_outside_the_allowlist(self):
+        # `memory_logs` is a Hippocampus pillar — never truncatable by
+        # this helper. (`bars` used to be the example here; RULING 9
+        # moved it onto the allowlist once it stopped holding
+        # production data — see the test below.)
         with pytest.raises(devdb.DestructiveRefused, match="allowlist"):
-            devdb.truncate(["bars"], confirm=True)
+            devdb.truncate(["memory_logs"], confirm=True)
+
+    def test_bars_is_allowlisted_but_still_refuses_production(self):
+        """RULING 9 added `bars` to the allowlist, because it no longer
+        holds production data — it was excluded before precisely
+        BECAUSE it did. The database guard is what keeps this safe and
+        is untouched: a `bars` truncate aimed at cobalt_brain still
+        refuses, even from inside a production shell."""
+        assert "bars" in devdb.TRUNCATABLE_TABLES
+        with pytest.raises(env.EnvConfigError, match="REFUSED"):
+            devdb.truncate(["bars"], db_name=env.PROD_DB_NAME, confirm=True)
+        # Allowlisted, but confirmation is still mandatory.
+        with pytest.raises(devdb.DestructiveRefused, match="confirmation"):
+            devdb.truncate(["bars"])
 
     def test_truncate_refuses_without_explicit_confirmation(self):
         with pytest.raises(devdb.DestructiveRefused, match="confirmation"):

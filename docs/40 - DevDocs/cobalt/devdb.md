@@ -7,7 +7,8 @@ reset in the new core goes through here, and it refuses any database but
 
 ## Key functions/classes
 - `DestructiveRefused(RuntimeError)` — a guard fired; nothing executed.
-- `TRUNCATABLE_TABLES = ("aset_sizings", "vault_writes", "vault_overrides")`
+- `TRUNCATABLE_TABLES = ("aset_sizings", "vault_writes", "vault_overrides", "bars")`
+  — `bars` joined under RULING 9 (2026-09-04).
 - `CONFIRM_FLAG = "--yes-truncate-cobalt-dev"`
 - `counts(tables, *, db_name=DEV_DB_NAME) -> dict[str, int]`
 - `truncate(tables, *, db_name=DEV_DB_NAME, confirm=False) -> dict[str, tuple[int, int]]`
@@ -22,8 +23,16 @@ reset in the new core goes through here, and it refuses any database but
    a TRUNCATE lands, because that failure mode is unbounded and
    `cobalt_brain` now holds the live trading record.
 2. **The table is on the allowlist** — orthogonal to the database
-   guard. `bars` (4.5M rows), the memory layer's five pillars and
-   Mattermost's 116 tables are out of reach *by name*.
+   guard. The memory layer's five pillars and Mattermost's 116 tables
+   are out of reach *by name*.
+
+   `bars` was on the excluded side until RULING 9, **because it held
+   production data**: 4.5M rows of live market history lived in
+   `cobalt_dev` while the archiver named its own database. Once RULING
+   9 moved `bars` to `cobalt_brain`, the exclusion protected nothing
+   and only pushed the dev truncate outside the one guarded path this
+   module exists to be. Guard 1 is what makes it safe and is unchanged:
+   a `bars` truncate aimed at `cobalt_brain` still refuses.
 3. **`confirm=True` / `--yes-truncate-cobalt-dev`** is explicit. There
    is deliberately no `--force` that reaches another database.
 
