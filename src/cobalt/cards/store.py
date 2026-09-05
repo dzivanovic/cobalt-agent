@@ -227,7 +227,7 @@ class CardStore:
                 # Decision 11: fold every stop edit made since the last
                 # transition into THIS row's evidence.
                 payload = dict(evidence or {})
-                pending = self._pending_stop_edits(cur, card_id)
+                pending_ids, pending = self._pending_stop_edits(cur, card_id)
                 if pending:
                     payload["stop_edits"] = pending
 
@@ -258,11 +258,17 @@ class CardStore:
                         "(expected exactly 1) — refusing to report a transition that "
                         "was not persisted."
                     )
-                if pending:
+                if pending_ids:
+                    # Marked BY ID, not by "everything still unfolded for
+                    # this card". `record_stop_edit` does not take the
+                    # card lock, so an edit inserted between the SELECT
+                    # above and this UPDATE would otherwise be marked
+                    # folded into a transition whose evidence never
+                    # carried it — silently losing the one record of a
+                    # moved stop, which is the 09-03 lesson exactly.
                     cur.execute(
-                        "UPDATE card_stop_edits SET folded_into = %s "
-                        "WHERE card_id = %s AND folded_into IS NULL",
-                        (transition_id, card_id),
+                        "UPDATE card_stop_edits SET folded_into = %s WHERE id = ANY(%s)",
+                        (transition_id, pending_ids),
                     )
             conn.commit()
             return transition_id
@@ -302,22 +308,29 @@ class CardStore:
             )
 
     @staticmethod
-    def _pending_stop_edits(cur, card_id: int) -> list[dict[str, Any]]:
+    def _pending_stop_edits(cur, card_id: int) -> tuple[list[int], list[dict[str, Any]]]:
+        """(ids, rendered) for the stop edits not yet folded into a
+        transition. The ids come back so the caller marks exactly the
+        rows it rendered — see the note at the UPDATE."""
         cur.execute(
-            "SELECT at, in_state, from_stop, to_stop, actor FROM card_stop_edits "
+            "SELECT id, at, in_state, from_stop, to_stop, actor FROM card_stop_edits "
             "WHERE card_id = %s AND folded_into IS NULL ORDER BY id",
             (card_id,),
         )
-        return [
-            {
-                "at": at.isoformat(),
-                "in_state": in_state,
-                "from_stop": str(from_stop),
-                "to_stop": str(to_stop),
-                "actor": actor,
-            }
-            for at, in_state, from_stop, to_stop, actor in cur.fetchall()
-        ]
+        rows = cur.fetchall()
+        return (
+            [r[0] for r in rows],
+            [
+                {
+                    "at": at.isoformat(),
+                    "in_state": in_state,
+                    "from_stop": str(from_stop),
+                    "to_stop": str(to_stop),
+                    "actor": actor,
+                }
+                for _, at, in_state, from_stop, to_stop, actor in rows
+            ],
+        )
 
     # -- genesis ------------------------------------------------------
 
