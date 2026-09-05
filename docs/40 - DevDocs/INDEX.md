@@ -49,6 +49,18 @@ channel (`src/cobalt/notify/`). S1-P3 also reshaped
 derived/config), added `daymode/note.py` (the daily note's sheet-mode
 line, both ways) and `cards/store.py`'s one-click fill.
 
+Extended 2026-09-04 (ops session, branch `ops/mattermost-split`) with
+**`src/cobalt/backup/`** — the nightly restic snapshot of the vault plus
+a fresh `cobalt_brain` dump, with its retention policy and a proven
+restore path. It is BUILT and PROVEN but deliberately **not armed**:
+neither destination the ruling names (external SSD, Backblaze B2) exists
+on this host yet, so `com.cobalt.backup` has no `jobs.yaml` row and its
+plist waits in `ops/pending/`. The same session moved Mattermost out of
+`cobalt_brain` into its own database (ADR-0006, 2026-09-04 section),
+which is why several pages here now say "103 Mattermost tables, until
+2026-09-04" where they used to say 116 — a number that was arithmetic
+rather than an inventory, and wrong.
+
 ---
 
 ## File inventory — everything created/modified for the ASET sheet

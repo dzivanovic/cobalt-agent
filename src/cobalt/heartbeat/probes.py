@@ -175,6 +175,52 @@ def archiver_freshness(store=None, now: Optional[datetime] = None) -> Probe:
     return Probe("archiver", True, detail)
 
 
+def backup_freshness(now: Optional[datetime] = None) -> Probe:
+    """Age of the newest nightly snapshot, against
+    `heartbeat.backup_max_age_min` (26 h).
+
+    THE UNARMED CASE IS RED, AND SAYS SO. Both legs of the backup ruling
+    (external SSD, Backblaze B2) are off until their inputs exist, and
+    the honest report of that is "there is no backup", not `??` and not
+    a green tick. `unknown` is reserved for a probe that could not RUN;
+    a config that declares no destination ran fine and the answer is bad.
+    """
+    from cobalt.backup.config import BackupConfigError, load_backup_config
+    from cobalt.backup.restic import BackupError, latest_snapshot_age
+
+    ts = now or clock_mod.now_utc()
+    try:
+        cfg = load_backup_config()
+    except BackupConfigError as e:
+        return Probe("backup", False, f"config unreadable: {e}", unknown=True)
+
+    if not cfg.armed:
+        off = ", ".join(d.name for d in cfg.destinations)
+        return Probe(
+            "backup", False,
+            f"NO DESTINATION ARMED ({off} all off) — there is no backup. "
+            "configs/cobalt/backup.yaml says what each leg is missing.",
+        )
+
+    max_age = timedelta(minutes=int(_tunable("heartbeat.backup_max_age_min")))
+    try:
+        age = latest_snapshot_age(cfg)
+    except (BackupError, Exception) as e:  # noqa: BLE001 — a repo we cannot reach is not a diagnosis
+        return Probe("backup", False, f"could not read the repository: {type(e).__name__}",
+                     unknown=True)
+    if age is None:
+        return Probe("backup", False,
+                     f"armed ({', '.join(d.name for d in cfg.armed)}) but the repository "
+                     "holds NO snapshot yet")
+    hours = age.total_seconds() / 3600
+    detail = (f"newest snapshot {hours:.1f} h old across "
+              f"{', '.join(d.name for d in cfg.armed)}")
+    if age > max_age:
+        return Probe("backup", False,
+                     f"STALE — {detail} (limit {max_age.total_seconds()/3600:.0f} h)")
+    return Probe("backup", True, detail)
+
+
 def vaultwrite_blocks(now: Optional[datetime] = None) -> Probe:
     """market_reset refusals + ungated migration runs since the last beat.
 

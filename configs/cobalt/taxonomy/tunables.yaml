@@ -526,6 +526,20 @@ tunables:
     source: ruling
     consumers: ["cobalt.heartbeat.probes.archiver_freshness (stale = red)"]
 
+  - key: heartbeat.backup_max_age_min
+    value: 1560
+    unit: min
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    # 26 h, not 24: the backup runs at 21:40 and a snapshot that starts
+    # a few minutes late must not paint the beat red the following
+    # night. The same shape as archiver_max_age_min, and the same
+    # reasoning — a threshold that alarms on a normal night is one
+    # people learn to scroll past.
+    consumers: ["cobalt.heartbeat.probes.backup_freshness (stale = red)"]
+
   - key: heartbeat.probe_timeout_s
     value: 5
     unit: duration

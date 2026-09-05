@@ -1,0 +1,68 @@
+# NIGHTLY BACKUP — restic (RULED: "restic → B2 + SSD, NOT Time Machine",
+# ledger 2026-09-04). Schema: src/cobalt/backup/config.py, Pydantic-
+# validated on load; a bad row CRASHES. No credential is ever written
+# here: the repository password and the B2 keys are named by VAULT KEY
+# only, exactly as configs/cobalt/notify.yaml names MATTERMOST_CREDS.
+#
+# ---------------------------------------------------------------------
+# WHY BOTH DESTINATIONS ARE `enabled: false` TODAY (2026-09-04)
+# ---------------------------------------------------------------------
+# The ruling names two destinations. On the night this file was written
+# NEITHER existed on this host:
+#   ssd — no external disk is mounted. /Volumes/ holds only the boot
+#         symlink and `diskutil list external` returns nothing. The ops
+#         prompt said: if none is mounted, report and skip — DO NOT pick
+#         a disk. So `repo` is empty and the leg is off.
+#   b2  — the vault holds 14 secrets and none is a B2 key id,
+#         application key, or bucket name. Creating an account or a
+#         bucket was explicitly out of scope.
+# `cobalt backup run` REFUSES to run with zero enabled destinations
+# rather than exiting 0 having written nothing, and com.cobalt.backup is
+# deliberately NOT loaded into launchd until one is armed — a nightly
+# job that cannot reach a repository would paint the heartbeat red every
+# night and teach someone to scroll past it.
+backup:
+  # ---------------- what is protected ----------------
+  # The vault is the irreplaceable half: Postgres can be rebuilt from
+  # Finviz history, a hand-written trade note cannot.
+  sources:
+    - /Users/cobalt/Vault/Think
+
+  # A FRESH dump, taken inside the snapshot, not a file lying on disk
+  # from some earlier night. `cobalt_brain` only — cobalt_dev is by
+  # definition reproducible (RULING 7) and `mattermost` is a product
+  # database with its own recovery story (ADR-0006, 2026-09-04 section).
+  database:
+    enabled: true
+    name: cobalt_brain
+
+  # Obsidian rewrites workspace.json on every pane change; backing it up
+  # makes every snapshot differ for a reason nobody cares about.
+  excludes:
+    - ".DS_Store"
+    - ".obsidian/workspace.json"
+    - ".obsidian/workspace-mobile.json"
+    - ".trash"
+    - "*.tmp"
+
+  destinations:
+    - name: ssd
+      kind: local
+      repo: ""
+      enabled: false
+    - name: b2
+      kind: b2
+      repo: ""
+      enabled: false
+
+  # Vault key names only — never the values.
+  password_vault_key: RESTIC_PASSWORD
+  b2_key_id_vault_key: B2_ACCOUNT_ID
+  b2_app_key_vault_key: B2_ACCOUNT_KEY
+
+  # Retention, as ruled. `forget --prune` runs after every snapshot so a
+  # repository cannot grow without bound between reviews.
+  forget:
+    daily: 14
+    weekly: 8
+    monthly: 12

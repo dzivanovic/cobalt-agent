@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    com.cobalt.backup — the nightly restic snapshot (ledger 2026-09-04:
+    "restic nightly -> B2 + fast SSD", and it "Gates Tahoe").
+
+    THIS FILE IS DELIBERATELY NOT LOADED INTO LAUNCHD (2026-09-04).
+    Neither destination the ruling names exists on this host yet: no
+    external SSD is mounted, and the vault holds no B2 credential. A
+    loaded job would fail every night at 21:40, and because S1-P3 made
+    the heartbeat ask launchd about EVERY registered job, the beat would
+    go red and DM every 15 minutes for a gap that is already written
+    down in the ledger. Teaching someone to scroll past a red heartbeat
+    costs more than the day of delay.
+
+    TO ARM IT, all five together (none of them alone is safe):
+      1. create the restic repository and store its password in the
+         vault under RESTIC_PASSWORD (plus B2_ACCOUNT_ID /
+         B2_ACCOUNT_KEY for the B2 leg);
+      2. set that destination's `repo` and `enabled: true` in
+         configs/cobalt/backup.yaml;
+      3. add the com.cobalt.backup row to configs/cobalt/jobs.yaml
+         (one-shot, supervisor: self, schedule {at: "21:40", weekdays:
+         [0,1,2,3,4,5,6]}, timeout_s 3600);
+      4. add probe_mod.backup_freshness(now=ts) to the probe list in
+         src/cobalt/heartbeat/runner.py;
+      5. cp this file to ~/Library/LaunchAgents/ and
+         `launchctl load` it, then `cobalt backup run` once by hand and
+         prove a restore before trusting the schedule.
+
+    21:40 ET, EVERY day including weekends. After the archiver's 20:30
+    (which took 23 minutes on each of the last two nights), so the
+    snapshot contains that night's bars rather than racing them; and
+    every day rather than Mon-Fri because a vault edit on a Saturday is
+    exactly as unrecoverable as one on a Tuesday.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.backup</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+        <!-- RULING 7 / Charter 8.4: every plist carries COBALT_ENV. The
+             backup dumps cobalt_brain, so it declares production. The
+             wrapper exports these too; they are here as well so a
+             `launchctl print` shows the job's declared environment
+             without anyone having to open the shell script. -->
+        <key>COBALT_ENV</key>
+        <string>production</string>
+        <key>COBALT_VAULT_PATH</key>
+        <string>/Users/cobalt/Vault/Think</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- ABSOLUTE PATH, deliberately: launchd posix_spawn()s
+             ProgramArguments[0] and does not search the job's own PATH.
+             A bare name here is the 2026-09-03 exit-78 signature. -->
+        <string>/Users/cobalt/cobalt/ops/run_backup.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/cobalt/cobalt</string>
+    <key>AbandonProcessGroup</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>40</integer></dict>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>40</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>40</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>40</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>40</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>40</integer></dict>
+        <dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>40</integer></dict>
+    </array>
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/cobalt/logs/backup.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/cobalt/logs/backup.err</string>
+</dict>
+</plist>
