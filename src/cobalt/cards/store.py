@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Optional
 
@@ -408,7 +409,35 @@ class CardStore:
                 "ARMED onward the summary strip is locked, because the key is a risk "
                 f"commitment. Editable states: {', '.join(sorted(s.value for s in STOP_EDITABLE))}."
             )
+        # Decision 11: "stop edits recompute shares/risk/targets/room
+        # live". Updating `stop` alone would leave `shares` and
+        # `used_risk` describing the OLD stop — a card that lies about
+        # the position it is asking for. The recompute runs through
+        # `engine.recompute_for_stop`, the same arithmetic
+        # `compute_sizing` uses, so the two can never disagree.
+        from cobalt.aset.engine import recompute_for_stop
+        from cobalt.aset.models import Direction
+
         with self._connect() as conn:
+            card = conn.execute(
+                "SELECT entry, direction, risk_budget, shares FROM aset_sizings "
+                "WHERE id = %s",
+                (card_id,),
+            ).fetchone()
+            if card is None:
+                raise CardStateError(f"no aset_sizings row with id {card_id}")
+            entry, direction, risk_budget, shares = card
+
+            recomputed = recompute_for_stop(
+                entry=entry,
+                stop=Decimal(str(to_stop)),
+                direction=Direction(direction),
+                risk_budget=risk_budget,
+                # In-trade the shares are already bought; a wider stop
+                # cannot un-buy them, so it changes OPEN RISK, not size.
+                in_trade_shares=shares if state is CardState.FILLED else None,
+            )
+
             row = conn.execute(
                 "INSERT INTO card_stop_edits "
                 "(card_id, at, session, in_state, from_stop, to_stop, actor) "
@@ -416,7 +445,15 @@ class CardStore:
                 (card_id, ts, session.value, state.value, from_stop, to_stop, actor.value),
             ).fetchone()
             conn.execute(
-                "UPDATE aset_sizings SET stop = %s WHERE id = %s", (to_stop, card_id)
+                "UPDATE aset_sizings SET stop = %s, per_share_risk = %s, shares = %s, "
+                "used_risk = %s WHERE id = %s",
+                (
+                    to_stop,
+                    recomputed.per_share_risk,
+                    recomputed.shares,
+                    recomputed.used_risk,
+                    card_id,
+                ),
             )
         return int(row[0])
 

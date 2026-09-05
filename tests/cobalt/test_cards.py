@@ -524,3 +524,117 @@ class TestBackfill:
                 "SELECT state FROM aset_sizings WHERE id = %s", (card_id,)
             ).fetchone()
         assert row[0] is None
+
+
+# =====================================================================
+# 7. Decision 11's recompute — a moved stop must not leave a lying card
+# =====================================================================
+
+
+class TestStopRecomputeMath:
+    """Pure arithmetic, no database."""
+
+    def test_pre_trade_a_wider_stop_buys_fewer_shares(self):
+        from cobalt.aset.engine import recompute_for_stop
+        from cobalt.aset.models import Direction
+
+        # $60 budget, entry 10.00. Stop 9.50 -> 0.50/share -> 120 shares.
+        tight = recompute_for_stop(
+            entry=Decimal("10.00"), stop=Decimal("9.50"),
+            direction=Direction.LONG, risk_budget=Decimal("60"),
+        )
+        assert tight.shares == 120 and tight.per_share_risk == Decimal("0.50")
+        assert tight.used_risk == Decimal("60.00") and tight.shares_changed
+
+        # Widen to 9.00 -> 1.00/share -> 60 shares, same budget.
+        wide = recompute_for_stop(
+            entry=Decimal("10.00"), stop=Decimal("9.00"),
+            direction=Direction.LONG, risk_budget=Decimal("60"),
+        )
+        assert wide.shares == 60 and wide.used_risk == Decimal("60.00")
+
+    def test_in_trade_the_shares_are_held_and_open_risk_moves(self):
+        """A wider stop cannot un-buy shares he already owns —
+        recomputing size in-trade would report a position he does not
+        have."""
+        from cobalt.aset.engine import recompute_for_stop
+        from cobalt.aset.models import Direction
+
+        got = recompute_for_stop(
+            entry=Decimal("10.00"), stop=Decimal("9.00"),
+            direction=Direction.LONG, risk_budget=Decimal("60"),
+            in_trade_shares=120,
+        )
+        assert got.shares == 120, "shares are held in-trade"
+        assert got.used_risk == Decimal("120.00"), "open risk doubled with the stop"
+        assert not got.shares_changed
+
+    def test_a_stop_on_the_wrong_side_is_refused(self):
+        from cobalt.aset.engine import SizingError, recompute_for_stop
+        from cobalt.aset.models import Direction
+
+        with pytest.raises(SizingError, match="must be below entry"):
+            recompute_for_stop(
+                entry=Decimal("10.00"), stop=Decimal("10.50"),
+                direction=Direction.LONG, risk_budget=Decimal("60"),
+            )
+        with pytest.raises(SizingError, match="must be above entry"):
+            recompute_for_stop(
+                entry=Decimal("10.00"), stop=Decimal("9.50"),
+                direction=Direction.SHORT, risk_budget=Decimal("60"),
+            )
+
+    def test_it_agrees_with_compute_sizing_at_card_creation(self):
+        """One-path rule: the stop-edit recompute and the card's original
+        sizing are the same arithmetic, so they cannot drift."""
+        from cobalt.aset.engine import compute_sizing, recompute_for_stop
+        from cobalt.aset.models import Direction
+
+        inp = SizingInput(
+            ticker="AGREE", grade=Grade.B, direction=Direction.LONG,
+            sheet_mode=SheetMode.FULL, risk_dollars=Decimal("60"),
+            entry=Decimal("10.00"), stop=Decimal("9.53"),
+        )
+        original = compute_sizing(inp, [Grade.A, Grade.B], Decimal("10"))
+        again = recompute_for_stop(
+            entry=inp.entry, stop=inp.stop, direction=inp.direction,
+            risk_budget=original.risk_budget,
+        )
+        assert again.shares == original.shares
+        assert again.per_share_risk == original.per_share_risk
+        assert again.used_risk == original.used_risk
+
+
+@requires_db
+@pytest.mark.integration
+class TestStopEditRecomputesTheCard:
+    def test_a_watch_stop_edit_resizes_the_card(self, stores):
+        aset, cards = stores
+        card_id = _make_card(aset, "STOPW")      # entry 10.00 stop 9.50 -> 120 sh
+        cards.record_stop_edit(
+            card_id, from_stop=Decimal("9.50"), to_stop=Decimal("9.00")
+        )
+        with cards._connect() as conn:
+            stop, psr, shares, used = conn.execute(
+                "SELECT stop, per_share_risk, shares, used_risk FROM aset_sizings "
+                "WHERE id = %s", (card_id,)
+            ).fetchone()
+        assert stop == Decimal("9.0000")
+        assert psr == Decimal("1.0000")
+        assert shares == 60, "a wider stop buys fewer shares on the same budget"
+        assert used == Decimal("60.00")
+
+    def test_a_filled_stop_edit_holds_the_shares_and_moves_open_risk(self, stores):
+        aset, cards = stores
+        card_id = _make_card(aset, "STOPF")
+        for target in (CardState.ARMED, CardState.TRIGGERED, CardState.FILLED):
+            cards.transition(card_id, target, actor=Actor.YOU)
+        cards.record_stop_edit(
+            card_id, from_stop=Decimal("9.50"), to_stop=Decimal("9.00")
+        )
+        with cards._connect() as conn:
+            shares, used = conn.execute(
+                "SELECT shares, used_risk FROM aset_sizings WHERE id = %s", (card_id,)
+            ).fetchone()
+        assert shares == 120, "already bought — a moved stop cannot un-buy them"
+        assert used == Decimal("120.00"), "open risk moved instead"

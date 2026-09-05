@@ -30,6 +30,7 @@ than an engine argument.
 
 from collections.abc import Iterable
 from decimal import Decimal
+from typing import NamedTuple
 
 from .models import Direction, FillRecompute, Grade, SizingInput, SizingResult
 
@@ -91,6 +92,69 @@ def compute_sizing(
         target_1r=target_1r.quantize(CENTS),
         target_2r=target_2r.quantize(CENTS),
         warnings=warnings,
+    )
+
+
+class StopEditRecompute(NamedTuple):
+    """What a moved stop does to the rest of the card (decision 11)."""
+
+    per_share_risk: Decimal
+    shares: int
+    used_risk: Decimal
+    shares_changed: bool
+
+
+def recompute_for_stop(
+    *,
+    entry: Decimal,
+    stop: Decimal,
+    direction: Direction,
+    risk_budget: Decimal,
+    in_trade_shares: int | None = None,
+) -> StopEditRecompute:
+    """Re-derive risk from a moved stop. Mock decision 11: "Stop edits
+    recompute shares/risk/targets/room live."
+
+    THE IN-TRADE CASE IS NOT THE PRE-TRADE CASE, and conflating them
+    would be a real trading error:
+
+    * **Pre-trade (WATCH)** — the risk budget is fixed and the position
+      is not on yet, so a wider stop buys FEWER shares.
+      `shares = risk_budget / per_share_risk`, as at card creation.
+    * **In-trade (FILLED)** — the shares are already bought. Moving the
+      stop cannot un-buy them, so the share count is held and what
+      changes is the OPEN RISK (`shares x per_share_risk`). Recomputing
+      shares here would silently report a position he does not have.
+
+    Pure arithmetic, no I/O — and the same expression `compute_sizing`
+    uses, factored out rather than copied (one-path rule), so a stop
+    edit can never disagree with the card it edits.
+    """
+    if entry <= 0:
+        raise SizingError("entry must be positive")
+    if direction is Direction.LONG and stop >= entry:
+        raise SizingError(
+            f"Long stop ({stop}) must be below entry ({entry}) — refusing, not warning."
+        )
+    if direction is Direction.SHORT and stop <= entry:
+        raise SizingError(
+            f"Short stop ({stop}) must be above entry ({entry}) — refusing, not warning."
+        )
+
+    per_share_risk = abs(entry - stop)
+    if in_trade_shares is not None:
+        return StopEditRecompute(
+            per_share_risk=per_share_risk,
+            shares=in_trade_shares,
+            used_risk=(per_share_risk * in_trade_shares).quantize(CENTS),
+            shares_changed=False,
+        )
+    shares = int(risk_budget / per_share_risk)
+    return StopEditRecompute(
+        per_share_risk=per_share_risk,
+        shares=shares,
+        used_risk=(per_share_risk * shares).quantize(CENTS),
+        shares_changed=True,
     )
 
 
