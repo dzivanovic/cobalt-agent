@@ -102,6 +102,7 @@ def cmd_propose(args: argparse.Namespace) -> None:
         prior_filled=inputs.filled_count,
         daily_stop_hit=inputs.daily_stop_hit,
         drc_note=inputs.drc_note,
+        drc_informative=inputs.drc_informative,
         band=_band(),
     )
     if proposal is None:

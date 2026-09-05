@@ -215,10 +215,28 @@ class TestProposal:
         assert NO_PRIOR_DRC in p.reason
         assert f"{NO_PRIOR_DRC} -> one rung down" in p.signals
 
+    def test_a_drc_that_exists_but_is_unfilled_still_costs_a_rung(self):
+        """The real 2026-09-03 DRC parsed as `grade (A+, A, B, C, etc..)`
+        — the template's own placeholder, not a grade he wrote. Treated
+        as a value it would have suppressed the step-down on a DRC that
+        carries no information at all. Same rung cost as no DRC, but a
+        different sentence: "you did not write one" and "you wrote one
+        and left it blank" are different facts about his day."""
+        cfg = _cfg(enabled_modes=("reduced", "half", "full"))
+        p = propose(
+            date(2026, 9, 3), cfg=cfg,
+            drc_note="DRC-2026-09-02.md (grade not filled, goal not filled)",
+            drc_informative=False, band=(3, 6),
+        )
+        assert p.proposed == "half", "one rung down, same as no DRC"
+        assert any("no headline field is filled" in s for s in p.signals)
+        assert NO_PRIOR_DRC not in p.reason, "the note exists and is named"
+        assert "DRC-2026-09-02.md" in p.reason
+
     def test_a_present_drc_is_cited_instead(self):
         p = propose(
             date(2026, 9, 3), cfg=_cfg(), drc_note="DRC-2026-09-02.md (grade B, goal 2)",
-            band=(3, 6),
+            drc_informative=True, band=(3, 6),
         )
         assert "DRC-2026-09-02.md" in p.reason
         assert NO_PRIOR_DRC not in p.reason
@@ -227,14 +245,14 @@ class TestProposal:
         """reduced-only enabled -> reduced, every time, with the clamp
         named in the reason."""
         for day in (date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 3), date(2026, 11, 27)):
-            p = propose(day, cfg=_cfg(), drc_note="DRC.md", band=(3, 6))
+            p = propose(day, cfg=_cfg(), drc_note="DRC.md", drc_informative=True, band=(3, 6))
             assert p.proposed == "reduced", day
             assert "enabled ['reduced']" in p.reason
 
     def test_the_ladder_still_exercises_the_higher_rungs(self):
         """With all three enabled and a clean day, the top rung wins."""
         cfg = _cfg(enabled_modes=("reduced", "half", "full"))
-        p = propose(date(2026, 9, 3), cfg=cfg, drc_note="DRC.md", band=(3, 6))
+        p = propose(date(2026, 9, 3), cfg=cfg, drc_note="DRC.md", drc_informative=True, band=(3, 6))
         assert p.proposed == "full"
         assert p.signals == []
 
@@ -246,7 +264,8 @@ class TestProposal:
     def test_a_daily_stop_on_the_prior_day_drops_to_the_floor(self):
         cfg = _cfg(enabled_modes=("reduced", "half", "full"))
         p = propose(
-            date(2026, 9, 3), cfg=cfg, drc_note="DRC.md", band=(3, 6), daily_stop_hit=True
+            date(2026, 9, 3), cfg=cfg, drc_note="DRC.md", drc_informative=True,
+            band=(3, 6), daily_stop_hit=True,
         )
         assert p.proposed == "reduced"
         assert any("daily stop" in s for s in p.signals)
@@ -255,7 +274,7 @@ class TestProposal:
         """2026-12-24: an early close whose prior trading day is the day
         before, so the early-close signal is the ONLY one firing."""
         cfg = _cfg(enabled_modes=("reduced", "half", "full"))
-        p = propose(date(2026, 12, 24), cfg=cfg, drc_note="DRC.md", band=(3, 6))
+        p = propose(date(2026, 12, 24), cfg=cfg, drc_note="DRC.md", drc_informative=True, band=(3, 6))
         assert p.signals == ["early close today -> one rung down"]
         assert p.proposed == "half"
 
@@ -264,7 +283,7 @@ class TestProposal:
         Thanksgiving, so it steps down twice: full -> half -> reduced.
         Adverse signals accumulate; they never cancel out."""
         cfg = _cfg(enabled_modes=("reduced", "half", "full"))
-        p = propose(date(2026, 11, 27), cfg=cfg, drc_note="DRC.md", band=(3, 6))
+        p = propose(date(2026, 11, 27), cfg=cfg, drc_note="DRC.md", drc_informative=True, band=(3, 6))
         assert any("early close" in s for s in p.signals)
         assert any("after a" in s for s in p.signals)
         assert p.proposed == "reduced"
@@ -272,14 +291,14 @@ class TestProposal:
     def test_the_first_session_after_a_holiday_steps_down(self):
         """2026-09-08, the Tuesday after Labor Day weekend."""
         cfg = _cfg(enabled_modes=("reduced", "half", "full"))
-        p = propose(date(2026, 9, 8), cfg=cfg, drc_note="DRC.md", band=(3, 6))
+        p = propose(date(2026, 9, 8), cfg=cfg, drc_note="DRC.md", drc_informative=True, band=(3, 6))
         assert any("after a" in s for s in p.signals)
 
     def test_an_unruled_band_pins_the_proposal_to_the_floor(self):
         """PLACEHOLDER tunables are themselves an adverse signal — an
         invented number must never justify a bigger rung."""
         cfg = _cfg(enabled_modes=("reduced", "half", "full"))
-        p = propose(date(2026, 9, 3), cfg=cfg, drc_note="DRC.md", band=(None, None))
+        p = propose(date(2026, 9, 3), cfg=cfg, drc_note="DRC.md", drc_informative=True, band=(None, None))
         assert p.proposed == "reduced"
         assert any("PLACEHOLDER" in s for s in p.signals)
         assert "PLACEHOLDER (unruled" in p.reason

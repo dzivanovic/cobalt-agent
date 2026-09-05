@@ -31,6 +31,7 @@ from typing import Optional
 from loguru import logger
 
 from cobalt import db, env
+from cobalt.aset.models import Grade
 from cobalt.prefill.config import load_prefill_paths
 from cobalt.prefill.vault_writer import resolve_dir
 
@@ -50,6 +51,12 @@ class PriorDayInputs:
     daily_stop_hit: bool
     drc_note: Optional[str]     # None means "no prior DRC" — loud, by design
     drc_path: Optional[str]
+    #: The note EXISTS and at least one headline field is filled. A DRC
+    #: that exists but says nothing is informationally the same as no DRC
+    #: for the proposal's purposes — but it is a DIFFERENT sentence in
+    #: the reason, because "you did not write one" and "you wrote one and
+    #: left it blank" are different facts about his day.
+    drc_informative: bool
 
 
 def _filled_and_stop(prior_day: date) -> tuple[int, bool]:
@@ -73,12 +80,14 @@ def _filled_and_stop(prior_day: date) -> tuple[int, bool]:
     return (int(row[0] or 0), bool(_DAILY_STOP.search(row[1] or "")))
 
 
-def _drc_note(prior_day: date) -> tuple[Optional[str], Optional[str]]:
-    """(summary, path) of the prior day's DRC note, or (None, None).
+def _drc_note(prior_day: date) -> tuple[Optional[str], Optional[str], bool]:
+    """(summary, path, informative) for the prior day's DRC note.
 
-    None is the honest answer and it becomes the literal `no prior DRC`
-    in the reason string — it is never softened into "assume it was
-    fine".
+    A None summary is the honest answer for a note that does not exist,
+    and it becomes the literal `no prior DRC` in the reason string — it
+    is never softened into "assume it was fine". `informative` is False
+    when the note exists but no headline field is filled: same effect on
+    the proposal, different sentence in the reason.
     """
     try:
         paths = load_prefill_paths()
@@ -90,23 +99,42 @@ def _drc_note(prior_day: date) -> tuple[Optional[str], Optional[str]]:
         # LOUD: the reason will carry "no prior DRC" rather than a blank,
         # and the proposal steps down a rung for it.
         logger.error("daymode: DRC path unresolved ({}: {})", type(e).__name__, e)
-        return (None, None)
+        return (None, None, False)
     if not note.exists():
         logger.info("daymode: {} — {}", NO_PRIOR_DRC, note)
-        return (None, None)
+        return (None, None, False)
     try:
         text = note.read_text(encoding="utf-8")
     except OSError as e:
         logger.error("daymode: DRC note unreadable ({}: {})", type(e).__name__, e)
-        return (None, str(note))
+        return (None, str(note), False)
 
     # Headline stub fields only. Anything not found is reported as
     # absent rather than inferred.
     grade = _field(text, r"^\s*[-*]?\s*(?:\*\*)?Grade(?:\*\*)?\s*[:|]\s*(.+)$")
     goal = _field(text, r"^\s*[-*]?\s*(?:\*\*)?Goal(?:\*\*)?\s*[:|]\s*(.+)$")
+
+    # A FIELD THAT STILL HOLDS THE TEMPLATE'S PLACEHOLDER IS NOT FILLED.
+    # The real 2026-09-03 DRC parsed as `grade (A+, A, B, C, etc..)` —
+    # the prompt text out of drc.md.j2, not a grade he wrote. Reported as
+    # a value it would have suppressed the "no prior DRC" step-down on a
+    # DRC that carries no information at all.
+    #
+    # The test is exact, not a heuristic on punctuation: a filled grade is
+    # one of the ladder's own values, and a filled goal contains a digit.
+    # Anything else is a placeholder or prose, and reads as unfilled —
+    # which steps the proposal DOWN, the safe direction to be wrong in.
+    if grade and grade.strip() not in {g.value for g in Grade}:
+        grade = None
+    if goal and not any(c.isdigit() for c in goal):
+        goal = None
+
     bits = [f"grade {grade}" if grade else "grade not filled",
             f"goal {goal}" if goal else "goal not filled"]
-    return (f"{note.name} ({', '.join(bits)})", str(note))
+    informative = bool(grade or goal)
+    if not informative:
+        logger.info("daymode: {} exists but no headline field is filled", note.name)
+    return (f"{note.name} ({', '.join(bits)})", str(note), informative)
 
 
 def _field(text: str, pattern: str) -> Optional[str]:
@@ -121,13 +149,14 @@ def prior_day_inputs(day: date) -> PriorDayInputs:
     """Everything the 09:00 reason needs about the day before `day`."""
     prior = prior_trading_day(day)
     filled, stop_hit = _filled_and_stop(prior)
-    note, path = _drc_note(prior)
+    note, path, informative = _drc_note(prior)
     return PriorDayInputs(
         prior_day=prior,
         filled_count=filled,
         daily_stop_hit=stop_hit,
         drc_note=note,
         drc_path=path,
+        drc_informative=informative,
     )
 
 

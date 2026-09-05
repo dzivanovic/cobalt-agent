@@ -142,6 +142,7 @@ def propose(
     prior_filled: int = 0,
     daily_stop_hit: bool = False,
     drc_note: Optional[str] = None,
+    drc_informative: Optional[bool] = None,
     band: tuple[Any, Any] = (None, None),
 ) -> Optional[Proposal]:
     """Cobalt's 09:00 proposal for `day`, or None if `day` does not trade.
@@ -162,9 +163,19 @@ def propose(
     if daily_stop_hit:
         ceiling = cfg.lowest_enabled
         signals.append("daily stop hit on the prior trading day -> floor")
-    if drc_note is None:
+    # A DRC that EXISTS but has no headline field filled is
+    # informationally the same as no DRC — so it costs the same rung.
+    # The sentence differs, because "you did not write one" and "you
+    # wrote one and left it blank" are different facts about his day.
+    if drc_informative is None:
+        drc_informative = drc_note is not None
+    if not drc_informative:
         ceiling = _step_down(cfg, ceiling)
-        signals.append(f"{NO_PRIOR_DRC} -> one rung down")
+        signals.append(
+            f"{NO_PRIOR_DRC} -> one rung down"
+            if drc_note is None
+            else "prior DRC exists but no headline field is filled -> one rung down"
+        )
     if clock.calendar.is_early_close(day):
         ceiling = _step_down(cfg, ceiling)
         signals.append("early close today -> one rung down")
