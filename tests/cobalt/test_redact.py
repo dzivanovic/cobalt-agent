@@ -22,6 +22,7 @@ right length, wrong everything else.
 
 import pytest
 
+from cobalt import env
 from cobalt.redact import redact
 from cobalt.redact.config import CONFIG_PATH, RedactConfigError, load_redact_config
 from cobalt.redact.guard import LITERAL_PREFIX
@@ -384,7 +385,14 @@ class TestTheCounter:
         from cobalt.redact.store import RedactionStore
         from cobalt.session import clock as clock_mod
 
-        monkeypatch.undo()   # the module-level no_counter stub is off here
+        # `undo()` drops the module's no_counter stub — and every OTHER
+        # patch on the same monkeypatch instance with it, including the
+        # autouse `dev_env` fixture in conftest.py. Without putting those
+        # back, `RedactionStore()` resolves its database with COBALT_ENV
+        # unset and RULING 7 correctly refuses. Restore what dev_env sets.
+        monkeypatch.undo()
+        monkeypatch.setenv(env.ENV_VAR, env.DEV)
+        monkeypatch.delenv("COBALT_VAULT_PATH", raising=False)
         store = RedactionStore()
         store.ensure_schema()
         since = clock_mod.now_utc() - timedelta(minutes=1)
