@@ -62,10 +62,10 @@ S1-P1 line 0 reports peer status, nothing more.
 | **F1 Session clock** | Card at 18:30 and 21:30 show the right session; the 21:30 one is blocked. | `cobalt.session`: premarket 04:00–09:30 / rth / aftermarket 16:00–20:00 / market_reset 20:00–21:00 hard-block / overnight; NYSE calendar (holidays, early closes) as config; boundaries = tunables rows; `session` column on cards, alerts, vault_writes; market_reset block enforced in the write path. |
 | **F7 Card state machine** (manual cards) — **DELIVERED S1-P2** | DRC counts match Postgres rows; no card exists without a state. | `card_state` enum + `card_transitions` table (from, to, at, evidence JSON, actor cobalt/you); existing ASET rows mapped (card = WATCH, FILLED status = FILLED); sheet gains ARM / DISARM / TRIGGERED / FILLED / PASS / EXPIRE controls; trigger-while-unarmed = MISSED row (manual entry at S1, detector at S2/S4). |
 | **F6 Two-stage day mode + match check** — **DELIVERED S1-P2** | He loads the full sheet on a half day → card refused with the reason. | Pre-09:00 = lowest *enabled* sheet by system rule (half today); 09:00 proposal row (mode, reason from prior DRC stub + goal band + calendar; "no prior DRC" = loud) with his approve/overrule + reason persisted; `.htk` loaded-sheet check refuses cards on mismatch. Trade-count goal band = tunables rows, value pending Rules Engine session. |
-| **F18 Heartbeat** | Unload a plist → red within one interval, on the out-of-band channel. | Heartbeat host job: services alive · archiver freshness (last run + row delta) · every ops plist loaded + last exit code · Obsidian running; red/green block in daily note (L28 unit) + Mattermost DM; red also by email via Layer-B Google OAuth (alert path ≠ monitored path). |
-| **F17 Task integrity, minimal** | A hung poller is surfaced as a zombie within one heartbeat interval. | `jobs` table: every launchd job = persisted row with state (pending/running/done/failed), timeout, heartbeat stamp; watchdog marks zombies; kill phrase (config) stops all; failed = loud via F18. |
-| **F19 Exfiltration guard** | A token in a DM payload is redacted before send. | Outbound secret-regex redactor as one function on every channel (Mattermost, email, log lines); patterns = config; tested against the rotated-secret shapes from 08-23. |
-| **F16 sweep** | `validate` passes; no inline literal in a predicate. | Every threshold introduced this sprint = tunables row with a consumer; loader fails loud on unknown keys (already). Sweep repeats every sprint. |
+| **F18 Heartbeat** — **DELIVERED S1-P3** | Unload a plist → red within one interval, on the out-of-band channel. | Heartbeat host job: services alive · archiver freshness (last run + row delta) · every ops plist loaded + last exit code · Obsidian running; red/green block in daily note (L28 unit) + Mattermost DM; red also by email via Layer-B Google OAuth (alert path ≠ monitored path). |
+| **F17 Task integrity, minimal** — **DELIVERED S1-P3** | A hung poller is surfaced as a zombie within one heartbeat interval. | `jobs` table: every launchd job = persisted row with state (pending/running/done/failed), timeout, heartbeat stamp; watchdog marks zombies; kill phrase (config) stops all; failed = loud via F18. |
+| **F19 Exfiltration guard** — **DELIVERED S1-P3** | A token in a DM payload is redacted before send. | Outbound secret-regex redactor as one function on every channel (Mattermost, email, log lines); patterns = config; tested against the rotated-secret shapes from 08-23. |
+| **F16 sweep** — **DELIVERED S1-P1/P2/P3** | `validate` passes; no inline literal in a predicate. | Every threshold introduced this sprint = tunables row with a consumer; loader fails loud on unknown keys (already). Sweep repeats every sprint. |
 | **bars.ts ADR-0007** (decided-with-veto) | — | Reinterpret stored ET-as-UTC values to true UTC (`America/New_York`), dump = rollback, row-count + md5 proof, archiver writes UTC from now; run outside 20:00–21:30. |
 
 **S1 smoke:** prefill-daily, prefill-drc, archiver, obsidian, mainframe,
@@ -78,7 +78,7 @@ ASET sheet with the new controls.
 **Code prompts owed (all Opus 5 — every one touches a DB or vault write path):**
 - S1-P1 · fresh · Tailscale status line 0 · TESTARCH delete · ADR-0007 bars.ts · F1 session clock + column stamps + market_reset block · F16 sweep. **(issued 09-04 · DELIVERED 09-04, branch `sprint-1/foundation`, unpushed)**
 - S1-P2 · fresh · F7 card_state + transitions + sheet controls · F6 two-stage mode + proposal row + `.htk` match refusal. **(issued 09-04 · DELIVERED 09-04, branch `sprint-1/foundation`, unpushed)**
-- S1-P3 · fresh · F19 redactor · F17 jobs table + watchdog + kill phrase · F18 heartbeat host (note unit + DM + email) · S1 smoke script + report.
+- S1-P3 · fresh · F19 redactor · F17 jobs table + watchdog + kill phrase · F18 heartbeat host (note unit + DM + email) · S1 smoke script + report. **(issued 09-04 · DELIVERED 09-04, branch `sprint-1/foundation`, unpushed. Email = NOT BUILT: no send path exists — see the outcome below.)**
 
 ### S1-P1 outcome (2026-09-04) — what landed, what it changed
 
@@ -260,6 +260,170 @@ IN-TRADE health line — before S2-P3. Detail-column order (mock #11) — S2-P3.
 Trade-count goal band value (his; band ships as placeholder in S1).
 Taxonomy v0.8 consolidation (§13.1 wording + stop.buffer re-rule) — natural
 bump point is S2-P2, the precondition evaluator.
+
+---
+
+### S1-P3 outcome (2026-09-04) — what landed, what it changed
+
+**S1 SMOKE: GREEN.** `scripts/smoke_s1.sh` — 19 checks across F1, F6,
+F7, F16, F17, F18 and F19, plus the 650-test new-core suite. Repeatable:
+hard-pinned to `cobalt_dev` + the dev vault, every card it creates
+deleted in a `finally`.
+
+**The four P2 corrections, all proven:**
+
+- **(a) The reduced rung is a SIZE rung, not a grade ban.**
+  `reduced_enabled_grades: [B] -> [A, B]`. On today's rung A is
+  accepted, A+ refused (the *account* ladder does not enable it), B
+  accepted.
+- **(b) The attested-sheet selector is DERIVED.** The hand-written
+  `file -> mode` list is gone, `reduced_day.htk` with it — a name that
+  matched no key table in `aset.yaml`, offered to him as an attestation
+  for a sheet that did not exist as a config row. The list also mapped
+  files to RUNGS, when a `.htk` is a key table and a key table is a
+  SHEET. Now one name per declared sheet from `hotkey_file_template`,
+  and the match check compares sheet to sheet. Adding `quarter` to
+  `aset.yaml` puts `quarter.htk` in the selector with no code change and
+  no edit to `daymode.yaml` — asserted by test.
+- **(c) One-click fill on manual cards.** `aset_sizings.origin`
+  (manual | radar, backfilled manual). `CardStore.fill()` is the single
+  way to reach FILLED; on a manual card it walks the rest of the route
+  itself, writing the missing ARMED/TRIGGERED rows with `actor=cobalt`,
+  evidence `{"auto": "manual_fill"}`, at the fill's own timestamp, all
+  in ONE transaction. **The edge table is unchanged** — the route comes
+  from a breadth-first walk of `ALLOWED`, and a test asserts for every
+  state that the shortcut can only walk edges the table already carries.
+  A radar card gets no shortcut and is refused by name. Proven on
+  cobalt_dev: manual WATCH + one click = 3 rows; the same click on a
+  radar card = genesis row only.
+- **(d) The daily note's sheet-mode line goes both ways.**
+  `daily.py:76`'s dead checkbox string is deleted and replaced by a
+  Cobalt-owned L28 unit carrying the decided mode and one checkbox per
+  declared sheet. A box he ticks in Obsidian IS an attestation, read
+  back at the next sheet request. A disagreement between the note and
+  the record is a REFUSAL showing both — proven on the dev vault with
+  diffs, in all four directions.
+- **(e) The step-down rules moved into `daymode.stepdowns`.** The FACTS
+  stay in code (they are queries against the calendar, the cards and the
+  DRC note); the EFFECT and the words are the table's. A signal the code
+  can compute but the table does not rule is refused at load — turning a
+  rule off is `effect: none`, visibly. Defaults are byte-for-byte what
+  S1-P2 shipped.
+
+**F19 exfiltration guard.** One `redact()` on every outbound channel.
+17 patterns + a LITERAL guard for the four 08-23 username/password
+rotations that no shape can describe. Fails closed, idempotent, partial
+(a redacted DSN stays readable). Proven live: a DM containing seven
+fabricated secret shapes arrived with six redactions counted and every
+value gone. **No secret value is anywhere in git** — the shapes were
+derived from the vault programmatically and never printed.
+
+**F17 task integrity.** Ten `cobalt_jobs` rows, one per plist, with
+state / timeout / heartbeat. ZOMBIE needs both halves (past timeout AND
+a stale heartbeat — the archiver runs 23 minutes on a normal night).
+MISSED is a fact about an absent run, not a state. Kill phrase
+`COBALT STOP` via `cobalt stop`, proven both directions; the DM half is
+not wired because the only Mattermost *listener* lives in the old tree.
+
+**F18 heartbeat.** `com.cobalt.heartbeat` installed and loaded, every 15
+min, `COBALT_ENV=production`, RunAtLoad. Red/green block in the live
+daily note as an L28 unit, updated in place, one diff per beat. DM on
+red + one green summary a day. **Charter test passed on production for
+real:** green → `launchctl bootout com.cobalt.cards-expire` → RED on the
+DM within the same interval, naming the label and the reload command →
+`launchctl bootstrap` → green, exit code intact.
+
+**THE EMAIL CHANNEL WAS NOT BUILT, and that is the finding.** Charter §3
+F18 specifies email via the Layer-B Google OAuth path. **No email send
+path exists in this repo** — no `smtplib`, no `sendmail`, no Gmail/OAuth
+client, no credentials file, no `send_email` anywhere in `src/`, `ops/`,
+`dev_utils/` or `configs/`. `google-api-python-client` is a dependency
+and `googleapiclient` appears in the old tree only as a Gemini/LLM
+import; the vault holds API keys, not an OAuth token. Per the prompt I
+did not build OAuth. Every red now says so out loud. **The consequence
+is the exact hole "alert path ≠ monitored path" exists to close:** the
+DM goes over Mattermost, which is one of the monitored services. → P4.
+
+**Five defects found, three of them only by running the acceptance tests
+against production rather than against a fixture:**
+
+1. **`jobs` is MATTERMOST's table.** `cobalt_brain` is the same Postgres
+   database Mattermost runs in — 129 tables, 116 of them Mattermost's,
+   including a `jobs` with 164,320 rows. `CREATE TABLE IF NOT EXISTS
+   jobs` did nothing, silently. The first production query failed loud
+   (`column "label" does not exist`), which is the only reason this was
+   a ten-second diagnosis rather than a week of green heartbeats
+   reporting on Mattermost's work queue. The three tables introduced
+   here are now `cobalt_jobs` / `cobalt_kill_switch` /
+   `cobalt_redactions`. **The larger issue is unruled:** every future
+   new-core table is one generic name away from this, and a
+   `DROP`/`TRUNCATE` aimed at the wrong name has Mattermost in blast
+   radius. Worth a ruling — a schema of its own, or a prefix convention
+   made law.
+2. **The Charter's own F18 test failed the first time.** Only RESIDENTS
+   were probed against launchd, so unloading a one-shot's plist left the
+   heartbeat green — between runs an unloaded one-shot looks identical
+   to a loaded one. Every job is now asked, and launchd's last exit code
+   is reported (78 = EX_CONFIG, the 09-03 signature).
+3. **A dev prefill run was rewriting the committed production
+   `rules.yaml`.** One `COBALT_ENV=dev uv run prefill daily` rewrote its
+   `source`, `source_sha256` and all twelve rule texts to the DEV
+   vault's copy. RULING 7 env-scoped the database and the vault and
+   stopped there; the generated artifact kept one hardcoded target.
+   Nothing failed — only `git status` showed it. Now env-scoped, with no
+   default.
+4. **`com.cobalt.archiver.plist` was malformed XML** (a double hyphen
+   inside an XML comment). launchd's parser is lenient and has been
+   running it nightly all along; `plistlib` refuses it, so every tool
+   that reads plists failed on that one file. Note that `plutil -lint`
+   *passes* it — plistlib is the stricter reader.
+5. **Two of my own, caught before they shipped:** F19 redacting per
+   pattern over the previous pattern's output let a later row match an
+   earlier row's placeholder (one secret, two hits, wrong attribution);
+   and an interval job was UNMISSABLE, so a 15-minute heartbeat measured
+   against a 30-minute grace reported green forever, including while
+   stopped.
+
+**The `market_reset` ruling (decided-with-veto) is implemented.**
+Migration and repair tooling stays ungated inside the block — the
+carve-outs already existed in `restore` and `backfill`, and what was
+missing was the price. Every such run now logs one loud line and lands
+in `session_blocks` with `kind = 'ungated_run'`, in the same counter F18
+shows. The two kinds are displayed separately and never summed. Card
+creation stays refused, asserted by its own test.
+
+**A LIVE-VAULT INCIDENT DURING THIS SESSION, for the record.**
+`docs/00 - Project/SPRINT-LADDER-v0_1.md` — this file — was overwritten
+at 21:44 by an older copy while the session was running. I read the
+374-line version at 21:33 and found a 200-line one at 21:50, with the
+S1-P1 and S1-P2 outcome sections gone. Nothing in this prompt wrote it.
+`docs/` is symlinked into the real vault at `0 - Projects/Cobalt`, so
+Obsidian Sync carried a stale copy from another device over the top —
+the same mechanism as the 09-03/04 daily-note incident, on a git-tracked
+file this time, which is the only reason it was recoverable
+(`git checkout` from HEAD). **The unresolved half: `docs/` is a live
+Sync target, so any uncommitted doc edit in this tree is one stale
+device away from being lost.** L28 protects notes Cobalt writes; it does
+not protect the repo's own docs.
+
+**Tests:** 613 new-core (up from 496 at S1-P2) — 64 F19, 45 F17, 15
+day-mode note, plus the one-click-fill and step-down-table cases.
+`cobalt validate` green, including the two new cross-checks.
+
+**Carried out of S1-P3 (not blocking):**
+- The **out-of-band alert channel** (Charter §3 F18) → P4. Building it
+  means client registration, consent, refresh-token storage in the
+  vault, and a new secret shape for F19 — not something to improvise
+  inside a heartbeat.
+- The **shared-database ruling**: Cobalt's trading record and
+  Mattermost's 116 tables in one database. Prefix convention, or a
+  schema of its own.
+- **`docs/` as a Sync target** — see the incident above.
+- **DevDocs**: `src/cobalt/vaultwrite/` (5 files) and
+  `taxonomy/__init__.py` still have no page. Pre-existing gap, not
+  introduced here.
+- The **archiver's first observed run** is tonight's 20:30; until then
+  its freshness probe reports "no run OBSERVED yet" rather than red.
 
 ---
 
