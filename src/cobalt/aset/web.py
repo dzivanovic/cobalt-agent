@@ -40,12 +40,15 @@ from cobalt.session import SessionBlocked, assert_writable
 from cobalt.session.clock import now_utc, session_clock
 from cobalt.cards import (
     ALLOWED,
+    FILL_TARGET,
     STOP_EDITABLE,
     Actor,
     CardState,
     CardStateError,
     CardStore,
     IllegalTransition,
+    Origin,
+    fill_path,
 )
 from cobalt.daymode import (
     DayModeStore,
@@ -56,6 +59,7 @@ from cobalt.daymode import (
     load_daymode_config,
     stage2_open,
 )
+from cobalt.daymode import note as daymode_note
 from cobalt.vault import VaultConfigError, dev_entry_allowed, is_production, resolve_vault_path
 
 from .config import ConfigError, load_config, load_sheet_modes_config
@@ -448,6 +452,34 @@ def _stage_label(row: dict | None, now=None) -> str:
     return "stage 2 (proposed, undecided — floor holds)"
 
 
+def _read_back_note_attestation(cfg, day, row: dict | None, store) -> dict | None:
+    """THE NOTE -> COBALT half of the two-way sheet-mode line (S1-P3).
+
+    A box he ticked in today's daily note IS an attestation, read at
+    every sheet request. If nothing is on record yet, the tick becomes
+    the record (persisted through the same `attest_sheet` the selector
+    calls — one write path). If both exist and disagree, `reconcile`
+    raises and the caller refuses with both shown.
+
+    A missing note, or a note with no day-mode unit, contributes nothing
+    and is not an error: the 05:15 prefill may simply not have run yet.
+    """
+    path = daymode_note.daily_note_path(day)
+    if not path.exists():
+        return row
+    note = daymode_note.read_attestation(path.read_text(encoding="utf-8"), cfg)
+    if not note.ticked:
+        return row
+    settled = daymode_note.reconcile(note, (row or {}).get("attested_sheet"))
+    if settled and settled != (row or {}).get("attested_sheet"):
+        store.attest_sheet(day, filename=settled)
+        logger.info(
+            "daymode: attestation {} read back from the daily note {}", settled, path
+        )
+        return store.for_date(day)
+    return row
+
+
 def _daymode_state() -> dict:
     """Everything the sheet needs about the day mode, resolved once.
 
@@ -455,7 +487,8 @@ def _daymode_state() -> dict:
     rather than a 500, because a sheet that will not paint is a sheet he
     cannot trade beside. `error` being set is itself the refusal — every
     card write re-checks through `assert_sheet_matches`, so a degraded
-    banner can never let a card through.
+    banner can never let a card through. A note/selector CONFLICT lands
+    in the same `error` for the same reason.
     """
     try:
         cfg = load_daymode_config()
@@ -463,14 +496,43 @@ def _daymode_state() -> dict:
         store = DayModeStore()
         store.ensure_schema()
         row = store.for_date(day)
+        row = _read_back_note_attestation(cfg, day, row, store)
         mode = decided_or_stage1(row, cfg)
         return {
             "cfg": cfg, "day": day, "row": row, "mode": mode, "error": None,
             "stage": _stage_label(row),
         }
+    except daymode_note.NoteAttestationConflict as e:
+        logger.error("daymode: note/selector attestation conflict: {}", e)
+        return {"cfg": None, "day": None, "row": None, "mode": None,
+                "stage": "CONFLICT", "error": str(e)}
     except Exception as e:  # noqa: BLE001 - rendered, never swallowed
         return {"cfg": None, "day": None, "row": None, "mode": None,
                 "stage": "UNRESOLVED", "error": f"{type(e).__name__}: {e}"}
+
+
+def _write_daymode_note(cfg, day, store) -> str:
+    """COBALT -> NOTE half of the two-way line (S1-P3). Returns a short
+    status suffix for the banner; never raises — an attestation that
+    reached Postgres is recorded whether or not the note write lands, and
+    a failed note write is LOUD in the log and on the page rather than a
+    reason to lose the attestation."""
+    try:
+        row = store.for_date(day)
+        result = daymode_note.write(
+            daymode_note.daily_note_path(day),
+            cfg,
+            decided_or_stage1(row, cfg),
+            stage=_stage_label(row),
+            attested=(row or {}).get("attested_sheet"),
+            row=row,
+        )
+        if result is None:
+            return " ⚠ today's daily note does not exist yet — nothing written to it."
+        return f" Daily note: {result.action} (write_id {result.write_id})."
+    except Exception as e:  # noqa: BLE001
+        logger.error("daymode note write FAILED (attestation stands): {}", e)
+        return f" ⚠ daily-note write FAILED: {type(e).__name__}: {e}"
 
 
 def _daymode_banner(dm: dict) -> str:
@@ -563,6 +625,24 @@ def _card_controls(card: dict) -> str:
             state is CardState.ARMED and target is CardState.WATCH
         )
 
+    # F7 ONE-CLICK FILL (S1-P3). A manual card more than one edge away
+    # from FILLED gets a single button that walks the rest of the route
+    # itself; a radar card never does. The button is only drawn when the
+    # store would actually accept it, so the sheet and the store agree
+    # about what is possible — same rule as every other button here.
+    origin = Origin(card.get("origin", Origin.MANUAL.value))
+    route = fill_path(state)
+    shortcut = ""
+    if origin is Origin.MANUAL and len(route) > 1:
+        hops = " → ".join(s.value for s in route[:-1])
+        shortcut = (
+            f'<form method="post" action="/card/{cid}/move" style="display:inline">'
+            f'<input type="hidden" name="to" value="{FILL_TARGET.value}">'
+            f'<input type="hidden" name="reason" value="">'
+            f'<button type="submit" title="Cobalt writes the missing {e(hops)} '
+            f'row(s) itself, actor cobalt">FILLED (1-click)</button></form>'
+        )
+
     buttons = []
     for target in sorted(ALLOWED[state], key=lambda x: x.value):
         cls = ' class="danger"' if target in danger else ""
@@ -608,7 +688,7 @@ def _card_controls(card: dict) -> str:
         f'<span class="st st-{state.value}">{state.value}</span>'
         f'<span class="muted">#{cid} · {e(str(card["grade"]))} · {e(str(card["direction"]))} · '
         f'{e(str(card["shares"]))} sh · {e(str(card["session"]))}</span>{key_lock}</div>'
-        f'{stop_html}<div class="acts">{"".join(buttons)}</div></div>'
+        f'{stop_html}<div class="acts">{"".join(buttons)}{shortcut}</div></div>'
     )
 
 
@@ -952,18 +1032,20 @@ async def attest(request: Request) -> str:
                 "the state in which a full-size key gets pressed on a reduced day.",
                 attested=None, mode="(none)",
             )
-        mode = cfg.mode_for_hotkey_file(filename)
+        sheet = cfg.sheet_for_hotkey_file(filename)
         store = DayModeStore()
         store.ensure_schema()
-        store.attest_sheet(_today_et(), filename=filename)
+        day = _today_et()
+        store.attest_sheet(day, filename=filename)
+        note_line = _write_daymode_note(cfg, day, store)
     except (SheetMismatch, ConfigError, SessionBlocked) as e:
         return _render(banner=_failed(str(e)))
     except Exception as e:
         return _render(banner=_failed(f"{type(e).__name__}: {e}"))
     return _render(
         banner=f'<div class="saved">Attested {html.escape(filename)} '
-        f"(= {html.escape(mode)} rung). Cards are checked against this until you "
-        "change it.</div>"
+        f"(= the {html.escape(sheet)} sheet). Cards are checked against this until "
+        f"you change it.{html.escape(note_line)}</div>"
     )
 
 
@@ -982,21 +1064,43 @@ async def card_move(card_id: int, request: Request) -> str:
         store = CardStore()
         store.ensure_schema()
         before = store.state_of(card_id)
-        tid = store.transition(
-            card_id,
-            CardState(form.get("to", "")),
-            actor=Actor.YOU,
-            evidence={"via": "aset.sheet"},
-            reason=(form.get("reason") or "").strip() or None,
-        )
+        to_state = CardState(form.get("to", ""))
+        if to_state is FILL_TARGET:
+            # ONE PATH TO FILLED (S1-P3): the same `fill()` the
+            # actual-fill form calls, so the one-click completion happens
+            # here too and a radar card is refused here too. `tids` is
+            # every row it wrote — three on a WATCH manual card.
+            tids = store.fill(
+                card_id,
+                actor=Actor.YOU,
+                evidence={"via": "aset.sheet"},
+                reason=(form.get("reason") or "").strip() or None,
+            )
+        else:
+            tids = [
+                store.transition(
+                    card_id,
+                    to_state,
+                    actor=Actor.YOU,
+                    evidence={"via": "aset.sheet"},
+                    reason=(form.get("reason") or "").strip() or None,
+                )
+            ]
     except (IllegalTransition, CardStateError, SessionBlocked, DevEntryRefused) as e:
         logger.error("card {} move REFUSED: {}", card_id, e)
         return _render(banner=_failed(str(e)))
     except Exception as e:
         return _render(banner=_failed(f"{type(e).__name__}: {e}"))
+    extra = (
+        f" · Cobalt inserted {len(tids) - 1} missing transition row(s) itself "
+        "(one-click fill on a manual card — actor cobalt, evidence auto=manual_fill)"
+        if len(tids) > 1
+        else ""
+    )
     return _render(
         banner=f'<div class="saved">card {card_id}: {before} → '
-        f'{html.escape(form.get("to", ""))} (card_transitions id {tid})</div>'
+        f'{html.escape(form.get("to", ""))} (card_transitions id(s) '
+        f'{", ".join(str(i) for i in tids)}){extra}</div>'
     )
 
 

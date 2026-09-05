@@ -56,7 +56,7 @@ def no_persistence(monkeypatch):
         lambda: {
             "cfg": cfg,
             "day": None,
-            "row": {"attested_sheet": "reduced_day.htk"},
+            "row": {"attested_sheet": cfg.hotkey_file_for_mode(cfg.lowest_enabled)},
             "mode": cfg.lowest_enabled,
             "stage": "stage 1 (system rule)",
             "error": None,
@@ -339,7 +339,7 @@ class TestMatchCheckAtTheSheet:
         r = client.post("/size", data=BASE_SIZE_FORM)
         assert "FAILED" in r.text
         assert "sheet FULL loaded, day mode REDUCED" in r.text
-        assert "reload reduced_day.htk or overrule" in r.text
+        assert "reload half.htk or overrule" in r.text
         assert "never reach AsetStore" not in r.text, "no card was written"
 
     def test_nothing_attested_refuses_too(self, monkeypatch):
@@ -351,13 +351,13 @@ class TestMatchCheckAtTheSheet:
 
     def test_a_key_outside_the_rung_is_refused(self, monkeypatch):
         """A+ on the reduced rung — the grade restriction, not the sheet."""
-        self._stub_daymode(monkeypatch, attested="reduced_day.htk")
+        self._stub_daymode(monkeypatch, attested="half.htk")
         r = client.post("/size", data=dict(BASE_SIZE_FORM, grade="A+"))
         assert "FAILED" in r.text
         assert "never reach AsetStore" not in r.text
 
     def test_the_matching_sheet_lets_the_card_through(self, monkeypatch):
-        self._stub_daymode(monkeypatch, attested="reduced_day.htk")
+        self._stub_daymode(monkeypatch, attested="half.htk")
         r = client.post("/size", data=BASE_SIZE_FORM)
         assert "never reach AsetStore" in r.text, "reached persistence"
 
