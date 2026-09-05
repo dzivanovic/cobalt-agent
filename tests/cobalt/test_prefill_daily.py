@@ -233,7 +233,7 @@ async def test_create_path_renders_full_template(fake_vault):
     when = datetime(2026, 8, 31, 5, 15, 0)
     result = await daily_module.run_daily_prefill(when=when)
     assert result.action == "created"
-    assert set(result.filled_slots) == {"rules", "trading", "market_calendar"}
+    assert set(result.filled_slots) == {"rules", "daymode", "trading", "market_calendar"}
     content = result.path.read_text()
     assert content.startswith("---\ntags:\n  - Daily\n---\n")
     assert "#### 2026-08-31 T 05:15" in content

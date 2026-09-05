@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Optional
 
 from jinja2 import Environment, FileSystemLoader
+from loguru import logger
 
 from cobalt.aset.config import load_config as load_aset_config
 from cobalt.aset.config import load_sheet_modes_config
@@ -73,7 +74,18 @@ from cobalt.vaultwrite import VaultWriteStore, VaultWriter, WriteResult, after_p
 from cobalt.vaultwrite.markers import find_section, legacy_slot_present
 
 MARKET_TICKERS = ("SPY", "QQQ", "IWM")
-SHEET_MODE_LINE = "Sheet mode: [ ] FULL [ ] HALF — .htk loaded: [ ] full [ ] half"
+
+#: DELETED 2026-09-04 (S1-P3, CTO review of S1-P2). `SHEET_MODE_LINE`
+#: used to live here:
+#:
+#:     "Sheet mode: [ ] FULL [ ] HALF — .htk loaded: [ ] full [ ] half"
+#:
+#: — four checkboxes that read nothing, compared nothing and refused
+#: nothing. It is replaced by a Cobalt-OWNED UNIT (L28) rendered by
+#: `cobalt.daymode.note`, which carries the decided day mode and the
+#: attestation and is read back at the next sheet request. One owner,
+#: one renderer: this module calls that one rather than carrying a
+#: second copy of the words (one-path rule).
 
 
 _GRADE_DOLLAR_RE = re.compile(r"B\s*=\s*\$\d+(?:\.\d+)?,\s*A\s*=\s*\$\d+(?:\.\d+)?")
@@ -185,6 +197,7 @@ def build_slot_contents(
     rules_cfg: RulesConfig,
     sheet_modes_cfg,
     mode_hint: str,
+    sheet_mode_block: str,
 ) -> dict:
     mode_aware_rules = apply_mode_aware_sizing(rules_cfg.rules, sheet_modes_cfg)
     spy_col2, spy_col3 = format_market_row("SPY", market_rows, market_error)
@@ -196,7 +209,7 @@ def build_slot_contents(
         "rules_checkbox_block": format_rules_checkbox_block(mode_aware_rules),
         "mantras_block": format_mantras_block(rules_cfg),
         "mode_hint": mode_hint,
-        "sheet_mode_line": SHEET_MODE_LINE + mode_hint,
+        "sheet_mode_block": sheet_mode_block,
         "spy_col2": spy_col2, "spy_col3": spy_col3,
         "qqq_col2": qqq_col2, "qqq_col3": qqq_col3,
         "iwm_col2": iwm_col2, "iwm_col3": iwm_col3,
@@ -326,16 +339,57 @@ def build_market_table_body(lines: list[str], row_values: dict[str, tuple[str, s
 _ROW_RE_TEMPLATE = r"^\|\s*{ticker}\s*\|([^|]*)\|([^|]*)\|\s*$"
 
 
+_RULES_SECTION_CLOSE_RE = re.compile(r"^\s*<!--\s*/cobalt:section\s+rules\s*-->\s*$")
+
+DAYMODE_PLACEMENT = after_pattern(
+    _RULES_SECTION_CLOSE_RE, "after the rules section's closing marker"
+)
+
+
 def _rules_slot_content(context: dict) -> str:
     return "\n".join(
         [
             context["rules_checkbox_block"],
             "",
-            context["sheet_mode_line"],
-            "",
             context["mantras_block"],
         ]
     )
+
+
+def build_sheet_mode_block() -> str:
+    """Today's day-mode block, rendered by its OWNER (`daymode.note`).
+
+    Fail-soft ONLY in the sense L28 allows: a config or database failure
+    renders as a visible FAILED line in the note rather than taking the
+    whole 05:15 run down, because the market table and the calendar are
+    still worth having. It is never blank and never guessed.
+    """
+    from cobalt.daymode import note as daymode_note
+    from cobalt.daymode.config import load_daymode_config
+    from cobalt.daymode.propose import decided_or_stage1
+    from cobalt.daymode.store import DayModeStore
+
+    try:
+        cfg = load_daymode_config()
+        day = datetime.now().astimezone().date()
+        try:
+            store = DayModeStore()
+            store.ensure_schema()
+            row = store.for_date(day)
+        except Exception as e:  # noqa: BLE001 - reported in the note, not swallowed
+            logger.error("daymode block: day_modes unreadable ({}) — stage 1 rendered", e)
+            row = None
+        mode = decided_or_stage1(row, cfg)
+        stage = (
+            "stage 2 (decided)"
+            if (row or {}).get("decided")
+            else "stage 1 (system rule, pre-09:00)"
+        )
+        return daymode_note.render_body(
+            cfg, mode, stage=stage, attested=(row or {}).get("attested_sheet"), row=row
+        )
+    except Exception as e:  # noqa: BLE001
+        return f"- FAILED: day mode unresolved ({type(e).__name__}: {e})"
 
 
 def slot_state(text: str, section: str, unit: str) -> str:
@@ -392,6 +446,11 @@ class DailyPrefillResult:
 SLOT_SPECS = (
     # (slot name == section name, unit id, placement)
     ("rules", "rules", RULES_PLACEMENT),
+    # S1-P3: the day-mode unit. It sits right after the rules section
+    # when the note already exists and has no daymode markers yet;
+    # `daymode.note.write()` updates it in place from then on (the sheet,
+    # the 09:00 proposal and an attestation all call that one writer).
+    ("daymode", "sheet_mode", DAYMODE_PLACEMENT),
     ("trading", "market_table", TRADING_PLACEMENT),
     ("market_calendar", "market_calendar", MARKET_CALENDAR_PLACEMENT),
 )
@@ -452,6 +511,7 @@ async def run_daily_prefill(
     context = build_slot_contents(
         when, market_rows, market_error, economic, earnings, calendar_error,
         rules_cfg, sheet_modes_cfg, format_mode_hint(cards),
+        build_sheet_mode_block(),
     )
 
     # L28.1: a note that does not exist is created whole from the
@@ -477,6 +537,7 @@ async def run_daily_prefill(
     }
     bodies = {
         "rules": _rules_slot_content(context),
+        "daymode": context["sheet_mode_block"],
         "trading": build_market_table_body(existing_lines, row_values),
         "market_calendar": context["market_calendar_block"],
     }
