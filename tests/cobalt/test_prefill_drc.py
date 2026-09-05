@@ -189,7 +189,7 @@ def fake_vault(monkeypatch, tmp_path):
     # (a separate binding from vault_writer's) -- must be patched too, or
     # regenerate_rules_config() silently falls through to the REAL vault.
     monkeypatch.setattr(rules_gen_module, "resolve_vault_path", lambda: vault_root)
-    monkeypatch.setattr(rules_gen_module, "RULES_CONFIG_PATH", tmp_path / "rules.yaml")
+    monkeypatch.setattr(rules_gen_module, "rules_generated_path", lambda p=tmp_path / "rules.yaml": p)
     return vault_root
 
 

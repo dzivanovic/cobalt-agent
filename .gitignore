@@ -31,6 +31,10 @@ docs/90 - References/assets/
 # briefing landing folder, not a documentation tier; stays fully
 # gitignored via the docs/* rule above, same as before the rename.
 configs/dev/aset.local.yaml
+# GENERATED from the DEV vault's Rules.md by a dev prefill run (2026-09-04,
+# S1-P3). The production twin, configs/cobalt/rules.yaml, IS committed —
+# splitting them is what stops a dev run rewriting production config.
+configs/dev/rules.generated.yaml
 docs/Cobalt/
 architecture_assessments/
 logs.vscode/

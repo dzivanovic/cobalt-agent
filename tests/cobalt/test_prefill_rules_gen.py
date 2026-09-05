@@ -89,7 +89,7 @@ class TestRegenerateRulesConfig:
 
         out_path = tmp_path / "rules.yaml"
         monkeypatch.setattr(rules_gen_module, "resolve_vault_path", lambda: vault_root)
-        monkeypatch.setattr(rules_gen_module, "RULES_CONFIG_PATH", out_path)
+        monkeypatch.setattr(rules_gen_module, "rules_generated_path", lambda p=out_path: p)
 
         cfg = regenerate_rules_config()
         assert len(cfg.rules) == 2
@@ -104,7 +104,7 @@ class TestRegenerateRulesConfig:
         vault_root = tmp_path / "vault"
         vault_root.mkdir()
         monkeypatch.setattr(rules_gen_module, "resolve_vault_path", lambda: vault_root)
-        monkeypatch.setattr(rules_gen_module, "RULES_CONFIG_PATH", tmp_path / "rules.yaml")
+        monkeypatch.setattr(rules_gen_module, "rules_generated_path", lambda p=tmp_path / "rules.yaml": p)
         with pytest.raises(RulesSourceError, match="Rules.md not found"):
             regenerate_rules_config()
 
@@ -118,10 +118,51 @@ class TestRegenerateRulesConfig:
 
         out_path = tmp_path / "rules.yaml"
         monkeypatch.setattr(rules_gen_module, "resolve_vault_path", lambda: vault_root)
-        monkeypatch.setattr(rules_gen_module, "RULES_CONFIG_PATH", out_path)
+        monkeypatch.setattr(rules_gen_module, "rules_generated_path", lambda p=out_path: p)
         monkeypatch.setattr("cobalt.prefill.config.RULES_CONFIG_PATH", out_path)
 
         regenerate_rules_config()
         reloaded = load_rules_config()
         assert len(reloaded.rules) == 2
         assert reloaded.generated.source_sha256
+
+
+class TestGeneratedRulesTargetIsEnvScoped:
+    """A dev run must not rewrite the committed production config.
+
+    Found 2026-09-04 (S1-P3) by a single `COBALT_ENV=dev uv run prefill
+    daily` during the P2-corrections proof: it rewrote
+    `configs/cobalt/rules.yaml`'s `source`, `source_sha256` and all
+    twelve rule texts to the DEV vault's Rules.md. Nothing failed, and
+    nothing would have — only `git status` showed it.
+    """
+
+    def test_production_writes_the_committed_file(self, monkeypatch):
+        from cobalt import env
+        from cobalt.prefill.config import RULES_CONFIG_PATH, rules_generated_path
+
+        monkeypatch.setenv(env.ENV_VAR, env.PRODUCTION)
+        assert rules_generated_path() == RULES_CONFIG_PATH
+
+    def test_dev_writes_a_gitignored_file_beside_the_other_dev_configs(self, monkeypatch):
+        from cobalt import env
+        from cobalt.prefill.config import (
+            DEV_RULES_CONFIG_PATH,
+            RULES_CONFIG_PATH,
+            rules_generated_path,
+        )
+
+        monkeypatch.setenv(env.ENV_VAR, env.DEV)
+        assert rules_generated_path() == DEV_RULES_CONFIG_PATH
+        assert rules_generated_path() != RULES_CONFIG_PATH
+
+    def test_an_undeclared_environment_writes_nowhere(self, monkeypatch):
+        """RULING 7 all the way down: no default, not even for a file
+        path. A process that has not said which environment it is in does
+        not get to pick which config it overwrites."""
+        from cobalt import env
+        from cobalt.prefill.config import rules_generated_path
+
+        monkeypatch.delenv(env.ENV_VAR, raising=False)
+        with pytest.raises(env.EnvConfigError):
+            rules_generated_path()

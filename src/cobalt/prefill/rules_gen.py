@@ -27,7 +27,7 @@ from cobalt.vault import resolve_vault_path
 
 from .config import (
     RECOGNIZED_TAGS,
-    RULES_CONFIG_PATH,
+    rules_generated_path,
     GeneratedMeta,
     MantraItem,
     RuleItem,
@@ -118,7 +118,8 @@ def _write_rules_yaml(rules_cfg: RulesConfig, path: Path) -> None:
 
 def regenerate_rules_config() -> RulesConfig:
     """Read Rules.md fresh from the vault, parse + validate it, write the
-    result to configs/cobalt/rules.yaml, and return the parsed config.
+    result to the environment's generated-rules file, and return the
+    parsed config.
     Raises RulesSourceError (a line's tag is missing/wrong) or
     VaultConfigError (vault unresolvable) — never falls back to a stale
     or default rule set."""
@@ -139,5 +140,11 @@ def regenerate_rules_config() -> RulesConfig:
         rules=rules,
         mantras=mantras,
     )
-    _write_rules_yaml(rules_cfg, RULES_CONFIG_PATH)
+    # WHICH FILE, decided by COBALT_ENV and nothing else. A dev run
+    # reads the dev vault's Rules.md, so its output is dev content and
+    # must not land in the committed production config — see
+    # prefill/config.py's note on DEV_RULES_CONFIG_PATH.
+    target = rules_generated_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_rules_yaml(rules_cfg, target)
     return rules_cfg

@@ -15,6 +15,16 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RULES_CONFIG_PATH = REPO_ROOT / "configs" / "cobalt" / "rules.yaml"
+#: The DEV target for the same generated artifact. `rules.yaml` is
+#: generated FROM THE VAULT, so which vault a run resolves decides what
+#: it contains — and a dev run resolves the dev skeleton. Writing that
+#: into the committed file (found 2026-09-04, S1-P3: a single
+#: `COBALT_ENV=dev uv run prefill daily` rewrote its `source`,
+#: `source_sha256` and all 12 rules to the dev vault's copy) puts dev
+#: content in production config with nothing but `git status` to catch
+#: it. `rules_generated_path()` picks by COBALT_ENV; this one is
+#: gitignored.
+DEV_RULES_CONFIG_PATH = REPO_ROOT / "configs" / "dev" / "rules.generated.yaml"
 STRATEGIES_CONFIG_PATH = REPO_ROOT / "configs" / "cobalt" / "strategies.yaml"
 PREFILL_CONFIG_PATH = REPO_ROOT / "configs" / "cobalt" / "prefill.yaml"
 TEMPLATES_DIR = REPO_ROOT / "configs" / "cobalt" / "templates"
@@ -22,6 +32,20 @@ TEMPLATES_DIR = REPO_ROOT / "configs" / "cobalt" / "templates"
 
 class PrefillConfigError(RuntimeError):
     """Missing/invalid prefill config — crash, never fall back."""
+
+
+def rules_generated_path():
+    """Where THIS process may write the generated rules file.
+
+    Production writes the committed `configs/cobalt/rules.yaml`; dev
+    writes a gitignored file beside the other dev configs. Same rule as
+    the database and the vault (RULING 7): `COBALT_ENV` decides, nothing
+    else, and there is no default — a process that has not declared its
+    environment raises rather than guessing which file to overwrite.
+    """
+    from cobalt import env
+
+    return RULES_CONFIG_PATH if env.is_production() else DEV_RULES_CONFIG_PATH
 
 
 RECOGNIZED_TAGS: tuple[str, ...] = (
