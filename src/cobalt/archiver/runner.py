@@ -87,6 +87,36 @@ async def run_backfill(ticker: str) -> RunSummary:
     return summary
 
 
+def _archive_nightly() -> None:
+    """The scheduled nightly run, inside its F17 job row.
+
+    Only the FULL run is the job. A `--backfill TICKER` is an operator
+    fetching one symbol on demand; recording it as the nightly run would
+    mark the night satisfied and silence the MISSED probe for a run that
+    never happened.
+    """
+    from cobalt.jobs.entrypoint import as_job
+
+    with as_job("com.cobalt.archiver") as job:
+        summary = asyncio.run(run_full())
+        # THIS is what makes F18's "archiver freshness (last run + rows
+        # written)" answerable without a second table.
+        job.result = {
+            "rows_written": summary.rows_written,
+            "tickers": len(summary.tickers),
+            "requests": summary.requests,
+            "failures": len(summary.failures),
+            "duration": summary.duration_str(),
+        }
+        if summary.failures:
+            # Raised, so the job row lands on `failed` with its exit code
+            # and its error text — F18 turns red on exactly this.
+            raise RuntimeError(
+                f"{len(summary.failures)} archiver failure(s): "
+                + "; ".join(summary.failures[:5])
+            )
+
+
 def main() -> None:
     import os
 
@@ -105,12 +135,20 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    from cobalt.jobs.entrypoint import JobStopped
+
     if args.backfill:
         summary = asyncio.run(run_backfill(args.backfill))
-    else:
-        summary = asyncio.run(run_full())
+        if summary.failures:
+            sys.exit(1)
+        return
 
-    if summary.failures:
+    try:
+        _archive_nightly()
+    except JobStopped as e:
+        # Exit 0: a deliberate stop is not a failure (F17d).
+        print(f"NOT RUN — {e}")
+    except Exception:
         sys.exit(1)
 
 

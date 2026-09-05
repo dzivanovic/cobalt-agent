@@ -1,0 +1,137 @@
+# F17 TASK INTEGRITY — the job registry (Charter §3 F17, L18).
+#
+# Schema: src/cobalt/jobs/config.py. Pydantic-validated on load; a bad
+# row CRASHES with its label. `cobalt validate` cross-checks this file
+# against ops/*.plist and fails on a job in one and not the other —
+# a registry that has drifted from launchd is a registry that reports
+# green for a job that no longer exists.
+#
+# ---------------------------------------------------------------------
+# WHAT A ROW MEANS
+# ---------------------------------------------------------------------
+# label     : the launchd label, exactly. It is the join key everywhere.
+# kind      : resident (runs continuously) | one-shot (runs and exits).
+# supervisor: WHO stamps `heartbeat_at`, and this is the honest part —
+#             `self`    Cobalt's own code, through the wrapper
+#                       (src/cobalt/jobs/wrapper.py). The process says it
+#                       is alive because it IS alive and running our code.
+#             `launchd` launchd holds a live PID for it. Cobalt does not
+#                       run inside it (Obsidian, the LM Studio server) or
+#                       does not want a heartbeat thread in it (the ASET
+#                       sheet). The WATCHDOG stamps from a real
+#                       `launchctl` probe, and the row says so, so nothing
+#                       pretends the process reported in itself.
+#             `pidfile` the process is not launchd's own child — see
+#                       com.cobalt.agent below.
+# timeout_s : how long a run may take before a stale heartbeat means
+#             ZOMBIE. The wrapper stamps at least every timeout_s/3.
+# schedule  : mirrors the plist. launchd cannot read this file and this
+#             file cannot read launchd, so `cobalt validate` compares
+#             them and a drift is loud.
+jobs:
+  # ---------------- residents ----------------
+  - label: com.cobalt.aset
+    kind: resident
+    supervisor: launchd
+    # The ASET sheet (ops/start_aset.sh -> uvicorn). It is Cobalt's own
+    # code, but it is a request-driven server: a heartbeat thread inside
+    # it would report "the process exists", which is exactly what the
+    # launchd probe already reports, and F18 additionally probes the
+    # sheet's HTTP 200 — which is the thing that actually matters and
+    # that a thread could not tell us (S1-P2 watched this process serve
+    # 500s while perfectly alive).
+    timeout_s: 300
+    what: "the ASET semi-auto sheet on :5010 — the surface he trades beside"
+
+  - label: com.cobalt.mainframe
+    kind: resident
+    supervisor: launchd
+    timeout_s: 600
+    what: "the LM Studio local-model server (ops/start_mainframe.sh), the L23 local lane"
+
+  - label: com.cobalt.obsidian
+    kind: resident
+    supervisor: launchd
+    timeout_s: 300
+    what: >
+      Obsidian as a supervised service (RULING 6). Not decoration: the
+      vault reaches his other devices only through a RUNNING Obsidian on
+      this Mac, and on 09-04 a correct 05:15 write was silently
+      overwritten because none was running.
+
+  - label: com.cobalt.agent
+    kind: resident
+    supervisor: pidfile
+    pidfile: logs/cobalt.pid
+    timeout_s: 600
+    # WHAT com.cobalt.agent IS (S1-P3 answer to the prompt's question).
+    # It is the OLD TREE's agent: the plist runs `cobalt.sh start`, which
+    # pre-flight-checks LM Studio/Postgres/Mattermost and then
+    # `nohup uv run src/cobalt_agent/main.py &` — the Mattermost
+    # websocket listener, the scheduler, the Scribe, the memory layer.
+    #
+    # It is registered as `pidfile` and not `launchd` because of a real
+    # shape, not a preference: cobalt.sh spawns the agent detached
+    # (`nohup`, and the plist sets AbandonProcessGroup) and EXITS 0. So
+    # launchd sees a one-shot that completed successfully and holds no
+    # PID — `launchctl list` shows `- 0` for this label whether the agent
+    # is running or dead. The only truthful liveness signal is the PID
+    # file cobalt.sh writes.
+    #
+    # It gets a row because F18 must be able to say it is down; it gets
+    # no wrapper because the strangler rule (CLAUDE.md) says the old tree
+    # stays untouched and no new-core code is added to it.
+    what: "the OLD-TREE agent (cobalt.sh start -> cobalt_agent/main.py), detached; liveness from its PID file"
+
+  # ---------------- one-shots ----------------
+  - label: com.cobalt.prefill-daily
+    kind: one-shot
+    supervisor: self
+    timeout_s: 600
+    schedule: {at: "05:15", weekdays: [1, 2, 3, 4, 5]}
+    what: "the morning daily-note prefill (uv run prefill daily)"
+
+  - label: com.cobalt.prefill-drc
+    kind: one-shot
+    supervisor: self
+    timeout_s: 600
+    schedule: {at: "15:40", weekdays: [1, 2, 3, 4, 5]}
+    what: "the evening DRC prefill (uv run prefill drc)"
+
+  - label: com.cobalt.archiver
+    kind: one-shot
+    supervisor: self
+    # The nightly full run took 23m04s and 23m11s on the last two nights.
+    # 90 minutes is not a target, it is the point past which a silent
+    # hang is more likely than a slow night.
+    timeout_s: 5400
+    schedule: {at: "20:30", weekdays: [1, 2, 3, 4, 5]}
+    what: "the Bar Archiver nightly full run (uv run archiver)"
+
+  - label: com.cobalt.cards-expire
+    kind: one-shot
+    supervisor: self
+    timeout_s: 300
+    schedule: {at: "16:05", weekdays: [1, 2, 3, 4, 5]}
+    what: "expire cards whose window closed (uv run cobalt cards expire)"
+
+  - label: com.cobalt.daymode-propose
+    kind: one-shot
+    supervisor: self
+    timeout_s: 300
+    schedule: {at: "09:00", weekdays: [1, 2, 3, 4, 5]}
+    what: "the 09:00 day-mode proposal (uv run cobalt daymode propose)"
+
+  - label: com.cobalt.heartbeat
+    kind: one-shot
+    supervisor: self
+    timeout_s: 300
+    # EVERY interval, all week. The heartbeat is the thing that notices a
+    # weekend failure before Monday morning needs it.
+    schedule: {every_min_tunable: heartbeat.interval_min}
+    what: "the F18 heartbeat host — probes everything above and says so out loud"
+
+# THE KILL PHRASE (F17d). Config, not a literal: `cobalt stop` and any
+# future DM listener compare against this exact string.
+kill_phrase: "COBALT STOP"
+resume_phrase: "COBALT RESUME"

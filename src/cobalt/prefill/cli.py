@@ -16,12 +16,27 @@ from datetime import date  # noqa: E402
 
 from loguru import logger  # noqa: E402
 
+from cobalt.jobs.entrypoint import JobStopped, as_job  # noqa: E402
+
 from .daily import run_daily_prefill  # noqa: E402
 from .drc import run_drc_prefill  # noqa: E402
 
+DAILY_JOB = "com.cobalt.prefill-daily"
+DRC_JOB = "com.cobalt.prefill-drc"
+
 
 def _run_daily(dry_run: bool) -> None:
-    result = asyncio.run(run_daily_prefill(dry_run=dry_run))
+    # F17: the run is a persisted row with a state, a timeout and a
+    # heartbeat. `skip=dry_run` because a dry run is not a run — see
+    # cobalt/jobs/entrypoint.py.
+    with as_job(DAILY_JOB, skip=dry_run) as job:
+        result = asyncio.run(run_daily_prefill(dry_run=dry_run))
+        job.result = {
+            "action": result.action,
+            "filled": result.filled_slots,
+            "skipped": result.skipped_slots,
+            "path": str(result.path),
+        }
     # L28.4: every report and run log shows the unified diff.
     report = result.report()
     logger.info(report)
@@ -30,7 +45,9 @@ def _run_daily(dry_run: bool) -> None:
 
 def _run_drc(target_date: str | None, dry_run: bool) -> None:
     for_date_ = date.fromisoformat(target_date) if target_date else None
-    result = asyncio.run(run_drc_prefill(for_date_=for_date_, dry_run=dry_run))
+    with as_job(DRC_JOB, skip=dry_run) as job:
+        result = asyncio.run(run_drc_prefill(for_date_=for_date_, dry_run=dry_run))
+        job.result = {"action": result.action, "path": str(result.path)}
     report = result.report()
     logger.info(report)
     print(report)
@@ -60,6 +77,10 @@ def main() -> None:
             _run_daily(args.dry_run)
         else:
             _run_drc(args.date, args.dry_run)
+    except JobStopped as e:
+        # Exit 0 — see cobalt/cli.py's note. A deliberate stop is not a
+        # failure and must not turn the heartbeat red.
+        print(f"NOT RUN — {e}")
     except Exception as e:
         logger.error(f"prefill {args.command} FAILED: {type(e).__name__}: {e}")
         print(f"FAILED: {type(e).__name__}: {e}", file=sys.stderr)

@@ -119,6 +119,13 @@ def cmd_show(args: argparse.Namespace) -> None:
 
 
 def cmd_propose(args: argparse.Namespace) -> None:
+    from cobalt.jobs.entrypoint import as_job
+
+    with as_job("com.cobalt.daymode-propose", skip=args.dry_run) as job:
+        job.result = _propose(args)
+
+
+def _propose(args: argparse.Namespace) -> dict:
     cfg = load_daymode_config()
     day = _day(args)
     ts = _at(args)
@@ -138,15 +145,16 @@ def cmd_propose(args: argparse.Namespace) -> None:
     )
     if proposal is None:
         print("NOT A TRADING DAY — no proposal, no row. (F6: a weekend is not an error.)")
-        return
+        return {"trading_day": False}
     print(f"proposed  : {proposal.proposed}")
     print(f"reason    : {proposal.reason}")
     if args.dry_run:
         print("DRY RUN — nothing written.")
-        return
+        return {"dry_run": True, "proposed": proposal.proposed}
     store.upsert_proposal(day, proposed=proposal.proposed, reason=proposal.reason, now=ts)
     print("WROTE day_modes row.")
     _sync_note(cfg, day, store)
+    return {"trading_day": True, "proposed": proposal.proposed, "signals": proposal.signals}
 
 
 def cmd_decide(args: argparse.Namespace) -> None:

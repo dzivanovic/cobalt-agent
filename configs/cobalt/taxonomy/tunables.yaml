@@ -488,3 +488,68 @@ tunables:
     status: proposed
     source: ruling
     consumers: ["F6 day-mode proposal (cobalt.daymode.propose)"]
+
+  # --- F17 task integrity / F18 heartbeat (S1-P3, 2026-09-04) ----------
+  # Every threshold these two features EVALUATE is a row here with a
+  # named consumer. Per-job timeouts and schedules are NOT here: those
+  # are per-job data, not thresholds, and they live in
+  # configs/cobalt/jobs.yaml under their own Pydantic schema (which
+  # `cobalt validate` also checks). The rows below are the numbers the
+  # code compares against.
+
+  - key: heartbeat.interval_min
+    value: 15
+    unit: min
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.heartbeat (probe cadence)",
+                "com.cobalt.heartbeat (job schedule, jobs.yaml)",
+                "F18 'red within one interval' — this IS the interval"]
+
+  - key: heartbeat.green_summary_at
+    value: "17:30"
+    unit: time
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.heartbeat (the one green DM per day)"]
+
+  - key: heartbeat.archiver_max_age_min
+    value: 1560
+    unit: min
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.heartbeat.probes.archiver_freshness (stale = red)"]
+
+  - key: heartbeat.probe_timeout_s
+    value: 5
+    unit: duration
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.heartbeat.probes (sheet HTTP, launchctl, database)"]
+
+  - key: jobs.heartbeat_fraction
+    value: 3
+    unit: ratio
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.jobs.wrapper (stamp at least every timeout_s / this)",
+                "cobalt.jobs.watchdog (stale-heartbeat threshold)"]
+
+  - key: jobs.missed_grace_min
+    value: 30
+    unit: min
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.jobs.watchdog (a one-shot past its cadence by this much = MISSED)"]

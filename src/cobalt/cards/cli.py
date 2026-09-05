@@ -120,6 +120,13 @@ def cmd_backfill(args: argparse.Namespace) -> None:
 
 
 def cmd_expire(args: argparse.Namespace) -> None:
+    from cobalt.jobs.entrypoint import as_job
+
+    with as_job("com.cobalt.cards-expire", skip=args.dry_run) as job:
+        job.result = _expire(args)
+
+
+def _expire(args: argparse.Namespace) -> dict:
     store = _store()
     ts = _at(args)
     print(f"database  : {store.db_name}  (COBALT_ENV={env.resolve_env()})")
@@ -127,13 +134,14 @@ def cmd_expire(args: argparse.Namespace) -> None:
     moved = expire_due(store, now=ts, dry_run=args.dry_run)
     if not moved:
         print("no cards past their window.")
-        return
+        return {"expired": 0}
     for row in moved:
         print(
             f"  card {row['card_id']:<6} {row['ticker']:<6} {row['from_state']:<9} "
             f"-> EXPIRED   window {row['window_end']} ({row['window_source']})"
         )
     print(f"{len(moved)} card(s) {'would be' if args.dry_run else ''} expired.")
+    return {"expired": len(moved), "card_ids": [r["card_id"] for r in moved]}
 
 
 def cmd_edges(args: argparse.Namespace) -> None:
