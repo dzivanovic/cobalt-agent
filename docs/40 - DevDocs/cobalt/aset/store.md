@@ -63,3 +63,39 @@ failure, schema failure, or the `RuntimeError` above). Writes to the
 None directly — `db_name` is passed in by the caller (`web.py`, from
 `AsetConfig.db_name`); actual connection parameters come from
 `cobalt.db.connect`'s environment-variable read.
+
+---
+
+## S1-P2 change (2026-09-04) — the F7 state machine
+
+**`save()` now creates the card AND its genesis state in ONE
+transaction.** "No card exists without a state" stopped being a habit
+callers keep and became this `with` block: the `INSERT` itself carries
+`state = 'WATCH'` (the column is `NOT NULL`, migration 0007), and
+`CardStore.create_state(conn=...)` writes the genesis ledger row on the
+same connection. A crash between the two rolls both back.
+
+**`mark_filled()` is now a transition, not a status write.** It calls
+`CardStore.transition(row_id, FILLED, ...)` — so a fill goes through the
+same gates, ledger row, evidence and session stamp as every other move.
+Two consequences worth knowing:
+
+- **`status` is no longer written.** The column stays *readable* (the
+  09-03 forensics and any historical reader still work), but `state` is
+  the truth. It retires when S1-P3's smoke proves nothing reads it.
+- **A fill is only reachable from `TRIGGERED`.** Filling a `WATCH` card
+  raises `IllegalTransition` naming the edge. This is deliberate: a card
+  that reached `FILLED` without ever being `TRIGGERED` makes the MISSED
+  count (Charter §3 F7) meaningless. The sheet's fill banner tells him to
+  ARM and mark TRIGGERED first.
+
+**`counts_for_date()` now counts `state IN ('FILLED','CLOSED')`, not
+`status`.** Left on `status` it would have silently reported *0 trades
+taken* from this sprint forward — precisely the class of silent
+miscount the state machine exists to end. `CLOSED` counts too: a card
+that filled and then closed is still a trade taken.
+
+**`ensure_schema()` also runs the cards migrations**, because `save()`
+now writes `card_transitions`. It *executes* that module's files rather
+than carrying a second copy of the DDL (one-path rule); the import is
+local to avoid the cycle.

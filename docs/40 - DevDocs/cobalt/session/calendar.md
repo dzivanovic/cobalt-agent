@@ -56,3 +56,34 @@ lengths (no hidden second copy).
   `session()` over the 2025 portion of the corpus raises. Deliberate —
   add the file when a 2025 join is actually needed, with its holidays
   confirmed rather than assumed.
+
+---
+
+## S1-P2 addition (2026-09-04) — `nyse-2025.yaml`
+
+S1-P1 closed with an explicit carried item: *"No `nyse-2025.yaml`, so
+`session()` over the 2025 third of the bars corpus raises
+`CalendarError` by design. Add the file when a 2025 join is actually
+needed."* F7's card backfill and F6's prior-trading-day lookback both
+walk historical rows, and ADR-0007 left ~4.75M reinterpreted `bars`
+rows a third of which are 2025 — so the year is now genuinely reachable
+and the file ships.
+
+Eleven holidays and three early closes. Two entries worth noting:
+
+- **2025-01-09, National Day of Mourning (President Carter)** — not an
+  annual holiday but a one-off full closure by exchange proclamation. It
+  is exactly the day a "weekday ⇒ trading day" fallback gets silently
+  wrong, which is why this module refuses to have such a fallback.
+- **2025-07-03 IS an early close** (unlike 2026, where July 4 fell on a
+  Saturday and July 3 was the observed holiday itself).
+
+Unlike `nyse-2026.yaml`, whose dates are derived and still carry Dejan's
+confirmation flag, every 2025 date is a settled, already-observed fact.
+
+Proof (`cobalt session now --at`), 2025-11-28, the day after Thanksgiving:
+
+| ET instant | Session |
+|---|---|
+| 12:00 | `rth` (early close is still RTH until 13:00) |
+| 13:30 | `aftermarket` |

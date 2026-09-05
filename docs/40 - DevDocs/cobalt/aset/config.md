@@ -101,3 +101,38 @@ next page load with no restart.
 Itself — this **is** the config loader for both files. Schema documented
 above; example values live in `configs/dev/aset.yaml` and
 `configs/cobalt/aset.yaml`.
+
+---
+
+## S1-P2 change (2026-09-04) — sheets are an ordered config list
+
+`SheetModesConfig` carried `full:` and `half:` as two literal fields and
+`dollars_for` branched `self.full if mode is FULL else self.half`, so a
+third rung could not be added without editing the class — the
+anti-rigidity rule CLAUDE.md opens with, broken.
+
+Ruled by Dejan 2026-09-04: *"Sheets are an ordered config list from
+aset.yaml — today [half, full]; a quarter sheet will be added later as a
+config row + its .htk, so never hardcode the count or names."*
+
+Now:
+
+```yaml
+sheet_modes:
+  order: [half, full]        # low -> high
+  sheets:
+    half: {A_plus: 170, A: 70, B: 30, C: 11, D: 0}
+    full: {A_plus: 345, A: 135, B: 60, C: 21, D: 0}
+  enabled_grades: [A, B]
+```
+
+- `sheets` is keyed by whatever ids the config declares; `order` lists
+  the rungs low to high and F6's "lowest enabled sheet" reads it.
+- `order` is **explicit**, not YAML mapping order: dict insertion order
+  survives pyyaml today, but "which rung is lower" is a trading fact and
+  will not rest on a parser implementation detail.
+- A validator refuses an `order` that does not name every sheet exactly
+  once — a rung missing from it would silently never be reachable.
+- `dollars_for(mode, grade)` and `is_enabled(grade)` keep their
+  signatures, so every caller is unchanged. **The dollar figures are
+  byte-identical** to what the DAS hotkey files carry.

@@ -156,3 +156,43 @@ caching), so editing `configs/dev/aset*.yaml` or
 `configs/cobalt/aset.yaml` takes effect on the next page load with no
 server restart. Also (Slice 2) `configs/cobalt/prefill.yaml` via
 `cobalt.prefill.config.load_prefill_paths()`, for the trade-note step.
+
+---
+
+## S1-P2 change (2026-09-04) — F6 banner, F7 controls
+
+### The FULL/HALF toggle is gone
+The sheet mode is **set by the day mode in force**, not chosen
+("risk set everywhere except the `.htk`", Charter M4). It renders as a
+read-only line; changing it means deciding or overruling the day mode.
+
+### The day-mode banner
+`_daymode_state()` / `_daymode_banner()` render the stage, the mode in
+force, the sheet it sizes from, the keys the rung permits, and the
+`.htk` match result — using **the same `assert_sheet_matches` call the
+write path makes**, so the banner cannot say "matched" while `/size`
+refuses. A config or database failure renders a loud banner rather than
+a 500 (a sheet that will not paint is a sheet he cannot trade beside),
+and because every write re-checks, a degraded banner can never let a
+card through.
+
+An attestation `<select>` lists the real DAS filenames and posts to
+`/attest`.
+
+### `POST /size` — two F6 refusals, both before any write
+The day mode is resolved *before* parsing (the parse needs the sheet),
+but the **refusals run after `compute_sizing`** so a typo'd stop still
+reports as a typo'd stop rather than hiding behind a hotkey complaint.
+Nothing is persisted at that point, so a refusal leaves no row and no
+note to unwind. Both refusals are logged.
+
+### `POST /card/{id}/move` and `/card/{id}/stop`
+Every button in the open-cards list is rendered **from `cards.ALLOWED`**,
+so no illegal button can be drawn and no legal edge can be missing.
+`MISSED` and `DISARM` prompt for their required reason client-side
+(mirroring `store._assert_reason`) rather than posting an empty field
+and reading a refusal.
+
+`/card/{id}/stop` writes **no transition row** (decision 11) — the edit
+rides in the next transition's evidence. The amber `YOURS` badge shows
+in `WATCH`/`FILLED`; every other state renders the 🔒 lock and says why.

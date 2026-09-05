@@ -27,7 +27,17 @@ config-boundary convention (`configs/cobalt/taxonomy/`). Extended
 `market_reset` hard block and its counter table, and the `cobalt
 session` CLI; a fourth sibling component, and the first one every other
 component now depends on (the vault writer and the ASET sheet both gate
-on it, and both stores stamp its answer).
+on it, and both stores stamp its answer). Extended 2026-09-04
+(Sprint 1, S1-P2) to cover **the F7 card state machine**
+(`src/cobalt/cards/`) — the edge table as data, the transition ledger,
+the stop-edit side-table and the 16:05 expiry job — and **F6's two-stage
+day mode** (`src/cobalt/daymode/`) — the derived mode ladder, the
+`reduced`-is-a-role config pointer, the 09:00 proposal and the attested
+`.htk` match check. Both reshape existing pages rather than only adding
+new ones: `aset/store.py` now creates a card and its genesis state in
+one transaction and routes a fill through the machine, `aset/config.py`'s
+sheet modes became an ordered config list, and `aset/web.py` grew the
+day-mode banner and the per-card controls.
 
 ---
 
