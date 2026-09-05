@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.daymode-propose</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+        <!-- RULING 7 / Charter §8.4: every plist carries COBALT_ENV. -->
+        <key>COBALT_ENV</key>
+        <string>production</string>
+        <!-- The proposal READS the prior day's DRC note out of the vault
+             to build its reason (src/cobalt/daymode/drc.py). That is a
+             read, but it must be a read of the REAL vault, not the dev
+             skeleton — an absent note there would render as the literal
+             "no prior DRC" and quietly step the proposal down a rung. -->
+        <key>COBALT_VAULT_PATH</key>
+        <string>/Users/cobalt/Vault/Think</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- Absolute path — see the 2026-09-03 root cause noted in
+             com.cobalt.cards-expire.plist and com.cobalt.prefill-daily.plist:
+             launchd does not search the job's own PATH for argv[0]. -->
+        <string>/Users/cobalt/.local/bin/uv</string>
+        <string>run</string>
+        <string>cobalt</string>
+        <string>daymode</string>
+        <string>propose</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/cobalt/cobalt</string>
+    <key>AbandonProcessGroup</key>
+    <true/>
+    <!-- 09:00 ET, Mon-Fri — Charter M4, the day-mode checkpoint, and the
+         `daymode.stage2_open` tunable (09:00). The tunable is the value
+         the CODE reads for "is it stage 2 yet"; this schedule is when the
+         JOB fires. They are the same number in two places on purpose:
+         launchd cannot read a tunables row, so the plist is a mirror and
+         `cobalt validate` prints the tunable so a drift is visible.
+         A HOLIDAY NEEDS NO SPECIAL CASE: propose() returns None on any
+         non-trading day and writes no row at all (a weekend is not an
+         error condition), so the Mon-Fri schedule is safe as-is.
+         TODO (S1-P3): register this label in the `jobs` table (F17) with
+         its timeout and heartbeat stamp, so F18 reports it loaded and
+         non-zombie. Label to register: com.cobalt.daymode-propose. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/cobalt/logs/daymode-propose.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/cobalt/logs/daymode-propose.err</string>
+</dict>
+</plist>

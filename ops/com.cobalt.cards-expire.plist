@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.cards-expire</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+        <!-- RULING 7 / Charter §8.4: every plist carries COBALT_ENV. This
+             job moves LIVE card state, so it declares production and
+             writes cobalt_brain. Without this the store would refuse to
+             resolve a database at all (env.resolve_env() raises on unset)
+             rather than quietly defaulting to dev — which is the whole
+             point of the ruling. -->
+        <key>COBALT_ENV</key>
+        <string>production</string>
+        <!-- The expiry job touches Postgres only, never the vault. The
+             override is set anyway so that a future step which does write
+             a note cannot land in the dev vault by omission (NN#16). -->
+        <key>COBALT_VAULT_PATH</key>
+        <string>/Users/cobalt/Vault/Think</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- ABSOLUTE PATH, deliberately. Root-caused 2026-09-03: launchd
+             posix_spawn()s ProgramArguments[0] and does NOT search the
+             job's own PATH the way a shell does — a bare "uv" here
+             produced exit 78 (EX_CONFIG) with empty stdout and stderr,
+             which is exactly how the 05:15 prefill job failed silently.
+             Matches `which uv` on this machine. -->
+        <string>/Users/cobalt/.local/bin/uv</string>
+        <string>run</string>
+        <string>cobalt</string>
+        <string>cards</string>
+        <string>expire</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/cobalt/cobalt</string>
+    <key>AbandonProcessGroup</key>
+    <true/>
+    <!-- 16:05 ET, Mon-Fri (system TZ = ET, same assumption as the
+         archiver's 20:30 and the prefill jobs' 05:15).
+         WHY 16:05 AND NOT 16:00: the window a card is measured against
+         ENDS at 16:00 (session.rth_close), and the comparison is strict
+         (`et > deadline`) — firing exactly at the boundary would race
+         its own definition. Five minutes is slack, not a threshold.
+         EARLY-CLOSE DAYS ARE NOT A SPECIAL CASE. On a half day the RTH
+         close is 13:00 (session.early_close.rth_close), so a card is
+         already past its window by 13:00; this 16:05 run is simply the
+         first one after that and expires it then. The job resolves each
+         card against ITS OWN trading day, so nothing is missed and
+         nothing needs a second schedule — see src/cobalt/cards/expire.py.
+         TODO (S1-P3): register this label in the `jobs` table (F17), with
+         its timeout and heartbeat stamp, so F18 can report it as loaded
+         and non-zombie. Label to register: com.cobalt.cards-expire. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>5</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>5</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>5</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>5</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>5</integer></dict>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/cobalt/logs/cards-expire.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/cobalt/logs/cards-expire.err</string>
+</dict>
+</plist>
