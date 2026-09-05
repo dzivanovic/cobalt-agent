@@ -1,0 +1,63 @@
+# NYSE trading calendar — 2025. F1 session clock (Charter §3 F1).
+#
+# Schema: src/cobalt/session/calendar.py (CalendarYear / TradingCalendar).
+# Same shape and same laws as nyse-2026.yaml — one file per year, loaded
+# by glob, weekends derived and never listed, holiday/early-close TIMES
+# living in tunables.yaml (`session.early_close.*`) rather than here.
+# This file says WHICH days; tunables.yaml says WHAT TIME.
+#
+# WHY THIS FILE EXISTS NOW (S1-P2, 2026-09-04). S1-P1 closed with an
+# explicit carried item: "No nyse-2025.yaml, so session() over the 2025
+# third of the bars corpus raises CalendarError by design. Add the file
+# when a 2025 join is actually needed." F7's card backfill and F6's
+# prior-trading-day lookback both walk historical rows, and ADR-0007
+# left ~4.75M reinterpreted `bars` rows a third of which are 2025 — so
+# the year is now genuinely reachable and the fail-loud gap closes here.
+#
+# 2025 IS HISTORY, NOT A FORECAST. Unlike nyse-2026.yaml (whose dates
+# were derived and still carry Dejan's confirmation flag), every date
+# below is a settled, already-observed exchange fact.
+year: 2025
+
+holidays:
+  - date: 2025-01-01
+    name: New Year's Day
+  # NOT an annual holiday: a one-off full closure by exchange
+  # proclamation for President Carter's state funeral. It is exactly the
+  # kind of day a "weekday => trading day" fallback would silently get
+  # wrong, which is why calendar.py refuses to have such a fallback.
+  - date: 2025-01-09
+    name: National Day of Mourning (President Jimmy Carter)
+  - date: 2025-01-20
+    name: Martin Luther King Jr. Day
+  - date: 2025-02-17
+    name: Washington's Birthday (Presidents' Day)
+  - date: 2025-04-18
+    name: Good Friday
+  - date: 2025-05-26
+    name: Memorial Day
+  - date: 2025-06-19
+    name: Juneteenth National Independence Day
+  - date: 2025-07-04
+    name: Independence Day
+  - date: 2025-09-01
+    name: Labor Day
+  - date: 2025-11-27
+    name: Thanksgiving Day
+  - date: 2025-12-25
+    name: Christmas Day
+
+# Early closes ("half days"): RTH ends 13:00 ET and aftermarket 17:00 ET
+# per the session.early_close.* tunables. market_reset is NOT moved — the
+# archiver still runs at 20:30, so 17:00-20:00 falls through to overnight
+# by the ordinary boundary walk (see clock.py's module docstring).
+#
+# July 3 IS an early close in 2025 (unlike 2026): July 4 fell on a Friday,
+# so July 3 was a normal half day rather than the observed holiday itself.
+early_closes:
+  - date: 2025-07-03
+    name: Day before Independence Day
+  - date: 2025-11-28
+    name: Day after Thanksgiving
+  - date: 2025-12-24
+    name: Christmas Eve

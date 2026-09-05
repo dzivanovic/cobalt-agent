@@ -321,10 +321,16 @@ def test_shipped_calendar_matches_its_file(clock):
     """The config on disk IS the calendar — no hidden second copy."""
     from cobalt.session.calendar import CALENDAR_DIR
 
-    raw = yaml.safe_load((CALENDAR_DIR / "nyse-2026.yaml").read_text())
-    assert clock.calendar.covered_years == [2026]
-    assert clock.calendar.holiday_count == len(raw["holidays"])
-    assert clock.calendar.early_close_count == len(raw["early_closes"])
+    # Every shipped year, not a hardcoded one: S1-P2 added nyse-2025.yaml
+    # (S1-P1 carried it as an open item — `session()` over the 2025 third
+    # of the bars corpus used to raise CalendarError by design). The
+    # assertion is now "the loader's totals equal the files' totals",
+    # which stays true as years are added.
+    files = sorted(CALENDAR_DIR.glob("nyse-*.yaml"))
+    years = [yaml.safe_load(f.read_text()) for f in files]
+    assert clock.calendar.covered_years == sorted(y["year"] for y in years)
+    assert clock.calendar.holiday_count == sum(len(y["holidays"]) for y in years)
+    assert clock.calendar.early_close_count == sum(len(y["early_closes"]) for y in years)
 
 
 # ---------------------------------------------------------------------
