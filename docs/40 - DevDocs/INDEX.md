@@ -37,7 +37,17 @@ day mode** (`src/cobalt/daymode/`) — the derived mode ladder, the
 new ones: `aset/store.py` now creates a card and its genesis state in
 one transaction and routes a fill through the machine, `aset/config.py`'s
 sheet modes became an ordered config list, and `aset/web.py` grew the
-day-mode banner and the per-card controls.
+day-mode banner and the per-card controls. Extended 2026-09-04 (Sprint 1, S1-P3) with the
+**firewall layer** — three sibling components that watch everything
+above rather than adding to it: **F19's exfiltration guard**
+(`src/cobalt/redact/`), one function on every outbound channel;
+**F17's task integrity** (`src/cobalt/jobs/`), a persisted row with a
+state, a timeout and a heartbeat per launchd job, plus the kill phrase;
+and **F18's heartbeat host** (`src/cobalt/heartbeat/`) with its outbound
+channel (`src/cobalt/notify/`). S1-P3 also reshaped
+`daymode/config.py` (the `.htk` names and the step-down rules are now
+derived/config), added `daymode/note.py` (the daily note's sheet-mode
+line, both ways) and `cards/store.py`'s one-click fill.
 
 ---
 
