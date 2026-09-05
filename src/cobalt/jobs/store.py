@@ -1,4 +1,10 @@
-"""F17 persistence: the `jobs` row, and the kill switch behind it.
+"""F17 persistence: the `cobalt_jobs` row, and the kill switch behind it.
+
+THE TABLE IS `cobalt_jobs`, NOT `jobs`. `cobalt_brain` is the same
+Postgres database Mattermost runs in, and Mattermost owns a `jobs` table
+with 164,320 rows — see the note at the head of
+`migrations/0001_cobalt_jobs.sql` for how that was found and why only the
+tables introduced by this prompt carry the prefix.
 
 Database from `COBALT_ENV` via `env.resolve_db_name()` (RULING 7/9);
 `db_name` is the test/tooling seam only.
@@ -58,7 +64,7 @@ class JobStore:
         an operator looks at first."""
         with self._connect(allow_prod=allow_prod) as conn:
             conn.execute(
-                "INSERT INTO jobs (label, kind, expected_cadence, timeout_s, "
+                "INSERT INTO cobalt_jobs (label, kind, expected_cadence, timeout_s, "
                 "heartbeat_source) VALUES (%s, %s, %s, %s, %s) "
                 "ON CONFLICT (label) DO UPDATE SET kind = EXCLUDED.kind, "
                 "expected_cadence = EXCLUDED.expected_cadence, "
@@ -83,7 +89,7 @@ class JobStore:
 
     def get(self, label: str) -> Optional[dict[str, Any]]:
         with self._connect() as conn:
-            cur = conn.execute("SELECT * FROM jobs WHERE label = %s", (label,))
+            cur = conn.execute("SELECT * FROM cobalt_jobs WHERE label = %s", (label,))
             row = cur.fetchone()
             if row is None:
                 return None
@@ -91,7 +97,7 @@ class JobStore:
 
     def all(self) -> list[dict[str, Any]]:
         with self._connect() as conn:
-            cur = conn.execute("SELECT * FROM jobs ORDER BY kind DESC, label")
+            cur = conn.execute("SELECT * FROM cobalt_jobs ORDER BY kind DESC, label")
             columns = [d.name for d in cur.description]
             return [dict(zip(columns, r)) for r in cur.fetchall()]
 
@@ -101,7 +107,7 @@ class JobStore:
         ts = now or clock_mod.now_utc()
         with self._connect() as conn:
             cur = conn.execute(
-                "UPDATE jobs SET state = %s, started_at = %s, heartbeat_at = %s, "
+                "UPDATE cobalt_jobs SET state = %s, started_at = %s, heartbeat_at = %s, "
                 "finished_at = NULL, exit_code = NULL, last_error = NULL, "
                 "updated_at = now() WHERE label = %s",
                 (JobState.RUNNING.value, ts, ts, label),
@@ -118,7 +124,7 @@ class JobStore:
         from a hung one."""
         with self._connect() as conn:
             conn.execute(
-                "UPDATE jobs SET heartbeat_at = %s, updated_at = now() WHERE label = %s",
+                "UPDATE cobalt_jobs SET heartbeat_at = %s, updated_at = now() WHERE label = %s",
                 (now or clock_mod.now_utc(), label),
             )
 
@@ -145,7 +151,7 @@ class JobStore:
             safe_error = redact(error, channel="jobs.last_error").text
         with self._connect() as conn:
             conn.execute(
-                "UPDATE jobs SET state = %s, finished_at = %s, heartbeat_at = %s, "
+                "UPDATE cobalt_jobs SET state = %s, finished_at = %s, heartbeat_at = %s, "
                 "exit_code = %s, last_error = %s, last_result = %s, updated_at = now() "
                 "WHERE label = %s",
                 (
@@ -165,7 +171,7 @@ class JobStore:
 
         with self._connect() as conn:
             conn.execute(
-                "UPDATE jobs SET state = %s, last_error = %s, updated_at = now() "
+                "UPDATE cobalt_jobs SET state = %s, last_error = %s, updated_at = now() "
                 "WHERE label = %s",
                 (JobState.ZOMBIE.value, redact(reason, channel="jobs.last_error").text, label),
             )
@@ -193,13 +199,13 @@ class JobStore:
         with self._connect() as conn:
             if alive:
                 conn.execute(
-                    "UPDATE jobs SET state = %s, heartbeat_at = %s, last_error = NULL, "
+                    "UPDATE cobalt_jobs SET state = %s, heartbeat_at = %s, last_error = NULL, "
                     "updated_at = now() WHERE label = %s",
                     (JobState.RUNNING.value, ts, label),
                 )
             else:
                 conn.execute(
-                    "UPDATE jobs SET state = %s, last_error = %s, updated_at = now() "
+                    "UPDATE cobalt_jobs SET state = %s, last_error = %s, updated_at = now() "
                     "WHERE label = %s",
                     (JobState.FAILED.value, safe, label),
                 )
@@ -208,7 +214,7 @@ class JobStore:
 
     def kill_switch(self) -> dict[str, Any]:
         with self._connect() as conn:
-            cur = conn.execute("SELECT * FROM kill_switch WHERE id = TRUE")
+            cur = conn.execute("SELECT * FROM cobalt_kill_switch WHERE id = TRUE")
             row = cur.fetchone()
             if row is None:
                 return {"active": False}
@@ -222,13 +228,13 @@ class JobStore:
         with self._connect() as conn:
             if active:
                 conn.execute(
-                    "UPDATE kill_switch SET active = TRUE, phrase = %s, set_by = %s, "
+                    "UPDATE cobalt_kill_switch SET active = TRUE, phrase = %s, set_by = %s, "
                     "set_at = %s, cleared_by = NULL, cleared_at = NULL WHERE id = TRUE",
                     (phrase, by, ts),
                 )
             else:
                 conn.execute(
-                    "UPDATE kill_switch SET active = FALSE, cleared_by = %s, "
+                    "UPDATE cobalt_kill_switch SET active = FALSE, cleared_by = %s, "
                     "cleared_at = %s WHERE id = TRUE",
                     (by, ts),
                 )
@@ -238,7 +244,7 @@ class JobStore:
 
     def counts_by_state(self) -> dict[str, int]:
         with self._connect() as conn:
-            cur = conn.execute("SELECT state, count(*) FROM jobs GROUP BY 1")
+            cur = conn.execute("SELECT state, count(*) FROM cobalt_jobs GROUP BY 1")
             return {r[0]: int(r[1]) for r in cur.fetchall()}
 
     def last_result(self, label: str) -> Optional[dict[str, Any]]:

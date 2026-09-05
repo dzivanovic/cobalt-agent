@@ -21,6 +21,7 @@ What is proven, in order:
 
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
@@ -504,3 +505,36 @@ class TestMissedStartsWhenWatchingStarts:
         row = {"finished_at": None, "registered_at": self.NOW - timedelta(days=3)}
         missed, detail = is_missed(spec, row, now_et=self.NOW, grace=timedelta(minutes=30))
         assert missed and "NEVER" in detail
+
+
+class TestTheTableNameIsCollisionProof:
+    """`cobalt_brain` is the SAME Postgres database Mattermost runs in —
+    129 tables, 116 of them Mattermost's — and one of those is `jobs`,
+    with 164,320 rows.
+
+    `CREATE TABLE IF NOT EXISTS jobs` therefore did nothing at all, and
+    the first production dry run failed with `column "label" does not
+    exist`. Fail-loud is what turned a week of green heartbeats reporting
+    on Mattermost's work queue into a ten-second diagnosis.
+    """
+
+    def test_the_migration_names_the_prefixed_tables(self):
+        from cobalt.jobs.store import MIGRATIONS_DIR
+
+        sql = "\n".join(p.read_text() for p in MIGRATIONS_DIR.glob("*.sql"))
+        assert "CREATE TABLE IF NOT EXISTS cobalt_jobs" in sql
+        assert "CREATE TABLE IF NOT EXISTS cobalt_kill_switch" in sql
+        assert "CREATE TABLE IF NOT EXISTS jobs (" not in sql
+        assert "CREATE TABLE IF NOT EXISTS kill_switch (" not in sql
+
+    def test_no_query_in_the_store_names_the_bare_tables(self):
+        import re
+
+        from cobalt.jobs import store as store_mod
+
+        source = Path(store_mod.__file__).read_text()
+        for bare in (r"\bFROM jobs\b", r"\bINTO jobs\b", r"\bUPDATE jobs\b",
+                     r"\bFROM kill_switch\b", r"\bUPDATE kill_switch\b"):
+            assert not re.search(bare, source), (
+                f"{bare} would hit Mattermost's table in cobalt_brain"
+            )

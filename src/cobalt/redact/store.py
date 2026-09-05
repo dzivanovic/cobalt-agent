@@ -5,6 +5,10 @@ and nothing else. There is no column that could hold a secret, which is
 deliberate: the table is queried by whoever is debugging an alert, and a
 schema with nowhere to put a value cannot leak one by accident.
 
+The table is `cobalt_redactions`, prefixed for the reason recorded in
+`jobs/migrations/0001_cobalt_jobs.sql`: `cobalt_brain` shares its
+database with Mattermost's 116 tables.
+
 Database from `COBALT_ENV` via `env.resolve_db_name()` (RULING 7/9).
 """
 
@@ -43,7 +47,7 @@ class RedactionStore:
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.executemany(
-                    "INSERT INTO redactions (channel, pattern, hits) VALUES (%s, %s, %s)",
+                    "INSERT INTO cobalt_redactions (channel, pattern, hits) VALUES (%s, %s, %s)",
                     rows,
                 )
 
@@ -51,14 +55,14 @@ class RedactionStore:
         """Total redacted secrets since `since` — the heartbeat's number."""
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT coalesce(sum(hits), 0) FROM redactions WHERE ts >= %s", (since,)
+                "SELECT coalesce(sum(hits), 0) FROM cobalt_redactions WHERE ts >= %s", (since,)
             ).fetchone()
         return int(row[0]) if row else 0
 
     def by_pattern_since(self, since: datetime) -> list[tuple[str, str, int]]:
         with self._connect() as conn:
             cur = conn.execute(
-                "SELECT channel, pattern, sum(hits) FROM redactions WHERE ts >= %s "
+                "SELECT channel, pattern, sum(hits) FROM cobalt_redactions WHERE ts >= %s "
                 "GROUP BY 1, 2 ORDER BY 3 DESC",
                 (since,),
             )
@@ -67,7 +71,7 @@ class RedactionStore:
     def recent(self, limit: int = 20) -> list[dict[str, Any]]:
         with self._connect() as conn:
             cur = conn.execute(
-                "SELECT id, ts, channel, pattern, hits FROM redactions "
+                "SELECT id, ts, channel, pattern, hits FROM cobalt_redactions "
                 "ORDER BY id DESC LIMIT %s",
                 (limit,),
             )
