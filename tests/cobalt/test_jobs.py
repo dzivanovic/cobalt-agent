@@ -538,3 +538,96 @@ class TestTheTableNameIsCollisionProof:
             assert not re.search(bare, source), (
                 f"{bare} would hit Mattermost's table in cobalt_brain"
             )
+
+
+@requires_db
+@pytest.mark.integration
+class TestEveryPlistMustBeLoaded:
+    """Charter §3 F18: "every ops plist loaded + last exit code", and its
+    acceptance test: "unload a plist -> red within one interval".
+
+    THIS CHECK WAS MISSING from the first version of the watchdog, and
+    running the Charter's own test for real is what found it. Only
+    RESIDENTS were probed against launchd; a one-shot's row was judged on
+    its state and its schedule alone. So `launchctl bootout
+    com.cobalt.cards-expire` left the heartbeat perfectly green: a
+    one-shot between runs looks identical whether its plist is loaded or
+    gone — it has no PID to lose and no state to change, it simply never
+    fires again. MISSED would not have said so until its next scheduled
+    time plus the grace, which for a Friday-evening unload is Monday.
+    """
+
+    @pytest.fixture
+    def registry(self):
+        return JobRegistry(
+            jobs=[_spec(label="com.cobalt.cards-expire")],
+            kill_phrase="STOP", resume_phrase="GO",
+        )
+
+    @pytest.fixture
+    def store(self, registry):
+        store = JobStore()
+        store.ensure_schema()
+        store.register(registry.jobs[0])
+        return store
+
+    def _sweep(self, store, registry, monkeypatch, *, loaded, last_exit=0):
+        from cobalt.jobs import watchdog
+
+        monkeypatch.setattr(
+            watchdog, "launchctl_status",
+            lambda label, **kw: watchdog.LaunchdStatus(
+                label, loaded, None, last_exit if loaded else None,
+                "loaded, not running (last exit 0)" if loaded else "NOT LOADED in launchd",
+            ),
+        )
+        return {f.label: f for f in watchdog.sweep(store=store, registry=registry)}
+
+    def test_an_unloaded_one_shot_is_red(self, store, registry, monkeypatch):
+        finding = self._sweep(store, registry, monkeypatch, loaded=False)["com.cobalt.cards-expire"]
+        assert not finding.ok
+        assert finding.state == "not loaded"
+        assert "NOT LOADED" in finding.detail
+
+    def test_a_loaded_one_shot_reports_launchds_last_exit_code(self, store, registry, monkeypatch):
+        finding = self._sweep(store, registry, monkeypatch, loaded=True, last_exit=78)[
+            "com.cobalt.cards-expire"
+        ]
+        assert finding.ok
+        assert "last exit 78" in finding.detail, (
+            "Charter §3 F18 asks for the last exit code, and 78 (EX_CONFIG) is the "
+            "exact signature of the 09-03 silent prefill failures"
+        )
+
+    def test_an_unloaded_one_shot_does_not_overwrite_its_last_run(
+        self, store, registry, monkeypatch
+    ):
+        """A one-shot's row is the record of its LAST RUN. 'The plist is
+        gone' is a fact about launchd — writing it into `state` and
+        `exit_code` destroys the only record of how the job last ended,
+        and leaves a stale `failed` behind after the plist is reloaded.
+        That happened on the first live run of this test."""
+        store.mark_finished("com.cobalt.cards-expire", exit_code=0)
+
+        self._sweep(store, registry, monkeypatch, loaded=False)
+        row = store.get("com.cobalt.cards-expire")
+        assert row["state"] == JobState.DONE.value
+        assert row["exit_code"] == 0
+
+        # ...and reloading returns it to green with no repair needed.
+        finding = self._sweep(store, registry, monkeypatch, loaded=True)["com.cobalt.cards-expire"]
+        assert finding.ok
+
+    def test_a_broken_launchd_probe_is_red_not_green(self, store, registry, monkeypatch):
+        """UNKNOWN is red. A heartbeat that says green when it could not
+        look is worse than no heartbeat."""
+        from cobalt.jobs import watchdog
+
+        def _boom(label, **kw):
+            raise RuntimeError("launchctl is not available")
+
+        monkeypatch.setattr(watchdog, "launchctl_status", _boom)
+        finding = {f.label: f for f in watchdog.sweep(store=store, registry=registry)}[
+            "com.cobalt.cards-expire"
+        ]
+        assert not finding.ok and "UNKNOWN" in finding.detail

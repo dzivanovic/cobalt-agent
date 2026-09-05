@@ -77,15 +77,39 @@ def _tunable_int(key: str) -> int:
 # ---------------------------------------------------------------------
 
 
-def launchctl_pid(label: str, *, timeout: float = 5.0) -> tuple[Optional[int], str]:
-    """(pid, detail) from `launchctl list`. `None` = loaded-but-not-running
-    or not loaded at all, and the detail says which.
+@dataclass(frozen=True)
+class LaunchdStatus:
+    """What `launchctl list` knows about one label.
 
-    Fail-loud: a `launchctl` that cannot be run RAISES rather than
-    reporting "not running". "The probe is broken" and "the job is down"
-    are different facts and collapsing them is how a red condition
-    becomes invisible — the same rule `cobalt.obsidian` keeps.
+    THREE DISTINCT ANSWERS, and conflating any two of them is how a red
+    condition goes unseen:
+
+    * `loaded=False` — launchd has never heard of this label. For a
+      one-shot this is the ONLY failure mode that exists between runs:
+      it has no PID to lose and no state to change, it simply will never
+      fire again. Charter §3 F18's acceptance test is exactly this
+      ("unload a plist -> red within one interval").
+    * `loaded=True, pid=None` — registered with launchd, not currently
+      running. Correct and healthy for a one-shot between runs; a
+      FAILURE for a resident.
+    * `last_exit` — launchd's own record of how the last run ended,
+      which is the other half of what the Charter asks for ("every ops
+      plist loaded + last exit code").
     """
+
+    label: str
+    loaded: bool
+    pid: Optional[int]
+    last_exit: Optional[int]
+    detail: str
+
+
+def launchctl_status(label: str, *, timeout: float = 5.0) -> LaunchdStatus:
+    """Ask launchd about one label. Fail-loud: a `launchctl` that cannot
+    be run RAISES rather than reporting "not loaded" — "the probe is
+    broken" and "the job is gone" are different facts, and collapsing
+    them is how a red condition becomes invisible (the same rule
+    `cobalt.obsidian` keeps)."""
     binary = shutil.which("launchctl") or "/bin/launchctl"
     if not os.path.exists(binary):
         raise RuntimeError("launchctl not found — cannot probe launchd jobs.")
@@ -101,13 +125,30 @@ def launchctl_pid(label: str, *, timeout: float = 5.0) -> tuple[Optional[int], s
         parts = line.split("\t")
         if len(parts) == 3 and parts[2].strip() == label:
             pid_raw, status_raw = parts[0].strip(), parts[1].strip()
-            if pid_raw.isdigit():
-                return int(pid_raw), f"launchd pid {pid_raw}"
-            return None, (
-                f"loaded but NOT RUNNING (last exit {status_raw}) — launchctl "
-                "shows no pid"
+            pid = int(pid_raw) if pid_raw.lstrip("-").isdigit() and pid_raw != "-" else None
+            try:
+                last_exit = int(status_raw)
+            except ValueError:
+                last_exit = None
+            detail = (
+                f"loaded, pid {pid}" if pid is not None
+                else f"loaded, not running (last exit {status_raw})"
             )
-    return None, "NOT LOADED in launchd — `launchctl list` does not know this label"
+            return LaunchdStatus(label, True, pid, last_exit, detail)
+    return LaunchdStatus(
+        label, False, None, None,
+        "NOT LOADED in launchd — `launchctl list` does not know this label, so it "
+        "will never fire again. Reload it: "
+        f"launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/{label}.plist",
+    )
+
+
+def launchctl_pid(label: str, *, timeout: float = 5.0) -> tuple[Optional[int], str]:
+    """(pid, detail). Kept as the narrow question residents ask."""
+    status = launchctl_status(label, timeout=timeout)
+    if status.pid is not None:
+        return status.pid, f"launchd pid {status.pid}"
+    return None, status.detail
 
 
 def pidfile_alive(spec: JobSpec) -> tuple[bool, str]:
@@ -258,6 +299,45 @@ def sweep(
 
     for spec in registry.jobs:
         row = rows.get(spec.label)
+
+        # -- IS THE PLIST EVEN LOADED? Charter §3 F18: "every ops plist
+        # loaded + last exit code". Asked of EVERY job, resident and
+        # one-shot alike, and asked FIRST.
+        #
+        # This check was missing from the first version of this function,
+        # and running the Charter's own acceptance test for real is what
+        # found it: `launchctl bootout com.cobalt.cards-expire` and the
+        # heartbeat stayed green, because a one-shot between runs looks
+        # identical whether its plist is loaded or gone. An unloaded
+        # one-shot has no PID to lose and no state to change — it simply
+        # never fires again, and MISSED would not say so until its next
+        # scheduled time plus the grace, which for a Friday-evening
+        # unload is Monday.
+        if probe:
+            try:
+                status = launchctl_status(spec.label)
+            except Exception as e:  # noqa: BLE001
+                findings.append(
+                    Finding(spec.label, False, (row or {}).get("state", "unknown"),
+                            f"launchd PROBE FAILED ({type(e).__name__}: {e}) — loaded "
+                            "state UNKNOWN, which is not the same as loaded")
+                )
+                continue
+            if not status.loaded:
+                # A RESIDENT's row IS its liveness, so it is marked. A
+                # ONE-SHOT's row is the record of its LAST RUN, and
+                # "the plist is gone" is a fact about launchd, not about
+                # that run — overwriting `state` and `exit_code` with it
+                # would destroy the only record of how the job last
+                # ended, and leave a stale `failed` behind after the
+                # plist is reloaded (which is exactly what happened the
+                # first time this ran: reload restored the plist and the
+                # row still said failed). It is reported, not written.
+                if row is not None and spec.kind is JobKind.RESIDENT:
+                    store.mark_probe(spec.label, alive=False, detail=status.detail, now=ts)
+                findings.append(Finding(spec.label, False, "not loaded", status.detail))
+                continue
+
         if row is None:
             store.register(spec)
             findings.append(
@@ -273,8 +353,8 @@ def sweep(
                 continue
             try:
                 if spec.supervisor is Supervisor.LAUNCHD:
-                    pid, detail = launchctl_pid(spec.label)
-                    alive = pid is not None
+                    alive = status.pid is not None
+                    detail = status.detail
                 else:
                     alive, detail = pidfile_alive(spec)
             except Exception as e:  # noqa: BLE001 - a broken probe is its own red
@@ -333,6 +413,10 @@ def sweep(
                 findings.append(Finding(spec.label, False, f"{state} (MISSED)", detail))
                 continue
 
+        launchd_note = (
+            f" · launchd: loaded, last exit {status.last_exit}"
+            if probe and status.last_exit is not None else " · launchd: loaded"
+        ) if probe else ""
         findings.append(
             Finding(
                 spec.label, True, state,
@@ -340,7 +424,7 @@ def sweep(
                     f"last finish {session_clock().to_et(row['finished_at']):%Y-%m-%d %H:%M} ET"
                     f", exit {row['exit_code']}"
                     if row["finished_at"] else "never run yet (registered, not yet due)"
-                ),
+                ) + launchd_note,
             )
         )
 
@@ -354,6 +438,8 @@ def red(findings: list[Finding]) -> list[Finding]:
 __all__ = [
     "MISSED_GRACE_KEY",
     "Finding",
+    "LaunchdStatus",
+    "launchctl_status",
     "is_missed",
     "last_due",
     "launchctl_pid",

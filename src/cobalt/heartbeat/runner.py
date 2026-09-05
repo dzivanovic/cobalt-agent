@@ -214,7 +214,11 @@ def run_beat(*, now: Optional[datetime] = None, dry_run: bool = False, probe: bo
     if write is None:
         beat.notes.append("Daily note: NOT WRITTEN — today's note does not exist yet.")
     else:
-        beat.notes.append(f"Daily note: {write.action} (write_id {write.write_id}).")
+        # L28.4: the unified diff goes in the RUN REPORT, every time. The
+        # heartbeat writes to the live vault every 15 minutes; a write
+        # path that reported only "updated" would be the one write path
+        # in this codebase whose changes nobody could read back.
+        beat.notes.append(write.report())
 
     sent_green = False
     if dry_run:

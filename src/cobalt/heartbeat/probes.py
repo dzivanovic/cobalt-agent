@@ -136,6 +136,20 @@ def archiver_freshness(store=None, now: Optional[datetime] = None) -> Probe:
         return Probe("archiver", False, "no jobs row — not registered")
     finished = row["finished_at"]
     if finished is None:
+        # SAME DAY-ONE RULE AS THE MISSED PROBE. The archiver has run
+        # every night for weeks; what it has never done is run while this
+        # table existed to notice. Calling that red would DM a false
+        # alarm every 15 minutes until tomorrow night's run, and an alert
+        # that is wrong on day one is one people learn to scroll past.
+        # It goes red the moment a real window passes with no run.
+        registered = row["registered_at"]
+        if registered is not None and ts - registered <= max_age:
+            return Probe(
+                "archiver", True,
+                f"registered {registered:%Y-%m-%d %H:%M} UTC; no run OBSERVED yet — "
+                "the job row is younger than one archiver window, so there has not "
+                "been a run for it to have missed",
+            )
         return Probe("archiver", False, "has never completed a run")
     age = ts - finished
     result = row["last_result"] or {}
