@@ -34,6 +34,29 @@ names both sides and both ways out:
 The attestation is a weaker guarantee than a read, and it is labelled as
 one everywhere it surfaces (the sheet says "attested, not read"). It is
 strictly stronger than a checkbox nobody reads.
+
+WHAT THE CTO REVIEW OF S1-P2 CHANGED (2026-09-04). The attestation used
+to be compared MODE to MODE, against a hand-written `file -> mode` list
+in config that included an invented `reduced_day.htk`. But a `.htk` is a
+KEY TABLE, and a key table is a SHEET — `reduced` is a ROLE a sheet
+plays, and it never had a file of its own. So the comparison is now
+SHEET to SHEET:
+
+    sheet he says he loaded   ==   cfg.sheet_for(mode in force)
+
+and the file names are derived from the declared sheets
+(`daymode.hotkey_file_template`), so the selector can only ever offer him
+a file that corresponds to a real key table. Today `reduced` sizes from
+`half`, so `half.htk` is the matching attestation and `full.htk` is the
+refusal — which is the same trading answer as before, reached without a
+name nobody could trace back to a config row.
+
+SECOND SOURCE, SAME ANSWER (S1-P3). The daily note carries the same
+attestation as a Cobalt-owned unit with one checkbox per sheet
+(`cobalt.daymode.note`). A box he ticks there IS an attestation and is
+read back at the next sheet request; if the note and the stored
+attestation disagree, `note.py` refuses with both shown rather than
+picking one.
 """
 
 from __future__ import annotations
@@ -60,44 +83,38 @@ def assert_sheet_matches(
     *,
     cfg: Optional[DayModeConfig] = None,
 ) -> str:
-    """Refuse unless the attested file's mode IS the mode in force.
+    """Refuse unless the attested file's SHEET is the sheet in force.
 
     Returns the attested filename on success. Raises `SheetMismatch`
-    when he has attested a different rung — and ALSO when he has
+    when he has attested a different key table — and ALSO when he has
     attested nothing at all, because "no attestation" is not the same as
     "it matches": an unstated hotkey file is exactly the state in which a
     full-size key gets pressed on a reduced-size day.
     """
     cfg = cfg or load_daymode_config()
     attested = (row or {}).get("attested_sheet")
-    expected = _expected_file(cfg, mode)
+    expected_sheet = cfg.sheet_for(mode)
+    expected = cfg.hotkey_file_for_sheet(expected_sheet)
 
     if not attested:
         raise SheetMismatch(
             "No hotkey file attested for today. Cobalt cannot read DAS (it never "
             "touches a trading platform) — say which .htk you have loaded before "
-            f"writing a card. Day mode is {mode.upper()}; the matching file is "
-            f"{expected}.",
+            f"writing a card. Day mode is {mode.upper()} (= the "
+            f"{expected_sheet.upper()} sheet); the matching file is {expected}.",
             attested=None,
             mode=mode,
         )
 
-    attested_mode = cfg.mode_for_hotkey_file(attested)
-    if attested_mode != mode:
+    attested_sheet = cfg.sheet_for_hotkey_file(attested)
+    if attested_sheet != expected_sheet:
         raise SheetMismatch(
-            f"sheet {attested_mode.upper()} loaded, day mode {mode.upper()} — "
-            f"reload {expected} or overrule",
+            f"sheet {attested_sheet.upper()} loaded, day mode {mode.upper()} "
+            f"(= the {expected_sheet.upper()} sheet) — reload {expected} or overrule",
             attested=attested,
             mode=mode,
         )
     return attested
-
-
-def _expected_file(cfg: DayModeConfig, mode: str) -> str:
-    for entry in cfg.hotkey_files:
-        if entry.mode == mode:
-            return entry.file
-    return f"(no .htk declared for mode {mode!r} in configs/cobalt/daymode.yaml)"
 
 
 def assert_grade_allowed(
@@ -106,10 +123,12 @@ def assert_grade_allowed(
     """Refuse a key outside the rung's grade ladder (F6/F10).
 
     The reduced rung narrows the account ladder to
-    `daymode.reduced_enabled_grades` (today `[B]`). An A key on the
-    reduced rung is not a smaller A — it is a key he has decided not to
-    press today, so it is refused with the reason on screen rather than
-    silently resized.
+    `daymode.reduced_enabled_grades` (today `[A, B]` — re-ruled by the
+    CTO review of S1-P2: the reduced rung is a SIZE rung, not a grade
+    ban). A key outside the rung's ladder is not a smaller version of
+    itself — it is a key he has decided not to press today, so it is
+    refused with the reason on screen rather than silently resized. A+
+    stays refused because the ACCOUNT ladder does not enable it.
     """
     cfg = cfg or load_daymode_config()
     allowed = cfg.enabled_grades_for(mode)

@@ -64,27 +64,42 @@ def _sheets(order=("half", "full")) -> SheetModesConfig:
     )
 
 
+#: The step-down table the shipped config carries, as the tests need it
+#: — built from `SIGNAL_IDS` so a new signal cannot be added to the code
+#: without this helper (and therefore every test) noticing.
+_STEPDOWNS = [
+    {"signal": "daily_stop_hit", "effect": "floor",
+     "because": "daily stop hit on the prior trading day"},
+    {"signal": "no_prior_drc", "effect": "down", "rungs": 1,
+     "because": "no prior DRC"},
+    {"signal": "drc_not_informative", "effect": "down", "rungs": 1,
+     "because": "prior DRC exists but no headline field is filled"},
+    {"signal": "early_close_today", "effect": "down", "rungs": 1,
+     "because": "early close today"},
+    {"signal": "first_session_after_close", "effect": "down", "rungs": 1,
+     "because": "first session after a multi-day close"},
+    {"signal": "trade_count_band_placeholder", "effect": "floor",
+     "because": "trade_count_band is PLACEHOLDER (unruled)"},
+]
+
+
 def _cfg(
     *,
     reduced_sheet="half",
     enabled_modes=("reduced",),
-    reduced_grades=(Grade.B,),
+    reduced_grades=(Grade.A, Grade.B),
     order=("half", "full"),
-    hotkeys=None,
+    hotkey_template="{sheet}.htk",
+    stepdowns=None,
 ) -> DayModeConfig:
     """A DayModeConfig built exactly the way the loader builds it."""
-    if hotkeys is None:
-        hotkeys = [
-            {"file": "full.htk", "mode": "full"},
-            {"file": "half.htk", "mode": "half"},
-            {"file": "reduced_day.htk", "mode": "reduced"},
-        ]
     sheets = _sheets(order)
     return DayModeConfig(
         reduced_sheet=reduced_sheet,
         reduced_enabled_grades=list(reduced_grades),
         enabled_modes=list(enabled_modes),
-        hotkey_files=hotkeys,
+        hotkey_file_template=hotkey_template,
+        stepdowns=[dict(s) for s in (stepdowns or _STEPDOWNS)],
         sheet_order=list(sheets.order),
         account_enabled_grades=list(sheets.enabled_grades),
     )
@@ -104,8 +119,21 @@ class TestShippedConfig:
         assert cfg.enabled_modes == ["reduced"]
         assert cfg.lowest_enabled == "reduced"
         assert cfg.sheet_for("reduced") == "half", "reduced is a ROLE; half plays it today"
-        assert [g.value for g in cfg.enabled_grades_for("reduced")] == ["B"]
-        assert cfg.hotkey_file_names == ["full.htk", "half.htk", "reduced_day.htk"]
+        # RE-RULED by the CTO review of S1-P2: the reduced rung is a SIZE
+        # rung, not a grade ban. A is taken at reduced size; A+ is out
+        # because the ACCOUNT ladder does not enable it.
+        assert [g.value for g in cfg.enabled_grades_for("reduced")] == ["A", "B"]
+        # DERIVED from the declared sheets, in ladder order — no
+        # hand-named file, and no `reduced_day.htk` (a name that
+        # corresponded to no key table in configs/cobalt/aset.yaml).
+        assert cfg.hotkey_file_names == ["half.htk", "full.htk"]
+        assert cfg.hotkey_file_for_mode("reduced") == "half.htk"
+
+    def test_every_computable_signal_is_ruled_in_the_table(self):
+        from cobalt.daymode.config import SIGNAL_IDS, load_daymode_config
+
+        cfg = load_daymode_config()
+        assert sorted(r.signal for r in cfg.stepdowns) == sorted(SIGNAL_IDS)
 
     def test_sheets_are_an_ordered_list_not_a_hardcoded_pair(self):
         from cobalt.aset.config import load_sheet_modes_config
@@ -129,16 +157,7 @@ class TestReducedIsARoleNotASheet:
         today = _cfg()
         assert today.sheet_for(REDUCED) == "half"
 
-        tomorrow = _cfg(
-            order=("quarter", "half", "full"),
-            reduced_sheet="quarter",
-            hotkeys=[
-                {"file": "full.htk", "mode": "full"},
-                {"file": "half.htk", "mode": "half"},
-                {"file": "quarter.htk", "mode": "quarter"},
-                {"file": "reduced_day.htk", "mode": "reduced"},
-            ],
-        )
+        tomorrow = _cfg(order=("quarter", "half", "full"), reduced_sheet="quarter")
         assert tomorrow.modes == ["reduced", "quarter", "half", "full"]
         assert tomorrow.sheet_for(REDUCED) == "quarter"
         assert stage1_mode(tomorrow) == "reduced"
@@ -149,17 +168,34 @@ class TestReducedIsARoleNotASheet:
         quarter = _cfg(
             order=("quarter", "half", "full"),
             reduced_sheet="quarter",
-            hotkeys=[
-                {"file": "full.htk", "mode": "full"},
-                {"file": "quarter.htk", "mode": "quarter"},
-                {"file": "reduced_day.htk", "mode": "reduced"},
-            ],
+            reduced_grades=(Grade.B,),
         )
         with pytest.raises(SheetMismatch) as excinfo:
             assert_grade_allowed(Grade.A, REDUCED, cfg=quarter)
         assert "QUARTER sheet" in str(excinfo.value), (
             "the message names the sheet the pointer resolves to, not a literal"
         )
+
+    def test_a_sheet_added_in_config_appears_in_the_selector(self):
+        """CTO review of S1-P2: the attested-sheet selector is DERIVED.
+
+        Adding a rung is a `configs/cobalt/aset.yaml` edit and nothing
+        else — no hand-named file, no code change here or in src/. The
+        assertion below names `quarter.htk`, and nothing produced it but
+        the template applied to the declared sheet id.
+        """
+        before = _cfg()
+        assert before.hotkey_file_names == ["half.htk", "full.htk"]
+
+        after = _cfg(order=("quarter", "half", "full"), reduced_sheet="quarter")
+        assert after.hotkey_file_names == ["quarter.htk", "half.htk", "full.htk"]
+        assert after.sheet_for_hotkey_file("quarter.htk") == "quarter"
+        assert after.hotkey_file_for_mode(REDUCED) == "quarter.htk"
+
+    def test_a_template_with_no_placeholder_is_refused(self):
+        with pytest.raises(Exception) as excinfo:
+            _cfg(hotkey_template="keys.htk")
+        assert "hotkey_file_template" in str(excinfo.value)
 
     def test_a_dangling_pointer_is_refused_not_defaulted(self):
         with pytest.raises(Exception) as excinfo:
@@ -237,7 +273,7 @@ class TestProposal:
         p = propose(date(2026, 9, 3), cfg=_cfg(), drc_note=None, band=(3, 6))
         assert p is not None
         assert NO_PRIOR_DRC in p.reason
-        assert f"{NO_PRIOR_DRC} -> one rung down" in p.signals
+        assert any(s.startswith(f"{NO_PRIOR_DRC} -> one rung down") for s in p.signals)
 
     def test_a_drc_that_exists_but_is_unfilled_still_costs_a_rung(self):
         """The real 2026-09-03 DRC parsed as `grade (A+, A, B, C, etc..)`
@@ -299,7 +335,7 @@ class TestProposal:
         before, so the early-close signal is the ONLY one firing."""
         cfg = _cfg(enabled_modes=("reduced", "half", "full"))
         p = propose(date(2026, 12, 24), cfg=cfg, drc_note="DRC.md", drc_informative=True, band=(3, 6))
-        assert p.signals == ["early close today -> one rung down"]
+        assert p.signals == ["early close today -> one rung down (half)"]
         assert p.proposed == "half"
 
     def test_signals_compound_downwards(self):
@@ -346,18 +382,22 @@ class TestMatchCheck:
         with pytest.raises(SheetMismatch) as excinfo:
             assert_sheet_matches(row, "reduced", cfg=cfg)
         message = str(excinfo.value)
-        assert message == "sheet FULL loaded, day mode REDUCED — reload reduced_day.htk or overrule"
+        assert message == (
+            "sheet FULL loaded, day mode REDUCED (= the HALF sheet) — "
+            "reload half.htk or overrule"
+        )
 
     def test_the_matching_sheet_passes(self):
-        assert assert_sheet_matches({"attested_sheet": "reduced_day.htk"}, "reduced", cfg=_cfg()) \
-            == "reduced_day.htk"
+        """The attestation is compared SHEET to SHEET (CTO review of
+        S1-P2). `reduced` sizes from `half`, so `half.htk` matches — and
+        there is no `reduced_day.htk` any more, because no key table in
+        configs/cobalt/aset.yaml ever corresponded to that name."""
+        assert assert_sheet_matches({"attested_sheet": "half.htk"}, "reduced", cfg=_cfg()) \
+            == "half.htk"
 
-    def test_half_htk_is_not_the_reduced_rung(self):
-        """`reduced_day.htk` carries the B-only restriction; `half.htk` is
-        the plain half rung. Attesting the wrong one of the two is still
-        a mismatch."""
-        with pytest.raises(SheetMismatch, match="sheet HALF loaded, day mode REDUCED"):
-            assert_sheet_matches({"attested_sheet": "half.htk"}, "reduced", cfg=_cfg())
+    def test_a_file_naming_no_declared_sheet_is_refused(self):
+        with pytest.raises(ConfigError, match="unknown hotkey file"):
+            assert_sheet_matches({"attested_sheet": "reduced_day.htk"}, "reduced", cfg=_cfg())
 
     def test_attesting_nothing_is_a_refusal_not_a_pass(self):
         with pytest.raises(SheetMismatch, match="No hotkey file attested"):
@@ -379,10 +419,19 @@ class TestGradeRestriction:
             assert_grade_allowed(Grade.A_PLUS, "reduced", cfg=_cfg())
         message = str(excinfo.value)
         assert "key A+ is not enabled on the REDUCED rung" in message
-        assert "['B']" in message
+        assert "['A', 'B']" in message
 
-    def test_a_is_refused_on_the_reduced_rung_but_allowed_on_full(self):
-        cfg = _cfg(enabled_modes=("reduced", "half", "full"))
+    def test_a_is_accepted_on_the_reduced_rung(self):
+        """RE-RULED by the CTO review of S1-P2: the reduced rung is a
+        SIZE rung, not a grade ban. An A setup on a reduced day is still
+        an A, taken at reduced size."""
+        assert_grade_allowed(Grade.A, "reduced", cfg=_cfg())    # no raise
+
+    def test_a_narrower_rung_still_refuses_by_config_alone(self):
+        """The narrowing mechanism is unchanged — only the value moved.
+        A config that puts B alone on the rung still refuses A, with no
+        code edit either way."""
+        cfg = _cfg(reduced_grades=(Grade.B,), enabled_modes=("reduced", "half", "full"))
         with pytest.raises(SheetMismatch):
             assert_grade_allowed(Grade.A, "reduced", cfg=cfg)
         assert_grade_allowed(Grade.A, "full", cfg=cfg)          # no raise
@@ -443,8 +492,8 @@ class TestDayModeStore:
 
     def test_attestation_round_trips(self, store):
         day = date(2026, 9, 3)
-        store.attest_sheet(day, filename="reduced_day.htk")
-        assert store.for_date(day)["attested_sheet"] == "reduced_day.htk"
+        store.attest_sheet(day, filename="half.htk")
+        assert store.for_date(day)["attested_sheet"] == "half.htk"
         store.attest_sheet(day, filename="full.htk")
         assert store.for_date(day)["attested_sheet"] == "full.htk"
 
@@ -454,7 +503,7 @@ class TestDayModeStore:
         store.attest_sheet(day, filename="full.htk")
         store.upsert_proposal(day, proposed="reduced", reason="r")
         row = store.decide(day, decided="reduced", decided_by="you")
-        with pytest.raises(SheetMismatch, match="reload reduced_day.htk or overrule"):
+        with pytest.raises(SheetMismatch, match="reload half.htk or overrule"):
             assert_sheet_matches(row, decided_or_stage1(row, _cfg()), cfg=_cfg())
 
     def test_writes_are_refused_in_market_reset(self, store, monkeypatch):
@@ -466,3 +515,85 @@ class TestDayModeStore:
         )
         with pytest.raises(SessionBlocked):
             store.upsert_proposal(date(2026, 9, 4), proposed="reduced", reason="r")
+
+
+# =====================================================================
+# The step-down table is CONFIG (S1-P3, CTO review of S1-P2)
+# =====================================================================
+
+
+class TestStepDownsAreData:
+    """The rule SET moved out of `propose.py` into
+    `configs/cobalt/daymode.yaml`. These tests change the TABLE and watch
+    the proposal change — no code edit anywhere."""
+
+    def test_ruling_a_rule_off_stops_it_firing(self):
+        from cobalt.daymode.propose import propose
+
+        rules = [dict(s) for s in _STEPDOWNS]
+        cfg = _cfg(enabled_modes=("reduced", "half", "full"), stepdowns=rules)
+        p = propose(date(2026, 12, 24), cfg=cfg, drc_note="DRC.md",
+                    drc_informative=True, band=(3, 6))
+        assert p.proposed == "half", "early close costs a rung, as shipped"
+
+        off = [dict(s) for s in _STEPDOWNS]
+        next(r for r in off if r["signal"] == "early_close_today")["effect"] = "none"
+        cfg_off = _cfg(enabled_modes=("reduced", "half", "full"), stepdowns=off)
+        p2 = propose(date(2026, 12, 24), cfg=cfg_off, drc_note="DRC.md",
+                     drc_informative=True, band=(3, 6))
+        assert p2.proposed == "full", "the same day, the same code, a different table"
+        assert any("ruled off in config" in s for s in p2.signals), (
+            "a rule ruled off is VISIBLE in the sentence, not absent from it"
+        )
+
+    def test_the_rung_cost_is_config_not_a_constant(self):
+        from cobalt.daymode.propose import propose
+
+        two = [dict(s) for s in _STEPDOWNS]
+        next(r for r in two if r["signal"] == "early_close_today")["rungs"] = 2
+        cfg = _cfg(enabled_modes=("reduced", "half", "full"), stepdowns=two)
+        p = propose(date(2026, 12, 24), cfg=cfg, drc_note="DRC.md",
+                    drc_informative=True, band=(3, 6))
+        assert p.proposed == "reduced", "full -> (2 rungs) -> reduced"
+        assert any("2 rungs down" in s for s in p.signals)
+
+    def test_the_words_in_the_sentence_come_from_the_table(self):
+        from cobalt.daymode.propose import propose
+
+        reworded = [dict(s) for s in _STEPDOWNS]
+        next(r for r in reworded if r["signal"] == "no_prior_drc")["because"] = (
+            "you skipped last night's review"
+        )
+        cfg = _cfg(enabled_modes=("reduced", "half", "full"), stepdowns=reworded)
+        p = propose(date(2026, 9, 3), cfg=cfg, drc_note=None, band=(3, 6))
+        assert any("you skipped last night's review" in s for s in p.signals)
+
+    def test_an_unknown_signal_is_a_loud_config_error(self):
+        bad = [dict(s) for s in _STEPDOWNS] + [
+            {"signal": "mercury_retrograde", "effect": "floor", "because": "no"}
+        ]
+        with pytest.raises(Exception) as excinfo:
+            _cfg(stepdowns=bad)
+        assert "unknown step-down signal" in str(excinfo.value)
+
+    def test_a_signal_left_out_of_the_table_is_refused(self):
+        """Silence is never how a policy hole gets made: turning a rule
+        off is `effect: none`, visibly, not deleting its row."""
+        short = [dict(s) for s in _STEPDOWNS if s["signal"] != "daily_stop_hit"]
+        with pytest.raises(Exception) as excinfo:
+            _cfg(stepdowns=short)
+        assert "no row for" in str(excinfo.value)
+
+    def test_every_signal_the_table_rules_has_a_fact_behind_it(self):
+        """The other direction: a signal ruled in config that the code
+        cannot compute would sit there looking like a rule and never
+        fire."""
+        from cobalt.daymode.config import SIGNAL_IDS
+        from cobalt.daymode.propose import _facts
+
+        facts = _facts(
+            _cfg(), date(2026, 9, 3),
+            daily_stop_hit=False, drc_note=None, drc_informative=False,
+            prior_day=date(2026, 9, 2), band=(3, 6),
+        )
+        assert sorted(facts) == sorted(SIGNAL_IDS)

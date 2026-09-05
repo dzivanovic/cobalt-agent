@@ -13,17 +13,34 @@ TWO STAGES, ONE LADDER:
 * **Stage 2, at 09:00** — this module. Cobalt proposes; he approves or
   overrules with a reason; until he answers, the sheet stays on stage 1.
 
-THE PROPOSAL RULE, and its honest status. `propose()` starts at the
+THE PROPOSAL RULE, and where it now lives. `propose()` starts at the
 highest permitted rung and STEPS DOWN once per adverse signal, then
 clamps into `enabled_modes`:
 
     proposed = clamp( max(lowest_enabled, ceiling_after_step_downs) )
 
-Every step-down names itself in the reason string, so the sentence is a
-derivation and not a summary. **The step-down set below is PROVISIONAL
-and belongs to the Rules Engine design session** — it is deliberately
-crude, it is marked as such in the reason he reads, and the whole
-`_SIGNALS` list is meant to be replaced wholesale rather than tuned.
+MOVED OUT OF CODE (CTO review of S1-P2, 2026-09-04). The step-down rules
+used to be an `if` ladder right here, so "what makes today a smaller day"
+was a Python edit. Cobalt is a product for many traders and their rules
+will differ, so the SET is now `daymode.stepdowns` in
+`configs/cobalt/daymode.yaml` and this module WALKS it.
+
+The split is deliberate and it is the only one that works:
+
+* **The facts are code.** Whether the daily stop was hit, whether the
+  prior DRC is informative, whether today is an early close, how long the
+  close before it was, whether the band is ruled — every one of those is
+  a query against the calendar, the card rows or a note. They cannot come
+  from a YAML file; they are computed in `_facts()` below and each one is
+  named by a `SIGNAL_IDS` id.
+* **The effects are config.** What a fired fact COSTS (floor / N rungs
+  down / nothing) and the words it contributes to the sentence he reads
+  are the table's, row by row.
+
+Every step-down still names itself in the reason string, so the sentence
+stays a derivation and not a summary, and the rule set is still marked
+PROVISIONAL in that sentence — it belongs to the Rules Engine session.
+Moving it into config is what makes that session a config edit.
 `daymode.trade_count_band.{min,max}` ship as PLACEHOLDER tunables rows
 for the same reason: until he rules them, an unruled band is itself an
 adverse signal that pins the proposal to the floor, which is the
@@ -44,7 +61,14 @@ from typing import Any, Optional
 from cobalt.session import session_clock
 from cobalt.session import clock as clock_mod
 
-from .config import DayModeConfig, load_daymode_config
+from .config import (
+    EFFECT_DOWN,
+    EFFECT_FLOOR,
+    EFFECT_NONE,
+    SIGNAL_IDS,
+    DayModeConfig,
+    load_daymode_config,
+)
 
 #: The tunables rows F6 consumes. PLACEHOLDER values pending the Rules
 #: Engine session — `validate` checks they EXIST; nothing pretends to
@@ -97,9 +121,71 @@ def stage1_mode(cfg: Optional[DayModeConfig] = None) -> str:
     return (cfg or load_daymode_config()).lowest_enabled
 
 
-def _step_down(cfg: DayModeConfig, mode: str) -> str:
+def _step_down(cfg: DayModeConfig, mode: str, rungs: int = 1) -> str:
     rank = cfg.rank(mode)
-    return cfg.modes[max(0, rank - 1)]
+    return cfg.modes[max(0, rank - rungs)]
+
+
+def _facts(
+    cfg: DayModeConfig,
+    day: date,
+    *,
+    daily_stop_hit: bool,
+    drc_note: Optional[str],
+    drc_informative: bool,
+    prior_day: date,
+    band: tuple[Any, Any],
+) -> dict[str, bool]:
+    """The FACTS, one per `SIGNAL_IDS` id. Code, because every one of
+    them is a query — against the NYSE calendar, the prior day's cards,
+    or the DRC note. The table decides what they COST."""
+    clock = session_clock()
+    band_min, band_max = band
+    facts = {
+        "daily_stop_hit": bool(daily_stop_hit),
+        # "you did not write one" and "you wrote one and left it blank"
+        # are different facts about his day, so they are two signals that
+        # the table may price differently. They are mutually exclusive.
+        "no_prior_drc": drc_note is None,
+        "drc_not_informative": drc_note is not None and not drc_informative,
+        "early_close_today": clock.calendar.is_early_close(day),
+        "first_session_after_close": (day - prior_day).days > 1,
+        "trade_count_band_placeholder": band_min is None or band_max is None,
+    }
+    missing = [s for s in SIGNAL_IDS if s not in facts]
+    if missing:  # pragma: no cover - guarded by test_every_signal_has_a_fact
+        raise RuntimeError(
+            f"signal(s) {missing} are declared in SIGNAL_IDS and ruled in "
+            "configs/cobalt/daymode.yaml but this module computes no fact for "
+            "them — a rule that can never fire."
+        )
+    return facts
+
+
+def apply_stepdowns(
+    cfg: DayModeConfig, facts: dict[str, bool], *, day: date
+) -> tuple[str, list[str]]:
+    """Walk the config table over the facts. Returns (ceiling, clauses).
+
+    Rows are applied IN CONFIG ORDER, which is what makes the table
+    readable as a policy: a `floor` row later in the table overrides an
+    earlier `down`, exactly as it reads. `effect: none` fires nothing and
+    says so, so a rule ruled off is visible in the sentence rather than
+    absent from it.
+    """
+    ceiling = cfg.highest_enabled
+    clauses: list[str] = []
+    for row in cfg.stepdowns:
+        if not facts.get(row.signal):
+            continue
+        if row.effect == EFFECT_FLOOR:
+            ceiling = cfg.lowest_enabled
+        elif row.effect == EFFECT_DOWN:
+            ceiling = _step_down(cfg, ceiling, row.rungs)
+        elif row.effect == EFFECT_NONE:
+            pass
+        clauses.append(row.describe(ceiling))
+    return ceiling, clauses
 
 
 def prior_trading_day(day: date) -> date:
@@ -180,36 +266,15 @@ def propose(
     if not clock.calendar.is_trading_day(day):
         return None
 
-    ceiling = cfg.highest_enabled
-    signals: list[str] = []
-
-    if daily_stop_hit:
-        ceiling = cfg.lowest_enabled
-        signals.append("daily stop hit on the prior trading day -> floor")
-    # A DRC that EXISTS but has no headline field filled is
-    # informationally the same as no DRC — so it costs the same rung.
-    # The sentence differs, because "you did not write one" and "you
-    # wrote one and left it blank" are different facts about his day.
     if drc_informative is None:
         drc_informative = drc_note is not None
-    if not drc_informative:
-        ceiling = _step_down(cfg, ceiling)
-        signals.append(
-            f"{NO_PRIOR_DRC} -> one rung down"
-            if drc_note is None
-            else "prior DRC exists but no headline field is filled -> one rung down"
-        )
-    if clock.calendar.is_early_close(day):
-        ceiling = _step_down(cfg, ceiling)
-        signals.append("early close today -> one rung down")
     prior = prior_trading_day(day)
-    if (day - prior).days > 1:
-        ceiling = _step_down(cfg, ceiling)
-        signals.append(f"first session after a {(day - prior).days - 1}-day close -> one rung down")
-    band_min, band_max = band
-    if band_min is None or band_max is None:
-        ceiling = cfg.lowest_enabled
-        signals.append("trade_count_band is PLACEHOLDER (unruled) -> floor")
+    facts = _facts(
+        cfg, day,
+        daily_stop_hit=daily_stop_hit, drc_note=drc_note,
+        drc_informative=drc_informative, prior_day=prior, band=band,
+    )
+    ceiling, signals = apply_stepdowns(cfg, facts, day=day)
 
     # max(floor, ceiling), then clamped into what is actually permitted.
     floor = cfg.lowest_enabled
@@ -273,6 +338,7 @@ def decided_or_stage1(
 
 __all__ = [
     "BAND_MAX_KEY",
+    "apply_stepdowns",
     "BAND_MIN_KEY",
     "NO_PRIOR_DRC",
     "Proposal",

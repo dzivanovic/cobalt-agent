@@ -165,8 +165,18 @@ def _cmd_validate(args: argparse.Namespace) -> None:
         f"keys {[g.value for g in dm.enabled_grades_for(dm.lowest_enabled)]}."
     )
     print(
-        f"Hotkey files: {', '.join(f'{h.file}={h.mode}' for h in dm.hotkey_files)} "
+        f"Hotkey files (derived from the sheets via "
+        f"daymode.hotkey_file_template={dm.hotkey_file_template!r}): "
+        f"{', '.join(f'{dm.hotkey_file_for_sheet(s)}={s}' for s in dm.sheet_order)} "
         "(attested, never read — Cobalt does not touch DAS)."
+    )
+    print(
+        "Step-downs: "
+        + "; ".join(
+            f"{r.signal}={r.effect}" + (f"({r.rungs})" if r.effect == "down" else "")
+            for r in dm.stepdowns
+        )
+        + f" — {len(dm.stepdowns)} row(s), every computable signal ruled."
     )
 
     registry = load_tunables().by_key

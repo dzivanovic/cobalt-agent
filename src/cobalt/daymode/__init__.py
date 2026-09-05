@@ -8,12 +8,27 @@
 * `match.py`   — the loaded `.htk` is ATTESTED, never read (Cobalt does
   not touch DAS), and a mismatch refuses card creation.
 * `store.py`   — one `day_modes` row per trading day; stage 1 has none.
+* `note.py`    — the daily note's sheet-mode line, BOTH ways: Cobalt
+  writes the decided mode + attestation as an L28 unit, and a checkbox
+  the trader ticks there is read back as the attestation. A disagreement
+  between the two is a refusal showing both, never a merge.
 """
 
-from .config import REDUCED, DayModeConfig, load_daymode_config
+from .config import (
+    EFFECT_DOWN,
+    EFFECT_FLOOR,
+    EFFECT_NONE,
+    REDUCED,
+    SIGNAL_IDS,
+    DayModeConfig,
+    StepDown,
+    load_daymode_config,
+)
 from .match import SheetMismatch, assert_grade_allowed, assert_sheet_matches
+from .note import NoteAttestation, NoteAttestationConflict
 from .propose import (
     BAND_MAX_KEY,
+    apply_stepdowns,
     BAND_MIN_KEY,
     NO_PRIOR_DRC,
     Proposal,
@@ -28,9 +43,17 @@ from .store import DayModeError, DayModeStore
 __all__ = [
     "BAND_MAX_KEY",
     "BAND_MIN_KEY",
+    "EFFECT_DOWN",
+    "EFFECT_FLOOR",
+    "EFFECT_NONE",
     "NO_PRIOR_DRC",
     "REDUCED",
+    "SIGNAL_IDS",
     "DayModeConfig",
+    "NoteAttestation",
+    "NoteAttestationConflict",
+    "StepDown",
+    "apply_stepdowns",
     "DayModeError",
     "DayModeStore",
     "Proposal",

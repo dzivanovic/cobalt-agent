@@ -33,11 +33,16 @@ daymode:
   reduced_sheet: half
 
   # The grade restriction that belongs to the REDUCED RUNG, narrowing
-  # (never widening) aset.yaml's account-wide `enabled_grades`. On the
-  # reduced rung he takes B and nothing else — an A key while reduced is
-  # refused with the reason on screen. Consumers: F6 (this module) and
-  # F10 (the key row's enabled/dimmed grades).
-  reduced_enabled_grades: [B]
+  # (never widening) aset.yaml's account-wide `enabled_grades`.
+  #
+  # RE-RULED 2026-09-04 (CTO review of S1-P2): [B] -> [A, B]. The reduced
+  # rung is a SIZE rung, not a grade ban — an A setup on a reduced day is
+  # still an A, taken at reduced size. A+ stays out because A+ is not
+  # enabled account-wide either (configs/cobalt/aset.yaml's
+  # `enabled_grades`), and this list can only ever narrow that one.
+  # Consumers: F6 (cobalt.daymode.match.assert_grade_allowed) and F10
+  # (the key row's enabled/dimmed grades).
+  reduced_enabled_grades: [A, B]
 
   # The modes currently PERMITTED, out of the ordered ladder
   # (reduced -> each sheet, low to high). Today: the reduced rung only.
@@ -45,21 +50,81 @@ daymode:
   # propose above the highest enabled one.
   enabled_modes: [reduced]
 
-  # THE ATTESTED HOTKEY FILES — the real DAS Trader Pro file names, as
-  # they exist on the trading PC. Cobalt never reads these files and
-  # never touches DAS (absolute boundary): the trader states which one
-  # he loaded and Cobalt holds him to it. See src/cobalt/daymode/match.py
-  # for why this is attestation and not a read.
+  # THE ATTESTED HOTKEY FILE NAMES — DERIVED, never hand-listed.
   #
-  # Note both `half.htk` and `reduced_day.htk` exist and are DIFFERENT
-  # attestations: `reduced_day.htk` is the reduced rung (half-sized keys
-  # AND the B-only grade restriction), `half.htk` is the plain half rung.
-  # They resolve to different modes, so attesting the wrong one of the
-  # two is still a mismatch and still refuses.
-  hotkey_files:
-    - file: full.htk
-      mode: full
-    - file: half.htk
-      mode: half
-    - file: reduced_day.htk
-      mode: reduced
+  # RE-RULED 2026-09-04 (CTO review of S1-P2). This was a hand-written
+  # list of three `{file, mode}` rows, and two things were wrong with it:
+  #
+  # 1. `reduced_day.htk` was a file name invented here. No sheet in
+  #    configs/cobalt/aset.yaml corresponds to it, so the selector on the
+  #    sheet offered him an attestation for a key table that does not
+  #    exist as a config row. A name that is not derived from config is a
+  #    name that can drift from config, silently.
+  # 2. The list mapped file -> MODE. But a `.htk` is a KEY TABLE, and a
+  #    key table is a SHEET (`half`, `full`), not a rung (`reduced`).
+  #    `reduced` is a role played by a sheet; it never had a file of its
+  #    own to load.
+  #
+  # So the attestation is now about SHEETS, and the file name for a sheet
+  # comes from this template. Every sheet declared in
+  # configs/cobalt/aset.yaml's `sheet_modes.sheets` gets exactly one
+  # entry in the selector, in `order`. Add a `quarter` sheet there and
+  # `quarter.htk` appears in the selector with NO code change and no edit
+  # here (tests/cobalt/test_daymode.py asserts exactly that).
+  #
+  # `{sheet}` is the only placeholder. Cobalt never reads these files and
+  # never touches DAS (CLAUDE.md's first absolute boundary): the trader
+  # states which one he loaded and Cobalt holds him to it. See
+  # src/cobalt/daymode/match.py for why this is attestation, not a read.
+  hotkey_file_template: "{sheet}.htk"
+
+  # THE STEP-DOWN TABLE — the 09:00 proposal's rule set, as data.
+  #
+  # MOVED OUT OF CODE 2026-09-04 (CTO review of S1-P2). These five rules
+  # were a `_SIGNALS`-shaped `if` ladder in cobalt/daymode/propose.py, so
+  # "what makes today a smaller day" was a Python edit — and Cobalt is a
+  # product for many traders, whose step-down rules will differ. The
+  # proposer now WALKS this table: the code computes the FACTS (it must —
+  # they come from the calendar, the card rows and the DRC note), the
+  # table decides the EFFECT and supplies the words.
+  #
+  # Defaults below are byte-for-byte the rules S1-P2 shipped in code.
+  #
+  # signal : one of the fact ids the proposer can compute. An unknown id
+  #          is a LOUD config error; a known id with no row here is also
+  #          a loud error (`effect: none` is how a rule is turned off —
+  #          silence is never how a policy hole gets made).
+  # effect : floor | down | none.  `down` takes `rungs` (default 1).
+  # because: the words that appear in the reason he reads at 09:00.
+  #
+  # PROVISIONAL, and marked as such in the sentence he reads: the rule
+  # SET belongs to the Rules Engine session. Moving it here is what makes
+  # that session a config edit rather than a code change.
+  stepdowns:
+    - signal: daily_stop_hit
+      effect: floor
+      because: "daily stop hit on the prior trading day"
+
+    - signal: no_prior_drc
+      effect: down
+      rungs: 1
+      because: "no prior DRC"
+
+    - signal: drc_not_informative
+      effect: down
+      rungs: 1
+      because: "prior DRC exists but no headline field is filled"
+
+    - signal: early_close_today
+      effect: down
+      rungs: 1
+      because: "early close today"
+
+    - signal: first_session_after_close
+      effect: down
+      rungs: 1
+      because: "first session after a multi-day close"
+
+    - signal: trade_count_band_placeholder
+      effect: floor
+      because: "trade_count_band is PLACEHOLDER (unruled)"

@@ -1,4 +1,5 @@
-"""F6 config: the mode ladder, the reduced pointer, the attested files.
+"""F6 config: the mode ladder, the reduced pointer, the attested files,
+and the step-down table.
 
 `configs/cobalt/daymode.yaml`, Pydantic-validated on load — a bad or
 missing file CRASHES with the file name (config-as-code law, no silent
@@ -16,16 +17,30 @@ is the ROLE of the bottom rung, and `reduced_sheet` says which sheet
 currently plays it (today `half`).
 
 Everything that could have been a hardcoded name — the floor, the
-refusal messages, the grade restriction, the .htk mapping — resolves
-through this object instead.
+refusal messages, the grade restriction, the .htk names, the step-down
+rules — resolves through this object instead. Cobalt is a product for
+many traders: a trader's rung, grades, sheets and thresholds are config
+today and profile-scoped later, never code.
+
+THE .HTK NAMES ARE DERIVED TOO (CTO review of S1-P2, 2026-09-04). They
+used to be a hand-written `file -> mode` list, which carried an invented
+`reduced_day.htk` naming no declared sheet, and mapped files to RUNGS
+when a `.htk` is a KEY TABLE and a key table is a SHEET. Now:
+
+    hotkey file for sheet S = hotkey_file_template.format(sheet=S)
+
+one entry per declared sheet, in `order`, and nothing else. The
+attestation is therefore about the SHEET he loaded, and it is compared
+against `sheet_for(mode)` — the sheet the rung in force sizes from.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from cobalt.aset.config import ConfigError, load_sheet_modes_config
 from cobalt.aset.models import Grade
@@ -39,14 +54,73 @@ CONFIG_PATH = REPO_ROOT / "configs" / "cobalt" / "daymode.yaml"
 #: sprinkled through the module.
 REDUCED = "reduced"
 
+#: The placeholder `hotkey_file_template` must contain — the ONE thing a
+#: derived file name is allowed to vary by.
+SHEET_PLACEHOLDER = "{sheet}"
 
-class HotkeyFile(BaseModel):
-    """One real `.htk` on the trading PC, and the mode it means."""
+#: Every fact id the proposer can compute, with the words the reason uses
+#: when the table has no `because` of its own. `stepdowns` must carry a
+#: row for each: an id the code can compute but the table does not rule
+#: is a silent policy hole, so the loader refuses it (turn a rule OFF
+#: with `effect: none`, visibly).
+#: What a fired signal costs. `floor` pins the proposal to the lowest
+#: enabled rung; `down` walks `rungs` down the ladder; `none` is how a
+#: rule is turned OFF visibly, rather than by deleting its row.
+EFFECT_FLOOR = "floor"
+EFFECT_DOWN = "down"
+EFFECT_NONE = "none"
+EFFECTS = (EFFECT_FLOOR, EFFECT_DOWN, EFFECT_NONE)
+
+SIGNAL_IDS = (
+    "daily_stop_hit",
+    "no_prior_drc",
+    "drc_not_informative",
+    "early_close_today",
+    "first_session_after_close",
+    "trade_count_band_placeholder",
+)
+
+
+class StepDown(BaseModel):
+    """One row of the step-down table: a fact id, and what it costs."""
 
     model_config = ConfigDict(extra="forbid")
 
-    file: str = Field(min_length=1)
-    mode: str = Field(min_length=1)
+    signal: str = Field(min_length=1)
+    effect: str = Field(min_length=1)
+    rungs: int = Field(default=1, ge=1)
+    because: str = Field(min_length=1)
+
+    @field_validator("signal")
+    @classmethod
+    def _known_signal(cls, v: str) -> str:
+        if v not in SIGNAL_IDS:
+            raise ValueError(
+                f"unknown step-down signal {v!r}. The proposer can compute: "
+                f"{', '.join(SIGNAL_IDS)}. A signal Cobalt cannot compute would "
+                "sit in the table looking like a rule and never fire."
+            )
+        return v
+
+    @field_validator("effect")
+    @classmethod
+    def _known_effect(cls, v: str) -> str:
+        if v not in EFFECTS:
+            raise ValueError(
+                f"unknown step-down effect {v!r} — must be one of "
+                f"{' | '.join(EFFECTS)}."
+            )
+        return v
+
+    def describe(self, target: str) -> str:
+        """The clause that lands in the 09:00 reason, e.g.
+        `no prior DRC -> one rung down`."""
+        if self.effect == EFFECT_FLOOR:
+            return f"{self.because} -> floor"
+        if self.effect == EFFECT_NONE:
+            return f"{self.because} -> no step-down (ruled off in config)"
+        rungs = "one rung down" if self.rungs == 1 else f"{self.rungs} rungs down"
+        return f"{self.because} -> {rungs} ({target})"
 
 
 class DayModeConfig(BaseModel):
@@ -55,7 +129,8 @@ class DayModeConfig(BaseModel):
     reduced_sheet: str = Field(min_length=1)
     reduced_enabled_grades: list[Grade] = Field(min_length=1)
     enabled_modes: list[str] = Field(min_length=1)
-    hotkey_files: list[HotkeyFile] = Field(min_length=1)
+    hotkey_file_template: str = Field(min_length=1)
+    stepdowns: list[StepDown] = Field(min_length=1)
 
     # Populated at load from aset.yaml, not written in daymode.yaml —
     # one path to the sheet order.
@@ -116,25 +191,72 @@ class DayModeConfig(BaseModel):
         """
         return list(self.reduced_enabled_grades if mode == REDUCED else self.account_enabled_grades)
 
-    # -- the attested files -------------------------------------------
+    # -- the attested files (DERIVED from the sheets) ------------------
+
+    def hotkey_file_for_sheet(self, sheet: str) -> str:
+        """The `.htk` name for a declared sheet. One template, no list."""
+        if sheet not in self.sheet_order:
+            raise ConfigError(
+                f"no sheet {sheet!r} in configs/cobalt/aset.yaml. Declared sheets "
+                f"(low to high): {', '.join(self.sheet_order)}."
+            )
+        return self.hotkey_file_template.format(sheet=sheet)
+
+    def hotkey_file_for_mode(self, mode: str) -> str:
+        """The `.htk` the rung in force expects — via its SHEET."""
+        return self.hotkey_file_for_sheet(self.sheet_for(mode))
 
     @property
     def hotkey_file_names(self) -> list[str]:
-        return [h.file for h in self.hotkey_files]
+        """Exactly one name per declared sheet, in ladder order. THIS is
+        the attested-sheet selector on the ASET sheet — a sheet added to
+        configs/cobalt/aset.yaml appears in it with no code change."""
+        return [self.hotkey_file_for_sheet(s) for s in self.sheet_order]
 
-    def mode_for_hotkey_file(self, filename: str) -> str:
-        for entry in self.hotkey_files:
-            if entry.file == filename:
-                return entry.mode
+    def sheet_for_hotkey_file(self, filename: str) -> str:
+        """Which SHEET he says he loaded. Refuses a name off the list."""
+        for sheet in self.sheet_order:
+            if self.hotkey_file_for_sheet(sheet) == filename:
+                return sheet
         raise ConfigError(
-            f"unknown hotkey file {filename!r}. Declared files: "
-            f"{', '.join(self.hotkey_file_names)} (configs/cobalt/daymode.yaml)."
+            f"unknown hotkey file {filename!r}. Declared files (derived from "
+            f"configs/cobalt/aset.yaml's sheets via "
+            f"daymode.hotkey_file_template={self.hotkey_file_template!r}): "
+            f"{', '.join(self.hotkey_file_names)}."
+        )
+
+    # -- the step-down table ------------------------------------------
+
+    def stepdown_for(self, signal: str) -> StepDown:
+        for row in self.stepdowns:
+            if row.signal == signal:
+                return row
+        raise ConfigError(  # pragma: no cover - the validator forbids this
+            f"no step-down row for signal {signal!r} in configs/cobalt/daymode.yaml."
         )
 
     # -- validation ---------------------------------------------------
 
     @model_validator(mode="after")
     def _pointers_resolve(self) -> "DayModeConfig":
+        if SHEET_PLACEHOLDER not in self.hotkey_file_template:
+            raise ValueError(
+                f"daymode.hotkey_file_template must contain {SHEET_PLACEHOLDER!r} — "
+                f"got {self.hotkey_file_template!r}. Without it every sheet would "
+                "derive the same file name and the attestation would mean nothing."
+            )
+        ruled = [row.signal for row in self.stepdowns]
+        dupes = sorted({s for s in ruled if ruled.count(s) > 1})
+        if dupes:
+            raise ValueError(f"duplicate step-down signal(s): {dupes}")
+        unruled = [s for s in SIGNAL_IDS if s not in ruled]
+        if unruled:
+            raise ValueError(
+                f"daymode.stepdowns has no row for {unruled}. Every signal the "
+                "proposer can compute must be ruled here — an unruled one would be "
+                "a policy hole made by silence. Turn a rule off with `effect: none`."
+            )
+
         if not self.sheet_order:            # pre-population pass
             return self
         if self.reduced_sheet not in self.sheet_order:
@@ -160,16 +282,13 @@ class DayModeConfig(BaseModel):
                 f"configs/cobalt/aset.yaml permits ({[g.value for g in self.account_enabled_grades]}); "
                 "it can never permit a key the account itself does not."
             )
-        for entry in self.hotkey_files:
-            if entry.mode not in self.modes:
-                raise ValueError(
-                    f"hotkey file {entry.file!r} maps to unknown mode {entry.mode!r}. "
-                    f"The ladder is {' < '.join(self.modes)}."
-                )
-        files = self.hotkey_file_names
-        dupes = sorted({f for f in files if files.count(f) > 1})
-        if dupes:
-            raise ValueError(f"duplicate hotkey file name(s): {dupes}")
+        names = self.hotkey_file_names
+        dupe_files = sorted({f for f in names if names.count(f) > 1})
+        if dupe_files:
+            raise ValueError(
+                f"daymode.hotkey_file_template {self.hotkey_file_template!r} derives "
+                f"duplicate file name(s) {dupe_files} from sheets {self.sheet_order}."
+            )
         return self
 
 
@@ -194,4 +313,15 @@ def load_daymode_config(sheet_modes=None) -> DayModeConfig:
         raise ConfigError(f"{CONFIG_PATH}: invalid day-mode config:\n{e}") from e
 
 
-__all__ = ["CONFIG_PATH", "REDUCED", "DayModeConfig", "HotkeyFile", "load_daymode_config"]
+__all__ = [
+    "CONFIG_PATH",
+    "EFFECTS",
+    "EFFECT_DOWN",
+    "EFFECT_FLOOR",
+    "EFFECT_NONE",
+    "REDUCED",
+    "SIGNAL_IDS",
+    "DayModeConfig",
+    "StepDown",
+    "load_daymode_config",
+]

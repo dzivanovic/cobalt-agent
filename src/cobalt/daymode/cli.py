@@ -21,6 +21,7 @@ from cobalt import env
 from cobalt.session.clock import now_utc, session_clock
 from cobalt.taxonomy.loader import load_tunables
 
+from . import note as daymode_note
 from .config import load_daymode_config
 from .drc import prior_day_inputs
 from .propose import BAND_MAX_KEY, BAND_MIN_KEY, decided_or_stage1, propose, stage1_mode
@@ -63,6 +64,36 @@ def _band() -> tuple[object, object]:
             )
         out.append(row.value)
     return (out[0], out[1])
+
+
+def _sync_note(cfg, day, store) -> None:
+    """Push the decided mode + attestation into the daily note (L28).
+
+    ONE writer for that unit — `daymode.note` — called from here, from
+    the ASET sheet's /attest, and from the 05:15 prefill. The unified
+    diff is printed, per L28.4: every vault change this command makes is
+    visible in its own output.
+    """
+    row = store.for_date(day)
+    mode = decided_or_stage1(row, cfg)
+    stage = (
+        "stage 2 (decided)"
+        if (row or {}).get("decided")
+        else "stage 1 (system rule, pre-09:00)"
+    )
+    try:
+        result = daymode_note.write(
+            daymode_note.daily_note_path(day),
+            cfg, mode, stage=stage,
+            attested=(row or {}).get("attested_sheet"), row=row,
+        )
+    except Exception as e:  # noqa: BLE001 - loud, never fatal to the DB write
+        print(f"WARN: daily-note sheet-mode write FAILED: {type(e).__name__}: {e}")
+        return
+    if result is None:
+        print("WARN: today's daily note does not exist — nothing written to it.")
+        return
+    print(result.report())
 
 
 def cmd_show(args: argparse.Namespace) -> None:
@@ -115,26 +146,31 @@ def cmd_propose(args: argparse.Namespace) -> None:
         return
     store.upsert_proposal(day, proposed=proposal.proposed, reason=proposal.reason, now=ts)
     print("WROTE day_modes row.")
+    _sync_note(cfg, day, store)
 
 
 def cmd_decide(args: argparse.Namespace) -> None:
     day = _day(args)
-    row = _store().decide(
+    store = _store()
+    row = store.decide(
         day, decided=args.mode, decided_by="you", overrule_reason=args.reason
     )
     verdict = "APPROVED" if row["decided"] == row["proposed"] else "OVERRULED"
     print(f"{day}: {verdict} — proposed {row['proposed']}, decided {row['decided']}")
     if row["overrule_reason"]:
         print(f"reason: {row['overrule_reason']}")
+    _sync_note(load_daymode_config(), day, store)
 
 
 def cmd_attest(args: argparse.Namespace) -> None:
     cfg = load_daymode_config()
-    mode = cfg.mode_for_hotkey_file(args.file)   # refuses an unknown file
+    sheet = cfg.sheet_for_hotkey_file(args.file)   # refuses an unknown file
     day = _day(args)
-    _store().attest_sheet(day, filename=args.file)
-    print(f"{day}: attested {args.file} (= {mode} rung). Attested, NOT read — "
+    store = _store()
+    store.attest_sheet(day, filename=args.file)
+    print(f"{day}: attested {args.file} (= the {sheet} sheet). Attested, NOT read — "
           "Cobalt never touches DAS.")
+    _sync_note(cfg, day, store)
 
 
 def add_parser(sub) -> None:
