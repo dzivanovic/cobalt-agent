@@ -415,3 +415,40 @@ class TestCardControls:
         assert "locked in ARMED" in html_out
         assert "key frozen from ARMED onward" in html_out
         assert ">DISARM<" in html_out
+
+
+class TestDayModeBannerStage:
+    """The stage LABEL and the MODE must come from one rule. Otherwise the
+    banner can read "stage 2 (decided)" while showing the stage-1 floor —
+    exactly what happens pre-09:00 on a day whose proposal was answered."""
+
+    @staticmethod
+    def _at(hour):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        return datetime(2026, 9, 3, hour, 30, tzinfo=ZoneInfo("America/New_York"))
+
+    def test_pre_0900_reads_stage_1_even_when_decided(self):
+        from cobalt.daymode import decided_or_stage1, load_daymode_config
+
+        row = {"proposed": "reduced", "decided": "full"}
+        assert "stage 1" in web_module._stage_label(row, self._at(8))
+        assert decided_or_stage1(row, load_daymode_config(), self._at(8)) == "reduced", (
+            "the floor holds before 09:00 — label and mode agree"
+        )
+
+    def test_after_0900_a_decision_reads_stage_2(self):
+        from cobalt.daymode import decided_or_stage1, load_daymode_config
+
+        row = {"proposed": "reduced", "decided": "full"}
+        assert web_module._stage_label(row, self._at(10)) == "stage 2 (decided)"
+        assert decided_or_stage1(row, load_daymode_config(), self._at(10)) == "full"
+
+    def test_after_0900_undecided_says_the_floor_holds(self):
+        from cobalt.daymode import decided_or_stage1, load_daymode_config
+
+        row = {"proposed": "full", "decided": None}
+        label = web_module._stage_label(row, self._at(10))
+        assert "undecided" in label and "floor holds" in label
+        assert decided_or_stage1(row, load_daymode_config(), self._at(10)) == "reduced"

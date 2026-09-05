@@ -21,6 +21,7 @@ from .propose import (
     prior_trading_day,
     propose,
     stage1_mode,
+    stage2_open,
 )
 from .store import DayModeError, DayModeStore
 
@@ -41,4 +42,5 @@ __all__ = [
     "prior_trading_day",
     "propose",
     "stage1_mode",
+    "stage2_open",
 ]

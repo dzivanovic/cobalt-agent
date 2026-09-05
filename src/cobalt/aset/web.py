@@ -54,6 +54,7 @@ from cobalt.daymode import (
     assert_sheet_matches,
     decided_or_stage1,
     load_daymode_config,
+    stage2_open,
 )
 from cobalt.vault import VaultConfigError, dev_entry_allowed, is_production, resolve_vault_path
 
@@ -430,6 +431,23 @@ def _today_et():
     return session_clock().to_et(now_utc()).date()
 
 
+def _stage_label(row: dict | None, now=None) -> str:
+    """Which stage the banner reports.
+
+    Must come from the SAME rule as the mode (`decided_or_stage1`), or
+    the banner can read "stage 2 (decided)" while showing the stage-1
+    floor — exactly what happens before 09:00 on a day whose proposal was
+    answered. Stage 2 is in force only once the `daymode.stage2_open`
+    boundary has passed AND he has answered.
+    """
+    in_stage2 = session_clock().to_et(now or now_utc()).time() >= stage2_open()
+    if not in_stage2:
+        return "stage 1 (system rule, pre-09:00)"
+    if row and row.get("decided"):
+        return "stage 2 (decided)"
+    return "stage 2 (proposed, undecided — floor holds)"
+
+
 def _daymode_state() -> dict:
     """Everything the sheet needs about the day mode, resolved once.
 
@@ -448,7 +466,7 @@ def _daymode_state() -> dict:
         mode = decided_or_stage1(row, cfg)
         return {
             "cfg": cfg, "day": day, "row": row, "mode": mode, "error": None,
-            "stage": "stage 2 (decided)" if (row and row.get("decided")) else "stage 1 (system rule)",
+            "stage": _stage_label(row),
         }
     except Exception as e:  # noqa: BLE001 - rendered, never swallowed
         return {"cfg": None, "day": None, "row": None, "mode": None,
