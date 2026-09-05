@@ -135,6 +135,29 @@ def _cmd_validate(args: argparse.Namespace) -> None:
         f"{' < '.join(sheets.order)} (ordered list, not a hardcoded pair)."
     )
 
+    # KNOWN COUPLING, made loud here rather than discovered live.
+    # `sheet_modes` is now an ordered config list, but `SizingInput.
+    # sheet_mode` is still the `SheetMode` enum (full/half) — it is on
+    # the live sizing path and was not reshaped this sprint. So a sheet
+    # declared in config with no enum member would pass every day-mode
+    # check and then fail at card-creation time, at 09:31 on a live
+    # morning. This turns that into a config-gate failure.
+    # TODO (whenever the quarter sheet lands): either add its enum member
+    # in the same change as its config row, or retire the enum in favour
+    # of a config-validated string on SizingInput.
+    from cobalt.aset.models import SheetMode
+
+    unmodelled = [s for s in sheets.order if s not in {m.value for m in SheetMode}]
+    if unmodelled:
+        print(
+            f"FAILED: sheet(s) {unmodelled} are declared in configs/cobalt/aset.yaml "
+            f"but have no SheetMode enum member (have: "
+            f"{sorted(m.value for m in SheetMode)}). A card sized on one would be "
+            "refused by Pydantic at creation time. Add the member in the same change "
+            "as the config row."
+        )
+        sys.exit(1)
+
     dm = load_daymode_config(sheets)
     print(
         f"Day modes: ladder {' < '.join(dm.modes)}; enabled {dm.enabled_modes}; "
