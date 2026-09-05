@@ -1,0 +1,65 @@
+# F6 two-stage day mode + .htk match check (Charter §3 F6, M4).
+# Schema: src/cobalt/daymode/config.py (DayModeConfig). Loaded through
+# the Pydantic config path like every other new-core config.
+#
+# `configs/cobalt/` is a sanctioned new-core location — the old loader's
+# glob (configs/*.yaml) is top-level only and never reaches this
+# subdirectory (CLAUDE.md config-boundary law; verified with
+# `git check-ignore` before the file was added, not after).
+#
+# ---------------------------------------------------------------------
+# REDUCED IS A ROLE, NOT A SHEET (ruled by Dejan, 2026-09-04, S1-P2).
+# ---------------------------------------------------------------------
+# The sheets themselves are an ordered config list in
+# configs/cobalt/aset.yaml (`sheet_modes.order`, today [half, full]).
+# "Reduced" is the name of the LOWEST RUNG'S ROLE — the premarket floor
+# and the live rung he is currently on — and `reduced_sheet` below is
+# the pointer that says which sheet plays it.
+#
+# Today that is `half`. When a quarter sheet exists it becomes a row in
+# aset.yaml plus a line in `hotkey_files` here, `reduced_sheet` is
+# repointed to it, and NOTHING IN src/ CHANGES: the code says "reduced",
+# the config says which sheet that is. This is why no module names
+# `half` or `full` as a literal and why nothing counts the sheets.
+#
+# Charter §8 collision #2 ("no quarter sheet exists today; half is the
+# premarket floor until then") is unchanged by this file — it is exactly
+# what `reduced_sheet: half` encodes.
+daymode:
+  # WHICH SHEET PLAYS THE REDUCED ROLE. Must name a sheet declared in
+  # configs/cobalt/aset.yaml's `sheet_modes.sheets`; the loader refuses
+  # a dangling pointer rather than falling back to "probably the first
+  # one".
+  reduced_sheet: half
+
+  # The grade restriction that belongs to the REDUCED RUNG, narrowing
+  # (never widening) aset.yaml's account-wide `enabled_grades`. On the
+  # reduced rung he takes B and nothing else — an A key while reduced is
+  # refused with the reason on screen. Consumers: F6 (this module) and
+  # F10 (the key row's enabled/dimmed grades).
+  reduced_enabled_grades: [B]
+
+  # The modes currently PERMITTED, out of the ordered ladder
+  # (reduced -> each sheet, low to high). Today: the reduced rung only.
+  # Stage 1 picks the lowest enabled mode; the 09:00 proposal can never
+  # propose above the highest enabled one.
+  enabled_modes: [reduced]
+
+  # THE ATTESTED HOTKEY FILES — the real DAS Trader Pro file names, as
+  # they exist on the trading PC. Cobalt never reads these files and
+  # never touches DAS (absolute boundary): the trader states which one
+  # he loaded and Cobalt holds him to it. See src/cobalt/daymode/match.py
+  # for why this is attestation and not a read.
+  #
+  # Note both `half.htk` and `reduced_day.htk` exist and are DIFFERENT
+  # attestations: `reduced_day.htk` is the reduced rung (half-sized keys
+  # AND the B-only grade restriction), `half.htk` is the plain half rung.
+  # They resolve to different modes, so attesting the wrong one of the
+  # two is still a mismatch and still refuses.
+  hotkey_files:
+    - file: full.htk
+      mode: full
+    - file: half.htk
+      mode: half
+    - file: reduced_day.htk
+      mode: reduced

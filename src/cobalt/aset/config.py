@@ -20,12 +20,22 @@ UI/compute availability tracked separately via `enabled_grades` — see
 
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from .models import Grade
+
+if TYPE_CHECKING:  # quoted annotation only — dollars_for takes an id or an enum
+    from .models import SheetMode
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "configs" / "dev" / "aset.yaml"
@@ -156,31 +166,81 @@ class SheetModeGrades(BaseModel):
 
 
 class SheetModesConfig(BaseModel):
+    """The sheets, as an ORDERED CONFIG LIST — never a hardcoded pair.
+
+    RULED 2026-09-04 (S1-P2, F6): "Sheets are an ordered config list from
+    aset.yaml — today [half, full]; a quarter sheet will be added later
+    as a config row + its .htk, so never hardcode the count or names."
+
+    Before this the model carried `full:` and `half:` as two literal
+    fields and `dollars_for` branched `self.full if mode is FULL else
+    self.half` — so a third rung could not be added without editing this
+    class, which is exactly the anti-rigidity rule CLAUDE.md opens with.
+    Now `sheets` is a mapping keyed by whatever ids the config declares
+    and `order` lists them low -> high; adding a quarter sheet is a
+    config row and nothing else here changes.
+
+    `order` is explicit rather than relying on YAML mapping order: dict
+    insertion order happens to survive pyyaml today, but "which rung is
+    lower" is a trading fact and it is not going to rest on an
+    implementation detail of the parser.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
-    full: SheetModeGrades
-    half: SheetModeGrades
+    #: Sheet id -> its fixed-dollar key table. Ids are the config's, not
+    #: this module's: `half`, `full`, and `quarter` when it exists.
+    sheets: dict[str, SheetModeGrades] = Field(min_length=1)
+    #: The rungs, LOW to HIGH. F6's "lowest enabled sheet" reads this.
+    order: list[str] = Field(min_length=1)
     # UI/compute availability, separate from the dollar truth above.
     # Enabling a grade later is a config edit here — never a code
     # change (see engine.compute_sizing, which takes this as an
     # explicit argument rather than reading a hardcoded constant).
     enabled_grades: list[Grade] = Field(min_length=1)
 
-    def dollars_for(self, mode: "SheetMode | str", grade: "Grade | str") -> Decimal:
-        # Local import of SheetMode only (Grade is already a module-level
-        # import, needed for the enabled_grades field's type itself) —
-        # the string-typed signature lets callers pass either enums or
-        # raw values without forcing every load_config() caller through
-        # models.py's SheetMode too.
-        from cobalt.aset.models import SheetMode
+    @model_validator(mode="after")
+    def _order_covers_every_sheet(self) -> "SheetModesConfig":
+        missing = [s for s in self.sheets if s not in self.order]
+        unknown = [s for s in self.order if s not in self.sheets]
+        if missing or unknown:
+            raise ValueError(
+                f"sheet_modes.order must name every sheet exactly once — "
+                f"declared but unordered: {missing or 'none'}; "
+                f"ordered but undeclared: {unknown or 'none'}. "
+                "F6 resolves 'the lowest enabled sheet' from this list, so a "
+                "rung missing from it would silently never be reachable."
+            )
+        if len(set(self.order)) != len(self.order):
+            raise ValueError(f"duplicate sheet id(s) in sheet_modes.order: {self.order}")
+        return self
 
-        mode = SheetMode(mode)
-        grade = Grade(grade)
-        grades = self.full if mode is SheetMode.FULL else self.half
-        return getattr(grades, _FIELD_BY_GRADE[grade])
+    def dollars_for(self, mode: "SheetMode | str", grade: "Grade | str") -> Decimal:
+        """Fixed dollars for (sheet, grade). Takes an enum or a raw id.
+
+        The signature is unchanged from the two-field version — callers
+        (web.py, prefill/daily.py, the tests) pass `"full"` / `"half"` and
+        keep working.
+        """
+        sheet_id = getattr(mode, "value", mode)
+        grades = self.sheets.get(str(sheet_id))
+        if grades is None:
+            raise ConfigError(
+                f"no sheet {str(sheet_id)!r} in configs/cobalt/aset.yaml. "
+                f"Declared sheets (low to high): {', '.join(self.order)}."
+            )
+        return getattr(grades, _FIELD_BY_GRADE[Grade(grade)])
 
     def is_enabled(self, grade: "Grade | str") -> bool:
         return Grade(grade) in self.enabled_grades
+
+    @property
+    def lowest_sheet(self) -> str:
+        """The bottom rung as declared. F6's stage-1 floor resolves
+        through `daymode.reduced_sheet`, not through this — but a config
+        whose order disagrees with the pointer is worth being able to
+        see."""
+        return self.order[0]
 
 
 def load_sheet_modes_config() -> SheetModesConfig:

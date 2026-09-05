@@ -153,8 +153,13 @@ def test_local_override_wins_and_must_be_complete(monkeypatch, tmp_path):
 
 class TestSheetModesConfig:
     def test_committed_config_is_valid(self):
+        """Sheets are an ORDERED LIST since S1-P2 (F6) — `cfg.full` /
+        `cfg.half` were two literal fields and are now `cfg.sheets[id]`,
+        so that a quarter sheet is a config row and not a class edit.
+        This walks whatever the config declares, naming no sheet."""
         cfg = load_sheet_modes_config()
-        for grades in (cfg.full, cfg.half):
+        assert cfg.order and set(cfg.order) == set(cfg.sheets)
+        for grades in cfg.sheets.values():
             assert grades.A_plus > 0
             assert grades.A > 0
             assert grades.B > 0
