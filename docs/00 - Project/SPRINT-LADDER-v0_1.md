@@ -360,6 +360,18 @@ against production rather than against a fixture:**
    `DROP`/`TRUNCATE` aimed at the wrong name has Mattermost in blast
    radius. Worth a ruling — a schema of its own, or a prefix convention
    made law.
+
+   > **CORRECTION (2026-09-04, added by the split session; the paragraph
+   > above is left as written per the frozen-record policy.)** "116 of
+   > them Mattermost's" was arithmetic, not an inventory: 129 total minus
+   > 13 assumed ours. A pristine Mattermost 11.4.0 reference install —
+   > same image digest, empty database, its own migrations — creates
+   > **103** tables. Cobalt's half is **28**, every one with a
+   > `CREATE TABLE` in this repo. So 13 Cobalt tables were being counted
+   > as Mattermost's, and a `DROP` guarded by "the 116" would have
+   > destroyed them. The ruling that closed this went further than either
+   > option offered above: **one database per product** — see ADR-0006's
+   > 2026-09-04 section.
 2. **The Charter's own F18 test failed the first time.** Only RESIDENTS
    were probed against launchd, so unloading a one-shot's plist left the
    heartbeat green — between runs an unloaded one-shot looks identical
@@ -416,8 +428,11 @@ day-mode note, plus the one-click-fill and step-down-table cases.
   vault, and a new secret shape for F19 — not something to improvise
   inside a heartbeat.
 - The **shared-database ruling**: Cobalt's trading record and
-  Mattermost's 116 tables in one database. Prefix convention, or a
-  schema of its own.
+  Mattermost's tables in one database. Prefix convention, or a
+  schema of its own. **RULED AND DONE 2026-09-04** — neither: one
+  database per product. Mattermost moved to `mattermost`;
+  `cobalt_brain` is Cobalt's 28 tables alone (ADR-0006). The count
+  in this section was wrong — 103 Mattermost tables, not 116.
 - **`docs/` as a Sync target** — see the incident above.
 - **DevDocs**: `src/cobalt/vaultwrite/` (5 files) and
   `taxonomy/__init__.py` still have no page. Pre-existing gap, not
@@ -462,7 +477,7 @@ Stop-override authority (mock #6) — before S3-P2.
 
 | Feature | Charter acceptance (test) | What S3 delivers |
 |---|---|---|
-| **F11 Fill recompute + fill/exit capture** | Fill 27% past plan → warning, FILLED row, DRC counts it as a trade; a ½-off tap during the trade produces an estimated leg without a keystroke. | TRIGGERED → FILLED @ [last poll, editable] + PASS; drift warning scaled to ATR (his 09-03 defect), >20% distance = "re-read stop"; `legs` table {card, shares, price, time, flag estimated/confirmed}; ½ · ⅓ · flat · typed compounding off running shares; running 0 → CLOSED; realized R provisional while any leg estimated; DM line "TSLA filled 372.82 10" / "TSLA out 374.50 all" writes the same rows. No tap by expiry → EXPIRED. |
+| **F11 Fill recompute + fill/exit capture** | Fill 27% past plan → warning, FILLED row, DRC counts it as a trade; a ½-off tap during the trade produces an estimated leg without a keystroke. | TRIGGERED → FILLED @ [last poll, editable] + PASS; drift warning scaled to ATR (his 09-03 defect), >20% distance = "re-read stop"; `legs` table {card, shares, price, time, flag estimated/confirmed}; ½ · ⅓ · flat · typed compounding off running shares; running 0 → CLOSED; realized R provisional while any leg estimated; DM line "TSLA filled 372.82 10" / "TSLA out 374.50 all" writes the same rows. No tap by expiry → EXPIRED. **Attestation check (ruled 09-04, soft):** the `.htk` sheet stays a self-report — he states which file he loaded, it persists on the `day_modes` row, and a fill is recorded against that stated sheet. Reading DAS's own loaded-hotkey state, and overwriting the attestation from it, are DEFERRED: the trading PC is not on the tailnet and CLAUDE.md forbids touching DAS at all, so a hard check has nothing to read. The soft check still refuses card creation while the attestation disagrees — including when nothing has been attested. |
 | **F22 Trade-note auto-creation** | A fill at 10:12 has a trade note by 10:13. | On FILLED: trade note via vaultwrite (create-if-absent, frontmatter site, L28) lighting the dataview table; legs update the note in place. Verify whether slice-2's version exists; if so, convert to the state-machine event. |
 | **F14 DRC prefill / reconcile / DRC→mode** | 09:00 proposal quotes the prior DRC; DRC note exists at 15:41 with every Cobalt field filled. | Separate `DRC-YYYY-MM-DD.md` in SMB format from the reviewed Templater template; prefilled 15:40: cards written / trades taken (FILLED only), every unfilled card asked taken/passed/discarded, pick-vs-rank, miss line, cost-of-discipline tally, adherence checkboxes, excitement audit, estimated legs to confirm, time blocks, PnL; daily note gets 3-line stub + link; next-morning F6 proposal cites it. `drc_builder` PDF = SHOULD, only if the sprint has room. |
 | **F15 Prediction records** | Any card's grade replays from stored inputs. | Every score + WHY stored with its inputs and joined to the card outcome (legs, realized R, MISSED counterfactual); a `replay(card_id)` command recomputes the grade from stored inputs and diffs. This is the corpus the post-MVP reasoning layer trains on. |
@@ -527,12 +542,14 @@ post-MVP lane (§11) fights for slots at sprint boundaries.
 
 - Trading PC joins Tailscale (his) — S4 precondition; S1-P1 reports status.
 - `.htk` label check (his) — S4 precondition.
+- `.htk` attestation is self-report until S3 — the soft check ships in S1 and stands through S2; F11 is where a fill is first recorded against the attested sheet. Nothing reads DAS before then, and nothing is planned to (ruled 09-04).
 - Health thresholds (#8) + detail-column order (#11) — before S2-P3.
 - DRC template review session (Dejan + Claude) — before S3-P3.
 - Stop-override authority (#6) — before S3-P2.
 - Trade-count goal band value (his, Rules Engine session) — placeholder in S1.
 - Hand-logged legs in the DRC chat continue until F11 lands (S3).
-- Vault backup restic → B2 + SSD (gated, before Tahoe) — schedule as an Opus write session at the S1/S2 boundary; not a Charter feature but the only thing standing between the corpus and a bad night.
+- Vault backup restic → B2 + SSD (gated, before Tahoe) — **mechanism BUILT and restore PROVEN 2026-09-04** (`src/cobalt/backup/`, `configs/cobalt/backup.yaml`, `cobalt backup run/status/restore`, 14 tests): a real snapshot of the vault + a fresh `cobalt_brain` dump restored byte-identical, and the dump reloaded into a scratch database matching live on every table and on md5 over 4.79M ordered `bars` rows. **NOT ARMED and NOT SCHEDULED** — neither ruled destination exists on this host: no external SSD is mounted, and the vault holds no B2 credential. Needs three values stored in VaultManager (`B2_ACCOUNT_ID`, `B2_ACCOUNT_KEY`, the bucket name into `backup.yaml`) or an SSD plugged in, plus `RESTIC_PASSWORD`. The plist waits in `ops/pending/` with its five-step arming procedure; loading it before a destination exists would DM a red heartbeat every 15 minutes for a gap already written down. Still the only thing standing between the corpus and a bad night.
+- **Mattermost database split — DONE 2026-09-04** (ruled 09-04, branch `ops/mattermost-split`). Mattermost moved off `cobalt_brain` into its own `mattermost` database; Cobalt keeps `cobalt_brain`, its name, its role and every plist value. `cobalt_brain` is 131 tables → 28, all Cobalt's. The S1-P3 registry's "116 of them Mattermost's" was WRONG — a pristine Mattermost 11.4.0 reference install proves 103, and 13 of the 28 Cobalt tables had been counted as Mattermost's. Dropping "the 116" would have destroyed them.
 - `sudo crontab -l` (his). Push of taxonomy/trade-defs-v0_3 (his). rules.yaml + gemini-era-vault-side commit ruling.
 - Taxonomy v0.8 consolidation — at S2-P2.
 - Spike leftovers: TV webhook extended hours + alert-slot cap — post-MVP SHOULD, untouched here.
