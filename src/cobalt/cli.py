@@ -10,6 +10,10 @@ Two command groups:
     cobalt session backfill [--dry-run]
     cobalt session blocks [--limit N]
 
+    cobalt cards state/history/move/backfill/expire/edges
+
+    cobalt daymode show/propose/decide/attest
+
     cobalt validate
 
 `restore` puts a section back to the before-state recorded in
@@ -17,7 +21,9 @@ Two command groups:
 markers, same mtime/hash guard, same atomic rename, and its own audit
 row. There is no second write path, not even for undo.
 
-`session` is the F1 clock (Charter §3 F1). `validate` is the config gate
+`session` is the F1 clock (Charter §3 F1); `cards` is the F7 state
+machine (Charter §3 F7); `daymode` is F6's two-stage mode.
+`validate` is the config gate
 (F16) — the same `python -m cobalt.taxonomy.validate` the tests run,
 given a name an operator can remember.
 """
@@ -40,6 +46,8 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 from cobalt.aset.config import load_config as load_aset_config  # noqa: E402
+from cobalt.cards import cli as cards_cli  # noqa: E402
+from cobalt.daymode import cli as daymode_cli  # noqa: E402
 from cobalt.session import cli as session_cli  # noqa: E402
 from cobalt.taxonomy import validate as taxonomy_validate  # noqa: E402
 from cobalt.vaultwrite import VaultWriter, VaultWriteStore  # noqa: E402
@@ -90,6 +98,7 @@ def _cmd_validate(args: argparse.Namespace) -> None:
     is a config the runtime can boot on."""
     from cobalt.session.calendar import load_calendar
     from cobalt.session.clock import BOUNDARY_KEYS, SessionClock
+    from cobalt.taxonomy.loader import load_tunables
 
     rc = taxonomy_validate.main()
     if rc != 0:
@@ -108,6 +117,57 @@ def _cmd_validate(args: argparse.Namespace) -> None:
     print(
         f"Session boundaries: {len(BOUNDARY_KEYS)} tunables rows resolved, "
         "ordering OK."
+    )
+
+    # F16 sweep, S1-P2: the two config families this sprint introduced.
+    # Same rule as above — building the object IS the check, because the
+    # loaders fail loud on a dangling pointer, an unknown mode, a grade
+    # that would WIDEN the account ladder, or a sheet missing from
+    # `order`. A config that passes here is one the runtime can boot on.
+    from cobalt.aset.config import load_sheet_modes_config
+    from cobalt.cards.models import ALLOWED, TERMINAL, CardState
+    from cobalt.daymode.config import load_daymode_config
+    from cobalt.daymode.propose import BAND_MAX_KEY, BAND_MIN_KEY
+
+    sheets = load_sheet_modes_config()
+    print(
+        f"\nSheets: {len(sheets.order)} declared, low to high "
+        f"{' < '.join(sheets.order)} (ordered list, not a hardcoded pair)."
+    )
+
+    dm = load_daymode_config(sheets)
+    print(
+        f"Day modes: ladder {' < '.join(dm.modes)}; enabled {dm.enabled_modes}; "
+        f"stage-1 floor {dm.lowest_enabled} -> {dm.sheet_for(dm.lowest_enabled)} sheet, "
+        f"keys {[g.value for g in dm.enabled_grades_for(dm.lowest_enabled)]}."
+    )
+    print(
+        f"Hotkey files: {', '.join(f'{h.file}={h.mode}' for h in dm.hotkey_files)} "
+        "(attested, never read — Cobalt does not touch DAS)."
+    )
+
+    registry = load_tunables().by_key
+    for key in (BAND_MIN_KEY, BAND_MAX_KEY):
+        row = registry.get(key)
+        if row is None:
+            print(f"FAILED: tunable {key!r} is missing — F6 has no built-in default (F16).")
+            sys.exit(1)
+        state = "PLACEHOLDER (unruled)" if row.value is None else repr(row.value)
+        print(f"Tunable {key}: {state}, consumers {row.consumers}")
+
+    # The edge table is data; a state with no way in or out is a config
+    # error in code form, and it is worth catching in the same gate.
+    unreachable = [
+        s.value for s in CardState
+        if s is not CardState.WATCH and not any(s in to for to in ALLOWED.values())
+    ]
+    if unreachable:
+        print(f"FAILED: card state(s) with no inbound edge: {unreachable}")
+        sys.exit(1)
+    print(
+        f"Card states: {len(CardState)} states, "
+        f"{sum(len(t) for t in ALLOWED.values())} legal edges, "
+        f"{len(TERMINAL)} terminal, every state reachable."
     )
 
 
@@ -132,6 +192,8 @@ def main() -> None:
     overrides.set_defaults(func=_cmd_overrides)
 
     session_cli.add_parser(sub)
+    cards_cli.add_parser(sub)
+    daymode_cli.add_parser(sub)
 
     validate = sub.add_parser(
         "validate", help="Validate every config family (F16 sweep gate)."
