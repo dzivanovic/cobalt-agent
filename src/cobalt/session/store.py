@@ -45,8 +45,12 @@ class SessionBlockStore:
                     if statement:
                         conn.execute(statement)
 
+    REFUSED = "refused"
+    UNGATED_RUN = "ungated_run"
+
     def record(
-        self, *, session: str, actor: str, target: Optional[str], reason: str
+        self, *, session: str, actor: str, target: Optional[str], reason: str,
+        kind: str = REFUSED,
     ) -> Optional[int]:
         """Append one refusal. Returns its id, or None if it could not be
         persisted (which is logged at ERROR and never raised — see the
@@ -55,9 +59,9 @@ class SessionBlockStore:
             self.ensure_schema()
             with self._connect() as conn:
                 row = conn.execute(
-                    "INSERT INTO session_blocks (session, actor, target, reason) "
-                    "VALUES (%s, %s, %s, %s) RETURNING id",
-                    (session, actor, target, reason),
+                    "INSERT INTO session_blocks (session, actor, target, reason, kind) "
+                    "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                    (session, actor, target, reason, kind),
                 ).fetchone()
             return int(row[0]) if row else None
         except Exception as e:
@@ -93,10 +97,34 @@ class SessionBlockStore:
             (now or session_clock_mod.now_utc()) - timedelta(minutes=int(row.value))
         )
 
+    def counts_over_window(self, now: Optional[datetime] = None) -> dict[str, int]:
+        """The heartbeat's number, SPLIT BY KIND (S1-P3 ruling).
+
+        A refusal and an ungated repair run are both "a write met the
+        market_reset window tonight", which is why they share a counter —
+        but they are not the same event, and F18 shows both numbers so
+        nobody reads five repair runs as five refusals.
+        """
+        from cobalt.taxonomy.loader import load_tunables
+
+        row = load_tunables().by_key.get(HEARTBEAT_WINDOW_KEY)
+        if row is None:
+            raise RuntimeError(
+                f"tunable {HEARTBEAT_WINDOW_KEY!r} is missing from tunables.yaml — "
+                "the heartbeat window is config, not a literal (F16)"
+            )
+        since = (now or session_clock_mod.now_utc()) - timedelta(minutes=int(row.value))
+        with self._connect() as conn:
+            cur = conn.execute(
+                "SELECT kind, count(*) FROM session_blocks WHERE ts >= %s GROUP BY 1",
+                (since,),
+            )
+            return {r[0]: int(r[1]) for r in cur.fetchall()}
+
     def recent(self, limit: int = 20) -> list[dict[str, Any]]:
         with self._connect() as conn:
             cur = conn.execute(
-                "SELECT id, ts, session, actor, target, reason "
+                "SELECT id, ts, session, actor, target, reason, kind "
                 "FROM session_blocks ORDER BY id DESC LIMIT %s",
                 (limit,),
             )

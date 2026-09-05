@@ -21,7 +21,7 @@ but boundary predicates.
 
 from .calendar import CalendarError, TradingCalendar, load_calendar
 from .clock import ET, SessionClock, SessionError, current_session, session_clock
-from .guard import SessionBlocked, assert_writable, block_message
+from .guard import SessionBlocked, assert_writable, block_message, note_ungated
 from .models import BLOCKED_SESSION, Session
 from .store import SessionBlockStore
 
@@ -37,6 +37,7 @@ __all__ = [
     "TradingCalendar",
     "assert_writable",
     "block_message",
+    "note_ungated",
     "current_session",
     "load_calendar",
     "session_clock",

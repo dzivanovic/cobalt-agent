@@ -546,3 +546,78 @@ def compute_test_sizing():
         [Grade.A],
         Decimal("10"),
     )
+
+
+# =====================================================================
+# The migration/repair carve-out (RULED 2026-09-04, S1-P3, with veto)
+# =====================================================================
+
+
+class TestUngatedRepairRuns:
+    """Migration and repair tooling runs inside `market_reset` — and can
+    never run QUIETLY there.
+
+    The ruling's two halves: the carve-out exists because locking
+    recovery out of 20:00-21:00 would mean the one hour you most need to
+    repair state is the hour you cannot; and the price of it is one loud
+    line plus a row in the same counter F18 displays. Card CREATION stays
+    refused, because that is trading record and the block exists for it.
+    """
+
+    INSIDE = datetime(2026, 9, 5, 0, 30, tzinfo=timezone.utc)    # 20:30 ET
+    OUTSIDE = datetime(2026, 9, 4, 18, 0, tzinfo=timezone.utc)   # 14:00 ET
+
+    class _Recorder:
+        def __init__(self):
+            self.rows = []
+
+        def record(self, **kw):
+            self.rows.append(kw)
+            return 1
+
+    def test_inside_the_window_it_logs_and_counts(self):
+        from cobalt.session import note_ungated
+        from cobalt.session.store import SessionBlockStore
+
+        store = self._Recorder()
+        note_ungated("test.tool", target="db", why="because", now=self.INSIDE, store=store)
+
+        assert len(store.rows) == 1
+        row = store.rows[0]
+        assert row["kind"] == SessionBlockStore.UNGATED_RUN
+        assert "UNGATED (test.tool)" in row["reason"]
+        assert "because" in row["reason"]
+
+    def test_outside_the_window_it_is_completely_silent(self):
+        """A backfill at two in the afternoon is not an event."""
+        from cobalt.session import note_ungated
+
+        store = self._Recorder()
+        note_ungated("test.tool", target="db", why="because", now=self.OUTSIDE, store=store)
+        assert store.rows == []
+
+    def test_it_never_refuses(self):
+        """The whole point: it reports, it does not gate."""
+        from cobalt.session import SessionBlocked, note_ungated
+
+        store = self._Recorder()
+        try:
+            note_ungated("test.tool", why="because", now=self.INSIDE, store=store)
+        except SessionBlocked:
+            pytest.fail("note_ungated must never raise — it is a report, not a gate")
+
+    def test_card_creation_is_still_refused_inside_the_window(self):
+        """The carve-out is for repair tooling only. Trading record is
+        exactly what the block exists for."""
+        from cobalt.session import SessionBlocked, assert_writable
+
+        with pytest.raises(SessionBlocked):
+            assert_writable("aset.card", target="TSLA", now=self.INSIDE,
+                            store=self._Recorder())
+
+    def test_the_two_kinds_are_reported_separately_not_summed(self):
+        """F18 shows both numbers. Reading five repairs as five refusals
+        would send someone hunting a bug that is not there."""
+        from cobalt.session.store import SessionBlockStore
+
+        assert SessionBlockStore.REFUSED != SessionBlockStore.UNGATED_RUN

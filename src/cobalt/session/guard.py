@@ -68,6 +68,58 @@ def _window_text(clock: SessionClock) -> str:
     return f"{window.start:%H:%M}-{window.end:%H:%M}"
 
 
+def note_ungated(
+    actor: str,
+    *,
+    target: Optional[str] = None,
+    why: str,
+    now: Optional[datetime] = None,
+    clock: Optional[SessionClock] = None,
+    store: Optional[SessionBlockStore] = None,
+) -> Session:
+    """Migration/repair tooling ran inside the block. Say so, loudly.
+
+    RULED 2026-09-04 (S1-P3, decided-with-veto): migration and repair
+    tooling stays UNGATED in `market_reset`. `VaultWriter.restore` and
+    `CardStore.backfill` already carried that carve-out in comments; the
+    reasoning is the same in both — locking recovery out for the
+    20:00-21:00 window would mean the one hour you most need to repair
+    state is the hour you cannot. Card CREATION stays refused: that is
+    trading record, and the block exists for it.
+
+    The price of the carve-out is that it may never happen QUIETLY. Every
+    such run inside the window logs ONE LOUD LINE and increments the same
+    counter F18 displays, tagged `ungated_run` so a repair is never read
+    as a refusal.
+
+    OUTSIDE the window this does nothing at all — no log line, no row. A
+    backfill at two in the afternoon is not an event.
+    """
+    clock = clock or session_clock()
+    ts = now or clock_mod.now_utc()
+    session = clock.session(ts)
+    if session is not BLOCKED_SESSION:
+        return session
+
+    et = clock.to_et(ts)
+    message = (
+        f"UNGATED ({actor}): it is {et:%H:%M:%S} ET on {et:%Y-%m-%d} — inside "
+        f"MARKET RESET, where every ordinary write is refused. This ran anyway "
+        f"under the migration/repair carve-out (ruled 2026-09-04): {why}. It is "
+        "counted on the heartbeat so that a repair inside the block can never be "
+        "a quiet one."
+    )
+    logger.error(message)
+    (store or SessionBlockStore()).record(
+        session=session.value,
+        actor=actor,
+        target=target,
+        reason=message,
+        kind=SessionBlockStore.UNGATED_RUN,
+    )
+    return session
+
+
 def assert_writable(
     actor: str,
     *,

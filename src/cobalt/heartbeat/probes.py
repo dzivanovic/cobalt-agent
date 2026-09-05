@@ -175,11 +175,21 @@ def vaultwrite_blocks(now: Optional[datetime] = None) -> Probe:
 
     try:
         store = SessionBlockStore()
-        count = store.count_over_window(now=now)
+        counts = store.counts_over_window(now=now)
     except Exception as e:  # noqa: BLE001
         return Probe("vault blocks", False, f"counter unreadable: {type(e).__name__}: {e}",
                      unknown=True)
-    return Probe("vault blocks", True, f"{count} in the counter window")
+    refused = counts.get(SessionBlockStore.REFUSED, 0)
+    ungated = counts.get(SessionBlockStore.UNGATED_RUN, 0)
+    # BOTH numbers, always, and never summed into one. They share a
+    # counter because they are both "a write met the market_reset window"
+    # — but a refusal is the guard working and an ungated run is the
+    # carve-out being used, and reading five repairs as five refusals
+    # would send someone hunting a bug that is not there.
+    return Probe(
+        "vault blocks", True,
+        f"{refused} refused, {ungated} ungated repair run(s) in the counter window",
+    )
 
 
 def redactions(minutes: int, now: Optional[datetime] = None) -> Probe:

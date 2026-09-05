@@ -78,6 +78,18 @@ def cmd_backfill(args: argparse.Namespace) -> None:
     db_name = env.resolve_db_name()
     print(f"database  : {db_name}  (COBALT_ENV={env.resolve_env()})")
 
+    # RULING 2026-09-04 (S1-P3): migration tooling stays ungated inside
+    # market_reset — and never runs quietly there. One loud line, one row
+    # in the counter F18 shows. Outside the window this does nothing.
+    from cobalt.session import note_ungated
+
+    note_ungated(
+        "session.backfill",
+        target=db_name,
+        why="stamping `session` on existing rows is migration tooling, run "
+            "deliberately by a human, and it names the database it wrote",
+    )
+
     conn = db.connect(db_name, allow_prod=True)
     conn.autocommit = False
     try:

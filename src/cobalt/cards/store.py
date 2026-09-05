@@ -641,6 +641,17 @@ class CardStore:
         know how it got there.
         """
         clock = session_clock()
+        # RULING 2026-09-04 (S1-P3, decided-with-veto): this runs inside
+        # market_reset if that is when it is needed — but never quietly.
+        # One loud line, and the same counter F18 shows.
+        from cobalt.session import note_ungated
+
+        note_ungated(
+            "cards.backfill",
+            target=self.db_name,
+            why="classifying state-less cards is repair tooling; refusing it inside "
+                "the block would lock recovery out of the hour it is most needed",
+        )
         # The column must exist before it can be populated, and the
         # NOT NULL must NOT be applied yet — see ensure_schema's note.
         self.ensure_schema(allow_prod=allow_prod, include_not_null=False)

@@ -56,7 +56,13 @@ from typing import Callable, Optional
 
 from loguru import logger
 
-from cobalt.session import Session, SessionClock, assert_writable, session_clock
+from cobalt.session import (
+    Session,
+    SessionClock,
+    assert_writable,
+    note_ungated,
+    session_clock,
+)
 from cobalt.session import clock as session_clock_mod
 from cobalt.vault import (
     PROD_VAULT_PATH_REFERENCE,
@@ -880,6 +886,19 @@ class VaultWriter:
         # the 20:00-21:00 window would mean the one hour you most want to
         # undo a bad write is the one hour you cannot. The write is still
         # audited and still stamps the session it happened in.
+        #
+        # RULED 2026-09-04 (S1-P3): the carve-out costs one loud line and
+        # a row in the counter F18 shows. Outside the window this is a
+        # no-op. Inside it, a rollback can never be a quiet one.
+        note_ungated(
+            f"vaultwrite:{self.writer}:restore",
+            target=str(path),
+            why=f"restoring vault_writes id {write_id} is the rollback path — the "
+                "one hour you most want to undo a bad write must not be the one "
+                "hour you cannot",
+            now=self._now(),
+            clock=self.clock,
+        )
         self._purge_once()
         if not path.exists():
             raise VaultWriteError(f"REFUSED: {path} no longer exists — nothing to restore into.")
