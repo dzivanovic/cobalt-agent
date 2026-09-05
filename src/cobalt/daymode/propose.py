@@ -38,10 +38,11 @@ the point of deriving the ladder rather than hardcoding it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any, Optional
 
 from cobalt.session import session_clock
+from cobalt.session import clock as clock_mod
 
 from .config import DayModeConfig, load_daymode_config
 
@@ -50,6 +51,14 @@ from .config import DayModeConfig, load_daymode_config
 #: know what they should be.
 BAND_MIN_KEY = "daymode.trade_count_band.min"
 BAND_MAX_KEY = "daymode.trade_count_band.max"
+
+#: The ET wall-clock boundary between stage 1 and stage 2. F16: "is it
+#: stage 2 yet" is a predicate, so its threshold is a tunables row and
+#: not a literal — read HERE, by `decided_or_stage1`, which is what
+#: makes the row's named consumer true rather than aspirational. The
+#: launchd schedule mirrors the same number, because launchd cannot read
+#: a tunables row; `cobalt validate` prints it so a drift is visible.
+STAGE2_OPEN_KEY = "daymode.stage2_open"
 
 #: The literal the reason carries when no DRC can be found for the prior
 #: trading day. Loud, and surfaced in the sheet banner — an absent DRC is
@@ -67,6 +76,20 @@ class Proposal:
     prior_trading_day: Optional[date] = None
     prior_filled: int = 0
     drc_note: Optional[str] = None
+
+
+def stage2_open() -> time:
+    """The ET time stage 2 begins, from tunables. No built-in default."""
+    from cobalt.taxonomy.loader import load_tunables
+
+    row = load_tunables().by_key.get(STAGE2_OPEN_KEY)
+    if row is None:
+        raise RuntimeError(
+            f"tunable {STAGE2_OPEN_KEY!r} is missing from tunables.yaml — F6 reads "
+            "the stage boundary from config and has no built-in default (F16)."
+        )
+    hour, _, minute = str(row.value).partition(":")
+    return time(int(hour), int(minute))
 
 
 def stage1_mode(cfg: Optional[DayModeConfig] = None) -> str:
@@ -221,14 +244,28 @@ def propose(
     )
 
 
-def decided_or_stage1(row: Optional[dict[str, Any]], cfg: Optional[DayModeConfig] = None) -> str:
-    """The mode IN FORCE right now.
+def decided_or_stage1(
+    row: Optional[dict[str, Any]],
+    cfg: Optional[DayModeConfig] = None,
+    now: Optional[datetime] = None,
+) -> str:
+    """The mode IN FORCE at `now`.
 
-    "Until decided after 09:00, the sheet stays on the stage-1 mode."
-    A proposal is not a decision — an unanswered 09:00 question leaves
-    the floor in place, which is the safe direction.
+    Two ways to land on the stage-1 floor, and they are different:
+
+    * **It is not stage 2 yet.** Before `daymode.stage2_open` (09:00 ET)
+      the floor holds no matter what the row says. A decision cannot
+      apply retroactively to the premarket in which no stop can rest —
+      that is the system rule, not a preference, so it is not something a
+      later decision reaches back and overrides.
+    * **Stage 2, but unanswered.** A proposal is not a decision. An
+      unanswered 09:00 question leaves the floor in place, which is the
+      safe direction.
     """
     cfg = cfg or load_daymode_config()
+    et = session_clock().to_et(now or clock_mod.now_utc())
+    if et.time() < stage2_open():
+        return cfg.lowest_enabled
     if row and row.get("decided"):
         return str(row["decided"])
     return cfg.lowest_enabled
@@ -241,7 +278,9 @@ __all__ = [
     "Proposal",
     "build_reason",
     "decided_or_stage1",
+    "STAGE2_OPEN_KEY",
     "prior_trading_day",
     "propose",
     "stage1_mode",
+    "stage2_open",
 ]

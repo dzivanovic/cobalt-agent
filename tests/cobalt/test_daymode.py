@@ -43,6 +43,11 @@ from cobalt.daymode.store import DayModeError, DayModeStore
 
 ET = ZoneInfo("America/New_York")
 
+
+def _at(hour: int, minute: int = 0) -> datetime:
+    """An ET instant on 2026-09-03, a plain full trading day."""
+    return datetime(2026, 9, 3, hour, minute, tzinfo=ET)
+
 requires_db = pytest.mark.skipif(
     not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
     reason="Postgres env settings not available",
@@ -186,14 +191,33 @@ class TestStage1:
     def test_an_undecided_proposal_leaves_stage_1_in_force(self):
         cfg = _cfg(enabled_modes=("reduced", "half", "full"))
         row = {"proposed": "full", "decided": None}
-        assert decided_or_stage1(row, cfg) == "reduced"
+        assert decided_or_stage1(row, cfg, _at(10, 30)) == "reduced"
 
     def test_a_decision_takes_over_from_stage_1(self):
         cfg = _cfg(enabled_modes=("reduced", "half", "full"))
-        assert decided_or_stage1({"proposed": "half", "decided": "half"}, cfg) == "half"
+        assert decided_or_stage1(
+            {"proposed": "half", "decided": "half"}, cfg, _at(10, 30)
+        ) == "half"
 
     def test_no_row_at_all_is_stage_1(self):
-        assert decided_or_stage1(None, _cfg()) == "reduced"
+        assert decided_or_stage1(None, _cfg(), _at(10, 30)) == "reduced"
+
+    def test_before_0900_the_floor_holds_even_against_a_decision(self):
+        """The premarket floor is a SYSTEM RULE — no stop can rest
+        premarket — so a later decision does not reach back and override
+        the session in which it could not have applied. The boundary is
+        the `daymode.stage2_open` tunable, read by the code, not a
+        literal (F16)."""
+        cfg = _cfg(enabled_modes=("reduced", "half", "full"))
+        decided_full = {"proposed": "reduced", "decided": "full"}
+        assert decided_or_stage1(decided_full, cfg, _at(8, 59)) == "reduced"
+        assert decided_or_stage1(decided_full, cfg, _at(9, 0)) == "full"
+        assert decided_or_stage1(decided_full, cfg, _at(5, 15)) == "reduced"
+
+    def test_stage2_open_comes_from_tunables(self):
+        from cobalt.daymode.propose import stage2_open
+
+        assert stage2_open().strftime("%H:%M") == "09:00"
 
 
 # =====================================================================
