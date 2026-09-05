@@ -39,6 +39,30 @@ def no_persistence(monkeypatch):
     # guards under test here.
     monkeypatch.setenv("COBALT_ALLOW_DEV_ENTRY", "1")
 
+    # F6 (S1-P2): /size now refuses a card whose attested `.htk` does not
+    # match the day mode in force, and refuses outright when nothing has
+    # been attested. These tests are about web.py's OWN guards (the
+    # entry-ticker backstop, the stop-side/typo rejects, the dev fence),
+    # so the day mode is stubbed into the matched state — otherwise every
+    # one of them would stop at the F6 banner and prove nothing about the
+    # guard it names. The F6 refusal itself is tested in TestMatchCheckAtTheSheet
+    # below and in tests/cobalt/test_daymode.py.
+    from cobalt.daymode.config import load_daymode_config
+
+    cfg = load_daymode_config()
+    monkeypatch.setattr(
+        web_module,
+        "_daymode_state",
+        lambda: {
+            "cfg": cfg,
+            "day": None,
+            "row": {"attested_sheet": "reduced_day.htk"},
+            "mode": cfg.lowest_enabled,
+            "stage": "stage 1 (system rule)",
+            "error": None,
+        },
+    )
+
 
 BASE_SIZE_FORM = {
     "ticker": "NVDA",
@@ -285,3 +309,65 @@ class TestDevEntryFence:
         text = web_module._render()
         assert "pre-beta slice 1 · PRODUCTION" in text
         assert "DEV INSTANCE" not in text
+
+
+class TestMatchCheckAtTheSheet:
+    """F6 at the write path — the Charter's own acceptance test, through
+    the actual HTTP endpoint rather than the checker in isolation."""
+
+    def _stub_daymode(self, monkeypatch, *, attested, mode=None):
+        from cobalt.daymode.config import load_daymode_config
+
+        cfg = load_daymode_config()
+        monkeypatch.setattr(
+            web_module,
+            "_daymode_state",
+            lambda: {
+                "cfg": cfg,
+                "day": None,
+                "row": ({"attested_sheet": attested} if attested else {}),
+                "mode": mode or cfg.lowest_enabled,
+                "stage": "stage 1 (system rule)",
+                "error": None,
+            },
+        )
+
+    def test_full_sheet_attested_on_a_reduced_day_refuses_the_card(self, monkeypatch):
+        """'He loads the full sheet on a half day -> card refused with
+        the reason' (Charter §3 F6)."""
+        self._stub_daymode(monkeypatch, attested="full.htk")
+        r = client.post("/size", data=BASE_SIZE_FORM)
+        assert "FAILED" in r.text
+        assert "sheet FULL loaded, day mode REDUCED" in r.text
+        assert "reload reduced_day.htk or overrule" in r.text
+        assert "never reach AsetStore" not in r.text, "no card was written"
+
+    def test_nothing_attested_refuses_too(self, monkeypatch):
+        self._stub_daymode(monkeypatch, attested=None)
+        r = client.post("/size", data=BASE_SIZE_FORM)
+        assert "FAILED" in r.text
+        assert "No hotkey file attested" in r.text
+        assert "never reach AsetStore" not in r.text
+
+    def test_a_key_outside_the_rung_is_refused(self, monkeypatch):
+        """A+ on the reduced rung — the grade restriction, not the sheet."""
+        self._stub_daymode(monkeypatch, attested="reduced_day.htk")
+        r = client.post("/size", data=dict(BASE_SIZE_FORM, grade="A+"))
+        assert "FAILED" in r.text
+        assert "never reach AsetStore" not in r.text
+
+    def test_the_matching_sheet_lets_the_card_through(self, monkeypatch):
+        self._stub_daymode(monkeypatch, attested="reduced_day.htk")
+        r = client.post("/size", data=BASE_SIZE_FORM)
+        assert "never reach AsetStore" in r.text, "reached persistence"
+
+    def test_an_unresolved_day_mode_refuses_every_card(self, monkeypatch):
+        monkeypatch.setattr(
+            web_module,
+            "_daymode_state",
+            lambda: {"cfg": None, "day": None, "row": None, "mode": None,
+                     "stage": "UNRESOLVED", "error": "ConfigError: daymode.yaml missing"},
+        )
+        r = client.post("/size", data=BASE_SIZE_FORM)
+        assert "FAILED" in r.text
+        assert "Day mode unresolved" in r.text

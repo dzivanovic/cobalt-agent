@@ -29,6 +29,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from fastapi import FastAPI, Request
+from loguru import logger
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from cobalt.prefill.config import PrefillConfigError, load_prefill_paths
@@ -36,6 +37,24 @@ from cobalt.prefill.trade_note import upsert_trade_note
 from cobalt.prefill.vault_writer import VaultWriteError
 from cobalt import env
 from cobalt.session import SessionBlocked, assert_writable
+from cobalt.session.clock import now_utc, session_clock
+from cobalt.cards import (
+    ALLOWED,
+    STOP_EDITABLE,
+    Actor,
+    CardState,
+    CardStateError,
+    CardStore,
+    IllegalTransition,
+)
+from cobalt.daymode import (
+    DayModeStore,
+    SheetMismatch,
+    assert_grade_allowed,
+    assert_sheet_matches,
+    decided_or_stage1,
+    load_daymode_config,
+)
 from cobalt.vault import VaultConfigError, dev_entry_allowed, is_production, resolve_vault_path
 
 from .config import ConfigError, load_config, load_sheet_modes_config
@@ -91,11 +110,45 @@ CSS = """
  table{width:100%;font-size:13px;border-collapse:collapse} td{padding:4px 8px;border-bottom:1px solid #20283c}
  .muted{color:#7f8ca8;font-size:12px}
  option:disabled{color:#55607a}
+ .mode{background:#0d1b2e;border:1px solid #1d3557;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px}
+ .mode b{color:#00e5ff;letter-spacing:.04em}
+ .mode .why{color:#7f8ca8;font-size:12px;margin-top:6px;line-height:1.45}
+ .mode.mismatch{background:#3a0d18;border-color:#ff4f71;color:#ffc3ce}
+ .attest{display:flex;gap:8px;align-items:center;margin-top:8px}
+ .attest select{flex:1}
+ .attest button{margin-top:0;white-space:nowrap}
+ .cards{margin-top:4px}
+ .crow{border:1px solid #20283c;border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#0e1526}
+ .crow .top{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+ .crow .tk{font-weight:900;font-size:16px}
+ .st{font-size:11px;font-weight:800;letter-spacing:.08em;padding:2px 8px;border-radius:99px;border:1px solid}
+ .st-WATCH{color:#8d9bb6;border-color:#28334d}
+ .st-ARMED{color:#00e5ff;border-color:#00e5ff}
+ .st-TRIGGERED{color:#ffd84d;border-color:#ffd84d}
+ .st-FILLED{color:#24d986;border-color:#24d986}
+ .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+ .acts button{margin-top:0;padding:6px 10px;font-size:12px}
+ .acts button.danger{border-color:#ff4f71;color:#ff8ea4}
+ .stopedit{display:flex;gap:6px;align-items:center;margin-top:8px}
+ .stopedit input{padding:6px 8px;font-size:13px;max-width:130px}
+ .stopedit button{margin-top:0;padding:6px 10px;font-size:12px}
+ .yours{font-size:10px;font-weight:800;letter-spacing:.06em;color:#ffd84d;border:1px solid #ffd84d;border-radius:99px;padding:1px 7px}
+ .locked{color:#55607a;font-size:11px;font-style:italic}
 """
 
 JS = """
  const MODE_DOLLARS = window.SHEET_MODE_DOLLARS;
  const $ = id => document.getElementById(id);
+
+ // F7: MISSED and DISARM carry a reason or they do not happen
+ // (cards/store.py _assert_reason). Prompt here so he types it once,
+ // rather than posting an empty field and reading a refusal.
+ function askReason(btn, label){
+   const why = window.prompt(label + ' — reason (required):', '');
+   if (why === null || !why.trim()) return false;
+   btn.form.reason.value = why.trim();
+   return true;
+ }
 
  // STATE PRINCIPLE (Defect 3, 2026-09-01): the ticker box going out of
  // focus is "new card" intent, full stop — whether or not the ticker
@@ -131,10 +184,13 @@ JS = """
    $('shortBtn').classList.toggle('active-short', d === 'short');
  }
 
+ // F6 (S1-P2): the sheet mode is no longer a toggle. It is set by the
+ // day mode in force and rendered read-only, so this only refreshes the
+ // dollar hint — the two FULL/HALF buttons it used to light up are gone
+ // (a card sized off a mode he picked freely is the mismatch the match
+ // check exists to refuse).
  function setMode(m){
-   $('sheet_mode').value = m;
-   $('fullBtn').classList.toggle('active-mode', m === 'full');
-   $('halfBtn').classList.toggle('active-mode', m === 'half');
+   if (m) $('sheet_mode').value = m;
    updateModeHint();
  }
 
@@ -208,7 +264,7 @@ JS = """
 
  window.addEventListener('DOMContentLoaded', () => {
    setDir($('direction').value || 'long');
-   setMode($('sheet_mode').value || 'full');
+   setMode($('sheet_mode').value);
    $('ticker').addEventListener('blur', () => onTickerBlur($('ticker').value));
    // Fires on every keystroke, ahead of blur — closes the Enter-to-submit
    // gap where blur (and clearForNewCard) never runs at all (D1).
@@ -293,10 +349,20 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
     )
 
     initial_ticker = form.get("ticker", "").strip().upper()
+    # Every declared sheet, not a hardcoded pair (F6: sheets are an
+    # ordered config list — adding a quarter sheet adds a row here too).
     mode_dollars = {
-        "full": {g.value: float(sheet_modes_cfg.dollars_for("full", g)) for g in Grade},
-        "half": {g.value: float(sheet_modes_cfg.dollars_for("half", g)) for g in Grade},
+        sheet: {g.value: float(sheet_modes_cfg.dollars_for(sheet, g)) for g in Grade}
+        for sheet in sheet_modes_cfg.order
     }
+
+    # F6: the sheet mode is no longer a free toggle. The day mode in
+    # force decides which key table sizes the card ("risk set everywhere
+    # except the .htk"), and the .htk he attested has to agree with it.
+    dm = _daymode_state()
+    daymode_html = _daymode_banner(dm)
+    sheet_mode = dm["cfg"].sheet_for(dm["mode"]) if dm["cfg"] else sheet_mode
+    open_cards_html = _open_cards_section()
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -305,8 +371,10 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
 <h1>ASET SEMI-AUTO SHEET <span class="muted">pre-beta slice 1 · {e(env_label)}</span></h1>
 {env_banner}
 {vault_line}
+{daymode_html}
 <div id="banner">{banner}</div>
 <div id="resultCard">{result}</div>
+{open_cards_html}
 <form class="card" method="post" action="/size">
  <div class="row"><div>
   <label>Ticker <span class="muted">(tab out to fetch)</span></label>
@@ -338,11 +406,8 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
   <label>Stop $ (yours, always)</label>
   <input name="stop" id="stop" type="number" step="0.0001" required value="{e(form.get("stop", ""))}">
  </div></div>
- <label>Sheet mode <span class="muted">(mirrors your DAS hotkey files)</span></label>
- <div class="toggle">
-  <button type="button" id="fullBtn" onclick="setMode('full')">FULL</button>
-  <button type="button" id="halfBtn" onclick="setMode('half')">HALF</button>
- </div>
+ <label>Sheet mode <span class="muted">(set by the day mode — not a free choice)</span></label>
+ <div class="hint" id="modeLine">{e(sheet_mode.upper())} sheet, from day mode {e(str(dm["mode"] or "UNRESOLVED")).upper()}. Change it by deciding or overruling the day mode above, never here.</div>
  <input type="hidden" name="sheet_mode" id="sheet_mode" value="{e(sheet_mode)}">
  <button class="primary" type="submit">Compute &amp; persist</button>
 </form>
@@ -354,6 +419,187 @@ window.INITIAL_TICKER = {json.dumps(initial_ticker)};
 <script>{JS}</script>
 </div></body></html>"""
 
+
+
+# ---------------------------------------------------------------------------
+# F6 day-mode banner + attestation, F7 card controls (S1-P2)
+# ---------------------------------------------------------------------------
+
+
+def _today_et():
+    return session_clock().to_et(now_utc()).date()
+
+
+def _daymode_state() -> dict:
+    """Everything the sheet needs about the day mode, resolved once.
+
+    Never raises: a config or database failure renders as a LOUD banner
+    rather than a 500, because a sheet that will not paint is a sheet he
+    cannot trade beside. `error` being set is itself the refusal — every
+    card write re-checks through `assert_sheet_matches`, so a degraded
+    banner can never let a card through.
+    """
+    try:
+        cfg = load_daymode_config()
+        day = _today_et()
+        store = DayModeStore()
+        store.ensure_schema()
+        row = store.for_date(day)
+        mode = decided_or_stage1(row, cfg)
+        return {
+            "cfg": cfg, "day": day, "row": row, "mode": mode, "error": None,
+            "stage": "stage 2 (decided)" if (row and row.get("decided")) else "stage 1 (system rule)",
+        }
+    except Exception as e:  # noqa: BLE001 - rendered, never swallowed
+        return {"cfg": None, "day": None, "row": None, "mode": None,
+                "stage": "UNRESOLVED", "error": f"{type(e).__name__}: {e}"}
+
+
+def _daymode_banner(dm: dict) -> str:
+    e = html.escape
+    if dm["error"]:
+        return (f'<div class="mode mismatch">⚠ DAY MODE UNRESOLVED — cards are refused '
+                f'until this is fixed: {e(dm["error"])}</div>')
+
+    cfg, row, mode = dm["cfg"], dm["row"], dm["mode"]
+    sheet = cfg.sheet_for(mode)
+    keys = ", ".join(g.value for g in cfg.enabled_grades_for(mode))
+    attested = (row or {}).get("attested_sheet")
+
+    # The match check, rendered. Same call the write path makes — the
+    # banner cannot say "matched" while the write path refuses.
+    try:
+        assert_sheet_matches(row, mode, cfg=cfg)
+        match_html = f'<span style="color:#24d986">✓ {e(attested)} matches</span>'
+        klass = "mode"
+    except SheetMismatch as mismatch:
+        match_html = f'<b style="color:#ff8ea4">⚠ {e(str(mismatch))}</b>'
+        klass = "mode mismatch"
+
+    reason = (row or {}).get("reason") or ""
+    proposed = (row or {}).get("proposed")
+    decided = (row or {}).get("decided")
+    lines = [
+        f'<div><b>DAY MODE {e(mode.upper())}</b> · {e(dm["stage"])} · sizes from the '
+        f'{e(sheet.upper())} sheet · keys {e(keys)}</div>',
+        f'<div style="margin-top:6px">.htk: {match_html} '
+        f'<span class="muted">(attested, not read — Cobalt never touches DAS)</span></div>',
+    ]
+    if proposed and not decided:
+        lines.append(f'<div class="why">09:00 proposal: <b>{e(proposed)}</b> — undecided, '
+                     f'so stage 1 stays in force. {e(reason)}</div>')
+    elif decided:
+        lines.append(f'<div class="why">proposed {e(proposed or "-")} → decided '
+                     f'{e(decided)} by {e((row or {}).get("decided_by") or "-")}'
+                     + (f' · overrule: {e(row["overrule_reason"])}' if (row or {}).get("overrule_reason") else "")
+                     + f'<br>{e(reason)}</div>')
+    else:
+        lines.append('<div class="why">No 09:00 proposal yet — stage 1 system rule: the '
+                     f'lowest enabled rung ({e(cfg.lowest_enabled)}).</div>')
+
+    options = "".join(
+        f'<option value="{e(f)}"{" selected" if f == attested else ""}>{e(f)}</option>'
+        for f in cfg.hotkey_file_names
+    )
+    lines.append(
+        '<form class="attest" method="post" action="/attest">'
+        f'<select name="file"><option value="">— which .htk have you loaded? —</option>{options}</select>'
+        '<button type="submit">Attest</button></form>'
+    )
+    return f'<div class="{klass}">' + "".join(lines) + "</div>"
+
+
+def _card_controls(card: dict) -> str:
+    """The action row for ONE card, derived from the edge table.
+
+    Every button is a legal edge out of the card's CURRENT state, read
+    from `cards.ALLOWED`. Nothing is listed that the store would refuse,
+    and nothing legal is missing — adding an edge to the table adds its
+    button here with no edit.
+    """
+    e = html.escape
+    state = CardState(card["state"])
+    cid = card["id"]
+    labels = {
+        CardState.ARMED: "ARM", CardState.WATCH: "DISARM", CardState.TRIGGERED: "TRIGGERED",
+        CardState.FILLED: "FILLED", CardState.PASSED: "PASS", CardState.EXPIRED: "EXPIRE",
+        CardState.MISSED: "MISSED",
+    }
+    danger = {CardState.PASSED, CardState.EXPIRED, CardState.MISSED, CardState.WATCH}
+    # MISSED and DISARM require a reason — the button prompts for one
+    # rather than posting an empty field the store would refuse.
+    def _needs_reason(target: CardState) -> bool:
+        """The two edges the store refuses without one (store._assert_reason).
+        Rendered from the same rule so the button prompts instead of the
+        server rejecting."""
+        return target is CardState.MISSED or (
+            state is CardState.ARMED and target is CardState.WATCH
+        )
+
+    buttons = []
+    for target in sorted(ALLOWED[state], key=lambda x: x.value):
+        cls = ' class="danger"' if target in danger else ""
+        onclick = (
+            f" onclick=\"return askReason(this,'{e(labels[target])}')\""
+            if _needs_reason(target)
+            else ""
+        )
+        buttons.append(
+            f'<form method="post" action="/card/{cid}/move" style="display:inline">'
+            f'<input type="hidden" name="to" value="{target.value}">'
+            f'<input type="hidden" name="reason" value="">'
+            f'<button type="submit"{cls}{onclick}>{e(labels[target])}</button></form>'
+        )
+
+    # Decision 11: stop editable in WATCH and FILLED, key frozen from
+    # ARMED onward. Both halves are rendered, so the lock is visible
+    # rather than merely enforced.
+    if state in STOP_EDITABLE:
+        stop_html = (
+            f'<form class="stopedit" method="post" action="/card/{cid}/stop">'
+            f'<span class="muted">stop</span>'
+            f'<input name="stop" type="number" step="0.0001" value="{e(str(card["stop"]))}">'
+            f'<button type="submit">commit</button>'
+            f'<span class="yours">YOURS</span>'
+            f'<span class="muted">↺ reset = re-enter the card stop</span></form>'
+        )
+    else:
+        stop_html = (
+            f'<div class="stopedit"><span class="muted">stop</span> '
+            f'<b>{e(str(card["stop"]))}</b> '
+            f'<span class="locked">🔒 locked in {e(state.value)} — the key is a risk '
+            f'commitment (decision 11)</span></div>'
+        )
+
+    key_lock = (
+        '<span class="locked">🔒 key frozen from ARMED onward</span>'
+        if state is not CardState.WATCH else ""
+    )
+    return (
+        f'<div class="crow"><div class="top">'
+        f'<span class="tk">{e(card["ticker"])}</span>'
+        f'<span class="st st-{state.value}">{state.value}</span>'
+        f'<span class="muted">#{cid} · {e(str(card["grade"]))} · {e(str(card["direction"]))} · '
+        f'{e(str(card["shares"]))} sh · {e(str(card["session"]))}</span>{key_lock}</div>'
+        f'{stop_html}<div class="acts">{"".join(buttons)}</div></div>'
+    )
+
+
+def _open_cards_section() -> str:
+    try:
+        store = CardStore()
+        store.ensure_schema()
+        cards = store.open_cards()
+    except Exception as e:  # noqa: BLE001
+        return (f'<div class="card"><div class="failed">FAILED\nOpen cards unreadable: '
+                f'{html.escape(f"{type(e).__name__}: {e}")}</div></div>')
+    if not cards:
+        return ('<div class="card"><label>Open cards (F7)</label>'
+                '<div class="muted">No card is in a live state. Terminal cards '
+                '(CLOSED / PASSED / EXPIRED / MISSED) are not listed.</div></div>')
+    rows = "".join(_card_controls(c) for c in cards)
+    return (f'<div class="card"><label>Open cards (F7) — every button writes a '
+            f'transition</label><div class="cards">{rows}</div></div>')
 
 def _failed(message: str) -> str:
     return f'<div class="failed">FAILED\n{html.escape(message)}</div>'
@@ -479,12 +725,41 @@ async def size(request: Request) -> str:
         # the refusal is the only thing that happens — a card refused
         # here leaves no aset_sizings row and no note write to unwind.
         assert_writable("aset.card", target=form.get("ticker") or None)
+
+        # F6, part 1: the day mode decides which key table sizes this
+        # card ("risk set everywhere except the .htk"). It is resolved
+        # BEFORE parsing because the parse needs the sheet — but the
+        # REFUSALS wait until after the card has been validated and
+        # priced, so a typo'd stop still reports as a typo'd stop rather
+        # than hiding behind a hotkey-file complaint.
+        dm = _daymode_state()
+        if dm["error"]:
+            raise SheetMismatch(
+                f"Day mode unresolved — no card can be written: {dm['error']}",
+                attested=None, mode="(unresolved)",
+            )
+        form["sheet_mode"] = dm["cfg"].sheet_for(dm["mode"])
+
         cfg = load_config()
         sheet_modes_cfg = load_sheet_modes_config()
         inp = _parse_input(form, sheet_modes_cfg)
         result = compute_sizing(
             inp, sheet_modes_cfg.enabled_grades, cfg.validation.max_stop_distance_pct
         )
+
+        # F6, part 2: the MATCH CHECK — "the loaded .htk is checked
+        # against the mode and mismatch refuses cards" (Charter §3 F6).
+        # Still ahead of every write: nothing has been persisted at this
+        # point, so a refusal here leaves no row and no note to unwind.
+        # Two separate refusals — the attested sheet must BE the mode in
+        # force, and the key must be one the rung permits (reduced is
+        # B-only). Both are logged: a refusal nobody can count is a rule
+        # nobody can review at the DRC.
+        assert_sheet_matches(dm["row"], dm["mode"], cfg=dm["cfg"])
+        assert_grade_allowed(inp.grade, dm["mode"], cfg=dm["cfg"])
+    except SheetMismatch as e:
+        logger.error("aset.card REFUSED (F6 match check): {}", e)
+        return _render(banner=_failed(str(e)), form=form)
     except (SizingError, ConfigError, DevEntryRefused, SessionBlocked) as e:
         return _render(banner=_failed(str(e)), form=form)
     except Exception as e:
@@ -590,10 +865,24 @@ async def fill(request: Request) -> str:
             )
         store = AsetStore()
         store.ensure_schema()
+        # F7: a fill is TRIGGERED -> FILLED and nothing else. If the card
+        # has not been armed and marked triggered, mark_filled raises
+        # IllegalTransition naming the edge — it is NOT coerced, because
+        # a card that reached FILLED without ever being TRIGGERED makes
+        # the MISSED count (Charter §3 F7) meaningless.
         store.mark_filled(int(card_row_raw), fill_result)
 
         note_path, note_write = save_fill_update(cfg, fill_result, orig_timestamp)
-    except (SizingError, ConfigError, DailyNoteRefused, DevEntryRefused, SessionBlocked) as e:
+    except IllegalTransition as e:
+        return _render(
+            banner=_failed(
+                f"{e}\n\nARM the card and mark it TRIGGERED first — the buttons are "
+                "on the open-cards list below."
+            ),
+            form=form,
+        )
+    except (SizingError, ConfigError, DailyNoteRefused, DevEntryRefused, SessionBlocked,
+            CardStateError) as e:
         return _render(banner=_failed(str(e)), form=form)
     except Exception as e:
         return _render(banner=_failed(f"{type(e).__name__}: {e}"), form=form)
@@ -614,4 +903,101 @@ async def fill(request: Request) -> str:
         banner=banner,
         result=_result_card(original, form, fill=fill_result),
         form=form,
+    )
+
+
+@app.post("/attest", response_class=HTMLResponse)
+async def attest(request: Request) -> str:
+    """Record which `.htk` he states he has loaded (F6).
+
+    ATTESTED, NOT READ. Cobalt never touches DAS Trader Pro (CLAUDE.md's
+    first absolute boundary), and the trading PC is not on the tailnet
+    anyway — so his word is the only input there is, and holding him to
+    it is the whole mechanism.
+    """
+    form = {k: str(v) for k, v in (await request.form()).items()}
+    filename = form.get("file", "").strip()
+    try:
+        cfg = load_daymode_config()
+        if not filename:
+            raise SheetMismatch(
+                "Pick the .htk you have loaded — an unstated hotkey file is exactly "
+                "the state in which a full-size key gets pressed on a reduced day.",
+                attested=None, mode="(none)",
+            )
+        mode = cfg.mode_for_hotkey_file(filename)
+        store = DayModeStore()
+        store.ensure_schema()
+        store.attest_sheet(_today_et(), filename=filename)
+    except (SheetMismatch, ConfigError, SessionBlocked) as e:
+        return _render(banner=_failed(str(e)))
+    except Exception as e:
+        return _render(banner=_failed(f"{type(e).__name__}: {e}"))
+    return _render(
+        banner=f'<div class="saved">Attested {html.escape(filename)} '
+        f"(= {html.escape(mode)} rung). Cards are checked against this until you "
+        "change it.</div>"
+    )
+
+
+@app.post("/card/{card_id}/move", response_class=HTMLResponse)
+async def card_move(card_id: int, request: Request) -> str:
+    """One state transition, from a button whose edge was already legal.
+
+    Every button on the sheet is rendered FROM the edge table, so a
+    refusal here means either a stale tab (the card moved underneath him)
+    or a missing reason — and both are worth saying out loud rather than
+    swallowing.
+    """
+    form = {k: str(v) for k, v in (await request.form()).items()}
+    try:
+        _check_entry_allowed()
+        store = CardStore()
+        store.ensure_schema()
+        before = store.state_of(card_id)
+        tid = store.transition(
+            card_id,
+            CardState(form.get("to", "")),
+            actor=Actor.YOU,
+            evidence={"via": "aset.sheet"},
+            reason=(form.get("reason") or "").strip() or None,
+        )
+    except (IllegalTransition, CardStateError, SessionBlocked, DevEntryRefused) as e:
+        logger.error("card {} move REFUSED: {}", card_id, e)
+        return _render(banner=_failed(str(e)))
+    except Exception as e:
+        return _render(banner=_failed(f"{type(e).__name__}: {e}"))
+    return _render(
+        banner=f'<div class="saved">card {card_id}: {before} → '
+        f'{html.escape(form.get("to", ""))} (card_transitions id {tid})</div>'
+    )
+
+
+@app.post("/card/{card_id}/stop", response_class=HTMLResponse)
+async def card_stop(card_id: int, request: Request) -> str:
+    """A stop edit — decision 11. NOT a state change.
+
+    No transition row is written; the edit is logged and folded into the
+    NEXT transition's evidence. The amber YOURS badge and the lock in the
+    other states are rendered by `_card_controls`.
+    """
+    form = {k: str(v) for k, v in (await request.form()).items()}
+    try:
+        _check_entry_allowed()
+        store = CardStore()
+        store.ensure_schema()
+        before = store.open_cards()
+        current = next((c for c in before if c["id"] == card_id), None)
+        if current is None:
+            raise CardStateError(f"card {card_id} is not open — its stop is settled.")
+        new_stop = Decimal(form.get("stop", ""))
+        store.record_stop_edit(card_id, from_stop=current["stop"], to_stop=new_stop)
+    except (CardStateError, SessionBlocked, DevEntryRefused, InvalidOperation) as e:
+        logger.error("card {} stop edit REFUSED: {}", card_id, e)
+        return _render(banner=_failed(str(e)))
+    except Exception as e:
+        return _render(banner=_failed(f"{type(e).__name__}: {e}"))
+    return _render(
+        banner=f'<div class="saved">card {card_id}: stop {current["stop"]} → {new_stop} '
+        "(YOURS — not a state change; it rides in the next transition\'s evidence)</div>"
     )
