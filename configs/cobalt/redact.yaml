@@ -1,0 +1,164 @@
+# F19 EXFILTRATION GUARD — the outbound secret patterns (Charter §3 F19).
+#
+# Schema: src/cobalt/redact/config.py (RedactConfig). Pydantic-validated
+# on load; a bad regex CRASHES with its name (config-as-code law). Lives
+# under configs/cobalt/ — a sanctioned new-core location, outside the old
+# loader's top-level `configs/*.yaml` glob (CLAUDE.md config boundary).
+#
+# ---------------------------------------------------------------------
+# NO SECRET VALUE APPEARS IN THIS FILE, and none ever may.
+# ---------------------------------------------------------------------
+# The rows below are SHAPES. Where a shape was derived from one of the
+# secrets rotated on 2026-08-23 (ledger decision log: SMB, FinancialJuice,
+# cloud keys, Finviz, the Mattermost token, the Postgres password), it was
+# derived from the value's FORM — its documented prefix, its character
+# class, its length — read programmatically and never printed. A file in
+# git that carried the thing it is meant to stop leaking would be the
+# leak.
+#
+# THE TWO HALVES OF THE GUARD, and why both are needed:
+#
+# 1. THESE PATTERNS catch anything token-shaped: a JWT, an AWS key, a
+#    Google OAuth token, a `sk-` key, a connection string with a password
+#    in it, a private-key block, a secret sitting in a URL query string.
+#    They work on text nobody has seen before, which is the whole point.
+#
+# 2. THE LITERAL GUARD (src/cobalt/redact/secrets.py) catches what no
+#    shape can describe. Four of the 08-23 rotations are USERNAMES AND
+#    PASSWORDS — smbtraining.com, rt.smbtraining.com, financialjuice.com,
+#    finviz.com. A regex broad enough to match a human password matches
+#    ordinary prose, and one narrow enough not to would not match the
+#    password. So those are matched LITERALLY, against the values held in
+#    VaultManager, loaded into memory and never written anywhere.
+#
+# A hit is redacted AND COUNTED. The count reaches the F18 heartbeat; the
+# value reaches nothing.
+redact:
+  # What replaces a hit. `{name}` is the pattern's name — the operator
+  # learns WHICH kind of secret was about to leave, never which secret.
+  placeholder: "[REDACTED:{name}]"
+
+  # The literal guard's floor. A vault value shorter than this is not
+  # matched literally: at that length a "secret" is as likely to be a
+  # substring of an ordinary word, and a redactor that mangles prose is a
+  # redactor people turn off.
+  literal_min_length: 8
+
+  # A pattern replaces its WHOLE match, unless it declares a group named
+  # `secret` — then only that group is replaced. That is what keeps
+  # `postgresql://cobalt:***@host:5432/db` readable as a DSN while its
+  # password is gone: an operator debugging a connection needs to see the
+  # host and the user.
+  patterns:
+    - name: private_key_block
+      because: "an armoured private key, in any of its PEM flavours"
+      regex: '-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----'
+
+    - name: jwt
+      because: "a JSON Web Token — three base64url segments, header first"
+      regex: '\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}'
+
+    - name: aws_access_key_id
+      because: "AWS-style key id: a four-letter type prefix plus 16 upper alnum"
+      regex: '\b(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA|ABIA|ACCA)[0-9A-Z]{16}\b'
+
+    - name: aws_secret_access_key
+      because: "the 40-char secret half, which is shapeless without its key name"
+      regex: '(?i)\baws[_-]?secret[_-]?access[_-]?key\b\W{0,4}(?P<secret>[A-Za-z0-9/+=]{40})'
+
+    - name: google_oauth_access_token
+      because: "Layer-B OAuth access token (ya29.) — the F18 email path's own credential"
+      regex: '\bya29\.[A-Za-z0-9_\-]{20,}'
+
+    - name: google_oauth_refresh_token
+      because: "the refresh half, which outlives every access token it mints"
+      regex: '\b1//[A-Za-z0-9_\-]{20,}'
+
+    - name: google_oauth_client_secret
+      because: "OAuth client secret (GOCSPX-)"
+      regex: '\bGOCSPX-[A-Za-z0-9_\-]{20,}'
+
+    - name: google_api_key
+      because: "Google API key, legacy AIza form — one of the 08-23 cloud-key rotations"
+      regex: '\bAIza[0-9A-Za-z_\-]{35}\b'
+
+    - name: google_api_key_current
+      because: >
+        The current Google AI key form (AQ. prefix, ~50 dotted alnum).
+        This IS the shape of the GEMINI_API_KEY rotated on 08-23 — read
+        from the vault as prefix + character class + length, never as a
+        value. The legacy AIza row above does not match it.
+      regex: '\bAQ\.[A-Za-z0-9][A-Za-z0-9_.\-]{30,}'
+
+    - name: openai_style_key
+      because: >
+        `sk-` keys. Covers both 08-23 cloud rotations in one shape:
+        OPENAI_API_KEY (sk-proj-…) and OPENROUTER_API_KEY (sk-or-v1-…).
+      regex: '\bsk-[A-Za-z0-9_\-]{20,}'
+
+    - name: url_query_secret
+      because: >
+        A secret in a URL QUERY STRING — the shape that leaks through
+        logged request URLs, and the one Finviz Elite uses (`&auth=…`).
+        Only the VALUE is replaced, so the endpoint stays readable and an
+        operator can still see which call failed.
+      regex: '(?i)([?&](?:auth|token|api_?key|access_token|apikey|key|secret|password|passwd|pwd|sig|signature)=)(?P<secret>[^&\s"''<>]+)'
+
+    - name: finviz_token_named
+      because: >
+        The Finviz API token where it is NAMED rather than in a URL. Its
+        08-23 rotation is 36 chars of alnum+_- — a shape far too generic
+        to match bare, so it is anchored to the words that introduce it.
+      regex: '(?i)\bfinviz[_.\s-]{0,3}(?:api[_.\s-]{0,3})?token\b\W{0,4}(?P<secret>[A-Za-z0-9_\-]{24,64})'
+
+    - name: mattermost_token
+      because: >
+        The Mattermost personal access token rotated on 08-23: 26 lower
+        alnum. Bare, that shape matches ordinary hashes and ids, so it is
+        anchored to a token name or a Bearer header — the two places it
+        can actually leave the host.
+      regex: '(?i)\b(?:mattermost[_\-]?token|mm[_\-]?token|Authorization:\s*Bearer)\b\W{0,4}(?P<secret>[a-z0-9]{26})\b'
+
+    - name: basic_auth_header
+      because: "HTTP Basic: base64 of user:password, decodable by anyone"
+      regex: '(?i)\bAuthorization:\s*Basic\s+(?P<secret>[A-Za-z0-9+/=]{16,})'
+
+    - name: connection_string_password
+      because: >
+        A DSN with its password inline — including the Postgres password
+        rotated on 08-23. Only the password is replaced; scheme, user,
+        host, port and database stay legible, because a redactor that
+        makes a broken DSN unreadable gets bypassed by whoever is
+        debugging it at 05:15.
+      regex: '(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss|amqp|amqps)://[^:@/\s]+:(?P<secret>[^@\s/]+)@'
+
+    - name: fernet_key
+      because: >
+        A 44-char urlsafe-base64 Fernet key where it is named — the shape
+        of COBALT_MASTER_KEY / VAULT_MASTER_KEY, which unlocks every
+        other secret on this host.
+      regex: '(?i)\b(?:master[_\-]?key|vault[_\-]?key|fernet(?:[_\-]?key)?)\b\W{0,4}(?P<secret>[A-Za-z0-9_\-]{43}=)'
+
+    # ------------------------------------------------------------------
+    # LAST ON PURPOSE. This row is the broadest: "a word that says secret,
+    # then a value". Every named row above it is more specific, and a
+    # pattern list is walked in order — so putting this first would
+    # attribute a Mattermost token to `env_assignment_secret` and cost the
+    # operator the one useful thing a redaction leaves behind, which is
+    # WHICH KIND of secret nearly left. Specific first, generic last.
+    # ------------------------------------------------------------------
+    - name: env_assignment_secret
+      because: >
+        `NAME=value` (or `NAME: value`) where NAME says it is a secret —
+        the .env line, the launchd EnvironmentVariables dump, the
+        `export` pasted into a message, the config line quoted in a log.
+        Catches POSTGRES_PASSWORD and COBALT_MASTER_KEY by NAME rather
+        than by shape, which is the only way those two can be caught: a
+        Postgres password has no more shape than any other password.
+
+        NOT anchored to the start of a line. It was, until the S1-P3
+        proof run put `export POSTGRES_PASSWORD=...` in the middle of a
+        DM line and watched it sail through — the test that "covered"
+        this row had put the sample on its own line, which is the one
+        place it is least likely to appear in real outbound text.
+      regex: '(?i)\b(?:export\s+)?[A-Za-z0-9_]*(?:PASSWORD|PASSWD|SECRET|TOKEN|API_?KEY|MASTER_KEY|PRIVATE_KEY|ACCESS_KEY)[A-Za-z0-9_]*\s*[=:]\s*(?P<secret>\S+)'
