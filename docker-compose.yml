@@ -36,8 +36,15 @@ services:
     ports:
       - "8065:8065"
     environment:
+      # RULED 2026-09-04: one database per product. Mattermost owns
+      # `mattermost`; Cobalt keeps `cobalt_brain` (POSTGRES_DB) with its
+      # name, its role and every plist value unchanged. Before the split
+      # both products shared cobalt_brain, which is how a Cobalt
+      # `CREATE TABLE jobs` silently hit Mattermost's 164k-row `jobs`.
+      # The role is deliberately the SAME existing credential: no
+      # Mattermost-specific Postgres role has ever existed on this host.
       MM_SQLSETTINGS_DRIVERNAME: postgres
-      MM_SQLSETTINGS_DATASOURCE: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable&connect_timeout=10
+      MM_SQLSETTINGS_DATASOURCE: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${MATTERMOST_DB:-mattermost}?sslmode=disable&connect_timeout=10
     depends_on:
       - db
     volumes:

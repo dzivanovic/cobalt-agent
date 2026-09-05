@@ -7,7 +7,10 @@ schema with nowhere to put a value cannot leak one by accident.
 
 The table is `cobalt_redactions`, prefixed for the reason recorded in
 `jobs/migrations/0001_cobalt_jobs.sql`: `cobalt_brain` shares its
-database with Mattermost's 116 tables.
+database with Mattermost's tables until 2026-09-04, when Mattermost
+moved to its own `mattermost` database (ADR-0006). The prefix stays: it
+is what made the collision impossible in the first place, and the
+one-path rule says a name earns its prefix once.
 
 Database from `COBALT_ENV` via `env.resolve_db_name()` (RULING 7/9).
 """

@@ -23,7 +23,8 @@ reset in the new core goes through here, and it refuses any database but
    a TRUNCATE lands, because that failure mode is unbounded and
    `cobalt_brain` now holds the live trading record.
 2. **The table is on the allowlist** — orthogonal to the database
-   guard. The memory layer's five pillars and Mattermost's 116 tables
+   guard. The memory layer's five pillars (and, until 2026-09-04,
+   Mattermost's 103 tables)
    are out of reach *by name*.
 
    `bars` was on the excluded side until RULING 9, **because it held

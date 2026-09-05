@@ -153,3 +153,112 @@ Database column, resolved from the same source the store uses.
 - **RULING 6.3c, the heartbeat probe, still has no host.** Unchanged.
 - **The production vault still has no backup.** Unchanged, and still the
   largest open risk in the incident report.
+
+---
+
+## 2026-09-04 (later the same day) — ONE DATABASE PER PRODUCT
+
+Status: Accepted. Ruled 2026-09-04. Delivered on branch
+`ops/mattermost-split`.
+
+RULING 8 cleaned production and RULING 9 moved `bars` into it, but both
+worked *inside* a database that Cobalt was only half the owner of. The
+`jobs` collision that S1-P3 found — `CREATE TABLE IF NOT EXISTS jobs`
+silently doing nothing because Mattermost already had a `jobs` with
+164,320 rows — was left as an open ruling: "a schema of its own, or a
+prefix convention made law". The ruling went further than either.
+
+**Mattermost gets its own database.** Cobalt keeps `cobalt_brain`, its
+name, its role, and every plist and config value. Nothing on Cobalt's
+side changed at all; the only edit was one `MM_SQLSETTINGS_DATASOURCE`
+in `docker-compose.yml`.
+
+### What the split actually found
+
+**The "116 Mattermost tables" in this repo's own documentation was
+wrong, and acting on it would have destroyed production data.** That
+figure was arithmetic, not an inventory: 129 tables total, minus 13
+assumed to be Cobalt's. Nobody had ever listed the 116.
+
+The split needed a list it could guard a `DROP` with, so one was
+derived from evidence instead: a **pristine Mattermost 11.4.0 reference
+install** — the same image digest as the running container — pointed at
+an empty database, allowed to run its own migrations, and then read.
+It creates **103** tables, 5 materialized views, 297 indexes and 6 enum
+types. Every one of those 103 was present in `cobalt_brain`, none was
+missing, and the index and type sets matched name for name. `bars.ts`
+aside, that is the strongest form of proof available here: the
+Mattermost half of `cobalt_brain` was structurally identical to a fresh
+install.
+
+Which makes the Cobalt half **28** tables, not 13. All 28 have a
+`CREATE TABLE` somewhere in this repo. **13 Cobalt tables had been
+counted as Mattermost's** — among them `themes`, `instruments`,
+`trades`, `trading_accounts`, `key_levels`, `market_snapshots`,
+`news_events`, `news_mentions`, `order_fills`, `strategy_signals` and
+`system_alerts`, all Gemini-era tables with generic names. A drop
+guarded by "the 116" would have taken them.
+
+**Two name collisions, and only two:** `jobs` and `sessions` are
+Mattermost's, and the repo also contains a `CREATE TABLE` for each. The
+`jobs` one is the S1-P3 defect, already resolved by the `cobalt_`
+prefix; the `sessions` one is in
+`docs/90 - References/claudeclaw-kit/`, which is reference material
+under L15 and not live code. `themes` looks like a third and is not:
+Mattermost has no `themes` table, and the live one is Cobalt's
+(`uuid` PK, `example_tickers`, `ai_metadata`).
+
+### Consequences, and the judgement calls inside them
+
+- **The migration excluded Cobalt's tables rather than selecting
+  Mattermost's.** `pg_dump -t` cannot carry enum types, and Mattermost
+  has six that its tables depend on. Excluding the 28 keeps every type,
+  matview, index and constraint in correct dependency order. Two
+  standalone Cobalt sequences (`browser_fast_path_id_seq`,
+  `memory_logs_id_seq`) rode along because they are not column-owned
+  and `--exclude-table` therefore does not remove them; they and the
+  `vector`/`uuid-ossp` extensions were dropped from the NEW database
+  afterwards, verified against the pristine reference.
+
+- **The three "row count mismatches" were materialized views, and they
+  were right to differ.** `pg_dump` emits `REFRESH MATERIALIZED VIEW`,
+  so the copies recomputed against current data while `cobalt_brain`'s
+  were stale. Refreshing the source made all five identical. The 103
+  base tables matched exactly, 165,520 rows, first time.
+
+- **The drop ran behind seven guards and three post-conditions in one
+  transaction**, including a row-count guard asserting every Mattermost
+  table still held exactly what was migrated — a single new row would
+  have meant something wrote to `cobalt_brain` after the dump, and would
+  have aborted the whole thing.
+
+- **Mattermost keeps using the `cobalt` role**, deliberately. The ruling
+  said to reuse the existing Mattermost credential and create nothing
+  new. There is no Mattermost-specific Postgres role and there never
+  was: `\du` returns exactly one role. Mattermost has always
+  authenticated as `cobalt`. Splitting the *database* was the ruling;
+  minting a role would have been inventing a credential the ruling
+  explicitly forbade. **This is a real remaining weakness** — one
+  superuser role reaches both databases — and it is the natural next
+  ruling, not something to take on an operator's initiative.
+
+- **The container is RECREATED, never restarted.** `MM_SQLSETTINGS_
+  DATASOURCE` is baked into the container at creation, which is the
+  same fact the 2026-08-23 credential rotation recorded. `docker compose
+  up --force-recreate mattermost` also recreates `cobalt_memory` through
+  `depends_on`; Postgres came back on its bind mount with both databases
+  intact, verified by row count before anything was dropped.
+
+### Follow-ups (not done here)
+
+- **A Postgres role per product.** Mattermost holding superuser on a
+  database that also contains the trading record is the part the split
+  did not fix.
+- **The old tree's `CREATE TABLE IF NOT EXISTS sessions`** is now
+  un-shadowed: nothing occupies that name in `cobalt_brain` any more.
+  It is reference material today, so nothing runs it — but the name is
+  free, and a future import would create a real table rather than
+  silently no-op.
+- **`mattermost` has no backup story of its own.** It is deliberately
+  outside `configs/cobalt/backup.yaml`'s scope; that scope should be
+  re-ruled once a backup destination exists.

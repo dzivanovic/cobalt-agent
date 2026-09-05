@@ -11,7 +11,8 @@ schema with no column for the material cannot leak it by accident.
 
 ## Why the table is prefixed
 `cobalt_brain` is the same Postgres database Mattermost runs in — 129
-tables, 116 of them Mattermost's. Generic names collide; see
+tables, 103 of them Mattermost's — until 2026-09-04, when Mattermost
+moved to its own database (ADR-0006). Generic names collide; see
 `cobalt/jobs/migrations/0001_cobalt_jobs.sql` for the one that did.
 
 ## What F18 reads

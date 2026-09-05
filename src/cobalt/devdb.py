@@ -37,7 +37,8 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 from cobalt import db, env  # noqa: E402
 
 # The ONLY tables this helper may empty. Everything else — the memory
-# layer's five pillars, Mattermost's 116 tables — is out of reach by
+# layer's five pillars, and (until 2026-09-04) Mattermost's tables —
+# is out of reach by
 # name, independent of the database guard.
 #
 # `bars` joined the list under RULING 9 (2026-09-04). It was excluded

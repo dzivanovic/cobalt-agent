@@ -1,7 +1,8 @@
 -- 0001: cobalt_redactions — F19's counter, and the F18 heartbeat's number.
 --
 -- Prefixed for the reason recorded in jobs/migrations/0001_cobalt_jobs.sql:
--- `cobalt_brain` shares its database with Mattermost's 116 tables, and a
+-- `cobalt_brain` SHARED its database with Mattermost's 103 tables until
+-- 2026-09-04 (ADR-0006, one database per product), and a
 -- generic name is a collision waiting to happen. Mattermost has no
 -- `redactions` table today; this does not rely on that staying true.
 --

@@ -2,7 +2,8 @@
 --
 -- WHY THE `cobalt_` PREFIX, when no other new-core table has one.
 -- `cobalt_brain` is the SAME Postgres database Mattermost uses: 129
--- tables, of which 116 are Mattermost's — and one of them is called
+-- tables, of which 103 were Mattermost's (they moved to their own
+-- database on 2026-09-04, ADR-0006) — and one of them was called
 -- `jobs`, with 164,320 rows of `expiry_notify` / `delete_expired_posts`
 -- work items in it. `CREATE TABLE IF NOT EXISTS jobs` therefore did
 -- NOTHING, silently, and the first query failed with `column "label"
