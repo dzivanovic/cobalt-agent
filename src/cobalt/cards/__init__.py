@@ -15,6 +15,14 @@ Four pieces, one law each:
   evidence, not a predicate evaluated on read.
 * `cli.py`    — `cobalt cards state/history/backfill/expire/edges`.
 
+ONE-CLICK FILL (S1-P3, CTO review). `store.fill()` is the single entry
+point to FILLED. On a card whose `origin` is `manual` it walks the rest
+of the legal route itself — inserting the ARMED/TRIGGERED rows Cobalt
+never watched happen, marked `actor=cobalt`, evidence
+`{"auto": "manual_fill"}`, at the fill's own timestamp. The route comes
+from `fill_path()`, a walk of the SAME edge table, so the shortcut adds
+no edge; a `radar` card gets no shortcut at all.
+
 At S1 the moves are manual: Dejan's buttons on the ASET sheet. The
 TRIGGERED detector is S2/S4's, and it will call exactly the same
 `store.transition()` these buttons call — the state machine does not
@@ -24,32 +32,39 @@ learn a second write path when the detector arrives.
 from .expire import expire_due, window_end_for
 from .models import (
     ALLOWED,
+    FILL_TARGET,
     KEY_EDITABLE,
     STOP_EDITABLE,
     TERMINAL,
     Actor,
     CardState,
     IllegalTransition,
+    Origin,
     assert_edge,
     edge_table_markdown,
+    fill_path,
     is_legal,
 )
-from .store import BACKFILL_MARKER, CardStateError, CardStore
+from .store import AUTO_FILL_EVIDENCE, BACKFILL_MARKER, CardStateError, CardStore
 
 __all__ = [
     "ALLOWED",
+    "AUTO_FILL_EVIDENCE",
     "BACKFILL_MARKER",
+    "FILL_TARGET",
     "Actor",
     "CardState",
     "CardStateError",
     "CardStore",
     "IllegalTransition",
     "KEY_EDITABLE",
+    "Origin",
     "STOP_EDITABLE",
     "TERMINAL",
     "assert_edge",
     "edge_table_markdown",
     "expire_due",
+    "fill_path",
     "is_legal",
     "window_end_for",
 ]

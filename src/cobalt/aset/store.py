@@ -81,7 +81,7 @@ class AsetStore:
         # cycle. The dependency runs one way at import time and both ways
         # at call time, which is the ordinary shape for two tables that
         # are written together.
-        from cobalt.cards.models import Actor, CardState
+        from cobalt.cards.models import Actor, CardState, Origin
         from cobalt.cards.store import CardStore
 
         inp = result.input
@@ -103,8 +103,8 @@ class AsetStore:
                         ticker, grade, direction, sheet_mode,
                         risk_budget, entry, stop, per_share_risk, shares,
                         used_risk, last_price, price_source, warnings, session,
-                        state, state_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        state, state_at, origin
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
                     (
@@ -131,6 +131,13 @@ class AsetStore:
                         # `create_state(conn=...)` adds.
                         CardState.WATCH.value,
                         ts,
+                        # A card written on this sheet is HIS. The column
+                        # has a DEFAULT, but the sheet states it anyway:
+                        # the one-click fill turns on this value, and a
+                        # write path that relied on a default would be a
+                        # write path that could silently change meaning
+                        # if the default ever moved (S1-P3).
+                        Origin.MANUAL.value,
                     ),
                 )
                 row = cur.fetchone()
@@ -167,18 +174,24 @@ class AsetStore:
         used to rebuild a note and could not answer "how many cards
         became trades". Fail-loud: a row id that matches nothing raises
         rather than silently updating zero rows."""
-        # F7 (S1-P2): a fill is a STATE TRANSITION, TRIGGERED -> FILLED,
-        # and it goes through the state machine like every other move —
-        # gates, ledger row, evidence, session stamp. `status` is NO
-        # LONGER WRITTEN here (the column stays readable; see
-        # migrations/0006). The figures below are the fill's own numbers,
-        # which belong on the card row, not in the transition.
-        from cobalt.cards.models import Actor, CardState
+        # F7 (S1-P2): a fill is a STATE TRANSITION and it goes through
+        # the state machine like every other move — gates, ledger row,
+        # evidence, session stamp. `status` is NO LONGER WRITTEN here
+        # (the column stays readable; see migrations/0006). The figures
+        # below are the fill's own numbers, which belong on the card row,
+        # not in the transition.
+        #
+        # S1-P3: it calls `CardStore.fill()`, not `transition()`, so the
+        # actual-fill form and the FILLED button on the open-cards list
+        # take the SAME path — including the one-click completion on a
+        # manual card. Two ways to fill a card that disagreed about what
+        # a fill requires would be exactly the second write path the
+        # one-path rule forbids.
+        from cobalt.cards.models import Actor
         from cobalt.cards.store import CardStore
 
-        CardStore(self.db_name).transition(
+        CardStore(self.db_name).fill(
             row_id,
-            CardState.FILLED,
             actor=Actor.YOU,
             evidence={
                 "actual_fill": str(fill.actual_fill),

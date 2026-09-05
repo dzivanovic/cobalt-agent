@@ -47,12 +47,21 @@ from cobalt.session import clock as clock_mod
 
 from .models import (
     ALLOWED,
+    FILL_TARGET,
     STOP_EDITABLE,
     Actor,
     CardState,
     IllegalTransition,
+    Origin,
     assert_edge,
+    fill_path,
 )
+
+#: The evidence a row Cobalt inserted on his behalf carries. Queryable:
+#: `evidence->>'auto' = 'manual_fill'` separates the transitions he made
+#: from the ones the shortcut made FOR him — Charter §1's "his taps are
+#: the calibration set" only survives if the two are never summed.
+AUTO_FILL_EVIDENCE = {"auto": "manual_fill"}
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
@@ -161,6 +170,15 @@ class CardStore:
             row = conn.execute("SELECT count(*) FROM card_transitions").fetchone()
         return int(row[0]) if row else 0
 
+    def origin_of(self, card_id: int) -> Origin:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT origin FROM aset_sizings WHERE id = %s", (card_id,)
+            ).fetchone()
+        if row is None:
+            raise CardStateError(f"no aset_sizings row with id {card_id}")
+        return Origin(row[0])
+
     def open_cards(self) -> list[dict[str, Any]]:
         """Cards not in a terminal state — what the expiry job considers
         and what the sheet lists. Derived from ALLOWED, so adding a
@@ -169,7 +187,7 @@ class CardStore:
         with self._connect() as conn:
             cur = conn.execute(
                 "SELECT id, created_at, ticker, grade, direction, sheet_mode, "
-                "entry, stop, shares, state, state_at, session "
+                "entry, stop, shares, state, state_at, session, origin "
                 "FROM aset_sizings WHERE state = ANY(%s) ORDER BY id",
                 (live,),
             )
@@ -188,20 +206,29 @@ class CardStore:
         reason: Optional[str] = None,
         now: Optional[datetime] = None,
         allow_prod: bool = False,
+        conn=None,
     ) -> int:
         """Move a card. Returns the `card_transitions` row id.
 
         Refuses in `market_reset` (F1), refuses an illegal edge by name
         (F7), and refuses a MISSED or a disarm with no reason. Writes the
         ledger row and the card's cached state in one transaction.
+
+        `conn` lets a caller pass an OPEN transaction so several hops
+        commit together — `fill()`'s one-click walk is the only caller
+        that does, and it does so because a shortcut that crashed halfway
+        would leave a card ARMED that nobody armed. Same seam, same
+        reasoning, as `create_state(conn=...)`.
         """
         # GATE 1 — F1, before anything else. A refused write must leave
         # no trace of having been attempted.
         ts = now or clock_mod.now_utc()
         session = assert_writable(f"cards.transition.{to_state.value}", target=str(card_id), now=ts)
 
-        conn = self._connect(allow_prod=allow_prod)
-        conn.autocommit = False
+        owned = conn is None
+        if owned:
+            conn = self._connect(allow_prod=allow_prod)
+            conn.autocommit = False
         try:
             with conn.cursor() as cur:
                 cur.execute(
@@ -270,13 +297,16 @@ class CardStore:
                         "UPDATE card_stop_edits SET folded_into = %s WHERE id = ANY(%s)",
                         (transition_id, pending_ids),
                     )
-            conn.commit()
+            if owned:
+                conn.commit()
             return transition_id
         except BaseException:
-            conn.rollback()
+            if owned:
+                conn.rollback()
             raise
         finally:
-            conn.close()
+            if owned:
+                conn.close()
 
     @staticmethod
     def _assert_reason(
@@ -331,6 +361,102 @@ class CardStore:
                 for _, at, in_state, from_stop, to_stop, actor in rows
             ],
         )
+
+    # -- the one fill path (F7 one-click fill) ------------------------
+
+    def fill(
+        self,
+        card_id: int,
+        *,
+        actor: Actor = Actor.YOU,
+        evidence: Optional[dict[str, Any]] = None,
+        reason: Optional[str] = None,
+        now: Optional[datetime] = None,
+        allow_prod: bool = False,
+    ) -> list[int]:
+        """Fill a card. THE entry point for reaching FILLED.
+
+        Returns the `card_transitions` row ids written, in order — so a
+        one-click fill from WATCH returns three and a fill of an already
+        TRIGGERED card returns one.
+
+        ONE CLICK ON A MANUAL CARD (CTO review of S1-P2, 2026-09-04).
+        A card whose `origin` is `manual` may be filled from WATCH or
+        ARMED: Cobalt inserts the ARMED and/or TRIGGERED rows it is
+        missing, itself, with `actor=cobalt` and evidence
+        `{"auto": "manual_fill"}`, at the SAME timestamp as the fill.
+
+        THE EDGE TABLE IS UNCHANGED. The route comes from `fill_path()`,
+        which is a breadth-first walk of `ALLOWED` — every inserted row
+        is an edge the table already permits, written through the same
+        `transition()` every button uses, with the same gates. This is a
+        convenience OVER the table, not a new edge in it, and the
+        evidence marker means the ledger never claims he tapped ARM.
+
+        A `radar` card gets no shortcut. The S2 detector's entire claim
+        is that it watched the arm and the trigger happen; a fill that
+        skipped them is a hole in that record, so it is refused by name
+        (`IllegalTransition`) exactly as it was before this method
+        existed.
+        """
+        ts = now or clock_mod.now_utc()
+        state = self.state_of(card_id)
+        origin = self.origin_of(card_id)
+
+        if state is FILL_TARGET:
+            raise IllegalTransition(state, FILL_TARGET, card_id)
+
+        route = fill_path(state)
+        if origin is not Origin.MANUAL or len(route) <= 1:
+            # Strict path: radar cards, and manual cards already sitting
+            # one legal edge away. `transition()` raises by name if the
+            # single edge is not legal (a terminal card, say).
+            return [
+                self.transition(
+                    card_id, FILL_TARGET, actor=actor, evidence=evidence,
+                    reason=reason, now=ts, allow_prod=allow_prod,
+                )
+            ]
+
+        if not route:
+            raise IllegalTransition(state, FILL_TARGET, card_id)
+
+        # EVERY HOP IN ONE TRANSACTION. A shortcut that crashed between
+        # ARMED and TRIGGERED would leave a card armed that nobody armed
+        # — a state with a ledger row behind it and no decision behind
+        # the row. All of it lands, or none of it does.
+        ids: list[int] = []
+        conn = self._connect(allow_prod=allow_prod)
+        conn.autocommit = False
+        try:
+            for hop in route[:-1]:
+                ids.append(
+                    self.transition(
+                        card_id, hop,
+                        actor=Actor.COBALT,
+                        evidence=dict(AUTO_FILL_EVIDENCE),
+                        reason=(
+                            f"inserted by the one-click fill: a manual card cannot reach "
+                            f"{FILL_TARGET.value} without passing through {hop.value}, and "
+                            "the trader filled it. Not his tap — actor is cobalt."
+                        ),
+                        now=ts,
+                        conn=conn,
+                    )
+                )
+            ids.append(
+                self.transition(
+                    card_id, FILL_TARGET, actor=actor, evidence=evidence,
+                    reason=reason, now=ts, conn=conn,
+                )
+            )
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return ids
 
     # -- genesis ------------------------------------------------------
 

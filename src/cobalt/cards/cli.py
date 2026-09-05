@@ -25,7 +25,7 @@ from cobalt import env
 from cobalt.session.clock import ET, now_utc, session_clock
 
 from .expire import expire_due
-from .models import Actor, CardState, edge_table_markdown
+from .models import FILL_TARGET, Actor, CardState, edge_table_markdown
 from .store import CardStore
 
 
@@ -71,13 +71,28 @@ def cmd_history(args: argparse.Namespace) -> None:
 def cmd_move(args: argparse.Namespace) -> None:
     store = _store()
     before = store.state_of(args.card_id)
-    tid = store.transition(
-        args.card_id,
-        CardState(args.to),
-        actor=Actor(args.actor),
-        reason=args.reason,
-        evidence={"via": "cobalt cards move"},
-    )
+    to_state = CardState(args.to)
+    # ONE PATH TO FILLED (S1-P3) — the CLI takes the same route the sheet
+    # and the actual-fill form take, so a manual card gets its missing
+    # rows here too and a radar card is refused here too.
+    if to_state is FILL_TARGET:
+        tids = store.fill(
+            args.card_id,
+            actor=Actor(args.actor),
+            reason=args.reason,
+            evidence={"via": "cobalt cards move"},
+        )
+    else:
+        tids = [
+            store.transition(
+                args.card_id,
+                to_state,
+                actor=Actor(args.actor),
+                reason=args.reason,
+                evidence={"via": "cobalt cards move"},
+            )
+        ]
+    tid = ", ".join(str(i) for i in tids)
     print(f"card {args.card_id}: {before} -> {args.to}  (card_transitions id {tid})")
 
 

@@ -1,0 +1,12 @@
+-- 0009: aset_sizings.origin NOT NULL.
+--
+-- Separate from 0008 for the reason recorded there and in
+-- cards/store.py's ensure_schema(): the constraint must not be applied
+-- before the backfill that satisfies it has had a chance to run. The
+-- `_not_null.sql` suffix is what `CardStore.ensure_schema(
+-- include_not_null=False)` matches on, so this file is skipped during a
+-- backfill and applied on the pass after it.
+--
+-- A card with no origin would be a card the one-click fill could neither
+-- allow nor refuse — so there is no such card.
+ALTER TABLE aset_sizings ALTER COLUMN origin SET NOT NULL;

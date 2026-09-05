@@ -179,16 +179,25 @@ def test_mark_filled_updates_the_card_row():
 
 
 @requires_db
-def test_mark_filled_refuses_a_card_that_was_never_triggered():
-    """F7: FILLED is reachable ONLY from TRIGGERED.
+def test_mark_filled_on_a_manual_card_walks_the_missing_rows_itself():
+    """F7 ONE-CLICK FILL (S1-P3, CTO review of S1-P2).
 
-    A card that reached FILLED without ever being TRIGGERED would make
-    the MISSED count (Charter §3 F7 — "trigger while unarmed = MISSED,
-    counted not hidden") meaningless, so the edge is refused by name
-    rather than coerced.
+    Until this prompt, filling a WATCH card was refused by name: FILLED
+    is reachable only from TRIGGERED, and a card that skipped it would
+    make the MISSED count (Charter §3 F7) meaningless. That reasoning
+    still holds for a card the RADAR proposed — the detector's claim IS
+    that it watched the arm and the trigger — and it is asserted in
+    `test_mark_filled_refuses_the_shortcut_on_a_radar_card` below.
+
+    It does not hold for a card Dejan wrote himself: the arm and the
+    trigger happened, in DAS, and Cobalt was simply not asked to watch.
+    So a `manual` card fills in one click and Cobalt writes the rows it
+    is missing — actor cobalt, evidence `auto=manual_fill`, same
+    timestamp — rather than making him tap three buttons to describe a
+    trade he has already taken.
     """
     from cobalt.aset.engine import compute_fill_recompute
-    from cobalt.cards.models import CardState, IllegalTransition
+    from cobalt.cards.models import Actor, CardState
     from cobalt.cards.store import CardStore
 
     store = AsetStore("cobalt_dev")
@@ -208,6 +217,69 @@ def test_mark_filled_refuses_a_card_that_was_never_triggered():
     )
     row_id = store.save(result)
     try:
+        cards = CardStore("cobalt_dev")
+        assert cards.state_of(row_id) is CardState.WATCH
+        fill = compute_fill_recompute(result, Decimal("10.10"), Decimal("5"))
+        store.mark_filled(row_id, fill)
+
+        assert cards.state_of(row_id) is CardState.FILLED
+        history = cards.history(row_id)
+        # genesis + ARMED + TRIGGERED + FILLED
+        assert [h["to_state"] for h in history] == [
+            "WATCH", "ARMED", "TRIGGERED", "FILLED",
+        ]
+        armed, triggered, filled = history[1], history[2], history[3]
+        assert armed["actor"] == Actor.COBALT.value
+        assert triggered["actor"] == Actor.COBALT.value
+        assert filled["actor"] == Actor.YOU.value, "the fill is HIS tap; the rest are not"
+        assert armed["evidence"]["auto"] == "manual_fill"
+        assert triggered["evidence"]["auto"] == "manual_fill"
+        assert armed["at"] == triggered["at"] == filled["at"], (
+            "the inserted rows carry the FILL's timestamp — they are bookkeeping "
+            "about one moment, not three moments Cobalt is claiming to have seen"
+        )
+        with store._connect() as conn:
+            actual = conn.execute(
+                "SELECT actual_fill FROM aset_sizings WHERE id = %s", (row_id,)
+            ).fetchone()[0]
+        assert actual == Decimal("10.10")
+    finally:
+        _delete_rows(store, [row_id])
+
+
+def test_mark_filled_refuses_the_shortcut_on_a_radar_card():
+    """A card the S2 radar proposed gets NO one-click fill.
+
+    The detector's entire claim is that it saw the arm and the trigger
+    happen, so a fill that skipped them is a hole in the detector's
+    record — refused by name, exactly as every fill was before the
+    shortcut existed."""
+    from cobalt.aset.engine import compute_fill_recompute
+    from cobalt.cards.models import CardState, IllegalTransition, Origin
+    from cobalt.cards.store import CardStore
+
+    store = AsetStore("cobalt_dev")
+    store.ensure_schema()
+    result = compute_sizing(
+        SizingInput(
+            ticker="TEST",
+            grade=Grade.B,
+            direction=Direction.LONG,
+            sheet_mode=SheetMode.FULL,
+            risk_dollars=Decimal("60"),
+            entry=Decimal("10.00"),
+            stop=Decimal("9.50"),
+        ),
+        (Grade.A, Grade.B),
+        Decimal("10"),
+    )
+    row_id = store.save(result)
+    try:
+        with store._connect() as conn:
+            conn.execute(
+                "UPDATE aset_sizings SET origin = %s WHERE id = %s",
+                (Origin.RADAR.value, row_id),
+            )
         fill = compute_fill_recompute(result, Decimal("10.10"), Decimal("5"))
         with pytest.raises(IllegalTransition, match="WATCH -> FILLED"):
             store.mark_filled(row_id, fill)

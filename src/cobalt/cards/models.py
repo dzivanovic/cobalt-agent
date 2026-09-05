@@ -50,6 +50,27 @@ class CardState(str, Enum):
         return self.value
 
 
+class Origin(str, Enum):
+    """Where a card came from. A property of the CARD, not of a move.
+
+    F7's ONE-CLICK FILL (CTO review of S1-P2, 2026-09-04) is allowed on
+    `manual` cards and refused on `radar` ones, and that is the whole
+    reason this enum exists. A card Dejan wrote himself and then filled
+    was armed and triggered in his head and in DAS — Cobalt was simply
+    not asked to watch it happen, and making him tap three buttons to say
+    so is bookkeeping, not evidence. A card the S2 RADAR proposed is the
+    opposite case: the detector's whole claim is that it SAW the arm and
+    the trigger, so a fill that skipped them is a hole in the detector's
+    record, and it is refused rather than papered over.
+    """
+
+    MANUAL = "manual"
+    RADAR = "radar"
+
+    def __str__(self) -> str:
+        return self.value
+
+
 class Actor(str, Enum):
     """Who moved the card. Every transition row carries one.
 
@@ -102,6 +123,11 @@ STOP_EDITABLE: frozenset[CardState] = frozenset({CardState.WATCH, CardState.FILL
 #: editable at all.
 KEY_EDITABLE: frozenset[CardState] = frozenset({CardState.WATCH})
 
+#: The state a one-click fill lands on, and the state it walks from.
+#: `fill_path()` derives the route from the edge table, so the shortcut
+#: is a CONVENIENCE OVER the table and never a new edge.
+FILL_TARGET = CardState.FILLED
+
 #: The one edge that means "the trigger fired but the card was never
 #: armed". Charter §3 F7: counted, not hidden — so it is a real state
 #: with a real transition row, and it requires a reason (store.py).
@@ -145,6 +171,36 @@ def assert_edge(
         raise IllegalTransition(from_state, to_state, card_id)
 
 
+def fill_path(from_state: CardState) -> list[CardState]:
+    """The shortest LEGAL route from `from_state` to FILLED.
+
+    Breadth-first over `ALLOWED`, so the shortcut cannot invent an edge:
+    every state it returns is one the edge table already permits, and
+    every hop becomes a real `card_transitions` row. Returns `[]` when
+    FILLED is unreachable (a terminal card, a PASSED card) — the caller
+    refuses; it does not coerce.
+
+    Today WATCH -> [ARMED, TRIGGERED, FILLED] and ARMED -> [TRIGGERED,
+    FILLED]. Neither list is written down here. Add an edge to the table
+    and this follows it.
+    """
+    if from_state is FILL_TARGET:
+        return []
+    queue: list[tuple[CardState, list[CardState]]] = [(from_state, [])]
+    seen = {from_state}
+    while queue:
+        state, path = queue.pop(0)
+        for nxt in sorted(ALLOWED[state], key=lambda s: s.value):
+            if nxt in seen:
+                continue
+            route = [*path, nxt]
+            if nxt is FILL_TARGET:
+                return route
+            seen.add(nxt)
+            queue.append((nxt, route))
+    return []
+
+
 def edge_table_markdown() -> str:
     """The edge table as a markdown table, for the DevDocs page.
 
@@ -168,6 +224,7 @@ def edge_table_markdown() -> str:
 __all__ = [
     "ALLOWED",
     "Actor",
+    "FILL_TARGET",
     "CardState",
     "IllegalTransition",
     "KEY_EDITABLE",
@@ -175,6 +232,8 @@ __all__ = [
     "STOP_EDITABLE",
     "TERMINAL",
     "assert_edge",
+    "Origin",
     "edge_table_markdown",
+    "fill_path",
     "is_legal",
 ]

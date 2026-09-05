@@ -666,3 +666,117 @@ class TestStopEditRecomputesTheCard:
             ).fetchone()
         assert shares == 120, "already bought — a moved stop cannot un-buy them"
         assert used == Decimal("120.00"), "open risk moved instead"
+
+
+# =====================================================================
+# 6. The one-click fill (S1-P3, CTO review of S1-P2)
+# =====================================================================
+
+
+class TestFillPathIsDerivedFromTheEdgeTable:
+    """The shortcut adds NO edge. It walks the table it was given."""
+
+    def test_the_routes_are_the_table_walked_not_a_written_list(self):
+        from cobalt.cards.models import fill_path
+
+        assert fill_path(CardState.WATCH) == [
+            CardState.ARMED, CardState.TRIGGERED, CardState.FILLED
+        ]
+        assert fill_path(CardState.ARMED) == [CardState.TRIGGERED, CardState.FILLED]
+        assert fill_path(CardState.TRIGGERED) == [CardState.FILLED]
+
+    def test_every_hop_is_an_edge_the_table_already_permits(self):
+        from cobalt.cards.models import fill_path
+
+        for state in CardState:
+            route = fill_path(state)
+            for frm, to in zip([state, *route], route):
+                assert is_legal(frm, to), (
+                    f"the shortcut would have invented {frm} -> {to}; it may only "
+                    "ever walk edges ALLOWED already carries"
+                )
+
+    def test_a_terminal_card_has_no_route_to_filled(self):
+        from cobalt.cards.models import fill_path
+
+        for state in TERMINAL:
+            assert fill_path(state) == []
+
+
+@requires_db
+@pytest.mark.integration
+class TestOneClickFill:
+    def test_a_manual_card_in_watch_fills_in_one_click_writing_three_rows(self, stores):
+        """The acceptance test, verbatim: manual WATCH -> one click ->
+        3 rows (ARMED, TRIGGERED, FILLED)."""
+        aset, cards = stores
+        card_id = _make_card(aset, ticker="TESTFILL")
+        assert cards.state_of(card_id) is CardState.WATCH
+
+        ids = cards.fill(card_id, actor=Actor.YOU, reason="filled at 10.10")
+
+        assert len(ids) == 3, "one click, three transition rows"
+        assert cards.state_of(card_id) is CardState.FILLED
+        history = cards.history(card_id)
+        assert [h["to_state"] for h in history[1:]] == ["ARMED", "TRIGGERED", "FILLED"]
+
+        armed, triggered, filled = history[1], history[2], history[3]
+        assert (armed["actor"], triggered["actor"]) == (Actor.COBALT.value,) * 2, (
+            "the rows Cobalt inserted are Cobalt's; his taps are the calibration "
+            "set (Charter §1) and the two must never be summed"
+        )
+        assert filled["actor"] == Actor.YOU.value
+        assert armed["evidence"]["auto"] == "manual_fill"
+        assert triggered["evidence"]["auto"] == "manual_fill"
+        assert "auto" not in (filled["evidence"] or {})
+        assert armed["at"] == triggered["at"] == filled["at"]
+
+    def test_a_manual_card_already_armed_fills_in_two_rows(self, stores):
+        aset, cards = stores
+        card_id = _make_card(aset, ticker="TESTFILL2")
+        cards.transition(card_id, CardState.ARMED, actor=Actor.YOU)
+
+        ids = cards.fill(card_id, actor=Actor.YOU)
+
+        assert len(ids) == 2
+        assert [h["to_state"] for h in cards.history(card_id)[1:]] == [
+            "ARMED", "TRIGGERED", "FILLED"
+        ]
+
+    def test_a_radar_card_gets_no_shortcut(self, stores):
+        """Same click, same card shape, different origin: refused."""
+        from cobalt.cards.models import Origin
+
+        aset, cards = stores
+        card_id = _make_card(aset, ticker="TESTRADAR")
+        with aset._connect() as conn:
+            conn.execute(
+                "UPDATE aset_sizings SET origin = %s WHERE id = %s",
+                (Origin.RADAR.value, card_id),
+            )
+
+        with pytest.raises(IllegalTransition, match="WATCH -> FILLED"):
+            cards.fill(card_id, actor=Actor.YOU)
+
+        assert cards.state_of(card_id) is CardState.WATCH
+        assert len(cards.history(card_id)) == 1, "the refusal left no trace"
+
+    def test_a_card_written_on_the_sheet_is_manual(self, stores):
+        from cobalt.cards.models import Origin
+
+        aset, cards = stores
+        card_id = _make_card(aset, ticker="TESTORIG")
+        assert cards.origin_of(card_id) is Origin.MANUAL
+
+    def test_the_shortcut_is_refused_in_market_reset_before_any_row(self, stores, monkeypatch):
+        """F1 first, as always — and ATOMICALLY: a shortcut refused
+        halfway would leave a card ARMED that nobody armed."""
+        aset, cards = stores
+        card_id = _make_card(aset, ticker="TESTBLOCK")
+        monkeypatch.setattr(
+            clock_mod, "now_utc", lambda: datetime(2026, 9, 4, 0, 30, tzinfo=timezone.utc)
+        )
+        with pytest.raises(SessionBlocked):
+            cards.fill(card_id, actor=Actor.YOU)
+        assert cards.state_of(card_id) is CardState.WATCH
+        assert len(cards.history(card_id)) == 1
