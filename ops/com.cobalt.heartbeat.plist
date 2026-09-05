@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.heartbeat</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+        <!-- RULING 7 / Charter §8.4: every plist carries COBALT_ENV. The
+             heartbeat reads the LIVE jobs table and writes the LIVE daily
+             note, so it declares production. Without this the store would
+             refuse to resolve a database at all rather than quietly
+             defaulting to dev. -->
+        <key>COBALT_ENV</key>
+        <string>production</string>
+        <!-- Output 1 is a Cobalt-owned block in TODAY'S daily note (L28
+             unit, in-place update). That has to be the real vault. -->
+        <key>COBALT_VAULT_PATH</key>
+        <string>/Users/cobalt/Vault/Think</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- ABSOLUTE PATH, deliberately: launchd posix_spawn()s
+             ProgramArguments[0] and does NOT search the job's own PATH
+             the way a shell does. A bare "uv" here produces exit 78
+             (EX_CONFIG) with empty stdout and stderr, which is exactly
+             how the 05:15 prefill failed silently on 2026-09-03. -->
+        <string>/Users/cobalt/.local/bin/uv</string>
+        <string>run</string>
+        <string>cobalt</string>
+        <string>heartbeat</string>
+        <string>beat</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/cobalt/cobalt</string>
+    <key>AbandonProcessGroup</key>
+    <true/>
+    <!-- StartInterval, NOT StartCalendarInterval, and every day of the
+         week. The heartbeat is the thing that notices a Saturday failure
+         before Monday morning needs it, and every "red within one
+         interval" claim in Charter §3 F18 is measured against THIS
+         number.
+
+         900 s = 15 min = the `heartbeat.interval_min` tunable. launchd
+         cannot read a tunables row, so this is a mirror; `cobalt
+         validate` prints both and fails if they disagree, which is the
+         only thing standing between the schedule and the code that
+         believes it. -->
+    <key>StartInterval</key>
+    <integer>900</integer>
+    <!-- RunAtLoad: the first beat happens when the machine comes up,
+         rather than up to 15 minutes later. A reboot is precisely when
+         something is most likely to be down (09-04: the 15.7.9 reboot
+         left Obsidian dead and a whole day's writes unsynced). -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/cobalt/logs/heartbeat.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/cobalt/logs/heartbeat.err</string>
+</dict>
+</plist>

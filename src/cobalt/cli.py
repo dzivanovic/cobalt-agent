@@ -14,6 +14,10 @@ Two command groups:
 
     cobalt daymode show/propose/decide/attest
 
+    cobalt jobs list/register/check/run
+    cobalt heartbeat beat/show
+    cobalt stop / cobalt resume        (F17d kill phrase)
+
     cobalt validate
 
 `restore` puts a section back to the before-state recorded in
@@ -48,6 +52,9 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 from cobalt.aset.config import load_config as load_aset_config  # noqa: E402
 from cobalt.cards import cli as cards_cli  # noqa: E402
 from cobalt.daymode import cli as daymode_cli  # noqa: E402
+from cobalt.heartbeat import cli as heartbeat_cli  # noqa: E402
+from cobalt.jobs import cli as jobs_cli  # noqa: E402
+from cobalt.jobs.wrapper import JobStopped  # noqa: E402
 from cobalt.session import cli as session_cli  # noqa: E402
 from cobalt.taxonomy import validate as taxonomy_validate  # noqa: E402
 from cobalt.vaultwrite import VaultWriter, VaultWriteStore  # noqa: E402
@@ -203,6 +210,109 @@ def _cmd_validate(args: argparse.Namespace) -> None:
         f"{len(TERMINAL)} terminal, every state reachable."
     )
 
+    # ---- F16 sweep, S1-P3: the three config families this prompt adds.
+    # Same rule as everything above — building the object IS the check,
+    # and the cross-checks below are the ones no single loader can do
+    # because they compare two files that cannot read each other.
+    import plistlib
+
+    from cobalt.jobs.config import load_job_registry
+    from cobalt.notify.config import load_notify_config
+    from cobalt.redact.config import load_redact_config
+
+    redact_cfg = load_redact_config()
+    print(
+        f"\nRedaction (F19): {len(redact_cfg.patterns)} pattern(s) compiled, "
+        f"placeholder {redact_cfg.placeholder!r}, literal floor "
+        f"{redact_cfg.literal_min_length} chars."
+    )
+    from cobalt.redact.secrets import load_literals
+
+    guard = load_literals(redact_cfg.literal_min_length)
+    print(
+        f"  literal guard: {'ACTIVE' if guard.available else 'INACTIVE'} — "
+        + (f"{len(guard)} vault value(s), names only: {', '.join(guard.names)}"
+           if guard.available else guard.reason)
+    )
+
+    notify_cfg = load_notify_config()
+    print(
+        f"Notify: mattermost {'enabled' if notify_cfg.mattermost.enabled else 'DISABLED'}, "
+        f"DM -> @{notify_cfg.mattermost.dm_username}, credential from vault key "
+        f"{notify_cfg.mattermost.vault_key!r} (never printed)."
+    )
+
+    registry = load_job_registry()
+    print(
+        f"Jobs (F17): {len(registry.jobs)} registered — "
+        f"{sum(1 for j in registry.jobs if j.kind.value == 'resident')} resident, "
+        f"{sum(1 for j in registry.jobs if j.kind.value == 'one-shot')} one-shot. "
+        f"Kill phrase {registry.kill_phrase!r}."
+    )
+
+    # CROSS-CHECK 1: the registry and ops/ name the same jobs. A registry
+    # that has drifted from launchd reports green for a job that is not
+    # there any more; a plist with no row is a job nobody watches.
+    from cobalt.jobs.config import OPS_DIR
+
+    declared = set(registry.by_label)
+    installed = {p.stem for p in OPS_DIR.glob("com.cobalt.*.plist")}
+    if declared != installed:
+        print(
+            f"FAILED: configs/cobalt/jobs.yaml and ops/ disagree.\n"
+            f"  registered with no plist: {sorted(declared - installed) or 'none'}\n"
+            f"  installed with no row   : {sorted(installed - declared) or 'none'}"
+        )
+        sys.exit(1)
+    print(f"  registry <-> ops/: {len(declared)} label(s), exact match.")
+
+    # CROSS-CHECK 2: the schedules. launchd cannot read a tunables row or
+    # a YAML file, so every plist mirrors its schedule — and a mirror
+    # nobody compares is a mirror that drifts.
+    for spec in registry.jobs:
+        try:
+            data = plistlib.loads(spec.plist_path.read_bytes())
+        except Exception as e:
+            print(f"FAILED: {spec.plist_path.name} is not readable as a plist: {e}")
+            sys.exit(1)
+        if data.get("EnvironmentVariables", {}).get("COBALT_ENV") != "production":
+            print(f"FAILED: {spec.plist_path.name} does not declare COBALT_ENV=production (Charter §8.4).")
+            sys.exit(1)
+        if spec.schedule is None:
+            continue
+        if spec.schedule.at:
+            intervals = data.get("StartCalendarInterval") or []
+            hh, _, mm = spec.schedule.at.partition(":")
+            drift = [
+                e for e in intervals
+                if e.get("Hour") != int(hh) or e.get("Minute") != int(mm)
+            ]
+            if drift or sorted(e.get("Weekday") for e in intervals) != sorted(spec.schedule.weekdays):
+                print(
+                    f"FAILED: {spec.label} — registry says {spec.schedule.describe()}, "
+                    f"{spec.plist_path.name} says {intervals}."
+                )
+                sys.exit(1)
+        else:
+            minutes = spec.schedule.interval_minutes()
+            plist_seconds = data.get("StartInterval")
+            if plist_seconds != minutes * 60:
+                print(
+                    f"FAILED: {spec.label} — the tunable resolves to {minutes} min "
+                    f"({minutes * 60} s) but {spec.plist_path.name} says "
+                    f"StartInterval {plist_seconds}. Every 'red within one interval' "
+                    "claim is measured against a number these two must agree on."
+                )
+                sys.exit(1)
+    print("  registry <-> plists: schedules and COBALT_ENV agree on every job.")
+
+    from cobalt.heartbeat.runner import green_summary_at, interval_min
+
+    print(
+        f"Heartbeat (F18): every {interval_min()} min, one green summary a day at "
+        f"{green_summary_at():%H:%M} ET."
+    )
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="cobalt", description="Cobalt new-core CLI")
@@ -227,6 +337,9 @@ def main() -> None:
     session_cli.add_parser(sub)
     cards_cli.add_parser(sub)
     daymode_cli.add_parser(sub)
+    jobs_cli.add_parser(sub)
+    heartbeat_cli.add_parser(sub)
+    jobs_cli.add_stop_parsers(sub)
 
     validate = sub.add_parser(
         "validate", help="Validate every config family (F16 sweep gate)."
@@ -236,6 +349,11 @@ def main() -> None:
     args = parser.parse_args()
     try:
         args.func(args)
+    except JobStopped as e:
+        # EXIT 0. A job turned away by the kill switch did not fail — an
+        # operator stopped it on purpose, and a non-zero exit would paint
+        # F18 red for a state he deliberately caused (F17d).
+        print(f"NOT RUN — {e}")
     except Exception as e:
         print(f"FAILED: {type(e).__name__}: {e}", file=sys.stderr)
         sys.exit(1)
