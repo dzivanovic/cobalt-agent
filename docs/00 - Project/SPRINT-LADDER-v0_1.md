@@ -60,8 +60,8 @@ S1-P1 line 0 reports peer status, nothing more.
 | Feature | Charter acceptance (test) | What S1 delivers |
 |---|---|---|
 | **F1 Session clock** | Card at 18:30 and 21:30 show the right session; the 21:30 one is blocked. | `cobalt.session`: premarket 04:00–09:30 / rth / aftermarket 16:00–20:00 / market_reset 20:00–21:00 hard-block / overnight; NYSE calendar (holidays, early closes) as config; boundaries = tunables rows; `session` column on cards, alerts, vault_writes; market_reset block enforced in the write path. |
-| **F7 Card state machine** (manual cards) | DRC counts match Postgres rows; no card exists without a state. | `card_state` enum + `card_transitions` table (from, to, at, evidence JSON, actor cobalt/you); existing ASET rows mapped (card = WATCH, FILLED status = FILLED); sheet gains ARM / DISARM / TRIGGERED / FILLED / PASS / EXPIRE controls; trigger-while-unarmed = MISSED row (manual entry at S1, detector at S2/S4). |
-| **F6 Two-stage day mode + match check** | He loads the full sheet on a half day → card refused with the reason. | Pre-09:00 = lowest *enabled* sheet by system rule (half today); 09:00 proposal row (mode, reason from prior DRC stub + goal band + calendar; "no prior DRC" = loud) with his approve/overrule + reason persisted; `.htk` loaded-sheet check refuses cards on mismatch. Trade-count goal band = tunables rows, value pending Rules Engine session. |
+| **F7 Card state machine** (manual cards) — **DELIVERED S1-P2** | DRC counts match Postgres rows; no card exists without a state. | `card_state` enum + `card_transitions` table (from, to, at, evidence JSON, actor cobalt/you); existing ASET rows mapped (card = WATCH, FILLED status = FILLED); sheet gains ARM / DISARM / TRIGGERED / FILLED / PASS / EXPIRE controls; trigger-while-unarmed = MISSED row (manual entry at S1, detector at S2/S4). |
+| **F6 Two-stage day mode + match check** — **DELIVERED S1-P2** | He loads the full sheet on a half day → card refused with the reason. | Pre-09:00 = lowest *enabled* sheet by system rule (half today); 09:00 proposal row (mode, reason from prior DRC stub + goal band + calendar; "no prior DRC" = loud) with his approve/overrule + reason persisted; `.htk` loaded-sheet check refuses cards on mismatch. Trade-count goal band = tunables rows, value pending Rules Engine session. |
 | **F18 Heartbeat** | Unload a plist → red within one interval, on the out-of-band channel. | Heartbeat host job: services alive · archiver freshness (last run + row delta) · every ops plist loaded + last exit code · Obsidian running; red/green block in daily note (L28 unit) + Mattermost DM; red also by email via Layer-B Google OAuth (alert path ≠ monitored path). |
 | **F17 Task integrity, minimal** | A hung poller is surfaced as a zombie within one heartbeat interval. | `jobs` table: every launchd job = persisted row with state (pending/running/done/failed), timeout, heartbeat stamp; watchdog marks zombies; kill phrase (config) stops all; failed = loud via F18. |
 | **F19 Exfiltration guard** | A token in a DM payload is redacted before send. | Outbound secret-regex redactor as one function on every channel (Mattermost, email, log lines); patterns = config; tested against the rotated-secret shapes from 08-23. |
@@ -77,7 +77,7 @@ ASET sheet with the new controls.
 
 **Code prompts owed (all Opus 5 — every one touches a DB or vault write path):**
 - S1-P1 · fresh · Tailscale status line 0 · TESTARCH delete · ADR-0007 bars.ts · F1 session clock + column stamps + market_reset block · F16 sweep. **(issued 09-04 · DELIVERED 09-04, branch `sprint-1/foundation`, unpushed)**
-- S1-P2 · fresh · F7 card_state + transitions + sheet controls · F6 two-stage mode + proposal row + `.htk` match refusal.
+- S1-P2 · fresh · F7 card_state + transitions + sheet controls · F6 two-stage mode + proposal row + `.htk` match refusal. **(issued 09-04 · DELIVERED 09-04, branch `sprint-1/foundation`, unpushed)**
 - S1-P3 · fresh · F19 redactor · F17 jobs table + watchdog + kill phrase · F18 heartbeat host (note unit + DM + email) · S1 smoke script + report.
 
 ### S1-P1 outcome (2026-09-04) — what landed, what it changed
@@ -116,6 +116,144 @@ ASET sheet with the new controls.
   is actually needed.
 - `bars` has no `session` column (derivable from `ts`); revisit if S2
   makes the derived cost real.
+
+### S1-P2 outcome (2026-09-04) — what landed, what it changed
+
+- **Dump hygiene (my error in P1, corrected):** the 316 MB bars dump was
+  **never committed** — `git ls-files` and `git log --all --stat --
+  '*bars-dump*'` both empty, so no branch rewrite was needed. It was
+  held out of git by ONE location-based `.gitignore` rule covering the
+  incident folder; the same file one directory over would have been
+  tracked. Moved to `~/cobalt-backups/` (mode 700), sha256 re-verified
+  identical, `.gitignore` gained content-based `*.sql` / `bars-dump-*`
+  rules **plus** a `!src/cobalt/*/migrations/*.sql` carve-out — without
+  it `*.sql` would have silently swallowed every future migration.
+  Repo 4.7G → 4.4G; `.git` unchanged at 116M (the proof it was never in
+  history). ADR-0007's Rollback section updated.
+
+- **F1 calendar gap closed:** `configs/cobalt/calendar/nyse-2025.yaml`
+  ships (11 holidays incl. the 01-09 National Day of Mourning, 3 early
+  closes incl. 07-03 which is a half day in 2025 but not 2026). Proven:
+  2025-11-28 12:00 ET → `rth`, 13:30 ET → `aftermarket`. The 2026 file
+  was not touched. This closes S1-P1's carried `CalendarError` item.
+
+- **F7 delivered** as `src/cobalt/cards/` — the edge table as ONE table
+  in code (exported to DevDocs by `edge_table_markdown()`, so the wiki
+  cannot drift), `card_transitions` as the ledger, `card_stop_edits` for
+  decision 11, and `cobalt cards state/history/move/backfill/expire/edges`.
+  `aset_sizings` gained `state` (NOT NULL) + `state_at`; `status` stays
+  readable and is no longer written. A card and its genesis transition
+  are now written in ONE transaction, with the state set *in the INSERT*.
+  A fill is a `TRIGGERED → FILLED` transition, so filling an un-triggered
+  card is refused by name. `counts_for_date` moved off `status` — left
+  there it would have reported 0 trades taken from this sprint forward.
+
+- **F6 delivered** as `src/cobalt/daymode/`, on Dejan's 09-04 ruling that
+  **`reduced` is a ROLE, not a sheet**. `sheet_modes` in
+  `configs/cobalt/aset.yaml` became an ordered config list
+  (`order: [half, full]` + `sheets:`), the mode ladder is DERIVED
+  (`["reduced"] + order` → `reduced < half < full`), and
+  `daymode.reduced_sheet` is the pointer (today `half`). Nothing in
+  `src/` names a sheet as a literal; a mocked `quarter` ladder in the
+  tests repoints the floor and every refusal message with no code change.
+  Charter §8 collision #2 is unchanged — `reduced_sheet: half` is what it
+  encodes.
+
+- **The `.htk` match check is an ATTESTATION, and here is why.** Slice
+  2's "match check" was found to be one static string in the daily-note
+  template — `SHEET_MODE_LINE`, two pairs of markdown checkboxes that
+  read nothing, compare nothing and refuse nothing. There is no other
+  `.htk` reference in `src/`. Nor could there be: the trading PC is not
+  on the tailnet (S1-P1 line 0) and CLAUDE.md forbids touching DAS at
+  all. So the honest fallback shipped: he states which file he loaded,
+  it persists on the `day_modes` row, and card creation is refused while
+  it disagrees — *including when nothing has been attested*, which is
+  exactly the state in which a full-size key gets pressed on a
+  reduced-size day.
+
+- **F16 sweep clean.** Three new tunables rows (`daymode.stage2_open`
+  09:00; `daymode.trade_count_band.min`/`.max` as PLACEHOLDER pending
+  the Rules Engine session), 45 total. `cobalt validate` now also covers
+  the sheet order, the day-mode ladder and pointer, the band rows, and
+  card-state reachability.
+
+- **Two launchd jobs installed and loaded:** `com.cobalt.cards-expire`
+  (16:05 ET) and `com.cobalt.daymode-propose` (09:00 ET), both carrying
+  `COBALT_ENV=production` and the absolute `uv` path. Registration in the
+  F17 `jobs` table is S1-P3's; each plist carries a TODO with its label.
+
+- **Backfill, cobalt_brain (92 cards, as the ladder's starting state
+  says):** `EXPIRED 87 · FILLED 4 · WATCH 1`. 92 genesis transition rows,
+  every one marked `evidence->>'backfill' = 'S1-P2'` and session-stamped,
+  0 rows left NULL, `state SET NOT NULL` applied clean. cobalt_dev's
+  `aset_sizings` is empty (RULING 7.1d's transactional tests leave
+  nothing behind), so its backfill was a schema-only no-op.
+
+- **Three defects found and fixed inside this prompt, two of them only
+  because the work was proven on real data:**
+  1. A `FILLED` card had no `CLOSE` button — `_card_controls` looked
+     labels up per legal edge and had no entry for `CLOSED`, so the first
+     card to actually fill would have raised `KeyError` while painting
+     the sheet. Caught by review before it shipped.
+  2. `cobalt cards backfill` opened with a full `ensure_schema()`, which
+     applies `state SET NOT NULL` — failing on exactly the un-backfilled
+     rows the command exists to fix. **Invisible on cobalt_dev** (empty
+     table, constraint applies to zero rows, all tests pass); it surfaced
+     on the first real run against cobalt_brain's 92.
+  3. A stop edit moved `stop` and nothing else, leaving `shares` and
+     `used_risk` describing the OLD stop — a card asking for a position
+     it had not sized. The recompute is now factored out of
+     `compute_sizing` (one path), and in-trade holds the share count and
+     moves open risk instead, since a moved stop cannot un-buy shares.
+  Plus one on the real vault: a DRC left on its template placeholder
+  (`grade (A+, A, B, C, etc..)`) counted as a filled DRC and suppressed
+  the step-down.
+
+- **Tests:** 88 new (47 F7 + 41 F6), including all 53 illegal edges
+  enumerated from the table itself. New-core suite **496 green**.
+  (Old-tree `tests/test_cortex.py`, `test_scribe.py`, `test_scheduler.py`,
+  `test_postgres_memory.py`, `test_finviz_extractor.py` fail as they did
+  before this prompt — `cobalt_agent`, untouched by the strangler rule;
+  verified no new-core frame appears in any of their tracebacks.)
+
+- **NN#16 lesson, caught live: a config RESHAPE is a deploy.** Reshaping
+  `configs/cobalt/aset.yaml` took the running `com.cobalt.aset` sheet to
+  HTTP 500 the moment it happened — `_render` calls
+  `load_sheet_modes_config()` on **every request**, so the long-running
+  process was reading the NEW file shape through its OLD Pydantic model
+  (`full`/`half` required, `order`/`sheets` forbidden). It failed LOUD
+  and refused to serve rather than sizing off a half-parsed config, which
+  is the behaviour we want — but the window between editing the file and
+  restarting the service is a real outage, and nothing in the process
+  warned that its config had changed underneath it. Restored by
+  kickstarting the LaunchAgent (L28's restart-on-deploy rule, applied to
+  a config edit rather than a code deploy). It happened on a Friday
+  evening inside the `market_reset` window with the market shut. Worth a
+  standing habit: **a config-shape change and its service restart are one
+  action.**
+
+**Behaviour changes Dejan will notice on the sheet, Monday morning:**
+1. The FULL/HALF toggle is **gone** — the sheet mode follows the day mode.
+2. **He must attest an `.htk` before the first card of the day.** Nothing
+   attested = card refused. One click on the banner selector.
+3. Today's rung is **reduced → half sheet, key B only.** An A key is
+   refused with the reason on screen.
+4. A fill now requires the card to be ARMED and marked TRIGGERED first —
+   both are one click each in the open-cards list.
+
+**Carried out of S1-P2 (not blocking):**
+- `daymode.trade_count_band.{min,max}` are PLACEHOLDER, and the
+  proposal's step-down rule set is provisional — both belong to the
+  **Rules Engine session**. While the band is unruled it acts as an
+  adverse signal that pins the proposal to the floor.
+- `SizingInput.sheet_mode` is still the `SheetMode` enum (full/half),
+  on the live sizing path and deliberately not reshaped. `cobalt
+  validate` now refuses a declared sheet with no enum member, so the
+  quarter sheet cannot land half-wired.
+- `preferred_windows_ref` is free prose; the expiry resolver only
+  trusts unambiguous strings and falls back to the session close
+  otherwise. Making those refs machine-readable is a taxonomy change
+  for the Rules Engine session.
 
 **Rulings/inputs owed before S2:** health thresholds (mock #8) for the panel's
 IN-TRADE health line — before S2-P3. Detail-column order (mock #11) — S2-P3.
