@@ -82,7 +82,11 @@ def cmd_move(args: argparse.Namespace) -> None:
 
 
 def cmd_backfill(args: argparse.Namespace) -> None:
-    store = _store()
+    # NOT `_store()`: that applies every migration including
+    # `state SET NOT NULL`, which fails on precisely the un-backfilled
+    # rows this command exists to fix. `backfill()` prepares its own
+    # schema without the constraint and applies it afterwards.
+    store = CardStore()
     print(f"database  : {store.db_name}  (COBALT_ENV={env.resolve_env()})")
     today = session_clock().to_et(now_utc()).date()
     print(f"today (ET): {today}")

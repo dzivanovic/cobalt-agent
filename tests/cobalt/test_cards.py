@@ -511,6 +511,34 @@ class TestBackfill:
             assert history[0]["evidence"]["backfill"] == BACKFILL_MARKER
             assert history[0]["actor"] == "cobalt"
 
+    def test_backfill_prepares_its_own_schema_without_the_not_null(self, stores):
+        """The bug this catches, found on the 92 real cobalt_brain rows:
+        `cobalt cards backfill` called full `ensure_schema()` first, which
+        applies `state SET NOT NULL` — and that fails on exactly the
+        un-backfilled rows the command exists to fix. Chicken-and-egg,
+        invisible on an empty dev database.
+
+        `backfill()` now prepares the schema WITHOUT the constraint and
+        applies it afterwards, the same two-step `cobalt session
+        backfill` uses.
+        """
+        aset, cards = stores
+        card_id = _make_card(aset, "BFORDER", now=_et(2026, 9, 3, 10, 0))
+        with cards._connect() as conn:
+            conn.execute("ALTER TABLE aset_sizings ALTER COLUMN state DROP NOT NULL")
+            conn.execute("DELETE FROM card_transitions WHERE card_id = %s", (card_id,))
+            conn.execute("UPDATE aset_sizings SET state = NULL WHERE id = %s", (card_id,))
+
+            # The constraint cannot be applied while the row is unclassified…
+            with pytest.raises(Exception, match="contains null values"):
+                cards.ensure_schema()
+
+        # …but the backfill must still be able to run, and then apply it.
+        cards.ensure_schema(include_not_null=False)     # no raise
+        cards.backfill(today=_et(2026, 9, 3, 10, 0).date())
+        assert cards.state_of(card_id) is CardState.WATCH
+        cards.ensure_schema()                            # now it applies cleanly
+
     def test_backfill_dry_run_writes_nothing(self, stores):
         aset, cards = stores
         card_id = _make_card(aset, "BFDRY", now=_et(2026, 9, 3, 10, 0))

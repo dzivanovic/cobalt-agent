@@ -84,7 +84,14 @@ class CardStore:
 
     # -- schema -------------------------------------------------------
 
-    def ensure_schema(self, *, allow_prod: bool = False) -> None:
+    #: Migrations that can only be applied once the data is in shape.
+    #: Named by suffix rather than by number so adding another one needs
+    #: no edit here.
+    NOT_NULL_SUFFIX = "_not_null.sql"
+
+    def ensure_schema(
+        self, *, allow_prod: bool = False, include_not_null: bool = True
+    ) -> None:
         """Card DDL, in dependency order.
 
         `card_transitions` carries a foreign key to `aset_sizings`, and
@@ -93,12 +100,25 @@ class CardStore:
         than carrying a second copy of the DDL (one-path rule). It does
         NOT reimplement AsetStore.ensure_schema(): it calls the same
         files in the same order.
+
+        `include_not_null=False` skips the constraint migrations
+        (`*_not_null.sql`) so the BACKFILL can create the column it is
+        about to populate. Applying `state SET NOT NULL` to a table that
+        still has un-backfilled rows fails — correctly, since the
+        alternative is a DEFAULT that invents a state for a card nobody
+        classified — but it must not fail *before the backfill has had a
+        chance to run*. `cobalt cards backfill` calls this with False,
+        then calls it again with the default True once the data is in
+        shape. Same two-step `cobalt session backfill` uses.
         """
         with self._connect(allow_prod=allow_prod) as conn:
-            for migration in sorted(ASET_MIGRATIONS.glob("*.sql")):
-                _exec_file(conn, migration)
-            for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
-                _exec_file(conn, migration)
+            for directory in (ASET_MIGRATIONS, MIGRATIONS_DIR):
+                for migration in sorted(directory.glob("*.sql")):
+                    if not include_not_null and migration.name.endswith(
+                        self.NOT_NULL_SUFFIX
+                    ):
+                        continue
+                    _exec_file(conn, migration)
 
     # -- reads --------------------------------------------------------
 
@@ -482,6 +502,9 @@ class CardStore:
         know how it got there.
         """
         clock = session_clock()
+        # The column must exist before it can be populated, and the
+        # NOT NULL must NOT be applied yet — see ensure_schema's note.
+        self.ensure_schema(allow_prod=allow_prod, include_not_null=False)
         conn = self._connect(allow_prod=allow_prod)
         conn.autocommit = False
         counts = {s.value: 0 for s in CardState}
