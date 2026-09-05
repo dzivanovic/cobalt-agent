@@ -42,14 +42,28 @@ class AsetStore:
         return db.connect(self.db_name)
 
     def ensure_schema(self) -> None:
+        """Every table `save()` writes to — which since S1-P2 includes
+        `card_transitions`.
+
+        `save()` creates a card AND its genesis transition in one
+        transaction (F7: no card exists without a state), so a schema
+        call that set up only `aset_sizings` would leave the write path
+        one table short. The cards migrations are EXECUTED from their own
+        directory, not copied here (one-path rule); the local import
+        avoids the import cycle, since `cards.store` imports this module
+        for the reverse direction.
+        """
+        from cobalt.cards.store import MIGRATIONS_DIR as CARD_MIGRATIONS
+
         with self._connect() as conn:
-            for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
-                lines = migration.read_text().splitlines()
-                sql = "\n".join(line for line in lines if not line.strip().startswith("--"))
-                for statement in sql.split(";"):
-                    statement = statement.strip()
-                    if statement:
-                        conn.execute(statement)
+            for directory in (MIGRATIONS_DIR, CARD_MIGRATIONS):
+                for migration in sorted(directory.glob("*.sql")):
+                    lines = migration.read_text().splitlines()
+                    sql = "\n".join(line for line in lines if not line.strip().startswith("--"))
+                    for statement in sql.split(";"):
+                        statement = statement.strip()
+                        if statement:
+                            conn.execute(statement)
 
     def save(self, result: SizingResult, *, now: Optional[datetime] = None) -> int:
         """Persist a card, stamped with the session it was created in.
@@ -62,40 +76,88 @@ class AsetStore:
         clocks are on this one host, and the alternative (a client
         timestamp) trades a nonexistent skew for a real one.
         """
-        inp = result.input
-        session = session_clock().session(now or session_clock_mod.now_utc())
-        with self._connect() as conn:
-            row = conn.execute(
-                """
-                INSERT INTO aset_sizings (
-                    ticker, grade, direction, sheet_mode,
-                    risk_budget, entry, stop, per_share_risk, shares,
-                    used_risk, last_price, price_source, warnings, session
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-                """,
-                (
-                    inp.ticker,
-                    inp.grade.value,
-                    inp.direction.value,
-                    inp.sheet_mode.value,
-                    result.risk_budget,
-                    inp.entry,
-                    inp.stop,
-                    result.per_share_risk,
-                    result.shares,
-                    result.used_risk,
-                    inp.last_price,
-                    inp.price_source,
-                    result.warnings,
-                    session.value,
-                ),
-            ).fetchone()
-        if row is None:
-            raise RuntimeError("INSERT returned no id — persistence failed loudly.")
-        return int(row[0])
+        # Local import: cobalt.cards.store imports THIS module (for the
+        # migration directory), so a module-level import here would be a
+        # cycle. The dependency runs one way at import time and both ways
+        # at call time, which is the ordinary shape for two tables that
+        # are written together.
+        from cobalt.cards.models import Actor, CardState
+        from cobalt.cards.store import CardStore
 
-    def mark_filled(self, row_id: int, fill: "FillRecompute") -> None:
+        inp = result.input
+        ts = now or session_clock_mod.now_utc()
+        session = session_clock().session(ts)
+
+        # ONE TRANSACTION FOR THE CARD AND ITS FIRST STATE (F7).
+        # "No card exists without a state" is not a habit the callers
+        # keep — it is this `with` block. A crash between the INSERT and
+        # the genesis transition rolls both back, so there is no window
+        # in which a state-less card is reachable.
+        conn = self._connect()
+        conn.autocommit = False
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO aset_sizings (
+                        ticker, grade, direction, sheet_mode,
+                        risk_budget, entry, stop, per_share_risk, shares,
+                        used_risk, last_price, price_source, warnings, session,
+                        state, state_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (
+                        inp.ticker,
+                        inp.grade.value,
+                        inp.direction.value,
+                        inp.sheet_mode.value,
+                        result.risk_budget,
+                        inp.entry,
+                        inp.stop,
+                        result.per_share_risk,
+                        result.shares,
+                        result.used_risk,
+                        inp.last_price,
+                        inp.price_source,
+                        result.warnings,
+                        session.value,
+                        # The state is set IN THE INSERT, not by a follow-up
+                        # UPDATE. `state` is NOT NULL (migration 0007), so a
+                        # card literally cannot exist without one — not even
+                        # for the few microseconds between two statements
+                        # inside this transaction. The genesis LEDGER row is
+                        # written next, in the same transaction; that is what
+                        # `create_state(conn=...)` adds.
+                        CardState.WATCH.value,
+                        ts,
+                    ),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    raise RuntimeError("INSERT returned no id — persistence failed loudly.")
+                row_id = int(row[0])
+
+            CardStore(self.db_name).create_state(
+                row_id,
+                CardState.WATCH,
+                actor=Actor.COBALT,
+                evidence={"created_by": "aset.sheet", "ticker": inp.ticker},
+                reason="card written",
+                now=ts,
+                conn=conn,
+            )
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return row_id
+
+    def mark_filled(
+        self, row_id: int, fill: "FillRecompute", *, now: Optional[datetime] = None
+    ) -> None:
         """Fill-recompute persists as an UPDATE to the card row it
         belongs to (2026-09-03, LAW L28 step 3).
 
@@ -105,11 +167,33 @@ class AsetStore:
         used to rebuild a note and could not answer "how many cards
         became trades". Fail-loud: a row id that matches nothing raises
         rather than silently updating zero rows."""
+        # F7 (S1-P2): a fill is a STATE TRANSITION, TRIGGERED -> FILLED,
+        # and it goes through the state machine like every other move —
+        # gates, ledger row, evidence, session stamp. `status` is NO
+        # LONGER WRITTEN here (the column stays readable; see
+        # migrations/0006). The figures below are the fill's own numbers,
+        # which belong on the card row, not in the transition.
+        from cobalt.cards.models import Actor, CardState
+        from cobalt.cards.store import CardStore
+
+        CardStore(self.db_name).transition(
+            row_id,
+            CardState.FILLED,
+            actor=Actor.YOU,
+            evidence={
+                "actual_fill": str(fill.actual_fill),
+                "recomputed_shares": fill.recomputed_shares,
+                "share_delta": fill.share_delta,
+                "distance_change_pct": str(fill.distance_change_pct),
+                "structural_warning": fill.structural_warning,
+            },
+            reason=f"filled at {fill.actual_fill}",
+            now=now,
+        )
         with self._connect() as conn:
             cur = conn.execute(
                 """
                 UPDATE aset_sizings SET
-                    status = 'FILLED',
                     filled_at = now(),
                     actual_fill = %s,
                     recomputed_shares = %s,
@@ -135,13 +219,22 @@ class AsetStore:
                 )
 
     def counts_for_date(self, day: date) -> tuple[int, int]:
-        """(cards written, trades taken) for `day`. Trades taken counts
-        status='FILLED' ONLY — a card is a written plan, not a trade
-        (DRC ruling, 2026-08-31; L28 step 3 makes it countable)."""
+        """(cards written, trades taken) for `day`. A card is a written
+        plan, not a trade (DRC ruling, 2026-08-31; L28 step 3 makes it
+        countable).
+
+        COUNTS `state`, NOT `status` (S1-P2). `status` stopped being
+        written when the F7 machine landed, so a count keyed off it would
+        have quietly reported 0 trades taken from that day forward —
+        which is precisely the class of silent-miscount the state machine
+        exists to end. A card that FILLED and then CLOSED is still a
+        trade taken, so both count.
+        """
         with self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT count(*), count(*) FILTER (WHERE status = 'FILLED')
+                SELECT count(*),
+                       count(*) FILTER (WHERE state IN ('FILLED', 'CLOSED'))
                 FROM aset_sizings
                 WHERE (created_at AT TIME ZONE 'America/New_York')::date = %s
                 """,
@@ -169,7 +262,7 @@ class AsetStore:
                 """
                 SELECT id, created_at, session, ticker, grade, direction, sheet_mode,
                        risk_budget, entry, stop, per_share_risk, shares, used_risk,
-                       status, filled_at, actual_fill, recomputed_shares,
+                       state, state_at, status, filled_at, actual_fill, recomputed_shares,
                        recomputed_used_risk, share_delta, distance_change_pct
                 FROM aset_sizings
                 WHERE (created_at AT TIME ZONE 'America/New_York')::date = %s
@@ -185,7 +278,7 @@ class AsetStore:
             cur = conn.execute(
                 """
                 SELECT id, created_at, session, ticker, grade, direction, sheet_mode,
-                       risk_budget, entry, stop, shares, used_risk, status
+                       risk_budget, entry, stop, shares, used_risk, state, status
                 FROM aset_sizings ORDER BY id DESC LIMIT %s
                 """,
                 (limit,),

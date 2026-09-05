@@ -121,8 +121,75 @@ def test_for_date_returns_todays_cards_oldest_first():
 def test_mark_filled_updates_the_card_row():
     """The fill recompute used to persist NOTHING — the 09-03 TSLA FILL
     UPDATE (10:02:36) had no DB row at all. It is an UPDATE to the card
-    row now: status FILLED plus the actual-fill figures."""
+    row now, plus a TRIGGERED -> FILLED transition.
+
+    S1-P2 (F7): a fill is a state transition and FILLED is reachable only
+    from TRIGGERED, so the card is walked there first — see
+    `test_mark_filled_refuses_a_card_that_was_never_triggered` below for
+    the other half. `status` is no longer written; `state` is the truth.
+    """
     from cobalt.aset.engine import compute_fill_recompute
+    from cobalt.cards.models import Actor, CardState
+    from cobalt.cards.store import CardStore
+
+    store = AsetStore("cobalt_dev")
+    store.ensure_schema()
+    result = compute_sizing(
+        SizingInput(
+            ticker="TEST",
+            grade=Grade.B,
+            direction=Direction.LONG,
+            sheet_mode=SheetMode.FULL,
+            risk_dollars=Decimal("60"),
+            entry=Decimal("10.00"),
+            stop=Decimal("9.50"),
+        ),
+        (Grade.A, Grade.B),
+        Decimal("10"),
+    )
+    row_id = store.save(result)
+    cards = CardStore("cobalt_dev")
+    try:
+        cards.transition(row_id, CardState.ARMED, actor=Actor.YOU)
+        cards.transition(row_id, CardState.TRIGGERED, actor=Actor.YOU)
+
+        fill = compute_fill_recompute(result, Decimal("10.10"), Decimal("5"))
+        store.mark_filled(row_id, fill)
+        row = [r for r in store.recent(limit=10) if r["id"] == row_id][0]
+        assert row["state"] == "FILLED"
+        assert cards.state_of(row_id) is CardState.FILLED
+        # The fill's own figures ride in the transition's evidence. The
+        # evidence keeps the Decimal AS GIVEN ("10.10"); the card column
+        # is NUMERIC(14,4) and pads it ("10.1000"). Both are asserted so
+        # the difference is documented rather than discovered later.
+        assert cards.history(row_id)[-1]["evidence"]["actual_fill"] == "10.10"
+
+        with store._connect() as conn:
+            actual, shares = conn.execute(
+                "SELECT actual_fill, recomputed_shares FROM aset_sizings WHERE id = %s",
+                (row_id,),
+            ).fetchone()
+        assert actual == Decimal("10.1000")
+        assert shares == fill.recomputed_shares
+
+        with pytest.raises(Exception, match="no aset_sizings row with id -1"):
+            store.mark_filled(-1, fill)
+    finally:
+        _delete_rows(store, [row_id])
+
+
+@requires_db
+def test_mark_filled_refuses_a_card_that_was_never_triggered():
+    """F7: FILLED is reachable ONLY from TRIGGERED.
+
+    A card that reached FILLED without ever being TRIGGERED would make
+    the MISSED count (Charter §3 F7 — "trigger while unarmed = MISSED,
+    counted not hidden") meaningless, so the edge is refused by name
+    rather than coerced.
+    """
+    from cobalt.aset.engine import compute_fill_recompute
+    from cobalt.cards.models import CardState, IllegalTransition
+    from cobalt.cards.store import CardStore
 
     store = AsetStore("cobalt_dev")
     store.ensure_schema()
@@ -142,19 +209,13 @@ def test_mark_filled_updates_the_card_row():
     row_id = store.save(result)
     try:
         fill = compute_fill_recompute(result, Decimal("10.10"), Decimal("5"))
-        store.mark_filled(row_id, fill)
-        row = [r for r in store.recent(limit=10) if r["id"] == row_id][0]
-        assert row["status"] == "FILLED"
-
+        with pytest.raises(IllegalTransition, match="WATCH -> FILLED"):
+            store.mark_filled(row_id, fill)
+        assert CardStore("cobalt_dev").state_of(row_id) is CardState.WATCH
         with store._connect() as conn:
-            actual, shares = conn.execute(
-                "SELECT actual_fill, recomputed_shares FROM aset_sizings WHERE id = %s",
-                (row_id,),
-            ).fetchone()
-        assert actual == Decimal("10.1000")
-        assert shares == fill.recomputed_shares
-
-        with pytest.raises(RuntimeError, match="expected exactly 1"):
-            store.mark_filled(-1, fill)
+            actual = conn.execute(
+                "SELECT actual_fill FROM aset_sizings WHERE id = %s", (row_id,)
+            ).fetchone()[0]
+        assert actual is None, "the refused fill wrote nothing to the card row"
     finally:
         _delete_rows(store, [row_id])

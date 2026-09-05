@@ -1,0 +1,488 @@
+"""F7 persistence: the card's state and the ledger behind it.
+
+Same shape as every other new-core store — the database is NOT named
+here, `COBALT_ENV` chooses it via `cobalt.env.resolve_db_name()`
+(RULING 7/9), and `db_name` survives only as the test/tooling seam.
+
+THE ONE INVARIANT THIS MODULE EXISTS TO HOLD. `aset_sizings.state` and
+`card_transitions` are written in ONE database transaction or neither is
+written. A card whose column says ARMED with no ARMED row in the ledger
+is a card whose DRC count is a guess, and F7's acceptance test is that
+those counts match Postgres. So `transition()` opens an explicit
+transaction, re-reads the current state INSIDE it (`FOR UPDATE`), checks
+the edge against that re-read value, and commits both writes together.
+
+WHY `FOR UPDATE` AND NOT A READ-THEN-WRITE. The sheet and the expiry job
+can touch the same card in the same second — the 16:05 job expiring a
+WATCH card while he taps ARM. Without the row lock both would read
+WATCH, both would find their edge legal, and the ledger would record two
+different next states for one card. With it, the second one re-reads
+ARMED and is refused by name, which is the correct answer.
+
+ORDER OF GATES, and it is deliberate:
+
+    1. F1 session guard   (market_reset -> refused, nothing else runs)
+    2. edge legality      (illegal -> refused, named)
+    3. reason requirement (MISSED and disarm need one)
+    4. the two writes, atomically
+
+The F1 gate is FIRST because a refused write must leave no trace of
+having been attempted — that is what S1-P1 built the guard for, and the
+S1-P2 test "a card in market_reset refused by F1 before any state logic
+runs" is asserting exactly this ordering.
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any, Optional
+
+from cobalt import db, env
+from cobalt.aset.store import MIGRATIONS_DIR as ASET_MIGRATIONS
+from cobalt.session import assert_writable, session_clock
+from cobalt.session import clock as clock_mod
+
+from .models import (
+    ALLOWED,
+    STOP_EDITABLE,
+    Actor,
+    CardState,
+    IllegalTransition,
+    assert_edge,
+)
+
+MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+
+#: The evidence marker every backfilled genesis row carries, so a row
+#: Cobalt classified retrospectively is never mistaken for one it watched
+#: happen. Queryable: `evidence->>'backfill' = 'S1-P2'`.
+BACKFILL_MARKER = "S1-P2"
+
+
+class CardStateError(RuntimeError):
+    """A state operation was refused for a reason other than the edge."""
+
+
+def _exec_file(conn, path: Path) -> None:
+    lines = path.read_text().splitlines()
+    sql = "\n".join(line for line in lines if not line.strip().startswith("--"))
+    for statement in sql.split(";"):
+        statement = statement.strip()
+        if statement:
+            conn.execute(statement)
+
+
+class CardStore:
+    def __init__(self, db_name: Optional[str] = None):
+        self.db_name = db_name or env.resolve_db_name()
+
+    def _connect(self, *, allow_prod: bool = False):
+        return db.connect(self.db_name, allow_prod=allow_prod)
+
+    # -- schema -------------------------------------------------------
+
+    def ensure_schema(self, *, allow_prod: bool = False) -> None:
+        """Card DDL, in dependency order.
+
+        `card_transitions` carries a foreign key to `aset_sizings`, and
+        `aset_sizings.state` is added by that table's OWN migration
+        (aset/0006) — this store executes the aset module's files rather
+        than carrying a second copy of the DDL (one-path rule). It does
+        NOT reimplement AsetStore.ensure_schema(): it calls the same
+        files in the same order.
+        """
+        with self._connect(allow_prod=allow_prod) as conn:
+            for migration in sorted(ASET_MIGRATIONS.glob("*.sql")):
+                _exec_file(conn, migration)
+            for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
+                _exec_file(conn, migration)
+
+    # -- reads --------------------------------------------------------
+
+    def state_of(self, card_id: int) -> CardState:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT state FROM aset_sizings WHERE id = %s", (card_id,)
+            ).fetchone()
+        if row is None:
+            raise CardStateError(f"no aset_sizings row with id {card_id}")
+        if row[0] is None:
+            raise CardStateError(
+                f"card {card_id} has NO STATE. Every card has one (F7) — this row "
+                "predates the state column and was not backfilled. Run "
+                "`cobalt cards backfill`."
+            )
+        return CardState(row[0])
+
+    def history(self, card_id: int) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            cur = conn.execute(
+                "SELECT id, card_id, from_state, to_state, at, session, actor, "
+                "evidence, reason FROM card_transitions WHERE card_id = %s "
+                "ORDER BY id",
+                (card_id,),
+            )
+            columns = [d.name for d in cur.description]
+            return [dict(zip(columns, r)) for r in cur.fetchall()]
+
+    def state_distribution(self) -> list[tuple[str, int]]:
+        with self._connect() as conn:
+            cur = conn.execute(
+                "SELECT coalesce(state, '(null)'), count(*) FROM aset_sizings "
+                "GROUP BY 1 ORDER BY 2 DESC, 1"
+            )
+            return [(r[0], int(r[1])) for r in cur.fetchall()]
+
+    def transition_count(self) -> int:
+        with self._connect() as conn:
+            row = conn.execute("SELECT count(*) FROM card_transitions").fetchone()
+        return int(row[0]) if row else 0
+
+    def open_cards(self) -> list[dict[str, Any]]:
+        """Cards not in a terminal state — what the expiry job considers
+        and what the sheet lists. Derived from ALLOWED, so adding a
+        non-terminal state does not need an edit here."""
+        live = sorted(s.value for s in CardState if ALLOWED[s])
+        with self._connect() as conn:
+            cur = conn.execute(
+                "SELECT id, created_at, ticker, grade, direction, sheet_mode, "
+                "entry, stop, shares, state, state_at, session "
+                "FROM aset_sizings WHERE state = ANY(%s) ORDER BY id",
+                (live,),
+            )
+            columns = [d.name for d in cur.description]
+            return [dict(zip(columns, r)) for r in cur.fetchall()]
+
+    # -- the one write path -------------------------------------------
+
+    def transition(
+        self,
+        card_id: int,
+        to_state: CardState,
+        *,
+        actor: Actor,
+        evidence: Optional[dict[str, Any]] = None,
+        reason: Optional[str] = None,
+        now: Optional[datetime] = None,
+        allow_prod: bool = False,
+    ) -> int:
+        """Move a card. Returns the `card_transitions` row id.
+
+        Refuses in `market_reset` (F1), refuses an illegal edge by name
+        (F7), and refuses a MISSED or a disarm with no reason. Writes the
+        ledger row and the card's cached state in one transaction.
+        """
+        # GATE 1 — F1, before anything else. A refused write must leave
+        # no trace of having been attempted.
+        ts = now or clock_mod.now_utc()
+        session = assert_writable(f"cards.transition.{to_state.value}", target=str(card_id), now=ts)
+
+        conn = self._connect(allow_prod=allow_prod)
+        conn.autocommit = False
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT state FROM aset_sizings WHERE id = %s FOR UPDATE", (card_id,)
+                )
+                row = cur.fetchone()
+                if row is None:
+                    raise CardStateError(f"no aset_sizings row with id {card_id}")
+                if row[0] is None:
+                    raise CardStateError(
+                        f"card {card_id} has NO STATE — run `cobalt cards backfill` "
+                        "before moving it (F7: no card exists without a state)."
+                    )
+                from_state = CardState(row[0])
+
+                # GATE 2 — the edge, against the value re-read under the
+                # lock, not against whatever the caller last saw.
+                assert_edge(from_state, to_state, card_id=card_id)
+
+                # GATE 3 — the reasons that are not optional.
+                self._assert_reason(from_state, to_state, reason)
+
+                # Decision 11: fold every stop edit made since the last
+                # transition into THIS row's evidence.
+                payload = dict(evidence or {})
+                pending = self._pending_stop_edits(cur, card_id)
+                if pending:
+                    payload["stop_edits"] = pending
+
+                cur.execute(
+                    "INSERT INTO card_transitions "
+                    "(card_id, from_state, to_state, at, session, actor, evidence, reason) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                    (
+                        card_id,
+                        from_state.value,
+                        to_state.value,
+                        ts,
+                        session.value,
+                        actor.value,
+                        json.dumps(payload, default=str),
+                        reason,
+                    ),
+                )
+                transition_id = int(cur.fetchone()[0])
+
+                cur.execute(
+                    "UPDATE aset_sizings SET state = %s, state_at = %s WHERE id = %s",
+                    (to_state.value, ts, card_id),
+                )
+                if cur.rowcount != 1:
+                    raise CardStateError(
+                        f"state UPDATE matched {cur.rowcount} rows for card {card_id} "
+                        "(expected exactly 1) — refusing to report a transition that "
+                        "was not persisted."
+                    )
+                if pending:
+                    cur.execute(
+                        "UPDATE card_stop_edits SET folded_into = %s "
+                        "WHERE card_id = %s AND folded_into IS NULL",
+                        (transition_id, card_id),
+                    )
+            conn.commit()
+            return transition_id
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _assert_reason(
+        from_state: CardState, to_state: CardState, reason: Optional[str]
+    ) -> None:
+        """MISSED and disarm carry a reason or they do not happen.
+
+        MISSED because Charter §3 F7 says it is "counted, not hidden" —
+        a count with no explanation is the hiding. Disarm because
+        ARMED -> WATCH is the one backwards edge, and an unexplained
+        un-commitment is the thing the DRC most needs to read back.
+        """
+        needs = {
+            (CardState.WATCH, CardState.MISSED): (
+                "MISSED means the trigger fired while the card was unarmed. It is "
+                "counted, not hidden (Charter §3 F7), and a count with no reason is "
+                "the hiding — say what happened."
+            ),
+            (CardState.ARMED, CardState.WATCH): (
+                "DISARM walks the card backwards out of a risk commitment. Give the "
+                "reason now, while it is true — the DRC asks for it later."
+            ),
+        }
+        message = needs.get((from_state, to_state))
+        if message and not (reason or "").strip():
+            raise CardStateError(
+                f"REFUSED {from_state.value} -> {to_state.value}: a reason is "
+                f"required. {message}"
+            )
+
+    @staticmethod
+    def _pending_stop_edits(cur, card_id: int) -> list[dict[str, Any]]:
+        cur.execute(
+            "SELECT at, in_state, from_stop, to_stop, actor FROM card_stop_edits "
+            "WHERE card_id = %s AND folded_into IS NULL ORDER BY id",
+            (card_id,),
+        )
+        return [
+            {
+                "at": at.isoformat(),
+                "in_state": in_state,
+                "from_stop": str(from_stop),
+                "to_stop": str(to_stop),
+                "actor": actor,
+            }
+            for at, in_state, from_stop, to_stop, actor in cur.fetchall()
+        ]
+
+    # -- genesis ------------------------------------------------------
+
+    def create_state(
+        self,
+        card_id: int,
+        state: CardState = CardState.WATCH,
+        *,
+        actor: Actor = Actor.COBALT,
+        evidence: Optional[dict[str, Any]] = None,
+        reason: Optional[str] = None,
+        now: Optional[datetime] = None,
+        conn=None,
+    ) -> int:
+        """Give a brand-new card its first state + genesis transition.
+
+        `from_state` is NULL on this row and on no other (enforced by a
+        partial unique index) — that is "no card exists without a state"
+        written as a constraint rather than a habit.
+
+        `conn` lets the caller pass an OPEN transaction so the card row
+        and its genesis row commit together; the ASET sheet does this, so
+        a crash between the two cannot leave a state-less card.
+        """
+        ts = now or clock_mod.now_utc()
+        session = session_clock().session(ts)
+        owned = conn is None
+        if owned:
+            conn = self._connect()
+            conn.autocommit = False
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO card_transitions "
+                    "(card_id, from_state, to_state, at, session, actor, evidence, reason) "
+                    "VALUES (%s, NULL, %s, %s, %s, %s, %s, %s) RETURNING id",
+                    (
+                        card_id,
+                        state.value,
+                        ts,
+                        session.value,
+                        actor.value,
+                        json.dumps(evidence or {}, default=str),
+                        reason,
+                    ),
+                )
+                transition_id = int(cur.fetchone()[0])
+                cur.execute(
+                    "UPDATE aset_sizings SET state = %s, state_at = %s WHERE id = %s",
+                    (state.value, ts, card_id),
+                )
+                if cur.rowcount != 1:
+                    raise CardStateError(
+                        f"genesis UPDATE matched {cur.rowcount} rows for card "
+                        f"{card_id} (expected exactly 1)."
+                    )
+            if owned:
+                conn.commit()
+            return transition_id
+        except BaseException:
+            if owned:
+                conn.rollback()
+            raise
+        finally:
+            if owned:
+                conn.close()
+
+    # -- stop edits (decision 11) -------------------------------------
+
+    def record_stop_edit(
+        self,
+        card_id: int,
+        *,
+        from_stop,
+        to_stop,
+        actor: Actor = Actor.YOU,
+        now: Optional[datetime] = None,
+    ) -> int:
+        """Log a stop move. NOT a state change — no transition row.
+
+        Refused unless the card is in a state where the stop is his to
+        move (decision 11: WATCH and IN-TRADE/FILLED). In ARMED the whole
+        summary strip is locked; in a terminal state the card is done.
+        """
+        ts = now or clock_mod.now_utc()
+        session = assert_writable("cards.stop_edit", target=str(card_id), now=ts)
+        state = self.state_of(card_id)
+        if state not in STOP_EDITABLE:
+            raise CardStateError(
+                f"REFUSED: the stop is not editable in {state.value}. Decision 11 — "
+                "the stop moves with structure in WATCH and in-trade (FILLED); from "
+                "ARMED onward the summary strip is locked, because the key is a risk "
+                f"commitment. Editable states: {', '.join(sorted(s.value for s in STOP_EDITABLE))}."
+            )
+        with self._connect() as conn:
+            row = conn.execute(
+                "INSERT INTO card_stop_edits "
+                "(card_id, at, session, in_state, from_stop, to_stop, actor) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (card_id, ts, session.value, state.value, from_stop, to_stop, actor.value),
+            ).fetchone()
+            conn.execute(
+                "UPDATE aset_sizings SET stop = %s WHERE id = %s", (to_stop, card_id)
+            )
+        return int(row[0])
+
+    # -- backfill -----------------------------------------------------
+
+    def backfill(
+        self, *, today: date, dry_run: bool = False, allow_prod: bool = False
+    ) -> dict[str, int]:
+        """Classify every state-less card, with a genesis row each.
+
+        The rule (S1-P2): `status = 'FILLED'` -> FILLED; otherwise a
+        trade date BEFORE `today` -> EXPIRED (the day is over and the
+        card was never resolved), and `today` -> WATCH (still live).
+
+        WHY NOT IN SQL. The trade date is the ET calendar date of
+        `created_at`, and each row needs its OWN genesis transition
+        stamped with the SESSION it was created in — which depends on the
+        NYSE calendar. Same reasoning as the F1 `session` backfill: it is
+        computed here, through the same resolver every write uses.
+
+        A FILLED row is NOT given a synthetic WATCH -> ... -> FILLED
+        history. Inventing four transitions that never happened would put
+        fabricated rows in the ledger the DRC counts. It gets ONE genesis
+        row landing directly on FILLED, marked as a backfill, which is
+        the honest shape: Cobalt knows where the card ended and does not
+        know how it got there.
+        """
+        clock = session_clock()
+        conn = self._connect(allow_prod=allow_prod)
+        conn.autocommit = False
+        counts = {s.value: 0 for s in CardState}
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, created_at, status FROM aset_sizings "
+                    "WHERE state IS NULL ORDER BY id"
+                )
+                rows = cur.fetchall()
+                for card_id, created_at, status in rows:
+                    trade_day = clock.to_et(created_at).date()
+                    if status == "FILLED":
+                        state = CardState.FILLED
+                    elif trade_day < today:
+                        state = CardState.EXPIRED
+                    else:
+                        state = CardState.WATCH
+                    counts[state.value] += 1
+                    self.create_state(
+                        card_id,
+                        state,
+                        actor=Actor.COBALT,
+                        evidence={
+                            "backfill": BACKFILL_MARKER,
+                            "from_status": status,
+                            "trade_date": trade_day.isoformat(),
+                            "rule": (
+                                "status=FILLED -> FILLED"
+                                if status == "FILLED"
+                                else f"trade date {'<' if trade_day < today else '=='} "
+                                f"{today.isoformat()} -> {state.value}"
+                            ),
+                        },
+                        reason="S1-P2 backfill: no state existed before the F7 machine.",
+                        now=created_at,
+                        conn=conn,
+                    )
+                cur.execute("SELECT count(*) FROM aset_sizings WHERE state IS NULL")
+                left = int(cur.fetchone()[0])
+                if left:
+                    raise CardStateError(
+                        f"ABORT: {left} card(s) still have no state after backfill"
+                    )
+            if dry_run:
+                conn.rollback()
+            else:
+                conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        counts["_total"] = sum(v for k, v in counts.items() if not k.startswith("_"))
+        return counts
+
+
+__all__ = ["BACKFILL_MARKER", "CardStateError", "CardStore", "IllegalTransition"]

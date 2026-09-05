@@ -1,0 +1,26 @@
+-- 0006: aset_sizings.state + state_at — F7 card state machine (S1-P2).
+--
+-- 0003 added `status` with exactly two observable values ('CARD',
+-- 'FILLED') and said in as many words that the full lifecycle was out of
+-- scope "until the state machine lands". It lands here.
+--
+-- `status` IS NOT DROPPED. It stays readable so the 09-03 forensics, the
+-- DRC's historical counts and anything still reading it keep working —
+-- but nothing writes it any more (see aset/store.py: mark_filled() now
+-- moves `state`, and CardStore owns every state write). Dropping a
+-- column that a live DRC path might still read, in the same sprint that
+-- introduces its replacement, is exactly the kind of two-things-at-once
+-- change NN#16 exists to prevent. It retires when S1-P3's smoke proves
+-- nothing reads it.
+--
+-- NULLABLE HERE, NOT NULL IN 0007. Same two-step as the `session`
+-- column (0004/0005): an existing row's state cannot be derived in SQL
+-- — it depends on the trade date and on `status`, and each backfilled
+-- row must get its own `card_transitions` genesis row in the SAME
+-- transaction. So Python does it (`cobalt cards backfill`) and only then
+-- does NOT NULL apply.
+ALTER TABLE aset_sizings ADD COLUMN IF NOT EXISTS state TEXT;
+-- When the card entered `state`. Not `created_at` and not `filled_at`:
+-- it is the clock on the LAST transition, and it is what the sheet's
+-- terminal strip shows (card-spec §2.5).
+ALTER TABLE aset_sizings ADD COLUMN IF NOT EXISTS state_at TIMESTAMPTZ;
