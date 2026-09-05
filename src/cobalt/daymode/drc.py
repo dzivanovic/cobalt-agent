@@ -31,7 +31,7 @@ from typing import Optional
 from loguru import logger
 
 from cobalt import db, env
-from cobalt.prefill.config import PrefillConfigError, load_prefill_paths
+from cobalt.prefill.config import load_prefill_paths
 from cobalt.prefill.vault_writer import resolve_dir
 
 from .propose import NO_PRIOR_DRC, prior_trading_day
@@ -84,7 +84,11 @@ def _drc_note(prior_day: date) -> tuple[Optional[str], Optional[str]]:
         paths = load_prefill_paths()
         review_dir = resolve_dir(paths.review_dir)
         note = review_dir / prior_day.strftime(paths.drc_filename_pattern)
-    except (PrefillConfigError, Exception) as e:  # noqa: B014 - config or vault resolution
+    except Exception as e:  # noqa: BLE001 - config OR vault resolution, both degrade the same
+        # PrefillConfigError is the expected one; vault resolution can
+        # raise its own. Either way the answer is the same and it is
+        # LOUD: the reason will carry "no prior DRC" rather than a blank,
+        # and the proposal steps down a rung for it.
         logger.error("daymode: DRC path unresolved ({}: {})", type(e).__name__, e)
         return (None, None)
     if not note.exists():
