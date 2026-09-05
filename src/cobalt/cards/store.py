@@ -320,6 +320,23 @@ class CardStore:
         `conn` lets the caller pass an OPEN transaction so the card row
         and its genesis row commit together; the ASET sheet does this, so
         a crash between the two cannot leave a state-less card.
+
+        NOT SESSION-GATED, unlike `transition()`, and deliberately. This
+        is never the outermost write. Its two callers are:
+
+        * `AsetStore.save()`, whose caller (`aset/web.py` POST /size)
+          already ran `assert_writable("aset.card")` — gating again here
+          would refuse identically and write a SECOND `session_blocks`
+          row for one refused card, inflating the heartbeat's counter.
+        * `backfill()`, which is migration tooling. Same carve-out as
+          `cobalt session backfill` (S1-P1) and `VaultWriter.restore`:
+          locking a migration out for an hour would mean the one hour you
+          most need to repair state is the hour you cannot. It is run
+          deliberately, by a human, and it says which database it wrote.
+
+        Card CREATION inside `market_reset` is still refused — at the
+        sheet, before any of this runs, and `test_cards.py` asserts the
+        ordering.
         """
         ts = now or clock_mod.now_utc()
         session = session_clock().session(ts)

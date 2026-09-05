@@ -520,11 +520,20 @@ def _card_controls(card: dict) -> str:
     e = html.escape
     state = CardState(card["state"])
     cid = card["id"]
+    # A label for EVERY state, keyed off the enum rather than off the
+    # edges that happen to exist today: a missing entry would be a
+    # KeyError at render time on whichever card first reached that
+    # state, i.e. a blank sheet mid-morning rather than a caught bug.
+    # `.get` is not used for the same reason — a state with no label is
+    # a mistake to fix, not a button to draw with a fallback name.
     labels = {
         CardState.ARMED: "ARM", CardState.WATCH: "DISARM", CardState.TRIGGERED: "TRIGGERED",
-        CardState.FILLED: "FILLED", CardState.PASSED: "PASS", CardState.EXPIRED: "EXPIRE",
-        CardState.MISSED: "MISSED",
+        CardState.FILLED: "FILLED", CardState.CLOSED: "CLOSE", CardState.PASSED: "PASS",
+        CardState.EXPIRED: "EXPIRE", CardState.MISSED: "MISSED",
     }
+    missing = [s.value for s in CardState if s not in labels]
+    if missing:  # pragma: no cover - guarded by test_every_state_has_a_button_label
+        raise RuntimeError(f"no sheet button label for card state(s): {missing}")
     danger = {CardState.PASSED, CardState.EXPIRED, CardState.MISSED, CardState.WATCH}
     # MISSED and DISARM require a reason — the button prompts for one
     # rather than posting an empty field the store would refuse.

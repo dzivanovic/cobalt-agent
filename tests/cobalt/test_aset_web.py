@@ -371,3 +371,47 @@ class TestMatchCheckAtTheSheet:
         r = client.post("/size", data=BASE_SIZE_FORM)
         assert "FAILED" in r.text
         assert "Day mode unresolved" in r.text
+
+
+class TestCardControls:
+    """The open-cards action row is rendered FROM the edge table, so a
+    state the table can reach but the sheet has no label for is a
+    KeyError at render time — a blank sheet mid-morning, not a caught
+    bug. This is how `CLOSED` was missed on the first pass."""
+
+    def test_every_state_has_a_button_label(self):
+        from cobalt.cards.models import ALLOWED, CardState
+
+        card = {
+            "id": 1, "ticker": "NVDA", "grade": "B", "direction": "long",
+            "shares": 100, "stop": "9.50", "session": "rth", "state": "WATCH",
+        }
+        for state in CardState:
+            if not ALLOWED[state]:
+                continue      # terminal: no action row to draw
+            html_out = web_module._card_controls(dict(card, state=state.value))
+            assert f'st-{state.value}' in html_out
+            for target in ALLOWED[state]:
+                assert f'value="{target.value}"' in html_out, (
+                    f"{state.value} -> {target.value} has no button"
+                )
+
+    def test_a_filled_card_offers_close_and_an_editable_stop(self):
+        card = {
+            "id": 1, "ticker": "NVDA", "grade": "B", "direction": "long",
+            "shares": 100, "stop": "9.50", "session": "rth", "state": "FILLED",
+        }
+        html_out = web_module._card_controls(card)
+        assert ">CLOSE<" in html_out
+        assert "YOURS" in html_out, "stop is editable in-trade (decision 11)"
+
+    def test_an_armed_card_locks_the_stop_and_shows_why(self):
+        card = {
+            "id": 1, "ticker": "NVDA", "grade": "B", "direction": "long",
+            "shares": 100, "stop": "9.50", "session": "rth", "state": "ARMED",
+        }
+        html_out = web_module._card_controls(card)
+        assert "YOURS" not in html_out
+        assert "locked in ARMED" in html_out
+        assert "key frozen from ARMED onward" in html_out
+        assert ">DISARM<" in html_out
