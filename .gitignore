@@ -48,3 +48,18 @@ cobalt_master_context.txt
 # contents into git history, which CLAUDE.md forbids absolutely. The
 # dump is the migration's ROLLBACK and it stays local, on disk, only.
 docs/00 - Project/incident-2026-09-03/
+
+# S1-P2 (2026-09-04) — database dumps never enter git, wherever they land.
+# The incident-directory rule above was location-based: it protected one
+# folder, so the same dump written one directory over was tracked again.
+# These two rules are content-based and belong to the dump itself.
+#
+# The carve-out below is NOT optional: `*.sql` would otherwise swallow
+# every NEW schema migration (src/cobalt/*/migrations/*.sql) the moment
+# it is created. Already-tracked migrations would survive (git ignores
+# only untracked files) — which is exactly what makes this failure
+# silent, and why the negation ships in the same commit as the rule.
+*.sql
+bars-dump-*
+!src/cobalt/*/migrations/*.sql
+!src/cobalt_agent/db/*.sql

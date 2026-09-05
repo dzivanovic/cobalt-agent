@@ -154,16 +154,31 @@ appeared alongside them.
 
 ## Rollback
 
-`docs/00 - Project/incident-2026-09-03/bars-dump-20260904T182807.sql` —
+`~/cobalt-backups/bars-dump-20260904T182807.sql` —
 `pg_dump --data-only --table=bars` of `cobalt_brain`, taken immediately
 before the migration and after the `TESTARCH` delete.
 
 - size: 330,192,554 bytes (316 MB)
 - sha256: `588573550abeb45e9d98ef4c0180cb908ef38fa91c9bad30857adaf20273d542`
+  (re-verified after the move, 2026-09-04)
 - contents: 4,755,477 rows in the PRE-conversion (ET-under-UTC) shape
 
-Restoring it means `TRUNCATE bars` then loading the dump; the file is in
-the gitignored incident directory alongside RULING 8/9's dumps.
+Restoring it means `TRUNCATE bars` then loading the dump.
+
+**MOVED OUT OF THE REPO, 2026-09-04 (S1-P2 step 0).** It was written to
+`docs/00 - Project/incident-2026-09-03/`, which is inside the
+`!docs/00 - Project/**` carve-out and was held back from git by ONE
+location-based `.gitignore` rule. It was never committed — verified with
+`git ls-files` and `git log --all --stat -- '*bars-dump*'`, both empty,
+so no history rewrite was needed. But a 316 MB file of verbatim
+production bars sitting one rule away from `git add -A` is a standing
+hazard, and the rule protected the *folder*, not the *dump*: the same
+file written one directory over would have been tracked. It now lives
+outside the working tree entirely, in `~/cobalt-backups/` (mode 700),
+and `.gitignore` gained content-based `*.sql` / `bars-dump-*` rules —
+with an explicit `!src/cobalt/*/migrations/*.sql` carve-out, because
+`*.sql` would otherwise have silently swallowed every future schema
+migration while leaving the already-tracked ones visible.
 
 Note what rollback would now cost: the archiver has written UTC rows on
 top since. A restore is a return to the defect, not a return to a clean
