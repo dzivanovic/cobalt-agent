@@ -41,10 +41,27 @@ services:
       # name, its role and every plist value unchanged. Before the split
       # both products shared cobalt_brain, which is how a Cobalt
       # `CREATE TABLE jobs` silently hit Mattermost's 164k-row `jobs`.
-      # The role is deliberately the SAME existing credential: no
-      # Mattermost-specific Postgres role has ever existed on this host.
+      #
+      # RULED 2026-09-05: one ROLE per product too. The 09-04 split left
+      # Mattermost authenticating as `cobalt`, a superuser that also
+      # reaches the trading record — the weakness ADR-0006 recorded as
+      # "the natural next ruling". `mattermost` now owns its database and
+      # every object in it, holds LOGIN and nothing else, and has no
+      # CONNECT on cobalt_brain or cobalt_dev. `cobalt` keeps superuser
+      # for now (its demotion is a separate ruling) and the db service's
+      # initdb variables below are deliberately unchanged.
+      #
+      # Both parts are bootstrap tier in .env: Compose interpolates this
+      # line at container-CREATE time, before any process could open the
+      # vault. A copy of the password lives in VaultManager, which is
+      # what puts it behind F19's literal guard.
+      #
+      # The DSN is baked in at creation, so this container is RECREATED,
+      # never restarted — the same lesson the 2026-08-23 rotation left.
+      # Recreate with `--no-deps` so `depends_on` does not bounce
+      # Postgres along with it, as it did on 09-04.
       MM_SQLSETTINGS_DRIVERNAME: postgres
-      MM_SQLSETTINGS_DATASOURCE: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${MATTERMOST_DB:-mattermost}?sslmode=disable&connect_timeout=10
+      MM_SQLSETTINGS_DATASOURCE: postgres://${MATTERMOST_DB_USER}:${MATTERMOST_DB_PASSWORD}@db:5432/${MATTERMOST_DB:-mattermost}?sslmode=disable&connect_timeout=10
     depends_on:
       - db
     volumes:
