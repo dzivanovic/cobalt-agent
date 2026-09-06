@@ -262,3 +262,126 @@ Mattermost has no `themes` table, and the live one is Cobalt's
 - **`mattermost` has no backup story of its own.** It is deliberately
   outside `configs/cobalt/backup.yaml`'s scope; that scope should be
   re-ruled once a backup destination exists.
+
+## 2026-09-05 — ONE ROLE PER PRODUCT
+
+Status: Accepted. Ruled 2026-09-05. Delivered on branch
+`ops/mattermost-role`, unpushed.
+
+The 09-04 split gave Mattermost its own database and left it
+authenticating as `cobalt` — a superuser that also reaches the trading
+record. That section named it "a real remaining weakness… the natural
+next ruling". This is that ruling.
+
+`mattermost` is now a role with **LOGIN and nothing else**: no
+superuser, no createdb, no createrole, no replication, no bypass-RLS, no
+membership in any other role. It owns database `mattermost` and all 103
+tables, 5 materialized views, 297 indexes and 6 enum types in it;
+`cobalt` owns nothing there any more. `cobalt` keeps superuser for now —
+its demotion is a separate ruling — and the db service's initdb
+variables are untouched.
+
+### `.env` is the bootstrap tier, and that is a rule now
+
+`MATTERMOST_DB_PASSWORD` lives in `.env` beside `POSTGRES_PASSWORD`, and
+the reason generalises: **`.env` holds only credentials that must be
+readable before the vault can be opened.** Docker Compose interpolates
+`MM_SQLSETTINGS_DATASOURCE` at container-create time, with no process
+running that could ask VaultManager for anything. That is the whole
+membership test for this tier. Everything else goes to VaultManager and
+only VaultManager.
+
+A copy is stored in the vault as well — not as a second source of truth,
+but because **storing it there IS its enrolment in F19's literal
+guard**. `cobalt.redact.secrets.load_literals()` walks every vault leaf
+of 8+ characters, so the guard went 15 values → 16 with no list to edit
+and no value written into a pattern file. Belt and braces: the name ends
+in `PASSWORD`, so F19's `env_assignment_secret` pattern also catches
+`MATTERMOST_DB_PASSWORD=…` by name with the vault locked.
+
+### The finding: `REASSIGN OWNED` would have taken `cobalt_brain`
+
+The ruling's step 3 said to run `REASSIGN OWNED BY cobalt TO mattermost`
+connected to `mattermost` only, on the understanding that it is
+per-database. **It is not, quite.** REASSIGN OWNED also reassigns
+*shared* objects — and databases are shared objects. Run as written it
+would have handed `cobalt_brain`, `cobalt_dev`, `postgres`, `template0`
+and `template1` to the `mattermost` role: the exact inverse of the
+ruling it was implementing.
+
+This was proven before anything production was touched, on throwaway
+objects: two databases owned by one throwaway role, REASSIGN run while
+connected to the first, and the **second** changed owner too.
+
+The substitute is an explicitly scoped loop over `pg_class` and
+`pg_type` in the current database, emitting one
+`ALTER TABLE|MATERIALIZED VIEW|TYPE … OWNER TO mattermost` per object
+inside a single transaction with `lock_timeout`. It reassigned 108
+relations (103 + 5) and 6 types; indexes follow their tables. Verified
+after: zero `cobalt`-owned relations remain in `mattermost`, and
+`cobalt_brain` / `cobalt_dev` are still owned by `cobalt` with all 100
+of `cobalt_brain`'s public relations unchanged.
+
+The general lesson is worth more than the incident: **a command whose
+scope is "the current database" may still have a shared-catalog
+exception, and ownership commands are where that bites.**
+
+### The password was never a bound parameter, because it could not be
+
+`CREATE ROLE … PASSWORD` takes a string literal; a utility statement
+cannot carry `$1`, so no server-side bind exists for it. Rather than
+fall back to client-side quoting of the plaintext, the provisioning
+script computes the **SCRAM-SHA-256 verifier locally** and sends only
+that. The plaintext never crosses the socket at all, so it cannot reach
+a server log, a wire capture or `pg_stat_statements` if any of those is
+switched on later — strictly stronger than the bound parameter it
+replaces. The verifier math was proven against a live server on a
+throwaway role, including the negative case (a wrong password rejected),
+before the real role was minted.
+
+Generation, `.env` write, vault write, role creation and the login check
+all happen inside **one process** (`ops/mattermost_role_provision.py`).
+Nothing is shelled out to, because `psql -c` and `echo >> .env` both put
+the value in a command line.
+
+### The fence is one-directional, on purpose
+
+`CONNECT` on `cobalt_brain` and `cobalt_dev` is revoked from `PUBLIC`,
+which is what `mattermost` was reaching them through — it holds no grant
+of its own on either, and no role membership. Proven by connection
+attempt: `FATAL: permission denied for database "cobalt_brain"`.
+
+`cobalt` can still reach `mattermost`, because it is a superuser and
+superusers bypass the check. **That half of the fence does not exist
+yet, and cannot until `cobalt` is demoted** — which is the next ruling,
+not something to take on an operator's initiative. `TEMP` remains
+granted to `PUBLIC` on both databases; it is inert without `CONNECT`,
+and tightening it was outside this ruling.
+
+Revoking from `PUBLIC` was safe to do before Mattermost was proven on
+the new role: `cobalt` holds `CTc` explicitly and was unaffected, and
+Mattermost was at that moment still connecting *as* `cobalt` *to*
+`mattermost`, which the revoke does not touch. Nothing `cobalt` holds
+was revoked, which is what "nothing is revoked until proven" protects.
+
+### Recreated, not restarted — and `--no-deps` this time
+
+`MM_SQLSETTINGS_DATASOURCE` is baked in at container creation (the
+2026-08-23 rotation lesson), so the container is recreated. On 09-04
+that recreate bounced `cobalt_memory` too, through `depends_on`. Adding
+`--no-deps` prevented it: the db container's id was byte-identical
+before and after, Postgres never restarted, and Mattermost's downtime
+was **15 seconds** (22:17:29 → 22:17:44 ET).
+
+### Follow-ups (not done here)
+
+- **Demote `cobalt`.** One superuser still reaches every database; the
+  fence stays one-directional until it is a plain owner role. Next
+  ruling.
+- **`.env` rotation path.** `ops/mattermost_role_provision.py` mints and
+  refuses to rotate — it aborts if either key is already present, rather
+  than guess which of role, `.env` and vault is authoritative. A
+  rotation needs its own script and its own recreate.
+- **`mattermost` still has no backup story** — unchanged from 09-04, and
+  now it is also the only database whose owner is not `cobalt`, which a
+  restore path would have to recreate.
