@@ -265,3 +265,26 @@ everything above the banner), `prefill/drc.py`, `prefill/trade_note.py`,
 `aset/daily_note.py`, `aset/web.py`. `prefill/vault_writer.py` keeps
 only path resolution — its `write_new`/`append_block`/`overwrite` are
 gone.
+
+Extended 2026-09-05 (ops session, branch `ops/mattermost-role`) with the
+first page outside `cobalt/` and `tests/`: **`ops/mattermost_role_
+provision.py`**, which mints Mattermost's own Postgres role and closes
+the weakness ADR-0006's 09-04 section left standing — Mattermost
+authenticating as the `cobalt` superuser, which also reaches the trading
+record. The rule is *one DevDoc per `.py` file*, and the tree mirrors the
+source path, so `ops/x.py` lands at `docs/40 - DevDocs/ops/x.md`.
+
+| file | one-line role |
+|---|---|
+| `ops/mattermost_role_provision.py` | Generates the password, mints role `mattermost` (LOGIN and nothing else), writes `.env` + VaultManager, proves the login — all in one process, plaintext never leaving it. |
+
+Nothing under `src/cobalt/` changed. The ownership transfer, the fence
+and the Compose repoint were run as reviewed SQL and a reviewed diff
+rather than automated, so they have no page here — ADR-0006's 2026-09-05
+section is their record, including why `REASSIGN OWNED` was rejected
+(it also reassigns shared objects, and would have handed `cobalt_brain`
+to the new role) and why the password is a locally computed SCRAM
+verifier rather than a bound parameter (a utility statement cannot carry
+one). The one thing to carry forward: storing a secret in VaultManager
+**is** its enrolment in F19's literal guard — the guard went 15 values to
+16 with no list edited.
