@@ -11,7 +11,17 @@ thing missing is an input from outside the repo.
 
 | plist | why it is not loaded | what unblocks it |
 |---|---|---|
-| `com.cobalt.backup.plist` | Neither destination the backup ruling names exists on this host (2026-09-04): no external SSD is mounted, and the vault holds no B2 credential. Loading it would fail every night at 21:40 and — since S1-P3 made the heartbeat ask launchd about every registered job — paint the beat red and DM every 15 minutes for a gap already written down in the ledger. | An SSD mounted or a B2 bucket, plus the secrets listed in that plist's own header. The header carries the full five-step arming procedure. |
+| _(empty)_ | — | — |
+
+**Nothing is pending today.** `com.cobalt.backup.plist` was the only
+occupant; it was armed on 2026-09-05 when the backup SSD was mounted,
+and moved to `ops/`. Its own header now records what the five steps
+were and which leg (B2) is still missing.
+
+This directory stays, empty, because the shape it enforces is worth
+keeping: a finished job whose only blocker is an input from outside the
+repo waits HERE, out of `cobalt validate`'s glob, rather than being
+loaded early to fail nightly.
 
 **Arming is never just `launchctl load`.** Every job here needs its
 `configs/cobalt/jobs.yaml` row, its heartbeat probe wiring, and its

@@ -12,8 +12,9 @@
 # pg_dump and the dump goes through the cobalt_memory container (see
 # src/cobalt/backup/pgdump.py).
 #
-# NOT LOADED INTO LAUNCHD as of 2026-09-04 — see the header of
-# ops/pending/com.cobalt.backup.plist for why.
+# LOADED since 2026-09-05 (SSD leg). See the header of
+# ops/com.cobalt.backup.plist for what arming involved and what is still
+# missing (B2).
 set -e
 
 export COBALT_ENV="production"

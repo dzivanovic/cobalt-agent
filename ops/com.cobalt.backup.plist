@@ -4,29 +4,32 @@
     com.cobalt.backup — the nightly restic snapshot (ledger 2026-09-04:
     "restic nightly -> B2 + fast SSD", and it "Gates Tahoe").
 
-    THIS FILE IS DELIBERATELY NOT LOADED INTO LAUNCHD (2026-09-04).
-    Neither destination the ruling names exists on this host yet: no
-    external SSD is mounted, and the vault holds no B2 credential. A
-    loaded job would fail every night at 21:40, and because S1-P3 made
-    the heartbeat ask launchd about EVERY registered job, the beat would
-    go red and DM every 15 minutes for a gap that is already written
-    down in the ledger. Teaching someone to scroll past a red heartbeat
-    costs more than the day of delay.
-
-    TO ARM IT, all five together (none of them alone is safe):
-      1. create the restic repository and store its password in the
-         vault under RESTIC_PASSWORD (plus B2_ACCOUNT_ID /
-         B2_ACCOUNT_KEY for the B2 leg);
-      2. set that destination's `repo` and `enabled: true` in
-         configs/cobalt/backup.yaml;
-      3. add the com.cobalt.backup row to configs/cobalt/jobs.yaml
-         (one-shot, supervisor: self, schedule {at: "21:40", weekdays:
-         [0,1,2,3,4,5,6]}, timeout_s 3600);
-      4. add probe_mod.backup_freshness(now=ts) to the probe list in
+    ARMED 2026-09-05 (SSD leg only). It moved here from ops/pending/
+    when a 500 GB APFS volume was mounted at /Volumes/COBALT-BACKUP and
+    the repository was created on it. The five-step procedure this
+    header used to carry was executed in full, in one commit:
+      1. RESTIC_PASSWORD generated (32 chars) and stored in the vault —
+         and mirrored to /Volumes/COBALT-BACKUP/RESTIC-PASSWORD-README
+         .txt (0600), because a repository password that exists only on
+         the machine it backs up is unrecoverable the day that machine
+         dies;
+      2. configs/cobalt/backup.yaml: ssd repo + requires_mount, enabled;
+      3. the com.cobalt.backup row in configs/cobalt/jobs.yaml;
+      4. probe_mod.backup_freshness(now=ts) wired into the probe list in
          src/cobalt/heartbeat/runner.py;
-      5. cp this file to ~/Library/LaunchAgents/ and
-         `launchctl load` it, then `cobalt backup run` once by hand and
-         prove a restore before trusting the schedule.
+      5. loaded here, `cobalt backup run` by hand, and a restore proven
+         against THIS repository — a note byte-identical and the dump
+         reloaded into a scratch database matching live.
+
+    THE B2 LEG IS STILL OFF — the vault holds no B2 credential. Until it
+    exists there is one copy of the corpus, on a disk sitting beside the
+    machine it protects.
+
+    IF THE SSD IS UNPLUGGED the run fails loud naming the mount, and the
+    heartbeat's `backup` probe says so. It never falls back to the boot
+    disk: /Volumes/COBALT-BACKUP is a path anything will happily CREATE
+    there, and a backup of the boot disk onto the boot disk exits 0 and
+    looks green forever.
 
     21:40 ET, EVERY day including weekends. After the archiver's 20:30
     (which took 23 minutes on each of the last two nights), so the

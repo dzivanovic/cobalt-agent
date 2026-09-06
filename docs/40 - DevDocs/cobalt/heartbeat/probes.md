@@ -5,7 +5,8 @@ One function per question, each returning a `Probe(name, ok, detail,
 unknown)`.
 
 `sheet_http` · `database` · `obsidian` · `mainframe` ·
-`archiver_freshness` · `vaultwrite_blocks` · `redactions`.
+`archiver_freshness` · `backup_freshness` · `vaultwrite_blocks` ·
+`redactions`.
 
 ## `unknown` is red, and separately marked
 A probe that could not run renders `??` rather than `RED`, so an
@@ -27,6 +28,26 @@ archiver window is **not** red: the archiver has run every night for
 weeks, what it has never done is run while a table existed to notice.
 Calling that red would DM a false alarm every 15 minutes until the next
 night's run — the same lesson as the MISSED probe's registration cutoff.
+
+## `backup_freshness` — three different reds, and they are not the same
+Wired into the runner on 2026-09-05, when the SSD leg was armed (before
+that it was written, tested, and deliberately not on the beat).
+
+* **no destination armed** — red, `unknown=False`. The probe ran fine;
+  the answer is simply "there is no backup". `??` would imply the
+  question could not be asked.
+* **armed but the disk is unplugged** — red, `unknown=True`, and the
+  detail is `BackupError`'s own first sentence, which names the mount:
+  `ssd: /Volumes/COBALT-BACKUP is NOT MOUNTED`. This is the one place a
+  probe passes an exception's *message* through rather than its type,
+  and it is deliberate: `BackupError`'s text is credential-free by
+  contract, and a beat that said only `BackupError` would send someone
+  to read a log to learn they need to plug a disk in. Any other
+  exception type still degrades to the type name.
+* **armed, reachable, stale** — red against
+  `heartbeat.backup_max_age_min` (1560 min = 26 h, not 24: the job runs
+  at 21:40 and a snapshot that starts late must not alarm the next
+  night).
 
 ## `vaultwrite_blocks` reports two numbers, never summed
 `refused` (the guard working) and `ungated_run` (the migration/repair

@@ -205,7 +205,14 @@ def backup_freshness(now: Optional[datetime] = None) -> Probe:
     max_age = timedelta(minutes=int(_tunable("heartbeat.backup_max_age_min")))
     try:
         age = latest_snapshot_age(cfg)
-    except (BackupError, Exception) as e:  # noqa: BLE001 — a repo we cannot reach is not a diagnosis
+    except BackupError as e:
+        # BackupError's text is credential-free BY CONTRACT (see
+        # backup/restic.py), and it is the one carrying the actionable
+        # sentence — "/Volumes/COBALT-BACKUP is NOT MOUNTED". A beat that
+        # said only `BackupError` would send someone to read the log to
+        # learn they need to plug a disk in.
+        return Probe("backup", False, str(e).split(". ")[0], unknown=True)
+    except Exception as e:  # noqa: BLE001 — a repo we cannot reach is not a diagnosis
         return Probe("backup", False, f"could not read the repository: {type(e).__name__}",
                      unknown=True)
     if age is None:

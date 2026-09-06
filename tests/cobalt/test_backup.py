@@ -47,23 +47,43 @@ class TestConfig:
         cfg = load_backup_config()
         assert cfg.forget.daily == 14 and cfg.forget.weekly == 8 and cfg.forget.monthly == 12
 
-    def test_both_legs_are_off_today(self):
-        """2026-09-04: no SSD is mounted and no B2 credential exists.
+    def test_the_ssd_is_armed_and_b2_is_not(self):
+        """ARMED 2026-09-05, SSD leg only. Was `both legs are off`.
 
-        If someone arms a leg, this test fails and MUST be updated in the
-        same commit — that is the point. Arming a backup is a change worth
-        noticing, not a config typo nobody reviews.
+        This test exists to make arming or disarming a backup a change
+        someone has to write down, not a config typo nobody reviews. If
+        the B2 leg comes on, this fails and MUST be updated in the same
+        commit — same as when the SSD leg did.
         """
         cfg = load_backup_config()
-        assert cfg.armed == [], "a destination was armed — see backup.yaml's header"
+        assert [d.name for d in cfg.armed] == ["ssd"]
         assert {d.name for d in cfg.destinations} == {"ssd", "b2"}
+        ssd = next(d for d in cfg.destinations if d.name == "ssd")
+        assert ssd.repo == "/Volumes/COBALT-BACKUP/restic"
+        assert ssd.requires_mount == "/Volumes/COBALT-BACKUP"
+
+    def test_a_removable_repo_must_declare_its_mount(self):
+        """The guard that keeps an unplugged disk from being 'backed up'
+        to a same-named directory on the boot disk."""
+        with pytest.raises(ValueError, match="declares no `requires_mount`"):
+            Destination(name="ssd", kind="local", repo="/Volumes/X/restic", enabled=True)
+
+    def test_the_mount_must_actually_contain_the_repo(self):
+        with pytest.raises(ValueError, match="is not under"):
+            Destination(name="ssd", kind="local", repo="/Volumes/X/restic",
+                        requires_mount="/Volumes/Y", enabled=True)
+
+    def test_a_non_removable_local_repo_needs_no_mount(self):
+        d = Destination(name="local", kind="local", repo="/srv/restic", enabled=True)
+        assert d.requires_mount == "" and d.mount_ok is True
 
     def test_enabled_without_a_repo_is_refused(self):
         with pytest.raises(ValueError, match="nowhere to write"):
             Destination(name="ssd", kind="local", repo="", enabled=True)
 
     def test_enabled_with_a_repo_is_fine(self):
-        d = Destination(name="ssd", kind="local", repo="/Volumes/X/restic", enabled=True)
+        d = Destination(name="ssd", kind="local", repo="/Volumes/X/restic",
+                        requires_mount="/Volumes/X", enabled=True)
         assert d.restic_repo() == "/Volumes/X/restic"
 
     def test_b2_repo_gets_its_scheme(self):
@@ -117,6 +137,59 @@ class TestSnapshotRefusals:
         assert called == []
 
 
+class TestMountGuard:
+    """The unplugged-disk case. `os.path.ismount`, not `exists`: with the
+    SSD out, /Volumes/COBALT-BACKUP is a path restic, mkdir and the shell
+    will all cheerfully create ON THE BOOT DISK — a run that exits 0,
+    reports green, and protects nothing."""
+
+    def _armed(self, tmp_path):
+        return _cfg(destinations=[Destination(
+            name="ssd", kind="local", repo=f"{tmp_path}/restic",
+            requires_mount=str(tmp_path), enabled=True)])
+
+    def test_an_unmounted_destination_refuses_and_names_the_mount(self, tmp_path):
+        cfg = self._armed(tmp_path)          # tmp_path exists but is not a mount
+        with pytest.raises(BackupError, match="is NOT MOUNTED") as e:
+            restic.snapshot(cfg)
+        assert str(tmp_path) in str(e.value)
+
+    def test_it_refuses_before_any_dump(self, tmp_path, monkeypatch):
+        """Same rule as the zero-armed refusal: nothing is dumped for a
+        run that has nowhere to put it, and the operator hears 'plug the
+        disk in' in the first second rather than six minutes later."""
+        called = []
+        monkeypatch.setattr(restic, "dump_database", lambda *a, **k: called.append(a))
+        with pytest.raises(BackupError, match="is NOT MOUNTED"):
+            restic.snapshot(self._armed(tmp_path))
+        assert called == []
+
+    def test_it_never_falls_back_to_another_destination(self, tmp_path):
+        """No 'best effort'. An unmounted disk fails the whole run."""
+        cfg = self._armed(tmp_path)
+        assert cfg.armed[0].mount_ok is False
+        with pytest.raises(BackupError):
+            restic.snapshot(cfg)
+
+    def test_a_mounted_destination_passes_the_guard(self):
+        d = Destination(name="ssd", kind="local", repo="/restic",
+                        requires_mount="/", enabled=True)
+        assert d.mount_ok is True
+        restic.require_mounted(d)   # does not raise
+
+    def test_the_probe_reports_the_unmounted_mount_by_name(self, tmp_path, monkeypatch):
+        """A beat that said only `BackupError` would send someone to read
+        a log to learn they need to plug a disk in."""
+        from cobalt.heartbeat import probes as probe_mod
+
+        cfg = self._armed(tmp_path)
+        monkeypatch.setattr("cobalt.backup.config.load_backup_config", lambda *a, **k: cfg)
+        monkeypatch.setattr(probe_mod, "_tunable", lambda k: 1560)
+        p = probe_mod.backup_freshness()
+        assert p.ok is False
+        assert "NOT MOUNTED" in p.detail and str(tmp_path) in p.detail
+
+
 class TestStagingPath:
     def test_the_dump_has_one_stable_path(self):
         """Found by the first restore drill (2026-09-04): with
@@ -126,12 +199,17 @@ class TestStagingPath:
         assert STAGING == Path.home() / "cobalt-backups" / "staging"
         assert "tmp" not in str(STAGING).split("/")[1:3]
 
-    def test_probe_is_red_and_explicit_when_nothing_is_armed(self):
+    def test_probe_is_red_and_explicit_when_nothing_is_armed(self, monkeypatch):
         """`unknown` (`??`) is for a probe that could not RUN. A config
-        declaring no destination ran fine; the answer is simply bad."""
-        from cobalt.heartbeat.probes import backup_freshness
+        declaring no destination ran fine; the answer is simply bad.
 
-        p = backup_freshness()
+        Against a CONSTRUCTED unarmed config since 2026-09-05, because
+        the shipped one now arms the SSD."""
+        from cobalt.heartbeat import probes as probe_mod
+
+        monkeypatch.setattr("cobalt.backup.config.load_backup_config",
+                            lambda *a, **k: _cfg())
+        p = probe_mod.backup_freshness()
         assert p.ok is False
         assert p.unknown is False
         assert "NO DESTINATION ARMED" in p.detail

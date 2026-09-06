@@ -33,6 +33,18 @@ logging it raw.
 `--tag cobalt-nightly`. A snapshot a human took by hand into the same
 repository can never be pruned by the nightly job.
 
+## `require_mounted()` runs before anything else, and never falls back
+An armed destination whose `requires_mount` volume is absent fails the
+whole run, loudly, naming the disk to plug in — it does not degrade to
+the other destination and it does not write to the boot disk. It is
+checked in `snapshot()` **before the dump**, in `latest_snapshot_age()`
+(so the heartbeat says "NOT MOUNTED" rather than "no snapshot" — two
+different problems with two different fixes), and in `restore()`.
+
+The reasoning is in `config.py`'s DevDoc: an unmounted volume's path is
+one anything will happily create on the boot disk, and a backup of the
+boot disk onto the boot disk exits 0 and looks green forever.
+
 ## Nothing is dumped for a run that cannot store it
 `snapshot()` raises on zero armed destinations **before** the dump. A
 360 MB dump written and thrown away is a real cost, and the refusal is

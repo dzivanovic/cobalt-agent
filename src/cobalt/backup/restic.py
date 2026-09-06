@@ -97,6 +97,33 @@ def _binary() -> str:
     return exe
 
 
+def require_mounted(dest: Destination) -> None:
+    """Refuse to touch a destination whose declared volume is absent.
+
+    THE FAILURE THIS PREVENTS is not restic's. With the SSD unplugged,
+    `/Volumes/COBALT-BACKUP/` is simply a path that does not exist, and
+    every tool in the chain — restic, `mkdir -p`, the shell — will
+    cheerfully CREATE it on the boot disk. The nightly job then writes the
+    whole repository — 423 MiB on the first night, growing — onto the
+    disk it is supposed to be protecting against, exits 0, and paints
+    the heartbeat green. There is no error anywhere until the day the
+    Mac dies.
+
+    So the check is `os.path.ismount`, not `exists`: the broken state is
+    a directory that exists on the wrong disk. No fallback destination,
+    no "best effort" — a backup with nowhere to go fails, loudly, naming
+    the disk to plug in.
+    """
+    if dest.mount_ok:
+        return
+    raise BackupError(
+        f"{dest.name}: {dest.requires_mount} is NOT MOUNTED, so the repository "
+        f"{dest.repo} is unreachable. Plug the backup disk in. Refusing to fall "
+        "back to the boot disk — an unmounted volume's path gets created there "
+        "silently, and a backup of the boot disk onto the boot disk is not a backup."
+    )
+
+
 def _env(cfg: BackupConfig, dest: Destination) -> dict[str, str]:
     """Child environment carrying the credentials, and nothing else new.
 
@@ -142,6 +169,13 @@ def snapshot(cfg: Optional[BackupConfig] = None, *, dry_run: bool = False) -> Ba
             "comment there for what each one is still missing. Refusing to exit 0 "
             "having written nothing."
         )
+    # Before the dump, not after: a 360 MB dump written for a run that
+    # has nowhere to put it is the same waste the zero-armed refusal
+    # above exists to avoid — and the operator wants to hear "plug the
+    # disk in" in the first second, not six minutes later.
+    for dest in cfg.armed:
+        require_mounted(dest)
+
     run = BackupRun()
     STAGING.mkdir(parents=True, exist_ok=True)
     try:
@@ -214,6 +248,10 @@ def latest_snapshot_age(cfg: Optional[BackupConfig] = None) -> Optional[timedelt
     cfg = cfg or load_backup_config()
     newest: Optional[datetime] = None
     for dest in cfg.armed:
+        # Raises rather than reporting "no snapshot": an unplugged disk
+        # and an empty repository are different problems with different
+        # fixes, and the probe renders this one by naming the mount.
+        require_mounted(dest)
         out = _run(["-r", dest.restic_repo(), "snapshots", "--tag", TAG, "--json"],
                    _env(cfg, dest), timeout=120)
         for snap in json.loads(out or "[]"):
@@ -235,6 +273,7 @@ def restore(dest_name: str, snapshot_id: str, into: Path,
             f"unknown destination {dest_name!r}. Configured: "
             f"{', '.join(d.name for d in cfg.destinations)}."
         )
+    require_mounted(dest)
     into.mkdir(parents=True, exist_ok=True)
     args = ["-r", dest.restic_repo(), "restore", snapshot_id, "--target", str(into)]
     if include:
@@ -246,6 +285,7 @@ def restore(dest_name: str, snapshot_id: str, into: Path,
 __all__ = [
     "TAG",
     "BackupError",
+    "require_mounted",
     "BackupRun",
     "SnapshotResult",
     "dump_database",

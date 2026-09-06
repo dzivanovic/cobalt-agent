@@ -122,6 +122,21 @@ jobs:
     schedule: {at: "09:00", weekdays: [1, 2, 3, 4, 5]}
     what: "the 09:00 day-mode proposal (uv run cobalt daymode propose)"
 
+  - label: com.cobalt.backup
+    kind: one-shot
+    supervisor: self
+    # An hour. The first real snapshot took minutes, but the number that
+    # matters is the one a FULL re-read takes on a bad night — restic
+    # rescans every source file when its cache is cold, and the dump
+    # alone is 360 MB.
+    timeout_s: 3600
+    # EVERY day including weekends, and after the archiver's 20:30 (which
+    # takes ~23 min) so the snapshot contains that night's bars rather
+    # than racing them. A vault edit on a Saturday is exactly as
+    # unrecoverable as one on a Tuesday.
+    schedule: {at: "21:40", weekdays: [0, 1, 2, 3, 4, 5, 6]}
+    what: "the nightly restic snapshot — vault + a fresh cobalt_brain dump, to the SSD"
+
   - label: com.cobalt.heartbeat
     kind: one-shot
     supervisor: self

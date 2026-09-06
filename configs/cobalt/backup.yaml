@@ -5,22 +5,31 @@
 # only, exactly as configs/cobalt/notify.yaml names MATTERMOST_CREDS.
 #
 # ---------------------------------------------------------------------
-# WHY BOTH DESTINATIONS ARE `enabled: false` TODAY (2026-09-04)
+# STATE: ssd ARMED (2026-09-05), b2 STILL OFF
 # ---------------------------------------------------------------------
-# The ruling names two destinations. On the night this file was written
-# NEITHER existed on this host:
-#   ssd — no external disk is mounted. /Volumes/ holds only the boot
-#         symlink and `diskutil list external` returns nothing. The ops
-#         prompt said: if none is mounted, report and skip — DO NOT pick
-#         a disk. So `repo` is empty and the leg is off.
-#   b2  — the vault holds 14 secrets and none is a B2 key id,
-#         application key, or bucket name. Creating an account or a
-#         bucket was explicitly out of scope.
-# `cobalt backup run` REFUSES to run with zero enabled destinations
-# rather than exiting 0 having written nothing, and com.cobalt.backup is
-# deliberately NOT loaded into launchd until one is armed — a nightly
-# job that cannot reach a repository would paint the heartbeat red every
-# night and teach someone to scroll past it.
+# The ruling names two destinations.
+#   ssd — ARMED. A 500 GB APFS volume (physical disk4, synthesized
+#         disk5s1) is mounted at /Volumes/COBALT-BACKUP and holds the
+#         repository. com.cobalt.backup is loaded and runs 21:40 daily.
+#   b2  — STILL OFF. The vault holds no B2 key id, application key or
+#         bucket name. The leg stays configured and disabled so that
+#         arming it is one `enabled: true` and a `repo`, reviewable as a
+#         diff, rather than a config someone writes from scratch under
+#         pressure. Until it exists there is ONE copy of the corpus, on
+#         a disk sitting next to the machine it protects.
+#
+# THE `requires_mount` GUARD, and why every removable repo needs one.
+# With the SSD unplugged, /Volumes/COBALT-BACKUP does not exist — and
+# restic, mkdir and the shell will all happily CREATE it on the boot
+# disk. The nightly job would then back the boot disk up to itself,
+# exit 0 and paint the heartbeat green, with no error anywhere until the
+# day the Mac dies. `requires_mount` is checked with os.path.ismount
+# before the dump is even taken; unmounted = loud failure naming the
+# disk to plug in, never a fallback. The schema REFUSES a local repo
+# under /Volumes/ that declares no mount.
+#
+# `cobalt backup run` still REFUSES to run with zero enabled
+# destinations rather than exiting 0 having written nothing.
 backup:
   # ---------------- what is protected ----------------
   # The vault is the irreplaceable half: Postgres can be rebuilt from
@@ -48,8 +57,11 @@ backup:
   destinations:
     - name: ssd
       kind: local
-      repo: ""
-      enabled: false
+      repo: "/Volumes/COBALT-BACKUP/restic"
+      # The volume that must be mounted for the repo above to be real.
+      # Mandatory for any local repo under /Volumes/ — see the header.
+      requires_mount: "/Volumes/COBALT-BACKUP"
+      enabled: true
     - name: b2
       kind: b2
       repo: ""
