@@ -517,15 +517,6 @@ tunables:
     source: ruling
     consumers: ["cobalt.heartbeat (the one green DM per day)"]
 
-  - key: heartbeat.archiver_max_age_min
-    value: 1560
-    unit: min
-    scope: global
-    dynamic: false
-    status: solidified
-    source: ruling
-    consumers: ["cobalt.heartbeat.probes.archiver_freshness (stale = red)"]
-
   - key: heartbeat.backup_max_age_min
     value: 1560
     unit: min
@@ -535,9 +526,15 @@ tunables:
     source: ruling
     # 26 h, not 24: the backup runs at 21:40 and a snapshot that starts
     # a few minutes late must not paint the beat red the following
-    # night. The same shape as archiver_max_age_min, and the same
-    # reasoning — a threshold that alarms on a normal night is one
-    # people learn to scroll past.
+    # night. `archiver_freshness` used to have a matching flat
+    # `archiver_max_age_min` window (deleted 2026-09-06) — it painted
+    # every Sat/Sun red once a Friday-registered row aged past it,
+    # because a flat age window cannot tell a weekday-cadence gap from a
+    # genuine miss. The archiver checks against its own cadence instead
+    # (`jobs.missed_grace_min`, via `cobalt.jobs.watchdog.is_missed`).
+    # `backup` stays on a flat window because it runs every day —
+    # weekends included — so there is no cadence gap for a flat window
+    # to misread.
     consumers: ["cobalt.heartbeat.probes.backup_freshness (stale = red)"]
 
   - key: heartbeat.probe_timeout_s

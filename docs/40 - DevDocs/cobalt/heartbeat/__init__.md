@@ -17,7 +17,7 @@ reboot left Obsidian dead and a day's writes unsynced).
 | `sheet HTTP` | `:5010/` is not **200** |
 | `obsidian` | no Obsidian process (RULING 6 — no Obsidian, no Sync) |
 | `mainframe` | `:1234` refuses a connection |
-| `archiver` | stale past `heartbeat.archiver_max_age_min`, failed, or **ran and wrote zero rows** |
+| `archiver` | MISSED against its own Mon-Fri cadence (`cobalt.jobs.watchdog.is_missed`), failed, or **ran and wrote zero rows** |
 | `vault blocks` | never red — reports refusals **and** ungated repair runs, separately |
 | `redactions` | never red — reports F19 hits since the last beat |
 

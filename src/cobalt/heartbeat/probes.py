@@ -119,38 +119,54 @@ def mainframe(host: str = "127.0.0.1", port: int = 1234) -> Probe:
 
 
 def archiver_freshness(store=None, now: Optional[datetime] = None) -> Probe:
-    """Last run + rows written, against `heartbeat.archiver_max_age_min`.
+    """Last run + rows written, checked against the archiver's own
+    Mon-Fri cadence via the same `is_missed` arithmetic F17's watchdog
+    uses — not a flat age window.
 
-    Both halves matter and the second is the one that would otherwise be
-    missed: an archiver that runs nightly and writes ZERO rows is exiting
-    0, looks green in every state column, and is quietly not collecting
-    the corpus every later feature depends on.
+    A flat `now - last_run > N hours` window cannot tell a genuine miss
+    from an ordinary Friday-to-Monday gap: whatever N is, it either
+    fires every weekend (too small) or hides a multi-day outage (too
+    big). 2026-09-06 is why this changed: the F17 wrapper was registered
+    at 22:19 ET Friday, AFTER that evening's 20:30 run had already
+    completed via the pre-wrapper code path, so the row's `finished_at`
+    stayed NULL forever with nothing wrong — and the old flat
+    `registered_at + heartbeat.archiver_max_age_min` grace expired
+    Saturday just after midnight, painting the whole weekend red for a
+    job that was never actually due again until Monday evening.
+    `is_missed` already gets this right, including the exact "cannot
+    miss a run it was not watching for" case above — reusing it here is
+    the one-path rule, not a nicety.
+
+    Rows written still matters once a run HAS completed — a nightly run
+    that exits 0 having written zero rows looks green in every state
+    column and is quietly not collecting the corpus every later feature
+    depends on. That check is cadence-independent and unchanged.
     """
+    from cobalt.jobs.config import load_job_registry
     from cobalt.jobs.store import JobStore
+    from cobalt.jobs.watchdog import MISSED_GRACE_KEY, is_missed
+    from cobalt.session.clock import session_clock
 
     store = store or JobStore()
     ts = now or clock_mod.now_utc()
-    max_age = timedelta(minutes=int(_tunable("heartbeat.archiver_max_age_min")))
     row = store.get("com.cobalt.archiver")
     if row is None:
         return Probe("archiver", False, "no jobs row — not registered")
+
+    spec = load_job_registry().spec("com.cobalt.archiver")
+    now_et = session_clock().to_et(ts)
+    grace = timedelta(minutes=int(_tunable(MISSED_GRACE_KEY)))
+    missed, missed_detail = is_missed(spec, row, now_et=now_et, grace=grace)
+
     finished = row["finished_at"]
     if finished is None:
-        # SAME DAY-ONE RULE AS THE MISSED PROBE. The archiver has run
-        # every night for weeks; what it has never done is run while this
-        # table existed to notice. Calling that red would DM a false
-        # alarm every 15 minutes until tomorrow night's run, and an alert
-        # that is wrong on day one is one people learn to scroll past.
-        # It goes red the moment a real window passes with no run.
-        registered = row["registered_at"]
-        if registered is not None and ts - registered <= max_age:
-            return Probe(
-                "archiver", True,
-                f"registered {registered:%Y-%m-%d %H:%M} UTC; no run OBSERVED yet — "
-                "the job row is younger than one archiver window, so there has not "
-                "been a run for it to have missed",
-            )
-        return Probe("archiver", False, "has never completed a run")
+        if missed:
+            return Probe("archiver", False, missed_detail)
+        return Probe(
+            "archiver", True,
+            f"no run OBSERVED yet — none due since registration "
+            f"({row['registered_at']:%Y-%m-%d %H:%M} UTC)",
+        )
     age = ts - finished
     result = row["last_result"] or {}
     rows_written = result.get("rows_written")
@@ -159,11 +175,8 @@ def archiver_freshness(store=None, now: Optional[datetime] = None) -> Probe:
         f", rows written {rows_written if rows_written is not None else 'UNRECORDED'}"
         f", exit {row['exit_code']}"
     )
-    if age > max_age:
-        return Probe(
-            "archiver", False,
-            f"STALE — {detail} (limit {max_age.total_seconds() / 3600:.0f} h)",
-        )
+    if missed:
+        return Probe("archiver", False, f"STALE — {detail} — {missed_detail}")
     if row["exit_code"] not in (0, None):
         return Probe("archiver", False, f"last run FAILED — {detail}")
     if rows_written == 0:

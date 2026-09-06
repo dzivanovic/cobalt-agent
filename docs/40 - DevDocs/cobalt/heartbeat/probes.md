@@ -20,14 +20,26 @@ sync".
 
 ## `archiver_freshness`, and the day-one rule
 Reads the job row's `finished_at` **and** `last_result.rows_written`.
-Red on: stale past `heartbeat.archiver_max_age_min`, a non-zero exit, or
-zero rows written.
+Red on: MISSED against the archiver's own Mon-Fri cadence (via
+`cobalt.jobs.watchdog.is_missed`, `jobs.missed_grace_min`), a non-zero
+exit, or zero rows written.
 
-A row that has **never** completed a run and is younger than one
-archiver window is **not** red: the archiver has run every night for
-weeks, what it has never done is run while a table existed to notice.
-Calling that red would DM a false alarm every 15 minutes until the next
-night's run — the same lesson as the MISSED probe's registration cutoff.
+**Changed 2026-09-06** (RED incident that morning): this used to check a
+flat `now - finished_at > heartbeat.archiver_max_age_min` (26h) window
+instead. A flat window cannot tell a genuine miss from an ordinary
+Friday-to-Monday gap, and it bit for real: the F17 wrapper was
+registered 22:19 ET Friday 2026-09-04, *after* that evening's 20:30 run
+had already completed via the pre-wrapper code path, so `finished_at`
+stayed NULL with nothing wrong — and the flat window expired just after
+midnight Saturday, painting the whole weekend red for a job not due
+again until Monday evening. `is_missed` already had the right,
+cadence-aware arithmetic (and its own tests for "a due moment before
+registration is not missed") — this probe now reuses it instead of a
+second, flatter copy of the same question.
+
+A row that has **never** completed a run and has had no due moment
+since it was registered is **not** red — the same registration-cutoff
+rule `is_missed` already enforces for the watchdog's MISSED finding.
 
 ## `backup_freshness` — three different reds, and they are not the same
 Wired into the runner on 2026-09-05, when the SSD leg was armed (before
@@ -57,5 +69,6 @@ repairs as five refusals would send someone hunting a bug that is not
 there.
 
 ## Thresholds are tunables rows (F16)
-`heartbeat.probe_timeout_s`, `heartbeat.archiver_max_age_min`. No
+`heartbeat.probe_timeout_s`, `heartbeat.backup_max_age_min`,
+`jobs.missed_grace_min` (shared with the F17 watchdog — see above). No
 literal in a predicate.
