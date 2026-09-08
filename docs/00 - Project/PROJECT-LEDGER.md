@@ -1039,3 +1039,4 @@ H. OPEN ON DEJAN
   - **L40** Expertise is owned, not shared: each side effect (vault writes, DB writes, orders, alerts) has exactly one expert role; others reach it by asking, never by doing.
 
 
+- 09-08 S1 LIVE ACCEPTANCE — GREEN. One live session on the ASET sheet with the new controls: attestation + rung→sheet gating applied; cards ARMED→TRIGGERED→FILLED on a real trade; daily note intact (no overwrite); heartbeat green (12:05, 11 jobs / 9 probes). S1-P4 email channel landed the same day (F18 proven RED→GREEN in production, DM + email). CODE FREEZE LIFTED. S1 delivered 09-04/08 vs 09-18 plan — ~10 days of slack; S2 starts on ADR-0008 done, not 09-21. Friday's 4 FILLED cards needed a manual CLOSE (expected until F11). Known debt: OAuth app in Testing status → refresh token expires ~09-15 unless Publish succeeds and email-auth is re-run.
