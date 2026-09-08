@@ -236,22 +236,35 @@ non-def values get an empty `trade_def:` so a later fill is a clause-2a cell. On
 write_id per note, unified diff per note in the report, restore proven on the
 dev-vault copy first.
 
+**Corrected 2026-09-08 from the dry-run**: the pre-ADR tally had been taken over
+all of `1 - Trading/` and so swept in the four legacy `strategy:` keys of the
+STRATEGY notes themselves (Backside Scalp, Back Through Open, Second Chance Scalp,
+Second Day Play) — which is why four rows read one high and `Backside Scalp`
+appeared at all. The table below is the actual `1 - Trading/2 - Trades/` corpus:
+69 notes, 36 with a non-blank `strategy:`, of which **31 match a slug**.
+
 | `strategy:` value | n | `trade_def:` |
 |---|---|---|
-| Second Chance Scalp | 6 | second-chance |
+| Second Chance Scalp | 5 | second-chance |
 | VWAP Continuation | 4 | vwap-continuation |
-| Second Day Play | 3 | second-day-play |
 | Offside Scalp | 3 | off-sides |
 | Hitchhiker Scalp | 3 | hitchhiker |
 | Fashionable Late Scalp | 3 | fashionably-late |
 | Opening Range Break | 2 | opening-range-break |
 | 9 EMA Reclaim | 2 | nine-ema-reclaim |
-| Back Through Open | 2 | back-through-open |
-| Backside Scalp · Gap Give and Go · First VWAP Pullback · Bouncy Ball · Bella Fade · 9 EMA Scalp | 1 each | backside · gap-give-and-go · first-vwap-pullback · bouncy-ball · bella-fade · nine-ema-scalp |
+| Second Day Play | 2 | second-day-play |
+| Gap Give and Go · First VWAP Pullback · Bouncy Ball · Bella Fade · 9 EMA Scalp · Back Through Open | 1 each | gap-give-and-go · first-vwap-pullback · bouncy-ball · bella-fade · nine-ema-scalp · back-through-open |
 | Big Dawg | 1 | big-dog |
 | Puppy Dog Consolidation | 1 | blank — RULED: a separate def later (`puppy-dog` queued) |
 | Bad Trade Outside of Playbook · Breaking News | 3 + 1 | blank, reported (not trade_defs) |
 | (blank) | 33 | blank, reported |
+| **totals** | **69** | **31 matched · 38 blank** |
+
+`Backside Scalp` names no trade note: the value exists only as the Backside Scalp
+STRATEGY note's own legacy `strategy:` key. Two values in the table were not yet
+anywhere in the vault and were added as aliases first (`cobalt taxonomy add-alias`):
+`Offside Scalp` on the `off-sides` draft and `Fashionable Late Scalp` on the
+`fashionably-late` def.
 
 `5 - Templates/Individual Trade Template.md` gains a `trade_def:` dropdown of the
 22 slugs and loses the `strategy:` dropdown for NEW notes. Templates are human-tree
