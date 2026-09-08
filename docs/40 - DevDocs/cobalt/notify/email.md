@@ -84,6 +84,25 @@ Two non-obvious requirements, both load-bearing:
   *alone* and the flow silently produces a credential that dies in an
   hour. `run_consent_flow` raises rather than storing one.
 
+## Two host-specific traps in the consent flow
+Both found the first time `email-auth` was run non-interactively
+(2026-09-08), both fixed rather than documented-around:
+
+- **Block-buffered stdout.** The function blocks on a socket for as long
+  as a human takes to click through a consent screen, and the first thing
+  it must emit is the URL that human needs. Python block-buffers stdout
+  whenever it is not a tty, so the URL sat in an 8 KB buffer until the
+  process exited — i.e. until after it was needed. `run_consent_flow`
+  now line-buffers stdout before anything prints.
+- **`socket.getfqdn("localhost")` takes 35 seconds on this host.**
+  `wsgiref` calls it during `server_bind` to fill in `SERVER_NAME`, and
+  `run_local_server` binds *before* printing the URL — so the command sat
+  silent for 35 s looking hung. `_fast_local_bind()` patches `getfqdn`
+  for the bind and restores it immediately. `SERVER_NAME` is read by
+  nothing on this path: one loopback request, from a URL that already
+  carries the host and port literally. Forward DNS is 0.01 s here, so the
+  **send** path never went near this.
+
 ## `channel_status()` never sends
 It reads vault key **names** (no values, no network) and the last row of
 `cobalt_email_sends`. A probe that mailed a test every 15 minutes would

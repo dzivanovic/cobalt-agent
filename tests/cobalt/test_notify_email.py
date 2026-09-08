@@ -648,3 +648,46 @@ def test_a_missing_tunable_crashes_rather_than_defaulting(monkeypatch):
     ))
     with pytest.raises(EmailError, match="missing from tunables.yaml"):
         email_mod.auth_port()
+
+
+# =====================================================================
+# 9. the consent flow's local bind
+# =====================================================================
+
+
+def test_fast_local_bind_is_fast_and_restores_getfqdn():
+    """`socket.getfqdn("localhost")` takes 35 SECONDS on the Mac Studio
+    (measured 2026-09-08), and `wsgiref` calls it while binding — before
+    `run_local_server` prints the authorisation URL. The command looked
+    hung with the one thing the operator needed still unprinted.
+
+    Two things must hold: it is fast inside, and the global is put back
+    on the way out. `getfqdn` is a shared builtin; an override that
+    outlived this context manager would surprise every later caller in
+    the process.
+    """
+    import socket
+    import time
+
+    from cobalt.notify.email import _fast_local_bind
+
+    original = socket.getfqdn
+    with _fast_local_bind():
+        start = time.monotonic()
+        assert socket.getfqdn("localhost") == "localhost"
+        assert time.monotonic() - start < 0.5
+        assert socket.getfqdn is not original
+
+    assert socket.getfqdn is original, "getfqdn was left monkeypatched"
+
+
+def test_fast_local_bind_restores_getfqdn_even_on_an_exception():
+    import socket
+
+    from cobalt.notify.email import _fast_local_bind
+
+    original = socket.getfqdn
+    with pytest.raises(RuntimeError):
+        with _fast_local_bind():
+            raise RuntimeError("consent was cancelled")
+    assert socket.getfqdn is original

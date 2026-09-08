@@ -60,6 +60,7 @@ token this module mints cannot leak through the channel it opens.
 from __future__ import annotations
 
 import base64
+import contextlib
 from email.message import EmailMessage
 from typing import Any, Optional
 
@@ -304,6 +305,38 @@ def _shred(path) -> None:
     path.unlink(missing_ok=True)
 
 
+@contextlib.contextmanager
+def _fast_local_bind():
+    """Stop `wsgiref` spending 35 seconds on a reverse DNS lookup.
+
+    MEASURED ON THIS HOST, 2026-09-08: `socket.getfqdn("localhost")` takes
+    **35 seconds**. `http.server.HTTPServer.server_bind` calls it to fill
+    in `server_name`, and `run_local_server` binds BEFORE it prints the
+    authorisation URL — so the command sat silent for 35 s looking
+    hung, with the one thing the operator needed still unprinted.
+
+    `server_name` becomes the WSGI environ's `SERVER_NAME` and nothing
+    else. This flow serves exactly one request, to a loopback redirect,
+    from a URL that already carries the host and port literally — nothing
+    in it reads `SERVER_NAME`. So the lookup buys nothing and costs the
+    whole delay.
+
+    Patched for the bind and restored immediately, rather than left
+    monkeypatched: `getfqdn` is a shared builtin and a global override
+    that outlived this function would be a surprise for every later
+    caller in the process. Forward DNS is untouched (0.01 s here), so the
+    SEND path never went near this.
+    """
+    import socket
+
+    original = socket.getfqdn
+    socket.getfqdn = lambda name="": name or "localhost"
+    try:
+        yield
+    finally:
+        socket.getfqdn = original
+
+
 def run_consent_flow(client_json_path, *, port: Optional[int] = None) -> str:
     """Store the client halves, run the loopback flow, store the refresh
     token, shred the client JSON. Returns the printable auth URL prompt.
@@ -315,9 +348,24 @@ def run_consent_flow(client_json_path, *, port: Optional[int] = None) -> str:
     also require the client JSON to still be there.
     """
     import json
+    import sys
     from pathlib import Path
 
     from cobalt.redact.secrets import put_secret
+
+    # LINE-BUFFER STDOUT BEFORE ANYTHING PRINTS. This function blocks on
+    # a socket for as long as it takes a human to click through a consent
+    # screen, and the ONE thing it must emit first is the URL that human
+    # has to open. Python block-buffers stdout whenever it is not a tty —
+    # a pipe, a log file, a background job — so without this the URL sits
+    # in a 8 KB buffer until the process exits, i.e. until after the
+    # thing it was needed for. Found the first time this was run
+    # non-interactively (2026-09-08): the listener was up, the prompt was
+    # invisible, and the command looked hung.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):  # not a TextIOWrapper — nothing to do
+        pass
 
     path = Path(client_json_path).expanduser()
     if not path.exists():
@@ -355,29 +403,30 @@ def run_consent_flow(client_json_path, *, port: Optional[int] = None) -> str:
         scopes=[SCOPE],
     )
 
-    print("WAITING: consent")
-    credentials = flow.run_local_server(
-        port=bind_port,
-        # Headless by contract: this runs over SSH and Tailscale as often
-        # as it runs at the keyboard, and a browser launched on the Mac
-        # Studio is a browser nobody is looking at.
-        open_browser=False,
-        authorization_prompt_message=(
-            "\nOpen this URL in a browser signed in as the sending account:\n\n{url}\n\n"
-            f"It will redirect to http://localhost:{bind_port}/ on THIS host — so open "
-            "it on this Mac, or forward the port. Waiting…\n"
-        ),
-        success_message=(
-            "Consent received. You can close this tab; Cobalt has stored the token."
-        ),
-        # `offline` + `consent` together are what make Google return a
-        # REFRESH token rather than an access token alone. Without
-        # prompt='consent' a second run on an already-consented account
-        # returns no refresh token at all and the flow silently produces
-        # a credential that dies in an hour.
-        access_type="offline",
-        prompt="consent",
-    )
+    print("WAITING: consent", flush=True)
+    with _fast_local_bind():
+        credentials = flow.run_local_server(
+            port=bind_port,
+            # Headless by contract: this runs over SSH and Tailscale as often
+            # as it runs at the keyboard, and a browser launched on the Mac
+            # Studio is a browser nobody is looking at.
+            open_browser=False,
+            authorization_prompt_message=(
+                "\nOpen this URL in a browser signed in as the sending account:\n\n{url}\n\n"
+                f"It will redirect to http://localhost:{bind_port}/ on THIS host — so open "
+                "it on this Mac, or forward the port. Waiting…\n"
+            ),
+            success_message=(
+                "Consent received. You can close this tab; Cobalt has stored the token."
+            ),
+            # `offline` + `consent` together are what make Google return a
+            # REFRESH token rather than an access token alone. Without
+            # prompt='consent' a second run on an already-consented account
+            # returns no refresh token at all and the flow silently produces
+            # a credential that dies in an hour.
+            access_type="offline",
+            prompt="consent",
+        )
 
     if not credentials.refresh_token:
         raise EmailError(
