@@ -60,8 +60,19 @@ def _retargeted(slug: str, name: str) -> str:
 
 @pytest.fixture
 def store():
+    """An EMPTY `"user".trade_defs`, inside the suite's rollback transaction.
+
+    The dev database legitimately holds a trader's loaded defs — this
+    directory's fixture wraps every test in a transaction it never
+    commits, so clearing the tables here is invisible outside the test and
+    makes the sync counts mean what they say. Without it, `defs_deleted`
+    would count whatever happened to be loaded when the suite ran.
+    """
     s = TradeDefStore("cobalt_dev")
     s.ensure_schema()
+    with s._connect() as conn:
+        conn.execute("DELETE FROM tunables")
+        conn.execute("DELETE FROM trade_defs")
     return s
 
 
