@@ -1,6 +1,6 @@
 """Trade-note tests: creates on first card, updates only Cobalt's five
 frontmatter keys on a re-run, and never touches his body or his other
-fields (strategy/RVOL/exit/entry_time/etc)."""
+fields (trade_def/RVOL/exit/entry_time/etc)."""
 
 from datetime import datetime
 from decimal import Decimal
@@ -61,7 +61,8 @@ def test_create_writes_expected_frontmatter_and_body(fake_vault):
     assert 'stop_price: "225.00"' in content
     assert 'entry_price: "227.98"' in content
     assert "exit_price:\n" in content
-    assert "strategy:\n" in content
+    assert "trade_def:\n" in content       # ADR-0008 D4: the id, blank, his
+    assert "strategy:" not in content      # ... and not the free-text name
     assert "RVOL:\n" in content
     assert "tags:\n  - trade" in content
     assert "# Trade: [[Trade-2026-08-31 09-31-05 -NVDA]]" in content
@@ -75,7 +76,7 @@ def test_rerun_same_card_updates_only_cobalt_fields(fake_vault):
 
     # simulate Dejan filling in his own fields + body after the fact
     manual = path.read_text()
-    manual = manual.replace('strategy:\n', 'strategy: "Big Dawg"\n')
+    manual = manual.replace('trade_def:\n', 'trade_def: example-range-break\n')
     manual = manual.replace('RVOL:\n', 'RVOL: "2.5"\n')
     manual = manual.replace(
         "- Notes: \n\t- [Why you entered, market conditions, mistakes]",
@@ -91,7 +92,7 @@ def test_rerun_same_card_updates_only_cobalt_fields(fake_vault):
 
     content = path.read_text()
     assert 'entry_price: "228.50"' in content  # Cobalt's field refreshed
-    assert 'strategy: "Big Dawg"' in content  # his field preserved
+    assert "trade_def: example-range-break" in content  # his field preserved
     assert 'RVOL: "2.5"' in content  # his field preserved
     assert "Entered on the flush, felt rushed." in content  # his body preserved
 

@@ -27,9 +27,17 @@ from .config import PrefillPathsConfig
 from .vault_writer import VaultWriteError, read_if_exists, resolve_target
 
 COBALT_OWNED_FIELDS = ("date", "symbol", "direction", "stop_price", "entry_price")
+#: ADR-0008 D4: a NEW trade note carries `trade_def:` — the trade's ID —
+#: and not `strategy:`, the free-text name D4 spent 69 notes replacing.
+#: It is DEJAN'S field, blank at creation like `RVOL` and `exit_price`:
+#: Cobalt writes the five in COBALT_OWNED_FIELDS and nothing else, and a
+#: card does not know which strategy he decided he was trading.
+#: Existing notes keep whatever they already have — this is the shape of
+#: a new one, not a migration (that is `cobalt taxonomy
+#: migrate-trade-notes`).
 FIELD_ORDER = (
     "date", "symbol", "direction", "stop_price", "entry_price", "exit_price",
-    "entry_time", "exit_time", "profit_loss", "strategy", "RVOL", "tags",
+    "entry_time", "exit_time", "profit_loss", "trade_def", "RVOL", "tags",
 )
 
 
@@ -48,10 +56,19 @@ def _cobalt_fields(result: SizingResult, when: datetime) -> dict:
     }
 
 
+#: Rendered WITHOUT quotes. A slug is `[a-z0-9-]` by construction and a
+#: date and a ticker need no quoting either — and `trade_def:` matters
+#: here beyond neatness: `cobalt taxonomy migrate-trade-notes` writes the
+#: slug unquoted into every existing note, so quoting it on the next
+#: Cobalt write would make his line and Cobalt's differ, and every prefill
+#: run would record a pointless override on a value nobody changed.
+_UNQUOTED_FIELDS = ("date", "symbol", "trade_def")
+
+
 def _render_value(key: str, value) -> str:
     if value is None or value == "":
         return f"{key}:"
-    if key in ("date", "symbol"):
+    if key in _UNQUOTED_FIELDS:
         return f"{key}: {value}"
     return f'{key}: "{value}"'
 
