@@ -1,7 +1,25 @@
 """Trade-definition schema — TAXONOMY-DRAFT-v0_7.md §10 (schema v0.4).
 
-Config-as-code (TRIAGE cross-cutting law): `trade_def` and its variable
-registry are YAML data, Pydantic-validated on load, never hand-parsed.
+**ADR-0008 D3: v0.4 minus authored `id`/`name`, plus structured
+`quality_factors`.** Recorded here; folded into the taxonomy document at
+S2-P2's v0.8 bump. Two changes, both consequences of the vault note
+becoming the trade_def's one home:
+
+1. `id` and `name` are LOADER-INJECTED. The note's frontmatter
+   `trade_def:` slug is the id (ruling a) and its `name:` is the display
+   name (ruling e); a unit that authors either fails loud. The fields are
+   still required ON THE MODEL — a `TradeDef` object always knows what it
+   is — but they enter through `TradeDef.from_unit()`, which is the one
+   place that refuses an authored copy. The YAML's former name, where it
+   differed, joins `aliases[]`.
+2. `quality_factors[]` items are `QualityFactor` objects, not bare
+   strings. `variables/<id>.yaml` and its set-equality cross-check are
+   GONE — the registry entry folded into the item itself, so the two
+   cannot disagree by construction. A bare string still parses, taking
+   every default, which is what the 13 sheet-derived defs use.
+
+Config-as-code (TRIAGE cross-cutting law): `trade_def` is YAML data,
+Pydantic-validated on load, never hand-parsed.
 This module carries the schema only — no predicate parser, no setup
 detectors, no bar logic. Enums are the single source of truth for the
 taxonomy vocabulary (v0.7 §10.1/§10.2/§3.6); YAML data must match them
@@ -28,7 +46,7 @@ from __future__ import annotations
 
 import re
 from enum import Enum
-from typing import Annotated, Any, Generic, Literal, TypeVar
+from typing import Annotated, Any, ClassVar, Generic, Literal, TypeVar
 
 from pydantic import (
     BaseModel,
@@ -58,8 +76,8 @@ class TradeClass(str, Enum):
     """Trade shape + horizon, not exit mechanics (v0.7 §0 class
     definitions, §14 c.2 — supersedes v0.6 row 2 and A.10, both STRUCK):
     trailing vs hard exit defines no class (any class may trail), and
-    legs-out count defines no class (scalps may scale out: Hitchhiker 2
-    legs, Rubberband 3). `scalp` = usually below the 15-min timeframe,
+    legs-out count defines no class — scalps may scale out, two legs or
+    three. `scalp` = usually below the 15-min timeframe,
     lasting seconds to ~45 minutes; `tf_ceiling: 15-min` stays the only
     hard constraint. `move2move` = defined entry, stop and target
     capitalising on a momentum move that can survive consolidation and
@@ -86,7 +104,7 @@ class EntryMode(str, Enum):
 
 
 class SetupRef(str, Enum):
-    """The 7 setup refs behind the Cameron H grid (§C)."""
+    """The 7 setup refs of the setup x trade matrix (§C)."""
 
     GAP_AND_GO = "gap_and_go"
     GAP_DOWN_INTO_SUPPORT = "gap_down_into_support"
@@ -140,8 +158,7 @@ class StructuralRef(str, Enum):
     their own params and are referenced as free-text anchors instead).
     `Range(micro).top` / `.base` are the same class of parametrized ref
     — encoded via `level {level_ref: "Range(micro).top"}` rather than an
-    enum member (Gap Give and Go / Rubberband precedent, ADR-0002, ruled
-    v0.7 §3.6)."""
+    enum member (ADR-0002, ruled v0.7 §3.6)."""
 
     SNAPBACK_CANDLE = "snapback_candle"
     TURN_LOW = "turn_low"
@@ -312,10 +329,11 @@ class StopBuffer(BaseModel):
     type; `spread` is not valid. `cents` is never a literal — it is a
     `cfg(key)` reference resolved against the tunable registry at load
     time (ruling 09-03: stop.buffer is a tunable, not a Pydantic
-    constant). Default is the global `cfg(stop.buffer)` row; a trade
-    with its own per-trade override row (e.g. back_through_open,
-    bella_fade) references that key directly — same hoist convention as
-    every other per-trade tunable key."""
+    constant). Default is the global `cfg(stop.buffer)` row; a trade with
+    its own per-trade override row references that key directly
+    (`cfg(<trade_key>.stop.buffer)`) — the same hoist convention as every
+    other per-trade tunable key. WHICH trades have one is USER data and
+    lives in their notes, not in this docstring (L31)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -583,6 +601,54 @@ class AddPolicy(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Quality factors (ADR-0008 D3 ruling b.2 — `variables/<id>.yaml` folded in)
+# ---------------------------------------------------------------------------
+
+
+class QualityFactor(BaseModel):
+    """One graded read on a trade, with its registry attributes attached.
+
+    WAS TWO FILES. Until ADR-0008 a trade's `quality_factors[]` was a
+    list of bare names in `trade_defs/<id>.yaml` and a parallel list of
+    entries in `variables/<id>.yaml`, and the loader cross-checked that
+    the two named the same set. Every edit had to touch both files, the
+    check was the only thing keeping them honest, and the second file was
+    the whole reason `variables.py` existed. Folding the entry into the
+    item makes that set-equality check vanish BY CONSTRUCTION — there is
+    no second set left to disagree with.
+
+    A BARE STRING IS A VALID ITEM. `- drive_rvol` parses to this model
+    with every default, which is what the sheet-derived defs write. The
+    mapping form is for a factor that has earned an attribute:
+
+        - {name: tape_absorption, source: human, tier: judgment, frontier: true}
+
+    `frontier: true` (§12) marks a human-only tape-class read that flips
+    to `source: cobalt` once an L2/T&S feed is ingested — no schema
+    change, which is the point of the flag.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    scale_min: int = 1
+    scale_max: int = 10
+    source: Literal["cobalt", "cobalt-degraded", "human"] = "human"
+    tier: Literal["deterministic", "judgment"] = "judgment"
+    why_template: str = ""
+    #: "stub" until the grading-engine sprint writes the why_template.
+    status: str = "stub"
+    frontier: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _bare_string_is_a_name(cls, data: Any) -> Any:
+        if isinstance(data, str):
+            return {"name": data}
+        return data
+
+
+# ---------------------------------------------------------------------------
 # trade_def registry (v0.7 §10.1)
 # ---------------------------------------------------------------------------
 
@@ -624,10 +690,44 @@ class TradeDef(BaseModel):
     reentry_window: Tunable[str] | None = None  # A.1 — duration, e.g. "3 min"
     add_policy: AddPolicy = Field(default_factory=AddPolicy)
     avoid: list[Predicate] = Field(default_factory=list)
-    quality_factors: list[str] = Field(min_length=1)
+    quality_factors: list[QualityFactor] = Field(min_length=1)
     preferred_windows: list[RTHWindow] = Field(default_factory=list)
     preferred_windows_ref: str | None = None
     reference_stats: dict[str, Any] | None = None
+
+    # -- the loader-injected identity (ADR-0008 D3 rulings a and e) -----
+
+    #: Refused in a raw unit mapping — the note owns both.
+    INJECTED_FIELDS: ClassVar[tuple[str, ...]] = ("id", "name")
+
+    @classmethod
+    def from_unit(cls, mapping: dict[str, Any], *, slug: str, name: str) -> TradeDef:
+        """Build a TradeDef from a vault unit's `trade_def:` mapping.
+
+        THE ONE PLACE `id` AND `name` ENTER. The mapping comes out of a
+        strategy note's Definition unit and must NOT author either: the
+        frontmatter `trade_def:` slug is the id and the frontmatter
+        `name:` is the display name, so a `id:` line in the YAML is a
+        second copy of an identity that already exists — the exact
+        one-path violation ADR-0008 was written to end.
+
+        Refusing rather than preferring one: if the two ever disagreed,
+        every answer ("frontmatter wins", "YAML wins") silently discards
+        something a human wrote.
+        """
+        authored = [f for f in cls.INJECTED_FIELDS if f in mapping]
+        if authored:
+            raise ValueError(
+                f"trade_def unit authors {', '.join(repr(f) for f in authored)} — "
+                "id/name come from frontmatter (`trade_def:` is the id, `name:` is "
+                "the display name; ADR-0008 D3 rulings a and e). Remove the line "
+                "from the YAML; the loader injects it."
+            )
+        return cls(**{**mapping, "id": slug, "name": name})
+
+    @property
+    def quality_factor_names(self) -> list[str]:
+        return [q.name for q in self.quality_factors]
 
     @model_validator(mode="before")
     @classmethod
@@ -694,11 +794,40 @@ class TradeDef(BaseModel):
 
     @model_validator(mode="after")
     def _standard_quality_factors_present(self) -> TradeDef:
-        missing = _STANDARD_QUALITY_FACTORS - set(self.quality_factors)
+        missing = _STANDARD_QUALITY_FACTORS - set(self.quality_factor_names)
         if missing:
             raise ValueError(
                 f"{self.id}: quality_factors missing standard trio: {sorted(missing)}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _valid_setups_are_unique_pairs(self) -> TradeDef:
+        """What is left of the setup x trade matrix cross-check.
+
+        Until ADR-0008 D3 ruling b.1 a second file listed each trade's
+        (setup_ref, relation) rows and the loader asserted the two sets
+        were equal. The def's own `valid_setups[]` is the truth now and
+        that file is gone, so the check is schema-level: refs are in
+        `SetupRef` (the enum does that), the list is non-empty
+        (`min_length=1`), and no pair is written twice — which is this.
+        `"user".setup_trade_matrix` is a VIEW unnested from these rows,
+        so a duplicate here would be a duplicate row in the matrix.
+        """
+        pairs = [(vs.setup_ref.value, vs.relation.value) for vs in self.valid_setups]
+        dupes = sorted({p for p in pairs if pairs.count(p) > 1})
+        if dupes:
+            raise ValueError(f"{self.id}: duplicate valid_setups pairs: {dupes}")
+        return self
+
+    @model_validator(mode="after")
+    def _quality_factor_names_unique(self) -> TradeDef:
+        """Was `VariableRegistry._unique_names`. It moved here with the
+        model it guarded — one factor, named once, graded once."""
+        names = self.quality_factor_names
+        dupes = sorted({n for n in names if names.count(n) > 1})
+        if dupes:
+            raise ValueError(f"{self.id}: duplicate quality_factors names: {dupes}")
         return self
 
     @field_validator("reference_stats")
