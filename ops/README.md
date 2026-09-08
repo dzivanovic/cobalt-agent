@@ -8,8 +8,17 @@ does not auto-update from git.
 
 ## Inventory
 
-All six installed and loaded as of 2026-09-03 (confirmed via
-`launchctl print gui/$UID/<label>`).
+**Eight plists below, seven of them loaded, as of 2026-09-08**
+(`launchctl list | grep com.cobalt`). The exception is
+`com.cobalt.herdr`, which is built and deliberately not bootstrapped —
+see "herdr handover" further down.
+
+This table is not the whole of `ops/`, and never was: `com.cobalt.backup`,
+`cards-expire`, `daymode-propose`, `heartbeat` and `obsidian` have
+plists and rows without a row here. **`configs/cobalt/jobs.yaml` is the
+authoritative list** — thirteen labels, cross-checked against `ops/`
+by `uv run cobalt validate` on every run of the gate. Read this table as
+prose about the ones with a story attached, not as an inventory.
 
 | Plist | Runs | Schedule | Wrapper | Installed |
 |---|---|---|---|---|
@@ -150,7 +159,14 @@ launchctl bootout gui/$(id -u)/com.cobalt.<name>
 
 ## herdr handover — a keyboard procedure, not a job
 
-**Status on 2026-09-08: BUILT, NOT LOADED.** `ops/com.cobalt.herdr.plist`
+**Status on 2026-09-08: BUILT, NOT LOADED** — unchanged by that
+evening's `com.cobalt.seat-usage` deploy, which touched nothing here.
+Before flipping the flag in step 8, settle the open ESCALATE in
+`docs/00 - Project/BACKLOG.md` § Standing follow-ups: the probe this
+turns on reads `herdr agent list`, which is the same list a reverted
+SessionStart hook pointer silently corrupts.
+
+**BUILT, NOT LOADED.** `ops/com.cobalt.herdr.plist`
 exists, `configs/cobalt/jobs.yaml` has its row with `enabled: false`, and
 the F18 `herdr` probe is green and silent because of that flag. The
 server is running from a manual start (`/opt/homebrew/bin/herdr server`,

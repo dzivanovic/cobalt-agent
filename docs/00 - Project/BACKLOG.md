@@ -350,6 +350,26 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
 
 ## STANDING FOLLOW-UPS
 
+- [ ] **ESCALATE (next ops prompt) — the F18 `herdr` probe reads the list
+      the SessionStart hook guard protects.** `herdr agent list` is what
+      `heartbeat.probes.herdr` asserts on, and it is the same list a
+      reverted hook pointer corrupts: a herdr bump replaces the
+      herdr-managed hook script and can rewrite
+      `~/.claude/settings.json`'s `hooks.SessionStart`, which today
+      points at the non-herdr-managed guard
+      `~/.claude/hooks/herdr-harness-guard.sh` (added 2026-09-08 to stop
+      a Grok session double-firing Claude's inherited hook). If that
+      pointer goes back to the herdr script, every Grok session reports
+      itself as `claude` in `agent list` — and the probe would report a
+      green, plausible, WRONG seat roster. The failure is silent in both
+      places at once. **Decide in the next ops prompt whether the probe
+      should verify the pointer itself** (cheap: stat the guard file and
+      read one JSON key) or whether the manual checklist line in
+      `docs/40 - DevDocs/reports/codex-seat-test-2026-09-07.md` §10 is
+      enough. Blocks nothing today — `com.cobalt.herdr` ships
+      `enabled: false` and the probe is not running — but it must be
+      settled BEFORE the herdr handover flips that flag.
+
 - [ ] Consolidate the Taxonomy draft chain (v0.2–v0.7, committed
       2026-09-03) into a standalone v0.8. v0.7 is an amendment layer over
       v0.4/v0.6, not a self-contained document — the chain currently IS
