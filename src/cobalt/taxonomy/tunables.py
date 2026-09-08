@@ -45,6 +45,12 @@ class TunableUnit(str, Enum):
     # predicate — so they need a unit of their own rather than being bent
     # into `min` or `label`.
     TIME = "time"
+    # An ET wall-clock SPAN, "HH:MM-HH:MM" (2026-09-08). A job that is
+    # due hourly between 06:00 and 23:00 has a window, and a window is
+    # neither a `time` (which is one instant) nor a `label` (which is
+    # free text nothing parses). Parsed by
+    # `cobalt.jobs.config.parse_window`, which is the only reader.
+    WINDOW = "window"
 
 
 class TunableStatus(str, Enum):

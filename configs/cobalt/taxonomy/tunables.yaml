@@ -461,3 +461,54 @@ tunables:
     source: ruling
     consumers:
       - "cobalt.notify.mattermost (/users/me, /users/username, /channels/direct, /posts)"
+
+  # --- seat usage (ops/herdr-usage, 2026-09-08) -------------------------
+  # The seat-usage report's cadence and its window. BOTH are read by the
+  # job's schedule (configs/cobalt/jobs.yaml) AND expanded into
+  # com.cobalt.seat-usage.plist's StartCalendarInterval array, because
+  # launchd cannot read a tunables row. The suite compares the two, so a
+  # change here that is not mirrored into the plist fails loudly rather
+  # than being discovered by a report that stopped updating.
+  - key: seat_usage.window
+    value: "06:00-23:00"
+    unit: window
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    # 06:00 is before the first pre-market work of the day; 23:00 is the
+    # last hour a seat is realistically still running. The hours outside
+    # it are not "cheap to cover" — they are hours in which a run would
+    # rewrite the day's row with no new data and put a diff in the audit
+    # log for nothing.
+    consumers:
+      - "cobalt.jobs.config.Schedule (due_now, window_opened_at, calendar_entries)"
+      - "cobalt.jobs.watchdog.is_missed (an overnight gap is the schedule, not a miss)"
+      - "cobalt.heartbeat.probes.seat_usage (the probe only asks INSIDE the window)"
+      - "ops/com.cobalt.seat-usage.plist (StartCalendarInterval, mirrored)"
+
+  - key: seat_usage.interval_min
+    value: 60
+    unit: min
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers:
+      - "cobalt.jobs.config.Schedule (interval_minutes, calendar_entries)"
+      - "cobalt.jobs.watchdog.is_missed (two intervals of slack)"
+      - "ops/com.cobalt.seat-usage.plist (one entry per interval, mirrored)"
+
+  - key: seat_usage.max_age_min
+    value: 120
+    unit: min
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    # Two intervals, and deliberately the same slack the watchdog gives
+    # an interval job: one run may be skipped without anyone being told,
+    # two in a row means the report is going stale and the number Dejan
+    # reads at the end of the day is wrong.
+    consumers:
+      - "cobalt.heartbeat.probes.seat_usage (last run age, asked only inside the window)"

@@ -230,14 +230,28 @@ def is_missed(
 
     minutes = spec.schedule.interval_minutes() if spec.schedule else None
     if minutes is not None:
+        # A WINDOWED interval job is not due outside its window, and an
+        # overnight gap is its schedule working. Asked before the
+        # arithmetic, because the arithmetic below has no way to tell a
+        # seven-hour gap that is correct from one that is not.
+        if not spec.schedule.due_now(now_et):
+            return False, ""
         window = timedelta(minutes=minutes) * 2
         reference = finished_et or clock.to_et(row["registered_at"])
+        # Inside a window, the clock starts when the window OPENS. The
+        # first run of the day is due one interval after 06:00, not one
+        # interval after last night's 23:00 — measuring from the older
+        # of the two would report MISSED every morning at 06:00 sharp.
+        opened = spec.schedule.window_opened_at(now_et)
+        if opened is not None and opened > reference:
+            reference = opened
         if now_et - reference <= window:
             return False, ""
         return True, (
             f"{cadence}; last finish "
             + (f"{finished_et:%Y-%m-%d %H:%M} ET" if finished_et else
-               f"NEVER (registered {reference:%Y-%m-%d %H:%M} ET)")
+               f"NEVER (registered {clock.to_et(row['registered_at']):%Y-%m-%d %H:%M} ET)")
+            + f", measured from {reference:%Y-%m-%d %H:%M} ET"
             + f" — more than two intervals ({window.total_seconds() / 60:.0f} min) ago. "
             "An interval job is missed against its OWN cadence: a fixed grace wider "
             "than the interval would make it unmissable."
@@ -299,6 +313,25 @@ def sweep(
 
     for spec in registry.jobs:
         row = rows.get(spec.label)
+
+        # -- IS THIS JOB EVEN SUPPOSED TO BE LOADED? A registry row with
+        # `enabled: false` is a job that has been BUILT and reviewed but
+        # not yet handed over to launchd. Every check below asks a
+        # question whose honest answer for such a job is "of course not"
+        # — probing it would put a permanent red on the beat for a state
+        # somebody chose deliberately, and a standing red is how a
+        # heartbeat stops being read. It is REPORTED, not hidden: the
+        # line is on the block, it just is not a failure.
+        if not spec.enabled:
+            findings.append(
+                Finding(
+                    spec.label, True, "disabled",
+                    "registered but NOT LOADED BY DESIGN (`enabled: false` in "
+                    "configs/cobalt/jobs.yaml) — nothing is probed and nothing is "
+                    "claimed. Flip the flag as the last step of its handover.",
+                )
+            )
+            continue
 
         # -- IS THE PLIST EVEN LOADED? Charter §3 F18: "every ops plist
         # loaded + last exit code". Asked of EVERY job, resident and

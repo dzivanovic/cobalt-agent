@@ -356,6 +356,17 @@ That is auth + the trusted herdr hook, nothing else. Post-cleanup health check p
 
 ## 10. Seat checklist
 
+- [ ] **Re-verify the hook guard after every herdr bump:** a herdr update replaces the
+  herdr-managed hook script and can rewrite the harness configs that point at it. Confirm
+  `~/.claude/settings.json`'s `hooks.SessionStart` still points at
+  `~/.claude/hooks/herdr-harness-guard.sh` (the non-herdr-managed guard added 2026-09-08, which
+  stops a Grok session double-firing Claude's inherited hook), that the guard file is still there
+  and executable, and re-run the three-case scratch proof in
+  `docs/40 - DevDocs/reports/seats-followup-2026-09-08.md` §b. The failure mode is silent: the
+  bump reverts the pointer, both hooks fire again, and every Grok session reports itself as
+  `claude` in `herdr agent list` — which is also the list the F18 `herdr` probe reads. Do this
+  before flipping `com.cobalt.herdr` back on if the bump happened while the job was loaded.
+
 - [ ] **Re-verify after every Codex bump:** confirm `codex --version`, then re-run §7 (scratch pane,
   `-a on-request -s read-only`, one command approval) and diff against the manifest version in
   `herdr agent explain`. A silent title-string change (item 5 above) is the failure mode; there is no

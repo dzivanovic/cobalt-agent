@@ -65,6 +65,7 @@ from cobalt.heartbeat import cli as heartbeat_cli  # noqa: E402
 from cobalt.jobs import cli as jobs_cli  # noqa: E402
 from cobalt.jobs.wrapper import JobStopped  # noqa: E402
 from cobalt.notify import cli as notify_cli  # noqa: E402
+from cobalt.seatusage import cli as seatusage_cli  # noqa: E402
 from cobalt.session import cli as session_cli  # noqa: E402
 from cobalt.settings import cli as settings_cli  # noqa: E402
 from cobalt.taxonomy import cli as taxonomy_cli  # noqa: E402
@@ -306,6 +307,17 @@ def _cmd_validate(args: argparse.Namespace) -> None:
         f"{sum(1 for j in registry.jobs if j.kind.value == 'one-shot')} one-shot. "
         f"Kill phrase {registry.kill_phrase!r}."
     )
+    # A job that is deliberately NOT loaded is named here, every time the
+    # gate runs. `enabled: false` is a state somebody chose, and the
+    # heartbeat stays green for it on purpose — so this is the one place
+    # that will not let it be forgotten about.
+    disabled = [j for j in registry.jobs if not j.enabled]
+    if disabled:
+        print(
+            f"  NOT LOADED BY DESIGN ({len(disabled)}): "
+            + ", ".join(f"{j.label} — {j.what}" for j in disabled)
+        )
+        print("  These are built and registered; their plists are not bootstrapped.")
 
     # CROSS-CHECK 1: the registry and ops/ name the same jobs. A registry
     # that has drifted from launchd reports green for a job that is not
@@ -348,6 +360,31 @@ def _cmd_validate(args: argparse.Namespace) -> None:
                 print(
                     f"FAILED: {spec.label} — registry says {spec.schedule.describe()}, "
                     f"{spec.plist_path.name} says {intervals}."
+                )
+                sys.exit(1)
+        elif spec.schedule.window_tunable:
+            # A WINDOWED interval. launchd has no "every N minutes between
+            # 06:00 and 23:00" — StartInterval never stops — so the window
+            # is expanded into one StartCalendarInterval entry per firing,
+            # and the comparison is entry for entry. Two tunables feed it
+            # (the cadence and the window), which is two more numbers a
+            # plist cannot read for itself.
+            expected = spec.schedule.calendar_entries()
+            found = [dict(e) for e in data.get("StartCalendarInterval") or []]
+            if found != expected:
+                print(
+                    f"FAILED: {spec.label} — the tunables resolve to "
+                    f"{spec.schedule.describe()} ({len(expected)} launchd entries) "
+                    f"but {spec.plist_path.name} carries {len(found)}. Regenerate "
+                    "the array from Schedule.calendar_entries(); a window nobody "
+                    "mirrored is a report that stops updating with nothing red."
+                )
+                sys.exit(1)
+            if data.get("StartInterval") is not None:
+                print(
+                    f"FAILED: {spec.label} — {spec.plist_path.name} carries BOTH a "
+                    "StartCalendarInterval array and a StartInterval. launchd would "
+                    "honour both and the job would run outside its window."
                 )
                 sys.exit(1)
         else:
@@ -401,6 +438,7 @@ def main() -> None:
     heartbeat_cli.add_parser(sub)
     backup_cli.add_parser(sub)
     notify_cli.add_parser(sub)
+    seatusage_cli.add_parser(sub)
     jobs_cli.add_stop_parsers(sub)
 
     validate = sub.add_parser(

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.herdr</string>
+    <!-- BUILT, NOT LOADED. This plist ships with `enabled: false` on its
+         registry row in configs/cobalt/jobs.yaml, and it must stay that
+         way until the handover in ops/README.md ("herdr handover") is
+         performed AT THE MAC KEYBOARD.
+
+         WHY IT CANNOT BE BOOTSTRAPPED FROM A SESSION. The server this
+         job supervises is the one hosting the terminal that would run
+         the bootstrap: `launchctl bootstrap` on this label, with the
+         manually-started server already running, is a second server or
+         a killed first one, and either way the session issuing the
+         command goes down mid-command. The handover therefore ends with
+         a human re-attaching, which a job cannot do for itself. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+        <!-- RULING 7 / Charter §8.4: every ops plist names its side, with
+             no exceptions — an exception is how the next plist gets to
+             have one too. herdr itself does NOT read this variable (it
+             is not Cobalt code and touches no Cobalt database); it is
+             declared so that the suite's "every plist carries
+             COBALT_ENV" invariant stays a rule rather than a habit, and
+             so that anything Cobalt ever runs INSIDE a herdr pane
+             inherits production rather than an unset value. -->
+        <key>COBALT_ENV</key>
+        <string>production</string>
+        <!-- Same reasoning, NN#16 direction: a shell opened in a herdr
+             pane inherits the real vault rather than resolving to the
+             dev default by omission. herdr writes no notes itself. -->
+        <key>COBALT_VAULT_PATH</key>
+        <string>/Users/cobalt/Vault/Think</string>
+        <!-- herdr keeps its socket and config under ~/.config/herdr; a
+             launchd agent inherits HOME, but naming it makes the socket
+             path this job's probe checks non-negotiable rather than
+             environmental. -->
+        <key>HOME</key>
+        <string>/Users/cobalt</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- ABSOLUTE PATH, deliberately: launchd posix_spawn()s
+             ProgramArguments[0] and does NOT search the job's own PATH
+             the way a shell does. A bare "herdr" here would produce exit
+             78 (EX_CONFIG) with empty stdout and stderr — the exact
+             silent failure the 05:15 prefill hit on 2026-09-03.
+             Matches `which herdr` on this machine (herdr 0.8.2).
+
+             FLAGS: none, and that is not an omission. The running
+             server was read off the live process list on 2026-09-08
+             (`ps aux | grep herdr` -> `/opt/homebrew/bin/herdr server`),
+             and it takes no arguments; its configuration lives in
+             ~/.config/herdr/config.toml, which `herdr server
+             reload-config` re-reads. Adding a flag here that the manual
+             server never had would make the handover a behaviour change
+             as well as a supervision change. -->
+        <string>/opt/homebrew/bin/herdr</string>
+        <string>server</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/cobalt/cobalt</string>
+    <!-- RunAtLoad: the server must be up before anything wants a pane,
+         and a Mac that came back from a reboot with no herdr is a Mac
+         with no seats on it. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <!-- KEEPALIVE ON CRASH ONLY. `SuccessfulExit: false` means "restart
+         it if it exited non-zero; leave it alone if it exited 0".
+         `herdr server stop` is an exit 0, and it is a deliberate human
+         action — a bare <true/> here would fight the operator, bringing
+         the server straight back up every time he stopped it and making
+         a herdr update (which stops the server) impossible to complete.
+         A crash is the case worth restarting, and it is the only one. -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <!-- Ten seconds between restart attempts. launchd's floor is 10 s
+         anyway; naming it documents that a crash-loop backs off rather
+         than spinning. -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/cobalt/ops/logs/herdr.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/cobalt/ops/logs/herdr.err</string>
+</dict>
+</plist>

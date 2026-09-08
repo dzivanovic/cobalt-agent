@@ -299,3 +299,47 @@ verifier rather than a bound parameter (a utility statement cannot carry
 one). The one thing to carry forward: storing a secret in VaultManager
 **is** its enrolment in F19's literal guard — the guard went 15 values to
 16 with no list edited.
+
+---
+
+Extended 2026-09-08 (ops session, branch `ops/herdr-usage`) with
+**`src/cobalt/seatusage/`** — the hourly seat-usage report, and the two
+smaller changes it needed elsewhere.
+
+| file | one-line role |
+|---|---|
+| `cobalt/seatusage/config.py` | `configs/cobalt/seat_usage.yaml` typed: the L15 tool pin, the role-hint map, the declared-free models. |
+| `cobalt/seatusage/ccusage.py` | Runs the pinned binary read-only and offline; the silent-zero guard lives here. |
+| `cobalt/seatusage/report.py` | One marked unit per day, the human cells beside it, newest day on top. |
+| `cobalt/seatusage/runner.py` | Collect → write in place → seed the cells once, inside the F17 wrapper. |
+| `cobalt/seatusage/cli.py` | `cobalt seat-usage run / show / gate`. |
+
+**Two things here are worth carrying forward past this feature.**
+
+The first is the **silent-zero guard**. The four-gate law's "no network
+at run time" means the tool prices from a bundled table, and on
+2026-09-08 that table had no rate for two models that were used all day
+— reporting `$0.00` for $17.32 of real usage. A used model showing zero
+is a plausible-empty artifact. The guard reports it as *unpriced*, marks
+the day total a *floor*, and keeps a genuinely-free model's honest zero
+by requiring it to be **named in config**. Any future collector that
+prices something from a cached table inherits this problem.
+
+The second is **`cobalt.vault.REPO_OWNED_ROOTS`**. The L28 writer
+refused every path inside the repo working tree, which is right for a
+vault note and wrong for a generated report that lives in git. One
+narrow tuple — today `docs/40 - DevDocs/reports/` alone — now names the
+repo directories Cobalt owns as an artifact tree, and the writer accepts
+those and skips both vault questions plus the F1 market-reset gate,
+because none of the three apply to a file with no human editing it at
+20:30 and no device syncing it. The report goes through the writer for
+the **merge**, not for the fences.
+
+Also new, on the F17/F18 side: `JobSpec.enabled` (a job that is built,
+registered and reviewable but deliberately not yet handed over to
+launchd — `com.cobalt.herdr` is the first), the **windowed interval
+schedule** (`Schedule.window_tunable` and `calendar_entries()`, because
+launchd has no "hourly between 06:00 and 23:00" and the window has to be
+expanded into moments the suite can compare), and two probes —
+`heartbeat.probes.herdr` and `heartbeat.probes.seat_usage`. Those extend
+existing pages rather than adding new ones.

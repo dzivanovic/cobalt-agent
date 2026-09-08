@@ -93,6 +93,30 @@ ALLOW_DEV_ENTRY_ENV = "COBALT_ALLOW_DEV_ENTRY"
 # production no longer DEPENDS on that env var being present.
 PROD_VAULT_PATH_REFERENCE = "/Users/cobalt/Vault/Think"
 
+#: The repo directories Cobalt OWNS as an artifact tree, and the only
+#: places inside the working tree the L28 writer may target.
+#:
+#: R3 (2026-09-06) generalised L28 to ownership by UNIT, not by folder,
+#: and named what Cobalt owns outright: marked units in the human vault,
+#: Postgres, `_imports/` — and THE REPO. A generated report under
+#: `docs/40 - DevDocs/reports/` is repo content by that ruling: it is
+#: versioned in git, it is reviewed in a diff, and no human note lives
+#: there.
+#:
+#: WHY IT STILL GOES THROUGH THE WRITER. Not for the vault guards — a
+#: repo file needs none of them — but for the MERGE. These reports carry
+#: human-owned cells beside generated ones, and the writer is the only
+#: code in this repo that can rewrite the generated half hourly while
+#: leaving a filled-in human cell exactly as its author left it, record
+#: the override, and produce the diff. Writing them with `open(..., "w")`
+#: would mean regenerating over Dejan's own numbers once an hour.
+#:
+#: NARROW ON PURPOSE. One directory, not `docs/`, and certainly not the
+#: repo. Everything outside this tuple is refused exactly as before, and
+#: the entry that admits a second directory should have to justify it in
+#: a diff.
+REPO_OWNED_ROOTS: tuple[str, ...] = ("docs/40 - DevDocs/reports",)
+
 
 class VaultConfigError(RuntimeError):
     """Vault path unset, misconfigured, or missing on disk — crash loudly."""
@@ -185,6 +209,23 @@ def resolve_vault_path() -> Path:
             )
 
     return resolved
+
+
+def is_repo_owned(path: Path) -> bool:
+    """Is this path inside a `REPO_OWNED_ROOTS` directory?
+
+    Answered from the RESOLVED path, so a symlink or a `..` cannot walk
+    a target into the carve-out from outside it.
+    """
+    resolved = Path(path).expanduser().resolve()
+    for rel in REPO_OWNED_ROOTS:
+        root = (REPO_ROOT / rel).resolve()
+        try:
+            resolved.relative_to(root)
+        except ValueError:
+            continue
+        return True
+    return False
 
 
 def assert_within_vault(path: Path) -> None:

@@ -9,6 +9,7 @@ loud rather than discovered by a job that never fired.
 
 from __future__ import annotations
 
+from datetime import datetime, time
 from pathlib import Path
 from typing import Optional
 
@@ -29,6 +30,35 @@ class JobConfigError(RuntimeError):
     """Missing/invalid job registry — crash, never fall back."""
 
 
+def parse_window(raw: str, key: str) -> tuple[time, time]:
+    """`"06:00-23:00"` -> (time(6, 0), time(23, 0)). Fail-loud on anything
+    else: a window nobody can parse is a window nobody is watching."""
+    open_raw, sep, close_raw = str(raw).partition("-")
+    if not sep:
+        raise JobConfigError(
+            f"tunable {key!r} = {raw!r} is not a window — expected 'HH:MM-HH:MM' ET."
+        )
+
+    def _t(part: str) -> time:
+        hh, _, mm = part.strip().partition(":")
+        try:
+            return time(int(hh), int(mm))
+        except ValueError:
+            raise JobConfigError(
+                f"tunable {key!r} = {raw!r} is not a window — {part.strip()!r} is "
+                "not HH:MM."
+            ) from None
+
+    opens, closes = _t(open_raw), _t(close_raw)
+    if closes <= opens:
+        raise JobConfigError(
+            f"tunable {key!r} = {raw!r} closes at or before it opens. A window that "
+            "wraps midnight is not supported — say so explicitly rather than having "
+            "the arithmetic quietly mean something else."
+        )
+    return opens, closes
+
+
 class Schedule(BaseModel):
     """When a one-shot is due. Either a wall-clock time on given
     weekdays (a `StartCalendarInterval` plist), or an interval."""
@@ -43,6 +73,18 @@ class Schedule(BaseModel):
     #: own cadence is the one that matters — it is the number every
     #: "within one interval" claim in Charter §3 F18 is measured against.
     every_min_tunable: Optional[str] = None
+    #: The ET clock window an interval job is due INSIDE, as "HH:MM-HH:MM",
+    #: read from a tunables row (F16 — a window is a threshold).
+    #:
+    #: WHY A WINDOW IS PART OF THE SCHEDULE AND NOT OF THE JOB. Without
+    #: it, `is_missed` compares an interval job's last finish against two
+    #: of its own intervals and nothing else — which is correct for a job
+    #: that runs all night (the heartbeat) and WRONG for one that stops
+    #: at 23:00 and starts again at 06:00. A 60-minute job would be
+    #: reported MISSED at 01:05 every single night for a gap that is its
+    #: schedule working exactly as written. The window is the only thing
+    #: that tells those two shapes apart.
+    window_tunable: Optional[str] = None
 
     @model_validator(mode="after")
     def _one_shape(self) -> "Schedule":
@@ -52,6 +94,17 @@ class Schedule(BaseModel):
                 "a schedule is exactly one of: `at` (+ weekdays), `every_min`, or "
                 "`every_min_tunable`."
             )
+        if self.window_tunable:
+            if self.at:
+                raise ValueError(
+                    "`window_tunable` belongs to an INTERVAL schedule — a calendar "
+                    "`at` time is already a single moment and has no window."
+                )
+            if not self.weekdays:
+                raise ValueError(
+                    "`window_tunable` needs `weekdays` — a window that does not say "
+                    "which days it opens on cannot answer 'was this due?' on a Sunday."
+                )
         if self.at:
             try:
                 hh, _, mm = self.at.partition(":")
@@ -83,12 +136,89 @@ class Schedule(BaseModel):
             )
         return int(row.value)
 
+    def window(self) -> Optional[tuple[time, time]]:
+        """(open, close) in ET, resolving the tunable. None when the
+        schedule has no window and the job is due around the clock."""
+        if not self.window_tunable:
+            return None
+        from cobalt.taxonomy.loader import load_tunables
+
+        row = load_tunables().by_key.get(self.window_tunable)
+        if row is None:
+            raise JobConfigError(
+                f"tunable {self.window_tunable!r} is missing from tunables.yaml — a "
+                "job window is read from config and has no built-in default (F16)."
+            )
+        return parse_window(str(row.value), self.window_tunable)
+
+    def due_now(self, now_et: datetime) -> bool:
+        """Is this schedule's job due to be running at `now_et`?
+
+        Only ever False for a WINDOWED interval schedule — every other
+        shape is due whenever its own arithmetic says so, and answering
+        "no" for them here would hide a real miss.
+        """
+        span = self.window()
+        if span is None:
+            return True
+        if self.weekdays:
+            iso = now_et.isoweekday()
+            launchd_day = 0 if iso == 7 else iso
+            if launchd_day not in set(self.weekdays):
+                return False
+        opens, closes = span
+        return opens <= now_et.time() <= closes
+
+    def window_opened_at(self, now_et: datetime) -> Optional[datetime]:
+        """The moment today's window opened, for a `now_et` inside it."""
+        span = self.window()
+        if span is None:
+            return None
+        opens = span[0]
+        return now_et.replace(
+            hour=opens.hour, minute=opens.minute, second=0, microsecond=0
+        )
+
     def describe(self) -> str:
         """The human string that lands in `jobs.expected_cadence`."""
         if self.at:
             days = ", ".join(WEEKDAY_NAMES[d] for d in sorted(self.weekdays))
             return f"{days} {self.at} ET"
-        return f"every {self.interval_minutes()} min"
+        base = f"every {self.interval_minutes()} min"
+        span = self.window()
+        if span is None:
+            return base
+        days = (
+            ", ".join(WEEKDAY_NAMES[d] for d in sorted(self.weekdays))
+            if self.weekdays else "every day"
+        )
+        return f"{base} {span[0]:%H:%M}-{span[1]:%H:%M} ET, {days}"
+
+    def calendar_entries(self) -> list[dict[str, int]]:
+        """The `StartCalendarInterval` array a windowed interval schedule
+        is worth in launchd — one entry per weekday per firing.
+
+        launchd has no "every N minutes between 06:00 and 23:00": it has
+        `StartInterval` (which never stops) and `StartCalendarInterval`
+        (which is a list of moments). A window is therefore EXPANDED into
+        moments here, and the test suite compares this list against the
+        plist's own array so the two can never drift.
+        """
+        minutes = self.interval_minutes()
+        span = self.window()
+        if minutes is None or span is None:
+            return []
+        opens, closes = span
+        entries: list[dict[str, int]] = []
+        for day in sorted(self.weekdays):
+            cursor = opens.hour * 60 + opens.minute
+            last = closes.hour * 60 + closes.minute
+            while cursor <= last:
+                entries.append(
+                    {"Weekday": day, "Hour": cursor // 60, "Minute": cursor % 60}
+                )
+                cursor += minutes
+        return entries
 
 
 class JobSpec(BaseModel):
@@ -101,6 +231,27 @@ class JobSpec(BaseModel):
     what: str = Field(min_length=1)
     schedule: Optional[Schedule] = None
     pidfile: Optional[str] = None
+    #: Is this job's plist supposed to be LOADED in launchd right now?
+    #:
+    #: Default True, because that is what every job in this registry has
+    #: always meant. `enabled: false` is the narrow, declared case of a
+    #: job that is BUILT, registered and reviewable but deliberately not
+    #: yet handed over to launchd — `com.cobalt.herdr` is the first, and
+    #: it exists because the handover has to happen at the keyboard (the
+    #: server being registered is the one hosting the session that would
+    #: register it).
+    #:
+    #: THE FLAG SUPPRESSES THE PROBE, NOT THE ROW. A disabled job is
+    #: still in the registry, still has to have a plist in ops/, still
+    #: has its schedule cross-checked by the suite. What it does not get
+    #: is a red "NOT LOADED in launchd" every 15 minutes for a state
+    #: somebody chose on purpose — which is exactly the kind of standing
+    #: red that teaches a reader to scroll past the heartbeat.
+    #:
+    #: Flipping it to true is the LAST step of a handover, after the
+    #: bootstrap: true means "launchd should hold this, tell me if it
+    #: does not".
+    enabled: bool = True
 
     @model_validator(mode="after")
     def _shape_matches_kind(self) -> "JobSpec":
@@ -182,6 +333,7 @@ __all__ = [
     "CONFIG_PATH",
     "OPS_DIR",
     "WEEKDAY_NAMES",
+    "parse_window",
     "JobConfigError",
     "JobRegistry",
     "JobSpec",

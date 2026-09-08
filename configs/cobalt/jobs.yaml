@@ -23,6 +23,12 @@
 #                       pretends the process reported in itself.
 #             `pidfile` the process is not launchd's own child — see
 #                       com.cobalt.agent below.
+# enabled   : is this plist supposed to be LOADED in launchd right now?
+#             Defaults true, which is what every row has always meant.
+#             `false` is the declared case of a job that is built,
+#             registered and reviewable but NOT yet handed over — the
+#             sweep reports it and probes nothing, so a deliberate state
+#             never shows up as a standing red.
 # timeout_s : how long a run may take before a stale heartbeat means
 #             ZOMBIE. The wrapper stamps at least every timeout_s/3.
 # schedule  : mirrors the plist. launchd cannot read this file and this
@@ -82,6 +88,25 @@ jobs:
     # no wrapper because the strangler rule (CLAUDE.md) says the old tree
     # stays untouched and no new-core code is added to it.
     what: "the OLD-TREE agent (cobalt.sh start -> cobalt_agent/main.py), detached; liveness from its PID file"
+
+  - label: com.cobalt.herdr
+    kind: resident
+    supervisor: launchd
+    # BUILT, NOT LOADED (2026-09-08). See ops/com.cobalt.herdr.plist and
+    # the "herdr handover" procedure in ops/README.md. The flag comes off
+    # at the Mac keyboard, as the LAST step of that procedure, because
+    # the server being registered is the one hosting the session that
+    # would register it — bootstrapping it from inside a herdr pane takes
+    # that pane down mid-command.
+    enabled: false
+    # `launchd`, not `self`: herdr is not Cobalt code and will never
+    # carry our wrapper. The watchdog probes launchctl and stamps on its
+    # behalf, and the row says so, so nothing reads "the process exists"
+    # as "the server is answering". The F18 probe `herdr` asks the
+    # second question separately — socket + agent list — for the same
+    # reason the ASET sheet gets an HTTP probe next to its PID probe.
+    timeout_s: 300
+    what: "the herdr server — the terminal workspace hosting every agent seat"
 
   # ---------------- one-shots ----------------
   - label: com.cobalt.prefill-daily
@@ -145,6 +170,20 @@ jobs:
     # weekend failure before Monday morning needs it.
     schedule: {every_min_tunable: heartbeat.interval_min}
     what: "the F18 heartbeat host — probes everything above and says so out loud"
+
+  - label: com.cobalt.seat-usage
+    kind: one-shot
+    supervisor: self
+    timeout_s: 300
+    # An INTERVAL inside a WINDOW, both from tunables rows (F16). launchd
+    # has no such shape natively, so the plist carries the window expanded
+    # into one StartCalendarInterval entry per firing and the suite
+    # compares the two — see Schedule.calendar_entries().
+    schedule:
+      every_min_tunable: seat_usage.interval_min
+      window_tunable: seat_usage.window
+      weekdays: [0, 1, 2, 3, 4, 5, 6]
+    what: "the hourly seat-usage report (uv run cobalt seat-usage run) — what the seats cost today"
 
 # THE KILL PHRASE (F17d). Config, not a literal: `cobalt stop` and any
 # future DM listener compare against this exact string.

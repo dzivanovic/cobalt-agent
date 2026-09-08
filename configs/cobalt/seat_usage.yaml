@@ -1,0 +1,83 @@
+# The seat-usage report (ops/herdr-usage, 2026-09-08).
+#
+# Schema: src/cobalt/seatusage/config.py. Pydantic-validated on load; a
+# bad file CRASHES rather than falling back (config-as-code, fail-loud).
+#
+# WHAT IS NOT IN HERE: the cadence and the window. Those are THRESHOLDS
+# and they live in tunables.yaml as `seat_usage.interval_min`,
+# `seat_usage.window` and `seat_usage.max_age_min` (F16), with their
+# consumers listed on the rows.
+
+# ---------------------------------------------------------------------
+# THE EXTERNAL TOOL, UNDER THE FOUR-GATE LAW (L15)
+# ---------------------------------------------------------------------
+# Every field here is a gate answer, and `cobalt seat-usage gate` prints
+# them beside what it finds on disk. A version that does not match is a
+# CRASH, not a warning: the whole point of pinning is that nobody finds
+# out about a bump from a number that quietly changed shape.
+tool:
+  name: ccusage
+  # PINNED, EXACT, NEVER `@latest` AT RUN TIME. `@latest` in a scheduled
+  # job means the tool can change under the report between two hourly
+  # runs, with no diff, no review and no one deciding to do it.
+  version: "20.0.20"
+  binary: "/Users/cobalt/.npm-global/bin/ccusage"
+  license: MIT
+  # Gate 4 (reviewed-clean): installed with `npm install -g --prefix
+  # ~/.npm-global ccusage@20.0.20` — two packages, zero runtime
+  # dependencies declared in its package.json, one bin entry.
+  # ~59k downloads in the week to 2026-09-06 (gate 1, proven; gate 3,
+  # industry-standard for this exact job).
+  #
+  # NO NETWORK AT RUN TIME. `--offline` makes ccusage price from its own
+  # bundled table instead of fetching the live pricing DB. That is the
+  # gate; it also has a consequence, and the consequence is handled
+  # rather than hidden — see `unpriced_is_loud` below.
+  offline: true
+
+# The report. A REPO path, under `cobalt.vault.REPO_OWNED_ROOTS` — it is
+# written through the L28 writer for the merge (the human cells), not
+# for the vault guards, which do not apply to a file in git.
+report_path: "docs/40 - DevDocs/reports/seat-usage.md"
+
+# ---------------------------------------------------------------------
+# THE SILENT-ZERO GUARD
+# ---------------------------------------------------------------------
+# On 2026-09-08, `--offline`'s bundled pricing table had no entry for
+# `claude-fable-5-1` or `gpt-6-astra` and priced both at exactly $0.00 —
+# while the online table priced the same day's fable tokens at $17.32.
+# A model that was used all day showing $0 is a plausible-empty
+# artifact, which is the one thing the fail-loud law forbids outright.
+#
+# So: a model with tokens but no price is reported as UNPRICED, never as
+# zero, and the day's total is labelled a FLOOR. A model that is
+# genuinely free says so here, by name, and gets a footnote instead of a
+# warning.
+unpriced_is_loud: true
+
+zero_cost_models:
+  mainframe: >
+    the local Qwen3.8-27B MLX server on this Mac (L23's local lane).
+    Its cost is electricity and the Mac Studio, not API spend — $0 here
+    is the true number, not a missing one, so it never raises the hourly
+    unpriced warning.
+
+# ---------------------------------------------------------------------
+# ROLE HINTS
+# ---------------------------------------------------------------------
+# HINTS, and the column says so. ccusage reads harness logs: it knows
+# which SEAT ran a model (claude / codex / grok / qwen — that part is
+# observed and printed as observed) and it cannot know which ROLE that
+# seat was holding. This map is the standing intent from L29 and L33,
+# not a measurement.
+#
+# An unmapped model prints an em dash. It is never guessed from the
+# name: a wrong role hint beside a real dollar figure is worse than no
+# hint at all.
+roles:
+  claude-opus-5: "write seat — L29 floor for vault/DB/migration paths"
+  claude-fable-5-1: "planning + architect seat — L29 above the floor, at Dejan's call"
+  claude-sonnet-5: "mechanical, non-write only — L29 ceiling for this tier"
+  gpt-6-astra: "reviewer seat — read-only role (L33)"
+  grok-4.6-build: "build + research seat"
+  mainframe: "local lane (L23) — delegated mundane work, token conservation"

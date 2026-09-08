@@ -13,9 +13,12 @@ worse than no heartbeat at all.
 
 from __future__ import annotations
 
+import json
 import socket
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 from urllib import request as urlrequest
 
@@ -301,6 +304,223 @@ def redactions(minutes: int, now: Optional[datetime] = None) -> Probe:
     return Probe("redactions", True, f"{count} since the last beat ({kinds})")
 
 
+# ---------------------------------------------------------------------
+# herdr — the terminal workspace every agent seat lives in
+# ---------------------------------------------------------------------
+
+HERDR_LABEL = "com.cobalt.herdr"
+
+#: Where herdr puts its API socket. Not a tunable: F16 governs
+#: THRESHOLDS, and this is an address — a number you might tune versus a
+#: path that is either right or wrong. `herdr status server` prints it,
+#: and it has been this since 0.8.x.
+HERDR_SOCKET = Path("~/.config/herdr/herdr.sock")
+
+#: Absolute, for the same reason every plist's ProgramArguments is: a
+#: probe that resolved a binary off PATH would answer a different
+#: question under launchd than it answers in a shell.
+HERDR_BINARY = Path("/opt/homebrew/bin/herdr")
+
+
+def _herdr_enabled() -> tuple[bool, str]:
+    """Is `com.cobalt.herdr` supposed to be up yet?
+
+    The registry row answers, and until the handover it says no. This is
+    read every beat rather than baked in, so flipping one flag in
+    `configs/cobalt/jobs.yaml` is the whole of the last handover step.
+    """
+    from cobalt.jobs.config import load_job_registry
+
+    spec = load_job_registry().by_label.get(HERDR_LABEL)
+    if spec is None:
+        return False, f"{HERDR_LABEL} is not in the job registry"
+    return spec.enabled, ""
+
+
+def _herdr_agent_list(binary: Path, timeout: float) -> list:
+    """`herdr agent list` -> the agents array. Raises on anything else."""
+    proc = subprocess.run(
+        [str(binary), "agent", "list"], capture_output=True, text=True, timeout=timeout
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"`herdr agent list` exited {proc.returncode}: "
+            f"{proc.stderr.strip()[:200] or '(no stderr)'}"
+        )
+    payload = json.loads(proc.stdout)
+    agents = (payload.get("result") or {}).get("agents")
+    if not isinstance(agents, list):
+        raise RuntimeError("`herdr agent list` returned no `result.agents` array")
+    return agents
+
+
+def herdr(
+    *,
+    socket_path: Optional[Path] = None,
+    binary: Optional[Path] = None,
+    list_agents=None,
+) -> Probe:
+    """The herdr server is up AND answering — two questions, both asked.
+
+    THE SOCKET EXISTING IS NOT THE SERVER WORKING, which is the same
+    lesson the ASET sheet's HTTP probe carries: a stale socket file
+    outlives the process that made it, and a server that has wedged
+    still holds its socket open. So this connects to the socket (does it
+    accept?) and then asks it something real (`herdr agent list`, which
+    has to traverse the server's live pane state to answer). Either half
+    failing is red, and the message names the launchd label so a reader
+    knows what to bootstrap.
+
+    UNTIL THE HANDOVER IT IS GREEN AND SAYS WHY. The registry row ships
+    `enabled: false` because the plist is built and deliberately not
+    loaded — see ops/README.md's "herdr handover". A red every 15
+    minutes for a state somebody chose on purpose is how a heartbeat
+    stops being read, and the server is running perfectly well under a
+    manual start in the meantime.
+    """
+    enabled, why = _herdr_enabled()
+    if not enabled:
+        return Probe(
+            "herdr", True,
+            (why or f"{HERDR_LABEL} is registered with `enabled: false`")
+            + " — NOT PROBED. The plist is built and deliberately not loaded; the "
+            "server is running under a manual start. ops/README.md 'herdr handover' "
+            "is the procedure, and flipping that flag is its last step.",
+        )
+
+    path = Path(socket_path or HERDR_SOCKET).expanduser()
+    timeout = probe_timeout_s()
+    if not path.exists():
+        return Probe(
+            "herdr", False,
+            f"no API socket at {path} — the server is not running. "
+            f"`launchctl kickstart -k gui/$(id -u)/{HERDR_LABEL}`",
+        )
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            sock.connect(str(path))
+    except OSError as e:
+        return Probe(
+            "herdr", False,
+            f"the socket at {path} exists but REFUSED a connection "
+            f"({type(e).__name__}) — a stale socket file outlives the process that "
+            f"made it. {HERDR_LABEL} needs a kickstart.",
+        )
+
+    caller = list_agents or _herdr_agent_list
+    try:
+        agents = caller(Path(binary or HERDR_BINARY), timeout)
+    except Exception as e:  # noqa: BLE001
+        return Probe(
+            "herdr", False,
+            f"socket accepted but the server did not answer `agent list` "
+            f"({type(e).__name__}: {e}) — {HERDR_LABEL} is up and not serving",
+        )
+    seats = ", ".join(sorted({str(a.get("agent")) for a in agents if a.get("agent")}))
+    return Probe(
+        "herdr", True,
+        f"socket accepting at {path}; {len(agents)} pane(s)"
+        + (f", seats: {seats}" if seats else ""),
+    )
+
+
+# ---------------------------------------------------------------------
+# seat-usage report freshness
+# ---------------------------------------------------------------------
+
+
+def seat_usage(store=None, now: Optional[datetime] = None) -> Probe:
+    """Has the seat-usage report been refreshed recently ENOUGH, and is
+    it even due right now?
+
+    ASKED ONLY INSIDE THE WINDOW. The job runs hourly between 06:00 and
+    23:00 ET; at 03:00 the last run is four hours old and everything is
+    exactly as it should be. A flat age check would be red all night for
+    a schedule working as written — the same mistake the archiver's
+    freshness probe made against weekends, and fixed on 2026-09-06 by
+    asking the schedule instead of guessing a number.
+
+    Inside the window, the limit is `seat_usage.max_age_min` (two
+    intervals): one missed run is a hiccup nobody needs to be told
+    about, two in a row means the number Dejan reads at the close is
+    wrong.
+    """
+    from cobalt.jobs.config import load_job_registry
+    from cobalt.jobs.store import JobStore
+    from cobalt.session.clock import session_clock
+    from cobalt.seatusage.runner import JOB_LABEL
+
+    ts = now or clock_mod.now_utc()
+    now_et = session_clock().to_et(ts)
+    spec = load_job_registry().by_label.get(JOB_LABEL)
+    if spec is None or spec.schedule is None:
+        return Probe("seat usage", False, f"{JOB_LABEL} is not in the job registry")
+    if not spec.enabled:
+        return Probe(
+            "seat usage", True,
+            f"{JOB_LABEL} is registered with `enabled: false` — NOT PROBED",
+        )
+    cadence = spec.cadence or "(no cadence)"
+    if not spec.schedule.due_now(now_et):
+        return Probe(
+            "seat usage", True,
+            f"outside its window — not due ({cadence}). The report holds "
+            "yesterday's last run until the window opens again.",
+        )
+
+    store = store or JobStore()
+    try:
+        row = store.get(JOB_LABEL)
+    except Exception as e:  # noqa: BLE001
+        return Probe("seat usage", False,
+                     f"jobs row unreadable: {type(e).__name__}: {e}", unknown=True)
+    if row is None:
+        return Probe("seat usage", False, f"no jobs row for {JOB_LABEL} — not registered")
+
+    limit = timedelta(minutes=int(_tunable("seat_usage.max_age_min")))
+    finished = row["finished_at"]
+    if finished is None:
+        opened = spec.schedule.window_opened_at(now_et)
+        reference = max(
+            [d for d in (opened, session_clock().to_et(row["registered_at"])) if d]
+        )
+        if now_et - reference <= limit:
+            return Probe(
+                "seat usage", True,
+                f"no run OBSERVED yet — none due since {reference:%Y-%m-%d %H:%M} ET "
+                f"({cadence})",
+            )
+        return Probe(
+            "seat usage", False,
+            f"NEVER RUN inside its window — nothing since "
+            f"{reference:%Y-%m-%d %H:%M} ET ({cadence})",
+        )
+
+    age = ts - finished
+    result = row["last_result"] or {}
+    unpriced = result.get("unpriced") or []
+    detail = (
+        f"last run {session_clock().to_et(finished):%Y-%m-%d %H:%M} ET "
+        f"({age.total_seconds() / 60:.0f} min ago), exit {row['exit_code']}"
+    )
+    if unpriced:
+        # NOT RED. An unpriced model is loud in the report itself, every
+        # hour, where the number it distorts is. Repeating it as a red
+        # beat would put a permanent alert on a condition that is fixed
+        # by a deliberate version bump, not by anything at 03:00.
+        detail += f"; UNPRICED in the report: {', '.join(unpriced)}"
+    if row["exit_code"] not in (0, None):
+        return Probe("seat usage", False, f"last run FAILED — {detail}")
+    if age > limit:
+        return Probe(
+            "seat usage", False,
+            f"STALE — {detail}, limit {limit.total_seconds() / 60:.0f} min "
+            f"({cadence}). The report is no longer today's.",
+        )
+    return Probe("seat usage", True, detail)
+
+
 def email() -> Probe:
     """The out-of-band alert channel is armed — token present + last send.
 
@@ -360,10 +580,12 @@ __all__ = [
     "archiver_freshness",
     "database",
     "email",
+    "herdr",
     "mainframe",
     "obsidian",
     "probe_timeout_s",
     "redactions",
+    "seat_usage",
     "sheet_http",
     "vaultwrite_blocks",
 ]

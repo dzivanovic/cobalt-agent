@@ -69,6 +69,7 @@ from cobalt.vault import (
     VaultWriteRefused,
     assert_within_vault,
     is_production,
+    is_repo_owned,
 )
 
 from .markers import (
@@ -165,8 +166,21 @@ def assert_write_target(path: Path) -> None:
     that declaration may write nowhere else. Both directions fail loud —
     a write never resolves silently into either vault (af83c6f's guard,
     applied to the resolved TARGET, not just to the vault root, because
-    callers can and do pass paths directly)."""
+    callers can and do pass paths directly).
+
+    ONE CARVE-OUT, DECLARED IN CONFIG-FREE CODE: a path inside
+    `cobalt.vault.REPO_OWNED_ROOTS` (today: `docs/40 - DevDocs/reports/`)
+    is allowed and skips both vault questions, because neither applies
+    to it — it is not in a vault, so it cannot be in the wrong one. The
+    generated seat-usage report lives there and still comes through this
+    writer for the MERGE (its human cells) and the audit row, not for
+    the guards. Everything else inside the repo is refused exactly as
+    before; the carve-out is a fixed tuple in the code, so a caller
+    cannot widen it by passing an argument.
+    """
     resolved = Path(path).expanduser().resolve()
+    if is_repo_owned(resolved):
+        return
     assert_within_vault(resolved)  # never inside the repo working tree
 
     prod_root = Path(PROD_VAULT_PATH_REFERENCE).expanduser().resolve()
@@ -365,6 +379,17 @@ class VaultWriter:
         """
         session = self.clock.session(self._now())
         if self.dry_run:
+            return session
+        if is_repo_owned(Path(path)):
+            # F1 GUARDS THE VAULT, NOT THE REPO. The market_reset window
+            # exists because 20:00-21:00 ET is when the trading day's
+            # notes are being reset and a Cobalt write into them races a
+            # human one. A generated report in the repo has no human
+            # editing it at 20:30, is not synced to any device, and is
+            # reviewed in a git diff — refusing it would take the 20:00
+            # and 21:00 runs of an hourly job out every single night,
+            # fail them, and paint F18 red for the guard doing something
+            # it was never asked to do.
             return session
         return assert_writable(
             f"vaultwrite:{self.writer}:{action}",
