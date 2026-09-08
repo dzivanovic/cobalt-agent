@@ -14,13 +14,11 @@ from cobalt.taxonomy.slug import (
 @pytest.mark.parametrize(
     "slug",
     [
-        "hitchhiker",
-        "big-dog",
-        "nine-ema-scalp",
-        "back-through-open",
-        "first-vwap-pullback",
-        "three-thirty",
         "example-range-break",
+        "example",
+        "nine-ema-example",
+        "a-b-c",
+        "three-thirty",
         "a1",
     ],
 )
@@ -33,11 +31,11 @@ def test_valid_slugs(slug):
     "bad",
     [
         "",
-        "Back$ide",          # the sheet's display name, not an identity
-        "Big Dog",           # spaces
-        "BigDog",            # uppercase
-        "big_dog",           # underscore is the GRAMMAR spelling, not the slug
-        "9-ema-scalp",       # leading digit
+        "Exa$mple",          # a display spelling, not an identity
+        "Example Break",     # spaces
+        "ExampleBreak",      # uppercase
+        "example_break",     # underscore is the GRAMMAR spelling, not the slug
+        "9-ema-example",     # leading digit
         "-leading",
         "trailing-",
         "double--hyphen",
@@ -51,8 +49,10 @@ def test_rejected_slugs(bad):
 
 
 def test_the_error_names_the_note():
-    with pytest.raises(SlugError, match="Big Dog.md"):
-        validate_slug("Big Dog", where="1 - Trading/4 - Strategies/Big Dog.md")
+    with pytest.raises(SlugError, match="Example Break.md"):
+        validate_slug(
+            "Example Break", where="1 - Trading/4 - Strategies/Example Break.md"
+        )
 
 
 def test_missing_slug_says_it_is_the_id():
@@ -61,16 +61,16 @@ def test_missing_slug_says_it_is_the_id():
 
 
 def test_trade_key_is_the_grammar_spelling():
-    assert trade_key("nine-ema-scalp") == "nine_ema_scalp"
-    assert trade_key("big-dog") == "big_dog"
-    assert trade_key("hitchhiker") == "hitchhiker"
+    assert trade_key("example-range-break") == "example_range_break"
+    assert trade_key("nine-ema-example") == "nine_ema_example"
+    assert trade_key("example") == "example"
 
 
 def test_trade_key_validates_first():
     """A bad slug must not be silently converted into a plausible key."""
     with pytest.raises(SlugError):
-        trade_key("Big Dog")
+        trade_key("Example Break")
 
 
 def test_per_trade_scope():
-    assert per_trade_scope("nine-ema-scalp") == "per_trade(nine_ema_scalp)"
+    assert per_trade_scope("example-range-break") == "per_trade(example_range_break)"

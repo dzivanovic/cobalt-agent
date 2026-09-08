@@ -67,11 +67,13 @@ def _stores():
     from cobalt.notify.store import EmailSendStore
     from cobalt.redact.store import RedactionStore
     from cobalt.session.store import SessionBlockStore
+    from cobalt.taxonomy.store import TradeDefStore
     from cobalt.vaultwrite.store import VaultWriteStore
 
     return [
         BarStore, AsetStore, CardStore, DayModeStore, JobStore,
-        EmailSendStore, RedactionStore, SessionBlockStore, VaultWriteStore,
+        EmailSendStore, RedactionStore, SessionBlockStore, TradeDefStore,
+        VaultWriteStore,
     ]
 
 
