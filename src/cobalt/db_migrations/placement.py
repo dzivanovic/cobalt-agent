@@ -45,16 +45,24 @@ SEEDED_TABLES: dict[str, Side] = {
     "traders": Side.USER,
 }
 
+#: Created by a FEATURE MODULE's own migration, directly on its side —
+#: `<module>/migrations/*.sql`, executed by that module's store, the way
+#: every other table in the new core is created. They were never in
+#: `public`, so `0002_move_tables.sql` does not name them and the migrate
+#: proof table does not carry them; the placement test does.
+MODULE_TABLES: dict[str, Side] = {
+    # taxonomy/migrations/0001_trade_defs.sql (ADR-0008 D3)
+    "trade_defs": Side.USER,
+    "tunables": Side.USER,
+    "setup_trade_matrix": Side.USER,   # a VIEW unnested from trade_defs.def
+}
+
 #: Declared by ADR-0008 D2 before they are built, so the first migration
 #: that creates one has a ruled side to create it on. Nothing here exists
 #: yet; the placement test only checks tables that DO exist.
 DECLARED_TABLES: dict[str, Side] = {
-    # D3 — loaded copies of the vault's trade_def units and the trader's
-    # own settings. User data by definition (L32).
-    "trade_defs": Side.USER,
-    "tunables": Side.USER,
+    # D3 — the trader's own settings (aset.yaml + daymode.yaml, step 6).
     "trader_settings": Side.USER,
-    "setup_trade_matrix": Side.USER,   # a VIEW unnested from trade_defs
     # S2-P4 / S3 — named now so the placement test knows them on sight.
     "legs": Side.USER,
     "fills": Side.USER,
@@ -71,7 +79,12 @@ DECLARED_TABLES: dict[str, Side] = {
 }
 
 #: Every table this codebase has ruled on.
-PLACEMENT: dict[str, Side] = {**MOVED_TABLES, **SEEDED_TABLES, **DECLARED_TABLES}
+PLACEMENT: dict[str, Side] = {
+    **MOVED_TABLES,
+    **SEEDED_TABLES,
+    **MODULE_TABLES,
+    **DECLARED_TABLES,
+}
 
 #: The old tree's tables, frozen in `public` and never touched
 #: (strangler rule). They exist in `cobalt_brain`; `cobalt_dev` has none
@@ -116,6 +129,7 @@ def tables_on(side: Side) -> frozenset[str]:
 
 __all__ = [
     "DECLARED_TABLES",
+    "MODULE_TABLES",
     "MOVED_TABLES",
     "OLD_TREE_PUBLIC_TABLES",
     "PLACEMENT",
