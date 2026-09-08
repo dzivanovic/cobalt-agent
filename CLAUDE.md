@@ -79,9 +79,10 @@ Cobalt in production must ALWAYS be left working after every sprint.
 - Host: Mac Studio (always-on server). Tailscale network: Mac + Fedora
   laptop + phone (Windows trading PC intentionally kept clean/off agentic
   load). Docker via OrbStack runs Postgres (RAG + Mattermost + bot DBs).
-- Local model: Qwen3.8-27B 8-bit MLX with MTP speculative decoding, parallel
-  slots, per-call reasoning_effort (default xhigh overthinks — use low/off
-  for simple calls). Exposed as the LiteLLM local route.
+- Local model: Qwen3.8-27B 8-bit MLX (mlx-community), context 262144,
+  thinking always on and inlined (consumers strip <think>…</think>), no
+  reasoning_effort control, speculative decoding not available on this
+  stack. Exposed as the LiteLLM local route.
 - Memory layer: PostgresMemory ("Hippocampus") — 5-pillar schema
   (memory_logs w/ 1536-dim embeddings, graph_nodes, graph_edges,
   hitl_proposals, browser_fast_path); cosine search w/ 0.3 floor;

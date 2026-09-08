@@ -353,3 +353,22 @@ That is auth + the trusted herdr hook, nothing else. Post-cleanup health check p
    changes its OSC title breaks `blocked` detection silently. Re-verify after codex upgrades.
 6. **Hook trust is interactive.** Re-running `herdr integration install codex` will block the next TUI
    launch on a trust prompt that non-interactive runs cannot answer.
+
+## 10. Seat checklist
+
+- [ ] **Re-verify after every Codex bump:** confirm `codex --version`, then re-run §7 (scratch pane,
+  `-a on-request -s read-only`, one command approval) and diff against the manifest version in
+  `herdr agent explain`. A silent title-string change (item 5 above) is the failure mode; there is no
+  hook fallback to catch it.
+
+**2026-09-08 re-verify (ops/triage-2026-09-06 seats-followup):** `codex-cli 0.153.4` — unchanged, no
+bump since this report. Re-ran §7 in a new scratch pane/dir (`~/codex-test-p4`, deleted at close):
+command-approval prompt → `agent_status: blocked`, `herdr agent explain` rule `osc_title_blocked`,
+evidence `"[ . ] Action Required | codex-test-p4"`, manifest `remote:codex.toml 2026.09.05.1` — same
+manifest version as §7. Denied via `Escape`; settled to `agent_status: done` / detection `state: idle`
+(rule `osc_title_idle`), matching the `done`-not-`idle` note in §7. `run.txt` not created. One
+addendum not present in §7: first launch in a brand-new directory now shows a **"Do you trust the
+contents of this directory?"** prompt before the TUI is usable (separate from hook trust) — §7's
+`/tmp/codex-test` had apparently already been trust-marked from Dejan's manual first launch, so this
+didn't fire there. Not a regression, just undocumented until now; answer "Yes, continue" for any new
+scratch dir.
