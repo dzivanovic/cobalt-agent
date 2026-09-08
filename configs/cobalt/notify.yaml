@@ -12,7 +12,6 @@ notify:
     # rather than a room he has to think to open.
     dm_username: dejan_z
     vault_key: MATTERMOST_CREDS
-    timeout_s: 10
     # `false` turns the channel into a LOUD, logged no-op — the F18
     # heartbeat says "DM channel disabled" in its own block rather than
     # appearing to have sent something. Never the silent state.

@@ -35,6 +35,26 @@ from cobalt.redact import redact
 from .config import MattermostConfig, load_notify_config
 from .result import SendResult
 
+#: F16 / ADR-0008 D7. The HTTP timeout on every Mattermost REST call is a
+#: threshold with consumers, so it is a `tunables.yaml` row and not a
+#: field on `MattermostConfig` — the same shape `notify/email.py` already
+#: used for its two numbers. Read per call rather than cached: a tunable
+#: is meant to be changeable, and one round trip through the loader costs
+#: nothing next to the HTTP call it is bounding.
+TIMEOUT_KEY = "notify.mattermost.timeout_s"
+
+
+def timeout_s() -> float:
+    from cobalt.taxonomy.loader import load_tunables
+
+    row = load_tunables().by_key.get(TIMEOUT_KEY)
+    if row is None:
+        raise MattermostError(
+            f"tunable {TIMEOUT_KEY!r} is missing from tunables.yaml — the Mattermost "
+            "channel reads its numbers from config and has no built-in defaults (F16)."
+        )
+    return float(row.value)
+
 CHANNEL = "mattermost"
 
 
@@ -132,15 +152,15 @@ def send_dm(message: str, *, cfg: Optional[MattermostConfig] = None) -> SendResu
         return SendResult(False, "channel disabled in configs/cobalt/notify.yaml", safe.hits)
 
     url, token = _creds(cfg)
-    me = _api(url, token, "/users/me", None, cfg.timeout_s)
-    them = _api(url, token, f"/users/username/{cfg.dm_username}", None, cfg.timeout_s)
+    me = _api(url, token, "/users/me", None, timeout_s())
+    them = _api(url, token, f"/users/username/{cfg.dm_username}", None, timeout_s())
     channel = _api(
-        url, token, "/channels/direct", [me["id"], them["id"]], cfg.timeout_s
+        url, token, "/channels/direct", [me["id"], them["id"]], timeout_s()
     )
     post = _api(
         url, token, "/posts",
         {"channel_id": channel["id"], "message": safe.text},
-        cfg.timeout_s,
+        timeout_s(),
     )
     post_id = post.get("id", "?")
     return SendResult(

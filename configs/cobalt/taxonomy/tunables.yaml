@@ -10,14 +10,15 @@
 # 09-03: RULED (Dejan) — default stop buffer = 0.02 everywhere, preset,
 # tunable per trade, never hardcoded as a Pydantic default. Per-trade
 # override = a `<trade_id>.stop.buffer` row (same hoist convention as
-# every other per-trade key); back_through_open and bella_fade carry
-# one each (`sheet_value: 0.01` — A.6 PROPOSAL record, visible, not
-# applied). `StopBuffer.cents` (trade_def.py) resolves via `cfg(key)`
-# like any other tunable — no inline literal in trade_def YAML.
+# every other per-trade key); the trades that carry one carry it in
+# their own strategy note now (ADR-0008 D3 b.3), with their
+# `sheet_value` record intact. `StopBuffer.cents` (trade_def.py)
+# resolves via `cfg(key)` like any other tunable — no inline literal in
+# a trade_def.
 #
 # Two other §13.1 rows are also excluded by the same dyn-only rule:
-# catalyst.grade_min/_max (dyn: no (config), per_trade bto /
-# bella_fade — a doctrine literal, not a replay-gated quantity) and
+# catalyst.grade_min/_max (dyn: no (config), per_trade — a doctrine
+# literal, not a replay-gated quantity) and
 # <trade>.max_attempts / <trade>.reentry_window (dyn: no (doctrine)) —
 # both already carried as Tunable[T] fields directly on their
 # trade_defs, not duplicated here.
@@ -63,7 +64,11 @@ tunables:
     dynamic: true
     status: replay_pending
     source: ruling
-    consumers: ["vwap_continuation", "bella_fade"]
+    # Consumers are the trades whose defs reference this key. WHICH
+    # trades those are is user data and lives in their notes (L31/L32) —
+    # `cobalt validate` resolves it from the vault, so an engine row does
+    # not have to carry a list of somebody's trade names.
+    consumers: ["trade_defs referencing cfg(trendline.min_pivots)"]
 
   - key: range.wick_ratio_max
     value: null
@@ -439,3 +444,20 @@ tunables:
     status: solidified
     source: ruling
     consumers: ["cobalt.jobs.watchdog (a one-shot past its cadence by this much = MISSED)"]
+
+  # --- F16 hygiene rider (ADR-0008 D7, 2026-09-08) ----------------------
+  # The Mattermost timeout was a `timeout_s:` field on MattermostConfig,
+  # a number living in a config file that F16's sweep had already moved
+  # everywhere else (notify.email.auth_port, notify.email.timeout_s). One
+  # channel reading its numbers from a tunables row while the other read
+  # its own from a YAML field was two answers to "where does a number
+  # live" — this is the second one being retired.
+  - key: notify.mattermost.timeout_s
+    value: 10
+    unit: duration
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers:
+      - "cobalt.notify.mattermost (/users/me, /users/username, /channels/direct, /posts)"

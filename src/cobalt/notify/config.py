@@ -5,14 +5,14 @@ VaultManager (`MATTERMOST_CREDS`) exactly as the old tree's did, and the
 Gmail OAuth triple from `GOOGLE_OAUTH_*` — this file carries only WHO to
 talk to and WHETHER the channel is on.
 
-NO THRESHOLD LIVES HERE EITHER, and that is F16 rather than taste. The
-email channel needs two numbers — the loopback port the consent flow
-binds and the HTTP timeout on a send — and both are thresholds with
-consumers, so both are `tunables.yaml` rows (`notify.email.auth_port`,
-`notify.email.timeout_s`) reached through `cobalt.taxonomy.loader`. The
-Mattermost block's own `timeout_s` predates that sweep and is left where
-it is: moving a live production field is a change with no proof attached
-to it, and F16's rule binds every NEW threshold.
+NO THRESHOLD LIVES HERE AT ALL, and that is F16 rather than taste. Every
+number this file used to hold is a threshold with consumers, so every one
+of them is a `tunables.yaml` row reached through `cobalt.taxonomy.loader`:
+`notify.email.auth_port`, `notify.email.timeout_s`, and — since ADR-0008
+D7 — `notify.mattermost.timeout_s`. That last one predated the sweep and
+was left alone at the time; leaving it was the only thing making "where
+does a number live" have two answers, so the hygiene rider retired it.
+What is left here is WHO to talk to and WHETHER the channel is on.
 """
 
 from __future__ import annotations
@@ -41,7 +41,6 @@ class MattermostConfig(BaseModel):
     dm_username: str = Field(min_length=1)
     #: Vault key holding {"url": ..., "token": ...} — the name only.
     vault_key: str = Field(default="MATTERMOST_CREDS", min_length=1)
-    timeout_s: float = Field(default=10.0, gt=0)
 
 
 #: Vault key names for the Layer-B Google OAuth credential (Charter §3
