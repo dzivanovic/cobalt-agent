@@ -37,3 +37,13 @@ deterministic` entry added, both here and in `quality_factors[]`, to
 every trade_def that carries a `trail` slot: second_chance, rubberband,
 vwap_continuation, ema9_scalp, back_through_open, bouncy_ball — v0.7
 §0's "which capability the stock cleanly follows", no schema change).
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+**RETIRED 2026-09-08 (ADR-0008 D3 ruling b.2).** The module is deleted.
+`VariableRegistryEntry` folded into `trade_def.QualityFactor`, one item
+per `quality_factors[]` entry, so the set-equality check this file
+existed to support vanishes by construction. See
+`docs/40 - DevDocs/cobalt/taxonomy/trade_def.md`.

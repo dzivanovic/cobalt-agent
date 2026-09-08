@@ -31,3 +31,11 @@ trade count unchanged).
 ## Config it reads
 Indirectly, via `loader.load_trade_defs()`'s defaults — see
 `loader.md`.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Reads the VAULT. Prints three blocks, and the second two are why it is
+worth running: the validated defs, the DRAFTS it skipped and why, and the
+frontmatter WARNINGS where a note's header disagrees with its def.

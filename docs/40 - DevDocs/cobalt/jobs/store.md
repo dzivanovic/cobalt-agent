@@ -54,3 +54,12 @@ themselves. Paired with the `heartbeat_source` column so a probe's
 `last_error` is redacted on its way *into* the column. F18 puts that
 text in a DM, so a traceback carrying a DSN must never become a row that
 later leaks.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Declares `SIDE = Side.SYSTEM` (ADR-0008 D2 — the side is chosen PER STORE, never per process).
+the scheduler's own bookkeeping plus the kill switch.
+
+`_connect()` passes it to the factory; `ensure_schema()` asserts the two-layer schemas exist before running its own DDL, naming `cobalt db migrate` if they do not.

@@ -28,3 +28,17 @@ created or in-place-frontmatter-updated file, or `VaultWriteError`.
 ## Config it reads
 `configs/cobalt/prefill.yaml` (trades_dir, trade_filename_pattern) via
 the caller-supplied `PrefillPathsConfig`.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+`FIELD_ORDER` carries `trade_def` where it carried `strategy` (ADR-0008
+D4): a new note gets the trade's ID, blank, as DEJAN'S field. Rendered
+UNQUOTED alongside `date` and `symbol` — the migration writes the slug
+unquoted into every existing note, so quoting it on the next Cobalt write
+would make his line and Cobalt's differ and record an override on a value
+nobody changed.
+
+`frontmatter_span` and `_split_frontmatter` moved to
+`vaultwrite/frontmatter.py` and are imported from there.

@@ -56,3 +56,10 @@ Recent `session_blocks` rows, timestamps in ET.
 - A populated table that has never been backfilled makes **every**
   `ensure_schema()` crash on the `SET NOT NULL`. That is intended
   fail-loud behaviour, and the crash is telling you to run `backfill`.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+`session backfill` targets `aset_sizings` and `vault_writes`, both user
+side, so one `side=Side.USER` connection covers it.

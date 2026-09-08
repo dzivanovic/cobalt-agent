@@ -50,3 +50,11 @@ note under the resolved vault root, or a raised error.
 `configs/cobalt/prefill.yaml`, `rules.yaml`, `strategies.yaml`,
 `configs/cobalt/aset.yaml` (sheet-mode dollar figures),
 `configs/cobalt/templates/drc.md.j2`.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Reads its frontmatter through the shared
+`vaultwrite.frontmatter.split_frontmatter` rather than a second copy of
+the regex.

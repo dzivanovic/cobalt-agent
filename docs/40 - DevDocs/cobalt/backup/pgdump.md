@@ -22,3 +22,14 @@ that looks green and restores nothing. The dump is rejected unless it is
 non-zero AND its last 4 KB carry pg_dump's own
 `PostgreSQL database dump complete` marker — which is also the check
 that catches a truncated write.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Both dump paths pass `--role=cobalt_backup`. That role is NOLOGIN and a
+member of `pg_read_all_data`, so the dump reads BOTH schemas without
+owning either; `0001_schemas.sql` grants the login role membership, which
+is the flag's only precondition. Fail-loud on purpose: on a server where
+`0001` has never run, `pg_dump` exits non-zero naming the missing role
+rather than quietly dumping as whoever logged in.

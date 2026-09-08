@@ -35,3 +35,13 @@ is not itself a string.
 `lru_cache(maxsize=1)`. The alternative is decrypting the vault on every
 outbound line, putting the master key through a hot path for no gain.
 `reset_cache()` is a test seam; production never calls it.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+The docstring no longer lists the four credential HOSTS. Which services a
+trader subscribes to is his, and a list of them in a committed file is
+the same leak as a list of his trades (L31 / ADR-0008 D5). The vault
+names them; the code does not. The `redact.yaml` pattern VALUES stay —
+ESCALATE, because F19 must not depend on the database.

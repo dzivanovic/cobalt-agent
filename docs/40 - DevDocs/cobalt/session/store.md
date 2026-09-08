@@ -37,3 +37,12 @@ updates a row.
 ## Tests
 `tests/cobalt/test_session.py::test_the_block_is_recorded_for_the_heartbeat`
 and `::test_a_dead_database_loses_the_counter_row_not_the_block`.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Declares `SIDE = Side.SYSTEM` (ADR-0008 D2 — the side is chosen PER STORE, never per process).
+the market_reset block is a system rule and its audit trail is system data.
+
+`_connect()` passes it to the factory; `ensure_schema()` asserts the two-layer schemas exist before running its own DDL, naming `cobalt db migrate` if they do not.

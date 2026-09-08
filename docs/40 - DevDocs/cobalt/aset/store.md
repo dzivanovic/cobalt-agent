@@ -99,3 +99,12 @@ that filled and then closed is still a trade taken.
 now writes `card_transitions`. It *executes* that module's files rather
 than carrying a second copy of the DDL (one-path rule); the import is
 local to avoid the cycle.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Declares `SIDE = Side.USER` (ADR-0008 D2 — the side is chosen PER STORE, never per process).
+a card is a written plan of his: ticker, grade, sheet dollars, entry and stop.
+
+`_connect()` passes it to the factory; `ensure_schema()` asserts the two-layer schemas exist before running its own DDL, naming `cobalt db migrate` if they do not.

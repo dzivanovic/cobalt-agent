@@ -34,3 +34,15 @@ in `src/`.
 
 `cobalt validate` builds this object, so a config that passes the gate
 is one the runtime can boot on.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+`load_daymode_config()` READS THE DATABASE
+(`"user".trader_settings`); `configs/cobalt/daymode.yaml` left the repo.
+The reduced pointer, the enabled modes, the `.htk` template and the
+step-down table are one trader's rulings (ADR-0008 D3.4). The object,
+every validator and every derived property are unchanged — including the
+check that `reduced_enabled_grades` may only NARROW the account ladder,
+which now fires across two rows instead of two files.

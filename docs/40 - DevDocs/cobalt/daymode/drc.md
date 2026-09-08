@@ -27,3 +27,10 @@ as "not filled", not inferred.
 A database or vault failure logs at `ERROR` and returns zeros/None — the
 proposal still happens, and the reason says what could not be read.
 Loud and non-blocking, in that order.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Its prior-day fill count reads `aset_sizings`, so its connection declares
+`side=Side.USER`.

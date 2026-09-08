@@ -50,3 +50,25 @@ crash.
 ## Config it reads
 No YAML config — reads Postgres connection parts directly from the
 process environment.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+`connect()` now takes a REQUIRED keyword-only `side: Side`. After
+connecting it does `SET ROLE cobalt_user|cobalt_system`,
+`SET search_path TO <that side's schema only>` (no `public`, quoted via
+`sql.Identifier` because `user` is reserved), and sets the
+`cobalt.trader_id` GUC from `configs/cobalt/tenant.yaml`. A wrong-side
+statement therefore fails twice over: relation-not-found, or permission
+denied. A call without `side` raises `DbConfigError`.
+
+New: `Side` (value IS the schema name, role is `cobalt_<value>`),
+`apply_side(conn, side)` (shared with the suite's transaction fixture, so
+a test cannot run with wider grants than production), `connect_migration()`
+(the ONE documented exception — no `SET ROLE`, for the migration harness
+only; a lint test asserts it has exactly one caller), and
+`assert_schemas_exist(conn)` (called at the top of every store's
+`ensure_schema`, naming `cobalt db migrate`).
+
+Still exactly one `psycopg.connect` in the tree, and a lint test says so.

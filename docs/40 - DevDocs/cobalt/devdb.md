@@ -67,3 +67,14 @@ an empty table list; guards the read path too.
 Performed RULING 7 §2g after the migration was proven:
 `aset_sizings 177 -> 0`, `vault_writes 871 -> 0`, `vault_overrides 0 -> 0`.
 Both other guards were exercised first and both refused as specified.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+The truncate allowlist straddles the split (`aset_sizings`,
+`vault_writes`, `vault_overrides` are user data; `bars` is engine data)
+and no role reaches both. `counts()` and `truncate()` now group the named
+tables by side, hold ONE CONNECTION PER SIDE, and name every table
+schema-qualified — for a destructive helper, a TRUNCATE should never
+depend on a search_path being what you assumed.

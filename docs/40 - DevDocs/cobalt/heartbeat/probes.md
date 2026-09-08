@@ -72,3 +72,10 @@ there.
 `heartbeat.probe_timeout_s`, `heartbeat.backup_max_age_min`,
 `jobs.missed_grace_min` (shared with the F17 watchdog — see above). No
 literal in a predicate.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+The `database` probe names no table but still has to declare a side:
+SYSTEM. A liveness probe must never be the thing that opens user data.

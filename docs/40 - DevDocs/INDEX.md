@@ -63,6 +63,17 @@ rather than an inventory, and wrong.
 
 ---
 
+Extended 2026-09-08 (Sprint 2, S2-P1 line 0) to cover **ADR-0008 — the
+two-layer data model**: `system` and `"user"` schemas with the side
+chosen PER STORE (`cobalt/db.py`, `cobalt/db_migrations/`,
+`cobalt/tenant.py`), the vault-backed trade_def loader and its one-off
+note migrations (`cobalt/taxonomy/{slug,vault_loader,store,note_migration,
+trade_note_migration}.py`), and the trader's own settings as rows rather
+than committed YAML (`cobalt/settings/`). It reshapes existing pages more
+than it adds: every store now declares a `SIDE`, both config loaders read
+the database, and `variables.py` is retired into
+`trade_def.QualityFactor`.
+
 ## File inventory — everything created/modified for the ASET sheet
 
 ### Source (`src/cobalt/`)

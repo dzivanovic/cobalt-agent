@@ -120,3 +120,22 @@ in `loader.py`) · `variables.py` (quality_factors cross-check, also
 § "Taxonomy replay validation (v0.7 §13/§13.1)" (now a pointer to
 `tunables.yaml`) · ADR-0001 · ADR-0002 (superseded for trail) ·
 ADR-0003.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Schema is now "v0.4 minus authored `id`/`name`, plus structured
+`quality_factors`" (ADR-0008 D3, folded into the taxonomy doc at S2-P2's
+v0.8 bump).
+
+`TradeDef.from_unit(mapping, slug=, name=)` is the ONE place identity
+enters, and it REFUSES a unit that authors `id:` or `name:` rather than
+preferring one — if the two disagreed, every tie-break silently discards
+something a human wrote. The fields stay REQUIRED on the model.
+
+`QualityFactor` absorbs the old `VariableRegistryEntry`: a bare string
+still parses (every default), a mapping carries `source`/`tier`/
+`frontier`, and the set-equality cross-check between two files vanishes
+because there is no second file. `valid_setups` gained a duplicate-pair
+check — what remains of the setup×trade matrix cross-check.

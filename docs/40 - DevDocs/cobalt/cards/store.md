@@ -58,3 +58,12 @@ ended and does not know how it got there.
 `aset/store.py` (`save` creates the genesis row in its own transaction;
 `mark_filled` is now a `TRIGGERED -> FILLED` transition), `aset/web.py`
 (the button routes), `cards/expire.py`, `cards/cli.py`.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Declares `SIDE = Side.USER` (ADR-0008 D2 — the side is chosen PER STORE, never per process).
+the card's own history sits where the card sits.
+
+`_connect()` passes it to the factory; `ensure_schema()` asserts the two-layer schemas exist before running its own DDL, naming `cobalt db migrate` if they do not.

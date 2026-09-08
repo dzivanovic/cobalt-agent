@@ -27,3 +27,12 @@ Same discipline as `cobalt_redactions`. `detail` is written from an
 already-redacted string (`EmailError`'s contract); `message_id` is
 Google's opaque id, which is not a credential and is what an operator
 pastes into a support thread.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Declares `SIDE = Side.SYSTEM` (ADR-0008 D2 — the side is chosen PER STORE, never per process).
+a channel log (ts, ok, caller, message_id, detail), no personal data (revised under ADR-0008 ruling g).
+
+`_connect()` passes it to the factory; `ensure_schema()` asserts the two-layer schemas exist before running its own DDL, naming `cobalt db migrate` if they do not.

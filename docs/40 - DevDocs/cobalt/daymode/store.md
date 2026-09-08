@@ -32,3 +32,12 @@ There is no row for a Sunday, a holiday, or any day before 09:00.
 - A row created by an early attestation carries no proposal, and
   `decide()` refuses on it rather than treating `''` as a proposal.
 - Every write goes through the F1 guard — refused in `market_reset`.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Declares `SIDE = Side.USER` (ADR-0008 D2 — the side is chosen PER STORE, never per process).
+which sheet he is trading today, and what he decided.
+
+`_connect()` passes it to the factory; `ensure_schema()` asserts the two-layer schemas exist before running its own DDL, naming `cobalt db migrate` if they do not.

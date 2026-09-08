@@ -21,3 +21,12 @@ beat. Not red on its own: the guard firing is the guard working. It is
 on the block because a count that suddenly climbs means something
 started putting credentials into outbound text, and that is worth seeing
 the day it starts.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Declares `SIDE = Side.SYSTEM` (ADR-0008 D2 — the side is chosen PER STORE, never per process).
+counts by pattern NAME; the schema has nowhere to put a value.
+
+`_connect()` passes it to the factory; `ensure_schema()` asserts the two-layer schemas exist before running its own DDL, naming `cobalt db migrate` if they do not.

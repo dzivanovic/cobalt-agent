@@ -54,3 +54,11 @@ caused deliberately.
 `db.connect()` composes its DSN from `.env` parts today. The prefill and
 ASET entry points get them by *accident*, through a transitive old-tree
 import; this CLI has no such chain, so it loads the same file on purpose.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Two new command groups: `cobalt db migrate [--allow-prod] [--rollback]`
+and `cobalt settings load|show`, plus `cobalt taxonomy
+load|migrate-strategy-notes|migrate-trade-notes|add-alias|sync-frontmatter`.

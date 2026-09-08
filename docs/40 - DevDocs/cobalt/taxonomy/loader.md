@@ -83,3 +83,18 @@ law; same pattern as `archiver/config.py`'s watchlists loader).
 `trade_def.py` (schema), `tunables.py` (`TunableRegistry`, `TunableRow`,
 `replay_backlog`), `defaults.py` (`TaxonomyDefaults`), `variables.py`
 (`VariableRegistry`), ADR-0003.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Only the ENGINE side is left: `defaults.yaml` and `tunables.yaml`. The
+repo-side trade_def loader, the setup-matrix loader and the
+variable-registry loader are GONE — a trade_def is user data and its one
+home is the strategy note (`taxonomy/vault_loader.py`).
+
+New `merge_tunables(engine, user)`: engine rows ∪ the trader's per-trade
+rows, with a collision made LOUD. A user row that shadowed an engine key
+would mean two installs computing different answers from configs that
+both look right. `resolve_cfg` takes the union and does not care which
+side a key came from, only that exactly one side defined it.

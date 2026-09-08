@@ -22,3 +22,12 @@ body can contain the request that was rejected, token included.
 ## `SendResult`, not an exception, on a disabled channel
 The heartbeat needs to say *in its own output* that the DM did not go.
 That is different from crashing.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+New `TIMEOUT_KEY = "notify.mattermost.timeout_s"` and `timeout_s()`,
+reading the tunables row through the loader exactly as `email.py` does —
+per call, with no built-in default (a timeout Cobalt invented is a hang
+nobody chose the length of). All four REST call sites use it.

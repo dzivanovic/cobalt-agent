@@ -136,3 +136,18 @@ sheet_modes:
 - `dollars_for(mode, grade)` and `is_enabled(grade)` keep their
   signatures, so every caller is unchanged. **The dollar figures are
   byte-identical** to what the DAS hotkey files carry.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+`load_sheet_modes_config()` READS THE DATABASE
+(`"user".trader_settings`), not `configs/cobalt/aset.yaml` — that file
+left the repo (ADR-0008 D3.4: the sheet dollars and the enabled grade
+ladder are one trader's numbers). Same name, same twenty-odd call sites,
+different source; an empty table is a loud `ConfigError` naming
+`cobalt settings load`, never a set of invented defaults.
+
+`load_config()` is unchanged and still reads a YAML: the daily-note
+folder, the bind address and the typo ceilings are INSTALL settings, not
+trading rules.

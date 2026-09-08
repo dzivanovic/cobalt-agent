@@ -61,3 +61,12 @@ environment-variable read.
   itself. It is outside RULING 8's named scope and was left in place
   deliberately. `TESTARCH` is in no watchlist tier, so no real run can
   reproduce it.
+
+---
+
+## 2026-09-08 — ADR-0008 (two-layer data model)
+
+Declares `SIDE = Side.SYSTEM` (ADR-0008 D2 — the side is chosen PER STORE, never per process).
+`bars` is market history any trader's strategies read.
+
+`_connect()` passes it to the factory; `ensure_schema()` asserts the two-layer schemas exist before running its own DDL, naming `cobalt db migrate` if they do not.
