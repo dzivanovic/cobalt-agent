@@ -5,10 +5,12 @@ the trade, and that string is the `TradeDef.id` the loader injects. There
 is no second identifier: the YAML unit no longer authors `id:`, and a
 unit that still carries one fails loud.
 
-SHAPE. Lowercase kebab — `[a-z][a-z0-9]*(-[a-z0-9]+)*`. No `$` (the
-sheet's `Back$ide` is a display name, not an identity), no leading digit
-(`9 EMA Scalp` is `nine-ema-scalp`), no underscores, no spaces, no
-trailing or doubled hyphens.
+SHAPE. Lowercase kebab — `[a-z][a-z0-9]*(-[a-z0-9]+)*`. A display name
+may contain anything a human wants to type (a `$`, a digit, spaces,
+capitals); the slug may not, because it is an identity and identities are
+matched, joined and put in URLs. So `9 EMA Scalp` is `nine-ema-scalp`: no
+`$`, no leading digit, no underscores, no spaces, no trailing or doubled
+hyphens.
 
 AND THE GRAMMAR-SAFE SPELLING. The v0.7 §13.1 tunable-key grammar and the
 `per_trade(<id>)` scope accept `[a-z0-9_]` only, so a kebab slug cannot
@@ -52,8 +54,9 @@ def validate_slug(slug: str, *, where: str = "") -> str:
         raise SlugError(
             f"{prefix}invalid trade slug {slug!r}. A slug is lowercase kebab "
             f"({SLUG_PATTERN.pattern}): no '$', no leading digit, no "
-            "underscores, no spaces, no doubled or trailing hyphen. "
-            "'Back$ide Scalp' is a display name; its slug is 'backside'."
+            "underscores, no spaces, no doubled or trailing hyphen. The "
+            "frontmatter `name:` is where a display spelling belongs — a "
+            "trade may be called anything; its id may not."
         )
     return slug
 

@@ -1,10 +1,27 @@
-"""trade_def / variable-registry loader — config-as-code (TRIAGE
-cross-cutting law). Single source per trade: `configs/cobalt/taxonomy/
-trade_defs/<id>.yaml` + `configs/cobalt/taxonomy/variables/<id>.yaml`,
-cross-checked against `configs/cobalt/taxonomy/cameron_grid.yaml`.
+"""Engine-side taxonomy config: defaults, tunables, and the `cfg()`
+resolver — config-as-code (TRIAGE cross-cutting law).
 
-Pydantic-validated on load; a bad or missing file crashes with the file
-path and field detail — no partial loads, no default fallback.
+WHAT LIVES HERE AFTER ADR-0008. The SYSTEM side of the taxonomy:
+`configs/cobalt/taxonomy/defaults.yaml` and `tunables.yaml`, both of them
+engine data that ships identically to every Cobalt install. Pydantic-
+validated on load; a bad or missing file crashes with the path and the
+field detail — no partial loads, no default fallback.
+
+WHAT LEFT. The repo-side trade_def loader, the setup-matrix loader and
+the variable-registry loader are GONE, with the three config families
+behind them (ADR-0008 D3). A trade_def is USER data and its one home is
+the strategy note in `1 - Trading/4 - Strategies/` — read by
+`taxonomy/vault_loader.py`, loaded into `"user".trade_defs`. There is no
+second loader and no repo copy to disagree with the vault; the setup x
+trade matrix is a VIEW over the defs' own `valid_setups[]`, and each
+trade's variable registry folded into `quality_factors[]` itself.
+
+TUNABLES ARE NOW TWO SETS, AND THEY ARE UNIONED HERE. Engine rows stay in
+`tunables.yaml`; a trader's per-trade rows live in their strategy note's
+`tunables:<slug>` unit and load into `"user".tunables`. `merge_tunables`
+is the union and it is loud in both directions: a user row that shadows
+an engine key is a collision, not an override.
+
 `configs/cobalt/` is a sanctioned new-core config location (CLAUDE.md's
 config boundary law; see also `archiver/config.py`'s watchlists loader).
 """
@@ -20,52 +37,26 @@ import yaml
 from pydantic import BaseModel, ValidationError
 
 from .defaults import TaxonomyDefaults
-from .trade_def import StopBuffer, TradeDef, Tunable
+from .trade_def import StopBuffer, Tunable
 from .tunables import TunableRegistry, TunableRow
-from .variables import VariableRegistry
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TAXONOMY_DIR = REPO_ROOT / "configs" / "cobalt" / "taxonomy"
-TRADE_DEFS_DIR = TAXONOMY_DIR / "trade_defs"
-VARIABLES_DIR = TAXONOMY_DIR / "variables"
-CAMERON_GRID_PATH = TAXONOMY_DIR / "cameron_grid.yaml"
 DEFAULTS_PATH = TAXONOMY_DIR / "defaults.yaml"
 TUNABLES_PATH = TAXONOMY_DIR / "tunables.yaml"
+
+#: The one synthetic strategy note the repo ships (ADR-0008 D3). Anatomy
+#: terms only — no trade name, no sheet rule. It is the loader's test
+#: fixture AND the worked example behind
+#: `docs/40 - DevDocs/taxonomy-authoring-a-trade-def.md`.
+EXAMPLE_NOTE_PATH = TAXONOMY_DIR / "examples" / "example_trade_def.md"
 
 _MA_REF_PATTERN = re.compile(r"^ma\.(fast|slow)$")
 _CFG_TOKEN_PATTERN = re.compile(r"cfg\(([a-zA-Z0-9_.]+)\)")  # v0.7 §13.1 grammar atom
 
 
 class TaxonomyConfigError(RuntimeError):
-    """Trade-def / variable-registry config missing or invalid — crash loudly."""
-
-
-def load_cameron_grid(
-    path: Path = CAMERON_GRID_PATH,
-) -> dict[str, list[dict[str, str]]]:
-    if not path.exists():
-        raise TaxonomyConfigError(f"cameron_grid.yaml not found: {path}")
-    raw = yaml.safe_load(path.read_text())
-    if not isinstance(raw, dict) or not isinstance(raw.get("valid_setups"), dict):
-        raise TaxonomyConfigError(
-            f"{path}: expected a top-level 'valid_setups' mapping"
-        )
-    grid = raw["valid_setups"]
-    for trade_id, rows in grid.items():
-        if not isinstance(rows, list) or not rows:
-            raise TaxonomyConfigError(
-                f"{path}: valid_setups.{trade_id} must be a non-empty list"
-            )
-        for row in rows:
-            if (
-                not isinstance(row, dict)
-                or "setup_ref" not in row
-                or "relation" not in row
-            ):
-                raise TaxonomyConfigError(
-                    f"{path}: valid_setups.{trade_id} rows must each have setup_ref + relation, got {row!r}"
-                )
-    return grid
+    """Taxonomy config missing or invalid — crash loudly."""
 
 
 def load_defaults(path: Path = DEFAULTS_PATH) -> TaxonomyDefaults:
@@ -96,12 +87,42 @@ def load_tunables(path: Path = TUNABLES_PATH) -> TunableRegistry:
         raise TaxonomyConfigError(f"{path}: invalid tunables registry:\n{e}") from e
 
 
+def merge_tunables(
+    engine: dict[str, TunableRow], user: dict[str, TunableRow]
+) -> dict[str, TunableRow]:
+    """Engine rows ∪ user rows, with a collision made LOUD (ADR-0008 D3).
+
+    A user row whose key already exists in `tunables.yaml` is refused
+    rather than allowed to shadow it. Shadowing sounds convenient and is
+    exactly the failure the split exists to prevent: the engine row is
+    what every Cobalt install runs on, and a trader's note quietly
+    replacing one would mean two installs computing different answers
+    from configs that both look right. If a trader needs a different
+    value for an engine key, that is a ruling on the engine row, not a
+    private copy of it.
+    """
+    collisions = sorted(set(engine) & set(user))
+    if collisions:
+        raise TaxonomyConfigError(
+            f"user tunable row(s) {collisions} shadow engine keys in "
+            f"{TUNABLES_PATH.name}. A per-trade row in a strategy note may only "
+            "ADD keys (scope per_trade(...)), never redefine an engine key — "
+            "change the engine row if the value is wrong."
+        )
+    return {**engine, **user}
+
+
 def resolve_cfg(
     key: str, tunables: dict[str, TunableRow], defaults: TaxonomyDefaults
 ) -> Any:
-    """The ONE `cfg(key)` resolver (v0.7 §13.1): tunables.yaml first,
-    then defaults.yaml's non-dynamic globals, else fail loud. Never
-    silently falls back to a made-up value."""
+    """The ONE `cfg(key)` resolver (v0.7 §13.1).
+
+    `tunables` is the UNION of the engine rows and the trader's own rows
+    (`merge_tunables`) — the resolver does not care which side a key came
+    from, only that exactly one side defined it. Then defaults.yaml's two
+    non-dynamic globals, else fail loud. Never silently falls back to a
+    made-up value.
+    """
     row = tunables.get(key)
     if row is not None:
         return row.value
@@ -110,7 +131,8 @@ def resolve_cfg(
     if is_ma_ref(key):
         return resolve_ma_ref(key, defaults)
     raise TaxonomyConfigError(
-        f"cfg({key}) has no row in tunables.yaml and no defaults.yaml fallback"
+        f"cfg({key}) has no row in tunables.yaml, no row in the vault's "
+        "per-trade tunables units, and no defaults.yaml fallback"
     )
 
 
@@ -143,101 +165,6 @@ def resolve_ma_ref(value: str, defaults: TaxonomyDefaults) -> int:
 
 def is_ma_ref(value: str) -> bool:
     return bool(_MA_REF_PATTERN.match(value))
-
-
-def load_variable_registry(
-    trade_id: str, directory: Path = VARIABLES_DIR
-) -> VariableRegistry:
-    file = directory / f"{trade_id}.yaml"
-    if not file.exists():
-        raise TaxonomyConfigError(
-            f"variable registry not found for trade_id={trade_id!r}: {file}"
-        )
-    raw = yaml.safe_load(file.read_text())
-    if not isinstance(raw, dict):
-        raise TaxonomyConfigError(
-            f"{file}: expected a YAML mapping, got {type(raw).__name__}"
-        )
-    try:
-        return VariableRegistry(**raw)
-    except ValidationError as e:
-        raise TaxonomyConfigError(f"{file}: invalid variable registry:\n{e}") from e
-
-
-def load_trade_defs(
-    trade_defs_dir: Path = TRADE_DEFS_DIR,
-    variables_dir: Path = VARIABLES_DIR,
-    cameron_grid_path: Path = CAMERON_GRID_PATH,
-) -> dict[str, TradeDef]:
-    """Load + validate every trade_def, cross-checked against the Cameron
-    H grid and each trade's variable registry. Fails loud on the first
-    error — no partial loads."""
-    if not trade_defs_dir.exists() or not trade_defs_dir.is_dir():
-        raise TaxonomyConfigError(f"trade_defs directory not found: {trade_defs_dir}")
-
-    grid = load_cameron_grid(cameron_grid_path)
-    defaults = load_defaults()
-    tunables = load_tunables().by_key
-    result: dict[str, TradeDef] = {}
-
-    for file in sorted(trade_defs_dir.glob("*.yaml")):
-        raw = yaml.safe_load(file.read_text())
-        if not isinstance(raw, dict) or "trade_def" not in raw:
-            raise TaxonomyConfigError(
-                f"{file}: expected a mapping with a top-level 'trade_def' key"
-            )
-        try:
-            td = TradeDef(**raw["trade_def"])
-        except ValidationError as e:
-            raise TaxonomyConfigError(f"{file}: invalid trade_def:\n{e}") from e
-
-        if td.id in result:
-            raise TaxonomyConfigError(
-                f"{file}: duplicate trade_def.id {td.id!r} (already loaded)"
-            )
-
-        grid_rows = grid.get(td.id)
-        if grid_rows is None:
-            raise TaxonomyConfigError(
-                f"{file}: trade_def.id {td.id!r} has no row in {cameron_grid_path} — "
-                "every trade's valid_setups[] must equal its Cameron H grid row"
-            )
-        expected = {(row["setup_ref"], row["relation"]) for row in grid_rows}
-        actual = {(vs.setup_ref.value, vs.relation.value) for vs in td.valid_setups}
-        if expected != actual:
-            raise TaxonomyConfigError(
-                f"{file}: valid_setups {sorted(actual)} does not match "
-                f"{cameron_grid_path} row for {td.id!r}: {sorted(expected)}"
-            )
-
-        registry_file = variables_dir / f"{td.id}.yaml"
-        registry = load_variable_registry(td.id, variables_dir)
-        qf = set(td.quality_factors)
-        missing_in_registry = qf - registry.names
-        missing_in_quality_factors = registry.names - qf
-        if missing_in_registry:
-            raise TaxonomyConfigError(
-                f"{file}: quality_factors not present in {registry_file}: {sorted(missing_in_registry)}"
-            )
-        if missing_in_quality_factors:
-            raise TaxonomyConfigError(
-                f"{registry_file}: variable(s) not referenced by {file}'s quality_factors: "
-                f"{sorted(missing_in_quality_factors)}"
-            )
-
-        for tunable in iter_tunables(td):
-            if isinstance(tunable.value, str) and is_ma_ref(tunable.value):
-                resolve_ma_ref(tunable.value, defaults)  # fail-loud on an unknown ma.* key
-
-        for cfg_key in iter_cfg_tokens(td):
-            try:
-                resolve_cfg(cfg_key, tunables, defaults)
-            except TaxonomyConfigError as e:
-                raise TaxonomyConfigError(f"{file}: trade_def {td.id!r}: {e}") from e
-
-        result[td.id] = td
-
-    return result
 
 
 def iter_tunables(obj: Any) -> Iterator[Tunable]:
@@ -275,3 +202,21 @@ def iter_stop_buffers(obj: Any) -> Iterator[StopBuffer]:
     elif isinstance(obj, dict):
         for item in obj.values():
             yield from iter_stop_buffers(item)
+
+
+__all__ = [
+    "DEFAULTS_PATH",
+    "EXAMPLE_NOTE_PATH",
+    "TAXONOMY_DIR",
+    "TUNABLES_PATH",
+    "TaxonomyConfigError",
+    "is_ma_ref",
+    "iter_cfg_tokens",
+    "iter_stop_buffers",
+    "iter_tunables",
+    "load_defaults",
+    "load_tunables",
+    "merge_tunables",
+    "resolve_cfg",
+    "resolve_ma_ref",
+]
