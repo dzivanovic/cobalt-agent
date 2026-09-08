@@ -232,3 +232,5 @@ override. Rows below name their target.
 |---|---|---|---|---|---|---|---|
 | 2026-09-04T20:22:52Z | full | cobalt_brain | 210 | 975 | 3132610 | 0 | 23m04s |
 | 2026-09-04T22:56:09Z | backfill:AAPL | cobalt_brain | 1 | 5 | 21718 | 0 | 0m05s |
+| 2026-09-05T00:30:05Z | full | cobalt_brain | 210 | 975 | 3164539 | 0 | 23m11s |
+| 2026-09-08T00:30:05Z | full | cobalt_brain | 210 | 975 | 3164539 | 0 | 23m21s |

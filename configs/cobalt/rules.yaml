@@ -6,8 +6,8 @@
 
 generated:
   source: /Users/cobalt/Vault/Think/1 - Trading/5 - Review/Rules.md
-  source_sha256: c0c3758aceecf31dfa41fc5a749fc362571f8ce30c0ff780b5765486302afa66
-  generated_at: '2026-09-03T18:22:37+00:00'
+  source_sha256: 35d4989a5bae922a4566a5a7b1e2a679d8f1089f7088f8483da6576acc9ebbc9
+  generated_at: '2026-09-08T09:15:04+00:00'
 rules:
 - id: rule_01
   category: process
@@ -41,7 +41,10 @@ rules:
   text: Two straight losses → **10-min cooldown.**
 - id: rule_10
   category: circuit_breaker
-  text: '**One position at a time** while red. Never two correlated names.'
+  text: Max two open positions. Never correlated. Both bracketed. Second seat closes
+    when the day's _realized_ P&L is strictly below −1R ($30 on the half sheet); reopens
+    when it recovers. Open positions with their stop at the card's level count for
+    nothing. Rule 9 cooldown takes precedence.
 - id: rule_11
   category: process
   text: First partial at 1R → **stop to B/E**, immediately.

@@ -45,7 +45,7 @@ models:
     provider: "openai"
     model_name: "mainframe"
     node_ref: "cortex"
-    context: 65536
+    context: 262144
     env_key_ref: "lmstudio"
 
   # --- CLOUD BLEEDING EDGE ---

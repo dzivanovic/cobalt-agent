@@ -45,9 +45,30 @@ OPS_DIR="/Users/cobalt/cobalt/ops"
 LOG_DIR="$OPS_DIR/logs"
 LOG_FILE="$LOG_DIR/mainframe.log"
 PID_FILE="$LOG_DIR/mainframe-heartbeat.pid"
-MODEL="qwen3.5-122b-a10b"
+# MODEL SWAP 2026-09-07 (was: qwen3.5-122b-a10b, 4-bit MoE, 69.6 GB).
+# The 122B segfaulted in LM Studio's node/llmster MLX worker every
+# ~330-352 s regardless of load — 820 crash-detections over four days,
+# forensics in docs/40 - DevDocs/reports/mainframe-triage-2026-09-07.md.
+#
+# WARNING — MODEL is a PREFIX match, and three models on this box match
+# "qwen3.8-27b": the 8-bit we want, the "-mtp" draft head, and a 4-bit
+# build. `lms load` picks "the first one" with no documented ordering,
+# so the key alone cannot guarantee which model gets served. MODEL_PATH
+# is therefore verified against the served model after load, and the
+# script aborts loudly on a mismatch rather than quietly serving a
+# 4-bit model to a production trading agent.
+MODEL="qwen3.8-27b"
+MODEL_PATH="mlx-community/Qwen3.8-27B-8bit"
 MODEL_ID="mainframe"
 API="http://localhost:1234"
+
+# Served context. The 122B ran 32768 as a VRAM-budget compromise; the
+# 27B is far cheaper, so it serves the model's full declared maximum.
+# Only 16 of its 64 layers use full attention (the other 48 are linear,
+# constant-state), so the KV cache at 262144 is ~17.2 GB — about 47 GB
+# all-in against the 122B's 69.6 GB. configs/config.yaml's
+# mainframe.context MUST match this value (E4).
+CONTEXT_LENGTH=262144
 
 mkdir -p "$LOG_DIR"
 
@@ -136,8 +157,68 @@ while ! curl -s "$API/v1/models" > /dev/null; do
     ELAPSED=$((ELAPSED + 2))
 done
 
+# -y is MANDATORY here, not a convenience. Without it `lms load` drops
+# into an interactive "Multiple models match — please select one" menu
+# whenever MODEL is a prefix of more than one model key. Under launchd
+# there is no TTY, so it blocks forever: the model never loads, the
+# heartbeat never spawns, and the mainframe is silently DOWN with the
+# job still showing as running. Reproduced in production 2026-09-07
+# 21:31 during this very swap. The 122B never hit it only because its
+# key happened to be unique. `-y` selects the first match, which is why
+# the arch/quant verification below is not optional.
 log "API online — loading model into VRAM"
-lms load "$MODEL" --identifier "$MODEL_ID" --gpu max --context-length 32768
+lms load "$MODEL" -y --identifier "$MODEL_ID" --gpu max --context-length "$CONTEXT_LENGTH"
+
+# --- verify we loaded the model we meant to ---------------------------
+#
+# MODEL is a prefix match against three "qwen3.8-27b*" models on this
+# box (see the MODEL block above). A wrong pick would serve a 4-bit
+# model, or the 265 MB MTP draft head, under the identifier the whole
+# agent routes to — silently, and with plausible-looking output. That
+# is precisely the "plausible-empty artifact" the fail-loud law
+# forbids, so a mismatch is fatal here rather than a warning.
+#
+# Discriminator is arch+quantization, NOT path: /api/v0/models reports
+# path=null for any model loaded under a custom --identifier (measured
+# 2026-09-07 against the running 122B), so path is unusable here.
+# arch+quant separates all three candidates cleanly:
+#     qwen3_5     + 8bit  -> the model we want
+#     qwen3_5     + 4bit  -> the 4-bit build
+#     qwen3_5_mtp + 4bit  -> the MTP draft head
+EXPECT_ARCH="qwen3_5"
+EXPECT_QUANT="8bit"
+
+read -r got_arch got_quant got_ctx <<EOF
+$(curl -s "$API/api/v0/models" | python3 -c "
+import json,sys
+mid=sys.argv[1]
+try:
+    for m in json.load(sys.stdin).get('data',[]):
+        if m.get('id')==mid:
+            print(m.get('arch',''), m.get('quantization',''), m.get('loaded_context_length',''))
+            break
+except Exception:
+    pass
+" "$MODEL_ID" 2>/dev/null)
+EOF
+
+if [ "$got_arch" != "$EXPECT_ARCH" ] || [ "$got_quant" != "$EXPECT_QUANT" ]; then
+    log "FATAL: '$MODEL_ID' should be $EXPECT_ARCH/$EXPECT_QUANT but is '${got_arch:-<none>}'/'${got_quant:-<none>}'"
+    log "FATAL: refusing to spawn the heartbeat against the wrong model. Aborting."
+    exit 1
+fi
+# Context mismatch is LOUD BUT NOT FATAL, deliberately. A wrong *model*
+# is silent and dangerous, so it aborts above. A clamped *context* still
+# serves correct answers, and an over-large prompt fails loudly at the
+# point of use anyway — whereas aborting here would leave the mainframe
+# down, which NN#16 ("production is always left working") ranks as the
+# worse outcome on a trading day. It is logged at WARN so E4 drift is
+# visible in the log rather than hidden.
+if [ "$got_ctx" != "$CONTEXT_LENGTH" ]; then
+    log "WARN: requested context $CONTEXT_LENGTH but server serves '${got_ctx:-<none>}'"
+    log "WARN: configs/config.yaml mainframe.context should read '${got_ctx:-?}', not $CONTEXT_LENGTH"
+fi
+log "verified: '$MODEL_ID' = $got_arch/$got_quant at context $got_ctx"
 
 log "model loaded — spawning heartbeat (60s ping, logged, self-healing)"
 caffeinate -i -m bash -c '
@@ -146,10 +227,49 @@ caffeinate -i -m bash -c '
   API="'"$API"'"
   MODEL_ID="'"$MODEL_ID"'"
   MODEL="'"$MODEL"'"
+  MODEL_PATH="'"$MODEL_PATH"'"
+  # Injected, not inherited: this block runs in a separate `bash -c`
+  # under single quotes, so an un-injected $CONTEXT_LENGTH would expand
+  # to empty here and every self-heal reload would fail on a bare
+  # `--context-length`.
+  CONTEXT_LENGTH="'"$CONTEXT_LENGTH"'"
   export PATH="'"$PATH"'"
   hb() { echo "$(date "+%Y-%m-%d %H:%M:%S") | $*" >> "$LOG_FILE"; }
+  reload() {
+    hb "heartbeat: attempting reload of $MODEL"
+    if lms load "$MODEL" -y --identifier "$MODEL_ID" --gpu max --context-length "$CONTEXT_LENGTH" \
+         >> "$LOG_FILE" 2>&1; then
+      hb "heartbeat: reload OK"
+    else
+      hb "heartbeat: reload FAILED — mainframe is DOWN"
+    fi
+  }
   while true; do
-    reply=$(curl -s --max-time 30 "$API/v1/chat/completions" \
+    # LIVENESS: cheap GET /v1/models — proves the LM Studio HTTP daemon
+    # itself is up. Fast (~15ms measured) and unaffected by generation
+    # length, so unlike the old single generation-based probe it cannot
+    # itself time out under load.
+    if ! curl -s -o /dev/null --max-time 10 "$API/v1/models"; then
+      hb "liveness FAILED: LM Studio HTTP server not responding"
+      reload
+      sleep 60
+      continue
+    fi
+    # READINESS: mainframe-triage-2026-09-07 proved GET /v1/models and
+    # the per-model "state" field on /api/v0/models both read "loaded"
+    # straight through a live crash (state only flips once WE issue a
+    # reload), so an inference call is the only probe that actually
+    # exercises the crashed worker. It stays the reload trigger for that
+    # reason (this intentionally differs from a textbook liveness and
+    # readiness split, where readiness never restarts anything).
+    # --max-time raised 30s -> 120s: measured generations run 33-41s, and
+    # a queued heartbeat ping waits behind the in-flight generation ahead
+    # of it, not just its own reply time — 30s was shorter than that
+    # queue wait and produced false "no response" DOWNs against a
+    # healthy, busy model (confirmed 2026-09-07: reproduced live, ping
+    # timed out at 30s during a 34s generation, succeeded at 120s against
+    # the same one).
+    reply=$(curl -s --max-time 120 "$API/v1/chat/completions" \
       -H "Content-Type: application/json" \
       -d "{\"model\":\"$MODEL_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":1}")
     if [ -n "$reply" ] && ! printf "%s" "$reply" | grep -q "\"error\""; then
@@ -162,13 +282,7 @@ caffeinate -i -m bash -c '
       # boot log) and the old ping-only heartbeat would have logged
       # FAILED every 60s forever while the mainframe stayed down. The
       # pre-RULING-6 script had the same flaw and no log to show it.
-      hb "heartbeat: attempting reload of $MODEL"
-      if lms load "$MODEL" --identifier "$MODEL_ID" --gpu max --context-length 32768 \
-           >> "$LOG_FILE" 2>&1; then
-        hb "heartbeat: reload OK"
-      else
-        hb "heartbeat: reload FAILED — mainframe is DOWN"
-      fi
+      reload
     fi
     sleep 60
   done

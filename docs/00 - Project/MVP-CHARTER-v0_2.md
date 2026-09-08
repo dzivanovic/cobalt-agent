@@ -388,3 +388,36 @@ trading was avoided; never let a green rule-break become a trophy.
 - `sudo crontab -l` (his). Env-law / migration Code report (issued for after
   16:00 today) — ruling cited here, proof pending.
 - Taxonomy v0.8 consolidation at next bump. Push of taxonomy/trade-defs-v0_3.
+
+# LEDGER APPENDIX — 2026-09-05 research session (accelerators, memory, capture)
+Session type: research (Fable 5.1 chat). Nothing entered code. Paste into PROJECT-LEDGER.md after the 09-04 ops entries.
+
+## Rulings
+- **R1 RULED — L17 privacy default flipped.** Vault and personal layer are exposable to any vendor or local model at Dejan's choice. Secrets remain excluded on every channel (F19). Supersedes the 08-29 "personal layer excluded by default" dial; the per-case mechanism becomes opt-out instead of opt-in.
+- **R2 RULED — L30 friction law.** Remove friction that moves no needle; keep friction that makes the trader (rules, sim, playbook study). Test for every accelerator: which kind does it add or remove.
+- **R4 RULED (DwV, confirmed) — memory home.** `Think/6 - Permanent/Memory/`: `INDEX.md` (only file loaded by default; one line per file: [[name]] — description — updated), `profile.md`, `preferences.md`, `people/ topics/ areas/` living files seeded from the export, export frozen under `_imports/anthropic-2026-09-05/` (never edited). Always-loaded block (INDEX + profile + preferences) capped at ~4K characters, enforced by failing the write, never truncation. Every line carries provenance `[stated YYYY-MM-DD · source]`. Superseded lines marked, not deleted. Frontmatter name/description/aliases/updated on every file. Consolidation ("dream") = Cobalt nightly job beside the archiver + pre-compact flush in Code; cadence driven by observation volume, not the clock; Cobalt-side placement ruled in the build lane (F21/S5).
+- **R3, R5 WITHDRAWN.** Video-ingestion routing and dictation-plugin spike not ruled. Capture/transcription stays research. No spikes on any deck pre-MVP.
+- **CODE FREEZE** (Dejan, 09-05): no Cobalt code outside the Ladder until S1 live acceptance (Tue 09-08) passes. Claude holds him to it.
+
+## Pending build-session rulings (Dejan the CTO)
+- **User-data vs system-data law.** System = schema/engine that makes any trader's strategies pluggable (taxonomy anatomy: regime, range, gap, extension, leg; card engine; radar; alerts). User = named trades and anything cheat-sheet-derived, his strategies/settings, SMB-derived material, Oura/psychology/DRCs/memory folder — never shipped or visible to other users. Consequences to rule: populated trade_defs batches move from repo to user layer; Data-Model ADR becomes two-layer; naming pass over taxonomy for anything proprietary; trade names not baked into system code.
+- **AGPL acceptability** for the product line (gates Honcho-class components; Mem0 is Apache-2.0 for contrast).
+- **Code-architect spike**: read-only role pack, plan mode, L29, Fable 5.1 (selectable in Code from phone/desktop). First task = the two-layer ADR. Open questions the spike answers: can /remote-control expose two sessions; does Code-architect keep day-to-day continuity as well as chat.
+- **herdr test** (after acceptance): two sessions, /rc exposure, state detection with Claude Code.
+
+## Candidate verdicts (research, not rulings)
+- Honcho — PARK. Patterns extracted (provenance per memory, domain as tag not partition, peers as first-class, scheduled conservative consolidation, levels of recall). Component rejected: own always-on LLM workers → metered or unproven local lane; AGPL.
+- Screenpipe — REJECT on the Cobalt host: 24/7 recorder of the secrets machine; licence now source-available (commercial use needs a licence; app $25/mo); CPU spikes reported. Pattern kept under L15: event-driven capture + accessibility tree over OCR.
+- HoverNotes — research only: Chrome extension, notes to vault, Gemini in the cloud generates them (not local), closed source.
+- Obsidian local-Whisper class (Audio Transcription, Local Dictation, Minute) — research only; DRC dictation candidate; human-side, no Cobalt code.
+- Meeting front-ends (Meetily MIT, Anarlog, OpenWhispr, Vibe, Scriberr) + engines (whisper.cpp, faster-whisper, WhisperX, Parakeet) — research only; Kashef kit stays the reference.
+- Obsidian Web Clipper + Interpreter (Defuddle → Turndown; Interpreter on Ollama/local with OLLAMA_ORIGINS + num_ctx) — the reference for capture; Defuddle usable headless by Cobalt.
+
+## Stances recorded (Dejan's, his risk)
+- SMB material: personal-use rights to everything he acquired; method of acquisition doesn't limit use; never sold or shared. Claude's repeated "not SMB" caution withdrawn.
+- Capture: never downloads video from anywhere. Method = web-clip pages (SMB, Discord, X) + still-frame screenshots of paused video + local summarization into linked markdown. Principle: a bot doing exactly his browser steps logged in as him = his hand. Tool-vs-build per site decided by each site's terms as a design feature. Discord/X terms noted once.
+- Transcription targets: SMB training, SMB real-time, X — via Cobalt or a Grok bot feeding Cobalt.
+
+## Open items
+- Part 3 export delivered; export complete (21 files).
+- Timeline: two-layer ADR costs S1 ~1–2 mornings (worth paying now; untangling after S2 costs a week). Memory folder = neutral. herdr = after acceptance. Cobalt-side memory = S5, not before.
