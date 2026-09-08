@@ -26,6 +26,21 @@ from loguru import logger
 #: accident.
 CONTAINER = "cobalt_memory"
 
+#: `pg_dump --role=` issues `SET ROLE` right after connecting (ADR-0008
+#: D1). `cobalt_backup` is NOLOGIN and a member of `pg_read_all_data`
+#: (PG14+), so it can read BOTH schemas — `system` and `"user"` — without
+#: owning either and without the dump having to run as an owner of one
+#: side or the other. The login role is granted membership by
+#: db_migrations/0001_schemas.sql, so the SET ROLE succeeds; that grant is
+#: this flag's only precondition, and it is cluster-wide once 0001 has
+#: been run against any database on this server.
+#:
+#: Fail-loud on purpose: on a server where 0001 has never run, pg_dump
+#: exits non-zero naming the missing role rather than quietly dumping as
+#: whoever happened to log in. A backup whose reader nobody chose is a
+#: backup whose contents nobody chose.
+BACKUP_ROLE = "cobalt_backup"
+
 
 class DumpError(RuntimeError):
     """The dump could not be taken. Message carries no credential."""
@@ -50,7 +65,8 @@ def dump_database_to(name: str, out: Path) -> Path:
 
     host_binary = shutil.which("pg_dump")
     if host_binary:
-        cmd = [host_binary, "-h", host, "-U", user, "-d", name, "--format=plain"]
+        cmd = [host_binary, "-h", host, "-U", user, "-d", name,
+               f"--role={BACKUP_ROLE}", "--format=plain"]
         env = {**os.environ, "PGPASSWORD": password}
         where = "host pg_dump"
     else:
@@ -62,7 +78,8 @@ def dump_database_to(name: str, out: Path) -> Path:
                 "Docker available to the backup job."
             )
         cmd = [docker, "exec", "-e", f"PGPASSWORD={password}", CONTAINER,
-               "pg_dump", "-h", "127.0.0.1", "-U", user, "-d", name, "--format=plain"]
+               "pg_dump", "-h", "127.0.0.1", "-U", user, "-d", name,
+               f"--role={BACKUP_ROLE}", "--format=plain"]
         env = dict(os.environ)
         where = f"pg_dump inside {CONTAINER}"
 
@@ -84,4 +101,4 @@ def dump_database_to(name: str, out: Path) -> Path:
     return out
 
 
-__all__ = ["CONTAINER", "DumpError", "dump_database_to"]
+__all__ = ["BACKUP_ROLE", "CONTAINER", "DumpError", "dump_database_to"]
