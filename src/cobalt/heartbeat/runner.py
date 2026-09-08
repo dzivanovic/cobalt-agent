@@ -8,15 +8,21 @@ WHAT ONE BEAT DOES, in order:
    (`jobs.watchdog`);
 2. writes a Cobalt-owned red/green block into TODAY'S daily note through
    `VaultWriter` — one L28 unit, updated in place, one diff per beat;
-3. DMs on any red, plus one green summary a day at
-   `heartbeat.green_summary_at`;
-4. on red, sends the second channel — see `_out_of_band` below for
-   exactly what exists today, which is not OAuth email.
+3. on red, sends the SECOND channel first (email, over Layer-B Google
+   OAuth — `out_of_band` below), so that its outcome can appear in the
+   DM;
+4. DMs on any red — carrying "email channel DOWN: <reason>" when the
+   second channel failed — plus one green summary a day at
+   `heartbeat.green_summary_at`. The GREEN summary is DM-only: a daily
+   all-clear in the alert inbox is how an alert inbox stops being read.
 
 THE ALERT PATH IS NOT THE MONITORED PATH (Charter §3 F18). The DM goes
 over Mattermost, which is one of the things being watched — so a
 Mattermost outage would take the alert about the Mattermost outage with
-it. That is the whole reason F18 asks for a second channel.
+it. That is the whole reason F18 asks for a second channel, and since
+S1-P4 that channel exists: `cobalt.notify.email`, whose docstring states
+the exact dependency chain. It needs neither Mattermost, nor Postgres,
+nor the Obsidian vault. The `email` probe watches the watcher.
 
 WHY THE BEAT NEVER RAISES ON A RED. A red heartbeat is the heartbeat
 WORKING. It exits 0 and says RED loudly; it exits non-zero only when the
@@ -88,6 +94,7 @@ def take_beat(*, now: Optional[datetime] = None, probe: bool = True) -> Beat:
         probe_mod.backup_freshness(now=ts),
         probe_mod.vaultwrite_blocks(now=ts),
         probe_mod.redactions(interval_min(), now=ts),
+        probe_mod.email(),
     ]
     try:
         beat.jobs = sweep(now=ts, probe=probe)
@@ -168,36 +175,57 @@ def send_dm(beat: Beat) -> str:
 
 
 def out_of_band(beat: Beat) -> str:
-    """Charter §3 F18's SECOND channel, and the honest answer about it.
+    """Charter §3 F18's SECOND channel — email, over Layer-B Google OAuth.
 
-    The Charter says: "red also out-of-band = email via Layer-B Google
-    OAuth at MVP (alert path != monitored path)."
+    Built at S1-P4 (2026-09-08). Until then this function existed only to
+    say, loudly and on every red, that the channel did NOT exist; the
+    honest placeholder is in the git history and its S1-P3 reasoning is
+    unchanged — alerting that stops at Mattermost is alerting that shares
+    a fate with one of the things it watches.
 
-    THAT SEND PATH DOES NOT EXIST IN THIS REPO. Searched at S1-P3
-    (2026-09-04): no `smtplib`, no `sendmail`, no Gmail/OAuth client, no
-    credentials file, no `send_email` anywhere in `src/`, `ops/`,
-    `dev_utils/` or `configs/`. `google-api-python-client` is in
-    pyproject's dependencies and `googleapiclient` appears in the old
-    tree only as a Gemini/LLM import — never as a mail sender. The vault
-    holds no Google OAuth token: its cloud keys are GEMINI/OPENAI/
-    OPENROUTER API keys, which are not an OAuth credential and cannot
-    send mail.
+    THIS RUNS BEFORE `send_dm`, and the order is the whole point. The DM
+    is the channel that can carry a report ABOUT the email channel; the
+    email channel cannot carry a report about itself. So the second
+    channel goes first, and its outcome — including "email channel DOWN:
+    <reason>" — is appended to the beat's notes in time for
+    `beat.dm_body()` to render it.
 
-    S1-P3's instruction was explicit: do NOT build OAuth; report what
-    exists and stop at Mattermost. So this function reports, loudly, on
-    every red, and the second channel is a P4 line. Building an OAuth
-    send path is a real piece of work — client registration, consent,
-    refresh-token storage in the vault, a new secret shape for F19 — and
-    it is not something to improvise inside a heartbeat.
+    NEVER RAISES. A failure here is a note, not a crash: a beat that died
+    trying to send the backup alert would take the primary alert with it,
+    which is the exact coupling this channel exists to break.
     """
-    return (
-        "OUT-OF-BAND CHANNEL NOT AVAILABLE — Charter §3 F18 specifies email via the "
-        "Layer-B Google OAuth path, and no email send path exists in this repo "
-        "(verified S1-P3: no smtplib/sendmail/OAuth client/credential anywhere in "
-        "src, ops, dev_utils or configs; the vault holds API keys, not an OAuth "
-        "token). Alerting stopped at Mattermost, which IS one of the monitored "
-        "services — so a Mattermost outage takes this alert with it. Carried to P4."
+    from cobalt.notify import EmailError, record_attempt, send_email
+    from cobalt.notify.config import load_notify_config
+
+    try:
+        cfg = load_notify_config().email
+    except Exception as e:  # noqa: BLE001
+        reason = f"notify config unreadable ({type(e).__name__}: {e})"
+        logger.error("heartbeat: email channel DOWN — {}", reason)
+        return f"email channel DOWN: {reason}"
+
+    subject = f"{beat.headline} · {beat.at:%Y-%m-%d %H:%M %Z}"
+    try:
+        result = send_email(cfg.to, subject, beat.dm_body())
+    except EmailError as e:
+        # `EmailError`'s message is redacted BY CONTRACT, so it is safe to
+        # put straight into a Mattermost DM — which is exactly where it is
+        # about to go.
+        record_attempt(ok=False, caller="heartbeat", detail=str(e))
+        logger.error("heartbeat: email channel DOWN — {}", e)
+        return f"email channel DOWN: {e}"
+
+    record_attempt(
+        ok=result.sent, caller="heartbeat", detail=result.detail, message_id=result.ref
     )
+    if not result.sent:
+        # A disabled channel is deliberate, not an outage — but the DM
+        # still says so, because "no email arrived" must never be
+        # ambiguous between "off" and "broken".
+        logger.warning("heartbeat: {}", result.report())
+        return f"email channel OFF: {result.detail}"
+    logger.info("heartbeat: {}", result.report())
+    return result.report()
 
 
 # ---------------------------------------------------------------------
@@ -225,8 +253,14 @@ def run_beat(*, now: Optional[datetime] = None, dry_run: bool = False, probe: bo
     if dry_run:
         beat.notes.append("DRY RUN — no DM sent, nothing written.")
     elif not beat.green:
-        beat.notes.append(send_dm(beat))
+        # OUT-OF-BAND FIRST. The DM's body is rendered from `beat.notes`,
+        # so the email outcome has to be in the list before `send_dm`
+        # reads it — that is what puts "email channel DOWN: <reason>" in
+        # the red DM. The reverse order would report the email result
+        # only to the log, where a failed second channel would be
+        # discovered by whoever went looking, which is nobody.
         beat.notes.append(out_of_band(beat))
+        beat.notes.append(send_dm(beat))
     elif should_send_green(beat, store):
         beat.notes.append(send_dm(beat))
         sent_green = True

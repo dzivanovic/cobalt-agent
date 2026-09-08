@@ -1,8 +1,28 @@
 # `src/cobalt/notify/` — outbound channels
 
 ## What it does
-Today: a Mattermost DM. `send_dm(message)` opens a direct channel with
-`notify.mattermost.dm_username` and posts.
+Two channels, and they are deliberately independent:
+
+| | | |
+|---|---|---|
+| `send_dm(text)` | Mattermost | the primary |
+| `send_email(to, subject, body)` | Gmail / OAuth | the out-of-band one |
+
+`send_dm` opens a direct channel with `notify.mattermost.dm_username` and
+posts. `send_email` sends as the authenticated Google user on a
+`gmail.send`-only scope.
+
+## Why there are two
+Charter §3 F18 requires the second **because of** the first: the DM
+travels over Mattermost, which is one of the services the heartbeat
+watches, so it cannot carry the news that Mattermost is down. `email.md`
+states that channel's exact dependency chain — what a send needs, and the
+longer list of what it deliberately does not (Postgres, Mattermost, the
+Obsidian vault, the mainframe, the sheet).
+
+The `email` probe in `heartbeat/probes.py` watches the watcher: an alert
+channel that quietly lost its refresh token would take every red with it
+and leave the beat looking exactly as green as before.
 
 ## Every line goes through F19, inside the sender
 The redaction happens at the **last point before the socket**, not at
@@ -20,8 +40,20 @@ with the running agent.
 
 ## Config carries no credential
 `configs/cobalt/notify.yaml` names the vault **key**
-(`MATTERMOST_CREDS`, rotated 2026-08-23) and nothing else. `cobalt
-validate` checks the key resolves without printing what it resolves to.
+(`MATTERMOST_CREDS`, rotated 2026-08-23) and nothing else. The email
+channel does not even name its keys there — `GOOGLE_OAUTH_CLIENT_ID` /
+`_CLIENT_SECRET` / `_REFRESH_TOKEN` are constants in `config.py`, because
+a config file that named its own secret keys would invite someone to
+paste the values next to them one day. `cobalt validate` reports whether
+each resolves without printing what it resolves to.
+
+## Config carries no threshold either (F16)
+The email channel's two numbers — the consent flow's loopback port and
+the send timeout — are `tunables.yaml` rows
+(`notify.email.auth_port`, `notify.email.timeout_s`), each with a named
+consumer. Mattermost's own `timeout_s` predates that sweep and is left
+where it is: moving a live production field is a change with no proof
+attached to it.
 
 ## `enabled: false` is loud
 A disabled channel returns `SendResult(sent=False, ...)` and logs a

@@ -298,10 +298,65 @@ def redactions(minutes: int, now: Optional[datetime] = None) -> Probe:
     return Probe("redactions", True, f"{count} since the last beat ({kinds})")
 
 
+def email() -> Probe:
+    """The out-of-band alert channel is armed — token present + last send.
+
+    THE ONE PROBE THAT WATCHES THE ALERT PATH ITSELF. Every other probe
+    here answers "is a monitored thing up?"; this one answers "could we
+    still tell him if it were not?". An email channel that quietly lost
+    its refresh token would take every red with it and leave the beat
+    looking exactly as green as before — which is the failure this row
+    exists to make impossible.
+
+    It NEVER SENDS. A probe that mailed a test every 15 minutes would put
+    96 messages a day in the inbox and train its reader to filter the
+    channel, defeating the thing it was checking. Presence of the
+    credential is read from the vault (names only, no values, no
+    network); the last real send is read from `cobalt_email_sends`,
+    written by whoever actually sent one.
+
+    A FAILED LAST SEND IS RED, and stays red until a later send succeeds.
+    "It worked in July" is not an answer about an alert path.
+    """
+    from cobalt.notify.email import channel_status
+    from cobalt.notify.store import EmailSendStore
+
+    try:
+        armed, detail = channel_status()
+    except Exception as e:  # noqa: BLE001
+        return Probe("email", False, f"PROBE FAILED — channel state UNKNOWN: {e}", unknown=True)
+    if not armed:
+        return Probe("email", False, detail)
+
+    try:
+        last = EmailSendStore().last()
+    except Exception as e:  # noqa: BLE001
+        # The credential IS there; only the history is unreadable. That
+        # is ignorance about half the question, not a dead channel — and
+        # `unknown` is what says so.
+        return Probe("email", False, f"{detail}; last send UNKNOWN ({type(e).__name__})",
+                     unknown=True)
+
+    if last is None:
+        # Never sent is not "broken", but it is not proven either, and
+        # F18's whole claim is that this path works. `cobalt notify
+        # email-test` is one command.
+        return Probe("email", False,
+                     f"{detail}, but NO SEND HAS EVER BEEN MADE from this host — the "
+                     "out-of-band path is unproven. Run `cobalt notify email-test`.")
+    when = f"{last['ts']:%Y-%m-%d %H:%M} UTC"
+    if not last["ok"]:
+        return Probe("email", False,
+                     f"{detail}; LAST SEND FAILED at {when} ({last['caller']}) — "
+                     f"{last['detail']}")
+    return Probe("email", True, f"{detail}; last send OK {when} ({last['caller']})")
+
+
 __all__ = [
     "Probe",
     "archiver_freshness",
     "database",
+    "email",
     "mainframe",
     "obsidian",
     "probe_timeout_s",

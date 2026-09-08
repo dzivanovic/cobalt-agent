@@ -546,6 +546,44 @@ tunables:
     source: ruling
     consumers: ["cobalt.heartbeat.probes (sheet HTTP, launchctl, database)"]
 
+  # --- F18's second channel: email (S1-P4, 2026-09-08) ------------------
+  # Both rows are numbers the CODE COMPARES OR BINDS against, which is
+  # what makes them tunables rather than per-job data.
+
+  - key: notify.email.auth_port
+    value: 8765
+    unit: count
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    # FIXED, not ephemeral, and that is the whole reason it is a row.
+    # Google requires every redirect URI to be pre-registered on the
+    # OAuth client, so `run_local_server(port=0)` — the library default —
+    # picks a port that is not registered and the consent screen fails
+    # with redirect_uri_mismatch. The port must be knowable BEFORE the
+    # client is registered, by a human editing the Google console, which
+    # means it has to live somewhere a human reads. `unit: count` is the
+    # least-wrong member of TunableUnit: a port is a bare number with no
+    # dimension, and inventing a PORT unit for one row would change the
+    # taxonomy schema for no analytical gain.
+    consumers: ["cobalt.notify.email.run_consent_flow (loopback bind)",
+                "the Desktop OAuth client's registered redirect URI (human-entered)"]
+
+  - key: notify.email.timeout_s
+    value: 20
+    unit: duration
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    # Longer than heartbeat.probe_timeout_s (5 s) ON PURPOSE. A probe
+    # that hangs delays the beat; this is the ALERT ITSELF, and a red
+    # that gave up after 5 seconds on a slow uplink is a red nobody
+    # receives. Still well inside the 900 s beat interval, so a hung
+    # send can never overlap the next beat.
+    consumers: ["cobalt.notify.email.send_email (token refresh + Gmail send)"]
+
   - key: jobs.heartbeat_fraction
     value: 3
     unit: ratio

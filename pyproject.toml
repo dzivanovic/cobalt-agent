@@ -54,6 +54,7 @@ dependencies = [
     "opencv-python>=4.13.0.92",
     "mss>=10.1.0",
     "psycopg2-binary>=2.9.11",
+    "google-auth-oauthlib>=1.4.1",
 ]
 
 # --- NEW-CORE ENTRY POINTS (src/cobalt/*, strangler rebuild) ---

@@ -66,16 +66,42 @@ redact:
       because: "the 40-char secret half, which is shapeless without its key name"
       regex: '(?i)\baws[_-]?secret[_-]?access[_-]?key\b\W{0,4}(?P<secret>[A-Za-z0-9/+=]{40})'
 
+    # ---- The three Google OAuth shapes. WRITTEN AHEAD OF THE CHANNEL,
+    # LIVE SINCE S1-P4 (2026-09-08). Until that sprint no email send path
+    # existed and these rows guarded a credential this host did not hold;
+    # `cobalt notify email-auth` now mints exactly these three values and
+    # stores them in the vault as GOOGLE_OAUTH_CLIENT_ID /
+    # _CLIENT_SECRET / _REFRESH_TOKEN.
+    #
+    # SO EACH IS NOW GUARDED TWICE, ON PURPOSE. The patterns below catch
+    # the SHAPE — in a stack trace, a Google error body, a config someone
+    # pasted, text this host has never seen before. The literal guard
+    # (src/cobalt/redact/secrets.py) additionally catches THESE EXACT
+    # VALUES, because every vault entry over `literal_min_length` is
+    # enrolled automatically the moment it is stored — the same mechanism
+    # that enrolled MATTERMOST_DB_PASSWORD on 2026-09-05, and the reason
+    # `put_secret` clears the guard's cache on write rather than at the
+    # next restart. A literal hit reports as
+    # `literal:GOOGLE_OAUTH_REFRESH_TOKEN`, which names the credential to
+    # rotate; a pattern hit reports the shape. Belt and braces, and the
+    # braces are the half that survives Google changing a prefix.
     - name: google_oauth_access_token
       because: "Layer-B OAuth access token (ya29.) — the F18 email path's own credential"
       regex: '\bya29\.[A-Za-z0-9_\-]{20,}'
 
     - name: google_oauth_refresh_token
-      because: "the refresh half, which outlives every access token it mints"
+      because: >
+        The refresh half, which outlives every access token it mints and
+        is therefore the one worth stealing. This IS the shape `cobalt
+        notify email-auth` stores under GOOGLE_OAUTH_REFRESH_TOKEN.
       regex: '\b1//[A-Za-z0-9_\-]{20,}'
 
     - name: google_oauth_client_secret
-      because: "OAuth client secret (GOCSPX-)"
+      because: >
+        OAuth client secret (GOCSPX-). Read once out of the Desktop
+        client JSON, stored as GOOGLE_OAUTH_CLIENT_SECRET, and the source
+        file shredded — this row catches the window in between, and any
+        copy of that JSON that turns up in a paste.
       regex: '\bGOCSPX-[A-Za-z0-9_\-]{20,}'
 
     - name: google_api_key

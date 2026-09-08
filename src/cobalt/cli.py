@@ -16,6 +16,7 @@ Two command groups:
 
     cobalt jobs list/register/check/run
     cobalt heartbeat beat/show
+    cobalt notify email-auth/email-test/email-status
     cobalt backup run/status/restore
     cobalt stop / cobalt resume        (F17d kill phrase)
 
@@ -57,6 +58,7 @@ from cobalt.backup import cli as backup_cli  # noqa: E402
 from cobalt.heartbeat import cli as heartbeat_cli  # noqa: E402
 from cobalt.jobs import cli as jobs_cli  # noqa: E402
 from cobalt.jobs.wrapper import JobStopped  # noqa: E402
+from cobalt.notify import cli as notify_cli  # noqa: E402
 from cobalt.session import cli as session_cli  # noqa: E402
 from cobalt.taxonomy import validate as taxonomy_validate  # noqa: E402
 from cobalt.vaultwrite import VaultWriter, VaultWriteStore  # noqa: E402
@@ -244,6 +246,51 @@ def _cmd_validate(args: argparse.Namespace) -> None:
         f"{notify_cfg.mattermost.vault_key!r} (never printed)."
     )
 
+    # F16 sweep, S1-P4: the email channel's two numbers and its three
+    # vault keys. NAMES ONLY — `secret_names()` is the vault's whole
+    # public listing and it returns keys, never values.
+    from cobalt.notify.config import CLIENT_ID_KEY, CLIENT_SECRET_KEY, REFRESH_TOKEN_KEY
+    from cobalt.notify.email import AUTH_PORT_KEY, TIMEOUT_KEY, auth_port, timeout_s
+
+    email_cfg = notify_cfg.email
+    print(
+        f"        email {'enabled' if email_cfg.enabled else 'DISABLED'}, "
+        f"alerts -> {email_cfg.to}, subject prefix {email_cfg.subject_prefix!r}."
+    )
+    registry = load_tunables().by_key
+    for key in (AUTH_PORT_KEY, TIMEOUT_KEY):
+        row = registry.get(key)
+        if row is None:
+            print(
+                f"FAILED: tunable {key!r} is missing — the email channel has no "
+                "built-in defaults (F16)."
+            )
+            sys.exit(1)
+        print(f"        tunable {key} = {row.value} {row.unit.value}, "
+              f"consumers {row.consumers}")
+    # Building both IS the check: a row present but unparseable as a port
+    # or a timeout fails here rather than at 03:00 on a red beat.
+    auth_port(), timeout_s()
+
+    # The credential itself: present or absent, never printed. A host
+    # that has never run `email-auth` is a host whose out-of-band alert
+    # path does not work, and that is a config-gate fact, not a runtime
+    # surprise.
+    absent = [
+        k for k in (CLIENT_ID_KEY, CLIENT_SECRET_KEY, REFRESH_TOKEN_KEY)
+        if k not in set(guard.names) and not any(n.startswith(k) for n in guard.names)
+    ] if guard.available else None
+    if absent is None:
+        print("        OAuth credential: UNVERIFIABLE (vault locked on this process).")
+    elif absent:
+        print(
+            f"        OAuth credential: NOT STORED — vault is missing "
+            f"{', '.join(absent)}. `cobalt notify email-auth` (one time, interactive). "
+            "The F18 `email` probe reports this red."
+        )
+    else:
+        print("        OAuth credential: all three vault keys present (values never read here).")
+
     registry = load_job_registry()
     print(
         f"Jobs (F17): {len(registry.jobs)} registered — "
@@ -342,6 +389,7 @@ def main() -> None:
     jobs_cli.add_parser(sub)
     heartbeat_cli.add_parser(sub)
     backup_cli.add_parser(sub)
+    notify_cli.add_parser(sub)
     jobs_cli.add_stop_parsers(sub)
 
     validate = sub.add_parser(

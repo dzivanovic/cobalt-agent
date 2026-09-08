@@ -17,3 +17,32 @@ notify:
     # heartbeat says "DM channel disabled" in its own block rather than
     # appearing to have sent something. Never the silent state.
     enabled: true
+
+  # Charter §3 F18's SECOND channel: "red also out-of-band = email via
+  # Layer-B Google OAuth at MVP (alert path != monitored path)."
+  #
+  # THE POINT OF THIS CHANNEL is that it shares nothing with the things
+  # being watched. The DM above goes over Mattermost, which is itself a
+  # monitored service on a monitored Postgres — so a Mattermost outage
+  # would take the alert about the Mattermost outage with it. This path
+  # touches Google's servers and the vault file, and nothing else on
+  # this host. src/cobalt/notify/email.py's docstring carries the exact
+  # dependency chain.
+  #
+  # NO CREDENTIAL HERE, and no key name either: the OAuth triple lives
+  # in VaultManager under GOOGLE_OAUTH_CLIENT_ID / _CLIENT_SECRET /
+  # _REFRESH_TOKEN, named in src/cobalt/notify/config.py. `cobalt
+  # notify email-status` says whether they resolve, never what to.
+  #
+  # NO THRESHOLDS HERE either (F16): the loopback port the consent flow
+  # binds and the send timeout are tunables.yaml rows
+  # (notify.email.auth_port, notify.email.timeout_s).
+  email:
+    to: dejan.kenkyukai@gmail.com
+    # A mail rule can catch the channel on the subject alone, without
+    # parsing a body that changes shape every time a probe is added.
+    subject_prefix: "[COBALT]"
+    # `false` is a LOUD no-op, same as the DM channel — the heartbeat's
+    # own block says the second channel is off rather than implying a
+    # send happened. Never the silent state.
+    enabled: true

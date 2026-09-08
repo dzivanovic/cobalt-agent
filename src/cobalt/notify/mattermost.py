@@ -24,7 +24,6 @@ before they are raised, because a 401 body can echo the token back.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from typing import Optional
 from urllib import error as urlerror
 from urllib import request as urlrequest
@@ -34,26 +33,13 @@ from loguru import logger
 from cobalt.redact import redact
 
 from .config import MattermostConfig, load_notify_config
+from .result import SendResult
 
 CHANNEL = "mattermost"
 
 
 class MattermostError(RuntimeError):
     """A DM could not be sent. Message is ALREADY redacted."""
-
-
-@dataclass
-class SendResult:
-    sent: bool
-    detail: str
-    redactions: dict[str, int]
-
-    def report(self) -> str:
-        head = "DM sent" if self.sent else "DM NOT sent"
-        if self.redactions:
-            kinds = ", ".join(f"{k} x{v}" for k, v in sorted(self.redactions.items()))
-            return f"{head} — {self.detail} · F19 redacted: {kinds}"
-        return f"{head} — {self.detail}"
 
 
 def _creds(cfg: MattermostConfig) -> tuple[str, str]:
@@ -156,7 +142,10 @@ def send_dm(message: str, *, cfg: Optional[MattermostConfig] = None) -> SendResu
         {"channel_id": channel["id"], "message": safe.text},
         cfg.timeout_s,
     )
-    return SendResult(True, f"post {post.get('id', '?')} to @{cfg.dm_username}", safe.hits)
+    post_id = post.get("id", "?")
+    return SendResult(
+        True, f"post {post_id} to @{cfg.dm_username}", safe.hits, ref=post_id
+    )
 
 
 __all__ = ["CHANNEL", "MattermostError", "SendResult", "send_dm"]
