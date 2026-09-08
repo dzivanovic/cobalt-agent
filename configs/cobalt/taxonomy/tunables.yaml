@@ -37,26 +37,6 @@ tunables:
     source: ruling
     consumers: ["all stops"]
 
-  - key: back_through_open.stop.buffer
-    value: 0.02
-    unit: cents
-    scope: per_trade(back_through_open)
-    dynamic: false
-    status: solidified
-    source: ruling
-    sheet_value: 0.01
-    consumers: ["back_through_open stop"]
-
-  - key: bella_fade.stop.buffer
-    value: 0.02
-    unit: cents
-    scope: per_trade(bella_fade)
-    dynamic: false
-    status: solidified
-    source: ruling
-    sheet_value: 0.01
-    consumers: ["bella_fade stop"]
-
   # --- global structure primitives -------------------------------------
   - key: range.micro.touches_per_side
     value: 2
@@ -186,157 +166,14 @@ tunables:
     consumers: ["vwap_continuation"]
 
   # --- per_trade: range.duration_band [5,20] / >=45 / [3,7] --------------
-  - key: hitchhiker.range_duration_band
-    value: [5, 20]
-    unit: min
-    scope: per_trade(hitchhiker)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["hitchhiker"]
-
-  # sheet/ruling gives a floor only ("≥45"), not a closed band — value is
-  # the floor; no upper bound recorded.
-  - key: big_dog.range_duration_band
-    value: 45
-    unit: min
-    scope: per_trade(big_dog)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["big_dog"]
-
-  - key: gap_give_and_go.range_duration_band
-    value: [3, 7]
-    unit: min
-    scope: per_trade(gap_give_and_go)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["gap_give_and_go"]
 
   # --- per_trade: time_stop.bars (backside / bto / bouncy_ball) ----------
-  - key: backside.time_stop_bars
-    value: 2
-    unit: bars
-    scope: per_trade(backside)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["backside"]
-
-  - key: back_through_open.time_stop_bars
-    value: 2
-    unit: bars
-    scope: per_trade(back_through_open)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["back_through_open"]
-
-  - key: bouncy_ball.time_stop_bars
-    value: 2
-    unit: bars
-    scope: per_trade(bouncy_ball)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["bouncy_ball"]
 
   # --- per_trade: bar_break_reverse.bars (ggg / big_dog) ------------------
-  - key: gap_give_and_go.bar_break_reverse_bars
-    value: 2
-    unit: bars
-    scope: per_trade(gap_give_and_go)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["gap_give_and_go"]
-
-  - key: big_dog.bar_break_reverse_bars
-    value: 2
-    unit: bars
-    scope: per_trade(big_dog)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["big_dog"]
 
   # --- per_trade: single-trade rows ---------------------------------------
-  - key: rubberband.bars_cleared
-    value: 2
-    unit: bars
-    scope: per_trade(rubberband)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["rubberband"]
-
-  - key: bella_fade.near_low_duration_max
-    value: null
-    unit: min
-    scope: per_trade(bella_fade)
-    dynamic: true
-    status: proposed
-    source: dwv
-    consumers: ["bella_fade"]
 
   # --- per_trade: trail_conditions (the 6 trail-carrying trade_defs) -----
-  # Capability SET only (the sheet's trail options); per-instance
-  # selection (mode: select) is card data, not a tunable — §13.1 note.
-  - key: second_chance.trail_conditions
-    value: ["ma_close ma.fast", "ma_close ma.slow", "prior_bar_break 1"]
-    unit: label
-    scope: per_trade(second_chance)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["second_chance"]
-
-  - key: rubberband.trail_conditions
-    value: ["ma_close ma.fast"]
-    unit: label
-    scope: per_trade(rubberband)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["rubberband"]
-
-  - key: vwap_continuation.trail_conditions
-    value: ["ma_close ma.slow"]
-    unit: label
-    scope: per_trade(vwap_continuation)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["vwap_continuation"]
-
-  - key: ema9_scalp.trail_conditions
-    value: ["level high_of_day", "ma_close EMA9"]
-    unit: label
-    scope: per_trade(ema9_scalp)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["ema9_scalp"]
-
-  - key: back_through_open.trail_conditions
-    value: ["prior_bar_break 1", "ma_close EMA9"]
-    unit: label
-    scope: per_trade(back_through_open)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["back_through_open"]
-
-  - key: bouncy_ball.trail_conditions
-    value: ["prior_bar_break 1", "ma_close EMA9"]
-    unit: label
-    scope: per_trade(bouncy_ball)
-    dynamic: true
-    status: replay_pending
-    source: sheet
-    consumers: ["bouncy_ball"]
 
   # --- F1 session clock (Sprint 1, 2026-09-04) --------------------------
   # Charter §3 F1 / SPRINT-LADDER §S1. Every session boundary is a row

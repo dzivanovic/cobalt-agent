@@ -142,3 +142,50 @@ def test_the_setup_matrix_is_named_for_what_it_is():
     store = (REPO_ROOT / "src" / "cobalt" / "taxonomy" / "store.py").read_text()
     assert "CREATE OR REPLACE VIEW setup_trade_matrix" in migration
     assert "setup_trade_matrix" in store
+
+
+# ---------------------------------------------------------------------
+# tunables.yaml is the ENGINE's file (ADR-0008 D3 b.3)
+# ---------------------------------------------------------------------
+
+
+def test_tunables_yaml_holds_no_per_trade_row():
+    """Every trader's per-trade row lives in that trade's own note.
+
+    `configs/cobalt/taxonomy/tunables.yaml` ships identically to every
+    Cobalt install, so a row scoped to one trader's trade in it is the
+    same leak as a committed trade_def — and it is the row the union in
+    `merge_tunables` would then refuse as a collision.
+    """
+    import yaml
+
+    from cobalt.taxonomy.loader import TUNABLES_PATH
+
+    rows = yaml.safe_load(TUNABLES_PATH.read_text())["tunables"]
+    per_trade = [r["key"] for r in rows if r["scope"].startswith("per_trade(")]
+    assert not per_trade, (
+        "ADR-0008 D3 b.3: these per-trade rows belong in their trade's note, "
+        f"not in the engine's config: {per_trade}"
+    )
+
+
+def test_no_engine_tunable_key_is_named_after_a_trade():
+    """The structural half of the same rule.
+
+    An engine key names an ENGINE concept — a session boundary, a
+    heartbeat interval, an anatomy threshold. It never begins with a
+    trade's name, and the way to check that without listing anybody's
+    trades is to require every remaining row to be `global` or
+    `per_indicator(...)`: a trade-named key has nowhere else to be scoped.
+    """
+    import yaml
+
+    from cobalt.taxonomy.loader import TUNABLES_PATH
+
+    rows = yaml.safe_load(TUNABLES_PATH.read_text())["tunables"]
+    bad = [
+        (r["key"], r["scope"])
+        for r in rows
+        if r["scope"] != "global" and not r["scope"].startswith("per_indicator(")
+    ]
+    assert not bad, f"engine rows must be global or per_indicator: {bad}"
