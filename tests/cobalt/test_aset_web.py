@@ -291,7 +291,28 @@ class TestDevEntryFence:
         assert "DEV instance" not in r.text
         assert "never reach AsetStore" in r.text
 
+    @staticmethod
+    def _settings_stay_on_dev(monkeypatch):
+        """ADR-0008 D3.4 consequence, made explicit.
+
+        The sheet's grade ladder and rung now come from
+        `"user".trader_settings`, so a process that declares itself
+        PRODUCTION resolves them out of `cobalt_brain` — which is exactly
+        right in production and exactly wrong in a test that flips the
+        flag only to check a header label. These two tests pin the
+        settings read to `cobalt_dev` so they keep testing the fence and
+        the label, and nothing else.
+        """
+        from cobalt.settings import TraderSettings, TraderSettingsStore
+        from cobalt.settings import models as settings_models
+
+        dev = TraderSettings.from_db(TraderSettingsStore("cobalt_dev"))
+        monkeypatch.setattr(
+            settings_models.TraderSettings, "from_db", classmethod(lambda cls, store=None: dev)
+        )
+
     def test_size_allowed_when_production(self, monkeypatch):
+        self._settings_stay_on_dev(monkeypatch)
         monkeypatch.setenv("COBALT_ENV", "production")
         monkeypatch.delenv("COBALT_ALLOW_DEV_ENTRY", raising=False)
         r = client.post("/size", data=BASE_SIZE_FORM)
@@ -305,6 +326,7 @@ class TestDevEntryFence:
         assert "DEV INSTANCE" in text
 
     def test_header_shows_production_label_and_no_banner_when_production(self, monkeypatch):
+        self._settings_stay_on_dev(monkeypatch)
         monkeypatch.setenv("COBALT_ENV", "production")
         text = web_module._render()
         assert "pre-beta slice 1 · PRODUCTION" in text

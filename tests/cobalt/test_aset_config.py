@@ -192,26 +192,29 @@ class TestSheetModesConfig:
         assert not cfg.is_enabled("C")
         assert not cfg.is_enabled("D")
 
-    def test_missing_file_crashes(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(aset_config, "SHEET_MODES_CONFIG_PATH", tmp_path / "absent.yaml")
-        with pytest.raises(ConfigError):
-            load_sheet_modes_config()
+    # ADR-0008 D3.4: the sheets and the grade ladder are ROWS now
+    # (`"user".trader_settings`), not a file, so "the file is missing" and
+    # "the file is malformed" moved to tests/cobalt/test_trader_settings.py
+    # (empty table, missing key, invalid rows). What stays here is the
+    # SHAPE the rows have to satisfy, which is this model and is unchanged.
 
-    def test_missing_grade_crashes(self, monkeypatch, tmp_path):
-        bad = tmp_path / "aset.yaml"
-        bad.write_text(
+    def test_a_missing_grade_is_refused(self):
+        import yaml as _yaml
+
+        raw = _yaml.safe_load(
             COMPLETE_SHEET_MODES.replace("    D: 0\n  half:", "  half:", 1)
-        )
-        monkeypatch.setattr(aset_config, "SHEET_MODES_CONFIG_PATH", bad)
-        with pytest.raises(ConfigError):
-            load_sheet_modes_config()
+        )["sheet_modes"]
+        with pytest.raises(Exception):
+            SheetModesConfig(**raw)
 
-    def test_missing_enabled_grades_crashes(self, monkeypatch, tmp_path):
-        bad = tmp_path / "aset.yaml"
-        bad.write_text(COMPLETE_SHEET_MODES.replace("  enabled_grades: [A, B]\n", ""))
-        monkeypatch.setattr(aset_config, "SHEET_MODES_CONFIG_PATH", bad)
-        with pytest.raises(ConfigError):
-            load_sheet_modes_config()
+    def test_missing_enabled_grades_is_refused(self):
+        import yaml as _yaml
+
+        raw = _yaml.safe_load(
+            COMPLETE_SHEET_MODES.replace("  enabled_grades: [A, B]\n", "")
+        )["sheet_modes"]
+        with pytest.raises(Exception):
+            SheetModesConfig(**raw)
 
     def test_non_positive_dollars_rejected(self):
         with pytest.raises(Exception):

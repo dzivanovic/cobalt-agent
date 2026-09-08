@@ -37,15 +37,15 @@ against `sheet_for(mode)` — the sheet the rung in force sizes from.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
-import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from cobalt.aset.config import ConfigError, load_sheet_modes_config
+from cobalt.aset.config import ConfigError
 from cobalt.aset.models import Grade
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+#: SEEDING ONLY (ADR-0008 D3.4) — see `aset/config.py`'s note. The
+#: runtime reads `"user".trader_settings`.
 CONFIG_PATH = REPO_ROOT / "configs" / "cobalt" / "daymode.yaml"
 
 #: The role name for the bottom rung. It is a ROLE, not a sheet: which
@@ -279,8 +279,9 @@ class DayModeConfig(BaseModel):
             raise ValueError(
                 f"daymode.reduced_enabled_grades would WIDEN the account ladder with "
                 f"{[g.value for g in widened]}. The reduced rung narrows what "
-                f"configs/cobalt/aset.yaml permits ({[g.value for g in self.account_enabled_grades]}); "
-                "it can never permit a key the account itself does not."
+                f"`aset.enabled_grades` permits "
+                f"({[g.value for g in self.account_enabled_grades]}); it can never "
+                "permit a key the account itself does not."
             )
         names = self.hotkey_file_names
         dupe_files = sorted({f for f in names if names.count(f) > 1})
@@ -293,24 +294,23 @@ class DayModeConfig(BaseModel):
 
 
 def load_daymode_config(sheet_modes=None) -> DayModeConfig:
-    """Load F6 config, resolving the sheet ladder from aset.yaml."""
-    if not CONFIG_PATH.exists():
-        raise ConfigError(
-            f"day-mode config not found: {CONFIG_PATH}. "
-            "Create it (see configs/cobalt/daymode.yaml)."
-        )
-    raw = yaml.safe_load(CONFIG_PATH.read_text())
-    if not isinstance(raw, dict) or "daymode" not in raw:
-        raise ConfigError(f"{CONFIG_PATH}: expected a 'daymode' mapping")
-    sheets = sheet_modes or load_sheet_modes_config()
+    """The F6 ladder — FROM THE DATABASE (ADR-0008 D3.4).
+
+    Which rung a trader is on, which grades it permits, what makes today
+    a smaller day: one person's rulings, so rows in
+    `"user".trader_settings` rather than a committed file. Same name,
+    same call sites, same object — a different source.
+
+    `sheet_modes` is still accepted so a caller that already resolved the
+    sheets does not pay for a second read; it is ignored otherwise,
+    because both halves come from the same seven rows.
+    """
+    from cobalt.settings import TraderSettings, TraderSettingsError
+
     try:
-        return DayModeConfig(
-            **raw["daymode"],
-            sheet_order=list(sheets.order),
-            account_enabled_grades=list(sheets.enabled_grades),
-        )
-    except ValidationError as e:
-        raise ConfigError(f"{CONFIG_PATH}: invalid day-mode config:\n{e}") from e
+        return TraderSettings.from_db().daymode
+    except TraderSettingsError as e:
+        raise ConfigError(str(e)) from e
 
 
 __all__ = [

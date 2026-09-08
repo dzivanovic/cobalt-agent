@@ -40,6 +40,10 @@ if TYPE_CHECKING:  # quoted annotation only — dollars_for takes an id or an en
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "configs" / "dev" / "aset.yaml"
 LOCAL_CONFIG_PATH = REPO_ROOT / "configs" / "dev" / "aset.local.yaml"
+#: SEEDING ONLY (ADR-0008 D3.4). The runtime reads
+#: `"user".trader_settings`; this path is where `cobalt settings load
+#: --from configs/cobalt` looks, and after the file leaves the tree the
+#: seed comes from `--from-git <commit>` instead.
 SHEET_MODES_CONFIG_PATH = REPO_ROOT / "configs" / "cobalt" / "aset.yaml"
 
 
@@ -226,8 +230,9 @@ class SheetModesConfig(BaseModel):
         grades = self.sheets.get(str(sheet_id))
         if grades is None:
             raise ConfigError(
-                f"no sheet {str(sheet_id)!r} in configs/cobalt/aset.yaml. "
-                f"Declared sheets (low to high): {', '.join(self.order)}."
+                f"no sheet {str(sheet_id)!r} in `aset.sheet_modes` "
+                f'("user".trader_settings). Declared sheets (low to high): '
+                f"{', '.join(self.order)}."
             )
         return getattr(grades, _FIELD_BY_GRADE[Grade(grade)])
 
@@ -244,16 +249,21 @@ class SheetModesConfig(BaseModel):
 
 
 def load_sheet_modes_config() -> SheetModesConfig:
-    path = SHEET_MODES_CONFIG_PATH
-    if not path.exists():
-        raise ConfigError(
-            f"sheet-modes config not found: {path}. "
-            "Create it (see configs/cobalt/aset.yaml)."
-        )
-    raw = yaml.safe_load(path.read_text())
-    if not isinstance(raw, dict) or "sheet_modes" not in raw:
-        raise ConfigError(f"{path}: expected a 'sheet_modes' mapping")
+    """The sheets and the account grade ladder — FROM THE DATABASE.
+
+    ADR-0008 D3.4: these are the trader's own numbers, so they are rows in
+    `"user".trader_settings`, not a committed file. The function keeps its
+    name and its twenty-odd call sites; what changed is where it reads.
+    `configs/cobalt/aset.yaml` is gone from the runtime — it survives only
+    as a seed that `cobalt settings load` can be pointed at, in a
+    directory or at a git revision.
+
+    The local import is the import cycle's price: `cobalt.settings` builds
+    `SheetModesConfig`, which lives here.
+    """
+    from cobalt.settings import TraderSettings, TraderSettingsError
+
     try:
-        return SheetModesConfig(**raw["sheet_modes"])
-    except ValidationError as e:
-        raise ConfigError(f"{path}: invalid sheet-modes config:\n{e}") from e
+        return TraderSettings.from_db().sheet_modes
+    except TraderSettingsError as e:
+        raise ConfigError(str(e)) from e
