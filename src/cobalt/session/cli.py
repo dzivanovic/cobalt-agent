@@ -90,7 +90,9 @@ def cmd_backfill(args: argparse.Namespace) -> None:
             "deliberately by a human, and it names the database it wrote",
     )
 
-    conn = db.connect(db_name, allow_prod=True)
+    # ADR-0008: both BACKFILL_TARGETS (`aset_sizings`, `vault_writes`)
+    # are user-side, so one USER connection covers the whole backfill.
+    conn = db.connect(db_name, side=db.Side.USER, allow_prod=True)
     conn.autocommit = False
     try:
         with conn.cursor() as cur:

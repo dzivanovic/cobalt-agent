@@ -82,7 +82,10 @@ def database(db_name: Optional[str] = None) -> Probe:
 
     name = db_name or env.resolve_db_name()
     try:
-        with db.connect(name) as conn:
+        # ADR-0008: the probe names no table, but a connection still has
+        # to declare a side. SYSTEM — the heartbeat is system-side, and a
+        # liveness probe must never be the thing that opens user data.
+        with db.connect(name, side=db.Side.SYSTEM) as conn:
             row = conn.execute("SELECT 1").fetchone()
         if row and row[0] == 1:
             return Probe("database", True, f"{name} reachable")

@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from cobalt import db, env
+from cobalt.db import Side
 from cobalt.session import clock as session_clock_mod
 from cobalt.session import session_clock
 from .models import FillRecompute, SizingResult
@@ -30,6 +31,11 @@ MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
 class AsetStore:
+    #: ADR-0008 D2 — the side is chosen PER STORE, never per process.
+    #: A card is a written plan of HIS — ticker, grade, sheet dollars,
+    #: entry and stop. Every column is one trader's own decision (L32).
+    SIDE = Side.USER
+
     def __init__(self, db_name: Optional[str] = None):
         """`db_name` is a TEST/TOOLING seam only. Production and dev both
         leave it None and take the database from `COBALT_ENV` via
@@ -39,7 +45,7 @@ class AsetStore:
         self.db_name = db_name or env.resolve_db_name()
 
     def _connect(self):
-        return db.connect(self.db_name)
+        return db.connect(self.db_name, side=self.SIDE)
 
     def ensure_schema(self) -> None:
         """Every table `save()` writes to — which since S1-P2 includes
@@ -56,6 +62,7 @@ class AsetStore:
         from cobalt.cards.store import MIGRATIONS_DIR as CARD_MIGRATIONS
 
         with self._connect() as conn:
+            db.assert_schemas_exist(conn)
             for directory in (MIGRATIONS_DIR, CARD_MIGRATIONS):
                 for migration in sorted(directory.glob("*.sql")):
                     lines = migration.read_text().splitlines()

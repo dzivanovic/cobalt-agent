@@ -34,7 +34,10 @@ from dotenv import load_dotenv
 # visibly, exactly as cobalt/cli.py does.
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
+from psycopg import sql  # noqa: E402
+
 from cobalt import db, env  # noqa: E402
+from cobalt.db_migrations.placement import side_of  # noqa: E402
 
 # The ONLY tables this helper may empty. Everything else — the memory
 # layer's five pillars, and (until 2026-09-04) Mattermost's tables —
@@ -69,6 +72,23 @@ def _check_tables(tables: list[str]) -> None:
         raise DestructiveRefused("REFUSED: no tables named.")
 
 
+def _by_side(tables: list[str]) -> dict[db.Side, list[str]]:
+    """Group the named tables by their ruled side (ADR-0008 D2).
+
+    The allowlist straddles the split — `aset_sizings`, `vault_writes` and
+    `vault_overrides` are user data, `bars` is engine data — and there is
+    no role that can reach both. So this helper exists and both functions
+    below hold ONE CONNECTION PER SIDE, exactly like a launchd job that
+    touches both. Every statement then names its table schema-qualified,
+    which for a destructive helper is worth the extra characters: a
+    TRUNCATE should never depend on a search_path being what you assumed.
+    """
+    grouped: dict[db.Side, list[str]] = {}
+    for table in tables:
+        grouped.setdefault(side_of(table), []).append(table)
+    return grouped
+
+
 def counts(tables: list[str], *, db_name: str = env.DEV_DB_NAME) -> dict[str, int]:
     """Row counts for `tables`. Read-only, but guarded identically so a
     typo in the database name can never even be *inspected* against
@@ -76,11 +96,16 @@ def counts(tables: list[str], *, db_name: str = env.DEV_DB_NAME) -> dict[str, in
     env.assert_destructive_target(db_name)
     _check_tables(tables)
     out: dict[str, int] = {}
-    with db.connect(db_name) as conn:
-        for table in tables:
-            row = conn.execute(f"SELECT count(*) FROM {table}").fetchone()
-            out[table] = int(row[0]) if row else 0
-    return out
+    for side, names in _by_side(tables).items():
+        with db.connect(db_name, side=side) as conn:
+            for table in names:
+                row = conn.execute(
+                    sql.SQL("SELECT count(*) FROM {}").format(
+                        sql.Identifier(side.schema, table)
+                    )
+                ).fetchone()
+                out[table] = int(row[0]) if row else 0
+    return {t: out[t] for t in tables}
 
 
 def truncate(
@@ -103,11 +128,18 @@ def truncate(
         )
 
     before = counts(tables, db_name=db_name)
-    with db.connect(db_name) as conn:
-        # RESTART IDENTITY resets the sequences too: after the migration
-        # the ids of record live in cobalt_brain, and a dev row that
-        # reuses one of them would be actively confusing in forensics.
-        conn.execute(f"TRUNCATE TABLE {', '.join(tables)} RESTART IDENTITY")
+    for side, names in _by_side(tables).items():
+        with db.connect(db_name, side=side) as conn:
+            # RESTART IDENTITY resets the sequences too: after the migration
+            # the ids of record live in cobalt_brain, and a dev row that
+            # reuses one of them would be actively confusing in forensics.
+            conn.execute(
+                sql.SQL("TRUNCATE TABLE {} RESTART IDENTITY").format(
+                    sql.SQL(", ").join(
+                        sql.Identifier(side.schema, t) for t in names
+                    )
+                )
+            )
     after = counts(tables, db_name=db_name)
     return {t: (before[t], after[t]) for t in tables}
 

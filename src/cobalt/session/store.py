@@ -19,6 +19,7 @@ from typing import Any, Optional
 from loguru import logger
 
 from cobalt import db, env
+from cobalt.db import Side
 from cobalt.session import clock as session_clock_mod
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
@@ -29,14 +30,20 @@ HEARTBEAT_WINDOW_KEY = "session.blocks.heartbeat_window"
 
 
 class SessionBlockStore:
+    #: ADR-0008 D2 — the side is chosen PER STORE, never per process.
+    #: Every refusal the market_reset hard block made. The block is a
+    #: system rule and its audit trail is system data.
+    SIDE = Side.SYSTEM
+
     def __init__(self, db_name: Optional[str] = None):
         self.db_name = db_name or env.resolve_db_name()
 
     def _connect(self):
-        return db.connect(self.db_name)
+        return db.connect(self.db_name, side=self.SIDE)
 
     def ensure_schema(self) -> None:
         with self._connect() as conn:
+            db.assert_schemas_exist(conn)
             for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
                 lines = migration.read_text().splitlines()
                 sql = "\n".join(line for line in lines if not line.strip().startswith("--"))

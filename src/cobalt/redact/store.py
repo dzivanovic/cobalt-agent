@@ -22,20 +22,27 @@ from pathlib import Path
 from typing import Any, Optional
 
 from cobalt import db, env
+from cobalt.db import Side
 from cobalt.session import clock as clock_mod
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
 class RedactionStore:
+    #: ADR-0008 D2 — the side is chosen PER STORE, never per process.
+    #: Counts by pattern NAME. The schema deliberately has nowhere to put
+    #: a secret or a value, so there is nothing user-side about it.
+    SIDE = Side.SYSTEM
+
     def __init__(self, db_name: Optional[str] = None):
         self.db_name = db_name or env.resolve_db_name()
 
     def _connect(self):
-        return db.connect(self.db_name)
+        return db.connect(self.db_name, side=self.SIDE)
 
     def ensure_schema(self) -> None:
         with self._connect() as conn:
+            db.assert_schemas_exist(conn)
             for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
                 lines = migration.read_text().splitlines()
                 sql = "\n".join(l for l in lines if not l.strip().startswith("--"))

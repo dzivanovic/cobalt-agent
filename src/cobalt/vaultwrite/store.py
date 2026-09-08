@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Iterator, Optional
 
 from cobalt import db, env
+from cobalt.db import Side
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 RETENTION_DAYS = 30
@@ -39,6 +40,11 @@ def sha256_text(text: Optional[str]) -> Optional[str]:
 
 
 class VaultWriteStore:
+    #: ADR-0008 D2 — the side is chosen PER STORE, never per process.
+    #: The L28 audit trail holds NOTE TEXT — before and after, plus every
+    #: place a human's words beat Cobalt's. That is user data outright.
+    SIDE = Side.USER
+
     def __init__(self, db_name: Optional[str] = None):
         """`db_name` is a TEST/TOOLING seam only. Production and dev both
         leave it None and take the database from `COBALT_ENV` via
@@ -48,10 +54,11 @@ class VaultWriteStore:
         self.db_name = db_name or env.resolve_db_name()
 
     def _connect(self):
-        return db.connect(self.db_name)
+        return db.connect(self.db_name, side=self.SIDE)
 
     def ensure_schema(self) -> None:
         with self._connect() as conn:
+            db.assert_schemas_exist(conn)
             for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
                 lines = migration.read_text().splitlines()
                 sql = "\n".join(line for line in lines if not line.strip().startswith("--"))

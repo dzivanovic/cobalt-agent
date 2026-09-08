@@ -62,7 +62,9 @@ class PriorDayInputs:
 def _filled_and_stop(prior_day: date) -> tuple[int, bool]:
     """FILLED cards on `prior_day`, and whether any carries a stop marker."""
     try:
-        with db.connect(env.resolve_db_name()) as conn:
+        # ADR-0008: this reads `aset_sizings`, so it is a USER-side
+        # connection — the same side DayModeStore and AsetStore use.
+        with db.connect(env.resolve_db_name(), side=db.Side.USER) as conn:
             row = conn.execute(
                 "SELECT count(*) FILTER (WHERE state = 'FILLED'), "
                 "       coalesce(string_agg(array_to_string(warnings, ' '), ' '), '') "

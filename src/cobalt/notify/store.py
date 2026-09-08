@@ -21,19 +21,27 @@ from typing import Any, Optional
 from loguru import logger
 
 from cobalt import db, env
+from cobalt.db import Side
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
 class EmailSendStore:
+    #: ADR-0008 D2 — the side is chosen PER STORE, never per process.
+    #: A channel log (ts, ok, caller, message_id, detail) and nothing
+    #: personal — revised to system 09-08 under ADR-0008 ruling g, same
+    #: class as `cobalt_redactions`.
+    SIDE = Side.SYSTEM
+
     def __init__(self, db_name: Optional[str] = None):
         self.db_name = db_name or env.resolve_db_name()
 
     def _connect(self):
-        return db.connect(self.db_name)
+        return db.connect(self.db_name, side=self.SIDE)
 
     def ensure_schema(self) -> None:
         with self._connect() as conn:
+            db.assert_schemas_exist(conn)
             for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
                 lines = migration.read_text().splitlines()
                 sql = "\n".join(l for l in lines if not l.strip().startswith("--"))

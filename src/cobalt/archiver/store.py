@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from cobalt import db, env
+from cobalt.db import Side
 
 from .models import Bar
 
@@ -24,6 +25,11 @@ MIGRATION_SQL = Path(__file__).parent / "migrations" / "0001_bars.sql"
 
 
 class BarStore:
+    #: ADR-0008 D2 — the side is chosen PER STORE, never per process.
+    #: `bars` is engine data: market history any trader's strategies read.
+    #: Nothing here is one trader's choice, so nothing here is user data.
+    SIDE = Side.SYSTEM
+
     def __init__(self, db_name: Optional[str] = None):
         """`db_name` is a TEST/TOOLING seam only. Production and dev both
         leave it None and take the database from `COBALT_ENV` via
@@ -33,10 +39,11 @@ class BarStore:
         self.db_name = db_name or env.resolve_db_name()
 
     def _connect(self):
-        return db.connect(self.db_name)
+        return db.connect(self.db_name, side=self.SIDE)
 
     def ensure_schema(self) -> None:
         with self._connect() as conn:
+            db.assert_schemas_exist(conn)
             conn.execute(MIGRATION_SQL.read_text())
 
     def upsert_bars(self, bars: list[Bar]) -> int:

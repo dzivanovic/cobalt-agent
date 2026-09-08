@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from cobalt import db, env
+from cobalt.db import Side
 from cobalt.aset.store import MIGRATIONS_DIR as ASET_MIGRATIONS
 from cobalt.session import assert_writable, session_clock
 from cobalt.session import clock as clock_mod
@@ -85,11 +86,16 @@ def _exec_file(conn, path: Path) -> None:
 
 
 class CardStore:
+    #: ADR-0008 D2 — the side is chosen PER STORE, never per process.
+    #: The card ledger is the card's own history, so it sits where the
+    #: card sits. `card_stop_edits` likewise.
+    SIDE = Side.USER
+
     def __init__(self, db_name: Optional[str] = None):
         self.db_name = db_name or env.resolve_db_name()
 
     def _connect(self, *, allow_prod: bool = False):
-        return db.connect(self.db_name, allow_prod=allow_prod)
+        return db.connect(self.db_name, side=self.SIDE, allow_prod=allow_prod)
 
     # -- schema -------------------------------------------------------
 
@@ -121,6 +127,7 @@ class CardStore:
         shape. Same two-step `cobalt session backfill` uses.
         """
         with self._connect(allow_prod=allow_prod) as conn:
+            db.assert_schemas_exist(conn)
             for directory in (ASET_MIGRATIONS, MIGRATIONS_DIR):
                 for migration in sorted(directory.glob("*.sql")):
                     if not include_not_null and migration.name.endswith(
