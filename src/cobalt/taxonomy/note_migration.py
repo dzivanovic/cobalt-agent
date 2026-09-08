@@ -80,6 +80,15 @@ PRE_DELETION_REV = "96c9159^"
 GRID_PATH = "configs/cobalt/taxonomy/cameron_grid.yaml"
 VARIABLES_PATH = "configs/cobalt/taxonomy/variables/{yaml_id}.yaml"
 
+#: The revision `tunables.yaml` still carried the trader's per-trade rows.
+#: They are user data and they left this repo the moment they landed in
+#: their notes — so, exactly like the matrix above, the one-off recovers
+#: them from history rather than from a working tree that no longer has
+#: them. Without this, a fresh run against a vault whose notes have no
+#: `tunables:` units yet (LIVE-2's prod vault) would silently write none.
+PRE_LIFT_REV = "9e862fe^"
+TUNABLES_REPO_PATH = "configs/cobalt/taxonomy/tunables.yaml"
+
 #: The frontmatter region's section label. Distinct from the trade note's
 #: (`trade-frontmatter`) so the two note types never share a baseline row.
 FRONTMATTER_SECTION = "strategy-frontmatter"
@@ -144,6 +153,44 @@ def load_matrix(rev: str = PRE_DELETION_REV) -> dict[str, list[dict[str, str]]]:
     """`{trade id: [{setup_ref, relation}, ...]}` — ruling b.1's source."""
     raw = yaml.safe_load(_git_show(GRID_PATH, rev))
     return raw["valid_setups"]
+
+
+def parse_key_aliases(pairs: Optional[list[str]], *, flag: str) -> dict[str, str]:
+    """`--<flag> <old_key>=<slug>` -> `{old_key: slug}`. Same shape, both uses."""
+    out: dict[str, str] = {}
+    for pair in pairs or []:
+        if "=" not in pair:
+            raise NoteMigrationError(f"--{flag} expects <old_key>=<slug>, got {pair!r}")
+        key, slug = (part.strip() for part in pair.split("=", 1))
+        if not key or not slug:
+            raise NoteMigrationError(f"--{flag} has an empty half: {pair!r}")
+        if key in out:
+            raise NoteMigrationError(f"--{flag} names {key!r} twice")
+        out[key] = slug
+    return out
+
+
+def parse_matrix_aliases(pairs: Optional[list[str]]) -> dict[str, str]:
+    """`--matrix-alias <matrix_key>=<slug>` -> `{slug: matrix_key}`.
+
+    THE PAIRING IS AN ARGUMENT, NOT A TABLE IN THIS REPO. Three of the
+    matrix's keys are spelled nothing like the slug of the note they
+    belong to, and no rule derives one from the other — it is a human
+    ruling. Putting that ruling in the source would put three of a
+    trader's trade names in a committed file (L31/L32); passing it on the
+    command line records it in the run's report instead, which is where a
+    ruling belongs.
+    """
+    by_key = parse_key_aliases(pairs, flag="matrix-alias")
+    out: dict[str, str] = {}
+    for key, slug in by_key.items():
+        if slug in out:
+            raise NoteMigrationError(
+                f"--matrix-alias names {slug!r} twice ({out[slug]!r} and {key!r}) — "
+                "a note takes at most one matrix row."
+            )
+        out[slug] = key
+    return out
 
 
 def load_registry(yaml_id: str, rev: str = PRE_DELETION_REV) -> dict[str, dict[str, Any]]:
@@ -464,7 +511,15 @@ def lift_per_trade_rows(
     `slug_by_key` maps a scope's trade key to the slug whose note the rows
     belong to; a key with no note is a loud failure, not a silent skip.
     """
-    source = TUNABLES_PATH.read_text(encoding="utf-8") if text is None else text
+    working = TUNABLES_PATH.read_text(encoding="utf-8") if text is None else text
+    source = working
+    from_history = False
+    if text is None and "scope: per_trade(" not in working:
+        # Already lifted here. The rows are the trader's and they live in
+        # their notes now; recover them from history so a run against a
+        # vault that has not had them yet still writes the units.
+        source = _git_show(TUNABLES_REPO_PATH, PRE_LIFT_REV)
+        from_history = True
     lines = source.split("\n")
 
     starts = [i for i, line in enumerate(lines) if re.match(r"^  - key:\s", line)]
@@ -506,13 +561,28 @@ def lift_per_trade_rows(
             )
         want = trade_key(slug)
         if want != key:
+            # WHOLE-WORD across the whole block, not just the `key:` and
+            # `scope:` lines: the row's `consumers:` names the trade by the
+            # same token, and a row whose key says one trade and whose
+            # consumer list says another is a row nobody can grep.
             block_lines = [
-                re.sub(rf"(?<![a-z0-9_]){re.escape(key)}(?=[.)])", want, line)
+                re.sub(rf"(?<![a-z0-9_]){re.escape(key)}(?![a-z0-9_])", want, line)
                 for line in block_lines
             ]
-            lift.rekeyed.append(f"{key}.* -> {want}.* (ruling a)")
+            lift.rekeyed.append(f"{key} -> {want} (ruling a, key + scope + consumers)")
         lift.blocks.setdefault(slug, []).extend(block_lines)
         drop.update(range(head, end))
+
+    if from_history:
+        # The working tree is already correct — do not rewrite it from an
+        # older revision, or a re-run would undo every later edit to the
+        # engine's own rows.
+        lift.remaining_text = working
+        lift.notes.append(
+            f"per-trade rows recovered from {PRE_LIFT_REV} "
+            f"({TUNABLES_REPO_PATH} no longer carries them)"
+        )
+        return lift
 
     kept = [line for i, line in enumerate(lines) if i not in drop]
     # Collapse the blank-line runs the removals left behind.
@@ -555,6 +625,8 @@ def plan_notes(
     *,
     only_slug: Optional[str] = None,
     rev: str = PRE_DELETION_REV,
+    matrix_aliases: Optional[dict[str, str]] = None,
+    tunable_aliases: Optional[dict[str, str]] = None,
 ) -> tuple[list[NotePlan], TunableLift]:
     """Compute every edit. Reads the vault and git; writes nothing."""
     root = Path(vault_root) if vault_root is not None else resolve_vault_path()
@@ -572,7 +644,7 @@ def plan_notes(
         if fm is None or not fm.get("trade_def"):
             raise NoteMigrationError(f"{path.name}: no `trade_def:` in the frontmatter")
         slug = fm["trade_def"]
-        plan = _plan_one(path, root, text, fm, matrix, rev)
+        plan = _plan_one(path, root, text, fm, matrix, rev, matrix_aliases or {})
         all_plans.append(plan)
         if only_slug is None or slug == only_slug:
             plans.append(plan)
@@ -586,6 +658,11 @@ def plan_notes(
         slug_by_key[trade_key(plan.slug)] = plan.slug
         if plan.yaml_id:
             slug_by_key[plan.yaml_id] = plan.slug
+    # ... and, for a vault whose notes have ALREADY dropped their authored
+    # id, whatever ruling the operator passes in. Needed only on a re-run
+    # over a migrated corpus: a first run still has the ids to read.
+    for old_key, slug in (tunable_aliases or {}).items():
+        slug_by_key.setdefault(old_key, slug)
 
     lift = lift_per_trade_rows(slug_by_key=slug_by_key)
     for plan in plans:
@@ -596,7 +673,7 @@ def plan_notes(
     return plans, lift
 
 
-def _plan_one(path, root, text, fm, matrix, rev) -> NotePlan:
+def _plan_one(path, root, text, fm, matrix, rev, matrix_aliases) -> NotePlan:
     slug = fm["trade_def"]
     name = str(fm.get("name") or "").strip()
     if not name:
@@ -662,18 +739,22 @@ def _plan_one(path, root, text, fm, matrix, rev) -> NotePlan:
         trade_class, families = after.get("class"), list(after.get("family") or [])
     else:
         plan.is_draft = True
-        rows = matrix.get(trade_key(slug))
+        matrix_key = matrix_aliases.get(slug, trade_key(slug))
+        rows = matrix.get(matrix_key)
         if rows is None:
             plan.def_body = None
             plan.warnings.append(
-                f"no setup x trade matrix row for trade key {trade_key(slug)!r} — the "
+                f"no setup x trade matrix row for key {matrix_key!r} — the "
                 "unit is left EMPTY and this note stays a draft. The matrix keys that "
                 "no note claims are reported at the end of the run; pairing one to a "
                 "note is a ruling, not something this command may guess."
             )
         else:
             plan.def_body = draft_unit_body(rows)
-            plan.notes.append(f"seeded {len(rows)} matrix row(s) as a partial def")
+            plan.notes.append(
+                f"seeded {len(rows)} matrix row(s) as a partial def"
+                + (f" (--matrix-alias {matrix_key})" if slug in matrix_aliases else "")
+            )
         trade_class, families = None, []
 
     return _finish_frontmatter(plan, lines, trade_class, families, path)
@@ -825,7 +906,9 @@ def migrate_strategy_template(
 
 
 def unclaimed_matrix_keys(
-    plans: list[NotePlan], rev: str = PRE_DELETION_REV
+    plans: list[NotePlan],
+    rev: str = PRE_DELETION_REV,
+    matrix_aliases: Optional[dict[str, str]] = None,
 ) -> list[str]:
     """Matrix rows no note claims — a ruling, not a guess.
 
@@ -835,6 +918,7 @@ def unclaimed_matrix_keys(
     """
     claimed = {trade_key(p.slug) for p in plans}
     claimed |= {p.yaml_id for p in plans if p.yaml_id}
+    claimed |= set((matrix_aliases or {}).values())
     return sorted(set(load_matrix(rev)) - claimed)
 
 
@@ -855,7 +939,10 @@ __all__ = [
     "STRATEGY_TEMPLATE",
     "lift_per_trade_rows",
     "load_matrix",
+    "PRE_LIFT_REV",
     "load_registry",
+    "parse_key_aliases",
+    "parse_matrix_aliases",
     "migrate_strategy_template",
     "plan_notes",
     "tunables_unit_body",

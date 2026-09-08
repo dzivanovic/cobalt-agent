@@ -38,6 +38,8 @@ from .note_migration import (
     apply_plans,
     edit_frontmatter,
     migrate_strategy_template,
+    parse_key_aliases,
+    parse_matrix_aliases,
     plan_notes,
     unclaimed_matrix_keys,
     write_tunables_yaml,
@@ -93,7 +95,13 @@ def cmd_load(args: argparse.Namespace) -> None:
 
 def cmd_migrate_strategy_notes(args: argparse.Namespace) -> None:
     dry_run = _require_mode(args, "migrate-strategy-notes")
-    plans, lift = plan_notes(only_slug=args.note)
+    aliases = parse_matrix_aliases(args.matrix_alias)
+    tunable_aliases = parse_key_aliases(args.tunable_alias, flag="tunable-alias")
+    plans, lift = plan_notes(
+        only_slug=args.note,
+        matrix_aliases=aliases,
+        tunable_aliases=tunable_aliases,
+    )
     if not plans:
         raise SystemExit(f"no strategy note matches --note {args.note!r}")
 
@@ -128,6 +136,8 @@ def cmd_migrate_strategy_notes(args: argparse.Namespace) -> None:
     if args.note is None:
         diff = write_tunables_yaml(lift, dry_run=dry_run)
         print("=== configs/cobalt/taxonomy/tunables.yaml")
+        for line in lift.notes:
+            print(f"    NOTE: {line}")
         for line in lift.rekeyed:
             print(f"    NOTE: re-keyed {line}")
         print(diff or "    (no change)")
@@ -151,7 +161,7 @@ def cmd_migrate_strategy_notes(args: argparse.Namespace) -> None:
         "no setup x trade matrix row" in w for o in outcomes for w in o.warnings
     )
     if args.note is None and needs_rows and any(p.yaml_id for p in plans):
-        unclaimed = unclaimed_matrix_keys(plans)
+        unclaimed = unclaimed_matrix_keys(plans, matrix_aliases=aliases)
         if unclaimed:
             print(
                 f"\nUNCLAIMED setup x trade matrix key(s): {unclaimed}. No note's "
@@ -248,6 +258,27 @@ def add_parser(sub) -> None:
     migrate.add_argument("--dry-run", action="store_true")
     migrate.add_argument("--apply", action="store_true")
     migrate.add_argument("--note", help="Limit the run to one slug.")
+    migrate.add_argument(
+        "--matrix-alias",
+        action="append",
+        metavar="MATRIX_KEY=SLUG",
+        help=(
+            "Pair a setup x trade matrix key with the note that owns it, for the "
+            "keys no rule derives. Repeatable. A RULING, passed in rather than "
+            "written down here — see parse_matrix_aliases()."
+        ),
+    )
+    migrate.add_argument(
+        "--tunable-alias",
+        action="append",
+        metavar="OLD_KEY=SLUG",
+        help=(
+            "Pair a per_trade tunable key with the note that owns it. Repeatable. "
+            "Needed only when re-running over a corpus whose units have already "
+            "dropped their authored id — a first run reads the pairing from the "
+            "notes themselves."
+        ),
+    )
     migrate.set_defaults(func=cmd_migrate_strategy_notes)
 
     sync = gsub.add_parser(

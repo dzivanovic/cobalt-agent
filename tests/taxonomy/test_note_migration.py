@@ -365,3 +365,64 @@ class TestStrategyTemplate:
     def test_a_vault_without_the_template_is_not_an_error(self, tmp_path):
         path, message = migrate_strategy_template(tmp_path, dry_run=True)
         assert path is None and "nothing to do" in message
+
+
+# ---------------------------------------------------------------------
+# ruled pairings arrive as ARGUMENTS (R1)
+# ---------------------------------------------------------------------
+
+
+class TestKeyAliases:
+    def test_matrix_aliases_invert_to_slug_keyed(self):
+        from cobalt.taxonomy.note_migration import parse_matrix_aliases
+
+        assert parse_matrix_aliases(["example_old=example-new"]) == {
+            "example-new": "example_old"
+        }
+
+    def test_a_note_may_take_only_one_matrix_row(self):
+        from cobalt.taxonomy.note_migration import parse_matrix_aliases
+
+        with pytest.raises(NoteMigrationError, match="twice"):
+            parse_matrix_aliases(["example_a=example-n", "example_b=example-n"])
+
+    def test_a_malformed_pair_is_refused(self):
+        from cobalt.taxonomy.note_migration import parse_key_aliases
+
+        for bad in ("no-equals", "=example-n", "example_a="):
+            with pytest.raises(NoteMigrationError):
+                parse_key_aliases([bad], flag="matrix-alias")
+
+    def test_tunable_aliases_stay_key_keyed(self):
+        from cobalt.taxonomy.note_migration import parse_key_aliases
+
+        assert parse_key_aliases(["example_old=example-new"], flag="tunable-alias") == {
+            "example_old": "example-new"
+        }
+
+    def test_none_is_an_empty_map(self):
+        from cobalt.taxonomy.note_migration import parse_key_aliases
+
+        assert parse_key_aliases(None, flag="x") == {}
+
+
+def test_the_rekey_covers_the_whole_row_including_consumers():
+    """A row whose key says one trade and whose consumer list says another
+    is a row nobody can grep — the re-key is whole-word over the block."""
+    text = (
+        "tunables:\n"
+        "  - key: example_old.thing\n"
+        "    value: 1\n"
+        "    unit: count\n"
+        "    scope: per_trade(example_old)\n"
+        "    dynamic: false\n"
+        "    status: proposed\n"
+        "    source: ruling\n"
+        '    consumers: ["example_old"]\n'
+    )
+    lift = lift_per_trade_rows(text, slug_by_key={"example_old": "example-new"})
+    block = "\n".join(lift.blocks["example-new"])
+    assert "key: example_new.thing" in block
+    assert "scope: per_trade(example_new)" in block
+    assert 'consumers: ["example_new"]' in block
+    assert "example_old" not in block
