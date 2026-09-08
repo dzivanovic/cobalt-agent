@@ -2,9 +2,10 @@
 # DwV) and §A.8 MA-period note. Schema: src/cobalt/taxonomy/defaults.py.
 # Per-trade `working_timeframe: config` overrides this default; ma.slow /
 # ma.fast are resolved by loader.resolve_ma_ref() wherever a trade_def's
-# Tunable[str] value is an "ma.*" ref (e.g. VWAP Continuation's / Second
-# Chance's trail exit ma_close condition).
+# Tunable[str] value is an "ma.*" ref (a trail's ma_close condition, for
+# instance). WHICH trades use one is user data and lives in their notes,
+# not in this comment (L31).
 working_timeframe: 2m
 ma:
   fast: 9
-  slow: 20  # SMB sheets say 21 (9 EMA Scalp, VWAP Continuation); Dejan trades 20
+  slow: 20  # sheet value 21; Dejan trades 20 (L31: the sheet is not named)
