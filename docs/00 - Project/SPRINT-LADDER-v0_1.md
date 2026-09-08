@@ -461,7 +461,7 @@ beside DAS on the panel (cards graded by tap, fill via the existing
 fill-recompute; legs hand-logged in the DRC chat until S3).
 
 **Code prompts owed:**
-- S2-P1 · Opus 5 · fresh · F2 pool job + membership history · Finviz bar poller at working TF (reuses the spike's client path) · account-mode tag.
+- S2-P1 · Opus 5 · fresh · **line 0: ADR-0008 in force** — `system` / `"user"` schemas, side per store; pool + membership tables land in `system`; the account-mode tag is a `"user".aset_sizings` column; every new table declared in the placement map or the suite fails; first cross-side joins J1-J4 per ADR-0008 · F2 pool job + membership history · Finviz bar poller at working TF (reuses the spike's client path) · account-mode tag.
 - S2-P2 · Opus 5 · fresh · F8 precondition evaluator, Rubberband first, then the other five · F10 dot scoring + ladder sizing + tap recording · taxonomy v0.8 bump.
 - S2-P3 · Sonnet · fresh · Radar panel front-end (no write path) — ladder, strips, badges, tap strip, phone frame · F3 rank + WHY display.
 - S2-P4 · Opus 5 · fresh · F3 pick-vs-rank rows · F12 nightly replay + counterfactual R · F13 top-N archive + benchmark + miss line · S2 smoke.
