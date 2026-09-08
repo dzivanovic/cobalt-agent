@@ -112,7 +112,14 @@ def test_for_date_returns_todays_cards_oldest_first():
         # migration 0003: cards written vs trades taken are two numbers
         written, taken = store.counts_for_date(today_et)
         assert written >= 2
-        assert taken == sum(1 for r in rows if r["status"] == "FILLED")
+        # `counts_for_date` counts STATE, not `status` — `status` stopped
+        # being written when the F7 machine landed (aset/migrations/0006),
+        # so a `status`-based expectation here agreed with it only for as
+        # long as no card in `cobalt_dev` had ever been filled. The
+        # 2026-09-08 sprint-close smoke wrote the first one and the two
+        # numbers parted company. A card that FILLED and then CLOSED is
+        # still a trade taken, so both states count.
+        assert taken == sum(1 for r in rows if r["state"] in ("FILLED", "CLOSED"))
     finally:
         _delete_rows(store, [id1, id2])
 
