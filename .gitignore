@@ -67,3 +67,9 @@ docs/00 - Project/incident-2026-09-03/
 bars-dump-*
 !src/cobalt/*/migrations/*.sql
 !src/cobalt_agent/db/*.sql
+# ADR-0008's migrations are DATABASE-WIDE (schemas, roles, grants, the
+# table-to-side moves), so they do not belong to any one feature module
+# and sit one directory higher than the `src/cobalt/*/migrations/*.sql`
+# carve-out above reaches. Named explicitly rather than by widening that
+# pattern — the rule stays "one carve-out per directory you mean".
+!src/cobalt/db_migrations/*.sql
