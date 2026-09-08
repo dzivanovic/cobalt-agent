@@ -1,7 +1,7 @@
 """L31 / ADR-0008 D5 — no trade name lives in this repo (a lint).
 
 THE PRODUCT INSTALLS EMPTY. Everything named after a trade, everything
-SMB- or cheat-sheet-derived, is USER data: it lives in a trader's vault
+derived from a paid course or a cheat sheet, is USER data: it lives in a trader's vault
 and never here (L32). Until 2026-09-08 the 13 sheet-derived defs were
 committed YAML, their ids were written into test assertions and
 docstrings, and a second config file carried a person's name in its

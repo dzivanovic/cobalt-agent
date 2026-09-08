@@ -6,8 +6,8 @@ Same shape as every other new-core store: the database is NOT named here
 `migrations/` and is executed, never re-typed (one-path rule).
 
 USER SIDE, and not a close call. A trade_def is the trader's own
-strategy: everything named after a trade, everything SMB- or
-cheat-sheet-derived, every setting that is one trader's choice is user
+strategy: everything named after a trade, everything derived from a
+paid course or a cheat sheet, every setting that is one trader's choice is user
 data and is never shipped to another Cobalt user (L32). Same for the
 per-trade tunable rows.
 

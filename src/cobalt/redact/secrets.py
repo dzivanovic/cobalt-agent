@@ -1,8 +1,10 @@
 """F19's literal guard — the half no regex can do.
 
 Four of the credentials rotated on 2026-08-23 are USERNAMES AND
-PASSWORDS: smbtraining.com, rt.smbtraining.com, financialjuice.com,
-finviz.com. A human password has no shape. A regex broad enough to match
+PASSWORDS — the vault names them; this docstring deliberately does not
+(L31/ADR-0008 D5: which services a trader subscribes to is HIS, and a
+list of them in a committed file is the same leak as a list of his
+trades). A human password has no shape. A regex broad enough to match
 one matches ordinary prose; one narrow enough to spare prose does not
 match the password. So they are matched LITERALLY, against the values
 VaultManager already holds.

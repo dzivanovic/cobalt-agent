@@ -77,7 +77,14 @@ from .vault_loader import (
 #: The revision the deleted inputs are read from — the parent of the
 #: commit that removed them. A repo fact, not user data.
 PRE_DELETION_REV = "96c9159^"
-GRID_PATH = "configs/cobalt/taxonomy/cameron_grid.yaml"
+#: The matrix file is NOT named here. It carried a person's first name
+#: (L31/D5) and it is a trader's data, so writing its filename into this
+#: repo would put back a piece of exactly what deleting it removed.
+#: It is found instead: at the pre-deletion revision the taxonomy config
+#: directory held three top-level YAMLs — the two engine files below, and
+#: the matrix. One subtraction, fully deterministic.
+TAXONOMY_CONFIG_DIR = "configs/cobalt/taxonomy"
+ENGINE_YAMLS = ("defaults.yaml", "tunables.yaml")
 VARIABLES_PATH = "configs/cobalt/taxonomy/variables/{yaml_id}.yaml"
 
 #: The revision `tunables.yaml` still carried the trader's per-trade rows.
@@ -149,9 +156,30 @@ def _git_show(path: str, rev: str) -> str:
     return proc.stdout
 
 
+def matrix_path(rev: str = PRE_DELETION_REV) -> str:
+    """The setup x trade matrix file at `rev`, found rather than named."""
+    listing = subprocess.run(
+        ["git", "ls-tree", "--name-only", rev, f"{TAXONOMY_CONFIG_DIR}/"],
+        cwd=Path(__file__).resolve().parents[3],
+        capture_output=True, text=True, check=False,
+    )
+    if listing.returncode != 0:
+        raise NoteMigrationError(f"could not list {TAXONOMY_CONFIG_DIR} at {rev}")
+    candidates = [
+        line for line in listing.stdout.split()
+        if line.endswith(".yaml") and Path(line).name not in ENGINE_YAMLS
+    ]
+    if len(candidates) != 1:
+        raise NoteMigrationError(
+            f"expected exactly one setup x trade matrix file in "
+            f"{TAXONOMY_CONFIG_DIR} at {rev}, found {candidates}"
+        )
+    return candidates[0]
+
+
 def load_matrix(rev: str = PRE_DELETION_REV) -> dict[str, list[dict[str, str]]]:
     """`{trade id: [{setup_ref, relation}, ...]}` — ruling b.1's source."""
-    raw = yaml.safe_load(_git_show(GRID_PATH, rev))
+    raw = yaml.safe_load(_git_show(matrix_path(rev), rev))
     return raw["valid_setups"]
 
 
@@ -982,6 +1010,7 @@ __all__ = [
     "STRATEGY_TEMPLATE",
     "lift_per_trade_rows",
     "load_matrix",
+    "matrix_path",
     "PRE_LIFT_REV",
     "load_registry",
     "parse_key_aliases",
