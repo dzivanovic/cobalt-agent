@@ -1,0 +1,18 @@
+# Which local trader this Cobalt install serves (ADR-0008 D1).
+#
+# The one connection factory (src/cobalt/db.py) reads this and sets the
+# session GUC `cobalt.trader_id` on every connection it opens. Every
+# user-side table's `user_id` column defaults to that GUC — there is no
+# literal default anywhere, so a connection that skipped the factory has
+# no GUC and every INSERT fails loud.
+#
+# A product install ships this as 1. It becomes interesting only when one
+# install serves more than one local trader, which is the door ruling 0
+# deliberately left open ("user will have more roles and more user
+# settings outside of being trader only").
+#
+# Committed on purpose: it is which SEAT this install is, not a secret and
+# not a preference. The trader's own settings (sheet dollars, enabled
+# grades, reduced mode) are NOT config — they are `"user".trader_settings`
+# rows (ADR-0008 D3.4).
+trader_id: 1
