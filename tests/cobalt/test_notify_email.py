@@ -180,9 +180,7 @@ def test_send_builds_a_real_rfc2822_message(armed_vault, gmail):
 
 def test_report_names_the_channel_and_the_id(armed_vault, gmail):
     gmail(message_id="abc123")
-    assert send_email("a@b.com", "s", "b", cfg=CFG).report() == (
-        "Email sent — message abc123 to a@b.com"
-    )
+    assert send_email("a@b.com", "s", "b", cfg=CFG).report() == "Email sent — message abc123"
 
 
 def test_disabled_channel_is_a_loud_no_op_not_a_crash(armed_vault, gmail):
@@ -477,6 +475,8 @@ def test_channel_status_is_green_once_armed(armed_vault):
     assert "token present" in detail
     # Presence, never material.
     assert FAKE_REFRESH_TOKEN not in detail
+    # And never the recipient — see the regression test below.
+    assert CFG.to not in detail
 
 
 def test_send_store_round_trips_on_cobalt_dev():
@@ -691,3 +691,97 @@ def test_fast_local_bind_restores_getfqdn_even_on_an_exception():
         with _fast_local_bind():
             raise RuntimeError("consent was cancelled")
     assert socket.getfqdn is original
+
+
+# =====================================================================
+# 10. the recipient is a vault literal — regression, 2026-09-08
+# =====================================================================
+
+
+def test_no_report_string_repeats_the_recipient_address(armed_vault, gmail):
+    """Dejan's alert address is ALSO his `rt.smbtraining.com::username`,
+    so it is a vault value and F19's literal guard redacts it — out of
+    Cobalt's own DM and Cobalt's own email.
+
+    Measured on the 2026-09-08 11:50 production beat: 2 redactions per
+    email, 3 per DM, every red beat, forever. Delivery was never at risk
+    (`to` goes into the `To:` header, which does not pass through the
+    guard). The damage was to the SIGNAL:
+    `heartbeat.probes.redactions` exists to notice a redaction count that
+    CLIMBS, and a permanent floor of 5 poisons the one instrument F19
+    gives F18.
+
+    The fix is to stop putting the address in report strings, not to
+    weaken the guard — the guard was right.
+    """
+    from cobalt.notify.email import channel_status
+
+    fake = gmail(message_id="mid42")
+    result = send_email(CFG.to, "heartbeat RED", "database unreachable", cfg=CFG)
+
+    assert CFG.to not in result.detail
+    assert CFG.to not in result.report()
+    assert CFG.to not in channel_status()[1]
+    assert result.redactions == {}, (
+        "a plain red alert must produce ZERO redactions; anything else is a "
+        "permanent floor under the F18 redactions probe"
+    )
+    # …and the mail still goes to the right place: `To:` is not redacted.
+    assert _decode(fake.sent_body)["To"] == CFG.to
+
+
+def test_a_red_beat_is_redaction_free_when_the_recipient_IS_a_vault_literal(
+    tmp_vault, gmail, monkeypatch
+):
+    """The production case, reproduced exactly.
+
+    The vault below holds the recipient address under an unrelated key —
+    which is the real situation: `rt.smbtraining.com::username` and
+    `notify.email.to` are the same string. If any report line repeats the
+    address, the literal guard redacts it out of Cobalt's own alert and
+    the F18 redactions probe gains a permanent floor.
+
+    Asserting `redactions == {}` on a clean red beat is what keeps that
+    from coming back.
+    """
+    from cobalt.heartbeat import runner
+    from cobalt.heartbeat.probes import Probe
+    from cobalt.heartbeat.render import Beat
+    from cobalt.notify.config import EmailConfig
+    from cobalt.session import clock as clock_mod
+    from cobalt.session.clock import session_clock
+
+    recipient = "someone.long.enough@example.com"
+    secrets_mod.put_secret(CLIENT_ID_KEY, FAKE_CLIENT_ID)
+    secrets_mod.put_secret(CLIENT_SECRET_KEY, FAKE_CLIENT_SECRET)
+    secrets_mod.put_secret(REFRESH_TOKEN_KEY, FAKE_REFRESH_TOKEN)
+    # The collision: the alert address is also somebody's stored username.
+    secrets_mod.put_secret("some.site::username", recipient)
+
+    cfg = EmailConfig(enabled=True, to=recipient, subject_prefix="[COBALT]")
+    monkeypatch.setattr(
+        "cobalt.notify.config.load_notify_config",
+        lambda: NotifyConfig(mattermost={"dm_username": "x"}, email=cfg),
+    )
+    monkeypatch.setattr("cobalt.notify.record_attempt", lambda **k: None)
+    fake = gmail()
+
+    beat = Beat(at=session_clock().to_et(clock_mod.now_utc()))
+    beat.probes = [
+        Probe("database", False, "cobalt_brain unreachable"),
+        Probe("email", True, channel_status()[1]),
+    ]
+    beat.notes.append(runner.out_of_band(beat))
+
+    # Sanity: the guard really IS armed on that value, so a leak would
+    # have been caught rather than silently absent.
+    leak = send_email(recipient, "s", f"address {recipient}", cfg=cfg)
+    assert "literal:some.site::username" in leak.redactions
+
+    for rendering in (beat.dm_body(), beat.note_body(), beat.console()):
+        assert recipient not in rendering
+        assert "REDACTED" not in rendering, (
+            "a clean red beat redacted something out of its own alert — "
+            "that is a permanent floor under the F18 redactions probe"
+        )
+    assert _decode(fake.sent_body)["To"] == recipient

@@ -279,7 +279,19 @@ def send_email(
         raise EmailError(detail) from None
 
     message_id = sent.get("id", "?")
-    return SendResult(True, f"message {message_id} to {to}", hits, noun="Email", ref=message_id)
+    # THE RECIPIENT IS DELIBERATELY NOT IN `detail`. Dejan's alert address
+    # is ALSO his `rt.smbtraining.com::username`, so it is a vault value
+    # and therefore enrolled in F19's literal guard — putting it in a
+    # report string meant every red beat redacted it out of its own DM and
+    # its own email (measured: 2 hits per email, 3 per DM, 2026-09-08
+    # 11:50 beat). Delivery was never at risk — `to` goes into the `To:`
+    # header, which does not pass through the guard — but the noise
+    # mattered: `heartbeat.probes.redactions` exists to notice a redaction
+    # count that CLIMBS, and a permanent +5 per red beat poisons the one
+    # instrument F19 gives F18. Where the alerts go is in notify.yaml and
+    # printed by `cobalt validate`; repeating it in every report bought
+    # nothing.
+    return SendResult(True, f"message {message_id}", hits, noun="Email", ref=message_id)
 
 
 # ---------------------------------------------------------------------
@@ -475,7 +487,11 @@ def channel_status() -> tuple[bool, str]:
             f"no consent on this host — vault is missing {', '.join(absent)}. "
             "Run `cobalt notify email-auth`."
         )
-    return True, f"token present, alerts -> {cfg.to}"
+    # Recipient omitted for the reason in `send_email` above: it is a
+    # vault literal, and this string is rendered into the DM, the email
+    # and the daily note. `configs/cobalt/notify.yaml` and `cobalt
+    # validate` are where an operator reads the address.
+    return True, "token present, recipient set in configs/cobalt/notify.yaml"
 
 
 __all__ = [
