@@ -49,6 +49,13 @@ import pytest
 from cobalt import db, env
 from cobalt.session import clock as session_clock_module
 
+#: The UNPATCHED factory, bound at import time. `dev_db_tx` replaces
+#: `db.connect` for the whole suite, so the fixture itself — and any test
+#: that is ABOUT the factory, the grants or the schemas (ADR-0008) —
+#: needs the real one. Held here rather than re-imported in each test, so
+#: there is one name for "a connection that is really a connection".
+REAL_CONNECT = db.connect
+
 
 @pytest.fixture(autouse=True)
 def mock_postgres_memory():
@@ -148,17 +155,35 @@ def dev_db_tx(monkeypatch):
         yield None
         return
 
-    real = db.connect(env.DEV_DB_NAME)
+    real = REAL_CONNECT(env.DEV_DB_NAME, side=db.Side.SYSTEM)
     real.autocommit = False
     counter = itertools.count()
 
-    def fake_connect(dbname: str, *, allow_prod: bool = False):
+    def fake_connect(dbname: str, *, side: db.Side, allow_prod: bool = False):
         if dbname != env.DEV_DB_NAME:
             raise AssertionError(
                 f"RULING 7.1d: a test asked for database {dbname!r}. The suite "
                 f"runs against {env.DEV_DB_NAME} only."
             )
-        return _SavepointConnection(real, f"pytest_sp_{next(counter)}")
+        if not isinstance(side, db.Side):
+            raise AssertionError(
+                f"ADR-0008: a test's store opened a connection with side={side!r}. "
+                "Every store declares SIDE and the factory requires it."
+            )
+        proxy = _SavepointConnection(real, f"pytest_sp_{next(counter)}")
+        # ADR-0008: the suite is pinned exactly the way production is —
+        # same SET ROLE, same single-schema search_path, same tenant GUC,
+        # through the SAME `db.apply_side` (one path). A store that
+        # declares the wrong SIDE therefore fails in the ordinary tests,
+        # not only in the dedicated tenancy test.
+        #
+        # This is safe on a SHARED connection because all three settings
+        # are session-scoped and transactional: the savepoint is taken
+        # first, so a rollback puts the previous side's settings back, and
+        # SET ROLE is checked against the SESSION user (still the login
+        # role) rather than the current one, so re-pinning always works.
+        db.apply_side(proxy, side)
+        return proxy
 
     monkeypatch.setattr(db, "connect", fake_connect)
     try:
@@ -166,6 +191,36 @@ def dev_db_tx(monkeypatch):
     finally:
         real.rollback()
         real.close()
+
+
+@pytest.fixture
+def real_connect():
+    """A REAL `db.connect` — outside the suite's rollback transaction.
+
+    ADR-0008's tenancy tests need connections the fixture has not
+    intercepted: a savepoint proxy over one shared connection cannot show
+    that a SYSTEM role is refused a `"user"` table, because both proxies
+    are the same session. Tests using this fixture must therefore not
+    leave rows behind — every one of them either reads or asserts that a
+    write is REFUSED.
+    """
+    opened = []
+
+    def _open(dbname: str = env.DEV_DB_NAME, *, side: db.Side):
+        if dbname != env.DEV_DB_NAME:
+            raise AssertionError(
+                f"RULING 7.1d: a test asked for database {dbname!r}. The suite "
+                f"runs against {env.DEV_DB_NAME} only."
+            )
+        conn = REAL_CONNECT(dbname, side=side)
+        opened.append(conn)
+        return conn
+
+    try:
+        yield _open
+    finally:
+        for conn in opened:
+            conn.close()
 
 
 # ---------------------------------------------------------------------

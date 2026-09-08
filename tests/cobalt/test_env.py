@@ -100,14 +100,14 @@ class TestConnectionFactoryGate:
     def test_dev_cannot_open_the_production_database(self, monkeypatch):
         monkeypatch.setenv(env.ENV_VAR, env.DEV)
         with pytest.raises(db.DbConfigError, match="cobalt_brain"):
-            real_connect("cobalt_brain")
+            real_connect("cobalt_brain", side=db.Side.SYSTEM)
 
     def test_unset_env_cannot_open_the_production_database(self, monkeypatch):
         """An unset flag must refuse, not explode with a different error
         — the refusal is the safety property."""
         monkeypatch.delenv(env.ENV_VAR, raising=False)
         with pytest.raises(db.DbConfigError, match="cobalt_brain"):
-            real_connect("cobalt_brain")
+            real_connect("cobalt_brain", side=db.Side.SYSTEM)
 
 
 # ---------------------------------------------------------------------
