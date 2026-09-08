@@ -14,6 +14,8 @@ Two command groups:
 
     cobalt daymode show/propose/decide/attest
 
+    cobalt db migrate [--allow-prod] [--rollback]
+
     cobalt jobs list/register/check/run
     cobalt heartbeat beat/show
     cobalt notify email-auth/email-test/email-status
@@ -54,6 +56,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 from cobalt.aset.config import load_config as load_aset_config  # noqa: E402
 from cobalt.cards import cli as cards_cli  # noqa: E402
 from cobalt.daymode import cli as daymode_cli  # noqa: E402
+from cobalt.db_migrations import cli as db_cli  # noqa: E402
 from cobalt.backup import cli as backup_cli  # noqa: E402
 from cobalt.heartbeat import cli as heartbeat_cli  # noqa: E402
 from cobalt.jobs import cli as jobs_cli  # noqa: E402
@@ -386,6 +389,7 @@ def main() -> None:
     session_cli.add_parser(sub)
     cards_cli.add_parser(sub)
     daymode_cli.add_parser(sub)
+    db_cli.add_parser(sub)
     jobs_cli.add_parser(sub)
     heartbeat_cli.add_parser(sub)
     backup_cli.add_parser(sub)
