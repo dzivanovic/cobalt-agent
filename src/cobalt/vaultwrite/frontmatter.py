@@ -5,7 +5,7 @@ first bytes of a note. That constraint is why it cannot be bounded by
 L28 markers (an HTML comment above the opening `---` stops it being
 frontmatter; one inside stops it being YAML) and why `VaultWriter` treats
 it as the single structurally-located region in the whole write path —
-see `prefill/trade_note.py`'s `frontmatter_span`.
+see `frontmatter_span` below.
 
 WHY THIS FILE EXISTS. The same regex was written out twice, in
 `prefill/trade_note.py` and `prefill/drc.py`, and ADR-0008's vault-backed
@@ -55,4 +55,27 @@ def split_frontmatter(content: str) -> tuple[Optional[dict[str, Any]], str]:
     return parsed, content[m.end():]
 
 
-__all__ = ["FRONTMATTER_RE", "FrontmatterError", "split_frontmatter"]
+def frontmatter_span(lines: list[str]) -> Optional[tuple[int, int]]:
+    """The `---` ... `---` block at the head of the file, as a line span.
+
+    Markers cannot bound it (see the module docstring), so this is the ONE
+    structurally-located region in the whole write path — the `locate`
+    every `VaultWriter.upsert_region` call on a frontmatter passes.
+
+    The span INCLUDES both `---` lines, so the body a caller writes back
+    must include them too.
+    """
+    if not lines or lines[0].strip() != "---":
+        return None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            return (0, i + 1)
+    return None
+
+
+__all__ = [
+    "FRONTMATTER_RE",
+    "FrontmatterError",
+    "frontmatter_span",
+    "split_frontmatter",
+]

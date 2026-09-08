@@ -21,7 +21,7 @@ from typing import Optional
 from cobalt.aset.models import SizingResult
 
 from cobalt.vaultwrite import VaultWriter, VaultWriteStore
-from cobalt.vaultwrite.frontmatter import split_frontmatter
+from cobalt.vaultwrite.frontmatter import frontmatter_span, split_frontmatter
 
 from .config import PrefillPathsConfig
 from .vault_writer import VaultWriteError, read_if_exists, resolve_target
@@ -96,23 +96,6 @@ def _split_frontmatter(content: str) -> tuple[Optional[dict], str]:
 
 FRONTMATTER_SECTION = "trade-frontmatter"
 FRONTMATTER_REGION = "frontmatter"
-
-
-def frontmatter_span(lines: list[str]) -> Optional[tuple[int, int]]:
-    """The `---` ... `---` block at the head of the file, as a line span.
-
-    Markers cannot bound it: Obsidian requires frontmatter to be the very
-    first bytes of the note, so an HTML comment above the opening `---`
-    stops it being frontmatter and one inside stops it being YAML. This
-    is the ONE structurally-located region in the whole write path — see
-    VaultWriter.upsert_region.
-    """
-    if not lines or lines[0].strip() != "---":
-        return None
-    for i in range(1, len(lines)):
-        if lines[i].strip() == "---":
-            return (0, i + 1)
-    return None
 
 
 def upsert_trade_note(
