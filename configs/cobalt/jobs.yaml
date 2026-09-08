@@ -98,7 +98,7 @@ jobs:
     # the server being registered is the one hosting the session that
     # would register it — bootstrapping it from inside a herdr pane takes
     # that pane down mid-command.
-    enabled: false
+    enabled: true
     # `launchd`, not `self`: herdr is not Cobalt code and will never
     # carry our wrapper. The watchdog probes launchctl and stamps on its
     # behalf, and the row says so, so nothing reads "the process exists"
