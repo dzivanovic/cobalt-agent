@@ -14,16 +14,14 @@ engine does not fetch it (see aset/prefill.py) — blank is the honest
 answer, not a guess.
 """
 
-import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-import yaml
-
 from cobalt.aset.models import SizingResult
 
 from cobalt.vaultwrite import VaultWriter, VaultWriteStore
+from cobalt.vaultwrite.frontmatter import split_frontmatter
 
 from .config import PrefillPathsConfig
 from .vault_writer import VaultWriteError, read_if_exists, resolve_target
@@ -33,7 +31,6 @@ FIELD_ORDER = (
     "date", "symbol", "direction", "stop_price", "entry_price", "exit_price",
     "entry_time", "exit_time", "profit_loss", "strategy", "RVOL", "tags",
 )
-_FRONTMATTER_RE = re.compile(r"\A---\n(.*?\n)---\n", re.DOTALL)
 
 
 def _trade_note_filename(prefill_paths: PrefillPathsConfig, ticker: str, when: datetime) -> str:
@@ -91,11 +88,10 @@ def _render_body(title: str) -> str:
 
 
 def _split_frontmatter(content: str) -> tuple[Optional[dict], str]:
-    m = _FRONTMATTER_RE.match(content)
-    if not m:
-        return None, content
-    parsed = yaml.safe_load(m.group(1))
-    return (parsed or {}), content[m.end():]
+    """Thin alias for the one shared reader (`vaultwrite.frontmatter`).
+    The regex used to be written out here AND in `prefill/drc.py`; the
+    ADR-0008 vault loader would have been the third copy."""
+    return split_frontmatter(content)
 
 
 FRONTMATTER_SECTION = "trade-frontmatter"

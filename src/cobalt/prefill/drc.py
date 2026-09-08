@@ -44,7 +44,6 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
-import yaml
 from jinja2 import Environment, FileSystemLoader
 
 from cobalt.aset.config import load_config as load_aset_config, load_sheet_modes_config
@@ -56,6 +55,7 @@ from .daily import apply_mode_aware_sizing, format_rules_checkbox_block
 from .rules_gen import regenerate_rules_config
 from .vault_writer import VaultWriteError, read_if_exists, resolve_dir, resolve_target
 from cobalt.vaultwrite import VaultWriteStore, VaultWriter, WriteResult, Placement, after_pattern
+from cobalt.vaultwrite.frontmatter import split_frontmatter
 from cobalt.vaultwrite.markers import find_section
 
 _FILL_BLOCK_RE = re.compile(r"```aset-fill\n(.*?)\n```", re.DOTALL)
@@ -64,7 +64,6 @@ _RISK_PARAMS_LINE_RE = re.compile(r"^Risk Parameters:.*$")
 _TRADES_HEADING_RE = re.compile(r"^###\s*Catalyst \+ Set Up \+ Trades\s*$")
 LEGACY_MARKER_TEMPLATE = "<!-- cobalt-prefill:drc:{date} -->"
 _TRADE_FILENAME_RE = re.compile(r"^Trade-(\d{4}-\d{2}-\d{2}) (\d{2}-\d{2}-\d{2}) -(.+)\.md$")
-_FRONTMATTER_RE = re.compile(r"\A---\n(.*?\n)---\n", re.DOTALL)
 FILL_MATCH_TOLERANCE_SECONDS = 30
 
 
@@ -124,10 +123,9 @@ def find_trade_note_for_card(trades_dir: Path, ticker: str, created_at: datetime
 def _read_strategy(trade_note_path: Optional[Path]) -> Optional[str]:
     if trade_note_path is None or not trade_note_path.exists():
         return None
-    m = _FRONTMATTER_RE.match(trade_note_path.read_text(encoding="utf-8"))
-    if not m:
+    fm, _ = split_frontmatter(trade_note_path.read_text(encoding="utf-8"))
+    if fm is None:
         return None
-    fm = yaml.safe_load(m.group(1)) or {}
     strategy = fm.get("strategy")
     return strategy.strip() if isinstance(strategy, str) and strategy.strip() else None
 
