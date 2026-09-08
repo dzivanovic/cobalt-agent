@@ -16,6 +16,8 @@ Two command groups:
 
     cobalt db migrate [--allow-prod] [--rollback]
     cobalt taxonomy load [--dry-run]
+    cobalt settings load --from <dir> | --from-git <commit> --dry-run|--apply
+    cobalt settings show
 
     cobalt jobs list/register/check/run
     cobalt heartbeat beat/show
@@ -64,6 +66,7 @@ from cobalt.jobs import cli as jobs_cli  # noqa: E402
 from cobalt.jobs.wrapper import JobStopped  # noqa: E402
 from cobalt.notify import cli as notify_cli  # noqa: E402
 from cobalt.session import cli as session_cli  # noqa: E402
+from cobalt.settings import cli as settings_cli  # noqa: E402
 from cobalt.taxonomy import cli as taxonomy_cli  # noqa: E402
 from cobalt.taxonomy import validate as taxonomy_validate  # noqa: E402
 from cobalt.vaultwrite import VaultWriter, VaultWriteStore  # noqa: E402
@@ -393,6 +396,7 @@ def main() -> None:
     daymode_cli.add_parser(sub)
     db_cli.add_parser(sub)
     taxonomy_cli.add_parser(sub)
+    settings_cli.add_parser(sub)
     jobs_cli.add_parser(sub)
     heartbeat_cli.add_parser(sub)
     backup_cli.add_parser(sub)

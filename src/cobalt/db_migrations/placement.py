@@ -55,14 +55,14 @@ MODULE_TABLES: dict[str, Side] = {
     "trade_defs": Side.USER,
     "tunables": Side.USER,
     "setup_trade_matrix": Side.USER,   # a VIEW unnested from trade_defs.def
+    # settings/migrations/0001_trader_settings.sql (ADR-0008 D3.4)
+    "trader_settings": Side.USER,
 }
 
 #: Declared by ADR-0008 D2 before they are built, so the first migration
 #: that creates one has a ruled side to create it on. Nothing here exists
 #: yet; the placement test only checks tables that DO exist.
 DECLARED_TABLES: dict[str, Side] = {
-    # D3 — the trader's own settings (aset.yaml + daymode.yaml, step 6).
-    "trader_settings": Side.USER,
     # S2-P4 / S3 — named now so the placement test knows them on sight.
     "legs": Side.USER,
     "fills": Side.USER,
