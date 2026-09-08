@@ -318,6 +318,30 @@ class TestOneFactoryLint:
         text = (SRC / "db.py").read_text()
         assert len(re.findall(r"\bpsycopg\.connect\(", text)) == 1
 
+    #: `connect_migration()` is the ONE documented exception to
+    #: `connect(side=...)`: it opens a session with no `SET ROLE`, which is
+    #: the privilege model switched off. It exists because 0001 creates the
+    #: schemas, roles and ownership that neither side role may touch — and
+    #: for no other reason. So it gets the same treatment as
+    #: `psycopg.connect`: exactly one caller, named here, and a second one
+    #: fails the suite rather than quietly becoming a habit.
+    MIGRATION_CALLER = "src/cobalt/db_migrations/cli.py"
+
+    def test_connect_migration_has_exactly_one_caller(self):
+        callers = [
+            f"{p.relative_to(REPO_ROOT)}:{i}"
+            for p in _python_files()
+            if p.name != "db.py"
+            for i, line in enumerate(p.read_text().splitlines(), 1)
+            if re.search(r"\bconnect_migration\(", line)
+        ]
+        assert len(callers) == 1 and callers[0].startswith(self.MIGRATION_CALLER), (
+            "ADR-0008 D1: `db.connect_migration()` opens a session with NO SET "
+            "ROLE. Its one caller is the migration harness "
+            f"({self.MIGRATION_CALLER}) — every other path takes a side. "
+            f"Found: {callers}"
+        )
+
 
 class TestReservedWordLint:
     #: `user` is reserved (PG16, pg_get_keywords catcode R). Anything that
