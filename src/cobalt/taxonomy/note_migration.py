@@ -400,6 +400,48 @@ def _yaml_scalar(value: Any) -> str:
     return str(value)
 
 
+def add_alias_to_unit(body: str, alias: str) -> tuple[str, list[str]]:
+    """Add one alias to a definition unit's `aliases[]`. Idempotent.
+
+    An alias is how a trade note's free-text `strategy:` value finds its
+    slug (ADR-0008 D4), so an alias that exists only in someone's head
+    matches nothing. This is the ONE way to add one, it edits a single
+    line, and re-adding an alias that is already there is a no-op rather
+    than a duplicate.
+
+    Works on a draft's partial mapping too: the list goes in right under
+    `trade_def:` when there is none.
+    """
+    lines = body.split("\n")
+    span = _fence_span(lines)
+    if span is None:
+        raise NoteMigrationError(
+            "this unit has no fenced YAML block, so it has nowhere to put an "
+            "alias. Write the definition (or its partial `valid_setups`) first."
+        )
+    start, end = span
+    quoted = _quote_alias(alias)
+
+    for i in range(start, end):
+        if re.match(r"^  aliases:", lines[i]):
+            existing = yaml.safe_load(
+                "\n".join(line[2:] for line in [lines[i]])
+            ).get("aliases") or []
+            if alias in existing:
+                return body, [f"{alias!r} is already an alias — nothing to do"]
+            lines[i] = _append_alias(lines[i], quoted)
+            return "\n".join(lines), [f"appended {alias!r} to aliases[]"]
+
+    for i in range(start, end):
+        if re.match(r"^trade_def:\s*$", lines[i]):
+            lines.insert(i + 1, f"  aliases: [{quoted}]")
+            return "\n".join(lines), [f"added aliases: [{alias!r}]"]
+
+    raise NoteMigrationError(
+        "the fenced YAML has no top-level `trade_def:` key to hang aliases[] on"
+    )
+
+
 def draft_unit_body(rows: list[dict[str, str]]) -> str:
     """Ruling b.1: a draft's unit carries its matrix row and says so."""
     lines = [
@@ -930,6 +972,7 @@ __all__ = [
     "NoteOutcome",
     "NotePlan",
     "TunableLift",
+    "add_alias_to_unit",
     "apply_plans",
     "assert_alias_move",
     "canonical_md5",

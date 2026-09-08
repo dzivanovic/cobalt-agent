@@ -2,6 +2,8 @@
 
     cobalt taxonomy load                   [--dry-run]
     cobalt taxonomy migrate-strategy-notes --dry-run | --apply [--note SLUG]
+    cobalt taxonomy migrate-trade-notes    --dry-run | --apply [--note PATH]
+    cobalt taxonomy add-alias SLUG "ALIAS"
     cobalt taxonomy sync-frontmatter       --dry-run | --apply
 
 `load` moves a trader's strategy notes into `"user".trade_defs`.
@@ -31,10 +33,12 @@ from typing import Optional
 
 from cobalt.vaultwrite import VaultWriter, VaultWriteStore
 from cobalt.vaultwrite.frontmatter import frontmatter_span
+from cobalt.vaultwrite.markers import find_section
 
 from .note_migration import (
     FRONTMATTER_REGION,
     FRONTMATTER_SECTION,
+    add_alias_to_unit,
     apply_plans,
     edit_frontmatter,
     migrate_strategy_template,
@@ -45,6 +49,12 @@ from .note_migration import (
     write_tunables_yaml,
 )
 from .store import TradeDefStore
+from .trade_note_migration import (
+    apply_trade_notes,
+    migrate_trade_template,
+    build_alias_index,
+    plan_trade_notes,
+)
 from .validate import print_result
 from .vault_loader import load_vault_trade_defs
 
@@ -177,6 +187,112 @@ def cmd_migrate_strategy_notes(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------
+# add-alias  (ADR-0008 D4 — an alias is how a free-text value finds a slug)
+# ---------------------------------------------------------------------
+
+
+def cmd_add_alias(args: argparse.Namespace) -> None:
+    from cobalt.vault import resolve_vault_path
+
+    from .vault_loader import DEFINITION_SECTION, DEF_UNIT_PREFIX, STRATEGIES_DIR
+
+    root = resolve_vault_path()
+    matches = [
+        path
+        for path in sorted((root / STRATEGIES_DIR).glob("*.md"))
+        if (split := _frontmatter_of(path)) and split.get("trade_def") == args.slug
+    ]
+    if len(matches) != 1:
+        raise SystemExit(
+            f"expected exactly one strategy note with trade_def: {args.slug!r}, "
+            f"found {len(matches)}"
+        )
+    path = matches[0]
+    lines = path.read_text(encoding="utf-8").splitlines()
+    section = find_section(lines, DEFINITION_SECTION)
+    unit = section.units.get(f"{DEF_UNIT_PREFIX}{args.slug}") if section else None
+    if unit is None:
+        raise SystemExit(f"{path.name}: no {DEF_UNIT_PREFIX}{args.slug} unit")
+
+    body = "\n".join(unit.body(lines))
+    new_body, notes = add_alias_to_unit(body, args.alias)
+
+    store = VaultWriteStore()
+    store.ensure_schema()
+    writer = VaultWriter("taxonomy.add_alias", store=store, dry_run=args.dry_run)
+    result = writer.upsert_unit(
+        path, DEFINITION_SECTION, f"{DEF_UNIT_PREFIX}{args.slug}", new_body
+    )
+    for note in notes:
+        print(f"NOTE: {note}")
+    print(result.report())
+
+
+def _frontmatter_of(path):
+    from cobalt.vaultwrite.frontmatter import split_frontmatter
+
+    fm, _ = split_frontmatter(path.read_text(encoding="utf-8"))
+    return fm or {}
+
+
+# ---------------------------------------------------------------------
+# migrate-trade-notes  (ADR-0008 D4)
+# ---------------------------------------------------------------------
+
+
+def cmd_migrate_trade_notes(args: argparse.Namespace) -> None:
+    dry_run = _require_mode(args, "migrate-trade-notes")
+    index = build_alias_index()
+    run = plan_trade_notes(only_note=args.note, index=index)
+
+    print(
+        "cobalt taxonomy migrate-trade-notes — "
+        f"{'DRY RUN' if dry_run else 'APPLY'} on {len(run.plans)} note(s)\n"
+    )
+    outcomes = apply_trade_notes(run, dry_run=dry_run)
+
+    for outcome in outcomes:
+        if outcome.action.startswith("skip"):
+            continue
+        print(
+            f"=== {outcome.path.name}\n"
+            f"    strategy={outcome.strategy_value!r} -> "
+            f"trade_def={outcome.slug or '(blank)'}"
+            + (f" · write_id={outcome.write_id}" if outcome.write_id else "")
+        )
+        if outcome.diff:
+            print(outcome.diff)
+        print()
+
+    print("=== tally (strategy value -> slug -> n)")
+    matched = blank = 0
+    for label, (slug, n) in sorted(run.tally.items(), key=lambda x: (-x[1][1], x[0])):
+        print(f"    {label!r:<44} -> {slug or '(blank)':<24} n={n}")
+        if slug:
+            matched += n
+        else:
+            blank += n
+    print(f"    matched {matched} note(s); {blank} left blank")
+
+    for problem in run.problems:
+        print(f"    PROBLEM: {problem}")
+    skipped = sum(1 for o in outcomes if o.action == "skip_has_trade_def")
+    if skipped:
+        print(f"    {skipped} note(s) already carried `trade_def:` — skipped")
+
+    if args.note is None:
+        _path, template_diff = migrate_trade_template(dry_run=dry_run)
+        print("\n=== 5 - Templates/Individual Trade Template.md  (plain edit)")
+        print(template_diff)
+
+    changed = sum(1 for o in outcomes if o.action == "updated")
+    print(
+        f"\n{len(outcomes)} note(s), {changed} write(s) "
+        f"{'that WOULD change bytes' if dry_run else 'applied'}."
+    )
+
+
+# ---------------------------------------------------------------------
 # sync-frontmatter  (ruling d)
 # ---------------------------------------------------------------------
 
@@ -281,6 +397,24 @@ def add_parser(sub) -> None:
     )
     migrate.set_defaults(func=cmd_migrate_strategy_notes)
 
+    trade = gsub.add_parser(
+        "migrate-trade-notes",
+        help="ONE-OFF: give every trade note a `trade_def:` (ADR-0008 D4).",
+    )
+    trade.add_argument("--dry-run", action="store_true")
+    trade.add_argument("--apply", action="store_true")
+    trade.add_argument("--note", help="Limit the run to one note (file name or path).")
+    trade.set_defaults(func=cmd_migrate_trade_notes)
+
+    alias = gsub.add_parser(
+        "add-alias",
+        help="Add one alias to a strategy note's aliases[] (idempotent).",
+    )
+    alias.add_argument("slug")
+    alias.add_argument("alias")
+    alias.add_argument("--dry-run", action="store_true")
+    alias.set_defaults(func=cmd_add_alias)
+
     sync = gsub.add_parser(
         "sync-frontmatter",
         help="Re-align each note's class/family with its loaded def (ruling d).",
@@ -292,7 +426,9 @@ def add_parser(sub) -> None:
 
 __all__ = [
     "add_parser",
+    "cmd_add_alias",
     "cmd_load",
+    "cmd_migrate_trade_notes",
     "cmd_migrate_strategy_notes",
     "cmd_sync_frontmatter",
 ]
