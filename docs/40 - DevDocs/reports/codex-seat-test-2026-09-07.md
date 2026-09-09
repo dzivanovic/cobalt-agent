@@ -356,16 +356,24 @@ That is auth + the trusted herdr hook, nothing else. Post-cleanup health check p
 
 ## 10. Seat checklist
 
-- [ ] **Re-verify the hook guard after every herdr bump:** a herdr update replaces the
+- [ ] **Re-verify the hook guard after every herdr bump — THE PROBE ASSERTS EXACTLY ONE
+  `SessionStart` ENTRY, not merely that the guard is present.** A herdr update replaces the
   herdr-managed hook script and can rewrite the harness configs that point at it. Confirm
-  `~/.claude/settings.json`'s `hooks.SessionStart` still points at
+  `~/.claude/settings.json`'s `hooks.SessionStart` is **one entry with one command hook**, running
   `~/.claude/hooks/herdr-harness-guard.sh` (the non-herdr-managed guard added 2026-09-08, which
   stops a Grok session double-firing Claude's inherited hook), that the guard file is still there
   and executable, and re-run the three-case scratch proof in
-  `docs/40 - DevDocs/reports/seats-followup-2026-09-08.md` §b. The failure mode is silent: the
-  bump reverts the pointer, both hooks fire again, and every Grok session reports itself as
-  `claude` in `herdr agent list` — which is also the list the F18 `herdr` probe reads. Do this
-  before flipping `com.cobalt.herdr` back on if the bump happened while the job was loaded.
+  `docs/40 - DevDocs/reports/seats-followup-2026-09-08.md` §b. **Counting is the check, because a
+  presence check misses what actually happened:** on 2026-09-09 at 08:33 `herdr integration install
+  claude` (v8 → v9) did NOT revert the pointer — it *appended a second entry* aimed at herdr's own
+  script, so both would have fired and the guard was still, technically, present. The failure mode
+  is silent either way: both hooks fire and every Grok session reports itself as `claude` in `herdr
+  agent list` — which is also the list the F18 `herdr` probe reads.
+
+  **Since 2026-09-09 this is the probe's third question, so a beat catches it within one interval**
+  (`cobalt.heartbeat.probes._check_hook_guard`; red message names the drift). The manual check
+  remains for the moment right after a bump, before the next beat. Do it before flipping
+  `com.cobalt.herdr` back on if the bump happened while the job was loaded.
 
 - [ ] **Re-verify after every Codex bump:** confirm `codex --version`, then re-run §7 (scratch pane,
   `-a on-request -s read-only`, one command approval) and diff against the manifest version in

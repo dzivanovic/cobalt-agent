@@ -14,6 +14,7 @@ worse than no heartbeat at all.
 from __future__ import annotations
 
 import json
+import os
 import socket
 import subprocess
 from dataclasses import dataclass
@@ -321,6 +322,96 @@ HERDR_SOCKET = Path("~/.config/herdr/herdr.sock")
 #: question under launchd than it answers in a shell.
 HERDR_BINARY = Path("/opt/homebrew/bin/herdr")
 
+#: Claude Code's settings file, and the harness-aware hook it must point
+#: at. Addresses, not thresholds — same reasoning as `HERDR_SOCKET`.
+CLAUDE_SETTINGS = Path("~/.claude/settings.json")
+HOOK_GUARD = Path("~/.claude/hooks/herdr-harness-guard.sh")
+
+
+class HookGuardDrift(RuntimeError):
+    """The SessionStart hook is not exactly the one guard entry."""
+
+
+def _check_hook_guard(
+    settings_path: Optional[Path] = None, guard_path: Optional[Path] = None
+) -> str:
+    """`hooks.SessionStart` is EXACTLY one entry pointing at the guard.
+
+    WHY THIS IS A HERDR QUESTION AND NOT A HOUSEKEEPING ONE. The `herdr`
+    probe's second question is `herdr agent list`, and that list is what
+    tells one seat from another. herdr's own Claude integration hardcodes
+    the agent name `herdr:claude` with no harness detection, so a Grok or
+    Codex session started under it reports itself as `claude`. The guard
+    script is what makes the report honest, and this probe reads the list
+    the guard protects — so the two belong in one answer.
+
+    IT IS NOT ENOUGH TO ASK WHETHER THE GUARD IS PRESENT. On 2026-09-09
+    at 08:33 `herdr integration install claude` (v8 -> v9) did NOT replace
+    the pointer, which a presence check would have called fine: it
+    APPENDED A SECOND SessionStart ENTRY aimed at herdr's own script, so
+    both would have fired and the last writer would have won. That is why
+    the assertion is EXACTLY ONE — an integration update is expected to
+    keep trying, and the count is the thing it changes.
+
+    Raises `HookGuardDrift` naming the drift; returns a one-line summary
+    when everything is as it should be.
+    """
+    settings = Path(settings_path or CLAUDE_SETTINGS).expanduser()
+    guard = Path(guard_path or HOOK_GUARD).expanduser()
+
+    if not settings.exists():
+        raise HookGuardDrift(f"{settings} does not exist — no SessionStart hook at all")
+    try:
+        data = json.loads(settings.read_text())
+    except Exception as e:  # noqa: BLE001
+        raise HookGuardDrift(
+            f"{settings} does not parse as JSON ({type(e).__name__}) — the hook "
+            "configuration is UNKNOWN, which is not the same as correct"
+        ) from None
+
+    entries = ((data.get("hooks") or {}).get("SessionStart")) or []
+    if not isinstance(entries, list):
+        raise HookGuardDrift(
+            f"hooks.SessionStart is a {type(entries).__name__}, not a list of entries"
+        )
+    if len(entries) != 1:
+        raise HookGuardDrift(
+            f"hooks.SessionStart has {len(entries)} entries, expected exactly 1 — "
+            "a herdr integration update appended/replaced the SessionStart hook. "
+            "Grok sessions will report as claude; restore the single guard entry "
+            f"({guard})"
+        )
+
+    hooks = entries[0].get("hooks") or []
+    commands = [h for h in hooks if isinstance(h, dict) and h.get("type") == "command"]
+    if len(commands) != 1:
+        raise HookGuardDrift(
+            f"the SessionStart entry carries {len(commands)} command hook(s), "
+            "expected exactly 1 — a herdr integration update appended/replaced the "
+            "SessionStart hook. Grok sessions will report as claude; restore the "
+            f"single guard entry ({guard})"
+        )
+
+    command = str(commands[0].get("command") or "")
+    if str(guard) not in command:
+        raise HookGuardDrift(
+            f"the SessionStart hook does not run {guard} — a herdr integration "
+            "update appended/replaced the SessionStart hook. Grok sessions will "
+            "report as claude; restore the single guard entry"
+        )
+    if not guard.exists():
+        raise HookGuardDrift(
+            f"the SessionStart hook points at {guard}, which DOES NOT EXIST — "
+            "every session starts with a failing hook and no harness detection. "
+            "Restore the guard script"
+        )
+    if not os.access(guard, os.X_OK):
+        raise HookGuardDrift(
+            f"{guard} exists but is NOT EXECUTABLE — the hook cannot run it, so "
+            "no harness detection happens. `chmod +x` it"
+        )
+    return f"hook guard: 1 SessionStart entry -> {guard.name}, executable"
+
 
 def _herdr_enabled() -> tuple[bool, str]:
     """Is `com.cobalt.herdr` supposed to be up yet?
@@ -359,8 +450,11 @@ def herdr(
     socket_path: Optional[Path] = None,
     binary: Optional[Path] = None,
     list_agents=None,
+    settings_path: Optional[Path] = None,
+    guard_path: Optional[Path] = None,
 ) -> Probe:
-    """The herdr server is up AND answering — two questions, both asked.
+    """The herdr server is up, answering, AND honestly labelled — three
+    questions, all asked.
 
     THE SOCKET EXISTING IS NOT THE SERVER WORKING, which is the same
     lesson the ASET sheet's HTTP probe carries: a stale socket file
@@ -371,12 +465,20 @@ def herdr(
     failing is red, and the message names the launchd label so a reader
     knows what to bootstrap.
 
-    UNTIL THE HANDOVER IT IS GREEN AND SAYS WHY. The registry row ships
-    `enabled: false` because the plist is built and deliberately not
-    loaded — see ops/README.md's "herdr handover". A red every 15
-    minutes for a state somebody chose on purpose is how a heartbeat
-    stops being read, and the server is running perfectly well under a
-    manual start in the meantime.
+    THE THIRD QUESTION, added 2026-09-09: is the SessionStart hook still
+    exactly the harness-aware guard? See `_check_hook_guard` — the short
+    version is that `agent list` is what this probe asserts on, and a
+    herdr integration update that appends a second hook makes every Grok
+    session report itself as `claude` IN THAT LIST. Asking the first two
+    questions of a list that has quietly stopped meaning what it says is
+    asking nothing.
+
+    WHEN THE ROW IS DISABLED IT IS GREEN AND SAYS WHY. `enabled: false`
+    is the declared state of a job that is built and deliberately not
+    loaded — see ops/README.md. A red every 15 minutes for a state
+    somebody chose on purpose is how a heartbeat stops being read. The
+    hook check is skipped there too: with no server under launchd there
+    is no `agent list` for a mislabelled seat to corrupt.
     """
     enabled, why = _herdr_enabled()
     if not enabled:
@@ -417,11 +519,24 @@ def herdr(
             f"socket accepted but the server did not answer `agent list` "
             f"({type(e).__name__}: {e}) — {HERDR_LABEL} is up and not serving",
         )
+    # THIRD QUESTION. Asked last, because a drifted hook is a fact about
+    # what the answer above MEANS, and the two answers above are worth
+    # having either way.
+    try:
+        guard_line = _check_hook_guard(settings_path, guard_path)
+    except HookGuardDrift as e:
+        return Probe(
+            "herdr", False,
+            f"socket and `agent list` are fine, but the SEAT LABELS ARE NOT "
+            f"TRUSTWORTHY: {e}",
+        )
+
     seats = ", ".join(sorted({str(a.get("agent")) for a in agents if a.get("agent")}))
     return Probe(
         "herdr", True,
         f"socket accepting at {path}; {len(agents)} pane(s)"
-        + (f", seats: {seats}" if seats else ""),
+        + (f", seats: {seats}" if seats else "")
+        + f"; {guard_line}",
     )
 
 
