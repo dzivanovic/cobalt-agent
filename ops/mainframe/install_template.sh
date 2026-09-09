@@ -23,6 +23,13 @@
 # invisible drift this file was written to end. Rollback is a one-liner:
 #     cp chat_template.jinja.orig chat_template.jinja
 #
+# CONTRACT. install_template RETURNS non-zero on every refusal; it never
+# calls `exit`. The caller decides what a refusal means, because the two
+# callers need opposite things: the main start path turns it into `exit 1`
+# (fail-loud, before anything is loaded), while the heartbeat's self-heal
+# reload() logs it and skips the reload, so a bad template can never take
+# the heartbeat itself down (NN#16).
+#
 # Requires from the caller: OPS_DIR, MODEL_PATH, and a `log` function.
 
 # shellcheck shell=bash
@@ -43,31 +50,48 @@ install_template() {
     if [ ! -f "$template_src" ]; then
         log "FATAL: template source missing: $template_src"
         log "FATAL: refusing to start without the repo-owned chat template."
-        exit 1
+        return 1
     fi
     src_sha="$(sha_of "$template_src")"
 
     if [ ! -f "$target" ]; then
         log "FATAL: no chat template in model dir ($target) — refusing"
-        exit 1
+        return 1
     fi
     target_sha="$(sha_of "$target")"
+
+    # RECOGNITION GATE. The template in the model dir must be either the
+    # upstream we pinned or the one we install. Anything else means a model
+    # update shipped a new template, or somebody hand-edited the file, and in
+    # both cases overwriting it silently is exactly the invisible drift this
+    # file exists to end.
+    #
+    # This runs on EVERY call, not only when .orig is missing (tightened
+    # 2026-09-09 on the architect's ESCALATE 4.1 ruling). It used to sit
+    # inside the `.orig`-missing branch, which meant that once a backup
+    # existed a genuine upstream change was overwritten without a word — the
+    # one case the guard was written for. A model update is a deliberate
+    # human action; refusing loudly there is NN#16-correct, because the fix
+    # is a two-minute review of ops/mainframe/, not a silent regression that
+    # surfaces days later as bad model output.
+    if [ "$target_sha" != "$UPSTREAM_SHA" ] && [ "$target_sha" != "$src_sha" ]; then
+        log "FATAL: model dir template is neither upstream nor ours — a model update shipped a new template; review ops/mainframe/ before serving"
+        log "FATAL:   $target sha $target_sha"
+        log "FATAL:   expected upstream $UPSTREAM_SHA or ours $src_sha"
+        return 1
+    fi
 
     # One-time backup of the pristine upstream template.
     if [ ! -f "$target.orig" ]; then
         if [ "$target_sha" = "$UPSTREAM_SHA" ]; then
             cp "$target" "$target.orig"
             log "template: backed up upstream template to $target.orig"
-        elif [ "$target_sha" = "$src_sha" ]; then
-            # Ours is already installed but the .orig was lost (model re-download,
-            # manual cleanup). Not fatal — the repo copy still carries the upstream
-            # sha in its header, so the original is recoverable from the model repo.
-            log "WARN: template already ours but $target.orig is missing — no backup to make"
         else
-            log "FATAL: unknown template in model dir, refusing"
-            log "FATAL:   $target sha $target_sha"
-            log "FATAL:   expected upstream $UPSTREAM_SHA or ours $src_sha"
-            exit 1
+            # Ours is already installed but the .orig was lost (model
+            # re-download, manual cleanup). Not fatal — the repo copy carries
+            # the upstream sha in its header, so the original is recoverable
+            # from the model repo.
+            log "WARN: template already ours but $target.orig is missing — no backup to make"
         fi
     fi
 

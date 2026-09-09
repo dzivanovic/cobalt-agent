@@ -148,6 +148,82 @@ def test_default_reasoning_effort_is_xhigh(template: jinja2.Template) -> None:
     assert LOW_INSTRUCTION not in out
 
 
+# --- g: tool calls with non-string argument values ---------------------------
+#
+# Upstream rendered these as `args_value | tojson | safe`. LM Studio's Jinja
+# engine has no `safe` filter, so EVERY tool call carrying a non-string argument
+# value blew up with `Unknown StringValue filter: safe` — reproduced against
+# production 2026-09-09: {"path":"x.py"} rendered, {"path":"x.py","limit":5} did
+# not. Only the `is string` branch kept simple calls working, which is why this
+# went unnoticed until a multi-turn read-file task hit turn 2. `| safe` is
+# dropped in the repo template; these tests hold that line.
+
+TOOL_HISTORY = [
+    {"role": "user", "content": "read x.py"},
+    {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_file",
+                    "arguments": {
+                        "path": "x.py",          # string -> the branch that always worked
+                        "limit": 5,              # int    -> tojson, the branch that crashed
+                        "flags": ["a", "b"],     # list   -> tojson
+                        "opts": {"deep": True},  # dict   -> tojson
+                        "raw": False,            # bool   -> tojson
+                    },
+                },
+            }
+        ],
+    },
+    {"role": "tool", "content": "print('hi')"},
+]
+
+
+def test_tool_call_with_non_string_arguments_renders(template: jinja2.Template) -> None:
+    out = render(template, TOOL_HISTORY)  # must not raise
+    assert "read_file" in out
+    assert "<tool_call>" in out
+
+
+def test_non_string_argument_values_appear_as_json(template: jinja2.Template) -> None:
+    out = render(template, TOOL_HISTORY)
+    assert "<parameter=limit>\n5\n" in out
+    assert '["a", "b"]' in out or '["a","b"]' in out
+    assert '"deep": true' in out or '"deep":true' in out
+    assert "<parameter=raw>\nfalse\n" in out
+    # the string branch is unchanged and still renders unquoted
+    assert "<parameter=path>\nx.py\n" in out
+
+
+def test_tool_response_is_rendered(template: jinja2.Template) -> None:
+    out = render(template, TOOL_HISTORY)
+    assert "<tool_response>\nprint('hi')\n</tool_response>" in out
+
+
+def test_safe_filter_is_gone_from_the_template(template_source: str) -> None:
+    """LM Studio's Jinja engine has no `safe` filter — it must not come back.
+
+    Jinja comments are stripped first: the provenance header and the edit-site
+    comment both discuss `| safe` in prose, and prose cannot crash a renderer.
+    Only live template code is checked.
+    """
+    code = re.sub(r"\{#.*?#\}", "", template_source, flags=re.DOTALL)
+    assert "safe" not in code, "a `safe` filter reappeared in live template code"
+    # and the fixed line is present, unquoted
+    assert "else args_value | tojson %}" in code
+
+
+def test_no_think_still_works_alongside_tool_calls(template: jinja2.Template) -> None:
+    """The two Cobalt edits must not interfere. In a tool-using history the last
+    message is a tool response, so the system message is what carries the marker."""
+    out = render(template, [{"role": "system", "content": "/no_think"}] + TOOL_HISTORY)
+    assert out.endswith(THINK_SKIPPED), repr(out[-80:])
+
+
 # --- f: structural provenance assertions -------------------------------------
 
 

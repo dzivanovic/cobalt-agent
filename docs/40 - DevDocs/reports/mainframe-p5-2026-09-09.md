@@ -10,10 +10,15 @@ Phase A1 by Opus 5 (developer); architect = Fable session.
 LM Studio 1.11.0 forwards neither `enable_thinking` nor `reasoning_effort` from the API into the
 model's Jinja chat template, so thinking on the mainframe is unconditionally on and no API parameter
 can turn it off. Phase A1 takes ownership of the template: `ops/mainframe/chat_template.jinja` is now
-the repo's source of truth (upstream, byte-for-byte, plus one in-band soft-switch block giving
-`/no_think` and `/think_low`), and `ops/start_mainframe.sh` installs it into the model directory on
+the repo's source of truth and `ops/start_mainframe.sh` installs it into the model directory on
 every start and every heartbeat self-heal, with a one-time `.orig` backup and a refuse-on-unrecognised
-guard.
+guard that fires on every call.
+
+Two edits vs upstream. The first is the in-band soft switch (`/no_think`, `/think_low`). The second
+turned out to matter more: upstream renders tool-call arguments through a `| safe` filter that **LM
+Studio's Jinja engine does not have**, so any tool call carrying a non-string argument value fails at
+prompt-render time with `Unknown StringValue filter: safe`. That is the defect that killed the Qwen
+seat on turn 2 of a read-file task this morning (§1.2).
 
 Three log-hygiene defects went with it: `lms load`'s TTY spinner (815 lines, ~8.8 MB of a 9.2 MB log)
 is now filtered, the log rotates at 5 MB (it never rotated), and two misleading log lines were made
@@ -32,23 +37,24 @@ under `~/.lmstudio`, no commits to `main`. Phase B is the deploy, and it has not
 
 | File | Status | What |
 |---|---|---|
-| `ops/mainframe/chat_template.jinja` | new | Upstream template + provenance header + soft-switch block |
-| `ops/mainframe/install_template.sh` | new | `install_template()`, sourced by both callers |
-| `ops/start_mainframe.sh` | modified | +224 / -5 — install, spinner filter, rotation, probe, honesty fixes |
-| `tests/cobalt/test_mainframe_template.py` | new | 12 offline tests |
+| `ops/mainframe/chat_template.jinja` | new | Upstream + provenance header + soft-switch block + `\| safe` removal |
+| `ops/mainframe/install_template.sh` | new | `install_template()`, sourced by both callers; return-based contract |
+| `ops/start_mainframe.sh` | modified | install, spinner filter, rotation, no-think probe, honesty fixes |
+| `tests/cobalt/test_mainframe_template.py` | new | 17 offline tests |
 
 ### 1.2 The template diff vs upstream
 
 Upstream is `mlx-community/Qwen3.8-27B-8bit/chat_template.jinja`, sha256
 `c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041` (verified on the copy before
-editing). `diff` shows **exactly two hunks, both pure insertions — nothing deleted, nothing altered**:
+editing). `diff` shows **exactly three hunks — two insertions and one one-token removal**:
 
 ```
-0a1,14      the provenance header
-45a60,73    the Cobalt soft-switch block
+0a1,26         the provenance header
+45a72,85       edit 1: the Cobalt soft-switch block
+138c178,185    edit 2: `| safe` dropped (plus its explanatory comment)
 ```
 
-The inserted block, immediately before the untouched upstream `enable_thinking` guard:
+#### Edit 1 — the soft-switch block, immediately before the untouched `enable_thinking` guard
 
 ```jinja
 {%- set cobalt_sw = namespace(no_think=false, low=false) %}
@@ -72,6 +78,39 @@ Semantics: the marker is honoured in the **system message or the LAST message on
 
 **Known cosmetic effect, accepted:** the marker stays visible in the rendered prompt text (the
 template renders message content unmodified). This is the standard Qwen in-band convention.
+
+#### Edit 2 — `| safe` dropped: the defect that killed the Qwen seat
+
+Upstream line 138 rendered tool-call arguments as:
+
+```jinja
+{%- set args_value = args_value | string if args_value is string else args_value | tojson | safe %}
+```
+
+**LM Studio's Jinja engine has no `safe` filter.** The `is string` branch is the only reason anything
+ever worked: a tool call whose argument values are all strings never reaches `tojson | safe`. The
+moment any argument is an int, list, dict or bool, the render dies.
+
+Reproduced against production with curl (architect, 2026-09-09 09:22):
+
+| tool-call `arguments` in history | result |
+|---|---|
+| `{"path":"x.py"}` | renders OK |
+| `{"path":"x.py","limit":5}` | `Error rendering prompt with jinja template: "Unknown StringValue filter: safe"` |
+| `{"path":"x.py","flags":["a"]}` | same error |
+
+**This is why the Qwen seat died on turn 2 of a read-file task this morning.** Turn 1 issues the tool
+call and succeeds; turn 2 sends the same call back as *history*, hits line 138, and the whole request
+fails at prompt-render time — before the model is reached, so it presents as an API error rather than
+a bad completion.
+
+Fix: drop `| safe`. `tojson` already returns a string and nothing autoescapes in this rendering, so
+the filter was a no-op under jinja2 and fatal under minijinja — which is exactly why it survived
+upstream testing. One token removed; the `is string` branch is untouched.
+
+Five tests cover it (case g, §1.6): a history with int, list, dict and bool arguments plus the tool
+response renders without raising and emits the arguments' JSON; a regression test strips Jinja
+comments and asserts no `safe` filter has crept back into live template code.
 
 ### 1.3 Spinner filter — before/after on real captured output
 
@@ -119,21 +158,46 @@ copy was extracted from the actual injected subshell body, not retyped.
 Per the architect's Q2 ruling it lives in `ops/mainframe/install_template.sh` and is `source`d by both
 the main path and the heartbeat subshell: one implementation, one place to edit.
 
-All six branches were exercised in a sandbox (a fake model root; **the real model dir was never
-written to**):
+**Recognition gate, tightened 09:27 on the architect's ESCALATE 4.1 ruling.** The check that the
+template in the model dir is either the pinned upstream or ours now runs on **every call**. It
+previously sat inside the `.orig`-missing branch, which meant that once a backup existed a genuine
+upstream change was overwritten without a word — the one case the guard was written for.
+
+**Contract:** `install_template` only ever `return`s non-zero; it never calls `exit`. The two callers
+need opposite things and now each decide for themselves:
+
+- **main path** → `exit 1`, fail-loud before anything is loaded;
+- **heartbeat `reload()`** → logs FATAL and **skips the reload**, so a refusal can never take the
+  heartbeat down. The loop keeps running and re-logs every 60 s until a human reviews
+  `ops/mainframe/`. Serving a template nobody has reviewed is worse than staying down.
+
+All seven branches exercised in a sandbox (a fake model root; **the real model dir was never written
+to**):
 
 | # | scenario | result |
 |---|---|---|
-| 1 | pristine upstream, no `.orig` | backs up to `.orig`, installs ours — PASS |
-| 2 | ours already installed | `template current: <sha>`, no rewrite — PASS |
-| 3 | ours installed, `.orig` lost | WARN, continues — PASS |
-| 4 | unknown template, no `.orig` | `FATAL: unknown template in model dir, refusing`, exit 1 — PASS |
-| 5 | repo template source missing | FATAL, exit 1 — PASS |
-| 6 | model update replaces upstream, `.orig` present | installs over it — **see ESCALATE 4.1** |
+| 1 | pristine upstream, no `.orig` | backs up to `.orig`, installs ours — rc 0 — PASS |
+| 2 | ours already installed | `template current: <sha>`, no rewrite — rc 0 — PASS |
+| 3 | ours installed, `.orig` lost | WARN, continues — rc 0 — PASS |
+| 4 | unknown template, no `.orig` | FATAL, rc 1 — PASS |
+| 5 | repo template source missing | FATAL, rc 1 — PASS |
+| 6 | **model update ships new upstream, `.orig` present** | **FATAL, rc 1, and the new upstream file is left byte-for-byte intact** — PASS (was the hole; now closed) |
+| 7 | no template in model dir at all | FATAL, rc 1 — PASS |
 
-In the **heartbeat**, `install_template` is called inside a subshell so its fail-loud `exit 1` cannot
-kill the heartbeat: there, a bad template is logged and the reload proceeds anyway. A loaded model
-with a stale template still answers; a dead heartbeat never recovers anything (NN#16).
+Scenario 6's log line:
+
+```
+FATAL: model dir template is neither upstream nor ours — a model update shipped
+       a new template; review ops/mainframe/ before serving
+FATAL:   <target> sha 626a16f4…
+FATAL:   expected upstream c3cf9e34…41 or ours f28860a4…
+```
+
+One case the ruling did not cover, decided the safe way and flagged: if `install_template.sh` itself
+is **missing** at heartbeat time, the fallback stub returns 0 so reloads still happen. The main path
+already exits 1 when that file is absent, so reaching this state means it was deleted *after* a good
+start — wedging the heartbeat over a repo problem would leave the mainframe down permanently, which
+is the wrong side of NN#16. The template simply stops being managed, loudly, every cycle.
 
 ### 1.5 Other script changes
 
@@ -152,7 +216,7 @@ with a stale template still answers; a dead heartbeat never recovers anything (N
 
 ### 1.6 Tests
 
-`tests/cobalt/test_mainframe_template.py` — 12 tests, fully offline (no LM Studio, no network, no
+`tests/cobalt/test_mainframe_template.py` — 17 tests, fully offline (no LM Studio, no network, no
 model dir). jinja2 `Environment(trim_blocks=True, lstrip_blocks=True)`, default `Undefined` (strict
 would break the template's bare `tools` truthiness test), `raise_exception` stub registered.
 
@@ -169,9 +233,14 @@ would break the template's bare `tools` truthiness test), `raise_exception` stub
 | f | marker block once, immediately before the anchor | PASS |
 | f | `start_mainframe.sh` sources the installer, ≥2 install sites | PASS |
 | f | installer pins the template path + upstream sha | PASS |
+| g | tool_call with int/list/dict/bool arguments renders without raising | PASS |
+| g | those values appear as JSON; the string branch stays unquoted | PASS |
+| g | the tool response renders | PASS |
+| g | no `safe` filter in live template code (comments stripped) | PASS |
+| g | `/no_think` still works alongside tool calls | PASS |
 
 ```
-uv run pytest tests/cobalt/test_mainframe_template.py -q   →  12 passed
+uv run pytest tests/cobalt/test_mainframe_template.py -q   →  17 passed
 ```
 
 **Full suite, apples-to-apples:**
@@ -179,9 +248,9 @@ uv run pytest tests/cobalt/test_mainframe_template.py -q   →  12 passed
 | | result |
 |---|---|
 | `main` baseline | **4 failed, 983 passed** |
-| `ops/mainframe-p5` | **4 failed, 995 passed** |
+| `ops/mainframe-p5` | **4 failed, 1000 passed** |
 
-+12 passed = exactly the new tests. The same 4 failures on both sides, all pre-existing and
++17 passed = exactly the new tests. The same 4 failures on both sides, all pre-existing and
 unrelated — `tests/cobalt/test_herdr_probe.py::TestBeforeTheHandover`, which still asserts the herdr
 plist ships disabled after the 2026-09-08 handover enabled it:
 
@@ -307,13 +376,12 @@ launchctl kickstart -k gui/$(id -u)/com.cobalt.mainframe
 
 ## 4. ESCALATE
 
-**4.1 — the unknown-template guard is bypassed once `.orig` exists.** Sandbox scenario 6: with a
-`.orig` already present, a *model update that ships a new upstream template* is silently overwritten
-by ours, because the refuse-on-unrecognised check only runs inside the `[ ! -f "$target.orig" ]`
-branch. That is as specified, and I implemented it as specified rather than changing it unilaterally —
-but it is a real hole, and it is the exact drift this work exists to end. Tightening it (compare the
-target against upstream **and** ours on every run) trades that silence for a mainframe that refuses to
-start after a model update, which is an NN#16 call for the architect, not for me.
+**4.1 — RESOLVED 09:27, ruling: tighten.** Raised as: the unknown-template guard was bypassed once
+`.orig` existed, so a model update shipping a new upstream template was silently overwritten. The
+architect ruled to tighten — a model update is a deliberate human action and refusing loudly there is
+NN#16-correct. Implemented, with `install_template` converted to a return-based contract so the main
+path can exit while the heartbeat merely skips the reload. Sandbox scenario 6 now refuses and leaves
+the new upstream file intact (§1.4). Closed.
 
 **4.2 — the minijinja gap is not closed by Phase A1.** These tests prove the template under
 **jinja2**; LM Studio serves it through **minijinja**. `namespace()`, `is string`, and `in`-on-string

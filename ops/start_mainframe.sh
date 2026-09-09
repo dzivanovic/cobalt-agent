@@ -274,10 +274,13 @@ done
 # The template is installed BEFORE the load, not after: LM Studio reads
 # chat_template.jinja when the model is brought into memory, so installing
 # it afterwards would leave the previous template serving until the next
-# restart. install_template exits 1 on a missing source or an
-# unrecognised template in the model dir — fail-loud, before anything is
-# loaded.
-install_template
+# restart. install_template RETURNS non-zero on a missing source or on a
+# template in the model dir that is neither upstream nor ours; on the main
+# path that is fatal, before anything is loaded.
+if ! install_template; then
+    log "FATAL: chat template not installed — refusing to load the model. Aborting."
+    exit 1
+fi
 
 log "API online — loading model into VRAM"
 # 2>&1 | strip_tty: see the strip_tty definition above. The exit status
@@ -438,19 +441,27 @@ caffeinate -i -m bash -c '
     . "$INSTALL_TEMPLATE_SH"
   else
     hb "WARN: $INSTALL_TEMPLATE_SH missing — heartbeat reloads will not reinstall the template"
-    install_template() { hb "WARN: install_template unavailable"; }
+    # Returns 0 on purpose, so reloads still happen. The main path already
+    # exits 1 when this file is missing, so reaching here means it was
+    # deleted AFTER a good start; wedging the heartbeat over that would
+    # leave the mainframe down permanently for a repo problem, which is the
+    # wrong side of NN#16. The template simply stops being managed, loudly.
+    install_template() { hb "WARN: install_template unavailable — template not managed this cycle"; return 0; }
   fi
   reload() {
     hb "heartbeat: attempting reload of $MODEL"
     # Reinstall the template before reloading: a self-heal reload is the
     # other path by which a model enters memory, and it must not bring the
-    # model up under a stale template. Run in a SUBSHELL so that
-    # install_template'\''s fail-loud `exit 1` cannot kill the heartbeat —
-    # in here, a bad template is a reason to log and carry on, because a
-    # loaded model with the wrong template still answers and a dead
-    # heartbeat never recovers anything (NN#16).
-    if ! ( install_template ); then
-      hb "WARN: template install failed — reloading anyway"
+    # model up under a stale or unrecognised template. install_template
+    # only ever RETURNS non-zero — it never calls exit — so a refusal
+    # cannot take the heartbeat down with it. The reload is SKIPPED on a
+    # refusal (architect ruling, ESCALATE 4.1, 2026-09-09): serving a
+    # template nobody has reviewed is worse than staying down, and the
+    # heartbeat keeps looping so the FATAL is re-logged every 60 s until a
+    # human looks at ops/mainframe/.
+    if ! install_template; then
+      hb "FATAL: template refused — skipping reload; mainframe stays DOWN until ops/mainframe/ is reviewed"
+      return 1
     fi
     lms load "$MODEL" -y --identifier "$MODEL_ID" --gpu max --context-length "$CONTEXT_LENGTH" \
       2>&1 | strip_tty >> "$LOG_FILE"

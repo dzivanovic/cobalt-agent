@@ -1,11 +1,23 @@
 {#- COBALT-OWNED CHAT TEMPLATE — ops/mainframe/chat_template.jinja
     Upstream: mlx-community/Qwen3.8-27B-8bit chat_template.jinja,
               sha256 c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041
-    ONE EDIT vs upstream (plus this header): the "Cobalt soft switch" block inserted
-    immediately before the upstream `enable_thinking` guard (upstream line 46).
-    Nothing else is changed; `diff` against the upstream file must show exactly these two hunks.
-    (That guard line is deliberately NOT quoted here — tests/cobalt/test_mainframe_template.py
-    asserts it appears exactly once in this file.)
+    TWO EDITS vs upstream (plus this header). `diff` against the upstream file must show
+    exactly these three hunks and nothing else:
+
+      1. The "Cobalt soft switch" block, inserted immediately before the upstream
+         `enable_thinking` guard (upstream line 46). It reads `/no_think` and `/think_low`
+         in-band, because LM Studio forwards no thinking parameters from the API.
+         (That guard line is deliberately NOT quoted here —
+         tests/cobalt/test_mainframe_template.py asserts it appears exactly once in this file.)
+
+      2. `| safe` dropped from the tool-call argument rendering (upstream line 138).
+         LM Studio's Jinja engine has no `safe` filter, so upstream raised
+         `Unknown StringValue filter: safe` on any tool call with a non-string argument
+         value — reproduced against production 2026-09-09: arguments {"path":"x.py"} render,
+         {"path":"x.py","limit":5} do not. This killed the Qwen seat on turn 2 of a
+         read-file task. tojson already returns a string and nothing autoescapes here, so
+         the filter was a no-op in jinja2 and fatal in minijinja. See the comment at the
+         edit site.
 
     This file is INSTALLED INTO THE MODEL DIRECTORY by ops/start_mainframe.sh (which keeps a
     one-time chat_template.jinja.orig backup of the upstream file next to it, and refuses to
@@ -163,7 +175,14 @@
                 {%- if tool_call.arguments is defined and tool_call.arguments != '' %}
                     {%- for args_name, args_value in tool_call.arguments|items %}
                         {{- '<parameter=' + args_name + '>\n' }}
-                        {%- set args_value = args_value | string if args_value is string else args_value | tojson | safe %}
+                        {#- Cobalt edit 2 (2026-09-09): `| safe` dropped. LM Studio's Jinja engine
+                            has no `safe` filter, so this line raised
+                            `Unknown StringValue filter: safe` for EVERY tool call carrying a
+                            non-string argument value — the `is string` branch is the only reason
+                            string-only calls ever worked. tojson already returns a string and
+                            nothing autoescapes in this rendering, so `safe` was a no-op in jinja2
+                            and fatal in minijinja. #}
+                        {%- set args_value = args_value | string if args_value is string else args_value | tojson %}
                         {{- args_value }}
                         {{- '\n</parameter>\n' }}
                     {%- endfor %}
