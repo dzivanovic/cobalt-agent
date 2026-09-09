@@ -810,6 +810,51 @@ def index() -> str:
     return _render()
 
 
+@app.get("/api/health")
+def api_health():
+    """What the DAY-MODE BANNER says, as JSON — for the F18 probe.
+
+    WHY THIS EXISTS. `sheet_http` asks whether the page answers 200, and
+    on 2026-09-09 the page answered 200 for about thirteen hours while
+    carrying "⚠ DAY MODE UNRESOLVED — cards are refused until this is
+    fixed". Every card write was being refused and the heartbeat was
+    green: `_daymode_state()` was raising `TaxonomyConfigError` because
+    the 09-08 seat-usage deploy added a `TunableUnit.WINDOW` row and the
+    sheet process — started before that code existed — re-reads
+    `tunables.yaml` on every request. The page he trades beside had
+    stopped working and nothing said so.
+
+    So the probe reads the banner rather than the status line, and this
+    is the banner's own state, from the SAME `_daymode_state()` call the
+    page renders from. One resolver, two renderings: this endpoint
+    cannot say green while the page shows the refusal.
+
+    NO DB WRITE AND NO LLM. `_daymode_state()` reads the day-mode row and
+    calls `ensure_schema()` (idempotent `CREATE TABLE IF NOT EXISTS` —
+    the same call the page render already makes); it inserts nothing,
+    decides nothing and reaches no model. It also NEVER RAISES: a config
+    or database failure is the thing this endpoint exists to report, so
+    it comes back as `ok: false` with the reason rather than as a 500 a
+    probe would have to interpret.
+    """
+    dm = _daymode_state()
+    mode = dm["mode"]
+    cfg = dm["cfg"]
+    return {
+        # False iff the banner is a refusal: an error was caught, or
+        # there is no mode — which is the same thing to a trader, since
+        # `assert_sheet_matches` refuses every card either way.
+        "ok": not dm["error"] and mode is not None,
+        "day": str(dm["day"]) if dm["day"] else None,
+        "mode": mode,
+        "stage": dm["stage"],
+        # The sheet the sizes come from: derived, not stored, and only
+        # answerable once the mode resolved.
+        "sheet_mode": cfg.sheet_for(mode) if (cfg and mode) else None,
+        "error": dm["error"],
+    }
+
+
 @app.get("/api/prefill")
 async def api_prefill(ticker: str):
     try:

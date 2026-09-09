@@ -80,6 +80,75 @@ def sheet_http(url: str = "http://127.0.0.1:5010/") -> Probe:
         return Probe("sheet HTTP", False, f"{url} unreachable: {type(e).__name__}: {e}")
 
 
+#: How much of a config error's own message reaches the beat line. A
+#: `TaxonomyConfigError` runs to several hundred characters; the first
+#: 160 carry the name of the thing that broke, which is what a reader
+#: needs at 06:09 — the whole text is on the page itself.
+DAYMODE_ERROR_CHARS = 160
+
+
+def sheet_daymode(url: str = "http://127.0.0.1:5010/api/health") -> Probe:
+    """The sheet is not just SERVING — it is WORKING.
+
+    THE THIRTEEN-HOUR GREEN. On 2026-09-09 the ASET sheet answered HTTP
+    200 from roughly 19:00 the previous evening until 07:06, while the
+    page carried "⚠ DAY MODE UNRESOLVED — cards are refused until this
+    is fixed". `sheet_http` was green the whole time and it was telling
+    the truth: the server was up. It was answering the wrong question.
+
+    The cause is worth keeping next to the probe, because it is the
+    shape of the failure this watches for. The 09-08 seat-usage deploy
+    added a `TunableUnit.WINDOW` row to `tunables.yaml`; the sheet
+    process re-reads that file per request through code that predated
+    the enum value, so every render raised `TaxonomyConfigError` — and
+    `_daymode_state()` catches everything and renders a banner, exactly
+    so the page paints rather than 500s. A page that refuses cards
+    politely looks identical, from the outside, to one that is working.
+
+    So this reads the banner. `/api/health` reports what
+    `_daymode_state()` resolved, and a false `ok` is red with the sheet's
+    own words.
+
+    NOT A REPLACEMENT FOR `sheet_http`, which stays exactly as it was.
+    Two questions: is it up, and is it usable. A dead server fails both,
+    and the first one's message is the one that says what to restart.
+    """
+    try:
+        with urlrequest.urlopen(url, timeout=probe_timeout_s()) as resp:
+            code = resp.status
+            payload = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:  # noqa: BLE001
+        return Probe(
+            "sheet daymode", False,
+            f"{url} unreachable: {type(e).__name__}: {e}",
+            unknown=True,
+        )
+
+    if code != 200 or not isinstance(payload, dict) or "ok" not in payload:
+        return Probe(
+            "sheet daymode", False,
+            f"{url} -> {code}, payload {str(payload)[:120]!r} — the health endpoint "
+            "is not answering the shape this probe reads. UNKNOWN, which is red.",
+            unknown=True,
+        )
+
+    if payload.get("ok"):
+        return Probe(
+            "sheet daymode", True,
+            f"day mode {payload.get('mode')} · {payload.get('stage')} · "
+            f"{payload.get('sheet_mode')} sheet — cards are accepted",
+        )
+
+    reason = payload.get("error") or (
+        f"no day mode resolved (stage {payload.get('stage')})"
+    )
+    return Probe(
+        "sheet daymode", False,
+        "THE SHEET IS SERVING BUT REFUSING CARDS — "
+        + str(reason)[:DAYMODE_ERROR_CHARS],
+    )
+
+
 def database(db_name: Optional[str] = None) -> Probe:
     """`cobalt_brain` (or whatever COBALT_ENV resolves) answers a query."""
     from cobalt import db, env

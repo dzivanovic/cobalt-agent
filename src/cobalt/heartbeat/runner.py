@@ -88,6 +88,11 @@ def take_beat(*, now: Optional[datetime] = None, probe: bool = True) -> Beat:
     beat.probes = [
         probe_mod.database(),
         probe_mod.sheet_http(),
+        # Right after `sheet_http`, and a separate line on purpose: "the
+        # server is up" and "the page will take a card" are different
+        # facts, and on 2026-09-09 they disagreed for thirteen hours
+        # while the beat stayed green.
+        probe_mod.sheet_daymode(),
         probe_mod.obsidian(),
         probe_mod.mainframe(),
         probe_mod.herdr(),
