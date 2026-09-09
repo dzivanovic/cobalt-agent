@@ -245,6 +245,21 @@ pkill -9 -f "node.*lmstudio" 2>/dev/null # the background workers
 stop_previous_heartbeat                  # was: pkill -9 -f caffeinate
 sleep 2
 
+# The template is installed BEFORE `lms daemon up`, not merely before the
+# load. PROVEN 2026-09-09 16:53 (Phase B, first attempt): the daemon indexes
+# every model dir at startup and `lms load` takes the chat template from
+# that index, not from disk — installing the file 2 s after the daemon came
+# up left the OLD template serving (`/no_think` ignored, `| safe` still
+# fatal) while ~/.lmstudio/.internal/model-index-cache.json already showed
+# the new one. The second start, template already on disk, served ours.
+# install_template RETURNS non-zero on a missing source or on a template in
+# the model dir that is neither upstream nor ours; on the main path that is
+# fatal, before anything is started.
+if ! install_template; then
+    log "FATAL: chat template not installed — refusing to start the mainframe. Aborting."
+    exit 1
+fi
+
 log "starting LM Studio daemon and server"
 lms daemon up
 lms server start
@@ -271,16 +286,6 @@ done
 # key happened to be unique. `-y` selects the first match, which is why
 # the arch/quant verification below is not optional.
 #
-# The template is installed BEFORE the load, not after: LM Studio reads
-# chat_template.jinja when the model is brought into memory, so installing
-# it afterwards would leave the previous template serving until the next
-# restart. install_template RETURNS non-zero on a missing source or on a
-# template in the model dir that is neither upstream nor ours; on the main
-# path that is fatal, before anything is loaded.
-if ! install_template; then
-    log "FATAL: chat template not installed — refusing to load the model. Aborting."
-    exit 1
-fi
 
 log "API online — loading model into VRAM"
 # 2>&1 | strip_tty: see the strip_tty definition above. The exit status
@@ -363,48 +368,44 @@ log "verified: '$MODEL_ID' = $got_arch/$got_quant at context $got_ctx"
 # check above: a mainframe that thinks when asked not to is a degraded
 # mainframe, while a mainframe that refused to start is a down one, and
 # NN#16 ranks down as strictly worse on a trading day.
-probe_reply="$(curl -s --max-time 60 "$API/v1/chat/completions" \
+probe_reply="$(curl -s --max-time 90 "$API/v1/chat/completions" \
     -H "Content-Type: application/json" \
-    -d "{\"model\":\"$MODEL_ID\",\"messages\":[{\"role\":\"system\",\"content\":\"/no_think\"},{\"role\":\"user\",\"content\":\"2+2, reply with just the number\"}],\"max_tokens\":16,\"temperature\":0}" 2>&1)"
+    -d "{\"model\":\"$MODEL_ID\",\"messages\":[{\"role\":\"system\",\"content\":\"/no_think\"},{\"role\":\"user\",\"content\":\"What is 2+2? Reply with just the number.\"}],\"max_tokens\":64,\"temperature\":0}" 2>&1)"
 
+# max_tokens 64, not 16: a length-truncated think block carries NO <think>
+# tag at all (Phase A2 finding 4.4), so a 16-token probe reads open-air
+# reasoning as "no think body" and passes a template that is NOT in effect
+# — exactly what happened on the first Phase B attempt (16:54). The verdict
+# is therefore three-way: finish_reason must be "stop", there must be no
+# populated <think> block, and the answer must start with "4".
 if [ -z "$probe_reply" ]; then
     log "WARN: nothink probe — no response from $API"
 else
-    probe_content="$(printf '%s' "$probe_reply" | python3 -c "
-import json,sys
+    probe_verdict="$(printf '%s' "$probe_reply" | python3 -c "
+import json,re,sys
 try:
     d = json.load(sys.stdin)
 except Exception as e:
-    print('__PROBE_ERROR__ unparseable response: %s' % e)
-    sys.exit(0)
+    print('WARN|unparseable response: %s' % e); sys.exit(0)
 if 'error' in d:
-    print('__PROBE_ERROR__ %s' % str(d['error'])[:160])
-    sys.exit(0)
+    print('WARN|%s' % str(d['error'])[:160]); sys.exit(0)
 try:
-    print(d['choices'][0]['message']['content'] or '')
+    ch = d['choices'][0]; content = ch['message']['content'] or ''; finish = ch.get('finish_reason')
 except Exception as e:
-    print('__PROBE_ERROR__ unexpected shape: %s' % e)
+    print('WARN|unexpected shape: %s' % e); sys.exit(0)
+m = re.search(r'<think>(.*?)</think>', content, re.DOTALL)
+if m and m.group(1).strip():
+    print('WARN|thinking still on (populated <think> block) — template not in effect?'); sys.exit(0)
+if finish != 'stop':
+    print('WARN|finish_reason=%s, content=%r — open-air reasoning, template not in effect?' % (finish, content[:60])); sys.exit(0)
+answer = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+if not answer.startswith('4'):
+    print('WARN|unexpected answer %r' % answer[:60]); sys.exit(0)
+print('OK|%s' % answer[:40])
 " 2>/dev/null)"
-
-    case "$probe_content" in
-        __PROBE_ERROR__*)
-            log "WARN: nothink probe — ${probe_content#__PROBE_ERROR__ }"
-            ;;
-        *)
-            # Thinking is "still on" only if <think> has actual content
-            # before </think>. The template's no-think path emits an EMPTY
-            # <think></think> pair by design, so an empty one is a PASS.
-            if printf '%s' "$probe_content" \
-                | python3 -c "
-import re,sys
-m = re.search(r'<think>(.*?)</think>', sys.stdin.read(), re.DOTALL)
-sys.exit(0 if (m and m.group(1).strip()) else 1)
-" 2>/dev/null; then
-                log "WARN: nothink probe — thinking still on (template not in effect?)"
-            else
-                log "nothink probe OK: $(printf '%s' "$probe_content" | tr -d '\n' | cut -c1-40)"
-            fi
-            ;;
+    case "$probe_verdict" in
+        OK\|*)   log "nothink probe OK: ${probe_verdict#OK|}" ;;
+        *)       log "WARN: nothink probe — ${probe_verdict#WARN|}" ;;
     esac
 fi
 

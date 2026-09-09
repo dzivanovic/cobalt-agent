@@ -538,7 +538,33 @@ heartbeat's last cycle (11:35 ET) is green on every row.
 
 ---
 
-## 3. Phase B — deploy (NOT RUN)
+## 3. Phase B — deploy — RUN 2026-09-09 16:53–16:58 ET, PROVEN on the second start
+
+| attempt | start | template on disk | served template | nothink probe | `/no_think` (b)/(c) | `| safe` repro |
+|---|---|---|---|---|---|---|
+| 1 | 16:53:48 (merge 3b57442, kickstart) | installed 16:53:54, `.orig` saved | **OLD upstream** | "OK" — FALSE PASS (16-token, tagless open-air reasoning) | thinking still on, 33–45 ctok | still `Unknown StringValue filter: safe` |
+| 2 | 16:56:22 (kickstart again) | `template current` | **ours** (`6543c0f4…`) | `nothink probe OK: 4` | `4`, 2 ctok, no tag, both placements | OK, 365 prompt tokens |
+
+**Root cause of attempt 1 (proven, not guessed):** `lms daemon up` indexes every model dir at
+startup and `lms load` takes the chat template from that index, not from disk. The script installed
+the template 2 s AFTER the daemon came up, so the first load served the index-time (old) template
+while `~/.lmstudio/.internal/model-index-cache.json` (rewritten 16:53 by the file watcher) already
+carried ours. The second start found the template on disk before the daemon indexed it. Fix in this
+commit: `install_template` runs BEFORE `lms daemon up`. No third kickstart is needed — the file is
+on disk, and every future start (RunAtLoad, F1 self-heal) indexes it first.
+
+**Second defect, the false PASS:** the probe used `max_tokens 16`; a length-truncated think block
+carries no `<think>` tag (A2 finding 4.4), so open-air reasoning read as "no think body". Fixed:
+64 tokens, and the verdict requires `finish_reason == stop`, no populated think block, AND the
+answer starts with `4`. Attempt 1 would have logged
+`WARN: nothink probe — finish_reason=length, content='We need to respond…' — open-air reasoning`.
+
+**Proof after attempt 2:** `lms ps` = `mainframe` only (29.53 GB, 262144); model-dir template
+sha `6543c0f4…` = repo template; `.orig` = upstream `c3cf9e34…`; forced heartbeat **GREEN 16:58:06**
+(13 jobs / 11 probes); mainframe.log rotated (9.26 MB → `.1`), no spinner lines. Residents
+restarted: `com.cobalt.mainframe` only (twice); outage 16:53:48–16:54:04 and 16:56:22–16:56:33.
+
+### 3.1 The original Phase B block (as planned)
 
 Outside market hours only.
 
