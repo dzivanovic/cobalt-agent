@@ -586,7 +586,9 @@ cp "/Users/cobalt/.lmstudio/models/mlx-community/Qwen3.8-27B-8bit/chat_template.
 # ff-only merge = NO merge commit to revert. Revert the branch commits by range
 # (oldest^..tip). Re-verify against `git log --oneline main` before running —
 # 8f896c3 stays the oldest; the tip is HEAD of ops/mainframe-p5 at merge time.
-cd /Users/cobalt/cobalt && git revert --no-edit 8f896c3^..HEAD
+# oldest branch commit after the 16:28 rebase = 7887646 ("repo-owned chat template with /no_think soft switch");
+# after the ff-only merge main's tip IS the branch tip, so the range is oldest^..main.
+cd /Users/cobalt/cobalt && git revert --no-edit 7887646^..main
 launchctl kickstart -k gui/$(id -u)/com.cobalt.mainframe
 ```
 
