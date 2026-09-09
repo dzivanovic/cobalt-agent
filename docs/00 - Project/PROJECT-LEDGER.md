@@ -1040,3 +1040,49 @@ H. OPEN ON DEJAN
 
 
 - 09-08 S1 LIVE ACCEPTANCE — GREEN. One live session on the ASET sheet with the new controls: attestation + rung→sheet gating applied; cards ARMED→TRIGGERED→FILLED on a real trade; daily note intact (no overwrite); heartbeat green (12:05, 11 jobs / 9 probes). S1-P4 email channel landed the same day (F18 proven RED→GREEN in production, DM + email). CODE FREEZE LIFTED. S1 delivered 09-04/08 vs 09-18 plan — ~10 days of slack; S2 starts on ADR-0008 done, not 09-21. Friday's 4 FILLED cards needed a manual CLOSE (expected until F11). Known debt: OAuth app in Testing status → refresh token expires ~09-15 unless Publish succeeds and email-auth is re-run.
+
+
+
+### 2026-09-08 — S1 acceptance + release planning (Fable 5.1 chat) — CLOSED
+RULINGS
+- R1 S1 LIVE ACCEPTANCE GREEN; CODE FREEZE LIFTED 09-08. S1 delivered 09-04/08 vs 09-18 plan; S2 starts on ADR-0008 done (done 09-08 17:55), not 09-21.
+- R2 122B deletion: after 24 h clean (~21:36 09-08), folded into Prompt 5 — NOT yet run.
+- R3 Morning briefing (old-tree APScheduler job, gemini-3.1-pro-preview via GEMINI_API_KEY, no cost telemetry) + old-tree Mattermost listener: LEAVE until F5/F20 replace them.
+- R4 Worktree rule (amends 09-08 branch rule): ~/cobalt IS production; every Code prompt works in ~/cobalt-wt/<branch> off main; production proofs only after --ff-only merge, from ~/cobalt, as a named step; merge = deploy.
+- Architect role in Code = Fable 5.1 always; implementing subagents Opus 5. Code-architect spike PASSED (ADR-0008: rulings a–g in the pane, developer subagent, 38 commits, live same day).
+- Grok seat role = RESEARCHER (read-only + web), `grok --sandbox readonly-safe`; Claude-config inheritance STAYS ON, coexistence via harness-aware hook guard.
+- Item d: class + family in strategy-note frontmatter, filled from the def (chat's second opinion was "drop"; Dejan ruled fill).
+- §1 fold: L17 amended, L28, L29 amended, L30, L31, L32, L33–L40 issued and pasted; the 09-05 research appendix (never pasted) recovered and pasted.
+FACTS
+- Git: six linear branches ff'd into main and deleted; main only. main at close: post-herdr-flip commit.
+- S1-P4 email: Layer-B Google OAuth gmail.send, proven RED→GREEN in prod. Google project = AI-Studio "Cobalt Project", stuck in TESTING (console bug) → refresh token expires ~09-15 unless Publish succeeds + `cobalt notify email-auth` re-run. Alert address == rt.smbtraining.com::username (vault literal; F19 redacts it from text).
+- herdr handover DONE 19:21 ET: com.cobalt.herdr pid 20039 under launchd; restore brought Claude1 (with conversation, /rc auto) + Qwen1 back; Codex/Grok/agy relaunched by hand. `herdr` probe live.
+- seat-usage job live, hourly 06–23 ET → docs/40 - DevDocs/reports/seat-usage.md; ccusage 20.0.20 pinned; fable-5-1 and gpt-6-astra UNPRICED offline. Chat-side usage not measurable — Dejan tracks weekly % open/close by hand.
+- 09-08 Code cost (API-equiv): Opus $36.5 (S1-P4 + ADR-0008 dev), Fable $13.1 (architect), Sonnet $8.5 (Prompt 4); architect review ≈ +$0.57 across Phase B — the developer is the spend.
+- 27B: thinking eats the whole budget at max_tokens=1600 (3/3 zero useful) → template-level disable (Prompt 5); adapter contract in ADR-0008.
+OWED
+- Prompt 5 (mainframe: template override, 4-bit vs 8-bit same test, 122B delete, spinner-log fix).
+- Ops prompt: cobalt_app non-superuser login (grants bind only after SET ROLE today) · herdr probe checks SessionStart guard pointer · vault restore defects (section-wide, no frontmatter undo) · hourly report git rule.
+- Seat-delegation spike (outside Ladder): architect → Codex/Grok/Qwen/agy by role, read-only, artifact-verified; agy with a Claude model selected — prove model + which quota.
+- OAuth Publish retry from another browser before 09-15.
+- Old-tree test_finviz_extractor collection error; MattermostConfig timeout_s DONE (ADR-0008).
+
+### 2026-09-09 — planning session, morning ops (Fable 5.1 Code architect, plan mode) — PART 1 CLOSED, scope items 2–6 continue in the next session
+RULINGS
+- R1 ASET sheet: DAY MODE UNRESOLVED (TaxonomyConfigError, tunables unit `window`) cleared by `launchctl kickstart -k com.cobalt.aset` at 07:06; verified REDUCED/half/keys A,B. Cause: the 09-08 ~19:00 seat-usage deploy added `TunableUnit.WINDOW` + a tunables row; the sheet process (started 17:50 at ADR-0008 LIVE-1) re-reads tunables.yaml per request through pre-merge code. The deploy plan said "nothing else is restarted" — that was the error. Law restated (third time: 09-04, 09-08 aset.yaml, today): a config-shape change and the restart of EVERY resident that reads that file are one action; every deploy plan names the residents it restarts.
+- R2 herdr fixed FORWARD, not rolled back. Root cause: `herdr --remote` from a 0.8.2 client replaces the running server (06:03 and 07:26, both from Fedora; the second attach came 27 s after the launchd start). Dejan's addendum: 0.8.2 DID prompt and he answered Yes without reading, so the replacement was human-confirmed — partly procedure, not only version. Fix: Mac + Fedora herdr 0.8.2 → 0.9.0 (0.9.0: "client updates leave compatible servers untouched … replacing a remote server asks, default No"); server restarted under launchd from the Mac keyboard (Terminal.app, not a herdr pane) 08:17 → pid 72998, run 3, version 0.9.0, endpoint_compatible yes; heartbeat GREEN 08:19:57 (13 jobs / 11 probes). Standing rules: the phone attaches via `ssh cobalt@cobalt` then `herdr` (its 0.8.2 client must never `--remote`); Fedora `--remote` on 0.9.0 answers NO to any replace prompt. ACCEPTANCE PENDING (Dejan): after a Fedora `--remote` attach, `launchctl list | grep com.cobalt.herdr` still shows pid 72998.
+- R3 Qwen seat: Qwen Code 0.23 sends `cron_list` and `list_agents` with `parameters` lacking `properties`; LM Studio's OpenAI endpoint returns 400 on every turn (confirmed from LM Studio's request log, tools[5]/tools[15]). Fix: `tools.exclude: [cron_list, list_agents]` in ~/.qwen/settings.json (backup ~/.qwen/settings.json.pre-0909); headless `qwen -p` → "OK", request carries neither tool. Interactive relaunch in Qwen1 PENDING (Dejan). Upstream filing (Qwen Code should emit `properties: {}`) = Dejan's call.
+- Ruling order for the day (Dejan): sheet → red heartbeat → Qwen → Codex1/Gemini1 (relaunch by hand; herdr restores shells, not agents — unless the agent reports a session reference, see 0.9.0 note below).
+FACTS
+- Heartbeat 19:21 09-08 → 05:54 09-09: 40 GREEN. One RED 21:07 09-08: the heartbeat itself MISSED (no beat 19:52 → 21:07, 75-min gap, cause not in the log, self-recovered 21:22). RED 06:09 → 08:05 on `com.cobalt.herdr` (launchd probe: loaded, not running, exit 0) while the socket probe stayed green — the two probes disagreeing was the correct signal; the launchd probe is the one that caught it.
+- 05:15 prefill created the 2026-09-09 note (write_id 2120): rules unit, REDUCED / half sheet / keys A,B, market table, calendar. prefill-drc 15:40 09-08 created DRC-2026-09-08. archiver 00:30Z 210 symbols, 3,166,696 rows, exit 0; backup 21:40 ok; seat-usage hourly ok, fable-5-1 unpriced.
+- Daily-note defect (L28 class, OPEN): the heartbeat unit was stuck on the 05:54 GREEN block from 06:25 to 08:05. The 06:09 and 06:24 beats wrote RED; at 06:25:54 the file was rewritten back to the 05:54 content (Obsidian Sync from the remote device is the likely writer); the merge then read the stale block as a human edit and let human win every beat ("unchanged", OVERRIDE conflict). Self-cleared after the 08:17 restart. A sync-revert is indistinguishable from a human edit to the current merge → Ops prompt.
+- Sheet probe defect (OPEN): F18's sheet probe checks HTTP 200 only; the page served 200 with the refusal banner for ~13 h → Ops prompt: probe must read the day-mode banner.
+- herdr 0.9.0 native agent restore relaunched claude / grok / qwen in their panes on restart; the Claude1 conversation continued without `--resume`. Codex1 / Gemini1 were empty shells before the restart, nothing to restore.
+- Hook-guard pointer (~/.claude/settings.json → herdr-harness-guard.sh) intact after `brew upgrade herdr` and the first 0.9.0 server run; Codex and Grok hooks still labelled. herdr then offered its Claude-integration update → re-verify the pointer after installing (checklist line, codex-seat-test §10).
+- ops/README "herdr handover" section is stale (0.8.2 wording, "built, not loaded", "at the Mac keyboard" reasoning) → Ops prompt rewrites it with the 0.9.0 attach rules.
+- Uncommitted in ~/cobalt, deliberately left: rules.yaml `generated_at` (05:15 regen), archiver-runs.md one row, seat-usage.md hourly rewrites — the hourly-report git rule is an Ops-prompt item. Committed here: this Ledger appendix + Dejan's 09-08 appendix paste.
+OWED (unchanged from 09-08, plus today's additions)
+- Prompt 5 (mainframe): chat-template thinking-off override, 4-bit vs 8-bit same tool-calling test, 122B deletion (24 h clean passed 21:36 09-08), spinner-log fix — draft, approve, Opus subagent in a proposed maintenance window.
+- Ops prompt: cobalt_app non-superuser login · herdr probe checks the SessionStart guard pointer · two vault-restore defects (section-wide, no frontmatter undo) · hourly seat-usage git rule · + sheet probe reads the banner · + sync-revert vs human-override · + deploy plans name residents to restart · + ops/README handover rewrite for 0.9.0 + phone/Fedora attach rules · + herdr acceptance result.
+- Seat-delegation spike (outside Ladder) · S2 start ruling (dates pulled forward; S2-P1 drafted, not run) · OAuth Publish retry before 09-15 (human) · Qwen Code upstream issue (Dejan's call).
