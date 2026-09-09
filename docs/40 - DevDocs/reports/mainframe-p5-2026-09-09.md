@@ -27,6 +27,11 @@ honest.
 **Nothing has been deployed.** Production is untouched — no `lms load`, no `launchctl`, no writes
 under `~/.lmstudio`, no commits to `main`. Phase B is the deploy, and it has not run.
 
+**Phase A2 caveat (chat second opinion, 09-09):** side instances share LM Studio's `llmster`
+daemon with production — "production untouched" means the model DIR and identifier, not the
+process. A daemon fault during A2 would take `mainframe` down with it. Accepted risk, after
+Dejan's trading window.
+
 **Status: Phase A1 complete and green. Phase A2 not started.**
 
 ---
@@ -105,7 +110,7 @@ fails at prompt-render time — before the model is reached, so it presents as a
 a bad completion.
 
 Fix: drop `| safe`. `tojson` already returns a string and nothing autoescapes in this rendering, so
-the filter was a no-op under jinja2 and fatal under minijinja — which is exactly why it survived
+the filter was a no-op under jinja2 and fatal under @huggingface/jinja (LM Studio's renderer) — which is exactly why it survived
 upstream testing. One token removed; the `is string` branch is untouched.
 
 Five tests cover it (case g, §1.6): a history with int, list, dict and bool arguments plus the tool
@@ -361,7 +366,10 @@ take and Phase B should be rolled back.
 ```bash
 cp "/Users/cobalt/.lmstudio/models/mlx-community/Qwen3.8-27B-8bit/chat_template.jinja.orig" \
    "/Users/cobalt/.lmstudio/models/mlx-community/Qwen3.8-27B-8bit/chat_template.jinja"
-cd /Users/cobalt/cobalt && git revert --no-edit <merge-sha>
+# ff-only merge = NO merge commit to revert. Revert the branch commits by range
+# (oldest^..tip). Re-verify the range against `git log --oneline main` before running —
+# A2 adds commits to this branch, so the tip moves; 8f896c3 stays the oldest.
+cd /Users/cobalt/cobalt && git revert --no-edit 8f896c3^..41ebd09
 launchctl kickstart -k gui/$(id -u)/com.cobalt.mainframe
 ```
 
@@ -383,8 +391,9 @@ NN#16-correct. Implemented, with `install_template` converted to a return-based 
 path can exit while the heartbeat merely skips the reload. Sandbox scenario 6 now refuses and leaves
 the new upstream file intact (§1.4). Closed.
 
-**4.2 — the minijinja gap is not closed by Phase A1.** These tests prove the template under
-**jinja2**; LM Studio serves it through **minijinja**. `namespace()`, `is string`, and `in`-on-string
+**4.2 — the renderer gap is not closed by Phase A1.** These tests prove the template under
+**jinja2**; LM Studio (a node app) serves it through **@huggingface/jinja** — the `Unknown StringValue
+filter` error string is that engine's format (not minijinja, as first written). `namespace()`, `is string`, and `in`-on-string
 are compatible but are not the same implementation. **Phase A2 loads the repo template on a side
 instance (`q8-sw`) and runs the thinking probes there before Phase B**, and the post-load `nothink
 probe` is the standing runtime check thereafter. Until A2 runs, the soft switch is unproven on the
