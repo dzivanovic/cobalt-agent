@@ -36,6 +36,44 @@
 # The heartbeat exists because the model is evicted from VRAM when idle;
 # `caffeinate -i -m` additionally stops the machine idle-sleeping and
 # the disk spinning down under it.
+#
+# 2026-09-09, PROMPT 5 phase A1 — four changes, none of which alter which
+# model is served or how it is loaded:
+#
+# 1. REPO-OWNED CHAT TEMPLATE. LM Studio 1.11.0 forwards neither
+#    `enable_thinking` nor `reasoning_effort` from the API into the
+#    model's Jinja chat template (proven 2026-09-07 and 2026-09-08), so
+#    thinking is unconditionally on and no API parameter can turn it off.
+#    The only remaining lever is the template itself, which lives in the
+#    model directory — outside the repo, outside git, outside review,
+#    exactly like this script did before RULING 6.
+#    ops/mainframe/chat_template.jinja is now the source of truth
+#    (upstream + one in-band soft-switch block: `/no_think` and
+#    `/think_low`), and ops/mainframe/install_template.sh copies it into
+#    the model dir on every start and on every heartbeat self-heal. It
+#    backs the upstream template up once to chat_template.jinja.orig and
+#    refuses to overwrite a template it does not recognise.
+#
+# 2. SPINNER FILTER. `lms load` prints a TTY progress spinner — braille
+#    frames separated by carriage returns, wrapped in ANSI escapes — with
+#    no quiet flag available and regardless of having no TTY. That is
+#    what made ops/logs/mainframe.log 9.2 MB: 815 spinner lines against
+#    10 348 lines of actual log. Both `lms load` calls now go through
+#    strip_tty(). Measured on a 20-line sample of the real log: 226 012
+#    bytes in, 1 260 bytes out (-99.4%) — and it SURFACES signal the raw
+#    log buried mid-line, "Model loaded successfully in 25.64s." becomes
+#    its own readable line. The main-path load also stops writing to
+#    launchd's stdout, so mainframe-boot.log stops collecting spinner.
+#
+# 3. LOG ROTATION. There was none; see the 9.2 MB above. One generation
+#    only, rotated at start when the log exceeds 5 MB.
+#
+# 4. TWO HONESTY FIXES. stop_previous_heartbeat() logged "pid N is not
+#    one of ours — left alone" even when the pid simply no longer existed
+#    (mainframe-swap-2026-09-07.md §12.8); a dead pid now says so. And a
+#    post-load `/no_think` probe checks that the installed template is
+#    actually in effect — at WARN, never fatal, because NN#16 ranks "the
+#    mainframe is down" above "the mainframe thinks when asked not to".
 
 set -u
 
@@ -74,6 +112,60 @@ mkdir -p "$LOG_DIR"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') | $*" >> "$LOG_FILE"; }
 
+# --- 0. rotate the log, ONE generation ---------------------------------
+#
+# Must run before the first `log` call so the rotation notice is the first
+# line of the new file. ONE generation is the rule: mainframe.log.1 is
+# overwritten every rotation and nothing older is kept. This log is a
+# liveness trace, not an audit trail — anything worth keeping longer is
+# quoted into a report under docs/40 - DevDocs/reports/ instead.
+# Before the spinner filter (change 2 above) the log grew ~9 MB in five
+# days; with it, 5 MB is a long time.
+LOG_MAX_BYTES=$((5 * 1024 * 1024))
+if [ -f "$LOG_FILE" ]; then
+    log_size="$(stat -f %z "$LOG_FILE" 2>/dev/null || echo 0)"
+    if [ "$log_size" -gt "$LOG_MAX_BYTES" ]; then
+        mv "$LOG_FILE" "$LOG_FILE.1"
+        log "rotated: previous log was $log_size bytes (> $LOG_MAX_BYTES) -> $LOG_FILE.1"
+    fi
+fi
+
+# `lms load` writes a TTY progress spinner even with no TTY attached and
+# has no quiet flag (its only flags are --gpu, -c/--context-length,
+# --parallel, --ttl, --identifier, --estimate-only, -y/--yes). Each
+# spinner burst arrives as ONE physical line of carriage-return-separated
+# braille frames wrapped in ANSI escapes, so `tr -d '\r'` would merely
+# concatenate ~9 000 characters of frames into a single unreadable line.
+# Turning CR into LF instead, then dropping the trailing spinner glyph and
+# collapsing the resulting runs, takes a 226 012-byte sample to 1 260
+# bytes and leaves "Model loaded successfully in 25.64s." legible.
+#
+# LC_ALL=C is deliberate: launchd starts this job with no LANG, and the
+# spinner glyphs are multibyte UTF-8. In C locale sed matches bytes, and
+# `[^[:print:][:space:]]` cleanly catches them without a multibyte
+# character range that would behave differently depending on the inherited
+# locale. Verified byte-identical under `env -i` (2026-09-09).
+strip_tty() {
+    tr '\r' '\n' \
+        | LC_ALL=C sed -E $'s/\x1b\\[[0-9;?]*[A-Za-z]//g' \
+        | LC_ALL=C sed -E 's/[[:space:]]*[^[:print:][:space:]]+[[:space:]]*$//' \
+        | grep -v '^[[:space:]]*$' \
+        | uniq
+}
+
+# Repo-owned chat template installer (change 1 above). Sourced rather than
+# inlined because the heartbeat's self-heal reload() needs the same
+# function from inside a separate `bash -c` — one implementation, one
+# place to edit it. Needs OPS_DIR, MODEL_PATH and log() — all three are
+# defined above this point.
+INSTALL_TEMPLATE_SH="$OPS_DIR/mainframe/install_template.sh"
+if [ ! -f "$INSTALL_TEMPLATE_SH" ]; then
+    log "FATAL: missing $INSTALL_TEMPLATE_SH — cannot install the chat template. Aborting."
+    exit 1
+fi
+# shellcheck source=mainframe/install_template.sh
+. "$INSTALL_TEMPLATE_SH"
+
 # Unique to THIS script's heartbeat. It appears in the heartbeat's own
 # command line, which is what makes "our heartbeat" identifiable without
 # resorting to `pkill -f caffeinate` and taking every unrelated
@@ -107,7 +199,19 @@ stop_previous_heartbeat() {
         *)
             # PIDs are recycled — confirm it is OURS by the marker before
             # signalling anything.
-            if ps -p "$old" -o args= 2>/dev/null | grep -q "$HEARTBEAT_MARKER"; then
+            #
+            # The dead-pid case is split out deliberately (2026-09-09). It
+            # used to fall into the "not one of ours" branch, which read as
+            # "something else owns that pid, we declined to touch it" when
+            # the truth was "that pid does not exist". Two very different
+            # facts, one misleading line — reported in
+            # mainframe-swap-2026-09-07.md §12.8. This is the overwhelmingly
+            # common case: launchd `kickstart -k` kills the old heartbeat
+            # before this script runs, so its pidfile almost always names a
+            # pid that is already gone.
+            if ! ps -p "$old" > /dev/null 2>&1; then
+                log "previous heartbeat pid $old is gone (nothing to stop)"
+            elif ps -p "$old" -o args= 2>/dev/null | grep -q "$HEARTBEAT_MARKER"; then
                 kill_tree "$old"
                 log "stopped previous heartbeat tree (pid $old)"
             else
@@ -166,8 +270,30 @@ done
 # 21:31 during this very swap. The 122B never hit it only because its
 # key happened to be unique. `-y` selects the first match, which is why
 # the arch/quant verification below is not optional.
+#
+# The template is installed BEFORE the load, not after: LM Studio reads
+# chat_template.jinja when the model is brought into memory, so installing
+# it afterwards would leave the previous template serving until the next
+# restart. install_template exits 1 on a missing source or an
+# unrecognised template in the model dir — fail-loud, before anything is
+# loaded.
+install_template
+
 log "API online — loading model into VRAM"
-lms load "$MODEL" -y --identifier "$MODEL_ID" --gpu max --context-length "$CONTEXT_LENGTH"
+# 2>&1 | strip_tty: see the strip_tty definition above. The exit status
+# that matters is `lms load`'s, not the last stage of the pipeline, hence
+# PIPESTATUS. This path previously wrote to launchd's stdout
+# (mainframe-boot.log); it now goes to the same log as everything else.
+lms load "$MODEL" -y --identifier "$MODEL_ID" --gpu max --context-length "$CONTEXT_LENGTH" \
+    2>&1 | strip_tty >> "$LOG_FILE"
+load_rc=${PIPESTATUS[0]}
+# Not fatal on its own: `lms load` has been observed returning non-zero
+# after a model was in fact loaded, and the arch/quant verification below
+# is the real gate. Logged so a non-zero rc is visible next to the
+# verification result rather than discarded, which is what happened before.
+if [ "$load_rc" -ne 0 ]; then
+    log "WARN: 'lms load' exited $load_rc — continuing to verification"
+fi
 
 # --- verify we loaded the model we meant to ---------------------------
 #
@@ -220,6 +346,65 @@ if [ "$got_ctx" != "$CONTEXT_LENGTH" ]; then
 fi
 log "verified: '$MODEL_ID' = $got_arch/$got_quant at context $got_ctx"
 
+# --- no-think probe ----------------------------------------------------
+#
+# install_template put our template in the model dir, but "the file is on
+# disk" is not "the template is in effect": LM Studio may have cached the
+# previous one, or may render it through minijinja with different
+# semantics than the jinja2 the unit tests use
+# (tests/cobalt/test_mainframe_template.py). This probe is the only check
+# that exercises the real path — send `/no_think` and see whether the
+# reply still carries a populated <think> block.
+#
+# WARN, NOT FATAL, deliberately, and for the same reason as the context
+# check above: a mainframe that thinks when asked not to is a degraded
+# mainframe, while a mainframe that refused to start is a down one, and
+# NN#16 ranks down as strictly worse on a trading day.
+probe_reply="$(curl -s --max-time 60 "$API/v1/chat/completions" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\":\"$MODEL_ID\",\"messages\":[{\"role\":\"system\",\"content\":\"/no_think\"},{\"role\":\"user\",\"content\":\"2+2, reply with just the number\"}],\"max_tokens\":16,\"temperature\":0}" 2>&1)"
+
+if [ -z "$probe_reply" ]; then
+    log "WARN: nothink probe — no response from $API"
+else
+    probe_content="$(printf '%s' "$probe_reply" | python3 -c "
+import json,sys
+try:
+    d = json.load(sys.stdin)
+except Exception as e:
+    print('__PROBE_ERROR__ unparseable response: %s' % e)
+    sys.exit(0)
+if 'error' in d:
+    print('__PROBE_ERROR__ %s' % str(d['error'])[:160])
+    sys.exit(0)
+try:
+    print(d['choices'][0]['message']['content'] or '')
+except Exception as e:
+    print('__PROBE_ERROR__ unexpected shape: %s' % e)
+" 2>/dev/null)"
+
+    case "$probe_content" in
+        __PROBE_ERROR__*)
+            log "WARN: nothink probe — ${probe_content#__PROBE_ERROR__ }"
+            ;;
+        *)
+            # Thinking is "still on" only if <think> has actual content
+            # before </think>. The template's no-think path emits an EMPTY
+            # <think></think> pair by design, so an empty one is a PASS.
+            if printf '%s' "$probe_content" \
+                | python3 -c "
+import re,sys
+m = re.search(r'<think>(.*?)</think>', sys.stdin.read(), re.DOTALL)
+sys.exit(0 if (m and m.group(1).strip()) else 1)
+" 2>/dev/null; then
+                log "WARN: nothink probe — thinking still on (template not in effect?)"
+            else
+                log "nothink probe OK: $(printf '%s' "$probe_content" | tr -d '\n' | cut -c1-40)"
+            fi
+            ;;
+    esac
+fi
+
 log "model loaded — spawning heartbeat (60s ping, logged, self-healing)"
 caffeinate -i -m bash -c '
   MARKER="'"$HEARTBEAT_MARKER"'"   # identifies this process as ours
@@ -233,15 +418,49 @@ caffeinate -i -m bash -c '
   # to empty here and every self-heal reload would fail on a bare
   # `--context-length`.
   CONTEXT_LENGTH="'"$CONTEXT_LENGTH"'"
+  # Same injection, for the same reason: install_template.sh needs OPS_DIR
+  # and MODEL_PATH, and is sourced rather than duplicated here so there is
+  # exactly one implementation of "put our chat template in the model dir".
+  OPS_DIR="'"$OPS_DIR"'"
+  INSTALL_TEMPLATE_SH="'"$INSTALL_TEMPLATE_SH"'"
   export PATH="'"$PATH"'"
   hb() { echo "$(date "+%Y-%m-%d %H:%M:%S") | $*" >> "$LOG_FILE"; }
+  # install_template.sh calls log(); in here the logger is hb().
+  log() { hb "$@"; }
+  strip_tty() {
+    tr "\r" "\n" \
+      | LC_ALL=C sed -E "s/$(printf "\033")\[[0-9;?]*[A-Za-z]//g" \
+      | LC_ALL=C sed -E "s/[[:space:]]*[^[:print:][:space:]]+[[:space:]]*\$//" \
+      | grep -v "^[[:space:]]*\$" \
+      | uniq
+  }
+  if [ -f "$INSTALL_TEMPLATE_SH" ]; then
+    . "$INSTALL_TEMPLATE_SH"
+  else
+    hb "WARN: $INSTALL_TEMPLATE_SH missing — heartbeat reloads will not reinstall the template"
+    install_template() { hb "WARN: install_template unavailable"; }
+  fi
   reload() {
     hb "heartbeat: attempting reload of $MODEL"
-    if lms load "$MODEL" -y --identifier "$MODEL_ID" --gpu max --context-length "$CONTEXT_LENGTH" \
-         >> "$LOG_FILE" 2>&1; then
+    # Reinstall the template before reloading: a self-heal reload is the
+    # other path by which a model enters memory, and it must not bring the
+    # model up under a stale template. Run in a SUBSHELL so that
+    # install_template'\''s fail-loud `exit 1` cannot kill the heartbeat —
+    # in here, a bad template is a reason to log and carry on, because a
+    # loaded model with the wrong template still answers and a dead
+    # heartbeat never recovers anything (NN#16).
+    if ! ( install_template ); then
+      hb "WARN: template install failed — reloading anyway"
+    fi
+    lms load "$MODEL" -y --identifier "$MODEL_ID" --gpu max --context-length "$CONTEXT_LENGTH" \
+      2>&1 | strip_tty >> "$LOG_FILE"
+    rc=${PIPESTATUS[0]}
+    # OK/FAILED is decided on lms load'\''s status, not the pipeline'\''s: the
+    # last stage is `uniq`, which succeeds even when the load did not.
+    if [ "$rc" -eq 0 ]; then
       hb "heartbeat: reload OK"
     else
-      hb "heartbeat: reload FAILED — mainframe is DOWN"
+      hb "heartbeat: reload FAILED (rc $rc) — mainframe is DOWN"
     fi
   }
   while true; do
