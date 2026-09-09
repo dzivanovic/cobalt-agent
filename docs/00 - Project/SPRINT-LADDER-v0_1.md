@@ -14,7 +14,9 @@ already runs by hand in the DRC chat; the expectancy corpus must sample the
 playbook's population (radar cards), not what Dejan spotted by eye; sim /
 shadow-card training (R2 rung) needs the radar. Hand-logged legs cover the
 gap until F11 lands.
-**Timebox:** 9 build weeks 09-08 → 11-06, acceptance run 11-09 → 11-13.
+**Timebox:** 9 build weeks 09-08 → 10-28, acceptance run 10-29 → 11-04
+(**dates pulled forward 2026-09-09**: S1 closed 09-08, ten days early; every later
+sprint moved up by the same shape; original 09-04 dates in the git history).
 Charter says ~2 months; this is 2 months + 1 week — flagged, not hidden.
 
 **Starting state (from the ledger, proven):** cobalt_brain live, cobalt_dev
@@ -33,11 +35,11 @@ built (host not yet), 92 real cards in cobalt_brain.
 | Sprint | Weeks | Adds (Charter F-ids) | §7 metric served |
 |---|---|---|---|
 | S1 Foundation + firewall | 09-08 → 09-18 (2) | F1 · F7 (manual cards) · F6 · F18 · F17 · F19 · F16 sweep · bars.ts ADR | adherence, prep (nothing silent again) |
-| S2 Radar 19a | 09-21 → 10-02 (2) | F2 · F8 · F10 · F3 · Radar panel (§5) · F12 · F13 | selection quality, awareness; expectancy corpus starts on the right population |
-| S3 Exits + DRC on radar cards | 10-05 → 10-16 (2) | F11 · F22 · F14 · F15 | exit efficiency, adherence measurement, expectancy |
-| S4 19b strike alert — CAPPED | 10-19 → 10-23 (1) | F9 | bandwidth (+ adherence under fire) |
-| S5 Prep + platform + playbook | 10-26 → 11-06 (2) | F4 · F5 · F20 · F21 · F23 · F16 close | prep, bandwidth |
-| Acceptance | 11-09 → 11-13 | §12: every MUST on live vault + DB, 5 days green, ≥3 live mornings | — |
+| S2 Radar 19a | 09-10 → 09-23 (2) | F2 · F8 · F10 · F3 · Radar panel (§5) · F12 · F13 | selection quality, awareness; expectancy corpus starts on the right population |
+| S3 Exits + DRC on radar cards | 09-24 → 10-07 (2) | F11 · F22 · F14 · F15 | exit efficiency, adherence measurement, expectancy |
+| S4 19b strike alert — CAPPED | 10-08 → 10-14 (1) | F9 | bandwidth (+ adherence under fire) |
+| S5 Prep + platform + playbook | 10-15 → 10-28 (2) | F4 · F5 · F20 · F21 · F23 · F16 close | prep, bandwidth |
+| Acceptance | 10-29 → 11-04 | §12: every MUST on live vault + DB, 5 days green, ≥3 live mornings | — |
 
 **Expectation set with the ruling:** the radar raises candidates, not the
 trade count — rule 10 and the trade-count band still cap what is taken.
@@ -442,7 +444,7 @@ day-mode note, plus the one-click-fill and step-down-table cases.
 
 ---
 
-## S2 — Radar 19a (09-21 → 10-02)
+## S2 — Radar 19a (09-10 → 09-23; was 09-21 → 10-02, pulled forward 09-09)
 
 | Feature | Charter acceptance (test) | What S2 delivers |
 |---|---|---|
@@ -467,13 +469,46 @@ fill-recompute; legs hand-logged in the DRC chat until S3).
 - S2-P4 · Opus 5 · fresh · F3 pick-vs-rank rows · F12 nightly replay + counterfactual R · F13 top-N archive + benchmark + miss line · S2 smoke.
 - Parallel, non-write: Agent SDK spike (Sonnet) — two-session test (subscription CoS + local worker via LiteLLM proxy), HITL hooks question — so S5's F20 does not start cold.
 
+### S2-P1 prompt — DRAFTED 2026-09-09 (architect session PART 2), NOT RUN
+
+Runs once Dejan hands over the 4 Finviz dynamic screens (user data — vault note or
+`"user".trader_settings`, never the repo; the repo ships one synthetic example screen).
+Opus 5 · fresh · worktree `~/cobalt-wt/s2-p1-radar-pool` off main · report + READY FOR MERGE ·
+LIVE block names RESTARTS via `cobalt jobs readers` (Ops prompt 09-09 item G).
+
+- **Line 0: ADR-0008 in force.** `system` / `"user"` schemas, side per store; every new table
+  declared in `src/cobalt/db_migrations/placement.py` or the placement test fails.
+  `radar_pool` + `radar_membership` are already DECLARED system-side; the account-mode tag is a
+  `"user".aset_sizings` column. First cross-side join J1
+  (`"user".aset_sizings.pool_member_id → system.radar_membership.id`); suite asserts sides.
+- **F2 pool job `com.cobalt.radar`** (resident, F17 wrapper, `reads:` declared): sources = the
+  4 TV static lists (today `configs/cobalt/watchlists.yaml` tiers — user data by L32, moved
+  user-side in this prompt, ADR-0008 ESCALATE 8) + the 4 Finviz dynamic screens
+  (`/export/screener?v=152&f=<filters>&c=<cols>` per DATA-SOURCE-MEMO §1; deterministic
+  collector, cached CSV, no LLM) → ≤ `radar.pool_cap` (tunable, 50) rotating names; churn
+  every `radar.scan_interval` (tunable, 60 s); premarket included via the F1 session clock;
+  membership history persisted (`entered_at`, `left_at`, `source`, `excluded_by ∈
+  {config_cap, not_equity, manual}`); a dead source = degraded flag on the pool row and a red
+  F18 line, never an empty pool.
+- **Finviz bar poller at `working_timeframe`** (2m, `configs/cobalt/taxonomy/defaults.yaml`)
+  for pool names: reuses `cobalt.archiver.collector.fetch_bars` + its token resolution (the
+  live-feed spike's path); i1 → 2m aggregation deterministic; bars land in `system.bars` with
+  the archiver's schema (one path, no second bars table). First build step: re-measure Finviz
+  throttle at 50 names on a 10 s grid and report the number before the cadence is set.
+- **Account-mode tag:** `"user".aset_sizings.account_mode ∈ {live, sim}` from the day-mode
+  row / trader_settings, stamped on every card; migration + placement + tests.
+- **Smoke (dev vault + cobalt_dev):** replay a recorded session from the archiver corpus —
+  pool churns, cap holds, a name entering on RVOL appears within one interval, membership rows
+  carry `excluded_by`; F18 gains a `radar` freshness probe.
+- **NOT in P1:** precondition evaluator, dots, panel, F12/F13 — S2-P2…P4 as listed above.
+
 **Rulings/inputs owed before S3:** DRC template review session (Dejan +
 Claude, his docx + SMB template → live Templater template) — before S3-P3.
 Stop-override authority (mock #6) — before S3-P2.
 
 ---
 
-## S3 — Exits + DRC on radar cards (10-05 → 10-16)
+## S3 — Exits + DRC on radar cards (09-24 → 10-07; was 10-05 → 10-16)
 
 | Feature | Charter acceptance (test) | What S3 delivers |
 |---|---|---|
@@ -494,7 +529,7 @@ replay of the card's grade matches.
 
 ---
 
-## S4 — 19b trigger detection + strike alert (10-19 → 10-23, ONE WEEK, CAPPED)
+## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)
 
 **Preconditions (must be true on 10-19 or the sprint slips, not stretches):**
 trading PC on Tailscale (his) · `.htk` hotkey labels checked against
@@ -509,7 +544,7 @@ S4-P2 · Opus 5 · fresh · SSE delivery + notification + fallback + week report
 
 ---
 
-## S5 — Prep + platform + playbook (10-26 → 11-06)
+## S5 — Prep + platform + playbook (10-15 → 10-28; was 10-26 → 11-06)
 
 **Flag:** this is the ladder's heaviest slot (F20/F21 are the Agent SDK
 bring-up). It holds only if the S2 SDK spike ran. If S5 overflows, F4/F5
@@ -532,7 +567,7 @@ F23 renderer (no vault write). SHOULD Vital Dawn only if a slot frees.
 
 ---
 
-## Acceptance week (11-09 → 11-13) — Charter §12
+## Acceptance week (10-29 → 11-04; was 11-09 → 11-13) — Charter §12
 
 Every §3 MUST passes its test on the live vault + live DB, five consecutive
 trading days, heartbeat green, card used in ≥3 live mornings. Then the
