@@ -33,9 +33,41 @@ f-string; a suite lint test fails on any unquoted reference to that
 schema anywhere under src/cobalt.
 
 THE ONE `psycopg.connect` IN THE NEW CORE IS IN THIS FILE, and a suite
-test greps for a second one. That is the enforcement behind the
-one-factory law until the non-superuser `cobalt_app` login lands
-(ADR-0008 D1 Revision 2, owed as its own ops prompt).
+test greps for a second one.
+
+TWO CREDENTIALS, ONE NAME EACH (2026-09-09 — ADR-0008 D1 Revision 2's
+owed ops prompt). Until today the factory logged in as the docker
+SUPERUSER, and a superuser bypasses every grant check: the `SET ROLE` in
+`apply_side` made the grants bite for that session, but a connection
+that skipped the factory kept full power, and the lint test was the only
+thing holding that line. So the login is split by PURPOSE, and each
+purpose has exactly one name:
+
+  `Credential.APP`        COBALT_DB_USER / COBALT_DB_PASSWORD
+                          -> `cobalt_app`: LOGIN, NOINHERIT, no
+                          superuser, no createdb / createrole /
+                          replication / bypassrls. A member of
+                          `cobalt_system`, `cobalt_user` and
+                          `cobalt_backup` — and NOINHERIT means it holds
+                          none of their privileges until a `SET ROLE`,
+                          so a connection that skips `apply_side` can
+                          read nothing at all. `connect()` uses this,
+                          which is every store, every job, every probe.
+
+  `Credential.BOOTSTRAP`  POSTGRES_USER / POSTGRES_PASSWORD
+                          -> the docker superuser. Its meaning is
+                          unchanged and must not change: docker-compose
+                          interpolates this pair for the container's own
+                          superuser and the old tree reads it too.
+                          MIGRATIONS AND BOOTSTRAP ONLY — `CREATE ROLE`,
+                          `ALTER ... OWNER`, `SET SCHEMA`: the acts the
+                          side roles are deliberately unable to perform.
+
+THERE IS NO FALLBACK BETWEEN THEM. A missing `COBALT_DB_*` raises
+`DbConfigError` naming both variables rather than quietly reaching for
+`POSTGRES_*`. Running the whole application as superuser because one
+line was missing from `.env` is exactly the failure this split exists to
+make impossible, and a silent fallback would reintroduce it.
 """
 
 import os
@@ -52,6 +84,32 @@ from cobalt import env, tenant
 # cobalt/env.py is the definition of record (RULING 7).
 PROD_DB_NAME = env.PROD_DB_NAME
 DEV_DB_NAME = env.DEV_DB_NAME
+
+
+#: The non-superuser application login (item A, 2026-09-09). The role's
+#: password lives in VaultManager under `COBALT_DB_PASSWORD` — which IS
+#: its F19 literal-guard enrolment — and in `.env` as the bootstrap tier,
+#: exactly like `MATTERMOST_DB_PASSWORD` (2026-09-05 precedent).
+APP_ROLE = "cobalt_app"
+
+
+class Credential(Enum):
+    """WHICH login a connection authenticates as. See the module
+    docstring: `APP` for everything the application does, `BOOTSTRAP`
+    for migrations and bootstrap only. The value is the (user, password)
+    environment-variable pair — one name per concept, written down once.
+    """
+
+    APP = ("COBALT_DB_USER", "COBALT_DB_PASSWORD")
+    BOOTSTRAP = ("POSTGRES_USER", "POSTGRES_PASSWORD")
+
+    @property
+    def user_env(self) -> str:
+        return self.value[0]
+
+    @property
+    def password_env(self) -> str:
+        return self.value[1]
 
 
 class Side(Enum):
@@ -99,26 +157,44 @@ def _prod_gate(dbname: str, allow_prod: bool) -> None:
             )
 
 
-def _open(dbname: str) -> psycopg.Connection:
-    """Compose the DSN from parts and open. THE ONLY `psycopg.connect`."""
-    parts = {
-        "POSTGRES_HOST": os.getenv("POSTGRES_HOST"),
-        "POSTGRES_USER": os.getenv("POSTGRES_USER"),
-        "POSTGRES_PASSWORD": os.getenv("POSTGRES_PASSWORD"),
-    }
-    missing = [name for name, value in parts.items() if not value]
+def _open(dbname: str, credential: Credential = Credential.APP) -> psycopg.Connection:
+    """Compose the DSN from parts and open. THE ONLY `psycopg.connect`.
+
+    `POSTGRES_HOST` / `POSTGRES_PORT` are the ADDRESS and are shared by
+    both credentials — there is one server, and which login you use has
+    nothing to do with where it is. Only the user/password pair changes,
+    which is why `Credential` carries exactly that pair.
+    """
+    host = os.getenv("POSTGRES_HOST")
+    user = os.getenv(credential.user_env)
+    password = os.getenv(credential.password_env)
+
+    missing = [
+        name
+        for name, value in (
+            ("POSTGRES_HOST", host),
+            (credential.user_env, user),
+            (credential.password_env, password),
+        )
+        if not value
+    ]
     if missing:
         raise DbConfigError(
-            f"Missing Postgres settings: {', '.join(missing)}. "
-            "Fail-loud: no default credentials, no silent fallback."
+            f"Missing Postgres settings for the {credential.name} credential: "
+            f"{', '.join(missing)}. That credential is composed from "
+            f"{credential.user_env} and {credential.password_env} (plus "
+            "POSTGRES_HOST/POSTGRES_PORT, shared). Fail-loud: no default "
+            "credentials, and NO FALLBACK to the other pair — running the "
+            "application as the bootstrap superuser because a line is missing "
+            "from .env is the failure this split exists to prevent."
         )
     port = os.getenv("POSTGRES_PORT", "5432")
 
     dsn = (
         "postgresql://"
-        f"{quote(parts['POSTGRES_USER'], safe='')}:"
-        f"{quote(parts['POSTGRES_PASSWORD'], safe='')}@"
-        f"{parts['POSTGRES_HOST']}:{port}/{quote(dbname, safe='')}"
+        f"{quote(user, safe='')}:"  # type: ignore[arg-type]
+        f"{quote(password, safe='')}@"  # type: ignore[arg-type]
+        f"{host}:{port}/{quote(dbname, safe='')}"
     )
     return psycopg.connect(dsn, autocommit=True)
 
@@ -168,6 +244,11 @@ def connect(
     on a call that omits it; the explicit check below turns a `None` or a
     string passed by a caller that half-migrated into the same loud
     `DbConfigError` every other config mistake gets.
+
+    2026-09-09: this authenticates as `Credential.APP` — `cobalt_app`,
+    NOINHERIT and non-superuser. The `SET ROLE` in `apply_side` is now
+    what makes the connection able to read anything at all, rather than
+    what makes an already-omnipotent session behave.
     """
     if not isinstance(side, Side):
         raise DbConfigError(
@@ -188,6 +269,11 @@ def connect(
 def connect_migration(dbname: str, *, allow_prod: bool = False) -> psycopg.Connection:
     """The MIGRATION HARNESS's connection: no `SET ROLE`, no side.
 
+    SUPERUSER: MIGRATIONS AND BOOTSTRAP ONLY. This is the one caller of
+    `Credential.BOOTSTRAP` (`POSTGRES_USER`/`POSTGRES_PASSWORD` — the
+    docker superuser), and it stays that way. Everything the application
+    does goes through `connect()` as `cobalt_app`.
+
     `cobalt db migrate` creates the schemas and the side roles, moves
     tables between schemas and transfers ownership — every one of which is
     an act the side roles are deliberately not able to perform on each
@@ -201,7 +287,7 @@ def connect_migration(dbname: str, *, allow_prod: bool = False) -> psycopg.Conne
     cannot become a second factory somewhere else.
     """
     _prod_gate(dbname, allow_prod)
-    conn = _open(dbname)
+    conn = _open(dbname, Credential.BOOTSTRAP)
     try:
         conn.execute("SET search_path TO public")
         conn.execute(
@@ -238,8 +324,10 @@ def assert_schemas_exist(conn) -> None:
 
 
 __all__ = [
+    "APP_ROLE",
     "DEV_DB_NAME",
     "PROD_DB_NAME",
+    "Credential",
     "DbConfigError",
     "SchemaMissingError",
     "Side",

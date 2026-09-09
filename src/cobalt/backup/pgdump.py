@@ -48,11 +48,24 @@ class DumpError(RuntimeError):
 
 def _parts() -> tuple[str, str, str]:
     """(host, user, password) — the same env parts `cobalt.db` composes
-    its DSN from, so there is one answer to 'which server'."""
+    its DSN from, so there is one answer to 'which server'.
+
+    THE APP CREDENTIAL, not the bootstrap one (2026-09-09). A backup is
+    something the application does every night, so it logs in as
+    `cobalt_app` like everything else does. `--role=cobalt_backup` still
+    works: `cobalt_app` is granted membership of `cobalt_backup`, and
+    `pg_dump --role=` issues a `SET ROLE`, which is exactly the mechanism
+    NOINHERIT leaves available. The env-var NAMES come from
+    `cobalt.db.Credential` rather than being written out a second time
+    here — one name per concept, in one place.
+    """
+    from cobalt.db import Credential
+
+    cred = Credential.APP
     host = os.getenv("POSTGRES_HOST") or "localhost"
-    user = os.getenv("POSTGRES_USER")
-    password = os.getenv("POSTGRES_PASSWORD")
-    missing = [n for n, v in (("POSTGRES_USER", user), ("POSTGRES_PASSWORD", password)) if not v]
+    user = os.getenv(cred.user_env)
+    password = os.getenv(cred.password_env)
+    missing = [n for n, v in ((cred.user_env, user), (cred.password_env, password)) if not v]
     if missing:
         raise DumpError(f"missing connection part(s): {', '.join(missing)}")
     return host, user, password  # type: ignore[return-value]

@@ -32,6 +32,15 @@ from dotenv import load_dotenv
 # old-tree import calls load_dotenv() somewhere down their chain. This
 # module has no such chain, so it loads the same file deliberately and
 # visibly, exactly as cobalt/cli.py does.
+#
+# BOTH credentials are loaded from that one file (2026-09-09):
+# `COBALT_DB_*` is the application login every `db.connect()` below uses,
+# and `POSTGRES_*` is the docker SUPERUSER — MIGRATIONS AND BOOTSTRAP
+# ONLY, which for this module means creating `cobalt_dev` itself and
+# running `cobalt db migrate` against it. The truncates below go through
+# `db.connect()` and therefore run as `cobalt_app` + `SET ROLE`, under
+# exactly the grants production has; a destructive helper that quietly
+# had more power than the code it rehearses would prove nothing.
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 from psycopg import sql  # noqa: E402

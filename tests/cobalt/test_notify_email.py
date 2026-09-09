@@ -70,10 +70,18 @@ CFG = EmailConfig(enabled=True, to="alerts@example.com", subject_prefix="[COBALT
 def tmp_vault(tmp_path, monkeypatch):
     """A throwaway encrypted vault with a throwaway key.
 
-    Points BOTH `VAULT_FILE` and `COBALT_MASTER_KEY` at material created
+    Points the vault path and `COBALT_MASTER_KEY` at material created
     inside this test. The real vault is never touched — which is not a
     nicety here: `put_secret` writes, and a test that wrote to
     `data/.cobalt_vault` would be editing production credentials.
+
+    BOTH WAYS OF SAYING IT (2026-09-09). `VAULT_FILE_ENV` was added so a
+    worktree can reach the host's single vault, and an environment that
+    sets it OUTRANKS a patched `VAULT_FILE` — which would have pointed
+    this fixture at the real vault and then tried to decrypt it with a
+    throwaway key. So the fixture sets the override too, and the order
+    stops mattering: a test may not depend on the developer's shell not
+    having a variable set.
     """
     from cryptography.fernet import Fernet
 
@@ -82,6 +90,7 @@ def tmp_vault(tmp_path, monkeypatch):
     path.write_bytes(Fernet(key.encode()).encrypt(json.dumps({}).encode()))
 
     monkeypatch.setattr(secrets_mod, "VAULT_FILE", path)
+    monkeypatch.setenv(secrets_mod.VAULT_FILE_ENV, str(path))
     monkeypatch.setenv(secrets_mod.MASTER_KEY_ENV, key)
     secrets_mod.reset_cache()
     yield path

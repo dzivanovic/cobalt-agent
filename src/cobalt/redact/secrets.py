@@ -42,7 +42,49 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 #: The same file `cobalt_agent.security.vault.VaultManager` reads.
 VAULT_FILE = REPO_ROOT / "data" / ".cobalt_vault"
 
+#: Override for the one case the default gets wrong: A GIT WORKTREE.
+#:
+#: There is exactly ONE vault on this host. The default above resolves it
+#: RELATIVE TO THE CHECKOUT, which is right for `~/cobalt` and silently
+#: wrong everywhere else — in `~/cobalt-wt/<branch>` there is no `data/`,
+#: `load_literals()` reports the literal half of F19 as INACTIVE, and
+#: nothing is red about it because "the vault is locked on this process"
+#: is a legitimate state (`MASTER_KEY_ENV` is deliberately absent from
+#: most environments). Found 2026-09-09 while proving the `cobalt_app`
+#: enrolment: a worktree run had NO literal guard and said so only in a
+#: line nobody reads.
+#:
+#: Production does not set this and must not: `~/cobalt`'s default is
+#: already the right file, and a second way to say the same thing is a
+#: second thing that can drift. It exists for dev checkouts, and it is
+#: FAIL-LOUD — an override naming a file that is not there raises rather
+#: than falling back to a path that would be created empty.
+VAULT_FILE_ENV = "COBALT_VAULT_FILE"
+
 MASTER_KEY_ENV = "COBALT_MASTER_KEY"
+
+
+def vault_file() -> Path:
+    """The vault this process reads and writes. See `VAULT_FILE_ENV`.
+
+    Resolved per call, not at import: `.env` is loaded by the entry point
+    and this module is imported from a dozen places, some of them before
+    that happens. A constant frozen at import time would answer
+    correctly or incorrectly depending on import order, which is the
+    worst of the three possibilities.
+    """
+    override = os.getenv(VAULT_FILE_ENV)
+    if not override:
+        return VAULT_FILE
+    path = Path(override).expanduser()
+    if not path.exists():
+        raise VaultAccessError(
+            f"{VAULT_FILE_ENV} points at {path}, which does not exist. Refusing "
+            "to fall back to the checkout-relative default: the vault is a host "
+            "singleton, and a process that silently reads a different one has no "
+            "literal guard and no credentials."
+        )
+    return path
 
 
 class LiteralGuard:
@@ -90,12 +132,13 @@ def load_literals(min_length: int = 8) -> LiteralGuard:
             f"{MASTER_KEY_ENV} is not set on this process — the literal half of the "
             "exfiltration guard is INACTIVE (the pattern half still runs)."
         )
-    if not VAULT_FILE.exists():
-        return _empty(f"vault file {VAULT_FILE} does not exist — literal guard INACTIVE.")
+    vf = vault_file()
+    if not vf.exists():
+        return _empty(f"vault file {vf} does not exist — literal guard INACTIVE.")
     try:
         from cryptography.fernet import Fernet
 
-        data = json.loads(Fernet(key.encode()).decrypt(VAULT_FILE.read_bytes()).decode())
+        data = json.loads(Fernet(key.encode()).decrypt(vf.read_bytes()).decode())
     except Exception as e:  # noqa: BLE001 - the REASON matters, the contents never appear
         return _empty(
             f"vault could not be opened ({type(e).__name__}) — literal guard INACTIVE. "
@@ -176,12 +219,13 @@ def _unlock() -> tuple[str, dict]:
             f"{MASTER_KEY_ENV} is not set on this process — the vault cannot be "
             "unlocked. Set it on the job that needs the credential."
         )
-    if not VAULT_FILE.exists():
-        raise VaultAccessError(f"vault file {VAULT_FILE} does not exist.")
+    vf = vault_file()
+    if not vf.exists():
+        raise VaultAccessError(f"vault file {vf} does not exist.")
     try:
         from cryptography.fernet import Fernet
 
-        return key, json.loads(Fernet(key.encode()).decrypt(VAULT_FILE.read_bytes()).decode())
+        return key, json.loads(Fernet(key.encode()).decrypt(vf.read_bytes()).decode())
     except Exception as e:  # noqa: BLE001 - the KIND matters; the text can echo material
         raise VaultAccessError(
             f"vault could not be opened ({type(e).__name__}). The exception text is "
@@ -224,11 +268,12 @@ def put_secret(name: str, value: str) -> None:
     from cryptography.fernet import Fernet
 
     payload = Fernet(key.encode()).encrypt(json.dumps(data).encode())
-    tmp = VAULT_FILE.with_suffix(VAULT_FILE.suffix + f".tmp.{os.getpid()}")
+    vf = vault_file()
+    tmp = vf.with_suffix(vf.suffix + f".tmp.{os.getpid()}")
     try:
         tmp.write_bytes(payload)
         os.chmod(tmp, 0o600)
-        os.replace(tmp, VAULT_FILE)
+        os.replace(tmp, vf)
     finally:
         if tmp.exists():
             tmp.unlink()
@@ -246,6 +291,7 @@ def secret_names() -> list[str]:
 __all__ = [
     "MASTER_KEY_ENV",
     "VAULT_FILE",
+    "VAULT_FILE_ENV",
     "LiteralGuard",
     "VaultAccessError",
     "has_secret",
@@ -254,4 +300,5 @@ __all__ = [
     "read_secret",
     "reset_cache",
     "secret_names",
+    "vault_file",
 ]
