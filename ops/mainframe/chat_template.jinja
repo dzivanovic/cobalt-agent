@@ -16,7 +16,8 @@
          value — reproduced against production 2026-09-09: arguments {"path":"x.py"} render,
          {"path":"x.py","limit":5} do not. This killed the Qwen seat on turn 2 of a
          read-file task. tojson already returns a string and nothing autoescapes here, so
-         the filter was a no-op in jinja2 and fatal in minijinja. See the comment at the
+         the filter was a no-op in jinja2 and fatal in @huggingface/jinja (LM Studio's
+         renderer, a node app). See the comment at the
          edit site.
 
     This file is INSTALLED INTO THE MODEL DIRECTORY by ops/start_mainframe.sh (which keeps a
@@ -73,12 +74,20 @@
     forwards neither enable_thinking nor reasoning_effort from the API into this template,
     so a request opts out IN-BAND. `/no_think` in the system message or in the LAST message
     disables thinking for that request; `/think_low` sets reasoning effort low. Default
-    unchanged (thinking on). Installed into the model dir by ops/start_mainframe.sh. #}
+    unchanged (thinking on). Installed into the model dir by ops/start_mainframe.sh.
+    The content is read through render_content, NOT through an `m.content is string`
+    guard: LM Studio normalises a user message's string content into a list
+    ([{type:'text',text:...}]) before rendering, so an `is string` test is FALSE for
+    every user message and the last-message arm never fired. Proven on the side
+    instance 2026-09-09 phase A2 (§2.0) by tokenising the offline render — the system
+    arm worked, the last-message arm did not, and the prompt-token count matched the
+    list-normalised render exactly. render_content already flattens both shapes. #}
 {%- set cobalt_sw = namespace(no_think=false, low=false) %}
 {%- for m in messages %}
-    {%- if (m.role == 'system' or loop.last) and m.content is string %}
-        {%- if '/no_think' in m.content %}{%- set cobalt_sw.no_think = true %}{%- endif %}
-        {%- if '/think_low' in m.content %}{%- set cobalt_sw.low = true %}{%- endif %}
+    {%- if m.role == 'system' or loop.last %}
+        {%- set cobalt_text = render_content(m.content, false) %}
+        {%- if '/no_think' in cobalt_text %}{%- set cobalt_sw.no_think = true %}{%- endif %}
+        {%- if '/think_low' in cobalt_text %}{%- set cobalt_sw.low = true %}{%- endif %}
     {%- endif %}
 {%- endfor %}
 {%- if cobalt_sw.no_think %}{%- set enable_thinking = false %}{%- endif %}
@@ -181,7 +190,7 @@
                             non-string argument value — the `is string` branch is the only reason
                             string-only calls ever worked. tojson already returns a string and
                             nothing autoescapes in this rendering, so `safe` was a no-op in jinja2
-                            and fatal in minijinja. #}
+                            and fatal in @huggingface/jinja. #}
                         {%- set args_value = args_value | string if args_value is string else args_value | tojson %}
                         {{- args_value }}
                         {{- '\n</parameter>\n' }}

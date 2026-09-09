@@ -353,7 +353,7 @@ log "verified: '$MODEL_ID' = $got_arch/$got_quant at context $got_ctx"
 #
 # install_template put our template in the model dir, but "the file is on
 # disk" is not "the template is in effect": LM Studio may have cached the
-# previous one, or may render it through minijinja with different
+# previous one, or may render it through @huggingface/jinja with different
 # semantics than the jinja2 the unit tests use
 # (tests/cobalt/test_mainframe_template.py). This probe is the only check
 # that exercises the real path — send `/no_think` and see whether the

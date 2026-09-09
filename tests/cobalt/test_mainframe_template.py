@@ -9,7 +9,7 @@ from the API into the template.
 These tests never touch LM Studio, the network, or the model directory. They render
 the REPO copy with jinja2 and assert on the generation prompt.
 
-CAVEAT: LM Studio serves the template through minijinja, not jinja2. These tests
+CAVEAT: LM Studio serves the template through @huggingface/jinja, not jinja2. These tests
 prove the template's logic under jinja2; the runtime proof is the `nothink probe`
 in ops/start_mainframe.sh and the phase A2 side-instance run.
 """
@@ -115,12 +115,51 @@ def test_no_think_in_earlier_message_only_keeps_thinking_on(
 def test_multimodal_content_list_does_not_crash_the_switch(
     template: jinja2.Template,
 ) -> None:
-    """`m.content is string` guards a list-shaped (multimodal) message content."""
+    """List-shaped (multimodal) message content must not break the switch."""
     out = render(
         template,
         [{"role": "user", "content": [{"type": "text", "text": "2+2?"}]}],
     )
     assert out.endswith(THINK_OPEN), repr(out[-80:])
+
+
+def test_marker_in_list_shaped_last_user_message_is_honoured(
+    template: jinja2.Template,
+) -> None:
+    """The A2 defect: LM Studio normalises a user string content into a list.
+
+    Phase A2 proved on the side instance that LM Studio hands the template
+    ``[{"type": "text", "text": ...}]`` for a user message the API received as a
+    plain string, so the original ``m.content is string`` guard made the
+    last-message arm dead at runtime while still passing under jinja2. The switch
+    now reads content through ``render_content``, which flattens both shapes.
+    """
+    out = render(
+        template,
+        [{"role": "user", "content": [{"type": "text", "text": "2+2? /no_think"}]}],
+    )
+    assert out.endswith(THINK_SKIPPED), repr(out[-80:])
+
+
+def test_marker_in_an_earlier_list_shaped_message_is_ignored(
+    template: jinja2.Template,
+) -> None:
+    out = render(
+        template,
+        [
+            {"role": "user", "content": [{"type": "text", "text": "hi /no_think"}]},
+            {"role": "assistant", "content": "Hello."},
+            {"role": "user", "content": [{"type": "text", "text": "2+2?"}]},
+        ],
+    )
+    assert out.endswith(THINK_OPEN), repr(out[-80:])
+
+
+def test_switch_does_not_use_the_dead_is_string_guard(template_source: str) -> None:
+    """Regression: the runtime-dead `is string` guard must not come back."""
+    block = template_source.split(MARKER, 1)[1].split("{%- endfor %}", 1)[0]
+    assert "is string" not in block, block
+    assert "render_content(m.content" in block, block
 
 
 # --- e: the /think_low switch ------------------------------------------------
