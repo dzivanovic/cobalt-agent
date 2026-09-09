@@ -72,6 +72,51 @@ def cmd_register(args: argparse.Namespace) -> None:
               f"timeout={spec.timeout_s}s  {spec.cadence or '(resident)'}")
 
 
+def cmd_readers(args: argparse.Namespace) -> None:
+    """`cobalt jobs readers <path>` — who must be restarted for this file.
+
+    THE COMMAND THAT PRODUCES A DEPLOY PLAN'S `RESTARTS:` LINE. The law
+    has been ruled three times (2026-09-04, 09-08 on aset.yaml, 09-09 on
+    tunables.yaml): a config-shape change and the restart of every
+    resident that reads that file are ONE ACTION. Re-deriving that list
+    from memory at deploy time is what failed on 09-08, when a plan that
+    said "nothing else is restarted" left the ASET sheet answering 200s
+    and refusing every card for thirteen hours.
+
+    EXIT 1 ON AN UNKNOWN PATH, and that is the useful half. "No resident
+    re-reads this" and "nobody has written down who reads this" are
+    different answers, and only one of them means it is safe to deploy
+    without a restart. A path no row mentions gets a non-zero exit and
+    the list of paths that ARE covered, so the operator knows they are
+    looking at a gap rather than an all-clear.
+    """
+    from pathlib import Path
+
+    registry = load_job_registry()
+    path = args.path
+    readers = registry.readers_of(path)
+
+    if not readers:
+        known = registry.read_paths
+        print(
+            f"UNKNOWN PATH: no job row lists {path!r} as re-read at runtime.\n"
+            "\n"
+            "That is NOT the same as 'nothing reads it'. `reads` is derived by hand\n"
+            "from the code, so an unlisted path means nobody has worked out its\n"
+            "readers yet — check before deploying a change to it, and add the row.\n"
+            "\n"
+            "Paths that ARE covered:\n  " + ("\n  ".join(known) or "(none)"),
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print(f"{path} is re-read at runtime by {len(readers)} resident(s):")
+    for spec in readers:
+        print(f"  {spec.label:<28} {spec.what.strip().splitlines()[0]}")
+    print("\nRESTARTS: " + " ".join(s.label for s in readers))
+    print("  launchctl kickstart -k gui/$(id -u)/<label>")
+
+
 def cmd_check(args: argparse.Namespace) -> None:
     findings = sweep()
     for f in findings:
@@ -125,6 +170,13 @@ def add_parser(sub) -> None:
 
     check = jsub.add_parser("check", help="Run the watchdog (zombie / missed).")
     check.set_defaults(func=cmd_check)
+
+    readers = jsub.add_parser(
+        "readers",
+        help="Which residents re-read a config file — the deploy plan's RESTARTS line.",
+    )
+    readers.add_argument("path", help="Repo-relative config path, e.g. configs/cobalt/taxonomy/tunables.yaml")
+    readers.set_defaults(func=cmd_readers)
 
     run = jsub.add_parser("run", help="Run a command wrapped as a registered job.")
     run.add_argument("label")

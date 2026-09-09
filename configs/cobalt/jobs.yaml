@@ -47,12 +47,36 @@ jobs:
     # that a thread could not tell us (S1-P2 watched this process serve
     # 500s while perfectly alive).
     timeout_s: 300
+    # WHAT THIS PROCESS RE-READS ON EVERY REQUEST — derived by measuring
+    # the request path (instrumented `open`/`read_text` over GET / and
+    # GET /api/health), not by reading config names off a shelf. Each
+    # entry cites its loader call in the 2026-09-09 ops report.
+    #
+    # It is the reason the field exists. On 09-08 a deploy added a
+    # `TunableUnit.WINDOW` row to tunables.yaml and said "nothing else is
+    # restarted"; this process re-read the new file through code that
+    # predated the enum value, and from ~19:00 to 07:06 the page he
+    # trades beside answered HTTP 200 and refused every card.
+    #
+    # NOT LISTED, and the omission is the point: `configs/dev/vault.yaml`
+    # IS re-read per request in dev (cobalt/vault.py:167) but NOT in
+    # production, where COBALT_VAULT_PATH is set in this job's own plist
+    # and the resolver returns before it reads the file. A row here that
+    # is only true in dev would send an operator to restart the sheet for
+    # a file production never opens.
+    reads:
+      - "configs/dev/aset.yaml"                    # aset/config.py:134 (load_config); the name says dev, but there is no configs/cobalt/aset.yaml — this IS the production sheet's config
+      - "configs/cobalt/taxonomy/tunables.yaml"    # taxonomy/loader.py:79 (load_tunables); the 09-09 R1 case
     what: "the ASET semi-auto sheet on :5010 — the surface he trades beside"
 
   - label: com.cobalt.mainframe
     kind: resident
     supervisor: launchd
     timeout_s: 600
+    # EMPTY, derived: LM Studio is not Cobalt code and reads its own
+    # `~/.lmstudio/` config, which is not repo-relative. Nothing in
+    # configs/ reaches this process.
+    reads: []
     what: "the LM Studio local-model server (ops/start_mainframe.sh), the L23 local lane"
 
   - label: com.cobalt.obsidian
@@ -64,6 +88,9 @@ jobs:
       vault reaches his other devices only through a RUNNING Obsidian on
       this Mac, and on 09-04 a correct 05:15 write was silently
       overwritten because none was running.
+    # EMPTY, derived: Obsidian is a third-party app. It reads the vault's
+    # own .obsidian/ directory, never configs/.
+    reads: []
 
   - label: com.cobalt.agent
     kind: resident
@@ -87,6 +114,14 @@ jobs:
     # It gets a row because F18 must be able to say it is down; it gets
     # no wrapper because the strangler rule (CLAUDE.md) says the old tree
     # stays untouched and no new-core code is added to it.
+    # EMPTY, and it needs the caveat. The old tree loads `configs/*.yaml`
+    # ONCE into a singleton at first construction
+    # (cobalt_agent/config.py:410) and `Config.load()` returns the cached
+    # object thereafter — so it does not RE-READ anything, which is what
+    # this field records. It still has to be restarted when one of those
+    # files changes, because it is running the old values. That is the
+    # read-once class; it wants its own field (09-09 ESCALATE).
+    reads: []
     what: "the OLD-TREE agent (cobalt.sh start -> cobalt_agent/main.py), detached; liveness from its PID file"
 
   - label: com.cobalt.herdr
@@ -106,6 +141,11 @@ jobs:
     # second question separately — socket + agent list — for the same
     # reason the ASET sheet gets an HTTP probe next to its PID probe.
     timeout_s: 300
+    # EMPTY, derived: herdr is not Cobalt code. Its config is
+    # `~/.config/herdr/config.toml` (and `herdr server reload-config`
+    # re-reads it without a restart) — not repo-relative, so no deploy of
+    # ours can change it.
+    reads: []
     what: "the herdr server — the terminal workspace hosting every agent seat"
 
   # ---------------- one-shots ----------------

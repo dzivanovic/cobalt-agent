@@ -411,6 +411,48 @@ def _cmd_validate(args: argparse.Namespace) -> None:
                 sys.exit(1)
     print("  registry <-> plists: schedules and COBALT_ENV agree on every job.")
 
+    # CROSS-CHECK 3: `reads`. Every declared path must exist, because
+    # this list is what `cobalt jobs readers` answers a deploy question
+    # from, and a stale entry means a file that quietly has no readers.
+    # One-shots must leave it empty — the model already refuses
+    # otherwise; this is the gate saying so where an operator sees it.
+    from cobalt.jobs.config import REPO_ROOT as JOBS_REPO_ROOT
+
+    missing_reads = [
+        (spec.label, p)
+        for spec in registry.jobs
+        for p in spec.reads
+        if not (JOBS_REPO_ROOT / p).exists()
+    ]
+    if missing_reads:
+        print(
+            "FAILED: `reads` names path(s) that do not exist:\n  "
+            + "\n  ".join(f"{label}: {p}" for label, p in missing_reads)
+            + "\n  A stale entry makes `cobalt jobs readers` answer 'nothing to "
+            "restart' for a file somebody renamed."
+        )
+        sys.exit(1)
+    noisy = [j.label for j in registry.jobs if j.kind.value == "one-shot" and j.reads]
+    if noisy:
+        print(f"FAILED: one-shot(s) declare `reads`: {noisy}. See JobSpec.reads.")
+        sys.exit(1)
+
+    covered = registry.read_paths
+    residents_with_reads = [j for j in registry.jobs if j.reads]
+    print(
+        f"  reads: {len(covered)} config path(s) re-read at runtime by "
+        f"{len(residents_with_reads)} resident(s); every path exists, every "
+        "one-shot empty."
+    )
+    for path in covered:
+        who = ", ".join(s.label for s in registry.readers_of(path))
+        print(f"    {path} -> {who}")
+    print(
+        "  LAW (ruled 09-04, 09-08, 09-09): a config-shape change and the restart of "
+        "every resident that reads that file are ONE action. Every deploy plan "
+        "carries a RESTARTS: line from `cobalt jobs readers`."
+    )
+
     from cobalt.heartbeat.runner import green_summary_at, interval_min
 
     print(

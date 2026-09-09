@@ -253,8 +253,52 @@ class JobSpec(BaseModel):
     #: does not".
     enabled: bool = True
 
+    #: Repo-relative config files this RESIDENT RE-READS AT RUNTIME.
+    #:
+    #: THE LAW THIS SERVES, ruled three times (2026-09-04, 2026-09-08 on
+    #: aset.yaml, 2026-09-09 on tunables.yaml): a config-shape change and
+    #: the restart of every resident that reads that file are ONE ACTION.
+    #: The 09-09 case is the one to remember — the 09-08 seat-usage deploy
+    #: added a `TunableUnit.WINDOW` row to tunables.yaml and its plan said
+    #: "nothing else is restarted". The ASET sheet re-reads that file on
+    #: every request, through code that predated the enum value, so from
+    #: roughly 19:00 to 07:06 the page he trades beside answered HTTP 200
+    #: and refused every card. The deploy was right about its own job and
+    #: wrong about everybody else's.
+    #:
+    #: EVERY ENTRY IS DERIVED FROM THE CODE, never guessed: a row here
+    #: claims that a specific loader call reads a specific file on a
+    #: request path, and the 2026-09-09 ops report cites file:line for
+    #: each one. A guessed row is worse than an empty list, because
+    #: `cobalt jobs readers` is trusted to be complete.
+    #:
+    #: ONE-SHOTS LEAVE IT EMPTY, and `cobalt validate` enforces that: a
+    #: one-shot re-reads everything every time it runs, by definition —
+    #: it starts, reads, exits. There is no stale process to restart, so
+    #: rows here would be noise diluting the ones that mean something.
+    #:
+    #: KNOWN GAP, deliberately not papered over: this is RE-READS, not
+    #: reads. A resident that loads a config ONCE AT STARTUP also needs a
+    #: restart when it changes, and `com.cobalt.agent` (the old tree) is
+    #: exactly that shape — it caches settings in a singleton at first
+    #: construction (`cobalt_agent/config.py:410`). That wants its own
+    #: field; see the 09-09 report's ESCALATE.
+    reads: list[str] = Field(default_factory=list)
+
     @model_validator(mode="after")
     def _shape_matches_kind(self) -> "JobSpec":
+        if self.kind is JobKind.ONE_SHOT and self.reads:
+            raise ValueError(
+                f"{self.label}: `reads` belongs to a RESIDENT. A one-shot re-reads "
+                "everything every time it runs — there is no stale process to "
+                "restart, so naming files here dilutes the rows that do mean "
+                "something."
+            )
+        bad = [p for p in self.reads if Path(p).is_absolute() or ".." in Path(p).parts]
+        if bad:
+            raise ValueError(
+                f"{self.label}: `reads` entries are REPO-RELATIVE with no `..`: {bad}"
+            )
         if self.kind is JobKind.ONE_SHOT and self.schedule is None:
             raise ValueError(
                 f"{self.label}: a one-shot needs a `schedule` — the MISSED probe "
@@ -303,6 +347,27 @@ class JobRegistry(BaseModel):
     @property
     def by_label(self) -> dict[str, JobSpec]:
         return {j.label: j for j in self.jobs}
+
+    def readers_of(self, path: str) -> list[JobSpec]:
+        """Every RESIDENT that re-reads `path` at runtime — the jobs a
+        change to that file must restart, in one action with the change.
+
+        Normalised through `Path` so `./configs/cobalt/x.yaml` and
+        `configs/cobalt/x.yaml` are the same file: an operator typing a
+        path from a `git status` line must not get an empty answer on a
+        leading `./`.
+        """
+        wanted = Path(path).as_posix().lstrip("./")
+        return [
+            j
+            for j in self.jobs
+            if any(Path(p).as_posix() == wanted for p in j.reads)
+        ]
+
+    @property
+    def read_paths(self) -> list[str]:
+        """Every path any row claims to re-read, deduplicated."""
+        return sorted({p for j in self.jobs for p in j.reads})
 
     def spec(self, label: str) -> JobSpec:
         try:
