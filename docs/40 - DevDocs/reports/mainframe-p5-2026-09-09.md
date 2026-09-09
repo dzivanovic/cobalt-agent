@@ -7,36 +7,26 @@ Phase A1 by Opus 5 (developer); architect = Fable session.
 
 ## 0. Headline
 
-LM Studio 1.11.0 forwards neither `enable_thinking` nor `reasoning_effort` from the API into the
-model's Jinja chat template, so thinking on the mainframe is unconditionally on and no API parameter
-can turn it off. Phase A1 takes ownership of the template: `ops/mainframe/chat_template.jinja` is now
-the repo's source of truth and `ops/start_mainframe.sh` installs it into the model directory on
-every start and every heartbeat self-heal, with a one-time `.orig` backup and a refuse-on-unrecognised
-guard that fires on every call.
-
-Two edits vs upstream. The first is the in-band soft switch (`/no_think`, `/think_low`). The second
-turned out to matter more: upstream renders tool-call arguments through a `| safe` filter that **LM
-Studio's Jinja engine does not have**, so any tool call carrying a non-string argument value fails at
-prompt-render time with `Unknown StringValue filter: safe`. That is the defect that killed the Qwen
-seat on turn 2 of a read-file task this morning (§1.2).
-
-Three log-hygiene defects went with it: `lms load`'s TTY spinner (815 lines, ~8.8 MB of a 9.2 MB log)
-is now filtered, the log rotates at 5 MB (it never rotated), and two misleading log lines were made
-honest.
-
-**Nothing has been deployed.** Production is untouched — no `lms load`, no `launchctl`, no writes
-under `~/.lmstudio`, no commits to `main`. Phase B is the deploy, and it has not run.
-
-**Phase A2 caveat (chat second opinion, 09-09):** side instances share LM Studio's `llmster`
-daemon with production — "production untouched" means the model DIR and identifier, not the
-process. A daemon fault during A2 would take `mainframe` down with it. Accepted risk, after
-Dejan's trading window.
-
-**Status: Phase A1 complete and green. Phase A2 not started.**
+Phase A2 ran the probes on the real renderer and caught A1's soft switch **half dead**: LM Studio
+normalises a user message's string `content` into a list, so `m.content is string` was false for
+every user message and only the system arm fired. Fixed, re-proven on a side instance, 20 tests
+green. The `| safe` fix is confirmed in the wild — the upstream cell lost **1 of 10 runs** to it.
+`/no_think` cuts a tool-calling turn **21.3 s -> 5.8 s**. Cleanup proven. **ESCALATE: 3 open (4.3, 4.4, 4.5); 4.1 and 4.2 closed.**
 
 ---
 
 ## 1. Phase A1
+
+### 1.0 Why A1 exists
+
+LM Studio 1.11.0 forwards neither `enable_thinking` nor `reasoning_effort` from the API into the
+model's Jinja chat template, so thinking on the mainframe is unconditionally on and no API parameter
+can turn it off. A1 took ownership of the template — `ops/mainframe/chat_template.jinja` is the
+repo's source of truth and `ops/start_mainframe.sh` installs it into the model directory on every
+start and every heartbeat self-heal, with a one-time `.orig` backup and a refuse-on-unrecognised
+guard. Two edits vs upstream: the in-band soft switch (`/no_think`, `/think_low`), and dropping the
+`| safe` filter that LM Studio's Jinja engine does not have. Three log-hygiene defects went with it.
+**Nothing has been deployed.** Phase B is the deploy, and it has not run.
 
 ### 1.1 What changed
 
@@ -45,7 +35,7 @@ Dejan's trading window.
 | `ops/mainframe/chat_template.jinja` | new | Upstream + provenance header + soft-switch block + `\| safe` removal |
 | `ops/mainframe/install_template.sh` | new | `install_template()`, sourced by both callers; return-based contract |
 | `ops/start_mainframe.sh` | modified | install, spinner filter, rotation, no-think probe, honesty fixes |
-| `tests/cobalt/test_mainframe_template.py` | new | 17 offline tests |
+| `tests/cobalt/test_mainframe_template.py` | new | 17 offline tests (**20 after A2** — §2.0) |
 
 ### 1.2 The template diff vs upstream
 
@@ -64,18 +54,24 @@ editing). `diff` shows **exactly three hunks — two insertions and one one-toke
 ```jinja
 {%- set cobalt_sw = namespace(no_think=false, low=false) %}
 {%- for m in messages %}
-    {%- if (m.role == 'system' or loop.last) and m.content is string %}
-        {%- if '/no_think' in m.content %}{%- set cobalt_sw.no_think = true %}{%- endif %}
-        {%- if '/think_low' in m.content %}{%- set cobalt_sw.low = true %}{%- endif %}
+    {%- if m.role == 'system' or loop.last %}
+        {%- set cobalt_text = render_content(m.content, false) %}
+        {%- if '/no_think' in cobalt_text %}{%- set cobalt_sw.no_think = true %}{%- endif %}
+        {%- if '/think_low' in cobalt_text %}{%- set cobalt_sw.low = true %}{%- endif %}
     {%- endif %}
 {%- endfor %}
 {%- if cobalt_sw.no_think %}{%- set enable_thinking = false %}{%- endif %}
 {%- if cobalt_sw.low %}{%- set reasoning_effort = 'low' %}{%- endif %}
 ```
 
+**AMENDED IN A2.** As written in A1 the guard was `(m.role == 'system' or loop.last) and
+m.content is string`, which is dead at runtime: LM Studio hands the template a LIST for user
+content. The switch now reads through `render_content`. §2.0 has the proof.
+
 Both the header and the block comment are `{#- … -#}` / `{#- … #}` forms, so they contribute zero
-bytes to rendered output. The `m.content is string` guard is retained: it is what stops a multimodal
-(list-shaped) message content from breaking the `in` test, and there is a test for it.
+bytes to rendered output. `render_content` is the template's own macro (defined above the switch) and
+flattens string content, list content and `none` alike — so multimodal messages neither break the
+`in` test nor go unread. ~~The `m.content is string` guard is retained~~ — removed in A2, §2.0.
 
 Semantics: the marker is honoured in the **system message or the LAST message only**. A stale
 `/no_think` in an old turn does not silently disable thinking for the rest of a conversation — case
@@ -221,7 +217,7 @@ is the wrong side of NN#16. The template simply stops being managed, loudly, eve
 
 ### 1.6 Tests
 
-`tests/cobalt/test_mainframe_template.py` — 17 tests, fully offline (no LM Studio, no network, no
+`tests/cobalt/test_mainframe_template.py` — 17 tests as of A1, **20 after A2**, fully offline (no LM Studio, no network, no
 model dir). jinja2 `Environment(trim_blocks=True, lstrip_blocks=True)`, default `Undefined` (strict
 would break the template's bare `tools` truthiness test), `raise_exception` stub registered.
 
@@ -244,9 +240,21 @@ would break the template's bare `tools` truthiness test), `raise_exception` stub
 | g | no `safe` filter in live template code (comments stripped) | PASS |
 | g | `/no_think` still works alongside tool calls | PASS |
 
+| case | assertion | added |
+|---|---|---|
+| A2 | marker in a LIST-shaped last user message → thinking off | A2 |
+| A2 | marker in an EARLIER list-shaped message → thinking stays on | A2 |
+| A2 | regression: the dead `is string` guard cannot come back | A2 |
+
 ```
-uv run pytest tests/cobalt/test_mainframe_template.py -q   →  17 passed
+uv run pytest tests/cobalt/test_mainframe_template.py -q   →  17 passed (A1)
+uv run pytest tests/cobalt/test_mainframe_template.py -q   →  20 passed (A2)
 ```
+
+**A2 re-run (new core, `tests/cobalt`):** **4 failed, 823 passed** — the same 4 pre-existing
+`test_herdr_probe.py::TestBeforeTheHandover` failures, +3 from A2. The old tree
+(`tests/test_llm.py`, `test_cortex.py`, `test_scribe.py`, `test_finviz_extractor.py`) fails on
+environment, not on this change; nothing under `ops/mainframe/` is reachable from it.
 
 **Full suite, apples-to-apples:**
 
@@ -285,39 +293,248 @@ Not fixed here, per instruction.
 
 ---
 
-## 2. Phase A2 — NOT STARTED (placeholders)
+## 2. Phase A2 — side-instance measurement (COMPLETE)
 
-To be run on a side instance, not on the production `mainframe` identifier.
+Run 2026-09-09 11:19–12:05 ET on three side instances built as symlink dirs under
+`~/.lmstudio/models/cobalt-test/` (weights symlinked from the real model dirs, only
+`chat_template.jinja` a real file). LM Studio assigned the keys `cobalt-test-sw@8bit`,
+`cobalt-test-orig`, `cobalt-test-sw@4bit` — **none share the `qwen3.8-27b` prefix**, so
+`start_mainframe.sh`'s `MODEL=` prefix match cannot select one. One instance loaded at a time,
+`--estimate-only` before every load (38.50 GiB for the 8-bit, 20.97 GiB for the 4-bit; free-ish
+43–48 GB throughout).
+
+**Accepted risk, stated:** side instances share LM Studio's `llmster` daemon with production.
+"Production untouched" means the model DIR and the `mainframe` identifier, not the process. The
+production template sha was `c3cf9e34…` at start AND at end, `com.cobalt.mainframe` was never
+touched, and no `launchctl` command was run. Production served 4 read-only completions (the §2.0
+(f) control, 3 of which are 400s by design) plus 10 tool-calling runs (cell 1) plus 1 sanity call.
+
+### 2.0 Probes on the real renderer — and the A1 defect they caught
+
+**The A1 soft switch was half dead.** Probe (c) failed on first run: `/no_think` at the end of the
+last user message did nothing. Cause, proven below: **LM Studio normalises a user message's string
+`content` into a list (`[{"type":"text","text":…}]`) before rendering**, so A1's
+`m.content is string` guard — kept deliberately, to stop multimodal content breaking the `in` test —
+was FALSE for every user message. Only the system-message arm ever fired. The jinja2 tests passed
+because jinja2 was handed the string the API received, not the list LM Studio renders.
+
+Proof, by tokenising the offline render against the live chat API (`/v1/completions`,
+`max_tokens 1`, messages `[user "/no_think"]`):
+
+| render path | prompt_tokens | matches live? |
+|---|---|---|
+| **live LM Studio chat API** | **55** | — |
+| offline render, `content` a string | 15 | no |
+| offline render + an appended empty assistant message | 64 | no |
+| **offline render, `content` a LIST** | **55** | **yes — exact** |
+
+`loop.last` itself is fine: `@huggingface/jinja` 's own `loop.last`, `namespace()`, substring `in`
+and `is string` were all exercised directly (`npm i @huggingface/jinja`, offline) and all behave as
+jinja2 does. The bug was entirely the `is string` guard meeting list-shaped content.
+
+**Fix (this phase):** the switch reads content through the template's existing `render_content`
+macro, which already flattens both shapes — no new helper, one path. Three new tests
+(`tests/cobalt/test_mainframe_template.py`, now **20 passed**) cover a marker in a list-shaped last
+message, a marker in an earlier list-shaped message, and a regression guard that the dead
+`is string` test cannot come back.
+
+Probes after the fix, on `cobalt-test-q8-sw` (`temperature 0`, `max_tokens 64`):
+
+| probe | expectation | before fix | after fix | verdict |
+|---|---|---|---|---|
+| (a) no marker | think body | `<think>…</think>\n\n4`, 37 ctok | same, 37 ctok | PASS |
+| (b) system `/no_think` | no think body | `4`, 2 ctok | `4`, 2 ctok | PASS |
+| (c) `/no_think` at END of last user msg | no think body | **`<think>…` 45 ctok — FAIL** | `4`, 2 ctok | **PASS** |
+| (d) `/no_think` in an EARLIER msg only | thinking stays ON | `<think>…`, 29 ctok | same, 29 ctok | PASS |
+| (e) system `/think_low` | shorter think body | 22 ctok vs 37 in (a) | 22 ctok | PASS |
+
+(e) note: the low-effort instruction shortened the think body by ~40 % (37 → 22 completion tokens)
+and the reasoning text visibly drops the "validate assumptions / consider alternatives" preamble.
+It is a length effect, not an off switch.
+
+#### (f) — the `| safe` repro, verbatim
+
+Tool-call history `user → assistant tool_call read_file → tool response`, with a `tools` array,
+`max_tokens 1`:
+
+| `arguments` in history | `cobalt-test-q8-sw` (repo template) | production `mainframe` (upstream) |
+|---|---|---|
+| `{"path":"x.py"}` | OK, usage 380 | OK, usage 380 |
+| `{"path":"x.py","limit":5}` | **OK, usage 392** | **HTTP 400** |
+| `{"path":"x.py","flags":["a"]}` | **OK, usage 394** | **HTTP 400** |
+
+Production's verbatim error, both failing rows:
+
+```
+Error rendering prompt with jinja template: "Unknown StringValue filter: safe".
+```
+
+`cobalt-test-q4-orig` (4-bit + its upstream template, sha identical to the 8-bit's `c3cf9e34…`)
+reproduces production exactly — string OK, int and list 400. `cobalt-test-q4-sw` renders all three.
 
 ### 2.1 Tool-calling matrix
 
-| cell | correct tool call | malformed | hallucinated | DONE | exit 0 | wall clock avg | completion tokens avg |
-|---|---|---|---|---|---|---|---|
-| | | | | | | | |
+10 runs per cell, `/private/tmp/qwen-tooltest` (`alpha.txt`, `beta.txt`, `gamma.txt`),
+`qwen --openai-logging -m <id> --approval-mode plan -p "list the files in this directory using
+your tool, then reply DONE"`. Scored from the traces, not the prose.
 
-### 2.2 Thinking probes
+> Harness note: `qwen -m <name>` selects a **provider id**, not an API model name — the first trial
+> silently ran against `mainframe`. Cells 2–4 required a project-scoped
+> `/private/tmp/qwen-tooltest/.qwen/settings.json` adding one provider per identifier; every trace
+> was then asserted to carry the right `request.model`. That settings file (and `QWEN.md`) are part
+> of the listed directory in cells 2–4 and are scored as real files. Both were removed at cleanup.
 
-| instance | marker | completion_tokens | think body? |
-|---|---|---|---|
-| | | | |
+| # | cell | correct listing tool call | malformed schema | hallucinated | DONE | exit 0 | lost to server error | turn-2 `safe` | wall avg (warm) | completion tok avg | API turns |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `mainframe` think-on **[production baseline]** | 10/10 | 0/10 | 0/10 | 10/10 | 10/10 | 0/10 | 0/10 | 21.3 s (18.6) | 313.4 | 2.2 |
+| 2 | `cobalt-test-q8-sw` + `/no_think` | 10/10 | 0/10 | 0/10 | 10/10 | 10/10 | 0/10 | 0/10 | **5.8 s (5.8)** | **63.3** | 2.0 |
+| 3 | `cobalt-test-q4-orig` think-on | 10/10 | 0/10 | 0/10 | **9/10** | **9/10** | **1/10** | **1/10** | 19.5 s (14.6) | 326.8 | 2.7 |
+| 4 | `cobalt-test-q4-sw` + `/no_think` | 10/10 | 0/10 | 0/10 | 10/10 | 10/10 | 0/10 | 0/10 | **9.7 s (4.9)** | **71.9** | 2.0 |
+
+"warm" excludes run 1 of each cell — the first request after a load pays 44–63 s of prompt
+processing for qwen-code's 27 000-character system prompt.
+
+**`/no_think` assertion (cells 2 and 4):** all 20 requests per cell carried `/no_think` in the
+**system** message, injected by qwen-code as `--- Context from: QWEN.md ---\n/no_think`. Verified
+from the traces, not assumed. Zero runs emitted a `<think>` body; cells 1 and 3 emitted one in
+10/10 and 9/10.
+
+**The `safe` defect, caught in the wild (cell 3, run 3).** Not a synthetic repro — a real seat
+death, exit 1, mid-task:
+
+```
+[API Error: Error rendering prompt with jinja template: "Unknown StringValue filter: safe".]
+```
+
+The trigger was **not** the listing tool. `glob` calls carry `{"pattern":"*"}` — all strings, always
+safe. The killer was qwen-code's own bookkeeping call, replayed as history on the next request:
+
+```
+update_goal {"status":"complete","reason":"…","evidenceRefs":["w:1","w:2"]}
+                                              ^^^^^^^^^^^^ list-valued -> tojson | safe -> 400
+```
+
+That is 1 seat death in 10 runs of a trivial read-only task, on the template production is serving
+right now. Cells 2 and 4 (repo template) issued the same `update_goal` and rendered it fine.
+
+### 2.2 Thinking probes across the instances
+
+`temperature 0`, `max_tokens 64`, question "What is 2+2? Reply with just the number."
+
+| instance | template | (a) no marker | (b) system `/no_think` | (c) marker in last user msg | (d) marker earlier only | (e) `/think_low` |
+|---|---|---|---|---|---|---|
+| `cobalt-test-q8-sw` | repo (fixed) | think, 37 ctok | **no think, 2 ctok** | **no think, 2 ctok** | think, 29 ctok (correct) | think, 22 ctok |
+| `cobalt-test-q4-sw` | repo (fixed) | think, 36 ctok | **no think, 2 ctok** | **no think, 2 ctok** | think, 26 ctok (correct) | think, 23 ctok |
+| `cobalt-test-q4-orig` | upstream | think, 36 ctok | think, 36 ctok — **ignored (expected)** | not run | not run | think, 37 ctok — **ignored (expected)** |
+| `mainframe` | upstream | not probed — production budget spent on the (f) control and cell 1 | | | | |
+
+`q4-orig` is the control and behaves exactly like production: the markers are inert text, and the
+prompt simply grows by their token cost (65 → 69).
 
 ### 2.3 Throughput
 
-| instance | marker | decode tok/s | useful tokens post-strip |
+"write 500 words about the ocean", `max_tokens 1600`, `temperature 0`, 3 runs each. USEFUL tokens =
+tokens after `</think>`; with thinking on the template ends the prompt with `<think>\n`, so
+everything emitted is reasoning until that tag appears.
+
+| instance | marker | decode tok/s | completion tokens | **useful tokens** | words | finish | wall |
+|---|---|---|---|---|---|---|---|
+| `cobalt-test-q8-sw` | thinking on | 22.37 | 1599 | **0** | 0 | `length` | 71.5 s |
+| `cobalt-test-q8-sw` | `/no_think` | 22.38 | 785 | **784** | 625 | `stop` | 35.1 s |
+| `cobalt-test-q4-sw` | thinking on | 37.61 | 1599 | **0** | 0 | `length` | 42.5 s |
+| `cobalt-test-q4-sw` | `/no_think` | 37.64 | 728 | **727** | 604 | `stop` | 19.3 s |
+
+**The 09-08 finding reproduces exactly: 0 useful tokens at 1600 with thinking on**, 3/3 runs on both
+quants, deterministic at `temperature 0`. The model spends the entire budget counting words inside
+the think block and the essay never begins. Captured tail of a truncated stream:
+
+```
+… Count Tides1 rise2 and3 fall4 with5 the6 moon7 influencing8 shorelines9 estuaries10 …
+```
+
+Note also: **LM Studio emits no `<think>` tag at all when the block is length-truncated** — it
+echoes the opening tag only if `</think>` is reached. Any consumer that strips `<think>…</think>`
+and keeps the rest will pass 1 599 tokens of raw reasoning through as if it were the answer. This
+is a live hazard for the LiteLLM local route, independent of the template.
+
+Decode rate is unchanged by the marker (22.4 tok/s 8-bit, 37.6 tok/s 4-bit — the 4-bit is **1.68×**
+faster). `/no_think` buys latency by not generating the reasoning, not by generating it faster.
+
+### 2.4 `--parallel 1` — speculative decoding
+
+`cobalt-test-q8-sw` reloaded with `--parallel 1 --context-length 32768`, then a prediction with
+`draftModel="qwen3.8-27b-mtp"` (LM Studio Python SDK 1.5.0). Verbatim:
+
+```
+LMStudioServerError: Completion error:
+  Failed to load draft model. SpeculativeDecodingNotSupportedError:
+  Speculative decoding is not supported for batched MLX models.
+```
+
+`--parallel 1` does **not** unlock it — LM Studio's MLX engine is a batched engine regardless of the
+parallel count, and `lms ps --json` exposes no parallel field to confirm otherwise. Baseline on the
+same `--parallel 1` instance, no draft head, 400 tokens × 3 runs: **22.45 / 22.80 / 22.80 tok/s** —
+identical to the §2.3 figure, so `--parallel 1` costs nothing and buys nothing.
+
+**Verdict: speculative decoding remains unavailable on this stack.** `qwen3.8-27b-mtp` (265 MB) is
+dead weight until LM Studio ships a non-batched MLX path.
+
+### 2.5 122B — ON HOLD (inventory)
+
+Deletion is **on hold** (Dejan's ruling, 2026-09-09). Nothing was removed. For the record:
+
+| model | dir | `du -sh` | `lms ls` |
 |---|---|---|---|
-| | | | |
+| `qwen3.5-122b-a10b` | `mlx-community/Qwen3.5-122B-A10B-4bit` | **65G** | 69.62 GB |
 
-### 2.4 `--parallel 1` result
-
-_TBD._
-
-### 2.5 122B deletion proof
-
-_TBD._
+65 G is 37 % of the 175 G model tree. Reclaiming it would take the tree to ~110 G. No action taken.
 
 ### 2.6 Model inventory
 
-_TBD._
+`du -sh ~/.lmstudio/models/*/*`, after cleanup:
+
+| model dir | size | `lms ls` key | loaded |
+|---|---|---|---|
+| `mlx-community/Qwen3.5-122B-A10B-4bit` | 65G | `qwen3.5-122b-a10b` | |
+| `mlx-community/Qwen3.5-35B-A3B-8bit` | 35G | `qwen3.5-35b-a3b` | |
+| `mlx-community/Qwen3.8-27B-8bit` | 28G | `qwen3.8-27b` | **✓ `mainframe`** |
+| `lmstudio-community/Qwen3.8-27B-MLX-4bit` | 15G | `qwen/qwen3.8-27b` | |
+| `mlx-community/Qwen3.5-27B-4bit` | 15G | `qwen3.5-27b` | |
+| `mlx-community/Qwen3.5-27B-Claude-4.6-Opus-Distilled-MLX-4bit` | 14G | `qwen3.5-27b-claude-4.6-opus-distilled-mlx` | |
+| `mlx-community/Qwen3.5-4B-MLX-4bit` | 2.9G | `qwen3.5-4b-mlx` | |
+| `mlx-community/Qwen3.8-27B-MTP-4bit` | 253M | `qwen3.8-27b-mtp` | (unusable — §2.4) |
+| **tree total** | **175G** | 9 models / 187.63 GB reported | |
+
+`df -h /`: 926Gi total, 604Gi → **598Gi** available (the data volume holding `~/.lmstudio` reports
+296Gi used / 594Gi avail). Nothing was deleted; the delta is unrelated churn.
+
+> `lms ls` reports GB where `du` reports GiB, which is why 175G of disk reads as 187.63 GB. While
+> the symlinked side dirs were indexed it reported **249.32 GB / 12 models** — 61.69 GB of it
+> phantom, the same weights counted three times. `du` showed those dirs at 12–16 KB.
+
+### 2.7 Cleanup — proven
+
+| check | step 0 | step 8 | |
+|---|---|---|---|
+| real files under `cobalt-test/` | — | `find -type f` = **3**, all `chat_template.jinja` | asserted **before** `rm -rf` |
+| side identifiers loaded | none | none (`lms unload` × 3) | PASS |
+| `lms ps` | `mainframe` only | `mainframe` only | PASS |
+| `lms ls` | 9 models / 187.63 GB | **9 models / 187.63 GB**, same keys | PASS |
+| production template sha | `c3cf9e34…1041` | **`c3cf9e34…1041`** | PASS |
+| 8-bit / 4-bit source dirs | 18 / 13 entries | 18 / 13 entries | PASS |
+| `memory_pressure` free | 65 % | 64 % | PASS |
+| `/private/tmp/qwen-tooltest` | 3 `.txt` | 3 `.txt` (`QWEN.md`, `.qwen/` removed) | PASS |
+
+The `rm -rf` was gated on the `find … -type f` assertion printing exactly the three
+`chat_template.jinja` copies; no weight file was ever writable through those dirs, and no `rm` was
+run anywhere else under `~/.lmstudio/models/`.
+
+Final production sanity: one read-only completion to `mainframe` returned normally, and the
+heartbeat's last cycle (11:35 ET) is green on every row.
+
+> Collateral, disclosed: `/private/tmp/qwen-tooltest/logs/openai/` — 24 stale trace files from the
+> 09-08 session — was deleted at setup so it would not pollute the directory listing the models were
+> asked to produce. Scratch data in `/private/tmp`, not a repo or vault surface.
 
 ---
 
@@ -352,7 +569,7 @@ API online — loading model into VRAM
 Loading qwen3.8-27b                                     <- filtered, a few lines not thousands
 Model loaded successfully in NN.NNs.
 verified: 'mainframe' = qwen3_5/8bit at context 262144
-nothink probe OK: 4                                     <- the acceptance line
+nothink probe OK: 4                                     <- the acceptance line (A2-proven)
 model loaded — spawning heartbeat (60s ping, logged, self-healing)
 heartbeat running as pid N (pidfile …)
 ```
@@ -367,9 +584,9 @@ take and Phase B should be rolled back.
 cp "/Users/cobalt/.lmstudio/models/mlx-community/Qwen3.8-27B-8bit/chat_template.jinja.orig" \
    "/Users/cobalt/.lmstudio/models/mlx-community/Qwen3.8-27B-8bit/chat_template.jinja"
 # ff-only merge = NO merge commit to revert. Revert the branch commits by range
-# (oldest^..tip). Re-verify the range against `git log --oneline main` before running —
-# A2 adds commits to this branch, so the tip moves; 8f896c3 stays the oldest.
-cd /Users/cobalt/cobalt && git revert --no-edit 8f896c3^..41ebd09
+# (oldest^..tip). Re-verify against `git log --oneline main` before running —
+# 8f896c3 stays the oldest; the tip is HEAD of ops/mainframe-p5 at merge time.
+cd /Users/cobalt/cobalt && git revert --no-edit 8f896c3^..HEAD
 launchctl kickstart -k gui/$(id -u)/com.cobalt.mainframe
 ```
 
@@ -391,16 +608,33 @@ NN#16-correct. Implemented, with `install_template` converted to a return-based 
 path can exit while the heartbeat merely skips the reload. Sandbox scenario 6 now refuses and leaves
 the new upstream file intact (§1.4). Closed.
 
-**4.2 — the renderer gap is not closed by Phase A1.** These tests prove the template under
-**jinja2**; LM Studio (a node app) serves it through **@huggingface/jinja** — the `Unknown StringValue
-filter` error string is that engine's format (not minijinja, as first written). `namespace()`, `is string`, and `in`-on-string
-are compatible but are not the same implementation. **Phase A2 loads the repo template on a side
-instance (`q8-sw`) and runs the thinking probes there before Phase B**, and the post-load `nothink
-probe` is the standing runtime check thereafter. Until A2 runs, the soft switch is unproven on the
-real renderer.
+**4.2 — RESOLVED by A2, and it found a real defect.** Raised as: the A1 tests prove the template
+under **jinja2**, while LM Studio (a node app) serves it through **@huggingface/jinja**. The gap was
+real, but not where it was expected — the engines agree; **LM Studio's own pre-render message
+normalisation** (string `content` → list) is what broke the switch. A1's last-message arm never
+fired in production. Fixed and re-proven on `cobalt-test-q8-sw`; all six probes green (§2.0). The
+standing runtime check is unchanged: the post-load `nothink probe` in `ops/start_mainframe.sh`.
+Closed.
 
 **4.3 — `configs/config.yaml` `mainframe.context` (E4) is unverified here.** Untouched by this work;
 the existing context WARN still covers it.
+
+---
+
+**4.4 — NEW, for the architect. Thinking-on truncation silently yields raw reasoning.** At
+`max_tokens 1600` with thinking on, 3/3 runs on both quants returned **1 599 completion tokens and
+0 useful tokens**, `finish_reason: length` — and **LM Studio emitted no `<think>` tag at all**,
+because it echoes the opening tag only when `</think>` is reached. A consumer that strips
+`<think>…</think>` and keeps the remainder will pass a raw reasoning stream through as the answer.
+This is a template-independent hazard on the LiteLLM local route and it survives Phase B. Two
+candidate mitigations, architect's call: (a) make `/no_think` the default for programmatic callers,
+(b) have the route reject a `finish_reason: length` response that never closed a think block.
+Nothing has been changed for this — it is outside A2's scope.
+
+**4.5 — NEW, low. Speculative decoding is dead on this stack, `--parallel 1` included.** Verbatim:
+`SpeculativeDecodingNotSupportedError: Speculative decoding is not supported for batched MLX
+models.` `mlx-community/Qwen3.8-27B-MTP-4bit` (253 MB) is unusable weight until LM Studio ships a
+non-batched MLX path (§2.4). No action taken.
 
 ---
 
@@ -411,12 +645,16 @@ $ git -C ~/cobalt-wt/ops-mainframe-p5 status --porcelain
 (clean)
 
 $ git -C ~/cobalt-wt/ops-mainframe-p5 log --oneline main..HEAD
-98f385b docs(report): mainframe-p5 phase A1
-68f5c1f ops(mainframe): install the template, filter the spinner, rotate the log
-369bb6c ops(mainframe): repo-owned chat template with /no_think soft switch
+<this report commit>  docs(report): mainframe-p5 phase A2
+4ad91bd ops(mainframe): fix the soft switch's dead last-message arm (proven on a side instance)
+eb24ff0 docs(report): mainframe-p5 — rollback by commit range (ff-only), renderer = @huggingface/jinja, llmster shared-daemon caveat
+41ebd09 ops(mainframe): drop `| safe`, tighten the template recognition gate
+caa254a docs(report): mainframe-p5 phase A1
+b8f1423 ops(mainframe): install the template, filter the spinner, rotate the log
+8f896c3 ops(mainframe): repo-owned chat template with /no_think soft switch
 ```
 
-(The report commit's own sha is the one this line was written under; it changes when this
-paragraph is amended in.)
+(A report cannot name its own sha without changing it, so the tip is left symbolic. The rollback
+range in §3 is `8f896c3^..HEAD` at merge time — re-verify against `git log --oneline main..HEAD`.)
 
-`main` is untouched: no commits, no merges, nothing deployed.
+`main` is untouched: no commits, no merges, nothing deployed. Nothing was pushed.
