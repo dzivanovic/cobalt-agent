@@ -79,8 +79,10 @@ from .markers import (
     find_section,
     render_section,
     render_unit,
+    unit_open,
     validate_name,
 )
+from .frontmatter import frontmatter_span
 from .merge import Override, merge3
 from cobalt import obsidian
 
@@ -883,11 +885,103 @@ class VaultWriter:
 
     # -- rollback ----------------------------------------------------
 
+    @staticmethod
+    def _locate_region(lines: list[str], row: dict) -> tuple[int, int]:
+        """Where the MARKER-LESS region this row wrote lives now.
+
+        `upsert_region` is the one write path whose target is located by
+        a callable rather than by a marker, and a Python callable cannot
+        be persisted — so `restore` cannot re-run the locator that made
+        the write. Until 2026-09-09 it did not try: it looked for a
+        section marker, found none (frontmatter cannot carry one — see
+        vaultwrite/frontmatter.py) and refused. 102 of the ADR-0008
+        sprint's vault writes were frontmatter, and a restic snapshot was
+        their only rollback.
+
+        Two ways in, in this order, and both are evidence rather than
+        inference:
+
+        1. **Structurally**, for the one region shape that HAS a
+           structure: `frontmatter_span`. Used when the block it finds
+           still holds exactly the bytes this row wrote.
+        2. **By content.** `unit_after` IS the text the write left on
+           disk, verbatim; a single contiguous run of lines equal to it
+           is where the region is. This covers every other `locate`
+           shape (the seat-usage report's human cells, and anything
+           added later) without a registry of locators to keep in step.
+
+        FAIL LOUD ON ANYTHING ELSE. Zero matches means the region has
+        been rewritten since — by a human, or by a later Cobalt write —
+        and restoring an old block over it would delete work nobody
+        asked to lose. More than one match means the anchor is ambiguous.
+        Neither is a case for guessing.
+        """
+        after = row["unit_after"]
+        if after is None:
+            raise VaultWriteError(
+                f"vault_writes id {row['id']} has no `unit_after` — there is no "
+                "record of what this write left on disk, so its region cannot be "
+                "located. Refusing."
+            )
+        after_lines = after.split("\n")
+
+        span = frontmatter_span(lines)
+        if span is not None and lines[span[0] : span[1]] == after_lines:
+            return span
+
+        n = len(after_lines)
+        matches = [
+            i for i in range(0, len(lines) - n + 1) if lines[i : i + n] == after_lines
+        ]
+        if len(matches) == 1:
+            return (matches[0], matches[0] + n)
+        if not matches:
+            raise VaultWriteError(
+                f"REFUSED: the marker-less region {row['unit']!r} written by "
+                f"vault_writes id {row['id']} is no longer on disk as it was "
+                f"written — {row['note']} has changed since. Restoring would "
+                "overwrite whatever replaced it. Refusing to guess where it "
+                "started and ended."
+            )
+        raise VaultWriteError(
+            f"REFUSED: the text vault_writes id {row['id']} wrote appears "
+            f"{len(matches)} times in {row['note']} — the anchor is ambiguous "
+            "and a marker-less region has nothing else to locate it by."
+        )
+
     @_reports_sync_status
     def restore(self, write_id: int) -> WriteResult:
-        """L28: `cobalt vault restore --write-id N` — put that section
-        back to its before-state, through this same writer (guard, atomic
-        write, its own audit row)."""
+        """L28: `cobalt vault restore --write-id N` — put that write back,
+        through this same writer (guard, atomic write, its own audit row).
+
+        THREE PATHS, and which one runs is decided by the row, not by a
+        flag (2026-09-09, closing ESCALATE items 1 and 2 of the ADR-0008
+        report):
+
+        * **a unit row** (`unit` set, `unit_before` not null) — only that
+          unit's body is put back, located by its own stable-id marker
+          INSIDE the section. Until today this restored the whole
+          section from `before`, which silently dropped every sibling
+          unit written after the one being undone: the daily note has a
+          `heartbeat` unit and a `rules` unit in one section, and rolling
+          back a heartbeat write took the morning's rules with it. A
+          per-write rollback that cannot be used on any note with two
+          units is not a rollback.
+
+          If the write CREATED the unit — its open marker is absent from
+          the recorded before-section — the unit is REMOVED rather than
+          emptied. Leaving a marker pair around nothing would be a
+          Cobalt-owned artifact that the before-state did not have.
+
+        * **a region row** (no section marker in the file) — the
+          marker-less `upsert_region` carve-out, restored byte-exact from
+          `unit_before` into the span `_locate_region` finds.
+
+        * **a legacy section row** (`unit` null, or `unit_before` null) —
+          the original whole-section replace, unchanged. Rows written
+          before this change carry no `unit_before` for their unit, and
+          the honest thing to do with them is what was always done.
+        """
         store = self._require_store()
         row = store.get_write(write_id)
         if row is None:
@@ -930,15 +1024,88 @@ class VaultWriter:
 
         section_name = row["section"]
         before_state = row["before"]
+        unit_id = row["unit"]
+        unit_before = row["unit_before"]
+        #: A unit row can be put back on its own. A row with no unit, or
+        #: one written before `unit_before` was recorded, cannot — and
+        #: gets the original whole-section behaviour rather than a guess.
+        per_unit = bool(unit_id) and unit_before is not None
 
         def build(snapshot: Snapshot):
             lines = (snapshot.text or "").split("\n")
             sec: Optional[SectionBlock] = find_section(lines, section_name)
+
             if sec is None:
-                raise VaultWriteError(
-                    f"REFUSED: section {section_name!r} is not in {path} any more — "
-                    "refusing to guess where to put the restored text."
-                )
+                # THE MARKER-LESS CARVE-OUT. `upsert_region` writes into a
+                # span located by a callable — frontmatter has no marker
+                # and cannot have one — so there is no section to find,
+                # and until 2026-09-09 this was where the refusal came
+                # from. See `_locate_region`.
+                if not per_unit:
+                    raise VaultWriteError(
+                        f"REFUSED: section {section_name!r} is not in {path} any "
+                        "more — refusing to guess where to put the restored text."
+                    )
+                start, end = self._locate_region(lines, row)
+                current_region = "\n".join(lines[start:end])
+                restored = unit_before.split("\n") if unit_before != "" else []
+                new_lines = lines[:start] + restored + lines[end:]
+                new_text = _ensure_trailing_newline("\n".join(new_lines))
+                if new_text == (snapshot.text or ""):
+                    return None
+                return new_text, {
+                    "section": section_name,
+                    "unit": unit_id,
+                    "before_section": current_region,
+                    "after_section": unit_before,
+                    "unit_before": current_region,
+                    "unit_after": unit_before,
+                    "overrides": [],
+                }
+
+            if per_unit:
+                unit = sec.units.get(unit_id)
+                if unit is None:
+                    raise VaultWriteError(
+                        f"REFUSED: unit {unit_id!r} is not in section "
+                        f"{section_name!r} of {path} any more — refusing to guess "
+                        "where to put the restored text. (The whole section is "
+                        "still recoverable from this row's `before` by hand.)"
+                    )
+                # Did this write CREATE the unit? The recorded
+                # before-section is the evidence: if the unit's own open
+                # marker is not in it, the unit did not exist, and putting
+                # back an empty body would leave a Cobalt marker pair the
+                # before-state never had.
+                created_it = unit_open(unit_id) not in before_state
+                current_unit = "\n".join(unit.body(lines))
+                if created_it:
+                    new_lines = lines[: unit.open_line] + lines[unit.close_line + 1 :]
+                else:
+                    new_lines = (
+                        lines[: unit.open_line]
+                        + render_unit(unit_id, unit_before)
+                        + lines[unit.close_line + 1 :]
+                    )
+                new_text = _ensure_trailing_newline("\n".join(new_lines))
+                if new_text == (snapshot.text or ""):
+                    return None
+                after_sec = find_section(new_text.split("\n"), section_name)
+                return new_text, {
+                    "section": section_name,
+                    "unit": unit_id,
+                    "before_section": sec.text(lines),
+                    "after_section": (
+                        after_sec.text(new_text.split("\n")) if after_sec else None
+                    ),
+                    # The restored body becomes the next merge's baseline,
+                    # so the following ordinary write merges against what
+                    # is on disk rather than against the version it undid.
+                    "unit_before": current_unit,
+                    "unit_after": None if created_it else unit_before,
+                    "overrides": [],
+                }
+
             current_section = sec.text(lines)
             new_lines = lines[: sec.open_line] + before_state.split("\n") + lines[sec.close_line + 1 :]
             new_text = _ensure_trailing_newline("\n".join(new_lines))
