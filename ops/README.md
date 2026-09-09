@@ -216,7 +216,11 @@ rather than at whatever hour somebody happens to look.
 ### The order
 
 1. `uv run cobalt validate` — the config gate, on the branch, before merging.
-2. `git merge --ff-only <branch>` from `~/cobalt`. **Merge is deploy** (R4).
+2. In the worktree, `git rebase main` first — after the nightly generated commit
+   (`com.cobalt.generated`, 23:37) every branch older than a day is behind `main`.
+   Then `git merge --ff-only <branch>` from `~/cobalt`. **Merge is deploy** (R4).
+   If the merge carries a NEW credential, its `.env` lines land BEFORE the merge:
+   between merge and `.env` a starting job fails loud (heartbeat, seat-usage).
 3. **Migrations**, if any, as their own step with their own rollback.
 4. **`RESTARTS:`** — kickstart every resident named by `cobalt jobs
    readers` for every config file the merge touched.
@@ -226,6 +230,10 @@ rather than at whatever hour somebody happens to look.
    `launchctl kickstart -k gui/$(id -u)/com.cobalt.heartbeat`.
 7. Deploys go **outside market hours** (NN#16) and outside 20:00-21:30 ET
    (F1's market-reset window).
+8. **Vault delivery snapshots:** a report written on an unmerged branch is copied
+   to `docs/_inflight/` (git-ignored, visible in Obsidian at
+   `0 - Projects/Cobalt/_inflight/`) so Dejan can read it before the merge; delete
+   the copy when the report lands in `40 - DevDocs/reports/` at merge.
 
 ## herdr under launchd (0.9.0)
 
@@ -356,3 +364,12 @@ The order matters: `bootout` takes the terminal workspace down with it,
 so **run it from Terminal.app, not from a herdr pane** — the same reason
 the original handover had to happen at the keyboard. Land everything
 first; assume every conversation is lost.
+
+## Email OAuth token clock (F18 / S1-P4)
+
+The Google project behind `gmail.send` is still in **Testing** status, so a refresh token
+expires **7 days after consent**. Dejan retries **Publish** (from another browser); if it
+fails again, a fresh `uv run cobalt notify email-auth` consent resets the 7-day clock —
+repeat every **≤6 days** until Publish lands. After each consent: send a test alert and read
+the token date back (`cobalt notify` status / the heartbeat `email` probe line) — proof, not
+assumption. Ruled 09-09 (chat second opinion, item 10).
