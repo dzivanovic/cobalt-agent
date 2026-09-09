@@ -343,3 +343,61 @@ launchd has no "hourly between 06:00 and 23:00" and the window has to be
 expanded into moments the suite can compare), and two probes —
 `heartbeat.probes.herdr` and `heartbeat.probes.seat_usage`. Those extend
 existing pages rather than adding new ones.
+
+---
+
+## Extended 2026-09-09 — the ops sprint (`ops/2026-09-09`)
+
+One new package, two new `ops/` scripts, and four existing pages whose
+subject changed underneath them.
+
+**New: `src/cobalt/generated/`** — `__init__` · `config` · `committer` ·
+`cli`. Files that live in git and are rewritten by a **job**, and the
+one commit that lands them. Three tracked files were being rewritten
+hourly/nightly with nothing committing them, so `~/cobalt` — which *is*
+production — was permanently dirty, and a permanently dirty working tree
+is one nobody reads. `com.cobalt.generated` (23:37 ET daily) commits the
+declared list and refuses off `main`, mid-merge, or with anything already
+staged.
+
+**New: `ops/pg_role.py`** — the role-minting mechanism, extracted from
+`ops/mattermost_role_provision.py` (2026-09-05) when `cobalt_app` became
+the second role to need it. Local SCRAM verifier so the plaintext never
+crosses the socket; never an argv; add-only. **`ops/cobalt_app_role_
+provision.py`** is the second caller.
+
+### The one that changes how everything else connects
+**`cobalt.db` now holds TWO credentials, and no fallback between them.**
+`Credential.APP` (`COBALT_DB_USER`/`COBALT_DB_PASSWORD` → `cobalt_app`,
+`LOGIN NOINHERIT`, non-superuser) is what `connect()` uses — every store,
+every job, every probe. `Credential.BOOTSTRAP` (`POSTGRES_*`, the docker
+superuser, meaning unchanged) is `connect_migration()` and nothing else.
+This closes ADR-0008 D1 Revision 2: until now a connection that skipped
+the factory kept superuser and bypassed every grant, and the lint test
+was the only thing holding that line. `backup/pgdump.py` moved to the app
+credential (`--role=cobalt_backup` still works — membership plus
+`SET ROLE` is exactly what NOINHERIT leaves available). Pages touched:
+`db.md`, `devdb.md`, `backup/pgdump.md`, `redact/secrets.md`.
+
+### Vault-write pages whose behaviour changed
+`vaultwrite/writer.md`, `vaultwrite/store.md` — **`restore` is per-write
+now.** A unit row puts back only that unit's body, located by its own
+marker, so siblings written later survive; a row from `upsert_region`
+(frontmatter, the marker-less carve-out) is located and restored
+byte-exact, which it simply could not be before. And
+**`sync_revert_of`**: a body byte-identical to one of this unit's own
+recent `unit_after` values is a *sync revert*, not a human edit — the
+merge takes the on-disk text as its base, records no override, and names
+the write that came back. Migration `0004` plus the first vaultwrite
+`.rollback.sql`, which is why `ensure_schema()` now filters the glob.
+
+### Probes and the registry
+`heartbeat/probes.md` gains a third question on `herdr` (the
+`SessionStart` hook must be **exactly one** guard entry — a herdr
+integration update *appends*, and a presence check would miss it) and a
+new `sheet_daymode`, which reads the ASET sheet's day-mode banner through
+a new `GET /api/health` rather than trusting HTTP 200. `jobs/config.md`
+and `jobs/cli.md` gain **`JobSpec.reads`** and `cobalt jobs readers` —
+the residents a config change must restart, derived from the code and
+printed as a deploy plan's `RESTARTS:` line instead of recalled from
+memory.
