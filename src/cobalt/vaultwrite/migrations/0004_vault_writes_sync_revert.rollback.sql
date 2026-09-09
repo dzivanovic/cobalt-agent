@@ -1,0 +1,23 @@
+-- 0004 REVERSE: drop `vault_writes.sync_revert_of`.
+--
+-- Same convention as `db_migrations/0002_move_tables.rollback.sql`: a
+-- reverse script beside its forward one, catalog-only, so the database
+-- has its own rollback domain and the pg_dump taken before the deploy is
+-- the belt to this brace.
+--
+-- CATALOG-ONLY. `DROP COLUMN` marks one pg_attribute row dropped; no
+-- heap is rewritten and no row is read. `vault_writes` keeps every
+-- before/after and every hash it held.
+--
+-- WHAT IT COSTS, said out loud: the sync-revert breadcrumbs recorded
+-- while 0004 was in place are lost, because the column that held them is
+-- the only place they lived. The writes themselves are untouched — only
+-- the answer to "was this one a revert" goes. Running 0004 forward again
+-- afterwards is clean (it is `ADD COLUMN IF NOT EXISTS`), but it does not
+-- bring the old values back, and nothing pretends otherwise.
+--
+-- WHAT IT DOES NOT DO: it does not touch `vault_overrides`. A rollback of
+-- this column re-exposes the defect it was written for — a sync revert
+-- will be recorded as a human override again — and that is a behaviour
+-- change belonging to the CODE domain, reverted with the code.
+ALTER TABLE vault_writes DROP COLUMN IF EXISTS sync_revert_of;

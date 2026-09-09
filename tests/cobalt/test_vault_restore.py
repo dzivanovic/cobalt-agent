@@ -367,3 +367,196 @@ class TestLegacyRowsKeepTheOldBehaviour:
             "be put back section-wide, and that is what it does"
         )
         assert "prose" in text, "everything outside the section is still untouched"
+
+
+# =====================================================================
+# D — a SYNC REVERT is not a human override
+# =====================================================================
+
+
+class TestSyncRevertIsNotAHumanOverride:
+    """Today's shape, replayed.
+
+    2026-09-09: the daily note's `heartbeat` unit was stuck on the 05:54
+    GREEN block from 06:25 to 08:05. The 06:09 and 06:24 beats wrote RED;
+    at 06:25:54 Obsidian Sync carried a stale copy up from another device
+    and put the 05:54 text back. Every beat after that read on-disk !=
+    baseline as "a human edited this", let the human win, and recorded
+    overrides 30-34 — for an hour and forty minutes, and with an audit
+    trail that said a person had insisted on it five times.
+
+    A human edit is NEW text; a sync revert is OLD text coming back, and
+    the difference was already in `vault_writes` and simply never
+    consulted.
+    """
+
+    @pytest.fixture
+    def note(self, writer, dev_dir):
+        path = dev_dir / "2026-09-09.md"
+        writer.create_if_absent(path, "# 2026-09-09\n\nHis own journal line.\n")
+        return path
+
+    def test_the_0909_shape_end_to_end(self, writer, note, store):
+        # A = 05:54 GREEN, B = 06:09 RED, then the sync puts A back,
+        # then C = the next beat.
+        a = writer.upsert_unit(note, SECTION, UNIT_B, "beat GREEN 05:54")
+        a_after = store.get_write(a.write_id)["unit_after"]
+        writer.upsert_unit(note, SECTION, UNIT_B, "beat RED 06:09")
+
+        # 06:25:54 — Obsidian Sync writes A's text back over B's.
+        note.write_text(note.read_text().replace("beat RED 06:09", a_after))
+        assert "beat GREEN 05:54" in note.read_text()
+
+        c = writer.upsert_unit(note, SECTION, UNIT_B, "beat RED 06:39")
+
+        row = store.get_write(c.write_id)
+        assert row["sync_revert_of"] == a.write_id, (
+            "the write row must name WHICH earlier write came back — the forensic "
+            "question gets a row id, not a guess"
+        )
+        assert not c.overrides, "a sync revert is not a human override"
+        assert store.overrides_for(str(note)) == [], "and no override row is written"
+        assert "beat RED 06:39" in note.read_text(), (
+            "THE DEFECT: Cobalt's new text must win cleanly — this is what did not "
+            "happen between 06:25 and 08:05"
+        )
+        assert "beat GREEN 05:54" not in note.read_text()
+
+    def test_the_result_names_the_matched_write_and_its_timestamp(
+        self, writer, note, store
+    ):
+        a = writer.upsert_unit(note, SECTION, UNIT_B, "beat GREEN 05:54")
+        a_row = store.get_write(a.write_id)
+        writer.upsert_unit(note, SECTION, UNIT_B, "beat RED 06:09")
+        note.write_text(note.read_text().replace("beat RED 06:09", a_row["unit_after"]))
+
+        c = writer.upsert_unit(note, SECTION, UNIT_B, "beat RED 06:39")
+
+        joined = " ".join(c.notes)
+        assert "SYNC REVERT" in joined
+        assert str(a.write_id) in joined
+        assert f"{a_row['ts']:%Y-%m-%d %H:%M:%S}" in joined
+
+    def test_a_REAL_human_edit_still_produces_an_override(self, writer, note, store):
+        """The regression that matters. Recognising sync reverts must not
+        cost the thing the override machinery exists for."""
+        writer.upsert_unit(note, SECTION, UNIT_B, "beat GREEN 05:54")
+        writer.upsert_unit(note, SECTION, UNIT_B, "beat RED 06:09")
+
+        # Text Cobalt has never written into this unit.
+        note.write_text(
+            note.read_text().replace("beat RED 06:09", "I checked — this was my fault")
+        )
+
+        c = writer.upsert_unit(note, SECTION, UNIT_B, "beat RED 06:39")
+
+        assert c.overrides, "a human edit is still an override"
+        rows = store.overrides_for(str(note))
+        assert rows and rows[-1]["human_text"] == "I checked — this was my fault"
+        assert store.get_write(c.write_id)["sync_revert_of"] is None
+        assert "I checked — this was my fault" in note.read_text(), "human wins (L28.2)"
+
+    def test_an_ordinary_write_records_no_revert(self, writer, note, store):
+        writer.upsert_unit(note, SECTION, UNIT_B, "beat GREEN 05:54")
+        second = writer.upsert_unit(note, SECTION, UNIT_B, "beat RED 06:09")
+        assert store.get_write(second.write_id)["sync_revert_of"] is None
+        assert not second.notes or not any("SYNC REVERT" in n for n in second.notes)
+
+    def test_the_window_is_bounded(self, writer, note, store):
+        """`recent_afters` is a recognition window, not a history search.
+        A body older than the window is not silently assumed to be
+        Cobalt's own — it is treated as a human edit, which is the safe
+        direction."""
+        first = writer.upsert_unit(note, SECTION, UNIT_B, "beat v0")
+        first_after = store.get_write(first.write_id)["unit_after"]
+        for i in range(1, VaultWriter.SYNC_REVERT_WINDOW + 2):
+            writer.upsert_unit(note, SECTION, UNIT_B, f"beat v{i}")
+
+        note.write_text(
+            note.read_text().replace(
+                f"beat v{VaultWriter.SYNC_REVERT_WINDOW + 1}", first_after
+            )
+        )
+        result = writer.upsert_unit(note, SECTION, UNIT_B, "beat vNEXT")
+        assert store.get_write(result.write_id)["sync_revert_of"] is None
+        assert result.overrides, "outside the window it is treated as a human edit"
+
+    def test_recent_afters_is_newest_first_and_bounded(self, writer, note, store):
+        ids = [
+            writer.upsert_unit(note, SECTION, UNIT_B, f"beat v{i}").write_id
+            for i in range(5)
+        ]
+        rows = store.recent_afters(str(note), SECTION, UNIT_B, limit=3)
+        assert [r[0] for r in rows] == list(reversed(ids))[:3]
+        assert rows[0][1] == "beat v4"
+
+
+class TestTheRegionPathUsesTheSameHelper:
+    """One helper, both write paths. The frontmatter carve-out gets the
+    same protection — and it is the path where a sync revert is most
+    likely, because frontmatter is what other devices' Templater runs
+    rewrite."""
+
+    def test_a_reverted_frontmatter_is_not_an_override(self, writer, dev_dir, store):
+        path = dev_dir / "trade.md"
+        writer.create_if_absent(path, ORIGINAL)
+
+        a = writer.upsert_region(
+            path, FM_SECTION, FM_REGION,
+            "---\ntrade_def: example-trade\nstatus: def\n---",
+            locate=frontmatter_span,
+        )
+        a_after = store.get_write(a.write_id)["unit_after"]
+        writer.upsert_region(
+            path, FM_SECTION, FM_REGION,
+            "---\ntrade_def: example-trade\nstatus: solidified\n---",
+            locate=frontmatter_span,
+        )
+
+        # The other device's copy comes back.
+        path.write_text(path.read_text().replace("status: solidified", "status: def"))
+        assert a_after in path.read_text()
+
+        c = writer.upsert_region(
+            path, FM_SECTION, FM_REGION,
+            "---\ntrade_def: example-trade\nstatus: retired\n---",
+            locate=frontmatter_span,
+        )
+
+        assert store.get_write(c.write_id)["sync_revert_of"] == a.write_id
+        assert not c.overrides
+        assert "status: retired" in path.read_text()
+        assert any("SYNC REVERT" in n for n in c.notes)
+
+
+class TestTheRollbackScriptIsNeverRunByEnsureSchema:
+    """`ensure_schema()` globs `migrations/*.sql`, and 0004 is the first
+    vaultwrite migration to ship a reverse script beside its forward one.
+    Without the exclusion the rollback would run on every boot, next to
+    the migration it undoes."""
+
+    def test_forward_migrations_excludes_rollback_scripts(self):
+        from cobalt.vaultwrite.store import forward_migrations
+
+        names = [p.name for p in forward_migrations()]
+        assert "0004_vault_writes_sync_revert.sql" in names
+        assert not any(n.endswith(".rollback.sql") for n in names), names
+
+    def test_the_reverse_script_exists_beside_its_forward_one(self):
+        from cobalt.vaultwrite.store import MIGRATIONS_DIR
+
+        assert (MIGRATIONS_DIR / "0004_vault_writes_sync_revert.rollback.sql").exists(), (
+            "the DATABASE rollback domain needs its own script — same convention "
+            "as db_migrations/0002_move_tables.rollback.sql"
+        )
+
+    def test_the_column_is_nullable(self, store):
+        """Null is the ordinary case; every pre-existing row has it."""
+        with store._connect() as conn:
+            row = conn.execute(
+                "SELECT is_nullable FROM information_schema.columns "
+                "WHERE table_schema = 'user' AND table_name = 'vault_writes' "
+                "AND column_name = 'sync_revert_of'"
+            ).fetchone()
+        assert row is not None, "migration 0004 has not been applied"
+        assert row[0] == "YES"

@@ -92,6 +92,16 @@ def _cmd_writes(args: argparse.Namespace) -> None:
             f"{row['id']:>6}  {row['ts']:%Y-%m-%d %H:%M:%S}  {row['writer']:<20} "
             f"{row['section'] or '-':<18} {row['unit'] or '-':<28} {row['note']}"
         )
+        # A SYNC REVERT is the one thing about a write that a reader
+        # cannot infer from the columns above, and it is exactly what
+        # they go looking for when a unit has "stopped updating". Its own
+        # indented line, so the table still scans (2026-09-09).
+        if row.get("sync_revert_of"):
+            print(
+                f"{'':>6}  ^ SYNC REVERT of write {row['sync_revert_of']} — the text on "
+                "disk was an earlier Cobalt write coming back (Obsidian Sync is the "
+                "usual cause), not a human edit. No override recorded."
+            )
 
 
 def _cmd_overrides(args: argparse.Namespace) -> None:

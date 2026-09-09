@@ -105,6 +105,21 @@ class VaultWriteError(RuntimeError):
     """A vault write could not be performed — refuse, never guess."""
 
 
+@dataclass(frozen=True)
+class _MergeBase:
+    """What `merge3` should use as its `base`, and why. See
+    `VaultWriter._merge_base`."""
+
+    text: Optional[str]
+    missing: bool
+    #: The earlier `vault_writes.id` whose output came back on disk. Set
+    #: only on a recognised SYNC REVERT; recorded on the write row.
+    sync_revert_of: Optional[int] = None
+    #: The line that goes into `WriteResult.notes`, so the decision is
+    #: visible in the run's own report and not only in the log.
+    note: Optional[str] = None
+
+
 class NoteChangedOnDisk(RuntimeError):
     """The note changed between the read this edit was computed from and
     the moment of the rename. Someone else (Obsidian's editor buffer is
@@ -476,6 +491,7 @@ class VaultWriter:
         overrides: list[Override],
         unit_before: Optional[str] = None,
         unit_after: Optional[str] = None,
+        sync_revert_of: Optional[int] = None,
         write_file: bool = True,
     ) -> int:
         store = self._require_store()
@@ -496,6 +512,7 @@ class VaultWriter:
             after=after_section,
             unit_before=unit_before,
             unit_after=unit_after,
+            sync_revert_of=sync_revert_of,
             hash_before=snapshot.sha256,
             hash_after=sha256_text(new_text),
             writer=self.writer,
@@ -704,12 +721,15 @@ class VaultWriter:
                 else:
                     human_lines = unit.body(lines)
                     human_body = "\n".join(human_lines)
-                    base_text = self._baseline(path, section, unit_id)
-                    if base_text is None:
+                    base = self._merge_base(path, section, unit_id, human_body)
+                    if base.missing:
                         baseline_missing = True
                         base_lines = list(human_lines)
                     else:
-                        base_lines = base_text.split("\n") if base_text != "" else []
+                        base_lines = base.text.split("\n") if base.text != "" else []
+                    if base.note:
+                        notes.append(base.note)
+                        state["sync_revert_of"] = base.sync_revert_of
                     merged = merge3(base_lines, human_lines, cobalt_lines)
                     unit_lines = render_unit(unit_id, "\n".join(merged.lines))
                     new_lines = (
@@ -744,6 +764,7 @@ class VaultWriter:
                 "after_section": after_section,
                 "unit_before": human_body,
                 "unit_after": merged_body,
+                "sync_revert_of": state.get("sync_revert_of"),
                 "overrides": overrides,
             }
 
@@ -787,6 +808,88 @@ class VaultWriter:
         if self.store is None:
             return None
         return self.store.last_after(str(path), section, unit_id)
+
+    #: How far back a body is still recognised as one Cobalt wrote here.
+    #: See `VaultWriteStore.recent_afters` — a recognition window, not a
+    #: search of the history.
+    SYNC_REVERT_WINDOW = 10
+
+    def _merge_base(
+        self, path: Path, section: str, unit_id: str, human_body: str
+    ) -> "_MergeBase":
+        """The `base` leg of the three-way merge, and WHY it is that.
+
+        THE ONE PLACE EITHER WRITE PATH DECIDES THIS. `upsert_unit` and
+        `upsert_region` both call it before `merge3`, because the bug it
+        exists for is a property of the merge and not of the marker
+        shape, and two copies of this reasoning would be one copy too
+        many (one-path rule).
+
+        Ordinarily the base is `last_after` — what Cobalt wrote here last
+        — and anything else on disk is the human's, which wins.
+
+        THE EXCEPTION, and it cost an hour and forty minutes on
+        2026-09-09. The daily note's `heartbeat` unit was stuck on the
+        05:54 GREEN block from 06:25 to 08:05. The 06:09 and 06:24 beats
+        wrote RED; at 06:25:54 Obsidian Sync carried a stale copy up from
+        another device and put the 05:54 text back. Every beat after that
+        saw on-disk != baseline, concluded "a human edited this", let the
+        human win, and wrote overrides 30-34. Cobalt could not update its
+        own status block, and the audit trail said a person had insisted
+        on it five times.
+
+        A HUMAN EDIT IS NEW TEXT; A SYNC REVERT IS OLD TEXT COMING BACK,
+        and that difference is already recorded — the reverted body is
+        byte-identical to something this unit's own history contains. So
+        when the on-disk body does not match the baseline but DOES match
+        a recent `unit_after`, the base becomes the on-disk text: Cobalt's
+        new text then wins cleanly, exactly as it would have if the sync
+        had never happened, and no override is recorded because none
+        occurred.
+
+        THE FALSE POSITIVE IS ACKNOWLEDGED AND NARROW: a human who
+        hand-types a byte-identical copy of one of the last ten things
+        Cobalt wrote into this unit is treated as a sync. That is
+        indistinguishable in principle — the bytes are the only evidence
+        there is — and the reverse mistake is the one that actually
+        happened and actually cost something.
+        """
+        base_text = self._baseline(path, section, unit_id)
+        if base_text is None:
+            return _MergeBase(text=None, missing=True)
+        if human_body == base_text or self.store is None:
+            return _MergeBase(text=base_text, missing=False)
+
+        for write_id, after in self.store.recent_afters(
+            str(path), section, unit_id, limit=self.SYNC_REVERT_WINDOW
+        ):
+            if after != human_body:
+                continue
+            row = self.store.get_write(write_id)
+            when = row["ts"] if row else None
+            note = (
+                f"SYNC REVERT: the text on disk is byte-identical to vault_writes "
+                f"id {write_id}"
+                + (f" ({when:%Y-%m-%d %H:%M:%S})" if when else "")
+                + " — an earlier Cobalt write coming back, not a human edit. "
+                "Cobalt's new text wins cleanly; no override recorded."
+            )
+            logger.warning(
+                "vaultwrite: SYNC REVERT in {} [{}/{}] — on-disk body matches "
+                "vault_writes id {} ({}). Obsidian Sync is the usual cause. "
+                "Taking the on-disk text as the merge base; NOT recording an "
+                "override.",
+                path,
+                section,
+                unit_id,
+                write_id,
+                when,
+            )
+            return _MergeBase(
+                text=human_body, missing=False, sync_revert_of=write_id, note=note
+            )
+
+        return _MergeBase(text=base_text, missing=False)
 
     @_reports_sync_status
     def upsert_region(
@@ -837,17 +940,24 @@ class VaultWriter:
                 )
             start, end = span
             human_lines = lines[start:end]
-            base_text = self._baseline(path, section_label, region_id)
-            baseline_missing = base_text is None
-            base_lines = list(human_lines) if base_text is None else (
-                base_text.split("\n") if base_text != "" else []
+            base = self._merge_base(
+                path, section_label, region_id, "\n".join(human_lines)
+            )
+            baseline_missing = base.missing
+            base_lines = list(human_lines) if base.missing else (
+                base.text.split("\n") if base.text != "" else []
             )
             cobalt_lines = body.split("\n") if body != "" else []
             merged = merge3(base_lines, human_lines, cobalt_lines)
             new_lines = lines[:start] + merged.lines + lines[end:]
             new_text = _ensure_trailing_newline("\n".join(new_lines))
 
-            state.update({"overrides": merged.overrides, "baseline_missing": baseline_missing})
+            state.update({
+                "overrides": merged.overrides,
+                "baseline_missing": baseline_missing,
+                "sync_revert_of": base.sync_revert_of,
+                "sync_note": base.note,
+            })
             if new_text == text and not merged.overrides:
                 return None
             return new_text, {
@@ -857,6 +967,7 @@ class VaultWriter:
                 "after_section": "\n".join(merged.lines),
                 "unit_before": "\n".join(human_lines),
                 "unit_after": "\n".join(merged.lines),
+                "sync_revert_of": base.sync_revert_of,
                 "overrides": merged.overrides,
             }
 
@@ -866,6 +977,7 @@ class VaultWriter:
                 path=path, action="unchanged", section=section_label, unit=region_id,
                 dry_run=self.dry_run, hash_before=snapshot.sha256, hash_after=snapshot.sha256,
                 baseline_missing=state.get("baseline_missing", False),
+                notes=[n for n in [state.get("sync_note")] if n],
             )
         new_text, _kwargs, write_id = outcome
         changed = new_text != (snapshot.text or "")
@@ -881,6 +993,7 @@ class VaultWriter:
             hash_before=snapshot.sha256,
             hash_after=sha256_text(new_text),
             baseline_missing=state.get("baseline_missing", False),
+            notes=[n for n in [state.get("sync_note")] if n],
         )
 
     # -- rollback ----------------------------------------------------

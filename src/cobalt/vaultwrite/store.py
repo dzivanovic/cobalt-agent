@@ -32,6 +32,25 @@ from cobalt.db import Side
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 RETENTION_DAYS = 30
 
+#: The suffix that marks a REVERSE script. `0004` is the first vaultwrite
+#: migration to ship one (same convention as
+#: `db_migrations/0002_move_tables.rollback.sql`), and `ensure_schema()`
+#: globs this directory — so without this the rollback would run on every
+#: boot, right next to the forward script it undoes. As it happens
+#: `.rollback.sql` sorts BEFORE `.sql`, so today it would have dropped the
+#: column and then re-added it: harmless by luck, and exactly the kind of
+#: luck that stops holding when the next migration is named differently.
+ROLLBACK_SUFFIX = ".rollback.sql"
+
+
+def forward_migrations() -> list[Path]:
+    """Every FORWARD migration, in order. Reverse scripts are named, not
+    executed: they are run deliberately by an operator during a rollback,
+    which is what `docs/40 - DevDocs/reports/` deploy plans call out."""
+    return sorted(
+        p for p in MIGRATIONS_DIR.glob("*.sql") if not p.name.endswith(ROLLBACK_SUFFIX)
+    )
+
 
 def sha256_text(text: Optional[str]) -> Optional[str]:
     if text is None:
@@ -59,7 +78,7 @@ class VaultWriteStore:
     def ensure_schema(self) -> None:
         with self._connect() as conn:
             db.assert_schemas_exist(conn)
-            for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
+            for migration in forward_migrations():
                 lines = migration.read_text().splitlines()
                 sql = "\n".join(line for line in lines if not line.strip().startswith("--"))
                 for statement in sql.split(";"):
@@ -89,13 +108,43 @@ class VaultWriteStore:
             ).fetchone()
         return None if row is None else row[0]
 
+    def recent_afters(
+        self, note: str, section: str, unit: str, limit: int = 10
+    ) -> list[tuple[int, str]]:
+        """`(id, unit_after)` for this unit's recent writes, NEWEST FIRST.
+
+        The evidence a SYNC REVERT is recognised by. `last_after()` above
+        answers "what did Cobalt write here last" — the merge baseline.
+        This answers the different question "is the text on disk right
+        now something Cobalt wrote here AT ALL", which is what tells a
+        stale copy coming back from another device apart from a human
+        typing something new.
+
+        Bounded at 10 by default, and the bound is the point: this is a
+        recognition window, not a search of the whole history. A body
+        that matches something from three weeks ago is not a sync revert,
+        it is a coincidence or a human copying an old block back — and
+        either way Cobalt should not silently assume it wrote it.
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, unit_after FROM vault_writes
+                WHERE note = %s AND section = %s AND unit = %s
+                  AND unit_after IS NOT NULL
+                ORDER BY id DESC LIMIT %s
+                """,
+                (note, section, unit, limit),
+            ).fetchall()
+        return [(int(r[0]), r[1]) for r in rows]
+
     def get_write(self, write_id: int) -> Optional[dict[str, Any]]:
         with self._connect() as conn:
             cur = conn.execute(
                 """
                 SELECT id, ts, note, section, unit, before, after,
                        unit_before, unit_after, hash_before, hash_after,
-                       writer, run_id, session
+                       writer, run_id, session, sync_revert_of
                 FROM vault_writes WHERE id = %s
                 """,
                 (write_id,),
@@ -110,7 +159,7 @@ class VaultWriteStore:
             cur = conn.execute(
                 """
                 SELECT id, ts, note, section, unit, hash_before, hash_after,
-                       writer, run_id, session
+                       writer, run_id, session, sync_revert_of
                 FROM vault_writes ORDER BY id DESC LIMIT %s
                 """,
                 (limit,),
@@ -136,6 +185,7 @@ class VaultWriteStore:
         session: str,
         unit_before: Optional[str] = None,
         unit_after: Optional[str] = None,
+        sync_revert_of: Optional[int] = None,
         overrides: Optional[list[dict[str, Any]]] = None,
     ) -> Iterator[int]:
         """INSERT the audit row (+ any override rows), yield its id for
@@ -147,13 +197,13 @@ class VaultWriteStore:
                     """
                     INSERT INTO vault_writes (
                         note, section, unit, before, after,
-                        unit_before, unit_after,
+                        unit_before, unit_after, sync_revert_of,
                         hash_before, hash_after, writer, run_id, session
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
                     (note, section, unit, before, after, unit_before, unit_after,
-                     hash_before, hash_after, writer, run_id, session),
+                     sync_revert_of, hash_before, hash_after, writer, run_id, session),
                 ).fetchone()
                 if row is None:
                     raise RuntimeError("vault_writes INSERT returned no id — audit trail failed.")
