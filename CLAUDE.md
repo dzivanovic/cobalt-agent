@@ -155,6 +155,10 @@ numbered folder.
   local-only, never committed.
 - **_archive** — superseded or misfiled content, organized by why it's
   there. Nothing under docs/ is ever deleted.
+- **_inflight** — NOT a documentation tier: git-ignored delivery snapshots of
+  reports still on an unmerged branch (see "Vault delivery" below); each copy
+  is deleted when its report lands on main. The one sanctioned folder outside
+  the numbered tiers (ruled 2026-09-09).
 
 **Law: every new markdown artifact files into one of these — never at
 repo root, never in a new ad-hoc folder.** CLAUDE.md and README.md are
@@ -239,3 +243,16 @@ Short, precise, concise by default; elaborate only when asked. Accuracy over
 completeness — say plainly when you don't know. Flag flaws in an idea up
 front, during planning, not after days of work. Speak up with improvements
 rather than silently executing.
+
+**Report discipline (ruled 2026-09-09, binding on every subagent report):**
+§0 Headline ≤5 lines (what changed, status, ESCALATE count) → tables →
+ESCALATE. No restating the prompt, no process narration, no section
+without a fact or a verdict. Replies to Dejan ≤10 lines, one ruling per
+message; full elaboration only when he asks.
+
+**Vault delivery:** every document Dejan reads or attaches must sit in the
+Obsidian vault. Repo `docs/` is in the vault through the symlink
+`0 - Projects/Cobalt`; a report on an unmerged branch is NOT, so copy it to
+`docs/_inflight/` (git-ignored by `docs/*`, no carve-out — never collides
+with a merge) the moment it lands, cite the vault path, and delete the copy
+when the report reaches `40 - DevDocs/reports/` at merge.
