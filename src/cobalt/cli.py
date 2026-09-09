@@ -59,6 +59,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 from cobalt.aset.config import load_config as load_aset_config  # noqa: E402
 from cobalt.cards import cli as cards_cli  # noqa: E402
 from cobalt.daymode import cli as daymode_cli  # noqa: E402
+from cobalt.generated import cli as generated_cli  # noqa: E402
 from cobalt.db_migrations import cli as db_cli  # noqa: E402
 from cobalt.backup import cli as backup_cli  # noqa: E402
 from cobalt.heartbeat import cli as heartbeat_cli  # noqa: E402
@@ -449,6 +450,7 @@ def main() -> None:
     backup_cli.add_parser(sub)
     notify_cli.add_parser(sub)
     seatusage_cli.add_parser(sub)
+    generated_cli.add_parser(sub)
     jobs_cli.add_stop_parsers(sub)
 
     validate = sub.add_parser(

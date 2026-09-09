@@ -1,0 +1,41 @@
+# GENERATED FILES — tracked files that a scheduled JOB rewrites.
+#
+# Schema: src/cobalt/generated/config.py. Pydantic-validated on load, and
+# the validation goes past the shape: every path must EXIST and be
+# TRACKED BY GIT or the load fails loudly. A stale entry would make the
+# nightly job a no-op nothing reports; an untracked entry would put a
+# file into the repository that no human reviewed.
+#
+# WHY THIS FILE EXISTS. These three are rewritten by jobs and nothing
+# commits them, so `~/cobalt` — which IS production (R4) — is
+# permanently dirty. A permanently dirty working tree is one nobody
+# reads: every deploy starts by squinting at `git status` deciding which
+# lines are "just the jobs", which is exactly the state in which a real
+# uncommitted change gets waved through. The 09-08 and 09-09 ledger
+# appendices both record leaving them uncommitted "deliberately" — a
+# decision re-made by hand every day, which is a rule asking to be code.
+#
+# `com.cobalt.generated` runs `cobalt generated commit` at 23:37 ET,
+# every day. It refuses unless the checkout is on `main`, no
+# merge/rebase/cherry-pick is in progress and nothing is already staged;
+# it stages ONLY the paths below that are dirty; and it NEVER pushes.
+#
+# ADDING A PATH IS A DECISION, not bookkeeping: it means a job may put
+# that file into the history unreviewed, every night. The `written_by`
+# line is required because the first question asked of an unexpected
+# diff is "what wrote this", and the answer belongs beside the path.
+
+files:
+  - path: "docs/40 - DevDocs/reports/seat-usage.md"
+    written_by: "com.cobalt.seat-usage — hourly, 06:00-23:00 ET, every day"
+
+  - path: "docs/30 - Design/archiver-runs.md"
+    written_by: "com.cobalt.archiver — one row per nightly run, Mon-Fri 20:30 ET"
+
+  - path: "configs/cobalt/rules.yaml"
+    written_by: "com.cobalt.prefill-daily — refreshes `generated_at` at 05:15 ET"
+
+# `{date}` is the only placeholder, and it is the ET calendar date: the
+# job fires at 23:37 ET, which is already tomorrow in UTC for eight
+# months of the year.
+message: "chore(generated): nightly rewrite {date}"

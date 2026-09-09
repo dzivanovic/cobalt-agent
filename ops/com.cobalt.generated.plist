@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.generated</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+        <!-- RULING 7 / Charter §8.4: every plist carries COBALT_ENV. This
+             job writes its own F17 row into the LIVE jobs table, so it
+             declares production. Without this the store refuses to
+             resolve a database at all rather than quietly defaulting to
+             dev — which is the whole point of the ruling. -->
+        <key>COBALT_ENV</key>
+        <string>production</string>
+        <!-- Declared for the same reason com.cobalt.seat-usage declares
+             it: a production process is REFUSED any vault target outside
+             the production vault, so a future step here that writes a
+             note lands in the real vault rather than failing at 23:37
+             (NN#16). This job writes no note today. -->
+        <key>COBALT_VAULT_PATH</key>
+        <string>/Users/cobalt/Vault/Think</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- ABSOLUTE PATH, deliberately: launchd posix_spawn()s
+             ProgramArguments[0] and does NOT search the job's own PATH
+             the way a shell does. A bare "uv" here produces exit 78
+             (EX_CONFIG) with empty stdout and stderr, which is exactly
+             how the 05:15 prefill failed silently on 2026-09-03. -->
+        <string>/Users/cobalt/.local/bin/uv</string>
+        <string>run</string>
+        <string>cobalt</string>
+        <string>generated</string>
+        <string>commit</string>
+    </array>
+    <!-- The checkout this commits in, and it is production (R4,
+         2026-09-08: ~/cobalt IS production). `cobalt generated commit`
+         defaults to the repository the installed package belongs to, so
+         this and that answer are the same repository — the job cannot be
+         aimed elsewhere by an accident of working directory. -->
+    <key>WorkingDirectory</key>
+    <string>/Users/cobalt/cobalt</string>
+    <key>AbandonProcessGroup</key>
+    <true/>
+    <!-- 23:37 ET, EVERY DAY INCLUDING WEEKENDS.
+
+         AFTER everything that writes: the last seat-usage run is 23:00,
+         the archiver 20:30 (~23 min), the backup 21:40. By 23:37 the
+         day's rewrites are all on disk.
+
+         NOT ON THE HOUR, and not on a round five. A scheduled `git add`
+         should not share its minute with another job — if it did, a
+         file could be half-rewritten as this stages it — and an odd
+         minute is the cheapest way to guarantee that.
+
+         WEEKENDS INCLUDED: seat-usage is rewritten on a Saturday exactly
+         as it is on a Tuesday, and a Sunday's dirty tree is as unreadable
+         as a Monday's. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>23</integer><key>Minute</key><integer>37</integer></dict>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>23</integer><key>Minute</key><integer>37</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>23</integer><key>Minute</key><integer>37</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>23</integer><key>Minute</key><integer>37</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>23</integer><key>Minute</key><integer>37</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>23</integer><key>Minute</key><integer>37</integer></dict>
+        <dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>23</integer><key>Minute</key><integer>37</integer></dict>
+    </array>
+    <!-- RunAtLoad false: the schedule above is the schedule. A load-time
+         run would make a commit at whatever minute the plist happened to
+         be bootstrapped, which is a commit nobody asked for. -->
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/cobalt/logs/generated.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/cobalt/logs/generated.err</string>
+</dict>
+</plist>

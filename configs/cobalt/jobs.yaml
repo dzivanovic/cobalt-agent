@@ -185,6 +185,26 @@ jobs:
       weekdays: [0, 1, 2, 3, 4, 5, 6]
     what: "the hourly seat-usage report (uv run cobalt seat-usage run) — what the seats cost today"
 
+  - label: com.cobalt.generated
+    kind: one-shot
+    supervisor: self
+    timeout_s: 300
+    # 23:37 ET, EVERY DAY. After the last seat-usage run (23:00) and well
+    # after the archiver's 20:30 + the backup's 21:40, so the day's
+    # rewrites are all on disk before this looks. Not on the hour, and
+    # not on a round five: a scheduled `git add` should not share its
+    # minute with anything, and an odd minute is the cheapest way to say
+    # so. Weekends included — the seat-usage report is rewritten on a
+    # Saturday exactly as it is on a Tuesday.
+    schedule: {at: "23:37", weekdays: [0, 1, 2, 3, 4, 5, 6]}
+    what: >
+      commit the generated files a job rewrote today (uv run cobalt
+      generated commit). configs/cobalt/generated.yaml is the declared
+      list; the command refuses off `main`, mid-merge, or with anything
+      already staged, and it NEVER pushes. It exists because ~/cobalt IS
+      production and a permanently dirty working tree is one nobody
+      reads.
+
 # THE KILL PHRASE (F17d). Config, not a literal: `cobalt stop` and any
 # future DM listener compare against this exact string.
 kill_phrase: "COBALT STOP"
