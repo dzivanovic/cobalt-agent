@@ -1,341 +1,302 @@
 # S2-P1 BUILD BRIEF — for Codex `gpt-5.6-sol`
 
-You build S2-P1 (radar pool + Finviz bar poller) in this worktree. Everything you need is in this
-file. The plan it implements is `docs/40 - DevDocs/reports/_inflight/plan-s2-p1-2026-09-10.md`,
-in this worktree. Where the two disagree, the plan wins; say so in the report.
+You build S2-P1 (radar pool + Finviz bar poller) in this worktree. The plan it implements is
+`docs/40 - DevDocs/reports/_inflight/plan-s2-p1-2026-09-10.md` (FINAL). Section references (D1…D15, §3, §4)
+point there. Where the two disagree, the plan wins; say so in the report.
 
 ## 0. Who does what
 
 | House | Does | Cannot |
 |---|---|---|
-| **You (Sol)**, high effort, `-s workspace-write`, network on | write code, tests, docs, the report, inside this worktree | commit, rebase, write outside the worktree, touch the real vault or `cobalt_brain` |
-| **Hub (Sonnet)** | launches you, verifies against ground truth, commits per step on `sprint-2/radar-pool`, runs what your sandbox cannot | build |
+| **You (Sol)**, high effort, `-s workspace-write`, network on | code, offline tests, fixtures, migrations as files, plist, DevDocs, the report — inside this worktree | commit, rebase, write outside the worktree, connect to ANY database, touch any vault |
+| **Hub (Sonnet)** | launches you, verifies, commits per step on `sprint-2/radar-pool`; runs migrations on cobalt_dev, the DB-backed suite, the dev-vault smoke (plan D15 H1–H12), and the live throttle probe if yours was NOT RUN | build |
 | **Dejan** | approves the HITL card | — |
 
-**Hub, before launching you:** (1) if `ops/heartbeat-market-reset` has merged to main, rebase this
-branch onto main first; (2) if the plan's §9 says the Astra review loop has not run, run it and fold
-fixes into the plan before launch; (3) export the dev DB credentials into your environment without
-printing them.
+**Hub, before launching you:** the branch is rebased on main `16847eb` and the plan is FINAL. Launch with NO
+database environment: no `POSTGRES_*` variables in your environment, no `.env` in the worktree.
 
-**Two runs.** RUN A = steps 0–13 (stage 1). Stop, print `DONE`. The hub commits stage 1, then
+**Two runs.** RUN A = steps 0–13 (stage 1). Print `DONE`. The hub runs H1–H11 and commits stage 1, then
 relaunches you with `RUN B` in the prompt. RUN B = step 14 (stage 2) + report update. Print `DONE`.
-Step G is **hub only, after Dejan's approval** — you never run it.
+Plan D13's real propose/apply and §6 LIVE steps are hub-only; you never run them.
 
-**Stop rules.** A step you cannot finish → mark it `NOT RUN` or `FAILED` in the report with the
-exact error line (scrubbed), then continue with the steps that do not depend on it. Never mark a
-test passing that did not run. 3 failed attempts at the same thing → stop that step, ESCALATE.
-Print `DONE` as the very last line of every run, nothing after it.
+**Stop rules.** A step you cannot finish → `NOT RUN` or `FAILED` in the report with the exact error line
+(scrubbed), then continue with the steps that do not depend on it. Never mark a test passing that did not run.
+3 failed attempts at the same thing → stop that step, ESCALATE. `DONE` is the last line of every run.
 
 ## 1. Laws (binding — a violation is a failed step)
 
-1. **Production is sacred (NN#16).** Dev only: `COBALT_ENV=dev`, database `cobalt_dev`, vault =
-   `data/smoke-vault` (gitignored copy you make of `~/dev-vault-cobalt`). Never open
-   `/Users/cobalt/Vault/Think`. Never connect to `cobalt_brain`. Never `launchctl` anything.
-2. **User data never enters the repo (L32).** No real screen, filter string, list or dollar figure in
-   any tracked file, report, fixture, test or log line you paste. The repo ships exactly ONE synthetic
-   example screen (R2).
-3. **Secrets.** Never print, log or paste a token, password, DSN or env value. Every URL and error
-   string passes through `cobalt.archiver.collector.scrub`. Never run `env`, `printenv` or `cat .env`.
-4. **Fail loud.** Missing data or invalid config = a loud failure naming the file/field. No silent
-   fallback, no plausible-empty artifact, no default invented for a missing value.
-5. **One path.** Reuse, never copy: `cobalt.db.connect` (the ONLY `psycopg.connect` is in `db.py`),
-   `archiver.collector.fetch_bars` / `resolve_token` / `scrub`, `BarStore.upsert_bars`,
+1. **No credentials (E7).** You never connect to a database. Never read, copy or create a `.env`; never read
+   `~/cobalt/.env`; never export or set `POSTGRES_*`. Every test that needs a DB carries `requires_db`
+   (the existing pattern, `tests/cobalt/test_aset_store.py:30`) and skips in your environment.
+2. **Production is sacred (NN#16).** Never open `/Users/cobalt/Vault/Think` or `~/dev-vault-cobalt`; vault
+   tests use `tmp_path`. Never `launchctl` anything.
+3. **User data never enters the repo (L32, E5).** No real screen, filter string, list or dollar figure in any
+   file, report, fixture, test or pasted log line. The repo ships exactly ONE synthetic screen (R2).
+4. **Secrets.** Never print, log or paste a token, password, DSN or env value. Every URL and error string
+   passes through `cobalt.archiver.collector.scrub`. Never run `env`, `printenv` or `cat .env`.
+5. **Fail loud.** Missing data or invalid config = a loud failure naming the file/field. No silent fallback,
+   no plausible-empty artifact, no default invented for a missing value.
+6. **One path.** Reuse, never copy: `cobalt.db.connect` (the ONLY `psycopg.connect` is in `db.py`),
+   `archiver.collector.finviz_get` / `fetch_bars` / `resolve_token` / `scrub`, `BarStore.upsert_bars`,
    `TraderSettingsStore.put`, `VaultWriter.upsert_unit` / `create_if_absent`, `session_clock()`,
-   `jobs.wrapper.job_run` / `should_keep_running`, `load_tunables()`.
-6. **ADR-0008 two layers.** Every store declares `SIDE`; `"user"` is ALWAYS quoted
-   (`psycopg.sql.Identifier` in Python); cross-side SQL is schema-qualified (`system.radar_membership`);
-   every new table is on a side in `src/cobalt/db_migrations/placement.py` or the suite fails.
-7. **Config-as-code.** Pydantic schema per config file, `extra="forbid"`, dry-run command. New-core
-   config lives only under `configs/cobalt/` (never `configs/*.yaml` top level).
-8. **Tunables.** Thresholds are `configs/cobalt/taxonomy/tunables.yaml` rows. Use EXISTING
-   `TunableUnit` / `TunableStatus` / `TunableSource` values only — adding an enum value breaks the
-   live ASET sheet (09-09 outage). No fitting value → ESCALATE.
-9. **market_reset (20:00–21:00 ET).** Ask `session_clock()` BEFORE writing; never rely on catching
-   `SessionBlocked`. Radar writes nothing in that window.
-10. **Tools fetch, code computes.** No LLM anywhere in P1. All numbers are deterministic code.
-11. **Tests per step.** `uv run pytest` for the step's tests before moving on; the whole suite at
-    step 13.
-12. **Names.** One name per concept across SQL, Python, config and docs (`radar_pool`,
-    `radar_membership`, `account_mode`, `pool_member_id`, `excluded_by`).
+   `jobs.wrapper.job_run` / `should_keep_running`, `load_tunables()`, `AsetStore.save`,
+   `DayModeStore.attest_sheet`.
+7. **ADR-0008 two layers.** Every store declares `SIDE`; `"user"` is ALWAYS quoted (`psycopg.sql.Identifier`);
+   cross-side SQL is schema-qualified; every table is on a side in `db_migrations/placement.py`.
+8. **Config-as-code.** Pydantic, `extra="forbid"`, a dry-run command. New-core config only under
+   `configs/cobalt/`. Committed config carries engine tunables only — never a cap, rank rule, metric choice
+   or stickiness (those are the vault pool block's, D2).
+9. **Tunables.** EXISTING `TunableUnit` / `TunableStatus` / `TunableSource` values only (09-09 outage). No
+   fitting value → ESCALATE.
+10. **market_reset (20:00–21:00 ET).** Ask `session_clock()` BEFORE each write stage; never rely on catching
+    `SessionBlocked`. Radar writes nothing in that window.
+11. **Tools fetch, code computes.** No LLM anywhere in P1.
+12. **Tests per step.** The step's tests before moving on; the whole offline suite at step 13.
+13. **Names.** One name per concept: `radar_pool`, `radar_membership`, `account_mode`, `aset.account_mode`,
+    `pool_member_id`, `excluded_by`, `below_cap_streak`, `scan_id`, `failed_stage`, `poll_failures`, `ticker`.
 
 ## 2. Rulings you implement (09-10, binding)
 
-- **R1 Radar Screens contract.** Vault note `1 - Trading/Radar Screens.md` gets one fenced YAML block
-  per screen: `screen, f, sort, columns, active_from, active_to (session clock, ET), enabled`. It is
-  written ONCE, through the vault writer, under ONE HITL card, prose untouched. After that Cobalt only
-  reads the note: parse fenced blocks only, reload on file-hash change, mirror each block + hash into
-  `"user".trader_settings`; `radar_membership.source` names screen + hash. Parse failure → pool row
-  degraded + heartbeat `radar` probe RED naming the screen; never the previous version silently. Day
-  Scan is active from 10:00 ET via the F1 session clock — a field, never code.
-- **R2 Synthetic example screen.** Exactly one, same fenced format, as the test fixture under
-  `tests/fixtures/`; real screens never enter the repo. `git ls-files | grep -i radar` stays clean of
-  user data.
-- **R3 `cobalt db query`.** Read-only CLI: factory connection, SET ROLE per side, SELECT-only enforced in
-  code (reject anything else, loud), output JSON/table. The workers' DB read path.
-- **R4 Static lists are user data.** They move user-side by the same mechanism as R1. Plan choice: a new
-  vault note `1 - Trading/Radar Lists.md` with fenced blocks. The archiver keeps working through the
-  migration (stage 2).
-- **R5 Houses + RESTARTS by rule.** plist in diff → that job; changed file in a resident's `reads:` →
-  that resident; registry → `register`; code/tests/docs → none; anything unclassified → ESCALATE.
+- **R1 Screens contract.** Vault note `1 - Trading/Radar Screens.md`: one fenced YAML block per screen —
+  `screen, f, sort, columns, active_from, active_to, enabled`, plus optional `ft` (D1). Cobalt only reads the
+  note: fenced blocks only, reload on file-hash change, mirror each block + hash into `"user".trader_settings`;
+  `radar_membership.source` names source + hash. Parse failure → degraded + `radar` probe RED naming it.
+- **R2** Exactly one synthetic screen, as a fixture under `tests/fixtures/radar/`.
+- **R3 `cobalt db query`.** Read-only CLI, SELECT-only enforced in code (D10).
+- **R4 Static lists** move user-side by the same mechanism: vault note `1 - Trading/Radar Lists.md`.
+- **E1 / D1 Account mode.** Card stamp = `day_modes.account_mode` for the day → `trader_settings['aset.account_mode']`
+  (standing, `live` seeded by migration 0004) → neither = card REFUSED, loud, logged, no row. The sim switch is
+  a select on the attestation form writing `day_modes.account_mode` for that day (D8).
+- **E2 / D2 Pool rule** = its own block kind `kind: pool` in the Screens note, own schema, exactly one;
+  missing → pool frozen, degraded, probe RED. The cap lives there.
+- **D3 Ranking.** premarket = volume, rth = RVOL, aftermarket = volume; overnight and market_reset do not scan.
+  Every scan ranks all candidates; stickiness per plan D3's precedence table; the cap is hard; Morning Low Float
+  ranks by volume in every session; Day Scan first among screens from 10:00.
+- **E3** The three tiers move as they are; `source` names the tier.
+- **E4 / D7** `ft` is an optional screen-block key from day one; the LIVE comparison decides whether a proposed
+  block carries it.
+- **E6 / D5 RESTARTS** by rule, derived by `cobalt jobs restarts`, printed in the report (plan §3).
+- **D6** Per-store transactions in the fixed order membership → pool row → mirror → bars, each idempotent,
+  partial failure named on the pool row; the session is checked inside each store transaction through its
+  `before_commit` hook (D5).
+- **E8** The vault write is propose (you build + offline tests) → HITL card → apply (hub).
+- **D8** The throttle probe observes status, redirects and elapsed through `finviz_get`'s `on_metrics` (D6).
 
 ## 3. Environment
 
-- Run everything from this worktree with `uv run …`. Tests: `uv run pytest tests/cobalt tests/taxonomy`.
-- DB env: the hub exports the Postgres credentials into your environment at launch. If a DB-backed test
-  or command fails to connect, record `NOT RUN (db unreachable: <scrubbed error>)` and continue.
-- No `psql` on this host. Before step 3 lands, reach the DB only through repo code; after it lands, use
-  `uv run cobalt db query --side system|user "<select>"`.
-- Finviz token: `cobalt.archiver.collector.resolve_token()`. If it fails in your sandbox, the live half
-  of step 1 is `NOT RUN`; the hub runs it.
-- Vault for smoke: `cp -R ~/dev-vault-cobalt data/smoke-vault` once, then
-  `COBALT_VAULT_PATH=$PWD/data/smoke-vault`. `data/` and `logs/` are gitignored — confirm with
-  `git check-ignore` before writing anything there.
-- DevDocs layout: one page per `.py` file at `docs/40 - DevDocs/cobalt/<module>/<file>.md`, tests at
-  `docs/40 - DevDocs/tests/cobalt/<file>.md`, and a line in `docs/40 - DevDocs/INDEX.md`.
+- Everything from this worktree with `uv run …`. Offline suite: `uv run pytest tests/cobalt tests/taxonomy`.
+- DB-backed tests: mark `requires_db` (skip without `POSTGRES_HOST`/`POSTGRES_USER`). Give every store a
+  fake or an injected connection so its logic is testable offline; the SQL itself is tested by the hub.
+- Finviz token: `resolve_token()`. If it fails in your sandbox, the live throttle run is `NOT RUN`.
+- Vault tests: `tmp_path` + `COBALT_VAULT_PATH` monkeypatched to it.
+- `data/` and `logs/` are gitignored — confirm with `git check-ignore` before writing there.
+- DevDocs: one page per `.py` at `docs/40 - DevDocs/cobalt/<module>/<file>.md`, tests at
+  `docs/40 - DevDocs/tests/cobalt/<file>.md`, a line each in `docs/40 - DevDocs/INDEX.md`.
 
 ## 4. Build steps
 
-Each step lists its files, then the tests that must pass before the next step starts.
+Each step lists files, then the tests that must pass before the next step.
 
 ### Step 0 — Base check (no code)
-- `test -f src/cobalt/db_migrations/0003_heartbeat_vault_outcome.sql`. Present → the heartbeat fix is in
-  your base; build on it. Absent → build on main as is, register 0004 after 0002, and list in the report
-  the files that will conflict at merge: `db_migrations/__init__.py`, `db_migrations/cli.py`,
-  `heartbeat/runner.py`, `jobs/config.py`, `jobs/wrapper.py`, `tests/cobalt/test_tenancy.py`,
-  `tests/cobalt/test_jobs.py`.
-- Record `git rev-parse HEAD` in the report.
+- `test -f src/cobalt/db_migrations/0003_heartbeat_vault_outcome.sql` must succeed (main `16847eb`). Absent →
+  STOP, report `FAILED: base is not 16847eb`.
+- Record `git rev-parse HEAD`.
 
-### Step 1 — Finviz throttle re-measure (FIRST)
-- `src/cobalt/radar/throttle.py` + `cobalt radar throttle-probe --names 50 --grids 60,30,15,10 --cycles 3`.
-- Names = the 50 first tickers of the synthetic lists fixture (step 5 creates it; create that fixture
-  file now if needed).
-- Refuses on trading days between 09:00 and 16:00 ET, and inside market_reset (use `session_clock()` and
-  the NYSE calendar).
-- Per cycle: sequential `fetch_bars(t, Interval.I1, token)` for each name, then one
-  `/export/screener?v=152&f=<fixture f>&c=0,…,150` call. STOP at the first non-200, 429, redirect,
-  non-CSV body or header mismatch.
-- Per stage record: requests, achieved req/min, status counts, p50/p95 latency ms, bytes. Write
-  `data/radar-throttle-<UTC ts>.json` and print a table.
-- `radar.finviz_max_rpm = floor(0.5 × highest clean stage req/min)`. If every stage was clean, write
-  "no throttle observed up to N req/min". Never extrapolate.
-- **Tests (mocked HTTP):** stop-on-first-error per class; refusal inside the forbidden window; rpm math;
-  token never appears in output (assert `auth=REDACTED`).
-- **Live run:** allowed only outside the forbidden window. Otherwise, or on token failure, `NOT RUN`.
+### Step 1 — Finviz transport + throttle probe (FIRST; plan D6, §4)
+- `archiver/collector.py`: `FetchMetrics` model; `finviz_get(path, params, token, *, on_metrics=None)` with
+  today's client settings (timeout 30 s, `follow_redirects=True`); `on_metrics` fires before `raise_for_status`
+  with `status`, `redirect_statuses` (from `response.history`), `elapsed_ms`, `bytes`, `content_type`, or
+  `error` on a transport failure. `fetch_bars(ticker, interval, token, *, on_metrics=None)` calls it.
+- `src/cobalt/radar/throttle.py` + `cobalt radar throttle-probe --names 50 --grids 60,30,15,10 --cycles 3`:
+  names = first 50 tickers of the lists fixture (create `tests/fixtures/radar/radar-lists.example.md` now);
+  refuses 09:00–16:00 ET on trading days and in market_reset; per cycle sequential `fetch_bars(…, on_metrics=)`
+  then one screener call through `finviz_get` with the fixture filter; STOP at the first status ≠ 200, any
+  redirect, error, non-CSV body or header mismatch; per stage: requests, achieved req/min, status counts,
+  p50/p95 ms, bytes → `data/radar-throttle-<UTC ts>.json` + printed table;
+  `finviz_max_rpm = floor(0.5 × highest clean stage req/min)`; all clean → "no throttle observed up to N req/min".
+- **Tests (mocked HTTP, `test_radar_throttle.py`, `test_archiver_collector.py`):** each stop class incl. a 302
+  followed to 200 (redirect seen in `redirect_statuses`); refusal windows; rpm math; `auth=REDACTED`; existing
+  archiver collector tests unchanged and green.
+- **Live run** outside the forbidden window only; otherwise or on token failure `NOT RUN`. The number (or
+  NOT RUN) is the report's first row.
 
-### Step 2 — Migration 0004, rollback bound, placement, J1
-- `src/cobalt/db_migrations/0004_radar_pool.sql` and `0004_radar_pool.rollback.sql` with exactly the
-  plan's §D3 DDL. Tables are created schema-qualified, `OWNER TO cobalt_system`;
-  `GRANT SELECT, REFERENCES ON system.radar_membership TO cobalt_user`;
-  `GRANT SELECT ON system.radar_pool TO cobalt_user`. The rollback header states its cost.
-- `db_migrations/__init__.py`: append to `FORWARD`, prepend to `REVERSE`, docstring lines.
-- `db_migrations/cli.py`: the digest excludes `account_mode` and `pool_member_id` (extend the heartbeat
-  fix's `DIGEST_EXCLUDED_COLUMNS` if present; otherwise generalize `TENANCY_COLUMN` into that tuple).
-  `--rollback` REQUIRES `--down-to NNNN`; it reverses only registered migrations newer than NNNN, newest
-  first; without it, it refuses and lists targets.
-- `placement.py`: move `radar_pool`, `radar_membership` out of `DECLARED_TABLES` into a new
-  `CREATED_TABLES` dict ("created by a db_migration directly on its side"), included in `PLACEMENT` and
-  in the proof table; extend the SQL/Python agreement test to 0004.
-- **Tests** (`tests/cobalt/test_tenancy.py`, `tests/cobalt/test_radar_migration.py`):
-  migrate twice idempotent; `migrate → --rollback --down-to 0003 → migrate` digests identical;
-  0003's columns (if present) survive the 0004 rollback; `--rollback` without `--down-to` refuses;
-  placement test green; J1 — FK catalog proof, `cobalt_user` SELECT OK / INSERT denied on
-  `system.radar_membership`, valid id insert OK / invalid FK-fails, `cobalt_system` SELECT on
-  `"user".aset_sizings` denied; membership CHECKs (`entered_at IS NOT NULL OR excluded_by IS NOT NULL`)
-  and the partial unique index reject bad rows.
+### Step 2 — Migration 0004 as files, bounded rollback, direction-aware proof, placement (plan D4)
+- `src/cobalt/db_migrations/0004_radar_pool.sql` + `0004_radar_pool.rollback.sql`: exactly plan D4's DDL,
+  grants, ownership, the `aset.account_mode` seed and the rollback (header states its cost).
+- `db_migrations/__init__.py`: append to `FORWARD`, prepend to `REVERSE`, docstring.
+- `db_migrations/cli.py`: `DIGEST_EXCLUDED_COLUMNS` + `account_mode`, `pool_member_id`; `--rollback` REQUIRES
+  `--down-to NNNN` (refuses before connecting, lists targets) and runs only newer reverse files, newest first;
+  verdicts `CREATED` / `DROPPED` / `CHANGED` computed BEFORE commit; `CHANGED` rolls back.
+- `placement.py`: `radar_pool`, `radar_membership` → new `CREATED_TABLES`, in `PLACEMENT` and the proof set.
+- **Offline tests (`test_radar_migration.py`, `test_tenancy.py`):** 0004 DDL ↔ placement agreement (parse the
+  SQL text); `--down-to` file selection; refusal without `--down-to` with no connection attempted; verdict
+  function table; abort-before-commit ordering with a fake connection.
+- **`requires_db` tests (hub):** idempotent migrate; round trip digests; 0003 columns survive; seed row
+  present/absent; J1 (plan D9); membership CHECKs and both unique indexes reject bad rows.
 
-### Step 3 — `cobalt db query` (R3)
-- `src/cobalt/db_query.py`, registered as `db query` in `db_migrations/cli.py`'s `db` group.
-- `--side user|system` (required), `--prod` (`allow_prod=True`), `--format json|table`, `--limit`
-  (default 1000). Connection = `db.connect(dbname, side=…)`.
-- The guard and the belt exactly as plan §D8 (tokenizer aware of quotes, dollar-quotes and comments;
-  single SELECT/WITH; refused words and functions; `BEGIN READ ONLY`; `SET LOCAL statement_timeout`
-  from tunable `db.query.timeout_s`; `SELECT * FROM (<sql>) AS q LIMIT n`; always ROLLBACK;
-  `current_user` asserted; output through F19 redaction).
-- **Tests** (`tests/cobalt/test_db_query.py`): each refused class exits 2 with the token named; a
-  keyword inside a string literal passes; multi-statement refused; data-modifying CTE refused;
-  `set_config('role', …)` refused; user side reads `system.bars` qualified; `cobalt_brain` without
-  `--prod` refuses (no connection attempted); the `psycopg.connect` lint still passes.
+### Step 3 — `cobalt db query` (plan D10)
+- `src/cobalt/db_query.py`, registered as `db query`. Guard pure and separately importable.
+- **Offline tests (`test_db_query.py`):** every refused class exits 2 naming the token; keyword in a literal
+  passes; multi-statement; data-modifying CTE; `set_config('role', …)`; `cobalt_brain` without `--prod` refuses
+  before connecting; the `psycopg.connect` lint still passes.
+- **`requires_db`:** READ ONLY belt, timeout, `current_user`, user side reads `system.bars` qualified.
 
-### Step 4 — Config
-- `configs/cobalt/radar.yaml` + `src/cobalt/radar/config.py` (Pydantic, `extra="forbid"`): `pool_key`,
-  `notes {screens: "1 - Trading/Radar Screens.md", lists: "1 - Trading/Radar Lists.md"}`,
-  `active_sessions [premarket, rth, aftermarket]`,
-  `export {v: 152, columns: "0-150", required_headers: [...]}`, `list_chunk_size`,
-  `not_equity {header, values}`, `rank`, `cache {dir: data/radar-cache, retention_days}`.
-- `required_headers` and the `not_equity` values come from a REAL recorded export header (step 6
-  captures one) — until then mark them `# UNVERIFIED` and a test asserts they are replaced before step 13.
-- `tunables.yaml` rows: `radar.pool_cap` 50 count; `radar.scan_interval` 60 duration;
-  `radar.poll_interval` 60 duration; `radar.finviz_max_rpm` count (step 1 value);
-  `heartbeat.radar_max_age_s` 180 duration; `db.query.timeout_s` 30 duration. Mirror the neighbouring
-  rows' `scope/dynamic/status/source/consumers` shape.
-- `cobalt radar check`: validates radar.yaml + tunables, and REFUSES when
-  `pool_cap × 60 / poll_interval + max active screens + list chunks per minute > finviz_max_rpm`.
-- **Tests** (`tests/cobalt/test_radar_config.py`): bad key crashes naming the file; budget refusal; every
-  new tunable resolves; `load_tunables()` still validates (the ASET sheet reads this file).
+### Step 4 — Config (plan D12)
+- `configs/cobalt/radar.yaml` + `src/cobalt/radar/config.py`: `pool_key`, `notes {screens, lists}`,
+  `export {v: 152, columns: "0-150", required_headers, metric_headers {volume, rvol}}`, `list_chunk_size`,
+  `not_equity {header, values}`, `cache {dir: data/radar-cache, retention_days}`. `required_headers`,
+  `metric_headers` and `not_equity` come from a real header capture (step 6); until then `# UNVERIFIED` and a
+  test that fails at step 13 if still marked.
+- `tunables.yaml`: `radar.scan_interval` 60 duration; `radar.poll_interval` 60 duration;
+  `radar.poll_overlap_bars` 5 count; `radar.finviz_max_rpm` count (step 1); `heartbeat.radar_max_age_s` 180 duration; `db.query.timeout_s` 30
+  duration — neighbouring rows' `scope/dynamic/status/source/consumers` shape. The cap is never a tunable (it lives in the pool block).
+- `jobs/config.py`: `JobSpec.imports: Optional[list[str]]`; `jobs.yaml`: `imports:` on every resident per
+  plan §3.
+- `cobalt radar check`: validates radar.yaml + tunables.
+- **Tests (`test_radar_config.py`, `test_jobs.py`):** bad key crashes naming the file; every new tunable
+  resolves; `load_tunables()` validates; `load_job_registry()` validates with `imports`.
 
-### Step 5 — Notes parser, fixtures, mirror (R1, R2, R4)
-- `src/cobalt/radar/models.py` (`ScreenBlock`, `ListBlock`, `ExcludeBlock`, `SourceSet`, `ExcludedBy`),
-  `src/cobalt/radar/notes.py` (plan §D1): read bytes once, hash those bytes, fenced ```` ```yaml ````
-  blocks only, every yaml fence must validate, sha256 per block and per note, key slugs unique.
-- Mirror via `TraderSettingsStore.put`: keys `radar.note.screens`, `radar.note.lists`,
-  `radar.screen.<key>`, `radar.list.<key>`, `radar.exclude`; value
-  `{block, block_sha256, note_sha256, status: ok|parse_failed|removed, error}`;
-  `source = vault:<note path>@<sha12>`. Writes only when the note hash changed. Never writes inside
-  market_reset.
-- Fixtures: `tests/fixtures/radar/radar-screens.example.md` — ONE synthetic screen (`screen: Example
-  Session Scan`, synthetic `f`, `active_from: "10:00"`, `active_to: "16:00"`, `enabled: true`, a short
-  prose paragraph around it). `tests/fixtures/radar/radar-lists.example.md` — synthetic lists: ≥60
-  large-cap tickers (rule: well-known index heavyweights, not copied from any file in this repo), one
-  ETF (for `not_equity`), one `exclude` block, `archive` intervals, exactly one `backfill_default`.
-- **Tests** (`tests/cobalt/test_radar_notes.py`): fixture parses; each field's validation failure names
-  the block; a non-validating yaml fence is a named failure; prose/markers ignored; hash stable across
-  re-reads and changes on a one-byte edit; parse failure → mirror row `parse_failed`, never the old
-  block; `TraderSettings.from_db()` returns identically with the radar rows present (the sheet cannot
-  break); R2 test (file CONTENTS): no tracked file under `src/cobalt/`, `configs/cobalt/`,
-  `tests/cobalt/`, `ops/` or `docs/40 - DevDocs/` contains `f=` followed by
-  `sh_|ta_|fa_|an_|cap_|exch_|geo_|idx_|ind_|sec_|news_|earningsdate_|ipodate_|targetprice_`,
-  outside `tests/fixtures/radar/` (use `git ls-files` for the tracked set).
+### Step 5 — Notes parser, block kinds, mirror, fixtures (plan D1, D2)
+- `src/cobalt/radar/models.py`: `ScreenBlock` (optional `ft`), `PoolBlock`, `ListBlock`, `ExcludeBlock`,
+  `SourceSet`, `ExcludedBy`. `src/cobalt/radar/notes.py`: bytes read once and hashed; yaml fences only;
+  dispatch by `kind` per note (D1); exactly one pool block; override keys cross-checked; budget check (D2);
+  sha256 per block and note.
+- Mirror via `TraderSettingsStore.put` with plan D1's keys and statuses; "changed" against the stored
+  `note_sha256`; no write in market_reset.
+- Fixtures: `radar-screens.example.md` — ONE screen block `example_session_scan` (synthetic `f`,
+  `active_from: "10:00"`, `active_to: "16:00"`, `enabled: true`), ONE pool block (`cap: 5`,
+  `stickiness_scans: 2`, `priority: [screens, lists]`, `rank_metric` for premarket/rth/aftermarket,
+  `overrides: {example_session_scan: {first_from: "10:00"}}`), prose in the "Export call (derived)" /
+  "Filters" / "Sort" shape. `radar-lists.example.md` — ≥60 large caps (well-known index heavyweights, not
+  copied from any repo file), one ETF, one `kind: exclude` block, `archive` intervals, one `backfill_default`.
+- **Offline tests (`test_radar_notes.py`):** plan D15 O5; each field failure names the block; prose/markers
+  ignored; hash stable, changes on a one-byte edit; mirror with a fake store → `parse_failed` / `missing`,
+  never the old block; `TraderSettings._build` succeeds with radar rows present; R2 content test (plan D1).
 
-### Step 6 — Screener collector, cache, replay
-- `src/cobalt/radar/collector.py`: `ScreenerCollector` protocol; `FinvizScreenerCollector` —
-  `GET https://elite.finviz.com/export/screener?v=152&f=<f>&o=<sort>&c=0,…,150` for screens and
-  `…&t=<chunk>&c=…` for lists; one process-wide token bucket at `radar.finviz_max_rpm` shared with the
-  poller; raw CSV cached to `data/radar-cache/<trade_date>/<source_key>-<HHMMSS>.csv`; parse by header
-  NAME; missing header / non-CSV / HTTP error → `SourceFailure` (named, never an empty list); every
-  string scrubbed.
-- Capture ONE real export header with the fixture filter (if network + token work) and pin
-  `required_headers` + `not_equity` from it; cite the capture file in the report (the header row only,
-  no data rows pasted).
-- `src/cobalt/radar/replay.py`: `ReplayCollector` serving cached CSVs by virtual clock, and
-  `cobalt radar replay-build <day>` that synthesizes snapshots from `system.bars` i1 in cobalt_dev
-  (RVOL proxy = cumulative volume ÷ mean cumulative volume at the same minute over the prior sessions
-  present; supports only the fixture screen's filter codes; any other code fails loud). Named
-  replay-only in its docstring.
-- **Tests** (`tests/cobalt/test_radar_collector.py`): recorded-CSV parse; header mismatch → failure;
-  HTML body → failure; `t=` chunking; token bucket pacing (fake clock); cache path under a gitignored
-  dir; scrub.
+### Step 6 — Screener collector, cache, replay (plan D6)
+- `src/cobalt/radar/collector.py`: `ScreenerCollector` protocol; `FinvizScreenerCollector` through
+  `finviz_get` (screens with optional `&ft=`; lists via `t=` chunks); one process-wide token bucket; cache
+  path; header-name parse; `SourceFailure` on missing header / non-CSV / HTTP error / redirect.
+- Capture ONE real export header with the fixture filter (network + token) and pin `required_headers`,
+  `metric_headers`, `not_equity` from it; cite the capture file (header row only) in the report.
+- `src/cobalt/radar/replay.py`: `ReplayCollector` serving snapshots by virtual clock; pure
+  `snapshots_from_bars(bars, screen, prior_sessions)` (RVOL proxy per plan D15 H4; only the fixture screen's
+  filter codes; any other code fails loud); `cobalt radar replay-build <day>` reads `system.bars` (DB, hub).
+- **Offline tests (`test_radar_collector.py`, `test_radar_replay.py`):** recorded-CSV parse; header mismatch;
+  HTML body; redirect; `t=` chunking; token bucket (fake clock); cache path gitignored; scrub; snapshot synthesis
+  from generated bars.
 
-### Step 7 — Pool decision + store
-- `src/cobalt/radar/pool.py`: a pure function `decide(candidates, open_members, sources, cfg, now) →
-  transitions`, no I/O, implementing plan §D4 steps 1–6 (manual, not_equity, rank, cap, screen_inactive,
-  degraded sources held).
-- `src/cobalt/radar/store.py`: `RadarStore` (`SIDE = Side.SYSTEM`) — pool row upsert, membership
-  episodes per plan §D3 (open, admit, exclude, leave, trade-date rollover), all transitions of one
-  cycle in ONE transaction.
-- **Tests** (`tests/cobalt/test_radar_pool.py`, `test_radar_store.py`): table tests for every rule and
-  every `excluded_by` value; cap never exceeded; rank tie-break deterministic; a degraded source's
-  members held AND counted against the cap first (admissions fill only `pool_cap − held`; a held member
-  is never evicted); re-admission closes the excluded episode and opens a new one; rollover closes the prior
-  day; store-side lint (own side or qualified).
+### Step 7 — Pool decision + store (plan D3, D5)
+- `src/cobalt/radar/pool.py`: pure `decide(candidates, open_members, blocks, sources, now) → transitions`
+  implementing plan D3's rank key and precedence table exactly.
+- `src/cobalt/radar/store.py`: `RadarStore` (`SIDE = Side.SYSTEM`) — S1 membership transitions and S2 pool row,
+  each one transaction taking `before_commit`, idempotent per plan D5; `assert_writable("radar.<stage>")`.
+- **Offline tests (`test_radar_pool.py`):** plan D15 O2; one table test per D3 step; rank key with mixed
+  metrics never compares volume to RVOL; first_from before/after 10:00; cap lowered below held; streak
+  reset/freeze/leave on the (N+1)-th scan; the cap-1 case (incumbent always ranked below one newcomer: retained
+  at streaks 1..N, leaves at N+1 — retention never resets the streak); rollover closes the prior day.
+- **`requires_db` (`test_radar_store.py`):** idempotent re-apply of a `scan_id`; unique indexes; store lint.
 
-### Step 8 — Bar poller + aggregation
-- `src/cobalt/radar/poller.py`: for admitted members in rank order, `fetch_bars(t, Interval.I1, token)`
-  through the shared token bucket; keep `ts > watermark` (seeded from `max(ts)` per ticker in
-  `system.bars`) and `ts + 1 min ≤ now`; `BarStore.upsert_bars`.
-- `src/cobalt/archiver/aggregate.py`: pure `aggregate(bars, minutes)`, buckets floored from 00:00 ET,
-  OHLCV rules explicit. Never stored.
-- **Tests** (`tests/cobalt/test_radar_poller.py`, `test_archiver_aggregate.py`): watermark; open bar
-  excluded; upsert idempotent; aggregation on hand-built bars incl. a DST day and a missing minute; an
-  agreement check vs stored `i2` on the replay day (DB test) printing the % — any systematic mismatch
-  goes to ESCALATE, not a tweak.
+### Step 8 — Bar poller + aggregation (plan D7)
+- `src/cobalt/radar/poller.py`: admitted members in rank order, `fetch_bars` through the shared bucket;
+  closed bars with `ts > watermark(ticker, 'i1') − radar.poll_overlap_bars` minutes;
+  `BarStore.upsert_bars(bars, before_commit=gate("bars"))`; `poll_failures` entries with reasons `error` and
+  `stale` (rth only), onset and recovery per plan D7.
+- `src/cobalt/archiver/store.py`: `upsert_bars(bars, *, before_commit=None)`, the hook called last inside the
+  connection context; `None` = today's behaviour.
+- `src/cobalt/archiver/aggregate.py`: pure `aggregate(bars, minutes)`, floored from 00:00 ET, explicit OHLCV.
+- **Offline tests (`test_radar_poller.py`, `test_archiver_aggregate.py`):** watermark with a fake store; overlap re-upsert;
+  open bar excluded; `error` and rth `stale` entries with onset and recovery, no stale rule outside rth; aggregation incl. a DST day and a missing minute.
+- **`requires_db`:** upsert idempotent; aggregate vs stored i2 agreement % on the replay day (hub, H7).
 
-### Step 9 — Resident runner, registry, plist
-- `src/cobalt/radar/runner.py` + `cobalt radar run` / `cobalt radar scan --once [--replay <day>
-  --from HH:MM --to HH:MM]`: `job_run("com.cobalt.radar")`; `should_keep_running` each cycle; session
-  asked FIRST (plan §D4): inactive → `idle`; market_reset → `paused_market_reset` with ZERO radar writes;
-  otherwise reload notes → fetch → decide → store → poll bars; one cycle per `radar.scan_interval`;
-  `last_scan_ms` stamped. The session is asked AGAIN immediately before the cycle's commit; a cycle
-  whose commit would land in market_reset is dropped whole and logged.
-- `configs/cobalt/jobs.yaml`: `com.cobalt.radar` — resident, `supervisor: self`, `timeout_s: 300`,
-  `enabled: false`, `reads:` derived by instrumenting one `scan --once` (patch `open` / `Path.read_text`
-  and record repo-relative paths), each entry with a `# file.py:line (loader)` comment.
-- `ops/com.cobalt.radar.plist`: `ProgramArguments` `/Users/cobalt/.local/bin/uv run cobalt radar run`;
-  `WorkingDirectory /Users/cobalt/cobalt`; `RunAtLoad true`; `KeepAlive {SuccessfulExit false}`;
-  `COBALT_ENV production`; `COBALT_VAULT_PATH /Users/cobalt/Vault/Think`; `PATH` as the archiver plist;
-  logs `logs/radar.log` / `logs/radar.err`. No double hyphen inside XML comments.
-- `ops/README.md`: radar handover + "after `cobalt resume`, `launchctl kickstart
-  gui/$(id -u)/com.cobalt.radar`".
-- **Tests** (`tests/cobalt/test_radar_runner.py`, `test_jobs.py`): market_reset cycle writes nothing
-  (row counts); a cycle started at 19:59:50 ET with a fake clock that reaches 20:00:05 at commit writes
-  nothing; idle cycle makes no HTTP call; kill switch → clean exit 0; `uv run cobalt validate`
-  exit 0 (registry ↔ plist); watchdog: stale heartbeat on this resident → `zombie`.
+### Step 9 — Resident runner, stages, registry, plist (plan D5)
+- `src/cobalt/radar/runner.py` + `cobalt radar run` / `cobalt radar scan --once [--replay <day> --from HH:MM
+  --to HH:MM]`: `job_run`; `should_keep_running`; session asked first; S1 → S2 → S3 → S4, each store call given
+  `before_commit=gate(stage)` (raises `StageDropped` in market_reset, rolling that transaction back; later
+  stages and remaining S4 tickers skipped); `settings/store.py`: `put(rows, *, source, before_commit=None)`,
+  the hook called immediately before `conn.commit()`; partial-failure handling and `failed_stage` stamping per plan D5; `scan_id` monotonic.
+- `jobs.yaml`: `com.cobalt.radar` row per plan D5; `reads:` derived by instrumenting one offline
+  `scan --once` with fakes (patch `open` / `Path.read_text`, repo-relative paths), each with `# file.py:line`.
+- `ops/com.cobalt.radar.plist` per plan D5 (`PATH` as the archiver plist; no double hyphen in XML comments);
+  `ops/README.md` radar handover.
+- **Offline tests (`test_radar_runner.py`, `test_jobs.py`):** plan D15 O3, O4; idle cycle makes no HTTP call;
+  market_reset cycle writes nothing (fakes); kill switch → exit 0; `cobalt validate` exit 0 (registry ↔ plist);
+  watchdog: stale heartbeat on this resident → `zombie`.
+- **`requires_db` (hub, H5):** the hook raising inside `RadarStore`, `TraderSettingsStore.put`,
+  `BarStore.upsert_bars` and between S4 tickers rolls back; existing settings and archiver tests green.
 
-### Step 10 — F18 `radar` probe
-- `probes.radar(now)` in `src/cobalt/heartbeat/probes.py`, added to `take_beat` in
-  `heartbeat/runner.py`, exactly plan §D9.
-- **Tests** (`tests/cobalt/test_heartbeat.py`): each branch (not probed / no row / paused / idle / fresh /
-  stale / degraded names sources / parse_failed names the screen).
+### Step 10 — F18 `radar` probe (plan D11)
+- `probes.radar(now)` in `heartbeat/probes.py`, added to `take_beat`.
+- **Offline tests (`test_heartbeat.py`, row source faked):** every D11 branch.
 
-### Step 11 — Account-mode tag
-- `"user".day_modes.account_mode` setter: `cobalt daymode account-mode live|sim [--date YYYY-MM-DD]`,
-  market_reset-gated like the other day-mode writes.
-- `aset/store.py` INSERT stamps `account_mode` from today's `day_modes` row; `aset/web.py` renders a
-  `LIVE` / `SIM` / `ACCOUNT MODE UNSET` badge on every card. No card is refused because of it.
-- **Tests** (`test_daymode.py`, `test_aset_store.py`, `test_aset_web.py`): setter gated; stamp from the
-  row; NULL → UNSET badge; existing card flows unchanged (whole aset test files green).
+### Step 11 — Account mode (plan D8)
+- `src/cobalt/aset/account_mode.py`: `resolve(conn, day)` → `live|sim` or `AccountModeUnresolved`.
+- `aset/store.py` `save`: resolve on the same transaction before the INSERT; INSERT writes `account_mode`.
+- `daymode/store.py` `attest_sheet(day, *, filename, account_mode=None, now=None)`: one upsert, `COALESCE` keeps
+  the column when `account_mode` is None.
+- `aset/web.py`: attestation form select; `POST /attest` validates and passes it; banner shows
+  `ACCOUNT LIVE` / `ACCOUNT SIM` or that cards are refused; every card shows its stamp.
+- **Offline tests (`test_aset_account_mode.py`, `test_aset_web.py`):** plan D15 O7 with fakes; the upsert SQL
+  text keeps `COALESCE`; whole existing aset/daymode offline tests green.
+- **`requires_db` (hub, H9):** stamp live / sim / refusal on cobalt_dev via TestClient.
 
-### Step 12 — Seed command (fixtures and smoke vault ONLY)
-- `src/cobalt/radar/seed.py` + `cobalt radar seed --dry-run | --apply --hitl <token> [--only
-  screens|lists]` per plan §D2: prose → blocks with `# from:` verbatim-source comments and
-  `# PROPOSED` markers; `upsert_unit` per screen section; `create_if_absent` for the Lists note rendered
-  from `configs/cobalt/watchlists.yaml`; create-once refusal; market_reset refusal; `--apply` without
-  `--hitl` refuses; prints write_ids + restore lines; `--probe-ft` compares each screen's ticker set with
-  and without `ft=4` (hub use).
-- **You run it only with `COBALT_VAULT_PATH=$PWD/data/smoke-vault`.** Its prose input is rendered from
-  the screen fixture inside the test — no second screen definition.
-- **Tests** (`tests/cobalt/test_radar_seed.py`): every pre-existing line byte-identical, diff is
-  insertions only; `f` mismatch between the export line and the filters line refuses; the lists note
-  round-trips to the same targets as the YAML; second apply refuses; `restore` by write_id returns the
-  original bytes.
+### Step 12 — Propose / apply (plan D13)
+- `src/cobalt/radar/propose.py` + `cobalt radar screens propose --pool-block <file> [--ft-compare]`,
+  `cobalt radar lists propose`, `cobalt radar screens apply --proposal <artifact> --hitl <token> --sha256 <sha>`,
+  `cobalt radar lists apply --proposal <artifact> --hitl <token> --sha256 <sha>` — derivation, `# from:` and
+  `# PROPOSED` markers, pool-block validation, the proposal artifact per plan D13 (inputs + final units +
+  target-note sha, sha256 over canonical JSON), diff, refusals, write_ids + restore lines. Apply writes exactly
+  the artifact's units: no re-derivation, no network.
+- `src/cobalt/radar/sources.py` + `cobalt radar sources [--json] [--archiver-diff --yaml-rev <sha>]`:
+  `archive_targets(note)` / `backfill_targets(note, t)` — the functions stage 2's archiver will call. Stage 1,
+  because LIVE L7/L8 run before stage 2 merges.
+- **Offline tests (`test_radar_propose.py`, `tmp_path`):** prose → blocks from the screen fixture (no second
+  screen definition); `f` mismatch between the export line and the filters line refuses; invalid pool-block file
+  refused; diff insertions only; sha stable; `--ft-compare` with mocked HTTP adds `ft: 4` only where sets differ;
+  lists proposal round-trips to the same targets as the YAML; the artifact records every input; apply refuses a
+  changed artifact sha and a changed target note before calling the writer; `cobalt radar sources
+  --archiver-diff` is empty for a Lists note rendered from `watchlists.yaml` at HEAD (the synthetic lists
+  fixture is NOT the comparison).
+- **`requires_db` (hub, H11):** apply writes, second apply refuses, `restore --write-id` byte-identical.
 
-### Step 13 — Smoke + report (end of RUN A)
-- Run plan §D12 S0–S12 against `data/smoke-vault` + `cobalt_dev` (S0 = `COBALT_ENV=dev uv run archiver
-  --backfill <T>` for each synthetic list ticker; it writes only to cobalt_dev). One row per check:
-  PASS/FAIL/NOT RUN + the evidence command and its key output line.
-- Whole suite: `uv run pytest tests/cobalt tests/taxonomy` (count passed/failed/skipped);
-  `uv run cobalt validate`; `uv run cobalt radar check`; `git ls-files | grep -i radar` listing.
-- DevDocs page for every new or changed `.py` (layout in §3) + INDEX lines.
-- RESTARTS: derive from `git diff --name-status main...HEAD` plus untracked files (`git status
-  --porcelain`), one row per path, by the R5 rule, using `uv run cobalt jobs readers <path>` for every
-  changed config path. Unclassified → ESCALATE.
+### Step 13 — RESTARTS tool, offline gate, report (end of RUN A)
+- `src/cobalt/jobs/restarts.py` + `cobalt jobs restarts <git-range>`: plan §3 rule; static ast walk from each
+  resident's `imports:`; unresolvable dynamic import or missing `imports:` → all residents; unclassified →
+  ESCALATE line; untracked files included when the range ends at the working tree.
+  **Tests (`test_jobs_restarts.py`):** each rule; a string-loaded module declared vs undeclared.
+- Run plan D15 O1–O10. One row each: PASS / FAIL / NOT RUN + the command and its key output line.
+- DevDocs for every new or changed `.py` + INDEX lines.
+- RESTARTS: `uv run cobalt jobs restarts main...HEAD` output pasted as the derivation table.
 - Write the report (§5). Print `DONE`.
 
-### Step 14 — RUN B: stage 2 (archiver onto the Lists note)
-- `archiver/config.py` reads targets from the Lists note via `cobalt.radar.notes` (read + validate only,
-  no mirror write); `archive_targets` / `backfill_targets` per plan §D11; missing or failed note → loud.
-- `cobalt radar sources [--json] [--archiver-diff --yaml-rev <sha>]`.
-- Tests re-targeted to the lists fixture; `git rm`-equivalent: delete `configs/cobalt/watchlists.yaml`
-  from the working tree (the hub commits the deletion).
-- **Tests:** render a Lists note FROM `configs/cobalt/watchlists.yaml` at RUN A's commit (the hub gives
-  you the sha) with the step-12 seed code into `data/smoke-vault`; archiver-diff between that note and
-  the YAML at the same sha is empty (the synthetic lists fixture is NOT the comparison — it is different
-  data by design); `archiver --backfill <T>` works from the note on cobalt_dev; the whole suite green.
-- Update the report (S13 row, stage-2 file list, RESTARTS rows). Print `DONE`.
-
-### Step G — HUB ONLY, after Dejan approves the HITL card (never Sol)
-Run as plan §6 L6–L8, from `~/cobalt` after stage 1 is merged, outside market_reset:
-`COBALT_ENV=production uv run cobalt radar seed --dry-run` (diff sha256 must equal the card's) →
-`--apply --hitl <token>` → `cobalt radar sources` → `--archiver-diff --yaml-rev HEAD` empty.
+### Step 14 — RUN B: stage 2 (plan D14)
+- `archiver/config.py` reads targets from the Lists note through `cobalt.radar.sources.archive_targets` /
+  `backfill_targets` (built in step 12; read + validate only); missing or failed note → loud.
+- Tests re-targeted to the lists fixture; delete `configs/cobalt/watchlists.yaml` from the working tree (the
+  hub commits the deletion).
+- **Offline tests:** archiver config built from a Lists note rendered by `lists propose` from `watchlists.yaml`
+  at RUN A's sha (the hub gives it) into `tmp_path` equals the targets that YAML produced. **`requires_db`
+  (hub, H12):** `archiver --backfill <T>` from the note.
+- Update the report (stage-2 file list, `cobalt jobs restarts <RUN A sha>...HEAD`). Print `DONE`.
 
 ## 5. Report — `docs/40 - DevDocs/reports/s2-p1-2026-09-10.md`
 
-Report discipline: §0 headline ≤5 lines (what changed, status, ESCALATE count) → tables → ESCALATE.
-No restating this brief, no process narration.
+§0 headline ≤5 lines (what changed, status, ESCALATE count) → tables → ESCALATE. No restating this brief.
 
-1. **§0 Headline** — READY FOR MERGE / NOT READY (+ the blocking rows).
-2. **Base** — `HEAD` sha at step 0; heartbeat fix present or not; expected conflicts.
-3. **Steps** — table: step · status · files · tests (passed/failed/skipped) · evidence.
-4. **Throttle** — the stage table, `finviz_max_rpm`, or NOT RUN + reason.
-5. **Smoke** — S0–S13 table.
-6. **Migration proof** — the printed proof tables (forward, rollback --down-to 0003, forward).
-7. **`reads:` derivation** — each path with file:line.
-8. **RESTARTS derivation** — path · change · rule · restart.
-9. **LIVE block** — plan §6 L0–L13, with real shas/tags filled where known, and the rollback column.
-10. **DISSENT** — copy plan §9 verbatim.
-11. **ESCALATE** — plan E1–E6 carried verbatim + anything new, one line each.
-12. **Stage 2 file list** (RUN B).
+1. **§0 Headline** — READY FOR HUB GATE / NOT READY (+ blocking rows).
+2. **Throttle** — `radar.finviz_max_rpm = N` (or NOT RUN + reason) first, then the stage table.
+3. **Base** — HEAD sha at step 0.
+4. **Steps** — step · status · files · tests (passed / failed / skipped `requires_db`) · evidence.
+5. **Offline gate** — O1–O10.
+6. **Hub gate** — H1–H12, every row `NOT RUN (hub)`; the hub fills them.
+7. **Header capture** — file path + header row only.
+8. **`reads:` derivation** — each path with file:line.
+9. **RESTARTS derivation** — the tool's output: path · change · rule · restart, and the `RESTARTS:` line.
+10. **LIVE block** — plan §6 L0–L13 with real shas where known, rollback column kept.
+11. **DISSENT** — plan §9 DISSENT verbatim.
+12. **ESCALATE** — plan §8 verbatim + anything new, one line each.
+13. **Stage 2 file list** (RUN B).
 
-You cannot write outside the worktree; the hub copies the report to `~/cobalt/docs/_inflight/` for the
-vault.
+You cannot write outside the worktree; the hub copies the report to `docs/_inflight/` for the vault.
 
 Print `DONE` last.
