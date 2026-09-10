@@ -21,6 +21,7 @@ from .models import JobKind, Supervisor
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "configs" / "cobalt" / "jobs.yaml"
 OPS_DIR = REPO_ROOT / "ops"
+HEARTBEAT_LABEL = "com.cobalt.heartbeat"
 
 #: launchd's weekday numbering, which this file mirrors: 1 = Monday.
 WEEKDAY_NAMES = {1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 0: "Sun"}
@@ -253,6 +254,11 @@ class JobSpec(BaseModel):
     #: does not".
     enabled: bool = True
 
+    #: The watcher must keep watching while the global stop is active. This
+    #: defaults false and is valid only for the heartbeat; widening the
+    #: exemption requires a code review, not one permissive YAML line.
+    kill_switch_exempt: bool = False
+
     #: Repo-relative config files this RESIDENT RE-READS AT RUNTIME.
     #:
     #: THE LAW THIS SERVES, ruled three times (2026-09-04, 2026-09-08 on
@@ -287,6 +293,11 @@ class JobSpec(BaseModel):
 
     @model_validator(mode="after")
     def _shape_matches_kind(self) -> "JobSpec":
+        if self.kill_switch_exempt and self.label != HEARTBEAT_LABEL:
+            raise ValueError(
+                f"{self.label}: `kill_switch_exempt` is reserved for "
+                f"{HEARTBEAT_LABEL}; the stop must still stop every other job"
+            )
         if self.kind is JobKind.ONE_SHOT and self.reads:
             raise ValueError(
                 f"{self.label}: `reads` belongs to a RESIDENT. A one-shot re-reads "
@@ -396,6 +407,7 @@ def load_job_registry() -> JobRegistry:
 
 __all__ = [
     "CONFIG_PATH",
+    "HEARTBEAT_LABEL",
     "OPS_DIR",
     "WEEKDAY_NAMES",
     "parse_window",

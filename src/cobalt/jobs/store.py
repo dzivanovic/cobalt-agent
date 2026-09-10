@@ -21,7 +21,7 @@ every evening would go blind for the hour it matters most.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -30,9 +30,10 @@ from cobalt.db import Side
 from cobalt.session import clock as clock_mod
 
 from .config import JobSpec
-from .models import JobState, Supervisor
+from .models import JobState
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+WRAPPER_RESULT_FIELDS = frozenset({"argv", "returncode"})
 
 
 class JobStoreError(RuntimeError):
@@ -171,6 +172,70 @@ class JobStore:
                     label,
                 ),
             )
+
+    def mark_wrapper_finished(
+        self,
+        label: str,
+        *,
+        exit_code: int,
+        error: Optional[str] = None,
+        result: Optional[dict[str, Any]] = None,
+        now: Optional[datetime] = None,
+    ) -> None:
+        """Finish the heartbeat wrapper without replacing beat-owned detail.
+
+        The heartbeat subprocess writes probe detail, daily-green dedup state,
+        and vault delivery. Its parent wrapper owns only lifecycle fields plus
+        ``argv``/``returncode``. JSONB concatenation is the atomic boundary
+        between those two owners.
+        """
+        result = result or {}
+        forbidden = sorted(set(result) - WRAPPER_RESULT_FIELDS)
+        if forbidden:
+            raise JobStoreError(
+                f"heartbeat wrapper result contains non-wrapper fields {forbidden}; "
+                "beat detail and green_summary_date belong to run_beat"
+            )
+        ts = now or clock_mod.now_utc()
+        state = JobState.DONE if exit_code == 0 else JobState.FAILED
+        safe_error = None
+        if error:
+            from cobalt.redact import redact
+
+            safe_error = redact(error, channel="jobs.last_error").text
+        wrapper_result = json.dumps(result, default=str)
+        with self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE cobalt_jobs SET state = %s, finished_at = %s, heartbeat_at = %s, "
+                "exit_code = %s, last_error = %s, "
+                "last_result = COALESCE(last_result, '{}'::jsonb) || %s::jsonb, "
+                "updated_at = now() WHERE label = %s",
+                (state.value, ts, ts, exit_code, safe_error, wrapper_result, label),
+            )
+            if cur.rowcount != 1:
+                raise JobStoreError(f"no jobs row for {label!r} while finishing its wrapper")
+
+    def record_heartbeat_result(
+        self,
+        label: str,
+        *,
+        result: dict[str, Any],
+        vault_outcome: Optional[str],
+        vault_reason: Optional[str],
+    ) -> None:
+        """Persist fields owned by the heartbeat, preserving wrapper fields."""
+        with self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE cobalt_jobs SET "
+                "last_result = COALESCE(last_result, '{}'::jsonb) || %s::jsonb, "
+                "vault_outcome = %s, vault_reason = %s, updated_at = now() "
+                "WHERE label = %s",
+                (json.dumps(result, default=str), vault_outcome, vault_reason, label),
+            )
+            if cur.rowcount != 1:
+                raise JobStoreError(
+                    f"no jobs row for {label!r} — register it before persisting a beat"
+                )
 
     def mark_zombie(self, label: str, *, reason: str) -> None:
         """The watchdog's conclusion. Nothing else may write this state."""

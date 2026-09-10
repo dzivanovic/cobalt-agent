@@ -30,6 +30,15 @@
         <string>/Users/cobalt/.local/bin/uv</string>
         <string>run</string>
         <string>cobalt</string>
+        <string>jobs</string>
+        <string>run</string>
+        <string>com.cobalt.heartbeat</string>
+        <!-- The remainder is the one heartbeat subprocess. The F17 wrapper
+             owns lifecycle/argv fields; run_beat owns beat detail and vault
+             outcome, and its result is merged rather than replaced. -->
+        <string>/Users/cobalt/.local/bin/uv</string>
+        <string>run</string>
+        <string>cobalt</string>
         <string>heartbeat</string>
         <string>beat</string>
     </array>

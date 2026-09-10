@@ -6,8 +6,7 @@ WHAT ONE BEAT DOES, in order:
 
 1. probes everything (`probes.py`) and sweeps every job row
    (`jobs.watchdog`);
-2. writes a Cobalt-owned red/green block into TODAY'S daily note through
-   `VaultWriter` — one L28 unit, updated in place, one diff per beat;
+2. composes the beat, including the kill-switch state;
 3. on red, sends the SECOND channel first (email, over Layer-B Google
    OAuth — `out_of_band` below), so that its outcome can appear in the
    DM;
@@ -15,6 +14,11 @@ WHAT ONE BEAT DOES, in order:
    second channel failed — plus one green summary a day at
    `heartbeat.green_summary_at`. The GREEN summary is DM-only: a daily
    all-clear in the alert inbox is how an alert inbox stops being read.
+5. persists the beat independently of alert delivery;
+6. writes the daily-note unit, unless the session clock says
+   `market_reset`;
+7. FINALIZE persists the vault outcome and sends a corrective
+   out-of-band RED if that late write failed.
 
 THE ALERT PATH IS NOT THE MONITORED PATH (Charter §3 F18). The DM goes
 over Mattermost, which is one of the things being watched — so a
@@ -33,15 +37,18 @@ useless.
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 from typing import Optional
 
 from loguru import logger
 
+from cobalt.jobs import killswitch
+from cobalt.jobs.config import load_job_registry
 from cobalt.jobs.store import JobStore
 from cobalt.jobs.watchdog import sweep
 from cobalt.session import clock as clock_mod
 from cobalt.session.clock import session_clock
+from cobalt.session.models import Session
 
 from . import probes as probe_mod
 from .render import SECTION, UNIT, WRITER, Beat
@@ -49,6 +56,9 @@ from .render import SECTION, UNIT, WRITER, Beat
 JOB_LABEL = "com.cobalt.heartbeat"
 INTERVAL_KEY = "heartbeat.interval_min"
 GREEN_SUMMARY_KEY = "heartbeat.green_summary_at"
+VAULT_WRITTEN = "written"
+VAULT_DEFERRED = "deferred_market_reset"
+VAULT_FAILED = "failed"
 
 
 def interval_min() -> int:
@@ -122,7 +132,9 @@ def take_beat(*, now: Optional[datetime] = None, probe: bool = True) -> Beat:
 # ---------------------------------------------------------------------
 
 
-def write_note_block(beat: Beat, *, dry_run: bool = False):
+def write_note_block(
+    beat: Beat, *, dry_run: bool = False, now: Optional[datetime] = None
+):
     """One L28 unit in today's note, updated in place — one diff a beat.
 
     Returns the `WriteResult`, or None when there is no note yet. A
@@ -143,7 +155,12 @@ def write_note_block(beat: Beat, *, dry_run: bool = False):
         return None
     store = VaultWriteStore()
     store.ensure_schema()
-    writer = VaultWriter(WRITER, store=store, dry_run=dry_run)
+    writer = VaultWriter(
+        WRITER,
+        store=store,
+        dry_run=dry_run,
+        now=(lambda: now) if now is not None else None,
+    )
     return writer.upsert_unit(path, SECTION, UNIT, beat.note_body())
 
 
@@ -236,60 +253,192 @@ def out_of_band(beat: Beat) -> str:
 
 
 # ---------------------------------------------------------------------
-# the beat
+# the six isolated stages
 # ---------------------------------------------------------------------
 
 
-def run_beat(*, now: Optional[datetime] = None, dry_run: bool = False, probe: bool = True) -> Beat:
-    """One whole heartbeat. Returns the Beat; never raises on a red."""
-    store = JobStore()
-    store.ensure_schema()
-    beat = take_beat(now=now, probe=probe)
+def _stage_failure(beat: Beat, stage: str, error: BaseException) -> str:
+    """Make a stage failure safe for persistence and outbound channels."""
+    raw = f"{stage} FAILED ({type(error).__name__}: {error})"
+    try:
+        from cobalt.redact import redact
 
-    write = write_note_block(beat, dry_run=dry_run)
-    if write is None:
-        beat.notes.append("Daily note: NOT WRITTEN — today's note does not exist yet.")
-    else:
-        # L28.4: the unified diff goes in the RUN REPORT, every time. The
-        # heartbeat writes to the live vault every 15 minutes; a write
-        # path that reported only "updated" would be the one write path
-        # in this codebase whose changes nobody could read back.
-        beat.notes.append(write.report())
+        reason = redact(raw, channel="heartbeat.stage").text
+    except Exception as redact_error:  # noqa: BLE001
+        logger.error(
+            "heartbeat: {} and its reason could not be redacted ({}: {})",
+            stage,
+            type(redact_error).__name__,
+            redact_error,
+        )
+        reason = f"{stage} FAILED ({type(error).__name__}; detail unavailable)"
+    logger.error("heartbeat: {}", reason)
+    beat.stage_failures.append(reason)
+    return reason
 
-    sent_green = False
+
+def _compose_beat(beat: Beat, store: JobStore) -> None:
+    state = killswitch.read(store)
+    beat.kill_switch = state.describe()
+    if state.active:
+        beat.kill_switch += " Heartbeat exemption active — this watcher is still running."
+
+
+def _attempt_alert(beat: Beat, name: str, sender) -> None:
+    try:
+        beat.notes.append(sender(beat))
+    except Exception as e:  # noqa: BLE001 - one channel cannot suppress the next
+        _stage_failure(beat, f"alerts/{name}", e)
+
+
+def _run_alerts(beat: Beat, store: JobStore, *, dry_run: bool) -> bool:
     if dry_run:
         beat.notes.append("DRY RUN — no DM sent, nothing written.")
-    elif not beat.green:
-        # OUT-OF-BAND FIRST. The DM's body is rendered from `beat.notes`,
-        # so the email outcome has to be in the list before `send_dm`
-        # reads it — that is what puts "email channel DOWN: <reason>" in
-        # the red DM. The reverse order would report the email result
-        # only to the log, where a failed second channel would be
-        # discovered by whoever went looking, which is nobody.
-        beat.notes.append(out_of_band(beat))
-        beat.notes.append(send_dm(beat))
-    elif should_send_green(beat, store):
-        beat.notes.append(send_dm(beat))
-        sent_green = True
+        return False
 
-    if not dry_run:
-        # The heartbeat records ITS OWN run like any other job — it is the
-        # one job nobody else is watching, so it watches itself and a
-        # stalled heartbeat shows up as its own MISSED row.
-        result = {
-            "green": beat.green,
-            "red_jobs": [j.label for j in beat.red_jobs],
-            "red_probes": [p.name for p in beat.red_probes],
-        }
-        prior = (store.get(JOB_LABEL) or {}).get("last_result") or {}
-        result["green_summary_date"] = (
-            beat.at.date().isoformat() if sent_green else prior.get("green_summary_date")
+    if beat.green:
+        try:
+            send_green = should_send_green(beat, store)
+        except Exception as e:  # noqa: BLE001
+            _stage_failure(beat, "alerts/green-dedup", e)
+            send_green = False
+        if send_green:
+            before = len(beat.stage_failures)
+            _attempt_alert(beat, "green-dm", send_dm)
+            if len(beat.stage_failures) == before:
+                return True
+
+    if not beat.green:
+        # OUT-OF-BAND FIRST. Its result is included in the primary DM, and
+        # an unexpected exception in either channel cannot suppress the other.
+        _attempt_alert(beat, "out-of-band", out_of_band)
+        _attempt_alert(beat, "red-dm", send_dm)
+    return False
+
+
+def _beat_result(beat: Beat, *, sent_green: bool) -> dict:
+    result = {
+        "green": beat.green,
+        "red_jobs": [j.label for j in beat.red_jobs],
+        "red_probes": [p.name for p in beat.red_probes],
+        "stage_failures": list(beat.stage_failures),
+        "kill_switch": beat.kill_switch,
+    }
+    # Omission preserves the prior dedup value through JobStore's JSON merge.
+    if sent_green:
+        result["green_summary_date"] = beat.at.date().isoformat()
+    return result
+
+
+def _persist_beat(beat: Beat, store: JobStore, *, sent_green: bool) -> None:
+    store.ensure_schema()
+    store.register(load_job_registry().spec(JOB_LABEL))
+    store.record_heartbeat_result(
+        JOB_LABEL,
+        result=_beat_result(beat, sent_green=sent_green),
+        vault_outcome=None,
+        vault_reason=None,
+    )
+
+
+def _run_vault_stage(
+    beat: Beat, *, now: datetime, dry_run: bool
+) -> tuple[Optional[str], Optional[str]]:
+    # The session decision happens before daily-note resolution, store setup,
+    # or VaultWriter construction. Deferral therefore cannot create a
+    # `session_blocks` refusal row.
+    current = session_clock().session(now)
+    if current is Session.MARKET_RESET:
+        return (
+            VAULT_DEFERRED,
+            "session clock resolved market_reset; no vault write was attempted",
         )
-        store.register_all(__import__(
-            "cobalt.jobs.config", fromlist=["load_job_registry"]
-        ).load_job_registry())
-        store.mark_running(JOB_LABEL, now=now or clock_mod.now_utc())
-        store.mark_finished(JOB_LABEL, exit_code=0, result=result, now=now or clock_mod.now_utc())
+
+    write = write_note_block(beat, dry_run=dry_run, now=now)
+    if write is None:
+        return VAULT_FAILED, "daily-note writer returned no result"
+    beat.notes.append(write.report())
+    if write.write_id is None:
+        return VAULT_FAILED, "daily-note writer returned success without a write id"
+    return VAULT_WRITTEN, None
+
+
+def _finalize(
+    beat: Beat,
+    store: JobStore,
+    *,
+    sent_green: bool,
+    dry_run: bool,
+) -> None:
+    if dry_run:
+        return
+
+    # Persistence and notification are deliberately separate attempts. If the
+    # final database update fails, the corrective out-of-band RED still runs.
+    try:
+        store.record_heartbeat_result(
+            JOB_LABEL,
+            result=_beat_result(beat, sent_green=sent_green),
+            vault_outcome=beat.vault_outcome,
+            vault_reason=beat.vault_reason,
+        )
+    except Exception as e:  # noqa: BLE001
+        _stage_failure(beat, "FINALIZE/persist", e)
+
+    if beat.vault_outcome == VAULT_FAILED:
+        _attempt_alert(beat, "corrective-out-of-band", out_of_band)
+
+
+def run_beat(*, now: Optional[datetime] = None, dry_run: bool = False, probe: bool = True) -> Beat:
+    """One whole heartbeat. Every stage fails loud and yields to the next."""
+    ts = now or clock_mod.now_utc()
+    store = JobStore()
+
+    logger.info("heartbeat: stage PROBES")
+    try:
+        beat = take_beat(now=ts, probe=probe)
+    except Exception as e:  # noqa: BLE001
+        beat = Beat(at=ts.astimezone(clock_mod.ET))
+        _stage_failure(beat, "probes", e)
+
+    logger.info("heartbeat: stage COMPOSE")
+    try:
+        _compose_beat(beat, store)
+    except Exception as e:  # noqa: BLE001
+        _stage_failure(beat, "compose", e)
+
+    logger.info("heartbeat: stage ALERTS")
+    try:
+        sent_green = _run_alerts(beat, store, dry_run=dry_run)
+    except Exception as e:  # noqa: BLE001
+        sent_green = False
+        _stage_failure(beat, "alerts", e)
+
+    logger.info("heartbeat: stage PERSIST")
+    if not dry_run:
+        try:
+            _persist_beat(beat, store, sent_green=sent_green)
+        except Exception as e:  # noqa: BLE001
+            _stage_failure(beat, "persist", e)
+
+    logger.info("heartbeat: stage VAULT")
+    try:
+        beat.vault_outcome, beat.vault_reason = _run_vault_stage(
+            beat, now=ts, dry_run=dry_run
+        )
+    except Exception as e:  # noqa: BLE001
+        beat.vault_outcome = VAULT_FAILED
+        beat.vault_reason = _stage_failure(beat, "vault", e)
+    if beat.vault_outcome == VAULT_FAILED:
+        logger.error("heartbeat: vault unit FAILED — {}", beat.vault_reason)
+    elif beat.vault_outcome == VAULT_DEFERRED:
+        logger.warning("heartbeat: vault unit DEFERRED — {}", beat.vault_reason)
+
+    logger.info("heartbeat: stage FINALIZE")
+    try:
+        _finalize(beat, store, sent_green=sent_green, dry_run=dry_run)
+    except Exception as e:  # noqa: BLE001
+        _stage_failure(beat, "FINALIZE", e)
 
     (logger.info if beat.green else logger.error)("heartbeat: {}", beat.headline)
     return beat
@@ -299,6 +448,9 @@ __all__ = [
     "GREEN_SUMMARY_KEY",
     "INTERVAL_KEY",
     "JOB_LABEL",
+    "VAULT_DEFERRED",
+    "VAULT_FAILED",
+    "VAULT_WRITTEN",
     "green_summary_at",
     "interval_min",
     "out_of_band",

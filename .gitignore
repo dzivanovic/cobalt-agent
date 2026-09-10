@@ -73,3 +73,5 @@ bars-dump-*
 # carve-out above reaches. Named explicitly rather than by widening that
 # pattern — the rule stays "one carve-out per directory you mean".
 !src/cobalt/db_migrations/*.sql
+docs/40 - DevDocs/reports/_inflight/*.log
+docs/40 - DevDocs/reports/_inflight/SOL_DONE

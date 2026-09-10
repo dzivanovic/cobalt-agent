@@ -205,6 +205,10 @@ jobs:
   - label: com.cobalt.heartbeat
     kind: one-shot
     supervisor: self
+    # The watcher keeps running while the stop is active so the stop itself,
+    # and anything else that is down, remains visible. Validation permits
+    # this exemption on this label only.
+    kill_switch_exempt: true
     timeout_s: 300
     # EVERY interval, all week. The heartbeat is the thing that notices a
     # weekend failure before Monday morning needs it.

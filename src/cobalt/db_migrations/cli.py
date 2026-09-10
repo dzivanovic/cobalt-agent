@@ -9,11 +9,11 @@ every run captures, per table, BEFORE and AFTER:
   * `count(*)`,
   * a content digest: `md5(string_agg(row::text, '|' ORDER BY <pk>))`.
 
-THE DIGEST EXCLUDES `user_id`. The forward migration ADDS that column to
-the six user-side tables, so a digest over the whole row would differ
-before and after by construction and would prove nothing. Taking it over
-`to_jsonb(t) - 'user_id'` means the two digests are comparable and an
-inequality is a real finding: the rows themselves changed. `to_jsonb`
+THE DIGEST EXCLUDES every column added by these migrations: `user_id`,
+`vault_outcome`, and `vault_reason`. A digest over the whole row would
+differ before and after by construction and would prove nothing. Taking
+it over `to_jsonb(t)` minus those columns makes the two digests comparable,
+and an inequality is a real finding: the rows themselves changed. `to_jsonb`
 serialises keys in a stable order, so the digest does not depend on
 column order either — which matters, because `SET SCHEMA` and `ADD
 COLUMN` both touch the catalog the naive `row::text` reads.
@@ -22,7 +22,7 @@ ORDERED BY THE PRIMARY KEY, read from the catalog per table rather than
 hard-coded: `bars` is keyed `(ticker, interval, ts)`, `day_modes` by
 `trade_date`, `cobalt_jobs` by `label`, the rest by `id`.
 
-`--rollback` runs `0002_move_tables.rollback.sql` (catalog-only reverse)
+`--rollback` runs the registered reverse migrations newest-first
 and prints the same proof table. Running `migrate`, then `--rollback`,
 then `migrate` again must land on the same digests — the suite asserts
 exactly that round-trip on `cobalt_dev`.
@@ -44,8 +44,9 @@ from cobalt import db, env
 from . import FORWARD, REVERSE
 from .placement import MOVED_TABLES, SEEDED_TABLES
 
-#: The tenancy column the digest ignores — see the module docstring.
-TENANCY_COLUMN = "user_id"
+#: Columns introduced by the registered migrations. Excluding them makes a
+#: populated row comparable before and after a shape-only migration.
+DIGEST_EXCLUDED_COLUMNS = ("user_id", "vault_outcome", "vault_reason")
 
 #: Where a new-core table may legitimately be found, in look-up order.
 SEARCHED_SCHEMAS = ("public", "user", "system")
@@ -92,12 +93,17 @@ def _probe(conn, table: str) -> dict:
     if schema is None:
         return {"schema": None, "rows": None, "digest": None}
     pk = _pk_columns(conn, schema, table)
+    row_json = sql.SQL("to_jsonb(t)")
+    for column in DIGEST_EXCLUDED_COLUMNS:
+        row_json = sql.SQL("({row_json} - {column})").format(
+            row_json=row_json, column=sql.Literal(column)
+        )
     query = sql.SQL(
         "SELECT count(*), "
-        "md5(coalesce(string_agg((to_jsonb(t) - {tenancy})::text, '|' ORDER BY {order}), '')) "
+        "md5(coalesce(string_agg(({row_json})::text, '|' ORDER BY {order}), '')) "
         "FROM {rel} AS t"
     ).format(
-        tenancy=sql.Literal(TENANCY_COLUMN),
+        row_json=row_json,
         order=sql.SQL(", ").join(sql.Identifier("t", c) for c in pk),
         rel=sql.Identifier(schema, table),
     )
@@ -141,8 +147,8 @@ def _print_proof(before: dict[str, dict], after: dict[str, dict]) -> int:
         )
     print("-" * len(header))
     print(
-        f"{len(tables)} table(s) proven; digest = md5(string_agg((to_jsonb(row) - "
-        f"'{TENANCY_COLUMN}')::text, '|' ORDER BY pk)). "
+        f"{len(tables)} table(s) proven; digest excludes "
+        f"{', '.join(DIGEST_EXCLUDED_COLUMNS)}. "
         + ("content UNCHANGED on every table."
            if changed == 0
            else f"{changed} table(s) CHANGED — investigate before proceeding.")
@@ -209,7 +215,7 @@ def add_parser(sub) -> None:
     migrate.add_argument(
         "--rollback",
         action="store_true",
-        help="Reverse 0002: every table back to public, user_id dropped.",
+        help="Reverse registered migrations: heartbeat columns dropped, tables moved to public.",
     )
     migrate.set_defaults(func=cmd_migrate)
 

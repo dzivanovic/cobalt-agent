@@ -37,7 +37,8 @@ import pytest
 
 from cobalt import db, env, tenant
 from cobalt.db import Side
-from cobalt.db_migrations import MIGRATIONS_DIR
+from cobalt.db_migrations import FORWARD, MIGRATIONS_DIR, REVERSE
+from cobalt.db_migrations.cli import DIGEST_EXCLUDED_COLUMNS, _apply, _probe
 from cobalt.db_migrations.placement import (
     MOVED_TABLES,
     OLD_TREE_PUBLIC_TABLES,
@@ -439,6 +440,46 @@ class TestStoresNameOnlyTheirOwnSide:
 # ---------------------------------------------------------------------
 # 5. Round trip
 # ---------------------------------------------------------------------
+
+
+def test_heartbeat_migration_is_registered_with_a_named_rollback():
+    assert FORWARD[-1].name == "0003_heartbeat_vault_outcome.sql"
+    assert REVERSE[0].name == "0003_heartbeat_vault_outcome.rollback.sql"
+    assert "cobalt_jobs" in FORWARD[-1].read_text()
+    rollback = REVERSE[0].read_text()
+    assert "DROP COLUMN IF EXISTS vault_outcome" in rollback
+    assert "DROP COLUMN IF EXISTS vault_reason" in rollback
+    assert {"vault_outcome", "vault_reason"} <= set(DIGEST_EXCLUDED_COLUMNS)
+
+
+def test_populated_job_row_digest_is_unchanged_by_heartbeat_migration():
+    """Exercise 0003 and its rollback around a real populated row.
+
+    PostgreSQL DDL is transactional, so the inserted proof row and both shape
+    changes disappear together at the end of this test.
+    """
+    conn = db.connect_migration(env.DEV_DB_NAME)
+    conn.autocommit = False
+    try:
+        _apply(conn, [FORWARD[-1]])
+        conn.execute(
+            "INSERT INTO system.cobalt_jobs "
+            "(label, kind, timeout_s, heartbeat_source, last_result) "
+            "VALUES (%s, 'one-shot', 300, 'self', %s::jsonb) "
+            "ON CONFLICT (label) DO UPDATE SET last_result = EXCLUDED.last_result",
+            ("com.cobalt.digest-proof", '{"green": true}'),
+        )
+        _apply(conn, [REVERSE[0]])
+        before = _probe(conn, "cobalt_jobs")
+        _apply(conn, [FORWARD[-1]])
+        after = _probe(conn, "cobalt_jobs")
+
+        assert before["rows"] and before["rows"] > 0
+        assert after["rows"] == before["rows"]
+        assert after["digest"] == before["digest"]
+    finally:
+        conn.rollback()
+        conn.close()
 
 
 def _migrate(*args: str) -> str:

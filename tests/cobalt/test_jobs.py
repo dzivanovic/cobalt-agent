@@ -20,8 +20,10 @@ What is proven, in order:
 """
 
 import os
+from argparse import Namespace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -124,6 +126,29 @@ class TestTheShippedRegistry:
         assert spec.supervisor is Supervisor.PIDFILE
         assert spec.pidfile_path is not None and spec.pidfile_path.name == "cobalt.pid"
 
+    def test_heartbeat_plist_uses_the_f17_wrapper_and_matches_its_interval(self):
+        import plistlib
+
+        spec = load_job_registry().spec("com.cobalt.heartbeat")
+        data = plistlib.loads(spec.plist_path.read_bytes())
+        args = data["ProgramArguments"]
+        assert args == [
+            "/Users/cobalt/.local/bin/uv",
+            "run",
+            "cobalt",
+            "jobs",
+            "run",
+            "com.cobalt.heartbeat",
+            "/Users/cobalt/.local/bin/uv",
+            "run",
+            "cobalt",
+            "heartbeat",
+            "beat",
+        ]
+        assert data["StartInterval"] == spec.schedule.interval_minutes() * 60
+        assert spec.reads == []
+        assert spec.kill_switch_exempt is True
+
 
 class TestRegistryValidation:
     def test_a_one_shot_without_a_schedule_is_refused(self):
@@ -145,6 +170,155 @@ class TestRegistryValidation:
             JobRegistry(
                 jobs=[_spec(), _spec()], kill_phrase="STOP", resume_phrase="GO"
             )
+
+    def test_kill_switch_exemption_defaults_false_and_is_heartbeat_only(self):
+        assert _spec().kill_switch_exempt is False
+        with pytest.raises(Exception, match="reserved for com.cobalt.heartbeat"):
+            _spec(kill_switch_exempt=True)
+
+    def test_wrapper_store_refuses_to_write_beat_owned_fields(self):
+        store = object.__new__(JobStore)
+        with pytest.raises(JobStoreError, match="non-wrapper fields.*green_summary_date"):
+            store.mark_wrapper_finished(
+                "com.cobalt.heartbeat",
+                exit_code=0,
+                result={"green_summary_date": "2026-09-10"},
+            )
+
+
+class TestHeartbeatWrapperDegradation:
+    @staticmethod
+    def _heartbeat_registry():
+        return JobRegistry(
+            jobs=[
+                _spec(
+                    label="com.cobalt.heartbeat",
+                    schedule=Schedule(every_min=15),
+                    kill_switch_exempt=True,
+                )
+            ],
+            kill_phrase="STOP",
+            resume_phrase="GO",
+        )
+
+    def test_bookkeeping_failure_still_runs_the_heartbeat_subprocess(
+        self, monkeypatch
+    ):
+        class BrokenStore:
+            def ensure_schema(self, **_kwargs):
+                raise RuntimeError("schema unavailable")
+
+            def register(self, *_args, **_kwargs):
+                raise RuntimeError("registration unavailable")
+
+            def kill_switch(self):
+                raise RuntimeError("database unavailable")
+
+            def mark_running(self, *_args, **_kwargs):
+                raise RuntimeError("mark_running unavailable")
+
+            def beat(self, *_args, **_kwargs):
+                raise RuntimeError("beat unavailable")
+
+            def mark_wrapper_finished(self, *_args, **_kwargs):
+                raise RuntimeError("mark_finished unavailable")
+
+        ran = []
+        monkeypatch.setattr(
+            "cobalt.jobs.wrapper.load_job_registry", self._heartbeat_registry
+        )
+        monkeypatch.setattr("cobalt.jobs.wrapper.JobStore", BrokenStore)
+        monkeypatch.setattr(
+            "cobalt.jobs.cli.subprocess.run",
+            lambda command: ran.append(command) or SimpleNamespace(returncode=0),
+        )
+
+        from cobalt.jobs.cli import cmd_run
+
+        command = ["uv", "run", "cobalt", "heartbeat", "beat"]
+        cmd_run(Namespace(label="com.cobalt.heartbeat", command=command))
+
+        assert ran == [command]
+
+    def test_wrapper_merges_only_its_result_fields_for_heartbeat(self, monkeypatch):
+        class MemoryStore:
+            result = {
+                "green": True,
+                "green_summary_date": "2026-09-10",
+                "red_probes": [],
+            }
+
+            def ensure_schema(self, **_kwargs):
+                pass
+
+            def register(self, *_args, **_kwargs):
+                pass
+
+            def kill_switch(self):
+                return {"active": False}
+
+            def mark_running(self, *_args, **_kwargs):
+                pass
+
+            def beat(self, *_args, **_kwargs):
+                pass
+
+            def mark_finished(self, *_args, **_kwargs):
+                pytest.fail("heartbeat must not use replacing mark_finished")
+
+            def mark_wrapper_finished(self, _label, *, result, **_kwargs):
+                self.result.update(result)
+
+        store = MemoryStore()
+        monkeypatch.setattr(
+            "cobalt.jobs.wrapper.load_job_registry", self._heartbeat_registry
+        )
+
+        with job_run("com.cobalt.heartbeat", store=store) as run:
+            run.result = {"argv": ["heartbeat", "beat"], "returncode": 0}
+
+        assert store.result == {
+            "green": True,
+            "green_summary_date": "2026-09-10",
+            "red_probes": [],
+            "argv": ["heartbeat", "beat"],
+            "returncode": 0,
+        }
+
+    def test_active_kill_switch_does_not_stop_the_heartbeat(self, monkeypatch):
+        class MemoryStore:
+            def ensure_schema(self, **_kwargs):
+                pass
+
+            def register(self, *_args, **_kwargs):
+                pass
+
+            def kill_switch(self):
+                return {
+                    "active": True,
+                    "phrase": "COBALT STOP",
+                    "set_by": "test",
+                    "set_at": None,
+                }
+
+            def mark_running(self, *_args, **_kwargs):
+                pass
+
+            def beat(self, *_args, **_kwargs):
+                pass
+
+            def mark_wrapper_finished(self, *_args, **_kwargs):
+                pass
+
+        monkeypatch.setattr(
+            "cobalt.jobs.wrapper.load_job_registry", self._heartbeat_registry
+        )
+        ran = []
+
+        with job_run("com.cobalt.heartbeat", store=MemoryStore()):
+            ran.append(True)
+
+        assert ran == [True]
 
 
 # =====================================================================

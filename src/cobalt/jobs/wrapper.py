@@ -16,8 +16,8 @@ TWO WAYS IN, one implementation:
 WHAT IT GUARANTEES, in order:
 
 1. THE KILL SWITCH IS CHECKED FIRST. A stopped Cobalt does not start a
-   one-shot at all — and it exits 0, not 1, because a deliberate stop is
-   not a failure and must not paint F18 red.
+   one-shot at all — except the heartbeat, whose validated registry flag
+   keeps the watcher running so it can report the stop itself.
 2. `running` is marked before the work, with `started_at`.
 3. A BEATER THREAD stamps `heartbeat_at` every `timeout_s /
    jobs.heartbeat_fraction` (5 min for the 15-min archiver window). This
@@ -130,16 +130,41 @@ def job_run(
     registry = load_job_registry()
     spec = registry.spec(label)
     store = store or JobStore()
-    store.ensure_schema(allow_prod=allow_prod)
+
+    def bookkeeping(stage: str, operation) -> bool:
+        try:
+            operation()
+            return True
+        except Exception as e:  # noqa: BLE001 - heartbeat must still launch
+            if not spec.kill_switch_exempt:
+                raise
+            logger.error(
+                "F17: {} {} FAILED ({}: {}) — heartbeat subprocess WILL STILL RUN; "
+                "its database probe and out-of-band alert own this outage.",
+                label, stage, type(e).__name__, e,
+            )
+            return False
+
+    bookkeeping(
+        "schema setup", lambda: store.ensure_schema(allow_prod=allow_prod)
+    )
     if register:
-        store.register(spec, allow_prod=allow_prod)
+        bookkeeping(
+            "registration", lambda: store.register(spec, allow_prod=allow_prod)
+        )
 
     if killswitch.is_active(store):
         state = killswitch.read(store)
-        logger.error("F17: {} REFUSED TO START — {}", label, state.describe())
-        raise JobStopped(state.describe())
+        if not spec.kill_switch_exempt:
+            logger.error("F17: {} REFUSED TO START — {}", label, state.describe())
+            raise JobStopped(state.describe())
+        logger.error(
+            "F17: {} is kill-switch EXEMPT and WILL RUN — {}",
+            label,
+            state.describe(),
+        )
 
-    store.mark_running(label)
+    bookkeeping("mark_running", lambda: store.mark_running(label))
     run = JobRun(spec)
     every_s = spec.timeout_s / heartbeat_fraction()
     logger.info(
@@ -150,15 +175,24 @@ def job_run(
         with _Beater(store, label, every_s):
             yield run
     except BaseException as e:
-        store.mark_finished(
-            label,
-            exit_code=1,
-            error=f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=8)}",
-            result=run.result,
+        error = f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=8)}"
+        finish = store.mark_wrapper_finished if spec.kill_switch_exempt else store.mark_finished
+        bookkeeping(
+            "mark_finished",
+            lambda: finish(
+                label,
+                exit_code=1,
+                error=error,
+                result=run.result,
+            ),
         )
         logger.error("F17: {} FAILED — {}: {}", label, type(e).__name__, e)
         raise            # the wrapper reports; it never swallows
-    store.mark_finished(label, exit_code=0, result=run.result)
+    finish = store.mark_wrapper_finished if spec.kill_switch_exempt else store.mark_finished
+    bookkeeping(
+        "mark_finished",
+        lambda: finish(label, exit_code=0, result=run.result),
+    )
     logger.info("F17: {} DONE", label)
 
 
