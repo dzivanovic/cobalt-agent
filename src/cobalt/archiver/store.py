@@ -14,7 +14,7 @@ executes that file, it does not carry a second copy (one-path rule).
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from cobalt import db, env
 from cobalt.db import Side
@@ -46,7 +46,12 @@ class BarStore:
             db.assert_schemas_exist(conn)
             conn.execute(MIGRATION_SQL.read_text())
 
-    def upsert_bars(self, bars: list[Bar]) -> int:
+    def upsert_bars(
+        self,
+        bars: list[Bar],
+        *,
+        before_commit: Callable[[], None] | None = None,
+    ) -> int:
         """Insert or refresh `bars`. Returns the number of rows written.
 
         ON CONFLICT DO UPDATE (not DO NOTHING): a re-run refreshes a bar
@@ -85,7 +90,18 @@ class BarStore:
                     """,
                     rows,
                 )
+            if before_commit is not None:
+                before_commit()
         return len(rows)
+
+    def watermark(self, ticker: str, interval: str = "i1"):
+        """Newest stored timestamp for one ticker/interval, or None."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT max(ts) FROM bars WHERE ticker = %s AND interval = %s",
+                (ticker, interval),
+            ).fetchone()
+        return row[0] if row else None
 
     def count_rows(self) -> int:
         with self._connect() as conn:

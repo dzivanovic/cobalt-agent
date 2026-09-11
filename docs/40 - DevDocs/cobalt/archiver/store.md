@@ -1,5 +1,7 @@
 # `src/cobalt/archiver/store.py`
 
+S2-P1 adds the optional `before_commit` seam to `upsert_bars` and a `(ticker, interval)` watermark read. The hook runs last inside the transaction.
+
 ## What it does
 Persistence for archived bars, into `bars` in whichever database
 `COBALT_ENV` names — `cobalt_brain` in production, `cobalt_dev` in dev
