@@ -1,5 +1,7 @@
 # `src/cobalt/archiver/collector.py`
 
+S2-P1 adds the sole shared `finviz_get` transport and `FetchMetrics`; metrics fire before status raising and include followed redirects, elapsed time, bytes, content type, or transport-error class. `fetch_bars` now delegates to that path.
+
 ## What it does
 Fetches and validates one `(ticker, interval)`'s bars from Finviz's
 `/export/stock`. Fail-loud, secret-safe: any shape mismatch — wrong

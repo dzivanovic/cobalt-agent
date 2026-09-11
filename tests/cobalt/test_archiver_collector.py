@@ -11,6 +11,7 @@ picked from the DATE — which is the whole point, and why the fixed rows
 below straddle both sides of both 2026 transitions.
 """
 
+import asyncio
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -18,9 +19,12 @@ import pytest
 
 from cobalt.archiver.collector import (
     CollectorError,
+    FetchMetrics,
     _parse_finviz_datetime,
     _parse_finviz_wall_clock,
     parse_csv_response,
+    finviz_get,
+    scrub,
 )
 from cobalt.archiver.models import Interval
 
@@ -160,3 +164,30 @@ def test_unparseable_price_rejected():
     text = f"{GOOD_HEADER}\r\n08/13/2026 04:00 AM,NOT_A_NUMBER,2,3,4,100\r\n"
     with pytest.raises(CollectorError, match="Unparseable row"):
         parse_csv_response(text, "MSFT", Interval.I5)
+
+
+def test_finviz_transport_reports_followed_redirect_before_status(monkeypatch):
+    import httpx
+    import cobalt.archiver.collector as module
+
+    async_client = httpx.AsyncClient
+
+    def handler(request):
+        if request.url.path == "/start":
+            return httpx.Response(302, headers={"location": "/final"})
+        return httpx.Response(200, text="ok", headers={"content-type": "text/csv"})
+
+    monkeypatch.setattr(
+        module.httpx,
+        "AsyncClient",
+        lambda **kwargs: async_client(transport=httpx.MockTransport(handler), **kwargs),
+    )
+    seen: list[FetchMetrics] = []
+    response = asyncio.run(finviz_get("/start", {}, "synthetic-token", on_metrics=seen.append))
+    assert response.status_code == 200
+    assert seen[0].redirect_statuses == (302,)
+    assert seen[0].bytes == 2
+
+
+def test_scrub_redacts_auth_query():
+    assert scrub("request failed ?auth=synthetic-secret&x=1") == "request failed ?auth=REDACTED&x=1"

@@ -1,5 +1,7 @@
 # `tests/cobalt/test_archiver_collector.py`
 
+S2-P1 adds mocked followed-redirect metrics and credential-redaction coverage.
+
 ## What it does
 Tests `collector.py`'s datetime parsing and CSV shape validation —
 pure-function tests, no network. Response shapes are drawn directly

@@ -34,11 +34,14 @@ by wall clock.
 import csv
 import io
 import re
+import time
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
+from typing import Callable
 from zoneinfo import ZoneInfo
 
 import httpx
+from pydantic import BaseModel, ConfigDict
 
 from cobalt_agent.skills.research.finviz_api import FinvizApiClient
 
@@ -53,6 +56,19 @@ FINVIZ_TZ = ZoneInfo("America/New_York")
 
 class CollectorError(RuntimeError):
     """Fetch or shape-validation failure — never store, never guess."""
+
+
+class FetchMetrics(BaseModel):
+    """Observable facts for one Finviz request, with no URL or credential."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    status: int | None = None
+    redirect_statuses: tuple[int, ...] = ()
+    elapsed_ms: float
+    bytes: int = 0
+    content_type: str | None = None
+    error: str | None = None
 
 
 def scrub(text: str) -> str:
@@ -156,19 +172,80 @@ def parse_csv_response(text: str, ticker: str, interval: Interval) -> list[Bar]:
     return bars
 
 
-async def fetch_bars(ticker: str, interval: Interval, token: str) -> list[Bar]:
+async def finviz_get(
+    path: str,
+    params: dict[str, object],
+    token: str,
+    *,
+    on_metrics: Callable[[FetchMetrics], None] | None = None,
+) -> httpx.Response:
+    """The sole Finviz HTTP transport used by new-core collectors.
+
+    Metrics are emitted before HTTP status handling so callers can observe
+    redirects and throttling without growing a second HTTP implementation.
+    """
+    clean_path = "/" + path.lstrip("/")
+    url = f"https://elite.finviz.com{clean_path}"
+    request_params = {**params, "auth": token}
+    started = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            response = await client.get(url, params=request_params)
+    except httpx.TransportError as e:
+        metrics = FetchMetrics(
+            elapsed_ms=(time.perf_counter() - started) * 1000,
+            error=type(e).__name__,
+        )
+        if on_metrics is not None:
+            on_metrics(metrics)
+        raise CollectorError(f"Finviz transport failed: {scrub(str(e))}") from e
+
+    metrics = FetchMetrics(
+        status=response.status_code,
+        redirect_statuses=tuple(item.status_code for item in response.history),
+        elapsed_ms=(time.perf_counter() - started) * 1000,
+        bytes=len(response.content),
+        content_type=response.headers.get("content-type"),
+    )
+    if on_metrics is not None:
+        on_metrics(metrics)
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        raise CollectorError(f"Finviz HTTP failed: {scrub(str(e))}") from e
+    return response
+
+
+async def fetch_bars(
+    ticker: str,
+    interval: Interval,
+    token: str,
+    *,
+    on_metrics: Callable[[FetchMetrics], None] | None = None,
+) -> list[Bar]:
     """Fetch one (ticker, interval)'s bars over the network, then
     validate/parse via `parse_csv_response`."""
     ticker = ticker.strip().upper()
-    url = "https://elite.finviz.com/export/stock"
-    params = {"t": ticker, "p": interval.value, "auth": token}
+    params = {"t": ticker, "p": interval.value}
     try:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
+        response = await finviz_get(
+            "/export/stock", params, token, on_metrics=on_metrics
+        )
     except Exception as e:
         raise CollectorError(
             f"Fetch failed for {ticker}/{interval.value}: {scrub(str(e))}"
         ) from e
 
     return parse_csv_response(response.text, ticker, interval)
+
+
+__all__ = [
+    "CollectorError",
+    "EXPECTED_COLUMNS",
+    "FetchMetrics",
+    "fetch_bars",
+    "finviz_get",
+    "parse_csv_response",
+    "resolve_token",
+    "scrub",
+]
