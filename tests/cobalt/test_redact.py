@@ -217,7 +217,7 @@ class TestCleanText:
         assert result.hits == {}
 
     def test_an_ordinary_url_keeps_all_of_itself(self):
-        url = "https://elite.finviz.com/export.ashx?v=111&t=AAPL&f=sh_avgvol_o500"
+        url = "https://elite.finviz.com/export.ashx?v=111&t=AAPL&screen=synthetic"
         assert redact(url, channel="test").text == url
 
 

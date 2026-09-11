@@ -16,6 +16,7 @@ transaction, so a settings table can never be half a config.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -30,6 +31,11 @@ from cobalt.settings import (
     TraderSettingsStore,
 )
 from cobalt.settings.models import ASET_FILENAME, DAYMODE_FILENAME
+
+pytestmark = pytest.mark.skipif(
+    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
+    reason="requires_db: trader settings integration needs cobalt_dev",
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

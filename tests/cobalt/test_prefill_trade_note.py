@@ -2,6 +2,7 @@
 frontmatter keys on a re-run, and never touches his body or his other
 fields (trade_def/RVOL/exit/entry_time/etc)."""
 
+import os
 from datetime import datetime
 from decimal import Decimal
 
@@ -13,6 +14,11 @@ from cobalt.prefill import trade_note as trade_note_module
 from cobalt.prefill import vault_writer as vault_writer_module
 from cobalt.prefill.config import PrefillPathsConfig
 from cobalt.prefill.vault_writer import VaultWriteError
+
+pytestmark = pytest.mark.skipif(
+    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
+    reason="requires_db: trade-note writes persist through VaultWriteStore",
+)
 
 ENABLED_GRADES = (Grade.A, Grade.B)
 MAX_STOP_DISTANCE_PCT = Decimal("10")

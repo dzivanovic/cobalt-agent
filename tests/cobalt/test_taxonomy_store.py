@@ -14,6 +14,7 @@ vault no longer documents.
 from __future__ import annotations
 
 import copy
+import os
 import re
 from pathlib import Path
 
@@ -24,6 +25,11 @@ from cobalt.db import Side
 from cobalt.taxonomy.loader import EXAMPLE_NOTE_PATH
 from cobalt.taxonomy.store import TradeDefStore
 from cobalt.taxonomy.vault_loader import STRATEGIES_DIR, load_vault_trade_defs
+
+pytestmark = pytest.mark.skipif(
+    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
+    reason="requires_db: taxonomy store integration needs cobalt_dev",
+)
 
 EXAMPLE_SLUG = "example-range-break"
 EXAMPLE_NAME = "Example Range Break"

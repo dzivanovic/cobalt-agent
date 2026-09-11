@@ -22,6 +22,11 @@ from cobalt.prefill.drc import (
     parse_fill_updates,
 )
 
+requires_db = pytest.mark.skipif(
+    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
+    reason="requires_db: runtime sheet config and write audit need cobalt_dev",
+)
+
 
 def make_aset_cfg() -> AsetConfig:
     return AsetConfig(
@@ -92,6 +97,7 @@ class TestFindTradeNoteForCard:
         assert find_trade_note_for_card(tmp_path / "nope", "NVDA", created_at) is None
 
 
+@requires_db
 class TestFormatRiskParameters:
     def test_full_mode_renders_grade_dollars(self):
         from cobalt.aset.config import load_sheet_modes_config
@@ -227,10 +233,6 @@ def fake_config(monkeypatch):
 
 # The DRC prefill goes through the ONE write path now (LAW L28), which
 # persists every write to Postgres before it lands.
-requires_db = pytest.mark.skipif(
-    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
-    reason="Postgres env settings not available",
-)
 
 
 @requires_db

@@ -71,7 +71,14 @@ class TestProbe:
     def test_the_real_probe_runs_on_this_machine(self):
         """Not mocked: exercises the actual pgrep call so a change in
         its interface can't pass the suite silently."""
-        assert isinstance(obsidian.obsidian_pids(), list)
+        try:
+            result = obsidian.obsidian_pids()
+        except obsidian.ObsidianProbeError as e:
+            # Sandboxed runners may not expose sysmond's process table.  The
+            # probe must report that condition loudly, not turn it into DOWN.
+            assert "pgrep" in str(e)
+        else:
+            assert isinstance(result, list)
 
 
 # ---------------------------------------------------------------------
