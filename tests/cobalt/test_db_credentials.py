@@ -16,6 +16,7 @@ when they ran.
 
 from __future__ import annotations
 
+import os
 import re
 
 import pytest
@@ -26,6 +27,11 @@ from cobalt.backup import pgdump
 APP_VARS = ("COBALT_DB_USER", "COBALT_DB_PASSWORD")
 BOOTSTRAP_VARS = ("POSTGRES_USER", "POSTGRES_PASSWORD")
 ALL_VARS = APP_VARS + BOOTSTRAP_VARS + ("POSTGRES_HOST", "POSTGRES_PORT")
+
+requires_db = pytest.mark.skipif(
+    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
+    reason="requires_db: live factory role proofs need cobalt_dev",
+)
 
 
 @pytest.fixture
@@ -158,6 +164,7 @@ class TestEachPathPicksTheRightLogin:
         assert "p@ss/word" not in captured[0]
 
 
+@requires_db
 class TestTheLiveFactoryAuthenticatesAsCobaltApp:
     """Against the real `cobalt_dev`, through the real factory.
 
