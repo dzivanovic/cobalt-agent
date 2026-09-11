@@ -1,5 +1,7 @@
 # `src/cobalt/jobs/config.py`
 
+Resident specifications now carry optional static import roots; missing declarations trigger conservative restart selection.
+
 ## What it does
 Loads `configs/cobalt/jobs.yaml` into `JobRegistry` / `JobSpec` /
 `Schedule`. Pydantic-validated; a bad row crashes with its label.

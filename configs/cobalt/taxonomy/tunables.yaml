@@ -388,6 +388,61 @@ tunables:
     source: ruling
     consumers: ["cobalt.heartbeat.probes (sheet HTTP, launchctl, database)"]
 
+  # --- S2-P1 radar engine --------------------------------------------
+  - key: radar.scan_interval
+    value: 60
+    unit: duration
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.radar.runner (scan cadence)"]
+
+  - key: radar.poll_interval
+    value: 60
+    unit: duration
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.radar.poller (member cadence)"]
+
+  - key: radar.poll_overlap_bars
+    value: 5
+    unit: count
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.radar.poller (revision overlap)"]
+
+  - key: radar.finviz_max_rpm
+    value: 30
+    unit: count
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["S2-P1 throttle report (hub-measured half-rate, 2026-09-10: 4 grids clean to 60 rpm, half-rate 30 held)", "cobalt.radar.collector.TokenBucket"]
+
+  - key: heartbeat.radar_max_age_s
+    value: 180
+    unit: duration
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.heartbeat.probes.radar", "cobalt.radar.poller stale detection"]
+
+  - key: db.query.timeout_s
+    value: 30
+    unit: duration
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.db_query statement_timeout"]
+
   # --- F18's second channel: email (S1-P4, 2026-09-08) ------------------
   # Both rows are numbers the CODE COMPARES OR BINDS against, which is
   # what makes them tunables rather than per-job data.

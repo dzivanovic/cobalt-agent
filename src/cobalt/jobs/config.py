@@ -290,6 +290,9 @@ class JobSpec(BaseModel):
     #: construction (`cobalt_agent/config.py:410`). That wants its own
     #: field; see the 09-09 report's ESCALATE.
     reads: list[str] = Field(default_factory=list)
+    #: Static Python roots used by `cobalt jobs restarts`. None means the
+    #: declaration is missing and therefore conservatively restarts all.
+    imports: Optional[list[str]] = None
 
     @model_validator(mode="after")
     def _shape_matches_kind(self) -> "JobSpec":

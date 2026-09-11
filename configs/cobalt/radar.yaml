@@ -1,0 +1,27 @@
+# VERIFIED 2026-09-10 (hub): required_headers and metric_headers confirmed
+# byte-for-byte against a real /export/screener header capture (fixture
+# filter exch_nasd,sh_avgvol_o500, 1809 rows, cache
+# data/radar-cache/2026-09-10/screen-example_session_scan-214943.csv).
+# not_equity's "Exchange Traded Fund" value did NOT appear in that capture's
+# Asset Type set (seen: Bonds, Commodities & Metals, CryptoCurrency,
+# Equities (Stocks), Multi-Asset - Tactical / Active, Preferred Stock) —
+# this filter may simply not surface ETFs, not proof the label is wrong;
+# unresolved, watch the first live run's Asset Type values.
+pool_key: primary
+notes:
+  screens: "1 - Trading/Radar Screens.md"
+  lists: "1 - Trading/Radar Lists.md"
+export:
+  v: 152
+  columns: "0-150"
+  required_headers: [Ticker, Volume, Relative Volume, Asset Type]
+  metric_headers:
+    volume: Volume
+    rvol: Relative Volume
+list_chunk_size: 50
+not_equity:
+  header: Asset Type
+  values: [Exchange Traded Fund]
+cache:
+  dir: data/radar-cache
+  retention_days: 7
