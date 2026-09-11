@@ -79,6 +79,17 @@ class RadarRunner:
         self.poller = poller
         self.clock = clock or session_clock()
         self.now = now
+        # A reset crossing cannot be written durably at the instant it is
+        # detected: the defining invariant is that nothing commits during
+        # market_reset.  Keep the failure on the resident runner until the
+        # next active cycle can put it on radar_pool.
+        self._pending_drop: tuple[str, str] | None = None
+
+    def _dropped(self, scan_id: int, decision: Decision, stage: str, error: StageDropped) -> CycleResult:
+        detail = scrub(str(error))
+        self._pending_drop = (stage, detail)
+        logger.error("radar cycle dropped at {}: {}", stage, detail)
+        return CycleResult(scan_id, "dropped", decision, stage, detail)
 
     async def _collect(
         self, parsed: ParsedSources, instant: datetime, open_rows: list[dict]
@@ -165,6 +176,7 @@ class RadarRunner:
         candidates, source_sets = await self._collect(parsed, instant, open_rows)
         decision = decide(candidates, opens, [item.block for item in parsed.screens.blocks + parsed.lists.blocks] if not parsed.frozen else None, source_sets, instant)
         elapsed_started = time.monotonic()
+        pending_drop = self._pending_drop
 
         # S1. Failure is named by S2, then the cycle stops.
         try:
@@ -177,7 +189,7 @@ class RadarRunner:
                 before_commit=gate("membership", clock=self.clock, now=self.now),
             )
         except StageDropped as e:
-            return CycleResult(scan_id, "dropped", decision, "membership", str(e))
+            return self._dropped(scan_id, decision, "membership", e)
         except Exception as e:
             detail = scrub(str(e))
             row = self._pool_row(parsed, decision, scan_id, instant, session, elapsed_started, open_rows)
@@ -187,8 +199,12 @@ class RadarRunner:
 
         # S2.
         row = self._pool_row(parsed, decision, scan_id, instant, session, elapsed_started, open_rows)
+        if pending_drop is not None:
+            row.update(failed_stage=pending_drop[0], failed_detail=pending_drop[1])
         try:
             self.radar_store.put_pool(row, now=instant, before_commit=gate("pool_row", clock=self.clock, now=self.now))
+        except StageDropped as e:
+            return self._dropped(scan_id, decision, "pool_row", e)
         except Exception as e:
             return CycleResult(scan_id, "failed", decision, "pool_row", scrub(str(e)))
 
@@ -202,7 +218,7 @@ class RadarRunner:
                 now=instant,
             )
         except StageDropped as e:
-            return CycleResult(scan_id, "dropped", decision, "mirror", str(e))
+            return self._dropped(scan_id, decision, "mirror", e)
         except Exception as e:
             mirror_failed = scrub(str(e))
             self.radar_store.stamp_failure(
@@ -236,18 +252,23 @@ class RadarRunner:
                 existing_failures=existing_failures,
                 before_commit=lambda ticker: gate(f"bars:{ticker}", clock=self.clock, now=self.now),
             )
-            self.radar_store.stamp_poll(
-                self.config.pool_key,
-                polled_at=instant,
-                poll_failures=[
+            stamp_kwargs = {
+                "polled_at": instant,
+                "poll_failures": [
                     {"ticker": item.ticker, "reason": item.reason, "since": item.since.isoformat()}
                     for item in poll.failures
                 ],
-                before_commit=gate("bars:status", clock=self.clock, now=self.now),
-            )
+                "before_commit": gate("bars:status", clock=self.clock, now=self.now),
+            }
+            if pending_drop is not None:
+                stamp_kwargs["preserve_failure"] = True
+            self.radar_store.stamp_poll(self.config.pool_key, **stamp_kwargs)
         except StageDropped as e:
-            return CycleResult(scan_id, "dropped", decision, "bars", str(e))
-        return CycleResult(scan_id, "scanning", decision, "mirror" if mirror_failed else None, mirror_failed)
+            return self._dropped(scan_id, decision, "bars", e)
+        self._pending_drop = None
+        failed_stage = "mirror" if mirror_failed else pending_drop[0] if pending_drop else None
+        detail = mirror_failed if mirror_failed else pending_drop[1] if pending_drop else None
+        return CycleResult(scan_id, "scanning", decision, failed_stage, detail)
 
     def _pool_row(self, parsed, decision, scan_id, instant, session, started, open_rows):
         admitted = (

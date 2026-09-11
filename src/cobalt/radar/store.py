@@ -211,9 +211,14 @@ class RadarStore:
         *,
         polled_at: datetime,
         poll_failures: list[dict],
+        preserve_failure: bool = False,
         before_commit: Callable[[], None] | None = None,
     ) -> None:
-        """Persist S4 freshness, clearing only a recovered bars failure."""
+        """Persist S4 freshness, clearing only a recovered bars failure.
+
+        ``preserve_failure`` keeps a reset-crossing failure visible for the
+        complete cycle in which the resident first succeeds in stamping it.
+        """
         assert_writable("radar.bars", target=pool_key, now=polled_at)
         conn = self._connect()
         conn.autocommit = False
@@ -221,14 +226,15 @@ class RadarStore:
             detail = f"poll failures: {len(poll_failures)}" if poll_failures else None
             conn.execute(
                 "UPDATE radar_pool SET last_poll_at=%s, poll_failures=%s::jsonb, "
-                "failed_stage=CASE WHEN %s THEN 'bars' "
+                "failed_stage=CASE WHEN %s THEN failed_stage WHEN %s THEN 'bars' "
                 "WHEN failed_stage='bars' THEN NULL ELSE failed_stage END, "
-                "failed_detail=CASE WHEN %s THEN %s "
+                "failed_detail=CASE WHEN %s THEN failed_detail WHEN %s THEN %s "
                 "WHEN failed_stage='bars' THEN NULL ELSE failed_detail END, updated_at=%s "
                 "WHERE pool_key=%s",
                 (
-                    polled_at, json.dumps(poll_failures), bool(poll_failures),
-                    bool(poll_failures), detail, polled_at, pool_key,
+                    polled_at, json.dumps(poll_failures), preserve_failure,
+                    bool(poll_failures), preserve_failure, bool(poll_failures),
+                    detail, polled_at, pool_key,
                 ),
             )
             if before_commit:
