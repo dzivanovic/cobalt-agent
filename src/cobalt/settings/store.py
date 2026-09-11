@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from cobalt import db, env
 from cobalt.db import Side
@@ -57,7 +57,13 @@ class TraderSettingsStore:
 
     # -- the one write path -------------------------------------------
 
-    def put(self, rows: dict[str, Any], *, source: str) -> dict[str, str]:
+    def put(
+        self,
+        rows: dict[str, Any],
+        *,
+        source: str,
+        before_commit: Callable[[], None] | None = None,
+    ) -> dict[str, str]:
         """Upsert every setting in `rows`. Returns `{key: created|updated
         |unchanged}` so the caller can report what actually moved.
 
@@ -87,6 +93,8 @@ class TraderSettingsStore:
                         """,
                         (key, json.dumps(value), source),
                     )
+            if before_commit is not None:
+                before_commit()
             conn.commit()
         except BaseException:
             conn.rollback()

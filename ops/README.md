@@ -373,3 +373,11 @@ fails again, a fresh `uv run cobalt notify email-auth` consent resets the 7-day 
 repeat every **≤6 days** until Publish lands. After each consent: send a test alert and read
 the token date back (`cobalt notify` status / the heartbeat `email` probe line) — proof, not
 assumption. Ruled 09-09 (chat second opinion, item 10).
+# Radar handover
+
+`com.cobalt.radar` ships disabled in the registry. After the stage-1 code,
+migration, source-note HITL apply, and hub gate are complete, copy the plist to
+`~/Library/LaunchAgents/`, bootstrap it, then run `cobalt resume`. If an already
+loaded radar needs to be woken after resume, use
+`launchctl kickstart gui/$(id -u)/com.cobalt.radar`. Flip `enabled` only after
+the service is loaded and its first cycle is visible.

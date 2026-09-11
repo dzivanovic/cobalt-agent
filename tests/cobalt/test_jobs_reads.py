@@ -79,7 +79,7 @@ class TestTheDerivedRows:
         ):
             spec = load_job_registry().spec(label)
             assert spec.reads == []
-        assert text.count("reads:") == 5, "one per resident, none on a one-shot"
+        assert text.count("reads:") == 6, "one per resident, none on a one-shot"
 
 
 class TestTheModelRefusesNonsense:
@@ -116,13 +116,13 @@ class TestTheModelRefusesNonsense:
 class TestReadersOf:
     def test_it_finds_the_sheet(self):
         readers = load_job_registry().readers_of(TUNABLES)
-        assert [r.label for r in readers] == [SHEET]
+        assert [r.label for r in readers] == [SHEET, "com.cobalt.radar"]
 
     def test_a_leading_dot_slash_is_the_same_file(self):
         """An operator pastes a path off a `git status` line; a leading
         `./` must not produce an empty answer."""
         readers = load_job_registry().readers_of("./" + TUNABLES)
-        assert [r.label for r in readers] == [SHEET]
+        assert [r.label for r in readers] == [SHEET, "com.cobalt.radar"]
 
     def test_an_unknown_path_finds_nothing(self):
         assert load_job_registry().readers_of("configs/cobalt/notify.yaml") == []
@@ -141,7 +141,7 @@ class TestTheCommand:
     def test_a_known_path_exits_zero_with_a_RESTARTS_line(self):
         proc = self._run(TUNABLES)
         assert proc.returncode == 0, proc.stderr
-        assert f"RESTARTS: {SHEET}" in proc.stdout
+        assert f"RESTARTS: {SHEET} com.cobalt.radar" in proc.stdout
         assert "launchctl kickstart" in proc.stdout
 
     def test_an_unknown_path_exits_ONE(self):

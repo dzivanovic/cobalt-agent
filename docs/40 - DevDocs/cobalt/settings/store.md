@@ -1,5 +1,7 @@
 # `src/cobalt/settings/store.py`
 
+`put` accepts an optional callback invoked after all upserts and immediately before commit for transactional session gating.
+
 ## What it does
 `TraderSettingsStore`, `SIDE = Side.USER`. Reads and upserts
 `"user".trader_settings`. DDL in `migrations/0001_trader_settings.sql`,

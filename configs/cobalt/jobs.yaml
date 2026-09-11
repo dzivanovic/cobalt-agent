@@ -67,6 +67,7 @@ jobs:
     reads:
       - "configs/dev/aset.yaml"                    # aset/config.py:134 (load_config); the name says dev, but there is no configs/cobalt/aset.yaml — this IS the production sheet's config
       - "configs/cobalt/taxonomy/tunables.yaml"    # taxonomy/loader.py:79 (load_tunables); the 09-09 R1 case
+    imports: [cobalt.aset.__main__, cobalt.aset.web]
     what: "the ASET semi-auto sheet on :5010 — the surface he trades beside"
 
   - label: com.cobalt.mainframe
@@ -77,6 +78,7 @@ jobs:
     # `~/.lmstudio/` config, which is not repo-relative. Nothing in
     # configs/ reaches this process.
     reads: []
+    imports: []
     what: "the LM Studio local-model server (ops/start_mainframe.sh), the L23 local lane"
 
   - label: com.cobalt.obsidian
@@ -91,6 +93,7 @@ jobs:
     # EMPTY, derived: Obsidian is a third-party app. It reads the vault's
     # own .obsidian/ directory, never configs/.
     reads: []
+    imports: []
 
   - label: com.cobalt.agent
     kind: resident
@@ -122,6 +125,7 @@ jobs:
     # files changes, because it is running the old values. That is the
     # read-once class; it wants its own field (09-09 ESCALATE).
     reads: []
+    imports: [cobalt_agent.main]
     what: "the OLD-TREE agent (cobalt.sh start -> cobalt_agent/main.py), detached; liveness from its PID file"
 
   - label: com.cobalt.herdr
@@ -146,7 +150,19 @@ jobs:
     # re-reads it without a restart) — not repo-relative, so no deploy of
     # ours can change it.
     reads: []
+    imports: []
     what: "the herdr server — the terminal workspace hosting every agent seat"
+
+  - label: com.cobalt.radar
+    kind: resident
+    supervisor: self
+    timeout_s: 300
+    enabled: false
+    reads:
+      - "configs/cobalt/radar.yaml"                # radar/config.py:67 (load_config)
+      - "configs/cobalt/taxonomy/tunables.yaml"    # taxonomy/loader.py:79 (load_tunables)
+    imports: [cobalt.cli]
+    what: "the resident radar pool scanner and Finviz i1 bar poller"
 
   # ---------------- one-shots ----------------
   - label: com.cobalt.prefill-daily
