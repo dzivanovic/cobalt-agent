@@ -7,6 +7,8 @@
 `0002_move_tables.rollback.sql` — the reverse, catalog-only.
 `0003_heartbeat_vault_outcome.sql` — durable heartbeat vault delivery.
 `0003_heartbeat_vault_outcome.rollback.sql` — removes those two columns.
+`0004_radar_pool.sql` — radar pool/membership and account-mode stamps.
+`0004_radar_pool.rollback.sql` — bounded destructive reverse of 0004.
 
 These are the DATABASE-WIDE migrations and they are the only ones that
 live outside a feature module. A module's own DDL still lives in its own
@@ -28,10 +30,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0001_schemas.sql",
     MIGRATIONS_DIR / "0002_move_tables.sql",
     MIGRATIONS_DIR / "0003_heartbeat_vault_outcome.sql",
+    MIGRATIONS_DIR / "0004_radar_pool.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0004_radar_pool.rollback.sql",
     MIGRATIONS_DIR / "0003_heartbeat_vault_outcome.rollback.sql",
     MIGRATIONS_DIR / "0002_move_tables.rollback.sql",
 )

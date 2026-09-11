@@ -42,11 +42,17 @@ from psycopg import sql
 from cobalt import db, env
 
 from . import FORWARD, REVERSE
-from .placement import MOVED_TABLES, SEEDED_TABLES
+from .placement import CREATED_TABLES, MOVED_TABLES, SEEDED_TABLES
 
 #: Columns introduced by the registered migrations. Excluding them makes a
 #: populated row comparable before and after a shape-only migration.
-DIGEST_EXCLUDED_COLUMNS = ("user_id", "vault_outcome", "vault_reason")
+DIGEST_EXCLUDED_COLUMNS = (
+    "user_id",
+    "vault_outcome",
+    "vault_reason",
+    "account_mode",
+    "pool_member_id",
+)
 
 #: Where a new-core table may legitimately be found, in look-up order.
 SEARCHED_SCHEMAS = ("public", "user", "system")
@@ -112,13 +118,44 @@ def _probe(conn, table: str) -> dict:
 
 
 def _probe_all(conn) -> dict[str, dict]:
-    tables = {**MOVED_TABLES, **SEEDED_TABLES}
+    tables = {**MOVED_TABLES, **SEEDED_TABLES, **CREATED_TABLES}
     return {t: _probe(conn, t) for t in sorted(tables)}
 
 
-def _print_proof(before: dict[str, dict], after: dict[str, dict]) -> int:
+def _verdict(
+    name: str, before: dict, after: dict, *, direction: str = "FORWARD"
+) -> str:
+    """Direction-aware classification, pure so abort ordering is testable."""
+    if before["schema"] is None and after["schema"] is None:
+        return "ABSENT"
+    if before["digest"] == after["digest"] and before["rows"] == after["rows"]:
+        return "OK"
+    if direction == "FORWARD" and before["schema"] is None:
+        return "CREATED"
+    if (
+        direction == "ROLLBACK"
+        and name in CREATED_TABLES
+        and before["schema"] is not None
+        and after["schema"] is None
+    ):
+        return "DROPPED"
+    return "CHANGED"
+
+
+def _proof_verdicts(
+    before: dict[str, dict], after: dict[str, dict], *, direction: str = "FORWARD"
+) -> dict[str, str]:
+    return {
+        name: _verdict(name, before[name], after[name], direction=direction)
+        for name in before
+    }
+
+
+def _print_proof(
+    before: dict[str, dict], after: dict[str, dict], *, direction: str = "FORWARD"
+) -> int:
     """Render the proof table. Returns the number of CHANGED digests."""
-    tables = {**MOVED_TABLES, **SEEDED_TABLES}
+    tables = {**MOVED_TABLES, **SEEDED_TABLES, **CREATED_TABLES}
     header = (
         f"{'table':<20} {'side':<7} {'schema before -> after':<26} "
         f"{'rows':<15} {'digest before -> after':<21} verdict"
@@ -132,14 +169,8 @@ def _print_proof(before: dict[str, dict], after: dict[str, dict]) -> int:
         rows = f"{'-' if b['rows'] is None else b['rows']} -> " \
                f"{'-' if a['rows'] is None else a['rows']}"
         dig = f"{(b['digest'] or '-')[:8]} -> {(a['digest'] or '-')[:8]}"
-        if b["schema"] is None and a["schema"] is None:
-            verdict = "ABSENT"
-        elif b["digest"] == a["digest"] and b["rows"] == a["rows"]:
-            verdict = "OK"
-        elif b["schema"] is None:
-            verdict = "CREATED"
-        else:
-            verdict = "CHANGED"
+        verdict = _verdict(name, b, a, direction=direction)
+        if verdict == "CHANGED":
             changed += 1
         print(
             f"{name:<20} {tables[name].value:<7} {where:<26} {rows:<15} "
@@ -171,9 +202,15 @@ def _apply(conn, paths) -> None:
 
 
 def cmd_migrate(args: argparse.Namespace) -> None:
+    if args.rollback and not args.down_to:
+        targets = ", ".join(path.name for path in REVERSE)
+        raise MigrationError(
+            "--rollback requires --down-to NNNN before any connection is opened; "
+            f"registered reverse targets newest-first: {targets}"
+        )
     dbname = db.PROD_DB_NAME if args.allow_prod else env.resolve_db_name()
     direction = "ROLLBACK" if args.rollback else "FORWARD"
-    paths = REVERSE if args.rollback else FORWARD
+    paths = _rollback_paths(args.down_to) if args.rollback else FORWARD
 
     print(f"cobalt db migrate — {direction} on {dbname}")
     conn = db.connect_migration(dbname, allow_prod=args.allow_prod)
@@ -182,7 +219,11 @@ def cmd_migrate(args: argparse.Namespace) -> None:
         before = _probe_all(conn)
         _apply(conn, paths)
         after = _probe_all(conn)
-        conn.commit()
+        verdicts = _proof_verdicts(before, after, direction=direction)
+        if "CHANGED" in verdicts.values():
+            conn.rollback()
+        else:
+            conn.commit()
     except BaseException:
         conn.rollback()
         raise
@@ -190,13 +231,32 @@ def cmd_migrate(args: argparse.Namespace) -> None:
         conn.close()
 
     print()
-    changed = _print_proof(before, after)
+    changed = _print_proof(before, after, direction=direction)
     if changed:
         raise MigrationError(
             f"{changed} table(s) changed content across the migration. The "
-            "migration is committed; the proof is not clean — compare against the "
-            "pg_dump taken before this run."
+            "transaction was rolled back before commit; compare against the pg_dump."
         )
+
+
+def _migration_version(path) -> int:
+    try:
+        return int(path.name.split("_", 1)[0])
+    except (ValueError, IndexError) as e:
+        raise MigrationError(f"migration filename has no numeric prefix: {path.name}") from e
+
+
+def _rollback_paths(down_to: str | None):
+    if down_to is None:
+        raise MigrationError("--rollback requires --down-to NNNN")
+    try:
+        target = int(down_to)
+    except ValueError as e:
+        raise MigrationError(f"--down-to must be a migration number, got {down_to!r}") from e
+    paths = tuple(path for path in REVERSE if _migration_version(path) > target)
+    if not paths:
+        raise MigrationError(f"no registered migrations are newer than {down_to}")
+    return paths
 
 
 def add_parser(sub) -> None:
@@ -213,11 +273,20 @@ def add_parser(sub) -> None:
         help="Target cobalt_brain (run from ~/cobalt only, outside market hours).",
     )
     migrate.add_argument(
+        "--down-to",
+        metavar="NNNN",
+        help="Required with --rollback; reverse only migrations newer than NNNN.",
+    )
+    migrate.add_argument(
         "--rollback",
         action="store_true",
         help="Reverse registered migrations: heartbeat columns dropped, tables moved to public.",
     )
     migrate.set_defaults(func=cmd_migrate)
+
+    from cobalt.db_query import add_query_parser
+
+    add_query_parser(gsub)
 
 
 __all__ = ["MigrationError", "add_parser", "cmd_migrate"]

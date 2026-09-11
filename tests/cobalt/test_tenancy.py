@@ -28,6 +28,7 @@ row: they read, or they assert that a write is refused.
 from __future__ import annotations
 
 import re
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -55,6 +56,11 @@ RAW_CONNECT = db.connect
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC = REPO_ROOT / "src" / "cobalt"
+
+requires_db = pytest.mark.skipif(
+    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
+    reason="Postgres env settings not available",
+)
 
 #: Every module that owns a store, with the side it declares. Read from
 #: the classes themselves so a store that changes its mind about its side
@@ -100,6 +106,7 @@ def _relations(conn) -> dict[str, list[str]]:
 # ---------------------------------------------------------------------
 
 
+@requires_db
 class TestPlacement:
     def test_every_table_is_on_its_ruled_side(self, real_connect):
         conn = real_connect(side=Side.SYSTEM)
@@ -171,6 +178,7 @@ class TestPlacement:
 # ---------------------------------------------------------------------
 
 
+@requires_db
 class TestWrongSide:
     def test_system_side_cannot_read_a_user_table(self, real_connect):
         """The grant. `cobalt_system` has NOTHING on `"user"` — system
@@ -224,6 +232,7 @@ class TestWrongSide:
 # ---------------------------------------------------------------------
 
 
+@requires_db
 class TestTenantGuc:
     def test_the_factory_sets_the_configured_trader(self, real_connect):
         conn = real_connect(side=Side.USER)
@@ -443,15 +452,18 @@ class TestStoresNameOnlyTheirOwnSide:
 
 
 def test_heartbeat_migration_is_registered_with_a_named_rollback():
-    assert FORWARD[-1].name == "0003_heartbeat_vault_outcome.sql"
-    assert REVERSE[0].name == "0003_heartbeat_vault_outcome.rollback.sql"
-    assert "cobalt_jobs" in FORWARD[-1].read_text()
-    rollback = REVERSE[0].read_text()
+    assert FORWARD[-2].name == "0003_heartbeat_vault_outcome.sql"
+    assert REVERSE[1].name == "0003_heartbeat_vault_outcome.rollback.sql"
+    assert FORWARD[-1].name == "0004_radar_pool.sql"
+    assert REVERSE[0].name == "0004_radar_pool.rollback.sql"
+    assert "cobalt_jobs" in FORWARD[-2].read_text()
+    rollback = REVERSE[1].read_text()
     assert "DROP COLUMN IF EXISTS vault_outcome" in rollback
     assert "DROP COLUMN IF EXISTS vault_reason" in rollback
     assert {"vault_outcome", "vault_reason"} <= set(DIGEST_EXCLUDED_COLUMNS)
 
 
+@requires_db
 def test_populated_job_row_digest_is_unchanged_by_heartbeat_migration():
     """Exercise 0003 and its rollback around a real populated row.
 
@@ -461,7 +473,7 @@ def test_populated_job_row_digest_is_unchanged_by_heartbeat_migration():
     conn = db.connect_migration(env.DEV_DB_NAME)
     conn.autocommit = False
     try:
-        _apply(conn, [FORWARD[-1]])
+        _apply(conn, [FORWARD[-2]])
         conn.execute(
             "INSERT INTO system.cobalt_jobs "
             "(label, kind, timeout_s, heartbeat_source, last_result) "
@@ -469,9 +481,9 @@ def test_populated_job_row_digest_is_unchanged_by_heartbeat_migration():
             "ON CONFLICT (label) DO UPDATE SET last_result = EXCLUDED.last_result",
             ("com.cobalt.digest-proof", '{"green": true}'),
         )
-        _apply(conn, [REVERSE[0]])
+        _apply(conn, [REVERSE[1]])
         before = _probe(conn, "cobalt_jobs")
-        _apply(conn, [FORWARD[-1]])
+        _apply(conn, [FORWARD[-2]])
         after = _probe(conn, "cobalt_jobs")
 
         assert before["rows"] and before["rows"] > 0
@@ -507,6 +519,7 @@ def _digests(out: str) -> dict[str, str]:
     return rows
 
 
+@requires_db
 class TestMigrationRoundTrip:
     """The migration harness, exercised for real on `cobalt_dev`.
 
@@ -521,7 +534,7 @@ class TestMigrationRoundTrip:
         second = _digests(_migrate())
         assert first and first == second, "db migrate is not idempotent"
 
-        rolled_back = _migrate("--rollback")
+        rolled_back = _migrate("--rollback", "--down-to", "0001")
         assert "-> public" in rolled_back
         again = _digests(_migrate())
         assert again == first, (
@@ -541,6 +554,7 @@ class TestMigrationRoundTrip:
 # ---------------------------------------------------------------------
 
 
+@requires_db
 def test_assert_schemas_exist_names_the_command(real_connect):
     conn = real_connect(side=Side.SYSTEM)
     db.assert_schemas_exist(conn)  # migrated: silent

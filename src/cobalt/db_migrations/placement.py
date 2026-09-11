@@ -59,6 +59,14 @@ MODULE_TABLES: dict[str, Side] = {
     "trader_settings": Side.USER,
 }
 
+#: Created by database-wide migrations directly on their final side. These
+#: belong in the migrate proof because a rollback intentionally drops them.
+CREATED_TABLES: dict[str, Side] = {
+    # db_migrations/0004_radar_pool.sql
+    "radar_pool": Side.SYSTEM,
+    "radar_membership": Side.SYSTEM,
+}
+
 #: Declared by ADR-0008 D2 before they are built, so the first migration
 #: that creates one has a ruled side to create it on. Nothing here exists
 #: yet; the placement test only checks tables that DO exist.
@@ -69,10 +77,6 @@ DECLARED_TABLES: dict[str, Side] = {
     "missed": Side.USER,
     "drc_rows": Side.USER,
     "prediction_records": Side.USER,
-    # S2-P1 — the radar. System: the pool and its membership history are
-    # engine artefacts any trader's strategies plug into.
-    "radar_pool": Side.SYSTEM,
-    "radar_membership": Side.SYSTEM,
     # S2-P2 — taxonomy anatomy instances (regime, range, gap, extension,
     # leg, session clock). The anatomy IS the system.
     "anatomy_instances": Side.SYSTEM,
@@ -83,6 +87,7 @@ PLACEMENT: dict[str, Side] = {
     **MOVED_TABLES,
     **SEEDED_TABLES,
     **MODULE_TABLES,
+    **CREATED_TABLES,
     **DECLARED_TABLES,
 }
 
@@ -129,6 +134,7 @@ def tables_on(side: Side) -> frozenset[str]:
 
 __all__ = [
     "DECLARED_TABLES",
+    "CREATED_TABLES",
     "MODULE_TABLES",
     "MOVED_TABLES",
     "OLD_TREE_PUBLIC_TABLES",

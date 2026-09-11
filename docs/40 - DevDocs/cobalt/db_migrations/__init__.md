@@ -1,5 +1,7 @@
 # `src/cobalt/db_migrations/__init__.py`
 
+Migration 0004 is appended forward and prepended reverse so bounded rollback runs newest first.
+
 ## What it does
 Holds the DATABASE-WIDE migrations — the two-schema split itself
 (ADR-0008). `FORWARD` is `0001_schemas.sql` then

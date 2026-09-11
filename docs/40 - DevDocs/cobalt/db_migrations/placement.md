@@ -1,5 +1,7 @@
 # `src/cobalt/db_migrations/placement.py`
 
+`radar_pool` and `radar_membership` are system-side `CREATED_TABLES` in both placement and the migration proof set.
+
 ## What it does
 The map of which side every table is on. One map, three readers: the
 suite's placement test (against what the database actually holds), the

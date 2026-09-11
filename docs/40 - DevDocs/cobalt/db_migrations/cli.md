@@ -1,5 +1,7 @@
 # `src/cobalt/db_migrations/cli.py`
 
+S2-P1 requires a rollback bound before connection, selects only newer reverse files, and computes direction-aware verdicts before commit. `CHANGED` always rolls back.
+
 ## What it does
 `cobalt db migrate [--allow-prod] [--rollback]`. Runs the migrations and
 prints a per-table proof: where the table lives, its row count, and a
