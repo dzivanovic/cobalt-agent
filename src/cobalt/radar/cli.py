@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-from . import throttle
-from . import config
-from . import replay
-from . import runner
-from . import propose
-from . import sources
+from . import config, propose, replay, runner, sources, throttle
 
 
 def add_parser(sub) -> None:
@@ -48,6 +43,7 @@ def add_parser(sub) -> None:
     lists = rsub.add_parser("lists", help="Propose/apply Lists note")
     lsub = lists.add_subparsers(dest="lists_command", required=True)
     lists_propose = lsub.add_parser("propose")
+    lists_propose.add_argument("--watchlists-yaml", required=True)
     lists_propose.set_defaults(func=propose.lists_propose)
     lists_apply = lsub.add_parser("apply")
     _apply_args(lists_apply, "lists")

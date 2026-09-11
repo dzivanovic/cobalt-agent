@@ -56,7 +56,7 @@ async def _run_targets(targets: list[tuple[str, Interval]], mode: str) -> RunSum
 
 
 async def run_full() -> RunSummary:
-    """Nightly job: archive tier_a + tier_b per their configured intervals.
+    """Nightly job: archive every enabled Lists-note archive target.
 
     Writes to whichever database `COBALT_ENV` names (RULING 9)."""
     cfg = load_config()
@@ -72,9 +72,10 @@ async def run_full() -> RunSummary:
 
 
 async def run_backfill(ticker: str) -> RunSummary:
-    """On-demand: fetch ALL tier_a intervals for one ticker (a new name
-    joining tier_a, or a manual re-fill). Same database rule as
-    `run_full` — `COBALT_ENV`, never an argument."""
+    """On-demand: fetch the Lists note's backfill-default intervals.
+
+    Same database rule as `run_full` — `COBALT_ENV`, never an argument.
+    """
     cfg = load_config()
     targets = cfg.backfill_targets(ticker)
     logger.info(f"Bar Archiver backfill for {ticker}: {len(targets)} targets")
@@ -131,7 +132,7 @@ def main() -> None:
     parser.add_argument(
         "--backfill",
         metavar="TICKER",
-        help="Fetch all tier_a intervals for one ticker on demand, instead of the full nightly run.",
+        help="Fetch the backfill-default intervals for one ticker instead of the full nightly run.",
     )
     args = parser.parse_args()
 

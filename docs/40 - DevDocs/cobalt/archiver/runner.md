@@ -18,12 +18,10 @@ entry point (`[project.scripts]` in `pyproject.toml`).
   abort the loop) → record failure and log it loudly. Sleeps between
   targets, not after the last one.
 - `run_full() -> RunSummary` — the nightly job:
-  `WatchlistsConfig.archive_targets()` (tier_a + tier_b, tier_c
-  excluded), run, append the report.
+  the enabled Lists-note archive targets, run, append the report.
 - `run_backfill(ticker) -> RunSummary` — the
-  on-demand path: `WatchlistsConfig.backfill_targets(ticker)` (always
-  tier_a's 5 intervals, regardless of the ticker's actual tier), run,
-  append the report.
+  on-demand path: the enabled `backfill_default` list's archive
+  intervals for the requested ticker, run, append the report.
 - `main()` — sets `LOGURU_LEVEL=INFO` before any import that pulls in
   loguru (same rationale as `aset/__main__.py` — cheap standing
   insurance against the old tree's since-fixed DEBUG secret dump),
@@ -33,16 +31,16 @@ entry point (`[project.scripts]` in `pyproject.toml`).
   even before a human reads the report).
 
 ## Data flow in/out
-**In:** `configs/cobalt/watchlists.yaml` (via `load_config()`), the
+**In:** the configured Radar Lists note (via `load_config()`), the
 Finviz vault token (via `collector.resolve_token()`).
 **Out:** rows written to `bars` in the database `COBALT_ENV` names, one appended line in
 `docs/30 - Design/archiver-runs.md`, loguru output to stdout/whatever
 redirects it (the launchd plist, in production).
 
 ## Config it reads
-`configs/cobalt/watchlists.yaml`, indirectly via `archiver.config`. The
-database is **not** configurable here and is not a parameter anywhere in
-this module.
+`configs/cobalt/radar.yaml` for the Lists-note path, indirectly via
+`archiver.config`. The database is **not** configurable here and is not
+a parameter anywhere in this module.
 
 ## Gotchas
 - **The database is not an argument (RULING 9, 2026-09-04).** This

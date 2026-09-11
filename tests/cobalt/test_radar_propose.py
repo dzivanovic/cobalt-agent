@@ -1,23 +1,30 @@
 """Pure proposal derivation, artifacts, and note-target parity."""
 
 import argparse
-from copy import deepcopy
 import hashlib
 import json
-from pathlib import Path
 import re
+import subprocess
+from copy import deepcopy
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 import yaml
 
 from cobalt.archiver.collector import scrub
-from cobalt.archiver.config import CONFIG_PATH, WatchlistsConfig
+from cobalt.archiver.config import load_config as load_archiver_config
+from cobalt.radar import propose as propose_module
 from cobalt.radar.models import PoolBlock
 from cobalt.radar.notes import parse_note
-from cobalt.radar import propose as propose_module
-from cobalt.radar.propose import ProposalRefused, apply, artifact_sha256, build_artifact, derive_screens, render_lists
-from cobalt.radar.sources import archive_targets
+from cobalt.radar.propose import (
+    ProposalRefused,
+    apply,
+    artifact_sha256,
+    build_artifact,
+    derive_screens,
+)
+from cobalt.radar.sources import LegacyWatchlistsConfig
 from cobalt.session import clock as session_clock_module
 
 
@@ -44,13 +51,41 @@ def test_artifact_sha_is_canonical_and_apply_refuses_changed_target_before_write
         apply(argparse.Namespace(proposal=str(proposal), sha256=artifact_sha256(artifact), hitl="synthetic"))
 
 
-def test_rendered_committed_lists_parse_to_same_archive_targets(tmp_path):
-    config = WatchlistsConfig.model_validate(yaml.safe_load(CONFIG_PATH.read_text()))
-    path = tmp_path / "Radar Lists.md"
-    path.write_text(render_lists(config))
-    parsed = parse_note(path, "lists")
-    assert parsed.ok, parsed.errors
-    assert set(archive_targets(parsed)) == set(config.archive_targets())
+FIXED_WATCHLISTS_BLOB = "bedf9bbfdadf98d85c3b3d32cdcb9fb678fb2b99"
+
+
+def _fixed_watchlists_fixture(tmp_path):
+    path = tmp_path / "legacy-watchlists.yaml"
+    proc = subprocess.run(
+        ["git", "cat-file", "blob", FIXED_WATCHLISTS_BLOB],
+        capture_output=True,
+        check=True,
+    )
+    path.write_bytes(proc.stdout)
+    return path
+
+
+def test_rendered_committed_lists_parse_to_same_archive_targets(tmp_path, monkeypatch):
+    source = _fixed_watchlists_fixture(tmp_path)
+    original = LegacyWatchlistsConfig.model_validate(yaml.safe_load(source.read_bytes()))
+    radar_config = propose_module.load_config()
+    artifacts = []
+    real_write = propose_module.write_artifact
+
+    def capture(artifact):
+        artifacts.append(deepcopy(artifact))
+        return real_write(artifact, directory=tmp_path / "artifacts")
+
+    monkeypatch.setattr("cobalt.vault.resolve_vault_path", lambda: tmp_path)
+    monkeypatch.setattr(propose_module, "write_artifact", capture)
+    propose_module.lists_propose(argparse.Namespace(watchlists_yaml=str(source)))
+    note = tmp_path / radar_config.notes.lists
+    note.parent.mkdir(parents=True, exist_ok=True)
+    note.write_text(artifacts[0]["units"][0]["body"], encoding="utf-8")
+    config = load_archiver_config(note)
+    assert set(config.archive_targets()) == set(original.archive_targets())
+    assert set(config.backfill_targets("PROOF")) == set(original.backfill_targets("PROOF"))
+    assert artifacts[0]["inputs"]["watchlists_git_blob"] == FIXED_WATCHLISTS_BLOB
 
 
 FIXTURE = Path("tests/fixtures/radar/radar-screens.example.md")
@@ -183,6 +218,7 @@ def test_artifact_is_verbatim_insertion_only_and_stable(tmp_path, monkeypatch, c
 
 def test_lists_artifact_records_watchlists_blob_and_verbatim_bytes(tmp_path, monkeypatch):
     cfg = propose_module.load_config()
+    source = _fixed_watchlists_fixture(tmp_path)
     artifacts = []
     real_write = propose_module.write_artifact
 
@@ -192,11 +228,12 @@ def test_lists_artifact_records_watchlists_blob_and_verbatim_bytes(tmp_path, mon
 
     monkeypatch.setattr("cobalt.vault.resolve_vault_path", lambda: tmp_path)
     monkeypatch.setattr(propose_module, "write_artifact", capture)
-    propose_module.lists_propose(argparse.Namespace())
+    propose_module.lists_propose(argparse.Namespace(watchlists_yaml=str(source)))
     assert len(artifacts) == 1
     assert artifacts[0]["target_note"] == str(tmp_path / cfg.notes.lists)
-    assert artifacts[0]["inputs"]["watchlists_yaml"].encode() == CONFIG_PATH.read_bytes()
+    assert artifacts[0]["inputs"]["watchlists_yaml"].encode() == source.read_bytes()
     assert re.fullmatch(r"[0-9a-f]{40}", artifacts[0]["inputs"]["watchlists_git_blob"])
+    assert artifacts[0]["inputs"]["watchlists_git_blob"] == FIXED_WATCHLISTS_BLOB
 
 
 class RecordingWriter:

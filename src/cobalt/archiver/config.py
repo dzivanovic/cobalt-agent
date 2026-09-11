@@ -1,68 +1,63 @@
-"""Watchlist config loader — config-as-code (TRIAGE cross-cutting law).
+"""Fail-loud Bar Archiver target loading from the Radar Lists note.
 
-Single source: configs/cobalt/watchlists.yaml. Pydantic-validated on
-load; a bad or missing file crashes with the file path and detail — no
-silent fallback. configs/cobalt/ is a second sanctioned new-core config
-location alongside configs/dev/ (CLAUDE.md's config boundary law) — the
-old loader's glob (configs/*.yaml) is top-level only and never reaches
-either subdirectory.
+The note is read and validated once at the start of each run. This module
+never writes or mirrors it, and there is no YAML or built-in target fallback.
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass
 from pathlib import Path
 
-import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from cobalt.radar.notes import ParsedNote, parse_note
+from cobalt.radar.sources import archive_targets, backfill_targets
 
+from .collector import scrub
 from .models import Interval
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-CONFIG_PATH = REPO_ROOT / "configs" / "cobalt" / "watchlists.yaml"
 
 
 class ConfigError(RuntimeError):
-    """Config missing or invalid — crash loudly."""
+    """Lists-note resolution or validation failed — crash loudly."""
+
+    def __init__(self, message: object):
+        super().__init__(scrub(str(message)))
 
 
-class Tier(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+@dataclass(frozen=True)
+class ArchiverConfig:
+    """A validated, single-read Lists note with runner-facing target methods."""
 
-    description: str = Field(min_length=1)
-    intervals: list[Interval]
-    tickers: list[str]
-
-
-class WatchlistsConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    tier_a: Tier
-    tier_b: Tier
-    tier_c: Tier
+    note: ParsedNote
 
     def archive_targets(self) -> list[tuple[str, Interval]]:
-        """Every (ticker, interval) pair this config says to archive.
-
-        tier_c is deliberately excluded (no archiving) — its presence
-        in the config is for future use only.
-        """
-        targets: list[tuple[str, Interval]] = []
-        for tier in (self.tier_a, self.tier_b):
-            for ticker in tier.tickers:
-                for interval in tier.intervals:
-                    targets.append((ticker, interval))
-        return targets
+        return archive_targets(self.note)
 
     def backfill_targets(self, ticker: str) -> list[tuple[str, Interval]]:
-        """All of tier_a's intervals for one ticker (the on-demand backfill path)."""
-        return [(ticker, interval) for interval in self.tier_a.intervals]
+        return backfill_targets(self.note, ticker)
 
 
-def load_config() -> WatchlistsConfig:
-    if not CONFIG_PATH.exists():
-        raise ConfigError(f"Watchlists config not found: {CONFIG_PATH}.")
-    raw = yaml.safe_load(CONFIG_PATH.read_text())
-    if not isinstance(raw, dict):
-        raise ConfigError(f"{CONFIG_PATH}: expected a YAML mapping, got {type(raw).__name__}")
+def _configured_lists_path() -> Path:
+    from cobalt.radar.config import load_config as load_radar_config
+    from cobalt.vault import resolve_vault_path
+
+    return resolve_vault_path() / load_radar_config().notes.lists
+
+
+def load_config(note_path: Path | None = None) -> ArchiverConfig:
+    """Read and validate the configured Lists note without any side effects."""
+
     try:
-        return WatchlistsConfig(**raw)
-    except ValidationError as e:
-        raise ConfigError(f"{CONFIG_PATH}: invalid watchlists config:\n{e}") from e
+        path = note_path if note_path is not None else _configured_lists_path()
+        parsed = parse_note(path, "lists")
+        # Exercise the exact Stage 1 derivation paths now so a malformed or
+        # incomplete note fails before the runner opens its store or token.
+        archive_targets(parsed)
+        backfill_targets(parsed, "VALIDATION")
+    except (RuntimeError, TypeError, ValueError) as error:
+        raise ConfigError(error) from error
+    return ArchiverConfig(parsed)
+
+
+__all__ = ["ArchiverConfig", "ConfigError", "load_config"]

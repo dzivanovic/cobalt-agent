@@ -2,9 +2,10 @@
 
 ## What it does
 Tests `archiver/config.py`'s fail-loud loading and the archive/backfill
-target-derivation logic. Two tests run against the real, committed
-`configs/cobalt/watchlists.yaml`; the rest isolate via `monkeypatch` +
-`tmp_path` or construct a `WatchlistsConfig` directly in memory.
+target-derivation logic. The historical equality cases materialize the
+fixed pre-run Git blob only under `tmp_path`, render a Lists-note
+fixture, and load that fixture. The remaining cases use synthetic Lists
+notes under `tmp_path`.
 
 ## Key functions/classes (what's covered, not defined)
 - `test_committed_watchlists_config_is_valid` — the real config loads;
@@ -14,8 +15,8 @@ target-derivation logic. Two tests run against the real, committed
   the real, hand-derived tier lists: no symbol is double-classified.
 - `test_vix_excluded_from_every_tier` — the named data-layer gap never
   silently ends up in a tier.
-- Missing file, non-mapping YAML, unknown `Interval` value, unknown
-  top-level key — all crash with `ConfigError`.
+- Missing note, non-mapping fenced YAML, unknown `Interval` value, and
+  unknown block key — all crash with `ConfigError`.
 - `test_archive_targets_covers_tier_a_and_b_not_c` — the cross-product
   logic, and that tier_c is genuinely excluded.
 - `test_backfill_targets_uses_tier_a_intervals_for_any_ticker` — the
@@ -23,8 +24,8 @@ target-derivation logic. Two tests run against the real, committed
   tier (or no tier) the ticker actually belongs to.
 
 ## Data flow in/out
-Two tests read the real `configs/cobalt/watchlists.yaml`; the rest
-write throwaway YAML under pytest's `tmp_path`.
+Every input is created under pytest's `tmp_path`; no vault is read or
+written.
 
 ## Config it reads
-`configs/cobalt/watchlists.yaml` (only in the two ambient tests).
+`configs/cobalt/radar.yaml` only for the Lists-note relative path.

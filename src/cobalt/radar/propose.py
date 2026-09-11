@@ -21,8 +21,8 @@ from cobalt.session import clock as session_clock_module
 from cobalt.session.models import Session
 from cobalt.vaultwrite import (
     AT_END,
-    VaultWriteStore,
     VaultWriter,
+    VaultWriteStore,
     assert_write_target,
 )
 
@@ -30,7 +30,7 @@ from .config import load_config
 from .models import PoolBlock, ScreenBlock
 
 if TYPE_CHECKING:
-    from cobalt.archiver.config import WatchlistsConfig
+    from .sources import LegacyWatchlistsConfig
 
 
 class ProposalRefused(RuntimeError):
@@ -161,7 +161,7 @@ def _print_insertion_diff(target: Path, original: str, units: list[dict]) -> Non
     print("".join(diff), end="")
 
 
-def render_lists(config: "WatchlistsConfig") -> str:
+def render_lists(config: LegacyWatchlistsConfig) -> str:
     blocks = []
     for key in ("tier_a", "tier_b", "tier_c"):
         tier = getattr(config, key)
@@ -261,16 +261,30 @@ def screens_propose(args) -> None:
 
 def lists_propose(args) -> None:
     from cobalt.vault import resolve_vault_path
-    from cobalt.archiver.config import CONFIG_PATH as watchlists_path
-    from cobalt.archiver.config import WatchlistsConfig
 
-    raw = watchlists_path.read_bytes()
-    config = WatchlistsConfig.model_validate(yaml.safe_load(raw))
+    from .sources import LegacyWatchlistsConfig
+
+    watchlists_path = Path(args.watchlists_yaml)
+    try:
+        raw = watchlists_path.read_bytes()
+        config = LegacyWatchlistsConfig.model_validate(yaml.safe_load(raw))
+    except (OSError, UnicodeError, ValueError, yaml.YAMLError) as error:
+        raise ProposalRefused(f"invalid watchlists input {watchlists_path}: {error}") from error
     target = resolve_vault_path() / load_config().notes.lists
     if target.exists():
         raise ProposalRefused(f"Lists target already exists: {target}")
     note = render_lists(config)
-    blob = subprocess.run(["git", "hash-object", str(watchlists_path)], capture_output=True, text=True, check=True).stdout.strip()
+    hashed = subprocess.run(
+        ["git", "hash-object", str(watchlists_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if hashed.returncode:
+        raise ProposalRefused(
+            f"git hash-object failed for {watchlists_path}: {hashed.stderr.strip()}"
+        )
+    blob = hashed.stdout.strip()
     artifact = build_artifact(
         "lists", target, "absent" if not target.exists() else hashlib.sha256(target.read_bytes()).hexdigest(),
         {"watchlists_yaml": raw.decode(), "watchlists_git_blob": blob},

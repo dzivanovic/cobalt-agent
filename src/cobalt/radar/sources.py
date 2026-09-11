@@ -7,7 +7,9 @@ import subprocess
 from pathlib import Path
 
 import yaml
+from pydantic import BaseModel, ConfigDict, Field
 
+from cobalt.archiver.collector import scrub
 from cobalt.archiver.models import Interval
 
 from .config import load_config
@@ -15,10 +17,43 @@ from .models import ListBlock
 from .notes import ParsedNote, RadarNoteError, parse_note
 
 
+class LegacyTier(BaseModel):
+    """Retired watchlists.yaml tier shape, retained only for migration proof."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    description: str = Field(min_length=1)
+    intervals: list[Interval]
+    tickers: list[str]
+
+
+class LegacyWatchlistsConfig(BaseModel):
+    """Historical YAML schema used by propose/diff, never by the archiver."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tier_a: LegacyTier
+    tier_b: LegacyTier
+    tier_c: LegacyTier
+
+    def archive_targets(self) -> list[tuple[str, Interval]]:
+        return [
+            (ticker, interval)
+            for tier in (self.tier_a, self.tier_b)
+            for ticker in tier.tickers
+            for interval in tier.intervals
+        ]
+
+    def backfill_targets(self, ticker: str) -> list[tuple[str, Interval]]:
+        return [(ticker, interval) for interval in self.tier_a.intervals]
+
+
 def _parsed(note: Path | ParsedNote) -> ParsedNote:
     parsed = note if isinstance(note, ParsedNote) else parse_note(Path(note), "lists")
     if not parsed.ok:
-        raise RadarNoteError(f"{parsed.path}: Lists note invalid: {'; '.join(parsed.errors)}")
+        raise RadarNoteError(
+            scrub(f"{parsed.path}: Lists note invalid: {'; '.join(parsed.errors)}")
+        )
     return parsed
 
 
@@ -39,12 +74,13 @@ def backfill_targets(note: Path | ParsedNote, ticker: str) -> list[tuple[str, In
         if isinstance(item.block, ListBlock) and item.block.backfill_default and item.block.enabled
     ]
     if len(blocks) != 1:
-        raise RadarNoteError(f"Lists note needs exactly one enabled backfill_default; found {len(blocks)}")
+        raise RadarNoteError(
+            scrub(f"Lists note needs exactly one enabled backfill_default; found {len(blocks)}")
+        )
     return [(ticker.strip().upper(), interval) for interval in blocks[0].archive]
 
 
 def _yaml_at_revision(revision: str):
-    from cobalt.archiver.config import WatchlistsConfig
     proc = subprocess.run(
         ["git", "show", f"{revision}:configs/cobalt/watchlists.yaml"],
         capture_output=True,
@@ -52,8 +88,13 @@ def _yaml_at_revision(revision: str):
         check=False,
     )
     if proc.returncode:
-        raise RadarNoteError(f"git show watchlists at {revision} failed: {proc.stderr.strip()}")
-    return WatchlistsConfig.model_validate(yaml.safe_load(proc.stdout))
+        raise RadarNoteError(
+            scrub(f"git show watchlists at {revision} failed: {proc.stderr.strip()}")
+        )
+    try:
+        return LegacyWatchlistsConfig.model_validate(yaml.safe_load(proc.stdout))
+    except (ValueError, yaml.YAMLError) as error:
+        raise RadarNoteError(scrub(f"watchlists at {revision} invalid: {error}")) from error
 
 
 def archiver_diff(note: Path | ParsedNote, revision: str) -> list[str]:
@@ -100,4 +141,7 @@ def command(args) -> None:
         print(f"archive targets: {len(payload['archive_targets'])}")
 
 
-__all__ = ["archive_targets", "archiver_diff", "backfill_targets"]
+__all__ = [
+    "LegacyWatchlistsConfig", "archive_targets", "archiver_diff",
+    "backfill_targets",
+]

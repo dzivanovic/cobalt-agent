@@ -95,7 +95,7 @@ the database, and `variables.py` is retired into
 | `aset/__main__.py` | Launcher (`uv run python -m cobalt.aset`) — resolves bind config, prints reachable URLs, starts uvicorn. |
 | `archiver/__init__.py` | Bar Archiver package marker; states the never-daily/weekly/monthly rule and the standalone-scheduling rule. |
 | `archiver/models.py` | `Interval` enum (i1/i2/i5/i15/i30 only — the footgun-law validated enum) + `Bar`. |
-| `archiver/config.py` | Watchlist tier config loader (`configs/cobalt/watchlists.yaml`) + `archive_targets()`/`backfill_targets()`. |
+| `archiver/config.py` | Read-only, fail-loud Radar Lists-note loader delegating `archive_targets()`/`backfill_targets()` to `radar.sources`. |
 | `archiver/collector.py` | Finviz `/export/stock` fetch + fail-loud shape validation (columns, and the daily-fallback-shape detector). |
 | `archiver/store.py` | Idempotent bar upserts into `bars` in `cobalt_dev` (PK `(ticker, interval, ts)`, `ON CONFLICT DO UPDATE`). |
 | `archiver/report.py` | Appends one run-summary row to `docs/30 - Design/archiver-runs.md`; strictly tabular by design. |
@@ -119,7 +119,6 @@ the database, and `variables.py` is retired into
 | `configs/cobalt/aset.yaml` | Committed — the sheet-mode fixed-dollar risk table (full/half × A/B), mirrors Dejan's DAS hotkey files exactly (iteration 4). |
 | `configs/dev/vault.yaml` | Committed — the real vault root (not a secret, just a path); `cobalt.vault`'s one config source. |
 | `src/cobalt/archiver/migrations/0001_bars.sql` | The one DDL source for `bars`. |
-| `configs/cobalt/watchlists.yaml` | Committed — the three watchlist tiers (derived from Dejan's TradingView exports) + intervals per tier. |
 | `ops/com.cobalt.archiver.plist` | Standalone launchd template, Mon-Fri 20:30 local — captured here, not auto-installed. |
 | `configs/cobalt/taxonomy/defaults.yaml` | Committed — `working_timeframe: 2m`, `ma: {fast: 9, slow: 20}` (Batch 2). |
 | `configs/cobalt/taxonomy/tunables.yaml` | Committed — 30 dynamic-tunable rows seeded from v0.7 §13.1's `dyn: yes` rows (ADR-0003), plus 3 non-dynamic `stop.buffer` rows (global + back_through_open/bella_fade overrides, ruling 09-03). |
@@ -194,9 +193,9 @@ together at the end:
 A sibling component to ASET, not built on it — shares only `cobalt.db`.
 
 1. **`archiver/models.md`** — `Interval` and `Bar`; the vocabulary.
-2. **`archiver/config.md`** + `configs/cobalt/watchlists.yaml` +
-   `tests/cobalt/test_archiver_config.md` — the three tiers, and how
-   `archive_targets()`/`backfill_targets()` turn them into work.
+2. **`archiver/config.md`** + `radar/sources.md` +
+   `tests/cobalt/test_archiver_config.md` — how the configured Lists
+   note becomes archive/backfill work.
 3. **`archiver/collector.md`** + `tests/cobalt/test_archiver_collector.md`
    — the fetch + fail-loud shape validation. Read the datetime-quirk
    handling closely; it's the part most likely to bite a future change.
