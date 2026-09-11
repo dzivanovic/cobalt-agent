@@ -1,5 +1,7 @@
 # `src/cobalt/cli.py`
 
+S2-P1 registers the `radar` command group and guarded `db query` subcommand through their module-owned parser builders.
+
 ## What it does
 The new core's top-level CLI. Command groups are mounted by the modules
 that own them — `cli.py` holds the vault commands and `validate`, and

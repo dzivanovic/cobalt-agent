@@ -26,6 +26,7 @@ from .models import RED_STATES
 from .store import JobStore
 from .watchdog import sweep
 from .wrapper import JobStopped, job_run
+from . import restarts
 
 
 def _store() -> JobStore:
@@ -182,6 +183,10 @@ def add_parser(sub) -> None:
     run.add_argument("label")
     run.add_argument("command", nargs=argparse.REMAINDER)
     run.set_defaults(func=cmd_run)
+
+    restart = jsub.add_parser("restarts", help="Derive resident restarts from a git range")
+    restart.add_argument("git_range")
+    restart.set_defaults(func=restarts.command)
 
 
 def add_stop_parsers(sub) -> None:

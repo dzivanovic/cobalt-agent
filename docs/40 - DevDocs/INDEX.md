@@ -401,3 +401,66 @@ and `jobs/cli.md` gain **`JobSpec.reads`** and `cobalt jobs readers` —
 the residents a config change must restart, derived from the code and
 printed as a deploy plan's `RESTARTS:` line instead of recalled from
 memory.
+
+## S2-P1 radar pool
+
+- `cobalt/archiver/aggregate.md` — pure ET OHLCV aggregation.
+- `cobalt/archiver/collector.md` — shared observable Finviz transport.
+- `cobalt/archiver/store.md` — bar upserts with the commit-gate seam.
+- `cobalt/aset/account_mode.md` — mandatory live/sim card stamp resolution.
+- `cobalt/aset/store.md` — account-mode resolution inside card persistence.
+- `cobalt/aset/web.md` — attestation selector, banner, and card stamps.
+- `cobalt/cards/store.md` — account-mode field in card reads.
+- `cobalt/cli.md` — radar CLI registration in the root command.
+- `cobalt/daymode/store.md` — atomic attestation/account-mode upsert.
+- `cobalt/db_migrations/__init__.md` — registered radar migration directions.
+- `cobalt/db_migrations/cli.md` — bounded rollback and direction-aware proof.
+- `cobalt/db_migrations/placement.md` — radar table tenancy placement.
+- `cobalt/db_query.md` — guarded read-only database query CLI.
+- `cobalt/heartbeat/probes.md` — F18 radar health branches.
+- `cobalt/heartbeat/runner.md` — radar probe in each beat.
+- `cobalt/jobs/cli.md` — restart derivation command registration.
+- `cobalt/jobs/config.md` — resident static import roots.
+- `cobalt/jobs/restarts.md` — static resident restart derivation.
+- `cobalt/radar/__init__.md` — radar package boundary.
+- `cobalt/radar/cli.md` — radar CLI registration.
+- `cobalt/radar/collector.md` — strict screener collection and token bucket.
+- `cobalt/radar/config.md` — strict engine config and tunable checks.
+- `cobalt/radar/models.md` — source, pool, and decision contracts.
+- `cobalt/radar/notes.md` — fenced note parser, hashes, budget, and mirror.
+- `cobalt/radar/poller.md` — rank-ordered overlapping i1 polling.
+- `cobalt/radar/pool.md` — pure rank/stickiness decision engine.
+- `cobalt/radar/propose.md` — deterministic HITL proposal artifacts.
+- `cobalt/radar/replay.md` — archived-bar snapshot synthesis.
+- `cobalt/radar/runner.md` — session-gated staged resident.
+- `cobalt/radar/sources.md` — note-derived archive/backfill targets.
+- `cobalt/radar/store.md` — system-side membership/pool transactions.
+- `cobalt/radar/throttle.md` — observable stop-first rate probe.
+- `cobalt/settings/store.md` — user-side mirror commit-gate seam.
+- `tests/cobalt/test_archiver_aggregate.md` — aggregation checks.
+- `tests/cobalt/test_aset_account_mode.md` — account stamp resolver checks.
+- `tests/cobalt/test_aset_web.md` — offline ASET web fakes and UI checks.
+- `tests/cobalt/test_daymode.md` — day-mode DB guard coverage.
+- `tests/cobalt/test_db_credentials.md` — DB role-proof guards.
+- `tests/cobalt/test_db_query.md` — SELECT guard refusal matrix.
+- `tests/cobalt/test_heartbeat.md` — radar probe branches.
+- `tests/cobalt/test_jobs_reads.md` — radar runtime-read registry checks.
+- `tests/cobalt/test_jobs_restarts.md` — restart classification rules.
+- `tests/cobalt/test_obsidian.md` — sandbox process-probe behavior.
+- `tests/cobalt/test_prefill_drc.md` — DRC DB dependency guards.
+- `tests/cobalt/test_prefill_trade_note.md` — audited note-write DB guard.
+- `tests/cobalt/test_redact.md` — F19 redaction and R2 filter-content boundary.
+- `tests/cobalt/test_radar_collector.md` — screener/cache/bucket checks.
+- `tests/cobalt/test_radar_config.md` — config and live-capture gate.
+- `tests/cobalt/test_radar_migration.md` — 0004 file/proof checks.
+- `tests/cobalt/test_radar_notes.md` — O5 parser/refusal matrix and R2 checks.
+- `tests/cobalt/test_radar_poller.md` — overlap/freshness/gate checks.
+- `tests/cobalt/test_radar_pool.md` — D3 table and property checks.
+- `tests/cobalt/test_radar_propose.md` — step-12 proposal/apply refusal matrix.
+- `tests/cobalt/test_radar_replay.md` — O3 all-day offline replay matrix.
+- `tests/cobalt/test_radar_runner.md` — O4 stage-crossing transaction matrix.
+- `tests/cobalt/test_radar_store.md` — transaction hook checks.
+- `tests/cobalt/test_radar_throttle.md` — throttle stop classes and math.
+- `tests/cobalt/test_taxonomy_store.md` — taxonomy integration DB guard.
+- `tests/cobalt/test_tenancy.md` — 0004 tenancy/proof expectations.
+- `tests/cobalt/test_trader_settings.md` — settings integration DB guard.

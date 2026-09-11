@@ -1,5 +1,7 @@
 # `src/cobalt/jobs/cli.py`
 
+Registers `cobalt jobs restarts <git-range>` and delegates derivation to `jobs.restarts`.
+
 ```
 cobalt jobs list                     the table, as F18 reads it
 cobalt jobs register                 upsert every row from jobs.yaml

@@ -1,5 +1,7 @@
 # `src/cobalt/daymode/store.py`
 
+S2-P1 lets `attest_sheet` atomically write an optional account mode. `COALESCE` preserves the prior mode when note read-back omits it.
+
 ## What it does
 One `day_modes` row per trading day. Database from `COBALT_ENV`
 (RULING 7/9).
