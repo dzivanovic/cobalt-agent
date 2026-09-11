@@ -12,6 +12,7 @@ just convention), plus a separate `enabled_grades` field controlling
 UI/compute availability.
 """
 
+import os
 from decimal import Decimal
 
 import pytest
@@ -49,6 +50,11 @@ sheet_modes:
     D: 0
   enabled_grades: [A, B]
 """
+
+requires_db = pytest.mark.skipif(
+    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
+    reason="requires_db: runtime sheet config is read from trader_settings",
+)
 
 
 def test_committed_dev_config_is_valid():
@@ -151,6 +157,7 @@ def test_local_override_wins_and_must_be_complete(monkeypatch, tmp_path):
         load_config()
 
 
+@requires_db
 class TestSheetModesConfig:
     def test_committed_config_is_valid(self):
         """Sheets are an ORDERED LIST since S1-P2 (F6) — `cfg.full` /

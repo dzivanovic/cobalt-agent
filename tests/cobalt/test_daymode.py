@@ -110,6 +110,7 @@ def _cfg(
 # =====================================================================
 
 
+@requires_db
 class TestShippedConfig:
     def test_the_real_config_loads_and_reads_as_ruled(self):
         from cobalt.daymode.config import load_daymode_config

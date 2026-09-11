@@ -1,5 +1,7 @@
 # `src/cobalt/cards/store.py`
 
+S2-P1 includes `account_mode` in open-card reads for the ASET surface.
+
 ## What it does
 Persists card state: `aset_sizings.state`/`state_at` plus the
 `card_transitions` ledger and the `card_stop_edits` side-table.

@@ -194,7 +194,7 @@ class CardStore:
         with self._connect() as conn:
             cur = conn.execute(
                 "SELECT id, created_at, ticker, grade, direction, sheet_mode, "
-                "entry, stop, shares, state, state_at, session, origin "
+                "entry, stop, shares, state, state_at, session, origin, account_mode "
                 "FROM aset_sizings WHERE state = ANY(%s) ORDER BY id",
                 (live,),
             )

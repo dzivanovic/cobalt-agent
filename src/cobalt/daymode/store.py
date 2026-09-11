@@ -130,7 +130,12 @@ class DayModeStore:
         return self.for_date(day)
 
     def attest_sheet(
-        self, day: date, *, filename: str, now: Optional[datetime] = None
+        self,
+        day: date,
+        *,
+        filename: str,
+        account_mode: Optional[str] = None,
+        now: Optional[datetime] = None,
     ) -> None:
         """Record which `.htk` he states he has loaded (F6 match check).
 
@@ -138,15 +143,20 @@ class DayModeStore:
         exists so he can attest before 09:00, while stage 1 is still in
         force and no proposal has been made.
         """
+        if account_mode is not None and account_mode not in {"live", "sim"}:
+            raise DayModeError(
+                f"REFUSED: account_mode must be live or sim, got {account_mode!r}"
+            )
         ts = now or clock_mod.now_utc()
         session = assert_writable("daymode.attest", target=day.isoformat(), now=ts)
         with self._connect() as conn:
             conn.execute(
                 "INSERT INTO day_modes (trade_date, stage, proposed, reason, session, "
-                "attested_sheet, attested_at) "
-                "VALUES (%s, 'stage1', %s, %s, %s, %s, %s) "
+                "attested_sheet, attested_at, account_mode) "
+                "VALUES (%s, 'stage1', %s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (trade_date) DO UPDATE SET "
-                "attested_sheet = EXCLUDED.attested_sheet, attested_at = EXCLUDED.attested_at",
+                "attested_sheet = EXCLUDED.attested_sheet, attested_at = EXCLUDED.attested_at, "
+                "account_mode = COALESCE(EXCLUDED.account_mode, day_modes.account_mode)",
                 (
                     day,
                     "",
@@ -154,6 +164,7 @@ class DayModeStore:
                     session.value,
                     filename,
                     ts,
+                    account_mode,
                 ),
             )
 

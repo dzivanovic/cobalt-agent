@@ -1,5 +1,7 @@
 # `src/cobalt/aset/store.py`
 
+S2-P1 resolves account mode on the same user-side connection before INSERT, stamps every new card, and refuses/logs before writing when neither valid source exists.
+
 ## What it does
 Persistence for computed sizings. Every completed `/size` POST is saved
 here before the sheet auto-appends to the daily note — this is the

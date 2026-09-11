@@ -68,6 +68,7 @@ from .engine import SizingError, compute_fill_recompute, compute_sizing
 from .models import Grade, SizingInput
 from .prefill import PrefillError, fetch_last_price
 from .store import AsetStore
+from .account_mode import AccountModeUnresolved, resolve as resolve_account_mode
 
 app = FastAPI(title="Cobalt ASET Sheet", docs_url=None, redoc_url=None)
 
@@ -498,17 +499,27 @@ def _daymode_state() -> dict:
         row = store.for_date(day)
         row = _read_back_note_attestation(cfg, day, row, store)
         mode = decided_or_stage1(row, cfg)
+        account_error = None
+        try:
+            with store._connect() as conn:
+                account_mode = resolve_account_mode(conn, day)
+        except AccountModeUnresolved as e:
+            account_mode = None
+            account_error = str(e)
         return {
             "cfg": cfg, "day": day, "row": row, "mode": mode, "error": None,
-            "stage": _stage_label(row),
+            "stage": _stage_label(row), "account_mode": account_mode,
+            "account_error": account_error,
         }
     except daymode_note.NoteAttestationConflict as e:
         logger.error("daymode: note/selector attestation conflict: {}", e)
         return {"cfg": None, "day": None, "row": None, "mode": None,
-                "stage": "CONFLICT", "error": str(e)}
+                "stage": "CONFLICT", "error": str(e), "account_mode": None,
+                "account_error": None}
     except Exception as e:  # noqa: BLE001 - rendered, never swallowed
         return {"cfg": None, "day": None, "row": None, "mode": None,
-                "stage": "UNRESOLVED", "error": f"{type(e).__name__}: {e}"}
+                "stage": "UNRESOLVED", "error": f"{type(e).__name__}: {e}",
+                "account_mode": None, "account_error": None}
 
 
 def _write_daymode_note(cfg, day, store) -> str:
@@ -560,6 +571,11 @@ def _daymode_banner(dm: dict) -> str:
     proposed = (row or {}).get("proposed")
     decided = (row or {}).get("decided")
     lines = [
+        (
+            f'<div><b>ACCOUNT {e(dm["account_mode"].upper())}</b></div>'
+            if dm.get("account_mode")
+            else f'<div><b>ACCOUNT MODE UNRESOLVED</b> — cards are refused: {e(dm.get("account_error") or "missing")}</div>'
+        ),
         f'<div><b>DAY MODE {e(mode.upper())}</b> · {e(dm["stage"])} · sizes from the '
         f'{e(sheet.upper())} sheet · keys {e(keys)}</div>',
         f'<div style="margin-top:6px">.htk: {match_html} '
@@ -584,6 +600,10 @@ def _daymode_banner(dm: dict) -> str:
     lines.append(
         '<form class="attest" method="post" action="/attest">'
         f'<select name="file"><option value="">— which .htk have you loaded? —</option>{options}</select>'
+        '<select name="account_mode">'
+        f'<option value="live"{" selected" if dm.get("account_mode") == "live" else ""}>LIVE</option>'
+        f'<option value="sim"{" selected" if dm.get("account_mode") == "sim" else ""}>SIM</option>'
+        '</select>'
         '<button type="submit">Attest</button></form>'
     )
     return f'<div class="{klass}">' + "".join(lines) + "</div>"
@@ -687,7 +707,8 @@ def _card_controls(card: dict) -> str:
         f'<span class="tk">{e(card["ticker"])}</span>'
         f'<span class="st st-{state.value}">{state.value}</span>'
         f'<span class="muted">#{cid} · {e(str(card["grade"]))} · {e(str(card["direction"]))} · '
-        f'{e(str(card["shares"]))} sh · {e(str(card["session"]))}</span>{key_lock}</div>'
+        f'{e(str(card["shares"]))} sh · {e(str(card["session"]))} · ACCOUNT '
+        f'{e(str(card.get("account_mode") or "UNSTAMPED").upper())}</span>{key_lock}</div>'
         f'{stop_html}<div class="acts">{"".join(buttons)}{shortcut}</div></div>'
     )
 
@@ -790,6 +811,7 @@ def _result_card(result, form: dict, fill=None) -> str:
       <table>
        <tr><td>Ticker / grade / direction</td><td>{html.escape(inp.ticker)} · {inp.grade.value} · {inp.direction.value.upper()}</td></tr>
        <tr><td>Sheet mode</td><td>{inp.sheet_mode.value.upper()}</td></tr>
+       <tr><td>Account</td><td>{html.escape(form.get("account_mode", "STAMPED ON SAVE").upper())}</td></tr>
        <tr><td>Risk budget</td><td>${result.risk_budget}</td></tr>
        <tr><td>Risk / share</td><td>${result.per_share_risk}</td></tr>
        <tr><td>Total used risk</td><td>${result.used_risk}</td></tr>
@@ -844,14 +866,15 @@ def api_health():
         # False iff the banner is a refusal: an error was caught, or
         # there is no mode — which is the same thing to a trader, since
         # `assert_sheet_matches` refuses every card either way.
-        "ok": not dm["error"] and mode is not None,
+        "ok": not dm["error"] and not dm.get("account_error") and mode is not None,
         "day": str(dm["day"]) if dm["day"] else None,
         "mode": mode,
         "stage": dm["stage"],
         # The sheet the sizes come from: derived, not stored, and only
         # answerable once the mode resolved.
         "sheet_mode": cfg.sheet_for(mode) if (cfg and mode) else None,
-        "error": dm["error"],
+        "error": dm["error"] or dm.get("account_error"),
+        "account_mode": dm.get("account_mode"),
     }
 
 
@@ -921,6 +944,7 @@ async def size(request: Request) -> str:
         store = AsetStore()
         store.ensure_schema()
         row_id = store.save(result)
+        form["account_mode"] = store.account_mode_for(row_id)
     except Exception as e:
         return _render(
             banner=_failed(f"Persistence FAILED: {type(e).__name__}: {e}"), form=form
@@ -1069,6 +1093,7 @@ async def attest(request: Request) -> str:
     """
     form = {k: str(v) for k, v in (await request.form()).items()}
     filename = form.get("file", "").strip()
+    account_mode = form.get("account_mode", "").strip()
     try:
         cfg = load_daymode_config()
         if not filename:
@@ -1077,11 +1102,17 @@ async def attest(request: Request) -> str:
                 "the state in which a full-size key gets pressed on a reduced day.",
                 attested=None, mode="(none)",
             )
+        if account_mode not in {"live", "sim"}:
+            raise SheetMismatch(
+                f"Pick account mode LIVE or SIM; got {account_mode!r}",
+                attested=None,
+                mode="(none)",
+            )
         sheet = cfg.sheet_for_hotkey_file(filename)
         store = DayModeStore()
         store.ensure_schema()
         day = _today_et()
-        store.attest_sheet(day, filename=filename)
+        store.attest_sheet(day, filename=filename, account_mode=account_mode)
         note_line = _write_daymode_note(cfg, day, store)
     except (SheetMismatch, ConfigError, SessionBlocked) as e:
         return _render(banner=_failed(str(e)))

@@ -1,5 +1,7 @@
 # `src/cobalt/aset/web.py`
 
+S2-P1 adds the LIVE/SIM attestation select, resolved/refused account banner, POST validation, and account stamp on every rendered card.
+
 ## What it does
 The ASET sheet's surface: a single-page FastAPI app (modeled on the
 `trade-reporter` reference's simple Flask pattern) that renders the

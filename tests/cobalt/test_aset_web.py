@@ -19,6 +19,36 @@ from cobalt.aset import web as web_module
 client = TestClient(web_module.app)
 
 
+def _offline_daymode_config():
+    from cobalt.aset.models import Grade
+    from cobalt.daymode.config import DayModeConfig, SIGNAL_IDS
+
+    return DayModeConfig(
+        reduced_sheet="half",
+        reduced_enabled_grades=[Grade.A, Grade.B],
+        enabled_modes=["reduced"],
+        hotkey_file_template="{sheet}.htk",
+        stepdowns=[
+            {"signal": signal, "effect": "none", "because": "offline web fixture"}
+            for signal in SIGNAL_IDS
+        ],
+        sheet_order=["half", "full"],
+        account_enabled_grades=[Grade.A, Grade.B],
+    )
+
+
+def _offline_sheet_modes_config():
+    from cobalt.aset.config import SheetModeGrades, SheetModesConfig
+    from cobalt.aset.models import Grade
+
+    grades = SheetModeGrades(A_plus=4, A=3, B=2, C=1, D=0)
+    return SheetModesConfig(
+        sheets={"half": grades, "full": grades},
+        order=["half", "full"],
+        enabled_grades=[Grade.A, Grade.B],
+    )
+
+
 class _NeverCallStore:
     def __init__(self, db_name: str | None = None):
         raise AssertionError("a rejected card must never reach AsetStore")
@@ -47,9 +77,8 @@ def no_persistence(monkeypatch):
     # one of them would stop at the F6 banner and prove nothing about the
     # guard it names. The F6 refusal itself is tested in TestMatchCheckAtTheSheet
     # below and in tests/cobalt/test_daymode.py.
-    from cobalt.daymode.config import load_daymode_config
-
-    cfg = load_daymode_config()
+    cfg = _offline_daymode_config()
+    monkeypatch.setattr(web_module, "load_sheet_modes_config", _offline_sheet_modes_config)
     monkeypatch.setattr(
         web_module,
         "_daymode_state",
@@ -303,13 +332,11 @@ class TestDevEntryFence:
         settings read to `cobalt_dev` so they keep testing the fence and
         the label, and nothing else.
         """
-        from cobalt.settings import TraderSettings, TraderSettingsStore
-        from cobalt.settings import models as settings_models
-
-        dev = TraderSettings.from_db(TraderSettingsStore("cobalt_dev"))
-        monkeypatch.setattr(
-            settings_models.TraderSettings, "from_db", classmethod(lambda cls, store=None: dev)
-        )
+        # Keep this entirely offline.  The autouse fixture already gives
+        # web.py synthetic config objects; restate the patches here because
+        # these tests deliberately flip COBALT_ENV to production.
+        monkeypatch.setattr(web_module, "load_sheet_modes_config", _offline_sheet_modes_config)
+        monkeypatch.setattr(web_module, "load_daymode_config", _offline_daymode_config)
 
     def test_size_allowed_when_production(self, monkeypatch):
         self._settings_stay_on_dev(monkeypatch)
@@ -338,9 +365,7 @@ class TestMatchCheckAtTheSheet:
     the actual HTTP endpoint rather than the checker in isolation."""
 
     def _stub_daymode(self, monkeypatch, *, attested, mode=None):
-        from cobalt.daymode.config import load_daymode_config
-
-        cfg = load_daymode_config()
+        cfg = _offline_daymode_config()
         monkeypatch.setattr(
             web_module,
             "_daymode_state",
@@ -452,25 +477,25 @@ class TestDayModeBannerStage:
         return datetime(2026, 9, 3, hour, 30, tzinfo=ZoneInfo("America/New_York"))
 
     def test_pre_0900_reads_stage_1_even_when_decided(self):
-        from cobalt.daymode import decided_or_stage1, load_daymode_config
+        from cobalt.daymode import decided_or_stage1
 
         row = {"proposed": "reduced", "decided": "full"}
         assert "stage 1" in web_module._stage_label(row, self._at(8))
-        assert decided_or_stage1(row, load_daymode_config(), self._at(8)) == "reduced", (
+        assert decided_or_stage1(row, _offline_daymode_config(), self._at(8)) == "reduced", (
             "the floor holds before 09:00 — label and mode agree"
         )
 
     def test_after_0900_a_decision_reads_stage_2(self):
-        from cobalt.daymode import decided_or_stage1, load_daymode_config
+        from cobalt.daymode import decided_or_stage1
 
         row = {"proposed": "reduced", "decided": "full"}
         assert web_module._stage_label(row, self._at(10)) == "stage 2 (decided)"
-        assert decided_or_stage1(row, load_daymode_config(), self._at(10)) == "full"
+        assert decided_or_stage1(row, _offline_daymode_config(), self._at(10)) == "full"
 
     def test_after_0900_undecided_says_the_floor_holds(self):
-        from cobalt.daymode import decided_or_stage1, load_daymode_config
+        from cobalt.daymode import decided_or_stage1
 
         row = {"proposed": "full", "decided": None}
         label = web_module._stage_label(row, self._at(10))
         assert "undecided" in label and "floor holds" in label
-        assert decided_or_stage1(row, load_daymode_config(), self._at(10)) == "reduced"
+        assert decided_or_stage1(row, _offline_daymode_config(), self._at(10)) == "reduced"

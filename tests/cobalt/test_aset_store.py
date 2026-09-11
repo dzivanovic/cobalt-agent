@@ -254,6 +254,7 @@ def test_mark_filled_on_a_manual_card_walks_the_missing_rows_itself():
         _delete_rows(store, [row_id])
 
 
+@requires_db
 def test_mark_filled_refuses_the_shortcut_on_a_radar_card():
     """A card the S2 radar proposed gets NO one-click fill.
 

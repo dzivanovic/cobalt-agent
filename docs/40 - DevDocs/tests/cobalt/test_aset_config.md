@@ -1,5 +1,7 @@
 # `tests/cobalt/test_aset_config.py`
 
+Runtime trader-setting cases explicitly declare `requires_db` in credential-free runs.
+
 ## What it does
 Tests `config.py`'s fail-loud loading behavior for both configs
 (`AsetConfig` / `load_config()` and, since iteration 4,

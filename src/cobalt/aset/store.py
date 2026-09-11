@@ -20,6 +20,7 @@ the data-model ADR; see the note in 0001.
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Optional
+from loguru import logger
 
 from cobalt import db, env
 from cobalt.db import Side
@@ -90,6 +91,7 @@ class AsetStore:
         # are written together.
         from cobalt.cards.models import Actor, CardState, Origin
         from cobalt.cards.store import CardStore
+        from cobalt.aset.account_mode import AccountModeUnresolved, resolve
 
         inp = result.input
         ts = now or session_clock_mod.now_utc()
@@ -103,6 +105,11 @@ class AsetStore:
         conn = self._connect()
         conn.autocommit = False
         try:
+            try:
+                account_mode = resolve(conn, self._connect_day(ts))
+            except AccountModeUnresolved as e:
+                logger.error("aset.card REFUSED: {}", e)
+                raise
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -110,8 +117,8 @@ class AsetStore:
                         ticker, grade, direction, sheet_mode,
                         risk_budget, entry, stop, per_share_risk, shares,
                         used_risk, last_price, price_source, warnings, session,
-                        state, state_at, origin
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        state, state_at, origin, account_mode
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
                     (
@@ -145,6 +152,7 @@ class AsetStore:
                         # write path that could silently change meaning
                         # if the default ever moved (S1-P3).
                         Origin.MANUAL.value,
+                        account_mode,
                     ),
                 )
                 row = cur.fetchone()
@@ -168,6 +176,11 @@ class AsetStore:
         finally:
             conn.close()
         return row_id
+
+    @staticmethod
+    def _connect_day(ts: datetime) -> date:
+        """The card's ET trading date, using the shared session clock."""
+        return session_clock().to_et(ts).date()
 
     def mark_filled(
         self, row_id: int, fill: "FillRecompute", *, now: Optional[datetime] = None
@@ -238,6 +251,15 @@ class AsetStore:
                     "that was not persisted."
                 )
 
+    def account_mode_for(self, row_id: int) -> str:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT account_mode FROM aset_sizings WHERE id = %s", (row_id,)
+            ).fetchone()
+        if row is None or row[0] not in {"live", "sim"}:
+            raise RuntimeError(f"card {row_id} has no valid account_mode stamp")
+        return str(row[0])
+
     def counts_for_date(self, day: date) -> tuple[int, int]:
         """(cards written, trades taken) for `day`. A card is a written
         plan, not a trade (DRC ruling, 2026-08-31; L28 step 3 makes it
@@ -280,7 +302,7 @@ class AsetStore:
         with self._connect() as conn:
             cur = conn.execute(
                 """
-                SELECT id, created_at, session, ticker, grade, direction, sheet_mode,
+                SELECT id, created_at, session, account_mode, ticker, grade, direction, sheet_mode,
                        risk_budget, entry, stop, per_share_risk, shares, used_risk,
                        state, state_at, status, filled_at, actual_fill, recomputed_shares,
                        recomputed_used_risk, share_delta, distance_change_pct
@@ -297,7 +319,7 @@ class AsetStore:
         with self._connect() as conn:
             cur = conn.execute(
                 """
-                SELECT id, created_at, session, ticker, grade, direction, sheet_mode,
+                SELECT id, created_at, session, account_mode, ticker, grade, direction, sheet_mode,
                        risk_budget, entry, stop, shares, used_risk, state, status
                 FROM aset_sizings ORDER BY id DESC LIMIT %s
                 """,

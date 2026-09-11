@@ -1,5 +1,7 @@
 # `tests/cobalt/test_aset_store.py`
 
+Every store case requiring Postgres now carries the established `requires_db` skip.
+
 ## What it does
 The one integration test in the ASET suite — a real INSERT/SELECT
 round trip against `cobalt_dev`. Marked `pytest.mark.integration` and
