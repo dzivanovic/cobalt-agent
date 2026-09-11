@@ -58,6 +58,66 @@ def probe_timeout_s() -> float:
     return float(_tunable("heartbeat.probe_timeout_s"))
 
 
+def radar(
+    now: datetime,
+    *,
+    pool_store=None,
+    settings_store=None,
+    enabled: bool | None = None,
+    clock=None,
+) -> Probe:
+    """F18 radar state: cadence, source health, stage, mirror, and bars."""
+    from cobalt.jobs.config import load_job_registry
+    from cobalt.radar.store import RadarStore
+    from cobalt.session import session_clock
+    from cobalt.session.models import Session
+    from cobalt.settings.store import TraderSettingsStore
+
+    if enabled is None:
+        enabled = load_job_registry().spec("com.cobalt.radar").enabled
+    if not enabled:
+        return Probe("radar", True, "NOT PROBED — registry enabled: false")
+    pool_store = pool_store or RadarStore()
+    settings_store = settings_store or TraderSettingsStore()
+    row = pool_store.pool_row("primary")
+    if row is None:
+        return Probe("radar", False, "no radar_pool row for primary")
+    resolved_clock = clock or session_clock()
+    session = resolved_clock.session(now)
+    if session is Session.MARKET_RESET:
+        return Probe("radar", True, "paused (market_reset)")
+    if session not in {Session.PREMARKET, Session.RTH, Session.AFTERMARKET}:
+        return Probe("radar", True, f"idle ({session.value})")
+
+    max_age = timedelta(seconds=float(_tunable("heartbeat.radar_max_age_s")))
+    findings: list[str] = []
+    last_scan = row.get("last_scan_at")
+    if last_scan is None or now - last_scan > max_age:
+        findings.append(f"last_scan_at stale ({last_scan})")
+    if row.get("degraded"):
+        for item in row.get("degraded_sources") or []:
+            findings.append(
+                f"degraded {item.get('source')}: {item.get('reason')} since {item.get('since')}"
+            )
+    if row.get("failed_stage"):
+        findings.append(f"failed_stage {row['failed_stage']}: {row.get('failed_detail')}")
+    for key, value in settings_store.values().items():
+        if key.startswith("radar.") and isinstance(value, dict) and value.get("status") in {"parse_failed", "missing"}:
+            findings.append(f"mirror {key} {value.get('status')}: {value.get('error')}")
+    for item in row.get("poll_failures") or []:
+        since = item.get("since")
+        try:
+            onset = since if isinstance(since, datetime) else datetime.fromisoformat(str(since))
+        except ValueError:
+            findings.append(f"poll failure {item.get('ticker')} has invalid since {since!r}")
+            continue
+        if now - onset > max_age:
+            findings.append(f"poll {item.get('ticker')} {item.get('reason')} since {since}")
+    if findings:
+        return Probe("radar", False, "; ".join(findings))
+    return Probe("radar", True, f"scanning ({session.value}), members {row.get('members', 0)}")
+
+
 # ---------------------------------------------------------------------
 
 

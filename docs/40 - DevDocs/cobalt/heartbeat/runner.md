@@ -1,5 +1,7 @@
 # `src/cobalt/heartbeat/runner.py`
 
+`take_beat` now includes the radar probe in the standard heartbeat result set.
+
 ## What it does
 `run_beat()` — probe, write the note block, alert, record its own run.
 `take_beat()` — probe only. `write_note_block()`, `out_of_band()`.

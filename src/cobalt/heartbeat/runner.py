@@ -111,6 +111,7 @@ def take_beat(*, now: Optional[datetime] = None, probe: bool = True) -> Beat:
         probe_mod.backup_freshness(now=ts),
         probe_mod.vaultwrite_blocks(now=ts),
         probe_mod.redactions(interval_min(), now=ts),
+        probe_mod.radar(ts),
         probe_mod.email(),
     ]
     try:

@@ -1,5 +1,7 @@
 # `src/cobalt/heartbeat/probes.py`
 
+S2-P1 adds the radar probe's disabled, missing, paused, idle, stale, degraded, failed-stage, mirror, and poll-failure branches.
+
 ## What it does
 One function per question, each returning a `Probe(name, ok, detail,
 unknown)`.

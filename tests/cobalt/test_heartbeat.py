@@ -18,7 +18,8 @@ implementation of the same question.
 
 from datetime import datetime, timezone
 
-from cobalt.heartbeat.probes import archiver_freshness
+from cobalt.heartbeat.probes import archiver_freshness, radar
+from cobalt.session.models import Session
 
 FRIDAY_RUN_FINISHED_ET = "2026-09-04 20:53"  # the actual pre-wrapper run
 REGISTERED_AT = datetime(2026, 9, 5, 2, 19, 45, tzinfo=timezone.utc)  # Fri 22:19:45 ET
@@ -34,6 +35,70 @@ class _FakeStore:
     def get(self, label):
         assert label == "com.cobalt.archiver"
         return self._row
+
+
+class _RadarPool:
+    def __init__(self, row):
+        self.row = row
+
+    def pool_row(self, key):
+        assert key == "primary"
+        return self.row
+
+
+class _RadarSettings:
+    def __init__(self, rows=None):
+        self.rows = rows or {}
+
+    def values(self):
+        return self.rows
+
+
+class _RadarClock:
+    def __init__(self, session):
+        self.value = session
+
+    def session(self, _now):
+        return self.value
+
+
+def _radar_row(now, **changes):
+    row = {"last_scan_at": now, "degraded": False, "degraded_sources": [],
+        "failed_stage": None, "failed_detail": None, "poll_failures": [], "members": 1}
+    row.update(changes)
+    return row
+
+
+def test_radar_disabled_and_no_row_branches():
+    now = datetime(2026, 9, 3, 14, 0, tzinfo=timezone.utc)
+    assert radar(now, enabled=False).ok
+    result = radar(now, enabled=True, pool_store=_RadarPool(None), settings_store=_RadarSettings())
+    assert not result.ok and "no radar_pool" in result.detail
+
+
+def test_radar_paused_idle_and_scanning_branches():
+    now = datetime(2026, 9, 3, 14, 0, tzinfo=timezone.utc)
+    for session, word in ((Session.MARKET_RESET, "paused"), (Session.OVERNIGHT, "idle")):
+        result = radar(now, enabled=True, pool_store=_RadarPool(_radar_row(now)),
+            settings_store=_RadarSettings(), clock=_RadarClock(session))
+        assert result.ok and word in result.detail
+    result = radar(now, enabled=True, pool_store=_RadarPool(_radar_row(now)),
+        settings_store=_RadarSettings(), clock=_RadarClock(Session.RTH))
+    assert result.ok and "scanning" in result.detail
+
+
+def test_radar_red_findings_name_stage_mirror_and_old_poll_failure():
+    now = datetime(2026, 9, 3, 14, 0, tzinfo=timezone.utc)
+    old = datetime(2026, 9, 3, 13, 0, tzinfo=timezone.utc)
+    row = _radar_row(now, failed_stage="bars", failed_detail="synthetic failure",
+        poll_failures=[{"ticker": "AAA", "reason": "stale", "since": old.isoformat()}])
+    result = radar(now, enabled=True, pool_store=_RadarPool(row),
+        settings_store=_RadarSettings({"radar.screen.synthetic": {"status": "parse_failed", "error": "bad field"}}),
+        clock=_RadarClock(Session.RTH))
+    assert not result.ok
+    assert "failed_stage bars" in result.detail
+    assert "mirror radar.screen.synthetic" in result.detail
+    assert "poll AAA stale" in result.detail
 
 
 def _row(*, finished=None, registered=REGISTERED_AT, exit_code=None, last_result=None):
