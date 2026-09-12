@@ -279,8 +279,9 @@ def test_malformed_markers_refuse_the_write(writer, dev_dir):
     path = dev_dir / "note.md"
     original = "# note\n\n<!-- cobalt:section aset-cards -->\nunclosed\n"
     path.write_text(original)
-    with pytest.raises(VaultWriteError, match="never closes"):
+    with pytest.raises(VaultWriteError, match="never closes") as caught:
         writer.upsert_unit(path, "aset-cards", "card-1", CARD_V1)
+    assert str(path) in str(caught.value)
     assert path.read_text() == original
 
 

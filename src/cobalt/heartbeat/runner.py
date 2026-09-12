@@ -37,7 +37,9 @@ useless.
 
 from __future__ import annotations
 
+import stat
 from datetime import datetime, time
+from pathlib import Path
 from typing import Optional
 
 from loguru import logger
@@ -58,7 +60,16 @@ INTERVAL_KEY = "heartbeat.interval_min"
 GREEN_SUMMARY_KEY = "heartbeat.green_summary_at"
 VAULT_WRITTEN = "written"
 VAULT_DEFERRED = "deferred_market_reset"
+VAULT_DEFERRED_NOTE_ABSENT = "deferred_note_absent"
 VAULT_FAILED = "failed"
+
+
+class DailyNoteAbsent(Exception):
+    """Positive evidence that the resolved daily-note target is absent."""
+
+    def __init__(self, path: Path):
+        self.path = Path(path)
+        super().__init__(str(self.path))
 
 
 def interval_min() -> int:
@@ -138,31 +149,47 @@ def write_note_block(
 ):
     """One L28 unit in today's note, updated in place — one diff a beat.
 
-    Returns the `WriteResult`, or None when there is no note yet. A
-    missing note is NOT created from here (L28.1: only
-    `create_if_absent` with a template may), and the 05:15 prefill is
-    what creates the day's note.
+    Returns the `WriteResult`. A missing note raises `DailyNoteAbsent`
+    carrying the one resolved target; it is NOT created from here (L28.1).
     """
     from cobalt.daymode.note import daily_note_path
-    from cobalt.vaultwrite import VaultWriter, VaultWriteStore
+    from cobalt.vaultwrite import VaultWriteError, VaultWriter, VaultWriteStore
 
-    path = daily_note_path(beat.at.date())
-    if not path.exists():
-        logger.error(
-            "heartbeat: {} does not exist — the status block was NOT written. The "
-            "05:15 prefill creates the day's note; this writer never does (L28.1).",
-            path,
+    target_day = beat.at.astimezone(clock_mod.ET).date()
+    try:
+        path = Path(daily_note_path(target_day))
+    except Exception as e:
+        raise VaultWriteError(
+            f"daily-note target unresolved for {target_day}: {e}"
+        ) from e
+
+    try:
+        target_stat = path.stat()
+    except FileNotFoundError:
+        raise DailyNoteAbsent(path) from None
+    except Exception as e:
+        raise VaultWriteError(f"daily-note target {path}: {e}") from e
+    if not stat.S_ISREG(target_stat.st_mode):
+        raise VaultWriteError(f"daily-note target {path}: target is not a regular file")
+
+    try:
+        store = VaultWriteStore()
+        store.ensure_schema()
+        writer = VaultWriter(
+            WRITER,
+            store=store,
+            dry_run=dry_run,
+            now=(lambda: now) if now is not None else None,
         )
-        return None
-    store = VaultWriteStore()
-    store.ensure_schema()
-    writer = VaultWriter(
-        WRITER,
-        store=store,
-        dry_run=dry_run,
-        now=(lambda: now) if now is not None else None,
-    )
-    return writer.upsert_unit(path, SECTION, UNIT, beat.note_body())
+        result = writer.upsert_unit(path, SECTION, UNIT, beat.note_body())
+    except Exception as e:
+        detail = str(e).removeprefix(f"{path}: ")
+        raise VaultWriteError(f"daily-note target {path}: {detail}") from e
+    if result is None:
+        raise VaultWriteError(
+            f"daily-note target {path}: writer returned no result without an absence signal"
+        )
+    return result
 
 
 # ---------------------------------------------------------------------
@@ -355,12 +382,30 @@ def _run_vault_stage(
             "session clock resolved market_reset; no vault write was attempted",
         )
 
-    write = write_note_block(beat, dry_run=dry_run, now=now)
+    try:
+        write = write_note_block(beat, dry_run=dry_run, now=now)
+    except DailyNoteAbsent as absent:
+        reason = (
+            f"daily note absent at {absent.path}; heartbeat status write deferred; "
+            "com.cobalt.prefill-daily owns note creation; heartbeat never creates "
+            "notes (L28.1)"
+        )
+        return (
+            VAULT_DEFERRED_NOTE_ABSENT,
+            reason,
+        )
     if write is None:
         return VAULT_FAILED, "daily-note writer returned no result"
     beat.notes.append(write.report())
     if write.write_id is None:
-        return VAULT_FAILED, "daily-note writer returned success without a write id"
+        reason = (
+            f"daily-note target {write.path}: writer returned action={write.action} "
+            "without a write id"
+        )
+        return (
+            VAULT_FAILED,
+            reason,
+        )
     return VAULT_WRITTEN, None
 
 
@@ -432,8 +477,8 @@ def run_beat(*, now: Optional[datetime] = None, dry_run: bool = False, probe: bo
         beat.vault_reason = _stage_failure(beat, "vault", e)
     if beat.vault_outcome == VAULT_FAILED:
         logger.error("heartbeat: vault unit FAILED — {}", beat.vault_reason)
-    elif beat.vault_outcome == VAULT_DEFERRED:
-        logger.warning("heartbeat: vault unit DEFERRED — {}", beat.vault_reason)
+    elif beat.vault_outcome in {VAULT_DEFERRED, VAULT_DEFERRED_NOTE_ABSENT}:
+        logger.info("heartbeat: vault unit DEFERRED — {}", beat.vault_reason)
 
     logger.info("heartbeat: stage FINALIZE")
     try:
@@ -446,10 +491,12 @@ def run_beat(*, now: Optional[datetime] = None, dry_run: bool = False, probe: bo
 
 
 __all__ = [
+    "DailyNoteAbsent",
     "GREEN_SUMMARY_KEY",
     "INTERVAL_KEY",
     "JOB_LABEL",
     "VAULT_DEFERRED",
+    "VAULT_DEFERRED_NOTE_ABSENT",
     "VAULT_FAILED",
     "VAULT_WRITTEN",
     "green_summary_at",

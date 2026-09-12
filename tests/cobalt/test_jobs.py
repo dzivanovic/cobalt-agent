@@ -572,6 +572,131 @@ class TestMissed:
         assert not missed
 
 
+class TestRealPrefillDailySchedule:
+    """The absence policy relies on this independent lifecycle watchdog."""
+
+    @staticmethod
+    def _spec() -> JobSpec:
+        return load_job_registry().spec("com.cobalt.prefill-daily")
+
+    @staticmethod
+    def _row(*, registered, finished=None):
+        return {
+            "label": "com.cobalt.prefill-daily",
+            "kind": JobKind.ONE_SHOT.value,
+            "state": JobState.DONE.value,
+            "started_at": None,
+            "heartbeat_at": finished,
+            "finished_at": finished,
+            "registered_at": registered,
+            "exit_code": 0 if finished else None,
+            "last_error": None,
+        }
+
+    @pytest.mark.parametrize(
+        ("now_et", "missed"),
+        [
+            (datetime(2026, 9, 11, 5, 29, tzinfo=ET), False),
+            (datetime(2026, 9, 11, 5, 45, 0, tzinfo=ET), False),
+            (datetime(2026, 9, 11, 5, 45, 1, tzinfo=ET), True),
+        ],
+    )
+    def test_established_never_finished_grace_boundary(self, now_et, missed):
+        actual, _detail = is_missed(
+            self._spec(),
+            self._row(registered=datetime(2026, 9, 1, 0, 0, tzinfo=ET)),
+            now_et=now_et,
+            grace=timedelta(minutes=30),
+        )
+        assert actual is missed
+
+    def test_yesterday_completion_does_not_satisfy_fridays_due_run(self):
+        missed, _detail = is_missed(
+            self._spec(),
+            self._row(
+                registered=datetime(2026, 9, 1, 0, 0, tzinfo=ET),
+                finished=datetime(2026, 9, 10, 5, 16, tzinfo=ET),
+            ),
+            now_et=datetime(2026, 9, 11, 5, 45, 1, tzinfo=ET),
+            grace=timedelta(minutes=30),
+        )
+        assert missed
+
+    def test_saturday_has_no_new_prefill_due(self):
+        missed, _detail = is_missed(
+            self._spec(),
+            self._row(
+                registered=datetime(2026, 9, 1, 0, 0, tzinfo=ET),
+                finished=datetime(2026, 9, 11, 5, 16, tzinfo=ET),
+            ),
+            now_et=datetime(2026, 9, 12, 20, 30, tzinfo=ET),
+            grace=timedelta(minutes=30),
+        )
+        assert not missed
+
+    def test_labor_day_weekday_prefill_is_still_due(self):
+        missed, _detail = is_missed(
+            self._spec(),
+            self._row(
+                registered=datetime(2026, 9, 1, 0, 0, tzinfo=ET),
+                finished=datetime(2026, 9, 4, 5, 16, tzinfo=ET),
+            ),
+            now_et=datetime(2026, 9, 7, 5, 45, 1, tzinfo=ET),
+            grace=timedelta(minutes=30),
+        )
+        assert missed
+
+    def test_first_registration_after_due_is_exempt(self):
+        missed, _detail = is_missed(
+            self._spec(),
+            self._row(registered=datetime(2026, 9, 11, 5, 20, tzinfo=ET)),
+            now_et=datetime(2026, 9, 11, 5, 45, 1, tzinfo=ET),
+            grace=timedelta(minutes=30),
+        )
+        assert not missed
+
+    def test_real_sweep_calls_launchctl_and_reports_missed_after_grace(self, monkeypatch):
+        from cobalt.jobs import watchdog
+
+        spec = self._spec()
+        registry = JobRegistry(
+            jobs=[spec], kill_phrase="COBALT STOP", resume_phrase="COBALT RESUME"
+        )
+        row = self._row(registered=datetime(2026, 9, 1, 0, 0, tzinfo=ET))
+
+        class Store:
+            def ensure_schema(self):
+                pass
+
+            def all(self):
+                return [row]
+
+        launchctl_calls = []
+
+        def loaded(label):
+            launchctl_calls.append(label)
+            return watchdog.LaunchdStatus(
+                label=label,
+                loaded=True,
+                pid=None,
+                last_exit=0,
+                detail="loaded, not running (last exit 0)",
+            )
+
+        monkeypatch.setattr(watchdog, "launchctl_status", loaded)
+        findings = watchdog.sweep(
+            store=Store(),
+            registry=registry,
+            now=datetime(2026, 9, 11, 5, 45, 1, tzinfo=ET),
+            probe=True,
+        )
+
+        assert launchctl_calls == ["com.cobalt.prefill-daily"]
+        assert len(findings) == 1
+        assert not findings[0].ok
+        assert findings[0].state == "done (MISSED)"
+
+
 # =====================================================================
 # 5. The kill phrase
 # =====================================================================

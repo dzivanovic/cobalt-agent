@@ -684,7 +684,7 @@ class VaultWriter:
             try:
                 sec = find_section(lines, section)
             except MarkerError as e:
-                raise VaultWriteError(str(e)) from e
+                raise VaultWriteError(f"{path}: {e}") from e
 
             cobalt_lines = body.split("\n") if body != "" else []
             notes: list[str] = []

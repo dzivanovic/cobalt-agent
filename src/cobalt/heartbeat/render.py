@@ -126,6 +126,11 @@ class Beat:
                     lines.append(f"  • {probe.name}: {probe.detail}")
         for note in self.notes:
             lines += ["", note]
+        if self.vault_outcome and self.vault_outcome.startswith("deferred_"):
+            detail = self.vault_outcome
+            if self.vault_reason:
+                detail += f" — {self.vault_reason}"
+            lines += ["", f"Vault unit: {detail}"]
         if self.kill_switch:
             lines += ["", self.kill_switch]
         return "\n".join(lines)

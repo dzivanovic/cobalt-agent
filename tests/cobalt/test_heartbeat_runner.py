@@ -1,6 +1,7 @@
-"""Regression tests for the 2026-09-10 heartbeat blackout fix."""
+"""Regression tests for heartbeat staging and daily-note absence."""
 
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +10,19 @@ from cobalt.heartbeat import runner
 from cobalt.heartbeat.probes import Probe
 from cobalt.heartbeat.render import Beat
 from cobalt.session.clock import ET
+from cobalt.vaultwrite import VaultWriteError
+
+
+# Reduced from the actual 2026-09-11 daily note: the production marker shape
+# and stable unit id are preserved; journal/probe content is incidental here.
+REAL_HEARTBEAT_NOTE = """# Daily note
+
+<!-- cobalt:section heartbeat -->
+<!-- cobalt:unit status -->
+🟢 **HEARTBEAT GREEN** · prior beat
+<!-- /cobalt:unit status -->
+<!-- /cobalt:section heartbeat -->
+"""
 
 
 def et(day: int, hour: int, minute: int) -> datetime:
@@ -52,7 +66,7 @@ class FakeStore:
         self.row["vault_reason"] = vault_reason
 
 
-def install_healthy_stages(monkeypatch, store, *, alerts, writes):
+def install_healthy_stages(monkeypatch, store, *, alerts, writes, patch_write=True):
     monkeypatch.setattr(runner, "JobStore", lambda: store)
     monkeypatch.setattr(
         runner,
@@ -77,7 +91,35 @@ def install_healthy_stages(monkeypatch, store, *, alerts, writes):
         writes.append("attempt")
         return SimpleNamespace(write_id=42, report=lambda: "write_id=42")
 
-    monkeypatch.setattr(runner, "write_note_block", write)
+    if patch_write:
+        monkeypatch.setattr(runner, "write_note_block", write)
+
+
+def install_note_target(monkeypatch, path: Path, *, result=None, error=None, calls=None):
+    """Resolve one temporary note and replace only DB-backed writer plumbing."""
+    calls = calls if calls is not None else []
+    monkeypatch.setattr("cobalt.daymode.note.daily_note_path", lambda _day: path)
+
+    class Store:
+        def __init__(self):
+            calls.append("store")
+
+        def ensure_schema(self):
+            calls.append("schema")
+
+    class Writer:
+        def __init__(self, *_args, **_kwargs):
+            calls.append("writer")
+
+        def upsert_unit(self, target, section, unit, body):
+            calls.append((target, section, unit, body))
+            if error is not None:
+                raise error
+            return result
+
+    monkeypatch.setattr("cobalt.vaultwrite.VaultWriteStore", Store)
+    monkeypatch.setattr("cobalt.vaultwrite.VaultWriter", Writer)
+    return calls
 
 
 def test_market_reset_alerts_persists_and_never_attempts_a_vault_write(monkeypatch):
@@ -113,7 +155,7 @@ def test_beat_reports_an_active_kill_switch(monkeypatch):
 
 
 @pytest.mark.parametrize("writer_result", [None, RuntimeError("vault exploded")])
-def test_none_or_exception_is_failed_red_persisted_and_corrected(
+def test_unexpected_none_or_exception_is_failed_red_persisted_and_corrected(
     monkeypatch, writer_result
 ):
     store, alerts, writes = FakeStore(), [], []
@@ -136,6 +178,218 @@ def test_none_or_exception_is_failed_red_persisted_and_corrected(
     assert len(corrective) == 1
     assert beat.vault_reason in corrective[0]
     assert "RED" in corrective[0]
+
+
+@pytest.mark.parametrize(
+    "at",
+    [
+        et(11, 0, 13),
+        et(11, 5, 14),
+        et(12, 4, 0),
+        et(12, 20, 30),
+        et(7, 20, 30),  # Labor Day is overnight, not market_reset.
+    ],
+)
+def test_absent_daily_note_defers_unconditionally_without_constructing_a_writer(
+    monkeypatch, tmp_path, at
+):
+    note = (tmp_path / f"{at:%Y-%m-%d}.md").resolve()
+    store, alerts, writes = FakeStore(), [], []
+    install_healthy_stages(
+        monkeypatch, store, alerts=alerts, writes=writes, patch_write=False
+    )
+    monkeypatch.setattr("cobalt.daymode.note.daily_note_path", lambda _day: note)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("an absent note must defer before store/writer construction")
+
+    monkeypatch.setattr("cobalt.vaultwrite.VaultWriteStore", forbidden)
+    monkeypatch.setattr("cobalt.vaultwrite.VaultWriter", forbidden)
+
+    beat = runner.run_beat(now=at)
+
+    expected_reason = (
+        f"daily note absent at {note}; heartbeat status write deferred; "
+        "com.cobalt.prefill-daily owns note creation; heartbeat never creates notes (L28.1)"
+    )
+    assert not note.exists()
+    assert beat.vault_outcome == runner.VAULT_DEFERRED_NOTE_ABSENT
+    assert beat.vault_reason == expected_reason
+    assert beat.green
+    assert beat.stage_failures == []
+    assert store.row["vault_outcome"] == runner.VAULT_DEFERRED_NOTE_ABSENT
+    assert store.row["vault_reason"] == expected_reason
+    assert [name for name, _body in alerts if name == "out_of_band"] == []
+    assert "deferred_note_absent" in beat.note_body()
+    assert expected_reason in beat.dm_body()
+    assert expected_reason in beat.console()
+
+
+def test_0529_prefilled_real_marker_shape_reaches_writer_and_records_written(
+    monkeypatch, tmp_path
+):
+    at = et(11, 5, 29)
+    note = (tmp_path / "2026-09-11.md").resolve()
+    note.write_text(REAL_HEARTBEAT_NOTE)
+    before = note.read_bytes()
+    result = SimpleNamespace(
+        path=note, action="updated", write_id=42, report=lambda: "write_id=42"
+    )
+    calls = install_note_target(monkeypatch, note, result=result)
+    store, alerts, writes = FakeStore(), [], []
+    install_healthy_stages(
+        monkeypatch, store, alerts=alerts, writes=writes, patch_write=False
+    )
+
+    beat = runner.run_beat(now=at)
+
+    assert beat.vault_outcome == runner.VAULT_WRITTEN
+    assert store.row["vault_outcome"] == runner.VAULT_WRITTEN
+    assert any(isinstance(call, tuple) and call[:3] == (note, "heartbeat", "status") for call in calls)
+    assert note.read_bytes() == before, "the fake DB-backed writer must not alter the fixture"
+
+
+def test_market_reset_precedes_even_absence_lookup(monkeypatch, tmp_path):
+    note = (tmp_path / "2026-09-11.md").resolve()
+
+    def forbidden_resolver(_day):
+        pytest.fail("market_reset must return before daily-note resolution")
+
+    monkeypatch.setattr("cobalt.daymode.note.daily_note_path", forbidden_resolver)
+    beat = Beat(at=et(11, 20, 0))
+
+    outcome, reason = runner._run_vault_stage(beat, now=beat.at, dry_run=False)
+
+    assert outcome == runner.VAULT_DEFERRED
+    assert reason == "session clock resolved market_reset; no vault write was attempted"
+    assert not note.exists()
+
+
+def test_deferred_absence_does_not_mask_an_unrelated_red_probe(monkeypatch, tmp_path):
+    at = et(11, 5, 14)
+    note = (tmp_path / "2026-09-11.md").resolve()
+    store, alerts = FakeStore(), []
+    monkeypatch.setattr(runner, "JobStore", lambda: store)
+    monkeypatch.setattr(
+        runner,
+        "take_beat",
+        lambda *, now, probe: Beat(
+            at=now.astimezone(ET), probes=[Probe("database", False, "down")]
+        ),
+    )
+    monkeypatch.setattr(runner, "should_send_green", lambda *_a: False)
+    monkeypatch.setattr(
+        runner,
+        "send_dm",
+        lambda beat: alerts.append(("dm", beat.dm_body())) or "DM sent",
+    )
+    monkeypatch.setattr(
+        runner,
+        "out_of_band",
+        lambda beat: alerts.append(("out_of_band", beat.dm_body())) or "email sent",
+    )
+    monkeypatch.setattr("cobalt.daymode.note.daily_note_path", lambda _day: note)
+    monkeypatch.setattr(
+        "cobalt.vaultwrite.VaultWriteStore",
+        lambda: pytest.fail("absent note constructed a store"),
+    )
+
+    beat = runner.run_beat(now=at)
+
+    assert beat.vault_outcome == runner.VAULT_DEFERRED_NOTE_ABSENT
+    assert not beat.green
+    assert beat.red_probes[0].name == "database"
+    assert store.row["last_result"]["green"] is False
+    assert [name for name, _body in alerts] == ["out_of_band", "dm"]
+
+
+def test_daily_note_target_errors_and_contract_failure_name_the_resolved_path(
+    monkeypatch, tmp_path
+):
+    note = (tmp_path / "2026-09-11.md").resolve()
+    note.write_text(REAL_HEARTBEAT_NOTE)
+    install_note_target(monkeypatch, note, result=None)
+    beat = Beat(at=et(11, 5, 29))
+
+    with pytest.raises(VaultWriteError, match="writer returned no result") as caught:
+        runner.write_note_block(beat, now=beat.at)
+
+    assert str(note) in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("action", "dry_run"), [("updated", False), ("unchanged", False), ("updated", True)]
+)
+def test_idless_result_remains_failed_and_names_its_path(
+    monkeypatch, tmp_path, action, dry_run
+):
+    note = (tmp_path / "2026-09-11.md").resolve()
+    result = SimpleNamespace(
+        path=note, action=action, write_id=None, report=lambda: f"{action} without id"
+    )
+    monkeypatch.setattr(runner, "write_note_block", lambda *_a, **_k: result)
+    beat = Beat(at=et(11, 5, 29))
+
+    outcome, reason = runner._run_vault_stage(beat, now=beat.at, dry_run=dry_run)
+
+    assert outcome == runner.VAULT_FAILED
+    assert reason == (
+        f"daily-note target {note}: writer returned action={action} without a write id"
+    )
+
+
+def test_directory_target_is_a_named_failure(monkeypatch, tmp_path):
+    note = (tmp_path / "2026-09-11.md").resolve()
+    note.mkdir()
+    install_note_target(monkeypatch, note)
+
+    with pytest.raises(VaultWriteError, match="not a regular file") as caught:
+        runner.write_note_block(Beat(at=et(11, 5, 29)))
+
+    assert str(note) in str(caught.value)
+
+
+def test_stat_io_error_is_a_named_failure_not_absence(monkeypatch, tmp_path):
+    note = (tmp_path / "2026-09-11.md").resolve()
+    original_stat = Path.stat
+    monkeypatch.setattr("cobalt.daymode.note.daily_note_path", lambda _day: note)
+
+    def broken_stat(path, *args, **kwargs):
+        if path == note:
+            raise PermissionError("permission denied")
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", broken_stat)
+
+    with pytest.raises(VaultWriteError, match="permission denied") as caught:
+        runner.write_note_block(Beat(at=et(11, 5, 29)))
+
+    assert str(note) in str(caught.value)
+
+
+def test_generic_writer_exception_is_a_named_failure(monkeypatch, tmp_path):
+    note = (tmp_path / "2026-09-11.md").resolve()
+    note.write_text(REAL_HEARTBEAT_NOTE)
+    install_note_target(monkeypatch, note, error=RuntimeError("writer exploded"))
+
+    with pytest.raises(VaultWriteError, match="writer exploded") as caught:
+        runner.write_note_block(Beat(at=et(11, 5, 29)))
+
+    assert str(caught.value).startswith(f"daily-note target {note}:")
+
+
+def test_resolver_failure_names_the_et_date_without_fabricating_a_path(monkeypatch):
+    def broken(_day):
+        raise RuntimeError("resolver unavailable")
+
+    monkeypatch.setattr("cobalt.daymode.note.daily_note_path", broken)
+
+    with pytest.raises(VaultWriteError) as caught:
+        runner.write_note_block(Beat(at=et(11, 5, 29)))
+
+    assert str(caught.value) == (
+        "daily-note target unresolved for 2026-09-11: resolver unavailable"
+    )
 
 
 def test_corrective_alert_survives_a_finalize_database_failure(monkeypatch):
