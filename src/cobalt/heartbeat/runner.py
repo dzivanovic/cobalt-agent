@@ -477,7 +477,9 @@ def run_beat(*, now: Optional[datetime] = None, dry_run: bool = False, probe: bo
         beat.vault_reason = _stage_failure(beat, "vault", e)
     if beat.vault_outcome == VAULT_FAILED:
         logger.error("heartbeat: vault unit FAILED — {}", beat.vault_reason)
-    elif beat.vault_outcome in {VAULT_DEFERRED, VAULT_DEFERRED_NOTE_ABSENT}:
+    elif beat.vault_outcome == VAULT_DEFERRED:
+        logger.warning("heartbeat: vault unit DEFERRED — {}", beat.vault_reason)
+    elif beat.vault_outcome == VAULT_DEFERRED_NOTE_ABSENT:
         logger.info("heartbeat: vault unit DEFERRED — {}", beat.vault_reason)
 
     logger.info("heartbeat: stage FINALIZE")
