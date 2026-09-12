@@ -27,8 +27,8 @@ row: they read, or they assert that a write is refused.
 
 from __future__ import annotations
 
-import re
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -452,15 +452,42 @@ class TestStoresNameOnlyTheirOwnSide:
 
 
 def test_heartbeat_migration_is_registered_with_a_named_rollback():
-    assert FORWARD[-2].name == "0003_heartbeat_vault_outcome.sql"
-    assert REVERSE[1].name == "0003_heartbeat_vault_outcome.rollback.sql"
-    assert FORWARD[-1].name == "0004_radar_pool.sql"
-    assert REVERSE[0].name == "0004_radar_pool.rollback.sql"
-    assert "cobalt_jobs" in FORWARD[-2].read_text()
-    rollback = REVERSE[1].read_text()
+    assert [path.name for path in FORWARD[-3:]] == [
+        "0003_heartbeat_vault_outcome.sql",
+        "0004_radar_pool.sql",
+        "0005_heartbeat_note_absent.sql",
+    ]
+    assert [path.name for path in REVERSE[:3]] == [
+        "0005_heartbeat_note_absent.rollback.sql",
+        "0004_radar_pool.rollback.sql",
+        "0003_heartbeat_vault_outcome.rollback.sql",
+    ]
+    assert "cobalt_jobs" in FORWARD[-3].read_text()
+    rollback = REVERSE[2].read_text()
     assert "DROP COLUMN IF EXISTS vault_outcome" in rollback
     assert "DROP COLUMN IF EXISTS vault_reason" in rollback
     assert {"vault_outcome", "vault_reason"} <= set(DIGEST_EXCLUDED_COLUMNS)
+
+
+def test_0005_extends_only_the_vault_outcome_check_and_has_a_refusing_reverse():
+    forward = (MIGRATIONS_DIR / "0005_heartbeat_note_absent.sql").read_text()
+    reverse = (MIGRATIONS_DIR / "0005_heartbeat_note_absent.rollback.sql").read_text()
+    for value in ("written", "deferred_market_reset", "deferred_note_absent", "failed"):
+        assert value in forward
+    assert "cobalt_jobs_vault_outcome_check" in forward
+    assert "pg_get_constraintdef" in forward
+    assert "unexpected definition" in forward
+    assert "deferred_note_absent" in reverse
+    assert "REFUSING 0005 reverse" in reverse
+    assert "DROP COLUMN" not in forward + reverse
+
+
+def test_down_to_0004_selects_only_0005_reverse():
+    from cobalt.db_migrations.cli import _rollback_paths
+
+    assert [path.name for path in _rollback_paths("0004")] == [
+        "0005_heartbeat_note_absent.rollback.sql"
+    ]
 
 
 @requires_db
@@ -473,7 +500,7 @@ def test_populated_job_row_digest_is_unchanged_by_heartbeat_migration():
     conn = db.connect_migration(env.DEV_DB_NAME)
     conn.autocommit = False
     try:
-        _apply(conn, [FORWARD[-2]])
+        _apply(conn, [FORWARD[-3]])
         conn.execute(
             "INSERT INTO system.cobalt_jobs "
             "(label, kind, timeout_s, heartbeat_source, last_result) "
@@ -481,14 +508,112 @@ def test_populated_job_row_digest_is_unchanged_by_heartbeat_migration():
             "ON CONFLICT (label) DO UPDATE SET last_result = EXCLUDED.last_result",
             ("com.cobalt.digest-proof", '{"green": true}'),
         )
-        _apply(conn, [REVERSE[1]])
+        _apply(conn, [REVERSE[2]])
         before = _probe(conn, "cobalt_jobs")
-        _apply(conn, [FORWARD[-2]])
+        _apply(conn, [FORWARD[-3]])
         after = _probe(conn, "cobalt_jobs")
 
         assert before["rows"] and before["rows"] > 0
         assert after["rows"] == before["rows"]
         assert after["digest"] == before["digest"]
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+@requires_db
+def test_0005_preserves_the_full_job_row_and_round_trips_its_bounded_domain():
+    """Explicit row/domain proof; outcome/reason are not digest-excluded here."""
+    conn = db.connect_migration(env.DEV_DB_NAME)
+    conn.autocommit = False
+    label = "com.cobalt.0005-proof"
+    try:
+        _apply(conn, FORWARD)
+        # A development beat may already have exercised the new value. Move
+        # those rows temporarily inside this transaction so the bounded reverse
+        # can establish the real 0004 starting point; rollback restores all of it.
+        conn.execute(
+            "UPDATE system.cobalt_jobs SET vault_outcome = 'written' "
+            "WHERE vault_outcome = 'deferred_note_absent'"
+        )
+        _apply(conn, [REVERSE[0]])
+        conn.execute(
+            "INSERT INTO system.cobalt_jobs "
+            "(label, kind, state, timeout_s, heartbeat_source, expected_cadence, "
+            "exit_code, last_error, last_result, vault_outcome, vault_reason) "
+            "VALUES (%s, 'one-shot', 'done', 600, 'self', 'Mon-Fri 05:15 ET', "
+            "0, NULL, %s::jsonb, 'written', 'proof reason') "
+            "ON CONFLICT (label) DO UPDATE SET vault_outcome = EXCLUDED.vault_outcome, "
+            "vault_reason = EXCLUDED.vault_reason",
+            (label, '{"green": true, "proof": "0005"}'),
+        )
+        before = conn.execute(
+            "SELECT to_jsonb(j) FROM system.cobalt_jobs AS j WHERE label = %s",
+            (label,),
+        ).fetchone()[0]
+
+        _apply(conn, [FORWARD[-1]])
+        after = conn.execute(
+            "SELECT to_jsonb(j) FROM system.cobalt_jobs AS j WHERE label = %s",
+            (label,),
+        ).fetchone()[0]
+        assert after == before
+
+        _apply(conn, [FORWARD[-1]])
+        repeated = conn.execute(
+            "SELECT to_jsonb(j) FROM system.cobalt_jobs AS j WHERE label = %s",
+            (label,),
+        ).fetchone()[0]
+        assert repeated == before
+
+        for outcome in (None, "written", "deferred_market_reset", "deferred_note_absent", "failed"):
+            conn.execute(
+                "UPDATE system.cobalt_jobs SET vault_outcome = %s WHERE label = %s",
+                (outcome, label),
+            )
+
+        conn.execute("SAVEPOINT arbitrary_outcome")
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(
+                "UPDATE system.cobalt_jobs SET vault_outcome = 'invented' WHERE label = %s",
+                (label,),
+            )
+        conn.execute("ROLLBACK TO SAVEPOINT arbitrary_outcome")
+
+        conn.execute(
+            "UPDATE system.cobalt_jobs SET vault_outcome = 'deferred_note_absent' "
+            "WHERE label = %s",
+            (label,),
+        )
+        expanded_row = conn.execute(
+            "SELECT to_jsonb(j) FROM system.cobalt_jobs AS j WHERE label = %s",
+            (label,),
+        ).fetchone()[0]
+        conn.execute("SAVEPOINT refusing_reverse")
+        with pytest.raises(psycopg.errors.RaiseException, match="REFUSING 0005 reverse"):
+            _apply(conn, [REVERSE[0]])
+        conn.execute("ROLLBACK TO SAVEPOINT refusing_reverse")
+        assert conn.execute(
+            "SELECT to_jsonb(j) FROM system.cobalt_jobs AS j WHERE label = %s",
+            (label,),
+        ).fetchone()[0] == expanded_row
+
+        conn.execute(
+            "UPDATE system.cobalt_jobs SET vault_outcome = 'written' WHERE label = %s",
+            (label,),
+        )
+        old_domain_row = conn.execute(
+            "SELECT to_jsonb(j) FROM system.cobalt_jobs AS j WHERE label = %s",
+            (label,),
+        ).fetchone()[0]
+        _apply(conn, [REVERSE[0]])
+        assert conn.execute(
+            "SELECT to_jsonb(j) FROM system.cobalt_jobs AS j WHERE label = %s",
+            (label,),
+        ).fetchone()[0] == old_domain_row
+        assert conn.execute("SELECT to_regclass('system.radar_pool')").fetchone()[0]
+        assert conn.execute("SELECT to_regclass('system.radar_membership')").fetchone()[0]
+        _apply(conn, [FORWARD[-1]])
     finally:
         conn.rollback()
         conn.close()
