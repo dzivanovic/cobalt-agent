@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlparse
 
 import yaml
+from pydantic import ValidationError
 
 from cobalt.archiver.collector import finviz_get, resolve_token, scrub
 from cobalt.session import clock as session_clock_module
@@ -41,6 +42,21 @@ class ProposalRefused(RuntimeError):
 
 
 HEADING_RE = re.compile(r"^##\s+(.+?)\s+—\s+(.+?)\s*$", re.MULTILINE)
+_BOLD_COLON_INSIDE_RE = re.compile(
+    r"^-\s+\*\*(?P<label>[^*]+?):\*\*\s*(?P<value>.*?)\s*$"
+)
+_BOLD_COLON_OUTSIDE_RE = re.compile(
+    r"^-\s+\*\*(?P<label>[^*]+?)\*\*:\s*(?P<value>.*?)\s*$"
+)
+_BARE_FIELD_RE = re.compile(r"^-\s+(?P<label>[^:]+):\s*(?P<value>.*?)\s*$")
+_INLINE_COLUMNS_RE = re.compile(
+    r"(?:^|\s+·\s+)(?:\*\*)?columns(?:\s+\(`c=`\))?"
+    r"(?::\*\*|\*\*:|:)\s*(?P<value>.*?)(?=\s+·\s+|$)",
+    re.IGNORECASE,
+)
+_TIMING_SUFFIX_RE = re.compile(r"\s+\(after\s+(?P<time>\d\d:\d\d)\)\s*$", re.IGNORECASE)
+_INTENT_START_RE = re.compile(r"\b(?:after|from)\s+(?P<time>\d\d:\d\d)\b", re.IGNORECASE)
+_SUPPORTED_FIELDS = {"export", "filters", "sort", "columns", "active", "pasted", "intent"}
 
 
 def canonical_bytes(value: dict) -> bytes:
@@ -55,65 +71,240 @@ def _slug(value: str) -> str:
     return re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", value.lower())).strip("_")
 
 
-def derive_screens(text: str) -> tuple[list[ScreenBlock], list[dict[str, str | None]]]:
+def _field_name(label: str) -> str | None:
+    normalized = re.sub(r"\s+\(`(?:f|c)=`\)\s*$", "", label.strip(), flags=re.IGNORECASE)
+    lowered = normalized.casefold()
+    if lowered.startswith("pasted"):
+        return "pasted"
+    aliases = {
+        "export call (derived)": "export",
+        "filters": "filters",
+        "sort": "sort",
+        "columns": "columns",
+        "active": "active",
+        "intent": "intent",
+    }
+    return aliases.get(lowered)
+
+
+def _section_fields(section: str, screen_name: str) -> dict[str, tuple[str, str]]:
+    fields: dict[str, tuple[str, str]] = {}
+    for source in section.splitlines():
+        matched = (
+            _BOLD_COLON_INSIDE_RE.match(source)
+            or _BOLD_COLON_OUTSIDE_RE.match(source)
+            or _BARE_FIELD_RE.match(source)
+        )
+        if matched is None:
+            continue
+        name = _field_name(matched.group("label"))
+        if name not in _SUPPORTED_FIELDS:
+            continue
+        if name in fields:
+            raise ProposalRefused(f"{screen_name}: duplicate prose field {matched.group('label').strip()}")
+        fields[name] = (source, matched.group("value"))
+    return fields
+
+
+def _required_field(
+    fields: dict[str, tuple[str, str]], name: str, screen_name: str
+) -> tuple[str, str]:
+    if name not in fields:
+        raise ProposalRefused(f"{screen_name}: missing prose field {name.title()}")
+    return fields[name]
+
+
+def _inline_code(value: str, *, field: str, screen_name: str) -> str:
+    values = re.findall(r"`([^`]+)`", value)
+    if len(values) != 1:
+        raise ProposalRefused(
+            f"{screen_name}: {field} needs exactly one inline-code value; found {len(values)}"
+        )
+    return values[0]
+
+
+def _query(raw: str, *, field: str, screen_name: str) -> dict[str, list[str]]:
+    parsed = parse_qs(urlparse(raw).query, keep_blank_values=True)
+    for name in ("f", "o", "c"):
+        if len(parsed.get(name, [])) > 1:
+            raise ProposalRefused(f"{screen_name}: {field} URL has ambiguous {name} parameters")
+    return parsed
+
+
+def _one(query: dict[str, list[str]], name: str) -> str | None:
+    values = query.get(name, [])
+    return values[0] if values else None
+
+
+def _filter_tokens(value: str, *, screen_name: str) -> list[str]:
+    chunks = re.findall(r"`([^`]+)`", value)
+    tokens = [token.strip() for chunk in chunks for token in chunk.split(",") if token.strip()]
+    if not tokens:
+        raise ProposalRefused(f"{screen_name}: Filters has no inline-code filter tokens")
+    return tokens
+
+
+def _sort_code(value: str, *, screen_name: str) -> str:
+    matched = re.match(r"\s*`(?P<code>-?[a-z0-9_]+)`(?:\s|$)", value)
+    if matched is None:
+        matched = re.match(r"\s*(?P<code>-?[a-z0-9_]+)(?:\s|$)", value)
+    if matched is None:
+        raise ProposalRefused(f"{screen_name}: Sort has no leading sort code")
+    return matched.group("code")
+
+
+def _columns(value: str, *, screen_name: str, source: str) -> list[int] | None:
+    normalized = value.strip().strip("`")
+    if normalized == "<same columns>":
+        return None
+    if normalized == "0-150":
+        return list(range(151))
+    if not re.fullmatch(r"\d+(?:,\d+)*", normalized):
+        raise ProposalRefused(f"{screen_name}: {source} columns are not a numeric declaration")
+    return [int(item) for item in normalized.split(",")]
+
+
+def _screen_name_and_heading_time(raw_name: str) -> tuple[str, str | None]:
+    suffix = _TIMING_SUFFIX_RE.search(raw_name)
+    if suffix is None:
+        return raw_name, None
+    return raw_name[:suffix.start()].rstrip(), suffix.group("time")
+
+
+def derive_screens(text: str) -> tuple[list[ScreenBlock], list[dict[str, object]]]:
     matches = list(HEADING_RE.finditer(text))
     if not matches:
         raise ProposalRefused("Screens note has no '## … — screen name' sections")
     screens: list[ScreenBlock] = []
-    evidence: list[dict[str, str]] = []
+    evidence: list[dict[str, object]] = []
     for index, match in enumerate(matches):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        raw_name = match.group(2)
         section = text[match.end():end]
+        fields = _section_fields(section, raw_name)
+        export_line, export_value = _required_field(fields, "export", raw_name)
+        filters_line, filters_value = _required_field(fields, "filters", raw_name)
+        sort_line, sort_field_value = _required_field(fields, "sort", raw_name)
 
-        def line(label: str) -> str:
-            found = re.search(rf"^- (?:\*\*)?{re.escape(label)}(?:\*\*)?:\s*(.+?)\s*$", section, re.MULTILINE)
-            if not found:
-                raise ProposalRefused(f"{match.group(2)}: missing prose field {label}")
-            return found.group(0)
-
-        export_line, filters_line, sort_line, columns_line = (
-            line("Export call (derived)"), line("Filters"), line("Sort"), line("Columns")
-        )
-        export_raw = export_line.split(":", 1)[1].strip().strip("`")
-        query = parse_qs(urlparse(export_raw).query)
-        if not query.get("f"):
-            raise ProposalRefused(f"{match.group(2)}: Export line has no f parameter")
-        f_value = query["f"][0]
-        prose_filters = re.findall(r"`([a-z0-9_.]+)`", filters_line)
+        export_raw = _inline_code(export_value, field="Export", screen_name=raw_name)
+        export_query = _query(export_raw, field="Export", screen_name=raw_name)
+        f_value = _one(export_query, "f")
+        if not f_value:
+            raise ProposalRefused(f"{raw_name}: Export line has no f parameter")
+        prose_filters = _filter_tokens(filters_value, screen_name=raw_name)
         if prose_filters != f_value.split(","):
-            raise ProposalRefused(
-                f"{match.group(2)}: f mismatch between Export and Filters lines"
-            )
-        sort_value = sort_line.split(":", 1)[1].strip().strip("`")
-        if query.get("o", [None])[0] != sort_value:
-            raise ProposalRefused(f"{match.group(2)}: sort mismatch between Export and Sort lines")
-        columns_raw = columns_line.split(":", 1)[1].strip().strip("`")
-        if query.get("c", [None])[0] != columns_raw:
-            raise ProposalRefused(f"{match.group(2)}: columns mismatch between Export and Columns lines")
-        if columns_raw == "0-150":
-            columns = list(range(151))
+            raise ProposalRefused(f"{raw_name}: f mismatch between Export and Filters lines")
+
+        pasted_line = pasted_query = None
+        if "pasted" in fields:
+            pasted_line, pasted_value = fields["pasted"]
+            pasted_raw = _inline_code(pasted_value, field="Pasted", screen_name=raw_name)
+            pasted_query = _query(pasted_raw, field="Pasted", screen_name=raw_name)
+            pasted_f = _one(pasted_query, "f")
+            if pasted_f is not None and pasted_f != f_value:
+                raise ProposalRefused(f"{raw_name}: f mismatch between Export and Pasted URLs")
+
+        sort_value = _sort_code(sort_field_value, screen_name=raw_name)
+        for source_name, query in (("Export", export_query), ("Pasted", pasted_query)):
+            declared = _one(query, "o") if query is not None else None
+            if declared is not None and declared != sort_value:
+                raise ProposalRefused(
+                    f"{raw_name}: sort mismatch between {source_name} URL and Sort line"
+                )
+
+        inline = _INLINE_COLUMNS_RE.search(sort_field_value)
+        if inline is not None and "columns" in fields:
+            raise ProposalRefused(f"{raw_name}: duplicate prose field Columns")
+        if inline is not None:
+            columns_line, columns_value = sort_line, inline.group("value")
+        elif "columns" in fields:
+            columns_line, columns_value = fields["columns"]
         else:
-            columns = [int(value) for value in columns_raw.split(",")]
-        active = re.search(r"^- Active:\s*`(\d\d:\d\d)`\s+to\s+`(\d\d:\d\d)`", section, re.MULTILINE)
-        if active is None:
+            columns_line = None
+            columns_value = None
+
+        declarations: list[tuple[str, list[int], str]] = []
+        if columns_value is not None:
+            explicit = _columns(columns_value, screen_name=raw_name, source="prose")
+            if explicit is not None:
+                declarations.append(("prose", explicit, columns_line or sort_line))
+        for source_name, query, source_line in (
+            ("Export", export_query, export_line),
+            ("Pasted", pasted_query, pasted_line),
+        ):
+            raw_columns = _one(query, "c") if query is not None else None
+            if raw_columns is None:
+                continue
+            parsed_columns = _columns(raw_columns, screen_name=raw_name, source=source_name)
+            if parsed_columns is not None:
+                declarations.append((source_name, parsed_columns, source_line or ""))
+        if not declarations:
+            raise ProposalRefused(f"{raw_name}: columns are not resolvable from prose or URLs")
+        columns = declarations[0][1]
+        disagreement = [name for name, values, _line in declarations if values != columns]
+        if disagreement:
+            raise ProposalRefused(
+                f"{raw_name}: columns mismatch among numeric declarations ({', '.join(disagreement)})"
+            )
+
+        display_name, heading_time = _screen_name_and_heading_time(raw_name)
+        active_sources: list[str] = []
+        if "active" in fields:
+            active_line, active_value = fields["active"]
+            active = re.fullmatch(
+                r"\s*`?(\d\d:\d\d)`?\s+to\s+`?(\d\d:\d\d)`?\s*", active_value
+            )
+            if active is None:
+                raise ProposalRefused(f"{raw_name}: Active must be HH:MM to HH:MM")
+            active_from, active_to = active.group(1), active.group(2)
+            active_sources = [active_line]
+            active_to_sources = [active_line]
+        else:
             from cobalt.taxonomy.loader import load_tunables
 
             tunables = load_tunables().by_key
-            active_from = tunables["session.premarket_open"].value
+            starts: list[tuple[str, str]] = []
+            if heading_time is not None:
+                starts.append((heading_time, match.group(0)))
+            if "intent" in fields:
+                intent_line, intent_value = fields["intent"]
+                starts.extend((item.group("time"), intent_line) for item in _INTENT_START_RE.finditer(intent_value))
+            distinct = list(dict.fromkeys(value for value, _source in starts))
+            if len(distinct) > 1:
+                raise ProposalRefused(f"{raw_name}: conflicting start times {distinct}")
+            active_from = distinct[0] if distinct else tunables["session.premarket_open"].value
             active_to = tunables["session.aftermarket_close"].value
-            active_line = None
-        else:
-            active_from, active_to = active.group(1), active.group(2)
-            active_line = active.group(0)
-        block = ScreenBlock(
-            screen=_slug(match.group(2)), f=f_value, sort=sort_value, columns=columns,
-            active_from=active_from, active_to=active_to, enabled=True,
-        )
+            active_sources = list(dict.fromkeys(source for _value, source in starts))
+            active_to_sources = []
+        try:
+            block = ScreenBlock(
+                screen=_slug(display_name), f=f_value, sort=sort_value, columns=columns,
+                active_from=active_from, active_to=active_to, enabled=True,
+            )
+        except ValidationError as error:
+            raise ProposalRefused(f"{raw_name}: invalid derived screen: {error}") from error
+        if block.screen in {item.screen for item in screens}:
+            raise ProposalRefused(f"{raw_name}: duplicate screen key {block.screen!r}")
         screens.append(block)
         evidence.append(
-            {"heading": match.group(0), "export": export_line, "filters": filters_line,
-             "sort": sort_line, "columns": columns_line,
-             "active": active_line}
+            {
+                "heading": match.group(0),
+                "export": export_line,
+                "filters": filters_line,
+                "sort": sort_line,
+                "columns": columns_line or declarations[0][2],
+                "active": active_sources[-1] if active_sources else None,
+                "f_sources": [source for source in (filters_line, pasted_line, export_line) if source],
+                "sort_sources": [source for source in (pasted_line, export_line if _one(export_query, "o") else None, sort_line) if source],
+                "columns_sources": [
+                    source for source in dict.fromkeys(
+                        [source for _name, _values, source in declarations if source and source != (columns_line or declarations[0][2])]
+                        + [columns_line or declarations[0][2]]
+                    ) if source
+                ],
+                "active_from_sources": active_sources,
+                "active_to_sources": active_to_sources,
+            }
         )
     return screens, evidence
 
@@ -122,22 +313,24 @@ def _dump_field(name: str, value: object) -> str:
     return yaml.safe_dump({name: value}, sort_keys=False).strip()
 
 
-def _render_screen(block: ScreenBlock, evidence: dict[str, str | None]) -> str:
+def _render_screen(block: ScreenBlock, evidence: dict[str, object]) -> str:
     values = block.model_dump(exclude_none=True)
     fields = [
-        ("screen", evidence["heading"]),
-        ("f", evidence["export"]),
-        ("sort", evidence["sort"]),
-        ("columns", evidence["columns"]),
-        ("active_from", evidence["active"]),
-        ("active_to", evidence["active"]),
+        ("screen", [evidence["heading"]]),
+        ("f", evidence.get("f_sources", [evidence["export"]])),
+        ("sort", evidence.get("sort_sources", [evidence["sort"]])),
+        ("columns", evidence.get("columns_sources", [evidence["columns"]])),
+        ("active_from", evidence.get("active_from_sources", [evidence["active"]])),
+        ("active_to", evidence.get("active_to_sources", [evidence["active"]])),
     ]
     lines = ["```yaml"]
-    for name, source in fields:
-        if source is None:
+    for name, sources in fields:
+        sources = [source for source in sources if source]
+        if not sources:
             lines.append("# PROPOSED — no window stated in prose")
         else:
-            lines.append(f"# from: {json.dumps(source)}")
+            for source in sources:
+                lines.append(f"# from: {json.dumps(scrub(str(source)))}")
         lines.append(_dump_field(name, values.pop(name)))
     lines.append("# PROPOSED — enabled for the generated radar block")
     lines.append(_dump_field("enabled", values.pop("enabled")))
@@ -158,10 +351,22 @@ def _print_insertion_diff(target: Path, original: str, units: list[dict]) -> Non
         fromfile=str(target),
         tofile=str(target),
     )
-    print("".join(diff), end="")
+    print(scrub("".join(diff)), end="")
 
 
-def render_lists(config: LegacyWatchlistsConfig) -> str:
+def _leading_comment_prose(source_text: str) -> str:
+    lines: list[str] = []
+    for line in source_text.splitlines():
+        if line.startswith("#"):
+            lines.append(line[1:].lstrip())
+        elif not line.strip() and lines:
+            lines.append("")
+        else:
+            break
+    return "\n".join(lines).rstrip()
+
+
+def render_lists(config: LegacyWatchlistsConfig, source_text: str | None = None) -> str:
     blocks = []
     for key in ("tier_a", "tier_b", "tier_c"):
         tier = getattr(config, key)
@@ -175,10 +380,11 @@ def render_lists(config: LegacyWatchlistsConfig) -> str:
             "enabled": True,
         }
         blocks.append("```yaml\n" + yaml.safe_dump(block, sort_keys=False).strip() + "\n```")
-    return (
-        "# Radar Lists\n\n# PROPOSED — derived from the committed tier rules.\n\n"
-        + "\n\n".join(blocks) + "\n"
-    )
+    rules = _leading_comment_prose(source_text or "")
+    intro = "# PROPOSED — derived from the committed tier rules."
+    if rules:
+        intro += "\n\n## Source derivation rules\n\n" + rules
+    return "# Radar Lists\n\n" + intro + "\n\n" + "\n\n".join(blocks) + "\n"
 
 
 def build_artifact(kind: str, target: Path, target_sha: str, inputs: dict, units: list[dict]) -> dict:
@@ -215,7 +421,14 @@ async def _ft_diff(block: ScreenBlock, token: str) -> dict:
             raise ProposalRefused(
                 f"{block.screen}: comparison redirected {list(metrics[-1].redirect_statuses)}"
             )
-        rows = list(csv.DictReader(io.StringIO(response.text)))
+        reader = csv.DictReader(io.StringIO(response.text))
+        if reader.fieldnames is None or "Ticker" not in reader.fieldnames:
+            raise ProposalRefused(
+                f"{block.screen}: comparison response is not CSV with a Ticker header"
+            )
+        rows = list(reader)
+        if any(None in row for row in rows):
+            raise ProposalRefused(f"{block.screen}: comparison response has malformed CSV rows")
         sets.append({row.get("Ticker", "") for row in rows if row.get("Ticker")})
     return {"without": len(sets[0]), "with_4": len(sets[1]), "symmetric_difference": sorted(sets[0] ^ sets[1])}
 
@@ -254,7 +467,7 @@ def screens_propose(args) -> None:
         {"target_text": text, "pool_block": pool_raw.decode(), "ft_comparisons": comparisons}, units,
     )
     path, digest = write_artifact(artifact)
-    print("\n\n".join(unit["body"] for unit in units))
+    print(scrub("\n\n".join(unit["body"] for unit in units)))
     _print_insertion_diff(target, text, units)
     print(f"artifact: {path}\nsha256: {digest}")
 
@@ -273,7 +486,7 @@ def lists_propose(args) -> None:
     target = resolve_vault_path() / load_config().notes.lists
     if target.exists():
         raise ProposalRefused(f"Lists target already exists: {target}")
-    note = render_lists(config)
+    note = render_lists(config, raw.decode())
     hashed = subprocess.run(
         ["git", "hash-object", str(watchlists_path)],
         capture_output=True,
@@ -294,6 +507,111 @@ def lists_propose(args) -> None:
     print(note)
     _print_insertion_diff(target, "", artifact["units"])
     print(f"artifact: {path}\nsha256: {digest}")
+
+
+def screens_validate(args) -> None:
+    """Validate current prose, pool, Lists, and installed-block drift without writes."""
+    from cobalt.taxonomy.loader import load_tunables
+    from cobalt.vault import resolve_vault_path
+
+    from .notes import FENCE_RE, parse_note, parse_note_bytes, planned_pool_rpm
+    from .sources import LegacyWatchlistsConfig, archive_targets
+
+    cfg = load_config()
+    vault = resolve_vault_path()
+    screens_path = vault / cfg.notes.screens
+    lists_path = vault / cfg.notes.lists
+    try:
+        screens_raw = screens_path.read_bytes()
+        screens_text = screens_raw.decode("utf-8")
+    except (OSError, UnicodeError) as error:
+        raise ProposalRefused(f"Screens note unreadable {screens_path}: {error}") from error
+    derived, evidence = derive_screens(screens_text)
+
+    pool_path = Path(args.pool_block)
+    try:
+        pool_raw = pool_path.read_bytes()
+        pool = PoolBlock.model_validate(yaml.safe_load(pool_raw))
+    except (OSError, UnicodeError, ValueError, yaml.YAMLError) as error:
+        raise ProposalRefused(f"invalid pool-block file {pool_path}: {error}") from error
+    unknown = sorted(set(pool.overrides) - {item.screen for item in derived})
+    if unknown:
+        raise ProposalRefused(f"pool-block overrides unknown screen(s) {unknown}")
+
+    if lists_path.exists():
+        lists = parse_note(lists_path, "lists")
+    else:
+        watchlists_path = Path(args.watchlists_yaml)
+        try:
+            watchlists_raw = watchlists_path.read_bytes()
+            legacy = LegacyWatchlistsConfig.model_validate(yaml.safe_load(watchlists_raw))
+            prospective = render_lists(legacy, watchlists_raw.decode()).encode()
+        except (OSError, UnicodeError, ValueError, yaml.YAMLError) as error:
+            raise ProposalRefused(
+                f"Lists note is absent and prospective watchlists input is invalid "
+                f"{watchlists_path}: {error}"
+            ) from error
+        lists = parse_note_bytes(lists_path, "lists", prospective)
+    if not lists.ok:
+        raise ProposalRefused(f"Lists validation failed: {'; '.join(lists.errors)}")
+
+    tunables = load_tunables().by_key
+    interval = int(tunables["radar.scan_interval"].value)
+    ceiling_raw = tunables["radar.finviz_max_rpm"].value
+    if ceiling_raw is None:
+        raise ProposalRefused("radar.finviz_max_rpm is unmeasured")
+    ceiling = int(ceiling_raw)
+    planned = planned_pool_rpm(pool, interval)
+    if planned > ceiling:
+        raise ProposalRefused(
+            f"pool budget exceeded: planned_rpm={planned:.2f}, "
+            f"finviz_max_rpm={ceiling}, cap={pool.cap}, scan_interval={interval}"
+        )
+
+    installed_status = "not installed"
+    if FENCE_RE.search(screens_raw):
+        installed = parse_note_bytes(screens_path, "screens", screens_raw)
+        if not installed.ok:
+            raise ProposalRefused(f"installed Screens blocks invalid: {'; '.join(installed.errors)}")
+        installed_screens = {
+            item.block.screen: item.block
+            for item in installed.blocks
+            if isinstance(item.block, ScreenBlock)
+        }
+        if set(installed_screens) != {item.screen for item in derived}:
+            raise ProposalRefused(
+                "installed/prose screen key drift: "
+                f"installed={sorted(installed_screens)}, prose={sorted(item.screen for item in derived)}"
+            )
+        for block, sources in zip(derived, evidence, strict=True):
+            current = installed_screens[block.screen]
+            for field in ("f", "sort", "columns"):
+                if getattr(current, field) != getattr(block, field):
+                    raise ProposalRefused(f"{block.screen}: installed/prose {field} drift")
+            for field, source_key in (
+                ("active_from", "active_from_sources"),
+                ("active_to", "active_to_sources"),
+            ):
+                if sources.get(source_key) and getattr(current, field) != getattr(block, field):
+                    raise ProposalRefused(f"{block.screen}: installed/prose {field} drift")
+        installed_pool = next(item.block for item in installed.blocks if item.key == "pool")
+        if installed_pool != pool:
+            raise ProposalRefused("installed/provided pool block drift")
+        installed_status = "installed blocks match prose"
+
+    print(scrub(f"Screens note: {screens_path}"))
+    print(f"Screens sha256: {hashlib.sha256(screens_raw).hexdigest()}")
+    print(scrub(f"Lists note: {lists_path}"))
+    print(f"Lists sha256: {lists.note_sha256}")
+    print(f"Pool sha256: {hashlib.sha256(pool_raw).hexdigest()}")
+    for block in derived:
+        print(f"{block.screen}: {block.active_from}-{block.active_to}")
+    print(
+        f"pool budget: {planned:.2f}/{ceiling} rpm "
+        f"(cap={pool.cap}, scan_interval={interval}s)"
+    )
+    print(f"drift: {installed_status}")
+    print(f"archive targets: {len(archive_targets(lists))}")
 
 
 def apply(args) -> None:

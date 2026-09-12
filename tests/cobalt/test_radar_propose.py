@@ -86,9 +86,128 @@ def test_rendered_committed_lists_parse_to_same_archive_targets(tmp_path, monkey
     assert set(config.archive_targets()) == set(original.archive_targets())
     assert set(config.backfill_targets("PROOF")) == set(original.backfill_targets("PROOF"))
     assert artifacts[0]["inputs"]["watchlists_git_blob"] == FIXED_WATCHLISTS_BLOB
+    rendered = artifacts[0]["units"][0]["body"]
+    assert "Derivation rules (exact, reproducible from the raw lists):" in rendered
+    assert "FLAGGED JUDGMENT CALLS" in rendered
+    assert len(original.archive_targets()) == 975
 
 
 FIXTURE = Path("tests/fixtures/radar/radar-screens.example.md")
+REAL_SHAPE_FIXTURE = Path("tests/fixtures/radar/radar-screens.real-shape.md")
+REAL_COLUMNS = [0, 1, 4, 5, 129, 6, 7, 25, 26, 28, 30, 84, 93, 49, 83, 61, 63, 64, 67, 65, 66]
+REAL_POOL = {
+    "kind": "pool",
+    "cap": 50,
+    "priority": ["screens", "lists"],
+    "rank_metric": {"premarket": "volume", "rth": "rvol", "aftermarket": "volume"},
+    "overrides": {
+        "morning_low_float": {"rank_metric": "volume"},
+        "day_scan": {"first_from": "10:00"},
+    },
+    "stickiness_scans": 3,
+}
+
+
+def test_real_shape_fixture_exercises_all_seven_extraction_defects():
+    text = REAL_SHAPE_FIXTURE.read_text(encoding="utf-8")
+    screens, evidence = derive_screens(text)
+    assert [item.screen for item in screens] == [
+        "up_gappers", "down_gappers", "day_scan", "morning_low_float",
+    ]
+    assert [item.f for item in screens] == [
+        "sh_avgvol_o2000,sh_curvol_o100,sh_price_o1,ta_averagetruerange_o0.5,ta_gap_u3",
+        "sh_avgvol_o2000,sh_curvol_o100,sh_price_o1,ta_averagetruerange_o0.5,ta_gap_d3",
+        "sh_curvol_o10000,sh_price_o1,sh_relvol_o3",
+        "sh_float_u10,sh_price_u10,ta_gap_u10",
+    ]
+    assert [item.sort for item in screens] == [
+        "-volume", "-relativevolume", "-volume", "-volume",
+    ]
+    assert all(item.columns == REAL_COLUMNS for item in screens)
+    assert screens[2].active_from == "10:00"
+    assert evidence[2]["active"] is not None
+    assert evidence[0]["filters"].endswith("`ta_gap_u3` gap up > 3%")
+    assert "**Sort:**" in evidence[0]["sort"]
+    assert "**columns (`c=`):**" in evidence[0]["sort"]
+    assert "o=" not in evidence[0]["export"]
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        (lambda value: value.replace("&o=-volume&ar=10", "&o=-relativevolume&ar=10", 1), "sort mismatch"),
+        (lambda value: value.replace("ta_gap_u3&c=<same columns>", "ta_gap_d3&c=<same columns>"), "f mismatch"),
+        (
+            lambda value: re.sub(r"&c=0%2C1%2C4%2C5%2C129[^`]+", "", re.sub(
+                r" · \*\*columns \(`c=`\):\*\* [^\n]+", "", value, count=1
+            ), count=1),
+            "columns",
+        ),
+        (lambda value: value.replace("&c=0,1,4,5,129", "&c=0,2,4,5,129", 1), "columns mismatch"),
+        (
+            lambda value: value.replace("0%2C1%2C4", "0%2C1%2C1", 1).replace(
+                "0,1,4", "0,1,1", 1
+            ),
+            "columns must be unique",
+        ),
+        (
+            lambda value: value.replace("0%2C1%2C4", "151%2C1%2C4", 1).replace(
+                "0,1,4", "151,1,4", 1
+            ),
+            "less than or equal to 150",
+        ),
+        (lambda value: value.replace("- **Intent:** premarket / open gap-up scan", "- **Sort:** `-volume`\n- **Intent:** premarket / open gap-up scan"), "duplicate prose field Sort"),
+        (lambda value: value.replace("## Screen 2 — Down Gappers", "## Screen 2 — Up Gappers"), "duplicate screen key"),
+        (lambda value: value.replace("used after 10:00 ET", "used after 10:01 ET"), "conflicting start times"),
+    ],
+)
+def test_real_shape_refusal_matrix(mutation, expected):
+    with pytest.raises(ProposalRefused) as caught:
+        derive_screens(mutation(REAL_SHAPE_FIXTURE.read_text(encoding="utf-8")))
+    assert expected in scrub(str(caught.value))
+
+
+def test_real_shape_supported_markup_variants_derive_equal_models():
+    text = REAL_SHAPE_FIXTURE.read_text(encoding="utf-8")
+    expected, _ = derive_screens(text)
+    conventional = re.sub(r"\*\*([^*\n]+?):\*\*", r"**\1**:", text)
+    actual, _ = derive_screens(conventional)
+    assert actual == expected
+
+
+def test_real_shape_gloss_and_url_encoding_edits_do_not_change_models():
+    text = REAL_SHAPE_FIXTURE.read_text(encoding="utf-8")
+    expected, _ = derive_screens(text)
+    edited = text.replace("gap DOWN > 3%", "gap lower by more than 3%; annotation only")
+    edited = edited.replace(
+        "sh_avgvol_o2000,sh_curvol_o100,sh_price_o1,ta_averagetruerange_o0.5,ta_gap_d3&ft=4",
+        "sh_avgvol_o2000%2Csh_curvol_o100%2Csh_price_o1%2Cta_averagetruerange_o0.5%2Cta_gap_d3&ft=4",
+    )
+    actual, evidence = derive_screens(edited)
+    assert actual == expected
+    assert "annotation only" in evidence[1]["filters"]
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "expected"),
+    [
+        ("ta_gap_u3&ft=4", "ta_gap_d3&ft=4", "f mismatch between Export and Pasted"),
+        ("ta_gap_u3&c=<same columns>", "ta_gap_u3&o=-relativevolume&c=<same columns>", "sort mismatch"),
+        (
+            "&c=<same columns>`",
+            "&f=" + "sh_price_o1&c=<same columns>`",
+            "ambiguous f",
+        ),
+        (
+            "- **Intent:** premarket / open gap-up scan",
+            "- **Active:** `99:99` to `20:00`\n- **Intent:** premarket / open gap-up scan",
+            "must be quoted HH:MM",
+        ),
+    ],
+)
+def test_additional_real_shape_refusals(old, new, expected):
+    with pytest.raises(ProposalRefused, match=expected):
+        derive_screens(REAL_SHAPE_FIXTURE.read_text().replace(old, new, 1))
 
 
 def _fixture_pool_bytes():
@@ -189,6 +308,146 @@ def test_ft_compare_adds_ft_only_when_ticker_sets_differ(tmp_path, monkeypatch, 
             "with_4": len(with_ft),
             "symmetric_difference": ([] if not different else ["T01"]),
         }
+    ]
+
+
+@pytest.mark.parametrize(
+    "body", ["<html>login</html>", "Symbol\nAAA\n", "Ticker,Volume\nAAA,1,extra\n"]
+)
+def test_ft_compare_refuses_non_csv_or_malformed_csv(tmp_path, monkeypatch, body):
+    _target, pool_path, artifacts = _proposal_env(tmp_path, monkeypatch)
+
+    async def invalid_get(_path, _params, _token, *, on_metrics):
+        on_metrics(SimpleNamespace(redirect_statuses=()))
+        return SimpleNamespace(text=body)
+
+    monkeypatch.setattr(propose_module, "finviz_get", invalid_get)
+    with pytest.raises(ProposalRefused, match="Ticker header|malformed CSV"):
+        propose_module.screens_propose(
+            argparse.Namespace(pool_block=str(pool_path), ft_compare=True)
+        )
+    assert artifacts == []
+
+
+def _real_validation_env(tmp_path, monkeypatch):
+    cfg = propose_module.load_config()
+    vault = tmp_path / "vault"
+    screens = vault / cfg.notes.screens
+    screens.parent.mkdir(parents=True)
+    screens.write_bytes(REAL_SHAPE_FIXTURE.read_bytes())
+    pool = tmp_path / "pool.yaml"
+    pool.write_text(yaml.safe_dump(REAL_POOL, sort_keys=False))
+    watchlists = _fixed_watchlists_fixture(tmp_path)
+    monkeypatch.setattr("cobalt.vault.resolve_vault_path", lambda: vault)
+    return screens, pool, watchlists
+
+
+def test_screens_validate_is_offline_side_effect_free_and_hashes_current_bytes(
+    tmp_path, monkeypatch, capsys
+):
+    screens, pool, watchlists = _real_validation_env(tmp_path, monkeypatch)
+    before = screens.read_bytes()
+
+    async def forbidden_http(*_args, **_kwargs):
+        raise AssertionError("validator made an HTTP call")
+
+    monkeypatch.setattr(propose_module, "finviz_get", forbidden_http)
+    monkeypatch.setattr(
+        propose_module,
+        "write_artifact",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("validator wrote an artifact")
+        ),
+    )
+    propose_module.screens_validate(
+        argparse.Namespace(pool_block=str(pool), watchlists_yaml=str(watchlists))
+    )
+    output = capsys.readouterr().out
+    assert hashlib.sha256(before).hexdigest() in output
+    assert "up_gappers: " in output and "day_scan: 10:00-" in output
+    assert "pool budget: 33.33/40 rpm" in output
+    assert "archive targets: 975" in output
+    assert screens.read_bytes() == before
+
+
+def test_screens_validate_detects_installed_prose_drift(tmp_path, monkeypatch):
+    screens_path, pool_path, watchlists = _real_validation_env(tmp_path, monkeypatch)
+    text = screens_path.read_text()
+    blocks, evidence = derive_screens(text)
+    bodies = [
+        propose_module._render_screen(block, evidence[index])
+        for index, block in enumerate(blocks)
+    ]
+    bodies.append("```yaml\n" + yaml.safe_dump(REAL_POOL, sort_keys=False).strip() + "\n```")
+    screens_path.write_text(text + "\n\n" + "\n\n".join(bodies) + "\n")
+    screens_path.write_text(
+        screens_path.read_text().replace(
+            "f: sh_avgvol_o2000,sh_curvol_o100,sh_price_o1,ta_averagetruerange_o0.5,ta_gap_u3",
+            "f: sh_avgvol_o2000,sh_curvol_o100,sh_price_o1,ta_averagetruerange_o0.5,ta_gap_d3",
+            1,
+        )
+    )
+    with pytest.raises(ProposalRefused, match="installed/prose f drift"):
+        propose_module.screens_validate(
+            argparse.Namespace(pool_block=str(pool_path), watchlists_yaml=str(watchlists))
+        )
+
+
+def test_screens_validate_refuses_bad_pool_before_http_or_artifact(
+    tmp_path, monkeypatch
+):
+    _screens, pool, watchlists = _real_validation_env(tmp_path, monkeypatch)
+    pool.write_text(yaml.safe_dump(dict(REAL_POOL, cap=61), sort_keys=False))
+    calls = []
+    monkeypatch.setattr(propose_module, "finviz_get", lambda *_a, **_k: calls.append("http"))
+    monkeypatch.setattr(propose_module, "write_artifact", lambda *_a, **_k: calls.append("write"))
+    with pytest.raises(ProposalRefused, match="pool budget exceeded"):
+        propose_module.screens_validate(
+            argparse.Namespace(pool_block=str(pool), watchlists_yaml=str(watchlists))
+        )
+    assert calls == []
+
+
+def test_real_shape_proposal_preserves_every_original_byte(tmp_path, monkeypatch):
+    screens, pool, _watchlists = _real_validation_env(tmp_path, monkeypatch)
+    artifacts = []
+    monkeypatch.setattr(
+        propose_module,
+        "write_artifact",
+        lambda artifact: (artifacts.append(deepcopy(artifact)) or (tmp_path / "artifact", "a" * 64)),
+    )
+    before = screens.read_bytes()
+    propose_module.screens_propose(
+        argparse.Namespace(pool_block=str(pool), ft_compare=False)
+    )
+    assert screens.read_bytes() == before
+    assert artifacts[0]["inputs"]["target_text"].encode() == before
+
+
+def test_real_shape_proposal_refuses_unknown_override_before_http_or_artifact(
+    tmp_path, monkeypatch
+):
+    _screens, pool, _watchlists = _real_validation_env(tmp_path, monkeypatch)
+    invalid = deepcopy(REAL_POOL)
+    invalid["overrides"]["unknown_screen"] = {"rank_metric": "volume"}
+    pool.write_text(yaml.safe_dump(invalid, sort_keys=False))
+    calls = []
+    monkeypatch.setattr(propose_module, "resolve_token", lambda: calls.append("http"))
+    monkeypatch.setattr(propose_module, "write_artifact", lambda *_a, **_k: calls.append("write"))
+    with pytest.raises(ProposalRefused, match="unknown screen"):
+        propose_module.screens_propose(
+            argparse.Namespace(pool_block=str(pool), ft_compare=True)
+        )
+    assert calls == []
+
+
+def test_ft_compare_accepts_valid_header_only_csv(tmp_path, monkeypatch):
+    _target, pool_path, artifacts = _proposal_env(tmp_path, monkeypatch, ft_sets=([], []))
+    propose_module.screens_propose(
+        argparse.Namespace(pool_block=str(pool_path), ft_compare=True)
+    )
+    assert artifacts[0]["inputs"]["ft_comparisons"] == [
+        {"without": 0, "with_4": 0, "symmetric_difference": []}
     ]
 
 
