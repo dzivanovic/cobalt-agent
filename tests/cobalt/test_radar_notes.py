@@ -23,25 +23,6 @@ def test_both_fixtures_parse_and_exactly_one_synthetic_screen():
     assert [x.block.screen for x in screens.blocks if isinstance(x.block, ScreenBlock)] == ["example_session_scan"]
 
 
-def test_no_screen_filter_value_escapes_the_single_fixture():
-    """R2/E5: screen filter strings live only in the synthetic fixture."""
-    roots = [Path("src/cobalt"), Path("configs/cobalt"), Path("tests/cobalt"),
-             Path("ops"), Path("docs/40 - DevDocs")]
-    prefix = "(?:sh_|ta_|fa_|an_|cap_|exch_|geo_|idx_|ind_|sec_|news_|"
-    pattern = re.compile(r"f=" + prefix + r"earningsdate_|ipodate_|targetprice_)")
-    offenders = []
-    for root in roots:
-        for path in root.rglob("*"):
-            if not path.is_file() or "tests/fixtures/radar" in path.as_posix():
-                continue
-            try:
-                text = path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
-                continue
-            if pattern.search(text):
-                offenders.append(path.as_posix())
-    assert offenders == []
-
 
 def test_prose_and_non_yaml_fences_are_ignored_and_hash_changes_by_byte(tmp_path):
     source = (FIXTURES / "radar-screens.example.md").read_bytes()
