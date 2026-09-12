@@ -153,7 +153,13 @@ def test_over_budget_refusal_names_field_and_computed_numbers():
     assert "cap=" in error
 
 
-def test_dejan_budget_cap_50_at_90_seconds_passes_under_40_rpm():
+def test_dejan_budget_cap_50_at_100_seconds_passes_under_40_rpm():
+    """2026-09-12 amendment: 90s -> 100s after Sol's total-transport objection.
+
+    radar-screens.example.md has one ScreenBlock; radar-lists.example.md has
+    one 60-ticker ListBlock (2 chunks at chunk_size 50). Total demand must
+    cover pool + screens + lists, not the pool alone.
+    """
     text = (FIXTURES / "radar-screens.example.md").read_text().replace("cap: 5", "cap: 50")
     # Keep the committed fixture immutable; exercise the actual loader with a private copy.
     from tempfile import TemporaryDirectory
@@ -164,17 +170,18 @@ def test_dejan_budget_cap_50_at_90_seconds_passes_under_40_rpm():
         parsed = load_sources(
             candidate,
             FIXTURES / "radar-lists.example.md",
-            scan_interval=90,
-            poll_interval=90,
+            scan_interval=100,
+            poll_interval=100,
             finviz_max_rpm=40,
             list_chunk_size=50,
         )
     assert parsed.pool_error is None
-    assert parsed.planned_rpm == pytest.approx(50 * 60 / 90)
+    expected = (50 * 60 / 100) + (1 * 60 / 100) + (2 * 60 / 100)  # pool + screens + list chunks
+    assert parsed.planned_rpm == pytest.approx(expected)
 
 
-def test_dejan_budget_refuses_when_ruled_pool_rate_exceeds_ceiling():
-    text = (FIXTURES / "radar-screens.example.md").read_text().replace("cap: 5", "cap: 61")
+def test_dejan_budget_refuses_when_pool_alone_exceeds_ceiling():
+    text = (FIXTURES / "radar-screens.example.md").read_text().replace("cap: 5", "cap: 100")
     from tempfile import TemporaryDirectory
 
     with TemporaryDirectory() as directory:
@@ -183,13 +190,44 @@ def test_dejan_budget_refuses_when_ruled_pool_rate_exceeds_ceiling():
         parsed = load_sources(
             candidate,
             FIXTURES / "radar-lists.example.md",
-            scan_interval=90,
-            poll_interval=90,
+            scan_interval=100,
+            poll_interval=100,
             finviz_max_rpm=40,
             list_chunk_size=50,
         )
     assert parsed.frozen
-    assert "planned_rpm=40.67" in scrub(parsed.pool_error or "")
+    error = scrub(parsed.pool_error or "")
+    assert "pool budget exceeded" in error
+    assert "pool=60.00" in error
+
+
+def test_dejan_budget_refuses_when_total_transport_exceeds_ceiling_though_pool_alone_passes():
+    """The defect Sol found: a budget check that measures one consumer and
+    calls it the budget gives false assurance. Pool cap 50 at 100s is 30.0
+    rpm alone (passes 40) but inflating the list-chunk count (60 tickers at
+    chunk_size 1 -> 60 chunks) pushes the TOTAL well over the ceiling.
+    """
+    text = (FIXTURES / "radar-screens.example.md").read_text().replace("cap: 5", "cap: 50")
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory() as directory:
+        candidate = Path(directory) / "screens.md"
+        candidate.write_text(text)
+        parsed = load_sources(
+            candidate,
+            FIXTURES / "radar-lists.example.md",
+            scan_interval=100,
+            poll_interval=100,
+            finviz_max_rpm=40,
+            list_chunk_size=1,
+        )
+    pool_only = 50 * 60 / 100
+    assert pool_only <= 40, "pool alone must pass for this test to prove the total-demand gap"
+    assert parsed.frozen
+    error = scrub(parsed.pool_error or "")
+    assert "pool budget exceeded" in error
+    assert f"pool={pool_only:.2f}" in error
+    assert "lists_chunks=60" in error
 
 
 def test_mirror_replaces_old_block_with_parse_failed_status(tmp_path):

@@ -174,11 +174,15 @@ def load_sources(
     if finviz_max_rpm is None:
         result.pool_error = "radar.finviz_max_rpm is unmeasured"
         return result
-    planned = planned_pool_rpm(pool, scan_interval)
+    screen_count = sum(1 for item in screens.blocks if isinstance(item.block, ScreenBlock))
+    list_blocks = [item.block for item in lists.blocks if isinstance(item.block, ListBlock)]
+    planned = planned_total_rpm(pool, screen_count, list_blocks, list_chunk_size, scan_interval)
     result.planned_rpm = planned
     if planned > finviz_max_rpm:
+        pool_rpm = planned_pool_rpm(pool, scan_interval)
         result.pool_error = (
-            f"pool budget exceeded: planned_rpm={planned:.2f}, "
+            f"pool budget exceeded: planned_rpm={planned:.2f} "
+            f"(pool={pool_rpm:.2f}, screens={screen_count}, lists_chunks={_total_chunks(list_blocks, list_chunk_size)}), "
             f"finviz_max_rpm={finviz_max_rpm}, cap={pool.cap}, "
             f"scan_interval={scan_interval}"
         )
@@ -186,12 +190,54 @@ def load_sources(
 
 
 def planned_pool_rpm(pool: PoolBlock, scan_interval: int) -> float:
-    """Ruled launch budget: hard pool width at the resident scan cadence."""
+    """Pool-only component of the resident scan cadence's request rate."""
     if scan_interval <= 0:
         raise RadarNoteError("radar.scan_interval must be positive")
-    # Dejan's recovery ruling defines cap 50 / 90 s = 33.33 rpm. The
-    # process-wide token bucket remains the hard ceiling for every Finviz call.
     return pool.cap * 60 / scan_interval
+
+
+def _total_chunks(list_blocks: list[ListBlock], list_chunk_size: int) -> int:
+    if list_chunk_size <= 0:
+        raise RadarNoteError("radar.list_chunk_size must be positive")
+    return sum(-(-len(block.tickers) // list_chunk_size) for block in list_blocks)
+
+
+def planned_screens_rpm(screen_count: int, scan_interval: int) -> float:
+    """Screen-scan component: one request per screen per resident cycle."""
+    if scan_interval <= 0:
+        raise RadarNoteError("radar.scan_interval must be positive")
+    return screen_count * 60 / scan_interval
+
+
+def planned_lists_rpm(list_blocks: list[ListBlock], list_chunk_size: int, scan_interval: int) -> float:
+    """List-collection component: one request per ticker chunk per resident cycle."""
+    if scan_interval <= 0:
+        raise RadarNoteError("radar.scan_interval must be positive")
+    return _total_chunks(list_blocks, list_chunk_size) * 60 / scan_interval
+
+
+def planned_total_rpm(
+    pool: PoolBlock,
+    screen_count: int,
+    list_blocks: list[ListBlock],
+    list_chunk_size: int,
+    scan_interval: int,
+) -> float:
+    """Total Finviz transport demand: pool bar-polling + screens + list chunks.
+
+    All three consumers share the single resident scan cadence (RadarRunner
+    runs _collect and the bar poller in the same cycle); a pool-only budget
+    check gives false assurance, the same shape as the pre-fix `radar
+    sources` command validating only Lists. Dejan's 2026-09-12 ruling
+    (amending the same-day pool-only 90s/33.33rpm ruling after Sol's
+    objection): cap 50 unchanged, ceiling 40rpm unchanged, scan interval
+    90s -> 100s so the combined total clears the ceiling with headroom.
+    """
+    return (
+        planned_pool_rpm(pool, scan_interval)
+        + planned_screens_rpm(screen_count, scan_interval)
+        + planned_lists_rpm(list_blocks, list_chunk_size, scan_interval)
+    )
 
 
 def configured_sources(config: RadarConfig | None = None) -> ParsedSources:
@@ -283,5 +329,5 @@ def mirror_sources(
 __all__ = [
     "ParsedBlock", "ParsedNote", "ParsedSources", "RadarNoteError",
     "configured_sources", "load_sources", "mirror_sources", "parse_note", "parse_note_bytes",
-    "planned_pool_rpm",
+    "planned_lists_rpm", "planned_pool_rpm", "planned_screens_rpm", "planned_total_rpm",
 ]

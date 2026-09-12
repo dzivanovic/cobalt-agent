@@ -389,8 +389,16 @@ tunables:
     consumers: ["cobalt.heartbeat.probes (sheet HTTP, launchctl, database)"]
 
   # --- S2-P1 radar engine --------------------------------------------
+  # 2026-09-12 CTO-chat amendment: 90s -> 100s after Sol's build-time
+  # objection that the pool-only budget check (33.33rpm at 90s) undercounted
+  # total transport demand once screens+lists share the same cadence
+  # (~40.67rpm at 90s, over the 40rpm ceiling). 100s keeps cap 50 and the
+  # 40rpm ceiling unchanged and clears the combined total with headroom.
+  # Provisional until the poller runs real sessions; staggered cadences
+  # (screens/lists slower than the pool) are the queued long-term fix, not
+  # built here.
   - key: radar.scan_interval
-    value: 90
+    value: 100
     unit: duration
     scope: global
     dynamic: false
@@ -399,7 +407,7 @@ tunables:
     consumers: ["cobalt.radar.runner (scan cadence)"]
 
   - key: radar.poll_interval
-    value: 90
+    value: 100
     unit: duration
     scope: global
     dynamic: false

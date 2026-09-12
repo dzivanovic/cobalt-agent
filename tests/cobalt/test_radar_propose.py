@@ -365,7 +365,11 @@ def test_screens_validate_is_offline_side_effect_free_and_hashes_current_bytes(
     output = capsys.readouterr().out
     assert hashlib.sha256(before).hexdigest() in output
     assert "up_gappers: " in output and "day_scan: 10:00-" in output
-    assert "pool budget: 33.33/40 rpm" in output
+    # 2026-09-12 amendment: 90s -> 100s; budget now covers total transport
+    # demand (pool 30.00 + 4 screens 2.40 + 7 list chunks 4.20 = 36.60), not
+    # the pool alone.
+    assert "transport budget: 36.60/40 rpm" in output
+    assert "pool=30.00" in output
     assert "archive targets: 975" in output
     assert screens.read_bytes() == before
 

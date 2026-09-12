@@ -28,7 +28,7 @@ from cobalt.vaultwrite import (
 )
 
 from .config import load_config
-from .models import PoolBlock, ScreenBlock
+from .models import ListBlock, PoolBlock, ScreenBlock
 
 if TYPE_CHECKING:
     from .sources import LegacyWatchlistsConfig
@@ -514,7 +514,7 @@ def screens_validate(args) -> None:
     from cobalt.taxonomy.loader import load_tunables
     from cobalt.vault import resolve_vault_path
 
-    from .notes import FENCE_RE, parse_note, parse_note_bytes, planned_pool_rpm
+    from .notes import FENCE_RE, parse_note, parse_note_bytes, planned_pool_rpm, planned_total_rpm
     from .sources import LegacyWatchlistsConfig, archive_targets
 
     cfg = load_config()
@@ -561,10 +561,14 @@ def screens_validate(args) -> None:
     if ceiling_raw is None:
         raise ProposalRefused("radar.finviz_max_rpm is unmeasured")
     ceiling = int(ceiling_raw)
-    planned = planned_pool_rpm(pool, interval)
+    list_blocks = [item.block for item in lists.blocks if isinstance(item.block, ListBlock)]
+    chunk_count = sum(-(-len(block.tickers) // cfg.list_chunk_size) for block in list_blocks)
+    pool_rpm = planned_pool_rpm(pool, interval)
+    planned = planned_total_rpm(pool, len(derived), list_blocks, cfg.list_chunk_size, interval)
     if planned > ceiling:
         raise ProposalRefused(
-            f"pool budget exceeded: planned_rpm={planned:.2f}, "
+            f"pool budget exceeded: planned_rpm={planned:.2f} "
+            f"(pool={pool_rpm:.2f}, screens={len(derived)}, lists_chunks={chunk_count}), "
             f"finviz_max_rpm={ceiling}, cap={pool.cap}, scan_interval={interval}"
         )
 
@@ -607,8 +611,9 @@ def screens_validate(args) -> None:
     for block in derived:
         print(f"{block.screen}: {block.active_from}-{block.active_to}")
     print(
-        f"pool budget: {planned:.2f}/{ceiling} rpm "
-        f"(cap={pool.cap}, scan_interval={interval}s)"
+        f"transport budget: {planned:.2f}/{ceiling} rpm "
+        f"(pool={pool_rpm:.2f}, cap={pool.cap}, "
+        f"screens={len(derived)}, lists_chunks={chunk_count}, scan_interval={interval}s)"
     )
     print(f"drift: {installed_status}")
     print(f"archive targets: {len(archive_targets(lists))}")
