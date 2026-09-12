@@ -390,7 +390,7 @@ tunables:
 
   # --- S2-P1 radar engine --------------------------------------------
   - key: radar.scan_interval
-    value: 60
+    value: 90
     unit: duration
     scope: global
     dynamic: false
@@ -399,7 +399,7 @@ tunables:
     consumers: ["cobalt.radar.runner (scan cadence)"]
 
   - key: radar.poll_interval
-    value: 60
+    value: 90
     unit: duration
     scope: global
     dynamic: false
@@ -417,7 +417,7 @@ tunables:
     consumers: ["cobalt.radar.poller (revision overlap)"]
 
   - key: radar.finviz_max_rpm
-    value: 30
+    value: 40
     unit: count
     scope: global
     dynamic: false

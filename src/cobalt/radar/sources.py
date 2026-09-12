@@ -12,9 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from cobalt.archiver.collector import scrub
 from cobalt.archiver.models import Interval
 
-from .config import load_config
 from .models import ListBlock
-from .notes import ParsedNote, RadarNoteError, parse_note
+from .notes import ParsedNote, RadarNoteError, configured_sources, parse_note
 
 
 class LegacyTier(BaseModel):
@@ -118,26 +117,34 @@ def archiver_diff(note: Path | ParsedNote, revision: str) -> list[str]:
 
 
 def command(args) -> None:
-    from cobalt.vault import resolve_vault_path
-
-    cfg = load_config()
-    path = resolve_vault_path() / cfg.notes.lists
-    parsed = _parsed(path)
+    parsed = configured_sources()
+    errors = parsed.screens.errors + parsed.lists.errors
+    if errors:
+        raise RadarNoteError(scrub(f"radar sources invalid: {'; '.join(errors)}"))
+    if parsed.pool_error:
+        raise RadarNoteError(scrub(parsed.pool_error))
+    screens_path = parsed.screens.path
+    lists_path = parsed.lists.path
     payload = {
-        "note": str(path),
-        "note_sha256": parsed.note_sha256,
-        "archive_targets": [(t, i.value) for t, i in archive_targets(parsed)],
+        "screens_note": str(screens_path),
+        "screens_note_sha256": parsed.screens.note_sha256,
+        "lists_note": str(lists_path),
+        "lists_note_sha256": parsed.lists.note_sha256,
+        "planned_rpm": parsed.planned_rpm,
+        "archive_targets": [(t, i.value) for t, i in archive_targets(parsed.lists)],
     }
     if args.archiver_diff:
-        lines = archiver_diff(parsed, args.yaml_rev)
+        lines = archiver_diff(parsed.lists, args.yaml_rev)
         if lines:
-            print("\n".join(lines))
+            raise RadarNoteError(scrub("archiver diff mismatch:\n" + "\n".join(lines)))
         else:
             print("archiver diff: empty")
     elif args.json:
         print(json.dumps(payload, sort_keys=True))
     else:
-        print(f"{path}: {len(parsed.blocks)} blocks ok")
+        print(scrub(f"{screens_path}: {len(parsed.screens.blocks)} blocks ok"))
+        print(scrub(f"{lists_path}: {len(parsed.lists.blocks)} blocks ok"))
+        print(f"planned rpm: {parsed.planned_rpm:.2f}")
         print(f"archive targets: {len(payload['archive_targets'])}")
 
 

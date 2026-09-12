@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -70,16 +69,25 @@ def _failure(kind: str, index: int, error: Exception) -> str:
 
 def parse_note(path: Path, kind: Literal["screens", "lists"]) -> ParsedNote:
     """Read bytes exactly once and parse every yaml fence; none are skipped."""
-    result = ParsedNote(path=path, kind=kind)
     try:
         payload = path.read_bytes()
     except FileNotFoundError:
+        result = ParsedNote(path=path, kind=kind)
         result.missing = True
         result.errors.append(f"{path}: missing")
         return result
     except OSError as e:
+        result = ParsedNote(path=path, kind=kind)
         result.errors.append(f"{path}: unreadable: {e}")
         return result
+    return parse_note_bytes(path, kind, payload)
+
+
+def parse_note_bytes(
+    path: Path, kind: Literal["screens", "lists"], payload: bytes
+) -> ParsedNote:
+    """Parse already-read bytes under the same note contract."""
+    result = ParsedNote(path=path, kind=kind)
     result.note_sha256 = hashlib.sha256(payload).hexdigest()
 
     for index, match in enumerate(FENCE_RE.finditer(payload), start=1):
@@ -88,7 +96,7 @@ def parse_note(path: Path, kind: Literal["screens", "lists"]) -> ParsedNote:
         try:
             raw = yaml.safe_load(body)
             if not isinstance(raw, dict):
-                raise ValueError("fenced YAML must be a mapping")
+                raise TypeError("fenced YAML must be a mapping")
             block_kind = raw.get("kind")
             if kind == "screens":
                 if block_kind is None:
@@ -111,7 +119,7 @@ def parse_note(path: Path, kind: Literal["screens", "lists"]) -> ParsedNote:
             if key in {item.key for item in result.blocks}:
                 raise ValueError(f"duplicate block key {key!r}")
             result.blocks.append(ParsedBlock(key, model, digest))
-        except (yaml.YAMLError, ValidationError, ValueError) as e:
+        except (yaml.YAMLError, ValidationError, TypeError, ValueError) as e:
             result.errors.append(_failure(kind, index, e))
 
     if kind == "screens":
@@ -166,23 +174,24 @@ def load_sources(
     if finviz_max_rpm is None:
         result.pool_error = "radar.finviz_max_rpm is unmeasured"
         return result
-    active_screens = sum(
-        isinstance(item.block, ScreenBlock) and item.block.enabled for item in screens.blocks
-    )
-    list_requests = sum(
-        math.ceil(len(item.block.tickers) / list_chunk_size)
-        for item in lists.blocks
-        if isinstance(item.block, ListBlock) and item.block.enabled and item.block.radar
-    )
-    planned = pool.cap * 60 / poll_interval + (active_screens + list_requests) * 60 / scan_interval
+    planned = planned_pool_rpm(pool, scan_interval)
     result.planned_rpm = planned
     if planned > finviz_max_rpm:
         result.pool_error = (
             f"pool budget exceeded: planned_rpm={planned:.2f}, "
             f"finviz_max_rpm={finviz_max_rpm}, cap={pool.cap}, "
-            f"active_screens={active_screens}, list_chunks={list_requests}"
+            f"scan_interval={scan_interval}"
         )
     return result
+
+
+def planned_pool_rpm(pool: PoolBlock, scan_interval: int) -> float:
+    """Ruled launch budget: hard pool width at the resident scan cadence."""
+    if scan_interval <= 0:
+        raise RadarNoteError("radar.scan_interval must be positive")
+    # Dejan's recovery ruling defines cap 50 / 90 s = 33.33 rpm. The
+    # process-wide token bucket remains the hard ceiling for every Finviz call.
+    return pool.cap * 60 / scan_interval
 
 
 def configured_sources(config: RadarConfig | None = None) -> ParsedSources:
@@ -229,7 +238,7 @@ def _mirror_rows(parsed: ParsedSources, before: dict[str, Any]) -> dict[str, Any
                 "error": error,
             }
     current_keys = set(rows)
-    for key, old in before.items():
+    for key in before:
         if key.startswith("radar.") and key not in current_keys:
             rows[key] = {
                 "block": None,
@@ -273,5 +282,6 @@ def mirror_sources(
 
 __all__ = [
     "ParsedBlock", "ParsedNote", "ParsedSources", "RadarNoteError",
-    "configured_sources", "load_sources", "mirror_sources", "parse_note",
+    "configured_sources", "load_sources", "mirror_sources", "parse_note", "parse_note_bytes",
+    "planned_pool_rpm",
 ]

@@ -1,8 +1,8 @@
-"""Fenced note contract, per-field refusal matrix, hashes, and R2 tests."""
+"""Fenced note contract, per-field refusal matrix, hashes, and fixture policy."""
 
-from datetime import datetime, timezone
-from pathlib import Path
 import re
+from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -11,7 +11,7 @@ from cobalt.radar.models import ScreenBlock
 from cobalt.radar.notes import load_sources, mirror_sources, parse_note
 
 FIXTURES = Path("tests/fixtures/radar")
-MIRROR_NOW = datetime(2026, 9, 3, 14, 0, tzinfo=timezone.utc)
+MIRROR_NOW = datetime(2026, 9, 3, 14, 0, tzinfo=UTC)
 
 
 def test_both_fixtures_parse_and_exactly_one_synthetic_screen():
@@ -22,6 +22,25 @@ def test_both_fixtures_parse_and_exactly_one_synthetic_screen():
     assert sum(isinstance(x.block, ScreenBlock) for x in screens.blocks) == 1
     assert [x.block.screen for x in screens.blocks if isinstance(x.block, ScreenBlock)] == ["example_session_scan"]
 
+
+def test_screen_filter_values_live_only_in_approved_radar_fixtures():
+    """L32/L45: real filters are user data allowed only in approved fixtures."""
+    roots = [Path("src/cobalt"), Path("configs/cobalt"), Path("tests/cobalt"),
+             Path("ops"), Path("docs/40 - DevDocs")]
+    prefix = "(?:sh_|ta_|fa_|an_|cap_|exch_|geo_|idx_|ind_|sec_|news_|"
+    pattern = re.compile(r"f=" + prefix + r"earningsdate_|ipodate_|targetprice_)")
+    offenders = []
+    for root in roots:
+        for path in root.rglob("*"):
+            if not path.is_file() or "tests/fixtures/radar" in path.as_posix():
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            if pattern.search(text):
+                offenders.append(path.as_posix())
+    assert offenders == []
 
 
 def test_prose_and_non_yaml_fences_are_ignored_and_hash_changes_by_byte(tmp_path):
@@ -132,6 +151,45 @@ def test_over_budget_refusal_names_field_and_computed_numbers():
     assert "planned_rpm=" in error
     assert "finviz_max_rpm=1" in error
     assert "cap=" in error
+
+
+def test_dejan_budget_cap_50_at_90_seconds_passes_under_40_rpm():
+    text = (FIXTURES / "radar-screens.example.md").read_text().replace("cap: 5", "cap: 50")
+    # Keep the committed fixture immutable; exercise the actual loader with a private copy.
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory() as directory:
+        candidate = Path(directory) / "screens.md"
+        candidate.write_text(text)
+        parsed = load_sources(
+            candidate,
+            FIXTURES / "radar-lists.example.md",
+            scan_interval=90,
+            poll_interval=90,
+            finviz_max_rpm=40,
+            list_chunk_size=50,
+        )
+    assert parsed.pool_error is None
+    assert parsed.planned_rpm == pytest.approx(50 * 60 / 90)
+
+
+def test_dejan_budget_refuses_when_ruled_pool_rate_exceeds_ceiling():
+    text = (FIXTURES / "radar-screens.example.md").read_text().replace("cap: 5", "cap: 61")
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory() as directory:
+        candidate = Path(directory) / "screens.md"
+        candidate.write_text(text)
+        parsed = load_sources(
+            candidate,
+            FIXTURES / "radar-lists.example.md",
+            scan_interval=90,
+            poll_interval=90,
+            finviz_max_rpm=40,
+            list_chunk_size=50,
+        )
+    assert parsed.frozen
+    assert "planned_rpm=40.67" in scrub(parsed.pool_error or "")
 
 
 def test_mirror_replaces_old_block_with_parse_failed_status(tmp_path):
