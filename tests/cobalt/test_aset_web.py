@@ -21,7 +21,7 @@ client = TestClient(web_module.app)
 
 def _offline_daymode_config():
     from cobalt.aset.models import Grade
-    from cobalt.daymode.config import DayModeConfig, SIGNAL_IDS
+    from cobalt.daymode.config import SIGNAL_IDS, DayModeConfig
 
     return DayModeConfig(
         reduced_sheet="half",
@@ -418,6 +418,57 @@ class TestMatchCheckAtTheSheet:
         r = client.post("/size", data=BASE_SIZE_FORM)
         assert "FAILED" in r.text
         assert "Day mode unresolved" in r.text
+
+
+def test_real_checkbox_shape_preserves_account_mode_and_renders_both_fields(
+    tmp_path, monkeypatch
+):
+    """A daily-note sheet tick updates only the sheet; LIVE/SIM remains explicit."""
+    cfg = _offline_daymode_config()
+    note = tmp_path / "daily.md"
+    note.write_text(
+        "<!-- cobalt:section daymode -->\n"
+        "<!-- cobalt:unit sheet_mode -->\n"
+        ".htk loaded — tick ONE:\n"
+        "- [x] half.htk\n"
+        "- [ ] full.htk\n"
+        "<!-- /cobalt:unit sheet_mode -->\n"
+        "<!-- /cobalt:section daymode -->\n"
+    )
+    monkeypatch.setattr(web_module.daymode_note, "daily_note_path", lambda _day: note)
+
+    class Store:
+        def __init__(self):
+            self.calls = []
+
+        def attest_sheet(self, day, *, filename, account_mode=None):
+            self.calls.append((day, filename, account_mode))
+
+        def for_date(self, _day):
+            return {"attested_sheet": "half.htk", "account_mode": "live"}
+
+    store = Store()
+    day = __import__("datetime").date(2026, 9, 11)
+    row = web_module._read_back_note_attestation(
+        cfg, day, {"attested_sheet": None, "account_mode": "live"}, store
+    )
+    assert store.calls == [(day, "half.htk", None)]
+    assert row["account_mode"] == "live"
+
+    rendered = web_module._daymode_banner(
+        {
+            "cfg": cfg,
+            "row": row,
+            "mode": cfg.lowest_enabled,
+            "stage": "stage 1 (system rule)",
+            "error": None,
+            "account_mode": "live",
+            "account_error": None,
+        }
+    )
+    assert '<option value="half.htk" selected>' in rendered
+    assert '<select name="account_mode">' in rendered
+    assert '<option value="live" selected>LIVE</option>' in rendered
 
 
 class TestCardControls:
