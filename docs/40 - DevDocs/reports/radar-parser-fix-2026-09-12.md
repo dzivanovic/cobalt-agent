@@ -263,4 +263,43 @@ equity/ETF classification probe, final restart derivation from actual deployment
 review/commit, Vault proposal approval/apply, process bootstrap, and Monday session evidence.
 The safe parked deployment was not touched.
 
+## Addendum — 2026-09-12, CTO-chat ruling on the total-transport objection
+
+Sol's objection (§5 above) was correct and is accepted: the pool-only budget check gave
+false assurance, the same defect shape as the pre-fix `radar sources` validating only
+Lists. Astra's original pool-only ruling (cap 50 / 90s / 40rpm ceiling → 33.33 rpm) is
+amended:
+
+- Pool scan interval: 90s → **100s**. Cap 50 and the 40rpm Finviz ceiling are unchanged.
+- The budget check (`planned_total_rpm` in `notes.py`, mirrored in `propose.py`'s
+  `screens_validate`) now sums pool bar-polling + one request per screen + one request per
+  list ticker-chunk, all sharing the single resident scan cadence, and compares that TOTAL
+  against the ceiling — not the pool component alone.
+- Rejected alternatives (recorded so they are not revisited silently): raising the ceiling
+  to 45 (a second same-day intuition number after the first was wrong); shipping at the
+  over-ceiling total and letting the token bucket silently throttle Monday's cadence.
+
+Re-verified against the real vault Screens note, the real production pool block
+(`data/radar-pool-block.yaml`), and the real committed `watchlists.yaml`:
+
+```text
+transport budget: 36.60/40 rpm (pool=30.00, cap=50, screens=4, lists_chunks=7, scan_interval=100s)
+archive targets: 975
+```
+
+Note for the record: the ruling's own illustrative arithmetic ("pool 30.0 + screens 2.67 +
+lists 4.67 = ~37.3") mixed the new 100s pool rate with the old 90s screens/lists rate.
+Under the actual single-cadence implementation all three components use the same
+interval, giving **36.60 rpm**, not 37.3 — same conclusion (comfortably under the 40rpm
+ceiling), corrected arithmetic. Full offline suite after the amendment: `1034 passed, 238
+skipped` (one new refusal test added — total-exceeds-while-pool-alone-passes — the point
+of this whole amendment).
+
+**Staggered cadences** — screens and lists polling on a slower interval than the pool,
+since they change far more slowly than per-name bar data — is the correct long-term fix
+for the headroom this 100s interval borrows. It is queued as an S2 item and was **not**
+built here. The 100s interval is provisional until the poller runs real sessions; the
+ceiling and the cadence remain Dejan's to set and are never settled silently in a config
+file.
+
 DONE
