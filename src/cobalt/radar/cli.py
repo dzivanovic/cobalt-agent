@@ -37,6 +37,12 @@ def add_parser(sub) -> None:
     screens_propose.add_argument("--pool-block", required=True)
     screens_propose.add_argument("--ft-compare", action="store_true")
     screens_propose.set_defaults(func=propose.screens_propose)
+    screens_validate = ssub.add_parser("validate")
+    screens_validate.add_argument("--pool-block", required=True)
+    screens_validate.add_argument(
+        "--watchlists-yaml", default="configs/cobalt/watchlists.yaml"
+    )
+    screens_validate.set_defaults(func=propose.screens_validate)
     screens_apply = ssub.add_parser("apply")
     _apply_args(screens_apply, "screens")
 
