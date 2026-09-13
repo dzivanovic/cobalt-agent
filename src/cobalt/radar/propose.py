@@ -42,6 +42,7 @@ class ProposalRefused(RuntimeError):
 
 
 HEADING_RE = re.compile(r"^##\s+(.+?)\s+—\s+(.+?)\s*$", re.MULTILINE)
+_SCREEN_ORDINAL_RE = re.compile(r"^(?:Screen\s+)?(?P<number>[1-9][0-9]*)$", re.IGNORECASE)
 _BOLD_COLON_INSIDE_RE = re.compile(
     r"^-\s+\*\*(?P<label>[^*]+?):\*\*\s*(?P<value>.*?)\s*$"
 )
@@ -69,6 +70,24 @@ def artifact_sha256(value: dict) -> str:
 
 def _slug(value: str) -> str:
     return re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", value.lower())).strip("_")
+
+
+def _screen_marker_ids(heading_anchor: str, screen_name: str) -> tuple[str, str]:
+    """Derive marker identifiers from the heading's durable screen ordinal.
+
+    The display name is editable trader prose and also feeds the radar source
+    key, so it cannot identify an L28-owned marker.  Both accepted real shapes
+    (``Screen 3`` and the older fixture's ``3``) carry the same ordinal.
+    """
+    matched = _SCREEN_ORDINAL_RE.fullmatch(heading_anchor.strip())
+    if matched is None:
+        raise ProposalRefused(
+            f"{screen_name}: heading anchor {heading_anchor!r} is not a stable "
+            "screen ordinal ('Screen N' or 'N')"
+        )
+    number = int(matched.group("number"))
+    section_id = f"radar-screen-{number}"
+    return section_id, f"{section_id}-definition"
 
 
 def _field_name(label: str) -> str | None:
@@ -177,9 +196,17 @@ def derive_screens(text: str) -> tuple[list[ScreenBlock], list[dict[str, object]
         raise ProposalRefused("Screens note has no '## … — screen name' sections")
     screens: list[ScreenBlock] = []
     evidence: list[dict[str, object]] = []
+    marker_sections: set[str] = set()
     for index, match in enumerate(matches):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         raw_name = match.group(2)
+        section_id, unit_id = _screen_marker_ids(match.group(1), raw_name)
+        if section_id in marker_sections:
+            raise ProposalRefused(
+                f"{raw_name}: duplicate stable screen ordinal {match.group(1)!r} "
+                f"produces section id {section_id!r}"
+            )
+        marker_sections.add(section_id)
         section = text[match.end():end]
         fields = _section_fields(section, raw_name)
         export_line, export_value = _required_field(fields, "export", raw_name)
@@ -289,6 +316,8 @@ def derive_screens(text: str) -> tuple[list[ScreenBlock], list[dict[str, object]
         evidence.append(
             {
                 "heading": match.group(0),
+                "section_id": section_id,
+                "unit_id": unit_id,
                 "export": export_line,
                 "filters": filters_line,
                 "sort": sort_line,
@@ -458,10 +487,24 @@ def screens_propose(args) -> None:
             if result["symmetric_difference"]:
                 screens[index] = block.model_copy(update={"ft": 4})
     units = [
-        {"section": evidence[index]["heading"][3:], "unit_id": f"radar-screen-{block.screen}", "placement": "at_end", "body": _render_screen(block, evidence[index])}
+        {
+            "section": evidence[index]["section_id"],
+            "unit_id": evidence[index]["unit_id"],
+            "placement": "at_end",
+            "body": _render_screen(block, evidence[index]),
+        }
         for index, block in enumerate(screens)
     ]
-    units.append({"section": evidence[-1]["heading"][3:], "unit_id": "radar-pool", "placement": "at_end", "body": "```yaml\n" + yaml.safe_dump(pool.model_dump(mode="json"), sort_keys=False).strip() + "\n```"})
+    units.append(
+        {
+            "section": evidence[-1]["section_id"],
+            "unit_id": "radar-pool",
+            "placement": "at_end",
+            "body": "```yaml\n"
+            + yaml.safe_dump(pool.model_dump(mode="json"), sort_keys=False).strip()
+            + "\n```",
+        }
+    )
     artifact = build_artifact(
         "screens", target, hashlib.sha256(target_raw).hexdigest(),
         {"target_text": text, "pool_block": pool_raw.decode(), "ft_comparisons": comparisons}, units,

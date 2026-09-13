@@ -5,7 +5,9 @@ import hashlib
 import json
 import re
 import subprocess
+from contextlib import contextmanager
 from copy import deepcopy
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -26,6 +28,9 @@ from cobalt.radar.propose import (
 )
 from cobalt.radar.sources import LegacyWatchlistsConfig
 from cobalt.session import clock as session_clock_module
+from cobalt.session.models import Session
+from cobalt.vaultwrite import AT_END, VaultWriter
+from cobalt.vaultwrite.markers import NAME_RE
 
 
 def test_prose_derives_only_the_fixture_screen_and_detects_f_mismatch():
@@ -132,6 +137,35 @@ def test_real_shape_fixture_exercises_all_seven_extraction_defects():
     assert "o=" not in evidence[0]["export"]
 
 
+def test_all_four_real_screen_marker_ids_are_valid_and_stable():
+    text = REAL_SHAPE_FIXTURE.read_text(encoding="utf-8")
+    _first_screens, first_evidence = derive_screens(text)
+    _second_screens, second_evidence = derive_screens(text)
+
+    first = [item["section_id"] for item in first_evidence]
+    second = [item["section_id"] for item in second_evidence]
+    first_units = [item["unit_id"] for item in first_evidence]
+    second_units = [item["unit_id"] for item in second_evidence]
+    assert first == ["radar-screen-1", "radar-screen-2", "radar-screen-3", "radar-screen-4"]
+    assert second == first
+    assert first_units == [f"{section_id}-definition" for section_id in first]
+    assert second_units == first_units
+    assert all(NAME_RE.fullmatch(marker_id) for marker_id in first + first_units)
+
+
+def test_real_screen_marker_ids_do_not_follow_editable_display_names():
+    text = REAL_SHAPE_FIXTURE.read_text(encoding="utf-8")
+    _screens, original = derive_screens(text)
+    edited = text.replace("Up Gappers", "Mixed Case Opening Movers", 1).replace(
+        "Day Scan (after 10:00)", "Intraday Candidates (after 10:00)", 1
+    )
+    _edited_screens, changed = derive_screens(edited)
+
+    assert [(item["section_id"], item["unit_id"]) for item in changed] == [
+        (item["section_id"], item["unit_id"]) for item in original
+    ]
+
+
 @pytest.mark.parametrize(
     ("mutation", "expected"),
     [
@@ -158,6 +192,10 @@ def test_real_shape_fixture_exercises_all_seven_extraction_defects():
         ),
         (lambda value: value.replace("- **Intent:** premarket / open gap-up scan", "- **Sort:** `-volume`\n- **Intent:** premarket / open gap-up scan"), "duplicate prose field Sort"),
         (lambda value: value.replace("## Screen 2 — Down Gappers", "## Screen 2 — Up Gappers"), "duplicate screen key"),
+        (
+            lambda value: value.replace("## Screen 4 —", "## Morning Screen —"),
+            "not a stable screen ordinal",
+        ),
         (lambda value: value.replace("used after 10:00 ET", "used after 10:01 ET"), "conflicting start times"),
     ],
 )
@@ -497,6 +535,11 @@ def test_lists_artifact_records_watchlists_blob_and_verbatim_bytes(tmp_path, mon
     assert artifacts[0]["inputs"]["watchlists_yaml"].encode() == source.read_bytes()
     assert re.fullmatch(r"[0-9a-f]{40}", artifacts[0]["inputs"]["watchlists_git_blob"])
     assert artifacts[0]["inputs"]["watchlists_git_blob"] == FIXED_WATCHLISTS_BLOB
+    assert len(artifacts[0]["units"]) == 1
+    unit = artifacts[0]["units"][0]
+    assert unit["section"] is None
+    assert unit["unit_id"] is None
+    assert unit["placement"] == "create_if_absent"
 
 
 class RecordingWriter:
@@ -522,6 +565,44 @@ class RecordingWriteStore:
 
     def ensure_schema(self):
         self.calls.append(("ensure_schema", (), {}))
+
+
+class MemoryWriteStore:
+    """DB-free audit seam for exercising the real VaultWriter merge path."""
+
+    def __init__(self):
+        self.rows = []
+
+    def purge_expired(self):
+        return 0
+
+    def last_after(self, note, section, unit):
+        for row in reversed(self.rows):
+            if (row["note"], row["section"], row["unit"]) == (note, section, unit):
+                return row["unit_after"]
+        return None
+
+    def recent_afters(self, note, section, unit, limit=10):
+        matches = [
+            (index, row["unit_after"])
+            for index, row in reversed(list(enumerate(self.rows, start=1)))
+            if (row["note"], row["section"], row["unit"]) == (note, section, unit)
+        ]
+        return matches[:limit]
+
+    @contextmanager
+    def pending_write(self, **row):
+        self.rows.append(row)
+        try:
+            yield len(self.rows)
+        except BaseException:
+            self.rows.pop()
+            raise
+
+
+class OpenSessionClock:
+    def session(self, _now):
+        return Session.RTH
 
 
 def _apply_artifact(tmp_path, monkeypatch, *, kind="screens", body="plain\n"):
@@ -642,3 +723,87 @@ def test_apply_uses_artifact_units_without_http_or_rederivation(tmp_path, monkey
         artifact["units"][0]["unit_id"],
         artifact["units"][0]["body"],
     )
+
+
+def test_real_screen_reapply_targets_existing_sections_without_duplicates(
+    tmp_path, monkeypatch
+):
+    target, pool, _watchlists = _real_validation_env(tmp_path, monkeypatch)
+    artifacts = []
+    monkeypatch.setattr(
+        propose_module,
+        "write_artifact",
+        lambda artifact: (
+            artifacts.append(deepcopy(artifact)) or (tmp_path / "artifact", "a" * 64)
+        ),
+    )
+    propose_module.screens_propose(
+        argparse.Namespace(pool_block=str(pool), ft_compare=False)
+    )
+
+    monkeypatch.setattr(VaultWriter, "_annotate_sync", lambda _self, _result: None)
+    writer = VaultWriter(
+        "test.radar.reapply",
+        store=MemoryWriteStore(),
+        clock=OpenSessionClock(),
+        now=lambda: datetime(2026, 9, 10, 14, 0, tzinfo=UTC),
+    )
+    units = artifacts[0]["units"]
+    first = [
+        writer.upsert_unit(
+            target, unit["section"], unit["unit_id"], unit["body"], placement=AT_END
+        )
+        for unit in units
+    ]
+    second = [
+        writer.upsert_unit(
+            target, unit["section"], unit["unit_id"], unit["body"], placement=AT_END
+        )
+        for unit in units
+    ]
+
+    assert all(result.action == "updated" for result in first)
+    assert all(result.action == "unchanged" for result in second)
+    content = target.read_text(encoding="utf-8")
+    for section_id in (
+        "radar-screen-1",
+        "radar-screen-2",
+        "radar-screen-3",
+        "radar-screen-4",
+    ):
+        assert content.count(f"<!-- cobalt:section {section_id} -->") == 1
+        assert content.count(f"<!-- /cobalt:section {section_id} -->") == 1
+
+
+def test_lists_apply_uses_create_if_absent_and_no_section_marker_id(
+    tmp_path, monkeypatch
+):
+    source = _fixed_watchlists_fixture(tmp_path)
+    artifacts = []
+    real_write = propose_module.write_artifact
+
+    def capture(artifact):
+        artifacts.append(deepcopy(artifact))
+        return real_write(artifact, directory=tmp_path / "artifacts")
+
+    monkeypatch.setattr("cobalt.vault.resolve_vault_path", lambda: tmp_path)
+    monkeypatch.setattr(propose_module, "write_artifact", capture)
+    propose_module.lists_propose(argparse.Namespace(watchlists_yaml=str(source)))
+    proposal = next((tmp_path / "artifacts").glob("lists-*.json"))
+
+    calls = []
+    RecordingWriter.calls = calls
+    RecordingWriteStore.calls = calls
+    monkeypatch.setattr(propose_module, "VaultWriter", RecordingWriter)
+    monkeypatch.setattr(propose_module, "VaultWriteStore", RecordingWriteStore)
+    apply(
+        argparse.Namespace(
+            proposal=str(proposal),
+            sha256=artifact_sha256(artifacts[0]),
+            hitl="synthetic-token",
+            proposal_kind="lists",
+        )
+    )
+
+    assert len([call for call in calls if call[0] == "create_if_absent"]) == 1
+    assert [call for call in calls if call[0] == "upsert_unit"] == []
