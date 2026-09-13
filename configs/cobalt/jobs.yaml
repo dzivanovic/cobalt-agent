@@ -157,7 +157,7 @@ jobs:
     kind: resident
     supervisor: self
     timeout_s: 300
-    enabled: false
+    enabled: true
     reads:
       - "configs/cobalt/radar.yaml"                # radar/config.py:67 (load_config)
       - "configs/cobalt/taxonomy/tunables.yaml"    # taxonomy/loader.py:79 (load_tunables)
