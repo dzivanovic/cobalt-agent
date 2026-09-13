@@ -28,15 +28,15 @@ weekly_pct_close:
 <!-- cobalt:unit seat-usage:2026-09-13 -->
 | model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
 |---|---|---:|---:|---:|---:|---:|
-| `claude-sonnet-5` | claude · mechanical, non-write only — L29 ceiling for this tier | 1,355,983 | 52,908 | 10,264 | $0.59 | — |
-| `mainframe` | qwen · local lane (L23) — delegated mundane work, token conservation | 0 | 0 | 6,739 | $0.00 [^free] | — |
+| `claude-sonnet-5` | claude · mechanical, non-write only — L29 ceiling for this tier | 3,240,165 | 144,763 | 26,400 | $1.49 | +$0.28 |
+| `mainframe` | qwen · local lane (L23) — delegated mundane work, token conservation | 0 | 0 | 6,739 | $0.00 [^free] | $0.00 |
 
-**Day total (API-equivalent):** $0.59 · **1,456,180** tokens across 2 model(s), seats: claude, qwen
-**Fresh input tokens:** 30,286 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+**Day total (API-equivalent):** $1.49 · **3,448,405** tokens across 2 model(s), seats: claude, qwen
+**Fresh input tokens:** 30,338 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
 
 [^free]: `mainframe` — the local Qwen3.8-27B MLX server on this Mac (L23's local lane). Its cost is electricity and the Mac Studio, not API spend — $0 here is the true number, not a missing one, so it never raises the hourly unpriced warning.
 
-_Generated 2026-09-13 07:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Generated 2026-09-13 09:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
 _Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20260913 --until 20260913 --by-agent --offline`_
 <!-- /cobalt:unit seat-usage:2026-09-13 -->
 <!-- /cobalt:section seat-usage:2026-09-13 -->
