@@ -201,3 +201,27 @@ the approved production migration connection. Verify the two columns are gone
 and force one beat on the restored direct invocation.
 
 DONE
+
+## LIVE 2026-09-10
+
+Executed 16:05-16:12 ET, main at 16847eb (unchanged throughout).
+
+**Guards (STEP 0):**
+- 0.2 PASS — `main...origin/main [ahead 2]`, HEAD 16847eb, dirty = `configs/cobalt/rules.yaml`, `docs/40 - DevDocs/reports/seat-usage.md` (M) + `day-open-2026-09-10.md` (??) only.
+- 0.3 PASS — `0003_heartbeat_vault_outcome` lives in `src/cobalt/db_migrations/` (DB-wide schema/table sequence 0001→0002→0003, per that dir's `__init__.py`). The live `0004` is `src/cobalt/vaultwrite/migrations/0004_vault_writes_sync_revert.sql` — a different directory, its own independent module-local numbering. No collision.
+- 0.4 — 5 largest files in HEAD: `docs/.../_inflight/heartbeat-fix-astra-r3.md` (+7593), `.../heartbeat-fix-astra-r2.md` (+4342), `tests/cobalt/test_heartbeat_runner.py` (+225), `docs/40 - DevDocs/reports/heartbeat-fix-2026-09-10.md` (+203), `src/cobalt/heartbeat/runner.py` (+201/-49). ~11.9k of ~13k insertions are the two `_inflight` delivery-snapshot drafts, not code.
+
+**STEP 1 — migrate:** `uv run cobalt db migrate --allow-prod` on `cobalt_brain` applied 0001→0003; equality proof: 13/13 tables OK, content unchanged (digest excludes `user_id`, `vault_outcome`, `vault_reason`). Forensics (`docker exec cobalt_memory psql`): `system.cobalt_jobs.vault_outcome` and `.vault_reason` both nullable `text`, check constraint on outcome values. Row: `com.cobalt.heartbeat | done | (null) | (null)` immediately post-migrate (one row — `cobalt_jobs` is a registry, one row per label, not a per-beat log). **Rollback:** `src/cobalt/db_migrations/0003_heartbeat_vault_outcome.rollback.sql` via `cobalt db migrate --rollback --allow-prod`.
+
+**STEP 2 — plist:** diffed installed vs `ops/com.cobalt.heartbeat.plist` — repo adds the F17 wrapper (`cobalt jobs run com.cobalt.heartbeat` → `cobalt heartbeat beat`). `launchctl bootout` old, `cp` new plist, `launchctl bootstrap` — no side-by-side. Proof: `launchctl print gui/501/com.cobalt.heartbeat` shows the wrapper invocation and `run interval = 900 seconds`. `RunAtLoad` fired one beat at bootstrap (`runs=1`) before the deliberate forced beat in STEP 4.
+
+**STEP 3 — registry:** `uv run cobalt jobs register` → 14 registered (unchanged count). `uv run cobalt validate` → exit 0, registry↔ops↔plist all matched, F17 line: "14 registered — 5 resident, 9 one-shot", "registry <-> ops/: 14 label(s), exact match."
+
+**STEP 4 — forced beat:** before: `green_summary_date=2026-09-09`, `vault_outcome=written` (from the RunAtLoad beat), `session_blocks` (actor `vaultwrite:heartbeat:%`) = 8, all historical 09-08/09-09 market-reset refusals. `launchctl kickstart -k gui/501/com.cobalt.heartbeat` → `runs=2`, exit 0. After: `vault_outcome=written`, `vault_reason` null, `green_summary_date=2026-09-09` (unchanged), wrapper fields on the same row (`started_at`/`finished_at`/`exit_code=0`), `heartbeat_source=self`. `session_blocks` unchanged at 8 — none added, none in today's beat window. Beat GREEN ("HEARTBEAT GREEN — 14 job(s), 12 probe(s), nothing red"), vault write succeeded (`write_id=2309`). No DM/email sent on this beat (dedup vs. the RunAtLoad beat two minutes prior, which did send) — expected, not waited on.
+  - Gap found, not fixed: `runner.py`'s per-stage `logger.info("heartbeat: stage PROBES/COMPOSE/ALERTS/PERSIST/VAULT/FINALIZE")` lines do not appear anywhere in `logs/heartbeat.log` for a healthy run — only the RED failure-path `_stage_failure` prints do (confirmed present, pre-migration, e.g. "FINALIZE/persist FAILED ... vault_outcome does not exist"). The ordered-path proof here is therefore indirect: no RED stage line + `vault_outcome=written` + exit 0, not a literal PROBES→FINALIZE trace. Logging config for the INFO-level stage lines is unverified — flagging, not chasing further under this prompt's scope.
+
+**Standing expectation for tonight:** first beat after 20:00 ET should land `vault_outcome=deferred_market_reset`, colour from probes, `session_blocks` (actor `vaultwrite:heartbeat:%`) count unchanged from tonight's post-beat baseline of 8 — verify at tomorrow's day-open.
+
+**Rollback triple:** `git revert 16847eb` (or the merge commit it names) · previous plist = the direct-invocation `com.cobalt.heartbeat.plist` (no F17 wrapper args, same env/interval) · `src/cobalt/db_migrations/0003_heartbeat_vault_outcome.rollback.sql`.
+
+RESTARTS: com.cobalt.heartbeat (done).

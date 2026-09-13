@@ -506,6 +506,46 @@ LIVE block names RESTARTS via `cobalt jobs readers` (Ops prompt 09-09 item G).
 Claude, his docx + SMB template → live Templater template) — before S3-P3.
 Stop-override authority (mock #6) — before S3-P2.
 
+
+LADDER EDITS 2026-09-10
+
+1. In the F2 Radar pool row and the S2-P1 prompt block, replace
+   "≤ `radar.pool_cap` (tunable, 50)" with:
+   "≤ the cap in the vault pool block (`kind: pool` in `1 - Trading/Radar Screens.md`,
+   50 today). Committed config carries engine tunables only — never a cap, rank rule,
+   metric choice or stickiness (ruled 09-10)."
+
+2. Replace the heading "### S2-P1 prompt — DRAFTED 2026-09-09 (architect session PART 2), NOT RUN"
+   with:
+   "### S2-P1 — BUILT 2026-09-10, IN HUB GATE; LIVE 09-11 after close"
+   and replace its first paragraph with:
+   "Screens filed 09-09. Plan FINAL 09-10 (`_inflight/plan-s2-p1-2026-09-10.md`, Astra 3 rounds,
+   dissent recorded). Houses: Opus 5 architect · GPT-6-Astra plan review · GPT-5.6-Sol build
+   (`-s workspace-write`, no DB, cannot commit) · Sonnet hub verifies and commits.
+   Worktree `~/cobalt-wt/s2-p1-radar-pool`, branch `sprint-2/radar-pool` off main.
+   Two stages: stage 1 = steps 0–13, stage 2 = the archiver moving to the Lists note.
+   LIVE 09-11 after close, including the HITL vault write (one deploy per evening, L43)."
+
+3. Add to the S2-P1 bullet list (scope that grew after the draft):
+   - Screens/Lists contract: fenced YAML per screen + one `kind: pool` block in
+     `1 - Trading/Radar Screens.md`, and `1 - Trading/Radar Lists.md` for the static lists;
+     written once via propose → HITL card → apply, then read-only with hash reload and a
+     `"user".trader_settings` mirror. Stage 2 deletes `configs/cobalt/watchlists.yaml`.
+   - `cobalt db query` — read-only, SELECT-only enforced in code, factory connection with
+     SET ROLE (no `psql` on the host).
+   - `cobalt jobs restarts <range>` — the L42 derivation tool, output pasted in every report.
+   - Account mode: standing `live` in trader_settings, per-day sim switch on the sheet
+     attestation, card refused when unresolved.
+   - Rank rules per the 09-10 pool ruling (volume premarket / RVOL after 09:30, Morning Low
+     Float always volume, Day Scan first among screens from 10:00, screens before lists,
+     stickiness 3 scans).
+
+4. In "Carried open items", the restic bullet: strike
+   "**still needs copying into a password manager off both devices**" — `RESTIC_PASSWORD` and the
+   Cobalt store master key have been in LastPass since 09-09. Replace with:
+   "Password in LastPass (09-09). OWED: the Cobalt key store into the nightly include set plus a
+   restore proof. B2 offsite still OFF — one local copy has already failed once (09-06)."
+
 ---
 
 ## S3 — Exits + DRC on radar cards (09-24 → 10-07; was 10-05 → 10-16)
