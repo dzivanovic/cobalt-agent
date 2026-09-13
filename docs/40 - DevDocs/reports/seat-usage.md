@@ -19,6 +19,29 @@ size, not as an amount owed.
 Newest day first.
 
 <!-- cobalt:days -->
+<!-- cobalt:section seat-usage:2026-09-12 -->
+### 2026-09-12
+
+weekly_pct_open:
+weekly_pct_close:
+
+<!-- cobalt:unit seat-usage:2026-09-12 -->
+| model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
+|---|---|---:|---:|---:|---:|---:|
+| `claude-sonnet-5` | claude · mechanical, non-write only — L29 ceiling for this tier | 60,591,526 | 671,469 | 258,220 | $17.39 | $0.00 |
+| `gpt-5.6-sol` | codex · — | 12,907,008 | 0 | 80,356 | $11.13 | $0.00 |
+| `claude-opus-5` | claude · write seat — L29 floor for vault/DB/migration paths | 1,660,503 | 66,054 | 17,780 | $1.94 | $0.00 |
+| `gpt-6-astra` | codex · reviewer seat — read-only role (L33) | 1,483,008 | 0 | 24,922 | **unpriced** | — |
+
+**Day total (API-equivalent):** ≥ $30.46 · **78,395,464** tokens across 4 model(s), seats: claude, codex
+**Fresh input tokens:** 634,618 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+
+> **UNPRICED MODELS: `gpt-6-astra`.** These were used today and the pinned tool's offline pricing table has no rate for them, so their cost is missing rather than zero, and the day total above is a FLOOR. Fix by bumping the pin in `configs/cobalt/seat_usage.yaml` (a decision, with a diff), never by letting the job reach the network.
+
+_Generated 2026-09-12 23:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20260912 --until 20260912 --by-agent --offline`_
+<!-- /cobalt:unit seat-usage:2026-09-12 -->
+<!-- /cobalt:section seat-usage:2026-09-12 -->
 <!-- cobalt:section seat-usage:2026-09-11 -->
 ### 2026-09-11
 
