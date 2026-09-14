@@ -12,8 +12,17 @@ def test_shipped_config_and_all_tunables_validate():
     assert cfg.export.v == 152
     assert set(values) == {
         "radar.scan_interval", "radar.poll_interval", "radar.poll_overlap_bars",
-        "radar.finviz_max_rpm", "heartbeat.radar_max_age_s", "db.query.timeout_s",
+        "radar.finviz_max_rpm", "radar.poll_bar_max_age_s", "db.query.timeout_s",
     }
+
+
+def test_staleness_key_is_split_poller_180_heartbeat_320():
+    from cobalt.taxonomy.loader import load_tunables
+
+    by_key = load_tunables().by_key
+    assert by_key["radar.poll_bar_max_age_s"].value == 180
+    assert by_key["heartbeat.radar_scan_max_age_s"].value == 320
+    assert "heartbeat.radar_max_age_s" not in by_key
 
 
 def test_extra_key_fails_naming_file(tmp_path):

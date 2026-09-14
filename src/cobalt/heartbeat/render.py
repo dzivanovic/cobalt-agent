@@ -43,6 +43,10 @@ class Beat:
         return [j for j in self.jobs if not j.ok]
 
     @property
+    def amber_jobs(self) -> list[Finding]:
+        return [j for j in self.jobs if j.ok and j.amber]
+
+    @property
     def green(self) -> bool:
         return (
             not self.red_probes
@@ -84,7 +88,7 @@ class Beat:
             icon = "🟢" if probe.ok else ("⚪" if probe.unknown else "🔴")
             lines.append(f"| {icon} | {probe.name} | {_cell(probe.detail)} |")
         for job in self.jobs:
-            icon = "🟢" if job.ok else "🔴"
+            icon = "🟡" if job.amber else ("🟢" if job.ok else "🔴")
             lines.append(f"| {icon} | `{job.label}` | {job.state} — {_cell(job.detail)} |")
         if self.vault_outcome:
             icon = "🔴" if self.vault_outcome == "failed" else "🟢"
@@ -124,6 +128,9 @@ class Beat:
             for probe in self.probes:
                 if probe.ok:
                     lines.append(f"  • {probe.name}: {probe.detail}")
+        if self.amber_jobs:
+            lines += ["", "Amber:"]
+            lines += [f"  • {job.label}: {job.detail}" for job in self.amber_jobs]
         for note in self.notes:
             lines += ["", note]
         if self.vault_outcome and self.vault_outcome.startswith("deferred_"):
@@ -131,6 +138,34 @@ class Beat:
             if self.vault_reason:
                 detail += f" — {self.vault_reason}"
             lines += ["", f"Vault unit: {detail}"]
+        if self.kill_switch:
+            lines += ["", self.kill_switch]
+        return "\n".join(lines)
+
+    def summary_body(self) -> str:
+        """The scheduled standing-state summary (ruled 2026-09-14).
+
+        Sent at every `heartbeat.summary_at` slot whether or not anything is
+        red — a missing summary is the dead-heartbeat signal. Lists every job
+        and probe currently RED or AMBER, or says "all green". The vault unit
+        is not in it: the summary goes out before this beat's vault stage.
+        """
+        lines = [f"COBALT HEARTBEAT SUMMARY · {self.at:%Y-%m-%d %H:%M %Z}", ""]
+        red = [*self.red_jobs, *self.red_probes]
+        if not red and not self.stage_failures and not self.amber_jobs:
+            lines.append(
+                f"all green — {len(self.jobs)} jobs, {len(self.probes)} probes"
+            )
+        if red or self.stage_failures:
+            lines.append("RED:")
+            for item in red:
+                name = getattr(item, "label", None) or item.name
+                lines.append(f"  • {name}: {item.detail}")
+            for failure in self.stage_failures:
+                lines.append(f"  • heartbeat stage: {failure}")
+        if self.amber_jobs:
+            lines.append("AMBER:")
+            lines += [f"  • {job.label}: {job.detail}" for job in self.amber_jobs]
         if self.kill_switch:
             lines += ["", self.kill_switch]
         return "\n".join(lines)

@@ -90,7 +90,7 @@ TUNABLE_UNITS = {
     "radar.poll_interval": TunableUnit.DURATION,
     "radar.poll_overlap_bars": TunableUnit.COUNT,
     "radar.finviz_max_rpm": TunableUnit.COUNT,
-    "heartbeat.radar_max_age_s": TunableUnit.DURATION,
+    "radar.poll_bar_max_age_s": TunableUnit.DURATION,
     "db.query.timeout_s": TunableUnit.DURATION,
 }
 

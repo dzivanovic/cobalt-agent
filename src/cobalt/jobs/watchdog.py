@@ -54,10 +54,36 @@ class Finding:
     ok: bool
     state: str
     detail: str
+    #: Not red, not green: a declared, known state that is still worth a
+    #: line (2026-09-14 — `launchd_unmanaged`). Always `ok=True`, so it
+    #: never enters the alert decision.
+    amber: bool = False
 
     def line(self) -> str:
-        mark = "OK  " if self.ok else "RED "
+        mark = "AMB " if self.amber else ("OK  " if self.ok else "RED ")
         return f"{mark} {self.label:<28} {self.state:<9} {self.detail}"
+
+
+def supervised_finding(spec: JobSpec, alive: bool, detail: str) -> Finding:
+    """The verdict on a resident someone else supervises.
+
+    `launchd_unmanaged` (jobs.yaml) turns "loaded, not running" into AMBER:
+    the process is deliberately running outside launchd, and a separate
+    process/socket probe is the authority on whether it is up.
+    """
+    if not alive and spec.launchd_unmanaged:
+        return Finding(
+            spec.label, True, "unmanaged",
+            f"AMBER launchd unmanaged — {detail} [{spec.supervisor} probe]; runs "
+            "outside launchd by declared interim (`launchd_unmanaged` in "
+            "configs/cobalt/jobs.yaml)",
+            amber=True,
+        )
+    return Finding(
+        spec.label, alive,
+        JobState.RUNNING.value if alive else JobState.FAILED.value,
+        f"{detail} [{spec.supervisor} probe]",
+    )
 
 
 def _tunable_int(key: str) -> int:
@@ -398,13 +424,7 @@ def sweep(
                 )
                 continue
             store.mark_probe(spec.label, alive=alive, detail=detail, now=ts)
-            findings.append(
-                Finding(
-                    spec.label, alive,
-                    JobState.RUNNING.value if alive else JobState.FAILED.value,
-                    f"{detail} [{spec.supervisor} probe]",
-                )
-            )
+            findings.append(supervised_finding(spec, alive, detail))
             continue
 
         # -- jobs the wrapper reports on -------------------------------

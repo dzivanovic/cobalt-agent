@@ -22,7 +22,14 @@ measured against.
   silence;
 - `supervisor: pidfile` with no `pidfile`, or a `pidfile` on any other
   supervisor (nothing would read it);
+- `launchd_unmanaged` on anything but a launchd-supervised resident —
+  nothing else has a launchd liveness probe to soften;
 - duplicate labels; a kill phrase equal to the resume phrase.
+
+## `launchd_unmanaged` (INTERIM, 2026-09-14)
+Plist loaded, process deliberately running outside launchd: the watchdog
+rates "not running" AMBER instead of RED (see `watchdog.md`). Set on
+`com.cobalt.herdr` only; removed as the last step of its launchd handover.
 
 ## The mirror problem
 launchd cannot read this file and this file cannot read launchd, so the

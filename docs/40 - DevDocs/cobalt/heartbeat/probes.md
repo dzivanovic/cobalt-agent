@@ -10,6 +10,19 @@ unknown)`.
 `archiver_freshness` · `backup_freshness` · `vaultwrite_blocks` ·
 `redactions`.
 
+## `radar` asks the session before the pool row (2026-09-14)
+Outside a scanning session (premarket, RTH, aftermarket) the probe
+returns idle or paused green before it looks for the `radar_pool` row.
+It used to return RED "no radar_pool row for primary" first, which
+painted every weekend and pre-session gap red: 64 beats in the 09-14
+triage. Same fix class as `archiver_freshness` below (b481bd5). Inside a
+session a missing row is still RED. `last_scan_at` staleness and a
+standing `poll_failures` entry are measured against
+`heartbeat.radar_scan_max_age_s` = 320 s (ruled 09-14: 3 × the 100 s
+cycle + jitter). That key is the heartbeat's alone: the poller's RTH
+bar-staleness threshold is `radar.poll_bar_max_age_s` = 180 s (split
+ruled 09-14).
+
 ## `unknown` is red, and separately marked
 A probe that could not run renders `??` rather than `RED`, so an
 operator knows they are looking at ignorance rather than at a diagnosis

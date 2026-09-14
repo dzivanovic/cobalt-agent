@@ -454,11 +454,12 @@ def _cmd_validate(args: argparse.Namespace) -> None:
         "carries a RESTARTS: line from `cobalt jobs readers`."
     )
 
-    from cobalt.heartbeat.runner import green_summary_at, interval_min
+    from cobalt.heartbeat.runner import interval_min, summary_at
 
     print(
-        f"Heartbeat (F18): every {interval_min()} min, one green summary a day at "
-        f"{green_summary_at():%H:%M} ET."
+        f"Heartbeat (F18): every {interval_min()} min, alerts on RED entry/recovery "
+        f"only, standing-state summaries at "
+        f"{', '.join(f'{slot:%H:%M}' for slot in summary_at())} ET."
     )
 
     # 2026-09-13 tree cleanup: docs/PLACEMENT.md's map, enforced. Captures,

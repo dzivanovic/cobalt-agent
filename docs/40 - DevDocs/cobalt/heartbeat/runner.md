@@ -12,12 +12,27 @@
    goes into the run report** (L28.4). It writes to the live vault every
    15 minutes, and it was the one write path here whose changes could
    not be read back;
-3. on red, `out_of_band()` — a real email since S1-P4 (2026-09-08),
-   over `cobalt.notify.email`;
-4. a DM on any red, carrying `email channel DOWN: <reason>` when step 3
-   failed; one green summary a day at `heartbeat.green_summary_at`.
-   The green summary is **DM-only** — a daily all-clear in the alert
-   inbox is how an alert inbox stops being read.
+3. on a **transition** — something entered RED or recovered since the
+   prior beat — `out_of_band()`, a real email since S1-P4 (2026-09-08),
+   over `cobalt.notify.email`. An unchanged RED is silent (ruled
+   2026-09-14, option B);
+4. a DM for the same transition, carrying `email channel DOWN: <reason>`
+   when step 3 failed; plus a standing-state summary at every
+   `heartbeat.summary_at` slot (07:00, 16:30 ET), sent **whether or not
+   anything is red** — a missing summary is the dead-heartbeat signal.
+   The summary is **DM-only**.
+
+## The transition decision
+`PriorBeat.from_row()` reads the previous beat's `red_jobs`, `red_probes`
+and early-stage failures from the job row **before** PERSIST overwrites
+it; `alert_keys()` names this beat's reds; `transitions()` returns
+(entered, recovered). No migration: `last_result` already carried the
+red sets. An unreadable prior fails toward alerting — every standing red
+counts as entered once. The vault unit is decided after ALERTS, so its
+transition is compared in FINALIZE against the prior `vault_outcome`.
+The beat row, the note and the table keep the full standing state; only
+the decision to send changed. `summary_due()` picks the latest passed
+slot not yet sent today, deduped in `last_result.summary_sent`.
 
 ## Why the second channel goes FIRST
 The DM's body is rendered from `beat.notes`, so the email outcome has to
@@ -52,7 +67,7 @@ intervals; see `jobs/watchdog.md`).
 
 ## Tunables it reads (F16)
 `heartbeat.interval_min` — also the plist's `StartInterval` mirror,
-compared by `cobalt validate`; `heartbeat.green_summary_at`. The email
+compared by `cobalt validate`; `heartbeat.summary_at`. The email
 path adds `notify.email.timeout_s` (see `notify/email.md`).
 
 ## Not a resident process

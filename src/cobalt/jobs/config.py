@@ -259,6 +259,13 @@ class JobSpec(BaseModel):
     #: exemption requires a code review, not one permissive YAML line.
     kill_switch_exempt: bool = False
 
+    #: INTERIM (2026-09-14): the plist is loaded but the process runs
+    #: outside launchd on purpose, so "loaded, not running" rates AMBER
+    #: "launchd unmanaged", never RED. A separate process/socket probe
+    #: stays the authority on liveness. Launchd-supervised residents only;
+    #: removed at the job's launchd handover.
+    launchd_unmanaged: bool = False
+
     #: Repo-relative config files this RESIDENT RE-READS AT RUNTIME.
     #:
     #: THE LAW THIS SERVES, ruled three times (2026-09-04, 2026-09-08 on
@@ -300,6 +307,13 @@ class JobSpec(BaseModel):
             raise ValueError(
                 f"{self.label}: `kill_switch_exempt` is reserved for "
                 f"{HEARTBEAT_LABEL}; the stop must still stop every other job"
+            )
+        if self.launchd_unmanaged and (
+            self.supervisor is not Supervisor.LAUNCHD or self.kind is not JobKind.RESIDENT
+        ):
+            raise ValueError(
+                f"{self.label}: `launchd_unmanaged` is for a launchd-supervised "
+                "RESIDENT only — nothing else has a launchd liveness probe to soften"
             )
         if self.kind is JobKind.ONE_SHOT and self.reads:
             raise ValueError(

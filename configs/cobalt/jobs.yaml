@@ -138,6 +138,12 @@ jobs:
     # would register it — bootstrapping it from inside a herdr pane takes
     # that pane down mid-command.
     enabled: true
+    # INTERIM until the launchd handover above is done (ruled 2026-09-14,
+    # option B): herdr is hand-started outside launchd, so the launchd
+    # probe's "loaded, not running" rates AMBER "launchd unmanaged", never
+    # RED. The `herdr` process/socket probe stays authoritative for
+    # liveness. Remove this line as part of the handover.
+    launchd_unmanaged: true
     # `launchd`, not `self`: herdr is not Cobalt code and will never
     # carry our wrapper. The watchdog probes launchctl and stamps on its
     # behalf, and the row says so, so nothing reads "the process exists"

@@ -79,17 +79,21 @@ def radar(
         return Probe("radar", True, "NOT PROBED — registry enabled: false")
     pool_store = pool_store or RadarStore()
     settings_store = settings_store or TraderSettingsStore()
-    row = pool_store.pool_row("primary")
-    if row is None:
-        return Probe("radar", False, "no radar_pool row for primary")
+    # SESSION FIRST, row second (2026-09-14, same fix class as b481bd5's
+    # archiver_freshness): outside a scanning session there is nothing to
+    # have scanned, so a missing pool row over a weekend or before the
+    # premarket is idle, not RED. Inside a session it still is RED.
     resolved_clock = clock or session_clock()
     session = resolved_clock.session(now)
     if session is Session.MARKET_RESET:
         return Probe("radar", True, "paused (market_reset)")
     if session not in {Session.PREMARKET, Session.RTH, Session.AFTERMARKET}:
         return Probe("radar", True, f"idle ({session.value})")
+    row = pool_store.pool_row("primary")
+    if row is None:
+        return Probe("radar", False, "no radar_pool row for primary")
 
-    max_age = timedelta(seconds=float(_tunable("heartbeat.radar_max_age_s")))
+    max_age = timedelta(seconds=float(_tunable("heartbeat.radar_scan_max_age_s")))
     findings: list[str] = []
     last_scan = row.get("last_scan_at")
     if last_scan is None or now - last_scan > max_age:

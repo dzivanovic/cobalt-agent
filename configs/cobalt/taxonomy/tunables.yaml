@@ -350,14 +350,18 @@ tunables:
                 "com.cobalt.heartbeat (job schedule, jobs.yaml)",
                 "F18 'red within one interval' — this IS the interval"]
 
-  - key: heartbeat.green_summary_at
-    value: "17:30"
+  # Ruled 2026-09-14 (option B), replacing `heartbeat.green_summary_at`
+  # (17:30, green-only): alerts fire on RED entry/recovery only, and a
+  # standing-state summary DM goes out at each slot WHETHER OR NOT anything
+  # is red — a missing summary is the dead-heartbeat signal. ET wall clock.
+  - key: heartbeat.summary_at
+    value: ["07:00", "16:30"]
     unit: time
     scope: global
     dynamic: false
     status: solidified
     source: ruling
-    consumers: ["cobalt.heartbeat (the one green DM per day)"]
+    consumers: ["cobalt.heartbeat.runner.summary_at (standing-state summary slots)"]
 
   - key: heartbeat.backup_max_age_min
     value: 1560
@@ -433,14 +437,25 @@ tunables:
     source: ruling
     consumers: ["S2-P1 throttle report (hub-measured half-rate, 2026-09-10: 4 grids clean to 60 rpm, half-rate 30 held)", "cobalt.radar.collector.TokenBucket"]
 
-  - key: heartbeat.radar_max_age_s
+  # 320 ruled 2026-09-14 (Dejan, key split from the shared radar_max_age_s): heartbeat only.
+  - key: heartbeat.radar_scan_max_age_s
+    value: 320
+    unit: duration
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.heartbeat.probes.radar (last_scan_at stale; poll_failures standing = red)"]
+
+  # 180 kept, ruled 2026-09-14 (Dejan, key split from the shared radar_max_age_s): poller RTH bar staleness only.
+  - key: radar.poll_bar_max_age_s
     value: 180
     unit: duration
     scope: global
     dynamic: false
     status: solidified
     source: ruling
-    consumers: ["cobalt.heartbeat.probes.radar", "cobalt.radar.poller stale detection"]
+    consumers: ["cobalt.radar.poller (RTH stale-bar poll_failures entry)"]
 
   - key: db.query.timeout_s
     value: 30

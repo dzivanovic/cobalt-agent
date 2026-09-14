@@ -1,6 +1,7 @@
 """Regression tests for heartbeat staging and daily-note absence."""
 
-from datetime import datetime
+import re
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -75,7 +76,11 @@ def install_healthy_stages(monkeypatch, store, *, alerts, writes, patch_write=Tr
             at=now.astimezone(ET), probes=[Probe("test", True, "healthy")]
         ),
     )
-    monkeypatch.setattr(runner, "should_send_green", lambda beat, store: True)
+    monkeypatch.setattr(
+        runner,
+        "send_summary",
+        lambda beat: alerts.append(("summary", beat.summary_body())) or "DM sent",
+    )
     monkeypatch.setattr(
         runner,
         "send_dm",
@@ -135,7 +140,8 @@ def test_market_reset_alerts_persists_and_never_attempts_a_vault_write(monkeypat
 
     beat = runner.run_beat(now=et(3, 20, 0))
 
-    assert [name for name, _body in alerts] == ["dm"]
+    # All green and nothing changed: no alert, only the 16:30 slot's summary.
+    assert [name for name, _body in alerts] == ["summary"]
     assert writes == []
     assert session_blocks == [], "no vault writer means no vaultwrite:heartbeat:* refusal"
     assert store.row["vault_outcome"] == runner.VAULT_DEFERRED
@@ -277,7 +283,7 @@ def test_deferred_absence_does_not_mask_an_unrelated_red_probe(monkeypatch, tmp_
             at=now.astimezone(ET), probes=[Probe("database", False, "down")]
         ),
     )
-    monkeypatch.setattr(runner, "should_send_green", lambda *_a: False)
+    monkeypatch.setattr(runner, "send_summary", lambda *_a: pytest.fail("05:14 is before every slot"))
     monkeypatch.setattr(
         runner,
         "send_dm",
@@ -460,6 +466,298 @@ def test_vault_session_boundaries_and_holiday(monkeypatch, at, expected, attempt
 
     assert outcome == expected
     assert len(writes) == attempts
+
+
+# ---------------------------------------------------------------------
+# 09-14 ruling (option B): transition-only alerting
+# ---------------------------------------------------------------------
+
+
+def _sequenced_beats(monkeypatch, store, sequence, alerts):
+    """Drive run_beat once per state; `sequence` is "RED"/"GREEN" per beat."""
+    monkeypatch.setattr(runner, "JobStore", lambda: store)
+    states = iter(sequence)
+
+    def beat(*, now, probe):
+        ok = next(states) == "GREEN"
+        return Beat(at=now.astimezone(ET), probes=[Probe("database", ok, "state")])
+
+    monkeypatch.setattr(runner, "take_beat", beat)
+    monkeypatch.setattr(
+        runner, "send_dm", lambda b: alerts.append(("dm", b.dm_body())) or "DM sent"
+    )
+    monkeypatch.setattr(
+        runner,
+        "send_summary",
+        lambda b: alerts.append(("summary", b.summary_body())) or "DM sent",
+    )
+    monkeypatch.setattr(
+        runner,
+        "out_of_band",
+        lambda b: alerts.append(("out_of_band", b.dm_body())) or "email sent",
+    )
+    monkeypatch.setattr(
+        runner,
+        "write_note_block",
+        lambda *_a, **_k: SimpleNamespace(write_id=1, report=lambda: "write_id=1"),
+    )
+
+
+def test_transition_oracle_red_red_red_green_green_alerts_exactly_twice(monkeypatch):
+    store, alerts = FakeStore(), []
+    # 10:xx ET is past the 07:00 slot; mark it sent so only transitions count.
+    store.row["last_result"]["summary_sent"] = {"07:00": "2026-09-15"}
+    sequence = ["RED", "RED", "RED", "GREEN", "GREEN"]
+    _sequenced_beats(monkeypatch, store, sequence, alerts)
+
+    for i in range(len(sequence)):
+        runner.run_beat(now=et(15, 10 + i, 0))
+
+    assert [name for name, _ in alerts].count("out_of_band") == 2
+    assert [name for name, _ in alerts].count("dm") == 2
+    bodies = [body for name, body in alerts if name == "dm"]
+    assert "ENTERED RED: database" in bodies[0]
+    assert "RECOVERED: database" in bodies[1]
+
+
+def test_known_idle_radar_weekend_without_pool_row_is_green():
+    from cobalt.heartbeat.probes import radar
+
+    class Pool:
+        def pool_row(self, _name):
+            return None
+
+    class Settings:
+        def values(self):
+            return {}
+
+    saturday = et(12, 10, 0)  # 2026-09-12 is a Saturday
+    result = radar(saturday, enabled=True, pool_store=Pool(), settings_store=Settings())
+    assert result.ok, result.detail
+    assert "idle" in result.detail
+
+
+class _Pool:
+    def __init__(self, row):
+        self.row = row
+
+    def pool_row(self, _name):
+        return self.row
+
+
+class _Settings:
+    def values(self):
+        return {}
+
+
+def _scanning_row(last_scan_at):
+    return {"last_scan_at": last_scan_at, "degraded": False, "degraded_sources": [],
+            "failed_stage": None, "failed_detail": None, "poll_failures": [], "members": 50}
+
+
+def test_182s_scan_gap_is_green_at_the_ruled_320s_threshold():
+    from cobalt.heartbeat.probes import radar
+
+    beat_at = datetime(2026, 9, 14, 7, 22, 27, tzinfo=ET)  # the 09-14 named event
+    green = radar(beat_at, enabled=True, pool_store=_Pool(_scanning_row(beat_at - timedelta(seconds=182))),
+                  settings_store=_Settings())
+    stale = radar(beat_at, enabled=True, pool_store=_Pool(_scanning_row(beat_at - timedelta(seconds=321))),
+                  settings_store=_Settings())
+    assert green.ok, green.detail
+    assert not stale.ok and "last_scan_at stale" in stale.detail
+
+
+def test_summary_fires_at_the_ruled_slots_and_only_then():
+    assert runner.summary_at() == [time(7, 0), time(16, 30)]
+    sent, fired = {}, []
+    start = datetime(2026, 9, 14, 0, 0, tzinfo=ET)
+    for i in range(2 * 96):  # two days of 15-minute beats
+        at = start + timedelta(minutes=15 * i)
+        slot = runner.summary_due(at, sent, runner.summary_at())
+        if slot:
+            fired.append(at)
+            sent = {**sent, slot: at.date().isoformat()}
+    assert [f"{at:%m-%d %H:%M}" for at in fired] == [
+        "09-14 07:00", "09-14 16:30", "09-15 07:00", "09-15 16:30",
+    ]
+
+
+def test_summary_goes_out_on_a_standing_red_without_a_transition_alert(monkeypatch):
+    store, alerts = FakeStore(), []
+    store.row["last_result"].update(red_probes=["database"], summary_sent={"07:00": "2026-09-14"})
+    _sequenced_beats(monkeypatch, store, ["RED"], alerts)
+
+    runner.run_beat(now=et(14, 16, 30))
+
+    assert [name for name, _ in alerts] == ["summary"]
+    assert "RED:" in alerts[0][1] and "database" in alerts[0][1]
+    assert store.row["last_result"]["summary_sent"] == {"07:00": "2026-09-14", "16:30": "2026-09-14"}
+
+
+def test_herdr_launchd_probe_is_amber_never_red_and_process_probe_is_untouched():
+    from cobalt.jobs.config import load_job_registry
+    from cobalt.jobs.watchdog import supervised_finding
+
+    spec = load_job_registry().spec("com.cobalt.herdr")
+    assert spec.launchd_unmanaged
+    down = supervised_finding(spec, False, "loaded, not running (last exit 0)")
+    up = supervised_finding(spec, True, "loaded, pid 1")
+    assert down.ok and down.amber and "launchd unmanaged" in down.detail
+    assert up.ok and not up.amber
+    beat = Beat(at=et(14, 8, 0), jobs=[down])
+    assert beat.green and beat.red_jobs == [] and beat.amber_jobs == [down]
+    assert "AMBER:" in beat.summary_body() and "com.cobalt.herdr" in beat.summary_body()
+
+
+def test_launchd_unmanaged_is_refused_off_a_launchd_resident():
+    from pydantic import ValidationError
+
+    from cobalt.jobs.config import JobSpec
+
+    with pytest.raises(ValidationError, match="launchd_unmanaged"):
+        JobSpec(label="x", kind="resident", supervisor="self", timeout_s=1, what="x",
+                launchd_unmanaged=True)
+
+
+# --- (e) REPLAY ORACLE over the real production log -------------------
+# Read-only. The window is pinned to the triage's own (alerts-triage-
+# 2026-09-14.md §3/§4): 48 h ending 2026-09-14 08:00 ET, which holds the
+# whole 09-12 08:00–12:16 vault episode. Pinned, so the log growing does
+# not move the numbers; skipped where the log is absent (a fresh clone).
+
+HEARTBEAT_LOG = Path.home() / "cobalt" / "logs" / "heartbeat.log"
+REPLAY_END = datetime(2026, 9, 14, 8, 0, tzinfo=ET)
+REPLAY_START = REPLAY_END - timedelta(hours=48)
+_HEADER = re.compile(r"^HEARTBEAT .+  \((\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) E[DS]T\)$")
+_SEND = ("Email sent", "DM sent", "email channel DOWN", "email channel OFF", "Mattermost DM FAILED")
+
+
+def _parse_log(text):
+    beats, cur = [], None
+    for line in text.splitlines():
+        header = _HEADER.match(line)
+        if header:
+            at = datetime.strptime(header.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=ET)
+            cur = {"at": at, "jobs": [], "probes": [], "sends": 0}
+            beats.append(cur)
+        elif cur is None:
+            continue
+        elif line.startswith(("RED  ", "??   ")):
+            body = line[5:]
+            if body.startswith("com.cobalt."):
+                cur["jobs"].append((body[:28].strip(), body[29:38].strip(), body[39:]))
+            else:
+                cur["probes"].append((body[:24].strip(), body[25:]))
+        elif line.startswith(_SEND):
+            cur["sends"] += 1
+    return beats
+
+
+def _rerate(beat):
+    """One logged beat under TODAY's code: (red keys, vault failed)."""
+    from cobalt.heartbeat.probes import radar
+    from cobalt.jobs.config import load_job_registry
+    from cobalt.jobs.watchdog import supervised_finding
+
+    registry, keys, vault_failed = load_job_registry(), set(), False
+    for label, state, detail in beat["jobs"]:
+        if state == "failed" and detail.endswith(" [launchd probe]"):
+            core = detail.removesuffix(" [launchd probe]")
+            if supervised_finding(registry.spec(label), False, core).ok:
+                continue
+        keys.add(label)
+    for name, detail in beat["probes"]:
+        if name == "vault unit":
+            vault_failed = True
+            continue
+        if name == "heartbeat stage":
+            key = runner._stage_key(detail)
+            if key:
+                keys.add(key)
+            continue
+        if name == "radar":
+            stale = re.fullmatch(r"last_scan_at stale \((.+)\)", detail)
+            if detail == "no radar_pool row for primary":
+                row = None
+            elif stale and stale.group(1) != "None":
+                row = _scanning_row(datetime.fromisoformat(stale.group(1)))
+            else:
+                keys.add(name)
+                continue
+            if radar(beat["at"], enabled=True, pool_store=_Pool(row), settings_store=_Settings()).ok:
+                continue
+        keys.add(name)
+    return keys, vault_failed
+
+
+def replay(beats, start=REPLAY_START, end=REPLAY_END):
+    """Feed logged beats through the runner's decision functions."""
+    inside = [b for b in beats if start <= b["at"] < end]
+    before = [b for b in beats if b["at"] < start]
+    prior_keys, prior_vault = _rerate(before[-1]) if before else (set(), False)
+    slots, sent = runner.summary_at(), {}
+    # Prime the summary dedup from the start day's earlier beats, as the job
+    # row would have been — otherwise a cold replay "sends" 07:00 at 08:00.
+    for beat in before:
+        if beat["at"].date() == start.date():
+            slot = runner.summary_due(beat["at"], sent, slots)
+            if slot:
+                sent = {**sent, slot: beat["at"].date().isoformat()}
+    events = []
+    for beat in inside:
+        keys, vault_failed = _rerate(beat)
+        entered, recovered = runner.transitions(prior_keys, keys)
+        if entered or recovered:
+            events.append((beat["at"], runner.transition_note(entered, recovered)))
+        if vault_failed != prior_vault:
+            events.append((beat["at"], runner.transition_note(
+                {runner.VAULT_KEY} if vault_failed else set(),
+                set() if vault_failed else {runner.VAULT_KEY})))
+        slot = runner.summary_due(beat["at"], sent, slots)
+        if slot:
+            sent = {**sent, slot: beat["at"].date().isoformat()}
+            events.append((beat["at"], f"SUMMARY {slot}"))
+        prior_keys, prior_vault = keys, vault_failed
+    return inside, events
+
+
+@pytest.mark.skipif(not HEARTBEAT_LOG.exists(), reason="production heartbeat.log not on this host")
+def test_replay_oracle_collapses_the_last_48h_of_real_beats():
+    beats = _parse_log(HEARTBEAT_LOG.read_text(errors="replace"))
+    if not beats or beats[0]["at"] >= REPLAY_START:
+        pytest.skip("heartbeat.log no longer covers the pinned replay window")
+    inside, events = replay(beats)
+    day = REPLAY_END - timedelta(hours=24)
+    last_24h = [b for b in inside if b["at"] >= day]
+
+    def messages(since):  # a transition = email + DM; a summary = one DM
+        return sum(1 if note.startswith("SUMMARY") else 2 for at, note in events if at >= since)
+
+    # BEFORE (as logged): every beat red; both channels on every beat, plus
+    # the vault's corrective email on each failed beat.
+    assert len(inside) == 192 and all(b["jobs"] or b["probes"] for b in inside)
+    assert sum(b["sends"] for b in last_24h) == 192
+    assert sum(b["sends"] for b in inside) == 402
+
+    # AFTER: herdr and radar never transition; the window holds the vault
+    # episode's recovery, and otherwise only the two ruled summaries a day.
+    alerts = [(f"{at:%m-%d %H:%M}", note) for at, note in events if not note.startswith("SUMMARY")]
+    summaries = [(f"{at:%m-%d %H:%M}", note) for at, note in events if note.startswith("SUMMARY")]
+    assert alerts == [("09-12 12:24", "RECOVERED: vault unit")]
+    assert summaries == [
+        ("09-12 16:40", "SUMMARY 16:30"), ("09-13 07:14", "SUMMARY 07:00"),
+        ("09-13 16:32", "SUMMARY 16:30"), ("09-14 07:07", "SUMMARY 07:00"),
+    ]
+    assert messages(REPLAY_START) == 6
+    assert messages(day) == 2
+
+    # The whole 09-12 vault episode began before the window (00:12, not the
+    # 08:00 the triage saw from its window edge): exactly two transitions.
+    _, episode = replay(beats, datetime(2026, 9, 12, 0, 0, tzinfo=ET),
+                        datetime(2026, 9, 12, 13, 0, tzinfo=ET))
+    assert [(f"{at:%H:%M}", note) for at, note in episode if not note.startswith("SUMMARY")] == [
+        ("00:12", "ENTERED RED: vault unit"), ("12:24", "RECOVERED: vault unit"),
+    ]
 
 
 def test_deferred_never_masks_an_unrelated_red_and_failed_is_red():

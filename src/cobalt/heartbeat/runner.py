@@ -7,13 +7,16 @@ WHAT ONE BEAT DOES, in order:
 1. probes everything (`probes.py`) and sweeps every job row
    (`jobs.watchdog`);
 2. composes the beat, including the kill-switch state;
-3. on red, sends the SECOND channel first (email, over Layer-B Google
-   OAuth — `out_of_band` below), so that its outcome can appear in the
-   DM;
-4. DMs on any red — carrying "email channel DOWN: <reason>" when the
-   second channel failed — plus one green summary a day at
-   `heartbeat.green_summary_at`. The GREEN summary is DM-only: a daily
-   all-clear in the alert inbox is how an alert inbox stops being read.
+3. on a TRANSITION — something entered RED or recovered since the prior
+   beat (ruled 2026-09-14, option B) — sends the SECOND channel first
+   (email, over Layer-B Google OAuth — `out_of_band` below), so that its
+   outcome can appear in the DM. A RED that is unchanged is silent;
+4. DMs the same transition — carrying "email channel DOWN: <reason>" when
+   the second channel failed — plus a standing-state summary at every
+   `heartbeat.summary_at` slot, sent whether or not anything is red (a
+   missing summary is the dead-heartbeat signal). The summary is DM-only:
+   a scheduled digest in the alert inbox is how an alert inbox stops being
+   read.
 5. persists the beat independently of alert delivery;
 6. writes the daily-note unit, unless the session clock says
    `market_reset`;
@@ -38,6 +41,7 @@ useless.
 from __future__ import annotations
 
 import stat
+from dataclasses import dataclass, field
 from datetime import datetime, time
 from pathlib import Path
 from typing import Optional
@@ -57,7 +61,12 @@ from .render import SECTION, UNIT, WRITER, Beat
 
 JOB_LABEL = "com.cobalt.heartbeat"
 INTERVAL_KEY = "heartbeat.interval_min"
-GREEN_SUMMARY_KEY = "heartbeat.green_summary_at"
+SUMMARY_KEY = "heartbeat.summary_at"
+#: The key a failed vault unit takes in a transition note.
+VAULT_KEY = "vault unit"
+#: Stages that run BEFORE the alert decision. Only their failures are known
+#: in time to take part in it; later stages are persisted, not compared.
+EARLY_STAGES = ("probes", "compose")
 VAULT_WRITTEN = "written"
 VAULT_DEFERRED = "deferred_market_reset"
 VAULT_DEFERRED_NOTE_ABSENT = "deferred_note_absent"
@@ -86,14 +95,27 @@ def interval_min() -> int:
     return int(row.value)
 
 
-def green_summary_at() -> time:
+def summary_at() -> list[time]:
+    """The ruled summary slots, ascending. A malformed row crashes (L1)."""
     from cobalt.taxonomy.loader import load_tunables
 
-    row = load_tunables().by_key.get(GREEN_SUMMARY_KEY)
+    row = load_tunables().by_key.get(SUMMARY_KEY)
     if row is None:
-        raise RuntimeError(f"tunable {GREEN_SUMMARY_KEY!r} is missing from tunables.yaml (F16).")
-    hh, _, mm = str(row.value).partition(":")
-    return time(int(hh), int(mm))
+        raise RuntimeError(f"tunable {SUMMARY_KEY!r} is missing from tunables.yaml (F16).")
+    if not isinstance(row.value, list) or not row.value:
+        raise RuntimeError(
+            f"tunable {SUMMARY_KEY!r} must be a non-empty list of ET \"HH:MM\" slots, "
+            f"got {row.value!r}"
+        )
+    slots = []
+    for value in row.value:
+        hh, sep, mm = str(value).partition(":")
+        if not sep:
+            raise RuntimeError(f"tunable {SUMMARY_KEY!r}: {value!r} is not \"HH:MM\"")
+        slots.append(time(int(hh), int(mm)))
+    if slots != sorted(set(slots)):
+        raise RuntimeError(f"tunable {SUMMARY_KEY!r}: slots must be ascending and unique")
+    return slots
 
 
 # ---------------------------------------------------------------------
@@ -197,26 +219,93 @@ def write_note_block(
 # ---------------------------------------------------------------------
 
 
-def should_send_green(beat: Beat, store: JobStore) -> bool:
-    """One green summary a day, at `heartbeat.green_summary_at`.
+def _stage_key(reason: str) -> Optional[str]:
+    """`"probes FAILED (...)"` -> `"stage probes"`; None for a late stage."""
+    stage = reason.partition(" FAILED")[0]
+    return f"stage {stage}" if stage in EARLY_STAGES else None
 
-    "Have we already sent today's?" is answered from the JOB ROW's own
-    `last_result` rather than from a new table — the heartbeat is the
-    only writer of that row, and a second table to remember one boolean a
-    day is a table to migrate later for nothing.
+
+@dataclass(frozen=True)
+class PriorBeat:
+    """What the previous beat left in the job row, read BEFORE this beat
+    overwrites it. No new table: `last_result` already carries the red sets,
+    exactly as the old green-summary dedup already read its date from it."""
+
+    red: frozenset[str] = frozenset()
+    vault_failed: bool = False
+    summary_sent: dict = field(default_factory=dict)
+
+    @classmethod
+    def from_row(cls, row: Optional[dict]) -> "PriorBeat":
+        row = row or {}
+        last = row.get("last_result") or {}
+        red = set(last.get("red_jobs") or []) | set(last.get("red_probes") or [])
+        red |= {k for k in map(_stage_key, last.get("stage_failures") or []) if k}
+        return cls(
+            red=frozenset(red),
+            vault_failed=row.get("vault_outcome") == VAULT_FAILED,
+            summary_sent=dict(last.get("summary_sent") or {}),
+        )
+
+
+def alert_keys(beat: Beat) -> set[str]:
+    """Everything in this beat that is RED at alert time, by stable name."""
+    keys = {j.label for j in beat.red_jobs} | {p.name for p in beat.red_probes}
+    keys |= {k for k in map(_stage_key, beat.stage_failures) if k}
+    return keys
+
+
+def transitions(prior: set[str], current: set[str]) -> tuple[set[str], set[str]]:
+    """(entered RED, recovered). Both empty = unchanged = silent."""
+    return set(current) - set(prior), set(prior) - set(current)
+
+
+def transition_note(entered: set[str], recovered: set[str]) -> str:
+    parts = []
+    if entered:
+        parts.append("ENTERED RED: " + ", ".join(sorted(entered)))
+    if recovered:
+        parts.append("RECOVERED: " + ", ".join(sorted(recovered)))
+    return " · ".join(parts)
+
+
+def summary_due(at: datetime, sent: dict, slots: list[time]) -> Optional[str]:
+    """The slot to summarise now, or None.
+
+    The latest slot at or before `at` (ET) that has not been sent today.
+    Only the latest: a beat that was dead at 07:00 does not send a stale
+    07:00 summary at 16:45 — it sends 16:30's.
     """
-    if beat.at.time() < green_summary_at():
-        return False
-    row = store.get(JOB_LABEL) or {}
-    last = (row.get("last_result") or {}).get("green_summary_date")
-    return last != beat.at.date().isoformat()
+    passed = [slot for slot in slots if slot <= at.time()]
+    if not passed:
+        return None
+    slot = f"{passed[-1]:%H:%M}"
+    return None if sent.get(slot) == at.date().isoformat() else slot
+
+
+def _read_prior(beat: Beat, store: JobStore) -> PriorBeat:
+    try:
+        return PriorBeat.from_row(store.get(JOB_LABEL))
+    except Exception as e:  # noqa: BLE001
+        # Fail toward alerting: an unreadable prior makes every standing
+        # red a transition once, never a silent beat.
+        _stage_failure(beat, "alerts/prior-read", e)
+        return PriorBeat()
+
+
+def send_summary(beat: Beat) -> str:
+    return _send_text(beat.summary_body())
 
 
 def send_dm(beat: Beat) -> str:
+    return _send_text(beat.dm_body())
+
+
+def _send_text(text: str) -> str:
     from cobalt.notify import MattermostError, send_dm as _send
 
     try:
-        result = _send(beat.dm_body())
+        result = _send(text)
     except MattermostError as e:
         # The alert path failing is itself worth saying, in the note and
         # in the log — it is the one failure the DM cannot report.
@@ -319,32 +408,42 @@ def _attempt_alert(beat: Beat, name: str, sender) -> None:
         _stage_failure(beat, f"alerts/{name}", e)
 
 
-def _run_alerts(beat: Beat, store: JobStore, *, dry_run: bool) -> bool:
+def _run_alerts(
+    beat: Beat, store: JobStore, prior: PriorBeat, *, dry_run: bool
+) -> Optional[dict]:
+    """Transition alert, then the scheduled summary.
+
+    Returns the updated `summary_sent` map when a summary went out, else
+    None. The beat itself keeps the full standing state either way — only
+    the decision to SEND changes.
+    """
     if dry_run:
         beat.notes.append("DRY RUN — no DM sent, nothing written.")
-        return False
+        return None
 
-    if beat.green:
-        try:
-            send_green = should_send_green(beat, store)
-        except Exception as e:  # noqa: BLE001
-            _stage_failure(beat, "alerts/green-dedup", e)
-            send_green = False
-        if send_green:
-            before = len(beat.stage_failures)
-            _attempt_alert(beat, "green-dm", send_dm)
-            if len(beat.stage_failures) == before:
-                return True
-
-    if not beat.green:
+    entered, recovered = transitions(prior.red, alert_keys(beat))
+    if entered or recovered:
+        beat.notes.append(transition_note(entered, recovered))
         # OUT-OF-BAND FIRST. Its result is included in the primary DM, and
         # an unexpected exception in either channel cannot suppress the other.
         _attempt_alert(beat, "out-of-band", out_of_band)
-        _attempt_alert(beat, "red-dm", send_dm)
-    return False
+        _attempt_alert(beat, "transition-dm", send_dm)
+
+    try:
+        slot = summary_due(beat.at, prior.summary_sent, summary_at())
+    except Exception as e:  # noqa: BLE001
+        _stage_failure(beat, "alerts/summary-dedup", e)
+        slot = None
+    if slot is None:
+        return None
+    before = len(beat.stage_failures)
+    _attempt_alert(beat, "summary-dm", send_summary)
+    if len(beat.stage_failures) != before:
+        return None
+    return {**prior.summary_sent, slot: beat.at.date().isoformat()}
 
 
-def _beat_result(beat: Beat, *, sent_green: bool) -> dict:
+def _beat_result(beat: Beat, *, sent_summary: Optional[dict]) -> dict:
     result = {
         "green": beat.green,
         "red_jobs": [j.label for j in beat.red_jobs],
@@ -353,17 +452,17 @@ def _beat_result(beat: Beat, *, sent_green: bool) -> dict:
         "kill_switch": beat.kill_switch,
     }
     # Omission preserves the prior dedup value through JobStore's JSON merge.
-    if sent_green:
-        result["green_summary_date"] = beat.at.date().isoformat()
+    if sent_summary:
+        result["summary_sent"] = sent_summary
     return result
 
 
-def _persist_beat(beat: Beat, store: JobStore, *, sent_green: bool) -> None:
+def _persist_beat(beat: Beat, store: JobStore, *, sent_summary: Optional[dict]) -> None:
     store.ensure_schema()
     store.register(load_job_registry().spec(JOB_LABEL))
     store.record_heartbeat_result(
         JOB_LABEL,
-        result=_beat_result(beat, sent_green=sent_green),
+        result=_beat_result(beat, sent_summary=sent_summary),
         vault_outcome=None,
         vault_reason=None,
     )
@@ -412,8 +511,9 @@ def _run_vault_stage(
 def _finalize(
     beat: Beat,
     store: JobStore,
+    prior: PriorBeat,
     *,
-    sent_green: bool,
+    sent_summary: Optional[dict],
     dry_run: bool,
 ) -> None:
     if dry_run:
@@ -424,15 +524,22 @@ def _finalize(
     try:
         store.record_heartbeat_result(
             JOB_LABEL,
-            result=_beat_result(beat, sent_green=sent_green),
+            result=_beat_result(beat, sent_summary=sent_summary),
             vault_outcome=beat.vault_outcome,
             vault_reason=beat.vault_reason,
         )
     except Exception as e:  # noqa: BLE001
         _stage_failure(beat, "FINALIZE/persist", e)
 
-    if beat.vault_outcome == VAULT_FAILED:
+    # The vault unit is decided after ALERTS, so its transition is decided
+    # here, against the prior beat's persisted `vault_outcome`.
+    failed = beat.vault_outcome == VAULT_FAILED
+    if failed != prior.vault_failed:
+        beat.notes.append(
+            transition_note({VAULT_KEY}, set()) if failed else transition_note(set(), {VAULT_KEY})
+        )
         _attempt_alert(beat, "corrective-out-of-band", out_of_band)
+        _attempt_alert(beat, "corrective-dm", send_dm)
 
 
 def run_beat(*, now: Optional[datetime] = None, dry_run: bool = False, probe: bool = True) -> Beat:
@@ -454,16 +561,21 @@ def run_beat(*, now: Optional[datetime] = None, dry_run: bool = False, probe: bo
         _stage_failure(beat, "compose", e)
 
     logger.info("heartbeat: stage ALERTS")
+    # Read BEFORE PERSIST overwrites the row: the transition is this beat
+    # against the one before it.
+    prior = PriorBeat()
     try:
-        sent_green = _run_alerts(beat, store, dry_run=dry_run)
+        if not dry_run:
+            prior = _read_prior(beat, store)
+        sent_summary = _run_alerts(beat, store, prior, dry_run=dry_run)
     except Exception as e:  # noqa: BLE001
-        sent_green = False
+        sent_summary = None
         _stage_failure(beat, "alerts", e)
 
     logger.info("heartbeat: stage PERSIST")
     if not dry_run:
         try:
-            _persist_beat(beat, store, sent_green=sent_green)
+            _persist_beat(beat, store, sent_summary=sent_summary)
         except Exception as e:  # noqa: BLE001
             _stage_failure(beat, "persist", e)
 
@@ -484,7 +596,7 @@ def run_beat(*, now: Optional[datetime] = None, dry_run: bool = False, probe: bo
 
     logger.info("heartbeat: stage FINALIZE")
     try:
-        _finalize(beat, store, sent_green=sent_green, dry_run=dry_run)
+        _finalize(beat, store, prior, sent_summary=sent_summary, dry_run=dry_run)
     except Exception as e:  # noqa: BLE001
         _stage_failure(beat, "FINALIZE", e)
 
@@ -494,17 +606,21 @@ def run_beat(*, now: Optional[datetime] = None, dry_run: bool = False, probe: bo
 
 __all__ = [
     "DailyNoteAbsent",
-    "GREEN_SUMMARY_KEY",
     "INTERVAL_KEY",
     "JOB_LABEL",
+    "PriorBeat",
+    "SUMMARY_KEY",
     "VAULT_DEFERRED",
     "VAULT_DEFERRED_NOTE_ABSENT",
     "VAULT_FAILED",
     "VAULT_WRITTEN",
-    "green_summary_at",
+    "alert_keys",
     "interval_min",
     "out_of_band",
     "run_beat",
+    "summary_at",
+    "summary_due",
     "take_beat",
+    "transitions",
     "write_note_block",
 ]

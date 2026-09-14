@@ -328,7 +328,7 @@ async def build_runner() -> RadarRunner:
             token,
             bucket=bucket,
             overlap_bars=int(tunables["radar.poll_overlap_bars"].value),
-            max_age_s=int(tunables["heartbeat.radar_max_age_s"].value),
+            max_age_s=int(tunables["radar.poll_bar_max_age_s"].value),
         ),
     )
 

@@ -27,6 +27,15 @@ of its last run, and *"the plist is gone"* is a fact about launchd.
 Writing it into `state`/`exit_code` destroyed that record and left a
 stale `failed` after the plist came back.
 
+## AMBER — `supervised_finding()` (2026-09-14)
+A launchd-supervised resident that is loaded but not running is RED,
+unless its row declares `launchd_unmanaged` (jobs.yaml). Then it is
+**AMBER "launchd unmanaged"**: `Finding.amber=True`, `ok=True`, so it
+never enters the heartbeat's alert decision but still shows on the note
+and in the summary. First and only case: `com.cobalt.herdr`, hand-started
+outside launchd until its handover. Its `herdr` socket probe stays the
+authority on whether it is up. An unloaded plist is still RED.
+
 ## ZOMBIE
 `running` past `timeout_s` **and** `heartbeat_at` stale by more than
 `timeout_s / jobs.heartbeat_fraction`. Both halves required.

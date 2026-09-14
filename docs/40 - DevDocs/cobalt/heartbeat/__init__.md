@@ -3,7 +3,8 @@
 ## What it does
 Every `heartbeat.interval_min` minutes (15): probe every service, sweep
 every job row, write one red/green block into today's daily note as an
-L28 unit, and DM on any red — plus one green summary a day.
+L28 unit, and alert when something enters RED or recovers — plus
+standing-state summaries at 07:00 and 16:30 ET (ruled 2026-09-14).
 
 Charter §3 F18 (M10). Job: `com.cobalt.heartbeat`,
 `COBALT_ENV=production`, `StartInterval 900`, `RunAtLoad` (a reboot is
@@ -39,11 +40,14 @@ that says green when it did not look is worse than no heartbeat.
 1. **The daily note.** One Cobalt-owned unit (`section heartbeat` /
    `unit status`) through `VaultWriter` — stable id, updated in place,
    one unified diff per beat. Not 96 blocks a day.
-2. **A Mattermost DM** on any red, plus one green summary at
-   `heartbeat.green_summary_at` (17:30 ET). "Have we sent today's?" is
-   answered from the job row's own `last_result` — the heartbeat is its
-   only writer, and a second table to remember one boolean a day is a
-   table to migrate later for nothing.
+2. **A Mattermost DM** on a RED transition (entered or recovered —
+   unchanged is silent), plus a standing-state summary at each
+   `heartbeat.summary_at` slot, sent even when nothing is red. The prior
+   state and "have we sent this slot today?" are both answered from the
+   job row's own `last_result` — the heartbeat is its only writer, and a
+   second table would be a table to migrate later for nothing.
+   Known-idle states never rate RED: radar outside a scanning session,
+   and a `launchd_unmanaged` job (AMBER, see `jobs/watchdog.md`).
 3. **The out-of-band channel — WHICH DOES NOT EXIST.** See below.
 
 ## Output 3: what exists, and what does not

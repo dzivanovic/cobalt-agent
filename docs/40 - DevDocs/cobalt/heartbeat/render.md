@@ -13,6 +13,14 @@ channels could disagree is a heartbeat you have to check twice.
 plain lines, red first then green. A table in a DM is unreadable on a
 phone, and the phone is where a red alert is actually read.
 
+## `summary_body()` and AMBER (2026-09-14)
+The scheduled summary sent at each `heartbeat.summary_at` slot: every
+RED job/probe and stage failure, then every AMBER job, or "all green". It
+goes out before the beat's vault stage, so the vault unit is not in it
+(its transitions alert on their own). `amber_jobs` are `ok` findings
+flagged amber: 🟡 in the note table, an "Amber:" section in the DM, never
+part of `green`'s negation.
+
 ## The unit id is stable
 `section heartbeat` / `unit status`, the same every beat, so
 `upsert_unit` updates in place. At 15-minute intervals an append-only
