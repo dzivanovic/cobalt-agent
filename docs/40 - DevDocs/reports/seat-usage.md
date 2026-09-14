@@ -28,15 +28,21 @@ weekly_pct_close:
 <!-- cobalt:unit seat-usage:2026-09-13 -->
 | model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
 |---|---|---:|---:|---:|---:|---:|
-| `claude-sonnet-5` | claude · mechanical, non-write only — L29 ceiling for this tier | 3,240,165 | 144,763 | 26,400 | $1.49 | +$0.28 |
-| `mainframe` | qwen · local lane (L23) — delegated mundane work, token conservation | 0 | 0 | 6,739 | $0.00 [^free] | $0.00 |
+| `claude-sonnet-5` | claude · mechanical, non-write only — L29 ceiling for this tier | 103,141,415 | 1,472,695 | 533,376 | $31.73 | +$0.18 |
+| `gpt-5.6-sol` | codex · — | 4,120,448 | 0 | 25,398 | $3.62 | $0.00 |
+| `claude-haiku-4-5-20251001` | claude · — | 213,198 | 85,063 | 8,916 | $0.24 | $0.00 |
+| `gpt-5.6-terra` | codex · — | 11,008 | 0 | 36 | $0.01 | — |
+| `mainframe` | qwen · local lane (L23) — delegated mundane work, token conservation | 0 | 0 | 6,935 | $0.00 [^free] | $0.00 |
+| `gpt-6-astra` | codex · reviewer seat — read-only role (L33) | 5,685,120 | 0 | 44,992 | **unpriced** | — |
 
-**Day total (API-equivalent):** $1.49 · **3,448,405** tokens across 2 model(s), seats: claude, qwen
-**Fresh input tokens:** 30,338 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+**Day total (API-equivalent):** ≥ $35.60 · **116,129,721** tokens across 6 model(s), seats: claude, codex, qwen
+**Fresh input tokens:** 781,121 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+
+> **UNPRICED MODELS: `gpt-6-astra`.** These were used today and the pinned tool's offline pricing table has no rate for them, so their cost is missing rather than zero, and the day total above is a FLOOR. Fix by bumping the pin in `configs/cobalt/seat_usage.yaml` (a decision, with a diff), never by letting the job reach the network.
 
 [^free]: `mainframe` — the local Qwen3.8-27B MLX server on this Mac (L23's local lane). Its cost is electricity and the Mac Studio, not API spend — $0 here is the true number, not a missing one, so it never raises the hourly unpriced warning.
 
-_Generated 2026-09-13 09:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Generated 2026-09-13 23:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
 _Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20260913 --until 20260913 --by-agent --offline`_
 <!-- /cobalt:unit seat-usage:2026-09-13 -->
 <!-- /cobalt:section seat-usage:2026-09-13 -->
