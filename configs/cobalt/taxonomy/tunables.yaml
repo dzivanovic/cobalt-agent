@@ -392,6 +392,32 @@ tunables:
     source: ruling
     consumers: ["cobalt.heartbeat.probes (sheet HTTP, launchctl, database)"]
 
+  # --- day-open (RULED 2026-09-14, A): the morning sweep, in code -----
+  # `cobalt day-open`'s two ruled numbers (L53 — never a literal in
+  # checks.py). Every other day-open threshold REUSES an existing
+  # tunable (session.premarket_open, session.aftermarket_close) rather
+  # than duplicating it — see src/cobalt/dayopen/config.py.
+  - key: dayopen.c4_expected_session_blocks
+    value: 8
+    unit: count
+    scope: global
+    dynamic: true
+    status: proposed
+    source: ruling
+    # A moving baseline, not a hard invariant: RULED 2026-09-14 against
+    # the day-open-2026-09-14.md dry run's own EXPECT line. Revisit as
+    # the vaultwrite:heartbeat: call sites change.
+    consumers: ["cobalt.dayopen.checks (C4: system.session_blocks count)"]
+
+  - key: dayopen.c6_max_gap_min
+    value: 20
+    unit: min
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.dayopen.checks (C6: max gap between beats since the prior evening)"]
+
   # --- S2-P1 radar engine --------------------------------------------
   # 2026-09-12 CTO-chat amendment: 90s -> 100s after Sol's build-time
   # objection that the pool-only budget check (33.33rpm at 90s) undercounted

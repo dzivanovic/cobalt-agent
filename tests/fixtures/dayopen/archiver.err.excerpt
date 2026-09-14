@@ -1,0 +1,10 @@
+2026-09-11 20:53:14.407 | INFO     | cobalt.archiver.runner:_run_targets:42 - [968/975] XLRE/i5: 1608 rows
+2026-09-11 20:53:15.820 | INFO     | cobalt.archiver.runner:_run_targets:42 - [969/975] XLRE/i30: 2609 rows
+2026-09-11 20:53:17.228 | INFO     | cobalt.archiver.runner:_run_targets:42 - [970/975] XLU/i5: 2331 rows
+2026-09-11 20:53:18.657 | INFO     | cobalt.archiver.runner:_run_targets:42 - [971/975] XLU/i30: 2613 rows
+2026-09-11 20:53:20.075 | INFO     | cobalt.archiver.runner:_run_targets:42 - [972/975] XLV/i5: 2354 rows
+2026-09-11 20:53:21.501 | INFO     | cobalt.archiver.runner:_run_targets:42 - [973/975] XLV/i30: 2613 rows
+2026-09-11 20:53:22.901 | INFO     | cobalt.archiver.runner:_run_targets:42 - [974/975] XLY/i5: 1635 rows
+2026-09-11 20:53:24.349 | INFO     | cobalt.archiver.runner:_run_targets:42 - [975/975] XLY/i30: 2608 rows
+2026-09-11 20:53:24.355 | INFO     | cobalt.archiver.runner:run_full:67 - Run complete: 210 tickers, 3160954 rows, 0 failures, 23m18s. Report: /Users/cobalt/cobalt/docs/30 - Design/archiver-runs.md
+2026-09-11 20:53:24.370 | INFO     | cobalt.jobs.wrapper:job_run:196 - F17: com.cobalt.archiver DONE

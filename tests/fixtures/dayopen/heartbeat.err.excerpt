@@ -1,0 +1,21 @@
+2026-09-12 11:16:13.454 | INFO     | cobalt.heartbeat.runner:run_beat:398 - heartbeat: stage PROBES
+2026-09-12 11:16:15.833 | INFO     | cobalt.heartbeat.runner:run_beat:405 - heartbeat: stage COMPOSE
+2026-09-12 11:16:15.849 | INFO     | cobalt.heartbeat.runner:run_beat:411 - heartbeat: stage ALERTS
+2026-09-12 11:16:16.731 | INFO     | cobalt.heartbeat.runner:out_of_band:252 - heartbeat: Email sent — message 1a09630cecd514a0
+2026-09-12 11:16:16.920 | INFO     | cobalt.heartbeat.runner:send_dm:198 - heartbeat: DM sent — post 771b66ie3br13esbuc9e7s7dbh to @dejan_z
+2026-09-12 11:16:16.926 | INFO     | cobalt.heartbeat.runner:run_beat:418 - heartbeat: stage PERSIST
+2026-09-12 11:16:16.979 | INFO     | cobalt.heartbeat.runner:run_beat:425 - heartbeat: stage VAULT
+2026-09-12 11:16:16.984 | ERROR    | cobalt.heartbeat.runner:write_note_block:151 - heartbeat: /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-12.md does not exist — the status block was NOT written. The 05:15 prefill creates the day's note; this writer never does (L28.1).
+2026-09-12 11:16:16.988 | ERROR    | cobalt.heartbeat.runner:run_beat:434 - heartbeat: vault unit FAILED — daily-note writer returned no result
+2026-09-12 11:16:16.992 | INFO     | cobalt.heartbeat.runner:run_beat:438 - heartbeat: stage FINALIZE
+2026-09-12 11:16:17.527 | INFO     | cobalt.heartbeat.runner:out_of_band:252 - heartbeat: Email sent — message 1a09630d3afd677d
+2026-09-12 11:16:17.545 | ERROR    | cobalt.heartbeat.runner:run_beat:444 - heartbeat: RED — 1 job(s) and vault write
+2026-09-12 11:16:17.679 | INFO     | cobalt.jobs.wrapper:job_run:196 - F17: com.cobalt.heartbeat DONE
+2026-09-12 11:31:18.267 | INFO     | cobalt.jobs.wrapper:job_run:170 - F17: com.cobalt.heartbeat RUNNING (timeout 300s, heartbeat every 100s)
+2026-09-12 11:31:18.598 | INFO     | cobalt.heartbeat.runner:run_beat:398 - heartbeat: stage PROBES
+2026-09-12 11:31:20.803 | INFO     | cobalt.heartbeat.runner:run_beat:405 - heartbeat: stage COMPOSE
+2026-09-12 11:31:20.821 | INFO     | cobalt.heartbeat.runner:run_beat:411 - heartbeat: stage ALERTS
+2026-09-12 11:31:21.710 | INFO     | cobalt.heartbeat.runner:out_of_band:252 - heartbeat: Email sent — message 1a0963e9fcc0fb05
+2026-09-12 11:31:21.960 | INFO     | cobalt.heartbeat.runner:send_dm:198 - heartbeat: DM sent — post 7ptgrf69b3gsbg6pfp4ph41m8h to @dejan_z
+2026-09-12 11:31:21.965 | INFO     | cobalt.heartbeat.runner:run_beat:418 - heartbeat: stage PERSIST
+2026-09-12 11:31:22.009 | INFO     | cobalt.heartbeat.runner:run_beat:425 - heartbeat: stage VAULT

@@ -15,6 +15,7 @@ cobalt daymode show/propose/decide/attest
 cobalt jobs list/register/check/run
 cobalt stop | cobalt resume                       (F17d kill phrase)
 cobalt heartbeat beat/show
+cobalt day-open [--date YYYY-MM-DD] [--json] | day-open verdict "<line>"
 cobalt validate
 ```
 
@@ -64,3 +65,8 @@ import; this CLI has no such chain, so it loads the same file on purpose.
 Two new command groups: `cobalt db migrate [--allow-prod] [--rollback]`
 and `cobalt settings load|show`, plus `cobalt taxonomy
 load|migrate-strategy-notes|migrate-trade-notes|add-alias|sync-frontmatter`.
+
+## 2026-09-14 — `day-open` (RULED, A)
+
+The morning sweep, in code: `cobalt.dayopen.cli.add_parser` mounts
+`day-open`. See `docs/40 - DevDocs/cobalt/dayopen/` for the module.

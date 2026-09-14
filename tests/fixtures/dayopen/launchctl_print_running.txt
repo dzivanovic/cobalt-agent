@@ -1,0 +1,9 @@
+com.cobalt.radar = {
+	active count = 1
+	path = /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist
+	type = LaunchAgent
+	state = running
+	runs = 1
+	pid = 27385
+	last exit code = (never exited)
+}

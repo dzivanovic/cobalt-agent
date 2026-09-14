@@ -1,0 +1,319 @@
+HEARTBEAT RED — 1 job(s) and 1 probe(s)  (2026-09-14 10:53:33 EDT)
+
+OK   database                 cobalt_brain reachable
+OK   sheet HTTP               http://127.0.0.1:5010/ -> 200
+OK   sheet daymode            day mode reduced · stage 2 (proposed, undecided — floor holds) · half sheet — cards are accepted
+OK   obsidian                 Obsidian running (pid 66104)
+OK   mainframe                127.0.0.1:1234 accepting connections
+OK   herdr                    socket accepting at /Users/cobalt/.config/herdr/herdr.sock; 7 pane(s), seats: agy, claude, codex, grok, qwen; hook guard: 1 SessionStart entry -> herdr-harness-guard.sh, executable
+OK   archiver                 last run 2026-09-12 00:53 UTC (62.0 h ago), rows written 3160954, exit 0
+OK   seat usage               last run 2026-09-14 10:00 ET (53 min ago), exit 0; UNPRICED in the report: gpt-6-astra
+OK   backup                   newest snapshot 13.2 h old across ssd
+OK   vault blocks             0 refused, 0 ungated repair run(s) in the counter window
+OK   redactions               0 since the last beat
+RED  radar                    failed_stage bars: poll failures: 2; poll ARBB stale since 2026-09-14T13:38:07.287155+00:00; poll IMCC stale since 2026-09-14T13:38:07.287155+00:00
+OK   email                    token present, recipient set in configs/cobalt/notify.yaml; last send OK 2026-09-14 14:38 UTC (heartbeat)
+OK   com.cobalt.aset              running   loaded, pid 27239 [launchd probe]
+OK   com.cobalt.mainframe         running   loaded, pid 25751 [launchd probe]
+OK   com.cobalt.obsidian          running   loaded, pid 66104 [launchd probe]
+OK   com.cobalt.agent             running   pid 98796 alive (from /Users/cobalt/cobalt/logs/cobalt.pid) [pidfile probe]
+RED  com.cobalt.herdr             failed    loaded, not running (last exit 0) [launchd probe]
+OK   com.cobalt.radar             running   running 1386 min, heartbeat fresh
+OK   com.cobalt.prefill-daily     done      last finish 2026-09-14 05:15 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.prefill-drc       done      last finish 2026-09-11 15:40 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.archiver          done      last finish 2026-09-11 20:53 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.cards-expire      done      last finish 2026-09-11 16:05 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.daymode-propose   done      last finish 2026-09-14 09:00 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.backup            done      last finish 2026-09-13 21:40 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.heartbeat         running   running 0 min, heartbeat fresh
+OK   com.cobalt.seat-usage        done      last finish 2026-09-14 10:00 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.generated         done      last finish 2026-09-13 23:37 ET, exit 0 · launchd: loaded, last exit 0
+OK   vault unit               written
+INFO kill switch              kill switch CLEAR — jobs run normally
+
+Email sent — message 1a0a068c9e8fee89
+DM sent — post isdu5er3pjrhin1i3fyhj8xpkc to @dejan_z
+[WRITE] updated: /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-14.md · section=heartbeat · unit=status · write_id=2564
+--- /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-14.md (before)
++++ /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-14.md (after)
+@@ -317,7 +317,7 @@
+ 
+ <!-- cobalt:section heartbeat -->
+ <!-- cobalt:unit status -->
+-🔴 **HEARTBEAT RED — 1 job(s) and 1 probe(s)** · 2026-09-14 10:38:29 EDT
++🔴 **HEARTBEAT RED — 1 job(s) and 1 probe(s)** · 2026-09-14 10:53:33 EDT
+ 
+ | | check | detail |
+ |---|---|---|
+@@ -326,20 +326,20 @@
+ | 🟢 | sheet daymode | day mode reduced · stage 2 (proposed, undecided — floor holds) · half sheet — cards are accepted |
+ | 🟢 | obsidian | Obsidian running (pid 66104) |
+ | 🟢 | mainframe | 127.0.0.1:1234 accepting connections |
+-| 🟢 | herdr | socket accepting at /Users/cobalt/.config/herdr/herdr.sock; 6 pane(s), seats: agy, claude, codex, grok, qwen; hook guard: 1 SessionStart entry -> herdr-harness-guard.sh, executable |
+-| 🟢 | archiver | last run 2026-09-12 00:53 UTC (61.8 h ago), rows written 3160954, exit 0 |
+-| 🟢 | seat usage | last run 2026-09-14 10:00 ET (38 min ago), exit 0; UNPRICED in the report: gpt-6-astra |
+-| 🟢 | backup | newest snapshot 13.0 h old across ssd |
++| 🟢 | herdr | socket accepting at /Users/cobalt/.config/herdr/herdr.sock; 7 pane(s), seats: agy, claude, codex, grok, qwen; hook guard: 1 SessionStart entry -> herdr-harness-guard.sh, executable |
++| 🟢 | archiver | last run 2026-09-12 00:53 UTC (62.0 h ago), rows written 3160954, exit 0 |
++| 🟢 | seat usage | last run 2026-09-14 10:00 ET (53 min ago), exit 0; UNPRICED in the report: gpt-6-astra |
++| 🟢 | backup | newest snapshot 13.2 h old across ssd |
+ | 🟢 | vault blocks | 0 refused, 0 ungated repair run(s) in the counter window |
+ | 🟢 | redactions | 0 since the last beat |
+-| 🔴 | radar | last_scan_at stale (2026-09-14 14:35:05.703693+00:00); failed_stage bars: poll failures: 3; poll ARBB stale since 2026-09-14T13:38:07.287155+00:00; poll DCOY stale since 2026-09-14T14:31:55.232495+00:00; poll IMCC stale since 2026-09-14T13:38:07.287155+00:00 |
+-| 🟢 | email | token present, recipient set in configs/cobalt/notify.yaml; last send OK 2026-09-14 14:23 UTC (heartbeat) |
++| 🔴 | radar | failed_stage bars: poll failures: 2; poll ARBB stale since 2026-09-14T13:38:07.287155+00:00; poll IMCC stale since 2026-09-14T13:38:07.287155+00:00 |
++| 🟢 | email | token present, recipient set in configs/cobalt/notify.yaml; last send OK 2026-09-14 14:38 UTC (heartbeat) |
+ | 🟢 | `com.cobalt.aset` | running — loaded, pid 27239 [launchd probe] |
+ | 🟢 | `com.cobalt.mainframe` | running — loaded, pid 25751 [launchd probe] |
+ | 🟢 | `com.cobalt.obsidian` | running — loaded, pid 66104 [launchd probe] |
+ | 🟢 | `com.cobalt.agent` | running — pid 98796 alive (from /Users/cobalt/cobalt/logs/cobalt.pid) [pidfile probe] |
+ | 🔴 | `com.cobalt.herdr` | failed — loaded, not running (last exit 0) [launchd probe] |
+-| 🟢 | `com.cobalt.radar` | running — running 1371 min, heartbeat fresh |
++| 🟢 | `com.cobalt.radar` | running — running 1386 min, heartbeat fresh |
+ | 🟢 | `com.cobalt.prefill-daily` | done — last finish 2026-09-14 05:15 ET, exit 0 · launchd: loaded, last exit 0 |
+ | 🟢 | `com.cobalt.prefill-drc` | done — last finish 2026-09-11 15:40 ET, exit 0 · launchd: loaded, last exit 0 |
+ | 🟢 | `com.cobalt.archiver` | done — last finish 2026-09-11 20:53 ET, exit 0 · launchd: loaded, last exit 0 |
+@@ -352,9 +352,9 @@
+ 
+ > kill switch CLEAR — jobs run normally
+ 
+-> Email sent — message 1a0a05afb2146b51
+-
+-> DM sent — post kntyojxiapf6tcc1ksufopqoro to @dejan_z
++> Email sent — message 1a0a068c9e8fee89
++
++> DM sent — post isdu5er3pjrhin1i3fyhj8xpkc to @dejan_z
+ <!-- /cobalt:unit status -->
+ <!-- /cobalt:section heartbeat -->
+ 
+com.cobalt.heartbeat: exit 0
+database: cobalt_brain  (COBALT_ENV=production)
+HEARTBEAT RED — 1 job(s) and 1 probe(s)  (2026-09-14 11:08:38 EDT)
+
+OK   database                 cobalt_brain reachable
+OK   sheet HTTP               http://127.0.0.1:5010/ -> 200
+OK   sheet daymode            day mode reduced · stage 2 (proposed, undecided — floor holds) · half sheet — cards are accepted
+OK   obsidian                 Obsidian running (pid 66104)
+OK   mainframe                127.0.0.1:1234 accepting connections
+OK   herdr                    socket accepting at /Users/cobalt/.config/herdr/herdr.sock; 7 pane(s), seats: agy, claude, codex, grok, qwen; hook guard: 1 SessionStart entry -> herdr-harness-guard.sh, executable
+OK   archiver                 last run 2026-09-12 00:53 UTC (62.3 h ago), rows written 3160954, exit 0
+OK   seat usage               last run 2026-09-14 11:00 ET (9 min ago), exit 0; UNPRICED in the report: gpt-6-astra
+OK   backup                   newest snapshot 13.5 h old across ssd
+OK   vault blocks             0 refused, 0 ungated repair run(s) in the counter window
+OK   redactions               0 since the last beat
+RED  radar                    failed_stage bars: poll failures: 3; poll ARBB stale since 2026-09-14T13:38:07.287155+00:00; poll DCOY stale since 2026-09-14T14:54:08.618696+00:00; poll IMCC stale since 2026-09-14T13:38:07.287155+00:00
+OK   email                    token present, recipient set in configs/cobalt/notify.yaml; last send OK 2026-09-14 14:53 UTC (heartbeat)
+OK   com.cobalt.aset              running   loaded, pid 27239 [launchd probe]
+OK   com.cobalt.mainframe         running   loaded, pid 25751 [launchd probe]
+OK   com.cobalt.obsidian          running   loaded, pid 66104 [launchd probe]
+OK   com.cobalt.agent             running   pid 98796 alive (from /Users/cobalt/cobalt/logs/cobalt.pid) [pidfile probe]
+RED  com.cobalt.herdr             failed    loaded, not running (last exit 0) [launchd probe]
+OK   com.cobalt.radar             running   running 1401 min, heartbeat fresh
+OK   com.cobalt.prefill-daily     done      last finish 2026-09-14 05:15 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.prefill-drc       done      last finish 2026-09-11 15:40 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.archiver          done      last finish 2026-09-11 20:53 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.cards-expire      done      last finish 2026-09-11 16:05 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.daymode-propose   done      last finish 2026-09-14 09:00 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.backup            done      last finish 2026-09-13 21:40 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.heartbeat         running   running 0 min, heartbeat fresh
+OK   com.cobalt.seat-usage        done      last finish 2026-09-14 11:00 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.generated         done      last finish 2026-09-13 23:37 ET, exit 0 · launchd: loaded, last exit 0
+OK   vault unit               written
+INFO kill switch              kill switch CLEAR — jobs run normally
+
+Email sent — message 1a0a07697d1278be
+DM sent — post ttd69pcwfpdqjqbuk7sonbj6ne to @dejan_z
+[WRITE] updated: /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-14.md · section=heartbeat · unit=status · write_id=2566
+--- /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-14.md (before)
++++ /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-14.md (after)
+@@ -317,7 +317,7 @@
+ 
+ <!-- cobalt:section heartbeat -->
+ <!-- cobalt:unit status -->
+-🔴 **HEARTBEAT RED — 1 job(s) and 1 probe(s)** · 2026-09-14 10:53:33 EDT
++🔴 **HEARTBEAT RED — 1 job(s) and 1 probe(s)** · 2026-09-14 11:08:38 EDT
+ 
+ | | check | detail |
+ |---|---|---|
+@@ -327,19 +327,19 @@
+ | 🟢 | obsidian | Obsidian running (pid 66104) |
+ | 🟢 | mainframe | 127.0.0.1:1234 accepting connections |
+ | 🟢 | herdr | socket accepting at /Users/cobalt/.config/herdr/herdr.sock; 7 pane(s), seats: agy, claude, codex, grok, qwen; hook guard: 1 SessionStart entry -> herdr-harness-guard.sh, executable |
+-| 🟢 | archiver | last run 2026-09-12 00:53 UTC (62.0 h ago), rows written 3160954, exit 0 |
+-| 🟢 | seat usage | last run 2026-09-14 10:00 ET (53 min ago), exit 0; UNPRICED in the report: gpt-6-astra |
+-| 🟢 | backup | newest snapshot 13.2 h old across ssd |
++| 🟢 | archiver | last run 2026-09-12 00:53 UTC (62.3 h ago), rows written 3160954, exit 0 |
++| 🟢 | seat usage | last run 2026-09-14 11:00 ET (9 min ago), exit 0; UNPRICED in the report: gpt-6-astra |
++| 🟢 | backup | newest snapshot 13.5 h old across ssd |
+ | 🟢 | vault blocks | 0 refused, 0 ungated repair run(s) in the counter window |
+ | 🟢 | redactions | 0 since the last beat |
+-| 🔴 | radar | failed_stage bars: poll failures: 2; poll ARBB stale since 2026-09-14T13:38:07.287155+00:00; poll IMCC stale since 2026-09-14T13:38:07.287155+00:00 |
+-| 🟢 | email | token present, recipient set in configs/cobalt/notify.yaml; last send OK 2026-09-14 14:38 UTC (heartbeat) |
++| 🔴 | radar | failed_stage bars: poll failures: 3; poll ARBB stale since 2026-09-14T13:38:07.287155+00:00; poll DCOY stale since 2026-09-14T14:54:08.618696+00:00; poll IMCC stale since 2026-09-14T13:38:07.287155+00:00 |
++| 🟢 | email | token present, recipient set in configs/cobalt/notify.yaml; last send OK 2026-09-14 14:53 UTC (heartbeat) |
+ | 🟢 | `com.cobalt.aset` | running — loaded, pid 27239 [launchd probe] |
+ | 🟢 | `com.cobalt.mainframe` | running — loaded, pid 25751 [launchd probe] |
+ | 🟢 | `com.cobalt.obsidian` | running — loaded, pid 66104 [launchd probe] |
+ | 🟢 | `com.cobalt.agent` | running — pid 98796 alive (from /Users/cobalt/cobalt/logs/cobalt.pid) [pidfile probe] |
+ | 🔴 | `com.cobalt.herdr` | failed — loaded, not running (last exit 0) [launchd probe] |
+-| 🟢 | `com.cobalt.radar` | running — running 1386 min, heartbeat fresh |
++| 🟢 | `com.cobalt.radar` | running — running 1401 min, heartbeat fresh |
+ | 🟢 | `com.cobalt.prefill-daily` | done — last finish 2026-09-14 05:15 ET, exit 0 · launchd: loaded, last exit 0 |
+ | 🟢 | `com.cobalt.prefill-drc` | done — last finish 2026-09-11 15:40 ET, exit 0 · launchd: loaded, last exit 0 |
+ | 🟢 | `com.cobalt.archiver` | done — last finish 2026-09-11 20:53 ET, exit 0 · launchd: loaded, last exit 0 |
+@@ -347,14 +347,14 @@
+ | 🟢 | `com.cobalt.daymode-propose` | done — last finish 2026-09-14 09:00 ET, exit 0 · launchd: loaded, last exit 0 |
+ | 🟢 | `com.cobalt.backup` | done — last finish 2026-09-13 21:40 ET, exit 0 · launchd: loaded, last exit 0 |
+ | 🟢 | `com.cobalt.heartbeat` | running — running 0 min, heartbeat fresh |
+-| 🟢 | `com.cobalt.seat-usage` | done — last finish 2026-09-14 10:00 ET, exit 0 · launchd: loaded, last exit 0 |
++| 🟢 | `com.cobalt.seat-usage` | done — last finish 2026-09-14 11:00 ET, exit 0 · launchd: loaded, last exit 0 |
+ | 🟢 | `com.cobalt.generated` | done — last finish 2026-09-13 23:37 ET, exit 0 · launchd: loaded, last exit 0 |
+ 
+ > kill switch CLEAR — jobs run normally
+ 
+-> Email sent — message 1a0a068c9e8fee89
+-
+-> DM sent — post isdu5er3pjrhin1i3fyhj8xpkc to @dejan_z
++> Email sent — message 1a0a07697d1278be
++
++> DM sent — post ttd69pcwfpdqjqbuk7sonbj6ne to @dejan_z
+ <!-- /cobalt:unit status -->
+ <!-- /cobalt:section heartbeat -->
+ 
+com.cobalt.heartbeat: exit 0
+database: cobalt_brain  (COBALT_ENV=production)
+HEARTBEAT RED — 1 job(s)  (2026-09-14 11:23:43 EDT)
+
+OK   database                 cobalt_brain reachable
+OK   sheet HTTP               http://127.0.0.1:5010/ -> 200
+OK   sheet daymode            day mode reduced · stage 2 (proposed, undecided — floor holds) · half sheet — cards are accepted
+OK   obsidian                 Obsidian running (pid 66104)
+OK   mainframe                127.0.0.1:1234 accepting connections
+OK   herdr                    socket accepting at /Users/cobalt/.config/herdr/herdr.sock; 7 pane(s), seats: agy, claude, codex, grok, qwen; hook guard: 1 SessionStart entry -> herdr-harness-guard.sh, executable
+OK   archiver                 last run 2026-09-12 00:53 UTC (62.5 h ago), rows written 3160954, exit 0
+OK   seat usage               last run 2026-09-14 11:00 ET (24 min ago), exit 0; UNPRICED in the report: gpt-6-astra
+OK   backup                   newest snapshot 13.7 h old across ssd
+OK   vault blocks             0 refused, 0 ungated repair run(s) in the counter window
+OK   redactions               0 since the last beat
+OK   radar                    scanning (rth), members 50
+OK   email                    token present, recipient set in configs/cobalt/notify.yaml; last send OK 2026-09-14 15:08 UTC (heartbeat)
+OK   com.cobalt.aset              running   loaded, pid 27239 [launchd probe]
+OK   com.cobalt.mainframe         running   loaded, pid 25751 [launchd probe]
+OK   com.cobalt.obsidian          running   loaded, pid 66104 [launchd probe]
+OK   com.cobalt.agent             running   pid 98796 alive (from /Users/cobalt/cobalt/logs/cobalt.pid) [pidfile probe]
+RED  com.cobalt.herdr             failed    loaded, not running (last exit 0) [launchd probe]
+OK   com.cobalt.radar             running   running 1416 min, heartbeat fresh
+OK   com.cobalt.prefill-daily     done      last finish 2026-09-14 05:15 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.prefill-drc       done      last finish 2026-09-11 15:40 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.archiver          done      last finish 2026-09-11 20:53 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.cards-expire      done      last finish 2026-09-11 16:05 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.daymode-propose   done      last finish 2026-09-14 09:00 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.backup            done      last finish 2026-09-13 21:40 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.heartbeat         running   running 0 min, heartbeat fresh
+OK   com.cobalt.seat-usage        done      last finish 2026-09-14 11:00 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.generated         done      last finish 2026-09-13 23:37 ET, exit 0 · launchd: loaded, last exit 0
+OK   vault unit               written
+INFO kill switch              kill switch CLEAR — jobs run normally
+
+Email sent — message 1a0a084654488cab
+DM sent — post jb1r9r15eibd8kuhhg5ctcxhdy to @dejan_z
+[WRITE] updated: /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-14.md · section=heartbeat · unit=status · write_id=2567
+--- /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-14.md (before)
++++ /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-14.md (after)
+@@ -317,7 +317,7 @@
+ 
+ <!-- cobalt:section heartbeat -->
+ <!-- cobalt:unit status -->
+-🔴 **HEARTBEAT RED — 1 job(s) and 1 probe(s)** · 2026-09-14 11:08:38 EDT
++🔴 **HEARTBEAT RED — 1 job(s)** · 2026-09-14 11:23:43 EDT
+ 
+ | | check | detail |
+ |---|---|---|
+@@ -327,19 +327,19 @@
+ | 🟢 | obsidian | Obsidian running (pid 66104) |
+ | 🟢 | mainframe | 127.0.0.1:1234 accepting connections |
+ | 🟢 | herdr | socket accepting at /Users/cobalt/.config/herdr/herdr.sock; 7 pane(s), seats: agy, claude, codex, grok, qwen; hook guard: 1 SessionStart entry -> herdr-harness-guard.sh, executable |
+-| 🟢 | archiver | last run 2026-09-12 00:53 UTC (62.3 h ago), rows written 3160954, exit 0 |
+-| 🟢 | seat usage | last run 2026-09-14 11:00 ET (9 min ago), exit 0; UNPRICED in the report: gpt-6-astra |
+-| 🟢 | backup | newest snapshot 13.5 h old across ssd |
++| 🟢 | archiver | last run 2026-09-12 00:53 UTC (62.5 h ago), rows written 3160954, exit 0 |
++| 🟢 | seat usage | last run 2026-09-14 11:00 ET (24 min ago), exit 0; UNPRICED in the report: gpt-6-astra |
++| 🟢 | backup | newest snapshot 13.7 h old across ssd |
+ | 🟢 | vault blocks | 0 refused, 0 ungated repair run(s) in the counter window |
+ | 🟢 | redactions | 0 since the last beat |
+-| 🔴 | radar | failed_stage bars: poll failures: 3; poll ARBB stale since 2026-09-14T13:38:07.287155+00:00; poll DCOY stale since 2026-09-14T14:54:08.618696+00:00; poll IMCC stale since 2026-09-14T13:38:07.287155+00:00 |
+-| 🟢 | email | token present, recipient set in configs/cobalt/notify.yaml; last send OK 2026-09-14 14:53 UTC (heartbeat) |
++| 🟢 | radar | scanning (rth), members 50 |
++| 🟢 | email | token present, recipient set in configs/cobalt/notify.yaml; last send OK 2026-09-14 15:08 UTC (heartbeat) |
+ | 🟢 | `com.cobalt.aset` | running — loaded, pid 27239 [launchd probe] |
+ | 🟢 | `com.cobalt.mainframe` | running — loaded, pid 25751 [launchd probe] |
+ | 🟢 | `com.cobalt.obsidian` | running — loaded, pid 66104 [launchd probe] |
+ | 🟢 | `com.cobalt.agent` | running — pid 98796 alive (from /Users/cobalt/cobalt/logs/cobalt.pid) [pidfile probe] |
+ | 🔴 | `com.cobalt.herdr` | failed — loaded, not running (last exit 0) [launchd probe] |
+-| 🟢 | `com.cobalt.radar` | running — running 1401 min, heartbeat fresh |
++| 🟢 | `com.cobalt.radar` | running — running 1416 min, heartbeat fresh |
+ | 🟢 | `com.cobalt.prefill-daily` | done — last finish 2026-09-14 05:15 ET, exit 0 · launchd: loaded, last exit 0 |
+ | 🟢 | `com.cobalt.prefill-drc` | done — last finish 2026-09-11 15:40 ET, exit 0 · launchd: loaded, last exit 0 |
+ | 🟢 | `com.cobalt.archiver` | done — last finish 2026-09-11 20:53 ET, exit 0 · launchd: loaded, last exit 0 |
+@@ -352,9 +352,9 @@
+ 
+ > kill switch CLEAR — jobs run normally
+ 
+-> Email sent — message 1a0a07697d1278be
+-
+-> DM sent — post ttd69pcwfpdqjqbuk7sonbj6ne to @dejan_z
++> Email sent — message 1a0a084654488cab
++
++> DM sent — post jb1r9r15eibd8kuhhg5ctcxhdy to @dejan_z
+ <!-- /cobalt:unit status -->
+ <!-- /cobalt:section heartbeat -->
+ 
+com.cobalt.heartbeat: exit 0
+database: cobalt_brain  (COBALT_ENV=production)
+HEARTBEAT RED — 1 job(s) and 1 probe(s)  (2026-09-14 11:38:48 EDT)
+
+OK   database                 cobalt_brain reachable
+OK   sheet HTTP               http://127.0.0.1:5010/ -> 200
+OK   sheet daymode            day mode reduced · stage 2 (proposed, undecided — floor holds) · half sheet — cards are accepted
+OK   obsidian                 Obsidian running (pid 66104)
+OK   mainframe                127.0.0.1:1234 accepting connections
+OK   herdr                    socket accepting at /Users/cobalt/.config/herdr/herdr.sock; 7 pane(s), seats: agy, claude, codex, grok, qwen; hook guard: 1 SessionStart entry -> herdr-harness-guard.sh, executable
+OK   archiver                 last run 2026-09-12 00:53 UTC (62.8 h ago), rows written 3160954, exit 0
+OK   seat usage               last run 2026-09-14 11:00 ET (39 min ago), exit 0; UNPRICED in the report: gpt-6-astra
+OK   backup                   newest snapshot 14.0 h old across ssd
+OK   vault blocks             0 refused, 0 ungated repair run(s) in the counter window
+OK   redactions               0 since the last beat
+RED  radar                    last_scan_at stale (2026-09-14 15:35:25.294591+00:00); failed_stage bars: poll failures: 3; poll ARBB stale since 2026-09-14T13:38:07.287155+00:00; poll DCOY stale since 2026-09-14T15:29:04.247132+00:00; poll IMCC stale since 2026-09-14T13:38:07.287155+00:00
+OK   email                    token present, recipient set in configs/cobalt/notify.yaml; last send OK 2026-09-14 15:23 UTC (heartbeat)
+OK   com.cobalt.aset              running   loaded, pid 27239 [launchd probe]
+OK   com.cobalt.mainframe         running   loaded, pid 25751 [launchd probe]
+OK   com.cobalt.obsidian          running   loaded, pid 66104 [launchd probe]
+OK   com.cobalt.agent             running   pid 98796 alive (from /Users/cobalt/cobalt/logs/cobalt.pid) [pidfile probe]
+RED  com.cobalt.herdr             failed    loaded, not running (last exit 0) [launchd probe]
+OK   com.cobalt.radar             running   running 1431 min, heartbeat fresh
+OK   com.cobalt.prefill-daily     done      last finish 2026-09-14 05:15 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.prefill-drc       done      last finish 2026-09-11 15:40 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.archiver          done      last finish 2026-09-11 20:53 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.cards-expire      done      last finish 2026-09-11 16:05 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.daymode-propose   done      last finish 2026-09-14 09:00 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.backup            done      last finish 2026-09-13 21:40 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.heartbeat         running   running 0 min, heartbeat fresh
+OK   com.cobalt.seat-usage        done      last finish 2026-09-14 11:00 ET, exit 0 · launchd: loaded, last exit 0
+OK   com.cobalt.generated         done      last finish 2026-09-13 23:37 ET, exit 0 · launchd: loaded, last exit 0
+OK   vault unit               written
+INFO kill switch              kill switch CLEAR — jobs run normally
+
+Email sent — message 1a0a09232bef6aff
+DM sent — post sb4stkrspby68bmxfq3h9cmb4r to @dejan_z
+[WRITE] updated: /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-14.md · section=heartbeat · unit=status · write_id=2568
+--- /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-14.md (before)
++++ /Users/cobalt/Vault/Think/1 - Trading/1- Daily Notes/2026-09-14.md (after)
+@@ -317,7 +317,7 @@
+ 
+ <!-- cobalt:section heartbeat -->
+ <!-- cobalt:unit status -->
+-🔴 **HEARTBEAT RED — 1 job(s)** · 2026-09-14 11:23:43 EDT
++🔴 **HEARTBEAT RED — 1 job(s) and 1 probe(s)** · 2026-09-14 11:38:48 EDT
+ 
+ | | check | detail |
+ |---|---|---|

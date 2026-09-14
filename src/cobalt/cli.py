@@ -21,6 +21,7 @@ Two command groups:
 
     cobalt jobs list/register/check/run
     cobalt heartbeat beat/show
+    cobalt day-open [--date YYYY-MM-DD] [--json] / cobalt day-open verdict "<line>"
     cobalt notify email-auth/email-test/email-status
     cobalt backup run/status/restore
     cobalt stop / cobalt resume        (F17d kill phrase)
@@ -62,6 +63,7 @@ from cobalt.daymode import cli as daymode_cli  # noqa: E402
 from cobalt.generated import cli as generated_cli  # noqa: E402
 from cobalt.db_migrations import cli as db_cli  # noqa: E402
 from cobalt.backup import cli as backup_cli  # noqa: E402
+from cobalt.dayopen import cli as dayopen_cli  # noqa: E402
 from cobalt.heartbeat import cli as heartbeat_cli  # noqa: E402
 from cobalt.jobs import cli as jobs_cli  # noqa: E402
 from cobalt.jobs.wrapper import JobStopped  # noqa: E402
@@ -506,6 +508,7 @@ def main() -> None:
     jobs_cli.add_parser(sub)
     heartbeat_cli.add_parser(sub)
     backup_cli.add_parser(sub)
+    dayopen_cli.add_parser(sub)
     notify_cli.add_parser(sub)
     seatusage_cli.add_parser(sub)
     generated_cli.add_parser(sub)
