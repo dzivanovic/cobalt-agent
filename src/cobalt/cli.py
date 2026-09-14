@@ -461,6 +461,20 @@ def _cmd_validate(args: argparse.Namespace) -> None:
         f"{green_summary_at():%H:%M} ET."
     )
 
+    # 2026-09-13 tree cleanup: docs/PLACEMENT.md's map, enforced. Captures,
+    # per-session dumps and stale in-flight duplicates are what sprawled
+    # before this sweep existed — see docs/PLACEMENT.md for the map.
+    from cobalt.placement.check import check_tree
+
+    placement_violations = check_tree()
+    if placement_violations:
+        print(
+            "\nFAILED: docs/PLACEMENT.md violations:\n  "
+            + "\n  ".join(placement_violations)
+        )
+        sys.exit(1)
+    print("\nPlacement (docs/PLACEMENT.md): tree clean.")
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="cobalt", description="Cobalt new-core CLI")

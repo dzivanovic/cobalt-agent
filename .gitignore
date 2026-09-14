@@ -9,6 +9,7 @@ data/
 # versioned carve-outs. Every new markdown artifact files into one of
 # these — never at repo root, never in a new ad-hoc folder.
 docs/*
+!docs/PLACEMENT.md
 !docs/00 - Project/
 !docs/00 - Project/**
 !docs/10 - Decisions/
@@ -75,3 +76,9 @@ bars-dump-*
 !src/cobalt/db_migrations/*.sql
 docs/40 - DevDocs/reports/_inflight/*.log
 docs/40 - DevDocs/reports/_inflight/SOL_DONE
+
+# 2026-09-13 tree cleanup — captures are gitignored, live drop dirs only.
+docs/_archive/captures/
+# 90 - References is untracked working material except its own INDEX.md.
+docs/90 - References/*
+!docs/90 - References/INDEX.md

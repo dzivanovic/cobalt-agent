@@ -1,0 +1,21 @@
+# Solar Usability in the Philadelphia, PA Area: Resource, Performance, and Economics Overview
+
+**Date:** Today
+
+## Executive Summary
+Philadelphia is a viable market for rooftop solar PV: the area has moderate solar irradiance (commonly evaluated using “peak sun hours”), and systems can generate meaningful annual energy despite winter cloud cover and occasional snow. Seasonal variability is expected—winter production is lower due to shorter days and more frequent cloudiness, while cooler temperatures can partially improve PV efficiency compared with very hot conditions. On the economics side, the combination of PECO net metering (commonly described as 1-to-1 crediting), a PECO meter credit (noted as up to $400 in one source), and the federal 30% Investment Tax Credit (available for qualifying installs through 2032 per the Inflation Reduction Act) materially improves payback and overall project feasibility. Site-specific roof shading and orientation remain the key determinants of household-level outcomes, with tools like Google Project Sunroof and Global Solar Atlas providing fast preliminary screening.
+
+## Key Findings
+- Peak sun hours are a standard way to express solar resource: one “peak sun hour” equals one hour at an average irradiance of 1,000 W/m², enabling quick conversion from solar resource to expected PV output.
+- Philadelphia’s rooftop PV feasibility should be evaluated using local irradiance/peak-sun-hour estimates from mapping tools (e.g., Global Solar Atlas, peak sun hour calculators, or NASA/POWER workflows) and then adjusted for roof-specific shading and tilt.
+- Google Project Sunroof can provide address-level estimates of rooftop solar potential and can be used as an initial screening tool before a detailed design.
+- Winter conditions reduce production mainly due to reduced sunlight intensity, shorter daylight duration, and increased cloud cover; however, PV modules can still generate in winter when sunlight reaches the cells.
+- Snow can temporarily reduce output when panels are covered, but winter generation is not eliminated; production resumes as panels clear and sunlight reaches the modules.
+- Cloud cover can significantly reduce PV output by lowering the irradiance reaching the panels; this is a primary driver of day-to-day and seasonal variability in the Philadelphia region.
+- High temperatures generally reduce PV efficiency; cooler conditions can improve module efficiency, partially offsetting some winter losses (though winter irradiance/daylength typically dominates the seasonal dip).
+- PECO net metering is described as 1-to-1 crediting for exported electricity in at least one referenced summary, supporting residential economics by valuing onsite generation and exports.
+- A PECO net-metering-related meter credit is noted as available up to $400 to help offset the cost of installing a second meter required for net metering (per an EnergySage summary).
+- The federal solar tax credit (Investment Tax Credit) is described as 30% for qualifying residential systems installed through 2032 under the Inflation Reduction Act, reducing upfront cost materially.
+
+## Strategic Outlook
+For Philadelphia homeowners and small commercial building owners, rooftop solar PV is strategically attractive when (1) the roof has low shading and adequate usable area, (2) the system is sized to align with annual consumption and net-metering rules, and (3) incentives are fully captured (notably the 30% federal tax credit and applicable PECO net-metering provisions). Next steps should prioritize a site-specific assessment: use Project Sunroof and Global Solar Atlas to estimate solar resource, then request installer proposals that include shade analysis, realistic production modeling (monthly/seasonal), and an economics case reflecting PECO billing/net metering and any required metering upgrades. Given expected seasonal variability (lower winter output due to clouds/daylength), financial planning should focus on annual production and bill offset rather than winter-month performance alone.

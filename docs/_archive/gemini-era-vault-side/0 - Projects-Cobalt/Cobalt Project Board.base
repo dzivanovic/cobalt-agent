@@ -1,0 +1,25 @@
+views:
+  - type: list
+    name: Table
+    filters:
+      and:
+        - file.inFolder("0 - Projects/Cobalt/Tasks")
+    groupBy:
+      property: status
+      direction: ASC
+    order:
+      - file.name
+      - status
+      - priority
+      - module
+      - complexity
+    sort:
+      - property: file.name
+        direction: ASC
+      - property: module
+        direction: ASC
+      - property: priority
+        direction: DESC
+    columnSize:
+      file.name: 244
+    cardSize: 110
