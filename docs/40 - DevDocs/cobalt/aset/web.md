@@ -1,6 +1,13 @@
 # `src/cobalt/aset/web.py`
 
-S2-P1 adds the LIVE/SIM attestation select, resolved/refused account banner, POST validation, and account stamp on every rendered card.
+S2-P3 adds the read-only Trade Radar page and pool-refresh API beside the existing S2-P1 LIVE/SIM attestation, validation, and card-write surface. The ASET header links to `/radar`.
+
+## S2-P3 read-only radar routes
+
+- `GET /radar` calls `build_radar_panel(since=None, snapshot=True)` and composes the pool-first page with `render_radar_page()`. `?frame=phone` adds the 390/366 px preview frame.
+- `GET /api/radar/pool?since=<aware ISO timestamp>` validates the required client cursor, calls the same builder in refresh mode, and returns the Pydantic pool dump plus the HTML from `render_pool()`.
+
+These handlers do not call `_render`, `_daymode_state`, `_open_cards_section`, schema initialization, attestation, or any persistence helper. A panel build failure becomes a visible escaped FAILED page; an API input refusal is 422, and a source/build failure is a loud 503 JSON response. No POST route was added.
 
 ## What it does
 The ASET sheet's surface: a single-page FastAPI app (modeled on the

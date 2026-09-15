@@ -1,0 +1,35 @@
+[
+  {
+    "key": "radar.pool",
+    "value": {
+      "block": {
+        "cap": 50,
+        "kind": "pool",
+        "overrides": {
+          "day_scan": {
+            "first_from": "10:00",
+            "rank_metric": null
+          },
+          "morning_low_float": {
+            "first_from": null,
+            "rank_metric": "volume"
+          }
+        },
+        "priority": [
+          "screens",
+          "lists"
+        ],
+        "rank_metric": {
+          "aftermarket": "volume",
+          "premarket": "volume",
+          "rth": "rvol"
+        },
+        "stickiness_scans": 3
+      },
+      "block_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "error": null,
+      "note_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "status": "ok"
+    }
+  }
+]

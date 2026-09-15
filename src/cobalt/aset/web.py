@@ -67,6 +67,14 @@ from .daily_note import DailyNoteRefused, save_card, save_fill_update
 from .engine import SizingError, compute_fill_recompute, compute_sizing
 from .models import Grade, SizingInput
 from .prefill import PrefillError, fetch_last_price
+from .radar_panel import (
+    RadarPanelError,
+    build_radar_panel,
+    parse_since,
+    pool_api_payload,
+    render_failed_page,
+    render_radar_page,
+)
 from .store import AsetStore
 from .account_mode import AccountModeUnresolved, resolve as resolve_account_mode
 
@@ -374,7 +382,7 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cobalt · ASET Sheet</title>
 <style>{CSS}</style></head><body><div class="wrap">
-<h1>ASET SEMI-AUTO SHEET <span class="muted">pre-beta slice 1 · {e(env_label)}</span></h1>
+<h1>ASET SEMI-AUTO SHEET <span class="muted">pre-beta slice 1 · {e(env_label)}</span> · <a href="/radar">Trade Radar</a></h1>
 {env_banner}
 {vault_line}
 {daymode_html}
@@ -830,6 +838,36 @@ def _result_card(result, form: dict, fill=None) -> str:
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     return _render()
+
+
+@app.get("/radar", response_class=HTMLResponse)
+def radar(frame: str | None = None) -> str:
+    """Read-only radar surface; deliberately bypasses every sheet helper."""
+    phone_frame = frame == "phone"
+    try:
+        view = build_radar_panel(since=None, snapshot=True)
+        return render_radar_page(view, phone_frame=phone_frame)
+    except Exception as exc:
+        message = str(exc) if isinstance(exc, RadarPanelError) else f"{type(exc).__name__}: {exc}"
+        logger.error("radar panel FAILED: {}", message)
+        return render_failed_page(message, phone_frame=phone_frame)
+
+
+@app.get("/api/radar/pool")
+def api_radar_pool(since: str | None = None):
+    """Refresh the pool from the same builder used by the initial page."""
+    instant = now_utc()
+    try:
+        cursor = parse_since(since or "", now=instant)
+    except RadarPanelError as exc:
+        return JSONResponse(status_code=422, content={"status": "FAILED", "error": str(exc)})
+    try:
+        view = build_radar_panel(since=cursor, snapshot=False, now=instant)
+        return pool_api_payload(view.pool)
+    except Exception as exc:
+        message = str(exc) if isinstance(exc, RadarPanelError) else f"{type(exc).__name__}: {exc}"
+        logger.error("radar pool refresh FAILED: {}", message)
+        return JSONResponse(status_code=503, content={"status": "FAILED", "error": message})
 
 
 @app.get("/api/health")

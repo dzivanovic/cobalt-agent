@@ -1,0 +1,894 @@
+[
+  {
+    "_contract": "card-spec \u00a76 \u2014 no real artifact until S2-P2; P2 replaces",
+    "account_mode": "live",
+    "actual_fill": null,
+    "attempt": 1,
+    "attempt_max": 2,
+    "card_score": 61,
+    "conviction": 0.53,
+    "created_at": "2026-01-05T14:30:00.000000+00:00",
+    "default_trail": null,
+    "degraded": true,
+    "direction": "long",
+    "distance_change_pct": null,
+    "dots": [
+      {
+        "grade": 4,
+        "label": "Catalyst",
+        "score": 1,
+        "why": "catalyst why 1"
+      },
+      {
+        "grade": 5,
+        "label": "Spread",
+        "score": 2,
+        "why": "spread why 1"
+      },
+      {
+        "grade": 6,
+        "label": "Level",
+        "score": 0,
+        "why": "level why 1"
+      },
+      {
+        "grade": 2,
+        "label": "Tape",
+        "score": null,
+        "why": "tape why 1"
+      }
+    ],
+    "entry": "180.00",
+    "filled_at": null,
+    "grade": "B",
+    "health": [
+      {
+        "label": "Participation",
+        "note": "RVOL vs entry \u2014 contract sample 1",
+        "status": "ok"
+      },
+      {
+        "label": "Cost",
+        "note": "spread vs entry \u2014 contract sample 1",
+        "status": "warn"
+      },
+      {
+        "label": "Graded dot",
+        "note": "dot delta \u2014 contract sample 1",
+        "status": "bad"
+      },
+      {
+        "label": "Structural",
+        "note": "level/MA/market/sector \u2014 contract sample 1",
+        "status": "ok"
+      }
+    ],
+    "id": 9001,
+    "last_price": "179.40",
+    "news": "",
+    "notes": "",
+    "origin": "radar",
+    "owner": "COBALT",
+    "per_share_risk": null,
+    "pool_member_id": null,
+    "pool_position": 1,
+    "price_source": null,
+    "proximity": 0.62,
+    "recomputed_shares": null,
+    "recomputed_used_risk": null,
+    "risk_budget": null,
+    "session": "rth",
+    "setup": "gap-go",
+    "share_delta": null,
+    "shares": 100,
+    "sheet_mode": "half",
+    "state": "WATCH",
+    "state_at": "2026-01-05T14:30:00.000000+00:00",
+    "status": null,
+    "stop": "177.50",
+    "target_1r": "182.5000",
+    "target_2r": "185.0000",
+    "ticker": "AMD",
+    "trade": "orb-long",
+    "trail_why": [],
+    "trails": [],
+    "used_risk": null,
+    "user_id": 1,
+    "warnings": null,
+    "why": "gap-go \u2192 orb-long, contract sample 1 (no numbers, per card-spec \u00a73)"
+  },
+  {
+    "_contract": "card-spec \u00a76 \u2014 no real artifact until S2-P2; P2 replaces",
+    "account_mode": "live",
+    "actual_fill": null,
+    "attempt": 1,
+    "attempt_max": 2,
+    "card_score": 62,
+    "conviction": 0.56,
+    "created_at": "2026-01-05T14:30:00.000000+00:00",
+    "default_trail": null,
+    "degraded": false,
+    "direction": "short",
+    "distance_change_pct": null,
+    "dots": [
+      {
+        "grade": 5,
+        "label": "Catalyst",
+        "score": 2,
+        "why": "catalyst why 2"
+      },
+      {
+        "grade": 6,
+        "label": "Spread",
+        "score": 0,
+        "why": "spread why 2"
+      },
+      {
+        "grade": 7,
+        "label": "Level",
+        "score": 1,
+        "why": "level why 2"
+      },
+      {
+        "grade": 3,
+        "label": "Tape",
+        "score": null,
+        "why": "tape why 2"
+      }
+    ],
+    "entry": "420.00",
+    "filled_at": null,
+    "grade": "B",
+    "health": [
+      {
+        "label": "Participation",
+        "note": "RVOL vs entry \u2014 contract sample 2",
+        "status": "warn"
+      },
+      {
+        "label": "Cost",
+        "note": "spread vs entry \u2014 contract sample 2",
+        "status": "bad"
+      },
+      {
+        "label": "Graded dot",
+        "note": "dot delta \u2014 contract sample 2",
+        "status": "ok"
+      },
+      {
+        "label": "Structural",
+        "note": "level/MA/market/sector \u2014 contract sample 2",
+        "status": "ok"
+      }
+    ],
+    "id": 9002,
+    "last_price": "419.10",
+    "news": "",
+    "notes": "",
+    "origin": "radar",
+    "owner": "COBALT",
+    "per_share_risk": null,
+    "pool_member_id": null,
+    "pool_position": 2,
+    "price_source": null,
+    "proximity": 0.64,
+    "recomputed_shares": null,
+    "recomputed_used_risk": null,
+    "risk_budget": null,
+    "session": "rth",
+    "setup": "gap-fade",
+    "share_delta": null,
+    "shares": 100,
+    "sheet_mode": "half",
+    "state": "ARMED",
+    "state_at": "2026-01-05T14:30:00.000000+00:00",
+    "status": null,
+    "stop": "417.00",
+    "target_1r": "417.0000",
+    "target_2r": "414.0000",
+    "ticker": "MSFT",
+    "trade": "orb-short",
+    "trail_why": [],
+    "trails": [],
+    "used_risk": null,
+    "user_id": 1,
+    "warnings": null,
+    "why": "gap-fade \u2192 orb-short, contract sample 2 (no numbers, per card-spec \u00a73)"
+  },
+  {
+    "_contract": "card-spec \u00a76 \u2014 no real artifact until S2-P2; P2 replaces",
+    "account_mode": "live",
+    "actual_fill": null,
+    "attempt": 1,
+    "attempt_max": 2,
+    "card_score": 63,
+    "conviction": 0.59,
+    "created_at": "2026-01-05T14:30:00.000000+00:00",
+    "default_trail": "1-bar",
+    "degraded": false,
+    "direction": "long",
+    "distance_change_pct": null,
+    "dots": [
+      {
+        "grade": 6,
+        "label": "Catalyst",
+        "score": 0,
+        "why": "catalyst why 3"
+      },
+      {
+        "grade": 7,
+        "label": "Spread",
+        "score": 1,
+        "why": "spread why 3"
+      },
+      {
+        "grade": 8,
+        "label": "Level",
+        "score": 2,
+        "why": "level why 3"
+      },
+      {
+        "grade": 4,
+        "label": "Tape",
+        "score": null,
+        "why": "tape why 3"
+      }
+    ],
+    "entry": "132.00",
+    "filled_at": null,
+    "grade": "B",
+    "health": [
+      {
+        "label": "Participation",
+        "note": "RVOL vs entry \u2014 contract sample 3",
+        "status": "bad"
+      },
+      {
+        "label": "Cost",
+        "note": "spread vs entry \u2014 contract sample 3",
+        "status": "ok"
+      },
+      {
+        "label": "Graded dot",
+        "note": "dot delta \u2014 contract sample 3",
+        "status": "ok"
+      },
+      {
+        "label": "Structural",
+        "note": "level/MA/market/sector \u2014 contract sample 3",
+        "status": "warn"
+      }
+    ],
+    "id": 9003,
+    "last_price": "132.15",
+    "news": "",
+    "notes": "",
+    "origin": "radar",
+    "owner": "COBALT",
+    "per_share_risk": null,
+    "pool_member_id": null,
+    "pool_position": 3,
+    "price_source": null,
+    "proximity": 0.66,
+    "recomputed_shares": null,
+    "recomputed_used_risk": null,
+    "risk_budget": null,
+    "session": "rth",
+    "setup": "gap-go",
+    "share_delta": null,
+    "shares": 100,
+    "sheet_mode": "half",
+    "state": "TRIGGERED",
+    "state_at": "2026-01-05T14:30:00.000000+00:00",
+    "status": null,
+    "stop": "129.80",
+    "target_1r": "134.2000",
+    "target_2r": "136.4000",
+    "ticker": "NVDA",
+    "trade": "orb-long",
+    "trail_why": [
+      "1-bar: fastest confirmed exit on this setup"
+    ],
+    "trails": [
+      "1-bar",
+      "structure"
+    ],
+    "used_risk": null,
+    "user_id": 1,
+    "warnings": null,
+    "why": "gap-go \u2192 orb-long, contract sample 3 (no numbers, per card-spec \u00a73)"
+  },
+  {
+    "_contract": "card-spec \u00a76 \u2014 no real artifact until S2-P2; P2 replaces",
+    "account_mode": "live",
+    "actual_fill": null,
+    "attempt": 1,
+    "attempt_max": 2,
+    "card_score": 64,
+    "conviction": 0.62,
+    "created_at": "2026-01-05T14:30:00.000000+00:00",
+    "default_trail": "1-bar",
+    "degraded": false,
+    "direction": "short",
+    "distance_change_pct": null,
+    "dots": [
+      {
+        "grade": 7,
+        "label": "Catalyst",
+        "score": 1,
+        "why": "catalyst why 4"
+      },
+      {
+        "grade": 8,
+        "label": "Spread",
+        "score": 2,
+        "why": "spread why 4"
+      },
+      {
+        "grade": 9,
+        "label": "Level",
+        "score": 0,
+        "why": "level why 4"
+      },
+      {
+        "grade": 5,
+        "label": "Tape",
+        "score": null,
+        "why": "tape why 4"
+      }
+    ],
+    "entry": "255.00",
+    "filled_at": null,
+    "grade": "B",
+    "health": [
+      {
+        "label": "Participation",
+        "note": "RVOL vs entry \u2014 contract sample 4",
+        "status": "ok"
+      },
+      {
+        "label": "Cost",
+        "note": "spread vs entry \u2014 contract sample 4",
+        "status": "ok"
+      },
+      {
+        "label": "Graded dot",
+        "note": "dot delta \u2014 contract sample 4",
+        "status": "warn"
+      },
+      {
+        "label": "Structural",
+        "note": "level/MA/market/sector \u2014 contract sample 4",
+        "status": "bad"
+      }
+    ],
+    "id": 9004,
+    "last_price": "256.20",
+    "news": "",
+    "notes": "",
+    "origin": "radar",
+    "owner": "COBALT",
+    "per_share_risk": null,
+    "pool_member_id": null,
+    "pool_position": 4,
+    "price_source": null,
+    "proximity": 0.68,
+    "recomputed_shares": null,
+    "recomputed_used_risk": null,
+    "risk_budget": null,
+    "session": "rth",
+    "setup": "gap-fade",
+    "share_delta": null,
+    "shares": 100,
+    "sheet_mode": "half",
+    "state": "FILLED",
+    "state_at": "2026-01-05T14:30:00.000000+00:00",
+    "status": null,
+    "stop": "251.00",
+    "target_1r": "251.0000",
+    "target_2r": "247.0000",
+    "ticker": "TSLA",
+    "trade": "orb-short",
+    "trail_why": [
+      "1-bar: fastest confirmed exit on this setup"
+    ],
+    "trails": [
+      "1-bar",
+      "structure"
+    ],
+    "used_risk": null,
+    "user_id": 1,
+    "warnings": null,
+    "why": "gap-fade \u2192 orb-short, contract sample 4 (no numbers, per card-spec \u00a73)"
+  },
+  {
+    "_contract": "card-spec \u00a76 \u2014 no real artifact until S2-P2; P2 replaces",
+    "account_mode": "live",
+    "actual_fill": null,
+    "attempt": 1,
+    "attempt_max": 2,
+    "card_score": 65,
+    "conviction": 0.65,
+    "created_at": "2026-01-05T14:30:00.000000+00:00",
+    "default_trail": null,
+    "degraded": false,
+    "direction": "long",
+    "distance_change_pct": null,
+    "dots": [
+      {
+        "grade": 8,
+        "label": "Catalyst",
+        "score": 2,
+        "why": "catalyst why 5"
+      },
+      {
+        "grade": 9,
+        "label": "Spread",
+        "score": 0,
+        "why": "spread why 5"
+      },
+      {
+        "grade": 10,
+        "label": "Level",
+        "score": 1,
+        "why": "level why 5"
+      },
+      {
+        "grade": 6,
+        "label": "Tape",
+        "score": null,
+        "why": "tape why 5"
+      }
+    ],
+    "entry": "228.00",
+    "filled_at": null,
+    "grade": "B",
+    "health": [
+      {
+        "label": "Participation",
+        "note": "RVOL vs entry \u2014 contract sample 5",
+        "status": "ok"
+      },
+      {
+        "label": "Cost",
+        "note": "spread vs entry \u2014 contract sample 5",
+        "status": "warn"
+      },
+      {
+        "label": "Graded dot",
+        "note": "dot delta \u2014 contract sample 5",
+        "status": "bad"
+      },
+      {
+        "label": "Structural",
+        "note": "level/MA/market/sector \u2014 contract sample 5",
+        "status": "ok"
+      }
+    ],
+    "id": 9005,
+    "last_price": "230.10",
+    "news": "",
+    "notes": "",
+    "origin": "radar",
+    "owner": "COBALT",
+    "per_share_risk": null,
+    "pool_member_id": null,
+    "pool_position": 5,
+    "price_source": null,
+    "proximity": 0.7,
+    "recomputed_shares": null,
+    "recomputed_used_risk": null,
+    "risk_budget": null,
+    "session": "rth",
+    "setup": "gap-go",
+    "share_delta": null,
+    "shares": 100,
+    "sheet_mode": "half",
+    "state": "CLOSED",
+    "state_at": "2026-01-05T14:30:00.000000+00:00",
+    "status": null,
+    "stop": "225.50",
+    "target_1r": "230.5000",
+    "target_2r": "233.0000",
+    "ticker": "AAPL",
+    "trade": "orb-long",
+    "trail_why": [],
+    "trails": [],
+    "used_risk": null,
+    "user_id": 1,
+    "warnings": null,
+    "why": "gap-go \u2192 orb-long, contract sample 5 (no numbers, per card-spec \u00a73)"
+  },
+  {
+    "_contract": "card-spec \u00a76 \u2014 no real artifact until S2-P2; P2 replaces",
+    "account_mode": "live",
+    "actual_fill": null,
+    "attempt": 1,
+    "attempt_max": 2,
+    "card_score": 66,
+    "conviction": 0.68,
+    "created_at": "2026-01-05T14:30:00.000000+00:00",
+    "default_trail": null,
+    "degraded": false,
+    "direction": "short",
+    "distance_change_pct": null,
+    "dots": [
+      {
+        "grade": 9,
+        "label": "Catalyst",
+        "score": 0,
+        "why": "catalyst why 6"
+      },
+      {
+        "grade": 10,
+        "label": "Spread",
+        "score": 1,
+        "why": "spread why 6"
+      },
+      {
+        "grade": 5,
+        "label": "Level",
+        "score": 2,
+        "why": "level why 6"
+      },
+      {
+        "grade": 7,
+        "label": "Tape",
+        "score": null,
+        "why": "tape why 6"
+      }
+    ],
+    "entry": "512.00",
+    "filled_at": null,
+    "grade": "B",
+    "health": [
+      {
+        "label": "Participation",
+        "note": "RVOL vs entry \u2014 contract sample 6",
+        "status": "warn"
+      },
+      {
+        "label": "Cost",
+        "note": "spread vs entry \u2014 contract sample 6",
+        "status": "bad"
+      },
+      {
+        "label": "Graded dot",
+        "note": "dot delta \u2014 contract sample 6",
+        "status": "ok"
+      },
+      {
+        "label": "Structural",
+        "note": "level/MA/market/sector \u2014 contract sample 6",
+        "status": "ok"
+      }
+    ],
+    "id": 9006,
+    "last_price": "508.00",
+    "news": "",
+    "notes": "",
+    "origin": "radar",
+    "owner": "COBALT",
+    "per_share_risk": null,
+    "pool_member_id": null,
+    "pool_position": 6,
+    "price_source": null,
+    "proximity": 0.72,
+    "recomputed_shares": null,
+    "recomputed_used_risk": null,
+    "risk_budget": null,
+    "session": "rth",
+    "setup": "gap-fade",
+    "share_delta": null,
+    "shares": 100,
+    "sheet_mode": "half",
+    "state": "PASSED",
+    "state_at": "2026-01-05T14:30:00.000000+00:00",
+    "status": null,
+    "stop": "507.00",
+    "target_1r": "507.0000",
+    "target_2r": "502.0000",
+    "ticker": "META",
+    "trade": "orb-short",
+    "trail_why": [],
+    "trails": [],
+    "used_risk": null,
+    "user_id": 1,
+    "warnings": null,
+    "why": "gap-fade \u2192 orb-short, contract sample 6 (no numbers, per card-spec \u00a73)"
+  },
+  {
+    "_contract": "card-spec \u00a76 \u2014 no real artifact until S2-P2; P2 replaces",
+    "account_mode": "live",
+    "actual_fill": null,
+    "attempt": 1,
+    "attempt_max": 2,
+    "card_score": 67,
+    "conviction": 0.71,
+    "created_at": "2026-01-05T14:30:00.000000+00:00",
+    "default_trail": null,
+    "degraded": false,
+    "direction": "long",
+    "distance_change_pct": null,
+    "dots": [
+      {
+        "grade": 10,
+        "label": "Catalyst",
+        "score": 1,
+        "why": "catalyst why 7"
+      },
+      {
+        "grade": 4,
+        "label": "Spread",
+        "score": 2,
+        "why": "spread why 7"
+      },
+      {
+        "grade": 6,
+        "label": "Level",
+        "score": 0,
+        "why": "level why 7"
+      },
+      {
+        "grade": 8,
+        "label": "Tape",
+        "score": null,
+        "why": "tape why 7"
+      }
+    ],
+    "entry": "168.00",
+    "filled_at": null,
+    "grade": "B",
+    "health": [
+      {
+        "label": "Participation",
+        "note": "RVOL vs entry \u2014 contract sample 7",
+        "status": "bad"
+      },
+      {
+        "label": "Cost",
+        "note": "spread vs entry \u2014 contract sample 7",
+        "status": "ok"
+      },
+      {
+        "label": "Graded dot",
+        "note": "dot delta \u2014 contract sample 7",
+        "status": "ok"
+      },
+      {
+        "label": "Structural",
+        "note": "level/MA/market/sector \u2014 contract sample 7",
+        "status": "warn"
+      }
+    ],
+    "id": 9007,
+    "last_price": "166.00",
+    "news": "",
+    "notes": "",
+    "origin": "radar",
+    "owner": "COBALT",
+    "per_share_risk": null,
+    "pool_member_id": null,
+    "pool_position": 7,
+    "price_source": null,
+    "proximity": 0.74,
+    "recomputed_shares": null,
+    "recomputed_used_risk": null,
+    "risk_budget": null,
+    "session": "rth",
+    "setup": "gap-go",
+    "share_delta": null,
+    "shares": 100,
+    "sheet_mode": "half",
+    "state": "EXPIRED",
+    "state_at": "2026-01-05T14:30:00.000000+00:00",
+    "status": null,
+    "stop": "165.50",
+    "target_1r": "170.5000",
+    "target_2r": "173.0000",
+    "ticker": "GOOGL",
+    "trade": "orb-long",
+    "trail_why": [],
+    "trails": [],
+    "used_risk": null,
+    "user_id": 1,
+    "warnings": null,
+    "why": "gap-go \u2192 orb-long, contract sample 7 (no numbers, per card-spec \u00a73)"
+  },
+  {
+    "_contract": "card-spec \u00a76 \u2014 no real artifact until S2-P2; P2 replaces",
+    "account_mode": "live",
+    "actual_fill": null,
+    "attempt": 1,
+    "attempt_max": 2,
+    "card_score": 68,
+    "conviction": 0.74,
+    "created_at": "2026-01-05T14:30:00.000000+00:00",
+    "default_trail": null,
+    "degraded": false,
+    "direction": "short",
+    "distance_change_pct": null,
+    "dots": [
+      {
+        "grade": 3,
+        "label": "Catalyst",
+        "score": 2,
+        "why": "catalyst why 8"
+      },
+      {
+        "grade": 5,
+        "label": "Spread",
+        "score": 0,
+        "why": "spread why 8"
+      },
+      {
+        "grade": 7,
+        "label": "Level",
+        "score": 1,
+        "why": "level why 8"
+      },
+      {
+        "grade": 9,
+        "label": "Tape",
+        "score": null,
+        "why": "tape why 8"
+      }
+    ],
+    "entry": "195.00",
+    "filled_at": null,
+    "grade": "B",
+    "health": [
+      {
+        "label": "Participation",
+        "note": "RVOL vs entry \u2014 contract sample 8",
+        "status": "ok"
+      },
+      {
+        "label": "Cost",
+        "note": "spread vs entry \u2014 contract sample 8",
+        "status": "ok"
+      },
+      {
+        "label": "Graded dot",
+        "note": "dot delta \u2014 contract sample 8",
+        "status": "warn"
+      },
+      {
+        "label": "Structural",
+        "note": "level/MA/market/sector \u2014 contract sample 8",
+        "status": "bad"
+      }
+    ],
+    "id": 9008,
+    "last_price": "196.50",
+    "news": "",
+    "notes": "",
+    "origin": "radar",
+    "owner": "COBALT",
+    "per_share_risk": null,
+    "pool_member_id": null,
+    "pool_position": 8,
+    "price_source": null,
+    "proximity": 0.76,
+    "recomputed_shares": null,
+    "recomputed_used_risk": null,
+    "risk_budget": null,
+    "session": "rth",
+    "setup": "gap-fade",
+    "share_delta": null,
+    "shares": 100,
+    "sheet_mode": "half",
+    "state": "MISSED",
+    "state_at": "2026-01-05T14:30:00.000000+00:00",
+    "status": null,
+    "stop": "192.00",
+    "target_1r": "192.0000",
+    "target_2r": "189.0000",
+    "ticker": "AMZN",
+    "trade": "orb-short",
+    "trail_why": [],
+    "trails": [],
+    "used_risk": null,
+    "user_id": 1,
+    "warnings": null,
+    "why": "gap-fade \u2192 orb-short, contract sample 8 (no numbers, per card-spec \u00a73)"
+  },
+  {
+    "_contract": "card-spec \u00a76 \u2014 no real artifact until S2-P2; P2 replaces",
+    "account_mode": "live",
+    "actual_fill": null,
+    "attempt": 1,
+    "attempt_max": 2,
+    "card_score": 69,
+    "conviction": 0.77,
+    "created_at": "2026-01-05T14:30:00.000000+00:00",
+    "default_trail": null,
+    "degraded": false,
+    "direction": "long",
+    "distance_change_pct": null,
+    "dots": [
+      {
+        "grade": 4,
+        "label": "Catalyst",
+        "score": 0,
+        "why": "catalyst why 9"
+      },
+      {
+        "grade": 6,
+        "label": "Spread",
+        "score": 1,
+        "why": "spread why 9"
+      },
+      {
+        "grade": 8,
+        "label": "Level",
+        "score": 2,
+        "why": "level why 9"
+      },
+      {
+        "grade": 10,
+        "label": "Tape",
+        "score": null,
+        "why": "tape why 9"
+      }
+    ],
+    "entry": "42.00",
+    "filled_at": null,
+    "grade": "B",
+    "health": [
+      {
+        "label": "Participation",
+        "note": "RVOL vs entry \u2014 contract sample 9",
+        "status": "ok"
+      },
+      {
+        "label": "Cost",
+        "note": "spread vs entry \u2014 contract sample 9",
+        "status": "warn"
+      },
+      {
+        "label": "Graded dot",
+        "note": "dot delta \u2014 contract sample 9",
+        "status": "bad"
+      },
+      {
+        "label": "Structural",
+        "note": "level/MA/market/sector \u2014 contract sample 9",
+        "status": "ok"
+      }
+    ],
+    "id": 9009,
+    "last_price": "41.80",
+    "news": "",
+    "notes": "",
+    "origin": "manual",
+    "owner": "N/A MANUAL",
+    "per_share_risk": null,
+    "pool_member_id": null,
+    "pool_position": 9,
+    "price_source": null,
+    "proximity": 0.78,
+    "recomputed_shares": null,
+    "recomputed_used_risk": null,
+    "risk_budget": null,
+    "session": "rth",
+    "setup": "gap-go",
+    "share_delta": null,
+    "shares": 100,
+    "sheet_mode": "half",
+    "state": "WATCH",
+    "state_at": "2026-01-05T14:30:00.000000+00:00",
+    "status": null,
+    "stop": "40.50",
+    "target_1r": "43.5000",
+    "target_2r": "45.0000",
+    "ticker": "SMCI",
+    "trade": "orb-long",
+    "trail_why": [],
+    "trails": [],
+    "used_risk": null,
+    "user_id": 1,
+    "warnings": null,
+    "why": "gap-go \u2192 orb-long, contract sample 9 (no numbers, per card-spec \u00a73)"
+  }
+]

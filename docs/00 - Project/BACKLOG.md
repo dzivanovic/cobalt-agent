@@ -61,6 +61,16 @@ don't duplicate them.
 
 ## NOW (in build)
 
+- **S2-P3 — Radar panel (2026-09-15): BUILD COMPLETE, HUB VERIFICATION PENDING.**
+  Read-only `GET /radar` pool view + card-ladder shell and
+  `GET /api/radar/pool?since=` refresh path built in the ASET process.
+  Store read layer, strict Pydantic views, fail-loud source/freshness
+  handling, responsive pure renderers, offline fixture contract tests, and
+  DevDocs are complete. Focused offline suite: 88 passed, 1 skipped
+  (`requires_db`, hub-owned). Full repository suite is blocked during
+  collection by the pre-existing old-tree `FinvizStockData` import; hub must
+  run the DB test and verify/commit the artifact.
+
 - **Pre-beta slice 1 — ASET semi-auto sheet** (days)
   Deterministic sizing engine in src/cobalt/: daily stop = account ÷ 50;
   grade→risk A+ 80% / A 30% / B 15% / C 5% / D-SAW 0%; entry/stop/direction

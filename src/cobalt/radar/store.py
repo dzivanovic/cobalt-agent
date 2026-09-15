@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
-from typing import Callable
+from collections.abc import Callable
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from cobalt import db, env
 from cobalt.db import Side
 from cobalt.session import assert_writable
 
 from .pool import Action, Transition
-from zoneinfo import ZoneInfo
 
 ET = ZoneInfo("America/New_York")
 
@@ -41,6 +41,25 @@ class RadarStore:
             cursor = conn.execute("SELECT * FROM radar_pool WHERE pool_key = %s", (pool_key,))
             row = cursor.fetchone()
             return dict(zip([item.name for item in cursor.description], row)) if row else None
+
+    def members_for_day(self, pool_key: str, trade_date: date) -> list[dict]:
+        """Return every membership episode for one pool and trading day.
+
+        This intentionally includes open, departed, and never-admitted
+        episodes.  Admission is represented by ``entered_at IS NOT NULL``;
+        callers must not mistake every open row for a pool member.
+        """
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "SELECT id, pool_key, ticker, trade_date, first_seen_at, "
+                "entered_at, left_at, source, sources, rank_at_entry, last_rank, "
+                "below_cap_streak, excluded_by, session, opened_scan_id, "
+                "last_scan_id, closed_scan_id FROM radar_membership "
+                "WHERE pool_key = %s AND trade_date = %s ORDER BY id",
+                (pool_key, trade_date),
+            )
+            columns = [item.name for item in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     def apply_membership(
         self,
