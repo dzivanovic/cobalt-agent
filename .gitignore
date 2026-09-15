@@ -27,6 +27,11 @@ docs/*
 docs/90 - References/assets/
 !docs/_archive/
 !docs/_archive/**
+# _inflight is README-only, permanently (PLACEMENT.md, ruled 2026-09-14) —
+# carve-out was missing before today, so the README was never actually
+# tracked despite CLAUDE.md/PLACEMENT.md documenting it as committed.
+!docs/_inflight/
+!docs/_inflight/README.md
 # docs/60 - Agent Output/ (renamed 2026-08-31 from docs/0 - Inbox/) is
 # deliberately NOT carved out here — it's the old scheduler's live
 # briefing landing folder, not a documentation tier; stays fully

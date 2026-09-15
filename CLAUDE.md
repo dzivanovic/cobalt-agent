@@ -164,10 +164,10 @@ numbered folder.
   local-only, never committed.
 - **_archive** — superseded or misfiled content, organized by why it's
   there. Nothing under docs/ is ever deleted.
-- **_inflight** — NOT a documentation tier: git-ignored delivery snapshots of
-  reports still on an unmerged branch (see "Vault delivery" below); each copy
-  is deleted when its report lands on main. The one sanctioned folder outside
-  the numbered tiers (ruled 2026-09-09).
+- **_inflight** — NOT a documentation tier: README-only in git, permanently
+  (see docs/PLACEMENT.md's `_inflight` rule, ruled 2026-09-14, superseding
+  the prior pre-merge copy workflow described here through 2026-09-13). The
+  one sanctioned folder outside the numbered tiers (ruled 2026-09-09).
 
 **Law: every new markdown artifact files into one of these — never at
 repo root, never in a new ad-hoc folder.** CLAUDE.md, AGENTS.md, QWEN.md,
@@ -262,11 +262,9 @@ without a fact or a verdict. Replies to Dejan ≤10 lines, one ruling per
 message; full elaboration only when he asks.
 
 **Vault delivery:** every document Dejan reads or attaches must sit in the
-Obsidian vault. Repo `docs/` is in the vault through the symlink
-`0 - Projects/Cobalt`; a report on an unmerged branch is NOT, so copy it to
-`docs/_inflight/` (git-ignored by `docs/*`, no carve-out — never collides
-with a merge) the moment it lands, cite the vault path, and delete the copy
-when the report reaches `40 - DevDocs/reports/` at merge.
+Obsidian vault. See docs/PLACEMENT.md's `_inflight` rule (ruled
+2026-09-14) for where plans and reports land and why no pre-merge copy is
+made.
 
 **Session hygiene (ruled 2026-09-06):** never rely on restore — state to
 the vault/DB before `/clear`. Never paste into an auto-mode pane without a

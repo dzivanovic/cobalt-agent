@@ -25,11 +25,17 @@ placement sweep allows their existing content through unchanged.
   deleted) but never enter git; everything else under `docs/_archive/`
   (renamed/superseded content, the gemini-era vault-side snapshot) stays
   tracked as before.
-- **One `_inflight`** — `docs/_inflight/` holds only `README.md` in git;
-  a report copied there for pre-merge vault delivery is a local,
-  gitignored artifact removed the moment the report lands in
-  `40 - DevDocs/reports/` at merge (the validator allows more only under
-  `COBALT_INFLIGHT_OK=1`, for that in-flight window).
+- **One `_inflight`** — RULED 2026-09-14, superseding the prior pre-merge
+  copy workflow: plans and reports are committed on the working branch
+  under `docs/40 - DevDocs/{plans,reports}`; `docs/_inflight` is
+  README-only; no copies for vault delivery — the vault sees them at
+  merge. `docs/_inflight/` holds only `README.md` in git, permanently
+  (not just between merges).
+- **Tribunal workspace** — RULED 2026-09-14: a tribunal's working copy
+  lives at `Think/0 - Inbox/tribunal-<name>-<date>/` (vault side), never
+  `~/tmp`; the hub's finished report lands in `docs/40 - DevDocs/reports/`.
+  Plans and reports commit on the working branch, never `docs/_inflight`
+  (see the `_inflight` rule above).
 - **`docs/60 - Agent Output/`** is the old scheduler's live Morning
   Briefing landing folder — out of scope of the D6 tiers, never a
   documentation tier, stays gitignored.
