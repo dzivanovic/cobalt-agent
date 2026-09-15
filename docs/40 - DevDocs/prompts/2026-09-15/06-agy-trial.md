@@ -2,6 +2,8 @@ MODEL: Sonnet 5 (`claude-sonnet-5`) hub → Gemini 3.1 Pro headless under `agy` 
 
 # Gemini 3.1 Pro usability trial (read-and-judge, L49 shape): review the S2-P3 build against its plan; the hub judges the reviewer
 
+EVERY LAUNCH IS A NEW ATTEMPT: a prior attempt in the report never means "nothing left to do" — the permission rules may have changed since. Always run steps 1–5 again and append `## Attempt <next letter>` to the report.
+
 INDEX CARD: read `/Users/cobalt/Vault/Think/6 - Permanent/Memory/INDEX.md` → `## NOW` at the top of `.../areas/cobalt.md` → `.../areas/cobalt-houses.md` (Gemini/agy lines only) → LAWS.md sections L33, L44, L47, L49 only. You are the HUB (L36): you launch agy, you judge its output, you write the report `docs/40 - DevDocs/reports/agy-trial-2026-09-15.md` in this worktree (L48) and commit it here. You do not touch `~/cobalt-wt/s2-p3-radar-panel` (read it only; another hub owns it) and never `~/cobalt`.
 
 1. **Launcher check (read-only):** `agy --help`, `agy models` (ids measured 09-15: `gemini-3.1-pro-high`, `gemini-3.1-pro-low`). PRECONDITION: the permission rules from `reports/agy-headless-research-2026-09-15.md` are in `~/.gemini/antigravity-cli/settings.json` (Dejan's one-liner) — verify with `python3 -c "import json;print(json.load(open('/Users/cobalt/.gemini/antigravity-cli/settings.json')).get('permissions'))"`; if absent, stop with `ESCALATE: agy permission rules not applied` (the 09-15 run produced zero output for that reason). Note: `agy` has `--print`, `--mode plan` (no edits), `--sandbox`, `--add-dir`, `--print-timeout`. Never pass `--dangerously-skip-permissions` (L55 class).
