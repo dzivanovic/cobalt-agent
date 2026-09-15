@@ -176,7 +176,10 @@ class TestItIsWiredIntoTheBeat:
         for name in (
             "database", "sheet_http", "sheet_daymode", "obsidian", "mainframe",
             "herdr", "archiver_freshness", "seat_usage", "backup_freshness",
-            "vaultwrite_blocks", "redactions", "email",
+            "vaultwrite_blocks", "redactions",
+            # radar reads Postgres inside a scanning session; unstubbed,
+            # this test failed whenever the suite ran premarket–aftermarket.
+            "radar",
         ):
             monkeypatch.setattr(probes, name, record(name))
         monkeypatch.setattr(runner, "sweep", lambda **k: [])

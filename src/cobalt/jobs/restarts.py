@@ -11,6 +11,10 @@ from .config import REPO_ROOT, JobRegistry, load_job_registry
 from .models import JobKind
 
 
+#: Root markdown files that are documentation only (CLAUDE.md, D6).
+ROOT_DOCS = frozenset({"README.md", "CLAUDE.md", "AGENTS.md", "QWEN.md"})
+
+
 class RestartError(RuntimeError):
     """The requested revision or import graph could not be classified."""
 
@@ -173,6 +177,10 @@ def classify(git_range: str, registry: JobRegistry | None = None) -> list[Classi
         if readers:
             restarts.update(job.label for job in readers)
             rule = (rule + "; " if rule else "") + "resident reads"
+        elif (declared := registry.no_resident_read(path)) is not None:
+            rule = (rule + "; " if rule else "") + (
+                f"no resident reads (one-shot: {','.join(declared.readers)})"
+            )
         module = _module_for(REPO_ROOT / path)
         if path.startswith("src/"):
             if module:
@@ -183,7 +191,17 @@ def classify(git_range: str, registry: JobRegistry | None = None) -> list[Classi
                 rule = (rule + "; " if rule else "") + "non-Python src asset"
         if not rule and path == "configs/cobalt/jobs.yaml":
             rule = "registry; register, no restart"
-        if not rule and path.startswith(("tests/", "docs/")):
+        if not rule and (path.startswith("docs/") or path in ROOT_DOCS):
+            # L42 amendment O9: documentation with no runtime reader derives
+            # no restart, not even the conservative set.
+            output.append(Classification(path, item.change, "DOCS", ()))
+            continue
+        if not rule and path.startswith(".claude/"):
+            # Claude Code harness settings: read by the agent CLI, never by a
+            # Cobalt process (committed 2026-09-15).
+            output.append(Classification(path, item.change, "HARNESS; no Cobalt reader", ()))
+            continue
+        if not rule and path.startswith("tests/"):
             rule = "test/documentation; no resident"
         if not rule and path == "ops/README.md":
             rule = "operations documentation; no resident"

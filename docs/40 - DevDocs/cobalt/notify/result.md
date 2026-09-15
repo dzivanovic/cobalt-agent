@@ -11,10 +11,9 @@ one-path rule kills on sight. `mattermost.SendResult` still imports from
 where it always was — it *is* this class.
 
 ## `ref`
-The remote system's own id — a Gmail message id, a Mattermost post id.
-Structured rather than left for a caller to parse back out of `detail`:
-`email-test` has to print the id *and* store it in a column, and a caller
-that re-split a human-readable sentence would break the moment that
+The remote system's own id — a Mattermost post id (a Gmail message id,
+until that channel was retired 2026-09-14). Structured rather than left
+for a caller to parse back out of `detail`: a caller that re-split a human-readable sentence would break the moment that
 sentence was reworded. Not a credential.
 
 ## It carries no material

@@ -64,6 +64,40 @@ def test_stale_onset_recovery_and_no_stale_outside_rth():
     assert outside.failures == []
 
 
+SINCE = datetime(2026, 9, 14, 13, 38, 7, 287155, tzinfo=timezone.utc)
+
+
+def test_carried_record_for_a_non_member_is_dropped_and_logged_once():
+    # cto-2026-09-15 §1.2: IMCC left the pool on 09-14 and its stale record
+    # was carried forever, because only a fetch of IMCC could pop it.
+    from loguru import logger
+
+    lines = []
+    sink = logger.add(lambda message: lines.append(message.record["message"]), level="INFO")
+    try:
+        result = asyncio.run(_poller(Store(NOW - timedelta(minutes=1)), []).poll(
+            [PollMember("AAA", 1)], now=NOW, session=Session.PREMARKET,
+            existing_failures=[PollFailure("IMCC", "stale", SINCE)]))
+    finally:
+        logger.remove(sink)
+    assert result.failures == []
+    dropped = [line for line in lines if "IMCC" in line]
+    assert len(dropped) == 1
+    assert SINCE.isoformat() in dropped[0]
+
+
+def test_carried_record_for_a_member_is_kept_until_its_fetch_clears_it():
+    store = Store(NOW - timedelta(minutes=10))
+    carried = [PollFailure("AAA", "stale", SINCE)]
+    still = asyncio.run(_poller(store, []).poll(
+        [PollMember("AAA", 1)], now=NOW, session=Session.RTH, existing_failures=carried))
+    assert still.failures == carried
+    store.mark = NOW - timedelta(minutes=1)
+    cleared = asyncio.run(_poller(store, []).poll(
+        [PollMember("AAA", 1)], now=NOW, session=Session.RTH, existing_failures=still.failures))
+    assert cleared.failures == []
+
+
 def test_commit_gate_exception_propagates_and_stops_remaining_tickers():
     store = Store()
     poller = _poller(store, [_bar(-1)])

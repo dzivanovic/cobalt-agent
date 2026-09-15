@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "additionalDirectories": ["/Users/cobalt/cobalt-wt", "/Users/cobalt/Vault"],
+    "allow": [
+      "Bash(uv run cobalt db query *)",
+      "Bash(COBALT_ENV=production uv run cobalt db query *)",
+      "Bash(uv run cobalt heartbeat show*)",
+      "Bash(COBALT_ENV=production uv run cobalt heartbeat show*)",
+      "Bash(uv run cobalt jobs list*)",
+      "Bash(uv run cobalt jobs restarts *)",
+      "Bash(uv run cobalt jobs readers *)",
+      "Bash(launchctl print *)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)"
+    ]
+  }
+}

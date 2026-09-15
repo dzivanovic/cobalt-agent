@@ -20,3 +20,8 @@ by being launched through it.
 `stop` / `resume` are **top-level**, not under `jobs`, deliberately: the
 kill phrase is what you reach for when something is wrong, and
 `cobalt jobs killswitch engage` is not what anyone types at that moment.
+
+## `jobs readers` on a declared one-shot-only file (2026-09-15)
+A path listed in `no_resident_reads` exits **0** and prints its one-shot
+readers, the `because`, and `RESTARTS: none`. A path no row mentions
+still exits 1 as UNKNOWN PATH.

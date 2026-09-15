@@ -37,3 +37,19 @@ and `docs/0 - Projects/` (the gitignored playground vault —
 live/uncertain prod surfaces) are otherwise untouched and do not appear
 here beyond the one dated cleanup above; see `CLAUDE.md`'s strangler
 rules.
+
+## Email channel, retired 2026-09-14 — not archived here
+
+The F18 second alert channel — email over Layer-B Google OAuth, built at
+S1-P4 (2026-09-08) — retired by Dejan's ruling of 2026-09-14 and removed
+from the new core on 2026-09-15 (ops/2026-09-15). Google's Publish step
+for the `gmail.send` scope is gated on restricted-scope verification, so
+the OAuth client stayed in Testing and its refresh token expired every
+seven days. Ruled 2026-09-15: **source code is never archived under
+`docs/`** — git history keeps it. `src/cobalt/notify/email.py`,
+`store.py`, `cli.py`, `tests/cobalt/test_notify_email.py` and the
+DevDocs `notify/cli.md`, `email.md`, `store.md` are all readable at
+`0ed37f5` (`git show 0ed37f5:<path>`). The
+`cobalt_email_sends` migration stays at
+`src/cobalt/notify/migrations/0001_cobalt_email_sends.sql` because the
+table still exists; dropping it is a separate HITL.

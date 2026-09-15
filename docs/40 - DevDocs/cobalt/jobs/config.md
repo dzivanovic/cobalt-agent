@@ -35,3 +35,14 @@ rates "not running" AMBER instead of RED (see `watchdog.md`). Set on
 launchd cannot read this file and this file cannot read launchd, so the
 schedule is written twice. `cobalt validate` compares them — a mirror
 nobody compares is a mirror that drifts.
+
+## `no_resident_reads` (ruled 2026-09-15)
+A top-level list of repo files that only **one-shots** read at runtime —
+`path`, `readers` (job labels), `because` (the derivation, file:line).
+A one-shot re-reads everything every run, so such a file derives no
+restart; declaring it is what separates "no resident reads this" from
+"nobody has worked out who reads this". The schema refuses an
+unregistered label, a RESIDENT as reader (that belongs in its `reads`),
+a path some resident already `reads`, and absolute or `..` paths.
+`JobRegistry.no_resident_read(path)` returns the declaration or None.
+First row: `configs/cobalt/notify.yaml`, reader `com.cobalt.heartbeat`.

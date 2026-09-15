@@ -196,8 +196,9 @@ def reset_cache() -> None:
 # owns `VAULT_FILE` + `MASTER_KEY_ENV` and already decrypts the vault; a
 # second module that opened the same file with the same Fernet would be
 # the duplicate implementation the one-path rule kills on sight. The F19
-# guard above READS every value; `email-auth` needs to read three by name
-# and write two. Same file, same key, same rules — so, same module.
+# guard above READS every value; named access reads or writes one by name
+# (its first caller, the Gmail consent flow, was retired 2026-09-14). Same
+# file, same key, same rules — so, same module.
 #
 # This is the first WRITE the new core makes to the vault. The old tree's
 # `VaultManager._save_vault` is the shape being matched (Fernet over a

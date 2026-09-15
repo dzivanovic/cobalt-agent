@@ -27,7 +27,7 @@ risk; attribution was — and attribution is the point.
 ## `record=False` exists for exactly one caller
 The log guard. Counting a redaction opens a database connection, a
 database failure logs, and logging comes back through here. The
-DM/email/heartbeat channels do the counting; the log guard only ever
+DM/heartbeat channels do the counting; the log guard only ever
 prevents.
 
 ## `install_log_guard()`

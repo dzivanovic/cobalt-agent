@@ -39,6 +39,7 @@ RULES_MD_RELATIVE_PATH = "1 - Trading/5 - Review/Rules.md"
 _NUMBERED_LINE_RE = re.compile(r"^\s*\d+\.\s+(.*)$")
 _MANTRA_RE = re.compile(r"^\*\*([^*]+):\*\*\s*\*(.+)\*\s*$")
 _TAG_TOKEN_RE = re.compile(r"^#\w+$")
+_GLUED_TAG_RE = re.compile(r"^(.*[^\w\s#])#(\w+)$")
 
 
 class RulesSourceError(RuntimeError):
@@ -53,6 +54,14 @@ def _split_trailing_tags(text: str) -> tuple[str, list[str]]:
     tags: list[str] = []
     while tokens and _TAG_TOKEN_RE.match(tokens[-1]):
         tags.insert(0, tokens.pop()[1:])
+    # One tolerance, and only this one (L45 companion: fix the parser, never
+    # the note): a RECOGNIZED tag glued to the final punctuation,
+    # "…never break-even.#process". A tag glued to a word stays "none".
+    if tokens:
+        glued = _GLUED_TAG_RE.match(tokens[-1])
+        if glued and glued.group(2) in RECOGNIZED_TAGS:
+            tokens[-1] = glued.group(1)
+            tags.insert(0, glued.group(2))
     return " ".join(tokens), tags
 
 

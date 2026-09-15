@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Awaitable, Callable
 
+from loguru import logger
+
 from cobalt.archiver.collector import fetch_bars, scrub
 from cobalt.archiver.models import Bar, Interval
 from cobalt.archiver.store import BarStore
@@ -62,6 +64,21 @@ class BarPoller:
         before_commit: Callable[[str], Callable[[], None] | None] | None = None,
     ) -> PollResult:
         failures = {(item.ticker, item.reason): item for item in existing_failures or []}
+        # A carried record is popped only by a fetch of its own ticker, so a
+        # name that left the pool kept its record forever (IMCC, 09-14 →
+        # cto-2026-09-15 §1.2). Outside the pool there are no bars to be
+        # stale about: drop it, once, loudly enough to trace.
+        polled = {member.ticker for member in members}
+        dropped: dict[str, list[PollFailure]] = {}
+        for key, item in list(failures.items()):
+            if item.ticker not in polled:
+                dropped.setdefault(item.ticker, []).append(failures.pop(key))
+        for ticker, items in sorted(dropped.items()):
+            logger.info(
+                "radar poll: dropped carried failure record(s) for {} — not a member this poll ({})",
+                ticker,
+                ", ".join(f"{item.reason} since {item.since.isoformat()}" for item in items),
+            )
         written: dict[str, int] = {}
         stopped_at: str | None = None
         for member in sorted(members, key=lambda item: (item.rank, item.ticker)):

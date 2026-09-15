@@ -98,6 +98,13 @@ def cmd_readers(args: argparse.Namespace) -> None:
     readers = registry.readers_of(path)
 
     if not readers:
+        declared = registry.no_resident_read(path)
+        if declared is not None:
+            print(f"{path} has NO resident reader (jobs.yaml `no_resident_reads`).")
+            print(f"  re-read on every run by one-shot(s): {', '.join(declared.readers)}")
+            print(f"  because: {' '.join(declared.because.split())}")
+            print("\nRESTARTS: none")
+            return
         known = registry.read_paths
         print(
             f"UNKNOWN PATH: no job row lists {path!r} as re-read at runtime.\n"

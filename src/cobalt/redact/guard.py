@@ -86,7 +86,7 @@ def redact(
 ) -> RedactResult:
     """Strip every known secret shape out of `text`. THE one entry point.
 
-    `channel` names where this was headed (mattermost / email / log /
+    `channel` names where this was headed (mattermost / log /
     heartbeat) and is what the counter row carries, so the heartbeat can
     say not just "3 redactions" but which surface nearly leaked.
 
@@ -201,7 +201,7 @@ def install_log_guard() -> None:
 
     `record=False`: counting a redaction opens a database connection, and
     a database failure logs — which would come straight back through
-    here. The DM/email/heartbeat channels do the counting; this one only
+    here. The DM/heartbeat channels do the counting; this one only
     ever prevents.
     """
     from loguru import logger

@@ -71,7 +71,6 @@ def _stores():
     from cobalt.cards.store import CardStore
     from cobalt.daymode.store import DayModeStore
     from cobalt.jobs.store import JobStore
-    from cobalt.notify.store import EmailSendStore
     from cobalt.redact.store import RedactionStore
     from cobalt.session.store import SessionBlockStore
     from cobalt.taxonomy.store import TradeDefStore
@@ -79,7 +78,7 @@ def _stores():
 
     return [
         BarStore, AsetStore, CardStore, DayModeStore, JobStore,
-        EmailSendStore, RedactionStore, SessionBlockStore, TradeDefStore,
+        RedactionStore, SessionBlockStore, TradeDefStore,
         VaultWriteStore,
     ]
 

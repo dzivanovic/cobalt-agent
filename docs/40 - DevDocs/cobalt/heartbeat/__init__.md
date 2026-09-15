@@ -48,25 +48,19 @@ that says green when it did not look is worse than no heartbeat.
    second table would be a table to migrate later for nothing.
    Known-idle states never rate RED: radar outside a scanning session,
    and a `launchd_unmanaged` job (AMBER, see `jobs/watchdog.md`).
-3. **The out-of-band channel — WHICH DOES NOT EXIST.** See below.
+3. **The out-of-band channel — RETIRED 2026-09-14.** See below.
 
-## Output 3: what exists, and what does not
-Charter §3 F18 specifies *"email via Layer-B Google OAuth"*. **There is
-no email send path in this repo.** Searched at S1-P3 (2026-09-04): no
-`smtplib`, no `sendmail`, no Gmail/OAuth client, no credentials file, no
-`send_email` anywhere in `src/`, `ops/`, `dev_utils/` or `configs/`.
-`google-api-python-client` is in pyproject's dependencies and
-`googleapiclient` appears in the old tree only as a Gemini/LLM import,
-never as a mail sender; the vault's cloud entries are GEMINI / OPENAI /
-OPENROUTER **API keys**, which are not an OAuth credential and cannot
-send mail.
-
-S1-P3's instruction was explicit: do not build OAuth, report what exists,
-stop at Mattermost. So `out_of_band()` says so on every red, naming what
-was searched for. **The consequence is the hole Charter §3 F18's "alert
-path ≠ monitored path" exists to close:** the DM goes over Mattermost,
-which is one of the monitored services, so a Mattermost outage takes the
-alert about it along. Carried to P4.
+## Output 3: built, then retired
+Charter §3 F18 specifies *"email via Layer-B Google OAuth"*. S1-P3
+(2026-09-04) found no send path and stopped at Mattermost; S1-P4
+(2026-09-08) built it. Google's Publish step for the `gmail.send` scope
+is gated on restricted-scope verification, so the OAuth client never
+left Testing and its refresh token expired every seven days. Dejan ruled
+the channel retired on 09-14; it was removed 09-15 (git history keeps the code:
+`git show 0ed37f5:src/cobalt/notify/email.py`). **The consequence is
+the hole Charter §3 F18's "alert path ≠ monitored path" exists to
+close:** the DM goes over Mattermost, which is one of the monitored
+services, so a Mattermost outage takes the alert about it along.
 
 ## A red beat exits 0
 A red heartbeat is the heartbeat *working*. A job row that flipped to

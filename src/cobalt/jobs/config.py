@@ -355,12 +355,58 @@ class JobSpec(BaseModel):
         return OPS_DIR / f"{self.label}.plist"
 
 
+class NoResidentRead(BaseModel):
+    """A repo file that only ONE-SHOTS read at runtime (ruled 2026-09-15).
+
+    A one-shot re-reads everything every run, so a change to this file
+    derives NO restart. That is still a claim about the code, so it is
+    written down — derived, file:line in `because` — rather than left
+    unlisted, which `cobalt jobs readers` treats as UNKNOWN (exit 1) and
+    `cobalt jobs restarts` escalates.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str = Field(min_length=1)
+    readers: list[str] = Field(min_length=1)
+    because: str = Field(min_length=1)
+
+
 class JobRegistry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     jobs: list[JobSpec] = Field(min_length=1)
     kill_phrase: str = Field(min_length=1)
     resume_phrase: str = Field(min_length=1)
+    no_resident_reads: list[NoResidentRead] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _no_resident_reads_name_one_shots_only(self) -> "JobRegistry":
+        by_label = {j.label: j for j in self.jobs}
+        resident_paths = {Path(p).as_posix() for j in self.jobs for p in j.reads}
+        for entry in self.no_resident_reads:
+            path = Path(entry.path)
+            if path.is_absolute() or ".." in path.parts:
+                raise ValueError(
+                    f"no_resident_reads {entry.path!r}: entries are REPO-RELATIVE with no `..`"
+                )
+            if path.as_posix() in resident_paths:
+                raise ValueError(
+                    f"no_resident_reads {entry.path!r} is re-read by a resident — it "
+                    "belongs in that resident's `reads`, where it derives a restart"
+                )
+            for label in entry.readers:
+                spec = by_label.get(label)
+                if spec is None:
+                    raise ValueError(
+                        f"no_resident_reads {entry.path!r}: {label!r} is not a registered job label"
+                    )
+                if spec.kind is JobKind.RESIDENT:
+                    raise ValueError(
+                        f"no_resident_reads {entry.path!r}: {label} is a RESIDENT — a resident "
+                        "reader goes in its own `reads` and derives a restart"
+                    )
+        return self
 
     @model_validator(mode="after")
     def _unique_labels(self) -> "JobRegistry":
@@ -391,6 +437,13 @@ class JobRegistry(BaseModel):
             for j in self.jobs
             if any(Path(p).as_posix() == wanted for p in j.reads)
         ]
+
+    def no_resident_read(self, path: str) -> Optional[NoResidentRead]:
+        """The `no_resident_reads` declaration for `path`, or None."""
+        wanted = Path(path).as_posix()
+        return next(
+            (e for e in self.no_resident_reads if Path(e.path).as_posix() == wanted), None
+        )
 
     @property
     def read_paths(self) -> list[str]:

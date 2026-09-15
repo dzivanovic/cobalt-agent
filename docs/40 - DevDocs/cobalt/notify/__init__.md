@@ -1,28 +1,28 @@
 # `src/cobalt/notify/` — outbound channels
 
 ## What it does
-Two channels, and they are deliberately independent:
+One channel:
 
 | | | |
 |---|---|---|
-| `send_dm(text)` | Mattermost | the primary |
-| `send_email(to, subject, body)` | Gmail / OAuth | the out-of-band one |
+| `send_dm(text)` | Mattermost | the only one |
 
 `send_dm` opens a direct channel with `notify.mattermost.dm_username` and
-posts. `send_email` sends as the authenticated Google user on a
-`gmail.send`-only scope.
+posts.
 
-## Why there are two
-Charter §3 F18 requires the second **because of** the first: the DM
-travels over Mattermost, which is one of the services the heartbeat
-watches, so it cannot carry the news that Mattermost is down. `email.md`
-states that channel's exact dependency chain — what a send needs, and the
-longer list of what it deliberately does not (Postgres, Mattermost, the
-Obsidian vault, the mainframe, the sheet).
-
-The `email` probe in `heartbeat/probes.py` watches the watcher: an alert
-channel that quietly lost its refresh token would take every red with it
-and leave the beat looking exactly as green as before.
+## The second channel was retired (2026-09-14, executed 2026-09-15)
+Charter §3 F18 asked for a second, out-of-band channel **because of** the
+first: the DM travels over Mattermost, which is one of the services the
+heartbeat watches, so it cannot carry the news that Mattermost is down.
+S1-P4 built it as `send_email` over Gmail / Layer-B Google OAuth, with an
+`email` heartbeat probe and `cobalt notify email-auth|email-test|email-status`.
+Google's Publish step for the `gmail.send` scope is gated on
+restricted-scope verification, so the OAuth client never left Testing and
+its refresh token expired every seven days. Dejan ruled it retired. The
+module, its send store, its CLI, their DevDocs and its tests are removed;
+git history keeps them (`git show 0ed37f5:src/cobalt/notify/email.py`); the
+`cobalt_email_sends` table stays as history (dropping it is a separate
+HITL). The three `GOOGLE_OAUTH_*` vault entries are Dejan's to remove.
 
 ## Every line goes through F19, inside the sender
 The redaction happens at the **last point before the socket**, not at
@@ -40,20 +40,13 @@ with the running agent.
 
 ## Config carries no credential
 `configs/cobalt/notify.yaml` names the vault **key**
-(`MATTERMOST_CREDS`, rotated 2026-08-23) and nothing else. The email
-channel does not even name its keys there — `GOOGLE_OAUTH_CLIENT_ID` /
-`_CLIENT_SECRET` / `_REFRESH_TOKEN` are constants in `config.py`, because
-a config file that named its own secret keys would invite someone to
-paste the values next to them one day. `cobalt validate` reports whether
-each resolves without printing what it resolves to.
+(`MATTERMOST_CREDS`, rotated 2026-08-23) and nothing else. `cobalt
+validate` reports whether it resolves without printing what it resolves
+to.
 
 ## Config carries no threshold either (F16)
-The email channel's two numbers — the consent flow's loopback port and
-the send timeout — are `tunables.yaml` rows
-(`notify.email.auth_port`, `notify.email.timeout_s`), each with a named
-consumer. Mattermost's own `timeout_s` predates that sweep and is left
-where it is: moving a live production field is a change with no proof
-attached to it.
+The Mattermost timeout is the `notify.mattermost.timeout_s` row in
+`tunables.yaml` (ADR-0008 D7), with a named consumer.
 
 ## `enabled: false` is loud
 A disabled channel returns `SendResult(sent=False, ...)` and logs a

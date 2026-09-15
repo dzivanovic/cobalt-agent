@@ -28,6 +28,6 @@ That is different from crashing.
 ## 2026-09-08 — ADR-0008 (two-layer data model)
 
 New `TIMEOUT_KEY = "notify.mattermost.timeout_s"` and `timeout_s()`,
-reading the tunables row through the loader exactly as `email.py` does —
+reading the tunables row through the loader —
 per call, with no built-in default (a timeout Cobalt invented is a hang
 nobody chose the length of). All four REST call sites use it.

@@ -265,7 +265,19 @@ don't duplicate them.
   Regime tiles, catalyst calendar, in-play candidates from existing scanner
   data. Fail-loud from line one.
 
-- [ ] **TICKET (09-14, Dejan) — Rules.md parser tolerance.** `RulesSourceError`
+- [x] **CLOSED 2026-09-15 (ops/2026-09-15 commit) — radar probe flap.** `_pool_row`
+      carries `poll_failures` + `failed_stage='bars'` through S2; `BarPoller.poll`
+      drops carried records for non-members (IMCC). Trace: reports/cto-2026-09-15.md §1.2.
+- [x] **CLOSED 2026-09-15 (ops/2026-09-15 commit) — email channel RETIRED** (ruled 09-14).
+      Code removed (git history keeps it: `git show 0ed37f5:src/cobalt/notify/email.py`);
+      `cobalt_email_sends` table kept (drop = separate HITL).
+- [x] **CLOSED 2026-09-15 (ops/2026-09-15 commit) — L42 O9 classifier rule.** `docs/`
+      and root markdown with no reader → `DOCS`, no restart.
+- [ ] **TICKET (09-15, ops) — named-secret API has no caller.** `redact/secrets.py`
+      `read_secret` / `put_secret` / `secret_names` were used only by the retired
+      Gmail consent flow; their tests left with `test_notify_email.py`. Rule: keep
+      (re-test) or retire.
+- [x] **CLOSED 2026-09-15 (ops/2026-09-15 commit) — TICKET (09-14, Dejan) — Rules.md parser tolerance.** `RulesSourceError`
       on rule #11: `...never break-even.#process` (no space before the tag)
       read as "found none" → `com.cobalt.prefill-drc` RED from the 11:24 edit.
       Dejan fixes the note himself; the parser must accept a tag glued to the

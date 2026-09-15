@@ -31,7 +31,11 @@ Dejan adds the same way later is picked up automatically.
 - `_split_trailing_tags(text) -> (remaining_text, [tags])` — peels
   however many trailing `#word` tokens actually exist off the end of a
   line (0, 1, or many), so the caller enforces "exactly one" itself and
-  can report the real count.
+  can report the real count. One tolerance (2026-09-15, L45 companion —
+  fix the parser, never the note): a RECOGNIZED tag glued to the final
+  punctuation (`…never break-even.#process`) is peeled too. A tag glued
+  to a word (`…trade#process`) or an unrecognized glued tag is still
+  "none".
 - `_parse_rules_md(text) -> (list[RuleItem], list[MantraItem])` — no
   hardcoded "must be 12" — parses however many numbered lines exist, so
   Rules.md stays editable (add/remove/reorder a rule) without a code

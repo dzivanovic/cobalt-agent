@@ -8,28 +8,28 @@ WHAT ONE BEAT DOES, in order:
    (`jobs.watchdog`);
 2. composes the beat, including the kill-switch state;
 3. on a TRANSITION — something entered RED or recovered since the prior
-   beat (ruled 2026-09-14, option B) — sends the SECOND channel first
-   (email, over Layer-B Google OAuth — `out_of_band` below), so that its
-   outcome can appear in the DM. A RED that is unchanged is silent;
-4. DMs the same transition — carrying "email channel DOWN: <reason>" when
-   the second channel failed — plus a standing-state summary at every
-   `heartbeat.summary_at` slot, sent whether or not anything is red (a
-   missing summary is the dead-heartbeat signal). The summary is DM-only:
-   a scheduled digest in the alert inbox is how an alert inbox stops being
-   read.
+   beat (ruled 2026-09-14, option B) — DMs it. A RED that is unchanged
+   is silent;
+4. DMs a standing-state summary at every `heartbeat.summary_at` slot,
+   sent whether or not anything is red (a missing summary is the
+   dead-heartbeat signal);
 5. persists the beat independently of alert delivery;
 6. writes the daily-note unit, unless the session clock says
    `market_reset`;
-7. FINALIZE persists the vault outcome and sends a corrective
-   out-of-band RED if that late write failed.
+7. FINALIZE persists the vault outcome and sends a corrective DM if that
+   late write failed or recovered.
 
-THE ALERT PATH IS NOT THE MONITORED PATH (Charter §3 F18). The DM goes
-over Mattermost, which is one of the things being watched — so a
-Mattermost outage would take the alert about the Mattermost outage with
-it. That is the whole reason F18 asks for a second channel, and since
-S1-P4 that channel exists: `cobalt.notify.email`, whose docstring states
-the exact dependency chain. It needs neither Mattermost, nor Postgres,
-nor the Obsidian vault. The `email` probe watches the watcher.
+THE SECOND CHANNEL WAS RETIRED 2026-09-14 (executed 2026-09-15). Charter
+§3 F18 asked for an out-of-band alert path because the DM travels over
+Mattermost, one of the watched services, so a Mattermost outage takes
+the alert about it along. S1-P4 built that path as Gmail over Layer-B
+Google OAuth. Google's Publish step for the `gmail.send` scope is gated
+on restricted-scope verification, so the OAuth client never left
+Testing and its refresh token expired every seven days — an alert path
+that needs a human re-consent every week is not an alert path. Dejan
+ruled it retired: alerts are DM-only, and that hole is known and named
+here rather than hidden. The channel's send-log table stays in the
+database as history (`db_migrations/placement.py`).
 
 WHY THE BEAT NEVER RAISES ON A RED. A red heartbeat is the heartbeat
 WORKING. It exits 0 and says RED loudly; it exits non-zero only when the
@@ -145,7 +145,6 @@ def take_beat(*, now: Optional[datetime] = None, probe: bool = True) -> Beat:
         probe_mod.vaultwrite_blocks(now=ts),
         probe_mod.redactions(interval_min(), now=ts),
         probe_mod.radar(ts),
-        probe_mod.email(),
     ]
     try:
         beat.jobs = sweep(now=ts, probe=probe)
@@ -315,60 +314,6 @@ def _send_text(text: str) -> str:
     return result.report()
 
 
-def out_of_band(beat: Beat) -> str:
-    """Charter §3 F18's SECOND channel — email, over Layer-B Google OAuth.
-
-    Built at S1-P4 (2026-09-08). Until then this function existed only to
-    say, loudly and on every red, that the channel did NOT exist; the
-    honest placeholder is in the git history and its S1-P3 reasoning is
-    unchanged — alerting that stops at Mattermost is alerting that shares
-    a fate with one of the things it watches.
-
-    THIS RUNS BEFORE `send_dm`, and the order is the whole point. The DM
-    is the channel that can carry a report ABOUT the email channel; the
-    email channel cannot carry a report about itself. So the second
-    channel goes first, and its outcome — including "email channel DOWN:
-    <reason>" — is appended to the beat's notes in time for
-    `beat.dm_body()` to render it.
-
-    NEVER RAISES. A failure here is a note, not a crash: a beat that died
-    trying to send the backup alert would take the primary alert with it,
-    which is the exact coupling this channel exists to break.
-    """
-    from cobalt.notify import EmailError, record_attempt, send_email
-    from cobalt.notify.config import load_notify_config
-
-    try:
-        cfg = load_notify_config().email
-    except Exception as e:  # noqa: BLE001
-        reason = f"notify config unreadable ({type(e).__name__}: {e})"
-        logger.error("heartbeat: email channel DOWN — {}", reason)
-        return f"email channel DOWN: {reason}"
-
-    subject = f"{beat.headline} · {beat.at:%Y-%m-%d %H:%M %Z}"
-    try:
-        result = send_email(cfg.to, subject, beat.dm_body())
-    except EmailError as e:
-        # `EmailError`'s message is redacted BY CONTRACT, so it is safe to
-        # put straight into a Mattermost DM — which is exactly where it is
-        # about to go.
-        record_attempt(ok=False, caller="heartbeat", detail=str(e))
-        logger.error("heartbeat: email channel DOWN — {}", e)
-        return f"email channel DOWN: {e}"
-
-    record_attempt(
-        ok=result.sent, caller="heartbeat", detail=result.detail, message_id=result.ref
-    )
-    if not result.sent:
-        # A disabled channel is deliberate, not an outage — but the DM
-        # still says so, because "no email arrived" must never be
-        # ambiguous between "off" and "broken".
-        logger.warning("heartbeat: {}", result.report())
-        return f"email channel OFF: {result.detail}"
-    logger.info("heartbeat: {}", result.report())
-    return result.report()
-
-
 # ---------------------------------------------------------------------
 # the six isolated stages
 # ---------------------------------------------------------------------
@@ -424,9 +369,6 @@ def _run_alerts(
     entered, recovered = transitions(prior.red, alert_keys(beat))
     if entered or recovered:
         beat.notes.append(transition_note(entered, recovered))
-        # OUT-OF-BAND FIRST. Its result is included in the primary DM, and
-        # an unexpected exception in either channel cannot suppress the other.
-        _attempt_alert(beat, "out-of-band", out_of_band)
         _attempt_alert(beat, "transition-dm", send_dm)
 
     try:
@@ -520,7 +462,7 @@ def _finalize(
         return
 
     # Persistence and notification are deliberately separate attempts. If the
-    # final database update fails, the corrective out-of-band RED still runs.
+    # final database update fails, the corrective DM still runs.
     try:
         store.record_heartbeat_result(
             JOB_LABEL,
@@ -538,7 +480,6 @@ def _finalize(
         beat.notes.append(
             transition_note({VAULT_KEY}, set()) if failed else transition_note(set(), {VAULT_KEY})
         )
-        _attempt_alert(beat, "corrective-out-of-band", out_of_band)
         _attempt_alert(beat, "corrective-dm", send_dm)
 
 
@@ -616,7 +557,6 @@ __all__ = [
     "VAULT_WRITTEN",
     "alert_keys",
     "interval_min",
-    "out_of_band",
     "run_beat",
     "summary_at",
     "summary_due",

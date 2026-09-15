@@ -271,6 +271,32 @@ jobs:
       production and a permanently dirty working tree is one nobody
       reads.
 
+# ---------------------------------------------------------------------
+# NO RESIDENT READS (ruled 2026-09-15)
+# ---------------------------------------------------------------------
+# A repo file that only ONE-SHOTS read at runtime. A one-shot re-reads
+# everything every run, so a change to it derives NO restart — but that
+# is a claim about the code, so it is written down here, derived with
+# file:line, instead of left unlisted (UNKNOWN to `cobalt jobs readers`,
+# ESCALATE to `cobalt jobs restarts`). The schema refuses a resident as a
+# reader: a resident reader belongs in that job's own `reads`.
+no_resident_reads:
+  - path: configs/cobalt/notify.yaml
+    readers: [com.cobalt.heartbeat]
+    because: >
+      load_notify_config() is called only by notify/mattermost.py:137
+      (send_dm, reached from heartbeat/runner.py:304 — the one-shot
+      heartbeat) and by `cobalt validate` (cli.py:261, an operator
+      command, not a job). No resident sends a DM. Ruled 2026-09-15.
+  - path: configs/cobalt/rules.yaml
+    readers: [com.cobalt.prefill-daily, com.cobalt.prefill-drc]
+    because: >
+      GENERATED from the vault's Rules.md and re-read on every prefill run:
+      prefill/daily.py:465 and prefill/drc.py:381 call
+      regenerate_rules_config() (prefill/rules_gen.py). load_rules_config()
+      (prefill/config.py:125) has no caller; no resident imports either
+      path. Added 2026-09-16 (the nightly generated commit escalated it).
+
 # THE KILL PHRASE (F17d). Config, not a literal: `cobalt stop` and any
 # future DM listener compare against this exact string.
 kill_phrase: "COBALT STOP"

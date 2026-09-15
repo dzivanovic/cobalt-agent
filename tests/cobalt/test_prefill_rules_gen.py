@@ -42,6 +42,34 @@ class TestSplitTrailingTags:
         )
 
 
+    # Real shape: Rules.md rule 11 as it stood 09-14 11:24 → 09-15, the
+    # tag glued to the final full stop (cto-2026-09-15.md §1.4). L45
+    # companion: the parser tolerates it, the note is never edited.
+    RULE_11_GLUED = (
+        "Exits and scaling follow the setup's sheet as written; no written exit = no trade. "
+        "Exit structure read live — prior 2-min bar, the EMA the stock is tracking (9/21), "
+        "or drive-hold (≤40% retracement, stop below consolidation). Every stop on a winner "
+        "is a positive-P&L stop. Stop moves logged by structure, not conviction. Leaving the "
+        "screen: flat, or a resting stop under a positive-R higher low — never break-even.#process"
+    )
+
+    def test_recognized_tag_glued_to_final_punctuation_is_peeled(self):
+        text, tags = _split_trailing_tags(self.RULE_11_GLUED)
+        assert tags == ["process"]
+        assert text == self.RULE_11_GLUED.removesuffix("#process")
+        assert text.endswith("never break-even.")
+
+    def test_tag_glued_to_a_word_is_still_none(self):
+        assert _split_trailing_tags("follow the trade#process") == ("follow the trade#process", [])
+
+    def test_unrecognized_tag_glued_to_punctuation_is_still_none(self):
+        assert _split_trailing_tags("never break-even.#banana") == ("never break-even.#banana", [])
+
+    def test_glued_real_rule_11_parses_as_one_process_rule(self):
+        rules, _ = _parse_rules_md(f"11. {self.RULE_11_GLUED}\n")
+        assert len(rules) == 1
+
+
 class TestParseRulesMd:
     def test_parses_rules_and_mantras(self):
         rules, mantras = _parse_rules_md(GOOD_RULES_MD)

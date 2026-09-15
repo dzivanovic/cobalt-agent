@@ -192,13 +192,13 @@ class RadarRunner:
             return self._dropped(scan_id, decision, "membership", e)
         except Exception as e:
             detail = scrub(str(e))
-            row = self._pool_row(parsed, decision, scan_id, instant, session, elapsed_started, open_rows)
+            row = self._pool_row(parsed, decision, scan_id, instant, session, elapsed_started, open_rows, existing_pool)
             row.update(failed_stage="membership", failed_detail=detail, degraded=True)
             self.radar_store.put_pool(row, now=instant, before_commit=gate("pool_row", clock=self.clock, now=self.now))
             return CycleResult(scan_id, "failed", decision, "membership", detail)
 
         # S2.
-        row = self._pool_row(parsed, decision, scan_id, instant, session, elapsed_started, open_rows)
+        row = self._pool_row(parsed, decision, scan_id, instant, session, elapsed_started, open_rows, existing_pool)
         if pending_drop is not None:
             row.update(failed_stage=pending_drop[0], failed_detail=pending_drop[1])
         try:
@@ -270,7 +270,12 @@ class RadarRunner:
         detail = mirror_failed if mirror_failed else pending_drop[1] if pending_drop else None
         return CycleResult(scan_id, "scanning", decision, failed_stage, detail)
 
-    def _pool_row(self, parsed, decision, scan_id, instant, session, started, open_rows):
+    def _pool_row(self, parsed, decision, scan_id, instant, session, started, open_rows, existing_pool=None):
+        # S2 carries S4's last outcome forward. Writing the row clean here and
+        # re-stamping it at S4 ~70 s later made the heartbeat radar probe flap
+        # on whichever side of that gap a beat sampled (cto-2026-09-15 §1.2).
+        # Same strings as RadarStore.stamp_poll; later stages still override.
+        carried = list((existing_pool or {}).get("poll_failures") or [])
         admitted = (
             sum(row.get("entered_at") is not None for row in open_rows)
             if decision.frozen
@@ -284,8 +289,8 @@ class RadarRunner:
                 {"source": source, "reason": "source failure", "since": instant.isoformat()}
                 for source in decision.degraded_sources
             ] + ([{"source": "pool_block", "reason": parsed.pool_error, "since": instant.isoformat()}] if parsed.pool_error else []),
-            "failed_stage": None,
-            "failed_detail": None,
+            "failed_stage": "bars" if carried else None,
+            "failed_detail": f"poll failures: {len(carried)}" if carried else None,
             "sources": [source for source in decision.degraded_sources],
             "session": session.value,
             "cap": parsed.pool.cap if parsed.pool else None,
@@ -294,7 +299,7 @@ class RadarRunner:
             "last_scan_at": instant,
             "last_scan_ms": int((time.monotonic() - started) * 1000),
             "last_poll_at": None,
-            "poll_failures": [],
+            "poll_failures": carried,
             "budget": {"planned_rpm": parsed.planned_rpm},
             "updated_at": instant,
         }

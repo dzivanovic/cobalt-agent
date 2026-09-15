@@ -37,8 +37,8 @@ from .result import SendResult
 
 #: F16 / ADR-0008 D7. The HTTP timeout on every Mattermost REST call is a
 #: threshold with consumers, so it is a `tunables.yaml` row and not a
-#: field on `MattermostConfig` — the same shape `notify/email.py` already
-#: used for its two numbers. Read per call rather than cached: a tunable
+#: field on `MattermostConfig` — the same shape every new-core threshold
+#: uses. Read per call rather than cached: a tunable
 #: is meant to be changeable, and one round trip through the loader costs
 #: nothing next to the HTTP call it is bounding.
 TIMEOUT_KEY = "notify.mattermost.timeout_s"

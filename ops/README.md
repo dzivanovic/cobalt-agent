@@ -365,14 +365,15 @@ so **run it from Terminal.app, not from a herdr pane** — the same reason
 the original handover had to happen at the keyboard. Land everything
 first; assume every conversation is lost.
 
-## Email OAuth token clock (F18 / S1-P4)
+## Email channel — RETIRED 2026-09-14 (executed 2026-09-15)
 
-The Google project behind `gmail.send` is still in **Testing** status, so a refresh token
-expires **7 days after consent**. Dejan retries **Publish** (from another browser); if it
-fails again, a fresh `uv run cobalt notify email-auth` consent resets the 7-day clock —
-repeat every **≤6 days** until Publish lands. After each consent: send a test alert and read
-the token date back (`cobalt notify` status / the heartbeat `email` probe line) — proof, not
-assumption. Ruled 09-09 (chat second opinion, item 10).
+The F18 second channel (Gmail over Layer-B Google OAuth, S1-P4) is gone. Google's **Publish**
+for the `gmail.send` scope is gated on restricted-scope verification, so the project stayed in
+**Testing** and every refresh token expired 7 days after consent. The 09-09 re-consent clock
+that lived here is void: there is no `cobalt notify` command and no heartbeat `email` probe
+any more. Alerts are Mattermost DM only. The `cobalt_email_sends` table stays as history
+(dropping it is a separate HITL); the code is removed and git history keeps it
+(`git show 0ed37f5:src/cobalt/notify/email.py`).
 # Radar handover
 
 `com.cobalt.radar` ships disabled in the registry. After the stage-1 code,

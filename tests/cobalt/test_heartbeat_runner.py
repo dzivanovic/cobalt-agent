@@ -86,11 +86,6 @@ def install_healthy_stages(monkeypatch, store, *, alerts, writes, patch_write=Tr
         "send_dm",
         lambda beat: alerts.append(("dm", beat.dm_body())) or "DM sent",
     )
-    monkeypatch.setattr(
-        runner,
-        "out_of_band",
-        lambda beat: alerts.append(("out_of_band", beat.dm_body())) or "email sent",
-    )
 
     def write(*_args, **_kwargs):
         writes.append("attempt")
@@ -180,7 +175,7 @@ def test_unexpected_none_or_exception_is_failed_red_persisted_and_corrected(
     assert beat.vault_outcome == runner.VAULT_FAILED
     assert not beat.green
     assert store.row["vault_outcome"] == runner.VAULT_FAILED
-    corrective = [body for name, body in alerts if name == "out_of_band"]
+    corrective = [body for name, body in alerts if name == "dm"]
     assert len(corrective) == 1
     assert beat.vault_reason in corrective[0]
     assert "RED" in corrective[0]
@@ -225,7 +220,7 @@ def test_absent_daily_note_defers_unconditionally_without_constructing_a_writer(
     assert beat.stage_failures == []
     assert store.row["vault_outcome"] == runner.VAULT_DEFERRED_NOTE_ABSENT
     assert store.row["vault_reason"] == expected_reason
-    assert [name for name, _body in alerts if name == "out_of_band"] == []
+    assert [name for name, _body in alerts if name == "dm"] == []
     assert "deferred_note_absent" in beat.note_body()
     assert expected_reason in beat.dm_body()
     assert expected_reason in beat.console()
@@ -289,11 +284,6 @@ def test_deferred_absence_does_not_mask_an_unrelated_red_probe(monkeypatch, tmp_
         "send_dm",
         lambda beat: alerts.append(("dm", beat.dm_body())) or "DM sent",
     )
-    monkeypatch.setattr(
-        runner,
-        "out_of_band",
-        lambda beat: alerts.append(("out_of_band", beat.dm_body())) or "email sent",
-    )
     monkeypatch.setattr("cobalt.daymode.note.daily_note_path", lambda _day: note)
     monkeypatch.setattr(
         "cobalt.vaultwrite.VaultWriteStore",
@@ -306,7 +296,7 @@ def test_deferred_absence_does_not_mask_an_unrelated_red_probe(monkeypatch, tmp_
     assert not beat.green
     assert beat.red_probes[0].name == "database"
     assert store.row["last_result"]["green"] is False
-    assert [name for name, _body in alerts] == ["out_of_band", "dm"]
+    assert [name for name, _body in alerts] == ["dm"]
 
 
 def test_daily_note_target_errors_and_contract_failure_name_the_resolved_path(
@@ -405,7 +395,7 @@ def test_corrective_alert_survives_a_finalize_database_failure(monkeypatch):
 
     beat = runner.run_beat(now=et(3, 19, 59))
 
-    assert any(name == "out_of_band" for name, _body in alerts)
+    assert any(name == "dm" for name, _body in alerts)
     assert any("FINALIZE/persist" in failure for failure in beat.stage_failures)
 
 
@@ -493,11 +483,6 @@ def _sequenced_beats(monkeypatch, store, sequence, alerts):
     )
     monkeypatch.setattr(
         runner,
-        "out_of_band",
-        lambda b: alerts.append(("out_of_band", b.dm_body())) or "email sent",
-    )
-    monkeypatch.setattr(
-        runner,
         "write_note_block",
         lambda *_a, **_k: SimpleNamespace(write_id=1, report=lambda: "write_id=1"),
     )
@@ -513,7 +498,6 @@ def test_transition_oracle_red_red_red_green_green_alerts_exactly_twice(monkeypa
     for i in range(len(sequence)):
         runner.run_beat(now=et(15, 10 + i, 0))
 
-    assert [name for name, _ in alerts].count("out_of_band") == 2
     assert [name for name, _ in alerts].count("dm") == 2
     bodies = [body for name, body in alerts if name == "dm"]
     assert "ENTERED RED: database" in bodies[0]
@@ -730,8 +714,8 @@ def test_replay_oracle_collapses_the_last_48h_of_real_beats():
     day = REPLAY_END - timedelta(hours=24)
     last_24h = [b for b in inside if b["at"] >= day]
 
-    def messages(since):  # a transition = email + DM; a summary = one DM
-        return sum(1 if note.startswith("SUMMARY") else 2 for at, note in events if at >= since)
+    def messages(since):  # a transition = one DM (second channel retired 09-14); a summary = one DM
+        return sum(1 for at, _note in events if at >= since)
 
     # BEFORE (as logged): every beat red; both channels on every beat, plus
     # the vault's corrective email on each failed beat.
@@ -748,7 +732,7 @@ def test_replay_oracle_collapses_the_last_48h_of_real_beats():
         ("09-12 16:40", "SUMMARY 16:30"), ("09-13 07:14", "SUMMARY 07:00"),
         ("09-13 16:32", "SUMMARY 16:30"), ("09-14 07:07", "SUMMARY 07:00"),
     ]
-    assert messages(REPLAY_START) == 6
+    assert messages(REPLAY_START) == 5
     assert messages(day) == 2
 
     # The whole 09-12 vault episode began before the window (00:12, not the

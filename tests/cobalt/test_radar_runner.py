@@ -126,6 +126,62 @@ def test_mirror_failure_is_stamped_and_bars_continue():
     assert events == ["membership", "pool", "mirror", "failure", "bars", "poll_status"]
 
 
+#: The live `radar_pool` row at 07:09 ET 09-15 (cto-2026-09-15.md §1.2),
+#: real shape per L45. It carries no source ids, so nothing to zero.
+LIVE_POOL_ROW = {
+    "pool_key": "primary", "state": "scanning", "session": "premarket",
+    "failed_stage": "bars", "failed_detail": "poll failures: 1",
+    "last_scan_at": "2026-09-15 11:08:52.350069+00:00",
+    "last_poll_at": "2026-09-15 11:08:52.350069+00:00",
+    "poll_failures": [{"since": "2026-09-14T13:38:07.287155+00:00", "reason": "stale", "ticker": "IMCC"}],
+}
+
+
+class CarryingRadar(Radar):
+    def __init__(self, events, existing):
+        super().__init__(events)
+        self.existing, self.pool_rows, self.stamps = existing, [], []
+    def pool_row(self, _key): return deepcopy(self.existing)
+    def put_pool(self, row, **kwargs):
+        self.pool_rows.append(deepcopy(row)); super().put_pool(row, **kwargs)
+    def stamp_poll(self, *args, **kwargs):
+        self.stamps.append(kwargs["poll_failures"]); super().stamp_poll(*args, **kwargs)
+
+
+class CarryingPoller(Poller):
+    async def poll(self, members, *, existing_failures, **kwargs):
+        await super().poll(members, **kwargs)
+        return PollResult(list(existing_failures), {item.ticker: 0 for item in members})
+
+
+def _carrying_runner(existing):
+    events = []
+    runner = _active_runner(events)
+    runner.radar_store = CarryingRadar(events, existing)
+    runner.poller = CarryingPoller(events)
+    return runner
+
+
+def test_carried_poll_failure_never_blinks_clean_between_put_pool_and_stamp_poll():
+    runner = _carrying_runner(LIVE_POOL_ROW)
+    result = asyncio.run(runner.cycle())
+    assert result.state == "scanning"
+    (row,) = runner.radar_store.pool_rows
+    assert row["failed_stage"] == "bars"
+    assert row["failed_detail"] == "poll failures: 1"
+    assert row["poll_failures"] == LIVE_POOL_ROW["poll_failures"]
+    assert runner.radar_store.stamps == [LIVE_POOL_ROW["poll_failures"]]
+
+
+def test_clean_previous_row_still_writes_a_clean_pool_row():
+    clean = {**LIVE_POOL_ROW, "failed_stage": None, "failed_detail": None, "poll_failures": []}
+    for existing in (None, clean):
+        runner = _carrying_runner(existing)
+        asyncio.run(runner.cycle())
+        (row,) = runner.radar_store.pool_rows
+        assert (row["failed_stage"], row["failed_detail"], row["poll_failures"]) == (None, None, [])
+
+
 ET = ZoneInfo("America/New_York")
 BEFORE_RESET = datetime(2026, 9, 3, 19, 59, 59, 500000, tzinfo=ET)
 AT_RESET = datetime(2026, 9, 3, 20, 0, 0, tzinfo=ET)

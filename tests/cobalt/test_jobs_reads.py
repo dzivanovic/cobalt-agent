@@ -25,10 +25,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from cobalt.jobs.config import REPO_ROOT, JobSpec, load_job_registry
+import yaml
+
+from cobalt.jobs.config import REPO_ROOT, JobRegistry, JobSpec, load_job_registry
 
 SHEET = "com.cobalt.aset"
 TUNABLES = "configs/cobalt/taxonomy/tunables.yaml"
+NOTIFY = "configs/cobalt/notify.yaml"
+UNLISTED = "configs/cobalt/no-row-names-this.yaml"
 
 
 class TestTheDerivedRows:
@@ -79,7 +83,10 @@ class TestTheDerivedRows:
         ):
             spec = load_job_registry().spec(label)
             assert spec.reads == []
-        assert text.count("reads:") == 6, "one per resident, none on a one-shot"
+        # Per-job `reads:` keys only — `no_resident_reads:` (2026-09-15) is
+        # a registry-level table, not a job's key.
+        keys = [line for line in text.splitlines() if line.strip().startswith("reads:")]
+        assert len(keys) == 6, "one per resident, none on a one-shot"
 
 
 class TestTheModelRefusesNonsense:
@@ -125,7 +132,44 @@ class TestReadersOf:
         assert [r.label for r in readers] == [SHEET, "com.cobalt.radar"]
 
     def test_an_unknown_path_finds_nothing(self):
-        assert load_job_registry().readers_of("configs/cobalt/notify.yaml") == []
+        assert load_job_registry().readers_of(UNLISTED) == []
+
+    def test_a_one_shot_only_path_has_no_resident_reader(self):
+        assert load_job_registry().readers_of(NOTIFY) == []
+
+
+class TestNoResidentReads:
+    """Ruled 2026-09-15: a file only one-shots read is DECLARED, not left
+    unknown — one-shots re-read every run, so it derives no restart, and
+    the declaration is what separates that from "nobody has looked"."""
+
+    def test_notify_yaml_is_declared_with_one_shot_readers_only(self):
+        registry = load_job_registry()
+        entry = registry.no_resident_read(NOTIFY)
+        assert entry is not None and entry.because.strip()
+        assert entry.readers
+        assert all(registry.spec(label).kind.value == "one-shot" for label in entry.readers)
+
+    def test_a_leading_dot_slash_is_the_same_file(self):
+        assert load_job_registry().no_resident_read("./" + NOTIFY) is not None
+
+    def _raw(self, **entry):
+        raw = yaml.safe_load((REPO_ROOT / "configs" / "cobalt" / "jobs.yaml").read_text())
+        raw["no_resident_reads"] = [{"path": NOTIFY, "readers": ["com.cobalt.heartbeat"],
+                                     "because": "test", **entry}]
+        return raw
+
+    def test_a_resident_named_as_reader_is_refused(self):
+        with pytest.raises(ValidationError, match="RESIDENT"):
+            JobRegistry(**self._raw(readers=["com.cobalt.radar"]))
+
+    def test_an_unregistered_reader_is_refused(self):
+        with pytest.raises(ValidationError, match="not a registered"):
+            JobRegistry(**self._raw(readers=["com.cobalt.nope"]))
+
+    def test_a_path_a_resident_reads_is_refused(self):
+        with pytest.raises(ValidationError, match="re-read by a resident"):
+            JobRegistry(**self._raw(path=TUNABLES))
 
 
 class TestTheCommand:
@@ -148,11 +192,17 @@ class TestTheCommand:
         """"No resident re-reads this" and "nobody has written down who
         reads this" are different answers, and only one of them means it
         is safe to deploy without a restart."""
-        proc = self._run("configs/cobalt/notify.yaml")
+        proc = self._run(UNLISTED)
         assert proc.returncode == 1
         assert "UNKNOWN PATH" in proc.stderr
         assert "NOT the same as" in proc.stderr
         assert TUNABLES in proc.stderr, "it lists what IS covered"
+
+    def test_a_one_shot_only_path_exits_zero_with_RESTARTS_none(self):
+        proc = self._run(NOTIFY)
+        assert proc.returncode == 0, proc.stderr
+        assert "RESTARTS: none" in proc.stdout
+        assert "com.cobalt.heartbeat" in proc.stdout
 
 
 class TestTheDeployChecklistIsWrittenDown:
