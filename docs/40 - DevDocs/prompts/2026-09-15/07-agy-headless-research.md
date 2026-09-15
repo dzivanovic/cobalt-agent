@@ -1,0 +1,17 @@
+MODEL: Sonnet 5 (`claude-sonnet-5`) · SEAT: researcher (L33: reads + web, no repo writes except its report) — SHELL tab, after the agy-trial pane has `/exit`ed: `cd /Users/cobalt/cobalt-wt/agy-trial && claude "Read '/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-15/07-agy-headless-research.md' and follow it exactly." --model claude-sonnet-5 --remote-control agy-research --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/.gemini` · SESSION: fresh · auto mode on · METER: Anthropic small; nobody watching — never ask a question
+
+# Research: how does `agy` (Antigravity CLI) run headless with its tools ALLOWED by configuration, never by `--dangerously-skip-permissions`?
+
+INDEX CARD: read `/Users/cobalt/Vault/Think/6 - Permanent/Memory/INDEX.md` → `## NOW` → `.../topics/devices.md` (the agy line) → `docs/40 - DevDocs/reports/agy-trial-2026-09-15.md` (what failed, verbatim error text) → LAWS.md L33, L44, L55 only. Report (L48): `docs/40 - DevDocs/reports/agy-headless-research-2026-09-15.md` in this worktree, committed here. You do not edit `~/.gemini/antigravity-cli/settings.json` (a prior hub was refused; the change is Dejan's one-liner, which you write out exactly). You may READ everything under `~/.gemini/antigravity-cli/`.
+
+Sources, in order, each cited in the report with what it said:
+1. Local: `agy changelog` in full (grep `permission`, `allow`, `rule`, `command(`, `unsandboxed`, `settings`); `agy help <subcommand>` for every subcommand; the settings schema if any under `~/.gemini/antigravity-cli/builtin/`, `knowledge/`, `brain/`, `mcp/`; `strings "$(readlink -f "$(which agy)")" | grep -iE "permissions|allow|deny|command\(|read_file\(|trustedWorkspaces"` (read-only); `~/.gemini/antigravity-cli/cli.log` and `log/` for the exact denial line and any hint of the rule it expected.
+2. Web (WebSearch/WebFetch): Google's Antigravity CLI documentation on permissions / headless / print mode / settings.json `permissions.allow`; GitHub issues or release notes mentioning `command(` rules and `read_file` permission in print mode.
+3. Interactive-grant path: does an interactive session's "always allow" persist into `settings.json` (the changelog says grants accumulate there) — find the resulting key shape.
+
+Deliverables in the report:
+- The exact JSON to add under `~/.gemini/antigravity-cli/settings.json` that allows, for the two worktrees `/Users/cobalt/cobalt-wt/s2-p3-radar-panel` and `/Users/cobalt/cobalt-wt/agy-trial` only: `read_file`, `list_dir`/`glob`, and `command(git diff *)` / `command(git log *)` — and nothing that writes. If two syntaxes are plausible, give both, most-likely first.
+- A one-line, backup-first Python command for Dejan that merges that JSON into the file (never overwrite unrelated keys).
+- A headless probe he runs after it: `agy --print="Read /Users/cobalt/cobalt-wt/agy-trial/README.md and reply with its first line only" --model gemini-3.1-pro-low --mode plan --sandbox --print-timeout 2m --add-dir /Users/cobalt/cobalt-wt/agy-trial` — expected output = the first line; and a second probe with `git diff --stat main..HEAD`.
+- If the research finds that print mode cannot be granted tools by configuration at all: say so in one line with the citation, and give the alternative (interactive one-time grant, or a wrapper that drives `--prompt-interactive` via stdin) with its own probe.
+- Cost line and ESCALATE count. Last line `RESEARCH DONE <hash> · path: <config|interactive|none>`; reply ≤6 lines and stop.
