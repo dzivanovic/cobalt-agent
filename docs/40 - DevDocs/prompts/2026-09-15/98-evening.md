@@ -1,3 +1,5 @@
+> LIVE 2026-09-15 14:35 (desk): the pane holding this job (`p3-hub-0915`, peer name `cobalt-ce`) confirmed by message at 14:33 that it holds cron `3483781f` for 20:05 ET. Pre-flight handed to it: commit its dirty report in the P3 worktree before the rebase. `09-evening-deploy.md` is the CONTINGENCY only if this pane dies; never run both.
+
 MODEL: Sonnet 5 (the P3 hub pane that already holds `a77a7fe`, remote name `p3-hub-0915`) · SEAT: evening hub — deploy at 20:05 ET, then Qwen allowlist, then the close; runs WITHOUT Dejan · SESSION: continue (same pane; Dejan ran `/login` right before typing this) · auto mode on · METER: Anthropic small
 
 # Evening 2026-09-15 — wait for 20:05 ET, deploy, allowlist, close. Nobody is watching; never ask a question — a step that cannot proceed is written to the report as ESCALATE and skipped.
