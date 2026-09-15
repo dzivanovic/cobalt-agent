@@ -1,4 +1,4 @@
-MODEL: Fable 5.1 (`claude-fable-5-1`) · SEAT: CTO desk — herdr pane Claude1, ONE line, nothing pasted: `cd ~/cobalt && claude --model claude-fable-5-1 --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt-wt "Read 'docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md' and follow it exactly."` · SESSION: fresh (`/clear` or a new pane) · auto mode on · METER: Anthropic small — this seat writes memory and prompt files only
+MODEL: Fable 5.1 (`claude-fable-5-1`) · SEAT: CTO desk — herdr pane Claude1, ONE line, nothing pasted: `cd ~/cobalt && claude --model claude-fable-5-1 --remote-control cto-desk --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt-wt "Read 'docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md' and follow it exactly."` · SESSION: fresh (`/clear` or a new pane) · auto mode on · METER: Anthropic small — this seat writes memory and prompt files only
 
 # CTO desk — wake-up (stable file; the day's state lives in memory, never here)
 
