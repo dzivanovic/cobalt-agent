@@ -1,0 +1,15 @@
+[profiles.readonly-safe]
+extends = "read-only"
+restrict_network = false
+
+[profiles.cobalt-job]
+extends = "workspace"
+deny = [
+  "/Users/cobalt/cobalt/.env",
+  "/Users/cobalt/.cobalt/",
+  "/Users/cobalt/.grok/auth.json",
+  "/Users/cobalt/.qwen/",
+  "/Users/cobalt/.claude/",
+  "/Users/cobalt/.codex/",
+  "/Users/cobalt/.gemini/",
+]
