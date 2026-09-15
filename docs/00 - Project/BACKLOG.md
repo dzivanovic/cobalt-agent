@@ -255,6 +255,13 @@ don't duplicate them.
   Regime tiles, catalyst calendar, in-play candidates from existing scanner
   data. Fail-loud from line one.
 
+- [ ] **TICKET (09-14, Dejan) — Rules.md parser tolerance.** `RulesSourceError`
+      on rule #11: `...never break-even.#process` (no space before the tag)
+      read as "found none" → `com.cobalt.prefill-drc` RED from the 11:24 edit.
+      Dejan fixes the note himself; the parser must accept a tag glued to the
+      final punctuation (L45 companion: fix the parser, never the note). Fixture
+      = real-shape line; failing test first.
+
 ## DESIGN SESSIONS (register — planning hard cap: two calendar weeks total)
 
 - [ ] **1. Trading Taxonomy Session** — FIRST. Absorbs variable registries.
