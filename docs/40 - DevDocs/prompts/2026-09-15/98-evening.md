@@ -1,0 +1,9 @@
+MODEL: Sonnet 5 (the P3 hub pane that already holds `a77a7fe`, remote name `p3-hub-0915`) · SEAT: evening hub — deploy at 20:05 ET, then Qwen allowlist, then the close; runs WITHOUT Dejan · SESSION: continue (same pane; Dejan ran `/login` right before typing this) · auto mode on · METER: Anthropic small
+
+# Evening 2026-09-15 — wait for 20:05 ET, deploy, allowlist, close. Nobody is watching; never ask a question — a step that cannot proceed is written to the report as ESCALATE and skipped.
+
+1. **Schedule yourself now.** Use your scheduling tool (ScheduleWakeup / CronCreate) for 20:05 ET today with the prompt "Run 98-evening.md step 2 onward". Confirm in one line what you scheduled. Then stop and wait. Do not poll.
+2. **20:05 ET — deploy:** execute §7 of `docs/40 - DevDocs/prompts/2026-09-15/01-p3-review-build.md` exactly (day-open 84912db → P3 a77a7fe → ops b2e33d5, rebase-then-ff each; validate; `cobalt jobs register`; restarts derived, expected `com.cobalt.aset` + `com.cobalt.radar`, kickstart both inside the pause; smoke; tag `deploy-2026-09-15`). Every command that needs a human decision is instead an ESCALATE line; if a rebase conflicts, stop the deploy at that branch, leave main as it was before that merge, and record it.
+3. **Qwen allowlist** (ops report item 10; only if `ops/day-open` merged): run the one-liner from `docs/40 - DevDocs/reports/ops-2026-09-15.md` §10 verbatim.
+4. **Close:** run `docs/40 - DevDocs/prompts/2026-09-15/99-close.md` steps 1–4 yourself (ledger appendix, LAWS proposals in the close report, validate, one commit). Include the deploy table in the close report.
+5. Last line of the close report: `EVENING DONE <hash> · LIVE: <yes/no per branch> · PUSH: Dejan · ESCALATE: <n>`. Then reply in this pane in ≤6 lines and stop. Dejan reads it tomorrow morning.

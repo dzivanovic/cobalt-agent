@@ -1,4 +1,4 @@
-MODEL: Sonnet 5 (`claude-sonnet-5`) · SEAT: review hub — in the SHELL tab, after the plan pane has `/exit`ed (two sessions never share a working tree, L46): `cd /Users/cobalt/cobalt-wt/s2-p2-cards && claude "Read '/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-15/04-p2-review.md' and follow it exactly." --model claude-sonnet-5 --remote-control p2-review --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt` · SESSION: fresh · auto mode on · METER: Anthropic small (hub); Codex probed in STEP 1 — if the window is spent, exit with `RELAUNCH AFTER RESET` and stop
+MODEL: Sonnet 5 (`claude-sonnet-5`) · SEAT: review hub — in the SHELL tab, after the plan pane has `/exit`ed (two sessions never share a working tree, L46): `cd /Users/cobalt/cobalt-wt/s2-p2-cards && claude "Read '/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-15/04-p2-review.md' and follow it exactly." --model claude-sonnet-5 --remote-control p2-review --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt` · SESSION: fresh · auto mode on · METER: Anthropic small (hub); Codex probed in STEP 1 — if the window is spent the hub waits by itself (self-scheduled wake-up), no human needed
 
 # S2-P2 plan — Astra review (≤3 rounds), amendments in place, REVIEWED — ready for the builder. No build.
 
@@ -12,7 +12,7 @@ INDEX CARD: you are the HUB (L36 only spawner, L35 trust the artifact). Read onl
 cd /Users/cobalt/cobalt-wt/s2-p2-cards && wc -l "docs/40 - DevDocs/plans/plan-s2-p2-2026-09-15.md"
 cd /Users/cobalt/cobalt-wt/s2-p2-cards && codex exec --skip-git-repo-check -m gpt-6-astra -s read-only "Run: wc -l 'docs/40 - DevDocs/plans/plan-s2-p2-2026-09-15.md' -- reply with only the number." < /dev/null
 ```
-Match + exit 0 + no usage-limit text = UP. Otherwise write `RELAUNCH AFTER RESET — Codex window spent at <time>` as the report's last line, tell Dejan in one line, and stop. Never wait, never substitute another house for the reviewer (L29: plan review = architect + Astra).
+Match + exit 0 + no usage-limit text = UP → continue. Otherwise (window spent): write `WAITING FOR CODEX RESET — probe failed at <time>` in the report, schedule your own wake-up (ScheduleWakeup / CronCreate) for 5 h 10 min from now with the prompt "Re-run 04-p2-review.md from step 1", reply in one line, and wait. Repeat at most twice (three probes total); after the third failure stop with `ESCALATE: Codex unavailable`. Never substitute another house for the reviewer (L29: plan review = architect + Astra); nobody is watching — never ask a question.
 
 ## 2. Astra rounds (L29 ≤3, L39 no fourth)
 Round 1:
