@@ -1,4 +1,4 @@
-MODEL: Sonnet 5 (`claude-sonnet-5`) · SEAT: hub, a fresh Claude Code pane in herdr (not Claude1), started with `cd ~/cobalt && claude --model claude-sonnet-5 --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt-wt` · SESSION: fresh · auto mode on · METER: Anthropic small (hub only); Codex = probed in STEP 1, never asked of Dejan
+MODEL: Sonnet 5 (`claude-sonnet-5`) · SEAT: hub, a fresh Claude Code pane in herdr (not Claude1), started with ONE line, nothing pasted: `cd ~/cobalt && claude --model claude-sonnet-5 --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt-wt "Read 'docs/40 - DevDocs/prompts/2026-09-15/01-p3-review-build.md' and follow it exactly."` · SESSION: fresh · auto mode on · METER: Anthropic small (hub only); Codex = probed in STEP 1, never asked of Dejan
 
 # S2-P3 radar panel — Astra review, Sol build, one commit, READY FOR MERGE; deploy in the 20:05 pause
 
