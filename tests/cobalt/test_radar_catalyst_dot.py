@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
+
 import radar_p2_support as sup
 from cobalt.radar.evaluate import replay_receipt
 from cobalt.session import session_clock
@@ -71,6 +73,42 @@ def test_a_card_formed_after_the_def_gained_catalyst_carries_it_from_birth():
     world.scan(SCAN0)
     dot = next(d for d in world.cards.cards[1]["dots"] if d.factor == "catalyst")
     assert dot.na_reason == "DESK_NA" and not [h for h in dot.history if h["label"] == "factor_added"]
+
+
+def test_a_catalyst_only_edit_refreshes_from_the_formation_def_stored_in_the_receipt():
+    world = World()
+    world.scan(SCAN0)
+    world.defs = [_with_catalyst()]
+    world.stage._formation_defs.clear()  # prove the receipt read, not a memo
+    outcome = world.scan(SCAN0 + timedelta(seconds=100))
+    assert outcome.refreshed == [1] and not outcome.refusals, outcome.refusals
+
+
+@pytest.mark.parametrize("edit", [
+    {"preconditions": [{"expr": "Extension.state == exhausted"}]},
+    {"trigger": {"type": "bar_break", "params": {"bars_cleared": 3, "direction": "any"},
+                 "confirmation_policy": {"type": "intrabar"}}},
+    "stop",
+], ids=["preconditions", "trigger", "stop"])
+def test_a_formation_field_edit_under_the_same_slug_is_refused_never_adopted(edit):
+    world = World()
+    world.scan(SCAN0)
+    before = dict(world.cards.cards[1])
+    if edit == "stop":
+        td = sup.anatomy_def(quality_factors=[*sup.ANATOMY_FACTORS, "catalyst"])
+        stop = td.model_dump(mode="json", by_alias=True)["stop"]
+        stop["placement"]["ref"] = "turn_candle"
+        td = sup.anatomy_def(quality_factors=[*sup.ANATOMY_FACTORS, "catalyst"], stop=stop)
+    else:
+        td = sup.anatomy_def(quality_factors=[*sup.ANATOMY_FACTORS, "catalyst"], **edit)
+    field = "stop" if edit == "stop" else next(iter(edit))
+    world.defs = [sup.loaded(td, md5=CATALYST_MD5)]
+    outcome = world.scan(SCAN0 + timedelta(seconds=100))
+    assert outcome.refreshed == []
+    assert any("card 1" in r and "no longer loaded" in r and f"{field} changed since formation" in r
+               for r in outcome.refusals), outcome.refusals
+    assert world.cards.cards[1]["dots"] == before["dots"]  # the new def drove nothing
+    assert "catalyst" not in {d.factor for d in world.cards.cards[1]["dots"]}
 
 
 def test_a_def_gone_from_the_loaded_set_is_still_a_loud_refusal():
