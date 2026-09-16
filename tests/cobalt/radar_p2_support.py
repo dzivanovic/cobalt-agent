@@ -288,6 +288,10 @@ class FakeCardStore:
         self.receipts.append(json.loads(json.dumps({**row, "id": receipt_id}, default=str)))
         return receipt_id
 
+    def receipts_for_day(self, pool_key, trade_date):
+        return [r for r in self.receipts
+                if r["pool_key"] == pool_key and r["observations"]["trade_date"] == trade_date.isoformat()]
+
     def tap(self, card_id, factor, grade):
         tap_id = len(self.taps) + 1
         self.taps.append({"id": tap_id, "card_id": card_id, "factor": factor, "grade": grade})
