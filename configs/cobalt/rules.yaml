@@ -6,8 +6,8 @@
 
 generated:
   source: /Users/cobalt/Vault/Think/1 - Trading/5 - Review/Rules.md
-  source_sha256: 35d4989a5bae922a4566a5a7b1e2a679d8f1089f7088f8483da6576acc9ebbc9
-  generated_at: '2026-09-14T09:15:04+00:00'
+  source_sha256: e183f123950ac4050d5203b3a48dc2c7dcf1753ce31f02ccac7d8646658215b6
+  generated_at: '2026-09-15T19:40:06+00:00'
 rules:
 - id: rule_01
   category: process
@@ -47,7 +47,12 @@ rules:
     nothing. Rule 9 cooldown takes precedence.
 - id: rule_11
   category: process
-  text: First partial at 1R → **stop to B/E**, immediately.
+  text: 'Exits and scaling follow the setup''s sheet as written; no written exit =
+    no trade. Exit structure read live — prior 2-min bar, the EMA the stock is tracking
+    (9/21), or drive-hold (≤40% retracement, stop below consolidation). Every stop
+    on a winner is a positive-P&L stop. Stop moves logged by structure, not conviction.
+    Leaving the screen: flat, or a resting stop under a positive-R higher low — never
+    break-even.'
 - id: rule_12
   category: hard_stop
   text: Daily stop hit ($215 live) → **done trading.** Watch only.
