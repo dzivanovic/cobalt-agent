@@ -7,7 +7,6 @@ extends = "workspace"
 deny = [
   "/Users/cobalt/cobalt/.env",
   "/Users/cobalt/.cobalt/",
-  "/Users/cobalt/.grok/auth.json",
   "/Users/cobalt/.qwen/",
   "/Users/cobalt/.claude/",
   "/Users/cobalt/.codex/",
