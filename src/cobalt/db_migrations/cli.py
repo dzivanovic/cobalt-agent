@@ -54,6 +54,22 @@ DIGEST_EXCLUDED_COLUMNS = (
     "pool_member_id",
 )
 
+#: Columns a registered migration adds to ONE table, excluded from that
+#: table's digest only. Per table rather than global because names like
+#: `scan_id` or `why` would otherwise silently drop out of the digests of
+#: the new seam tables that carry them as real content.
+TABLE_DIGEST_EXCLUDED_COLUMNS: dict[str, tuple[str, ...]] = {
+    # 0007_radar_cards.sql — the radar card columns.
+    "aset_sizings": (
+        "trade_def_slug", "trade_def_md5", "setup_ref", "trigger_type",
+        "trigger_price", "stop_ref", "structural_stop", "formed_at",
+        "expires_at", "why", "proposed_key", "tapped_grade", "sized_grade",
+        "snap_notice", "conviction", "proximity", "card_score",
+        "score_suppressed", "radar_score_id", "scan_id", "formula_sha256",
+        "tunables_sha256", "settings_sha256", "health", "promoted_at",
+    ),
+}
+
 #: Where a new-core table may legitimately be found, in look-up order.
 SEARCHED_SCHEMAS = ("public", "user", "system")
 
@@ -100,7 +116,7 @@ def _probe(conn, table: str) -> dict:
         return {"schema": None, "rows": None, "digest": None}
     pk = _pk_columns(conn, schema, table)
     row_json = sql.SQL("to_jsonb(t)")
-    for column in DIGEST_EXCLUDED_COLUMNS:
+    for column in DIGEST_EXCLUDED_COLUMNS + TABLE_DIGEST_EXCLUDED_COLUMNS.get(table, ()):
         row_json = sql.SQL("({row_json} - {column})").format(
             row_json=row_json, column=sql.Literal(column)
         )
@@ -179,7 +195,12 @@ def _print_proof(
     print("-" * len(header))
     print(
         f"{len(tables)} table(s) proven; digest excludes "
-        f"{', '.join(DIGEST_EXCLUDED_COLUMNS)}. "
+        f"{', '.join(DIGEST_EXCLUDED_COLUMNS)}"
+        + "".join(
+            f"; {table}: {len(cols)} card column(s) added by 0007"
+            for table, cols in TABLE_DIGEST_EXCLUDED_COLUMNS.items()
+        )
+        + ". "
         + ("content UNCHANGED on every table."
            if changed == 0
            else f"{changed} table(s) CHANGED — investigate before proceeding.")
@@ -289,4 +310,10 @@ def add_parser(sub) -> None:
     add_query_parser(gsub)
 
 
-__all__ = ["MigrationError", "add_parser", "cmd_migrate"]
+__all__ = [
+    "DIGEST_EXCLUDED_COLUMNS",
+    "MigrationError",
+    "TABLE_DIGEST_EXCLUDED_COLUMNS",
+    "add_parser",
+    "cmd_migrate",
+]
