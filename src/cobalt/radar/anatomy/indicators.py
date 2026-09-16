@@ -134,7 +134,44 @@ def volume_band(prior: Sequence[OHLCV], n: int, k: Decimal) -> VolumeBand:
     )
 
 
+class EmaObservation(BaseModel):
+    """EMA of closes (S2-P2 STEP-7 names EMA9 as a structural health side;
+    Astra R1-12: no step computed it, so the convention is fixed here).
+
+    * seed = simple mean of the first `period` closes;
+    * after the seed: ema = alpha·close + (1 − alpha)·ema, alpha = 2/(period+1);
+    * warm-up: fewer than `period` bars → `InsufficientBars`.
+    The period comes from `defaults.yaml` `ma.fast` (9), never a literal.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    value: Decimal
+    period: int
+    seed: Literal["sma_first_period"] = "sma_first_period"
+    alpha: Literal["2_over_period_plus_1"] = "2_over_period_plus_1"
+    bars_used: int
+    last_bar_ts: AwareDatetime | None = None
+
+
+def ema(bars: Sequence[OHLCV], period: int) -> EmaObservation:
+    if period <= 0:
+        raise ValueError(f"EMA period must be positive, got {period}")
+    if len(bars) < period:
+        raise InsufficientBars("EMA", period, len(bars))
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        closes = [bar.close for bar in bars]
+        value = sum(closes[:period], Decimal(0)) / period
+        alpha = Decimal(2) / (period + 1)
+        for close in closes[period:]:
+            value = alpha * close + (1 - alpha) * value
+    return EmaObservation(
+        value=value, period=period, bars_used=len(bars), last_bar_ts=getattr(bars[-1], "ts", None)
+    )
+
+
 __all__ = [
-    "ATR_PERIOD", "AtrObservation", "InsufficientBars", "OHLCV", "VolumeBand",
-    "true_ranges", "volume_band", "wilder_atr",
+    "ATR_PERIOD", "AtrObservation", "EmaObservation", "InsufficientBars", "OHLCV", "VolumeBand",
+    "ema", "true_ranges", "volume_band", "wilder_atr",
 ]

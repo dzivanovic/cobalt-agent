@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 from cobalt import db, env
 from cobalt.db import Side
@@ -62,15 +62,24 @@ class TraderSettingsStore:
         rows: dict[str, Any],
         *,
         source: str,
+        delete: Iterable[str] = (),
         before_commit: Callable[[], None] | None = None,
     ) -> dict[str, str]:
-        """Upsert every setting in `rows`. Returns `{key: created|updated
-        |unchanged}` so the caller can report what actually moved.
+        """Upsert every setting in `rows` and remove every key in
+        `delete`. Returns `{key: created|updated|unchanged|deleted}` so
+        the caller can report what actually moved.
 
         One transaction: a half-applied settings load is a config that
         validates nowhere, which is the failure the per-top-level-setting
-        row layout was chosen to avoid in the first place.
+        row layout was chosen to avoid in the first place. `delete` is in
+        the same transaction for the same reason — the card-settings file
+        is a whole set, and a key it omits must vanish atomically with the
+        keys it writes (S2-P2, Astra R1-5).
         """
+        delete = list(delete)
+        overlap = sorted(set(delete) & set(rows))
+        if overlap:
+            raise ValueError(f"a setting cannot be both written and deleted: {overlap}")
         before = self.values()
         outcome: dict[str, str] = {}
         conn = self._connect()
@@ -93,6 +102,10 @@ class TraderSettingsStore:
                         """,
                         (key, json.dumps(value), source),
                     )
+                for key in delete:
+                    cur.execute("DELETE FROM trader_settings WHERE key = %s", (key,))
+                    if cur.rowcount:
+                        outcome[key] = "deleted"
             if before_commit is not None:
                 before_commit()
             conn.commit()
