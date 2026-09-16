@@ -75,7 +75,7 @@ class FakeCardStore:
         self.rows = rows or []
         self.error = error
 
-    def open_cards(self):
+    def radar_board_cards(self, _trade_date):
         if self.error:
             raise self.error
         return copy.deepcopy(self.rows)
@@ -140,36 +140,6 @@ def _build(
         tunables_loader=tunables_loader or _tunables(),
     )
     return view, store
-
-
-def _presentation(index: int, *, malicious: bool = False):
-    text = '<script data-x="bad">&' if malicious else f"fixture why {index}"
-    statuses = ["ok", "warn", "bad"]
-    return {
-        "setup": f"setup {index}",
-        "trade": f"trade {index}",
-        "why": text,
-        "dots": [
-            {"label": "structure", "score": index % 3, "grade": 7, "why": text},
-            {"label": "tape", "score": None, "grade": 5, "why": "judgment"},
-        ],
-        "health": [
-            {"label": f"health-{status}", "status": status, "note": text} for status in statuses
-        ],
-        "trails": ["one bar"],
-        "default_trail": "one bar",
-        "trail_why": ["structure"],
-        "attempt": 1,
-        "attempt_max": 2,
-        "news": "",
-        "notes": "",
-    }
-
-
-def _contract_cards():
-    return [
-        panel.CardView.from_contract(row, **_presentation(i)) for i, row in enumerate(CARD_FIXTURE)
-    ]
 
 
 def test_store_members_for_day_selects_every_episode_column():
@@ -460,108 +430,28 @@ def test_parse_since_rejects_missing_malformed_naive_and_future(value):
         panel.parse_since(value, now=NOW)
 
 
-def test_card_contract_refuses_missing_presentation_fields():
-    with pytest.raises(panel.RadarPanelError, match="presentation fields missing"):
-        panel.CardView.from_contract(CARD_FIXTURE[0])
+# The card-shell tests that ran against `panel-cards.contract.json`
+# through `CardView.from_contract` moved to `test_radar_panel_cards.py`
+# (S2-P2 STEP-8): the adapter is gone and the ladder is specified against
+# `"user".radar_cards_v` rows the evaluator produces from the hub-cut bars.
 
 
-def test_every_fixture_state_and_r1_4_field_renders():
-    cards = _contract_cards()
-    rendered = panel.render_ladder(panel.order_cards(cards))
-    for row, card in zip(CARD_FIXTURE, cards):
-        assert row["ticker"] in rendered
-        assert card.card_score == row["card_score"]
-        assert card.conviction == row["conviction"]
-        assert card.proximity == row["proximity"]
-        assert card.pool_position == row["pool_position"]
-        assert card.owner == row["owner"]
-        if card.state not in panel.TERMINAL:
-            assert str(row["card_score"]) in rendered
-    for card in cards:
-        assert card.target_1r is not None and card.target_2r is not None
-        if card.state not in panel.TERMINAL:
-            assert str(card.target_1r) in rendered
-            assert str(card.target_2r) in rendered
-    assert "IN-TRADE" in rendered and "FILLED" not in rendered
-    for owner in ("COBALT", "YOU", "N/A MANUAL"):
-        assert owner in rendered
-    assert "health-ok · ok" in rendered
-    assert "health-warn · warn" in rendered
-    assert "health-bad · bad" in rendered
-
-
-def test_pinned_states_beat_watch_and_watch_is_score_descending():
-    ladder = panel.order_cards(_contract_cards())
-    assert [card.state for card in ladder.active[:3]] == [
-        CardState.ARMED,
-        CardState.TRIGGERED,
-        CardState.FILLED,
-    ]
-    watches = [card for card in ladder.active if card.state is CardState.WATCH]
-    assert [card.card_score for card in watches] == sorted(
-        (card.card_score for card in watches), reverse=True
-    )
-
-
-def test_first_two_open_others_strips_and_controls_are_disabled():
-    rendered = panel.render_ladder(panel.order_cards(_contract_cards()))
-    assert rendered.count('class="ladder-item open"') == 2
-    assert 'id="collapse-all"' in rendered and 'id="top-two"' in rendered
-    assert 'title="S2-P2" disabled>promote ↑' in rendered
-    assert 'title="S2-P2" disabled>judgment tap' in rendered
-
-
-def test_detail_order_is_levels_rank_why_news_notes_chart():
-    rendered = panel.render_ladder(panel.order_cards(_contract_cards()))
-    indices = [
-        rendered.index(f'data-detail="{name}"')
-        for name in ("levels", "rank", "news", "notes", "chart")
-    ]
-    assert indices == sorted(indices)
-
-
-def test_card_targets_compute_only_for_noncontract_stored_values():
-    data = _contract_cards()[0].model_dump()
-    data.update(
-        contract=None, direction="long", trigger="10", stop="9", target_1r=None, target_2r=None
-    )
-    card = panel.CardView.model_validate(data)
-    assert card.target_1r == 11 and card.target_2r == 12
-
-
-def test_contract_values_are_not_recomputed():
-    row = copy.deepcopy(CARD_FIXTURE[0])
-    row["target_1r"], row["target_2r"] = "999", "1000"
-    card = panel.CardView.from_contract(row, **_presentation(0))
-    assert card.target_1r == 999 and card.target_2r == 1000
-
-
-def test_terminal_cards_render_below_active_ladder():
-    rendered = panel.render_ladder(panel.order_cards(_contract_cards()))
-    terminal_at = rendered.index('class="terminal"')
-    assert rendered.index("SMCI") < terminal_at < rendered.index("AAPL")
-
-
-def test_ladder_html_escapes_why_source_health_and_error():
-    row = copy.deepcopy(CARD_FIXTURE[0])
-    row["price_source"] = "<source>&"
-    card = panel.CardView.from_contract(row, **_presentation(0, malicious=True))
-    rendered = panel.render_ladder(panel.order_cards([card]))
-    assert "<script data-x" not in rendered
-    assert "&lt;script data-x" in rendered and "&lt;source&gt;&amp;" in rendered
+def test_failed_page_escapes_the_error():
     failed = panel.render_failed_page('<failure data-x="bad">')
     assert '<failure data-x="bad">' not in failed and "&lt;failure" in failed
 
 
-def test_card_source_adapter_empty_failure_and_unwired_cases():
+def test_card_source_empty_and_failure_cases():
     assert (
-        panel.build_ladder_view(card_store=FakeCardStore()).empty_message
-        == "No radar cards — F8 lands in S2-P2"
+        panel.build_ladder_view(card_store=FakeCardStore(), clock=FakeClock(), now=NOW).empty_message
+        == "No radar cards today"
     )
     with pytest.raises(panel.RadarPanelError, match="card read failed"):
-        panel.build_ladder_view(card_store=FakeCardStore(error=RuntimeError("offline")))
-    with pytest.raises(panel.RadarPanelError, match="contract is not wired"):
-        panel.build_ladder_view(card_store=FakeCardStore([{"origin": "radar"}]))
+        panel.build_ladder_view(
+            card_store=FakeCardStore(error=RuntimeError("offline")), clock=FakeClock(), now=NOW
+        )
+    with pytest.raises(panel.RadarPanelError, match="invalid radar card row"):
+        panel.build_ladder_view(card_store=FakeCardStore([{"origin": "radar"}]), clock=FakeClock(), now=NOW)
 
 
 def test_css_has_exact_responsive_contract_and_phone_frame():

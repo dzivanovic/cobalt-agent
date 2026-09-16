@@ -43,6 +43,15 @@ def add_parser(sub) -> None:
     evaluate.add_argument("--taps", help="Simulated taps file for --candidate.")
     evaluate.set_defaults(func=_evaluate)
 
+    from .audit_export import add_arguments as _audit_arguments
+
+    audit = rsub.add_parser(
+        "audit-export",
+        help="Write the frozen L52-d audit bundle for a run or a replayed day (STEP-11).",
+    )
+    _audit_arguments(audit)
+    audit.set_defaults(func=_audit_export)
+
     screens = rsub.add_parser("screens", help="Propose/apply Screens note blocks")
     ssub = screens.add_subparsers(dest="screens_command", required=True)
     screens_propose = ssub.add_parser("propose")
@@ -77,6 +86,12 @@ def _evaluate(args) -> None:
     from .evaluate_cli import evaluate_command
 
     evaluate_command(args)
+
+
+def _audit_export(args) -> None:
+    from .audit_export import command
+
+    command(args)
 
 
 def _apply_args(parser, kind: str) -> None:
