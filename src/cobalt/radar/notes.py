@@ -240,6 +240,44 @@ def planned_context_rpm(context_tickers: int, scan_interval: int) -> float:
     return context_tickers * 60 / scan_interval
 
 
+class LifecycleDemand(BaseModel):
+    """S5's departed-member polling on top of the planned steady demand."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    planned_rpm: float | None
+    lifecycle_names: int
+    lifecycle_rpm: float
+    total_rpm: float | None
+    ceiling_rpm: int
+    refusal: str | None
+
+
+def lifecycle_poll_demand(
+    planned_rpm: float | None, names: int, *, scan_interval: int, ceiling_rpm: int
+) -> LifecycleDemand:
+    """Can S4 also poll `names` departed-member tickers whose radar cards
+    are still open (S2-P2, Astra R1-15)? Counted CONSERVATIVELY on top of
+    the whole planned steady demand — which already budgets the full pool
+    cap — at the pool's own per-cycle rate, never against the pool alone
+    (L53: the total across every consumer of the transport is the rule).
+    An unplanned source (a frozen or failed note) has no total and is
+    refused, not assumed."""
+    lifecycle_rpm = planned_context_rpm(names, scan_interval) * (1 + DAILY_RETRIES_PER_REQUEST)
+    if planned_rpm is None:
+        return LifecycleDemand(planned_rpm=None, lifecycle_names=names, lifecycle_rpm=lifecycle_rpm,
+                               total_rpm=None, ceiling_rpm=ceiling_rpm,
+                               refusal="no planned demand to add lifecycle polling to (sources unplanned)")
+    total = planned_rpm + lifecycle_rpm
+    refusal = (
+        f"total demand {total:.2f} rpm (planned {planned_rpm:.2f} + lifecycle {lifecycle_rpm:.2f}) "
+        f"exceeds the ceiling {ceiling_rpm}"
+        if total > ceiling_rpm + 1e-9 else None
+    )
+    return LifecycleDemand(planned_rpm=planned_rpm, lifecycle_names=names, lifecycle_rpm=lifecycle_rpm,
+                           total_rpm=total, ceiling_rpm=ceiling_rpm, refusal=refusal)
+
+
 def planned_total_rpm(
     pool: PoolBlock,
     screen_count: int,

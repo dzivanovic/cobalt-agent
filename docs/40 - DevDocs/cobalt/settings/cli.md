@@ -16,6 +16,14 @@
 - After applying it RE-READS the rows and asserts
   `from_db() == the seed` before claiming success.
 
+## `--card <file> [--sha256 <hash>]` (S2-P2, Astra R1-5)
+Loads the five radar-card keys (`settings/card.py`) from ONE reviewed
+file instead of the two YAMLs. It does not combine with `--from` or
+`--from-git`. `--apply` requires `--sha256` of the file's bytes; a
+`--sha256` without `--card` is refused. The body is
+`card.cmd_load_card`: diff, one `put` with deletes, and a round-trip
+proof.
+
 ## `--from-git`, and why it exists
 `configs/cobalt/aset.yaml` and `daymode.yaml` left the repo in the same
 sprint. A LIVE seed therefore reads them at a revision:

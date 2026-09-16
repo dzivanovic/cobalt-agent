@@ -69,3 +69,28 @@ Declares `SIDE = Side.USER` (ADR-0008 D2 — the side is chosen PER STORE, never
 the card's own history sits where the card sits.
 
 `_connect()` passes it to the factory; `ensure_schema()` asserts the two-layer schemas exist before running its own DDL, naming `cobalt db migrate` if they do not.
+
+---
+
+## 2026-09-16 — S2-P2 radar cards (STEP-4/6)
+
+**The sized-card ARM invariant lives in `transition()` (Astra R1-6).** The locked `SELECT … FOR UPDATE` now also reads `grade`, `risk_budget`, `shares` and `used_risk`. Any `-> ARMED` on a card with one of them NULL is refused by name ("UNSIZED — tap a key first"). This covers every caller, including the sheet's `/card/{id}/move`, not just the radar tap route. `transition()` also accepts `before_commit` so the S5 stage's market_reset gate reaches an expiry.
+
+**Unsized stop edit.** `record_stop_edit` locks the row. On an unsized radar WATCH card (`risk_budget` NULL) it side-checks through `aset.engine.stop_distance` and updates `stop` and `per_share_risk` only; the sizing columns stay NULL. The old path divided by NULL. Sized and FILLED edits are unchanged.
+
+**One creation path for an unsized radar card (Astra R1-7).** `create_radar_card(spec, *, now, before_commit)` does, in one transaction:
+1. resolve the account mode;
+2. `INSERT … ON CONFLICT (pool_member_id, trade_def_slug, direction) WHERE origin='radar' AND state IN (…) DO NOTHING RETURNING id`. `None` means the database already holds the open card; the partial unique index decides, not a check-then-insert (R1-14);
+3. `create_state` genesis, with evidence carrying run id, formation bar ts and atoms;
+4. the `card_dots` rows.
+
+**Other radar methods:**
+- `refresh_radar_card(update)` locks the row and writes proximity, last price, health and the seam id. Dots upsert with engine fields and history only, never `trader_grade`/`tapped_at`. When a tap landed after the stage read the card (`tap_version`), conviction/score/key are left to the tap's own recompute and the next scan reconciles.
+- `expire_radar_card` goes through `transition(EXPIRED)`. A state that moved under it (FILLED) is logged, not raised.
+- `write_receipt`, `receipts_chain(receipt_id)` (oldest first) and `receipts_for_day(pool_key, day)`.
+- Reads: `open_radar_cards()` (with dots and taps), `formation_consumed(ticker, slug, direction, formed_at)`, `radar_card(id)`.
+
+**Taps (STEP-6), each one locked transaction:**
+- `tap_key(card_id, sizing)`: WATCH only (`KEY_EDITABLE`). Refuses when entry/stop moved since the size was computed. Writes tapped/sized grade, sheet, risk budget, shares, used risk and snap notice.
+- `tap_dot(card_id, factor, grade, *, bands, enabled)`: appends a `card_dot_taps` row carrying `engine_grade_at_tap`, sets the trader grade, and recomputes conviction/suppression/card_score (from the stored proximity) and the proposed key. Refused on a terminal card.
+- `set_promoted(card_id, bool)`: promote needs WATCH and clears any other promoted card in the same transaction; the `aset_sizings_one_promoted_radar_card` index backs it across rows.
