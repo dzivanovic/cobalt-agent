@@ -27,6 +27,14 @@ typed. `class`/`family` drift is a warning and THE HUMAN WINS: this is a
 read path and it corrects nothing.
 
 ## Gotchas
+A predicate that does not parse (S2-P2 R3) fails the def like any other
+validation error. `_locate_predicate_errors` puts one line per bad
+expression IN FRONT of the error: `<note>:<line> (trade_def:<slug>):
+predicate syntax error at column N …`. The line is found by searching
+for the expression text inside the unit's own line range. If YAML
+escaping hides the exact text, the unit's opening marker line is named
+instead, and the error is still reported.
+
 Two units per note, on purpose: replay writes a tunable row's `status`,
 and a status write that re-rendered the definition unit would rewrite the
 def and every comment in it. A per-trade row must carry scope
