@@ -1,0 +1,96 @@
+[
+  {
+    "key": "aset.sheet_modes",
+    "value": {
+      "order": [
+        "half",
+        "full"
+      ],
+      "sheets": {
+        "full": {
+          "A": 135,
+          "A_plus": 345,
+          "B": 60,
+          "C": 21,
+          "D": 0
+        },
+        "half": {
+          "A": 70,
+          "A_plus": 170,
+          "B": 30,
+          "C": 11,
+          "D": 0
+        }
+      }
+    }
+  },
+  {
+    "key": "daymode.reduced_sheet",
+    "value": "half"
+  },
+  {
+    "key": "daymode.enabled_modes",
+    "value": [
+      "reduced"
+    ]
+  },
+  {
+    "key": "daymode.hotkey_file_template",
+    "value": "{sheet}.htk"
+  },
+  {
+    "key": "daymode.stepdowns",
+    "value": [
+      {
+        "because": "daily stop hit on the prior trading day",
+        "effect": "floor",
+        "signal": "daily_stop_hit"
+      },
+      {
+        "because": "no prior DRC",
+        "effect": "down",
+        "rungs": 1,
+        "signal": "no_prior_drc"
+      },
+      {
+        "because": "prior DRC exists but no headline field is filled",
+        "effect": "down",
+        "rungs": 1,
+        "signal": "drc_not_informative"
+      },
+      {
+        "because": "early close today",
+        "effect": "down",
+        "rungs": 1,
+        "signal": "early_close_today"
+      },
+      {
+        "because": "first session after a multi-day close",
+        "effect": "down",
+        "rungs": 1,
+        "signal": "first_session_after_close"
+      },
+      {
+        "because": "trade_count_band is PLACEHOLDER (unruled)",
+        "effect": "floor",
+        "signal": "trade_count_band_placeholder"
+      }
+    ]
+  },
+  {
+    "key": "aset.enabled_grades",
+    "value": [
+      "A",
+      "B",
+      "C"
+    ]
+  },
+  {
+    "key": "daymode.reduced_enabled_grades",
+    "value": [
+      "A",
+      "B",
+      "C"
+    ]
+  }
+]
