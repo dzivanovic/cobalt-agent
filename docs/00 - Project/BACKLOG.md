@@ -61,6 +61,11 @@ don't duplicate them.
 
 ## NOW (in build)
 
+- **S2-P2 — Radar cards: F8 precondition evaluator + F10 dots / ladder / taps (2026-09-16): BUILD CHUNKS A–C COMPLETE, HUB VERIFICATION PENDING.**
+  Plan `docs/40 - DevDocs/plans/plan-s2-p2-2026-09-15.md` (R1–R11), ADR-0009.
+  Branch `sprint-2/cards`. Chunk A (`ca184c8`): migrations 0006/0007, the §10.5 predicate AST, anatomy detectors. Chunk B (`17eb35f`): S5 evaluate stage, dots/scoring, snap-down key taps, health pills. Chunk C (uncommitted, builder report `docs/40 - DevDocs/reports/s2-p2-build-opus-C-2026-09-16.md`): `/radar` ladder wired to `"user".radar_cards_v` with badges, hollow shadow dots, the 1–10 tap strip, key row and promote; explicit POST allowlist + GET sentinels; taxonomy v0.8 (schema 0.5 behind the 0.4 loader gate, `taxonomy catalyst-review`/`catalyst-apply`); `cards trail-fit-draft`; `cards shadow-report`; `radar audit-export`.
+  Owed before merge (hub): `requires_db` + `requires_vault` tests, `cobalt db migrate` on cobalt_dev (0007 changed again in chunk C), `cobalt validate`, `cobalt jobs restarts main..HEAD`, dev replay, audit bundle staging. Ships dark (R9). Carried: curve tribunal (S3), catalyst markup (Dejan, D3), alignment default ruling (plan §8 item 4), `panel-cards.real-shape.json` cut (hub).
+
 - **S2-P3 — Radar panel (2026-09-15): BUILD COMPLETE, HUB VERIFICATION PENDING.**
   Read-only `GET /radar` pool view + card-ladder shell and
   `GET /api/radar/pool?since=` refresh path built in the ASET process.

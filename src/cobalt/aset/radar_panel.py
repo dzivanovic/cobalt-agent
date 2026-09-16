@@ -1,4 +1,13 @@
-"""Read-only Trade Radar panel view models, builder, and HTML renderers."""
+"""Trade Radar panel view models, builders, and HTML renderers.
+
+The pool layer (S2-P3) is read-only. The card ladder (S2-P2 STEP-8) reads
+`"user".radar_cards_v` rows through `CardStore.radar_board_cards` and
+renders them with their owner badges, hollow shadow dots, the 1-10 tap
+strip, the key row and promote. Every write the ladder offers is a
+`fetch` POST to one of the allowlisted `/radar/card/{id}/…` routes in
+`web.py`; this module itself never writes, initializes a schema, or
+attests a note.
+"""
 
 from __future__ import annotations
 
@@ -13,10 +22,12 @@ from pydantic import (
     Field,
     ValidationError,
     field_validator,
-    model_validator,
 )
 
-from cobalt.cards import TERMINAL, CardState, CardStore, Origin
+from cobalt.cards import TERMINAL, CardState, CardStore
+from cobalt.cards.models import KEY_EDITABLE
+from cobalt.cards.radar import FIELD_OWNERS, LadderEntry, ladder_order
+from cobalt.cards.scoring import Dot, colour_thresholds, dot_colour
 from cobalt.radar.models import PoolBlock
 from cobalt.radar.store import RadarStore
 from cobalt.session.clock import now_utc, session_clock
@@ -175,16 +186,118 @@ class PoolView(_ViewModel):
     churn: ChurnDelta | None
 
 
+# ---------------------------------------------------------------------
+# The card ladder (S2-P2 STEP-8)
+# ---------------------------------------------------------------------
+
+
+class RadarCardRow(_ViewModel):
+    """One `"user".radar_cards_v` row — exactly the view's columns — plus
+    the card's `"user".card_dots` rows. Validated before anything renders."""
+
+    card_id: int
+    user_id: int
+    created_at: datetime
+    ticker: str = Field(min_length=1)
+    direction: Literal["long", "short"]
+    state: CardState
+    state_at: datetime
+    session: str = Field(min_length=1)
+    account_mode: str | None
+    pool_member_id: int
+    trade_def_slug: str = Field(min_length=1)
+    trade_def_md5: str = Field(min_length=1)
+    setup_ref: str | None
+    trigger_type: str | None
+    trigger_price: Decimal
+    stop_ref: str | None
+    structural_stop: Decimal
+    entry: Decimal
+    stop: Decimal
+    formed_at: datetime | None
+    expires_at: datetime | None
+    why: str | None
+    proposed_key: str | None
+    tapped_grade: str | None
+    sized_grade: str | None
+    snap_notice: str | None
+    grade: str | None
+    risk_budget: Decimal | None
+    shares: int | None
+    used_risk: Decimal | None
+    conviction: Decimal | None
+    proximity: Decimal | None
+    card_score: int | None
+    score_suppressed: str | None
+    radar_score_id: int
+    scan_id: int
+    formula_sha256: str
+    tunables_sha256: str
+    settings_sha256: str
+    health: dict[str, Any] | None
+    promoted_at: datetime | None
+    board_score_id: int | None
+    board_run_id: int | None
+    board_evaluation: str | None
+    board_started_at: datetime | None
+    outside_pool: bool
+    last_price: Decimal | None
+    pool_position: int | None
+    dots: list[Dot]
+
+    @field_validator("created_at", "state_at", "formed_at", "expires_at", "promoted_at", "board_started_at")
+    @classmethod
+    def _timestamps_aware(cls, value: datetime | None, info) -> datetime | None:
+        return _aware(value, info.field_name)
+
+
+_ROW_COLUMNS = set(RadarCardRow.model_fields) - {"dots"}
+if _ROW_COLUMNS != set(FIELD_OWNERS):  # pragma: no cover - import-time contract
+    raise RadarPanelError(
+        f"radar card row columns and FIELD_OWNERS disagree: {sorted(_ROW_COLUMNS ^ set(FIELD_OWNERS))}"
+    )
+
+#: The fields the card face and detail pane display, each with its badge.
+BADGED_FIELDS: tuple[str, ...] = (
+    "ticker", "direction", "state", "setup_ref", "trade_def_slug", "why", "entry", "stop",
+    "trigger_price", "structural_stop", "last_price", "proposed_key", "tapped_grade", "sized_grade",
+    "snap_notice", "grade", "shares", "risk_budget", "conviction", "proximity", "card_score",
+    "score_suppressed", "pool_position", "formed_at", "expires_at", "health", "outside_pool", "scan_id",
+)
+
+
 class DotView(_ViewModel):
-    label: str = Field(min_length=1)
-    score: Literal[0, 1, 2] | None
-    grade: int = Field(ge=1, le=10)
+    factor: str = Field(min_length=1)
+    position: int = Field(ge=0)
+    source: Literal["cobalt", "cobalt-degraded", "human"]
+    tier: Literal["deterministic", "judgment"]
+    role: Literal["shadow", "live", "human"]
+    #: Hollow = nothing counts toward conviction yet: an untapped shadow,
+    #: desk or human dot. A tap fills it.
+    hollow: bool
+    engine_grade: int | None = Field(default=None, ge=1, le=10)
+    trader_grade: int | None = Field(default=None, ge=1, le=10)
+    #: The grade the dot shows as its own: the tap, or a LIVE engine grade.
+    shown_grade: int | None = Field(default=None, ge=1, le=10)
+    colour: Literal[0, 1, 2] | None
+    na_reason: str | None
     why: str = Field(min_length=1)
+    owner: Literal["COBALT", "YOU"]
+    tappable: bool
+
+
+class KeyView(_ViewModel):
+    grade: str
+    dollars: Decimal
+    enabled: bool
+    proposed: bool
+    tapped: bool
+    sized: bool
 
 
 class HealthView(_ViewModel):
     label: str = Field(min_length=1)
-    status: Literal["ok", "warn", "bad"]
+    status: Literal["ok", "warn", "bad", "n/a"]
     note: str = Field(min_length=1)
 
 
@@ -193,119 +306,52 @@ class CardView(_ViewModel):
     ticker: str = Field(min_length=1)
     direction: Literal["long", "short"]
     state: CardState
-    setup: str = Field(min_length=1)
+    setup: str
     trade: str = Field(min_length=1)
-    why: str = Field(min_length=1)
+    why: str
     trigger: Decimal
-    last: Decimal
+    trigger_evidence: Decimal
     stop: Decimal
-    target_1r: Decimal | None = None
-    target_2r: Decimal | None = None
-    grade: str = Field(min_length=1)
-    proposed_key: str = Field(min_length=1)
-    enabled_grades: list[str]
-    shares: int = Field(ge=0)
-    owner: Literal["COBALT", "YOU", "N/A MANUAL"]
-    source: str = Field(min_length=1)
-    card_score: int = Field(ge=0)
-    conviction: float = Field(ge=0, le=1)
-    proximity: float = Field(ge=0, le=1)
-    pool_position: int = Field(ge=1)
+    structural_stop: Decimal
+    last: Decimal | None
+    target_1r: Decimal
+    target_2r: Decimal
+    grade: str | None
+    tapped_grade: str | None
+    sized_grade: str | None
+    snap_notice: str | None
+    proposed_key: str | None
+    score_suppressed: str | None
+    keys: list[KeyView]
+    key_editable: bool
+    shares: int | None
+    risk_budget: Decimal | None
+    card_score: int | None
+    conviction: Decimal | None
+    proximity: Decimal | None
+    pool_position: int | None
+    rank_chip: int | None
+    promoted: bool
+    outside_pool: bool
     dots: list[DotView]
     health: list[HealthView]
-    trails: list[str]
-    default_trail: str | None
-    trail_why: list[str]
-    attempt: int = Field(ge=0)
-    attempt_max: int = Field(ge=1)
-    news: str
-    notes: str
+    badges: dict[str, str]
     state_at: datetime
-    degraded: bool
-    contract: str | None = None
-
-    @field_validator("state_at")
-    @classmethod
-    def _state_at_aware(cls, value: datetime) -> datetime:
-        return _aware(value, "state_at")  # type: ignore[return-value]
-
-    @model_validator(mode="after")
-    def _targets(self) -> CardView:
-        if self.contract is not None:
-            if self.target_1r is None or self.target_2r is None:
-                raise ValueError("contract cards must supply target_1r and target_2r")
-            return self
-        distance = abs(self.trigger - self.stop)
-        sign = Decimal(1) if self.direction == "long" else Decimal(-1)
-        self.target_1r = self.trigger + sign * distance
-        self.target_2r = self.trigger + sign * distance * 2
-        return self
+    formed_at: datetime | None
+    expires_at: datetime | None
+    scan_id: int
+    board_evaluation: str | None
 
     @property
     def display_state(self) -> str:
         return "IN-TRADE" if self.state is CardState.FILLED else self.state.value
-
-    @classmethod
-    def from_contract(cls, row: dict[str, Any], **presentation: Any) -> CardView:
-        """Adapt a hub-cut sizing-shape row plus its supplied UI contract.
-
-        The fixture deliberately retains the real ``aset_sizings`` column
-        shape.  UI-only fields are explicit arguments so this adapter cannot
-        silently invent WHY, dots, health, or trails.
-        """
-        required = {
-            "setup",
-            "trade",
-            "why",
-            "dots",
-            "health",
-            "trails",
-            "default_trail",
-            "trail_why",
-            "attempt",
-            "attempt_max",
-            "news",
-            "notes",
-        }
-        missing = sorted(required - presentation.keys())
-        if missing:
-            raise RadarPanelError(
-                f"contract card presentation fields missing: {', '.join(missing)}"
-            )
-        try:
-            return cls(
-                id=row["id"],
-                ticker=row["ticker"],
-                direction=row["direction"],
-                state=row["state"],
-                trigger=row["entry"],
-                last=row["last_price"],
-                stop=row["stop"],
-                target_1r=row["target_1r"],
-                target_2r=row["target_2r"],
-                grade=row["grade"],
-                proposed_key=row["grade"],
-                enabled_grades=["A", "B"],
-                shares=row["shares"],
-                owner=row["owner"],
-                source=row.get("price_source") or f"{row['origin']}:fixture",
-                card_score=row["card_score"],
-                conviction=row["conviction"],
-                proximity=row["proximity"],
-                pool_position=row["pool_position"],
-                state_at=row["state_at"],
-                degraded=row["degraded"],
-                contract=row.get("_contract"),
-                **presentation,
-            )
-        except (KeyError, ValidationError, TypeError) as exc:
-            raise RadarPanelError(f"invalid contract card: {exc}") from exc
 
 
 class LadderView(_ViewModel):
     active: list[CardView]
     terminal: list[CardView]
     empty_message: str | None
+    rung: str | None = None
 
 
 class RadarPanelView(_ViewModel):
@@ -574,41 +620,137 @@ def build_pool_view(
     )
 
 
-def order_cards(cards: list[CardView]) -> LadderView:
-    pinned_states = {CardState.ARMED, CardState.TRIGGERED, CardState.FILLED}
-    terminal = sorted(
-        (card for card in cards if card.state in TERMINAL),
-        key=lambda card: (card.state.value, card.state_at, card.ticker),
-    )
-    pinned = sorted(
-        (card for card in cards if card.state in pinned_states),
-        key=lambda card: (card.pool_position, -card.card_score, card.ticker),
-    )
-    watch = sorted(
-        (card for card in cards if card.state is CardState.WATCH),
-        key=lambda card: (-card.card_score, card.pool_position, card.ticker),
-    )
-    return LadderView(
-        active=[*pinned, *watch],
-        terminal=terminal,
-        empty_message=None if cards else "No radar cards — F8 lands in S2-P2",
+def _decided_rung(instant: datetime, daymode_cfg) -> str:
+    """Today's day-mode rung, READ-ONLY: the stored decision (no schema
+    init, no note attestation) through the one `decided_or_stage1` rule."""
+    from cobalt.daymode import DayModeStore, decided_or_stage1
+
+    row = DayModeStore().for_date(session_clock().to_et(instant).date())
+    return decided_or_stage1(row, daymode_cfg, now=instant)
+
+
+def _dot_view(dot: Dot, *, live_card: bool, red: int, amber: int) -> DotView:
+    tapped = dot.trader_grade is not None
+    shown = dot.trader_grade if tapped else (dot.engine_grade if dot.role == "live" else None)
+    hollow = shown is None
+    colour_grade = dot.trader_grade if tapped else dot.engine_grade
+    if tapped:
+        why = f"you: {dot.trader_grade}"
+        if dot.engine_grade is not None:
+            why += f" · {dot.role} {dot.engine_grade}"
+        if dot.engine_why:
+            why += f" · {dot.engine_why}"
+    elif dot.engine_why:
+        why = dot.engine_why
+    elif dot.role == "human":
+        why = "your read — tap 1-10"
+    else:
+        why = f"{dot.factor}: {dot.na_reason or 'no engine grade'}"
+    return DotView(
+        factor=dot.factor, position=dot.position, source=dot.source, tier=dot.tier, role=dot.role,
+        hollow=hollow, engine_grade=dot.engine_grade, trader_grade=dot.trader_grade, shown_grade=shown,
+        colour=dot_colour(colour_grade, red_max=red, amber_max=amber), na_reason=dot.na_reason, why=why,
+        owner="YOU" if dot.role == "human" or tapped else "COBALT", tappable=live_card,
     )
 
 
-def build_ladder_view(*, card_store: CardStore | None = None) -> LadderView:
+def _health_views(health: dict[str, Any] | None) -> list[HealthView]:
+    if not health:
+        return []
+    pills = health.get("pills")
+    if not isinstance(pills, list):
+        raise RadarPanelError("FAILED: card health has no pills list")
+    return [HealthView(label=p["label"], status=p["status"], note=p["note"]) for p in pills]
+
+
+def build_ladder_view(
+    *,
+    card_store: CardStore | None = None,
+    settings_store: TraderSettingsStore | None = None,
+    clock=None,
+    now: datetime | None = None,
+    tunables_loader=load_tunables,
+    rung_source=None,
+) -> LadderView:
+    """Read `"user".radar_cards_v` for today and build the ladder.
+
+    The rung, the sheet dollars and the dot colour thresholds are read
+    only when there is a card to render; an empty ladder needs none of
+    them. Every read or validation failure is a loud `RadarPanelError`."""
+    from cobalt.aset.engine import key_ladder
+    from cobalt.settings.models import TraderSettings
+
     card_store = card_store or CardStore()
+    clock = clock or session_clock()
+    instant = now or now_utc()
+    day = clock.to_et(instant).date()
     try:
-        rows = card_store.open_cards()
+        raw = card_store.radar_board_cards(day)
+    except Exception as exc:
+        raise RadarPanelError(f"FAILED: radar card read failed: {type(exc).__name__}: {exc}") from exc
+    try:
+        rows = [RadarCardRow.model_validate(item) for item in raw]
+    except ValidationError as exc:
+        raise RadarPanelError(f"FAILED: invalid radar card row: {exc}") from exc
+    if not rows:
+        return LadderView(active=[], terminal=[], empty_message="No radar cards today")
+
+    settings_store = settings_store or TraderSettingsStore()
+    try:
+        trader = TraderSettings._build(settings_store.values(), where='"user".trader_settings')
+        mode = (rung_source or _decided_rung)(instant, trader.daymode)
+        sheet = trader.daymode.sheet_for(mode)
+        enabled = trader.daymode.enabled_grades_for(mode)
+        ladder_keys = key_ladder(trader.sheet_modes, sheet, enabled)
     except Exception as exc:
         raise RadarPanelError(
-            f"FAILED: radar card read failed: {type(exc).__name__}: {exc}"
+            f"FAILED: day mode / sheet for the key row unresolved: {type(exc).__name__}: {exc}"
         ) from exc
-    radar_rows = [row for row in rows if str(row.get("origin")) == Origin.RADAR.value]
-    if radar_rows:
-        raise RadarPanelError(
-            "FAILED: radar cards exist but the card contract is not wired — S2-P2"
+    try:
+        red, amber = colour_thresholds(tunables_loader().by_key)
+    except Exception as exc:
+        raise RadarPanelError(f"FAILED: dot colour tunables: {type(exc).__name__}: {exc}") from exc
+
+    order = ladder_order([
+        LadderEntry(card_id=r.card_id, state=r.state, card_score=r.card_score, pool_position=r.pool_position,
+                    ticker=r.ticker, promoted_at=r.promoted_at, state_at=r.state_at)
+        for r in rows
+    ])
+    by_id = {r.card_id: r for r in rows}
+
+    def view(position) -> CardView:
+        r = by_id[position.card_id]
+        live = r.state not in TERMINAL
+        sign = Decimal(1) if r.direction == "long" else Decimal(-1)
+        distance = abs(r.entry - r.stop)
+        return CardView(
+            id=r.card_id, ticker=r.ticker, direction=r.direction, state=r.state, setup=r.setup_ref or "",
+            trade=r.trade_def_slug, why=r.why or "", trigger=r.entry, trigger_evidence=r.trigger_price,
+            stop=r.stop, structural_stop=r.structural_stop, last=r.last_price,
+            target_1r=r.entry + sign * distance, target_2r=r.entry + sign * distance * 2,
+            grade=r.grade, tapped_grade=r.tapped_grade, sized_grade=r.sized_grade, snap_notice=r.snap_notice,
+            proposed_key=r.proposed_key, score_suppressed=r.score_suppressed,
+            keys=[
+                KeyView(grade=k.grade.value, dollars=k.dollars, enabled=k.enabled,
+                        proposed=r.proposed_key == k.grade.value, tapped=r.tapped_grade == k.grade.value,
+                        sized=r.sized_grade == k.grade.value)
+                for k in ladder_keys
+            ],
+            key_editable=r.state in KEY_EDITABLE, shares=r.shares, risk_budget=r.risk_budget,
+            card_score=r.card_score, conviction=r.conviction, proximity=r.proximity,
+            pool_position=r.pool_position, rank_chip=position.rank_chip, promoted=position.promoted,
+            outside_pool=r.outside_pool,
+            dots=[_dot_view(d, live_card=live, red=red, amber=amber) for d in r.dots],
+            health=_health_views(r.health), badges=dict(FIELD_OWNERS), state_at=r.state_at,
+            formed_at=r.formed_at, expires_at=r.expires_at, scan_id=r.scan_id, board_evaluation=r.board_evaluation,
         )
-    return order_cards([])
+
+    return LadderView(
+        active=[view(p) for p in order.active],
+        terminal=[view(p) for p in order.terminal],
+        empty_message=None,
+        rung=f"{mode} · {sheet} sheet · enabled {', '.join(g.value for g in enabled) or 'none'}",
+    )
 
 
 def build_radar_panel(
@@ -621,6 +763,7 @@ def build_radar_panel(
     clock=None,
     now: datetime | None = None,
     tunables_loader=load_tunables,
+    rung_source=None,
 ) -> RadarPanelView:
     pool = build_pool_view(
         since=since,
@@ -631,7 +774,11 @@ def build_radar_panel(
         now=now,
         tunables_loader=tunables_loader,
     )
-    return RadarPanelView(pool=pool, ladder=build_ladder_view(card_store=card_store))
+    ladder = build_ladder_view(
+        card_store=card_store, settings_store=settings_store, clock=clock, now=now,
+        tunables_loader=tunables_loader, rung_source=rung_source,
+    )
+    return RadarPanelView(pool=pool, ladder=ladder)
 
 
 def _fmt_dt(value: datetime | None) -> str:
@@ -691,70 +838,141 @@ def render_pool(view: PoolView) -> str:
 </section>'''
 
 
-def _owner_badge(owner: str) -> str:
-    return f'<span class="owner owner-{html.escape(owner.lower().replace(" ", "-").replace("/", "-"))}">{html.escape(owner)}</span>'
+def _badge(owner: str) -> str:
+    return f'<span class="badge badge-{html.escape(owner.lower())}">{html.escape(owner)}</span>'
+
+
+def _field(card: CardView, field: str, label: str, value: Any, *, tag: str = "span") -> str:
+    """One displayed card field: its label, its owner badge, its value."""
+    shown = "—" if value is None or value == "" else str(value)
+    return (
+        f'<{tag} class="field" data-field="{field}">{html.escape(label)} {_badge(card.badges[field])} '
+        f'<b>{html.escape(shown)}</b></{tag}>'
+    )
+
+
+def _dot_html(card: CardView, dot: DotView) -> str:
+    e = html.escape
+    fill = "hollow" if dot.hollow else "filled"
+    colour = "" if dot.colour is None else f" colour-{dot.colour}"
+    if dot.shown_grade is not None:
+        value = str(dot.shown_grade)
+    elif dot.engine_grade is not None:
+        value = f"{dot.role} {dot.engine_grade}"
+    elif dot.na_reason:
+        value = f"n/a {dot.na_reason}"
+    else:
+        value = "tap"
+    button = (
+        f'<button class="dot {fill} role-{dot.role}{colour}" type="button" data-dot-toggle="1" '
+        f'data-card-id="{card.id}" data-factor="{e(dot.factor)}" title="{e(dot.why)}">'
+        f"{e(dot.factor)} · {e(value)} {_badge(dot.owner)}</button>"
+    )
+    strip = ""
+    if dot.tappable:
+        taps = "".join(
+            f'<button class="tap" type="button" data-grade="{n}">{n}</button>' for n in range(1, 11)
+        )
+        strip = (
+            f'<div class="tap-strip" data-card-id="{card.id}" data-factor="{e(dot.factor)}" hidden>{taps}</div>'
+        )
+    return f'<div class="dot-cell">{button}<span class="dot-why">{e(dot.why)}</span>{strip}</div>'
+
+
+def _key_row(card: CardView) -> str:
+    e = html.escape
+    if not card.key_editable:
+        return (
+            f'<div class="key-row frozen">key {e(card.grade or "—")} · tapped {e(card.tapped_grade or "—")} · '
+            f"frozen in {e(card.display_state)}</div>"
+        )
+    buttons = []
+    for key in card.keys:
+        classes = ["key"]
+        if not key.enabled:
+            classes.append("key-disabled")
+        if key.proposed:
+            classes.append("key-proposed")
+        if key.sized:
+            classes.append("key-sized")
+        note = "enabled today" if key.enabled else "not enabled today — a tap sizes at the nearest enabled key below"
+        buttons.append(
+            f'<button class="{" ".join(classes)}" data-card-id="{card.id}" data-key="{e(key.grade)}" '
+            f'type="button" title="{e(note)}">{e(key.grade)} · ${e(str(key.dollars))}</button>'
+        )
+    buttons.append(
+        f'<button class="key key-pass" data-card-id="{card.id}" data-key="pass" type="button">pass</button>'
+    )
+    return f'<div class="key-row">{"".join(buttons)}</div>'
 
 
 def _card_detail(card: CardView) -> str:
     e = html.escape
     health = "".join(
-        f'<span class="health {item.status}" title="{e(item.note)}">{e(item.label)} · {item.status}</span>'
+        f'<span class="health {item.status.replace("/", "-")}" title="{e(item.note)}">'
+        f"{e(item.label)} · {item.status}</span>"
         for item in card.health
     )
-    troubled = sum(item.status != "ok" for item in card.health)
-    health_summary = "all holding" if troubled == 0 else f"{troubled} deteriorating"
-    dots = "".join(
-        f'<button class="dot score-{item.score if item.score is not None else "judgment"}" '
-        f'title="S2-P2" disabled>{e(item.label)} · {item.grade} '
-        f"{_owner_badge('YOU' if item.score is None else 'COBALT')}</button>"
-        for item in card.dots
+    troubled = sum(item.status in ("warn", "bad") for item in card.health)
+    if not card.health:
+        health_summary = "no pills — health is checked once the card is in trade"
+    else:
+        health_summary = "all holding" if troubled == 0 else f"{troubled} deteriorating"
+    dots = "".join(_dot_html(card, dot) for dot in card.dots)
+    snap = f'<div class="snap-notice">{e(card.snap_notice)}</div>' if card.snap_notice else ""
+    proposed = card.proposed_key or "tap to propose"
+    suppressed = (
+        f'<div class="suppressed">score suppressed: {e(card.score_suppressed)}</div>' if card.score_suppressed else ""
     )
-    trails = ", ".join(e(item) for item in card.trails) or "—"
     if card.state is CardState.WATCH:
         state_body = (
-            f'<div class="state-block watch-state"><b>WATCH</b> · proposed key {e(card.proposed_key)} · '
-            f"trigger {e(str(card.trigger))} · stop {e(str(card.stop))} · {card.shares} sh</div>"
+            f'<div class="state-block watch-state"><b>WATCH</b> · proposed key {e(proposed)} · '
+            f"trigger {e(str(card.trigger))} · stop {e(str(card.stop))}</div>"
         )
     elif card.state is CardState.ARMED:
         state_body = (
             f'<div class="state-block armed-state"><b>ARMED · LOCKED</b>'
-            f'<div class="trigger-distance">last {e(str(card.last))} · trigger {e(str(card.trigger))}</div>'
-            f"<div>key {e(card.proposed_key)} · {card.shares} sh · stop {e(str(card.stop))}</div></div>"
+            f'<div class="trigger-distance">last {e(str(card.last or "—"))} · trigger {e(str(card.trigger))}</div>'
+            f"<div>key {e(card.grade or '—')} · {card.shares if card.shares is not None else '—'} sh · stop {e(str(card.stop))}</div></div>"
         )
     elif card.state is CardState.TRIGGERED:
         state_body = (
-            f'<div class="state-block triggered-state"><b>TRIGGERED · COBALT</b>'
-            f'<div class="strike-numbers"><span>KEY {e(card.proposed_key)}</span>'
-            f"<span>SHARES {card.shares}</span><span>STOP {e(str(card.stop))}</span></div></div>"
+            f'<div class="state-block triggered-state"><b>TRIGGERED</b>'
+            f'<div class="strike-numbers"><span>KEY {e(card.grade or "—")}</span>'
+            f"<span>SHARES {card.shares if card.shares is not None else '—'}</span><span>STOP {e(str(card.stop))}</span></div></div>"
         )
     else:
         state_body = (
             f'<div class="state-block in-trade-state"><b>IN-TRADE</b> · stop {e(str(card.stop))} · '
-            f"next exits {e(str(card.target_1r))} / {e(str(card.target_2r))} · "
-            f"attempt {card.attempt}/{card.attempt_max} · trail {trails}</div>"
+            f"next exits {e(str(card.target_1r))} / {e(str(card.target_2r))}</div>"
         )
+    outside = '<span class="outside-pool">OUTSIDE POOL</span>' if card.outside_pool else ""
+    chip = "—" if card.card_score is None else str(card.card_score)
+    rank = "—" if card.rank_chip is None else f"#{card.rank_chip}"
     return f'''<div class="expanded" data-state="{e(card.display_state)}">
 <div class="card-pane">
- <div class="card-title"><span class="rank-chip">#{card.pool_position} · {card.card_score}</span><strong>{e(card.ticker)}</strong>
+ <div class="card-title"><span class="rank-chip">{rank} · {chip}</span><strong>{e(card.ticker)}</strong>
  <span class="direction {card.direction}">{"↑" if card.direction == "long" else "↓"}</span>
- <span>{e(card.setup)} → {e(card.trade)}</span>{_owner_badge(card.owner)}</div>
- <p class="why-line">{e(card.why)}</p>
+ <span>{e(card.setup)} → {e(card.trade)}</span>{outside}</div>
+ <p class="why-line">{_field(card, "why", "why", card.why)}</p>
  <div class="semaphore">{dots}</div>
  <div class="health-line">{health}<b>{e(health_summary)}</b></div>
  {state_body}
- <button class="judgment-tap" title="S2-P2" disabled>judgment tap · S2-P2</button>
+ {_key_row(card)}{snap}{suppressed}
+ <div class="card-status" data-card-id="{card.id}"></div>
 </div>
 <aside class="detail-pane">
- <section data-detail="levels"><h4>LEVELS</h4><dl><dt>trigger</dt><dd>{e(str(card.trigger))}</dd><dt>stop</dt><dd>{e(str(card.stop))}</dd><dt>1R</dt><dd>{e(str(card.target_1r))}</dd><dt>2R</dt><dd>{e(str(card.target_2r))}</dd></dl></section>
- <section data-detail="rank"><h4>RANK + WHY</h4><p>score {card.card_score} · conviction {card.conviction:.2f} · proximity {card.proximity:.2f} · pool #{card.pool_position} · {e(card.source)}</p><p>{e(card.why)}</p></section>
- <section data-detail="news"><h4>NEWS</h4><p>{e(card.news or "empty · S2-P2")}</p></section>
- <section data-detail="notes"><h4>NOTES</h4><p>{e(card.notes or "empty · S2-P2")}</p></section>
+ <section data-detail="levels"><h4>LEVELS</h4><div class="fields">{_field(card, "entry", "trigger", card.trigger)}{_field(card, "stop", "stop", card.stop)}{_field(card, "trigger_price", "trigger at formation", card.trigger_evidence)}{_field(card, "structural_stop", "structural stop at formation", card.structural_stop)}{_field(card, "last_price", "last", card.last)}<span class="field">1R <b>{e(str(card.target_1r))}</b></span><span class="field">2R <b>{e(str(card.target_2r))}</b></span></div></section>
+ <section data-detail="rank"><h4>RANK + WHY</h4><div class="fields">{_field(card, "card_score", "score", card.card_score)}{_field(card, "conviction", "conviction", card.conviction)}{_field(card, "proximity", "proximity", card.proximity)}{_field(card, "pool_position", "pool", card.pool_position)}{_field(card, "proposed_key", "proposed key", card.proposed_key or "tap to propose")}{_field(card, "tapped_grade", "tapped", card.tapped_grade)}{_field(card, "sized_grade", "sized", card.sized_grade)}{_field(card, "grade", "key", card.grade)}{_field(card, "shares", "shares", card.shares)}{_field(card, "risk_budget", "risk $", card.risk_budget)}{_field(card, "snap_notice", "snap", card.snap_notice)}{_field(card, "score_suppressed", "suppressed", card.score_suppressed)}</div></section>
+ <section data-detail="card"><h4>CARD</h4><div class="fields">{_field(card, "ticker", "ticker", card.ticker)}{_field(card, "direction", "direction", card.direction)}{_field(card, "state", "state", card.display_state)}{_field(card, "setup_ref", "setup", card.setup)}{_field(card, "trade_def_slug", "trade", card.trade)}{_field(card, "formed_at", "formed", _fmt_dt(card.formed_at))}{_field(card, "expires_at", "expires", _fmt_dt(card.expires_at))}{_field(card, "health", "health", health_summary)}{_field(card, "outside_pool", "outside pool", "yes" if card.outside_pool else "no")}{_field(card, "scan_id", "scan", card.scan_id)}</div></section>
+ <section data-detail="news"><h4>NEWS</h4><p>no news source wired to radar cards (S3)</p></section>
+ <section data-detail="notes"><h4>NOTES</h4><p>no notes source wired to radar cards (S3)</p></section>
  <section data-detail="chart"><h4>CHART</h4><p>reserved · empty</p></section>
 </aside></div>'''
 
 
 def render_ladder(view: LadderView) -> str:
-    """Pure HTML renderer for the card-ladder shell."""
+    """Pure HTML renderer for the card ladder."""
     e = html.escape
     if view.empty_message:
         active_html = f'<div class="empty-state">{e(view.empty_message)}</div>'
@@ -762,16 +980,24 @@ def render_ladder(view: LadderView) -> str:
         rows = []
         for index, card in enumerate(view.active, start=1):
             open_class = " open" if index <= 2 else ""
-            promote = (
-                '<button class="promote" title="S2-P2" disabled>promote ↑</button>'
-                if index >= 3
-                else ""
-            )
+            promote = ""
+            if card.promoted:
+                promote = (
+                    f'<button class="promote" data-card-id="{card.id}" data-promote="release" '
+                    'type="button">release ↓</button>'
+                )
+            elif card.state is CardState.WATCH and index >= 3:
+                promote = (
+                    f'<button class="promote" data-card-id="{card.id}" data-promote="promote" '
+                    'type="button" title="pin to #2">promote ↑</button>'
+                )
+            score = "—" if card.card_score is None else str(card.card_score)
             rows.append(
                 f'<article class="ladder-item{open_class}" data-card-id="{card.id}">'
-                f'<button class="strip" data-toggle-card="{card.id}"><span>#{index} · {card.card_score}</span>'
+                f'<button class="strip" type="button" data-toggle-card="{card.id}"><span>#{index} · {score}</span>'
                 f"<b>{e(card.ticker)}</b><span>{e(card.setup)} → {e(card.trade)}</span>"
-                f"<span>{e(card.display_state)} · {e(card.grade)} · {card.shares} sh · stop {e(str(card.stop))}</span></button>"
+                f"<span>{e(card.display_state)} · {e(card.grade or 'no key')} · "
+                f"{card.shares if card.shares is not None else '—'} sh · stop {e(str(card.stop))}</span></button>"
                 f"{_card_detail(card)}{promote}</article>"
             )
         active_html = "".join(rows)
@@ -782,13 +1008,15 @@ def render_ladder(view: LadderView) -> str:
             continue
         group_rows = "".join(
             f'<div class="terminal-row"><span>{e(card.display_state)}</span><b>{e(card.ticker)}</b>'
-            f"<span>{e(card.direction)} · {e(card.grade)} · {card.shares} sh · stop {e(str(card.stop))}</span>"
+            f"<span>{e(card.direction)} · {e(card.grade or 'no key')} · "
+            f"{card.shares if card.shares is not None else '—'} sh · stop {e(str(card.stop))}</span>"
             f"<time>{e(_fmt_dt(card.state_at))}</time></div>"
             for card in cards
         )
         terminal_groups.append(f"<h4>{state.value} · {len(cards)}</h4>{group_rows}")
     terminal_rows = "".join(terminal_groups) or '<div class="muted">none</div>'
-    return f"""<section id="ladder-layer"><header class="layer-head"><div><span class="eyebrow">CARD LADDER · SHELL</span><h2>TRADE RADAR</h2></div>
+    rung = f'<div class="rung-line">{e(view.rung)}</div>' if view.rung else ""
+    return f"""<section id="ladder-layer"><header class="layer-head"><div><span class="eyebrow">CARD LADDER</span><h2>TRADE RADAR</h2>{rung}</div>
 <div class="ladder-actions"><button id="collapse-all" type="button">collapse all</button><button id="top-two" type="button">top 2</button></div></header>
 <div id="ladder">{active_html}</div>
 <details class="terminal"><summary>TERMINAL · {len(view.terminal)}</summary>{terminal_rows}</details></section>"""
@@ -796,7 +1024,7 @@ def render_ladder(view: LadderView) -> str:
 
 PANEL_CSS = r"""
 :root{color-scheme:dark;--surface:#0d1117;--card:#11151c;--border:#1f2531;--text:#e6e9ef;--muted:#7d8595;--blue:#4f8dff;--amber:#d9a24a;--green:#35c77a;--red:#ef5b6b}
-*{box-sizing:border-box}body{margin:0;background:var(--surface);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.radar-wrap{max-width:1440px;margin:auto;padding:20px}a{color:var(--blue)}h2{margin:3px 0}.eyebrow,.mono,.rank-chip,.ticker,button,th{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em}.eyebrow,.muted,.pool-meta,.override-line{color:var(--muted);font-size:12px}.layer-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:18px 0}.pool-stats{text-align:right}.panel-banner,.refresh-failure{padding:10px 12px;border:1px solid var(--red);background:#351019;color:#ffd0d6;border-radius:7px;margin:7px 0}.retained{border-color:var(--amber);background:#2d2412}.stale-data{outline:2px solid var(--red);outline-offset:5px}.refresh-failed{opacity:.65}table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--border)}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--border);font-size:12px}.ticker{font-weight:800;font-size:15px}.count,.churn-in{color:var(--green)}.churn-out{color:var(--red)}details{margin:12px 0}summary{cursor:pointer;color:#aeb5c2}.ladder-actions button,.strip,.promote,.judgment-tap,.dot{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:7px}.ladder-actions button{padding:8px;margin-left:7px}.ladder-item{position:relative;margin:8px 0}.strip{width:100%;height:52px;padding:0 18px;display:grid;grid-template-columns:110px 90px 1fr auto;gap:12px;align-items:center;text-align:left}.expanded{display:none;grid-template-columns:minmax(520px,1fr) minmax(360px,1fr);gap:18px;border:1px solid var(--blue);border-top:0;padding:12px;background:#0b0f15}.ladder-item.open .expanded{display:grid}.card-pane,.detail-pane{background:var(--card);border:1px solid var(--border);padding:18px}.card-title{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.card-title strong{font:800 28px ui-monospace,SFMono-Regular,Menlo,monospace}.direction.long{color:var(--green)}.direction.short{color:var(--red)}.rank-chip{border:1px solid var(--border);padding:4px}.owner{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--blue);padding:2px 4px;color:var(--blue)}.owner-n-a-manual{background:var(--red);color:#111;border-color:var(--red)}.owner-you{color:var(--amber);border-color:var(--amber)}.why-line{color:#aeb5c2}.semaphore,.health-line{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--border)}.dot{min-height:34px}.health{padding:4px 7px;border-radius:10px;font-size:11px}.health.ok{color:var(--green);border:1px solid var(--green)}.health.warn{color:var(--amber);border:1px solid var(--amber)}.health.bad{color:var(--red);border:1px solid var(--red)}.state-block{padding:14px 0}.trigger-distance{font:700 24px ui-monospace,SFMono-Regular,Menlo,monospace;padding:12px 0}.triggered-state{border:1px solid var(--green);padding:18px}.strike-numbers{display:flex;gap:24px;font:800 24px ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:12px}.judgment-tap{min-height:44px}.detail-pane h4,.terminal h4{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);letter-spacing:.12em}.detail-pane dl{display:grid;grid-template-columns:100px 1fr}.detail-pane dt{color:var(--muted)}.promote{position:absolute;right:-2px;top:55px;min-height:44px}.terminal{margin-top:24px}.terminal-row{height:52px;opacity:.55;border:1px solid var(--border);background:var(--card);display:grid;grid-template-columns:100px 100px 1fr auto;align-items:center;padding:0 18px;margin:6px 0}.empty-state{border:1px dashed var(--border);padding:28px;color:var(--muted)}
+*{box-sizing:border-box}body{margin:0;background:var(--surface);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.radar-wrap{max-width:1440px;margin:auto;padding:20px}a{color:var(--blue)}h2{margin:3px 0}.eyebrow,.mono,.rank-chip,.ticker,button,th{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em}.eyebrow,.muted,.pool-meta,.override-line{color:var(--muted);font-size:12px}.layer-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:18px 0}.pool-stats{text-align:right}.panel-banner,.refresh-failure{padding:10px 12px;border:1px solid var(--red);background:#351019;color:#ffd0d6;border-radius:7px;margin:7px 0}.retained{border-color:var(--amber);background:#2d2412}.stale-data{outline:2px solid var(--red);outline-offset:5px}.refresh-failed{opacity:.65}table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--border)}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--border);font-size:12px}.ticker{font-weight:800;font-size:15px}.count,.churn-in{color:var(--green)}.churn-out{color:var(--red)}details{margin:12px 0}summary{cursor:pointer;color:#aeb5c2}.ladder-actions button,.strip,.promote,.dot,.key,.tap{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:7px}.ladder-actions button{padding:8px;margin-left:7px}.ladder-item{position:relative;margin:8px 0}.strip{width:100%;height:52px;padding:0 18px;display:grid;grid-template-columns:110px 90px 1fr auto;gap:12px;align-items:center;text-align:left}.expanded{display:none;grid-template-columns:minmax(520px,1fr) minmax(360px,1fr);gap:18px;border:1px solid var(--blue);border-top:0;padding:12px;background:#0b0f15}.ladder-item.open .expanded{display:grid}.card-pane,.detail-pane{background:var(--card);border:1px solid var(--border);padding:18px}.card-title{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.card-title strong{font:800 28px ui-monospace,SFMono-Regular,Menlo,monospace}.direction.long{color:var(--green)}.direction.short{color:var(--red)}.rank-chip{border:1px solid var(--border);padding:4px}.badge{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--blue);padding:1px 3px;color:var(--blue);border-radius:3px}.badge-you{color:var(--amber);border-color:var(--amber)}.badge-ledger{color:var(--muted);border-color:var(--muted)}.why-line{color:#aeb5c2}.semaphore,.health-line{display:flex;gap:7px;align-items:flex-start;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--border)}.dot-cell{display:flex;flex-direction:column;gap:4px;max-width:260px}.dot{min-height:34px}.dot.hollow{background:transparent;border-style:dashed}.dot.filled.colour-0{background:#3a1119;border-color:var(--red)}.dot.filled.colour-1{background:#2d2412;border-color:var(--amber)}.dot.filled.colour-2{background:#0f2a1c;border-color:var(--green)}.dot.hollow.colour-0{border-color:var(--red)}.dot.hollow.colour-1{border-color:var(--amber)}.dot.hollow.colour-2{border-color:var(--green)}.dot-why{font-size:11px;color:var(--muted)}.tap-strip{display:grid;grid-template-columns:repeat(10,1fr);gap:3px}.tap-strip[hidden]{display:none}.tap{min-height:36px;min-width:30px}.key-row{display:flex;gap:6px;flex-wrap:wrap;padding:10px 0}.key{min-height:44px;padding:0 12px}.key-disabled{opacity:.45}.key-proposed{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue)}.key-sized{border-color:var(--green)}.key-row.frozen{color:var(--muted)}.snap-notice{border:1px solid var(--amber);background:#2d2412;color:#ffe2b0;padding:8px;border-radius:6px;font-weight:700}.suppressed{color:var(--muted);font-size:12px;padding:4px 0}.card-status{font-size:12px;min-height:16px}.card-status.refused{color:var(--red);font-weight:700}.card-status.ok{color:var(--green)}.outside-pool{border:1px solid var(--amber);color:var(--amber);padding:2px 6px;font:11px ui-monospace,SFMono-Regular,Menlo,monospace}.rung-line{font-size:12px;color:var(--muted)}.fields{display:grid;grid-template-columns:1fr;gap:4px}.field{font-size:12px;color:var(--muted)}.field b{color:var(--text)}.health{padding:4px 7px;border-radius:10px;font-size:11px}.health.ok{color:var(--green);border:1px solid var(--green)}.health.warn{color:var(--amber);border:1px solid var(--amber)}.health.bad{color:var(--red);border:1px solid var(--red)}.health.n-a{color:var(--muted);border:1px dashed var(--red)}.state-block{padding:14px 0}.trigger-distance{font:700 24px ui-monospace,SFMono-Regular,Menlo,monospace;padding:12px 0}.triggered-state{border:1px solid var(--green);padding:18px}.strike-numbers{display:flex;gap:24px;font:800 24px ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:12px}.detail-pane h4,.terminal h4{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);letter-spacing:.12em}.promote{position:absolute;right:-2px;top:55px;min-height:44px}.terminal{margin-top:24px}.terminal-row{height:52px;opacity:.55;border:1px solid var(--border);background:var(--card);display:grid;grid-template-columns:100px 100px 1fr auto;align-items:center;padding:0 18px;margin:6px 0}.empty-state{border:1px dashed var(--border);padding:28px;color:var(--muted)}
 @media (max-width:1149px){.expanded{grid-template-columns:1fr}.detail-pane{grid-row:2}}
 @media (max-width:700px){.strip{grid-template-columns:75px 70px 1fr}.strip span:nth-child(4){display:none}.radar-wrap{padding:10px}.pool-stats{text-align:left}.layer-head{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto}}
 @media (max-width:430px){body,.phone-frame{width:100%}.radar-wrap{width:366px;max-width:100%;padding:8px}.expanded{padding:5px}.card-pane,.detail-pane{padding:11px}.card-title strong{font-size:24px}.strip{padding:0 8px}.terminal-row{grid-template-columns:75px 65px 1fr}.terminal-row time{display:none}}
@@ -809,10 +1037,45 @@ PANEL_JS = r"""
  const items=()=>Array.from(document.querySelectorAll('.ladder-item'));
  function collapseAll(){items().forEach(x=>x.classList.remove('open'));}
  function topTwo(){items().forEach((x,i)=>x.classList.toggle('open',i<2));}
- document.getElementById('collapse-all').addEventListener('click',collapseAll);
- document.getElementById('top-two').addEventListener('click',topTwo);
- document.getElementById('ladder').addEventListener('click',function(event){
-   const strip=event.target.closest('[data-toggle-card]'); if(strip){strip.closest('.ladder-item').classList.toggle('open');}
+ function openIds(){return items().filter(x=>x.classList.contains('open')).map(x=>x.dataset.cardId);}
+ function status(cardId,text,level){
+   const box=document.querySelector('.card-status[data-card-id="'+cardId+'"]');
+   if(box){box.textContent=text; box.className='card-status '+level;}
+ }
+ async function refreshLadder(){
+   const keep=openIds();
+   const response=await fetch('/radar',{headers:{accept:'text/html'}});
+   if(!response.ok){throw new Error('HTTP '+response.status);}
+   const doc=new DOMParser().parseFromString(await response.text(),'text/html');
+   const next=doc.getElementById('ladder-layer');
+   if(!next){throw new Error('the /radar page returned no ladder');}
+   document.getElementById('ladder-layer').replaceWith(next);
+   items().forEach(x=>x.classList.toggle('open',keep.indexOf(x.dataset.cardId)>=0));
+ }
+ async function post(cardId,path,body){
+   status(cardId,'sending','pending');
+   try{
+     const response=await fetch('/radar/card/'+cardId+path,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams(body||{})});
+     const payload=await response.json().catch(()=>({}));
+     if(!response.ok){status(cardId,'REFUSED '+response.status+' · '+(payload.reason||payload.error||'no reason given'),'refused'); return;}
+     await refreshLadder();
+     status(cardId,payload.snap_notice?('saved · '+payload.snap_notice):'saved','ok');
+   }catch(failure){status(cardId,'FAILED · '+String(failure),'refused');}
+ }
+ document.addEventListener('click',function(event){
+   const target=event.target;
+   if(target.closest('#collapse-all')){collapseAll(); return;}
+   if(target.closest('#top-two')){topTwo(); return;}
+   const strip=target.closest('[data-toggle-card]');
+   if(strip){strip.closest('.ladder-item').classList.toggle('open'); return;}
+   const dot=target.closest('[data-dot-toggle]');
+   if(dot){const tray=dot.parentElement.querySelector('.tap-strip'); if(tray){tray.hidden=!tray.hidden;} return;}
+   const grade=target.closest('.tap-strip [data-grade]');
+   if(grade){const tray=grade.closest('.tap-strip'); post(tray.dataset.cardId,'/dot/'+encodeURIComponent(tray.dataset.factor),{grade:grade.dataset.grade}); return;}
+   const key=target.closest('[data-key]');
+   if(key){post(key.dataset.cardId,'/key',{grade:key.dataset.key}); return;}
+   const promote=target.closest('[data-promote]');
+   if(promote){post(promote.dataset.cardId,promote.dataset.promote==='release'?'/release':'/promote'); return;}
  });
  let cursor=document.getElementById('pool-layer').dataset.watermark;
  const interval=Number(document.body.dataset.refreshSeconds)*1000;
@@ -830,7 +1093,7 @@ PANEL_JS = r"""
      oldLayer.querySelector('#refresh-status').innerHTML='<div class="refresh-failure"><b>REFRESH FAILED</b> · retained data is stale · '+String(error)+'</div>';
    }
  }
- window.COBALT_RADAR={collapseAll:collapseAll,topTwo:topTwo,refreshPool:refreshPool};
+ window.COBALT_RADAR={collapseAll:collapseAll,topTwo:topTwo,refreshPool:refreshPool,refreshLadder:refreshLadder};
  window.setInterval(refreshPool,interval);
 })();
 """
@@ -852,6 +1115,7 @@ def pool_api_payload(view: PoolView) -> dict[str, Any]:
 
 
 __all__ = [
+    "BADGED_FIELDS",
     "PANEL_CSS",
     "PANEL_JS",
     "BannerView",
@@ -859,16 +1123,17 @@ __all__ = [
     "ChurnDelta",
     "DotView",
     "HealthView",
+    "KeyView",
     "LadderView",
     "MembershipRecord",
     "PoolRow",
     "PoolView",
+    "RadarCardRow",
     "RadarPanelError",
     "RadarPanelView",
     "build_ladder_view",
     "build_pool_view",
     "build_radar_panel",
-    "order_cards",
     "parse_since",
     "pool_api_payload",
     "render_failed_page",

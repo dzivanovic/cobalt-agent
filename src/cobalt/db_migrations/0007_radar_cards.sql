@@ -223,26 +223,36 @@ CREATE OR REPLACE VIEW "user".radar_cards_v AS
            c.health, c.promoted_at,
            b.id AS board_score_id, b.run_id AS board_run_id, b.evaluation AS board_evaluation,
            b.started_at AS board_started_at,
-           (m.left_at IS NOT NULL) AS outside_pool
+           (m.left_at IS NOT NULL) AS outside_pool,
+           c.last_price, m.last_rank AS pool_position
       FROM "user".aset_sizings AS c
       LEFT JOIN system.radar_board_v AS b
-        ON b.membership_id = c.pool_member_id AND b.trade_def_md5 = c.trade_def_md5
+        ON b.id = c.radar_score_id  -- the score row of the card's own latest refresh; not the md5,
+                                    -- which stays the formation md5 after a note edit (R2-4)
       LEFT JOIN system.radar_membership AS m ON m.id = c.pool_member_id
      WHERE c.origin = 'radar';
 
 ALTER VIEW "user".radar_cards_v OWNER TO cobalt_user;
 
--- Per factor x session: tap vs the engine/desk shadow grade shown at tap
--- time. A tap with no shadow grade is not a pair.
+-- Per factor x trading session (the ET date of the tap — the promotion
+-- bar counts SESSIONS, i.e. trading days, S2-P2 STEP-10): tap vs the
+-- engine/desk shadow grade shown at tap time. A tap with no shadow grade
+-- is not a pair. `deltas` keeps every |delta| so a report over many days
+-- takes the median over all pairs, never a median of daily medians.
+-- DROP first: chunk C changed the column list, which OR REPLACE alone
+-- refuses on a database that already holds the earlier shape. Nothing
+-- depends on this view, and the pair is still idempotent.
+DROP VIEW IF EXISTS "user".shadow_agreement_v;
 CREATE OR REPLACE VIEW "user".shadow_agreement_v AS
-    SELECT t.user_id, t.factor, t.session,
+    SELECT t.user_id, t.factor, (t.at AT TIME ZONE 'America/New_York')::date AS trade_date,
            count(*) AS pairs,
            percentile_cont(0.5) WITHIN GROUP (
                ORDER BY abs(t.grade - t.engine_grade_at_tap)) AS median_abs_delta,
            avg(CASE WHEN abs(t.grade - t.engine_grade_at_tap) <= 2 THEN 1.0 ELSE 0.0 END)
-               AS within2_share
+               AS within2_share,
+           array_agg(abs(t.grade - t.engine_grade_at_tap) ORDER BY t.id) AS deltas
       FROM "user".card_dot_taps AS t
      WHERE t.engine_grade_at_tap IS NOT NULL
-     GROUP BY t.user_id, t.factor, t.session;
+     GROUP BY t.user_id, t.factor, (t.at AT TIME ZONE 'America/New_York')::date;
 
 ALTER VIEW "user".shadow_agreement_v OWNER TO cobalt_user;
