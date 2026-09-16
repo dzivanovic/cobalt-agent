@@ -236,8 +236,10 @@ def test_dot_taps_append_recompute_and_are_never_overwritten_by_a_scan(world):
     assert result["conviction"] == "0.9" and result["card_score"] is not None
     with cards._connect() as conn:
         taps = conn.execute("SELECT grade FROM card_dot_taps WHERE card_id = %s ORDER BY id", (card_id,)).fetchall()
+        conn.execute("SAVEPOINT immutable_probe")
         with pytest.raises(psycopg.errors.RaiseException):
             conn.execute("UPDATE card_dot_taps SET grade = 1 WHERE card_id = %s", (card_id,))
+        conn.execute("ROLLBACK TO SAVEPOINT immutable_probe")
     assert [t[0] for t in taps] == [8, 9]
     world["scan"](SCAN0 + timedelta(seconds=100))
     with cards._connect() as conn:
