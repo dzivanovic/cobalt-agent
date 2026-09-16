@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from cobalt.session.clock import SessionClock
+
 from .models import CheckResult, DayOpenReport
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -82,14 +84,27 @@ def render_json(report: DayOpenReport) -> str:
 
 
 def write_report(report: DayOpenReport, *, reports_dir: Path = REPORTS_DIR) -> Path:
-    """Write the markdown report, create-if-absent's simpler cousin: this
-    is a repo file day-open owns outright (not a marker-bounded unit in a
-    human's vault note), so every run OVERWRITES its own day's file —
-    there is nothing here for a human to have edited."""
+    """Write the markdown report. NEVER replaces an existing file.
+
+    The first run of a date writes `day-open-<date>.md` — the file the
+    seat's `verdict` appends to. Any later run for the same date lands
+    beside it as `day-open-<date>-<HHMMSS>.md` (ET, from `generated_at`).
+    On 2026-09-15 the deploy smoke's run overwrote the seat's 08:18 report,
+    verdict and all; a day's report is evidence (L48), not a cache. A
+    stamped name that already exists is refused loudly, not replaced."""
     reports_dir.mkdir(parents=True, exist_ok=True)
     path = report_path(report.report_date, reports_dir=reports_dir)
+    if path.exists():
+        stamp = SessionClock.to_et(report.generated_at).strftime("%H%M%S")
+        path = path.with_name(f"{path.stem}-{stamp}.md")
     _assert_under_reports_dir(path, reports_dir=reports_dir)
-    path.write_text(render_markdown(report))
+    try:
+        with path.open("x") as f:
+            f.write(render_markdown(report))
+    except FileExistsError as e:
+        raise ReportPathError(
+            f"refusing to replace {path} — a day-open report is never overwritten"
+        ) from e
     return path
 
 

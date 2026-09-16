@@ -69,6 +69,30 @@ def test_cmd_run_writes_report_and_prints_verdict_table(monkeypatch, tmp_path, c
     assert "OVERALL: GREEN" in out
 
 
+def test_json_alone_writes_nothing_to_disk(monkeypatch, capsys):
+    # 2026-09-15: `cobalt day-open --json` in the deploy smoke rewrote the
+    # day's report. `--json` prints; it never writes.
+    from datetime import datetime, timezone
+
+    from cobalt.dayopen.models import CheckResult, DayOpenReport, Overall, Verdict
+
+    stub_report = DayOpenReport(
+        report_date=date(2026, 9, 14),
+        generated_at=datetime(2026, 9, 14, 11, 5, tzinfo=timezone.utc),
+        checks=[CheckResult("C1", "radar launchd", Verdict.PASS, "PASS", "raw")],
+        overall=Overall.GREEN,
+    )
+    monkeypatch.setattr(dayopen_cli.runner, "run", lambda **kwargs: stub_report)
+
+    def _no_write(*args, **kwargs):
+        raise AssertionError("--json must not write a report")
+
+    monkeypatch.setattr(dayopen_cli, "write_report", _no_write)
+    args = _parser().parse_args(["day-open", "--json"])
+    args.func(args)
+    assert '"overall"' in capsys.readouterr().out
+
+
 def test_cmd_verdict_reports_failure_on_missing_report(monkeypatch, capsys):
     from cobalt.dayopen.report import ReportPathError
 

@@ -56,10 +56,26 @@ def test_write_report_creates_the_file_and_returns_its_path(tmp_path):
     assert "OVERALL: GREEN" in path.read_text()
 
 
-def test_write_report_overwrites_its_own_days_file(tmp_path):
+def test_a_second_run_never_replaces_the_days_report(tmp_path):
+    # 2026-09-15 20:3x: the deploy smoke's run REWROTE the seat's 08:18
+    # report (8.7 KB, with its SEAT VERDICT) with its own output. The dated
+    # file is never replaced; a later run lands beside it, stamped HHMMSS ET.
+    first = write_report(_report(Overall.GREEN), reports_dir=tmp_path)
+    append_verdict(date(2026, 9, 14), "GREEN, ship it", reports_dir=tmp_path)
+    before = first.read_text()
+    second = write_report(_report(Overall.RED), reports_dir=tmp_path)
+    assert first.read_text() == before
+    assert second == tmp_path / "day-open-2026-09-14-070500.md"
+    assert "OVERALL: RED" in second.read_text()
+
+
+def test_a_colliding_timestamped_report_is_refused_not_replaced(tmp_path):
     write_report(_report(Overall.GREEN), reports_dir=tmp_path)
-    path = write_report(_report(Overall.RED), reports_dir=tmp_path)
-    assert "OVERALL: RED" in path.read_text()
+    stamped = write_report(_report(Overall.GREEN), reports_dir=tmp_path)
+    stamped_text = stamped.read_text()
+    with pytest.raises(ReportPathError):
+        write_report(_report(Overall.RED), reports_dir=tmp_path)
+    assert stamped.read_text() == stamped_text
 
 
 def test_append_verdict_appends_to_an_existing_report(tmp_path):

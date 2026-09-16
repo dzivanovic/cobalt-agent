@@ -4,8 +4,10 @@
     cobalt day-open verdict "<one line>"
 
 The bare command runs the six checks, writes
-`docs/40 - DevDocs/reports/day-open-<date>.md`, and prints the VERDICT
-table (or the same content as JSON with `--json`). `verdict` appends a
+`docs/40 - DevDocs/reports/day-open-<date>.md` (a later run the same day
+writes `day-open-<date>-<HHMMSS>.md` beside it — never a replacement),
+and prints the VERDICT table. `--json` prints the same content as JSON
+and writes nothing. `verdict` appends a
 `SEAT VERDICT:` line to that day's report — the local seat's only write
 path under the Qwen allowlist, through Cobalt rather than the shell
 (see `cobalt.dayopen`'s module docstring for why).
@@ -38,13 +40,21 @@ def _parse_date(raw: str) -> date:
 
 def cmd_run(args: argparse.Namespace) -> None:
     report = runner.run(report_date=args.date)
-    path = write_report(report)
     if args.json:
+        # Prints only. The 09-15 deploy smoke's `--json` run rewrote the
+        # seat's report; a read-only flag writes nothing to disk.
         print(render_json(report))
-    else:
-        print(f"wrote {path}")
-        print()
-        print(render_verdict_section(report))
+        return
+    try:
+        path = write_report(report)
+    except ReportPathError as e:
+        print(f"FAILED: {e}", file=sys.stderr)
+        sys.exit(1)
+    if path.name != f"day-open-{report.report_date:%Y-%m-%d}.md":
+        print(f"NOTE: the day's report already exists and was NOT replaced — wrote {path.name} beside it")
+    print(f"wrote {path}")
+    print()
+    print(render_verdict_section(report))
 
 
 def cmd_verdict(args: argparse.Namespace) -> None:
