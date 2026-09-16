@@ -357,6 +357,20 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
 
 ## GATED (post-MVP)
 
+- **Sessions-as-jobs gap analysis** (recorded 2026-09-16, Dejan: "record a
+  gap") — the CTO-desk/hub practice built by hand on 09-15/16 (desk = L6
+  chief of staff; prompt file = L16 registry entry; `claude agents` +
+  wake-up reconcile = L18 job table + watchdog; `ASK DESK`/ESCALATE report
+  lines = L38 asks; L58 = hand-run memory write) is what the laws specify
+  and Cobalt has not built for agent sessions. Four gaps from real use:
+  (1) session registry + liveness as Cobalt data (L18/L34 rows for agent
+  sessions, not only launchd jobs); (2) ask/escalation routing as data;
+  (3) HITL approvals as real tokens (L7 status note; L61 chat-approve is
+  interim); (4) the Cobalt memory write command (L58 interim). Deliverable:
+  a bounded gap analysis by a hub — `topics/cto-desk.md` + L58–L61 practice
+  vs L6/L16/L18/L34/L38 and the MVP Charter — output an ADR candidate, no
+  build. Timing: after S2 closes 09-23, unless the Anthropic meter is idle
+  earlier. Owner: desk writes the prompt.
 - **Guardian sprint** — gates: grading/EV live + alerting + Rules Engine
   session. Content: real-time enforcement of the Guardian rule set
   (TRIAGE: 7 rules; live as DRC checkboxes until then); rule deactivation
