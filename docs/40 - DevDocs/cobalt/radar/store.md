@@ -31,3 +31,9 @@ Writes — each is one guarded transaction (`assert_writable('radar.evaluate')` 
 - `put_scores` re-validates every `detail`/`desk_shadow` through `seam.RadarScoreDetail`/`DeskShadow` at the write, and returns `{(membership_id, md5): score_id}`.
 - `copy_card_values` puts the card's proximity/conviction/card_score/suppression onto its seam row.
 - `finish_run` publishes `complete` or `failed`, and refuses a run that is not `running`, so a published run is never re-published.
+
+## Audit export reads (S2-P2 STEP-11)
+- `score_run(run_id)`: one `radar_score_run` row as a dict, or `None`.
+- `scores_for_run(run_id)`: every `radar_score` row of that run, by id.
+
+Both are plain SELECTs; `radar.audit_export.export_run` pairs them with the user-side receipt chain and refuses a run whose stored hashes or seam labels do not replay.

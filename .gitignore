@@ -30,7 +30,14 @@ docs/90 - References/assets/
 # _inflight is README-only, permanently (PLACEMENT.md, ruled 2026-09-14) —
 # carve-out was missing before today, so the README was never actually
 # tracked despite CLAUDE.md/PLACEMENT.md documenting it as committed.
+# [amended S2-P2 2026-09-16] the un-ignore alone didn't re-ignore other
+# files placed inside the directory (docs/* only matches direct
+# children, so anything under _inflight/ was untracked-but-not-ignored,
+# i.e. staged by a bare `git add -A`) — found via the catalyst-review
+# default-path fix (desk ruling, chunk C ESCALATE 3), which depends on
+# this folder actually being gitignored for anything but the README.
 !docs/_inflight/
+docs/_inflight/*
 !docs/_inflight/README.md
 # docs/60 - Agent Output/ (renamed 2026-08-31 from docs/0 - Inbox/) is
 # deliberately NOT carved out here — it's the old scheduler's live

@@ -435,6 +435,20 @@ class RadarStore:
             columns = [item.name for item in cursor.description]
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
+    def score_run(self, run_id: int) -> dict | None:
+        """One `system.radar_score_run` row (the audit export's run header)."""
+        with self._connect() as conn:
+            cursor = conn.execute("SELECT * FROM radar_score_run WHERE id = %s", (run_id,))
+            row = cursor.fetchone()
+            return None if row is None else dict(zip([item.name for item in cursor.description], row))
+
+    def scores_for_run(self, run_id: int) -> list[dict]:
+        """Every `system.radar_score` row of one run, by id."""
+        with self._connect() as conn:
+            cursor = conn.execute("SELECT * FROM radar_score WHERE run_id = %s ORDER BY id", (run_id,))
+            columns = [item.name for item in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
     def members_for_replay(self, pool_key: str, trade_date: date) -> list[dict]:
         """Admitted episodes of one day (read-only dry-run input)."""
         return [row for row in self.members_for_day(pool_key, trade_date) if row["entered_at"] is not None]

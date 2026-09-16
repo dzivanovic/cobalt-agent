@@ -94,3 +94,9 @@ the card's own history sits where the card sits.
 - `tap_key(card_id, sizing)`: WATCH only (`KEY_EDITABLE`). Refuses when entry/stop moved since the size was computed. Writes tapped/sized grade, sheet, risk budget, shares, used risk and snap notice.
 - `tap_dot(card_id, factor, grade, *, bands, enabled)`: appends a `card_dot_taps` row carrying `engine_grade_at_tap`, sets the trader grade, and recomputes conviction/suppression/card_score (from the stored proximity) and the proposed key. Refused on a terminal card.
 - `set_promoted(card_id, bool)`: promote needs WATCH and clears any other promoted card in the same transaction; the `aset_sizings_one_promoted_radar_card` index backs it across rows.
+
+## 2026-09-16 — S2-P2 chunk C reads (STEP-8/10/11)
+All three are plain SELECTs: no schema init, no write guard.
+- `radar_board_cards(trade_date)`: the `/radar` ladder's one read. Every `"user".radar_cards_v` row that is open, plus terminal rows whose `state_at` falls on `trade_date` in ET, each with its `dots` (`_dots_for`).
+- `shadow_agreement(since)`: `"user".shadow_agreement_v` rows (factor × ET trading day, with every |tap − engine| delta), optionally from `since`.
+- `receipt_for_run(run_id)`: the one receipt id of a run, `None` when there is none, and a loud refusal when there are two.

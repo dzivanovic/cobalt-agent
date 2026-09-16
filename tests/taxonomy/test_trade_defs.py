@@ -102,7 +102,7 @@ class TestQualityFactors:
 
     def test_standard_trio_still_required(self, base_trade_def_dict):
         base_trade_def_dict["quality_factors"] = ["range_duration"]
-        with pytest.raises(ValidationError, match="standard trio"):
+        with pytest.raises(ValidationError, match="missing standard factors at schema 0.4"):
             _build(base_trade_def_dict)
 
     def test_duplicate_names_fail_loud(self, base_trade_def_dict):

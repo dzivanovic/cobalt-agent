@@ -64,6 +64,7 @@ FIELD_OWNERS: dict[str, str] = {
     "health": "COBALT", "promoted_at": "YOU",
     "board_score_id": "COBALT", "board_run_id": "COBALT", "board_evaluation": "COBALT",
     "board_started_at": "COBALT", "outside_pool": "COBALT",
+    "last_price": "COBALT", "pool_position": "COBALT",
 }
 
 TradeDirection = Literal["long", "short"]
