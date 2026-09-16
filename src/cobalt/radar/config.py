@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from cobalt.taxonomy.loader import load_tunables
 from cobalt.taxonomy.tunables import TunableUnit
@@ -50,6 +51,24 @@ class CacheConfig(BaseModel):
     retention_days: int = Field(gt=0)
 
 
+class ContextConfig(BaseModel):
+    """Context tickers (market/sector ETFs) polled beside the pool for the
+    alignment shadow dots (S2-P2 STEP-3/5). Required, so the total-demand
+    check always counts them (L53); an explicit empty list is a declared
+    zero, and the alignment dots then render CHECKPOINT_MISSING."""
+
+    model_config = ConfigDict(extra="forbid")
+    tickers: list[str]
+
+    @field_validator("tickers")
+    @classmethod
+    def _tickers(cls, v: list[str]) -> list[str]:
+        bad = [t for t in v if not re.fullmatch(r"[A-Z][A-Z0-9.]{0,9}", t)]
+        if bad or len(set(v)) != len(v):
+            raise ValueError(f"context tickers must be unique uppercase symbols, got {v}")
+        return v
+
+
 class RadarConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pool_key: str = Field(pattern=r"^[a-z0-9_]+$")
@@ -58,6 +77,7 @@ class RadarConfig(BaseModel):
     list_chunk_size: int = Field(gt=0)
     not_equity: NotEquityConfig
     cache: CacheConfig
+    context: ContextConfig
 
 
 def load_config(path: Path = CONFIG_PATH) -> RadarConfig:

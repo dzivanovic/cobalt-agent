@@ -25,3 +25,9 @@ not_equity:
 cache:
   dir: data/radar-cache
   retention_days: 7
+# S2-P2: market/sector context tickers for the alignment shadow dots. Empty
+# until the hub's STEP-0 read verifies bar coverage and the sector map; an
+# empty list is counted as zero demand and the alignment dots render
+# CHECKPOINT_MISSING. Every ticker here counts against radar.finviz_max_rpm.
+context:
+  tickers: []

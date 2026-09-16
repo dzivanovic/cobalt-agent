@@ -196,6 +196,7 @@ def test_all_day_scan_replay_offline_acceptance_matrix(tmp_path, monkeypatch, ca
         poll_interval=60,
         finviz_max_rpm=100,
         list_chunk_size=50,
+        context_tickers=0,
     )
     screen_item = next(item for item in parsed.screens.blocks if isinstance(item.block, ScreenBlock))
     pool_item = next(item for item in parsed.screens.blocks if item.key == "pool")

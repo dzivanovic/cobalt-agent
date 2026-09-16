@@ -9,13 +9,14 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from cobalt.session import session_clock
 from cobalt.session.clock import now_utc
 from cobalt.session.models import Session
 from cobalt.settings.store import TraderSettingsStore
 
+from .collector import DAILY_RETRIES_PER_REQUEST
 from .config import RadarConfig, load_config
 from .models import ExcludeBlock, ListBlock, PoolBlock, ScreenBlock
 
@@ -57,6 +58,7 @@ class ParsedSources:
     pool: PoolBlock | None
     pool_error: str | None = None
     planned_rpm: float | None = None
+    demand: TransportDemand | None = None
 
     @property
     def frozen(self) -> bool:
@@ -156,6 +158,7 @@ def load_sources(
     poll_interval: int,
     finviz_max_rpm: int | None,
     list_chunk_size: int,
+    context_tickers: int,
 ) -> ParsedSources:
     screens = parse_note(screens_path, "screens")
     lists = parse_note(lists_path, "lists")
@@ -176,13 +179,25 @@ def load_sources(
         return result
     screen_count = sum(1 for item in screens.blocks if isinstance(item.block, ScreenBlock))
     list_blocks = [item.block for item in lists.blocks if isinstance(item.block, ListBlock)]
-    planned = planned_total_rpm(pool, screen_count, list_blocks, list_chunk_size, scan_interval)
-    result.planned_rpm = planned
-    if planned > finviz_max_rpm:
-        pool_rpm = planned_pool_rpm(pool, scan_interval)
+    demand = plan_transport_demand(
+        pool,
+        screen_count=screen_count,
+        list_blocks=list_blocks,
+        list_chunk_size=list_chunk_size,
+        scan_interval=scan_interval,
+        context_tickers=context_tickers,
+        daily_names=pool.cap,
+        retries_per_request=DAILY_RETRIES_PER_REQUEST,
+        ceiling_rpm=finviz_max_rpm,
+    )
+    result.planned_rpm = demand.steady_rpm
+    result.demand = demand
+    if demand.refusal is not None:
         result.pool_error = (
-            f"pool budget exceeded: planned_rpm={planned:.2f} "
-            f"(pool={pool_rpm:.2f}, screens={screen_count}, lists_chunks={_total_chunks(list_blocks, list_chunk_size)}), "
+            f"pool budget exceeded: {demand.refusal}; planned_rpm={demand.steady_rpm:.2f} "
+            f"(pool={demand.pool_rpm:.2f}, screens={screen_count}, "
+            f"lists_chunks={_total_chunks(list_blocks, list_chunk_size)}, "
+            f"context={demand.context_rpm:.2f}, daily_names={demand.daily_names}), "
             f"finviz_max_rpm={finviz_max_rpm}, cap={pool.cap}, "
             f"scan_interval={scan_interval}"
         )
@@ -216,14 +231,27 @@ def planned_lists_rpm(list_blocks: list[ListBlock], list_chunk_size: int, scan_i
     return _total_chunks(list_blocks, list_chunk_size) * 60 / scan_interval
 
 
+def planned_context_rpm(context_tickers: int, scan_interval: int) -> float:
+    """Context-ticker polling (S2-P2): one bar request per ticker per cycle."""
+    if scan_interval <= 0:
+        raise RadarNoteError("radar.scan_interval must be positive")
+    if context_tickers < 0:
+        raise RadarNoteError("context ticker count cannot be negative")
+    return context_tickers * 60 / scan_interval
+
+
 def planned_total_rpm(
     pool: PoolBlock,
     screen_count: int,
     list_blocks: list[ListBlock],
     list_chunk_size: int,
     scan_interval: int,
+    *,
+    context_tickers: int,
 ) -> float:
-    """Total Finviz transport demand: pool bar-polling + screens + list chunks.
+    """Steady Finviz transport demand: pool bar-polling + screens + list
+    chunks + context-ticker polling (S2-P2). Daily bars are not steady — a
+    once-per-day cold burst — and are planned by `plan_transport_demand`.
 
     All three consumers share the single resident scan cadence (RadarRunner
     runs _collect and the bar poller in the same cycle); a pool-only budget
@@ -237,6 +265,105 @@ def planned_total_rpm(
         planned_pool_rpm(pool, scan_interval)
         + planned_screens_rpm(screen_count, scan_interval)
         + planned_lists_rpm(list_blocks, list_chunk_size, scan_interval)
+        + planned_context_rpm(context_tickers, scan_interval)
+    )
+
+
+class TransportDemand(BaseModel):
+    """Every consumer of the shared Finviz transport, planned together (L53).
+
+    THE RULE: a budget that measures one consumer is not a budget. The
+    steady consumers (pool bars, screens, list chunks, context tickers)
+    run every scan cycle; daily bars are a once-per-ET-day cold burst of
+    one request per pool name. Every request may be retried
+    `retries_per_request` times, so each consumer's worst case is
+    multiplied by (1 + retries).
+
+    ACTUAL PACING, NOT AN IDEALISED REFUSAL (Astra R1-13). At runtime the
+    shared `TokenBucket` never refuses — it WAITS, so real traffic never
+    exceeds the ceiling; excess demand shows up as slower cycles. This
+    plan is where refusal happens, before a scan starts:
+
+    * steady demand above the ceiling → refused (cycles would fall behind
+      the ruled cadence forever);
+    * any daily names with no headroom left after steady demand → refused
+      (the cold burst would never drain);
+    * otherwise the plan states how long the cold burst takes to drain
+      (`cold_drain_minutes`) and how long the first cold cycle really
+      takes when the bucket paces pool + daily requests together
+      (`cold_cycle_seconds`, `cold_cycle_overruns_scan_interval`). Those
+      are reported, not refused: the ceiling and cadence are Dejan's to
+      set, never settled here.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    ceiling_rpm: int
+    scan_interval: int
+    retries_per_request: int
+    pool_rpm: float
+    screens_rpm: float
+    lists_rpm: float
+    context_rpm: float
+    daily_names: int
+    steady_rpm: float
+    headroom_rpm: float
+    cycle_requests: int
+    cold_drain_minutes: float | None
+    cold_cycle_seconds: float
+    cold_cycle_overruns_scan_interval: bool
+    pacing: Literal["token_bucket_waits"] = "token_bucket_waits"
+    refusal: str | None
+
+
+def plan_transport_demand(
+    pool: PoolBlock,
+    *,
+    screen_count: int,
+    list_blocks: list[ListBlock],
+    list_chunk_size: int,
+    scan_interval: int,
+    context_tickers: int,
+    daily_names: int,
+    retries_per_request: int,
+    ceiling_rpm: int,
+) -> TransportDemand:
+    if ceiling_rpm <= 0:
+        raise RadarNoteError("radar.finviz_max_rpm must be positive")
+    if retries_per_request < 0 or daily_names < 0:
+        raise RadarNoteError("retries and daily names cannot be negative")
+    factor = 1 + retries_per_request
+    pool_rpm = planned_pool_rpm(pool, scan_interval) * factor
+    screens_rpm = planned_screens_rpm(screen_count, scan_interval) * factor
+    lists_rpm = planned_lists_rpm(list_blocks, list_chunk_size, scan_interval) * factor
+    context_rpm = planned_context_rpm(context_tickers, scan_interval) * factor
+    steady = pool_rpm + screens_rpm + lists_rpm + context_rpm
+    headroom = ceiling_rpm - steady
+    cycle_requests = (
+        pool.cap + screen_count + _total_chunks(list_blocks, list_chunk_size) + context_tickers
+    )
+    cold_requests = daily_names * factor
+    cold_cycle_seconds = (cycle_requests * factor + cold_requests) * 60 / ceiling_rpm
+    refusal: str | None = None
+    drain: float | None = None
+    if steady > ceiling_rpm + 1e-9:
+        refusal = f"total steady demand {steady:.2f} rpm exceeds the ceiling {ceiling_rpm}"
+    elif cold_requests > 0 and headroom <= 1e-9:
+        refusal = (
+            f"no headroom for {daily_names} daily-bar name(s): steady demand {steady:.2f} rpm "
+            f"leaves {headroom:.2f} of {ceiling_rpm}"
+        )
+    elif cold_requests > 0:
+        drain = cold_requests / headroom
+    return TransportDemand(
+        ceiling_rpm=ceiling_rpm, scan_interval=scan_interval,
+        retries_per_request=retries_per_request, pool_rpm=pool_rpm,
+        screens_rpm=screens_rpm, lists_rpm=lists_rpm, context_rpm=context_rpm,
+        daily_names=daily_names, steady_rpm=steady, headroom_rpm=headroom,
+        cycle_requests=cycle_requests, cold_drain_minutes=drain,
+        cold_cycle_seconds=cold_cycle_seconds,
+        cold_cycle_overruns_scan_interval=cold_cycle_seconds > scan_interval,
+        refusal=refusal,
     )
 
 
@@ -255,6 +382,7 @@ def configured_sources(config: RadarConfig | None = None) -> ParsedSources:
         poll_interval=int(values["radar.poll_interval"].value),
         finviz_max_rpm=None if rpm is None else int(rpm),
         list_chunk_size=cfg.list_chunk_size,
+        context_tickers=len(cfg.context.tickers),
     )
 
 
@@ -329,5 +457,6 @@ def mirror_sources(
 __all__ = [
     "ParsedBlock", "ParsedNote", "ParsedSources", "RadarNoteError",
     "configured_sources", "load_sources", "mirror_sources", "parse_note", "parse_note_bytes",
+    "TransportDemand", "plan_transport_demand", "planned_context_rpm",
     "planned_lists_rpm", "planned_pool_rpm", "planned_screens_rpm", "planned_total_rpm",
 ]
