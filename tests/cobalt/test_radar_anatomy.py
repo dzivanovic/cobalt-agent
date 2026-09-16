@@ -271,7 +271,7 @@ def test_high_volume_but_not_the_widest_body_is_not_path_a():
     assert obs.path != "A"
 
 
-def test_path_b_only_is_not_evaluable_catalyst_unknown():
+def test_path_b_only_formation_is_not_evaluable():
     bars = []
     price = Decimal("10")
     for i in range(20):
@@ -498,6 +498,26 @@ def test_unsupported_atoms_trigger_and_stop_are_named_missing():
         "Range(micro).instantiated", "Leg(pullback)", "VWAP", "touched",
         "trigger:range_break", "stop:structural_extreme:range_base",
     }
+
+
+def test_sequence_trigger_is_named_missing_not_a_crash():
+    step = {"name": "break", "predicate": {"expr": "Extension.state == culminating"},
+            "confirmation_policy": {"type": "intrabar"}}
+    td = _def_with([{"expr": "Extension.state == culminating"}], [],
+                   {"type": "sequence", "steps": [step]})
+    result = evaluability(td)
+    assert not result.evaluable and result.missing_atoms == ("trigger:sequence",)
+
+
+def test_shipped_synthetic_def_reports_not_evaluable_with_its_missing_atoms():
+    from cobalt.taxonomy.loader import EXAMPLE_NOTE_PATH
+    import yaml
+
+    text = EXAMPLE_NOTE_PATH.read_text()
+    mapping = yaml.safe_load(text.split("```yaml\n", 1)[1].split("\n```", 1)[0])["trade_def"]
+    result = evaluability(TradeDef.from_unit(mapping, slug="shipped-example", name="Shipped Example"))
+    assert not result.evaluable
+    assert result.missing_atoms and all(a not in SUPPORTED_ATOMS for a in result.missing_atoms)
 
 
 def test_supported_atoms_are_exactly_the_s2_detectors():
