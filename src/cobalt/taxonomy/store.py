@@ -111,6 +111,26 @@ class TradeDefStore:
                 )
             ]
 
+    def loaded_for_evaluation(self) -> tuple[list, dict]:
+        """(defs, user tunable rows) as the radar S5 stage consumes them:
+        every loaded def re-validated (its predicates re-parse) with its
+        md5, and the trader's own per-trade tunable rows. A row that no
+        longer validates fails the read loud — the stage never evaluates a
+        def it could not rebuild."""
+        from cobalt.radar.evaluate import LoadedDef
+
+        from .trade_def import TradeDef
+        from .tunables import TunableRow
+
+        with self._connect() as conn:
+            def_rows = conn.execute("SELECT slug, md5, def FROM trade_defs ORDER BY slug").fetchall()
+            tunable_rows = conn.execute("SELECT key, row FROM tunables ORDER BY key").fetchall()
+        defs = [
+            LoadedDef(slug=slug, md5=md5, definition=TradeDef.model_validate(definition))
+            for slug, md5, definition in def_rows
+        ]
+        return defs, {key: TunableRow.model_validate(row) for key, row in tunable_rows}
+
     def tunable_keys(self) -> list[str]:
         with self._connect() as conn:
             return [r[0] for r in conn.execute("SELECT key FROM tunables ORDER BY key")]

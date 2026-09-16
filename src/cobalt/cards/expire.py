@@ -52,9 +52,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, time
-from typing import Any, Optional
+from decimal import Decimal
+from typing import Any, Literal, Optional
 
 from loguru import logger
+from pydantic import AwareDatetime, BaseModel, ConfigDict
 
 from cobalt.session import Session, session_clock
 from cobalt.session import clock as clock_mod
@@ -219,4 +221,96 @@ def expire_due(
     return moved
 
 
-__all__ = ["EXPIRABLE", "WindowEnd", "expire_due", "window_end_for"]
+# ---------------------------------------------------------------------
+# Radar cards (S2-P2 STEP-4, Astra R1-16)
+# ---------------------------------------------------------------------
+#
+# THE AUTHORITATIVE RESOLVER IS `window_end_for`, AND ITS INPUT IS THE
+# HUMAN `preferred_windows_ref` — not the detector's `preferred_windows`
+# enum list. The deadline is resolved ONCE, at formation, and persisted
+# on the card (`aset_sizings.expires_at`) with the resolution evidence in
+# the genesis transition. Recomputing it live on every scan would let a
+# predicate that stays true mint a card that is already past its window;
+# a persisted deadline cannot move.
+#
+# CAUSES AND THE STATES THEY APPLY FROM (models.ALLOWED):
+#   deadline          WATCH / ARMED / TRIGGERED  (all three have EXPIRED)
+#   avoid turned true WATCH / ARMED / TRIGGERED
+#   stop touched      WATCH only — before arm; an armed card's stop is a
+#                     risk it already committed to
+# FILLED and every terminal state never expire.
+
+STOP_TOUCH_EXPIRABLE: tuple[CardState, ...] = (CardState.WATCH,)
+
+
+class RadarDeadline(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    expires_at: AwareDatetime
+    window_source: str
+    window_detail: str
+
+
+def radar_deadline(preferred_windows_ref: Optional[str], day: date) -> RadarDeadline:
+    """The deadline persisted on a radar card at formation."""
+    window = window_end_for(preferred_windows_ref, day)
+    return RadarDeadline(
+        expires_at=datetime.combine(day, window.at, tzinfo=ET),
+        window_source=window.source,
+        window_detail=window.detail,
+    )
+
+
+class RadarExpiry(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    cause: Literal["deadline", "avoid", "stop_before_arm"]
+    reason: str
+    evidence: dict[str, Any]
+
+
+def radar_expiry(
+    *,
+    state: CardState,
+    now: datetime,
+    expires_at: datetime,
+    avoided: bool,
+    direction: Literal["long", "short"],
+    stop: Decimal,
+    bars_after_formation: list[Any],
+) -> RadarExpiry | None:
+    """Why this open radar card expires now, or None. Deterministic order:
+    stop-before-arm, then avoid, then deadline — the first true cause is
+    the one recorded."""
+    if state not in EXPIRABLE:
+        return None
+    if state in STOP_TOUCH_EXPIRABLE:
+        touched = [
+            bar for bar in bars_after_formation
+            if (bar.high >= stop if direction == "short" else bar.low <= stop)
+        ]
+        if touched:
+            return RadarExpiry(
+                cause="stop_before_arm",
+                reason=f"stop {stop} touched before arm at {touched[0].ts.isoformat()}",
+                evidence={"cause": "stop_before_arm", "stop": str(stop),
+                          "bar_ts": touched[0].ts.isoformat(),
+                          "bar_high": str(touched[0].high), "bar_low": str(touched[0].low)},
+            )
+    if avoided:
+        return RadarExpiry(
+            cause="avoid", reason="an avoid predicate turned true",
+            evidence={"cause": "avoid", "checked_at": now.isoformat()},
+        )
+    if now > expires_at:
+        return RadarExpiry(
+            cause="deadline", reason=f"window closed at {expires_at.isoformat()}",
+            evidence={"cause": "deadline", "expires_at": expires_at.isoformat(), "checked_at": now.isoformat()},
+        )
+    return None
+
+
+__all__ = [
+    "EXPIRABLE", "RadarDeadline", "RadarExpiry", "STOP_TOUCH_EXPIRABLE", "WindowEnd",
+    "expire_due", "radar_deadline", "radar_expiry", "window_end_for",
+]

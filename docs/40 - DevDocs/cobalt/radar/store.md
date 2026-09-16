@@ -13,3 +13,21 @@ All three are plain SELECT paths. They do not initialize a schema or invoke a wr
 ## Writes
 
 `apply_membership`, `put_pool`, `stamp_failure`, and `stamp_poll` remain the resident's guarded write transactions. `stamp_poll(..., preserve_failure=True)` updates S4 freshness without clearing the pending reset-crossing failure that S2 first made observable in the same recovery cycle. The default remains `False`, so ordinary successful polling still clears a recovered `bars` failure.
+
+## S5 evaluate seam (S2-P2 STEP-4)
+System payload only (L32, Astra R1-1).
+
+Reads:
+- `admitted_members(pool_key)`: open admitted episodes by id.
+- `memberships(ids)`: raises when an id an open card references is missing.
+- `i1_bars(ticker, start, end)`: stored bars as `Bar`, oldest first.
+- `latest_run_id(pool_key)`.
+- `board(pool_key)`: `radar_board_v`.
+- `members_for_replay(pool_key, day)`.
+
+Writes — each is one guarded transaction (`assert_writable('radar.evaluate')` + `before_commit`):
+- `abandon_running_runs` marks a stale `running` run `failed`, named "abandoned".
+- `open_score_run` inserts the run as `running`.
+- `put_scores` re-validates every `detail`/`desk_shadow` through `seam.RadarScoreDetail`/`DeskShadow` at the write, and returns `{(membership_id, md5): score_id}`.
+- `copy_card_values` puts the card's proximity/conviction/card_score/suppression onto its seam row.
+- `finish_run` publishes `complete` or `failed`, and refuses a run that is not `running`, so a published run is never re-published.

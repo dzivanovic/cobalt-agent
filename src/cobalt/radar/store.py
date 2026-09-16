@@ -266,4 +266,178 @@ class RadarStore:
             conn.close()
 
 
+    # -- S5 evaluate: the system-side seam (S2-P2 STEP-4) ----------------
+    #
+    # SYSTEM PAYLOAD ONLY (L32, Astra R1-1): the rows written here carry a
+    # trade_def md5, generic atoms/observations validated by
+    # `cobalt.radar.seam`, hashes, and nullable numeric copies of a card's
+    # values — never a slug, def text, WHY prose or settings content. The
+    # stored inputs live user-side in the receipt.
+
+    def admitted_members(self, pool_key: str) -> list[dict]:
+        """Open, ADMITTED membership episodes, by id (the S5 cohort)."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "SELECT id, ticker, trade_date, entered_at, left_at, last_rank FROM radar_membership "
+                "WHERE pool_key = %s AND left_at IS NULL AND entered_at IS NOT NULL ORDER BY id",
+                (pool_key,),
+            )
+            columns = [item.name for item in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    def memberships(self, ids: list[int]) -> list[dict]:
+        if not ids:
+            return []
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "SELECT id, ticker, trade_date, entered_at, left_at, last_rank FROM radar_membership "
+                "WHERE id = ANY(%s) ORDER BY id",
+                (list(ids),),
+            )
+            columns = [item.name for item in cursor.description]
+            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        missing = sorted(set(ids) - {row["id"] for row in rows})
+        if missing:
+            raise RuntimeError(f"radar_membership rows {missing} referenced by open radar cards do not exist")
+        return rows
+
+    def i1_bars(self, ticker: str, start: datetime, end: datetime) -> list:
+        """Stored i1 bars in [start, end), oldest first."""
+        from cobalt.archiver.models import Bar, Interval
+
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT ticker, interval, ts, open, high, low, close, volume FROM bars "
+                "WHERE ticker = %s AND interval = 'i1' AND ts >= %s AND ts < %s ORDER BY ts",
+                (ticker, start, end),
+            ).fetchall()
+        return [
+            Bar(ticker=r[0], interval=Interval(r[1]), ts=r[2], open=r[3], high=r[4], low=r[5], close=r[6], volume=r[7])
+            for r in rows
+        ]
+
+    def latest_run_id(self, pool_key: str) -> int | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT max(id) FROM radar_score_run WHERE pool_key = %s", (pool_key,)
+            ).fetchone()
+        return int(row[0]) if row and row[0] is not None else None
+
+    def _tx(self, label: str, target: str, now: datetime, work, before_commit):
+        assert_writable(label, target=target, now=now)
+        conn = self._connect()
+        conn.autocommit = False
+        try:
+            with conn.cursor() as cur:
+                result = work(cur)
+            if before_commit:
+                before_commit()
+            conn.commit()
+            return result
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def abandon_running_runs(self, pool_key: str, *, now: datetime, before_commit=None) -> list[int]:
+        """A run still `running` at the start of a new one never published
+        (a crash, or a market_reset drop): it is marked failed, named."""
+        def work(cur):
+            cur.execute(
+                "UPDATE radar_score_run SET status = 'failed', finished_at = %s, "
+                "failed_detail = 'abandoned: the run never published (crash or market_reset drop)' "
+                "WHERE pool_key = %s AND status = 'running' RETURNING id",
+                (now, pool_key),
+            )
+            return [int(r[0]) for r in cur.fetchall()]
+
+        return self._tx("radar.evaluate", pool_key, now, work, before_commit)
+
+    def open_score_run(self, row: dict, *, before_commit=None) -> int:
+        def work(cur):
+            cur.execute(
+                "INSERT INTO radar_score_run (pool_key, scan_id, previous_run_id, session, started_at, status, "
+                "cards_enabled, evaluator_version, formula_sha256, tunables_sha256, settings_sha256, cohort_sha256) "
+                "VALUES (%(pool_key)s, %(scan_id)s, %(previous_run_id)s, %(session)s, %(started_at)s, 'running', "
+                "%(cards_enabled)s, %(evaluator_version)s, %(formula_sha256)s, %(tunables_sha256)s, "
+                "%(settings_sha256)s, %(cohort_sha256)s) RETURNING id",
+                row,
+            )
+            return int(cur.fetchone()[0])
+
+        return self._tx("radar.evaluate", row["pool_key"], row["started_at"], work, before_commit)
+
+    def put_scores(self, run_id: int, rows: list[dict], *, before_commit=None) -> dict[tuple[int, str], int]:
+        from .seam import DeskShadow, RadarScoreDetail
+
+        # The closed seam models are the gate, re-applied at the write.
+        for row in rows:
+            RadarScoreDetail.model_validate(row["detail"])
+            DeskShadow.model_validate(row["desk_shadow"])
+
+        def work(cur):
+            out: dict[tuple[int, str], int] = {}
+            for row in rows:
+                cur.execute(
+                    "INSERT INTO radar_score (run_id, membership_id, ticker, trade_def_md5, direction, evaluation, "
+                    "detail, desk_shadow, inputs_sha256) VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s) "
+                    "RETURNING id",
+                    (run_id, row["membership_id"], row["ticker"], row["trade_def_md5"], row["direction"],
+                     row["evaluation"], json.dumps(row["detail"]), json.dumps(row["desk_shadow"]),
+                     row["inputs_sha256"]),
+                )
+                out[(row["membership_id"], row["trade_def_md5"])] = int(cur.fetchone()[0])
+            return out
+
+        from cobalt.session.clock import now_utc
+
+        return self._tx("radar.evaluate", str(run_id), now_utc(), work, before_commit)
+
+    def copy_card_values(self, copies: list[dict], *, before_commit=None) -> None:
+        def work(cur):
+            for copy in copies:
+                cur.execute(
+                    "UPDATE radar_score SET proximity = %s, conviction = %s, card_score = %s, "
+                    "suppressed_reason = %s WHERE id = %s",
+                    (copy["proximity"], copy["conviction"], copy["card_score"], copy["suppressed_reason"],
+                     copy["score_id"]),
+                )
+                if cur.rowcount != 1:
+                    raise RuntimeError(f"radar_score {copy['score_id']} not found for the card value copy")
+
+        from cobalt.session.clock import now_utc
+
+        self._tx("radar.evaluate", "radar_score", now_utc(), work, before_commit)
+
+    def finish_run(self, run_id: int, *, status: str, finished_at: datetime, detail: str | None,
+                   before_commit=None) -> None:
+        if status not in {"complete", "failed"}:
+            raise ValueError(f"a run finishes complete or failed, not {status!r}")
+
+        def work(cur):
+            cur.execute(
+                "UPDATE radar_score_run SET status = %s, finished_at = %s, failed_detail = %s "
+                "WHERE id = %s AND status = 'running'",
+                (status, finished_at, detail, run_id),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError(f"radar_score_run {run_id} was not running — refusing to re-publish it")
+
+        self._tx("radar.evaluate", str(run_id), finished_at, work, before_commit)
+
+    def board(self, pool_key: str) -> list[dict]:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM radar_board_v WHERE pool_key = %s ORDER BY membership_id, trade_def_md5",
+                (pool_key,),
+            )
+            columns = [item.name for item in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    def members_for_replay(self, pool_key: str, trade_date: date) -> list[dict]:
+        """Admitted episodes of one day (read-only dry-run input)."""
+        return [row for row in self.members_for_day(pool_key, trade_date) if row["entered_at"] is not None]
+
+
 __all__ = ["RadarStore"]
