@@ -65,3 +65,20 @@ At `max-width:1149px` detail drops below the card; the 430 px rule uses a 366 px
 - `order_cards()` (P3) is gone; `cards.radar.ladder_order` is the one order.
 - Terminal cards are today's only: a card that expired yesterday is history, not ladder.
 - The fixture `panel-cards.contract.json` is no longer read by the panel; the offline tests build `radar_cards_v` rows by running the S5 stage over the hub-cut bars fixture until the hub cuts `panel-cards.real-shape.json`.
+
+---
+
+## 2026-09-17 — S2-P4: value column (ruling R1, Astra R1-19)
+
+`MembershipRecord` and `PoolRow` gain `rank_metric` (`RankMetricName | None`)
+and `rank_value` (`Decimal | None`). On `MembershipRecord` both are
+**required but nullable**. NULL is a pre-deploy episode. A row missing the
+keys means a store forgot to select them, and it fails validation
+(`RadarPanelError`). `_row` threads both through to `PoolRow`, so the name
+shown is the per-row metric that actually ranked the ticker (a screen
+override's name included), not the view-level session metric.
+
+`render_pool` adds a `value` column after `ticker`. `_rank_value_cell`
+prints `<metric> <value>`, with the stored NUMERIC normalized (trailing
+zeros dropped, never rounded). It prints `—` when both are NULL and
+`<metric> —` when only the value is NULL.

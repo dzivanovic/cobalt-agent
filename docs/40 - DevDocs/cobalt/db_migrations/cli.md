@@ -242,3 +242,11 @@ There is no `schema_migrations` ledger: `FORWARD` is re-applied in full
 every run and every file is idempotent. So "applied nothing" is proven by
 the absence of any `-- applying` line and by the relation set being
 unchanged, not by a version row.
+
+---
+
+## 2026-09-17 — S2-P4
+
+`DIGEST_EXCLUDED_COLUMNS` gains `rank_metric` and `rank_value` (Astra
+R1-1). Adding two nullable columns to a populated `radar_membership` is not
+content corruption, and dropping them on rollback must not read as CHANGED.

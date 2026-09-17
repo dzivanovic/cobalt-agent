@@ -28,3 +28,51 @@ schemas exist and tells you to run `cobalt db migrate`.
 
 `0001` is idempotent and re-run on every invocation; it is deliberately
 NOT reversed by `--rollback` (dropping a schema is not a catalog flip).
+
+---
+
+## 2026-09-17 — S2-P4: 0008 and 0009
+
+`FORWARD` gains `0008_radar_value_movers.sql` (system) and
+`0009_picks_missed.sql` (user). `REVERSE` gains their rollbacks, newest
+first. 0006/0007 are reserved for S2-P2, and both tuples stay ordered by
+version whichever merges first. Neither P4 file names a P2 object, so
+either merge order applies. `--down-to` selects by version, never by
+position.
+
+**0008 (system).**
+- `radar_membership` gains `rank_metric TEXT CHECK IN ('volume','rvol')`
+  and `rank_value NUMERIC(20,6)`.
+- New `system.movers_daily` table, owned by `cobalt_system`. Rows are never
+  deleted: `active` is false for a row a rerun dropped (Astra R2-1), and
+  the partial unique index `movers_daily_one_active` keeps one active row
+  per (trade_date, side, ticker).
+- `replay_run_id` names the run that selected the row.
+- `cobalt_user` gets `SELECT, REFERENCES` (for `missed.mover_id`) and the
+  identity sequence grant.
+
+**0009 (user).** `"user".picks` and `"user".missed`, both owned by
+`cobalt_user`, both with `user_id INTEGER NOT NULL DEFAULT
+current_setting('cobalt.trader_id')::int REFERENCES "user".traders(id)`.
+
+`picks` has one row per card (`card_id UNIQUE`), linked to its FILLED
+`card_transitions` row. `pool_basis`, `score_basis` and `score_inputs`
+store why a field is null and what the rank came from (L57).
+
+`missed` carries an immutable `receipt` JSONB hashed by `inputs_sha256`
+(Astra R1-8). The receipt-owned `replay_run_id` replaces the plan's
+`replay_job_id`. Versioning columns (R2-1/R3-1):
+- `run_seq`, `is_current`, `superseded_by → missed(id)`, `retired_by_run_id`
+- CHECK: a non-current row names its retiring run.
+- CHECK: a current row has no successor.
+- `missed_one_current_per_subject` is a partial unique index `WHERE
+  is_current`. For formations it also keys on `formation_at` and the
+  member (R1-21).
+
+A rerun reconciles in one transaction: retire, then insert, then link.
+
+**Rollbacks** drop only their own tables and columns. Reverse 0009 before
+0008: `missed` references `movers_daily`. The boundary is `--down-to 0007`.
+If P2 is present, its 0007 rollback deleting radar cards that picks/missed
+reference is blocked by the NO ACTION foreign keys and fails loud; nothing
+is lost silently (plan §6 R1-23).

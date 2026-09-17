@@ -23,5 +23,24 @@
   backfill commits — the same two-step the F1 `session` backfill uses.
 - `edges` is what `docs/40 - DevDocs/cobalt/cards/models.md` renders, so
   the wiki cannot disagree with what the store enforces.
-- The two S2-P2 commands import their modules lazily, so `cobalt cards
-  state` does not load the taxonomy or the settings reader.
+- The two S2-P2 commands (`trail-fit-draft`, `shadow-report`) import their
+  modules lazily, so `cobalt cards state` does not load the taxonomy or the
+  settings reader. `picks` is the exception: `cli.py` imports it at the top,
+  which costs only `cobalt.radar.models` and the session clock.
+
+---
+
+## 2026-09-17 — S2-P4: `cobalt cards picks` and the fill result
+
+`cobalt cards picks [--date YYYY-MM-DD] [--cutoff ISO8601]` prints pick vs
+pool rank/value and card-score rank for every FILLED transition on the ET
+day (default: today ET). It exits 1 when any counted transition has no pick
+row (MISSING). `--cutoff` must carry a timezone offset. Gaps before it
+print `MISSING (before cutoff)` and do not count: this is smoke check K6's
+comparison window, so historical gaps stay visible without failing it. An
+empty day prints `no FILLED transitions on <date>` and exits 0. Rendering
+lives in `picks.render_picks_report`.
+
+`cobalt cards move <id> FILLED` now reads `FillResult.transition_ids`. If
+the fill committed but the pick did not, it prints `PICK NOT RECORDED …` to
+stderr and exits 1, so a script cannot mistake the gap for a clean fill.

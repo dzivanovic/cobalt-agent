@@ -388,6 +388,32 @@ def test_missed_rerun_reconciles_in_the_ruled_order_against_the_live_unique_inde
             "SELECT id, is_current, superseded_by, receipt FROM missed WHERE ticker='P4R' ORDER BY id"
         ).fetchall()
         assert rows == [(first, False, second, {"v": 1}), (second, True, None, {"v": 2})]
+
+        # A subject whose miss disappears on rerun: step (1) only. It keeps
+        # its receipt, names the retiring run, and links to nothing.
+        conn.execute("SAVEPOINT retire_needs_run")
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute("UPDATE missed SET is_current = false WHERE id = %s", (second,))
+        conn.execute("ROLLBACK TO SAVEPOINT retire_needs_run")
+        conn.execute(
+            "UPDATE missed SET is_current = false, retired_by_run_id = 'run-3' WHERE id = %s",
+            (second,),
+        )
+        assert conn.execute(
+            "SELECT is_current, superseded_by, retired_by_run_id, receipt FROM missed WHERE id = %s",
+            (second,),
+        ).fetchone() == (False, None, "run-3", {"v": 2})
+        assert conn.execute(
+            "SELECT count(*) FROM missed WHERE ticker='P4R' AND is_current"
+        ).fetchone()[0] == 0
+
+        # A current row can never also point at a successor.
+        conn.execute("SAVEPOINT current_superseded")
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(insert.replace("run_seq)", "run_seq,superseded_by)").replace(
+                "%s,%s) RETURNING", "%s,%s,%s) RETURNING"),
+                (mover_id, "sha-4", '{"v": 4}', "run-4", 4, first))
+        conn.execute("ROLLBACK TO SAVEPOINT current_superseded")
     finally:
         conn.rollback()
         conn.close()

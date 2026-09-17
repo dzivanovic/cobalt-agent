@@ -428,8 +428,21 @@ class TestFillWritesPick:
         monkeypatch.setattr(picks_mod, "record_pick", broken)
         card_id = _make_card("P4FAIL")
         cards = CardStore("cobalt_dev")
-        result = cards.fill(card_id, actor=Actor.YOU, now=RTH)
+        from loguru import logger
+
+        messages: list[str] = []
+        sink = logger.add(lambda message: messages.append(str(message)), level="ERROR")
+        try:
+            result = cards.fill(card_id, actor=Actor.YOU, now=RTH)
+        finally:
+            logger.remove(sink)
         assert not result.pick_recorded and "DivisionByZero" in result.pick_error
+        assert any(f"card {card_id}" in m and "DivisionByZero" in m for m in messages)
+        # The banner the sheet renders from this very result (both HTTP
+        # routes are covered in test_aset_web.TestPickNotRecordedBanner).
+        from cobalt.aset.web import _pick_banner
+
+        assert "pick not recorded" in _pick_banner(card_id, result)
         assert cards.state_of(card_id) is CardState.FILLED
         assert _pick_row(card_id) == [], "only the savepoint rolled back"
 

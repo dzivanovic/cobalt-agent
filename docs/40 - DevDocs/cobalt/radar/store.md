@@ -37,3 +37,17 @@ Writes — each is one guarded transaction (`assert_writable('radar.evaluate')` 
 - `scores_for_run(run_id)`: every `radar_score` row of that run, by id.
 
 Both are plain SELECTs; `radar.audit_export.export_run` pairs them with the user-side receipt chain and refuses a run whose stored hashes or seam labels do not replay.
+
+---
+
+## 2026-09-17 — S2-P4: `rank_metric` / `rank_value` (ruling R1)
+
+- `open_members` and `members_for_day` select both columns.
+- `apply_membership` writes the pair on RETAIN, on the in-place UPDATE of
+  a never-admitted EXCLUDE, and on INSERT.
+- HOLD has its own UPDATE. A HOLD with no metric keeps the stored pair
+  (`COALESCE`). A HOLD that carries a metric writes both together, so the
+  metric and the value never come from different scans.
+- LEAVE touches neither column: the departed episode keeps its last values.
+
+No backfill (L57): rows written before 0008 stay NULL.

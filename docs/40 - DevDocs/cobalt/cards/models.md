@@ -68,3 +68,14 @@ rendered *from* `ALLOWED`, so no illegal button can be drawn),
 ## Related
 `docs/30 - Design/TRADE-RADAR-CARD-MOCK-v0_1/card-spec.md` §2 (lifecycle),
 `decisions.md` #1 / #7 / #11.
+
+---
+
+## 2026-09-17 — S2-P4: `FillResult`
+
+A frozen Pydantic model returned by `CardStore.fill()`:
+`transition_ids` (min length 1), `pick_recorded`, `pick_id`, `pick_error`.
+Its validator enforces that `pick_recorded` is true exactly when `pick_id`
+is set, that an unrecorded pick names its error, and that a recorded pick
+carries none. The object exists only when the fill committed; a failed fill
+raises instead. Re-exported from `cobalt.cards`.

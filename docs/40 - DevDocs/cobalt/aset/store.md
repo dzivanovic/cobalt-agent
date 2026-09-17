@@ -110,3 +110,13 @@ Declares `SIDE = Side.USER` (ADR-0008 D2 — the side is chosen PER STORE, never
 a card is a written plan of his: ticker, grade, sheet dollars, entry and stop.
 
 `_connect()` passes it to the factory; `ensure_schema()` asserts the two-layer schemas exist before running its own DDL, naming `cobalt db migrate` if they do not.
+
+---
+
+## 2026-09-17 — S2-P4: `mark_filled` returns the `FillResult`
+
+`mark_filled()` used to discard `CardStore.fill()`'s return. It now returns
+the `FillResult` (Astra R1-5) so the sheet can render "pick not recorded".
+A pick gap never stops the fill-figures UPDATE that follows, and that
+UPDATE's own exactly-one-row check is unchanged
+(`test_mark_filled_figures_persist_after_a_pick_failure`).

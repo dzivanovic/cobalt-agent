@@ -19,3 +19,10 @@ The moves are **manual** — Dejan's buttons on the ASET sheet. The
 TRIGGERED detector is S2/S4's, and it will call exactly the same
 `store.transition()` these buttons call: the state machine does not
 learn a second write path when the detector arrives.
+
+---
+
+## 2026-09-17 — S2-P4
+
+The module gains `picks.py` (F3 pick rows written under `SAVEPOINT pick`
+inside `fill()`; see `picks.md`). `FillResult` is re-exported.

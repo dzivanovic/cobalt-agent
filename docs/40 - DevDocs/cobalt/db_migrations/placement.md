@@ -25,3 +25,14 @@ test asserting this map and `0002_move_tables.sql` agree.
 Two copies of the map exist — this one and the SQL's — because SQL
 cannot import Python. A test makes a drift between them a failure rather
 than a surprise.
+
+---
+
+## 2026-09-17 — S2-P4
+
+`CREATED_TABLES` gains `movers_daily` (SYSTEM, from 0008), and `picks` and
+`missed` (USER, from 0009). `missed` leaves `DECLARED_TABLES` now that it
+is built. Every table still sits in exactly one part of the map
+(`test_placement_movers_daily_system_picks_and_missed_user`).
+`TestTenantGuc` now checks `user_id` NOT NULL + GUC default on every USER
+table in `CREATED_TABLES` as well as the moved ones.

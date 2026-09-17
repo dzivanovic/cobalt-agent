@@ -100,3 +100,37 @@ All three are plain SELECTs: no schema init, no write guard.
 - `radar_board_cards(trade_date)`: the `/radar` ladder's one read. Every `"user".radar_cards_v` row that is open, plus terminal rows whose `state_at` falls on `trade_date` in ET, each with its `dots` (`_dots_for`).
 - `shadow_agreement(since)`: `"user".shadow_agreement_v` rows (factor × ET trading day, with every |tap − engine| delta), optionally from `since`.
 - `receipt_for_run(run_id)`: the one receipt id of a run, `None` when there is none, and a loud refusal when there are two.
+
+---
+
+## 2026-09-17 — S2-P4 (F3 picks, rulings R2 + Astra R1-4/R1-5/R1-7)
+
+**`fill()` returns a `FillResult`, not a bare id list.** It holds
+`transition_ids` (same order as before: three on a one-click WATCH fill,
+one on a strict fill), `pick_recorded`, `pick_id` and `pick_error`.
+
+**One transaction on every route.** Before this change the strict route
+(radar cards, and manual cards one edge away) called `transition()`
+unwrapped, and that call committed on its own. Now `fill()` opens one USER
+connection for every route and passes it to every `transition()` hop.
+After the FILLED hop, still inside that transaction, `_record_pick` runs:
+
+1. `SAVEPOINT pick`
+2. `picks.record_pick(conn, card_id, <FILLED transition id>, ts)`
+3. on success `RELEASE SAVEPOINT pick`. On any `Exception`:
+   `ROLLBACK TO SAVEPOINT pick`, then one `logger.error` naming the card
+   and the error class. The fill continues and commits.
+
+Only `Exception` is caught, so an interrupt still aborts the whole fill. If
+the savepoint rollback itself fails, or the commit fails, everything rolls
+back and the error propagates: a failed fill never returns a result.
+
+**Log destination.** The `logger.error` line goes to loguru's default
+stderr sink. For the sheet process (`com.cobalt.aset`) that is
+`/Users/cobalt/cobalt/logs/aset.err` (the plist's `StandardErrorPath`,
+rotated by `ops/start_aset.sh`). It is a log line, not a persisted job row.
+The persisted evidence of the gap is `cobalt cards picks` reporting MISSING.
+
+**`filled_with_picks(day)`** backs `cobalt cards picks`. It returns every
+`card_transitions` row with `to_state = 'FILLED'` whose `at` falls on that
+ET date, joined to the card and left-joined to `picks` on `transition_id`.

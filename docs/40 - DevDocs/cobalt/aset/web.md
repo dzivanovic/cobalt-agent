@@ -219,3 +219,17 @@ Every refusal is a named 4xx (`{"status": "REFUSED", "reason"}`), logged. All ro
 
 ### S2-P2 chunk C (STEP-8) — the panel is wired; the routes are unchanged
 `web.py` itself did not change in chunk C. `GET /radar` and `GET /api/radar/pool` still call `build_radar_panel` and nothing else; the builder now also reads today's radar cards from `"user".radar_cards_v` and renders the key row, the dot tap strips and promote/release, whose clicks are `fetch` POSTs to the four `/radar/card/{id}/…` routes above. The S2-P3 line "No POST route was added" is superseded: the explicit allowlist test (`test_post_routes_are_exactly_the_explicit_allowlist`) now pins every POST path the app serves — `/size`, `/fill`, `/attest`, `/card/{card_id}/move`, `/card/{card_id}/stop` and the four radar card routes — and keeps `/`, `/radar`, `/api/radar/pool`, `/api/health`, `/api/prefill` GET-only. Both radar GETs are covered by fail-on-call sentinels for `_render`, `_daymode_state`, `_open_cards_section`, `_read_back_note_attestation`, `_write_daymode_note` and every store's `ensure_schema`. The panel resolves today's rung READ-ONLY (`DayModeStore.for_date` + `decided_or_stage1`), never through `_daymode_state`, which can attest a note.
+
+---
+
+## 2026-09-17 — S2-P4: "pick not recorded" banner
+
+`_pick_banner(card_id, filled)` returns the red FAILED-idiom banner when
+`filled.pick_recorded` is False, and an empty string otherwise. The banner
+names the error, says the fill stands, and points to `cobalt cards picks`.
+Both fill routes **append** it after their unchanged success banner:
+- `POST /fill` (the actual-fill form, via `AsetStore.mark_filled`)
+- `POST /card/{id}/move` with `to=FILLED` (via `CardStore.fill`; reads
+  `transition_ids` from the result)
+
+Tests: `test_aset_web.TestPickNotRecordedBanner`.
