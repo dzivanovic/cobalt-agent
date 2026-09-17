@@ -12,7 +12,9 @@
       "Bash(launchctl print *)",
       "Bash(git status*)",
       "Bash(git log*)",
-      "Bash(git diff*)"
+      "Bash(git diff*)",
+      "Bash(claude stop *)"
     ]
-  }
+  },
+  "worktree": {"bgIsolation": "none"}
 }
