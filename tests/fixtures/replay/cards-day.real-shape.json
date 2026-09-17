@@ -1,0 +1,327 @@
+{
+  "sizings": [
+    {
+      "created_at": "2026-02-10 13:29:30.724041+00:00",
+      "direction": "short",
+      "entry": "219.0500",
+      "id": 302,
+      "state": "EXPIRED",
+      "stop": "222.6500",
+      "ticker": "CRWD"
+    },
+    {
+      "created_at": "2026-02-10 13:31:57.010889+00:00",
+      "direction": "short",
+      "entry": "220.4950",
+      "id": 303,
+      "state": "EXPIRED",
+      "stop": "220.5500",
+      "ticker": "CRWD"
+    },
+    {
+      "created_at": "2026-02-10 13:32:38.553861+00:00",
+      "direction": "short",
+      "entry": "219.7500",
+      "id": 304,
+      "state": "EXPIRED",
+      "stop": "220.5500",
+      "ticker": "CRWD"
+    },
+    {
+      "created_at": "2026-02-10 13:33:40.484685+00:00",
+      "direction": "short",
+      "entry": "222.7400",
+      "id": 305,
+      "state": "EXPIRED",
+      "stop": "222.8000",
+      "ticker": "CRWD"
+    },
+    {
+      "created_at": "2026-02-10 13:34:18.623011+00:00",
+      "direction": "short",
+      "entry": "221.2280",
+      "id": 306,
+      "state": "CLOSED",
+      "stop": "223.5600",
+      "ticker": "CRWD"
+    },
+    {
+      "created_at": "2026-02-10 13:37:07.772558+00:00",
+      "direction": "short",
+      "entry": "903.1000",
+      "id": 307,
+      "state": "CLOSED",
+      "stop": "907.5200",
+      "ticker": "MU"
+    },
+    {
+      "created_at": "2026-02-10 13:56:05.388818+00:00",
+      "direction": "short",
+      "entry": "903.7660",
+      "id": 308,
+      "state": "EXPIRED",
+      "stop": "906.7700",
+      "ticker": "MU"
+    },
+    {
+      "created_at": "2026-02-10 13:59:43.730510+00:00",
+      "direction": "short",
+      "entry": "905.4750",
+      "id": 309,
+      "state": "EXPIRED",
+      "stop": "907.1500",
+      "ticker": "MU"
+    },
+    {
+      "created_at": "2026-02-10 14:02:40.436686+00:00",
+      "direction": "short",
+      "entry": "911.0600",
+      "id": 310,
+      "state": "CLOSED",
+      "stop": "912.5200",
+      "ticker": "MU"
+    },
+    {
+      "created_at": "2026-02-10 14:17:00.970742+00:00",
+      "direction": "short",
+      "entry": "97.2800",
+      "id": 311,
+      "state": "CLOSED",
+      "stop": "97.8000",
+      "ticker": "INTC"
+    },
+    {
+      "created_at": "2026-02-10 14:49:05.863174+00:00",
+      "direction": "short",
+      "entry": "96.6650",
+      "id": 312,
+      "state": "CLOSED",
+      "stop": "96.8200",
+      "ticker": "INTC"
+    }
+  ],
+  "transitions": [
+    {
+      "at": "2026-02-10 13:29:30.711835+00:00",
+      "card_id": 302,
+      "from_state": null,
+      "to_state": "WATCH"
+    },
+    {
+      "at": "2026-02-10 20:05:03.002850+00:00",
+      "card_id": 302,
+      "from_state": "WATCH",
+      "to_state": "EXPIRED"
+    },
+    {
+      "at": "2026-02-10 13:31:56.999644+00:00",
+      "card_id": 303,
+      "from_state": null,
+      "to_state": "WATCH"
+    },
+    {
+      "at": "2026-02-10 20:05:03.002850+00:00",
+      "card_id": 303,
+      "from_state": "WATCH",
+      "to_state": "EXPIRED"
+    },
+    {
+      "at": "2026-02-10 13:32:38.548424+00:00",
+      "card_id": 304,
+      "from_state": null,
+      "to_state": "WATCH"
+    },
+    {
+      "at": "2026-02-10 20:05:03.002850+00:00",
+      "card_id": 304,
+      "from_state": "WATCH",
+      "to_state": "EXPIRED"
+    },
+    {
+      "at": "2026-02-10 13:33:40.471781+00:00",
+      "card_id": 305,
+      "from_state": null,
+      "to_state": "WATCH"
+    },
+    {
+      "at": "2026-02-10 20:05:03.002850+00:00",
+      "card_id": 305,
+      "from_state": "WATCH",
+      "to_state": "EXPIRED"
+    },
+    {
+      "at": "2026-02-10 13:34:18.612899+00:00",
+      "card_id": 306,
+      "from_state": null,
+      "to_state": "WATCH"
+    },
+    {
+      "at": "2026-02-10 13:34:35.854856+00:00",
+      "card_id": 306,
+      "from_state": "ARMED",
+      "to_state": "TRIGGERED"
+    },
+    {
+      "at": "2026-02-10 13:34:35.854856+00:00",
+      "card_id": 306,
+      "from_state": "TRIGGERED",
+      "to_state": "FILLED"
+    },
+    {
+      "at": "2026-02-10 13:34:35.854856+00:00",
+      "card_id": 306,
+      "from_state": "WATCH",
+      "to_state": "ARMED"
+    },
+    {
+      "at": "2026-02-11 11:51:15.518410+00:00",
+      "card_id": 306,
+      "from_state": "FILLED",
+      "to_state": "CLOSED"
+    },
+    {
+      "at": "2026-02-10 13:37:07.764044+00:00",
+      "card_id": 307,
+      "from_state": null,
+      "to_state": "WATCH"
+    },
+    {
+      "at": "2026-02-10 13:37:22.687392+00:00",
+      "card_id": 307,
+      "from_state": "ARMED",
+      "to_state": "TRIGGERED"
+    },
+    {
+      "at": "2026-02-10 13:37:22.687392+00:00",
+      "card_id": 307,
+      "from_state": "WATCH",
+      "to_state": "ARMED"
+    },
+    {
+      "at": "2026-02-10 13:37:22.687392+00:00",
+      "card_id": 307,
+      "from_state": "TRIGGERED",
+      "to_state": "FILLED"
+    },
+    {
+      "at": "2026-02-11 11:51:14.628939+00:00",
+      "card_id": 307,
+      "from_state": "FILLED",
+      "to_state": "CLOSED"
+    },
+    {
+      "at": "2026-02-10 13:56:05.378558+00:00",
+      "card_id": 308,
+      "from_state": null,
+      "to_state": "WATCH"
+    },
+    {
+      "at": "2026-02-10 20:05:03.002850+00:00",
+      "card_id": 308,
+      "from_state": "WATCH",
+      "to_state": "EXPIRED"
+    },
+    {
+      "at": "2026-02-10 13:59:43.721276+00:00",
+      "card_id": 309,
+      "from_state": null,
+      "to_state": "WATCH"
+    },
+    {
+      "at": "2026-02-10 20:05:03.002850+00:00",
+      "card_id": 309,
+      "from_state": "WATCH",
+      "to_state": "EXPIRED"
+    },
+    {
+      "at": "2026-02-10 14:02:40.425347+00:00",
+      "card_id": 310,
+      "from_state": null,
+      "to_state": "WATCH"
+    },
+    {
+      "at": "2026-02-10 14:03:21.671167+00:00",
+      "card_id": 310,
+      "from_state": "TRIGGERED",
+      "to_state": "FILLED"
+    },
+    {
+      "at": "2026-02-10 14:03:21.671167+00:00",
+      "card_id": 310,
+      "from_state": "WATCH",
+      "to_state": "ARMED"
+    },
+    {
+      "at": "2026-02-10 14:03:21.671167+00:00",
+      "card_id": 310,
+      "from_state": "ARMED",
+      "to_state": "TRIGGERED"
+    },
+    {
+      "at": "2026-02-11 11:51:13.662412+00:00",
+      "card_id": 310,
+      "from_state": "FILLED",
+      "to_state": "CLOSED"
+    },
+    {
+      "at": "2026-02-10 14:17:00.963279+00:00",
+      "card_id": 311,
+      "from_state": null,
+      "to_state": "WATCH"
+    },
+    {
+      "at": "2026-02-10 14:17:17.855402+00:00",
+      "card_id": 311,
+      "from_state": "WATCH",
+      "to_state": "ARMED"
+    },
+    {
+      "at": "2026-02-10 14:17:17.855402+00:00",
+      "card_id": 311,
+      "from_state": "TRIGGERED",
+      "to_state": "FILLED"
+    },
+    {
+      "at": "2026-02-10 14:17:17.855402+00:00",
+      "card_id": 311,
+      "from_state": "ARMED",
+      "to_state": "TRIGGERED"
+    },
+    {
+      "at": "2026-02-11 11:51:12.484371+00:00",
+      "card_id": 311,
+      "from_state": "FILLED",
+      "to_state": "CLOSED"
+    },
+    {
+      "at": "2026-02-10 14:49:05.852008+00:00",
+      "card_id": 312,
+      "from_state": null,
+      "to_state": "WATCH"
+    },
+    {
+      "at": "2026-02-10 14:50:39.812305+00:00",
+      "card_id": 312,
+      "from_state": "WATCH",
+      "to_state": "ARMED"
+    },
+    {
+      "at": "2026-02-10 14:50:39.812305+00:00",
+      "card_id": 312,
+      "from_state": "ARMED",
+      "to_state": "TRIGGERED"
+    },
+    {
+      "at": "2026-02-10 14:50:39.812305+00:00",
+      "card_id": 312,
+      "from_state": "TRIGGERED",
+      "to_state": "FILLED"
+    },
+    {
+      "at": "2026-02-11 11:51:11.091043+00:00",
+      "card_id": 312,
+      "from_state": "FILLED",
+      "to_state": "CLOSED"
+    }
+  ]
+}
