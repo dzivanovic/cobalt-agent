@@ -1,0 +1,29 @@
+# UNATTENDED LAUNCH — standing standard for every session the CTO desk starts (ruled 2026-09-17 06:03 ET, Dejan; stable file, dateless)
+
+His ruling, the part that binds: "I want all your sessions to have all the necessary permissions ahead of starting and I want them to run unattended by you all the way through until the task is finished. … You ask me to approve ahead of time and you run the tasks yourself. You close the task yourself. … I want them all to be attached to Herder and … exposed with remote control, but I want the approval list ahead of time and no questions in the middle. If the question is in the middle, your task has failed, needs to rerun with the correct information."
+
+## 1. Before launch — the desk
+1. Read the prompt file end to end and list EVERY command shape that is not plain reading, editing inside the session's own worktree, or `uv run pytest`: production reads, credential-file copies, vault-token fetches, dev DB migrations and rollbacks, other houses' CLIs (`claude -p`, `agy`, `grok`, `codex`), git history operations, anything outside the worktree. Source of known denial classes: the reports' own words — `[Production Reads]`, `[Production Deploy]` (also fires on cobalt_dev rollbacks), `[Credential Materialization]`, `[Credential Exploration]`, `[Git Destructive]`, `[Create Unsafe Agents]`, `[Self-Modification]`, `[Auto-Mode Bypass]`.
+2. Turn that list into the APPROVAL LIST: one row per rule — the exact `Bash(<prefix> *)` text, what it is for, what it can touch, what it can never touch. Add the NEVER block (push, `bypassPermissions`, `--allow-prod` outside a deploy prompt, production vault writes, `launchctl`, another seat's config file).
+3. Show him the approval list ONCE, in the desk chat, before anything starts. His "approve" is logged in `reports/cto-<date>.md` §4 with the time (L61). Nothing already approved for the same job shape is brought to him again: the approved list is saved in the prompt file's launch line and reused.
+4. The launch line carries the list: `claude --bg "Read '<prompt file>' and follow it exactly." --model <m> --remote-control <job-name> --allowedTools "<rule>" "<rule>" … --disallowedTools "AskUserQuestion" "EnterWorktree" --add-dir …`. Per session, never blanket (L55); never `bypassPermissions`; push never in it.
+5. After launch the desk attaches the session into a job-named herdr tab (`herdr tab create … --label <job>`, then `claude attach <id>` in its pane) and records id, pid, tab and the approved list in the desk report's launches table.
+
+## 2. Inside every prompt file — the block the desk pastes under the launch line
+UNATTENDED RULES (ruled 2026-09-17): nobody answers a dialog. You cannot ask a question and you cannot enter a worktree — you are already in yours. Every command that leaves plain reading is in your launch allowlist and matches ONLY in its bare shape: ONE command per Bash call, exactly the listed prefix, no `cd … &&` in front, no pipe, no `>`/`2>` redirect, no `; echo` behind. Change directory with `cd <path>` as its own call. Capture output from the tool result and write files with the Write tool. A long run (`claude -p`, `agy`) goes in the background with its own output flags or `run_in_background`, never a shell redirect.
+PREFLIGHT (first two minutes, before any real work): run the harmless variant of every allowlisted shape your steps will need, in order, and write one row each into your report under `## PREFLIGHT` (rule · command · exit · allowed/DENIED + the classifier's reason string verbatim). ANY denial → last line `FAILED PREFLIGHT: <rules>`, commit the report, stop. You never retry a denied command in another shape, never route around a denial, never ask another session to run it.
+MID-RUN DENIAL = THE RUN FAILED: write `FAILED: <step> — <command> — <reason string>` as the last line, wip-commit your work (recovery rule), stop. The desk corrects the list, asks Dejan once for the addition, and reruns you from your `CONTINUE:` line.
+
+## 3. While it runs — the desk
+- Subscribes (`notify_when_idle`) and watches the report file; a hub is never asked "are you done".
+- A `FAILED PREFLIGHT` / `FAILED` line → the desk fixes the prompt's allowlist, brings him ONLY the new rows, reruns the same prompt file (it resumes from `CONTINUE:`).
+- A hub found on a dialog anyway = the launch was wrong (the two deny rules were missing): `claude stop <id>`, fix, rerun. The desk never presses another session's dialog and never relays data a hub was denied (both refused by the desk's classifier on 2026-09-17, correctly).
+
+## 4. Close — the desk
+When the report's last line is its stop line (`READY FOR MERGE …`, `OPS … ESCALATE: n`, `EVENING DONE`): verify the artifact (L35: worktree clean, commits present, suite line), record it in the desk report, `claude stop <id>` if the session is still listed as running, close its herdr tab, fold `MEMORY:`/`RULING:` lines, bring him the ESCALATE items one ruling per message.
+
+## 5. Facts learned 2026-09-17
+- `claude stop <id>` ends a `--bg` session (printed by `claude --bg` itself). It does NOT end a headless builder the hub launched: the `claude -p` child survives as an orphan and keeps writing — find it (`pgrep -fl "claude --model"`) and `kill` it, or two writers meet in one worktree (L54).
+- `claude agents --json` reports a hub that is blocked on a dialog as `busy`/`working`. The registry cannot see a blocked hub; only a missing dialog tool prevents one.
+- The Claude Code web/desktop view does not render a terminal permission dialog; only the attached herdr viewer does.
+- An allow rule in the tracked `.claude/settings.json` or in `--allowedTools` beats the auto-mode classifier for a matching BARE command; the same command wrapped (`cd … &&`, redirects) does not match and is judged by the classifier.
