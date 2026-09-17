@@ -21,7 +21,7 @@ def test_0004_created_tables_match_placement():
         name for name in CREATED_TABLES
         if f"CREATE TABLE IF NOT EXISTS system.{name}" in text
     }
-    assert created == {"radar_pool", "radar_membership"} <= set(CREATED_TABLES)
+    assert created == set(CREATED_TABLES) == {"radar_pool", "radar_membership"}
     assert 'ALTER TABLE "user".aset_sizings' in text
     assert 'ALTER TABLE "user".day_modes' in text
 
@@ -29,13 +29,11 @@ def test_0004_created_tables_match_placement():
 def test_rollback_selects_only_newer_files_newest_first():
     selected = _rollback_paths("0003")
     assert [p.name for p in selected] == [
-        "0007_radar_cards.rollback.sql",
-        "0006_radar_score.rollback.sql",
         "0005_heartbeat_note_absent.rollback.sql",
         "0004_radar_pool.rollback.sql",
     ]
     assert selected == tuple(
-        p for p in REVERSE if p.name.startswith(("0007", "0006", "0005", "0004"))
+        p for p in REVERSE if p.name.startswith(("0005", "0004"))
     )
 
 

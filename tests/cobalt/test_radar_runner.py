@@ -105,7 +105,6 @@ def _active_runner(events, *, mirror_fail=False):
         Path("tests/fixtures/radar/radar-screens.example.md"),
         Path("tests/fixtures/radar/radar-lists.example.md"),
         scan_interval=60, poll_interval=60, finviz_max_rpm=100, list_chunk_size=50,
-        context_tickers=0,
     )
     return RadarRunner(config=load_config(), sources_loader=lambda: parsed, collector=Collector(),
         radar_store=Radar(events), settings_store=Settings(events, mirror_fail),
@@ -350,7 +349,6 @@ def _crossing_runner(crossing):
         poll_interval=60,
         finviz_max_rpm=100,
         list_chunk_size=50,
-        context_tickers=0,
     )
     runner = RadarRunner(
         config=load_config(),

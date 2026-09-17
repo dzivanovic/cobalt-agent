@@ -20,14 +20,13 @@ becoming the trade_def's one home:
 
 Config-as-code (TRIAGE cross-cutting law): `trade_def` is YAML data,
 Pydantic-validated on load, never hand-parsed.
-This module carries the schema only — no setup detectors, no bar logic;
-the predicate grammar it validates against lives in `predicate.py`. Enums are the single source of truth for the
+This module carries the schema only — no predicate parser, no setup
+detectors, no bar logic. Enums are the single source of truth for the
 taxonomy vocabulary (v0.7 §10.1/§10.2/§3.6); YAML data must match them
 exactly or fail loud, never silently coerce.
 
-`Predicate.expr` stores the §10.5 grammar string as authored and is
-PARSED at validation into a typed AST (S2-P2 R3, `predicate.py`);
-evaluating it is the radar's job, not this module's. Anywhere the
+`Predicate.expr` stores the §10.5 grammar string UNPARSED — grammar
+evaluation is a future setups-engine sprint, not this one. Anywhere the
 taxonomy says "any stop-placement" (raise_to.placement, the top-level
 stop itself) reuses the same `StopPlacement` union so a validator can
 check shape once.
@@ -53,12 +52,9 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    PrivateAttr,
     field_validator,
     model_validator,
 )
-
-from .predicate import parse_predicate, required_atoms
 
 SCHEMA_VERSION = "0.4"
 
@@ -252,24 +248,15 @@ class OnCicActionType(str, Enum):
 class Predicate(BaseModel):
     """A precondition / radar_watch / avoid / sequence-step atom.
 
-    `expr` holds the §10.5 grammar string as authored; `text` is the
-    human-readable fallback for anything not expressible in the grammar.
-    Exactly one of the two is set.
-
-    PARSED AT VALIDATION (S2-P2 R3). An `expr` is parsed into its frozen
-    AST (`cobalt.taxonomy.predicate`) the moment the model validates, so a
-    def that loads is a def whose every expression parses; a syntax error
-    fails the whole def loud. The AST is a private attribute: it is
-    derived from `expr`, so it never enters `model_dump()`, the stored def
-    JSON or its md5.
+    `expr` holds the §10.5 grammar string UNPARSED (no grammar parsing in
+    this task); `text` is the human-readable fallback for anything not yet
+    expressible in the grammar. Exactly one of the two is set.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     expr: str | None = None
     text: str | None = None
-
-    _ast: Any = PrivateAttr(default=None)
 
     @model_validator(mode="after")
     def _exactly_one(self) -> Predicate:
@@ -279,24 +266,9 @@ class Predicate(BaseModel):
             )
         return self
 
-    @model_validator(mode="after")
-    def _parse_expr(self) -> Predicate:
-        if self.expr is not None:
-            self._ast = parse_predicate(self.expr)
-        return self
-
     @property
     def computable(self) -> bool:
         return self.expr is not None
-
-    @property
-    def ast(self) -> Any:
-        """The parsed expression, or None for a `text` predicate."""
-        return self._ast
-
-    @property
-    def required_atoms(self) -> frozenset[str]:
-        return required_atoms(self._ast) if self._ast is not None else frozenset()
 
 
 T = TypeVar("T")

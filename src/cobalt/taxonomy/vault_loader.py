@@ -82,7 +82,6 @@ from .loader import (
     resolve_cfg,
     resolve_ma_ref,
 )
-from .predicate import PredicateSyntaxError
 from .slug import SlugError, per_trade_scope, validate_slug
 from .trade_def import Family, TradeClass, TradeDef
 from .tunables import TunableRegistry, TunableRow
@@ -284,36 +283,6 @@ def _read_tunables_unit(
     return rows
 
 
-def _locate_predicate_errors(
-    error: Exception, lines: list[str], unit, *, note_path: str, slug: str
-) -> str:
-    """`<note>:<line> (trade_def:<slug>): <syntax error>` per bad expr.
-
-    R3: a parse failure must be locatable in the vault unit, so the
-    expression text is searched for inside the unit's own line range and
-    the 1-based note line is named. An expression that cannot be found
-    verbatim (YAML escaping) is still reported, at the unit's opening
-    marker line — never dropped.
-    """
-    found = []
-    if isinstance(error, ValidationError):
-        for item in error.errors():
-            exc = (item.get("ctx") or {}).get("error")
-            if isinstance(exc, PredicateSyntaxError):
-                found.append(exc)
-    elif isinstance(error, PredicateSyntaxError):
-        found.append(error)
-    out = []
-    for exc in found:
-        line_no = unit.open_line + 1
-        for index in range(unit.open_line, unit.close_line + 1):
-            if exc.expr and exc.expr in lines[index]:
-                line_no = index + 1
-                break
-        out.append(f"{note_path}:{line_no} (trade_def:{slug}): {exc}\n")
-    return "".join(out)
-
-
 def _read_note(path: Path, vault_root: Path) -> tuple[
     Optional[LoadedTradeDef], Optional[DraftNote], list[LoadedTunable], list[str]
 ]:
@@ -432,10 +401,7 @@ def _read_note(path: Path, vault_root: Path) -> tuple[
     try:
         td = TradeDef.from_unit(mapping, slug=slug, name=name)
     except (ValidationError, ValueError) as e:
-        located = _locate_predicate_errors(
-            e, lines, unit, note_path=note_path, slug=slug
-        )
-        raise VaultTaxonomyError(f"{located}{where}: invalid trade_def:\n{e}") from e
+        raise VaultTaxonomyError(f"{where}: invalid trade_def:\n{e}") from e
 
     warnings += _check_status(fm, validated=True, where=note_path)
     warnings += _check_frontmatter_agreement(fm, td, note_path)

@@ -23,7 +23,6 @@ def _parsed(tmp_path, *, valid=True):
         poll_interval=90,
         finviz_max_rpm=45,
         list_chunk_size=50,
-        context_tickers=0,
     )
 
 

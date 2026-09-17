@@ -78,7 +78,6 @@ def _loaded(screens_path, *, rpm=100):
         poll_interval=60,
         finviz_max_rpm=rpm,
         list_chunk_size=50,
-        context_tickers=0,
     )
 
 
@@ -175,7 +174,6 @@ def test_dejan_budget_cap_50_at_100_seconds_passes_under_45_rpm():
             poll_interval=100,
             finviz_max_rpm=45,
             list_chunk_size=50,
-            context_tickers=0,
         )
     assert parsed.pool_error is None
     expected = (50 * 60 / 100) + (1 * 60 / 100) + (2 * 60 / 100)  # pool + screens + list chunks
@@ -196,7 +194,6 @@ def test_dejan_budget_refuses_when_pool_alone_exceeds_ceiling():
             poll_interval=100,
             finviz_max_rpm=45,
             list_chunk_size=50,
-            context_tickers=0,
         )
     assert parsed.frozen
     error = scrub(parsed.pool_error or "")
@@ -223,7 +220,6 @@ def test_dejan_budget_refuses_when_total_transport_exceeds_ceiling_though_pool_a
             poll_interval=100,
             finviz_max_rpm=45,
             list_chunk_size=1,
-            context_tickers=0,
         )
     pool_only = 50 * 60 / 100
     assert pool_only <= 45, "pool alone must pass for this test to prove the total-demand gap"
@@ -264,8 +260,7 @@ def test_mirror_replaces_old_block_with_parse_failed_status(tmp_path):
     broken.write_text((FIXTURES / "radar-screens.example.md").read_text().replace(
         "f: exch_nasd,sh_avgvol_o500", "f: forbidden=value"))
     parsed = load_sources(broken, FIXTURES / "radar-lists.example.md",
-        scan_interval=60, poll_interval=60, finviz_max_rpm=100, list_chunk_size=50,
-        context_tickers=0)
+        scan_interval=60, poll_interval=60, finviz_max_rpm=100, list_chunk_size=50)
 
     class Store:
         def __init__(self):

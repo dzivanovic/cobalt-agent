@@ -1,6 +1,4 @@
-"""Finviz screener and daily-bar collection, strict CSV parsing, caching,
-and rate limiting. Every request from either collector takes a token from
-the one shared `radar.finviz_max_rpm` bucket."""
+"""Finviz screener collection, strict CSV parsing, caching, and rate limiting."""
 
 from __future__ import annotations
 
@@ -11,12 +9,10 @@ import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Awaitable, Callable, Protocol, runtime_checkable
-from zoneinfo import ZoneInfo
+from typing import Awaitable, Callable, Protocol
 
 from cobalt.archiver.collector import FetchMetrics, finviz_get, scrub
 
-from .anatomy.daily import DailySeries, parse_daily_csv
 from .config import RadarConfig, load_config
 from .models import ListBlock, ScreenBlock
 
@@ -82,33 +78,6 @@ def process_bucket(rpm: int) -> TokenBucket:
     return _BUCKET
 
 
-def prune_cache(cache_root: Path, *, today: date, retention_days: int) -> None:
-    """Remove every `<YYYY-MM-DD>` cache directory older than retention.
-
-    Shared by both collectors. Recursive, because the daily collector
-    nests `daily/` under the date directory and a files-then-rmdir sweep
-    fails on a non-empty subdirectory (Astra R1-13). Anything that is not
-    a date-named directory is left alone.
-    """
-    if not cache_root.exists():
-        return
-    cutoff = today - timedelta(days=retention_days)
-    for directory in cache_root.iterdir():
-        if not directory.is_dir():
-            continue
-        try:
-            day = date.fromisoformat(directory.name)
-        except ValueError:
-            continue
-        if day < cutoff:
-            for item in sorted(directory.rglob("*"), key=lambda p: len(p.parts), reverse=True):
-                if item.is_dir():
-                    item.rmdir()
-                else:
-                    item.unlink()
-            directory.rmdir()
-
-
 def parse_screener_csv(
     payload: bytes,
     *,
@@ -166,7 +135,18 @@ class FinvizScreenerCollector:
         target.mkdir(parents=True, exist_ok=True)
         path = target / f"{source}-{now.strftime('%H%M%S')}.csv"
         path.write_bytes(payload)
-        prune_cache(self.cache_root, today=now.date(), retention_days=self.config.cache.retention_days)
+        cutoff = now.date() - timedelta(days=self.config.cache.retention_days)
+        for directory in self.cache_root.iterdir():
+            if directory.is_dir():
+                try:
+                    day = date.fromisoformat(directory.name)
+                except ValueError:
+                    continue
+                if day < cutoff:
+                    for item in directory.iterdir():
+                        if item.is_file():
+                            item.unlink()
+                    directory.rmdir()
         return path
 
     async def _request(self, source: str, params: dict[str, object], now: datetime) -> ScreenerSnapshot:
@@ -208,99 +188,7 @@ class FinvizScreenerCollector:
         return snapshots
 
 
-#: The daily collector makes no retry: a failed fetch is a SourceFailure
-#: and that name's HTF atoms are unavailable until the next attempt. The
-#: total-demand check multiplies by (1 + this), so adding a retry path
-#: without changing it here would undercount demand (L53).
-DAILY_RETRIES_PER_REQUEST = 0
-
-ET = ZoneInfo("America/New_York")
-
-
-@runtime_checkable
-class DailyBarsSource(Protocol):
-    """The collector interface for daily bars (L9). A substitute source is
-    a new implementation of this, nothing upstream changes."""
-
-    async def daily(self, ticker: str, now: datetime) -> DailySeries: ...
-
-
-class FinvizDailyBarsCollector:
-    """Daily bars, one request per name per ET day (R5).
-
-    The cache IS the once-per-day guarantee: `<cache_root>/<ET date>/daily/
-    <TICKER>.csv`. A hit — in this process or after a restart — reads the
-    file and makes no request and takes no token. A miss takes one token
-    from the SHARED bucket (the same `radar.finviz_max_rpm` bucket every
-    other consumer uses), fetches, validates, and only then writes the
-    cache: a refused body is never cached. The ET date, not the UTC date,
-    names the day, so 20:00 ET does not roll the cache over.
-    """
-
-    def __init__(
-        self,
-        token: str,
-        *,
-        config: RadarConfig | None = None,
-        bucket: TokenBucket | None = None,
-        cache_root: Path | None = None,
-    ):
-        self.config = config or load_config()
-        self.token = token
-        if bucket is None:
-            from cobalt.taxonomy.loader import load_tunables
-
-            raw = load_tunables().by_key["radar.finviz_max_rpm"].value
-            if raw is None:
-                raise SourceFailure("radar.finviz_max_rpm is unmeasured")
-            bucket = process_bucket(int(raw))
-        self.bucket = bucket
-        self.cache_root = cache_root or Path(self.config.cache.dir)
-
-    def cache_path(self, ticker: str, now: datetime) -> Path:
-        if now.tzinfo is None:
-            raise ValueError("now must be tz-aware (ADR-0007)")
-        day = now.astimezone(ET).date().isoformat()
-        return self.cache_root / day / "daily" / f"{ticker}.csv"
-
-    async def daily(self, ticker: str, now: datetime) -> DailySeries:
-        ticker = ticker.strip().upper()
-        path = self.cache_path(ticker, now)
-        if path.exists():
-            bars = self._parse(ticker, path.read_bytes())
-            return DailySeries(ticker=ticker, bars=bars, fetched_at=now, source="cache-hit")
-
-        metrics: list[FetchMetrics] = []
-        await self.bucket.acquire()
-        try:
-            response = await finviz_get(
-                "/export/stock", {"t": ticker, "p": "d"}, self.token, on_metrics=metrics.append
-            )
-        except Exception as e:
-            raise SourceFailure(f"daily-{ticker}: {scrub(str(e))}") from e
-        metric = metrics[-1]
-        if metric.redirect_statuses:
-            raise SourceFailure(f"daily-{ticker}: redirect statuses {list(metric.redirect_statuses)}")
-        bars = self._parse(ticker, response.content)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(response.content)
-        prune_cache(
-            self.cache_root,
-            today=now.astimezone(ET).date(),
-            retention_days=self.config.cache.retention_days,
-        )
-        return DailySeries(ticker=ticker, bars=bars, fetched_at=now, source="cache-miss")
-
-    @staticmethod
-    def _parse(ticker: str, payload: bytes):
-        try:
-            return parse_daily_csv(payload.decode("utf-8-sig"), ticker)
-        except (UnicodeDecodeError, ValueError) as e:
-            raise SourceFailure(f"daily-{ticker}: {scrub(str(e))}") from e
-
-
 __all__ = [
-    "DAILY_RETRIES_PER_REQUEST", "DailyBarsSource", "FinvizDailyBarsCollector",
     "FinvizScreenerCollector", "ScreenerCollector", "ScreenerSnapshot",
-    "SourceFailure", "TokenBucket", "parse_screener_csv", "process_bucket", "prune_cache",
+    "SourceFailure", "TokenBucket", "parse_screener_csv", "process_bucket",
 ]
