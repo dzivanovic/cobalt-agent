@@ -1,4 +1,4 @@
-MODEL: Qwen3.8-27B local (`mainframe`) via Qwen Code · SEAT: day-open, read-and-judge (L49) · HOW (Qwen under watch, ruled 09-15): in the Qwen1 pane, start `qwen --yolo`, then type ONE line: `Read docs/40 - DevDocs/prompts/DAY-OPEN-QWEN.md and follow it exactly. /no_think` · METER: local, free · COST: ≤10 fixed commands, one report file. This file is dateless and stable; the date comes from `date +%F`.
+MODEL: Qwen3.8-27B local (`mainframe`) via Qwen Code · SEAT: day-open, read-and-judge (L49) · HOW (Qwen under watch, ruled 09-15; `--yolo` retired 09-16 — the `~/.qwen/settings.json` allowlist covers every command below): in the Qwen1 pane, start plain `qwen`, then type ONE line: `Read docs/40 - DevDocs/prompts/DAY-OPEN-QWEN.md and follow it exactly. /no_think` · METER: local, free · COST: ≤10 fixed commands, one report file. This file is dateless and stable; the date comes from `date +%F`.
 
 # DAY-OPEN — seat qwen-27b, read-only checks, one report, every trading morning
 
