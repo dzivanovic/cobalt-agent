@@ -198,28 +198,19 @@ def compute_dots(
     return out
 
 
-def refresh_dots(
-    previous: Iterable[Dot], fresh: Iterable[Dot], *, at: datetime, added_by: Mapping[str, Any] | None = None
-) -> list[Dot]:
+def refresh_dots(previous: Iterable[Dot], fresh: Iterable[Dot], *, at: datetime) -> list[Dot]:
     """The stored dots updated by this scan's fresh dots.
 
     Taps (`trader_grade`, `tapped_at`) and `history` carry over. When a
     fresh dot is stale and the stored one had an engine grade, that grade
     moves into history labelled `input_stale` (09-14 group-2 B) — the
     card shows the suppression, not the old number. A factor absent from
-    a non-empty previous set (a def that gained a factor — taxonomy v0.8's
-    `catalyst`, Astra R2-4) is added untapped, with a `factor_added`
-    history record naming `added_by` (the definition md5 and run)."""
-    previous = list(previous)
+    the previous set (a def that gained a factor) is added as is."""
     prior = {d.factor: d for d in previous}
     out: list[Dot] = []
     for dot in fresh:
         old = prior.get(dot.factor)
         if old is None:
-            if previous:
-                dot = dot.model_copy(update={"history": [
-                    *dot.history, {"label": "factor_added", "at": at.isoformat(), **dict(added_by or {})},
-                ]})
             out.append(dot)
             continue
         history = list(old.history)

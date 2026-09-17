@@ -144,23 +144,3 @@ still parses (every default), a mapping carries `source`/`tier`/
 `frontier`, and the set-equality cross-check between two files vanishes
 because there is no second file. `valid_setups` gained a duplicate-pair
 check — what remains of the setup×trade matrix cross-check.
-
----
-
-## 2026-09-16 — S2-P2 STEP-9 (taxonomy v0.8, schema 0.5, ruling R10)
-
-- `SCHEMA_VERSION = "0.5"` is the schema the code knows
-  (TAXONOMY-DRAFT-v0_8): `catalyst` joins the standard quality factors.
-- `LOADER_SCHEMA_GATE = "0.4"` is the schema the validator ENFORCES. It
-  stays 0.4 until STEP-D4, when the notes carry `- catalyst` (the batch
-  apply's re-read proves it) and the constant is flipped in code, merged
-  and restarted. It is not a config value.
-- `standard_quality_factors(schema)` returns the required set per
-  schema; `active_schema()` is the gate unless a `schema_gate(schema)`
-  context is active. `schema_gate` is a `ContextVar` override scoped to
-  its `with` block — `taxonomy.catalyst` uses it to prove a unit will
-  validate at 0.5 before the loader requires it. An unknown schema is
-  refused.
-- `_standard_quality_factors_present` now reads the active schema; its
-  message names the schema ("missing standard factors at schema 0.4").
-- `CATALYST_FACTOR = "catalyst"`.

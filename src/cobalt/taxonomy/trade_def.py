@@ -46,9 +46,6 @@ them fails loud, pointing at the `trail` slot (`TradeDef`'s
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
-from contextlib import contextmanager
-from contextvars import ContextVar
 from enum import Enum
 from typing import Annotated, Any, ClassVar, Generic, Literal, TypeVar
 
@@ -63,49 +60,7 @@ from pydantic import (
 
 from .predicate import parse_predicate, required_atoms
 
-#: The schema this code KNOWS (TAXONOMY-DRAFT-v0_8): 0.5 adds `catalyst`
-#: to the standard quality factors (S2-P2 R10).
-SCHEMA_VERSION = "0.5"
-
-#: The schema the LOADER ENFORCES. It stays 0.4 until STEP-D4: the notes
-#: carry no `catalyst` line until Dejan's marked-up review file is batch-
-#: applied (`cobalt taxonomy catalyst-apply`) and every applied unit
-#: re-reads valid at 0.5. Flipping it is a one-line code change, merged
-#: and restarted like any other (plan §6 STEP-D4), never a config value.
-LOADER_SCHEMA_GATE = "0.4"
-
-CATALYST_FACTOR = "catalyst"
-
-#: A scoped override of the gate — how `catalyst-apply` proves a unit
-#: will validate at 0.5 before the loader enforces it. Never set globally.
-_SCHEMA_GATE_OVERRIDE: ContextVar[str | None] = ContextVar("taxonomy_schema_gate", default=None)
-
-_STANDARD_BY_SCHEMA: dict[str, frozenset[str]] = {
-    "0.4": frozenset({"setup_relation", "market_alignment", "sector_alignment"}),
-    "0.5": frozenset({"setup_relation", "market_alignment", "sector_alignment", CATALYST_FACTOR}),
-}
-
-
-def active_schema() -> str:
-    return _SCHEMA_GATE_OVERRIDE.get() or LOADER_SCHEMA_GATE
-
-
-def standard_quality_factors(schema: str) -> frozenset[str]:
-    try:
-        return _STANDARD_BY_SCHEMA[schema]
-    except KeyError:
-        raise ValueError(f"unknown taxonomy schema {schema!r}; known: {sorted(_STANDARD_BY_SCHEMA)}") from None
-
-
-@contextmanager
-def schema_gate(schema: str) -> Iterator[None]:
-    """Validate at `schema` inside the block only."""
-    standard_quality_factors(schema)
-    token = _SCHEMA_GATE_OVERRIDE.set(schema)
-    try:
-        yield
-    finally:
-        _SCHEMA_GATE_OVERRIDE.reset(token)
+SCHEMA_VERSION = "0.4"
 
 # ---------------------------------------------------------------------------
 # Enums — verbatim from v0.7 §10.1 / §10.2 / §3.6. Extend here, never coerce
@@ -725,6 +680,7 @@ class QualityFactor(BaseModel):
 # trade_def registry (v0.7 §10.1)
 # ---------------------------------------------------------------------------
 
+_STANDARD_QUALITY_FACTORS = {"setup_relation", "market_alignment", "sector_alignment"}
 _FORBIDDEN_REFERENCE_STATS_KEYS = {"ev", "expectancy"}
 _DURATION_PATTERN = re.compile(r"^\d+ min$")  # A.1 — e.g. "3 min"
 
@@ -866,11 +822,10 @@ class TradeDef(BaseModel):
 
     @model_validator(mode="after")
     def _standard_quality_factors_present(self) -> TradeDef:
-        schema = active_schema()
-        missing = standard_quality_factors(schema) - set(self.quality_factor_names)
+        missing = _STANDARD_QUALITY_FACTORS - set(self.quality_factor_names)
         if missing:
             raise ValueError(
-                f"{self.id}: quality_factors missing standard factors at schema {schema}: {sorted(missing)}"
+                f"{self.id}: quality_factors missing standard trio: {sorted(missing)}"
             )
         return self
 
