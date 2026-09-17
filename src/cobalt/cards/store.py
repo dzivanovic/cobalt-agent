@@ -50,7 +50,6 @@ from .models import (
     ALLOWED,
     FILL_TARGET,
     STOP_EDITABLE,
-    TERMINAL,
     Actor,
     CardState,
     IllegalTransition,
@@ -215,7 +214,6 @@ class CardStore:
         now: Optional[datetime] = None,
         allow_prod: bool = False,
         conn=None,
-        before_commit=None,
     ) -> int:
         """Move a card. Returns the `card_transitions` row id.
 
@@ -241,9 +239,7 @@ class CardStore:
         try:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT state, grade, risk_budget, shares, used_risk FROM aset_sizings "
-                    "WHERE id = %s FOR UPDATE",
-                    (card_id,),
+                    "SELECT state FROM aset_sizings WHERE id = %s FOR UPDATE", (card_id,)
                 )
                 row = cur.fetchone()
                 if row is None:
@@ -258,23 +254,6 @@ class CardStore:
                 # GATE 2 — the edge, against the value re-read under the
                 # lock, not against whatever the caller last saw.
                 assert_edge(from_state, to_state, card_id=card_id)
-
-                # GATE 2b — THE SIZED-CARD ARM INVARIANT (S2-P2, Astra R1-6).
-                # A radar card is born unsized. ARM is a risk commitment, so
-                # it is refused here, under the row lock, for EVERY caller —
-                # the sheet button, the radar tap route, anything later —
-                # unless the four sizing columns are filled.
-                if to_state is CardState.ARMED:
-                    unsized = [
-                        name for name, value in zip(("grade", "risk_budget", "shares", "used_risk"), row[1:])
-                        if value is None
-                    ]
-                    if unsized:
-                        raise CardStateError(
-                            f"REFUSED card {card_id}: {from_state.value} -> ARMED on an UNSIZED card "
-                            f"({', '.join(unsized)} empty). Tap a key first — ARM commits risk, and a "
-                            "card with no size has none to commit."
-                        )
 
                 # GATE 3 — the reasons that are not optional.
                 self._assert_reason(from_state, to_state, reason)
@@ -325,8 +304,6 @@ class CardStore:
                         "UPDATE card_stop_edits SET folded_into = %s WHERE id = ANY(%s)",
                         (transition_id, pending_ids),
                     )
-            if before_commit is not None:
-                before_commit()
             if owned:
                 conn.commit()
             return transition_id
@@ -604,44 +581,18 @@ class CardStore:
         # the position it is asking for. The recompute runs through
         # `engine.recompute_for_stop`, the same arithmetic
         # `compute_sizing` uses, so the two can never disagree.
-        from cobalt.aset.engine import recompute_for_stop, stop_distance
+        from cobalt.aset.engine import recompute_for_stop
         from cobalt.aset.models import Direction
 
         with self._connect() as conn:
             card = conn.execute(
-                "SELECT entry, direction, risk_budget, shares, state FROM aset_sizings "
-                "WHERE id = %s FOR UPDATE",
+                "SELECT entry, direction, risk_budget, shares FROM aset_sizings "
+                "WHERE id = %s",
                 (card_id,),
             ).fetchone()
             if card is None:
                 raise CardStateError(f"no aset_sizings row with id {card_id}")
-            entry, direction, risk_budget, shares, locked_state = card
-
-            if risk_budget is None:
-                # AN UNSIZED RADAR CARD (S2-P2, Astra R1-6). No key tapped,
-                # so there is no budget to divide by — the old path raised a
-                # first-use TypeError here. The stop still moves (side-checked
-                # through the one distance path) and the live per-share risk
-                # still updates, so proximity and a later key tap read the
-                # stop he chose; the sizing columns stay NULL.
-                if CardState(locked_state) is not CardState.WATCH:
-                    raise CardStateError(
-                        f"card {card_id} is unsized in {locked_state} — only a WATCH card may be unsized"
-                    )
-                distance = stop_distance(
-                    entry=entry, stop=Decimal(str(to_stop)), direction=Direction(direction)
-                )
-                row = conn.execute(
-                    "INSERT INTO card_stop_edits "
-                    "(card_id, at, session, in_state, from_stop, to_stop, actor) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                    (card_id, ts, session.value, state.value, from_stop, to_stop, actor.value),
-                ).fetchone()
-                conn.execute(
-                    "UPDATE aset_sizings SET stop = %s, per_share_risk = %s WHERE id = %s",
-                    (to_stop, distance, card_id),
-                )
-                return int(row[0])
+            entry, direction, risk_budget, shares = card
 
             recomputed = recompute_for_stop(
                 entry=entry,
@@ -766,408 +717,6 @@ class CardStore:
             conn.close()
         counts["_total"] = sum(v for k, v in counts.items() if not k.startswith("_"))
         return counts
-
-
-    # -- radar cards (S2-P2 STEP-4/6) ----------------------------------
-    #
-    # ONE CREATION PATH for an unsized radar card (Astra R1-7): the row,
-    # its genesis transition and its dots in one transaction, through
-    # `create_state` — the same genesis every card gets. Taps, key taps
-    # and promotes take the card's row lock (R1-14). Nothing here decides
-    # a number: the pure modules (`cards.scoring`, `aset.engine`) do, and
-    # the store writes what they return.
-
-    RADAR_OPEN_STATES = ("WATCH", "ARMED", "TRIGGERED", "FILLED")
-
-    def _write_tx(self, label: str, target: str, now: Optional[datetime], work, before_commit=None):
-        ts = now or clock_mod.now_utc()
-        assert_writable(label, target=target, now=ts)
-        conn = self._connect()
-        conn.autocommit = False
-        try:
-            result = work(conn, ts)
-            if before_commit is not None:
-                before_commit()
-            conn.commit()
-            return result
-        except BaseException:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
-
-    @staticmethod
-    def _dot_params(card_id: int, dot) -> tuple:
-        return (
-            card_id, dot.factor, dot.position, dot.source, dot.tier, dot.role, dot.engine_value,
-            dot.engine_grade, dot.engine_why,
-            json.dumps(dot.engine_inputs, default=str) if dot.engine_inputs is not None else None,
-            dot.engine_formula, dot.na_reason, json.dumps(dot.history, default=str),
-            dot.trader_grade, dot.tapped_at,
-        )
-
-    def _dots_for(self, conn, card_ids: list[int]) -> dict[int, list]:
-        from .scoring import Dot
-
-        out: dict[int, list] = {card_id: [] for card_id in card_ids}
-        if not card_ids:
-            return out
-        cur = conn.execute(
-            "SELECT card_id, factor, position, source, tier, role, engine_value, engine_grade, engine_why, "
-            "engine_inputs, engine_formula, na_reason, history, trader_grade, tapped_at FROM card_dots "
-            "WHERE card_id = ANY(%s) ORDER BY card_id, position",
-            (card_ids,),
-        )
-        for r in cur.fetchall():
-            out[r[0]].append(Dot(
-                factor=r[1], position=r[2], source=r[3], tier=r[4], role=r[5], engine_value=r[6],
-                engine_grade=r[7], engine_why=r[8], engine_inputs=r[9], engine_formula=r[10],
-                na_reason=r[11], history=r[12] or [], trader_grade=r[13], tapped_at=r[14],
-            ))
-        return out
-
-    def open_radar_cards(self) -> list:
-        from cobalt.radar.evaluate import OpenRadarCard
-
-        with self._connect() as conn:
-            cur = conn.execute(
-                "SELECT id, pool_member_id, ticker, direction, state, trade_def_slug, trade_def_md5, "
-                "trigger_price, structural_stop, entry, stop, formed_at, expires_at, promoted_at, health "
-                "FROM aset_sizings WHERE origin = 'radar' AND state = ANY(%s) ORDER BY id",
-                (list(self.RADAR_OPEN_STATES),),
-            )
-            rows = cur.fetchall()
-            ids = [r[0] for r in rows]
-            dots = self._dots_for(conn, ids)
-            taps: dict[int, list] = {card_id: [] for card_id in ids}
-            if ids:
-                for tap_id, card_id, factor, grade in conn.execute(
-                    "SELECT id, card_id, factor, grade FROM card_dot_taps WHERE card_id = ANY(%s) ORDER BY id",
-                    (ids,),
-                ).fetchall():
-                    taps[card_id].append({"id": tap_id, "factor": factor, "grade": grade})
-        return [
-            OpenRadarCard(
-                card_id=r[0], pool_member_id=r[1], ticker=r[2], direction=r[3], state=r[4],
-                trade_def_slug=r[5], trade_def_md5=r[6], trigger_price=r[7], structural_stop=r[8],
-                entry=r[9], stop=r[10], formed_at=r[11], expires_at=r[12], promoted_at=r[13], health=r[14],
-                dots=dots[r[0]], taps=taps[r[0]],
-            )
-            for r in rows
-        ]
-
-    def formation_consumed(self, ticker: str, slug: str, direction: str, formed_at: datetime) -> bool:
-        """Any radar card, in ANY state, already made from this formation
-        (R1-16: a passed or expired formation never mints a second WATCH)."""
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT 1 FROM aset_sizings WHERE origin = 'radar' AND ticker = %s AND trade_def_slug = %s "
-                "AND direction = %s AND formed_at = %s LIMIT 1",
-                (ticker, slug, direction, formed_at),
-            ).fetchone()
-        return row is not None
-
-    def create_radar_card(self, spec, *, now: Optional[datetime] = None, before_commit=None) -> Optional[int]:
-        """Create an unsized WATCH radar card. Returns its id, or None when
-        the database already holds an OPEN card for (member, def, direction)
-        — the partial unique index decides, not a check-then-insert."""
-        from cobalt.aset.account_mode import resolve
-
-        def work(conn, ts):
-            session = session_clock().session(ts)
-            account_mode = resolve(conn, session_clock().to_et(ts).date())
-            row = conn.execute(
-                """
-                INSERT INTO aset_sizings (
-                    ticker, grade, direction, sheet_mode, risk_budget, entry, stop, per_share_risk,
-                    shares, used_risk, last_price, price_source, warnings, session, state, state_at,
-                    origin, account_mode, pool_member_id, trade_def_slug, trade_def_md5, setup_ref,
-                    trigger_type, trigger_price, stop_ref, structural_stop, formed_at, expires_at, why,
-                    proposed_key, conviction, proximity, card_score, score_suppressed, radar_score_id,
-                    scan_id, formula_sha256, tunables_sha256, settings_sha256
-                ) VALUES (
-                    %s, NULL, %s, NULL, NULL, %s, %s, %s, NULL, NULL, NULL, 'radar', '{}', %s, 'WATCH', %s,
-                    'radar', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s
-                )
-                ON CONFLICT (pool_member_id, trade_def_slug, direction)
-                    WHERE origin = 'radar' AND state IN ('WATCH', 'ARMED', 'TRIGGERED', 'FILLED')
-                DO NOTHING
-                RETURNING id
-                """,
-                (
-                    spec.ticker, spec.direction, spec.entry, spec.stop, spec.per_share_risk, session.value, ts,
-                    account_mode, spec.pool_member_id, spec.trade_def_slug, spec.trade_def_md5, spec.setup_ref,
-                    spec.trigger_type, spec.trigger_price, spec.stop_ref, spec.structural_stop, spec.formed_at,
-                    spec.expires_at, spec.why, spec.proposed_key, spec.conviction, spec.proximity,
-                    spec.card_score, spec.score_suppressed, spec.radar_score_id, spec.scan_id,
-                    spec.formula_sha256, spec.tunables_sha256, spec.settings_sha256,
-                ),
-            ).fetchone()
-            if row is None:
-                return None
-            card_id = int(row[0])
-            self.create_state(
-                card_id, CardState.WATCH, actor=Actor.COBALT, evidence=spec.evidence,
-                reason="radar formation", now=ts, conn=conn,
-            )
-            with conn.cursor() as cur:
-                for dot in spec.dots:
-                    cur.execute(_DOT_INSERT, self._dot_params(card_id, dot))
-            return card_id
-
-        return self._write_tx("radar.card", spec.ticker, now, work, before_commit)
-
-    def refresh_radar_card(self, update, *, now: Optional[datetime] = None, before_commit=None) -> bool:
-        """This scan's numbers on an open card, under its row lock. Taps
-        are never overwritten: a tap that landed after the stage read the
-        card leaves conviction/score/key to the tap route's own recompute
-        (the next scan reconciles), and only engine fields move."""
-        def work(conn, ts):
-            locked = conn.execute(
-                "SELECT state, (SELECT coalesce(max(id), 0) FROM card_dot_taps WHERE card_id = %s) "
-                "FROM aset_sizings WHERE id = %s AND origin = 'radar' FOR UPDATE",
-                (update.card_id, update.card_id),
-            ).fetchone()
-            if locked is None:
-                raise CardStateError(f"no radar card with id {update.card_id}")
-            taps_moved = int(locked[1]) != update.tap_version
-            if taps_moved:
-                conn.execute(
-                    "UPDATE aset_sizings SET proximity = %s, last_price = COALESCE(%s, last_price), "
-                    "health = %s::jsonb, radar_score_id = %s WHERE id = %s",
-                    (update.proximity, update.last_price,
-                     json.dumps(update.health, default=str) if update.health else None,
-                     update.radar_score_id, update.card_id),
-                )
-            else:
-                conn.execute(
-                    "UPDATE aset_sizings SET proximity = %s, last_price = COALESCE(%s, last_price), "
-                    "conviction = %s, card_score = %s, score_suppressed = %s, proposed_key = %s, "
-                    "health = %s::jsonb, radar_score_id = %s WHERE id = %s",
-                    (update.proximity, update.last_price, update.conviction, update.card_score,
-                     update.score_suppressed, update.proposed_key,
-                     json.dumps(update.health, default=str) if update.health else None,
-                     update.radar_score_id, update.card_id),
-                )
-            with conn.cursor() as cur:
-                for dot in update.dots:
-                    cur.execute(_DOT_UPSERT_ENGINE, self._dot_params(update.card_id, dot))
-            return not taps_moved
-
-        return self._write_tx("radar.card", str(update.card_id), now, work, before_commit)
-
-    def expire_radar_card(self, card_id: int, expiry, *, run_id: int, now: Optional[datetime] = None,
-                          before_commit=None) -> bool:
-        """EXPIRED through the one transition path. A card that moved under
-        us to a state EXPIRED is not legal from (FILLED, say) is not
-        expired — the refusal is the right answer, logged, not raised."""
-        from loguru import logger
-
-        try:
-            self.transition(
-                card_id, CardState.EXPIRED, actor=Actor.COBALT,
-                evidence={**expiry.evidence, "run_id": run_id, "job": "radar S5 evaluate"},
-                reason=expiry.reason, now=now, before_commit=before_commit,
-            )
-        except IllegalTransition as e:
-            logger.warning("radar expiry of card {} not applied: {}", card_id, e)
-            return False
-        return True
-
-    def write_receipt(self, row: dict, *, before_commit=None) -> int:
-        def work(conn, ts):
-            result = conn.execute(
-                "INSERT INTO radar_score_receipt (run_id, pool_key, scan_id, evaluated_at, ordered_cohort, "
-                "tie_policy, pool_unit, pool_unit_sha256, tunables_snapshot, settings_snapshot, "
-                "definitions_snapshot, tap_versions, observations) VALUES (%s, %s, %s, %s, %s::jsonb, %s, "
-                "%s::jsonb, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb) RETURNING id",
-                (
-                    row["run_id"], row["pool_key"], row["scan_id"], row["evaluated_at"],
-                    json.dumps(row["ordered_cohort"], default=str), row["tie_policy"],
-                    json.dumps(row["pool_unit"], default=str), row["pool_unit_sha256"],
-                    json.dumps(row["tunables_snapshot"], default=str),
-                    json.dumps(row["settings_snapshot"], default=str),
-                    json.dumps(row["definitions_snapshot"], default=str),
-                    json.dumps(row["tap_versions"], default=str),
-                    json.dumps(row["observations"], default=str),
-                ),
-            ).fetchone()
-            return int(result[0])
-
-        return self._write_tx("radar.receipt", row["pool_key"], row["evaluated_at"], work, before_commit)
-
-    def receipts_for_day(self, pool_key: str, trade_date: date) -> list[dict]:
-        with self._connect() as conn:
-            cur = conn.execute(
-                "SELECT * FROM radar_score_receipt WHERE pool_key = %s "
-                "AND observations->>'trade_date' = %s ORDER BY id",
-                (pool_key, trade_date.isoformat()),
-            )
-            columns = [d.name for d in cur.description]
-            return [dict(zip(columns, row)) for row in cur.fetchall()]
-
-    def receipts_chain(self, receipt_id: int) -> list[dict]:
-        """The receipt and every base it references, oldest first."""
-        chain: list[dict] = []
-        with self._connect() as conn:
-            current: Optional[int] = receipt_id
-            while current is not None:
-                cur = conn.execute("SELECT * FROM radar_score_receipt WHERE id = %s", (current,))
-                row = cur.fetchone()
-                if row is None:
-                    raise CardStateError(f"radar_score_receipt {current} is missing from the chain")
-                record = dict(zip([d.name for d in cur.description], row))
-                chain.append(record)
-                current = record["observations"].get("base_receipt_id")
-        return list(reversed(chain))
-
-    # -- taps (STEP-6) ----------------------------------------------------
-
-    def radar_card(self, card_id: int) -> dict[str, Any]:
-        with self._connect() as conn:
-            cur = conn.execute(
-                "SELECT id, ticker, direction, state, origin, entry, stop, proximity, formed_at, created_at, "
-                "tapped_grade, sized_grade, promoted_at FROM aset_sizings WHERE id = %s",
-                (card_id,),
-            )
-            row = cur.fetchone()
-            if row is None:
-                raise CardStateError(f"no aset_sizings row with id {card_id}")
-            record = dict(zip([d.name for d in cur.description], row))
-        if record["origin"] != "radar":
-            raise CardStateError(f"card {card_id} is not a radar card")
-        return record
-
-    def tap_key(self, card_id: int, sizing, *, now: Optional[datetime] = None) -> dict[str, Any]:
-        """Record the tapped key and size the card at the snapped key — one
-        transaction under the row lock. WATCH only (KEY_EDITABLE); the entry
-        and stop the size was computed on must still be the card's."""
-        from .models import KEY_EDITABLE
-
-        def work(conn, ts):
-            locked = conn.execute(
-                "SELECT state, origin, entry, stop FROM aset_sizings WHERE id = %s FOR UPDATE", (card_id,)
-            ).fetchone()
-            if locked is None or locked[1] != "radar":
-                raise CardStateError(f"no radar card with id {card_id}")
-            if CardState(locked[0]) not in KEY_EDITABLE:
-                raise CardStateError(
-                    f"REFUSED card {card_id}: the key is frozen in {locked[0]} — keys are tapped in WATCH only "
-                    "(decision 11: from ARMED onward the key is a risk commitment)"
-                )
-            inp = sizing.result.input
-            if Decimal(locked[2]) != inp.entry or Decimal(locked[3]) != inp.stop:
-                raise CardStateError(
-                    f"REFUSED card {card_id}: entry/stop moved to {locked[2]}/{locked[3]} while the key was "
-                    f"sized on {inp.entry}/{inp.stop} — tap again"
-                )
-            conn.execute(
-                "UPDATE aset_sizings SET tapped_grade = %s, sized_grade = %s, grade = %s, sheet_mode = %s, "
-                "risk_budget = %s, per_share_risk = %s, shares = %s, used_risk = %s, snap_notice = %s "
-                "WHERE id = %s",
-                (sizing.tapped_grade.value, sizing.sized_grade.value, sizing.sized_grade.value,
-                 inp.sheet_mode.value, sizing.result.risk_budget, sizing.result.per_share_risk,
-                 sizing.result.shares, sizing.result.used_risk, sizing.snap_notice, card_id),
-            )
-            return {"card_id": card_id, "tapped_grade": sizing.tapped_grade.value,
-                    "sized_grade": sizing.sized_grade.value, "shares": sizing.result.shares,
-                    "risk_budget": str(sizing.result.risk_budget), "snap_notice": sizing.snap_notice}
-
-        return self._write_tx("radar.card.key", str(card_id), now, work)
-
-    def tap_dot(self, card_id: int, factor: str, grade: int, *, bands, enabled,
-                now: Optional[datetime] = None) -> dict[str, Any]:
-        """Append the tap, set the dot's trader grade and recompute
-        conviction / card_score / proposed key from the locked dots and the
-        card's stored proximity — one transaction under the row lock."""
-        from .scoring import card_score, conviction, proposed_key, suppression
-
-        if not 1 <= int(grade) <= 10:
-            raise CardStateError(f"a dot grade is 1-10, got {grade}")
-
-        def work(conn, ts):
-            locked = conn.execute(
-                "SELECT state, origin, proximity FROM aset_sizings WHERE id = %s FOR UPDATE", (card_id,)
-            ).fetchone()
-            if locked is None or locked[1] != "radar":
-                raise CardStateError(f"no radar card with id {card_id}")
-            if CardState(locked[0]) in TERMINAL:
-                raise CardStateError(f"REFUSED card {card_id}: {locked[0]} is terminal — nothing to grade")
-            dot = conn.execute(
-                "SELECT engine_grade FROM card_dots WHERE card_id = %s AND factor = %s", (card_id, factor)
-            ).fetchone()
-            if dot is None:
-                raise CardStateError(f"card {card_id} has no dot {factor!r}")
-            session = session_clock().session(ts)
-            conn.execute(
-                "INSERT INTO card_dot_taps (card_id, factor, grade, engine_grade_at_tap, at, session) "
-                "VALUES (%s, %s, %s, %s, %s, %s)",
-                (card_id, factor, int(grade), dot[0], ts, session.value),
-            )
-            conn.execute(
-                "UPDATE card_dots SET trader_grade = %s, tapped_at = %s WHERE card_id = %s AND factor = %s",
-                (int(grade), ts, card_id, factor),
-            )
-            dots = self._dots_for(conn, [card_id])[card_id]
-            conv = conviction(dots)
-            prox = Decimal(locked[2]) if locked[2] is not None else None
-            suppressed = suppression(dots)
-            score = card_score(conv, prox, suppressed)
-            key, key_reason = proposed_key(conv, bands, enabled)
-            conn.execute(
-                "UPDATE aset_sizings SET conviction = %s, card_score = %s, score_suppressed = %s, "
-                "proposed_key = %s WHERE id = %s",
-                (conv, score, suppressed, key.value if key else None, card_id),
-            )
-            return {"card_id": card_id, "factor": factor, "grade": int(grade),
-                    "conviction": None if conv is None else str(conv), "card_score": score,
-                    "score_suppressed": suppressed, "proposed_key": key.value if key else None,
-                    "proposed_key_reason": key_reason}
-
-        return self._write_tx("radar.card.dot", str(card_id), now, work)
-
-    def set_promoted(self, card_id: int, promoted: bool, *, now: Optional[datetime] = None) -> dict[str, Any]:
-        """Promote pins one WATCH card to #2 (at most one per trader —
-        the partial unique index backs it); release restores the order."""
-        def work(conn, ts):
-            locked = conn.execute(
-                "SELECT state, origin FROM aset_sizings WHERE id = %s FOR UPDATE", (card_id,)
-            ).fetchone()
-            if locked is None or locked[1] != "radar":
-                raise CardStateError(f"no radar card with id {card_id}")
-            if promoted:
-                if CardState(locked[0]) is not CardState.WATCH:
-                    raise CardStateError(f"REFUSED card {card_id}: only a WATCH card can be promoted ({locked[0]})")
-                conn.execute(
-                    "UPDATE aset_sizings SET promoted_at = NULL WHERE origin = 'radar' "
-                    "AND promoted_at IS NOT NULL AND id <> %s",
-                    (card_id,),
-                )
-                conn.execute("UPDATE aset_sizings SET promoted_at = %s WHERE id = %s", (ts, card_id))
-            else:
-                conn.execute("UPDATE aset_sizings SET promoted_at = NULL WHERE id = %s", (card_id,))
-            return {"card_id": card_id, "promoted": promoted}
-
-        return self._write_tx("radar.card.promote", str(card_id), now, work)
-
-
-_DOT_COLUMNS = (
-    "card_id, factor, position, source, tier, role, engine_value, engine_grade, engine_why, engine_inputs, "
-    "engine_formula, na_reason, history, trader_grade, tapped_at"
-)
-_DOT_INSERT = (
-    f"INSERT INTO card_dots ({_DOT_COLUMNS}) VALUES "
-    "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s)"
-)
-#: Engine fields and history only — trader_grade/tapped_at belong to taps.
-_DOT_UPSERT_ENGINE = (
-    _DOT_INSERT + " ON CONFLICT (card_id, factor) DO UPDATE SET position = EXCLUDED.position, "
-    "source = EXCLUDED.source, tier = EXCLUDED.tier, role = EXCLUDED.role, engine_value = EXCLUDED.engine_value, "
-    "engine_grade = EXCLUDED.engine_grade, engine_why = EXCLUDED.engine_why, "
-    "engine_inputs = EXCLUDED.engine_inputs, engine_formula = EXCLUDED.engine_formula, "
-    "na_reason = EXCLUDED.na_reason, history = EXCLUDED.history"
-)
 
 
 __all__ = ["BACKFILL_MARKER", "CardStateError", "CardStore", "IllegalTransition"]

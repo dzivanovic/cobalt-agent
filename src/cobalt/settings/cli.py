@@ -66,23 +66,11 @@ def _texts_from_git(commit: str) -> dict[str, str]:
 
 
 def cmd_load(args: argparse.Namespace) -> None:
-    if getattr(args, "card", None):
-        if args.from_dir or args.from_git:
-            raise SystemExit(
-                "cobalt settings load: --card loads the card-settings file only; "
-                "it does not combine with --from / --from-git."
-            )
-        from .card import cmd_load_card
-
-        cmd_load_card(args)
-        return
-    if getattr(args, "sha256", None):
-        raise SystemExit("cobalt settings load: --sha256 verifies a --card file only.")
     dry_run = _require_mode(args)
     if bool(args.from_dir) == bool(args.from_git):
         raise SystemExit(
-            "cobalt settings load: pass exactly one of --from <dir>, "
-            "--from-git <commit> or --card <file>."
+            "cobalt settings load: pass exactly one of --from <dir> or "
+            "--from-git <commit>."
         )
 
     if args.from_git:
@@ -175,16 +163,6 @@ def add_parser(sub) -> None:
         dest="from_git",
         metavar="COMMIT",
         help="Read both YAMLs at this revision (they have left the working tree).",
-    )
-    load.add_argument(
-        "--card",
-        metavar="FILE",
-        help="The reviewed card-settings file (radar.cards_enabled, card.*; S2-P2).",
-    )
-    load.add_argument(
-        "--sha256",
-        metavar="HASH",
-        help="sha256 of the reviewed --card file's bytes; required with --apply.",
     )
     load.add_argument("--dry-run", action="store_true")
     load.add_argument("--apply", action="store_true")

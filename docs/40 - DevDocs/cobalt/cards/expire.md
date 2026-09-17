@@ -62,13 +62,3 @@ carries a `trade_def` (cards are manual; the detector lands in S2/S4),
 so it defaults to `None` and every window is the session close. The seam
 exists now so S2 attaches the trade_def and **nothing in this module
 changes**.
-
-## Radar cards (S2-P2 STEP-4, Astra R1-16)
-The S5 stage expires radar cards itself. Existing functions are unchanged; two pure helpers are added.
-
-- `radar_deadline(preferred_windows_ref, day) -> RadarDeadline`. The authoritative resolver is still `window_end_for`, and its input is the HUMAN `preferred_windows_ref`, not the detector's `preferred_windows` enum. The deadline is resolved ONCE at formation and persisted on the card (`expires_at`, with the resolution in the genesis evidence), so a predicate that stays true cannot mint an already-expired card.
-- `radar_expiry(*, state, now, expires_at, avoided, direction, stop, bars_after_formation) -> RadarExpiry | None` checks causes in a fixed order:
-  1. `stop_before_arm`: WATCH only (`STOP_TOUCH_EXPIRABLE`), and only bars after the formation bar closed;
-  2. `avoid`;
-  3. `deadline`.
-  The latter two apply from WATCH, ARMED and TRIGGERED. FILLED and terminal states never expire.

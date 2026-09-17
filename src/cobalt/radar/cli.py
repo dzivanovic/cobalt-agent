@@ -31,18 +31,6 @@ def add_parser(sub) -> None:
     scan.add_argument("--to", dest="to_time")
     scan.set_defaults(func=runner.scan_command)
 
-    evaluate = rsub.add_parser(
-        "evaluate",
-        help="S5 dry-run replay (writes nothing) or the cobalt_dev candidate harness",
-    )
-    evaluate.add_argument("--replay", metavar="YYYY-MM-DD", help="Replay a day; writes nothing.")
-    evaluate.add_argument("--candidate", metavar="YYYY-MM-DD", help="Persist candidate rows to cobalt_dev.")
-    evaluate.add_argument("--trade-def", dest="trade_def", metavar="SLUG")
-    evaluate.add_argument("--settings-file", dest="settings_file", help="Frozen D2 card-settings file.")
-    evaluate.add_argument("--sha256", help="sha256 of --settings-file.")
-    evaluate.add_argument("--taps", help="Simulated taps file for --candidate.")
-    evaluate.set_defaults(func=_evaluate)
-
     screens = rsub.add_parser("screens", help="Propose/apply Screens note blocks")
     ssub = screens.add_subparsers(dest="screens_command", required=True)
     screens_propose = ssub.add_parser("propose")
@@ -71,12 +59,6 @@ def add_parser(sub) -> None:
     source_cmd.add_argument("--archiver-diff", action="store_true")
     source_cmd.add_argument("--yaml-rev", default="HEAD")
     source_cmd.set_defaults(func=sources.command)
-
-
-def _evaluate(args) -> None:
-    from .evaluate_cli import evaluate_command
-
-    evaluate_command(args)
 
 
 def _apply_args(parser, kind: str) -> None:
