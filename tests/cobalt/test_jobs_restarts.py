@@ -51,6 +51,19 @@ def test_claude_harness_settings_derive_no_restart(monkeypatch):
     assert row.restarts == ()
 
 
+def test_grok_sandbox_profile_is_harness_and_derives_no_restart(monkeypatch):
+    # 2026-09-17: `ops/grok-sandbox.toml` is the Grok CLI's sandbox profile,
+    # read by the Grok harness (`~/.grok/sandbox.toml`), never by a Cobalt
+    # process. It derived UNCLASSIFIED (all residents) on 09-16.
+    monkeypatch.setattr(restarts, "changes", lambda _range: [
+        Change("ops/grok-sandbox.toml", "A"),
+    ])
+    (row,) = classify("HEAD...HEAD")
+    assert row.escalate is False
+    assert row.restarts == ()
+    assert row.rule.startswith("HARNESS")
+
+
 def test_a_declared_one_shot_only_config_derives_no_restart(monkeypatch):
     # Ruled 2026-09-15: notify.yaml has no resident reader; declared in
     # jobs.yaml `no_resident_reads`, so it no longer escalates.

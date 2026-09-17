@@ -13,6 +13,9 @@ from .models import JobKind
 
 #: Root markdown files that are documentation only (CLAUDE.md, D6).
 ROOT_DOCS = frozenset({"README.md", "CLAUDE.md", "AGENTS.md", "QWEN.md"})
+#: Agent-CLI harness files kept under ops/: read by a vendor CLI, never by a
+#: Cobalt process (the Grok sandbox profile, 2026-09-17).
+HARNESS_FILES = frozenset({"ops/grok-sandbox.toml"})
 
 
 class RestartError(RuntimeError):
@@ -196,7 +199,7 @@ def classify(git_range: str, registry: JobRegistry | None = None) -> list[Classi
             # no restart, not even the conservative set.
             output.append(Classification(path, item.change, "DOCS", ()))
             continue
-        if not rule and path.startswith(".claude/"):
+        if not rule and (path.startswith(".claude/") or path in HARNESS_FILES):
             # Claude Code harness settings: read by the agent CLI, never by a
             # Cobalt process (committed 2026-09-15).
             output.append(Classification(path, item.change, "HARNESS; no Cobalt reader", ()))
