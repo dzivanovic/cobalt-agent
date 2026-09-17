@@ -19,6 +19,33 @@ size, not as an amount owed.
 Newest day first.
 
 <!-- cobalt:days -->
+<!-- cobalt:section seat-usage:2026-09-17 -->
+### 2026-09-17
+
+weekly_pct_open:
+weekly_pct_close:
+
+<!-- cobalt:unit seat-usage:2026-09-17 -->
+| model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
+|---|---|---:|---:|---:|---:|---:|
+| `claude-opus-5` | claude · write seat — L29 floor for vault/DB/migration paths | 86,722,977 | 1,727,906 | 537,108 | $73.80 | $0.00 |
+| `claude-sonnet-5` | claude · mechanical, non-write only — L29 ceiling for this tier | 88,483,267 | 636,493 | 213,738 | $22.38 | $0.00 |
+| `claude-haiku-4-5-20251001` | claude · — | 315,637 | 58,934 | 3,602 | $0.17 | $0.00 |
+| `grok-4.6-build` | grok · build + research seat | 27,904 | 0 | 331 | $0.03 | $0.00 |
+| `mainframe` | qwen · local lane (L23) — delegated mundane work, token conservation | 0 | 0 | 786 | $0.00 [^free] | $0.00 |
+| `claude-fable-5-1` | claude · planning + architect seat — L29 above the floor, at Dejan's call | 84,352,930 | 1,180,814 | 266,734 | **unpriced** | — |
+
+**Day total (API-equivalent):** ≥ $96.38 · **264,723,576** tokens across 6 model(s), seats: claude, grok, qwen
+**Fresh input tokens:** 194,415 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+
+> **UNPRICED MODELS: `claude-fable-5-1`.** These were used today and the pinned tool's offline pricing table has no rate for them, so their cost is missing rather than zero, and the day total above is a FLOOR. Fix by bumping the pin in `configs/cobalt/seat_usage.yaml` (a decision, with a diff), never by letting the job reach the network.
+
+[^free]: `mainframe` — the local Qwen3.8-27B MLX server on this Mac (L23's local lane). Its cost is electricity and the Mac Studio, not API spend — $0 here is the true number, not a missing one, so it never raises the hourly unpriced warning.
+
+_Generated 2026-09-17 19:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20260917 --until 20260917 --by-agent --offline`_
+<!-- /cobalt:unit seat-usage:2026-09-17 -->
+<!-- /cobalt:section seat-usage:2026-09-17 -->
 <!-- cobalt:section seat-usage:2026-09-16 -->
 ### 2026-09-16
 

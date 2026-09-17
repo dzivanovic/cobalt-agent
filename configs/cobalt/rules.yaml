@@ -7,7 +7,7 @@
 generated:
   source: /Users/cobalt/Vault/Think/1 - Trading/5 - Review/Rules.md
   source_sha256: e183f123950ac4050d5203b3a48dc2c7dcf1753ce31f02ccac7d8646658215b6
-  generated_at: '2026-09-16T19:40:00+00:00'
+  generated_at: '2026-09-17T19:40:00+00:00'
 rules:
 - id: rule_01
   category: process
