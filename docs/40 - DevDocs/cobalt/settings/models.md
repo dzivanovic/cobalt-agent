@@ -28,3 +28,18 @@ narrow `aset.enabled_grades` and that cross-check has to keep firing now
 that the two live in separate rows. A Pydantic failure is re-raised as
 `TraderSettingsError` naming the rows, not a file that is no longer the
 source.
+
+---
+
+## 2026-09-17 — S2-P4: `radar.benchmark` (ruling R5, Astra R1-14)
+
+- `BENCHMARK_KEY = "radar.benchmark"`, and `BenchmarkSettings {top_n > 0,
+  min_move_pct > 0}` (frozen, extra forbidden). `from_rows(rows)` is the
+  runtime reader. An absent row or a malformed value raises
+  `TraderSettingsError`, never a default. `row()` gives the jsonable value.
+- The key is OPTIONAL and is **not** in `SETTING_KEYS` (plan F14): a required
+  key crashes the ASET sheet when missing, and a missing benchmark must fail
+  only the replay's movers step.
+- `OPTIONAL_SETTING_KEYS` / `OPTIONAL_SETTING_MODELS` are the one registry
+  of optional keys and their models. The `--optional` loader and every
+  reader use it.

@@ -27,7 +27,24 @@ from .store import BarStore
 GENTLE_SLEEP_SECONDS = 1.2
 
 
+def _check_demand(targets: list[tuple[str, Interval]], mode: str) -> None:
+    """L53 (S2-P4 R1-13/R2-5): the ONE shared total-demand gate, before the
+    first request. The nightly run is the registry's `archiver` consumer; a
+    manual backfill is unscheduled, so it counts against every window."""
+    from cobalt.radar.notes import DemandConsumer, check_scheduled_demand
+
+    if mode == "full":
+        check_scheduled_demand("archiver")
+        return
+    backfill = DemandConsumer(
+        name="backfill", rpm=min(len(targets), 60 / GENTLE_SLEEP_SECONDS), window=None,
+        basis=f"{len(targets)} request(s), pacing bound, unscheduled",
+    )
+    check_scheduled_demand("backfill", extra=[backfill])
+
+
 async def _run_targets(targets: list[tuple[str, Interval]], mode: str) -> RunSummary:
+    _check_demand(targets, mode)
     summary = RunSummary(mode=mode)
     store = BarStore()
     store.ensure_schema()

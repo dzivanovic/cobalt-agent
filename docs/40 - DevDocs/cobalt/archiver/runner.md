@@ -56,3 +56,20 @@ a parameter anywhere in this module.
   is actually in flight — the day's bars are fetched from Finviz history
   in one pass at 20:30, so the job only has to be loaded *by* 20:30, not
   continuously.
+
+---
+
+## 2026-09-17 — S2-P4: the L53 total-demand gate before the first request
+
+`_run_targets` now calls `_check_demand(targets, mode)` before the token
+is resolved or anything is fetched:
+- the nightly `full` run is the registry's `archiver` consumer:
+  `check_scheduled_demand("archiver")`.
+- a manual `backfill:<T>` is unscheduled, so it is added as an unbounded
+  consumer with `min(len(targets), 50)` rpm.
+
+A refusal raises `TotalDemandExceeded`, so the job row goes `failed` with
+the total-demand line. Pacing, targets and the report are unchanged.
+**Open deployment gate:** the archiver's own pacing bound (50 rpm) exceeds
+the 40 rpm ceiling, so the gate refuses the nightly run until the ceiling
+or the pacing is ruled (plan §8 item 4).

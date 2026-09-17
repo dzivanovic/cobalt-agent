@@ -7,3 +7,15 @@ Lists proposal requires an explicit `--watchlists-yaml` input because the commit
 `screens validate` shares the same derivation path, hashes current note bytes, validates the supplied pool and actual/prospective Lists, checks the ruled total-transport request budget through `notes.plan_transport_demand` — the same plan `radar sources` uses: pool + screens + list chunks + context tickers, plus the once-per-ET-day daily-bar burst (S2-P2, L53) — and prints the steady rpm, the cold daily drain time and the first cold cycle's paced length, and compares prose-derived fields with installed YAML. It performs no network, DB, vault, or proposal write.
 
 Apply uses only the recorded artifact units and performs no derivation or network access. Before constructing the audit store or writer, it verifies the artifact and target hashes, note absence/block state, non-empty HITL token, session, and environment-to-vault match. Only then does it write through `VaultWriter`.
+
+---
+
+## 2026-09-17 — S2-P4: the proposal's budget check goes through the shared gate (L53)
+
+The prospective radar total is checked with `notes.check_total_demand`
+against every scheduled consumer (`scheduled_consumers`) over the radar's
+own window, instead of comparing the radar alone to the ceiling. The
+refusal keeps its `pool budget exceeded: …` prefix and appends the total
+demand line. Today's archiver and replay windows are disjoint from
+04:00–20:00, so a proposal's outcome changes only if a consumer's window
+comes to overlap the radar's.

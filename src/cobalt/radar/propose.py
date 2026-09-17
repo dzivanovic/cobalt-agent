@@ -620,13 +620,34 @@ def screens_validate(args) -> None:
         retries_per_request=DAILY_RETRIES_PER_REQUEST,
         ceiling_rpm=ceiling,
     )
-    if demand.refusal is not None:
+    # L53: that same prospective radar demand joins every other consumer's,
+    # over the radar's own window, through the ONE shared gate.
+    from .notes import DemandConsumer, TotalDemandExceeded, check_total_demand, radar_window, scheduled_consumers
+
+    refused: TotalDemandExceeded | None = None
+    try:
+        check_total_demand(
+            [
+                DemandConsumer(
+                    name="radar", rpm=demand.steady_rpm, window=radar_window(tunables),
+                    basis="proposed total",
+                ),
+                *[c for c in scheduled_consumers(ceiling=ceiling, tunables=tunables) if c.name != "radar"],
+            ],
+            subject="radar",
+            ceiling=ceiling,
+        )
+    except TotalDemandExceeded as error:
+        refused = error
+    if demand.refusal is not None or refused is not None:
+        reason = demand.refusal or "the total across every consumer exceeds the ceiling"
         raise ProposalRefused(
-            f"pool budget exceeded: {demand.refusal}; planned_rpm={demand.steady_rpm:.2f} "
+            f"pool budget exceeded: {reason}; planned_rpm={demand.steady_rpm:.2f} "
             f"(pool={demand.pool_rpm:.2f}, screens={len(derived)}, lists_chunks={chunk_count}, "
             f"context={demand.context_rpm:.2f}, daily_names={demand.daily_names}), "
             f"finviz_max_rpm={ceiling}, cap={pool.cap}, scan_interval={interval}"
-        )
+            + (f"; {refused}" if refused is not None else "")
+        ) from refused
 
     installed_status = "not installed"
     if FENCE_RE.search(screens_raw):

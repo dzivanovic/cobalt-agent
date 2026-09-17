@@ -19,4 +19,48 @@ It REFUSES in two cases: steady demand above the ceiling, or daily names with no
 ## Gotchas
 `load_sources` takes `context_tickers` as a required argument, so no caller can leave the context consumer out. The refusal text names every consumer's share (`context=`, `daily_names=`), so a frozen pool says why.
 
-Out-of-process Finviz callers (the 05:15 and 15:40 ET prefill jobs, the 20:30 ET archiver) are not in this plan. They do not share the resident's bucket.
+Out-of-process Finviz callers (the 05:15 and 15:40 ET prefill jobs) are not in this plan; they do not share the resident's bucket. The scheduled one-shots that DO consume the same Finviz transport (the 20:30 archiver, the 21:05 replay) are counted by the total-demand gate below, over their own windows.
+
+---
+
+## 2026-09-17 — S2-P4: ONE total Finviz demand gate (L53, Astra R1-13/R2-5)
+
+- `DemandWindow` is `[start_min, end_min)` in ET minutes, and `end` may pass
+  24:00. `DemandConsumer {name, rpm, window | None, basis}`, where `None`
+  means unbounded and so counts everywhere. `TotalDemand` holds the peak
+  and the names counted.
+- `total_demand(consumers, subject, ceiling)` is the peak concurrent rpm
+  over the subject's window. A consumer counts wherever its window overlaps
+  the subject's; one proved disjoint contributes zero.
+- **`check_total_demand`** is THE shared gate. It raises
+  `TotalDemandExceeded` (a `RadarNoteError`) when the peak is above the
+  ceiling, or when the ceiling is unmeasured.
+- `scheduled_consumers(ceiling=, radar_rpm=, replay_top_n=)` builds its
+  list from the job registry and tunables:
+  - radar: planned total or the bucket bound, 04:00–20:00.
+  - archiver: pacing bound `60 / GENTLE_SLEEP_SECONDS` = 50 rpm, from `at`
+    to `at + timeout_s`. It is never omitted because a precondition
+    serializes it.
+  - replay: `min(2 + 2×top_n, ceiling)`, or the bucket bound, from `at` to
+    the deadline.
+- `radar_window()`, `replay_window()` (deadline = backup `at` −
+  `replay.backup_margin_s`), and `check_scheduled_demand(subject, …,
+  extra=)` as the call sites use it.
+- Call sites, each before any request: `load_sources` (new
+  `radar_window=` / `other_consumers=` kwargs; `configured_sources` passes
+  the registry's consumers; an overlap sets `pool_error` to "pool budget
+  exceeded: …; REFUSED: total Finviz demand …"), `propose.py`,
+  `archiver.runner._run_targets`, and `replay.movers.MoversCollector.exports`
+  / `.bars`.
+- The radar never computes its demand twice (L3): `load_sources` and
+  `propose.py` build the radar `DemandConsumer` from the SAME
+  `plan_transport_demand` result (`rpm=demand.steady_rpm`), so the gate
+  and the plan share one number. Either refusal — the plan's own
+  (`demand.refusal`: steady over the ceiling, or no headroom to drain the
+  daily burst) or the gate's (`TotalDemandExceeded`) — freezes the pool
+  with the same "pool budget exceeded: …" text, and the gate's refusal is
+  appended verbatim after it.
+- **Deployment gate (plan ESCALATE 4, still open):** the archiver's pacing
+  bound alone (50 rpm) exceeds `radar.finviz_max_rpm` (45, ruled
+  2026-09-16). Radar is disjoint and unaffected, but the archiver and
+  replay sites refuse until Dejan rules the number.

@@ -72,3 +72,12 @@ Declares `SIDE = Side.SYSTEM` (ADR-0008 D2 — the side is chosen PER STORE, nev
 `bars` is market history any trader's strategies read.
 
 `_connect()` passes it to the factory; `ensure_schema()` asserts the two-layer schemas exist before running its own DDL, naming `cobalt db migrate` if they do not.
+
+---
+
+## 2026-09-17 — S2-P4: `bars_between`
+
+`bars_between(ticker, interval, start, end)` returns `Bar` models with
+`start <= ts < end`, oldest first. It is a plain read and the nightly
+replay's only bar read: coverage checks, counterfactual R, and the movers
+archive re-check.

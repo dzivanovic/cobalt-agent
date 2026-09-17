@@ -642,6 +642,20 @@ tunables:
     source: ruling
     consumers: ["cobalt.jobs.watchdog (a one-shot past its cadence by this much = MISSED)"]
 
+  # --- nightly replay (S2-P4 STEP-4, plan R1-16) --------------------------
+  # The replay's ENFORCED deadline sits this far before com.cobalt.backup's
+  # schedule, so no replay write is still landing when the 21:40 snapshot
+  # starts. 300 s = the plan's 21:35 cutoff. Not measured yet: proposed, the
+  # first live runs' durations are the measurement.
+  - key: replay.backup_margin_s
+    value: 300
+    unit: duration
+    scope: global
+    dynamic: false
+    status: proposed
+    source: ruling
+    consumers: ["cobalt.replay.runner (deadline)", "cobalt.radar.notes.replay_window (L53 total demand)"]
+
   # --- F16 hygiene rider (ADR-0008 D7, 2026-09-08) ----------------------
   # The Mattermost timeout was a `timeout_s:` field on MattermostConfig,
   # a number living in a config file that F16's sweep had already moved

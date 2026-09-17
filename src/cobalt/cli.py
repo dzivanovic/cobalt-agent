@@ -67,6 +67,7 @@ from cobalt.heartbeat import cli as heartbeat_cli  # noqa: E402
 from cobalt.jobs import cli as jobs_cli  # noqa: E402
 from cobalt.jobs.wrapper import JobStopped  # noqa: E402
 from cobalt.radar import cli as radar_cli  # noqa: E402
+from cobalt.replay import cli as replay_cli  # noqa: E402
 from cobalt.seatusage import cli as seatusage_cli  # noqa: E402
 from cobalt.session import cli as session_cli  # noqa: E402
 from cobalt.settings import cli as settings_cli  # noqa: E402
@@ -468,6 +469,7 @@ def main() -> None:
     seatusage_cli.add_parser(sub)
     generated_cli.add_parser(sub)
     radar_cli.add_parser(sub)
+    replay_cli.add_parser(sub)
     jobs_cli.add_stop_parsers(sub)
 
     validate = sub.add_parser(

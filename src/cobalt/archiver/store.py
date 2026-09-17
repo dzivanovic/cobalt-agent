@@ -19,7 +19,7 @@ from typing import Callable, Optional
 from cobalt import db, env
 from cobalt.db import Side
 
-from .models import Bar
+from .models import Bar, Interval
 
 MIGRATION_SQL = Path(__file__).parent / "migrations" / "0001_bars.sql"
 
@@ -93,6 +93,21 @@ class BarStore:
             if before_commit is not None:
                 before_commit()
         return len(rows)
+
+    def bars_between(self, ticker: str, interval: Interval, start, end) -> list[Bar]:
+        """Stored bars for one ticker/interval with `start <= ts < end`,
+        oldest first — the read the nightly replay's coverage check and
+        counterfactual R consume (S2-P4)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT ticker, interval, ts, open, high, low, close, volume FROM bars "
+                "WHERE ticker = %s AND interval = %s AND ts >= %s AND ts < %s ORDER BY ts",
+                (ticker, Interval(interval).value, start, end),
+            ).fetchall()
+        return [
+            Bar(ticker=r[0], interval=r[1], ts=r[2], open=r[3], high=r[4], low=r[5], close=r[6], volume=r[7])
+            for r in rows
+        ]
 
     def watermark(self, ticker: str, interval: str = "i1"):
         """Newest stored timestamp for one ticker/interval, or None."""

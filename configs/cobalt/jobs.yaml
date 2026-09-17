@@ -195,6 +195,18 @@ jobs:
     schedule: {at: "20:30", weekdays: [1, 2, 3, 4, 5]}
     what: "the Bar Archiver nightly full run (uv run archiver)"
 
+  - label: com.cobalt.replay
+    kind: one-shot
+    supervisor: self
+    # S2-P4 R3. 21:05 ET, after the 20:00-21:00 reset and after the 20:30
+    # archiver, which it refuses to run without (tonight's occurrence,
+    # done, exit 0). 30 minutes bounds a stall; the run's own enforced
+    # deadline (replay.backup_margin_s before the 21:40 backup) bounds a
+    # healthy long run.
+    timeout_s: 1800
+    schedule: {at: "21:05", weekdays: [1, 2, 3, 4, 5]}
+    what: "the nightly replay — movers, card misses + counterfactual R, the DRC miss line (uv run cobalt replay nightly)"
+
   - label: com.cobalt.cards-expire
     kind: one-shot
     supervisor: self

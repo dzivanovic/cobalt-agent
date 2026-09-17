@@ -149,3 +149,15 @@ def test_generated_rules_yaml_derives_no_restart(monkeypatch):
     assert row.escalate is False
     assert row.restarts == ()
     assert "no resident" in row.rule
+
+
+def test_a_new_one_shot_plist_derives_an_explicit_bootstrap_and_no_restart(monkeypatch):
+    # S2-P4 R1-22/R2-6: a brand-new one-shot plist used to vanish from the
+    # derivation. Its action is now explicit: bootstrap once, restart nothing.
+    monkeypatch.setattr(restarts, "changes", lambda _range: [
+        Change("ops/com.cobalt.replay.plist", "A"),
+    ])
+    (row,) = classify("HEAD...HEAD")
+    assert row.escalate is False
+    assert row.restarts == ()
+    assert "bootstrap once: com.cobalt.replay" in row.rule

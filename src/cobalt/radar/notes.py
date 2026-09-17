@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from cobalt.session import session_clock
 from cobalt.session.clock import now_utc
@@ -150,6 +150,247 @@ def parse_note_bytes(
     return result
 
 
+# ---------------------------------------------------------------------------
+# L53: ONE total Finviz demand across every consumer (S2-P4 STEP-6, R1-13/R2-5)
+# ---------------------------------------------------------------------------
+
+#: The scheduled one-shot consumers of the shared transport, by registry label.
+ARCHIVER_LABEL = "com.cobalt.archiver"
+REPLAY_LABEL = "com.cobalt.replay"
+BACKUP_LABEL = "com.cobalt.backup"
+#: The engine tunable that keeps replay's window clear of the 21:40 backup.
+REPLAY_MARGIN_KEY = "replay.backup_margin_s"
+
+
+class TotalDemandExceeded(RadarNoteError):
+    """The total Finviz demand over a consumer's window exceeds the ceiling."""
+
+    def __init__(self, message: str, demand: "TotalDemand | None" = None):
+        super().__init__(message)
+        self.demand = demand
+
+
+class DemandWindow(BaseModel):
+    """[start, end) in ET minutes after midnight; `end` may run past 24:00."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    start_min: int = Field(ge=0, lt=1440)
+    end_min: int = Field(gt=0, le=2880)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "DemandWindow":
+        if self.end_min <= self.start_min:
+            raise ValueError(f"demand window end {self.end_min} is not after start {self.start_min}")
+        return self
+
+    @classmethod
+    def between(cls, start: str, end: str) -> "DemandWindow":
+        return cls(start_min=_hhmm_minutes(start), end_min=_hhmm_minutes(end))
+
+    @classmethod
+    def from_at(cls, at: str, seconds: int) -> "DemandWindow":
+        start = _hhmm_minutes(at)
+        return cls(start_min=start, end_min=start + -(-seconds // 60))
+
+    def overlaps(self, other: "DemandWindow") -> bool:
+        return self.start_min < other.end_min and other.start_min < self.end_min
+
+    def describe(self) -> str:
+        return f"{_minutes_hhmm(self.start_min)}-{_minutes_hhmm(self.end_min)} ET"
+
+
+class DemandConsumer(BaseModel):
+    """One consumer of the shared transport and its defined rpm conversion.
+
+    `window=None` means UNBOUNDED: it has not been proved disjoint from
+    anything, so it counts against every other consumer.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str = Field(min_length=1)
+    rpm: float = Field(ge=0)
+    window: DemandWindow | None
+    basis: str = Field(min_length=1)
+
+
+class TotalDemand(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    subject: str
+    ceiling: int | None
+    peak_rpm: float
+    peak_at_min: int | None
+    counted: tuple[str, ...]
+
+    def describe(self) -> str:
+        at = f" at {_minutes_hhmm(self.peak_at_min)} ET" if self.peak_at_min is not None else ""
+        return (
+            f"total Finviz demand for {self.subject}: peak {self.peak_rpm:.2f} rpm{at} "
+            f"over [{', '.join(self.counted)}], finviz_max_rpm={self.ceiling}"
+        )
+
+
+def _hhmm_minutes(raw: str) -> int:
+    hour, _, minute = str(raw).partition(":")
+    return int(hour) * 60 + int(minute)
+
+
+def _minutes_hhmm(minutes: int) -> str:
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def total_demand(consumers, *, subject: str, ceiling: int | None) -> TotalDemand:
+    """Peak CONCURRENT demand over `subject`'s window.
+
+    A consumer counts wherever its window overlaps the subject's; one
+    proved disjoint contributes zero (and only then). The peak is taken at
+    every instant a counted window opens inside the subject's window.
+    """
+    by_name = {c.name: c for c in consumers}
+    if subject not in by_name:
+        raise RadarNoteError(f"total demand: subject {subject!r} is not among the consumers {sorted(by_name)}")
+    own = by_name[subject].window
+    counted = [
+        c for c in consumers
+        if c.window is None or own is None or c.window.overlaps(own)
+    ]
+    points = {own.start_min} if own is not None else {0}
+    for c in counted:
+        if c.window is not None and (own is None or own.start_min <= c.window.start_min < own.end_min):
+            points.add(c.window.start_min)
+
+    def active(c: DemandConsumer, at: int) -> bool:
+        return c.window is None or c.window.start_min <= at < c.window.end_min
+
+    peak, peak_at = 0.0, None
+    for at in sorted(points):
+        load = sum(c.rpm for c in counted if active(c, at))
+        if load > peak:
+            peak, peak_at = load, at
+    return TotalDemand(subject=subject, ceiling=ceiling, peak_rpm=peak, peak_at_min=peak_at,
+                       counted=tuple(c.name for c in counted))
+
+
+def check_total_demand(consumers, *, subject: str, ceiling: int | None) -> TotalDemand:
+    """THE shared gate (L53). Refuses — before any request — when the
+    total over `subject`'s window exceeds the ceiling."""
+    if ceiling is None:
+        raise TotalDemandExceeded(f"{subject}: radar.finviz_max_rpm is unmeasured — no demand can be proved")
+    demand = total_demand(consumers, subject=subject, ceiling=ceiling)
+    if demand.peak_rpm > ceiling:
+        raise TotalDemandExceeded(f"REFUSED: {demand.describe()} exceeds the ceiling", demand)
+    return demand
+
+
+def _ceiling() -> int | None:
+    from cobalt.taxonomy.loader import load_tunables
+
+    raw = load_tunables().by_key["radar.finviz_max_rpm"].value
+    return None if raw is None else int(raw)
+
+
+def radar_window(tunables=None) -> DemandWindow:
+    """The resident radar scans premarket through aftermarket."""
+    if tunables is None:
+        from cobalt.taxonomy.loader import load_tunables
+
+        tunables = load_tunables().by_key
+    return DemandWindow.between(tunables["session.premarket_open"].value, tunables["session.aftermarket_close"].value)
+
+
+def replay_window(registry=None, tunables=None) -> DemandWindow:
+    """`com.cobalt.replay`'s window: its schedule to its enforced deadline,
+    `replay.backup_margin_s` before the backup (R1-16)."""
+    from cobalt.jobs.config import load_job_registry
+
+    registry = registry or load_job_registry()
+    if tunables is None:
+        from cobalt.taxonomy.loader import load_tunables
+
+        tunables = load_tunables().by_key
+    replay, backup = registry.spec(REPLAY_LABEL), registry.spec(BACKUP_LABEL)
+    if replay.schedule is None or not replay.schedule.at or backup.schedule is None or not backup.schedule.at:
+        raise RadarNoteError(f"{REPLAY_LABEL}/{BACKUP_LABEL}: both need an `at` schedule for the replay deadline")
+    row = tunables.get(REPLAY_MARGIN_KEY)
+    if row is None or row.value is None:
+        raise RadarNoteError(f"tunables.yaml: {REPLAY_MARGIN_KEY} is missing or unmeasured")
+    deadline_s = _hhmm_minutes(backup.schedule.at) * 60 - int(row.value)
+    try:
+        return DemandWindow(start_min=_hhmm_minutes(replay.schedule.at), end_min=deadline_s // 60)
+    except ValidationError as e:
+        raise RadarNoteError(
+            f"{REPLAY_LABEL} at {replay.schedule.at} leaves no window before its deadline "
+            f"({BACKUP_LABEL} {backup.schedule.at} - {REPLAY_MARGIN_KEY} {row.value}s)"
+        ) from e
+
+
+def scheduled_consumers(
+    *,
+    ceiling: int | None,
+    radar_rpm: float | None = None,
+    replay_top_n: int | None = None,
+    registry=None,
+    tunables=None,
+) -> list[DemandConsumer]:
+    """Every consumer of the shared transport, with its defined rpm conversion.
+
+    * radar — its planned total (pool + screens + list chunks) when known,
+      else its own TokenBucket bound (the ceiling), 04:00-20:00 ET.
+    * archiver — its pacing bound, 60 / GENTLE_SLEEP_SECONDS rpm (every
+      request is followed by that sleep), from `at` to `at + timeout_s`:
+      the watchdog bound, the only proved end. Never omitted because a job
+      precondition serializes it (R2-5).
+    * replay — 2 exports + one i1 fetch per top-N mover per side, paced by
+      the process bucket: min(2 + 2 x top_n, ceiling); the bucket bound
+      when the benchmark is not known. Schedule to deadline.
+    """
+    from cobalt.archiver.runner import GENTLE_SLEEP_SECONDS
+    from cobalt.jobs.config import load_job_registry
+
+    registry = registry or load_job_registry()
+    if tunables is None:
+        from cobalt.taxonomy.loader import load_tunables
+
+        tunables = load_tunables().by_key
+    bound = float(ceiling) if ceiling is not None else 0.0
+    consumers = [
+        DemandConsumer(
+            name="radar", window=radar_window(tunables),
+            rpm=float(radar_rpm) if radar_rpm is not None else bound,
+            basis="planned total" if radar_rpm is not None else "bucket bound (ceiling)",
+        )
+    ]
+    archiver = registry.by_label.get(ARCHIVER_LABEL)
+    if archiver is not None and archiver.schedule is not None and archiver.schedule.at:
+        consumers.append(DemandConsumer(
+            name="archiver", rpm=60 / GENTLE_SLEEP_SECONDS,
+            window=DemandWindow.from_at(archiver.schedule.at, archiver.timeout_s),
+            basis=f"pacing bound 60/{GENTLE_SLEEP_SECONDS}s, window to timeout_s",
+        ))
+    if REPLAY_LABEL in registry.by_label:
+        if replay_top_n is not None:
+            from cobalt.replay.movers import replay_request_count
+
+            rpm = float(min(replay_request_count(replay_top_n), ceiling if ceiling is not None else 10**9))
+            basis = f"min(2 + 2 x top_n={replay_top_n}, ceiling)"
+        else:
+            rpm, basis = bound, "bucket bound (benchmark not read)"
+        consumers.append(DemandConsumer(name="replay", rpm=rpm, window=replay_window(registry, tunables), basis=basis))
+    return consumers
+
+
+def check_scheduled_demand(subject: str, *, radar_rpm: float | None = None,
+                           replay_top_n: int | None = None, extra=()) -> TotalDemand:
+    """The gate as every pre-request site calls it: the registry's
+    consumers, this site's own known numbers, the tunable ceiling.
+    `extra` adds an unscheduled consumer (a manual backfill)."""
+    ceiling = _ceiling()
+    consumers = [*scheduled_consumers(ceiling=ceiling, radar_rpm=radar_rpm, replay_top_n=replay_top_n), *extra]
+    return check_total_demand(consumers, subject=subject, ceiling=ceiling)
+
+
 def load_sources(
     screens_path: Path,
     lists_path: Path,
@@ -159,6 +400,8 @@ def load_sources(
     finviz_max_rpm: int | None,
     list_chunk_size: int,
     context_tickers: int,
+    radar_window: DemandWindow | None = None,
+    other_consumers=(),
 ) -> ParsedSources:
     screens = parse_note(screens_path, "screens")
     lists = parse_note(lists_path, "lists")
@@ -192,14 +435,27 @@ def load_sources(
     )
     result.planned_rpm = demand.steady_rpm
     result.demand = demand
-    if demand.refusal is not None:
+    # L53: that ONE radar demand — never a second computation — joins every
+    # other consumer's over the radar's own window, through the shared gate.
+    radar = DemandConsumer(
+        name="radar", rpm=demand.steady_rpm, window=radar_window, basis="planned total"
+    )
+    others = [c for c in other_consumers if c.name != "radar"]
+    refused: TotalDemandExceeded | None = None
+    try:
+        check_total_demand([radar, *others], subject="radar", ceiling=finviz_max_rpm)
+    except TotalDemandExceeded as error:
+        refused = error
+    if demand.refusal is not None or refused is not None:
+        reason = demand.refusal or "the total across every consumer exceeds the ceiling"
         result.pool_error = (
-            f"pool budget exceeded: {demand.refusal}; planned_rpm={demand.steady_rpm:.2f} "
+            f"pool budget exceeded: {reason}; planned_rpm={demand.steady_rpm:.2f} "
             f"(pool={demand.pool_rpm:.2f}, screens={screen_count}, "
             f"lists_chunks={_total_chunks(list_blocks, list_chunk_size)}, "
             f"context={demand.context_rpm:.2f}, daily_names={demand.daily_names}), "
             f"finviz_max_rpm={finviz_max_rpm}, cap={pool.cap}, "
             f"scan_interval={scan_interval}"
+            + (f"; {refused}" if refused is not None else "")
         )
     return result
 
@@ -413,14 +669,17 @@ def configured_sources(config: RadarConfig | None = None) -> ParsedSources:
     values = load_tunables().by_key
     vault = resolve_vault_path()
     rpm = values["radar.finviz_max_rpm"].value
+    ceiling = None if rpm is None else int(rpm)
     return load_sources(
         vault / cfg.notes.screens,
         vault / cfg.notes.lists,
         scan_interval=int(values["radar.scan_interval"].value),
         poll_interval=int(values["radar.poll_interval"].value),
-        finviz_max_rpm=None if rpm is None else int(rpm),
+        finviz_max_rpm=ceiling,
         list_chunk_size=cfg.list_chunk_size,
         context_tickers=len(cfg.context.tickers),
+        radar_window=radar_window(values),
+        other_consumers=scheduled_consumers(ceiling=ceiling, tunables=values),
     )
 
 
@@ -493,8 +752,10 @@ def mirror_sources(
 
 
 __all__ = [
-    "ParsedBlock", "ParsedNote", "ParsedSources", "RadarNoteError",
-    "configured_sources", "load_sources", "mirror_sources", "parse_note", "parse_note_bytes",
-    "TransportDemand", "plan_transport_demand", "planned_context_rpm",
-    "planned_lists_rpm", "planned_pool_rpm", "planned_screens_rpm", "planned_total_rpm",
+    "DemandConsumer", "DemandWindow", "ParsedBlock", "ParsedNote", "ParsedSources",
+    "RadarNoteError", "TotalDemand", "TotalDemandExceeded", "TransportDemand",
+    "check_scheduled_demand", "check_total_demand", "configured_sources", "load_sources",
+    "mirror_sources", "parse_note", "parse_note_bytes", "plan_transport_demand",
+    "planned_context_rpm", "planned_lists_rpm", "planned_pool_rpm", "planned_screens_rpm",
+    "planned_total_rpm", "radar_window", "replay_window", "scheduled_consumers", "total_demand",
 ]

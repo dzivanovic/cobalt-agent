@@ -70,3 +70,10 @@ load|migrate-strategy-notes|migrate-trade-notes|add-alias|sync-frontmatter`.
 
 The morning sweep, in code: `cobalt.dayopen.cli.add_parser` mounts
 `day-open`. See `docs/40 - DevDocs/cobalt/dayopen/` for the module.
+
+---
+
+## 2026-09-17 — S2-P4: `cobalt replay`
+
+`replay_cli.add_parser(sub)` mounts `cobalt replay nightly [--date]
+[--dry-run]` (`replay/cli.md`).

@@ -194,6 +194,10 @@ def classify(git_range: str, registry: JobRegistry | None = None) -> list[Classi
             if label in {job.label for job in residents}:
                 restarts.add(label)
             rule = "plist in diff"
+            spec = registry.by_label.get(label)
+            if item.change == "A" and spec is not None and spec.kind is not JobKind.RESIDENT:
+                # S2-P4 R1-22/R2-6: a new one-shot is loaded, not restarted.
+                rule += f"; new one-shot, bootstrap once: {label}"
         readers = registry.readers_of(path)
         if readers:
             restarts.update(job.label for job in readers)

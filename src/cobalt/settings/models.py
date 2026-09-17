@@ -16,11 +16,12 @@ rather than believed.
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Optional
 
 import yaml
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from cobalt.aset.config import SheetModesConfig
 from cobalt.daymode.config import DayModeConfig
@@ -45,9 +46,56 @@ SETTING_KEYS = (*SHEET_KEYS, *DAYMODE_KEYS)
 ASET_FILENAME = "aset.yaml"
 DAYMODE_FILENAME = "daymode.yaml"
 
+#: S2-P4 R5: the nightly replay's benchmark — his values, applied by his
+#: hand (L53). OPTIONAL on purpose and NEVER in `SETTING_KEYS` (plan F14):
+#: a key in that tuple is required by the sheet, and a missing benchmark
+#: must fail the replay's movers step loudly, not the ASET sheet.
+BENCHMARK_KEY = "radar.benchmark"
+
+#: Every optional key the `--optional` loader path accepts, with the model
+#: that validates it. One registry, so the loader and every reader agree.
+OPTIONAL_SETTING_KEYS = (BENCHMARK_KEY,)
+
 
 class TraderSettingsError(RuntimeError):
     """Settings missing or invalid — crash, never fall back."""
+
+
+class BenchmarkSettings(BaseModel):
+    """`radar.benchmark` (S2-P4 R5): how many unfiltered movers per side
+    the replay archives, and the |change| at or above which a mover the
+    pool never admitted is a miss."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    top_n: int = Field(gt=0)
+    min_move_pct: Decimal = Field(gt=0)
+
+    @classmethod
+    def from_rows(cls, rows: dict[str, Any]) -> "BenchmarkSettings":
+        """The runtime reader. Absent or malformed -> loud, never a default."""
+        if BENCHMARK_KEY not in rows:
+            raise TraderSettingsError(
+                f'"user".trader_settings has no {BENCHMARK_KEY!r} row — the replay does '
+                "not invent a benchmark. Load the reviewed file with `cobalt settings "
+                "load --optional <file> --sha256 <hash> --apply`."
+            )
+        value = rows[BENCHMARK_KEY]
+        if not isinstance(value, dict):
+            raise TraderSettingsError(
+                f"{BENCHMARK_KEY} must be a mapping {{top_n, min_move_pct}}, got "
+                f"{type(value).__name__}"
+            )
+        try:
+            return cls(**value)
+        except ValidationError as e:
+            raise TraderSettingsError(f"invalid {BENCHMARK_KEY}:\n{e}") from e
+
+    def row(self) -> dict[str, Any]:
+        return _jsonable(self.model_dump(mode="json"))
+
+
+OPTIONAL_SETTING_MODELS: dict[str, type[BaseModel]] = {BENCHMARK_KEY: BenchmarkSettings}
 
 
 def _jsonable(value: Any) -> Any:
@@ -204,7 +252,11 @@ class TraderSettings(BaseModel):
 
 __all__ = [
     "ASET_FILENAME",
+    "BENCHMARK_KEY",
+    "BenchmarkSettings",
     "DAYMODE_FILENAME",
+    "OPTIONAL_SETTING_KEYS",
+    "OPTIONAL_SETTING_MODELS",
     "DAYMODE_KEYS",
     "SETTING_KEYS",
     "SHEET_KEYS",

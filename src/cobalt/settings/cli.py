@@ -3,7 +3,15 @@ own settings (ADR-0008 D3.4).
 
     cobalt settings load --from configs/cobalt   --dry-run | --apply
     cobalt settings load --from-git <commit>     --dry-run | --apply
+    cobalt settings load --card     <file> [--sha256 <hash>] --dry-run | --apply
+    cobalt settings load --optional <file> [--sha256 <hash>] --dry-run | --apply
     cobalt settings show
+
+`--card` (S2-P2, `.card`) and `--optional` (S2-P4) each load their own
+reviewed file — the card settings (`radar.cards_enabled`, `card.*`) and
+the optional keys (`radar.benchmark`) — whose bytes must hash to
+`--sha256` before anything parses. Neither combines with the other or
+with `--from` / `--from-git`.
 
 `--from` reads the two YAML files out of a directory. `--from-git` reads
 the same two files at a revision — which is how a LIVE seed works after
@@ -21,15 +29,20 @@ want to.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 from pathlib import Path
+
+import yaml
 
 from cobalt.session import assert_writable
 
 from .models import (
     ASET_FILENAME,
     DAYMODE_FILENAME,
+    OPTIONAL_SETTING_KEYS,
+    OPTIONAL_SETTING_MODELS,
     SETTING_KEYS,
     TraderSettings,
     TraderSettingsError,
@@ -65,24 +78,135 @@ def _texts_from_git(commit: str) -> dict[str, str]:
     return out
 
 
+OPTIONAL_FILE_ROOT = "optional_settings"
+
+
+def load_optional_file(path: Path, *, sha256: str | None, require_hash: bool) -> dict:
+    """Read, hash-verify and validate an optional-settings file (S2-P4
+    R5, Astra R1-14). Returns `{key: jsonable value}`.
+
+    THE HASH IS OF THE FILE'S BYTES and is checked BEFORE anything
+    parses: the file he reviewed is the file that loads, byte for byte.
+    Only keys in `OPTIONAL_SETTING_KEYS` are accepted; a required sheet
+    key submitted here is refused by name, because two load paths for one
+    row is the one-path rule's failure.
+
+        optional_settings:
+          radar.benchmark: {top_n: 20, min_move_pct: 10}
+    """
+    try:
+        payload = Path(path).read_bytes()
+    except OSError as e:
+        raise TraderSettingsError(f"{path}: cannot read optional-settings file: {e}") from e
+    digest = hashlib.sha256(payload).hexdigest()
+    if sha256 is None:
+        if require_hash:
+            raise TraderSettingsError(
+                f"{path}: --apply needs --sha256 of the reviewed file (this file hashes "
+                f"to {digest}). A trader-run apply names the exact bytes it loads."
+            )
+    elif sha256.strip().lower() != digest:
+        raise TraderSettingsError(
+            f"{path}: sha256 mismatch — reviewed {sha256.strip().lower()}, file is "
+            f"{digest}. Nothing loaded."
+        )
+    try:
+        raw = yaml.safe_load(payload.decode("utf-8"))
+    except (UnicodeDecodeError, yaml.YAMLError) as e:
+        raise TraderSettingsError(f"{path}: not valid YAML: {e}") from e
+    if not isinstance(raw, dict) or set(raw) != {OPTIONAL_FILE_ROOT}:
+        raise TraderSettingsError(
+            f"{path}: expected exactly one top-level mapping {OPTIONAL_FILE_ROOT!r}"
+        )
+    body = raw[OPTIONAL_FILE_ROOT]
+    if not isinstance(body, dict) or not body:
+        raise TraderSettingsError(f"{path}: {OPTIONAL_FILE_ROOT} must be a non-empty mapping")
+    rows: dict = {}
+    for key, value in body.items():
+        if key in SETTING_KEYS:
+            raise TraderSettingsError(
+                f"{path}: {key!r} is a required sheet/day-mode setting — it loads through "
+                "--from/--from-git only"
+            )
+        model = OPTIONAL_SETTING_MODELS.get(key)
+        if model is None:
+            raise TraderSettingsError(
+                f"{path}: unknown optional setting {key!r}; accepted: "
+                f"{list(OPTIONAL_SETTING_KEYS)}"
+            )
+        rows[key] = model.from_rows({key: value}).row()
+    return rows
+
+
+def cmd_load_optional(args: argparse.Namespace) -> None:
+    dry_run = _require_mode(args)
+    try:
+        rows = load_optional_file(
+            Path(args.optional), sha256=args.sha256, require_hash=not dry_run
+        )
+    except TraderSettingsError as e:
+        raise SystemExit(f"FAILED: {e}") from e
+
+    store = TraderSettingsStore()
+    current = store.values()
+    source_label = f"optional:{Path(args.optional).name}"
+    print(f"cobalt settings load — {'DRY RUN' if dry_run else 'APPLY'} from {source_label}\n")
+    changed = [key for key in rows if current.get(key) != rows[key]]
+    for key in rows:
+        old = current.get(key)
+        if key not in changed:
+            print(f"  = {key}")
+            continue
+        print(f"  {'+' if old is None else '~'} {key}")
+        print(f"      db  : {json.dumps(old, sort_keys=True) if old is not None else '(absent)'}")
+        print(f"      file: {json.dumps(rows[key], sort_keys=True)}")
+    if not changed:
+        print("\nno differences — the database already holds these settings.")
+        return
+    if dry_run:
+        print(f"\nDRY RUN — {len(changed)} setting(s) would change. Nothing written.")
+        return
+
+    assert_writable("settings.load", target='"user".trader_settings')
+    outcome = store.put({key: rows[key] for key in changed}, source=source_label)
+    print(f"\napplied: {outcome} (sha256 {args.sha256})")
+    reloaded = store.values()
+    drift = [key for key in rows if reloaded.get(key) != rows[key]]
+    if drift:
+        raise SystemExit(f"FAILED: what the database now returns differs from the file: {drift}")
+    for key in rows:
+        OPTIONAL_SETTING_MODELS[key].from_rows(reloaded)
+    print("round trip: database == file, every optional key re-validates.")
+
+
 def cmd_load(args: argparse.Namespace) -> None:
     if getattr(args, "card", None):
-        if args.from_dir or args.from_git:
+        if args.from_dir or args.from_git or getattr(args, "optional", None):
             raise SystemExit(
                 "cobalt settings load: --card loads the card-settings file only; "
-                "it does not combine with --from / --from-git."
+                "it does not combine with --from / --from-git / --optional."
             )
         from .card import cmd_load_card
 
         cmd_load_card(args)
         return
+    if getattr(args, "optional", None):
+        if args.from_dir or args.from_git:
+            raise SystemExit(
+                "cobalt settings load: --optional loads the optional-settings file only; "
+                "it does not combine with --from / --from-git."
+            )
+        cmd_load_optional(args)
+        return
     if getattr(args, "sha256", None):
-        raise SystemExit("cobalt settings load: --sha256 verifies a --card file only.")
+        raise SystemExit(
+            "cobalt settings load: --sha256 verifies a --card or an --optional file only."
+        )
     dry_run = _require_mode(args)
     if bool(args.from_dir) == bool(args.from_git):
         raise SystemExit(
             "cobalt settings load: pass exactly one of --from <dir>, "
-            "--from-git <commit> or --card <file>."
+            "--from-git <commit>, --card <file> or --optional <file>."
         )
 
     if args.from_git:
@@ -182,9 +306,14 @@ def add_parser(sub) -> None:
         help="The reviewed card-settings file (radar.cards_enabled, card.*; S2-P2).",
     )
     load.add_argument(
+        "--optional",
+        metavar="FILE",
+        help="The reviewed optional-settings file (radar.benchmark; S2-P4).",
+    )
+    load.add_argument(
         "--sha256",
         metavar="HASH",
-        help="sha256 of the reviewed --card file's bytes; required with --apply.",
+        help="sha256 of the reviewed --card / --optional file's bytes; required with --apply.",
     )
     load.add_argument("--dry-run", action="store_true")
     load.add_argument("--apply", action="store_true")
