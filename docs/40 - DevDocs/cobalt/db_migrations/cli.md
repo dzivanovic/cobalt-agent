@@ -25,11 +25,5 @@ Each file is handed to the server ENTIRE rather than split on `;`: they
 are `DO` blocks, and a splitter would cut them at the first semicolon
 inside the body.
 
-`TABLE_DIGEST_EXCLUDED_COLUMNS` (S2-P2) excludes the 25 card columns
-that 0007 adds to `aset_sizings`, from THAT table's digest only. It is
-per table on purpose: `scan_id` and `why` are real content on other
-tables, and a global exclusion would silently drop them from those
-digests. The proof line counts them per table.
-
 Running it twice is a no-op. Rollback then re-migrate lands on identical
 digests — the suite asserts that round trip on `cobalt_dev`.

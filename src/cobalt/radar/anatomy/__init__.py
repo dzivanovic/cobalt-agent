@@ -13,5 +13,4 @@ tunables and records every observation it consumed (L57).
     structure.py   tracked extreme, bar_break trigger, structural stop
     daily.py       daily bars: prior session, daily ATR, HTF refs (R5)
     registry.py    which atoms/triggers/stops S2 can evaluate (R2)
-    freshness.py   RVOL observations; staleness per dependency (R1-12)
 """
