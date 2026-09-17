@@ -10,11 +10,16 @@ from dataclasses import dataclass
 from datetime import date as Date
 from datetime import datetime
 from enum import Enum
+from typing import Protocol, Sequence
 
 
 class Verdict(str, Enum):
     PASS = "PASS"
     FAIL = "FAIL"
+    #: A named, ruled condition (e.g. "no fill yet") — reported, never a
+    #: failure. Day-open's six checks do not emit it; `cobalt smoke` does
+    #: (S2-P4 STEP-9) and shares this roll-up rather than owning a second.
+    KNOWN = "KNOWN"
     ERROR = "ERROR"
 
 
@@ -37,7 +42,11 @@ class CheckResult:
     raw: str
 
 
-def overall_verdict(results: list[CheckResult]) -> Overall:
+class HasVerdict(Protocol):
+    verdict: Verdict
+
+
+def overall_verdict(results: Sequence[HasVerdict]) -> Overall:
     """RULED (this build, 2026-09-14): ERROR outranks FAIL.
 
     A check whose own command or query failed (no data collected) is a
@@ -48,8 +57,13 @@ def overall_verdict(results: list[CheckResult]) -> Overall:
 
         RED   — any check is ERROR
         AMBER — no ERROR, but any check is FAIL
-        GREEN — every check is PASS
+        GREEN — every check is PASS or KNOWN (KNOWN never lowers it,
+                plan-s2-p4 §1 F17)
+
+    An EMPTY list raises: a sweep that checked nothing is not GREEN (L1).
     """
+    if not results:
+        raise ValueError("overall_verdict: no check results — nothing was checked")
     if any(r.verdict is Verdict.ERROR for r in results):
         return Overall.RED
     if any(r.verdict is Verdict.FAIL for r in results):

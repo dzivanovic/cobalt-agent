@@ -5,10 +5,13 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 import sys
 from dataclasses import dataclass
+from typing import Any
 
 from psycopg import sql
+from pydantic import BaseModel, ConfigDict
 
 from cobalt import db, env
 from cobalt.db import Side
@@ -130,20 +133,31 @@ def _timeout_ms() -> int:
     return int(row.value) * 1000
 
 
-def command(args: argparse.Namespace) -> None:
-    try:
-        statement = guard_select(args.sql)
-    except QueryRefused as e:
-        print(f"REFUSED SQL token: {e}", file=sys.stderr)
-        raise SystemExit(2) from e
+class QueryRows(BaseModel):
+    """One read's result: column names and rows, in server order."""
 
-    side = Side(args.side)
-    dbname = db.PROD_DB_NAME if args.prod else env.resolve_db_name()
-    if dbname == db.PROD_DB_NAME and not args.prod:
-        print("REFUSED database token: cobalt_brain requires --prod", file=sys.stderr)
-        raise SystemExit(2)
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
-    conn = db.connect(dbname, side=side, allow_prod=args.prod)
+    columns: tuple[str, ...]
+    rows: list[tuple[Any, ...]]
+
+
+def read_rows(statement: str, *, side: Side | str, prod: bool, limit: int = 1000) -> QueryRows:
+    """THE read path: guard, READ ONLY transaction, statement timeout, role
+    assertion, row limit, unconditional rollback. `cobalt db query` and
+    `cobalt smoke` (S2-P4 STEP-9) both read through here, so a query a
+    smoke check ran is byte-for-byte the query its hand command runs.
+
+    Raises `QueryRefused` for a statement off the allowlist and for the
+    production database without `prod=True`, before any connection opens.
+    """
+    statement = guard_select(statement)
+    side = Side(side)
+    dbname = db.PROD_DB_NAME if prod else env.resolve_db_name()
+    if dbname == db.PROD_DB_NAME and not prod:
+        raise QueryRefused(f"database {db.PROD_DB_NAME} requires --prod")
+
+    conn = db.connect(dbname, side=side, allow_prod=prod)
     conn.autocommit = False
     try:
         conn.execute("BEGIN READ ONLY")
@@ -154,18 +168,42 @@ def command(args: argparse.Namespace) -> None:
         if current != side.role:
             raise RuntimeError(f"current_user is {current!r}, expected {side.role!r}")
         query = sql.SQL("SELECT * FROM ({}) AS q LIMIT %s").format(sql.SQL(statement))
-        cursor = conn.execute(query, (args.limit,))
-        columns = [item.name for item in cursor.description]
-        rows = cursor.fetchall()
-        if args.format == "json":
-            print(json.dumps([dict(zip(columns, row)) for row in rows], default=str))
-        else:
-            print("\t".join(columns))
-            for row in rows:
-                print("\t".join("" if value is None else str(value) for value in row))
+        cursor = conn.execute(query, (limit,))
+        return QueryRows(
+            columns=tuple(item.name for item in cursor.description),
+            rows=[tuple(row) for row in cursor.fetchall()],
+        )
     finally:
         conn.rollback()
         conn.close()
+
+
+def hand_command(statement: str, *, side: Side | str, prod: bool) -> str:
+    """The shell line that runs `statement` through this same read path —
+    what a smoke report prints so the checklist runs by hand (R6 A)."""
+    flags = f"--side {Side(side).value}" + (" --prod" if prod else "")
+    return f"uv run cobalt db query {flags} --format json {shlex.quote(statement)}"
+
+
+def command(args: argparse.Namespace) -> None:
+    try:
+        guard_select(args.sql)
+    except QueryRefused as e:
+        print(f"REFUSED SQL token: {e}", file=sys.stderr)
+        raise SystemExit(2) from e
+
+    dbname = db.PROD_DB_NAME if args.prod else env.resolve_db_name()
+    if dbname == db.PROD_DB_NAME and not args.prod:
+        print("REFUSED database token: cobalt_brain requires --prod", file=sys.stderr)
+        raise SystemExit(2)
+
+    result = read_rows(args.sql, side=args.side, prod=args.prod, limit=args.limit)
+    if args.format == "json":
+        print(json.dumps([dict(zip(result.columns, row)) for row in result.rows], default=str))
+    else:
+        print("\t".join(result.columns))
+        for row in result.rows:
+            print("\t".join("" if value is None else str(value) for value in row))
 
 
 def add_query_parser(sub) -> None:
@@ -178,4 +216,7 @@ def add_query_parser(sub) -> None:
     query.set_defaults(func=command)
 
 
-__all__ = ["QueryRefused", "add_query_parser", "guard_select", "tokenize"]
+__all__ = [
+    "QueryRefused", "QueryRows", "add_query_parser", "guard_select", "hand_command",
+    "read_rows", "tokenize",
+]

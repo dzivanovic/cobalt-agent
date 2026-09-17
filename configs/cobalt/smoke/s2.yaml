@@ -1,0 +1,352 @@
+# `cobalt smoke s2` — the S2 close checklist (S2-P4 STEP-9, R6; plan
+# §2 STEP-9 table K1-K18 as amended by Astra R1-19/R1-24).
+#
+# Loaded through `cobalt.smoke.models.SmokeSuite` (L10): a bad file
+# crashes with its line number, never a partial run. Every check is
+# READ-ONLY: SQL goes through `cobalt db query`'s guarded read path
+# (refused at load if it is not one side-effect-free SELECT/WITH), `cli`
+# argv must be on the read-only allowlist in `cobalt/smoke/models.py`,
+# and a vault read is `find_section` over the note's text.
+#
+# EACH ROW IS ALSO THE HAND FALLBACK (R6 A). The report prints, per row,
+# the exact command the check ran (rendered from this file with the run's
+# variables substituted as literals) and `expect_text`, so the checklist
+# runs blind from the report alone.
+#
+# Variables (computed by code, printed at the top of every report):
+#   {now}                UTC instant of the run
+#   {report_date}        ET date (default today)
+#   {session}            the session clock's session at {now}
+#   {cutoff}             the P4 deploy instant — `--cutoff`, required
+#   {last_trading_day}   the latest trading day whose `day_anchor_job`
+#                        occurrence + timeout_s has passed by {now}
+#   {last_summary_slot}  latest `heartbeat.summary_at` slot at/before {now}
+#   {last_summary_date}  that slot's ET date
+#   {tunable:<key>}      a tunables.yaml value
+#
+# Verdicts: PASS · FAIL (a predicate failed) · KNOWN (a check-level
+# `known_if` holds, or every failing predicate's actual value is listed in
+# its `known`) · ERROR (the probe itself could not run). OVERALL: RED any
+# ERROR · AMBER any FAIL · GREEN otherwise; KNOWN never lowers it.
+# S2 done = GREEN only.
+#
+# `known` lists start EMPTY. A value joins one only by Dejan's ruling.
+
+suite: s2
+title: S2 smoke
+day_anchor_job: com.cobalt.replay
+
+checks:
+  - id: K1
+    title: com.cobalt.radar launchctl
+    kind: launchctl
+    mode: running
+    label: com.cobalt.radar
+    expect_text: "`state = running` and a `pid = <n>` line"
+
+  - id: K2
+    title: radar_pool primary
+    kind: sql
+    side: system
+    query: >-
+      SELECT pool_key, state, session, cap, members, failed_stage, failed_detail,
+      last_scan_at, COALESCE(members <= cap, false) AS within_cap,
+      CASE WHEN {session} IN ('premarket', 'rth', 'aftermarket')
+      THEN COALESCE(state = 'scanning' AND last_scan_at >= {now} - make_interval(secs => {tunable:heartbeat.radar_scan_max_age_s}), false)
+      ELSE state IN ('scanning', 'idle', 'paused_market_reset', 'stopped') END AS state_valid
+      FROM system.radar_pool WHERE pool_key = 'primary'
+    expect:
+      - {column: state_valid, op: eq, value: true}
+      - {column: within_cap, op: eq, value: true}
+      - {column: failed_stage, op: is_null}
+    expect_text: >-
+      one row; state_valid = true (inside premarket/rth/aftermarket: state
+      scanning and last_scan_at within heartbeat.radar_scan_max_age_s);
+      within_cap = true (members <= cap); failed_stage null
+
+  - id: K3
+    title: membership value column (post-deploy admissions)
+    kind: sql
+    side: system
+    query: >-
+      SELECT count(*) AS post_deploy_admitted,
+      count(*) FILTER (WHERE rank_metric IS NULL) AS metric_missing,
+      count(*) FILTER (WHERE rank_value IS NULL) AS value_null
+      FROM system.radar_membership
+      WHERE entered_at IS NOT NULL AND first_seen_at >= {cutoff}
+    known_if:
+      - {column: post_deploy_admitted, op: eq, value: 0}
+    known_text: "no admitted row first seen after the deploy yet"
+    expect:
+      - {column: metric_missing, op: eq, value: 0}
+    expect_text: >-
+      metric_missing = 0 over admitted rows first seen at/after the cutoff
+      (the INSERT path always writes rank_metric; a frozen HOLD row keeping a
+      pre-deploy NULL is outside this set by construction). value_null is
+      evidence only: a genuinely absent metric stores rank_value NULL.
+      post_deploy_admitted = 0 → KNOWN
+
+  - id: K4.1
+    title: sheet /api/health
+    kind: http
+    url: http://127.0.0.1:5010/api/health
+    status: 200
+    expect_text: HTTP 200
+
+  - id: K4.2
+    title: sheet GET /
+    kind: http
+    url: http://127.0.0.1:5010/
+    status: 200
+    expect_text: HTTP 200
+
+  - id: K4.3
+    title: sheet GET /radar with value column
+    kind: http
+    url: http://127.0.0.1:5010/radar
+    status: 200
+    contains: ["<th>value</th>"]
+    expect_text: "HTTP 200 and the body contains `<th>value</th>`"
+
+  - id: K4.4
+    title: sheet /api/radar/pool
+    kind: http
+    url: http://127.0.0.1:5010/api/radar/pool
+    status: 200
+    expect_text: HTTP 200
+
+  - id: K5.1
+    title: P2 seam — latest radar_score_run
+    kind: sql
+    side: system
+    requires_relation: system.radar_score_run
+    query: >-
+      SELECT (SELECT status FROM system.radar_score_run WHERE pool_key = 'primary'
+      ORDER BY id DESC LIMIT 1) AS latest_status,
+      (SELECT failed_stage FROM system.radar_pool WHERE pool_key = 'primary') AS failed_stage
+    expect:
+      - {column: latest_status, op: eq, value: complete}
+      - {column: failed_stage, op: is_null}
+    expect_text: >-
+      system.radar_score_run exists (absent = P2 not deployed = FAIL);
+      latest_status = complete; failed_stage null
+
+  - id: K5.2
+    title: P2 seam — radar.cards_enabled reported
+    kind: sql
+    side: user
+    query: >-
+      SELECT (SELECT value FROM trader_settings WHERE key = 'radar.cards_enabled')
+      AS cards_enabled
+    expect:
+      - {column: cards_enabled, op: not_null}
+    expect_text: "cards_enabled not null (true or false both PASS — dark is PASS); absent = FAIL"
+
+  - id: K6
+    title: picks — one row per post-deploy FILLED transition
+    kind: sql
+    side: user
+    query: >-
+      SELECT count(*) AS fills, count(*) FILTER (WHERE p.id IS NULL) AS missing
+      FROM card_transitions t LEFT JOIN picks p ON p.card_id = t.card_id
+      WHERE t.to_state = 'FILLED' AND t.at >= {cutoff}
+    known_if:
+      - {column: fills, op: eq, value: 0}
+    known_text: "no fill yet"
+    expect:
+      - {column: missing, op: eq, value: 0}
+    expect_text: >-
+      missing = 0 over FILLED transitions at/after the cutoff (picks.card_id is
+      UNIQUE, so present = exactly one); fills = 0 → KNOWN: no fill yet.
+      Per-day view: `uv run cobalt cards picks --date <day> --cutoff <cutoff>` exit 0
+
+  - id: K7
+    title: replay job — last run
+    kind: job_row
+    label: com.cobalt.replay
+    state: done
+    exit_code: 0
+    not_missed: true
+    result_keys: [movers, archived, card_misses, mover_misses, formation_replay, line_action]
+    result_equals:
+      trade_date: "{last_trading_day}"
+      dry_run: false
+    expect_text: >-
+      state done, exit_code 0, not missed against its Mon-Fri 21:05 cadence;
+      last_result carries movers/archived/card_misses/mover_misses/
+      formation_replay/line_action; last_result.trade_date = last trading day;
+      dry_run false
+
+  - id: K8
+    title: missed — card rows complete and equal job.result
+    kind: sql
+    side: user
+    query: >-
+      SELECT count(*) FILTER (WHERE m.kind = 'card') AS card_rows,
+      count(*) FILTER (WHERE m.kind = 'card' AND (m.cf_r IS NULL OR m.inputs_sha256 IS NULL)) AS incomplete,
+      (SELECT (j.last_result ->> 'card_misses')::int FROM system.cobalt_jobs j WHERE j.label = 'com.cobalt.replay') AS job_card_misses,
+      (SELECT (j.last_result ->> 'input_stale')::int FROM system.cobalt_jobs j WHERE j.label = 'com.cobalt.replay') AS input_stale,
+      (SELECT (j.last_result ->> 'trade_date') FROM system.cobalt_jobs j WHERE j.label = 'com.cobalt.replay') AS job_trade_date,
+      count(*) FILTER (WHERE m.kind = 'card') = (SELECT (j.last_result ->> 'card_misses')::int FROM system.cobalt_jobs j WHERE j.label = 'com.cobalt.replay') AS counts_agree
+      FROM "user".missed m
+      WHERE m.trade_date = {last_trading_day} AND m.is_current
+    expect:
+      - {column: job_trade_date, op: eq, value: "{last_trading_day}"}
+      - {column: incomplete, op: eq, value: 0}
+      - {column: counts_agree, op: eq, value: true}
+      - {column: input_stale, op: eq, value: 0}
+    expect_text: >-
+      for current rows of the last trading day: every kind='card' row has cf_r
+      and inputs_sha256 (excluded_by is NOT NULL by schema); card_rows =
+      job.result card_misses; job.result input_stale = 0 (R1-12 coverage);
+      job.result trade_date = last trading day
+
+  - id: K9
+    title: movers_daily — top-N per side, bars archived
+    kind: sql
+    side: user
+    query: >-
+      SELECT (SELECT (value ->> 'top_n')::int FROM trader_settings WHERE key = 'radar.benchmark') AS top_n,
+      count(*) FILTER (WHERE side = 'gainers') AS gainers,
+      count(*) FILTER (WHERE side = 'losers') AS losers,
+      count(*) FILTER (WHERE NOT bars_archived) AS not_archived,
+      count(*) FILTER (WHERE side = 'gainers') = (SELECT (value ->> 'top_n')::int FROM trader_settings WHERE key = 'radar.benchmark')
+      AND count(*) FILTER (WHERE side = 'losers') = (SELECT (value ->> 'top_n')::int FROM trader_settings WHERE key = 'radar.benchmark') AS full_sides
+      FROM system.movers_daily
+      WHERE trade_date = {last_trading_day} AND active
+    expect:
+      - {column: top_n, op: not_null}
+      - {column: full_sides, op: eq, value: true}
+      - {column: not_archived, op: eq, value: 0}
+    expect_text: >-
+      active rows for the last trading day: gainers = losers = radar.benchmark
+      top_n; not_archived = 0. Fewer rows FAIL here; the hub compares the
+      side's cached export `data/radar-cache/<date>/movers-<side>-*.csv` row count
+
+  - id: K10.1
+    title: miss line unit in the DRC note
+    kind: vault_unit
+    note: drc
+    day: last_trading_day
+    section: drc-misses
+    unit: miss_line
+    expect_text: "both marker lines present: `<!-- cobalt:section drc-misses -->` and `<!-- cobalt:unit miss_line -->` inside it"
+
+  - id: K10.2
+    title: miss line vault_writes row
+    kind: sql
+    side: user
+    query: >-
+      SELECT count(*) AS writes FROM vault_writes
+      WHERE section = 'drc-misses' AND unit = 'miss_line'
+      AND (ts AT TIME ZONE 'America/New_York')::date = {last_trading_day}
+    expect:
+      - {column: writes, op: ge, value: 1}
+    expect_text: "writes >= 1 on the last trading day (ET)"
+
+  - id: K11.1
+    title: heartbeat — last beat age
+    kind: job_row
+    label: com.cobalt.heartbeat
+    max_age_min: 20
+    expect_text: "cobalt_jobs.updated_at for com.cobalt.heartbeat within 20 min of now"
+
+  - id: K11.2
+    title: heartbeat — database probe OK
+    kind: log_grep
+    path: logs/heartbeat.log
+    block_start: "^HEARTBEAT "
+    pattern: "^OK +database "
+    present: true
+    expect_text: "the newest HEARTBEAT block has an `OK   database` line"
+
+  - id: K11.3
+    title: heartbeat — sheet HTTP probe OK
+    kind: log_grep
+    path: logs/heartbeat.log
+    block_start: "^HEARTBEAT "
+    pattern: "^OK +sheet HTTP "
+    present: true
+    expect_text: "the newest HEARTBEAT block has an `OK   sheet HTTP` line"
+
+  - id: K12.1
+    title: prefill-daily last run
+    kind: job_row
+    label: com.cobalt.prefill-daily
+    state: done
+    exit_code: 0
+    not_missed: true
+    expect_text: "state done, exit_code 0, not missed against its cadence"
+
+  - id: K12.2
+    title: prefill-drc last run
+    kind: job_row
+    label: com.cobalt.prefill-drc
+    state: done
+    exit_code: 0
+    not_missed: true
+    expect_text: "state done, exit_code 0, not missed against its cadence"
+
+  - id: K13
+    title: archiver freshness (cadence-aware)
+    kind: job_row
+    label: com.cobalt.archiver
+    exit_code: 0
+    not_missed: true
+    result_positive: [rows_written]
+    expect_text: >-
+      not missed against the Mon-Fri 20:30 cadence (the same `is_missed` the
+      heartbeat archiver probe uses — no flat 30 h cutoff); exit_code 0;
+      last_result.rows_written > 0
+
+  - id: K14
+    title: backup last run
+    kind: job_row
+    label: com.cobalt.backup
+    state: done
+    exit_code: 0
+    not_missed: true
+    expect_text: "state done, exit_code 0, not missed against its cadence"
+
+  - id: K15
+    title: heartbeat summary sent at the last slot
+    kind: job_row
+    label: com.cobalt.heartbeat
+    result_equals:
+      "summary_sent.{last_summary_slot}": "{last_summary_date}"
+    expect_text: >-
+      last_result.summary_sent[<last heartbeat.summary_at slot>] = that slot's
+      ET date (the heartbeat records a slot only after the DM send succeeded)
+
+  - id: K16.1
+    title: cards-expire last run
+    kind: job_row
+    label: com.cobalt.cards-expire
+    state: done
+    exit_code: 0
+    not_missed: true
+    expect_text: "state done, exit_code 0, not missed against its cadence"
+
+  - id: K16.2
+    title: daymode-propose last run
+    kind: job_row
+    label: com.cobalt.daymode-propose
+    state: done
+    exit_code: 0
+    not_missed: true
+    expect_text: "state done, exit_code 0, not missed against its cadence"
+
+  - id: K17
+    title: cobalt validate
+    kind: cli
+    argv: [cobalt, validate]
+    exit_code: 0
+    expect_text: exit 0
+
+  - id: K18
+    title: jobs registry vs launchd
+    kind: launchctl
+    mode: registry_match
+    expect_text: >-
+      every `enabled: true` label in configs/cobalt/jobs.yaml is loaded in
+      launchd and no `enabled: false` label is

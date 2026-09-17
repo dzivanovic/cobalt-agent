@@ -242,6 +242,12 @@ def classify(git_range: str, registry: JobRegistry | None = None) -> list[Classi
             rule = "operations documentation; no resident"
         if not rule and path == "configs/cobalt/watchlists.yaml":
             rule = "one-shot archiver reads fresh; no resident"
+        if not rule and path.startswith("configs/cobalt/smoke/"):
+            # S2-P4 §5 (Astra R2-6): read only by `cobalt smoke`, run by hand;
+            # no plist invokes it and no resident imports cobalt.smoke
+            # (test_a_smoke_suite_file_derives_no_restart_and_no_job_runs_the_smoke).
+            output.append(Classification(path, item.change, "operator command (cobalt smoke); no job reads", ()))
+            continue
         if not rule and path.startswith("configs/"):
             output.append(Classification(path, item.change, "UNCLASSIFIED CONFIG", all_labels, True))
             continue

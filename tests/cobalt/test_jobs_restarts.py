@@ -161,3 +161,31 @@ def test_a_new_one_shot_plist_derives_an_explicit_bootstrap_and_no_restart(monke
     assert row.escalate is False
     assert row.restarts == ()
     assert "bootstrap once: com.cobalt.replay" in row.rule
+
+
+def test_a_smoke_suite_file_derives_no_restart_and_no_job_runs_the_smoke(monkeypatch):
+    # S2-P4 §5 (Astra R2-6): `configs/cobalt/smoke/<suite>.yaml` is read only
+    # by `cobalt smoke`, an operator command. No plist runs it, and the only
+    # code that opens a suite file is `smoke/cli.py`'s `run` — both halves of
+    # that claim are checked here, so the rule stops being true the moment
+    # either changes. (Import reach is not the question: `com.cobalt.radar`
+    # enters through `cobalt.cli`, which mounts every command module, so a
+    # change to smoke's CODE still derives that restart by the src/ rule.)
+    monkeypatch.setattr(restarts, "changes", lambda _range: [
+        Change("configs/cobalt/smoke/s2.yaml", "A"),
+    ])
+    (row,) = classify("HEAD...HEAD")
+    assert row.escalate is False
+    assert row.restarts == ()
+    assert "operator command" in row.rule
+
+    from pathlib import Path
+
+    repo = Path(restarts.REPO_ROOT)
+    assert not [p.name for p in (repo / "ops").glob("com.cobalt.*.plist") if "smoke" in p.read_text()]
+    openers = sorted(
+        str(p.relative_to(repo))
+        for p in (repo / "src").rglob("*.py")
+        if any(token in p.read_text() for token in ("load_suite(", "suite_path(", "SUITES_DIR"))
+    )
+    assert openers == ["src/cobalt/smoke/cli.py", "src/cobalt/smoke/config.py"]

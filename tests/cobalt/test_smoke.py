@@ -1,0 +1,774 @@
+"""`cobalt smoke s2` (S2-P4 STEP-9, R6) — offline, every probe on fakes.
+
+§4 Smoke sentences, one test each, plus one test per check KIND
+(launchctl, sql, http, log_grep, job_row, vault_unit, cli). No database,
+no launchd, no network, no vault: every collector is a `SmokeDeps` field
+and each test hands in its own fake. The committed suite
+(`configs/cobalt/smoke/s2.yaml`) is loaded for real, so a check whose
+shape the code cannot run fails here, not on the S2 close evening.
+
+The one DB-backed test (`requires_db`) runs every committed SQL/job_row
+query on cobalt_dev through `cobalt db query`'s read path; the hub runs
+it (L41 interim) and it skips cleanly offline.
+"""
+
+from __future__ import annotations
+
+import ast
+import json
+import os
+import shlex
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+import pytest
+
+from cobalt.dayopen.launchd import LaunchdPrintError, LaunchdPrintStatus
+from cobalt.db_query import QueryRows
+from cobalt.smoke import checks, cli, report
+from cobalt.smoke.config import SUITES_DIR, SmokeConfigError, load_suite
+from cobalt.smoke.models import (
+    CheckOutcome,
+    CliCheck,
+    HttpCheck,
+    JobRowCheck,
+    LaunchctlCheck,
+    LogGrepCheck,
+    Overall,
+    SmokeContext,
+    SqlCheck,
+    Verdict,
+    VaultUnitCheck,
+    overall_verdict,
+)
+
+ET = ZoneInfo("America/New_York")
+REPO = Path(__file__).resolve().parents[2]
+SMOKE_SRC = REPO / "src" / "cobalt" / "smoke"
+
+#: Tuesday 2026-09-22, 21:50 ET — after that evening's 21:05 replay + its
+#: 1800 s timeout, the S2 close evening (plan §6).
+NOW = datetime(2026, 9, 22, 21, 50, tzinfo=ET).astimezone(timezone.utc)
+DAY = date(2026, 9, 22)
+CUTOFF = datetime(2026, 9, 18, 20, 5, tzinfo=ET)
+
+requires_db = pytest.mark.skipif(
+    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
+    reason="requires_db: Postgres env settings not available",
+)
+
+
+# ---------------------------------------------------------------------
+# fakes
+# ---------------------------------------------------------------------
+
+
+def ctx(**overrides) -> SmokeContext:
+    values = dict(
+        now=NOW,
+        report_date=DAY,
+        session="overnight",
+        cutoff=CUTOFF,
+        last_trading_day=DAY,
+        last_summary_slot="16:30",
+        last_summary_date=DAY,
+        prod=True,
+        tunables={"heartbeat.radar_scan_max_age_s": 900},
+    )
+    values.update(overrides)
+    return SmokeContext(**values)
+
+
+def rows(columns, *data) -> QueryRows:
+    return QueryRows(columns=tuple(columns), rows=[tuple(r) for r in data])
+
+
+def _unexpected(name):
+    def fail(*_a, **_k):
+        raise AssertionError(f"this test did not expect a {name} call")
+
+    return fail
+
+
+def deps(**overrides) -> checks.SmokeDeps:
+    values = dict(
+        read_rows=_unexpected("read_rows"),
+        launchctl_print=_unexpected("launchctl_print"),
+        launchctl_loaded=_unexpected("launchctl_loaded"),
+        http_get=_unexpected("http_get"),
+        read_text=_unexpected("read_text"),
+        run_cli=_unexpected("run_cli"),
+        job_specs=_unexpected("job_specs"),
+        drc_note_path=_unexpected("drc_note_path"),
+        missed_grace=lambda: timedelta(minutes=30),
+    )
+    values.update(overrides)
+    return checks.SmokeDeps(**values)
+
+
+def _job_row(**overrides):
+    base = dict(
+        label="com.cobalt.replay",
+        state="done",
+        exit_code=0,
+        started_at=datetime(2026, 9, 22, 21, 5, 1, tzinfo=ET),
+        finished_at=datetime(2026, 9, 22, 21, 9, 30, tzinfo=ET),
+        updated_at=datetime(2026, 9, 22, 21, 9, 30, tzinfo=ET),
+        registered_at=datetime(2026, 9, 18, 20, 10, tzinfo=ET),
+        last_result={
+            "trade_date": "2026-09-22", "dry_run": False, "movers": 40, "archived": 12,
+            "card_misses": 2, "mover_misses": 3, "formation_replay": "unavailable",
+            "line_action": "updated", "rows_written": 5,
+            "summary_sent": {"07:00": "2026-09-22", "16:30": "2026-09-22"},
+        },
+    )
+    base.update(overrides)
+    columns = list(base)
+    return rows(columns, [base[c] for c in columns])
+
+
+# ---------------------------------------------------------------------
+# §4: schema, bad file crashes with a line
+# ---------------------------------------------------------------------
+
+
+def _write(tmp_path, text) -> Path:
+    path = tmp_path / "s9.yaml"
+    path.write_text(text)
+    return path
+
+
+GOOD_HEAD = "suite: s9\ntitle: test\nday_anchor_job: com.cobalt.replay\nchecks:\n"
+
+
+def test_smoke_checks_load_through_schema_bad_file_crashes_with_line(tmp_path):
+    # The committed suite loads, whole, through the schema.
+    suite = load_suite(SUITES_DIR / "s2.yaml")
+    ids = [c.id for c in suite.checks]
+    assert {i.split(".")[0] for i in ids} == {f"K{n}" for n in range(1, 19)}
+    assert len(ids) == len(set(ids))
+
+    # A validation error names the line of the offending value.
+    bad_op = GOOD_HEAD + (
+        "  - id: K1\n"                      # 5
+        "    title: t\n"                     # 6
+        "    kind: sql\n"                    # 7
+        "    side: system\n"                 # 8
+        "    query: SELECT 1 AS x\n"         # 9
+        "    expect_text: x\n"               # 10
+        "    expect:\n"                      # 11
+        "      - {column: x, op: bogus}\n"   # 12
+    )
+    with pytest.raises(SmokeConfigError) as raised:
+        load_suite(_write(tmp_path, bad_op))
+    assert raised.value.line == 12
+    assert ":12:" in str(raised.value)
+
+    # A missing required field names the check's own line.
+    missing_side = GOOD_HEAD + (
+        "  - id: K1\n"                       # 5
+        "    title: t\n"
+        "    kind: sql\n"
+        "    query: SELECT 1 AS x\n"
+        "    expect_text: x\n"
+        "    expect: [{column: x, op: eq, value: 1}]\n"
+    )
+    with pytest.raises(SmokeConfigError) as raised:
+        load_suite(_write(tmp_path, missing_side))
+    assert raised.value.line == 5
+    assert "side" in str(raised.value)
+
+    # A YAML syntax error carries the parser's line.
+    with pytest.raises(SmokeConfigError) as raised:
+        load_suite(_write(tmp_path, GOOD_HEAD + "  - id: K1\n    title: [unclosed\n"))
+    assert raised.value.line is not None and ":" in str(raised.value)
+
+    # A write statement never loads (the read path's own guard).
+    write_sql = GOOD_HEAD + (
+        "  - id: K1\n"
+        "    title: t\n"
+        "    kind: sql\n"
+        "    side: user\n"
+        "    query: DELETE FROM picks\n"     # 9
+        "    expect_text: x\n"
+        "    expect: [{column: x, op: eq, value: 1}]\n"
+    )
+    with pytest.raises(SmokeConfigError) as raised:
+        load_suite(_write(tmp_path, write_sql))
+    assert raised.value.line == 9 and "DELETE" in str(raised.value)
+
+    # A cli argv off the read-only allowlist never loads.
+    writer_cli = GOOD_HEAD + (
+        "  - id: K1\n"
+        "    title: t\n"
+        "    kind: cli\n"
+        "    argv: [cobalt, heartbeat, beat]\n"  # 8
+        "    expect_text: x\n"
+    )
+    with pytest.raises(SmokeConfigError) as raised:
+        load_suite(_write(tmp_path, writer_cli))
+    assert raised.value.line == 8
+
+    # An unknown variable never loads.
+    unknown_var = GOOD_HEAD + (
+        "  - id: K1\n"
+        "    title: t\n"
+        "    kind: sql\n"
+        "    side: user\n"
+        "    query: SELECT {yesterday} AS x\n"  # 9
+        "    expect_text: x\n"
+        "    expect: [{column: x, op: eq, value: 1}]\n"
+    )
+    with pytest.raises(SmokeConfigError) as raised:
+        load_suite(_write(tmp_path, unknown_var))
+    assert raised.value.line == 9 and "yesterday" in str(raised.value)
+
+    # Duplicate ids never load.
+    dup = GOOD_HEAD + "".join(
+        f"  - id: K1\n    title: t\n    kind: http\n    url: http://127.0.0.1:1/\n    expect_text: x\n"
+        for _ in range(2)
+    )
+    with pytest.raises(SmokeConfigError):
+        load_suite(_write(tmp_path, dup))
+
+    # An absent file crashes; it never runs an empty checklist.
+    with pytest.raises(SmokeConfigError):
+        load_suite(tmp_path / "absent.yaml")
+
+
+# ---------------------------------------------------------------------
+# §4: the roll-up
+# ---------------------------------------------------------------------
+
+
+def _outcome(verdict: Verdict, cid="K1") -> CheckOutcome:
+    return CheckOutcome(
+        id=cid, title="t", kind="http", verdict=verdict, detail="d",
+        command="c", expected="e", raw="r",
+    )
+
+
+def test_verdict_red_on_error_amber_on_fail_known_never_lowers():
+    P, F, K, E = Verdict.PASS, Verdict.FAIL, Verdict.KNOWN, Verdict.ERROR
+    assert overall_verdict([_outcome(P)]) is Overall.GREEN
+    assert overall_verdict([_outcome(P), _outcome(K)]) is Overall.GREEN
+    assert overall_verdict([_outcome(K), _outcome(K)]) is Overall.GREEN
+    assert overall_verdict([_outcome(P), _outcome(F)]) is Overall.AMBER
+    assert overall_verdict([_outcome(K), _outcome(F)]) is Overall.AMBER
+    assert overall_verdict([_outcome(F), _outcome(E)]) is Overall.RED
+    assert overall_verdict([_outcome(K), _outcome(E)]) is Overall.RED
+    # An empty check list is not GREEN: nothing looked.
+    with pytest.raises(ValueError):
+        overall_verdict([])
+
+
+# ---------------------------------------------------------------------
+# §4: sentinels — imports no writer, calls no write
+# ---------------------------------------------------------------------
+
+#: Every name that opens a write in the new core. The smoke package's own
+#: source may not import or reference one.
+WRITER_NAMES = {
+    "VaultWriter", "VaultWriteStore", "upsert_unit", "create_if_absent", "write_miss_line",
+    "JobStore", "job_run", "as_job", "sweep", "run_beat", "take_beat",
+    "TraderSettingsStore", "CardStore", "AsetStore", "RadarStore", "BarStore",
+    "MissedStore", "MoversStore", "SessionBlockStore", "ensure_schema", "connect_migration",
+}
+WRITER_MODULES = {
+    "cobalt.vaultwrite.writer", "cobalt.vaultwrite.store", "cobalt.jobs.store",
+    "cobalt.jobs.wrapper", "cobalt.settings.store", "cobalt.replay.line",
+    "cobalt.replay.runner", "cobalt.prefill.vault_writer", "cobalt.cards.store",
+    "cobalt.aset.store", "cobalt.radar.store", "cobalt.archiver.store",
+}
+
+
+def test_smoke_imports_no_writer_and_calls_no_write(tmp_path, monkeypatch):
+    # 1) static: no writer module imported, no writer name referenced.
+    offenders = []
+    for path in sorted(SMOKE_SRC.glob("*.py")):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if module in WRITER_MODULES or module == "cobalt.vaultwrite":
+                    offenders.append(f"{path.name}: from {module} import …")
+                offenders += [f"{path.name}: imports {a.name}" for a in node.names if a.name in WRITER_NAMES]
+            elif isinstance(node, ast.Import):
+                offenders += [f"{path.name}: import {a.name}" for a in node.names if a.name in WRITER_MODULES]
+            elif isinstance(node, ast.Name) and node.id in WRITER_NAMES:
+                offenders.append(f"{path.name}: references {node.id}")
+            elif isinstance(node, ast.Attribute) and node.attr in WRITER_NAMES:
+                offenders.append(f"{path.name}: references .{node.attr}")
+    assert offenders == []
+
+    # 2) runtime: the whole committed suite, run through the CLI entry,
+    # with every write surface in the new core armed to explode.
+    tripped: list[str] = []
+
+    def sentinel(name):
+        def boom(*_a, **_k):
+            tripped.append(name)
+            raise AssertionError(f"smoke called a write: {name}")
+
+        return boom
+
+    from cobalt import db
+    from cobalt.jobs.store import JobStore
+    from cobalt.settings.store import TraderSettingsStore
+    from cobalt.vaultwrite.store import VaultWriteStore
+    from cobalt.vaultwrite.writer import VaultWriter
+
+    for cls, names in (
+        (VaultWriter, ["upsert_unit", "upsert_region", "create_if_absent", "restore"]),
+        (VaultWriteStore, ["ensure_schema", "pending_write", "purge_expired"]),
+        (JobStore, ["ensure_schema", "register", "register_all", "mark_running", "beat",
+                    "mark_finished", "mark_wrapper_finished", "record_heartbeat_result",
+                    "mark_zombie", "mark_probe", "set_kill_switch"]),
+        (TraderSettingsStore, ["ensure_schema", "put"]),
+    ):
+        for name in names:
+            # A renamed write method must fail here, not silently un-arm.
+            assert hasattr(cls, name), f"{cls.__name__}.{name} no longer exists"
+            monkeypatch.setattr(cls, name, sentinel(f"{cls.__name__}.{name}"))
+    monkeypatch.setattr(db, "connect", sentinel("db.connect"))
+    monkeypatch.setattr(db, "connect_migration", sentinel("db.connect_migration"))
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "run", sentinel("subprocess.run"))
+    monkeypatch.setattr(subprocess, "Popen", sentinel("subprocess.Popen"))
+
+    drc = tmp_path / "drc.md"
+    drc.write_text(
+        "# DRC\n<!-- cobalt:section drc-misses -->\n<!-- cobalt:unit miss_line -->\n"
+        "Misses …\n<!-- /cobalt:unit miss_line -->\n<!-- /cobalt:section drc-misses -->\n"
+    )
+    seen_sql: list[str] = []
+
+    def read_rows(statement, side):
+        seen_sql.append(statement)
+        return rows(["x"], [1])
+
+    fakes = deps(
+        read_rows=read_rows,
+        launchctl_print=lambda label: LaunchdPrintStatus(label, "running", 1, "(never exited)", 1, "state = running"),
+        launchctl_loaded=lambda label: True,
+        http_get=lambda url: (200, "<th>value</th>"),
+        read_text=lambda path: "HEARTBEAT GREEN — x (2026-09-22 21:45:00 EDT)\nOK   database  ok\nOK   sheet HTTP  ok\n",
+        run_cli=lambda argv: (0, "ok"),
+        job_specs=lambda: checks.load_job_specs(),
+        drc_note_path=lambda day: drc,
+    )
+    result = cli.run("s2", cutoff=CUTOFF, now=NOW, prod=True, deps=fakes)
+    assert tripped == []
+    assert seen_sql, "the sql checks never reached the read path"
+    # Every outcome came from a probe that ran (fakes answer loosely, so
+    # FAIL/ERROR verdicts are expected) — never from a tripped sentinel.
+    assert all("smoke called a write" not in o.detail for o in result.checks)
+
+
+# ---------------------------------------------------------------------
+# §4: the report file
+# ---------------------------------------------------------------------
+
+
+def _report(verdicts=(Verdict.PASS, Verdict.KNOWN, Verdict.FAIL)):
+    outcomes = [_outcome(v, cid=f"K{i + 1}") for i, v in enumerate(verdicts)]
+    return report.build_report("s2", "S2 smoke", ctx(), outcomes)
+
+
+def test_smoke_writes_report_file_with_table(tmp_path):
+    rep = _report()
+    path = report.write_report(rep, reports_dir=tmp_path)
+    assert path.name == "s2-smoke-2026-09-22.md"
+    text = path.read_text()
+    assert "| # | check | verdict | evidence |" in text
+    for outcome in rep.checks:
+        assert f"| {outcome.id} | {outcome.title} | {outcome.verdict.value} |" in text
+    assert "OVERALL: AMBER" in text
+    # The variables the commands were rendered with head the file.
+    assert f"cutoff: {CUTOFF.isoformat()}" in text
+    assert "last_trading_day: 2026-09-22" in text
+    # Each row's exact command and expected output are in the file (R1-24).
+    assert text.count("command:") == len(rep.checks)
+    assert text.count("expected:") == len(rep.checks)
+
+    # A second run the same day lands beside the first, never over it.
+    first = path.read_text()
+    second = report.write_report(rep, reports_dir=tmp_path)
+    assert second != path and second.name.startswith("s2-smoke-2026-09-22-")
+    assert path.read_text() == first
+
+
+def test_json_flag_prints_and_writes_nothing(monkeypatch, capsys, tmp_path):
+    rep = _report((Verdict.PASS,))
+    monkeypatch.setattr(cli, "run", lambda *a, **k: rep)
+    monkeypatch.setattr(report, "REPORTS_DIR", tmp_path)
+    args = cli.build_parser().parse_args(
+        ["smoke", "s2", "--cutoff", CUTOFF.isoformat(), "--json"]
+    )
+    args.func(args)
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["overall"] == "GREEN" and payload["checks"][0]["id"] == "K1"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_cutoff_is_required_and_must_carry_an_offset():
+    parser = cli.build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["smoke", "s2"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["smoke", "s2", "--cutoff", "2026-09-18T20:05:00"])
+
+
+# ---------------------------------------------------------------------
+# One test per check kind, on fakes
+# ---------------------------------------------------------------------
+
+
+def test_kind_launchctl_running_and_registry_match():
+    running = LaunchctlCheck(id="K1", title="radar", kind="launchctl", mode="running",
+                             label="com.cobalt.radar", expect_text="running")
+    up = LaunchdPrintStatus("com.cobalt.radar", "running", 42, "(never exited)", 3, "state = running\npid = 42")
+    down = LaunchdPrintStatus("com.cobalt.radar", "not running", None, "1", 3, "state = not running")
+
+    out = checks.evaluate(running, ctx(), deps(launchctl_print=lambda label: up))
+    assert out.verdict is Verdict.PASS and "pid = 42" in out.raw
+    assert out.command == "launchctl print gui/$(id -u)/com.cobalt.radar"
+    assert checks.evaluate(running, ctx(), deps(launchctl_print=lambda label: down)).verdict is Verdict.FAIL
+
+    def broken(label):
+        raise LaunchdPrintError("exited 113")
+
+    assert checks.evaluate(running, ctx(), deps(launchctl_print=broken)).verdict is Verdict.ERROR
+
+    match = LaunchctlCheck(id="K18", title="drift", kind="launchctl", mode="registry_match",
+                           expect_text="no drift")
+
+    class Spec:
+        def __init__(self, label, enabled):
+            self.label, self.enabled = label, enabled
+
+    specs = [Spec("com.cobalt.radar", True), Spec("com.cobalt.replay", True), Spec("com.cobalt.agent", False)]
+    loaded = {"com.cobalt.radar": True, "com.cobalt.replay": True, "com.cobalt.agent": False}
+    out = checks.evaluate(match, ctx(), deps(job_specs=lambda: specs, launchctl_loaded=loaded.__getitem__))
+    assert out.verdict is Verdict.PASS
+
+    drift = dict(loaded, **{"com.cobalt.replay": False, "com.cobalt.agent": True})
+    out = checks.evaluate(match, ctx(), deps(job_specs=lambda: specs, launchctl_loaded=drift.__getitem__))
+    assert out.verdict is Verdict.FAIL
+    assert "com.cobalt.replay" in out.detail and "com.cobalt.agent" in out.detail
+
+
+def test_kind_sql_renders_literals_through_the_read_path_and_grades_rows():
+    check = SqlCheck.model_validate({
+        "id": "K6", "title": "picks", "kind": "sql", "side": "user",
+        "query": "SELECT count(*) AS fills, count(*) AS missing FROM card_transitions WHERE at >= {cutoff}",
+        "known_if": [{"column": "fills", "op": "eq", "value": 0}],
+        "known_text": "no fill yet",
+        "expect": [{"column": "missing", "op": "eq", "value": 0}],
+        "expect_text": "missing = 0",
+    })
+    calls = []
+
+    def answer(result):
+        def read_rows(statement, side):
+            calls.append((statement, side))
+            return result
+
+        return read_rows
+
+    out = checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["fills", "missing"], [3, 0]))))
+    statement, side = calls[-1]
+    assert side == "user"
+    assert "TIMESTAMPTZ '2026-09-18T20:05:00-04:00'" in statement and "{" not in statement
+    assert out.verdict is Verdict.PASS
+    # The hand command is the same statement through `cobalt db query`.
+    assert out.command.startswith("uv run cobalt db query --side user --prod --format json ")
+    assert shlex.split(out.command)[-1] == statement
+
+    assert checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["fills", "missing"], [3, 1])))).verdict is Verdict.FAIL
+    known = checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["fills", "missing"], [0, 0]))))
+    assert known.verdict is Verdict.KNOWN and "no fill yet" in known.detail
+    # No row is a finding; two rows is a broken probe.
+    assert checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["fills", "missing"])))).verdict is Verdict.FAIL
+    assert checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["fills", "missing"], [1, 0], [2, 0])))).verdict is Verdict.ERROR
+    # A predicate naming a column the query does not return is a broken probe.
+    assert checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["other"], [0])))).verdict is Verdict.ERROR
+
+    def refused(statement, side):
+        raise RuntimeError("connection refused")
+
+    assert checks.evaluate(check, ctx(), deps(read_rows=refused)).verdict is Verdict.ERROR
+
+    # requires_relation: an absent relation is a FAIL, named, and the
+    # main query never runs.
+    seam = SqlCheck.model_validate({
+        "id": "K5.1", "title": "seam", "kind": "sql", "side": "system",
+        "requires_relation": "system.radar_score_run",
+        "query": "SELECT (SELECT status FROM system.radar_score_run LIMIT 1) AS latest_status",
+        "expect": [{"column": "latest_status", "op": "eq", "value": "complete"}],
+        "expect_text": "complete",
+    })
+    calls.clear()
+    out = checks.evaluate(seam, ctx(), deps(read_rows=answer(rows(["present"], [False]))))
+    assert out.verdict is Verdict.FAIL and "system.radar_score_run" in out.detail
+    assert len(calls) == 1 and "to_regclass('system.radar_score_run')" in calls[0][0]
+
+    # Per-predicate `known`: a failing value listed there is KNOWN, not FAIL.
+    pool = SqlCheck.model_validate({
+        "id": "K2", "title": "pool", "kind": "sql", "side": "system",
+        "query": "SELECT failed_stage, members FROM system.radar_pool",
+        "expect": [
+            {"column": "failed_stage", "op": "is_null", "known": ["bars"]},
+            {"column": "members", "op": "le", "value": 50},
+        ],
+        "expect_text": "x",
+    })
+    assert checks.evaluate(pool, ctx(), deps(read_rows=answer(rows(["failed_stage", "members"], ["bars", Decimal("50")])))).verdict is Verdict.KNOWN
+    assert checks.evaluate(pool, ctx(), deps(read_rows=answer(rows(["failed_stage", "members"], ["mirror", 50])))).verdict is Verdict.FAIL
+    assert checks.evaluate(pool, ctx(), deps(read_rows=answer(rows(["failed_stage", "members"], ["bars", 51])))).verdict is Verdict.FAIL
+
+    # Tunables and dates render as literals; a date compares to its text.
+    rendered = checks.render_sql("SELECT {tunable:heartbeat.radar_scan_max_age_s}, {last_trading_day}, {session}", ctx())
+    assert rendered == "SELECT 900, DATE '2026-09-22', 'overnight'"
+    assert checks.render_sql("SELECT {session}", ctx(session="o'x")) == "SELECT 'o''x'"
+
+
+def test_kind_http_status_and_body():
+    check = HttpCheck(id="K4.3", title="radar", kind="http", url="http://127.0.0.1:5010/radar",
+                      status=200, contains=["<th>value</th>"], expect_text="200")
+    out = checks.evaluate(check, ctx(), deps(http_get=lambda url: (200, "<table><th>value</th>")))
+    assert out.verdict is Verdict.PASS
+    assert "curl" in out.command and "http://127.0.0.1:5010/radar" in out.command
+    assert checks.evaluate(check, ctx(), deps(http_get=lambda url: (200, "<th>rank</th>"))).verdict is Verdict.FAIL
+    assert checks.evaluate(check, ctx(), deps(http_get=lambda url: (500, "<th>value</th>"))).verdict is Verdict.FAIL
+
+    def down(url):
+        raise ConnectionRefusedError("refused")
+
+    assert checks.evaluate(check, ctx(), deps(http_get=down)).verdict is Verdict.ERROR
+
+
+def test_kind_log_grep_reads_only_the_newest_block():
+    check = LogGrepCheck(id="K11.2", title="db", kind="log_grep", path="logs/heartbeat.log",
+                         block_start="^HEARTBEAT ", pattern="^OK +database ", present=True,
+                         expect_text="OK database")
+    log = (
+        "HEARTBEAT GREEN — all (2026-09-22 21:30:00 EDT)\n\nOK   database                 cobalt_brain reachable\n"
+        "HEARTBEAT RED — 1 (2026-09-22 21:45:00 EDT)\n\nRED  database                 unreachable\n"
+    )
+    seen = []
+
+    def read_text(path):
+        seen.append(path)
+        return log
+
+    out = checks.evaluate(check, ctx(), deps(read_text=read_text))
+    # The older block's OK line does not rescue the newest block's RED.
+    assert out.verdict is Verdict.FAIL
+    assert seen == [checks.REPO_ROOT / "logs" / "heartbeat.log"]
+    assert "logs/heartbeat.log" in out.command and "grep -E" in out.command
+
+    healthy = log.replace("RED  database                 unreachable", "OK   database                 cobalt_brain reachable")
+    assert checks.evaluate(check, ctx(), deps(read_text=lambda p: healthy)).verdict is Verdict.PASS
+
+    absent = LogGrepCheck(id="K9", title="no failed", kind="log_grep", path="logs/replay.err",
+                          pattern="FAILED", present=False, expect_text="none")
+    assert checks.evaluate(absent, ctx(), deps(read_text=lambda p: "ok\n")).verdict is Verdict.PASS
+    assert checks.evaluate(absent, ctx(), deps(read_text=lambda p: "x FAILED y\n")).verdict is Verdict.FAIL
+
+    assert checks.evaluate(check, ctx(), deps(read_text=lambda p: "no beats\n")).verdict is Verdict.ERROR
+
+    def unreadable(path):
+        raise FileNotFoundError(path)
+
+    assert checks.evaluate(check, ctx(), deps(read_text=unreadable)).verdict is Verdict.ERROR
+
+    with pytest.raises(ValueError):
+        LogGrepCheck(id="K1", title="t", kind="log_grep", path="../secrets", pattern="x", expect_text="x")
+
+
+def test_kind_job_row_state_cadence_age_and_result():
+    from cobalt.jobs.config import load_job_registry
+
+    registry = load_job_registry()
+    spec_of = lambda: registry.jobs  # noqa: E731
+    check = JobRowCheck.model_validate({
+        "id": "K7", "title": "replay", "kind": "job_row", "label": "com.cobalt.replay",
+        "state": "done", "exit_code": 0, "not_missed": True,
+        "result_keys": ["movers", "card_misses"],
+        "result_equals": {"trade_date": "{last_trading_day}", "dry_run": False},
+        "expect_text": "done",
+    })
+    calls = []
+
+    def answer(result):
+        def read_rows(statement, side):
+            calls.append((statement, side))
+            return result
+
+        return read_rows
+
+    out = checks.evaluate(check, ctx(), deps(read_rows=answer(_job_row()), job_specs=spec_of))
+    assert out.verdict is Verdict.PASS, out.detail
+    statement, side = calls[-1]
+    assert side == "system" and "FROM cobalt_jobs WHERE label = 'com.cobalt.replay'" in statement
+    assert out.command.startswith("uv run cobalt db query --side system --prod --format json ")
+
+    assert checks.evaluate(check, ctx(), deps(read_rows=answer(_job_row(state="failed", exit_code=1)), job_specs=spec_of)).verdict is Verdict.FAIL
+    # Yesterday's run tonight is MISSED (21:05 + grace passed, no finish after it).
+    stale = _job_row(finished_at=datetime(2026, 9, 21, 21, 9, tzinfo=ET))
+    out = checks.evaluate(check, ctx(), deps(read_rows=answer(stale), job_specs=spec_of))
+    assert out.verdict is Verdict.FAIL and "missed" in out.detail.lower()
+    wrong_day = _job_row(last_result={**_job_row().rows[0][-1], "trade_date": "2026-09-21"})
+    assert checks.evaluate(check, ctx(), deps(read_rows=answer(wrong_day), job_specs=spec_of)).verdict is Verdict.FAIL
+    no_keys = _job_row(last_result={"trade_date": "2026-09-22", "dry_run": False})
+    assert checks.evaluate(check, ctx(), deps(read_rows=answer(no_keys), job_specs=spec_of)).verdict is Verdict.FAIL
+    assert checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["label"])), job_specs=spec_of)).verdict is Verdict.FAIL
+
+    beat = JobRowCheck(id="K11.1", title="beat", kind="job_row", label="com.cobalt.heartbeat",
+                       max_age_min=20, expect_text="fresh")
+    fresh = _job_row(label="com.cobalt.heartbeat", updated_at=NOW - timedelta(minutes=5))
+    old = _job_row(label="com.cobalt.heartbeat", updated_at=NOW - timedelta(minutes=25))
+    assert checks.evaluate(beat, ctx(), deps(read_rows=answer(fresh))).verdict is Verdict.PASS
+    assert checks.evaluate(beat, ctx(), deps(read_rows=answer(old))).verdict is Verdict.FAIL
+
+    summary = JobRowCheck.model_validate({
+        "id": "K15", "title": "summary", "kind": "job_row", "label": "com.cobalt.heartbeat",
+        "result_equals": {"summary_sent.{last_summary_slot}": "{last_summary_date}"},
+        "expect_text": "sent",
+    })
+    assert checks.evaluate(summary, ctx(), deps(read_rows=answer(fresh))).verdict is Verdict.PASS
+    unsent = _job_row(last_result={"summary_sent": {"07:00": "2026-09-22", "16:30": "2026-09-21"}})
+    assert checks.evaluate(summary, ctx(), deps(read_rows=answer(unsent))).verdict is Verdict.FAIL
+
+    archiver = JobRowCheck(id="K13", title="archiver", kind="job_row", label="com.cobalt.archiver",
+                           exit_code=0, result_positive=["rows_written"], expect_text="rows")
+    empty = _job_row(label="com.cobalt.archiver", last_result={"rows_written": 0})
+    assert checks.evaluate(archiver, ctx(), deps(read_rows=answer(empty))).verdict is Verdict.FAIL
+
+
+def test_kind_vault_unit_reads_markers_and_never_creates(tmp_path):
+    check = VaultUnitCheck(id="K10.1", title="miss line", kind="vault_unit", note="drc",
+                           day="last_trading_day", section="drc-misses", unit="miss_line",
+                           expect_text="present")
+    note = tmp_path / "2026-09-22 DRC.md"
+    body = (
+        "# DRC\n<!-- cobalt:section drc-rules -->\n<!-- /cobalt:section drc-rules -->\n"
+        "<!-- cobalt:section drc-misses -->\n<!-- cobalt:unit miss_line -->\n"
+        "Misses 2026-09-22: cards 2\n<!-- /cobalt:unit miss_line -->\n"
+        "<!-- /cobalt:section drc-misses -->\n"
+    )
+    note.write_text(body)
+    asked = []
+
+    def path_for(day):
+        asked.append(day)
+        return note
+
+    out = checks.evaluate(check, ctx(), deps(drc_note_path=path_for, read_text=lambda p: p.read_text()))
+    assert out.verdict is Verdict.PASS and "Misses 2026-09-22" in out.raw
+    assert asked == [DAY]
+    assert "grep -n -F" in out.command and str(note) in out.command
+    assert note.read_text() == body
+
+    no_unit = body.replace("<!-- cobalt:unit miss_line -->\n", "").replace("<!-- /cobalt:unit miss_line -->\n", "")
+    note.write_text(no_unit)
+    assert checks.evaluate(check, ctx(), deps(drc_note_path=path_for, read_text=lambda p: p.read_text())).verdict is Verdict.FAIL
+
+    note.write_text(body.replace("<!-- /cobalt:section drc-misses -->\n", "<!-- /cobalt:section drc-misses -->\n<!-- /cobalt:section drc-misses -->\n"))
+    assert checks.evaluate(check, ctx(), deps(drc_note_path=path_for, read_text=lambda p: p.read_text())).verdict is Verdict.ERROR
+
+    absent = tmp_path / "absent.md"
+    out = checks.evaluate(check, ctx(), deps(drc_note_path=lambda d: absent, read_text=lambda p: p.read_text()))
+    assert out.verdict is Verdict.FAIL and not absent.exists()
+
+
+def test_kind_cli_exit_code_through_the_allowlist():
+    check = CliCheck(id="K17", title="validate", kind="cli", argv=["cobalt", "validate"],
+                     exit_code=0, expect_text="exit 0")
+    ran = []
+
+    def run_cli(argv):
+        ran.append(argv)
+        return 0, "Placement (docs/PLACEMENT.md): tree clean."
+
+    out = checks.evaluate(check, ctx(), deps(run_cli=run_cli))
+    assert out.verdict is Verdict.PASS and ran == [["cobalt", "validate"]]
+    assert out.command == "uv run cobalt validate"
+    assert checks.evaluate(check, ctx(), deps(run_cli=lambda argv: (1, "FAILED: x"))).verdict is Verdict.FAIL
+
+    def missing(argv):
+        raise FileNotFoundError("uv")
+
+    assert checks.evaluate(check, ctx(), deps(run_cli=missing)).verdict is Verdict.ERROR
+    with pytest.raises(ValueError):
+        CliCheck(id="K1", title="t", kind="cli", argv=["cobalt", "jobs", "check"], expect_text="x")
+
+
+# ---------------------------------------------------------------------
+# R1-24: every committed K row carries its exact command and expected output
+# ---------------------------------------------------------------------
+
+
+def test_every_committed_check_renders_an_exact_command_and_expected_output():
+    suite = load_suite(SUITES_DIR / "s2.yaml")
+    for check in suite.checks:
+        command = checks.command_for(check, ctx())
+        assert command and "{" not in command.replace("'%{http_code}'", ""), check.id
+        assert check.expect_text.strip(), check.id
+    by_id = {c.id: c for c in suite.checks}
+    assert by_id["K6"].known_text == "no fill yet"
+    assert by_id["K5.1"].requires_relation == "system.radar_score_run"
+    assert by_id["K3"].known_if and by_id["K3"].expect
+
+
+def test_context_last_trading_day_waits_for_the_anchor_job_and_skips_holidays():
+    from cobalt.jobs.config import load_job_registry
+
+    spec = load_job_registry().spec("com.cobalt.replay")
+    # 21:50 ET Tuesday: tonight's 21:05 + 1800 s has passed -> today.
+    assert checks.last_trading_day(NOW, spec) == DAY
+    # 21:20 ET Tuesday: tonight's run may still be going -> Monday.
+    early = datetime(2026, 9, 22, 21, 20, tzinfo=ET)
+    assert checks.last_trading_day(early, spec) == date(2026, 9, 21)
+    # Monday 2026-12-28 09:00 ET: tonight's run is hours away and Friday
+    # 12-25 is an NYSE holiday, so the answer is Thursday 12-24.
+    assert checks.last_trading_day(datetime(2026, 12, 28, 9, 0, tzinfo=ET), spec) == date(2026, 12, 24)
+
+    built = checks.build_context(now=NOW, report_date=None, cutoff=CUTOFF, prod=True,
+                                 anchor_spec=spec, tunables={"heartbeat.radar_scan_max_age_s": 900})
+    assert built.report_date == DAY and built.last_trading_day == DAY
+    assert built.session == "overnight"
+    assert (built.last_summary_slot, built.last_summary_date) == ("16:30", DAY)
+    morning = checks.build_context(now=datetime(2026, 9, 22, 6, 0, tzinfo=ET), report_date=None,
+                                   cutoff=CUTOFF, prod=True, anchor_spec=spec, tunables={})
+    assert (morning.last_summary_slot, morning.last_summary_date) == ("16:30", date(2026, 9, 21))
+
+
+# ---------------------------------------------------------------------
+# requires_db (hub, cobalt_dev): every committed query parses and runs
+# ---------------------------------------------------------------------
+
+
+@requires_db
+def test_committed_queries_run_read_only_on_cobalt_dev():
+    from cobalt.jobs.config import load_job_registry
+    from cobalt.taxonomy.loader import load_tunables
+
+    registry = load_job_registry()
+    tunables = {key: row.value for key, row in load_tunables().by_key.items()}
+    context = checks.build_context(now=datetime.now(timezone.utc), report_date=None, cutoff=CUTOFF,
+                                   prod=False, anchor_spec=registry.spec("com.cobalt.replay"),
+                                   tunables=tunables)
+    live = checks.default_deps(prod=False)
+    suite = load_suite(SUITES_DIR / "s2.yaml")
+    for check in suite.checks:
+        if check.kind not in ("sql", "job_row"):
+            continue
+        outcome = checks.evaluate(check, context, live)
+        # A missing P2 relation or an empty dev table is a FAIL/KNOWN; a
+        # query the server cannot parse or the role cannot read is ERROR.
+        assert outcome.verdict is not Verdict.ERROR, (check.id, outcome.detail)

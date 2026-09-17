@@ -18,3 +18,19 @@ Before this, a brand-new one-shot dropped out of the derivation silently.
 The first case is `ops/com.cobalt.replay.plist`. The formation adapter in
 `replay/runner.py` uses a static import on purpose: a string-named dynamic
 import would mark every resident "unresolved".
+
+## 2026-09-17 — S2-P4: smoke suite files are an operator command's input (§5, Astra R2-6)
+
+A path under `configs/cobalt/smoke/` classifies as `operator command
+(cobalt smoke); no job reads` and derives no restart. Without this rule,
+`configs/cobalt/smoke/s2.yaml` fell to `UNCLASSIFIED CONFIG` and escalated
+every resident.
+
+`test_a_smoke_suite_file_derives_no_restart_and_no_job_runs_the_smoke`
+checks the claim behind the rule, not only its output:
+- no `ops/com.cobalt.*.plist` invokes `smoke`;
+- the only source files that open a suite are `smoke/cli.py` and `smoke/config.py`.
+
+Import reach is deliberately not the test. `com.cobalt.radar` enters
+through `cobalt.cli`, which mounts every command module, so a change to
+smoke's code still derives that restart by the ordinary `src/` rule.

@@ -61,6 +61,29 @@ don't duplicate them.
 
 ## NOW (in build)
 
+- **S2-P4: picks, value column, nightly replay + counterfactual R, movers benchmark and miss line, `cobalt smoke s2` (2026-09-17). BUILD COMPLETE (chunks A–C); HUB VERIFICATION PENDING.**
+  - Plan: `docs/40 - DevDocs/plans/plan-s2-p4-2026-09-15.md`. Decision record: ADR-0010.
+  - **Builder reports:** `docs/40 - DevDocs/reports/s2-p4-build-opus-{A,B,C}-2026-09-17.md`.
+  - **Built:**
+    - migrations 0008/0009;
+    - the `rank_metric`/`rank_value` column;
+    - F3 `"user".picks` in the fill transaction;
+    - `com.cobalt.replay` at 21:05 Mon–Fri: movers + i1 archive, card misses with cf-R and immutable receipts, the `drc-misses/miss_line` unit;
+    - the shared L53 total-demand gate;
+    - `cobalt smoke s2`, read-only, K1–K18 from `configs/cobalt/smoke/s2.yaml`.
+  - **Hub owes:**
+    - the `requires_db`/`requires_vault` tests on cobalt_dev;
+    - `cobalt validate`;
+    - `cobalt jobs restarts main..HEAD`;
+    - the dev replay end-to-end;
+    - the leak scan and the commit (L46).
+  - **Deploy gates (ESCALATE):**
+    - the L53 gate refuses the archiver and replay under the unchanged `finviz_max_rpm` ceiling (Dejan's ruling);
+    - P2 formation binding;
+    - `radar.benchmark` values;
+    - `trade_count_band` values.
+  - **S2 close:** `cobalt smoke s2 --prod --cutoff <P4 D1 instant>` ≥ 09-22 evening. GREEN = S2 done.
+
 - **S2-P2 — Radar cards: F8 precondition evaluator + F10 dots / ladder / taps (2026-09-16): BUILD CHUNKS A–C COMPLETE, HUB VERIFICATION PENDING.**
   Plan `docs/40 - DevDocs/plans/plan-s2-p2-2026-09-15.md` (R1–R11), ADR-0009.
   Branch `sprint-2/cards`. Chunk A (`ca184c8`): migrations 0006/0007, the §10.5 predicate AST, anatomy detectors. Chunk B (`17eb35f`): S5 evaluate stage, dots/scoring, snap-down key taps, health pills. Chunk C (uncommitted, builder report `docs/40 - DevDocs/reports/s2-p2-build-opus-C-2026-09-16.md`): `/radar` ladder wired to `"user".radar_cards_v` with badges, hollow shadow dots, the 1–10 tap strip, key row and promote; explicit POST allowlist + GET sentinels; taxonomy v0.8 (schema 0.5 behind the 0.4 loader gate, `taxonomy catalyst-review`/`catalyst-apply`); `cards trail-fit-draft`; `cards shadow-report`; `radar audit-export`.

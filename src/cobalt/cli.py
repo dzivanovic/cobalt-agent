@@ -23,6 +23,8 @@ Two command groups:
     cobalt heartbeat beat/show
     cobalt day-open [--date YYYY-MM-DD] [--json] / cobalt day-open verdict "<line>"
     cobalt backup run/status/restore
+    cobalt replay nightly [--date] [--dry-run]
+    cobalt smoke <suite> --cutoff ISO8601 [--prod] [--json]   (read-only)
     cobalt stop / cobalt resume        (F17d kill phrase)
 
     cobalt validate
@@ -69,6 +71,7 @@ from cobalt.jobs.wrapper import JobStopped  # noqa: E402
 from cobalt.radar import cli as radar_cli  # noqa: E402
 from cobalt.replay import cli as replay_cli  # noqa: E402
 from cobalt.seatusage import cli as seatusage_cli  # noqa: E402
+from cobalt.smoke import cli as smoke_cli  # noqa: E402
 from cobalt.session import cli as session_cli  # noqa: E402
 from cobalt.settings import cli as settings_cli  # noqa: E402
 from cobalt.taxonomy import cli as taxonomy_cli  # noqa: E402
@@ -470,6 +473,7 @@ def main() -> None:
     generated_cli.add_parser(sub)
     radar_cli.add_parser(sub)
     replay_cli.add_parser(sub)
+    smoke_cli.add_parser(sub)
     jobs_cli.add_stop_parsers(sub)
 
     validate = sub.add_parser(

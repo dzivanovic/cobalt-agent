@@ -77,3 +77,10 @@ The morning sweep, in code: `cobalt.dayopen.cli.add_parser` mounts
 
 `replay_cli.add_parser(sub)` mounts `cobalt replay nightly [--date]
 [--dry-run]` (`replay/cli.md`).
+
+## 2026-09-17 — S2-P4: `cobalt smoke`
+
+`smoke_cli.add_parser(sub)` mounts `cobalt smoke <suite> --cutoff ISO8601
+[--date] [--prod] [--json]`, the read-only sprint smoke checklist
+(`smoke/cli.md`). The module docstring's command map now also lists
+`cobalt replay nightly` and `cobalt smoke`.
