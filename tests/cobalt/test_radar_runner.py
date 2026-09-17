@@ -3,6 +3,7 @@
 import asyncio
 from copy import deepcopy
 from datetime import datetime, time, timezone
+from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -419,3 +420,60 @@ def test_stage_crossing_matrix(crossing, crossed_stage, committed_before):
     next_result = asyncio.run(runner.cycle())
     assert next_result.state == "scanning"
     assert radar.pool["failed_stage"] == crossed_stage
+
+
+# ---------------------------------------------------------------------
+# S2-P4 STEP-2 (Astra R2-2): real-shaped open_members rows through the scan
+# ---------------------------------------------------------------------
+
+
+class ValueRadar(Radar):
+    """`open_members` rows in the exact shape the store selects."""
+
+    ROWS = [
+        {"ticker": "NVDA", "sources": ["list:index_heavyweights@0123456789ab"],
+         "entered_at": datetime(2026, 9, 3, 13, 30, tzinfo=timezone.utc), "below_cap_streak": 0,
+         "last_rank": 1, "trade_date": "2026-09-03", "rank_metric": "volume",
+         "rank_value": Decimal("5000000.000000")},
+        # A pre-deploy episode: the columns exist and are NULL.
+        {"ticker": "MSFT", "sources": ["list:index_heavyweights@0123456789ab"],
+         "entered_at": datetime(2026, 9, 3, 13, 30, tzinfo=timezone.utc), "below_cap_streak": 0,
+         "last_rank": 2, "trade_date": "2026-09-03", "rank_metric": None, "rank_value": None},
+    ]
+
+    def __init__(self, events):
+        super().__init__(events)
+        self.transitions = []
+
+    def open_members(self, _key):
+        return deepcopy(self.ROWS)
+
+    def apply_membership(self, **kwargs):
+        self.transitions = kwargs["transitions"]
+        super().apply_membership(**kwargs)
+
+
+class ListDownCollector(Collector):
+    async def screen(self, _block, now):
+        return ScreenerSnapshot("screen-synthetic", now,
+            ({"Ticker": "AAA", "Volume": "2", "Relative Volume": "2.5", "Asset Type": "Stock"},),
+            ("Ticker", "Volume", "Relative Volume", "Asset Type"))
+
+    async def listed(self, _block, _now):
+        raise RuntimeError("synthetic list outage")
+
+
+def test_open_member_values_flow_through_the_resident_scan_and_hold_preserves_them():
+    events = []
+    runner = _active_runner(events)
+    radar = ValueRadar(events)
+    runner.radar_store = radar
+    runner.collector = ListDownCollector()
+    result = asyncio.run(runner.cycle())
+    assert result.state == "scanning"
+    by = {item.ticker: item for item in radar.transitions}
+    assert (by["NVDA"].action, by["NVDA"].rank_metric, by["NVDA"].rank_value) == (
+        Action.HOLD, "volume", Decimal("5000000.000000"))
+    assert (by["MSFT"].action, by["MSFT"].rank_metric, by["MSFT"].rank_value) == (Action.HOLD, None, None)
+    assert (by["AAA"].action, by["AAA"].rank_metric, by["AAA"].rank_value) == (
+        Action.ADMIT, "rvol", Decimal("2.5"))

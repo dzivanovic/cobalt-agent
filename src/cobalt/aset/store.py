@@ -184,7 +184,7 @@ class AsetStore:
 
     def mark_filled(
         self, row_id: int, fill: "FillRecompute", *, now: Optional[datetime] = None
-    ) -> None:
+    ) -> "FillResult":
         """Fill-recompute persists as an UPDATE to the card row it
         belongs to (2026-09-03, LAW L28 step 3).
 
@@ -207,10 +207,14 @@ class AsetStore:
         # manual card. Two ways to fill a card that disagreed about what
         # a fill requires would be exactly the second write path the
         # one-path rule forbids.
+        #
+        # S2-P4 (Astra R1-5): the fill's `FillResult` is RETURNED, not
+        # dropped — the sheet renders "pick not recorded" from it. A pick
+        # gap never stops the fill figures below from persisting.
         from cobalt.cards.models import Actor
         from cobalt.cards.store import CardStore
 
-        CardStore(self.db_name).fill(
+        filled = CardStore(self.db_name).fill(
             row_id,
             actor=Actor.YOU,
             evidence={
@@ -250,6 +254,7 @@ class AsetStore:
                     f"{row_id} (expected exactly 1) — refusing to report a fill "
                     "that was not persisted."
                 )
+        return filled
 
     def account_mode_for(self, row_id: int) -> str:
         with self._connect() as conn:

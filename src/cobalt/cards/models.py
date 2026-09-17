@@ -31,6 +31,8 @@ from __future__ import annotations
 
 from enum import Enum
 
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
 
 class CardState(str, Enum):
     """The eight states a card can be in. `str` mixin so a value stamps
@@ -159,6 +161,37 @@ class IllegalTransition(RuntimeError):
         )
 
 
+class FillResult(BaseModel):
+    """What `CardStore.fill()` wrote (S2-P4 R2, Astra R1-5).
+
+    `transition_ids` are the `card_transitions` rows, in order — three on
+    a one-click manual fill from WATCH, one on a strict fill. The fill
+    COMMITTED whenever this object exists; a failed fill raises instead.
+
+    `pick_recorded` is the F3 pick row's outcome, written under SAVEPOINT
+    pick inside the same transaction. False never undoes the fill: the
+    sheet appends a red "pick not recorded" banner, the store logs the card
+    and the error class, and `cobalt cards picks` reports the gap MISSING.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    transition_ids: list[int] = Field(min_length=1)
+    pick_recorded: bool
+    pick_id: int | None
+    pick_error: str | None = None
+
+    @model_validator(mode="after")
+    def _outcome_is_named(self) -> "FillResult":
+        if self.pick_recorded != (self.pick_id is not None):
+            raise ValueError("pick_recorded must be True exactly when pick_id is set")
+        if not self.pick_recorded and not (self.pick_error or "").strip():
+            raise ValueError("an unrecorded pick must name its error")
+        if self.pick_recorded and self.pick_error is not None:
+            raise ValueError("a recorded pick carries no error")
+        return self
+
+
 def is_legal(from_state: CardState, to_state: CardState) -> bool:
     return to_state in ALLOWED[from_state]
 
@@ -226,6 +259,7 @@ __all__ = [
     "Actor",
     "FILL_TARGET",
     "CardState",
+    "FillResult",
     "IllegalTransition",
     "KEY_EDITABLE",
     "MISSED_EDGE",

@@ -39,6 +39,10 @@ def _delete_rows(store: AsetStore, ids: list[int]) -> None:
     to, so test rows left behind become real pollution in the DRC's
     counts (2026-09-03: 15 stray TEST/FORDATE rows did exactly that)."""
     with store._connect() as conn:
+        # S2-P4: a fill writes a `picks` row whose card FK is NO ACTION on
+        # purpose (a pick is never deleted with its card silently).
+        if conn.execute("SELECT to_regclass('\"user\".picks')").fetchone()[0]:
+            conn.execute("DELETE FROM picks WHERE card_id = ANY(%s)", (ids,))
         conn.execute("DELETE FROM aset_sizings WHERE id = ANY(%s)", (ids,))
 
 

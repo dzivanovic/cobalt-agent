@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime
+from decimal import Decimal
 from enum import Enum
 from typing import Annotated, List, Literal
 
@@ -14,6 +15,10 @@ from cobalt.archiver.models import Interval
 FILTER_RE = re.compile(r"^[a-z0-9_.]+(?:,[a-z0-9_.]+)*$")
 SORT_RE = re.compile(r"^-?[a-z0-9_]+$")
 KEY_RE = re.compile(r"^[a-z0-9_]+$")
+
+#: The metrics a pool may rank by — one spelling for the note block, the
+#: membership row's `rank_metric` CHECK (0008) and every model below.
+RankMetricName = Literal["volume", "rvol"]
 
 
 def _valid_hhmm(value: str) -> str:
@@ -195,10 +200,14 @@ class OpenMember(BaseModel):
     below_cap_streak: int = Field(ge=0)
     last_rank: int | None = None
     trade_date: date | str | None = None
+    # S2-P4 R1: the pair the latest scan wrote. NULL on every episode scanned
+    # before the 0008 deploy; carried unchanged through a frozen HOLD.
+    rank_metric: RankMetricName | None = None
+    rank_value: Decimal | None = None
 
 
 __all__ = [
     "Candidate", "ExcludeBlock", "ExcludedBy", "ListBlock", "OpenMember",
-    "PoolBlock", "PoolOverride", "RankMetric", "ScreenBlock", "SourceHealth",
-    "SourceSet",
+    "PoolBlock", "PoolOverride", "RankMetric", "RankMetricName", "ScreenBlock",
+    "SourceHealth", "SourceSet",
 ]

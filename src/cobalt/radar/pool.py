@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from enum import Enum
 from typing import Iterable, Sequence
 from zoneinfo import ZoneInfo
@@ -18,6 +19,7 @@ from .models import (
     ExcludedBy,
     OpenMember,
     PoolBlock,
+    RankMetricName,
     ScreenBlock,
     SourceHealth,
     SourceSet,
@@ -45,6 +47,18 @@ class Transition(BaseModel):
     excluded_by: ExcludedBy | None = None
     rollover: bool = False
     left_at: datetime | None = None
+    # S2-P4 R1: the metric that actually ranked this name on this scan (a
+    # screen override's metric, else the session's) and its value. Set on
+    # every ranked RETAIN/ADMIT/EXCLUDE; a HOLD carries the member's prior
+    # pair; None where no ranking happened or the export had no value.
+    rank_metric: RankMetricName | None = None
+    rank_value: Decimal | None = None
+
+
+def _as_decimal(value: float | None) -> Decimal | None:
+    """The export's parsed number as stored: through `str`, so the NUMERIC
+    column holds the digits the CSV carried, not a binary-float expansion."""
+    return None if value is None else Decimal(str(value))
 
 
 class Decision(BaseModel):
@@ -97,11 +111,22 @@ def _ranked(
     pool: PoolBlock,
     sources: list[SourceSet],
     now: datetime,
-) -> tuple[list[str], dict[str, int], dict[str, str]]:
+) -> tuple[
+    list[str], dict[str, int], dict[str, str], dict[str, tuple[str, Decimal | None]]
+]:
+    """(ordered, ranks, source_for, values).
+
+    `values[ticker]` is `(metric, value)` for the metric that ranked the
+    name: for a screen-sourced name, the winning screen's override metric
+    (else the session metric) and that screen's value; for a list-sourced
+    name, the session metric and the max across its lists — the same
+    expression the list ordering uses. None stays None.
+    """
     session = session_clock().session(now).value
     session_metric = getattr(pool.rank_metric, session)
     priority = {name: index for index, name in enumerate(pool.priority)}
     source_for: dict[str, str] = {}
+    values: dict[str, tuple[str, Decimal | None]] = {}
 
     def key(ticker: str):
         carrying = [
@@ -112,6 +137,7 @@ def _ranked(
         group = "screens" if screen_sources else "lists"
         if screen_sources:
             positions = []
+            metric_for: dict[str, str] = {}
             for source in screen_sources:
                 source_key = _source_key(source)
                 override = pool.overrides.get(source_key)
@@ -131,24 +157,36 @@ def _ranked(
                     else getattr(override, "first_from", None)
                 )
                 metric = override_metric or session_metric
+                metric_for[source.source] = metric
                 first = 0 if first_from and now.astimezone(ET).strftime("%H:%M") >= first_from else 1
                 positions.append(
                     (first, _metric_position(source, metric, ticker), source.note_order, source.source)
                 )
             first, position, order, best_source = min(positions)
+            best = next(source for source in screen_sources if source.source == best_source)
+            best_metric = metric_for[best_source]
+            values[ticker] = (
+                best_metric,
+                _as_decimal(best.metrics.get(ticker, {}).get(best_metric)),
+            )
         else:
             first = 1
             list_sources = [source for source in carrying if source.kind == "list"]
             best_source = min((source.source for source in list_sources), default=candidates[ticker].sources[0] if candidates[ticker].sources else "")
-            values = [source.metrics.get(ticker, {}).get(session_metric) for source in list_sources]
-            value = max((v for v in values if v is not None), default=None)
+            list_values = [source.metrics.get(ticker, {}).get(session_metric) for source in list_sources]
+            value = max((v for v in list_values if v is not None), default=None)
+            values[ticker] = (session_metric, _as_decimal(value))
             union = sorted(
                 candidates,
                 key=lambda name: (
+                    # None-filtered like the value expression below: a name
+                    # with no value on one list and a value on another
+                    # used to raise TypeError here (found S2-P4 STEP-2).
                     max(
                         (
                             source.metrics.get(name, {}).get(session_metric)
                             for source in sources if source.kind == "list" and name in source.tickers
+                            and source.metrics.get(name, {}).get(session_metric) is not None
                         ),
                         default=None,
                     ) is None,
@@ -171,7 +209,7 @@ def _ranked(
         return (priority[group], first if group == "screens" else 0, position, order, ticker)
 
     ordered = sorted(candidates, key=key)
-    return ordered, {ticker: index + 1 for index, ticker in enumerate(ordered)}, source_for
+    return ordered, {ticker: index + 1 for index, ticker in enumerate(ordered)}, source_for, values
 
 
 def decide(
@@ -285,7 +323,12 @@ def decide(
     ranked_candidates = {
         ticker: item for ticker, item in candidate_map.items() if ticker not in held
     }
-    ordered, ranks, source_for = _ranked(ranked_candidates, pool, source_rows, now)
+    ordered, ranks, source_for, values = _ranked(ranked_candidates, pool, source_rows, now)
+
+    def value_of(ticker: str) -> dict:
+        metric, value = values.get(ticker, (None, None))
+        return {"rank_metric": metric, "rank_value": value}
+
     seats = max(0, pool.cap - len(held))
     winners = ordered[:seats]
     provisional = list(winners)
@@ -299,7 +342,7 @@ def decide(
                 Transition(
                     ticker=ticker, action=Action.RETAIN,
                     sources=candidate_map[ticker].sources, source=source_for.get(ticker),
-                    rank=ranks[ticker], below_cap_streak=0,
+                    rank=ranks[ticker], below_cap_streak=0, **value_of(ticker),
                 )
             )
             continue
@@ -331,27 +374,27 @@ def decide(
         provisional[provisional.index(loser)] = member.ticker
         newcomers.remove(loser)
         transitions.append(
-            Transition(ticker=member.ticker, action=Action.RETAIN, sources=candidate_map.get(member.ticker, Candidate(ticker=member.ticker, sources=member.sources)).sources, source=source_for.get(member.ticker), rank=rank, below_cap_streak=streak)
+            Transition(ticker=member.ticker, action=Action.RETAIN, sources=candidate_map.get(member.ticker, Candidate(ticker=member.ticker, sources=member.sources)).sources, source=source_for.get(member.ticker), rank=rank, below_cap_streak=streak, **value_of(member.ticker))
         )
 
     admitted = {t.ticker for t in transitions if t.action in {Action.RETAIN, Action.HOLD}}
     for ticker, member in held.items():
         transitions.append(
-            Transition(ticker=ticker, action=Action.HOLD, sources=member.sources, rank=member.last_rank, below_cap_streak=member.below_cap_streak)
+            Transition(ticker=ticker, action=Action.HOLD, sources=member.sources, rank=member.last_rank, below_cap_streak=member.below_cap_streak, rank_metric=member.rank_metric, rank_value=member.rank_value)
         )
         admitted.add(ticker)
     for ticker in provisional:
         if ticker not in opens:
             item = candidate_map[ticker]
             transitions.append(
-                Transition(ticker=ticker, action=Action.ADMIT, sources=item.sources, source=source_for.get(ticker), rank=ranks[ticker])
+                Transition(ticker=ticker, action=Action.ADMIT, sources=item.sources, source=source_for.get(ticker), rank=ranks[ticker], **value_of(ticker))
             )
             admitted.add(ticker)
     for ticker in ordered:
         if ticker not in opens and ticker not in provisional:
             item = candidate_map[ticker]
             transitions.append(
-                Transition(ticker=ticker, action=Action.EXCLUDE, sources=item.sources, source=source_for.get(ticker), rank=ranks[ticker], excluded_by=ExcludedBy.CONFIG_CAP)
+                Transition(ticker=ticker, action=Action.EXCLUDE, sources=item.sources, source=source_for.get(ticker), rank=ranks[ticker], excluded_by=ExcludedBy.CONFIG_CAP, **value_of(ticker))
             )
 
     if len(admitted) > pool.cap:

@@ -713,7 +713,7 @@ class TestOneClickFill:
         card_id = _make_card(aset, ticker="TESTFILL")
         assert cards.state_of(card_id) is CardState.WATCH
 
-        ids = cards.fill(card_id, actor=Actor.YOU, reason="filled at 10.10")
+        ids = cards.fill(card_id, actor=Actor.YOU, reason="filled at 10.10").transition_ids
 
         assert len(ids) == 3, "one click, three transition rows"
         assert cards.state_of(card_id) is CardState.FILLED
@@ -736,7 +736,7 @@ class TestOneClickFill:
         card_id = _make_card(aset, ticker="TESTFILL2")
         cards.transition(card_id, CardState.ARMED, actor=Actor.YOU)
 
-        ids = cards.fill(card_id, actor=Actor.YOU)
+        ids = cards.fill(card_id, actor=Actor.YOU).transition_ids
 
         assert len(ids) == 2
         assert [h["to_state"] for h in cards.history(card_id)[1:]] == [

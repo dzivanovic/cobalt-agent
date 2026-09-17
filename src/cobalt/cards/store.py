@@ -40,12 +40,15 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Optional
 
+from loguru import logger
+
 from cobalt import db, env
 from cobalt.db import Side
 from cobalt.aset.store import MIGRATIONS_DIR as ASET_MIGRATIONS
 from cobalt.session import assert_writable, session_clock
 from cobalt.session import clock as clock_mod
 
+from . import picks
 from .models import (
     ALLOWED,
     FILL_TARGET,
@@ -53,6 +56,7 @@ from .models import (
     TERMINAL,
     Actor,
     CardState,
+    FillResult,
     IllegalTransition,
     Origin,
     assert_edge,
@@ -186,6 +190,34 @@ class CardStore:
         if row is None:
             raise CardStateError(f"no aset_sizings row with id {card_id}")
         return Origin(row[0])
+
+    def filled_with_picks(self, day: date) -> list[dict[str, Any]]:
+        """Every FILLED transition on ET `day`, left-joined to its pick.
+
+        Driven by `card_transitions`, not by current `state`, card creation
+        date or `filled_at` (S2-P4, Astra R1-7): a card that later CLOSED
+        still carries its pick, and the direct-button route never sets
+        `filled_at`. A FILLED transition with no pick row is a gap —
+        `cobalt cards picks` prints it MISSING.
+        """
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                SELECT t.id AS transition_id, t.card_id, t.at AS filled_at, s.ticker,
+                       s.state, s.origin, p.id AS pick_id, p.not_in_pool, p.pool_basis,
+                       p.pool_rank, p.pool_size, p.rank_metric, p.rank_value, p.card_score,
+                       p.card_score_rank, p.focus_top4, p.score_basis
+                FROM card_transitions t
+                JOIN aset_sizings s ON s.id = t.card_id
+                LEFT JOIN picks p ON p.transition_id = t.id
+                WHERE t.to_state = 'FILLED'
+                  AND (t.at AT TIME ZONE 'America/New_York')::date = %s
+                ORDER BY t.at, t.id
+                """,
+                (day,),
+            )
+            columns = [d.name for d in cur.description]
+            return [dict(zip(columns, r)) for r in cur.fetchall()]
 
     def open_cards(self) -> list[dict[str, Any]]:
         """Cards not in a terminal state — what the expiry job considers
@@ -403,12 +435,23 @@ class CardStore:
         reason: Optional[str] = None,
         now: Optional[datetime] = None,
         allow_prod: bool = False,
-    ) -> list[int]:
+    ) -> FillResult:
         """Fill a card. THE entry point for reaching FILLED.
 
-        Returns the `card_transitions` row ids written, in order — so a
-        one-click fill from WATCH returns three and a fill of an already
-        TRIGGERED card returns one.
+        Returns a `FillResult`: the `card_transitions` row ids written, in
+        order — three on a one-click fill from WATCH, one on a fill of an
+        already TRIGGERED card — and whether the F3 pick row was recorded.
+
+        ONE TRANSACTION ON EVERY ROUTE (S2-P4, Astra R1-4). The fill opens
+        one USER transaction and passes it to every `transition()` hop,
+        the strict single-hop route included. After the FILLED hop, still
+        inside it, `picks.record_pick` runs under `SAVEPOINT pick`. Any
+        exception there rolls back to the savepoint ONLY: the fill commits,
+        `pick_recorded` is False with the error named, and one ERROR line
+        (card id + error class) goes to the process log — for the sheet,
+        `com.cobalt.aset`'s stderr, `~/cobalt/logs/aset.err`. A failure of
+        the fill itself (a hop, the savepoint rollback, the commit) rolls
+        everything back and raises; it never returns a result.
 
         ONE CLICK ON A MANUAL CARD (CTO review of S1-P2, 2026-09-04).
         A card whose `origin` is `manual` may be filled from WATCH or
@@ -437,19 +480,10 @@ class CardStore:
             raise IllegalTransition(state, FILL_TARGET, card_id)
 
         route = fill_path(state)
-        if origin is not Origin.MANUAL or len(route) <= 1:
-            # Strict path: radar cards, and manual cards already sitting
-            # one legal edge away. `transition()` raises by name if the
-            # single edge is not legal (a terminal card, say).
-            return [
-                self.transition(
-                    card_id, FILL_TARGET, actor=actor, evidence=evidence,
-                    reason=reason, now=ts, allow_prod=allow_prod,
-                )
-            ]
-
-        if not route:
-            raise IllegalTransition(state, FILL_TARGET, card_id)
+        # Strict path: radar cards, and manual cards already sitting one
+        # legal edge away. `transition()` raises by name if the single
+        # edge is not legal (a terminal card, say).
+        strict = origin is not Origin.MANUAL or len(route) <= 1
 
         # EVERY HOP IN ONE TRANSACTION. A shortcut that crashed between
         # ARMED and TRIGGERED would leave a card armed that nobody armed
@@ -459,34 +493,67 @@ class CardStore:
         conn = self._connect(allow_prod=allow_prod)
         conn.autocommit = False
         try:
-            for hop in route[:-1]:
-                ids.append(
-                    self.transition(
-                        card_id, hop,
-                        actor=Actor.COBALT,
-                        evidence=dict(AUTO_FILL_EVIDENCE),
-                        reason=(
-                            f"inserted by the one-click fill: a manual card cannot reach "
-                            f"{FILL_TARGET.value} without passing through {hop.value}, and "
-                            "the trader filled it. Not his tap — actor is cobalt."
-                        ),
-                        now=ts,
-                        conn=conn,
+            if not strict:
+                for hop in route[:-1]:
+                    ids.append(
+                        self.transition(
+                            card_id, hop,
+                            actor=Actor.COBALT,
+                            evidence=dict(AUTO_FILL_EVIDENCE),
+                            reason=(
+                                f"inserted by the one-click fill: a manual card cannot reach "
+                                f"{FILL_TARGET.value} without passing through {hop.value}, and "
+                                "the trader filled it. Not his tap — actor is cobalt."
+                            ),
+                            now=ts,
+                            conn=conn,
+                        )
                     )
-                )
             ids.append(
                 self.transition(
                     card_id, FILL_TARGET, actor=actor, evidence=evidence,
                     reason=reason, now=ts, conn=conn,
                 )
             )
+            pick_id, pick_error = self._record_pick(conn, card_id, ids[-1], ts)
             conn.commit()
         except BaseException:
             conn.rollback()
             raise
         finally:
             conn.close()
-        return ids
+        return FillResult(
+            transition_ids=ids,
+            pick_recorded=pick_id is not None,
+            pick_id=pick_id,
+            pick_error=pick_error,
+        )
+
+    @staticmethod
+    def _record_pick(
+        conn, card_id: int, transition_id: int, ts: datetime
+    ) -> tuple[Optional[int], Optional[str]]:
+        """F3 pick under `SAVEPOINT pick` (S2-P4 R2). Returns (pick id,
+        None) or (None, "<ErrorClass>: <message>").
+
+        Only `Exception` is caught: an interrupt still aborts the fill. If
+        the ROLLBACK TO SAVEPOINT itself fails the connection is unusable
+        and that error propagates — the fill rolls back and raises.
+        """
+        conn.execute(f"SAVEPOINT {picks.PICK_SAVEPOINT}")
+        try:
+            pick_id = picks.record_pick(conn, card_id, transition_id, ts)
+        except Exception as exc:
+            conn.execute(f"ROLLBACK TO SAVEPOINT {picks.PICK_SAVEPOINT}")
+            logger.error(
+                "card {}: pick NOT recorded ({}) — the fill commits; "
+                "`cobalt cards picks` reports it MISSING",
+                card_id,
+                type(exc).__name__,
+            )
+            return None, f"{type(exc).__name__}: {exc}"
+        conn.execute(f"RELEASE SAVEPOINT {picks.PICK_SAVEPOINT}")
+        return pick_id, None
 
     # -- genesis ------------------------------------------------------
 
@@ -1206,4 +1273,4 @@ _DOT_UPSERT_ENGINE = (
 )
 
 
-__all__ = ["BACKFILL_MARKER", "CardStateError", "CardStore", "IllegalTransition"]
+__all__ = ["BACKFILL_MARKER", "CardStateError", "CardStore", "FillResult", "IllegalTransition"]

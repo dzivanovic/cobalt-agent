@@ -6,6 +6,7 @@
     cobalt cards backfill [--dry-run]
     cobalt cards expire [--at ISO8601] [--dry-run]
     cobalt cards edges
+    cobalt cards picks [--date YYYY-MM-DD] [--cutoff ISO8601]
 
 `edges` prints the edge table straight from `models.ALLOWED` — the
 DevDocs page is generated from it, so the wiki cannot drift from what the
@@ -19,13 +20,15 @@ the clock rather than sleeping until 16:05.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+import sys
+from datetime import date, datetime
 
 from cobalt import env
 from cobalt.session.clock import ET, now_utc, session_clock
 
 from .expire import expire_due
 from .models import FILL_TARGET, Actor, CardState, edge_table_markdown
+from .picks import PickReportRow, render_picks_report
 from .store import CardStore
 
 
@@ -75,13 +78,15 @@ def cmd_move(args: argparse.Namespace) -> None:
     # ONE PATH TO FILLED (S1-P3) — the CLI takes the same route the sheet
     # and the actual-fill form take, so a manual card gets its missing
     # rows here too and a radar card is refused here too.
+    filled = None
     if to_state is FILL_TARGET:
-        tids = store.fill(
+        filled = store.fill(
             args.card_id,
             actor=Actor(args.actor),
             reason=args.reason,
             evidence={"via": "cobalt cards move"},
         )
+        tids = filled.transition_ids
     else:
         tids = [
             store.transition(
@@ -94,6 +99,40 @@ def cmd_move(args: argparse.Namespace) -> None:
         ]
     tid = ", ".join(str(i) for i in tids)
     print(f"card {args.card_id}: {before} -> {args.to}  (card_transitions id {tid})")
+    if filled is not None and not filled.pick_recorded:
+        # The fill COMMITTED (R2); the pick did not. Exit 1 so a script
+        # cannot mistake the gap for a clean fill.
+        print(
+            f"PICK NOT RECORDED for card {args.card_id}: {filled.pick_error} — the fill "
+            "stands; `cobalt cards picks` reports this card MISSING.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+
+def cmd_picks(args: argparse.Namespace) -> None:
+    """F3: pick vs rank for every FILLED transition on one ET day.
+
+    Exit 1 when any counted FILLED transition has no pick row (MISSING).
+    `--cutoff` (the P4 deploy instant) keeps earlier gaps visible but not
+    counted — the K6 smoke check's comparison window.
+    """
+    day = date.fromisoformat(args.date) if args.date else session_clock().to_et(now_utc()).date()
+    cutoff = None
+    if args.cutoff:
+        cutoff = datetime.fromisoformat(args.cutoff)
+        if cutoff.tzinfo is None:
+            raise SystemExit(
+                f"--cutoff {args.cutoff!r} has no timezone; pass an offset (…-04:00) or a 'Z'."
+            )
+    rows = [PickReportRow(**row) for row in _store().filled_with_picks(day)]
+    if not rows:
+        print(f"no FILLED transitions on {day.isoformat()}")
+        return
+    text, missing = render_picks_report(rows, day=day, cutoff=cutoff)
+    print(text)
+    if missing:
+        raise SystemExit(1)
 
 
 def cmd_backfill(args: argparse.Namespace) -> None:
@@ -181,6 +220,16 @@ def add_parser(sub) -> None:
 
     edges = csub.add_parser("edges", help="Print the edge table (source of the DevDoc).")
     edges.set_defaults(func=cmd_edges)
+
+    picks = csub.add_parser(
+        "picks", help="F3: pick vs pool/card-score rank for every FILLED card that day."
+    )
+    picks.add_argument("--date", help="ET trading day YYYY-MM-DD (default: today ET).")
+    picks.add_argument(
+        "--cutoff",
+        help="ISO 8601 instant WITH offset; gaps before it print but do not fail (K6).",
+    )
+    picks.set_defaults(func=cmd_picks)
 
     trail = csub.add_parser(
         "trail-fit-draft",

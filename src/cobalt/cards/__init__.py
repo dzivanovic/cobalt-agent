@@ -13,7 +13,10 @@ Four pieces, one law each:
   BEFORE any state logic, so a refused write leaves no trace.
 * `expire.py` — a window that closed is an ACT with an actor and
   evidence, not a predicate evaluated on read.
-* `cli.py`    — `cobalt cards state/history/backfill/expire/edges`.
+* `cli.py`    — `cobalt cards state/history/backfill/expire/edges/picks`.
+* `picks.py`  — F3 (S2-P4): the pick row `fill()` writes under
+  `SAVEPOINT pick`, snapshotting pool rank/metric/value and card-score
+  rank at pick time. A pick failure never undoes the fill.
 
 ONE-CLICK FILL (S1-P3, CTO review). `store.fill()` is the single entry
 point to FILLED. On a card whose `origin` is `manual` it walks the rest
@@ -38,6 +41,7 @@ from .models import (
     TERMINAL,
     Actor,
     CardState,
+    FillResult,
     IllegalTransition,
     Origin,
     assert_edge,
@@ -56,6 +60,7 @@ __all__ = [
     "CardState",
     "CardStateError",
     "CardStore",
+    "FillResult",
     "IllegalTransition",
     "KEY_EDITABLE",
     "Origin",

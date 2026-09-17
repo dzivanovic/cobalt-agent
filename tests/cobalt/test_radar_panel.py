@@ -7,6 +7,7 @@ import json
 import os
 import re
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from typing import ClassVar
@@ -103,6 +104,12 @@ def _small_snapshot():
     current["closed_scan_id"] = None
     departed = copy.deepcopy(next(row for row in admitted[1:] if row["excluded_by"] is not None))
     never_admitted = copy.deepcopy(excluded[0])
+    # The hub-cut fixture predates 0008. The store's query selects both
+    # columns since S2-P4, and every episode scanned before the deploy
+    # holds NULL in them (R1: no backfill) — that is the shape given here.
+    for row in (current, departed, never_admitted):
+        row.setdefault("rank_metric", None)
+        row.setdefault("rank_value", None)
     pool_row = copy.deepcopy(POOL_FIXTURE["pool"])
     pool_row.update(
         members=1,
@@ -161,6 +168,8 @@ def test_store_members_for_day_selects_every_episode_column():
         "opened_scan_id",
         "last_scan_id",
         "closed_scan_id",
+        "rank_metric",
+        "rank_value",
     ]
     rows = [tuple(range(len(columns)))]
 
@@ -216,6 +225,43 @@ def test_real_shape_episode_ids_distinguish_exclusion_promotion_departure_and_re
     assert (
         sum(row["entered_at"] is not None and row["left_at"] is not None for row in episodes) >= 2
     )
+
+
+def test_pre_deploy_null_value_renders_dash():
+    view, _ = _build()
+    row = view.pool.current[0]
+    assert (row.rank_metric, row.rank_value) == (None, None)
+    rendered = panel.render_pool(view.pool)
+    cell = re.search(
+        rf'<tr data-episode-id="{row.episode_id}"[^>]*>(.*?)</tr>', rendered
+    ).group(1)
+    assert '<td class="mono rank-value">—</td>' in cell
+
+
+def test_pool_view_shows_value_beside_metric_name():
+    """R1-19: query row -> MembershipRecord -> PoolRow -> HTML, with the
+    per-row metric name (a screen override's name, not the session's)."""
+    pool_row, members = _small_snapshot()
+    members[0].update(rank_metric="volume", rank_value=Decimal("1234567.000000"))
+    members[1].update(rank_metric="rvol", rank_value=Decimal("3.250000"))
+    view, _ = _build(pool_row=pool_row, members=members)
+    assert view.pool.rank_metric == "volume"  # the stored premarket session metric
+    current, departed = view.pool.current[0], view.pool.departed[0]
+    assert (current.rank_metric, current.rank_value) == ("volume", Decimal("1234567.000000"))
+    assert (departed.rank_metric, departed.rank_value) == ("rvol", Decimal("3.250000"))
+    rendered = panel.render_pool(view.pool)
+    assert '<td class="mono rank-value">volume 1234567</td>' in rendered
+    assert '<td class="mono rank-value">rvol 3.25</td>' in rendered
+    assert "<th>value</th>" in rendered
+
+
+def test_membership_row_without_the_value_columns_fails_loud():
+    """The columns are selected on every read; a row missing them is a
+    store that forgot them, not a pre-deploy NULL."""
+    pool_row, members = _small_snapshot()
+    del members[0]["rank_value"]
+    with pytest.raises(panel.RadarPanelError, match="invalid radar membership row"):
+        _build(pool_row=pool_row, members=members)
 
 
 def test_departed_rows_render_left_time_reason_and_episode_id():

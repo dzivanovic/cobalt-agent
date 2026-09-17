@@ -80,22 +80,34 @@ def _table_body(text: str, qualified: str) -> str:
 
 
 def test_0006_and_0007_are_registered_forward_in_order():
+    # A position in FORWARD is not an identity — later sprints append. Assert
+    # by name: 0006 is followed immediately by 0007.
     names = [p.name for p in FORWARD]
-    assert names[-2:] == ["0006_radar_score.sql", "0007_radar_cards.sql"]
+    assert "0006_radar_score.sql" in names, names
+    start = names.index("0006_radar_score.sql")
+    assert names[start:][:2] == ["0006_radar_score.sql", "0007_radar_cards.sql"]
     for path in (SYSTEM_SQL, SYSTEM_ROLLBACK, USER_SQL, USER_ROLLBACK):
         assert path.exists(), path
 
 
-def test_rollback_selects_0007_then_0006_newest_first():
-    assert [p.name for p in REVERSE[:2]] == [
+def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first():
+    assert [p.name for p in REVERSE[:4]] == [
+        "0009_picks_missed.rollback.sql",
+        "0008_radar_value_movers.rollback.sql",
         "0007_radar_cards.rollback.sql",
         "0006_radar_score.rollback.sql",
     ]
     assert [p.name for p in _rollback_paths("0005")] == [
+        "0009_picks_missed.rollback.sql",
+        "0008_radar_value_movers.rollback.sql",
         "0007_radar_cards.rollback.sql",
         "0006_radar_score.rollback.sql",
     ]
-    assert [p.name for p in _rollback_paths("0006")] == ["0007_radar_cards.rollback.sql"]
+    assert [p.name for p in _rollback_paths("0006")] == [
+        "0009_picks_missed.rollback.sql",
+        "0008_radar_value_movers.rollback.sql",
+        "0007_radar_cards.rollback.sql",
+    ]
 
 
 # ---------------------------------------------------------------------

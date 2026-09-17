@@ -515,6 +515,80 @@ class TestCardControls:
         assert ">DISARM<" in html_out
 
 
+class TestPickNotRecordedBanner:
+    """S2-P4 R2 / Astra R1-5: both HTTP fill paths keep their success
+    banner and APPEND a red "pick not recorded" banner when the fill
+    committed without its pick."""
+
+    GAP = None
+
+    @staticmethod
+    def _result(recorded: bool):
+        from cobalt.cards.models import FillResult
+
+        if recorded:
+            return FillResult(transition_ids=[11, 12, 13], pick_recorded=True, pick_id=5)
+        return FillResult(transition_ids=[11, 12, 13], pick_recorded=False, pick_id=None,
+                          pick_error="UndefinedTable: relation \"picks\" does not exist")
+
+    def _fill_form(self):
+        return dict(BASE_SIZE_FORM, actual_fill="218.91",
+                    orig_timestamp="2026-08-31T09:58:00-04:00", card_row_id="4242")
+
+    def _stub_fill_route(self, monkeypatch, recorded):
+        from types import SimpleNamespace
+
+        result = self._result(recorded)
+
+        class Store:
+            def __init__(self, db_name=None):
+                pass
+
+            def ensure_schema(self):
+                pass
+
+            def mark_filled(self, row_id, fill):
+                return result
+
+        monkeypatch.setattr(web_module, "AsetStore", Store)
+        monkeypatch.setattr(web_module, "save_fill_update",
+                            lambda *a, **k: ("/dev/note.md", SimpleNamespace(action="appended")))
+        monkeypatch.setattr(web_module, "_open_cards_section", lambda: "")
+
+    @pytest.mark.parametrize("recorded", [True, False])
+    def test_fill_form_route(self, monkeypatch, recorded):
+        self._stub_fill_route(monkeypatch, recorded)
+        r = client.post("/fill", data=self._fill_form())
+        assert "aset_sizings id 4242 marked FILLED" in r.text, "the success banner stays"
+        assert ("pick not recorded" in r.text) is (not recorded)
+        if not recorded:
+            assert 'class="failed"' in r.text and "UndefinedTable" in r.text
+            assert "cobalt cards picks" in r.text
+
+    @pytest.mark.parametrize("recorded", [True, False])
+    def test_card_move_fill_route(self, monkeypatch, recorded):
+        result = self._result(recorded)
+
+        class Cards:
+            def ensure_schema(self):
+                pass
+
+            def state_of(self, card_id):
+                from cobalt.cards.models import CardState
+
+                return CardState.WATCH
+
+            def fill(self, card_id, **kwargs):
+                return result
+
+        monkeypatch.setattr(web_module, "CardStore", Cards)
+        monkeypatch.setattr(web_module, "_open_cards_section", lambda: "")
+        r = client.post("/card/7/move", data={"to": "FILLED"})
+        assert "card_transitions id(s) 11, 12, 13" in r.text
+        assert "inserted 2 missing transition row(s)" in r.text
+        assert ("pick not recorded" in r.text) is (not recorded)
+
+
 class TestDayModeBannerStage:
     """The stage LABEL and the MODE must come from one rule. Otherwise the
     banner can read "stage 2 (decided)" while showing the stage-1 floor —

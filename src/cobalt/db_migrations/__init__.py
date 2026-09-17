@@ -21,6 +21,15 @@
                          columns, dots, taps, run receipt, views.
 `0007_radar_cards.rollback.sql` — deletes radar-origin cards, drops the
                                   card tables/columns, restores NOT NULL.
+`0008_radar_value_movers.sql` — membership rank_metric/rank_value and the
+                              system movers_daily table (S2-P4).
+`0008_radar_value_movers.rollback.sql` — drops movers_daily and both columns.
+`0009_picks_missed.sql` — "user".picks and "user".missed (S2-P4).
+`0009_picks_missed.rollback.sql` — drops both tables.
+
+0006/0007 are S2-P2's, 0008/0009 are S2-P4's. Both tuples stay ordered by
+version; every file is idempotent and neither 0008 nor 0009 names a P2
+object (`--down-to` selects by version, never by position).
 
 These are the DATABASE-WIDE migrations and they are the only ones that
 live outside a feature module. A module's own DDL still lives in its own
@@ -37,7 +46,7 @@ from pathlib import Path
 
 MIGRATIONS_DIR = Path(__file__).parent
 
-#: Applied in this order, every time, both idempotent.
+#: Applied in this order, every time, every file idempotent.
 FORWARD = (
     MIGRATIONS_DIR / "0001_schemas.sql",
     MIGRATIONS_DIR / "0002_move_tables.sql",
@@ -46,10 +55,14 @@ FORWARD = (
     MIGRATIONS_DIR / "0005_heartbeat_note_absent.sql",
     MIGRATIONS_DIR / "0006_radar_score.sql",
     MIGRATIONS_DIR / "0007_radar_cards.sql",
+    MIGRATIONS_DIR / "0008_radar_value_movers.sql",
+    MIGRATIONS_DIR / "0009_picks_missed.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0009_picks_missed.rollback.sql",
+    MIGRATIONS_DIR / "0008_radar_value_movers.rollback.sql",
     MIGRATIONS_DIR / "0007_radar_cards.rollback.sql",
     MIGRATIONS_DIR / "0006_radar_score.rollback.sql",
     MIGRATIONS_DIR / "0005_heartbeat_note_absent.rollback.sql",

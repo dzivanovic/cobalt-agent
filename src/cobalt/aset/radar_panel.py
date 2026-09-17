@@ -28,7 +28,7 @@ from cobalt.cards import TERMINAL, CardState, CardStore
 from cobalt.cards.models import KEY_EDITABLE
 from cobalt.cards.radar import FIELD_OWNERS, LadderEntry, ladder_order
 from cobalt.cards.scoring import Dot, colour_thresholds, dot_colour
-from cobalt.radar.models import PoolBlock
+from cobalt.radar.models import PoolBlock, RankMetricName
 from cobalt.radar.store import RadarStore
 from cobalt.session.clock import now_utc, session_clock
 from cobalt.session.models import Session
@@ -118,6 +118,10 @@ class MembershipRecord(_ViewModel):
     opened_scan_id: int
     last_scan_id: int
     closed_scan_id: int | None
+    # S2-P4 R1 — required, nullable. NULL is a pre-deploy episode; a row
+    # MISSING the keys is a store that did not select them, and fails.
+    rank_metric: RankMetricName | None
+    rank_value: Decimal | None
 
     @field_validator("first_seen_at", "entered_at", "left_at")
     @classmethod
@@ -152,6 +156,8 @@ class PoolRow(_ViewModel):
     entered_at: datetime | None
     left_at: datetime | None
     excluded_by: str | None
+    rank_metric: RankMetricName | None
+    rank_value: Decimal | None
     category: Literal["current", "departed", "excluded"]
     entered_since: bool = False
     left_since: bool = False
@@ -414,6 +420,8 @@ def _row(
         entered_at=record.entered_at,
         left_at=record.left_at,
         excluded_by=record.excluded_by,
+        rank_metric=record.rank_metric,
+        rank_value=record.rank_value,
         category=category,
         entered_since=bool(admitted and since is not None and record.entered_at > since),
         left_since=bool(
@@ -785,6 +793,18 @@ def _fmt_dt(value: datetime | None) -> str:
     return "—" if value is None else value.isoformat(timespec="seconds")
 
 
+def _rank_value_cell(row: PoolRow) -> str:
+    """The metric that ranked this row and its stored value, e.g.
+    `volume 1234567` or `rvol 3.25`. A pre-deploy row (both NULL) is a
+    dash; a metric with no value prints the name and a dash. The value is
+    the stored NUMERIC with trailing zeros dropped — never rounded."""
+    if row.rank_metric is None:
+        return "—"
+    if row.rank_value is None:
+        return f"{row.rank_metric} —"
+    return f"{row.rank_metric} {format(row.rank_value.normalize(), 'f')}"
+
+
 def _pool_table(rows: list[PoolRow], title: str) -> str:
     e = html.escape
 
@@ -794,6 +814,7 @@ def _pool_table(rows: list[PoolRow], title: str) -> str:
         return (
             f'<tr data-episode-id="{row.episode_id}" data-category="{row.category}">'
             f'<td class="mono">{e(str(row.position or "—"))}</td><td class="ticker">{e(row.ticker)}</td>'
+            f'<td class="mono rank-value">{e(_rank_value_cell(row))}</td>'
             f"<td>{e(row.session.value)}</td><td>{e(row.source)}</td>"
             f"<td>{e(_fmt_dt(row.entered_at))} {entered_badge}</td>"
             f"<td>{e(_fmt_dt(row.left_at))} {left_badge}</td>"
@@ -802,10 +823,10 @@ def _pool_table(rows: list[PoolRow], title: str) -> str:
 
     body = "".join(render_row(row) for row in rows)
     if not body:
-        body = '<tr><td colspan="7" class="muted">none</td></tr>'
+        body = '<tr><td colspan="8" class="muted">none</td></tr>'
     return (
         f'<h3>{e(title)} <span class="count">{len(rows)}</span></h3>'
-        "<table><thead><tr><th>rank</th><th>ticker</th><th>session</th><th>source</th>"
+        "<table><thead><tr><th>rank</th><th>ticker</th><th>value</th><th>session</th><th>source</th>"
         f"<th>entered</th><th>left</th><th>excluded by</th></tr></thead><tbody>{body}</tbody></table>"
     )
 

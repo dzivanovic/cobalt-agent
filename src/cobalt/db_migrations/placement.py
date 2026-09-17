@@ -75,6 +75,11 @@ CREATED_TABLES: dict[str, Side] = {
     "card_dots": Side.USER,
     "card_dot_taps": Side.USER,
     "radar_score_receipt": Side.USER,
+    # db_migrations/0008_radar_value_movers.sql — market data (S2-P4 R5)
+    "movers_daily": Side.SYSTEM,
+    # db_migrations/0009_picks_missed.sql — one trader's record (S2-P4 R2/R4)
+    "picks": Side.USER,
+    "missed": Side.USER,
 }
 
 #: VIEWS created by database-wide migrations. On a side like any table
@@ -93,10 +98,10 @@ CREATED_VIEWS: dict[str, Side] = {
 #: that creates one has a ruled side to create it on. Nothing here exists
 #: yet; the placement test only checks tables that DO exist.
 DECLARED_TABLES: dict[str, Side] = {
-    # S2-P4 / S3 — named now so the placement test knows them on sight.
+    # S3 — named now so the placement test knows them on sight. `missed`
+    # left this list when S2-P4's 0009 built it.
     "legs": Side.USER,
     "fills": Side.USER,
-    "missed": Side.USER,
     "drc_rows": Side.USER,
     "prediction_records": Side.USER,
     # S2-P2 — taxonomy anatomy instances (regime, range, gap, extension,

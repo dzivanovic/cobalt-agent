@@ -89,6 +89,11 @@ DIGEST_EXCLUDED_COLUMNS = (
     "vault_reason",
     "account_mode",
     "pool_member_id",
+    # 0008 (S2-P4, Astra R1-1): adding two nullable columns to a populated
+    # radar_membership is not content corruption, and dropping them on
+    # rollback must not read as CHANGED.
+    "rank_metric",
+    "rank_value",
 )
 
 #: Columns a registered migration adds to ONE table, excluded from that

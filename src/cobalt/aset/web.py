@@ -743,6 +743,18 @@ def _failed(message: str) -> str:
     return f'<div class="failed">FAILED\n{html.escape(message)}</div>'
 
 
+def _pick_banner(card_id: int, filled) -> str:
+    """S2-P4 R2: the red "pick not recorded" banner, APPENDED after a fill's
+    success banner — the fill committed; only the F3 pick row is missing.
+    Empty when the pick was recorded."""
+    if filled.pick_recorded:
+        return ""
+    return _failed(
+        f"card {card_id}: pick not recorded ({filled.pick_error}). The fill stands; "
+        "`cobalt cards picks` reports this card MISSING."
+    )
+
+
 def _resolve_risk_dollars(sheet_modes_cfg, mode: str, grade: str) -> Decimal:
     """Every real Grade now has a configured dollar figure (D is always
     0), so this only needs a fallback for a garbage/missing grade or
@@ -1086,7 +1098,7 @@ async def fill(request: Request) -> str:
         # IllegalTransition naming the edge — it is NOT coerced, because
         # a card that reached FILLED without ever being TRIGGERED makes
         # the MISSED count (Charter §3 F7) meaningless.
-        store.mark_filled(int(card_row_raw), fill_result)
+        filled = store.mark_filled(int(card_row_raw), fill_result)
 
         note_path, note_write = save_fill_update(cfg, fill_result, orig_timestamp)
     except IllegalTransition as e:
@@ -1115,6 +1127,7 @@ async def fill(request: Request) -> str:
             f"FILLED · fill update {html.escape(note_write.action)} in "
             f"{html.escape(str(note_path))}</div>"
         )
+    banner += _pick_banner(int(card_row_raw), filled)
     return _render(
         banner=banner,
         result=_result_card(original, form, fill=fill_result),
@@ -1181,17 +1194,19 @@ async def card_move(card_id: int, request: Request) -> str:
         store.ensure_schema()
         before = store.state_of(card_id)
         to_state = CardState(form.get("to", ""))
+        filled = None
         if to_state is FILL_TARGET:
             # ONE PATH TO FILLED (S1-P3): the same `fill()` the
             # actual-fill form calls, so the one-click completion happens
             # here too and a radar card is refused here too. `tids` is
             # every row it wrote — three on a WATCH manual card.
-            tids = store.fill(
+            filled = store.fill(
                 card_id,
                 actor=Actor.YOU,
                 evidence={"via": "aset.sheet"},
                 reason=(form.get("reason") or "").strip() or None,
             )
+            tids = filled.transition_ids
         else:
             tids = [
                 store.transition(
@@ -1217,6 +1232,7 @@ async def card_move(card_id: int, request: Request) -> str:
         banner=f'<div class="saved">card {card_id}: {before} → '
         f'{html.escape(form.get("to", ""))} (card_transitions id(s) '
         f'{", ".join(str(i) for i in tids)}){extra}</div>'
+        + (_pick_banner(card_id, filled) if filled is not None else "")
     )
 
 

@@ -29,14 +29,14 @@ def test_0004_created_tables_match_placement():
 def test_rollback_selects_only_newer_files_newest_first():
     selected = _rollback_paths("0003")
     assert [p.name for p in selected] == [
+        "0009_picks_missed.rollback.sql",
+        "0008_radar_value_movers.rollback.sql",
         "0007_radar_cards.rollback.sql",
         "0006_radar_score.rollback.sql",
         "0005_heartbeat_note_absent.rollback.sql",
         "0004_radar_pool.rollback.sql",
     ]
-    assert selected == tuple(
-        p for p in REVERSE if p.name.startswith(("0007", "0006", "0005", "0004"))
-    )
+    assert selected == tuple(p for p in REVERSE if int(p.name[:4]) > 3)
 
 
 def test_rollback_without_bound_refuses():
