@@ -383,6 +383,20 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
   vs L6/L16/L18/L34/L38 and the MVP Charter — output an ADR candidate, no
   build. Timing: after S2 closes 09-23, unless the Anthropic meter is idle
   earlier. Owner: desk writes the prompt.
+- **Cobalt mailbox on Dejan's domain** (ruled A 2026-09-16 21:3x, "after
+  MVP, and if there is a desire for Cobalt to have an email address"):
+  he owns an outward-facing domain with unlimited addresses. Two rows,
+  both post-MVP, neither a design session: (a) IDENTITY — a Cobalt-owned
+  address for vendor accounts (Finviz, X, data vendors) so no personal
+  address sits in a vendor account; policy only, zero build; (b) INBOX
+  COLLECTOR — deterministic IMAP pull into the cache for mail-only feeds
+  (broker statements, earnings mailers), L9 collector shape, L32 user
+  data. Outbound email stays RETIRED (09-14, Mattermost only, L14).
+  NOT a backlog item, ruled out 09-16: a public, domain-hosted mission
+  control — the tailnet already reaches every device of the one user;
+  a public surface adds 2FA/TLS/hardening/patch duty under NN#16 for no
+  capability; revisit only for an inbound-webhook vendor or a second
+  human user (Tailscale Serve for a nicer tailnet URL if wanted).
 - **Guardian sprint** — gates: grading/EV live + alerting + Rules Engine
   session. Content: real-time enforcement of the Guardian rule set
   (TRIAGE: 7 rules; live as DRC checkboxes until then); rule deactivation
