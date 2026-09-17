@@ -303,31 +303,29 @@ tunables:
     consumers: ["cobalt.daymode (stage-1 -> stage-2 boundary)",
                 "com.cobalt.daymode-propose (job schedule)"]
 
-  # The running trade-count goal band the 09:00 reason cites. VALUES ARE
-  # PLACEHOLDER — `value: null` + `status: proposed` is this registry's
-  # own notation for "no number ruled yet" (see the header), and it is
-  # the honest state: the band is a trading rule and it belongs to the
-  # RULES ENGINE design session, not to a build prompt.
+  # The running trade-count goal band the 09:00 reason cites. 2-6 trades
+  # per day, ruled 2026-09-16 (Dejan): "2 - 6 and make it tunable" —
+  # dynamic, his to tune.
   #
-  # Until it is ruled, an unruled band is itself an adverse signal in
-  # cobalt.daymode.propose — it pins the proposal to the floor rather
-  # than letting an invented number justify a bigger rung. Conservative
-  # in the only direction it is safe to be wrong.
+  # If a value is ever set back to null (unruled), that is itself an
+  # adverse signal in cobalt.daymode.propose — it pins the proposal to
+  # the floor rather than letting an invented number justify a bigger
+  # rung. Conservative in the only direction it is safe to be wrong.
   - key: daymode.trade_count_band.min
-    value: null
+    value: 2
     unit: count
     scope: global
     dynamic: true
-    status: proposed
+    status: solidified
     source: ruling
     consumers: ["F6 day-mode proposal (cobalt.daymode.propose)"]
 
   - key: daymode.trade_count_band.max
-    value: null
+    value: 6
     unit: count
     scope: global
     dynamic: true
-    status: proposed
+    status: solidified
     source: ruling
     consumers: ["F6 day-mode proposal (cobalt.daymode.propose)"]
 
@@ -455,13 +453,13 @@ tunables:
     consumers: ["cobalt.radar.poller (revision overlap)"]
 
   - key: radar.finviz_max_rpm
-    value: 40
+    value: 45
     unit: count
     scope: global
     dynamic: false
     status: solidified
     source: ruling
-    consumers: ["S2-P1 throttle report (hub-measured half-rate, 2026-09-10: 4 grids clean to 60 rpm, half-rate 30 held)", "cobalt.radar.collector.TokenBucket"]
+    consumers: ["S2-P1 throttle report (hub-measured half-rate, 2026-09-10: 4 grids clean to 60 rpm, half-rate 30 held)", "cobalt.radar.collector.TokenBucket", "ruled 45 on 2026-09-16 (Dejan; 09-10 throttle report: 4 grids clean to 60 rpm)"]
 
   # 320 ruled 2026-09-14 (Dejan, key split from the shared radar_max_age_s): heartbeat only.
   - key: heartbeat.radar_scan_max_age_s

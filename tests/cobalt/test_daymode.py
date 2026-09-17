@@ -598,3 +598,53 @@ class TestStepDownsAreData:
             prior_day=date(2026, 9, 2), band=(3, 6),
         )
         assert sorted(facts) == sorted(SIGNAL_IDS)
+
+
+class TestTradeCountBandRuled:
+    """`daymode.trade_count_band` 2-6, ruled 2026-09-16 (Dejan): "2 - 6 and
+    make it tunable". The value is his (dynamic), read from tunables."""
+
+    _ALL = ("reduced", "half", "full")
+
+    def test_the_shipped_band_is_the_ruled_2_to_6(self):
+        from cobalt.daymode.cli import _band
+        from cobalt.taxonomy.loader import load_tunables
+
+        assert _band() == (2, 6)
+        by_key = load_tunables().by_key
+        for key in ("daymode.trade_count_band.min", "daymode.trade_count_band.max"):
+            assert by_key[key].status == "solidified"
+            assert by_key[key].source == "ruling"
+            assert by_key[key].dynamic is True
+
+    def test_a_day_with_4_trades_is_not_adverse(self):
+        p = propose(
+            date(2026, 9, 3), cfg=_cfg(enabled_modes=self._ALL), prior_filled=4,
+            drc_note="DRC.md", drc_informative=True, band=(2, 6),
+        )
+        assert p.proposed == "full"
+        assert p.signals == []
+        assert "trade-count band: 2-6" in p.reason
+
+    def test_an_unset_band_still_pins_to_the_floor(self):
+        """Regression: an unruled (null) band is an adverse signal -> floor."""
+        p = propose(
+            date(2026, 9, 3), cfg=_cfg(enabled_modes=self._ALL), prior_filled=4,
+            drc_note="DRC.md", drc_informative=True, band=(None, None),
+        )
+        assert p.proposed == "reduced"
+        assert any("PLACEHOLDER" in s for s in p.signals)
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="ops-2026-09-17 ESCALATE: no over-band signal exists; a new SIGNAL_ID needs "
+        "its step-down row (effect = Dejan's) in \"user\".trader_settings daymode.stepdowns "
+        "loaded under L28 in the same change, or load_daymode_config refuses in production",
+    )
+    def test_a_day_with_7_trades_is_adverse(self):
+        p = propose(
+            date(2026, 9, 3), cfg=_cfg(enabled_modes=self._ALL), prior_filled=7,
+            drc_note="DRC.md", drc_informative=True, band=(2, 6),
+        )
+        assert p.signals, "7 trades is above the ruled band 2-6"
+        assert p.proposed != "full"

@@ -21,7 +21,7 @@ def _parsed(tmp_path, *, valid=True):
         FIXTURES / "radar-lists.example.md",
         scan_interval=90,
         poll_interval=90,
-        finviz_max_rpm=40,
+        finviz_max_rpm=45,
         list_chunk_size=50,
     )
 

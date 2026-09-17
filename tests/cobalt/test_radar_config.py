@@ -37,3 +37,13 @@ def test_live_header_capture_has_replaced_unverified_marker():
         "step 6 header capture NOT RUN: configs/cobalt/radar.yaml is still UNVERIFIED"
     )
 
+
+
+def test_finviz_ceiling_is_the_ruled_45():
+    """Ruled A by Dejan 2026-09-16 07:18 ET (L53: his number): 40 -> 45."""
+    from cobalt.taxonomy.loader import load_tunables
+
+    row = load_tunables().by_key["radar.finviz_max_rpm"]
+    assert row.value == 45
+    assert row.source == "ruling"
+    assert any("ruled 45 on 2026-09-16" in c for c in row.consumers)
