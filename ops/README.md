@@ -39,6 +39,32 @@ claim, and `uv run cobalt validate` compares the two: it fails on a job
 in one and not the other, and prints a `NOT LOADED BY DESIGN` line for
 every row carrying `enabled: false`.
 
+## cto-desk.sh — bring the always-on CTO desk back (2026-09-18)
+
+`ops/cto-desk.sh` is the one command that restores the desk to the state
+R11 ruled on 2026-09-17: a background session on remote control **and** a
+live viewer in the single herdr tab labelled "CTO". Run it after a crash,
+a reboot, or any time the desk is unreachable.
+
+```sh
+ops/cto-desk.sh --dry-run   # prints every action, runs none — always safe
+ops/cto-desk.sh             # desk alive -> re-attach if needed; no desk -> launch it
+```
+
+Desk alive → it ensures the tab and the viewer and prints
+`desk <id> alive — viewer ok` (or `— viewer re-attached`). No desk → it
+launches one with the launch line **read out of**
+`docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md` line 1, so that file stays
+the only place the desk's model, flags and remote-control name are written
+down (L3).
+
+It **never stops, kills or closes anything**. An older background row
+sharing the desk's cwd is printed and left alone; ending a session is a
+human's call, and two desks must never write memory at once (L58).
+
+Not a LaunchAgent: a login-time agent for the desk was considered and is
+not built (his ruling, 2026-09-17).
+
 ## com.cobalt.aset — persistence fix (2026-08-31)
 
 **Incident:** the ASET widget had no LaunchAgent at all — it was only
