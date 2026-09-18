@@ -64,27 +64,55 @@ checks:
       scanning and last_scan_at within heartbeat.radar_scan_max_age_s);
       within_cap = true (members <= cap); failed_stage null
 
+  # TWO SETS, ONE QUERY, BECAUSE TWO CODE PATHS WRITE THE PAIR.
+  # `first_seen_at >= {cutoff}` reaches only episodes BORN after the
+  # deploy — the INSERT path. A pre-deploy episode that the scan RETAINs
+  # keeps its old `first_seen_at`, and `radar/store.py`'s RETAIN branch
+  # writes `rank_metric = %s` unconditionally: a defect there is invisible
+  # to the first set. The second set is that path — open admitted rows
+  # carrying the pool's own `last_scan_id`, gated on that scan having run
+  # after the cutoff. Both are graded; the check goes quiet only when both
+  # are empty.
   - id: K3
-    title: membership value column (post-deploy admissions)
+    title: membership value column (post-deploy admissions and re-scans)
     kind: sql
     side: system
     query: >-
-      SELECT count(*) AS post_deploy_admitted,
-      count(*) FILTER (WHERE rank_metric IS NULL) AS metric_missing,
-      count(*) FILTER (WHERE rank_value IS NULL) AS value_null
-      FROM system.radar_membership
-      WHERE entered_at IS NOT NULL AND first_seen_at >= {cutoff}
+      WITH scan AS (
+      SELECT max(last_scan_id) AS id FROM system.radar_pool
+      WHERE pool_key = 'primary' AND last_scan_at >= {cutoff}),
+      admitted AS (
+      SELECT m.rank_metric, m.rank_value,
+      m.first_seen_at >= {cutoff} AS inserted_after,
+      (m.left_at IS NULL AND m.last_scan_id = scan.id) AS rescanned_after
+      FROM system.radar_membership m CROSS JOIN scan
+      WHERE m.entered_at IS NOT NULL)
+      SELECT count(*) FILTER (WHERE inserted_after) AS post_deploy_admitted,
+      count(*) FILTER (WHERE inserted_after AND rank_metric IS NULL) AS metric_missing,
+      count(*) FILTER (WHERE inserted_after AND rank_value IS NULL) AS value_null,
+      count(*) FILTER (WHERE rescanned_after) AS rescanned_admitted,
+      count(*) FILTER (WHERE rescanned_after AND rank_metric IS NULL) AS rescanned_metric_missing
+      FROM admitted
     known_if:
       - {column: post_deploy_admitted, op: eq, value: 0}
-    known_text: "no admitted row first seen after the deploy yet"
+      - {column: rescanned_admitted, op: eq, value: 0}
+    known_text: "no admitted row first seen after the deploy, and none re-scanned since it, yet"
     expect:
       - {column: metric_missing, op: eq, value: 0}
+      - {column: rescanned_metric_missing, op: eq, value: 0}
     expect_text: >-
-      metric_missing = 0 over admitted rows first seen at/after the cutoff
-      (the INSERT path always writes rank_metric; a frozen HOLD row keeping a
-      pre-deploy NULL is outside this set by construction). value_null is
-      evidence only: a genuinely absent metric stores rank_value NULL.
-      post_deploy_admitted = 0 → KNOWN
+      metric_missing = 0 over admitted rows FIRST SEEN at/after the cutoff
+      (the INSERT path always writes rank_metric) AND
+      rescanned_metric_missing = 0 over open admitted rows the pool's latest
+      post-cutoff scan touched (the RETAIN path, where a dropped metric would
+      otherwise hide behind a pre-deploy first_seen_at). Both counts 0 →
+      KNOWN. value_null is evidence only: a genuinely absent metric stores
+      rank_value NULL. ONE KNOWN AMBIGUITY in the second set: a frozen HOLD
+      stamps last_scan_id too (radar/store.py's COALESCE branch), so a
+      pre-deploy episode HELD this scan because its only source was degraded
+      carries its pre-deploy NULL into this count, and no column tells it
+      apart from a RETAIN defect. A rescanned_metric_missing FAIL is read
+      against radar_pool.degraded_sources before it is ruled known.
 
   - id: K4.1
     title: sheet /api/health

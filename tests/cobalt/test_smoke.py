@@ -730,6 +730,122 @@ def test_every_committed_check_renders_an_exact_command_and_expected_output():
 
 
 # ---------------------------------------------------------------------
+# K3 reaches BOTH paths that write the value pair (R1-19)
+# ---------------------------------------------------------------------
+
+#: What K3's statement must name to grade both writers of
+#: `rank_metric`/`rank_value`. The INSERT path is keyed on `first_seen_at`
+#: — an episode BORN after the deploy. The RETAIN path is not: a
+#: pre-deploy episode retained tonight keeps its old `first_seen_at`, and
+#: `radar/store.py`'s RETAIN branch writes `rank_metric = %s`
+#: unconditionally, so a defect there is reachable only through the pool's
+#: own `last_scan_id`, gated on that scan having run after the cutoff.
+K3_REQUIRED_CLAUSES = (
+    "first_seen_at >= {cutoff}",
+    "left_at IS NULL",
+    "last_scan_id",
+    "system.radar_pool",
+    "last_scan_at >= {cutoff}",
+)
+#: One graded column per set, and one `known_if` count per set — the
+#: "no admitted row yet → KNOWN" semantics hold for the UNION, so both
+#: counts must be zero before the check goes quiet.
+K3_GRADED = ("metric_missing", "rescanned_metric_missing")
+K3_KNOWN_COUNTS = ("post_deploy_admitted", "rescanned_admitted")
+
+
+def k3_gaps(check) -> list[str]:
+    """Every clause or predicate K3 needs and does not have."""
+    query = " ".join(check.query.split())
+    gaps = [f"query does not name {needle!r}" for needle in K3_REQUIRED_CLAUSES
+            if needle not in query]
+    graded = {p.column for p in check.expect}
+    gaps += [f"no expect predicate on {column}" for column in K3_GRADED if column not in graded]
+    known = {p.column for p in check.known_if}
+    gaps += [f"no known_if predicate on {column}" for column in K3_KNOWN_COUNTS
+             if column not in known]
+    return gaps
+
+
+def _k3():
+    return {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}["K3"]
+
+
+def test_k3_covers_the_insert_path_and_the_retain_path():
+    check = _k3()
+    assert k3_gaps(check) == []
+    # It stays on the system side: both relations it reads are system's.
+    assert check.kind == "sql" and check.side == "system"
+    assert '"user".' not in check.query
+    # Both cutoff gates render as the same literal in the hand command.
+    assert check.query.count("{cutoff}") == 2
+    assert checks.command_for(check, ctx()).count(CUTOFF.isoformat()) == 2
+
+
+def test_the_k3_coverage_check_refuses_the_first_seen_at_only_shape():
+    """The bite proof: K3 as it read before this fix — only the INSERT
+    path — is refused, and so is dropping either half of the grading."""
+    old_k3 = SqlCheck.model_validate({
+        "id": "K3", "title": "membership value column (post-deploy admissions)",
+        "kind": "sql", "side": "system",
+        "query": (
+            "SELECT count(*) AS post_deploy_admitted, "
+            "count(*) FILTER (WHERE rank_metric IS NULL) AS metric_missing, "
+            "count(*) FILTER (WHERE rank_value IS NULL) AS value_null "
+            "FROM system.radar_membership "
+            "WHERE entered_at IS NOT NULL AND first_seen_at >= {cutoff}"
+        ),
+        "known_if": [{"column": "post_deploy_admitted", "op": "eq", "value": 0}],
+        "known_text": "no admitted row first seen after the deploy yet",
+        "expect": [{"column": "metric_missing", "op": "eq", "value": 0}],
+        "expect_text": "metric_missing = 0",
+    })
+    gaps = k3_gaps(old_k3)
+    assert any("last_scan_id" in gap for gap in gaps)
+    assert "no expect predicate on rescanned_metric_missing" in gaps
+    assert "no known_if predicate on rescanned_admitted" in gaps
+
+    # The shipped shape with its RETAIN grading removed is refused too.
+    shipped = _k3()
+    ungraded = shipped.model_copy(update={
+        "expect": [p for p in shipped.expect if p.column != "rescanned_metric_missing"]
+    })
+    assert k3_gaps(ungraded) == ["no expect predicate on rescanned_metric_missing"]
+
+
+def test_k3_grades_each_set_and_is_known_only_when_both_are_empty():
+    check = _k3()
+
+    def answer(**values):
+        row = {
+            "post_deploy_admitted": 0, "metric_missing": 0, "value_null": 0,
+            "rescanned_admitted": 0, "rescanned_metric_missing": 0,
+        }
+        row.update(values)
+        columns = list(row)
+        return lambda statement, side: rows(columns, [row[c] for c in columns])
+
+    quiet = checks.evaluate(check, ctx(), deps(read_rows=answer()))
+    assert quiet.verdict is Verdict.KNOWN
+    # Re-scanned rows exist and carry their metric: the check is live and green.
+    live = checks.evaluate(check, ctx(), deps(read_rows=answer(rescanned_admitted=40)))
+    assert live.verdict is Verdict.PASS
+    # THE DEFECT THIS EXISTS FOR: a row the post-deploy scan retained with
+    # no metric. Its `first_seen_at` is pre-cutoff, so the INSERT-path
+    # counters stay clean and only the RETAIN counter bites.
+    retained = checks.evaluate(check, ctx(), deps(
+        read_rows=answer(rescanned_admitted=40, rescanned_metric_missing=1)))
+    assert retained.verdict is Verdict.FAIL and "rescanned_metric_missing" in retained.detail
+    # The INSERT path still bites on its own.
+    inserted = checks.evaluate(check, ctx(), deps(
+        read_rows=answer(post_deploy_admitted=3, metric_missing=1)))
+    assert inserted.verdict is Verdict.FAIL and "metric_missing" in inserted.detail
+    # A set that is empty does not make the other set KNOWN.
+    half = checks.evaluate(check, ctx(), deps(read_rows=answer(post_deploy_admitted=3)))
+    assert half.verdict is Verdict.PASS
+
+
+# ---------------------------------------------------------------------
 # L32: a check never reads across the tenancy wall it declares
 # ---------------------------------------------------------------------
 

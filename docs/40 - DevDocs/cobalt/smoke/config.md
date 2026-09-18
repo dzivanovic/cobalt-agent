@@ -50,5 +50,42 @@ every committed `sql` check in both directions;
 `test_the_tenancy_wall_check_refuses_a_cross_side_query` proves it bites
 on the pre-split K8 shape.
 
+## K3 grades BOTH writers of the value pair (added 2026-09-18, chunk FY)
+
+`rank_metric`/`rank_value` reach a membership row down two code paths, and
+a check keyed on `first_seen_at` sees only one of them:
+
+- **INSERT** — a new admitted episode. `first_seen_at >= {cutoff}` finds
+  exactly these, and `radar/store.py`'s ADMIT branch always writes the pair.
+- **RETAIN** — a pre-deploy episode the scan keeps. Its `first_seen_at` is
+  older than the deploy, so it never enters the first set, yet the RETAIN
+  branch writes `rank_metric = %s` unconditionally: a defect there was
+  invisible. It is found instead through the pool's own scan id —
+  `left_at IS NULL AND last_scan_id = (max scan id of pool 'primary')` —
+  gated on `radar_pool.last_scan_at >= {cutoff}` so a pool that has not
+  scanned since the deploy contributes nothing.
+
+One statement, one row, five counters: `post_deploy_admitted` /
+`metric_missing` / `value_null` for the first set, `rescanned_admitted` /
+`rescanned_metric_missing` for the second. Both `metric_missing` counters
+are graded; `known_if` needs BOTH population counts at zero, so the "no
+admitted row yet → KNOWN" semantics now hold for the union rather than for
+half of it.
+
+One ambiguity is named in `expect_text` rather than hidden: a frozen HOLD
+(the COALESCE branch) also stamps `last_scan_id`, so a pre-deploy episode
+held because its only source was degraded carries its pre-deploy NULL into
+the second set, and no column tells it apart from a RETAIN defect. It reads
+as a FAIL — loud, with the counts printed — and is checked against
+`radar_pool.degraded_sources` before anyone rules it known (L1: a false
+loud beats a silent miss).
+
+`test_k3_covers_the_insert_path_and_the_retain_path` holds the shape
+against the SHIPPED yaml, and
+`test_the_k3_coverage_check_refuses_the_first_seen_at_only_shape` proves it
+bites on the pre-fix `first_seen_at`-only query. The SQL itself cannot run
+offline; `test_committed_queries_run_read_only_on_cobalt_dev` (`requires_db`,
+hub) is where the statement is proven to parse and run.
+
 Classification for `cobalt jobs restarts` (L42): a change under
 `configs/cobalt/smoke/` derives no restart. The rule is `operator command (cobalt smoke); no job reads`, in `jobs/restarts.py`. The test keeps the claim true: no plist runs `cobalt smoke`, and only `smoke/cli.py` and this file open a suite.
