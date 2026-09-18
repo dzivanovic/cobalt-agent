@@ -16,6 +16,8 @@ from typing import Any, Literal, Optional
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
+from cobalt.archiver.models import Bar
+
 #: The one counterfactual-R formula's version. Stored in every receipt; a
 #: change to the formula is a new version, never a silent recompute.
 FORMULA_VERSION = "s2p4.cf_r.1"
@@ -173,6 +175,122 @@ class CardReplay(_Frozen):
 
 
 # ---------------------------------------------------------------------------
+# The ONE counterfactual (shared by cards and formations — L3)
+# ---------------------------------------------------------------------------
+
+
+class Counterfactual(_Frozen):
+    """The trigger/fill/exit walk of the one cf-R formula (R4, R1-9).
+
+    A card supplies its as-of-trigger stop and a formation supplies P2's
+    structural stop; everything below this line is computed once, in one
+    place, from those same values.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    searched: tuple[Bar, ...]
+    trigger: Bar
+    stop: Decimal
+    risk: Decimal
+    window_end: AwareDatetime
+    horizon_end: AwareDatetime
+    eligible: tuple[Bar, ...]
+    walked: tuple[Bar, ...]
+    fill_price: Decimal
+    exit_bar: Bar
+    exit_price: Decimal
+    exit_reason: Literal["stop", "horizon_end"]
+    cf_r: Decimal
+    mfe_r: Decimal
+
+
+class CfOutcome(_Frozen):
+    """`counterfactual()`'s answer: the walk, or why there is no row."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    status: Literal["ok", "no_trigger", "input_stale"]
+    reason: str
+    walk: Optional[Counterfactual] = None
+
+
+# ---------------------------------------------------------------------------
+# F12 — formations (S2-P2's replay, R1-21)
+# ---------------------------------------------------------------------------
+
+
+class RadarCardRef(_Frozen):
+    """A radar card that already exists for a (member, def, direction).
+
+    Its presence SUPPRESSES the formation miss (R1-21): the card path
+    (F12) owns that subject, and one event never becomes two rows (L3).
+    """
+
+    card_id: int
+    pool_member_id: Optional[int] = None
+    trade_def_slug: Optional[str] = None
+    direction: Optional[Direction] = None
+    state: str
+    created_at: Optional[AwareDatetime] = None
+
+
+class FormationCandidate(_Frozen):
+    """One S2-P2 `ReplayFormation`, in replay's own vocabulary.
+
+    `entry`/`stop` are the SAME mapping the live radar card path uses
+    (`RadarCardSpec.entry = trigger_price`, `.stop = structural_stop`) —
+    never a second reading of P2's values.
+    """
+
+    membership_id: int
+    ticker: str
+    slug: str
+    trade_def_md5: str = Field(pattern=r"^[0-9a-f]{32}$")
+    direction: Direction
+    entry: Decimal
+    stop: Decimal
+    formed_at: AwareDatetime
+    seen_at: AwareDatetime
+    score_inputs_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    evaluator_version: str
+
+    def subject_key(self) -> tuple:
+        """The suppression key: (member, def, direction), the same triple
+        `aset_sizings_one_open_radar_card` enforces."""
+        return (self.membership_id, self.slug, self.direction)
+
+
+class FormationReplay(_Frozen):
+    """What replaying one formation produced."""
+
+    membership_id: int
+    ticker: str
+    status: Literal["miss", "suppressed", "no_trigger", "input_stale"]
+    reason: str
+    miss: Optional[MissRow] = None
+
+
+class FormationCounts(_Frozen):
+    """Every formation the day produced, by outcome — none silently dropped."""
+
+    candidates: int = 0
+    misses: int = 0
+    suppressed: int = 0
+    no_trigger: int = 0
+    input_stale: int = 0
+
+
+class FormationOutcome(_Frozen):
+    """The formation step's whole answer: the capability marker it bound
+    to (or `unavailable`), its rows, and every count behind them."""
+
+    status: str
+    rows: tuple[MissRow, ...] = ()
+    counts: FormationCounts = FormationCounts()
+
+
+# ---------------------------------------------------------------------------
 # F13 — movers
 # ---------------------------------------------------------------------------
 
@@ -263,6 +381,11 @@ class ReplayResult(BaseModel):
     input_stale: int = 0
     no_trigger: int = 0
     formation_replay: str = FORMATION_UNAVAILABLE
+    formation_candidates: int = 0
+    formation_misses: int = 0
+    formation_suppressed: int = 0
+    formation_no_trigger: int = 0
+    formation_input_stale: int = 0
     line_action: Optional[str] = None
     line_diff: Optional[str] = None
     steps_done: list[str] = Field(default_factory=list)
@@ -275,9 +398,10 @@ class ReplayResult(BaseModel):
 
 
 __all__ = [
-    "CardCandidate", "CardReplay", "Direction", "Episode", "ExcludedBy",
+    "CardCandidate", "CardReplay", "CfOutcome", "Counterfactual", "Direction", "Episode", "ExcludedBy",
     "FORMATION_UNAVAILABLE", "FORMATION_UNAVAILABLE_LINE", "FORMULA_VERSION",
-    "MissKind", "MissRow", "MoverRow", "MoversExport", "PositionSpan",
+    "FormationCandidate", "FormationCounts", "FormationOutcome", "FormationReplay",
+    "MissKind", "MissRow", "MoverRow", "MoversExport", "PositionSpan", "RadarCardRef",
     "ReconcileCounts", "ReplayError", "ReplayInputError", "ReplayResult", "Side",
     "StepFailed", "StopEdit", "StoredMover", "TransitionRow", "WindowResolution",
     "canonical_json", "sha256_json",

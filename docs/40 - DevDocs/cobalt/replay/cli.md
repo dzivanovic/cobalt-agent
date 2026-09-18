@@ -14,7 +14,8 @@ of `com.cobalt.replay` (`ops/com.cobalt.replay.plist`, Mon–Fri 21:10, with
   the partial result is attached first, so a failed row still says which
   step failed and what ran.
 - It prints one summary line: movers, archived, card and mover misses,
-  input_stale, formations, line action.
+  input_stale, the formation marker with its miss and suppressed counts,
+  and the line action.
 
 ## `default_deps(dry_run=)` — the production wiring
 - Stores: `JobStore`, `MissedStore` (USER), `MoversStore`, `BarStore` and
@@ -29,6 +30,13 @@ of `com.cobalt.replay` (`ops/com.cobalt.replay.plist`, Mon–Fri 21:10, with
   It calls `ensure_schema()` only for a real run, so a dry run performs no
   DDL (R1-17).
 - `drc_path = line.drc_note_path`.
+- `formation_sources` (2026-09-18, chunk E2): a factory returning
+  `FormationSources` — the pool key, a `RadarStore`,
+  `TradeDefStore().loaded_for_evaluation`, `CachedDailyBars(cache).load`,
+  the tunables, taxonomy defaults and the session clock. These are exactly
+  S2-P2's `replay_formations` arguments, and the SAME stores the resident
+  evaluates with, read-only. It imports `cobalt.radar` lazily, inside the
+  factory, so `default_deps` still builds when S2-P2 is not in the tree.
 
 Constructing the deps writes nothing. Every write lives behind a runner
 call that a dry run never makes.

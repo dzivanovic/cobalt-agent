@@ -8,7 +8,9 @@ typed `CardReplay` comes out. Nothing here reads a clock, a database or
 a config file, which is what lets `replay_from_receipt` recompute every
 stored number from the receipt alone (L57).
 
-THE ONE FORMULA (R4, R1-9):
+THE ONE FORMULA (R4, R1-9) lives in `counterfactual()`, which `replay_card`
+and `replay/formations.py` both call — a formation and a card differ in
+their gates and their receipt, never in their arithmetic (L3):
 
 * Trigger = the first i1 bar starting at or after `created_at` whose
   high >= entry (long) / low <= entry (short). `fill_price` = the planned
@@ -68,9 +70,12 @@ from .models import (
     FORMULA_VERSION,
     CardCandidate,
     CardReplay,
+    CfOutcome,
+    Counterfactual,
     MissKind,
     MissRow,
     PositionSpan,
+    RadarCardRef,
     ReconcileCounts,
     ReplayInputError,
     StopEdit,
@@ -110,7 +115,9 @@ def _iso(value: Optional[datetime]) -> Optional[str]:
     return value.isoformat() if value is not None else None
 
 
-def _bar_json(bar: Bar) -> dict[str, str]:
+def bar_json(bar: Bar) -> dict[str, str]:
+    """One bar as a receipt row. PUBLIC because `formations.py` stores the
+    same shape — a receipt bar has one spelling in this package (L3)."""
     return {
         "ts": bar.ts.isoformat(), "open": str(bar.open), "high": str(bar.high),
         "low": str(bar.low), "close": str(bar.close), "volume": str(bar.volume),
@@ -206,6 +213,79 @@ def _favourable(bar: Bar, direction: str, fill: Decimal) -> Decimal:
 
 
 # ---------------------------------------------------------------------------
+# THE ONE FORMULA — shared by cards and formations (L3)
+# ---------------------------------------------------------------------------
+
+
+def counterfactual(
+    todays: Sequence[Bar],
+    *,
+    subject: str,
+    direction: str,
+    entry: Decimal,
+    stop_at: Callable[[datetime], Decimal],
+    start_at: datetime,
+    window_end: datetime,
+    session_close: datetime,
+) -> CfOutcome:
+    """Trigger, fill, horizon, exit, cf_r and mfe_r — the module docstring's
+    one formula, over one day's sorted bars.
+
+    `stop_at` is asked for the stop IN FORCE at the trigger: a card walks
+    its own edit history back (R1-11), a formation hands over S2-P2's
+    structural stop unchanged. Nothing else differs between the two, which
+    is why there is exactly one implementation.
+    """
+    searched = [b for b in todays if b.ts >= start_at and b.ts + MINUTE <= session_close]
+    trigger = next((b for b in searched if _touches_entry(b, direction, entry)), None)
+    if trigger is None:
+        return CfOutcome(status="no_trigger", reason="entry never traded through before the close")
+
+    trigger_ts = trigger.ts
+    w_end = min(window_end, session_close)
+    horizon = w_end if trigger_ts <= w_end else session_close
+    eligible = [b for b in searched if b.ts >= trigger_ts and b.ts + MINUTE <= horizon]
+    if not eligible:
+        return CfOutcome(
+            status="input_stale",
+            reason=(f"input_stale: trigger bar {trigger_ts.isoformat()} leaves no completed bar by "
+                    f"horizon {horizon.isoformat()}"),
+        )
+
+    stop = stop_at(trigger_ts)
+    risk = abs(entry - stop)
+    if risk == 0:
+        raise ReplayInputError(f"{subject}: entry equals stop ({entry}) — no R unit")
+    if (direction == "long" and stop > entry) or (direction == "short" and stop < entry):
+        raise ReplayInputError(f"{subject}: {direction} stop {stop} is on the wrong side of entry {entry}")
+
+    if direction == "long":
+        fill = trigger.open if trigger.open > entry else entry
+    else:
+        fill = trigger.open if trigger.open < entry else entry
+
+    exit_bar, exit_price, exit_reason = eligible[-1], eligible[-1].close, "horizon_end"
+    best = Decimal(0)
+    walked: list[Bar] = []
+    for bar in eligible:
+        walked.append(bar)
+        best = max(best, _favourable(bar, direction, fill))
+        if _touches_stop(bar, direction, stop):
+            exit_bar, exit_price, exit_reason = bar, stop, "stop"
+            break
+    sign = Decimal(1) if direction == "long" else Decimal(-1)
+    return CfOutcome(
+        status="ok", reason=f"exit {exit_reason}",
+        walk=Counterfactual(
+            searched=tuple(searched), trigger=trigger, stop=stop, risk=risk, window_end=w_end,
+            horizon_end=horizon, eligible=tuple(eligible), walked=tuple(walked), fill_price=fill,
+            exit_bar=exit_bar, exit_price=exit_price, exit_reason=exit_reason,
+            cf_r=_round((exit_price - fill) / risk * sign), mfe_r=_round(best / risk),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
 # The replay
 # ---------------------------------------------------------------------------
 
@@ -231,48 +311,22 @@ def replay_card(
     if not cov["covered"]:
         return stale(f"input_stale: {cov['reason']}")
 
-    search = [b for b in todays if b.ts >= card.created_at and b.ts + MINUTE <= session_close]
-    trigger = next((b for b in search if _touches_entry(b, card.direction, card.entry)), None)
-    if trigger is None:
-        return CardReplay(card_id=card.id, ticker=card.ticker, status="no_trigger",
-                          reason="entry never traded through before the close")
+    outcome = counterfactual(
+        todays, subject=f"card {card.id}", direction=card.direction, entry=card.entry,
+        stop_at=lambda at: stop_as_of(card, at)[0], start_at=card.created_at,
+        window_end=window.resolved_end, session_close=session_close,
+    )
+    if outcome.status == "no_trigger":
+        return CardReplay(card_id=card.id, ticker=card.ticker, status="no_trigger", reason=outcome.reason)
+    if outcome.status == "input_stale":
+        return stale(outcome.reason)
 
-    trigger_ts = trigger.ts
-    w_end = min(window.resolved_end, session_close)
-    horizon = w_end if trigger_ts <= w_end else session_close
-    eligible = [b for b in search if b.ts >= trigger_ts and b.ts + MINUTE <= horizon]
-    if not eligible:
-        return stale(
-            f"input_stale: trigger bar {trigger_ts.isoformat()} leaves no completed bar by "
-            f"horizon {horizon.isoformat()}"
-        )
-
+    walk = outcome.walk
+    search, trigger, trigger_ts = list(walk.searched), walk.trigger, walk.trigger.ts
+    w_end, horizon, eligible = walk.window_end, walk.horizon_end, list(walk.eligible)
     stop, edits = stop_as_of(card, trigger_ts)
-    risk = abs(card.entry - stop)
-    if risk == 0:
-        raise ReplayInputError(f"card {card.id}: entry equals stop ({card.entry}) — no R unit")
-    if (card.direction == "long" and stop > card.entry) or (card.direction == "short" and stop < card.entry):
-        raise ReplayInputError(
-            f"card {card.id}: {card.direction} stop {stop} is on the wrong side of entry {card.entry}"
-        )
-
-    if card.direction == "long":
-        fill = trigger.open if trigger.open > card.entry else card.entry
-    else:
-        fill = trigger.open if trigger.open < card.entry else card.entry
-
-    exit_bar, exit_price, exit_reason = eligible[-1], eligible[-1].close, "horizon_end"
-    best = Decimal(0)
-    walked: list[Bar] = []
-    for bar in eligible:
-        walked.append(bar)
-        best = max(best, _favourable(bar, card.direction, fill))
-        if _touches_stop(bar, card.direction, stop):
-            exit_bar, exit_price, exit_reason = bar, stop, "stop"
-            break
-    sign = Decimal(1) if card.direction == "long" else Decimal(-1)
-    cf_r = _round((exit_price - fill) / risk * sign)
-    mfe_r = _round(best / risk)
+    fill, exit_bar, exit_price, exit_reason = walk.fill_price, walk.exit_bar, walk.exit_price, walk.exit_reason
+    cf_r, mfe_r, walked = walk.cf_r, walk.mfe_r, list(walk.walked)
 
     # -- gates, fixed order ------------------------------------------------
     open_others = sorted(p.card_id for p in positions if p.card_id != card.id and p.open_at(trigger_ts))
@@ -329,11 +383,11 @@ def replay_card(
             for p in sorted(positions, key=lambda p: (p.filled_at, p.card_id))
         ],
         "eligibility": "bar_start + 1 minute <= horizon",
-        "bars": [_bar_json(b) for b in consumed],
+        "bars": [bar_json(b) for b in consumed],
     }
     outputs = {
         "coverage": coverage(consumed, start=card.created_at, end=session_close),
-        "trigger_bar": _bar_json(trigger), "stop_as_of_trigger": str(stop),
+        "trigger_bar": bar_json(trigger), "stop_as_of_trigger": str(stop),
         "window_end": w_end.isoformat(), "horizon_end": horizon.isoformat(),
         "eligible_bar_ts": [b.ts.isoformat() for b in eligible],
         "walked_bar_ts": [b.ts.isoformat() for b in walked],
@@ -483,6 +537,35 @@ class MissedStore:
                 transitions=tuple(transitions[c["id"]]), stop_edits=tuple(edits[c["id"]]),
             )
             for c in cards
+        ]
+
+    def radar_cards(self, trade_date: date) -> list[RadarCardRef]:
+        """Every radar-origin card created that ET day, by (member, def,
+        direction) — the suppression set for STEP-5's formations (R1-21).
+
+        Created that day, not open NOW: by the 21:10 run a card that
+        formed at 10:00 may have EXPIRED, and the formation it came from
+        is still not a separate miss — the card path already replayed it.
+        """
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                SELECT id, pool_member_id, trade_def_slug, direction, state, created_at
+                FROM aset_sizings
+                WHERE origin = 'radar'
+                  AND (created_at AT TIME ZONE 'America/New_York')::date = %s
+                ORDER BY id
+                """,
+                (trade_date,),
+            )
+            rows = [dict(zip([d.name for d in cur.description], r)) for r in cur.fetchall()]
+        return [
+            RadarCardRef(
+                card_id=r["id"], pool_member_id=r["pool_member_id"], trade_def_slug=r["trade_def_slug"],
+                direction=str(r["direction"]).lower() if r["direction"] else None,
+                state=r["state"], created_at=r["created_at"],
+            )
+            for r in rows
         ]
 
     def positions(self, trade_date: date) -> list[PositionSpan]:
@@ -648,7 +731,7 @@ class MissedStore:
 
 
 __all__ = [
-    "GATE_ORDER", "MINUTE", "MissedStore", "RULE_10_PROXY", "STATE_GATE", "coverage",
+    "GATE_ORDER", "MINUTE", "MissedStore", "RULE_10_PROXY", "STATE_GATE", "bar_json", "counterfactual", "coverage",
     "day_bars", "ordered_transitions", "replay_card", "replay_from_receipt", "resolve_window",
     "session_close_for", "state_at", "stop_as_of",
 ]

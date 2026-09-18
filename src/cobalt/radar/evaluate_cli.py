@@ -61,6 +61,24 @@ class CandidateRefused(RuntimeError):
 
 
 class ReplayFormation(BaseModel):
+    """One formation the read-only replay saw.
+
+    The last three fields identify the formation's SUBJECT and its
+    retained score receipt, and are carried for downstream consumers that
+    must key a row on it (S2-P4 STEP-5's `"user".missed` rows, whose
+    `kind='formation'` CHECK needs member and def, R1-21). All three are
+    values `evaluate_member` already returned for this formation — the
+    replay still reads only, writes nothing, and no schema changed:
+
+    * `membership_id` — the `system.radar_membership` episode evaluated.
+    * `trade_def_md5` — the `LoadedDef` md5 the formation was formed from.
+    * `score_inputs_sha256` — the evaluation's input digest, which is the
+      `inputs_sha256` column the resident stores on its own
+      `system.radar_score` row for the same `(membership_id,
+      trade_def_md5)`. It is a CONTENT-ADDRESSED reference: this replay
+      reads no receipt row and so cannot report a score id.
+    """
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     seen_at: AwareDatetime
@@ -70,6 +88,9 @@ class ReplayFormation(BaseModel):
     trigger: str
     stop: str
     formed_bar_ts: AwareDatetime
+    membership_id: int
+    trade_def_md5: str = Field(pattern=r"^[0-9a-f]{32}$")
+    score_inputs_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class ReplayReport(BaseModel):
@@ -188,6 +209,8 @@ def replay_formations(
                         report.formations.append(ReplayFormation(
                             seen_at=instant, ticker=ticker, slug=ld.slug, direction=f.trade_direction,
                             trigger=str(f.trigger.price), stop=str(f.stop.price), formed_bar_ts=f.formed_bar_ts,
+                            membership_id=ev.membership_id, trade_def_md5=ev.md5,
+                            score_inputs_sha256=ev.inputs_sha256,
                         ))
                         out(
                             f"{clock.to_et(instant):%H:%M:%S} ET {ticker} {ld.slug} FORMED {f.trade_direction} "

@@ -5,6 +5,24 @@ module replays the day's unfilled cards over stored i1 bars. For each miss
 it records the gate that excluded it and one counterfactual R, with every
 input stored.
 
+## `counterfactual(...)` — the ONE formula (added 2026-09-18, chunk E2)
+
+`counterfactual(todays, *, subject, direction, entry, stop_at, start_at,
+window_end, session_close) -> CfOutcome` holds steps 2–5 below and is
+called by BOTH `replay_card` and `replay/formations.py`. A card and a
+formation differ in their gates and their receipt, never in their
+arithmetic (L3) — there is one trigger search, one gap-through fill rule,
+one stop-wins-on-tie walk and one rounding in the package.
+
+`stop_at(trigger_ts)` is how the two differ where they must: a card walks
+its own `card_stop_edits` history back to the trigger (R1-11), a formation
+hands over S2-P2's structural stop unchanged. `CfOutcome.status` is `ok`
+(with a `Counterfactual`), `no_trigger` or `input_stale`; `subject` is the
+string every refusal names (`card 302`, `formation MU example-… @ …`).
+
+`bar_json(bar)` is public for the same reason: a receipt bar has one
+spelling here.
+
 ## The pure core
 `replay_card(card, bars, *, trade_date, window, session_close, positions)`
 reads no clock, database or config.
@@ -72,6 +90,11 @@ and returns an identical `MissRow` (tested on the real fixture day).
   plus their transitions and stop edits.
 - `positions(day)`: cards FILLED by the day and not CLOSED before it,
   overnight holds included.
+- `radar_cards(day)` (2026-09-18, chunk E2): every radar-origin
+  `aset_sizings` row CREATED that ET day, as `RadarCardRef`s, for the
+  formation step's suppression gate. Created that day, not "open now": by
+  21:10 a card that formed at 10:00 may have EXPIRED, and its formation is
+  still not a separate miss because the card path already replayed it.
 - `current(day, kind)`: the CURRENT rows. The miss line publishes only
   these.
 - `reconcile(run_id, trade_date, kind, rows)`: one serialized transaction

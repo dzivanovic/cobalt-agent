@@ -12,6 +12,7 @@ calendar.
 from __future__ import annotations
 
 import asyncio
+import builtins
 import json
 import os
 import sys
@@ -234,14 +235,111 @@ def test_drc_note_absent_fails_the_line_step_and_creates_nothing():
 # =====================================================================
 
 
+def p2_absent(monkeypatch, *names):
+    """S2-P2 NOT in the tree, simulated explicitly.
+
+    P2 is now under this branch, so deleting the module from the cache
+    only makes the next `import` read it from disk again. The absence a
+    pre-P2 deploy has is the import itself failing, so that is what is
+    simulated here — both module names, exactly as the adapter imports
+    them.
+    """
+    real = builtins.__import__
+
+    def refuse(name, *args, **kwargs):
+        if name in names:
+            raise ModuleNotFoundError(f"No module named {name!r}", name=name)
+        return real(name, *args, **kwargs)
+
+    for name in names:
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    monkeypatch.setattr(builtins, "__import__", refuse)
+
+
 def test_formation_replay_unavailable_logs_exact_line_no_rows(monkeypatch):
     printed: list[str] = []
-    monkeypatch.delitem(sys.modules, "cobalt.radar.evaluate_cli", raising=False)
-    status, rows = formation_replay(DAY, out=printed.append)
-    assert status == "unavailable"
-    assert rows == []
+    p2_absent(monkeypatch, "cobalt.radar.evaluate_cli", "cobalt.radar.evaluate")
+    outcome = formation_replay(DAY, out=printed.append)
+    assert outcome.status == "unavailable"
+    assert list(outcome.rows) == []
+    assert outcome.counts.candidates == 0
     assert printed == [FORMATION_UNAVAILABLE_LINE]
     assert FORMATION_UNAVAILABLE_LINE == "trade_def replay: not available until S2-P2"
+
+
+def test_an_unrelated_missing_module_is_never_read_as_p2_absent(monkeypatch):
+    """A broken dependency INSIDE S2-P2 is not "S2-P2 is not deployed"."""
+    real = builtins.__import__
+
+    def refuse(name, *args, **kwargs):
+        if name.startswith("cobalt.radar.evaluate"):
+            raise ModuleNotFoundError("No module named 'a_dependency_that_vanished'",
+                                      name="a_dependency_that_vanished")
+        return real(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", refuse)
+    with pytest.raises(ModuleNotFoundError, match="a_dependency_that_vanished"):
+        formation_replay(DAY, out=lambda line: None)
+
+
+def p2_sources():
+    """S2-P2's real replay arguments over the P4 fixture day's own bars —
+    the same stores production hands it, in memory (L45)."""
+    import radar_p2_support as sup
+    from cobalt.replay.formations import FormationSources
+    from cobalt.session import session_clock
+
+    bars: dict[str, list[Bar]] = {}
+    for bar in _load_bars():
+        bars.setdefault(bar.ticker, []).append(bar)
+    members = [
+        {"id": 200 + i, "ticker": t, "trade_date": DAY, "entered_at": RTH_OPEN + timedelta(minutes=5),
+         "left_at": None, "last_rank": i + 1}
+        for i, t in enumerate(sorted(bars))
+    ]
+
+    class Radar(sup.FakeRadarStore):
+        def members_for_day(self, pool_key, day):
+            return [dict(m, trade_date=day) for m in self.members]
+
+    def no_daily(ticker, day):
+        raise FileNotFoundError(f"no cached daily bars for {ticker} on {day}")
+
+    return FormationSources(
+        pool_key="pool", radar_store=Radar(members, bars),
+        defs_source=lambda: ([sup.loaded()], {}), daily_source=no_daily,
+        tunables=sup.engine_tunables(), defaults=sup.defaults(), clock=session_clock(),
+    )
+
+
+def test_the_nightly_run_binds_to_p2s_shipped_replay_and_reconciles_its_formation_misses():
+    deps, calls = fake_deps(formations=runner_mod.formation_replay, formation_sources=p2_sources)
+    result = run_nightly(DAY, dry_run=False, deps=deps)
+    assert result.formation_replay == "s2p2.1"          # the shipped capability marker, not a guess
+    assert (result.formation_candidates, result.formation_misses) == (1, 1)
+    row = deps.missed.current_rows["formation"][
+        (DAY, "formation", "MU", 0, "0123456789abcdef0123456789abcdef",
+         "2026-02-10T15:32:00+00:00", 202)]
+    assert (row["excluded_by"], row["cf_r"], row["mfe_r"]) == ("no_card", Decimal("-1.0000"), Decimal("0.8521"))
+    assert row["trigger_ts"] == datetime(2026, 2, 10, 15, 47, tzinfo=timezone.utc)
+    printed = "\n".join(deps.printed)
+    assert "MISS formation MU short member=202 formed=2026-02-10T15:32:00+00:00 excluded_by=no_card" in printed
+    assert "formations: 1 not taken (no_card) · cf-R Σ −1.0R, n=1" in deps.written[-1]
+    assert calls.index("missed.radar_cards") < calls.index("missed.reconcile:formation") < \
+        calls.index("writer.upsert_unit")
+
+
+def test_an_open_radar_card_for_the_formations_subject_suppresses_it_in_the_run():
+    from cobalt.replay.models import RadarCardRef
+
+    deps, calls = fake_deps(formations=runner_mod.formation_replay, formation_sources=p2_sources)
+    deps.missed.cards = [RadarCardRef(card_id=901, pool_member_id=202,
+                                      trade_def_slug="example-anatomy-reversal", direction="short",
+                                      state="EXPIRED")]
+    result = run_nightly(DAY, dry_run=False, deps=deps)
+    assert (result.formation_candidates, result.formation_misses, result.formation_suppressed) == (1, 0, 1)
+    assert "missed.reconcile:formation" not in calls
+    assert "formations: 0 not taken (no_card) · cf-R Σ +0.0R, n=0 · suppressed 1" in deps.written[-1]
 
 
 def test_r1_21_a_present_but_incompatible_p2_fails_loud(monkeypatch):
@@ -256,11 +354,35 @@ def test_r1_21_a_present_but_incompatible_p2_fails_loud(monkeypatch):
         stop: str
         formed_bar_ts: datetime
 
+    import cobalt.radar
+
     module = types.ModuleType("cobalt.radar.evaluate_cli")
     module.ReplayFormation = ReplayFormation
     module.replay_formations = lambda *a, **k: None
+    # `import a.b.c as x` reads the ATTRIBUTE on the parent package first,
+    # so a sys.modules entry alone leaves the real S2-P2 module in place —
+    # both are set, or this test proves nothing.
     monkeypatch.setitem(sys.modules, "cobalt.radar.evaluate_cli", module)
+    monkeypatch.setattr(cobalt.radar, "evaluate_cli", module)
     with pytest.raises(ReplayError, match="incompatible.*membership_id"):
+        formation_replay(DAY, out=lambda line: None)
+
+
+def test_r1_21_an_unsupported_p2_capability_marker_fails_loud(monkeypatch):
+    import cobalt.radar
+    import cobalt.radar.evaluate_cli as shipped
+
+    marker = types.ModuleType("cobalt.radar.evaluate")
+    marker.EVALUATOR_VERSION = "s9p9.0"
+    monkeypatch.setitem(sys.modules, "cobalt.radar.evaluate", marker)
+    monkeypatch.setattr(cobalt.radar, "evaluate", marker)
+    monkeypatch.setattr(cobalt.radar, "evaluate_cli", shipped)
+    with pytest.raises(ReplayError, match="incompatible: evaluator version 's9p9.0'"):
+        formation_replay(DAY, out=lambda line: None)
+
+
+def test_a_compatible_p2_with_no_sources_refuses_rather_than_half_wiring():
+    with pytest.raises(ReplayError, match="no formation sources"):
         formation_replay(DAY, out=lambda line: None)
 
 
@@ -395,7 +517,19 @@ class FakeCollector:
         return ({t: [] for t in tickers if t not in self.fail}, {t: "CollectorError: 429" for t in tickers if t in self.fail})
 
 
-def fake_deps(*, job_row="default", settings="default", collector=None, now=None, drc_missing=False):
+def unavailable_formations(trade_date, *, out, sources=None, context=None):
+    """The formation step with S2-P2 NOT deployed, injected the way every
+    other store is injected here. The tests below are about the run's
+    order, its commits and its failures — not about the P2 binding, which
+    `test_replay_formations.py` and the bound test above cover."""
+    from cobalt.replay.models import FORMATION_UNAVAILABLE, FormationOutcome
+
+    out(FORMATION_UNAVAILABLE_LINE)
+    return FormationOutcome(status=FORMATION_UNAVAILABLE)
+
+
+def fake_deps(*, job_row="default", settings="default", collector=None, now=None, drc_missing=False,
+              formations=unavailable_formations, formation_sources=None):
     import tempfile
 
     from cobalt.prefill.drc import _render_template
@@ -417,7 +551,8 @@ def fake_deps(*, job_row="default", settings="default", collector=None, now=None
         candidates_error = None
 
         def __init__(self):
-            self.current_rows: dict[str, dict[tuple, dict]] = {"card": {}, "mover": {}}
+            self.current_rows: dict[str, dict[tuple, dict]] = {"card": {}, "mover": {}, "formation": {}}
+            self.cards: list = []
 
         def candidates(self, day):
             calls.append("missed.candidates")
@@ -428,6 +563,10 @@ def fake_deps(*, job_row="default", settings="default", collector=None, now=None
         def positions(self, day):
             calls.append("missed.positions")
             return positions
+
+        def radar_cards(self, day):
+            calls.append("missed.radar_cards")
+            return list(self.cards)
 
         def reconcile(self, *, run_id, trade_date, kind, rows, before_commit=None):
             calls.append(f"missed.reconcile:{kind}")
@@ -497,6 +636,7 @@ def fake_deps(*, job_row="default", settings="default", collector=None, now=None
         missed=Missed(), movers_store=Movers(), bar_store=Bars(), radar_store=Radar(),
         radar_config=load_radar_config(), collector_factory=None, cache_root=folder,
         writer_factory=None, drc_path=lambda day: drc, out=None, ceiling=40,
+        formation_source=formations, formation_sources=formation_sources,
     )
     deps.printed = []
     deps.written = []

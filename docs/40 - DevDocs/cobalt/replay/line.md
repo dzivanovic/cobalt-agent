@@ -16,6 +16,14 @@ Misses 2026-09-03: cards 3 (unarmed 2 · passed 0 · not_filled 0 · window 0 ·
   from the ruled template) are listed, then `(+J more)`. Negatives use
   U+2212.
 - `movers: unavailable` is printed when no benchmark settings were read.
+- **Formations (2026-09-18, chunk E2).** While S2-P2 is absent the segment
+  stays `formations: unavailable until S2-P2`. Once the binding runs it
+  carries its own count and sum, in the card segment's shape:
+  `formations: 2 not taken (no_card) · cf-R Σ −29.9R, n=2`, with
+  `· suppressed K` and `· input_stale K` appended when nonzero. The plan
+  wrote only the unavailable text; this is its extension. A suppressed
+  formation (an open radar card already covers that member, def and
+  direction) is not a second miss and appears only as its count.
 
 ## Writing (L28)
 - `drc_note_path(day)`: `prefill.yaml` `review_dir` +

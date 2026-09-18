@@ -9,6 +9,17 @@
 (one line in the note; wrapped here). It is rendered ONLY from the run's
 own reconciled current set, so the line and `job.result` cannot disagree.
 
+Once S2-P2's replay is bound the formation segment carries its own count
+and cf-R sum — the plan wrote only the unavailable text, so this is its
+extension, in the same shape as the card segment:
+
+    · formations: 2 not taken (no_card) · cf-R Σ −29.9R, n=2
+      [· suppressed K] [· input_stale K]
+
+A suppressed formation (an open radar card already covers that member,
+def and direction) is NOT a second miss — it is surfaced on the line only
+as its count, and in `job.result` in full.
+
 L8: the cf-R sum always carries its n; an average renders only at n >= 30,
 otherwise `avg: insufficient data (n<30)`. R1-12: a nonzero input_stale
 count is printed on the line — a card that could not be replayed is never
@@ -76,6 +87,9 @@ def render_line(
     settings: Optional[BenchmarkSettings],
     formation_replay: str,
     input_stale: int,
+    formation_rows: Sequence[dict[str, Any]] = (),
+    formation_suppressed: int = 0,
+    formation_input_stale: int = 0,
 ) -> str:
     """The line body. `card_rows`/`mover_rows` are CURRENT `"user".missed` rows."""
     counts = {gate: 0 for gate in CARD_GATES}
@@ -115,7 +129,14 @@ def render_line(
     if formation_replay == FORMATION_UNAVAILABLE:
         parts.append("formations: unavailable until S2-P2")
     else:
-        parts.append(f"formations: {formation_replay}")
+        rs = [Decimal(str(row["cf_r"])) for row in formation_rows if row.get("cf_r") is not None]
+        segment = (f"formations: {len(formation_rows)} not taken (no_card) · "
+                   f"cf-R Σ {_signed(sum(rs, Decimal(0)), '0.1', 'R')}, n={len(rs)}")
+        if formation_suppressed:
+            segment += f" · suppressed {formation_suppressed}"
+        if formation_input_stale:
+            segment += f" · input_stale {formation_input_stale}"
+        parts.append(segment)
     return " · ".join(parts)
 
 

@@ -41,6 +41,27 @@ datetimes. `sha256_json` hashes that text. Every `inputs_sha256` is
 - `CardReplay`: `miss | no_trigger | input_stale`, a reason, and the
   `MissRow` for a miss.
 
+## The shared counterfactual (2026-09-18, chunk E2)
+- `Counterfactual`: what `cards.counterfactual()` computed — the searched
+  and eligible bars, the trigger bar, the stop in force, the risk unit,
+  window and horizon, the walked bars, fill, exit and `cf_r`/`mfe_r`. It
+  holds `Bar`s, so `arbitrary_types_allowed` is on.
+- `CfOutcome`: `ok | no_trigger | input_stale`, a reason, and the walk.
+
+## Formation side (F12, R1-21)
+- `RadarCardRef`: a radar card that already exists for a (member, def,
+  direction). Its presence suppresses the formation miss.
+- `FormationCandidate`: one S2-P2 `ReplayFormation` in replay's
+  vocabulary — `entry`/`stop` take the live card path's own mapping
+  (`trigger_price`/`structural_stop`), and `subject_key()` is the
+  (member, def slug, direction) triple `aset_sizings_one_open_radar_card`
+  enforces.
+- `FormationReplay`: `miss | suppressed | no_trigger | input_stale`.
+- `FormationCounts`: candidates, misses, suppressed, no_trigger,
+  input_stale — every formation the day produced, none silently dropped.
+- `FormationOutcome`: the formation step's whole answer — the capability
+  marker it bound to (or `unavailable`), its rows and its counts.
+
 ## Mover side (F13)
 - `MoverRow`: one ranked export row.
 - `MoversExport`: one side's top rows, the sha256 of the raw bytes, the
@@ -58,5 +79,8 @@ datetimes. `sha256_json` hashes that text. Every `inputs_sha256` is
 - `ReplayResult`: `job.result`. It carries `movers, archived,
   card_misses, mover_misses, formation_replay, line_action` (STEP-4), the
   R1-12 coverage counts (`input_stale, archive_failures,
-  archive_incomplete`, `no_trigger`), `line_diff`, `steps_done`,
-  `failed_step`, `precondition`, and per-kind `reconcile` counts.
+  archive_incomplete`, `no_trigger`), the formation counts
+  (`formation_candidates, formation_misses, formation_suppressed,
+  formation_no_trigger, formation_input_stale`, added 2026-09-18),
+  `line_diff`, `steps_done`, `failed_step`, `precondition`, and per-kind
+  `reconcile` counts.

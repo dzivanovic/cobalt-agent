@@ -12,7 +12,7 @@ historical run reads what was retained.
 | (0) precondition | `archiver_precondition` on the `com.cobalt.archiver` row | read only |
 | `movers` | benchmark settings (USER read) → exports → `movers_store.reconcile` → `archive_movers` → `mark_bars_archived` → membership read → `benchmark_misses` → `missed.reconcile(kind="mover")` | SYSTEM, then USER |
 | `cards` | candidates + positions (USER) → bars (SYSTEM read) → `replay_card` each → `missed.reconcile(kind="card")` | USER |
-| `formations` | `deps.formation_source` (default `formation_replay`) | none today |
+| `formations` | `missed.radar_cards` (USER read) + bars (SYSTEM read) → `deps.formation_source` (default `formation_replay`) → `missed.reconcile(kind="formation")` when it returns rows | USER |
 | `line` | `render_line` from the current rows → `drc_path` → deadline check → `write_miss_line` | vault (L28) |
 
 - No connection spans both schemas (R2-3). Recovery is a rerun:
@@ -26,8 +26,10 @@ historical run reads what was retained.
   archive failure(s)…")` **after** the line (archiver semantics).
   Incomplete coverage is counted, not failed.
 - Every miss is printed as `MISS card <id> <ticker> <dir> excluded_by=<gate>
-  cf_r=…` or `MISS mover <ticker> excluded_by=<gate> change=…%`. That is
-  the report listing each miss with its gate.
+  cf_r=…`, `MISS mover <ticker> excluded_by=<gate> change=…%` or
+  `MISS formation <ticker> <dir> member=<id> formed=<ts>
+  excluded_by=no_card cf_r=…`. That is the report listing each miss with
+  its gate.
 
 ## `archiver_precondition(row, *, trade_date, now, registry)` (R1-15)
 It refuses (`archiver not done: …`) on: an absent row, state not `done`, a
@@ -50,20 +52,39 @@ async collector work through `asyncio.wait_for`. A slow collector that is
 still heartbeating is cut at the deadline. A dry run has no deadline
 because it writes nothing.
 
-## `formation_replay(trade_date, *, out)` (R4, R1-21)
-- `cobalt.radar.evaluate_cli` absent: logs and prints exactly `trade_def
-  replay: not available until S2-P2` and returns `("unavailable", [])`.
-- Present but missing `replay_formations`/`ReplayFormation`, or any of
-  `FORMATION_REQUIRED_FIELDS` (`membership_id, trade_def_md5, ticker,
-  direction, trigger, stop, formed_bar_ts`): refuses as incompatible.
-- Present and compatible: refuses too until the binding is written against
-  the real contract. No second formation path is guessed.
+## `formation_replay(trade_date, *, out, sources=None, context=None)` (R4, R1-21)
 
-The import is static (`import cobalt.radar.evaluate_cli`). A string-named
-dynamic import would make the L42 restart classifier restart every resident.
+**2026-09-18 — S2-P4 chunk E2.** The adapter is now BOUND. It returns a
+`FormationOutcome` (status, rows, counts), not a tuple.
+
+| S2-P2 in the tree | What happens |
+|---|---|
+| absent | logs and prints exactly `trade_def replay: not available until S2-P2`, status `unavailable`, no rows |
+| present, model missing any of `FORMATION_REQUIRED_FIELDS` | `ReplayError`, "present but incompatible: missing […]" |
+| present, `EVALUATOR_VERSION` outside `SUPPORTED_EVALUATORS` | `ReplayError`, "incompatible: evaluator version …" |
+| present and compatible, no `sources`/`context` | `ReplayError`, "no formation sources" — a half-wired binding never runs |
+| present, compatible, wired | calls P2's OWN `replay_formations` for the day and hands its report to `formations.formation_misses` |
+
+TWO S2-P2 MODULES, BOTH IMPORTED STATICALLY: the entrypoint and its model
+are in `cobalt.radar.evaluate_cli`, the capability marker
+`EVALUATOR_VERSION` is in `cobalt.radar.evaluate`. The plan named one
+module (`cobalt.radar.evaluate`); the code follows the shipped layout and
+never accepts one name in two spellings (L3). The imports are static
+because a string-named dynamic import would make the L42 restart
+classifier restart every resident.
+
+A `ModuleNotFoundError` naming anything OTHER than those two modules is
+re-raised: a broken dependency inside S2-P2 is not "S2-P2 is not deployed".
 
 ## `ReplayDeps`
 A dataclass of everything the run touches: stores, registry, tunables,
 clock, session bounds, settings reader, collector factory, writer factory,
 DRC path, output and ceiling. Tests record every call on it.
 `cli.default_deps` is the production wiring.
+
+`formation_source` (default `formation_replay`) and `formation_sources`
+(the factory that builds S2-P2's own replay arguments) are the two
+formation seams. The `formations` step builds its `FormationContext` from
+the deps it already holds — the SYSTEM bar read it uses for cards and the
+USER `missed.radar_cards(trade_date)` read — and both are callables, so
+nothing is read when S2-P2 is absent.

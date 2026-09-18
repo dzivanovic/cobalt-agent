@@ -7,8 +7,10 @@
                       archive -> benchmark -> USER commit (missed, mover)
     (2) cards         F12: USER reads + SYSTEM bar reads -> USER commit
                       (missed, card)
-    (3) formations    S2-P2's replay when present and compatible; today one
-                      exact unavailable line and no rows (R4, R1-21)
+    (3) formations    S2-P2's own read-only replay when present and
+                      compatible -> USER commit (missed, formation);
+                      absent -> one exact unavailable line, no rows;
+                      incompatible -> loud (R4, R1-21)
     (4) line          the DRC miss line from the reconciled current set
 
 PER-SIDE COMMITS (R2-3). No connection or role spans the two schemas in
@@ -49,11 +51,19 @@ from cobalt.session.clock import ET
 from cobalt.settings.models import BenchmarkSettings
 
 from .cards import replay_card, resolve_window
+from .formations import (
+    FORMATION_REQUIRED_FIELDS,
+    SUPPORTED_EVALUATORS,
+    FormationContext,
+    FormationSources,
+    formation_misses,
+)
 from .line import render_line, write_miss_line
 from .models import (
     FORMATION_UNAVAILABLE,
     FORMATION_UNAVAILABLE_LINE,
     Episode,
+    FormationOutcome,
     MissRow,
     ReplayError,
     ReplayResult,
@@ -63,12 +73,6 @@ from .models import (
 from .movers import archive_movers, benchmark_misses, retained_exports
 
 STEPS = ("movers", "cards", "formations", "line")
-
-#: What S2-P2's replay must return per formation for replay to bind to it
-#: (R1-21). P2's shipped `ReplayFormation` is recorded in the build report.
-FORMATION_REQUIRED_FIELDS = frozenset(
-    {"membership_id", "trade_def_md5", "ticker", "direction", "trigger", "stop", "formed_bar_ts"}
-)
 
 
 class DeadlineExceeded(ReplayError):
@@ -162,26 +166,40 @@ def replay_deadline(now: datetime, *, registry, tunables) -> Optional[datetime]:
 # ---------------------------------------------------------------------------
 
 
-def formation_replay(trade_date: date, *, out: Callable[[str], None]) -> tuple[str, list[MissRow]]:
+def formation_replay(
+    trade_date: date,
+    *,
+    out: Callable[[str], None],
+    sources: Optional[FormationSources] = None,
+    context: Optional[FormationContext] = None,
+) -> FormationOutcome:
     """Bind to S2-P2's replay, or say exactly that it is not there.
 
     Absent -> the exact line, `unavailable`, no rows. Present but not
-    carrying the fields a miss row needs -> loud refusal, never a silent
-    degrade. Present and compatible -> refused too until the binding is
-    written against the real contract: no second scoring implementation
-    is ever guessed here (R1-21).
+    carrying the fields a miss row needs, or carrying a capability marker
+    this binding was not written against -> loud refusal, never a silent
+    degrade (R1-21). Present, compatible and wired -> P2's OWN read-only
+    replay runs for the day and every formation it returns goes through
+    `replay/formations.py`; replay never re-derives a formation itself.
+
+    Two S2-P2 modules, two distinct roles, both imported statically: the
+    entrypoint and its model ship in `cobalt.radar.evaluate_cli`, the
+    capability marker in `cobalt.radar.evaluate`. The plan named the
+    single module `cobalt.radar.evaluate`; the shipped layout is what the
+    code follows, and no name is ever accepted in two spellings (L3).
     """
     try:
-        # A STATIC import, on purpose: the restart classifier (L42) walks
+        # STATIC imports, on purpose: the restart classifier (L42) walks
         # imports by AST and treats a string-named dynamic import as
         # unresolvable, which would restart every resident.
+        import cobalt.radar.evaluate as evaluator
         import cobalt.radar.evaluate_cli as module
     except ModuleNotFoundError as e:
         if e.name not in {"cobalt.radar.evaluate_cli", "cobalt.radar.evaluate"}:
             raise
         logger.warning(FORMATION_UNAVAILABLE_LINE)
         out(FORMATION_UNAVAILABLE_LINE)
-        return FORMATION_UNAVAILABLE, []
+        return FormationOutcome(status=FORMATION_UNAVAILABLE)
     model = getattr(module, "ReplayFormation", None)
     call = getattr(module, "replay_formations", None)
     fields = set(getattr(model, "model_fields", {}) or {})
@@ -192,10 +210,23 @@ def formation_replay(trade_date: date, *, out: Callable[[str], None]) -> tuple[s
             + ("no replay_formations/ReplayFormation" if call is None or model is None else f"missing {missing}")
             + f" (replay needs {sorted(FORMATION_REQUIRED_FIELDS)})"
         )
-    raise ReplayError(
-        "S2-P2 formation replay is present and carries the required fields, but replay's binding to it "
-        "is not built — refusing rather than guessing a second formation path (R1-21)"
+    version = getattr(evaluator, "EVALUATOR_VERSION", None)
+    if version not in SUPPORTED_EVALUATORS:
+        raise ReplayError(
+            f"S2-P2 formation replay is present but incompatible: evaluator version {version!r} is not one "
+            f"this binding was written against ({sorted(SUPPORTED_EVALUATORS)})"
+        )
+    if sources is None or context is None:
+        raise ReplayError(
+            "S2-P2 formation replay is present and compatible, but replay was given no formation "
+            "sources — refusing rather than running a half-wired binding (R1-21)"
+        )
+    report = call(
+        trade_date, pool_key=sources.pool_key, slug_filter=None, radar_store=sources.radar_store,
+        defs_source=sources.defs_source, daily_source=sources.daily_source, tunables=sources.tunables,
+        defaults=sources.defaults, clock=sources.clock, out=out,
     )
+    return formation_misses(report, context=context, evaluator_version=version)
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +255,9 @@ class ReplayDeps:
     drc_path: Callable[[date], Any]
     out: Callable[[str], None]
     ceiling: Optional[int]
-    formation_source: Callable[..., tuple[str, list[MissRow]]] = formation_replay
+    formation_source: Callable[..., FormationOutcome] = formation_replay
+    #: S2-P2's own replay arguments, built only when the step runs.
+    formation_sources: Optional[Callable[[], FormationSources]] = None
 
 
 def _new_run_id(trade_date: date, now: datetime) -> str:
@@ -353,15 +386,40 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
         result.card_misses = len(state["card_rows"])
 
     def formations_step() -> None:
-        status, rows = deps.formation_source(trade_date, out=deps.out)
-        result.formation_replay = status
-        if rows:
-            raise ReplayError("formation rows returned without a bound formation contract")
+        context = FormationContext(
+            trade_date=trade_date, session_close=close,
+            bars_for=lambda ticker: deps.bar_store.bars_between(ticker, Interval.I1, day_start, day_end),
+            radar_cards=lambda: deps.missed.radar_cards(trade_date),
+        )
+        outcome = deps.formation_source(
+            trade_date, out=deps.out,
+            sources=deps.formation_sources() if deps.formation_sources else None, context=context,
+        )
+        result.formation_replay = outcome.status
+        result.formation_candidates = outcome.counts.candidates
+        result.formation_suppressed = outcome.counts.suppressed
+        result.formation_no_trigger = outcome.counts.no_trigger
+        result.formation_input_stale = outcome.counts.input_stale
+        rows = list(outcome.rows)
+        for row in rows:
+            deps.out(f"MISS formation {row.ticker} {row.direction} member={row.pool_member_id} "
+                     f"formed={row.formation_at.isoformat()} excluded_by={row.excluded_by} cf_r={row.cf_r} "
+                     f"trigger={row.trigger_ts.isoformat()} fill={row.fill_price} "
+                     f"exit={row.exit_reason}@{row.exit_price} mfe_r={row.mfe_r}")
+        state["formation_rows"] = [r.model_dump() for r in rows]
+        if rows and not dry_run:
+            result.reconcile["formation"] = deps.missed.reconcile(
+                run_id=result.replay_run_id, trade_date=trade_date, kind="formation", rows=rows)
+            state["formation_rows"] = deps.missed.current(trade_date, "formation")
+        result.formation_misses = len(state["formation_rows"])
 
     def line_step() -> None:
         body = render_line(trade_date, card_rows=state["card_rows"], mover_rows=state["mover_rows"],
                            settings=state.get("settings"), formation_replay=result.formation_replay,
-                           input_stale=result.input_stale)
+                           input_stale=result.input_stale,
+                           formation_rows=state.get("formation_rows", []),
+                           formation_suppressed=result.formation_suppressed,
+                           formation_input_stale=result.formation_input_stale)
         path = deps.drc_path(trade_date)
         check_deadline("line (before the vault write)")
         written = write_miss_line(path, body, writer=deps.writer_factory(dry_run))
@@ -391,6 +449,6 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
 
 
 __all__ = [
-    "DeadlineExceeded", "FORMATION_REQUIRED_FIELDS", "ReplayDeps", "STEPS", "archiver_precondition",
-    "formation_replay", "replay_deadline", "run_nightly",
+    "DeadlineExceeded", "FORMATION_REQUIRED_FIELDS", "ReplayDeps", "STEPS", "SUPPORTED_EVALUATORS",
+    "archiver_precondition", "formation_replay", "replay_deadline", "run_nightly",
 ]

@@ -46,6 +46,7 @@ def default_deps(*, dry_run: bool) -> ReplayDeps:
     from cobalt.vaultwrite import VaultWriter, VaultWriteStore
 
     from .cards import MissedStore
+    from .formations import FormationSources
     from .line import WRITER, drc_note_path
     from .movers import MoversCollector, MoversStore, load_radar_config
 
@@ -74,12 +75,27 @@ def default_deps(*, dry_run: bool) -> ReplayDeps:
             store.ensure_schema()
         return VaultWriter(WRITER, store=store, dry_run=is_dry)
 
+    def formation_sources():
+        """S2-P2's own replay arguments — the SAME stores the resident
+        evaluates with, read-only. Built only when the formation step
+        runs, so replay still loads when S2-P2 is not in the tree."""
+        from cobalt.radar.evaluate_cli import CachedDailyBars
+        from cobalt.taxonomy.loader import load_defaults
+        from cobalt.taxonomy.store import TradeDefStore
+
+        return FormationSources(
+            pool_key=config.pool_key, radar_store=RadarStore(),
+            defs_source=TradeDefStore().loaded_for_evaluation,
+            daily_source=CachedDailyBars(cache_root).load, tunables=tunables,
+            defaults=load_defaults(), clock=session_clock(),
+        )
+
     return ReplayDeps(
         job_store=JobStore(), registry=load_job_registry(), tunables=tunables, now=clock_mod.now_utc,
         session_bounds=session_bounds, settings_values=TraderSettingsStore().values, missed=MissedStore(),
         movers_store=MoversStore(), bar_store=BarStore(), radar_store=RadarStore(), radar_config=config,
         collector_factory=collector_factory, cache_root=cache_root, writer_factory=writer_factory,
-        drc_path=drc_note_path, out=print, ceiling=ceiling,
+        drc_path=drc_note_path, out=print, ceiling=ceiling, formation_sources=formation_sources,
     )
 
 
@@ -101,7 +117,9 @@ def cmd_nightly(args: argparse.Namespace) -> None:
     print(
         f"replay {trade_date}{' DRY RUN' if args.dry_run else ''}: movers {result.movers} · archived "
         f"{result.archived} · card misses {result.card_misses} · mover misses {result.mover_misses} · "
-        f"input_stale {result.input_stale} · formations {result.formation_replay} · line {result.line_action}"
+        f"input_stale {result.input_stale} · formations {result.formation_replay} "
+        f"({result.formation_misses} misses, {result.formation_suppressed} suppressed) · "
+        f"line {result.line_action}"
     )
 
 

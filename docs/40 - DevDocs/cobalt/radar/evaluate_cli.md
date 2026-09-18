@@ -16,6 +16,28 @@
 
 ## Key functions/classes
 - `replay_formations(day, *, pool_key, slug_filter, radar_store, defs_source, daily_source, tunables, defaults, clock, out)` returns a `ReplayReport` (scans, formations, path-B-only lines, not-evaluable map, evaluation counts).
+- `ReplayFormation` is the per-formation row of that report: `seen_at, ticker, slug, direction, trigger, stop, formed_bar_ts, membership_id, trade_def_md5, score_inputs_sha256`. Frozen, `extra="forbid"`.
+
+## The three subject fields (added 2026-09-18, S2-P4 chunk E2)
+`membership_id`, `trade_def_md5` and `score_inputs_sha256` were added
+ADDITIVELY for downstream consumers that must key a row on a formation —
+S2-P4's `"user".missed` rows, whose `kind='formation'` CHECK needs the
+member and the def, and whose unique index needs the formation bar so two
+same-day formations of one (ticker, trade_def) do not collapse into one
+row (Astra R1-21).
+
+Every one of the three is a value `evaluate_member` already returned for
+that formation (`ev.membership_id`, `ev.md5`, `ev.inputs_sha256`). Nothing
+new is computed here, nothing is written, and no schema changed: the
+`--replay` path is as read-only as it was.
+
+`score_inputs_sha256` is the reference to the RETAINED SCORE RECEIPT. The
+resident stores that same digest in `system.radar_score.inputs_sha256` on
+its row for the same `(membership_id, trade_def_md5)`. Because this path
+reads no receipt row, the reference is content-addressed — a natural key
+plus a digest — not a score id. A consumer resolves it with a lookup; a
+digest that does not match means the resident evaluated different inputs,
+which is the point of keeping it (L57).
 - `admitted_at(rows, instant)` returns the episodes admitted at an instant. `scan_instants(day, clock, interval, first)` returns the RTH scan grid.
 - `CachedDailyBars` is the read-only half of the daily collector (same `<root>/<ET date>/daily/<T>.csv` path). A missing file is an error, never a fetch.
 - `assert_dev_database()` raises `CandidateRefused` unless `COBALT_ENV` resolves cobalt_dev.
