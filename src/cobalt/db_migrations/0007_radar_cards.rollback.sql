@@ -31,7 +31,6 @@ DROP TABLE IF EXISTS "user".card_dot_taps;
 DROP TABLE IF EXISTS "user".card_dots;
 DROP FUNCTION IF EXISTS "user".refuse_row_update();
 
-DROP INDEX IF EXISTS "user".aset_sizings_one_promoted_radar_card;
 DROP INDEX IF EXISTS "user".aset_sizings_one_open_radar_card;
 
 ALTER TABLE "user".aset_sizings

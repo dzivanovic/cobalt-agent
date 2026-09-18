@@ -205,14 +205,3 @@ and reading a refusal.
 `/card/{id}/stop` writes **no transition row** (decision 11) — the edit
 rides in the next transition's evidence. The amber `YOURS` badge shows
 in `WATCH`/`FILLED`; every other state renders the 🔒 lock and says why.
-
-### Radar card taps (S2-P2 STEP-6) — JSON routes for the panel's fetch POSTs
-Every refusal is a named 4xx (`{"status": "REFUSED", "reason"}`), logged. All routes check the dev-entry opt-in (403) and `assert_writable` first. The row locks and the ARM invariant live in `CardStore`, so the sheet's `/card/{id}/move` gets them too.
-
-- `POST /radar/card/{id}/key` with `grade=A+|A|B|C|pass`:
-  - `pass` is WATCH → PASSED, actor you.
-  - A key resolves today's rung (`_daymode_state`; unresolved → 409) and keeps the F6 `.htk` mismatch refusal unchanged (`assert_sheet_matches` → 409).
-  - It sizes through `engine.size_at_key` on the card's LIVE entry/stop, at `sheet_for(mode)` dollars and `enabled_grades_for(mode)`. Nothing enabled below → 409, no write. Otherwise `CardStore.tap_key` (a non-WATCH card → 409).
-  - Then ONE daily-note card block via `save_card(cfg, result, when=card.created_at)`: the card's stable unit, so a re-tap updates that block and no scan ever writes the note. A note refusal returns 500 with what was persisted.
-- `POST /radar/card/{id}/dot/{factor}` with `grade=1..10` (else 422) calls `CardStore.tap_dot`, with bands from `CardSettingsReader().current()` (read per request) and today's enabled grades.
-- `POST /radar/card/{id}/promote` and `/release` call `CardStore.set_promoted`.

@@ -70,16 +70,7 @@ class RadarRunner:
         poller: BarPoller,
         clock=None,
         now: Callable[[], datetime] = clock_mod.now_utc,
-        evaluator=None,
-        ceiling_rpm: int | None = None,
     ):
-        # S5 (S2-P2 R1). `build_runner` always wires the stage; `None` is
-        # the S1-S4-only shape the pre-S5 tests and the membership replay
-        # tool construct, stated at their call sites.
-        self.evaluator = evaluator
-        if evaluator is not None and ceiling_rpm is None:
-            raise ValueError("S5 needs radar.finviz_max_rpm to bound lifecycle polling (L53)")
-        self.ceiling_rpm = ceiling_rpm
         self.config = config
         self.sources_loader = sources_loader
         self.collector = collector
@@ -245,28 +236,6 @@ class RadarRunner:
                 PollMember(row["ticker"], row.get("last_rank") or 10**9)
                 for row in open_rows if row.get("entered_at") is not None
             ]
-        # Departed members with an open radar card keep being polled so the
-        # card keeps its price/health/expiry coverage (Astra R1-15) — but
-        # only inside the total Finviz demand ceiling (L53, R5).
-        lifecycle_refusal: str | None = None
-        if self.evaluator is not None:
-            try:
-                extra = self.evaluator.lifecycle_tickers([item.ticker for item in admitted])
-            except Exception as e:
-                extra = []
-                lifecycle_refusal = f"lifecycle card read failed: {scrub(str(e))}"
-            if extra:
-                from .notes import lifecycle_poll_demand
-
-                demand = lifecycle_poll_demand(
-                    parsed.planned_rpm, len(extra),
-                    scan_interval=int(load_tunables().by_key["radar.scan_interval"].value),
-                    ceiling_rpm=int(self.ceiling_rpm),
-                )
-                if demand.refusal is None:
-                    admitted = [*admitted, *(PollMember(ticker, 10**9) for ticker in extra)]
-                else:
-                    lifecycle_refusal = f"lifecycle polling refused for {extra}: {demand.refusal}"
         existing_failures = [
             PollFailure(
                 item["ticker"],
@@ -299,58 +268,6 @@ class RadarRunner:
         self._pending_drop = None
         failed_stage = "mirror" if mirror_failed else pending_drop[0] if pending_drop else None
         detail = mirror_failed if mirror_failed else pending_drop[1] if pending_drop else None
-        if lifecycle_refusal is not None:
-            try:
-                self.radar_store.stamp_failure(
-                    self.config.pool_key, failed_stage="bars", failed_detail=lifecycle_refusal,
-                    now=instant, before_commit=gate("bars:lifecycle", clock=self.clock, now=self.now),
-                )
-            except StageDropped as e:
-                return self._dropped(scan_id, decision, "bars", e)
-            logger.error("radar lifecycle polling: {}", lifecycle_refusal)
-            failed_stage, detail = "bars", lifecycle_refusal
-
-        # S5 evaluate, behind the same commit gate. A failure stamps
-        # failed_stage='evaluate'; S1-S4 results stand.
-        if self.evaluator is not None:
-            from .anatomy.freshness import rvol_observations
-            from .evaluate import EvaluateError
-
-            pool_unit = {
-                "pool_block": parsed.pool.model_dump(mode="json") if parsed.pool else None,
-                "frozen": parsed.frozen,
-                "source_sets": [item.model_dump(mode="json") for item in source_sets],
-            }
-            try:
-                outcome = await self.evaluator.run(
-                    pool_key=self.config.pool_key, scan_id=scan_id, session=session.value, instant=instant,
-                    rvol=rvol_observations(source_sets, observed_at=instant), pool_unit=pool_unit,
-                    gate=lambda label: gate(label, clock=self.clock, now=self.now),
-                )
-            except StageDropped as e:
-                return self._dropped(scan_id, decision, "evaluate", e)
-            except Exception as e:
-                evaluate_detail = scrub(str(e)) if isinstance(e, EvaluateError) else scrub(f"{type(e).__name__}: {e}")
-                logger.error("radar S5 evaluate FAILED: {}", evaluate_detail)
-                try:
-                    self.radar_store.stamp_failure(
-                        self.config.pool_key, failed_stage="evaluate", failed_detail=evaluate_detail,
-                        now=instant, before_commit=gate("evaluate:status", clock=self.clock, now=self.now),
-                    )
-                except StageDropped as dropped:
-                    return self._dropped(scan_id, decision, "evaluate", dropped)
-                return CycleResult(scan_id, "scanning", decision, "evaluate", evaluate_detail)
-            if outcome.refusals:
-                refusal = scrub("; ".join(outcome.refusals))[:500]
-                logger.error("radar S5 card refusals: {}", refusal)
-                try:
-                    self.radar_store.stamp_failure(
-                        self.config.pool_key, failed_stage="evaluate", failed_detail=refusal,
-                        now=instant, before_commit=gate("evaluate:status", clock=self.clock, now=self.now),
-                    )
-                except StageDropped as e:
-                    return self._dropped(scan_id, decision, "evaluate", e)
-                return CycleResult(scan_id, "scanning", decision, "evaluate", refusal)
         return CycleResult(scan_id, "scanning", decision, failed_stage, detail)
 
     def _pool_row(self, parsed, decision, scan_id, instant, session, started, open_rows, existing_pool=None):
@@ -406,41 +323,12 @@ async def build_runner() -> RadarRunner:
         raise RuntimeError("radar.finviz_max_rpm is unmeasured; run throttle-probe")
     token = await resolve_token()
     bucket = process_bucket(int(rpm))
-    from cobalt.cards.store import CardStore
-    from cobalt.taxonomy.loader import load_defaults
-    from cobalt.taxonomy.store import TradeDefStore
-
-    from .collector import FinvizDailyBarsCollector
-    from .evaluate import EvaluateStage
-
-    settings_store = TraderSettingsStore()
-
-    def rung(instant, daymode_cfg):
-        from cobalt.daymode import DayModeStore, decided_or_stage1
-
-        row = DayModeStore().for_date(session_clock().to_et(instant).date())
-        return decided_or_stage1(row, daymode_cfg, now=instant)
-
-    evaluator = EvaluateStage(
-        rung_source=rung,
-        radar_store=RadarStore(),
-        card_store=CardStore(),
-        defs_source=TradeDefStore().loaded_for_evaluation,
-        settings_values=settings_store.values,  # re-read every cycle (plan §5)
-        daily_source=FinvizDailyBarsCollector(token, config=config, bucket=bucket).daily,
-        tunables_loader=lambda: load_tunables().by_key,
-        defaults_loader=load_defaults,
-        clock=session_clock(),
-        now=clock_mod.now_utc,
-    )
     return RadarRunner(
-        evaluator=evaluator,
-        ceiling_rpm=int(rpm),
         config=config,
         sources_loader=configured_sources,
         collector=FinvizScreenerCollector(token, config=config, bucket=bucket),
         radar_store=RadarStore(),
-        settings_store=settings_store,
+        settings_store=TraderSettingsStore(),
         poller=BarPoller(
             token,
             bucket=bucket,
@@ -526,9 +414,6 @@ async def _scan_replay(args) -> None:
         radar_store=RadarStore(),
         settings_store=TraderSettingsStore(),
         poller=_ReplayPoller(),
-        # The S1-S4 membership replay tool: no S5. Evaluation replays with
-        # `cobalt radar evaluate --replay` (writes nothing).
-        evaluator=None,
         now=lambda: virtual[0],
     )
     interval = int(load_tunables().by_key["radar.scan_interval"].value)

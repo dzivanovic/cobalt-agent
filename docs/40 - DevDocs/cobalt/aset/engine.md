@@ -64,11 +64,3 @@ side effects — callers (`web.py`) own persistence and rendering.
 None — by design. `risk_dollars` arrives as a `SizingInput` field,
 already resolved by the caller from `config.py`'s
 `SheetModesConfig.dollars_for(mode, grade)`.
-
-## 2026-09-16 — S2-P2 radar keys (STEP-6, ruling R8)
-- `stop_distance(*, entry, stop, direction)` is the side check plus `|entry − stop|`, factored out of `recompute_for_stop` (one path). An unsized radar card's stop edit uses it too.
-- `LADDER_KEYS` = A+, A, B, C, high to low. D is the SAW grade, not a key; `pass` is a state move.
-- `key_ladder(sheet_modes, sheet, enabled)` returns every key with `dollars_for(sheet, key)` and an `enabled` flag. A disabled key still carries its would-be dollars.
-- `snap_down(tapped, enabled) -> (sized | None, notice)`: the tapped key if enabled, else the nearest enabled key BELOW it with a notice, else `(None, refusal)`. Never up. A non-ladder key raises `KeyRefused`.
-- `size_at_key(tapped, *, ticker, entry, stop, direction, sheet_modes, sheet, enabled, max_stop_distance_pct) -> KeySizing` runs `snap_down`, then `compute_sizing` at the snapped key's dollars. The notice names the dollars and the sheet. With nothing below it raises `KeyRefused` (a `SizingError`).
-- `cards.scoring.proposed_key` also goes through `snap_down`, so the highlight can never propose a key the tap would refuse.

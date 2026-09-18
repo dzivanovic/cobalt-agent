@@ -10,11 +10,6 @@ vault's defs into `"user".trade_defs` / `"user".tunables`, and reads
 - `sync(result) -> SyncCounts` — one transaction for defs and tunables
   together (a per-trade row references its def).
 - `slugs()`, `get(slug)`, `matrix()`, `tunable_keys()`.
-- `loaded_for_evaluation() -> (list[LoadedDef], {key: TunableRow})`
-  (S2-P2) — what the radar S5 stage consumes. Every stored def is
-  re-validated (its predicates re-parse) with its md5, and the trader's
-  per-trade tunable rows come with them. A row that no longer validates
-  fails the read loud.
 
 ## `sync` is a REPLACE, not a merge
 Every def in the read is upserted, and every slug in the table the read

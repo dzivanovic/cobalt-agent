@@ -95,25 +95,6 @@ def compute_sizing(
     )
 
 
-def stop_distance(*, entry: Decimal, stop: Decimal, direction: Direction) -> Decimal:
-    """|entry - stop|, after the side check. The one place both the
-    stop-edit recompute and an UNSIZED radar card's stop edit (S2-P2,
-    Astra R1-6) get their distance from: an unsized WATCH card has no
-    risk budget to divide by, but its stop must still sit on the right
-    side and its distance still feeds proximity."""
-    if entry <= 0:
-        raise SizingError("entry must be positive")
-    if direction is Direction.LONG and stop >= entry:
-        raise SizingError(
-            f"Long stop ({stop}) must be below entry ({entry}) — refusing, not warning."
-        )
-    if direction is Direction.SHORT and stop <= entry:
-        raise SizingError(
-            f"Short stop ({stop}) must be above entry ({entry}) — refusing, not warning."
-        )
-    return abs(entry - stop)
-
-
 class StopEditRecompute(NamedTuple):
     """What a moved stop does to the rest of the card (decision 11)."""
 
@@ -149,7 +130,18 @@ def recompute_for_stop(
     uses, factored out rather than copied (one-path rule), so a stop
     edit can never disagree with the card it edits.
     """
-    per_share_risk = stop_distance(entry=entry, stop=stop, direction=direction)
+    if entry <= 0:
+        raise SizingError("entry must be positive")
+    if direction is Direction.LONG and stop >= entry:
+        raise SizingError(
+            f"Long stop ({stop}) must be below entry ({entry}) — refusing, not warning."
+        )
+    if direction is Direction.SHORT and stop <= entry:
+        raise SizingError(
+            f"Short stop ({stop}) must be above entry ({entry}) — refusing, not warning."
+        )
+
+    per_share_risk = abs(entry - stop)
     if in_trade_shares is not None:
         return StopEditRecompute(
             per_share_risk=per_share_risk,
@@ -164,104 +156,6 @@ def recompute_for_stop(
         used_risk=(per_share_risk * shares).quantize(CENTS),
         shares_changed=True,
     )
-
-
-# ---------------------------------------------------------------------
-# The radar ladder: keys, snap DOWN only (S2-P2 STEP-6, ruling R8)
-# ---------------------------------------------------------------------
-
-#: The keys a radar card offers, HIGH to LOW. D is not a key: it is the
-#: SAW grade ($0), and "pass" is a state move, not a size.
-LADDER_KEYS: tuple[Grade, ...] = (Grade.A_PLUS, Grade.A, Grade.B, Grade.C)
-
-
-class KeyRefused(SizingError):
-    """A key tap that cannot size — nothing enabled at or below it."""
-
-
-class KeyOption(NamedTuple):
-    """One key on the card: its grade, the dollars it sizes on today's
-    sheet, and whether today's rung enables it. A disabled key still
-    carries its would-be dollars so the greyed key tells the truth."""
-
-    grade: Grade
-    dollars: Decimal
-    enabled: bool
-
-
-def key_ladder(sheet_modes, sheet: str, enabled: Iterable[Grade]) -> tuple[KeyOption, ...]:
-    """Every ladder key with `dollars_for(sheet, key)`. `sheet_modes` is
-    the `SheetModesConfig` read from `trader_settings`; this module still
-    reads no config itself."""
-    allowed = set(enabled)
-    return tuple(
-        KeyOption(grade, sheet_modes.dollars_for(sheet, grade), grade in allowed)
-        for grade in LADDER_KEYS
-    )
-
-
-def snap_down(tapped: Grade, enabled: Iterable[Grade]) -> tuple[Grade | None, str | None]:
-    """(sized, notice). R8: the tapped key if enabled; otherwise the
-    nearest ENABLED key BELOW it, with a notice; otherwise (None, the
-    refusal). Never up — a key he did not reach for is never sized."""
-    if tapped not in LADDER_KEYS:
-        raise KeyRefused(
-            f"{tapped.value} is not a ladder key (keys: "
-            f"{', '.join(g.value for g in LADDER_KEYS)})"
-        )
-    allowed = set(enabled)
-    if tapped in allowed:
-        return tapped, None
-    for grade in LADDER_KEYS[LADDER_KEYS.index(tapped) + 1:]:
-        if grade in allowed:
-            return grade, (
-                f"{tapped.value} is not enabled today — recorded {tapped.value}, "
-                f"sized at {grade.value}, the nearest enabled key below"
-            )
-    return None, (
-        f"{tapped.value} is not enabled today and nothing enabled below it "
-        f"(enabled: {', '.join(sorted(g.value for g in allowed)) or 'none'}) — refused, no size"
-    )
-
-
-class KeySizing(NamedTuple):
-    tapped_grade: Grade
-    sized_grade: Grade
-    snap_notice: str | None
-    result: SizingResult
-
-
-def size_at_key(
-    tapped: Grade,
-    *,
-    ticker: str,
-    entry: Decimal,
-    stop: Decimal,
-    direction: Direction,
-    sheet_modes,
-    sheet: str,
-    enabled: Iterable[Grade],
-    max_stop_distance_pct: Decimal,
-) -> KeySizing:
-    """Size a radar card at a tapped key: `snap_down`, then the ONE
-    sizing path (`compute_sizing`) at the snapped key's sheet dollars.
-    The notice names the dollars so the amber line reads on its own."""
-    allowed = list(enabled)
-    sized, notice = snap_down(tapped, allowed)
-    if sized is None:
-        raise KeyRefused(notice)
-    dollars = sheet_modes.dollars_for(sheet, sized)
-    result = compute_sizing(
-        SizingInput(
-            ticker=ticker, grade=sized, direction=direction, sheet_mode=sheet,
-            risk_dollars=dollars, entry=entry, stop=stop,
-        ),
-        allowed,
-        max_stop_distance_pct,
-    )
-    if notice is not None:
-        notice = f"{notice} (${dollars} on the {sheet} sheet)"
-    return KeySizing(tapped, sized, notice, result)
 
 
 def compute_fill_recompute(

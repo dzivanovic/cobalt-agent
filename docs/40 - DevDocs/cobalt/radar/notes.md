@@ -13,9 +13,6 @@ It REFUSES in two cases: steady demand above the ceiling, or daily names with no
 
 `planned_total_rpm` stays as the steady-demand sum and now requires `context_tickers`.
 
-## Lifecycle polling (S2-P2, Astra R1-15)
-`lifecycle_poll_demand(planned_rpm, names, *, scan_interval, ceiling_rpm)` returns `LifecycleDemand`. It decides whether S4 may also poll `names` departed-member tickers whose radar cards are still open. The count is conservative: those names go on top of the whole planned steady demand, which already budgets the full pool cap, at one request per name per cycle times the same retry factor. Above the ceiling it refuses with the named total. With no planned demand (a frozen or failed note) it refuses rather than assumes.
-
 ## Gotchas
 `load_sources` takes `context_tickers` as a required argument, so no caller can leave the context consumer out. The refusal text names every consumer's share (`context=`, `daily_names=`), so a frozen pool says why.
 

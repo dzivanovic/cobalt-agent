@@ -91,14 +91,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS aset_sizings_one_open_radar_card
     ON "user".aset_sizings (pool_member_id, trade_def_slug, direction)
     WHERE origin = 'radar' AND state IN ('WATCH', 'ARMED', 'TRIGGERED', 'FILLED');
 
--- One PROMOTED radar card per trader (STEP-6 promote pins one card to
--- #2). Two concurrent promotes lock two different rows, so the "clear the
--- others, set mine" transaction alone cannot hold it; the index can.
--- Added S2-P2 chunk B.
-CREATE UNIQUE INDEX IF NOT EXISTS aset_sizings_one_promoted_radar_card
-    ON "user".aset_sizings (user_id)
-    WHERE origin = 'radar' AND promoted_at IS NOT NULL;
-
 -- ---------------------------------------------------------------------
 -- 2. Immutability guard shared by the append-only tables.
 -- ---------------------------------------------------------------------
