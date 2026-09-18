@@ -89,4 +89,24 @@ vault_writes         user    user -> user               184 -> 184      4a965c69
 | empty-table digest | `d41d8cd9…` = `md5('')` — the `coalesce(…, '')` arm. The streamed fold must reproduce it as `md5(b"")` |
 | no timings | today's table has no seconds column anywhere — deliverable 3 |
 
-CONTINUE: step 2
+## 2. Tests first — `tests/cobalt/test_migrate_proof.py`, RED
+
+`COBALT_ENV=dev uv run pytest -q tests/cobalt/test_migrate_proof.py --tb=line -p no:randomly` → **16 failed, 1 passed**, then the one green test was tightened (it was passing for the wrong reason — argparse refusing `--proof-only` as an UNKNOWN flag is not the harness refusing the COMBINATION) → **17 failed, 0 passed**. Every test red before the change:
+
+| # | group | test | red line, verbatim |
+|---|---|---|---|
+| a | fold | `test_the_streamed_fold_reproduces_string_agg_byte_for_byte[zero_rows / one_row / many_rows / rows_containing_the_separator / empty_strings / non_ascii / very_long]` (7) | `AttributeError: module 'cobalt.db_migrations.cli' has no attribute '_digest_rows'` |
+| a | fold | `test_no_rows_digests_the_empty_string` | `AttributeError: … has no attribute '_digest_rows'` |
+| a | fold | `test_the_separator_goes_between_rows_and_never_after_the_last` | `AttributeError: … has no attribute '_digest_rows'` |
+| b | DB oracle | `test_every_proof_table_digests_to_the_value_the_old_sql_returns` | `AttributeError: … has no attribute '_row_json'` |
+| c | guard | `test_no_statement_the_probe_sends_contains_string_agg` | `AssertionError: the proof still concatenates rows server-side — that value is what passed the 1 GB ceiling on 8.4M rows: ['SELECT count(*), md5(coalesce(string_agg(…))::text, '\|' ORDER BY "t"."id"), '')) FROM "user"."aset_sizings" AS t', … FROM "system"."bars" AS t']` |
+| e | memory | `test_rows_reach_the_probe_through_a_named_cursor_in_batches` | `AssertionError: every table's rows must stream through its own NAMED (server-side) cursor; named cursors declared: []` |
+| d | flag | `TestProofOnly::test_it_prints_every_table_with_timings_and_applies_nothing` | `cobalt: error: unrecognized arguments: --proof-only` · `assert 2 == 0` |
+| d | flag | `TestProofOnly::test_it_refuses_rollback_and_down_to` | `AssertionError: ('--proof-only', '--rollback', '--down-to', '0005') was refused by argparse as an UNKNOWN flag, which is not the same thing as refusing the combination` |
+| d | read-only | `TestProofOnly::test_its_transaction_is_read_only_at_the_server` | `AttributeError: … has no attribute '_connect'` |
+| e | memory | `test_row_texts_stream_through_one_named_batched_server_side_cursor` | `AttributeError: … has no attribute '_stream_row_texts'` |
+| e | memory | `test_the_batch_size_is_bounded_and_not_one_row_at_a_time` | `AttributeError: … has no attribute 'PROBE_BATCH_SIZE'` |
+
+Two of the reds are BEHAVIOURAL, not scaffolding — (c) prints today's actual `string_agg` query back as the failure, and (e)'s DB half records that today's probe declares **zero** server-side cursors. Test (b) is the byte-compatibility oracle: it runs the OLD SQL expression itself, which after step 3 survives in this test file and nowhere else (L3), and it additionally asserts the new `seconds` key that today's probe has no concept of.
+
+CONTINUE: step 3
