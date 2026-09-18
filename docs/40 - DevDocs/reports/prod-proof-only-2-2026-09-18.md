@@ -74,3 +74,63 @@ NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.
 | dev `bars` | **1,043,443 rows in 5.42 s** (the 09-18 build run read 5.55 s at the same row count — the one-pass fold is no slower) |
 | drift, expected | `cobalt_redactions` 118 → 121 rows, digest `2f0b1b28…` → `177a0fde…`: the append-only table drifts by design; no BASELINE comparison is made here (the gate run compared BEFORE with AFTER inside one command) |
 
+
+## Production — ONE command, once
+
+`date` **`Fri Sep 18 17:28:55 EDT 2026`** → `COBALT_ENV=production uv run cobalt db migrate --allow-prod --proof-only` (foreground, Bash `timeout` 600000) → `date` **`Fri Sep 18 17:29:45 EDT 2026`**. **Exit 0. 50 s of wall clock for the whole command.** Whole output, verbatim:
+
+```
+cobalt db migrate — PROOF ONLY on cobalt_brain (READ ONLY, nothing applied)
+
+table                side    schema   rows         digest                             secs
+------------------------------------------------------------------------------------------
+aset_sizings         user    user     146          baac6ac19fd231057ebe2cbe7443c933   0.03
+bars                 system  system   8592116      2ca2840db52f5e0930dd0d31bbbf2b5c   45.75
+card_dot_taps        user    -        -            -                                  0.00
+card_dots            user    -        -            -                                  0.00
+card_stop_edits      user    user     1            cbae670bbd7acd13749ac41d99f25861   0.00
+card_transitions     user    user     293          3986eb3f96571498667bbfbc3d80aa8c   0.00
+cobalt_email_sends   system  system   463          c8fc112af72900bb260196353fea82bd   0.00
+cobalt_jobs          system  system   15           19dc75ee74118d6f1b67d1a0189bedbf   0.00
+cobalt_kill_switch   system  system   1            310655940a3a0ce10031f77a390733b6   0.00
+cobalt_redactions    system  system   2            cf42d85ee49244ca40d419683eb3ca51   0.00
+day_modes            user    user     10           d9139ce7290afb41d88404c32c59736b   0.00
+desk_grade           system  -        -            -                                  0.00
+desk_packet          system  -        -            -                                  0.00
+desk_regime          system  -        -            -                                  0.00
+radar_membership     system  system   3330         0d429fe0a347084c02cc224d7daa111d   0.04
+radar_pool           system  system   1            960845c0f24ed5c9a91b1d3110108fc9   0.00
+radar_score          system  -        -            -                                  0.00
+radar_score_receipt  user    -        -            -                                  0.00
+radar_score_run      system  -        -            -                                  0.00
+session_blocks       system  system   8            ddf2a773f48403300cbff196fe9aa419   0.00
+traders              user    user     1            cf9aec4d006d82fb0f12be2d9afa10b9   0.00
+vault_overrides      user    user     29           1f529ee789a2e27f1b73010bbae4cdd7   0.00
+vault_writes         user    user     1290         000f5ba334d907741af1192dba31e78a   0.12
+------------------------------------------------------------------------------------------
+23 table(s) probed on cobalt_brain; digest excludes user_id, vault_outcome, vault_reason, account_mode, pool_member_id; aset_sizings: 25 card column(s) added by 0007. Proof cost: total 46.0 s — and a migration pays it TWICE (before and after), inside the outage.
+NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.
+```
+
+**PASS, every condition:**
+
+| condition | result |
+|---|---|
+| exit 0 | **yes** |
+| every table has rows + digest + seconds | **yes** — 15 present tables carry all three; the 8 absent ones print `-` `-` with their seconds, which is what ABSENT looks like |
+| `system.bars` ≈ 8.4M completes | **yes — 8,592,116 rows digested in 45.75 s, no `ProgramLimitExceeded`.** The 1 GB failure of 15:4x is gone on the real table, on the FINAL code |
+| no `-- applying` line | **none anywhere in the output** |
+| the run's own last line | `NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.` |
+| `.env` | `rm` run, then `ls -la` → `ls: /Users/cobalt/cobalt-wt/s2-p2-cards/.env: No such file or directory` (L41 interim; never printed) |
+
+**Against the FIRST production proof (16:54 ET, code `511bff0`, `prod-proof-only-2026-09-18.md`):**
+
+| | first run (16:54) | this run (17:29) |
+|---|---|---|
+| `bars` rows | 8,591,339 | **8,592,116** (+777 — the RTH poller, 36 minutes) |
+| `bars` seconds | 46.73 | **45.75** |
+| total | 46.9 s | **46.0 s** |
+| `bars` digest | `a40b1c4e7541c0844b182465a777e537` | `2ca2840db52f5e0930dd0d31bbbf2b5c` |
+
+The digest moved because the table moved: 777 new rows between the runs. That is the expected reading of a live table, not a defect — `--proof-only` renders no verdict, and F1's folded one-statement probe means the printed count and the digest are the SAME snapshot (8,592,116 rows is the count the cursor yielded, not a separate `count(*)`). The one-pass fold is also not slower than the two-pass version it replaced: 45.75 s against 46.73 s at 0.009% more rows.
+
