@@ -253,7 +253,6 @@ def test_dejan_budget_ceiling_45_refuses_only_above_45(cap, frozen):
             poll_interval=100,
             finviz_max_rpm=45,
             list_chunk_size=50,
-            context_tickers=0,
         )
     assert parsed.planned_rpm == pytest.approx(cap * 0.6 + 0.6 + 1.2)
     assert parsed.planned_rpm > 40
