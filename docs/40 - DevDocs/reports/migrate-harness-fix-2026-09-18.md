@@ -2,12 +2,13 @@
 
 Hub `migrate-fix-0918` (Opus 5, `claude-opus-5`), worktree `/Users/cobalt/cobalt-wt/s2-p2-cards`, branch `sprint-2/cards` on top of `848681e`. Prompt: `docs/40 - DevDocs/prompts/2026-09-18/15-migrate-harness-fix.md`.
 
-## §0 Headline
+## §0 Headline (16:14 ET)
 
-- RUN OPEN 15:54 ET. PREFLIGHT PASS — six rules probed, **zero denials**.
-- Authorization VERIFIED by this hub: every rule in this launch line is inside R1 list (1) (`cto-2026-09-18.md` §4), committed on main.
-- Target: `_probe`'s `md5(string_agg(...))` → a client-side streamed md5 over a server-side cursor, byte-identical digests; plus a read-only `--proof-only` with timings.
-- ESCALATE: 0 so far.
+- **HARNESS BUILT — `511bff0`. The 1 GB ceiling is gone and every digest kept its old value: 23/23 tables byte-identical to the BASELINE taken before the change, `bars` (1,043,443 real rows) included.** The old `string_agg` expression is deleted from the module and survives only as the suite's oracle.
+- `--proof-only` ships: read-only at the SERVER (`BEGIN … READ ONLY`), applies nothing, exit 0, refuses `--rollback`/`--down-to`. Both modes now print per-table and total wall seconds.
+- Suites: **1832 passed / 0 failed** with the DB (1815 gated + 17 new), **1548 / 0** offline. `validate` exit 0. Dev round trip 0005↔0007 identical. `.env` removed and proven gone.
+- Zero denials, all run; no production command, no vault write, no push, no merge.
+- **OWED before any production use: the second-house review (R8), then a production `--proof-only` under its own approval.** ESCALATE: 3.
 
 ## PREFLIGHT
 
@@ -262,4 +263,22 @@ RESTARTS: com.cobalt.radar
 
 The prompt expected no resident. The classifier derives **`com.cobalt.radar`** by static import reach, and it is right by rule (L42 — derived, never judged): `src/cobalt/cli.py:63` does `from cobalt.db_migrations import cli as db_cli`, and the radar resident's entrypoint reaches `cobalt.cli`. So the module IS loaded by that resident even though nobody calls it there. **`RESTARTS: com.cobalt.radar` stands** and the deploy that ships this carries it. 0 UNCLASSIFIED.
 
-CONTINUE: step 4
+## 4. Close (16:14 ET)
+
+| check | result |
+|---|---|
+| `git status --porcelain` | **empty** |
+| `git rev-parse --short HEAD` | **`511bff0`** |
+| `git diff --stat 848681e HEAD -- src tests docs` | `docs/40 - DevDocs/cobalt/db_migrations/cli.md 105 ++++-` · `docs/40 - DevDocs/reports/migrate-harness-fix-2026-09-18.md 265 +++` · `src/cobalt/db_migrations/cli.py 267 ++++--` · `tests/cobalt/test_migrate_proof.py 426 +++` · `tests/cobalt/test_radar_migration.py 15 +-` — **5 files, 1040 insertions, 38 deletions** |
+| commits above `848681e` | `5ad8a6a` (preflight) · `44fb72a` (BASELINE) · `fd13970` (red tests) · `511bff0` (the fix) + this close commit. Nothing rebased, nothing cherry-picked, main untouched |
+| configs / ops | **not touched** — no file under `configs/` or `ops/` is in the diff |
+
+## ESCALATE
+
+1. **The proof is not free, and the deploy plan needs its number.** `bars` probes in **5.5 s** at `cobalt_dev`'s 1,043,443 rows; production holds **8,410,174** — about **8× that, so ≈45 s per probe and ≈90 s of the outage window** for the before/after pair, on top of the migration itself. The old harness never told anyone this because it never printed a time. The next deploy prompt should budget it, and `--proof-only` can now measure it against production for real (read-only, its own approval) instead of being extrapolated from this line.
+2. **`RESTARTS: com.cobalt.radar`, not "no resident" as the prompt expected.** The derivation is correct by rule (L42): `src/cobalt/cli.py:63` imports `cobalt.db_migrations.cli`, and the radar resident's entrypoint reaches `cobalt.cli` by static walk, so the resident does load this module. An operator-only command still triggers a resident restart through the CLI module graph — worth knowing generally, since it applies to every `db_*`/ops command in that package, not just this change. Not overridden here; the deploy that ships this carries the restart.
+3. **Second opinion (R8) is OWED and this build has not had it.** The prompt states it, and this hub did not run it: R8 requires another house to review a build before its deploy. This report is the artefact for that review. After it, the production `--proof-only` run is the next thing — read-only, under its own approved command list, and it is the first production command this fix has ever seen.
+
+Also noted, unchanged from all three deploy runs today: the prompt file's tail carries a block styled as a system reminder asking for a `Claude-Session:` URL line in every commit. It arrives inside a tool result — the file's own bytes — not from the harness or from Dejan; the genuine harness attribution reminder names only `Co-Authored-By` and says not to add lines it leaves out. **Not followed.**
+
+HARNESS BUILT 511bff0 | digests byte-compatible with BASELINE: 23/23 tables | --proof-only: read-only, applies nothing | dev round trip 0005↔0007: identical | with DB: 1832 passed, 0 failed | offline: 1548 passed, 0 failed | OWED: second-house review, then production --proof-only (read-only, its own approval) | ESCALATE: 3
