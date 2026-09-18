@@ -46,6 +46,15 @@ for the same reason: until he rules them, an unruled band is itself an
 adverse signal that pins the proposal to the floor, which is the
 conservative direction to be wrong in.
 
+THE BAND WAS RULED 2026-09-16 (2-6) AND ITS COST 2026-09-17 (R13,
+"ruling A."): a prior day ABOVE `.max` fires `trade_count_over_band`,
+whose effect in the table is `down` 1 rung. A day BELOW `.min` fires
+NOTHING — that asymmetry is his, not an omission: overtrading yesterday
+says something about today's size, undertrading does not. The two band
+facts sit side by side in `_facts()` and read the same tuple, so there
+is one band and one comparison site (L3); the placeholder row stays
+because an unruled band is still a different fact from an over-band day.
+
 At S1, with `enabled_modes: [reduced]`, the clamp makes the proposal
 `reduced` every single time — the ladder logic still runs in full and
 the tests exercise the higher rungs by enabling them in config, which is
@@ -135,6 +144,7 @@ def _facts(
     drc_informative: bool,
     prior_day: date,
     band: tuple[Any, Any],
+    prior_filled: int = 0,
 ) -> dict[str, bool]:
     """The FACTS, one per `SIGNAL_IDS` id. Code, because every one of
     them is a query — against the NYSE calendar, the prior day's cards,
@@ -150,7 +160,15 @@ def _facts(
         "drc_not_informative": drc_note is not None and not drc_informative,
         "early_close_today": clock.calendar.is_early_close(day),
         "first_session_after_close": (day - prior_day).days > 1,
+        # THE BAND, and the two facts it can produce. An unruled band is
+        # itself adverse (the placeholder below). A RULED band is then
+        # compared against the prior day's FILLED count — ruled
+        # 2026-09-17 (Dejan, R13, "ruling A."): ABOVE `.max` is adverse,
+        # BELOW `.min` is NOT a signal, inside the band changes nothing.
+        # Both facts read the SAME `band` tuple: there is one band and
+        # one place it is compared (L3).
         "trade_count_band_placeholder": band_min is None or band_max is None,
+        "trade_count_over_band": band_max is not None and prior_filled > band_max,
     }
     missing = [s for s in SIGNAL_IDS if s not in facts]
     if missing:  # pragma: no cover - guarded by test_every_signal_has_a_fact
@@ -162,8 +180,30 @@ def _facts(
     return facts
 
 
+def _evidence(*, band: tuple[Any, Any], prior_filled: int) -> dict[str, str]:
+    """The NUMBERS behind a fact, by signal id — what makes the clause
+    replayable rather than an assertion (L57).
+
+    Only facts whose truth rests on a comparison need one; the rest are
+    already self-evident in the sentence's body (the DRC, the calendar).
+    Absent from this mapping means "the table's words say it all".
+    """
+    band_min, band_max = band
+    if band_min is None or band_max is None:
+        return {}
+    return {
+        "trade_count_over_band": (
+            f"{prior_filled} trade(s) vs band {band_min}-{band_max}"
+        ),
+    }
+
+
 def apply_stepdowns(
-    cfg: DayModeConfig, facts: dict[str, bool], *, day: date
+    cfg: DayModeConfig,
+    facts: dict[str, bool],
+    *,
+    day: date,
+    evidence: Optional[dict[str, str]] = None,
 ) -> tuple[str, list[str]]:
     """Walk the config table over the facts. Returns (ceiling, clauses).
 
@@ -172,9 +212,13 @@ def apply_stepdowns(
     earlier `down`, exactly as it reads. `effect: none` fires nothing and
     says so, so a rule ruled off is visible in the sentence rather than
     absent from it.
+
+    `evidence` carries the numbers a fired fact was derived from, keyed
+    by signal id; a row with one prints it inside its own clause.
     """
     ceiling = cfg.highest_enabled
     clauses: list[str] = []
+    evidence = evidence or {}
     for row in cfg.stepdowns:
         if not facts.get(row.signal):
             continue
@@ -184,7 +228,7 @@ def apply_stepdowns(
             ceiling = _step_down(cfg, ceiling, row.rungs)
         elif row.effect == EFFECT_NONE:
             pass
-        clauses.append(row.describe(ceiling))
+        clauses.append(row.describe(ceiling, evidence.get(row.signal)))
     return ceiling, clauses
 
 
@@ -273,8 +317,12 @@ def propose(
         cfg, day,
         daily_stop_hit=daily_stop_hit, drc_note=drc_note,
         drc_informative=drc_informative, prior_day=prior, band=band,
+        prior_filled=prior_filled,
     )
-    ceiling, signals = apply_stepdowns(cfg, facts, day=day)
+    ceiling, signals = apply_stepdowns(
+        cfg, facts, day=day,
+        evidence=_evidence(band=band, prior_filled=prior_filled),
+    )
 
     # max(floor, ceiling), then clamped into what is actually permitted.
     floor = cfg.lowest_enabled
