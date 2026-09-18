@@ -20,11 +20,15 @@ import pytest
 from cobalt.archiver import runner as archiver_runner
 from cobalt.radar import notes as notes_mod
 from cobalt.radar.notes import (
+    ARCHIVER_LABEL,
+    REPLAY_LABEL,
     DemandConsumer,
     DemandWindow,
     TotalDemandExceeded,
+    check_scheduled_demand,
     check_total_demand,
     load_sources,
+    replay_window,
     scheduled_consumers,
     total_demand,
 )
@@ -112,10 +116,110 @@ def test_scheduled_consumers_read_the_registry_and_never_omit_the_archiver():
     assert {"radar", "archiver", "replay"} <= set(consumers)
     assert consumers["archiver"].window.start_min == 20 * 60 + 30
     assert consumers["archiver"].rpm == pytest.approx(60 / archiver_runner.GENTLE_SLEEP_SECONDS)
-    assert consumers["replay"].window.start_min == 21 * 60 + 5
+    assert consumers["replay"].window.start_min == 21 * 60 + 10
     assert consumers["replay"].rpm == 40            # min(2 + 2 x 20, bucket ceiling)
     # the replay window closes before the 21:40 backup
     assert consumers["replay"].window.end_min <= 21 * 60 + 40
+
+
+# =====================================================================
+# S2-P4 R17 — ceiling 50, disjoint archiver/replay windows
+#
+# Ruled 2026-09-17 (Dejan, "50 is approved."): three numbers, zero pacing
+# change. `radar.finviz_max_rpm` 45 -> 50 (= the archiver's own pacing
+# bound 60/GENTLE_SLEEP_SECONDS = 60/1.2 = 50.0, so the archiver sits at
+# EXACTLY the ceiling and `50.0 > 50` is False), the archiver's
+# `timeout_s` 5400 -> 2400 (its declared window now ends at 21:10), and
+# the replay's `at` 21:05 -> 21:10 (its window starts where the
+# archiver's ends, so the two are disjoint under `overlaps`).
+#
+# These read the SHIPPED jobs.yaml/tunables.yaml through the real
+# loaders — no mocked numbers. That is the point: they fail the moment
+# any of the three drifts.
+# =====================================================================
+
+#: The radar's planned total transport demand — pool 30.00 + 4 screens
+#: 2.40 + 7 list chunks 4.20 (cto-2026-09-17.md; the same 36.60 the
+#: `screens validate` budget line prints).
+RADAR_PLANNED_RPM = 36.6
+#: The replay's benchmarked top-N: 2 exports + 2 x 20 movers = 42 rpm.
+REPLAY_TOP_N = 20
+
+
+def test_r17_every_scheduled_subject_passes_against_the_shipped_ceiling_of_50():
+    assert notes_mod._ceiling() == 50
+    kw = dict(radar_rpm=RADAR_PLANNED_RPM, replay_top_n=REPLAY_TOP_N)
+    radar = check_scheduled_demand("radar", **kw)
+    archiver = check_scheduled_demand("archiver", **kw)
+    replay = check_scheduled_demand("replay", **kw)
+    # each subject's window holds only its own demand — the windows are disjoint
+    assert radar.peak_rpm == pytest.approx(RADAR_PLANNED_RPM)
+    assert archiver.peak_rpm == pytest.approx(50.0)  # exactly the ceiling, and it passes
+    assert replay.peak_rpm == pytest.approx(42.0)    # 2 + 2 x 20
+    for demand in (radar, archiver, replay):
+        assert demand.ceiling == 50
+        assert demand.peak_rpm <= 50, demand.describe()
+
+
+def test_r17_the_shipped_archiver_and_replay_windows_are_disjoint():
+    consumers = {c.name: c for c in scheduled_consumers(
+        ceiling=50, radar_rpm=RADAR_PLANNED_RPM, replay_top_n=REPLAY_TOP_N)}
+    archiver, replay = consumers["archiver"].window, consumers["replay"].window
+    # 20:30 + 2400 s = 21:10; 21:10 to the 21:40 backup less the 300 s margin
+    assert archiver.describe() == "20:30-21:10 ET"
+    assert replay.describe() == "21:10-21:35 ET"
+    assert replay_window().describe() == "21:10-21:35 ET"
+    # [20:30, 21:10) and [21:10, 21:35) touch but do not overlap
+    assert not archiver.overlaps(replay)
+    assert not replay.overlaps(archiver)
+    # ...and the gate agrees: neither subject counts the other's rpm
+    every = list(consumers.values())
+    assert "replay" not in total_demand(every, subject="archiver", ceiling=50).counted
+    assert "archiver" not in total_demand(every, subject="replay", ceiling=50).counted
+
+
+def test_r17_at_ceiling_49_the_archiver_alone_is_refused_and_at_50_it_is_not():
+    """The exact-boundary proof R17's arithmetic promises: the archiver's
+    pacing bound is 60/1.2 = 50.0 rpm, so 49 refuses it and 50 does not.
+    """
+    consumers = scheduled_consumers(ceiling=49, radar_rpm=RADAR_PLANNED_RPM, replay_top_n=REPLAY_TOP_N)
+    archiver = next(c for c in consumers if c.name == "archiver")
+    assert archiver.rpm == pytest.approx(60 / archiver_runner.GENTLE_SLEEP_SECONDS)
+    assert archiver.rpm == pytest.approx(50.0)
+    with pytest.raises(TotalDemandExceeded, match="archiver"):
+        check_total_demand(consumers, subject="archiver", ceiling=49)
+    assert check_total_demand(consumers, subject="archiver", ceiling=50).peak_rpm == pytest.approx(50.0)
+
+
+def test_r17_a_2105_replay_would_overlap_the_archiver_and_be_refused_at_50():
+    """The overlap detection itself, independent of today's shipped `at`:
+    roll the replay back to its pre-R17 21:05 against the real archiver
+    window and the two windows overlap again — the archiver's 50.0 rpm is
+    counted into the replay's total and 92.0 rpm is refused at 50.
+    """
+    from cobalt.jobs.config import load_job_registry
+
+    shipped = load_job_registry()
+    old = shipped.spec(REPLAY_LABEL)
+    rolled_back = old.model_copy(update={"schedule": old.schedule.model_copy(update={"at": "21:05"})})
+    registry = shipped.model_copy(update={
+        "jobs": [rolled_back if j.label == REPLAY_LABEL else j for j in shipped.jobs]})
+    assert registry.spec(REPLAY_LABEL).schedule.at == "21:05"
+    assert registry.spec(ARCHIVER_LABEL).timeout_s == 2400, "the archiver's real window must be untouched"
+
+    consumers = {c.name: c for c in scheduled_consumers(
+        ceiling=50, radar_rpm=RADAR_PLANNED_RPM, replay_top_n=REPLAY_TOP_N, registry=registry)}
+    archiver, replay = consumers["archiver"].window, consumers["replay"].window
+    assert archiver.describe() == "20:30-21:10 ET"   # the shipped 2400 s, unchanged
+    assert replay.describe() == "21:05-21:35 ET"
+    assert archiver.overlaps(replay) and replay.overlaps(archiver)
+
+    every = list(consumers.values())
+    demand = total_demand(every, subject="replay", ceiling=50)
+    assert set(demand.counted) >= {"archiver", "replay"}
+    assert demand.peak_rpm == pytest.approx(50.0 + 42.0)
+    with pytest.raises(TotalDemandExceeded, match="replay"):
+        check_total_demand(every, subject="replay", ceiling=50)
 
 
 class _NoWaitBucket:

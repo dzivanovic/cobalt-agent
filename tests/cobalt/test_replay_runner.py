@@ -51,8 +51,8 @@ FIX = Path(__file__).resolve().parents[1] / "fixtures"
 DAY = date(2026, 2, 10)
 RTH_OPEN = datetime(2026, 2, 10, 13, 30, tzinfo=timezone.utc)
 CLOSE = datetime(2026, 2, 10, 20, 0, tzinfo=timezone.utc)
-#: The replay "tonight": 21:05 ET on the fixture day.
-NOW = datetime(2026, 2, 10, 21, 5, tzinfo=ET)
+#: The replay "tonight": 21:10 ET on the fixture day (S2-P4 R17).
+NOW = datetime(2026, 2, 10, 21, 10, tzinfo=ET)
 
 requires_db = pytest.mark.skipif(
     not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
@@ -329,12 +329,12 @@ def test_registry_and_ops_carry_the_replay_job_with_matching_schedule():
 
     spec = REGISTRY.spec("com.cobalt.replay")
     assert (spec.kind.value, spec.timeout_s, spec.schedule.at, sorted(spec.schedule.weekdays)) == (
-        "one-shot", 1800, "21:05", [1, 2, 3, 4, 5])
+        "one-shot", 1800, "21:10", [1, 2, 3, 4, 5])
     data = plistlib.loads(spec.plist_path.read_bytes())
     assert data["EnvironmentVariables"]["COBALT_ENV"] == "production"
     assert data["EnvironmentVariables"]["COBALT_VAULT_PATH"] == "/Users/cobalt/Vault/Think"
     assert data["ProgramArguments"][-3:] == ["cobalt", "replay", "nightly"]
-    assert {(e["Hour"], e["Minute"]) for e in data["StartCalendarInterval"]} == {(21, 5)}
+    assert {(e["Hour"], e["Minute"]) for e in data["StartCalendarInterval"]} == {(21, 10)}
 
 
 # =====================================================================

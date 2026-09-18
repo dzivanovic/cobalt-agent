@@ -172,7 +172,7 @@ checks:
       trade_date: "{last_trading_day}"
       dry_run: false
     expect_text: >-
-      state done, exit_code 0, not missed against its Mon-Fri 21:05 cadence;
+      state done, exit_code 0, not missed against its Mon-Fri 21:10 cadence;
       last_result carries movers/archived/card_misses/mover_misses/
       formation_replay/line_action; last_result.trade_date = last trading day;
       dry_run false

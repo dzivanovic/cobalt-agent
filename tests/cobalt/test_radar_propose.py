@@ -406,7 +406,7 @@ def test_screens_validate_is_offline_side_effect_free_and_hashes_current_bytes(
     # 2026-09-12 amendment: 90s -> 100s; budget now covers total transport
     # demand (pool 30.00 + 4 screens 2.40 + 7 list chunks 4.20 = 36.60), not
     # the pool alone.
-    assert "transport budget: 36.60/45 rpm" in output
+    assert "transport budget: 36.60/50 rpm" in output
     assert "pool=30.00" in output
     assert "archive targets: 975" in output
     assert screens.read_bytes() == before
@@ -439,7 +439,9 @@ def test_screens_validate_refuses_bad_pool_before_http_or_artifact(
     tmp_path, monkeypatch
 ):
     _screens, pool, watchlists = _real_validation_env(tmp_path, monkeypatch)
-    pool.write_text(yaml.safe_dump(dict(REAL_POOL, cap=66), sort_keys=False))
+    # cap 76 at 100 s = 45.60 pool + 2.40 screens + 4.20 list chunks = 52.20
+    # rpm, over the 50 ceiling (R17). Under the old 45 ceiling this was 66.
+    pool.write_text(yaml.safe_dump(dict(REAL_POOL, cap=76), sort_keys=False))
     calls = []
     monkeypatch.setattr(propose_module, "finviz_get", lambda *_a, **_k: calls.append("http"))
     monkeypatch.setattr(propose_module, "write_artifact", lambda *_a, **_k: calls.append("write"))

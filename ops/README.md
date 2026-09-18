@@ -32,7 +32,7 @@ prose about the ones with a story attached, not as an inventory.
 | `com.cobalt.herdr.plist` | `/opt/homebrew/bin/herdr server` (the terminal workspace every agent seat lives in) | RunAtLoad + KeepAlive on crash only | — | **yes (2026-09-08 19:21 — the handover)** |
 | `com.cobalt.generated.plist` | `/Users/cobalt/.local/bin/uv run cobalt generated commit` (commits the files a job rewrote today) | daily 23:37 ET | F17 wrapper | new 2026-09-09 |
 | `com.cobalt.seat-usage.plist` | `/Users/cobalt/.local/bin/uv run cobalt seat-usage run` (the hourly seat-usage report) | hourly 06:00-23:00 ET, every day | F17 wrapper (`cobalt seat-usage run`) | yes (2026-09-08) |
-| `com.cobalt.replay.plist` | `/Users/cobalt/.local/bin/uv run cobalt replay nightly` (movers, card misses + counterfactual R, DRC miss line — S2-P4) | Mon-Fri 21:05 ET, `RunAtLoad` false | F17 wrapper (`as_job`) | **not yet** — new one-shot: `launchctl bootstrap` once at the P4 deploy (plan-s2-p4 §6 D1 step 4); `cobalt jobs restarts` derives `bootstrap once`, no restart (R1-22/R2-6) |
+| `com.cobalt.replay.plist` | `/Users/cobalt/.local/bin/uv run cobalt replay nightly` (movers, card misses + counterfactual R, DRC miss line — S2-P4) | Mon-Fri 21:10 ET, `RunAtLoad` false | F17 wrapper (`as_job`) | **not yet** — new one-shot: `launchctl bootstrap` once at the P4 deploy (plan-s2-p4 §6 D1 step 4); `cobalt jobs restarts` derives `bootstrap once`, no restart (R1-22/R2-6) |
 
 The table above says which plists are *supposed* to be loaded.
 `configs/cobalt/jobs.yaml` is the machine-readable version of the same

@@ -189,22 +189,28 @@ jobs:
     kind: one-shot
     supervisor: self
     # The nightly full run took 23m04s and 23m11s on the last two nights.
-    # 90 minutes is not a target, it is the point past which a silent
-    # hang is more likely than a slow night.
-    timeout_s: 5400
+    # 2400 s (40 min) is not a target and does not kill a healthy long
+    # run: it is the END OF THE DECLARED DEMAND WINDOW, 20:30 -> 21:10,
+    # which the L53 total-demand gate reads as this job's Finviz window
+    # (S2-P4 R17). The watchdog flags ZOMBIE only past that AND with a
+    # stale heartbeat, so a slow-but-beating night is never cut.
+    timeout_s: 2400
     schedule: {at: "20:30", weekdays: [1, 2, 3, 4, 5]}
     what: "the Bar Archiver nightly full run (uv run archiver)"
 
   - label: com.cobalt.replay
     kind: one-shot
     supervisor: self
-    # S2-P4 R3. 21:05 ET, after the 20:00-21:00 reset and after the 20:30
-    # archiver, which it refuses to run without (tonight's occurrence,
-    # done, exit 0). 30 minutes bounds a stall; the run's own enforced
-    # deadline (replay.backup_margin_s before the 21:40 backup) bounds a
-    # healthy long run.
+    # S2-P4 R3, moved 21:05 -> 21:10 by R17. After the 20:00-21:00 reset
+    # and after the 20:30 archiver, which it refuses to run without
+    # (tonight's occurrence, done, exit 0) — and now also after the
+    # archiver's DECLARED WINDOW ENDS at 21:10, so the two Finviz windows
+    # are disjoint and neither counts the other's rpm against the
+    # ceiling. 30 minutes bounds a stall; the run's own enforced deadline
+    # (replay.backup_margin_s before the 21:40 backup) bounds a healthy
+    # long run.
     timeout_s: 1800
-    schedule: {at: "21:05", weekdays: [1, 2, 3, 4, 5]}
+    schedule: {at: "21:10", weekdays: [1, 2, 3, 4, 5]}
     what: "the nightly replay — movers, card misses + counterfactual R, the DRC miss line (uv run cobalt replay nightly)"
 
   - label: com.cobalt.cards-expire

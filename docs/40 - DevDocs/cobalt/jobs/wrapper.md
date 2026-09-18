@@ -15,7 +15,7 @@ with job_run("com.cobalt.archiver") as run:
 2. `running` is marked before the work, with `started_at`.
 3. A **beater thread** stamps `heartbeat_at` every
    `timeout_s / jobs.heartbeat_fraction` (5 min for the archiver's
-   90-minute window).
+   40-minute window).
 4. `done` (exit 0) or `failed` (exit code + the exception, redacted
    through F19 on its way into the column).
 5. The exception is **re-raised**. The wrapper reports; it never

@@ -1,7 +1,7 @@
 # `src/cobalt/replay/cli.py`
 
 `cobalt replay nightly [--date YYYY-MM-DD] [--dry-run]` is the entry point
-of `com.cobalt.replay` (`ops/com.cobalt.replay.plist`, Mon–Fri 21:05, with
+of `com.cobalt.replay` (`ops/com.cobalt.replay.plist`, Mon–Fri 21:10, with
 `COBALT_ENV=production` and `COBALT_VAULT_PATH`, like the prefill plists).
 
 ## `cmd_nightly`

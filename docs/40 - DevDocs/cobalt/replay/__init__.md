@@ -1,7 +1,8 @@
 # `src/cobalt/replay/__init__.py`
 
-The package for `com.cobalt.replay`, the nightly one-shot at 21:05 ET on
-weekdays (S2-P4 ruling R3). The file holds only the package docstring, which
+The package for `com.cobalt.replay`, the nightly one-shot at 21:10 ET on
+weekdays (S2-P4 ruling R3, moved 21:05 -> 21:10 by R17). The file holds only
+the package docstring, which
 maps the modules:
 
 | Module | Owns |

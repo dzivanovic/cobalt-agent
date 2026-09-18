@@ -19,7 +19,7 @@ nobody watches.
 | `com.cobalt.agent` | resident | **pidfile** | 600 s | — |
 | `com.cobalt.prefill-daily` | one-shot | self | 600 s | Mon–Fri 05:15 ET |
 | `com.cobalt.prefill-drc` | one-shot | self | 600 s | Mon–Fri 15:40 ET |
-| `com.cobalt.archiver` | one-shot | self | 5400 s | Mon–Fri 20:30 ET |
+| `com.cobalt.archiver` | one-shot | self | 2400 s | Mon–Fri 20:30 ET |
 | `com.cobalt.cards-expire` | one-shot | self | 300 s | Mon–Fri 16:05 ET |
 | `com.cobalt.daymode-propose` | one-shot | self | 300 s | Mon–Fri 09:00 ET |
 | `com.cobalt.heartbeat` | one-shot | self | 300 s | every 15 min |

@@ -492,13 +492,13 @@ tunables:
     consumers: ["cobalt.radar.poller (revision overlap)"]
 
   - key: radar.finviz_max_rpm
-    value: 45
+    value: 50
     unit: count
     scope: global
     dynamic: false
     status: solidified
     source: ruling
-    consumers: ["S2-P1 throttle report (hub-measured half-rate, 2026-09-10: 4 grids clean to 60 rpm, half-rate 30 held)", "cobalt.radar.collector.TokenBucket", "ruled 45 on 2026-09-16 (Dejan; 09-10 throttle report: 4 grids clean to 60 rpm)"]
+    consumers: ["S2-P1 throttle report (hub-measured half-rate, 2026-09-10: 4 grids clean to 60 rpm, half-rate 30 held)", "cobalt.radar.collector.TokenBucket", "ruled 45 on 2026-09-16 (Dejan; 09-10 throttle report: 4 grids clean to 60 rpm)", "ruled 50 on 2026-09-17 (Dejan, cto-2026-09-17.md R17: = the archiver's pacing bound 60/1.2)"]
 
   # 320 ruled 2026-09-14 (Dejan, key split from the shared radar_max_age_s): heartbeat only.
   - key: heartbeat.radar_scan_max_age_s

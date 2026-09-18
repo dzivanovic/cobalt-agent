@@ -27,17 +27,19 @@
     <string>/Users/cobalt/cobalt</string>
     <key>AbandonProcessGroup</key>
     <true/>
-    <!-- S2-P4 R3: Mon-Fri 21:05 local (system TZ = ET) — after the
-         market_reset pause and after the 20:30 archiver, whose tonight's
-         run it requires. Its vault write therefore falls outside
+    <!-- S2-P4 R3, moved to 21:10 by R17: Mon-Fri 21:10 local (system TZ
+         = ET) — after the market_reset pause, after the 20:30 archiver
+         (whose tonight's run it requires), and after that archiver's
+         declared demand window ends at 21:10, which keeps the two Finviz
+         windows disjoint. Its vault write therefore falls outside
          market_reset and before the 21:40 backup captures it. -->
     <key>StartCalendarInterval</key>
     <array>
-        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>5</integer></dict>
-        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>5</integer></dict>
-        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>5</integer></dict>
-        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>5</integer></dict>
-        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>5</integer></dict>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>10</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>10</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>10</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>10</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>10</integer></dict>
     </array>
     <key>RunAtLoad</key>
     <false/>

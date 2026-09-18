@@ -48,8 +48,8 @@ ET = ZoneInfo("America/New_York")
 REPO = Path(__file__).resolve().parents[2]
 SMOKE_SRC = REPO / "src" / "cobalt" / "smoke"
 
-#: Tuesday 2026-09-22, 21:50 ET — after that evening's 21:05 replay + its
-#: 1800 s timeout, the S2 close evening (plan §6).
+#: Tuesday 2026-09-22, 21:50 ET — after that evening's 21:10 replay + its
+#: 1800 s timeout (ends 21:40), the S2 close evening (plan §6).
 NOW = datetime(2026, 9, 22, 21, 50, tzinfo=ET).astimezone(timezone.utc)
 DAY = date(2026, 9, 22)
 CUTOFF = datetime(2026, 9, 18, 20, 5, tzinfo=ET)
@@ -113,9 +113,11 @@ def _job_row(**overrides):
         label="com.cobalt.replay",
         state="done",
         exit_code=0,
-        started_at=datetime(2026, 9, 22, 21, 5, 1, tzinfo=ET),
-        finished_at=datetime(2026, 9, 22, 21, 9, 30, tzinfo=ET),
-        updated_at=datetime(2026, 9, 22, 21, 9, 30, tzinfo=ET),
+        # tonight's run: started just after the 21:10 occurrence (R17 moved
+        # it from 21:05), finished well inside the 1800 s timeout.
+        started_at=datetime(2026, 9, 22, 21, 10, 1, tzinfo=ET),
+        finished_at=datetime(2026, 9, 22, 21, 14, 30, tzinfo=ET),
+        updated_at=datetime(2026, 9, 22, 21, 14, 30, tzinfo=ET),
         registered_at=datetime(2026, 9, 18, 20, 10, tzinfo=ET),
         last_result={
             "trade_date": "2026-09-22", "dry_run": False, "movers": 40, "archived": 12,
@@ -618,7 +620,8 @@ def test_kind_job_row_state_cadence_age_and_result():
     assert out.command.startswith("uv run cobalt db query --side system --prod --format json ")
 
     assert checks.evaluate(check, ctx(), deps(read_rows=answer(_job_row(state="failed", exit_code=1)), job_specs=spec_of)).verdict is Verdict.FAIL
-    # Yesterday's run tonight is MISSED (21:05 + grace passed, no finish after it).
+    # Yesterday's run tonight is MISSED (21:10 + the 30 min grace passed by
+    # 21:50, and no finish after tonight's due moment).
     stale = _job_row(finished_at=datetime(2026, 9, 21, 21, 9, tzinfo=ET))
     out = checks.evaluate(check, ctx(), deps(read_rows=answer(stale), job_specs=spec_of))
     assert out.verdict is Verdict.FAIL and "missed" in out.detail.lower()
@@ -729,7 +732,7 @@ def test_context_last_trading_day_waits_for_the_anchor_job_and_skips_holidays():
     from cobalt.jobs.config import load_job_registry
 
     spec = load_job_registry().spec("com.cobalt.replay")
-    # 21:50 ET Tuesday: tonight's 21:05 + 1800 s has passed -> today.
+    # 21:50 ET Tuesday: tonight's 21:10 + 1800 s (21:40) has passed -> today.
     assert checks.last_trading_day(NOW, spec) == DAY
     # 21:20 ET Tuesday: tonight's run may still be going -> Monday.
     early = datetime(2026, 9, 22, 21, 20, tzinfo=ET)

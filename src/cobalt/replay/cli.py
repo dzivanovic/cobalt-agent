@@ -1,6 +1,6 @@
 """`cobalt replay nightly [--date YYYY-MM-DD] [--dry-run]` — com.cobalt.replay.
 
-The scheduled 21:05 ET entry point (S2-P4 R3), wrapped by
+The scheduled 21:10 ET entry point (S2-P4 R3, moved by R17), wrapped by
 `as_job("com.cobalt.replay")`. `--dry-run` runs `as_job(..., skip=True)`
 — no jobs row is touched — and every store call it makes is a read; the
 vault writer runs its own dry-run diff path. `--date` replays a past day
@@ -106,7 +106,7 @@ def cmd_nightly(args: argparse.Namespace) -> None:
 
 
 def _add_commands(sub) -> None:
-    nightly = sub.add_parser("nightly", help="The 21:05 ET replay: movers, card misses, the DRC miss line.")
+    nightly = sub.add_parser("nightly", help="The 21:10 ET replay: movers, card misses, the DRC miss line.")
     nightly.add_argument("--date", help="Replay a past ET trade date from retained inputs (YYYY-MM-DD).")
     nightly.add_argument("--dry-run", action="store_true", help="Write nothing; print rows and the line diff.")
     nightly.set_defaults(func=cmd_nightly)

@@ -39,11 +39,17 @@ def test_live_header_capture_has_replaced_unverified_marker():
 
 
 
-def test_finviz_ceiling_is_the_ruled_45():
-    """Ruled A by Dejan 2026-09-16 07:18 ET (L53: his number): 40 -> 45."""
+def test_finviz_ceiling_is_the_ruled_50():
+    """Ruled A by Dejan 2026-09-16 07:18 ET (L53: his number): 40 -> 45,
+    then 45 -> 50 on 2026-09-17 (R17) so the ceiling IS the archiver's
+    pacing bound 60/GENTLE_SLEEP_SECONDS = 60/1.2 = 50.0 rpm — at exactly
+    the ceiling the gate passes (`50.0 > 50` is False). The 09-16 ruling
+    stays on the row: consumers is the audit trail, not the current value.
+    """
     from cobalt.taxonomy.loader import load_tunables
 
     row = load_tunables().by_key["radar.finviz_max_rpm"]
-    assert row.value == 45
+    assert row.value == 50
     assert row.source == "ruling"
     assert any("ruled 45 on 2026-09-16" in c for c in row.consumers)
+    assert any("ruled 50 on 2026-09-17" in c for c in row.consumers)

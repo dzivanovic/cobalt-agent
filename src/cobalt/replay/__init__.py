@@ -1,4 +1,4 @@
-"""The nightly replay — `com.cobalt.replay`, 21:05 ET weekdays (S2-P4).
+"""The nightly replay — `com.cobalt.replay`, 21:10 ET weekdays (S2-P4).
 
     cli.py     `cobalt replay nightly [--date] [--dry-run]`, inside `as_job`
     runner.py  the ordered run: archiver precondition, deadline, per-side phases

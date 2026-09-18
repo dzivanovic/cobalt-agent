@@ -15,7 +15,7 @@ One evaluator per check kind, the run's variables, and the exact hand command ea
 
 ## Context
 - `last_trading_day(now, anchor_spec, calendar)`: the latest NYSE trading day whose anchor-job occurrence (`schedule.at` ET) plus that job's `timeout_s` has passed by `now`. It walks back at most 14 days.
-  - With `com.cobalt.replay` (21:05 ET, 1800 s): 21:50 gives today, 21:20 gives the previous trading day, and holidays are skipped.
+  - With `com.cobalt.replay` (21:10 ET, 1800 s): 21:50 gives today, 21:20 gives the previous trading day, and holidays are skipped.
 - `build_context(now=, report_date=, cutoff=, prod=, anchor_spec=, tunables=)` returns a `SmokeContext`:
   - `session` comes from the session clock.
   - `last_summary_slot`/`last_summary_date` is the latest `heartbeat.summary_at` slot at or before now, or yesterday's last slot before the first one. It uses `heartbeat.runner.summary_at` (the same parser the heartbeat uses).
