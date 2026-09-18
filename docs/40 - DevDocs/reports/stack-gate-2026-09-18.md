@@ -173,13 +173,13 @@ Seat: `stack-gate-0918b`, Opus 5 (`claude-opus-5`), background, same worktree `/
 Prompt: `docs/40 - DevDocs/prompts/2026-09-18/12-stack-gate-2.md`. Steps 1.4 → 3 of `09-stack-gate.md` bind verbatim; §F (the ONE fixture edit) is this prompt's addition.
 Inherited: the stack assembled at `00c568e` (43 commits), branch tip `dad73f0` (report commits), worktree clean. Steps 0, 1.1, 1.2, 1.3 PASS — not replayed.
 
-## §0 Headline (14:5x ET)
+## §0 Headline (14:53 ET)
 
-- **§F DONE — the seam is closed by one row in one file and the offline suite is GREEN: `1535 passed, 0 failed, 0 errors`** (was 43 failed / 1455 passed / 5 errors).
-- The row is Dejan's R13 of 09-17 (`down 1`), spelled byte-for-byte as ops-0918 ships it (`test_daymode.py:83`, ops report §1.2): `because: "trade count above the ruled band"`.
-- `git diff --stat` = 1 file, **6 insertions, 0 deletions**. No second file involved: no hash/digest and no row count is asserted against this fixture anywhere.
-- Step 2 (dev DB) next; `cobalt_dev` still untouched by this run at this point.
-- ESCALATE 2nd run: see below.
+- **§F DONE — the fixture fix worked: offline is GREEN, `1535 passed, 0 failed, 0 errors`** (was 43 failed / 1455 passed / 5 errors), one row in one file, 6 insertions.
+- **FAILED at step 2 — the INTEGRATED suite with `cobalt_dev` is `8 failed, 1805 passed`. A different and deeper seam, and NOT ONE of the 8 is P2's.**
+- **5 × `test_trader_settings.py`** — the revision-3 proof seeds the settings table from the YAML read out of GIT HISTORY (6 step-downs, frozen); ops-0918's new mandatory signal refuses it. **No database state can fix these**: `cobalt_dev` now HAS the row (`validate` → 7 rows) and they are still red. Deploy 1 counted these same 5 as "`cobalt_dev` state" — that diagnosis was wrong, and the stacked deploy will reproduce them.
+- **3 × `test_aset_config` / `test_daymode::TestShippedConfig`** — the approved settings file (production's values) enables one more grade than these three tests assert as RULED. Closing the dev↔production drift (ops ESCALATE 5) was correct and exposed a contradiction only Dejan can rule.
+- Dev DB written exactly as approved (R7's exact line; both hashes = R4), `validate` exit 0 with `trade_count_over_band=down(1)`. `.env` removed. No merge, no push, production and the real vault untouched. ESCALATE 2nd run: 3.
 
 ## AUTHORIZATION (verified by this hub, 14:44 ET)
 
@@ -259,4 +259,89 @@ No `_cut_p2_fixtures.py` run (the prompt forbids it, and a re-cut from productio
 
 The gate's literal command, with no `--continue-on-collection-errors` and no flags added: it collects and it is green. Delta vs the first run: 43 failed → 0, 5 collection errors → 0, 1455 → 1535 passed (the 5 collection errors had hidden ~80 tests).
 
+### F.4 Commit
+
+`f907f1d` — `fix(s2-p2): card-settings fixture carries the trade_count_over_band step-down (ops-0918 seam, ruled 2026-09-17 R13)`, 1 file changed, 6 insertions(+). Report committed separately at `db950b5`.
+
 CONTINUE: step 2
+
+## 2. The dev database — RUN, and it is RED
+
+| # | step | command | result | verdict |
+|---|---|---|---|---|
+| 2.1 | `.env` in | `cp /Users/cobalt/cobalt/.env …/s2-p2-cards/.env` | by name, never printed (L41 interim) | PASS |
+| 2.2 | migrate | `COBALT_ENV=dev uv run cobalt db migrate` | `0001`…`0007` applied, exit 0; **23 tables proven, content UNCHANGED on every one**; P4's `picks` / `missed` / `movers_daily` **ABSENT** | PASS |
+| 2.3 | dry run | `COBALT_ENV=dev … settings load --from …/scratch/daymode-settings-0918 --dry-run` | **`DRY RUN — 3 setting(s) would change.`** KEYS only (L32): `~ aset.enabled_grades`, `~ daymode.reduced_enabled_grades`, `~ daymode.stepdowns`; the other four `=` unchanged | PASS — exactly the 3 expected |
+| 2.4 | hashes | `shasum -a 256` on both files | `daymode.yaml` = `daa7bb72…b3d5ebb` · `aset.yaml` = `8eca6945…6eb99d58` | PASS — **both identical to `cto-2026-09-18.md` R4** |
+| 2.5 | apply (DEV) | the exact R7 line, `--apply` | `applied: {aset.sheet_modes: unchanged, aset.enabled_grades: updated, daymode.reduced_sheet: unchanged, daymode.reduced_enabled_grades: updated, daymode.enabled_modes: unchanged, daymode.hotkey_file_template: unchanged, daymode.stepdowns: updated}` then **`from_db() == from_yaml() — field-by-field diff EMPTY.`** | PASS |
+| 2.6 | validate | `COBALT_ENV=dev uv run cobalt validate` | exit 0. `Step-downs: … trade_count_band_placeholder=floor; **trade_count_over_band=down(1)** — 7 row(s), every computable signal ruled.` Band min 2 / max 6. Placement clean. | PASS |
+| 2.7 | **integrated suite** | `COBALT_ENV=dev uv run pytest -q tests/cobalt tests/taxonomy --tb=short -p no:randomly` | **`8 failed, 1805 passed, 3 skipped, 1 xfailed`** in 107.81 s | **FAIL** |
+| 2.8 | real-vault subset | — | **NOT RUN** (gate stops at 2.7) | — |
+| 2.9 | dark card dry run + sha256 | — | **NOT RUN** | — |
+| 2.10 | `.env` out | `rm` then `ls -la` | `No such file or directory` (exit 1) — **credential gone** | PASS |
+| 2.11 | `jobs restarts` | — | **NOT RUN** | — |
+
+Nothing was fixed (the gate forbids it). The dev DB keeps the approved row — that write is authorized on its own (R7) and is the state the next run needs.
+
+### 2.7 The 8 — named, root-caused, owned
+
+**Group A — 5 failures, `tests/cobalt/test_trader_settings.py`. Owner: ops-0918. Structural; no DB state can clear it.**
+
+| test | fails in |
+|---|---|
+| `TestRevisionThreeProof::test_from_db_equals_from_yaml` | `TraderSettings.from_db` |
+| `TestRevisionThreeProof::test_the_diff_is_not_vacuous` | `TraderSettings._build(where="test")` |
+| `TestTheLoadersReadTheDatabase::test_sheet_modes_comes_from_the_rows` | `load_sheet_modes_config()` → `ConfigError` |
+| `TestTheLoadersReadTheDatabase::test_daymode_comes_from_the_rows` | `load_daymode_config()` → `ConfigError` |
+| `TestTheLoadersReadTheDatabase::test_the_two_halves_still_validate_against_each_other` | `Regex pattern did not match` — it raises the completeness error instead of the narrowing error it asserts |
+
+All five die on the same message:
+
+```
+daymode.stepdowns has no row for ['trade_count_over_band']. Every signal the
+proposer can compute must be ruled here — an unruled one would be a policy
+hole made by silence. Turn a rule off with `effect: none`.
+```
+
+**Why the database cannot fix it.** The `seeded` fixture (`test_trader_settings.py:80-83`) does `store.put(TraderSettings.rows_from_yaml(texts=_seed_texts()))` inside the suite's rollback transaction, after the `store` fixture has `DELETE`d every row. `_seed_texts()` (`:45-61`) reads `configs/cobalt/aset.yaml` and `daymode.yaml` **out of git history** (`git show <rev>^:…`) because revision 3 deleted them from the tree — that is the whole point of the module ("the proof the YAML deletion was gated on"). Those frozen texts carry **six** step-downs and can never carry a seventh. So every test that seeds and then builds a `TraderSettings` refuses under ops-0918's completeness check, whatever `"user".trader_settings` holds.
+
+**Proof that it is not `cobalt_dev` state:** `validate` at 2.6 read **7 rows including `trade_count_over_band`** from that same database, minutes before this run. The row is there. The five are still red.
+
+**This corrects deploy 1's diagnosis.** `deploy-2026-09-18.md:203` grouped 22 of its 26 failures under this error and named `test_trader_settings` (5) among them, and its stop line concluded *"every failure caused by `cobalt_dev` state (no `trade_count_over_band` row) … none by the merged code"*. For 17 of the 22 that was right. **For these 5 it was not** — they are the merged code meeting a frozen historical fixture, and they would have come back red on the very next post-merge suite, after the revert, after any re-migration. Neither branch's own suite could see them: ops-0918 ran OFFLINE (no `.env`), and this whole file is `skipif` without `POSTGRES_HOST`/`POSTGRES_USER` (`:34-37`) — 281 skipped offline vs 3 skipped here.
+
+**Group B — 3 failures. Owner: neither branch. A RULED-VALUE contradiction, surfaced by closing ops ESCALATE 5.**
+
+| test | line | what it asserts |
+|---|---|---|
+| `test_aset_config.py::TestSheetModesConfig::test_committed_config_is_valid` | `:175` | `set(cfg.enabled_grades) == {Grade.A, Grade.B}` |
+| `test_aset_config.py::TestSheetModesConfig::test_is_enabled_reflects_committed_config` | `:199` | `not cfg.is_enabled("C")` |
+| `test_daymode.py::TestShippedConfig::test_the_real_config_loads_and_reads_as_ruled` | `:128` | `enabled_grades_for("reduced") == ["A", "B"]`, carrying the ruling in its own comment: *"RE-RULED by the CTO review of S1-P2 … A is taken at reduced size; A+ is out because the ACCOUNT ladder does not enable it."* |
+
+All three call `load_sheet_modes_config()` / `load_daymode_config()`, i.e. they read the LIVE `"user".trader_settings` rows — not a fixture. Until 2.5 `cobalt_dev` carried the two-grade ladder and they passed (the P2 re-ship's third run: 1801 passed, 0 failed). The approved file carries **production's** current values, which enable one grade more; 2.5 wrote them, and the three went red. Values withheld (L32) — the test-side value is quoted above only because it is committed repo source.
+
+So the contradiction is not dev-vs-dev: **production's rows and these three tests disagree today**, and have disagreed since before either branch existed. The drift was right to close — the file's whole purpose is to mirror production — but one of the two sides is wrong and it is a sizing value. **His call, not mine** (ESCALATE 2).
+
+Neither group is P2's. P2's own contribution to this gate was the fixture row, and after it the offline suite is clean.
+
+## ESCALATE 2nd run
+
+1. **BLOCKER — `test_trader_settings.py`'s revision-3 seed cannot satisfy ops-0918's completeness check, and no deploy can outrun it.** The seed is read from git history by design, so it is frozen at six step-downs while `SIGNAL_IDS` grows. Three shapes, for a build hub to be told which: (a) the `seeded` fixture appends a ruled row for any `SIGNAL_IDS` entry the frozen text does not name — exactly the pattern ops-0918 already used for its own note fixture (`382c862`, ops report §1.1 "its fixture now appends a row for any `SIGNAL_IDS` entry it does not name, so the next signal cannot stale it") — which keeps the revision-3 proof honest about the fields it actually proves; (b) the proof pins itself to the six keys it was written for and states that it is a historical equivalence, not a live-schema check; (c) the completeness check accepts a seed marked historical. (a) is the one ops-0918 itself chose elsewhere and is the smallest. **This is the same defect class for the third time in two days, and the first one the gate caught twice** — the deeper lesson is that ops-0918's suite ran offline, so every DB-only test in the repo was invisible to it (281 skipped vs 3).
+2. **HIS RULING NEEDED — the reduced-mode grade ladder.** Production's `"user".trader_settings` enables one more grade than the three tests above assert, and those tests cite a CTO re-ruling of S1-P2 for their value. Either production's rows drifted and should be corrected (in which case the approved `aset.yaml`, sha256 `8eca6945…`, carries the drift forward — it was approved as "production's current values", which it faithfully is), or the ladder was re-ruled since and the three tests are stale. It is a sizing value, so it is a trading-logic change either way and cannot be settled by a hub. Until it is ruled, **any suite run against a production-mirroring settings table is 3 red**, including the post-merge smoke of the stacked deploy.
+3. **Not a blocker — `cobalt_dev` is now production-mirroring, and that changes what a green suite means.** Before 2.5 the dev DB carried the older two-grade ladder, which is why deploy 1's 3.6 and the P2 re-ship's green run disagreed with production without anyone seeing it. The drift is closed (ops ESCALATE 5 → done, in DEV) and `cobalt_dev` is left at `0007` + the over-band row + production's grade values. Any session inheriting this DB should expect the 3 of group B until item 2 is ruled, and should not read them as a regression.
+
+## What the next run inherits
+
+| item | value |
+|---|---|
+| branch | `sprint-2/cards`, worktree **clean**. Stack tip `00c568e`; **fixture fix `f907f1d`** above it; report commits on top. |
+| stack shape | unchanged and re-proven by the first run: P2 35 + ops-0918 8 on main `34524c1`, ops code byte-identical to `856176e`. Not rebuilt this run; main has since moved (desk docs commits) — the next run rebases or restacks as its prompt says. |
+| proven | steps 0, 1.1, 1.2, 1.3 (first run) · §F fixture + **offline `1535 passed, 0 failed`** · migrate 0001–0007 · dry run 3 keys · both hashes = R4 · DEV apply + empty field diff · `validate` exit 0 with `trade_count_over_band=down(1)` |
+| NOT proven | the integrated suite (8 red, above), the real-vault subset, the dark-file dry run + sha256, `jobs restarts` |
+| `cobalt_dev` | **written by this run, as approved**: at `0007`, carries the over-band row and production's settings values. P4's tables still absent. |
+| production / real vault / `~/cobalt` | untouched. No merge, no push, no `--allow-prod`, no `COBALT_ENV=production` command, no vault write. `.env` removed from this worktree. |
+
+MEMORY: stack gate 0918 second run — P2's fixture row added (`f907f1d`), offline suite GREEN 1535/0. Integrated suite with `cobalt_dev` is 8 red, none of them P2's: 5 in `test_trader_settings.py` are structural (the revision-3 proof seeds settings from the frozen git-history YAML, 6 step-downs, which ops-0918's mandatory 7th signal refuses — no DB state can fix them, correcting deploy 1's "every failure is cobalt_dev state"), 3 are a ruled-value contradiction (production's grade ladder enables one grade more than `test_aset_config`/`test_daymode::TestShippedConfig` assert as ruled — his call). `cobalt_dev` at 0007 + over-band row + production values since 14:5x; dev↔production settings drift CLOSED in dev by stack-gate-0918b.
+
+CONTINUE: after ESCALATE 1 is built and ESCALATE 2 ruled, relaunch this prompt — §F is already committed, the dev DB already carries the row, so the run resumes at step 2.7 (the integrated suite).
+
+FAILED: integrated suite — 8 red (`1805 passed`) with the dev database, none of them P2's and none fixable by database state: 5 in `tests/cobalt/test_trader_settings.py` are structural — the revision-3 proof seeds `"user".trader_settings` from the YAML frozen in git history (six step-downs) and ops-0918's mandatory `trade_count_over_band` refuses it, which also corrects deploy 1's "every failure is cobalt_dev state" — and 3 in `test_aset_config` / `test_daymode::TestShippedConfig` are a ruled-value contradiction between production's grade ladder and what those tests assert, needing Dejan's word; the §F fixture fix is done and GREEN offline (1535 passed, 0 failed, commit `f907f1d`), the DEV apply is done and `validate` reads `trade_count_over_band=down(1)`, `.env` removed, nothing merged or pushed, production and the real vault untouched — ESCALATE: 3
