@@ -738,24 +738,6 @@ class CardUpdate(BaseModel):
     last_price: Decimal | None = None
 
 
-#: The TradeDef fields the catalyst-review workflow may edit under an open
-#: card (Astra R2-4). Every other field shaped the card's formation.
-CATALYST_REVIEW_FIELDS = frozenset(
-    {"quality_factors", "preferred_windows", "preferred_windows_ref", "aliases", "name", "reference_stats"}
-)
-
-
-def formation_changes(original: TradeDef, current: TradeDef) -> list[str]:
-    """The formation fields `current` changed against `original`, named;
-    empty = an edit scoped to `CATALYST_REVIEW_FIELDS` only."""
-    before, after = original.model_dump(mode="json"), current.model_dump(mode="json")
-    return [
-        f"{name} changed since formation"
-        for name in TradeDef.model_fields
-        if name not in CATALYST_REVIEW_FIELDS and before[name] != after[name]
-    ]
-
-
 def refresh_card(
     card: OpenRadarCard,
     ev: MemberEvaluation,
@@ -1156,7 +1138,6 @@ class EvaluateStage:
         self.clock = clock
         self.now = now
         self.chain = ReceiptChain()
-        self._formation_defs: dict[str, TradeDef] = {}
 
     def lifecycle_tickers(self, admitted: Iterable[str]) -> list[str]:
         """Tickers of open radar cards whose member left the pool — S4
@@ -1317,21 +1298,13 @@ class EvaluateStage:
             for card in open_cards:
                 open_keys.add((card.ticker, card.trade_def_slug, card.direction))
                 # Same md5 first; else the same SLUG's current def (the note
-                # was edited since formation — R2-4's catalyst batch), but
-                # only when the edit left every formation field identical.
-                ld = by_md5.get(card.trade_def_md5)
-                changed: list[str] = []
-                if ld is None and card.trade_def_slug in by_slug:
-                    candidate = by_slug[card.trade_def_slug]
-                    original, why = self._formation_definition(card, pool_key)
-                    changed = [why] if original is None else formation_changes(original, candidate.definition)
-                    ld = None if changed else candidate
+                # was edited since formation — R2-4's catalyst batch).
+                ld = by_md5.get(card.trade_def_md5) or by_slug.get(card.trade_def_slug)
                 ev = ev_by.get((card.pool_member_id, ld.md5)) if ld is not None else None
                 if ev is None or ld is None:
-                    detail = f" ({'; '.join(changed)})" if changed else ""
                     outcome.refusals.append(
                         f"card {card.card_id}: its trade_def {card.trade_def_slug} (md5 {card.trade_def_md5}) "
-                        f"is no longer loaded{detail} — not refreshed"
+                        "is no longer loaded — not refreshed"
                     )
                     continue
                 # Chronology: only i1 bars that opened after the formation
@@ -1443,27 +1416,6 @@ class EvaluateStage:
         outcome.receipt_id = receipt_id
         return outcome
 
-    def _formation_definition(self, card: OpenRadarCard, pool_key: str) -> tuple[TradeDef | None, str]:
-        """The def a card formed under, by its formation md5, from the
-        definitions snapshots of its formation day's receipts — the run
-        that created the card stored it. An md5 names immutable content,
-        so a found def is memoised for the process."""
-        md5 = card.trade_def_md5
-        if md5 in self._formation_defs:
-            return self._formation_defs[md5], ""
-        trade_date = self.clock.to_et(card.formed_at).date()
-        for receipt in self.card_store.receipts_for_day(pool_key, trade_date):
-            entry = receipt["definitions_snapshot"]
-            if "value" not in entry:
-                continue  # an unchanged pointer: its value sits in an earlier receipt of the day
-            if canonical_sha256(entry["value"]) != entry["sha256"]:
-                return None, f"receipt {receipt['id']} definitions snapshot does not hash to its sha256"
-            for d in entry["value"]["defs"]:
-                if d["md5"] == md5:
-                    self._formation_defs[md5] = TradeDef.model_validate(d["definition"])
-                    return self._formation_defs[md5], ""
-        return None, f"its formation def is in no {pool_key} receipt of {trade_date.isoformat()}"
-
     @staticmethod
     def _i1_closed(members: list[MemberInput], card: OpenRadarCard) -> list[Bar]:
         for member in members:
@@ -1487,10 +1439,9 @@ def _state(value: str):
 
 
 __all__ = [
-    "AtomValue", "CATALYST_REVIEW_FIELDS", "CardUpdate", "EVALUATOR_VERSION", "EvaluateError", "EvaluateStage",
-    "FACTOR_COMPUTERS", "Formation", "LoadedDef", "MemberEvaluation", "MemberInput", "OpenRadarCard",
-    "ReceiptChain", "ReplayError", "ReplayedCard", "StageOutcome", "build_receipt", "canonical_sha256",
-    "card_why", "chain_commit", "desk_shadow", "evaluate_member", "evaluate_node", "formation_changes",
-    "formula_sha256", "overlay_taps",
+    "AtomValue", "CardUpdate", "EVALUATOR_VERSION", "EvaluateError", "EvaluateStage", "FACTOR_COMPUTERS",
+    "Formation", "LoadedDef", "MemberEvaluation", "MemberInput", "OpenRadarCard", "ReceiptChain",
+    "ReplayError", "ReplayedCard", "StageOutcome", "build_receipt", "canonical_sha256", "card_why",
+    "chain_commit", "desk_shadow", "evaluate_member", "evaluate_node", "formula_sha256", "overlay_taps",
     "published_numbers", "rebuild_members", "refresh_card", "replay_receipt", "seam_atom",
 ]
