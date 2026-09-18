@@ -354,14 +354,6 @@ Seat: `stack-gate-0918c`, Opus 5 (`claude-opus-5`), background, same worktree `/
 Prompt: `docs/40 - DevDocs/prompts/2026-09-18/13-stack-gate-3.md`. Steps 2 and 3 of `09-stack-gate.md` bind verbatim, with the two stated differences (over-band dev dry run now expects the zero-change line; no second `--apply`). §T (the two TEST-SIDE fixes) is this prompt's addition; nothing under `src/`, `configs/` or `ops/` may change.
 Inherited: stack tip `00c568e` (43 commits), fixture fix `f907f1d`, branch tip `ff26c8f`, worktree clean. `cobalt_dev` at `0007`, carrying the over-band row and production's settings values.
 
-## §0 Headline (15:1x ET)
-
-- **STACK READY. The gate is fully green: offline `1537 passed / 0 failed`, integrated with `cobalt_dev` `1815 passed / 0 failed`, real-vault `93 passed`.**
-- **Both groups of the second run's 8 reds were test-side and both are fixed, in `tests/` only** — `f7a018a` (the revision-3 seed completes itself from `SIGNAL_IDS`, `trade_count_over_band` taking R13's `down`/`1`) and `00d671d` (the three live-settings tests assert invariants, not the trader's ladder). `git diff --stat ff26c8f HEAD -- src configs ops` prints NOTHING.
-- **Group B needed no ruling from Dejan after all**: `PROJECT-LEDGER.md:1393` overrules the "reduced keeps A, B" assumption BY NAME under his 09-14 C-size ruling. Production's rows are right; the three tests were stale. The second run's ESCALATE 2 is closed, not escalated.
-- Dev DB NOT written this run (dry run printed the zero-change line, `--apply` skipped as instructed); dark file ONE add, sha256 unchanged; `RESTARTS: com.cobalt.aset com.cobalt.radar`, 0 UNCLASSIFIED. `.env` removed. No merge, no push, production and the real vault untouched.
-- ESCALATE 3rd run: **4** — none of them a blocker, none needing his word to deploy.
-
 ## AUTHORIZATION (verified by this hub, 14:58 ET)
 
 This launch line is **rule-for-rule identical to the first and second runs'** (compared item by item: the `.env` `cp`/`rm`/`ls -la` by exact path; the five `COBALT_ENV=dev` rules; `COBALT_VAULT_PATH=… pytest`; `uv run pytest *`; `uv run cobalt jobs restarts *`; `git rebase main`; `git rebase --abort`; `git cherry-pick *`; `git add/commit/diff/status/log/show/rev-parse *`; `git -C /Users/cobalt/cobalt log*`/`rev-parse *`; `cd`/`ls`/`grep`/`tail`/`wc`/`shasum -a 256`/`date`; `--disallowedTools AskUserQuestion EnterWorktree`). Rows read from `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-18.md` §4 — R1 list (1) at `:14`, R2 at `:15`, R7 at `:20`, R3 at `:16`, R5 at `:17`, R8 at `:21`. Every rule MATCHES; the first run's rule-by-rule table stands unchanged and is not repeated.
@@ -450,65 +442,3 @@ Each comment cites the **09-14 C-size ruling** (grade C re-enabled; his own `set
 | `uv run pytest -q tests/cobalt tests/taxonomy` (offline, gate's literal command) | 0 failed | **`1537 passed, 281 skipped, 1 xfailed, 0 failed, 0 errors`** in 39.61 s (1535 → 1537: the two new constructed-ladder tests) | PASS |
 
 CONTINUE: step 2
-
-## 2. The dev database — the full gate, GREEN
-
-Run per `09-stack-gate.md` step 2, with this prompt's two stated differences: the over-band dry run now EXPECTS the zero-change line, and the `--apply` is NOT run again.
-
-| # | step | command | result | verdict |
-|---|---|---|---|---|
-| 2.1 | `.env` in | `cp /Users/cobalt/cobalt/.env …/s2-p2-cards/.env` | by name, never printed (L41 interim) | PASS |
-| 2.2 | migrate | `COBALT_ENV=dev uv run cobalt db migrate` | `0001`…`0007` applied, exit 0; **23 tables proven, content UNCHANGED on every one**; P4's `picks` / `missed` / `movers_daily` **ABSENT** | PASS |
-| 2.3 | dry run | `COBALT_ENV=dev … settings load --from …/scratch/daymode-settings-0918 --dry-run` | all seven keys `=`, then **`no differences — the database already holds these settings.`** | PASS — **the expected zero-change line**, exactly as this prompt states |
-| 2.4 | hashes | `shasum -a 256` on both files | `daymode.yaml` = `daa7bb72…b3d5ebb` · `aset.yaml` = `8eca6945…6eb99d58` | PASS — **both still identical to `cto-2026-09-18.md` R4** |
-| 2.5 | apply (DEV) | — | **NOT RUN, by this prompt's instruction** (the second run did it; 2.3 proves the row is in place) | — |
-| 2.6 | validate | `COBALT_ENV=dev uv run cobalt validate` | exit 0. `Step-downs: … trade_count_band_placeholder=floor; **trade_count_over_band=down(1)** — 7 row(s), every computable signal ruled.` Band min 2 / max 6; 13 trade_defs OK; jobs registry ↔ `ops/` ↔ plists exact match; placement clean | PASS |
-| 2.7 | **integrated suite** | `COBALT_ENV=dev uv run pytest -q tests/cobalt tests/taxonomy --tb=short -p no:randomly` | **`1815 passed, 3 skipped, 1 xfailed, 0 failed`** in 108.17 s | **PASS** — was `8 failed, 1805 passed` |
-| 2.8 | real-vault subset | `COBALT_VAULT_PATH=/Users/cobalt/Vault/Think uv run pytest -q tests/cobalt -k "requires_vault or vault" -m "" -p no:randomly` | **`93 passed, 1442 deselected`** in 4.44 s, 0 failed — reads only | PASS |
-| 2.9 | dark card dry run | `COBALT_ENV=dev … settings load --card …/pre-s2-p2-2026-09-17/p2-dark-settings.yaml --dry-run` | **`+ radar.cards_enabled` (db: absent → file: false)**, then `DRY RUN — 1 card setting(s) would change. Nothing written.` — ONE add, ZERO deletions | PASS |
-| 2.9b | its sha256 | `shasum -a 256` the same file | `945e42f86997559267b2e7c20783f2d023b9135ae4bb437ca25a4999ca7cd3ca` | PASS — **unchanged**, and the CLI printed the same hash itself |
-| 2.10 | `.env` out | `rm` then `ls -la` | `No such file or directory` (exit 1) — **credential gone** | PASS |
-| 2.11 | `jobs restarts` | `uv run cobalt jobs restarts main..HEAD` | **`RESTARTS: com.cobalt.aset com.cobalt.radar`**, **0 UNCLASSIFIED** | PASS |
-
-Values withheld throughout (L32): 2.3 names keys only, and `validate`'s ladder lines are not quoted here.
-
-### 2.11 The RESTARTS derivation
-
-Every path classified, none dropped. The rules that fired: `static import reach` (every `src/cobalt/**` change), `resident reads` (`configs/cobalt/radar.yaml` → radar; `configs/cobalt/taxonomy/tunables.yaml` → aset + radar), `META` (`.gitignore` → `-`), `DOCS` (every `docs/**` path → `-`, L42's 09-13 amendment), `operator script; no Cobalt reader` (`ops/cto-desk.sh` → `-`, ops-0918's own new rule), `operations documentation; no resident` (`ops/README.md`), `non-Python src asset` (the four `.sql` files), `test/documentation; no resident` (every `tests/**` path — **including this run's three**). Verdict line: **`RESTARTS: com.cobalt.aset com.cobalt.radar`**.
-
-One artefact of the range, named so the deploy hub does not trip on it: five `docs/40 - DevDocs/prompts/2026-09-18/*.md` paths (`10`, `11`, `12`, `13`, `14`) appear as `D`. They are desk prompt files added to **main** after this stack's base, not deletions by any commit here — the same class as the first run's `configs/cobalt/rules.yaml` note. All five classify `DOCS → -`, so they change nothing.
-
-CONTINUE: step 3
-
-## 3. Close
-
-| check | observed | verdict |
-|---|---|---|
-| `git status --porcelain` | empty | PASS |
-| stack base vs main today | stack is based on main `34524c1`; main is now **`c1c9512`**. `git diff --stat 34524c1 main -- src configs ops tests` → **no output**: main has moved **docs-only** since the base, so the pre-merge rebase replays no code | PASS — recorded for the deploy hub |
-| code delta vs today's main | `git diff --stat main HEAD -- src configs ops tests` → 96 files, +25,649 / −429, every one a P2 or ops-0918 path | PASS |
-| commits above main | **52** = the 43-commit stack + 3 seam/test fixes (`f907f1d`, `f7a018a`, `00d671d`) + 6 report commits | recorded |
-| `src/` `configs/` `ops/` in THIS run | `git diff --stat ff26c8f HEAD -- src configs ops` → **no output** | PASS |
-| production / real vault / `~/cobalt` | untouched: no merge, no push, no `--allow-prod`, no `COBALT_ENV=production` command, no vault write. The real vault was READ once, by 2.8's read-only suite | PASS |
-
-MEMORY: `cobalt_dev` at 0007 + over-band row since 2026-09-18 14:5x ET, still mirroring production's settings (this run's dry run printed the zero-change line; no second apply); dev↔production settings drift closed by stack-gate-0918. Third run: both groups of the 8 integrated reds were TEST-SIDE and both are fixed — the revision-3 seed now completes itself from `SIGNAL_IDS` (`f7a018a`), and the three tests that read the live settings table assert invariants instead of the trader's current ladder (`00d671d`; C-size ruled 2026-09-14, and `PROJECT-LEDGER.md:1393` overrules the "reduced keeps A, B" assumption by name). Integrated suite `1815 passed, 0 failed`.
-
-## ESCALATE 3rd run
-
-1. **CLOSED by this run — the second run's ESCALATE 1 and 2, both test-side.** ESCALATE 1 was built in shape (a), as ruled. ESCALATE 2 turned out **not** to need his word: the record already held his ruling (09-14 C-size — `areas/cobalt-sprints.md:37`, `PROJECT-LEDGER.md:1393`), and the ledger line names the exact defect — "a Sonnet run made a silent policy assumption in a daymode comment (reduced keeps A, B) — **overruled**". Production's rows are right; the three tests were four days stale and wrong in kind.
-2. **The defect class, with a cheap rule that would have caught all three.** A test that reads the live settings table and pins a VALUE is a time bomb on the trader's own settings (L32): his 09-14 ruling broke three of them and nobody saw it until a gate ran the suite against a production-mirroring database, four days later. Candidate rule for the close list, his number: **a test may read `"user".trader_settings` to prove an INVARIANT, never to assert a value; values belong on a constructed config.** Worth a one-off sweep for other live-row readers with literal expectations — this run only saw the three files it was given.
-3. **Not a blocker, carried from the second run's ESCALATE 3.** `cobalt_dev` still mirrors production's settings at `0007`, and that is now what a green suite means. A session inheriting this DB and seeing different numbers than the pre-09-14 runs is not looking at a regression.
-4. **Not a blocker, carried from the first run's ESCALATE 3.** `trade_count_band_placeholder` still sits in `SIGNAL_IDS` beside the real `trade_count_over_band`. This run's seed completion makes it slightly stickier: a future signal the frozen text predates now gets `effect: none` automatically — correct, ruled-off-visibly, and silent. Both rows are ruled, nothing is broken; a ruling at leisure.
-
-## What the next run inherits
-
-| item | value |
-|---|---|
-| branch | `sprint-2/cards`, worktree **clean**. Stack tip `00c568e`; seam fixes `f907f1d`, `f7a018a`, `00d671d` above it; report commits on top. |
-| stack shape | P2 35 + ops-0918 8 on main `34524c1` (proven in run 1, unchanged) + 3 test-side seam fixes. Main is now `c1c9512`, **docs-only ahead**. |
-| proven | runs 1–2: stack assembly, fixture row, offline green · **this run**: both test-side fixes, offline `1537 passed / 0 failed`, migrate 0001–0007 with P4's tables absent, dry run = zero-change line, both settings hashes = R4, `validate` exit 0 with `trade_count_over_band=down(1)`, **integrated `1815 passed / 0 failed`**, real-vault `93 passed`, dark file ONE add with sha256 unchanged, RESTARTS derived with 0 UNCLASSIFIED |
-| NOT proven | anything on production — no merge, no migration, no settings write, no restart. Deploy is not this seat's. |
-| `cobalt_dev` | at `0007`, over-band row present, mirroring production's settings. **Not written by this run**: 2.3's dry run confirmed it and 2.5 was deliberately skipped. |
-| production / real vault / `~/cobalt` | untouched. `.env` removed from this worktree. |
-
-STACK READY 00d671d | P2 + ops-0918 (8) + seam fixes f907f1d f7a018a 00d671d on main 34524c1 (main now c1c9512, docs-only ahead) | offline: 1537 passed, 0 failed | integrated with DB: 1815 passed, 0 failed | real-vault: 93 passed | dark file sha256 945e42f8…ca7cd3ca unchanged | RESTARTS: com.cobalt.aset com.cobalt.radar | ESCALATE: 4
