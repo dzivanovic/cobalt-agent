@@ -2,11 +2,11 @@
 
 ## §0 Headline
 
-- **Part A DONE.** Review finding F1 folded: `_probe` sends ONE statement, the row count comes out of the fold, `bars` is read once. 19 red before → 30 passed with the DB / 24 passed + 6 skipped offline.
-- Authorization VERIFIED against main: R13 (17:05 ET, "It's approved.") carries the one new rule `Bash(git switch -c sprint-2/stack main)`; every other rule is R1 list (1) / R2 / R7. No mismatch.
-- PREFLIGHT: 5 probes, 0 denials.
-- Parts B (re-land on `sprint-2/stack`) and C (the gate, with the database) still to run.
-- ESCALATE so far: 0.
+- **STACK READY on `sprint-2/stack`** — 63 commits re-landed by cherry-pick onto main `968e010` (stack tip `d72ece4`), code byte-identical to what part A left, no conflict.
+- **Review finding F1 folded** (`0e1f768`): the row count comes out of the fold, so `_probe` sends ONE statement and `bars` is read once. 19 red before, green after; **every dev digest is unchanged, 23/23**.
+- **Gate GREEN with the database**: migrate 0001–0007, 23/23 `OK` and 0 `CHANGED`; integrated 1845 passed / 0 failed; real-vault 93; offline 1561.
+- Authorization VERIFIED rule by rule against main; PREFLIGHT 5 probes, 0 denials; `.env` removed, tree clean, nothing merged, nothing pushed, no production command run.
+- **ESCALATE: 3** (production's proof timing is stale-and-conservative; the BASELINE shape that avoids the append-only table; a noisy 63-commit changelog).
 
 ## PREFLIGHT
 
@@ -92,3 +92,69 @@ The reverts on main restored each patch's exact pre-image, so the whole range ap
 Whole-tree `git diff --stat 6694652 HEAD` shows 6 files, all under `docs/` — main's own desk commits since (`cto-2026-09-18.md`, `deploy-2026-09-18.md`, four `prompts/2026-09-18/*.md`), 262 insertions. Nothing under `src`, `tests`, `configs`, `ops` or `.gitignore` differs.
 
 CONTINUE: part C
+
+## C. The gate, with the database (on `sprint-2/stack`)
+
+| # | command | result |
+|---|---|---|
+| C.1 | `cp /Users/cobalt/cobalt/.env …/s2-p2-cards/.env` | copied by name, never printed (L41 interim) |
+| C.2 | `COBALT_ENV=dev uv run cobalt db migrate --proof-only` | 23 tables, **nothing applied** — see the quoted table below |
+| C.3 | `COBALT_ENV=dev uv run cobalt db migrate` | 0001–0007 applied, **23/23 `OK`, 0 `CHANGED`** |
+| C.4 | `COBALT_ENV=dev uv run cobalt settings load --from …/daymode-settings-0918 --dry-run` | `no differences — the database already holds these settings.` (7 keys, all `=`; keys only, L32) |
+| C.5 | `COBALT_ENV=dev uv run cobalt validate` | exit 0 · `Step-downs: … trade_count_over_band=down(1) — 7 row(s), every computable signal ruled.` |
+| C.6 | `COBALT_ENV=dev uv run pytest -q tests/cobalt tests/taxonomy --tb=short -p no:randomly` | **1845 passed, 0 failed**, 3 skipped, 1 xfailed, 153.85 s |
+| C.7 | `COBALT_VAULT_PATH=/Users/cobalt/Vault/Think uv run pytest -q tests/cobalt -k "requires_vault or vault" -m "" -p no:randomly` | **93 passed, 0 failed**, 1472 deselected |
+| C.8 | `COBALT_ENV=dev uv run cobalt settings load --card …/p2-dark-settings.yaml --dry-run` | `+ radar.cards_enabled` (db absent → file `false`) — **ONE add, zero deletions**; `DRY RUN — 1 card setting(s) would change. Nothing written.` |
+| C.9 | `shasum -a 256` dark card | `945e42f86997559267b2e7c20783f2d023b9135ae4bb437ca25a4999ca7cd3ca` = R10 (2), unchanged |
+| C.9 | `shasum -a 256` over-band pair | `daa7bb72…3d5ebb` (daymode.yaml), `8eca6945…b99d58` (aset.yaml) — **both exactly R4 (b)** |
+| C.10 | `rm …/.env` then `ls -la …/.env` | `No such file or directory` |
+| C.11 | `uv run cobalt jobs restarts main..HEAD` | 168 paths classified, **0 UNCLASSIFIED** · `RESTARTS: com.cobalt.aset com.cobalt.radar` |
+| C.12 | `git status --porcelain` | empty |
+
+### C.2 — `--proof-only`, quoted with its seconds
+
+```
+cobalt db migrate — PROOF ONLY on cobalt_dev (READ ONLY, nothing applied)
+
+table                side    schema   rows         digest                             secs
+------------------------------------------------------------------------------------------
+aset_sizings         user    user     1            0824685c130da3c7cb7f0e76191a6819   0.01
+bars                 system  system   1043443      2769919a57144c7bf8720110061dbf72   5.43
+cobalt_redactions    system  system   120          a9594cce035f4c845768d97546b55796   0.00
+cobalt_jobs          system  system   13           8d9b0861615861e343009f33118a4931   0.00
+session_blocks       system  system   6            b650702dd6fd624548e05ca940662f08   0.00
+vault_writes         user    user     184          4a965c69340f112d12e6ca21a8a0602c   0.01
+(17 further tables, all as printed)
+------------------------------------------------------------------------------------------
+23 table(s) probed on cobalt_dev; … Proof cost: total 5.5 s — and a migration pays it TWICE (before and after), inside the outage.
+NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.
+```
+
+**The F1 fix is digest-neutral on real data at scale.** Every one of these values equals the 16:52 pre-fix dev probe (`prod-proof-only-2026-09-18.md`) byte for byte — `bars` 1,043,443 / `2769919a…`, `aset_sizings` `0824685c…`, `cobalt_jobs` `8d9b0861…`, `session_blocks` `b650702d…`, `vault_writes` `4a965c69…`, and `cobalt_redactions` still 120 / `a9594cce…`. 23/23, including the append-only table that drifted this afternoon. Counting inside the fold changed the statement count, not one byte of any digest.
+
+`bars` probed in 5.43 s vs 5.35 s before the fix — dev's `bars` is 1/8th of production's and dominated by row transfer, so no speed-up is visible at this size; the second pass that was removed was `count(*)`, which is index-cheap on a small table. Production is where the saving is, and it has not been re-measured (ESCALATE 2).
+
+### C.3 — the migration's own proof
+
+`-- applying 0001_schemas.sql … 0007_radar_cards.sql`, then all 23 tables `OK`:
+
+```
+23 table(s) proven; digest excludes user_id, vault_outcome, vault_reason, account_mode, pool_member_id; aset_sizings: 25 card column(s) added by 0007. content UNCHANGED on every table.
+proof cost: BEFORE 5.4 s + AFTER 5.1 s = total 10.5 s; slowest table bars (5.4 s before).
+```
+
+**Zero `CHANGED`** — not even `cobalt_redactions`: nothing was redacted between BEFORE and AFTER in this run, so the append-only exception the prompt allows for was not needed and is not claimed.
+
+**P4's tables are ABSENT.** No allowlisted command in this launch line lists arbitrary relations (`db query` is not in it), so the evidence is the suite: `tests/cobalt/test_tenancy.py::TestPlacement::test_every_table_is_on_its_ruled_side` fails on any relation missing from the placement map — it is the test that went red this morning naming `user.picks` and `system.movers_daily` — and `TestMigrationRoundTrip::test_twice_is_idempotent_and_the_rollback_round_trips` dies on their FKs onto `system.radar_membership`. Both passed in C.6. `cobalt_dev` is at 0007 and clean.
+
+## ESCALATE
+
+1. **Production's `--proof-only` figure is now stale, and conservative.** The 46.73 s / ≈94 s outage budget in `prod-proof-only-2026-09-18.md` was measured with the separate `count(*)` still in place — one of the two passes this run removed. On `bars`, where the count is a full heap/index scan of 8.6M rows, the saving is real but unmeasured; dev is too small to show it (5.43 s vs 5.35 s). A re-run of `COBALT_ENV=production uv run cobalt db migrate --allow-prod --proof-only` would replace a guess with a number before the deploy sizes its outage — but R12 approved that line to be run ONCE, so it needs Dejan's word again. Not a blocker: the standing budget over-states the cost, it does not under-state it.
+2. **The append-only BASELINE problem (carried from `prod-proof-only-2026-09-18.md` ESCALATE 1) did not bite this run, and the reason is worth keeping.** This gate compared BEFORE against AFTER inside one command rather than against a pinned BASELINE, so `cobalt_redactions` had no window to drift. That is the durable shape of the fix the earlier hub asked for: compare within the run, not against a digest pinned an hour earlier. If a future prompt does pin a BASELINE, exclude that table by name.
+3. **`sprint-2/stack` carries 63 commits, 30 of which are report commits from five runs** (re-ship, gate ×3, harness fix, prod proof, this one). They re-land because the range re-lands whole, and squashing them would have broken "original messages, no squash". Nothing is wrong with the tree; it is the deploy's changelog that is noisy. If the desk wants a clean one, that is a decision for the merge, not for this branch.
+
+## Close
+
+MEMORY: `cobalt_dev` at 0007, clean, with the over-band row, as of 2026-09-18 17:1x ET; the gated stack now lives on `sprint-2/stack` (off main `968e010`), not on `sprint-2/cards`; the migration harness's content proof is one statement per table since `0e1f768`.
+
+STACK READY d72ece4 on sprint-2/stack | 63 commits re-landed by cherry-pick onto main 968e010, byte-identical to 6694652 | harness: streamed proof + --proof-only + F1 | offline: 1561 passed, 0 failed | integrated with DB: 1845 passed, 0 failed | real-vault: 93 passed | dark file sha256 945e42f8…ca7cd3ca unchanged | RESTARTS: com.cobalt.aset com.cobalt.radar | ESCALATE: 3
