@@ -165,8 +165,20 @@ def _row_json(table: str) -> sql.Composed:
     return row_json
 
 
-def _digest_rows(row_texts: Iterable[str]) -> str:
-    """Fold row texts into the digest, holding exactly one row at a time.
+def _digest_rows(row_texts: Iterable[str]) -> tuple[int, str]:
+    """Fold row texts into `(how many, their digest)` in ONE pass.
+
+    THE COUNT COMES OUT OF THE FOLD (2026-09-18, review finding F1). It
+    used to be a separate `SELECT count(*)`, and two statements under
+    READ COMMITTED take two snapshots: on a table being written to, the
+    printed `rows` could belong to one snapshot and the digest to
+    another — a self-contradictory proof line, and `bars` read twice for
+    the privilege. Counting the rows the cursor actually yields makes the
+    pair self-consistent by construction, whatever lands mid-probe.
+
+    Client memory is one batch, not one row: `_stream_row_texts` fetches
+    `PROBE_BATCH_SIZE` rows per round trip. What is never held is the
+    table, or the concatenation of it.
 
     The bytes are the ones a `'|'`-joined aggregate of the same rows in
     the same order would have produced: the separator goes BETWEEN rows
@@ -177,14 +189,13 @@ def _digest_rows(row_texts: Iterable[str]) -> str:
     2026-09-18 rewrite.
     """
     digest = hashlib.md5()
-    first = True
+    rows = 0
     for row_text in row_texts:
-        if first:
-            first = False
-        else:
+        if rows:
             digest.update(b"|")
         digest.update(row_text.encode("utf-8"))
-    return digest.hexdigest()
+        rows += 1
+    return rows, digest.hexdigest()
 
 
 def _stream_row_texts(conn, table: str, query) -> Iterator[str]:
@@ -220,9 +231,6 @@ def _probe(conn, table: str) -> dict:
         }
     pk = _pk_columns(conn, schema, table)
     rel = sql.Identifier(schema, table)
-    rows = conn.execute(
-        sql.SQL("SELECT count(*) FROM {rel}").format(rel=rel)
-    ).fetchone()[0]
     stream = sql.SQL(
         "SELECT ({row_json})::text FROM {rel} AS t ORDER BY {order}"
     ).format(
@@ -230,10 +238,13 @@ def _probe(conn, table: str) -> dict:
         rel=rel,
         order=sql.SQL(", ").join(sql.Identifier("t", c) for c in pk),
     )
-    digest = _digest_rows(_stream_row_texts(conn, table, stream))
+    # ONE statement for both numbers: the count is the rows the cursor
+    # yields, so no concurrent write can put the count and the digest on
+    # different snapshots — and an 8.4M-row table is read once, not twice.
+    rows, digest = _digest_rows(_stream_row_texts(conn, table, stream))
     return {
         "schema": schema,
-        "rows": int(rows),
+        "rows": rows,
         "digest": digest,
         "seconds": time.perf_counter() - started,
     }

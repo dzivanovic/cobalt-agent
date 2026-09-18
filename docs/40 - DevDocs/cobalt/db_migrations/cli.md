@@ -26,14 +26,26 @@ whole-row digest would differ by construction and prove nothing.
 `SET SCHEMA` and `ADD COLUMN` touch.
 
 ## How the digest is computed now (and why the values did not change)
-`_probe` keeps `count(*)` in SQL, and folds the digest HERE:
+`_probe` sends ONE statement for the whole proof and folds it HERE:
 
 * `_stream_row_texts` opens a NAMED — therefore server-side — cursor with
-  `itersize = PROBE_BATCH_SIZE` (10,000) and yields one row text at a
-  time. Unnamed would only move the ceiling from the server into this
-  process.
+  `itersize = PROBE_BATCH_SIZE` (10,000): the server hands the rows over
+  a batch at a time, and that batch is what this process buffers — never
+  the table, never the concatenation of it. Unnamed would only move the
+  ceiling from the server into this process.
 * `_digest_rows` folds them into one `hashlib.md5()`, writing `b"|"`
-  BETWEEN rows and never after the last; no rows at all digest `b""`.
+  BETWEEN rows and never after the last; no rows at all digest `b""`. It
+  returns `(rows, digest)`: the ROW COUNT IS THE ROWS IT FOLDED.
+
+That last point is review finding F1 (2026-09-18, Grok MAJOR + Gemini
+Q5), folded before the re-land. The probe used to run `SELECT count(*)`
+and then the digest — two statements, and under READ COMMITTED two
+snapshots. On a table being written to, the printed `rows` could belong
+to one snapshot and the digest to another (a line that contradicts
+itself, or a false `CHANGED`), and `bars` paid for two full passes. One
+statement removes both: the pair is self-consistent by construction, and
+8.4M rows are read once. The digest VALUES are untouched — the same
+bytes in the same order — so the comparability below still holds.
 
 Those are exactly the bytes `string_agg(…, '|' ORDER BY …)` produced
 (and `coalesce(…, '')` for the empty case), so **every digest keeps its
@@ -74,10 +86,13 @@ environment) is what reaches `cobalt_brain`; read-only does not relax it.
 
 ## Timing is a deliverable
 The proof runs TWICE inside a resident outage (before and after), so
-every run prints what it cost. On `cobalt_dev` (1,043,443 bars)
-`bars` probes in ≈5.5 s and the pair costs ≈11 s; production's 8.4M rows
-scale that to roughly 45 s per probe, ≈90 s of the outage. Read the
-numbers off the run — do not re-derive them from this file.
+every run prints what it cost. On `cobalt_dev` (1,043,443 bars) `bars`
+probed in ≈5.4 s and the pair costs ≈11 s; the 2026-09-18 production
+`--proof-only` run measured `system.bars` at 8,591,339 rows in 46.73 s,
+46.9 s for the whole probe, so the BEFORE+AFTER pair is ≈94 s of the
+outage. Both figures were measured while `_probe` still ran a separate
+`count(*)`; folding F1 removed that pass, so expect the same or less —
+read the numbers off the run, never re-derive them from this file.
 
 ## Data flow in/out
 **In:** `_connect()` → `db.connect_migration()` (no `SET ROLE` — see

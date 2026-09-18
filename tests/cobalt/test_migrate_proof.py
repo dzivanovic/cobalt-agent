@@ -34,10 +34,18 @@ Five groups:
    server itself will not let anything write to.
 5. MEMORY SHAPE (no database) — the cursor's construction, since a 1 GB
    table cannot be built in a test.
+6. ONE STATEMENT, ONE PASS (no database) — review finding F1: the row
+   count comes out of the fold, so a table being written to cannot yield
+   a `rows` that belongs to one snapshot and a `digest` that belongs to
+   another. Asserted against a fake table that grows under the probe.
+7. THE CHEAP UNTESTED CASES the review listed — `--proof-only` combined
+   with `--rollback` is refused before a connection is ever opened, and a
+   probe that raises leaves the connection rolled back and closed.
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import os
 import subprocess
@@ -90,23 +98,40 @@ def test_the_streamed_fold_reproduces_string_agg_byte_for_byte(case):
     expected = hashlib.md5("|".join(rows).encode("utf-8")).hexdigest()
     # An ITERATOR, not a list: the fold must never need the rows twice
     # and must never hold them all.
-    assert cli._digest_rows(iter(rows)) == expected, (
+    assert cli._digest_rows(iter(rows))[1] == expected, (
         f"{case}: the streamed fold does not produce the bytes "
         "string_agg(..., '|') would have produced"
     )
 
 
+@pytest.mark.parametrize("case", sorted(FOLD_CASES))
+def test_the_fold_reports_how_many_rows_it_folded(case):
+    """The COUNT comes out of the fold, not out of a second statement.
+
+    That is the whole of review finding F1: a `SELECT count(*)` and the
+    digest are two READ COMMITTED statements, so on a table being written
+    to they can describe different snapshots and the printed line is
+    self-contradictory. One statement, one pass, one pair.
+    """
+    rows = FOLD_CASES[case]
+    counted, digest = cli._digest_rows(iter(rows))
+    assert counted == len(rows), (
+        f"{case}: the fold folded {len(rows)} row(s) and reported {counted}"
+    )
+    assert digest == hashlib.md5("|".join(rows).encode("utf-8")).hexdigest()
+
+
 def test_no_rows_digests_the_empty_string():
     """The `coalesce(string_agg(...), '')` arm, which every empty table hits."""
-    assert cli._digest_rows(iter([])) == hashlib.md5(b"").hexdigest()
-    assert cli._digest_rows(iter([])) == "d41d8cd98f00b204e9800998ecf8427e"
+    assert cli._digest_rows(iter([])) == (0, hashlib.md5(b"").hexdigest())
+    assert cli._digest_rows(iter([])) == (0, "d41d8cd98f00b204e9800998ecf8427e")
 
 
 def test_the_separator_goes_between_rows_and_never_after_the_last():
     """One row must digest the row alone — no trailing `|`."""
-    assert cli._digest_rows(iter(["solo"])) == hashlib.md5(b"solo").hexdigest()
-    assert cli._digest_rows(iter(["a", "b"])) == hashlib.md5(b"a|b").hexdigest()
-    assert cli._digest_rows(iter(["a", "b"])) != hashlib.md5(b"a|b|").hexdigest()
+    assert cli._digest_rows(iter(["solo"])) == (1, hashlib.md5(b"solo").hexdigest())
+    assert cli._digest_rows(iter(["a", "b"])) == (2, hashlib.md5(b"a|b").hexdigest())
+    assert cli._digest_rows(iter(["a", "b"]))[1] != hashlib.md5(b"a|b|").hexdigest()
 
 
 # ---------------------------------------------------------------------
@@ -424,3 +449,197 @@ def test_row_texts_stream_through_one_named_batched_server_side_cursor():
 
 def test_the_batch_size_is_bounded_and_not_one_row_at_a_time():
     assert cli.PROBE_BATCH_SIZE == 10_000
+
+
+# ---------------------------------------------------------------------
+# 6. ONE STATEMENT, ONE PASS — review finding F1
+# ---------------------------------------------------------------------
+
+
+class _FakeResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self):
+        return list(self._rows)
+
+
+class _GrowingProbeConn:
+    """A table under continuous insert: every statement sees one more row.
+
+    Nothing exotic — that IS READ COMMITTED, which is what the harness's
+    connection uses: each statement takes its own snapshot, so two
+    statements inside one probe describe two different tables. Review
+    finding F1 (Grok MAJOR, Gemini Q5) is exactly this, and the only way
+    a probe can be immune to it is to send ONE statement.
+    """
+
+    def __init__(self, start_rows: int = 3):
+        self._rows = [f'{{"id": {i}}}' for i in range(start_rows)]
+        self.statements: list[str] = []
+        self.cursors: list[_FakeCursor] = []
+        self.streamed: list[list[str]] = []
+
+    def _snapshot(self) -> list[str]:
+        """A writer commits one more row before every statement runs."""
+        self._rows.append(f'{{"id": {len(self._rows)}}}')
+        return list(self._rows)
+
+    def execute(self, query, *args, **kwargs):
+        text = _rendered(query, None)
+        self.statements.append(text)
+        if "pg_tables" in text:
+            return _FakeResult([("system",)])
+        if "indisprimary" in text:
+            return _FakeResult([("id",)])
+        if "count(" in text.lower():
+            return _FakeResult([(len(self._snapshot()),)])
+        raise AssertionError(f"the probe sent an unexpected statement: {text}")
+
+    def cursor(self, *args, **kwargs):
+        snapshot = self._snapshot()
+        self.streamed.append(snapshot)
+        cursor = _FakeCursor(
+            kwargs.get("name") or (args[0] if args else None),
+            [(row_text,) for row_text in snapshot],
+        )
+        self.cursors.append(cursor)
+        return cursor
+
+    def every_statement(self) -> list[str]:
+        return self.statements + [
+            _rendered(c.executed, None) for c in self.cursors if c.executed is not None
+        ]
+
+
+def test_a_table_that_grows_under_the_probe_yields_a_self_consistent_pair():
+    """`rows` and `digest` must describe the SAME snapshot, always."""
+    conn = _GrowingProbeConn()
+    first = cli._probe(conn, "bars")
+    second = cli._probe(conn, "bars")
+
+    for probe, streamed in zip((first, second), conn.streamed):
+        assert probe["rows"] == len(streamed), (
+            "the probe printed a row count that belongs to a different "
+            f"snapshot than its digest: rows={probe['rows']}, digest folded "
+            f"over {len(streamed)} row(s)"
+        )
+        assert probe["digest"] == hashlib.md5(
+            "|".join(streamed).encode("utf-8")
+        ).hexdigest(), (
+            "the digest is not the digest of the rows the probe counted"
+        )
+
+    assert (first["rows"], first["digest"]) != (second["rows"], second["digest"]), (
+        "the fake table did not grow between the two probes, so this test "
+        "proved nothing"
+    )
+
+
+def test_the_probe_sends_no_separate_count_statement():
+    """One pass over the table, not two — `bars` is read once."""
+    conn = _GrowingProbeConn()
+    cli._probe(conn, "bars")
+
+    offenders = [s for s in conn.every_statement() if "count(" in s.lower()]
+    assert not offenders, (
+        "the content proof still counts the rows in a second statement: "
+        f"{offenders}. The count comes out of the fold (review F1), which is "
+        "also what stops `bars` being read twice."
+    )
+
+
+def test_the_documented_fold_counts_rows_and_buffers_a_batch():
+    """The prose must not promise a row-at-a-time fold it does not do."""
+    assert "one row at a time" not in (cli._digest_rows.__doc__ or ""), (
+        "`_digest_rows`'s docstring still claims it holds exactly one row at "
+        "a time; the server-side cursor buffers PROBE_BATCH_SIZE rows per fetch"
+    )
+
+    devdoc = (
+        REPO_ROOT / "docs" / "40 - DevDocs" / "cobalt" / "db_migrations" / "cli.md"
+    ).read_text()
+    assert "one row text at a time" not in devdoc, (
+        "the DevDoc still says the cursor yields one row text at a time"
+    )
+    assert "keeps `count(*)` in SQL" not in devdoc, (
+        "the DevDoc still describes the split count/digest probe that review "
+        "finding F1 removed"
+    )
+    assert "PROBE_BATCH_SIZE" in devdoc and "buffer" in devdoc.lower(), (
+        "the DevDoc must say what is actually held: a batch of "
+        "PROBE_BATCH_SIZE rows, buffered per fetch"
+    )
+
+
+# ---------------------------------------------------------------------
+# 7. THE CHEAP UNTESTED CASES the review listed
+# ---------------------------------------------------------------------
+
+
+class _RecordingConnection:
+    """Enough of a connection to see what the failure path does with it."""
+
+    def __init__(self):
+        self.rolled_back = 0
+        self.closed = 0
+
+    def rollback(self):
+        self.rolled_back += 1
+
+    def close(self):
+        self.closed += 1
+
+
+@pytest.mark.parametrize("allow_prod", [False, True])
+def test_proof_only_with_rollback_is_refused_before_any_connection(
+    monkeypatch, allow_prod
+):
+    """Including under `--allow-prod`: the refusal never reaches a database."""
+
+    def _never(*args, **kwargs):
+        raise AssertionError(
+            "a connection was opened for a combination the harness refuses"
+        )
+
+    monkeypatch.setenv(env.ENV_VAR, env.DEV)
+    monkeypatch.setattr(cli, "_connect", _never)
+    monkeypatch.setattr(db, "connect_migration", _never)
+
+    for rollback, down_to in ((True, "0005"), (True, None), (False, "0005")):
+        args = argparse.Namespace(
+            proof_only=True,
+            rollback=rollback,
+            down_to=down_to,
+            allow_prod=allow_prod,
+        )
+        with pytest.raises(cli.MigrationError) as excinfo:
+            cli.cmd_migrate(args)
+        message = str(excinfo.value)
+        assert "--proof-only" in message and "--rollback" in message, (
+            f"the refusal does not name the conflict: {message}"
+        )
+
+
+def test_an_exception_inside_the_probe_leaves_the_connection_rolled_back(monkeypatch):
+    """A probe that dies must not leave a transaction open on the server."""
+    conn = _RecordingConnection()
+    monkeypatch.setenv(env.ENV_VAR, env.DEV)
+    monkeypatch.setattr(cli, "_connect", lambda *a, **k: conn)
+
+    def _boom(_conn):
+        raise MemoryError("Cannot enlarge string buffer")
+
+    monkeypatch.setattr(cli, "_probe_all", _boom)
+
+    args = argparse.Namespace(
+        proof_only=True, rollback=False, down_to=None, allow_prod=False
+    )
+    with pytest.raises(MemoryError):
+        cli.cmd_migrate(args)
+
+    assert conn.rolled_back == 1, "the probe's transaction was not rolled back"
+    assert conn.closed == 1, "the connection was left open"
