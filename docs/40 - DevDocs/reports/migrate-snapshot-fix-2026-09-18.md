@@ -57,4 +57,20 @@ In R1 list (1) but **NOT** in this launch line (narrower, never wider): `setting
 | `cobalt_redactions` | 121 | `177a0fde` | | `day_modes` | 2 | `f2ffb4d4` |
 | `desk_grade` / `desk_packet` / `desk_regime` | 0 | `d41d8cd9` | | | | |
 
-CONTINUE: step 1
+## Step 1 — the tests, RED
+
+`tests/cobalt/test_migrate_proof.py` group **8. SNAPSHOT CONSISTENCY**, five tests, each against `cobalt_dev` with a SECOND connection (`db.connect_migration`, autocommit — it IS another session) playing the other writer. Discovery IS a fixed list (`placement.MOVED_TABLES/SEEDED_TABLES/CREATED_TABLES` is a dict literal), so per the prompt's fallback the concurrency table is `cobalt_redactions`; every row inserted is deleted **by its own id** in teardown.
+
+`COBALT_ENV=dev uv run pytest -q tests/cobalt/test_migrate_proof.py -k "snapshot or invisible or repeatable or own_write or concurrent" --tb=short -p no:randomly` → **4 failed, 1 passed** in 11.18 s.
+
+| # | test | before the change | quoted failing line |
+|---|---|---|---|
+| (a) | `test_a_commit_by_another_session_between_the_probes_is_invisible` | **RED** | `AssertionError: another session committed one row between the BEFORE and the AFTER probe and the proof called it CHANGED: rows 121 -> 122, digest 177a0fde30d8c28fa57360b49382abb1 -> da4f5e64aa7c4526c31d1172c239fdde.` / `assert 'CHANGED' == 'OK'` |
+| (b) | `test_the_migrate_transactions_own_write_is_still_seen_between_the_probes` | **PASSES, by design** | — it is a PRESERVATION guard: the property "the transaction sees its own writes" holds at READ COMMITTED too, and the change must not break it. A test that fails first is impossible for a property that is already true; it is the one test in this group that cannot be red, and it is the one that would catch a fix that hid the migration's own changes. |
+| (c) | `test_the_proof_only_transaction_is_repeatable_read_and_read_only` | **RED** | `AssertionError: --proof-only's transaction runs at 'read committed'. …` / `assert 'read committed' == 'repeatable read'` |
+| (d) | `test_the_migrate_transaction_is_repeatable_read_and_read_write` | **RED** | `AssertionError: the migrate transaction runs at 'read committed', so its BEFORE and AFTER probes read two different databases` / `assert 'read committed' == 'repeatable read'` |
+| (e) | `test_a_concurrent_update_to_a_row_the_migration_updates_fails_loud` | **RED** | `AssertionError: the harness did not name the serialization failure; an operator reading this at 20:40 on a deploy gets: 1 table(s) changed content across the migration. The transaction was rolled back before commit; compare against the pg_dump.` |
+
+**(e) IS deterministic** — the desk's prompt allowed for it not being. The row is committed by the other session BEFORE the migrate transaction opens (so it is inside the snapshot), the other session commits over it while the migration holds that snapshot, and the migration then updates the same row. Nothing races: plain `SELECT`s take only `ACCESS SHARE`, so the other session's `UPDATE` is never blocked. The red run above is the full `cmd_migrate` path, and its captured proof table shows the pre-fix behaviour exactly — `cobalt_redactions … 122 -> 122 … dc32ce10 -> 208c6b30 CHANGED`, i.e. at READ COMMITTED the migration's own update is simply allowed and the verdict is a content change, not a serialization failure.
+
+CONTINUE: step 2

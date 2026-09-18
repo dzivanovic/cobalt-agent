@@ -16,7 +16,7 @@ computed WITHOUT ever materialising the concatenation", and separately
 that its VALUE is byte-for-byte the one the old SQL produced, so proof
 tables printed before today stay comparable.
 
-Five groups:
+Eight groups:
 
 1. THE FOLD (no database) — the client-side md5 over an iterator of row
    texts equals `md5('|'.join(rows))` exactly: zero rows, one row, many
@@ -41,6 +41,15 @@ Five groups:
 7. THE CHEAP UNTESTED CASES the review listed — `--proof-only` combined
    with `--rollback` is refused before a connection is ever opened, and a
    probe that raises leaves the connection rolled back and closed.
+8. SNAPSHOT CONSISTENCY (database, with a SECOND connection playing the
+   other session) — group 6 fixed the two snapshots INSIDE one probe;
+   this group fixes the two snapshots BETWEEN the BEFORE and the AFTER
+   probe, which on production are ≈100 s apart. The harness transaction
+   is REPEATABLE READ, so a commit by any other session inside that
+   window is invisible to both probes and cannot make a good migration
+   read `CHANGED` and roll back; the transaction's OWN writes are still
+   seen, because "did THIS migration change existing content?" is the
+   question the proof exists to answer.
 """
 
 from __future__ import annotations
@@ -51,6 +60,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 import psycopg
 import pytest
@@ -643,3 +653,251 @@ def test_an_exception_inside_the_probe_leaves_the_connection_rolled_back(monkeyp
 
     assert conn.rolled_back == 1, "the probe's transaction was not rolled back"
     assert conn.closed == 1, "the connection was left open"
+
+
+# ---------------------------------------------------------------------
+# 8. SNAPSHOT CONSISTENCY — the proof must not see other sessions' commits
+# ---------------------------------------------------------------------
+#
+# THE DEFECT (2026-09-18, desk finding): `cmd_migrate` runs
+# `before = _probe_all(conn)` → `_apply(...)` → `after = _probe_all(conn)`
+# and rolls back on any `CHANGED` verdict. At READ COMMITTED every probe
+# STATEMENT takes its own snapshot, so the AFTER probe sees whatever any
+# other session committed in between. Until 2026-09-18 the two probes were
+# seconds apart and nobody noticed; production's `system.bars` makes each
+# probe ≈46 s, so the window is ≈100 s — and a deploy only takes the two
+# RESIDENTS down. `com.cobalt.heartbeat` (every 15 min) and
+# `com.cobalt.seat-usage` (hourly) keep updating `system.cobalt_jobs`,
+# `cobalt_redactions` is append-only telemetry that drifted 118 → 121 rows
+# during one afternoon on dev, and `vault_writes` grows with any vault
+# write. ONE such commit inside the window = a false `CHANGED` = the whole
+# migration rolled back with the residents down: an outage for nothing.
+#
+# THE FIX: the harness transaction runs at REPEATABLE READ. The snapshot
+# is taken at the transaction's first statement, both probes read THAT
+# snapshot plus this transaction's own changes, and the proof answers
+# exactly the question it was written for.
+
+
+#: The table the concurrency tests write to. `_probe_all`'s discovery is a
+#: FIXED dict (`placement.MOVED_TABLES/SEEDED_TABLES/CREATED_TABLES`), so a
+#: scratch table cannot be registered for the probe from a test; this is
+#: the fallback the desk named — append-only telemetry, cheap to probe, and
+#: every row inserted here is deleted BY ITS OWN ID in teardown, so the
+#: database is left byte-identical.
+CONCURRENCY_TABLE = "cobalt_redactions"
+
+
+def _concurrency_rel(conn) -> sql.Identifier:
+    """`<schema>.cobalt_redactions`, wherever the migrations put it.
+
+    Read from the catalog rather than hard-coded `system.`: these tests
+    must not quietly pass on a database where the table has not moved.
+    """
+    schema = cli._schema_of(conn, CONCURRENCY_TABLE)
+    assert schema is not None, (
+        f"{CONCURRENCY_TABLE} is on none of {cli.SEARCHED_SCHEMAS} — run "
+        "`cobalt db migrate` against this database first"
+    )
+    return sql.Identifier(schema, CONCURRENCY_TABLE)
+
+
+def _insert_redaction(conn, pattern: str) -> int:
+    return conn.execute(
+        sql.SQL(
+            "INSERT INTO {rel} (channel, pattern, hits) VALUES ('test', %s, 1) "
+            "RETURNING id"
+        ).format(rel=_concurrency_rel(conn)),
+        (pattern,),
+    ).fetchone()[0]
+
+
+def _delete_redaction(conn, row_id: int) -> None:
+    conn.execute(
+        sql.SQL("DELETE FROM {rel} WHERE id = %s").format(rel=_concurrency_rel(conn)),
+        (row_id,),
+    )
+
+
+def _hits(conn, row_id: int) -> Optional[int]:
+    row = conn.execute(
+        sql.SQL("SELECT hits FROM {rel} WHERE id = %s").format(
+            rel=_concurrency_rel(conn)
+        ),
+        (row_id,),
+    ).fetchone()
+    return None if row is None else row[0]
+
+
+@requires_db
+def test_a_commit_by_another_session_between_the_probes_is_invisible():
+    """(a) THE DEFECT, reproduced with a second connection.
+
+    `db.connect_migration` opens autocommit, so the second connection IS
+    another session: its INSERT is committed and visible to everyone the
+    instant it runs. At READ COMMITTED the AFTER probe picks it up and
+    the verdict is `CHANGED` — a good migration rolled back because the
+    heartbeat ticked. At REPEATABLE READ both probes read one snapshot
+    and the verdict is `OK`.
+    """
+    other = db.connect_migration(env.DEV_DB_NAME)
+    conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+    row_id = None
+    try:
+        before = cli._probe(conn, CONCURRENCY_TABLE)
+        row_id = _insert_redaction(other, "snapshot-fix-a")
+        after = cli._probe(conn, CONCURRENCY_TABLE)
+    finally:
+        conn.rollback()
+        conn.close()
+        if row_id is not None:
+            _delete_redaction(other, row_id)
+        other.close()
+
+    assert cli._verdict(CONCURRENCY_TABLE, before, after) == "OK", (
+        "another session committed one row between the BEFORE and the AFTER "
+        f"probe and the proof called it CHANGED: rows {before['rows']} -> "
+        f"{after['rows']}, digest {before['digest']} -> {after['digest']}. "
+        "That verdict rolls the migration back with the residents down — an "
+        "outage caused by a scheduled job, not by the migration."
+    )
+    assert (after["rows"], after["digest"]) == (before["rows"], before["digest"]), (
+        "the two probes did not read the same snapshot"
+    )
+
+
+@requires_db
+def test_the_migrate_transactions_own_write_is_still_seen_between_the_probes():
+    """(b) The other half of the property, and the one that must NOT break.
+
+    A snapshot that hid the transaction's own changes would make the
+    proof useless: it exists to answer "did THIS migration change
+    existing content?". REPEATABLE READ shows a transaction its own
+    writes, so the verdict here is `CHANGED` before and after the fix.
+    The row is inserted through the MIGRATE connection and never
+    committed — the rollback in `finally` is the whole teardown.
+    """
+    conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+    try:
+        row_id = _insert_redaction(conn, "snapshot-fix-b")
+        before = cli._probe(conn, CONCURRENCY_TABLE)
+        conn.execute(
+            sql.SQL("UPDATE {rel} SET hits = hits + 1 WHERE id = %s").format(
+                rel=_concurrency_rel(conn)
+            ),
+            (row_id,),
+        )
+        after = cli._probe(conn, CONCURRENCY_TABLE)
+    finally:
+        conn.rollback()
+        conn.close()
+
+    assert cli._verdict(CONCURRENCY_TABLE, before, after) == "CHANGED", (
+        "the migrate transaction's OWN update between the probes was invisible "
+        "to the AFTER probe. A proof that cannot see the migration's own "
+        "changes proves nothing at all."
+    )
+
+
+@requires_db
+def test_the_proof_only_transaction_is_repeatable_read_and_read_only():
+    """(c) Asserted at the SERVER, not on the Python attributes."""
+    conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=True)
+    try:
+        isolation = conn.execute("SHOW transaction_isolation").fetchone()[0]
+        read_only = conn.execute("SHOW transaction_read_only").fetchone()[0]
+    finally:
+        conn.rollback()
+        conn.close()
+
+    assert isolation == "repeatable read", (
+        f"--proof-only's transaction runs at {isolation!r}. Its whole job is to "
+        "carry ONE consistent picture of the database out of a deploy window"
+    )
+    assert read_only == "on", f"--proof-only's transaction is not READ ONLY: {read_only!r}"
+
+
+@requires_db
+def test_the_migrate_transaction_is_repeatable_read_and_read_write():
+    """(d) The same isolation, without losing the ability to apply."""
+    conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+    try:
+        isolation = conn.execute("SHOW transaction_isolation").fetchone()[0]
+        read_only = conn.execute("SHOW transaction_read_only").fetchone()[0]
+    finally:
+        conn.rollback()
+        conn.close()
+
+    assert isolation == "repeatable read", (
+        f"the migrate transaction runs at {isolation!r}, so its BEFORE and "
+        "AFTER probes read two different databases"
+    )
+    assert read_only == "off", (
+        "the migrate transaction must still be able to APPLY the migrations: "
+        f"transaction_read_only is {read_only!r}"
+    )
+
+
+@requires_db
+def test_a_concurrent_update_to_a_row_the_migration_updates_fails_loud(monkeypatch):
+    """(e) The KNOWN CONSEQUENCE, made deterministic and made loud.
+
+    REPEATABLE READ buys the snapshot at a price, and this is the price:
+    if another session commits a change to a row this transaction then
+    modifies, Postgres refuses to serialize the two and raises. That is
+    the RIGHT outcome — nothing is applied, the existing
+    `except: conn.rollback(); raise` path runs, and the operator is told
+    what happened rather than being handed a bare driver error.
+
+    Deterministic by construction: the row is committed BEFORE the
+    migration opens (so it is in the snapshot), the other session commits
+    over it while the migration holds that snapshot, and the migration
+    then updates the same row.
+    """
+    other = db.connect_migration(env.DEV_DB_NAME)
+    row_id = _insert_redaction(other, "snapshot-fix-e")
+    reached: list[str] = []
+
+    def _conflicting_apply(conn, paths):
+        other.execute(
+            sql.SQL("UPDATE {rel} SET hits = 2 WHERE id = %s").format(
+                rel=_concurrency_rel(other)
+            ),
+            (row_id,),
+        )
+        reached.append("other session committed")
+        conn.execute(
+            sql.SQL("UPDATE {rel} SET hits = 3 WHERE id = %s").format(
+                rel=_concurrency_rel(conn)
+            ),
+            (row_id,),
+        )
+        reached.append("the migration's own update returned")
+
+    monkeypatch.setenv(env.ENV_VAR, env.DEV)
+    monkeypatch.setattr(cli, "_apply", _conflicting_apply)
+    args = argparse.Namespace(
+        proof_only=False, rollback=False, down_to=None, allow_prod=False
+    )
+    try:
+        with pytest.raises(cli.MigrationError) as excinfo:
+            cli.cmd_migrate(args)
+        message = str(excinfo.value)
+        assert "serialize" in message.lower(), (
+            "the harness did not name the serialization failure; an operator "
+            f"reading this at 20:40 on a deploy gets: {message}"
+        )
+        assert "nothing was applied" in message.lower(), (
+            f"the message does not say that nothing was applied: {message}"
+        )
+        assert reached == ["other session committed"], (
+            "the migration's UPDATE of a row another session had already "
+            f"changed was allowed through: {reached}"
+        )
+        assert _hits(other, row_id) == 2, (
+            "the migration's write survived a transaction that failed — the "
+            "rollback path did not run"
+        )
+    finally:
+        _delete_redaction(other, row_id)
+        other.close()
