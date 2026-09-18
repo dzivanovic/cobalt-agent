@@ -383,3 +383,62 @@ Carried forward from both earlier runs: the prompt file's tail contains a block 
 | P5 | `grep *` | authorization reads above | 0 | allowed |
 
 **0 allowlisted shape denied.** Probed by first real use, per the prompt: the `.env` `cp`/`rm`/`ls -la`, `COBALT_ENV=dev pytest`, `db migrate`, both `settings load` rules, `COBALT_VAULT_PATH=… pytest`, `jobs restarts`, `git add`/`git commit`.
+
+## T. The two test-side fixes
+
+### T.1 Red before — the 8, exactly
+
+| check | observed | verdict |
+|---|---|---|
+| `git status --porcelain` | empty | PASS |
+| tip at T.1 | **`ff26c8f`** (report commit; stack tip `00c568e`, fixture fix `f907f1d` below it) | recorded |
+| `.env` in | `cp /Users/cobalt/cobalt/.env …/s2-p2-cards/.env` — by name, never printed (L41 interim) | PASS |
+| `COBALT_ENV=dev uv run pytest -q tests/cobalt/test_trader_settings.py tests/cobalt/test_aset_config.py tests/cobalt/test_daymode.py -p no:randomly --tb=no` | **`8 failed, 92 passed`** in 2.22 s — the 5 Group A + the 3 Group B, name for name, nothing new | PASS — the red set has NOT moved |
+
+### T.2 Group A — the revision-3 seed completes itself
+
+`git show 382c862` read first: ops-0918's own note fixture appends `{"signal": s, "effect": "down", "because": …}` for every `SIGNAL_IDS` entry it does not already name, "so the next signal cannot stale it either". Same pattern, one difference stated below.
+
+| what | how |
+|---|---|
+| frozen text | `_seed_texts()` RENAMED to `_frozen_texts()` — unchanged body, still `git show <rev>^:configs/cobalt/<name>` out of history. **The revision-3 text itself is never edited** (it is history, and the two YAMLs are absent from the tree — verified by `ls configs/cobalt/`). |
+| the completion | a NEW `_seed_texts()` wraps it: parse the daymode text, append a row for every `SIGNAL_IDS` entry its `stepdowns` do not name, dump back. Every existing call site reads `_seed_texts()` and is **unchanged**. |
+| the appended row's policy | `_RULED_ROWS` — `trade_count_over_band` takes **R13's `effect: down`, `rungs: 1`** (Dejan, `cto-2026-09-17.md:194`, "ruling A."), cited in the constant's own comment. Any other future signal defaults to `effect: none` — ruled OFF visibly, the only honest default for a seed that cannot carry a policy it never saw. |
+| why the completion sits in `_seed_texts()` and not in the `seeded` fixture alone | `TestRevisionThreeProof::test_from_db_equals_from_yaml` calls `TraderSettings.from_yaml(texts=_seed_texts())` **inside the test body**, and `from_yaml` = `_build(rows_from_yaml(...))` → the same completeness check. A fixture-only append would have left that one red and forced a test-body edit. Placing it in the seed reader is the same ruling (a ruled row for every unnamed `SIGNAL_IDS` entry) at the only point where **all five tests pass unchanged** — which the ruling also required. Both sides of the proof read the same seed, so the field-for-field equivalence is not weakened. |
+
+| proof | expected | observed | verdict |
+|---|---|---|---|
+| `COBALT_ENV=dev uv run pytest -q tests/cobalt/test_trader_settings.py -p no:randomly --tb=short` | 0 failed | **`16 passed`** in 1.00 s | PASS |
+| test bodies edited | none | none — one import added, one function renamed, one function + one constant added | PASS |
+| commit | — | **`f7a018a`** `test(settings): the revision-3 seed appends a ruled row for every SIGNAL_IDS entry its frozen text predates (ops-0918 seam)`, 1 file, 50 insertions / 1 deletion | PASS |
+
+### T.3 Group B — the three live-settings tests now assert their invariant
+
+Each one, what it asserted, what it asserts now, and the citation in its own comment:
+
+| test | was (pinned a live value) | now (the invariant it was protecting) |
+|---|---|---|
+| `test_aset_config.py::TestSheetModesConfig::test_committed_config_is_valid` | `set(cfg.enabled_grades) == {Grade.A, Grade.B}` | `enabled_grades` is **non-empty**, every member is a declared `Grade`, no duplicates, and the list comes back **in ladder order** (`Grade`'s own order) — whatever subset he has enabled |
+| `…::test_is_enabled_reflects_committed_config` | `is_enabled("A")`, `is_enabled("B")`, `not is_enabled("A+"/"C"/"D")` | for **every** `Grade` member, `is_enabled(grade)` and `is_enabled(grade.value)` are true **exactly** for members of `enabled_grades` |
+| `test_daymode.py::TestShippedConfig::test_the_real_config_loads_and_reads_as_ruled` | `[g.value for g in cfg.enabled_grades_for("reduced")] == ["A", "B"]` | `reduced` is non-empty, `set(reduced) ⊆ set(account)` — **the re-ruling's actual content, "A+ is out because the ACCOUNT ladder does not enable it", kept verbatim in the comment** — and `reduced` is in ladder order |
+
+Each comment cites the **09-14 C-size ruling** (grade C re-enabled; his own `settings load --apply` at 07:55 / 07:59) and says why no live value is pinned: under **L32** his ladder is user data, so a test that reads `"user".trader_settings` and pins his current choice turns red every time he changes his own settings. `PROJECT-LEDGER.md:1393` is cited because it overrules the "reduced keeps A, B" assumption **by name**.
+
+**Nothing deleted, no refusal weakened.** The value-pinning behaviour moved onto the file's own CONSTRUCTED config (`COMPLETE_SHEET_MODES`, `enabled_grades: [A, B]`) as a new `TestConstructedLadder` — `is_enabled` still refuses `A+`, `C`, `D` against a declared ladder, and the ladder-order invariant is proven there against a known list. That class carries **no** `requires_db` mark, so it runs OFFLINE, with no database at all — the refusal proof no longer depends on the dev DB either.
+
+| proof | expected | observed | verdict |
+|---|---|---|---|
+| `COBALT_ENV=dev uv run pytest -q tests/cobalt/test_aset_config.py tests/cobalt/test_daymode.py -p no:randomly --tb=short` | 0 failed | **`86 passed`** in 0.98 s | PASS |
+| `grep -n '"A", "B"\|Grade.A, Grade.B'` on the three files | only constructed-config uses | 8 hits, **every one constructed or prose**: `test_aset_config.py:260,269` (pre-existing `pytest.raises` constructions), `:312` (the new `TestConstructedLadder`, the constructed ladder itself), `test_trader_settings.py:232,235` (the loader test's own `UPDATE` inside the rolled-back transaction — a value it writes, not one it reads from his settings), `test_daymode.py:63,92` (the `_cfg()` constructed helper's defaults), `test_daymode.py:133` (the new comment). **No literal grade list from live rows remains.** | PASS |
+| commit | — | **`00d671d`** `test(aset,daymode): live-settings tests assert invariants, not the trader's current ladder (C-size ruled 2026-09-14)`, 2 files, 88 insertions / 9 deletions | PASS |
+
+### T.4 Scope and the offline suite
+
+| proof | expected | observed | verdict |
+|---|---|---|---|
+| `git diff --stat ff26c8f HEAD` | only `tests/` (+ this report) | `docs/40 - DevDocs/reports/stack-gate-2026-09-18.md`, `tests/cobalt/test_aset_config.py`, `tests/cobalt/test_daymode.py`, `tests/cobalt/test_trader_settings.py` — **4 files, nothing else** | PASS |
+| `git diff --stat ff26c8f HEAD -- src configs ops` | NOTHING | **no output** — not one file under `src/`, `configs/` or `ops/` changed | PASS |
+| `.env` out | gone | `rm` then `ls -la` → `No such file or directory` (exit 1) — **credential gone before the offline run** | PASS |
+| `uv run pytest -q tests/cobalt tests/taxonomy` (offline, gate's literal command) | 0 failed | **`1537 passed, 281 skipped, 1 xfailed, 0 failed, 0 errors`** in 39.61 s (1535 → 1537: the two new constructed-ladder tests) | PASS |
+
+CONTINUE: step 2
