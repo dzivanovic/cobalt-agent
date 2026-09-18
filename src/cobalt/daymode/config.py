@@ -37,6 +37,7 @@ against `sheet_for(mode)` — the sheet the rung in force sizes from.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -78,6 +79,11 @@ SIGNAL_IDS = (
     "early_close_today",
     "first_session_after_close",
     "trade_count_band_placeholder",
+    # RULED 2026-09-17 (Dejan, `cto-2026-09-17.md` R13, "ruling A."): a
+    # prior day whose trade count is ABOVE `daymode.trade_count_band.max`
+    # is adverse. BELOW `.min` is deliberately NOT a signal — overtrading
+    # costs a rung, undertrading costs nothing.
+    "trade_count_over_band",
 )
 
 
@@ -112,15 +118,22 @@ class StepDown(BaseModel):
             )
         return v
 
-    def describe(self, target: str) -> str:
+    def describe(self, target: str, detail: Optional[str] = None) -> str:
         """The clause that lands in the 09:00 reason, e.g.
-        `no prior DRC -> one rung down`."""
+        `no prior DRC -> one rung down`.
+
+        `detail` is the EVIDENCE behind the fact, supplied by the code
+        that computed it (`propose._evidence`) — the numbers that make
+        the clause replayable (L57). The table still owns the words and
+        the effect; a fact with no numbers to show passes nothing.
+        """
+        because = f"{self.because} ({detail})" if detail else self.because
         if self.effect == EFFECT_FLOOR:
-            return f"{self.because} -> floor"
+            return f"{because} -> floor"
         if self.effect == EFFECT_NONE:
-            return f"{self.because} -> no step-down (ruled off in config)"
+            return f"{because} -> no step-down (ruled off in config)"
         rungs = "one rung down" if self.rungs == 1 else f"{self.rungs} rungs down"
-        return f"{self.because} -> {rungs} ({target})"
+        return f"{because} -> {rungs} ({target})"
 
 
 class DayModeConfig(BaseModel):
