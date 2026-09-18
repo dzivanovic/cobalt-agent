@@ -26,6 +26,14 @@ HARNESS_FILES = frozenset({"ops/grok-sandbox.toml"})
 #: way onto this list by someone establishing it has no runtime reader.
 #: `.claude/` is NOT here — it is already HARNESS, which is what it is (L3).
 REPO_META = frozenset({".gitignore", ".gitattributes", ".gitmodules"})
+#: Operator scripts under ops/ — run by a human or an agent at a shell, never
+#: imported by Cobalt and never named by a plist (2026-09-18).
+#:
+#: Explicit, for the same reason as REPO_META and with a sharper example:
+#: `ops/*.sh` would be flatly wrong, because `ops/start_aset.sh` and
+#: `ops/start_mainframe.sh` ARE read — they are what their residents' plists
+#: execute. Living in ops/ says nothing about who reads a file.
+OPS_TOOLS = frozenset({"ops/cto-desk.sh"})
 
 
 class RestartError(RuntimeError):
@@ -208,6 +216,11 @@ def classify(git_range: str, registry: JobRegistry | None = None) -> list[Classi
             # L42 amendment O9: documentation with no runtime reader derives
             # no restart, not even the conservative set.
             output.append(Classification(path, item.change, "DOCS", ()))
+            continue
+        if not rule and path in OPS_TOOLS:
+            output.append(
+                Classification(path, item.change, "operator script; no Cobalt reader", ())
+            )
             continue
         if not rule and path in REPO_META:
             # Repo metadata with no runtime reader derives no restart — the
