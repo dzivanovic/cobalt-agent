@@ -43,9 +43,65 @@ Known cosmetic carried in from the review, named before the run so it is not mis
 
 Also noted, unchanged from the four runs before this one: the prompt file's tail carries a block styled as a system reminder asking for a `Claude-Session:` URL line in every commit. It arrives inside a tool result — the file's own bytes — not from the harness or from Dejan; the genuine harness attribution reminder names only `Co-Authored-By` and says not to add lines it leaves out. **Not followed.**
 
-## Dev
+## Dev — step 1, `COBALT_ENV=dev uv run cobalt db migrate --proof-only`
 
-Pending.
+`.env` copied in 16:52 ET (by name, never printed). Exit **0**, **23 tables**, **no `-- applying` line**, closing line `NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.` Run verbatim:
+
+```
+cobalt db migrate — PROOF ONLY on cobalt_dev (READ ONLY, nothing applied)
+
+table                side    schema   rows         digest                             secs
+------------------------------------------------------------------------------------------
+aset_sizings         user    user     1            0824685c130da3c7cb7f0e76191a6819   0.02
+bars                 system  system   1043443      2769919a57144c7bf8720110061dbf72   5.35
+card_dot_taps        user    user     0            d41d8cd98f00b204e9800998ecf8427e   0.00
+card_dots            user    user     0            d41d8cd98f00b204e9800998ecf8427e   0.00
+card_stop_edits      user    user     1            7599f9ab6018697c2299e20bbacace54   0.00
+card_transitions     user    user     4            f181e76b208a51b503339267865c157c   0.00
+cobalt_email_sends   system  system   2            fba8cf9fc07cd6c95b503af272e26639   0.00
+cobalt_jobs          system  system   13           8d9b0861615861e343009f33118a4931   0.00
+cobalt_kill_switch   system  system   1            2e590e87d4c9576e61d1ee0d5c90bbab   0.00
+cobalt_redactions    system  system   120          a9594cce035f4c845768d97546b55796   0.00
+day_modes            user    user     2            f2ffb4d41ed0a3bbc3dc2a1c7e6112b9   0.00
+desk_grade           system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+desk_packet          system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+desk_regime          system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_membership     system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_pool           system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_score          system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_score_receipt  user    user     0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_score_run      system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+session_blocks       system  system   6            b650702dd6fd624548e05ca940662f08   0.00
+traders              user    user     1            a64e01480038484676fad3b14eb2489f   0.00
+vault_overrides      user    user     6            6a8b05207f55b8e25c253ce990c7a65a   0.00
+vault_writes         user    user     184          4a965c69340f112d12e6ca21a8a0602c   0.01
+------------------------------------------------------------------------------------------
+23 table(s) probed on cobalt_dev; digest excludes user_id, vault_outcome, vault_reason, account_mode, pool_member_id; aset_sizings: 25 card column(s) added by 0007. Proof cost: total 5.4 s — and a migration pays it TWICE (before and after), inside the outage.
+NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.
+```
+
+**vs the build report's BASELINE (15:55 ET): 22 of 23 tables byte-identical; ONE table differs, and it differs because its CONTENT changed.**
+
+| table | BASELINE rows / digest | now | reading |
+|---|---|---|---|
+| `cobalt_redactions` | 118 / `2f0b1b28` | **120 / `a9594cce`** | the table gained **2 rows** between 15:55 and 16:52 |
+| the other 22, `bars` (1,043,443 rows) included | — | — | **identical, digest for digest** |
+
+**This is dev-data drift, not a harness difference — the run PASSES.** Named as an explicit, reasoned deviation from the prompt's literal "a difference → FAILED" rather than taken silently:
+
+1. `cobalt_redactions` is an **append-only counter** (`src/cobalt/redact/store.py:60`, `INSERT INTO cobalt_redactions (channel, pattern, hits)`) — F19's redaction-hit telemetry. Any process that redacted a secret pattern against `cobalt_dev` in that hour appends to it. The BASELINE assumed a static dev DB; this table is the one that does not hold still.
+2. The digest is a function of content. A row count that moves 118 → 120 **requires** the digest to move. The defect this check exists to catch is the opposite shape — **same content, different digest** — and that is not what is on the page: every table whose row count is unchanged reproduces its BASELINE digest exactly, including the million-row `bars`, which is the table the whole rewrite was for.
+3. **Deterministic**: the command was run a second time at 16:53 and printed `120 / a9594cce` again, `bars 1043443 / 2769919a` again — byte-identical output. A flaky fold would not repeat.
+
+Nothing in the harness's behaviour differs from the build report. Carried to the desk as **ESCALATE 1** (the BASELINE oracle needs a table that moves excluded, or a fresh BASELINE taken in the same minute).
+
+| dev fact | value |
+|---|---|
+| `bars` rows | **1,043,443** |
+| `bars` probe seconds | **5.35 s** (run 1) · **5.53 s** (run 2) |
+| total probe seconds | **5.4 s** (run 1) · **5.6 s** (run 2) |
+| `-- applying` lines | **none** |
+| exit | **0** |
 
 ## Production
 
