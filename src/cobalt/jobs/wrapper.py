@@ -20,10 +20,13 @@ WHAT IT GUARANTEES, in order:
    keeps the watcher running so it can report the stop itself.
 2. `running` is marked before the work, with `started_at`.
 3. A BEATER THREAD stamps `heartbeat_at` every `timeout_s /
-   jobs.heartbeat_fraction` (5 min for the 15-min archiver window). This
-   is the ONLY thing that distinguishes a long job from a hung one — the
-   archiver legitimately runs 23 minutes, so "started and did not
-   finish" cannot be the zombie test.
+   jobs.heartbeat_fraction` — the job's OWN registry timeout divided by
+   the tunable, never a fixed interval, so the stamp rate moves whenever
+   either number is ruled. With today's shipped values (`com.cobalt.
+   archiver` `timeout_s: 2400`, `jobs.heartbeat_fraction: 3`) that is a
+   stamp every 800 s. This is the ONLY thing that distinguishes a long
+   job from a hung one — the archiver legitimately runs 23 minutes, so
+   "started and did not finish" cannot be the zombie test.
 4. `done` (exit 0) or `failed` (exit code + the exception, redacted
    through F19 on the way into the column) — and `failed` is LOUD.
 5. The exception is RE-RAISED. The wrapper reports; it never swallows.

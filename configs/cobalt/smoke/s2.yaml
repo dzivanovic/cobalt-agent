@@ -177,29 +177,50 @@ checks:
       formation_replay/line_action; last_result.trade_date = last trading day;
       dry_run false
 
-  - id: K8
-    title: missed — card rows complete and equal job.result
+  # K8 IS TWO CHECKS, ONE PER SIDE OF THE TENANCY WALL (L32). The corpus
+  # question — "are the miss rows complete, and do they agree with the job
+  # that wrote them?" — spans `system.cobalt_jobs` and `"user".missed`, and
+  # NO role may read both: `cobalt_user` is never granted `cobalt_jobs`
+  # (system-side by declaration, 0003; moved there by 0002, so neither
+  # 0001's schema-wide grant nor its default privileges reach it), and
+  # `cobalt_system` is REVOKEd from schema `"user"` outright (0001). No
+  # cross-side grant is added for a smoke check. So: K8.1 asks the job row
+  # (system side), K8.2 asks the corpus (user side), and the one assertion
+  # that needed both in one statement — card_rows = job.result card_misses —
+  # is now a HAND comparison of the two numbers each check prints, named in
+  # both `expect_text`s. Everything else K8 asserted is still asserted:
+  # input_stale = 0 and trade_date on K8.1, incomplete = 0 on K8.2.
+  - id: K8.1
+    title: missed — the replay job's own counters (system side)
+    kind: job_row
+    label: com.cobalt.replay
+    result_keys: [card_misses]
+    result_equals:
+      input_stale: 0
+      trade_date: "{last_trading_day}"
+    expect_text: >-
+      last_result.input_stale = 0 (R1-12 coverage); last_result.trade_date =
+      last trading day (same value K7 asserts, repeated here because it is
+      what makes the hand comparison below valid); last_result.card_misses
+      present — that printed number is the one K8.2's card_rows must equal
+
+  - id: K8.2
+    title: missed — card rows complete (user side)
     kind: sql
     side: user
     query: >-
       SELECT count(*) FILTER (WHERE m.kind = 'card') AS card_rows,
-      count(*) FILTER (WHERE m.kind = 'card' AND (m.cf_r IS NULL OR m.inputs_sha256 IS NULL)) AS incomplete,
-      (SELECT (j.last_result ->> 'card_misses')::int FROM system.cobalt_jobs j WHERE j.label = 'com.cobalt.replay') AS job_card_misses,
-      (SELECT (j.last_result ->> 'input_stale')::int FROM system.cobalt_jobs j WHERE j.label = 'com.cobalt.replay') AS input_stale,
-      (SELECT (j.last_result ->> 'trade_date') FROM system.cobalt_jobs j WHERE j.label = 'com.cobalt.replay') AS job_trade_date,
-      count(*) FILTER (WHERE m.kind = 'card') = (SELECT (j.last_result ->> 'card_misses')::int FROM system.cobalt_jobs j WHERE j.label = 'com.cobalt.replay') AS counts_agree
+      count(*) FILTER (WHERE m.kind = 'card' AND (m.cf_r IS NULL OR m.inputs_sha256 IS NULL)) AS incomplete
       FROM "user".missed m
       WHERE m.trade_date = {last_trading_day} AND m.is_current
     expect:
-      - {column: job_trade_date, op: eq, value: "{last_trading_day}"}
       - {column: incomplete, op: eq, value: 0}
-      - {column: counts_agree, op: eq, value: true}
-      - {column: input_stale, op: eq, value: 0}
     expect_text: >-
       for current rows of the last trading day: every kind='card' row has cf_r
-      and inputs_sha256 (excluded_by is NOT NULL by schema); card_rows =
-      job.result card_misses; job.result input_stale = 0 (R1-12 coverage);
-      job.result trade_date = last trading day
+      and inputs_sha256 (excluded_by is NOT NULL by schema), so incomplete = 0.
+      card_rows is printed as evidence and MUST EQUAL K8.1's
+      last_result.card_misses — compare the two numbers by eye; neither role
+      may read the other side's table (L32), so no single query can do it
 
   - id: K9
     title: movers_daily — top-N per side, bars archived

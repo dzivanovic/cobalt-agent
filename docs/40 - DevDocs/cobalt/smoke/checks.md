@@ -57,6 +57,7 @@ The rendering helpers:
   - `running`: PASS when `state = running` with a pid.
   - `registry_match`: FAIL names every enabled label that is not loaded and every `enabled: false` label that is loaded.
 - **sql**
+  - `side` is a Postgres role: `read_rows` SET ROLEs to it and asserts `current_user`, so a relation the role was never granted is a permission-denied ERROR, not a FAIL. A cross-side read is therefore split into one check per side (K8.1/K8.2), never granted across — see `config.md`'s tenancy-wall section.
   - The `requires_relation` probe runs first; an absent relation is FAIL naming it (K5.1: P2 not deployed = FAIL), and the main query never runs.
   - More than one row is ERROR; no row is FAIL.
   - When every `known_if` predicate holds, the check is KNOWN with `known_text`. Otherwise the `expect` predicates grade it:

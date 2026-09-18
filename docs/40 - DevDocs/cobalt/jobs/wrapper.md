@@ -14,8 +14,13 @@ with job_run("com.cobalt.archiver") as run:
    state the operator caused.
 2. `running` is marked before the work, with `started_at`.
 3. A **beater thread** stamps `heartbeat_at` every
-   `timeout_s / jobs.heartbeat_fraction` (5 min for the archiver's
-   40-minute window).
+   `timeout_s / jobs.heartbeat_fraction` — the job's own registry
+   timeout divided by the tunable, never a fixed interval. Both numbers
+   are config, so the interval changes when either is ruled: with the
+   shipped values (`com.cobalt.archiver` `timeout_s: 2400` in
+   `configs/cobalt/jobs.yaml`, `jobs.heartbeat_fraction: 3` in
+   `configs/cobalt/taxonomy/tunables.yaml`) the archiver stamps every
+   **800 s**.
 4. `done` (exit 0) or `failed` (exit code + the exception, redacted
    through F19 on its way into the column).
 5. The exception is **re-raised**. The wrapper reports; it never

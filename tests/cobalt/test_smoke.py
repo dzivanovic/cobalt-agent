@@ -17,6 +17,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import re
 import shlex
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -726,6 +727,176 @@ def test_every_committed_check_renders_an_exact_command_and_expected_output():
     assert by_id["K6"].known_text == "no fill yet"
     assert by_id["K5.1"].requires_relation == "system.radar_score_run"
     assert by_id["K3"].known_if and by_id["K3"].expect
+
+
+# ---------------------------------------------------------------------
+# L32: a check never reads across the tenancy wall it declares
+# ---------------------------------------------------------------------
+
+MIGRATIONS = REPO / "src" / "cobalt" / "db_migrations"
+
+#: `GRANT <privs> ON [TABLE|SEQUENCE] <schema>.<relation> TO <roles>;` —
+#: bounded to one statement (`[^;]`), so a `GRANT … ON SCHEMA …` or a
+#: `GRANT <role> TO <role>` never bleeds into the next statement's name.
+GRANT_RE = re.compile(
+    r"\bGRANT\s+(?P<privs>[^;]+?)\s+ON\s+(?:TABLE\s+|SEQUENCE\s+)?"
+    r'(?P<relation>"?[a-z_]+"?\.[a-z_][a-z0-9_]*)\s+TO\s+(?P<roles>[^;]+);',
+    re.IGNORECASE | re.DOTALL,
+)
+SQL_COMMENT_RE = re.compile(r"--[^\n]*")
+#: A `system.`/`"user".`-qualified relation named in a query.
+QUALIFIED_RE = re.compile(r'("user"|system)\.([a-z_][a-z0-9_]*)')
+SIDE_ROLE = {"system": "cobalt_system", "user": "cobalt_user"}
+
+
+def granted_relations() -> dict[str, set[str]]:
+    """`{role: {schema.relation, …}}`, parsed from the shipped migrations.
+
+    Only PER-RELATION grants count, and that is deliberate. `GRANT … ON
+    ALL TABLES IN SCHEMA …` (0001) reaches only the relations that
+    existed when it ran — `system` was empty at that point — and `ALTER
+    DEFAULT PRIVILEGES` reaches only relations CREATED later by the roles
+    it names. Neither reaches a relation MOVED into the schema afterwards
+    by `ALTER TABLE … SET SCHEMA` (0002), which keeps the ACL it had in
+    `public`. `system.cobalt_jobs` is exactly such a moved relation.
+    """
+    granted: dict[str, set[str]] = {}
+    for path in sorted(MIGRATIONS.glob("*.sql")):
+        for match in GRANT_RE.finditer(SQL_COMMENT_RE.sub("", path.read_text())):
+            relation = match.group("relation").replace('"', "")
+            for role in match.group("roles").split(","):
+                granted.setdefault(role.strip(), set()).add(relation)
+    return granted
+
+
+def cross_side_reads(suite_checks) -> list[str]:
+    """Every `kind: sql` check that names a relation on the OTHER side
+    without a migration granting it to the side's role — both directions."""
+    granted = granted_relations()
+    offenders = []
+    for check in suite_checks:
+        if check.kind != "sql":
+            continue
+        role = SIDE_ROLE[check.side]
+        for schema, name in sorted(set(QUALIFIED_RE.findall(check.query))):
+            relation = f"{schema.replace(chr(34), '')}.{name}"
+            if relation.split(".")[0] == check.side:
+                continue  # its own side
+            if relation not in granted.get(role, set()):
+                offenders.append(
+                    f"{check.id} (side: {check.side}) reads {relation}, "
+                    f"which no migration GRANTs to {role}"
+                )
+    return offenders
+
+
+def test_no_smoke_check_reads_across_the_tenancy_wall_it_declares():
+    granted = granted_relations()
+    # The one documented, migration-backed crossing: `0008` grants the user
+    # role SELECT/REFERENCES on `system.movers_daily` for `missed.mover_id`'s
+    # FK, which is what lets K9 read it from `side: user`.
+    assert "system.movers_daily" in granted["cobalt_user"]
+    # `cobalt_jobs` is system-side by declaration (0003) and was MOVED there
+    # by 0002; no migration ever grants it to the user role.
+    assert "system.cobalt_jobs" not in granted["cobalt_user"]
+
+    offenders = cross_side_reads(load_suite(SUITES_DIR / "s2.yaml").checks)
+    assert offenders == [], (
+        "a smoke check would hit `permission denied` on a real connection "
+        "(L32: `cobalt db query` SET ROLEs to the side's role and asserts it).\n"
+        + "\n".join(offenders)
+        + "\nThe only migration-backed crossing today is system.movers_daily "
+        "(0008_radar_value_movers.sql, granted to cobalt_user for missed.mover_id). "
+        "A cross-side read is split into two checks, never granted across."
+    )
+
+
+def test_the_tenancy_wall_check_refuses_a_cross_side_query():
+    """The bite proof: the shape K8 had before the split is refused."""
+    old_k8 = SqlCheck.model_validate({
+        "id": "K8", "title": "missed — card rows complete and equal job.result",
+        "kind": "sql", "side": "user",
+        "query": (
+            "SELECT count(*) FILTER (WHERE m.kind = 'card') AS card_rows, "
+            "(SELECT (j.last_result ->> 'card_misses')::int FROM system.cobalt_jobs j "
+            "WHERE j.label = 'com.cobalt.replay') AS job_card_misses "
+            "FROM \"user\".missed m WHERE m.trade_date = {last_trading_day}"
+        ),
+        "expect": [{"column": "card_rows", "op": "not_null"}],
+        "expect_text": "counts agree",
+    })
+    offenders = cross_side_reads([old_k8])
+    assert len(offenders) == 1 and "system.cobalt_jobs" in offenders[0]
+    assert "cobalt_user" in offenders[0]
+
+    # The reverse direction bites the same way: the system role has no
+    # reach into `"user"` at all (0001 REVOKEs it).
+    system_side = SqlCheck.model_validate({
+        "id": "K8.9", "title": "reverse", "kind": "sql", "side": "system",
+        "query": 'SELECT count(*) AS card_rows FROM "user".missed m',
+        "expect": [{"column": "card_rows", "op": "not_null"}],
+        "expect_text": "x",
+    })
+    offenders = cross_side_reads([system_side])
+    assert len(offenders) == 1 and "user.missed" in offenders[0]
+    assert "cobalt_system" in offenders[0]
+
+    # The granted crossing stays legal: K9 reads system.movers_daily from
+    # the user side because 0008 grants exactly that.
+    granted_crossing = SqlCheck.model_validate({
+        "id": "K9", "title": "movers", "kind": "sql", "side": "user",
+        "query": "SELECT count(*) AS n FROM system.movers_daily WHERE active",
+        "expect": [{"column": "n", "op": "not_null"}],
+        "expect_text": "x",
+    })
+    assert cross_side_reads([granted_crossing]) == []
+
+
+def test_the_k8_split_keeps_every_assertion_on_its_own_side():
+    """K8 became K8.1 (system) + K8.2 (user). Nothing it asserted was
+    dropped, and each half still grades the way the single check did."""
+    by_id = {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}
+    assert "K8" not in by_id
+    k81, k82 = by_id["K8.1"], by_id["K8.2"]
+
+    # K8.1 owns the job row, through the one path that reads cobalt_jobs.
+    assert k81.kind == "job_row" and k81.label == "com.cobalt.replay"
+    assert k81.result_equals["input_stale"] == 0
+    assert k81.result_equals["trade_date"] == "{last_trading_day}"
+    assert "card_misses" in k81.result_keys
+    # K8.2 owns the corpus and names no system relation at all.
+    assert k82.kind == "sql" and k82.side == "user"
+    assert "system." not in k82.query and '"user".missed' in k82.query
+    assert [(p.column, p.op.value, p.value) for p in k82.expect] == [("incomplete", "eq", 0)]
+    # The equality that can no longer be one statement is named on both
+    # rows, so the hand fallback still performs it (R6 A).
+    assert "card_misses" in k81.expect_text and "card_rows" in k81.expect_text
+    assert "card_misses" in k82.expect_text and "card_rows" in k82.expect_text
+
+    def answer(result):
+        return lambda statement, side: result
+
+    def job(**result):
+        base = {"trade_date": "2026-09-22", "card_misses": 2, "input_stale": 0}
+        return _job_row(last_result={**base, **result})
+
+    assert checks.evaluate(k81, ctx(), deps(read_rows=answer(job()))).verdict is Verdict.PASS
+    stale = checks.evaluate(k81, ctx(), deps(read_rows=answer(job(input_stale=2))))
+    assert stale.verdict is Verdict.FAIL and "input_stale" in stale.detail
+    wrong_day = checks.evaluate(k81, ctx(), deps(read_rows=answer(job(trade_date="2026-09-21"))))
+    assert wrong_day.verdict is Verdict.FAIL and "trade_date" in wrong_day.detail
+    no_count = _job_row(last_result={"trade_date": "2026-09-22", "input_stale": 0})
+    out = checks.evaluate(k81, ctx(), deps(read_rows=answer(no_count)))
+    assert out.verdict is Verdict.FAIL and "card_misses" in out.detail
+
+    complete = rows(["card_rows", "incomplete"], [2, 0])
+    out = checks.evaluate(k82, ctx(), deps(read_rows=answer(complete)))
+    assert out.verdict is Verdict.PASS and "2" in out.raw  # card_rows printed
+    holed = rows(["card_rows", "incomplete"], [2, 1])
+    assert checks.evaluate(k82, ctx(), deps(read_rows=answer(holed))).verdict is Verdict.FAIL
+    # The user-side statement it runs is the one it prints, and it names
+    # no system table (the hand fallback runs as cobalt_user).
+    assert "system." not in out.command
 
 
 def test_context_last_trading_day_waits_for_the_anchor_job_and_skips_holidays():
