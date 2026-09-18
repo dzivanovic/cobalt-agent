@@ -64,4 +64,31 @@ No denial at any point.
 
 Docs: `docs/40 - DevDocs/cobalt/db_migrations/cli.md` — "How the digest is computed now" rewritten (one statement; the batch is what is buffered; F1 named), "Timing is a deliverable" updated with the measured production figures (8,591,339 rows in 46.73 s, probe 46.9 s, pair ≈94 s) and the note that both figures predate this fix.
 
+`<T_old>` = **`6694652`** (`3a6f2b3` fix + `6694652` report).
+
 CONTINUE: part B
+
+## B. Re-land on `sprint-2/stack`, off main
+
+| step | command | result |
+|---|---|---|
+| B.1 | `git status --porcelain` | empty |
+| B.1 | `git rev-list --count d672f2d..6694652` | **`<n>` = 63** (the 53 gated + the harness-fix chain + this run's 2) |
+| B.1 | `git -C /Users/cobalt/cobalt rev-parse --short HEAD` | main = **`968e010`** |
+| B.2 | `git switch -c sprint-2/stack main` | `Switched to a new branch 'sprint-2/stack'` — the branch did not exist |
+| B.3 | `git cherry-pick d672f2d..6694652` | 63 commits replayed oldest-first, original messages, **no conflict, no empty-commit stop, no `--continue` needed**. New tip **`d72ece4`** |
+
+The reverts on main restored each patch's exact pre-image, so the whole range applied clean — the third confirmation today of `UNATTENDED-LAUNCH.md` §6 (a merged-then-reverted branch re-lands by cherry-pick, never by rebase).
+
+### B.4 PROOF — all three
+
+| proof | command | result |
+|---|---|---|
+| count | `git rev-list --count main..HEAD` | **63** = `<n>` ✅ |
+| byte-identity | `git diff --stat 6694652 HEAD -- src tests configs ops .gitignore` | **prints nothing** ✅ — the code is byte-identical to what part A left |
+| offline | `ls -la …/.env` | `No such file or directory` ✅ |
+| offline | `uv run pytest -q tests/cobalt tests/taxonomy --tb=short -p no:randomly` | **1561 passed, 0 failed**, 287 skipped, 1 xfailed, 39.95 s ✅ |
+
+Whole-tree `git diff --stat 6694652 HEAD` shows 6 files, all under `docs/` — main's own desk commits since (`cto-2026-09-18.md`, `deploy-2026-09-18.md`, four `prompts/2026-09-18/*.md`), 262 insertions. Nothing under `src`, `tests`, `configs`, `ops` or `.gitignore` differs.
+
+CONTINUE: part C
