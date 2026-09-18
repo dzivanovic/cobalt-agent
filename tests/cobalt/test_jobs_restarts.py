@@ -64,6 +64,42 @@ def test_grok_sandbox_profile_is_harness_and_derives_no_restart(monkeypatch):
     assert row.rule.startswith("HARNESS")
 
 
+def test_repo_meta_files_derive_no_restart_and_are_labelled_meta(monkeypatch):
+    # Carried three times (S2-P2 ESCALATE 14): `.gitignore` is git's own
+    # bookkeeping. No Cobalt process opens it, so it can derive no restart —
+    # but it escalated as UNCLASSIFIED (all residents) on every range that
+    # touched it.
+    monkeypatch.setattr(restarts, "changes", lambda _range: [
+        Change(".gitignore", "M"),
+    ])
+    (row,) = classify("HEAD...HEAD")
+    assert row.rule == "META"
+    assert row.restarts == ()
+    assert row.escalate is False
+
+
+def test_every_repo_meta_path_is_meta(monkeypatch):
+    monkeypatch.setattr(restarts, "changes", lambda _range: [
+        Change(path, "M") for path in sorted(restarts.REPO_META)
+    ])
+    rows = classify("HEAD...HEAD")
+    assert len(rows) == len(restarts.REPO_META)
+    assert {row.rule for row in rows} == {"META"}
+    assert not any(row.escalate for row in rows)
+
+
+def test_an_unknown_dotfile_still_escalates(monkeypatch):
+    # The rule is an EXPLICIT LIST, never a glob on dotfiles: a new dotfile
+    # nobody has classified is exactly the case ESCALATE exists for (L42).
+    monkeypatch.setattr(restarts, "changes", lambda _range: [
+        Change(".mystery-rc", "A"),
+    ])
+    (row,) = classify("HEAD...HEAD")
+    assert row.rule == "UNCLASSIFIED"
+    assert row.escalate is True
+    assert row.restarts  # the conservative set: every resident
+
+
 def test_a_declared_one_shot_only_config_derives_no_restart(monkeypatch):
     # Ruled 2026-09-15: notify.yaml has no resident reader; declared in
     # jobs.yaml `no_resident_reads`, so it no longer escalates.
