@@ -124,8 +124,23 @@ class TestShippedConfig:
         assert cfg.sheet_for("reduced") == "half", "reduced is a ROLE; half plays it today"
         # RE-RULED by the CTO review of S1-P2: the reduced rung is a SIZE
         # rung, not a grade ban. A is taken at reduced size; A+ is out
-        # because the ACCOUNT ladder does not enable it.
-        assert [g.value for g in cfg.enabled_grades_for("reduced")] == ["A", "B"]
+        # because the ACCOUNT ladder does not enable it. That sentence IS
+        # the invariant — `reduced ⊆ account` — and it is what this
+        # asserts. The ladder's members are the trader's own setting (L32
+        # user data) and are not pinned here: grade C was re-enabled by
+        # his ruling of 2026-09-14 (weekly review with his trading
+        # psychologist) and applied by his own `settings load --apply` at
+        # 07:59, which turned a pinned `["A", "B"]` red —
+        # PROJECT-LEDGER.md line 1393 overrules the "reduced keeps A, B"
+        # assumption by name. A test that reads the live settings table
+        # and pins his current choice breaks on his next one.
+        reduced = cfg.enabled_grades_for("reduced")
+        account = cfg.enabled_grades_for("full")
+        assert reduced, "the reduced rung always permits at least one grade"
+        assert set(reduced) <= set(account), (
+            "the reduced rung NARROWS the account ladder and can never widen it"
+        )
+        assert reduced == [g for g in Grade if g in set(reduced)], "in ladder order"
         # DERIVED from the declared sheets, in ladder order — no
         # hand-named file, and no `reduced_day.htk` (a name that
         # corresponded to no key table in configs/cobalt/aset.yaml).

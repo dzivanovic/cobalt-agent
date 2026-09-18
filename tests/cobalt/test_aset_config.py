@@ -163,7 +163,22 @@ class TestSheetModesConfig:
         """Sheets are an ORDERED LIST since S1-P2 (F6) — `cfg.full` /
         `cfg.half` were two literal fields and are now `cfg.sheets[id]`,
         so that a quarter sheet is a config row and not a class edit.
-        This walks whatever the config declares, naming no sheet."""
+        This walks whatever the config declares, naming no sheet.
+
+        The grade ladder is read the same way, and for the same reason
+        twice over: it is the TRADER'S OWN SETTING (L32 user data), so
+        this asserts the invariant and never a value. It used to pin one
+        literal ladder, which made it go red the moment he changed his
+        own settings — grade C was re-enabled by his ruling of 2026-09-14
+        (weekly review with his trading psychologist; PROJECT-LEDGER.md
+        line 1393, which overrules by name the "reduced keeps A, B"
+        assumption this file carried) and applied by his own
+        `cobalt settings load --apply` at 07:55. A test that pins his
+        current choice is a test that breaks on his next one. The
+        value-pinning half lives on a CONSTRUCTED ladder below
+        (`TestConstructedLadder`), where a grade outside the ladder is
+        still proven refused.
+        """
         cfg = load_sheet_modes_config()
         assert cfg.order and set(cfg.order) == set(cfg.sheets)
         for grades in cfg.sheets.values():
@@ -172,7 +187,14 @@ class TestSheetModesConfig:
             assert grades.B > 0
             assert grades.C > 0
             assert grades.D == 0
-        assert set(cfg.enabled_grades) == {Grade.A, Grade.B}
+        enabled = cfg.enabled_grades
+        assert enabled, "the account ladder is never empty"
+        assert set(enabled) <= set(Grade), "every enabled grade is a declared Grade"
+        assert len(set(enabled)) == len(enabled), "no grade is enabled twice"
+        assert enabled == [g for g in Grade if g in set(enabled)], (
+            "the ladder comes back in ladder order (Grade's own order), "
+            "whatever subset of it he has enabled"
+        )
 
     def test_dollars_for_matches_das_hotkey_values(self):
         cfg = load_sheet_modes_config()
@@ -192,12 +214,19 @@ class TestSheetModesConfig:
         assert cfg.dollars_for("half", "C") == Decimal("11")
 
     def test_is_enabled_reflects_committed_config(self):
+        """`is_enabled(g)` is true for EXACTLY the members of
+        `enabled_grades` — whatever ladder the rows hold.
+
+        No live value is pinned, for the reason given above: the ladder
+        is his (L32), re-ruled 2026-09-14 when grade C was re-enabled.
+        The refusal behaviour this test used to prove with literals is
+        proven on a constructed ladder in `TestConstructedLadder`.
+        """
         cfg = load_sheet_modes_config()
-        assert cfg.is_enabled("A")
-        assert cfg.is_enabled("B")
-        assert not cfg.is_enabled("A+")
-        assert not cfg.is_enabled("C")
-        assert not cfg.is_enabled("D")
+        enabled = set(cfg.enabled_grades)
+        for grade in Grade:
+            assert cfg.is_enabled(grade) is (grade in enabled)
+            assert cfg.is_enabled(grade.value) is (grade in enabled)
 
     # ADR-0008 D3.4: the sheets and the grade ladder are ROWS now
     # (`"user".trader_settings`), not a file, so "the file is missing" and
@@ -247,3 +276,38 @@ class TestSheetModesConfig:
                 half={"A_plus": Decimal("170"), "A": Decimal("70"), "B": Decimal("30"), "C": Decimal("11"), "D": Decimal("0")},
                 enabled_grades=[],
             )
+
+
+def _constructed_sheet_modes() -> SheetModesConfig:
+    """`COMPLETE_SHEET_MODES` as a config object — the file's own
+    constructed ladder (`enabled_grades: [A, B]`), built for exactly this
+    purpose and owing nothing to `"user".trader_settings`."""
+    import yaml as _yaml
+
+    raw = dict(_yaml.safe_load(COMPLETE_SHEET_MODES)["sheet_modes"])
+    enabled_grades = raw.pop("enabled_grades")
+    # The two rungs this fixture declares, low to high.
+    return SheetModesConfig(sheets=raw, order=["half", "full"], enabled_grades=enabled_grades)
+
+
+class TestConstructedLadder:
+    """The value-pinning half of the two tests above, moved OFF the live
+    rows by the 2026-09-14 C-size ruling (grade C re-enabled; a test that
+    reads `"user".trader_settings` and pins the trader's current choice
+    turns red every time he changes his own settings — L32, his values
+    are user data, not system behaviour). Nothing is weakened: a grade
+    outside a declared ladder is still proven refused, and this runs
+    offline, with no database at all."""
+
+    def test_is_enabled_refuses_a_grade_outside_the_declared_ladder(self):
+        cfg = _constructed_sheet_modes()
+        assert cfg.is_enabled("A")
+        assert cfg.is_enabled("B")
+        assert not cfg.is_enabled("A+")
+        assert not cfg.is_enabled("C")
+        assert not cfg.is_enabled("D")
+
+    def test_the_declared_ladder_is_what_is_enabled(self):
+        cfg = _constructed_sheet_modes()
+        assert set(cfg.enabled_grades) == {Grade.A, Grade.B}
+        assert cfg.enabled_grades == [g for g in Grade if g in set(cfg.enabled_grades)]
