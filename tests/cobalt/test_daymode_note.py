@@ -27,7 +27,7 @@ import pytest
 from cobalt.aset.config import AsetConfig, SheetModeGrades, SheetModesConfig
 from cobalt.aset.models import Grade
 from cobalt.daymode import note as note_mod
-from cobalt.daymode.config import DayModeConfig
+from cobalt.daymode.config import SIGNAL_IDS, DayModeConfig
 from cobalt.prefill import vault_writer as vault_writer_module
 from cobalt.vaultwrite import VaultWriteStore
 
@@ -45,6 +45,16 @@ _STEPDOWNS = [
     {"signal": "early_close_today", "effect": "down", "because": "early close"},
     {"signal": "first_session_after_close", "effect": "down", "because": "after a close"},
     {"signal": "trade_count_band_placeholder", "effect": "floor", "because": "band unruled"},
+]
+# These note tests need A valid step-down table, not THE shipped one, and
+# `DayModeConfig` refuses a table missing any signal the proposer can
+# compute. So any signal added to `SIGNAL_IDS` later gets a row here
+# automatically: a new step-down must not break note-writing tests that
+# have nothing to do with it (2026-09-18, on `trade_count_over_band`).
+_STEPDOWNS += [
+    {"signal": signal, "effect": "down", "because": signal.replace("_", " ")}
+    for signal in SIGNAL_IDS
+    if signal not in {row["signal"] for row in _STEPDOWNS}
 ]
 
 
