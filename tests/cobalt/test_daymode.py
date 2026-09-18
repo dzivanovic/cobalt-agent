@@ -80,8 +80,6 @@ _STEPDOWNS = [
      "because": "first session after a multi-day close"},
     {"signal": "trade_count_band_placeholder", "effect": "floor",
      "because": "trade_count_band is PLACEHOLDER (unruled)"},
-    {"signal": "trade_count_over_band", "effect": "down", "rungs": 1,
-     "because": "trade count above the ruled band"},
 ]
 
 
@@ -637,82 +635,16 @@ class TestTradeCountBandRuled:
         assert p.proposed == "reduced"
         assert any("PLACEHOLDER" in s for s in p.signals)
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="ops-2026-09-17 ESCALATE: no over-band signal exists; a new SIGNAL_ID needs "
+        "its step-down row (effect = Dejan's) in \"user\".trader_settings daymode.stepdowns "
+        "loaded under L28 in the same change, or load_daymode_config refuses in production",
+    )
     def test_a_day_with_7_trades_is_adverse(self):
-        """RULED 2026-09-17 (Dejan, R13, "ruling A."): over the band =
-        adverse, one rung down. Was a strict xfail until the signal and
-        its step-down row existed."""
         p = propose(
             date(2026, 9, 3), cfg=_cfg(enabled_modes=self._ALL), prior_filled=7,
             drc_note="DRC.md", drc_informative=True, band=(2, 6),
         )
         assert p.signals, "7 trades is above the ruled band 2-6"
         assert p.proposed != "full"
-
-
-class TestOverBandStepDown:
-    """R13's shape, one test per branch of it: ABOVE `.max` costs one
-    rung, BELOW `.min` costs nothing, inside the band changes nothing."""
-
-    _ALL = ("reduced", "half", "full")
-
-    def test_exactly_the_band_max_is_not_adverse(self):
-        """The band is INCLUSIVE at its edge — 6 is inside 2-6."""
-        p = propose(
-            date(2026, 9, 3), cfg=_cfg(enabled_modes=self._ALL), prior_filled=6,
-            drc_note="DRC.md", drc_informative=True, band=(2, 6),
-        )
-        assert p.signals == []
-        assert p.proposed == "full"
-
-    def test_one_over_the_band_max_is_one_rung_down(self):
-        p = propose(
-            date(2026, 9, 3), cfg=_cfg(enabled_modes=self._ALL), prior_filled=7,
-            drc_note="DRC.md", drc_informative=True, band=(2, 6),
-        )
-        assert p.proposed == "half", "one rung down from full"
-        assert any("trade count above the ruled band" in s for s in p.signals)
-
-    def test_the_clause_cites_the_count_and_the_band(self):
-        """L57: the number is replayable from the sentence he reads."""
-        p = propose(
-            date(2026, 9, 3), cfg=_cfg(enabled_modes=self._ALL), prior_filled=9,
-            drc_note="DRC.md", drc_informative=True, band=(2, 6),
-        )
-        clause = next(s for s in p.signals if "above the ruled band" in s)
-        assert "9 trade(s) vs band 2-6" in clause
-        assert "one rung down (half)" in clause
-
-    def test_under_the_band_min_is_not_a_signal(self):
-        """His ruling, explicitly: under the band does nothing."""
-        p = propose(
-            date(2026, 9, 3), cfg=_cfg(enabled_modes=self._ALL), prior_filled=1,
-            drc_note="DRC.md", drc_informative=True, band=(2, 6),
-        )
-        assert p.signals == []
-        assert p.proposed == "full"
-
-    def test_an_unruled_band_fires_the_placeholder_and_not_the_over_band_row(self):
-        """Regression against a None comparison: with no band there is
-        nothing to be over, so only the placeholder fires."""
-        p = propose(
-            date(2026, 9, 3), cfg=_cfg(enabled_modes=self._ALL), prior_filled=99,
-            drc_note="DRC.md", drc_informative=True, band=(None, None),
-        )
-        assert p.proposed == "reduced"
-        assert any("PLACEHOLDER" in s for s in p.signals)
-        assert not any("above the ruled band" in s for s in p.signals)
-
-    def test_the_effect_is_the_tables_not_the_codes(self):
-        """The cost is a config row: reword and re-price it and the
-        proposal follows, with no edit in src/."""
-        repriced = [dict(s) for s in _STEPDOWNS]
-        row = next(r for r in repriced if r["signal"] == "trade_count_over_band")
-        row["effect"] = "floor"
-        row["because"] = "you traded too many times yesterday"
-        p = propose(
-            date(2026, 9, 3),
-            cfg=_cfg(enabled_modes=self._ALL, stepdowns=repriced), prior_filled=7,
-            drc_note="DRC.md", drc_informative=True, band=(2, 6),
-        )
-        assert p.proposed == "reduced"
-        assert any("you traded too many times yesterday" in s for s in p.signals)
