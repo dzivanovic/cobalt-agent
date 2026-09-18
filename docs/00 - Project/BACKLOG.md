@@ -369,6 +369,29 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
 
 ## GATED (post-MVP)
 
+- **Host OS upgrade (macOS 27) — deferred project** (ruled 2026-09-17,
+  Dejan, R18: "is it still too risky for us to do that mid sprints and if
+  so can we just today build deferred sprint or project and put it in the
+  list for after we're done with what we're building right now … there's
+  nothing stopping us to run on the old version it's not outdated yet").
+  The Mac Studio stays on macOS Sequoia 15.x until the current build lane
+  is done (S2-P2 D2 + P4 D1 live, MVP readiness). Not the OS's maturity —
+  our host IS production (NN#16): OrbStack/Postgres, LM Studio MLX and the
+  88 GB wired-memory setting, herdr, Tailscale, launchd jobs and restic all
+  ride on it, and the upgrade buys the trading system nothing now. Gate
+  first recorded 2026-09-03/04 (LEDGER:650, then named for Tahoe).
+  ENTRY CHECKLIST when it is scheduled (one ops hub, a weekend, outside
+  market days): (1) Cobalt key store in restic's include set + a fresh full
+  restore proof (owed since 09-11); (2) restic password rotated (exposed
+  09-11, his hand); (3) second backup copy decided (offsite leg deferred
+  09-11 R5; one local USB disk today); (4) compatibility check with
+  versions for every resident + seat CLI; (5) pre-upgrade snapshot +
+  `pg_dump`, bring-back checklist (`cobalt.sh`, LaunchAgents, heartbeat
+  GREEN, day-open GREEN); (6) rollback plan stated honestly — a macOS
+  major has no one-command rollback, the fallback is rebuild + restore, so
+  the rebuild manifest (parked to S5) comes first or with it.
+  Point updates inside Sequoia (15.8 security) are NOT this project:
+  allowed any evening after 21:05 on his word, heartbeat check after.
 - **Sessions-as-jobs gap analysis** (recorded 2026-09-16, Dejan: "record a
   gap") — the CTO-desk/hub practice built by hand on 09-15/16 (desk = L6
   chief of staff; prompt file = L16 registry entry; `claude agents` +
