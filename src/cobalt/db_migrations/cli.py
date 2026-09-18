@@ -52,7 +52,9 @@ exactly that round-trip on `cobalt_dev`.
 `--proof-only` takes the BEFORE proof over every table the harness knows,
 prints it with its timings, and applies NOTHING. Its transaction is
 opened READ ONLY, so a bug in this flag's own handling cannot write
-either — the server refuses. It exists because the 09-18 defect cost a
+either — the server refuses; and REPEATABLE READ, so the whole table
+carries ONE picture of the database out of the window rather than a
+different snapshot per table. It exists because the 09-18 defect cost a
 resident outage to discover: this is the command a deploy preflights
 while everything is still up. It is refused together with `--rollback` /
 `--down-to`, which exist to apply things.
@@ -70,7 +72,8 @@ import hashlib
 import time
 from typing import Iterable, Iterator, Optional
 
-from psycopg import sql
+import psycopg
+from psycopg import IsolationLevel, sql
 
 from cobalt import db, env
 
@@ -416,11 +419,46 @@ def _connect(dbname: str, *, allow_prod: bool, read_only: bool):
     `read_only=True` is not a convention this module promises to honour —
     psycopg opens every transaction with `BEGIN ... READ ONLY`, so the
     SERVER refuses a write even if the code asks for one.
+
+    REPEATABLE READ, AND IT IS THE POINT OF THE WHOLE PROOF (2026-09-18).
+    `cmd_migrate` takes the BEFORE probe, applies, and takes the AFTER
+    probe, then rolls back on any `CHANGED` verdict. At Postgres's default
+    READ COMMITTED every probe STATEMENT takes its own snapshot, so the
+    AFTER probe also sees whatever OTHER sessions committed in between —
+    and on production `system.bars` makes one probe ≈46 s, so that window
+    is ≈100 s wide. A deploy only takes the two RESIDENTS down:
+    `com.cobalt.heartbeat` (every 15 minutes) and `com.cobalt.seat-usage`
+    (hourly) keep updating `system.cobalt_jobs`, `cobalt_redactions` is
+    append-only telemetry, `vault_writes` grows with any vault write. One
+    such commit inside the window made a GOOD migration read `CHANGED`
+    and roll the whole thing back, with the residents already stopped:
+    a clean failure, but an outage for nothing.
+
+    At REPEATABLE READ the snapshot is taken at this transaction's first
+    statement and BOTH probes read THAT snapshot plus this transaction's
+    OWN changes — which is exactly the question the proof was written to
+    answer: "did THIS migration change existing content?". Other
+    sessions' commits are invisible to both probes, so they cannot fail a
+    good migration; the migration's own writes are still seen, so the
+    proof still proves something.
+
+    The price is named and accepted: if another session commits a change
+    to a row this migration then modifies, the server raises
+    `could not serialize access…` rather than applying it. Nothing is
+    applied, `cmd_migrate`'s `except` path rolls back, and the operator
+    is told what happened — see the message there.
+
+    Set here, before the first statement, because psycopg refuses to
+    change the isolation level of a transaction already in progress and
+    applies these attributes at the next `BEGIN`. `db.connect_migration`
+    hands back an AUTOCOMMIT connection whose `SET search_path` /
+    `set_config` have already committed, so nothing is open yet.
     """
     conn = db.connect_migration(dbname, allow_prod=allow_prod)
     try:
         if read_only:
             conn.read_only = True
+        conn.isolation_level = IsolationLevel.REPEATABLE_READ
         conn.autocommit = False
         _assert_utf8(conn)
     except BaseException:
@@ -470,6 +508,21 @@ def cmd_migrate(args: argparse.Namespace) -> None:
             conn.rollback()
         else:
             conn.commit()
+    except psycopg.errors.SerializationFailure as e:
+        # The named price of REPEATABLE READ (see `_connect`). Postgres's
+        # own text ("could not serialize access due to concurrent
+        # update") tells an operator nothing about what to do at 20:40
+        # on a deploy, so it is wrapped rather than re-raised bare.
+        conn.rollback()
+        raise MigrationError(
+            "the migration could not serialize access: another session "
+            "committed a change to a row this migration then modified, while "
+            "this transaction held its REPEATABLE READ snapshot. NOTHING WAS "
+            "APPLIED — the transaction was rolled back. Something is still "
+            "writing to a table this migration touches: stop it (a resident, "
+            "a scheduled one-shot, another session) and run the migration "
+            f"again. Postgres said: {e}"
+        ) from e
     except BaseException:
         conn.rollback()
         raise

@@ -1,6 +1,6 @@
 # `src/cobalt/db_migrations/cli.py`
 
-S2-P1 requires a rollback bound before connection, selects only newer reverse files, and computes direction-aware verdicts before commit. `CHANGED` always rolls back. Since 2026-09-18 the content proof is STREAMED (no size ceiling) and there is a read-only `--proof-only` mode.
+S2-P1 requires a rollback bound before connection, selects only newer reverse files, and computes direction-aware verdicts before commit. `CHANGED` always rolls back. Since 2026-09-18 the content proof is STREAMED (no size ceiling), runs at REPEATABLE READ (one snapshot for both probes), and there is a read-only `--proof-only` mode.
 
 ## What it does
 `cobalt db migrate [--allow-prod] [--rollback --down-to NNNN] [--proof-only]`.
@@ -16,6 +16,58 @@ server-side `string_agg` over `system.bars`, and production holds
 8,410,174 rows. One transaction, rolled back, nothing applied — but the
 residents were already down, because there was no way to take the proof
 without a migration attached to it.
+
+## The second 2026-09-18 finding, in two lines
+The desk read the production `--proof-only` numbers and found the proof
+was not snapshot-consistent: `cmd_migrate`'s transaction ran at
+Postgres's default READ COMMITTED, where every probe STATEMENT takes its
+own snapshot, and the streamed `bars` probe takes ≈46 s each way — so any
+commit by any other session inside that ≈100 s window made a GOOD
+migration read `CHANGED` and roll back. A deploy only stops the two
+residents; `com.cobalt.heartbeat` (every 15 min) and `com.cobalt.seat-usage`
+(hourly) keep updating `system.cobalt_jobs`, `cobalt_redactions` drifted
+118 → 121 rows in one afternoon on dev, and `vault_writes` grows with any
+vault write — roughly a 1-in-6 chance of an outage for nothing per attempt.
+
+## Why the harness runs at REPEATABLE READ
+`_connect` sets `conn.isolation_level = IsolationLevel.REPEATABLE_READ`
+on both the migrate and the `--proof-only` connection (`--proof-only` is
+REPEATABLE READ **and** READ ONLY). The snapshot is taken at the
+transaction's first statement, and BOTH probes read THAT snapshot plus
+this transaction's OWN changes — so the proof answers exactly the
+question it was written for, *"did THIS migration change existing
+content?"*, and other sessions' commits are invisible to both probes.
+`--proof-only` gains the same property: its whole table is one picture of
+the database, not a different snapshot per table.
+
+It is set where the connection is configured, before the first statement,
+because psycopg refuses to change the isolation level of a transaction
+already in progress and applies the attribute at the next `BEGIN`.
+`db.connect_migration` hands back an autocommit connection whose
+`SET search_path` / `set_config` have already committed, so nothing is
+open yet.
+
+**The price, named and accepted.** If another session commits a change to
+a row the migration then modifies, Postgres raises
+`could not serialize access due to concurrent update`. `cmd_migrate`
+catches `psycopg.errors.SerializationFailure` specifically, rolls back
+(the existing `except` path) and raises a `MigrationError` that says what
+happened: nothing was applied, something is still writing to a table this
+migration touches, stop it and run again. The bare driver text tells an
+operator nothing at 20:40 on a deploy, which is why it is wrapped rather
+than re-raised. DDL under REPEATABLE READ is unaffected — catalog reads
+use their own snapshot, and the dev round trip (`--rollback --down-to
+0005` → `migrate`, 8 tables DROPPED then CREATED, every persistent
+digest identical) is the standing proof that it works.
+
+### Two designs rejected, and why (the snapshot fix)
+* **Exclude the job/telemetry tables from the proof.** A weaker proof —
+  `cobalt_jobs`, `cobalt_redactions` and `vault_writes` stop being
+  covered at all — and the exclusion list would rot the moment a new
+  scheduled writer appears.
+* **Stop every scheduled job for a deploy.** A bigger outage surface than
+  the two residents, and it still does not cover an ad-hoc writer: a
+  session someone opened by hand is not on any launchd list.
 
 ## The digest, and why it is not the naive one
 `to_jsonb(row)` minus the columns these migrations add, cast to text,
@@ -75,7 +127,9 @@ plus total seconds. Applies nothing and exits 0.
 It is not merely a code path that declines to write: `_connect(...,
 read_only=True)` sets `conn.read_only`, so psycopg opens the transaction
 `BEGIN ... READ ONLY` and the SERVER refuses any write. The suite proves
-that by attempting one.
+that by attempting one, and asserts both properties at the server
+(`SHOW transaction_isolation` = `repeatable read`,
+`SHOW transaction_read_only` = `on`) rather than on the Python attributes.
 
 Refused together with `--rollback` / `--down-to` — those exist to apply
 things — with a message naming the conflict, before any connection opens.
@@ -112,7 +166,11 @@ one way this rewrite could lie, so it is checked rather than assumed.
 
 The named cursor needs a transaction: `_connect` turns autocommit off
 before anything probes. A `WITHOUT HOLD` cursor declared in autocommit
-mode would be gone before the first fetch.
+mode would be gone before the first fetch. The ORDER inside `_connect`
+matters: `read_only` and `isolation_level` are set while the connection
+is still in autocommit and idle, then autocommit goes off, then
+`_assert_utf8` runs the first statement — setting either attribute after
+a transaction has opened raises.
 
 `TABLE_DIGEST_EXCLUDED_COLUMNS` (S2-P2) excludes the 25 card columns
 that 0007 adds to `aset_sizings`, from THAT table's digest only. It is

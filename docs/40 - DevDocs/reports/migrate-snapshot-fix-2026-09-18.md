@@ -74,3 +74,68 @@ In R1 list (1) but **NOT** in this launch line (narrower, never wider): `setting
 **(e) IS deterministic** — the desk's prompt allowed for it not being. The row is committed by the other session BEFORE the migrate transaction opens (so it is inside the snapshot), the other session commits over it while the migration holds that snapshot, and the migration then updates the same row. Nothing races: plain `SELECT`s take only `ACCESS SHARE`, so the other session's `UPDATE` is never blocked. The red run above is the full `cmd_migrate` path, and its captured proof table shows the pre-fix behaviour exactly — `cobalt_redactions … 122 -> 122 … dc32ce10 -> 208c6b30 CHANGED`, i.e. at READ COMMITTED the migration's own update is simply allowed and the verdict is a content change, not a serialization failure.
 
 CONTINUE: step 2
+
+## Step 2 — the build, and the proof on `cobalt_dev`
+
+**The change, in three places** (`src/cobalt/db_migrations/cli.py`, +1 import line, +1 statement, +1 `except` clause; the rest is prose):
+
+| where | what |
+|---|---|
+| `_connect` | `conn.isolation_level = IsolationLevel.REPEATABLE_READ`, set between `conn.read_only` and `conn.autocommit = False` — while the connection is still autocommit and IDLE, because psycopg refuses to change the isolation level of a transaction already in progress and applies the attribute at the next `BEGIN`. Both callers get it: migrate (read-write) and `--proof-only` (**REPEATABLE READ + READ ONLY**). |
+| `cmd_migrate` | a new `except psycopg.errors.SerializationFailure` ahead of the existing `except BaseException`: same `conn.rollback()`, but re-raised as a `MigrationError` that names the cause — *"another session committed a change to a row this migration then modified … NOTHING WAS APPLIED … stop it and run the migration again"* — with Postgres's own text appended. |
+| module docstring + DevDoc | why REPEATABLE READ, the serialization-failure consequence, the two rejected designs, the 2026-09-18 finding in two lines. |
+
+Nothing else changed. The desk design was buildable as written — no `FAILED: design`.
+
+### The tests, GREEN
+
+`COBALT_ENV=dev uv run pytest -q tests/cobalt/test_migrate_proof.py --tb=short -p no:randomly` → **35 passed in 34.06 s** (30 before + the 5 new).
+
+### `--proof-only` on `cobalt_dev`
+
+`COBALT_ENV=dev uv run cobalt db migrate --proof-only`, exit 0, verbatim tail:
+
+```
+23 table(s) probed on cobalt_dev; digest excludes user_id, vault_outcome, vault_reason, account_mode, pool_member_id; aset_sizings: 25 card column(s) added by 0007. Proof cost: total 5.6 s — and a migration pays it TWICE (before and after), inside the outage.
+NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.
+```
+
+`bars 1043443 / 2769919a57144c7bf8720110061dbf72`, `cobalt_redactions 121 / 177a0fde30d8c28fa57360b49382abb1` — **every row count and digest identical to the BASELINE above**, which also proves the step-1 tests cleaned up exactly what they created. No `-- applying` line.
+
+### No-op forward migrate
+
+`COBALT_ENV=dev uv run cobalt db migrate` → all 7 files applied, **23 tables `OK`, 0 `CHANGED`**, `content UNCHANGED on every table`, proof cost BEFORE 5.6 s + AFTER 5.4 s = 11.0 s. DDL runs and COMMITS under REPEATABLE READ.
+
+### ROUND TRIP 0005 ↔ 0007 — the standing proof that DDL survives the isolation change
+
+| run | result |
+|---|---|
+| `COBALT_ENV=dev uv run cobalt db migrate --rollback --down-to 0005` | `0007_radar_cards.rollback.sql` + `0006_radar_score.rollback.sql` applied; **8 tables `DROPPED`** (`card_dot_taps`, `card_dots`, `desk_grade`, `desk_packet`, `desk_regime`, `radar_score`, `radar_score_receipt`, `radar_score_run`); every other table `OK`; `content UNCHANGED on every table` |
+| `COBALT_ENV=dev uv run cobalt db migrate` | all 7 files applied; **the same 8 tables `CREATED`**; every other table `OK`; `content UNCHANGED on every table` |
+
+**Digests identical before and after the round trip**, every persistent table: `bars 1043443/2769919a`, `aset_sizings 1/0824685c`, `card_stop_edits 1/7599f9ab`, `card_transitions 4/f181e76b`, `cobalt_email_sends 2/fba8cf9f`, `cobalt_jobs 13/8d9b0861`, `cobalt_kill_switch 1/2e590e87`, `cobalt_redactions 121/177a0fde`, `day_modes 2/f2ffb4d4`, `radar_membership 0/d41d8cd9`, `radar_pool 0/d41d8cd9`, `session_blocks 6/b650702d`, `traders 1/a64e0148`, `vault_overrides 6/6a8b0520`, `vault_writes 184/4a965c69`. **0006/0007 are back.**
+
+### The gate, and the close of step 2
+
+| check | command | result |
+|---|---|---|
+| re-land gate | `COBALT_ENV=dev uv run pytest -q tests/cobalt tests/taxonomy --tb=short -p no:randomly` | **1850 passed, 3 skipped, 1 xfailed, 0 failed** in 156.58 s (the gate's 1845 + the 5 new tests) |
+| config | `COBALT_ENV=dev uv run cobalt validate` | **exit 0** — 13 trade_defs OK, 15 jobs registered, registry ↔ ops/ exact match, `Placement (docs/PLACEMENT.md): tree clean` |
+| credential | `rm …/.env` then `ls -la …/.env` | `ls: /Users/cobalt/cobalt-wt/s2-p2-cards/.env: No such file or directory` — **gone** (L41 interim: copied by name, never printed) |
+| offline | `uv run pytest -q tests/cobalt tests/taxonomy` | **1561 passed, 292 skipped, 1 xfailed, 0 failed** in 39.5 s (the 5 new tests are `requires_db`, so they skip with no `.env`) |
+
+**`uv run cobalt jobs restarts d72ece4..HEAD`**, verbatim:
+
+```
+path	change	rule	restart
+docs/40 - DevDocs/reports/migrate-snapshot-fix-2026-09-18.md	A	DOCS	-
+docs/40 - DevDocs/reports/prod-proof-only-2-2026-09-18.md	A	DOCS	-
+docs/40 - DevDocs/reports/reland-gate-2026-09-18.md	M	DOCS	-
+src/cobalt/db_migrations/cli.py	M	static import reach	com.cobalt.radar
+tests/cobalt/test_migrate_proof.py	M	test/documentation; no resident	-
+RESTARTS: com.cobalt.radar
+```
+
+**Cleanup proven (the prompt's condition):** the no-op proof table before step 1 and after step 2 list the same rows and the same digests for **every** table, `cobalt_redactions` included — 121 rows, `177a0fde30d8c28fa57360b49382abb1`, unchanged. No redaction fired during the run, so the append-only exemption was not needed.
+
+CONTINUE: step 3
