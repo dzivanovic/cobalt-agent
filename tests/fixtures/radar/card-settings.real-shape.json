@@ -74,12 +74,6 @@
         "because": "trade_count_band is PLACEHOLDER (unruled)",
         "effect": "floor",
         "signal": "trade_count_band_placeholder"
-      },
-      {
-        "because": "trade count above the ruled band",
-        "effect": "down",
-        "rungs": 1,
-        "signal": "trade_count_over_band"
       }
     ]
   },
