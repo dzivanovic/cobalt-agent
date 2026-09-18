@@ -265,7 +265,6 @@ def test_mark_filled_refuses_the_shortcut_on_a_radar_card():
     from cobalt.aset.engine import compute_fill_recompute
     from cobalt.cards.models import CardState, IllegalTransition, Origin
     from cobalt.cards.store import CardStore
-    from cobalt.radar.store import RadarStore
 
     store = AsetStore("cobalt_dev")
     store.ensure_schema()
@@ -284,41 +283,10 @@ def test_mark_filled_refuses_the_shortcut_on_a_radar_card():
     )
     row_id = store.save(result)
     try:
-        # A radar-origin row must satisfy 0007's aset_sizings_radar_provenance
-        # CHECK (every card 0007 adds), so the fixture needs a real
-        # system-side membership/score/run to reference, not just the
-        # origin flip this test cares about.
-        with RadarStore("cobalt_dev")._connect() as sysconn:
-            sysconn.execute(
-                "INSERT INTO radar_pool (pool_key, state, session, members) VALUES "
-                "('p2_fixture', 'idle', 'rth', 0) ON CONFLICT DO NOTHING"
-            )
-            member_id = sysconn.execute(
-                "INSERT INTO radar_membership (pool_key, ticker, trade_date, first_seen_at, "
-                "entered_at, source, sources, session, opened_scan_id, last_scan_id) VALUES "
-                "('p2_fixture', 'TEST', current_date, now(), now(), 'screen', '[]', 'rth', -9, -9) "
-                "RETURNING id"
-            ).fetchone()[0]
-            run_id = sysconn.execute(
-                "INSERT INTO radar_score_run (pool_key, scan_id, session, started_at, status, "
-                "cards_enabled, evaluator_version, formula_sha256, tunables_sha256, "
-                "settings_sha256, cohort_sha256) VALUES ('p2_fixture', -9, 'rth', now(), "
-                "'running', true, 'fixture', 'f', 't', 's', 'c') RETURNING id"
-            ).fetchone()[0]
-            score_id = sysconn.execute(
-                "INSERT INTO radar_score (run_id, membership_id, ticker, trade_def_md5, "
-                "evaluation, detail, desk_shadow, inputs_sha256) VALUES (%s, %s, 'TEST', "
-                "'md5', 'formed', '{}', '{}', 'i') RETURNING id",
-                (run_id, member_id),
-            ).fetchone()[0]
         with store._connect() as conn:
             conn.execute(
-                "UPDATE aset_sizings SET origin = %s, trade_def_slug = 'fixture-def', "
-                "trade_def_md5 = 'md5', trigger_price = 10, structural_stop = 9, "
-                "radar_score_id = %s, scan_id = -9, formula_sha256 = 'f', "
-                "tunables_sha256 = 't', settings_sha256 = 's', pool_member_id = %s "
-                "WHERE id = %s",
-                (Origin.RADAR.value, score_id, member_id, row_id),
+                "UPDATE aset_sizings SET origin = %s WHERE id = %s",
+                (Origin.RADAR.value, row_id),
             )
         fill = compute_fill_recompute(result, Decimal("10.10"), Decimal("5"))
         with pytest.raises(IllegalTransition, match="WATCH -> FILLED"):
