@@ -152,7 +152,7 @@ Not started. No `.env` copied into this worktree, no `cobalt db migrate`, no `se
 
 | item | value |
 |---|---|
-| branch | `sprint-2/cards` tip **`00c568e`**, worktree **clean**, 43 commits above main `34524c1` |
+| branch | `sprint-2/cards`: **stack tip `00c568e`** (43 commits above main `34524c1`); branch tip is `30f3402`, this report's own commit, sitting one above it. Worktree **clean**. |
 | stack shape | P2 35 commits (`f87ff05` … `060dab9`) rebased onto main, ops-0918 8 commits (`800d73c` … `00c568e`) cherry-picked on top; ops code byte-identical to `856176e` |
 | what is proven | steps 0, 1.1, 1.2, 1.3 all PASS — the stack assembles with no conflict and no dropped commit; **rebuilding it is not needed, only the fixture is** |
 | what is NOT proven | the offline suite (red, above), the integrated suite with `cobalt_dev`, the real-vault suite, the dark-file dry run, `jobs restarts` — none of step 2 ran |
