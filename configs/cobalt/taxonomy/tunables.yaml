@@ -95,46 +95,7 @@ tunables:
     dynamic: true
     status: replay_pending
     source: ruling
-    consumers: ["Extension instantiation", "cobalt.radar.anatomy.extension (path B)"]
-
-  # S2-P2 STEP-3 detector definitions (plan §8 item 3): decided with veto,
-  # replay_pending until a corpus pass — they gate card LANDING, behind R9.
-  - key: extension.path_a_volume_ma_bars
-    value: 20
-    unit: bars
-    scope: global
-    dynamic: true
-    status: replay_pending
-    source: dwv
-    consumers: ["cobalt.radar.anatomy.extension (path A volume band sample n)"]
-
-  # §3.2 ruled "MA+2σ"; a row so the band's k is a stored input, not a literal.
-  - key: extension.path_a_volume_sigma
-    value: 2
-    unit: ratio
-    scope: global
-    dynamic: true
-    status: replay_pending
-    source: ruling
-    consumers: ["cobalt.radar.anatomy.extension (path A volume band k)"]
-
-  - key: extension.leg_base
-    value: session_open
-    unit: label
-    scope: global
-    dynamic: true
-    status: replay_pending
-    source: dwv
-    consumers: ["cobalt.radar.anatomy (run and leg base = first RTH working bar)"]
-
-  - key: range_break.htf_range
-    value: prior_session_high_low
-    unit: label
-    scope: global
-    dynamic: true
-    status: replay_pending
-    source: dwv
-    consumers: ["cobalt.radar.anatomy.daily (RangeBreak(HTF), htf_level_proximity)"]
+    consumers: ["Extension instantiation"]
 
   - key: extension.backside_hh_min
     value: 1

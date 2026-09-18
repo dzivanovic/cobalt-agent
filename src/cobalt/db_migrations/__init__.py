@@ -12,15 +12,6 @@
 `0005_heartbeat_note_absent.sql` — adds the benign note-absence outcome.
 `0005_heartbeat_note_absent.rollback.sql` — restores the 0003 outcome domain
                                          only when no new-domain row exists.
-`0006_radar_score.sql` — the system-side radar scoring seam (runs, scores,
-                         board view, empty desk tables); `failed_stage`
-                         gains 'evaluate'.
-`0006_radar_score.rollback.sql` — drops the seam; clears 'evaluate' stages
-                                  before restoring the 0004 CHECK.
-`0007_radar_cards.sql` — user-side radar cards: nullable sizing, card
-                         columns, dots, taps, run receipt, views.
-`0007_radar_cards.rollback.sql` — deletes radar-origin cards, drops the
-                                  card tables/columns, restores NOT NULL.
 
 These are the DATABASE-WIDE migrations and they are the only ones that
 live outside a feature module. A module's own DDL still lives in its own
@@ -44,14 +35,10 @@ FORWARD = (
     MIGRATIONS_DIR / "0003_heartbeat_vault_outcome.sql",
     MIGRATIONS_DIR / "0004_radar_pool.sql",
     MIGRATIONS_DIR / "0005_heartbeat_note_absent.sql",
-    MIGRATIONS_DIR / "0006_radar_score.sql",
-    MIGRATIONS_DIR / "0007_radar_cards.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
-    MIGRATIONS_DIR / "0007_radar_cards.rollback.sql",
-    MIGRATIONS_DIR / "0006_radar_score.rollback.sql",
     MIGRATIONS_DIR / "0005_heartbeat_note_absent.rollback.sql",
     MIGRATIONS_DIR / "0004_radar_pool.rollback.sql",
     MIGRATIONS_DIR / "0003_heartbeat_vault_outcome.rollback.sql",

@@ -557,8 +557,7 @@ def screens_validate(args) -> None:
     from cobalt.taxonomy.loader import load_tunables
     from cobalt.vault import resolve_vault_path
 
-    from .collector import DAILY_RETRIES_PER_REQUEST
-    from .notes import FENCE_RE, parse_note, parse_note_bytes, plan_transport_demand
+    from .notes import FENCE_RE, parse_note, parse_note_bytes, planned_pool_rpm, planned_total_rpm
     from .sources import LegacyWatchlistsConfig, archive_targets
 
     cfg = load_config()
@@ -607,24 +606,12 @@ def screens_validate(args) -> None:
     ceiling = int(ceiling_raw)
     list_blocks = [item.block for item in lists.blocks if isinstance(item.block, ListBlock)]
     chunk_count = sum(-(-len(block.tickers) // cfg.list_chunk_size) for block in list_blocks)
-    # One total-demand computation for every consumer (L53): the same plan
-    # `radar sources` and the resident use, daily bars and context included.
-    demand = plan_transport_demand(
-        pool,
-        screen_count=len(derived),
-        list_blocks=list_blocks,
-        list_chunk_size=cfg.list_chunk_size,
-        scan_interval=interval,
-        context_tickers=len(cfg.context.tickers),
-        daily_names=pool.cap,
-        retries_per_request=DAILY_RETRIES_PER_REQUEST,
-        ceiling_rpm=ceiling,
-    )
-    if demand.refusal is not None:
+    pool_rpm = planned_pool_rpm(pool, interval)
+    planned = planned_total_rpm(pool, len(derived), list_blocks, cfg.list_chunk_size, interval)
+    if planned > ceiling:
         raise ProposalRefused(
-            f"pool budget exceeded: {demand.refusal}; planned_rpm={demand.steady_rpm:.2f} "
-            f"(pool={demand.pool_rpm:.2f}, screens={len(derived)}, lists_chunks={chunk_count}, "
-            f"context={demand.context_rpm:.2f}, daily_names={demand.daily_names}), "
+            f"pool budget exceeded: planned_rpm={planned:.2f} "
+            f"(pool={pool_rpm:.2f}, screens={len(derived)}, lists_chunks={chunk_count}), "
             f"finviz_max_rpm={ceiling}, cap={pool.cap}, scan_interval={interval}"
         )
 
@@ -667,18 +654,9 @@ def screens_validate(args) -> None:
     for block in derived:
         print(f"{block.screen}: {block.active_from}-{block.active_to}")
     print(
-        f"transport budget: {demand.steady_rpm:.2f}/{ceiling} rpm "
-        f"(pool={demand.pool_rpm:.2f}, cap={pool.cap}, "
-        f"screens={len(derived)}, lists_chunks={chunk_count}, "
-        f"context={demand.context_rpm:.2f}, scan_interval={interval}s)"
-    )
-    drain = (
-        "none" if demand.cold_drain_minutes is None
-        else f"{demand.cold_drain_minutes:.1f} min at {demand.headroom_rpm:.2f} rpm headroom"
-    )
-    print(
-        f"daily bars: {demand.daily_names} name(s) once per ET day, cold drain {drain}; "
-        f"first cold cycle {demand.cold_cycle_seconds:.0f}s paced by the shared bucket"
+        f"transport budget: {planned:.2f}/{ceiling} rpm "
+        f"(pool={pool_rpm:.2f}, cap={pool.cap}, "
+        f"screens={len(derived)}, lists_chunks={chunk_count}, scan_interval={interval}s)"
     )
     print(f"drift: {installed_status}")
     print(f"archive targets: {len(archive_targets(lists))}")

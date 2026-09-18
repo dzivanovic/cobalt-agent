@@ -65,28 +65,6 @@ CREATED_TABLES: dict[str, Side] = {
     # db_migrations/0004_radar_pool.sql
     "radar_pool": Side.SYSTEM,
     "radar_membership": Side.SYSTEM,
-    # db_migrations/0006_radar_score.sql — the scoring seam (S2-P2)
-    "radar_score_run": Side.SYSTEM,
-    "radar_score": Side.SYSTEM,
-    "desk_regime": Side.SYSTEM,
-    "desk_packet": Side.SYSTEM,
-    "desk_grade": Side.SYSTEM,
-    # db_migrations/0007_radar_cards.sql — radar cards (S2-P2)
-    "card_dots": Side.USER,
-    "card_dot_taps": Side.USER,
-    "radar_score_receipt": Side.USER,
-}
-
-#: VIEWS created by database-wide migrations. On a side like any table
-#: (the placement test reads pg_views too), but kept apart from
-#: CREATED_TABLES because the migrate proof digests tables by primary
-#: key and a view has none.
-CREATED_VIEWS: dict[str, Side] = {
-    # 0006: latest complete run per pool
-    "radar_board_v": Side.SYSTEM,
-    # 0007: the card-joined board, and tap-vs-shadow agreement
-    "radar_cards_v": Side.USER,
-    "shadow_agreement_v": Side.USER,
 }
 
 #: Declared by ADR-0008 D2 before they are built, so the first migration
@@ -110,7 +88,6 @@ PLACEMENT: dict[str, Side] = {
     **SEEDED_TABLES,
     **MODULE_TABLES,
     **CREATED_TABLES,
-    **CREATED_VIEWS,
     **DECLARED_TABLES,
 }
 
@@ -158,7 +135,6 @@ def tables_on(side: Side) -> frozenset[str]:
 __all__ = [
     "DECLARED_TABLES",
     "CREATED_TABLES",
-    "CREATED_VIEWS",
     "MODULE_TABLES",
     "MOVED_TABLES",
     "OLD_TREE_PUBLIC_TABLES",
