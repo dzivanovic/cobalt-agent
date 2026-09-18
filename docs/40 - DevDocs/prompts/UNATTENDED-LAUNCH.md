@@ -28,3 +28,7 @@ When the report's last line is its stop line (`READY FOR MERGE …`, `OPS … ES
 - `claude agents --json` reports a hub that is blocked on a dialog as `busy`/`working`. The registry cannot see a blocked hub; only a missing dialog tool prevents one.
 - The Claude Code web/desktop view does not render a terminal permission dialog; only the attached herdr viewer does.
 - An allow rule in the tracked `.claude/settings.json` or in `--allowedTools` beats the auto-mode classifier for a matching BARE command; the same command wrapped (`cd … &&`, redirects) does not match and is judged by the classifier.
+
+## 6. Facts learned 2026-09-18
+- A PREFLIGHT probe must itself match the rule it probes: `cobalt settings load --help` does not match `settings load *--dry-run*`, fell to the classifier and was denied `[Credential Leakage]` (`s2-p2-reship-2026-09-18.md` ESCALATE 2). The desk names every probe in the prompt; a rule with no harmless variant inside its own pattern is probed by its first real use.
+- A branch that was MERGED and then REVERTED on main is never re-landed with `git rebase main`: its commits are ancestors of main, so `main..HEAD` does not contain them, the rebase replays nothing and exits 0 (09-18 06:5x, P2 re-ship, first launch). No rebase flag changes that (`--reapply-cherry-picks` only keeps commits that ARE in the range). Re-land = `git cherry-pick <base>..<shipped tip>` onto a branch off main, proven by an empty `git diff --stat <shipped tip> HEAD -- <code paths>`. Every prompt that re-ships after an L54 rollback carries that check.
