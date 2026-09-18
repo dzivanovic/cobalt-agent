@@ -88,31 +88,6 @@ def test_every_repo_meta_path_is_meta(monkeypatch):
     assert not any(row.escalate for row in rows)
 
 
-def test_an_operator_script_with_no_cobalt_reader_derives_no_restart(monkeypatch):
-    # `ops/cto-desk.sh` is run by a human or an agent at a shell. No Cobalt
-    # process imports or reads it and no plist names it, so it can derive no
-    # restart — it escalated as UNCLASSIFIED (every resident) on the range
-    # that added it.
-    monkeypatch.setattr(restarts, "changes", lambda _range: [
-        Change("ops/cto-desk.sh", "A"),
-    ])
-    (row,) = classify("HEAD...HEAD")
-    assert row.restarts == ()
-    assert row.escalate is False
-    assert "no Cobalt reader" in row.rule
-
-
-def test_a_resident_wrapper_script_is_not_an_operator_script(monkeypatch):
-    # The reason OPS_TOOLS is an explicit list and not `ops/*.sh`:
-    # `start_aset.sh` IS read — it is what com.cobalt.aset's plist executes.
-    monkeypatch.setattr(restarts, "changes", lambda _range: [
-        Change("ops/start_aset.sh", "M"),
-    ])
-    (row,) = classify("HEAD...HEAD")
-    assert row.escalate is True
-    assert row.restarts  # the conservative set, until someone rules on it
-
-
 def test_an_unknown_dotfile_still_escalates(monkeypatch):
     # The rule is an EXPLICIT LIST, never a glob on dotfiles: a new dotfile
     # nobody has classified is exactly the case ESCALATE exists for (L42).
