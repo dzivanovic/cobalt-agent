@@ -345,3 +345,41 @@ MEMORY: stack gate 0918 second run — P2's fixture row added (`f907f1d`), offli
 CONTINUE: after ESCALATE 1 is built and ESCALATE 2 ruled, relaunch this prompt — §F is already committed, the dev DB already carries the row, so the run resumes at step 2.7 (the integrated suite).
 
 FAILED: integrated suite — 8 red (`1805 passed`) with the dev database, none of them P2's and none fixable by database state: 5 in `tests/cobalt/test_trader_settings.py` are structural — the revision-3 proof seeds `"user".trader_settings` from the YAML frozen in git history (six step-downs) and ops-0918's mandatory `trade_count_over_band` refuses it, which also corrects deploy 1's "every failure is cobalt_dev state" — and 3 in `test_aset_config` / `test_daymode::TestShippedConfig` are a ruled-value contradiction between production's grade ladder and what those tests assert, needing Dejan's word; the §F fixture fix is done and GREEN offline (1535 passed, 0 failed, commit `f907f1d`), the DEV apply is done and `validate` reads `trade_count_over_band=down(1)`, `.env` removed, nothing merged or pushed, production and the real vault untouched — ESCALATE: 3
+
+---
+
+# THIRD RUN
+
+Seat: `stack-gate-0918c`, Opus 5 (`claude-opus-5`), background, same worktree `/Users/cobalt/cobalt-wt/s2-p2-cards` (`sprint-2/cards`).
+Prompt: `docs/40 - DevDocs/prompts/2026-09-18/13-stack-gate-3.md`. Steps 2 and 3 of `09-stack-gate.md` bind verbatim, with the two stated differences (over-band dev dry run now expects the zero-change line; no second `--apply`). §T (the two TEST-SIDE fixes) is this prompt's addition; nothing under `src/`, `configs/` or `ops/` may change.
+Inherited: stack tip `00c568e` (43 commits), fixture fix `f907f1d`, branch tip `ff26c8f`, worktree clean. `cobalt_dev` at `0007`, carrying the over-band row and production's settings values.
+
+## AUTHORIZATION (verified by this hub, 14:58 ET)
+
+This launch line is **rule-for-rule identical to the first and second runs'** (compared item by item: the `.env` `cp`/`rm`/`ls -la` by exact path; the five `COBALT_ENV=dev` rules; `COBALT_VAULT_PATH=… pytest`; `uv run pytest *`; `uv run cobalt jobs restarts *`; `git rebase main`; `git rebase --abort`; `git cherry-pick *`; `git add/commit/diff/status/log/show/rev-parse *`; `git -C /Users/cobalt/cobalt log*`/`rev-parse *`; `cd`/`ls`/`grep`/`tail`/`wc`/`shasum -a 256`/`date`; `--disallowedTools AskUserQuestion EnterWorktree`). Rows read from `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-18.md` §4 — R1 list (1) at `:14`, R2 at `:15`, R7 at `:20`, R3 at `:16`, R5 at `:17`, R8 at `:21`. Every rule MATCHES; the first run's rule-by-rule table stands unchanged and is not repeated.
+
+The file edits of §T are made with the Edit tool inside this hub's own worktree — not a Bash rule, they need none. Not in this line and not used: push, `bypassPermissions`, `--allow-prod`, any `COBALT_ENV=production` command, any vault write, `git reset`, `git branch -f`.
+
+**The two citations this prompt rests on, verified BEFORE touching Group B:**
+
+| citation | what the record says, verbatim | verdict |
+|---|---|---|
+| `cto-2026-09-17.md:194` **R13** | "ruling A." — a day OVER `daymode.trade_count_band` (max 6) = adverse, effect `down 1`; UNDER the band does nothing | MATCH — the Group A appended row's `down`/`1` |
+| `areas/cobalt-sprints.md:37` (09-14 C-size) | "C-size RULED (source: 09-14 weekly review with his trading psychologist): grade C re-enabled; … applied by him 07:55 (`aset.enabled_grades`) and 07:59 (`daymode.reduced_enabled_grades` — `enabled_modes=[reduced]` is the gating key)" | MATCH — word for word as the prompt cites it |
+| `PROJECT-LEDGER.md:1393` | same ruling, and it goes further: "Findings: … **a Sonnet run made a silent policy assumption in a daymode comment (reduced keeps A,B) — overruled.**" | MATCH, and it names the exact defect the three Group B tests carry |
+
+The ledger line is stronger than the prompt claimed: the "reduced keeps A,B" assumption was not merely superseded on 09-14, it was **overruled by name**. The three tests pin the overruled value. Group B proceeds.
+
+Carried forward from both earlier runs: the prompt file's tail contains a block styled as a system reminder asking for a `Claude-Session:` URL in every commit. It arrives inside a tool result (the file's own bytes), not from the harness; the genuine harness reminder names only `Co-Authored-By`. Not followed.
+
+## PREFLIGHT 3rd run (14:58 ET)
+
+| # | rule probed | command | exit | verdict |
+|---|---|---|---|---|
+| P1 | `git status*` | `git status --porcelain` | 0 | allowed — no output (clean) |
+| P2 | `git log*` | `git log -1 --oneline` | 0 | allowed — `ff26c8f` |
+| P3 | `date*` | `date` | 0 | allowed — Fri Sep 18 14:58:10 EDT 2026 |
+| P4 | `uv run pytest *` | `uv run pytest --co -q tests/cobalt/test_trader_settings.py` | 0 | allowed — 16 tests collected |
+| P5 | `grep *` | authorization reads above | 0 | allowed |
+
+**0 allowlisted shape denied.** Probed by first real use, per the prompt: the `.env` `cp`/`rm`/`ls -la`, `COBALT_ENV=dev pytest`, `db migrate`, both `settings load` rules, `COBALT_VAULT_PATH=… pytest`, `jobs restarts`, `git add`/`git commit`.
