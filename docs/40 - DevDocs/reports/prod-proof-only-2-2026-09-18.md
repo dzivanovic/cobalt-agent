@@ -4,7 +4,11 @@ Hub `prod-proof-0918b` (Opus 5, `claude-opus-5`), worktree `/Users/cobalt/cobalt
 
 ## §0 Headline
 
-- RUNNING — filled at the close.
+- **PROD PROOF DONE (17:29 ET). The FINAL code (F1 folded, `0e1f768`) met production once, read-only: `system.bars` 8,592,116 rows digested in 45.75 s, exit 0, no `ProgramLimitExceeded`, no `-- applying` line, nothing applied and nothing written.**
+- **The outage estimate is now measured: total 46.0 s per pass → BEFORE + AFTER ≈ 92 s** (was ≈94 s extrapolated); `bars` is 99.5% of it; the command's wall clock was 50 s.
+- 23 tables probed on `cobalt_brain`; `0006`/`0007`'s eight tables absent, as a forward migration expects. Dev first: 23 tables, exit 0, no `-- applying`.
+- One production command, run once. `.env` copied by name, removed, proven gone. Worktree clean, report committed after every section.
+- ESCALATE: **3** — the ≈92 s grows linearly with `bars`; the archiver is not booted out with the other residents; the 600000 ms Bash timeout is now a property of the harness.
 
 ## PREFLIGHT
 
@@ -134,3 +138,44 @@ NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.
 
 The digest moved because the table moved: 777 new rows between the runs. That is the expected reading of a live table, not a defect — `--proof-only` renders no verdict, and F1's folded one-statement probe means the printed count and the digest are the SAME snapshot (8,592,116 rows is the count the cursor yielded, not a separate `count(*)`). The one-pass fold is also not slower than the two-pass version it replaced: 45.75 s against 46.73 s at 0.009% more rows.
 
+
+## Close
+
+**Per-table seconds, every production table over 100,000 rows.** There is exactly one: `bars`. The next largest table in the database is `radar_membership` at 3,330 rows — three orders of magnitude below the threshold.
+
+| table | rows | seconds | share of the proof |
+|---|---|---|---|
+| `bars` | 8,592,116 | **45.75** | 99.5% |
+| `vault_writes` | 1,290 | 0.12 | 0.3% |
+| `radar_membership` | 3,330 | 0.04 | 0.1% |
+| `aset_sizings` | 146 | 0.03 | 0.1% |
+| the other 19 | ≤ 463 | 0.00 each | ~0% |
+| **TOTAL (the command's own line)** | | **46.0 s** | |
+
+**Implied outage cost of a BEFORE + AFTER pair: ≈ 92 s** (2 × 46.0 s), measured, not extrapolated — this replaces the ≈94 s estimate the deploy plan has been carrying. It is the probe cost ALONE: the migration's own DDL (0006 + 0007) and the residents' stop/start sit on top of it. The command's wall clock was 50 s, so a deploy step that runs the migration should budget ≈100–110 s of client time for the two probes plus connect overhead.
+
+**`0006`/`0007`'s tables are absent from production — yes, all eight.** The proof table lists what exists, and every table the two pending migrations create prints `-` for schema, rows and digest:
+
+| migration | tables | production |
+|---|---|---|
+| `0006_radar_score.sql` | `radar_score_run`, `radar_score`, `desk_regime`, `desk_packet`, `desk_grade` | **all 5 absent** |
+| `0007_radar_cards.sql` | `card_dots`, `card_dot_taps`, `radar_score_receipt` | **all 3 absent** |
+
+(`card_stop_edits` and `card_transitions` DO exist in production — they are not 0006/0007 tables; they arrived with the settings/migrations tier and are unaffected.) This is the state a forward migration expects: nothing from the reverted 09-17 merge survived, as `cobalt.md` `## NOW` records.
+
+Heartbeat-visible impact during the probe is the desk's to check, not this hub's.
+
+| check | result |
+|---|---|
+| `git status --porcelain` | empty (verified at the close) |
+| production writes | **none possible** — the transaction was `READ ONLY` at the server; the run applied nothing and wrote nothing |
+| vault writes | none — L28 owes no trace line for a run that writes nothing |
+| commands run against production | **one**, the approved line, once |
+
+## ESCALATE
+
+1. **The outage budget is now a measured fact: ≈92 s of probe inside the deploy, and it grows linearly with `bars`.** `bars` is 99.5% of the proof cost. It gained 777 rows in the 36 minutes between the two proofs (RTH poller) and ~182k rows since the 15:5x count of 8,410,174 (the nightly archiver). At today's ≈5.3 s per million rows, every additional million rows adds ≈11 s to the deploy outage. The streamed fold removed the 1 GB cliff, not the linear cost — the fix is the BOUNDED proof for `bars` (closed periods proven once by a stored digest, only the open period re-read), which is exactly what R15's partition/retention tribunal is being asked to design. Until then every production migration carries ≈92 s and rising.
+2. **A live `bars` makes the BEFORE/AFTER pair snapshot-sensitive, and `com.cobalt.archiver` is not one of the residents the deploy boots out.** This run and the 16:54 run printed different `bars` digests for the honest reason that 777 rows landed between them. In a deploy the AFTER probe must see what the BEFORE probe saw except for the DDL: `com.cobalt.aset` and `com.cobalt.radar` are stopped by the deploy, but the archiver (20:30 ET bulk insert into `bars`) and the 21:05 replay are NOT, so a migration overlapping them would read a changed `bars`, print `CHANGED` and roll back — a false failure, fail-safe but expensive. Tonight's prompt `19-deploy-stack-2.md` step 1.1 already avoids this by the clock (start ≤19:00 ET or ≥21:40 ET, re-checked before 3.2/3.6/3.7). The standing fix is to make the exclusion explicit — the archiver disarmed like the other two, or `bars` proven by the bounded method of item 1 — rather than relying on a clock rule in each prompt.
+3. **Keep the Bash `timeout` at 600000 on every production migrate call.** The read-only proof alone spent 50 s of client wall time; a real migration pays two probes plus the DDL, i.e. ≈100–110 s+, against a 120 s default that would kill the client mid-transaction (the failure mode the desk named for `19-deploy-stack-2.md` step 3.5). This is a property of the harness now, not of one prompt: any future caller of `db migrate` against production needs the same.
+
+PROD PROOF DONE | 23 tables | system.bars 8592116 rows in 45.75 s | total 46.0 s → BEFORE+AFTER ≈ 92 s of outage | nothing applied, nothing written | 0006/0007 absent: yes | ESCALATE: 3
