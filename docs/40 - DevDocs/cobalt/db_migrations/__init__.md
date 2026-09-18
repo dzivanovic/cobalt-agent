@@ -71,6 +71,17 @@ store why a field is null and what the rank came from (L57).
 
 A rerun reconciles in one transaction: retire, then insert, then link.
 
+**Migration prose is checked, not trusted** (2026-09-18, chunk FY).
+`0008`'s header called `movers_daily` "the unfiltered top movers the 21:05
+replay fetches"; R17 moved `com.cobalt.replay` to 21:10 on 2026-09-17 and
+the comment kept pointing at an occurrence that no longer exists.
+`test_p4_migration_prose_names_no_retired_schedule_literal` reads
+`000[89]*.sql` WITH their comments (the other lint tests strip them through
+`_sql`) and refuses any retired schedule literal. Correcting a comment is
+safe here because the runner's digests are of table DATA
+(`cli.DIGEST_EXCLUDED_COLUMNS` and the probe), never of the file's bytes —
+there is no content checksum over a `.sql` file anywhere in this package.
+
 **Rollbacks** drop only their own tables and columns. Reverse 0009 before
 0008: `missed` references `movers_daily`. The boundary is `--down-to 0007`.
 If P2 is present, its 0007 rollback deleting radar cards that picks/missed

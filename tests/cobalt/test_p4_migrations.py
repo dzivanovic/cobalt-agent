@@ -124,6 +124,29 @@ def test_0008_creates_only_system_objects_and_0009_only_user_tables():
     assert "CREATE TABLE IF NOT EXISTS system." not in s9
 
 
+#: Schedule literals that have MOVED. `21:05` was `com.cobalt.replay`'s
+#: `at` until 2026-09-17 R17 put it at 21:10 (`configs/cobalt/jobs.yaml`);
+#: a migration that still names it sends its reader to an occurrence that
+#: does not exist.
+RETIRED_SCHEDULE_LITERALS = ("21:05",)
+
+
+def test_p4_migration_prose_names_no_retired_schedule_literal():
+    """Read WITH the comments (`_sql` strips them): the prose is the only
+    place a stale schedule can hide in a migration, and it is exactly what
+    a reader trusts. Safe to correct — the runner's digests are of table
+    DATA (`cli.DIGEST_EXCLUDED_COLUMNS`), never of the file's bytes, so a
+    comment edit re-applies and re-proves unchanged.
+    """
+    for path in sorted(MIGRATIONS_DIR.glob("000[89]*.sql")):
+        text = path.read_text()
+        stale = [lit for lit in RETIRED_SCHEDULE_LITERALS if lit in text]
+        assert not stale, (
+            f"{path.name} names the retired schedule literal(s) {stale} — "
+            "com.cobalt.replay runs at 21:10 (2026-09-17 R17)"
+        )
+
+
 def test_0008_0009_name_nothing_of_the_p2_seam_so_either_merge_order_applies():
     for path in (FWD_0008, FWD_0009, REV_0008, REV_0009):
         text = _sql(path)

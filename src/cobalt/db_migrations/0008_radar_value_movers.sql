@@ -9,7 +9,7 @@ ALTER TABLE system.radar_membership
   ADD COLUMN IF NOT EXISTS rank_metric TEXT CHECK (rank_metric IN ('volume','rvol')),
   ADD COLUMN IF NOT EXISTS rank_value  NUMERIC(20,6);
 
--- movers_daily: the unfiltered top movers the 21:05 replay fetches.
+-- movers_daily: the unfiltered top movers the 21:10 replay fetches.
 -- Rows are never deleted: a rerun that drops a mover out of the selected
 -- set marks it active = false (Astra R1-20/R2-1), so "user".missed.mover_id
 -- never loses its target and every prior row keeps its replay inputs.
