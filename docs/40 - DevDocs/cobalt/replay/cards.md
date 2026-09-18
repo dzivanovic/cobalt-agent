@@ -62,6 +62,29 @@ reads no clock, database or config.
    `gate_detail` records every gate, plus `trade_count_band: "unset"`,
    which is never an `excluded_by`.
 
+### EXPIRED: one gate value, three recorded causes (added 2026-09-18, chunk FY)
+
+`STATE_GATE` is many-to-one exactly once. `cards/expire.py` can expire a
+card for three different reasons — `deadline` ("window closed at …"),
+`avoid` ("an avoid predicate turned true") and `stop_before_arm` ("stop …
+touched before arm at …") — and all three map to `excluded_by = "window"`.
+The gate value is correct and is NOT widened: `excluded_by`'s vocabulary is
+constrained by `0009`'s CHECK and that constraint is untouched.
+
+What was lost was the cause. So for an EXPIRED state as of the trigger,
+`gate_detail["state"]` carries two more keys, copied VERBATIM off the
+transition that expired the card, never re-derived from the window:
+
+- `recorded_reason` — `card_transitions.reason`
+- `recorded_cause` — `card_transitions.evidence->>'cause'`, when the writer
+  recorded one (`radar_expiry`'s evidence does; the 16:05 `expire_due` job
+  records its cause in the reason prose only, so this key is null there)
+
+Both keys are absent for every other state, so a non-EXPIRED card's
+`gate_detail` shape is byte-identical to before (tested on the real-shape
+fixture card 302). Either value may be null — that is the honest reading of
+a transition written before this shipped, not a computed fallback.
+
 The stop is read **as of the trigger** (`stop_as_of`): the current stop,
 walked back through every later `card_stop_edits` row. State comes from
 `state_at`, ordered by `(at, id)`. If tied rows have no id, the order is
@@ -69,8 +92,9 @@ unknowable and the call refuses.
 
 ## The receipt (R1-8, L57)
 `receipt = {"inputs", "outputs"}`. The inputs hold the formula version,
-card, transitions, stop edits, window resolution, session close, positions,
-the eligibility rule and the consumed bars. The consumed bars are the bar
+card, transitions (each with its `reason` and `cause`, so the recorded
+cause above replays from the receipt alone), stop edits, window resolution,
+session close, positions, the eligibility rule and the consumed bars. The consumed bars are the bar
 proving start coverage, every searched bar, and the bar proving close
 coverage. `inputs_sha256 = sha256_json(inputs)`.
 `replay_from_receipt(receipt)` rebuilds every value from the inputs alone
@@ -87,7 +111,9 @@ and returns an identical `MissRow` (tested on the real fixture day).
 ## `MissedStore` (USER side)
 - `candidates(day)`: cards created that ET day
   (`created_at AT TIME ZONE 'America/New_York'`) with no FILLED transition,
-  plus their transitions and stop edits.
+  plus their transitions and stop edits. The transition read also loads
+  `reason` and `evidence` (2026-09-18, chunk FY) — without those two
+  columns the EXPIRED cause above would be null on every production row.
 - `positions(day)`: cards FILLED by the day and not CLOSED before it,
   overnight holds included.
 - `radar_cards(day)` (2026-09-18, chunk E2): every radar-origin

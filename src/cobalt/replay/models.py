@@ -81,6 +81,13 @@ class TransitionRow(_Frozen):
     from_state: Optional[str] = None
     to_state: str
     at: AwareDatetime
+    #: The row's OWN recorded words (`card_transitions.reason`) and, when
+    #: its `evidence` carries one, the structured cause the writer chose
+    #: (`cards/expire.radar_expiry`: deadline / avoid / stop_before_arm).
+    #: Carried verbatim, never re-derived: one `excluded_by` gate value can
+    #: stand for several recorded causes, and the cause is the fact (R1-11).
+    reason: Optional[str] = None
+    cause: Optional[str] = None
 
 
 class StopEdit(_Frozen):

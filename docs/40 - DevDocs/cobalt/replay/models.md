@@ -31,6 +31,10 @@ datetimes. `sha256_json` hashes that text. Every `inputs_sha256` is
 ## Card side (F12)
 - `TransitionRow`: one `card_transitions` row. `id` is optional only so the
   hub-cut fixture (which has no ids) can load. `(at, id)` is the order.
+  `reason` and `cause` (2026-09-18, chunk FY) are the row's OWN recorded
+  words and its structured cause (`evidence->>'cause'`), both optional and
+  both carried verbatim — `replay_card` puts them in `gate_detail` for an
+  EXPIRED state, where one `excluded_by` value stands for three causes.
 - `StopEdit`: one `card_stop_edits` row.
 - `CardCandidate`: a card created that ET day whose history never reached
   FILLED, with its transitions and stop edits.

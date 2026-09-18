@@ -42,7 +42,10 @@ THE GATES (R4, R1-11), first match in this fixed order:
 3. the card's state at `trigger_ts`, from `card_transitions` ordered by
    `(at, id)`: WATCH/MISSED -> `unarmed`, PASSED -> `passed`,
    ARMED/TRIGGERED -> `not_filled`, EXPIRED -> `window`. FILLED/CLOSED
-   cannot occur for a candidate and refuse loud.
+   cannot occur for a candidate and refuse loud. EXPIRED is the one
+   many-to-one mapping — `cards/expire.py` records three causes for it —
+   so an EXPIRED state carries its transition's own `reason` and `cause`
+   into `gate_detail['state']`, verbatim, beside the gate value.
 
 `trade_count_band` is recorded `unset` while its tunables are null (plan
 §8 item 2) and is never an `excluded_by` value.
@@ -341,6 +344,18 @@ def replay_card(
             f"card {card.id}: state {in_force.to_state} at the trigger — a candidate never reached FILLED"
         )
     excluded_by = "rule_10" if rule_10 else ("window" if window_fired else state_gate)
+    state_detail: dict[str, Any] = {
+        "state": in_force.to_state, "transition_id": in_force.id,
+        "at": in_force.at.isoformat(), "maps_to": state_gate,
+    }
+    if in_force.to_state == "EXPIRED":
+        # EXPIRED has ONE gate value and THREE causes (`cards/expire.py`:
+        # deadline, avoid, stop_before_arm). `excluded_by` stays `window`
+        # — the vocabulary 0009's CHECK constrains is not widened — so the
+        # transition's own recorded words are carried here instead, exactly
+        # as the live path wrote them. Never re-derived from the window.
+        state_detail["recorded_reason"] = in_force.reason
+        state_detail["recorded_cause"] = in_force.cause
     gate_detail = {
         "order": list(GATE_ORDER),
         "rule_10": {
@@ -349,8 +364,7 @@ def replay_card(
         },
         "window": {"fired": window_fired, "window_end": w_end.isoformat(),
                    "trigger_ts": trigger_ts.isoformat()},
-        "state": {"state": in_force.to_state, "transition_id": in_force.id,
-                  "at": in_force.at.isoformat(), "maps_to": state_gate},
+        "state": state_detail,
         "trade_count_band": "unset",
     }
 
@@ -372,7 +386,8 @@ def replay_card(
         "stop_edits": edits,
         "transitions": [
             {"id": t.id, "card_id": t.card_id, "from_state": t.from_state,
-             "to_state": t.to_state, "at": t.at.isoformat()}
+             "to_state": t.to_state, "at": t.at.isoformat(),
+             "reason": t.reason, "cause": t.cause}
             for t in ordered_transitions(card.transitions)
         ],
         "window": {"resolved_end": window.resolved_end.isoformat(), "source": window.source,
@@ -518,12 +533,15 @@ class MissedStore:
             transitions: dict[int, list[TransitionRow]] = {i: [] for i in ids}
             edits: dict[int, list[StopEdit]] = {i: [] for i in ids}
             if ids:
-                for tid, card_id, frm, to, at in conn.execute(
-                    "SELECT id, card_id, from_state, to_state, at FROM card_transitions "
+                for tid, card_id, frm, to, at, reason, evidence in conn.execute(
+                    "SELECT id, card_id, from_state, to_state, at, reason, evidence "
+                    "FROM card_transitions "
                     "WHERE card_id = ANY(%s) ORDER BY at, id", (ids,),
                 ).fetchall():
+                    evidence = evidence if isinstance(evidence, dict) else {}
                     transitions[card_id].append(
-                        TransitionRow(id=tid, card_id=card_id, from_state=frm, to_state=to, at=at)
+                        TransitionRow(id=tid, card_id=card_id, from_state=frm, to_state=to, at=at,
+                                      reason=reason, cause=evidence.get("cause"))
                     )
                 for eid, card_id, at, frm, to in conn.execute(
                     "SELECT id, card_id, at, from_stop, to_stop FROM card_stop_edits "

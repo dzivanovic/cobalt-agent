@@ -15,6 +15,7 @@ The one-bar vectors below are formula arithmetic, not parser fixtures.
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 from datetime import date, datetime, timedelta, timezone
@@ -24,6 +25,7 @@ from pathlib import Path
 import pytest
 
 from cobalt.archiver.models import Bar, Interval
+from cobalt.cards.expire import radar_expiry
 from cobalt.cards.models import CardState
 from cobalt.replay import cards as cards_mod
 from cobalt.replay.cards import (
@@ -344,6 +346,61 @@ def test_r1_11_terminal_states_map_with_their_reason(terminal, expected):
            TransitionRow(id=2, card_id=7, from_state="WATCH", to_state=terminal, at=T0 + timedelta(minutes=2)))
     bars = full_day({3: bar(3, 100, 101.5, 100, 101)})
     assert run(card(transitions=trs), bars).miss.excluded_by == expected
+
+
+def test_r1_11_expired_card_carries_its_own_recorded_reason_into_gate_detail():
+    """EXPIRED has ONE gate value and THREE causes.
+
+    `excluded_by` stays `window` (the vocabulary 0009's CHECK constrains is
+    untouched), but the live path records `stop_before_arm`, `avoid` or
+    `deadline` (`cards/expire.radar_expiry`). The transition's own recorded
+    words ride into `gate_detail`, verbatim, and come back out of the
+    receipt alone (L57).
+    """
+    expired_at = T0 + timedelta(minutes=2)
+    # Not invented here: this is what the live expiry path records for this
+    # card, produced by the real type.
+    expiry = radar_expiry(
+        state=CardState.WATCH, now=expired_at, expires_at=T0 + timedelta(minutes=300),
+        avoided=False, direction="long", stop=Decimal("99"),
+        bars_after_formation=[bar(1, 100, 100, 98.5, 99)],
+    )
+    assert expiry is not None and expiry.cause == "stop_before_arm"
+
+    trs = (TransitionRow(id=1, card_id=7, to_state="WATCH", at=T0),
+           TransitionRow(id=2, card_id=7, from_state="WATCH", to_state="EXPIRED",
+                         at=expired_at, reason=expiry.reason, cause=expiry.evidence["cause"]))
+    miss = run(card(transitions=trs), full_day({3: bar(3, 100, 101.5, 100, 101)})).miss
+
+    assert miss.excluded_by == "window"
+    state = miss.gate_detail["state"]
+    assert state["maps_to"] == "window"
+    assert state["recorded_reason"] == expiry.reason
+    assert state["recorded_cause"] == "stop_before_arm"
+    again = replay_from_receipt(json.loads(json.dumps(miss.receipt))).miss
+    assert again == miss
+    assert again.gate_detail["state"]["recorded_reason"] == expiry.reason
+
+
+def test_a_non_expired_cards_gate_detail_shape_is_unchanged(cards_day, bars_day):
+    """Real CRWD card 302 is WATCH at its trigger. The recorded-reason keys
+    belong to an EXPIRED as-of-trigger state and to nothing else."""
+    miss = _replay_fixture(cards_day, bars_day, 302).miss
+    assert list(miss.gate_detail) == ["order", "rule_10", "window", "state", "trade_count_band"]
+    assert list(miss.gate_detail["state"]) == ["state", "transition_id", "at", "maps_to"]
+
+
+def test_the_candidate_loader_reads_the_transition_reason_and_its_cause():
+    """The recorded reason is only real in production if the loader carries
+    the columns: `card_transitions` stores `reason` and a jsonb `evidence`
+    (`cards/store.py`'s INSERT), and `evidence['cause']` is where the radar
+    expiry path puts its structured cause. Offline this is a static proof;
+    the live read is the hub's `requires_db` run.
+    """
+    source = " ".join(inspect.getsource(MissedStore.candidates).split())
+    assert "FROM card_transitions" in source
+    assert "SELECT id, card_id, from_state, to_state, at, reason, evidence" in source
+    assert 'cause=evidence.get("cause")' in source
 
 
 def test_r1_11_simultaneous_transitions_order_by_id_and_refuse_without_one():
