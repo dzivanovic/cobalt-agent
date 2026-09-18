@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from cobalt.daymode.config import SIGNAL_IDS
 from cobalt.db import Side
 from cobalt.settings import (
     SETTING_KEYS,
@@ -39,10 +40,21 @@ pytestmark = pytest.mark.skipif(
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+#: What a signal the frozen text predates is ruled to cost. A signal not
+#: named here is ruled OFF visibly (`effect: none`) — the only honest
+#: default for a seed that cannot carry a policy it never saw.
+#: `trade_count_over_band` is RULED (Dejan, `cto-2026-09-17.md` R13,
+#: "ruling A."): a day above `daymode.trade_count_band.max` is adverse,
+#: `down` one rung.
+_RULED_ROWS: dict[str, dict[str, object]] = {
+    "trade_count_over_band": {"effect": "down", "rungs": 1},
+}
+
+
 #: The revision the two YAMLs were last committed at. The proof reads
 #: them from here so it survives their deletion — see the module
 #: docstring. Resolved at runtime so a rebase cannot stale it.
-def _seed_texts() -> dict[str, str]:
+def _frozen_texts() -> dict[str, str]:
     out = {}
     for name in (ASET_FILENAME, DAYMODE_FILENAME):
         path = REPO_ROOT / "configs" / "cobalt" / name
@@ -59,6 +71,43 @@ def _seed_texts() -> dict[str, str]:
             cwd=REPO_ROOT, capture_output=True, text=True, check=False,
         ).stdout
     return out
+
+
+def _seed_texts() -> dict[str, str]:
+    """The frozen texts, plus a ruled row for every `SIGNAL_IDS` entry
+    they predate.
+
+    The revision-3 YAMLs are HISTORY: they froze at six step-downs and can
+    never grow a seventh, while `SIGNAL_IDS` keeps growing — 2026-09-18
+    added `trade_count_over_band`. `DayModeConfig` refuses a step-down
+    table missing any signal the proposer can compute, so without this
+    every seed here dies on a signal this module was never about, and the
+    revision-3 proof stops proving the equivalence it exists for. Exactly
+    the pattern ops-0918 used for its own note fixture (`382c862`).
+
+    The git blob is never touched: `_frozen_texts()` still returns history
+    verbatim and this completion happens in memory, on both sides of the
+    proof at once (`from_db` and `from_yaml` read the same seed), so the
+    field-for-field equivalence is unweakened.
+    """
+    texts = _frozen_texts()
+    doc = yaml.safe_load(texts[DAYMODE_FILENAME])
+    rows = doc["daymode"]["stepdowns"]
+    named = {row["signal"] for row in rows}
+    missing = [signal for signal in SIGNAL_IDS if signal not in named]
+    if not missing:
+        return texts
+    for signal in missing:
+        ruled = _RULED_ROWS.get(signal, {"effect": "none"})
+        rows.append(
+            {
+                "signal": signal,
+                "because": signal.replace("_", " "),
+                **ruled,
+            }
+        )
+    texts[DAYMODE_FILENAME] = yaml.safe_dump(doc, sort_keys=False)
+    return texts
 
 
 @pytest.fixture
