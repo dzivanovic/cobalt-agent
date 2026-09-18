@@ -19,7 +19,7 @@ Pure functions over Pydantic values: no database, clock or config read.
   - **Desk** dots (`catalyst`, `market_alignment`, `sector_alignment`) are shadow, `cobalt-degraded`, and N/A through S2: `DESK_NA` for catalyst, `DEFAULT_UNRULED` for both alignments (plan §8 ESCALATE 4). They are mirrored as `desk shadow: n/a (…)`.
   - **Human** dots are hollow until tapped. There is never a neutral 5.
 - `grade_from_curve(value, curve)` is piecewise-linear, flat beyond the end anchors, clipped to 1–10 and rounded half-up ONCE. It returns `(unrounded, grade)`; the curve and the unrounded grade are stored in `engine_inputs`.
-- `refresh_dots(previous, fresh, *, at, added_by=None)` carries taps and history across. A factor missing from a non-empty previous set (a def that gained one — taxonomy v0.8's `catalyst`, Astra R2-4) is added untapped with a `{"label": "factor_added", "at", **added_by}` history record; the stage passes the definition md5 and run id. When a fresh dot is stale and the stored one had a grade, that grade moves into history as `{"label": "input_stale", "at", "engine_value", "engine_grade"}`.
+- `refresh_dots(previous, fresh, *, at)` carries taps and history across. When a fresh dot is stale and the stored one had a grade, that grade moves into history as `{"label": "input_stale", "at", "engine_value", "engine_grade"}`.
 - `conviction(dots)` is the mean of TAPPED trader grades ÷ 10, quantized to 6 dp. An empty tap set is `None`, never 0.
 - `suppression(dots)` is the settled rule: a computed dot that is N/A and untapped suppresses the score, with the reason.
 - `proximity(*, last, trigger, stop)` is `clamp(1 − |last − trigger| ÷ (3 × |trigger − stop|), 0, 1)`, quantized to 6 dp.

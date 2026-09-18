@@ -856,34 +856,6 @@ class CardStore:
             for r in rows
         ]
 
-    def radar_board_cards(self, trade_date: date) -> list[dict[str, Any]]:
-        """The `/radar` ladder's read (STEP-8): every `"user".radar_cards_v`
-        row that is open, plus the terminal ones whose last transition
-        landed on `trade_date` (ET), each with its dots. Read-only — no
-        schema init, no attestation, no write."""
-        with self._connect() as conn:
-            cur = conn.execute(
-                "SELECT * FROM radar_cards_v WHERE state = ANY(%s) "
-                "OR (state_at AT TIME ZONE 'America/New_York')::date = %s ORDER BY card_id",
-                (list(self.RADAR_OPEN_STATES), trade_date),
-            )
-            columns = [d.name for d in cur.description]
-            rows = [dict(zip(columns, r)) for r in cur.fetchall()]
-            dots = self._dots_for(conn, [row["card_id"] for row in rows])
-        return [{**row, "dots": dots[row["card_id"]]} for row in rows]
-
-    def shadow_agreement(self, since: Optional[date]) -> list[dict[str, Any]]:
-        """`"user".shadow_agreement_v` rows (STEP-10), oldest day first. Read-only."""
-        with self._connect() as conn:
-            cur = conn.execute(
-                "SELECT user_id, factor, trade_date, pairs, median_abs_delta, within2_share, deltas "
-                "FROM shadow_agreement_v WHERE %s::date IS NULL OR trade_date >= %s::date "
-                "ORDER BY factor, trade_date",
-                (since, since),
-            )
-            columns = [d.name for d in cur.description]
-            return [dict(zip(columns, r)) for r in cur.fetchall()]
-
     def formation_consumed(self, ticker: str, slug: str, direction: str, formed_at: datetime) -> bool:
         """Any radar card, in ANY state, already made from this formation
         (R1-16: a passed or expired formation never mints a second WATCH)."""
@@ -1034,14 +1006,6 @@ class CardStore:
             )
             columns = [d.name for d in cur.description]
             return [dict(zip(columns, row)) for row in cur.fetchall()]
-
-    def receipt_for_run(self, run_id: int) -> Optional[int]:
-        """The receipt id of one run (one receipt per run), or None."""
-        with self._connect() as conn:
-            rows = conn.execute("SELECT id FROM radar_score_receipt WHERE run_id = %s", (run_id,)).fetchall()
-        if len(rows) > 1:
-            raise CardStateError(f"radar_score_run {run_id} has {len(rows)} receipts — expected exactly one")
-        return int(rows[0][0]) if rows else None
 
     def receipts_chain(self, receipt_id: int) -> list[dict]:
         """The receipt and every base it references, oldest first."""

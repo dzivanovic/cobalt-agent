@@ -247,41 +247,6 @@ def test_dot_taps_append_recompute_and_are_never_overwritten_by_a_scan(world):
     assert grade == 9
 
 
-def test_shadow_agreement_v_pairs_taps_with_the_engine_grade_per_factor_and_et_day(world):
-    """STEP-10: the view the shadow report reads, on real taps."""
-    from datetime import date
-
-    from cobalt.aset.models import Grade
-    from cobalt.cards import shadow_report as sr
-    from cobalt.settings.card import CardSettings
-
-    card_id = world["scan"](SCAN0).created[0]
-    cards = world["cards"]
-    bands = CardSettings.from_rows(ENABLED).proposed_key
-    with cards._connect() as conn:
-        engine = conn.execute(
-            "SELECT engine_grade FROM card_dots WHERE card_id = %s AND factor = 'rvol'", (card_id,)
-        ).fetchone()[0]
-    assert engine is not None
-    enabled = [Grade.A, Grade.B, Grade.C]
-    next_day = SCAN0 + timedelta(days=1)
-    cards.tap_dot(card_id, "rvol", engine, bands=bands, enabled=enabled, now=SCAN0)
-    cards.tap_dot(card_id, "rvol", max(1, engine - 3), bands=bands, enabled=enabled, now=SCAN0 + timedelta(minutes=1))
-    cards.tap_dot(card_id, "setup_relation", 7, bands=bands, enabled=enabled, now=SCAN0)  # no engine grade: no pair
-    cards.tap_dot(card_id, "rvol", engine, bands=bands, enabled=enabled, now=next_day)
-    rows = [r for r in cards.shadow_agreement(None)
-            if r["trade_date"] in (date(2026, 1, 6), date(2026, 1, 7))]
-    assert {r["factor"] for r in rows} == {"rvol"}
-    assert [(r["trade_date"], r["pairs"], list(r["deltas"])) for r in sorted(rows, key=lambda r: r["trade_date"])] == [
-        (date(2026, 1, 6), 2, [0, engine - max(1, engine - 3)]), (date(2026, 1, 7), 1, [0]),
-    ]
-    report = sr.shadow_report(rows, bar=CardSettings.from_rows(
-        {"radar.cards_enabled": False,
-         "card.shadow_promotion_bar": {"sessions": 10, "pairs": 30, "median_max": 1, "within2_min": 0.9}},
-    ).shadow_promotion_bar, since=None)
-    assert report.factors[0].sessions == 2 and report.factors[0].pairs == 3 and not report.factors[0].gate_met
-
-
 def test_one_promoted_card_and_release(world):
     card_id = world["scan"](SCAN0).created[0]
     cards = world["cards"]
@@ -312,50 +277,3 @@ def test_a_publish_failure_leaves_the_run_unpublished_on_cobalt_dev(world):
         ).fetchall()]
     assert statuses == ["complete", "failed"]
     assert {row["run_id"] for row in radar.board(POOL)} == {radar.latest_run_id(POOL) - 1}
-
-
-def test_audit_export_of_a_cobalt_dev_run_verifies_and_writes_the_bundle(world, tmp_path):
-    """STEP-11 against the real stores: the run row, its score rows and its
-    receipt chain as Postgres returns them (JSONB, TIMESTAMPTZ, NUMERIC)."""
-    import hashlib
-    import json
-
-    from cobalt.aset.models import Grade
-    from cobalt.radar.audit_export import export_run
-    from cobalt.session import session_clock
-    from cobalt.settings.card import CardSettings
-
-    card_id = world["scan"](SCAN0).created[0]
-    world["cards"].tap_dot(card_id, "trail_fit", 7, bands=CardSettings.from_rows(ENABLED).proposed_key,
-                           enabled=[Grade.A, Grade.B, Grade.C], now=SCAN0 + timedelta(seconds=30))
-    second = world["scan"](SCAN0 + timedelta(seconds=100))
-    out = tmp_path / "bundle"
-    manifest = export_run(second.run_id, radar_store=world["radar"], card_store=world["cards"], out=out,
-                          clock=session_clock(), generated_at=SCAN0 + timedelta(hours=8))
-    assert manifest.self_check["all_equal"] and all(h["matches"] for h in manifest.hashes.values())
-    for name, digest in manifest.files.items():
-        assert hashlib.sha256((out / name).read_bytes()).hexdigest() == digest
-    cards = json.loads((out / "cards.json").read_text())["cards"]
-    assert cards and cards[0]["card_id"] == card_id and cards[0]["published"]["card_score"] is not None
-
-
-def test_the_ladder_reads_radar_cards_v_with_its_dots_on_cobalt_dev(world):
-    """STEP-8: the panel's one read is the user-side view, dots attached,
-    validated by the panel's row model and rendered with its badges."""
-    from cobalt.aset import radar_panel as panel
-    from cobalt.cards.radar import FIELD_OWNERS
-    from cobalt.session import session_clock
-
-    first = world["scan"](SCAN0)
-    card_id = first.created[0]
-    rows = world["cards"].radar_board_cards(sup.TRADE_DATE)
-    row = next(r for r in rows if r["card_id"] == card_id)
-    assert set(row) - {"dots"} == set(FIELD_OWNERS)
-    assert len(row["dots"]) == len(sup.ANATOMY_FACTORS) and row["pool_position"] == 1
-    view = panel.build_ladder_view(
-        card_store=world["cards"], settings_store=world["settings"], clock=session_clock(),
-        now=SCAN0 + timedelta(seconds=60), rung_source=lambda _at, _cfg: "reduced",
-    )
-    card = next(c for c in view.active if c.id == card_id)
-    assert card.state.value == "WATCH" and any(d.role == "shadow" and d.hollow for d in card.dots)
-    assert 'data-key="pass"' in panel.render_ladder(view)

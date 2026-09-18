@@ -724,14 +724,11 @@ def refresh_card(
     *,
     at: datetime,
     thresholds: HealthThresholds | None,
-    run_id: int | None = None,
 ) -> CardUpdate:
     """The per-scan numbers for an existing card, from this scan's
-    evaluation. Formation evidence is never touched. `ld` is the def of
-    the card's slug as loaded NOW — after a note edit its md5 differs from
-    the card's formation md5, and a factor it gained is added once."""
+    evaluation. Formation evidence is never touched."""
     fresh = compute_dots(ld.definition.quality_factors, ev.observations, settings.curves, at=at)
-    dots = refresh_dots(card.dots, fresh, at=at, added_by={"definition_md5": ld.md5, "run_id": run_id})
+    dots = refresh_dots(card.dots, fresh, at=at)
     last = ev.last_price if ev.last_price is not None else card.entry
     score = score_card(dots, last=last, trigger=card.entry, stop=card.stop,
                        bands=settings.proposed_key, enabled=enabled)
@@ -1026,13 +1023,10 @@ def replay_receipt(receipts: Sequence[Mapping[str, Any]], *, clock) -> tuple[lis
     at = receipts[index]["evaluated_at"]
     at = datetime.fromisoformat(at) if isinstance(at, str) else at
     for card in receipts[index]["tap_versions"]["cards"]:
-        # The def the stage refreshed the card with (a later edit of the
-        # same slug may differ from the card's formation md5, R2-4).
-        md5 = card.get("definition_md5") or card["trade_def_md5"]
-        ev = by_key.get((card["pool_member_id"], md5))
+        ev = by_key.get((card["pool_member_id"], card["trade_def_md5"]))
         if ev is None:
             raise ReplayError(f"card {card['card_id']}: no evaluation for its member/def in the receipt")
-        ld = defs[md5]
+        ld = defs[card["trade_def_md5"]]
         fresh = compute_dots(ld.definition.quality_factors, ev.observations, settings.curves, at=at)
         dots = overlay_taps(fresh, card["taps"])
         last = ev.last_price if ev.last_price is not None else Decimal(card["entry"])
@@ -1237,12 +1231,11 @@ class EvaluateStage:
                         defaults, scan_interval, settings, enabled, open_cards, thresholds, cohort, pool_unit,
                         tunables_snapshot, settings_snapshot, definitions_snapshot, session, gate, colours):
         by_md5 = {d.md5: d for d in defs}
-        by_slug = {d.slug: d for d in defs}
-        card_defs = {(c.pool_member_id, c.trade_def_slug) for c in open_cards}
+        card_defs = {(c.pool_member_id, c.trade_def_md5) for c in open_cards}
         evaluations: list[MemberEvaluation] = []
         for member in members:
             for ld in defs:
-                if member.departed and (member.membership_id, ld.slug) not in card_defs:
+                if member.departed and (member.membership_id, ld.md5) not in card_defs:
                     continue  # a departed member forms no new card
                 evaluations.append(evaluate_member(
                     ld, member, tunables=tunables, defaults=defaults, scan_interval=scan_interval, clock=self.clock,
@@ -1274,14 +1267,11 @@ class EvaluateStage:
             open_keys = set()
             for card in open_cards:
                 open_keys.add((card.ticker, card.trade_def_slug, card.direction))
-                # Same md5 first; else the same SLUG's current def (the note
-                # was edited since formation — R2-4's catalyst batch).
-                ld = by_md5.get(card.trade_def_md5) or by_slug.get(card.trade_def_slug)
-                ev = ev_by.get((card.pool_member_id, ld.md5)) if ld is not None else None
+                ev = ev_by.get((card.pool_member_id, card.trade_def_md5))
+                ld = by_md5.get(card.trade_def_md5)
                 if ev is None or ld is None:
                     outcome.refusals.append(
-                        f"card {card.card_id}: its trade_def {card.trade_def_slug} (md5 {card.trade_def_md5}) "
-                        "is no longer loaded — not refreshed"
+                        f"card {card.card_id}: its trade_def md5 {card.trade_def_md5} is no longer loaded — not refreshed"
                     )
                     continue
                 # Chronology: only i1 bars that opened after the formation
@@ -1292,8 +1282,7 @@ class EvaluateStage:
                     avoided=ev.evaluation == "avoided", direction=card.direction, stop=card.stop,
                     bars_after_formation=[b for b in self._i1_closed(members, card) if b.ts >= formed_end],
                 )
-                update = refresh_card(card, ev, ld, settings, enabled, at=instant, thresholds=thresholds,
-                                      run_id=run_id)
+                update = refresh_card(card, ev, ld, settings, enabled, at=instant, thresholds=thresholds)
                 update = update.model_copy(update={"radar_score_id": score_ids[(ev.membership_id, ev.md5)]})
                 self.card_store.refresh_radar_card(update, now=instant, before_commit=gate("evaluate:card"))
                 outcome.refreshed.append(card.card_id)
@@ -1306,7 +1295,7 @@ class EvaluateStage:
                 copies.append({"score_id": update.radar_score_id, "proximity": update.proximity,
                                "conviction": update.conviction, "card_score": update.card_score,
                                "suppressed_reason": update.score_suppressed})
-                receipt_cards.append(self._receipt_card(card, update, definition_md5=ld.md5))
+                receipt_cards.append(self._receipt_card(card, update))
 
             for ev in evaluations:
                 if ev.evaluation != "formed" or ev.departed or ev.formation is None:
@@ -1374,7 +1363,7 @@ class EvaluateStage:
                                "card_score": score.card_score, "suppressed_reason": score.score_suppressed})
                 receipt_cards.append({
                     "card_id": card_id, "pool_member_id": ev.membership_id, "trade_def_md5": ld.md5,
-                    "definition_md5": ld.md5, "entry": str(spec.entry), "stop": str(spec.stop), "taps": [],
+                    "entry": str(spec.entry), "stop": str(spec.stop), "taps": [],
                     "published": published_numbers(update),
                 })
             if copies:
@@ -1401,10 +1390,10 @@ class EvaluateStage:
         return []
 
     @staticmethod
-    def _receipt_card(card: OpenRadarCard, update: CardUpdate, *, definition_md5: str) -> dict[str, Any]:
+    def _receipt_card(card: OpenRadarCard, update: CardUpdate) -> dict[str, Any]:
         return {
             "card_id": card.card_id, "pool_member_id": card.pool_member_id, "trade_def_md5": card.trade_def_md5,
-            "definition_md5": definition_md5, "entry": str(card.entry), "stop": str(card.stop), "taps": card.taps,
+            "entry": str(card.entry), "stop": str(card.stop), "taps": card.taps,
             "published": published_numbers(update),
         }
 

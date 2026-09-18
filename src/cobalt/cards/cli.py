@@ -182,31 +182,5 @@ def add_parser(sub) -> None:
     edges = csub.add_parser("edges", help="Print the edge table (source of the DevDoc).")
     edges.set_defaults(func=cmd_edges)
 
-    trail = csub.add_parser(
-        "trail-fit-draft",
-        help="Write the trail_fit -> source: human review DRAFT (R5). Touches no note; no apply exists.",
-    )
-    trail.add_argument("--out", help="Draft path (default: docs/40 - DevDocs/reports/trail-fit-draft-<date>.md).")
-    trail.set_defaults(func=_trail_fit_draft)
-
-    shadow = csub.add_parser(
-        "shadow-report",
-        help="Per-factor shadow agreement vs card.shadow_promotion_bar (STEP-10). Read-only; flips nothing.",
-    )
-    shadow.add_argument("--since", help="First ET trading date to include (YYYY-MM-DD).")
-    shadow.set_defaults(func=_shadow_report)
-
-
-def _trail_fit_draft(args: argparse.Namespace) -> None:
-    from .trail_fit_draft import cmd_trail_fit_draft
-
-    cmd_trail_fit_draft(args)
-
-
-def _shadow_report(args: argparse.Namespace) -> None:
-    from .shadow_report import cmd_shadow_report
-
-    cmd_shadow_report(args)
-
 
 __all__ = ["add_parser"]

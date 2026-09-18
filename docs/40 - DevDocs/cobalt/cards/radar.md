@@ -18,7 +18,5 @@ The radar card's creation spec, the owner badge of every card field, and the lad
   - at most one promoted WATCH card moves to #2, or just below two or more pinned cards, and is never moved down; its rank chip is unchanged;
   - release restores the natural order.
 
-2026-09-16 (chunk C): the view gained `last_price` and `pool_position` (the membership's `last_rank`) for the panel; both are `COBALT`. The panel's `RadarCardRow` refuses to import if its columns and `FIELD_OWNERS` disagree.
-
 ## Gotchas
 Two price representations, named (R1-7): `trigger_price`/`structural_stop` are immutable formation evidence, read by replay and audit. `entry`/`stop` are the live sizing inputs, read by key taps, proximity and stop-touched expiry.

@@ -423,35 +423,6 @@ def add_parser(sub) -> None:
     sync.add_argument("--apply", action="store_true")
     sync.set_defaults(func=cmd_sync_frontmatter)
 
-    review = gsub.add_parser(
-        "catalyst-review",
-        help="Draft the ONE catalyst review file for taxonomy v0.8 (R10); writes no note.",
-    )
-    review.add_argument("--out", help="Review file path (default: docs/_inflight/catalyst-review-<date>.md, gitignored — the review carries note paths and factor names, user data under L32).")
-    review.set_defaults(func=_catalyst_review)
-
-    apply = gsub.add_parser(
-        "catalyst-apply",
-        help="Batch-apply a marked catalyst review file, bound to its sha256 (R10).",
-    )
-    apply.add_argument("--review", required=True, help="The marked review file.")
-    apply.add_argument("--sha256", required=True, help="sha256 of the marked file's bytes.")
-    apply.add_argument("--dry-run", action="store_true")
-    apply.add_argument("--apply", action="store_true")
-    apply.set_defaults(func=_catalyst_apply)
-
-
-def _catalyst_review(args: argparse.Namespace) -> None:
-    from .catalyst import cmd_catalyst_review
-
-    cmd_catalyst_review(args)
-
-
-def _catalyst_apply(args: argparse.Namespace) -> None:
-    from .catalyst import cmd_catalyst_apply
-
-    cmd_catalyst_apply(args)
-
 
 __all__ = [
     "add_parser",
