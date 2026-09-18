@@ -47,7 +47,7 @@ def test_rollback_without_bound_refuses():
 def test_cmd_refuses_missing_bound_before_connection(monkeypatch):
     monkeypatch.setattr(cli.db, "connect_migration", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("connected")))
     with pytest.raises(MigrationError, match="before any connection"):
-        cli.cmd_migrate(argparse.Namespace(rollback=True, down_to=None, allow_prod=False))
+        cli.cmd_migrate(argparse.Namespace(rollback=True, down_to=None, allow_prod=False, proof_only=False))
 
 
 def test_direction_aware_verdict_table():
@@ -63,9 +63,20 @@ def test_changed_verdict_rolls_back_before_close_and_report(monkeypatch):
 
     class Conn:
         autocommit = True
+        read_only = None
+        def execute(self, _sql):
+            # `_connect` checks the database encoding before it probes: the
+            # digest is folded as UTF-8 bytes client-side, and on any other
+            # server encoding it would not equal the value the proof has
+            # always printed.
+            return _Row("UTF8")
         def rollback(self): events.append("rollback")
         def commit(self): events.append("commit")
         def close(self): events.append("close")
+
+    class _Row:
+        def __init__(self, value): self._value = value
+        def fetchone(self): return (self._value,)
 
     before = {"radar_pool": _state("system")}
     after = {"radar_pool": _state("system", 1, "changed")}
@@ -75,5 +86,5 @@ def test_changed_verdict_rolls_back_before_close_and_report(monkeypatch):
     monkeypatch.setattr(cli, "_apply", lambda _conn, _paths: events.append("apply"))
     monkeypatch.setattr(cli, "_print_proof", lambda *_a, **_k: events.append("report") or 1)
     with pytest.raises(MigrationError, match="rolled back before commit"):
-        cli.cmd_migrate(argparse.Namespace(rollback=False, down_to=None, allow_prod=False))
+        cli.cmd_migrate(argparse.Namespace(rollback=False, down_to=None, allow_prod=False, proof_only=False))
     assert events == ["apply", "rollback", "close", "report"]

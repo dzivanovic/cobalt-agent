@@ -1,4 +1,4 @@
-"""`cobalt db migrate [--allow-prod] [--rollback]` — ADR-0008's harness.
+"""`cobalt db migrate [--allow-prod] [--rollback] [--proof-only]` — ADR-0008's harness.
 
 WHAT IT PRINTS IS THE POINT. A migration that moves twelve tables between
 schemas and adds a column to six of them is a migration whose claim
@@ -7,7 +7,29 @@ every run captures, per table, BEFORE and AFTER:
 
   * where it lives (`public` / `system` / `"user"`),
   * `count(*)`,
-  * a content digest: `md5(string_agg(row::text, '|' ORDER BY <pk>))`.
+  * a content digest over the rows, ordered by the primary key,
+  * how long taking that proof cost, in wall seconds.
+
+THE DIGEST IS FOLDED ROW BY ROW IN THIS PROCESS (2026-09-18). It used to
+be one server-side value — the whole table concatenated with `'|'` and
+hashed in a single expression — and on 2026-09-18 that is exactly what
+killed a production deploy: `system.bars` holds 8,410,174 rows, the
+concatenation passed Postgres's 1 GB varlena ceiling, and the run died
+with `ProgramLimitExceeded` in the BEFORE proof, before the first
+`-- applying` line. `cobalt_dev` was green on the same command, so the
+gate could not see it. The rows now arrive through a NAMED (server-side)
+cursor in batches of `PROBE_BATCH_SIZE` and are folded into one
+`hashlib.md5()` — the separator written BETWEEN rows and never after the
+last, no rows at all hashing the empty string. Those are precisely the
+bytes the old aggregate produced, so **every digest keeps its old value**
+and proof tables printed before that date stay comparable. Memory is
+constant and there is no size ceiling left.
+
+Two designs were rejected and are recorded so they are not re-proposed:
+hashing each row and digesting the hashes (32 bytes per row is 269 MB at
+today's row count and hits 1 GB again near 33M rows — a later ceiling is
+still a ceiling), and exempting bulk tables from the content digest (a
+weaker proof exactly where the most data lives).
 
 THE DIGEST EXCLUDES every column added by these migrations: `user_id`,
 `vault_outcome`, and `vault_reason`. A digest over the whole row would
@@ -27,15 +49,26 @@ and prints the same proof table. Running `migrate`, then `--rollback`,
 then `migrate` again must land on the same digests — the suite asserts
 exactly that round-trip on `cobalt_dev`.
 
+`--proof-only` takes the BEFORE proof over every table the harness knows,
+prints it with its timings, and applies NOTHING. Its transaction is
+opened READ ONLY, so a bug in this flag's own handling cannot write
+either — the server refuses. It exists because the 09-18 defect cost a
+resident outage to discover: this is the command a deploy preflights
+while everything is still up. It is refused together with `--rollback` /
+`--down-to`, which exist to apply things.
+
 `--allow-prod` reaches `cobalt_brain` without flipping the process into
 production mode (RULING 7's one-off-tooling seam). Without it the target
-is whatever `COBALT_ENV` resolves.
+is whatever `COBALT_ENV` resolves. `--proof-only` is under the same gate:
+read-only or not, it does not open a production connection by itself.
 """
 
 from __future__ import annotations
 
 import argparse
-from typing import Optional
+import hashlib
+import time
+from typing import Iterable, Iterator, Optional
 
 from psycopg import sql
 
@@ -73,6 +106,12 @@ TABLE_DIGEST_EXCLUDED_COLUMNS: dict[str, tuple[str, ...]] = {
 #: Where a new-core table may legitimately be found, in look-up order.
 SEARCHED_SCHEMAS = ("public", "user", "system")
 
+#: Rows fetched per round trip from the server-side cursor the digest
+#: reads. Big enough that a million-row table is a hundred fetches, small
+#: enough that no batch is a memory event: the whole point of the
+#: 2026-09-18 rewrite is that neither side ever holds the table.
+PROBE_BATCH_SIZE = 10_000
+
 
 class MigrationError(RuntimeError):
     """The migration could not be run or could not be proven."""
@@ -109,33 +148,104 @@ def _pk_columns(conn, schema: str, table: str) -> list[str]:
     return [r[0] for r in rows]
 
 
-def _probe(conn, table: str) -> dict:
-    """(schema, rows, digest) for `table`, wherever it currently lives."""
-    schema = _schema_of(conn, table)
-    if schema is None:
-        return {"schema": None, "rows": None, "digest": None}
-    pk = _pk_columns(conn, schema, table)
-    row_json = sql.SQL("to_jsonb(t)")
+def _row_json(table: str) -> sql.Composed:
+    """`to_jsonb(t)` minus the columns these migrations add to `table`.
+
+    Split out so the digest expression has ONE definition: the streamed
+    proof builds its SELECT from it, and the suite's byte-compatibility
+    oracle — the only surviving copy of the old aggregate — builds the
+    old expression from the same thing, which is what makes the two
+    values comparable rather than merely similar.
+    """
+    row_json: sql.Composable = sql.SQL("to_jsonb(t)")
     for column in DIGEST_EXCLUDED_COLUMNS + TABLE_DIGEST_EXCLUDED_COLUMNS.get(table, ()):
         row_json = sql.SQL("({row_json} - {column})").format(
             row_json=row_json, column=sql.Literal(column)
         )
-    query = sql.SQL(
-        "SELECT count(*), "
-        "md5(coalesce(string_agg(({row_json})::text, '|' ORDER BY {order}), '')) "
-        "FROM {rel} AS t"
+    return row_json
+
+
+def _digest_rows(row_texts: Iterable[str]) -> str:
+    """Fold row texts into the digest, holding exactly one row at a time.
+
+    The bytes are the ones a `'|'`-joined aggregate of the same rows in
+    the same order would have produced: the separator goes BETWEEN rows
+    and never after the last, and no rows at all digest the empty string
+    (which is what the old expression's `coalesce(..., '')` arm meant).
+    That equality is not an implementation detail — it is what lets a
+    proof table printed today be compared with one printed before the
+    2026-09-18 rewrite.
+    """
+    digest = hashlib.md5()
+    first = True
+    for row_text in row_texts:
+        if first:
+            first = False
+        else:
+            digest.update(b"|")
+        digest.update(row_text.encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _stream_row_texts(conn, table: str, query) -> Iterator[str]:
+    """Yield `query`'s single text column through a server-side cursor.
+
+    NAMED, therefore server-side: an unnamed psycopg cursor reads the
+    whole result set into this process, which would move the 1 GB
+    ceiling rather than remove it. `itersize` is what makes the server
+    hand the rows over in batches instead of all at once.
+    """
+    with conn.cursor(name=f"cobalt_probe_{table}") as cursor:
+        cursor.itersize = PROBE_BATCH_SIZE
+        cursor.execute(query)
+        for (row_text,) in cursor:
+            yield row_text
+
+
+def _probe(conn, table: str) -> dict:
+    """(schema, rows, digest, seconds) for `table`, wherever it lives.
+
+    `seconds` is wall time and it is a deliverable, not decoration: this
+    probe runs twice inside a resident outage, so its cost is part of the
+    deploy plan.
+    """
+    started = time.perf_counter()
+    schema = _schema_of(conn, table)
+    if schema is None:
+        return {
+            "schema": None,
+            "rows": None,
+            "digest": None,
+            "seconds": time.perf_counter() - started,
+        }
+    pk = _pk_columns(conn, schema, table)
+    rel = sql.Identifier(schema, table)
+    rows = conn.execute(
+        sql.SQL("SELECT count(*) FROM {rel}").format(rel=rel)
+    ).fetchone()[0]
+    stream = sql.SQL(
+        "SELECT ({row_json})::text FROM {rel} AS t ORDER BY {order}"
     ).format(
-        row_json=row_json,
+        row_json=_row_json(table),
+        rel=rel,
         order=sql.SQL(", ").join(sql.Identifier("t", c) for c in pk),
-        rel=sql.Identifier(schema, table),
     )
-    rows, digest = conn.execute(query).fetchone()
-    return {"schema": schema, "rows": int(rows), "digest": digest}
+    digest = _digest_rows(_stream_row_texts(conn, table, stream))
+    return {
+        "schema": schema,
+        "rows": int(rows),
+        "digest": digest,
+        "seconds": time.perf_counter() - started,
+    }
 
 
 def _probe_all(conn) -> dict[str, dict]:
     tables = {**MOVED_TABLES, **SEEDED_TABLES, **CREATED_TABLES}
     return {t: _probe(conn, t) for t in sorted(tables)}
+
+
+def _total_seconds(probe: dict[str, dict]) -> float:
+    return sum(p["seconds"] for p in probe.values())
 
 
 def _verdict(
@@ -174,7 +284,7 @@ def _print_proof(
     tables = {**MOVED_TABLES, **SEEDED_TABLES, **CREATED_TABLES}
     header = (
         f"{'table':<20} {'side':<7} {'schema before -> after':<26} "
-        f"{'rows':<15} {'digest before -> after':<21} verdict"
+        f"{'rows':<15} {'probe secs':<15} {'digest before -> after':<21} verdict"
     )
     print(header)
     print("-" * len(header))
@@ -184,13 +294,14 @@ def _print_proof(
         where = f"{b['schema'] or '-'} -> {a['schema'] or '-'}"
         rows = f"{'-' if b['rows'] is None else b['rows']} -> " \
                f"{'-' if a['rows'] is None else a['rows']}"
+        secs = f"{b['seconds']:.2f} -> {a['seconds']:.2f}"
         dig = f"{(b['digest'] or '-')[:8]} -> {(a['digest'] or '-')[:8]}"
         verdict = _verdict(name, b, a, direction=direction)
         if verdict == "CHANGED":
             changed += 1
         print(
             f"{name:<20} {tables[name].value:<7} {where:<26} {rows:<15} "
-            f"{dig:<21} {verdict}"
+            f"{secs:<15} {dig:<21} {verdict}"
         )
     print("-" * len(header))
     print(
@@ -205,7 +316,54 @@ def _print_proof(
            if changed == 0
            else f"{changed} table(s) CHANGED — investigate before proceeding.")
     )
+    _print_cost(before, after)
     return changed
+
+
+def _print_cost(before: dict[str, dict], after: dict[str, dict]) -> None:
+    """What the proof itself cost, because it is spent inside an outage."""
+    b, a = _total_seconds(before), _total_seconds(after)
+    slowest = max(before, key=lambda name: before[name]["seconds"])
+    print(
+        f"proof cost: BEFORE {b:.1f} s + AFTER {a:.1f} s = total {b + a:.1f} s; "
+        f"slowest table {slowest} ({before[slowest]['seconds']:.1f} s before)."
+    )
+
+
+def _print_probe(probe: dict[str, dict], *, dbname: str) -> None:
+    """`--proof-only`'s table: one state, with the full digests.
+
+    The full 32 characters rather than the migrate table's 8, because
+    this output exists to be carried out of the window and compared with
+    a later run's — a prefix is enough to read, not enough to trust.
+    """
+    tables = {**MOVED_TABLES, **SEEDED_TABLES, **CREATED_TABLES}
+    header = (
+        f"{'table':<20} {'side':<7} {'schema':<8} {'rows':<12} "
+        f"{'digest':<34} secs"
+    )
+    print(header)
+    print("-" * len(header))
+    for name in sorted(tables):
+        p = probe[name]
+        rows = "-" if p["rows"] is None else str(p["rows"])
+        print(
+            f"{name:<20} {tables[name].value:<7} {p['schema'] or '-':<8} "
+            f"{rows:<12} {p['digest'] or '-':<34} {p['seconds']:.2f}"
+        )
+    print("-" * len(header))
+    total = _total_seconds(probe)
+    print(
+        f"{len(tables)} table(s) probed on {dbname}; digest excludes "
+        f"{', '.join(DIGEST_EXCLUDED_COLUMNS)}"
+        + "".join(
+            f"; {table}: {len(cols)} card column(s) added by 0007"
+            for table, cols in TABLE_DIGEST_EXCLUDED_COLUMNS.items()
+        )
+        + f". Proof cost: total {total:.1f} s — and a migration pays it TWICE "
+        "(before and after), inside the outage."
+    )
+    print("NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.")
 
 
 def _apply(conn, paths) -> None:
@@ -222,7 +380,52 @@ def _apply(conn, paths) -> None:
         conn.execute(path.read_text())
 
 
+def _assert_utf8(conn) -> None:
+    """The digest's byte-compatibility rests on the database encoding.
+
+    The old aggregate hashed a server-side text value, whose bytes are in
+    the DATABASE encoding; the fold hashes `str.encode("utf-8")`. The two
+    agree exactly when that encoding is UTF-8 — and silently disagree on
+    non-ASCII rows when it is not, which is the one way this rewrite
+    could lie. Checked once per run rather than assumed (L1).
+    """
+    encoding = conn.execute("SHOW server_encoding").fetchone()[0]
+    if encoding.upper().replace("-", "").replace("_", "") != "UTF8":
+        raise MigrationError(
+            f"the database's server_encoding is {encoding!r}, not UTF8. The "
+            "content digest is folded client-side as UTF-8 bytes, so on this "
+            "database it would not equal the value the proof has always "
+            "printed. Fix the encoding or the fold, not the comparison."
+        )
+
+
+def _connect(dbname: str, *, allow_prod: bool, read_only: bool):
+    """The harness's ONE connection (ADR-0008 D1: one `connect_migration`).
+
+    `read_only=True` is not a convention this module promises to honour —
+    psycopg opens every transaction with `BEGIN ... READ ONLY`, so the
+    SERVER refuses a write even if the code asks for one.
+    """
+    conn = db.connect_migration(dbname, allow_prod=allow_prod)
+    try:
+        if read_only:
+            conn.read_only = True
+        conn.autocommit = False
+        _assert_utf8(conn)
+    except BaseException:
+        conn.close()
+        raise
+    return conn
+
+
 def cmd_migrate(args: argparse.Namespace) -> None:
+    proof_only = args.proof_only
+    if proof_only and (args.rollback or args.down_to):
+        raise MigrationError(
+            "--proof-only takes the proof and applies NOTHING, so it cannot be "
+            "combined with --rollback or --down-to, whose whole job is to apply "
+            "the reverse migrations. Run the proof first, then the rollback."
+        )
     if args.rollback and not args.down_to:
         targets = ", ".join(path.name for path in REVERSE)
         raise MigrationError(
@@ -233,9 +436,20 @@ def cmd_migrate(args: argparse.Namespace) -> None:
     direction = "ROLLBACK" if args.rollback else "FORWARD"
     paths = _rollback_paths(args.down_to) if args.rollback else FORWARD
 
+    if proof_only:
+        print(f"cobalt db migrate — PROOF ONLY on {dbname} (READ ONLY, nothing applied)")
+        conn = _connect(dbname, allow_prod=args.allow_prod, read_only=True)
+        try:
+            probe = _probe_all(conn)
+        finally:
+            conn.rollback()
+            conn.close()
+        print()
+        _print_probe(probe, dbname=dbname)
+        return
+
     print(f"cobalt db migrate — {direction} on {dbname}")
-    conn = db.connect_migration(dbname, allow_prod=args.allow_prod)
-    conn.autocommit = False
+    conn = _connect(dbname, allow_prod=args.allow_prod, read_only=False)
     try:
         before = _probe_all(conn)
         _apply(conn, paths)
@@ -303,6 +517,12 @@ def add_parser(sub) -> None:
         action="store_true",
         help="Reverse registered migrations: heartbeat columns dropped, tables moved to public.",
     )
+    migrate.add_argument(
+        "--proof-only",
+        action="store_true",
+        help="Take the proof (rows, digest, seconds) in a READ ONLY transaction "
+             "and apply nothing. Preflight this before a deploy window.",
+    )
     migrate.set_defaults(func=cmd_migrate)
 
     from cobalt.db_query import add_query_parser
@@ -312,6 +532,7 @@ def add_parser(sub) -> None:
 
 __all__ = [
     "DIGEST_EXCLUDED_COLUMNS",
+    "PROBE_BATCH_SIZE",
     "MigrationError",
     "TABLE_DIGEST_EXCLUDED_COLUMNS",
     "add_parser",
