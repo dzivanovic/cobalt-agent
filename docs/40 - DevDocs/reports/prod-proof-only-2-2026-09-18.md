@@ -28,3 +28,49 @@ Read for the index card: `UNATTENDED-LAUNCH.md` §2+§6 · Memory `INDEX.md` →
 **F1 is no longer a caveat on this code.** The prompt's index card warns that the two-statement probe can print a `rows` value off by concurrent inserts. `_probe` at this tip takes both numbers from ONE statement — `rows, digest = _digest_rows(_stream_row_texts(conn, table, stream))`, the count being the rows the cursor yields (`0e1f768`). On a live `bars` the printed count and digest are therefore the same snapshot, and the 8.4M-row table is read once per probe, not twice.
 
 **L28:** nothing is written by this run — no vault write, no DB write, no trace line is owed.
+
+## Dev — the flag does what it says in this checkout
+
+`.env` copied in by name (L41 interim, never printed). `COBALT_ENV=dev uv run cobalt db migrate --proof-only`, 17:29 ET, **exit 0**, verbatim:
+
+```
+cobalt db migrate — PROOF ONLY on cobalt_dev (READ ONLY, nothing applied)
+
+table                side    schema   rows         digest                             secs
+------------------------------------------------------------------------------------------
+aset_sizings         user    user     1            0824685c130da3c7cb7f0e76191a6819   0.01
+bars                 system  system   1043443      2769919a57144c7bf8720110061dbf72   5.42
+card_dot_taps        user    user     0            d41d8cd98f00b204e9800998ecf8427e   0.00
+card_dots            user    user     0            d41d8cd98f00b204e9800998ecf8427e   0.00
+card_stop_edits      user    user     1            7599f9ab6018697c2299e20bbacace54   0.00
+card_transitions     user    user     4            f181e76b208a51b503339267865c157c   0.00
+cobalt_email_sends   system  system   2            fba8cf9fc07cd6c95b503af272e26639   0.00
+cobalt_jobs          system  system   13           8d9b0861615861e343009f33118a4931   0.00
+cobalt_kill_switch   system  system   1            2e590e87d4c9576e61d1ee0d5c90bbab   0.00
+cobalt_redactions    system  system   121          177a0fde30d8c28fa57360b49382abb1   0.00
+day_modes            user    user     2            f2ffb4d41ed0a3bbc3dc2a1c7e6112b9   0.00
+desk_grade           system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+desk_packet          system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+desk_regime          system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_membership     system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_pool           system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_score          system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_score_receipt  user    user     0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_score_run      system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+session_blocks       system  system   6            b650702dd6fd624548e05ca940662f08   0.00
+traders              user    user     1            a64e01480038484676fad3b14eb2489f   0.00
+vault_overrides      user    user     6            6a8b05207f55b8e25c253ce990c7a65a   0.00
+vault_writes         user    user     184          4a965c69340f112d12e6ca21a8a0602c   0.01
+------------------------------------------------------------------------------------------
+23 table(s) probed on cobalt_dev; digest excludes user_id, vault_outcome, vault_reason, account_mode, pool_member_id; aset_sizings: 25 card column(s) added by 0007. Proof cost: total 5.5 s — and a migration pays it TWICE (before and after), inside the outage.
+NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.
+```
+
+| check | result |
+|---|---|
+| tables | **23**, each with rows + digest + seconds |
+| `-- applying` line | **none** — nothing was applied |
+| exit | **0** |
+| dev `bars` | **1,043,443 rows in 5.42 s** (the 09-18 build run read 5.55 s at the same row count — the one-pass fold is no slower) |
+| drift, expected | `cobalt_redactions` 118 → 121 rows, digest `2f0b1b28…` → `177a0fde…`: the append-only table drifts by design; no BASELINE comparison is made here (the gate run compared BEFORE with AFTER inside one command) |
+
