@@ -16,6 +16,16 @@ ROOT_DOCS = frozenset({"README.md", "CLAUDE.md", "AGENTS.md", "QWEN.md"})
 #: Agent-CLI harness files kept under ops/: read by a vendor CLI, never by a
 #: Cobalt process (the Grok sandbox profile, 2026-09-17).
 HARNESS_FILES = frozenset({"ops/grok-sandbox.toml"})
+#: Git's own bookkeeping — files the VERSION CONTROL SYSTEM reads and no
+#: Cobalt process ever opens, so they can derive no restart (2026-09-18;
+#: S2-P2 ESCALATE 14, carried three times).
+#:
+#: An EXPLICIT LIST, deliberately, and never a glob on dotfiles: `.env` is a
+#: dotfile the runtime very much reads, and the next dotfile nobody has
+#: thought about is exactly the case ESCALATE exists for. A path earns its
+#: way onto this list by someone establishing it has no runtime reader.
+#: `.claude/` is NOT here — it is already HARNESS, which is what it is (L3).
+REPO_META = frozenset({".gitignore", ".gitattributes", ".gitmodules"})
 
 
 class RestartError(RuntimeError):
@@ -198,6 +208,11 @@ def classify(git_range: str, registry: JobRegistry | None = None) -> list[Classi
             # L42 amendment O9: documentation with no runtime reader derives
             # no restart, not even the conservative set.
             output.append(Classification(path, item.change, "DOCS", ()))
+            continue
+        if not rule and path in REPO_META:
+            # Repo metadata with no runtime reader derives no restart — the
+            # same shape as the 09-15 DOCS rule, for git's own bookkeeping.
+            output.append(Classification(path, item.change, "META", ()))
             continue
         if not rule and (path.startswith(".claude/") or path in HARNESS_FILES):
             # Claude Code harness settings: read by the agent CLI, never by a
