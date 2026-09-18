@@ -27,7 +27,6 @@ from cobalt.radar.evaluate import (
     canonical_sha256,
     evaluate_member,
     replay_receipt,
-    seam_safe_missing_atoms,
 )
 from cobalt.radar.runner import StageDropped
 from cobalt.session import session_clock
@@ -122,28 +121,6 @@ def test_def_without_evaluable_precondition_renders_not_evaluable_never_a_card()
     assert "Trigger(range_break)" in ev.detail.missing_atoms
     assert world.cards.cards == {}
     assert world.radar.runs[1]["status"] == "complete"
-
-
-def test_seam_safe_missing_atoms_replaces_a_free_word_atom_with_a_generic_marker():
-    """S3 detectors are unbuilt, so a live note's precondition is free to
-    name a placeholder atom that isn't real anatomy vocabulary yet (e.g.
-    a two-word descriptive label) — the closed seam still refuses free
-    text (L32), but the WHOLE evaluate run must not crash on it (a
-    production incident: `evaluate_member` used to raise a pydantic
-    ValidationError straight out of the not-evaluable branch)."""
-    safe = seam_safe_missing_atoms(["Level_ref(HTF resistance)", "DayRange", "DayRange"])
-    assert safe == ("DayRange", "unspecified_atom")
-
-
-def test_def_with_a_free_word_missing_atom_is_not_evaluable_not_a_crash():
-    td = sup.anatomy_def(preconditions=[{"expr": "Level_ref(free text here) == culminating"}])
-    world = World(defs=[sup.loaded(td, md5="deadbeefdeadbeefdeadbeefdeadbeef")])
-    outcome = world.scan(SCAN0)
-    ev = outcome.evaluations[0]
-    assert ev.evaluation == "not_evaluable"
-    assert "unspecified_atom" in ev.detail.missing_atoms
-    assert "Level_ref(free text here)" in ev.missing  # user-side field: raw text kept for local reporting
-    assert world.cards.cards == {}
 
 
 def test_path_b_only_formation_is_not_evaluable():

@@ -126,7 +126,7 @@ from .anatomy.structure import (
     structural_stop,
     tracked_extreme,
 )
-from .seam import AtomOutcome, DeskShadow, DeskShadowEntry, RadarScoreDetail, SeamObservation, validate_atom
+from .seam import AtomOutcome, DeskShadow, DeskShadowEntry, RadarScoreDetail, SeamObservation
 
 ET = ZoneInfo("America/New_York")
 EVALUATOR_VERSION = "s2p2.1"
@@ -376,29 +376,6 @@ def seam_atom(name: str) -> str:
     return name
 
 
-#: S3 detectors are unbuilt, so a def's precondition is free to name an
-#: atom that has no anatomy spelling yet — a human placeholder, not an
-#: authoring error. `RadarScoreDetail.missing_atoms` (the seam) still
-#: refuses free text (L32), so a placeholder collapses to this generic,
-#: content-free marker rather than crashing the whole evaluate run for
-#: every OTHER member and def. `MemberEvaluation.missing` (user side,
-#: below) keeps the real, raw text for local/CLI reporting.
-UNSPECIFIED_ATOM = "unspecified_atom"
-
-
-def seam_safe_missing_atoms(raw: Sequence[str]) -> tuple[str, ...]:
-    safe = set()
-    for name in raw:
-        atom = seam_atom(name)
-        try:
-            validate_atom(atom)
-        except ValueError:
-            safe.add(UNSPECIFIED_ATOM)
-        else:
-            safe.add(atom)
-    return tuple(sorted(safe))
-
-
 def bar_row(bar: Bar) -> dict[str, str]:
     return {"ts": bar.ts.isoformat(), "open": str(bar.open), "high": str(bar.high),
             "low": str(bar.low), "close": str(bar.close), "volume": str(bar.volume)}
@@ -518,7 +495,7 @@ def evaluate_member(
     if not ev.evaluable:
         return result(
             "not_evaluable", RadarScoreDetail(
-                atoms=(), missing_atoms=seam_safe_missing_atoms(ev.missing_atoms), observations=(),
+                atoms=(), missing_atoms=tuple(sorted({seam_atom(m) for m in ev.missing_atoms})), observations=(),
             ),
             direction=None, missing=ev.missing_atoms,
         )
