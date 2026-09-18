@@ -19,7 +19,7 @@ It REFUSES in two cases: steady demand above the ceiling, or daily names with no
 ## Gotchas
 `load_sources` takes `context_tickers` as a required argument, so no caller can leave the context consumer out. The refusal text names every consumer's share (`context=`, `daily_names=`), so a frozen pool says why.
 
-Out-of-process Finviz callers (the 05:15 and 15:40 ET prefill jobs) are not in this plan; they do not share the resident's bucket. The scheduled one-shots that DO consume the same Finviz transport (the 20:30 archiver, the 21:05 replay) are counted by the total-demand gate below, over their own windows.
+Out-of-process Finviz callers (the 05:15 and 15:40 ET prefill jobs) are not in this plan; they do not share the resident's bucket. The scheduled one-shots that DO consume the same Finviz transport (the 20:30 archiver, the 21:10 replay) are counted by the total-demand gate below, over their own windows.
 
 ---
 
