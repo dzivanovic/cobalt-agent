@@ -5,9 +5,8 @@ The `trade_def` Pydantic schema (TAXONOMY-DRAFT-v0_7.md §10.1, schema
 **v0.4** — `SCHEMA_VERSION = "0.4"` — extended from v0.3 by Batch 2's
 §A / ADR-0002, then folded to v0.7 / v0.4 by ADR-0003: one-stop trail
 slot, removed `trail_ma_close`/`trail_bar`/standalone `ma_close`, class
-definitions rewritten). Models only — no setup detectors, no bar logic;
-the predicate grammar it validates against lives in `predicate.py`
-(S2-P2). Enums are the single source of truth for the
+definitions rewritten). Models only — no predicate parser, no setup
+detectors, no bar logic. Enums are the single source of truth for the
 taxonomy vocabulary; YAML data must match them exactly or fail loud.
 
 ## Key functions/classes
@@ -25,15 +24,11 @@ taxonomy vocabulary; YAML data must match them exactly or fail loud.
   one-stop law), `ExitTargetType` (standalone `ma_close` REMOVED; `trail`
   now takes NO params — the trail slot is the only place conditions
   live), `Event`, `OnCicActionType`, `IndicatorType`, `SnapshotType`.
-- `Predicate {expr | text}` — `expr` stores the §10.5 grammar string as
-  authored; `text` is the human fallback. **Parsed at validation (S2-P2
-  R3):** the `_parse_expr` validator runs `predicate.parse_predicate` on
-  every `expr`, so a def whose expression does not parse fails to load.
-  The tree is a private attribute (`_ast`, read through the `ast`
-  property) — it never enters `model_dump()`, the stored def JSON or its
-  md5. `required_atoms` names what a detector must supply (empty for a
-  `text` predicate). `cfg(key)` resolution is unchanged:
-  `loader.iter_cfg_tokens`/`resolve_cfg` still check every key at load.
+- `Predicate {expr | text}` — unchanged: `expr` stores the §10.5 grammar
+  string UNPARSED; `text` is the human fallback. `cfg(key)` tokens (the
+  v0.7 §13.1 grammar atom) are plain substrings inside `expr` — no
+  parsing here, `loader.iter_cfg_tokens`/`resolve_cfg` do the
+  token-scan + resolution at load time.
 - `Tunable[T] {value, dynamic, note}` — unchanged mechanism for
   structured per-field values (`max_attempts`, `reentry_window`,
   `duration_bars`, MA refs). **Not** the same thing as a `tunables.py`

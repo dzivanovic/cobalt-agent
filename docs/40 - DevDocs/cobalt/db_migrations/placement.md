@@ -2,8 +2,6 @@
 
 `radar_pool` and `radar_membership` are system-side `CREATED_TABLES` in both placement and the migration proof set.
 
-S2-P2: `radar_score_run`, `radar_score`, `desk_regime`, `desk_packet` and `desk_grade` are SYSTEM `CREATED_TABLES`; `card_dots`, `card_dot_taps` and `radar_score_receipt` are USER. The three views sit in `CREATED_VIEWS`: `radar_board_v` on the system side, `radar_cards_v` and `shadow_agreement_v` on the user side. They are in `PLACEMENT` like any table, but kept out of `CREATED_TABLES` because the migrate proof digests tables by primary key and a view has none. Every USER entry in `CREATED_TABLES` gets the same `user_id NOT NULL` + FK + GUC-default assertion as the moved tables.
-
 ## What it does
 The map of which side every table is on. One map, three readers: the
 suite's placement test (against what the database actually holds), the
