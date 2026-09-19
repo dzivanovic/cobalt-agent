@@ -586,29 +586,47 @@ def cmd_migrate(args: argparse.Namespace) -> None:
     migration, not a defect in these.
 
     THE LOCK CEILING, AND WHERE THE `SET LOCAL` SITS (2026-09-19). The
-    read-write transaction issues `SET LOCAL lock_timeout` before
-    `_apply`'s first statement, forward and rollback alike, so a DDL that
-    cannot get ACCESS EXCLUSIVE fails in `--lock-timeout-s` seconds
-    instead of waiting for as long as the caller happens to allow.
+    read-write transaction issues `SET LOCAL lock_timeout` as its first
+    statement after `_connect`, forward and rollback alike — BEFORE the
+    BEFORE probe — so every lock this transaction waits for, the probe's
+    ACCESS SHARE and `_apply`'s ACCESS EXCLUSIVE alike, fails in
+    `--lock-timeout-s` seconds instead of waiting for as long as the
+    caller happens to allow.
 
-    It is issued AFTER the BEFORE probe, and that position is a
-    deliberate, conservative choice rather than an accident. The property
-    that must hold is that the BEFORE probe and the migration read ONE
-    REPEATABLE READ snapshot; a snapshot is taken once per such
-    transaction, so a statement issued after the probe cannot move it.
-    Whether a `SET` is itself a statement that takes the snapshot was NOT
-    SETTLED from a citable source during this offline build (the Postgres
-    manual could not be read from the run that wrote this), so the
-    statement was placed where the question cannot matter. Today the
-    first statement of the transaction is `SHOW server_encoding` in
-    `_assert_utf8`, which is before the probe either way.
+    IT USED TO SIT AFTER THE PROBE, and the reason it moved is worth
+    keeping. The property that must hold is that the BEFORE probe and the
+    migration read ONE REPEATABLE READ snapshot. A snapshot is taken once
+    per such transaction, so a statement issued after the probe cannot
+    move it — but whether a bare `SET` is itself the statement that TAKES
+    the snapshot could not be settled from a citable source by the
+    offline build that wrote this (the Postgres manual could not be read
+    from that run), so the statement was parked where the question could
+    not matter, at the cost below.
 
-    THE PRICE OF THAT POSITION, stated rather than discovered: the BEFORE
-    PROBE IS NOT UNDER THE CEILING. The probe takes ACCESS SHARE, which
-    only an ACCESS EXCLUSIVE holder — another DDL, not a resident's
-    INSERT or UPDATE — can block. Moving the `SET LOCAL` into `_connect`
-    would cover the probe as well, and is the change to make once the
-    snapshot question is answered against the manual.
+    SETTLED BY EXPERIMENT ON `cobalt_dev`, 2026-09-19 (R1/R11, ops DB
+    run). Two `@requires_db` tests in `tests/cobalt/test_migrate_proof.py`
+    §12 time the snapshot against another session's commit, by reading
+    the same row's `xmin` from both sides:
+
+      `test_connects_show_server_encoding_does_not_take_the_snapshot`
+          — `_assert_utf8`'s `SHOW server_encoding`, this transaction's
+            literal first statement, does NOT take the snapshot.
+      `test_a_bare_set_local_does_not_take_the_snapshot_either`
+          — neither does a bare `SET LOCAL lock_timeout`.
+
+    A third test, `test_the_instrument_can_see_a_snapshot_that_is_already
+    _fixed`, is the negative control: once a REAL query has run, the same
+    reading DOES pin the old row version, so the two results above are an
+    observation and not a vacuous pass.
+
+    So the BEFORE probe is still the statement that takes the snapshot,
+    exactly as before the move, and the price is paid off: THE BEFORE
+    PROBE IS NOW UNDER THE CEILING. It takes ACCESS SHARE, which only an
+    ACCESS EXCLUSIVE holder — another DDL, not a resident's INSERT or
+    UPDATE — can block; before the move such a holder made the probe wait
+    with no bound at all.
+    `test_a_blocked_before_probe_is_under_the_lock_ceiling_too` holds
+    that lock for real and runs `cmd_migrate` with the probe UNSTUBBED.
 
     `--proof-only` is deliberately NOT given a ceiling: it takes ACCESS
     SHARE, applies nothing, and is the command a deploy preflights while
@@ -661,12 +679,14 @@ def cmd_migrate(args: argparse.Namespace) -> None:
     print(f"cobalt db migrate — {direction} on {dbname}")
     conn = _connect(dbname, allow_prod=args.allow_prod, read_only=False)
     try:
-        before = _probe_all(conn)
-        # The ceiling on every lock `_apply` asks for, this transaction
-        # only. `lock_timeout_s` is a validated int by the check at the
-        # top of this function, so it is interpolated directly rather
-        # than through `sql.Literal` — there is no user text here.
+        # The ceiling on every lock this transaction asks for — the
+        # BEFORE probe's ACCESS SHARE included, which is what moving it
+        # above the probe buys (R1/R11, 2026-09-19; see the docstring).
+        # `lock_timeout_s` is a validated int by the check at the top of
+        # this function, so it is interpolated directly rather than
+        # through `sql.Literal` — there is no user text here.
         conn.execute(f"SET LOCAL lock_timeout = '{lock_timeout_s}s'")
+        before = _probe_all(conn)
         _apply(conn, paths)
         after = _probe_all(conn)
         verdicts = _proof_verdicts(before, after, direction=direction)
