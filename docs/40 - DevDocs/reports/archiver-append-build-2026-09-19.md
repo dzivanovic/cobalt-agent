@@ -2112,3 +2112,268 @@ the desk's fold, as that row's APPLIED note already says ("memory line at the fo
 **RULING:** none new owed by this chunk. R3-1 and R2-1 remain owed from earlier rounds, untouched.
 
 ARCHIVER R3B ecb817c (code tip; this line's own docs-only commit on top) | offline 1871/0 (319 skipped — passed unchanged at 1871, skipped −1 from 320, failed 0) | DB-2: twin dropped per R26, 3 offline pins green: test_upsert_bars_still_does_update_and_never_do_nothing, test_only_one_copy_of_the_upsert_statement_exists, test_upsert_bars_on_takes_the_callers_connection_and_never_opens_one | ESCALATE: 1 | cobalt_dev: untouched
+
+---
+
+# DB RE-RUN — the with-DB proof in the corrected order (DB-3), re-proving DB-1 and DB-2 on real Postgres
+
+Seat `archiver-db2-0919` (Opus 5), worktree `/Users/cobalt/cobalt-wt/archiver-append`, branch
+`archiver/append-0919`, prompt `docs/40 - DevDocs/prompts/2026-09-19/44-archiver-db-rerun.md`.
+Started 2026-09-19 13:36:23 EDT (`date`). This section APPENDS after `# ROUND 3b`; nothing above it is
+deleted, edited or restructured.
+
+## DB RE-RUN PREFLIGHT
+
+| rule | command | exit | allowed / DENIED |
+|---|---|---|---|
+| `Bash(date*)` | `date` | 0 | allowed — `Sat Sep 19 13:36:23 EDT 2026` |
+| `Bash(git status*)` | `git status --porcelain` | 0 | allowed — **EMPTY** |
+| `Bash(git status*)` | `git status` | 0 | allowed — first two lines verbatim: `On branch archiver/append-0919` / `nothing to commit, working tree clean`. Branch correct; no rebase in progress. |
+| `Bash(git log*)` | `git log --oneline -1` | 0 | allowed — `4075084 docs(report): archiver append round 3b — DB-2 closed by R26, the twin deleted, three offline pins green first, skipped 320 to 319` (first launch; round 3b's closing tip) |
+| `Bash(git -C /Users/cobalt/cobalt log*)` | `git -C /Users/cobalt/cobalt log --oneline -1` | 0 | allowed — `e90f978 docs(desk): 09-19 deploy-2 house check round 1 — 2 launch blockers (migrate wildcard admits --allow-prod; late window re-check), fold in work; archiver R3 built, 3b launched` (recorded, no equality required) |
+| `Bash(ls *)` | `ls -la .env` | 1 | allowed — `ls: .env: No such file or directory` ✅ nothing inherited |
+| — (Read tool) | report's LAST LINE, `:2114` | — | quoted below; starts `ARCHIVER R3B ` → round 3b closed clean, no `CONTINUE:` / `FAILED:` |
+| `Bash(grep *)` | `grep -rln "cobalt_dev" "…/reports/"` | 0 | allowed — 37 files; the lane check is below |
+| `Bash(grep *)` | `grep -n "cobalt_dev" "…/cto-2026-09-19.md"` | 0 | allowed — 30 hits; the later ones read with the Read tool |
+| `Bash(git -C … diff*)` | `git -C /Users/cobalt/cobalt-wt/archiver-append diff --stat 8838dda..HEAD -- src tests docs` | 0 | allowed — quoted below |
+| `Bash(uv run pytest *)` | `uv run pytest --co -q <the three archiver files>` | 0 | allowed — `161 tests collected in 0.09s`, no collection error |
+
+Round 3b's last line, quoted verbatim as PREFLIGHT read it (Read tool, `:2114`):
+
+```
+ARCHIVER R3B ecb817c (code tip; this line's own docs-only commit on top) | offline 1871/0 (319 skipped — passed unchanged at 1871, skipped −1 from 320, failed 0) | DB-2: twin dropped per R26, 3 offline pins green: test_upsert_bars_still_does_update_and_never_do_nothing, test_only_one_copy_of_the_upsert_statement_exists, test_upsert_bars_on_takes_the_callers_connection_and_never_opens_one | ESCALATE: 1 | cobalt_dev: untouched
+```
+
+### LANE CHECK — a later session DID hold `cobalt_dev` after the `ARCHIVER DB` line. It released it. NAMED, not waved off.
+
+`grep -rln "cobalt_dev"` over `~/cobalt/docs/40 - DevDocs/reports/` returns 37 files; exactly three carry a
+2026-09-19 date: `harness-round2-2026-09-19.md`, `prod-proof-only-3-2026-09-19.md` (both landed 07:11–07:55 ET,
+hours before the first DB run — established by the first DB run's own PREFLIGHT, not re-derived here) and the
+desk's `cto-2026-09-19.md`. **The desk report is the only one with sections dated after `ARCHIVER DB` (12:5x),
+and it does carry a later claim on the lane.** Read with the Read tool, `:558-592`:
+
+- **`p4-db-0919` LAUNCHED 12:53** (`:563`, §52): *"bg `8a46e814`, Opus, cwd `s2-p4`, `37`'s line verbatim.
+  **HOLDS `cobalt_dev`; DO NOT STOP before `P4 DB …`.**"* — a real hold, after the archiver's first DB run.
+- **It closed and released** (`:575`, §54): *"`P4 DB 9045260 | offline 1829/0 | db 2147/0 … | cobalt_dev:
+  0001–0009, unchanged | .env: removed, proven gone | … | 0 new ESCALATE | DB DEBT: CLOSED`. Desk check: no
+  `.env`, tree clean. Hub `8a46e814` stopped. **`cobalt_dev` FREE.**"*
+- **The desk states the lane FREE for THIS run** (`:590`, §57, 13:3x): *"→ then `44-archiver-db-rerun.md`
+  (`35`'s line, order fixed) on `cobalt_dev` (FREE)."*
+
+**DISPOSITION — why this is not `FAILED PREFLIGHT`, stated so the desk can overrule it.** The PREFLIGHT rule's
+purpose clause is "confirm no session claimed the lane since the first DB run closed it". One did: `p4-db-0919`.
+But it is not an open or unknown claim — it is a desk-launched run with a recorded stop line, a desk L35 check
+(`no .env, tree clean`), a stopped hub, and a terminal state (`cobalt_dev: 0001–0009, unchanged`) **identical to
+the baseline this run expects**; and the same desk report, two sections later, says the lane is FREE and names
+this prompt as what runs next on it. `cto-2026-09-19.md` is the desk's RECORD of launches, not a second claim —
+the first DB run's PREFLIGHT read it the same way and said so in as many words. **The live probe is the
+authority, not the prose:** step 0's `--proof-only` is the test of what `cobalt_dev` actually holds, and if it
+reads anything other than 0001–0009 with 0010/0011 absent, this run stops there per step 0's own rule. Carried
+to ESCALATE as an item the desk may read differently.
+
+Also noted from the same read, because it touches THIS session's own allowlist (`:592`, §57, desk ops item):
+the wildcard rule `Bash(COBALT_ENV=dev uv run cobalt db migrate*)` — in this run's line — also admits
+`… migrate --allow-prod …`, and `cmd_migrate` routes `--allow-prod` to production whatever `COBALT_ENV` says.
+**This run never types `--allow-prod`**; every migrate command it runs is quoted in full below. Carried to
+ESCALATE.
+
+### Branch diff since the merge-base — `git diff --stat 8838dda..HEAD -- src tests docs`, verbatim
+
+```
+ docs/40 - DevDocs/cobalt/archiver/__init__.md      |  131 ++
+ docs/40 - DevDocs/cobalt/archiver/cli.md           |   66 +
+ docs/40 - DevDocs/cobalt/archiver/incidents.md     |   55 +
+ docs/40 - DevDocs/cobalt/archiver/progress.md      |   60 +
+ docs/40 - DevDocs/cobalt/archiver/quiet.md         |   86 +
+ docs/40 - DevDocs/cobalt/archiver/reconcile.md     |  131 ++
+ docs/40 - DevDocs/cobalt/archiver/report.md        |   43 +
+ docs/40 - DevDocs/cobalt/archiver/runner.md        |   65 +
+ docs/40 - DevDocs/cobalt/archiver/settings.md      |   87 +
+ docs/40 - DevDocs/cobalt/archiver/shadow.md        |   89 +
+ docs/40 - DevDocs/cobalt/archiver/store.md         |   60 +
+ docs/40 - DevDocs/cobalt/db_migrations/__init__.md |   48 +
+ .../40 - DevDocs/cobalt/db_migrations/placement.md |    2 +
+ docs/40 - DevDocs/cobalt/heartbeat/probes.md       |   47 +
+ .../reports/archiver-append-build-2026-09-19.md    | 2114 ++++++++++++++++++++
+ src/cobalt/archiver/cli.py                         |  532 +++++
+ src/cobalt/archiver/incidents.py                   |  172 ++
+ src/cobalt/archiver/progress.py                    |  156 ++
+ src/cobalt/archiver/quiet.py                       |  350 ++++
+ src/cobalt/archiver/reconcile.py                   |  933 +++++++++
+ src/cobalt/archiver/report.py                      |  200 +-
+ src/cobalt/archiver/runner.py                      |  305 ++-
+ src/cobalt/archiver/settings.py                    |  285 +++
+ src/cobalt/archiver/shadow.py                      |  356 ++++
+ src/cobalt/archiver/store.py                       |  232 ++-
+ src/cobalt/cli.py                                  |   28 +
+ .../0010_archive_progress.rollback.sql             |   15 +
+ src/cobalt/db_migrations/0010_archive_progress.sql |   98 +
+ .../0011_archive_incidents.rollback.sql            |   14 +
+ .../db_migrations/0011_archive_incidents.sql       |  122 ++
+ src/cobalt/db_migrations/__init__.py               |   21 +
+ src/cobalt/db_migrations/placement.py              |    6 +
+ src/cobalt/heartbeat/probes.py                     |   89 +-
+ tests/cobalt/test_archiver_append_store.py         |  807 ++++++++
+ tests/cobalt/test_archiver_migrations.py           |  512 +++++
+ tests/cobalt/test_archiver_quiet.py                | 1360 +++++++++++++
+ tests/cobalt/test_archiver_reconcile.py            |  844 ++++++++
+ tests/cobalt/test_archiver_runner.py               |  797 ++++++++
+ tests/cobalt/test_archiver_settings.py             |  291 +++
+ tests/cobalt/test_finviz_consumers.py              |    6 +
+ tests/cobalt/test_heartbeat.py                     |   19 +
+ tests/cobalt/test_heartbeat_archiver_incidents.py  |  208 ++
+ tests/cobalt/test_radar_migration.py               |    8 +-
+ tests/cobalt/test_radar_score_migration.py         |   25 +-
+ tests/cobalt/test_tenancy.py                       |    9 +-
+ 45 files changed, 11829 insertions(+), 55 deletions(-)
+```
+
+**45 paths, no surprise.** The same 45 the first DB run's close listed (its `10955` insertions are now `11829`
+— rounds 3 and 3b added the five offline pins, the REVOKE statements, the deletion and the report text).
+Every path the prompt expects is present: `src/cobalt/db_migrations/0010_*.sql` / `0011_*.sql` (and both
+rollbacks), `tests/cobalt/test_archiver_migrations.py`, `tests/cobalt/test_archiver_append_store.py`,
+`docs/40 - DevDocs/`. Nothing outside the branch's own named work.
+
+### Collection and the `requires_db` count — **22**, counted from this run's own `--co`, not requoted
+
+`161 tests collected in 0.09s`, no collection error. Counted from the collected node ids:
+
+| file | `requires_db` items | names |
+|---|---|---|
+| `tests/cobalt/test_archiver_migrations.py` | **10** | `…forward_creates_both_tables_on_the_system_side`, `…migrate_twice_is_idempotent_for_the_two_new_tables`, `…rollback_down_to_0007_drops_exactly_those_two_and_nothing_else`, `test_owner_is_the_system_role` ×2, `test_the_user_role_has_no_grant_on_either_table` ×2, `…check_refuses_progress_past_its_own_export`, `…one_unresolved_incident_per_key_then_a_second_after_resolution`, `…kind_domain_is_enforced_by_the_database` |
+| `tests/cobalt/test_archiver_append_store.py` | **12** | `test_the_append_path_never_modifies_an_existing_row` … `test_an_equal_value_race_writes_the_same_value_and_changes_nothing` (the block at `:520-780`) |
+| `tests/cobalt/test_archiver_quiet.py` | **0** | — |
+| **total** | **22** | matches the prompt's expectation exactly; no drift |
+
+**DB-4's two corrections confirmed from this run's own evidence, not requoted:** the 0010/0011 half is **10**
+(listed above, never ≈17), and `test_archiver_quiet.py` holds **ZERO** `requires_db` tests —
+`grep -n "requires_db" tests/cobalt/test_archiver_quiet.py` returns exactly one hit, `:1123`, and it is a
+COMMENT (`# requires_db twin in test_archiver_append_store.py`), not a marker.
+
+**Round 3b's deletion confirmed GONE, not merely skipped.**
+`grep -rn "test_the_own_connection_upsert_survives_another_transactions_rollback" tests/` → **exit 1, no
+output**. The name does not appear in the collected list either. The file's `requires_db` count is 12, down
+from the first DB run's 13, which is the arithmetic behind 22 = 10 + 12 + 0.
+
+## DB RE-RUN AUTHORIZATION
+
+**(a) The launch line.** The 16 base `Bash(...)` rules, `Bash(uv run cobalt jobs restarts *)`, the two
+`COBALT_ENV=dev` rules, `--disallowedTools "AskUserQuestion" "EnterWorktree"` and the three `--add-dir` values
+are `25-ops-db-run.md`'s own list, run once by `ops-0919-db` and again by `archiver-db-0919` (`35`) — with
+this worktree's path only where the two `.env` rules name it. No new approval is needed beyond what covered
+`25` / `35`, and this run asks for none.
+
+**(b) R18 — VERIFIED MYSELF from the file, not taken from the prompt.**
+`grep -n "R18" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-19.md"` → **line 31**, in `## §4
+Rulings`, row **R18**, 11:33 ET, "approve env". Its text is byte-identical to the prompt's quotation: all four
+rule strings (the `ops-2026-09-19` pair and the `archiver-append` pair), the two REUSED `COBALT_ENV=dev`
+strings from 13's approved line, the NEVER block (`production, push, vault write, bypassPermissions`) and the
+`Covers:` sentence naming `25-ops-db-run.md` and "the archiver's DB run after its round 2". **APPLIED marker
+present**, verbatim: `APPLIED: this row committed before either launch`. The two rules new to this worktree —
+`Bash(cp /Users/cobalt/cobalt/.env /Users/cobalt/cobalt-wt/archiver-append/.env)` and
+`Bash(rm /Users/cobalt/cobalt-wt/archiver-append/.env)` — are two of R18's four strings, by name. **This run is
+a RE-RUN under that same grant; no new `.env` rule is requested. No authorization mismatch.**
+
+**(c) The WORK ITEM.** Authorized by three citations, each read in the file and each saying what is quoted:
+- `# DB RUN`'s **DB-3** (this report, `:1594-1598`): *"`35`'s step order is wrong and the next prompt of this
+  shape should not repeat it. … The safe default taken (re-apply, run, roll back again) delivered both steps'
+  stated outcomes."* — **this prompt IS that next prompt**, and its step 1 is written to that finding.
+- `# ROUND 3`'s close: DB-1 closed **in the SQL** (`REVOKE ALL … FROM cobalt_user` in 0010 and 0011, plus the
+  sequence), with R3-3 stating in as many words that the two `requires_db` grant tests and the apply-twice
+  idempotency of the REVOKEs are **owed to this DB re-run** and are not provable offline.
+- `# ROUND 3b`'s close: DB-2 CLOSED by R26 — the twin deleted, the three offline pins green first.
+- `cto-2026-09-19.md` `## §4` rows **R25** (line 38, 13:10 ET, "B" — the explicit REVOKE; *"The two red tests
+  stay as they are and must go green"*) and **R26** (line 39, 13:21 ET, "A" — the twin DROPPED), both read in
+  full from the file, both carrying their APPROVED markers.
+
+**Laws read in full this run:** `LAWS.md` (L1–L70; L1, L3, L4, L29, L35, L41, L45, L46, L48, L54, L57, L60,
+L67 bind directly), `UNATTENDED-LAUNCH.md` §2 + §6, memory `INDEX.md` → `areas/cobalt.md ## NOW`. Spec read:
+`ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §4 and §11. Code read in full: `db_migrations/__init__.py`, both
+forward SQL files (the REVOKE statements CONFIRMED present before relying on the grant tests flipping —
+`0010:98`, `0011:121-122`), `cli.py`'s `cmd_migrate` and `_rollback_paths`, `test_archiver_migrations.py`,
+and the `requires_db` half of `test_archiver_append_store.py`.
+
+## DB RE-RUN — MIGRATIONS 0010/0011 + SUITE WHILE APPLIED + REVERSED
+
+### Step 0 — STATE PROBE (13:37 ET): the allowlist proof and what `cobalt_dev` holds before this run
+
+`cp /Users/cobalt/cobalt/.env /Users/cobalt/cobalt-wt/archiver-append/.env` → allowed, exit 0, nothing printed.
+`COBALT_ENV=dev uv run cobalt db migrate --proof-only` → allowed, exit 0. FULL output:
+
+```
+cobalt db migrate — PROOF ONLY on cobalt_dev (READ ONLY, nothing applied)
+
+table                side    schema   rows         digest                             secs
+------------------------------------------------------------------------------------------
+archive_incidents    system  -        -            -                                  0.00
+archive_progress     system  -        -            -                                  0.00
+aset_sizings         user    user     1            0824685c130da3c7cb7f0e76191a6819   0.01
+bars                 system  system   1043443      2769919a57144c7bf8720110061dbf72   5.46
+card_dot_taps        user    user     0            d41d8cd98f00b204e9800998ecf8427e   0.00
+card_dots            user    user     0            d41d8cd98f00b204e9800998ecf8427e   0.00
+card_stop_edits      user    user     1            7599f9ab6018697c2299e20bbacace54   0.00
+card_transitions     user    user     4            f181e76b208a51b503339267865c157c   0.00
+cobalt_email_sends   system  system   2            fba8cf9fc07cd6c95b503af272e26639   0.00
+cobalt_jobs          system  system   13           8d9b0861615861e343009f33118a4931   0.00
+cobalt_kill_switch   system  system   1            2e590e87d4c9576e61d1ee0d5c90bbab   0.00
+cobalt_redactions    system  system   127          0f80638def1d0d8e46457a59b2771fe7   0.00
+day_modes            user    user     2            f2ffb4d41ed0a3bbc3dc2a1c7e6112b9   0.00
+desk_grade           system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+desk_packet          system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+desk_regime          system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_membership     system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_pool           system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_score          system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_score_receipt  user    user     0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_score_run      system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+session_blocks       system  system   6            b650702dd6fd624548e05ca940662f08   0.00
+traders              user    user     1            a64e01480038484676fad3b14eb2489f   0.00
+vault_overrides      user    user     6            6a8b05207f55b8e25c253ce990c7a65a   0.00
+vault_writes         user    user     184          4a965c69340f112d12e6ca21a8a0602c   0.01
+------------------------------------------------------------------------------------------
+25 table(s) probed on cobalt_dev; digest excludes user_id, vault_outcome, vault_reason, account_mode, pool_member_id; aset_sizings: 25 card column(s) added by 0007. Proof cost: total 5.5 s — and a migration pays it TWICE (before and after), inside the outage.
+NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.
+```
+
+`rm /Users/cobalt/cobalt-wt/archiver-append/.env` → allowed. `ls -la .env` → `ls: .env: No such file or
+directory` ✅ gone.
+
+**READ.** 25 tables in this branch's view. 0001–0007's 23 objects all present with a schema, a row count and a
+digest. `archive_progress` and `archive_incidents` read `-` / `-` / `-` — **ABSENT**, exactly as required: the
+first DB run rolled them back and nothing has re-applied them since. Nothing errored. (As the first DB run
+recorded, `--proof-only` has no `OK`/`CHANGED` verdict column at all — verdicts belong to the BEFORE→AFTER
+proof that FORWARD and ROLLBACK print, `cli.py:541-551` vs `:553-591` — so "OK" for a step-0 probe means
+*present with a row count and a digest*. The trailing line is `NOTHING WAS APPLIED: …`, not a `code:` line.)
+**None of step 0's three stop conditions is met: nothing reads CHANGED, nothing errored, and the two new
+tables do not exist.** Proceeding.
+
+> **`cobalt_dev` holds (before this run): 0001–0009 objects OK, 1,043,443 rows in `system.bars` (digest
+> `2769919a57144c7bf8720110061dbf72`); 0010/0011 objects: absent (expected — first DB run rolled them back,
+> nothing has re-applied since).**
+
+### ONE DIFFERENCE from the first DB run's baseline, found by comparing digest for digest — NAMED, not waved off
+
+Compared line by line against `# DB RUN`'s step-0 table (this report, `:1146-1190`), **24 of 25 rows are
+byte-identical** — `bars` 1043443 / `2769919a…`, `vault_writes` 184 / `4a965c69…`, `cobalt_jobs` 13 /
+`8d9b0861…`, `session_blocks` 6 / `b650702d…`, and so on. **One row is not:**
+
+| table | first DB run, 12:42 ET | this run, 13:37 ET | Δ |
+|---|---|---|---|
+| `system.cobalt_redactions` | 126 rows, digest `5c891af77292421e9595daef739c3941` | **127 rows**, digest **`0f80638def1d0d8e46457a59b2771fe7`** | **+1 row, committed** |
+
+**What this is and is not.** It is NOT a partial 0010/0011 state (both tables are absent), NOT a schema
+difference (every object and side is unchanged), and NOT something this branch's migrations touch — neither
+0010 nor 0011 names `cobalt_redactions`, and the rollbacks drop one table each. It IS a committed row written
+into `cobalt_dev` by something between 12:42 and 13:37 ET — the window in which `p4-db-0919` held the lane
+(12:53 → ~13:0x, §52/§54 above), which ran the P4 branch's with-DB suite (`db 2147/0`) and reported
+`cobalt_dev: 0001–0009, unchanged` against **its own** baseline.
+
+**I cannot identify the writer with this session's allowlist, and I will not guess.** There is no `psql` rule
+here, and no Bash-allowed command reads a row of `system.cobalt_redactions`. Stating the bound rather than
+inventing a command is the same discipline step 1's sequence-privilege check is bounded by. **ESCALATED**
+below as DB2-1.
+
+**Consequence for this run: none, and here is why it is stated rather than assumed.** Step 1's closing
+comparison is against **this run's own step-0 baseline**, printed above — not against the first DB run's. The
++1 row is inside that baseline, so a closing proof that comes back byte-identical to it proves exactly what
+this run claims: that this run changed nothing.
