@@ -1,0 +1,23 @@
+# QUESTIONS — round 3 (the LAST round), tribunal check of `38-deploy-p4.md`
+
+You are reading an UNATTENDED PRODUCTION DEPLOY PROMPT. It merges one branch into the live tree, applies two migrations to the live database, takes two resident services down and back up, and arms a new scheduled job. Nobody sits at its terminal. A defect you do not name here runs tonight.
+
+Round 2 found four REAL things (N1–N4) and one of them blocked the launch. This round reads ONE thing: **the fold of those four**, in `fold-r3.worddiff.txt` (`[-removed-]` / `{+added+}`, round-2 file → now) against the file as it now stands (`38-deploy-p4-after.md`). The round-2 verdicts are in `round2-verdicts.md`.
+
+Answer each question with the sentence you read, quoted, and the section it is in. Say NOT FIXED plainly when it is not fixed.
+
+**Q1 — N1 (the launch blocker).** Round 2: §4.2's terminal branch (`bootout` still loaded after one retry) stopped the run saying production "is untouched and the services are as they were", although `bootout` is two commands and one of them may have succeeded — leaving `com.cobalt.aset` DOWN under a sentence saying it is up, with §8 (the only thing that would have restored it) explicitly forbidden. Read the new §4.2 branch. (a) Does it now bring back any resident whose bootout DID take, before the FAILED line? (b) Does it still forbid §8, and is that still right? (c) Does the FAILED line now state the resident state from something the session actually printed, rather than asserting it? (d) Does the repair it performs use commands that are in the launch line's `--allowedTools` list VERBATIM — quote the rule and the typed command side by side. (e) Can the new branch loop, retry forever, or re-enter itself?
+
+**Q2 — N2 (the red-branch restore).** Round 2: §1.4 (c) and (d) said "`.env` cleanup, FAILED" while (h) said "restore FIRST, then cleanup", so a literal session would have removed the `.env` that (f)'s restore needs; and (h)'s premise ("every FAILED branch of (c) leaves `cobalt_dev` at 0001–0011") is false for (c), because `cmd_migrate` applies, probes and commits in ONE transaction. Read (c), (d) and (h) as they now stand. (a) Do (c) and (d) now route to (h), with no contradicting instruction left anywhere in §1.4? (b) Is (h)'s corrected premise true against `src/cobalt/db_migrations/cli.py` — go read it and re-derive the line numbers yourself? (c) Is the order (f) → (g) → FAILED line still unambiguous, and does anything in §1.4 still tell a session to clean up `.env` before running (f)?
+
+**Q3 — N3 and N4 (wording).** (a) §1.2: does the rerun branch now read as terminal, with no sentence continuing past its FAILED line? (b) §2.1: is the point of no return still stated consistently — clock never sends a successful merge to §8, a RED result still does — and does the new sentence contradict anything in §8's header or in §5.2?
+
+**Q4 — WHAT DID THIS FOLD BREAK?** This is the question that matters most and it is not rhetorical. Read every `{+added+}` region in the diff and ask, for each: does it contradict a sentence elsewhere in the file that the diff did NOT touch? Does it introduce a command, a spelling, or a branch that the `--allowedTools` list does not carry? Does it change what a step's GATE is? Does it make any FAILED line say something the session cannot have proven? Name each one with both sentences quoted.
+
+**Q5 — the approval list.** `approval-list.md` is the list the desk will put in front of Dejan: 23 rule strings that differ from the already-approved deploy-1 line. This fold was supposed to change NO rule string. (a) Does the launch line in `38-deploy-p4-after.md` still carry exactly those strings — any added, any removed, any respelled? (b) Does any step in the folded file now type a command that is NOT covered by a rule in that line? (c) Is any rule in that line now unused by any step?
+
+**Q6 — anything else the fold made worse**, and only that. Findings that round 1 or round 2 already ruled NOT REAL are not re-opened here; if you disagree with one, say so in one line and move on.
+
+**Not your business, and not findings:** the P15 archiver precondition (it is now MET — `ARCHIVER DB2 … db 161/0` — and the desk has verified that line), the wide-vs-narrow L68 scope (Dejan's), and whether an unstarred allowlist rule matches by prefix on this host (UNVERIFIABLE FROM READS, the desk settles it by experiment outside a deploy). Do not count any of the three.
+
+Your verdict line: `VERDICT: RUN AS IS` or `VERDICT: RUN AFTER FIXES <numbers>` or `VERDICT: DO NOT RUN <numbers>`. Severity per finding: BLOCKER (it can damage production or leave it in a state the prompt misdescribes) / MAJOR / MINOR. For each finding give a ONE-LINE fix.
