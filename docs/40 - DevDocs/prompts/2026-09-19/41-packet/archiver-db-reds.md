@@ -19,6 +19,60 @@ up; the migration-harness tests … are self-contained round trips". That is tru
 which call `_apply`/`_rollback_paths` on their own connection and roll back). **The other 20 need the two
 tables to already EXIST**: seven via the `real_connect` fixture (which conftest documents as a REAL
 `db.connect` that applies no migrations, `conftest.py:196-223`) and thirteen via `BarStore().ensure_schema()`,
+which executes the bars module DDL only (`archiver/store.py:100-103`) and creates neither new table. Ten went
+red on `relation … does not exist` / `… missing — run cobalt db migrate`:
+
+| test | assertion, verbatim |
+|---|---|
+| `test_owner_is_the_system_role[archive_progress]` | `AssertionError: archive_progress missing — run \`cobalt db migrate\`` |
+| `test_owner_is_the_system_role[archive_incidents]` | `AssertionError: archive_incidents missing — run \`cobalt db migrate\`` |
+| `test_the_user_role_has_no_grant_on_either_table[archive_progress]` | `psycopg.errors.UndefinedTable: relation "system.archive_progress" does not exist` |
+| `test_the_user_role_has_no_grant_on_either_table[archive_incidents]` | `psycopg.errors.UndefinedTable: relation "system.archive_incidents" does not exist` |
+| `test_the_check_refuses_progress_past_its_own_export` | `assert ('archived_through' in 'relation "archive_progress" does not exist…')` |
+| `test_one_unresolved_incident_per_key_then_a_second_after_resolution` | `psycopg.errors.UndefinedTable: relation "archive_incidents" does not exist` |
+| `test_a_crash_after_the_inserts_leaves_neither_bars_nor_progress` | `psycopg.errors.UndefinedTable: relation "archive_progress" does not exist` |
+| `test_progress_and_an_incident_commit_with_the_bars_or_not_at_all` | `psycopg.errors.UndefinedTable: relation "archive_progress" does not exist` |
+| `test_progress_is_monotonic_across_accepted_runs` | `psycopg.errors.UndefinedTable: relation "archive_progress" does not exist` |
+| `test_a_recurring_incident_refreshes_rather_than_duplicating` | `psycopg.errors.UndefinedTable: relation "archive_incidents" does not exist` |
+
+**ASK DESK: should `35`'s step order be swapped (suite BEFORE the rollback) in the next prompt of this
+shape, or is the re-apply the desk wants? [12:45 ET]** Safe default taken, and it is the only one that
+delivers BOTH of step 1's and step 2's stated outcomes: re-apply `COBALT_ENV=dev uv run cobalt db migrate`
+(an allowlisted command this run had already used twice), run the suite for real, then roll back to 0009
+again so `cobalt_dev` is left exactly as step 2's own terminal line requires. Nothing outside the allowlist
+was typed and no step was skipped — step 1's applied-and-reversed proof stands on its own, above.
+
+### Run 2 (12:46 ET) — migrations re-applied, the suite's FIRST REAL RUN
+
+`COBALT_ENV=dev uv run cobalt db migrate` → both tables `CREATED` again, every other table `OK`,
+`content UNCHANGED on every table`. Then:
+
+```
+4 failed, 153 passed in 4.67s
+```
+
+Ten of run 1's twelve went green the moment the tables existed. **Four reds survived — none of them
+caused by the ordering, all four never seen before, because these tests had never run.**
+
+### Run 3 (12:47 ET) — after the one test-side fix
+
+```
+3 failed, 154 passed in 3.22s
+```
+
+> **`cobalt_dev` holds (after this step): 0001–0009, unchanged | db 154/3 (the 23 archiver `requires_db`
+> tests, scoped as above — 20 of the 23 pass, 3 red, all three ESCALATED below)**
+
+**`cobalt_dev` IS unchanged in content, and it is proven, not assumed.** The BEFORE probe of the closing
+`--rollback --down-to 0009` was taken AFTER the whole with-DB suite had run, and every digest in it is
+identical to step 0's baseline — `bars` 1043443 / `2769919a…`, `vault_writes` 184 / `4a965c69…`,
+`cobalt_redactions` 126 / `5c891af7…`, `cobalt_jobs` 13 / `8d9b0861…`, down the table. The mechanism is
+`conftest.dev_db_tx` (autouse): every `db.connect` in the suite returns a `_SavepointConnection` over one
+`cobalt_dev` transaction that is rolled back. The suite committed nothing. The closing `--proof-only` is
+byte-identical to step 0's, including the two `-` rows.
+
+`rm …/.env` → `ls -la .env` → `No such file or directory` ✅.
+
 ### The four reds, one row each
 
 **F-DB1 / F-DB2 — `cobalt_user` CAN read both new tables. GENUINE FINDING, ESCALATED, not "fixed".**
