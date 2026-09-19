@@ -26,6 +26,7 @@ import pytest
 
 from cobalt.archiver import incidents as incidents_mod
 from cobalt.archiver import progress as progress_mod
+from cobalt.db import Side
 from cobalt.archiver.models import Bar, Interval
 from cobalt.archiver.reconcile import (
     BarValues,
@@ -584,21 +585,29 @@ def test_the_retry_after_a_crash_is_idempotent():
 
 
 @requires_db
-def test_a_second_holder_of_the_advisory_lock_refuses():
-    st = BarStore()
-    first = st._connect()
-    second = st._connect()
-    try:
-        assert try_acquire_run_lock(first) is True
-        assert try_acquire_run_lock(second) is False
-        with pytest.raises(ArchiveLockError):
-            try_acquire_run_lock(second, what="a second nightly run")
-        release_run_lock(first)
-        assert try_acquire_run_lock(second) is True
-        release_run_lock(second)
-    finally:
-        first.close()
-        second.close()
+def test_a_second_holder_of_the_advisory_lock_refuses(real_connect):
+    """§9's lock is SESSION level, so this test needs TWO SESSIONS.
+
+    FIRST RUN ON `cobalt_dev`, 2026-09-19 (archiver DB run): written with
+    `BarStore._connect()` twice, which goes through `db.connect` — and
+    `conftest.dev_db_tx` (autouse) hands every caller a
+    `_SavepointConnection` over ONE shared session. `pg_try_advisory_lock`
+    is re-entrant within a session, so the second acquire returned True
+    and the test read `assert True is False`. The property was never
+    wrong; the test could not observe it. `real_connect` is the fixture
+    conftest documents for exactly this ("a savepoint proxy over one
+    shared connection cannot show …, because both proxies are the same
+    session"). It writes no rows, so RULING 7 is untouched.
+    """
+    first = real_connect(side=Side.SYSTEM)
+    second = real_connect(side=Side.SYSTEM)
+    assert try_acquire_run_lock(first) is True
+    assert try_acquire_run_lock(second) is False
+    with pytest.raises(ArchiveLockError):
+        try_acquire_run_lock(second, what="a second nightly run")
+    release_run_lock(first)
+    assert try_acquire_run_lock(second) is True
+    release_run_lock(second)
 
 
 @requires_db
