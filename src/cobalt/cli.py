@@ -424,6 +424,15 @@ def _cmd_validate(args: argparse.Namespace) -> None:
         f"{', '.join(f'{slot:%H:%M}' for slot in summary_at())} ET."
     )
 
+    # The Bar Archiver's write mode and quiet window (append-only FINAL
+    # design §10). Building the model IS the check, as everywhere above:
+    # a missing row, a wrong unit or a near-miss spelling of the write
+    # mode crashes here, naming the key, rather than at 20:30 tonight.
+    from cobalt.archiver.settings import validate_command_lines as archiver_lines
+
+    for line in archiver_lines():
+        print(line)
+
     # 2026-09-13 tree cleanup: docs/PLACEMENT.md's map, enforced. Captures,
     # per-session dumps and stale in-flight duplicates are what sprawled
     # before this sweep existed — see docs/PLACEMENT.md for the map.
