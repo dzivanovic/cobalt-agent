@@ -693,16 +693,31 @@ def cmd_migrate(args: argparse.Namespace) -> None:
         # The other named price of a deploy-time DDL, and the one this
         # harness used to pay in wall-clock instead of in a message:
         # without a ceiling the statement simply waited.
+        #
+        # R5 (tribunal round 1, 2026-09-19): the diagnostic below used to
+        # read `pg_locks WHERE NOT granted`, which selects WAITING lock
+        # requests rather than the session holding the lock — and since
+        # `conn.rollback()` on the next line has already removed this
+        # transaction's own waiting row, the query could come back empty
+        # while the holder sat there untouched. It now selects GRANTED
+        # locks joined to `pg_stat_activity`, which is what an operator
+        # can still run minutes later and get an answer from.
         conn.rollback()
         raise MigrationError(
             f"the migration could not get a lock within {lock_timeout_s} s: a "
             "statement waited for a table lock it could not have (an ALTER "
             "needs ACCESS EXCLUSIVE, which conflicts with every other lock) "
             "and gave up when this transaction's lock_timeout fired. NOTHING "
-            "WAS APPLIED — the transaction was rolled back. Find the session "
-            "holding it: SELECT pid, mode, granted, relation::regclass FROM "
-            "pg_locks WHERE NOT granted; then stop what is holding the lock (a "
-            "resident, a scheduled one-shot, another session) and run the "
+            "WAS APPLIED — the transaction was rolled back, so this "
+            "migration's own waiting request is already gone from pg_locks; "
+            "the HOLDER is still there. Find it: SELECT l.pid, l.mode, "
+            "l.relation::regclass, a.state, a.query FROM pg_locks l JOIN "
+            "pg_stat_activity a USING (pid) WHERE l.granted AND l.relation IS "
+            "NOT NULL; the list is not filtered by mode because an ALTER "
+            "conflicts with every other lock mode, so any granted lock on the "
+            "table it touches is enough to block it. Then stop what is holding "
+            "the lock (a resident, a scheduled one-shot, another session) and "
+            "run the "
             f"migration again. Raising --lock-timeout-s above {lock_timeout_s} "
             "only makes a stuck deploy wait longer. Postgres said: "
             f"{e}"

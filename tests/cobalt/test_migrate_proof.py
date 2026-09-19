@@ -1539,6 +1539,23 @@ def test_a_lock_it_cannot_get_rolls_back_and_says_nothing_was_applied(monkeypatc
         "the operator is not told how to find the session holding the lock: "
         f"{message}"
     )
+    # R5 (tribunal round 1, 2026-09-19). The hint used to read `pg_locks
+    # WHERE NOT granted`, which selects WAITING requests, not the holder
+    # — and by the time an operator runs it this transaction has already
+    # rolled back, so its own waiting row is gone too and the query can
+    # come back empty while a holder is sitting there. The hint must
+    # point at a GRANTED lock and name who holds it.
+    assert "NOT granted" not in message, (
+        "the hint still filters on ungranted locks, which lists waiters "
+        f"(and after this rollback, not even this one): {message}"
+    )
+    assert "pg_stat_activity" in message, (
+        "the hint names no way to see WHICH session holds the lock: "
+        f"{message}"
+    )
+    assert "l.granted" in message, (
+        f"the hint does not select granted locks: {message}"
+    )
 
 
 @pytest.mark.parametrize("bad", [0, -1, -30])
