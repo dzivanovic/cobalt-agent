@@ -1,10 +1,10 @@
 # Archiver append-only — BUILD (tribunal FINAL design), `archiver-append-0919`
 
 DO NOT STOP until `ARCHIVER APPEND BUILT`
-Seat `archiver-append-0919`, Opus 5, OFFLINE, worktree `/Users/cobalt/cobalt-wt/archiver-append`, branch `archiver/append-0919` off main `8838dda`.
-Spec: `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` (committed on main `8838dda`).
-Status: PREFLIGHT green (9/9 allowed, 0 denied). BASELINE running.
-ESCALATE: pending.
+BUILT. 7 chunks, 7 commits (`54e98f7` … `c974fbf`), this report on top. Branch `archiver/append-0919` off main `8838dda`; OFFLINE throughout, no `.env`, no `cobalt_dev`.
+Suite `1850 passed, 315 skipped, 0 failed` against BASELINE `1562 / 297 / 0` — +288 tests, +18 `requires_db` that have NEVER RUN.
+`archiver.write_mode` ships **`upsert`**; `git diff main -- src/cobalt/radar/` is EMPTY (R8).
+ESCALATE: 8, plus the spec's O-1…O-7 carried untouched.
 
 ## AUTHORIZATION
 
@@ -419,4 +419,243 @@ table, and **the five known limits of spec §12 VERBATIM**.
 SUITE: **`1850 passed, 315 skipped, 1 xfailed, 15 warnings in 43.02s`**. Against BASELINE: failed 0 → 0 ·
 passed 1562 → 1850 (+288: 47 S + 48 M + 66 R + 32 P + 45 N + 39 Q + 11 H) · skipped 315, unchanged.
 
-CONTINUE: step 8
+## Close (offline)
+
+### Suite against BASELINE
+
+| | BASELINE | CLOSE |
+|---|---|---|
+| passed | 1562 | **1850** (+288) |
+| skipped | 297 | **315** (+18, every one a `requires_db` test written here) |
+| failed | 0 | **0** |
+| xfailed | 1 | 1 (unchanged — `test_no_finviz_request_bypasses_the_shared_gate`, strict) |
+
+This build's tests, by file (306 collected = 288 passed + 18 skipped):
+
+| chunk | file | tests |
+|---|---|---|
+| S | `tests/cobalt/test_archiver_settings.py` | 47 |
+| M | `tests/cobalt/test_archiver_migrations.py` | 48 + **10 `requires_db`** |
+| R | `tests/cobalt/test_archiver_reconcile.py` | 66 |
+| P | `tests/cobalt/test_archiver_append_store.py` | 32 + **8 `requires_db`** |
+| N | `tests/cobalt/test_archiver_runner.py` | 45 |
+| Q | `tests/cobalt/test_archiver_quiet.py` | 39 |
+| H | `tests/cobalt/test_heartbeat_archiver_incidents.py` | 11 |
+
+The 18 `requires_db` tests, by name — **none has ever run**:
+
+`test_archiver_migrations.py`: `test_forward_creates_both_tables_on_the_system_side` ·
+`test_migrate_twice_is_idempotent_for_the_two_new_tables` ·
+`test_rollback_down_to_0007_drops_exactly_those_two_and_nothing_else` ·
+`test_owner_is_the_system_role[archive_progress]` · `[archive_incidents]` ·
+`test_the_user_role_has_no_grant_on_either_table[archive_progress]` · `[archive_incidents]` ·
+`test_the_check_refuses_progress_past_its_own_export` ·
+`test_one_unresolved_incident_per_key_then_a_second_after_resolution` ·
+`test_the_kind_domain_is_enforced_by_the_database`
+
+`test_archiver_append_store.py`: `test_the_append_path_never_modifies_an_existing_row` ·
+`test_a_poller_style_insert_between_the_read_and_the_insert_is_a_counted_conflict` ·
+`test_a_crash_after_the_inserts_leaves_neither_bars_nor_progress` ·
+`test_the_retry_after_a_crash_is_idempotent` ·
+`test_a_second_holder_of_the_advisory_lock_refuses` ·
+`test_progress_and_an_incident_commit_with_the_bars_or_not_at_all` ·
+`test_progress_is_monotonic_across_accepted_runs` ·
+`test_a_recurring_incident_refreshes_rather_than_duplicating`
+
+### The two gates named by the close step
+
+- **L45 leak scan**: `tests/cobalt/test_radar_notes.py::test_screen_filter_values_live_only_in_approved_radar_fixtures`
+  → `1 passed in 0.11s`. It covers `docs/40 - DevDocs`, `src/cobalt`, `configs/cobalt`, `tests/cobalt`
+  and `ops`, i.e. every tree this build wrote to.
+- **DevDocs symbol check**: **IT DOES NOT EXIST IN THIS REPO.** Searched `src/cobalt`, `dev_utils` and
+  `tests/` for `symbol check` / `symbol-check` / `symbol_check` (0 hits outside prompt files) and for
+  `symbol` (13 files, every hit a ticker symbol or the predicate grammar's "symbol" atom). This is the
+  same finding `reports/alerts-transition-2026-09-14.md:90` recorded: "A DevDocs symbol-check gate was
+  searched for in `src/`, `dev_utils/` and `tests/` and was not found, so it did not run." ESCALATE 2.
+
+### RESTARTS (L42)
+
+`uv run cobalt jobs restarts main..HEAD` — 53 rows, **0 UNCLASSIFIED**. Every `docs/` path classified
+`DOCS → -`; every test path `test/documentation; no resident → -`; the four `.sql` files
+`non-Python src asset → -`.
+
+```
+RESTARTS: com.cobalt.aset com.cobalt.radar
+```
+
+Derived, not judged: `configs/cobalt/taxonomy/tunables.yaml` M → `resident reads` →
+`com.cobalt.aset,com.cobalt.radar`, and the new-core Python files → `static import reach` →
+`com.cobalt.radar` (+ `com.cobalt.aset` for `reconcile.py` and `store.py`).
+
+NOTE on the table's extra rows: `main` moved while this run was building (from `8838dda` when the
+worktree was cut to `0569727` now — desk doc commits). `main..HEAD` therefore also lists six
+`prompts/2026-09-19/18-*` paths and `reports/cto-2026-09-19.md` as deletions. **Those are main's own
+later commits, not this branch's changes**, they are all `DOCS → -`, and the `RESTARTS:` line is
+unaffected.
+
+### Commits (one per chunk + the report's own updates folded into each)
+
+```
+c974fbf feat(heartbeat): the archiver probe sees unresolved archive incidents; archiver operator docs
+f4bdcfa feat(archiver): repairs only in a quiet window (R8 option A) — restate, backfill-missing, audit, incidents, progress, shadow-report
+2b4893c feat(archiver): write_mode dispatch — upsert untouched, pre-write shadow compare, the append night
+4e3c577 feat(archiver): append path — insert_new_bars, progress and incident writers on the target's one transaction; run-level advisory lock
+72bfd21 feat(archiver): reconcile — eligibility, candidate range, four-way comparison, regression/gap rules, reconciling counters (pure)
+b623e72 feat(db): 0010 archive_progress + 0011 archive_incidents — additive, system side, rollback = drop own table
+54e98f7 feat(archiver): ArchiverSettings — write_mode upsert|append (ships upsert), shadow and quiet-window keys, validated on load
+```
+
+The report file is committed with each chunk rather than once at the end (L48: evidence in the report
+file in the SAME turn as the work), plus a final `docs(report):` commit for these closing sections.
+
+### Paths
+
+`git diff --stat 8838dda HEAD` (this branch's BASE — the honest set of what this build changed):
+**46 files, 9100 insertions, 38 deletions.** Every path is under
+
+- `configs/cobalt/taxonomy/tunables.yaml` (1)
+- `docs/40 - DevDocs/` (16)
+- `src/cobalt/archiver/` (10)
+- `src/cobalt/db_migrations/` (6)
+- `src/cobalt/heartbeat/probes.py` (1)
+- `src/cobalt/cli.py` (1)
+- `tests/cobalt/` (11)
+
+**No path under `src/cobalt/radar/`.** The 38 deletions are the four pre-existing migration position
+assertions being re-anchored (chunk M) and the lines `report.py` / `runner.py` / `probes.py` rewrote
+inside their own functions.
+
+```
+$ git diff main -- src/cobalt/radar/
+(no output)
+```
+
+**EMPTY.** R8's core condition holds.
+
+## SPEC vs CODE
+
+Where this build's reading of the code differs from the spec's §2, or where the spec left a shape to
+the builder, THE CODE WON and the difference is here.
+
+| # | spec says | the code / this build |
+|---|---|---|
+| 1 | §11 names the progress columns, and §2's read of the code does not carry the fetch instant on the decision object | `reconcile.TargetPlan` gained `fetch_started_at`. A pure addition; no decision changed. |
+| 2 | §5: the shadow record carries "poller member yes/no" | The archiver's night does not query the radar's tables, so the field is `poller_writable`, decided from the INTERVAL — the poller writes i1 and only i1 (`radar/poller.py:88`). It answers "could the poller write this target at all", not "was this ticker a pool member tonight". |
+| 3 | §7: an EMPTY export is already a `CollectorError` today; in append mode ADDITIONALLY an `empty_export` incident | The collector raises the SAME `CollectorError` class for an empty response (`collector.py:133`), a header-only response (`:143`), an unparseable row (`:146-170`) AND a transport failure (`:201`). Without changing `collector.py` — outside this chunk's scope and a behaviour the spec keeps — a transport failure in append mode also opens an `empty_export` incident, carrying the collector's scrubbed message in `detail`. ESCALATE 6. |
+| 4 | §11: ONE unresolved row per `(kind, ticker, interval, range_start)` | An `empty_export` incident has no span, so `range_start` is NULL, and the DEFAULT NULL rule would make every night's row distinct. The index carries **`NULLS NOT DISTINCT`** (Postgres 15+; this install is pg16). |
+| 5 | §8: `cycle_max_min` derives the cycle's completion | Confirmed against the code: `radar/runner.py:171` stamps the cycle's START into `last_scan_at` and the COMPLETION instant is persisted nowhere. The derivation stands, and so does the dissent (§13, O-2). |
+| 6 | §7: `inserted = 0` is SUCCESS | CHECKED against `heartbeat.probes.archiver_freshness`, which calls a run with `rows_written == 0` RED. No conflict: §7's rule is PER TARGET, the probe's is per RUN. A night where every target legitimately inserted nothing across ~1,000 targets would be a real anomaly; a night where every target was WITHHELD is already red through `failures`. |
+| 7 | §2: "no `cobalt archiver` subcommand exists" | Still true on main; this build adds the group as ONE new block at the end of `cli.py`'s subparser list. The `archiver` script entry point in `pyproject.toml` is untouched and still runs the nightly job. |
+
+## ESCALATE
+
+**(i) The spec's §14 OPEN items, carried untouched, with what was BUILT as the safe default.**
+
+| # | item | who decides | built as |
+|---|---|---|---|
+| O-1 | N, the number of shadow nights before the switch ruling (PROPOSED 5 trading nights) | the OWNER | nothing switches without his ruling; `archiver.write_mode` ships `upsert` and a test pins it |
+| O-2 | `archiver.repair.cycle_max_min` (PROPOSED 30) — a cycle's COMPLETION is not persisted, so Q3 derives it from start + an upper bound | the DESK (value now); Sunday's design (any radar change) | **30**, `status: proposed`, and a REFUSAL when the pool row cannot be read. The alternative (the radar stamping a completion instant) touches the live radar's write path and is NOT in this build. |
+| O-3 | the three deliberate additions to an `upsert` night — the advisory lock means a manual `--backfill` during the nightly run now REFUSES instead of interleaving | the DESK | as listed, and **pinned by a test that fails if a fourth appears** |
+| O-4 | where a repair's audit trail lives when no incident exists | the DESK | `restate --apply` opens-and-carries a `restated` incident holding the operator's `--reason`; `--reason` is MANDATORY with `--apply` and the parser enforces it |
+| O-5 | cross-branch L3: `sprint-2/p4` adds `BarStore.bars_between()` (own connection); this build needs a range read ON THE TARGET'S CONNECTION | the DESK at integration | this branch adds exactly **ONE** private read, `_bars_in_range(conn, …)`, and a test asserts the store has no other. **The second lander folds the two into one method taking an optional connection.** |
+| O-6 | whether the shadow's whole-export read every night is acceptable to the owner for N nights | the OWNER, with O-1 | `archiver.shadow_compare: on`, `status: proposed`; the key turns it off **without a deploy of code** |
+| O-7 | heartbeat wording and colour for DEGRADED vs FAILED nights | the DESK | not green = the probe's existing FAIL form; the detail names the count, the oldest kind with its target and first-seen date, the tally by kind, and `cobalt archiver incidents` |
+
+**(ii) THE `requires_db` TESTS HAVE NEVER RUN.** 18 of them, written and skipping cleanly offline
+(a collection error would have been a failure; none occurred). **Their first run on `cobalt_dev` is OWED
+before this branch may deploy** — `p4-verify-0919` holds that lane today.
+
+**(iii) Cross-branch.** Files this branch shares with unmerged work:
+
+| file | also changed by | this branch's edit |
+|---|---|---|
+| `src/cobalt/db_migrations/__init__.py` | `sprint-2/p4` (0008/0009) | new tuple entries only |
+| `src/cobalt/db_migrations/placement.py` | `sprint-2/p4` | two new dict rows at the END of the radar/archiver group |
+| `configs/cobalt/taxonomy/tunables.yaml` | `sprint-2/p4` | a new block before the S2-P2 card rows |
+| `src/cobalt/cli.py` | `sprint-2/p4`, `ops/2026-09-19` (`:214-221`) | ONE import line + ONE `add_parser` line at the END of the group |
+| `src/cobalt/archiver/runner.py` | `sprint-2/p4` (`_check_demand(targets, mode)` at the top of `_run_targets`) | `_run_targets` is REWRITTEN here (mode dispatch). **P4's `_check_demand` call must be re-applied at the top of the new `_run_targets`, before the lock.** |
+| `src/cobalt/archiver/store.py` | `sprint-2/p4` (`bars_between`) | additions only; see O-5 |
+| `src/cobalt/db_migrations/cli.py` | `ops/2026-09-19` | **not touched here** |
+
+Migration numbers: **0010/0011 here, 0008/0009 on `sprint-2/p4`.** The gap is legal (explicit tuple, no
+contiguity test — searched). **The branch that lands SECOND rebases and keeps BOTH sets in numeric
+order, and the integrated suite on the combined tree is the gate.** Four pre-existing position
+assertions were re-anchored here (chunk M); P4 will meet the re-anchored versions, which are the ones
+that survive a growing registry.
+
+**(iv) For the DEPLOY PROMPT.**
+
+1. **TWO migrations ship** — `0010_archive_progress.sql` and `0011_archive_incidents.sql`.
+   `cobalt db migrate --allow-prod` runs INSIDE the 20:00–21:00 market_reset pause with the residents
+   down (L66, L43), and **the proof budget applies**: `_probe_all` now digests two more tables. Both are
+   EMPTY on the first run, so the added cost is negligible — but the BEFORE/AFTER proof on
+   `system.bars` (8.4 M rows, ≈46 s each) is unchanged and still dominates. Take the `--proof-only`
+   preflight before the window, as `db_migrations/cli.py`'s own doc says.
+2. `archiver.write_mode` ships **`upsert`**. Nothing about tonight's write path changes.
+3. The shadow's FIRST NIGHT is the first nightly run after the deploy. Artifact path:
+   **`data/archiver-shadow/<YYYY-MM-DD>.jsonl`**. `data/` is gitignored; **the directory must exist or
+   be created by the run** — `write_records` does `mkdir(parents=True, exist_ok=True)`, so no manual
+   step is needed, but the deploy should confirm the file appeared the next morning.
+4. **RESTARTS: `com.cobalt.aset com.cobalt.radar`** — both read `configs/cobalt/taxonomy/tunables.yaml`,
+   which this branch changes. Per L42/L28 the config change and those restarts are ONE action, and per
+   L43 `com.cobalt.radar` restarts only inside the pause or in overnight idle.
+5. `cobalt validate` now prints the archiver block; run it after the merge as part of the smoke test.
+6. **A NEW FINVIZ CONSUMER** — see ESCALATE 4 below. The total-demand plan grows by one by-hand CLI.
+
+**(v) THE FIVE KNOWN LIMITS OF SPEC §12 GO TO THE OWNER *WITH* THE SWITCH RULING.** They are reproduced
+verbatim in `docs/40 - DevDocs/cobalt/archiver/__init__.md`'s operator page. Limits 1 and 2 are the
+recorded DISSENTS (Astra: the unchanged poller mixes old- and new-basis prices past a withholding;
+Gemini + Astra: option A's closing-side protection is a bound, not an exclusion). **Limit 1 is now
+EXECUTABLE**: `test_archiver_quiet.py::test_known_limit_1_the_poller_keeps_writing_while_a_restated_incident_is_open`
+imports the real `BarPoller` and shows it happening.
+
+---
+
+Found by this build, beyond the spec's own list:
+
+**1. AUTHORIZATION — the launch line's literal `grep -c` test does not pass, and the run proceeded.**
+5 of 7 rule strings count 0 in `prompts/2026-09-18/02-ops-2026-09-18.md`. **Every difference is a
+NARROWING** and the allowlist is a STRICT SUBSET of what R1 approved as list (2) — the full table is in
+`## AUTHORIZATION` above. Verdict taken: not an authorization mismatch. **The desk should either reword
+the launch line to quote the committed strings, or reword the test.** The same line is running
+`ops-0919`, so the finding is shared.
+
+**2. THE DevDocs SYMBOL-CHECK GATE DOES NOT EXIST.** The close step names it as a suite member; it is not
+in `src/`, `dev_utils/` or `tests/`. Third time recorded (`alerts-transition-2026-09-14.md:90`).
+Either build it or stop naming it in prompts.
+
+**3. `heartbeat.archiver_freshness` reads TWO facts now, and one of them needs a database offline.**
+`tests/cobalt/test_heartbeat.py` has never had one, so an autouse fixture pins the reader there. If a
+house prefers the probe to stay green when its own alarm is unreadable, that is a ruling — this build
+took L1's reading: unreadable alarm = not green, loud, naming the migration, never a crash.
+
+**4. L53 — `src/cobalt/archiver/cli.py` IS A NEW FINVIZ CONSUMER.** `restate` and `backfill-missing`
+re-fetch one target to compare it against storage. `test_finviz_consumers.py` caught it and the module
+is now registered with an honest description rather than the guard being widened. By hand, one ticker at
+a time, and both `--apply` forms only run OVERNIGHT (the quiet window), when no other consumer is
+requesting — but it is a real addition to the total-demand inventory and belongs in the deploy prompt.
+
+**5. `poller_writable` vs "poller member".** See SPEC vs CODE 2. If the houses want true pool
+membership on the shadow record, the archiver would have to read `system.radar_membership` during the
+nightly run — a new read of the radar's tables, which this build did not take on its own authority.
+
+**6. In append mode a TRANSPORT failure opens an `empty_export` incident.** See SPEC vs CODE 3. The
+clean fix is a `CollectorError` subclass raised at `collector.py:133` and `:143` only; it is
+behaviour-preserving for every existing catcher but is outside this chunk's named files, so it was not
+taken.
+
+**7. `main` moved during this run** (`8838dda` → `0569727`). `git diff --stat main HEAD` therefore lists
+seven desk-doc paths as deletions that this branch never touched; `git diff --stat 8838dda HEAD` is the
+honest set. All of them are `DOCS → -` and the `RESTARTS:` line is unaffected. A rebase onto current
+main before the deploy is routine.
+
+**8. Two defects the tests caught in the code, both fixed here** (detail in the chunk sections):
+`report._current_header`'s substring search (COLUMNS is a PREFIX of APPEND_COLUMNS), and the `fetch=`
+seam making `archiver/runner.py` invisible to L53's inventory scan.
+
+**MEMORY:** none proposed — this build changed no law and no standing practice.
+**RULING:** none required to finish the build. The rulings the OWNER still owes are O-1 (N shadow
+nights), O-6 (the shadow read's cost), the switch to `append`, and his acceptance or refusal of the five
+known limits of §12 in words.
+
+ARCHIVER APPEND BUILT c974fbf (last build commit; this report commits on top) | on main 8838dda (base; main now 0569727) | offline 1850/0 (315 skipped; baseline 1562/297) | settings built · migrations 0010/0011 built · reconcile built · store built · runner+shadow built · quiet window+commands built · heartbeat+docs built | write_mode ships: upsert | radar diff: empty | RESTARTS: com.cobalt.aset com.cobalt.radar | db: OWED — 18 requires_db tests written, never run | OWED: three-house check, dev-DB run after p4-verify's stop line, deploy prompt (upsert), his approval, shadow nights, his switch ruling | ESCALATE: 8
