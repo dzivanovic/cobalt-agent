@@ -5,12 +5,14 @@ ADDITIVE and SYSTEM side (L32: market-data bookkeeping, nothing of one
 trader's choice), and each rollback is a plain `DROP TABLE` of its own
 table — no other object is touched.
 
-WHY 0010/0011 AND NOT 0008/0009. `0008`/`0009` exist only on the
-unmerged branch `sprint-2/p4` and are never used here. The registry is
-an EXPLICIT ordered tuple (`db_migrations/__init__.py`) with no
-contiguity rule, so a gap is legal; the branch that lands second
-rebases and keeps both sets in numeric order. This file asserts the
-registration and the rollback SELECTION, never contiguity.
+WHY 0010/0011 AND NOT 0008/0009. `0008`/`0009` belonged to the then
+unmerged branch `sprint-2/p4`, which shipped on 2026-09-19 (deploy 2);
+this branch rebased onto it, so both sets now live in the registry in
+numeric order — exactly what the gap note said the second lander would
+do. The registry is an EXPLICIT ordered tuple
+(`db_migrations/__init__.py`) and the tests below assert the
+registration and the rollback SELECTION by numeric prefix, never by
+position.
 
 The `requires_db` half is written here and owed its first run on
 `cobalt_dev` once `p4-verify-0919` releases the lane (L41 interim).
@@ -59,19 +61,26 @@ def _code(path) -> str:
 # ---------------------------------------------------------------------
 
 
-def test_forward_ends_0007_0010_0011():
-    assert [p.name for p in FORWARD[-3:]] == [
-        "0007_radar_cards.sql",
+def test_forward_ends_0008_0009_0010_0011():
+    """The tail after the P4 rebase: P4's pair, then this branch's pair,
+    in numeric order. The invariant is unchanged — 0010 and 0011 are the
+    LAST two registered, and nothing of this branch's was displaced."""
+    assert [p.name for p in FORWARD[-4:]] == [
+        "0008_radar_value_movers.sql",
+        "0009_picks_missed.sql",
         "0010_archive_progress.sql",
         "0011_archive_incidents.sql",
     ]
 
 
-def test_reverse_begins_0011_0010_0007():
-    assert [p.name for p in REVERSE[:3]] == [
+def test_reverse_begins_0011_0010_0009_0008():
+    """The exact mirror of the tail above: this branch's pair reverses
+    FIRST, then P4's."""
+    assert [p.name for p in REVERSE[:4]] == [
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
-        "0007_radar_cards.rollback.sql",
+        "0009_picks_missed.rollback.sql",
+        "0008_radar_value_movers.rollback.sql",
     ]
 
 
@@ -82,23 +91,43 @@ def test_each_new_migration_has_its_rollback_and_both_are_registered():
     assert PROGRESS_ROLLBACK in REVERSE and INCIDENTS_ROLLBACK in REVERSE
 
 
-def test_rollback_down_to_0007_selects_exactly_the_two_new_files():
-    """The bounded reverse an operator runs to undo this branch alone."""
-    assert [p.name for p in _rollback_paths("0007")] == [
+def test_rollback_down_to_0009_undoes_this_branch_alone_and_0007_also_reaches_p4():
+    """The bound the operator actually runs to undo THIS branch is
+    `--down-to 0009`: after the P4 rebase that is the boundary which
+    selects exactly this branch's two files and stops. `--down-to 0007`
+    is no longer that bound — it correctly reaches P4's pair as well,
+    because selection is by numeric prefix and P4 now sits between.
+    Both are pinned so neither can drift."""
+    assert [p.name for p in _rollback_paths("0009")] == [
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
     ]
+    assert [p.name for p in _rollback_paths("0007")] == [
+        "0011_archive_incidents.rollback.sql",
+        "0010_archive_progress.rollback.sql",
+        "0009_picks_missed.rollback.sql",
+        "0008_radar_value_movers.rollback.sql",
+    ]
 
 
-def test_the_registry_is_an_explicit_list_so_the_0008_0009_gap_is_legal():
-    """No contiguity rule anywhere — asserted, because the gap is
-    deliberate (P4 owns 0008/0009 on an unmerged branch)."""
+def test_the_registry_is_an_explicit_contiguous_list_and_reverse_mirrors_it():
+    """The gap of 0008/0009 is CLOSED — P4 shipped and this branch
+    rebased onto it. The invariant underneath the old gap test survives
+    and is what is pinned here: the registry is an EXPLICIT ordered list,
+    its numbers run 1…11 contiguously with no duplicate, and REVERSE is
+    FORWARD reversed — minus 0001, which is deliberately never reversed
+    (`db_migrations/__init__.py`). Selection stays by numeric prefix,
+    never by position."""
     numbers = [int(p.name.split("_", 1)[0]) for p in FORWARD]
     assert numbers == sorted(numbers), "FORWARD must be in numeric order"
-    assert 8 not in numbers and 9 not in numbers
-    assert numbers[-2:] == [10, 11]
+    assert len(numbers) == len(set(numbers)), f"duplicate migration number in {numbers}"
+    assert numbers == list(range(1, 12)), f"1…11 contiguous, got {numbers}"
+    assert numbers[-2:] == [10, 11], "this branch's pair is still the tail"
     reverse_numbers = [int(p.name.split("_", 1)[0]) for p in REVERSE]
     assert reverse_numbers == sorted(reverse_numbers, reverse=True)
+    assert reverse_numbers == [n for n in reversed(numbers) if n != 1], (
+        "REVERSE must be FORWARD reversed, 0001 excepted"
+    )
 
 
 # ---------------------------------------------------------------------
