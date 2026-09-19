@@ -538,7 +538,11 @@ async def archive_movers(
         ids_by_ticker.setdefault(mover.ticker, []).append(mover.id)
 
     def covered(ticker: str) -> bool:
-        stored = day_bars(bar_store.bars_between(ticker, Interval.I1, day_start, day_end), trade_date)
+        stored = day_bars(
+            bar_store.bars_in_range(
+                None, ticker, Interval.I1, day_start, day_end,
+                end_inclusive=False, as_bars=True),
+            trade_date)
         return coverage(stored, start=rth_open, end=close)["covered"]
 
     to_fetch = []

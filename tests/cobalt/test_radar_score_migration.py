@@ -80,34 +80,51 @@ def _table_body(text: str, qualified: str) -> str:
 
 
 def test_0006_and_0007_are_registered_forward_in_order():
+    """ADJACENCY, not position (2026-09-19): P4's 0008/0009 and the
+    archiver's 0010/0011 are appended after 0007, so `FORWARD` no longer
+    ends here. What 0006/0007 need is to run in that order, with 0006's
+    system seam before 0007's user cards that reference it."""
     # A position in FORWARD is not an identity — later sprints append. Assert
     # by name: 0006 is followed immediately by 0007.
     names = [p.name for p in FORWARD]
     assert "0006_radar_score.sql" in names, names
     start = names.index("0006_radar_score.sql")
     assert names[start:][:2] == ["0006_radar_score.sql", "0007_radar_cards.sql"]
+    assert names.index("0007_radar_cards.sql") == names.index("0006_radar_score.sql") + 1
     for path in (SYSTEM_SQL, SYSTEM_ROLLBACK, USER_SQL, USER_ROLLBACK):
         assert path.exists(), path
 
 
 def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first():
-    assert [p.name for p in REVERSE[:4]] == [
+    """The USER cards reverse before the SYSTEM seam they reference — an
+    adjacency in REVERSE, and a suffix of each bounded selection. The
+    newest four are named explicitly: P4's 0008/0009 and the archiver's
+    0010/0011 both reverse before 0007."""
+    newest_four = [
+        "0011_archive_incidents.rollback.sql",
+        "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",
         "0008_radar_value_movers.rollback.sql",
+    ]
+    reverse_names = [p.name for p in REVERSE]
+    assert reverse_names[:4] == newest_four
+    assert (
+        reverse_names.index("0006_radar_score.rollback.sql")
+        == reverse_names.index("0007_radar_cards.rollback.sql") + 1
+    )
+    assert [p.name for p in _rollback_paths("0005")][:4] == newest_four
+    assert [p.name for p in _rollback_paths("0005")][-2:] == [
         "0007_radar_cards.rollback.sql",
         "0006_radar_score.rollback.sql",
     ]
-    assert [p.name for p in _rollback_paths("0005")] == [
-        "0009_picks_missed.rollback.sql",
-        "0008_radar_value_movers.rollback.sql",
-        "0007_radar_cards.rollback.sql",
-        "0006_radar_score.rollback.sql",
+    assert [p.name for p in _rollback_paths("0006")][:4] == newest_four
+    assert [p.name for p in _rollback_paths("0006")][-1:] == [
+        "0007_radar_cards.rollback.sql"
     ]
-    assert [p.name for p in _rollback_paths("0006")] == [
-        "0009_picks_missed.rollback.sql",
-        "0008_radar_value_movers.rollback.sql",
-        "0007_radar_cards.rollback.sql",
-    ]
+    assert not any(
+        p.name.startswith(("0005", "0004", "0003", "0002"))
+        for p in _rollback_paths("0006")
+    )
 
 
 # ---------------------------------------------------------------------

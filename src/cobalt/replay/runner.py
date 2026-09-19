@@ -379,7 +379,9 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
         rows: list[MissRow] = []
         for card in candidates:
             check_deadline("cards")
-            bars = deps.bar_store.bars_between(card.ticker, Interval.I1, day_start, day_end)
+            bars = deps.bar_store.bars_in_range(
+                None, card.ticker, Interval.I1, day_start, day_end,
+                end_inclusive=False, as_bars=True)
             replayed = replay_card(card, bars, trade_date=trade_date, window=resolve_window(card.window_ref, trade_date),
                                    session_close=close, positions=positions)
             if replayed.status == "input_stale":
@@ -404,7 +406,9 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
     def formations_step() -> None:
         context = FormationContext(
             trade_date=trade_date, session_close=close,
-            bars_for=lambda ticker: deps.bar_store.bars_between(ticker, Interval.I1, day_start, day_end),
+            bars_for=lambda ticker: deps.bar_store.bars_in_range(
+                None, ticker, Interval.I1, day_start, day_end,
+                end_inclusive=False, as_bars=True),
             radar_cards=lambda: deps.missed.radar_cards(trade_date),
         )
         outcome = deps.formation_source(

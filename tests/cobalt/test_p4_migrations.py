@@ -90,15 +90,32 @@ def test_0008_0009_registered_forward_in_version_order_with_named_rollbacks():
     assert reverse_versions == sorted(reverse_versions, reverse=True)
 
 
-def test_rollback_down_to_0007_reverses_0009_then_0008_only():
+def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     """R1-23: the explicit boundary is `--down-to 0007`, numerically right
-    whether or not P2's 0007 exists yet — it never reaches 0006/0007."""
+    whether or not P2's 0007 exists yet — it never reaches 0006/0007.
+
+    That property is unchanged; what changed is what sits ABOVE 0007.
+    The archiver's 0010/0011 landed on 2026-09-19, so `--down-to 0007`
+    now reverses all four, newest first. P4's own bound is still pinned
+    below it: nothing at or below the bound is ever selected."""
     assert [p.name for p in _rollback_paths("0007")] == [
+        "0011_archive_incidents.rollback.sql",
+        "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",
         "0008_radar_value_movers.rollback.sql",
     ]
+    # P4's own bound: at 0009 neither of P4's files may be selected.
+    above_0009 = [p.name for p in _rollback_paths("0009")]
+    assert not [n for n in above_0009 if n.startswith(("0008", "0009"))], above_0009
+    assert above_0009 == [
+        "0011_archive_incidents.rollback.sql",
+        "0010_archive_progress.rollback.sql",
+    ]
+    # ...and at 0008 exactly 0009 and everything newer, 0008 itself excluded.
     assert [p.name for p in _rollback_paths("0008")] == [
-        "0009_picks_missed.rollback.sql"
+        "0011_archive_incidents.rollback.sql",
+        "0010_archive_progress.rollback.sql",
+        "0009_picks_missed.rollback.sql",
     ]
 
 

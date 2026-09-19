@@ -698,7 +698,11 @@ class _FakeBars:
         self.existing = dict(existing or {})
         self.upserted = 0
 
-    def bars_between(self, ticker, interval, start, end):
+    def bars_in_range(self, conn, ticker, interval, start, end,
+                      *, end_inclusive=True, as_bars=False):
+        assert (conn, end_inclusive, as_bars) == (None, False, True), (
+            "replay owns no transaction and reads [start, end) as bars"
+        )
         return [b for b in self.existing.get(ticker, []) if start <= b.ts < end]
 
     def upsert_bars(self, bars):

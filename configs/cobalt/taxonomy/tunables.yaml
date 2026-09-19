@@ -520,6 +520,96 @@ tunables:
     source: ruling
     consumers: ["cobalt.radar.poller (RTH stale-bar poll_failures entry)"]
 
+  # --- Bar Archiver: append-only redesign (2026-09-19) --------------------
+  # FINAL design `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md`
+  # §10, derived by the four-house tribunal (L67) from the owner's R14/R15
+  # ("know where the watermark is for each ticker … only add the new bars")
+  # and his R8 09-19 09:30 ET "A on archiver" (repairs only in a quiet
+  # window; the live radar poller is NOT touched).
+  #
+  # THE MODE SHIPS AS `upsert` — today's behaviour byte for byte. The switch
+  # to `append` is HIS ruling on the shadow numbers (L7): a reviewed commit
+  # to the row below, after N shadow nights, never a default that drifted.
+  # A test pins this value.
+  - key: archiver.write_mode
+    value: upsert
+    unit: label
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.archiver.settings.ArchiverSettings (upsert | append; the nightly write path)", "solidified by the FINAL design 2026-09-19; the switch to 'append' is the owner's ruling on the shadow numbers (L7)"]
+
+  # PROPOSED (§10): the operational lever if the pre-write shadow read ever
+  # costs a night. Ignored in `append` mode, where the comparison IS the gate.
+  - key: archiver.shadow_compare
+    value: "on"
+    unit: label
+    scope: global
+    dynamic: false
+    status: proposed
+    source: ruling
+    consumers: ["cobalt.archiver.settings.ArchiverSettings (on | off)", "cobalt.archiver.shadow (the pre-write comparison and its nightly artifact)"]
+
+  # PROPOSED (§10): the shadow read's own statement_timeout. The shadow can
+  # never fail or slow-fail a target, so its read is bounded rather than trusted.
+  - key: archiver.shadow_statement_timeout_s
+    value: 10
+    unit: count
+    scope: global
+    dynamic: false
+    status: proposed
+    source: ruling
+    consumers: ["cobalt.archiver.shadow (statement_timeout on the stored-range read)"]
+
+  # PROPOSED (§10): how many nights of `data/archiver-shadow/<date>.jsonl`
+  # are kept. `shadow-report` reads across them for persisted/vanished/appeared.
+  - key: archiver.shadow_retention_nights
+    value: 30
+    unit: count
+    scope: global
+    dynamic: false
+    status: proposed
+    source: ruling
+    consumers: ["cobalt.archiver.shadow (artifact retention)"]
+
+  # THE DESK'S NUMBER (§16). Q2 of the quiet window: a repair may not start
+  # within this many minutes of the next SCANNED session opening.
+  - key: archiver.repair.quiet_before_open_min
+    value: 10
+    unit: min
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.archiver.quiet (Q2: distance to the next scanning open)", "the desk's number, cto-2026-09-19.md §16 / R8"]
+
+  # THE DESK'S NUMBER (§16). Q3: how long after a cycle is DERIVED to have
+  # completed before the radar counts as quiet.
+  - key: archiver.repair.quiet_after_cycle_min
+    value: 5
+    unit: min
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.archiver.quiet (Q3: quiet interval after the last poll cycle)", "the desk's number, cto-2026-09-19.md §16 / R8"]
+
+  # PROPOSED (§14 O-2). A STATED UPPER BOUND on a radar cycle's length, not a
+  # measurement: `radar_pool.last_scan_at` holds a cycle's START and the
+  # COMPLETION instant is persisted nowhere (§2), so Q3 derives the finish
+  # from start + this bound. Basis of 30: pool cap x (30 s transport timeout +
+  # token-bucket spacing) for a cap of ~50; the cap is the owner's (L53) and
+  # can change. This estimate IS Gemini's and Astra's recorded dissent (§13).
+  - key: archiver.repair.cycle_max_min
+    value: 30
+    unit: min
+    scope: global
+    dynamic: false
+    status: proposed
+    source: ruling
+    consumers: ["cobalt.archiver.quiet (Q3: the derived cycle completion bound)"]
+
   # --- S2-P2 radar cards: dot colours (09-14 accepted defaults) ----------
   # Engine tunables, never trader_settings (L53): `cobalt settings load
   # --card` refuses any card.dot.* / card.health.* key by name.

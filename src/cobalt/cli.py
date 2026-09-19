@@ -77,6 +77,9 @@ from cobalt.settings import cli as settings_cli  # noqa: E402
 from cobalt.taxonomy import cli as taxonomy_cli  # noqa: E402
 from cobalt.taxonomy import validate as taxonomy_validate  # noqa: E402
 from cobalt.vaultwrite import VaultWriter, VaultWriteStore  # noqa: E402
+from cobalt.archiver import cli as archiver_cli  # noqa: E402
+from cobalt.archiver.quiet import QuietRefused  # noqa: E402
+from cobalt.archiver.store import ArchiveLockError  # noqa: E402
 
 
 def _store() -> VaultWriteStore:
@@ -440,6 +443,15 @@ def _cmd_validate(args: argparse.Namespace) -> None:
         f"{', '.join(f'{slot:%H:%M}' for slot in summary_at())} ET."
     )
 
+    # The Bar Archiver's write mode and quiet window (append-only FINAL
+    # design §10). Building the model IS the check, as everywhere above:
+    # a missing row, a wrong unit or a near-miss spelling of the write
+    # mode crashes here, naming the key, rather than at 20:30 tonight.
+    from cobalt.archiver.settings import validate_command_lines as archiver_lines
+
+    for line in archiver_lines():
+        print(line)
+
     # 2026-09-13 tree cleanup: docs/PLACEMENT.md's map, enforced. Captures,
     # per-session dumps and stale in-flight duplicates are what sprawled
     # before this sweep existed — see docs/PLACEMENT.md for the map.
@@ -490,6 +502,11 @@ def main() -> None:
     radar_cli.add_parser(sub)
     replay_cli.add_parser(sub)
     smoke_cli.add_parser(sub)
+    # The Bar Archiver's operator commands (append-only FINAL design
+    # 2026-09-19): progress, incidents, audit, shadow-report, and the two
+    # quiet-window repairs. A NEW block at the end of this group — it
+    # reflows none of its neighbours.
+    archiver_cli.add_parser(sub)
     jobs_cli.add_stop_parsers(sub)
 
     validate = sub.add_parser(
@@ -505,6 +522,17 @@ def main() -> None:
         # operator stopped it on purpose, and a non-zero exit would paint
         # F18 red for a state he deliberately caused (F17d).
         print(f"NOT RUN — {e}")
+    except (QuietRefused, ArchiveLockError) as e:
+        # EXIT 2, the archiver's REFUSALS (append-only design §8, §9).
+        # Both are plain RuntimeErrors, so without this clause they fell
+        # into the generic branch below and exited 1 — indistinguishable
+        # from a real failure, while nothing was written and nothing is
+        # broken. The message keeps this CLI's own `FAILED: <type>:
+        # <message>` shape so a reader sees one rendering across every
+        # command; the refusal's own multi-line body (the three observed
+        # values and the earliest allowed start) follows it verbatim.
+        print(f"FAILED: {type(e).__name__}: {e}", file=sys.stderr)
+        sys.exit(e.exit_code)
     except Exception as e:
         print(f"FAILED: {type(e).__name__}: {e}", file=sys.stderr)
         sys.exit(1)
