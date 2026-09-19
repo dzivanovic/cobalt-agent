@@ -6,12 +6,22 @@ inside one transaction that is always rolled back (DDL is transactional),
 and switch roles with the ONE `db.apply_side` so the grants that bite are
 the side roles', not the superuser's.
 
-Both merge orders (plan STEP-1, Astra R1-1/R1-3): P2's 0006/0007 are not
-in this tree (P2 not merged — hub report STEP-0). The P2-before-P4 order is
-exercised by adding P2's `aset_sizings.card_score`/`conviction` columns
-before 0008/0009; the P4-before-P2 order by adding them after. The lint
+Both merge orders (plan STEP-1, Astra R1-1/R1-3). P2's 0006/0007 ARE in
+this tree: the branch was rebased onto merged P2, and `FORWARD` carries
+`0006_radar_score.sql` and `0007_radar_cards.sql`. (Through 2026-09-19
+this docstring still said they were not — written before the rebase and
+left stale, which is what made the two parametrizations below the same
+case twice: both applied every migration under 0008, P2's included, so
+`_simulate_p2_card_columns`'s `ADD COLUMN IF NOT EXISTS` was a no-op in
+the `p4_before_p2` half. Tribunal A5, fixed 2026-09-19.)
+
+`_merge_order_bases` is what now separates them: `p2_before_p4` applies
+everything below 0008 first; `p4_before_p2` HOLDS P2's 0006/0007 back,
+applies 0008/0009 to a tree that has never seen P2's seam, and applies
+0006/0007 afterwards. `_simulate_p2_card_columns` still adds the two
+`aset_sizings` columns P4 reads, in each order's P2 position. The lint
 test proves 0008/0009 name nothing of P2's, which is the property that
-makes either order safe. The hub reruns these on the rebased tree.
+makes either order safe.
 """
 
 from __future__ import annotations
@@ -276,18 +286,96 @@ def _simulate_p2_card_columns(conn) -> None:
     )
 
 
-def _seed_membership(conn, *, ticker: str, scan_id: int, value) -> int:
+#: The versions of P2's own seam inside `FORWARD`. On the rebased tree
+#: they ARE in the registry, which is what makes the two merge orders
+#: distinguishable at all (see `_merge_order_bases`).
+P2_VERSIONS = (6, 7)
+
+
+def _merge_order_bases(order: str) -> tuple[list, list]:
+    """`(applied before 0008/0009, applied after them)` for one order.
+
+    `p2_before_p4`: everything below 0008 — P2's 0006/0007 included — is
+    applied first; nothing is held back.
+    `p4_before_p2`: P2's 0006/0007 are HELD BACK, so 0008/0009 land on a
+    tree that has never seen P2's seam, and 0006/0007 arrive afterwards
+    in the P2 position. Before this existed both parametrizations applied
+    the same `[p for p in FORWARD if _migration_version(p) < 8]`, which
+    on the rebased tree already contains 0006/0007 — so `p4_before_p2`
+    was `p2_before_p4` under another name, and `_simulate_p2_card_columns`
+    (`ADD COLUMN IF NOT EXISTS`) was a no-op in it.
+    """
+    below_8 = [p for p in FORWARD if _migration_version(p) < 8]
+    p2 = [p for p in below_8 if _migration_version(p) in P2_VERSIONS]
+    if order == "p2_before_p4":
+        return below_8, []
+    return [p for p in below_8 if p not in p2], p2
+
+
+def _membership_insert(ticker: str, scan_id: int, value) -> tuple[str, tuple]:
+    """The seed INSERT and its parameters.
+
+    `value is None` names NEITHER of the two columns 0008 adds, which is
+    the only way to seed a row BEFORE 0008 has run — the pre-existing row
+    whose survival across the first apply is what "on populated
+    membership" is supposed to prove.
+    """
+    columns = ("pool_key,ticker,trade_date,first_seen_at,entered_at,source,sources,"
+               "rank_at_entry,last_rank,session,opened_scan_id,last_scan_id")
+    values = ("'p4_proof',%s,'2040-01-03','2040-01-03 15:00+00','2040-01-03 15:00+00',"
+              "'test','[\"test\"]'::jsonb,1,1,'rth',%s,%s")
+    params: tuple = (ticker, scan_id, scan_id)
+    if value is not None:
+        columns += ",rank_metric,rank_value"
+        values += ",'volume',%s"
+        params += (value,)
+    return f"INSERT INTO system.radar_membership ({columns}) VALUES ({values}) RETURNING id", params
+
+
+def _seed_membership(conn, *, ticker: str, scan_id: int, value=None) -> int:
     conn.execute(
         "INSERT INTO system.radar_pool (pool_key,state,session,members) "
         "VALUES ('p4_proof','scanning','rth',1) ON CONFLICT (pool_key) DO NOTHING"
     )
-    return conn.execute(
-        "INSERT INTO system.radar_membership (pool_key,ticker,trade_date,first_seen_at,"
-        "entered_at,source,sources,rank_at_entry,last_rank,session,opened_scan_id,last_scan_id,"
-        "rank_metric,rank_value) VALUES ('p4_proof',%s,'2040-01-03','2040-01-03 15:00+00',"
-        "'2040-01-03 15:00+00','test','[\"test\"]'::jsonb,1,1,'rth',%s,%s,'volume',%s) RETURNING id",
-        (ticker, scan_id, scan_id, value),
-    ).fetchone()[0]
+    sql, params = _membership_insert(ticker, scan_id, value)
+    return conn.execute(sql, params).fetchone()[0]
+
+
+def test_the_two_merge_orders_no_longer_build_the_same_base():
+    """A5, offline: the stale docstring's premise is false on this tree,
+    and the two parametrizations now really differ.
+
+    This is the part of the merge-order test that can be proved WITHOUT a
+    database — the registry and the two base lists. The `requires_db`
+    test below is the part that cannot, and its first run is OWED.
+    """
+    versions = {_migration_version(p) for p in FORWARD}
+    assert versions >= set(P2_VERSIONS)          # P2 IS in this tree — the docstring was stale
+
+    p2_first, p2_first_later = _merge_order_bases("p2_before_p4")
+    p4_first, p4_first_later = _merge_order_bases("p4_before_p2")
+
+    assert p2_first != p4_first                  # not the same case twice any more
+    assert {_migration_version(p) for p in p2_first} >= set(P2_VERSIONS)
+    assert not ({_migration_version(p) for p in p4_first} & set(P2_VERSIONS))
+    assert p2_first_later == []
+    assert {_migration_version(p) for p in p4_first_later} == set(P2_VERSIONS)
+    # and neither order ever applies 0008/0009 as part of its base
+    assert all(_migration_version(p) < 8 for p in p2_first + p4_first + p4_first_later)
+
+
+def test_a_row_can_be_seeded_before_0008_adds_its_columns():
+    """The other half of A5: `_seed_membership` named `rank_metric` and
+    `rank_value` unconditionally, so every seeded row was necessarily
+    created AFTER the first `_apply([0008, 0009])` — the digest equality
+    could not have been about pre-existing rows."""
+    pre, pre_params = _membership_insert("P4PRE", 9800000, None)
+    assert "rank_metric" not in pre and "rank_value" not in pre
+    assert pre_params == ("P4PRE", 9800000, 9800000)
+
+    post, post_params = _membership_insert("P4A", 9800001, "1234567.5")
+    assert "rank_metric" in post and "rank_value" in post
+    assert post_params == ("P4A", 9800001, 9800001, "1234567.5")
 
 
 @requires_db
@@ -295,14 +383,29 @@ def _seed_membership(conn, *, ticker: str, scan_id: int, value) -> int:
 def test_0008_0009_apply_twice_reverse_and_reapply_on_populated_membership(order):
     """R1-1: first-apply, second-apply, reverse/reapply on a populated
     `radar_membership` carrying non-null post-deploy values; the digest
-    (which excludes the two new columns) never changes."""
+    (which excludes the two new columns) never changes.
+
+    The two orders are built by `_merge_order_bases`, so `p4_before_p2`
+    really does hold P2's 0006/0007 back and apply them AFTER 0008/0009
+    (before that they shared one base and were the same case twice).
+    `radar_membership` is populated BEFORE the first P4 apply — the
+    pre-existing row cannot carry the columns 0008 adds, which is why it
+    is seeded with no value — so the equalities below really are about
+    rows that predate the migration.
+    """
     conn = _migration_conn()
     try:
-        base = [p for p in FORWARD if _migration_version(p) < 8]
+        base, p2_after = _merge_order_bases(order)
         _apply(conn, base)
         if order == "p2_before_p4":
             _simulate_p2_card_columns(conn)
+        # PRE-EXISTING: seeded before 0008 exists, so without its columns.
+        pre_existing = _seed_membership(conn, ticker="P4PRE", scan_id=9800000)
         _apply(conn, [FWD_0008, FWD_0009])
+        assert conn.execute(
+            "SELECT rank_metric, rank_value FROM system.radar_membership WHERE id = %s",
+            (pre_existing,),
+        ).fetchone() == (None, None)                     # the row survived, columns added empty
         _seed_membership(conn, ticker="P4A", scan_id=9800001, value="1234567.5")
         before = _content(_probe(conn, "radar_membership"))
         # Both facts the equalities below rest on are really in the dict,
@@ -312,6 +415,7 @@ def test_0008_0009_apply_twice_reverse_and_reapply_on_populated_membership(order
         _apply(conn, [FWD_0008, FWD_0009])               # second apply: idempotent
         assert _content(_probe(conn, "radar_membership")) == before
         if order == "p4_before_p2":
+            _apply(conn, p2_after)                       # P2's OWN migrations, in the P2 position
             _simulate_p2_card_columns(conn)
             _apply(conn, [FWD_0008, FWD_0009])
             assert _content(_probe(conn, "radar_membership")) == before
