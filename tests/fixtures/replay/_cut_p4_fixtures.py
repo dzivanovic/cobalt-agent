@@ -16,6 +16,17 @@ rows) — recorded as a real gap, never invented. Shifted to synthetic
 anchor-month date string survive under tests/fixtures/ — this docstring
 therefore never spells it out either).
 
+ANONYMIZATION is spec-01 §3's three transforms for the cards cut, and
+all three are implemented here: the date shift (`_shift_dates`), the
+`@<hex>` suffix scrub (`_anonymize`), and — key-level, so not reachable
+from either text pass — `user_id` → 1 with free-text reasons →
+`"<reason>"` (`strip_personal`, wired into `cut_cards_day`). The raw
+reads this script consumes select neither of those last two columns, so
+the committed cut is unchanged by them; they exist so that the
+guarantee does not depend on the column list of whatever read comes
+next. The tickers and card ids ARE the fixture spec-01:249 commissions
+and are inherent to it (L45 real-shape), not an anonymization gap.
+
 Inputs, all raw production-read output, none queried by this script:
   scratch/step0-sizings.json           aset_sizings, `--format json`
                                         (desk-staged per the CTO desk's
@@ -155,6 +166,41 @@ def _anonymize(text: str) -> str:
     return _HEX_SUFFIX_RE.sub("@000000000000", _shift_dates(text))
 
 
+#: spec-01 §3 (`spec-01:249`), the two transforms `_anonymize` does not
+#: do — it is a hex-suffix scrub plus the date shift, both text-level.
+#: These are key-level and so run over the parsed rows instead.
+#:
+#: Today's raw reads select neither column (`step0-sizings.json` and
+#: card-transitions carry `created_at, direction, entry, id, state, stop,
+#: ticker` and `at, card_id, from_state, to_state`), so these change
+#: nothing about the committed cut. They are here because "the read
+#: happens to omit it" is not a transform: the next read taken with a
+#: wider column list would otherwise carry an owner id or a line of the
+#: trader's own writing into a committed file (L32).
+PERSONAL_ID_FIELDS = frozenset({"user_id", "trader_id"})
+FREE_TEXT_FIELDS = frozenset({"reason", "note", "comment", "rationale", "thesis"})
+REASON_PLACEHOLDER = "<reason>"
+
+
+def strip_personal(rows: Sequence[dict]) -> list[dict]:
+    """`user_id` → 1, free-text reasons → `"<reason>"`, nothing else.
+
+    A NULL free-text cell stays NULL: a missing note is not free text,
+    and the real shape includes its nullability. Rows are copied, never
+    mutated in place, so a caller's raw read is left as it was read.
+    """
+    out: list[dict] = []
+    for row in rows:
+        clean = dict(row)
+        for field in PERSONAL_ID_FIELDS & clean.keys():
+            clean[field] = 1
+        for field in FREE_TEXT_FIELDS & clean.keys():
+            if clean[field] is not None:
+                clean[field] = REASON_PLACEHOLDER
+        out.append(clean)
+    return out
+
+
 def _cast_row(row: dict) -> dict:
     out = {}
     for k, v in row.items():
@@ -175,10 +221,10 @@ def cut_cards_day() -> None:
     sizings_raw = json.loads((SCRATCH / "step0-sizings.json").read_text())
     day_cards = [r for r in sizings_raw if r["created_at"].startswith(str(REAL_ANCHOR))]
     assert day_cards, "no sizings for the anchor day"
-    sizings = json.loads(_anonymize(json.dumps(day_cards)))
+    sizings = json.loads(_anonymize(json.dumps(strip_personal(day_cards))))
 
     trans_text = (SCRATCH / "card-transitions-day-raw.tsv").read_text()
-    transitions = json.loads(_anonymize(json.dumps(_tsv_rows(trans_text))))
+    transitions = json.loads(_anonymize(json.dumps(strip_personal(_tsv_rows(trans_text)))))
 
     dest = HERE / "cards-day.real-shape.json"
     dest.write_text(

@@ -404,3 +404,69 @@ def test_headerless_file_raises_with_its_name(tmp_path):
     with pytest.raises(cutter.EvidenceError) as excinfo:
         cutter.collect_evidence([empty])
     assert "empty-cache-write.csv" in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------
+# spec-01 §3's personal-data transforms (tribunal A4)
+#
+# `spec-01:249` commissions `cards-day.real-shape.json` with three
+# transforms, verbatim: "`user_id` → 1; all timestamps shifted to a fixed
+# synthetic day with intraday offsets kept; free-text reasons →
+# `"<reason>"`". The date shift is implemented (`_shift_dates`). The
+# other two were not: `_anonymize` is a hex-suffix scrub plus that shift,
+# so the cut stayed clean only because today's raw reads happen to select
+# neither column. "The read happens to omit it" is not a transform — the
+# next read that selects `*` would carry them straight into a committed
+# file. These tests pin the committed fixture clean AND pin the transform
+# itself, so the guarantee no longer depends on the shape of a query.
+# This module is where they live because it already loads the cutter by
+# path (`_load_cutter`); a second loader would be a second path (L3).
+# ---------------------------------------------------------------------
+
+CARDS_FIXTURE = FIX / "replay" / "cards-day.real-shape.json"
+
+#: Every key either array of the committed cut carries, as cut.
+CARDS_SIZING_KEYS = {"created_at", "direction", "entry", "id", "state", "stop", "ticker"}
+CARDS_TRANSITION_KEYS = {"at", "card_id", "from_state", "to_state"}
+
+
+def test_the_committed_cards_fixture_carries_no_owner_id_and_no_free_text():
+    """A REGRESSION PIN, and that is its stated purpose: the committed
+    fixture is already clean (the hub's A4 read, re-verified on this tip),
+    so this is green today and fails the day a re-cut lets either class of
+    column in."""
+    import json
+
+    raw = json.loads(CARDS_FIXTURE.read_text())
+    assert set(raw) == {"sizings", "transitions"}
+    assert {key for row in raw["sizings"] for key in row} == CARDS_SIZING_KEYS
+    assert {key for row in raw["transitions"] for key in row} == CARDS_TRANSITION_KEYS
+    every_key = CARDS_SIZING_KEYS | CARDS_TRANSITION_KEYS
+    assert not (every_key & cutter.PERSONAL_ID_FIELDS)
+    assert not (every_key & cutter.FREE_TEXT_FIELDS)
+
+
+def test_the_cutter_flattens_the_owner_id_and_replaces_a_free_text_reason():
+    """spec-01:249's two missing transforms, over a SYNTHETIC row that
+    carries both columns — the shape a future `SELECT *` read would hand
+    the cutter. Nothing else on the row may move."""
+    rows = [{
+        "id": 302, "ticker": "CRWD", "direction": "short", "entry": "219.0500",
+        "state": "EXPIRED", "created_at": "2026-02-10 13:29:30.724041+00:00",
+        "user_id": 7741,
+        "reason": "synthetic free text standing in for whatever the trader typed",
+        "note": None,
+    }]
+    out = cutter.strip_personal(rows)
+    assert out[0]["user_id"] == 1
+    assert out[0]["reason"] == "<reason>"
+    assert out[0]["note"] is None                     # a NULL is not free text; the shape is kept
+    assert {k: v for k, v in out[0].items() if k not in {"user_id", "reason"}} == {
+        "id": 302, "ticker": "CRWD", "direction": "short", "entry": "219.0500",
+        "state": "EXPIRED", "created_at": "2026-02-10 13:29:30.724041+00:00", "note": None}
+    assert rows[0]["user_id"] == 7741                 # the input row is not mutated
+
+
+def test_a_row_carrying_neither_column_is_returned_unchanged():
+    rows = [dict.fromkeys(CARDS_SIZING_KEYS, "x")]
+    assert cutter.strip_personal(rows) == rows
