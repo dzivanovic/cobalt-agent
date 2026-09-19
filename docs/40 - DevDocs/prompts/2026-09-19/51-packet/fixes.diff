@@ -1,0 +1,906 @@
+diff --git a/src/cobalt/archiver/cli.py b/src/cobalt/archiver/cli.py
+index 8a6ad82..5cbc09c 100644
+--- a/src/cobalt/archiver/cli.py
++++ b/src/cobalt/archiver/cli.py
+@@ -348,7 +348,7 @@ def _compared(store, ticker: str, interval: Interval):
+         archived_through=None,
+     )
+     with store.target_transaction() as conn:
+-        held = store._bars_in_range(
++        held = store.bars_in_range(
+             conn, ticker, interval, plan.range_start, plan.range_end
+         )
+     return plan, compare(plan.candidates, held)
+diff --git a/src/cobalt/archiver/runner.py b/src/cobalt/archiver/runner.py
+index 3bb8c2d..860f4ee 100644
+--- a/src/cobalt/archiver/runner.py
++++ b/src/cobalt/archiver/runner.py
+@@ -29,21 +29,98 @@ from .store import BarStore
+ 
+ GENTLE_SLEEP_SECONDS = 1.2
+ 
++#: The two tunables that name the premarket window R34 closed to the
++#: backfill. Read, never hardcoded (L10): if Dejan moves the session, the
++#: bound moves with it and the refusal message says so.
++PREMARKET_OPEN_KEY = "session.premarket_open"
++PREMARKET_CLOSE_KEY = "session.rth_open"
+ 
+-def _check_demand(targets: list[tuple[str, Interval]], mode: str) -> None:
+-    """L53 (S2-P4 R1-13/R2-5): the ONE shared total-demand gate, before the
+-    first request. The nightly run is the registry's `archiver` consumer; a
+-    manual backfill is unscheduled, so it counts against every window."""
++#: Minutes in a day, for the one place a backfill's window can run past
++#: midnight and meet the NEXT morning's premarket.
++_DAY_MINUTES = 1440
++
++
++class BackfillWindowRefused(RuntimeError):
++    """A manual backfill was invoked inside — or would run into — the
++    premarket window that `cto-2026-09-19.md` §4 R34 "B" closed to it."""
++
++
++def _premarket_window():
++    """04:00-09:30 ET, from the session tunables."""
++    from cobalt.radar.notes import DemandWindow
++    from cobalt.taxonomy.loader import load_tunables
++
++    tunables = load_tunables().by_key
++    return DemandWindow.between(
++        tunables[PREMARKET_OPEN_KEY].value, tunables[PREMARKET_CLOSE_KEY].value
++    )
++
++
++def _backfill_window(targets: list[tuple[str, Interval]], instant):
++    """The window this backfill will ACTUALLY hold the transport for:
++    `[instant, instant + len(targets) x GENTLE_SLEEP_SECONDS)` in ET.
++
++    A manual backfill has no schedule, so before R34 it declared
++    `window=None` — which `radar/notes.py` defines as UNBOUNDED and
++    therefore counts against every other consumer's window, including
++    the radar's 04:00 peak. It is not unbounded; it is bounded by the
++    clock it was started on and by its own pacing bound, and that is
++    what it now says. The conversion to whole minutes is
++    `DemandWindow.from_at`, the same one the nightly `archiver`
++    consumer's window is built with.
++    """
++    from cobalt.radar.notes import DemandWindow
++    from cobalt.session.clock import SessionClock
++
++    et = SessionClock.to_et(instant)
++    seconds = max(1, round(len(targets) * GENTLE_SLEEP_SECONDS))
++    return DemandWindow.from_at(f"{et.hour:02d}:{et.minute:02d}", seconds)
++
++
++def _check_demand(targets: list[tuple[str, Interval]], mode: str, now=None):
++    """L53 (S2-P4 R1-13/R2-5): the ONE shared total-demand gate, before
++    the first request. The nightly run is the registry's `archiver`
++    consumer, untouched by R34.
++
++    A manual backfill is bounded TWICE, and both halves are the same
++    fact stated to two audiences (`cto-2026-09-19.md` §4 R34 "B",
++    2026-09-19 — the ruling that closed the archiver DevDoc's open
++    deployment gate; the ceiling `radar.finviz_max_rpm` stays at 50 and
++    is not read, written or reasoned about here):
++
++    * it REFUSES, loudly, if the run would touch 04:00-09:30 ET — the
++      premarket window, where the radar already holds the ceiling and
++      where a throttle on a historically shared Finviz login costs a
++      trading morning; and
++    * it declares that same enforced interval as its `DemandWindow`, so
++      the shared gate counts it where it really is instead of against
++      every window at once.
++
++    The two halves are written together on purpose: a declared window
++    the runner did not enforce would be a lie to the demand model, and
++    an enforced window the model never saw would leave the 04:00 peak
++    exactly as overstated as `window=None` left it.
++    """
+     from cobalt.radar.notes import DemandConsumer, check_scheduled_demand
+ 
+     if mode == "full":
+-        check_scheduled_demand("archiver")
+-        return
++        return check_scheduled_demand("archiver")
++
++    instant = (now if now is not None else _now)()
++    window = _backfill_window(targets, instant)
++    premarket = _premarket_window()
++    if window.overlaps(premarket) or window.end_min > _DAY_MINUTES + premarket.start_min:
++        raise BackfillWindowRefused(
++            f"REFUSED: the backfill is bounded out of {premarket.describe()} "
++            f"(cto-2026-09-19.md §4 R34 \"B\") — this run would hold the "
++            f"transport {window.describe()} for {len(targets)} request(s). "
++            f"Start it outside the premarket window."
++        )
+     backfill = DemandConsumer(
+-        name="backfill", rpm=min(len(targets), 60 / GENTLE_SLEEP_SECONDS), window=None,
+-        basis=f"{len(targets)} request(s), pacing bound, unscheduled",
++        name="backfill", rpm=min(len(targets), 60 / GENTLE_SLEEP_SECONDS), window=window,
++        basis=f"{len(targets)} request(s), pacing bound, {window.describe()}",
+     )
+-    check_scheduled_demand("backfill", extra=[backfill])
++    return check_scheduled_demand("backfill", extra=[backfill])
+ 
+ 
+ def _now():
+@@ -129,7 +206,7 @@ async def _run_targets(
+     are kept side by side by the 2026-09-19 rebase; neither is a choice
+     against the other.
+     """
+-    _check_demand(targets, mode)
++    _check_demand(targets, mode, now=now)
+     cfg = settings if settings is not None else load_archiver_settings()
+     store = store if store is not None else BarStore()
+     fetch_fn = fetch if fetch is not None else _default_fetch
+@@ -274,7 +351,7 @@ def _append_one(store, summary, ticker, interval, bars, fetch_started_at, clock,
+                 fetch_started_at=fetch_started_at, archived_through=archived_through,
+             )
+             stored = (
+-                store._bars_in_range(
++                store.bars_in_range(
+                     conn, ticker, interval, plan.range_start, plan.range_end
+                 )
+                 if plan.needs_stored_read
+diff --git a/src/cobalt/archiver/shadow.py b/src/cobalt/archiver/shadow.py
+index b3cadda..37ec462 100644
+--- a/src/cobalt/archiver/shadow.py
++++ b/src/cobalt/archiver/shadow.py
+@@ -152,7 +152,7 @@ def observe(
+     if eligible:
+         with store.target_transaction() as conn:
+             _bound_statement(conn, settings.shadow_statement_timeout_s)
+-            stored = store._bars_in_range(
++            stored = store.bars_in_range(
+                 conn, ticker, interval, split.export_oldest, split.export_newest
+             )
+ 
+diff --git a/src/cobalt/archiver/store.py b/src/cobalt/archiver/store.py
+index a6ff9f3..1127acd 100644
+--- a/src/cobalt/archiver/store.py
++++ b/src/cobalt/archiver/store.py
+@@ -170,21 +170,6 @@ class BarStore:
+             )
+         return len(rows)
+ 
+-    def bars_between(self, ticker: str, interval: Interval, start, end) -> list[Bar]:
+-        """Stored bars for one ticker/interval with `start <= ts < end`,
+-        oldest first — the read the nightly replay's coverage check and
+-        counterfactual R consume (S2-P4)."""
+-        with self._connect() as conn:
+-            rows = conn.execute(
+-                "SELECT ticker, interval, ts, open, high, low, close, volume FROM bars "
+-                "WHERE ticker = %s AND interval = %s AND ts >= %s AND ts < %s ORDER BY ts",
+-                (ticker, Interval(interval).value, start, end),
+-            ).fetchall()
+-        return [
+-            Bar(ticker=r[0], interval=r[1], ts=r[2], open=r[3], high=r[4], low=r[5], close=r[6], volume=r[7])
+-            for r in rows
+-        ]
+-
+     def watermark(self, ticker: str, interval: str = "i1"):
+         """Newest stored timestamp for one ticker/interval, or None."""
+         with self._connect() as conn:
+@@ -295,27 +280,67 @@ class BarStore:
+             )
+         return inserted
+ 
+-    def _bars_in_range(
+-        self, conn, ticker: str, interval: Interval, start, end
+-    ) -> dict:
+-        """The stored rows of one target over `[start, end]`, normalised.
+-
+-        PRIVATE and CONNECTION-TAKING on purpose (spec O-5). The
+-        unmerged `sprint-2/p4` adds `BarStore.bars_between()`, which
+-        opens its own connection; after both land there must be ONE
+-        range read, and the second lander folds them into one method
+-        with an optional connection (L3). Until then this branch adds
+-        exactly one, and the ESCALATE names the overlap.
+-
+-        Returns `{ts: BarValues}` — already normalised to the column's
+-        own `NUMERIC(14,4)` / integer shape, so the comparison in
+-        `reconcile` is deciding on values rather than on renderings.
++    def bars_in_range(
++        self,
++        conn,
++        ticker: str,
++        interval: Interval,
++        start,
++        end,
++        *,
++        end_inclusive: bool = True,
++        as_bars: bool = False,
++    ) -> dict | list[Bar]:
++        """THE range read of the store, oldest first — one statement,
++        one path (L3, spec O-5).
++
++        THE FOLD (owed at P4 integration, performed 2026-09-19). This
++        branch carried a private `_bars_in_range` taking the caller's
++        connection, and `sprint-2/p4` carried a public `bars_between`
++        opening its own; its own docstring named the merge as due once
++        both landed. They were the same read differing on exactly three
++        axes, and each axis is now a parameter rather than a second copy
++        of the SQL:
++
++        * `conn` — the caller's transaction, or `None` to open and
++          close one here. The archiver MUST pass its own: §8's
++          pre-commit re-check compares against rows read inside the
++          repair's `target_transaction`, and a read on another
++          connection cannot see them. Replay passes `None`; it owns no
++          transaction.
++        * `end_inclusive` — `[start, end]` for the archiver's
++          reconcile, `[start, end)` for replay's whole-day windows.
++        * `as_bars` — `{ts: BarValues}` for reconcile, which compares
++          VALUES and wants them normalised to the column's own
++          `NUMERIC(14,4)` / integer shape rather than to their
++          rendering; `list[Bar]` for replay's coverage check and
++          counterfactual R, which carry the ticker and interval with
++          each row.
++
++        Neither caller's result changed in the fold: the two renderings
++        are built from the same row, and the SQL differs from both
++        originals only in the columns it always selects.
+         """
+-        cursor = conn.execute(
+-            "SELECT ts, open, high, low, close, volume FROM bars "
+-            "WHERE ticker = %s AND interval = %s AND ts >= %s AND ts <= %s "
+-            "ORDER BY ts",
+-            (ticker, interval.value if isinstance(interval, Interval) else interval,
+-             start, end),
++        sql = (
++            "SELECT ticker, interval, ts, open, high, low, close, volume FROM bars "
++            "WHERE ticker = %s AND interval = %s AND ts >= %s AND "
++            f"ts {'<=' if end_inclusive else '<'} %s ORDER BY ts"
++        )
++        params = (
++            ticker,
++            interval.value if isinstance(interval, Interval) else interval,
++            start,
++            end,
+         )
+-        return {row[0]: values_from_row(row[1:]) for row in cursor.fetchall()}
++        if conn is None:
++            with self._connect() as owned:
++                rows = owned.execute(sql, params).fetchall()
++        else:
++            rows = conn.execute(sql, params).fetchall()
++        if as_bars:
++            return [
++                Bar(ticker=r[0], interval=r[1], ts=r[2], open=r[3], high=r[4],
++                    low=r[5], close=r[6], volume=r[7])
++                for r in rows
++            ]
++        return {r[2]: values_from_row(r[3:]) for r in rows}
+diff --git a/src/cobalt/replay/movers.py b/src/cobalt/replay/movers.py
+index 5628689..17b7491 100644
+--- a/src/cobalt/replay/movers.py
++++ b/src/cobalt/replay/movers.py
+@@ -538,7 +538,11 @@ async def archive_movers(
+         ids_by_ticker.setdefault(mover.ticker, []).append(mover.id)
+ 
+     def covered(ticker: str) -> bool:
+-        stored = day_bars(bar_store.bars_between(ticker, Interval.I1, day_start, day_end), trade_date)
++        stored = day_bars(
++            bar_store.bars_in_range(
++                None, ticker, Interval.I1, day_start, day_end,
++                end_inclusive=False, as_bars=True),
++            trade_date)
+         return coverage(stored, start=rth_open, end=close)["covered"]
+ 
+     to_fetch = []
+diff --git a/src/cobalt/replay/runner.py b/src/cobalt/replay/runner.py
+index 781c3ed..ce3ca94 100644
+--- a/src/cobalt/replay/runner.py
++++ b/src/cobalt/replay/runner.py
+@@ -379,7 +379,9 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
+         rows: list[MissRow] = []
+         for card in candidates:
+             check_deadline("cards")
+-            bars = deps.bar_store.bars_between(card.ticker, Interval.I1, day_start, day_end)
++            bars = deps.bar_store.bars_in_range(
++                None, card.ticker, Interval.I1, day_start, day_end,
++                end_inclusive=False, as_bars=True)
+             replayed = replay_card(card, bars, trade_date=trade_date, window=resolve_window(card.window_ref, trade_date),
+                                    session_close=close, positions=positions)
+             if replayed.status == "input_stale":
+@@ -404,7 +406,9 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
+     def formations_step() -> None:
+         context = FormationContext(
+             trade_date=trade_date, session_close=close,
+-            bars_for=lambda ticker: deps.bar_store.bars_between(ticker, Interval.I1, day_start, day_end),
++            bars_for=lambda ticker: deps.bar_store.bars_in_range(
++                None, ticker, Interval.I1, day_start, day_end,
++                end_inclusive=False, as_bars=True),
+             radar_cards=lambda: deps.missed.radar_cards(trade_date),
+         )
+         outcome = deps.formation_source(
+diff --git a/tests/cobalt/test_archiver_append_store.py b/tests/cobalt/test_archiver_append_store.py
+index f2b50d5..2ed8e3d 100644
+--- a/tests/cobalt/test_archiver_append_store.py
++++ b/tests/cobalt/test_archiver_append_store.py
+@@ -288,43 +288,66 @@ def test_insert_new_bars_sends_one_statement_for_the_whole_batch(no_connections)
+ 
+ 
+ # ---------------------------------------------------------------------
+-# The ONE private range read (spec O-5)
++# The ONE range read (spec O-5, folded with P4's `bars_between` 2026-09-19)
+ # ---------------------------------------------------------------------
+ 
+ 
+-def test_the_range_read_is_one_private_method_that_takes_a_connection(no_connections):
+-    rows = [
+-        (ts(50), Decimal("99.0000"), Decimal("101.0000"), Decimal("98.5000"),
+-         Decimal("100.0000"), 1234),
+-    ]
+-    conn = _FakeConn(rows=rows)
+-    held = store()._bars_in_range(conn, "TESTARCH", Interval.I5, ts(40), ts(59))
+-    assert held == {ts(50): BarValues(
+-        Decimal("99.0000"), Decimal("101.0000"), Decimal("98.5000"), Decimal("100.0000"), 1234
+-    )}
++#: One row as the folded SELECT returns it: ticker, interval, ts, OHLCV.
++_RANGE_ROW = (
++    "TESTARCH", "i5", ts(50), Decimal("99.0000"), Decimal("101.0000"),
++    Decimal("98.5000"), Decimal("100.0000"), 1234,
++)
++_RANGE_VALUES = BarValues(
++    Decimal("99.0000"), Decimal("101.0000"), Decimal("98.5000"), Decimal("100.0000"), 1234
++)
++
++
++def test_the_range_read_uses_the_connection_it_is_given(no_connections):
++    """The archiver's half of the fold: the caller's transaction, never
++    one of the store's own, and never committed or closed here."""
++    conn = _FakeConn(rows=[_RANGE_ROW])
++    held = store().bars_in_range(conn, "TESTARCH", Interval.I5, ts(40), ts(59))
++    assert held == {ts(50): _RANGE_VALUES}
+     assert (conn.commits, conn.closes) == (0, 0)
+     assert "SELECT" in conn.sql and "FROM bars" in conn.sql
+     assert "ts >=" in conn.sql and "ts <=" in conn.sql
+ 
+ 
++def test_the_range_read_renders_bars_on_a_half_open_window_for_replay(no_connections):
++    """P4's half of the fold, on the SAME method: `[start, end)` and
++    `list[Bar]`, exactly what `bars_between` returned to replay."""
++    conn = _FakeConn(rows=[_RANGE_ROW])
++    bars = store().bars_in_range(
++        conn, "TESTARCH", Interval.I5, ts(40), ts(59),
++        end_inclusive=False, as_bars=True,
++    )
++    assert [(b.ticker, b.interval, b.ts, b.close, b.volume) for b in bars] == [
++        ("TESTARCH", Interval.I5, ts(50), Decimal("100.0000"), 1234)
++    ]
++    assert "ts <" in conn.sql and "ts <=" not in conn.sql
++    assert (conn.commits, conn.closes) == (0, 0)
++
++
+ def test_the_range_read_is_parameterised_never_interpolated(no_connections):
+     conn = _FakeConn()
+-    store()._bars_in_range(conn, "TESTARCH", Interval.I5, ts(40), ts(59))
++    store().bars_in_range(conn, "TESTARCH", Interval.I5, ts(40), ts(59))
+     (query, params) = conn.queries[0]
+     assert "TESTARCH" not in query
+     assert params == ("TESTARCH", "i5", ts(40), ts(59))
+ 
+ 
+ def test_there_is_exactly_one_range_read_on_the_store():
+-    """L3 / spec O-5. `sprint-2/p4` adds `bars_between()` with its own
+-    connection; the two fold into one method at integration. Until then
+-    this branch adds exactly one, and it takes a connection."""
++    """L3 / spec O-5. `sprint-2/p4` shipped `bars_between()` with its own
++    connection on 2026-09-19; this branch's `_bars_in_range` took the
++    caller's. The fold owed at integration is DONE — `bars_in_range` is
++    the one survivor, it still takes the connection first, and `None`
++    there is what now opens one of its own."""
+     reads = [
+         name for name in dir(BarStore)
+         if ("range" in name or "between" in name) and callable(getattr(BarStore, name))
+     ]
+-    assert reads == ["_bars_in_range"]
+-    assert list(inspect.signature(BarStore._bars_in_range).parameters)[:2] == ["self", "conn"]
++    assert reads == ["bars_in_range"]
++    assert list(inspect.signature(BarStore.bars_in_range).parameters)[:2] == ["self", "conn"]
+ 
+ 
+ # ---------------------------------------------------------------------
+@@ -543,7 +566,7 @@ def test_a_poller_style_insert_between_the_read_and_the_insert_is_a_counted_conf
+     st.ensure_schema()
+     keys = [datetime(2026, 8, 29, 10, m, tzinfo=UTC) for m in (0, 5)]
+     with st.target_transaction() as conn:
+-        held = st._bars_in_range(conn, "TESTARCH", Interval.I5, keys[0], keys[-1])
++        held = st.bars_in_range(conn, "TESTARCH", Interval.I5, keys[0], keys[-1])
+         assert keys[0] not in held
+         # ...the poller commits on its own connection, in between.
+         st.upsert_bars([bar(keys[0])])
+@@ -757,7 +780,7 @@ def test_a_committed_poller_write_is_overwritten_by_a_later_repair():
+     assert st.upsert_bars([bar(key, close="100.00")]) == 1
+ 
+     with st.target_transaction() as conn:
+-        held = st._bars_in_range(conn, "TESTARCH", Interval.I5, key, key)
++        held = st.bars_in_range(conn, "TESTARCH", Interval.I5, key, key)
+         assert str(held[key].close) == "100.0000"
+         # ...the poller, on its OWN connection, between the read and the
+         # write. It commits the instant it returns.
+@@ -790,7 +813,7 @@ def test_an_equal_value_race_writes_the_same_value_and_changes_nothing():
+     assert st.upsert_bars([bar(key, close="105.00")]) == 1
+ 
+     with st.target_transaction() as conn:
+-        held = st._bars_in_range(conn, "TESTARCH", Interval.I5, key, key)
++        held = st.bars_in_range(conn, "TESTARCH", Interval.I5, key, key)
+         comparison = compare([bar(key, close="105.00")], held)
+         assert comparison.differing == ()
+         assert comparison.equal == (key,)
+diff --git a/tests/cobalt/test_archiver_migrations.py b/tests/cobalt/test_archiver_migrations.py
+index b213f06..0a243bb 100644
+--- a/tests/cobalt/test_archiver_migrations.py
++++ b/tests/cobalt/test_archiver_migrations.py
+@@ -5,12 +5,14 @@ ADDITIVE and SYSTEM side (L32: market-data bookkeeping, nothing of one
+ trader's choice), and each rollback is a plain `DROP TABLE` of its own
+ table — no other object is touched.
+ 
+-WHY 0010/0011 AND NOT 0008/0009. `0008`/`0009` exist only on the
+-unmerged branch `sprint-2/p4` and are never used here. The registry is
+-an EXPLICIT ordered tuple (`db_migrations/__init__.py`) with no
+-contiguity rule, so a gap is legal; the branch that lands second
+-rebases and keeps both sets in numeric order. This file asserts the
+-registration and the rollback SELECTION, never contiguity.
++WHY 0010/0011 AND NOT 0008/0009. `0008`/`0009` belonged to the then
++unmerged branch `sprint-2/p4`, which shipped on 2026-09-19 (deploy 2);
++this branch rebased onto it, so both sets now live in the registry in
++numeric order — exactly what the gap note said the second lander would
++do. The registry is an EXPLICIT ordered tuple
++(`db_migrations/__init__.py`) and the tests below assert the
++registration and the rollback SELECTION by numeric prefix, never by
++position.
+ 
+ The `requires_db` half is written here and owed its first run on
+ `cobalt_dev` once `p4-verify-0919` releases the lane (L41 interim).
+@@ -42,6 +44,11 @@ INCIDENTS_ROLLBACK = MIGRATIONS_DIR / "0011_archive_incidents.rollback.sql"
+ 
+ NEW_TABLES = ("archive_progress", "archive_incidents")
+ 
++#: `sprint-2/p4`'s own tables, created by 0008/0009, which now sit BELOW
++#: this branch's pair in the united registry. Named here so the rollback
++#: pins can say which bound owns what instead of asserting "mine only".
++P4_TABLES = ("movers_daily", "picks", "missed")
++
+ #: §11: the five kinds. `regression` is v3's addition to v2's four.
+ INCIDENT_KINDS = ("gap", "restated", "stored_only", "empty_export", "regression")
+ 
+@@ -54,24 +61,38 @@ def _code(path) -> str:
+     )
+ 
+ 
++def _regclass(conn, name: str):
++    """`to_regclass` for a table in the schema `CREATED_TABLES` declares
++    for it — the one place that mapping is turned into a qualified name."""
++    schema = '"user"' if CREATED_TABLES[name] is Side.USER else "system"
++    return conn.execute("SELECT to_regclass(%s)", (f"{schema}.{name}",)).fetchone()[0]
++
++
+ # ---------------------------------------------------------------------
+ # Registration
+ # ---------------------------------------------------------------------
+ 
+ 
+-def test_forward_ends_0007_0010_0011():
+-    assert [p.name for p in FORWARD[-3:]] == [
+-        "0007_radar_cards.sql",
++def test_forward_ends_0008_0009_0010_0011():
++    """The tail after the P4 rebase: P4's pair, then this branch's pair,
++    in numeric order. The invariant is unchanged — 0010 and 0011 are the
++    LAST two registered, and nothing of this branch's was displaced."""
++    assert [p.name for p in FORWARD[-4:]] == [
++        "0008_radar_value_movers.sql",
++        "0009_picks_missed.sql",
+         "0010_archive_progress.sql",
+         "0011_archive_incidents.sql",
+     ]
+ 
+ 
+-def test_reverse_begins_0011_0010_0007():
+-    assert [p.name for p in REVERSE[:3]] == [
++def test_reverse_begins_0011_0010_0009_0008():
++    """The exact mirror of the tail above: this branch's pair reverses
++    FIRST, then P4's."""
++    assert [p.name for p in REVERSE[:4]] == [
+         "0011_archive_incidents.rollback.sql",
+         "0010_archive_progress.rollback.sql",
+-        "0007_radar_cards.rollback.sql",
++        "0009_picks_missed.rollback.sql",
++        "0008_radar_value_movers.rollback.sql",
+     ]
+ 
+ 
+@@ -82,23 +103,43 @@ def test_each_new_migration_has_its_rollback_and_both_are_registered():
+     assert PROGRESS_ROLLBACK in REVERSE and INCIDENTS_ROLLBACK in REVERSE
+ 
+ 
+-def test_rollback_down_to_0007_selects_exactly_the_two_new_files():
+-    """The bounded reverse an operator runs to undo this branch alone."""
++def test_rollback_down_to_0009_undoes_this_branch_alone_and_0007_also_reaches_p4():
++    """The bound the operator actually runs to undo THIS branch is
++    `--down-to 0009`: after the P4 rebase that is the boundary which
++    selects exactly this branch's two files and stops. `--down-to 0007`
++    is no longer that bound — it correctly reaches P4's pair as well,
++    because selection is by numeric prefix and P4 now sits between.
++    Both are pinned so neither can drift."""
++    assert [p.name for p in _rollback_paths("0009")] == [
++        "0011_archive_incidents.rollback.sql",
++        "0010_archive_progress.rollback.sql",
++    ]
+     assert [p.name for p in _rollback_paths("0007")] == [
+         "0011_archive_incidents.rollback.sql",
+         "0010_archive_progress.rollback.sql",
++        "0009_picks_missed.rollback.sql",
++        "0008_radar_value_movers.rollback.sql",
+     ]
+ 
+ 
+-def test_the_registry_is_an_explicit_list_so_the_0008_0009_gap_is_legal():
+-    """No contiguity rule anywhere — asserted, because the gap is
+-    deliberate (P4 owns 0008/0009 on an unmerged branch)."""
++def test_the_registry_is_an_explicit_contiguous_list_and_reverse_mirrors_it():
++    """The gap of 0008/0009 is CLOSED — P4 shipped and this branch
++    rebased onto it. The invariant underneath the old gap test survives
++    and is what is pinned here: the registry is an EXPLICIT ordered list,
++    its numbers run 1…11 contiguously with no duplicate, and REVERSE is
++    FORWARD reversed — minus 0001, which is deliberately never reversed
++    (`db_migrations/__init__.py`). Selection stays by numeric prefix,
++    never by position."""
+     numbers = [int(p.name.split("_", 1)[0]) for p in FORWARD]
+     assert numbers == sorted(numbers), "FORWARD must be in numeric order"
+-    assert 8 not in numbers and 9 not in numbers
+-    assert numbers[-2:] == [10, 11]
++    assert len(numbers) == len(set(numbers)), f"duplicate migration number in {numbers}"
++    assert numbers == list(range(1, 12)), f"1…11 contiguous, got {numbers}"
++    assert numbers[-2:] == [10, 11], "this branch's pair is still the tail"
+     reverse_numbers = [int(p.name.split("_", 1)[0]) for p in REVERSE]
+     assert reverse_numbers == sorted(reverse_numbers, reverse=True)
++    assert reverse_numbers == [n for n in reversed(numbers) if n != 1], (
++        "REVERSE must be FORWARD reversed, 0001 excepted"
++    )
+ 
+ 
+ # ---------------------------------------------------------------------
+@@ -391,35 +432,63 @@ def test_migrate_twice_is_idempotent_for_the_two_new_tables():
+ 
+ 
+ @requires_db
+-def test_rollback_down_to_0007_drops_exactly_those_two_and_nothing_else():
++def test_rollback_down_to_0009_drops_this_branch_alone_and_0007_also_reaches_p4():
++    """The `requires_db` sibling of the registry pin above, applied to a
++    real database instead of to `FORWARD`/`REVERSE`.
++
++    It was written while this branch was the only unmerged one and it
++    asserted that `--down-to 0007` was THIS branch's operator-undo bound.
++    After the P4 rebase that is false in exactly the way its five offline
++    siblings were: `0008`/`0009` now sit BELOW `0010`/`0011`, so a
++    rollback to `0007` correctly also reverses P4's pair. `48` §4.1 could
++    not see it because that table was built from an OFFLINE run, and an
++    offline run SKIPS every `requires_db` test.
++
++    Rewritten, never weakened: it asserts what is now true — `--down-to
++    0007` drops all of P4's tables as well as this branch's two — and it
++    keeps the invariant the pin existed to protect by asserting the
++    archiver's own bound beside it: `--down-to 0009` drops EXACTLY
++    `archive_progress` and `archive_incidents` and leaves P4's tables
++    standing.
++    """
+     conn = _migration_conn()
+     try:
+         _apply(conn, FORWARD)
+         survivors = {
+             name
+             for name in CREATED_TABLES
+-            if name not in NEW_TABLES
+-            and conn.execute(
+-                "SELECT to_regclass(%s)",
+-                (f"{'\"user\"' if CREATED_TABLES[name] is Side.USER else 'system'}.{name}",),
+-            ).fetchone()[0]
++            if name not in NEW_TABLES and name not in P4_TABLES and _regclass(conn, name)
+         }
+-        _apply(conn, _rollback_paths("0007"))
++
++        # (1) THE ARCHIVER'S OWN BOUND: `--down-to 0009` is this branch alone.
++        _apply(conn, _rollback_paths("0009"))
+         for table in NEW_TABLES:
+-            assert conn.execute(
+-                "SELECT to_regclass(%s)", (f"system.{table}",)
+-            ).fetchone()[0] is None, f"{table} survived its own rollback"
++            assert _regclass(conn, table) is None, f"{table} survived its own rollback"
++        for name in P4_TABLES:
++            assert _regclass(conn, name), (
++                f"{name} was dropped by --down-to 0009, which does not own it"
++            )
+         for name in survivors:
+-            schema = '"user"' if CREATED_TABLES[name] is Side.USER else "system"
+-            assert conn.execute(
+-                "SELECT to_regclass(%s)", (f"{schema}.{name}",)
+-            ).fetchone()[0], f"{name} was dropped by a rollback that does not own it"
++            assert _regclass(conn, name), (
++                f"{name} was dropped by a rollback that does not own it"
++            )
++        _apply(conn, FORWARD)
++
++        # (2) `--down-to 0007` REACHES P4 TOO, and stops there.
++        _apply(conn, _rollback_paths("0007"))
++        for table in (*NEW_TABLES, *P4_TABLES):
++            assert _regclass(conn, table) is None, (
++                f"{table} survived --down-to 0007, which reverses everything above 0007"
++            )
++        for name in survivors:
++            assert _regclass(conn, name), (
++                f"{name} was dropped by a rollback that does not own it"
++            )
++
+         # ...and forward again lands back where it started.
+         _apply(conn, FORWARD)
+-        for table in NEW_TABLES:
+-            assert conn.execute(
+-                "SELECT to_regclass(%s)", (f"system.{table}",)
+-            ).fetchone()[0], table
++        for table in (*NEW_TABLES, *P4_TABLES):
++            assert _regclass(conn, table), table
+     finally:
+         conn.rollback()
+         conn.close()
+diff --git a/tests/cobalt/test_archiver_runner.py b/tests/cobalt/test_archiver_runner.py
+index 7538a85..3f401f7 100644
+--- a/tests/cobalt/test_archiver_runner.py
++++ b/tests/cobalt/test_archiver_runner.py
+@@ -124,8 +124,8 @@ class FakeStore:
+             self.rollbacks += 1
+             raise
+ 
+-    def _bars_in_range(self, conn, ticker, interval, start, end):
+-        self.calls.append(("_bars_in_range", ticker, interval.value if hasattr(interval, "value") else interval))
++    def bars_in_range(self, conn, ticker, interval, start, end):
++        self.calls.append(("bars_in_range", ticker, interval.value if hasattr(interval, "value") else interval))
+         held = self.stored.get((ticker, getattr(interval, "value", interval)), {})
+         return {k: v for k, v in held.items() if start is None or (start <= k <= end)}
+ 
+@@ -318,7 +318,7 @@ def test_the_complete_list_of_upsert_mode_additions_is_pinned(wired):
+     #     range read — all before the write, and nothing else.
+     assert on.names == [
+         "run_lock", "ensure_schema", "target_transaction", "conn.execute",
+-        "_bars_in_range", "upsert_bars",
++        "bars_in_range", "upsert_bars",
+     ]
+     assert "set_config" in on.calls[3][1], "the shadow read must be time-bounded"
+     # (3) the one extra key in the job result.
+@@ -330,10 +330,18 @@ def test_the_complete_list_of_upsert_mode_additions_is_pinned(wired):
+ 
+ 
+ def test_run_targets_mode_still_means_the_report_scope(wired):
++    """Both assertions are the ones this test was written with; only the
++    CLOCK moved. It drives a backfill, and from `cto-2026-09-19.md` §4
++    R34 "B" a backfill declares the window it runs in and is refused
++    inside 04:00-09:30 ET, so an hour a backfill may actually hold the
++    transport is now part of driving one. `FETCH_AT` is 16:30 ET, inside
++    the radar's 04:00-20:00 window where the radar alone already holds
++    the whole ceiling; `BACKFILL_AT` is 22:00 ET, which no scheduled
++    consumer holds. See `BACKFILL_AT` and the R34 section below."""
+     store = wired(FakeStore())
+     summary = run([("TESTARCH", Interval.I5)], store=store,
+                   fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(),
+-                  mode="backfill:TESTARCH")
++                  mode="backfill:TESTARCH", now=BACKFILL_AT)
+     assert summary.mode == "backfill:TESTARCH"
+     assert summary.write_mode == "upsert"
+ 
+@@ -374,7 +382,7 @@ def test_the_shadow_runs_after_the_fetch_and_before_the_write(wired):
+     store = wired(FakeStore(stored=_stored(NIGHT_1[:2])))
+     run([("TESTARCH", Interval.I5)], store=store,
+         fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
+-    assert store.names.index("_bars_in_range") < store.names.index("upsert_bars")
++    assert store.names.index("bars_in_range") < store.names.index("upsert_bars")
+ 
+ 
+ def test_the_shadow_record_is_labelled_pre_write(wired, tmp_path):
+@@ -442,7 +450,7 @@ def test_shadow_compare_off_skips_it_entirely(wired):
+     store = wired(FakeStore())
+     summary = run([("TESTARCH", Interval.I5)], store=store,
+                   fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(shadow_compare="off"))
+-    assert "_bars_in_range" not in store.names
++    assert "bars_in_range" not in store.names
+     assert summary.shadow_records == []
+     assert "shadow" not in summary.job_result()
+ 
+@@ -795,3 +803,122 @@ def test_an_upsert_row_after_an_append_row_goes_back_to_its_own_table(wired, tmp
+     assert content.count("## Back to upsert mode") == 1
+     rows = [line for line in content.splitlines() if line.startswith("| 2026")]
+     assert rows[0].count("|") == 15 and rows[1].count("|") == 9
++
++
++# =====================================================================
++# R34 "B" — THE BACKFILL IS BOUNDED OUT OF THE PREMARKET WINDOW
++# (`cto-2026-09-19.md` §4 R34, 2026-09-19)
++#
++# The rebase onto post-P4 `main` made L53's shared gate fire on the
++# archiver: with `replay` registered, the inventory at 04:00 ET reached
++# 51.00 rpm against `radar.finviz_max_rpm = 50`, because the backfill
++# declared `window=None` — UNBOUNDED, counted against every window.
++# Dejan ruled B: the CEILING STAYS AT 50 and the backfill is bounded
++# out of 04:00-09:30 ET. These tests are that bound.
++# =====================================================================
++
++#: 2026-09-18 22:00 ET — outside the premarket bound AND clear of every
++#: scheduled consumer's window (radar 04:00-20:00, archiver 20:30-21:10,
++#: replay 21:10-21:35), so this is an hour a backfill may actually run.
++BACKFILL_AT = datetime(2026, 9, 19, 2, 0, tzinfo=UTC)
++#: 2026-09-18 08:00 ET — inside 04:00-09:30, the window R34 closed.
++PREMARKET_AT = datetime(2026, 9, 18, 12, 0, tzinfo=UTC)
++#: 2026-09-18 03:50 ET — outside it by 10 minutes, but a long enough
++#: backfill RUNS into it.
++JUST_BEFORE_PREMARKET_AT = datetime(2026, 9, 18, 7, 50, tzinfo=UTC)
++
++
++def _never_fetch():
++    async def _fetch(*args, **kwargs):
++        raise AssertionError("Finviz was contacted despite the premarket bound")
++
++    return _fetch
++
++
++def test_a_backfill_inside_the_premarket_window_is_refused_before_any_request(wired):
++    """R34 "B", the loud half: 04:00-09:30 ET is closed to the backfill,
++    and the refusal happens before the lock, the store and the token —
++    so no request is sent and nothing is written."""
++    store = wired(FakeStore())
++    with pytest.raises(runner_mod.BackfillWindowRefused) as e:
++        run([("TESTARCH", Interval.I5)], store=store, fetch=_never_fetch(),
++            cfg=settings(), mode="backfill:TESTARCH", now=PREMARKET_AT)
++    message = str(e.value)
++    assert "04:00-09:30 ET" in message, message
++    assert "R34" in message and "cto-2026-09-19" in message, message
++    assert store.names == [], "the refusal must come before the run lock"
++    assert store.write_calls == []
++
++
++def test_a_backfill_that_would_RUN_into_the_premarket_window_is_refused(wired):
++    """The bound is on the run's WINDOW, not on its first instant: a
++    backfill that starts at 03:50 and paces 40 minutes of requests is
++    inside 04:00-09:30 for most of its life."""
++    targets = [("TESTARCH", Interval.I5)] * 2000
++    store = wired(FakeStore())
++    with pytest.raises(runner_mod.BackfillWindowRefused) as e:
++        run(targets, store=store, fetch=_never_fetch(), cfg=settings(),
++            mode="backfill:TESTARCH", now=JUST_BEFORE_PREMARKET_AT)
++    assert "04:00-09:30 ET" in str(e.value)
++    assert store.names == []
++
++
++def test_the_backfill_declares_the_window_it_actually_runs_in(wired):
++    """The declared `DemandWindow` is not a label: it is `[now, now +
++    len(targets) x GENTLE_SLEEP_SECONDS)` in ET, the interval the runner
++    then enforces. A window the runner did not enforce would be a lie to
++    the shared demand model."""
++    window = runner_mod._backfill_window([("TESTARCH", Interval.I5)] * 100, BACKFILL_AT)
++    assert window.describe() == "22:00-22:02 ET", window.describe()
++    assert window.overlaps(runner_mod._premarket_window()) is False
++
++
++def test_a_backfill_outside_the_premarket_window_is_allowed_under_the_ceiling(wired):
++    """The quiet half: at an hour no scheduled consumer holds, the same
++    backfill runs and the L53 total stays at or under the ceiling."""
++    demand = runner_mod._check_demand(
++        [("TESTARCH", Interval.I5)], "backfill:TESTARCH", now=lambda: BACKFILL_AT
++    )
++    assert demand is not None
++    assert demand.ceiling == 50
++    assert demand.peak_rpm <= 50, demand.describe()
++    assert "backfill" in demand.counted
++
++    store = wired(FakeStore())
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(),
++                  mode="backfill:TESTARCH", now=BACKFILL_AT)
++    assert summary.mode == "backfill:TESTARCH"
++    assert store.write_calls == ["upsert_bars"]
++
++
++def test_the_nightly_full_run_is_untouched_by_the_backfill_bound():
++    """R34 leaves the 20:30 `full` run alone. It is the registry's own
++    `archiver` consumer, it is not the backfill, and the premarket bound
++    does not apply to it — not even when the clock says 08:00 ET."""
++    demand = runner_mod._check_demand(
++        [("TESTARCH", Interval.I5)], "full", now=lambda: PREMARKET_AT
++    )
++    assert demand is not None
++    assert demand.subject == "archiver"
++    assert demand.peak_rpm <= 50, demand.describe()
++
++
++def test_the_finviz_ceiling_is_still_fifty():
++    """R34 "B" changed the backfill's window and NOTHING else. The
++    ceiling is Dejan's (L53) and it did not move."""
++    from cobalt.taxonomy.loader import load_tunables
++
++    assert int(load_tunables().by_key["radar.finviz_max_rpm"].value) == 50
++
++
++def test_the_premarket_bound_is_read_from_the_session_tunables():
++    """Config-as-code (L10): 04:00 and 09:30 are `session.premarket_open`
++    and `session.rth_open`, not two literals in the runner."""
++    from cobalt.taxonomy.loader import load_tunables
++
++    tunables = load_tunables().by_key
++    window = runner_mod._premarket_window()
++    assert window.describe() == (
++        f"{tunables['session.premarket_open'].value}-{tunables['session.rth_open'].value} ET"
++    )
+diff --git a/tests/cobalt/test_p4_migrations.py b/tests/cobalt/test_p4_migrations.py
+index 93fd4db..68ef67e 100644
+--- a/tests/cobalt/test_p4_migrations.py
++++ b/tests/cobalt/test_p4_migrations.py
+@@ -90,15 +90,32 @@ def test_0008_0009_registered_forward_in_version_order_with_named_rollbacks():
+     assert reverse_versions == sorted(reverse_versions, reverse=True)
+ 
+ 
+-def test_rollback_down_to_0007_reverses_0009_then_0008_only():
++def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
+     """R1-23: the explicit boundary is `--down-to 0007`, numerically right
+-    whether or not P2's 0007 exists yet — it never reaches 0006/0007."""
++    whether or not P2's 0007 exists yet — it never reaches 0006/0007.
++
++    That property is unchanged; what changed is what sits ABOVE 0007.
++    The archiver's 0010/0011 landed on 2026-09-19, so `--down-to 0007`
++    now reverses all four, newest first. P4's own bound is still pinned
++    below it: nothing at or below the bound is ever selected."""
+     assert [p.name for p in _rollback_paths("0007")] == [
++        "0011_archive_incidents.rollback.sql",
++        "0010_archive_progress.rollback.sql",
+         "0009_picks_missed.rollback.sql",
+         "0008_radar_value_movers.rollback.sql",
+     ]
++    # P4's own bound: at 0009 neither of P4's files may be selected.
++    above_0009 = [p.name for p in _rollback_paths("0009")]
++    assert not [n for n in above_0009 if n.startswith(("0008", "0009"))], above_0009
++    assert above_0009 == [
++        "0011_archive_incidents.rollback.sql",
++        "0010_archive_progress.rollback.sql",
++    ]
++    # ...and at 0008 exactly 0009 and everything newer, 0008 itself excluded.
+     assert [p.name for p in _rollback_paths("0008")] == [
+-        "0009_picks_missed.rollback.sql"
++        "0011_archive_incidents.rollback.sql",
++        "0010_archive_progress.rollback.sql",
++        "0009_picks_missed.rollback.sql",
+     ]
+ 
+ 
+diff --git a/tests/cobalt/test_replay_movers.py b/tests/cobalt/test_replay_movers.py
+index 5217874..dd481ce 100644
+--- a/tests/cobalt/test_replay_movers.py
++++ b/tests/cobalt/test_replay_movers.py
+@@ -698,7 +698,11 @@ class _FakeBars:
+         self.existing = dict(existing or {})
+         self.upserted = 0
+ 
+-    def bars_between(self, ticker, interval, start, end):
++    def bars_in_range(self, conn, ticker, interval, start, end,
++                      *, end_inclusive=True, as_bars=False):
++        assert (conn, end_inclusive, as_bars) == (None, False, True), (
++            "replay owns no transaction and reads [start, end) as bars"
++        )
+         return [b for b in self.existing.get(ticker, []) if start <= b.ts < end]
+ 
+     def upsert_bars(self, bars):
+diff --git a/tests/cobalt/test_replay_runner.py b/tests/cobalt/test_replay_runner.py
+index e63c808..fd4fbe1 100644
+--- a/tests/cobalt/test_replay_runner.py
++++ b/tests/cobalt/test_replay_runner.py
+@@ -824,8 +824,12 @@ def fake_deps(*, job_row="default", settings="default", collector=None, now=None
+             calls.append("movers_store.mark_bars_archived")
+ 
+     class Bars:
+-        def bars_between(self, ticker, interval, start, end):
+-            calls.append("bar_store.bars_between")
++        def bars_in_range(self, conn, ticker, interval, start, end,
++                          *, end_inclusive=True, as_bars=False):
++            calls.append("bar_store.bars_in_range")
++            assert (conn, end_inclusive, as_bars) == (None, False, True), (
++                "replay owns no transaction and reads [start, end) as bars"
++            )
+             return [b for b in bars if b.ticker == ticker and start <= b.ts < end]
+ 
+         def upsert_bars(self, rows):

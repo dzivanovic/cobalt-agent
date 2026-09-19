@@ -1,0 +1,4 @@
+85b6d7c feat(archiver): bound the backfill out of the 04:00-09:30 premarket window (cto-2026-09-19 R34 "B"; ceiling stays 50)
+529e1c9 test(db-migrate): the sixth (requires_db) enumeration pin asserts the united registry (rebase-d3 chunk 3)
+0efe5a9 refactor(archiver): fold bars_between and _bars_in_range into one range read (L3, owed at P4 integration)
+4ddc5e4 test(db-migrate): the five enumeration pins assert the united 0001-0011 registry (rebase-d3 chunk 2)
