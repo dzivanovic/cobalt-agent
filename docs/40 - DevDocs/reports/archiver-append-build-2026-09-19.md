@@ -659,3 +659,388 @@ nights), O-6 (the shadow read's cost), the switch to `append`, and his acceptanc
 known limits of §12 in words.
 
 ARCHIVER APPEND BUILT c974fbf (last build commit; this report commits on top) | on main 8838dda (base; main now 0569727) | offline 1850/0 (315 skipped; baseline 1562/297) | settings built · migrations 0010/0011 built · reconcile built · store built · runner+shadow built · quiet window+commands built · heartbeat+docs built | write_mode ships: upsert | radar diff: empty | RESTARTS: com.cobalt.aset com.cobalt.radar | db: OWED — 18 requires_db tests written, never run | OWED: three-house check, dev-DB run after p4-verify's stop line, deploy prompt (upsert), his approval, shadow nights, his switch ruling | ESCALATE: 8
+
+---
+
+# ROUND 2 — folding the three-house check (2026-09-19, `archiver-append-r2`)
+
+## §0 Headline
+
+The tribunal's ONE blocker is fixed: `restate --apply` wrote bars on `upsert_bars`'s OWN connection, so
+§8's pre-commit re-check rolled back the incident and left the rewritten bars committed. All 7 REAL
+findings are folded; `backfill-missing` never had the defect and a test now says so. Offline suite
+**1866 passed / 0 failed / 320 skipped** (round-1 close 1850/0/315): +16 offline tests, +5 `requires_db`.
+Radar diff empty, `write_mode` still ships `upsert`, counting identities untouched. ESCALATE: 4 new,
+round 1's 8 carried verbatim.
+
+## PREFLIGHT
+
+| rule | command | exit | allowed / DENIED |
+|---|---|---|---|
+| `Bash(date*)` | `date` | 0 | allowed — `Sat Sep 19 11:30:45 EDT 2026` |
+| `Bash(git status*)` | `git status --porcelain` | 0 | allowed — EMPTY |
+| `Bash(git status*)` | `git status` | 0 | allowed — `On branch archiver/append-0919` / `nothing to commit, working tree clean`. No rebase in progress. |
+| `Bash(git log*)` | `git log --oneline -1` | 0 | allowed — `7c972ee` (first launch, as the prompt expects) |
+| `Bash(git -C /Users/cobalt/cobalt log*)` | `git -C /Users/cobalt/cobalt log --oneline -1` | 0 | allowed — `5f204be docs(desk): 09-19 archiver round 2 launched (f6bb98b6); ops DB run awaits 'approve env'; P4 check B timed for 11:41` |
+| `Bash(ls *)` | `ls -la .env` | 1 | allowed — `ls: .env: No such file or directory` (required) |
+| `Bash(uv run pytest *)` | `uv run pytest --co -q tests/cobalt/test_archiver_quiet.py tests/cobalt/test_archiver_migrations.py tests/cobalt/test_archiver_runner.py` | 0 | allowed — **142 tests collected** |
+
+No denial. Authorization rule-proof: each of the 16 `Bash(...)` strings, `--disallowedTools
+"AskUserQuestion" "EnterWorktree"`, and the three `--add-dir` values `grep -c` **1** against
+`prompts/2026-09-19/17-archiver-append-build.md`. Sets identical; nothing added, altered or dropped.
+
+## 1. F1 — `restate --apply` writes on the repair's own transaction — **FIXED** (`806f45f`)
+
+**Read first.** `cli.py:266-267` `with store.target_transaction() as conn: written = _apply_restate(store,
+conn, …)`; `_apply_restate` (`:391-399`) never used `conn` and called `store.upsert_bars(rows)`, which
+`store.py:95-141` runs inside its own `with self._connect() as conn:` — a second connection that COMMITS
+on exit. `guard.check_before_commit()` (`cli.py:287`) raises inside the FIRST transaction, so the
+incident write rolled back and the bars did not.
+
+**`backfill-missing` CONFIRMED safe, not assumed.** Read verbatim from `store.py:208`:
+
+```
+    def insert_new_bars(self, conn, bars: list[Bar]) -> int:
+```
+
+`conn` is its FIRST positional argument; the body has no `self._connect()`, no `commit()` and no
+`close()` — it runs `with conn.cursor() as cur:` and returns the server's `rowcount`. `_cmd_backfill_missing`
+(`cli.py:313-315`) calls it inside its own `target_transaction()` block, so its write already rolled back
+with its re-check. **No F1-shaped fix was needed there.** A test now states it rather than leaving it to a
+future reader.
+
+**THE SHAPE TAKEN (named, as the prompt asks): a sibling connection-taking method**, not an optional
+parameter on `upsert_bars`. `BarStore.upsert_bars_on(conn, bars)` holds the ONE copy of the
+`ON CONFLICT … DO UPDATE` statement (L3); `upsert_bars` opens its own connection and delegates to it,
+then runs `before_commit`. The nightly call site is untouched — `git diff main -- src/cobalt/archiver/runner.py`
+shows `rows = store.upsert_bars(bars)` as a **context** line:
+
+```
+     total = len(targets)
+     for i, (ticker, interval) in enumerate(targets, start=1):
+         try:
+-            bars = await fetch_bars(ticker, interval, token)
++            bars = await fetch(ticker, interval, token)
++            if settings.shadow_enabled:
++                _shadow_target(store, summary, ticker, interval, bars, settings, clock)
+             rows = store.upsert_bars(bars)
+```
+
+`_apply_restate` now calls `store.upsert_bars_on(conn, rows)`; the incident write and the bar write are
+both inside `_cmd_restate`'s one `target_transaction()` block and `guard.check_before_commit()` still runs
+after both.
+
+**RED (on `7c972ee`) → GREEN (on `806f45f`):**
+
+```
+E  AssertionError: a repair whose pre-commit re-check failed left a rewritten bar row behind:
+E  {('TESTARCH', 'i5', datetime(2026, 9, 18, 19, 55, tzinfo=utc)): '100.00'}
+E  -> {('TESTARCH', 'i5', datetime(2026, 9, 18, 19, 55, tzinfo=utc)): '105.00'}
+...
+3 failed, 2 passed, 37 deselected in 0.18s
+```
+```
+5 passed, 37 deselected in 0.09s
+```
+
+The 2 that passed RED are the two this round expected to pass on the old tip: the `backfill-missing`
+twin (already safe) and the quiet-window commit case.
+
+**Tests added.** `tests/cobalt/test_archiver_quiet.py` — `test_a_failed_recheck_leaves_zero_changed_bar_rows_in_restate`,
+`…_in_backfill_missing`, `test_a_quiet_restate_commits_its_rows_and_its_incident`, each driving
+`archiver_cli.build_parser().parse_args(...)` → `HANDLERS[...]` with the suite's own `FakeBars`, EXTENDED
+(not duplicated, L3) with `run_lock`, `target_transaction` and `upsert_bars_on`. The fake now models the
+two-connection asymmetry that is the whole of F1: a write on the caller's `conn` is pending until commit
+and vanishes on rollback; a write on another connection has already committed and is not undone.
+`tests/cobalt/test_archiver_append_store.py` — `test_only_one_copy_of_the_upsert_statement_exists`,
+`test_upsert_bars_on_takes_the_callers_connection_and_never_opens_one`, `test_upsert_bars_on_is_a_noop_on_an_empty_list`.
+
+**One existing pin FOLLOWED, not dropped.** `test_upsert_bars_still_does_update_and_never_do_nothing`
+asserted the DO UPDATE statement was inside `upsert_bars`. It now asserts the statement in
+`upsert_bars_on` AND that `upsert_bars` still opens its own connection, delegates, runs `before_commit`
+and holds no second copy of the clause. `test_upsert_bars_signature_is_unchanged` passes untouched.
+
+**`requires_db` twins written, FIRST RUN OWED** (`test_archiver_append_store.py`):
+`test_a_rollback_unwrites_an_upsert_made_on_the_targets_connection`,
+`test_the_own_connection_upsert_survives_another_transactions_rollback`,
+`test_backfill_missings_insert_rolls_back_with_its_transaction`.
+
+## 2. F2 — the two named §8 boundary tests drive the command path — **ADDED** (in `806f45f`)
+
+**EXTENDED, not replaced**; every existing assertion is kept byte for byte, including
+`store.snapshot() == before` and `store.calls == ["upsert_bars"]` (the command drive uses a SECOND
+`FakeBars`, so the original store's assertions are untouched).
+
+- `test_gemini_close_boundary_poller_lag` gains scenario **(iv)**: on the early-close night the repair
+  STARTS quiet (17:40, last cycle 17:00) and the lagging poller opens a cycle at 17:40 while the repair
+  is in flight, so Q3 fails at the PRE-COMMIT re-check. That is Gemini's lag at the one boundary where
+  the radar's own gate does not save us, driven through `_cmd_restate`.
+- `test_astra_open_boundary_repair_crosses_open` gains the same sequence it already computed as
+  verdicts — start 03:49:59 quiet, re-check 03:50:05 not — now driven through `_cmd_restate`.
+
+Both were RED on `7c972ee` (`AssertionError: a repair that crossed the open must leave ZERO changed bar
+rows`; `AssertionError: the lagging poller's cycle opened while the repair was in flight …`) and GREEN
+after F1's fix.
+
+**COMBINED COMMIT, stated as the prompt requires.** Steps 1 and 2 share one RED/GREEN boundary and one
+file, so they are one commit (`806f45f`) whose message names both F1 and F2.
+
+## 3. F3 / Q10 — the differing-value and equal-value race tests — **offline + `requires_db`** (`b9e165b`)
+
+| test | form | why |
+|---|---|---|
+| `test_a_differing_value_race_the_repair_commits_last_and_its_value_survives` | **offline** | The poller commits X on its own connection between the repair's range read and its write (§15's Concurrency window); the repair's `DO UPDATE` commits after it, so the repair's Y survives. The ORDERING is deterministic Python and the fake models `DO UPDATE` / `DO NOTHING` faithfully. |
+| `test_a_differing_value_race_the_poller_writes_after_the_repair_committed` | **offline** | The other order, stated so the pair is honest: a poller write AFTER the repair's commit wins and NOTHING in this build stops it — §12's Known limit 1 on a single key. The `restated` incident stays open, which is how an operator finds out. |
+| `test_an_equal_value_race_rewrites_nothing` | **offline** | Traced, not assumed: `compare` normalises before deciding, so an equal key is neither `differing` nor `incoming_only`, `_apply_restate` offers an EMPTY list and `upsert_bars_on` returns 0 before sending a statement. |
+| `test_an_equal_value_race_offers_no_rows_to_the_writer` | **offline** | The same property at the layer that decides it (`compare`), so a regression names the cause. |
+| `test_a_committed_poller_write_is_overwritten_by_a_later_repair` | **`requires_db`** | Which value survives when two UNCOMMITTED transactions contend for one row is Postgres's row lock and commit order, not this suite's. Stretching a fake to claim it would be claiming a guarantee only a real transaction can prove (L45). |
+| `test_an_equal_value_race_writes_the_same_value_and_changes_nothing` | **`requires_db`** | Same reason, plus it asserts on the real stored `NUMERIC(14,4)` rendering. |
+
+**An honest finding, not papered over:** an equal-value race DOES open a `restated` incident, with
+`rows_rewritten: 0`. Spec O-4 writes the audit row for the COMMAND the operator ran, not per rewritten
+row, so that is correct behaviour and the test asserts it as such — "no incident" would have been the
+wrong assertion.
+
+All four offline tests are **GREEN on add**: they pin a gap in §15's must-exist list, they are not
+regression proofs for a defect.
+
+## 4. F4 — four tests assert on behaviour — **REWRITTEN** (`e5bec36`)
+
+| test | was | is |
+|---|---|---|
+| `test_the_refusal_exit_code_is_two` | `assert QuietRefused("x").exit_code == 2` | runs `archiver_cli.main(RESTATE_ARGV)` with a window that refuses at START; asserts the code the real entry point RETURNS (2), the refusal on stderr (first line `Q1 …`, then `REFUSED — not in a quiet window.`), and that no writer was reached |
+| `test_both_mutating_commands_are_refused_in_every_scanned_session` | computed `quiet_verdict` then `assert command in MUTATING_COMMANDS` | invokes each handler through `HANDLERS` for both commands across the four scanned sessions; asserts `QuietRefused` with `exit_code == 2` and a Q1 failure line, the snapshot unchanged, `committed == 0` |
+| `test_previews_always_run` | monkeypatched `require_quiet`, asserted `calls == []` with nothing invoked | RUNS both previews (no `--apply`) to completion, asserts what each prints, and asserts neither `require_quiet` NOR `guarded_repair` was reached. Its observer iterator is EMPTY, so a preview that read the window raises `StopIteration` rather than merely failing an assertion |
+| `test_backfill_missing_never_calls_upsert_bars` | `store.insert_new_bars(None, …)` — tested the fake | drives `_cmd_backfill_missing` through its real entry point in a QUIET window with one stored DIFFERING key and one missing key; asserts the differing key untouched, the missing one inserted, `store.calls == ["run_lock", "insert_new_bars"]`, and neither `upsert_bars` nor `upsert_bars_on` reached |
+
+`test_backfill_missing_can_only_do_nothing`'s source scan is **kept as-is** — not one of the four, and
+the hub called it weak but not wrong.
+
+**GREEN before expected, and why (the prompt asks for this plainly).** All four are GREEN on add. F4 is
+test-quality debt, not a defect — the verdict row says so. The behaviour they now assert was already
+correct; what was missing was any test that looked at it. Two of them would have ERRORED on `c974fbf`
+only because the suite's fake had no transaction surface until step 1 added one — a fixture shape, not a
+behaviour change. **One real correction found while writing them:** §9's run-level lock is taken BEFORE
+the window is read (Q4 is held for the whole command), so a refused command's call list is
+`["run_lock"]`, not `[]`. The assertions say so and explain why; a lock is not a write.
+
+## 5. F5 — exit code 2 on the production `cobalt` entry — **FIXED** (`ec045bd`)
+
+**RED, quoted verbatim from the real process** (tip `e5bec36`, before the fix):
+
+```
+E  AssertionError: a QuietRefused must leave `cobalt` with exit status 2; got 1
+E    stderr:
+E    FAILED: QuietRefused: Q1 radar idle: session=rth - the radar scans in premarket, RTH and aftermarket.
+E    REFUSED - not in a quiet window. session=rth - earliest allowed start: 2026-09-19 20:35:00 EDT. The preview (no --apply) is always available.
+E  AssertionError: a ArchiveLockError must leave `cobalt` with exit status 2; got 1
+E    stderr:
+E    FAILED: ArchiveLockError: another archive/repair run holds the lock - refusing to start restate --apply TESTARCH.
+E  AttributeError: type object 'ArchiveLockError' has no attribute 'exit_code'
+3 failed, 2 passed, 46 deselected in 1.97s
+```
+
+GREEN after: `5 passed, 46 deselected in 1.86s`.
+
+**The fix**, `git diff` of `src/cobalt/cli.py` in full — a NEW except-clause, no neighbour reflowed
+(the file is shared with `ops/2026-09-19` at `:214-221`, untouched):
+
+```diff
+ from cobalt.archiver import cli as archiver_cli  # noqa: E402
++from cobalt.archiver.quiet import QuietRefused  # noqa: E402
++from cobalt.archiver.store import ArchiveLockError  # noqa: E402
+@@
+         print(f"NOT RUN — {e}")
++    except (QuietRefused, ArchiveLockError) as e:
++        # EXIT 2, the archiver's REFUSALS (append-only design §8, §9).
++        ...
++        print(f"FAILED: {type(e).__name__}: {e}", file=sys.stderr)
++        sys.exit(e.exit_code)
+     except Exception as e:
+         print(f"FAILED: {type(e).__name__}: {e}", file=sys.stderr)
+         sys.exit(1)
+```
+
+`ArchiveLockError` gained `exit_code = 2`, matching `QuietRefused` (`quiet.py:73`).
+
+**MESSAGE SHAPE, chosen and stated:** kept as this CLI's own `FAILED: {type(e).__name__}: {e}` rather
+than `archiver_cli.main`'s bare `str(refused)`. Reason: one rendering across every `cobalt` command, so
+a reader never has to know which subcommand produced the line; the refusal's own multi-line body (the
+three observed values and the earliest allowed start) follows it verbatim, and a separate test
+(`test_the_refusal_body_survives_to_stderr`) asserts that body survives, so the exit-code mapping cannot
+quietly swallow it.
+
+**HARNESS, named as the prompt asks:** the shape of `test_migrate_proof.py`'s
+`test_the_cli_turns_a_migration_error_into_failed_and_exit_1` — a REAL process running the real entry
+point, with a scenario that raises before any connection is opened, so **no `cobalt_dev` is needed**.
+Here the scenario is built by replacing ONE handler in the archiver's module before `cobalt.cli.main()`
+builds its parser (`add_parser` reads `func` from that module's globals at build time), so the real
+parser, the real dispatch and the real `try/except` all run.
+
+**The clause did not widen:** `test_every_other_exception_keeps_its_own_exit_status` drives a real
+`MigrationError` through `python -m cobalt.cli db migrate --proof-only --rollback` and asserts exit 1 and
+`FAILED: MigrationError: `. `JobStopped` → `NOT RUN`/exit 0 is untouched.
+
+## 6. F6 — the shadow artifact's night is the ET trading date — **FIXED** (`d9ddc2a`)
+
+**RED:** a run frozen at `2026-09-19 00:30 UTC` (= `2026-09-18 20:30 EDT`, the real nightly hour) wrote
+
+```
+E  AssertionError: the artifact must be named for the ET trading night; files present: ['2026-09-19.jsonl']
+...
+shadow compare: 1 target(s) -> .../archiver-shadow/2026-09-19.jsonl
+```
+
+GREEN after: `46 passed in test_archiver_runner.py`.
+
+**The fix is the one-line derivation the verdict row names, and nothing more.** `night=clock().date()`
+→ `night=_trading_night(clock())`, where `_trading_night` is `SessionClock.to_et(now).date()` —
+`session/clock.py:262`, the ET conversion already in the codebase, a STATIC method (no config load, no
+calendar) that REFUSES a naive datetime rather than guessing a zone (ADR-0007). The artifact naming
+scheme and the retention scheme are untouched. The existing schema test still asserts `2026-09-18.jsonl`
+for `FETCH_AT` (20:30 UTC = 16:30 ET, same date) and passes unchanged.
+
+## 7. F7 — `NULLS NOT DISTINCT` pinned — **PINNED** (`9056e73`)
+
+Quoted first, as the prompt asks: the test **PASSED without the assertion** —
+`1 passed, 57 deselected in 0.01s` for
+`-k partial_unique_index`. That is the gap: `0011_archive_incidents.sql:92` carries the clause and its
+own comment calls it load-bearing, but nothing asserted it, so a later edit could drop it without a red
+test. The assertion added (no existing one removed):
+
+```python
+    assert "NULLS NOT DISTINCT" in body, (
+        "the partial unique index lost NULLS NOT DISTINCT — an "
+        "`empty_export` incident (range_start IS NULL) would duplicate on "
+        f"every run instead of refreshing: {body}"
+    )
+```
+
+GREEN on add (`48 passed, 10 skipped`) because the SQL already has it — F7 is a test-coverage finding,
+not a code defect, exactly as the verdict row says.
+
+## CLOSE (offline)
+
+```
+1866 passed, 320 skipped, 1 xfailed, 15 warnings in 44.61s
+```
+
+Round-1 close was `1850 passed, 315 skipped, 0 failed`. **Failed stays 0.**
+
+**+16 offline tests, by step** — step 1/2 (6): `…_in_restate`, `…_in_backfill_missing`,
+`test_a_quiet_restate_commits_its_rows_and_its_incident`, `test_only_one_copy_of_the_upsert_statement_exists`,
+`test_upsert_bars_on_takes_the_callers_connection_and_never_opens_one`, `test_upsert_bars_on_is_a_noop_on_an_empty_list`
+(the two NAMED boundary tests were extended, not added) · step 3 (4): the two differing-value orders, the
+equal-value command test, the equal-value comparison test · step 4 (0 — four rewritten in place) ·
+step 5 (5): `test_the_production_entry_exits_2_on_a_refusal_or_a_held_lock` ×2 params,
+`test_the_refusal_body_survives_to_stderr`, `test_every_other_exception_keeps_its_own_exit_status`,
+`test_the_lock_error_carries_the_same_exit_code_as_the_refusal` · step 6 (1) · step 7 (0 — one assertion
+added to an existing test). 6+4+0+5+1+0 = **16**, and 1850+16 = 1866. ✓
+
+**+5 skipped, all `requires_db`, all named** — step 1 (3):
+`test_a_rollback_unwrites_an_upsert_made_on_the_targets_connection`,
+`test_the_own_connection_upsert_survives_another_transactions_rollback`,
+`test_backfill_missings_insert_rolls_back_with_its_transaction` · step 3 (2):
+`test_a_committed_poller_write_is_overwritten_by_a_later_repair`,
+`test_an_equal_value_race_writes_the_same_value_and_changes_nothing`. 315+5 = 320. ✓
+
+**`uv run cobalt jobs restarts c974fbf..HEAD`**, verbatim:
+
+```
+path	change	rule	restart
+docs/40 - DevDocs/reports/archiver-append-build-2026-09-19.md	M	DOCS	-
+src/cobalt/archiver/cli.py	M	static import reach	com.cobalt.radar
+src/cobalt/archiver/runner.py	M	static import reach	-
+src/cobalt/archiver/store.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/cli.py	M	static import reach	com.cobalt.radar
+tests/cobalt/test_archiver_append_store.py	M	test/documentation; no resident	-
+tests/cobalt/test_archiver_migrations.py	M	test/documentation; no resident	-
+tests/cobalt/test_archiver_quiet.py	M	test/documentation; no resident	-
+tests/cobalt/test_archiver_runner.py	M	test/documentation; no resident	-
+RESTARTS: com.cobalt.aset com.cobalt.radar
+```
+
+**0 UNCLASSIFIED.** The only non-`src`/`tests` path is round 1's own report, which is in the range
+because it was committed at `7c972ee`; it classifies `DOCS → -`. The `RESTARTS:` line is unchanged from
+round 1's.
+
+**`git diff main -- src/cobalt/radar/`** → **EMPTY** (no output). The poller is imported and driven by a
+test; it is not edited.
+
+**`git status --porcelain`** → EMPTY.
+
+**`git diff --stat c974fbf HEAD -- src tests docs`:**
+
+```
+ .../reports/archiver-append-build-2026-09-19.md    | 249 ++++++-
+ src/cobalt/archiver/cli.py                         |  16 +-
+ src/cobalt/archiver/runner.py                      |  23 +-
+ src/cobalt/archiver/store.py                       |  67 +-
+ src/cobalt/cli.py                                  |  13 +
+ tests/cobalt/test_archiver_append_store.py         | 210 +++++-
+ tests/cobalt/test_archiver_migrations.py           |  12 +
+ tests/cobalt/test_archiver_quiet.py                | 753 ++++++++++++++++++++-
+ tests/cobalt/test_archiver_runner.py               |  34 +
+ 9 files changed, 1323 insertions(+), 54 deletions(-)
+```
+
+Every path is one this prompt named (`src/cobalt/archiver/*`, `src/cobalt/cli.py`, `tests/cobalt/*`,
+`docs/40 - DevDocs/`). **L57: the counting identities were not touched** — no counter, no identity and
+no `RunSummary` field changed this round.
+
+**Commits, one per item (step 1+2 combined and stated):**
+
+| commit | item |
+|---|---|
+| `806f45f` | F1 + F2 |
+| `b9e165b` | F3/Q10 |
+| `e5bec36` | F4 |
+| `ec045bd` | F5 |
+| `d9ddc2a` | F6 |
+| `9056e73` | F7 |
+
+## ROUND 2 ESCALATE
+
+**Round 1's `## ESCALATE` is carried forward UNTOUCHED** — its (i) §14 OPEN table, (ii) the never-run
+`requires_db` tests, (iii) the cross-branch table, (iv) the deploy-prompt list, (v) the five known
+limits of §12, and its numbered findings 1–8. Nothing in this round resolves or supersedes any of them.
+Two of them need a one-line amendment from this round's work, marked below.
+
+**R2-1. Spec §5's `<YYYY-MM-DD>` is AMBIGUOUS on timezone, and this round resolved it to ET.**
+The design writes `data/archiver-shadow/<YYYY-MM-DD>.jsonl` and names no zone. The verdict row (F6)
+says "derive the night from the ET date (the design's `<YYYY-MM-DD>` is ambiguous — desk to rule
+which)", and that is what was built. **This is a fix-per-row, not a design change; the desk or the
+owner may still rule differently**, and if they rule UTC the change is one line in
+`runner._trading_night` plus the test. Amends round 1's deploy-prompt item (iv)3: the first shadow
+night's file is named for the **ET** trading date, so a run at 20:30 ET on 2026-09-22 writes
+`2026-09-22.jsonl`, not `2026-09-23.jsonl`.
+
+**R2-2. `backfill-missing` needed NO F1-shaped fix — stated either way, as the prompt requires.**
+Confirmed by reading the signature and body of `insert_new_bars` (`store.py:208`), not assumed: it takes
+`conn` first, never connects, never commits, never closes. `_cmd_backfill_missing` already called it
+inside its own `target_transaction()`. This is now an assertion
+(`test_a_failed_recheck_leaves_zero_changed_bar_rows_in_backfill_missing`, plus a `requires_db` twin), so
+if the command ever grows F1's shape a test says so. **No new finding here.**
+
+**R2-3. The `requires_db` first run is still OWED, and the count is now 23.** Round 1 wrote 18; this
+round adds 5 (named under CLOSE). None has ever run. **Their first run on `cobalt_dev` remains a gate
+before this branch may deploy** — unchanged from round 1's ESCALATE (ii), only the number moves.
+
+**R2-4. One existing test was rewritten to follow F1's refactor, not dropped — flagged so the next
+check sees it deliberately.** `test_upsert_bars_still_does_update_and_never_do_nothing` pinned the
+`ON CONFLICT … DO UPDATE` statement *inside* `upsert_bars`; the statement now lives in the sibling
+`upsert_bars_on`. The test asserts it there AND asserts `upsert_bars` still opens its own connection,
+delegates to that sibling, runs `before_commit`, and holds no second copy of the clause — plus a new
+`test_only_one_copy_of_the_upsert_statement_exists` for L3. The §5 mode-isolation property is unchanged;
+only the file location of the assertion moved. `test_upsert_bars_signature_is_unchanged` passes as it
+was.
+
+**Also recorded, not an escalation:** §9's run-level lock is taken BEFORE the quiet window is read, so a
+refused repair's recorded call list is `["run_lock"]`. Correct by §8's Q4 (the lock is held for the
+whole command) and now documented in the tests rather than being a surprise to the next reader.
+
+**MEMORY:** none proposed — this round changed no law and no standing practice.
+**RULING:** one is owed by the desk/owner: **R2-1**, the shadow artifact's timezone. Everything else
+this round fixed was already ruled by the FINAL design.
+
+ARCHIVER APPEND R2 9056e73 | on archiver/append-0919 (round 1 c974fbf) | offline 1866/0 (320 skipped; round-1 close 1850/0/315) | F1 restate fixed · backfill-missing shape already-safe | F2 command-path tests added | F3/Q10 race tests offline+requires_db | F4 four tests rewritten fixed | F5 exit code 2 on cobalt fixed | F6 shadow night = ET date fixed | F7 NULLS NOT DISTINCT pinned fixed | radar diff: empty yes | write_mode ships: upsert (unchanged) | RESTARTS: com.cobalt.aset com.cobalt.radar | CARRIED: 23 requires_db tests never run (now includes this round's 5) | ESCALATE: 4
