@@ -16,7 +16,7 @@ day-open report (L48):
   4. One section per check: kind, `command:`, `expected:`, verdict detail, then the raw evidence in a fence.
 
   The hand fallback runs from this file alone (R6 A).
-- `render_json(rep)` carries the same content without `raw`, for `--json`.
+- `render_json(rep)` carries the same content without `raw`, for `--json`. Each check also carries `number`: THE number of its result when it declared a `result_number`, rendered as **text** — a `Decimal` prints exactly and a float would not (L57) — and `null` otherwise.
 - `write_report(rep, reports_dir=)`:
   - Never replaces a file. A second run the same day writes `…-<HHMMSS>.md` beside the first, stamped with the ET time of the write.
   - Refuses to write outside `reports_dir` and to overwrite a colliding stamp (`ReportPathError`).

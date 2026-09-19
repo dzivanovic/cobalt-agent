@@ -49,9 +49,12 @@ The rendering helpers:
 | log_grep | `tail -r <path> \| sed -E '/<block_start>/q' \| grep -E <pattern>` (newest block), else `grep -E <pattern> <path>` |
 | vault_unit | `grep -n -F -e '<!-- cobalt:section S -->' -e '<!-- cobalt:unit U -->' <note path>` |
 | cli | `uv run <argv>` |
+| compare | `# compare <left> <op> <right> — run both rows above; their two printed numbers must be <op>` |
+
+The compare line is the one entry that is not a command, because that row runs no probe. It is still the hand fallback: it names the two ids and the operator, and the two rows it names print the numbers themselves.
 
 ## Evaluation
-`evaluate(check, ctx, deps)` never raises. Any exception becomes ERROR with its class and message: a broken probe is not a finding. `run_suite` evaluates every check in file order.
+`evaluate(check, ctx, deps, results=None)` never raises. Any exception becomes ERROR with its class and message: a broken probe is not a finding. `run_suite` evaluates every check in file order, keeping each outcome by id as it goes and passing that map into the next `evaluate` — which is what a `compare` row reads. One pass, no source read twice.
 
 - **launchctl**
   - `running`: PASS when `state = running` with a pid.
@@ -60,6 +63,7 @@ The rendering helpers:
   - `side` is a Postgres role: `read_rows` SET ROLEs to it and asserts `current_user`, so a relation the role was never granted is a permission-denied ERROR, not a FAIL. A cross-side read is therefore split into one check per side (K8.1/K8.2), never granted across — see `config.md`'s tenancy-wall section.
   - The `requires_relation` probe runs first; an absent relation is FAIL naming it (K5.1: P2 not deployed = FAIL), and the main query never runs.
   - More than one row is ERROR; no row is FAIL.
+  - `result_number`, when the check declares one, is read off the returned row and carried on the outcome for a `compare` row. It never changes this check's own verdict — a column that is absent or not a number simply leaves `number` as `None`, and the compare that wanted it is the row that goes loud.
   - When every `known_if` predicate holds, the check is KNOWN with `known_text`. Otherwise the `expect` predicates grade it:
     - Any failing predicate whose value is not in its `known` list makes the check FAIL.
     - Otherwise, a failing predicate whose value is listed makes it KNOWN.
@@ -68,6 +72,12 @@ The rendering helpers:
   - No row is FAIL. Otherwise it checks `state`, `exit_code` and `updated_at` age.
   - `not_missed` uses `jobs.watchdog.is_missed(spec, row, now_et, grace)`, the same arithmetic as the heartbeat archiver probe. So K13 is cadence-aware with no flat 30 h cutoff (Astra R1-24).
   - `result_keys`, `result_equals` (dotted path into `last_result`) and `result_positive` (> 0) check the run's result.
+  - `result_number` is the dotted `last_result` path that IS this check's number, read the same way and with the same rule: it grades nothing here (K8.1's missing `card_misses` stays a FAIL through `result_keys`, not an ERROR).
+- **compare**
+  - Reads no source. It looks up the outcomes of `left` and `right` in the map `run_suite` threads through, and grades their `number`s with `COMPARE_OPS[op]` (`eq` today).
+  - Equal → PASS. Unequal → FAIL. An operand that ERRORed → ERROR naming it, never a quiet PASS: nothing ran, so nothing was compared. An operand with no number (the key was absent, or the value was text) → ERROR naming it and its kind.
+  - Both operands are printed in `detail` and in `raw` whatever the verdict, so the comparison replays from the report alone (L57).
+  - Evaluating one outside `run_suite` — no results map — raises, and so reports ERROR. The schema already forbids the file-level version of that mistake.
 - **http:** status and every `contains` needle.
 - **log_grep**
   - With `block_start`, only the text from the last matching line on is searched. No such line is ERROR.

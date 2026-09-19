@@ -984,10 +984,14 @@ def test_the_k8_split_keeps_every_assertion_on_its_own_side():
     assert k82.kind == "sql" and k82.side == "user"
     assert "system." not in k82.query and '"user".missed' in k82.query
     assert [(p.column, p.op.value, p.value) for p in k82.expect] == [("incomplete", "eq", 0)]
-    # The equality that can no longer be one statement is named on both
-    # rows, so the hand fallback still performs it (R6 A).
-    assert "card_misses" in k81.expect_text and "card_rows" in k81.expect_text
-    assert "card_misses" in k82.expect_text and "card_rows" in k82.expect_text
+    # The equality that can no longer be one STATEMENT is K8.3's, a machine
+    # assertion again (`kind: compare`). Neither half asks for an eye
+    # comparison any more, and each names the number K8.3 reads.
+    k83 = by_id["K8.3"]
+    assert k83.kind == "compare" and (k83.left, k83.right) == ("K8.1", "K8.2")
+    assert (k81.result_number, k82.result_number) == ("card_misses", "card_rows")
+    for check in (k81, k82):
+        assert "by eye" not in check.expect_text
 
     def answer(result):
         return lambda statement, side: result
@@ -1013,6 +1017,230 @@ def test_the_k8_split_keeps_every_assertion_on_its_own_side():
     # The user-side statement it runs is the one it prints, and it names
     # no system table (the hand fallback runs as cobalt_user).
     assert "system." not in out.command
+
+
+# ---------------------------------------------------------------------
+# `kind: compare` — the assertion the K8 split lost, restored as a row
+# ---------------------------------------------------------------------
+
+#: Two checks that each name THE number of their own result, and a compare
+#: row over them. Written as YAML text so every test below goes through the
+#: real loader — the same path the close evening runs.
+LEFT_SQL = (
+    "  - id: K1\n"
+    "    title: left\n"
+    "    kind: sql\n"
+    "    side: user\n"
+    "    query: SELECT count(*) AS card_rows FROM picks\n"
+    "    result_number: card_rows\n"
+    "    expect: [{column: card_rows, op: ge, value: 0}]\n"
+    "    expect_text: card_rows\n"
+)
+RIGHT_JOB = (
+    "  - id: K2\n"
+    "    title: right\n"
+    "    kind: job_row\n"
+    "    label: com.cobalt.replay\n"
+    "    result_keys: [card_misses]\n"
+    "    result_number: card_misses\n"
+    "    expect_text: card_misses\n"
+)
+NUMBERLESS_LAUNCHCTL = (
+    "  - id: K1\n"
+    "    title: radar\n"
+    "    kind: launchctl\n"
+    "    mode: running\n"
+    "    label: com.cobalt.radar\n"
+    "    expect_text: running\n"
+)
+
+
+def _compare_row(cid="K3", left="K1", right="K2", op="eq") -> str:
+    return (
+        f"  - id: {cid}\n"
+        "    title: the two counters agree\n"
+        "    kind: compare\n"
+        f"    left: {left}\n"
+        f"    right: {right}\n"
+        f"    op: {op}\n"
+        "    expect_text: the two numbers are equal\n"
+    )
+
+
+def _pair_deps(card_rows=2, card_misses=2, left_raises=False):
+    def read_rows(statement, side):
+        if "cobalt_jobs" in statement:
+            return _job_row(last_result={"card_misses": card_misses})
+        if left_raises:
+            raise RuntimeError("connection refused")
+        return rows(["card_rows"], [card_rows])
+
+    return deps(read_rows=read_rows)
+
+
+def test_compare_refuses_an_unknown_id_a_self_reference_and_an_operand_with_no_number(tmp_path):
+    suite = load_suite(_write(tmp_path, GOOD_HEAD + LEFT_SQL + RIGHT_JOB + _compare_row()))
+    k3 = {c.id: c for c in suite.checks}["K3"]
+    assert (k3.kind, k3.left, k3.right, k3.op.value) == ("compare", "K1", "K2", "eq")
+
+    def refused(text) -> str:
+        with pytest.raises(SmokeConfigError) as raised:
+            load_suite(_write(tmp_path, text))
+        return str(raised.value)
+
+    # An id no check in the file carries.
+    assert "K7" in refused(GOOD_HEAD + LEFT_SQL + RIGHT_JOB + _compare_row(right="K7"))
+    # A check that names itself on either side.
+    assert "K3" in refused(GOOD_HEAD + LEFT_SQL + RIGHT_JOB + _compare_row(left="K3"))
+    # One check compared with itself: nothing is asserted.
+    assert "K1" in refused(GOOD_HEAD + LEFT_SQL + RIGHT_JOB + _compare_row(right="K1"))
+    # An operand BELOW the compare row has not run when the compare runs.
+    assert "K1" in refused(GOOD_HEAD + _compare_row() + LEFT_SQL + RIGHT_JOB)
+    # An operand that names no number of its own.
+    numberless = LEFT_SQL.replace("    result_number: card_rows\n", "")
+    message = refused(GOOD_HEAD + numberless + RIGHT_JOB + _compare_row())
+    assert "K1" in message and "result_number" in message
+    # A kind that has no numeric result at all.
+    message = refused(GOOD_HEAD + NUMBERLESS_LAUNCHCTL + RIGHT_JOB + _compare_row())
+    assert "K1" in message and "launchctl" in message
+    # An operator the evaluator does not implement: the refusal names the
+    # field and the one operator that exists.
+    message = refused(GOOD_HEAD + LEFT_SQL + RIGHT_JOB + _compare_row(op="gt"))
+    assert "op" in message and "'eq'" in message
+
+
+def test_compare_grades_equal_pass_unequal_fail_and_errors_on_a_bad_operand(tmp_path):
+    suite = load_suite(_write(tmp_path, GOOD_HEAD + LEFT_SQL + RIGHT_JOB + _compare_row()))
+
+    def run(**overrides):
+        return {o.id: o for o in checks.run_suite(suite, ctx(), _pair_deps(**overrides))}
+
+    equal = run(card_rows=2, card_misses=2)
+    assert equal["K3"].verdict is Verdict.PASS
+    # One row, both values printed (L57).
+    assert all(token in equal["K3"].detail for token in ("K1", "K2", "2"))
+    # The hand fallback prints the two ids and the operator (R6 A).
+    assert all(token in equal["K3"].command for token in ("K1", "K2", "eq"))
+
+    unequal = run(card_rows=2, card_misses=3)
+    assert unequal["K3"].verdict is Verdict.FAIL
+    assert "2" in unequal["K3"].detail and "3" in unequal["K3"].detail
+    # The operands' own verdicts are untouched by the comparison.
+    assert unequal["K1"].verdict is Verdict.PASS and unequal["K2"].verdict is Verdict.PASS
+
+    # An operand that ERRORed is never a silent PASS.
+    errored = run(left_raises=True)
+    assert errored["K1"].verdict is Verdict.ERROR
+    assert errored["K3"].verdict is Verdict.ERROR and "K1" in errored["K3"].detail
+
+    # A non-numeric result is ERROR, naming the operand that carries it.
+    text = run(card_misses="two")["K3"]
+    assert text.verdict is Verdict.ERROR and "K2" in text.detail
+    # So is a result key the job row never wrote.
+    missing = {o.id: o for o in checks.run_suite(
+        suite, ctx(), deps(read_rows=lambda statement, side: (
+            _job_row(last_result={"other": 1}) if "cobalt_jobs" in statement
+            else rows(["card_rows"], [2]))))}
+    assert missing["K3"].verdict is Verdict.ERROR and "K2" in missing["K3"].detail
+
+
+def _k8_trio():
+    suite = load_suite(SUITES_DIR / "s2.yaml")
+    by_id = {c.id: c for c in suite.checks}
+    return suite.model_copy(update={"checks": [by_id["K8.1"], by_id["K8.2"], by_id["K8.3"]]})
+
+
+def _k8_deps(card_rows, card_misses):
+    def read_rows(statement, side):
+        if "cobalt_jobs" in statement:
+            return _job_row(last_result={"trade_date": "2026-09-22", "input_stale": 0,
+                                         "card_misses": card_misses})
+        return rows(["card_rows", "incomplete"], [card_rows, 0])
+
+    return deps(read_rows=read_rows)
+
+
+def test_the_shipped_k8_3_asserts_the_two_counters_agree():
+    trio = _k8_trio()
+    agree = {o.id: o for o in checks.run_suite(trio, ctx(), _k8_deps(2, 2))}
+    assert [agree[cid].verdict for cid in ("K8.1", "K8.2", "K8.3")] == [Verdict.PASS] * 3
+    assert overall_verdict(list(agree.values())) is Overall.GREEN
+
+    disagree = {o.id: o for o in checks.run_suite(trio, ctx(), _k8_deps(3, 2))}
+    # Each half still passes on its own side — the disagreement is the row
+    # that exists to see it, and it takes the suite off GREEN.
+    assert disagree["K8.1"].verdict is Verdict.PASS and disagree["K8.2"].verdict is Verdict.PASS
+    assert disagree["K8.3"].verdict is Verdict.FAIL
+    assert "2" in disagree["K8.3"].detail and "3" in disagree["K8.3"].detail
+    assert overall_verdict(list(disagree.values())) is Overall.AMBER
+
+
+def test_the_report_renders_the_compare_row():
+    outcomes = checks.run_suite(_k8_trio(), ctx(), _k8_deps(3, 2))
+    rep = report.build_report("s2", "S2 smoke", ctx(), outcomes)
+    table = report.render_table(rep)
+    assert "| K8.3 |" in table and "FAIL" in table
+    text = report.render_markdown(rep)
+    assert "## K8.3" in text and "- kind: compare" in text
+    # The row prints its two ids, its operator and both values, so the
+    # comparison is replayable from the report alone (R6 A, L57).
+    section = text.split("## K8.3")[1]
+    assert all(token in section for token in ("K8.1", "K8.2", "eq", "2", "3"))
+    payload = json.loads(report.render_json(rep))
+    numbers = {c["id"]: c["number"] for c in payload["checks"]}
+    assert numbers == {"K8.1": "2", "K8.2": "3", "K8.3": None}
+
+
+def _suite_fakes(tmp_path):
+    drc = tmp_path / "drc.md"
+    drc.write_text(
+        "# DRC\n<!-- cobalt:section drc-misses -->\n<!-- cobalt:unit miss_line -->\n"
+        "Misses …\n<!-- /cobalt:unit miss_line -->\n<!-- /cobalt:section drc-misses -->\n"
+    )
+
+    def read_rows(statement, side):
+        if "cobalt_jobs" in statement:
+            return _job_row()
+        return rows(["x"], [1])
+
+    return deps(
+        read_rows=read_rows,
+        launchctl_print=lambda label: LaunchdPrintStatus(label, "running", 1, "(never exited)", 1, "state = running"),
+        launchctl_loaded=lambda label: True,
+        http_get=lambda url: (200, "<th>value</th>"),
+        read_text=lambda path: "HEARTBEAT GREEN — x\nOK   database  ok\nOK   sheet HTTP  ok\n",
+        run_cli=lambda argv: (0, "ok"),
+        job_specs=lambda: checks.load_job_specs(),
+        drc_note_path=lambda day: drc,
+    )
+
+
+def test_a_suite_with_no_compare_row_loads_and_runs_exactly_as_before(tmp_path):
+    """The bound this was built inside: ONE additive kind and ONE additive
+    optional field. A smoke file written before either existed — the
+    shipped suite with every compare row and every `result_number` line
+    stripped out — still loads, and every check it keeps runs to the same
+    verdict, detail, command and evidence as in the shipped suite."""
+    text = (SUITES_DIR / "s2.yaml").read_text()
+    head, marker, body = text.partition("checks:\n")
+    assert marker, "the shipped suite no longer has a `checks:` block"
+    blocks = re.split(r"(?m)^(?=  - id: )", body)
+    old = head + marker + "".join(block for block in blocks if "kind: compare" not in block)
+    old = "".join(f"{line}\n" for line in old.splitlines()
+                  if not line.strip().startswith("result_number:"))
+
+    old_suite = load_suite(_write(tmp_path, old))
+    shipped = load_suite(SUITES_DIR / "s2.yaml")
+    assert [c.id for c in shipped.checks if c.kind != "compare"] == [c.id for c in old_suite.checks]
+    assert any(c.kind == "compare" for c in shipped.checks), "nothing was stripped"
+    assert all(getattr(c, "result_number", None) is None for c in old_suite.checks)
+
+    fakes = _suite_fakes(tmp_path)
+    before = {o.id: o for o in checks.run_suite(old_suite, ctx(), fakes)}
+    after = {o.id: o for o in checks.run_suite(shipped, ctx(), fakes)}
+    for cid, outcome in before.items():
+        twin = after[cid]
+        assert outcome.model_dump(exclude={"number"}) == twin.model_dump(exclude={"number"}), cid
 
 
 def test_context_last_trading_day_waits_for_the_anchor_job_and_skips_holidays():

@@ -6,6 +6,13 @@ heartbeat ("the probe broke" and "the thing is down" are different
 facts). Every collector is a `SmokeDeps` field, so tests hand in fakes
 and `default_deps()` is the only place the real ones are named.
 
+THE ONE KIND THAT COLLECTS NOTHING is `compare`: it grades two numbers
+its operands already collected, so `run_suite` threads the outcomes it
+has produced so far into each `evaluate` call. A check declaring
+`result_number` carries THE number of its result on its outcome; a
+compare over an operand that ERRORed, or that came back with something
+that is not a number, is ERROR naming it — never a silent PASS.
+
 READ-ONLY, AND HOW THAT IS KEPT. SQL and job rows go through
 `cobalt.db_query.read_rows` — the `cobalt db query` read path (guard,
 READ ONLY transaction, timeout, role assertion, rollback). A vault note is
@@ -46,6 +53,8 @@ from .models import (
     VAR_RE,
     CheckOutcome,
     CliCheck,
+    CompareCheck,
+    CompareOp,
     HttpCheck,
     JobRowCheck,
     LaunchctlCheck,
@@ -367,6 +376,14 @@ def command_for(check, ctx: SmokeContext, *, note_path: Optional[Path] = None) -
         )
     if isinstance(check, CliCheck):
         return "uv run " + " ".join(shlex.quote(render_text(a, ctx)) for a in check.argv)
+    if isinstance(check, CompareCheck):
+        # Not a command: this row runs no probe. It is the hand
+        # instruction (R6 A) — run the two rows it names, then compare the
+        # two numbers they printed.
+        return (
+            f"# compare {check.left} {check.op.value} {check.right} "
+            f"— run both rows above; their two printed numbers must be {check.op.value}"
+        )
     raise TypeError(f"unknown check type {type(check).__name__}")
 
 
@@ -375,10 +392,11 @@ def command_for(check, ctx: SmokeContext, *, note_path: Optional[Path] = None) -
 # ---------------------------------------------------------------------
 
 
-def _out(check, verdict: Verdict, detail: str, command: str, raw: str) -> CheckOutcome:
+def _out(check, verdict: Verdict, detail: str, command: str, raw: str,
+         number: Optional[Decimal] = None) -> CheckOutcome:
     return CheckOutcome(
         id=check.id, title=check.title, kind=check.kind, verdict=verdict, detail=detail,
-        command=command, expected=check.expect_text, raw=raw,
+        command=command, expected=check.expect_text, raw=raw, number=number,
     )
 
 
@@ -406,7 +424,7 @@ def _launchctl(check: LaunchctlCheck, ctx: SmokeContext, deps: SmokeDeps) -> Che
 
 
 def _grade(check, row: dict[str, Any], expect: list[Predicate], ctx: SmokeContext,
-           command: str, raw: str) -> CheckOutcome:
+           command: str, raw: str, number: Optional[Decimal] = None) -> CheckOutcome:
     failed, known = [], []
     for pred in expect:
         if holds(pred, row, ctx):
@@ -416,10 +434,10 @@ def _grade(check, row: dict[str, Any], expect: list[Predicate], ctx: SmokeContex
         else:
             failed.append(_describe(pred, row))
     if failed:
-        return _out(check, Verdict.FAIL, "; ".join(failed), command, raw)
+        return _out(check, Verdict.FAIL, "; ".join(failed), command, raw, number)
     if known:
-        return _out(check, Verdict.KNOWN, "known: " + "; ".join(known), command, raw)
-    return _out(check, Verdict.PASS, "; ".join(f"{p.column} ok" for p in expect), command, raw)
+        return _out(check, Verdict.KNOWN, "known: " + "; ".join(known), command, raw, number)
+    return _out(check, Verdict.PASS, "; ".join(f"{p.column} ok" for p in expect), command, raw, number)
 
 
 def _one_row(result: QueryRows) -> Optional[dict[str, Any]]:
@@ -444,9 +462,10 @@ def _sql(check: SqlCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
     row = _one_row(result)
     if row is None:
         return _out(check, Verdict.FAIL, "no row returned", command, raw)
+    number = _number(row.get(check.result_number)) if check.result_number else None
     if check.known_if and all(holds(p, row, ctx) for p in check.known_if):
-        return _out(check, Verdict.KNOWN, f"KNOWN: {check.known_text}", command, raw)
-    return _grade(check, row, check.expect, ctx, command, raw)
+        return _out(check, Verdict.KNOWN, f"KNOWN: {check.known_text}", command, raw, number)
+    return _grade(check, row, check.expect, ctx, command, raw, number)
 
 
 def _dig(data: Any, dotted: str) -> tuple[bool, Any]:
@@ -496,10 +515,15 @@ def _job_row(check: JobRowCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOut
         value = _number(last.get(key))
         if value is None or value <= 0:
             failed.append(f"last_result.{key} = {last.get(key)!r} (expected > 0)")
+    number = None
+    if check.result_number:
+        found, value = _dig(last, check.result_number)
+        number = _number(value) if found else None
     if failed:
-        return _out(check, Verdict.FAIL, "; ".join(failed), command, raw)
+        return _out(check, Verdict.FAIL, "; ".join(failed), command, raw, number)
     return _out(check, Verdict.PASS, f"{check.label}: state={row.get('state')}, "
-                f"exit={row.get('exit_code')}, finished_at={row.get('finished_at')}", command, raw)
+                f"exit={row.get('exit_code')}, finished_at={row.get('finished_at')}",
+                command, raw, number)
 
 
 def _http(check: HttpCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
@@ -567,14 +591,62 @@ def _cli(check: CliCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
     return _out(check, Verdict.PASS, f"exit {code}", command, raw)
 
 
+#: One callable per `CompareOp`. Adding an operator is adding a row here
+#: and its test (the schema refuses anything else at load).
+COMPARE_OPS: dict[CompareOp, Callable[[Decimal, Decimal], bool]] = {
+    CompareOp.EQ: lambda left, right: left == right,
+}
+
+
+def _compare(check: CompareCheck, ctx: SmokeContext,
+             results: dict[str, CheckOutcome]) -> CheckOutcome:
+    """Grade one comparison over two outcomes that have already run.
+
+    Both operands are printed on this row whatever the verdict, so the
+    comparison is replayable from the report alone (L57, R6 A).
+    """
+    command = command_for(check, ctx)
+    operands = []
+    for role, cid in (("left", check.left), ("right", check.right)):
+        outcome = results.get(cid)
+        if outcome is None:
+            # The schema forbids this in a file; reaching it means the
+            # caller evaluated a compare outside `run_suite`.
+            raise KeyError(f"{check.id}.{role} names {cid}, which has not run")
+        operands.append(outcome)
+    left, right = operands
+    raw = "\n".join(
+        f"{o.id}\t{o.verdict.value}\t{'(no number)' if o.number is None else o.number}"
+        for o in operands
+    )
+    errored = [o.id for o in operands if o.verdict is Verdict.ERROR]
+    if errored:
+        return _out(check, Verdict.ERROR,
+                    f"ERROR(operand) — {', '.join(errored)} could not run, so there is "
+                    "nothing to compare", command, raw)
+    absent = [f"{o.id} ({o.kind})" for o in operands if o.number is None]
+    if absent:
+        return _out(check, Verdict.ERROR,
+                    f"ERROR(non-numeric result) — {', '.join(absent)} produced no number to "
+                    "compare", command, raw)
+    detail = (f"{left.id} = {left.number}, {right.id} = {right.number} "
+              f"(op {check.op.value})")
+    if COMPARE_OPS[check.op](left.number, right.number):
+        return _out(check, Verdict.PASS, detail, command, raw)
+    return _out(check, Verdict.FAIL, detail + " — they disagree", command, raw)
+
+
 _EVALUATORS = {
     "launchctl": _launchctl, "sql": _sql, "job_row": _job_row, "http": _http,
     "log_grep": _log_grep, "vault_unit": _vault_unit, "cli": _cli,
 }
 
 
-def evaluate(check, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
+def evaluate(check, ctx: SmokeContext, deps: SmokeDeps,
+             results: Optional[dict[str, CheckOutcome]] = None) -> CheckOutcome:
     try:
+        if isinstance(check, CompareCheck):
+            return _compare(check, ctx, results or {})
         return _EVALUATORS[check.kind](check, ctx, deps)
     except Exception as e:  # noqa: BLE001 — a broken probe is ERROR, never a crash
         try:
@@ -585,12 +657,23 @@ def evaluate(check, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
 
 
 def run_suite(suite, ctx: SmokeContext, deps: SmokeDeps) -> list[CheckOutcome]:
-    """Every check in file order. One broken probe never stops the rest."""
-    return [evaluate(check, ctx, deps) for check in suite.checks]
+    """Every check in file order. One broken probe never stops the rest.
+
+    Outcomes are kept by id as they are produced, so a `compare` row
+    grades the numbers the rows above it already collected — one pass,
+    no second read of any source.
+    """
+    outcomes: list[CheckOutcome] = []
+    so_far: dict[str, CheckOutcome] = {}
+    for check in suite.checks:
+        outcome = evaluate(check, ctx, deps, so_far)
+        so_far[outcome.id] = outcome
+        outcomes.append(outcome)
+    return outcomes
 
 
 __all__ = [
-    "SmokeDeps", "build_context", "command_for", "default_deps", "evaluate", "holds",
-    "last_trading_day", "load_job_specs", "render_sql", "render_text", "run_suite", "same",
-    "sql_literal",
+    "COMPARE_OPS", "SmokeDeps", "build_context", "command_for", "default_deps", "evaluate",
+    "holds", "last_trading_day", "load_job_specs", "render_sql", "render_text", "run_suite",
+    "same", "sql_literal",
 ]

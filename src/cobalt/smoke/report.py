@@ -90,7 +90,10 @@ def render_json(rep: SmokeReport) -> str:
             "overall": rep.overall.value,
             "checks": [
                 {"id": c.id, "title": c.title, "kind": c.kind, "verdict": c.verdict.value,
-                 "detail": c.detail, "command": c.command, "expected": c.expected}
+                 "detail": c.detail, "command": c.command, "expected": c.expected,
+                 # THE number of the check's result, as text: a Decimal
+                 # renders exactly, and a float would not (L57).
+                 "number": None if c.number is None else str(c.number)}
                 for c in rep.checks
             ],
         },

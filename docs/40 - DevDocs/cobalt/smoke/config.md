@@ -35,13 +35,14 @@ denied, and OVERALL goes RED.
 - `cobalt_system` has no reach into `"user"` at all (`0001` REVOKEs the
   schema), so the reverse crossing is never legal either.
 - **K8 is the worked example.** The corpus question spans both sides, so
-  it is two checks: `K8.1` (`job_row`, system) owns `input_stale = 0`,
+  it is three rows: `K8.1` (`job_row`, system) owns `input_stale = 0`,
   `trade_date = {last_trading_day}` and printing `card_misses`; `K8.2`
-  (`sql`, user) owns `incomplete = 0` and prints `card_rows`. The one
-  assertion that needed both in a single statement — `card_rows =
-  job.result card_misses` — is now a hand comparison of the two printed
-  numbers, named in both `expect_text`s (R6 A). No cross-side grant was
-  added for a smoke check.
+  (`sql`, user) owns `incomplete = 0` and prints `card_rows`; `K8.3`
+  (`compare`) asserts the equality that can never be a single statement —
+  `card_rows = job.result card_misses` — over the two numbers those rows
+  collected (each names its own through `result_number`). No cross-side
+  grant was added for a smoke check, and the assertion is a machine one
+  again rather than a comparison by eye (added 2026-09-19, TR-A).
 
 `test_no_smoke_check_reads_across_the_tenancy_wall_it_declares` keeps
 this true: it derives the granted set by parsing the GRANT statements in
@@ -85,7 +86,11 @@ against the SHIPPED yaml, and
 `test_the_k3_coverage_check_refuses_the_first_seen_at_only_shape` proves it
 bites on the pre-fix `first_seen_at`-only query. The SQL itself cannot run
 offline; `test_committed_queries_run_read_only_on_cobalt_dev` (`requires_db`,
-hub) is where the statement is proven to parse and run.
+hub) is where the statement is proven to parse and run, and
+`tests/cobalt/test_smoke_k3_sql.py` (added 2026-09-19, TR-A; `requires_db`,
+rolled back) is where the ambiguity above stops being an argument: it
+CONSTRUCTS the held pre-deploy row on `cobalt_dev` and records that the
+framework grades K3 FAIL on it.
 
 Classification for `cobalt jobs restarts` (L42): a change under
 `configs/cobalt/smoke/` derives no restart. The rule is `operator command (cobalt smoke); no job reads`, in `jobs/restarts.py`. The test keeps the claim true: no plist runs `cobalt smoke`, and only `smoke/cli.py` and this file open a suite.

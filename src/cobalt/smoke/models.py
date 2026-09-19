@@ -1,7 +1,7 @@
 """The shapes `cobalt smoke` loads and renders (S2-P4 STEP-9, R6).
 
 A suite file (`configs/cobalt/smoke/<suite>.yaml`) is one `SmokeSuite`: an
-ordered list of checks, each one of seven kinds, discriminated on `kind`
+ordered list of checks, each one of eight kinds, discriminated on `kind`
 (L10: a Pydantic schema per config family, validated on load). Every
 check kind is READ-ONLY by construction, and the schema is where that is
 enforced first:
@@ -13,6 +13,17 @@ enforced first:
     http      — a GET
     launchctl — `launchctl print` / `launchctl list`
     vault_unit — a marker read over the note's text
+    compare   — reads nothing: two checks' already-collected numbers
+
+`compare` exists because of the tenancy wall (L32). An assertion that
+spans both sides — "the corpus has as many card rows as the job that
+wrote them says it wrote" — cannot be one statement, because no role may
+read both `system.cobalt_jobs` and `"user".missed`. So each side is asked
+by its own check, each names THE number of its result (`result_number`),
+and a `compare` row asserts the equality between them. Everything it
+needs is validated at load: an operand that is not a check ABOVE it, or
+one that names no number, crashes the file with its line (L1/L10) rather
+than producing a row that could never run.
 
 The verdict vocabulary and the OVERALL roll-up are day-open's
 (`cobalt.dayopen.models`), not a second copy (L3).
@@ -22,6 +33,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime
+from decimal import Decimal
 from enum import Enum
 from typing import Annotated, Any, Literal, Optional, Union
 
@@ -46,6 +58,11 @@ READ_ONLY_CLI: tuple[tuple[str, ...], ...] = (("cobalt", "validate"),)
 
 CHECK_ID = r"^K\d+(\.\d+)?$"
 
+#: A `result_number`: a column name for `sql`, a dotted `last_result` path
+#: for `job_row`. Lower-case identifiers joined by dots — the same shape
+#: `result_equals` already uses, so one file reads one way.
+RESULT_NUMBER = r"^[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)*$"
+
 
 def variables_in(text: str) -> list[str]:
     """Every `{name}` / `{tunable:key}` in `text`; raises on an unknown name."""
@@ -62,6 +79,17 @@ def variables_in(text: str) -> list[str]:
             )
         found.append(match.group(0))
     return found
+
+
+class CompareOp(str, Enum):
+    """The operators a `compare` row may use between two numbers.
+
+    One member on purpose: `eq` is the assertion the K8 split lost, and an
+    operator nothing asserts is an untested branch. Adding one is adding
+    its test (desk ruling, row 4).
+    """
+
+    EQ = "eq"
 
 
 class Op(str, Enum):
@@ -139,6 +167,10 @@ class SqlCheck(_Check):
     known_text: Optional[str] = None
     #: Checked first with `to_regclass`; absent -> FAIL naming it.
     requires_relation: Optional[str] = Field(default=None, pattern=r"^[a-z_]+\.[a-z_]+$")
+    #: OPTIONAL and additive: the column of the returned row that IS this
+    #: check's number, for a `compare` row to read. It grades nothing here
+    #: — `expect` still owns this check's own verdict.
+    result_number: Optional[str] = Field(default=None, pattern=RESULT_NUMBER)
 
     @field_validator("query")
     @classmethod
@@ -203,6 +235,9 @@ class JobRowCheck(_Check):
     result_equals: dict[str, Any] = Field(default_factory=dict)
     #: keys in `last_result` whose value must be a number > 0.
     result_positive: list[str] = Field(default_factory=list)
+    #: OPTIONAL and additive: the dotted `last_result` path that IS this
+    #: check's number, for a `compare` row to read (see `SqlCheck`).
+    result_number: Optional[str] = Field(default=None, pattern=RESULT_NUMBER)
 
     @model_validator(mode="after")
     def _asks_something(self) -> "JobRowCheck":
@@ -241,8 +276,35 @@ class CliCheck(_Check):
         return value
 
 
+class CompareCheck(_Check):
+    """Two checks' numbers, compared once both have run.
+
+    It reads no source of its own: `left` and `right` name checks ABOVE it
+    in the file, each declaring `result_number`, and the comparison is
+    made over the numbers those two runs already collected. That is what
+    keeps it read-only and what keeps it honest — the numbers it grades
+    are the ones printed on their own rows.
+    """
+
+    kind: Literal["compare"]
+    left: str = Field(pattern=CHECK_ID)
+    right: str = Field(pattern=CHECK_ID)
+    op: CompareOp = CompareOp.EQ
+
+    @model_validator(mode="after")
+    def _two_other_checks(self) -> "CompareCheck":
+        if self.left == self.right:
+            raise ValueError(
+                f"left and right are both {self.left} — a compare names two different checks"
+            )
+        if self.id in (self.left, self.right):
+            raise ValueError(f"check {self.id} compares itself")
+        return self
+
+
 SmokeCheck = Annotated[
-    Union[LaunchctlCheck, SqlCheck, HttpCheck, LogGrepCheck, JobRowCheck, VaultUnitCheck, CliCheck],
+    Union[LaunchctlCheck, SqlCheck, HttpCheck, LogGrepCheck, JobRowCheck, VaultUnitCheck,
+          CliCheck, CompareCheck],
     Field(discriminator="kind"),
 ]
 
@@ -264,6 +326,39 @@ class SmokeSuite(BaseModel):
             if check.id in seen:
                 raise ValueError(f"duplicate check id {check.id}")
             seen.add(check.id)
+        return value
+
+    @field_validator("checks")
+    @classmethod
+    def _compare_operands(cls, value: list) -> list:
+        """A `compare` row's operands are resolved at LOAD, never at 21:50.
+
+        Both must be checks EARLIER in the file (the run evaluates in file
+        order, so a later one has no result yet) and both must name a
+        `result_number`. Either mistake crashes the file with its line
+        rather than producing a row that reports ERROR on the close
+        evening (L1).
+        """
+        kinds: dict[str, str] = {}
+        numbered: set[str] = set()
+        for check in value:
+            if isinstance(check, CompareCheck):
+                for role, cid in (("left", check.left), ("right", check.right)):
+                    if cid not in kinds:
+                        above = ", ".join(kinds) or "nothing"
+                        raise ValueError(
+                            f"{check.id}.{role} names {cid}, which is not a check above it "
+                            f"(a compare reads results that have already run; above it: {above})"
+                        )
+                    if cid not in numbered:
+                        raise ValueError(
+                            f"{check.id}.{role} names {cid} (kind {kinds[cid]}), which declares "
+                            "no `result_number` — only a check that names THE number of its "
+                            "result can be compared"
+                        )
+            kinds[check.id] = check.kind
+            if getattr(check, "result_number", None):
+                numbered.add(check.id)
         return value
 
 
@@ -317,6 +412,12 @@ class CheckOutcome(BaseModel):
     command: str
     expected: str
     raw: str
+    #: THE number of this check's result, when it declared a
+    #: `result_number` and the run produced one. `None` everywhere else —
+    #: including a check that declared one and came back with a value that
+    #: is not a number, which is what makes a `compare` over it ERROR
+    #: instead of quietly passing.
+    number: Optional[Decimal] = None
 
 
 class SmokeReport(BaseModel):
@@ -331,8 +432,9 @@ class SmokeReport(BaseModel):
 
 
 __all__ = [
-    "CHECK_ID", "CheckOutcome", "CliCheck", "HttpCheck", "JobRowCheck", "LaunchctlCheck",
-    "LogGrepCheck", "Op", "Overall", "Predicate", "READ_ONLY_CLI", "SmokeCheck",
-    "SmokeContext", "SmokeReport", "SmokeSuite", "SqlCheck", "VARIABLES", "VAR_RE",
-    "VaultUnitCheck", "Verdict", "overall_verdict", "variables_in",
+    "CHECK_ID", "CheckOutcome", "CliCheck", "CompareCheck", "CompareOp", "HttpCheck",
+    "JobRowCheck", "LaunchctlCheck", "LogGrepCheck", "Op", "Overall", "Predicate",
+    "READ_ONLY_CLI", "RESULT_NUMBER", "SmokeCheck", "SmokeContext", "SmokeReport",
+    "SmokeSuite", "SqlCheck", "VARIABLES", "VAR_RE", "VaultUnitCheck", "Verdict",
+    "overall_verdict", "variables_in",
 ]
