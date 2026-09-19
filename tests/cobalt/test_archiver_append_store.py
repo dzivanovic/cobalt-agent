@@ -31,6 +31,7 @@ from cobalt.archiver.reconcile import (
     BarValues,
     IncidentDraft,
     IncidentKind,
+    compare,
     plan_candidates,
     reconcile,
 )
@@ -747,3 +748,78 @@ def test_backfill_missings_insert_rolls_back_with_its_transaction():
             "SELECT count(*) FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
             ("TESTARCH", "i5", key),
         ).fetchone()[0] == 0
+
+
+# ---------------------------------------------------------------------
+# Spec §15's named races (tribunal round 1, F3 = the desk's Q10)
+#
+# The SEQUENCED forms are offline in `test_archiver_quiet.py`. These
+# two need two REAL connections: which value survives when a poller
+# commit and a repair commit contend for one row is decided by
+# Postgres, not by a fake (L45). First run OWED on cobalt_dev.
+# ---------------------------------------------------------------------
+
+
+@requires_db
+def test_a_committed_poller_write_is_overwritten_by_a_later_repair():
+    """DIFFERING-VALUE RACE, same key: the poller commits X on its own
+    connection inside the repair's transaction window, and the repair's
+    `DO UPDATE` commits after it. Y survives.
+
+    The offline twin asserts which method ran; this one asserts what the
+    database actually holds after two real commits.
+    """
+    st = BarStore()
+    st.ensure_schema()
+    key = datetime(2026, 8, 29, 16, 0, tzinfo=UTC)
+    assert st.upsert_bars([bar(key, close="100.00")]) == 1
+
+    with st.target_transaction() as conn:
+        held = st._bars_in_range(conn, "TESTARCH", Interval.I5, key, key)
+        assert str(held[key].close) == "100.0000"
+        # ...the poller, on its OWN connection, between the read and the
+        # write. It commits the instant it returns.
+        st.upsert_bars([bar(key, close="103.00")])
+        assert st.upsert_bars_on(conn, [bar(key, close="105.00")]) == 1
+
+    with st._connect() as conn:
+        row = conn.execute(
+            "SELECT close FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
+            ("TESTARCH", "i5", key),
+        ).fetchone()
+    assert str(row[0]) == "105.0000", (
+        "the repair committed last; its restated value must be the stored one"
+    )
+
+
+@requires_db
+def test_an_equal_value_race_writes_the_same_value_and_changes_nothing():
+    """EQUAL-VALUE RACE, same key: the poller writes X and the repair
+    independently computes X.
+
+    Two things are asserted, because only one of them is obvious: the
+    stored value is unchanged, AND the repair offers nothing at all —
+    `compare` finds no differing key, so `_apply_restate`'s row list is
+    empty and `upsert_bars_on` returns 0 without sending a statement.
+    """
+    st = BarStore()
+    st.ensure_schema()
+    key = datetime(2026, 8, 29, 16, 30, tzinfo=UTC)
+    assert st.upsert_bars([bar(key, close="105.00")]) == 1
+
+    with st.target_transaction() as conn:
+        held = st._bars_in_range(conn, "TESTARCH", Interval.I5, key, key)
+        comparison = compare([bar(key, close="105.00")], held)
+        assert comparison.differing == ()
+        assert comparison.equal == (key,)
+        rows = [b for b in [bar(key, close="105.00")] if b.ts in {
+            d.ts for d in comparison.differing
+        }]
+        assert st.upsert_bars_on(conn, rows) == 0
+
+    with st._connect() as conn:
+        row = conn.execute(
+            "SELECT close FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
+            ("TESTARCH", "i5", key),
+        ).fetchone()
+    assert str(row[0]) == "105.0000"

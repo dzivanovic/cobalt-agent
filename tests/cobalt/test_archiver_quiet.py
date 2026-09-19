@@ -970,3 +970,140 @@ def test_the_poller_module_is_imported_never_edited():
     source = inspect.getsource(poller_mod)
     for name in ("archive_progress", "archive_incidents", "quiet", "ARCHIVE_RUN_LOCK_KEY"):
         assert name not in source, f"the poller now knows about {name!r}"
+
+
+# =====================================================================
+# §15's named races (tribunal round 1, F3 = the desk's Q10)
+#
+# Spec §15, "Quiet window (§8)": "differing-value and equal-value
+# races"; and §15, "Concurrency": "a poller insert between the range
+# read and the insert is a counted conflict, never an error".
+#
+# WHAT A FAKE MAY HONESTLY CLAIM. Both tests below script a SEQUENCED
+# race: the poller commits on its own connection in the window between
+# the repair's range read and the repair's write. That ordering is
+# deterministic Python — which method ran, with which clause, and what
+# the surviving value therefore is — and the fake models the two
+# clauses faithfully (`DO UPDATE` overwrites, `DO NOTHING` skips).
+#
+# WHAT IT MAY NOT. Which value survives when two UNCOMMITTED
+# transactions contend for the same row is decided by Postgres's row
+# lock and commit order, not by this suite. Stretching a fake to assert
+# that would be claiming a guarantee only a real transaction can prove
+# (L45), so the genuinely concurrent differing-value case is a
+# `requires_db` twin in `test_archiver_append_store.py`
+# (`test_a_committed_poller_write_is_overwritten_by_a_later_repair`),
+# first run OWED on cobalt_dev.
+# =====================================================================
+
+
+def test_a_differing_value_race_the_repair_commits_last_and_its_value_survives(
+    monkeypatch,
+):
+    """SAME KEY: the poller writes X while the repair wants Y.
+
+    The repair read the range, decided the vendor's 105.00 differs from
+    the stored 100.00, and is on its way to the write. The poller lands
+    103.00 on its own connection in between. The repair's `DO UPDATE`
+    commits after it, so 105.00 is what is stored — and the poller's
+    write is NOT lost silently: it was simply older than the repair's
+    commit, which is what `restate --apply` means.
+    """
+    store = FakeBars()
+    store.upsert_bars([_bar(RESTATE_TS, close="100.00")])
+    store.calls.clear()
+
+    def _read_then_the_poller_writes(*_a, **_k):
+        plan_and_result = scenario(stored="100.00", vendor="105.00")
+        # ...the window §15's Concurrency bullet names: after the range
+        # read, before the repair's write, on the poller's OWN
+        # connection (so it is committed and outside the repair's
+        # transaction).
+        store.upsert_bars([_bar(RESTATE_TS, close="103.00")])
+        return plan_and_result
+
+    wire_command_path(monkeypatch, store, iter([QUIET_AT, QUIET_AT]))
+    monkeypatch.setattr(archiver_cli, "_compared", _read_then_the_poller_writes)
+
+    run_command(RESTATE_ARGV)
+
+    assert store.snapshot()[("TESTARCH", "i5", RESTATE_TS)] == "105.00", (
+        "the repair committed last, so its restated value must be the stored "
+        f"one; calls: {store.calls}"
+    )
+    assert store.calls == ["run_lock", "upsert_bars", "upsert_bars_on"]
+    assert store.committed == 1 and store.rolled_back == 0
+    assert store.incidents[0][2]["rows_rewritten"] == 1
+
+
+def test_a_differing_value_race_the_poller_writes_after_the_repair_committed(
+    monkeypatch,
+):
+    """The other order, stated so the pair is honest: the poller's later
+    write wins, and NOTHING in this build stops it.
+
+    That is spec §12's Known limit 1 on a single key — the poller is
+    untouched by R8 and goes on writing new-basis bars over a restated
+    one. The repair's `restated` incident stays OPEN, which is how an
+    operator finds out.
+    """
+    store = FakeBars()
+    store.upsert_bars([_bar(RESTATE_TS, close="100.00")])
+    store.calls.clear()
+
+    wire_command_path(monkeypatch, store, iter([QUIET_AT, QUIET_AT]))
+    run_command(RESTATE_ARGV)
+    assert store.snapshot()[("TESTARCH", "i5", RESTATE_TS)] == "105.00"
+
+    # ...and then the poller's next cycle, on its own connection.
+    store.upsert_bars([_bar(RESTATE_TS, close="103.00")])
+
+    assert store.snapshot()[("TESTARCH", "i5", RESTATE_TS)] == "103.00", (
+        "the poller overwrote the repair — the KNOWN limit, demonstrated"
+    )
+    assert [row[0].value for row in store.incidents] == ["restated"]
+
+
+def test_an_equal_value_race_rewrites_nothing(monkeypatch):
+    """SAME KEY: the poller writes X and the repair computes the SAME X.
+
+    Traced rather than assumed: `compare` normalises before deciding,
+    so an equal key is not `differing`, `_apply_restate` offers an EMPTY
+    row list, and `upsert_bars_on` returns 0 before it sends a
+    statement. No bar row changes and no row is rewritten.
+
+    The one thing that DOES happen is the audit incident: spec O-4 makes
+    `restate --apply` open-and-resolve a `restated` row carrying the
+    operator's `--reason`, and it is written for the COMMAND the
+    operator ran, not per rewritten row. It records `rows_rewritten: 0`,
+    which is the honest trace of a repair that found nothing to do.
+    """
+    store = FakeBars()
+    store.upsert_bars([_bar(RESTATE_TS, close="105.00")])
+    store.calls.clear()
+    before = store.snapshot()
+
+    wire_command_path(
+        monkeypatch, store, iter([QUIET_AT, QUIET_AT]),
+        compared=scenario(stored="105.00", vendor="105.00"),
+    )
+    run_command(RESTATE_ARGV)
+
+    assert store.snapshot() == before, "an equal-value race rewrote a bar row"
+    assert store.committed == 1 and store.rolled_back == 0
+    assert store.incidents[0][2]["rows_rewritten"] == 0
+    assert store.incidents[0][2]["reason"] == "vendor restated the session"
+
+
+def test_an_equal_value_race_offers_no_rows_to_the_writer():
+    """The same property one level down, where it is decided: an equal
+    key is neither `differing` nor `incoming_only`, so the repair has
+    nothing to offer and `backfill-missing` has nothing to insert."""
+    _plan, result = scenario(stored="105.00", vendor="105.00")
+    assert result.differing == ()
+    assert result.incoming_only == ()
+    assert result.equal == (RESTATE_TS,)
+
+    _plan, differs = scenario(stored="100.00", vendor="105.00")
+    assert [d.ts for d in differs.differing] == [RESTATE_TS]
+    assert differs.incoming_only == () and differs.equal == ()
