@@ -1253,9 +1253,14 @@ def test_the_alter_waits_for_an_open_transaction_and_then_completes():
          deliberately ABOVE (1): a legitimate wait must be reported by
          this test, not pre-empted by the server.
 
-    On the hung path the test also CANCELS the worker's statement from
-    the main thread, joins again and closes the connection — and still
-    fails with the same message.
+    CLEANUP RUNS ON EVERY PATH (R2, tribunal round 1). Whatever the
+    `try` did or raised, the `finally` below cancels a still-running
+    worker statement from the main thread, rejoins, then rolls back and
+    closes the worker's connection. It is not conditional on the hung
+    verdict: an exception from the lock probe or from `other.commit()`
+    would otherwise leave a backend queued for ACCESS EXCLUSIVE past the
+    end of the test. On the hung path the test still fails with the same
+    message.
     """
     other = db.connect_migration(env.DEV_DB_NAME)
     watcher = db.connect_migration(env.DEV_DB_NAME)
@@ -1293,30 +1298,36 @@ def test_the_alter_waits_for_an_open_transaction_and_then_completes():
         committed = True
         thread.join(timeout=LOCK_CEILING_S)
         hung = thread.is_alive()
-        if hung:
-            # A1: the verdict is already decided (the assertion below
-            # fails either way) — this is cleanup, so the test cannot
-            # leave a backend waiting for ACCESS EXCLUSIVE on
-            # `cobalt_dev` in front of every other session. `cancel()` is
-            # psycopg's documented cross-thread call, the one thing the
-            # main thread may do to a connection another thread is using.
-            # The second join is given the SERVER ceiling's worth of
-            # time, because that is the backstop if the cancel does not
-            # land.
-            conn.cancel()
-            thread.join(timeout=WORKER_STATEMENT_TIMEOUT_S)
-        else:
+        if not hung:
             after = cli._probe(conn, JOBS_TABLE)
     finally:
         if not committed:
             other.commit()
         other.close()
         watcher.close()
+        # R2 (tribunal round 1, 2026-09-19): the cancel + rejoin used to
+        # sit in the `try` under `if hung:`, so any exception raised
+        # between `thread.start()` and that check — from
+        # `_wait_for_a_blocked_lock`, from `other.commit()` — skipped it
+        # and left the worker's backend queued for ACCESS EXCLUSIVE on
+        # `cobalt_dev` in front of every other session. It is here now,
+        # unconditional, and there is only one copy of it (L3).
+        #
+        # The commit above has already released what the ALTER was
+        # waiting for, so a still-live thread at this point is one that
+        # did not get its lock anyway. `cancel()` is psycopg's documented
+        # cross-thread call, the one thing the main thread may do to a
+        # connection another thread is using. The rejoin is given the
+        # SERVER ceiling's worth of time, because that is the backstop if
+        # the cancel does not land.
+        if thread.is_alive():
+            conn.cancel()
+            thread.join(timeout=WORKER_STATEMENT_TIMEOUT_S)
         # Only from THIS thread once the ALTER is done with the
-        # connection. After the cancel + second join above, the HUNG path
+        # connection. After the cancel + rejoin above, the hung path
         # reaches here with a finished thread too, so the worker's
-        # transaction is rolled back and its connection closed on both
-        # paths (A1).
+        # transaction is rolled back and its connection closed on every
+        # path the cancel could reach (A1).
         if not thread.is_alive():
             conn.rollback()
             conn.close()
