@@ -1,0 +1,52 @@
+# DERIVED VERSION v2 — the Bar Archiver becomes append-only (four-house tribunal, LAWS L67, round 2)
+
+Round 1 (2026-09-19 07:51 ET): Grok, Gemini and Astra each ruled `BUILD WITH MY AMENDMENTS`; no point was accepted 3-0; nobody asked for a redesign; the collating hub found 0 false claims about the code. This file is the version DERIVED from those rulings by the fourth house (Fable, the proposer). Every point says whose amendment it takes, and where it does NOT follow a house it says why, with the file evidence. `round1-amendments.md` holds the three houses' texts verbatim. Round 2 asks each house to ACCEPT or OBJECT, point by point. What is still contested after round 3 goes to the owner with the dissent verbatim; nothing is voted.
+
+Fable's own ruling on its proposal: D2's `ts > w` is WITHDRAWN for Gemini's start-of-day range; D4's `K = 30` is WITHDRAWN for a comparison over the whole re-sent range; D5's "flag in the run report" is WITHDRAWN for a persistent incident record; the statement "no date parameter has any effect" is CORRECTED to "none of the seven date parameters tested had any effect" (Astra, evidence correction).
+
+## V2-1 (was D1) — two write paths · takes Grok + Astra; Gemini accepted D1 as it was
+`BarStore.insert_new_bars(bars) -> (inserted, conflicts)`: `INSERT … ON CONFLICT (ticker, interval, ts) DO NOTHING`, counting ACTUAL inserts (`RETURNING` or the driver's row count — never `len(rows)`). No `watermark` argument: which bars to send is the runner's policy, not the store's. `upsert_bars` (DO UPDATE) stays for the radar poller's 5-bar overlap and for the authorised `restate` command, nothing else. A test pins: the archiver path never modifies an existing row.
+
+## V2-2 (was D2) — the range · takes Gemini's range, Grok's "both keys", Astra's time rule · does NOT take Astra's durable progress record
+Per (ticker, interval) — both keys always required — `w = max(ts)`. The candidate range is every COMPLETE bar of the download with `ts >=` the start of the America/New_York calendar day that contains `w` (DST-aware; never a fixed 24-hour subtraction). `w` is NULL → the whole export. Older bars are not sent.
+WHY NO SEPARATE PROGRESS RECORD (Astra's D2, D9, bootstrap migration) — by the staged code, not by preference:
+1. The poller is the only other writer and writes i1 only. From the SAME full 14-day export it keeps every closed bar with `ts > (its watermark − 5 min)` (`poller.py` lines 96-105). It therefore cannot move `max(ts)` past a hole: in Astra's example (Friday's archive fails, Monday's poller runs) Monday's first poll has watermark = Thursday and inserts all of Friday. For i2/i5/i15/i30 the archiver is the only writer.
+2. A failed archiver target leaves `w` where it was, so the next successful night starts from that older day — self-healing inside the vendor's window; beyond the window it is a GAP (V2-5).
+3. "`w` NULL = first contact" being false when the poller has rows is harmless: the poller's first contact already wrote the whole export.
+THE DEPENDENCY THIS CREATES IS PINNED BY TESTS (they fail if the poller ever changes): (a) poller re-entry after an absence back-fills the absence; (b) Astra's own sequence — failed archive night → poller advance → archive night — ends with no missing key; (c) Gemini's sequence — poller writes 10:00 and 14:00, the archiver fills 11:00–13:00.
+A house that OBJECTS here must give a concrete sequence of events, against the staged files, that leaves a missing key under this rule.
+
+## V2-3 (was D3) — completeness · takes Astra (Grok, Gemini accepted D3)
+Accept a bar only when `ts + interval_duration <= fetch_started_at` (aware UTC; the instant BEFORE the request, so a slow fetch cannot bless a forming bar). Interval → duration is an explicit map that FAILS LOUD on an unknown interval (Grok). No open-session prohibition. Tests: regular close, 13:00 half-day, extended hours, both DST offsets, a fetch that crosses a bar close.
+
+## V2-4 (was D4 + D7's automatic part) — restatement and late bars · takes Gemini + Astra on withholding; Astra on breadth; Grok's partial-difference rule is NOT taken
+One `SELECT` of the stored rows of the candidate range per target (PK range scan). Then, inside that range:
+- key in both, values equal (after normalising to `NUMERIC(14,4)` and integer volume) → nothing to do;
+- key only in the download → a LATE ADDITION: inserted by DO NOTHING like any new bar, counted `late_inserted`;
+- key only in storage → counted `stored_only`, flagged, NOTHING is deleted;
+- key in both, ANY OHLCV difference → the target's outcome is `restated`: NO insert for that target tonight, stored rows untouched, an incident is recorded (V2-5), the target counts as FAILED (V2-9).
+Never an automatic repair, by constant factor or otherwise (all three houses). Remedy = `cobalt archiver restate <ticker> [<interval>]`: a PREVIEW first (affected range, the differences, what the vendor window covers, what stored history lies outside it and stays unresolved), execution only with an explicit `--apply`, audit trail on the incident row.
+NOT TAKEN, and why: Grok's "some differ → insert and flag" (2 of 3 houses withhold; a mixed pre/post-split series is the named harm). Astra's "the poller must honour a quarantine" and "mark the series unavailable for replay" (Astra alone; Grok and Gemini leave the poller unchanged; no reader-side mechanism exists — the incident row is what a reader can join later; the poller's 5-bar overlap is older, separately ruled behaviour).
+DESK ADDITION — MEASURE BEFORE THE SWITCH: nobody knows how often Finviz revises bars, and withholding is only right if revisions are rare. The build ships a READ-ONLY `cobalt archiver audit [--sample N | --from <date>]` that fetches, compares and prints per-target `differing / late / stored_only` counts and writes nothing. The deploy runs it on production BEFORE the first append-only night; if more than 1 % of sampled targets differ, the deploy stops and the numbers come back to this tribunal.
+
+## V2-5 (was D5) — gaps and incidents · takes Gemini + Astra (a persistent record); answers Grok's "no side table"
+ONE small additive table `system.archive_incidents`: `id, kind (gap | restated | stored_only | empty_export), ticker, interval, range_start, range_end, first_seen_at, last_seen_at, detail jsonb, resolved_at, resolved_by`. Logical targets and time ranges only — no dependence on how `bars` is physically laid out (Astra D8). It is NOT a watermark table: `max(ts)` stays the only notion of progress, which is what Grok's D8 protects.
+- GAP: `w` older than the oldest bar of the download → insert the usable range, open a `gap` incident with both bounds, worded "unavailable from the tested export interface" (Astra). The incident survives the watermark moving on.
+- EMPTY OR TRUNCATED EXPORT (0 rows, or the newest downloaded bar is older than `w`'s day) → the target FAILS, nothing is inserted, an `empty_export` incident is opened or refreshed.
+- `cobalt archiver incidents` lists the unresolved ones; the heartbeat probe for the archiver is not green while any is unresolved (Gemini's alert, Grok's "F18 not green on flags").
+The migration takes the next free number at build time (another branch holds two undeployed numbers).
+
+## V2-6 (was D6) — counters · takes Grok + Astra
+Per target: `fetched, invalid, duplicate_input_keys, incomplete, below_range, candidates, inserted (actual), conflicts, late_inserted, differing, stored_only, withheld`, plus `status, reason, w_before, w_after, incident_ids`. Per run: the sums, `restated_targets, gap_targets, failed_targets`, run identity. `Rows Written` = `inserted`. The report carries a legend and the reconciliation rule `fetched = invalid + duplicate_input_keys + incomplete + below_range + candidates`; `candidates = inserted + conflicts + withheld`.
+
+## V2-7 (was D7) — interior holes · takes Gemini's reading of the owner's words, Astra's horizon statement; Grok's range-count is superseded by V2-4's comparison
+Automatic horizon = the candidate range of V2-2 (when last night succeeded: yesterday's session day and today's — Astra's "two most recent sessions" in the normal case). Inside it, holes fill themselves (V2-4). The report STATES that horizon. Older holes: `cobalt archiver audit --from <date>` (read-only) and `cobalt archiver backfill-missing <ticker> [<interval>]` (DO NOTHING only — it can never become an overwrite). Cost stated honestly: about one day of keys read and re-offered per target per night (≈0.4–0.8M PK probes, no row rewritten, no dead tuple) against today's ≈3.34M rewritten rows.
+
+## V2-8 (was D8) — Sunday's tribunal stays free · takes all three
+No change to `bars` (columns, PK, indexes). Non-i1 intervals stay droppable: no new reader of them, no constraint on them. Carried to Sunday as a FACT (Astra): ≈9.6 months of stored i30 cannot be rebuilt from ≈14 days of i1, and i1/i5 include extended hours while i15/i30 are regular-session only — consolidation must rule on both.
+
+## V2-9 (was D9) — failure semantics · takes Astra on atomicity, Grok on what counts as failure
+One transaction per target holding the inserts AND the incident writes. The run continues after a failed target. FAILED target = `restated` (withheld), `empty_export`, any exception. DEGRADED = a `gap` whose usable range was inserted, or `stored_only` keys seen. `inserted = 0` because the poller already stored everything = SUCCESS (Grok). Any FAILED or DEGRADED target → the nightly job's result is not healthy. Two archive/repair runs at once: a Postgres advisory lock taken at run start; the second run refuses loudly. Run start/finish are already durable in the job row (`system.cobalt_jobs`); no new run table.
+
+## Tests and tools that must exist (MISSING lists, merged)
+Runner tests (none exist today): failed-night recovery with a poller advance; first archive contact with poller rows present; rollback of a target; interruption between targets; re-running a completed target inserts 0. Concurrency: a poller insert between the range `SELECT` and the insert is a counted conflict, never an error; a second concurrent run refuses. Data quality: split-like change → `restated` + withheld; late addition → `late_inserted`; duplicate input keys; empty export; precision normalisation. Time: V2-3's list. Commands: `audit`, `incidents`, `backfill-missing`, `restate` (preview / `--apply`). NOT built (they belong to the progress record that V2-2 does not adopt): a bootstrap reconciliation migration, an "inspect archive progress" tool.
