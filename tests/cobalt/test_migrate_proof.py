@@ -1632,8 +1632,10 @@ def test_the_cli_turns_a_refused_lock_timeout_into_failed_and_exit_1():
 
 @requires_db
 def test_a_migration_that_cannot_get_its_lock_fails_in_about_a_second(monkeypatch):
-    """(j) NEVER RUN AS OF 2026-09-19 — written offline, owed a first run
-    on `cobalt_dev` once `p4-verify-0919` releases it.
+    """(j) FIRST RUN 2026-09-19, the ops DB run, once `p4-verify-0919`
+    released `cobalt_dev`. Written offline two rounds earlier and red on
+    that first run — see the connection comment below; the defect was in
+    this test, not in the harness.
 
     Another session holds ACCESS EXCLUSIVE on the table `0003` alters, so
     `_apply`'s ALTER cannot get its lock; with `--lock-timeout-s 1` the
@@ -1651,10 +1653,26 @@ def test_a_migration_that_cannot_get_its_lock_fails_in_about_a_second(monkeypatc
     (n), `test_a_blocked_before_probe_is_under_the_lock_ceiling_too`,
     which runs the real `_probe_all` against the same held lock.
     """
-    reader = db.connect_migration(env.DEV_DB_NAME)
+    # Held before the monkeypatch below replaces `cli._connect`: the AFTER
+    # probe needs a REAL connection, and the patch is still in force when
+    # it runs (monkeypatch undoes at teardown, not mid-test).
+    real_connect = cli._connect
+
+    # NOT `db.connect_migration` for the two probes, which is what this
+    # test was written with and why its first real run (2026-09-19, the
+    # ops DB run) failed before reaching a single assertion:
+    # `NoActiveSqlTransaction: DECLARE CURSOR can only be used in
+    # transaction blocks`. `_probe` streams through a NAMED (server-side)
+    # cursor, and Postgres will not DECLARE one outside a transaction
+    # block — which is exactly what an AUTOCOMMIT connection is.
+    # `cli._connect(read_only=True)` is the harness's own probe
+    # connection, the one `--proof-only` opens.
+    reader = real_connect(env.DEV_DB_NAME, allow_prod=False, read_only=True)
     holder = db.connect_migration(env.DEV_DB_NAME)
     try:
         before = cli._probe(reader, JOBS_TABLE)
+        reader.rollback()
+        reader.close()
 
         holder.autocommit = False
         holder.execute(
@@ -1663,7 +1681,7 @@ def test_a_migration_that_cannot_get_its_lock_fails_in_about_a_second(monkeypatc
             )
         )
 
-        conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+        conn = real_connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
         monkeypatch.setenv(env.ENV_VAR, env.DEV)
         monkeypatch.setattr(cli, "_connect", lambda *a, **k: conn)
         monkeypatch.setattr(cli, "_probe_all", lambda c: {})
@@ -1686,12 +1704,15 @@ def test_a_migration_that_cannot_get_its_lock_fails_in_about_a_second(monkeypatc
     finally:
         holder.rollback()
         holder.close()
-        reader.close()
+        if not reader.closed:
+            reader.rollback()
+            reader.close()
 
-    after_conn = db.connect_migration(env.DEV_DB_NAME)
+    after_conn = real_connect(env.DEV_DB_NAME, allow_prod=False, read_only=True)
     try:
         after = cli._probe(after_conn, JOBS_TABLE)
     finally:
+        after_conn.rollback()
         after_conn.close()
     assert cli._verdict(JOBS_TABLE, before, after) == "OK", (
         "a migration that failed on its lock left the table changed: rows "
