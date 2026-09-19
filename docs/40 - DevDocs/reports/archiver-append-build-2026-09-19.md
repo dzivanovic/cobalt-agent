@@ -1598,3 +1598,278 @@ tables: REVOKE, or amend §11) and **DB-2** (whether a `requires_db` test may co
 R2-1 (the shadow artifact's timezone) remains owed from round 2 and is untouched by this run.
 
 ARCHIVER DB d2099e1 (code tip; report 2e4ca6f, and this line's own docs-only commit on top) | offline 1866/0 (320 skipped vs round-2 320 — unchanged, and correct: step 3 runs with `.env` removed so all 23 `requires_db` skip again) | db 154/3 (the 23 archiver requires_db tests: 20 pass, 3 red — DB-1 ×2 cobalt_user grant, DB-2 unobservable commit) | migrations 0010/0011: applied on real cobalt_dev (both CREATED system-side, every pre-existing digest unchanged) and reversed (`--rollback --down-to 0009` dropped exactly those two, proof-only byte-identical to the step-0 baseline) | UNVERIFIABLE settled: (1) fresh c974fbf..HEAD diff = round 2's nine paths, no surprise; (2) 1866/0/320 real + the 23 ran for the first time; (3) RESTARTS derived, 0 UNCLASSIFIED | cobalt_dev: 0001–0009, unchanged (every row count and digest identical to this run's step-0 proof) | .env: removed, proven gone | RESTARTS: com.cobalt.aset com.cobalt.radar | OWED: whole-build house check close (Astra), rulings DB-1 + DB-2 + R2-1, next deploy prompt (deploy 3, after P4) | ESCALATE: 4
+
+---
+
+# ROUND 3 — REVOKE cobalt_user off the two archiver tables (cto-2026-09-19 R25 "B", DB-1)
+
+Seat `archiver-round3-0919` (Opus 5), worktree `~/cobalt-wt/archiver-append`, branch `archiver/append-0919`,
+OFFLINE by design — `.env` absent, `cobalt_dev` untouched. Prompt: `prompts/2026-09-19/40-archiver-round3.md`.
+
+## §0 Headline
+
+DB-1 is CLOSED IN THE SQL: `0010` and `0011` now carry an explicit `REVOKE ALL … FROM cobalt_user`, and
+`0011` revokes `archive_incidents_id_seq` with its table. Five new offline tests, all RED first, now GREEN.
+Offline suite **1871 passed / 0 failed / 320 skipped** (baseline 1866/0/320 — +5, exactly the new tests).
+The two `requires_db` grant tests still SKIP and are OWED to the DB re-run, together with the
+apply-twice idempotency fact. §11 NOT edited; one sentence in it escalated instead. ESCALATE: 6 new.
+
+## Step 1 — the cause, quoted from the file
+
+`src/cobalt/db_migrations/0001_schemas.sql`, verbatim:
+
+```
+124:GRANT SELECT ON ALL TABLES IN SCHEMA system TO cobalt_user;
+125:GRANT SELECT ON ALL SEQUENCES IN SCHEMA system TO cobalt_user;
+```
+
+and inside the `DO $$ … $$` block of section 5:
+
+```
+149:    EXECUTE format(
+150:        'ALTER DEFAULT PRIVILEGES FOR ROLE cobalt_system, %I IN SCHEMA system '
+151:        'GRANT SELECT ON TABLES TO cobalt_user', current_user);
+152:    EXECUTE format(
+153:        'ALTER DEFAULT PRIVILEGES FOR ROLE cobalt_system, %I IN SCHEMA system '
+154:        'GRANT SELECT ON SEQUENCES TO cobalt_user', current_user);
+```
+
+`:124` fires once, at 0001's own run, over the tables that exist then; `:149-151` is what reaches a table
+created LATER — 0010's and 0011's. `:125`/`:152-154` are the same pair for SEQUENCES.
+
+**Only two routes, confirmed from the files and not from the prompt.** `grep -rn cobalt_user
+src/cobalt/db_migrations/` returns every mention: 0001 (the two routes above, plus the role's `CREATE ROLE
+… NOLOGIN` at `:78-79` and the login role's `GRANT cobalt_system, cobalt_user, cobalt_backup TO %I` at
+`:95`), and explicit per-table grants in `0004:59-60`, `0006:198-200`, `0007:204-206` — each naming its own
+tables, none naming an archive table. `cobalt_user` is NOLOGIN and is a member of no role (only the login
+role is granted membership INTO it, `:95`), and `:132` `REVOKE ALL ON SCHEMA "user", system FROM PUBLIC;`
+closes the PUBLIC route at schema level (PUBLIC holds no default table privilege in Postgres regardless).
+**No third route. Nothing folded in silently.**
+
+**THE SEQUENCE — decided, option (i), revoke it too.** `0011_archive_incidents.sql:49` is
+`id            BIGSERIAL   PRIMARY KEY,` — read from the file, not assumed: the sequence
+`archive_incidents_id_seq` is created as part of the `CREATE TABLE`, so an order test anchored on
+`CREATE TABLE system.archive_incidents` is sufficient. By `:152-154` it inherits the same default SELECT
+the table does. 0011's own comment at `:99-100` says *"NOTHING is granted to `cobalt_user`"* — aspirational
+for the sequence exactly as it was for the table. Option (ii) would have narrowed a true-intent comment to
+"nothing except the identity counter", which is a readable row-count proxy for the incident log the tenancy
+answer excludes. **Taken: revoke, in the same commit, so the comment is true of both objects.** This is one
+OBJECT beyond R25's literal words ("these two are the only system tables"); it is authorized by step 1 of
+the prompt, which put both options in front of this seat and required one to be taken. Named in ESCALATE.
+
+## Step 2 — 0006 is a contrast, not a template
+
+`0006_radar_score.sql:198-200` is `GRANT SELECT, REFERENCES ON system.radar_score TO cobalt_user;` /
+`… system.radar_score_run …` / `GRANT SELECT ON system.radar_board_v TO cobalt_user;` — those tables are
+MEANT to be read user-side (radar scores feed ASET sizing). **0010/0011 diverging from that pattern is
+deliberate (R25), not an inconsistency to fix toward 0006: the two sets of tables have opposite tenancy
+answers (L32), and both migrations now say so in their own comments so the next reader cannot mistake it.**
+
+## Step 3 — tests first (RED), then the SQL (GREEN)
+
+Parametrized over `(path, table)` pairs, the way the existing `test_each_table_is_owned_by_the_system_role`
+is — **five new OFFLINE tests, no `requires_db` marker**, all through the file's own `_code()` helper so a
+REVOKE living only in a `--` comment cannot pass them:
+
+| test | pins |
+|---|---|
+| `test_each_table_revokes_everything_from_cobalt_user[path0-archive_progress]` | `REVOKE ALL ON system.archive_progress FROM cobalt_user;` present in `0010` |
+| `…[path1-archive_incidents]` | the same statement for `archive_incidents` in `0011` |
+| `test_the_revoke_comes_after_the_table_exists[path0-archive_progress]` | `.index()` of the `CREATE TABLE IF NOT EXISTS` < `.index()` of the REVOKE |
+| `…[path1-archive_incidents]` | the same ORDER for `0011` |
+| `test_the_incident_sequence_is_also_revoked_from_cobalt_user` | `REVOKE ALL ON SEQUENCE system.archive_incidents_id_seq FROM cobalt_user;`, ordered after the `CREATE TABLE` |
+
+**SPELLING — `REVOKE ALL`, stated rather than silently picked.** §11's word is "nothing", not "no SELECT
+specifically". `REVOKE ALL` is the spelling that matches it; it costs nothing today (SELECT is the only
+privilege the role holds on these objects, per step 1) and stays correct if a later migration ever adds a
+different default grant to `cobalt_user` in schema `system` that this design never intended for these two.
+
+**RED, before any SQL change** — `uv run pytest -q tests/cobalt/test_archiver_migrations.py -k revoke`:
+
+```
+FAILED …::test_each_table_revokes_everything_from_cobalt_user[path0-archive_progress] - AssertionError: assert 'REVOKE ALL ON system.archive_progress FROM cobalt_u...
+FAILED …::test_each_table_revokes_everything_from_cobalt_user[path1-archive_incidents] - AssertionError: assert 'REVOKE ALL ON system.archive_incidents FROM cobalt_...
+FAILED …::test_the_revoke_comes_after_the_table_exists[path0-archive_progress] - ValueError: substring not found
+FAILED …::test_the_revoke_comes_after_the_table_exists[path1-archive_incidents] - ValueError: substring not found
+FAILED …::test_the_incident_sequence_is_also_revoked_from_cobalt_user - AssertionError: assert 'REVOKE ALL ON SEQUENCE system.archive_incidents_id_...
+5 failed, 58 deselected in 0.08s
+```
+
+**THE SQL.** `0010_archive_progress.sql` — one statement after `ALTER TABLE … OWNER TO cobalt_system;`,
+with the cause and the 0006 divergence in its comment:
+
+```
+REVOKE ALL ON system.archive_progress FROM cobalt_user;
+```
+
+`0011_archive_incidents.sql` — in the existing grants section, beside the sequence grant already there:
+
+```
+REVOKE ALL ON system.archive_incidents FROM cobalt_user;
+REVOKE ALL ON SEQUENCE system.archive_incidents_id_seq FROM cobalt_user;
+```
+
+**GREEN** — `uv run pytest -q tests/cobalt/test_archiver_migrations.py`: **`53 passed, 10 skipped in 0.03s`**
+(63 collected = 58 before + 5 new; the 10 skips are the file's `requires_db` half, the two named ones
+included).
+
+**ONE EXISTING OFFLINE TEST HAD TO CHANGE, and it is named here rather than buried.**
+`test_nothing_is_granted_to_cobalt_user` asserted `"cobalt_user" not in _code(path)` — the ROLE NAME's
+absence. A REVOKE has to name the role, so R25's ruling makes that assertion false by construction. Its
+INTENT is untouched and is what R25 affirms; only its mechanism moved: it now asserts `"TO cobalt_user"
+not in code` (the direction — no grant), and still asserts the bare name is absent from both
+`.rollback.sql` files, where nothing names it. **This is not one of the two `requires_db` tests the prompt
+froze** (`test_the_user_role_has_no_grant_on_either_table[archive_progress|archive_incidents]`,
+`:391-398` before this edit) — those are byte-for-byte unchanged and still SKIP.
+
+**IDEMPOTENCY — a Postgres fact, NOT tested here.** `REVOKE` on a privilege the grantee does not currently
+hold succeeds as a no-op rather than erroring, so re-running 0010/0011 against a database where the REVOKE
+already applied is safe, exactly as idempotent as the files' existing `CREATE TABLE IF NOT EXISTS`. **Only a
+live `cobalt db migrate` run twice proves it. It is OWED to the DB re-run, alongside the two `requires_db`
+tests, and is not claimed as tested by this chunk.** The existing offline
+`test_both_migrations_are_idempotent` scans `CREATE …` statements only and says nothing about a REVOKE.
+
+**NEITHER `.rollback.sql` CHANGED.** `DROP TABLE IF EXISTS system.archive_progress;` /
+`… system.archive_incidents;` remove the table and every privilege recorded on it, the REVOKE included —
+there is nothing for a rollback to undo. `0011`'s rollback already notes its sequence goes with the table.
+
+**COMMIT `193a2ca`** — `fix(db-migrate): REVOKE cobalt_user off system.archive_progress and
+system.archive_incidents (cto-2026-09-19 R25 "B", DB-1)`. `git show --stat HEAD`: exactly
+`src/cobalt/db_migrations/0010_archive_progress.sql`, `src/cobalt/db_migrations/0011_archive_incidents.sql`,
+`tests/cobalt/test_archiver_migrations.py` — 3 files, 101 insertions, 3 deletions. No other path.
+
+## Step 4 — §11 confirmed, NOT edited
+
+The sentence R25 names, quoted from
+`docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §11, first paragraph:
+
+> Both SYSTEM side (L32: market-data bookkeeping, nothing of one trader's choice; `placement.py` gains both;
+> `cobalt_user` is granted nothing on them).
+
+**It was correct as written and stays untouched** — this chunk makes it true in the SQL, and true in the
+database once the DB re-run proves it. §15's "Migrations" bullet (`… `cobalt_user` has no grant`) is
+likewise correct and stays: the test it demands exists and is currently skipping, not missing.
+
+**`docs/30 - Design/` was NOT touched.** One sentence in §11 nevertheless reads wrong to this seat, and it
+is escalated rather than edited — see R3-1. The reason for escalating instead of editing: R25 ruled the
+substance and explicitly said §11 "stands as written"; editing a tribunal-derived FINAL design (L67) on a
+sentence the ruling did not name would extend R25, which this chunk is told not to do.
+
+## CLOSE — offline numbers
+
+| check | result |
+|---|---|
+| `uv run pytest -q tests/cobalt/test_archiver_migrations.py` | `53 passed, 10 skipped in 0.03s` — the two `requires_db` grant tests SKIP (not run, not xfail) |
+| `uv run pytest -q tests/cobalt tests/taxonomy` | **`1871 passed, 320 skipped, 1 xfailed, 15 warnings in 44.43s`** — 0 failed |
+| vs the DB run's offline close (1866 passed / 0 failed / 320 skipped) | failed **0**, unchanged · passed **+5**, exactly the five new tests named in step 3 · skipped **320**, unchanged (this chunk added no `requires_db` test) |
+| `uv run cobalt jobs restarts c14e6f9..HEAD` | verbatim below — 3 paths, **0 UNCLASSIFIED** |
+| `git diff c14e6f9 HEAD -- src/cobalt/archiver/ src/cobalt/radar/` | **EMPTY** (the prompt's `main`-based form cannot be empty on this branch — see R3-5) |
+| `git status --porcelain` | empty |
+| `git diff --stat c14e6f9 HEAD -- src tests docs` | the 3 paths above, +101/−3; this report's own path joins it with the closing docs commit |
+
+```
+path	change	rule	restart
+src/cobalt/db_migrations/0010_archive_progress.sql	M	non-Python src asset	-
+src/cobalt/db_migrations/0011_archive_incidents.sql	M	non-Python src asset	-
+tests/cobalt/test_archiver_migrations.py	M	test/documentation; no resident	-
+RESTARTS: none
+```
+
+**RESTARTS: none** for THIS CHUNK. The branch's own deploy line is unchanged and still
+`com.cobalt.aset com.cobalt.radar` (round 1's ESCALATE (iv) item 4, driven by `tunables.yaml`, which this
+chunk does not touch). A migration file derives no restart of its own; it ships through
+`cobalt db migrate --allow-prod` inside the pause (L66/L43), as round 1's deploy list already says.
+
+## ROUND 3 ESCALATE
+
+**CARRIED FORWARD UNTOUCHED, nothing re-litigated, nothing resolved here:** round 1's `## ESCALATE` in
+full — (i) the §14 OPEN table O-1…O-7 with what was built as the safe default, (ii) the never-run
+`requires_db` tests **(CLOSED by the DB run)**, (iii) the cross-branch table (`sprint-2/p4` shares
+`db_migrations/__init__.py`, `placement.py`, `tunables.yaml`, `cli.py`, `archiver/runner.py`,
+`archiver/store.py`; P4's `_check_demand` call must be re-applied at the top of the rewritten
+`_run_targets`), (iv) the deploy-prompt list 1–6, (v) §12's five known limits, and its numbered findings
+1–8 · round 2's **R2-1** (the shadow artifact's timezone, ET — a ruling still OWED from the desk or the
+owner), **R2-2**, **R2-4** · the DB run's **DB-2**
+(`test_the_own_connection_upsert_survives_another_transactions_rollback` unobservable under conftest's
+autouse single-transaction fixture — **NOT ruled, NOT touched here, status unchanged: ruling owed**),
+**DB-3** (the step-order lesson, settled for future prompts) and **DB-4** (the two index-card drifts,
+settled). **Nothing in this run supersedes any of them.**
+
+**NEW THIS RUN — 6 items.**
+
+**R3-1. §11 carries a second sentence that this chunk makes visibly wrong, and it was NOT edited.** Quoted
+from §11's "Migrations" bullet:
+
+> Ownership and grants follow `0006_radar_score.sql`'s pattern for a system table — the builder reads it,
+> never invents one.
+
+After R25 the grants deliberately do NOT follow 0006's pattern: 0006 GRANTS `cobalt_user` read, 0010/0011
+REVOKE it. Read narrowly the sentence means "state grants explicitly rather than relying on default
+privileges", which the REVOKE also satisfies — but read plainly it would send the next builder to copy
+`0006:198-200` and re-open exactly the hole DB-1 found. **This seat did not edit it** (see step 4).
+**Proposed wording for the desk or the tribunal, one clause added:** "Ownership and the SYSTEM-role grants
+follow `0006_radar_score.sql`'s pattern; the user-side grant is its OPPOSITE — `cobalt_user` is revoked,
+not granted (`cto-2026-09-19` R25)." **DECIDES: the desk or the tribunal that derived the FINAL design.**
+
+**R3-2. The sequence REVOKE is one object beyond R25's literal wording.** R25 says "these two are the only
+system TABLES that role cannot read"; `archive_incidents_id_seq` is a sequence. The prompt's step 1 put
+option (i) revoke / (ii) narrow-the-comment in front of this seat and required a choice; (i) was taken and
+is reasoned above. **If the desk wants the sequence readable after all, the single line to drop is
+`0011_archive_incidents.sql`'s `REVOKE ALL ON SEQUENCE …` plus
+`test_the_incident_sequence_is_also_revoked_from_cobalt_user`.** Flagged for visibility, not as a doubt.
+
+**R3-3. STILL OWED TO THE DB RE-RUN — three things, none provable offline.** (a)
+`test_the_user_role_has_no_grant_on_either_table[archive_progress]` and `[archive_incidents]` — red on
+`cobalt_dev` in the DB run, expected GREEN after this chunk, **not yet proven**; (b) the apply-twice
+IDEMPOTENCY of the new REVOKE statements on real Postgres (stated as a Postgres fact above, never as a
+test result); (c) nothing here proves the REVOKE actually bites against the default-privilege grant — only
+`has_table_privilege('cobalt_user', …)` on a migrated database does. **The re-run's order matters: apply →
+suite → roll back (DB-3), not the DB run's original order.**
+
+**R3-4. An existing offline test's MECHANISM changed, by necessity, and is recorded here.**
+`test_nothing_is_granted_to_cobalt_user` moved from "the role name never appears" to "no grant in the
+role's direction", because R25's REVOKE must name the role. Intent unchanged; the rollback files still
+assert full absence. Named so no reviewer finds it as a surprise diff. **No other pre-existing test in the
+file was altered, and the two frozen `requires_db` tests are byte-identical.**
+
+**R3-5. The prompt's close check `git diff main -- src/cobalt/archiver/ src/cobalt/radar/` CANNOT be empty
+on this branch, and was not.** It returns ~140 KB — the branch's OWN archiver build from rounds 1/2:
+`git diff --stat main -- …` = `cli.py`, `incidents.py`, `progress.py`, `quiet.py`, `reconcile.py`,
+`report.py`, `runner.py`, `settings.py`, `shadow.py`, `store.py`, 10 files, +3477/−44, and ZERO
+`src/cobalt/radar/` files. The check as written asks this chunk to prove the branch has no archiver build,
+which is its entire purpose. **The check that carries the intended meaning — did THIS chunk touch archiver
+or radar source — is `git diff c14e6f9 HEAD -- src/cobalt/archiver/ src/cobalt/radar/`, and it is EMPTY.**
+Reported rather than silently substituted; the next prompt of this shape should anchor the check on the
+chunk's branch point, not on `main`.
+
+**R3-6. Citation drift in DB-1's own text, named for the record.** DB-1 cites the default-privilege grant as
+`0001_schemas.sql:150-152`; the statement actually spans `:149-151` (`:152` opens the SEQUENCES twin). The
+prompt's `:149-151` is correct. Quoted from the file above; no consequence beyond the citation.
+
+**MEMORY:** none proposed — this run changed no law and no standing practice; R25 is already recorded in
+`cto-2026-09-19.md` §4 and is owed a `areas/cobalt-product-definition.md` line at the desk's fold.
+**RULING:** R3-1 (the §11 "follows 0006's pattern" sentence) is the one new item owed a decision. DB-2 and
+R2-1 remain owed, untouched.
+
+## Round 3 PREFLIGHT
+
+| rule | command | exit | result |
+|---|---|---|---|
+| `Bash(date*)` | `date` | 0 | allowed — `Sat Sep 19 13:15:44 EDT 2026` |
+| `Bash(git status*)` | `git status --porcelain` | 0 | allowed — EMPTY |
+| `Bash(git status*)` | `git status` | 0 | allowed — `On branch archiver/append-0919` / `nothing to commit, working tree clean`; no rebase in progress |
+| `Bash(git log*)` | `git log --oneline -1` | 0 | allowed — `c14e6f9 docs(report): archiver db run — fill the stop line's sha (code tip d2099e1, report 2e4ca6f)` = the expected first-launch tip |
+| `Bash(git -C /Users/cobalt/cobalt log*)` | `git -C /Users/cobalt/cobalt log --oneline -1` | 0 | allowed — `1dfc8cb docs(desk): 09-19 R25 (DB-1 = B, explicit REVOKE); archiver round-3 chunk prompt (40)` (recorded, no equality required) |
+| `Bash(ls *)` | `ls -la .env` | 1 | allowed — `No such file or directory`, as required: this run never sees the dev database |
+| `Bash(uv run pytest *)` | `uv run pytest --co -q tests/cobalt/test_archiver_migrations.py` | 0 | allowed — **58 tests collected**, both frozen `requires_db` grant tests present and unchanged |
+| `Bash(grep *)` | the 21 authorization `grep -c` calls | 0 | allowed — see below |
+
+**AUTHORIZATION — verified, HOLDS.** All 16 `Bash(...)` rule strings, `--disallowedTools "AskUserQuestion"
+"EnterWorktree"` and the three `--add-dir` values counted ≥1 in
+`prompts/2026-09-19/26-archiver-round2.md`. Four counted **2** rather than 1 — `Bash(uv run pytest *)`,
+`Bash(uv run cobalt jobs restarts *)`, the deny pair and `--add-dir /Users/cobalt/cobalt-wt`. Located, not
+assumed: the second hit is 26's OWN PROSE (its line 1 "NO NEW RULE" sentence and its line 18 AUTHORIZATION
+paragraph), never a differing rule; 26's committed launch line (line 5) carries every string exactly once.
+**No rule in this run's line is absent from 26's, none is altered, none added.** The WORK ITEM is
+authorized by `cto-2026-09-19.md` §4 R25 (13:10 ET, "B" — read in full, quoted in step 3's commit),
+DB-1 in this report's `# DB RUN` section, and §11/§15 of the FINAL design.
