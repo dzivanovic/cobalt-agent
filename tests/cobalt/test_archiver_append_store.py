@@ -707,35 +707,8 @@ def test_a_rollback_unwrites_an_upsert_made_on_the_targets_connection():
     )
 
 
-@requires_db
-def test_the_own_connection_upsert_survives_another_transactions_rollback():
-    """The DEFECT, stated as a passing test so it can never come back
-    unnoticed: `upsert_bars` opens and COMMITS its own connection, so a
-    rollback elsewhere does not touch it.
-
-    Nothing is wrong with that — it is what the poller and the nightly
-    `upsert` night need. It is wrong only inside a repair, which is why
-    `_apply_restate` now takes `upsert_bars_on`.
-    """
-    st = BarStore()
-    st.ensure_schema()
-    key = datetime(2026, 8, 29, 14, 30, tzinfo=UTC)
-    assert st.upsert_bars([bar(key, close="100.00")]) == 1
-
-    with pytest.raises(RuntimeError):
-        with st.target_transaction() as _conn:
-            assert st.upsert_bars([bar(key, close="999.00")]) == 1
-            raise RuntimeError("the pre-commit re-check refused")
-
-    with st._connect() as conn:
-        row = conn.execute(
-            "SELECT close FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
-            ("TESTARCH", "i5", key),
-        ).fetchone()
-    assert str(row[0]) == "999.0000", (
-        "`upsert_bars` is expected to commit on its OWN connection; if this "
-        "now rolls back, the nightly night's write semantics changed"
-    )
+# Dropped 2026-09-19 (cto-2026-09-19.md R26): unobservable under
+# conftest.py:133's autouse single-transaction fixture. Offline pins stay: tests/cobalt/test_archiver_append_store.py::test_upsert_bars_still_does_update_and_never_do_nothing, tests/cobalt/test_archiver_append_store.py::test_only_one_copy_of_the_upsert_statement_exists, tests/cobalt/test_archiver_append_store.py::test_upsert_bars_on_takes_the_callers_connection_and_never_opens_one.
 
 
 @requires_db
