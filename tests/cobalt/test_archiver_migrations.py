@@ -198,6 +198,18 @@ def test_incidents_has_the_partial_unique_index_on_unresolved_rows():
     body = " ".join(index.group(0).split())
     assert "(kind, ticker, interval, range_start)" in body
     assert "WHERE resolved_at IS NULL" in body
+    # Tribunal round 1, F7. `NULLS NOT DISTINCT` (pg15+; this install is
+    # pg16) is LOAD-BEARING, not tidiness: an `empty_export` incident has
+    # no span, so its `range_start` is NULL, and under the DEFAULT rule
+    # every NULL is distinct from every other — a target failing empty
+    # for a month would open thirty rows for one condition and the
+    # heartbeat's "oldest kind" detail would be meaningless. The clause
+    # is in the SQL; until this round nothing said it had to stay.
+    assert "NULLS NOT DISTINCT" in body, (
+        "the partial unique index lost NULLS NOT DISTINCT — an "
+        "`empty_export` incident (range_start IS NULL) would duplicate on "
+        f"every run instead of refreshing: {body}"
+    )
 
 
 @pytest.mark.parametrize(
