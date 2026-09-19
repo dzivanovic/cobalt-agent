@@ -996,9 +996,17 @@ def test_a_concurrent_update_to_a_row_the_migration_updates_fails_loud(monkeypat
 JOBS_TABLE = "cobalt_jobs"
 
 #: Hard ceiling, in seconds, on the lock wait in test (g). A hang must
-#: FAIL the test, never hang the suite: the harness carries no
-#: `lock_timeout` (deliberately out of scope), so the ceiling lives here.
+#: FAIL the test, never hang the suite, so the ceiling lives here.
 LOCK_CEILING_S = 20.0
+
+#: A1 (2026-09-19, Astra): the SERVER-SIDE ceiling on test (g)'s worker
+#: connection, a little above `LOCK_CEILING_S`. `LOCK_CEILING_S` only
+#: bounds how long the MAIN thread waits; it cannot end a statement
+#: already running on the worker's connection. Without this, a lock wait
+#: that outlived the join left a backend queued for ACCESS EXCLUSIVE on
+#: `cobalt_dev` until the interpreter exited — in front of every other
+#: session wanting that table. With it, a hung ALTER ends ITSELF.
+WORKER_STATEMENT_TIMEOUT_S = 25
 
 
 def _migration_0003_sql() -> str:
@@ -1045,12 +1053,23 @@ def _touch_a_job_row(conn) -> None:
     )
 
 
-def _wait_for_a_blocked_lock(watcher, table: str, ceiling: float) -> bool:
-    """True once SOME session is waiting for a lock on `table`.
+def _wait_for_a_blocked_lock(watcher, table: str, ceiling: float, pid: int) -> bool:
+    """True once THE WORKER'S OWN backend is waiting for ACCESS EXCLUSIVE
+    on `table`.
 
     Polling the catalog rather than sleeping a guessed interval: the test
     must know the ALTER is actually BLOCKED before it releases the other
     session, or it proves nothing about waiting.
+
+    A2 (2026-09-19, Astra; `cto-2026-09-19.md` §8). This used to count
+    ANY ungranted lock on the table, in ANY mode, held by ANY session —
+    so a concurrent suite run, a stray `psql`, or the test's OWN other
+    session queueing behind something satisfied it, and the caller
+    proceeded believing it had reproduced the interleaving when it had
+    not. All three filters are now required: the backend this test
+    started (`pid`, read from the worker connection BEFORE its thread
+    starts), the mode an `ALTER TABLE` actually asks for
+    (`AccessExclusiveLock`), and not yet granted.
     """
     schema = cli._schema_of(watcher, table)
     deadline = time.perf_counter() + ceiling
@@ -1061,9 +1080,12 @@ def _wait_for_a_blocked_lock(watcher, table: str, ceiling: float) -> bool:
             FROM pg_locks l
             JOIN pg_class c ON c.oid = l.relation
             JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE c.relname = %s AND n.nspname = %s AND NOT l.granted
+            WHERE c.relname = %s AND n.nspname = %s
+              AND l.pid = %s
+              AND l.mode = 'AccessExclusiveLock'
+              AND NOT l.granted
             """,
-            (table, schema),
+            (table, schema, pid),
         ).fetchone()[0]
         if blocked:
             return True
@@ -1212,6 +1234,28 @@ def test_the_alter_waits_for_an_open_transaction_and_then_completes():
     tells a deploy nothing.
 
     EXPECTED: the ALTER blocks, then completes; no error either way.
+
+    HOW THIS TEST'S CEILINGS RELATE TO THE HARNESS'S OWN `lock_timeout`
+    (A1, 2026-09-19). They do not overlap, and that is worth stating
+    rather than assuming. This test calls `cli._connect` and executes the
+    ALTER ITSELF; it never goes through `cmd_migrate`, which is the only
+    place `SET LOCAL lock_timeout = '<DEFAULT_LOCK_TIMEOUT_S>s'` is
+    issued. So the harness's 30 s ceiling is NOT in force here at all.
+    What bounds this test, in the order the clocks run out:
+
+      1. `LOCK_CEILING_S` (20 s) — the MAIN thread's `join` gives up and
+         the test has its verdict. This is what fires first, so
+         **the message a reader sees is this test's own "did not
+         finish" assertion**, never a driver error.
+      2. `WORKER_STATEMENT_TIMEOUT_S` (25 s), set on the worker
+         connection below — the server ends a still-running ALTER by
+         itself, so no backend is left queued on `cobalt_dev`. It is
+         deliberately ABOVE (1): a legitimate wait must be reported by
+         this test, not pre-empted by the server.
+
+    On the hung path the test also CANCELS the worker's statement from
+    the main thread, joins again and closes the connection — and still
+    fails with the same message.
     """
     other = db.connect_migration(env.DEV_DB_NAME)
     watcher = db.connect_migration(env.DEV_DB_NAME)
@@ -1231,22 +1275,48 @@ def test_the_alter_waits_for_an_open_transaction_and_then_completes():
     after = None
     try:
         before = cli._probe(conn, JOBS_TABLE)
+        # A1: the worker's own server-side ceiling, set on the open
+        # transaction before anything can block on it. `SET LOCAL` so it
+        # dies with this transaction and cannot leak into a later one.
+        conn.execute(f"SET LOCAL statement_timeout = '{WORKER_STATEMENT_TIMEOUT_S}s'")
+        # A2: the backend the ALTER will run on, read from the main
+        # thread BEFORE the worker thread starts — so the lock probe
+        # below can ask about THIS session and no other.
+        worker_pid = conn.execute("SELECT pg_backend_pid()").fetchone()[0]
         other.autocommit = False  # the other session's transaction stays OPEN
         _touch_a_job_row(other)
         thread.start()
-        blocked = _wait_for_a_blocked_lock(watcher, JOBS_TABLE, LOCK_CEILING_S)
+        blocked = _wait_for_a_blocked_lock(
+            watcher, JOBS_TABLE, LOCK_CEILING_S, worker_pid
+        )
         other.commit()
         committed = True
         thread.join(timeout=LOCK_CEILING_S)
         hung = thread.is_alive()
-        if not hung:
+        if hung:
+            # A1: the verdict is already decided (the assertion below
+            # fails either way) — this is cleanup, so the test cannot
+            # leave a backend waiting for ACCESS EXCLUSIVE on
+            # `cobalt_dev` in front of every other session. `cancel()` is
+            # psycopg's documented cross-thread call, the one thing the
+            # main thread may do to a connection another thread is using.
+            # The second join is given the SERVER ceiling's worth of
+            # time, because that is the backstop if the cancel does not
+            # land.
+            conn.cancel()
+            thread.join(timeout=WORKER_STATEMENT_TIMEOUT_S)
+        else:
             after = cli._probe(conn, JOBS_TABLE)
     finally:
         if not committed:
             other.commit()
         other.close()
         watcher.close()
-        # Only from THIS thread once the ALTER is done with the connection.
+        # Only from THIS thread once the ALTER is done with the
+        # connection. After the cancel + second join above, the HUNG path
+        # reaches here with a finished thread too, so the worker's
+        # transaction is rolled back and its connection closed on both
+        # paths (A1).
         if not thread.is_alive():
             conn.rollback()
             conn.close()
