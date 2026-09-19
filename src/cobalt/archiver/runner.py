@@ -29,21 +29,98 @@ from .store import BarStore
 
 GENTLE_SLEEP_SECONDS = 1.2
 
+#: The two tunables that name the premarket window R34 closed to the
+#: backfill. Read, never hardcoded (L10): if Dejan moves the session, the
+#: bound moves with it and the refusal message says so.
+PREMARKET_OPEN_KEY = "session.premarket_open"
+PREMARKET_CLOSE_KEY = "session.rth_open"
 
-def _check_demand(targets: list[tuple[str, Interval]], mode: str) -> None:
-    """L53 (S2-P4 R1-13/R2-5): the ONE shared total-demand gate, before the
-    first request. The nightly run is the registry's `archiver` consumer; a
-    manual backfill is unscheduled, so it counts against every window."""
+#: Minutes in a day, for the one place a backfill's window can run past
+#: midnight and meet the NEXT morning's premarket.
+_DAY_MINUTES = 1440
+
+
+class BackfillWindowRefused(RuntimeError):
+    """A manual backfill was invoked inside — or would run into — the
+    premarket window that `cto-2026-09-19.md` §4 R34 "B" closed to it."""
+
+
+def _premarket_window():
+    """04:00-09:30 ET, from the session tunables."""
+    from cobalt.radar.notes import DemandWindow
+    from cobalt.taxonomy.loader import load_tunables
+
+    tunables = load_tunables().by_key
+    return DemandWindow.between(
+        tunables[PREMARKET_OPEN_KEY].value, tunables[PREMARKET_CLOSE_KEY].value
+    )
+
+
+def _backfill_window(targets: list[tuple[str, Interval]], instant):
+    """The window this backfill will ACTUALLY hold the transport for:
+    `[instant, instant + len(targets) x GENTLE_SLEEP_SECONDS)` in ET.
+
+    A manual backfill has no schedule, so before R34 it declared
+    `window=None` — which `radar/notes.py` defines as UNBOUNDED and
+    therefore counts against every other consumer's window, including
+    the radar's 04:00 peak. It is not unbounded; it is bounded by the
+    clock it was started on and by its own pacing bound, and that is
+    what it now says. The conversion to whole minutes is
+    `DemandWindow.from_at`, the same one the nightly `archiver`
+    consumer's window is built with.
+    """
+    from cobalt.radar.notes import DemandWindow
+    from cobalt.session.clock import SessionClock
+
+    et = SessionClock.to_et(instant)
+    seconds = max(1, round(len(targets) * GENTLE_SLEEP_SECONDS))
+    return DemandWindow.from_at(f"{et.hour:02d}:{et.minute:02d}", seconds)
+
+
+def _check_demand(targets: list[tuple[str, Interval]], mode: str, now=None):
+    """L53 (S2-P4 R1-13/R2-5): the ONE shared total-demand gate, before
+    the first request. The nightly run is the registry's `archiver`
+    consumer, untouched by R34.
+
+    A manual backfill is bounded TWICE, and both halves are the same
+    fact stated to two audiences (`cto-2026-09-19.md` §4 R34 "B",
+    2026-09-19 — the ruling that closed the archiver DevDoc's open
+    deployment gate; the ceiling `radar.finviz_max_rpm` stays at 50 and
+    is not read, written or reasoned about here):
+
+    * it REFUSES, loudly, if the run would touch 04:00-09:30 ET — the
+      premarket window, where the radar already holds the ceiling and
+      where a throttle on a historically shared Finviz login costs a
+      trading morning; and
+    * it declares that same enforced interval as its `DemandWindow`, so
+      the shared gate counts it where it really is instead of against
+      every window at once.
+
+    The two halves are written together on purpose: a declared window
+    the runner did not enforce would be a lie to the demand model, and
+    an enforced window the model never saw would leave the 04:00 peak
+    exactly as overstated as `window=None` left it.
+    """
     from cobalt.radar.notes import DemandConsumer, check_scheduled_demand
 
     if mode == "full":
-        check_scheduled_demand("archiver")
-        return
+        return check_scheduled_demand("archiver")
+
+    instant = (now if now is not None else _now)()
+    window = _backfill_window(targets, instant)
+    premarket = _premarket_window()
+    if window.overlaps(premarket) or window.end_min > _DAY_MINUTES + premarket.start_min:
+        raise BackfillWindowRefused(
+            f"REFUSED: the backfill is bounded out of {premarket.describe()} "
+            f"(cto-2026-09-19.md §4 R34 \"B\") — this run would hold the "
+            f"transport {window.describe()} for {len(targets)} request(s). "
+            f"Start it outside the premarket window."
+        )
     backfill = DemandConsumer(
-        name="backfill", rpm=min(len(targets), 60 / GENTLE_SLEEP_SECONDS), window=None,
-        basis=f"{len(targets)} request(s), pacing bound, unscheduled",
+        name="backfill", rpm=min(len(targets), 60 / GENTLE_SLEEP_SECONDS), window=window,
+        basis=f"{len(targets)} request(s), pacing bound, {window.describe()}",
     )
-    check_scheduled_demand("backfill", extra=[backfill])
+    return check_scheduled_demand("backfill", extra=[backfill])
 
 
 def _now():
@@ -129,7 +206,7 @@ async def _run_targets(
     are kept side by side by the 2026-09-19 rebase; neither is a choice
     against the other.
     """
-    _check_demand(targets, mode)
+    _check_demand(targets, mode, now=now)
     cfg = settings if settings is not None else load_archiver_settings()
     store = store if store is not None else BarStore()
     fetch_fn = fetch if fetch is not None else _default_fetch

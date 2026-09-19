@@ -330,10 +330,18 @@ def test_the_complete_list_of_upsert_mode_additions_is_pinned(wired):
 
 
 def test_run_targets_mode_still_means_the_report_scope(wired):
+    """Both assertions are the ones this test was written with; only the
+    CLOCK moved. It drives a backfill, and from `cto-2026-09-19.md` §4
+    R34 "B" a backfill declares the window it runs in and is refused
+    inside 04:00-09:30 ET, so an hour a backfill may actually hold the
+    transport is now part of driving one. `FETCH_AT` is 16:30 ET, inside
+    the radar's 04:00-20:00 window where the radar alone already holds
+    the whole ceiling; `BACKFILL_AT` is 22:00 ET, which no scheduled
+    consumer holds. See `BACKFILL_AT` and the R34 section below."""
     store = wired(FakeStore())
     summary = run([("TESTARCH", Interval.I5)], store=store,
                   fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(),
-                  mode="backfill:TESTARCH")
+                  mode="backfill:TESTARCH", now=BACKFILL_AT)
     assert summary.mode == "backfill:TESTARCH"
     assert summary.write_mode == "upsert"
 
@@ -795,3 +803,122 @@ def test_an_upsert_row_after_an_append_row_goes_back_to_its_own_table(wired, tmp
     assert content.count("## Back to upsert mode") == 1
     rows = [line for line in content.splitlines() if line.startswith("| 2026")]
     assert rows[0].count("|") == 15 and rows[1].count("|") == 9
+
+
+# =====================================================================
+# R34 "B" — THE BACKFILL IS BOUNDED OUT OF THE PREMARKET WINDOW
+# (`cto-2026-09-19.md` §4 R34, 2026-09-19)
+#
+# The rebase onto post-P4 `main` made L53's shared gate fire on the
+# archiver: with `replay` registered, the inventory at 04:00 ET reached
+# 51.00 rpm against `radar.finviz_max_rpm = 50`, because the backfill
+# declared `window=None` — UNBOUNDED, counted against every window.
+# Dejan ruled B: the CEILING STAYS AT 50 and the backfill is bounded
+# out of 04:00-09:30 ET. These tests are that bound.
+# =====================================================================
+
+#: 2026-09-18 22:00 ET — outside the premarket bound AND clear of every
+#: scheduled consumer's window (radar 04:00-20:00, archiver 20:30-21:10,
+#: replay 21:10-21:35), so this is an hour a backfill may actually run.
+BACKFILL_AT = datetime(2026, 9, 19, 2, 0, tzinfo=UTC)
+#: 2026-09-18 08:00 ET — inside 04:00-09:30, the window R34 closed.
+PREMARKET_AT = datetime(2026, 9, 18, 12, 0, tzinfo=UTC)
+#: 2026-09-18 03:50 ET — outside it by 10 minutes, but a long enough
+#: backfill RUNS into it.
+JUST_BEFORE_PREMARKET_AT = datetime(2026, 9, 18, 7, 50, tzinfo=UTC)
+
+
+def _never_fetch():
+    async def _fetch(*args, **kwargs):
+        raise AssertionError("Finviz was contacted despite the premarket bound")
+
+    return _fetch
+
+
+def test_a_backfill_inside_the_premarket_window_is_refused_before_any_request(wired):
+    """R34 "B", the loud half: 04:00-09:30 ET is closed to the backfill,
+    and the refusal happens before the lock, the store and the token —
+    so no request is sent and nothing is written."""
+    store = wired(FakeStore())
+    with pytest.raises(runner_mod.BackfillWindowRefused) as e:
+        run([("TESTARCH", Interval.I5)], store=store, fetch=_never_fetch(),
+            cfg=settings(), mode="backfill:TESTARCH", now=PREMARKET_AT)
+    message = str(e.value)
+    assert "04:00-09:30 ET" in message, message
+    assert "R34" in message and "cto-2026-09-19" in message, message
+    assert store.names == [], "the refusal must come before the run lock"
+    assert store.write_calls == []
+
+
+def test_a_backfill_that_would_RUN_into_the_premarket_window_is_refused(wired):
+    """The bound is on the run's WINDOW, not on its first instant: a
+    backfill that starts at 03:50 and paces 40 minutes of requests is
+    inside 04:00-09:30 for most of its life."""
+    targets = [("TESTARCH", Interval.I5)] * 2000
+    store = wired(FakeStore())
+    with pytest.raises(runner_mod.BackfillWindowRefused) as e:
+        run(targets, store=store, fetch=_never_fetch(), cfg=settings(),
+            mode="backfill:TESTARCH", now=JUST_BEFORE_PREMARKET_AT)
+    assert "04:00-09:30 ET" in str(e.value)
+    assert store.names == []
+
+
+def test_the_backfill_declares_the_window_it_actually_runs_in(wired):
+    """The declared `DemandWindow` is not a label: it is `[now, now +
+    len(targets) x GENTLE_SLEEP_SECONDS)` in ET, the interval the runner
+    then enforces. A window the runner did not enforce would be a lie to
+    the shared demand model."""
+    window = runner_mod._backfill_window([("TESTARCH", Interval.I5)] * 100, BACKFILL_AT)
+    assert window.describe() == "22:00-22:02 ET", window.describe()
+    assert window.overlaps(runner_mod._premarket_window()) is False
+
+
+def test_a_backfill_outside_the_premarket_window_is_allowed_under_the_ceiling(wired):
+    """The quiet half: at an hour no scheduled consumer holds, the same
+    backfill runs and the L53 total stays at or under the ceiling."""
+    demand = runner_mod._check_demand(
+        [("TESTARCH", Interval.I5)], "backfill:TESTARCH", now=lambda: BACKFILL_AT
+    )
+    assert demand is not None
+    assert demand.ceiling == 50
+    assert demand.peak_rpm <= 50, demand.describe()
+    assert "backfill" in demand.counted
+
+    store = wired(FakeStore())
+    summary = run([("TESTARCH", Interval.I5)], store=store,
+                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(),
+                  mode="backfill:TESTARCH", now=BACKFILL_AT)
+    assert summary.mode == "backfill:TESTARCH"
+    assert store.write_calls == ["upsert_bars"]
+
+
+def test_the_nightly_full_run_is_untouched_by_the_backfill_bound():
+    """R34 leaves the 20:30 `full` run alone. It is the registry's own
+    `archiver` consumer, it is not the backfill, and the premarket bound
+    does not apply to it — not even when the clock says 08:00 ET."""
+    demand = runner_mod._check_demand(
+        [("TESTARCH", Interval.I5)], "full", now=lambda: PREMARKET_AT
+    )
+    assert demand is not None
+    assert demand.subject == "archiver"
+    assert demand.peak_rpm <= 50, demand.describe()
+
+
+def test_the_finviz_ceiling_is_still_fifty():
+    """R34 "B" changed the backfill's window and NOTHING else. The
+    ceiling is Dejan's (L53) and it did not move."""
+    from cobalt.taxonomy.loader import load_tunables
+
+    assert int(load_tunables().by_key["radar.finviz_max_rpm"].value) == 50
+
+
+def test_the_premarket_bound_is_read_from_the_session_tunables():
+    """Config-as-code (L10): 04:00 and 09:30 are `session.premarket_open`
+    and `session.rth_open`, not two literals in the runner."""
+    from cobalt.taxonomy.loader import load_tunables
+
+    tunables = load_tunables().by_key
+    window = runner_mod._premarket_window()
+    assert window.describe() == (
+        f"{tunables['session.premarket_open'].value}-{tunables['session.rth_open'].value} ET"
+    )
