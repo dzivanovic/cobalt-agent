@@ -1,0 +1,681 @@
+diff --git a/configs/cobalt/taxonomy/tunables.yaml b/configs/cobalt/taxonomy/tunables.yaml
+index 9659368..aab4207 100644
+--- a/configs/cobalt/taxonomy/tunables.yaml
++++ b/configs/cobalt/taxonomy/tunables.yaml
+@@ -520,6 +520,96 @@ tunables:
+     source: ruling
+     consumers: ["cobalt.radar.poller (RTH stale-bar poll_failures entry)"]
+ 
++  # --- Bar Archiver: append-only redesign (2026-09-19) --------------------
++  # FINAL design `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md`
++  # §10, derived by the four-house tribunal (L67) from the owner's R14/R15
++  # ("know where the watermark is for each ticker … only add the new bars")
++  # and his R8 09-19 09:30 ET "A on archiver" (repairs only in a quiet
++  # window; the live radar poller is NOT touched).
++  #
++  # THE MODE SHIPS AS `upsert` — today's behaviour byte for byte. The switch
++  # to `append` is HIS ruling on the shadow numbers (L7): a reviewed commit
++  # to the row below, after N shadow nights, never a default that drifted.
++  # A test pins this value.
++  - key: archiver.write_mode
++    value: upsert
++    unit: label
++    scope: global
++    dynamic: false
++    status: solidified
++    source: ruling
++    consumers: ["cobalt.archiver.settings.ArchiverSettings (upsert | append; the nightly write path)", "solidified by the FINAL design 2026-09-19; the switch to 'append' is the owner's ruling on the shadow numbers (L7)"]
++
++  # PROPOSED (§10): the operational lever if the pre-write shadow read ever
++  # costs a night. Ignored in `append` mode, where the comparison IS the gate.
++  - key: archiver.shadow_compare
++    value: "on"
++    unit: label
++    scope: global
++    dynamic: false
++    status: proposed
++    source: ruling
++    consumers: ["cobalt.archiver.settings.ArchiverSettings (on | off)", "cobalt.archiver.shadow (the pre-write comparison and its nightly artifact)"]
++
++  # PROPOSED (§10): the shadow read's own statement_timeout. The shadow can
++  # never fail or slow-fail a target, so its read is bounded rather than trusted.
++  - key: archiver.shadow_statement_timeout_s
++    value: 10
++    unit: count
++    scope: global
++    dynamic: false
++    status: proposed
++    source: ruling
++    consumers: ["cobalt.archiver.shadow (statement_timeout on the stored-range read)"]
++
++  # PROPOSED (§10): how many nights of `data/archiver-shadow/<date>.jsonl`
++  # are kept. `shadow-report` reads across them for persisted/vanished/appeared.
++  - key: archiver.shadow_retention_nights
++    value: 30
++    unit: count
++    scope: global
++    dynamic: false
++    status: proposed
++    source: ruling
++    consumers: ["cobalt.archiver.shadow (artifact retention)"]
++
++  # THE DESK'S NUMBER (§16). Q2 of the quiet window: a repair may not start
++  # within this many minutes of the next SCANNED session opening.
++  - key: archiver.repair.quiet_before_open_min
++    value: 10
++    unit: min
++    scope: global
++    dynamic: false
++    status: solidified
++    source: ruling
++    consumers: ["cobalt.archiver.quiet (Q2: distance to the next scanning open)", "the desk's number, cto-2026-09-19.md §16 / R8"]
++
++  # THE DESK'S NUMBER (§16). Q3: how long after a cycle is DERIVED to have
++  # completed before the radar counts as quiet.
++  - key: archiver.repair.quiet_after_cycle_min
++    value: 5
++    unit: min
++    scope: global
++    dynamic: false
++    status: solidified
++    source: ruling
++    consumers: ["cobalt.archiver.quiet (Q3: quiet interval after the last poll cycle)", "the desk's number, cto-2026-09-19.md §16 / R8"]
++
++  # PROPOSED (§14 O-2). A STATED UPPER BOUND on a radar cycle's length, not a
++  # measurement: `radar_pool.last_scan_at` holds a cycle's START and the
++  # COMPLETION instant is persisted nowhere (§2), so Q3 derives the finish
++  # from start + this bound. Basis of 30: pool cap x (30 s transport timeout +
++  # token-bucket spacing) for a cap of ~50; the cap is the owner's (L53) and
++  # can change. This estimate IS Gemini's and Astra's recorded dissent (§13).
++  - key: archiver.repair.cycle_max_min
++    value: 30
++    unit: min
++    scope: global
++    dynamic: false
++    status: proposed
++    source: ruling
++    consumers: ["cobalt.archiver.quiet (Q3: the derived cycle completion bound)"]
++
+   # --- S2-P2 radar cards: dot colours (09-14 accepted defaults) ----------
+   # Engine tunables, never trader_settings (L53): `cobalt settings load
+   # --card` refuses any card.dot.* / card.health.* key by name.
+diff --git a/src/cobalt/archiver/settings.py b/src/cobalt/archiver/settings.py
+new file mode 100644
+index 0000000..83a277e
+--- /dev/null
++++ b/src/cobalt/archiver/settings.py
+@@ -0,0 +1,285 @@
++"""The archiver's engine tunables — ONE Pydantic model, read through the
++ONE tunables loader (spec §10; L3, L10, L53).
++
++WHY THIS MODULE EXISTS AT ALL. The append-only redesign
++(`docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md`) adds a
++WRITE MODE to a job that writes market history every night, and L7 says
++a flip from one source of truth to another is never a default that
++drifted — it is a shadow run, numbers, and the owner's ruling. So the
++mode is a config row with exactly two legal spellings, validated on
++load, printed by `cobalt validate`, and pinned to `upsert` by a test.
++
++THERE IS NO SECOND YAML READER HERE (L3). `configs/cobalt/taxonomy/
++tunables.yaml` is the registry that already carries
++`radar.poll_overlap_bars`; this module reads it through
++`cobalt.taxonomy.loader.load_tunables()` exactly as `radar/config.py`
++does, and adds a schema on top.
++
++FAIL LOUD, NAMING THE KEY (L1). Every refusal below names the tunables
++key an operator has to go and fix — `archiver.write_mode`, not
++`write_mode`. A missing row is a crash, never a built-in default: a
++defaulted write mode is the one failure this whole design exists to
++make impossible.
++"""
++
++from __future__ import annotations
++
++from enum import Enum
++
++from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
++
++from cobalt.taxonomy.loader import TaxonomyConfigError, load_tunables
++from cobalt.taxonomy.tunables import TunableRow, TunableUnit
++
++
++class ArchiverSettingsError(RuntimeError):
++    """A tunables row the archiver needs is missing, mistyped or illegal."""
++
++
++class WriteMode(str, Enum):
++    """The nightly write path. EXACTLY these two spellings (§10).
++
++    `upsert` is today's behaviour byte for byte (§5, mode isolation):
++    the whole export through `ON CONFLICT DO UPDATE`. `append` is the
++    design's night: only bars that do not exist are inserted, and no
++    stored row is ever rewritten.
++    """
++
++    UPSERT = "upsert"
++    APPEND = "append"
++
++
++class ShadowCompare(str, Enum):
++    """The pre-write shadow comparison, the evidence for the switch (§5).
++
++    `off` is the operational lever if the shadow read ever costs a
++    night (O-6): it turns the read off without deploying code.
++    """
++
++    ON = "on"
++    OFF = "off"
++
++
++#: The seven rows this module reads, with the unit each one must carry.
++#: The unit check is not ceremony: a `min` row silently read as a
++#: `count` is how a ten-minute quiet window becomes ten of something
++#: else.
++ARCHIVER_TUNABLE_UNITS: dict[str, TunableUnit] = {
++    "archiver.write_mode": TunableUnit.LABEL,
++    "archiver.shadow_compare": TunableUnit.LABEL,
++    "archiver.shadow_statement_timeout_s": TunableUnit.COUNT,
++    "archiver.shadow_retention_nights": TunableUnit.COUNT,
++    "archiver.repair.quiet_before_open_min": TunableUnit.MIN,
++    "archiver.repair.quiet_after_cycle_min": TunableUnit.MIN,
++    "archiver.repair.cycle_max_min": TunableUnit.MIN,
++}
++
++#: `archiver.repair.<name>` -> the field of `RepairSettings`.
++_REPAIR_FIELDS = {
++    "archiver.repair.quiet_before_open_min": "quiet_before_open_min",
++    "archiver.repair.quiet_after_cycle_min": "quiet_after_cycle_min",
++    "archiver.repair.cycle_max_min": "cycle_max_min",
++}
++
++#: `<top-level key>` -> the field of `ArchiverSettings`.
++_TOP_FIELDS = {
++    "archiver.write_mode": "write_mode",
++    "archiver.shadow_compare": "shadow_compare",
++    "archiver.shadow_statement_timeout_s": "shadow_statement_timeout_s",
++    "archiver.shadow_retention_nights": "shadow_retention_nights",
++}
++
++#: field -> the tunables key it came from, for error messages.
++_FIELD_KEYS = {
++    **{field: key for key, field in _TOP_FIELDS.items()},
++    **{field: key for key, field in _REPAIR_FIELDS.items()},
++}
++
++
++def _positive_int(value: object, key: str) -> int:
++    """A count of whole minutes or seconds. `bool` is not an integer here
++    and `"10"` is not a number — a YAML row that quotes its value is a
++    row somebody edited by hand, and coercing it hides that."""
++    if isinstance(value, bool) or not isinstance(value, int):
++        raise ValueError(
++            f"{key} must be a positive INTEGER, got "
++            f"{type(value).__name__} {value!r}"
++        )
++    if value <= 0:
++        raise ValueError(f"{key} must be a positive integer, got {value!r}")
++    return value
++
++
++class RepairSettings(BaseModel):
++    """The quiet window's three numbers (§8).
++
++    `cycle_max_min` is a STATED UPPER BOUND on a radar cycle's length,
++    not a measurement: the radar persists a cycle's START and never its
++    completion (§2), so Q3 derives "the cycle has finished" from
++    start + this bound. That is precisely Gemini's and Astra's dissent
++    (§13) and spec O-2 — it is recorded here so the next reader of this
++    file meets it before relying on the number.
++    """
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    quiet_before_open_min: int
++    quiet_after_cycle_min: int
++    cycle_max_min: int
++
++    @field_validator("quiet_before_open_min", "quiet_after_cycle_min", "cycle_max_min", mode="before")
++    @classmethod
++    def _positive(cls, v, info):
++        return _positive_int(v, _FIELD_KEYS[info.field_name])
++
++
++class ArchiverSettings(BaseModel):
++    """Spec §10's seven keys, resolved once per process."""
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    write_mode: WriteMode
++    shadow_compare: ShadowCompare
++    shadow_statement_timeout_s: int
++    shadow_retention_nights: int
++    repair: RepairSettings
++
++    @field_validator("write_mode", mode="before")
++    @classmethod
++    def _exact_write_mode(cls, v):
++        """No `strip()`, no `lower()`, no coercion (L1).
++
++        `Append`, ` upsert` and `""` are refused rather than repaired,
++        because the repair a human would expect ("they obviously meant
++        append") is exactly the silent switch of the production write
++        path that L7 forbids.
++        """
++        legal = [m.value for m in WriteMode]
++        if not isinstance(v, str) or v not in legal:
++            raise ValueError(
++                f"archiver.write_mode must be EXACTLY one of {legal} — got "
++                f"{v!r}. Case, surrounding whitespace and an empty value are "
++                "all refused: the write mode of the nightly archiver is the "
++                "owner's ruling (L7), never a near-miss that was tidied up."
++            )
++        return v
++
++    @field_validator("shadow_compare", mode="before")
++    @classmethod
++    def _exact_shadow_compare(cls, v):
++        legal = [m.value for m in ShadowCompare]
++        if not isinstance(v, str) or v not in legal:
++            raise ValueError(
++                f"archiver.shadow_compare must be EXACTLY one of {legal} — got {v!r}"
++            )
++        return v
++
++    @field_validator("shadow_statement_timeout_s", "shadow_retention_nights", mode="before")
++    @classmethod
++    def _positive(cls, v, info):
++        return _positive_int(v, _FIELD_KEYS[info.field_name])
++
++    @property
++    def shadow_enabled(self) -> bool:
++        """Whether tonight writes a shadow artifact.
++
++        §5: the shadow compare is the evidence for the switch and runs
++        only in `upsert` mode. In `append` the same comparison IS the
++        gate, so the key is ignored there rather than doubling the read.
++        """
++        return self.write_mode is WriteMode.UPSERT and self.shadow_compare is ShadowCompare.ON
++
++
++def _value(registry: dict[str, TunableRow], key: str) -> object:
++    row = registry.get(key)
++    if row is None:
++        raise ArchiverSettingsError(
++            f"tunables.yaml: missing {key} — the archiver reads every one of "
++            f"its {len(ARCHIVER_TUNABLE_UNITS)} settings from config and has "
++            "no built-in default (L1, L10)."
++        )
++    expected = ARCHIVER_TUNABLE_UNITS[key]
++    if row.unit is not expected:
++        raise ArchiverSettingsError(
++            f"tunables.yaml: {key} has unit {row.unit.value!r}, expected "
++            f"{expected.value!r}"
++        )
++    return row.value
++
++
++def load_archiver_settings(
++    registry: dict[str, TunableRow] | None = None,
++) -> ArchiverSettings:
++    """Resolve spec §10's seven keys into the one settings model.
++
++    `registry` is a TEST seam (the `by_key` mapping the loader already
++    returns); production passes nothing and reads the shipped file.
++    """
++    if registry is None:
++        try:
++            registry = load_tunables().by_key
++        except TaxonomyConfigError as e:
++            raise ArchiverSettingsError(f"archiver settings unavailable: {e}") from e
++
++    payload = {field: _value(registry, key) for key, field in _TOP_FIELDS.items()}
++    payload["repair"] = {
++        field: _value(registry, key) for key, field in _REPAIR_FIELDS.items()
++    }
++    try:
++        return ArchiverSettings(**payload)
++    except ValidationError as e:
++        raise ArchiverSettingsError(
++            "tunables.yaml: invalid archiver settings:\n" + _name_the_keys(e)
++        ) from e
++
++
++def _name_the_keys(error: ValidationError) -> str:
++    """Pydantic reports `write_mode`; an operator needs `archiver.write_mode`.
++
++    The mapping is done here rather than with validation aliases so that
++    the nested `repair.*` rows read the same way as the top-level ones
++    and there is one place to look when a message is wrong.
++    """
++    lines = []
++    for item in error.errors():
++        loc = [str(part) for part in item["loc"] if not str(part).startswith("function-")]
++        field = loc[-1] if loc else ""
++        key = _FIELD_KEYS.get(field, field)
++        lines.append(f"  {key}: {item['msg']}")
++    return "\n".join(lines)
++
++
++def validate_command_lines() -> list[str]:
++    """What `cobalt validate` prints for this config family (L10).
++
++    A list of lines rather than `print` calls so the gate is testable
++    without running the whole F16 sweep (which reads the vault).
++    """
++    settings = load_archiver_settings()
++    return [
++        "",
++        f"Archiver (spec §10): {len(ARCHIVER_TUNABLE_UNITS)} tunables rows resolved.",
++        f"  archiver.write_mode = {settings.write_mode.value} "
++        f"(legal: {', '.join(m.value for m in WriteMode)}; the switch to "
++        "'append' is the owner's ruling on the shadow numbers, L7)",
++        f"  archiver.shadow_compare = {settings.shadow_compare.value} "
++        f"-> shadow artifact tonight: {'yes' if settings.shadow_enabled else 'no'}",
++        f"  archiver.shadow_statement_timeout_s = {settings.shadow_statement_timeout_s}",
++        f"  archiver.shadow_retention_nights = {settings.shadow_retention_nights}",
++        f"  archiver.repair.quiet_before_open_min = {settings.repair.quiet_before_open_min}",
++        f"  archiver.repair.quiet_after_cycle_min = {settings.repair.quiet_after_cycle_min}",
++        f"  archiver.repair.cycle_max_min = {settings.repair.cycle_max_min} "
++        "(a STATED upper bound on a radar cycle, not a measurement — spec O-2)",
++    ]
++
++
++__all__ = [
++    "ARCHIVER_TUNABLE_UNITS",
++    "ArchiverSettings",
++    "ArchiverSettingsError",
++    "RepairSettings",
++    "ShadowCompare",
++    "WriteMode",
++    "load_archiver_settings",
++    "validate_command_lines",
++]
+diff --git a/src/cobalt/db_migrations/0010_archive_progress.rollback.sql b/src/cobalt/db_migrations/0010_archive_progress.rollback.sql
+new file mode 100644
+index 0000000..41b0184
+--- /dev/null
++++ b/src/cobalt/db_migrations/0010_archive_progress.rollback.sql
+@@ -0,0 +1,15 @@
++-- 0010 rollback. ADDITIVE migration, ADDITIVE rollback: this drops the
++-- one table 0010 created and touches no other object. `system.bars` is
++-- not read, not written and not altered here.
++--
++-- COST: every target's `archived_through` is lost, so the next `append`
++-- night BOOTSTRAPS each target again (compare + DO NOTHING over the whole
++-- available export, §4). No stored bar is affected — a bootstrap writes
++-- nothing that is already there, it only re-reads. The run report says
++-- `bootstrap` and states that history before the export's bounds is
++-- UNASSESSED.
++--
++-- Run after 0011's rollback; `--down-to 0007` does both in REVERSE order
++-- in one invocation.
++
++DROP TABLE IF EXISTS system.archive_progress;
+diff --git a/src/cobalt/db_migrations/0010_archive_progress.sql b/src/cobalt/db_migrations/0010_archive_progress.sql
+new file mode 100644
+index 0000000..3b13293
+--- /dev/null
++++ b/src/cobalt/db_migrations/0010_archive_progress.sql
+@@ -0,0 +1,75 @@
++-- 0010: system.archive_progress — the Bar Archiver's OWN watermark, per
++-- (ticker, interval). Append-only redesign, FINAL design
++-- `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §4 and §11,
++-- derived by the four-house tribunal (L67) from the owner's R14/R15:
++-- "i want to know where the watermark is for each ticker and I want to
++-- only add the new [bars] in the database that don't exist."
++--
++-- WHY THIS IS NOT `max(ts)`. `BarStore.watermark()` reads `max(ts)` over
++-- `system.bars`, and the RADAR POLLER writes that table too — every 100 s,
++-- i1, with a five-bar overlap. So `max(ts)` advances past bars the
++-- ARCHIVER never saw, and using it as the archiver's progress loses every
++-- bar the vendor adds late (round-2 sequences, `TRIBUNAL-R3.md`). This
++-- table is the archiver's own record and nothing else writes it.
++--
++-- WHAT `archived_through` MEANS, EXACTLY (§4): the `ts` — the bar OPEN, in
++-- UTC — of the newest COMPLETE bar of an ACCEPTED export. A BAR
++-- timestamp, never a clock time, never a bar-close time, never
++-- `fetch_started_at`. It records that the AVAILABLE export was processed
++-- through that key; it does not claim the vendor supplied every bar.
++-- Monotonic across accepted runs (the writer uses `GREATEST`), frozen on a
++-- failed, withheld, empty or regressed target.
++--
++-- A ROW IS NEVER DELETED — not when a ticker leaves the trader's Lists
++-- note. A returning target meets its old `archived_through`, which is what
++-- makes the dropped-and-re-added sequence open a `gap` incident (round-2
++-- sequence #8) instead of silently skipping the missing days.
++--
++-- SYSTEM SIDE (L32): market-data bookkeeping, nothing of one trader's
++-- choice. `cobalt_user` is granted NOTHING here — a wrong-side query must
++-- fail loud, and the user side has no business reading it.
++--
++-- ADDITIVE. `system.bars` is not touched (columns, PK, indexes are
++-- explicitly out of scope, §1 non-goals), and the rollback is a plain
++-- `DROP TABLE` of this table alone. IDEMPOTENT: a second
++-- `cobalt db migrate` is a no-op.
++
++CREATE TABLE IF NOT EXISTS system.archive_progress (
++    -- The key. One row per (ticker, interval) target, for the life of the
++    -- install.
++    ticker            TEXT        NOT NULL,
++    interval          TEXT        NOT NULL,
++
++    -- The watermark itself, and the bounds of the export that set it.
++    -- `export_oldest`/`export_newest` are ELIGIBLE-bar bounds (complete
++    -- bars only, §7); `raw_export_newest` keeps the unfiltered bound as a
++    -- diagnostic and is deliberately NULLABLE — an export whose raw bound
++    -- cannot be read must still be able to record progress.
++    archived_through  TIMESTAMPTZ NOT NULL,
++    export_oldest     TIMESTAMPTZ NOT NULL,
++    export_newest     TIMESTAMPTZ NOT NULL,
++    raw_export_newest TIMESTAMPTZ,
++
++    -- When the run that set this row started its fetch (V2-3's
++    -- completeness instant), when this target was first bootstrapped, and
++    -- which run last wrote the row. `run_id` is
++    -- `<label or command>@<run started_at, UTC ISO>` (§9): `system.cobalt_jobs`
++    -- has one row per LABEL and no per-run id, so the report and this row
++    -- share a TEXT rather than a new run table.
++    fetch_started_at  TIMESTAMPTZ NOT NULL,
++    bootstrap_at      TIMESTAMPTZ NOT NULL,
++    run_id            TEXT        NOT NULL,
++    updated_at        TIMESTAMPTZ NOT NULL,
++
++    PRIMARY KEY (ticker, interval),
++
++    -- The invariant that makes the watermark auditable: progress can
++    -- never be newer than the export it was derived from. If this ever
++    -- fires, the writer computed `archived_through` from something other
++    -- than the accepted export's newest eligible bar (L1: crash, do not
++    -- store a number nobody can replay — L57).
++    CONSTRAINT archive_progress_through_within_export
++        CHECK (archived_through <= export_newest)
++);
++
++ALTER TABLE system.archive_progress OWNER TO cobalt_system;
+diff --git a/src/cobalt/db_migrations/0011_archive_incidents.rollback.sql b/src/cobalt/db_migrations/0011_archive_incidents.rollback.sql
+new file mode 100644
+index 0000000..c483d39
+--- /dev/null
++++ b/src/cobalt/db_migrations/0011_archive_incidents.rollback.sql
+@@ -0,0 +1,14 @@
++-- 0011 rollback. ADDITIVE migration, ADDITIVE rollback: this drops the
++-- one table 0011 created (its two indexes and its sequence go with it)
++-- and touches no other object.
++--
++-- COST: every unresolved incident is lost, and with it the heartbeat's
++-- reason for being non-green. A target that was WITHHELD for a
++-- `restated` difference is still withheld — the condition lives in the
++-- vendor's data, not in this table — but nothing on the dashboard says
++-- so any more. Read `cobalt archiver incidents` and keep the output
++-- before running this.
++--
++-- Runs FIRST in a `--down-to 0007` reverse (REVERSE is newest-first).
++
++DROP TABLE IF EXISTS system.archive_incidents;
+diff --git a/src/cobalt/db_migrations/0011_archive_incidents.sql b/src/cobalt/db_migrations/0011_archive_incidents.sql
+new file mode 100644
+index 0000000..406f7d6
+--- /dev/null
++++ b/src/cobalt/db_migrations/0011_archive_incidents.sql
+@@ -0,0 +1,101 @@
++-- 0011: system.archive_incidents — what the append-only night REFUSED to
++-- do, and why, kept until a person resolves it. FINAL design
++-- `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §6, §7, §11.
++--
++-- THE FIVE KINDS (§11 — `regression` is v3's addition to v2's four):
++--
++--   gap           progress exists and the export's oldest eligible bar is
++--                 NEWER than `archived_through` — the window between them
++--                 is "unavailable from the tested export interface", not
++--                 proven missing. The usable range is still appended; the
++--                 target is DEGRADED.
++--   restated      a key present in BOTH storage and the download differs
++--                 in any of O/H/L/C/V after normalisation. NOTHING is
++--                 inserted for that target tonight, nothing stored is
++--                 touched, progress is unchanged, the target counts
++--                 FAILED. There is no automatic repair, by constant
++--                 factor or otherwise — the remedy is
++--                 `cobalt archiver restate`, previewed, then `--apply`
++--                 inside a quiet window (§8).
++--   stored_only   a key in storage that the download does not carry.
++--                 FLAGGED, never deleted.
++--   empty_export  the export had no rows, or rows but no eligible
++--                 COMPLETE bar. Progress unchanged, target FAILED.
++--   regression    `export_newest < archived_through`, strictly. EQUAL is
++--                 fine: an illiquid name whose newest bar has not moved
++--                 succeeds with zero inserts, and a half-day's newest bar
++--                 is newer than last night's. Only an ACCEPTED export
++--                 ever updates the baseline.
++--
++-- ONE UNRESOLVED ROW PER (kind, ticker, interval, range_start), enforced
++-- by a PARTIAL unique index `WHERE resolved_at IS NULL`. A recurring
++-- night refreshes `last_seen_at`; it never duplicates. Once a row is
++-- resolved the index no longer covers it, so the same condition can open
++-- again and the history of both is kept.
++--
++-- THE HEARTBEAT READS THIS TABLE. `cobalt.heartbeat.probes.archiver_freshness`
++-- is not green while any row is unresolved (§11, O-7) — that is the alarm
++-- behind Known limit 3 (a withheld target whose new bars age out of the
++-- vendor window if nobody repairs it).
++--
++-- Resolution is EXPLICIT and audited on the row (`resolved_by`, and the
++-- operator's `--reason` in `detail`): nothing resolves itself, and a
++-- `restate --apply` leaves its audit trail here (spec O-4).
++--
++-- SYSTEM SIDE (L32). `cobalt_user` is granted NOTHING. ADDITIVE and
++-- IDEMPOTENT; the rollback drops this table alone.
++
++CREATE TABLE IF NOT EXISTS system.archive_incidents (
++    id            BIGSERIAL   PRIMARY KEY,
++
++    kind          TEXT        NOT NULL CHECK (kind IN (
++                      'gap', 'restated', 'stored_only', 'empty_export', 'regression')),
++    ticker        TEXT        NOT NULL,
++    interval      TEXT        NOT NULL,
++
++    -- The affected span of BAR timestamps, when the kind has one. A
++    -- `gap` carries (archived_through, export_oldest); an `empty_export`
++    -- has no span at all, so both are NULLABLE.
++    range_start   TIMESTAMPTZ,
++    range_end     TIMESTAMPTZ,
++
++    first_seen_at TIMESTAMPTZ NOT NULL,
++    last_seen_at  TIMESTAMPTZ NOT NULL,
++
++    -- The evidence, closed payload, validated by the writer before it
++    -- gets here: observed bounds, the differing keys and which of
++    -- O/H/L/C/V differed with both values after normalisation, the
++    -- session dates involved, the operator's --reason on a repair. The
++    -- database only insists it is an object (L57: the stored inputs
++    -- behind every number).
++    detail        JSONB       NOT NULL CHECK (jsonb_typeof(detail) = 'object'),
++
++    resolved_at   TIMESTAMPTZ,
++    resolved_by   TEXT,
++
++    run_id        TEXT        NOT NULL
++);
++
++ALTER TABLE system.archive_incidents OWNER TO cobalt_system;
++
++-- ONE open row per condition. PARTIAL, on purpose: resolved rows are
++-- history and must not block the same condition recurring later.
++--
++-- `NULLS NOT DISTINCT` (Postgres 15+; this install is pg16) is
++-- load-bearing, not tidiness: an `empty_export` incident has no span, so
++-- its `range_start` is NULL, and under the DEFAULT rule every NULL is
++-- distinct from every other — a target failing empty for a month would
++-- open thirty rows for one condition and the heartbeat's "oldest kind"
++-- detail would be meaningless.
++CREATE UNIQUE INDEX IF NOT EXISTS archive_incidents_one_open
++    ON system.archive_incidents (kind, ticker, interval, range_start)
++    NULLS NOT DISTINCT
++    WHERE resolved_at IS NULL;
++
++CREATE INDEX IF NOT EXISTS archive_incidents_unresolved
++    ON system.archive_incidents (resolved_at, kind, first_seen_at)
++    WHERE resolved_at IS NULL;
++
++-- Granted explicitly rather than assumed from 0001's default privileges
++-- (0006's pattern, Astra R1-2). NOTHING is granted to `cobalt_user`.
++GRANT USAGE, SELECT ON SEQUENCE system.archive_incidents_id_seq TO cobalt_system;
+diff --git a/src/cobalt/db_migrations/__init__.py b/src/cobalt/db_migrations/__init__.py
+index 9ddf7bb..4c051ab 100644
+--- a/src/cobalt/db_migrations/__init__.py
++++ b/src/cobalt/db_migrations/__init__.py
+@@ -21,6 +21,23 @@
+                          columns, dots, taps, run receipt, views.
+ `0007_radar_cards.rollback.sql` — deletes radar-origin cards, drops the
+                                   card tables/columns, restores NOT NULL.
++`0010_archive_progress.sql` — the Bar Archiver's own per-(ticker,
++                         interval) watermark, system side (append-only
++                         FINAL design §4, §11). Additive.
++`0010_archive_progress.rollback.sql` — drops that one table; the next
++                         `append` night bootstraps each target again.
++`0011_archive_incidents.sql` — what an append night refused to do and
++                         why: the five kinds, one unresolved row per
++                         condition, read by the heartbeat. Additive.
++`0011_archive_incidents.rollback.sql` — drops that one table.
++
++THE 0008/0009 GAP IS DELIBERATE. Those two numbers belong to the
++unmerged branch `sprint-2/p4` and are never used here. This registry is
++an EXPLICIT ordered tuple and nothing asserts contiguity, so a gap is
++legal; the branch that lands second rebases and keeps BOTH sets in
++numeric order. `_rollback_paths` selects by the numeric prefix, so
++`--down-to 0007` reverses exactly 0011 then 0010 whether or not P4's
++pair is present.
+ 
+ These are the DATABASE-WIDE migrations and they are the only ones that
+ live outside a feature module. A module's own DDL still lives in its own
+@@ -46,10 +63,14 @@ FORWARD = (
+     MIGRATIONS_DIR / "0005_heartbeat_note_absent.sql",
+     MIGRATIONS_DIR / "0006_radar_score.sql",
+     MIGRATIONS_DIR / "0007_radar_cards.sql",
++    MIGRATIONS_DIR / "0010_archive_progress.sql",
++    MIGRATIONS_DIR / "0011_archive_incidents.sql",
+ )
+ 
+ #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
+ REVERSE = (
++    MIGRATIONS_DIR / "0011_archive_incidents.rollback.sql",
++    MIGRATIONS_DIR / "0010_archive_progress.rollback.sql",
+     MIGRATIONS_DIR / "0007_radar_cards.rollback.sql",
+     MIGRATIONS_DIR / "0006_radar_score.rollback.sql",
+     MIGRATIONS_DIR / "0005_heartbeat_note_absent.rollback.sql",
+diff --git a/src/cobalt/db_migrations/placement.py b/src/cobalt/db_migrations/placement.py
+index c81d0c7..55be6f4 100644
+--- a/src/cobalt/db_migrations/placement.py
++++ b/src/cobalt/db_migrations/placement.py
+@@ -75,6 +75,12 @@ CREATED_TABLES: dict[str, Side] = {
+     "card_dots": Side.USER,
+     "card_dot_taps": Side.USER,
+     "radar_score_receipt": Side.USER,
++    # db_migrations/0010 + 0011 — the append-only Bar Archiver's
++    # bookkeeping (FINAL design 2026-09-19 §11). SYSTEM, both: market-data
++    # bookkeeping about `system.bars`, nothing of one trader's choice
++    # (L32). `cobalt_user` is granted nothing on either.
++    "archive_progress": Side.SYSTEM,
++    "archive_incidents": Side.SYSTEM,
+ }
+ 
+ #: VIEWS created by database-wide migrations. On a side like any table

@@ -1,0 +1,2284 @@
+diff --git a/tests/cobalt/test_archiver_quiet.py b/tests/cobalt/test_archiver_quiet.py
+new file mode 100644
+index 0000000..d5dfc45
+--- /dev/null
++++ b/tests/cobalt/test_archiver_quiet.py
+@@ -0,0 +1,659 @@
++"""Chunk Q — the QUIET WINDOW and the archiver's commands.
++
++Spec `ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §8 (V3-9, **option A**,
++ruled by the owner 2026-09-19 09:30 ET, `cto-2026-09-19.md` R8), §6 and
++§3 V3-7.
++
++WHAT WAS RULED. Every command that MUTATES stored bars outside the
++nightly run — `restate --apply` and `backfill-missing` — runs only in a
++quiet window: the radar idle, at least `quiet_after_cycle_min` past the
++DERIVED completion of the last poll cycle, at least
++`quiet_before_open_min` before the next scanning session opens, and
++holding the run-level lock. **The live poller is NOT touched.** Option B
++(a per-target marker the poller checks) was not taken and is carried to
++Sunday's bars-lifecycle design; Gemini's and Astra's dissents on that
++stand, and one test here DEMONSTRATES the limit executably rather than
++in prose.
++
++Everything is offline: a fake clock, a constructed pool row through an
++injected reader, and a fake store. No database, no radar.
++"""
++
++from __future__ import annotations
++
++import inspect
++from datetime import date, datetime, timedelta, timezone
++from decimal import Decimal
++from zoneinfo import ZoneInfo
++
++import pytest
++
++from cobalt.archiver import cli as archiver_cli
++from cobalt.archiver import quiet as quiet_mod
++from cobalt.archiver.models import Bar, Interval
++from cobalt.archiver.quiet import (
++    QuietObservation,
++    QuietRefused,
++    quiet_verdict,
++)
++from cobalt.archiver.settings import ArchiverSettings
++from cobalt.session.models import Session
++
++ET = ZoneInfo("America/New_York")
++UTC = timezone.utc
++
++
++def et(y, m, d, hh, mm, ss=0) -> datetime:
++    return datetime(y, m, d, hh, mm, ss, tzinfo=ET).astimezone(UTC)
++
++
++def cfg(**over) -> ArchiverSettings:
++    payload = {
++        "write_mode": "upsert",
++        "shadow_compare": "on",
++        "shadow_statement_timeout_s": 10,
++        "shadow_retention_nights": 30,
++        "repair": {
++            "quiet_before_open_min": 10,
++            "quiet_after_cycle_min": 5,
++            "cycle_max_min": 30,
++        },
++    }
++    payload.update(over)
++    return ArchiverSettings(**payload)
++
++
++def observation(
++    *,
++    now,
++    session=Session.OVERNIGHT,
++    last_scan_at=None,
++    pool_row_present=True,
++    next_scanning_open=None,
++    overnight_start=None,
++    open_after_overnight=None,
++) -> QuietObservation:
++    """A quiet window as the reader would have seen it."""
++    return QuietObservation(
++        now=now,
++        session=session,
++        pool_key="probe_pool",
++        pool_row_present=pool_row_present,
++        last_scan_at=last_scan_at if last_scan_at is not None else now - timedelta(hours=4),
++        next_scanning_open=(
++            next_scanning_open if next_scanning_open is not None else now + timedelta(hours=4)
++        ),
++        next_scanning_session=Session.PREMARKET,
++        overnight_start=overnight_start if overnight_start is not None else now,
++        open_after_overnight=(
++            open_after_overnight
++            if open_after_overnight is not None
++            else (next_scanning_open if next_scanning_open is not None else now + timedelta(hours=4))
++        ),
++    )
++
++
++# =====================================================================
++# §8 — the four rules, each refusing ALONE
++# =====================================================================
++
++
++def test_a_quiet_overnight_window_is_allowed():
++    verdict = quiet_verdict(observation(now=et(2026, 9, 18, 2, 0)), cfg())
++    assert verdict.quiet is True
++    assert verdict.failures == ()
++
++
++@pytest.mark.parametrize("session", [
++    Session.PREMARKET, Session.RTH, Session.AFTERMARKET, Session.MARKET_RESET
++])
++def test_q1_every_non_overnight_session_refuses_alone(session):
++    verdict = quiet_verdict(
++        observation(now=et(2026, 9, 18, 10, 0), session=session), cfg()
++    )
++    assert verdict.quiet is False
++    assert any(line.startswith("Q1") for line in verdict.failures)
++    assert session.value in verdict.text
++
++
++def test_market_reset_is_not_quiet():
++    """§8, in so many words: the radar is PAUSED there, not idle, and
++    20:30 belongs to the nightly run."""
++    verdict = quiet_verdict(
++        observation(now=et(2026, 9, 18, 20, 30), session=Session.MARKET_RESET), cfg()
++    )
++    assert verdict.quiet is False
++    assert any("market_reset" in line for line in verdict.failures)
++
++
++def test_q2_refuses_alone_when_the_next_scanning_open_is_too_close():
++    now = et(2026, 9, 18, 3, 55)
++    verdict = quiet_verdict(
++        observation(now=now, next_scanning_open=now + timedelta(minutes=5),
++                    open_after_overnight=now + timedelta(minutes=5)),
++        cfg(),
++    )
++    assert verdict.quiet is False
++    assert [line[:2] for line in verdict.failures] == ["Q2"]
++
++
++def test_q2_allows_exactly_the_configured_distance():
++    now = et(2026, 9, 18, 3, 50)
++    verdict = quiet_verdict(
++        observation(now=now, next_scanning_open=now + timedelta(minutes=10),
++                    open_after_overnight=now + timedelta(minutes=10)),
++        cfg(),
++    )
++    assert verdict.quiet is True
++
++
++def test_q3_refuses_alone_when_the_derived_cycle_finish_is_too_recent():
++    """`cycle_max_min` + `quiet_after_cycle_min` = 35 minutes after the
++    cycle's START, because the radar persists the start and never the
++    completion (§2)."""
++    now = et(2026, 9, 18, 21, 30)
++    verdict = quiet_verdict(
++        observation(now=now, last_scan_at=now - timedelta(minutes=34)), cfg()
++    )
++    assert verdict.quiet is False
++    assert [line[:2] for line in verdict.failures] == ["Q3"]
++    assert "need >= 35 min" in verdict.text
++
++
++def test_q3_allows_exactly_the_derived_bound():
++    now = et(2026, 9, 18, 21, 30)
++    verdict = quiet_verdict(
++        observation(now=now, last_scan_at=now - timedelta(minutes=35)), cfg()
++    )
++    assert verdict.quiet is True
++
++
++def test_a_missing_pool_row_refuses_because_quiet_cannot_be_PROVEN():
++    verdict = quiet_verdict(
++        observation(now=et(2026, 9, 18, 2, 0), pool_row_present=False), cfg()
++    )
++    assert verdict.quiet is False
++    assert "cannot prove the radar is quiet" in verdict.text
++
++
++def test_a_null_last_scan_at_refuses_the_same_way():
++    verdict = quiet_verdict(
++        observation(now=et(2026, 9, 18, 2, 0), last_scan_at=None, pool_row_present=True),
++        cfg(),
++    )
++    # `last_scan_at=None` reaches the model as an explicit NULL.
++    refused = quiet_verdict(
++        QuietObservation(
++            now=et(2026, 9, 18, 2, 0), session=Session.OVERNIGHT, pool_key="probe_pool",
++            pool_row_present=True, last_scan_at=None,
++            next_scanning_open=et(2026, 9, 18, 4, 0),
++            next_scanning_session=Session.PREMARKET,
++            overnight_start=et(2026, 9, 18, 2, 0),
++            open_after_overnight=et(2026, 9, 18, 4, 0),
++        ),
++        cfg(),
++    )
++    assert refused.quiet is False
++    assert "cannot prove the radar is quiet" in refused.text
++    assert verdict.quiet is True   # the helper's default IS a real scan
++
++
++# =====================================================================
++# §8 — the refusal text
++# =====================================================================
++
++
++def test_the_refusal_names_every_observed_value_and_the_earliest_start():
++    now = et(2026, 9, 18, 21, 10)
++    verdict = quiet_verdict(
++        observation(
++            now=now, session=Session.OVERNIGHT, last_scan_at=now - timedelta(minutes=20),
++            next_scanning_open=now + timedelta(minutes=6),
++            open_after_overnight=now + timedelta(minutes=6),
++        ),
++        cfg(),
++    )
++    text = verdict.text
++    # §8's shape: one line per FAILED rule, then the summary line.
++    lines = text.splitlines()
++    assert [line[:2] for line in lines[:-1]] == ["Q2", "Q3"]
++    assert lines[-1].startswith("REFUSED — not in a quiet window.")
++    assert "session=overnight" in text
++    assert "last radar scan started" in text and "20 min ago" in text
++    assert "need >= 35 min" in text
++    assert "next scanning session opens" in text and "in 6 min" in text
++    assert "need >= 10 min" in text
++    assert "earliest allowed start:" in text
++    assert "The preview (no --apply) is always available." in text
++    # One line per FAILED rule, above the summary.
++    assert [line[:2] for line in verdict.failures] == ["Q2", "Q3"]
++
++
++def test_the_earliest_allowed_start_is_the_later_of_the_two_constraints():
++    now = et(2026, 9, 18, 21, 10)
++    verdict = quiet_verdict(
++        observation(now=now, last_scan_at=now - timedelta(minutes=20)), cfg()
++    )
++    assert verdict.earliest_allowed_start == now + timedelta(minutes=15)
++
++
++def test_the_refusal_exit_code_is_two():
++    assert QuietRefused("x").exit_code == 2
++
++
++def code_of(obj) -> str:
++    """Source with docstrings and comments removed (`ast.unparse`).
++
++    Several assertions here are about what the CODE does, and the prose
++    beside it names the thing it refuses to do — `cli.py`'s docstring
++    says "THERE IS NO `--force`" and `quiet.py` explains why. A raw
++    substring search would read the explanation and fail.
++    """
++    import ast
++    import textwrap
++
++    tree = ast.parse(textwrap.dedent(inspect.getsource(obj)))
++    for node in ast.walk(tree):
++        body = getattr(node, "body", None)
++        if not isinstance(body, list) or not body:
++            continue
++        first = body[0]
++        if (
++            isinstance(first, ast.Expr)
++            and isinstance(first.value, ast.Constant)
++            and isinstance(first.value.value, str)
++        ):
++            node.body = body[1:] or [ast.Pass()]
++    return ast.unparse(tree)
++
++
++def test_there_is_no_force_flag_anywhere():
++    """§8: 'No `--force`. An override of the window is the owner's word,
++    recorded by the desk, and is a code/config change — never a flag
++    (L1, L37).'"""
++    parser = archiver_cli.build_parser()
++    for argv in (
++        ["archiver", "restate", "TESTARCH", "--apply", "--reason", "x", "--force"],
++        ["archiver", "backfill-missing", "TESTARCH", "--apply", "--force"],
++    ):
++        with pytest.raises(SystemExit):
++            parser.parse_args(argv)
++    for module in (archiver_cli, quiet_mod):
++        assert "force" not in code_of(module).lower(), module.__name__
++
++
++# =====================================================================
++# THE TWO NAMED BOUNDARY TESTS (§8)
++# =====================================================================
++
++
++class FakeBars:
++    """A store whose bar rows are visible, so 'NO bar row changed' is an
++    assertion rather than a hope."""
++
++    def __init__(self):
++        self.rows = {}
++        self.calls: list[str] = []
++
++    def upsert_bars(self, bars, *, before_commit=None):
++        self.calls.append("upsert_bars")
++        for b in bars:
++            self.rows[(b.ticker, b.interval.value, b.ts)] = str(b.close)
++        if before_commit is not None:
++            before_commit()
++        return len(bars)
++
++    def insert_new_bars(self, conn, bars):
++        self.calls.append("insert_new_bars")
++        written = 0
++        for b in bars:
++            key = (b.ticker, b.interval.value, b.ts)
++            if key not in self.rows:
++                self.rows[key] = str(b.close)
++                written += 1
++        return written
++
++    def snapshot(self):
++        return dict(self.rows)
++
++
++def _bar(when, close="100.00", ticker="TESTARCH", interval=Interval.I5) -> Bar:
++    return Bar(
++        ticker=ticker, interval=interval, ts=when, open=Decimal("99.00"),
++        high=Decimal("101.00"), low=Decimal("98.50"), close=Decimal(close), volume=1234,
++    )
++
++
++def test_gemini_close_boundary_poller_lag():
++    """Gemini's round-3 sequence, placed on THIS radar's real closing
++    boundaries (§8).
++
++    (i) NORMAL DAY 20:00 — the repair is refused by Q1 (`market_reset`),
++        and a lagging poller write would be dropped by the radar's own
++        gate anyway.
++    (ii) EARLY-CLOSE DAY 17:00 -> OVERNIGHT — the gate does NOT drop the
++        lagging write, so Q3 is the whole protection: at 17:00:10 the
++        last cycle started ~16:59, one minute ago, and the repair is
++        REFUSED.
++    (iii) Gemini's literal 16:00 is RTH -> AFTERMARKET, both SCANNED:
++        refused by Q1.
++
++    No bar row changes in any of the three.
++    """
++    store = FakeBars()
++    store.upsert_bars([_bar(et(2026, 11, 27, 12, 55), close="100.00")])
++    before = store.snapshot()
++
++    # (i) normal day, 20:00:10 — market_reset
++    normal = quiet_verdict(
++        observation(now=et(2026, 9, 18, 20, 0, 10), session=Session.MARKET_RESET,
++                    last_scan_at=et(2026, 9, 18, 19, 59)),
++        cfg(),
++    )
++    assert normal.quiet is False
++    assert any("market_reset" in line for line in normal.failures)
++
++    # (ii) early close, 17:00:10 — OVERNIGHT, but the cycle was a minute ago
++    early = quiet_verdict(
++        observation(now=et(2026, 11, 27, 17, 0, 10), session=Session.OVERNIGHT,
++                    last_scan_at=et(2026, 11, 27, 16, 59),
++                    next_scanning_open=et(2026, 11, 30, 4, 0),
++                    open_after_overnight=et(2026, 11, 30, 4, 0)),
++        cfg(),
++    )
++    assert early.quiet is False
++    assert [line[:2] for line in early.failures] == ["Q3"]
++    assert "1 min ago" in early.text
++
++    # (iii) Gemini's literal 16:00 — RTH, a scanned session
++    literal = quiet_verdict(
++        observation(now=et(2026, 9, 18, 16, 0), session=Session.RTH,
++                    last_scan_at=et(2026, 9, 18, 15, 58)),
++        cfg(),
++    )
++    assert literal.quiet is False
++    assert any(line.startswith("Q1") for line in literal.failures)
++
++    assert store.snapshot() == before, "a refused repair must not change a bar row"
++    assert store.calls == ["upsert_bars"]      # only the setup write
++
++
++def test_astra_open_boundary_repair_crosses_open():
++    """Astra's round-3 sequence (§8): a repair started at 03:59:50, the
++    poller fetching at 04:00:05, the repair committing at 04:00:10, the
++    poller writing at 04:00:20.
++
++    At START it is refused by Q2 — 04:00 is 10 seconds away and the rule
++    needs 10 MINUTES. And a repair started at 03:49:59, which WOULD pass
++    at start, is rolled back by the PRE-COMMIT re-check when it reaches
++    its commit at 03:50:05.
++    """
++    store = FakeBars()
++    store.upsert_bars([_bar(et(2026, 9, 18, 3, 0), close="100.00")])
++    before = store.snapshot()
++
++    start = quiet_verdict(
++        observation(now=et(2026, 9, 18, 3, 59, 50), session=Session.OVERNIGHT,
++                    last_scan_at=et(2026, 9, 17, 20, 0),
++                    next_scanning_open=et(2026, 9, 18, 4, 0),
++                    open_after_overnight=et(2026, 9, 18, 4, 0)),
++        cfg(),
++    )
++    assert start.quiet is False
++    assert [line[:2] for line in start.failures] == ["Q2"]
++
++    # 03:49:59 — exactly on the 10-minute line, so the START check passes.
++    at_start = quiet_verdict(
++        observation(now=et(2026, 9, 18, 3, 49, 59), session=Session.OVERNIGHT,
++                    last_scan_at=et(2026, 9, 17, 20, 0),
++                    next_scanning_open=et(2026, 9, 18, 4, 0),
++                    open_after_overnight=et(2026, 9, 18, 4, 0)),
++        cfg(),
++    )
++    assert at_start.quiet is True
++
++    # ...and the SAME repair at its commit instant, 03:50:05, does not.
++    at_commit = quiet_verdict(
++        observation(now=et(2026, 9, 18, 3, 50, 5), session=Session.OVERNIGHT,
++                    last_scan_at=et(2026, 9, 17, 20, 0),
++                    next_scanning_open=et(2026, 9, 18, 4, 0),
++                    open_after_overnight=et(2026, 9, 18, 4, 0)),
++        cfg(),
++    )
++    assert at_commit.quiet is False
++    assert [line[:2] for line in at_commit.failures] == ["Q2"]
++
++    assert store.snapshot() == before
++    assert store.calls == ["upsert_bars"]
++
++
++def test_the_pre_commit_recheck_rolls_the_repair_back():
++    """The shape of the radar's own `gate`: Q1-Q3 are checked at command
++    START and AGAIN immediately before COMMIT. A failed re-check raises
++    inside the transaction, so the `with` rolls it back."""
++    store = FakeBars()
++    store.upsert_bars([_bar(et(2026, 9, 18, 3, 0), close="100.00")])
++    before = store.snapshot()
++
++    instants = iter([
++        et(2026, 9, 18, 3, 49, 59),   # start: quiet
++        et(2026, 9, 18, 3, 50, 5),    # pre-commit: no longer quiet
++    ])
++
++    def _observe(**_kwargs):
++        now = next(instants)
++        return observation(
++            now=now, session=Session.OVERNIGHT, last_scan_at=et(2026, 9, 17, 20, 0),
++            next_scanning_open=et(2026, 9, 18, 4, 0),
++            open_after_overnight=et(2026, 9, 18, 4, 0),
++        )
++
++    rolled_back = []
++
++    class Conn:
++        def execute(self, *a, **k):
++            return self
++
++        def fetchone(self):
++            return (1,)
++
++    class Txn:
++        """A transaction with real rollback semantics: on an exception it
++        restores the store's rows, which is what Postgres does and what
++        the assertion below is actually about."""
++
++        def __enter__(self):
++            self.snapshot = store.snapshot()
++            return Conn()
++
++        def __exit__(self, exc_type, *_):
++            if exc_type is not None:
++                rolled_back.append(True)
++                store.rows = dict(self.snapshot)
++            return False
++
++    with pytest.raises(QuietRefused):
++        with quiet_mod.guarded_repair(
++            observe=_observe, settings=cfg(), what="restate --apply"
++        ) as guard:
++            with Txn() as conn:
++                store.insert_new_bars(conn, [_bar(et(2026, 9, 18, 3, 5))])
++                guard.check_before_commit()
++
++    assert rolled_back == [True]
++    assert store.snapshot() == before, "the pre-commit re-check must undo the write"
++
++
++# =====================================================================
++# Commands
++# =====================================================================
++
++
++@pytest.mark.parametrize("session", [
++    Session.PREMARKET, Session.RTH, Session.AFTERMARKET, Session.MARKET_RESET
++])
++@pytest.mark.parametrize("command", ["restate", "backfill-missing"])
++def test_both_mutating_commands_are_refused_in_every_scanned_session(session, command):
++    verdict = quiet_verdict(
++        observation(now=et(2026, 9, 18, 10, 0), session=session), cfg()
++    )
++    assert verdict.quiet is False
++    assert command in archiver_cli.MUTATING_COMMANDS
++
++
++def test_previews_always_run(monkeypatch):
++    """§8: 'Previews and every read-only command are always available.'"""
++    calls = []
++    monkeypatch.setattr(
++        quiet_mod, "require_quiet",
++        lambda *a, **k: calls.append("checked"),
++    )
++    for command in archiver_cli.READ_ONLY_COMMANDS:
++        assert command not in archiver_cli.MUTATING_COMMANDS
++    assert calls == []
++
++
++def test_the_read_only_commands_are_the_ones_the_design_names():
++    assert archiver_cli.READ_ONLY_COMMANDS == (
++        "audit", "incidents", "progress", "shadow-report",
++    )
++    assert archiver_cli.MUTATING_COMMANDS == ("restate", "backfill-missing")
++
++
++def test_restate_apply_requires_a_reason():
++    parser = archiver_cli.build_parser()
++    with pytest.raises(SystemExit):
++        parser.parse_args(["archiver", "restate", "TESTARCH", "--apply"])
++    args = parser.parse_args(
++        ["archiver", "restate", "TESTARCH", "i5", "--apply", "--reason", "vendor split"]
++    )
++    assert args.reason == "vendor split" and args.apply is True
++
++
++def test_restate_without_apply_is_a_preview():
++    parser = archiver_cli.build_parser()
++    args = parser.parse_args(["archiver", "restate", "TESTARCH"])
++    assert args.apply is False and args.reason is None
++
++
++def test_backfill_missing_can_only_do_nothing():
++    """§8: `backfill-missing` never overwrites. Its only write path is
++    `insert_new_bars` (DO NOTHING); `upsert_bars` is unreachable from it."""
++    source = inspect.getsource(archiver_cli._cmd_backfill_missing)
++    assert "insert_new_bars" in source
++    assert "upsert_bars" not in source
++
++
++def test_backfill_missing_never_calls_upsert_bars(monkeypatch):
++    store = FakeBars()
++    store.upsert_bars([_bar(et(2026, 9, 18, 3, 0), close="100.00")])
++    store.calls.clear()
++    existing = store.snapshot()
++    assert store.insert_new_bars(None, [_bar(et(2026, 9, 18, 3, 0), close="999.00")]) == 0
++    assert store.snapshot() == existing
++    assert store.calls == ["insert_new_bars"]
++
++
++def test_every_read_only_command_calls_no_write_method():
++    """The four read-only commands and both previews touch no writer."""
++    for name in archiver_cli.READ_ONLY_COMMANDS:
++        handler = archiver_cli.HANDLERS[name]
++        source = inspect.getsource(handler)
++        for writer in ("upsert_bars", "insert_new_bars", "upsert_progress", "open_or_refresh"):
++            assert writer not in source, f"{name} reaches {writer}"
++
++
++def test_incidents_resolve_is_explicit_and_audited():
++    parser = archiver_cli.build_parser()
++    with pytest.raises(SystemExit):
++        parser.parse_args(["archiver", "incidents", "resolve", "7"])
++    args = parser.parse_args(
++        ["archiver", "incidents", "resolve", "7", "--by", "dejan", "--note", "repaired"]
++    )
++    assert args.incident_id == 7 and args.by == "dejan" and args.note == "repaired"
++
++
++def test_audit_is_read_only_and_takes_a_from_date():
++    parser = archiver_cli.build_parser()
++    args = parser.parse_args(["archiver", "audit", "--from", "2026-09-01"])
++    assert args.from_date == date(2026, 9, 1)
++    assert "audit" in archiver_cli.READ_ONLY_COMMANDS
++
++
++def test_shadow_report_takes_a_night_count():
++    parser = archiver_cli.build_parser()
++    assert parser.parse_args(["archiver", "shadow-report"]).nights == 5
++    assert parser.parse_args(["archiver", "shadow-report", "--nights", "12"]).nights == 12
++
++
++# =====================================================================
++# Known limit 1, DEMONSTRATED (spec §12, §15)
++# =====================================================================
++
++
++def test_known_limit_1_the_poller_keeps_writing_while_a_restated_incident_is_open():
++    """SPEC §12 limit 1, executable rather than prose — it goes to the
++    owner WITH the switch ruling.
++
++    After a vendor restatement the archiver WITHHOLDS the target and the
++    heartbeat goes non-green, but the poller is UNCHANGED by R8: it goes
++    on writing new-basis i1 bars beside old-basis history until an
++    operator runs `restate`. This test IMPORTS the poller and drives it.
++    It does not edit it, and `git diff main -- src/cobalt/radar/` is
++    empty.
++    """
++    import asyncio
++
++    from cobalt.radar.poller import BarPoller, PollMember
++
++    store = FakeBars()
++    old_basis = _bar(et(2026, 9, 18, 10, 0), close="100.00", interval=Interval.I1)
++    store.rows[(old_basis.ticker, "i1", old_basis.ts)] = "100.00"
++
++    class _Store:
++        def __init__(self, bars):
++            self.bars = bars
++
++        def watermark(self, ticker, interval="i1"):
++            keys = [k[2] for k in self.bars.rows if k[0] == ticker and k[1] == interval]
++            return max(keys) if keys else None
++
++        def upsert_bars(self, bars, *, before_commit=None):
++            return self.bars.upsert_bars(bars, before_commit=before_commit)
++
++    class _Bucket:
++        async def acquire(self):
++            return None
++
++    new_basis = _bar(et(2026, 9, 18, 10, 5), close="50.00", interval=Interval.I1)
++
++    async def _fetch(ticker, interval, token):
++        return [new_basis]
++
++    poller = BarPoller(
++        "TOKEN", store=_Store(store), bucket=_Bucket(), overlap_bars=5,
++        max_age_s=180, fetch=_fetch,
++    )
++    asyncio.run(
++        poller.poll(
++            [PollMember("TESTARCH", 1)],
++            now=et(2026, 9, 18, 10, 10),
++            session=Session.RTH,
++        )
++    )
++
++    # An open `restated` incident changes NOTHING about the poller: the
++    # new-basis bar is now stored beside the old-basis one.
++    assert store.rows[("TESTARCH", "i1", new_basis.ts)] == "50.00"
++    assert store.rows[("TESTARCH", "i1", old_basis.ts)] == "100.00"
++    assert "insert_new_bars" not in store.calls, "the poller writes through upsert_bars"
++
++
++def test_the_poller_module_is_imported_never_edited():
++    """R8, asserted here as well as by the empty `git diff main --
++    src/cobalt/radar/` in the build report."""
++    import cobalt.radar.poller as poller_mod
++
++    source = inspect.getsource(poller_mod)
++    for name in ("archive_progress", "archive_incidents", "quiet", "ARCHIVE_RUN_LOCK_KEY"):
++        assert name not in source, f"the poller now knows about {name!r}"
+diff --git a/tests/cobalt/test_archiver_reconcile.py b/tests/cobalt/test_archiver_reconcile.py
+new file mode 100644
+index 0000000..f20e46a
+--- /dev/null
++++ b/tests/cobalt/test_archiver_reconcile.py
+@@ -0,0 +1,844 @@
++"""Chunk R — `cobalt.archiver.reconcile`, the pure core of the append night.
++
++Spec `ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §3 (V2-3), §4, §6, §7.
++
++EVERYTHING HERE IS OFFLINE AND PURE. `reconcile.py` performs no I/O,
++reads no clock (the instant is an argument) and touches no database, so
++the whole of the design's decision-making can be tested exactly — which
++is the point of the structure the build prompt requires.
++
++The dated sequences below are the four the houses wrote in round 2 and
++the tribunal carried into the final design's §15. They are kept on the
++houses' own dates and the houses' own public tickers (L32: no name from
++the trader's lists in a committed fixture; constructed names use
++`TESTARCH`/`THIN`).
++"""
++
++from __future__ import annotations
++
++from datetime import date, datetime, timedelta, timezone
++from decimal import Decimal
++from zoneinfo import ZoneInfo
++
++import pytest
++
++from cobalt.archiver.models import Bar, Interval
++from cobalt.archiver.reconcile import (
++    INTERVAL_MINUTES,
++    IncidentKind,
++    ReconcileError,
++    TargetCounts,
++    TargetStatus,
++    bar_closes_at,
++    bar_values,
++    compare,
++    et_date,
++    interval_duration,
++    is_complete,
++    normalise_price,
++    normalise_volume,
++    plan_candidates,
++    reconcile,
++    split_export,
++    steady_state_dates,
++)
++
++ET = ZoneInfo("America/New_York")
++
++
++# --- fixtures in the vendor's real shape -----------------------------
++
++
++def et(y, m, d, hh, mm) -> datetime:
++    """An ET wall clock, as the vendor's CSV writes it, as a UTC instant."""
++    return datetime(y, m, d, hh, mm, tzinfo=ET).astimezone(timezone.utc)
++
++
++def bar(ts, interval=Interval.I5, ticker="TESTARCH", close="100.00", volume=1234, open_="99.00",
++        high="101.00", low="98.50") -> Bar:
++    return Bar(
++        ticker=ticker,
++        interval=interval,
++        ts=ts,
++        open=Decimal(open_),
++        high=Decimal(high),
++        low=Decimal(low),
++        close=Decimal(close),
++        volume=volume,
++    )
++
++
++def stored_from(bars) -> dict:
++    """The shape the store hands `reconcile`: {ts: BarValues}."""
++    return {b.ts: bar_values(b) for b in bars}
++
++
++def plan_for(bars, *, fetch_started_at, archived_through=None, ticker="TESTARCH",
++             interval=Interval.I5):
++    return plan_candidates(
++        ticker=ticker,
++        interval=interval,
++        bars=bars,
++        fetch_started_at=fetch_started_at,
++        archived_through=archived_through,
++    )
++
++
++# =====================================================================
++# V2-3 — completeness and the interval map
++# =====================================================================
++
++
++def test_the_interval_map_is_explicit_and_covers_every_enum_member():
++    assert {i.value: INTERVAL_MINUTES[i] for i in Interval} == {
++        "i1": 1, "i2": 2, "i5": 5, "i15": 15, "i30": 30
++    }
++    for interval in Interval:
++        assert interval_duration(interval) == timedelta(minutes=INTERVAL_MINUTES[interval])
++
++
++@pytest.mark.parametrize("unknown", ["i60", "d", "", None, 5, "I5"])
++def test_an_unknown_interval_fails_loud(unknown):
++    with pytest.raises(ReconcileError) as e:
++        interval_duration(unknown)
++    assert "interval" in str(e.value).lower()
++
++
++def test_a_bar_closes_one_duration_after_it_opens():
++    ts = et(2026, 9, 18, 12, 30)
++    assert bar_closes_at(ts, Interval.I30) == ts + timedelta(minutes=30)
++    assert bar_closes_at(ts, Interval.I1) == ts + timedelta(minutes=1)
++
++
++def test_completeness_is_close_at_or_before_the_fetch_instant():
++    ts = et(2026, 9, 18, 19, 59)
++    close = ts + timedelta(minutes=1)
++    assert is_complete(ts, Interval.I1, close) is True          # exactly at close
++    assert is_complete(ts, Interval.I1, close - timedelta(seconds=1)) is False
++    assert is_complete(ts, Interval.I1, close + timedelta(hours=1)) is True
++
++
++def test_a_naive_fetch_instant_is_refused():
++    with pytest.raises(ReconcileError):
++        is_complete(et(2026, 9, 18, 19, 59), Interval.I1, datetime(2026, 9, 18, 20, 0))
++
++
++def test_a_future_dated_row_is_incomplete_not_a_poison():
++    """§7: an invalid future-dated row is excluded by V2-3, so it can
++    neither set `export_newest` nor trigger a false regression."""
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, 18, 19, 55)), bar(et(2026, 9, 19, 14, 0))]
++    split = split_export(bars, Interval.I5, fetch)
++    assert split.incomplete == 1
++    assert [b.ts for b in split.eligible] == [et(2026, 9, 18, 19, 55)]
++    assert split.export_newest == et(2026, 9, 18, 19, 55)
++    assert split.raw_newest == et(2026, 9, 19, 14, 0)
++
++
++# =====================================================================
++# TIME — the spec's §15 list, ET dates AND UTC boundaries
++# =====================================================================
++
++
++def test_regular_close_the_1959_i1_bar_completes_at_2000_et():
++    ts = et(2026, 9, 18, 19, 59)              # Friday aftermarket
++    assert ts == datetime(2026, 9, 18, 23, 59, tzinfo=timezone.utc)
++    assert bar_closes_at(ts, Interval.I1) == datetime(2026, 9, 19, 0, 0, tzinfo=timezone.utc)
++    assert is_complete(ts, Interval.I1, et(2026, 9, 18, 20, 0))
++    assert et_date(ts) == date(2026, 9, 18)
++
++
++def test_half_day_the_i30_bar_opening_1230_completes_at_1300_et():
++    """Spec §15, verbatim: 'a 13:00 half-day (an i30 bar opening 12:30
++    completes at 13:00)'. The nightly run is still at 20:30, so it is
++    complete by hours — the point is that the close is 13:00, not 13:30."""
++    ts = et(2026, 11, 27, 12, 30)             # the Friday after Thanksgiving
++    assert bar_closes_at(ts, Interval.I30) == et(2026, 11, 27, 13, 0)
++    assert is_complete(ts, Interval.I30, et(2026, 11, 27, 13, 0))
++    assert not is_complete(ts, Interval.I30, et(2026, 11, 27, 12, 59))
++
++
++def test_extended_hours_bars_are_ordinary_bars_to_this_module():
++    """i1/i5 carry premarket and aftermarket; nothing here filters by
++    session (§3 V2-3: 'no open-session prohibition for the nightly run')."""
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [
++        bar(et(2026, 9, 18, 4, 0), Interval.I1),      # premarket
++        bar(et(2026, 9, 18, 10, 0), Interval.I1),     # RTH
++        bar(et(2026, 9, 18, 19, 59), Interval.I1),    # aftermarket
++    ]
++    split = split_export(bars, Interval.I1, fetch)
++    assert len(split.eligible) == 3
++    assert split.export_oldest == et(2026, 9, 18, 4, 0)
++    assert split.export_newest == et(2026, 9, 18, 19, 59)
++
++
++def test_thanksgiving_thursday_has_no_bars_and_friday_is_a_half_day():
++    """2026: Thanksgiving is Thu 11-26, Fri 11-27 closes 13:00 ET. The
++    export simply carries no 11-26 date — no 24-hour arithmetic (§4)."""
++    fetch = et(2026, 11, 27, 20, 30)
++    bars = [
++        bar(et(2026, 11, 25, 15, 55)),        # Wednesday
++        bar(et(2026, 11, 27, 12, 55)),        # Friday, before the 13:00 close
++    ]
++    split = split_export(bars, Interval.I5, fetch)
++    assert [et_date(b.ts) for b in split.eligible] == [date(2026, 11, 25), date(2026, 11, 27)]
++    assert date(2026, 11, 26) not in {et_date(b.ts) for b in split.eligible}
++    assert steady_state_dates(split.eligible, fetch) == (date(2026, 11, 25), date(2026, 11, 27))
++
++
++def test_a_weekend_is_simply_two_dates_the_export_does_not_carry():
++    fetch = et(2026, 9, 21, 20, 30)           # Monday night
++    bars = [
++        bar(et(2026, 9, 17, 19, 55)),         # Thursday
++        bar(et(2026, 9, 18, 19, 55)),         # Friday
++        bar(et(2026, 9, 21, 19, 55)),         # Monday
++    ]
++    dates = steady_state_dates(split_export(bars, Interval.I5, fetch).eligible, fetch)
++    # Today (Monday) plus the two most recent COMPLETED sessions present.
++    assert dates == (date(2026, 9, 17), date(2026, 9, 18), date(2026, 9, 21))
++
++
++def test_the_0907_holiday_is_skipped_and_0908_is_the_next_session():
++    """Labor Day 2026 is Mon 09-07; the export's dates run 09-04 -> 09-08."""
++    fetch = et(2026, 9, 8, 20, 30)
++    bars = [bar(et(2026, 9, 3, 19, 55)), bar(et(2026, 9, 4, 19, 55)), bar(et(2026, 9, 8, 19, 55))]
++    dates = steady_state_dates(split_export(bars, Interval.I5, fetch).eligible, fetch)
++    assert dates == (date(2026, 9, 3), date(2026, 9, 4), date(2026, 9, 8))
++    assert date(2026, 9, 7) not in dates
++
++
++def test_spring_forward_2026_03_08_keeps_et_dates_and_shifts_utc():
++    before = et(2026, 3, 6, 9, 30)            # EST, UTC-5
++    after = et(2026, 3, 9, 9, 30)             # EDT, UTC-4
++    assert before == datetime(2026, 3, 6, 14, 30, tzinfo=timezone.utc)
++    assert after == datetime(2026, 3, 9, 13, 30, tzinfo=timezone.utc)
++    assert et_date(before) == date(2026, 3, 6) and et_date(after) == date(2026, 3, 9)
++    # A bar that opens on the transition Sunday still closes one duration later.
++    sunday = datetime(2026, 3, 8, 6, 55, tzinfo=timezone.utc)
++    assert bar_closes_at(sunday, Interval.I5) == datetime(2026, 3, 8, 7, 0, tzinfo=timezone.utc)
++
++
++def test_fall_back_2026_11_01_keeps_et_dates_and_shifts_utc():
++    before = et(2026, 10, 30, 9, 30)          # EDT, UTC-4
++    after = et(2026, 11, 2, 9, 30)            # EST, UTC-5
++    assert before == datetime(2026, 10, 30, 13, 30, tzinfo=timezone.utc)
++    assert after == datetime(2026, 11, 2, 14, 30, tzinfo=timezone.utc)
++    assert et_date(before) == date(2026, 10, 30) and et_date(after) == date(2026, 11, 2)
++
++
++def test_a_fetch_that_crosses_a_bar_close_excludes_that_bar():
++    """`fetch_started_at` is captured BEFORE the request (§3 V2-3). A bar
++    that closes while the response is in flight is NOT eligible tonight —
++    tomorrow's run picks it up, which is what makes the rule replayable."""
++    fetch = et(2026, 9, 18, 19, 59, )
++    forming = et(2026, 9, 18, 19, 59)
++    split = split_export([bar(forming, Interval.I1)], Interval.I1, fetch)
++    assert split.eligible == ()
++    assert split.incomplete == 1
++    assert split.export_newest is None
++
++
++# =====================================================================
++# §4 — the candidate range
++# =====================================================================
++
++
++def test_bootstrap_takes_the_whole_eligible_export():
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, d, 19, 55)) for d in (1, 2, 3, 4, 8, 9, 10, 17, 18)]
++    plan = plan_for(bars, fetch_started_at=fetch, archived_through=None)
++    assert plan.bootstrap is True
++    assert len(plan.candidates) == len(bars)
++    assert plan.below_range == 0
++
++
++def test_steady_state_is_the_union_of_newer_than_progress_and_range_b():
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, d, 19, 55)) for d in (3, 4, 8, 9, 10, 17, 18)]
++    # Progress sits at 09-17's newest bar, so (a) is 09-18 alone; (b) adds
++    # 09-18 (today) plus the two most recent completed sessions: 09-10, 09-17.
++    plan = plan_for(bars, fetch_started_at=fetch, archived_through=et(2026, 9, 17, 19, 55))
++    assert plan.bootstrap is False
++    assert [et_date(b.ts) for b in plan.candidates] == [
++        date(2026, 9, 10), date(2026, 9, 17), date(2026, 9, 18)
++    ]
++    assert plan.below_range == 4
++    assert plan.range_dates == (date(2026, 9, 10), date(2026, 9, 17), date(2026, 9, 18))
++
++
++def test_range_b_reaches_back_even_when_progress_is_ahead_of_it():
++    """(a) can be empty and (b) still selects: an illiquid target whose
++    progress already covers the newest bar is still RE-COMPARED over the
++    last two sessions, which is what catches a vendor restatement."""
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, d, 19, 55)) for d in (10, 17, 18)]
++    plan = plan_for(bars, fetch_started_at=fetch, archived_through=et(2026, 9, 18, 19, 55))
++    assert [b.ts for b in plan.candidates] == [b.ts for b in bars]
++    assert plan.below_range == 0
++
++
++def test_todays_date_is_in_range_b_even_with_no_completed_session_in_the_export():
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, 18, 19, 55))]
++    assert steady_state_dates(bars, fetch) == (date(2026, 9, 18),)
++
++
++def test_duplicate_input_keys_are_counted_once_and_not_offered_twice():
++    fetch = et(2026, 9, 18, 20, 30)
++    ts = et(2026, 9, 18, 19, 55)
++    split = split_export([bar(ts), bar(ts, close="101.00")], Interval.I5, fetch)
++    assert split.fetched == 2
++    assert split.duplicate_input_keys == 1
++    assert len(split.eligible) == 1
++
++
++# =====================================================================
++# §7 — regression, gap, empty export
++# =====================================================================
++
++
++def test_a_strict_regression_fails_with_the_evidence_kept():
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, 17, 19, 55))]
++    plan = plan_for(bars, fetch_started_at=fetch, archived_through=et(2026, 9, 18, 19, 55))
++    outcome = reconcile(plan, {})
++    assert outcome.status is TargetStatus.FAILED
++    assert [i.kind for i in outcome.incidents] == [IncidentKind.REGRESSION]
++    incident = outcome.incidents[0]
++    assert incident.detail["export_newest"] == et(2026, 9, 17, 19, 55).isoformat()
++    assert incident.detail["archived_through"] == et(2026, 9, 18, 19, 55).isoformat()
++    assert outcome.archived_through_after is None      # progress unchanged
++    assert outcome.to_insert == ()
++
++
++def test_an_equal_newest_bar_is_not_a_regression_illiquid_thin_three_sessions():
++    """Grok's objection, answered by §7: 'an illiquid name whose last
++    print does not move can fail that same clock check every night'. It
++    does not — EQUAL is fine, and the target SUCCEEDS with zero inserts."""
++    newest = et(2026, 9, 16, 15, 55)
++    for day in (16, 17, 18):
++        fetch = et(2026, 9, day, 20, 30)
++        plan = plan_for(
++            [bar(newest, ticker="THIN")], fetch_started_at=fetch, archived_through=newest,
++            ticker="THIN",
++        )
++        outcome = reconcile(plan, stored_from([bar(newest, ticker="THIN")]))
++        assert outcome.status is TargetStatus.SUCCESS, day
++        assert outcome.incidents == ()
++        assert outcome.to_insert == ()
++        assert outcome.counts(inserted=0, concurrent_conflicts=0).inserted == 0
++
++
++def test_a_half_day_is_not_truncation_and_not_a_regression():
++    """Grok: '13:00/16:00 is "older" than last night's 19:59'. Compared as
++    BAR TIMESTAMPS, Friday 12:55 is NEWER than Wednesday 19:59."""
++    fetch = et(2026, 11, 27, 20, 30)
++    bars = [bar(et(2026, 11, 25, 19, 55)), bar(et(2026, 11, 27, 12, 55))]
++    plan = plan_for(bars, fetch_started_at=fetch, archived_through=et(2026, 11, 25, 19, 55))
++    outcome = reconcile(plan, stored_from([bar(et(2026, 11, 25, 19, 55))]))
++    assert outcome.status is TargetStatus.SUCCESS
++    assert not any(i.kind is IncidentKind.REGRESSION for i in outcome.incidents)
++    assert outcome.archived_through_after == et(2026, 11, 27, 12, 55)
++
++
++def test_the_imcc_case_a_future_dated_row_then_a_valid_unchanged_export():
++    """A failed night's observation is NEVER the baseline (§7). The
++    future-dated row is excluded as incomplete, and the next valid export
++    with an unchanged newest bar succeeds."""
++    fetch1 = et(2026, 9, 17, 20, 30)
++    poisoned = [bar(et(2026, 9, 17, 15, 55)), bar(et(2027, 1, 4, 10, 0))]
++    plan1 = plan_for(poisoned, fetch_started_at=fetch1, archived_through=et(2026, 9, 17, 15, 55))
++    out1 = reconcile(plan1, stored_from([bar(et(2026, 9, 17, 15, 55))]))
++    assert out1.status is TargetStatus.SUCCESS
++    assert out1.export_newest == et(2026, 9, 17, 15, 55)
++    assert out1.raw_export_newest == et(2027, 1, 4, 10, 0)
++
++    fetch2 = et(2026, 9, 18, 20, 30)
++    plan2 = plan_for(
++        [bar(et(2026, 9, 17, 15, 55))], fetch_started_at=fetch2,
++        archived_through=et(2026, 9, 17, 15, 55),
++    )
++    out2 = reconcile(plan2, stored_from([bar(et(2026, 9, 17, 15, 55))]))
++    assert out2.status is TargetStatus.SUCCESS
++
++
++def test_a_gap_opens_when_the_export_starts_after_the_watermark():
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, 17, 19, 55)), bar(et(2026, 9, 18, 19, 55))]
++    plan = plan_for(bars, fetch_started_at=fetch, archived_through=et(2026, 9, 4, 19, 55))
++    outcome = reconcile(plan, {})
++    assert outcome.status is TargetStatus.DEGRADED
++    gap = next(i for i in outcome.incidents if i.kind is IncidentKind.GAP)
++    assert gap.range_start == et(2026, 9, 4, 19, 55)
++    assert gap.range_end == et(2026, 9, 17, 19, 55)
++    assert "unavailable from the tested export interface" in gap.detail["wording"]
++    assert gap.detail["suspected_unavailable"] is True
++    assert gap.detail["proven_missing"] is False
++    # The usable range is still appended, and progress still advances.
++    assert len(outcome.to_insert) == 2
++    assert outcome.archived_through_after == et(2026, 9, 18, 19, 55)
++
++
++def test_no_gap_on_a_bootstrap_the_report_says_unassessed_instead():
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, 18, 19, 55))]
++    outcome = reconcile(plan_for(bars, fetch_started_at=fetch, archived_through=None), {})
++    assert not any(i.kind is IncidentKind.GAP for i in outcome.incidents)
++    assert outcome.bootstrap is True
++    assert outcome.unassessed_before == et(2026, 9, 18, 19, 55)
++
++
++def test_an_export_with_rows_but_no_eligible_bar_is_an_empty_export_failure():
++    fetch = et(2026, 9, 18, 19, 59)
++    plan = plan_for([bar(et(2026, 9, 18, 19, 55))], fetch_started_at=fetch,
++                    archived_through=et(2026, 9, 17, 19, 55))
++    outcome = reconcile(plan, {})
++    assert outcome.status is TargetStatus.FAILED
++    assert [i.kind for i in outcome.incidents] == [IncidentKind.EMPTY_EXPORT]
++    assert outcome.archived_through_after is None
++
++
++def test_an_export_with_no_rows_at_all_is_an_empty_export_failure():
++    outcome = reconcile(plan_for([], fetch_started_at=et(2026, 9, 18, 20, 30)), {})
++    assert outcome.status is TargetStatus.FAILED
++    assert [i.kind for i in outcome.incidents] == [IncidentKind.EMPTY_EXPORT]
++
++
++def test_an_empty_export_does_not_establish_progress_so_the_next_night_bootstraps():
++    empty = reconcile(plan_for([], fetch_started_at=et(2026, 9, 17, 20, 30)), {})
++    assert empty.archived_through_after is None
++    good = reconcile(
++        plan_for([bar(et(2026, 9, 18, 19, 55))], fetch_started_at=et(2026, 9, 18, 20, 30)), {}
++    )
++    assert good.bootstrap is True
++
++
++# =====================================================================
++# §6 — the four-way comparison, normalisation and withholding
++# =====================================================================
++
++
++def test_normalisation_is_numeric_14_4_and_integer_volume():
++    assert normalise_price("100.1") == Decimal("100.1000")
++    assert normalise_price(Decimal("100.10000")) == Decimal("100.1000")
++    assert normalise_price(Decimal("100.10004")) == Decimal("100.1000")
++    assert normalise_volume(Decimal("1234")) == 1234
++    assert normalise_volume(1234) == 1234
++
++
++def test_equal_after_normalisation_is_not_a_difference():
++    ts = et(2026, 9, 18, 19, 55)
++    vendor = [bar(ts, close="100.00")]
++    stored = {ts: bar_values(bar(ts, close="100.0000"))}
++    result = compare(vendor, stored)
++    assert result.equal == (ts,)
++    assert result.differing == () and result.incoming_only == () and result.stored_only == ()
++
++
++def test_a_field_level_difference_is_recorded_with_both_values():
++    ts = et(2026, 9, 18, 19, 55)
++    vendor = [bar(ts, close="105.00", volume=2000)]
++    stored = {ts: bar_values(bar(ts, close="100.00", volume=1234))}
++    result = compare(vendor, stored)
++    (difference,) = result.differing
++    assert difference.ts == ts
++    assert {f.field for f in difference.fields} == {"close", "volume"}
++    close = next(f for f in difference.fields if f.field == "close")
++    assert close.stored == "100.0000" and close.vendor == "105.0000"
++
++
++def test_stored_only_keys_are_flagged_and_nothing_is_deleted():
++    fetch = et(2026, 9, 18, 20, 30)
++    kept = et(2026, 9, 18, 19, 50)
++    vendor = [bar(et(2026, 9, 18, 19, 55))]
++    plan = plan_for(vendor, fetch_started_at=fetch, archived_through=et(2026, 9, 18, 19, 40))
++    outcome = reconcile(plan, stored_from([bar(kept)]))
++    assert outcome.stored_only_keys == (kept,)
++    assert outcome.status is TargetStatus.DEGRADED
++    assert any(i.kind is IncidentKind.STORED_ONLY for i in outcome.incidents)
++    assert outcome.to_insert and all(b.ts != kept for b in outcome.to_insert)
++
++
++def test_any_ohlcv_difference_withholds_the_whole_target():
++    fetch = et(2026, 9, 18, 20, 30)
++    old = et(2026, 9, 18, 19, 50)
++    new = et(2026, 9, 18, 19, 55)
++    plan = plan_for([bar(old, close="105.00"), bar(new)], fetch_started_at=fetch,
++                    archived_through=old)
++    outcome = reconcile(plan, stored_from([bar(old, close="100.00")]))
++    assert outcome.status is TargetStatus.FAILED
++    assert [i.kind for i in outcome.incidents] == [IncidentKind.RESTATED]
++    assert outcome.to_insert == ()                 # NO insert for this target tonight
++    assert outcome.archived_through_after is None  # progress unchanged
++    assert outcome.withheld == 1                   # the one incoming-only key
++    assert "no automatic repair" in outcome.reason or "restate" in outcome.reason
++
++
++@pytest.mark.parametrize("field,kwargs", [
++    ("open", {"open_": "99.50"}),
++    ("high", {"high": "101.50"}),
++    ("low", {"low": "98.00"}),
++    ("close", {"close": "100.25"}),
++    ("volume", {"volume": 9999}),
++])
++def test_a_difference_in_any_one_of_the_five_fields_withholds(field, kwargs):
++    fetch = et(2026, 9, 18, 20, 30)
++    ts = et(2026, 9, 18, 19, 50)
++    plan = plan_for([bar(ts, **kwargs)], fetch_started_at=fetch, archived_through=ts)
++    outcome = reconcile(plan, stored_from([bar(ts)]))
++    assert outcome.status is TargetStatus.FAILED
++    assert outcome.incidents[0].detail["differing"][0]["fields"][0]["field"] == field
++
++
++def test_nothing_is_ever_repaired_automatically():
++    """§6: 'Never an automatic repair, by constant factor or otherwise.'
++    A whole-export constant-factor difference — the split-like case — is
++    still a withholding, never a rescale."""
++    fetch = et(2026, 9, 18, 20, 30)
++    keys = [et(2026, 9, 18, 19, 40 + i) for i in range(0, 15, 5)]
++    plan = plan_for([bar(k, close="50.00", open_="49.50", high="50.50", low="49.25") for k in keys],
++                    fetch_started_at=fetch, archived_through=keys[-1])
++    stored = stored_from([bar(k, close="100.00", open_="99.00", high="101.00", low="98.50")
++                          for k in keys])
++    outcome = reconcile(plan, stored)
++    assert outcome.status is TargetStatus.FAILED
++    assert outcome.to_insert == ()
++    assert len(outcome.incidents[0].detail["differing"]) == 3
++
++
++# =====================================================================
++# The four ROUND-2 SEQUENCES, on the houses' own dates
++# =====================================================================
++
++
++def test_gemini_monday_1400_restoration_seen_on_tuesday():
++    """Gemini, round 2: bars for Monday 14:00-14:05 are RESTORED by the
++    vendor and first appear in Tuesday 09:30's data. The poller's
++    `max(ts)` has long since moved past them, so a `max(ts)` watermark
++    drops them forever. `archived_through` does not: Monday's accepted
++    export set it to Monday's newest bar, and the restored keys lie
++    inside range (b)."""
++    fetch = et(2026, 9, 22, 20, 30)                   # Tuesday night
++    restored = [et(2026, 9, 21, 14, 0), et(2026, 9, 21, 14, 5)]
++    monday_newest = et(2026, 9, 21, 19, 55)
++    export = [bar(t, Interval.I1) for t in restored] + [
++        bar(monday_newest, Interval.I1), bar(et(2026, 9, 22, 19, 55), Interval.I1)
++    ]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=monday_newest,
++                    interval=Interval.I1)
++    # Both restored keys are candidates even though they are OLDER than
++    # the watermark — that is range (b) doing its job.
++    assert set(restored) <= {b.ts for b in plan.candidates}
++    stored = stored_from([bar(monday_newest, Interval.I1)])
++    outcome = reconcile(plan, stored)
++    assert outcome.status is TargetStatus.SUCCESS
++    assert {b.ts for b in outcome.to_insert} == set(restored) | {et(2026, 9, 22, 19, 55)}
++    counts = outcome.counts(inserted=3, concurrent_conflicts=0)
++    assert counts.late == 2 and counts.new == 1
++
++
++def test_astra_friday_1002_late_addition_appears_after_a_weekend():
++    """Astra, round 2: a bar for Friday 10:02 is added by the vendor and
++    is first seen on Monday 09:36. The weekend is not 72 hours of
++    arithmetic — Friday is simply one of the two most recent completed
++    session DATES the export carries (§4)."""
++    fetch = et(2026, 9, 21, 20, 30)                   # Monday night
++    late_key = et(2026, 9, 18, 10, 2)
++    friday_newest = et(2026, 9, 18, 19, 55)
++    export = [
++        bar(et(2026, 9, 17, 19, 55), Interval.I1),
++        bar(late_key, Interval.I1),
++        bar(friday_newest, Interval.I1),
++        bar(et(2026, 9, 21, 19, 55), Interval.I1),
++    ]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=friday_newest,
++                    interval=Interval.I1)
++    assert late_key in {b.ts for b in plan.candidates}
++    assert plan.range_dates == (date(2026, 9, 17), date(2026, 9, 18), date(2026, 9, 21))
++    outcome = reconcile(plan, stored_from([
++        bar(et(2026, 9, 17, 19, 55), Interval.I1), bar(friday_newest, Interval.I1)
++    ]))
++    assert {b.ts for b in outcome.to_insert} == {late_key, et(2026, 9, 21, 19, 55)}
++    counts = outcome.counts(inserted=2, concurrent_conflicts=0)
++    assert counts.late == 1 and counts.new == 1
++
++
++def test_grok_nvda_wednesday_1017_appears_on_thursday():
++    """Grok, round 2: NVDA's Wednesday 10:17 bar appears on Thursday.
++    The poller's maximum never enters the decision — it is reported
++    beside the counters and used by nothing (§7)."""
++    fetch = et(2026, 9, 17, 20, 30)                   # Thursday night
++    late_key = et(2026, 9, 16, 10, 17)
++    wed_newest = et(2026, 9, 16, 19, 55)
++    export = [bar(t, Interval.I1, ticker="NVDA") for t in (
++        late_key, wed_newest, et(2026, 9, 17, 19, 55)
++    )]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=wed_newest,
++                    ticker="NVDA", interval=Interval.I1)
++    outcome = reconcile(
++        plan, stored_from([bar(wed_newest, Interval.I1, ticker="NVDA")]),
++        poller_watermark=et(2026, 9, 17, 19, 55),
++    )
++    assert late_key in {b.ts for b in outcome.to_insert}
++    assert outcome.poller_watermark == et(2026, 9, 17, 19, 55)
++    assert outcome.archived_through_after == et(2026, 9, 17, 19, 55)
++
++
++def test_the_gap_a_poller_backfill_would_have_hidden_msft_0827_to_0904():
++    """Astra, round 2 (MSFT 08-27 / 09-04) and Grok's AAPL re-added: a
++    poller back-fill moves `max(ts)` forward across days the archiver
++    never covered, so a `max(ts)` gap test reads clean. `archived_through`
++    still sits at 08-27 and the gap opens."""
++    fetch = et(2026, 9, 4, 20, 30)
++    export = [bar(et(2026, 9, 3, 19, 55)), bar(et(2026, 9, 4, 19, 55))]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=et(2026, 8, 27, 19, 55))
++    outcome = reconcile(plan, {}, poller_watermark=et(2026, 9, 4, 19, 55))
++    gap = next(i for i in outcome.incidents if i.kind is IncidentKind.GAP)
++    assert gap.range_start == et(2026, 8, 27, 19, 55)
++    assert gap.range_end == et(2026, 9, 3, 19, 55)
++    assert outcome.status is TargetStatus.DEGRADED
++    assert outcome.poller_watermark == et(2026, 9, 4, 19, 55)
++
++
++def test_a_progress_row_survives_a_ticker_leaving_and_returning():
++    """Round-2 sequence #8. AAPL leaves the Lists note for a fortnight and
++    comes back; its progress row was never deleted, so the days it missed
++    are a GAP rather than silence."""
++    fetch = et(2026, 9, 18, 20, 30)
++    export = [bar(et(2026, 9, 17, 19, 55), ticker="AAPL"), bar(et(2026, 9, 18, 19, 55), ticker="AAPL")]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=et(2026, 9, 3, 19, 55),
++                    ticker="AAPL")
++    outcome = reconcile(plan, {})
++    assert any(i.kind is IncidentKind.GAP for i in outcome.incidents)
++    assert outcome.status is TargetStatus.DEGRADED
++
++
++def test_the_poller_maximum_never_enters_any_decision():
++    """Asserted directly: the same inputs with three different poller
++    watermarks produce byte-identical decisions."""
++    fetch = et(2026, 9, 18, 20, 30)
++    export = [bar(et(2026, 9, 18, 19, 55))]
++    outcomes = [
++        reconcile(
++            plan_for(export, fetch_started_at=fetch, archived_through=et(2026, 9, 17, 19, 55)),
++            {},
++            poller_watermark=w,
++        )
++        for w in (None, et(2026, 9, 1, 10, 0), et(2027, 1, 1, 10, 0))
++    ]
++    decisions = {
++        (o.status, o.archived_through_after, tuple(b.ts for b in o.to_insert),
++         tuple(i.kind for i in o.incidents))
++        for o in outcomes
++    }
++    assert len(decisions) == 1
++
++
++# =====================================================================
++# §7 — the counting identities (L57)
++# =====================================================================
++
++
++def test_msft_1959_after_1958_is_new_not_late():
++    fetch = et(2026, 9, 18, 20, 30)
++    previous = et(2026, 9, 18, 19, 58)
++    export = [bar(previous, Interval.I1, ticker="MSFT"), bar(et(2026, 9, 18, 19, 59), Interval.I1, ticker="MSFT")]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=previous,
++                    ticker="MSFT", interval=Interval.I1)
++    outcome = reconcile(plan, stored_from([bar(previous, Interval.I1, ticker="MSFT")]))
++    counts = outcome.counts(inserted=1, concurrent_conflicts=0)
++    assert counts.incoming_only == 1 and counts.new == 1 and counts.late == 0
++
++
++def test_msft_1959_already_stored_equal_is_one_one_zero():
++    """§15, verbatim: 'MSFT 19:59 already stored equal = 1 / 1 / 0'
++    — one candidate, one already-stored-equal, zero incoming-only."""
++    fetch = et(2026, 9, 18, 20, 30)
++    ts = et(2026, 9, 18, 19, 59)
++    plan = plan_for([bar(ts, Interval.I1, ticker="MSFT")], fetch_started_at=fetch,
++                    archived_through=ts, ticker="MSFT", interval=Interval.I1)
++    outcome = reconcile(plan, stored_from([bar(ts, Interval.I1, ticker="MSFT")]))
++    counts = outcome.counts(inserted=0, concurrent_conflicts=0)
++    assert (counts.candidates, counts.already_stored_equal, counts.incoming_only) == (1, 1, 0)
++
++
++def test_groks_hundred_key_case_reconciles():
++    """Equal, differing and incoming-only candidates in one target. The
++    difference withholds, so `withheld == incoming_only` and
++    `inserted == 0` — and every identity still closes."""
++    fetch = et(2026, 9, 18, 20, 30)
++    keys = [et(2026, 9, 18, 9, 30) + timedelta(minutes=5 * i) for i in range(100)]
++    export = [bar(k) for k in keys]
++    export[7] = bar(keys[7], close="999.00")
++    stored = stored_from([bar(k) for k in keys[:60]])
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=keys[59])
++    outcome = reconcile(plan, stored)
++    counts = outcome.counts(inserted=0, concurrent_conflicts=0)
++    assert counts.candidates == 100
++    assert counts.already_stored_equal == 59
++    assert counts.differing == 1
++    assert counts.incoming_only == 40
++    assert counts.withheld == 40 and counts.inserted == 0 and counts.concurrent_conflicts == 0
++
++
++def test_astras_aapl_i5_case_reconciles():
++    fetch = et(2026, 9, 18, 20, 30)
++    keys = [et(2026, 9, 18, 9, 30) + timedelta(minutes=5 * i) for i in range(12)]
++    export = [bar(k, ticker="AAPL") for k in keys]
++    stored = stored_from([bar(k, ticker="AAPL") for k in keys[:8]])
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=keys[7], ticker="AAPL")
++    outcome = reconcile(plan, stored)
++    counts = outcome.counts(inserted=4, concurrent_conflicts=0)
++    assert counts.candidates == counts.already_stored_equal + counts.differing + counts.incoming_only
++    assert counts.incoming_only == counts.inserted + counts.concurrent_conflicts
++    assert counts.fetched == (
++        counts.invalid + counts.duplicate_input_keys + counts.incomplete
++        + counts.below_range + counts.candidates
++    )
++
++
++def test_a_counted_conflict_is_not_an_error():
++    """A poller insert between the range read and this insert shows up as
++    `concurrent_conflicts`, and the identity still closes."""
++    fetch = et(2026, 9, 18, 20, 30)
++    keys = [et(2026, 9, 18, 19, 50), et(2026, 9, 18, 19, 55)]
++    plan = plan_for([bar(k) for k in keys], fetch_started_at=fetch, archived_through=keys[0])
++    outcome = reconcile(plan, stored_from([bar(keys[0])]))
++    counts = outcome.counts(inserted=0, concurrent_conflicts=1)
++    assert counts.incoming_only == 1
++    assert counts.inserted == 0 and counts.concurrent_conflicts == 1
++
++
++@pytest.mark.parametrize("bad", [
++    dict(inserted=5, concurrent_conflicts=0),     # more inserted than offered
++    dict(inserted=0, concurrent_conflicts=5),
++    dict(inserted=-1, concurrent_conflicts=0),
++])
++def test_a_non_reconciling_count_cannot_be_constructed(bad):
++    fetch = et(2026, 9, 18, 20, 30)
++    keys = [et(2026, 9, 18, 19, 50), et(2026, 9, 18, 19, 55)]
++    plan = plan_for([bar(k) for k in keys], fetch_started_at=fetch, archived_through=keys[0])
++    outcome = reconcile(plan, stored_from([bar(keys[0])]))
++    with pytest.raises(Exception):
++        outcome.counts(**bad)
++
++
++def test_the_counts_model_refuses_a_broken_identity_directly():
++    with pytest.raises(Exception) as e:
++        TargetCounts(
++            fetched=10, invalid=0, duplicate_input_keys=0, incomplete=0, below_range=0,
++            candidates=9,                       # 10 != 0+0+0+0+9
++            already_stored_equal=0, differing=0, incoming_only=9, new=9, late=0,
++            withheld=0, inserted=9, concurrent_conflicts=0, stored_only=0,
++        )
++    assert "fetched" in str(e.value)
++
++
++def test_a_withheld_target_has_zero_inserted_and_zero_conflicts():
++    with pytest.raises(Exception):
++        TargetCounts(
++            fetched=1, invalid=0, duplicate_input_keys=0, incomplete=0, below_range=0,
++            candidates=1, already_stored_equal=0, differing=0, incoming_only=1, new=1, late=0,
++            withheld=1, inserted=1, concurrent_conflicts=0, stored_only=0,
++        )
++
++
++def test_late_is_zero_on_a_bootstrap():
++    fetch = et(2026, 9, 18, 20, 30)
++    keys = [et(2026, 9, 18, 19, 50), et(2026, 9, 18, 19, 55)]
++    outcome = reconcile(plan_for([bar(k) for k in keys], fetch_started_at=fetch), {})
++    counts = outcome.counts(inserted=2, concurrent_conflicts=0)
++    assert counts.late == 0 and counts.new == 2
++
++
++def test_invalid_is_zero_by_construction_but_the_counter_survives():
++    """§7: the collector fails a whole target on one bad row, so `invalid`
++    is 0 today. The counter stays so the identity survives a collector
++    change."""
++    outcome = reconcile(
++        plan_for([bar(et(2026, 9, 18, 19, 55))], fetch_started_at=et(2026, 9, 18, 20, 30)), {}
++    )
++    assert outcome.counts(inserted=1, concurrent_conflicts=0).invalid == 0
++    assert "invalid" in TargetCounts.model_fields
++
++
++def test_stored_only_is_reported_beside_the_identities_not_inside_them():
++    fetch = et(2026, 9, 18, 20, 30)
++    vendor = [bar(et(2026, 9, 18, 19, 55))]
++    plan = plan_for(vendor, fetch_started_at=fetch, archived_through=et(2026, 9, 18, 19, 40))
++    outcome = reconcile(plan, stored_from([bar(et(2026, 9, 18, 19, 50))]))
++    counts = outcome.counts(inserted=1, concurrent_conflicts=0)
++    assert counts.stored_only == 1
++    assert counts.candidates == counts.already_stored_equal + counts.differing + counts.incoming_only
++
++
++# =====================================================================
++# Purity
++# =====================================================================
++
++
++def test_the_module_reads_no_clock_no_database_and_no_file():
++    """Purity asserted on the AST, not on prose: the module's docstring
++    explains WHY `max(ts)` is the wrong watermark and names the store
++    while doing it. What must stay absent is the import."""
++    import ast
++    import pathlib
++
++    import cobalt.archiver.reconcile as module
++
++    tree = ast.parse(pathlib.Path(module.__file__).read_text(encoding="utf-8"))
++    imported: set[str] = set()
++    for node in ast.walk(tree):
++        if isinstance(node, ast.Import):
++            imported.update(alias.name.split(".")[0] for alias in node.names)
++        elif isinstance(node, ast.ImportFrom):
++            imported.add((node.module or "").split(".")[0] or ".")
++    assert imported <= {
++        "__future__", "datetime", "decimal", "enum", "typing", "zoneinfo",
++        "pydantic", "models",
++    }, f"reconcile.py must stay pure; it imports {sorted(imported)}"
++    # The one relative import is the Pydantic models, nothing else.
++    relative = {
++        node.module
++        for node in ast.walk(tree)
++        if isinstance(node, ast.ImportFrom) and node.level
++    }
++    assert relative == {"models"}
++
++    called = {
++        node.func.attr
++        for node in ast.walk(tree)
++        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
++    } | {
++        node.func.id
++        for node in ast.walk(tree)
++        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
++    }
++    for forbidden in ("now", "utcnow", "today", "open", "read_text", "execute"):
++        assert forbidden not in called, f"reconcile.py calls {forbidden}()"
++
++
++def test_two_failed_nights_then_a_success_inserts_the_keys_still_in_the_window():
++    """§15: 'two failed nights then success (keys still in the window
++    insert)'. Progress never moved on the failures, so the third night's
++    range (a) still reaches back to the old watermark."""
++    watermark = et(2026, 9, 16, 19, 55)
++    for day in (17, 18):
++        out = reconcile(plan_for([], fetch_started_at=et(2026, 9, day, 20, 30),
++                                 archived_through=watermark), {})
++        assert out.status is TargetStatus.FAILED
++        assert out.archived_through_after is None
++
++    fetch = et(2026, 9, 21, 20, 30)
++    export = [bar(et(2026, 9, d, 19, 55)) for d in (16, 17, 18, 21)]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=watermark)
++    # The store read is bounded by the candidate range, and 09-16 is below
++    # it (not newer than the watermark, not one of the three range dates),
++    # so the read returns nothing.
++    assert watermark not in {b.ts for b in plan.candidates}
++    outcome = reconcile(plan, {})
++    assert {b.ts for b in outcome.to_insert} == {
++        et(2026, 9, 17, 19, 55), et(2026, 9, 18, 19, 55), et(2026, 9, 21, 19, 55)
++    }
++    assert outcome.archived_through_after == et(2026, 9, 21, 19, 55)
+diff --git a/tests/cobalt/test_archiver_runner.py b/tests/cobalt/test_archiver_runner.py
+new file mode 100644
+index 0000000..70a40d3
+--- /dev/null
++++ b/tests/cobalt/test_archiver_runner.py
+@@ -0,0 +1,763 @@
++"""Chunk N — the runner: MODE ISOLATION, the shadow compare, the append night.
++
++Spec `ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §5, §6, §7, §9.
++
++THERE WAS NO RUNNER TEST FILE BEFORE THIS ONE. The nightly run is the
++thing that writes 3.34M rows a night, and the only guard on it was the
++store's two integration tests.
++
++§5 is the promise this file exists to keep: **in `upsert` mode the
++write path is today's code byte for byte.** So the first section is
++DIFFERENTIAL — it asserts what the run does against what it did before
++the redesign — and the additions are PINNED by a test that fails if a
++fourth one appears.
++
++Everything here is offline: a fake store that records every call and a
++fake `fetch`. No database, no network, no clock read the test does not
++control.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import json
++from contextlib import contextmanager
++from datetime import datetime, timedelta, timezone
++from decimal import Decimal
++
++import pytest
++
++from cobalt.archiver import runner as runner_mod
++from cobalt.archiver import shadow as shadow_mod
++from cobalt.archiver.collector import CollectorError
++from cobalt.archiver.models import Bar, Interval
++from cobalt.archiver.reconcile import BarValues, IncidentKind, TargetStatus, bar_values
++from cobalt.archiver.settings import ArchiverSettings
++from cobalt.archiver.store import ArchiveLockError
++
++UTC = timezone.utc
++FETCH_AT = datetime(2026, 9, 18, 20, 30, tzinfo=UTC)
++
++
++def ts(day: int, hour: int, minute: int) -> datetime:
++    return datetime(2026, 9, day, hour, minute, tzinfo=UTC)
++
++
++def bar(when, close="100.00", ticker="TESTARCH", interval=Interval.I5, volume=1234) -> Bar:
++    return Bar(
++        ticker=ticker, interval=interval, ts=when,
++        open=Decimal("99.00"), high=Decimal("101.00"), low=Decimal("98.50"),
++        close=Decimal(close), volume=volume,
++    )
++
++
++def settings(write_mode="upsert", shadow_compare="on", **over) -> ArchiverSettings:
++    payload = {
++        "write_mode": write_mode,
++        "shadow_compare": shadow_compare,
++        "shadow_statement_timeout_s": 10,
++        "shadow_retention_nights": 30,
++        "repair": {
++            "quiet_before_open_min": 10,
++            "quiet_after_cycle_min": 5,
++            "cycle_max_min": 30,
++        },
++    }
++    payload.update(over)
++    return ArchiverSettings(**payload)
++
++
++# ---------------------------------------------------------------------
++# The fake store — records EVERY call, in order
++# ---------------------------------------------------------------------
++
++
++class FakeConn:
++    def __init__(self, store):
++        self.store = store
++
++    def execute(self, query, params=None):
++        self.store.calls.append(("conn.execute", str(query)[:40]))
++        return self
++
++    def fetchone(self):
++        return (True,)
++
++
++class FakeStore:
++    def __init__(self, *, stored=None, progress=None, lock_held=False, insert_rowcount=None):
++        self.calls: list[tuple] = []
++        self.stored: dict[tuple, dict] = dict(stored or {})
++        self.progress: dict[tuple, datetime] = dict(progress or {})
++        self.upserted: list[list[Bar]] = []
++        self.inserted: list[list[Bar]] = []
++        self.written_progress: list[tuple] = []
++        self.written_incidents: list[tuple] = []
++        self.lock_held = lock_held
++        self.insert_rowcount = insert_rowcount
++        self.rollbacks = 0
++
++    # --- what today's run already calls --------------------------------
++    def ensure_schema(self):
++        self.calls.append(("ensure_schema",))
++
++    def upsert_bars(self, bars, *, before_commit=None):
++        self.calls.append(("upsert_bars", len(bars)))
++        self.upserted.append(list(bars))
++        return len(bars)
++
++    # --- the append path ------------------------------------------------
++    @contextmanager
++    def run_lock(self, what):
++        self.calls.append(("run_lock", what))
++        if self.lock_held:
++            raise ArchiveLockError(f"another archive/repair run holds the lock — {what}")
++        yield FakeConn(self)
++
++    @contextmanager
++    def target_transaction(self):
++        self.calls.append(("target_transaction",))
++        conn = FakeConn(self)
++        try:
++            yield conn
++        except BaseException:
++            self.rollbacks += 1
++            raise
++
++    def _bars_in_range(self, conn, ticker, interval, start, end):
++        self.calls.append(("_bars_in_range", ticker, interval.value if hasattr(interval, "value") else interval))
++        held = self.stored.get((ticker, getattr(interval, "value", interval)), {})
++        return {k: v for k, v in held.items() if start is None or (start <= k <= end)}
++
++    def insert_new_bars(self, conn, bars):
++        self.calls.append(("insert_new_bars", len(bars)))
++        self.inserted.append(list(bars))
++        return len(bars) if self.insert_rowcount is None else self.insert_rowcount
++
++    @property
++    def names(self) -> list[str]:
++        return [c[0] for c in self.calls]
++
++    @property
++    def write_calls(self) -> list[str]:
++        return [n for n in self.names if n in {"upsert_bars", "insert_new_bars"}]
++
++
++class FakeProgress:
++    """Stands in for `cobalt.archiver.progress`, recording every write."""
++
++    def __init__(self, store: FakeStore):
++        self.store = store
++
++    def read_archived_through(self, conn, ticker, interval):
++        self.store.calls.append(("read_progress", ticker))
++        return self.store.progress.get((ticker, getattr(interval, "value", interval)))
++
++    def upsert_progress(self, conn, *, plan, run_id, now):
++        if plan.archived_through_after is None:
++            raise RuntimeError("not accepted")
++        self.store.calls.append(("upsert_progress", plan.ticker, plan.archived_through_after))
++        self.store.written_progress.append((plan.ticker, plan.archived_through_after, run_id))
++
++
++class FakeIncidents:
++    def __init__(self, store: FakeStore):
++        self.store = store
++        self._next = 1
++
++    def open_or_refresh(self, conn, draft, *, run_id, now):
++        self.store.calls.append(("open_incident", draft.kind.value, draft.ticker))
++        self.store.written_incidents.append((draft.kind, draft.ticker, run_id))
++        self._next += 1
++        return self._next - 1
++
++
++@pytest.fixture
++def wired(monkeypatch, tmp_path):
++    """A runner wired to fakes, with the shadow artifact in tmp_path."""
++    monkeypatch.setattr(shadow_mod, "SHADOW_DIR", tmp_path / "archiver-shadow")
++
++    def _wire(store: FakeStore):
++        monkeypatch.setattr(runner_mod, "progress", FakeProgress(store))
++        monkeypatch.setattr(runner_mod, "incidents", FakeIncidents(store))
++        return store
++
++    return _wire
++
++
++def run(targets, *, store, fetch, cfg, mode="full", now=FETCH_AT):
++    return asyncio.run(
++        runner_mod._run_targets(
++            targets, mode=mode, store=store, fetch=fetch, settings=cfg, now=lambda: now
++        )
++    )
++
++
++def fetcher(mapping):
++    async def _fetch(ticker, interval, token, **kwargs):
++        key = (ticker, getattr(interval, "value", interval))
++        value = mapping[key]
++        if isinstance(value, Exception):
++            raise value
++        return list(value)
++
++    return _fetch
++
++
++@pytest.fixture(autouse=True)
++def _no_sleep_no_token(monkeypatch):
++    async def _instant(_seconds):
++        return None
++
++    async def _token():
++        return "TEST-TOKEN"
++
++    monkeypatch.setattr(runner_mod.asyncio, "sleep", _instant)
++    monkeypatch.setattr(runner_mod, "resolve_token", _token)
++
++
++# =====================================================================
++# §5 — MODE ISOLATION, differential against today's behaviour
++# =====================================================================
++
++
++NIGHT_1 = [bar(ts(17, 19, 55)), bar(ts(18, 19, 50)), bar(ts(18, 19, 55))]
++#: the latest bar has NOT closed at 20:30? it has — this one is the
++#: forming bar a fetch at 19:56 would carry.
++FORMING = bar(ts(18, 20, 29), close="101.00")
++
++
++@pytest.mark.parametrize("night", [1, 2])
++def test_upsert_sends_the_whole_export_on_every_night(wired, night):
++    store = wired(FakeStore(progress={("TESTARCH", "i5"): ts(18, 19, 50)}))
++    export = NIGHT_1 + [FORMING]
++    run([("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): export}), cfg=settings(shadow_compare="off"))
++    if night == 2:
++        run([("TESTARCH", Interval.I5)], store=store,
++            fetch=fetcher({("TESTARCH", "i5"): export}), cfg=settings(shadow_compare="off"))
++    for sent in store.upserted:
++        assert sent == export, "the whole export, unfiltered — no completeness cut"
++    assert len(store.upserted) == night
++
++
++def test_upsert_keeps_the_incomplete_latest_bar(wired):
++    store = wired(FakeStore())
++    run([("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1 + [FORMING]}),
++        cfg=settings(shadow_compare="off"))
++    assert FORMING in store.upserted[0]
++
++
++def test_upsert_writes_no_progress_and_no_incident(wired):
++    store = wired(FakeStore())
++    run([("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert store.written_progress == []
++    assert store.written_incidents == []
++    assert "insert_new_bars" not in store.names
++
++
++def test_upsert_keeps_todays_failure_on_an_empty_export(wired):
++    store = wired(FakeStore())
++    summary = run(
++        [("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): CollectorError("No data rows for TESTARCH/i5.")}),
++        cfg=settings(shadow_compare="off"),
++    )
++    assert len(summary.failures) == 1
++    assert "No data rows" in summary.failures[0]
++    assert store.written_incidents == []
++
++
++def test_upsert_keeps_the_submitted_row_count(wired):
++    """`rows_written` in `upsert` mode is rows SUBMITTED, as it has always
++    been — `upsert_bars` returns `len(rows)` and the report says so."""
++    store = wired(FakeStore())
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert summary.rows_written == len(NIGHT_1) == 3
++    assert summary.requests == 1
++    assert summary.tickers == {"TESTARCH"}
++
++
++def test_upsert_keeps_the_run_report_row_byte_for_byte(wired, tmp_path, monkeypatch):
++    from cobalt.archiver import report as report_mod
++
++    path = tmp_path / "archiver-runs.md"
++    monkeypatch.setattr(report_mod, "REPORT_PATH", path)
++    store = wired(FakeStore())
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    report_mod.append_run_report(summary)
++    content = path.read_text()
++    assert report_mod.COLUMNS in content
++    assert report_mod.APPEND_COLUMNS not in content, (
++        "the append columns must not appear on an upsert night"
++    )
++    row = [line for line in content.splitlines() if line.startswith("| 2026")][-1]
++    assert row.count("|") == 9        # 8 columns, today's shape
++    assert "| full | cobalt_dev | 1 | 1 | 3 | 0 |" in row
++
++
++def test_the_complete_list_of_upsert_mode_additions_is_pinned(wired):
++    """§5: exactly THREE things a night in `upsert` mode now does that
++    today's night does not — (1) the run-level lock, (2) the pre-write
++    shadow read, (3) one `shadow` key in `job.result` plus one artifact.
++    This test fails if a fourth appears."""
++    off = wired(FakeStore())
++    run([("TESTARCH", Interval.I5)], store=off,
++        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(shadow_compare="off"))
++    # (1) the lock, and NOTHING else beyond today's two calls.
++    assert off.names == ["run_lock", "ensure_schema", "upsert_bars"]
++
++    on = wired(FakeStore())
++    summary = run([("TESTARCH", Interval.I5)], store=on,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    # (2) the shadow read: one transaction, its statement_timeout, one
++    #     range read — all before the write, and nothing else.
++    assert on.names == [
++        "run_lock", "ensure_schema", "target_transaction", "conn.execute",
++        "_bars_in_range", "upsert_bars",
++    ]
++    assert "set_config" in on.calls[3][1], "the shadow read must be time-bounded"
++    # (3) the one extra key in the job result.
++    assert set(summary.job_result()) == {
++        "rows_written", "tickers", "requests", "failures", "duration", "shadow"
++    }
++    # ...and no write method was reached by the shadow.
++    assert on.write_calls == ["upsert_bars"]
++
++
++def test_run_targets_mode_still_means_the_report_scope(wired):
++    store = wired(FakeStore())
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(),
++                  mode="backfill:TESTARCH")
++    assert summary.mode == "backfill:TESTARCH"
++    assert summary.write_mode == "upsert"
++
++
++def test_any_other_write_mode_is_refused_before_the_run_starts():
++    with pytest.raises(Exception) as e:
++        settings(write_mode="both")
++    assert "archiver.write_mode" in str(e.value)
++
++
++def test_the_run_level_lock_is_taken_in_both_write_modes(wired):
++    for mode in ("upsert", "append"):
++        store = wired(FakeStore())
++        run([("TESTARCH", Interval.I5)], store=store,
++            fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(write_mode=mode))
++        assert store.names[0] == "run_lock"
++        assert mode in store.calls[0][1]
++
++
++def test_a_second_run_refuses_on_the_lock(wired):
++    store = wired(FakeStore(lock_held=True))
++    with pytest.raises(ArchiveLockError):
++        run([("TESTARCH", Interval.I5)], store=store,
++            fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert store.write_calls == []
++
++
++# =====================================================================
++# §5 — THE SHADOW COMPARE
++# =====================================================================
++
++
++def _stored(pairs):
++    return {("TESTARCH", "i5"): {b.ts: bar_values(b) for b in pairs}}
++
++
++def test_the_shadow_runs_after_the_fetch_and_before_the_write(wired):
++    store = wired(FakeStore(stored=_stored(NIGHT_1[:2])))
++    run([("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert store.names.index("_bars_in_range") < store.names.index("upsert_bars")
++
++
++def test_the_shadow_record_is_labelled_pre_write(wired, tmp_path):
++    store = wired(FakeStore(stored=_stored(NIGHT_1[:2])))
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    (record,) = summary.shadow_records
++    assert record.label == "pre-write"
++
++
++@pytest.mark.parametrize("boom", [
++    RuntimeError("the shadow read blew up"),
++    TimeoutError("statement timeout"),
++])
++def test_a_shadow_failure_leaves_the_target_and_the_summary_identical(wired, boom, monkeypatch):
++    clean = wired(FakeStore())
++    expected = run([("TESTARCH", Interval.I5)], store=clean,
++                   fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(shadow_compare="off"))
++
++    broken = wired(FakeStore())
++
++    def _explode(*a, **k):
++        raise boom
++
++    monkeypatch.setattr(shadow_mod, "observe", _explode)
++    actual = run([("TESTARCH", Interval.I5)], store=broken,
++                 fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++
++    assert broken.upserted == clean.upserted
++    assert (actual.rows_written, actual.requests, actual.failures) == (
++        expected.rows_written, expected.requests, expected.failures
++    )
++    assert actual.shadow_errors == 1
++    assert expected.shadow_errors == 0
++
++
++def test_a_slow_shadow_read_does_not_slow_the_write_path(wired, monkeypatch):
++    """The read is bounded by its own `statement_timeout` (§10), and the
++    target's upsert runs whatever the shadow did."""
++    store = wired(FakeStore())
++    seen = {}
++
++    real = shadow_mod.observe
++
++    def _slow(*a, **k):
++        seen["called"] = True
++        raise TimeoutError("canceling statement due to statement timeout")
++
++    monkeypatch.setattr(shadow_mod, "observe", _slow)
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert seen["called"] and summary.rows_written == 3
++    assert real is not None
++
++
++def test_the_shadow_writes_nothing_to_the_database(wired):
++    store = wired(FakeStore(stored=_stored(NIGHT_1)))
++    run([("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert store.write_calls == ["upsert_bars"]
++    assert store.written_progress == [] and store.written_incidents == []
++
++
++def test_shadow_compare_off_skips_it_entirely(wired):
++    store = wired(FakeStore())
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(shadow_compare="off"))
++    assert "_bars_in_range" not in store.names
++    assert summary.shadow_records == []
++    assert "shadow" not in summary.job_result()
++
++
++def test_the_shadow_reports_both_scopes(wired):
++    """§5: the four-way comparison computed TWICE — the BOOTSTRAP scope
++    (the whole export) and the STEADY-STATE scope (range (b))."""
++    export = [bar(ts(3, 19, 55)), bar(ts(4, 19, 55)), bar(ts(17, 19, 55)), bar(ts(18, 19, 55))]
++    store = wired(FakeStore(stored=_stored([export[0]])))
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): export}), cfg=settings())
++    (record,) = summary.shadow_records
++    assert record.bootstrap.candidates == 4
++    # Range (b): today (09-18) + the two most recent completed session
++    # dates the export carries (09-04, 09-17). 09-03 is below it.
++    assert record.steady_state.candidates == 3
++    assert record.bootstrap.already_stored_equal == 1
++    assert record.steady_state.already_stored_equal == 0
++
++
++def test_the_shadow_records_field_level_differences_after_normalisation(wired):
++    export = [bar(ts(18, 19, 55), close="105.00", volume=2000)]
++    store = wired(FakeStore(stored=_stored([bar(ts(18, 19, 55), close="100.00")])))
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): export}), cfg=settings())
++    (record,) = summary.shadow_records
++    assert record.bootstrap.would_withhold is True
++    (difference,) = record.bootstrap.differing
++    assert difference["ts"] == ts(18, 19, 55).isoformat()
++    assert {f["field"] for f in difference["fields"]} == {"close", "volume"}
++    assert next(f for f in difference["fields"] if f["field"] == "close")["stored"] == "100.0000"
++
++
++def test_an_equal_rendering_is_not_recorded_as_a_difference(wired):
++    export = [bar(ts(18, 19, 55), close="100.0")]
++    store = wired(FakeStore(stored=_stored([bar(ts(18, 19, 55), close="100.0000")])))
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): export}), cfg=settings())
++    (record,) = summary.shadow_records
++    assert record.bootstrap.differing == []
++    assert record.bootstrap.would_withhold is False
++
++
++def test_the_artifact_is_json_lines_with_the_recorded_schema(wired, tmp_path):
++    store = wired(FakeStore(stored=_stored(NIGHT_1[:1])))
++    run([("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    # The RUN wrote it; the night is the clock's date, not the wall clock.
++    path = shadow_mod.SHADOW_DIR / "2026-09-18.jsonl"
++    assert path.exists()
++    (line,) = path.read_text(encoding="utf-8").strip().splitlines()
++    payload = json.loads(line)
++    assert payload["label"] == "pre-write"
++    assert payload["ticker"] == "TESTARCH" and payload["interval"] == "i5"
++    for key in (
++        "export_oldest", "export_newest", "raw_export_newest", "fetched",
++        "poller_writable", "bootstrap", "steady_state", "fetch_started_at",
++    ):
++        assert key in payload, key
++    for scope in ("bootstrap", "steady_state"):
++        for key in (
++            "candidates", "already_stored_equal", "differing", "incoming_only",
++            "new", "late", "stored_only", "would_withhold",
++        ):
++            assert key in payload[scope], (scope, key)
++
++
++def test_retention_deletes_only_nights_older_than_the_window(wired, tmp_path):
++    directory = shadow_mod.SHADOW_DIR
++    directory.mkdir(parents=True, exist_ok=True)
++    for age in (0, 1, 29, 30, 31, 400):
++        night = (FETCH_AT - timedelta(days=age)).date()
++        (directory / f"{night.isoformat()}.jsonl").write_text("{}\n", encoding="utf-8")
++    shadow_mod.apply_retention(retention_nights=30, today=FETCH_AT.date())
++    kept = sorted(p.stem for p in directory.glob("*.jsonl"))
++    assert kept == sorted(
++        (FETCH_AT - timedelta(days=age)).date().isoformat() for age in (0, 1, 29)
++    )
++
++
++def test_shadow_report_says_which_differences_persisted_vanished_and_appeared():
++    """§5: refreshed storage alone cannot show revision frequency, so the
++    artifact is a RETAINED baseline and `shadow-report` reads across
++    nights. Astra and Grok both required this."""
++    nights = [
++        ("2026-09-16", {("AAPL", "i5", "2026-09-16T13:30:00+00:00")}),
++        ("2026-09-17", {("AAPL", "i5", "2026-09-16T13:30:00+00:00"),
++                        ("MSFT", "i1", "2026-09-17T13:30:00+00:00")}),
++        ("2026-09-18", {("MSFT", "i1", "2026-09-17T13:30:00+00:00"),
++                        ("NVDA", "i5", "2026-09-18T13:30:00+00:00")}),
++    ]
++    verdict = shadow_mod.persisted_vanished_appeared(nights)
++    assert verdict["persisted"] == [("MSFT", "i1", "2026-09-17T13:30:00+00:00")]
++    assert verdict["vanished"] == [("AAPL", "i5", "2026-09-16T13:30:00+00:00")]
++    assert verdict["appeared"] == [("NVDA", "i5", "2026-09-18T13:30:00+00:00")]
++
++
++def test_the_shadow_aggregate_reaches_the_job_result(wired):
++    export = [bar(ts(18, 19, 55), close="105.00")]
++    store = wired(FakeStore(stored=_stored([bar(ts(18, 19, 55), close="100.00")])))
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): export}), cfg=settings())
++    aggregate = summary.job_result()["shadow"]
++    assert aggregate["targets_compared"] == 1
++    assert aggregate["targets_errored"] == 0
++    assert aggregate["would_withhold_by_interval"] == {"i5": 1}
++    assert aggregate["would_withhold_poller_writable"] == 0
++    assert aggregate["would_withhold_archiver_only"] == 1
++    assert aggregate["volume_only"] == 0
++    assert aggregate["any_ohlc"] == 1
++    assert "late" in aggregate and "new" in aggregate
++
++
++# =====================================================================
++# §6, §7 — THE APPEND NIGHT
++# =====================================================================
++
++
++def append_run(store, export, *, progress=None, mode="full"):
++    if progress:
++        store.progress.update(progress)
++    return run([("TESTARCH", Interval.I5)], store=store,
++               fetch=fetcher({("TESTARCH", "i5"): export}),
++               cfg=settings(write_mode="append"), mode=mode)
++
++
++def test_append_bootstrap_offers_the_whole_eligible_export(wired):
++    store = wired(FakeStore())
++    summary = append_run(store, NIGHT_1 + [FORMING])
++    assert store.upserted == []                              # never DO UPDATE
++    assert [b.ts for b in store.inserted[0]] == [b.ts for b in NIGHT_1]
++    assert FORMING not in store.inserted[0]                  # incomplete, excluded
++    assert store.written_progress == [("TESTARCH", ts(18, 19, 55), summary.run_id)]
++    assert summary.bootstraps == 1
++
++
++def test_append_steady_state_offers_only_what_is_missing(wired):
++    store = wired(FakeStore(stored=_stored(NIGHT_1[:2])))
++    summary = append_run(store, NIGHT_1, progress={("TESTARCH", "i5"): ts(18, 19, 50)})
++    assert [b.ts for b in store.inserted[0]] == [ts(18, 19, 55)]
++    assert summary.rows_written == 1
++    assert summary.bootstraps == 0
++
++
++def test_a_withheld_target_inserts_nothing_freezes_progress_and_fails(wired):
++    store = wired(FakeStore(stored=_stored([bar(ts(18, 19, 50), close="50.00")])))
++    summary = append_run(store, NIGHT_1, progress={("TESTARCH", "i5"): ts(18, 19, 50)})
++    assert store.inserted == []
++    assert store.written_progress == []
++    assert len(summary.failures) == 1
++    assert "restated" in summary.failures[0]
++    assert summary.restated_targets == 1
++
++
++def test_a_withheld_targets_incident_is_persisted_after_the_rollback(wired):
++    store = wired(FakeStore(stored=_stored([bar(ts(18, 19, 50), close="50.00")])))
++    append_run(store, NIGHT_1, progress={("TESTARCH", "i5"): ts(18, 19, 50)})
++    assert store.rollbacks == 1
++    kinds = [k for k, _, _ in store.written_incidents]
++    assert IncidentKind.RESTATED in kinds
++    # ...in a SECOND transaction, opened after the first was rolled back.
++    opens = [i for i, name in enumerate(store.names) if name == "open_incident"]
++    transactions = [i for i, name in enumerate(store.names) if name == "target_transaction"]
++    assert len(transactions) == 2
++    assert opens[0] > transactions[1]
++
++
++def test_a_gap_incident_is_written_before_progress_advances(wired):
++    store = wired(FakeStore())
++    summary = append_run(store, NIGHT_1, progress={("TESTARCH", "i5"): ts(4, 19, 55)})
++    order = store.names
++    assert order.index("open_incident") < order.index("upsert_progress")
++    assert [k for k, _, _ in store.written_incidents] == [IncidentKind.GAP]
++    assert summary.gap_targets == 1
++    assert summary.degraded_targets == 1
++    assert store.inserted, "the usable range is still appended"
++
++
++def test_a_regression_fails_the_target_and_freezes_progress(wired):
++    store = wired(FakeStore())
++    summary = append_run(store, [bar(ts(17, 19, 55))],
++                         progress={("TESTARCH", "i5"): ts(18, 19, 55)})
++    assert store.inserted == [] and store.written_progress == []
++    assert [k for k, _, _ in store.written_incidents] == [IncidentKind.REGRESSION]
++    assert len(summary.failures) == 1
++
++
++def test_inserted_zero_because_everything_was_stored_is_a_success(wired):
++    store = wired(FakeStore(stored=_stored(NIGHT_1)))
++    summary = append_run(store, NIGHT_1, progress={("TESTARCH", "i5"): ts(18, 19, 55)})
++    assert summary.failures == []
++    assert summary.rows_written == 0
++    assert summary.degraded_targets == 0
++    assert store.written_progress, "an accepted night still records progress"
++
++
++def test_an_empty_export_fails_and_opens_an_empty_export_incident(wired):
++    store = wired(FakeStore())
++    summary = append_run(store, CollectorError("No data rows for TESTARCH/i5."))
++    assert len(summary.failures) == 1
++    assert [k for k, _, _ in store.written_incidents] == [IncidentKind.EMPTY_EXPORT]
++    assert store.written_progress == []
++
++
++def test_two_failed_nights_then_a_success_inserts_the_keys_still_in_the_window(wired):
++    store = wired(FakeStore(progress={("TESTARCH", "i5"): ts(16, 19, 55)}))
++    for _ in range(2):
++        append_run(store, CollectorError("No data rows for TESTARCH/i5."))
++    assert store.written_progress == []
++    summary = append_run(store, NIGHT_1)
++    assert {b.ts for b in store.inserted[0]} == {b.ts for b in NIGHT_1}
++    assert summary.failures == []
++
++
++def test_the_run_continues_after_a_failed_target(wired):
++    store = wired(FakeStore())
++    summary = run(
++        [("TESTARCH", Interval.I5), ("THIN", Interval.I5)],
++        store=store,
++        fetch=fetcher({
++            ("TESTARCH", "i5"): CollectorError("No data rows for TESTARCH/i5."),
++            ("THIN", "i5"): [bar(ts(18, 19, 55), ticker="THIN")],
++        }),
++        cfg=settings(write_mode="append"),
++    )
++    assert len(summary.failures) == 1
++    assert summary.requests == 2
++    assert [b.ticker for batch in store.inserted for b in batch] == ["THIN"]
++
++
++@pytest.mark.parametrize("scenario,expected", [
++    ("failed", False),
++    ("degraded", False),
++    ("clean", True),
++])
++def test_failed_or_degraded_means_the_job_result_is_not_healthy(wired, scenario, expected):
++    store = wired(FakeStore())
++    if scenario == "failed":
++        summary = append_run(store, CollectorError("No data rows for TESTARCH/i5."))
++    elif scenario == "degraded":
++        summary = append_run(store, NIGHT_1, progress={("TESTARCH", "i5"): ts(4, 19, 55)})
++    else:
++        summary = append_run(store, NIGHT_1)
++    assert summary.healthy is expected
++
++
++def test_an_upsert_night_stays_healthy_on_a_degraded_shaped_export(wired):
++    """Mode isolation again: `degraded` is an APPEND-mode verdict. An
++    `upsert` night has no such concept and must not invent one."""
++    store = wired(FakeStore())
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert summary.healthy is True
++    assert summary.degraded_targets == 0
++
++
++def test_rows_written_is_inserted_in_append_mode(wired):
++    store = wired(FakeStore(insert_rowcount=2))
++    summary = append_run(store, NIGHT_1)
++    assert summary.rows_written == 2, "§7: Rows Written = inserted in append mode"
++
++
++def test_a_concurrent_conflict_is_counted_and_the_identity_closes(wired):
++    store = wired(FakeStore(insert_rowcount=2))
++    summary = append_run(store, NIGHT_1)
++    (counts,) = summary.counts
++    assert counts.inserted == 2 and counts.concurrent_conflicts == 1
++    assert counts.incoming_only == counts.inserted + counts.concurrent_conflicts
++
++
++def test_the_append_report_row_carries_the_append_columns(wired, tmp_path, monkeypatch):
++    from cobalt.archiver import report as report_mod
++
++    path = tmp_path / "archiver-runs.md"
++    monkeypatch.setattr(report_mod, "REPORT_PATH", path)
++    store = wired(FakeStore())
++    summary = append_run(store, NIGHT_1)
++    report_mod.append_run_report(summary)
++    content = path.read_text()
++    assert report_mod.APPEND_COLUMNS in content
++    assert content.count("## Append mode") == 1
++    row = [line for line in content.splitlines() if line.startswith("| 2026")][-1]
++    assert row.count("|") == 15
++
++
++def test_the_append_schema_break_is_written_once(wired, tmp_path, monkeypatch):
++    from cobalt.archiver import report as report_mod
++
++    path = tmp_path / "archiver-runs.md"
++    monkeypatch.setattr(report_mod, "REPORT_PATH", path)
++    for _ in range(3):
++        store = wired(FakeStore())
++        report_mod.append_run_report(append_run(store, NIGHT_1))
++    content = path.read_text()
++    assert content.count("## Append mode") == 1
++    assert content.count(report_mod.APPEND_COLUMNS) == 1
++    assert len([line for line in content.splitlines() if line.startswith("| 2026")]) == 3
++
++
++def test_an_upsert_row_after_an_append_row_goes_back_to_its_own_table(wired, tmp_path, monkeypatch):
++    """A markdown table cannot change its column count in place, and a
++    rollback to `upsert` must not write 8-column rows under the 14-column
++    header."""
++    from cobalt.archiver import report as report_mod
++
++    path = tmp_path / "archiver-runs.md"
++    monkeypatch.setattr(report_mod, "REPORT_PATH", path)
++    report_mod.append_run_report(append_run(wired(FakeStore()), NIGHT_1))
++    store = wired(FakeStore())
++    report_mod.append_run_report(
++        run([("TESTARCH", Interval.I5)], store=store,
++            fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    )
++    content = path.read_text()
++    assert content.count("## Append mode") == 1
++    assert content.count("## Back to upsert mode") == 1
++    rows = [line for line in content.splitlines() if line.startswith("| 2026")]
++    assert rows[0].count("|") == 15 and rows[1].count("|") == 9
