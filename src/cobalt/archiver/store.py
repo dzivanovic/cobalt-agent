@@ -179,6 +179,25 @@ class BarStore:
     # rather than by reading the code.
 
     @contextmanager
+    def run_lock(self, what: str):
+        """Hold §9's run-level lock for the whole of a run or a repair.
+
+        Its own SESSION, separate from any target's transaction: the
+        lock outlives every per-target commit and rollback, which is
+        exactly what "one archiver writes at a time" means. Released and
+        closed on the way out, whatever happened in between.
+        """
+        conn = self._connect()
+        try:
+            try_acquire_run_lock(conn, what=what)
+            yield conn
+        finally:
+            try:
+                release_run_lock(conn)
+            finally:
+                conn.close()
+
+    @contextmanager
     def target_transaction(self):
         """ONE connection, ONE transaction, for one target's whole night.
 

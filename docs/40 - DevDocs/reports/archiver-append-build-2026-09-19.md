@@ -262,4 +262,75 @@ addition, no decision changed.
 SUITE: **`1755 passed, 315 skipped, 1 xfailed, 15 warnings in 41.83s`**. Against BASELINE: failed 0 → 0 ·
 passed 1562 → 1755 (+193: 47 S + 48 M + 66 R + 32 P) · skipped 297 → 315 (+18 `requires_db`: 10 M + 8 P).
 
-CONTINUE: step 5
+## Chunk N — the runner: mode isolation, the shadow compare, the append night (spec §5, §6, §7, §9)
+
+RED FIRST: `uv run pytest -q tests/cobalt/test_archiver_runner.py` (a NEW file — there was no runner test
+in this repo) → `ImportError: cannot import name 'shadow' from 'cobalt.archiver'`, `1 error in 0.19s`.
+Then GREEN: **`45 passed in 0.15s`**.
+
+### Mode isolation, differential against today's behaviour
+
+| §5 / §15 requirement | test |
+|---|---|
+| night 1 AND night 2 send the WHOLE export to `upsert_bars` | `test_upsert_sends_the_whole_export_on_every_night` (parametrized 1, 2) — asserts `sent == export`, unfiltered |
+| the incomplete latest bar is kept | `test_upsert_keeps_the_incomplete_latest_bar` |
+| no progress, no incident, no `insert_new_bars` | `test_upsert_writes_no_progress_and_no_incident` |
+| today's failure on an empty export | `test_upsert_keeps_todays_failure_on_an_empty_export` — and NO incident is opened in upsert mode |
+| the submitted-row count | `test_upsert_keeps_the_submitted_row_count` |
+| the run-report row byte for byte | `test_upsert_keeps_the_run_report_row_byte_for_byte` — 8 columns (9 pipes), and `APPEND_COLUMNS` must NOT appear |
+| **the COMPLETE list of additions, pinned** | `test_the_complete_list_of_upsert_mode_additions_is_pinned` — asserts the fake store's recorded call sequence EXACTLY with the shadow off (`run_lock, ensure_schema, upsert_bars`) and on (`+ target_transaction, conn.execute(set_config), _bars_in_range`), plus `job_result()`'s key set. **A fourth addition fails it.** |
+| `_run_targets(mode=…)` still means the report scope | `test_run_targets_mode_still_means_the_report_scope` |
+| the lock in BOTH modes, a second run refuses | `test_the_run_level_lock_is_taken_in_both_write_modes`, `test_a_second_run_refuses_on_the_lock` (and writes nothing) |
+
+### The shadow compare
+
+Runs after the fetch and BEFORE the write (`test_the_shadow_runs_after_the_fetch_and_before_the_write`
+asserts the index of `_bars_in_range` < that of `upsert_bars`), labelled `pre-write`, and:
+
+- an exception and a timeout each leave the target's upsert and the summary IDENTICAL to a shadow-off
+  night (`test_a_shadow_failure_leaves_the_target_and_the_summary_identical`, parametrized), with
+  `shadow_errors == 1`; a slow read is the same path (`test_a_slow_shadow_read_does_not_slow_the_write_path`);
+- it calls NO write method of the store (`test_the_shadow_writes_nothing_to_the_database`);
+- both scopes are reported (`test_the_shadow_reports_both_scopes`: bootstrap 4 candidates, steady-state 3);
+- field-level differences after normalisation, and an equal RENDERING is not a difference
+  (`test_the_shadow_records_field_level_differences_after_normalisation`, `test_an_equal_rendering_is_not_recorded_as_a_difference`);
+- artifact schema (`test_the_artifact_is_json_lines_with_the_recorded_schema` — every §5 field asserted by name);
+- retention (`test_retention_deletes_only_nights_older_than_the_window` — by FILENAME date, not mtime);
+- `shadow-report`'s persisted / vanished / appeared across nights (`test_shadow_report_says_which_differences_persisted_vanished_and_appeared`);
+- `shadow_compare: off` skips it entirely, and no `shadow` key reaches the job result;
+- the aggregate reaches `job.result["shadow"]` with by-interval, poller-writable vs archiver-only,
+  volume-only vs any-OHLC, late and new.
+
+### The append night
+
+bootstrap · steady state · a withheld target (no insert, progress frozen, target FAILED, **incident
+persisted in a SECOND transaction opened after the first was rolled back** — asserted by index) · a gap
+(**incident written BEFORE progress advances** — asserted by index; DEGRADED; the usable range still
+appended) · a regression · `inserted = 0` = SUCCESS · an empty export → FAILED + `empty_export` incident ·
+two failed nights then a success · the run continues after a failed target · FAILED **and** DEGRADED →
+`healthy is False`, while an `upsert` night stays healthy (`degraded` is an append-mode verdict) ·
+`Rows Written` = `inserted` · a concurrent conflict is counted and the identity closes · the append report
+row has 14 columns, its schema break is written ONCE, and a return to `upsert` opens its own table again.
+
+### Two defects found by the tests and fixed in the CODE
+
+1. **`report._current_header` used a substring search.** `COLUMNS` is a PREFIX of `APPEND_COLUMNS`, so
+   `find` reported both at the same offset, every append night read as an upsert file, and a fresh schema
+   break was written above EVERY row (3 of them in a 3-row test). Now it scans whole LINES backwards.
+2. **`test_finviz_consumers.py::test_every_finviz_consumer_is_in_the_total_demand_inventory` went red.**
+   The `fetch=` test seam replaced the literal `fetch_bars(...)` call with `fetch_fn(...)`, so L53's
+   total-demand inventory scan stopped seeing `archiver/runner.py` as a Finviz consumer — while the module
+   went on sending exactly as many requests. Fixed by making the default an explicit named wrapper
+   `_default_fetch` that calls `fetch_bars(...)`. **The guard was not weakened**; the module was made
+   honest to it.
+
+SPEC vs CODE (this chunk): §5 asks the shadow record to carry "poller member yes/no". The archiver's night
+does not query the radar's tables, so the field is `poller_writable`, decided from the INTERVAL — the
+poller writes i1 and only i1 (`radar/poller.py:88`). It answers "could the poller write this target at
+all", not "was this ticker a pool member tonight". ESCALATE 5.
+
+SUITE: **`1800 passed, 315 skipped, 1 xfailed, 15 warnings in 42.21s`**. Against BASELINE: failed 0 → 0 ·
+passed 1562 → 1800 (+238: 47 S + 48 M + 66 R + 32 P + 45 N) · skipped 315, unchanged (chunk N adds no
+`requires_db` test — the whole chunk runs on fakes).
+
+CONTINUE: step 6

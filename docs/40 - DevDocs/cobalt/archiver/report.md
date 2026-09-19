@@ -64,3 +64,46 @@ None — `REPORT_PATH` is a fixed, computed constant, not configurable.
   "strictly tabular, never interleaved" rule above. It is written at
   most once per file, and it opens a *new* table rather than
   interrupting the old one — so both tables still render.
+
+---
+
+## 2026-09-19 — the append columns (FINAL design §5, §7)
+
+`RunSummary` gains `write_mode` — a DIFFERENT NAME from `mode`, which is
+and stays the report SCOPE (`"full"` / `"backfill:<T>"`). §5 is explicit
+about keeping the two apart, and a test asserts it.
+
+An `append` night has six more numbers (`Inserted`, `Withheld`, `Gaps`,
+`Restated`, `Degraded`, `Bootstraps`), and a markdown table cannot change
+its column count in place — the same problem RULING 9 hit, answered with
+the same device rather than a new one (L3):
+
+- `APPEND_COLUMNS` / `APPEND_HEADER` / `APPEND_SCHEMA_BREAK` — the
+  14-column table, opened once when the first `append` row is written.
+- `UPSERT_RETURN_BREAK` — the way BACK. `write_mode` is a config row and
+  a rollback to `upsert` is one reviewed commit, so the log has to
+  survive the round trip without writing 8-column rows under the
+  14-column header.
+- `_current_header(text)` picks the table the file is currently
+  appending to by scanning WHOLE LINES backwards. A substring search
+  cannot answer it: `COLUMNS` is a PREFIX of `APPEND_COLUMNS`, so `find`
+  reports both at the same offset and a file in append mode reads as an
+  upsert file — which, before this was caught, put a fresh schema break
+  above every single row.
+
+**The append columns never appear on an `upsert` night** — mode
+isolation, and a test asserts the header's absence as well as the row's
+shape (9 pipes vs 15).
+
+`RunSummary` also gains:
+
+- `run_id` = `<mode>@<started_at ISO>` (§9). `system.cobalt_jobs` has one
+  row per LABEL and no per-run id, so the report and the
+  progress/incident rows share this TEXT rather than growing a new run
+  table.
+- `record_append` / `record_append_failure` — the per-target accounting.
+- `healthy` — V2-9: false on any FAILED or DEGRADED target.
+  `degraded_targets` is 0 by construction on an `upsert` night.
+- `job_result()` — today's five keys, `shadow` when the pre-write
+  comparison ran, `append` in append mode. The `upsert` key set is
+  pinned by a runner test.
