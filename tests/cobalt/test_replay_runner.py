@@ -158,6 +158,76 @@ def test_r1_16_a_deadline_passing_between_steps_stops_before_the_vault_write():
     assert not any(c.startswith("writer") for c in calls)
 
 
+def test_r1_16_the_check_immediately_before_the_vault_write_is_what_refuses_a_late_run():
+    """The half `test_r1_16_a_deadline_passing_between_steps…` above does
+    NOT pin: there, the between-steps `check_deadline` catches the run and
+    the failing step may be `formations` OR `line`. Here the deadline is
+    crossed by SYNCHRONOUS work INSIDE the line step, after that step's own
+    between-steps check has already passed, so the only thing left that can
+    refuse is `check_deadline("line (before the vault write)")` — the one
+    guarantee spec R1-16 states ("no late vault write"). The writer is
+    never reached.
+    """
+    clock = Clock(NOW)
+    deps, calls = fake_deps(now=clock)
+
+    def drc_path_then_late(day):
+        # a synchronous dep call inside the step: by the time it returns,
+        # the deadline has passed
+        clock.at = datetime(2026, 2, 10, 21, 36, tzinfo=ET)
+        return deps.drc
+
+    deps.drc_path = drc_path_then_late
+    with pytest.raises(StepFailed) as failed:
+        run_nightly(DAY, dry_run=False, deps=deps)
+    assert failed.value.step == "line"
+    assert isinstance(failed.value.error, DeadlineExceeded)
+    assert "line (before the vault write)" in str(failed.value.error)
+    assert not any(c.startswith("writer") for c in calls)
+    assert deps.drc.read_text() == deps.drc_before          # not one byte of the vault note
+
+
+def test_r1_16_a_synchronous_step_is_not_cut_mid_flight_the_documented_limitation():
+    """THE CURRENT CONTRACT, asserted as such — not an endorsement.
+
+    The deadline bounds only (a) work handed to `run_async` (under
+    `asyncio.wait_for`) and (b) the `check_deadline` points between steps
+    and immediately before the vault write. `formation_source(...)` and
+    `missed.reconcile(...)` are synchronous and run to completion even when
+    the clock passes the deadline WHILE they run; the run then stops at the
+    NEXT check. `runner.py:26-31` documents exactly this design and spec
+    R1-16's stated bar (no late vault write, a measured margin) is met by
+    the test above.
+
+    Bounding synchronous DB work would be a DESIGN CHANGE and was not made
+    this round — see `## ROUND 2 ESCALATE` line A2 (deadline scope) in
+    `docs/40 - DevDocs/reports/s2-p4-verify-2026-09-19.md`. If that design
+    is ruled, this test is the one that must change.
+    """
+    clock = Clock(NOW)
+    deps, calls = fake_deps(now=clock)
+    original = deps.missed.reconcile
+
+    def slow_past_the_deadline(**kw):
+        if kw["kind"] == "mover":
+            clock.at = datetime(2026, 2, 10, 21, 36, tzinfo=ET)   # the deadline passes mid-call
+        return original(**kw)
+
+    deps.missed.reconcile = slow_past_the_deadline
+    with pytest.raises(StepFailed) as failed:
+        run_nightly(DAY, dry_run=False, deps=deps)
+
+    # NOT cut mid-flight: the synchronous reconcile ran to completion and
+    # its rows are current, even though the deadline passed while it ran.
+    assert "missed.reconcile:mover" in calls
+    assert deps.missed.current_rows["mover"]
+    assert failed.value.result.mover_misses == len(deps.missed.current_rows["mover"])
+    # and the run stops at the NEXT check_deadline, one step later.
+    assert failed.value.step == "cards"
+    assert isinstance(failed.value.error, DeadlineExceeded)
+    assert not any(c.startswith("writer") for c in calls)
+
+
 # =====================================================================
 # The run
 # =====================================================================
