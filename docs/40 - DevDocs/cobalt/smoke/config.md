@@ -24,7 +24,7 @@ denied, and OVERALL goes RED.
   relation only where a migration GRANTs that relation to its role.
   Today the one such crossing is `system.movers_daily`, granted to
   `cobalt_user` by `0008_radar_value_movers.sql` for `missed.mover_id`'s
-  FK — which is what lets K9 run `side: user`.
+  FK — which is what lets K9.1/K9.4 run `side: user`.
 - `system.cobalt_jobs` is NOT in that set: it is system-side by
   declaration (`0003`) and was MOVED into `system` by `0002`'s
   `ALTER TABLE … SET SCHEMA`, so it kept its `public` ACL — neither
@@ -43,6 +43,25 @@ denied, and OVERALL goes RED.
   collected (each names its own through `result_number`). No cross-side
   grant was added for a smoke check, and the assertion is a machine one
   again rather than a comparison by eye (added 2026-09-19, TR-A).
+- **K9 is the second worked example** (rewritten 2026-09-19, TR-B). "Does
+  `movers_daily` hold every row the night's export allowed?" spans the
+  same wall: the stored rows are in `system.movers_daily` (granted), the
+  export's own row count is in `system.cobalt_jobs.last_result` (never
+  granted). So it is six rows, three per side: `K9.1`/`K9.4` (`sql`,
+  user) count ONE side's active rows and keep both of old K9's
+  predicates — `top_n not_null`, `not_archived = 0` — and print `stored`;
+  `K9.2`/`K9.5` (`job_row`, system) print
+  `movers_by_side.<side>.expected` = `min(top_n, exported)` from the
+  replay's own result, and assert `trade_date = {last_trading_day}` so
+  the comparison is about the night being checked; `K9.3`/`K9.6`
+  (`compare`) assert the two are equal. `side` is CHECK-constrained to
+  the two values (`0008`), so the two `not_archived` predicates together
+  still cover every active row of the day. What changed in verdicts: a
+  side whose export really returned fewer rows than `top_n` now PASSES
+  (the plan's "or fewer with export evidence"), while a side holding
+  fewer rows than its export allowed FAILS — the old `full_sides eq
+  true` failed both alike and deferred the difference to a hand count of
+  `data/radar-cache/<date>/movers-<side>-*.csv`.
 
 `test_no_smoke_check_reads_across_the_tenancy_wall_it_declares` keeps
 this true: it derives the granted set by parsing the GRANT statements in

@@ -40,7 +40,9 @@ A question that spans both sides of L32 — "does the corpus hold as many
 card rows as the job that wrote them says it wrote?" — can never be one
 statement: `cobalt_user` is not granted `system.cobalt_jobs` and
 `cobalt_system` is revoked from schema `"user"`. It is asked as three
-rows instead (K8.1 / K8.2 / K8.3).
+rows instead (K8.1 / K8.2 / K8.3). K9 uses the same shape per side since
+2026-09-19 — the stored mover count against `min(top_n, exported)` from
+the replay's own result (K9.1–K9.3 gainers, K9.4–K9.6 losers).
 
 - `result_number` is OPTIONAL and ADDITIVE on `sql` and `job_row`. It names THE number of that check's result — a **column** of the single returned row for `sql`, a dotted **`last_result` path** for `job_row` (`RESULT_NUMBER` is the shared pattern, the shape `result_equals` already uses). A file that never writes one loads and runs exactly as it did before the field existed.
 - It grades nothing on its own check. The check's verdict still comes from its `expect` predicates alone; the number rides along on the outcome for a `compare` row to read.

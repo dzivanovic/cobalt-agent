@@ -30,6 +30,13 @@ ROWS ARE NEVER DELETED. A rerun that drops a mover out of the selected set
 marks its row `active = false` so `"user".missed.mover_id` keeps its
 target; an identical rerun (same export bytes, same values) changes
 nothing (R2-1).
+
+WHAT THE EXPORT REALLY HAD is recorded, never inferred. Each export keeps
+its own row count (`exported_rows`) and `export_counts` writes
+`min(top_n, exported)` per side into `job.result`, so a side Finviz
+returned short of `top_n` reads as a fact rather than as missing rows.
+This is bookkeeping: the rows stored, benchmarked and archived are the
+same `rows[:top_n]` in the same order, whether or not anyone counts them.
 """
 
 from __future__ import annotations
@@ -61,6 +68,7 @@ from .models import (
     MissRow,
     MoverRow,
     MoversExport,
+    MoversSideCount,
     ReplayError,
     ReplayInputError,
     StoredMover,
@@ -81,8 +89,8 @@ _CACHE_NAME = re.compile(r"^movers-(gainers|losers)-(\d{6})\.csv$")
 
 __all__ = [
     "ArchiveOutcome", "MoversCollector", "MoversStore", "REQUIRED_HEADERS", "SIDES",
-    "archive_movers", "benchmark_misses", "load_radar_config", "parse_change_pct", "parse_movers",
-    "replay_request_count", "retained_exports",
+    "archive_movers", "benchmark_misses", "export_counts", "load_radar_config", "parse_change_pct",
+    "parse_movers", "replay_request_count", "retained_exports",
 ]
 
 
@@ -176,8 +184,33 @@ def parse_movers(
             )
     return MoversExport(
         side=side, fetched_at=fetched_at, export_sha256=hashlib.sha256(payload).hexdigest(),
-        header=tuple(header), rows=tuple(rows[:top_n]), source=source, cache_path=cache_path,
+        header=tuple(header), rows=tuple(rows[:top_n]), exported_rows=len(rows), source=source,
+        cache_path=cache_path,
     )
+
+
+def export_counts(exports: Sequence[MoversExport], *, top_n: int) -> dict[str, MoversSideCount]:
+    """Per side: what the export really had, and how many rows that allows.
+
+    BOOKKEEPING ONLY. It reads the exports already in memory and selects,
+    orders and drops nothing: `expected` is `min(top_n, exported)`, the
+    same cap `parse_movers` already applied, written down so the S2 smoke
+    can check the stored count against the night's own export instead of
+    a hand count of the cached CSV. A disagreement between the count and
+    the rows kept, or a side seen twice, is loud (L1).
+    """
+    counts: dict[str, MoversSideCount] = {}
+    for export in exports:
+        if export.side in counts:
+            raise ReplayInputError(f"two exports for side {export.side!r} in one run")
+        expected = min(top_n, export.exported_rows)
+        if len(export.rows) != expected:
+            raise ReplayInputError(
+                f"movers-{export.side}: the export kept {len(export.rows)} of {export.exported_rows} "
+                f"rows, not min(top_n {top_n}, exported {export.exported_rows}) = {expected}"
+            )
+        counts[export.side] = MoversSideCount(exported=export.exported_rows, top_n=top_n, expected=expected)
+    return counts
 
 
 # ---------------------------------------------------------------------------

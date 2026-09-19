@@ -1191,6 +1191,106 @@ def test_the_report_renders_the_compare_row():
     assert numbers == {"K8.1": "2", "K8.2": "3", "K8.3": None}
 
 
+# ---------------------------------------------------------------------
+# K9 — the stored count against what the export really allowed
+# ---------------------------------------------------------------------
+
+#: The three rows of each side: the user-side count, the job row that
+#: carries what that side's export allowed, and the compare between them.
+K9_SIDES = {"gainers": ("K9.1", "K9.2", "K9.3"), "losers": ("K9.4", "K9.5", "K9.6")}
+
+
+def _k9_trio(side):
+    suite = load_suite(SUITES_DIR / "s2.yaml")
+    by_id = {c.id: c for c in suite.checks}
+    return suite.model_copy(update={"checks": [by_id[cid] for cid in K9_SIDES[side]]})
+
+
+def _k9_deps(*, stored, exported, top_n, not_archived=0, last_result=None):
+    def read_rows(statement, side):
+        if "cobalt_jobs" in statement:
+            result = {"trade_date": "2026-09-22", "movers_by_side": {
+                s: {"exported": exported, "top_n": top_n, "expected": min(top_n, exported)}
+                for s in ("gainers", "losers")}}
+            return _job_row(last_result=result if last_result is None else last_result)
+        return rows(["top_n", "stored", "not_archived"], [top_n, stored, not_archived])
+
+    return deps(read_rows=read_rows)
+
+
+def test_the_shipped_k9_compares_the_stored_count_against_what_the_export_allowed():
+    """K9 became three rows per side. `full_sides` and the hand compare of
+    the cached CSV are gone; `top_n not_null` and `not_archived = 0` stay."""
+    by_id = {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}
+    assert "K9" not in by_id
+    for side, (stored_id, job_id, compare_id) in K9_SIDES.items():
+        stored, job, compare = by_id[stored_id], by_id[job_id], by_id[compare_id]
+        # the user side counts ONE side's active rows and keeps both of
+        # K9's own predicates
+        assert stored.kind == "sql" and stored.side == "user"
+        assert "system.movers_daily" in stored.query and f"side = '{side}'" in stored.query
+        assert [(p.column, p.op.value, p.value) for p in stored.expect] == [
+            ("top_n", "not_null", None), ("not_archived", "eq", 0)]
+        assert stored.result_number == "stored"
+        assert "full_sides" not in stored.query
+        # the job row carries what that side's export allowed
+        assert job.kind == "job_row" and job.label == "com.cobalt.replay"
+        assert job.result_keys == ["movers_by_side"]
+        assert job.result_number == f"movers_by_side.{side}.expected"
+        assert job.result_equals["trade_date"] == "{last_trading_day}"
+        # and the tolerance is a machine assertion, not a hand comparison
+        assert compare.kind == "compare" and (compare.left, compare.right) == (stored_id, job_id)
+        assert compare.op.value == "eq"
+        for check in (stored, job, compare):
+            assert "the hub compares" not in check.expect_text
+            assert "by eye" not in check.expect_text
+
+
+def test_k9_passes_a_short_side_and_fails_a_stored_count_below_what_the_export_allowed():
+    for side, (stored_id, job_id, compare_id) in K9_SIDES.items():
+        trio = _k9_trio(side)
+
+        def run(**kw):
+            return {o.id: o for o in checks.run_suite(trio, ctx(), _k9_deps(**kw))}
+
+        # A FULL side: the export had far more rows than top_n; all 25 stored.
+        full = run(stored=25, exported=151, top_n=25)
+        assert [full[cid].verdict for cid in K9_SIDES[side]] == [Verdict.PASS] * 3
+        assert overall_verdict(list(full.values())) is Overall.GREEN
+
+        # A SHORT side: the export really had 18 rows and 18 are stored.
+        # The plan's "or fewer with export evidence" — now PASS by machine.
+        short = run(stored=18, exported=18, top_n=25)
+        assert [short[cid].verdict for cid in K9_SIDES[side]] == [Verdict.PASS] * 3
+        assert "18" in short[compare_id].detail
+
+        # One row FEWER than the export allowed: FAIL, on the compare row.
+        gap = run(stored=17, exported=18, top_n=25)
+        assert gap[stored_id].verdict is Verdict.PASS and gap[job_id].verdict is Verdict.PASS
+        assert gap[compare_id].verdict is Verdict.FAIL
+        assert "17" in gap[compare_id].detail and "18" in gap[compare_id].detail
+        assert overall_verdict(list(gap.values())) is Overall.AMBER
+
+        # The two predicates K9 always had still bite.
+        unarchived = run(stored=25, exported=151, top_n=25, not_archived=1)
+        assert unarchived[stored_id].verdict is Verdict.FAIL
+        assert "not_archived" in unarchived[stored_id].detail
+
+        # A job result from before the counts existed: FAIL naming the key,
+        # and the compare ERRORs rather than passing quietly.
+        old = run(stored=25, exported=151, top_n=25, last_result={"trade_date": "2026-09-22"})
+        assert old[job_id].verdict is Verdict.FAIL and "movers_by_side" in old[job_id].detail
+        assert old[compare_id].verdict is Verdict.ERROR and job_id in old[compare_id].detail
+        assert overall_verdict(list(old.values())) is Overall.RED
+
+        # A job row for another day cannot validate today's count.
+        other_day = {o.id: o for o in checks.run_suite(trio, ctx(), _k9_deps(
+            stored=25, exported=151, top_n=25,
+            last_result={"trade_date": "2026-09-21", "movers_by_side": {
+                side: {"exported": 151, "top_n": 25, "expected": 25}}}))}
+        assert other_day[job_id].verdict is Verdict.FAIL and "trade_date" in other_day[job_id].detail
+
+
 def _suite_fakes(tmp_path):
     drc = tmp_path / "drc.md"
     drc.write_text(

@@ -33,17 +33,25 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from cobalt.archiver.models import Bar, Interval
 from cobalt.radar.collector import SourceFailure
 from cobalt.replay import movers as movers_mod
 from cobalt.replay.line import render_line
-from cobalt.replay.models import Episode, ReplayError, StoredMover
+from cobalt.replay.models import (
+    Episode,
+    MoversSideCount,
+    ReplayError,
+    ReplayInputError,
+    StoredMover,
+)
 from cobalt.replay.movers import (
     SIDES,
     MoversStore,
     archive_movers,
     benchmark_misses,
+    export_counts,
     parse_change_pct,
     parse_movers,
     replay_request_count,
@@ -261,6 +269,59 @@ def test_change_pct_parsing_is_strict():
 def test_request_count_and_sides():
     assert replay_request_count(20) == 42
     assert SIDES == {"gainers": "-change", "losers": "change"}
+
+
+# =====================================================================
+# Export bookkeeping: what the export really had (build 2 §4 row 3)
+# =====================================================================
+
+
+def test_the_export_records_how_many_rows_it_really_had_and_keeps_the_same_top_rows():
+    """`exported_rows` counts the export; `rows` is still `rows[:top_n]`.
+
+    Recording the count selects nothing: at every cap the kept rows are
+    the first N of the same ranking, and the raw bytes hash the same.
+    """
+    full = _export("gainers", top_n=60)
+    assert (full.exported_rows, len(full.rows)) == (60, 60)
+    capped = _export("gainers", top_n=10)
+    assert (capped.exported_rows, len(capped.rows)) == (60, 10)
+    # A cap ABOVE what the export had: the export is short, not wrong.
+    over = _export("gainers", top_n=1000)
+    assert (over.exported_rows, len(over.rows)) == (60, 60)
+    assert list(capped.rows) == list(full.rows[:10]) == list(over.rows[:10])
+    assert full.export_sha256 == capped.export_sha256 == over.export_sha256
+    assert list(full.rows) == list(over.rows)
+
+
+def test_export_counts_record_min_top_n_exported_per_side():
+    """`expected` = min(top_n, exported) — the only number a stored-row
+    count may be checked against, because a short export is a fact about
+    the source, not a failure of the run."""
+    counts = export_counts([_export(side, top_n=60) for side in SIDES], top_n=60)
+    assert set(counts) == {"gainers", "losers"}
+    assert [(c.exported, c.top_n, c.expected) for c in counts.values()] == [(60, 60, 60), (60, 60, 60)]
+    # the export ran out first
+    short = export_counts([_export(side, top_n=1000) for side in SIDES], top_n=1000)
+    assert all((c.exported, c.top_n, c.expected) == (60, 1000, 60) for c in short.values())
+    # the cap came first
+    capped = export_counts([_export(side, top_n=10) for side in SIDES], top_n=10)
+    assert all((c.exported, c.top_n, c.expected) == (60, 10, 10) for c in capped.values())
+
+
+def test_export_counts_refuse_a_disagreement_and_a_repeated_side():
+    export = _export("gainers", top_n=60)
+    # the count and the rows kept must tell the same story
+    with pytest.raises(ReplayInputError, match="kept 60 of 60"):
+        export_counts([export], top_n=10)
+    with pytest.raises(ReplayInputError, match="two exports for side"):
+        export_counts([export, export], top_n=60)
+    # `expected` is min(top_n, exported) or the model refuses to exist
+    with pytest.raises(ValidationError):
+        MoversSideCount(exported=5, top_n=60, expected=60)
+    with pytest.raises(ValidationError):
+        MoversSideCount(exported=60, top_n=25, expected=60)
+    assert MoversSideCount(exported=5, top_n=60, expected=5).expected == 5
 
 
 # =====================================================================

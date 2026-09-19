@@ -69,7 +69,17 @@ datetimes. `sha256_json` hashes that text. Every `inputs_sha256` is
 ## Mover side (F13)
 - `MoverRow`: one ranked export row.
 - `MoversExport`: one side's top rows, the sha256 of the raw bytes, the
-  header, and `live | retained`.
+  header, and `live | retained`. `exported_rows` (2026-09-19) is how many
+  rows the export REALLY carried, before the top-N cap kept `rows` — a
+  count, never a selection; the validator refuses a model whose
+  `exported_rows` is smaller than the rows it kept.
+- `MoversSideCount` (2026-09-19): one side's export bookkeeping as
+  `job.result` records it — `exported`, the `top_n` in force, and
+  `expected = min(top_n, exported)`, which the model validates rather
+  than trusts. `expected` is the only number a stored-row count may be
+  checked against: an export that returned fewer rows than the cap is a
+  fact about the source, not a failure of the run, and storing the two
+  inputs beside the answer is what makes the check replay (L57).
 - `StoredMover`: an active `system.movers_daily` row. `id` is None in a dry
   run.
 - `Episode`: a `radar_membership` episode. It ignores extra columns.
@@ -87,4 +97,9 @@ datetimes. `sha256_json` hashes that text. Every `inputs_sha256` is
   (`formation_candidates, formation_misses, formation_suppressed,
   formation_no_trigger, formation_input_stale`, added 2026-09-18),
   `line_diff`, `steps_done`, `failed_step`, `precondition`, and per-kind
-  `reconcile` counts.
+  `reconcile` counts. Since 2026-09-19 it also carries `movers_by_side`:
+  side -> `MoversSideCount`, so the S2 smoke (K9.2/K9.5, dotted path
+  `movers_by_side.<side>.expected`) checks the stored count against the
+  night's own export instead of a hand count of the cached CSV. It is
+  recorded on every path — live, dry run and a retained `--date` run —
+  because all three go through the same exports.

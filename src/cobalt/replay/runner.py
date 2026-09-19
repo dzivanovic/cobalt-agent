@@ -70,7 +70,7 @@ from .models import (
     StepFailed,
     StoredMover,
 )
-from .movers import archive_movers, benchmark_misses, retained_exports
+from .movers import archive_movers, benchmark_misses, export_counts, retained_exports
 
 STEPS = ("movers", "cards", "formations", "line")
 
@@ -318,6 +318,10 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
                                                   trade_date=trade_date))
         else:
             exports = retained_exports(deps.cache_root, trade_date, top_n=settings.top_n, config=deps.radar_config)
+        # Bookkeeping, before anything is stored: what each side's export
+        # really had, and how many rows that allows (`min(top_n,
+        # exported)`). Selects nothing — the rows below are the same ones.
+        result.movers_by_side = export_counts(exports, top_n=settings.top_n)
         if dry_run:
             stored = [
                 StoredMover(trade_date=trade_date, side=e.side, rank=r.rank, ticker=r.ticker, change_pct=r.change_pct,

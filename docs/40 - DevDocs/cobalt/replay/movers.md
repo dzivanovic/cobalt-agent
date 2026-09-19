@@ -42,6 +42,26 @@ cut's; each benchmark test names the row that actually carries its case.
 — the one column-set source (AT-1 2.3, L3) — so the fixture's shape and the
 live request's shape cannot drift apart silently.
 
+## What the export really had (`export_counts`, 2026-09-19)
+`parse_movers` also records `exported_rows` — the rows the export itself
+carried, before the `rows[:top_n]` cap. `export_counts(exports, top_n)`
+turns that into one `MoversSideCount` per side: `exported`, `top_n`, and
+`expected = min(top_n, exported)`, which the run puts in
+`job.result.movers_by_side`.
+
+It is **bookkeeping, not selection**. It reads the exports already in
+memory and drops, reorders and re-ranks nothing; the rows stored,
+benchmarked and archived are the same `rows[:top_n]`, in the same order,
+whether or not anyone counts them. What it buys is the S2 smoke's K9: a
+side whose export really returned fewer rows than `top_n` PASSES against
+`expected`, and a side holding fewer rows than its export allowed FAILS
+— the tolerance the plan wrote as "or fewer with export evidence",
+asserted by machine instead of by a hand count of the cached CSV.
+
+Two refusals, both loud (L1): a side seen twice in one run, and an export
+whose kept rows disagree with `min(top_n, exported_rows)` — the invariant
+that would catch any future change to the selection itself.
+
 ## History (`retained_exports`)
 A past `--date` reads the latest retained `movers-<side>-*.csv` for that
 date. If none is retained it refuses (R1-20); it never relabels a live

@@ -11,9 +11,10 @@
 # EACH ROW IS ALSO THE HAND FALLBACK (R6 A). The report prints, per row,
 # the exact command the check ran (rendered from this file with the run's
 # variables substituted as literals) and `expect_text`, so the checklist
-# runs blind from the report alone. The one row that runs no command is
-# `kind: compare` (K8.3): it grades two numbers rows above it printed, and
-# prints the two ids and the operator instead of a command.
+# runs blind from the report alone. The rows that run no command are the
+# `kind: compare` ones (K8.3, K9.3, K9.6): each grades two numbers rows
+# above it printed, and prints the two ids and the operator instead of a
+# command.
 #
 # Variables (computed by code, printed at the top of every report):
 #   {now}                UTC instant of the run
@@ -269,27 +270,112 @@ checks:
       their own rows above. Unequal = FAIL; either operand ERRORed = ERROR,
       never a quiet PASS
 
-  - id: K9
-    title: movers_daily — top-N per side, bars archived
+  # K9 IS SIX ROWS: THREE PER SIDE, FOR THE SAME REASON K8 IS SPLIT. The
+  # question — "does `movers_daily` hold every row the night's export
+  # allowed?" — cannot be one statement either: the stored rows are in
+  # `system.movers_daily` (granted to the user role by 0008) and the
+  # night's export row count is in `system.cobalt_jobs.last_result`,
+  # which the user role is never granted. So per side: the count (user
+  # side), what that side's export allowed (the job row, system side),
+  # and the `compare` between them.
+  #
+  # `expected` = min(top_n, exported) is computed by the replay and
+  # stored in its own result, so a side whose export really returned
+  # fewer rows than top_n PASSES — the plan's "or fewer with export
+  # evidence", made by machine instead of by a hand count of the cached
+  # CSV — while a side holding fewer rows than its export allowed FAILS.
+  # `side` is CHECK-constrained to these two values (0008), so the two
+  # `not_archived = 0` predicates together cover every active row of the
+  # day.
+  - id: K9.1
+    title: movers_daily — gainers stored (user side)
     kind: sql
     side: user
     query: >-
       SELECT (SELECT (value ->> 'top_n')::int FROM trader_settings WHERE key = 'radar.benchmark') AS top_n,
-      count(*) FILTER (WHERE side = 'gainers') AS gainers,
-      count(*) FILTER (WHERE side = 'losers') AS losers,
-      count(*) FILTER (WHERE NOT bars_archived) AS not_archived,
-      count(*) FILTER (WHERE side = 'gainers') = (SELECT (value ->> 'top_n')::int FROM trader_settings WHERE key = 'radar.benchmark')
-      AND count(*) FILTER (WHERE side = 'losers') = (SELECT (value ->> 'top_n')::int FROM trader_settings WHERE key = 'radar.benchmark') AS full_sides
+      count(*) AS stored,
+      count(*) FILTER (WHERE NOT bars_archived) AS not_archived
       FROM system.movers_daily
-      WHERE trade_date = {last_trading_day} AND active
+      WHERE trade_date = {last_trading_day} AND side = 'gainers' AND active
+    result_number: stored
     expect:
       - {column: top_n, op: not_null}
-      - {column: full_sides, op: eq, value: true}
       - {column: not_archived, op: eq, value: 0}
     expect_text: >-
-      active rows for the last trading day: gainers = losers = radar.benchmark
-      top_n; not_archived = 0. Fewer rows FAIL here; the hub compares the
-      side's cached export `data/radar-cache/<date>/movers-<side>-*.csv` row count
+      active gainers rows for the last trading day: radar.benchmark top_n is
+      set; not_archived = 0 (every stored mover has its i1 bars). stored is
+      printed and is K9.3's left operand
+
+  - id: K9.2
+    title: movers — what the gainers export allowed (system side)
+    kind: job_row
+    label: com.cobalt.replay
+    result_keys: [movers_by_side]
+    result_number: movers_by_side.gainers.expected
+    result_equals:
+      trade_date: "{last_trading_day}"
+    expect_text: >-
+      last_result.movers_by_side.gainers = {exported, top_n, expected}: the rows
+      that night's gainers export really returned, the cap in force, and
+      expected = min(top_n, exported); last_result.trade_date = last trading day
+      (what makes K9.3's comparison valid). expected is K9.3's right operand
+
+  - id: K9.3
+    title: movers — gainers stored = what the export allowed
+    kind: compare
+    left: K9.1
+    right: K9.2
+    op: eq
+    expect_text: >-
+      K9.1's stored = K9.2's movers_by_side.gainers.expected, both printed on
+      their own rows above. A short export (fewer rows than top_n) PASSES here;
+      fewer stored rows than the export allowed = FAIL; either operand ERRORed
+      = ERROR, never a quiet PASS
+
+  - id: K9.4
+    title: movers_daily — losers stored (user side)
+    kind: sql
+    side: user
+    query: >-
+      SELECT (SELECT (value ->> 'top_n')::int FROM trader_settings WHERE key = 'radar.benchmark') AS top_n,
+      count(*) AS stored,
+      count(*) FILTER (WHERE NOT bars_archived) AS not_archived
+      FROM system.movers_daily
+      WHERE trade_date = {last_trading_day} AND side = 'losers' AND active
+    result_number: stored
+    expect:
+      - {column: top_n, op: not_null}
+      - {column: not_archived, op: eq, value: 0}
+    expect_text: >-
+      active losers rows for the last trading day: radar.benchmark top_n is
+      set; not_archived = 0 (every stored mover has its i1 bars). stored is
+      printed and is K9.6's left operand
+
+  - id: K9.5
+    title: movers — what the losers export allowed (system side)
+    kind: job_row
+    label: com.cobalt.replay
+    result_keys: [movers_by_side]
+    result_number: movers_by_side.losers.expected
+    result_equals:
+      trade_date: "{last_trading_day}"
+    expect_text: >-
+      last_result.movers_by_side.losers = {exported, top_n, expected}: the rows
+      that night's losers export really returned, the cap in force, and
+      expected = min(top_n, exported); last_result.trade_date = last trading day
+      (what makes K9.6's comparison valid). expected is K9.6's right operand
+
+  - id: K9.6
+    title: movers — losers stored = what the export allowed
+    kind: compare
+    left: K9.4
+    right: K9.5
+    op: eq
+    expect_text: >-
+      K9.4's stored = K9.5's movers_by_side.losers.expected, both printed on
+      their own rows above. A short export (fewer rows than top_n) PASSES here;
+      fewer stored rows than the export allowed = FAIL; either operand ERRORed
+      = ERROR, never a quiet PASS
 
   - id: K10.1
     title: miss line unit in the DRC note

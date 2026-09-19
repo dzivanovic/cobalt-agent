@@ -10,7 +10,7 @@ historical run reads what was retained.
 | Step | What | Commit side |
 |---|---|---|
 | (0) precondition | `archiver_precondition` on the `com.cobalt.archiver` row | read only |
-| `movers` | benchmark settings (USER read) → exports → `movers_store.reconcile` → `archive_movers` → `mark_bars_archived` → membership read → `benchmark_misses` → `missed.reconcile(kind="mover")` | SYSTEM, then USER |
+| `movers` | benchmark settings (USER read) → exports → `export_counts` → `movers_store.reconcile` → `archive_movers` → `mark_bars_archived` → membership read → `benchmark_misses` → `missed.reconcile(kind="mover")` | SYSTEM, then USER |
 | `cards` | candidates + positions (USER) → bars (SYSTEM read) → `replay_card` each → `missed.reconcile(kind="card")` | USER |
 | `formations` | `missed.radar_cards` (USER read) + bars (SYSTEM read) → `deps.formation_source` (default `formation_replay`) → `missed.reconcile(kind="formation")` when it returns rows | USER |
 | `line` | `render_line` from the current rows → `drc_path` → deadline check → `write_miss_line` | vault (L28) |
@@ -25,6 +25,16 @@ historical run reads what was retained.
 - Per-ticker archive failures are counted and raise `ReplayError("N movers
   archive failure(s)…")` **after** the line (archiver semantics).
   Incomplete coverage is counted, not failed.
+- **What the export really had (2026-09-19).** Between the exports and the
+  first write, `movers_step` records `result.movers_by_side =
+  export_counts(exports, top_n=settings.top_n)` — per side, the export's
+  own row count and `min(top_n, exported)`. One pure statement over
+  values already in memory: it selects, orders and drops nothing, and the
+  movers stored, benchmarked and archived below it are unchanged. Every
+  path records it, because all three (live, dry run, retained `--date`)
+  reach the same `exports` list. It is what lets the S2 smoke's K9 pass a
+  short side and fail a side holding fewer rows than its export allowed,
+  without a hand count of the cached CSV.
 - Every miss is printed as `MISS card <id> <ticker> <dir> excluded_by=<gate>
   cf_r=…`, `MISS mover <ticker> excluded_by=<gate> change=…%` or
   `MISS formation <ticker> <dir> member=<id> formed=<ts>

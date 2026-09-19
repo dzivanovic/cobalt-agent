@@ -14,7 +14,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal, Optional
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from cobalt.archiver.models import Bar
 
@@ -315,15 +315,59 @@ class MoverRow(_Frozen):
 
 
 class MoversExport(_Frozen):
-    """One side's export: the parsed top rows and the raw bytes' hash."""
+    """One side's export: the parsed top rows and the raw bytes' hash.
+
+    `exported_rows` is BOOKKEEPING, not selection: how many rows the
+    export really carried, before the top-N cap kept `rows`. A side whose
+    export returned fewer rows than `top_n` is a fact about the source,
+    and this is where that fact is first written down.
+    """
 
     side: Side
     fetched_at: AwareDatetime
     export_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     header: tuple[str, ...]
     rows: tuple[MoverRow, ...]
+    #: Rows in the export itself — always >= len(rows).
+    exported_rows: int = Field(ge=0)
     source: Literal["live", "retained"]
     cache_path: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _counted_the_whole_export(self) -> "MoversExport":
+        if self.exported_rows < len(self.rows):
+            raise ValueError(
+                f"movers-{self.side}: exported_rows {self.exported_rows} is fewer than the "
+                f"{len(self.rows)} rows kept — the count is of the export, never of the selection"
+            )
+        return self
+
+
+class MoversSideCount(_Frozen):
+    """One side's export bookkeeping, as `job.result` records it.
+
+    `expected` is `min(top_n, exported)` — the ONLY number a stored-row
+    count may be checked against, because an export that returned fewer
+    rows than the cap is a fact about the source, not a failure of the
+    run. Stored with its two inputs, so the check replays from the row
+    alone (L57).
+    """
+
+    #: Rows the export really had.
+    exported: int = Field(ge=0)
+    #: `radar.benchmark.top_n` in force for the run.
+    top_n: int = Field(ge=1)
+    #: Rows `movers_daily` should hold for the side: `min(top_n, exported)`.
+    expected: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _expected_is_the_smaller_of_its_inputs(self) -> "MoversSideCount":
+        if self.expected != min(self.top_n, self.exported):
+            raise ValueError(
+                f"expected {self.expected} is not min(top_n {self.top_n}, exported {self.exported}) "
+                f"= {min(self.top_n, self.exported)}"
+            )
+        return self
 
 
 class StoredMover(_Frozen):
@@ -379,6 +423,11 @@ class ReplayResult(BaseModel):
     replay_run_id: str
     dry_run: bool
     movers: int = 0
+    #: side -> what its export really had and how many rows that allows
+    #: `movers_daily` to hold. Recorded so the S2 smoke can check the
+    #: stored count against the night's own export instead of a hand
+    #: count of the cached CSV.
+    movers_by_side: dict[Side, MoversSideCount] = Field(default_factory=dict)
     archived: int = 0
     archive_failures: int = 0
     archive_incomplete: int = 0
@@ -408,7 +457,7 @@ __all__ = [
     "CardCandidate", "CardReplay", "CfOutcome", "Counterfactual", "Direction", "Episode", "ExcludedBy",
     "FORMATION_UNAVAILABLE", "FORMATION_UNAVAILABLE_LINE", "FORMULA_VERSION",
     "FormationCandidate", "FormationCounts", "FormationOutcome", "FormationReplay",
-    "MissKind", "MissRow", "MoverRow", "MoversExport", "PositionSpan", "RadarCardRef",
+    "MissKind", "MissRow", "MoverRow", "MoversExport", "MoversSideCount", "PositionSpan", "RadarCardRef",
     "ReconcileCounts", "ReplayError", "ReplayInputError", "ReplayResult", "Side",
     "StepFailed", "StopEdit", "StoredMover", "TransitionRow", "WindowResolution",
     "canonical_json", "sha256_json",
