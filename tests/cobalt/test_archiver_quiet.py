@@ -1236,3 +1236,125 @@ def test_an_equal_value_race_offers_no_rows_to_the_writer():
     _plan, differs = scenario(stored="100.00", vendor="105.00")
     assert [d.ts for d in differs.differing] == [RESTATE_TS]
     assert differs.incoming_only == () and differs.equal == ()
+
+
+# =====================================================================
+# §8/§9 on the PRODUCTION `cobalt` entry (tribunal round 1, F5)
+#
+# `cobalt.archiver.cli.main` returns `refused.exit_code`, but no entry
+# point calls it: production dispatches through `cobalt.cli.main`, where
+# `QuietRefused` and `ArchiveLockError` are both plain `RuntimeError`s
+# and fell into the generic `except Exception` — `FAILED: …`, exit 1.
+# §8's refusal and §9's lock both specify exit code 2.
+#
+# THE HARNESS, named: the shape `test_migrate_proof.py`'s
+# `test_the_cli_turns_a_migration_error_into_failed_and_exit_1` uses —
+# a REAL process running the real entry point, with a scenario that
+# raises before any connection is opened, so no database is needed.
+# Here the scenario is built by replacing one handler in the archiver's
+# module before `cobalt.cli.main()` builds its parser: `add_parser`
+# reads `func` out of that module's globals at build time, so the real
+# parser, the real dispatch and the real `try/except` all run.
+# =====================================================================
+
+
+_ENTRY_PROGRAM = """
+import os
+import sys
+
+from cobalt.archiver import cli as archiver_cli
+from cobalt.archiver.quiet import QuietRefused
+from cobalt.archiver.store import ArchiveLockError
+
+RAISES = {
+    "QuietRefused": lambda: QuietRefused(
+        "Q1 radar idle: session=rth - the radar scans in premarket, RTH and "
+        "aftermarket.\\nREFUSED - not in a quiet window. session=rth - "
+        "earliest allowed start: 2026-09-19 20:35:00 EDT. "
+        "The preview (no --apply) is always available."
+    ),
+    "ArchiveLockError": lambda: ArchiveLockError(
+        "another archive/repair run holds the lock - refusing to start "
+        "restate --apply TESTARCH."
+    ),
+}
+
+
+def _raise(_args):
+    raise RAISES[os.environ["COBALT_TEST_RAISE"]]()
+
+
+archiver_cli._cmd_progress = _raise
+
+from cobalt.cli import main
+
+main()
+"""
+
+
+def _cobalt_entry(exception: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, "-c", _ENTRY_PROGRAM, "archiver", "progress"],
+        cwd=REPO_ROOT,
+        env={**os.environ, "COBALT_TEST_RAISE": exception},
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize("exception", ["QuietRefused", "ArchiveLockError"])
+def test_the_production_entry_exits_2_on_a_refusal_or_a_held_lock(exception):
+    """§8 ("exit code 2, nothing written") and §9 ("a second holder
+    refuses loudly …, exit code 2"), through the process an operator
+    actually runs."""
+    proc = _cobalt_entry(exception)
+
+    assert proc.returncode == 2, (
+        f"a {exception} must leave `cobalt` with exit status 2; got "
+        f"{proc.returncode}\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+    )
+    assert f"FAILED: {exception}: " in proc.stderr, (
+        "the refusal was not rendered in the CLI's own `FAILED: <type>: "
+        f"<message>` shape:\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+    )
+    assert "FAILED:" not in proc.stdout, (
+        f"the refusal was printed on STDOUT:\n{proc.stdout}"
+    )
+
+
+def test_the_refusal_body_survives_to_stderr():
+    """The operator's three observed values and the earliest allowed
+    start are what make §8's refusal actionable; a mapping that kept the
+    exit code and swallowed the text would pass the test above."""
+    proc = _cobalt_entry("QuietRefused")
+    assert "Q1 radar idle:" in proc.stderr
+    assert "earliest allowed start:" in proc.stderr
+    assert "The preview (no --apply) is always available." in proc.stderr
+
+
+def test_every_other_exception_keeps_its_own_exit_status():
+    """The new clause must not widen. A generic error is still
+    `FAILED: …` / exit 1 — asserted through the same real entry point.
+    """
+    proc = subprocess.run(
+        [sys.executable, "-m", "cobalt.cli", "db", "migrate",
+         "--proof-only", "--rollback", "--down-to", "0005"],
+        cwd=REPO_ROOT,
+        env={**os.environ, "COBALT_ENV": "dev"},
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    assert proc.returncode == 1, (
+        f"a MigrationError must still exit 1\nstderr:\n{proc.stderr}"
+    )
+    assert "FAILED: MigrationError: " in proc.stderr
+
+
+def test_the_lock_error_carries_the_same_exit_code_as_the_refusal():
+    """`QuietRefused.exit_code` was 2 and `ArchiveLockError` had no
+    `exit_code` at all — the two §8/§9 refusals must agree."""
+    assert ArchiveLockError.exit_code == QuietRefused.exit_code == 2

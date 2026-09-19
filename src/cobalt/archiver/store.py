@@ -36,7 +36,17 @@ ARCHIVE_RUN_LOCK_KEY = 20260919
 
 
 class ArchiveLockError(RuntimeError):
-    """Another archive or repair run holds the run-level lock."""
+    """Another archive or repair run holds the run-level lock.
+
+    Exit code 2, the same as `QuietRefused` (`quiet.py:73`): §9 says a
+    second holder "refuses loudly …, exit code 2", and §8 says the same
+    of a refused repair. Both are REFUSALS, not failures — nothing was
+    written and nothing is broken — so an operator (and a deploy
+    script) can tell them from the generic `FAILED:`/exit 1 by the
+    status alone. `cobalt.cli.main` maps both.
+    """
+
+    exit_code = 2
 
 
 def try_acquire_run_lock(conn, *, what: str | None = None) -> bool:

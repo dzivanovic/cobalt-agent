@@ -78,6 +78,8 @@ from cobalt.taxonomy import cli as taxonomy_cli  # noqa: E402
 from cobalt.taxonomy import validate as taxonomy_validate  # noqa: E402
 from cobalt.vaultwrite import VaultWriter, VaultWriteStore  # noqa: E402
 from cobalt.archiver import cli as archiver_cli  # noqa: E402
+from cobalt.archiver.quiet import QuietRefused  # noqa: E402
+from cobalt.archiver.store import ArchiveLockError  # noqa: E402
 
 
 def _store() -> VaultWriteStore:
@@ -504,6 +506,17 @@ def main() -> None:
         # operator stopped it on purpose, and a non-zero exit would paint
         # F18 red for a state he deliberately caused (F17d).
         print(f"NOT RUN — {e}")
+    except (QuietRefused, ArchiveLockError) as e:
+        # EXIT 2, the archiver's REFUSALS (append-only design §8, §9).
+        # Both are plain RuntimeErrors, so without this clause they fell
+        # into the generic branch below and exited 1 — indistinguishable
+        # from a real failure, while nothing was written and nothing is
+        # broken. The message keeps this CLI's own `FAILED: <type>:
+        # <message>` shape so a reader sees one rendering across every
+        # command; the refusal's own multi-line body (the three observed
+        # values and the earliest allowed start) follows it verbatim.
+        print(f"FAILED: {type(e).__name__}: {e}", file=sys.stderr)
+        sys.exit(e.exit_code)
     except Exception as e:
         print(f"FAILED: {type(e).__name__}: {e}", file=sys.stderr)
         sys.exit(1)
