@@ -13,6 +13,7 @@ DDL lives in exactly one place (migrations/0001_bars.sql) — this module
 executes that file, it does not carry a second copy (one-path rule).
 """
 
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -20,8 +21,52 @@ from cobalt import db, env
 from cobalt.db import Side
 
 from .models import Bar, Interval
+from .reconcile import values_from_row
 
 MIGRATION_SQL = Path(__file__).parent / "migrations" / "0001_bars.sql"
+
+#: §9: ONE constant key for the run-level advisory lock, SESSION level.
+#: Held for the whole of `run_full`, `run_backfill`, `restate --apply`
+#: and `backfill-missing`, in BOTH write modes. The POLLER does not take
+#: it (R8: the live radar's write path is not touched by this build), so
+#: this lock serialises the archiver against ITSELF and against repairs —
+#: it is not, and is not claimed to be, protection against the poller.
+#: The number is arbitrary but FIXED: two holders must collide.
+ARCHIVE_RUN_LOCK_KEY = 20260919
+
+
+class ArchiveLockError(RuntimeError):
+    """Another archive or repair run holds the run-level lock."""
+
+
+def try_acquire_run_lock(conn, *, what: str | None = None) -> bool:
+    """Take the run-level lock on `conn`, or return False.
+
+    SESSION level, not transaction level: a repair re-checks the quiet
+    window immediately before COMMIT and rolls back when it has closed
+    (§8), and `pg_try_advisory_xact_lock` would hand the lock away at
+    that rollback while the command is still running.
+
+    `what` turns the refusal into an exception instead of a False, for
+    the callers that cannot continue without it.
+    """
+    held = conn.execute(
+        "SELECT pg_try_advisory_lock(%s)", (ARCHIVE_RUN_LOCK_KEY,)
+    ).fetchone()[0]
+    if held:
+        return True
+    if what is not None:
+        raise ArchiveLockError(
+            f"another archive/repair run holds the lock — refusing to start "
+            f"{what}. One archiver writes to system.bars at a time (spec §9); "
+            "wait for the other run to finish, or find it in `cobalt jobs list`."
+        )
+    return False
+
+
+def release_run_lock(conn) -> None:
+    """Give the run-level lock back. Safe to call when it is not held."""
+    conn.execute("SELECT pg_advisory_unlock(%s)", (ARCHIVE_RUN_LOCK_KEY,))
 
 
 class BarStore:
@@ -122,3 +167,105 @@ class BarStore:
         with self._connect() as conn:
             row = conn.execute("SELECT count(*) FROM bars").fetchone()
         return int(row[0]) if row else 0
+
+    # -- the append path (FINAL design 2026-09-19, §3 V2-1, §4, §9) ----
+    #
+    # EVERY METHOD BELOW TAKES A CONNECTION. §4: one transaction on one
+    # connection per target holds the stored-range read, the inserts, the
+    # progress write, the incident writes and the accepted outcome, so a
+    # crash between any two of them commits none of them. A method that
+    # opened its own connection would break that guarantee silently —
+    # which is why the offline tests assert it with a recording fake
+    # rather than by reading the code.
+
+    @contextmanager
+    def target_transaction(self):
+        """ONE connection, ONE transaction, for one target's whole night.
+
+        Commits on a clean exit, rolls back on any exception, and always
+        closes. A failed or withheld target's transaction is rolled back
+        here; its failure EVIDENCE (the incident) is then persisted in a
+        SECOND small transaction by the runner — Astra's V3-2 point,
+        because evidence written inside the doomed transaction dies with
+        it.
+        """
+        conn = self._connect()
+        conn.autocommit = False
+        try:
+            yield conn
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def insert_new_bars(self, conn, bars: list[Bar]) -> int:
+        """Offer `bars`; return how many rows were ACTUALLY inserted.
+
+        `ON CONFLICT … DO NOTHING`, not `DO UPDATE`: this is the whole
+        of the owner's ruling (R14/R15) in one clause — "only add the
+        new [bars] in the database that don't exist". A key already
+        stored is left exactly as it is, whatever the vendor now says
+        about it; a difference is a `restated` incident for a person to
+        look at, never a silent overwrite.
+
+        THE COUNT IS THE SERVER'S, NEVER `len(rows)` (§3 V2-1). A bar
+        the radar poller committed between this transaction's range read
+        and this statement is a CONFLICT — not an error, and not an
+        insert. Reporting `len(rows)` would count it as written and
+        break §7's identity `incoming_only = inserted +
+        concurrent_conflicts`. psycopg sets `rowcount` to the total rows
+        affected across an `executemany`; if the driver cannot say, this
+        FAILS rather than guessing (L1).
+        """
+        if not bars:
+            return 0
+        rows = [
+            (b.ticker, b.interval.value, b.ts, b.open, b.high, b.low, b.close, b.volume)
+            for b in bars
+        ]
+        with conn.cursor() as cur:
+            cur.executemany(
+                """
+                INSERT INTO bars (ticker, interval, ts, open, high, low, close, volume)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (ticker, interval, ts) DO NOTHING
+                """,
+                rows,
+            )
+            inserted = cur.rowcount
+        if not isinstance(inserted, int) or inserted < 0:
+            raise RuntimeError(
+                f"the driver reported row count {inserted!r} for an insert of "
+                f"{len(rows)} bar(s). The append night's counters reconcile "
+                "against the number of rows ACTUALLY inserted, so a run that "
+                "cannot learn it fails rather than reporting the number it "
+                "hoped for (L1, L57)."
+            )
+        return inserted
+
+    def _bars_in_range(
+        self, conn, ticker: str, interval: Interval, start, end
+    ) -> dict:
+        """The stored rows of one target over `[start, end]`, normalised.
+
+        PRIVATE and CONNECTION-TAKING on purpose (spec O-5). The
+        unmerged `sprint-2/p4` adds `BarStore.bars_between()`, which
+        opens its own connection; after both land there must be ONE
+        range read, and the second lander folds them into one method
+        with an optional connection (L3). Until then this branch adds
+        exactly one, and the ESCALATE names the overlap.
+
+        Returns `{ts: BarValues}` — already normalised to the column's
+        own `NUMERIC(14,4)` / integer shape, so the comparison in
+        `reconcile` is deciding on values rather than on renderings.
+        """
+        cursor = conn.execute(
+            "SELECT ts, open, high, low, close, volume FROM bars "
+            "WHERE ticker = %s AND interval = %s AND ts >= %s AND ts <= %s "
+            "ORDER BY ts",
+            (ticker, interval.value if isinstance(interval, Interval) else interval,
+             start, end),
+        )
+        return {row[0]: values_from_row(row[1:]) for row in cursor.fetchall()}

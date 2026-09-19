@@ -601,6 +601,7 @@ class TargetPlan(BaseModel):
     bootstrap: bool
     status: TargetStatus
     reason: str
+    fetch_started_at: datetime
     archived_through_before: datetime | None
     archived_through_after: datetime | None
     to_insert: tuple[Bar, ...] = ()
@@ -669,6 +670,7 @@ def _base_fields(plan: CandidatePlan, stored_rows_read: int, poller_watermark) -
         "ticker": plan.ticker,
         "interval": plan.interval,
         "bootstrap": plan.bootstrap,
+        "fetch_started_at": plan.fetch_started_at,
         "archived_through_before": plan.archived_through_before,
         "export_oldest": split.export_oldest,
         "export_newest": split.export_newest,

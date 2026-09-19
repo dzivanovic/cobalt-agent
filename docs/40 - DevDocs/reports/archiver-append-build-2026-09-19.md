@@ -205,4 +205,61 @@ SUITE: **`1723 passed, 307 skipped, 1 xfailed, 15 warnings in 41.92s`**. Against
 passed 1562 → 1723 (+161: 47 S + 48 M + 66 R) · skipped 307, unchanged (chunk R adds no `requires_db`
 test — the whole chunk is pure).
 
-CONTINUE: step 4
+## Chunk P — store methods on ONE connection (spec §3 V2-1, §4, §9, §11)
+
+RED FIRST: `uv run pytest -q tests/cobalt/test_archiver_append_store.py` before the code →
+`ImportError: cannot import name 'incidents' from 'cobalt.archiver'`, `1 error in 0.11s`.
+Then GREEN: **`32 passed, 8 skipped in 0.06s`**.
+
+**`upsert_bars` IS BYTE-IDENTICAL TO MAIN.** Quoted verbatim:
+
+```
+$ git diff main --stat -- src/cobalt/archiver/store.py
+ src/cobalt/archiver/store.py | 148 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 148 insertions(+)
+```
+
+**0 deletions** — additions only, as the chunk requires. (The new `Interval` import is on its own line
+for exactly this reason; extending the existing `from .models import Bar` line would have shown as a
+deletion.) Two tests pin the method beyond the diff: `DO UPDATE SET` present and `DO NOTHING` absent in
+its CODE, `return len(rows)`, and the signature `(self, bars, *, before_commit)` unchanged.
+
+| what the spec asks | proven by |
+|---|---|
+| `insert_new_bars` sends `ON CONFLICT (ticker, interval, ts) DO NOTHING` | `test_insert_new_bars_uses_do_nothing_on_the_primary_key` (and `DO UPDATE` absent) |
+| counts ACTUAL inserts, never `len(rows)` | `test_insert_new_bars_counts_actual_inserts_not_rows_sent` — 3 bars sent, driver says 1, method returns **1** |
+| a row count the driver cannot give FAILS | `test_insert_new_bars_refuses_a_row_count_the_driver_did_not_give` (L1) |
+| never opens or commits a connection | `test_insert_new_bars_never_opens_or_commits_a_connection` + the `no_connections` fixture, which makes `BarStore._connect` itself an assertion failure for EVERY offline test in the file |
+| one statement for the whole batch | `test_insert_new_bars_sends_one_statement_for_the_whole_batch` |
+| the range read takes `conn`, is ONE private method (O-5) | `test_the_range_read_is_one_private_method_that_takes_a_connection`, `test_there_is_exactly_one_range_read_on_the_store` (asserts the store has exactly `["_bars_in_range"]`), `test_the_range_read_is_parameterised_never_interpolated` |
+| progress upsert uses `GREATEST`, takes `conn`, only on an accepted outcome | `test_progress_is_written_with_greatest_and_takes_the_connection`, `test_progress_refuses_to_write_for_a_target_that_was_not_accepted` (the writer RAISES and sends no statement), `test_progress_sends_the_bar_timestamp_never_a_clock_time` |
+| a progress row is never deleted | `test_progress_rows_are_never_deleted_by_this_module` (over the CODE, docstrings stripped) |
+| incident open-or-refresh takes `conn`, never duplicates | `test_an_incident_is_opened_or_refreshed_never_duplicated` — asserts `ON CONFLICT (kind, ticker, interval, range_start) WHERE resolved_at IS NULL` |
+| a refresh moves `last_seen_at`, never `first_seen_at` | `test_a_refresh_moves_last_seen_at_and_never_first_seen_at` (splits on `DO UPDATE SET`) |
+| every kind the pure core can raise is writable | parametrized over all 5 of `IncidentKind` |
+| read-only commands mutate nothing | `test_listing_unresolved_incidents_writes_nothing` |
+| resolution is explicit and audited | `test_resolving_an_incident_is_explicit_and_audited`, `test_resolve_refuses_an_empty_who` |
+| the lock: ONE constant key, SESSION level | `test_the_lock_key_is_one_constant`, `test_the_lock_is_session_level_not_transaction_level` (no `pg_try_advisory_xact_lock`), `test_acquiring_the_lock_asks_the_server_once` |
+| a second holder refuses loudly | `test_a_second_holder_is_refused_loudly` — "another archive/repair run holds the lock" |
+
+Four assertions failed on the first green run because they searched the raw SOURCE and found the module's
+own PROSE (`upsert_bars`'s docstring explains why it is `DO UPDATE` **rather than** `DO NOTHING`; the lock
+helper's docstring names `pg_try_advisory_xact_lock` to say why it is not used). A `code_of()` helper now
+strips docstrings and comments via `ast.unparse`, so those four assert on CODE. No production behaviour
+changed.
+
+`requires_db` WRITTEN, NEVER RUN (8 tests): the append path never modifies an existing row · a
+poller-style insert between the range read and the insert is a counted conflict, not an error · a crash
+after the inserts leaves neither bars nor progress · the retry is idempotent · a second holder of the
+advisory lock refuses and the lock is re-takeable after release · progress and an incident commit with
+the bars or not at all · progress is monotonic across accepted runs (`GREATEST` refuses to move it back)
+· a recurring incident refreshes rather than duplicating (`first_seen_at` held, `last_seen_at` moved).
+
+SPEC vs CODE (this chunk): `reconcile.TargetPlan` gained `fetch_started_at`. The spec's §11 column list
+requires it on the progress row and §2's read of the code does not carry it on the plan — a pure
+addition, no decision changed.
+
+SUITE: **`1755 passed, 315 skipped, 1 xfailed, 15 warnings in 41.83s`**. Against BASELINE: failed 0 → 0 ·
+passed 1562 → 1755 (+193: 47 S + 48 M + 66 R + 32 P) · skipped 297 → 315 (+18 `requires_db`: 10 M + 8 P).
+
+CONTINUE: step 5
