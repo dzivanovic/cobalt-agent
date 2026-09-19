@@ -1,0 +1,1170 @@
+diff --git a/src/cobalt/cli.py b/src/cobalt/cli.py
+index 5939df2..e4bde8f 100644
+--- a/src/cobalt/cli.py
++++ b/src/cobalt/cli.py
+@@ -159,7 +159,12 @@ def _cmd_validate(args: argparse.Namespace) -> None:
+     from cobalt.aset.config import load_sheet_modes_config
+     from cobalt.cards.models import ALLOWED, TERMINAL, CardState
+     from cobalt.daymode.config import load_daymode_config
+-    from cobalt.daymode.propose import BAND_MAX_KEY, BAND_MIN_KEY
++    from cobalt.daymode.propose import (
++        BAND_MAX_KEY,
++        BAND_MIN_KEY,
++        BandError,
++        validate_band,
++    )
+ 
+     sheets = load_sheet_modes_config()
+     print(
+@@ -212,13 +217,24 @@ def _cmd_validate(args: argparse.Namespace) -> None:
+     )
+ 
+     registry = load_tunables().by_key
++    band: list[object] = []
+     for key in (BAND_MIN_KEY, BAND_MAX_KEY):
+         row = registry.get(key)
+         if row is None:
+             print(f"FAILED: tunable {key!r} is missing — F6 has no built-in default (F16).")
+             sys.exit(1)
++        band.append(row.value)
+         state = "PLACEHOLDER (unruled)" if row.value is None else repr(row.value)
+         print(f"Tunable {key}: {state}, consumers {row.consumers}")
++    # Until now this gate PRINTED the band and checked nothing, so an
++    # inverted or non-integer band reached `com.cobalt.daymode-propose`
++    # at 09:00. Same validator the 09:00 reader calls — one rule, two
++    # call sites (L3), caught here at deploy time (L10).
++    try:
++        validate_band(band[0], band[1])
++    except BandError as e:
++        print(f"FAILED: {e}")
++        sys.exit(1)
+ 
+     # The edge table is data; a state with no way in or out is a config
+     # error in code form, and it is worth catching in the same gate.
+diff --git a/src/cobalt/daymode/cli.py b/src/cobalt/daymode/cli.py
+index 4072c39..62959ab 100644
+--- a/src/cobalt/daymode/cli.py
++++ b/src/cobalt/daymode/cli.py
+@@ -24,7 +24,15 @@ from cobalt.taxonomy.loader import load_tunables
+ from . import note as daymode_note
+ from .config import load_daymode_config
+ from .drc import prior_day_inputs
+-from .propose import BAND_MAX_KEY, BAND_MIN_KEY, decided_or_stage1, propose, stage1_mode
++from .propose import (
++    BAND_MAX_KEY,
++    BAND_MIN_KEY,
++    BandError,
++    decided_or_stage1,
++    propose,
++    stage1_mode,
++    validate_band,
++)
+ from .store import DayModeStore
+ 
+ 
+@@ -52,7 +60,10 @@ def _store() -> DayModeStore:
+ def _band() -> tuple[object, object]:
+     """The trade-count band from tunables. PLACEHOLDER until ruled — a
+     missing ROW is a config error (F16), a null VALUE is 'not ruled yet'
+-    and is an adverse signal, not a crash."""
++    and is an adverse signal, not a crash. A band that is SET but cannot
++    be a band (inverted, or not a whole non-negative count) is refused by
++    `validate_band` — the same function `cobalt validate` calls, so the
++    refusal normally happens at the deploy gate, never at 09:00 (L3, L10)."""
+     registry = load_tunables().by_key
+     out = []
+     for key in (BAND_MIN_KEY, BAND_MAX_KEY):
+@@ -63,6 +74,10 @@ def _band() -> tuple[object, object]:
+                 "from config and has no built-in default (F16)."
+             )
+         out.append(row.value)
++    try:
++        validate_band(out[0], out[1])
++    except BandError as e:
++        raise SystemExit(str(e)) from e
+     return (out[0], out[1])
+ 
+ 
+diff --git a/src/cobalt/daymode/propose.py b/src/cobalt/daymode/propose.py
+index 2d891b5..f565706 100644
+--- a/src/cobalt/daymode/propose.py
++++ b/src/cobalt/daymode/propose.py
+@@ -85,6 +85,71 @@ from .config import (
+ BAND_MIN_KEY = "daymode.trade_count_band.min"
+ BAND_MAX_KEY = "daymode.trade_count_band.max"
+ 
++
++class BandError(ValueError):
++    """The two trade-count-band rows cannot be a band. A config error, so
++    it is loud (L1) and it is the config gate's to catch, never 09:00's."""
++
++
++def validate_band(band_min: Any, band_max: Any) -> None:
++    """Refuse a trade-count band that cannot be a band. ONE validator,
++    called by BOTH readers of these two rows (L3): `daymode/cli.py`'s
++    `_band()`, which `com.cobalt.daymode-propose` runs at 09:00, and
++    `cobalt validate` in `src/cobalt/cli.py`, which is the deploy gate —
++    so a bad band crashes at deploy time with a line number, not on a
++    live morning (L10).
++
++    What it refuses, both values SET: a value that is not a whole
++    non-negative integer (a `bool` is an `int` to Python and is NOT a
++    count here), and an inverted band (`min > max`), which nothing can be
++    inside. Origin: `cto-2026-09-18.md` §18 F2.
++
++    What it does NOT touch — deliberately, and this is the whole of the
++    day-mode contract it must not move:
++
++    * BOTH values null -> accepted. An unruled band is a PLACEHOLDER and
++      is itself an adverse signal (`trade_count_band_placeholder`), not a
++      crash.
++    * EXACTLY ONE value null -> ACCEPTED, unchanged. Today a half-set
++      band is still "not ruled yet": it fires the same placeholder signal
++      and `com.cobalt.daymode-propose` steps down. Making it fail loud
++      would turn that job's 09:00 outcome from "step down" into "job
++      FAILED", which is a day-mode outcome and therefore a trading-logic
++      change (L7 / CLAUDE.md HITL). It is SCOPED OUT of this chunk as a
++      DESIGN call for the desk (ops 2026-09-19 item b2), and
++      `TestABandThatIsValidChangesNothing` pins it.
++
++    For every band this function accepts, `_facts` below produces exactly
++    the same dict it produced before this function existed.
++    """
++    if band_min is None or band_max is None:
++        return
++
++    not_counts = [
++        key
++        for key, value in ((BAND_MIN_KEY, band_min), (BAND_MAX_KEY, band_max))
++        if isinstance(value, bool) or not isinstance(value, int) or value < 0
++    ]
++    if not_counts:
++        raise _band_error(
++            band_min, band_max,
++            f"{' and '.join(not_counts)} must be a whole number >= 0 "
++            "(a count of trades; a string, a fraction, a negative or a bool is not one)",
++        )
++    if band_min > band_max:
++        raise _band_error(band_min, band_max, "min must be <= max — nothing can be inside an inverted band")
++
++
++def _band_error(band_min: Any, band_max: Any, why: str) -> BandError:
++    """Both keys AND both values in every refusal, so the operator can
++    find the two rows without reading the code."""
++    return BandError(
++        f"the trade-count band is not a band: {BAND_MIN_KEY}={band_min!r}, "
++        f"{BAND_MAX_KEY}={band_max!r} — {why}. Fix the two rows in "
++        "configs/cobalt/taxonomy/tunables.yaml; F6 reads the band from config "
++        "and has no built-in default (F16)."
++    )
++
+ #: The ET wall-clock boundary between stage 1 and stage 2. F16: "is it
+ #: stage 2 yet" is a predicate, so its threshold is a tunables row and
+ #: not a literal — read HERE, by `decided_or_stage1`, which is what
+diff --git a/src/cobalt/dayopen/checks.py b/src/cobalt/dayopen/checks.py
+index b606e80..f1c8213 100644
+--- a/src/cobalt/dayopen/checks.py
++++ b/src/cobalt/dayopen/checks.py
+@@ -167,11 +167,23 @@ def check_c2_radar_membership(
+     raw_lines.append(f"pool block metric ({session.value}): {metric or pool_note}")
+     raw = "\n".join(raw_lines)
+ 
++    # The calendar read moves AHEAD of the zero-row FAIL. No session exists
++    # on a non-trading day, so no membership rows is the correct state, not a
++    # defect — 2026-09-19 (Saturday) day-open went AMBER on this check alone.
++    # C3 already carries the same guard (`windows_for` empty = not a trading
++    # day, below). A TRADING day with zero rows is still FAIL.
++    windows = clock.windows_for(report_date)
++    if not windows and count == 0:
++        return CheckResult(
++            "C2", title, Verdict.PASS,
++            f"PASS — no session today ({report_date} is not a trading day)",
++            raw,
++        )
++
+     if count == 0:
+         return CheckResult("C2", title, Verdict.FAIL, f"FAIL — no rows for {report_date}", raw)
+ 
+     first_seen_et = SessionClock.to_et(first_five[0]["first_seen_at"])
+-    windows = clock.windows_for(report_date)
+     if windows:
+         premarket_open = windows[0].start
+         on_time = first_seen_et.time() >= premarket_open
+diff --git a/src/cobalt/db_migrations/cli.py b/src/cobalt/db_migrations/cli.py
+index 5ac5604..27d7374 100644
+--- a/src/cobalt/db_migrations/cli.py
++++ b/src/cobalt/db_migrations/cli.py
+@@ -71,6 +71,7 @@ from __future__ import annotations
+ import argparse
+ import hashlib
+ import time
++from pathlib import Path
+ from typing import Iterable, Iterator, Optional
+ 
+ import psycopg
+@@ -107,6 +108,64 @@ TABLE_DIGEST_EXCLUDED_COLUMNS: dict[str, tuple[str, ...]] = {
+     ),
+ }
+ 
++#: Seconds the migrate transaction will wait for any single lock before
++#: giving up. Decided-with-veto by the CTO desk, 2026-09-19. WHY 30: a
++#: deploy takes its residents DOWN before the merge (L66), so an HONEST
++#: lock wait at that point is sub-second — 30 s is generous for the
++#: legitimate case and still short enough that a stuck deploy fails
++#: inside its own window instead of running to whatever timeout the
++#: LAUNCHER happens to carry. Before this existed the only ceiling was
++#: the Bash tool's 600 s, which is a property of whoever started the
++#: deploy and not of this code (`prod-proof-only-3-2026-09-19.md`
++#: ESCALATE 3). An ENGINE TUNABLE, not an L53 ceiling: it decides how
++#: long to wait for a lock, never what the system may do.
++DEFAULT_LOCK_TIMEOUT_S = 30
++
++#: The checkout the RUNNING `cobalt` package was imported from — derived
++#: from THIS module's own file, never from the current directory. A
++#: deploy hub `cd`s between `~/cobalt` and a worktree, and the answer to
++#: "which code just ran" must not follow it.
++CODE_ROOT = Path(__file__).resolve().parents[3]
++
++
++def _code_line() -> str:
++    """`code: <short sha> (clean|DIRTY: n path(s)) · <repo root>`.
++
++    The LAST line of both the proof-only and the forward output, so a
++    proof report carries the code that produced it as a FIELD. Until
++    2026-09-19 the deploy could only bind a report to a commit by git
++    history — which proves when the report was COMMITTED, not which code
++    EXECUTED, and the desk had to close that gap by hand
++    (`cto-2026-09-19.md` §14).
++
++    ONE git helper, imported, never a third copy (L3):
++    `cobalt.generated.committer._git`, which takes the repo root
++    explicitly and runs `git -C`, so it is already immune to the caller's
++    working directory. The import is function-local so this module keeps
++    no import-time dependency on the `generated` package.
++
++    A GIT FAILURE NEVER FAILS A MIGRATION OR A PROOF. Whatever goes
++    wrong — not a repository, git absent, a broken index — the line reads
++    `code: UNKNOWN — <reason>`. That is explicit, and explicitly NOT a
++    plausible value (L1): an operator can tell "we could not read it"
++    from "it was clean". Refusing an UNKNOWN or a DIRTY tip belongs to
++    the DEPLOY GATE, in the desk's prompt, not to this command — a
++    migration that is otherwise fine must not be blocked by a question
++    about the checkout.
++    """
++    try:
++        from cobalt.generated.committer import _git
++
++        sha = _git(CODE_ROOT, "rev-parse", "--short", "HEAD").strip()
++        dirty = [
++            line for line in _git(CODE_ROOT, "status", "--porcelain").splitlines()
++            if line.strip()
++        ]
++        state = "clean" if not dirty else f"DIRTY: {len(dirty)} path(s)"
++        return f"code: {sha} ({state}) · {CODE_ROOT}"
++    except Exception as e:  # noqa: BLE001 — never fatal; see the docstring
++        return f"code: UNKNOWN — {type(e).__name__}: {e}"
++
+ #: The schemas searched for a new-core table. A name found in more than
+ #: one of them is an ERROR, not a choice — there is no look-up order.
+ SEARCHED_SCHEMAS = ("public", "user", "system")
+@@ -520,8 +579,51 @@ def cmd_migrate(args: argparse.Namespace) -> None:
+     NOTHING` or an `UPDATE … WHERE user_id IS NULL` that matches no row
+     on a database already past `0002` — so this is a rule for the next
+     migration, not a defect in these.
++
++    THE LOCK CEILING, AND WHERE THE `SET LOCAL` SITS (2026-09-19). The
++    read-write transaction issues `SET LOCAL lock_timeout` before
++    `_apply`'s first statement, forward and rollback alike, so a DDL that
++    cannot get ACCESS EXCLUSIVE fails in `--lock-timeout-s` seconds
++    instead of waiting for as long as the caller happens to allow.
++
++    It is issued AFTER the BEFORE probe, and that position is a
++    deliberate, conservative choice rather than an accident. The property
++    that must hold is that the BEFORE probe and the migration read ONE
++    REPEATABLE READ snapshot; a snapshot is taken once per such
++    transaction, so a statement issued after the probe cannot move it.
++    Whether a `SET` is itself a statement that takes the snapshot was NOT
++    SETTLED from a citable source during this offline build (the Postgres
++    manual could not be read from the run that wrote this), so the
++    statement was placed where the question cannot matter. Today the
++    first statement of the transaction is `SHOW server_encoding` in
++    `_assert_utf8`, which is before the probe either way.
++
++    THE PRICE OF THAT POSITION, stated rather than discovered: the BEFORE
++    PROBE IS NOT UNDER THE CEILING. The probe takes ACCESS SHARE, which
++    only an ACCESS EXCLUSIVE holder — another DDL, not a resident's
++    INSERT or UPDATE — can block. Moving the `SET LOCAL` into `_connect`
++    would cover the probe as well, and is the change to make once the
++    snapshot question is answered against the manual.
++
++    `--proof-only` is deliberately NOT given a ceiling: it takes ACCESS
++    SHARE, applies nothing, and is the command a deploy preflights while
++    everything is still up. It must not start failing on a busy evening.
+     """
+     proof_only = args.proof_only
++    # Namespaces built by hand (tests, and any future in-process caller)
++    # need not carry the flag; the parser always sets it. The DEFAULT is
++    # the module constant either way, so there is one number, named once.
++    lock_timeout_s = getattr(args, "lock_timeout_s", DEFAULT_LOCK_TIMEOUT_S)
++    if (
++        isinstance(lock_timeout_s, bool)
++        or not isinstance(lock_timeout_s, int)
++        or lock_timeout_s < 1
++    ):
++        raise MigrationError(
++            f"--lock-timeout-s must be a whole number of seconds >= 1, got "
++            f"{lock_timeout_s!r}. 0 means wait forever — that is the defect "
++            "this flag closes."
++        )
+     if proof_only and (args.rollback or args.down_to):
+         raise MigrationError(
+             "--proof-only takes the proof and applies NOTHING, so it cannot be "
+@@ -548,12 +650,18 @@ def cmd_migrate(args: argparse.Namespace) -> None:
+             conn.close()
+         print()
+         _print_probe(probe, dbname=dbname)
++        print(_code_line())
+         return
+ 
+     print(f"cobalt db migrate — {direction} on {dbname}")
+     conn = _connect(dbname, allow_prod=args.allow_prod, read_only=False)
+     try:
+         before = _probe_all(conn)
++        # The ceiling on every lock `_apply` asks for, this transaction
++        # only. `lock_timeout_s` is a validated int by the check at the
++        # top of this function, so it is interpolated directly rather
++        # than through `sql.Literal` — there is no user text here.
++        conn.execute(f"SET LOCAL lock_timeout = '{lock_timeout_s}s'")
+         _apply(conn, paths)
+         after = _probe_all(conn)
+         verdicts = _proof_verdicts(before, after, direction=direction)
+@@ -576,6 +684,24 @@ def cmd_migrate(args: argparse.Namespace) -> None:
+             "a scheduled one-shot, another session) and run the migration "
+             f"again. Postgres said: {e}"
+         ) from e
++    except psycopg.errors.LockNotAvailable as e:
++        # The other named price of a deploy-time DDL, and the one this
++        # harness used to pay in wall-clock instead of in a message:
++        # without a ceiling the statement simply waited.
++        conn.rollback()
++        raise MigrationError(
++            f"the migration could not get a lock within {lock_timeout_s} s: a "
++            "statement waited for a table lock it could not have (an ALTER "
++            "needs ACCESS EXCLUSIVE, which conflicts with every other lock) "
++            "and gave up when this transaction's lock_timeout fired. NOTHING "
++            "WAS APPLIED — the transaction was rolled back. Find the session "
++            "holding it: SELECT pid, mode, granted, relation::regclass FROM "
++            "pg_locks WHERE NOT granted; then stop what is holding the lock (a "
++            "resident, a scheduled one-shot, another session) and run the "
++            f"migration again. Raising --lock-timeout-s above {lock_timeout_s} "
++            "only makes a stuck deploy wait longer. Postgres said: "
++            f"{e}"
++        ) from e
+     except BaseException:
+         conn.rollback()
+         raise
+@@ -584,6 +710,9 @@ def cmd_migrate(args: argparse.Namespace) -> None:
+ 
+     print()
+     changed = _print_proof(before, after, direction=direction)
++    # Printed BEFORE the CHANGED refusal below: a run that rolled back is
++    # exactly the run whose code an operator most needs named.
++    print(_code_line())
+     if changed:
+         raise MigrationError(
+             f"{changed} table(s) changed content across the migration. The "
+@@ -634,6 +763,15 @@ def add_parser(sub) -> None:
+         action="store_true",
+         help="Reverse registered migrations: heartbeat columns dropped, tables moved to public.",
+     )
++    migrate.add_argument(
++        "--lock-timeout-s",
++        type=int,
++        default=DEFAULT_LOCK_TIMEOUT_S,
++        metavar="N",
++        help="Seconds the migrate transaction waits for any one lock before "
++             f"failing with nothing applied (default {DEFAULT_LOCK_TIMEOUT_S}). "
++             "Not used by --proof-only. 0 is refused: it means wait forever.",
++    )
+     migrate.add_argument(
+         "--proof-only",
+         action="store_true",
+@@ -648,6 +786,8 @@ def add_parser(sub) -> None:
+ 
+ 
+ __all__ = [
++    "CODE_ROOT",
++    "DEFAULT_LOCK_TIMEOUT_S",
+     "DIGEST_EXCLUDED_COLUMNS",
+     "PROBE_BATCH_SIZE",
+     "MigrationError",
+diff --git a/tests/cobalt/test_daymode.py b/tests/cobalt/test_daymode.py
+index 39a6445..56543ce 100644
+--- a/tests/cobalt/test_daymode.py
++++ b/tests/cobalt/test_daymode.py
+@@ -731,3 +731,155 @@ class TestOverBandStepDown:
+         )
+         assert p.proposed == "reduced"
+         assert any("you traded too many times yesterday" in s for s in p.signals)
++
++
++# ---------------------------------------------------------------------
++# Band validation (ops 2026-09-19, item b1 — `cto-2026-09-18.md` §18 F2)
++# ---------------------------------------------------------------------
++
++#: Every band the validator must ACCEPT, with the `day_facts` dict each
++#: one produces. The dicts were computed on the UNTOUCHED code path and
++#: pinned here before `validate_band` existed: this is the test that says
++#: the validation chunk changes no fact for any VALID band. Validation is
++#: a config gate — it is not on the fact-computing path at all.
++_ACCEPTED_BANDS = [
++    ((2, 6), False),      # his live, ruled band
++    ((3, 3), False),      # a one-value band: min == max is a band
++    ((None, None), True),  # unruled -> PLACEHOLDER, deliberately adverse
++    ((2, None), True),     # HALF-SET: still "not ruled yet" today (b2 is scoped out)
++    ((None, 6), True),     # HALF-SET, the other side
++]
++
++
++class TestABandThatIsValidChangesNothing:
++    """L7 / CLAUDE.md HITL: this is the day-mode path. For every band the
++    validator accepts, `day_facts` must be byte-identical to today's."""
++
++    @pytest.mark.parametrize("band,placeholder", _ACCEPTED_BANDS)
++    def test_the_facts_for_an_accepted_band_are_todays_facts(self, band, placeholder):
++        from cobalt.daymode.propose import _facts
++
++        facts = _facts(
++            _cfg(), date(2026, 9, 3),
++            daily_stop_hit=False, drc_note="DRC.md", drc_informative=True,
++            prior_day=date(2026, 9, 2), band=band, prior_filled=2,
++        )
++        assert facts == {
++            "daily_stop_hit": False,
++            "no_prior_drc": False,
++            "drc_not_informative": False,
++            "early_close_today": False,
++            "first_session_after_close": False,
++            "trade_count_band_placeholder": placeholder,
++            "trade_count_over_band": False,
++        }
++
++    @pytest.mark.parametrize("band,placeholder", _ACCEPTED_BANDS)
++    def test_the_validator_accepts_it(self, band, placeholder):
++        from cobalt.daymode.propose import validate_band
++
++        assert validate_band(*band) is None
++
++
++#: Every band the validator must REFUSE. `cto-2026-09-18.md` §18 F2:
++#: "the over-band fact has no guard for an inverted (min > max) or
++#: half-set band". b1 closes the inverted and the non-integer cases; the
++#: half-set case is SCOPED OUT as a DESIGN question (see the accepted
++#: list above and `validate_band`'s docstring).
++_REFUSED_BANDS = [
++    (6, 2),        # inverted — nothing can be inside it
++    (2, "6"),      # a string is not a count
++    (2.5, 6),      # a fraction of a trade is not a count
++    (-1, 6),       # a negative count
++    (True, 6),     # a bool IS an int to Python; it is not a count here
++]
++
++
++class TestTheBandValidatorRefusesWhatCannotBeABand:
++    """L1 fail-loud + L10 config-as-code: a band that cannot be a band is
++    caught at the deploy's `validate`, not at 09:00 by
++    `com.cobalt.daymode-propose`."""
++
++    @pytest.mark.parametrize("band", _REFUSED_BANDS)
++    def test_it_is_refused_naming_both_keys_and_both_values(self, band):
++        from cobalt.daymode.propose import (
++            BAND_MAX_KEY,
++            BAND_MIN_KEY,
++            BandError,
++            validate_band,
++        )
++
++        with pytest.raises(BandError) as excinfo:
++            validate_band(*band)
++        message = str(excinfo.value)
++        # both keys AND both values, so the operator can find the rows
++        assert f"{BAND_MIN_KEY}={band[0]!r}" in message
++        assert f"{BAND_MAX_KEY}={band[1]!r}" in message
++        assert "tunables.yaml" in message
++
++    def test_the_inverted_band_says_why(self):
++        from cobalt.daymode.propose import BandError, validate_band
++
++        with pytest.raises(BandError) as excinfo:
++            validate_band(6, 2)
++        assert "min must be <= max" in str(excinfo.value)
++
++    def test_a_non_integer_names_the_offending_key(self):
++        from cobalt.daymode.propose import BAND_MAX_KEY, BandError, validate_band
++
++        with pytest.raises(BandError) as excinfo:
++            validate_band(2, "6")
++        assert BAND_MAX_KEY in str(excinfo.value).split("—")[1]
++
++
++class _Row:
++    def __init__(self, value):
++        self.value = value
++
++
++class _Tunables:
++    def __init__(self, by_key):
++        self.by_key = by_key
++
++
++def _fake_tunables(band_min, band_max):
++    from cobalt.daymode.propose import BAND_MAX_KEY, BAND_MIN_KEY
++
++    return _Tunables({BAND_MIN_KEY: _Row(band_min), BAND_MAX_KEY: _Row(band_max)})
++
++
++class TestBothReadersOfTheTwoRowsValidate:
++    """L3: ONE validator, two call sites. `daymode/cli.py._band()` is the
++    09:00 reader; `cobalt validate` (`src/cobalt/cli.py`) is the deploy
++    gate that today prints the two rows and checks nothing."""
++
++    @pytest.mark.parametrize("band", _REFUSED_BANDS)
++    def test_band_refuses_it(self, band, monkeypatch):
++        from cobalt.daymode import cli as daymode_cli
++
++        monkeypatch.setattr(daymode_cli, "load_tunables", lambda: _fake_tunables(*band))
++        with pytest.raises(SystemExit) as excinfo:
++            daymode_cli._band()
++        assert "trade-count band" in str(excinfo.value)
++
++    @pytest.mark.parametrize("band,placeholder", _ACCEPTED_BANDS)
++    def test_band_still_returns_an_accepted_band_unchanged(self, band, placeholder, monkeypatch):
++        from cobalt.daymode import cli as daymode_cli
++
++        monkeypatch.setattr(daymode_cli, "load_tunables", lambda: _fake_tunables(*band))
++        assert daymode_cli._band() == band
++
++    def test_cobalt_validate_calls_the_same_validator(self):
++        """`cobalt validate` is not run here (it is not in this offline
++        run's allowlist and whether it needs a database is NOT VERIFIED —
++        `facts.md` "Cross-branch facts"). Its branch is proven by the unit
++        tests above plus this wiring check: the command calls the ONE
++        validator and carries no second copy of the rule (L3)."""
++        import inspect
++
++        from cobalt import cli as cobalt_cli
++
++        source = inspect.getsource(cobalt_cli._cmd_validate)
++        assert "validate_band" in source
++        # no second copy of the rule inside the command
++        assert "min must be <= max" not in source
+diff --git a/tests/cobalt/test_dayopen_checks.py b/tests/cobalt/test_dayopen_checks.py
+index 1593eec..11ae0a5 100644
+--- a/tests/cobalt/test_dayopen_checks.py
++++ b/tests/cobalt/test_dayopen_checks.py
+@@ -9,6 +9,8 @@ DB-backed proof is the hub's step at merge."
+ 
+ from datetime import date, datetime, timezone
+ 
++import pytest
++
+ from cobalt.dayopen import checks
+ from cobalt.dayopen.launchd import LaunchdPrintError, LaunchdPrintStatus
+ from cobalt.dayopen.models import Verdict
+@@ -16,6 +18,7 @@ from cobalt.session.clock import session_clock
+ 
+ MONDAY = date(2026, 9, 14)  # a real NYSE trading day (loaded calendar)
+ SUNDAY = date(2026, 9, 13)  # a real weekend day
++SATURDAY = date(2026, 9, 19)  # the real 09-19 false alarm this guard closes
+ MONDAY_0705_ET = datetime(2026, 9, 14, 11, 5, tzinfo=timezone.utc)  # 07:05 ET (DST, UTC-4)
+ 
+ 
+@@ -182,6 +185,48 @@ def test_c2_fail_zero_rows():
+     assert "no rows" in result.detail
+ 
+ 
++@pytest.mark.parametrize("non_trading_day", [SUNDAY, SATURDAY])
++def test_c2_non_trading_day_with_zero_rows_is_pass(non_trading_day):
++    """No scanning session exists on a weekend, so zero rows is the
++    correct state, not a defect: 2026-09-19 (Saturday) day-open went
++    AMBER on C2 alone for exactly this reason. C3 already carries the
++    same calendar guard (`test_c3_weekend_red_is_idle`)."""
++    conn = _FakeConn(
++        [
++            (lambda sql: "count(*)" in sql, _one_row_cursor(0)),
++            (lambda sql: "ORDER BY first_seen_at" in sql, _table_cursor([], _MEMBERSHIP_COLUMNS)),
++        ]
++    )
++    result = checks.check_c2_radar_membership(
++        non_trading_day, now=MONDAY_0705_ET, clock=session_clock(),
++        system_connect=lambda: conn, settings_store=_pool_settings(),
++    )
++    assert result.verdict is Verdict.PASS
++    assert result.detail == f"PASS — no session today ({non_trading_day} is not a trading day)"
++    # the raw block is still produced — the operator still sees the probe
++    assert "count\t0" in result.raw
++    assert "pool block metric" in result.raw
++    assert conn.closed
++
++
++def test_c2_trading_day_zero_rows_still_fails():
++    """The guard is a calendar guard, not a zero-rows amnesty: a trading
++    day with no membership rows stays FAIL (same shape as
++    `test_c2_fail_zero_rows`, kept beside it so the pair is legible)."""
++    conn = _FakeConn(
++        [
++            (lambda sql: "count(*)" in sql, _one_row_cursor(0)),
++            (lambda sql: "ORDER BY first_seen_at" in sql, _table_cursor([], _MEMBERSHIP_COLUMNS)),
++        ]
++    )
++    result = checks.check_c2_radar_membership(
++        MONDAY, now=MONDAY_0705_ET, clock=session_clock(),
++        system_connect=lambda: conn, settings_store=_pool_settings(),
++    )
++    assert result.verdict is Verdict.FAIL
++    assert result.detail == f"FAIL — no rows for {MONDAY}"
++
++
+ def test_c2_fail_first_row_before_premarket_open():
+     too_early = datetime(2026, 9, 14, 7, 30, tzinfo=timezone.utc)  # 03:30 ET
+     conn = _FakeConn(
+diff --git a/tests/cobalt/test_migrate_proof.py b/tests/cobalt/test_migrate_proof.py
+index 92d667a..8d25d01 100644
+--- a/tests/cobalt/test_migrate_proof.py
++++ b/tests/cobalt/test_migrate_proof.py
+@@ -996,10 +996,18 @@ def test_a_concurrent_update_to_a_row_the_migration_updates_fails_loud(monkeypat
+ JOBS_TABLE = "cobalt_jobs"
+ 
+ #: Hard ceiling, in seconds, on the lock wait in test (g). A hang must
+-#: FAIL the test, never hang the suite: the harness carries no
+-#: `lock_timeout` (deliberately out of scope), so the ceiling lives here.
++#: FAIL the test, never hang the suite, so the ceiling lives here.
+ LOCK_CEILING_S = 20.0
+ 
++#: A1 (2026-09-19, Astra): the SERVER-SIDE ceiling on test (g)'s worker
++#: connection, a little above `LOCK_CEILING_S`. `LOCK_CEILING_S` only
++#: bounds how long the MAIN thread waits; it cannot end a statement
++#: already running on the worker's connection. Without this, a lock wait
++#: that outlived the join left a backend queued for ACCESS EXCLUSIVE on
++#: `cobalt_dev` until the interpreter exited — in front of every other
++#: session wanting that table. With it, a hung ALTER ends ITSELF.
++WORKER_STATEMENT_TIMEOUT_S = 25
++
+ 
+ def _migration_0003_sql() -> str:
+     """`0003_heartbeat_vault_outcome.sql`, WHOLE, from the file itself.
+@@ -1045,12 +1053,23 @@ def _touch_a_job_row(conn) -> None:
+     )
+ 
+ 
+-def _wait_for_a_blocked_lock(watcher, table: str, ceiling: float) -> bool:
+-    """True once SOME session is waiting for a lock on `table`.
++def _wait_for_a_blocked_lock(watcher, table: str, ceiling: float, pid: int) -> bool:
++    """True once THE WORKER'S OWN backend is waiting for ACCESS EXCLUSIVE
++    on `table`.
+ 
+     Polling the catalog rather than sleeping a guessed interval: the test
+     must know the ALTER is actually BLOCKED before it releases the other
+     session, or it proves nothing about waiting.
++
++    A2 (2026-09-19, Astra; `cto-2026-09-19.md` §8). This used to count
++    ANY ungranted lock on the table, in ANY mode, held by ANY session —
++    so a concurrent suite run, a stray `psql`, or the test's OWN other
++    session queueing behind something satisfied it, and the caller
++    proceeded believing it had reproduced the interleaving when it had
++    not. All three filters are now required: the backend this test
++    started (`pid`, read from the worker connection BEFORE its thread
++    starts), the mode an `ALTER TABLE` actually asks for
++    (`AccessExclusiveLock`), and not yet granted.
+     """
+     schema = cli._schema_of(watcher, table)
+     deadline = time.perf_counter() + ceiling
+@@ -1061,9 +1080,12 @@ def _wait_for_a_blocked_lock(watcher, table: str, ceiling: float) -> bool:
+             FROM pg_locks l
+             JOIN pg_class c ON c.oid = l.relation
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+-            WHERE c.relname = %s AND n.nspname = %s AND NOT l.granted
++            WHERE c.relname = %s AND n.nspname = %s
++              AND l.pid = %s
++              AND l.mode = 'AccessExclusiveLock'
++              AND NOT l.granted
+             """,
+-            (table, schema),
++            (table, schema, pid),
+         ).fetchone()[0]
+         if blocked:
+             return True
+@@ -1212,6 +1234,28 @@ def test_the_alter_waits_for_an_open_transaction_and_then_completes():
+     tells a deploy nothing.
+ 
+     EXPECTED: the ALTER blocks, then completes; no error either way.
++
++    HOW THIS TEST'S CEILINGS RELATE TO THE HARNESS'S OWN `lock_timeout`
++    (A1, 2026-09-19). They do not overlap, and that is worth stating
++    rather than assuming. This test calls `cli._connect` and executes the
++    ALTER ITSELF; it never goes through `cmd_migrate`, which is the only
++    place `SET LOCAL lock_timeout = '<DEFAULT_LOCK_TIMEOUT_S>s'` is
++    issued. So the harness's 30 s ceiling is NOT in force here at all.
++    What bounds this test, in the order the clocks run out:
++
++      1. `LOCK_CEILING_S` (20 s) — the MAIN thread's `join` gives up and
++         the test has its verdict. This is what fires first, so
++         **the message a reader sees is this test's own "did not
++         finish" assertion**, never a driver error.
++      2. `WORKER_STATEMENT_TIMEOUT_S` (25 s), set on the worker
++         connection below — the server ends a still-running ALTER by
++         itself, so no backend is left queued on `cobalt_dev`. It is
++         deliberately ABOVE (1): a legitimate wait must be reported by
++         this test, not pre-empted by the server.
++
++    On the hung path the test also CANCELS the worker's statement from
++    the main thread, joins again and closes the connection — and still
++    fails with the same message.
+     """
+     other = db.connect_migration(env.DEV_DB_NAME)
+     watcher = db.connect_migration(env.DEV_DB_NAME)
+@@ -1231,22 +1275,48 @@ def test_the_alter_waits_for_an_open_transaction_and_then_completes():
+     after = None
+     try:
+         before = cli._probe(conn, JOBS_TABLE)
++        # A1: the worker's own server-side ceiling, set on the open
++        # transaction before anything can block on it. `SET LOCAL` so it
++        # dies with this transaction and cannot leak into a later one.
++        conn.execute(f"SET LOCAL statement_timeout = '{WORKER_STATEMENT_TIMEOUT_S}s'")
++        # A2: the backend the ALTER will run on, read from the main
++        # thread BEFORE the worker thread starts — so the lock probe
++        # below can ask about THIS session and no other.
++        worker_pid = conn.execute("SELECT pg_backend_pid()").fetchone()[0]
+         other.autocommit = False  # the other session's transaction stays OPEN
+         _touch_a_job_row(other)
+         thread.start()
+-        blocked = _wait_for_a_blocked_lock(watcher, JOBS_TABLE, LOCK_CEILING_S)
++        blocked = _wait_for_a_blocked_lock(
++            watcher, JOBS_TABLE, LOCK_CEILING_S, worker_pid
++        )
+         other.commit()
+         committed = True
+         thread.join(timeout=LOCK_CEILING_S)
+         hung = thread.is_alive()
+-        if not hung:
++        if hung:
++            # A1: the verdict is already decided (the assertion below
++            # fails either way) — this is cleanup, so the test cannot
++            # leave a backend waiting for ACCESS EXCLUSIVE on
++            # `cobalt_dev` in front of every other session. `cancel()` is
++            # psycopg's documented cross-thread call, the one thing the
++            # main thread may do to a connection another thread is using.
++            # The second join is given the SERVER ceiling's worth of
++            # time, because that is the backstop if the cancel does not
++            # land.
++            conn.cancel()
++            thread.join(timeout=WORKER_STATEMENT_TIMEOUT_S)
++        else:
+             after = cli._probe(conn, JOBS_TABLE)
+     finally:
+         if not committed:
+             other.commit()
+         other.close()
+         watcher.close()
+-        # Only from THIS thread once the ALTER is done with the connection.
++        # Only from THIS thread once the ALTER is done with the
++        # connection. After the cancel + second join above, the HUNG path
++        # reaches here with a finished thread too, so the worker's
++        # transaction is rolled back and its connection closed on both
++        # paths (A1).
+         if not thread.is_alive():
+             conn.rollback()
+             conn.close()
+@@ -1271,3 +1341,392 @@ def test_the_alter_waits_for_an_open_transaction_and_then_completes():
+         f"{before['rows']} -> {after['rows']}, digest {before['digest']} -> "
+         f"{after['digest']}"
+     )
++
++
++# ---------------------------------------------------------------------
++# 10. `lock_timeout` ON THE MIGRATE TRANSACTION (ops 2026-09-19, item c)
++# ---------------------------------------------------------------------
++#
++# ORIGIN: `prod-proof-only-3-2026-09-19.md` ESCALATE 3 — "Nothing in
++# `cli.py` sets a `lock_timeout` or a statement timeout … so a deploy
++# whose `0003` ALTER meets a heartbeat write waits indefinitely rather
++# than failing fast". The only ceiling was the Bash tool's 600 s, which
++# is a property of whoever launched the deploy, not of the code.
++#
++# THE SHAPE: the READ-WRITE migrate transaction issues
++# `SET LOCAL lock_timeout` before `_apply`'s first statement, forward and
++# rollback alike; `psycopg.errors.LockNotAvailable` is wrapped exactly as
++# `SerializationFailure` already is — rollback, then a `MigrationError`
++# that says NOTHING WAS APPLIED and names the timeout. `--proof-only`
++# takes ACCESS SHARE only and is deliberately NOT changed: it must not
++# start failing on a busy evening.
++#
++# WHERE THE STATEMENT SITS, and what that costs: AFTER the BEFORE probe.
++# See `cmd_migrate`'s docstring — the placement is the conservative one,
++# so the `SET` provably cannot sit between the transaction's start and
++# its snapshot. The price, stated rather than discovered: the BEFORE
++# PROBE ITSELF IS NOT UNDER THE TIMEOUT. It takes ACCESS SHARE, which
++# only an ACCESS EXCLUSIVE holder (another DDL) can block.
++
++
++class _StatementRecorder:
++    """An offline stand-in for the migrate connection.
++
++    It records every statement `cmd_migrate` sends and executes none of
++    them, so the ORDER of the statements — which is the whole claim here
++    — is checkable with no database. `_apply` is left REAL: it reads the
++    registered `.sql` files off disk and hands each one to `execute`, so
++    "before the first migration file's text" means the actual text of the
++    actual file, not a stand-in for it (L45).
++    """
++
++    def __init__(self, raise_on_apply: Optional[BaseException] = None):
++        self.statements: list[str] = []
++        self.rolled_back = 0
++        self.committed = 0
++        self.closed = 0
++        self._raise_on_apply = raise_on_apply
++
++    def execute(self, query, *args, **kwargs):
++        text = query if isinstance(query, str) else str(query)
++        self.statements.append(text)
++        if self._raise_on_apply is not None and "SET LOCAL" not in text:
++            raise self._raise_on_apply
++        return None
++
++    def rollback(self):
++        self.rolled_back += 1
++
++    def commit(self):
++        self.committed += 1
++
++    def close(self):
++        self.closed += 1
++
++
++def _offline_migrate(monkeypatch, recorder, print_proof=None, **namespace):
++    """Run `cmd_migrate` with no database: the connection is the recorder
++    and both probe passes are stubbed (an empty probe dict makes every
++    verdict vacuously OK, which is what lets the commit path run).
++
++    `print_proof` overrides the proof-table stub for a test that needs to
++    see where the table lands in the output.
++    """
++    monkeypatch.setenv(env.ENV_VAR, env.DEV)
++    monkeypatch.setattr(cli, "_connect", lambda *a, **k: recorder)
++    monkeypatch.setattr(cli, "_probe_all", lambda conn: {})
++    monkeypatch.setattr(cli, "_print_proof", print_proof or (lambda *a, **k: 0))
++    fields = {
++        "proof_only": False,
++        "rollback": False,
++        "down_to": None,
++        "allow_prod": False,
++        "lock_timeout_s": cli.DEFAULT_LOCK_TIMEOUT_S,
++    }
++    fields.update(namespace)
++    return cli.cmd_migrate(argparse.Namespace(**fields))
++
++
++def _index_of(statements: list[str], needle: str) -> int:
++    for i, text in enumerate(statements):
++        if needle in text:
++            return i
++    raise AssertionError(f"no statement contains {needle!r}; sent: {statements}")
++
++
++def test_the_default_lock_timeout_is_thirty_seconds():
++    """A module constant, not a literal buried in the call — the DevDoc
++    and the deploy prompt both quote this number."""
++    assert cli.DEFAULT_LOCK_TIMEOUT_S == 30
++
++
++def test_a_forward_run_sets_lock_timeout_before_the_first_migration_file(monkeypatch):
++    recorder = _StatementRecorder()
++    _offline_migrate(monkeypatch, recorder)
++
++    first_file_text = FORWARD[0].read_text()
++    set_at = _index_of(recorder.statements, "SET LOCAL lock_timeout")
++    applied_at = recorder.statements.index(first_file_text)
++    assert set_at < applied_at, (
++        "the lock ceiling was set AFTER the first migration file had already "
++        f"been sent: statement order {recorder.statements[:3]}"
++    )
++    assert f"'{cli.DEFAULT_LOCK_TIMEOUT_S}s'" in recorder.statements[set_at]
++    assert recorder.committed == 1 and recorder.rolled_back == 0
++
++
++def test_a_rollback_run_sets_lock_timeout_too(monkeypatch):
++    """A rollback's reverse migrations are DDL as well — a deploy that
++    cannot roll back because it is waiting on a lock is the worse half of
++    the same defect."""
++    recorder = _StatementRecorder()
++    _offline_migrate(monkeypatch, recorder, rollback=True, down_to="0005")
++
++    reverse_text = cli._rollback_paths("0005")[0].read_text()
++    set_at = _index_of(recorder.statements, "SET LOCAL lock_timeout")
++    assert set_at < recorder.statements.index(reverse_text)
++
++
++def test_proof_only_sends_no_lock_timeout(monkeypatch):
++    """`--proof-only` takes ACCESS SHARE and applies nothing. Giving it a
++    lock ceiling would make the one command a deploy runs while
++    everything is still up start failing on a busy evening."""
++    recorder = _StatementRecorder()
++    monkeypatch.setenv(env.ENV_VAR, env.DEV)
++    monkeypatch.setattr(cli, "_connect", lambda *a, **k: recorder)
++    monkeypatch.setattr(cli, "_probe_all", lambda conn: {})
++    monkeypatch.setattr(cli, "_print_probe", lambda *a, **k: None)
++    args = argparse.Namespace(
++        proof_only=True, rollback=False, down_to=None, allow_prod=False,
++        lock_timeout_s=cli.DEFAULT_LOCK_TIMEOUT_S,
++    )
++    cli.cmd_migrate(args)
++
++    offenders = [s for s in recorder.statements if "lock_timeout" in s]
++    assert not offenders, f"--proof-only sent a lock ceiling: {offenders}"
++
++
++def test_a_lock_it_cannot_get_rolls_back_and_says_nothing_was_applied(monkeypatch):
++    """The `SerializationFailure` shape, for the other named price of a
++    deploy-time DDL."""
++    recorder = _StatementRecorder(
++        raise_on_apply=psycopg.errors.LockNotAvailable(
++            "canceling statement due to lock timeout"
++        )
++    )
++    with pytest.raises(cli.MigrationError) as excinfo:
++        _offline_migrate(monkeypatch, recorder)
++
++    message = str(excinfo.value)
++    assert recorder.rolled_back == 1, "the transaction was not rolled back"
++    assert recorder.committed == 0
++    assert "nothing was applied" in message.lower(), message
++    assert f"{cli.DEFAULT_LOCK_TIMEOUT_S}" in message, (
++        f"the message does not name the timeout that fired: {message}"
++    )
++    assert "pg_locks" in message, (
++        "the operator is not told how to find the session holding the lock: "
++        f"{message}"
++    )
++
++
++@pytest.mark.parametrize("bad", [0, -1, -30])
++def test_a_zero_or_negative_lock_timeout_is_refused_before_any_connection(
++    monkeypatch, bad
++):
++    """0 means "wait forever" — the very defect the flag closes — so it is
++    refused where every other malformed-argument refusal lives: before a
++    connection exists."""
++
++    def _never(*args, **kwargs):
++        raise AssertionError("a connection was opened for a refused lock ceiling")
++
++    monkeypatch.setenv(env.ENV_VAR, env.DEV)
++    monkeypatch.setattr(cli, "_connect", _never)
++    monkeypatch.setattr(db, "connect_migration", _never)
++
++    args = argparse.Namespace(
++        proof_only=False, rollback=False, down_to=None, allow_prod=False,
++        lock_timeout_s=bad,
++    )
++    with pytest.raises(cli.MigrationError) as excinfo:
++        cli.cmd_migrate(args)
++    assert "--lock-timeout-s" in str(excinfo.value)
++
++
++def test_the_cli_turns_a_refused_lock_timeout_into_failed_and_exit_1():
++    """The CLI boundary for this flag, through a REAL process, in the
++    shape of `test_the_cli_turns_a_migration_error_into_failed_and_exit_1`
++    — and like that one it needs no database, because the refusal happens
++    before any connection is opened."""
++    proc = _migrate("--lock-timeout-s", "0")
++
++    assert proc.returncode == 1, (
++        f"got {proc.returncode}\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
++    )
++    assert "FAILED: MigrationError: " in proc.stderr, (
++        f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
++    )
++    assert "--lock-timeout-s" in proc.stderr
++
++
++@requires_db
++def test_a_migration_that_cannot_get_its_lock_fails_in_about_a_second(monkeypatch):
++    """(j) NEVER RUN AS OF 2026-09-19 — written offline, owed a first run
++    on `cobalt_dev` once `p4-verify-0919` releases it.
++
++    Another session holds ACCESS EXCLUSIVE on the table `0003` alters, so
++    `_apply`'s ALTER cannot get its lock; with `--lock-timeout-s 1` the
++    run must FAIL in about a second instead of waiting, and the table's
++    proof must be unchanged afterwards.
++
++    `_probe_all` is stubbed deliberately: under the conservative
++    placement the `SET LOCAL` is issued AFTER the BEFORE probe, so a real
++    probe would itself block on the ACCESS EXCLUSIVE holder with no
++    ceiling. That is a real property of this build and is reported under
++    the ops report's ESCALATE, not hidden by this test — what this test
++    pins is the ceiling on `_apply`, which is where the deploy's DDL is.
++    """
++    reader = db.connect_migration(env.DEV_DB_NAME)
++    holder = db.connect_migration(env.DEV_DB_NAME)
++    try:
++        before = cli._probe(reader, JOBS_TABLE)
++
++        holder.autocommit = False
++        holder.execute(
++            sql.SQL("LOCK TABLE {rel} IN ACCESS EXCLUSIVE MODE").format(
++                rel=_rel(holder, JOBS_TABLE)
++            )
++        )
++
++        conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
++        monkeypatch.setenv(env.ENV_VAR, env.DEV)
++        monkeypatch.setattr(cli, "_connect", lambda *a, **k: conn)
++        monkeypatch.setattr(cli, "_probe_all", lambda c: {})
++        monkeypatch.setattr(cli, "_print_proof", lambda *a, **k: 0)
++        args = argparse.Namespace(
++            proof_only=False, rollback=False, down_to=None, allow_prod=False,
++            lock_timeout_s=1,
++        )
++
++        started = time.perf_counter()
++        with pytest.raises(cli.MigrationError) as excinfo:
++            cli.cmd_migrate(args)
++        elapsed = time.perf_counter() - started
++
++        assert "nothing was applied" in str(excinfo.value).lower()
++        assert elapsed < LOCK_CEILING_S, (
++            f"--lock-timeout-s 1 took {elapsed:.1f} s to give up — the ceiling "
++            "is not reaching the statement that waits"
++        )
++    finally:
++        holder.rollback()
++        holder.close()
++        reader.close()
++
++    after_conn = db.connect_migration(env.DEV_DB_NAME)
++    try:
++        after = cli._probe(after_conn, JOBS_TABLE)
++    finally:
++        after_conn.close()
++    assert cli._verdict(JOBS_TABLE, before, after) == "OK", (
++        "a migration that failed on its lock left the table changed: rows "
++        f"{before['rows']} -> {after['rows']}, digest {before['digest']} -> "
++        f"{after['digest']}"
++    )
++
++
++# ---------------------------------------------------------------------
++# 11. THE OUTPUT NAMES THE CODE IT RAN FROM (ops 2026-09-19, item e)
++# ---------------------------------------------------------------------
++#
++# ORIGIN: `cto-2026-09-19.md` §14 — the deploy's git-history binding
++# proves the proof report was COMMITTED after a given sha on the branch,
++# not which code EXECUTED; the desk had to verify by hand that the
++# report's commits sat on that code. The fix is one printed line.
++#
++# A git failure NEVER fails a migration or a proof: the line reads
++# `code: UNKNOWN — <reason>`, which is explicit and is not a plausible
++# value (L1). Refusing an UNKNOWN or a DIRTY tip is the DEPLOY GATE's
++# job, in the desk's prompt, not this command's.
++
++
++def _fake_git_factory(sha="abc1234", porcelain="", raises=None):
++    def _fake_git(repo_root, *args, **kwargs):
++        if raises is not None:
++            raise raises
++        if args[:1] == ("rev-parse",):
++            return sha + "\n"
++        if args[:1] == ("status",):
++            return porcelain
++        raise AssertionError(f"unexpected git call: {args}")
++
++    return _fake_git
++
++
++def _patch_git(monkeypatch, **kwargs):
++    from cobalt.generated import committer
++
++    monkeypatch.setattr(committer, "_git", _fake_git_factory(**kwargs))
++
++
++def _proof_only_output(monkeypatch, capsys) -> list[str]:
++    recorder = _StatementRecorder()
++    monkeypatch.setenv(env.ENV_VAR, env.DEV)
++    monkeypatch.setattr(cli, "_connect", lambda *a, **k: recorder)
++    monkeypatch.setattr(cli, "_probe_all", lambda conn: {})
++    monkeypatch.setattr(cli, "_print_probe", lambda *a, **k: print("<proof table>"))
++    args = argparse.Namespace(
++        proof_only=True, rollback=False, down_to=None, allow_prod=False,
++        lock_timeout_s=cli.DEFAULT_LOCK_TIMEOUT_S,
++    )
++    cli.cmd_migrate(args)
++    return [line for line in capsys.readouterr().out.splitlines() if line.strip()]
++
++
++def test_proof_only_ends_with_the_code_it_ran_from(monkeypatch, capsys):
++    _patch_git(monkeypatch, sha="abc1234", porcelain="")
++    lines = _proof_only_output(monkeypatch, capsys)
++
++    assert lines[-1] == f"code: abc1234 (clean) · {cli.CODE_ROOT}", (
++        f"the LAST line is not the code line: {lines[-3:]}"
++    )
++
++
++def test_a_dirty_tree_says_how_many_paths(monkeypatch, capsys):
++    _patch_git(
++        monkeypatch, sha="abc1234",
++        porcelain=" M src/cobalt/db_migrations/cli.py\n?? scratch/notes.md\n",
++    )
++    lines = _proof_only_output(monkeypatch, capsys)
++
++    assert lines[-1] == f"code: abc1234 (DIRTY: 2 path(s)) · {cli.CODE_ROOT}", lines[-1]
++
++
++def test_a_git_failure_is_unknown_and_never_fails_the_proof(monkeypatch, capsys):
++    """L1: `UNKNOWN` is explicit. It is NOT a plausible value, and it is
++    not this command's job to refuse it — the deploy gate does that."""
++    _patch_git(monkeypatch, raises=RuntimeError("not a git repository"))
++    lines = _proof_only_output(monkeypatch, capsys)  # returns => did not raise
++
++    assert lines[-1].startswith("code: UNKNOWN — "), lines[-1]
++    assert "not a git repository" in lines[-1]
++
++
++def test_the_forward_path_prints_the_same_line_after_its_proof_table(
++    monkeypatch, capsys
++):
++    _patch_git(monkeypatch, sha="deadbee", porcelain="")
++    recorder = _StatementRecorder()
++
++    def _table(*a, **k):
++        print("<proof table>")
++        return 0
++
++    _offline_migrate(monkeypatch, recorder, print_proof=_table)
++
++    lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
++    assert lines.index("<proof table>") < lines.index(
++        f"code: deadbee (clean) · {cli.CODE_ROOT}"
++    ), f"the code line does not follow the proof table: {lines}"
++    assert lines[-1] == f"code: deadbee (clean) · {cli.CODE_ROOT}"
++
++
++def test_the_code_root_is_the_package_not_the_current_directory():
++    """A deploy hub `cd`s; the answer must not follow it. `CODE_ROOT` is
++    derived from this module's own file, so it names the checkout the
++    RUNNING `cobalt` package was imported from."""
++    assert cli.CODE_ROOT == Path(cli.__file__).resolve().parents[3]
++    assert (cli.CODE_ROOT / "src" / "cobalt" / "db_migrations" / "cli.py").exists()
++
++
++def test_the_real_helper_imports_and_produces_a_line():
++    """L3: there is no third git helper — `_code_line` imports an EXISTING
++    one. This runs it for real against this checkout (no database, no
++    network), which is what proves the import carries no cycle and no
++    side effect."""
++    line = cli._code_line()
++
++    assert line.startswith("code: "), line
++    assert str(cli.CODE_ROOT) in line
++    assert ("(clean)" in line) or ("(DIRTY: " in line), line
