@@ -16,7 +16,7 @@ computed WITHOUT ever materialising the concatenation", and separately
 that its VALUE is byte-for-byte the one the old SQL produced, so proof
 tables printed before today stay comparable.
 
-Eight groups:
+Nine groups:
 
 1. THE FOLD (no database) — the client-side md5 over an iterator of row
    texts equals `md5('|'.join(rows))` exactly: zero rows, one row, many
@@ -50,6 +50,10 @@ Eight groups:
    read `CHANGED` and roll back; the transaction's OWN writes are still
    seen, because "did THIS migration change existing content?" is the
    question the proof exists to answer.
+9. THE TRIBUNAL'S ROUND 1 (2026-09-19) — an ambiguous table name is
+   refused instead of resolved to whichever row came first (R1), and the
+   case no house could settle from reads: DDL under REPEATABLE READ after
+   ANOTHER session committed to the same table (U1).
 """
 
 from __future__ import annotations
@@ -59,6 +63,8 @@ import hashlib
 import os
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -67,7 +73,7 @@ import pytest
 from psycopg import sql
 
 from cobalt import db, env
-from cobalt.db_migrations import cli
+from cobalt.db_migrations import FORWARD, cli
 from cobalt.db_migrations.placement import (
     CREATED_TABLES,
     MOVED_TABLES,
@@ -688,18 +694,22 @@ def test_an_exception_inside_the_probe_leaves_the_connection_rolled_back(monkeyp
 CONCURRENCY_TABLE = "cobalt_redactions"
 
 
-def _concurrency_rel(conn) -> sql.Identifier:
-    """`<schema>.cobalt_redactions`, wherever the migrations put it.
+def _rel(conn, table: str) -> sql.Identifier:
+    """`<schema>.<table>`, wherever the migrations put it.
 
     Read from the catalog rather than hard-coded `system.`: these tests
     must not quietly pass on a database where the table has not moved.
     """
-    schema = cli._schema_of(conn, CONCURRENCY_TABLE)
+    schema = cli._schema_of(conn, table)
     assert schema is not None, (
-        f"{CONCURRENCY_TABLE} is on none of {cli.SEARCHED_SCHEMAS} — run "
+        f"{table} is on none of {cli.SEARCHED_SCHEMAS} — run "
         "`cobalt db migrate` against this database first"
     )
-    return sql.Identifier(schema, CONCURRENCY_TABLE)
+    return sql.Identifier(schema, table)
+
+
+def _concurrency_rel(conn) -> sql.Identifier:
+    return _rel(conn, CONCURRENCY_TABLE)
 
 
 def _insert_redaction(conn, pattern: str) -> int:
@@ -727,6 +737,25 @@ def _hits(conn, row_id: int) -> Optional[int]:
         (row_id,),
     ).fetchone()
     return None if row is None else row[0]
+
+
+def _ids_with_pattern(conn, pattern: str) -> list[int]:
+    """Every row this file's tests wrote under one pattern, by id.
+
+    Teardown deletes by id and the assertions read by id; this is how a
+    row written inside a transaction that was supposed to be rolled back
+    is looked for from ANOTHER session, which is the only place it could
+    show up.
+    """
+    return [
+        row[0]
+        for row in conn.execute(
+            sql.SQL("SELECT id FROM {rel} WHERE pattern = %s ORDER BY id").format(
+                rel=_concurrency_rel(conn)
+            ),
+            (pattern,),
+        ).fetchall()
+    ]
 
 
 @requires_db
@@ -853,12 +882,23 @@ def test_a_concurrent_update_to_a_row_the_migration_updates_fails_loud(monkeypat
     migration opens (so it is in the snapshot), the other session commits
     over it while the migration holds that snapshot, and the migration
     then updates the same row.
+
+    STRENGTHENED 2026-09-19 (tribunal round 1, R3 — Astra finding 2). As
+    first written, the fake migration's ONLY write was the one Postgres
+    rejects, so the rollback had nothing to undo and this test passed
+    with or without it. The migration now makes a write of its own FIRST,
+    on a row this test owns, and the test asserts that write is GONE
+    afterwards — which is a claim about the rollback rather than about
+    the statement Postgres refused.
     """
     other = db.connect_migration(env.DEV_DB_NAME)
     row_id = _insert_redaction(other, "snapshot-fix-e")
     reached: list[str] = []
+    owned: list[int] = []
 
     def _conflicting_apply(conn, paths):
+        owned.append(_insert_redaction(conn, "snapshot-fix-e-owned"))
+        reached.append("the migration's own write landed")
         other.execute(
             sql.SQL("UPDATE {rel} SET hits = 2 WHERE id = %s").format(
                 rel=_concurrency_rel(other)
@@ -890,7 +930,10 @@ def test_a_concurrent_update_to_a_row_the_migration_updates_fails_loud(monkeypat
         assert "nothing was applied" in message.lower(), (
             f"the message does not say that nothing was applied: {message}"
         )
-        assert reached == ["other session committed"], (
+        assert reached == [
+            "the migration's own write landed",
+            "other session committed",
+        ], (
             "the migration's UPDATE of a row another session had already "
             f"changed was allowed through: {reached}"
         )
@@ -898,6 +941,333 @@ def test_a_concurrent_update_to_a_row_the_migration_updates_fails_loud(monkeypat
             "the migration's write survived a transaction that failed — the "
             "rollback path did not run"
         )
+        assert owned, "the fake migration never made its own write"
+        assert _hits(other, owned[0]) is None, (
+            f"the migrate transaction's OWN write ({CONCURRENCY_TABLE} row "
+            f"{owned[0]}, made BEFORE the conflict) is still in the database "
+            "after the command failed. Nothing rolled that transaction back."
+        )
+        assert _ids_with_pattern(other, "snapshot-fix-e-owned") == [], (
+            "a row the failed migration wrote is visible to another session"
+        )
     finally:
         _delete_redaction(other, row_id)
+        for leaked in _ids_with_pattern(other, "snapshot-fix-e-owned"):
+            _delete_redaction(other, leaked)
         other.close()
+
+
+# ---------------------------------------------------------------------
+# 9. THE TRIBUNAL'S ROUND 1 (2026-09-19)
+# ---------------------------------------------------------------------
+#
+# Three houses read the snapshot build (`scratch/review-harness-0919/`:
+# Grok SAFE TO DEPLOY, Gemini FIX FIRST Q5, Astra FIX FIRST 1). What
+# survived the hub's verification and lands here:
+#
+#   R1 (Astra finding 1, REAL, latent) — `_schema_of` looked a table up
+#      across `SEARCHED_SCHEMAS` with `LIMIT 1` and no `ORDER BY`. If one
+#      name existed in two of those schemas the proof could digest the
+#      UNTOUCHED copy, before and after, and print `OK` for a table the
+#      migration had changed. Production has no such duplicate today, so
+#      this was never the 09-18 failure; it is a VERIFIER THAT CAN LIE,
+#      on the production write path, and L1 says such a thing fails loud
+#      rather than guesses.
+#   R3 (Astra finding 2, REAL) — test (e) above could not detect a
+#      missing rollback, and nothing tested the CLI boundary. Both fixed:
+#      (e) is strengthened in place, and the exit status is asserted here
+#      through a real process.
+#   U1 (Astra Q2 + the hub; UNVERIFIABLE FROM READS) — the runner
+#      re-applies `0003` on EVERY run, and its `ALTER TABLE
+#      system.cobalt_jobs ADD COLUMN IF NOT EXISTS …` runs AFTER the
+#      BEFORE probe has read that table under REPEATABLE READ, while
+#      `com.cobalt.heartbeat` (every 15 min) and `com.cobalt.seat-usage`
+#      (hourly) keep committing to it. Yesterday's dev round trip had no
+#      concurrent writer, so nobody had ever run that interleaving. (f)
+#      and (g) run it.
+#
+# (f) and (g) have NO CODE CHANGE behind them: they pin Postgres's
+# behaviour against the code as it already stands, so they pass at once,
+# exactly as test (b) does. That is the point — the claim was unproven,
+# not wrong, and a future Postgres or a future `0003` that breaks it now
+# fails HERE instead of at 20:40 on a deploy.
+
+#: The table `0003` alters, and the one the two residents write to.
+JOBS_TABLE = "cobalt_jobs"
+
+#: Hard ceiling, in seconds, on the lock wait in test (g). A hang must
+#: FAIL the test, never hang the suite: the harness carries no
+#: `lock_timeout` (deliberately out of scope), so the ceiling lives here.
+LOCK_CEILING_S = 20.0
+
+
+def _migration_0003_sql() -> str:
+    """`0003_heartbeat_vault_outcome.sql`, WHOLE, from the file itself.
+
+    L45: the real artifact. Retyping the `ALTER TABLE` here would prove
+    something about a string in a test file, not about the statement the
+    runner actually sends on every migrate — which is the statement U1 is
+    a question about. The assertions below are what notice if `0003` ever
+    stops being that statement.
+    """
+    path = next(p for p in FORWARD if p.name.startswith("0003_"))
+    text = path.read_text()
+    assert "ALTER TABLE system.cobalt_jobs" in text, (
+        f"{path.name} no longer alters system.cobalt_jobs, so tests (f) and "
+        f"(g) are no longer exercising the U1 case:\n{text}"
+    )
+    assert "ADD COLUMN IF NOT EXISTS" in text, (
+        f"{path.name} is no longer the idempotent ADD COLUMN the runner "
+        f"re-applies every run:\n{text}"
+    )
+    return text
+
+
+def _touch_a_job_row(conn) -> None:
+    """A no-CHANGE update of one existing `cobalt_jobs` row.
+
+    `SET last_result = last_result` writes a new row version — which is
+    what makes it a concurrent commit as far as MVCC and lock conflicts
+    are concerned — while leaving every value, and therefore the table's
+    digest, exactly as it was. So there is nothing to clean up: this is
+    the one write in the file that leaves no trace to delete.
+    """
+    rel = _rel(conn, JOBS_TABLE)
+    updated = conn.execute(
+        sql.SQL(
+            "UPDATE {rel} SET last_result = last_result "
+            "WHERE label = (SELECT min(label) FROM {rel})"
+        ).format(rel=rel)
+    ).rowcount
+    assert updated == 1, (
+        f"the other session updated {updated} row(s) of {JOBS_TABLE}, not 1 — "
+        "the interleaving these tests describe did not happen"
+    )
+
+
+def _wait_for_a_blocked_lock(watcher, table: str, ceiling: float) -> bool:
+    """True once SOME session is waiting for a lock on `table`.
+
+    Polling the catalog rather than sleeping a guessed interval: the test
+    must know the ALTER is actually BLOCKED before it releases the other
+    session, or it proves nothing about waiting.
+    """
+    schema = cli._schema_of(watcher, table)
+    deadline = time.perf_counter() + ceiling
+    while time.perf_counter() < deadline:
+        blocked = watcher.execute(
+            """
+            SELECT count(*)
+            FROM pg_locks l
+            JOIN pg_class c ON c.oid = l.relation
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relname = %s AND n.nspname = %s AND NOT l.granted
+            """,
+            (table, schema),
+        ).fetchone()[0]
+        if blocked:
+            return True
+        time.sleep(0.05)
+    return False
+
+
+@requires_db
+def test_a_table_name_in_two_searched_schemas_is_refused():
+    """(h) R1 — the proof must never pick one of two candidates.
+
+    The duplicate is created through the SAME connection the probe reads
+    with, and the transaction is rolled back in `finally`, so nothing is
+    ever committed to `cobalt_dev`: the ambiguity exists only inside this
+    transaction's own catalog view, which is exactly where `_schema_of`
+    looks.
+    """
+    conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+    try:
+        home = cli._schema_of(conn, CONCURRENCY_TABLE)
+        assert home is not None, "the fixture table is not on any searched schema"
+        intruder = next(s for s in cli.SEARCHED_SCHEMAS if s != home)
+        conn.execute(
+            sql.SQL("CREATE TABLE {rel} (id INTEGER PRIMARY KEY)").format(
+                rel=sql.Identifier(intruder, CONCURRENCY_TABLE)
+            )
+        )
+        with pytest.raises(cli.MigrationError) as excinfo:
+            cli._schema_of(conn, CONCURRENCY_TABLE)
+        message = str(excinfo.value)
+        # And the production path, not just the helper: `_probe` is what
+        # the proof calls, and it must not digest either candidate.
+        with pytest.raises(cli.MigrationError):
+            cli._probe(conn, CONCURRENCY_TABLE)
+    finally:
+        conn.rollback()
+        conn.close()
+
+    assert CONCURRENCY_TABLE in message, (
+        f"the refusal does not name the table: {message}"
+    )
+    assert home in message and intruder in message, (
+        "the refusal must name BOTH schemas — an operator cannot act on "
+        f"'a duplicate exists somewhere': {message}"
+    )
+
+
+@requires_db
+def test_one_match_still_returns_that_schema():
+    """(h2) R1's unchanged case: exactly one match behaves as it always did."""
+    conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+    try:
+        found = cli._schema_of(conn, CONCURRENCY_TABLE)
+        rows = conn.execute(
+            "SELECT schemaname FROM pg_tables "
+            "WHERE tablename = %s AND schemaname = ANY(%s)",
+            (CONCURRENCY_TABLE, list(cli.SEARCHED_SCHEMAS)),
+        ).fetchall()
+    finally:
+        conn.rollback()
+        conn.close()
+
+    assert len(rows) == 1, f"the fixture table is not unique on this database: {rows}"
+    assert found == rows[0][0]
+
+
+@requires_db
+def test_no_match_still_returns_none():
+    """(h3) R1's other unchanged case: `None` is how `_probe` says ABSENT."""
+    conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+    try:
+        assert cli._schema_of(conn, "no_migration_has_ever_created_this") is None
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+def test_the_cli_turns_a_migration_error_into_failed_and_exit_1():
+    """(i) R3 — the CLI boundary the review read but nothing tested.
+
+    `cobalt.cli.main` catches every exception, prints
+    `FAILED: <type>: <message>` on STDERR and exits 1. A deploy reads
+    that exit status, so it is asserted through a REAL process rather
+    than by reading `main`. The cheapest `MigrationError` there is:
+    `--proof-only` with `--rollback`, refused before any connection is
+    opened, which is why this test needs no database.
+    """
+    proc = _migrate("--proof-only", "--rollback", "--down-to", "0005")
+
+    assert proc.returncode == 1, (
+        "a MigrationError must leave the process with exit status 1; got "
+        f"{proc.returncode}\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+    )
+    assert "FAILED: MigrationError: " in proc.stderr, (
+        "the CLI did not render the MigrationError as `FAILED: …` on stderr:\n"
+        f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+    )
+    assert "FAILED:" not in proc.stdout, (
+        "the failure was printed on STDOUT, where a deploy log mixes it with "
+        f"the proof table:\n{proc.stdout}"
+    )
+
+
+@requires_db
+def test_ddl_runs_after_another_session_committed_to_the_same_table():
+    """(f) U1 — `0003`'s ALTER after a concurrent commit, under REPEATABLE READ.
+
+    The interleaving a production deploy actually runs: BEFORE probe
+    reads `cobalt_jobs` under the snapshot, the heartbeat commits to that
+    same table, and then `0003` — re-applied on every run — takes ACCESS
+    EXCLUSIVE on it. Nobody had run it: yesterday's round trip had no
+    concurrent writer, and no house could settle it from reads.
+
+    EXPECTED: no serialization error, and the table reads unchanged
+    (the other session's commit is outside this transaction's snapshot,
+    which is the whole property the snapshot fix bought).
+    """
+    other = db.connect_migration(env.DEV_DB_NAME)
+    conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+    try:
+        before = cli._probe(conn, JOBS_TABLE)
+        _touch_a_job_row(other)  # autocommit: committed the instant it runs
+        conn.execute(_migration_0003_sql())
+        after = cli._probe(conn, JOBS_TABLE)
+    finally:
+        conn.rollback()
+        conn.close()
+        other.close()
+
+    assert cli._verdict(JOBS_TABLE, before, after) == "OK", (
+        "a concurrent commit to cobalt_jobs, followed by 0003's ALTER TABLE, "
+        f"changed what the proof reads: rows {before['rows']} -> "
+        f"{after['rows']}, digest {before['digest']} -> {after['digest']}"
+    )
+
+
+@requires_db
+def test_the_alter_waits_for_an_open_transaction_and_then_completes():
+    """(g) U1's harder half: the other session is still IN its transaction.
+
+    `ALTER TABLE` needs ACCESS EXCLUSIVE and the open transaction holds
+    ROW EXCLUSIVE on the same rows, so the ALTER must WAIT — and must
+    complete, without error, once that transaction commits. Driven from a
+    thread with a hard ceiling inside the test, because the failure mode
+    being guarded against is a hang, and a hang that stops the suite
+    tells a deploy nothing.
+
+    EXPECTED: the ALTER blocks, then completes; no error either way.
+    """
+    other = db.connect_migration(env.DEV_DB_NAME)
+    watcher = db.connect_migration(env.DEV_DB_NAME)
+    conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+    outcome: list[tuple[str, Optional[BaseException]]] = []
+    alter = _migration_0003_sql()
+
+    def _run_the_alter() -> None:
+        try:
+            conn.execute(alter)
+            outcome.append(("completed", None))
+        except BaseException as e:  # a FINDING, not a test to bend
+            outcome.append(("raised", e))
+
+    thread = threading.Thread(target=_run_the_alter, daemon=True)
+    committed = False
+    after = None
+    try:
+        before = cli._probe(conn, JOBS_TABLE)
+        other.autocommit = False  # the other session's transaction stays OPEN
+        _touch_a_job_row(other)
+        thread.start()
+        blocked = _wait_for_a_blocked_lock(watcher, JOBS_TABLE, LOCK_CEILING_S)
+        other.commit()
+        committed = True
+        thread.join(timeout=LOCK_CEILING_S)
+        hung = thread.is_alive()
+        if not hung:
+            after = cli._probe(conn, JOBS_TABLE)
+    finally:
+        if not committed:
+            other.commit()
+        other.close()
+        watcher.close()
+        # Only from THIS thread once the ALTER is done with the connection.
+        if not thread.is_alive():
+            conn.rollback()
+            conn.close()
+
+    assert not hung, (
+        f"0003's ALTER TABLE did not finish within {LOCK_CEILING_S:.0f} s of "
+        "the other session committing. A migration that can hang behind a "
+        "resident's transaction is a deploy that never ends."
+    )
+    assert blocked, (
+        "the ALTER never appeared in pg_locks as waiting, so this test did "
+        "not exercise the lock wait it claims to (Postgres took ACCESS "
+        "EXCLUSIVE without contention — check that the other session's "
+        "transaction really was open)"
+    )
+    assert outcome and outcome[0][0] == "completed", (
+        "0003's ALTER TABLE raised after waiting for a concurrent "
+        f"transaction to commit: {outcome[0][1]!r}"
+    )
+    assert cli._verdict(JOBS_TABLE, before, after) == "OK", (
+        "the table did not read unchanged after the lock wait: rows "
+        f"{before['rows']} -> {after['rows']}, digest {before['digest']} -> "
+        f"{after['digest']}"
+    )
