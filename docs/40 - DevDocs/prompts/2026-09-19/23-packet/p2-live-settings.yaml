@@ -5,5 +5,4 @@ card_settings:
     atrs_from_open: [[1, 1], [3, 10]]
     rvol: [[1.2, 1], [5, 10]]
     Extension.leg_count: [[0, 10], [1, 10], [2, 6], [3, 3], [5, 1]]
-    htf_level_proximity: [[0, 10], [2, 1]]
   card.shadow_promotion_bar: {sessions: 10, pairs: 30, median_max: 1, within2_min: 0.90}
