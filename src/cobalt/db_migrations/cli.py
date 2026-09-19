@@ -112,6 +112,19 @@ TABLE_DIGEST_EXCLUDED_COLUMNS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+#: Seconds the migrate transaction will wait for any single lock before
+#: giving up. Decided-with-veto by the CTO desk, 2026-09-19. WHY 30: a
+#: deploy takes its residents DOWN before the merge (L66), so an HONEST
+#: lock wait at that point is sub-second — 30 s is generous for the
+#: legitimate case and still short enough that a stuck deploy fails
+#: inside its own window instead of running to whatever timeout the
+#: LAUNCHER happens to carry. Before this existed the only ceiling was
+#: the Bash tool's 600 s, which is a property of whoever started the
+#: deploy and not of this code (`prod-proof-only-3-2026-09-19.md`
+#: ESCALATE 3). An ENGINE TUNABLE, not an L53 ceiling: it decides how
+#: long to wait for a lock, never what the system may do.
+DEFAULT_LOCK_TIMEOUT_S = 30
+
 #: The schemas searched for a new-core table. A name found in more than
 #: one of them is an ERROR, not a choice — there is no look-up order.
 SEARCHED_SCHEMAS = ("public", "user", "system")
@@ -525,8 +538,51 @@ def cmd_migrate(args: argparse.Namespace) -> None:
     NOTHING` or an `UPDATE … WHERE user_id IS NULL` that matches no row
     on a database already past `0002` — so this is a rule for the next
     migration, not a defect in these.
+
+    THE LOCK CEILING, AND WHERE THE `SET LOCAL` SITS (2026-09-19). The
+    read-write transaction issues `SET LOCAL lock_timeout` before
+    `_apply`'s first statement, forward and rollback alike, so a DDL that
+    cannot get ACCESS EXCLUSIVE fails in `--lock-timeout-s` seconds
+    instead of waiting for as long as the caller happens to allow.
+
+    It is issued AFTER the BEFORE probe, and that position is a
+    deliberate, conservative choice rather than an accident. The property
+    that must hold is that the BEFORE probe and the migration read ONE
+    REPEATABLE READ snapshot; a snapshot is taken once per such
+    transaction, so a statement issued after the probe cannot move it.
+    Whether a `SET` is itself a statement that takes the snapshot was NOT
+    SETTLED from a citable source during this offline build (the Postgres
+    manual could not be read from the run that wrote this), so the
+    statement was placed where the question cannot matter. Today the
+    first statement of the transaction is `SHOW server_encoding` in
+    `_assert_utf8`, which is before the probe either way.
+
+    THE PRICE OF THAT POSITION, stated rather than discovered: the BEFORE
+    PROBE IS NOT UNDER THE CEILING. The probe takes ACCESS SHARE, which
+    only an ACCESS EXCLUSIVE holder — another DDL, not a resident's
+    INSERT or UPDATE — can block. Moving the `SET LOCAL` into `_connect`
+    would cover the probe as well, and is the change to make once the
+    snapshot question is answered against the manual.
+
+    `--proof-only` is deliberately NOT given a ceiling: it takes ACCESS
+    SHARE, applies nothing, and is the command a deploy preflights while
+    everything is still up. It must not start failing on a busy evening.
     """
     proof_only = args.proof_only
+    # Namespaces built by hand (tests, and any future in-process caller)
+    # need not carry the flag; the parser always sets it. The DEFAULT is
+    # the module constant either way, so there is one number, named once.
+    lock_timeout_s = getattr(args, "lock_timeout_s", DEFAULT_LOCK_TIMEOUT_S)
+    if (
+        isinstance(lock_timeout_s, bool)
+        or not isinstance(lock_timeout_s, int)
+        or lock_timeout_s < 1
+    ):
+        raise MigrationError(
+            f"--lock-timeout-s must be a whole number of seconds >= 1, got "
+            f"{lock_timeout_s!r}. 0 means wait forever — that is the defect "
+            "this flag closes."
+        )
     if proof_only and (args.rollback or args.down_to):
         raise MigrationError(
             "--proof-only takes the proof and applies NOTHING, so it cannot be "
@@ -559,6 +615,11 @@ def cmd_migrate(args: argparse.Namespace) -> None:
     conn = _connect(dbname, allow_prod=args.allow_prod, read_only=False)
     try:
         before = _probe_all(conn)
+        # The ceiling on every lock `_apply` asks for, this transaction
+        # only. `lock_timeout_s` is a validated int by the check at the
+        # top of this function, so it is interpolated directly rather
+        # than through `sql.Literal` — there is no user text here.
+        conn.execute(f"SET LOCAL lock_timeout = '{lock_timeout_s}s'")
         _apply(conn, paths)
         after = _probe_all(conn)
         verdicts = _proof_verdicts(before, after, direction=direction)
@@ -580,6 +641,24 @@ def cmd_migrate(args: argparse.Namespace) -> None:
             "writing to a table this migration touches: stop it (a resident, "
             "a scheduled one-shot, another session) and run the migration "
             f"again. Postgres said: {e}"
+        ) from e
+    except psycopg.errors.LockNotAvailable as e:
+        # The other named price of a deploy-time DDL, and the one this
+        # harness used to pay in wall-clock instead of in a message:
+        # without a ceiling the statement simply waited.
+        conn.rollback()
+        raise MigrationError(
+            f"the migration could not get a lock within {lock_timeout_s} s: a "
+            "statement waited for a table lock it could not have (an ALTER "
+            "needs ACCESS EXCLUSIVE, which conflicts with every other lock) "
+            "and gave up when this transaction's lock_timeout fired. NOTHING "
+            "WAS APPLIED — the transaction was rolled back. Find the session "
+            "holding it: SELECT pid, mode, granted, relation::regclass FROM "
+            "pg_locks WHERE NOT granted; then stop what is holding the lock (a "
+            "resident, a scheduled one-shot, another session) and run the "
+            f"migration again. Raising --lock-timeout-s above {lock_timeout_s} "
+            "only makes a stuck deploy wait longer. Postgres said: "
+            f"{e}"
         ) from e
     except BaseException:
         conn.rollback()
@@ -640,6 +719,15 @@ def add_parser(sub) -> None:
         help="Reverse registered migrations: heartbeat columns dropped, tables moved to public.",
     )
     migrate.add_argument(
+        "--lock-timeout-s",
+        type=int,
+        default=DEFAULT_LOCK_TIMEOUT_S,
+        metavar="N",
+        help="Seconds the migrate transaction waits for any one lock before "
+             f"failing with nothing applied (default {DEFAULT_LOCK_TIMEOUT_S}). "
+             "Not used by --proof-only. 0 is refused: it means wait forever.",
+    )
+    migrate.add_argument(
         "--proof-only",
         action="store_true",
         help="Take the proof (rows, digest, seconds) in a READ ONLY transaction "
@@ -653,6 +741,7 @@ def add_parser(sub) -> None:
 
 
 __all__ = [
+    "DEFAULT_LOCK_TIMEOUT_S",
     "DIGEST_EXCLUDED_COLUMNS",
     "PROBE_BATCH_SIZE",
     "MigrationError",

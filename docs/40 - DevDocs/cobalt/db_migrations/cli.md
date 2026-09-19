@@ -3,7 +3,7 @@
 S2-P1 requires a rollback bound before connection, selects only newer reverse files, and computes direction-aware verdicts before commit. `CHANGED` always rolls back. Since 2026-09-18 the content proof is STREAMED (no size ceiling), runs at REPEATABLE READ (one snapshot for both probes), and there is a read-only `--proof-only` mode. Since 2026-09-19 (the tribunal's round 1) an ambiguous table name is REFUSED rather than resolved, and what `OK` means is written down rather than inferred.
 
 ## What it does
-`cobalt db migrate [--allow-prod] [--rollback --down-to NNNN] [--proof-only]`.
+`cobalt db migrate [--allow-prod] [--rollback --down-to NNNN] [--proof-only] [--lock-timeout-s N]`.
 Runs the migrations and prints a per-table proof: where the table lives,
 its row count, a content digest, and what taking the proof cost in wall
 seconds — before and after.
@@ -74,6 +74,60 @@ ceiling so a hang fails the test instead of the suite). That is the
 interleaving a production deploy runs every time, because the runner
 re-applies `0003` on every run while the heartbeat writes to that table
 every 15 minutes.
+
+## `--lock-timeout-s N` — the migrate transaction's lock ceiling
+`DEFAULT_LOCK_TIMEOUT_S = 30`. The READ-WRITE transaction issues
+`SET LOCAL lock_timeout = '<N>s'` before `_apply`'s first statement,
+forward and rollback alike, so a DDL that cannot get its lock **fails in
+N seconds with nothing applied** instead of waiting.
+
+**Why it exists.** Until 2026-09-19 nothing in this file set a
+`lock_timeout` or a `statement_timeout`
+(`prod-proof-only-3-2026-09-19.md` ESCALATE 3), so the only ceiling on a
+deploy-time ALTER was whatever timeout the LAUNCHER happened to carry —
+600 s for the Bash tool that ran the last deploy. That is a property of
+the operator's shell, not of the code, and it is not a ceiling anyone
+chose.
+
+**Why 30 s.** A deploy takes its residents down before the merge (L66),
+so at that moment an honest lock wait is sub-second; the suite's own
+in-test ceiling for a deliberate lock wait is 20 s. 30 s is generous for
+the legitimate case and still fails inside the deploy's own window.
+Decided-with-veto by the desk. It is an ENGINE TUNABLE, not an L53
+ceiling: it decides how long to wait for a lock, never what the system
+may do. `0` is refused — "wait forever" is the defect this closes — as
+is any negative or non-integer value, and the refusal happens **before
+any connection is opened**, like the `--proof-only`/`--rollback`
+conflict.
+
+**What the operator sees on a timeout.** `psycopg.errors.
+LockNotAvailable` is wrapped exactly the way `SerializationFailure` is:
+roll back, then a `MigrationError` that says NOTHING WAS APPLIED, names
+the timeout that fired, gives the `pg_locks` query that finds the session
+holding the lock, and says plainly that raising `--lock-timeout-s` only
+makes a stuck deploy wait longer. The CLI renders it as
+`FAILED: MigrationError: …` on stderr and exits 1, which is what a deploy
+reads. **The operator's next step is to find and stop the holder, not to
+retry with a bigger number.**
+
+**Where the `SET LOCAL` sits, and what that costs.** After the BEFORE
+probe, before `_apply`. The property that must hold is that the BEFORE
+probe and the migration share ONE REPEATABLE READ snapshot; a snapshot is
+taken once per such transaction, so nothing issued after the probe can
+move it. Whether a `SET` is itself a snapshot-taking statement was not
+settled from a citable source during the offline build that wrote this,
+so the statement was put where the question cannot matter. **The price:
+the BEFORE PROBE IS NOT UNDER THE CEILING** — it takes ACCESS SHARE,
+which only an ACCESS EXCLUSIVE holder (another DDL, never a resident's
+INSERT) can block. Moving the `SET LOCAL` into `_connect` would cover the
+probe too, and is the change to make once the snapshot question is
+answered against the Postgres manual.
+
+**`--proof-only` is deliberately NOT given a ceiling.** It takes ACCESS
+SHARE and applies nothing, and it is the command a deploy preflights
+while everything is still up; giving it a lock ceiling would make it
+start failing on a busy evening. A test asserts it sends no
+`lock_timeout` at all.
 
 ## What `OK` means, exactly
 Written down here and in `cmd_migrate`'s docstring rather than inferred,

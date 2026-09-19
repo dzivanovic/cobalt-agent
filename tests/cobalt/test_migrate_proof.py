@@ -1271,3 +1271,272 @@ def test_the_alter_waits_for_an_open_transaction_and_then_completes():
         f"{before['rows']} -> {after['rows']}, digest {before['digest']} -> "
         f"{after['digest']}"
     )
+
+
+# ---------------------------------------------------------------------
+# 10. `lock_timeout` ON THE MIGRATE TRANSACTION (ops 2026-09-19, item c)
+# ---------------------------------------------------------------------
+#
+# ORIGIN: `prod-proof-only-3-2026-09-19.md` ESCALATE 3 — "Nothing in
+# `cli.py` sets a `lock_timeout` or a statement timeout … so a deploy
+# whose `0003` ALTER meets a heartbeat write waits indefinitely rather
+# than failing fast". The only ceiling was the Bash tool's 600 s, which
+# is a property of whoever launched the deploy, not of the code.
+#
+# THE SHAPE: the READ-WRITE migrate transaction issues
+# `SET LOCAL lock_timeout` before `_apply`'s first statement, forward and
+# rollback alike; `psycopg.errors.LockNotAvailable` is wrapped exactly as
+# `SerializationFailure` already is — rollback, then a `MigrationError`
+# that says NOTHING WAS APPLIED and names the timeout. `--proof-only`
+# takes ACCESS SHARE only and is deliberately NOT changed: it must not
+# start failing on a busy evening.
+#
+# WHERE THE STATEMENT SITS, and what that costs: AFTER the BEFORE probe.
+# See `cmd_migrate`'s docstring — the placement is the conservative one,
+# so the `SET` provably cannot sit between the transaction's start and
+# its snapshot. The price, stated rather than discovered: the BEFORE
+# PROBE ITSELF IS NOT UNDER THE TIMEOUT. It takes ACCESS SHARE, which
+# only an ACCESS EXCLUSIVE holder (another DDL) can block.
+
+
+class _StatementRecorder:
+    """An offline stand-in for the migrate connection.
+
+    It records every statement `cmd_migrate` sends and executes none of
+    them, so the ORDER of the statements — which is the whole claim here
+    — is checkable with no database. `_apply` is left REAL: it reads the
+    registered `.sql` files off disk and hands each one to `execute`, so
+    "before the first migration file's text" means the actual text of the
+    actual file, not a stand-in for it (L45).
+    """
+
+    def __init__(self, raise_on_apply: Optional[BaseException] = None):
+        self.statements: list[str] = []
+        self.rolled_back = 0
+        self.committed = 0
+        self.closed = 0
+        self._raise_on_apply = raise_on_apply
+
+    def execute(self, query, *args, **kwargs):
+        text = query if isinstance(query, str) else str(query)
+        self.statements.append(text)
+        if self._raise_on_apply is not None and "SET LOCAL" not in text:
+            raise self._raise_on_apply
+        return None
+
+    def rollback(self):
+        self.rolled_back += 1
+
+    def commit(self):
+        self.committed += 1
+
+    def close(self):
+        self.closed += 1
+
+
+def _offline_migrate(monkeypatch, recorder, **namespace):
+    """Run `cmd_migrate` with no database: the connection is the recorder
+    and both probe passes are stubbed (an empty probe dict makes every
+    verdict vacuously OK, which is what lets the commit path run)."""
+    monkeypatch.setenv(env.ENV_VAR, env.DEV)
+    monkeypatch.setattr(cli, "_connect", lambda *a, **k: recorder)
+    monkeypatch.setattr(cli, "_probe_all", lambda conn: {})
+    monkeypatch.setattr(cli, "_print_proof", lambda *a, **k: 0)
+    fields = {
+        "proof_only": False,
+        "rollback": False,
+        "down_to": None,
+        "allow_prod": False,
+        "lock_timeout_s": cli.DEFAULT_LOCK_TIMEOUT_S,
+    }
+    fields.update(namespace)
+    return cli.cmd_migrate(argparse.Namespace(**fields))
+
+
+def _index_of(statements: list[str], needle: str) -> int:
+    for i, text in enumerate(statements):
+        if needle in text:
+            return i
+    raise AssertionError(f"no statement contains {needle!r}; sent: {statements}")
+
+
+def test_the_default_lock_timeout_is_thirty_seconds():
+    """A module constant, not a literal buried in the call — the DevDoc
+    and the deploy prompt both quote this number."""
+    assert cli.DEFAULT_LOCK_TIMEOUT_S == 30
+
+
+def test_a_forward_run_sets_lock_timeout_before_the_first_migration_file(monkeypatch):
+    recorder = _StatementRecorder()
+    _offline_migrate(monkeypatch, recorder)
+
+    first_file_text = FORWARD[0].read_text()
+    set_at = _index_of(recorder.statements, "SET LOCAL lock_timeout")
+    applied_at = recorder.statements.index(first_file_text)
+    assert set_at < applied_at, (
+        "the lock ceiling was set AFTER the first migration file had already "
+        f"been sent: statement order {recorder.statements[:3]}"
+    )
+    assert f"'{cli.DEFAULT_LOCK_TIMEOUT_S}s'" in recorder.statements[set_at]
+    assert recorder.committed == 1 and recorder.rolled_back == 0
+
+
+def test_a_rollback_run_sets_lock_timeout_too(monkeypatch):
+    """A rollback's reverse migrations are DDL as well — a deploy that
+    cannot roll back because it is waiting on a lock is the worse half of
+    the same defect."""
+    recorder = _StatementRecorder()
+    _offline_migrate(monkeypatch, recorder, rollback=True, down_to="0005")
+
+    reverse_text = cli._rollback_paths("0005")[0].read_text()
+    set_at = _index_of(recorder.statements, "SET LOCAL lock_timeout")
+    assert set_at < recorder.statements.index(reverse_text)
+
+
+def test_proof_only_sends_no_lock_timeout(monkeypatch):
+    """`--proof-only` takes ACCESS SHARE and applies nothing. Giving it a
+    lock ceiling would make the one command a deploy runs while
+    everything is still up start failing on a busy evening."""
+    recorder = _StatementRecorder()
+    monkeypatch.setenv(env.ENV_VAR, env.DEV)
+    monkeypatch.setattr(cli, "_connect", lambda *a, **k: recorder)
+    monkeypatch.setattr(cli, "_probe_all", lambda conn: {})
+    monkeypatch.setattr(cli, "_print_probe", lambda *a, **k: None)
+    args = argparse.Namespace(
+        proof_only=True, rollback=False, down_to=None, allow_prod=False,
+        lock_timeout_s=cli.DEFAULT_LOCK_TIMEOUT_S,
+    )
+    cli.cmd_migrate(args)
+
+    offenders = [s for s in recorder.statements if "lock_timeout" in s]
+    assert not offenders, f"--proof-only sent a lock ceiling: {offenders}"
+
+
+def test_a_lock_it_cannot_get_rolls_back_and_says_nothing_was_applied(monkeypatch):
+    """The `SerializationFailure` shape, for the other named price of a
+    deploy-time DDL."""
+    recorder = _StatementRecorder(
+        raise_on_apply=psycopg.errors.LockNotAvailable(
+            "canceling statement due to lock timeout"
+        )
+    )
+    with pytest.raises(cli.MigrationError) as excinfo:
+        _offline_migrate(monkeypatch, recorder)
+
+    message = str(excinfo.value)
+    assert recorder.rolled_back == 1, "the transaction was not rolled back"
+    assert recorder.committed == 0
+    assert "nothing was applied" in message.lower(), message
+    assert f"{cli.DEFAULT_LOCK_TIMEOUT_S}" in message, (
+        f"the message does not name the timeout that fired: {message}"
+    )
+    assert "pg_locks" in message, (
+        "the operator is not told how to find the session holding the lock: "
+        f"{message}"
+    )
+
+
+@pytest.mark.parametrize("bad", [0, -1, -30])
+def test_a_zero_or_negative_lock_timeout_is_refused_before_any_connection(
+    monkeypatch, bad
+):
+    """0 means "wait forever" — the very defect the flag closes — so it is
+    refused where every other malformed-argument refusal lives: before a
+    connection exists."""
+
+    def _never(*args, **kwargs):
+        raise AssertionError("a connection was opened for a refused lock ceiling")
+
+    monkeypatch.setenv(env.ENV_VAR, env.DEV)
+    monkeypatch.setattr(cli, "_connect", _never)
+    monkeypatch.setattr(db, "connect_migration", _never)
+
+    args = argparse.Namespace(
+        proof_only=False, rollback=False, down_to=None, allow_prod=False,
+        lock_timeout_s=bad,
+    )
+    with pytest.raises(cli.MigrationError) as excinfo:
+        cli.cmd_migrate(args)
+    assert "--lock-timeout-s" in str(excinfo.value)
+
+
+def test_the_cli_turns_a_refused_lock_timeout_into_failed_and_exit_1():
+    """The CLI boundary for this flag, through a REAL process, in the
+    shape of `test_the_cli_turns_a_migration_error_into_failed_and_exit_1`
+    — and like that one it needs no database, because the refusal happens
+    before any connection is opened."""
+    proc = _migrate("--lock-timeout-s", "0")
+
+    assert proc.returncode == 1, (
+        f"got {proc.returncode}\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+    )
+    assert "FAILED: MigrationError: " in proc.stderr, (
+        f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+    )
+    assert "--lock-timeout-s" in proc.stderr
+
+
+@requires_db
+def test_a_migration_that_cannot_get_its_lock_fails_in_about_a_second(monkeypatch):
+    """(j) NEVER RUN AS OF 2026-09-19 — written offline, owed a first run
+    on `cobalt_dev` once `p4-verify-0919` releases it.
+
+    Another session holds ACCESS EXCLUSIVE on the table `0003` alters, so
+    `_apply`'s ALTER cannot get its lock; with `--lock-timeout-s 1` the
+    run must FAIL in about a second instead of waiting, and the table's
+    proof must be unchanged afterwards.
+
+    `_probe_all` is stubbed deliberately: under the conservative
+    placement the `SET LOCAL` is issued AFTER the BEFORE probe, so a real
+    probe would itself block on the ACCESS EXCLUSIVE holder with no
+    ceiling. That is a real property of this build and is reported under
+    the ops report's ESCALATE, not hidden by this test — what this test
+    pins is the ceiling on `_apply`, which is where the deploy's DDL is.
+    """
+    reader = db.connect_migration(env.DEV_DB_NAME)
+    holder = db.connect_migration(env.DEV_DB_NAME)
+    try:
+        before = cli._probe(reader, JOBS_TABLE)
+
+        holder.autocommit = False
+        holder.execute(
+            sql.SQL("LOCK TABLE {rel} IN ACCESS EXCLUSIVE MODE").format(
+                rel=_rel(holder, JOBS_TABLE)
+            )
+        )
+
+        conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+        monkeypatch.setenv(env.ENV_VAR, env.DEV)
+        monkeypatch.setattr(cli, "_connect", lambda *a, **k: conn)
+        monkeypatch.setattr(cli, "_probe_all", lambda c: {})
+        monkeypatch.setattr(cli, "_print_proof", lambda *a, **k: 0)
+        args = argparse.Namespace(
+            proof_only=False, rollback=False, down_to=None, allow_prod=False,
+            lock_timeout_s=1,
+        )
+
+        started = time.perf_counter()
+        with pytest.raises(cli.MigrationError) as excinfo:
+            cli.cmd_migrate(args)
+        elapsed = time.perf_counter() - started
+
+        assert "nothing was applied" in str(excinfo.value).lower()
+        assert elapsed < LOCK_CEILING_S, (
+            f"--lock-timeout-s 1 took {elapsed:.1f} s to give up — the ceiling "
+            "is not reaching the statement that waits"
+        )
+    finally:
+        holder.rollback()
+        holder.close()
+        reader.close()
+
+    after_conn = db.connect_migration(env.DEV_DB_NAME)
+    try:
+        after = cli._probe(after_conn, JOBS_TABLE)
+    finally:
+        after_conn.close()
+    assert cli._verdict(JOBS_TABLE, before, after) == "OK", (
+        "a migration that failed on its lock left the table changed: rows "
+        f"{before['rows']} -> {after['rows']}, digest {before['digest']} -> "
+        f"{after['digest']}"
+    )
