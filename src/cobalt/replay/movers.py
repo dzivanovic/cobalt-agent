@@ -49,7 +49,7 @@ from cobalt.archiver.collector import FetchMetrics, fetch_bars, finviz_get, scru
 from cobalt.archiver.models import Bar, Interval
 from cobalt.db import Side as DbSide
 from cobalt.radar.collector import SourceFailure, parse_screener_csv
-from cobalt.radar.config import RadarConfig
+from cobalt.radar.config import RadarConfig, screener_columns_param
 from cobalt.radar.config import load_config as load_radar_config
 from cobalt.radar.notes import check_scheduled_demand
 from cobalt.session.clock import ET
@@ -207,7 +207,8 @@ class MoversCollector:
         self._fetch_bars = fetch_bars
 
     def _params(self, side: str) -> dict[str, object]:
-        return {"v": self.config.export.v, "c": ",".join(str(v) for v in range(151)), "o": SIDES[side]}
+        return {"v": self.config.export.v, "c": screener_columns_param(self.config.export.columns),
+                "o": SIDES[side]}
 
     async def exports(self, *, top_n: int, now: datetime, cache: bool,
                       trade_date: Optional[date] = None) -> list[MoversExport]:

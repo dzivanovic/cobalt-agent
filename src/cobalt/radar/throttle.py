@@ -29,6 +29,8 @@ from cobalt.archiver.models import Interval
 from cobalt.session import session_clock
 from cobalt.session.models import Session
 
+from .config import load_config, screener_columns_param
+
 ET = ZoneInfo("America/New_York")
 REPO_ROOT = Path(__file__).resolve().parents[3]
 LISTS_FIXTURE = REPO_ROOT / "tests/fixtures/radar/radar-lists.example.md"
@@ -131,12 +133,21 @@ async def run_probe(
     names: int,
     grids: list[int],
     cycles: int,
+    columns: str,
     now: datetime | None = None,
     token: str | None = None,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     monotonic: Callable[[], float] = time.monotonic,
 ) -> tuple[list[dict[str, object]], int | None]:
+    """Measure Finviz's request tolerance without a config of its own.
+
+    The probe's screener request must be the same shape the radar sends,
+    or its measurement is of a different request. It holds no config, so
+    `columns` is handed in by the caller — `command()` reads it from the
+    radar config once (L3); the probe never opens a second copy.
+    """
     instant = now or datetime.now(timezone.utc)
+    column_param = screener_columns_param(columns)
     refused = refusal_reason(instant)
     if refused:
         raise ProbeError(f"throttle probe refused during {refused}")
@@ -177,7 +188,7 @@ async def run_probe(
                 "v": 152,
                 "f": screen["f"],
                 "o": screen["sort"],
-                "c": ",".join(str(v) for v in range(151)),
+                "c": column_param,
             }
             if screen.get("ft") is not None:
                 params["ft"] = screen["ft"]
@@ -227,7 +238,10 @@ def print_table(stages: list[dict[str, object]], limit: int | None) -> None:
 
 def command(args) -> None:
     grids = [int(value.strip()) for value in args.grids.split(",") if value.strip()]
-    stages, limit = asyncio.run(run_probe(names=args.names, grids=grids, cycles=args.cycles))
+    columns = load_config().export.columns
+    stages, limit = asyncio.run(
+        run_probe(names=args.names, grids=grids, cycles=args.cycles, columns=columns)
+    )
     path = write_result(stages, limit)
     print_table(stages, limit)
     print(path.relative_to(REPO_ROOT))

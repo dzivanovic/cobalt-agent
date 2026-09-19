@@ -45,10 +45,18 @@ Inputs, all raw production-read output, none queried by this script:
                                         `cp` from data/radar-cache/
   scratch/movers-{gainers,losers}-raw.csv
                                         live Finviz /export/screener
-                                        v=152 o=-change / o=change,
-                                        unfiltered, no filter param, via
-                                        _fetch_movers.py (deleted after
-                                        its one run)
+                                        o=-change / o=change, unfiltered,
+                                        no filter param. RE-FETCHED by
+                                        the hub at the radar's real
+                                        column set (`v` and `c` from
+                                        configs/cobalt/radar.yaml), 151
+                                        columns incl. `Asset Type`,
+                                        11,640 rows per side — the shape
+                                        the collector actually receives.
+                                        The first cut used a v=152
+                                        default view (21 columns, no
+                                        `Asset Type`), which is why the
+                                        `movers` mode below exists.
 
 Outputs:
   tests/fixtures/replay/cards-day.real-shape.json
@@ -69,6 +77,15 @@ blank for an ordinary stock, so the radar config's `not_equity.values:
 [Exchange Traded Fund]` matches nothing; the report is the evidence for
 rebuilding that rule. It is a decision aid, never a rule. Tickers live
 in the scratch file only (L32) — stdout carries counts.
+
+THIRD MODE, `movers` (AT-1 2.5). Re-cuts ONLY the two movers fixtures,
+from the re-fetched raw exports above, and touches nothing else: the
+no-argument mode still needs raw inputs that no longer all exist, so
+re-cutting everything is not a way to fix one fixture. Same rules as the
+other cuts (`_anonymize`, first `MOVERS_ROWS` rows) plus the guarantee
+that at least one real row with a non-blank `Asset Type` is in the cut —
+see `cut_movers`. The fixture is never hand-edited: a divergence is
+fixed here and the mode re-run.
 """
 
 from __future__ import annotations
@@ -227,14 +244,80 @@ def cut_pool_metrics() -> None:
     print(f"wrote {dest} ({len(trimmed) - 1} rows)")
 
 
+#: Data rows taken from the top of each movers export. Enough to carry
+#: the day's real top of the tape without committing 11,000 rows.
+MOVERS_ROWS = 60
+
+
+def _one_row(header: str, line: str) -> dict:
+    """One export line parsed against the export's own header."""
+    row = next(csv.DictReader(io.StringIO(header + line)), None)
+    if row is None:
+        raise AssertionError("movers: a data line parsed to no row")
+    return row
+
+
+def _first_fund_row(header: str, data: list[str], taken: int) -> tuple[int, str] | None:
+    """The first row BELOW the cut whose `Asset Type` is non-blank, or
+    None if the cut already holds one — or the file holds none at all."""
+    if any((_one_row(header, line).get(ASSET_TYPE_COL) or "").strip() for line in data[:taken]):
+        return None
+    for offset, line in enumerate(data[taken:], start=taken + 1):
+        if (_one_row(header, line).get(ASSET_TYPE_COL) or "").strip():
+            return offset, line
+    return None
+
+
 def cut_movers() -> None:
+    """Both unfiltered movers exports, cut to their top `MOVERS_ROWS` rows.
+
+    The header row is the raw file's own, never rebuilt and never
+    trimmed, and `_anonymize` must leave it byte for byte — a header the
+    cutter edited is not the shape the collector receives (L45). Line
+    endings are the one normalisation, applied by `read_text` to every
+    fixture this script cuts, so the movers header matches the radar
+    export fixture's exactly.
+
+    A real row with a non-blank `Asset Type` is guaranteed to be in the
+    cut. Finviz fills that column only for funds, so a cut without one
+    would leave every "reads Asset Type when present" claim untested. If
+    the top rows hold none, the first one further down the file is
+    APPENDED, out of rank order, and stdout says so; if the file holds
+    none at all, the cut is what exists and stdout says that instead. A
+    row is never invented.
+    """
     for side in ("gainers", "losers"):
         raw_text = (SCRATCH / f"movers-{side}-raw.csv").read_text()
         lines = raw_text.splitlines(keepends=True)
-        trimmed = lines[:61]  # header + 60 rows
+        records = list(csv.reader(io.StringIO(raw_text)))
+        assert len(records) == len(lines), (
+            f"movers-{side}: {len(records)} CSV records over {len(lines)} lines — a field spans "
+            "lines, so cutting by line would split a row"
+        )
+        header, data = lines[0], lines[1:]
+        assert _anonymize(header) == header, f"movers-{side}: _anonymize rewrote the header row"
+
+        trimmed = data[:MOVERS_ROWS]
+        appended = _first_fund_row(header, data, MOVERS_ROWS)
+        if appended is not None:
+            trimmed = trimmed + [appended[1]]
         dest = HERE / f"movers-{side}.real-shape.csv"
-        dest.write_text("".join(trimmed))
-        print(f"wrote {dest} ({len(trimmed) - 1} rows); header: {lines[0].strip()}")
+        dest.write_text(_anonymize("".join([header] + trimmed)))
+
+        funds = sum(
+            1 for line in trimmed if (_one_row(header, line).get(ASSET_TYPE_COL) or "").strip()
+        )
+        note = (
+            f"appended data row {appended[0]} for its non-blank {ASSET_TYPE_COL}"
+            if appended is not None
+            else f"no {ASSET_TYPE_COL} row appended"
+        )
+        if funds == 0:
+            note = f"NO non-blank {ASSET_TYPE_COL} row exists in the raw export — cut what exists"
+        print(
+            f"wrote {dest} ({len(trimmed)} rows, {len(records[0])} columns, "
+            f"{funds} with a non-blank {ASSET_TYPE_COL}; {note})"
+        )
 
 
 def main() -> None:
@@ -539,5 +622,7 @@ if __name__ == "__main__":
         main()
     elif mode == "evidence":
         evidence_main()
+    elif mode == "movers":
+        cut_movers()
     else:
-        raise SystemExit(f"unknown mode {mode!r}; expected no argument or 'evidence'")
+        raise SystemExit(f"unknown mode {mode!r}; expected no argument, 'evidence' or 'movers'")

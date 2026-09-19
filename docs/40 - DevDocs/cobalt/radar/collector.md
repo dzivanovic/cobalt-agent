@@ -2,6 +2,8 @@
 
 Strict Finviz screener collector using the shared transport and one process token bucket. It parses CSV by header name, refuses redirects/HTML/missing headers, chunks ticker lists, and caches raw responses only under gitignored `data/radar-cache`.
 
+`_params()` builds the screener request's `v` and `c` from the loaded config: `c` comes from `config.screener_columns_param(config.export.columns)`, never from a literal of its own (AT-1 2.3, L3).
+
 ## Daily bars (S2-P2, R5)
 `DailyBarsSource` is the collector interface (L9) for daily bars; `FinvizDailyBarsCollector` is its Finviz implementation. It makes one request per name per ET day. The cache is what makes that true: `<cache_root>/<ET date>/daily/<TICKER>.csv`. A cache hit, whether in this process or after a restart, reads the file and takes no token. A miss takes one token from the SAME bucket every other radar consumer uses (`process_bucket`, `radar.finviz_max_rpm`), fetches, parses through `anatomy.daily.parse_daily_csv`, and only then writes the cache, so a refused body is never cached. A redirect, a transport error or a bad body raises `SourceFailure`, and that name's HTF atoms are unavailable. The day comes from the ET date, so the cache does not roll over at 19:00/20:00 ET when the UTC date changes.
 

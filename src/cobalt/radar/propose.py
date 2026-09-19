@@ -27,7 +27,7 @@ from cobalt.vaultwrite import (
     assert_write_target,
 )
 
-from .config import load_config
+from .config import RadarConfigError, load_config, screener_columns
 from .models import ListBlock, PoolBlock, ScreenBlock
 
 if TYPE_CHECKING:
@@ -173,14 +173,17 @@ def _sort_code(value: str, *, screen_name: str) -> str:
 
 
 def _columns(value: str, *, screen_name: str, source: str) -> list[int] | None:
+    """A screen note's own column declaration. The note's formatting —
+    backticks, surrounding whitespace, the `<same columns>` placeholder —
+    is this parser's business; the declaration itself goes to the radar's
+    one column-set source (L3)."""
     normalized = value.strip().strip("`")
     if normalized == "<same columns>":
         return None
-    if normalized == "0-150":
-        return list(range(151))
-    if not re.fullmatch(r"\d+(?:,\d+)*", normalized):
-        raise ProposalRefused(f"{screen_name}: {source} columns are not a numeric declaration")
-    return [int(item) for item in normalized.split(",")]
+    try:
+        return screener_columns(normalized)
+    except RadarConfigError as e:
+        raise ProposalRefused(f"{screen_name}: {source} columns are not a numeric declaration") from e
 
 
 def _screen_name_and_heading_time(raw_name: str) -> tuple[str, str | None]:

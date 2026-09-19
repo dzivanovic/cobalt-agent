@@ -39,6 +39,45 @@ class ExportConfig(BaseModel):
     metric_headers: MetricHeaders
 
 
+#: The two shapes a Finviz `c=` declaration takes: an inclusive `a-b`
+#: range (radar.yaml's `export.columns`) or an explicit comma list (what
+#: a screen note may declare instead).
+_COLUMN_RANGE = re.compile(r"(\d+)-(\d+)")
+_COLUMN_LIST = re.compile(r"\d+(?:,\d+)*")
+
+
+def screener_columns(declaration: str) -> list[int]:
+    """The ONE place a Finviz column index list is produced (L3).
+
+    `"0-150"` -> 0..150 inclusive; `"1,2,3"` -> itself. Four modules used
+    to build the 151-index list for themselves, which is one export shape
+    per copy the day the declaration changes.
+
+    The function tidies nothing: anything that is not one of the two
+    shapes crashes (L1). A silently wrong column set does not fail — it
+    returns a differently shaped export that every parser downstream
+    reads as a header mismatch, far from the config line that caused it.
+    Stripping backticks and whitespace off a trader's note is the note
+    parser's job, not this one's.
+    """
+    matched = _COLUMN_RANGE.fullmatch(declaration)
+    if matched:
+        start, end = int(matched.group(1)), int(matched.group(2))
+        if start > end:
+            raise RadarConfigError(f"column declaration {declaration!r} runs backwards")
+        return list(range(start, end + 1))
+    if _COLUMN_LIST.fullmatch(declaration):
+        return [int(index) for index in declaration.split(",")]
+    raise RadarConfigError(
+        f"column declaration {declaration!r} is neither an 'a-b' range nor a comma list of indices"
+    )
+
+
+def screener_columns_param(declaration: str) -> str:
+    """A declaration rendered as the `c=` request parameter."""
+    return ",".join(str(index) for index in screener_columns(declaration))
+
+
 class NotEquityConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     header: str = Field(min_length=1)
@@ -138,4 +177,12 @@ def command(_args) -> None:
         print(f"{key} = {values[key]}")
 
 
-__all__ = ["CONFIG_PATH", "RadarConfig", "RadarConfigError", "check", "load_config"]
+__all__ = [
+    "CONFIG_PATH",
+    "RadarConfig",
+    "RadarConfigError",
+    "check",
+    "load_config",
+    "screener_columns",
+    "screener_columns_param",
+]

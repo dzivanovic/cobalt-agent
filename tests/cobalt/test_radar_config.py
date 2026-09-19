@@ -4,7 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from cobalt.radar.config import CONFIG_PATH, RadarConfigError, check, load_config
+from cobalt.radar.config import (
+    CONFIG_PATH,
+    RadarConfigError,
+    check,
+    load_config,
+    screener_columns,
+    screener_columns_param,
+)
 
 
 def test_shipped_config_and_all_tunables_validate():
@@ -37,6 +44,33 @@ def test_live_header_capture_has_replaced_unverified_marker():
         "step 6 header capture NOT RUN: configs/cobalt/radar.yaml is still UNVERIFIED"
     )
 
+
+
+def test_screener_columns_parses_the_two_declarations_the_radar_uses():
+    """`a-b` is inclusive at both ends; a comma list is itself. These are
+    the only two shapes Finviz's `c=` takes, and both reach this one
+    function — `configs/cobalt/radar.yaml`'s `export.columns` and a
+    screen note's own column declaration (L3)."""
+    assert screener_columns("0-150") == list(range(0, 151))
+    assert screener_columns("0-3") == [0, 1, 2, 3]
+    assert screener_columns("7") == [7]
+    assert screener_columns("0,1,65") == [0, 1, 65]
+    assert screener_columns_param("0-3") == "0,1,2,3"
+    assert screener_columns_param(load_config().export.columns) == ",".join(str(i) for i in range(151))
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["", "0-", "-150", "0-150,7", "0..150", "a-b", "150-0", "0, 1", "<same columns>", "0-150 "],
+)
+def test_a_malformed_column_declaration_crashes(bad):
+    """L1: a column set that is silently wrong ships an export whose shape
+    nobody notices, so a declaration that is not one of the two shapes is
+    a config error, never a best-effort parse. The function tidies
+    nothing — `"0-150 "` is malformed; stripping markdown backticks and
+    whitespace off a trader's note belongs to the note parser."""
+    with pytest.raises(RadarConfigError, match="column declaration"):
+        screener_columns(bad)
 
 
 def test_finviz_ceiling_is_the_ruled_50():

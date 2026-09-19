@@ -10,12 +10,17 @@ aid, not a rule, and it never writes a fixture.
 
 The cutter is a script, not an importable package, so it is loaded by
 path. Every assertion below is against committed real-shape exports
-(L45): `pool-metrics.real-shape.csv` is a real 151-column screener export
-that HAS both columns, and `movers-gainers.real-shape.csv` is a real
-`v=152` export that does NOT — the file that proves the "counted and
-listed, never silently skipped" path. No row is invented anywhere in this
-module; the one tmp_path CSV is the real header plus one real row copied
-byte-for-byte.
+(L45): `pool-metrics.real-shape.csv` and `movers-gainers.real-shape.csv`
+are both real 151-column screener exports, and since AT-1 2.5 re-cut the
+movers fixtures at the radar's real column set BOTH carry `Asset Type`
+and `Industry`. The movers cut is what gives tables A and B their first
+real rows — 29 fund rows in 60 — so the report's row rendering is no
+longer proved by hand-built report objects alone.
+
+No committed export lacks the two columns any more, so the "counted and
+listed, never silently skipped" path is exercised by `narrowed_export`:
+the real movers fixture with those two columns DELETED. Every remaining
+cell is the real file's. No row is invented anywhere in this module.
 """
 
 from __future__ import annotations
@@ -33,9 +38,15 @@ CUTTER = FIX / "replay" / "_cut_p4_fixtures.py"
 POOL_METRICS = FIX / "radar" / "pool-metrics.real-shape.csv"
 MOVERS = FIX / "replay" / "movers-gainers.real-shape.csv"
 
-#: Data-row counts of the two committed fixtures, as cut by the hub.
+#: Data-row counts of the two committed fixtures, as cut.
 POOL_METRICS_ROWS = 20
 MOVERS_ROWS = 60
+#: Rows of the movers cut whose `Asset Type` is non-blank, and the two
+#: values they carry. Real content of the committed fixture.
+MOVERS_FUND_ROWS = 29
+MOVERS_ASSET_TYPES = [("CryptoCurrency", 5), ("Equities (Stocks)", 24)]
+#: The narrowed copy's name, asserted on the report's own line.
+NARROWED = "movers-gainers.no-asset-type.csv"
 
 
 def _load_cutter():
@@ -56,6 +67,33 @@ cutter = _load_cutter()
 def _pool_metrics_tickers() -> list[str]:
     with POOL_METRICS.open(newline="", encoding="utf-8") as handle:
         return [row["Ticker"] for row in csv.DictReader(handle)]
+
+
+def _movers_tickers() -> list[str]:
+    with MOVERS.open(newline="", encoding="utf-8") as handle:
+        return [row["Ticker"] for row in csv.DictReader(handle)]
+
+
+@pytest.fixture
+def narrowed_export(tmp_path) -> Path:
+    """The real movers export with `Asset Type` and `Industry` DELETED.
+
+    A cache file written by an older column set is exactly this shape,
+    and it is the only way left to exercise the "file without the
+    columns" path from a real artifact: every committed export now has
+    both columns. Two columns removed, every other cell untouched."""
+    with MOVERS.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.reader(handle))
+    drop = sorted(
+        (rows[0].index(cutter.ASSET_TYPE_COL), rows[0].index(cutter.INDUSTRY_COL)), reverse=True
+    )
+    for row in rows:
+        for index in drop:
+            del row[index]
+    path = tmp_path / NARROWED
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        csv.writer(handle).writerows(rows)
+    return path
 
 
 # ---------------------------------------------------------------------
@@ -82,16 +120,25 @@ def test_no_argument_path_untouched():
 # ---------------------------------------------------------------------
 
 
-def test_rows_read_counts_both_kinds_of_file():
-    report = cutter.collect_evidence([POOL_METRICS, MOVERS])
+def test_rows_read_counts_both_kinds_of_file(narrowed_export):
+    report = cutter.collect_evidence([POOL_METRICS, narrowed_export])
     assert report.files_read == 2
     assert report.rows_with_columns == POOL_METRICS_ROWS
     assert report.rows_without_columns == MOVERS_ROWS
 
 
-def test_file_without_the_columns_is_listed_never_skipped():
+def test_file_without_the_columns_is_listed_never_skipped(narrowed_export):
+    report = cutter.collect_evidence([POOL_METRICS, narrowed_export])
+    assert report.files_without_columns == [NARROWED]
+
+
+def test_both_committed_exports_now_carry_the_two_columns():
+    """AT-1 2.5: the movers fixtures were re-cut at the radar's real
+    column set, so no committed export is missing either column."""
     report = cutter.collect_evidence([POOL_METRICS, MOVERS])
-    assert report.files_without_columns == [MOVERS.name]
+    assert report.files_without_columns == []
+    assert report.rows_with_columns == POOL_METRICS_ROWS + MOVERS_ROWS
+    assert report.rows_without_columns == 0
 
 
 def test_input_dirs_are_recorded_as_given():
@@ -174,11 +221,45 @@ def test_render_shapes_a_non_empty_table():
     assert [line for line in lines if line == "(none)"] == ["(none)"]
 
 
-def test_render_reports_the_file_without_the_columns_by_name():
-    report = cutter.collect_evidence([POOL_METRICS, MOVERS])
+def test_render_reports_the_file_without_the_columns_by_name(narrowed_export):
+    report = cutter.collect_evidence([POOL_METRICS, narrowed_export])
     text = cutter.render_evidence(report)
-    assert MOVERS.name in text
+    assert NARROWED in text
     assert f"rows read (files without the columns): {MOVERS_ROWS}" in text
+
+
+# ---------------------------------------------------------------------
+# the movers fixture as a real input (AT-1 2.5, closing AT-0 ESCALATE 1)
+# ---------------------------------------------------------------------
+
+
+def test_the_movers_fixture_gives_tables_a_and_b_real_rows():
+    """29 of the movers cut's 60 rows carry a non-blank `Asset Type`, in
+    two values. Both are ALSO `Industry = Exchange Traded Fund`, so the
+    two fund signals agree on every row of this cut and table C is empty
+    — the real disagreement rows the hub counted over the whole radar
+    cache are not in these 60 (see ESCALATE)."""
+    report = cutter.collect_evidence([MOVERS])
+    assert report.rows_with_columns == MOVERS_ROWS
+    assert [(row.asset_type, row.rows) for row in report.table_b] == MOVERS_ASSET_TYPES
+    assert [(row.asset_type, row.industry, row.rows) for row in report.table_a] == [
+        (asset_type, cutter.FUND_INDUSTRY, rows) for asset_type, rows in MOVERS_ASSET_TYPES
+    ]
+    assert report.distinct_fund_tickers == MOVERS_FUND_ROWS
+    assert report.distinct_asset_types == len(MOVERS_ASSET_TYPES)
+    assert report.table_c_total == 0
+
+
+def test_a_real_export_renders_non_empty_a_and_b_tables():
+    """The row rendering, exercised from a real artifact rather than from
+    report objects built in the test (AT-0 ESCALATE 1)."""
+    text = cutter.render_evidence(cutter.collect_evidence([MOVERS]))
+    assert f"| Equities (Stocks) | {cutter.FUND_INDUSTRY} | 24 |" in text.splitlines()
+    assert "| CryptoCurrency | 5 |" in text.splitlines()
+    # only table C's two halves are empty
+    assert [line for line in text.splitlines() if line == "(none)"] == ["(none)"] * 2
+    for ticker in _movers_tickers():
+        assert ticker not in cutter.summarize_evidence(cutter.collect_evidence([MOVERS]))
 
 
 # ---------------------------------------------------------------------
@@ -186,8 +267,8 @@ def test_render_reports_the_file_without_the_columns_by_name():
 # ---------------------------------------------------------------------
 
 
-def test_stdout_summary_carries_counts_and_no_ticker():
-    report = cutter.collect_evidence([POOL_METRICS, MOVERS])
+def test_stdout_summary_carries_counts_and_no_ticker(narrowed_export):
+    report = cutter.collect_evidence([POOL_METRICS, narrowed_export])
     summary = cutter.summarize_evidence(report)
     assert "files: 2" in summary
     assert f"rows: {POOL_METRICS_ROWS}" in summary

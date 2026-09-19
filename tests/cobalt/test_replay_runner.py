@@ -168,7 +168,7 @@ def test_nightly_report_lists_misses_with_the_gate_or_variable_that_excluded_the
     printed = "\n".join(deps.printed)
     assert "MISS card 302 CRWD short excluded_by=unarmed cf_r=-1.0139" in printed
     assert "MISS card 308 MU short excluded_by=rule_10 cf_r=-1.0000" in printed
-    assert "MISS mover CTNT excluded_by=not_in_any_source" in printed
+    assert "MISS mover QNME excluded_by=not_in_any_source" in printed
     assert "MISS mover DAIC excluded_by=config_cap" in printed
     assert (result.card_misses, result.no_trigger, result.input_stale) == (5, 1, 0)
     assert result.steps_done == ["movers", "cards", "formations", "line"]
@@ -209,7 +209,7 @@ def test_r2_3_a_retry_after_a_commit_boundary_resumes_idempotently():
 
 
 def test_archive_failures_are_counted_and_fail_the_job_at_the_end():
-    deps, calls = fake_deps(collector=FakeCollector(fail={"CTNT"}))
+    deps, calls = fake_deps(collector=FakeCollector(fail={"IMCC"}))
     with pytest.raises(ReplayError, match="1 movers archive failure") as failed:
         run_nightly(DAY, dry_run=False, deps=deps, live=True)
     assert failed.value.result.steps_done == ["movers", "cards", "formations", "line"]

@@ -24,10 +24,23 @@ is **verified**: gainers must not increase and losers must not decrease,
 otherwise it is the wrong sort or side. `Change` must be a percentage.
 `Asset Type` and RVOL are read when their columns exist.
 
-Real shape: the hub's movers fixtures were cut without `c=` and have no
-Asset Type column. The real `c=0-150` export (`pool-metrics.real-shape.csv`)
-has the column but leaves it **blank** for stocks. Both read as `None`
-("unreported"), which is never guessed to mean equity or not.
+Real shape (corrected AT-1 2.5): the movers fixtures were first cut from a
+21-column default view — a shape the collector never receives — and have
+been re-cut from unfiltered exports fetched at the radar's own column set.
+They now carry the same 151-column header as `pool-metrics.real-shape.csv`,
+byte for byte, `Asset Type` included; a test asserts that one shape across
+all three fixtures. Finviz fills `Asset Type` only for funds, so most rows
+are **blank** and a handful are not, and the fixture holds both. A blank
+cell and an absent column both read as `None` ("unreported"), which is
+never guessed to mean equity or not.
+
+The exports are a different trading day from `membership-day.real-shape
+.json`, so the fixtures' pool overlap is real but smaller than the first
+cut's; each benchmark test names the row that actually carries its case.
+
+`MoversCollector._params` takes `c` from `radar.config.screener_columns_param`
+— the one column-set source (AT-1 2.3, L3) — so the fixture's shape and the
+live request's shape cannot drift apart silently.
 
 ## History (`retained_exports`)
 A past `--date` reads the latest retained `movers-<side>-*.csv` for that

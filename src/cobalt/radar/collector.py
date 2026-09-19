@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from cobalt.archiver.collector import FetchMetrics, finviz_get, scrub
 
 from .anatomy.daily import DailySeries, parse_daily_csv
-from .config import RadarConfig, load_config
+from .config import RadarConfig, load_config, screener_columns_param
 from .models import ListBlock, ScreenBlock
 
 
@@ -158,7 +158,7 @@ class FinvizScreenerCollector:
     def _params(self) -> dict[str, object]:
         return {
             "v": self.config.export.v,
-            "c": ",".join(str(value) for value in range(151)),
+            "c": screener_columns_param(self.config.export.columns),
         }
 
     def _cache(self, source: str, now: datetime, payload: bytes) -> Path:

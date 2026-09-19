@@ -12,6 +12,11 @@ from cobalt.radar.throttle import ProbeError, finviz_max_rpm, refusal_reason
 
 ET = ZoneInfo("America/New_York")
 
+#: The probe holds no config; its caller hands the column declaration
+#: down (AT-1 2.3). These stop-first tests care about the stop, not the
+#: shape, so they declare the smallest valid set.
+COLUMNS = "0-1"
+
 
 def test_refuses_trading_window_and_market_reset():
     assert "09:00-16:00" in refusal_reason(datetime(2026, 9, 10, 12, 0, tzinfo=ET))
@@ -33,7 +38,7 @@ def test_followed_redirect_stops_first_stage(monkeypatch):
 
     monkeypatch.setattr(throttle, "fetch_bars", bars)
     stages, limit = asyncio.run(throttle.run_probe(
-        names=1, grids=[60, 30], cycles=1,
+        names=1, grids=[60, 30], cycles=1, columns=COLUMNS,
         now=datetime(2026, 9, 12, 12, 0, tzinfo=ET), token="synthetic-token",
     ))
     assert len(stages) == 1 and not stages[0]["clean"]
@@ -53,7 +58,7 @@ def test_non_200_status_stops(monkeypatch, status):
         raise RuntimeError(f"HTTP {status}")
 
     monkeypatch.setattr(throttle, "fetch_bars", bars)
-    stages, _ = asyncio.run(throttle.run_probe(names=1, grids=[60], cycles=1,
+    stages, _ = asyncio.run(throttle.run_probe(names=1, grids=[60], cycles=1, columns=COLUMNS,
         now=datetime(2026, 9, 12, 12, 0, tzinfo=ET), token="synthetic-token"))
     assert not stages[0]["clean"] and str(status) in stages[0]["stop_reason"]
 
@@ -69,7 +74,7 @@ def test_html_screener_body_stops(monkeypatch):
 
     monkeypatch.setattr(throttle, "fetch_bars", bars)
     monkeypatch.setattr(throttle, "finviz_get", screen)
-    stages, _ = asyncio.run(throttle.run_probe(names=1, grids=[60], cycles=1,
+    stages, _ = asyncio.run(throttle.run_probe(names=1, grids=[60], cycles=1, columns=COLUMNS,
         now=datetime(2026, 9, 12, 12, 0, tzinfo=ET), token="synthetic-token"))
     assert not stages[0]["clean"] and "non-CSV" in stages[0]["stop_reason"]
 
@@ -88,6 +93,6 @@ def test_header_change_stops(monkeypatch):
 
     monkeypatch.setattr(throttle, "fetch_bars", bars)
     monkeypatch.setattr(throttle, "finviz_get", screen)
-    stages, _ = asyncio.run(throttle.run_probe(names=1, grids=[60], cycles=2,
+    stages, _ = asyncio.run(throttle.run_probe(names=1, grids=[60], cycles=2, columns=COLUMNS,
         now=datetime(2026, 9, 12, 12, 0, tzinfo=ET), token="synthetic-token"))
     assert not stages[0]["clean"] and "header mismatch" in stages[0]["stop_reason"]
