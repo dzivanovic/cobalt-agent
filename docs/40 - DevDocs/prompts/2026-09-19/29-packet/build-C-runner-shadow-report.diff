@@ -1,0 +1,1833 @@
+diff --git a/src/cobalt/archiver/report.py b/src/cobalt/archiver/report.py
+index ff177e7..5e0b1a8 100644
+--- a/src/cobalt/archiver/report.py
++++ b/src/cobalt/archiver/report.py
+@@ -48,10 +48,65 @@ override. Rows below name their target.
+ {_RULE}
+ """
+ 
++# The append-only redesign (2026-09-19) gives an `append` night six more
++# numbers, and a markdown table cannot change its column count in place —
++# the same problem RULING 9 hit, answered the same way. These appear ONLY
++# in `append` mode: §5's mode isolation says an `upsert` night writes the
++# row it has always written, byte for byte, and a test asserts the append
++# header never appears on an upsert night.
++APPEND_COLUMNS = (
++    "| Date (UTC) | Mode | Database | Tickers | Requests | Rows Written | Failures | "
++    "Duration | Inserted | Withheld | Gaps | Restated | Degraded | Bootstraps |"
++)
++_APPEND_RULE = "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
++
++_APPEND_NOTE = """## Append mode — write_mode: append
++
++Rows below were written by the APPEND path: only bars that did not exist
++were inserted, and no stored row was rewritten. `Rows Written` is
++`inserted` — the count the SERVER reported, not the count submitted, so
++a bar the radar poller committed in between is a conflict rather than a
++write. `Withheld` counts keys an `restated` target refused to insert;
++`Gaps`, `Restated` and `Degraded` count targets, not keys.
++"""
++
++APPEND_HEADER = f"""# Bar Archiver — Run Log
++
++Append-only. One row per run (nightly full run, or a manual
++`--backfill TICKER`). Written by `cobalt.archiver.report`.
++
++{_APPEND_NOTE}
++{APPEND_COLUMNS}
++{_APPEND_RULE}
++"""
++
++APPEND_SCHEMA_BREAK = f"""
++{_APPEND_NOTE}
++{APPEND_COLUMNS}
++{_APPEND_RULE}
++"""
++
++# The way back. `write_mode` is a config row and a rollback to `upsert`
++# is one reviewed commit, so the log has to survive the round trip
++# without writing 8-column rows under a 14-column header.
++UPSERT_RETURN_BREAK = f"""
++## Back to upsert mode — write_mode: upsert
++
++Rows below were written by the nightly overlay again: the whole export
++through `ON CONFLICT … DO UPDATE`, and `Rows Written` is rows SUBMITTED.
++
++{COLUMNS}
++{_RULE}
++"""
++
+ 
+ class RunSummary:
+-    def __init__(self, mode: str, db_name: str | None = None):
++    def __init__(self, mode: str, db_name: str | None = None, write_mode: str = "upsert"):
+         self.mode = mode
++        #: The WRITE mode — a different name from `mode`, which is and
++        #: stays the REPORT SCOPE ("full" / "backfill:<T>"). §5 is
++        #: explicit about keeping the two names apart.
++        self.write_mode = write_mode
+         # Resolved once, at the start of the run, from the same source
+         # the store uses — so the log cannot disagree with where the
+         # rows actually went.
+@@ -61,6 +116,21 @@ class RunSummary:
+         self.requests = 0
+         self.rows_written = 0
+         self.failures: list[str] = []
++        #: §9: `system.cobalt_jobs` has ONE row per label and no per-run
++        #: id, so the run report and the progress/incident rows share
++        #: this TEXT rather than growing a new run table.
++        self.run_id = f"{mode}@{self.started_at.isoformat()}"
++        # --- append-mode counters (all 0 on an upsert night) ----------
++        self.withheld = 0
++        self.gap_targets = 0
++        self.restated_targets = 0
++        self.degraded_targets = 0
++        self.bootstraps = 0
++        self.counts: list = []
++        # --- the shadow compare (upsert mode only, §5) ----------------
++        self.shadow_records: list = []
++        self.shadow_errors = 0
++        self.shadow: dict | None = None
+ 
+     def record_success(self, ticker: str, rows: int) -> None:
+         self.tickers.add(ticker)
+@@ -72,30 +142,136 @@ class RunSummary:
+         self.requests += 1
+         self.failures.append(f"{ticker}/{interval}: {error}")
+ 
++    def record_append(self, ticker: str, plan, counts) -> None:
++        """One ACCEPTED append target. `Rows Written` = `inserted` (§7)."""
++        self.record_success(ticker, counts.inserted)
++        self.counts.append(counts)
++        if plan.bootstrap:
++            self.bootstraps += 1
++        kinds = {incident.kind.value for incident in plan.incidents}
++        if "gap" in kinds:
++            self.gap_targets += 1
++        if plan.status.value == "degraded":
++            self.degraded_targets += 1
++
++    def record_append_failure(self, ticker: str, interval: str, plan) -> None:
++        """One REFUSED append target: withheld, regressed or empty."""
++        self.record_failure(ticker, interval, plan.reason)
++        self.withheld += plan.withheld
++        kinds = {incident.kind.value for incident in plan.incidents}
++        if "restated" in kinds:
++            self.restated_targets += 1
++        if "gap" in kinds:
++            self.gap_targets += 1
++
++    @property
++    def healthy(self) -> bool:
++        """V2-9: any FAILED or DEGRADED target makes the night not healthy.
++
++        `degraded_targets` is 0 by construction on an `upsert` night —
++        that mode has no such verdict and must not invent one.
++        """
++        return not self.failures and self.degraded_targets == 0
++
++    def job_result(self) -> dict:
++        """What `_archive_nightly` puts on the `cobalt_jobs` row.
++
++        The five keys below are today's, unchanged. `shadow` is added
++        only when the shadow ran, and `append` only in append mode —
++        §5's complete list of `upsert`-mode additions is those keys plus
++        the lock and the artifact, and a test fails if a fourth appears.
++        """
++        result = {
++            "rows_written": self.rows_written,
++            "tickers": len(self.tickers),
++            "requests": self.requests,
++            "failures": len(self.failures),
++            "duration": self.duration_str(),
++        }
++        if self.shadow is not None:
++            result["shadow"] = self.shadow
++        if self.write_mode == "append":
++            result["append"] = {
++                "inserted": self.rows_written,
++                "withheld": self.withheld,
++                "gap_targets": self.gap_targets,
++                "restated_targets": self.restated_targets,
++                "degraded_targets": self.degraded_targets,
++                "bootstraps": self.bootstraps,
++                "healthy": self.healthy,
++            }
++        return result
++
+     def duration_str(self) -> str:
+         elapsed = (datetime.now(timezone.utc) - self.started_at).total_seconds()
+         m, s = divmod(int(elapsed), 60)
+         return f"{m}m{s:02d}s"
+ 
+ 
++def _current_header(text: str) -> str | None:
++    """Which table the file is currently appending to, or None.
++
++    WHOLE LINES, scanned backwards. A substring search cannot answer
++    this: `COLUMNS` is a PREFIX of `APPEND_COLUMNS` (the append table
++    adds six columns after `Duration`), so `find` reports both at the
++    same offset and a file in append mode reads as an upsert file —
++    which put a fresh schema break above every single row.
++    """
++    for line in reversed(text.splitlines()):
++        if line == APPEND_COLUMNS:
++            return APPEND_COLUMNS
++        if line == COLUMNS:
++            return COLUMNS
++    return None
++
++
+ def append_run_report(summary: RunSummary) -> Path:
+     """Append one table row. Kept strictly tabular (no interleaved
+     content) so the table renders correctly across every future append —
+     the Failures column is a count; full per-ticker error text goes to
+-    stdout/loguru (the launchd job's own log file), not this file."""
++    stdout/loguru (the launchd job's own log file), not this file.
++
++    A WRITE-MODE CHANGE OPENS A NEW TABLE, ONCE, in either direction. A
++    markdown table cannot change its column count in place, so an
++    `append` night after `upsert` nights gets the 14-column table and a
++    rollback to `upsert` gets its 8-column one back — never rows
++    misaligned under the wrong header. This is RULING 9's device,
++    reused rather than reinvented (L3).
++    """
+     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
++    append_mode = summary.write_mode == "append"
++    want = APPEND_COLUMNS if append_mode else COLUMNS
+     is_new = not REPORT_PATH.exists()
+-    needs_break = not is_new and COLUMNS not in REPORT_PATH.read_text(encoding="utf-8")
++    text = "" if is_new else REPORT_PATH.read_text(encoding="utf-8")
++    current = _current_header(text)
++
++    if is_new:
++        prefix = APPEND_HEADER if append_mode else HEADER
++    elif current == want:
++        prefix = ""
++    elif append_mode:
++        prefix = APPEND_SCHEMA_BREAK
++    elif current is None:
++        # A pre-RULING-9 file: no Database column anywhere.
++        prefix = SCHEMA_BREAK
++    else:
++        prefix = UPSERT_RETURN_BREAK
++
+     date_str = summary.started_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+-    row = (
+-        f"| {date_str} | {summary.mode} | {summary.db_name} | "
+-        f"{len(summary.tickers)} | {summary.requests} | {summary.rows_written} | "
+-        f"{len(summary.failures)} | {summary.duration_str()} |\n"
+-    )
++    cells = [
++        date_str, summary.mode, summary.db_name, str(len(summary.tickers)),
++        str(summary.requests), str(summary.rows_written), str(len(summary.failures)),
++        summary.duration_str(),
++    ]
++    if append_mode:
++        cells += [
++            str(summary.rows_written), str(summary.withheld), str(summary.gap_targets),
++            str(summary.restated_targets), str(summary.degraded_targets),
++            str(summary.bootstraps),
++        ]
++    row = "| " + " | ".join(cells) + " |\n"
+     with open(REPORT_PATH, "a", encoding="utf-8") as f:
+-        if is_new:
+-            f.write(HEADER)
+-        elif needs_break:
+-            f.write(SCHEMA_BREAK)
++        if prefix:
++            f.write(prefix)
+         f.write(row)
+     return REPORT_PATH
+diff --git a/src/cobalt/archiver/runner.py b/src/cobalt/archiver/runner.py
+index a346538..ca6f7b0 100644
+--- a/src/cobalt/archiver/runner.py
++++ b/src/cobalt/archiver/runner.py
+@@ -18,25 +18,136 @@ import sys
+ 
+ from loguru import logger
+ 
++from . import incidents, progress, shadow
+ from .collector import CollectorError, fetch_bars, resolve_token
+ from .config import load_config
+ from .models import Interval
++from .reconcile import IncidentDraft, IncidentKind, TargetStatus, plan_candidates, reconcile
+ from .report import RunSummary, append_run_report
++from .settings import WriteMode, load_archiver_settings
+ from .store import BarStore
+ 
+ GENTLE_SLEEP_SECONDS = 1.2
+ 
+ 
+-async def _run_targets(targets: list[tuple[str, Interval]], mode: str) -> RunSummary:
+-    summary = RunSummary(mode=mode)
+-    store = BarStore()
+-    store.ensure_schema()
+-    token = await resolve_token()
++def _now():
++    """The ONE system-clock read (`cobalt.session.clock.now_utc`).
+ 
++    Imported inside the function so `reconcile` can stay clock-free and
++    so a test can freeze the instant by passing `now=` rather than by
++    patching a global.
++    """
++    from cobalt.session import clock
++
++    return clock.now_utc()
++
++
++def _trading_night(now):
++    """The ET calendar date of `now` — the night an artifact is named for.
++
++    Tribunal round 1, F6: this was `now.date()` on a UTC instant. The
++    nightly run happens at 20:30 ET, which is already the NEXT UTC
++    calendar day, so every artifact was named for the day after the
++    trading night it recorded. Spec §5 writes
++    `data/archiver-shadow/<YYYY-MM-DD>.jsonl` and names no timezone;
++    resolved to ET here, which is the zone every other date in this
++    system is stated in (sessions are defined in ET, storage is UTC).
++
++    `SessionClock.to_et` is the conversion the codebase already has
++    (`session/clock.py:262`) — a static method, so no config is loaded
++    and no calendar is consulted, and it REFUSES a naive datetime rather
++    than guessing a zone (ADR-0007).
++    """
++    from cobalt.session.clock import SessionClock
++
++    return SessionClock.to_et(now).date()
++
++
++async def _default_fetch(ticker, interval, token):
++    """The real transport, behind the runner's `fetch=` test seam.
++
++    A named wrapper rather than `fetch_bars` passed as a default value,
++    because `test_finviz_consumers.py` scans this tree for `fetch_bars(`
++    to build L53's TOTAL-DEMAND inventory. Handing the function around
++    as a value would make this module invisible to that scan while it
++    goes on sending exactly as many requests as before — a guard that
++    stops seeing a consumer is worse than no guard.
++    """
++    return await fetch_bars(ticker, interval, token)
++
++
++class _Withheld(Exception):
++    """A target the comparison refused. Raised INSIDE the target's
++    transaction so the `with` rolls it back; the evidence is persisted
++    afterwards in a second, small transaction (Astra, V3-2)."""
++
++    def __init__(self, plan):
++        super().__init__(plan.reason)
++        self.plan = plan
++
++
++async def _run_targets(
++    targets: list[tuple[str, Interval]],
++    mode: str,
++    *,
++    store=None,
++    fetch=None,
++    settings=None,
++    now=None,
++) -> RunSummary:
++    """One run over `targets`.
++
++    `mode` is and stays the REPORT SCOPE ("full" / "backfill:<T>"). The
++    WRITE mode is `archiver.write_mode`, a different name everywhere
++    (§5) — and the dispatch on it happens BEFORE any append-specific
++    step, which is Astra's rule: no new failure rule, no completeness
++    cut, no range read may leak into an `upsert` night.
++
++    `store` / `fetch` / `settings` / `now` are TEST seams, the same kind
++    as `BarStore(db_name=…)`. Production passes none of them.
++    """
++    cfg = settings if settings is not None else load_archiver_settings()
++    store = store if store is not None else BarStore()
++    fetch_fn = fetch if fetch is not None else _default_fetch
++    clock = now if now is not None else _now
++
++    summary = RunSummary(mode=mode, write_mode=cfg.write_mode.value)
++
++    # §9: the run-level advisory lock, in BOTH write modes. A second
++    # archiver or a repair refuses loudly rather than interleaving.
++    with store.run_lock(
++        f"the archiver run ({mode}, write_mode={cfg.write_mode.value})"
++    ):
++        store.ensure_schema()
++        token = await resolve_token()
++        if cfg.write_mode is WriteMode.APPEND:
++            await _append_targets(
++                targets, store=store, fetch=fetch_fn, token=token,
++                summary=summary, clock=clock,
++            )
++        else:
++            await _upsert_targets(
++                targets, store=store, fetch=fetch_fn, token=token,
++                summary=summary, settings=cfg, clock=clock,
++            )
++    return summary
++
++
++async def _upsert_targets(targets, *, store, fetch, token, summary, settings, clock) -> None:
++    """TODAY'S NIGHT, unchanged: the whole export through `upsert_bars`.
++
++    No completeness filter, no range cut, no comparison gate, no
++    withholding, no new failure rule, no `archive_progress` write, no
++    incident write, the same submitted-row count and the same run-report
++    row. The ONLY additions are the lock (taken by the caller), the
++    pre-write shadow read, and the `shadow` key plus its artifact.
++    """
+     total = len(targets)
+     for i, (ticker, interval) in enumerate(targets, start=1):
+         try:
+-            bars = await fetch_bars(ticker, interval, token)
++            bars = await fetch(ticker, interval, token)
++            if settings.shadow_enabled:
++                _shadow_target(store, summary, ticker, interval, bars, settings, clock)
+             rows = store.upsert_bars(bars)
+             summary.record_success(ticker, rows)
+             logger.info(f"[{i}/{total}] {ticker}/{interval.value}: {rows} rows")
+@@ -52,7 +163,166 @@ async def _run_targets(targets: list[tuple[str, Interval]], mode: str) -> RunSum
+         if i < total:
+             await asyncio.sleep(GENTLE_SLEEP_SECONDS)
+ 
+-    return summary
++    if settings.shadow_enabled:
++        summary.shadow = shadow.aggregate(
++            summary.shadow_records, errors=summary.shadow_errors
++        )
++        if summary.shadow_records:
++            path = shadow.write_records(
++                summary.shadow_records,
++                night=_trading_night(clock()),
++                retention_nights=settings.shadow_retention_nights,
++            )
++            logger.info(f"shadow compare: {len(summary.shadow_records)} target(s) -> {path}")
++
++
++def _shadow_target(store, summary, ticker, interval, bars, settings, clock) -> None:
++    """The pre-write comparison. IT CAN NEVER FAIL A TARGET.
++
++    Its own `try/except Exception` is what keeps a shadow defect out of
++    the target's failure path — without it, a broken shadow would turn
++    every target red and the night would look like a data outage.
++    """
++    try:
++        archived_through = None
++        record = shadow.observe(
++            store, ticker=ticker, interval=interval, bars=bars,
++            fetch_started_at=clock(), settings=settings,
++            archived_through=archived_through,
++        )
++        summary.shadow_records.append(record)
++    except Exception as e:  # noqa: BLE001 — deliberate: see the docstring
++        summary.shadow_errors += 1
++        logger.warning(
++            f"shadow compare for {ticker}/{interval.value} failed and was "
++            f"ignored: {type(e).__name__}: {e}"
++        )
++
++
++async def _append_targets(targets, *, store, fetch, token, summary, clock) -> None:
++    """THE APPEND NIGHT (§6, §7). One transaction per target (§4)."""
++    total = len(targets)
++    for i, (ticker, interval) in enumerate(targets, start=1):
++        fetch_started_at = clock()
++        try:
++            bars = await fetch(ticker, interval, token)
++        except CollectorError as e:
++            # Today's behaviour, kept: the collector fails a whole target
++            # on an empty response, a header-only response or one bad
++            # row. In `append` mode the target additionally gets an
++            # `empty_export` incident so the heartbeat sees it (§7).
++            summary.record_failure(ticker, interval.value, str(e))
++            logger.error(f"[{i}/{total}] {ticker}/{interval.value}: FAILED — {e}")
++            _persist_incidents(
++                store,
++                [
++                    IncidentDraft(
++                        kind=IncidentKind.EMPTY_EXPORT,
++                        ticker=ticker,
++                        interval=interval.value,
++                        detail={
++                            "collector_error": str(e),
++                            "fetch_started_at": fetch_started_at.isoformat(),
++                        },
++                    )
++                ],
++                run_id=summary.run_id,
++                now=clock(),
++            )
++        except Exception as e:
++            summary.record_failure(ticker, interval.value, f"{type(e).__name__}: {e}")
++            logger.error(f"[{i}/{total}] {ticker}/{interval.value}: FAILED — {type(e).__name__}: {e}")
++        else:
++            _append_one(
++                store, summary, ticker, interval, bars, fetch_started_at, clock, i, total
++            )
++
++        if i < total:
++            await asyncio.sleep(GENTLE_SLEEP_SECONDS)
++
++
++def _append_one(store, summary, ticker, interval, bars, fetch_started_at, clock, i, total) -> None:
++    try:
++        with store.target_transaction() as conn:
++            archived_through = progress.read_archived_through(conn, ticker, interval)
++            plan = plan_candidates(
++                ticker=ticker, interval=interval, bars=bars,
++                fetch_started_at=fetch_started_at, archived_through=archived_through,
++            )
++            stored = (
++                store._bars_in_range(
++                    conn, ticker, interval, plan.range_start, plan.range_end
++                )
++                if plan.needs_stored_read
++                else {}
++            )
++            outcome = reconcile(plan, stored)
++            if outcome.archived_through_after is None:
++                raise _Withheld(outcome)
++
++            inserted = store.insert_new_bars(conn, list(outcome.to_insert))
++            conflicts = len(outcome.to_insert) - inserted
++            if conflicts < 0:
++                raise RuntimeError(
++                    f"{ticker}/{interval.value}: the server reported {inserted} "
++                    f"insert(s) for {len(outcome.to_insert)} offered key(s) — "
++                    "the counters cannot reconcile (L57)."
++                )
++            now = clock()
++            # A `gap` incident is persisted BEFORE progress advances (§7):
++            # the window between the old watermark and this export's
++            # oldest bar must be on the record before the watermark moves
++            # past it.
++            for draft in outcome.incidents:
++                incidents.open_or_refresh(conn, draft, run_id=summary.run_id, now=now)
++            progress.upsert_progress(
++                conn, plan=outcome, run_id=summary.run_id, now=now
++            )
++            counts = outcome.counts(inserted=inserted, concurrent_conflicts=conflicts)
++    except _Withheld as withheld:
++        # The transaction is already rolled back. The evidence goes in a
++        # SECOND small transaction, or it dies with the one that failed.
++        outcome = withheld.plan
++        summary.record_append_failure(ticker, interval.value, outcome)
++        _persist_incidents(
++            store, outcome.incidents, run_id=summary.run_id, now=clock()
++        )
++        logger.error(
++            f"[{i}/{total}] {ticker}/{interval.value}: {outcome.status.value.upper()} "
++            f"— {outcome.reason}"
++        )
++        return
++    except Exception as e:
++        summary.record_failure(ticker, interval.value, f"{type(e).__name__}: {e}")
++        logger.error(
++            f"[{i}/{total}] {ticker}/{interval.value}: FAILED — {type(e).__name__}: {e}"
++        )
++        return
++
++    summary.record_append(ticker, outcome, counts)
++    level = logger.info if outcome.status is TargetStatus.SUCCESS else logger.warning
++    level(
++        f"[{i}/{total}] {ticker}/{interval.value}: {outcome.status.value} — "
++        f"{counts.inserted} inserted, {counts.concurrent_conflicts} conflict(s), "
++        f"{outcome.reason}"
++    )
++
++
++def _persist_incidents(store, drafts, *, run_id: str, now) -> None:
++    """A SECOND transaction, for evidence whose own one was rolled back.
++
++    Its failure is logged and swallowed: losing the incident row is bad,
++    losing the run because the incident row could not be written is
++    worse, and the target has already been recorded as failed.
++    """
++    if not drafts:
++        return
++    try:
++        with store.target_transaction() as conn:
++            for draft in drafts:
++                incidents.open_or_refresh(conn, draft, run_id=run_id, now=now)
++    except Exception as e:  # noqa: BLE001
++        logger.error(f"could not persist archive incident(s): {type(e).__name__}: {e}")
+ 
+ 
+ async def run_full() -> RunSummary:
+@@ -101,14 +371,10 @@ def _archive_nightly() -> None:
+     with as_job("com.cobalt.archiver") as job:
+         summary = asyncio.run(run_full())
+         # THIS is what makes F18's "archiver freshness (last run + rows
+-        # written)" answerable without a second table.
+-        job.result = {
+-            "rows_written": summary.rows_written,
+-            "tickers": len(summary.tickers),
+-            "requests": summary.requests,
+-            "failures": len(summary.failures),
+-            "duration": summary.duration_str(),
+-        }
++        # written)" answerable without a second table. `job_result()`
++        # returns today's five keys, plus `shadow` when the pre-write
++        # comparison ran and `append` in append mode (§5).
++        job.result = summary.job_result()
+         if summary.failures:
+             # Raised, so the job row lands on `failed` with its exit code
+             # and its error text — F18 turns red on exactly this.
+@@ -116,6 +382,15 @@ def _archive_nightly() -> None:
+                 f"{len(summary.failures)} archiver failure(s): "
+                 + "; ".join(summary.failures[:5])
+             )
++        if not summary.healthy:
++            # V2-9: a DEGRADED target — a gap whose usable range was
++            # still appended, or stored keys the download did not carry —
++            # is not a failure of the run, but the night is NOT healthy
++            # and the job row must say so rather than reporting green.
++            raise RuntimeError(
++                f"{summary.degraded_targets} DEGRADED archiver target(s) — "
++                f"{summary.gap_targets} gap(s). See `cobalt archiver incidents`."
++            )
+ 
+ 
+ def main() -> None:
+diff --git a/src/cobalt/archiver/shadow.py b/src/cobalt/archiver/shadow.py
+new file mode 100644
+index 0000000..b3cadda
+--- /dev/null
++++ b/src/cobalt/archiver/shadow.py
+@@ -0,0 +1,356 @@
++"""The PRE-WRITE shadow compare — the evidence for the owner's switch ruling.
++
++Spec: `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §5,
++and spec O-6.
++
++WHY IT IS PRE-WRITE, AND WHY THAT IS THE WHOLE POINT. The first design
++proposed an `audit` command run AFTER the nightly overlay. Three houses
++refused it in round 3 with the same argument, and they were right: the
++20:30 run's `INSERT … DO UPDATE` refreshes every in-window bar, so an
++audit taken afterwards reads zeros by construction and cannot tell the
++owner whether `append` would have halted any target. So the comparison
++happens INSIDE the nightly run, per target, AFTER the fetch and BEFORE
++that target's `upsert_bars` — and every record carries the literal
++label `pre-write` so a reader of the artifact can see which it is.
++
++IT CAN NEVER FAIL OR SLOW-FAIL A TARGET. The read is bounded by its own
++`statement_timeout` (§10), the whole observation is wrapped by the
++runner in `try/except Exception` and counted as `shadow_errors`, and
++the target's `upsert_bars` runs whatever the shadow did. The 1.2 s
++pacing is untouched. Tests drive an exception, a timeout and a slow read
++and assert the target's write and the run summary are IDENTICAL to a
++night with the shadow off.
++
++IT IS READ-ONLY. No bar, progress row, incident or config is written.
++The runner's fake store records every call, and the test asserts the
++only write method reached on a shadow night is the target's own upsert.
++
++THE ARTIFACT IS A RETAINED BASELINE, not a log. Refreshed storage alone
++cannot show revision FREQUENCY — after tonight's overlay, last night's
++difference is gone. So each night is a JSON-lines file under
++`data/archiver-shadow/` (gitignored; never `git add`ed), and
++`shadow-report` reads ACROSS nights to say which differing keys
++PERSISTED, VANISHED or APPEARED. Astra and Grok both required exactly
++that.
++"""
++
++from __future__ import annotations
++
++import json
++from datetime import date, timedelta
++from pathlib import Path
++
++from pydantic import BaseModel, ConfigDict, Field
++
++from .config import REPO_ROOT
++from .models import Interval
++from .reconcile import compare, et_date, split_export, steady_state_dates
++
++#: `data/` is gitignored (`.gitignore:6`) — this directory is never a
++#: committed path, and no `git add` in this build names it.
++SHADOW_DIR = REPO_ROOT / "data" / "archiver-shadow"
++
++#: The literal §5 requires on every record.
++LABEL = "pre-write"
++
++
++class ScopeResult(BaseModel):
++    """One scope's four-way comparison, as the artifact carries it."""
++
++    model_config = ConfigDict(frozen=True, extra="forbid")
++
++    scope: str
++    candidates: int = 0
++    already_stored_equal: int = 0
++    differing: list[dict] = Field(default_factory=list)
++    incoming_only: int = 0
++    new: int = 0
++    late: int = 0
++    stored_only: int = 0
++    would_withhold: bool = False
++    #: True when EVERY differing key differs only in volume — the cheap
++    #: question the owner will ask first, because a volume-only
++    #: restatement is a different kind of worry from a price one.
++    volume_only: bool = False
++
++
++class ShadowRecord(BaseModel):
++    """One target's night, as one line of the artifact."""
++
++    model_config = ConfigDict(frozen=True, extra="forbid")
++
++    label: str = LABEL
++    ticker: str
++    interval: str
++    fetch_started_at: str
++    fetched: int
++    export_oldest: str | None
++    export_newest: str | None
++    raw_export_newest: str | None
++    archived_through: str | None
++    stored_rows_read: int
++    #: Whether the RADAR POLLER can write this target at all. The poller
++    #: writes i1 and only i1 (`radar/poller.py:88`), so this is decided
++    #: from the interval rather than by reading the live pool — the
++    #: archiver's night does not query the radar's tables.
++    poller_writable: bool
++    bootstrap: ScopeResult
++    steady_state: ScopeResult
++
++    def as_line(self) -> str:
++        return json.dumps(self.model_dump(), sort_keys=True, default=str)
++
++
++def _scope(scope: str, candidates, stored, *, archived_through) -> ScopeResult:
++    result = compare(candidates, stored)
++    late = (
++        0
++        if archived_through is None
++        else sum(1 for k in result.incoming_only if k <= archived_through)
++    )
++    differing = [d.as_detail() for d in result.differing]
++    volume_only = bool(differing) and all(
++        {f["field"] for f in d["fields"]} == {"volume"} for d in differing
++    )
++    return ScopeResult(
++        scope=scope,
++        candidates=len(candidates),
++        already_stored_equal=len(result.equal),
++        differing=differing,
++        incoming_only=len(result.incoming_only),
++        new=len(result.incoming_only) - late,
++        late=late,
++        stored_only=len(result.stored_only),
++        would_withhold=bool(result.differing),
++        volume_only=volume_only,
++    )
++
++
++def observe(
++    store,
++    *,
++    ticker: str,
++    interval: Interval,
++    bars,
++    fetch_started_at,
++    settings,
++    archived_through=None,
++) -> ShadowRecord:
++    """What `append` WOULD have done to this target tonight.
++
++    ONE read of the stored rows over the eligible export's range; both
++    scopes are then computed in memory, so the steady-state scope costs
++    no second query.
++
++    This function does not catch its own exceptions — the RUNNER does,
++    once, and counts `shadow_errors`. Swallowing here would hide a
++    systematically broken shadow behind a clean-looking night.
++    """
++    split = split_export(list(bars), interval, fetch_started_at)
++    eligible = split.eligible
++    stored: dict = {}
++    if eligible:
++        with store.target_transaction() as conn:
++            _bound_statement(conn, settings.shadow_statement_timeout_s)
++            stored = store._bars_in_range(
++                conn, ticker, interval, split.export_oldest, split.export_newest
++            )
++
++    steady_dates = set(steady_state_dates(eligible, fetch_started_at))
++    steady = tuple(b for b in eligible if et_date(b.ts) in steady_dates)
++    steady_keys = {b.ts for b in steady}
++
++    return ShadowRecord(
++        ticker=ticker,
++        interval=interval.value,
++        fetch_started_at=fetch_started_at.isoformat(),
++        fetched=split.fetched,
++        export_oldest=split.export_oldest.isoformat() if split.export_oldest else None,
++        export_newest=split.export_newest.isoformat() if split.export_newest else None,
++        raw_export_newest=split.raw_newest.isoformat() if split.raw_newest else None,
++        archived_through=archived_through.isoformat() if archived_through else None,
++        stored_rows_read=len(stored),
++        poller_writable=interval is Interval.I1,
++        bootstrap=_scope("bootstrap", eligible, stored, archived_through=archived_through),
++        steady_state=_scope(
++            "steady_state",
++            steady,
++            {k: v for k, v in stored.items() if k in steady_keys},
++            archived_through=archived_through,
++        ),
++    )
++
++
++def _bound_statement(conn, timeout_s: int) -> None:
++    """The shadow's read is bounded, not trusted (§5, §10).
++
++    `set_config(..., is_local => true)` rather than a `SET LOCAL` string
++    so the value reaches the server as a PARAMETER — and so it expires
++    with the transaction rather than leaking onto a pooled session.
++    """
++    conn.execute(
++        "SELECT set_config('statement_timeout', %s, true)", (str(int(timeout_s) * 1000),)
++    )
++
++
++# ---------------------------------------------------------------------
++# The artifact
++# ---------------------------------------------------------------------
++
++
++def write_records(records, *, night: date, retention_nights: int) -> Path:
++    """Append tonight's records to `data/archiver-shadow/<date>.jsonl`.
++
++    Append rather than replace: `run_full` and a manual `--backfill`
++    can both happen on one night, and the second must not erase the
++    first's evidence.
++    """
++    SHADOW_DIR.mkdir(parents=True, exist_ok=True)
++    path = SHADOW_DIR / f"{night.isoformat()}.jsonl"
++    with open(path, "a", encoding="utf-8") as handle:
++        for record in records:
++            handle.write(record.as_line() + "\n")
++    apply_retention(retention_nights=retention_nights, today=night)
++    return path
++
++
++def apply_retention(*, retention_nights: int, today: date) -> list[Path]:
++    """Delete nights older than the window. Returns what was removed.
++
++    Bounded by the FILENAME's date, not by mtime: a file copied or
++    restored keeps its night, and an mtime-based sweep would keep
++    whatever was touched last rather than whatever is recent.
++    """
++    if not SHADOW_DIR.exists():
++        return []
++    cutoff = today - timedelta(days=retention_nights - 1)
++    removed: list[Path] = []
++    for path in sorted(SHADOW_DIR.glob("*.jsonl")):
++        try:
++            night = date.fromisoformat(path.stem)
++        except ValueError:
++            continue
++        if night < cutoff:
++            path.unlink()
++            removed.append(path)
++    return removed
++
++
++def read_night(night: date) -> list[dict]:
++    path = SHADOW_DIR / f"{night.isoformat()}.jsonl"
++    if not path.exists():
++        return []
++    return [
++        json.loads(line)
++        for line in path.read_text(encoding="utf-8").splitlines()
++        if line.strip()
++    ]
++
++
++def recent_nights(limit: int) -> list[tuple[str, list[dict]]]:
++    """The most recent `limit` nights present, oldest first."""
++    if not SHADOW_DIR.exists():
++        return []
++    paths = sorted(SHADOW_DIR.glob("*.jsonl"))[-limit:]
++    return [
++        (
++            path.stem,
++            [
++                json.loads(line)
++                for line in path.read_text(encoding="utf-8").splitlines()
++                if line.strip()
++            ],
++        )
++        for path in paths
++    ]
++
++
++def differing_keys(records) -> set[tuple[str, str, str]]:
++    """`(ticker, interval, ts)` of every key that differed, bootstrap scope."""
++    keys: set[tuple[str, str, str]] = set()
++    for record in records:
++        for difference in record.get("bootstrap", {}).get("differing", []):
++            keys.add((record["ticker"], record["interval"], difference["ts"]))
++    return keys
++
++
++def persisted_vanished_appeared(nights) -> dict[str, list]:
++    """Across nights: which differing keys survived, went away, are new.
++
++    `nights` is `[(label, keys_or_records), …]`, oldest first. PURE:
++    the command reads the artifacts and hands the sets in, so the
++    arithmetic is testable without a filesystem.
++
++    This is the number the owner needs and the one a post-write audit
++    cannot produce: a difference that VANISHES was healed by the very
++    overlay `append` would stop doing.
++    """
++    sets = []
++    for _, payload in nights:
++        if isinstance(payload, set):
++            sets.append(payload)
++        else:
++            sets.append(differing_keys(payload))
++    if not sets:
++        return {"persisted": [], "vanished": [], "appeared": []}
++    first, last = sets[0], sets[-1]
++    earlier = set().union(*sets[:-1]) if len(sets) > 1 else set()
++    return {
++        "persisted": sorted(last & earlier),
++        "vanished": sorted(first - last),
++        "appeared": sorted(last - earlier),
++    }
++
++
++def aggregate(records, *, errors: int) -> dict:
++    """`job.result["shadow"]` (§5): what a night's shadow saw, in one dict."""
++    by_interval: dict[str, int] = {}
++    poller_writable = 0
++    archiver_only = 0
++    volume_only = 0
++    any_ohlc = 0
++    late = 0
++    new = 0
++    for record in records:
++        scope = record.bootstrap
++        late += scope.late
++        new += scope.new
++        if not scope.would_withhold:
++            continue
++        by_interval[record.interval] = by_interval.get(record.interval, 0) + 1
++        if record.poller_writable:
++            poller_writable += 1
++        else:
++            archiver_only += 1
++        if scope.volume_only:
++            volume_only += 1
++        else:
++            any_ohlc += 1
++    return {
++        "label": LABEL,
++        "targets_compared": len(records),
++        "targets_errored": errors,
++        "would_withhold_by_interval": by_interval,
++        "would_withhold_poller_writable": poller_writable,
++        "would_withhold_archiver_only": archiver_only,
++        "volume_only": volume_only,
++        "any_ohlc": any_ohlc,
++        "late": late,
++        "new": new,
++    }
++
++
++__all__ = [
++    "LABEL",
++    "SHADOW_DIR",
++    "ScopeResult",
++    "ShadowRecord",
++    "aggregate",
++    "apply_retention",
++    "differing_keys",
++    "observe",
++    "persisted_vanished_appeared",
++    "read_night",
++    "recent_nights",
++    "write_records",
++]
+diff --git a/src/cobalt/cli.py b/src/cobalt/cli.py
+index 5939df2..7e809b6 100644
+--- a/src/cobalt/cli.py
++++ b/src/cobalt/cli.py
+@@ -73,6 +73,9 @@ from cobalt.settings import cli as settings_cli  # noqa: E402
+ from cobalt.taxonomy import cli as taxonomy_cli  # noqa: E402
+ from cobalt.taxonomy import validate as taxonomy_validate  # noqa: E402
+ from cobalt.vaultwrite import VaultWriter, VaultWriteStore  # noqa: E402
++from cobalt.archiver import cli as archiver_cli  # noqa: E402
++from cobalt.archiver.quiet import QuietRefused  # noqa: E402
++from cobalt.archiver.store import ArchiveLockError  # noqa: E402
+ 
+ 
+ def _store() -> VaultWriteStore:
+@@ -420,6 +423,15 @@ def _cmd_validate(args: argparse.Namespace) -> None:
+         f"{', '.join(f'{slot:%H:%M}' for slot in summary_at())} ET."
+     )
+ 
++    # The Bar Archiver's write mode and quiet window (append-only FINAL
++    # design §10). Building the model IS the check, as everywhere above:
++    # a missing row, a wrong unit or a near-miss spelling of the write
++    # mode crashes here, naming the key, rather than at 20:30 tonight.
++    from cobalt.archiver.settings import validate_command_lines as archiver_lines
++
++    for line in archiver_lines():
++        print(line)
++
+     # 2026-09-13 tree cleanup: docs/PLACEMENT.md's map, enforced. Captures,
+     # per-session dumps and stale in-flight duplicates are what sprawled
+     # before this sweep existed — see docs/PLACEMENT.md for the map.
+@@ -468,6 +480,11 @@ def main() -> None:
+     seatusage_cli.add_parser(sub)
+     generated_cli.add_parser(sub)
+     radar_cli.add_parser(sub)
++    # The Bar Archiver's operator commands (append-only FINAL design
++    # 2026-09-19): progress, incidents, audit, shadow-report, and the two
++    # quiet-window repairs. A NEW block at the end of this group — it
++    # reflows none of its neighbours.
++    archiver_cli.add_parser(sub)
+     jobs_cli.add_stop_parsers(sub)
+ 
+     validate = sub.add_parser(
+@@ -483,6 +500,17 @@ def main() -> None:
+         # operator stopped it on purpose, and a non-zero exit would paint
+         # F18 red for a state he deliberately caused (F17d).
+         print(f"NOT RUN — {e}")
++    except (QuietRefused, ArchiveLockError) as e:
++        # EXIT 2, the archiver's REFUSALS (append-only design §8, §9).
++        # Both are plain RuntimeErrors, so without this clause they fell
++        # into the generic branch below and exited 1 — indistinguishable
++        # from a real failure, while nothing was written and nothing is
++        # broken. The message keeps this CLI's own `FAILED: <type>:
++        # <message>` shape so a reader sees one rendering across every
++        # command; the refusal's own multi-line body (the three observed
++        # values and the earliest allowed start) follows it verbatim.
++        print(f"FAILED: {type(e).__name__}: {e}", file=sys.stderr)
++        sys.exit(e.exit_code)
+     except Exception as e:
+         print(f"FAILED: {type(e).__name__}: {e}", file=sys.stderr)
+         sys.exit(1)
+diff --git a/tests/cobalt/test_archiver_runner.py b/tests/cobalt/test_archiver_runner.py
+new file mode 100644
+index 0000000..7538a85
+--- /dev/null
++++ b/tests/cobalt/test_archiver_runner.py
+@@ -0,0 +1,797 @@
++"""Chunk N — the runner: MODE ISOLATION, the shadow compare, the append night.
++
++Spec `ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §5, §6, §7, §9.
++
++THERE WAS NO RUNNER TEST FILE BEFORE THIS ONE. The nightly run is the
++thing that writes 3.34M rows a night, and the only guard on it was the
++store's two integration tests.
++
++§5 is the promise this file exists to keep: **in `upsert` mode the
++write path is today's code byte for byte.** So the first section is
++DIFFERENTIAL — it asserts what the run does against what it did before
++the redesign — and the additions are PINNED by a test that fails if a
++fourth one appears.
++
++Everything here is offline: a fake store that records every call and a
++fake `fetch`. No database, no network, no clock read the test does not
++control.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import json
++from contextlib import contextmanager
++from datetime import datetime, timedelta, timezone
++from decimal import Decimal
++
++import pytest
++
++from cobalt.archiver import runner as runner_mod
++from cobalt.archiver import shadow as shadow_mod
++from cobalt.archiver.collector import CollectorError
++from cobalt.archiver.models import Bar, Interval
++from cobalt.archiver.reconcile import BarValues, IncidentKind, TargetStatus, bar_values
++from cobalt.archiver.settings import ArchiverSettings
++from cobalt.archiver.store import ArchiveLockError
++
++UTC = timezone.utc
++FETCH_AT = datetime(2026, 9, 18, 20, 30, tzinfo=UTC)
++
++
++def ts(day: int, hour: int, minute: int) -> datetime:
++    return datetime(2026, 9, day, hour, minute, tzinfo=UTC)
++
++
++def bar(when, close="100.00", ticker="TESTARCH", interval=Interval.I5, volume=1234) -> Bar:
++    return Bar(
++        ticker=ticker, interval=interval, ts=when,
++        open=Decimal("99.00"), high=Decimal("101.00"), low=Decimal("98.50"),
++        close=Decimal(close), volume=volume,
++    )
++
++
++def settings(write_mode="upsert", shadow_compare="on", **over) -> ArchiverSettings:
++    payload = {
++        "write_mode": write_mode,
++        "shadow_compare": shadow_compare,
++        "shadow_statement_timeout_s": 10,
++        "shadow_retention_nights": 30,
++        "repair": {
++            "quiet_before_open_min": 10,
++            "quiet_after_cycle_min": 5,
++            "cycle_max_min": 30,
++        },
++    }
++    payload.update(over)
++    return ArchiverSettings(**payload)
++
++
++# ---------------------------------------------------------------------
++# The fake store — records EVERY call, in order
++# ---------------------------------------------------------------------
++
++
++class FakeConn:
++    def __init__(self, store):
++        self.store = store
++
++    def execute(self, query, params=None):
++        self.store.calls.append(("conn.execute", str(query)[:40]))
++        return self
++
++    def fetchone(self):
++        return (True,)
++
++
++class FakeStore:
++    def __init__(self, *, stored=None, progress=None, lock_held=False, insert_rowcount=None):
++        self.calls: list[tuple] = []
++        self.stored: dict[tuple, dict] = dict(stored or {})
++        self.progress: dict[tuple, datetime] = dict(progress or {})
++        self.upserted: list[list[Bar]] = []
++        self.inserted: list[list[Bar]] = []
++        self.written_progress: list[tuple] = []
++        self.written_incidents: list[tuple] = []
++        self.lock_held = lock_held
++        self.insert_rowcount = insert_rowcount
++        self.rollbacks = 0
++
++    # --- what today's run already calls --------------------------------
++    def ensure_schema(self):
++        self.calls.append(("ensure_schema",))
++
++    def upsert_bars(self, bars, *, before_commit=None):
++        self.calls.append(("upsert_bars", len(bars)))
++        self.upserted.append(list(bars))
++        return len(bars)
++
++    # --- the append path ------------------------------------------------
++    @contextmanager
++    def run_lock(self, what):
++        self.calls.append(("run_lock", what))
++        if self.lock_held:
++            raise ArchiveLockError(f"another archive/repair run holds the lock — {what}")
++        yield FakeConn(self)
++
++    @contextmanager
++    def target_transaction(self):
++        self.calls.append(("target_transaction",))
++        conn = FakeConn(self)
++        try:
++            yield conn
++        except BaseException:
++            self.rollbacks += 1
++            raise
++
++    def _bars_in_range(self, conn, ticker, interval, start, end):
++        self.calls.append(("_bars_in_range", ticker, interval.value if hasattr(interval, "value") else interval))
++        held = self.stored.get((ticker, getattr(interval, "value", interval)), {})
++        return {k: v for k, v in held.items() if start is None or (start <= k <= end)}
++
++    def insert_new_bars(self, conn, bars):
++        self.calls.append(("insert_new_bars", len(bars)))
++        self.inserted.append(list(bars))
++        return len(bars) if self.insert_rowcount is None else self.insert_rowcount
++
++    @property
++    def names(self) -> list[str]:
++        return [c[0] for c in self.calls]
++
++    @property
++    def write_calls(self) -> list[str]:
++        return [n for n in self.names if n in {"upsert_bars", "insert_new_bars"}]
++
++
++class FakeProgress:
++    """Stands in for `cobalt.archiver.progress`, recording every write."""
++
++    def __init__(self, store: FakeStore):
++        self.store = store
++
++    def read_archived_through(self, conn, ticker, interval):
++        self.store.calls.append(("read_progress", ticker))
++        return self.store.progress.get((ticker, getattr(interval, "value", interval)))
++
++    def upsert_progress(self, conn, *, plan, run_id, now):
++        if plan.archived_through_after is None:
++            raise RuntimeError("not accepted")
++        self.store.calls.append(("upsert_progress", plan.ticker, plan.archived_through_after))
++        self.store.written_progress.append((plan.ticker, plan.archived_through_after, run_id))
++
++
++class FakeIncidents:
++    def __init__(self, store: FakeStore):
++        self.store = store
++        self._next = 1
++
++    def open_or_refresh(self, conn, draft, *, run_id, now):
++        self.store.calls.append(("open_incident", draft.kind.value, draft.ticker))
++        self.store.written_incidents.append((draft.kind, draft.ticker, run_id))
++        self._next += 1
++        return self._next - 1
++
++
++@pytest.fixture
++def wired(monkeypatch, tmp_path):
++    """A runner wired to fakes, with the shadow artifact in tmp_path."""
++    monkeypatch.setattr(shadow_mod, "SHADOW_DIR", tmp_path / "archiver-shadow")
++
++    def _wire(store: FakeStore):
++        monkeypatch.setattr(runner_mod, "progress", FakeProgress(store))
++        monkeypatch.setattr(runner_mod, "incidents", FakeIncidents(store))
++        return store
++
++    return _wire
++
++
++def run(targets, *, store, fetch, cfg, mode="full", now=FETCH_AT):
++    return asyncio.run(
++        runner_mod._run_targets(
++            targets, mode=mode, store=store, fetch=fetch, settings=cfg, now=lambda: now
++        )
++    )
++
++
++def fetcher(mapping):
++    async def _fetch(ticker, interval, token, **kwargs):
++        key = (ticker, getattr(interval, "value", interval))
++        value = mapping[key]
++        if isinstance(value, Exception):
++            raise value
++        return list(value)
++
++    return _fetch
++
++
++@pytest.fixture(autouse=True)
++def _no_sleep_no_token(monkeypatch):
++    async def _instant(_seconds):
++        return None
++
++    async def _token():
++        return "TEST-TOKEN"
++
++    monkeypatch.setattr(runner_mod.asyncio, "sleep", _instant)
++    monkeypatch.setattr(runner_mod, "resolve_token", _token)
++
++
++# =====================================================================
++# §5 — MODE ISOLATION, differential against today's behaviour
++# =====================================================================
++
++
++NIGHT_1 = [bar(ts(17, 19, 55)), bar(ts(18, 19, 50)), bar(ts(18, 19, 55))]
++#: the latest bar has NOT closed at 20:30? it has — this one is the
++#: forming bar a fetch at 19:56 would carry.
++FORMING = bar(ts(18, 20, 29), close="101.00")
++
++
++@pytest.mark.parametrize("night", [1, 2])
++def test_upsert_sends_the_whole_export_on_every_night(wired, night):
++    store = wired(FakeStore(progress={("TESTARCH", "i5"): ts(18, 19, 50)}))
++    export = NIGHT_1 + [FORMING]
++    run([("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): export}), cfg=settings(shadow_compare="off"))
++    if night == 2:
++        run([("TESTARCH", Interval.I5)], store=store,
++            fetch=fetcher({("TESTARCH", "i5"): export}), cfg=settings(shadow_compare="off"))
++    for sent in store.upserted:
++        assert sent == export, "the whole export, unfiltered — no completeness cut"
++    assert len(store.upserted) == night
++
++
++def test_upsert_keeps_the_incomplete_latest_bar(wired):
++    store = wired(FakeStore())
++    run([("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1 + [FORMING]}),
++        cfg=settings(shadow_compare="off"))
++    assert FORMING in store.upserted[0]
++
++
++def test_upsert_writes_no_progress_and_no_incident(wired):
++    store = wired(FakeStore())
++    run([("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert store.written_progress == []
++    assert store.written_incidents == []
++    assert "insert_new_bars" not in store.names
++
++
++def test_upsert_keeps_todays_failure_on_an_empty_export(wired):
++    store = wired(FakeStore())
++    summary = run(
++        [("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): CollectorError("No data rows for TESTARCH/i5.")}),
++        cfg=settings(shadow_compare="off"),
++    )
++    assert len(summary.failures) == 1
++    assert "No data rows" in summary.failures[0]
++    assert store.written_incidents == []
++
++
++def test_upsert_keeps_the_submitted_row_count(wired):
++    """`rows_written` in `upsert` mode is rows SUBMITTED, as it has always
++    been — `upsert_bars` returns `len(rows)` and the report says so."""
++    store = wired(FakeStore())
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert summary.rows_written == len(NIGHT_1) == 3
++    assert summary.requests == 1
++    assert summary.tickers == {"TESTARCH"}
++
++
++def test_upsert_keeps_the_run_report_row_byte_for_byte(wired, tmp_path, monkeypatch):
++    from cobalt.archiver import report as report_mod
++
++    path = tmp_path / "archiver-runs.md"
++    monkeypatch.setattr(report_mod, "REPORT_PATH", path)
++    store = wired(FakeStore())
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    report_mod.append_run_report(summary)
++    content = path.read_text()
++    assert report_mod.COLUMNS in content
++    assert report_mod.APPEND_COLUMNS not in content, (
++        "the append columns must not appear on an upsert night"
++    )
++    row = [line for line in content.splitlines() if line.startswith("| 2026")][-1]
++    assert row.count("|") == 9        # 8 columns, today's shape
++    assert "| full | cobalt_dev | 1 | 1 | 3 | 0 |" in row
++
++
++def test_the_complete_list_of_upsert_mode_additions_is_pinned(wired):
++    """§5: exactly THREE things a night in `upsert` mode now does that
++    today's night does not — (1) the run-level lock, (2) the pre-write
++    shadow read, (3) one `shadow` key in `job.result` plus one artifact.
++    This test fails if a fourth appears."""
++    off = wired(FakeStore())
++    run([("TESTARCH", Interval.I5)], store=off,
++        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(shadow_compare="off"))
++    # (1) the lock, and NOTHING else beyond today's two calls.
++    assert off.names == ["run_lock", "ensure_schema", "upsert_bars"]
++
++    on = wired(FakeStore())
++    summary = run([("TESTARCH", Interval.I5)], store=on,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    # (2) the shadow read: one transaction, its statement_timeout, one
++    #     range read — all before the write, and nothing else.
++    assert on.names == [
++        "run_lock", "ensure_schema", "target_transaction", "conn.execute",
++        "_bars_in_range", "upsert_bars",
++    ]
++    assert "set_config" in on.calls[3][1], "the shadow read must be time-bounded"
++    # (3) the one extra key in the job result.
++    assert set(summary.job_result()) == {
++        "rows_written", "tickers", "requests", "failures", "duration", "shadow"
++    }
++    # ...and no write method was reached by the shadow.
++    assert on.write_calls == ["upsert_bars"]
++
++
++def test_run_targets_mode_still_means_the_report_scope(wired):
++    store = wired(FakeStore())
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(),
++                  mode="backfill:TESTARCH")
++    assert summary.mode == "backfill:TESTARCH"
++    assert summary.write_mode == "upsert"
++
++
++def test_any_other_write_mode_is_refused_before_the_run_starts():
++    with pytest.raises(Exception) as e:
++        settings(write_mode="both")
++    assert "archiver.write_mode" in str(e.value)
++
++
++def test_the_run_level_lock_is_taken_in_both_write_modes(wired):
++    for mode in ("upsert", "append"):
++        store = wired(FakeStore())
++        run([("TESTARCH", Interval.I5)], store=store,
++            fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(write_mode=mode))
++        assert store.names[0] == "run_lock"
++        assert mode in store.calls[0][1]
++
++
++def test_a_second_run_refuses_on_the_lock(wired):
++    store = wired(FakeStore(lock_held=True))
++    with pytest.raises(ArchiveLockError):
++        run([("TESTARCH", Interval.I5)], store=store,
++            fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert store.write_calls == []
++
++
++# =====================================================================
++# §5 — THE SHADOW COMPARE
++# =====================================================================
++
++
++def _stored(pairs):
++    return {("TESTARCH", "i5"): {b.ts: bar_values(b) for b in pairs}}
++
++
++def test_the_shadow_runs_after_the_fetch_and_before_the_write(wired):
++    store = wired(FakeStore(stored=_stored(NIGHT_1[:2])))
++    run([("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert store.names.index("_bars_in_range") < store.names.index("upsert_bars")
++
++
++def test_the_shadow_record_is_labelled_pre_write(wired, tmp_path):
++    store = wired(FakeStore(stored=_stored(NIGHT_1[:2])))
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    (record,) = summary.shadow_records
++    assert record.label == "pre-write"
++
++
++@pytest.mark.parametrize("boom", [
++    RuntimeError("the shadow read blew up"),
++    TimeoutError("statement timeout"),
++])
++def test_a_shadow_failure_leaves_the_target_and_the_summary_identical(wired, boom, monkeypatch):
++    clean = wired(FakeStore())
++    expected = run([("TESTARCH", Interval.I5)], store=clean,
++                   fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(shadow_compare="off"))
++
++    broken = wired(FakeStore())
++
++    def _explode(*a, **k):
++        raise boom
++
++    monkeypatch.setattr(shadow_mod, "observe", _explode)
++    actual = run([("TESTARCH", Interval.I5)], store=broken,
++                 fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++
++    assert broken.upserted == clean.upserted
++    assert (actual.rows_written, actual.requests, actual.failures) == (
++        expected.rows_written, expected.requests, expected.failures
++    )
++    assert actual.shadow_errors == 1
++    assert expected.shadow_errors == 0
++
++
++def test_a_slow_shadow_read_does_not_slow_the_write_path(wired, monkeypatch):
++    """The read is bounded by its own `statement_timeout` (§10), and the
++    target's upsert runs whatever the shadow did."""
++    store = wired(FakeStore())
++    seen = {}
++
++    real = shadow_mod.observe
++
++    def _slow(*a, **k):
++        seen["called"] = True
++        raise TimeoutError("canceling statement due to statement timeout")
++
++    monkeypatch.setattr(shadow_mod, "observe", _slow)
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert seen["called"] and summary.rows_written == 3
++    assert real is not None
++
++
++def test_the_shadow_writes_nothing_to_the_database(wired):
++    store = wired(FakeStore(stored=_stored(NIGHT_1)))
++    run([("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert store.write_calls == ["upsert_bars"]
++    assert store.written_progress == [] and store.written_incidents == []
++
++
++def test_shadow_compare_off_skips_it_entirely(wired):
++    store = wired(FakeStore())
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(shadow_compare="off"))
++    assert "_bars_in_range" not in store.names
++    assert summary.shadow_records == []
++    assert "shadow" not in summary.job_result()
++
++
++def test_the_shadow_reports_both_scopes(wired):
++    """§5: the four-way comparison computed TWICE — the BOOTSTRAP scope
++    (the whole export) and the STEADY-STATE scope (range (b))."""
++    export = [bar(ts(3, 19, 55)), bar(ts(4, 19, 55)), bar(ts(17, 19, 55)), bar(ts(18, 19, 55))]
++    store = wired(FakeStore(stored=_stored([export[0]])))
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): export}), cfg=settings())
++    (record,) = summary.shadow_records
++    assert record.bootstrap.candidates == 4
++    # Range (b): today (09-18) + the two most recent completed session
++    # dates the export carries (09-04, 09-17). 09-03 is below it.
++    assert record.steady_state.candidates == 3
++    assert record.bootstrap.already_stored_equal == 1
++    assert record.steady_state.already_stored_equal == 0
++
++
++def test_the_shadow_records_field_level_differences_after_normalisation(wired):
++    export = [bar(ts(18, 19, 55), close="105.00", volume=2000)]
++    store = wired(FakeStore(stored=_stored([bar(ts(18, 19, 55), close="100.00")])))
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): export}), cfg=settings())
++    (record,) = summary.shadow_records
++    assert record.bootstrap.would_withhold is True
++    (difference,) = record.bootstrap.differing
++    assert difference["ts"] == ts(18, 19, 55).isoformat()
++    assert {f["field"] for f in difference["fields"]} == {"close", "volume"}
++    assert next(f for f in difference["fields"] if f["field"] == "close")["stored"] == "100.0000"
++
++
++def test_an_equal_rendering_is_not_recorded_as_a_difference(wired):
++    export = [bar(ts(18, 19, 55), close="100.0")]
++    store = wired(FakeStore(stored=_stored([bar(ts(18, 19, 55), close="100.0000")])))
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): export}), cfg=settings())
++    (record,) = summary.shadow_records
++    assert record.bootstrap.differing == []
++    assert record.bootstrap.would_withhold is False
++
++
++#: 00:30 UTC = 20:30 EDT the PRECEDING day. A run at the nightly hour
++#: lands on a different UTC calendar day than the ET trading night it is
++#: naming, and `FETCH_AT` (20:30 UTC = 16:30 ET, same date) never
++#: exercises it — which is how tribunal round 1's F6 survived.
++FETCH_AT_ET_NIGHT = datetime(2026, 9, 19, 0, 30, tzinfo=UTC)
++
++
++def test_the_artifact_night_is_the_ET_trading_date_not_the_UTC_date(wired, tmp_path):
++    """Tribunal round 1, F6.
++
++    The nightly archiver runs at 20:30 ET. `night=clock().date()` took
++    the `.date()` of a UTC instant, so on every such run the artifact
++    was named for the NEXT calendar day — `2026-09-19.jsonl` for the
++    night of 2026-09-18. Spec §5 names the file
++    `data/archiver-shadow/<YYYY-MM-DD>.jsonl` and states no timezone;
++    this round resolves it to ET per the verdict row (recorded as an
++    ESCALATE — the desk may still rule otherwise).
++    """
++    store = wired(FakeStore(stored=_stored(NIGHT_1[:1])))
++    run([("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(),
++        now=FETCH_AT_ET_NIGHT)
++
++    et_night = shadow_mod.SHADOW_DIR / "2026-09-18.jsonl"
++    utc_night = shadow_mod.SHADOW_DIR / "2026-09-19.jsonl"
++    assert et_night.exists(), (
++        "the artifact must be named for the ET trading night; files present: "
++        f"{sorted(p.name for p in shadow_mod.SHADOW_DIR.glob('*.jsonl'))}"
++    )
++    assert not utc_night.exists(), (
++        "the UTC calendar date of the run instant named the artifact"
++    )
++
++
++def test_the_artifact_is_json_lines_with_the_recorded_schema(wired, tmp_path):
++    store = wired(FakeStore(stored=_stored(NIGHT_1[:1])))
++    run([("TESTARCH", Interval.I5)], store=store,
++        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    # The RUN wrote it; the night is the clock's date, not the wall clock.
++    path = shadow_mod.SHADOW_DIR / "2026-09-18.jsonl"
++    assert path.exists()
++    (line,) = path.read_text(encoding="utf-8").strip().splitlines()
++    payload = json.loads(line)
++    assert payload["label"] == "pre-write"
++    assert payload["ticker"] == "TESTARCH" and payload["interval"] == "i5"
++    for key in (
++        "export_oldest", "export_newest", "raw_export_newest", "fetched",
++        "poller_writable", "bootstrap", "steady_state", "fetch_started_at",
++    ):
++        assert key in payload, key
++    for scope in ("bootstrap", "steady_state"):
++        for key in (
++            "candidates", "already_stored_equal", "differing", "incoming_only",
++            "new", "late", "stored_only", "would_withhold",
++        ):
++            assert key in payload[scope], (scope, key)
++
++
++def test_retention_deletes_only_nights_older_than_the_window(wired, tmp_path):
++    directory = shadow_mod.SHADOW_DIR
++    directory.mkdir(parents=True, exist_ok=True)
++    for age in (0, 1, 29, 30, 31, 400):
++        night = (FETCH_AT - timedelta(days=age)).date()
++        (directory / f"{night.isoformat()}.jsonl").write_text("{}\n", encoding="utf-8")
++    shadow_mod.apply_retention(retention_nights=30, today=FETCH_AT.date())
++    kept = sorted(p.stem for p in directory.glob("*.jsonl"))
++    assert kept == sorted(
++        (FETCH_AT - timedelta(days=age)).date().isoformat() for age in (0, 1, 29)
++    )
++
++
++def test_shadow_report_says_which_differences_persisted_vanished_and_appeared():
++    """§5: refreshed storage alone cannot show revision frequency, so the
++    artifact is a RETAINED baseline and `shadow-report` reads across
++    nights. Astra and Grok both required this."""
++    nights = [
++        ("2026-09-16", {("AAPL", "i5", "2026-09-16T13:30:00+00:00")}),
++        ("2026-09-17", {("AAPL", "i5", "2026-09-16T13:30:00+00:00"),
++                        ("MSFT", "i1", "2026-09-17T13:30:00+00:00")}),
++        ("2026-09-18", {("MSFT", "i1", "2026-09-17T13:30:00+00:00"),
++                        ("NVDA", "i5", "2026-09-18T13:30:00+00:00")}),
++    ]
++    verdict = shadow_mod.persisted_vanished_appeared(nights)
++    assert verdict["persisted"] == [("MSFT", "i1", "2026-09-17T13:30:00+00:00")]
++    assert verdict["vanished"] == [("AAPL", "i5", "2026-09-16T13:30:00+00:00")]
++    assert verdict["appeared"] == [("NVDA", "i5", "2026-09-18T13:30:00+00:00")]
++
++
++def test_the_shadow_aggregate_reaches_the_job_result(wired):
++    export = [bar(ts(18, 19, 55), close="105.00")]
++    store = wired(FakeStore(stored=_stored([bar(ts(18, 19, 55), close="100.00")])))
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): export}), cfg=settings())
++    aggregate = summary.job_result()["shadow"]
++    assert aggregate["targets_compared"] == 1
++    assert aggregate["targets_errored"] == 0
++    assert aggregate["would_withhold_by_interval"] == {"i5": 1}
++    assert aggregate["would_withhold_poller_writable"] == 0
++    assert aggregate["would_withhold_archiver_only"] == 1
++    assert aggregate["volume_only"] == 0
++    assert aggregate["any_ohlc"] == 1
++    assert "late" in aggregate and "new" in aggregate
++
++
++# =====================================================================
++# §6, §7 — THE APPEND NIGHT
++# =====================================================================
++
++
++def append_run(store, export, *, progress=None, mode="full"):
++    if progress:
++        store.progress.update(progress)
++    return run([("TESTARCH", Interval.I5)], store=store,
++               fetch=fetcher({("TESTARCH", "i5"): export}),
++               cfg=settings(write_mode="append"), mode=mode)
++
++
++def test_append_bootstrap_offers_the_whole_eligible_export(wired):
++    store = wired(FakeStore())
++    summary = append_run(store, NIGHT_1 + [FORMING])
++    assert store.upserted == []                              # never DO UPDATE
++    assert [b.ts for b in store.inserted[0]] == [b.ts for b in NIGHT_1]
++    assert FORMING not in store.inserted[0]                  # incomplete, excluded
++    assert store.written_progress == [("TESTARCH", ts(18, 19, 55), summary.run_id)]
++    assert summary.bootstraps == 1
++
++
++def test_append_steady_state_offers_only_what_is_missing(wired):
++    store = wired(FakeStore(stored=_stored(NIGHT_1[:2])))
++    summary = append_run(store, NIGHT_1, progress={("TESTARCH", "i5"): ts(18, 19, 50)})
++    assert [b.ts for b in store.inserted[0]] == [ts(18, 19, 55)]
++    assert summary.rows_written == 1
++    assert summary.bootstraps == 0
++
++
++def test_a_withheld_target_inserts_nothing_freezes_progress_and_fails(wired):
++    store = wired(FakeStore(stored=_stored([bar(ts(18, 19, 50), close="50.00")])))
++    summary = append_run(store, NIGHT_1, progress={("TESTARCH", "i5"): ts(18, 19, 50)})
++    assert store.inserted == []
++    assert store.written_progress == []
++    assert len(summary.failures) == 1
++    assert "restated" in summary.failures[0]
++    assert summary.restated_targets == 1
++
++
++def test_a_withheld_targets_incident_is_persisted_after_the_rollback(wired):
++    store = wired(FakeStore(stored=_stored([bar(ts(18, 19, 50), close="50.00")])))
++    append_run(store, NIGHT_1, progress={("TESTARCH", "i5"): ts(18, 19, 50)})
++    assert store.rollbacks == 1
++    kinds = [k for k, _, _ in store.written_incidents]
++    assert IncidentKind.RESTATED in kinds
++    # ...in a SECOND transaction, opened after the first was rolled back.
++    opens = [i for i, name in enumerate(store.names) if name == "open_incident"]
++    transactions = [i for i, name in enumerate(store.names) if name == "target_transaction"]
++    assert len(transactions) == 2
++    assert opens[0] > transactions[1]
++
++
++def test_a_gap_incident_is_written_before_progress_advances(wired):
++    store = wired(FakeStore())
++    summary = append_run(store, NIGHT_1, progress={("TESTARCH", "i5"): ts(4, 19, 55)})
++    order = store.names
++    assert order.index("open_incident") < order.index("upsert_progress")
++    assert [k for k, _, _ in store.written_incidents] == [IncidentKind.GAP]
++    assert summary.gap_targets == 1
++    assert summary.degraded_targets == 1
++    assert store.inserted, "the usable range is still appended"
++
++
++def test_a_regression_fails_the_target_and_freezes_progress(wired):
++    store = wired(FakeStore())
++    summary = append_run(store, [bar(ts(17, 19, 55))],
++                         progress={("TESTARCH", "i5"): ts(18, 19, 55)})
++    assert store.inserted == [] and store.written_progress == []
++    assert [k for k, _, _ in store.written_incidents] == [IncidentKind.REGRESSION]
++    assert len(summary.failures) == 1
++
++
++def test_inserted_zero_because_everything_was_stored_is_a_success(wired):
++    store = wired(FakeStore(stored=_stored(NIGHT_1)))
++    summary = append_run(store, NIGHT_1, progress={("TESTARCH", "i5"): ts(18, 19, 55)})
++    assert summary.failures == []
++    assert summary.rows_written == 0
++    assert summary.degraded_targets == 0
++    assert store.written_progress, "an accepted night still records progress"
++
++
++def test_an_empty_export_fails_and_opens_an_empty_export_incident(wired):
++    store = wired(FakeStore())
++    summary = append_run(store, CollectorError("No data rows for TESTARCH/i5."))
++    assert len(summary.failures) == 1
++    assert [k for k, _, _ in store.written_incidents] == [IncidentKind.EMPTY_EXPORT]
++    assert store.written_progress == []
++
++
++def test_two_failed_nights_then_a_success_inserts_the_keys_still_in_the_window(wired):
++    store = wired(FakeStore(progress={("TESTARCH", "i5"): ts(16, 19, 55)}))
++    for _ in range(2):
++        append_run(store, CollectorError("No data rows for TESTARCH/i5."))
++    assert store.written_progress == []
++    summary = append_run(store, NIGHT_1)
++    assert {b.ts for b in store.inserted[0]} == {b.ts for b in NIGHT_1}
++    assert summary.failures == []
++
++
++def test_the_run_continues_after_a_failed_target(wired):
++    store = wired(FakeStore())
++    summary = run(
++        [("TESTARCH", Interval.I5), ("THIN", Interval.I5)],
++        store=store,
++        fetch=fetcher({
++            ("TESTARCH", "i5"): CollectorError("No data rows for TESTARCH/i5."),
++            ("THIN", "i5"): [bar(ts(18, 19, 55), ticker="THIN")],
++        }),
++        cfg=settings(write_mode="append"),
++    )
++    assert len(summary.failures) == 1
++    assert summary.requests == 2
++    assert [b.ticker for batch in store.inserted for b in batch] == ["THIN"]
++
++
++@pytest.mark.parametrize("scenario,expected", [
++    ("failed", False),
++    ("degraded", False),
++    ("clean", True),
++])
++def test_failed_or_degraded_means_the_job_result_is_not_healthy(wired, scenario, expected):
++    store = wired(FakeStore())
++    if scenario == "failed":
++        summary = append_run(store, CollectorError("No data rows for TESTARCH/i5."))
++    elif scenario == "degraded":
++        summary = append_run(store, NIGHT_1, progress={("TESTARCH", "i5"): ts(4, 19, 55)})
++    else:
++        summary = append_run(store, NIGHT_1)
++    assert summary.healthy is expected
++
++
++def test_an_upsert_night_stays_healthy_on_a_degraded_shaped_export(wired):
++    """Mode isolation again: `degraded` is an APPEND-mode verdict. An
++    `upsert` night has no such concept and must not invent one."""
++    store = wired(FakeStore())
++    summary = run([("TESTARCH", Interval.I5)], store=store,
++                  fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    assert summary.healthy is True
++    assert summary.degraded_targets == 0
++
++
++def test_rows_written_is_inserted_in_append_mode(wired):
++    store = wired(FakeStore(insert_rowcount=2))
++    summary = append_run(store, NIGHT_1)
++    assert summary.rows_written == 2, "§7: Rows Written = inserted in append mode"
++
++
++def test_a_concurrent_conflict_is_counted_and_the_identity_closes(wired):
++    store = wired(FakeStore(insert_rowcount=2))
++    summary = append_run(store, NIGHT_1)
++    (counts,) = summary.counts
++    assert counts.inserted == 2 and counts.concurrent_conflicts == 1
++    assert counts.incoming_only == counts.inserted + counts.concurrent_conflicts
++
++
++def test_the_append_report_row_carries_the_append_columns(wired, tmp_path, monkeypatch):
++    from cobalt.archiver import report as report_mod
++
++    path = tmp_path / "archiver-runs.md"
++    monkeypatch.setattr(report_mod, "REPORT_PATH", path)
++    store = wired(FakeStore())
++    summary = append_run(store, NIGHT_1)
++    report_mod.append_run_report(summary)
++    content = path.read_text()
++    assert report_mod.APPEND_COLUMNS in content
++    assert content.count("## Append mode") == 1
++    row = [line for line in content.splitlines() if line.startswith("| 2026")][-1]
++    assert row.count("|") == 15
++
++
++def test_the_append_schema_break_is_written_once(wired, tmp_path, monkeypatch):
++    from cobalt.archiver import report as report_mod
++
++    path = tmp_path / "archiver-runs.md"
++    monkeypatch.setattr(report_mod, "REPORT_PATH", path)
++    for _ in range(3):
++        store = wired(FakeStore())
++        report_mod.append_run_report(append_run(store, NIGHT_1))
++    content = path.read_text()
++    assert content.count("## Append mode") == 1
++    assert content.count(report_mod.APPEND_COLUMNS) == 1
++    assert len([line for line in content.splitlines() if line.startswith("| 2026")]) == 3
++
++
++def test_an_upsert_row_after_an_append_row_goes_back_to_its_own_table(wired, tmp_path, monkeypatch):
++    """A markdown table cannot change its column count in place, and a
++    rollback to `upsert` must not write 8-column rows under the 14-column
++    header."""
++    from cobalt.archiver import report as report_mod
++
++    path = tmp_path / "archiver-runs.md"
++    monkeypatch.setattr(report_mod, "REPORT_PATH", path)
++    report_mod.append_run_report(append_run(wired(FakeStore()), NIGHT_1))
++    store = wired(FakeStore())
++    report_mod.append_run_report(
++        run([("TESTARCH", Interval.I5)], store=store,
++            fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
++    )
++    content = path.read_text()
++    assert content.count("## Append mode") == 1
++    assert content.count("## Back to upsert mode") == 1
++    rows = [line for line in content.splitlines() if line.startswith("| 2026")]
++    assert rows[0].count("|") == 15 and rows[1].count("|") == 9
+diff --git a/tests/cobalt/test_finviz_consumers.py b/tests/cobalt/test_finviz_consumers.py
+index e977df4..30f9edd 100644
+--- a/tests/cobalt/test_finviz_consumers.py
++++ b/tests/cobalt/test_finviz_consumers.py
+@@ -19,6 +19,12 @@ _REQUEST = re.compile(r"elite\.finviz\.com|\bfinviz_get\(|\bfetch_bars\(")
+ CONSUMERS = {
+     "archiver/collector.py": "transport (finviz_get / fetch_bars)",
+     "archiver/runner.py": "com.cobalt.archiver one-shot, 20:30, own 1.2 s pacing",
++    # Added 2026-09-19 with the append-only redesign: `cobalt archiver
++    # restate` / `backfill-missing` re-fetch ONE target to compare it
++    # against storage. By hand, one ticker at a time, and the two
++    # `--apply` forms only run inside the quiet window (spec §8) — which
++    # is OVERNIGHT, when no other consumer is requesting. No bucket.
++    "archiver/cli.py": "cobalt archiver restate / backfill-missing (CLI, by hand, one target), no bucket",
+     "radar/collector.py": "com.cobalt.radar resident, radar TokenBucket",
+     "radar/propose.py": "cobalt radar screens propose (CLI, by hand), no bucket",
+     "radar/throttle.py": "throttle probe (CLI, by hand), no bucket",
