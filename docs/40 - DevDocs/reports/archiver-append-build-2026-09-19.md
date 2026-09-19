@@ -381,4 +381,42 @@ and goes to the deploy prompt** (ESCALATE 4).
 SUITE: **`1839 passed, 315 skipped, 1 xfailed, 15 warnings in 42.32s`**. Against BASELINE: failed 0 → 0 ·
 passed 1562 → 1839 (+277: 47 S + 48 M + 66 R + 32 P + 45 N + 39 Q) · skipped 315, unchanged.
 
-CONTINUE: step 7
+## Chunk H — heartbeat and docs (spec §11, O-7)
+
+RED FIRST: `uv run pytest -q tests/cobalt/test_heartbeat_archiver_incidents.py` before the probe change →
+**`11 failed in 0.15s`** (`TypeError: archiver_freshness() got an unexpected keyword argument 'incidents'`
+×10, plus the source assertion). Then GREEN: **`64 passed in 6.55s`** for
+`test_heartbeat_archiver_incidents.py` + `test_heartbeat.py` + `test_heartbeat_runner.py` together.
+
+| requirement | test |
+|---|---|
+| not green while an unresolved incident exists | `test_one_unresolved_incident_is_not_green` |
+| the detail names the count and the oldest kind | `test_the_detail_names_the_count_and_the_oldest_kind` — 3 incidents, "oldest restated", the target, the date, and the tally `gap=2, restated=1`; the run's own line survives |
+| it points at the command that lists them | `test_the_detail_points_at_the_command_that_lists_them` |
+| zero incidents → **exactly** today's result | `test_zero_incidents_is_exactly_todays_result` — asserted by **IDENTITY** (`_with_archive_incidents(base, reader) is base`), not equality |
+| a red run keeps its own reason | `test_a_red_run_stays_red_with_its_own_reason` |
+| a missing table → LOUD, naming the migration | `test_an_unreadable_incident_table_is_a_loud_probe_failure` (2 error shapes) — names `archive_incidents`, `0011_archive_incidents.sql` and `cobalt db migrate` |
+| never green | same test (`ok is False`) |
+| never a crash of the heartbeat run | `test_an_unreadable_incident_table_does_not_crash_the_heartbeat_run` — it returns a red Probe, it does not raise |
+| the run detail survives the failure | `test_the_run_detail_survives_an_unreadable_incident_table` |
+| the production reader is the archiver's own read-only query | `test_the_default_reader_is_the_archivers_own_unresolved_query` — and reaches no writer |
+
+`heartbeat/probes.py` changed in ONE probe only. `archiver_freshness` splits into
+`_archiver_run_probe` (today's verdict on the last RUN, unchanged) and `_with_archive_incidents` (the
+fold), with `_read_archive_incidents` as the production reader and `incidents=` as the test seam.
+
+ONE PRE-EXISTING FILE TOUCHED: `tests/cobalt/test_heartbeat.py` gains an autouse fixture pinning
+`_read_archive_incidents` to "no incidents". That file is about RUN FRESHNESS and has never had a
+database; without the pin the probe correctly refuses to call anything green when its own alarm is
+unreadable, and 5 of its tests would have gone red for a reason that is not theirs. **No test of its was
+changed or weakened** — the incident behaviour, including the unreadable case, lives in the new file.
+
+DevDocs: `heartbeat/probes.md` (the 09-19 section) and **`archiver/__init__.md` gains the operator's
+page** — the two modes, what a shadow night writes, how to read `shadow-report` (persisted / vanished /
+appeared, and why a post-write audit cannot produce them), the quiet window in plain words, the command
+table, and **the five known limits of spec §12 VERBATIM**.
+
+SUITE: **`1850 passed, 315 skipped, 1 xfailed, 15 warnings in 43.02s`**. Against BASELINE: failed 0 → 0 ·
+passed 1562 → 1850 (+288: 47 S + 48 M + 66 R + 32 P + 45 N + 39 Q + 11 H) · skipped 315, unchanged.
+
+CONTINUE: step 8

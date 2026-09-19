@@ -258,8 +258,29 @@ def mainframe(host: str = "127.0.0.1", port: int = 1234) -> Probe:
         return Probe("mainframe", False, f"{host}:{port} refused: {type(e).__name__}")
 
 
-def archiver_freshness(store=None, now: Optional[datetime] = None) -> Probe:
-    """Last run + rows written, checked against the archiver's own
+def archiver_freshness(
+    store=None, now: Optional[datetime] = None, incidents=None
+) -> Probe:
+    """Last run + rows written + UNRESOLVED ARCHIVE INCIDENTS.
+
+    The last of those was added 2026-09-19 with the append-only redesign
+    (FINAL design §11, spec O-7): **this probe is not green while any
+    `system.archive_incidents` row is unresolved**, and the desk's safe
+    default for wording and colour is "not green = the probe's existing
+    FAIL form, detail names the incident count".
+
+    WHY THE HEARTBEAT HAS TO CARRY IT. Known limit 3 (spec §12): a
+    withheld target's new bars age out of the vendor window (i5 ≈ 21
+    days) if nobody repairs it. The incident list and this probe ARE the
+    alarm. A dashboard that stayed green through a fortnight of
+    withholding would make `append` worse than the overlay it replaces.
+
+    ZERO INCIDENTS CHANGES NOTHING. Until an `append` night runs there
+    are none, and this returns exactly what it has always returned — the
+    same object, not a rebuilt one. `incidents` is a TEST seam; in
+    production the probe reads them itself.
+
+    Last run + rows written are checked against the archiver's own
     Mon-Fri cadence via the same `is_missed` arithmetic F17's watchdog
     uses — not a flat age window.
 
@@ -292,6 +313,15 @@ def archiver_freshness(store=None, now: Optional[datetime] = None) -> Probe:
     row = store.get("com.cobalt.archiver")
     if row is None:
         return Probe("archiver", False, "no jobs row — not registered")
+    base = _archiver_run_probe(row, ts)
+    return _with_archive_incidents(base, incidents)
+
+
+def _archiver_run_probe(row, ts) -> Probe:
+    """Today's verdict on the last RUN, unchanged."""
+    from cobalt.jobs.config import load_job_registry
+    from cobalt.jobs.watchdog import MISSED_GRACE_KEY, is_missed
+    from cobalt.session.clock import session_clock
 
     spec = load_job_registry().spec("com.cobalt.archiver")
     now_et = session_clock().to_et(ts)
@@ -326,6 +356,61 @@ def archiver_freshness(store=None, now: Optional[datetime] = None) -> Probe:
             "failure that looks green in every state column.",
         )
     return Probe("archiver", True, detail)
+
+
+def _read_archive_incidents():
+    """The archiver's OWN unresolved query, read-only (§11, O-7).
+
+    Kept behind a function so the probe's default is one named thing
+    and the test seam replaces exactly it.
+    """
+    from cobalt.archiver import incidents as incidents_mod
+    from cobalt.archiver.store import BarStore
+
+    store = BarStore()
+    with store.target_transaction() as conn:
+        return incidents_mod.unresolved(conn)
+
+
+def _with_archive_incidents(base: Probe, incidents) -> Probe:
+    """Fold the incident alarm into the run's verdict.
+
+    ZERO INCIDENTS RETURNS `base` ITSELF — not a rebuilt equal one — so
+    "an upsert night's probe is byte-identical to today's" is true by
+    construction rather than by careful copying.
+
+    AN UNREADABLE TABLE IS RED AND NAMES THE MIGRATION. It is never
+    green (the alarm cannot be read, so nothing can be asserted about
+    it) and it never raises: L1 says fail LOUD, not take the whole
+    heartbeat run down with it.
+    """
+    from cobalt.archiver.incidents import counts_by_kind
+
+    reader = incidents if incidents is not None else _read_archive_incidents
+    try:
+        rows = list(reader())
+    except Exception as e:  # noqa: BLE001 — see the docstring
+        return Probe(
+            "archiver",
+            False,
+            "archive_incidents could not be read — run `cobalt db migrate` "
+            "(0011_archive_incidents.sql); the archiver's incident alarm is "
+            f"unreadable, so nothing here can be called green: "
+            f"{type(e).__name__}: {e}. Last run: {base.detail}",
+        )
+    if not rows:
+        return base
+    oldest = min(rows, key=lambda row: row.first_seen_at)
+    counts = counts_by_kind(rows)
+    tally = ", ".join(f"{kind}={n}" for kind, n in sorted(counts.items()))
+    return Probe(
+        "archiver",
+        False,
+        f"{len(rows)} unresolved archive incident(s) — oldest {oldest.kind} on "
+        f"{oldest.ticker}/{oldest.interval} since "
+        f"{oldest.first_seen_at:%Y-%m-%d %H:%M} UTC ({tally}). "
+        f"List them: `cobalt archiver incidents`. {base.detail}",
+    )
 
 
 def backup_freshness(now: Optional[datetime] = None) -> Probe:

@@ -18,8 +18,27 @@ implementation of the same question.
 
 from datetime import datetime, timezone
 
+import pytest
+
+from cobalt.heartbeat import probes as probes_mod
 from cobalt.heartbeat.probes import archiver_freshness, radar
 from cobalt.session.models import Session
+
+
+@pytest.fixture(autouse=True)
+def _no_archive_incidents(monkeypatch):
+    """This file is about RUN FRESHNESS and has never had a database.
+
+    2026-09-19 gave `archiver_freshness` a second input — unresolved
+    `system.archive_incidents` rows (FINAL design §11, spec O-7) — which
+    it reads for itself in production. Offline that read cannot succeed,
+    and the probe correctly refuses to call anything green when its own
+    alarm is unreadable. Pinning the reader to "no incidents" here keeps
+    every test below asserting exactly what it was written to assert;
+    the incident behaviour, including the unreadable case, is covered in
+    `test_heartbeat_archiver_incidents.py`.
+    """
+    monkeypatch.setattr(probes_mod, "_read_archive_incidents", lambda: [])
 
 FRIDAY_RUN_FINISHED_ET = "2026-09-04 20:53"  # the actual pre-wrapper run
 REGISTERED_AT = datetime(2026, 9, 5, 2, 19, 45, tzinfo=timezone.utc)  # Fri 22:19:45 ET

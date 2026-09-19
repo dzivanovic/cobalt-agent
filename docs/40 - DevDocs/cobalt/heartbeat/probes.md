@@ -94,3 +94,50 @@ literal in a predicate.
 
 The `database` probe names no table but still has to declare a side:
 SYSTEM. A liveness probe must never be the thing that opens user data.
+
+---
+
+## 2026-09-19 — the archiver probe sees unresolved archive incidents
+
+Append-only FINAL design §11 and spec **O-7**: `archiver_freshness` is
+NOT GREEN while any `system.archive_incidents` row is unresolved. The
+desk's safe default for wording and colour is the one the spec named —
+"not green = the probe's existing FAIL form, detail names the incident
+count".
+
+WHY THE HEARTBEAT CARRIES IT. Known limit 3 (spec §12): a withheld
+target's new bars age out of the vendor window (i5 ≈ 21 days) if nobody
+repairs it. The incident list and this probe ARE the alarm. A dashboard
+that stayed green through a fortnight of withholding would make `append`
+worse than the overlay it replaces.
+
+The probe splits into two named pieces:
+
+- `_archiver_run_probe(row, ts)` — today's verdict on the last RUN,
+  unchanged: `is_missed` for the cadence, then exit code, then
+  `rows_written`.
+- `_with_archive_incidents(base, incidents)` — the fold. **Zero
+  incidents returns `base` ITSELF**, not a rebuilt equal one, so "an
+  upsert night's probe is byte-identical to today's" is true by
+  construction rather than by careful copying — and a test asserts that
+  identity, not just equality.
+- `_read_archive_incidents()` — the production reader (read-only,
+  `archiver.incidents.unresolved`). `archiver_freshness(incidents=…)` is
+  the test seam that replaces exactly it.
+
+An UNREADABLE table is RED, names the migration
+(`0011_archive_incidents.sql`) and the command that applies it — the
+alarm cannot be read, so nothing here can be called green — **and it
+does not raise**: L1 says fail LOUD, not take the whole heartbeat run
+down with it. The run's own detail is kept on the line either way, so an
+operator sees both facts at once.
+
+An unresolved incident's line names the COUNT, the OLDEST kind with its
+target and first-seen date, the tally by kind, and
+`cobalt archiver incidents`.
+
+NOTE for `tests/cobalt/test_heartbeat.py`: that file is about run
+freshness and has never had a database, so an autouse fixture pins
+`_read_archive_incidents` to "no incidents" there. The incident
+behaviour, including the unreadable case, lives in
+`test_heartbeat_archiver_incidents.py`.
