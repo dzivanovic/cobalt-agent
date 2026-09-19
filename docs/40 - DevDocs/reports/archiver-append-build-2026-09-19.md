@@ -159,4 +159,50 @@ database.
 SUITE: **`1657 passed, 307 skipped, 1 xfailed, 15 warnings in 41.88s`**. Against BASELINE: failed 0 →
 0 · passed 1562 → 1657 (+95: 47 chunk S + 48 chunk M) · skipped 297 → 307 (+10, all `requires_db`).
 
-CONTINUE: step 3
+## Chunk R — the pure core: `reconcile.py` (spec §3 V2-3, §4, §6, §7)
+
+RED FIRST: `uv run pytest -q tests/cobalt/test_archiver_reconcile.py` before the module →
+`ModuleNotFoundError: No module named 'cobalt.archiver.reconcile'`, `1 error in 0.14s`.
+Then GREEN: **`66 passed in 0.11s`**.
+
+Two of my own test-authoring defects were found on the first green run and fixed (both in the TEST, not
+in the module): Grok's 100-key fixture started at 15:00 ET so 34 of its bars had not closed by the 20:30
+fetch, and the purity test asserted on the module's PROSE (the docstring names `BarStore` while
+explaining why `max(ts)` is the wrong watermark). The purity test now asserts on the **AST**: the module
+may import only `__future__`, `datetime`, `decimal`, `enum`, `typing`, `zoneinfo`, `pydantic` and its own
+`models`, and may not call `now()`, `utcnow()`, `today()`, `open()`, `read_text()` or `execute()`.
+
+| §15 list | tests |
+|---|---|
+| TIME — regular close | `test_regular_close_the_1959_i1_bar_completes_at_2000_et` (ET 19:59 = UTC 23:59; closes UTC 00:00) |
+| 13:00 half-day incl. the i30 12:30 bar | `test_half_day_the_i30_bar_opening_1230_completes_at_1300_et` |
+| extended hours | `test_extended_hours_bars_are_ordinary_bars_to_this_module` (premarket 04:00, RTH, aftermarket 19:59) |
+| Thanksgiving Thursday + Friday half-day | `test_thanksgiving_thursday_has_no_bars_and_friday_is_a_half_day` (2026: Thu 11-26, Fri 11-27) |
+| weekend | `test_a_weekend_is_simply_two_dates_the_export_does_not_carry` |
+| 09-07 → 09-08 holiday | `test_the_0907_holiday_is_skipped_and_0908_is_the_next_session` |
+| both DST dates | `test_spring_forward_2026_03_08_…`, `test_fall_back_2026_11_01_…` — ET dates AND UTC instants asserted |
+| a fetch crossing a bar close | `test_a_fetch_that_crosses_a_bar_close_excludes_that_bar` |
+| unknown interval fails loud | `test_an_unknown_interval_fails_loud` (6 cases) |
+| RANGE — union of (a) and (b), bootstrap = whole export | `test_bootstrap_takes_the_whole_eligible_export`, `test_steady_state_is_the_union_of_newer_than_progress_and_range_b`, `test_range_b_reaches_back_even_when_progress_is_ahead_of_it`, `test_todays_date_is_in_range_b_…` |
+| the four ROUND-2 SEQUENCES, dated | `test_gemini_monday_1400_restoration_seen_on_tuesday` · `test_astra_friday_1002_late_addition_appears_after_a_weekend` · `test_grok_nvda_wednesday_1017_appears_on_thursday` · `test_the_gap_a_poller_backfill_would_have_hidden_msft_0827_to_0904` (+ `test_a_progress_row_survives_a_ticker_leaving_and_returning`, sequence #8) |
+| the poller's `max(ts)` never enters a decision | `test_the_poller_maximum_never_enters_any_decision` — three different watermarks, byte-identical decisions |
+| REGRESSION / ILLIQUID | THIN unchanged three sessions = SUCCESS · strict regression = FAILED with the evidence · IMCC future-dated row then valid export · half-day is not truncation |
+| GAP (`export_oldest > archived_through`) | `test_a_gap_opens_when_the_export_starts_after_the_watermark` (incident BEFORE progress advances, DEGRADED, usable range still appended) + `test_no_gap_on_a_bootstrap_the_report_says_unassessed_instead` |
+| COUNTERS | Grok's 100-key case · Astra's AAPL/i5 case · MSFT 19:59 new-not-late · MSFT 19:59 equal = **1 / 1 / 0** · complete withholding · a counted conflict · `late == 0` on a bootstrap · `invalid` survives as a counter |
+| normalisation to `NUMERIC(14,4)` / integer volume | `test_normalisation_…`, `test_equal_after_normalisation_is_not_a_difference` |
+| never an automatic repair | `test_nothing_is_ever_repaired_automatically` — a whole-export constant-factor (split-like) difference is still a withholding |
+
+IDENTITIES IN THE OBJECT (L57, L1): `TargetCounts` carries §7's five identities in its own
+`model_validator`, and `TargetPlan.counts(inserted=…, concurrent_conflicts=…)` is the ONLY way to build
+one. `test_a_non_reconciling_count_cannot_be_constructed` (3 cases) and two direct-construction tests
+prove a night that cannot explain itself raises rather than renders.
+
+Diff stat (chunk R): `src/cobalt/archiver/reconcile.py` +703 (new),
+`tests/cobalt/test_archiver_reconcile.py` +800 (new),
+`docs/40 - DevDocs/cobalt/archiver/reconcile.md` +143 (new).
+
+SUITE: **`1723 passed, 307 skipped, 1 xfailed, 15 warnings in 41.92s`**. Against BASELINE: failed 0 → 0 ·
+passed 1562 → 1723 (+161: 47 S + 48 M + 66 R) · skipped 307, unchanged (chunk R adds no `requires_db`
+test — the whole chunk is pure).
+
+CONTINUE: step 4
