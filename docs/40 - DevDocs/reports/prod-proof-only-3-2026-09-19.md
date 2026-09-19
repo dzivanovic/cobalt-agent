@@ -5,7 +5,11 @@ Prompt: `docs/40 - DevDocs/prompts/2026-09-19/03-prod-proof-only-3.md`. Authoriz
 
 ## §0 Headline
 
-- RUN IN PROGRESS — this section is rewritten at the close.
+- **PROD PROOF DONE (07:52–07:53 ET). The FINAL code (`ad9b07c` — F1 + the REPEATABLE READ snapshot fix + the tribunal fold) met production once, read-only: 23 tables, `system.bars` 8,834,532 rows digested in 51.99 s, exit 0, no `ProgramLimitExceeded`, no `-- applying` line, nothing applied and nothing written.**
+- **The outage budget is now measured on the final code: total 52.2 s per pass → BEFORE + AFTER ≈ 104 s** (09-18 read ≈92 s); `bars` is 99.6% of it; the command's wall clock was 60 s.
+- Round 2's new refusal did NOT fire: all 23 probes completed, so production carries no duplicate table name across `public`/`user`/`system`. `0006`/`0007`'s eight tables are absent, as the deploy requires. Dev first: 23 tables, `bars` 1,043,443 in 5.24 s, digests identical to the round-2 baseline except append-only `cobalt_redactions`.
+- PREFLIGHT clean (10 rules, 0 denials); review gate `REVIEW DONE … blocks the deploy: 0`; `.env` in by name and removed, `ls` proves it gone; worktree clean.
+- ESCALATE: **3** — the ≈104 s grew 4.8× faster than the row count; the archiver is still not booted out; no `lock_timeout` anywhere in the harness.
 
 ## PREFLIGHT
 
@@ -84,3 +88,103 @@ NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.
 | total | **5.3 s** |
 
 **Drift, expected and by design:** `cobalt_redactions` 122 → 123 (`834d5919` → `2797ee97`) since the round-2 baseline. That table is append-only telemetry; the prompt pins no older BASELINE for exactly this reason. Every other row count and digest is byte-identical to `harness-round2-2026-09-19.md`'s post-round-trip list.
+
+## Production
+
+`date` before: `Sat Sep 19 07:52:08 EDT 2026` · `date` after: `Sat Sep 19 07:53:08 EDT 2026` — **wall clock 60 s**. ONE command, run once, foreground, Bash `timeout` 600000 ms. Whole output, verbatim:
+
+```
+$ COBALT_ENV=production uv run cobalt db migrate --allow-prod --proof-only
+cobalt db migrate — PROOF ONLY on cobalt_brain (READ ONLY, nothing applied)
+
+table                side    schema   rows         digest                             secs
+------------------------------------------------------------------------------------------
+aset_sizings         user    user     146          baac6ac19fd231057ebe2cbe7443c933   0.03
+bars                 system  system   8834532      d21fc0b31265b2565c71432a6ebf6979   51.99
+card_dot_taps        user    -        -            -                                  0.00
+card_dots            user    -        -            -                                  0.00
+card_stop_edits      user    user     1            cbae670bbd7acd13749ac41d99f25861   0.00
+card_transitions     user    user     293          3986eb3f96571498667bbfbc3d80aa8c   0.01
+cobalt_email_sends   system  system   463          c8fc112af72900bb260196353fea82bd   0.00
+cobalt_jobs          system  system   15           635701c427c7e7e82581d4291749fd3b   0.00
+cobalt_kill_switch   system  system   1            310655940a3a0ce10031f77a390733b6   0.00
+cobalt_redactions    system  system   2            cf42d85ee49244ca40d419683eb3ca51   0.00
+day_modes            user    user     10           d9139ce7290afb41d88404c32c59736b   0.00
+desk_grade           system  -        -            -                                  0.00
+desk_packet          system  -        -            -                                  0.00
+desk_regime          system  -        -            -                                  0.00
+radar_membership     system  system   3334         72b94dfe689084e8e96cd880d031e3f3   0.04
+radar_pool           system  system   1            88537229826d4da833be389abd8367be   0.00
+radar_score          system  -        -            -                                  0.00
+radar_score_receipt  user    -        -            -                                  0.00
+radar_score_run      system  -        -            -                                  0.00
+session_blocks       system  system   8            ddf2a773f48403300cbff196fe9aa419   0.00
+traders              user    user     1            cf9aec4d006d82fb0f12be2d9afa10b9   0.00
+vault_overrides      user    user     29           1f529ee789a2e27f1b73010bbae4cdd7   0.00
+vault_writes         user    user     1321         8fcd48b94922fee9bd47aa1b8fde8144   0.12
+------------------------------------------------------------------------------------------
+23 table(s) probed on cobalt_brain; digest excludes user_id, vault_outcome, vault_reason, account_mode, pool_member_id; aset_sizings: 25 card column(s) added by 0007. Proof cost: total 52.2 s — and a migration pays it TWICE (before and after), inside the outage.
+NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.
+```
+
+### PASS conditions, one by one
+
+| condition | result |
+|---|---|
+| exit 0 | **yes** |
+| every table has rows + digest + seconds | **yes** for the 15 tables that EXIST; the 8 that do not exist print `-` / `-` with their seconds, which is the proof table saying what is absent (see 0006/0007 below) |
+| `system.bars` ≈ 8.6M completes, no `ProgramLimitExceeded` | **yes — 8,834,532 rows digested in 51.99 s**, one streamed pass, no error |
+| NO `-- applying` line | **yes** |
+| the run's own last line says nothing was applied | **yes** — `NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.` |
+| duplicate table name (round-2 ESCALATE 2) | **did not fire** — the harness completed all 23 probes, which `_schema_of` would have refused at the first one. Production carries no name in two of `public`/`user`/`system`; this is a second, independent confirmation of the desk's 06:57 ET read-only check |
+
+`.env` removed immediately after the command; `ls -la /Users/cobalt/cobalt-wt/s2-p2-cards/.env` → `No such file or directory` (exit 1). L28: **nothing was written, so no trace line is owed** — the transaction was `READ ONLY` at the server and `--proof-only` never reaches `_apply`.
+
+## Close
+
+### Per-table seconds, every production table over 100,000 rows
+
+There is exactly **one**. The next largest table in the database is `radar_membership` at 3,334 rows — three orders of magnitude below the threshold.
+
+| table | rows | seconds | share of total |
+|---|---|---|---|
+| `system.bars` | 8,834,532 | **51.99** | **99.6%** |
+| *(all 22 others combined)* | 6,624 | 0.21 | 0.4% |
+| **TOTAL** | | **52.2** | |
+
+**Implied outage cost of a BEFORE + AFTER pair: ≈ 104 s** (2 × 52.2). The command's own wall clock was 60 s, so ≈8 s of connect + UTF-8 check + interpreter boot sits outside the probe total and is paid once, not twice.
+
+### Against the two earlier production proofs
+
+| | 09-18 16:5x (`511bff0`) | 09-18 17:29 (`0e1f768`) | **09-19 07:52 (`ad9b07c`)** |
+|---|---|---|---|
+| isolation | READ COMMITTED | READ COMMITTED | **REPEATABLE READ** |
+| `bars` rows | 8,591,339 | 8,592,116 | **8,834,532** (+242,416) |
+| `bars` seconds | 46.73 | 45.75 | **51.99** |
+| total | 46.9 s | 46.0 s | **52.2 s** |
+| BEFORE+AFTER | ≈94 s | ≈92 s | **≈104 s** |
+| `bars` digest | `a40b1c4e…` | `2ca2840d…` | `d21fc0b3…` |
+| wall clock | — | 50 s | **60 s** |
+
+The digest differs from yesterday's for the honest reason that 242,416 rows landed in between (the 09-18 20:53 archiver run, then the overnight replay). Nothing here is a comparison failure — `--proof-only` pins no cross-day baseline.
+
+### `0006`/`0007`'s tables are absent — yes
+
+The proof table lists what exists, and exactly the eight tables those two migrations create print `-`:
+
+| migration | tables it creates | on production |
+|---|---|---|
+| `0006_radar_score.sql` | `system.radar_score_run`, `system.radar_score`, `system.desk_regime`, `system.desk_packet`, `system.desk_grade` | **all 5 absent** |
+| `0007_radar_cards.sql` | `"user".card_dots`, `"user".card_dot_taps`, `"user".radar_score_receipt` | **all 3 absent** |
+
+`"user".aset_sizings` exists with 146 rows but WITHOUT `0007`'s 25 card columns — the footer's `aset_sizings: 25 card column(s) added by 0007` is the digest exclusion list, which is why the same digest is comparable across the migration. This is the expected pre-deploy shape: the stacked deploy is what creates the eight.
+
+Heartbeat-visible impact is the desk's to check, not this hub's.
+
+## ESCALATE
+
+1. **The outage budget is now ≈104 s, and it grew FASTER than the row count.** In the 14.4 hours since the 09-18 17:29 proof, `bars` gained 2.82% more rows (+242,416) but the probe took 13.6% longer (+6.24 s). At yesterday's linear rate today's table should have read 47.0 s; it read 52.0 s — **5 s over linear**. One pair of measurements does not prove superlinearity (Saturday-morning host load is a confound, and the radar is idle rather than scanning), but the deploy must budget from the MEASURED 104 s, not from 09-18's 92 s, and the bounded-proof fix for `bars` (closed periods proven once by a stored digest, only the open period re-read) is now worth more than the ≈11 s per million the 09-18 report estimated. This is exactly the question Sunday's partition/retention tribunal is being asked.
+2. **`com.cobalt.archiver` is still not one of the residents the deploy boots out** (unchanged from `prod-proof-only-2-2026-09-18.md` ESCALATE 2, and NOT closed by the snapshot fix). REPEATABLE READ now protects the BEFORE/AFTER pair from a mid-migration commit, so the archiver can no longer make a good migration print `CHANGED`. What it can still do is raise `could not serialize access…` if it commits a change to a row the migration then modifies — the named price in `_connect`'s docstring. Today's registered set touches no row the archiver writes, so the exposure is zero for THIS deploy; the standing fix (disarm the archiver like the other two, or the bounded `bars` proof) is still owed, and until it lands each deploy prompt carries a clock rule instead.
+3. **60 s of wall clock for 52.2 s of probe, and the 600000 ms Bash timeout is a property of the harness, not of the code.** The gap is interpreter boot + connect + `SHOW server_encoding`. Nothing in `cli.py` sets a `lock_timeout` or a statement timeout either (REVIEW.md U1), so a deploy whose `0003` ALTER meets a heartbeat write waits indefinitely rather than failing fast. Unproven risk, named: the expected behaviour is a short lock wait, and the deploy takes the residents down first.
+
+PROD PROOF DONE | 23 tables | system.bars 8834532 rows in 51.99 s | total 52.2 s → BEFORE+AFTER ≈ 104 s of outage | nothing applied, nothing written | 0006/0007 absent: yes | ESCALATE: 3
