@@ -1404,14 +1404,18 @@ class _StatementRecorder:
         self.closed += 1
 
 
-def _offline_migrate(monkeypatch, recorder, **namespace):
+def _offline_migrate(monkeypatch, recorder, print_proof=None, **namespace):
     """Run `cmd_migrate` with no database: the connection is the recorder
     and both probe passes are stubbed (an empty probe dict makes every
-    verdict vacuously OK, which is what lets the commit path run)."""
+    verdict vacuously OK, which is what lets the commit path run).
+
+    `print_proof` overrides the proof-table stub for a test that needs to
+    see where the table lands in the output.
+    """
     monkeypatch.setenv(env.ENV_VAR, env.DEV)
     monkeypatch.setattr(cli, "_connect", lambda *a, **k: recorder)
     monkeypatch.setattr(cli, "_probe_all", lambda conn: {})
-    monkeypatch.setattr(cli, "_print_proof", lambda *a, **k: 0)
+    monkeypatch.setattr(cli, "_print_proof", print_proof or (lambda *a, **k: 0))
     fields = {
         "proof_only": False,
         "rollback": False,
@@ -1610,3 +1614,119 @@ def test_a_migration_that_cannot_get_its_lock_fails_in_about_a_second(monkeypatc
         f"{before['rows']} -> {after['rows']}, digest {before['digest']} -> "
         f"{after['digest']}"
     )
+
+
+# ---------------------------------------------------------------------
+# 11. THE OUTPUT NAMES THE CODE IT RAN FROM (ops 2026-09-19, item e)
+# ---------------------------------------------------------------------
+#
+# ORIGIN: `cto-2026-09-19.md` §14 — the deploy's git-history binding
+# proves the proof report was COMMITTED after a given sha on the branch,
+# not which code EXECUTED; the desk had to verify by hand that the
+# report's commits sat on that code. The fix is one printed line.
+#
+# A git failure NEVER fails a migration or a proof: the line reads
+# `code: UNKNOWN — <reason>`, which is explicit and is not a plausible
+# value (L1). Refusing an UNKNOWN or a DIRTY tip is the DEPLOY GATE's
+# job, in the desk's prompt, not this command's.
+
+
+def _fake_git_factory(sha="abc1234", porcelain="", raises=None):
+    def _fake_git(repo_root, *args, **kwargs):
+        if raises is not None:
+            raise raises
+        if args[:1] == ("rev-parse",):
+            return sha + "\n"
+        if args[:1] == ("status",):
+            return porcelain
+        raise AssertionError(f"unexpected git call: {args}")
+
+    return _fake_git
+
+
+def _patch_git(monkeypatch, **kwargs):
+    from cobalt.generated import committer
+
+    monkeypatch.setattr(committer, "_git", _fake_git_factory(**kwargs))
+
+
+def _proof_only_output(monkeypatch, capsys) -> list[str]:
+    recorder = _StatementRecorder()
+    monkeypatch.setenv(env.ENV_VAR, env.DEV)
+    monkeypatch.setattr(cli, "_connect", lambda *a, **k: recorder)
+    monkeypatch.setattr(cli, "_probe_all", lambda conn: {})
+    monkeypatch.setattr(cli, "_print_probe", lambda *a, **k: print("<proof table>"))
+    args = argparse.Namespace(
+        proof_only=True, rollback=False, down_to=None, allow_prod=False,
+        lock_timeout_s=cli.DEFAULT_LOCK_TIMEOUT_S,
+    )
+    cli.cmd_migrate(args)
+    return [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+
+
+def test_proof_only_ends_with_the_code_it_ran_from(monkeypatch, capsys):
+    _patch_git(monkeypatch, sha="abc1234", porcelain="")
+    lines = _proof_only_output(monkeypatch, capsys)
+
+    assert lines[-1] == f"code: abc1234 (clean) · {cli.CODE_ROOT}", (
+        f"the LAST line is not the code line: {lines[-3:]}"
+    )
+
+
+def test_a_dirty_tree_says_how_many_paths(monkeypatch, capsys):
+    _patch_git(
+        monkeypatch, sha="abc1234",
+        porcelain=" M src/cobalt/db_migrations/cli.py\n?? scratch/notes.md\n",
+    )
+    lines = _proof_only_output(monkeypatch, capsys)
+
+    assert lines[-1] == f"code: abc1234 (DIRTY: 2 path(s)) · {cli.CODE_ROOT}", lines[-1]
+
+
+def test_a_git_failure_is_unknown_and_never_fails_the_proof(monkeypatch, capsys):
+    """L1: `UNKNOWN` is explicit. It is NOT a plausible value, and it is
+    not this command's job to refuse it — the deploy gate does that."""
+    _patch_git(monkeypatch, raises=RuntimeError("not a git repository"))
+    lines = _proof_only_output(monkeypatch, capsys)  # returns => did not raise
+
+    assert lines[-1].startswith("code: UNKNOWN — "), lines[-1]
+    assert "not a git repository" in lines[-1]
+
+
+def test_the_forward_path_prints_the_same_line_after_its_proof_table(
+    monkeypatch, capsys
+):
+    _patch_git(monkeypatch, sha="deadbee", porcelain="")
+    recorder = _StatementRecorder()
+
+    def _table(*a, **k):
+        print("<proof table>")
+        return 0
+
+    _offline_migrate(monkeypatch, recorder, print_proof=_table)
+
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+    assert lines.index("<proof table>") < lines.index(
+        f"code: deadbee (clean) · {cli.CODE_ROOT}"
+    ), f"the code line does not follow the proof table: {lines}"
+    assert lines[-1] == f"code: deadbee (clean) · {cli.CODE_ROOT}"
+
+
+def test_the_code_root_is_the_package_not_the_current_directory():
+    """A deploy hub `cd`s; the answer must not follow it. `CODE_ROOT` is
+    derived from this module's own file, so it names the checkout the
+    RUNNING `cobalt` package was imported from."""
+    assert cli.CODE_ROOT == Path(cli.__file__).resolve().parents[3]
+    assert (cli.CODE_ROOT / "src" / "cobalt" / "db_migrations" / "cli.py").exists()
+
+
+def test_the_real_helper_imports_and_produces_a_line():
+    """L3: there is no third git helper — `_code_line` imports an EXISTING
+    one. This runs it for real against this checkout (no database, no
+    network), which is what proves the import carries no cycle and no
+    side effect."""
+    line = cli._code_line()
+
+    assert line.startswith("code: "), line
+    assert str(cli.CODE_ROOT) in line
+    assert ("(clean)" in line) or ("(DIRTY: " in line), line

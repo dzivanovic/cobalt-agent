@@ -71,6 +71,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import time
+from pathlib import Path
 from typing import Iterable, Iterator, Optional
 
 import psycopg
@@ -124,6 +125,51 @@ TABLE_DIGEST_EXCLUDED_COLUMNS: dict[str, tuple[str, ...]] = {
 #: ESCALATE 3). An ENGINE TUNABLE, not an L53 ceiling: it decides how
 #: long to wait for a lock, never what the system may do.
 DEFAULT_LOCK_TIMEOUT_S = 30
+
+#: The checkout the RUNNING `cobalt` package was imported from — derived
+#: from THIS module's own file, never from the current directory. A
+#: deploy hub `cd`s between `~/cobalt` and a worktree, and the answer to
+#: "which code just ran" must not follow it.
+CODE_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _code_line() -> str:
+    """`code: <short sha> (clean|DIRTY: n path(s)) · <repo root>`.
+
+    The LAST line of both the proof-only and the forward output, so a
+    proof report carries the code that produced it as a FIELD. Until
+    2026-09-19 the deploy could only bind a report to a commit by git
+    history — which proves when the report was COMMITTED, not which code
+    EXECUTED, and the desk had to close that gap by hand
+    (`cto-2026-09-19.md` §14).
+
+    ONE git helper, imported, never a third copy (L3):
+    `cobalt.generated.committer._git`, which takes the repo root
+    explicitly and runs `git -C`, so it is already immune to the caller's
+    working directory. The import is function-local so this module keeps
+    no import-time dependency on the `generated` package.
+
+    A GIT FAILURE NEVER FAILS A MIGRATION OR A PROOF. Whatever goes
+    wrong — not a repository, git absent, a broken index — the line reads
+    `code: UNKNOWN — <reason>`. That is explicit, and explicitly NOT a
+    plausible value (L1): an operator can tell "we could not read it"
+    from "it was clean". Refusing an UNKNOWN or a DIRTY tip belongs to
+    the DEPLOY GATE, in the desk's prompt, not to this command — a
+    migration that is otherwise fine must not be blocked by a question
+    about the checkout.
+    """
+    try:
+        from cobalt.generated.committer import _git
+
+        sha = _git(CODE_ROOT, "rev-parse", "--short", "HEAD").strip()
+        dirty = [
+            line for line in _git(CODE_ROOT, "status", "--porcelain").splitlines()
+            if line.strip()
+        ]
+        state = "clean" if not dirty else f"DIRTY: {len(dirty)} path(s)"
+        return f"code: {sha} ({state}) · {CODE_ROOT}"
+    except Exception as e:  # noqa: BLE001 — never fatal; see the docstring
+        return f"code: UNKNOWN — {type(e).__name__}: {e}"
 
 #: The schemas searched for a new-core table. A name found in more than
 #: one of them is an ERROR, not a choice — there is no look-up order.
@@ -609,6 +655,7 @@ def cmd_migrate(args: argparse.Namespace) -> None:
             conn.close()
         print()
         _print_probe(probe, dbname=dbname)
+        print(_code_line())
         return
 
     print(f"cobalt db migrate — {direction} on {dbname}")
@@ -668,6 +715,9 @@ def cmd_migrate(args: argparse.Namespace) -> None:
 
     print()
     changed = _print_proof(before, after, direction=direction)
+    # Printed BEFORE the CHANGED refusal below: a run that rolled back is
+    # exactly the run whose code an operator most needs named.
+    print(_code_line())
     if changed:
         raise MigrationError(
             f"{changed} table(s) changed content across the migration. The "
@@ -741,6 +791,7 @@ def add_parser(sub) -> None:
 
 
 __all__ = [
+    "CODE_ROOT",
     "DEFAULT_LOCK_TIMEOUT_S",
     "DIGEST_EXCLUDED_COLUMNS",
     "PROBE_BATCH_SIZE",

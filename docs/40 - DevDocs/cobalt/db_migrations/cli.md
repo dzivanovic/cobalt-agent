@@ -129,6 +129,38 @@ while everything is still up; giving it a lock ceiling would make it
 start failing on a busy evening. A test asserts it sends no
 `lock_timeout` at all.
 
+## The output names the code it ran from
+Both modes end with the same LAST line:
+
+```
+code: 8232dcc (clean) · /Users/cobalt/cobalt
+code: 8232dcc (DIRTY: 2 path(s)) · /Users/cobalt/cobalt-wt/ops-2026-09-19
+code: UNKNOWN — RestartError: git rev-parse --short HEAD failed: …
+```
+
+**Who reads it, and what they do with it.** The proof report is carried
+out of the deploy window and compared later, and until 2026-09-19 the
+only binding between a report and its code was git history — which proves
+when the report was COMMITTED, not which code EXECUTED. The desk closed
+that gap by hand on the 09-19 deploy (`cto-2026-09-19.md` §14). Now it is
+a field. **The deploy gate — the desk's prompt — compares this line's sha
+with the branch tip it was approved for, and refuses an `UNKNOWN` or a
+`DIRTY` tip.** This command does not: a migration that is otherwise fine
+is never blocked by a question about the checkout.
+
+`CODE_ROOT` is derived from this module's own `__file__`, never from the
+current directory, because a deploy hub `cd`s between `~/cobalt` and a
+worktree and the answer must not follow it. The git call goes through an
+EXISTING helper — `cobalt.generated.committer._git`, which takes the repo
+root explicitly and runs `git -C` — imported inside the function so this
+module keeps no import-time dependency on that package. **There is no
+third git helper in the repo (L3).**
+
+A git failure NEVER fails a migration or a proof. Not a repository, git
+absent, a broken index: the line reads `code: UNKNOWN — <reason>`, which
+is explicit and is not a plausible value (L1) — a reader can tell "we
+could not read it" from "it was clean".
+
 ## What `OK` means, exactly
 Written down here and in `cmd_migrate`'s docstring rather than inferred,
 because all three houses read the same property out of the code in round
