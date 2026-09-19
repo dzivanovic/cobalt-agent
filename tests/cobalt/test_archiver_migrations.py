@@ -44,6 +44,11 @@ INCIDENTS_ROLLBACK = MIGRATIONS_DIR / "0011_archive_incidents.rollback.sql"
 
 NEW_TABLES = ("archive_progress", "archive_incidents")
 
+#: `sprint-2/p4`'s own tables, created by 0008/0009, which now sit BELOW
+#: this branch's pair in the united registry. Named here so the rollback
+#: pins can say which bound owns what instead of asserting "mine only".
+P4_TABLES = ("movers_daily", "picks", "missed")
+
 #: §11: the five kinds. `regression` is v3's addition to v2's four.
 INCIDENT_KINDS = ("gap", "restated", "stored_only", "empty_export", "regression")
 
@@ -54,6 +59,13 @@ def _code(path) -> str:
     return "\n".join(
         line for line in path.read_text().splitlines() if not line.strip().startswith("--")
     )
+
+
+def _regclass(conn, name: str):
+    """`to_regclass` for a table in the schema `CREATED_TABLES` declares
+    for it — the one place that mapping is turned into a qualified name."""
+    schema = '"user"' if CREATED_TABLES[name] is Side.USER else "system"
+    return conn.execute("SELECT to_regclass(%s)", (f"{schema}.{name}",)).fetchone()[0]
 
 
 # ---------------------------------------------------------------------
@@ -420,35 +432,63 @@ def test_migrate_twice_is_idempotent_for_the_two_new_tables():
 
 
 @requires_db
-def test_rollback_down_to_0007_drops_exactly_those_two_and_nothing_else():
+def test_rollback_down_to_0009_drops_this_branch_alone_and_0007_also_reaches_p4():
+    """The `requires_db` sibling of the registry pin above, applied to a
+    real database instead of to `FORWARD`/`REVERSE`.
+
+    It was written while this branch was the only unmerged one and it
+    asserted that `--down-to 0007` was THIS branch's operator-undo bound.
+    After the P4 rebase that is false in exactly the way its five offline
+    siblings were: `0008`/`0009` now sit BELOW `0010`/`0011`, so a
+    rollback to `0007` correctly also reverses P4's pair. `48` §4.1 could
+    not see it because that table was built from an OFFLINE run, and an
+    offline run SKIPS every `requires_db` test.
+
+    Rewritten, never weakened: it asserts what is now true — `--down-to
+    0007` drops all of P4's tables as well as this branch's two — and it
+    keeps the invariant the pin existed to protect by asserting the
+    archiver's own bound beside it: `--down-to 0009` drops EXACTLY
+    `archive_progress` and `archive_incidents` and leaves P4's tables
+    standing.
+    """
     conn = _migration_conn()
     try:
         _apply(conn, FORWARD)
         survivors = {
             name
             for name in CREATED_TABLES
-            if name not in NEW_TABLES
-            and conn.execute(
-                "SELECT to_regclass(%s)",
-                (f"{'\"user\"' if CREATED_TABLES[name] is Side.USER else 'system'}.{name}",),
-            ).fetchone()[0]
+            if name not in NEW_TABLES and name not in P4_TABLES and _regclass(conn, name)
         }
-        _apply(conn, _rollback_paths("0007"))
+
+        # (1) THE ARCHIVER'S OWN BOUND: `--down-to 0009` is this branch alone.
+        _apply(conn, _rollback_paths("0009"))
         for table in NEW_TABLES:
-            assert conn.execute(
-                "SELECT to_regclass(%s)", (f"system.{table}",)
-            ).fetchone()[0] is None, f"{table} survived its own rollback"
+            assert _regclass(conn, table) is None, f"{table} survived its own rollback"
+        for name in P4_TABLES:
+            assert _regclass(conn, name), (
+                f"{name} was dropped by --down-to 0009, which does not own it"
+            )
         for name in survivors:
-            schema = '"user"' if CREATED_TABLES[name] is Side.USER else "system"
-            assert conn.execute(
-                "SELECT to_regclass(%s)", (f"{schema}.{name}",)
-            ).fetchone()[0], f"{name} was dropped by a rollback that does not own it"
+            assert _regclass(conn, name), (
+                f"{name} was dropped by a rollback that does not own it"
+            )
+        _apply(conn, FORWARD)
+
+        # (2) `--down-to 0007` REACHES P4 TOO, and stops there.
+        _apply(conn, _rollback_paths("0007"))
+        for table in (*NEW_TABLES, *P4_TABLES):
+            assert _regclass(conn, table) is None, (
+                f"{table} survived --down-to 0007, which reverses everything above 0007"
+            )
+        for name in survivors:
+            assert _regclass(conn, name), (
+                f"{name} was dropped by a rollback that does not own it"
+            )
+
         # ...and forward again lands back where it started.
         _apply(conn, FORWARD)
-        for table in NEW_TABLES:
-            assert conn.execute(
-                "SELECT to_regclass(%s)", (f"system.{table}",)
-            ).fetchone()[0], table
+        for table in (*NEW_TABLES, *P4_TABLES):
+            assert _regclass(conn, table), table
     finally:
         conn.rollback()
         conn.close()
