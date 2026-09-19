@@ -2122,6 +2122,17 @@ Seat `archiver-db2-0919` (Opus 5), worktree `/Users/cobalt/cobalt-wt/archiver-ap
 Started 2026-09-19 13:36:23 EDT (`date`). This section APPENDS after `# ROUND 3b`; nothing above it is
 deleted, edited or restructured.
 
+## §0 Headline
+
+**Green in one pass, in the corrected order — DB-1 and DB-2 are now CLOSED on real Postgres.** 0010/0011
+applied on `cobalt_dev`, the with-DB suite run WHILE APPLIED (**161 passed, 0 failed** — all 22 archiver
+`requires_db` tests, including both `test_the_user_role_has_no_grant_on_either_table` params, **PASSED**),
+then rolled back to 0009 with the closing proof byte-identical to this run's baseline. DB-3's lesson holds:
+the same suite was `12 failed, 145 passed` in the old order. Offline **1871/0 (319 skipped)**, unchanged from
+round 3b. No code changed; `cobalt_dev` left at 0001–0009; `.env` removed and proven gone. **ESCALATE: 3 new**
+— a stray `cobalt_redactions` row not this branch's, the sequence REVOKE still untested live, and the
+`--allow-prod` wildcard in this session's own allowlist (never typed).
+
 ## DB RE-RUN PREFLIGHT
 
 | rule | command | exit | allowed / DENIED |
@@ -2653,3 +2664,199 @@ directory` ✅ gone (13:42 ET).
 
 **No code changed in step 1.** The proof surfaced no defect: no test needed a fix, and nothing about
 `cobalt_dev`'s real state needed one. This step's commit is report-only, as the prompt provides for.
+
+## DB RE-RUN — OFFLINE SUITE + RESTARTS
+
+`ls -la .env` → `ls: .env: No such file or directory`, re-confirmed before this step ran (13:42 ET) — the
+offline suite sees no database.
+
+`uv run pytest -q tests/cobalt tests/taxonomy`, FULL summary line:
+
+```
+1871 passed, 319 skipped, 1 xfailed, 15 warnings in 44.24s
+```
+
+**The arithmetic against round 3b's own close (`offline 1871/0 (319 skipped …)`), named rather than waved off:**
+
+| number | round 3b | this run | Δ | required | verdict |
+|---|---|---|---|---|---|
+| passed | 1871 | **1871** | **0** | MUST match exactly — this step touched no offline test, and this run changed no code at all | ✅ |
+| failed | 0 | **0** | **0** | MUST stay 0 | ✅ |
+| skipped | 319 | **319** | **0** | unchanged — `.env` is removed, so `requires_db`'s `skipif(not (POSTGRES_HOST and POSTGRES_USER))` fires and all 22 skip again, exactly as at round 3b's close | ✅ |
+
+All three match. Note the shape of the `skipped` figure, since it is the one a reader can misread: the 22
+`requires_db` tests ran for real in step 1, in a SEPARATE run with `.env` present and `COBALT_ENV=dev`; this
+run has `.env` removed, so they skip. **Two runs, two environments — the offline number is not supposed to
+move.** (`1 xfailed` is the suite's standing xfail, present identically in the DB run, round 3 and round 3b.)
+
+`uv run cobalt jobs restarts 8838dda..HEAD` (the branch's merge-base with `main`), table VERBATIM:
+
+```
+path	change	rule	restart
+configs/cobalt/taxonomy/tunables.yaml	M	resident reads	com.cobalt.aset,com.cobalt.radar
+docs/40 - DevDocs/cobalt/archiver/__init__.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/cli.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/incidents.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/progress.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/quiet.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/reconcile.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/report.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/runner.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/settings.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/shadow.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/store.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/db_migrations/__init__.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/db_migrations/placement.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/heartbeat/probes.md	M	DOCS	-
+docs/40 - DevDocs/reports/archiver-append-build-2026-09-19.md	A	DOCS	-
+src/cobalt/archiver/cli.py	A	static import reach	com.cobalt.radar
+src/cobalt/archiver/incidents.py	A	static import reach	com.cobalt.radar
+src/cobalt/archiver/progress.py	A	static import reach	com.cobalt.radar
+src/cobalt/archiver/quiet.py	A	static import reach	com.cobalt.radar
+src/cobalt/archiver/reconcile.py	A	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/archiver/report.py	M	static import reach	-
+src/cobalt/archiver/runner.py	M	static import reach	-
+src/cobalt/archiver/settings.py	A	static import reach	com.cobalt.radar
+src/cobalt/archiver/shadow.py	A	static import reach	com.cobalt.radar
+src/cobalt/archiver/store.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/cli.py	M	static import reach	com.cobalt.radar
+src/cobalt/db_migrations/0010_archive_progress.rollback.sql	A	non-Python src asset	-
+src/cobalt/db_migrations/0010_archive_progress.sql	A	non-Python src asset	-
+src/cobalt/db_migrations/0011_archive_incidents.rollback.sql	A	non-Python src asset	-
+src/cobalt/db_migrations/0011_archive_incidents.sql	A	non-Python src asset	-
+src/cobalt/db_migrations/__init__.py	M	static import reach	com.cobalt.radar
+src/cobalt/db_migrations/placement.py	M	static import reach	com.cobalt.radar
+src/cobalt/heartbeat/probes.py	M	static import reach	com.cobalt.radar
+tests/cobalt/test_archiver_append_store.py	A	test/documentation; no resident	-
+tests/cobalt/test_archiver_migrations.py	A	test/documentation; no resident	-
+tests/cobalt/test_archiver_quiet.py	A	test/documentation; no resident	-
+tests/cobalt/test_archiver_reconcile.py	A	test/documentation; no resident	-
+tests/cobalt/test_archiver_runner.py	A	test/documentation; no resident	-
+tests/cobalt/test_archiver_settings.py	A	test/documentation; no resident	-
+tests/cobalt/test_finviz_consumers.py	M	test/documentation; no resident	-
+tests/cobalt/test_heartbeat.py	M	test/documentation; no resident	-
+tests/cobalt/test_heartbeat_archiver_incidents.py	A	test/documentation; no resident	-
+tests/cobalt/test_radar_migration.py	M	test/documentation; no resident	-
+tests/cobalt/test_radar_score_migration.py	M	test/documentation; no resident	-
+tests/cobalt/test_tenancy.py	M	test/documentation; no resident	-
+RESTARTS: com.cobalt.aset com.cobalt.radar
+```
+
+**46 rows, every one carrying a rule — 0 UNCLASSIFIED**, checked row by row, not assumed from the trailing
+line. `RESTARTS: com.cobalt.aset com.cobalt.radar` is unchanged from the first DB run's derivation and is the
+branch's deploy line. The `aset` half comes from exactly three paths (`configs/cobalt/taxonomy/tunables.yaml`
+by `resident reads`, `archiver/reconcile.py` and `archiver/store.py` by `static import reach`); the 15 DevDocs
+paths and this report derive `-` under L42's 09-13 documentation amendment; the four 0010/0011 SQL files
+classify `non-Python src asset` → `-`, which is right — a migration is read by the `db migrate` CLI, not by a
+resident, and the deploy runs the migration as its own named step rather than as a restart.
+
+**This run adds no restart of its own.** It changed no `src/`, no config and no test — only this report.
+
+### Close checks
+
+| check | result |
+|---|---|
+| `git status --porcelain` | **empty** |
+| `git diff --stat 8838dda HEAD -- src tests docs` | **45 files, 12370 insertions, 55 deletions** — the same 45 paths PREFLIGHT listed; the only delta against PREFLIGHT's `11829` is this report's own text (+541 lines across this run's commits). Every path is one this prompt or the branch's own prior commits named. |
+| `.env` | absent, proven by `ls -la .env` → `No such file or directory` at every boundary (step 0 close, step 1 close, and before this step) |
+
+## DB RE-RUN ESCALATE
+
+**DB-1 and DB-2 — both CLOSED on real Postgres. Stated plainly, as the prompt requires:**
+
+- **DB-1 is CLOSED.** `test_the_user_role_has_no_grant_on_either_table[archive_progress]` and
+  `[archive_incidents]` — RED on `cobalt_dev` in the first DB run, **both PASSED here**, against live
+  `has_table_privilege('cobalt_user', 'system.<table>', 'SELECT')` on a database where 0010/0011 had just been
+  applied. R25's REVOKE bites against `0001_schemas.sql:124`'s blanket grant and `:149-151`'s default
+  privilege. R3-3's three owed items are answered: (a) the two tests, GREEN; (b) apply-twice idempotency,
+  proved by `test_migrate_twice_is_idempotent_for_the_two_new_tables` PASSING with both REVOKEs executing
+  twice; (c) the REVOKE proved on the database, not from the SQL text. **One part of the surrounding question
+  is NOT closed and is carried below as DB2-2: the SEQUENCE's revoke has no live test.**
+- **DB-2 is CLOSED.** R26 dropped the unobservable twin in round 3b; this run confirms the deletion from its
+  own evidence (`grep -rn` exit 1; absent from `--co` and from the verbose run) and records that the file's
+  `requires_db` count is 12, giving the 22 this run ran.
+- **DB-3 is CLOSED by this run's existence.** The corrected order — apply → proof → suite → rollback → proof —
+  produced `161 passed` in ONE pass where the first DB run's original order produced `12 failed, 145 passed`.
+  No `ASK DESK` was needed and none was raised.
+- **DB-4's two index-card drifts are corrected here from this run's own `--co`, for any later reader:**
+  `tests/cobalt/test_archiver_quiet.py` holds **ZERO** `requires_db` tests (its only `requires_db` string is a
+  comment at `:1123`), and the 0010/0011 `requires_db` half is **10** tests, not ≈17. With
+  `test_archiver_append_store.py`'s **12** (13 before round 3b's deletion) that is the **22** this run ran.
+
+**CARRIED FORWARD UNTOUCHED — every item the first DB run's, round 3's and round 3b's ESCALATE sections
+carried, by name. Nothing below is re-litigated and nothing is resolved by this run:**
+
+- Round 1's `## ESCALATE` in full — **(i)** the spec §14 OPEN table O-1…O-7 with what was built as the safe
+  default, **(ii)** the never-run `requires_db` tests (CLOSED by the first DB run), **(iii)** the cross-branch
+  table (`sprint-2/p4` shares `db_migrations/__init__.py`, `placement.py`, `tunables.yaml`, `cli.py`,
+  `archiver/runner.py`, `archiver/store.py`; P4's `_check_demand` call must be re-applied at the top of the
+  rewritten `_run_targets`), **(iv)** the deploy-prompt list 1–6, **(v)** §12's five known limits, and its
+  numbered findings 1–8.
+- Round 2's **R2-1** (the shadow artifact's timezone, ET — a ruling still OWED from the desk or the owner),
+  **R2-2**, **R2-4**.
+- The first DB run's **DB-3** and **DB-4** — both settled, recorded above.
+- Round 3's six: **R3-1** (§11's "Ownership and grants follow `0006_radar_score.sql`'s pattern" sentence — NOT
+  edited, proposed wording with the desk or the tribunal, **still owed a decision**, and this run's live proof
+  sharpens it: the REVOKE demonstrably works, so the sentence is now the only thing pointing a later builder
+  the other way), **R3-2** (the sequence REVOKE is one object beyond R25's literal wording — and see DB2-2),
+  **R3-3** (**ANSWERED for the two tables by this run**, as recorded above; its sequence half survives as
+  DB2-2), **R3-4** (`test_nothing_is_granted_to_cobalt_user`'s mechanism change, recorded), **R3-5** (the
+  `main`-anchored close check cannot be empty on this branch; anchor on the chunk's branch point),
+  **R3-6** (DB-1's `:150-152` citation drift; `:149-151` is correct).
+- Round 3b's **R3B-1** (the authorization count check should read "counts ≥1, and the launch line carries it
+  exactly once"). **This run did not repeat that check** — its authorization section verifies R18, R25 and R26
+  in the desk report and the three work-item citations, which is what this prompt asks for — so R3B-1 is
+  carried unchanged, neither confirmed nor refuted here.
+
+**NEW THIS RUN — 3 items.**
+
+**DB2-1. `cobalt_dev` gained one committed row in `system.cobalt_redactions` between the first DB run and this
+one, and I cannot name the writer with this allowlist.** 126 rows / digest `5c891af77292421e9595daef739c3941`
+at 12:42 ET → **127 rows / `0f80638def1d0d8e46457a59b2771fe7`** at 13:37 ET; all 24 other tables byte-identical.
+The window is the one `p4-db-0919` held (12:53 → ~13:0x), whose stop line reads `cobalt_dev: 0001–0009,
+unchanged` — true against ITS baseline, which would already have contained the row if it arrived before that
+run's step 0. **Nothing in this branch touches that table**, and this run's own closing proof is byte-identical
+to its step-0 baseline, so this run neither caused it nor is affected by it. There is no `psql` rule in this
+session's allowlist and no Bash-allowed command that reads a row of `system.cobalt_redactions`, so the writer
+is NOT identified here and is not guessed at. **DECIDES: the CTO desk** — worth one look before deploy 3,
+because `cobalt_redactions` is a production-shaped table and a self-cleaning suite is supposed to leave none.
+
+**DB2-2. The sequence REVOKE is proved in the SQL and UNPROVEN on the database — no `requires_db` test covers
+it.** `0011_archive_incidents.sql:122` carries
+`REVOKE ALL ON SEQUENCE system.archive_incidents_id_seq FROM cobalt_user;`, and round 3 pinned it OFFLINE
+(`test_the_incident_sequence_is_also_revoked_from_cobalt_user`, a text grep of the migration). Searched this
+run's collected list and the file's source: **no live test calls `has_sequence_privilege` on
+`archive_incidents_id_seq`**; the only live privilege call in the file is `has_table_privilege` at `:449`,
+parametrized over the two TABLES. So `cobalt_user`'s privilege on that sequence is exactly the L45/L70 class
+DB-1 was — clean in the text, untested on the database. **Not proved here, and no command was invented to
+prove it** (no `psql` rule; the prompt bounds this check for that reason). **The fix is one test**, a
+`requires_db` twin asserting
+`has_sequence_privilege('cobalt_user', 'system.archive_incidents_id_seq', 'SELECT') is False`, which any later
+DB-backed run on this branch can carry. **DECIDES: the CTO desk** — whether to add it before deploy 3 or
+accept the offline pin as sufficient for a sequence nothing reads.
+
+**DB2-3. This session's own allowlist carries the wildcard the desk flagged at 13:3x.**
+`Bash(COBALT_ENV=dev uv run cobalt db migrate*)` also admits `… migrate --allow-prod …`, and `cmd_migrate`
+routes `--allow-prod` to production whatever `COBALT_ENV` says (`cto-2026-09-19.md` §57, the desk's own ops
+item, found by the deploy-2 house check's hub). **This run typed no `--allow-prod` and no production command
+of any kind — every migrate command it ran is quoted in full above, four of them, all bare
+`COBALT_ENV=dev uv run cobalt db migrate` with at most `--proof-only` or `--rollback --down-to 0009`.**
+Restated here only so the record shows the run knew about the gap and stayed inside it. **DECIDES: already the
+desk's — it is on the list to tell him with deploy 2's approval; the code fix it names (refuse `--allow-prod`
+unless `COBALT_ENV=production`) is not this branch's to make.**
+
+**Also carried, not new: the LANE CHECK disposition.** PREFLIGHT found that `p4-db-0919` DID hold `cobalt_dev`
+after the first DB run's stop line, and judged it a closed, released, desk-recorded hold rather than a
+`FAILED PREFLIGHT`. The reasoning is in full under `## DB RE-RUN PREFLIGHT`, and the live step-0 probe backed
+it. **If the desk reads that rule more strictly than this seat did, this run is the one to say so about.**
+
+**MEMORY:** none proposed — this run changed no law and no standing practice. R25's and R26's memory lines are
+already owed at the desk's fold, as their own APPLIED notes say.
+**RULING:** two new, both small and both the desk's: **DB2-1** (the stray `cobalt_redactions` row) and
+**DB2-2** (whether the sequence gets its live test before deploy 3). **R3-1** and **R2-1** remain owed from
+earlier rounds, untouched by this run.
+
+**WHAT THIS BRANCH STILL OWES AFTER THIS RUN — not mine, stated so the desk does not have to reconstruct it:**
+the whole-build house check is not closed (Astra's read is owed after its meter resets at 16:54; Grok's
+whole-build read is queued separately), then Dejan's approval, then deploy 3 on Sunday after P4. This run
+merges nothing, deploys nothing, pushes nothing, and touched no production surface.
