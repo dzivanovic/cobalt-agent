@@ -220,8 +220,10 @@ def test_manual_cards_are_unaffected(world):
     assert shares == 60
     cards.transition(card_id, CardState.ARMED, actor=Actor.YOU)
     assert cards.state_of(card_id) is CardState.ARMED
-    ids = cards.fill(card_id, actor=Actor.YOU)
-    assert len(ids) == 2
+    # `fill` returns a FillResult (S2-P4 R1-5), not a list of ids: the two
+    # rows are the one-click manual route's TRIGGERED hop and the FILLED hop.
+    result = cards.fill(card_id, actor=Actor.YOU)
+    assert len(result.transition_ids) == 2
 
 
 def test_dot_taps_append_recompute_and_are_never_overwritten_by_a_scan(world):

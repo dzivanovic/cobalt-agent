@@ -254,6 +254,20 @@ def _named(paths, prefix: str):
     return [p for p in paths if p.name.startswith(prefix)]
 
 
+def _content(probe: dict) -> dict:
+    """A probe's CONTENT facts — `schema`, `rows`, `digest` — without its
+    wall time.
+
+    `_probe` also returns `seconds`, and that number is a deliverable of
+    the deploy plan, not of this test: it is a fresh stopwatch reading on
+    every call, so comparing two whole probe dicts compares two clocks and
+    fails on a difference of microseconds. This test asserts that the
+    CONTENT never changes, so `seconds` is the only key dropped — every
+    other key, including one added later, is still compared.
+    """
+    return {k: v for k, v in probe.items() if k != "seconds"}
+
+
 def _simulate_p2_card_columns(conn) -> None:
     """The two P2 columns P4 reads (`record_pick`), nothing else of P2."""
     conn.execute(
@@ -290,15 +304,17 @@ def test_0008_0009_apply_twice_reverse_and_reapply_on_populated_membership(order
             _simulate_p2_card_columns(conn)
         _apply(conn, [FWD_0008, FWD_0009])
         _seed_membership(conn, ticker="P4A", scan_id=9800001, value="1234567.5")
-        before = _probe(conn, "radar_membership")
-        assert before["rows"] and before["rows"] > 0
+        before = _content(_probe(conn, "radar_membership"))
+        # Both facts the equalities below rest on are really in the dict,
+        # so an unchanged probe can never be asserted vacuously.
+        assert before["rows"] and before["rows"] > 0 and before["digest"]
 
         _apply(conn, [FWD_0008, FWD_0009])               # second apply: idempotent
-        assert _probe(conn, "radar_membership") == before
+        assert _content(_probe(conn, "radar_membership")) == before
         if order == "p4_before_p2":
             _simulate_p2_card_columns(conn)
             _apply(conn, [FWD_0008, FWD_0009])
-            assert _probe(conn, "radar_membership") == before
+            assert _content(_probe(conn, "radar_membership")) == before
 
         _apply(conn, [REV_0009, REV_0008])
         assert _probe(conn, "radar_membership")["digest"] == before["digest"]
