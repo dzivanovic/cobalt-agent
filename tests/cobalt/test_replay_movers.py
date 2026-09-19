@@ -234,14 +234,21 @@ def test_the_collector_receives_one_export_shape():
 
 
 def test_both_movers_fixtures_hold_a_real_row_with_a_non_blank_asset_type():
-    """Finviz fills `Asset Type` only for funds. A cut of 60 rows with
-    none would leave "reads Asset Type when present" asserted against
-    blanks alone; the cutter's `movers` mode guarantees at least one, and
-    appends one from further down the file if the top rows have none."""
+    """Finviz fills `Asset Type` only for funds. A cut with none would
+    leave "reads Asset Type when present" asserted against blanks alone;
+    the cutter's `movers` mode guarantees at least one, and appends one
+    from further down the file if the top rows have none.
+
+    61 rows, not 60: the top 60 of the export plus the one row the cutter
+    appends per side for the OTHER guaranteed class — a fund named by
+    `Industry` alone, its `Asset Type` cell blank (AT-1 FR-1). That row is
+    rank 61, so a `parse_movers(top_n=60)` never sees it; the blank-type
+    fund class is asserted in `test_p4_asset_type_evidence.py`, against
+    the file, where the cutter's guarantee lives."""
     for side in SIDES:
         rows = list(csv.DictReader(io.StringIO(
             (FIX / "replay" / f"movers-{side}.real-shape.csv").read_text(encoding="utf-8"))))
-        assert len(rows) == 60
+        assert len(rows) == 61
         non_blank = [row for row in rows if (row["Asset Type"] or "").strip()]
         assert non_blank, f"movers-{side} has no non-blank Asset Type row"
 
@@ -282,13 +289,13 @@ def test_the_export_records_how_many_rows_it_really_had_and_keeps_the_same_top_r
     Recording the count selects nothing: at every cap the kept rows are
     the first N of the same ranking, and the raw bytes hash the same.
     """
-    full = _export("gainers", top_n=60)
-    assert (full.exported_rows, len(full.rows)) == (60, 60)
+    full = _export("gainers", top_n=61)
+    assert (full.exported_rows, len(full.rows)) == (61, 61)
     capped = _export("gainers", top_n=10)
-    assert (capped.exported_rows, len(capped.rows)) == (60, 10)
+    assert (capped.exported_rows, len(capped.rows)) == (61, 10)
     # A cap ABOVE what the export had: the export is short, not wrong.
     over = _export("gainers", top_n=1000)
-    assert (over.exported_rows, len(over.rows)) == (60, 60)
+    assert (over.exported_rows, len(over.rows)) == (61, 61)
     assert list(capped.rows) == list(full.rows[:10]) == list(over.rows[:10])
     assert full.export_sha256 == capped.export_sha256 == over.export_sha256
     assert list(full.rows) == list(over.rows)
@@ -300,19 +307,19 @@ def test_export_counts_record_min_top_n_exported_per_side():
     the source, not a failure of the run."""
     counts = export_counts([_export(side, top_n=60) for side in SIDES], top_n=60)
     assert set(counts) == {"gainers", "losers"}
-    assert [(c.exported, c.top_n, c.expected) for c in counts.values()] == [(60, 60, 60), (60, 60, 60)]
+    assert [(c.exported, c.top_n, c.expected) for c in counts.values()] == [(61, 60, 60), (61, 60, 60)]
     # the export ran out first
     short = export_counts([_export(side, top_n=1000) for side in SIDES], top_n=1000)
-    assert all((c.exported, c.top_n, c.expected) == (60, 1000, 60) for c in short.values())
+    assert all((c.exported, c.top_n, c.expected) == (61, 1000, 61) for c in short.values())
     # the cap came first
     capped = export_counts([_export(side, top_n=10) for side in SIDES], top_n=10)
-    assert all((c.exported, c.top_n, c.expected) == (60, 10, 10) for c in capped.values())
+    assert all((c.exported, c.top_n, c.expected) == (61, 10, 10) for c in capped.values())
 
 
 def test_export_counts_refuse_a_disagreement_and_a_repeated_side():
     export = _export("gainers", top_n=60)
     # the count and the rows kept must tell the same story
-    with pytest.raises(ReplayInputError, match="kept 60 of 60"):
+    with pytest.raises(ReplayInputError, match="kept 60 of 61"):
         export_counts([export], top_n=10)
     with pytest.raises(ReplayInputError, match="two exports for side"):
         export_counts([export, export], top_n=60)

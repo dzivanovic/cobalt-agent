@@ -14,8 +14,9 @@ path. Every assertion below is against committed real-shape exports
 are both real 151-column screener exports, and since AT-1 2.5 re-cut the
 movers fixtures at the radar's real column set BOTH carry `Asset Type`
 and `Industry`. The movers cut is what gives tables A and B their first
-real rows — 29 fund rows in 60 — so the report's row rendering is no
-longer proved by hand-built report objects alone.
+real rows — 29 fund rows in 61 — so the report's row rendering is no
+longer proved by hand-built report objects alone, and since FR-1 its
+appended 61st row per side gives table C(ii) a real row too.
 
 No committed export lacks the two columns any more, so the "counted and
 listed, never silently skipped" path is exercised by `narrowed_export`:
@@ -37,14 +38,29 @@ FIX = ROOT / "tests" / "fixtures"
 CUTTER = FIX / "replay" / "_cut_p4_fixtures.py"
 POOL_METRICS = FIX / "radar" / "pool-metrics.real-shape.csv"
 MOVERS = FIX / "replay" / "movers-gainers.real-shape.csv"
+MOVERS_BOTH = [FIX / "replay" / f"movers-{side}.real-shape.csv" for side in ("gainers", "losers")]
 
 #: Data-row counts of the two committed fixtures, as cut.
 POOL_METRICS_ROWS = 20
-MOVERS_ROWS = 60
+#: 61, not 60: the export's top 60 plus the one row the cutter appends
+#: per side for the blank-`Asset Type` fund class (AT-1 FR-1).
+MOVERS_ROWS = 61
 #: Rows of the movers cut whose `Asset Type` is non-blank, and the two
 #: values they carry. Real content of the committed fixture.
 MOVERS_FUND_ROWS = 29
 MOVERS_ASSET_TYPES = [("CryptoCurrency", 5), ("Equities (Stocks)", 24)]
+#: The appended row: a fund named by `Industry` alone. It is table B's
+#: `<blank>` row and table C(ii)'s only row in this cut, and it carries a
+#: ticker none of the 29 non-blank rows carries.
+MOVERS_BLANK_TYPE_FUND_ROWS = 1
+MOVERS_DISTINCT_FUND_TICKERS = MOVERS_FUND_ROWS + MOVERS_BLANK_TYPE_FUND_ROWS
+#: The candidate not-equity rule the hub is weighing (R16 "C"): a row is
+#: dropped when its `Asset Type` is non-blank OR its `Industry` is the
+#: fund industry. `MOVERS_DROPPED` is how many rows of the committed
+#: movers cut it drops; `MOVERS_STOCK_ROWS_HIT` is how many of those are
+#: table C(i) — an ordinary stock, dropped by mistake.
+MOVERS_DROPPED = MOVERS_FUND_ROWS + MOVERS_BLANK_TYPE_FUND_ROWS
+MOVERS_STOCK_ROWS_HIT = 0
 #: The narrowed copy's name, asserted on the report's own line.
 NARROWED = "movers-gainers.no-asset-type.csv"
 
@@ -234,20 +250,25 @@ def test_render_reports_the_file_without_the_columns_by_name(narrowed_export):
 
 
 def test_the_movers_fixture_gives_tables_a_and_b_real_rows():
-    """29 of the movers cut's 60 rows carry a non-blank `Asset Type`, in
-    two values. Both are ALSO `Industry = Exchange Traded Fund`, so the
-    two fund signals agree on every row of this cut and table C is empty
-    — the real disagreement rows the hub counted over the whole radar
-    cache are not in these 60 (see ESCALATE)."""
+    """29 of the movers cut's 61 rows carry a non-blank `Asset Type`, in
+    two values, and every one of them is ALSO `Industry = Exchange Traded
+    Fund` — so table A is those two values and table C(i) stays empty.
+    The 61st row is the appended blank-`Asset Type` fund: it is in table
+    B under `<blank>` and in table C(ii), and it is why the two fund
+    signals no longer agree on every row of this cut."""
     report = cutter.collect_evidence([MOVERS])
     assert report.rows_with_columns == MOVERS_ROWS
-    assert [(row.asset_type, row.rows) for row in report.table_b] == MOVERS_ASSET_TYPES
+    assert [(row.asset_type, row.rows) for row in report.table_b] == [
+        (cutter.BLANK, MOVERS_BLANK_TYPE_FUND_ROWS)
+    ] + MOVERS_ASSET_TYPES
     assert [(row.asset_type, row.industry, row.rows) for row in report.table_a] == [
         (asset_type, cutter.FUND_INDUSTRY, rows) for asset_type, rows in MOVERS_ASSET_TYPES
     ]
-    assert report.distinct_fund_tickers == MOVERS_FUND_ROWS
+    assert report.distinct_fund_tickers == MOVERS_DISTINCT_FUND_TICKERS
     assert report.distinct_asset_types == len(MOVERS_ASSET_TYPES)
-    assert report.table_c_total == 0
+    assert len(report.table_c_non_blank_not_fund) == MOVERS_STOCK_ROWS_HIT
+    assert len(report.table_c_fund_blank_type) == MOVERS_BLANK_TYPE_FUND_ROWS
+    assert report.table_c_total == MOVERS_BLANK_TYPE_FUND_ROWS
 
 
 def test_a_real_export_renders_non_empty_a_and_b_tables():
@@ -256,10 +277,94 @@ def test_a_real_export_renders_non_empty_a_and_b_tables():
     text = cutter.render_evidence(cutter.collect_evidence([MOVERS]))
     assert f"| Equities (Stocks) | {cutter.FUND_INDUSTRY} | 24 |" in text.splitlines()
     assert "| CryptoCurrency | 5 |" in text.splitlines()
-    # only table C's two halves are empty
-    assert [line for line in text.splitlines() if line == "(none)"] == ["(none)"] * 2
+    # only table C(i) is empty: the appended row fills C(ii) from a real
+    # artifact, so the disagreement table renders rows here too
+    assert [line for line in text.splitlines() if line == "(none)"] == ["(none)"]
     for ticker in _movers_tickers():
         assert ticker not in cutter.summarize_evidence(cutter.collect_evidence([MOVERS]))
+
+
+# ---------------------------------------------------------------------
+# the candidate rule's own two numbers (R16 "C")
+# ---------------------------------------------------------------------
+
+
+def test_dropped_under_new_rule_counts_every_row_the_candidate_rule_drops():
+    """`non-blank Asset Type OR Industry = the fund industry`, counted
+    over the committed real-shape exports. The radar fixture contributes
+    nothing (no fund row anywhere in it), so the whole count is the
+    movers cut's."""
+    assert cutter.collect_evidence([POOL_METRICS]).dropped_under_new_rule == 0
+    report = cutter.collect_evidence([POOL_METRICS, MOVERS])
+    assert report.dropped_under_new_rule == MOVERS_DROPPED
+
+
+def test_the_summary_line_carries_the_rule_count_and_the_stock_rows_it_hits():
+    """Both numbers on the one stdout line: what the rule would drop, and
+    how many of those are ordinary stocks (table C(i)) — the number that
+    decides whether the rule is safe."""
+    summary = cutter.summarize_evidence(cutter.collect_evidence([MOVERS]))
+    assert f"dropped under the new rule: {MOVERS_DROPPED}" in summary
+    assert f"stock rows hit: {MOVERS_STOCK_ROWS_HIT}" in summary
+
+
+def test_the_report_file_carries_the_rule_count_and_the_stock_rows_it_hits():
+    lines = cutter.render_evidence(cutter.collect_evidence([MOVERS])).splitlines()
+    assert (
+        f"- rows dropped under the new rule (non-blank `Asset Type` OR `Industry` = "
+        f"{cutter.FUND_INDUSTRY}): {MOVERS_DROPPED}"
+    ) in lines
+    assert (
+        f"- of those, stock rows hit (table C(i), a non-fund `Industry`): "
+        f"{MOVERS_STOCK_ROWS_HIT}"
+    ) in lines
+
+
+def test_both_movers_cuts_hold_a_real_blank_type_fund_row():
+    """The half of the candidate rule that the `Asset Type` column alone
+    cannot carry: a fund Finviz left the `Asset Type` cell blank on, named
+    only by `Industry`. It is table C(ii)'s whole class, and a cut without
+    one would leave that branch of the rule untested against a real row.
+    The cutter's `movers` mode guarantees one per side, appended from the
+    same side's raw export when the top rows hold none. Counts only
+    (L32)."""
+    for path in MOVERS_BOTH:
+        with path.open(newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+        blank_type_funds = [
+            row
+            for row in rows
+            if not (row[cutter.ASSET_TYPE_COL] or "").strip()
+            and (row[cutter.INDUSTRY_COL] or "").strip() == cutter.FUND_INDUSTRY
+        ]
+        assert len(blank_type_funds) >= 1, f"{path.name}: no blank-`Asset Type` fund row"
+
+
+def test_a_stock_row_hit_is_counted_on_both_surfaces():
+    """Renderer and summary only — NOT a parser tested against an
+    invented export (L45). No committed real-shape export carries a table
+    C(i) row, so the number that would decide the rule would otherwise
+    render untested; the report object is built directly and its cells
+    are labels, not data."""
+    report = cutter.EvidenceReport(
+        files_read=1,
+        rows_with_columns=1,
+        dropped_under_new_rule=1,
+        table_c_non_blank_not_fund=[
+            cutter.DisagreementRow(
+                file="screen.csv",
+                ticker="<none>",
+                asset_type="Equity",
+                industry="Shell Companies",
+            )
+        ],
+    )
+    assert "dropped under the new rule: 1" in cutter.summarize_evidence(report)
+    assert "stock rows hit: 1" in cutter.summarize_evidence(report)
+    assert (
+        "- of those, stock rows hit (table C(i), a non-fund `Industry`): 1"
+        in cutter.render_evidence(report).splitlines()
+    )
 
 
 # ---------------------------------------------------------------------

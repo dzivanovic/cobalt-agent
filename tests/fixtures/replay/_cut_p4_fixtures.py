@@ -82,10 +82,11 @@ THIRD MODE, `movers` (AT-1 2.5). Re-cuts ONLY the two movers fixtures,
 from the re-fetched raw exports above, and touches nothing else: the
 no-argument mode still needs raw inputs that no longer all exist, so
 re-cutting everything is not a way to fix one fixture. Same rules as the
-other cuts (`_anonymize`, first `MOVERS_ROWS` rows) plus the guarantee
-that at least one real row with a non-blank `Asset Type` is in the cut —
-see `cut_movers`. The fixture is never hand-edited: a divergence is
-fixed here and the mode re-run.
+other cuts (`_anonymize`, first `MOVERS_ROWS` rows) plus a guaranteed
+real row for every class in `GUARANTEED_ROW_CLASSES` — a non-blank
+`Asset Type`, and a fund named by `Industry` alone with the `Asset Type`
+cell left blank — see `cut_movers`. The fixture is never hand-edited: a
+divergence is fixed here and the mode re-run.
 """
 
 from __future__ import annotations
@@ -96,7 +97,7 @@ import json
 import re
 import sys
 from collections import Counter
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -244,6 +245,14 @@ def cut_pool_metrics() -> None:
     print(f"wrote {dest} ({len(trimmed) - 1} rows)")
 
 
+#: Finviz column names and the one `Industry` value that names a fund.
+#: Read by BOTH the movers cut (its guaranteed row classes) and the
+#: read-only `evidence` mode below — one definition, never a second copy.
+ASSET_TYPE_COL = "Asset Type"
+INDUSTRY_COL = "Industry"
+TICKER_COL = "Ticker"
+FUND_INDUSTRY = "Exchange Traded Fund"
+
 #: Data rows taken from the top of each movers export. Enough to carry
 #: the day's real top of the tape without committing 11,000 rows.
 MOVERS_ROWS = 60
@@ -257,13 +266,37 @@ def _one_row(header: str, line: str) -> dict:
     return row
 
 
-def _first_fund_row(header: str, data: list[str], taken: int) -> tuple[int, str] | None:
-    """The first row BELOW the cut whose `Asset Type` is non-blank, or
-    None if the cut already holds one — or the file holds none at all."""
-    if any((_one_row(header, line).get(ASSET_TYPE_COL) or "").strip() for line in data[:taken]):
+def _has_asset_type(row: dict) -> bool:
+    """A fund Finviz named in the `Asset Type` column."""
+    return bool((row.get(ASSET_TYPE_COL) or "").strip())
+
+
+def _is_blank_type_fund(row: dict) -> bool:
+    """A fund Finviz named in `Industry` ALONE, leaving `Asset Type`
+    blank — the class table C(ii) counts, and the only rows that tell a
+    `not_equity` rule reading one column from a rule reading both."""
+    return not _has_asset_type(row) and (row.get(INDUSTRY_COL) or "").strip() == FUND_INDUSTRY
+
+
+#: Row classes at least one real example of which must be in every
+#: movers cut, with the phrase stdout names each by. A cut missing one
+#: leaves that branch of the not-equity question asserted against
+#: nothing.
+GUARANTEED_ROW_CLASSES = (
+    (f"a non-blank {ASSET_TYPE_COL}", _has_asset_type),
+    (f"a blank {ASSET_TYPE_COL} with {INDUSTRY_COL} = {FUND_INDUSTRY}", _is_blank_type_fund),
+)
+
+
+def _first_row_below(
+    header: str, data: list[str], taken: int, matches: Callable[[dict], bool]
+) -> tuple[int, str] | None:
+    """The first row BELOW the cut that `matches`, or None if the cut
+    already holds one — or the file holds none at all."""
+    if any(matches(_one_row(header, line)) for line in data[:taken]):
         return None
     for offset, line in enumerate(data[taken:], start=taken + 1):
-        if (_one_row(header, line).get(ASSET_TYPE_COL) or "").strip():
+        if matches(_one_row(header, line)):
             return offset, line
     return None
 
@@ -278,13 +311,19 @@ def cut_movers() -> None:
     fixture this script cuts, so the movers header matches the radar
     export fixture's exactly.
 
-    A real row with a non-blank `Asset Type` is guaranteed to be in the
-    cut. Finviz fills that column only for funds, so a cut without one
-    would leave every "reads Asset Type when present" claim untested. If
-    the top rows hold none, the first one further down the file is
-    APPENDED, out of rank order, and stdout says so; if the file holds
-    none at all, the cut is what exists and stdout says that instead. A
-    row is never invented.
+    Every class in `GUARANTEED_ROW_CLASSES` is guaranteed a real row in
+    the cut: a non-blank `Asset Type` (Finviz fills that column only for
+    funds, so a cut without one would leave every "reads Asset Type when
+    present" claim untested) and a fund named by `Industry` alone with a
+    blank `Asset Type` (the case a one-column rule misses). If the top
+    rows hold none of a class, the first one further down the file is
+    APPENDED and stdout says so; if the file holds none at all, the cut
+    is what exists and stdout says that instead. A row is never invented.
+
+    An appended row is a lower-ranked row of the same export, so it
+    extends the tail in the export's own order and `parse_movers`' sort
+    check still passes — but it sits at a rank the raw file never gave
+    it, which is why appends are counted on stdout rather than silent.
     """
     for side in ("gainers", "losers"):
         raw_text = (SCRATCH / f"movers-{side}-raw.csv").read_text()
@@ -298,25 +337,32 @@ def cut_movers() -> None:
         assert _anonymize(header) == header, f"movers-{side}: _anonymize rewrote the header row"
 
         trimmed = data[:MOVERS_ROWS]
-        appended = _first_fund_row(header, data, MOVERS_ROWS)
-        if appended is not None:
-            trimmed = trimmed + [appended[1]]
+        notes: list[str] = []
+        appends: list[tuple[int, str]] = []
+        for label, matches in GUARANTEED_ROW_CLASSES:
+            found = _first_row_below(header, data, MOVERS_ROWS, matches)
+            if found is not None:
+                appends.append(found)
+                notes.append(f"appended data row {found[0]} for {label}")
+            elif any(matches(_one_row(header, line)) for line in trimmed):
+                notes.append(f"{label}: already in the top rows")
+            else:
+                notes.append(f"NO row with {label} exists in the raw export — cut what exists")
+        # Ranked order: an append taken from further down the file keeps
+        # the export's own order only if the appends go back in file order.
+        trimmed = trimmed + [line for _, line in sorted(appends)]
         dest = HERE / f"movers-{side}.real-shape.csv"
         dest.write_text(_anonymize("".join([header] + trimmed)))
 
-        funds = sum(
-            1 for line in trimmed if (_one_row(header, line).get(ASSET_TYPE_COL) or "").strip()
-        )
-        note = (
-            f"appended data row {appended[0]} for its non-blank {ASSET_TYPE_COL}"
-            if appended is not None
-            else f"no {ASSET_TYPE_COL} row appended"
-        )
-        if funds == 0:
-            note = f"NO non-blank {ASSET_TYPE_COL} row exists in the raw export — cut what exists"
+        rows = [_one_row(header, line) for line in trimmed]
+        funds = sum(1 for row in rows if _has_asset_type(row))
+        blank_type_funds = sum(1 for row in rows if _is_blank_type_fund(row))
         print(
             f"wrote {dest} ({len(trimmed)} rows, {len(records[0])} columns, "
-            f"{funds} with a non-blank {ASSET_TYPE_COL}; {note})"
+            f"{funds} with a non-blank {ASSET_TYPE_COL}, "
+            f"{blank_type_funds} blank-{ASSET_TYPE_COL} {FUND_INDUSTRY}; "
+            + "; ".join(notes)
+            + ")"
         )
 
 
@@ -343,11 +389,6 @@ RADAR_CACHE_DIR = Path("/Users/cobalt/cobalt/data/radar-cache")
 EVIDENCE_SCRATCH_INPUTS = ("movers-gainers-raw.csv", "movers-losers-raw.csv")
 
 EVIDENCE_OUT = SCRATCH / "asset-type-evidence.md"
-
-ASSET_TYPE_COL = "Asset Type"
-INDUSTRY_COL = "Industry"
-TICKER_COL = "Ticker"
-FUND_INDUSTRY = "Exchange Traded Fund"
 
 #: Rendered in place of an empty `Asset Type` so a blank is never
 #: invisible in a table.
@@ -395,6 +436,10 @@ class EvidenceReport(BaseModel):
     rows_without_columns: int = 0
     distinct_fund_tickers: int = 0
     distinct_asset_types: int = 0
+    #: Rows the candidate not-equity rule would drop: `Asset Type`
+    #: non-blank OR `Industry` = the fund industry. The union of table A's
+    #: rows and table B's rows, counted once per row.
+    dropped_under_new_rule: int = 0
     table_a: list[PairCount] = []
     table_b: list[AssetTypeCount] = []
     table_c_non_blank_not_fund: list[DisagreementRow] = []
@@ -403,6 +448,13 @@ class EvidenceReport(BaseModel):
     @property
     def table_c_total(self) -> int:
         return len(self.table_c_non_blank_not_fund) + len(self.table_c_fund_blank_type)
+
+    @property
+    def stock_rows_hit(self) -> int:
+        """Rows `dropped_under_new_rule` drops that are NOT funds by
+        industry — table C(i). An ordinary stock the rule would throw
+        away, which is the cost side of the decision."""
+        return len(self.table_c_non_blank_not_fund)
 
 
 def _read_csv(path: Path) -> tuple[list[str], list[dict]]:
@@ -439,6 +491,7 @@ def collect_evidence(
     non_blank_not_fund: list[DisagreementRow] = []
     fund_blank_type: list[DisagreementRow] = []
     files_read = 0
+    dropped = 0
 
     for path in paths:
         files_read += 1
@@ -460,6 +513,7 @@ def collect_evidence(
                 fund_types[asset_type or BLANK] += 1
             if not (asset_type or is_fund_industry):
                 continue
+            dropped += 1
             fund_tickers.add(ticker)
             if asset_type and not is_fund_industry:
                 non_blank_not_fund.append(
@@ -488,6 +542,7 @@ def collect_evidence(
         rows_without_columns=rows_without,
         distinct_fund_tickers=len(fund_tickers),
         distinct_asset_types=len(asset_types),
+        dropped_under_new_rule=dropped,
         table_a=[
             PairCount(asset_type=at, industry=ind, rows=n)
             for (at, ind), n in sorted(pairs.items())
@@ -534,6 +589,13 @@ def render_evidence(report: EvidenceReport) -> str:
         "",
         f"- distinct fund tickers (a row in table A or table B): {report.distinct_fund_tickers}",
         f"- distinct non-blank `Asset Type` values: {report.distinct_asset_types}",
+        "",
+        "## 2a. The candidate rule",
+        "",
+        f"- rows dropped under the new rule (non-blank `Asset Type` OR `Industry` = "
+        f"{FUND_INDUSTRY}): {report.dropped_under_new_rule}",
+        f"- of those, stock rows hit (table C(i), a non-fund `Industry`): "
+        f"{report.stock_rows_hit}",
         "",
         "## 3. Table A — (`Asset Type`, `Industry`) pairs, `Asset Type` non-blank",
         "",
@@ -590,7 +652,9 @@ def summarize_evidence(report: EvidenceReport) -> str:
         f"(without the columns: {report.rows_without_columns}); "
         f"distinct fund tickers: {report.distinct_fund_tickers}; "
         f"distinct Asset Type values: {report.distinct_asset_types}; "
-        f"table C total: {report.table_c_total}"
+        f"table C total: {report.table_c_total}; "
+        f"dropped under the new rule: {report.dropped_under_new_rule}; "
+        f"stock rows hit: {report.stock_rows_hit}"
     )
 
 

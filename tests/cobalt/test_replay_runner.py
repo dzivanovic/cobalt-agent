@@ -400,29 +400,29 @@ def test_the_result_records_what_each_export_had_and_how_many_rows_that_allows()
     """Bookkeeping, never selection: the run records each side's own
     export row count and `min(top_n, exported)` beside it, so a short
     side is a fact in `job.result` instead of a hand count of the CSV."""
-    deps, _ = fake_deps()                                   # the fixtures are 60-row exports, top_n 60
+    deps, _ = fake_deps()                                   # the fixtures are 61-row exports, top_n 60
     result = run_nightly(DAY, dry_run=False, deps=deps)
-    assert _side_counts(result) == {"gainers": (60, 60, 60), "losers": (60, 60, 60)}
+    assert _side_counts(result) == {"gainers": (61, 60, 60), "losers": (61, 60, 60)}
     assert result.movers == sum(c.expected for c in result.movers_by_side.values()) == 120
 
     # a cap ABOVE what Finviz returned: the export ran out first, and the
     # expected stored count follows the export, not the cap
     deps, _ = fake_deps(settings={"radar.benchmark": {"top_n": 1000, "min_move_pct": 30}})
     short = run_nightly(DAY, dry_run=False, deps=deps)
-    assert _side_counts(short) == {"gainers": (60, 1000, 60), "losers": (60, 1000, 60)}
-    assert short.movers == 120
+    assert _side_counts(short) == {"gainers": (61, 1000, 61), "losers": (61, 1000, 61)}
+    assert short.movers == 122
 
     # a cap BELOW it: the cap is what the day may store
     deps, _ = fake_deps(settings={"radar.benchmark": {"top_n": 10, "min_move_pct": 30}})
     capped = run_nightly(DAY, dry_run=False, deps=deps)
-    assert _side_counts(capped) == {"gainers": (60, 10, 10), "losers": (60, 10, 10)}
+    assert _side_counts(capped) == {"gainers": (61, 10, 10), "losers": (61, 10, 10)}
     assert capped.movers == 20
 
 
 def test_a_dry_run_and_a_retained_export_run_record_the_counts_too():
     deps, calls = fake_deps()
     dry = run_nightly(DAY, dry_run=True, deps=deps, live=True)
-    assert _side_counts(dry) == {"gainers": (60, 60, 60), "losers": (60, 60, 60)}
+    assert _side_counts(dry) == {"gainers": (61, 60, 60), "losers": (61, 60, 60)}
     assert "movers_store.reconcile" not in calls            # still writes nothing
 
     deps, calls = fake_deps()
@@ -436,8 +436,8 @@ def test_the_recorded_counts_round_trip_through_job_result():
     result = run_nightly(DAY, dry_run=False, deps=deps)
     payload = result.job_result()
     assert payload["movers_by_side"] == {
-        "gainers": {"exported": 60, "top_n": 60, "expected": 60},
-        "losers": {"exported": 60, "top_n": 60, "expected": 60},
+        "gainers": {"exported": 61, "top_n": 60, "expected": 60},
+        "losers": {"exported": 61, "top_n": 60, "expected": 60},
     }
     assert ReplayResult.model_validate(payload) == result    # what `job.result` stores replays
 
