@@ -10,6 +10,54 @@ Both are idempotent (Astra R1-3): `IF NOT EXISTS` / `OR REPLACE` everywhere, and
 
 The 0007 reverse deletes radar-origin cards first (their transitions, stop edits, dots and taps cascade). It restores the old `NOT NULL`s only after that. The 0006 reverse clears `failed_stage='evaluate'` before restoring the 0004 CHECK.
 
+## 2026-09-19 — the append-only Bar Archiver adds 0010 and 0011
+
+The registered list, in `FORWARD` order:
+
+| # | file | what it creates | side | rollback |
+|---|---|---|---|---|
+| 0001 | `0001_schemas.sql` | schemas, roles, grants, `"user".traders` | both | none (deliberate) |
+| 0002 | `0002_move_tables.sql` | the twelve tables onto their sides + `user_id` | both | catalog-only reverse |
+| 0003 | `0003_heartbeat_vault_outcome.sql` | durable heartbeat vault delivery | system | drops the two columns |
+| 0004 | `0004_radar_pool.sql` | `radar_pool`, `radar_membership`, account-mode stamps | system | bounded destructive |
+| 0005 | `0005_heartbeat_note_absent.sql` | the benign note-absence outcome | system | restores the 0003 domain |
+| 0006 | `0006_radar_score.sql` | the scoring seam + empty desk tables | system | drops the seam |
+| 0007 | `0007_radar_cards.sql` | radar cards, dots, taps, receipt, views | user | deletes radar cards, drops the columns |
+| **0010** | **`0010_archive_progress.sql`** | **`system.archive_progress`** — the archiver's own watermark per (ticker, interval) | **system** | **`DROP TABLE` of that one table** |
+| **0011** | **`0011_archive_incidents.sql`** | **`system.archive_incidents`** — the five kinds, one unresolved row per condition | **system** | **`DROP TABLE` of that one table** |
+
+**`0008`/`0009` are missing on purpose.** They belong to the unmerged
+branch `sprint-2/p4` and are never used here. `FORWARD`/`REVERSE` are
+EXPLICIT ordered tuples and nothing in the suite asserts contiguity, so
+the gap is legal; `_rollback_paths` selects by numeric prefix, so
+`--down-to 0007` reverses exactly 0011 then 0010 whether or not P4's
+pair is present. The branch that lands second rebases and keeps both
+sets in numeric order — that rebase, and the integrated suite on the
+combined tree, are the gate.
+
+Both new migrations are ADDITIVE in the strongest sense the suite can
+check: `test_archiver_migrations.py::test_neither_migration_touches_bars_or_any_existing_object`
+asserts neither file contains `ALTER TABLE system.bars`, `DROP`,
+`UPDATE`, `DELETE` or `radar_pool`. `system.bars` — its columns, PK and
+indexes — is explicitly out of scope of the append-only design (§1
+non-goals), and partitioning is Sunday's tribunal.
+
+Both are SYSTEM side (L32: bookkeeping ABOUT market data, nothing of one
+trader's choice) and **`cobalt_user` is granted nothing on either** — a
+test asserts the string does not appear in any of the four files. 0011's
+`BIGSERIAL` sequence is granted to `cobalt_system` explicitly, following
+0006's pattern rather than relying on 0001's default privileges.
+
+0011's uniqueness is a PARTIAL unique index `WHERE resolved_at IS NULL`
+with **`NULLS NOT DISTINCT`** (Postgres 15+). The NULL clause is
+load-bearing: an `empty_export` incident has no span, so its
+`range_start` is NULL, and under the default rule a target failing empty
+for a month would open thirty rows for one condition.
+
+Both tables are declared in `placement.py`'s `CREATED_TABLES`, so the
+migrate proof carries them and a `--down-to 0007` reads `DROPPED` rather
+than `CHANGED` for each.
+
 ## What it does
 Holds the DATABASE-WIDE migrations — the two-schema split itself
 (ADR-0008). `FORWARD` is `0001_schemas.sql` then

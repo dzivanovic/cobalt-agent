@@ -80,6 +80,12 @@ CREATED_TABLES: dict[str, Side] = {
     # db_migrations/0009_picks_missed.sql — one trader's record (S2-P4 R2/R4)
     "picks": Side.USER,
     "missed": Side.USER,
+    # db_migrations/0010 + 0011 — the append-only Bar Archiver's
+    # bookkeeping (FINAL design 2026-09-19 §11). SYSTEM, both: market-data
+    # bookkeeping about `system.bars`, nothing of one trader's choice
+    # (L32). `cobalt_user` is granted nothing on either.
+    "archive_progress": Side.SYSTEM,
+    "archive_incidents": Side.SYSTEM,
 }
 
 #: VIEWS created by database-wide migrations. On a side like any table

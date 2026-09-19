@@ -26,10 +26,27 @@
 `0008_radar_value_movers.rollback.sql` — drops movers_daily and both columns.
 `0009_picks_missed.sql` — "user".picks and "user".missed (S2-P4).
 `0009_picks_missed.rollback.sql` — drops both tables.
+`0010_archive_progress.sql` — the Bar Archiver's own per-(ticker,
+                         interval) watermark, system side (append-only
+                         FINAL design §4, §11). Additive.
+`0010_archive_progress.rollback.sql` — drops that one table; the next
+                         `append` night bootstraps each target again.
+`0011_archive_incidents.sql` — what an append night refused to do and
+                         why: the five kinds, one unresolved row per
+                         condition, read by the heartbeat. Additive.
+`0011_archive_incidents.rollback.sql` — drops that one table.
 
 0006/0007 are S2-P2's, 0008/0009 are S2-P4's. Both tuples stay ordered by
 version; every file is idempotent and neither 0008 nor 0009 names a P2
 object (`--down-to` selects by version, never by position).
+
+THE 0008/0009 GAP IS CLOSED. Those two numbers belonged to the then
+unmerged `sprint-2/p4`, which shipped on 2026-09-19 (deploy 2); this
+branch rebased onto it and keeps BOTH sets in numeric order, exactly as
+the gap note said the second lander would. This registry is an EXPLICIT
+ordered tuple and nothing asserts contiguity. `_rollback_paths` selects
+by the numeric prefix, so `--down-to 0009` reverses exactly 0011 then
+0010, and `--down-to 0007` reverses those two plus P4's pair.
 
 These are the DATABASE-WIDE migrations and they are the only ones that
 live outside a feature module. A module's own DDL still lives in its own
@@ -57,10 +74,14 @@ FORWARD = (
     MIGRATIONS_DIR / "0007_radar_cards.sql",
     MIGRATIONS_DIR / "0008_radar_value_movers.sql",
     MIGRATIONS_DIR / "0009_picks_missed.sql",
+    MIGRATIONS_DIR / "0010_archive_progress.sql",
+    MIGRATIONS_DIR / "0011_archive_incidents.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0011_archive_incidents.rollback.sql",
+    MIGRATIONS_DIR / "0010_archive_progress.rollback.sql",
     MIGRATIONS_DIR / "0009_picks_missed.rollback.sql",
     MIGRATIONS_DIR / "0008_radar_value_movers.rollback.sql",
     MIGRATIONS_DIR / "0007_radar_cards.rollback.sql",

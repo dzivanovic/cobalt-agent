@@ -107,4 +107,56 @@ SUITE: `uv run pytest -q tests/cobalt tests/taxonomy` → **`1609 passed, 297 sk
 in 42.20s`**. Against BASELINE: failed 0 → 0 · passed 1562 → 1609 (+47 = this chunk's tests) · skipped
 297 → 297 (this chunk adds no `requires_db` test).
 
-CONTINUE: step 2
+## Chunk M — the two additive tables (spec §11)
+
+RED FIRST: `uv run pytest -q tests/cobalt/test_archiver_migrations.py` before any SQL →
+**`48 failed, 10 skipped`** (`FileNotFoundError: …/0010_archive_progress.sql`, and the FORWARD/REVERSE
+tail assertions). The 10 `requires_db` tests SKIPPED cleanly on the red run — no collection error.
+Then GREEN: **`48 passed, 10 skipped in 0.03s`**.
+
+CONTIGUITY CHECK (the chunk's STOP condition): searched for a test asserting that the migration numbers
+are contiguous — `grep -rn "FORWARD\|REVERSE" tests/` → 4 files. **No contiguity test exists.** What does
+exist is four POSITION assertions (the tail of `FORWARD`, the head of `REVERSE`, and two bounded
+`_rollback_paths` selections). The chunk's STOP condition did not trigger; the four were re-anchored to
+assert their own property (adjacency / suffix / "nothing at or below the bound") instead of a fixed tuple
+length, each with a dated comment saying why:
+
+| test | was | now |
+|---|---|---|
+| `test_radar_score_migration.py::test_0006_and_0007_are_registered_forward_in_order` | `names[-2:] == [0006, 0007]` | `index(0007) == index(0006) + 1` (the system seam before the user cards that reference it) |
+| `test_radar_score_migration.py::test_rollback_selects_0007_then_0006_newest_first` | `REVERSE[:2] == …` | adjacency in REVERSE + suffix of each bounded selection + "nothing ≤ the bound" |
+| `test_radar_migration.py::test_rollback_selects_only_newer_files_newest_first` | fixed 4-tuple | suffix + "nothing ≤ 0003" + the full filter identity |
+| `test_tenancy.py::test_down_to_0004_selects_0007_0006_then_0005_reverse` | fixed 3-tuple | suffix + "nothing ≤ 0004" |
+
+| what the spec asks (§11) | proven by |
+|---|---|
+| `FORWARD` ends `…0007, 0010, 0011` | `test_forward_ends_0007_0010_0011` |
+| `REVERSE` begins `0011, 0010, 0007…` | `test_reverse_begins_0011_0010_0007` |
+| each new file has its rollback, both registered | `test_each_new_migration_has_its_rollback_and_both_are_registered` |
+| `--down-to 0007` selects exactly the two | `test_rollback_down_to_0007_selects_exactly_the_two_new_files` |
+| the 0008/0009 gap is legal | `test_the_registry_is_an_explicit_list_so_the_0008_0009_gap_is_legal` (numeric order asserted, contiguity not) |
+| `side_of("archive_progress")` / `("archive_incidents")` are SYSTEM | `test_both_tables_are_declared_system_side` (also asserts `CREATED_TABLES`, so the migrate proof carries them and a rollback reads DROPPED) |
+| PK `(ticker, interval)` | `test_progress_carries_its_primary_key_and_the_check` |
+| `CHECK (archived_through <= export_newest)` | same test, regex on the DDL |
+| the five incident kinds, and only those | `test_incidents_carries_the_five_kinds_and_nothing_else` (set equality on the CHECK's domain) |
+| the partial unique index `WHERE resolved_at IS NULL` | `test_incidents_has_the_partial_unique_index_on_unresolved_rows` |
+| NO grant to `cobalt_user` | `test_nothing_is_granted_to_cobalt_user` — the string does not appear in ANY of the four files |
+| 0006's ownership/grant pattern | `test_each_table_is_owned_by_the_system_role` + `test_the_incident_sequence_is_granted_to_the_system_role` |
+| additive, rollback = drop own table | `test_*_rollback_drops_only_its_own_table` (`count("DROP") == 1`) + `test_neither_migration_touches_bars_or_any_existing_object` |
+
+DESIGN DECISION taken inside the spec's words, recorded: the partial unique index carries
+**`NULLS NOT DISTINCT`** (Postgres 15+; this install is pg16). §11 says "ONE unresolved row per
+`(kind, ticker, interval, range_start)`", and an `empty_export` incident has no span — under the DEFAULT
+NULL rule a target failing empty for a month would open thirty rows for one condition.
+
+`requires_db` WRITTEN, NEVER RUN (10 tests): forward creates both on the system side and neither
+user-side · migrate twice is idempotent · `--down-to 0007` drops exactly those two, every other
+`CREATED_TABLES` relation survives, forward again restores them · owner is `cobalt_system` (×2) ·
+`cobalt_user` has no SELECT privilege (×2) · the `archived_through <= export_newest` CHECK refuses ·
+one unresolved row per key, a second allowed after resolution · the `kind` domain is enforced by the
+database.
+
+SUITE: **`1657 passed, 307 skipped, 1 xfailed, 15 warnings in 41.88s`**. Against BASELINE: failed 0 →
+0 · passed 1562 → 1657 (+95: 47 chunk S + 48 chunk M) · skipped 297 → 307 (+10, all `requires_db`).
+
+CONTINUE: step 3

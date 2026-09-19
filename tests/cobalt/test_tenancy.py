@@ -501,18 +501,30 @@ def test_0005_extends_only_the_vault_outcome_check_and_has_a_refusing_reverse():
 
 
 def test_down_to_0004_selects_0009_0008_0007_0006_then_0005_reverse():
+    """Selection is by NUMBER and newest-first, not by position in the
+    tuple. Asserted as a suffix (2026-09-19) because the registry grows at
+    the top: the archiver's 0010/0011 now precede P4's 0008/0009 and 0007
+    in REVERSE, and a tail-anchored assertion would have to be rewritten by
+    every migration that lands, which is how a real regression gets edited
+    away. The head is named too, so 0008/0009 keep their own pin."""
     from cobalt.db_migrations.cli import _rollback_paths
 
-    names = [path.name for path in _rollback_paths("0004")]
-    assert names == [
+    selected = [path.name for path in _rollback_paths("0004")]
+    names = selected
+    assert selected[:4] == [
+        "0011_archive_incidents.rollback.sql",
+        "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",
         "0008_radar_value_movers.rollback.sql",
+    ]
+    assert selected[-3:] == [
         "0007_radar_cards.rollback.sql",
         "0006_radar_score.rollback.sql",
         "0005_heartbeat_note_absent.rollback.sql",
     ]
     assert names[-1] == "0005_heartbeat_note_absent.rollback.sql"
     assert all(int(name[:4]) > 4 for name in names)
+    assert not any(name.startswith(("0004", "0003", "0002")) for name in selected)
 
 
 @requires_db

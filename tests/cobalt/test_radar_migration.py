@@ -27,15 +27,26 @@ def test_0004_created_tables_match_placement():
 
 
 def test_rollback_selects_only_newer_files_newest_first():
+    """Asserted as a SUFFIX since 2026-09-19: the archiver's 0010/0011 sit
+    ahead of 0007 in REVERSE, and the property under test is "everything
+    newer than the bound, newest first", never a fixed tuple length."""
     selected = _rollback_paths("0003")
-    assert [p.name for p in selected] == [
+    assert [p.name for p in selected][:4] == [
+        "0011_archive_incidents.rollback.sql",
+        "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",
         "0008_radar_value_movers.rollback.sql",
+    ]
+    assert [p.name for p in selected][-4:] == [
         "0007_radar_cards.rollback.sql",
         "0006_radar_score.rollback.sql",
         "0005_heartbeat_note_absent.rollback.sql",
         "0004_radar_pool.rollback.sql",
     ]
+    assert not any(p.name.startswith(("0003", "0002", "0001")) for p in selected)
+    assert selected == tuple(
+        p for p in REVERSE if not p.name.startswith(("0003", "0002", "0001"))
+    )
     assert selected == tuple(p for p in REVERSE if int(p.name[:4]) > 3)
 
 

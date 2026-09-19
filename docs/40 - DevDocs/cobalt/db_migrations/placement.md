@@ -4,6 +4,8 @@
 
 S2-P2: `radar_score_run`, `radar_score`, `desk_regime`, `desk_packet` and `desk_grade` are SYSTEM `CREATED_TABLES`; `card_dots`, `card_dot_taps` and `radar_score_receipt` are USER. The three views sit in `CREATED_VIEWS`: `radar_board_v` on the system side, `radar_cards_v` and `shadow_agreement_v` on the user side. They are in `PLACEMENT` like any table, but kept out of `CREATED_TABLES` because the migrate proof digests tables by primary key and a view has none. Every USER entry in `CREATED_TABLES` gets the same `user_id NOT NULL` + FK + GUC-default assertion as the moved tables.
 
+2026-09-19, the append-only Bar Archiver: `archive_progress` and `archive_incidents` join `CREATED_TABLES` on the SYSTEM side (created directly there by `0010`/`0011`, so a rollback's `DROP` reads `DROPPED` in the migrate proof rather than `CHANGED`). Both are SYSTEM under L32 for the same reason `bars` is — they are bookkeeping ABOUT market data (a per-(ticker, interval) watermark, and what a night refused to write), not one trader's choice — and `cobalt_user` is granted nothing on either, so a wrong-side query fails loud.
+
 ## What it does
 The map of which side every table is on. One map, three readers: the
 suite's placement test (against what the database actually holds), the
