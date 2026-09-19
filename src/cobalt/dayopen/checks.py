@@ -167,11 +167,23 @@ def check_c2_radar_membership(
     raw_lines.append(f"pool block metric ({session.value}): {metric or pool_note}")
     raw = "\n".join(raw_lines)
 
+    # The calendar read moves AHEAD of the zero-row FAIL. No session exists
+    # on a non-trading day, so no membership rows is the correct state, not a
+    # defect — 2026-09-19 (Saturday) day-open went AMBER on this check alone.
+    # C3 already carries the same guard (`windows_for` empty = not a trading
+    # day, below). A TRADING day with zero rows is still FAIL.
+    windows = clock.windows_for(report_date)
+    if not windows and count == 0:
+        return CheckResult(
+            "C2", title, Verdict.PASS,
+            f"PASS — no session today ({report_date} is not a trading day)",
+            raw,
+        )
+
     if count == 0:
         return CheckResult("C2", title, Verdict.FAIL, f"FAIL — no rows for {report_date}", raw)
 
     first_seen_et = SessionClock.to_et(first_five[0]["first_seen_at"])
-    windows = clock.windows_for(report_date)
     if windows:
         premarket_open = windows[0].start
         on_time = first_seen_et.time() >= premarket_open

@@ -34,6 +34,36 @@ the same reason — and while unruled, the band is itself an adverse
 signal that pins the proposal to the floor. Conservative in the only
 direction it is safe to be wrong.
 
+## `validate_band` / `BandError` — the band's config gate
+`validate_band(band_min, band_max)` is the ONE place the two
+`daymode.trade_count_band.*` rows are judged, called by **both** readers
+of those rows (L3): `daymode/cli.py`'s `_band()` (the 09:00 path) and
+`cobalt validate` in `src/cobalt/cli.py` (the deploy gate, which until
+2026-09-19 printed the two rows and checked nothing). Origin:
+`cto-2026-09-18.md` §18 finding F2.
+
+| band | verdict |
+|---|---|
+| both set, whole ints ≥ 0, `min <= max` | accepted |
+| both set, `min > max` | **`BandError`** — nothing can be inside an inverted band |
+| either value not a whole non-negative count (`"6"`, `2.5`, `-1`, `True`) | **`BandError`** — a `bool` is an `int` to Python and is not a count here |
+| **both** null | accepted — unruled PLACEHOLDER, itself adverse |
+| **exactly one** null (half-set) | accepted — still "not ruled yet" |
+
+Every refusal names **both keys and both values**, so the operator can
+find the two rows in `configs/cobalt/taxonomy/tunables.yaml` without
+reading code (L1: loud, and explicit about what it saw).
+
+**Why a half-set band is not (yet) refused.** Today a null on either side
+fires `trade_count_band_placeholder` and the proposal steps down. Making
+a half-set band fail loud would change what `com.cobalt.daymode-propose`
+does at 09:00 from *step down* to *job FAILED* — a day-mode outcome, and
+therefore a trading-logic change (L7). It is a DESIGN call for the desk,
+scoped out of the validation chunk deliberately. For every band
+`validate_band` accepts, `_facts` produces exactly the dict it produced
+before the validator existed; `TestABandThatIsValidChangesNothing` in
+`tests/cobalt/test_daymode.py` pins that, band by band.
+
 ## At S1
 With `enabled_modes: [reduced]` the clamp makes the proposal `reduced`
 every time, and the reason says why. The ladder logic still runs in

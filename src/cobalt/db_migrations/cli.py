@@ -71,6 +71,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import time
+from pathlib import Path
 from typing import Iterable, Iterator, Optional
 
 import psycopg
@@ -111,6 +112,64 @@ TABLE_DIGEST_EXCLUDED_COLUMNS: dict[str, tuple[str, ...]] = {
         "tunables_sha256", "settings_sha256", "health", "promoted_at",
     ),
 }
+
+#: Seconds the migrate transaction will wait for any single lock before
+#: giving up. Decided-with-veto by the CTO desk, 2026-09-19. WHY 30: a
+#: deploy takes its residents DOWN before the merge (L66), so an HONEST
+#: lock wait at that point is sub-second — 30 s is generous for the
+#: legitimate case and still short enough that a stuck deploy fails
+#: inside its own window instead of running to whatever timeout the
+#: LAUNCHER happens to carry. Before this existed the only ceiling was
+#: the Bash tool's 600 s, which is a property of whoever started the
+#: deploy and not of this code (`prod-proof-only-3-2026-09-19.md`
+#: ESCALATE 3). An ENGINE TUNABLE, not an L53 ceiling: it decides how
+#: long to wait for a lock, never what the system may do.
+DEFAULT_LOCK_TIMEOUT_S = 30
+
+#: The checkout the RUNNING `cobalt` package was imported from — derived
+#: from THIS module's own file, never from the current directory. A
+#: deploy hub `cd`s between `~/cobalt` and a worktree, and the answer to
+#: "which code just ran" must not follow it.
+CODE_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _code_line() -> str:
+    """`code: <short sha> (clean|DIRTY: n path(s)) · <repo root>`.
+
+    The LAST line of both the proof-only and the forward output, so a
+    proof report carries the code that produced it as a FIELD. Until
+    2026-09-19 the deploy could only bind a report to a commit by git
+    history — which proves when the report was COMMITTED, not which code
+    EXECUTED, and the desk had to close that gap by hand
+    (`cto-2026-09-19.md` §14).
+
+    ONE git helper, imported, never a third copy (L3):
+    `cobalt.generated.committer._git`, which takes the repo root
+    explicitly and runs `git -C`, so it is already immune to the caller's
+    working directory. The import is function-local so this module keeps
+    no import-time dependency on the `generated` package.
+
+    A GIT FAILURE NEVER FAILS A MIGRATION OR A PROOF. Whatever goes
+    wrong — not a repository, git absent, a broken index — the line reads
+    `code: UNKNOWN — <reason>`. That is explicit, and explicitly NOT a
+    plausible value (L1): an operator can tell "we could not read it"
+    from "it was clean". Refusing an UNKNOWN or a DIRTY tip belongs to
+    the DEPLOY GATE, in the desk's prompt, not to this command — a
+    migration that is otherwise fine must not be blocked by a question
+    about the checkout.
+    """
+    try:
+        from cobalt.generated.committer import _git
+
+        sha = _git(CODE_ROOT, "rev-parse", "--short", "HEAD").strip()
+        dirty = [
+            line for line in _git(CODE_ROOT, "status", "--porcelain").splitlines()
+            if line.strip()
+        ]
+        state = "clean" if not dirty else f"DIRTY: {len(dirty)} path(s)"
+        return f"code: {sha} ({state}) · {CODE_ROOT}"
+    except Exception as e:  # noqa: BLE001 — never fatal; see the docstring
+        return f"code: UNKNOWN — {type(e).__name__}: {e}"
 
 #: The schemas searched for a new-core table. A name found in more than
 #: one of them is an ERROR, not a choice — there is no look-up order.
@@ -525,8 +584,69 @@ def cmd_migrate(args: argparse.Namespace) -> None:
     NOTHING` or an `UPDATE … WHERE user_id IS NULL` that matches no row
     on a database already past `0002` — so this is a rule for the next
     migration, not a defect in these.
+
+    THE LOCK CEILING, AND WHERE THE `SET LOCAL` SITS (2026-09-19). The
+    read-write transaction issues `SET LOCAL lock_timeout` as its first
+    statement after `_connect`, forward and rollback alike — BEFORE the
+    BEFORE probe — so every lock this transaction waits for, the probe's
+    ACCESS SHARE and `_apply`'s ACCESS EXCLUSIVE alike, fails in
+    `--lock-timeout-s` seconds instead of waiting for as long as the
+    caller happens to allow.
+
+    IT USED TO SIT AFTER THE PROBE, and the reason it moved is worth
+    keeping. The property that must hold is that the BEFORE probe and the
+    migration read ONE REPEATABLE READ snapshot. A snapshot is taken once
+    per such transaction, so a statement issued after the probe cannot
+    move it — but whether a bare `SET` is itself the statement that TAKES
+    the snapshot could not be settled from a citable source by the
+    offline build that wrote this (the Postgres manual could not be read
+    from that run), so the statement was parked where the question could
+    not matter, at the cost below.
+
+    SETTLED BY EXPERIMENT ON `cobalt_dev`, 2026-09-19 (R1/R11, ops DB
+    run). Two `@requires_db` tests in `tests/cobalt/test_migrate_proof.py`
+    §12 time the snapshot against another session's commit, by reading
+    the same row's `xmin` from both sides:
+
+      `test_connects_show_server_encoding_does_not_take_the_snapshot`
+          — `_assert_utf8`'s `SHOW server_encoding`, this transaction's
+            literal first statement, does NOT take the snapshot.
+      `test_a_bare_set_local_does_not_take_the_snapshot_either`
+          — neither does a bare `SET LOCAL lock_timeout`.
+
+    A third test, `test_the_instrument_can_see_a_snapshot_that_is_already
+    _fixed`, is the negative control: once a REAL query has run, the same
+    reading DOES pin the old row version, so the two results above are an
+    observation and not a vacuous pass.
+
+    So the BEFORE probe is still the statement that takes the snapshot,
+    exactly as before the move, and the price is paid off: THE BEFORE
+    PROBE IS NOW UNDER THE CEILING. It takes ACCESS SHARE, which only an
+    ACCESS EXCLUSIVE holder — another DDL, not a resident's INSERT or
+    UPDATE — can block; before the move such a holder made the probe wait
+    with no bound at all.
+    `test_a_blocked_before_probe_is_under_the_lock_ceiling_too` holds
+    that lock for real and runs `cmd_migrate` with the probe UNSTUBBED.
+
+    `--proof-only` is deliberately NOT given a ceiling: it takes ACCESS
+    SHARE, applies nothing, and is the command a deploy preflights while
+    everything is still up. It must not start failing on a busy evening.
     """
     proof_only = args.proof_only
+    # Namespaces built by hand (tests, and any future in-process caller)
+    # need not carry the flag; the parser always sets it. The DEFAULT is
+    # the module constant either way, so there is one number, named once.
+    lock_timeout_s = getattr(args, "lock_timeout_s", DEFAULT_LOCK_TIMEOUT_S)
+    if (
+        isinstance(lock_timeout_s, bool)
+        or not isinstance(lock_timeout_s, int)
+        or lock_timeout_s < 1
+    ):
+        raise MigrationError(
+            f"--lock-timeout-s must be a whole number of seconds >= 1, got "
+            f"{lock_timeout_s!r}. 0 means wait forever — that is the defect "
+            "this flag closes."
+        )
     if proof_only and (args.rollback or args.down_to):
         raise MigrationError(
             "--proof-only takes the proof and applies NOTHING, so it cannot be "
@@ -553,11 +673,19 @@ def cmd_migrate(args: argparse.Namespace) -> None:
             conn.close()
         print()
         _print_probe(probe, dbname=dbname)
+        print(_code_line())
         return
 
     print(f"cobalt db migrate — {direction} on {dbname}")
     conn = _connect(dbname, allow_prod=args.allow_prod, read_only=False)
     try:
+        # The ceiling on every lock this transaction asks for — the
+        # BEFORE probe's ACCESS SHARE included, which is what moving it
+        # above the probe buys (R1/R11, 2026-09-19; see the docstring).
+        # `lock_timeout_s` is a validated int by the check at the top of
+        # this function, so it is interpolated directly rather than
+        # through `sql.Literal` — there is no user text here.
+        conn.execute(f"SET LOCAL lock_timeout = '{lock_timeout_s}s'")
         before = _probe_all(conn)
         _apply(conn, paths)
         after = _probe_all(conn)
@@ -581,6 +709,39 @@ def cmd_migrate(args: argparse.Namespace) -> None:
             "a scheduled one-shot, another session) and run the migration "
             f"again. Postgres said: {e}"
         ) from e
+    except psycopg.errors.LockNotAvailable as e:
+        # The other named price of a deploy-time DDL, and the one this
+        # harness used to pay in wall-clock instead of in a message:
+        # without a ceiling the statement simply waited.
+        #
+        # R5 (tribunal round 1, 2026-09-19): the diagnostic below used to
+        # read `pg_locks WHERE NOT granted`, which selects WAITING lock
+        # requests rather than the session holding the lock — and since
+        # `conn.rollback()` on the next line has already removed this
+        # transaction's own waiting row, the query could come back empty
+        # while the holder sat there untouched. It now selects GRANTED
+        # locks joined to `pg_stat_activity`, which is what an operator
+        # can still run minutes later and get an answer from.
+        conn.rollback()
+        raise MigrationError(
+            f"the migration could not get a lock within {lock_timeout_s} s: a "
+            "statement waited for a table lock it could not have (an ALTER "
+            "needs ACCESS EXCLUSIVE, which conflicts with every other lock) "
+            "and gave up when this transaction's lock_timeout fired. NOTHING "
+            "WAS APPLIED — the transaction was rolled back, so this "
+            "migration's own waiting request is already gone from pg_locks; "
+            "the HOLDER is still there. Find it: SELECT l.pid, l.mode, "
+            "l.relation::regclass, a.state, a.query FROM pg_locks l JOIN "
+            "pg_stat_activity a USING (pid) WHERE l.granted AND l.relation IS "
+            "NOT NULL; the list is not filtered by mode because an ALTER "
+            "conflicts with every other lock mode, so any granted lock on the "
+            "table it touches is enough to block it. Then stop what is holding "
+            "the lock (a resident, a scheduled one-shot, another session) and "
+            "run the "
+            f"migration again. Raising --lock-timeout-s above {lock_timeout_s} "
+            "only makes a stuck deploy wait longer. Postgres said: "
+            f"{e}"
+        ) from e
     except BaseException:
         conn.rollback()
         raise
@@ -589,6 +750,9 @@ def cmd_migrate(args: argparse.Namespace) -> None:
 
     print()
     changed = _print_proof(before, after, direction=direction)
+    # Printed BEFORE the CHANGED refusal below: a run that rolled back is
+    # exactly the run whose code an operator most needs named.
+    print(_code_line())
     if changed:
         raise MigrationError(
             f"{changed} table(s) changed content across the migration. The "
@@ -640,6 +804,15 @@ def add_parser(sub) -> None:
         help="Reverse registered migrations: heartbeat columns dropped, tables moved to public.",
     )
     migrate.add_argument(
+        "--lock-timeout-s",
+        type=int,
+        default=DEFAULT_LOCK_TIMEOUT_S,
+        metavar="N",
+        help="Seconds the migrate transaction waits for any one lock before "
+             f"failing with nothing applied (default {DEFAULT_LOCK_TIMEOUT_S}). "
+             "Not used by --proof-only. 0 is refused: it means wait forever.",
+    )
+    migrate.add_argument(
         "--proof-only",
         action="store_true",
         help="Take the proof (rows, digest, seconds) in a READ ONLY transaction "
@@ -653,6 +826,8 @@ def add_parser(sub) -> None:
 
 
 __all__ = [
+    "CODE_ROOT",
+    "DEFAULT_LOCK_TIMEOUT_S",
     "DIGEST_EXCLUDED_COLUMNS",
     "PROBE_BATCH_SIZE",
     "MigrationError",

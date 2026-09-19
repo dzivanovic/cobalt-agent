@@ -16,7 +16,8 @@ computed WITHOUT ever materialising the concatenation", and separately
 that its VALUE is byte-for-byte the one the old SQL produced, so proof
 tables printed before today stay comparable.
 
-Nine groups:
+Twelve groups (1-9 written 2026-09-18; 10-11 by the ops round-1 build and
+12 by the ops DB run, both 2026-09-19):
 
 1. THE FOLD (no database) — the client-side md5 over an iterator of row
    texts equals `md5('|'.join(rows))` exactly: zero rows, one row, many
@@ -54,6 +55,14 @@ Nine groups:
    refused instead of resolved to whichever row came first (R1), and the
    case no house could settle from reads: DDL under REPEATABLE READ after
    ANOTHER session committed to the same table (U1).
+10. `lock_timeout` ON THE MIGRATE TRANSACTION — the ceiling is set before
+   the migrations run, forward and rollback alike, and `--proof-only`
+   never gets one.
+11. THE OUTPUT NAMES THE CODE IT RAN FROM — the `code:` line.
+12. THE TRIBUNAL'S CARRIED ITEMS (R1/R11) — the one question rounds 1
+   and 2 could not answer offline, settled against `cobalt_dev`: WHICH
+   statement takes the REPEATABLE READ snapshot, and therefore whether
+   the lock ceiling can cover the BEFORE probe. It can, and now does.
 """
 
 from __future__ import annotations
@@ -996,9 +1005,17 @@ def test_a_concurrent_update_to_a_row_the_migration_updates_fails_loud(monkeypat
 JOBS_TABLE = "cobalt_jobs"
 
 #: Hard ceiling, in seconds, on the lock wait in test (g). A hang must
-#: FAIL the test, never hang the suite: the harness carries no
-#: `lock_timeout` (deliberately out of scope), so the ceiling lives here.
+#: FAIL the test, never hang the suite, so the ceiling lives here.
 LOCK_CEILING_S = 20.0
+
+#: A1 (2026-09-19, Astra): the SERVER-SIDE ceiling on test (g)'s worker
+#: connection, a little above `LOCK_CEILING_S`. `LOCK_CEILING_S` only
+#: bounds how long the MAIN thread waits; it cannot end a statement
+#: already running on the worker's connection. Without this, a lock wait
+#: that outlived the join left a backend queued for ACCESS EXCLUSIVE on
+#: `cobalt_dev` until the interpreter exited — in front of every other
+#: session wanting that table. With it, a hung ALTER ends ITSELF.
+WORKER_STATEMENT_TIMEOUT_S = 25
 
 
 def _migration_0003_sql() -> str:
@@ -1045,12 +1062,23 @@ def _touch_a_job_row(conn) -> None:
     )
 
 
-def _wait_for_a_blocked_lock(watcher, table: str, ceiling: float) -> bool:
-    """True once SOME session is waiting for a lock on `table`.
+def _wait_for_a_blocked_lock(watcher, table: str, ceiling: float, pid: int) -> bool:
+    """True once THE WORKER'S OWN backend is waiting for ACCESS EXCLUSIVE
+    on `table`.
 
     Polling the catalog rather than sleeping a guessed interval: the test
     must know the ALTER is actually BLOCKED before it releases the other
     session, or it proves nothing about waiting.
+
+    A2 (2026-09-19, Astra; `cto-2026-09-19.md` §8). This used to count
+    ANY ungranted lock on the table, in ANY mode, held by ANY session —
+    so a concurrent suite run, a stray `psql`, or the test's OWN other
+    session queueing behind something satisfied it, and the caller
+    proceeded believing it had reproduced the interleaving when it had
+    not. All three filters are now required: the backend this test
+    started (`pid`, read from the worker connection BEFORE its thread
+    starts), the mode an `ALTER TABLE` actually asks for
+    (`AccessExclusiveLock`), and not yet granted.
     """
     schema = cli._schema_of(watcher, table)
     deadline = time.perf_counter() + ceiling
@@ -1061,9 +1089,12 @@ def _wait_for_a_blocked_lock(watcher, table: str, ceiling: float) -> bool:
             FROM pg_locks l
             JOIN pg_class c ON c.oid = l.relation
             JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE c.relname = %s AND n.nspname = %s AND NOT l.granted
+            WHERE c.relname = %s AND n.nspname = %s
+              AND l.pid = %s
+              AND l.mode = 'AccessExclusiveLock'
+              AND NOT l.granted
             """,
-            (table, schema),
+            (table, schema, pid),
         ).fetchone()[0]
         if blocked:
             return True
@@ -1212,6 +1243,61 @@ def test_the_alter_waits_for_an_open_transaction_and_then_completes():
     tells a deploy nothing.
 
     EXPECTED: the ALTER blocks, then completes; no error either way.
+
+    HOW THIS TEST'S CEILINGS RELATE TO THE HARNESS'S OWN `lock_timeout`
+    (A1, 2026-09-19). They do not overlap, and that is worth stating
+    rather than assuming. This test calls `cli._connect` and executes the
+    ALTER ITSELF; it never goes through `cmd_migrate`, which is the only
+    place `SET LOCAL lock_timeout = '<DEFAULT_LOCK_TIMEOUT_S>s'` is
+    issued. So the harness's 30 s ceiling is NOT in force here at all.
+    What bounds this test, in the order the clocks run out:
+
+      1. `LOCK_CEILING_S` (20 s) — the MAIN thread's `join` gives up and
+         the test has its verdict.
+      2. `WORKER_STATEMENT_TIMEOUT_S` (25 s), set on the worker
+         connection below — the server ends a still-running ALTER by
+         itself, so no backend is left queued on `cobalt_dev`. It is
+         deliberately ABOVE (1): a legitimate wait must be reported by
+         this test, not pre-empted by the server.
+
+    WHAT (1)-BEFORE-(2) ACTUALLY GUARANTEES (R3, tribunal round 1; this
+    used to be stated unconditionally and was not true in general). The
+    two clocks do not start together: (2) starts at the server when the
+    ALTER begins executing, right after `thread.start()`, while (1) is
+    only armed once `_wait_for_a_blocked_lock` has returned AND
+    `other.commit()` has run. So (1) fires first exactly while those two
+    steps take less than the 5 s of headroom between them — which is the
+    case this test drives: the probe polls the catalog every 50 ms and
+    returns as soon as the worker's own ungranted `AccessExclusiveLock`
+    request is visible, i.e. within milliseconds of the ALTER blocking,
+    and the commit is a local round trip.
+
+    It is NOT a general guarantee, and no bound beyond the 5 s of
+    headroom is claimed here. If the probe itself ran long — its own
+    ceiling is `LOCK_CEILING_S`, and it returns False rather than early
+    when the worker's request never appears, e.g. because a THIRD
+    session already holds ACCESS EXCLUSIVE — the server's 25 s can fire
+    first. Then the worker's ALTER raises, `hung` is False, and the
+    `_probe` on the next line meets an aborted transaction: the message
+    a reader sees is a driver error, not this test's own "did not
+    finish" assertion.
+
+    CLEANUP RUNS ON EVERY PATH (R2, tribunal round 1; NESTED by F1,
+    tribunal round 2). Whatever the `try` did or raised, the `finally`
+    below cancels a still-running worker statement from the main thread,
+    rejoins, then rolls back and closes the worker's connection. It is
+    not conditional on the hung verdict: an exception from the lock probe
+    or from `other.commit()` would otherwise leave a backend queued for
+    ACCESS EXCLUSIVE past the end of the test. On the hung path the test
+    still fails with the same message.
+
+    F1 is the second half of that, and it is why the worker cleanup sits
+    in a nested `finally` rather than simply below the other three
+    statements: `other.commit()`, `other.close()` and `watcher.close()`
+    run FIRST, and if any of THEM raises, an unnested worker cleanup is
+    skipped just as surely as R2's `if hung:` used to skip it. Nesting
+    makes the cleanup independent of how closing the other two
+    connections goes.
     """
     other = db.connect_migration(env.DEV_DB_NAME)
     watcher = db.connect_migration(env.DEV_DB_NAME)
@@ -1231,10 +1317,20 @@ def test_the_alter_waits_for_an_open_transaction_and_then_completes():
     after = None
     try:
         before = cli._probe(conn, JOBS_TABLE)
+        # A1: the worker's own server-side ceiling, set on the open
+        # transaction before anything can block on it. `SET LOCAL` so it
+        # dies with this transaction and cannot leak into a later one.
+        conn.execute(f"SET LOCAL statement_timeout = '{WORKER_STATEMENT_TIMEOUT_S}s'")
+        # A2: the backend the ALTER will run on, read from the main
+        # thread BEFORE the worker thread starts — so the lock probe
+        # below can ask about THIS session and no other.
+        worker_pid = conn.execute("SELECT pg_backend_pid()").fetchone()[0]
         other.autocommit = False  # the other session's transaction stays OPEN
         _touch_a_job_row(other)
         thread.start()
-        blocked = _wait_for_a_blocked_lock(watcher, JOBS_TABLE, LOCK_CEILING_S)
+        blocked = _wait_for_a_blocked_lock(
+            watcher, JOBS_TABLE, LOCK_CEILING_S, worker_pid
+        )
         other.commit()
         committed = True
         thread.join(timeout=LOCK_CEILING_S)
@@ -1242,14 +1338,46 @@ def test_the_alter_waits_for_an_open_transaction_and_then_completes():
         if not hung:
             after = cli._probe(conn, JOBS_TABLE)
     finally:
-        if not committed:
-            other.commit()
-        other.close()
-        watcher.close()
-        # Only from THIS thread once the ALTER is done with the connection.
-        if not thread.is_alive():
-            conn.rollback()
-            conn.close()
+        try:
+            if not committed:
+                other.commit()
+            other.close()
+            watcher.close()
+        finally:
+            # R2 (tribunal round 1, 2026-09-19): the cancel + rejoin used
+            # to sit in the `try` under `if hung:`, so any exception
+            # raised between `thread.start()` and that check — from
+            # `_wait_for_a_blocked_lock`, from `other.commit()` — skipped
+            # it and left the worker's backend queued for ACCESS
+            # EXCLUSIVE on `cobalt_dev` in front of every other session.
+            # It is here now, unconditional, and there is only one copy
+            # of it (L3).
+            #
+            # F1 (tribunal round 2, folded by the DB run 2026-09-19): and
+            # it is NESTED, because R2 alone was not enough — the three
+            # statements above still ran first and unguarded, so a raise
+            # from `other.commit()`, `other.close()` or `watcher.close()`
+            # skipped this block for exactly the same reason and left
+            # exactly the same backend queued.
+            #
+            # The commit above has already released what the ALTER was
+            # waiting for, so a still-live thread at this point is one
+            # that did not get its lock anyway. `cancel()` is psycopg's
+            # documented cross-thread call, the one thing the main thread
+            # may do to a connection another thread is using. The rejoin
+            # is given the SERVER ceiling's worth of time, because that
+            # is the backstop if the cancel does not land.
+            if thread.is_alive():
+                conn.cancel()
+                thread.join(timeout=WORKER_STATEMENT_TIMEOUT_S)
+            # Only from THIS thread once the ALTER is done with the
+            # connection. After the cancel + rejoin above, the hung path
+            # reaches here with a finished thread too, so the worker's
+            # transaction is rolled back and its connection closed on
+            # every path the cancel could reach (A1).
+            if not thread.is_alive():
+                conn.rollback()
+                conn.close()
 
     assert not hung, (
         f"0003's ALTER TABLE did not finish within {LOCK_CEILING_S:.0f} s of "
@@ -1270,4 +1398,773 @@ def test_the_alter_waits_for_an_open_transaction_and_then_completes():
         "the table did not read unchanged after the lock wait: rows "
         f"{before['rows']} -> {after['rows']}, digest {before['digest']} -> "
         f"{after['digest']}"
+    )
+
+
+# ---------------------------------------------------------------------
+# 10. `lock_timeout` ON THE MIGRATE TRANSACTION (ops 2026-09-19, item c)
+# ---------------------------------------------------------------------
+#
+# ORIGIN: `prod-proof-only-3-2026-09-19.md` ESCALATE 3 — "Nothing in
+# `cli.py` sets a `lock_timeout` or a statement timeout … so a deploy
+# whose `0003` ALTER meets a heartbeat write waits indefinitely rather
+# than failing fast". The only ceiling was the Bash tool's 600 s, which
+# is a property of whoever launched the deploy, not of the code.
+#
+# THE SHAPE: the READ-WRITE migrate transaction issues
+# `SET LOCAL lock_timeout` before `_apply`'s first statement, forward and
+# rollback alike; `psycopg.errors.LockNotAvailable` is wrapped exactly as
+# `SerializationFailure` already is — rollback, then a `MigrationError`
+# that says NOTHING WAS APPLIED and names the timeout. `--proof-only`
+# takes ACCESS SHARE only and is deliberately NOT changed: it must not
+# start failing on a busy evening.
+#
+# WHERE THE STATEMENT SITS: BEFORE the BEFORE probe, since 2026-09-19.
+# It was written the other way round — the conservative placement, so
+# that the `SET` provably could not sit between the transaction's start
+# and its snapshot — and the price of that, stated rather than
+# discovered, was that THE BEFORE PROBE ITSELF WAS NOT UNDER THE TIMEOUT:
+# it takes ACCESS SHARE, which only an ACCESS EXCLUSIVE holder (another
+# DDL) can block, and against such a holder it waited unbounded. §12
+# settles the snapshot question by experiment on `cobalt_dev` (R1/R11)
+# and the statement moved; §12 (n) is the probe's own coverage test.
+# The two tests below are unchanged by the move: they assert the `SET`
+# precedes the first MIGRATION FILE, which it did before and does now.
+
+
+class _StatementRecorder:
+    """An offline stand-in for the migrate connection.
+
+    It records every statement `cmd_migrate` sends and executes none of
+    them, so the ORDER of the statements — which is the whole claim here
+    — is checkable with no database. `_apply` is left REAL: it reads the
+    registered `.sql` files off disk and hands each one to `execute`, so
+    "before the first migration file's text" means the actual text of the
+    actual file, not a stand-in for it (L45).
+    """
+
+    def __init__(self, raise_on_apply: Optional[BaseException] = None):
+        self.statements: list[str] = []
+        self.rolled_back = 0
+        self.committed = 0
+        self.closed = 0
+        self._raise_on_apply = raise_on_apply
+
+    def execute(self, query, *args, **kwargs):
+        text = query if isinstance(query, str) else str(query)
+        self.statements.append(text)
+        if self._raise_on_apply is not None and "SET LOCAL" not in text:
+            raise self._raise_on_apply
+        return None
+
+    def rollback(self):
+        self.rolled_back += 1
+
+    def commit(self):
+        self.committed += 1
+
+    def close(self):
+        self.closed += 1
+
+
+def _offline_migrate(monkeypatch, recorder, print_proof=None, **namespace):
+    """Run `cmd_migrate` with no database: the connection is the recorder
+    and both probe passes are stubbed (an empty probe dict makes every
+    verdict vacuously OK, which is what lets the commit path run).
+
+    `print_proof` overrides the proof-table stub for a test that needs to
+    see where the table lands in the output.
+    """
+    monkeypatch.setenv(env.ENV_VAR, env.DEV)
+    monkeypatch.setattr(cli, "_connect", lambda *a, **k: recorder)
+    monkeypatch.setattr(cli, "_probe_all", lambda conn: {})
+    monkeypatch.setattr(cli, "_print_proof", print_proof or (lambda *a, **k: 0))
+    fields = {
+        "proof_only": False,
+        "rollback": False,
+        "down_to": None,
+        "allow_prod": False,
+        "lock_timeout_s": cli.DEFAULT_LOCK_TIMEOUT_S,
+    }
+    fields.update(namespace)
+    return cli.cmd_migrate(argparse.Namespace(**fields))
+
+
+def _index_of(statements: list[str], needle: str) -> int:
+    for i, text in enumerate(statements):
+        if needle in text:
+            return i
+    raise AssertionError(f"no statement contains {needle!r}; sent: {statements}")
+
+
+def test_the_default_lock_timeout_is_thirty_seconds():
+    """A module constant, not a literal buried in the call — the DevDoc
+    and the deploy prompt both quote this number."""
+    assert cli.DEFAULT_LOCK_TIMEOUT_S == 30
+
+
+def test_a_forward_run_sets_lock_timeout_before_the_first_migration_file(monkeypatch):
+    recorder = _StatementRecorder()
+    _offline_migrate(monkeypatch, recorder)
+
+    first_file_text = FORWARD[0].read_text()
+    set_at = _index_of(recorder.statements, "SET LOCAL lock_timeout")
+    applied_at = recorder.statements.index(first_file_text)
+    assert set_at < applied_at, (
+        "the lock ceiling was set AFTER the first migration file had already "
+        f"been sent: statement order {recorder.statements[:3]}"
+    )
+    assert f"'{cli.DEFAULT_LOCK_TIMEOUT_S}s'" in recorder.statements[set_at]
+    assert recorder.committed == 1 and recorder.rolled_back == 0
+
+
+def test_a_rollback_run_sets_lock_timeout_too(monkeypatch):
+    """A rollback's reverse migrations are DDL as well — a deploy that
+    cannot roll back because it is waiting on a lock is the worse half of
+    the same defect."""
+    recorder = _StatementRecorder()
+    _offline_migrate(monkeypatch, recorder, rollback=True, down_to="0005")
+
+    reverse_text = cli._rollback_paths("0005")[0].read_text()
+    set_at = _index_of(recorder.statements, "SET LOCAL lock_timeout")
+    assert set_at < recorder.statements.index(reverse_text)
+
+
+def test_proof_only_sends_no_lock_timeout(monkeypatch):
+    """`--proof-only` takes ACCESS SHARE and applies nothing. Giving it a
+    lock ceiling would make the one command a deploy runs while
+    everything is still up start failing on a busy evening."""
+    recorder = _StatementRecorder()
+    monkeypatch.setenv(env.ENV_VAR, env.DEV)
+    monkeypatch.setattr(cli, "_connect", lambda *a, **k: recorder)
+    monkeypatch.setattr(cli, "_probe_all", lambda conn: {})
+    monkeypatch.setattr(cli, "_print_probe", lambda *a, **k: None)
+    args = argparse.Namespace(
+        proof_only=True, rollback=False, down_to=None, allow_prod=False,
+        lock_timeout_s=cli.DEFAULT_LOCK_TIMEOUT_S,
+    )
+    cli.cmd_migrate(args)
+
+    offenders = [s for s in recorder.statements if "lock_timeout" in s]
+    assert not offenders, f"--proof-only sent a lock ceiling: {offenders}"
+
+
+def test_a_lock_it_cannot_get_rolls_back_and_says_nothing_was_applied(monkeypatch):
+    """The `SerializationFailure` shape, for the other named price of a
+    deploy-time DDL."""
+    recorder = _StatementRecorder(
+        raise_on_apply=psycopg.errors.LockNotAvailable(
+            "canceling statement due to lock timeout"
+        )
+    )
+    with pytest.raises(cli.MigrationError) as excinfo:
+        _offline_migrate(monkeypatch, recorder)
+
+    message = str(excinfo.value)
+    assert recorder.rolled_back == 1, "the transaction was not rolled back"
+    assert recorder.committed == 0
+    assert "nothing was applied" in message.lower(), message
+    assert f"{cli.DEFAULT_LOCK_TIMEOUT_S}" in message, (
+        f"the message does not name the timeout that fired: {message}"
+    )
+    assert "pg_locks" in message, (
+        "the operator is not told how to find the session holding the lock: "
+        f"{message}"
+    )
+    # R5 (tribunal round 1, 2026-09-19). The hint used to read `pg_locks
+    # WHERE NOT granted`, which selects WAITING requests, not the holder
+    # — and by the time an operator runs it this transaction has already
+    # rolled back, so its own waiting row is gone too and the query can
+    # come back empty while a holder is sitting there. The hint must
+    # point at a GRANTED lock and name who holds it.
+    assert "NOT granted" not in message, (
+        "the hint still filters on ungranted locks, which lists waiters "
+        f"(and after this rollback, not even this one): {message}"
+    )
+    assert "pg_stat_activity" in message, (
+        "the hint names no way to see WHICH session holds the lock: "
+        f"{message}"
+    )
+    assert "l.granted" in message, (
+        f"the hint does not select granted locks: {message}"
+    )
+
+
+@pytest.mark.parametrize("bad", [0, -1, -30])
+def test_a_zero_or_negative_lock_timeout_is_refused_before_any_connection(
+    monkeypatch, bad
+):
+    """0 means "wait forever" — the very defect the flag closes — so it is
+    refused where every other malformed-argument refusal lives: before a
+    connection exists."""
+
+    def _never(*args, **kwargs):
+        raise AssertionError("a connection was opened for a refused lock ceiling")
+
+    monkeypatch.setenv(env.ENV_VAR, env.DEV)
+    monkeypatch.setattr(cli, "_connect", _never)
+    monkeypatch.setattr(db, "connect_migration", _never)
+
+    args = argparse.Namespace(
+        proof_only=False, rollback=False, down_to=None, allow_prod=False,
+        lock_timeout_s=bad,
+    )
+    with pytest.raises(cli.MigrationError) as excinfo:
+        cli.cmd_migrate(args)
+    assert "--lock-timeout-s" in str(excinfo.value)
+
+
+def test_the_cli_turns_a_refused_lock_timeout_into_failed_and_exit_1():
+    """The CLI boundary for this flag, through a REAL process, in the
+    shape of `test_the_cli_turns_a_migration_error_into_failed_and_exit_1`
+    — and like that one it needs no database, because the refusal happens
+    before any connection is opened."""
+    proc = _migrate("--lock-timeout-s", "0")
+
+    assert proc.returncode == 1, (
+        f"got {proc.returncode}\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+    )
+    assert "FAILED: MigrationError: " in proc.stderr, (
+        f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+    )
+    assert "--lock-timeout-s" in proc.stderr
+
+
+@requires_db
+def test_a_migration_that_cannot_get_its_lock_fails_in_about_a_second(monkeypatch):
+    """(j) FIRST RUN 2026-09-19, the ops DB run, once `p4-verify-0919`
+    released `cobalt_dev`. Written offline two rounds earlier and red on
+    that first run — see the connection comment below; the defect was in
+    this test, not in the harness.
+
+    Another session holds ACCESS EXCLUSIVE on the table `0003` alters, so
+    `_apply`'s ALTER cannot get its lock; with `--lock-timeout-s 1` the
+    run must FAIL in about a second instead of waiting, and the table's
+    proof must be unchanged afterwards.
+
+    `_probe_all` is stubbed deliberately, and what that means CHANGED on
+    2026-09-19 (R1/R11, the ops DB run). It used to be a necessity: the
+    `SET LOCAL` was issued AFTER the BEFORE probe, so a real probe would
+    have blocked on the ACCESS EXCLUSIVE holder with no ceiling at all.
+    The `SET LOCAL` now runs BEFORE the probe, so the stub is a
+    NARROWING, not a workaround — it keeps this test on the one property
+    it was written for, the ceiling reaching `_apply`, which is where the
+    deploy's DDL is. The probe's own coverage is a separate test, §12
+    (n), `test_a_blocked_before_probe_is_under_the_lock_ceiling_too`,
+    which runs the real `_probe_all` against the same held lock.
+    """
+    # Held before the monkeypatch below replaces `cli._connect`: the AFTER
+    # probe needs a REAL connection, and the patch is still in force when
+    # it runs (monkeypatch undoes at teardown, not mid-test).
+    real_connect = cli._connect
+
+    # NOT `db.connect_migration` for the two probes, which is what this
+    # test was written with and why its first real run (2026-09-19, the
+    # ops DB run) failed before reaching a single assertion:
+    # `NoActiveSqlTransaction: DECLARE CURSOR can only be used in
+    # transaction blocks`. `_probe` streams through a NAMED (server-side)
+    # cursor, and Postgres will not DECLARE one outside a transaction
+    # block — which is exactly what an AUTOCOMMIT connection is.
+    # `cli._connect(read_only=True)` is the harness's own probe
+    # connection, the one `--proof-only` opens.
+    reader = real_connect(env.DEV_DB_NAME, allow_prod=False, read_only=True)
+    holder = db.connect_migration(env.DEV_DB_NAME)
+    try:
+        before = cli._probe(reader, JOBS_TABLE)
+        reader.rollback()
+        reader.close()
+
+        holder.autocommit = False
+        holder.execute(
+            sql.SQL("LOCK TABLE {rel} IN ACCESS EXCLUSIVE MODE").format(
+                rel=_rel(holder, JOBS_TABLE)
+            )
+        )
+
+        conn = real_connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+        monkeypatch.setenv(env.ENV_VAR, env.DEV)
+        monkeypatch.setattr(cli, "_connect", lambda *a, **k: conn)
+        monkeypatch.setattr(cli, "_probe_all", lambda c: {})
+        monkeypatch.setattr(cli, "_print_proof", lambda *a, **k: 0)
+        args = argparse.Namespace(
+            proof_only=False, rollback=False, down_to=None, allow_prod=False,
+            lock_timeout_s=1,
+        )
+
+        started = time.perf_counter()
+        with pytest.raises(cli.MigrationError) as excinfo:
+            cli.cmd_migrate(args)
+        elapsed = time.perf_counter() - started
+
+        assert "nothing was applied" in str(excinfo.value).lower()
+        assert elapsed < LOCK_CEILING_S, (
+            f"--lock-timeout-s 1 took {elapsed:.1f} s to give up — the ceiling "
+            "is not reaching the statement that waits"
+        )
+    finally:
+        holder.rollback()
+        holder.close()
+        if not reader.closed:
+            reader.rollback()
+            reader.close()
+
+    after_conn = real_connect(env.DEV_DB_NAME, allow_prod=False, read_only=True)
+    try:
+        after = cli._probe(after_conn, JOBS_TABLE)
+    finally:
+        after_conn.rollback()
+        after_conn.close()
+    assert cli._verdict(JOBS_TABLE, before, after) == "OK", (
+        "a migration that failed on its lock left the table changed: rows "
+        f"{before['rows']} -> {after['rows']}, digest {before['digest']} -> "
+        f"{after['digest']}"
+    )
+
+
+# ---------------------------------------------------------------------
+# 11. THE OUTPUT NAMES THE CODE IT RAN FROM (ops 2026-09-19, item e)
+# ---------------------------------------------------------------------
+#
+# ORIGIN: `cto-2026-09-19.md` §14 — the deploy's git-history binding
+# proves the proof report was COMMITTED after a given sha on the branch,
+# not which code EXECUTED; the desk had to verify by hand that the
+# report's commits sat on that code. The fix is one printed line.
+#
+# A git failure NEVER fails a migration or a proof: the line reads
+# `code: UNKNOWN — <reason>`, which is explicit and is not a plausible
+# value (L1). Refusing an UNKNOWN or a DIRTY tip is the DEPLOY GATE's
+# job, in the desk's prompt, not this command's.
+
+
+def _fake_git_factory(sha="abc1234", porcelain="", raises=None):
+    def _fake_git(repo_root, *args, **kwargs):
+        if raises is not None:
+            raise raises
+        if args[:1] == ("rev-parse",):
+            return sha + "\n"
+        if args[:1] == ("status",):
+            return porcelain
+        raise AssertionError(f"unexpected git call: {args}")
+
+    return _fake_git
+
+
+def _patch_git(monkeypatch, **kwargs):
+    from cobalt.generated import committer
+
+    monkeypatch.setattr(committer, "_git", _fake_git_factory(**kwargs))
+
+
+def _proof_only_output(monkeypatch, capsys) -> list[str]:
+    recorder = _StatementRecorder()
+    monkeypatch.setenv(env.ENV_VAR, env.DEV)
+    monkeypatch.setattr(cli, "_connect", lambda *a, **k: recorder)
+    monkeypatch.setattr(cli, "_probe_all", lambda conn: {})
+    monkeypatch.setattr(cli, "_print_probe", lambda *a, **k: print("<proof table>"))
+    args = argparse.Namespace(
+        proof_only=True, rollback=False, down_to=None, allow_prod=False,
+        lock_timeout_s=cli.DEFAULT_LOCK_TIMEOUT_S,
+    )
+    cli.cmd_migrate(args)
+    return [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+
+
+def test_proof_only_ends_with_the_code_it_ran_from(monkeypatch, capsys):
+    _patch_git(monkeypatch, sha="abc1234", porcelain="")
+    lines = _proof_only_output(monkeypatch, capsys)
+
+    assert lines[-1] == f"code: abc1234 (clean) · {cli.CODE_ROOT}", (
+        f"the LAST line is not the code line: {lines[-3:]}"
+    )
+
+
+def test_a_dirty_tree_says_how_many_paths(monkeypatch, capsys):
+    _patch_git(
+        monkeypatch, sha="abc1234",
+        porcelain=" M src/cobalt/db_migrations/cli.py\n?? scratch/notes.md\n",
+    )
+    lines = _proof_only_output(monkeypatch, capsys)
+
+    assert lines[-1] == f"code: abc1234 (DIRTY: 2 path(s)) · {cli.CODE_ROOT}", lines[-1]
+
+
+def test_a_git_failure_is_unknown_and_never_fails_the_proof(monkeypatch, capsys):
+    """L1: `UNKNOWN` is explicit. It is NOT a plausible value, and it is
+    not this command's job to refuse it — the deploy gate does that."""
+    _patch_git(monkeypatch, raises=RuntimeError("not a git repository"))
+    lines = _proof_only_output(monkeypatch, capsys)  # returns => did not raise
+
+    assert lines[-1].startswith("code: UNKNOWN — "), lines[-1]
+    assert "not a git repository" in lines[-1]
+
+
+def test_the_forward_path_prints_the_same_line_after_its_proof_table(
+    monkeypatch, capsys
+):
+    _patch_git(monkeypatch, sha="deadbee", porcelain="")
+    recorder = _StatementRecorder()
+
+    def _table(*a, **k):
+        print("<proof table>")
+        return 0
+
+    _offline_migrate(monkeypatch, recorder, print_proof=_table)
+
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+    assert lines.index("<proof table>") < lines.index(
+        f"code: deadbee (clean) · {cli.CODE_ROOT}"
+    ), f"the code line does not follow the proof table: {lines}"
+    assert lines[-1] == f"code: deadbee (clean) · {cli.CODE_ROOT}"
+
+
+def test_the_code_root_is_the_package_not_the_current_directory():
+    """A deploy hub `cd`s; the answer must not follow it. `CODE_ROOT` is
+    derived from this module's own file, so it names the checkout the
+    RUNNING `cobalt` package was imported from."""
+    assert cli.CODE_ROOT == Path(cli.__file__).resolve().parents[3]
+    assert (cli.CODE_ROOT / "src" / "cobalt" / "db_migrations" / "cli.py").exists()
+
+
+def test_the_real_helper_imports_and_produces_a_line():
+    """L3: there is no third git helper — `_code_line` imports an EXISTING
+    one. This runs it for real against this checkout (no database, no
+    network), which is what proves the import carries no cycle and no
+    side effect."""
+    line = cli._code_line()
+
+    assert line.startswith("code: "), line
+    assert str(cli.CODE_ROOT) in line
+    assert ("(clean)" in line) or ("(DIRTY: " in line), line
+
+
+# ---------------------------------------------------------------------
+# 12. THE TRIBUNAL'S CARRIED ITEMS (R1/R11, 2026-09-19 DB run)
+# ---------------------------------------------------------------------
+#
+# NUMBERED 12, NOT 10. `25-packet/db-run-spec.md` §A says "place it in a
+# new section after §9, e.g. '10. …'" — but §10 (`lock_timeout` on the
+# migrate transaction) and §11 (the code line) already exist in this
+# file, written by round 1 of the same day. The CODE wins over the
+# packet; this section is appended after §11 with the next free number,
+# and the difference is an ESCALATE line in the DB-run report.
+#
+# WHAT R1/R11 ASKED. `cmd_migrate` issues `SET LOCAL lock_timeout` AFTER
+# the BEFORE probe, deliberately, because the build that wrote it was
+# offline and could not settle whether a bare `SET` is "the statement
+# that takes the REPEATABLE READ snapshot" (`cli.py`, `cmd_migrate`'s
+# docstring). The price of that placement is that the BEFORE PROBE ITSELF
+# RUNS WITH NO LOCK CEILING. `cobalt_dev` is reachable now, so the
+# question is settled here by experiment rather than by citation.
+#
+# ONE PLACE THE SPEC'S EXPERIMENT DIFFERS FROM THE CODE, and it matters
+# enough to split the question in two. The spec's step 1 says the
+# connection comes back from `cli._connect` with "no statement has run on
+# it yet". It has: `_connect` calls `_assert_utf8`, which runs `SHOW
+# server_encoding` (`cli.py:489`) — `cmd_migrate`'s own docstring says so
+# ("Today the first statement of the transaction is `SHOW
+# server_encoding`"). So a single test through `cli._connect` cannot tell
+# a snapshot taken by `SHOW` from one taken by `SET LOCAL`. Both are
+# asked, separately:
+#
+#   (k) `cli._connect` ALONE — does the `SHOW` fix the snapshot?
+#   (l) `cli._connect` + a bare `SET LOCAL lock_timeout` — does the `SET`
+#       fix it?
+#
+# THE MECHANISM, both times: session B reads the target row's `xmin`,
+# commits a row-version-only UPDATE (`_touch_a_job_row`'s cleanup-free
+# `SET last_result = last_result`, which changes `xmin` and no VALUE, so
+# the table's digest and `cobalt_dev`'s content are untouched), and reads
+# `xmin` again. Session A then runs its FIRST real query against that
+# row. The `xmin` A sees names the snapshot A got: B's NEW one means the
+# snapshot had not been taken yet, the OLD one means it had.
+
+
+def _jobs_rel(conn) -> sql.Identifier:
+    """`<schema>.cobalt_jobs`, resolved on a connection OTHER than the one
+    under test.
+
+    `_rel` runs a catalog query, and a catalog query is a statement: run
+    on session A it would be A's first statement and could take the very
+    snapshot these two tests are trying to time. Resolved once on session
+    B and reused as a literal identifier, session A's first statement is
+    the `SELECT` and nothing else.
+    """
+    return _rel(conn, JOBS_TABLE)
+
+
+def _xmin_of_the_touched_row(conn, rel: sql.Identifier) -> str:
+    """The `xmin` of the one `cobalt_jobs` row `_touch_a_job_row` updates.
+
+    `xmin` rather than a value: the no-op UPDATE is the whole point —
+    it writes a new row version while leaving every column as it was, so
+    nothing needs cleaning up afterwards, and `xmin` is the only thing
+    that moves. Read as text because an `xid` has no useful Python type.
+    """
+    row = conn.execute(
+        sql.SQL(
+            "SELECT xmin::text FROM {rel} "
+            "WHERE label = (SELECT min(label) FROM {rel})"
+        ).format(rel=rel)
+    ).fetchone()
+    assert row is not None, (
+        f"{JOBS_TABLE} has no rows, so there is no row version to watch — "
+        "run `cobalt db migrate` against this database first"
+    )
+    return row[0]
+
+
+def _snapshot_experiment(*, send_set_local: bool) -> tuple[str, str, str]:
+    """Run the (k)/(l) experiment once. Returns (before, after, seen).
+
+    `before`/`after` are B's readings of the row's `xmin` either side of
+    its own commit; `seen` is what A's FIRST real query reads. A never
+    commits — it applied nothing and has nothing to keep.
+    """
+    other = db.connect_migration(env.DEV_DB_NAME)
+    try:
+        rel = _jobs_rel(other)
+        xmin_before = _xmin_of_the_touched_row(other, rel)
+
+        conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+        try:
+            if send_set_local:
+                # The statement under test, and NOTHING else: no table is
+                # touched, which is exactly why it was unclear whether it
+                # counts as the snapshot-taking statement.
+                conn.execute("SET LOCAL lock_timeout = '5s'")
+            _touch_a_job_row(other)
+            xmin_after = _xmin_of_the_touched_row(other, rel)
+            assert xmin_after != xmin_before, (
+                "the other session's UPDATE did not write a new row version "
+                f"({xmin_before} -> {xmin_after}), so this experiment has "
+                "nothing to observe"
+            )
+            xmin_seen = _xmin_of_the_touched_row(conn, rel)
+        finally:
+            conn.rollback()
+            conn.close()
+    finally:
+        other.close()
+    return xmin_before, xmin_after, xmin_seen
+
+
+@requires_db
+def test_connects_show_server_encoding_does_not_take_the_snapshot():
+    """(k) R1/R11, first half — proved on `cobalt_dev` 2026-09-19.
+
+    `cli._connect` runs `SHOW server_encoding` before it hands the
+    connection back. `SHOW` reads a GUC, not a table, and the result
+    below says it does NOT acquire the transaction snapshot: a commit by
+    another session AFTER `_connect` returned is still visible to this
+    transaction's first real query.
+
+    That is what makes (l) a separate question rather than the same one,
+    and it is also the reason `cmd_migrate`'s old docstring could say the
+    `SET LOCAL`'s position "cannot matter" while leaving the real
+    question open.
+    """
+    xmin_before, xmin_after, xmin_seen = _snapshot_experiment(send_set_local=False)
+
+    assert xmin_seen == xmin_after, (
+        "`cli._connect`'s own `SHOW server_encoding` DID take the "
+        f"transaction's REPEATABLE READ snapshot: the first real query read "
+        f"xmin {xmin_seen}, the row version that existed before the other "
+        f"session's commit ({xmin_before}), not the one after it "
+        f"({xmin_after})."
+    )
+
+
+@requires_db
+def test_a_bare_set_local_does_not_take_the_snapshot_either():
+    """(l) R1/R11, the question itself — proved on `cobalt_dev` 2026-09-19.
+
+    A bare `SET LOCAL lock_timeout`, issued on the real harness
+    connection and followed by nothing, does NOT take the transaction's
+    REPEATABLE READ snapshot: the first real query still sees a commit
+    that landed after the `SET`.
+
+    WHAT THIS SETTLES. Moving `SET LOCAL lock_timeout` ahead of the
+    BEFORE probe in `cmd_migrate` cannot move the snapshot, because the
+    `SET` does not take one — the BEFORE probe remains the statement that
+    does, exactly as it is today. So the probe can be brought under the
+    lock ceiling at no cost to the property the whole proof rests on
+    (`test_a_commit_by_another_session_between_the_probes_is_invisible`,
+    (a) above, is what would go red if that were wrong).
+    """
+    xmin_before, xmin_after, xmin_seen = _snapshot_experiment(send_set_local=True)
+
+    assert xmin_seen == xmin_after, (
+        "a bare `SET LOCAL lock_timeout` DID take the transaction's "
+        f"REPEATABLE READ snapshot: the first real query read xmin "
+        f"{xmin_seen}, the row version that existed before the other "
+        f"session's commit ({xmin_before}), not the one after it "
+        f"({xmin_after}). `SET LOCAL` must then stay where it is, AFTER "
+        "the BEFORE probe — moving it would fix the snapshot one statement "
+        "earlier than the probe that must define it."
+    )
+
+
+@requires_db
+def test_the_instrument_can_see_a_snapshot_that_is_already_fixed():
+    """(m) THE NEGATIVE CONTROL for (k) and (l).
+
+    (k) and (l) both assert that session A sees the NEW row version. An
+    assertion like that is only evidence if the OTHER outcome is
+    reachable by the same instrument — otherwise "the snapshot was not
+    taken" and "this test cannot see a snapshot" are the same passing
+    test, and R1 would be closed on nothing (L35, L70).
+
+    So: give session A a REAL query FIRST, which is the one thing that
+    certainly does take the snapshot, and then run the identical
+    sequence. A must now be pinned to the row version that existed
+    before the other session's commit.
+    """
+    other = db.connect_migration(env.DEV_DB_NAME)
+    try:
+        rel = _jobs_rel(other)
+        xmin_before = _xmin_of_the_touched_row(other, rel)
+
+        conn = cli._connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+        try:
+            # THE DIFFERENCE from (k)/(l), and the whole control: a real
+            # query, before the other session commits anything.
+            xmin_a_first = _xmin_of_the_touched_row(conn, rel)
+            _touch_a_job_row(other)
+            xmin_after = _xmin_of_the_touched_row(other, rel)
+            xmin_a_second = _xmin_of_the_touched_row(conn, rel)
+        finally:
+            conn.rollback()
+            conn.close()
+    finally:
+        other.close()
+
+    assert xmin_a_first == xmin_before, (
+        "session A's first real query did not read the row version that was "
+        f"current when it ran: {xmin_a_first} vs {xmin_before}"
+    )
+    assert xmin_after != xmin_before, (
+        "the other session's UPDATE did not write a new row version "
+        f"({xmin_before} -> {xmin_after}), so this control observes nothing"
+    )
+    assert xmin_a_second == xmin_before, (
+        "THE INSTRUMENT IS BLIND: another session committed a new row "
+        f"version ({xmin_before} -> {xmin_after}) and session A, which had "
+        f"already taken its REPEATABLE READ snapshot, read {xmin_a_second} "
+        "instead of staying on the old one. Until this passes, (k) and (l) "
+        "prove nothing about when the snapshot is taken."
+    )
+
+
+#: The server-side backstop for (n), and the reason (n) cannot hang the
+#: suite. If `SET LOCAL lock_timeout` ever moves back BELOW the BEFORE
+#: probe, the probe waits on the ACCESS EXCLUSIVE holder with no ceiling
+#: of its own — so the server is given one, well above both the 2 s the
+#: test asks for and the ~5.5 s a whole `_probe_all` pass costs on
+#: `cobalt_dev` (measured 2026-09-19: `bars`, 1,043,443 rows, is 5.4 s of
+#: it, and `bars` sorts BEFORE `cobalt_jobs`, so the covered probe pays
+#: that before it ever reaches the blocked table). A regression then
+#: FAILS this test in ~30 s instead of hanging the suite behind the lock.
+PROBE_COVERAGE_BACKSTOP_S = 30
+
+#: What (n) asks `cmd_migrate` for. Well under `LOCK_CEILING_S`, and far
+#: enough under the backstop above that the two cannot be confused.
+PROBE_COVERAGE_LOCK_TIMEOUT_S = 2
+
+
+@requires_db
+def test_a_blocked_before_probe_is_under_the_lock_ceiling_too(monkeypatch):
+    """(n) R1/R11, what the move BUYS — the BEFORE probe now fails fast.
+
+    Another session holds ACCESS EXCLUSIVE on `cobalt_jobs`, so the
+    BEFORE probe's own ACCESS SHARE request cannot be granted. With the
+    `SET LOCAL lock_timeout` issued ahead of the probe, the run must give
+    up with the harness's `MigrationError` — through the
+    `LockNotAvailable` path — instead of waiting on the holder.
+
+    `_probe_all` IS NOT STUBBED, which is the entire point and the one
+    thing that separates this test from (j)
+    (`test_a_migration_that_cannot_get_its_lock_fails_in_about_a_second`,
+    which stubs it and therefore pins the ceiling on `_apply` only). The
+    real probe runs, reaches the locked table on its own, and waits there
+    — under the ceiling.
+    """
+    # Held before `cli._connect` is monkeypatched below, because the AFTER
+    # probe needs a REAL connection and the patch is still in force when it
+    # runs (monkeypatch undoes at teardown, not mid-test).
+    real_connect = cli._connect
+
+    holder = db.connect_migration(env.DEV_DB_NAME)
+    # NOT `db.connect_migration` for the probe: that connection is
+    # AUTOCOMMIT, and `_probe` streams through a NAMED cursor, which
+    # Postgres refuses outside a transaction block (`NoActiveSqlTransaction:
+    # DECLARE CURSOR can only be used in transaction blocks`). `cli._connect`
+    # is the harness's own read-only probe connection — the one
+    # `--proof-only` uses.
+    reader = real_connect(env.DEV_DB_NAME, allow_prod=False, read_only=True)
+    try:
+        rel = _rel(holder, JOBS_TABLE)
+        before = cli._probe(reader, JOBS_TABLE)
+        reader.rollback()
+        reader.close()
+
+        assert PROOF_TABLES.index("bars") < PROOF_TABLES.index(JOBS_TABLE), (
+            "the probe order changed; the elapsed-time budget below was "
+            f"measured with bars probed first: {PROOF_TABLES}"
+        )
+
+        holder.autocommit = False
+        holder.execute(
+            sql.SQL("LOCK TABLE {rel} IN ACCESS EXCLUSIVE MODE").format(rel=rel)
+        )
+
+        conn = real_connect(env.DEV_DB_NAME, allow_prod=False, read_only=False)
+        # Set BEFORE `cmd_migrate` touches the connection, so it is in
+        # force for the probe either way. Not `LOCAL`: `cmd_migrate`'s own
+        # `SET LOCAL lock_timeout` must remain the only LOCAL one, and
+        # this transaction is rolled back, which discards this too.
+        conn.execute(f"SET statement_timeout = '{PROBE_COVERAGE_BACKSTOP_S}s'")
+        monkeypatch.setenv(env.ENV_VAR, env.DEV)
+        monkeypatch.setattr(cli, "_connect", lambda *a, **k: conn)
+        monkeypatch.setattr(cli, "_print_proof", lambda *a, **k: 0)
+        args = argparse.Namespace(
+            proof_only=False, rollback=False, down_to=None, allow_prod=False,
+            lock_timeout_s=PROBE_COVERAGE_LOCK_TIMEOUT_S,
+        )
+
+        started = time.perf_counter()
+        with pytest.raises(cli.MigrationError) as excinfo:
+            cli.cmd_migrate(args)
+        elapsed = time.perf_counter() - started
+    finally:
+        holder.rollback()
+        holder.close()
+        if not reader.closed:
+            reader.rollback()
+            reader.close()
+
+    message = str(excinfo.value).lower()
+    assert "could not get a lock" in message, (
+        "the run failed, but not through the LockNotAvailable path — so this "
+        f"says nothing about the probe being under the ceiling: {excinfo.value}"
+    )
+    assert "nothing was applied" in message, excinfo.value
+    assert elapsed < LOCK_CEILING_S, (
+        f"the BEFORE probe took {elapsed:.1f} s to give up against an ACCESS "
+        f"EXCLUSIVE holder with --lock-timeout-s "
+        f"{PROBE_COVERAGE_LOCK_TIMEOUT_S} — the ceiling is not reaching the "
+        "probe. Budget: ~5.5 s for the probe passes that are NOT blocked "
+        f"(bars is 5.4 s of it), then {PROBE_COVERAGE_LOCK_TIMEOUT_S} s on "
+        f"{JOBS_TABLE}."
+    )
+
+    after_conn = real_connect(env.DEV_DB_NAME, allow_prod=False, read_only=True)
+    try:
+        after = cli._probe(after_conn, JOBS_TABLE)
+    finally:
+        after_conn.rollback()
+        after_conn.close()
+    assert cli._verdict(JOBS_TABLE, before, after) == "OK", (
+        "a migration that failed on its BEFORE probe left the table changed: "
+        f"rows {before['rows']} -> {after['rows']}, digest {before['digest']} "
+        f"-> {after['digest']}"
     )
