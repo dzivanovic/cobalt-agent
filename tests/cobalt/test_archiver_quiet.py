@@ -246,8 +246,35 @@ def test_the_earliest_allowed_start_is_the_later_of_the_two_constraints():
     assert verdict.earliest_allowed_start == now + timedelta(minutes=15)
 
 
-def test_the_refusal_exit_code_is_two():
-    assert QuietRefused("x").exit_code == 2
+def test_the_refusal_exit_code_is_two(monkeypatch, capsys):
+    """§8: "THE REFUSAL (exit code 2, nothing written)".
+
+    Tribunal round 1, F4: this used to be
+    `assert QuietRefused("x").exit_code == 2`, which proves an attribute
+    exists and nothing about the code any caller returns. It now runs
+    `archiver_cli.main` — the real parser, the real handler, the real
+    `except` clause — with a window that refuses at START.
+    """
+    store = FakeBars()
+    store.upsert_bars([_bar(RESTATE_TS, close="100.00")])
+    store.calls.clear()
+    before = store.snapshot()
+
+    refusing = observation(
+        now=et(2026, 9, 18, 10, 0), session=Session.RTH,
+        last_scan_at=et(2026, 9, 18, 9, 58),
+    )
+    wire_command_path(monkeypatch, store, iter([refusing]))
+
+    assert archiver_cli.main(RESTATE_ARGV) == 2
+    captured = capsys.readouterr()
+    assert captured.err.splitlines()[0].startswith("Q1")
+    assert "REFUSED — not in a quiet window." in captured.err
+    # §9's run-level lock is taken BEFORE the window is read (Q4 is held
+    # for the whole command), so it is the one call a refusal makes. No
+    # WRITE method is reached.
+    assert store.snapshot() == before
+    assert store.calls == ["run_lock"]
 
 
 def code_of(obj) -> str:
@@ -806,24 +833,90 @@ def test_the_pre_commit_recheck_rolls_the_repair_back():
     Session.PREMARKET, Session.RTH, Session.AFTERMARKET, Session.MARKET_RESET
 ])
 @pytest.mark.parametrize("command", ["restate", "backfill-missing"])
-def test_both_mutating_commands_are_refused_in_every_scanned_session(session, command):
-    verdict = quiet_verdict(
-        observation(now=et(2026, 9, 18, 10, 0), session=session), cfg()
+def test_both_mutating_commands_are_refused_in_every_scanned_session(
+    session, command, monkeypatch
+):
+    """§8, through the DISPATCH.
+
+    Tribunal round 1, F4: this used to compute a `quiet_verdict` and
+    then assert `command in MUTATING_COMMANDS` — two true statements
+    that never met. It now invokes each handler and asserts the command
+    itself raises and writes nothing.
+    """
+    store = FakeBars()
+    store.upsert_bars([_bar(RESTATE_TS, close="100.00")])
+    store.calls.clear()
+    before = store.snapshot()
+
+    refusing = observation(
+        now=et(2026, 9, 18, 10, 0), session=session,
+        last_scan_at=et(2026, 9, 18, 9, 58),
     )
-    assert verdict.quiet is False
-    assert command in archiver_cli.MUTATING_COMMANDS
+    wire_command_path(
+        monkeypatch, store, iter([refusing]),
+        compared=scenario(stored=None, ts=datetime(2026, 9, 18, 19, 50, tzinfo=UTC))
+        if command == "backfill-missing"
+        else None,
+    )
+
+    argv = RESTATE_ARGV if command == "restate" else BACKFILL_ARGV
+    with pytest.raises(QuietRefused) as refused:
+        run_command(argv)
+
+    assert refused.value.exit_code == 2
+    assert any(line.startswith("Q1") for line in refused.value.verdict.failures)
+    assert store.snapshot() == before
+    # §9's lock is taken first and held for the whole command (Q4); it is
+    # not a write, and no write method follows it.
+    assert store.calls == ["run_lock"], (
+        f"{command} reached a writer in a {session.value} session: {store.calls}"
+    )
+    assert store.committed == 0
 
 
-def test_previews_always_run(monkeypatch):
-    """§8: 'Previews and every read-only command are always available.'"""
-    calls = []
+def test_previews_always_run(monkeypatch, capsys):
+    """§8: 'Previews and every read-only command are always available.'
+
+    Tribunal round 1, F4: this used to monkeypatch `require_quiet` and
+    assert `calls == []` without invoking anything — a test that passes
+    on an empty file. It now RUNS both previews (no `--apply`) to
+    completion and asserts they print, read nothing but the comparison,
+    and never reach the quiet gate.
+    """
+    gate: list[str] = []
     monkeypatch.setattr(
-        quiet_mod, "require_quiet",
-        lambda *a, **k: calls.append("checked"),
+        quiet_mod, "require_quiet", lambda *a, **k: gate.append("require_quiet")
     )
-    for command in archiver_cli.READ_ONLY_COMMANDS:
-        assert command not in archiver_cli.MUTATING_COMMANDS
-    assert calls == []
+    monkeypatch.setattr(
+        quiet_mod, "guarded_repair", lambda *a, **k: gate.append("guarded_repair")
+    )
+
+    store = FakeBars()
+    store.upsert_bars([_bar(RESTATE_TS, close="100.00")])
+    store.calls.clear()
+    before = store.snapshot()
+    # NO instants: a preview that reached the observer would raise
+    # StopIteration, which is a louder failure than an assertion.
+    wire_command_path(monkeypatch, store, iter([]))
+
+    run_command(["archiver", "restate", "TESTARCH", "i5"])
+    restate_out = capsys.readouterr().out
+    assert "restate PREVIEW — TESTARCH/i5" in restate_out
+    assert "Nothing is written." in restate_out
+    assert "1 differing" in restate_out
+    assert "stored history outside it stays UNRESOLVED" in restate_out.replace("\n", " ")
+
+    wire_command_path(
+        monkeypatch, store, iter([]),
+        compared=scenario(stored=None, ts=datetime(2026, 9, 18, 19, 50, tzinfo=UTC)),
+    )
+    run_command(["archiver", "backfill-missing", "TESTARCH", "i5"])
+    backfill_out = capsys.readouterr().out
+    assert "backfill-missing PREVIEW — TESTARCH/i5" in backfill_out
+    assert "can only DO NOTHING" in backfill_out
+
+    assert gate == [], f"a preview reached the quiet gate: {gate}"
+    assert store.calls == [] and store.snapshot() == before
 
 
 def test_the_read_only_commands_are_the_ones_the_design_names():
@@ -858,13 +951,49 @@ def test_backfill_missing_can_only_do_nothing():
 
 
 def test_backfill_missing_never_calls_upsert_bars(monkeypatch):
+    """§8: `backfill-missing` CAN ONLY DO NOTHING.
+
+    Tribunal round 1, F4: this used to call `FakeBars.insert_new_bars`
+    directly, which tests the fake. It now drives `_cmd_backfill_missing`
+    through its real entry point in a QUIET window, with one key already
+    stored and one missing — so the command actually runs to its commit
+    and the assertion is about which writer IT reached.
+    """
+    stored_key = RESTATE_TS
+    missing_key = datetime(2026, 9, 18, 19, 50, tzinfo=UTC)
+
     store = FakeBars()
-    store.upsert_bars([_bar(et(2026, 9, 18, 3, 0), close="100.00")])
+    store.upsert_bars([_bar(stored_key, close="100.00")])
     store.calls.clear()
-    existing = store.snapshot()
-    assert store.insert_new_bars(None, [_bar(et(2026, 9, 18, 3, 0), close="999.00")]) == 0
-    assert store.snapshot() == existing
-    assert store.calls == ["insert_new_bars"]
+
+    def _both(_store, _ticker, _interval):
+        """One key already stored (the vendor now says 999.00 — a
+        DIFFERING key `backfill-missing` must leave alone) and one key
+        storage lacks."""
+        plan = plan_candidates(
+            ticker="TESTARCH", interval=Interval.I5,
+            bars=[_bar(stored_key, close="999.00"), _bar(missing_key, close="101.00")],
+            fetch_started_at=FETCH_AT, archived_through=None,
+        )
+        return plan, compare(
+            plan.candidates, {stored_key: bar_values(_bar(stored_key, close="100.00"))}
+        )
+
+    wire_command_path(monkeypatch, store, iter([QUIET_AT, QUIET_AT]))
+    monkeypatch.setattr(archiver_cli, "_compared", _both)
+
+    run_command(BACKFILL_ARGV)
+
+    assert "upsert_bars" not in store.calls, (
+        f"backfill-missing reached an overwrite: {store.calls}"
+    )
+    assert "upsert_bars_on" not in store.calls
+    assert store.calls == ["run_lock", "insert_new_bars"]
+    assert store.snapshot()[("TESTARCH", "i5", stored_key)] == "100.00", (
+        "the DIFFERING key was overwritten — DO NOTHING means DO NOTHING"
+    )
+    assert store.snapshot()[("TESTARCH", "i5", missing_key)] == "101.00"
+    assert store.committed == 1
 
 
 def test_every_read_only_command_calls_no_write_method():
