@@ -1244,14 +1244,34 @@ def test_the_alter_waits_for_an_open_transaction_and_then_completes():
     What bounds this test, in the order the clocks run out:
 
       1. `LOCK_CEILING_S` (20 s) — the MAIN thread's `join` gives up and
-         the test has its verdict. This is what fires first, so
-         **the message a reader sees is this test's own "did not
-         finish" assertion**, never a driver error.
+         the test has its verdict.
       2. `WORKER_STATEMENT_TIMEOUT_S` (25 s), set on the worker
          connection below — the server ends a still-running ALTER by
          itself, so no backend is left queued on `cobalt_dev`. It is
          deliberately ABOVE (1): a legitimate wait must be reported by
          this test, not pre-empted by the server.
+
+    WHAT (1)-BEFORE-(2) ACTUALLY GUARANTEES (R3, tribunal round 1; this
+    used to be stated unconditionally and was not true in general). The
+    two clocks do not start together: (2) starts at the server when the
+    ALTER begins executing, right after `thread.start()`, while (1) is
+    only armed once `_wait_for_a_blocked_lock` has returned AND
+    `other.commit()` has run. So (1) fires first exactly while those two
+    steps take less than the 5 s of headroom between them — which is the
+    case this test drives: the probe polls the catalog every 50 ms and
+    returns as soon as the worker's own ungranted `AccessExclusiveLock`
+    request is visible, i.e. within milliseconds of the ALTER blocking,
+    and the commit is a local round trip.
+
+    It is NOT a general guarantee, and no bound beyond the 5 s of
+    headroom is claimed here. If the probe itself ran long — its own
+    ceiling is `LOCK_CEILING_S`, and it returns False rather than early
+    when the worker's request never appears, e.g. because a THIRD
+    session already holds ACCESS EXCLUSIVE — the server's 25 s can fire
+    first. Then the worker's ALTER raises, `hung` is False, and the
+    `_probe` on the next line meets an aborted transaction: the message
+    a reader sees is a driver error, not this test's own "did not
+    finish" assertion.
 
     CLEANUP RUNS ON EVERY PATH (R2, tribunal round 1). Whatever the
     `try` did or raised, the `finally` below cancels a still-running
