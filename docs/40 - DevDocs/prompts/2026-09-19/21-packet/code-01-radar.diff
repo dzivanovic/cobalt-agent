@@ -1,0 +1,904 @@
+diff --git a/src/cobalt/radar/collector.py b/src/cobalt/radar/collector.py
+index 585e7d6..ff19925 100644
+--- a/src/cobalt/radar/collector.py
++++ b/src/cobalt/radar/collector.py
+@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
+ from cobalt.archiver.collector import FetchMetrics, finviz_get, scrub
+ 
+ from .anatomy.daily import DailySeries, parse_daily_csv
+-from .config import RadarConfig, load_config
++from .config import RadarConfig, load_config, screener_columns_param
+ from .models import ListBlock, ScreenBlock
+ 
+ 
+@@ -158,7 +158,7 @@ class FinvizScreenerCollector:
+     def _params(self) -> dict[str, object]:
+         return {
+             "v": self.config.export.v,
+-            "c": ",".join(str(value) for value in range(151)),
++            "c": screener_columns_param(self.config.export.columns),
+         }
+ 
+     def _cache(self, source: str, now: datetime, payload: bytes) -> Path:
+diff --git a/src/cobalt/radar/config.py b/src/cobalt/radar/config.py
+index 1de776e..772ab6b 100644
+--- a/src/cobalt/radar/config.py
++++ b/src/cobalt/radar/config.py
+@@ -39,6 +39,45 @@ class ExportConfig(BaseModel):
+     metric_headers: MetricHeaders
+ 
+ 
++#: The two shapes a Finviz `c=` declaration takes: an inclusive `a-b`
++#: range (radar.yaml's `export.columns`) or an explicit comma list (what
++#: a screen note may declare instead).
++_COLUMN_RANGE = re.compile(r"(\d+)-(\d+)")
++_COLUMN_LIST = re.compile(r"\d+(?:,\d+)*")
++
++
++def screener_columns(declaration: str) -> list[int]:
++    """The ONE place a Finviz column index list is produced (L3).
++
++    `"0-150"` -> 0..150 inclusive; `"1,2,3"` -> itself. Four modules used
++    to build the 151-index list for themselves, which is one export shape
++    per copy the day the declaration changes.
++
++    The function tidies nothing: anything that is not one of the two
++    shapes crashes (L1). A silently wrong column set does not fail — it
++    returns a differently shaped export that every parser downstream
++    reads as a header mismatch, far from the config line that caused it.
++    Stripping backticks and whitespace off a trader's note is the note
++    parser's job, not this one's.
++    """
++    matched = _COLUMN_RANGE.fullmatch(declaration)
++    if matched:
++        start, end = int(matched.group(1)), int(matched.group(2))
++        if start > end:
++            raise RadarConfigError(f"column declaration {declaration!r} runs backwards")
++        return list(range(start, end + 1))
++    if _COLUMN_LIST.fullmatch(declaration):
++        return [int(index) for index in declaration.split(",")]
++    raise RadarConfigError(
++        f"column declaration {declaration!r} is neither an 'a-b' range nor a comma list of indices"
++    )
++
++
++def screener_columns_param(declaration: str) -> str:
++    """A declaration rendered as the `c=` request parameter."""
++    return ",".join(str(index) for index in screener_columns(declaration))
++
++
+ class NotEquityConfig(BaseModel):
+     model_config = ConfigDict(extra="forbid")
+     header: str = Field(min_length=1)
+@@ -138,4 +177,12 @@ def command(_args) -> None:
+         print(f"{key} = {values[key]}")
+ 
+ 
+-__all__ = ["CONFIG_PATH", "RadarConfig", "RadarConfigError", "check", "load_config"]
++__all__ = [
++    "CONFIG_PATH",
++    "RadarConfig",
++    "RadarConfigError",
++    "check",
++    "load_config",
++    "screener_columns",
++    "screener_columns_param",
++]
+diff --git a/src/cobalt/radar/evaluate_cli.py b/src/cobalt/radar/evaluate_cli.py
+index 8d404c9..c3f9a46 100644
+--- a/src/cobalt/radar/evaluate_cli.py
++++ b/src/cobalt/radar/evaluate_cli.py
+@@ -61,6 +61,24 @@ class CandidateRefused(RuntimeError):
+ 
+ 
+ class ReplayFormation(BaseModel):
++    """One formation the read-only replay saw.
++
++    The last three fields identify the formation's SUBJECT and its
++    retained score receipt, and are carried for downstream consumers that
++    must key a row on it (S2-P4 STEP-5's `"user".missed` rows, whose
++    `kind='formation'` CHECK needs member and def, R1-21). All three are
++    values `evaluate_member` already returned for this formation — the
++    replay still reads only, writes nothing, and no schema changed:
++
++    * `membership_id` — the `system.radar_membership` episode evaluated.
++    * `trade_def_md5` — the `LoadedDef` md5 the formation was formed from.
++    * `score_inputs_sha256` — the evaluation's input digest, which is the
++      `inputs_sha256` column the resident stores on its own
++      `system.radar_score` row for the same `(membership_id,
++      trade_def_md5)`. It is a CONTENT-ADDRESSED reference: this replay
++      reads no receipt row and so cannot report a score id.
++    """
++
+     model_config = ConfigDict(extra="forbid", frozen=True)
+ 
+     seen_at: AwareDatetime
+@@ -70,6 +88,9 @@ class ReplayFormation(BaseModel):
+     trigger: str
+     stop: str
+     formed_bar_ts: AwareDatetime
++    membership_id: int
++    trade_def_md5: str = Field(pattern=r"^[0-9a-f]{32}$")
++    score_inputs_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+ 
+ 
+ class ReplayReport(BaseModel):
+@@ -188,6 +209,8 @@ def replay_formations(
+                         report.formations.append(ReplayFormation(
+                             seen_at=instant, ticker=ticker, slug=ld.slug, direction=f.trade_direction,
+                             trigger=str(f.trigger.price), stop=str(f.stop.price), formed_bar_ts=f.formed_bar_ts,
++                            membership_id=ev.membership_id, trade_def_md5=ev.md5,
++                            score_inputs_sha256=ev.inputs_sha256,
+                         ))
+                         out(
+                             f"{clock.to_et(instant):%H:%M:%S} ET {ticker} {ld.slug} FORMED {f.trade_direction} "
+diff --git a/src/cobalt/radar/models.py b/src/cobalt/radar/models.py
+index 37c0244..73f5559 100644
+--- a/src/cobalt/radar/models.py
++++ b/src/cobalt/radar/models.py
+@@ -4,6 +4,7 @@ from __future__ import annotations
+ 
+ import re
+ from datetime import date, datetime
++from decimal import Decimal
+ from enum import Enum
+ from typing import Annotated, List, Literal
+ 
+@@ -15,6 +16,10 @@ FILTER_RE = re.compile(r"^[a-z0-9_.]+(?:,[a-z0-9_.]+)*$")
+ SORT_RE = re.compile(r"^-?[a-z0-9_]+$")
+ KEY_RE = re.compile(r"^[a-z0-9_]+$")
+ 
++#: The metrics a pool may rank by — one spelling for the note block, the
++#: membership row's `rank_metric` CHECK (0008) and every model below.
++RankMetricName = Literal["volume", "rvol"]
++
+ 
+ def _valid_hhmm(value: str) -> str:
+     try:
+@@ -195,10 +200,14 @@ class OpenMember(BaseModel):
+     below_cap_streak: int = Field(ge=0)
+     last_rank: int | None = None
+     trade_date: date | str | None = None
++    # S2-P4 R1: the pair the latest scan wrote. NULL on every episode scanned
++    # before the 0008 deploy; carried unchanged through a frozen HOLD.
++    rank_metric: RankMetricName | None = None
++    rank_value: Decimal | None = None
+ 
+ 
+ __all__ = [
+     "Candidate", "ExcludeBlock", "ExcludedBy", "ListBlock", "OpenMember",
+-    "PoolBlock", "PoolOverride", "RankMetric", "ScreenBlock", "SourceHealth",
+-    "SourceSet",
++    "PoolBlock", "PoolOverride", "RankMetric", "RankMetricName", "ScreenBlock",
++    "SourceHealth", "SourceSet",
+ ]
+diff --git a/src/cobalt/radar/notes.py b/src/cobalt/radar/notes.py
+index fb40321..de93019 100644
+--- a/src/cobalt/radar/notes.py
++++ b/src/cobalt/radar/notes.py
+@@ -9,7 +9,7 @@ from pathlib import Path
+ from typing import Any, Literal
+ 
+ import yaml
+-from pydantic import BaseModel, ConfigDict, ValidationError
++from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+ 
+ from cobalt.session import session_clock
+ from cobalt.session.clock import now_utc
+@@ -150,6 +150,247 @@ def parse_note_bytes(
+     return result
+ 
+ 
++# ---------------------------------------------------------------------------
++# L53: ONE total Finviz demand across every consumer (S2-P4 STEP-6, R1-13/R2-5)
++# ---------------------------------------------------------------------------
++
++#: The scheduled one-shot consumers of the shared transport, by registry label.
++ARCHIVER_LABEL = "com.cobalt.archiver"
++REPLAY_LABEL = "com.cobalt.replay"
++BACKUP_LABEL = "com.cobalt.backup"
++#: The engine tunable that keeps replay's window clear of the 21:40 backup.
++REPLAY_MARGIN_KEY = "replay.backup_margin_s"
++
++
++class TotalDemandExceeded(RadarNoteError):
++    """The total Finviz demand over a consumer's window exceeds the ceiling."""
++
++    def __init__(self, message: str, demand: "TotalDemand | None" = None):
++        super().__init__(message)
++        self.demand = demand
++
++
++class DemandWindow(BaseModel):
++    """[start, end) in ET minutes after midnight; `end` may run past 24:00."""
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    start_min: int = Field(ge=0, lt=1440)
++    end_min: int = Field(gt=0, le=2880)
++
++    @model_validator(mode="after")
++    def _ordered(self) -> "DemandWindow":
++        if self.end_min <= self.start_min:
++            raise ValueError(f"demand window end {self.end_min} is not after start {self.start_min}")
++        return self
++
++    @classmethod
++    def between(cls, start: str, end: str) -> "DemandWindow":
++        return cls(start_min=_hhmm_minutes(start), end_min=_hhmm_minutes(end))
++
++    @classmethod
++    def from_at(cls, at: str, seconds: int) -> "DemandWindow":
++        start = _hhmm_minutes(at)
++        return cls(start_min=start, end_min=start + -(-seconds // 60))
++
++    def overlaps(self, other: "DemandWindow") -> bool:
++        return self.start_min < other.end_min and other.start_min < self.end_min
++
++    def describe(self) -> str:
++        return f"{_minutes_hhmm(self.start_min)}-{_minutes_hhmm(self.end_min)} ET"
++
++
++class DemandConsumer(BaseModel):
++    """One consumer of the shared transport and its defined rpm conversion.
++
++    `window=None` means UNBOUNDED: it has not been proved disjoint from
++    anything, so it counts against every other consumer.
++    """
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    name: str = Field(min_length=1)
++    rpm: float = Field(ge=0)
++    window: DemandWindow | None
++    basis: str = Field(min_length=1)
++
++
++class TotalDemand(BaseModel):
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    subject: str
++    ceiling: int | None
++    peak_rpm: float
++    peak_at_min: int | None
++    counted: tuple[str, ...]
++
++    def describe(self) -> str:
++        at = f" at {_minutes_hhmm(self.peak_at_min)} ET" if self.peak_at_min is not None else ""
++        return (
++            f"total Finviz demand for {self.subject}: peak {self.peak_rpm:.2f} rpm{at} "
++            f"over [{', '.join(self.counted)}], finviz_max_rpm={self.ceiling}"
++        )
++
++
++def _hhmm_minutes(raw: str) -> int:
++    hour, _, minute = str(raw).partition(":")
++    return int(hour) * 60 + int(minute)
++
++
++def _minutes_hhmm(minutes: int) -> str:
++    return f"{minutes // 60:02d}:{minutes % 60:02d}"
++
++
++def total_demand(consumers, *, subject: str, ceiling: int | None) -> TotalDemand:
++    """Peak CONCURRENT demand over `subject`'s window.
++
++    A consumer counts wherever its window overlaps the subject's; one
++    proved disjoint contributes zero (and only then). The peak is taken at
++    every instant a counted window opens inside the subject's window.
++    """
++    by_name = {c.name: c for c in consumers}
++    if subject not in by_name:
++        raise RadarNoteError(f"total demand: subject {subject!r} is not among the consumers {sorted(by_name)}")
++    own = by_name[subject].window
++    counted = [
++        c for c in consumers
++        if c.window is None or own is None or c.window.overlaps(own)
++    ]
++    points = {own.start_min} if own is not None else {0}
++    for c in counted:
++        if c.window is not None and (own is None or own.start_min <= c.window.start_min < own.end_min):
++            points.add(c.window.start_min)
++
++    def active(c: DemandConsumer, at: int) -> bool:
++        return c.window is None or c.window.start_min <= at < c.window.end_min
++
++    peak, peak_at = 0.0, None
++    for at in sorted(points):
++        load = sum(c.rpm for c in counted if active(c, at))
++        if load > peak:
++            peak, peak_at = load, at
++    return TotalDemand(subject=subject, ceiling=ceiling, peak_rpm=peak, peak_at_min=peak_at,
++                       counted=tuple(c.name for c in counted))
++
++
++def check_total_demand(consumers, *, subject: str, ceiling: int | None) -> TotalDemand:
++    """THE shared gate (L53). Refuses — before any request — when the
++    total over `subject`'s window exceeds the ceiling."""
++    if ceiling is None:
++        raise TotalDemandExceeded(f"{subject}: radar.finviz_max_rpm is unmeasured — no demand can be proved")
++    demand = total_demand(consumers, subject=subject, ceiling=ceiling)
++    if demand.peak_rpm > ceiling:
++        raise TotalDemandExceeded(f"REFUSED: {demand.describe()} exceeds the ceiling", demand)
++    return demand
++
++
++def _ceiling() -> int | None:
++    from cobalt.taxonomy.loader import load_tunables
++
++    raw = load_tunables().by_key["radar.finviz_max_rpm"].value
++    return None if raw is None else int(raw)
++
++
++def radar_window(tunables=None) -> DemandWindow:
++    """The resident radar scans premarket through aftermarket."""
++    if tunables is None:
++        from cobalt.taxonomy.loader import load_tunables
++
++        tunables = load_tunables().by_key
++    return DemandWindow.between(tunables["session.premarket_open"].value, tunables["session.aftermarket_close"].value)
++
++
++def replay_window(registry=None, tunables=None) -> DemandWindow:
++    """`com.cobalt.replay`'s window: its schedule to its enforced deadline,
++    `replay.backup_margin_s` before the backup (R1-16)."""
++    from cobalt.jobs.config import load_job_registry
++
++    registry = registry or load_job_registry()
++    if tunables is None:
++        from cobalt.taxonomy.loader import load_tunables
++
++        tunables = load_tunables().by_key
++    replay, backup = registry.spec(REPLAY_LABEL), registry.spec(BACKUP_LABEL)
++    if replay.schedule is None or not replay.schedule.at or backup.schedule is None or not backup.schedule.at:
++        raise RadarNoteError(f"{REPLAY_LABEL}/{BACKUP_LABEL}: both need an `at` schedule for the replay deadline")
++    row = tunables.get(REPLAY_MARGIN_KEY)
++    if row is None or row.value is None:
++        raise RadarNoteError(f"tunables.yaml: {REPLAY_MARGIN_KEY} is missing or unmeasured")
++    deadline_s = _hhmm_minutes(backup.schedule.at) * 60 - int(row.value)
++    try:
++        return DemandWindow(start_min=_hhmm_minutes(replay.schedule.at), end_min=deadline_s // 60)
++    except ValidationError as e:
++        raise RadarNoteError(
++            f"{REPLAY_LABEL} at {replay.schedule.at} leaves no window before its deadline "
++            f"({BACKUP_LABEL} {backup.schedule.at} - {REPLAY_MARGIN_KEY} {row.value}s)"
++        ) from e
++
++
++def scheduled_consumers(
++    *,
++    ceiling: int | None,
++    radar_rpm: float | None = None,
++    replay_top_n: int | None = None,
++    registry=None,
++    tunables=None,
++) -> list[DemandConsumer]:
++    """Every consumer of the shared transport, with its defined rpm conversion.
++
++    * radar — its planned total (pool + screens + list chunks) when known,
++      else its own TokenBucket bound (the ceiling), 04:00-20:00 ET.
++    * archiver — its pacing bound, 60 / GENTLE_SLEEP_SECONDS rpm (every
++      request is followed by that sleep), from `at` to `at + timeout_s`:
++      the watchdog bound, the only proved end. Never omitted because a job
++      precondition serializes it (R2-5).
++    * replay — 2 exports + one i1 fetch per top-N mover per side, paced by
++      the process bucket: min(2 + 2 x top_n, ceiling); the bucket bound
++      when the benchmark is not known. Schedule to deadline.
++    """
++    from cobalt.archiver.runner import GENTLE_SLEEP_SECONDS
++    from cobalt.jobs.config import load_job_registry
++
++    registry = registry or load_job_registry()
++    if tunables is None:
++        from cobalt.taxonomy.loader import load_tunables
++
++        tunables = load_tunables().by_key
++    bound = float(ceiling) if ceiling is not None else 0.0
++    consumers = [
++        DemandConsumer(
++            name="radar", window=radar_window(tunables),
++            rpm=float(radar_rpm) if radar_rpm is not None else bound,
++            basis="planned total" if radar_rpm is not None else "bucket bound (ceiling)",
++        )
++    ]
++    archiver = registry.by_label.get(ARCHIVER_LABEL)
++    if archiver is not None and archiver.schedule is not None and archiver.schedule.at:
++        consumers.append(DemandConsumer(
++            name="archiver", rpm=60 / GENTLE_SLEEP_SECONDS,
++            window=DemandWindow.from_at(archiver.schedule.at, archiver.timeout_s),
++            basis=f"pacing bound 60/{GENTLE_SLEEP_SECONDS}s, window to timeout_s",
++        ))
++    if REPLAY_LABEL in registry.by_label:
++        if replay_top_n is not None:
++            from cobalt.replay.movers import replay_request_count
++
++            rpm = float(min(replay_request_count(replay_top_n), ceiling if ceiling is not None else 10**9))
++            basis = f"min(2 + 2 x top_n={replay_top_n}, ceiling)"
++        else:
++            rpm, basis = bound, "bucket bound (benchmark not read)"
++        consumers.append(DemandConsumer(name="replay", rpm=rpm, window=replay_window(registry, tunables), basis=basis))
++    return consumers
++
++
++def check_scheduled_demand(subject: str, *, radar_rpm: float | None = None,
++                           replay_top_n: int | None = None, extra=()) -> TotalDemand:
++    """The gate as every pre-request site calls it: the registry's
++    consumers, this site's own known numbers, the tunable ceiling.
++    `extra` adds an unscheduled consumer (a manual backfill)."""
++    ceiling = _ceiling()
++    consumers = [*scheduled_consumers(ceiling=ceiling, radar_rpm=radar_rpm, replay_top_n=replay_top_n), *extra]
++    return check_total_demand(consumers, subject=subject, ceiling=ceiling)
++
++
+ def load_sources(
+     screens_path: Path,
+     lists_path: Path,
+@@ -159,6 +400,8 @@ def load_sources(
+     finviz_max_rpm: int | None,
+     list_chunk_size: int,
+     context_tickers: int,
++    radar_window: DemandWindow | None = None,
++    other_consumers=(),
+ ) -> ParsedSources:
+     screens = parse_note(screens_path, "screens")
+     lists = parse_note(lists_path, "lists")
+@@ -192,14 +435,27 @@ def load_sources(
+     )
+     result.planned_rpm = demand.steady_rpm
+     result.demand = demand
+-    if demand.refusal is not None:
++    # L53: that ONE radar demand — never a second computation — joins every
++    # other consumer's over the radar's own window, through the shared gate.
++    radar = DemandConsumer(
++        name="radar", rpm=demand.steady_rpm, window=radar_window, basis="planned total"
++    )
++    others = [c for c in other_consumers if c.name != "radar"]
++    refused: TotalDemandExceeded | None = None
++    try:
++        check_total_demand([radar, *others], subject="radar", ceiling=finviz_max_rpm)
++    except TotalDemandExceeded as error:
++        refused = error
++    if demand.refusal is not None or refused is not None:
++        reason = demand.refusal or "the total across every consumer exceeds the ceiling"
+         result.pool_error = (
+-            f"pool budget exceeded: {demand.refusal}; planned_rpm={demand.steady_rpm:.2f} "
++            f"pool budget exceeded: {reason}; planned_rpm={demand.steady_rpm:.2f} "
+             f"(pool={demand.pool_rpm:.2f}, screens={screen_count}, "
+             f"lists_chunks={_total_chunks(list_blocks, list_chunk_size)}, "
+             f"context={demand.context_rpm:.2f}, daily_names={demand.daily_names}), "
+             f"finviz_max_rpm={finviz_max_rpm}, cap={pool.cap}, "
+             f"scan_interval={scan_interval}"
++            + (f"; {refused}" if refused is not None else "")
+         )
+     return result
+ 
+@@ -413,14 +669,17 @@ def configured_sources(config: RadarConfig | None = None) -> ParsedSources:
+     values = load_tunables().by_key
+     vault = resolve_vault_path()
+     rpm = values["radar.finviz_max_rpm"].value
++    ceiling = None if rpm is None else int(rpm)
+     return load_sources(
+         vault / cfg.notes.screens,
+         vault / cfg.notes.lists,
+         scan_interval=int(values["radar.scan_interval"].value),
+         poll_interval=int(values["radar.poll_interval"].value),
+-        finviz_max_rpm=None if rpm is None else int(rpm),
++        finviz_max_rpm=ceiling,
+         list_chunk_size=cfg.list_chunk_size,
+         context_tickers=len(cfg.context.tickers),
++        radar_window=radar_window(values),
++        other_consumers=scheduled_consumers(ceiling=ceiling, tunables=values),
+     )
+ 
+ 
+@@ -493,8 +752,10 @@ def mirror_sources(
+ 
+ 
+ __all__ = [
+-    "ParsedBlock", "ParsedNote", "ParsedSources", "RadarNoteError",
+-    "configured_sources", "load_sources", "mirror_sources", "parse_note", "parse_note_bytes",
+-    "TransportDemand", "plan_transport_demand", "planned_context_rpm",
+-    "planned_lists_rpm", "planned_pool_rpm", "planned_screens_rpm", "planned_total_rpm",
++    "DemandConsumer", "DemandWindow", "ParsedBlock", "ParsedNote", "ParsedSources",
++    "RadarNoteError", "TotalDemand", "TotalDemandExceeded", "TransportDemand",
++    "check_scheduled_demand", "check_total_demand", "configured_sources", "load_sources",
++    "mirror_sources", "parse_note", "parse_note_bytes", "plan_transport_demand",
++    "planned_context_rpm", "planned_lists_rpm", "planned_pool_rpm", "planned_screens_rpm",
++    "planned_total_rpm", "radar_window", "replay_window", "scheduled_consumers", "total_demand",
+ ]
+diff --git a/src/cobalt/radar/pool.py b/src/cobalt/radar/pool.py
+index ead3e75..4c0ca0d 100644
+--- a/src/cobalt/radar/pool.py
++++ b/src/cobalt/radar/pool.py
+@@ -4,6 +4,7 @@ from __future__ import annotations
+ 
+ from dataclasses import dataclass
+ from datetime import date, datetime, time, timedelta
++from decimal import Decimal
+ from enum import Enum
+ from typing import Iterable, Sequence
+ from zoneinfo import ZoneInfo
+@@ -18,6 +19,7 @@ from .models import (
+     ExcludedBy,
+     OpenMember,
+     PoolBlock,
++    RankMetricName,
+     ScreenBlock,
+     SourceHealth,
+     SourceSet,
+@@ -45,6 +47,18 @@ class Transition(BaseModel):
+     excluded_by: ExcludedBy | None = None
+     rollover: bool = False
+     left_at: datetime | None = None
++    # S2-P4 R1: the metric that actually ranked this name on this scan (a
++    # screen override's metric, else the session's) and its value. Set on
++    # every ranked RETAIN/ADMIT/EXCLUDE; a HOLD carries the member's prior
++    # pair; None where no ranking happened or the export had no value.
++    rank_metric: RankMetricName | None = None
++    rank_value: Decimal | None = None
++
++
++def _as_decimal(value: float | None) -> Decimal | None:
++    """The export's parsed number as stored: through `str`, so the NUMERIC
++    column holds the digits the CSV carried, not a binary-float expansion."""
++    return None if value is None else Decimal(str(value))
+ 
+ 
+ class Decision(BaseModel):
+@@ -97,11 +111,22 @@ def _ranked(
+     pool: PoolBlock,
+     sources: list[SourceSet],
+     now: datetime,
+-) -> tuple[list[str], dict[str, int], dict[str, str]]:
++) -> tuple[
++    list[str], dict[str, int], dict[str, str], dict[str, tuple[str, Decimal | None]]
++]:
++    """(ordered, ranks, source_for, values).
++
++    `values[ticker]` is `(metric, value)` for the metric that ranked the
++    name: for a screen-sourced name, the winning screen's override metric
++    (else the session metric) and that screen's value; for a list-sourced
++    name, the session metric and the max across its lists — the same
++    expression the list ordering uses. None stays None.
++    """
+     session = session_clock().session(now).value
+     session_metric = getattr(pool.rank_metric, session)
+     priority = {name: index for index, name in enumerate(pool.priority)}
+     source_for: dict[str, str] = {}
++    values: dict[str, tuple[str, Decimal | None]] = {}
+ 
+     def key(ticker: str):
+         carrying = [
+@@ -112,6 +137,7 @@ def _ranked(
+         group = "screens" if screen_sources else "lists"
+         if screen_sources:
+             positions = []
++            metric_for: dict[str, str] = {}
+             for source in screen_sources:
+                 source_key = _source_key(source)
+                 override = pool.overrides.get(source_key)
+@@ -131,24 +157,36 @@ def _ranked(
+                     else getattr(override, "first_from", None)
+                 )
+                 metric = override_metric or session_metric
++                metric_for[source.source] = metric
+                 first = 0 if first_from and now.astimezone(ET).strftime("%H:%M") >= first_from else 1
+                 positions.append(
+                     (first, _metric_position(source, metric, ticker), source.note_order, source.source)
+                 )
+             first, position, order, best_source = min(positions)
++            best = next(source for source in screen_sources if source.source == best_source)
++            best_metric = metric_for[best_source]
++            values[ticker] = (
++                best_metric,
++                _as_decimal(best.metrics.get(ticker, {}).get(best_metric)),
++            )
+         else:
+             first = 1
+             list_sources = [source for source in carrying if source.kind == "list"]
+             best_source = min((source.source for source in list_sources), default=candidates[ticker].sources[0] if candidates[ticker].sources else "")
+-            values = [source.metrics.get(ticker, {}).get(session_metric) for source in list_sources]
+-            value = max((v for v in values if v is not None), default=None)
++            list_values = [source.metrics.get(ticker, {}).get(session_metric) for source in list_sources]
++            value = max((v for v in list_values if v is not None), default=None)
++            values[ticker] = (session_metric, _as_decimal(value))
+             union = sorted(
+                 candidates,
+                 key=lambda name: (
++                    # None-filtered like the value expression below: a name
++                    # with no value on one list and a value on another
++                    # used to raise TypeError here (found S2-P4 STEP-2).
+                     max(
+                         (
+                             source.metrics.get(name, {}).get(session_metric)
+                             for source in sources if source.kind == "list" and name in source.tickers
++                            and source.metrics.get(name, {}).get(session_metric) is not None
+                         ),
+                         default=None,
+                     ) is None,
+@@ -171,7 +209,7 @@ def _ranked(
+         return (priority[group], first if group == "screens" else 0, position, order, ticker)
+ 
+     ordered = sorted(candidates, key=key)
+-    return ordered, {ticker: index + 1 for index, ticker in enumerate(ordered)}, source_for
++    return ordered, {ticker: index + 1 for index, ticker in enumerate(ordered)}, source_for, values
+ 
+ 
+ def decide(
+@@ -285,7 +323,12 @@ def decide(
+     ranked_candidates = {
+         ticker: item for ticker, item in candidate_map.items() if ticker not in held
+     }
+-    ordered, ranks, source_for = _ranked(ranked_candidates, pool, source_rows, now)
++    ordered, ranks, source_for, values = _ranked(ranked_candidates, pool, source_rows, now)
++
++    def value_of(ticker: str) -> dict:
++        metric, value = values.get(ticker, (None, None))
++        return {"rank_metric": metric, "rank_value": value}
++
+     seats = max(0, pool.cap - len(held))
+     winners = ordered[:seats]
+     provisional = list(winners)
+@@ -299,7 +342,7 @@ def decide(
+                 Transition(
+                     ticker=ticker, action=Action.RETAIN,
+                     sources=candidate_map[ticker].sources, source=source_for.get(ticker),
+-                    rank=ranks[ticker], below_cap_streak=0,
++                    rank=ranks[ticker], below_cap_streak=0, **value_of(ticker),
+                 )
+             )
+             continue
+@@ -331,27 +374,27 @@ def decide(
+         provisional[provisional.index(loser)] = member.ticker
+         newcomers.remove(loser)
+         transitions.append(
+-            Transition(ticker=member.ticker, action=Action.RETAIN, sources=candidate_map.get(member.ticker, Candidate(ticker=member.ticker, sources=member.sources)).sources, source=source_for.get(member.ticker), rank=rank, below_cap_streak=streak)
++            Transition(ticker=member.ticker, action=Action.RETAIN, sources=candidate_map.get(member.ticker, Candidate(ticker=member.ticker, sources=member.sources)).sources, source=source_for.get(member.ticker), rank=rank, below_cap_streak=streak, **value_of(member.ticker))
+         )
+ 
+     admitted = {t.ticker for t in transitions if t.action in {Action.RETAIN, Action.HOLD}}
+     for ticker, member in held.items():
+         transitions.append(
+-            Transition(ticker=ticker, action=Action.HOLD, sources=member.sources, rank=member.last_rank, below_cap_streak=member.below_cap_streak)
++            Transition(ticker=ticker, action=Action.HOLD, sources=member.sources, rank=member.last_rank, below_cap_streak=member.below_cap_streak, rank_metric=member.rank_metric, rank_value=member.rank_value)
+         )
+         admitted.add(ticker)
+     for ticker in provisional:
+         if ticker not in opens:
+             item = candidate_map[ticker]
+             transitions.append(
+-                Transition(ticker=ticker, action=Action.ADMIT, sources=item.sources, source=source_for.get(ticker), rank=ranks[ticker])
++                Transition(ticker=ticker, action=Action.ADMIT, sources=item.sources, source=source_for.get(ticker), rank=ranks[ticker], **value_of(ticker))
+             )
+             admitted.add(ticker)
+     for ticker in ordered:
+         if ticker not in opens and ticker not in provisional:
+             item = candidate_map[ticker]
+             transitions.append(
+-                Transition(ticker=ticker, action=Action.EXCLUDE, sources=item.sources, source=source_for.get(ticker), rank=ranks[ticker], excluded_by=ExcludedBy.CONFIG_CAP)
++                Transition(ticker=ticker, action=Action.EXCLUDE, sources=item.sources, source=source_for.get(ticker), rank=ranks[ticker], excluded_by=ExcludedBy.CONFIG_CAP, **value_of(ticker))
+             )
+ 
+     if len(admitted) > pool.cap:
+diff --git a/src/cobalt/radar/propose.py b/src/cobalt/radar/propose.py
+index 0744d38..1254f71 100644
+--- a/src/cobalt/radar/propose.py
++++ b/src/cobalt/radar/propose.py
+@@ -27,7 +27,7 @@ from cobalt.vaultwrite import (
+     assert_write_target,
+ )
+ 
+-from .config import load_config
++from .config import RadarConfigError, load_config, screener_columns
+ from .models import ListBlock, PoolBlock, ScreenBlock
+ 
+ if TYPE_CHECKING:
+@@ -173,14 +173,17 @@ def _sort_code(value: str, *, screen_name: str) -> str:
+ 
+ 
+ def _columns(value: str, *, screen_name: str, source: str) -> list[int] | None:
++    """A screen note's own column declaration. The note's formatting —
++    backticks, surrounding whitespace, the `<same columns>` placeholder —
++    is this parser's business; the declaration itself goes to the radar's
++    one column-set source (L3)."""
+     normalized = value.strip().strip("`")
+     if normalized == "<same columns>":
+         return None
+-    if normalized == "0-150":
+-        return list(range(151))
+-    if not re.fullmatch(r"\d+(?:,\d+)*", normalized):
+-        raise ProposalRefused(f"{screen_name}: {source} columns are not a numeric declaration")
+-    return [int(item) for item in normalized.split(",")]
++    try:
++        return screener_columns(normalized)
++    except RadarConfigError as e:
++        raise ProposalRefused(f"{screen_name}: {source} columns are not a numeric declaration") from e
+ 
+ 
+ def _screen_name_and_heading_time(raw_name: str) -> tuple[str, str | None]:
+@@ -620,13 +623,34 @@ def screens_validate(args) -> None:
+         retries_per_request=DAILY_RETRIES_PER_REQUEST,
+         ceiling_rpm=ceiling,
+     )
+-    if demand.refusal is not None:
++    # L53: that same prospective radar demand joins every other consumer's,
++    # over the radar's own window, through the ONE shared gate.
++    from .notes import DemandConsumer, TotalDemandExceeded, check_total_demand, radar_window, scheduled_consumers
++
++    refused: TotalDemandExceeded | None = None
++    try:
++        check_total_demand(
++            [
++                DemandConsumer(
++                    name="radar", rpm=demand.steady_rpm, window=radar_window(tunables),
++                    basis="proposed total",
++                ),
++                *[c for c in scheduled_consumers(ceiling=ceiling, tunables=tunables) if c.name != "radar"],
++            ],
++            subject="radar",
++            ceiling=ceiling,
++        )
++    except TotalDemandExceeded as error:
++        refused = error
++    if demand.refusal is not None or refused is not None:
++        reason = demand.refusal or "the total across every consumer exceeds the ceiling"
+         raise ProposalRefused(
+-            f"pool budget exceeded: {demand.refusal}; planned_rpm={demand.steady_rpm:.2f} "
++            f"pool budget exceeded: {reason}; planned_rpm={demand.steady_rpm:.2f} "
+             f"(pool={demand.pool_rpm:.2f}, screens={len(derived)}, lists_chunks={chunk_count}, "
+             f"context={demand.context_rpm:.2f}, daily_names={demand.daily_names}), "
+             f"finviz_max_rpm={ceiling}, cap={pool.cap}, scan_interval={interval}"
+-        )
++            + (f"; {refused}" if refused is not None else "")
++        ) from refused
+ 
+     installed_status = "not installed"
+     if FENCE_RE.search(screens_raw):
+diff --git a/src/cobalt/radar/store.py b/src/cobalt/radar/store.py
+index 1fbaa8c..bae28b5 100644
+--- a/src/cobalt/radar/store.py
++++ b/src/cobalt/radar/store.py
+@@ -29,7 +29,8 @@ class RadarStore:
+     def open_members(self, pool_key: str) -> list[dict]:
+         with self._connect() as conn:
+             cursor = conn.execute(
+-                "SELECT ticker, sources, entered_at, below_cap_streak, last_rank, trade_date "
++                "SELECT ticker, sources, entered_at, below_cap_streak, last_rank, trade_date, "
++                "rank_metric, rank_value "
+                 "FROM radar_membership WHERE pool_key = %s AND left_at IS NULL",
+                 (pool_key,),
+             )
+@@ -54,7 +55,7 @@ class RadarStore:
+                 "SELECT id, pool_key, ticker, trade_date, first_seen_at, "
+                 "entered_at, left_at, source, sources, rank_at_entry, last_rank, "
+                 "below_cap_streak, excluded_by, session, opened_scan_id, "
+-                "last_scan_id, closed_scan_id FROM radar_membership "
++                "last_scan_id, closed_scan_id, rank_metric, rank_value FROM radar_membership "
+                 "WHERE pool_key = %s AND trade_date = %s ORDER BY id",
+                 (pool_key, trade_date),
+             )
+@@ -82,13 +83,30 @@ class RadarStore:
+                     (pool_key, session),
+                 )
+                 for item in transitions:
+-                    if item.action in {Action.RETAIN, Action.HOLD}:
++                    if item.action is Action.RETAIN:
+                         cur.execute(
+                             "UPDATE radar_membership SET sources=%s::jsonb, last_rank=%s, "
+-                            "below_cap_streak=%s, last_scan_id=%s "
++                            "below_cap_streak=%s, last_scan_id=%s, rank_metric=%s, rank_value=%s "
+                             "WHERE pool_key=%s AND ticker=%s AND left_at IS NULL "
+                             "AND last_scan_id < %s",
+-                            (json.dumps(item.sources), item.rank, item.below_cap_streak, scan_id, pool_key, item.ticker, scan_id),
++                            (json.dumps(item.sources), item.rank, item.below_cap_streak, scan_id,
++                             item.rank_metric, item.rank_value, pool_key, item.ticker, scan_id),
++                        )
++                    elif item.action is Action.HOLD:
++                        # Frozen pool (S2-P4 R1): the pair is kept, never
++                        # blanked. A HOLD that carries no metric keeps the
++                        # stored pair; one that carries a metric writes the
++                        # pair together, so metric and value never mix scans.
++                        cur.execute(
++                            "UPDATE radar_membership SET sources=%s::jsonb, last_rank=%s, "
++                            "below_cap_streak=%s, last_scan_id=%s, "
++                            "rank_metric=COALESCE(%s::text, rank_metric), "
++                            "rank_value=CASE WHEN %s::text IS NULL THEN rank_value ELSE %s::numeric END "
++                            "WHERE pool_key=%s AND ticker=%s AND left_at IS NULL "
++                            "AND last_scan_id < %s",
++                            (json.dumps(item.sources), item.rank, item.below_cap_streak, scan_id,
++                             item.rank_metric, item.rank_metric, item.rank_value,
++                             pool_key, item.ticker, scan_id),
+                         )
+                     elif item.action is Action.LEAVE:
+                         cur.execute(
+@@ -114,19 +132,22 @@ class RadarStore:
+                         if item.action is Action.EXCLUDE:
+                             cur.execute(
+                                 "UPDATE radar_membership SET sources=%s::jsonb, last_rank=%s, "
+-                                "excluded_by=%s, last_scan_id=%s WHERE pool_key=%s AND ticker=%s "
++                                "excluded_by=%s, last_scan_id=%s, rank_metric=%s, rank_value=%s "
++                                "WHERE pool_key=%s AND ticker=%s "
+                                 "AND left_at IS NULL AND entered_at IS NULL AND last_scan_id < %s",
+                                 (json.dumps(item.sources), item.rank,
+                                  item.excluded_by.value if item.excluded_by else None,
+-                                 scan_id, pool_key, item.ticker, scan_id),
++                                 scan_id, item.rank_metric, item.rank_value,
++                                 pool_key, item.ticker, scan_id),
+                             )
+                             if cur.rowcount:
+                                 continue
+                         cur.execute(
+                             "INSERT INTO radar_membership "
+                             "(pool_key,ticker,trade_date,first_seen_at,entered_at,source,sources,"
+-                            "rank_at_entry,last_rank,below_cap_streak,excluded_by,session,opened_scan_id,last_scan_id) "
+-                            "VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s) "
++                            "rank_at_entry,last_rank,below_cap_streak,excluded_by,session,opened_scan_id,last_scan_id,"
++                            "rank_metric,rank_value) "
++                            "VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                             "ON CONFLICT (pool_key, opened_scan_id, ticker) DO NOTHING",
+                             (
+                                 pool_key, item.ticker, now.astimezone(ET).date(), now, entered,
+@@ -135,6 +156,7 @@ class RadarStore:
+                                 item.below_cap_streak,
+                                 item.excluded_by.value if item.excluded_by else None,
+                                 session, scan_id, scan_id,
++                                item.rank_metric, item.rank_value,
+                             ),
+                         )
+             if before_commit:
+diff --git a/src/cobalt/radar/throttle.py b/src/cobalt/radar/throttle.py
+index 4cb2a84..eaa50f4 100644
+--- a/src/cobalt/radar/throttle.py
++++ b/src/cobalt/radar/throttle.py
+@@ -29,6 +29,8 @@ from cobalt.archiver.models import Interval
+ from cobalt.session import session_clock
+ from cobalt.session.models import Session
+ 
++from .config import load_config, screener_columns_param
++
+ ET = ZoneInfo("America/New_York")
+ REPO_ROOT = Path(__file__).resolve().parents[3]
+ LISTS_FIXTURE = REPO_ROOT / "tests/fixtures/radar/radar-lists.example.md"
+@@ -131,12 +133,21 @@ async def run_probe(
+     names: int,
+     grids: list[int],
+     cycles: int,
++    columns: str,
+     now: datetime | None = None,
+     token: str | None = None,
+     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+     monotonic: Callable[[], float] = time.monotonic,
+ ) -> tuple[list[dict[str, object]], int | None]:
++    """Measure Finviz's request tolerance without a config of its own.
++
++    The probe's screener request must be the same shape the radar sends,
++    or its measurement is of a different request. It holds no config, so
++    `columns` is handed in by the caller — `command()` reads it from the
++    radar config once (L3); the probe never opens a second copy.
++    """
+     instant = now or datetime.now(timezone.utc)
++    column_param = screener_columns_param(columns)
+     refused = refusal_reason(instant)
+     if refused:
+         raise ProbeError(f"throttle probe refused during {refused}")
+@@ -177,7 +188,7 @@ async def run_probe(
+                 "v": 152,
+                 "f": screen["f"],
+                 "o": screen["sort"],
+-                "c": ",".join(str(v) for v in range(151)),
++                "c": column_param,
+             }
+             if screen.get("ft") is not None:
+                 params["ft"] = screen["ft"]
+@@ -227,7 +238,10 @@ def print_table(stages: list[dict[str, object]], limit: int | None) -> None:
+ 
+ def command(args) -> None:
+     grids = [int(value.strip()) for value in args.grids.split(",") if value.strip()]
+-    stages, limit = asyncio.run(run_probe(names=args.names, grids=grids, cycles=args.cycles))
++    columns = load_config().export.columns
++    stages, limit = asyncio.run(
++        run_probe(names=args.names, grids=grids, cycles=args.cycles, columns=columns)
++    )
+     path = write_result(stages, limit)
+     print_table(stages, limit)
+     print(path.relative_to(REPO_ROOT))

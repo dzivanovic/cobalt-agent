@@ -1,0 +1,294 @@
+diff --git a/src/cobalt/db_migrations/0008_radar_value_movers.rollback.sql b/src/cobalt/db_migrations/0008_radar_value_movers.rollback.sql
+new file mode 100644
+index 0000000..3f4a70e
+--- /dev/null
++++ b/src/cobalt/db_migrations/0008_radar_value_movers.rollback.sql
+@@ -0,0 +1,10 @@
++-- 0008 rollback. COST: drops the nightly movers corpus and the rank-metric
++-- value columns. Membership rows themselves are untouched (the proof digest
++-- excludes the two columns). 0009 must be reversed first: "user".missed
++-- references system.movers_daily. Take the plan's pg_dump snapshot first.
++
++DROP TABLE IF EXISTS system.movers_daily;
++
++ALTER TABLE system.radar_membership
++    DROP COLUMN IF EXISTS rank_value,
++    DROP COLUMN IF EXISTS rank_metric;
+diff --git a/src/cobalt/db_migrations/0008_radar_value_movers.sql b/src/cobalt/db_migrations/0008_radar_value_movers.sql
+new file mode 100644
+index 0000000..6061b0e
+--- /dev/null
++++ b/src/cobalt/db_migrations/0008_radar_value_movers.sql
+@@ -0,0 +1,44 @@
++-- 0008: the rank metric's value on membership, and the nightly movers table.
++-- S2-P4 STEP-1 (rulings R1, R5). SYSTEM side only (ADR-0008 D2): both are
++-- market data, not one trader's choice. Idempotent when applied repeatedly.
++--
++-- rank_metric/rank_value: the metric that actually ranked the name and its
++-- value at the latest scan, written by S1. No backfill (L57): rows from
++-- before the deploy stay NULL and render a dash.
++ALTER TABLE system.radar_membership
++  ADD COLUMN IF NOT EXISTS rank_metric TEXT CHECK (rank_metric IN ('volume','rvol')),
++  ADD COLUMN IF NOT EXISTS rank_value  NUMERIC(20,6);
++
++-- movers_daily: the unfiltered top movers the 21:10 replay fetches.
++-- Rows are never deleted: a rerun that drops a mover out of the selected
++-- set marks it active = false (Astra R1-20/R2-1), so "user".missed.mover_id
++-- never loses its target and every prior row keeps its replay inputs.
++-- One ACTIVE row per (trade_date, side, ticker); retired rows may repeat.
++CREATE TABLE IF NOT EXISTS system.movers_daily (
++    id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
++    trade_date     DATE NOT NULL,
++    side           TEXT NOT NULL CHECK (side IN ('gainers','losers')),
++    rank           INTEGER NOT NULL CHECK (rank >= 1),
++    ticker         TEXT NOT NULL,
++    change_pct     NUMERIC(10,4) NOT NULL,
++    asset_type     TEXT,
++    volume         BIGINT,
++    rvol           NUMERIC(12,4),
++    export_sha256  TEXT NOT NULL,          -- raw CSV bytes (L57)
++    fetched_at     TIMESTAMPTZ NOT NULL,
++    bars_archived  BOOLEAN NOT NULL DEFAULT false,
++    replay_run_id  TEXT NOT NULL,          -- the run that selected this row
++    active         BOOLEAN NOT NULL DEFAULT true
++);
++
++ALTER TABLE system.movers_daily OWNER TO cobalt_system;
++CREATE UNIQUE INDEX IF NOT EXISTS movers_daily_one_active
++    ON system.movers_daily (trade_date, side, ticker) WHERE active;
++CREATE INDEX IF NOT EXISTS movers_daily_trade_date
++    ON system.movers_daily (trade_date);
++
++-- USER reads movers for the benchmark diff and needs REFERENCES for the
++-- "user".missed.mover_id foreign key (Astra R1-2).
++GRANT SELECT, REFERENCES ON system.movers_daily TO cobalt_user;
++GRANT USAGE, SELECT ON SEQUENCE system.movers_daily_id_seq TO cobalt_system;
++GRANT SELECT ON SEQUENCE system.movers_daily_id_seq TO cobalt_user;
+diff --git a/src/cobalt/db_migrations/0009_picks_missed.rollback.sql b/src/cobalt/db_migrations/0009_picks_missed.rollback.sql
+new file mode 100644
+index 0000000..031e626
+--- /dev/null
++++ b/src/cobalt/db_migrations/0009_picks_missed.rollback.sql
+@@ -0,0 +1,6 @@
++-- 0009 rollback. COST: drops every pick row and the whole missed corpus,
++-- receipts included. A D1 dump cannot restore rows created after D1 —
++-- snapshot both tables first (plan §6 rollback, Astra R1-23).
++
++DROP TABLE IF EXISTS "user".missed;
++DROP TABLE IF EXISTS "user".picks;
+diff --git a/src/cobalt/db_migrations/0009_picks_missed.sql b/src/cobalt/db_migrations/0009_picks_missed.sql
+new file mode 100644
+index 0000000..3cf3b3e
+--- /dev/null
++++ b/src/cobalt/db_migrations/0009_picks_missed.sql
+@@ -0,0 +1,121 @@
++-- 0009: F3 picks and the F12/F13 missed corpus. S2-P4 STEP-1 (R2, R4, R5).
++-- USER side only (ADR-0008 D2): a pick and a miss are one trader's record.
++-- Both tables carry user_id NOT NULL + FK + the tenant GUC default, owned
++-- by cobalt_user. Idempotent when applied repeatedly. Nothing here depends
++-- on S2-P2's 0006/0007, so either merge order applies.
++
++-- picks: one row per card that reached FILLED, written inside the
++-- CardStore.fill transaction under SAVEPOINT pick (R2). It snapshots the
++-- pool rank/metric/value and the card-score rank AT PICK TIME, with the
++-- inputs that replay both ranks (L57, Astra R1-6):
++--   pool_basis   'pool' | 'unavailable: <reason>' — why a pool field is null
++--   score_basis  'card_score' | 'unavailable: <reason>'
++--   score_inputs the ordered cohort and tie policy the rank came from
++CREATE TABLE IF NOT EXISTS "user".picks (
++    id                   BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
++    user_id              INTEGER NOT NULL
++                             DEFAULT (current_setting('cobalt.trader_id')::int)
++                             REFERENCES "user".traders(id),
++    card_id              BIGINT NOT NULL UNIQUE REFERENCES "user".aset_sizings(id),
++    transition_id        BIGINT NOT NULL REFERENCES "user".card_transitions(id),
++    ticker               TEXT NOT NULL,
++    picked_at            TIMESTAMPTZ NOT NULL,
++    session              TEXT NOT NULL,
++    origin               TEXT NOT NULL,
++    account_mode         TEXT,
++    pool_member_id       BIGINT REFERENCES system.radar_membership(id),
++    not_in_pool          BOOLEAN NOT NULL,
++    pool_basis           TEXT NOT NULL,
++    pool_rank            INTEGER,
++    pool_size            INTEGER,
++    rank_metric          TEXT,
++    rank_value           NUMERIC(20,6),
++    pool_scan_id         BIGINT,
++    pool_scan_at         TIMESTAMPTZ,
++    card_score           INTEGER,
++    card_score_rank      INTEGER,
++    focus_top4           BOOLEAN,
++    score_basis          TEXT NOT NULL,
++    score_inputs         JSONB NOT NULL,
++    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
++    CHECK (not_in_pool = (pool_member_id IS NULL))
++);
++
++ALTER TABLE "user".picks OWNER TO cobalt_user;
++CREATE INDEX IF NOT EXISTS picks_picked_at ON "user".picks (picked_at);
++
++-- missed: every miss the nightly replay finds, with the gate that excluded
++-- it and, for cards/formations, one counterfactual R.
++--
++-- IMMUTABLE RECEIPT (Astra R1-8). system.bars is mutable and a hash cannot
++-- recover a source that has since changed, so `receipt` retains the actual
++-- consumed bars, entry/stop as evaluated, the window and horizon, the state
++-- history behind each gate and the benchmark/settings inputs;
++-- `inputs_sha256` hashes it. `replay_run_id` is the receipt-owned run
++-- identity (never cobalt_jobs' per-label id, which each run overwrites).
++--
++-- VERSIONED, NEVER OVERWRITTEN (Astra R2-1, corrected R3-1). A rerun that
++-- recomputes a subject runs, in one USER transaction: (1) UPDATE the prior
++-- row is_current = false, retired_by_run_id = <run> — freeing the partial
++-- unique slot; (2) INSERT the replacement; (3) UPDATE the prior row's
++-- superseded_by = <new id>. A subject whose miss disappears stops at (1).
++CREATE TABLE IF NOT EXISTS "user".missed (
++    id                   BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
++    user_id              INTEGER NOT NULL
++                             DEFAULT (current_setting('cobalt.trader_id')::int)
++                             REFERENCES "user".traders(id),
++    trade_date           DATE NOT NULL,
++    kind                 TEXT NOT NULL CHECK (kind IN ('card','formation','mover')),
++    ticker               TEXT NOT NULL,
++    direction            TEXT CHECK (direction IN ('long','short')),
++    card_id              BIGINT REFERENCES "user".aset_sizings(id),
++    trade_def_md5        TEXT,
++    formation_at         TIMESTAMPTZ,
++    pool_member_id       BIGINT REFERENCES system.radar_membership(id),
++    mover_id             BIGINT REFERENCES system.movers_daily(id),
++    excluded_by          TEXT NOT NULL CHECK (excluded_by IN (
++                             'unarmed','passed','not_filled','no_card','window','rule_10',
++                             'not_in_any_source','config_cap','not_equity',
++                             'screen_inactive','manual')),
++    gate_detail          JSONB NOT NULL,
++    entry                NUMERIC(14,4),
++    stop                 NUMERIC(14,4),
++    trigger_ts           TIMESTAMPTZ,
++    fill_price           NUMERIC(14,4),
++    horizon_end          TIMESTAMPTZ,
++    exit_ts              TIMESTAMPTZ,
++    exit_price           NUMERIC(14,4),
++    exit_reason          TEXT CHECK (exit_reason IN ('stop','horizon_end')),
++    cf_r                 NUMERIC(10,4),
++    mfe_r                NUMERIC(10,4),
++    bars_watermark       TIMESTAMPTZ,
++    formula_version      TEXT,
++    receipt              JSONB NOT NULL,
++    inputs_sha256        TEXT NOT NULL,
++    replay_run_id        TEXT NOT NULL,
++    run_seq              INTEGER NOT NULL DEFAULT 1,
++    is_current           BOOLEAN NOT NULL DEFAULT true,
++    superseded_by        BIGINT REFERENCES "user".missed(id),
++    retired_by_run_id    TEXT,
++    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
++    CHECK (kind <> 'card' OR (card_id IS NOT NULL AND entry IS NOT NULL AND stop IS NOT NULL)),
++    CHECK (kind <> 'mover' OR mover_id IS NOT NULL),
++    CHECK (kind <> 'formation' OR (trade_def_md5 IS NOT NULL AND formation_at IS NOT NULL
++                                   AND pool_member_id IS NOT NULL)),
++    CHECK (is_current OR retired_by_run_id IS NOT NULL),
++    CHECK (superseded_by IS NULL OR NOT is_current)
++);
++
++ALTER TABLE "user".missed OWNER TO cobalt_user;
++
++-- One CURRENT row per subject. A formation's subject includes its trigger
++-- time and member (Astra R1-21) so two same-day formations of one
++-- (ticker, trade_def) never collapse into one row.
++CREATE UNIQUE INDEX IF NOT EXISTS missed_one_current_per_subject
++    ON "user".missed (
++        user_id, trade_date, kind, ticker,
++        COALESCE(card_id, 0), COALESCE(trade_def_md5, ''),
++        COALESCE(formation_at, '-infinity'::timestamptz),
++        COALESCE(CASE WHEN kind = 'formation' THEN pool_member_id END, 0))
++    WHERE is_current;
++CREATE INDEX IF NOT EXISTS missed_trade_date ON "user".missed (trade_date, kind);
+diff --git a/src/cobalt/db_migrations/__init__.py b/src/cobalt/db_migrations/__init__.py
+index 9ddf7bb..18a09e1 100644
+--- a/src/cobalt/db_migrations/__init__.py
++++ b/src/cobalt/db_migrations/__init__.py
+@@ -21,6 +21,15 @@
+                          columns, dots, taps, run receipt, views.
+ `0007_radar_cards.rollback.sql` — deletes radar-origin cards, drops the
+                                   card tables/columns, restores NOT NULL.
++`0008_radar_value_movers.sql` — membership rank_metric/rank_value and the
++                              system movers_daily table (S2-P4).
++`0008_radar_value_movers.rollback.sql` — drops movers_daily and both columns.
++`0009_picks_missed.sql` — "user".picks and "user".missed (S2-P4).
++`0009_picks_missed.rollback.sql` — drops both tables.
++
++0006/0007 are S2-P2's, 0008/0009 are S2-P4's. Both tuples stay ordered by
++version; every file is idempotent and neither 0008 nor 0009 names a P2
++object (`--down-to` selects by version, never by position).
+ 
+ These are the DATABASE-WIDE migrations and they are the only ones that
+ live outside a feature module. A module's own DDL still lives in its own
+@@ -37,7 +46,7 @@ from pathlib import Path
+ 
+ MIGRATIONS_DIR = Path(__file__).parent
+ 
+-#: Applied in this order, every time, both idempotent.
++#: Applied in this order, every time, every file idempotent.
+ FORWARD = (
+     MIGRATIONS_DIR / "0001_schemas.sql",
+     MIGRATIONS_DIR / "0002_move_tables.sql",
+@@ -46,10 +55,14 @@ FORWARD = (
+     MIGRATIONS_DIR / "0005_heartbeat_note_absent.sql",
+     MIGRATIONS_DIR / "0006_radar_score.sql",
+     MIGRATIONS_DIR / "0007_radar_cards.sql",
++    MIGRATIONS_DIR / "0008_radar_value_movers.sql",
++    MIGRATIONS_DIR / "0009_picks_missed.sql",
+ )
+ 
+ #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
+ REVERSE = (
++    MIGRATIONS_DIR / "0009_picks_missed.rollback.sql",
++    MIGRATIONS_DIR / "0008_radar_value_movers.rollback.sql",
+     MIGRATIONS_DIR / "0007_radar_cards.rollback.sql",
+     MIGRATIONS_DIR / "0006_radar_score.rollback.sql",
+     MIGRATIONS_DIR / "0005_heartbeat_note_absent.rollback.sql",
+diff --git a/src/cobalt/db_migrations/cli.py b/src/cobalt/db_migrations/cli.py
+index 5ac5604..d1f0962 100644
+--- a/src/cobalt/db_migrations/cli.py
++++ b/src/cobalt/db_migrations/cli.py
+@@ -89,6 +89,11 @@ DIGEST_EXCLUDED_COLUMNS = (
+     "vault_reason",
+     "account_mode",
+     "pool_member_id",
++    # 0008 (S2-P4, Astra R1-1): adding two nullable columns to a populated
++    # radar_membership is not content corruption, and dropping them on
++    # rollback must not read as CHANGED.
++    "rank_metric",
++    "rank_value",
+ )
+ 
+ #: Columns a registered migration adds to ONE table, excluded from that
+diff --git a/src/cobalt/db_migrations/placement.py b/src/cobalt/db_migrations/placement.py
+index c81d0c7..d64015b 100644
+--- a/src/cobalt/db_migrations/placement.py
++++ b/src/cobalt/db_migrations/placement.py
+@@ -75,6 +75,11 @@ CREATED_TABLES: dict[str, Side] = {
+     "card_dots": Side.USER,
+     "card_dot_taps": Side.USER,
+     "radar_score_receipt": Side.USER,
++    # db_migrations/0008_radar_value_movers.sql — market data (S2-P4 R5)
++    "movers_daily": Side.SYSTEM,
++    # db_migrations/0009_picks_missed.sql — one trader's record (S2-P4 R2/R4)
++    "picks": Side.USER,
++    "missed": Side.USER,
+ }
+ 
+ #: VIEWS created by database-wide migrations. On a side like any table
+@@ -93,10 +98,10 @@ CREATED_VIEWS: dict[str, Side] = {
+ #: that creates one has a ruled side to create it on. Nothing here exists
+ #: yet; the placement test only checks tables that DO exist.
+ DECLARED_TABLES: dict[str, Side] = {
+-    # S2-P4 / S3 — named now so the placement test knows them on sight.
++    # S3 — named now so the placement test knows them on sight. `missed`
++    # left this list when S2-P4's 0009 built it.
+     "legs": Side.USER,
+     "fills": Side.USER,
+-    "missed": Side.USER,
+     "drc_rows": Side.USER,
+     "prediction_records": Side.USER,
+     # S2-P2 — taxonomy anatomy instances (regime, range, gap, extension,

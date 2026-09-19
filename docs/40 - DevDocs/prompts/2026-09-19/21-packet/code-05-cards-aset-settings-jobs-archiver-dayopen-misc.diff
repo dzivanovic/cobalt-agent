@@ -1,0 +1,1556 @@
+diff --git a/src/cobalt/cards/__init__.py b/src/cobalt/cards/__init__.py
+index 0a60b3a..8fa7ca2 100644
+--- a/src/cobalt/cards/__init__.py
++++ b/src/cobalt/cards/__init__.py
+@@ -13,7 +13,10 @@ Four pieces, one law each:
+   BEFORE any state logic, so a refused write leaves no trace.
+ * `expire.py` — a window that closed is an ACT with an actor and
+   evidence, not a predicate evaluated on read.
+-* `cli.py`    — `cobalt cards state/history/backfill/expire/edges`.
++* `cli.py`    — `cobalt cards state/history/backfill/expire/edges/picks`.
++* `picks.py`  — F3 (S2-P4): the pick row `fill()` writes under
++  `SAVEPOINT pick`, snapshotting pool rank/metric/value and card-score
++  rank at pick time. A pick failure never undoes the fill.
+ 
+ ONE-CLICK FILL (S1-P3, CTO review). `store.fill()` is the single entry
+ point to FILLED. On a card whose `origin` is `manual` it walks the rest
+@@ -38,6 +41,7 @@ from .models import (
+     TERMINAL,
+     Actor,
+     CardState,
++    FillResult,
+     IllegalTransition,
+     Origin,
+     assert_edge,
+@@ -56,6 +60,7 @@ __all__ = [
+     "CardState",
+     "CardStateError",
+     "CardStore",
++    "FillResult",
+     "IllegalTransition",
+     "KEY_EDITABLE",
+     "Origin",
+diff --git a/src/cobalt/cards/cli.py b/src/cobalt/cards/cli.py
+index 4512ea5..fa15652 100644
+--- a/src/cobalt/cards/cli.py
++++ b/src/cobalt/cards/cli.py
+@@ -6,6 +6,7 @@
+     cobalt cards backfill [--dry-run]
+     cobalt cards expire [--at ISO8601] [--dry-run]
+     cobalt cards edges
++    cobalt cards picks [--date YYYY-MM-DD] [--cutoff ISO8601]
+ 
+ `edges` prints the edge table straight from `models.ALLOWED` — the
+ DevDocs page is generated from it, so the wiki cannot drift from what the
+@@ -19,13 +20,15 @@ the clock rather than sleeping until 16:05.
+ from __future__ import annotations
+ 
+ import argparse
+-from datetime import datetime
++import sys
++from datetime import date, datetime
+ 
+ from cobalt import env
+ from cobalt.session.clock import ET, now_utc, session_clock
+ 
+ from .expire import expire_due
+ from .models import FILL_TARGET, Actor, CardState, edge_table_markdown
++from .picks import PickReportRow, render_picks_report
+ from .store import CardStore
+ 
+ 
+@@ -75,13 +78,15 @@ def cmd_move(args: argparse.Namespace) -> None:
+     # ONE PATH TO FILLED (S1-P3) — the CLI takes the same route the sheet
+     # and the actual-fill form take, so a manual card gets its missing
+     # rows here too and a radar card is refused here too.
++    filled = None
+     if to_state is FILL_TARGET:
+-        tids = store.fill(
++        filled = store.fill(
+             args.card_id,
+             actor=Actor(args.actor),
+             reason=args.reason,
+             evidence={"via": "cobalt cards move"},
+         )
++        tids = filled.transition_ids
+     else:
+         tids = [
+             store.transition(
+@@ -94,6 +99,40 @@ def cmd_move(args: argparse.Namespace) -> None:
+         ]
+     tid = ", ".join(str(i) for i in tids)
+     print(f"card {args.card_id}: {before} -> {args.to}  (card_transitions id {tid})")
++    if filled is not None and not filled.pick_recorded:
++        # The fill COMMITTED (R2); the pick did not. Exit 1 so a script
++        # cannot mistake the gap for a clean fill.
++        print(
++            f"PICK NOT RECORDED for card {args.card_id}: {filled.pick_error} — the fill "
++            "stands; `cobalt cards picks` reports this card MISSING.",
++            file=sys.stderr,
++        )
++        raise SystemExit(1)
++
++
++def cmd_picks(args: argparse.Namespace) -> None:
++    """F3: pick vs rank for every FILLED transition on one ET day.
++
++    Exit 1 when any counted FILLED transition has no pick row (MISSING).
++    `--cutoff` (the P4 deploy instant) keeps earlier gaps visible but not
++    counted — the K6 smoke check's comparison window.
++    """
++    day = date.fromisoformat(args.date) if args.date else session_clock().to_et(now_utc()).date()
++    cutoff = None
++    if args.cutoff:
++        cutoff = datetime.fromisoformat(args.cutoff)
++        if cutoff.tzinfo is None:
++            raise SystemExit(
++                f"--cutoff {args.cutoff!r} has no timezone; pass an offset (…-04:00) or a 'Z'."
++            )
++    rows = [PickReportRow(**row) for row in _store().filled_with_picks(day)]
++    if not rows:
++        print(f"no FILLED transitions on {day.isoformat()}")
++        return
++    text, missing = render_picks_report(rows, day=day, cutoff=cutoff)
++    print(text)
++    if missing:
++        raise SystemExit(1)
+ 
+ 
+ def cmd_backfill(args: argparse.Namespace) -> None:
+@@ -182,6 +221,16 @@ def add_parser(sub) -> None:
+     edges = csub.add_parser("edges", help="Print the edge table (source of the DevDoc).")
+     edges.set_defaults(func=cmd_edges)
+ 
++    picks = csub.add_parser(
++        "picks", help="F3: pick vs pool/card-score rank for every FILLED card that day."
++    )
++    picks.add_argument("--date", help="ET trading day YYYY-MM-DD (default: today ET).")
++    picks.add_argument(
++        "--cutoff",
++        help="ISO 8601 instant WITH offset; gaps before it print but do not fail (K6).",
++    )
++    picks.set_defaults(func=cmd_picks)
++
+     trail = csub.add_parser(
+         "trail-fit-draft",
+         help="Write the trail_fit -> source: human review DRAFT (R5). Touches no note; no apply exists.",
+diff --git a/src/cobalt/cards/models.py b/src/cobalt/cards/models.py
+index 07c4574..5976687 100644
+--- a/src/cobalt/cards/models.py
++++ b/src/cobalt/cards/models.py
+@@ -31,6 +31,8 @@ from __future__ import annotations
+ 
+ from enum import Enum
+ 
++from pydantic import BaseModel, ConfigDict, Field, model_validator
++
+ 
+ class CardState(str, Enum):
+     """The eight states a card can be in. `str` mixin so a value stamps
+@@ -159,6 +161,37 @@ class IllegalTransition(RuntimeError):
+         )
+ 
+ 
++class FillResult(BaseModel):
++    """What `CardStore.fill()` wrote (S2-P4 R2, Astra R1-5).
++
++    `transition_ids` are the `card_transitions` rows, in order — three on
++    a one-click manual fill from WATCH, one on a strict fill. The fill
++    COMMITTED whenever this object exists; a failed fill raises instead.
++
++    `pick_recorded` is the F3 pick row's outcome, written under SAVEPOINT
++    pick inside the same transaction. False never undoes the fill: the
++    sheet appends a red "pick not recorded" banner, the store logs the card
++    and the error class, and `cobalt cards picks` reports the gap MISSING.
++    """
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    transition_ids: list[int] = Field(min_length=1)
++    pick_recorded: bool
++    pick_id: int | None
++    pick_error: str | None = None
++
++    @model_validator(mode="after")
++    def _outcome_is_named(self) -> "FillResult":
++        if self.pick_recorded != (self.pick_id is not None):
++            raise ValueError("pick_recorded must be True exactly when pick_id is set")
++        if not self.pick_recorded and not (self.pick_error or "").strip():
++            raise ValueError("an unrecorded pick must name its error")
++        if self.pick_recorded and self.pick_error is not None:
++            raise ValueError("a recorded pick carries no error")
++        return self
++
++
+ def is_legal(from_state: CardState, to_state: CardState) -> bool:
+     return to_state in ALLOWED[from_state]
+ 
+@@ -226,6 +259,7 @@ __all__ = [
+     "Actor",
+     "FILL_TARGET",
+     "CardState",
++    "FillResult",
+     "IllegalTransition",
+     "KEY_EDITABLE",
+     "MISSED_EDGE",
+diff --git a/src/cobalt/cards/picks.py b/src/cobalt/cards/picks.py
+new file mode 100644
+index 0000000..32b3593
+--- /dev/null
++++ b/src/cobalt/cards/picks.py
+@@ -0,0 +1,355 @@
++"""F3 picks — his pick against Cobalt's rank, recorded at the fill.
++
++Charter F3: "DRC shows his pick and Cobalt's rank for every card". A PICK
++is any card reaching FILLED (manual now, radar later; S2-P4 R2). One
++`"user".picks` row per card, written by `record_pick()` INSIDE
++`CardStore.fill()`'s transaction under `SAVEPOINT pick`. The row exists
++now; DRC rendering lands in S3.
++
++WHAT THE ROW SNAPSHOTS, AT PICK TIME
++  * pool:  the admitted membership episode open at the fill instant for
++    the ticker, in the configured pool (`radar.yaml` `pool_key`) — its
++    `last_rank`, `rank_metric`, `rank_value` — plus the pool's size and
++    last scan. `pool_basis` says why a pool field is null:
++      'pool'                               the pool was readable
++      'unavailable: pool row missing'      no `radar_pool` row
++      'unavailable: pool degraded (...)'   the pool flagged degraded
++      'unavailable: pool failed_stage=X'   the last scan failed a stage
++    A ticker simply not in a readable pool is `not_in_pool = true` with
++    `pool_basis = 'pool'`.
++  * card score: `card_score` and its rank among open radar cards — only
++    if S2-P2's `aset_sizings.card_score`/`conviction` columns exist. The
++    cohort is WATCH/ARMED/TRIGGERED radar cards with a score, PLUS the
++    picked card itself (Astra R1-6: after the FILLED hop it is no longer
++    open and would drop out of its own ranking). `score_basis` names the
++    outcome ('card_score' | 'unavailable: <reason>') and `score_inputs`
++    stores the ordered cohort and the tie policy, so the rank replays
++    (L57).
++
++ONE CONNECTION. `record_pick` reads `system.radar_*` schema-qualified on
++the USER connection it is handed (ADR-0008 permits qualified cross-side
++reads); it opens no connection, switches no role and never commits — the
++fill owns the transaction and the savepoint.
++"""
++
++from __future__ import annotations
++
++import json
++from datetime import date, datetime
++from decimal import Decimal
++from typing import Any
++
++from pydantic import BaseModel, ConfigDict, Field, model_validator
++
++from cobalt.radar.models import RankMetricName
++from cobalt.session.clock import ET
++
++#: The savepoint name `CardStore.fill()` wraps the pick in.
++PICK_SAVEPOINT = "pick"
++
++#: Open card states that form the card-score cohort (the pick joins them).
++COHORT_STATES: tuple[str, ...] = ("WATCH", "ARMED", "TRIGGERED")
++
++TIE_POLICY = (
++    "competition ranking: rank = 1 + number of cohort cards with a strictly higher "
++    "card_score; ties share a rank; cohort listed by (card_score desc, card_id asc)"
++)
++
++#: The number of top-ranked cards the focus view shows.
++FOCUS_TOP_N = 4
++
++P2_NOT_MERGED = "unavailable: S2-P2 not merged"
++
++
++class PickError(RuntimeError):
++    """A pick could not be recorded. Never refuses the fill (R2)."""
++
++
++class CohortEntry(BaseModel):
++    model_config = ConfigDict(extra="forbid", frozen=True)
++    card_id: int
++    card_score: int
++    state: str
++
++
++class PoolSnapshot(BaseModel):
++    model_config = ConfigDict(extra="forbid")
++    pool_member_id: int | None
++    pool_basis: str = Field(min_length=1)
++    pool_rank: int | None
++    pool_size: int | None
++    rank_metric: RankMetricName | None
++    rank_value: Decimal | None
++    pool_scan_id: int | None
++    pool_scan_at: datetime | None
++
++    @property
++    def not_in_pool(self) -> bool:
++        return self.pool_member_id is None
++
++
++class ScoreSnapshot(BaseModel):
++    model_config = ConfigDict(extra="forbid")
++    card_score: int | None
++    card_score_rank: int | None
++    focus_top4: bool | None
++    score_basis: str = Field(min_length=1)
++    score_inputs: dict[str, Any] = Field(min_length=1)
++
++    @model_validator(mode="after")
++    def _basis_matches(self) -> "ScoreSnapshot":
++        ranked = self.score_basis == "card_score"
++        if ranked != (self.card_score_rank is not None):
++            raise ValueError("a card_score rank exists exactly when score_basis is 'card_score'")
++        if not ranked and not self.score_basis.startswith("unavailable: "):
++            raise ValueError("score_basis is 'card_score' or 'unavailable: <reason>'")
++        return self
++
++
++class PickRow(BaseModel):
++    """One `"user".picks` row, validated before it is inserted."""
++
++    model_config = ConfigDict(extra="forbid")
++    card_id: int
++    transition_id: int
++    ticker: str = Field(min_length=1)
++    picked_at: datetime
++    session: str = Field(min_length=1)
++    origin: str = Field(min_length=1)
++    account_mode: str | None
++    pool: PoolSnapshot
++    score: ScoreSnapshot
++
++
++class PickReportRow(BaseModel):
++    """One FILLED transition of the day, left-joined to its pick."""
++
++    model_config = ConfigDict(extra="forbid")
++    transition_id: int
++    card_id: int
++    filled_at: datetime
++    ticker: str
++    state: str
++    origin: str
++    pick_id: int | None
++    not_in_pool: bool | None
++    pool_basis: str | None
++    pool_rank: int | None
++    pool_size: int | None
++    rank_metric: RankMetricName | None
++    rank_value: Decimal | None
++    card_score: int | None
++    card_score_rank: int | None
++    focus_top4: bool | None
++    score_basis: str | None
++
++
++def configured_pool_key() -> str:
++    """The pool a pick is ranked against — `radar.yaml`'s `pool_key`. A
++    config error raises, inside the savepoint: pick not recorded, loud."""
++    from cobalt.radar.config import load_config
++
++    return load_config().pool_key
++
++
++def rank_in_cohort(card_id: int, cohort: list[CohortEntry]) -> int:
++    """Competition rank of `card_id` (see `TIE_POLICY`)."""
++    own = next((entry for entry in cohort if entry.card_id == card_id), None)
++    if own is None:
++        raise PickError(f"card {card_id} is not in its own cohort — the pick must rank itself")
++    return 1 + sum(1 for entry in cohort if entry.card_score > own.card_score)
++
++
++def pool_snapshot(conn, *, ticker: str, at: datetime, pool_key: str) -> PoolSnapshot:
++    pool = conn.execute(
++        "SELECT members, last_scan_id, last_scan_at, degraded, degraded_sources, failed_stage "
++        "FROM system.radar_pool WHERE pool_key = %s",
++        (pool_key,),
++    ).fetchone()
++    empty = dict(pool_member_id=None, pool_rank=None, rank_metric=None, rank_value=None)
++    if pool is None:
++        return PoolSnapshot(**empty, pool_basis="unavailable: pool row missing",
++                            pool_size=None, pool_scan_id=None, pool_scan_at=None)
++    members, scan_id, scan_at, degraded, degraded_sources, failed_stage = pool
++    scan = dict(pool_size=members, pool_scan_id=scan_id, pool_scan_at=scan_at)
++    if failed_stage:
++        return PoolSnapshot(**empty, **scan, pool_basis=f"unavailable: pool failed_stage={failed_stage}")
++    if degraded:
++        names = ", ".join(
++            str(item.get("source", item)) if isinstance(item, dict) else str(item)
++            for item in (degraded_sources or [])
++        ) or "no source named"
++        return PoolSnapshot(**empty, **scan, pool_basis=f"unavailable: pool degraded ({names})")
++    member = conn.execute(
++        "SELECT id, last_rank, rank_metric, rank_value FROM system.radar_membership "
++        "WHERE pool_key = %s AND ticker = %s AND entered_at IS NOT NULL AND entered_at <= %s "
++        "AND (left_at IS NULL OR left_at > %s) ORDER BY entered_at DESC, id DESC LIMIT 1",
++        (pool_key, ticker, at, at),
++    ).fetchone()
++    if member is None:
++        return PoolSnapshot(**empty, **scan, pool_basis="pool")
++    member_id, last_rank, metric, value = member
++    return PoolSnapshot(pool_member_id=member_id, pool_rank=last_rank, rank_metric=metric,
++                        rank_value=value, **scan, pool_basis="pool")
++
++
++def score_snapshot(conn, *, card_id: int) -> ScoreSnapshot:
++    present = {
++        row[0]
++        for row in conn.execute(
++            "SELECT column_name FROM information_schema.columns "
++            "WHERE table_schema = 'user' AND table_name = 'aset_sizings' "
++            "AND column_name IN ('card_score', 'conviction')"
++        ).fetchall()
++    }
++
++    def unavailable(reason: str, **extra: Any) -> ScoreSnapshot:
++        return ScoreSnapshot(card_score=extra.pop("card_score", None), card_score_rank=None,
++                             focus_top4=None, score_basis=reason,
++                             score_inputs={"reason": reason, "columns_present": sorted(present), **extra})
++
++    if "card_score" not in present:
++        return unavailable(P2_NOT_MERGED)
++    if "conviction" not in present:
++        return unavailable("unavailable: S2-P2 conviction column absent")
++    own = conn.execute(
++        "SELECT card_score, conviction FROM aset_sizings WHERE id = %s", (card_id,)
++    ).fetchone()
++    if own is None:
++        raise PickError(f"no aset_sizings row with id {card_id}")
++    score, conviction = own
++    if conviction is None:
++        return unavailable("unavailable: no taps", card_score=score)
++    if score is None:
++        return unavailable("unavailable: card_score suppressed", conviction=str(conviction))
++    rows = conn.execute(
++        "SELECT id, card_score, state FROM aset_sizings WHERE card_score IS NOT NULL "
++        "AND ((origin = 'radar' AND state = ANY(%s)) OR id = %s) ORDER BY card_score DESC, id",
++        (list(COHORT_STATES), card_id),
++    ).fetchall()
++    cohort = [CohortEntry(card_id=r[0], card_score=r[1], state=r[2]) for r in rows]
++    rank = rank_in_cohort(card_id, cohort)
++    return ScoreSnapshot(
++        card_score=score, card_score_rank=rank, focus_top4=rank <= FOCUS_TOP_N, score_basis="card_score",
++        score_inputs={
++            "tie_policy": TIE_POLICY,
++            "cohort_states": list(COHORT_STATES),
++            "focus_top_n": FOCUS_TOP_N,
++            "conviction": str(conviction),
++            "cohort": [entry.model_dump() for entry in cohort],
++        },
++    )
++
++
++def record_pick(conn, card_id: int, transition_id: int, now: datetime, *, pool_key: str | None = None) -> int:
++    """Write the pick row for the FILLED hop `transition_id`. Returns its id.
++
++    Runs on the fill's open connection, inside `SAVEPOINT pick`; any
++    exception is the caller's to roll back to the savepoint.
++    """
++    card = conn.execute(
++        "SELECT ticker, origin, account_mode FROM aset_sizings WHERE id = %s", (card_id,)
++    ).fetchone()
++    if card is None:
++        raise PickError(f"no aset_sizings row with id {card_id}")
++    hop = conn.execute(
++        "SELECT card_id, to_state, session FROM card_transitions WHERE id = %s", (transition_id,)
++    ).fetchone()
++    if hop is None or hop[0] != card_id or hop[1] != "FILLED":
++        raise PickError(
++            f"transition {transition_id} is not card {card_id}'s FILLED hop (got {hop!r})"
++        )
++    ticker, origin, account_mode = card
++    row = PickRow(
++        card_id=card_id,
++        transition_id=transition_id,
++        ticker=ticker,
++        picked_at=now,
++        session=hop[2],
++        origin=origin,
++        account_mode=account_mode,
++        pool=pool_snapshot(conn, ticker=ticker, at=now, pool_key=pool_key or configured_pool_key()),
++        score=score_snapshot(conn, card_id=card_id),
++    )
++    inserted = conn.execute(
++        "INSERT INTO picks (card_id, transition_id, ticker, picked_at, session, origin, account_mode, "
++        "pool_member_id, not_in_pool, pool_basis, pool_rank, pool_size, rank_metric, rank_value, "
++        "pool_scan_id, pool_scan_at, card_score, card_score_rank, focus_top4, score_basis, score_inputs) "
++        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb) "
++        "RETURNING id",
++        (
++            row.card_id, row.transition_id, row.ticker, row.picked_at, row.session, row.origin,
++            row.account_mode, row.pool.pool_member_id, row.pool.not_in_pool, row.pool.pool_basis,
++            row.pool.pool_rank, row.pool.pool_size, row.pool.rank_metric, row.pool.rank_value,
++            row.pool.pool_scan_id, row.pool.pool_scan_at, row.score.card_score,
++            row.score.card_score_rank, row.score.focus_top4, row.score.score_basis,
++            json.dumps(row.score.score_inputs),
++        ),
++    ).fetchone()
++    if inserted is None:
++        raise PickError(f"pick INSERT for card {card_id} returned no id")
++    return int(inserted[0])
++
++
++def _fmt_value(metric: str | None, value: Decimal | None) -> str:
++    if metric is None:
++        return "—"
++    return f"{metric} {'—' if value is None else format(value.normalize(), 'f')}"
++
++
++def render_picks_report(
++    rows: list[PickReportRow], *, day: date, cutoff: datetime | None
++) -> tuple[str, int]:
++    """(table text, MISSING count that fails the command).
++
++    A FILLED transition with no pick prints MISSING. With `cutoff` (the P4
++    deploy instant, K6), a gap before it prints `MISSING (before cutoff)`
++    and is not counted — historical gaps stay visible, never fatal.
++    """
++    lines = [
++        f"picks {day.isoformat()} — every FILLED transition that ET day",
++        f"{'filled (ET)':<9} {'card':>6} {'ticker':<7} {'state':<7} {'pool':<14} "
++        f"{'value':<18} {'score rank':<10} basis",
++    ]
++    counted = 0
++    for row in rows:
++        at = row.filled_at.astimezone(ET).strftime("%H:%M:%S")
++        if row.pick_id is None:
++            before = cutoff is not None and row.filled_at < cutoff
++            if not before:
++                counted += 1
++            label = "MISSING (before cutoff)" if before else "MISSING"
++            lines.append(f"{at:<9} {row.card_id:>6} {row.ticker} {row.state:<7} {label}")
++            continue
++        if row.not_in_pool:
++            pool = "not in pool" if row.pool_basis == "pool" else "—"
++        else:
++            pool = f"#{row.pool_rank}/{row.pool_size}"
++        score = "—" if row.card_score_rank is None else f"#{row.card_score_rank} ({row.card_score})"
++        basis = row.score_basis if row.pool_basis == "pool" else f"{row.pool_basis}; {row.score_basis}"
++        lines.append(
++            f"{at:<9} {row.card_id:>6} {row.ticker} {row.state:<7} {pool:<14} "
++            f"{_fmt_value(row.rank_metric, row.rank_value):<18} {score:<10} {basis}"
++        )
++    lines.append(f"{len(rows)} FILLED transition(s) · {counted} MISSING")
++    return "\n".join(lines), counted
++
++
++__all__ = [
++    "COHORT_STATES",
++    "CohortEntry",
++    "FOCUS_TOP_N",
++    "PICK_SAVEPOINT",
++    "PickError",
++    "PickReportRow",
++    "PickRow",
++    "PoolSnapshot",
++    "ScoreSnapshot",
++    "TIE_POLICY",
++    "configured_pool_key",
++    "pool_snapshot",
++    "rank_in_cohort",
++    "record_pick",
++    "render_picks_report",
++    "score_snapshot",
++]
+diff --git a/src/cobalt/cards/store.py b/src/cobalt/cards/store.py
+index 9df4a42..25f6987 100644
+--- a/src/cobalt/cards/store.py
++++ b/src/cobalt/cards/store.py
+@@ -40,12 +40,15 @@ from decimal import Decimal
+ from pathlib import Path
+ from typing import Any, Optional
+ 
++from loguru import logger
++
+ from cobalt import db, env
+ from cobalt.db import Side
+ from cobalt.aset.store import MIGRATIONS_DIR as ASET_MIGRATIONS
+ from cobalt.session import assert_writable, session_clock
+ from cobalt.session import clock as clock_mod
+ 
++from . import picks
+ from .models import (
+     ALLOWED,
+     FILL_TARGET,
+@@ -53,6 +56,7 @@ from .models import (
+     TERMINAL,
+     Actor,
+     CardState,
++    FillResult,
+     IllegalTransition,
+     Origin,
+     assert_edge,
+@@ -187,6 +191,34 @@ class CardStore:
+             raise CardStateError(f"no aset_sizings row with id {card_id}")
+         return Origin(row[0])
+ 
++    def filled_with_picks(self, day: date) -> list[dict[str, Any]]:
++        """Every FILLED transition on ET `day`, left-joined to its pick.
++
++        Driven by `card_transitions`, not by current `state`, card creation
++        date or `filled_at` (S2-P4, Astra R1-7): a card that later CLOSED
++        still carries its pick, and the direct-button route never sets
++        `filled_at`. A FILLED transition with no pick row is a gap —
++        `cobalt cards picks` prints it MISSING.
++        """
++        with self._connect() as conn:
++            cur = conn.execute(
++                """
++                SELECT t.id AS transition_id, t.card_id, t.at AS filled_at, s.ticker,
++                       s.state, s.origin, p.id AS pick_id, p.not_in_pool, p.pool_basis,
++                       p.pool_rank, p.pool_size, p.rank_metric, p.rank_value, p.card_score,
++                       p.card_score_rank, p.focus_top4, p.score_basis
++                FROM card_transitions t
++                JOIN aset_sizings s ON s.id = t.card_id
++                LEFT JOIN picks p ON p.transition_id = t.id
++                WHERE t.to_state = 'FILLED'
++                  AND (t.at AT TIME ZONE 'America/New_York')::date = %s
++                ORDER BY t.at, t.id
++                """,
++                (day,),
++            )
++            columns = [d.name for d in cur.description]
++            return [dict(zip(columns, r)) for r in cur.fetchall()]
++
+     def open_cards(self) -> list[dict[str, Any]]:
+         """Cards not in a terminal state — what the expiry job considers
+         and what the sheet lists. Derived from ALLOWED, so adding a
+@@ -403,12 +435,23 @@ class CardStore:
+         reason: Optional[str] = None,
+         now: Optional[datetime] = None,
+         allow_prod: bool = False,
+-    ) -> list[int]:
++    ) -> FillResult:
+         """Fill a card. THE entry point for reaching FILLED.
+ 
+-        Returns the `card_transitions` row ids written, in order — so a
+-        one-click fill from WATCH returns three and a fill of an already
+-        TRIGGERED card returns one.
++        Returns a `FillResult`: the `card_transitions` row ids written, in
++        order — three on a one-click fill from WATCH, one on a fill of an
++        already TRIGGERED card — and whether the F3 pick row was recorded.
++
++        ONE TRANSACTION ON EVERY ROUTE (S2-P4, Astra R1-4). The fill opens
++        one USER transaction and passes it to every `transition()` hop,
++        the strict single-hop route included. After the FILLED hop, still
++        inside it, `picks.record_pick` runs under `SAVEPOINT pick`. Any
++        exception there rolls back to the savepoint ONLY: the fill commits,
++        `pick_recorded` is False with the error named, and one ERROR line
++        (card id + error class) goes to the process log — for the sheet,
++        `com.cobalt.aset`'s stderr, `~/cobalt/logs/aset.err`. A failure of
++        the fill itself (a hop, the savepoint rollback, the commit) rolls
++        everything back and raises; it never returns a result.
+ 
+         ONE CLICK ON A MANUAL CARD (CTO review of S1-P2, 2026-09-04).
+         A card whose `origin` is `manual` may be filled from WATCH or
+@@ -437,19 +480,10 @@ class CardStore:
+             raise IllegalTransition(state, FILL_TARGET, card_id)
+ 
+         route = fill_path(state)
+-        if origin is not Origin.MANUAL or len(route) <= 1:
+-            # Strict path: radar cards, and manual cards already sitting
+-            # one legal edge away. `transition()` raises by name if the
+-            # single edge is not legal (a terminal card, say).
+-            return [
+-                self.transition(
+-                    card_id, FILL_TARGET, actor=actor, evidence=evidence,
+-                    reason=reason, now=ts, allow_prod=allow_prod,
+-                )
+-            ]
+-
+-        if not route:
+-            raise IllegalTransition(state, FILL_TARGET, card_id)
++        # Strict path: radar cards, and manual cards already sitting one
++        # legal edge away. `transition()` raises by name if the single
++        # edge is not legal (a terminal card, say).
++        strict = origin is not Origin.MANUAL or len(route) <= 1
+ 
+         # EVERY HOP IN ONE TRANSACTION. A shortcut that crashed between
+         # ARMED and TRIGGERED would leave a card armed that nobody armed
+@@ -459,34 +493,67 @@ class CardStore:
+         conn = self._connect(allow_prod=allow_prod)
+         conn.autocommit = False
+         try:
+-            for hop in route[:-1]:
+-                ids.append(
+-                    self.transition(
+-                        card_id, hop,
+-                        actor=Actor.COBALT,
+-                        evidence=dict(AUTO_FILL_EVIDENCE),
+-                        reason=(
+-                            f"inserted by the one-click fill: a manual card cannot reach "
+-                            f"{FILL_TARGET.value} without passing through {hop.value}, and "
+-                            "the trader filled it. Not his tap — actor is cobalt."
+-                        ),
+-                        now=ts,
+-                        conn=conn,
++            if not strict:
++                for hop in route[:-1]:
++                    ids.append(
++                        self.transition(
++                            card_id, hop,
++                            actor=Actor.COBALT,
++                            evidence=dict(AUTO_FILL_EVIDENCE),
++                            reason=(
++                                f"inserted by the one-click fill: a manual card cannot reach "
++                                f"{FILL_TARGET.value} without passing through {hop.value}, and "
++                                "the trader filled it. Not his tap — actor is cobalt."
++                            ),
++                            now=ts,
++                            conn=conn,
++                        )
+                     )
+-                )
+             ids.append(
+                 self.transition(
+                     card_id, FILL_TARGET, actor=actor, evidence=evidence,
+                     reason=reason, now=ts, conn=conn,
+                 )
+             )
++            pick_id, pick_error = self._record_pick(conn, card_id, ids[-1], ts)
+             conn.commit()
+         except BaseException:
+             conn.rollback()
+             raise
+         finally:
+             conn.close()
+-        return ids
++        return FillResult(
++            transition_ids=ids,
++            pick_recorded=pick_id is not None,
++            pick_id=pick_id,
++            pick_error=pick_error,
++        )
++
++    @staticmethod
++    def _record_pick(
++        conn, card_id: int, transition_id: int, ts: datetime
++    ) -> tuple[Optional[int], Optional[str]]:
++        """F3 pick under `SAVEPOINT pick` (S2-P4 R2). Returns (pick id,
++        None) or (None, "<ErrorClass>: <message>").
++
++        Only `Exception` is caught: an interrupt still aborts the fill. If
++        the ROLLBACK TO SAVEPOINT itself fails the connection is unusable
++        and that error propagates — the fill rolls back and raises.
++        """
++        conn.execute(f"SAVEPOINT {picks.PICK_SAVEPOINT}")
++        try:
++            pick_id = picks.record_pick(conn, card_id, transition_id, ts)
++        except Exception as exc:
++            conn.execute(f"ROLLBACK TO SAVEPOINT {picks.PICK_SAVEPOINT}")
++            logger.error(
++                "card {}: pick NOT recorded ({}) — the fill commits; "
++                "`cobalt cards picks` reports it MISSING",
++                card_id,
++                type(exc).__name__,
++            )
++            return None, f"{type(exc).__name__}: {exc}"
++        conn.execute(f"RELEASE SAVEPOINT {picks.PICK_SAVEPOINT}")
++        return pick_id, None
+ 
+     # -- genesis ------------------------------------------------------
+ 
+@@ -1206,4 +1273,4 @@ _DOT_UPSERT_ENGINE = (
+ )
+ 
+ 
+-__all__ = ["BACKFILL_MARKER", "CardStateError", "CardStore", "IllegalTransition"]
++__all__ = ["BACKFILL_MARKER", "CardStateError", "CardStore", "FillResult", "IllegalTransition"]
+diff --git a/src/cobalt/aset/radar_panel.py b/src/cobalt/aset/radar_panel.py
+index 2c118e9..fdf0beb 100644
+--- a/src/cobalt/aset/radar_panel.py
++++ b/src/cobalt/aset/radar_panel.py
+@@ -28,7 +28,7 @@ from cobalt.cards import TERMINAL, CardState, CardStore
+ from cobalt.cards.models import KEY_EDITABLE
+ from cobalt.cards.radar import FIELD_OWNERS, LadderEntry, ladder_order
+ from cobalt.cards.scoring import Dot, colour_thresholds, dot_colour
+-from cobalt.radar.models import PoolBlock
++from cobalt.radar.models import PoolBlock, RankMetricName
+ from cobalt.radar.store import RadarStore
+ from cobalt.session.clock import now_utc, session_clock
+ from cobalt.session.models import Session
+@@ -118,6 +118,10 @@ class MembershipRecord(_ViewModel):
+     opened_scan_id: int
+     last_scan_id: int
+     closed_scan_id: int | None
++    # S2-P4 R1 — required, nullable. NULL is a pre-deploy episode; a row
++    # MISSING the keys is a store that did not select them, and fails.
++    rank_metric: RankMetricName | None
++    rank_value: Decimal | None
+ 
+     @field_validator("first_seen_at", "entered_at", "left_at")
+     @classmethod
+@@ -152,6 +156,8 @@ class PoolRow(_ViewModel):
+     entered_at: datetime | None
+     left_at: datetime | None
+     excluded_by: str | None
++    rank_metric: RankMetricName | None
++    rank_value: Decimal | None
+     category: Literal["current", "departed", "excluded"]
+     entered_since: bool = False
+     left_since: bool = False
+@@ -414,6 +420,8 @@ def _row(
+         entered_at=record.entered_at,
+         left_at=record.left_at,
+         excluded_by=record.excluded_by,
++        rank_metric=record.rank_metric,
++        rank_value=record.rank_value,
+         category=category,
+         entered_since=bool(admitted and since is not None and record.entered_at > since),
+         left_since=bool(
+@@ -785,6 +793,18 @@ def _fmt_dt(value: datetime | None) -> str:
+     return "—" if value is None else value.isoformat(timespec="seconds")
+ 
+ 
++def _rank_value_cell(row: PoolRow) -> str:
++    """The metric that ranked this row and its stored value, e.g.
++    `volume 1234567` or `rvol 3.25`. A pre-deploy row (both NULL) is a
++    dash; a metric with no value prints the name and a dash. The value is
++    the stored NUMERIC with trailing zeros dropped — never rounded."""
++    if row.rank_metric is None:
++        return "—"
++    if row.rank_value is None:
++        return f"{row.rank_metric} —"
++    return f"{row.rank_metric} {format(row.rank_value.normalize(), 'f')}"
++
++
+ def _pool_table(rows: list[PoolRow], title: str) -> str:
+     e = html.escape
+ 
+@@ -794,6 +814,7 @@ def _pool_table(rows: list[PoolRow], title: str) -> str:
+         return (
+             f'<tr data-episode-id="{row.episode_id}" data-category="{row.category}">'
+             f'<td class="mono">{e(str(row.position or "—"))}</td><td class="ticker">{e(row.ticker)}</td>'
++            f'<td class="mono rank-value">{e(_rank_value_cell(row))}</td>'
+             f"<td>{e(row.session.value)}</td><td>{e(row.source)}</td>"
+             f"<td>{e(_fmt_dt(row.entered_at))} {entered_badge}</td>"
+             f"<td>{e(_fmt_dt(row.left_at))} {left_badge}</td>"
+@@ -802,10 +823,10 @@ def _pool_table(rows: list[PoolRow], title: str) -> str:
+ 
+     body = "".join(render_row(row) for row in rows)
+     if not body:
+-        body = '<tr><td colspan="7" class="muted">none</td></tr>'
++        body = '<tr><td colspan="8" class="muted">none</td></tr>'
+     return (
+         f'<h3>{e(title)} <span class="count">{len(rows)}</span></h3>'
+-        "<table><thead><tr><th>rank</th><th>ticker</th><th>session</th><th>source</th>"
++        "<table><thead><tr><th>rank</th><th>ticker</th><th>value</th><th>session</th><th>source</th>"
+         f"<th>entered</th><th>left</th><th>excluded by</th></tr></thead><tbody>{body}</tbody></table>"
+     )
+ 
+diff --git a/src/cobalt/aset/store.py b/src/cobalt/aset/store.py
+index 382fcc4..e612aff 100644
+--- a/src/cobalt/aset/store.py
++++ b/src/cobalt/aset/store.py
+@@ -184,7 +184,7 @@ class AsetStore:
+ 
+     def mark_filled(
+         self, row_id: int, fill: "FillRecompute", *, now: Optional[datetime] = None
+-    ) -> None:
++    ) -> "FillResult":
+         """Fill-recompute persists as an UPDATE to the card row it
+         belongs to (2026-09-03, LAW L28 step 3).
+ 
+@@ -207,10 +207,14 @@ class AsetStore:
+         # manual card. Two ways to fill a card that disagreed about what
+         # a fill requires would be exactly the second write path the
+         # one-path rule forbids.
++        #
++        # S2-P4 (Astra R1-5): the fill's `FillResult` is RETURNED, not
++        # dropped — the sheet renders "pick not recorded" from it. A pick
++        # gap never stops the fill figures below from persisting.
+         from cobalt.cards.models import Actor
+         from cobalt.cards.store import CardStore
+ 
+-        CardStore(self.db_name).fill(
++        filled = CardStore(self.db_name).fill(
+             row_id,
+             actor=Actor.YOU,
+             evidence={
+@@ -250,6 +254,7 @@ class AsetStore:
+                     f"{row_id} (expected exactly 1) — refusing to report a fill "
+                     "that was not persisted."
+                 )
++        return filled
+ 
+     def account_mode_for(self, row_id: int) -> str:
+         with self._connect() as conn:
+diff --git a/src/cobalt/aset/web.py b/src/cobalt/aset/web.py
+index ca4dfaf..1fa1b2f 100644
+--- a/src/cobalt/aset/web.py
++++ b/src/cobalt/aset/web.py
+@@ -743,6 +743,18 @@ def _failed(message: str) -> str:
+     return f'<div class="failed">FAILED\n{html.escape(message)}</div>'
+ 
+ 
++def _pick_banner(card_id: int, filled) -> str:
++    """S2-P4 R2: the red "pick not recorded" banner, APPENDED after a fill's
++    success banner — the fill committed; only the F3 pick row is missing.
++    Empty when the pick was recorded."""
++    if filled.pick_recorded:
++        return ""
++    return _failed(
++        f"card {card_id}: pick not recorded ({filled.pick_error}). The fill stands; "
++        "`cobalt cards picks` reports this card MISSING."
++    )
++
++
+ def _resolve_risk_dollars(sheet_modes_cfg, mode: str, grade: str) -> Decimal:
+     """Every real Grade now has a configured dollar figure (D is always
+     0), so this only needs a fallback for a garbage/missing grade or
+@@ -1086,7 +1098,7 @@ async def fill(request: Request) -> str:
+         # IllegalTransition naming the edge — it is NOT coerced, because
+         # a card that reached FILLED without ever being TRIGGERED makes
+         # the MISSED count (Charter §3 F7) meaningless.
+-        store.mark_filled(int(card_row_raw), fill_result)
++        filled = store.mark_filled(int(card_row_raw), fill_result)
+ 
+         note_path, note_write = save_fill_update(cfg, fill_result, orig_timestamp)
+     except IllegalTransition as e:
+@@ -1115,6 +1127,7 @@ async def fill(request: Request) -> str:
+             f"FILLED · fill update {html.escape(note_write.action)} in "
+             f"{html.escape(str(note_path))}</div>"
+         )
++    banner += _pick_banner(int(card_row_raw), filled)
+     return _render(
+         banner=banner,
+         result=_result_card(original, form, fill=fill_result),
+@@ -1181,17 +1194,19 @@ async def card_move(card_id: int, request: Request) -> str:
+         store.ensure_schema()
+         before = store.state_of(card_id)
+         to_state = CardState(form.get("to", ""))
++        filled = None
+         if to_state is FILL_TARGET:
+             # ONE PATH TO FILLED (S1-P3): the same `fill()` the
+             # actual-fill form calls, so the one-click completion happens
+             # here too and a radar card is refused here too. `tids` is
+             # every row it wrote — three on a WATCH manual card.
+-            tids = store.fill(
++            filled = store.fill(
+                 card_id,
+                 actor=Actor.YOU,
+                 evidence={"via": "aset.sheet"},
+                 reason=(form.get("reason") or "").strip() or None,
+             )
++            tids = filled.transition_ids
+         else:
+             tids = [
+                 store.transition(
+@@ -1217,6 +1232,7 @@ async def card_move(card_id: int, request: Request) -> str:
+         banner=f'<div class="saved">card {card_id}: {before} → '
+         f'{html.escape(form.get("to", ""))} (card_transitions id(s) '
+         f'{", ".join(str(i) for i in tids)}){extra}</div>'
++        + (_pick_banner(card_id, filled) if filled is not None else "")
+     )
+ 
+ 
+diff --git a/src/cobalt/settings/cli.py b/src/cobalt/settings/cli.py
+index 2edf6e0..5c405b0 100644
+--- a/src/cobalt/settings/cli.py
++++ b/src/cobalt/settings/cli.py
+@@ -3,8 +3,16 @@ own settings (ADR-0008 D3.4).
+ 
+     cobalt settings load --from configs/cobalt   --dry-run | --apply
+     cobalt settings load --from-git <commit>     --dry-run | --apply
++    cobalt settings load --card     <file> [--sha256 <hash>] --dry-run | --apply
++    cobalt settings load --optional <file> [--sha256 <hash>] --dry-run | --apply
+     cobalt settings show
+ 
++`--card` (S2-P2, `.card`) and `--optional` (S2-P4) each load their own
++reviewed file — the card settings (`radar.cards_enabled`, `card.*`) and
++the optional keys (`radar.benchmark`) — whose bytes must hash to
++`--sha256` before anything parses. Neither combines with the other or
++with `--from` / `--from-git`.
++
+ `--from` reads the two YAML files out of a directory. `--from-git` reads
+ the same two files at a revision — which is how a LIVE seed works after
+ they have left the working tree, exactly as the taxonomy migration reads
+@@ -21,15 +29,20 @@ want to.
+ from __future__ import annotations
+ 
+ import argparse
++import hashlib
+ import json
+ import subprocess
+ from pathlib import Path
+ 
++import yaml
++
+ from cobalt.session import assert_writable
+ 
+ from .models import (
+     ASET_FILENAME,
+     DAYMODE_FILENAME,
++    OPTIONAL_SETTING_KEYS,
++    OPTIONAL_SETTING_MODELS,
+     SETTING_KEYS,
+     TraderSettings,
+     TraderSettingsError,
+@@ -65,24 +78,135 @@ def _texts_from_git(commit: str) -> dict[str, str]:
+     return out
+ 
+ 
++OPTIONAL_FILE_ROOT = "optional_settings"
++
++
++def load_optional_file(path: Path, *, sha256: str | None, require_hash: bool) -> dict:
++    """Read, hash-verify and validate an optional-settings file (S2-P4
++    R5, Astra R1-14). Returns `{key: jsonable value}`.
++
++    THE HASH IS OF THE FILE'S BYTES and is checked BEFORE anything
++    parses: the file he reviewed is the file that loads, byte for byte.
++    Only keys in `OPTIONAL_SETTING_KEYS` are accepted; a required sheet
++    key submitted here is refused by name, because two load paths for one
++    row is the one-path rule's failure.
++
++        optional_settings:
++          radar.benchmark: {top_n: 20, min_move_pct: 10}
++    """
++    try:
++        payload = Path(path).read_bytes()
++    except OSError as e:
++        raise TraderSettingsError(f"{path}: cannot read optional-settings file: {e}") from e
++    digest = hashlib.sha256(payload).hexdigest()
++    if sha256 is None:
++        if require_hash:
++            raise TraderSettingsError(
++                f"{path}: --apply needs --sha256 of the reviewed file (this file hashes "
++                f"to {digest}). A trader-run apply names the exact bytes it loads."
++            )
++    elif sha256.strip().lower() != digest:
++        raise TraderSettingsError(
++            f"{path}: sha256 mismatch — reviewed {sha256.strip().lower()}, file is "
++            f"{digest}. Nothing loaded."
++        )
++    try:
++        raw = yaml.safe_load(payload.decode("utf-8"))
++    except (UnicodeDecodeError, yaml.YAMLError) as e:
++        raise TraderSettingsError(f"{path}: not valid YAML: {e}") from e
++    if not isinstance(raw, dict) or set(raw) != {OPTIONAL_FILE_ROOT}:
++        raise TraderSettingsError(
++            f"{path}: expected exactly one top-level mapping {OPTIONAL_FILE_ROOT!r}"
++        )
++    body = raw[OPTIONAL_FILE_ROOT]
++    if not isinstance(body, dict) or not body:
++        raise TraderSettingsError(f"{path}: {OPTIONAL_FILE_ROOT} must be a non-empty mapping")
++    rows: dict = {}
++    for key, value in body.items():
++        if key in SETTING_KEYS:
++            raise TraderSettingsError(
++                f"{path}: {key!r} is a required sheet/day-mode setting — it loads through "
++                "--from/--from-git only"
++            )
++        model = OPTIONAL_SETTING_MODELS.get(key)
++        if model is None:
++            raise TraderSettingsError(
++                f"{path}: unknown optional setting {key!r}; accepted: "
++                f"{list(OPTIONAL_SETTING_KEYS)}"
++            )
++        rows[key] = model.from_rows({key: value}).row()
++    return rows
++
++
++def cmd_load_optional(args: argparse.Namespace) -> None:
++    dry_run = _require_mode(args)
++    try:
++        rows = load_optional_file(
++            Path(args.optional), sha256=args.sha256, require_hash=not dry_run
++        )
++    except TraderSettingsError as e:
++        raise SystemExit(f"FAILED: {e}") from e
++
++    store = TraderSettingsStore()
++    current = store.values()
++    source_label = f"optional:{Path(args.optional).name}"
++    print(f"cobalt settings load — {'DRY RUN' if dry_run else 'APPLY'} from {source_label}\n")
++    changed = [key for key in rows if current.get(key) != rows[key]]
++    for key in rows:
++        old = current.get(key)
++        if key not in changed:
++            print(f"  = {key}")
++            continue
++        print(f"  {'+' if old is None else '~'} {key}")
++        print(f"      db  : {json.dumps(old, sort_keys=True) if old is not None else '(absent)'}")
++        print(f"      file: {json.dumps(rows[key], sort_keys=True)}")
++    if not changed:
++        print("\nno differences — the database already holds these settings.")
++        return
++    if dry_run:
++        print(f"\nDRY RUN — {len(changed)} setting(s) would change. Nothing written.")
++        return
++
++    assert_writable("settings.load", target='"user".trader_settings')
++    outcome = store.put({key: rows[key] for key in changed}, source=source_label)
++    print(f"\napplied: {outcome} (sha256 {args.sha256})")
++    reloaded = store.values()
++    drift = [key for key in rows if reloaded.get(key) != rows[key]]
++    if drift:
++        raise SystemExit(f"FAILED: what the database now returns differs from the file: {drift}")
++    for key in rows:
++        OPTIONAL_SETTING_MODELS[key].from_rows(reloaded)
++    print("round trip: database == file, every optional key re-validates.")
++
++
+ def cmd_load(args: argparse.Namespace) -> None:
+     if getattr(args, "card", None):
+-        if args.from_dir or args.from_git:
++        if args.from_dir or args.from_git or getattr(args, "optional", None):
+             raise SystemExit(
+                 "cobalt settings load: --card loads the card-settings file only; "
+-                "it does not combine with --from / --from-git."
++                "it does not combine with --from / --from-git / --optional."
+             )
+         from .card import cmd_load_card
+ 
+         cmd_load_card(args)
+         return
++    if getattr(args, "optional", None):
++        if args.from_dir or args.from_git:
++            raise SystemExit(
++                "cobalt settings load: --optional loads the optional-settings file only; "
++                "it does not combine with --from / --from-git."
++            )
++        cmd_load_optional(args)
++        return
+     if getattr(args, "sha256", None):
+-        raise SystemExit("cobalt settings load: --sha256 verifies a --card file only.")
++        raise SystemExit(
++            "cobalt settings load: --sha256 verifies a --card or an --optional file only."
++        )
+     dry_run = _require_mode(args)
+     if bool(args.from_dir) == bool(args.from_git):
+         raise SystemExit(
+             "cobalt settings load: pass exactly one of --from <dir>, "
+-            "--from-git <commit> or --card <file>."
++            "--from-git <commit>, --card <file> or --optional <file>."
+         )
+ 
+     if args.from_git:
+@@ -181,10 +305,15 @@ def add_parser(sub) -> None:
+         metavar="FILE",
+         help="The reviewed card-settings file (radar.cards_enabled, card.*; S2-P2).",
+     )
++    load.add_argument(
++        "--optional",
++        metavar="FILE",
++        help="The reviewed optional-settings file (radar.benchmark; S2-P4).",
++    )
+     load.add_argument(
+         "--sha256",
+         metavar="HASH",
+-        help="sha256 of the reviewed --card file's bytes; required with --apply.",
++        help="sha256 of the reviewed --card / --optional file's bytes; required with --apply.",
+     )
+     load.add_argument("--dry-run", action="store_true")
+     load.add_argument("--apply", action="store_true")
+diff --git a/src/cobalt/settings/models.py b/src/cobalt/settings/models.py
+index eaf18f2..d1070c3 100644
+--- a/src/cobalt/settings/models.py
++++ b/src/cobalt/settings/models.py
+@@ -16,11 +16,12 @@ rather than believed.
+ from __future__ import annotations
+ 
+ import json
++from decimal import Decimal
+ from pathlib import Path
+ from typing import Any, Optional
+ 
+ import yaml
+-from pydantic import BaseModel, ConfigDict, ValidationError
++from pydantic import BaseModel, ConfigDict, Field, ValidationError
+ 
+ from cobalt.aset.config import SheetModesConfig
+ from cobalt.daymode.config import DayModeConfig
+@@ -45,11 +46,58 @@ SETTING_KEYS = (*SHEET_KEYS, *DAYMODE_KEYS)
+ ASET_FILENAME = "aset.yaml"
+ DAYMODE_FILENAME = "daymode.yaml"
+ 
++#: S2-P4 R5: the nightly replay's benchmark — his values, applied by his
++#: hand (L53). OPTIONAL on purpose and NEVER in `SETTING_KEYS` (plan F14):
++#: a key in that tuple is required by the sheet, and a missing benchmark
++#: must fail the replay's movers step loudly, not the ASET sheet.
++BENCHMARK_KEY = "radar.benchmark"
++
++#: Every optional key the `--optional` loader path accepts, with the model
++#: that validates it. One registry, so the loader and every reader agree.
++OPTIONAL_SETTING_KEYS = (BENCHMARK_KEY,)
++
+ 
+ class TraderSettingsError(RuntimeError):
+     """Settings missing or invalid — crash, never fall back."""
+ 
+ 
++class BenchmarkSettings(BaseModel):
++    """`radar.benchmark` (S2-P4 R5): how many unfiltered movers per side
++    the replay archives, and the |change| at or above which a mover the
++    pool never admitted is a miss."""
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    top_n: int = Field(gt=0)
++    min_move_pct: Decimal = Field(gt=0)
++
++    @classmethod
++    def from_rows(cls, rows: dict[str, Any]) -> "BenchmarkSettings":
++        """The runtime reader. Absent or malformed -> loud, never a default."""
++        if BENCHMARK_KEY not in rows:
++            raise TraderSettingsError(
++                f'"user".trader_settings has no {BENCHMARK_KEY!r} row — the replay does '
++                "not invent a benchmark. Load the reviewed file with `cobalt settings "
++                "load --optional <file> --sha256 <hash> --apply`."
++            )
++        value = rows[BENCHMARK_KEY]
++        if not isinstance(value, dict):
++            raise TraderSettingsError(
++                f"{BENCHMARK_KEY} must be a mapping {{top_n, min_move_pct}}, got "
++                f"{type(value).__name__}"
++            )
++        try:
++            return cls(**value)
++        except ValidationError as e:
++            raise TraderSettingsError(f"invalid {BENCHMARK_KEY}:\n{e}") from e
++
++    def row(self) -> dict[str, Any]:
++        return _jsonable(self.model_dump(mode="json"))
++
++
++OPTIONAL_SETTING_MODELS: dict[str, type[BaseModel]] = {BENCHMARK_KEY: BenchmarkSettings}
++
++
+ def _jsonable(value: Any) -> Any:
+     """Round-trip through the JSON the column stores, so an in-memory
+     Decimal and a Decimal read back from JSONB compare equal."""
+@@ -204,7 +252,11 @@ class TraderSettings(BaseModel):
+ 
+ __all__ = [
+     "ASET_FILENAME",
++    "BENCHMARK_KEY",
++    "BenchmarkSettings",
+     "DAYMODE_FILENAME",
++    "OPTIONAL_SETTING_KEYS",
++    "OPTIONAL_SETTING_MODELS",
+     "DAYMODE_KEYS",
+     "SETTING_KEYS",
+     "SHEET_KEYS",
+diff --git a/src/cobalt/jobs/restarts.py b/src/cobalt/jobs/restarts.py
+index b4eb908..0caf642 100644
+--- a/src/cobalt/jobs/restarts.py
++++ b/src/cobalt/jobs/restarts.py
+@@ -194,6 +194,10 @@ def classify(git_range: str, registry: JobRegistry | None = None) -> list[Classi
+             if label in {job.label for job in residents}:
+                 restarts.add(label)
+             rule = "plist in diff"
++            spec = registry.by_label.get(label)
++            if item.change == "A" and spec is not None and spec.kind is not JobKind.RESIDENT:
++                # S2-P4 R1-22/R2-6: a new one-shot is loaded, not restarted.
++                rule += f"; new one-shot, bootstrap once: {label}"
+         readers = registry.readers_of(path)
+         if readers:
+             restarts.update(job.label for job in readers)
+@@ -238,6 +242,12 @@ def classify(git_range: str, registry: JobRegistry | None = None) -> list[Classi
+             rule = "operations documentation; no resident"
+         if not rule and path == "configs/cobalt/watchlists.yaml":
+             rule = "one-shot archiver reads fresh; no resident"
++        if not rule and path.startswith("configs/cobalt/smoke/"):
++            # S2-P4 §5 (Astra R2-6): read only by `cobalt smoke`, run by hand;
++            # no plist invokes it and no resident imports cobalt.smoke
++            # (test_a_smoke_suite_file_derives_no_restart_and_no_job_runs_the_smoke).
++            output.append(Classification(path, item.change, "operator command (cobalt smoke); no job reads", ()))
++            continue
+         if not rule and path.startswith("configs/"):
+             output.append(Classification(path, item.change, "UNCLASSIFIED CONFIG", all_labels, True))
+             continue
+diff --git a/src/cobalt/jobs/wrapper.py b/src/cobalt/jobs/wrapper.py
+index 0ab0cff..14faa46 100644
+--- a/src/cobalt/jobs/wrapper.py
++++ b/src/cobalt/jobs/wrapper.py
+@@ -20,10 +20,13 @@ WHAT IT GUARANTEES, in order:
+    keeps the watcher running so it can report the stop itself.
+ 2. `running` is marked before the work, with `started_at`.
+ 3. A BEATER THREAD stamps `heartbeat_at` every `timeout_s /
+-   jobs.heartbeat_fraction` (5 min for the 15-min archiver window). This
+-   is the ONLY thing that distinguishes a long job from a hung one — the
+-   archiver legitimately runs 23 minutes, so "started and did not
+-   finish" cannot be the zombie test.
++   jobs.heartbeat_fraction` — the job's OWN registry timeout divided by
++   the tunable, never a fixed interval, so the stamp rate moves whenever
++   either number is ruled. With today's shipped values (`com.cobalt.
++   archiver` `timeout_s: 2400`, `jobs.heartbeat_fraction: 3`) that is a
++   stamp every 800 s. This is the ONLY thing that distinguishes a long
++   job from a hung one — the archiver legitimately runs 23 minutes, so
++   "started and did not finish" cannot be the zombie test.
+ 4. `done` (exit 0) or `failed` (exit code + the exception, redacted
+    through F19 on the way into the column) — and `failed` is LOUD.
+ 5. The exception is RE-RAISED. The wrapper reports; it never swallows.
+diff --git a/src/cobalt/archiver/runner.py b/src/cobalt/archiver/runner.py
+index a346538..649867c 100644
+--- a/src/cobalt/archiver/runner.py
++++ b/src/cobalt/archiver/runner.py
+@@ -27,7 +27,24 @@ from .store import BarStore
+ GENTLE_SLEEP_SECONDS = 1.2
+ 
+ 
++def _check_demand(targets: list[tuple[str, Interval]], mode: str) -> None:
++    """L53 (S2-P4 R1-13/R2-5): the ONE shared total-demand gate, before the
++    first request. The nightly run is the registry's `archiver` consumer; a
++    manual backfill is unscheduled, so it counts against every window."""
++    from cobalt.radar.notes import DemandConsumer, check_scheduled_demand
++
++    if mode == "full":
++        check_scheduled_demand("archiver")
++        return
++    backfill = DemandConsumer(
++        name="backfill", rpm=min(len(targets), 60 / GENTLE_SLEEP_SECONDS), window=None,
++        basis=f"{len(targets)} request(s), pacing bound, unscheduled",
++    )
++    check_scheduled_demand("backfill", extra=[backfill])
++
++
+ async def _run_targets(targets: list[tuple[str, Interval]], mode: str) -> RunSummary:
++    _check_demand(targets, mode)
+     summary = RunSummary(mode=mode)
+     store = BarStore()
+     store.ensure_schema()
+diff --git a/src/cobalt/archiver/store.py b/src/cobalt/archiver/store.py
+index 9bbbdb9..2e0e793 100644
+--- a/src/cobalt/archiver/store.py
++++ b/src/cobalt/archiver/store.py
+@@ -19,7 +19,7 @@ from typing import Callable, Optional
+ from cobalt import db, env
+ from cobalt.db import Side
+ 
+-from .models import Bar
++from .models import Bar, Interval
+ 
+ MIGRATION_SQL = Path(__file__).parent / "migrations" / "0001_bars.sql"
+ 
+@@ -94,6 +94,21 @@ class BarStore:
+                 before_commit()
+         return len(rows)
+ 
++    def bars_between(self, ticker: str, interval: Interval, start, end) -> list[Bar]:
++        """Stored bars for one ticker/interval with `start <= ts < end`,
++        oldest first — the read the nightly replay's coverage check and
++        counterfactual R consume (S2-P4)."""
++        with self._connect() as conn:
++            rows = conn.execute(
++                "SELECT ticker, interval, ts, open, high, low, close, volume FROM bars "
++                "WHERE ticker = %s AND interval = %s AND ts >= %s AND ts < %s ORDER BY ts",
++                (ticker, Interval(interval).value, start, end),
++            ).fetchall()
++        return [
++            Bar(ticker=r[0], interval=r[1], ts=r[2], open=r[3], high=r[4], low=r[5], close=r[6], volume=r[7])
++            for r in rows
++        ]
++
+     def watermark(self, ticker: str, interval: str = "i1"):
+         """Newest stored timestamp for one ticker/interval, or None."""
+         with self._connect() as conn:
+diff --git a/src/cobalt/dayopen/models.py b/src/cobalt/dayopen/models.py
+index a7c776b..e7d26fc 100644
+--- a/src/cobalt/dayopen/models.py
++++ b/src/cobalt/dayopen/models.py
+@@ -10,11 +10,16 @@ from dataclasses import dataclass
+ from datetime import date as Date
+ from datetime import datetime
+ from enum import Enum
++from typing import Protocol, Sequence
+ 
+ 
+ class Verdict(str, Enum):
+     PASS = "PASS"
+     FAIL = "FAIL"
++    #: A named, ruled condition (e.g. "no fill yet") — reported, never a
++    #: failure. Day-open's six checks do not emit it; `cobalt smoke` does
++    #: (S2-P4 STEP-9) and shares this roll-up rather than owning a second.
++    KNOWN = "KNOWN"
+     ERROR = "ERROR"
+ 
+ 
+@@ -37,7 +42,11 @@ class CheckResult:
+     raw: str
+ 
+ 
+-def overall_verdict(results: list[CheckResult]) -> Overall:
++class HasVerdict(Protocol):
++    verdict: Verdict
++
++
++def overall_verdict(results: Sequence[HasVerdict]) -> Overall:
+     """RULED (this build, 2026-09-14): ERROR outranks FAIL.
+ 
+     A check whose own command or query failed (no data collected) is a
+@@ -48,8 +57,13 @@ def overall_verdict(results: list[CheckResult]) -> Overall:
+ 
+         RED   — any check is ERROR
+         AMBER — no ERROR, but any check is FAIL
+-        GREEN — every check is PASS
++        GREEN — every check is PASS or KNOWN (KNOWN never lowers it,
++                plan-s2-p4 §1 F17)
++
++    An EMPTY list raises: a sweep that checked nothing is not GREEN (L1).
+     """
++    if not results:
++        raise ValueError("overall_verdict: no check results — nothing was checked")
+     if any(r.verdict is Verdict.ERROR for r in results):
+         return Overall.RED
+     if any(r.verdict is Verdict.FAIL for r in results):
+diff --git a/src/cobalt/cli.py b/src/cobalt/cli.py
+index 5939df2..f46c104 100644
+--- a/src/cobalt/cli.py
++++ b/src/cobalt/cli.py
+@@ -23,6 +23,8 @@ Two command groups:
+     cobalt heartbeat beat/show
+     cobalt day-open [--date YYYY-MM-DD] [--json] / cobalt day-open verdict "<line>"
+     cobalt backup run/status/restore
++    cobalt replay nightly [--date] [--dry-run]
++    cobalt smoke <suite> --cutoff ISO8601 [--prod] [--json]   (read-only)
+     cobalt stop / cobalt resume        (F17d kill phrase)
+ 
+     cobalt validate
+@@ -67,7 +69,9 @@ from cobalt.heartbeat import cli as heartbeat_cli  # noqa: E402
+ from cobalt.jobs import cli as jobs_cli  # noqa: E402
+ from cobalt.jobs.wrapper import JobStopped  # noqa: E402
+ from cobalt.radar import cli as radar_cli  # noqa: E402
++from cobalt.replay import cli as replay_cli  # noqa: E402
+ from cobalt.seatusage import cli as seatusage_cli  # noqa: E402
++from cobalt.smoke import cli as smoke_cli  # noqa: E402
+ from cobalt.session import cli as session_cli  # noqa: E402
+ from cobalt.settings import cli as settings_cli  # noqa: E402
+ from cobalt.taxonomy import cli as taxonomy_cli  # noqa: E402
+@@ -468,6 +472,8 @@ def main() -> None:
+     seatusage_cli.add_parser(sub)
+     generated_cli.add_parser(sub)
+     radar_cli.add_parser(sub)
++    replay_cli.add_parser(sub)
++    smoke_cli.add_parser(sub)
+     jobs_cli.add_stop_parsers(sub)
+ 
+     validate = sub.add_parser(
+diff --git a/src/cobalt/db_query.py b/src/cobalt/db_query.py
+index c172be5..58eead8 100644
+--- a/src/cobalt/db_query.py
++++ b/src/cobalt/db_query.py
+@@ -5,10 +5,13 @@ from __future__ import annotations
+ import argparse
+ import json
+ import re
++import shlex
+ import sys
+ from dataclasses import dataclass
++from typing import Any
+ 
+ from psycopg import sql
++from pydantic import BaseModel, ConfigDict
+ 
+ from cobalt import db, env
+ from cobalt.db import Side
+@@ -130,20 +133,31 @@ def _timeout_ms() -> int:
+     return int(row.value) * 1000
+ 
+ 
+-def command(args: argparse.Namespace) -> None:
+-    try:
+-        statement = guard_select(args.sql)
+-    except QueryRefused as e:
+-        print(f"REFUSED SQL token: {e}", file=sys.stderr)
+-        raise SystemExit(2) from e
++class QueryRows(BaseModel):
++    """One read's result: column names and rows, in server order."""
+ 
+-    side = Side(args.side)
+-    dbname = db.PROD_DB_NAME if args.prod else env.resolve_db_name()
+-    if dbname == db.PROD_DB_NAME and not args.prod:
+-        print("REFUSED database token: cobalt_brain requires --prod", file=sys.stderr)
+-        raise SystemExit(2)
++    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
++
++    columns: tuple[str, ...]
++    rows: list[tuple[Any, ...]]
++
++
++def read_rows(statement: str, *, side: Side | str, prod: bool, limit: int = 1000) -> QueryRows:
++    """THE read path: guard, READ ONLY transaction, statement timeout, role
++    assertion, row limit, unconditional rollback. `cobalt db query` and
++    `cobalt smoke` (S2-P4 STEP-9) both read through here, so a query a
++    smoke check ran is byte-for-byte the query its hand command runs.
+ 
+-    conn = db.connect(dbname, side=side, allow_prod=args.prod)
++    Raises `QueryRefused` for a statement off the allowlist and for the
++    production database without `prod=True`, before any connection opens.
++    """
++    statement = guard_select(statement)
++    side = Side(side)
++    dbname = db.PROD_DB_NAME if prod else env.resolve_db_name()
++    if dbname == db.PROD_DB_NAME and not prod:
++        raise QueryRefused(f"database {db.PROD_DB_NAME} requires --prod")
++
++    conn = db.connect(dbname, side=side, allow_prod=prod)
+     conn.autocommit = False
+     try:
+         conn.execute("BEGIN READ ONLY")
+@@ -154,20 +168,44 @@ def command(args: argparse.Namespace) -> None:
+         if current != side.role:
+             raise RuntimeError(f"current_user is {current!r}, expected {side.role!r}")
+         query = sql.SQL("SELECT * FROM ({}) AS q LIMIT %s").format(sql.SQL(statement))
+-        cursor = conn.execute(query, (args.limit,))
+-        columns = [item.name for item in cursor.description]
+-        rows = cursor.fetchall()
+-        if args.format == "json":
+-            print(json.dumps([dict(zip(columns, row)) for row in rows], default=str))
+-        else:
+-            print("\t".join(columns))
+-            for row in rows:
+-                print("\t".join("" if value is None else str(value) for value in row))
++        cursor = conn.execute(query, (limit,))
++        return QueryRows(
++            columns=tuple(item.name for item in cursor.description),
++            rows=[tuple(row) for row in cursor.fetchall()],
++        )
+     finally:
+         conn.rollback()
+         conn.close()
+ 
+ 
++def hand_command(statement: str, *, side: Side | str, prod: bool) -> str:
++    """The shell line that runs `statement` through this same read path —
++    what a smoke report prints so the checklist runs by hand (R6 A)."""
++    flags = f"--side {Side(side).value}" + (" --prod" if prod else "")
++    return f"uv run cobalt db query {flags} --format json {shlex.quote(statement)}"
++
++
++def command(args: argparse.Namespace) -> None:
++    try:
++        guard_select(args.sql)
++    except QueryRefused as e:
++        print(f"REFUSED SQL token: {e}", file=sys.stderr)
++        raise SystemExit(2) from e
++
++    dbname = db.PROD_DB_NAME if args.prod else env.resolve_db_name()
++    if dbname == db.PROD_DB_NAME and not args.prod:
++        print("REFUSED database token: cobalt_brain requires --prod", file=sys.stderr)
++        raise SystemExit(2)
++
++    result = read_rows(args.sql, side=args.side, prod=args.prod, limit=args.limit)
++    if args.format == "json":
++        print(json.dumps([dict(zip(result.columns, row)) for row in result.rows], default=str))
++    else:
++        print("\t".join(result.columns))
++        for row in result.rows:
++            print("\t".join("" if value is None else str(value) for value in row))
++
++
+ def add_query_parser(sub) -> None:
+     query = sub.add_parser("query", help="Run a guarded, read-only SELECT")
+     query.add_argument("--side", choices=[s.value for s in Side], required=True)
+@@ -178,4 +216,7 @@ def add_query_parser(sub) -> None:
+     query.set_defaults(func=command)
+ 
+ 
+-__all__ = ["QueryRefused", "add_query_parser", "guard_select", "tokenize"]
++__all__ = [
++    "QueryRefused", "QueryRows", "add_query_parser", "guard_select", "hand_command",
++    "read_rows", "tokenize",
++]

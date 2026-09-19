@@ -1,0 +1,1178 @@
+diff --git a/src/cobalt/replay/__init__.py b/src/cobalt/replay/__init__.py
+new file mode 100644
+index 0000000..7eb31de
+--- /dev/null
++++ b/src/cobalt/replay/__init__.py
+@@ -0,0 +1,9 @@
++"""The nightly replay — `com.cobalt.replay`, 21:10 ET weekdays (S2-P4).
++
++    cli.py     `cobalt replay nightly [--date] [--dry-run]`, inside `as_job`
++    runner.py  the ordered run: archiver precondition, deadline, per-side phases
++    movers.py  F13: unfiltered top movers, their i1 archive, the benchmark diff
++    cards.py   F12: unfilled cards over i1 bars, counterfactual R, the gates
++    line.py    the one DRC miss line (`drc-misses/miss_line`)
++    models.py  every structured value the above passes around
++"""
+diff --git a/src/cobalt/replay/cli.py b/src/cobalt/replay/cli.py
+new file mode 100644
+index 0000000..52a8468
+--- /dev/null
++++ b/src/cobalt/replay/cli.py
+@@ -0,0 +1,144 @@
++"""`cobalt replay nightly [--date YYYY-MM-DD] [--dry-run]` — com.cobalt.replay.
++
++The scheduled 21:10 ET entry point (S2-P4 R3, moved by R17), wrapped by
++`as_job("com.cobalt.replay")`. `--dry-run` runs `as_job(..., skip=True)`
++— no jobs row is touched — and every store call it makes is a read; the
++vault writer runs its own dry-run diff path. `--date` replays a past day
++from what was retained (exports in the radar cache, bars in system.bars);
++it never relabels a live fetch as history.
++
++`job.result` = `ReplayResult`: movers, archived, card_misses,
++mover_misses, formation_replay, line_action, plus the coverage counts
++(input_stale, archive_failures, archive_incomplete) and the line diff.
++"""
++
++from __future__ import annotations
++
++import argparse
++from datetime import date, datetime
++from pathlib import Path
++
++from cobalt.session.clock import ET
++
++from .models import ReplayError
++from .runner import ReplayDeps, run_nightly
++
++
++def now_et() -> datetime:
++    from cobalt.session import clock
++
++    return clock.now_utc().astimezone(ET)
++
++
++def default_deps(*, dry_run: bool) -> ReplayDeps:
++    """The production wiring. Nothing here writes on construction; a dry
++    run never reaches an `ensure_schema`."""
++    from cobalt.archiver.collector import resolve_token
++    from cobalt.archiver.store import BarStore
++    from cobalt.jobs.config import load_job_registry
++    from cobalt.jobs.store import JobStore
++    from cobalt.radar.collector import process_bucket
++    from cobalt.radar.store import RadarStore
++    from cobalt.session import Session, session_clock
++    from cobalt.session import clock as clock_mod
++    from cobalt.settings.store import TraderSettingsStore
++    from cobalt.taxonomy.loader import load_tunables
++    from cobalt.vaultwrite import VaultWriter, VaultWriteStore
++
++    from .cards import MissedStore
++    from .formations import FormationSources
++    from .line import WRITER, drc_note_path
++    from .movers import MoversCollector, MoversStore, load_radar_config
++
++    tunables = load_tunables().by_key
++    raw = tunables["radar.finviz_max_rpm"].value
++    ceiling = None if raw is None else int(raw)
++    config = load_radar_config()
++    cache_root = Path(config.cache.dir)
++
++    def session_bounds(day: date):
++        clock = session_clock()
++        rth = next((w for w in clock.windows_for(day) if w.session is Session.RTH), None)
++        if rth is None:
++            raise ReplayError(f"{day} is not a trading day ({clock.calendar.describe(day)})")
++        return datetime.combine(day, rth.start, tzinfo=ET), datetime.combine(day, rth.end, tzinfo=ET)
++
++    async def collector_factory():
++        if ceiling is None:
++            raise ReplayError("radar.finviz_max_rpm is unmeasured")
++        return MoversCollector(await resolve_token(), config=config, bucket=process_bucket(ceiling),
++                               cache_root=cache_root)
++
++    def writer_factory(is_dry: bool):
++        store = VaultWriteStore()
++        if not is_dry:
++            store.ensure_schema()
++        return VaultWriter(WRITER, store=store, dry_run=is_dry)
++
++    def formation_sources():
++        """S2-P2's own replay arguments — the SAME stores the resident
++        evaluates with, read-only. Built only when the formation step
++        runs, so replay still loads when S2-P2 is not in the tree."""
++        from cobalt.radar.evaluate_cli import CachedDailyBars
++        from cobalt.taxonomy.loader import load_defaults
++        from cobalt.taxonomy.store import TradeDefStore
++
++        return FormationSources(
++            pool_key=config.pool_key, radar_store=RadarStore(),
++            defs_source=TradeDefStore().loaded_for_evaluation,
++            daily_source=CachedDailyBars(cache_root).load, tunables=tunables,
++            defaults=load_defaults(), clock=session_clock(),
++        )
++
++    return ReplayDeps(
++        job_store=JobStore(), registry=load_job_registry(), tunables=tunables, now=clock_mod.now_utc,
++        session_bounds=session_bounds, settings_values=TraderSettingsStore().values, missed=MissedStore(),
++        movers_store=MoversStore(), bar_store=BarStore(), radar_store=RadarStore(), radar_config=config,
++        collector_factory=collector_factory, cache_root=cache_root, writer_factory=writer_factory,
++        drc_path=drc_note_path, out=print, ceiling=ceiling, formation_sources=formation_sources,
++    )
++
++
++def cmd_nightly(args: argparse.Namespace) -> None:
++    from cobalt.jobs.entrypoint import as_job
++    from cobalt.radar.notes import REPLAY_LABEL
++
++    trade_date = date.fromisoformat(args.date) if args.date else now_et().date()
++    with as_job(REPLAY_LABEL, skip=args.dry_run) as job:
++        deps = default_deps(dry_run=args.dry_run)
++        try:
++            result = run_nightly(trade_date, dry_run=args.dry_run, deps=deps)
++        except ReplayError as e:
++            partial = getattr(e, "result", None)
++            if partial is not None:
++                job.result = partial.job_result()
++            raise
++        job.result = result.job_result()
++    print(
++        f"replay {trade_date}{' DRY RUN' if args.dry_run else ''}: movers {result.movers} · archived "
++        f"{result.archived} · card misses {result.card_misses} · mover misses {result.mover_misses} · "
++        f"input_stale {result.input_stale} · formations {result.formation_replay} "
++        f"({result.formation_misses} misses, {result.formation_suppressed} suppressed) · "
++        f"line {result.line_action}"
++    )
++
++
++def _add_commands(sub) -> None:
++    nightly = sub.add_parser("nightly", help="The 21:10 ET replay: movers, card misses, the DRC miss line.")
++    nightly.add_argument("--date", help="Replay a past ET trade date from retained inputs (YYYY-MM-DD).")
++    nightly.add_argument("--dry-run", action="store_true", help="Write nothing; print rows and the line diff.")
++    nightly.set_defaults(func=cmd_nightly)
++
++
++def build_parser() -> argparse.ArgumentParser:
++    parser = argparse.ArgumentParser(prog="replay")
++    _add_commands(parser.add_subparsers(dest="command", required=True))
++    return parser
++
++
++def add_parser(sub) -> None:
++    group = sub.add_parser("replay", help="The nightly replay (S2-P4, com.cobalt.replay)")
++    _add_commands(group.add_subparsers(dest="command", required=True))
++
++
++__all__ = ["add_parser", "build_parser", "cmd_nightly", "default_deps", "now_et"]
+diff --git a/src/cobalt/replay/formations.py b/src/cobalt/replay/formations.py
+new file mode 100644
+index 0000000..3315d75
+--- /dev/null
++++ b/src/cobalt/replay/formations.py
+@@ -0,0 +1,353 @@
++"""F12 formations: the trade_defs that formed and were never taken
++(S2-P4 STEP-5, R4 as amended by Astra R1-21).
++
++    formation_misses(report, context=…, evaluator_version=…) -> FormationOutcome
++
++BOUND TO S2-P2's SHIPPED CONTRACT, NOT TO A PLANNED ONE. The plan named
++the entrypoint `cobalt.radar.evaluate`; what S2-P2 actually ships is
++
++    cobalt.radar.evaluate_cli.replay_formations(day, *, pool_key,
++        slug_filter, radar_store, defs_source, daily_source, tunables,
++        defaults, clock, out) -> ReplayReport
++
++with the capability marker `cobalt.radar.evaluate.EVALUATOR_VERSION`.
++The code follows the shipped names; `replay/runner.py` imports BOTH
++modules statically (one for the callable, one for the marker) and never
++accepts two spellings of one name. This module holds no import of
++`cobalt.radar` at all, so replay still loads when S2-P2 is absent.
++
++WHAT A FORMATION ROW NEEDS, AND WHERE IT COMES FROM. Migration 0009's
++`kind='formation'` CHECK needs `trade_def_md5`, `formation_at` and
++`pool_member_id`, and the unique index adds `formation_at` +
++`pool_member_id` to the subject so two same-day formations of one
++(ticker, trade_def) never collapse into one row. S2-P2's
++`ReplayFormation` carries all three (`trade_def_md5`, `formed_bar_ts`,
++`membership_id`) plus `score_inputs_sha256`, the retained score
++receipt's reference — every one of them a value `evaluate_member`
++already computed inside the read-only replay. No schema changed, no
++second seam, nothing is written on P2's side.
++
++THE SCORE-RECEIPT REFERENCE is content-addressed, not a row id: P2's
++`--replay` path reads no receipt row, so it can name the retained
++receipt only by its natural key `(membership_id, trade_def_md5)` in
++`system.radar_score` together with that row's own `inputs_sha256`
++column. Both go in the miss row's receipt (L57).
++
++THE GATE. One gate, ruled: an existing radar card for that (member,
++def, direction) SUPPRESSES the miss — the card path (F12) already
++replays that subject, and one event never becomes two rows (L3).
++Otherwise the row's `excluded_by` is `no_card`. `rule_10` is recorded as
++NOT APPLICABLE rather than silently passed: a formation has no card and
++no position of its own, and no position-level exclusion was ruled for
++formations.
++
++THE HORIZON is the card path's, through the ONE public window resolver
++with no card window to resolve (`resolve_window(None, …)`), so
++`W = session close`. THE ARITHMETIC is `cards.counterfactual()` — the
++same trigger, gap-through fill, stop-wins-on-tie walk and rounding a
++card gets, never a second implementation.
++"""
++
++from __future__ import annotations
++
++import json
++from collections.abc import Sequence
++from dataclasses import dataclass
++from datetime import date, datetime
++from decimal import Decimal
++from typing import Any, Callable, Optional
++
++from cobalt.archiver.models import Bar, Interval
++from cobalt.session.clock import ET
++
++from .cards import MINUTE, bar_json, counterfactual, coverage, day_bars, resolve_window
++from .models import (
++    FORMULA_VERSION,
++    FormationCandidate,
++    FormationCounts,
++    FormationOutcome,
++    FormationReplay,
++    MissRow,
++    RadarCardRef,
++    ReplayError,
++    ReplayInputError,
++    WindowResolution,
++    canonical_json,
++    sha256_json,
++)
++
++#: The S2-P2 capability markers this binding was written against. A value
++#: outside this set is a loud refusal, never a silent degrade (R1-21).
++SUPPORTED_EVALUATORS = frozenset({"s2p2.1"})
++
++#: P2's shipped replay entrypoint, recorded in the receipt of every row.
++P2_MODULE = "cobalt.radar.evaluate_cli"
++P2_CALLABLE = "replay_formations"
++P2_MODEL = "ReplayFormation"
++P2_MARKER = "cobalt.radar.evaluate.EVALUATOR_VERSION"
++
++#: The `ReplayFormation` fields a miss row cannot be built without.
++FORMATION_REQUIRED_FIELDS = frozenset({
++    "membership_id", "trade_def_md5", "score_inputs_sha256", "seen_at",
++    "ticker", "slug", "direction", "trigger", "stop", "formed_bar_ts",
++})
++
++#: The one `excluded_by` a formation row carries (R1-21).
++NO_CARD = "no_card"
++GATE_ORDER = ("existing_card",)
++RULE_10_NOT_APPLICABLE = (
++    "not applicable: a formation has no card and no position of its own; R1-21 rules a formation's "
++    "exclusion `no_card`"
++)
++
++#: The retained score receipt a formation's numbers came from.
++SCORE_RECEIPT_TABLE = "system.radar_score"
++SCORE_RECEIPT_COLUMN = "inputs_sha256"
++
++
++@dataclass
++class FormationSources:
++    """Exactly the arguments S2-P2's `replay_formations` takes, minus the
++    day, the slug filter and the output sink. Production passes the same
++    stores the resident uses; a test passes its own."""
++
++    pool_key: str
++    radar_store: Any
++    defs_source: Callable[[], tuple[list, dict]]
++    daily_source: Callable[[str, date], Any]
++    tunables: Any
++    defaults: Any
++    clock: Any
++
++
++@dataclass
++class FormationContext:
++    """What replay needs to turn P2's formations into miss rows. Every
++    field is a callable so that nothing is read when P2 is absent."""
++
++    trade_date: date
++    session_close: datetime
++    bars_for: Callable[[str], list[Bar]]
++    radar_cards: Callable[[], Sequence[RadarCardRef]]
++
++
++# ---------------------------------------------------------------------------
++# P2's formations -> replay's candidates
++# ---------------------------------------------------------------------------
++
++
++def formation_candidates(report: Any, *, evaluator_version: str) -> list[FormationCandidate]:
++    """P2's `ReplayReport.formations`, in replay's vocabulary.
++
++    `entry`/`stop` take the SAME mapping the live card path takes
++    (`RadarCardSpec.entry = trigger_price`, `.stop = structural_stop`).
++    """
++    if evaluator_version not in SUPPORTED_EVALUATORS:
++        raise ReplayError(
++            f"S2-P2 evaluator version {evaluator_version!r} is not one this binding was written against "
++            f"({sorted(SUPPORTED_EVALUATORS)}) — refusing rather than replaying an unknown contract"
++        )
++    out: list[FormationCandidate] = []
++    for f in report.formations:
++        missing = sorted(name for name in FORMATION_REQUIRED_FIELDS if not hasattr(f, name))
++        if missing:
++            raise ReplayError(f"S2-P2 formation is missing {missing} — {P2_MODULE}.{P2_MODEL} changed shape")
++        out.append(FormationCandidate(
++            membership_id=f.membership_id, ticker=f.ticker, slug=f.slug, trade_def_md5=f.trade_def_md5,
++            direction=f.direction, entry=Decimal(f.trigger), stop=Decimal(f.stop),
++            formed_at=f.formed_bar_ts, seen_at=f.seen_at, score_inputs_sha256=f.score_inputs_sha256,
++            evaluator_version=evaluator_version,
++        ))
++    return out
++
++
++# ---------------------------------------------------------------------------
++# One formation
++# ---------------------------------------------------------------------------
++
++
++def _suppressor(candidate: FormationCandidate, cards: Sequence[RadarCardRef]) -> Optional[RadarCardRef]:
++    return next(
++        (c for c in cards
++         if (c.pool_member_id, c.trade_def_slug, c.direction) == candidate.subject_key()),
++        None,
++    )
++
++
++def replay_formation(
++    candidate: FormationCandidate,
++    bars: Sequence[Bar],
++    *,
++    trade_date: date,
++    window: WindowResolution,
++    session_close: datetime,
++    radar_cards: Sequence[RadarCardRef],
++) -> FormationReplay:
++    """Replay one formation. PURE — see the module docstring for the rules."""
++    if candidate.formed_at.astimezone(ET).date() != trade_date:
++        raise ReplayInputError(
++            f"formation {candidate.ticker} {candidate.slug} formed {candidate.formed_at.isoformat()}, "
++            f"which is not trade date {trade_date.isoformat()}"
++        )
++
++    def done(status: str, reason: str, miss: Optional[MissRow] = None) -> FormationReplay:
++        return FormationReplay(membership_id=candidate.membership_id, ticker=candidate.ticker,
++                               status=status, reason=reason, miss=miss)
++
++    card = _suppressor(candidate, radar_cards)
++    if card is not None:
++        return done("suppressed", f"radar card {card.card_id} already covers "
++                                  f"{candidate.subject_key()} — the card path owns this subject")
++
++    todays = day_bars(bars, trade_date)
++    cov = coverage(todays, start=candidate.seen_at, end=session_close)
++    if not cov["covered"]:
++        return done("input_stale", f"input_stale: {cov['reason']}")
++
++    outcome = counterfactual(
++        todays, subject=f"formation {candidate.ticker} {candidate.slug} @ {candidate.formed_at.isoformat()}",
++        direction=candidate.direction, entry=candidate.entry, stop_at=lambda _at: candidate.stop,
++        start_at=candidate.seen_at, window_end=window.resolved_end, session_close=session_close,
++    )
++    if outcome.status != "ok":
++        return done(outcome.status, outcome.reason)
++    walk = outcome.walk
++
++    considered = sorted(c.card_id for c in radar_cards if c.pool_member_id == candidate.membership_id)
++    gate_detail: dict[str, Any] = {
++        "order": list(GATE_ORDER),
++        "existing_card": {
++            "fired": False, "matched": None,
++            "key": {"pool_member_id": candidate.membership_id, "trade_def_slug": candidate.slug,
++                    "direction": candidate.direction},
++            "cards_considered": considered,
++        },
++        "window": {"fired": False, "window_end": walk.window_end.isoformat(),
++                   "trigger_ts": walk.trigger.ts.isoformat(), "source": window.source,
++                   "detail": window.detail},
++        "rule_10": {"applies": False, "reason": RULE_10_NOT_APPLICABLE},
++        "trade_count_band": "unset",
++    }
++
++    before_start = [b for b in todays if b.ts <= candidate.seen_at][-1:]
++    after_end = [b for b in todays if b.ts + MINUTE >= session_close][:1]
++    consumed = sorted({b.ts: b for b in (*before_start, *walk.searched, *after_end)}.values(), key=lambda b: b.ts)
++    inputs = {
++        "formula_version": FORMULA_VERSION,
++        "trade_date": trade_date.isoformat(),
++        "formation": {
++            "membership_id": candidate.membership_id, "ticker": candidate.ticker, "slug": candidate.slug,
++            "trade_def_md5": candidate.trade_def_md5, "direction": candidate.direction,
++            "entry": str(candidate.entry), "stop": str(candidate.stop),
++            "formed_at": candidate.formed_at.isoformat(), "seen_at": candidate.seen_at.isoformat(),
++        },
++        "p2_contract": {
++            "evaluator_version": candidate.evaluator_version, "module": P2_MODULE, "callable": P2_CALLABLE,
++            "model": P2_MODEL, "marker": P2_MARKER, "required_fields": sorted(FORMATION_REQUIRED_FIELDS),
++        },
++        "score_receipt": {
++            "table": SCORE_RECEIPT_TABLE, "column": SCORE_RECEIPT_COLUMN,
++            "key": {"membership_id": candidate.membership_id, "trade_def_md5": candidate.trade_def_md5},
++            "inputs_sha256": candidate.score_inputs_sha256,
++            "note": "content-addressed: P2's read-only replay reads no receipt row and reports no score id",
++        },
++        "window": {"resolved_end": window.resolved_end.isoformat(), "source": window.source,
++                   "detail": window.detail},
++        "session_close": session_close.isoformat(),
++        "radar_cards": [
++            {"card_id": c.card_id, "pool_member_id": c.pool_member_id, "trade_def_slug": c.trade_def_slug,
++             "direction": c.direction, "state": c.state,
++             "created_at": c.created_at.isoformat() if c.created_at else None}
++            for c in sorted(radar_cards, key=lambda c: c.card_id)
++        ],
++        "eligibility": "bar_start + 1 minute <= horizon",
++        "bars": [bar_json(b) for b in consumed],
++    }
++    outputs = {
++        "coverage": coverage(consumed, start=candidate.seen_at, end=session_close),
++        "trigger_bar": bar_json(walk.trigger), "stop": str(walk.stop),
++        "window_end": walk.window_end.isoformat(), "horizon_end": walk.horizon_end.isoformat(),
++        "eligible_bar_ts": [b.ts.isoformat() for b in walk.eligible],
++        "walked_bar_ts": [b.ts.isoformat() for b in walk.walked],
++        "fill_price": str(walk.fill_price), "exit_ts": walk.exit_bar.ts.isoformat(),
++        "exit_price": str(walk.exit_price), "exit_reason": walk.exit_reason,
++        "cf_r": str(walk.cf_r), "mfe_r": str(walk.mfe_r),
++        "excluded_by": NO_CARD, "gate_detail": gate_detail,
++    }
++    miss = MissRow(
++        trade_date=trade_date, kind="formation", ticker=candidate.ticker, direction=candidate.direction,
++        trade_def_md5=candidate.trade_def_md5, formation_at=candidate.formed_at,
++        pool_member_id=candidate.membership_id, excluded_by=NO_CARD, gate_detail=gate_detail,
++        entry=candidate.entry, stop=walk.stop, trigger_ts=walk.trigger.ts, fill_price=walk.fill_price,
++        horizon_end=walk.horizon_end, exit_ts=walk.exit_bar.ts, exit_price=walk.exit_price,
++        exit_reason=walk.exit_reason, cf_r=walk.cf_r, mfe_r=walk.mfe_r, bars_watermark=consumed[-1].ts,
++        formula_version=FORMULA_VERSION, receipt=json.loads(canonical_json({"inputs": inputs, "outputs": outputs})),
++        inputs_sha256=sha256_json(inputs),
++    )
++    return done("miss", f"excluded_by {NO_CARD}", miss)
++
++
++def replay_formation_from_receipt(receipt: dict[str, Any]) -> FormationReplay:
++    """Recompute a stored formation miss from its receipt's inputs ONLY (L57)."""
++    inputs = receipt["inputs"]
++    if inputs.get("formula_version") != FORMULA_VERSION:
++        raise ReplayInputError(f"receipt formula {inputs.get('formula_version')!r} is not {FORMULA_VERSION!r}")
++    f, contract, reference = inputs["formation"], inputs["p2_contract"], inputs["score_receipt"]
++    candidate = FormationCandidate(
++        membership_id=f["membership_id"], ticker=f["ticker"], slug=f["slug"],
++        trade_def_md5=f["trade_def_md5"], direction=f["direction"], entry=Decimal(f["entry"]),
++        stop=Decimal(f["stop"]), formed_at=datetime.fromisoformat(f["formed_at"]),
++        seen_at=datetime.fromisoformat(f["seen_at"]), score_inputs_sha256=reference["inputs_sha256"],
++        evaluator_version=contract["evaluator_version"],
++    )
++    bars = [
++        Bar(ticker=candidate.ticker, interval=Interval.I1, ts=b["ts"], open=Decimal(b["open"]),
++            high=Decimal(b["high"]), low=Decimal(b["low"]), close=Decimal(b["close"]), volume=int(b["volume"]))
++        for b in inputs["bars"]
++    ]
++    return replay_formation(
++        candidate, bars, trade_date=date.fromisoformat(inputs["trade_date"]),
++        window=WindowResolution(**inputs["window"]),
++        session_close=datetime.fromisoformat(inputs["session_close"]),
++        radar_cards=[RadarCardRef(**row) for row in inputs["radar_cards"]],
++    )
++
++
++# ---------------------------------------------------------------------------
++# The day
++# ---------------------------------------------------------------------------
++
++
++def formation_misses(report: Any, *, context: FormationContext, evaluator_version: str) -> FormationOutcome:
++    """Every formation of the day, as rows and counts. Reads only."""
++    candidates = formation_candidates(report, evaluator_version=evaluator_version)
++    cards = list(context.radar_cards())
++    window = resolve_window(None, context.trade_date)
++    rows: list[MissRow] = []
++    tally = {"suppressed": 0, "no_trigger": 0, "input_stale": 0}
++    for candidate in candidates:
++        replayed = replay_formation(
++            candidate, context.bars_for(candidate.ticker), trade_date=context.trade_date,
++            window=window, session_close=context.session_close, radar_cards=cards,
++        )
++        if replayed.status == "miss":
++            rows.append(replayed.miss)
++        else:
++            tally[replayed.status] += 1
++    subjects = [row.subject() for row in rows]
++    if len(set(subjects)) != len(subjects):
++        raise ReplayInputError(
++            "two formation rows share one subject — the extended key (member, formation_at) did not separate them"
++        )
++    return FormationOutcome(
++        status=evaluator_version, rows=tuple(rows),
++        counts=FormationCounts(candidates=len(candidates), misses=len(rows), **tally),
++    )
++
++
++__all__ = [
++    "FORMATION_REQUIRED_FIELDS", "GATE_ORDER", "NO_CARD", "P2_CALLABLE", "P2_MARKER", "P2_MODEL",
++    "P2_MODULE", "SCORE_RECEIPT_COLUMN", "SCORE_RECEIPT_TABLE", "SUPPORTED_EVALUATORS",
++    "FormationContext", "FormationSources", "formation_candidates", "formation_misses",
++    "replay_formation", "replay_formation_from_receipt",
++]
+diff --git a/src/cobalt/replay/line.py b/src/cobalt/replay/line.py
+new file mode 100644
+index 0000000..bbaed20
+--- /dev/null
++++ b/src/cobalt/replay/line.py
+@@ -0,0 +1,178 @@
++"""The ONE miss line — unit `drc-misses/miss_line` in that day's DRC note
++(S2-P4 STEP-7, R5, R1-18).
++
++    Misses YYYY-MM-DD: cards N (unarmed a · passed b · not_filled c · window d · rule_10 e)
++      · cf-R Σ ±x.xR, n=N · avg: insufficient data (n<30)
++      · movers ≥ m%: K not in play — T1 +12.3% not_in_any_source · T2 −9.8% config_cap · T3 … (+J more)
++      · formations: unavailable until S2-P2
++
++(one line in the note; wrapped here). It is rendered ONLY from the run's
++own reconciled current set, so the line and `job.result` cannot disagree.
++
++Once S2-P2's replay is bound the formation segment carries its own count
++and cf-R sum — the plan wrote only the unavailable text, so this is its
++extension, in the same shape as the card segment:
++
++    · formations: 2 not taken (no_card) · cf-R Σ −29.9R, n=2
++      [· suppressed K] [· input_stale K]
++
++A suppressed formation (an open radar card already covers that member,
++def and direction) is NOT a second miss — it is surfaced on the line only
++as its count, and in `job.result` in full.
++
++L8: the cf-R sum always carries its n; an average renders only at n >= 30,
++otherwise `avg: insufficient data (n<30)`. R1-12: a nonzero input_stale
++count is printed on the line — a card that could not be replayed is never
++a silent zero.
++
++L28, through the one write path. `VaultWriter.upsert_unit` — versioned,
++diffed, human-wins, sync-revert aware, mtime-guarded — into an EXISTING
++note only: replay never calls `create_if_absent`. The DRC note belongs to
++prefill-drc; absent -> `DrcNoteAbsent`, loud, nothing created. The first
++write places the section ZERO-WIDTH right after the `drc-rules` section's
++closing marker, touching no human line; a note without that anchor takes
++the writer's own safe fallback (appended at the end, noted in the result).
++"""
++
++from __future__ import annotations
++
++from datetime import date
++from decimal import ROUND_HALF_UP, Decimal
++from pathlib import Path
++from typing import Any, Optional, Sequence
++
++from cobalt.settings.models import BenchmarkSettings
++from cobalt.vault import resolve_vault_path
++from cobalt.vaultwrite import Placement, VaultWriter, WriteResult
++from cobalt.vaultwrite.markers import find_section
++
++from .models import FORMATION_UNAVAILABLE, ReplayError
++
++SECTION = "drc-misses"
++UNIT = "miss_line"
++ANCHOR_SECTION = "drc-rules"
++WRITER = "replay.nightly"
++
++#: The ruled template shows three movers, then "(+J more)".
++MOVERS_SHOWN = 3
++#: L8's floor for an average.
++MIN_N_FOR_AVERAGE = 30
++CARD_GATES = ("unarmed", "passed", "not_filled", "window", "rule_10")
++MINUS = "−"
++
++
++class DrcNoteAbsent(ReplayError):
++    """The day's DRC note does not exist. prefill-drc creates it; replay never does."""
++
++    def __init__(self, path: Path):
++        super().__init__(f"DRC note absent — prefill-drc owns creation ({path})")
++        self.path = path
++
++
++def _signed(value: Decimal, places: str, suffix: str) -> str:
++    q = value.quantize(Decimal(places), rounding=ROUND_HALF_UP)
++    return f"{'+' if q >= 0 else MINUS}{abs(q)}{suffix}"
++
++
++def _plain(value: Decimal) -> str:
++    text = format(value.normalize(), "f")
++    return text
++
++
++def render_line(
++    trade_date: date,
++    *,
++    card_rows: Sequence[dict[str, Any]],
++    mover_rows: Sequence[dict[str, Any]],
++    settings: Optional[BenchmarkSettings],
++    formation_replay: str,
++    input_stale: int,
++    formation_rows: Sequence[dict[str, Any]] = (),
++    formation_suppressed: int = 0,
++    formation_input_stale: int = 0,
++) -> str:
++    """The line body. `card_rows`/`mover_rows` are CURRENT `"user".missed` rows."""
++    counts = {gate: 0 for gate in CARD_GATES}
++    for row in card_rows:
++        counts[row["excluded_by"]] = counts.get(row["excluded_by"], 0) + 1
++    cards = f"cards {len(card_rows)} (" + " · ".join(f"{g} {counts[g]}" for g in CARD_GATES) + ")"
++    parts = [f"Misses {trade_date.isoformat()}: {cards}"]
++    if input_stale:
++        parts.append(f"input_stale {input_stale}")
++
++    rs = [Decimal(str(row["cf_r"])) for row in card_rows if row.get("cf_r") is not None]
++    n = len(rs)
++    total = sum(rs, Decimal(0))
++    parts.append(f"cf-R Σ {_signed(total, '0.1', 'R')}, n={n}")
++    if n >= MIN_N_FOR_AVERAGE:
++        parts.append(f"avg {_signed(total / n, '0.01', 'R')}")
++    else:
++        parts.append(f"avg: insufficient data (n<{MIN_N_FOR_AVERAGE})")
++
++    if settings is None:
++        parts.append("movers: unavailable")
++    else:
++        ordered = sorted(
++            mover_rows, key=lambda r: (-abs(Decimal(str(r["gate_detail"]["change_pct"]))), r["ticker"])
++        )
++        shown = [
++            f"{r['ticker']} {_signed(Decimal(str(r['gate_detail']['change_pct'])), '0.1', '%')} {r['excluded_by']}"
++            for r in ordered[:MOVERS_SHOWN]
++        ]
++        segment = f"movers ≥ {_plain(settings.min_move_pct)}%: {len(ordered)} not in play"
++        if shown:
++            segment += " — " + " · ".join(shown)
++            if len(ordered) > MOVERS_SHOWN:
++                segment += f" (+{len(ordered) - MOVERS_SHOWN} more)"
++        parts.append(segment)
++
++    if formation_replay == FORMATION_UNAVAILABLE:
++        parts.append("formations: unavailable until S2-P2")
++    else:
++        rs = [Decimal(str(row["cf_r"])) for row in formation_rows if row.get("cf_r") is not None]
++        segment = (f"formations: {len(formation_rows)} not taken (no_card) · "
++                   f"cf-R Σ {_signed(sum(rs, Decimal(0)), '0.1', 'R')}, n={len(rs)}")
++        if formation_suppressed:
++            segment += f" · suppressed {formation_suppressed}"
++        if formation_input_stale:
++            segment += f" · input_stale {formation_input_stale}"
++        parts.append(segment)
++    return " · ".join(parts)
++
++
++def _after_rules(lines: list[str]) -> Optional[tuple[int, int]]:
++    section = find_section(lines, ANCHOR_SECTION)
++    if section is None:
++        return None
++    return (section.close_line + 1, section.close_line + 1)
++
++
++def after_drc_rules() -> Placement:
++    """Zero-width, immediately after the `drc-rules` closing marker."""
++    return Placement(f"after the {ANCHOR_SECTION} section's closing marker", _after_rules)
++
++
++def drc_note_path(trade_date: date) -> Path:
++    """`prefill.yaml` review_dir + drc_filename_pattern, in the resolved vault.
++    Absent -> `DrcNoteAbsent` (nothing is ever created here)."""
++    from cobalt.prefill.config import load_prefill_paths
++
++    paths = load_prefill_paths()
++    path = resolve_vault_path() / paths.review_dir / trade_date.strftime(paths.drc_filename_pattern)
++    if not path.is_file():
++        raise DrcNoteAbsent(path)
++    return path
++
++
++def write_miss_line(path: Path, body: str, *, writer: VaultWriter) -> WriteResult:
++    """Upsert the unit through the one write path. Never creates the note."""
++    path = Path(path)
++    if not path.is_file():
++        raise DrcNoteAbsent(path)
++    return writer.upsert_unit(path, SECTION, UNIT, body, placement=after_drc_rules())
++
++
++__all__ = [
++    "ANCHOR_SECTION", "DrcNoteAbsent", "MIN_N_FOR_AVERAGE", "MOVERS_SHOWN", "SECTION", "UNIT", "WRITER",
++    "after_drc_rules", "drc_note_path", "render_line", "write_miss_line",
++]
+diff --git a/src/cobalt/replay/models.py b/src/cobalt/replay/models.py
+new file mode 100644
+index 0000000..9000600
+--- /dev/null
++++ b/src/cobalt/replay/models.py
+@@ -0,0 +1,464 @@
++"""Typed values for the nightly replay (S2-P4 STEP-4..7).
++
++Every structured value the replay reads, computes or publishes is one of
++these models (Pydantic for all structured data). Numbers are `Decimal`
++end to end: a counterfactual R that went through a float is a number
++that does not replay to the same four decimals (L57).
++"""
++
++from __future__ import annotations
++
++import hashlib
++import json
++from datetime import date, datetime
++from decimal import Decimal
++from typing import Any, Literal, Optional
++
++from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
++
++from cobalt.archiver.models import Bar
++
++#: The one counterfactual-R formula's version. Stored in every receipt; a
++#: change to the formula is a new version, never a silent recompute.
++FORMULA_VERSION = "s2p4.cf_r.1"
++
++#: `formation_replay` in `job.result` and the miss line while S2-P2's
++#: evaluator is not in this tree (R4). The log line is exact.
++FORMATION_UNAVAILABLE = "unavailable"
++FORMATION_UNAVAILABLE_LINE = "trade_def replay: not available until S2-P2"
++
++#: The exclusion values a `"user".missed` row may carry (0009's CHECK).
++ExcludedBy = Literal[
++    "unarmed", "passed", "not_filled", "no_card", "window", "rule_10",
++    "not_in_any_source", "config_cap", "not_equity", "screen_inactive", "manual",
++]
++
++Direction = Literal["long", "short"]
++MissKind = Literal["card", "formation", "mover"]
++Side = Literal["gainers", "losers"]
++
++
++class ReplayError(RuntimeError):
++    """The replay refused. Names what and why; never a partial success."""
++
++
++class ReplayInputError(ReplayError):
++    """An input the formula needs is missing, ambiguous or contradictory."""
++
++
++class StepFailed(ReplayError):
++    """One replay step failed. Earlier steps' commits stand."""
++
++    def __init__(self, step: str, error: BaseException):
++        self.step = step
++        self.error = error
++        super().__init__(f"step {step} failed — {type(error).__name__}: {error}")
++
++
++def canonical_json(payload: Any) -> str:
++    """Sorted keys, no whitespace, Decimals and datetimes as strings."""
++    return json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
++
++
++def sha256_json(payload: Any) -> str:
++    return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
++
++
++class _Frozen(BaseModel):
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++
++# ---------------------------------------------------------------------------
++# F12 — cards
++# ---------------------------------------------------------------------------
++
++
++class TransitionRow(_Frozen):
++    """One `card_transitions` row. `id` is the tiebreak for equal `at`."""
++
++    id: Optional[int] = None
++    card_id: int
++    from_state: Optional[str] = None
++    to_state: str
++    at: AwareDatetime
++    #: The row's OWN recorded words (`card_transitions.reason`) and, when
++    #: its `evidence` carries one, the structured cause the writer chose
++    #: (`cards/expire.radar_expiry`: deadline / avoid / stop_before_arm).
++    #: Carried verbatim, never re-derived: one `excluded_by` gate value can
++    #: stand for several recorded causes, and the cause is the fact (R1-11).
++    reason: Optional[str] = None
++    cause: Optional[str] = None
++
++
++class StopEdit(_Frozen):
++    """One `card_stop_edits` row — the stop as of any instant replays."""
++
++    id: Optional[int] = None
++    at: AwareDatetime
++    from_stop: Decimal
++    to_stop: Decimal
++
++
++class CardCandidate(_Frozen):
++    """A card created on the replay day whose history never reached FILLED."""
++
++    id: int
++    ticker: str
++    direction: Direction
++    entry: Decimal
++    stop: Decimal
++    created_at: AwareDatetime
++    window_ref: Optional[str] = None
++    transitions: tuple[TransitionRow, ...]
++    stop_edits: tuple[StopEdit, ...] = ()
++
++
++class PositionSpan(_Frozen):
++    """A card that was FILLED — open from `filled_at` until `closed_at`."""
++
++    card_id: int
++    filled_at: AwareDatetime
++    closed_at: Optional[AwareDatetime] = None
++
++    def open_at(self, instant: datetime) -> bool:
++        return self.filled_at <= instant and (self.closed_at is None or self.closed_at > instant)
++
++
++class WindowResolution(_Frozen):
++    """The card's window end as the public resolver returned it."""
++
++    resolved_end: AwareDatetime
++    source: str
++    detail: str
++
++
++class MissRow(_Frozen):
++    """One `"user".missed` row, before the database assigns its id."""
++
++    trade_date: date
++    kind: MissKind
++    ticker: str
++    direction: Optional[Direction] = None
++    card_id: Optional[int] = None
++    trade_def_md5: Optional[str] = None
++    formation_at: Optional[AwareDatetime] = None
++    pool_member_id: Optional[int] = None
++    mover_id: Optional[int] = None
++    excluded_by: ExcludedBy
++    gate_detail: dict[str, Any]
++    entry: Optional[Decimal] = None
++    stop: Optional[Decimal] = None
++    trigger_ts: Optional[AwareDatetime] = None
++    fill_price: Optional[Decimal] = None
++    horizon_end: Optional[AwareDatetime] = None
++    exit_ts: Optional[AwareDatetime] = None
++    exit_price: Optional[Decimal] = None
++    exit_reason: Optional[Literal["stop", "horizon_end"]] = None
++    cf_r: Optional[Decimal] = None
++    mfe_r: Optional[Decimal] = None
++    bars_watermark: Optional[AwareDatetime] = None
++    formula_version: Optional[str] = None
++    receipt: dict[str, Any]
++    inputs_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
++
++    def subject(self) -> tuple:
++        """The `missed_one_current_per_subject` key, in Python."""
++        return (
++            self.trade_date, self.kind, self.ticker, self.card_id or 0,
++            self.trade_def_md5 or "",
++            self.formation_at.isoformat() if self.formation_at else "",
++            self.pool_member_id if self.kind == "formation" else 0,
++        )
++
++
++class CardReplay(_Frozen):
++    """What replaying one candidate produced."""
++
++    card_id: int
++    ticker: str
++    status: Literal["miss", "no_trigger", "input_stale"]
++    reason: str
++    miss: Optional[MissRow] = None
++
++
++# ---------------------------------------------------------------------------
++# The ONE counterfactual (shared by cards and formations — L3)
++# ---------------------------------------------------------------------------
++
++
++class Counterfactual(_Frozen):
++    """The trigger/fill/exit walk of the one cf-R formula (R4, R1-9).
++
++    A card supplies its as-of-trigger stop and a formation supplies P2's
++    structural stop; everything below this line is computed once, in one
++    place, from those same values.
++    """
++
++    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
++
++    searched: tuple[Bar, ...]
++    trigger: Bar
++    stop: Decimal
++    risk: Decimal
++    window_end: AwareDatetime
++    horizon_end: AwareDatetime
++    eligible: tuple[Bar, ...]
++    walked: tuple[Bar, ...]
++    fill_price: Decimal
++    exit_bar: Bar
++    exit_price: Decimal
++    exit_reason: Literal["stop", "horizon_end"]
++    cf_r: Decimal
++    mfe_r: Decimal
++
++
++class CfOutcome(_Frozen):
++    """`counterfactual()`'s answer: the walk, or why there is no row."""
++
++    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
++
++    status: Literal["ok", "no_trigger", "input_stale"]
++    reason: str
++    walk: Optional[Counterfactual] = None
++
++
++# ---------------------------------------------------------------------------
++# F12 — formations (S2-P2's replay, R1-21)
++# ---------------------------------------------------------------------------
++
++
++class RadarCardRef(_Frozen):
++    """A radar card that already exists for a (member, def, direction).
++
++    Its presence SUPPRESSES the formation miss (R1-21): the card path
++    (F12) owns that subject, and one event never becomes two rows (L3).
++    """
++
++    card_id: int
++    pool_member_id: Optional[int] = None
++    trade_def_slug: Optional[str] = None
++    direction: Optional[Direction] = None
++    state: str
++    created_at: Optional[AwareDatetime] = None
++
++
++class FormationCandidate(_Frozen):
++    """One S2-P2 `ReplayFormation`, in replay's own vocabulary.
++
++    `entry`/`stop` are the SAME mapping the live radar card path uses
++    (`RadarCardSpec.entry = trigger_price`, `.stop = structural_stop`) —
++    never a second reading of P2's values.
++    """
++
++    membership_id: int
++    ticker: str
++    slug: str
++    trade_def_md5: str = Field(pattern=r"^[0-9a-f]{32}$")
++    direction: Direction
++    entry: Decimal
++    stop: Decimal
++    formed_at: AwareDatetime
++    seen_at: AwareDatetime
++    score_inputs_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
++    evaluator_version: str
++
++    def subject_key(self) -> tuple:
++        """The suppression key: (member, def, direction), the same triple
++        `aset_sizings_one_open_radar_card` enforces."""
++        return (self.membership_id, self.slug, self.direction)
++
++
++class FormationReplay(_Frozen):
++    """What replaying one formation produced."""
++
++    membership_id: int
++    ticker: str
++    status: Literal["miss", "suppressed", "no_trigger", "input_stale"]
++    reason: str
++    miss: Optional[MissRow] = None
++
++
++class FormationCounts(_Frozen):
++    """Every formation the day produced, by outcome — none silently dropped."""
++
++    candidates: int = 0
++    misses: int = 0
++    suppressed: int = 0
++    no_trigger: int = 0
++    input_stale: int = 0
++
++
++class FormationOutcome(_Frozen):
++    """The formation step's whole answer: the capability marker it bound
++    to (or `unavailable`), its rows, and every count behind them."""
++
++    status: str
++    rows: tuple[MissRow, ...] = ()
++    counts: FormationCounts = FormationCounts()
++
++
++# ---------------------------------------------------------------------------
++# F13 — movers
++# ---------------------------------------------------------------------------
++
++
++class MoverRow(_Frozen):
++    """One ranked row of an unfiltered export, as `movers_daily` stores it."""
++
++    side: Side
++    rank: int = Field(ge=1)
++    ticker: str = Field(min_length=1)
++    change_pct: Decimal
++    asset_type: Optional[str] = None
++    volume: Optional[int] = None
++    rvol: Optional[Decimal] = None
++
++
++class MoversExport(_Frozen):
++    """One side's export: the parsed top rows and the raw bytes' hash.
++
++    `exported_rows` is BOOKKEEPING, not selection: how many rows the
++    export really carried, before the top-N cap kept `rows`. A side whose
++    export returned fewer rows than `top_n` is a fact about the source,
++    and this is where that fact is first written down.
++    """
++
++    side: Side
++    fetched_at: AwareDatetime
++    export_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
++    header: tuple[str, ...]
++    rows: tuple[MoverRow, ...]
++    #: Rows in the export itself — always >= len(rows).
++    exported_rows: int = Field(ge=0)
++    source: Literal["live", "retained"]
++    cache_path: Optional[str] = None
++
++    @model_validator(mode="after")
++    def _counted_the_whole_export(self) -> "MoversExport":
++        if self.exported_rows < len(self.rows):
++            raise ValueError(
++                f"movers-{self.side}: exported_rows {self.exported_rows} is fewer than the "
++                f"{len(self.rows)} rows kept — the count is of the export, never of the selection"
++            )
++        return self
++
++
++class MoversSideCount(_Frozen):
++    """One side's export bookkeeping, as `job.result` records it.
++
++    `expected` is `min(top_n, exported)` — the ONLY number a stored-row
++    count may be checked against, because an export that returned fewer
++    rows than the cap is a fact about the source, not a failure of the
++    run. Stored with its two inputs, so the check replays from the row
++    alone (L57).
++    """
++
++    #: Rows the export really had.
++    exported: int = Field(ge=0)
++    #: `radar.benchmark.top_n` in force for the run.
++    top_n: int = Field(ge=1)
++    #: Rows `movers_daily` should hold for the side: `min(top_n, exported)`.
++    expected: int = Field(ge=0)
++
++    @model_validator(mode="after")
++    def _expected_is_the_smaller_of_its_inputs(self) -> "MoversSideCount":
++        if self.expected != min(self.top_n, self.exported):
++            raise ValueError(
++                f"expected {self.expected} is not min(top_n {self.top_n}, exported {self.exported}) "
++                f"= {min(self.top_n, self.exported)}"
++            )
++        return self
++
++
++class StoredMover(_Frozen):
++    """An active `system.movers_daily` row."""
++
++    id: Optional[int] = None
++    trade_date: date
++    side: Side
++    rank: int
++    ticker: str
++    change_pct: Decimal
++    asset_type: Optional[str] = None
++    volume: Optional[int] = None
++    rvol: Optional[Decimal] = None
++    export_sha256: str
++    fetched_at: AwareDatetime
++    bars_archived: bool = False
++
++
++class Episode(_Frozen):
++    """One `system.radar_membership` episode the benchmark diffs against."""
++
++    model_config = ConfigDict(extra="ignore", frozen=True)
++
++    id: Optional[int] = None
++    ticker: str
++    trade_date: date
++    entered_at: Optional[AwareDatetime] = None
++    left_at: Optional[AwareDatetime] = None
++    first_seen_at: Optional[AwareDatetime] = None
++    excluded_by: Optional[str] = None
++    source: Optional[str] = None
++
++
++# ---------------------------------------------------------------------------
++# The run
++# ---------------------------------------------------------------------------
++
++
++class ReconcileCounts(_Frozen):
++    inserted: int = 0
++    superseded: int = 0
++    retired: int = 0
++    unchanged: int = 0
++
++
++class ReplayResult(BaseModel):
++    """`job.result` (STEP-4) plus the coverage counts R1-12 surfaces."""
++
++    model_config = ConfigDict(extra="forbid")
++
++    trade_date: date
++    replay_run_id: str
++    dry_run: bool
++    movers: int = 0
++    #: side -> what its export really had and how many rows that allows
++    #: `movers_daily` to hold. Recorded so the S2 smoke can check the
++    #: stored count against the night's own export instead of a hand
++    #: count of the cached CSV.
++    movers_by_side: dict[Side, MoversSideCount] = Field(default_factory=dict)
++    archived: int = 0
++    archive_failures: int = 0
++    archive_incomplete: int = 0
++    card_candidates: int = 0
++    card_misses: int = 0
++    mover_misses: int = 0
++    input_stale: int = 0
++    no_trigger: int = 0
++    formation_replay: str = FORMATION_UNAVAILABLE
++    formation_candidates: int = 0
++    formation_misses: int = 0
++    formation_suppressed: int = 0
++    formation_no_trigger: int = 0
++    formation_input_stale: int = 0
++    line_action: Optional[str] = None
++    line_diff: Optional[str] = None
++    steps_done: list[str] = Field(default_factory=list)
++    failed_step: Optional[str] = None
++    precondition: Optional[str] = None
++    reconcile: dict[str, ReconcileCounts] = Field(default_factory=dict)
++
++    def job_result(self) -> dict[str, Any]:
++        return self.model_dump(mode="json")
++
++
++__all__ = [
++    "CardCandidate", "CardReplay", "CfOutcome", "Counterfactual", "Direction", "Episode", "ExcludedBy",
++    "FORMATION_UNAVAILABLE", "FORMATION_UNAVAILABLE_LINE", "FORMULA_VERSION",
++    "FormationCandidate", "FormationCounts", "FormationOutcome", "FormationReplay",
++    "MissKind", "MissRow", "MoverRow", "MoversExport", "MoversSideCount", "PositionSpan", "RadarCardRef",
++    "ReconcileCounts", "ReplayError", "ReplayInputError", "ReplayResult", "Side",
++    "StepFailed", "StopEdit", "StoredMover", "TransitionRow", "WindowResolution",
++    "canonical_json", "sha256_json",
++]

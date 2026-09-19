@@ -1,0 +1,1992 @@
+diff --git a/tests/cobalt/test_smoke.py b/tests/cobalt/test_smoke.py
+new file mode 100644
+index 0000000..b0f958f
+--- /dev/null
++++ b/tests/cobalt/test_smoke.py
+@@ -0,0 +1,1392 @@
++"""`cobalt smoke s2` (S2-P4 STEP-9, R6) — offline, every probe on fakes.
++
++§4 Smoke sentences, one test each, plus one test per check KIND
++(launchctl, sql, http, log_grep, job_row, vault_unit, cli). No database,
++no launchd, no network, no vault: every collector is a `SmokeDeps` field
++and each test hands in its own fake. The committed suite
++(`configs/cobalt/smoke/s2.yaml`) is loaded for real, so a check whose
++shape the code cannot run fails here, not on the S2 close evening.
++
++The one DB-backed test (`requires_db`) runs every committed SQL/job_row
++query on cobalt_dev through `cobalt db query`'s read path; the hub runs
++it (L41 interim) and it skips cleanly offline.
++"""
++
++from __future__ import annotations
++
++import ast
++import json
++import os
++import re
++import shlex
++from datetime import date, datetime, timedelta, timezone
++from decimal import Decimal
++from pathlib import Path
++from zoneinfo import ZoneInfo
++
++import pytest
++
++from cobalt.dayopen.launchd import LaunchdPrintError, LaunchdPrintStatus
++from cobalt.db_query import QueryRows
++from cobalt.smoke import checks, cli, report
++from cobalt.smoke.config import SUITES_DIR, SmokeConfigError, load_suite
++from cobalt.smoke.models import (
++    CheckOutcome,
++    CliCheck,
++    HttpCheck,
++    JobRowCheck,
++    LaunchctlCheck,
++    LogGrepCheck,
++    Overall,
++    SmokeContext,
++    SqlCheck,
++    Verdict,
++    VaultUnitCheck,
++    overall_verdict,
++)
++
++ET = ZoneInfo("America/New_York")
++REPO = Path(__file__).resolve().parents[2]
++SMOKE_SRC = REPO / "src" / "cobalt" / "smoke"
++
++#: Tuesday 2026-09-22, 21:50 ET — after that evening's 21:10 replay + its
++#: 1800 s timeout (ends 21:40), the S2 close evening (plan §6).
++NOW = datetime(2026, 9, 22, 21, 50, tzinfo=ET).astimezone(timezone.utc)
++DAY = date(2026, 9, 22)
++CUTOFF = datetime(2026, 9, 18, 20, 5, tzinfo=ET)
++
++requires_db = pytest.mark.skipif(
++    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
++    reason="requires_db: Postgres env settings not available",
++)
++
++
++# ---------------------------------------------------------------------
++# fakes
++# ---------------------------------------------------------------------
++
++
++def ctx(**overrides) -> SmokeContext:
++    values = dict(
++        now=NOW,
++        report_date=DAY,
++        session="overnight",
++        cutoff=CUTOFF,
++        last_trading_day=DAY,
++        last_summary_slot="16:30",
++        last_summary_date=DAY,
++        prod=True,
++        tunables={"heartbeat.radar_scan_max_age_s": 900},
++    )
++    values.update(overrides)
++    return SmokeContext(**values)
++
++
++def rows(columns, *data) -> QueryRows:
++    return QueryRows(columns=tuple(columns), rows=[tuple(r) for r in data])
++
++
++def _unexpected(name):
++    def fail(*_a, **_k):
++        raise AssertionError(f"this test did not expect a {name} call")
++
++    return fail
++
++
++def deps(**overrides) -> checks.SmokeDeps:
++    values = dict(
++        read_rows=_unexpected("read_rows"),
++        launchctl_print=_unexpected("launchctl_print"),
++        launchctl_loaded=_unexpected("launchctl_loaded"),
++        http_get=_unexpected("http_get"),
++        read_text=_unexpected("read_text"),
++        run_cli=_unexpected("run_cli"),
++        job_specs=_unexpected("job_specs"),
++        drc_note_path=_unexpected("drc_note_path"),
++        missed_grace=lambda: timedelta(minutes=30),
++    )
++    values.update(overrides)
++    return checks.SmokeDeps(**values)
++
++
++def _job_row(**overrides):
++    base = dict(
++        label="com.cobalt.replay",
++        state="done",
++        exit_code=0,
++        # tonight's run: started just after the 21:10 occurrence (R17 moved
++        # it from 21:05), finished well inside the 1800 s timeout.
++        started_at=datetime(2026, 9, 22, 21, 10, 1, tzinfo=ET),
++        finished_at=datetime(2026, 9, 22, 21, 14, 30, tzinfo=ET),
++        updated_at=datetime(2026, 9, 22, 21, 14, 30, tzinfo=ET),
++        registered_at=datetime(2026, 9, 18, 20, 10, tzinfo=ET),
++        last_result={
++            "trade_date": "2026-09-22", "dry_run": False, "movers": 40, "archived": 12,
++            "card_misses": 2, "mover_misses": 3, "formation_replay": "unavailable",
++            "line_action": "updated", "rows_written": 5,
++            "summary_sent": {"07:00": "2026-09-22", "16:30": "2026-09-22"},
++        },
++    )
++    base.update(overrides)
++    columns = list(base)
++    return rows(columns, [base[c] for c in columns])
++
++
++# ---------------------------------------------------------------------
++# §4: schema, bad file crashes with a line
++# ---------------------------------------------------------------------
++
++
++def _write(tmp_path, text) -> Path:
++    path = tmp_path / "s9.yaml"
++    path.write_text(text)
++    return path
++
++
++GOOD_HEAD = "suite: s9\ntitle: test\nday_anchor_job: com.cobalt.replay\nchecks:\n"
++
++
++def test_smoke_checks_load_through_schema_bad_file_crashes_with_line(tmp_path):
++    # The committed suite loads, whole, through the schema.
++    suite = load_suite(SUITES_DIR / "s2.yaml")
++    ids = [c.id for c in suite.checks]
++    assert {i.split(".")[0] for i in ids} == {f"K{n}" for n in range(1, 19)}
++    assert len(ids) == len(set(ids))
++
++    # A validation error names the line of the offending value.
++    bad_op = GOOD_HEAD + (
++        "  - id: K1\n"                      # 5
++        "    title: t\n"                     # 6
++        "    kind: sql\n"                    # 7
++        "    side: system\n"                 # 8
++        "    query: SELECT 1 AS x\n"         # 9
++        "    expect_text: x\n"               # 10
++        "    expect:\n"                      # 11
++        "      - {column: x, op: bogus}\n"   # 12
++    )
++    with pytest.raises(SmokeConfigError) as raised:
++        load_suite(_write(tmp_path, bad_op))
++    assert raised.value.line == 12
++    assert ":12:" in str(raised.value)
++
++    # A missing required field names the check's own line.
++    missing_side = GOOD_HEAD + (
++        "  - id: K1\n"                       # 5
++        "    title: t\n"
++        "    kind: sql\n"
++        "    query: SELECT 1 AS x\n"
++        "    expect_text: x\n"
++        "    expect: [{column: x, op: eq, value: 1}]\n"
++    )
++    with pytest.raises(SmokeConfigError) as raised:
++        load_suite(_write(tmp_path, missing_side))
++    assert raised.value.line == 5
++    assert "side" in str(raised.value)
++
++    # A YAML syntax error carries the parser's line.
++    with pytest.raises(SmokeConfigError) as raised:
++        load_suite(_write(tmp_path, GOOD_HEAD + "  - id: K1\n    title: [unclosed\n"))
++    assert raised.value.line is not None and ":" in str(raised.value)
++
++    # A write statement never loads (the read path's own guard).
++    write_sql = GOOD_HEAD + (
++        "  - id: K1\n"
++        "    title: t\n"
++        "    kind: sql\n"
++        "    side: user\n"
++        "    query: DELETE FROM picks\n"     # 9
++        "    expect_text: x\n"
++        "    expect: [{column: x, op: eq, value: 1}]\n"
++    )
++    with pytest.raises(SmokeConfigError) as raised:
++        load_suite(_write(tmp_path, write_sql))
++    assert raised.value.line == 9 and "DELETE" in str(raised.value)
++
++    # A cli argv off the read-only allowlist never loads.
++    writer_cli = GOOD_HEAD + (
++        "  - id: K1\n"
++        "    title: t\n"
++        "    kind: cli\n"
++        "    argv: [cobalt, heartbeat, beat]\n"  # 8
++        "    expect_text: x\n"
++    )
++    with pytest.raises(SmokeConfigError) as raised:
++        load_suite(_write(tmp_path, writer_cli))
++    assert raised.value.line == 8
++
++    # An unknown variable never loads.
++    unknown_var = GOOD_HEAD + (
++        "  - id: K1\n"
++        "    title: t\n"
++        "    kind: sql\n"
++        "    side: user\n"
++        "    query: SELECT {yesterday} AS x\n"  # 9
++        "    expect_text: x\n"
++        "    expect: [{column: x, op: eq, value: 1}]\n"
++    )
++    with pytest.raises(SmokeConfigError) as raised:
++        load_suite(_write(tmp_path, unknown_var))
++    assert raised.value.line == 9 and "yesterday" in str(raised.value)
++
++    # Duplicate ids never load.
++    dup = GOOD_HEAD + "".join(
++        f"  - id: K1\n    title: t\n    kind: http\n    url: http://127.0.0.1:1/\n    expect_text: x\n"
++        for _ in range(2)
++    )
++    with pytest.raises(SmokeConfigError):
++        load_suite(_write(tmp_path, dup))
++
++    # An absent file crashes; it never runs an empty checklist.
++    with pytest.raises(SmokeConfigError):
++        load_suite(tmp_path / "absent.yaml")
++
++
++# ---------------------------------------------------------------------
++# §4: the roll-up
++# ---------------------------------------------------------------------
++
++
++def _outcome(verdict: Verdict, cid="K1") -> CheckOutcome:
++    return CheckOutcome(
++        id=cid, title="t", kind="http", verdict=verdict, detail="d",
++        command="c", expected="e", raw="r",
++    )
++
++
++def test_verdict_red_on_error_amber_on_fail_known_never_lowers():
++    P, F, K, E = Verdict.PASS, Verdict.FAIL, Verdict.KNOWN, Verdict.ERROR
++    assert overall_verdict([_outcome(P)]) is Overall.GREEN
++    assert overall_verdict([_outcome(P), _outcome(K)]) is Overall.GREEN
++    assert overall_verdict([_outcome(K), _outcome(K)]) is Overall.GREEN
++    assert overall_verdict([_outcome(P), _outcome(F)]) is Overall.AMBER
++    assert overall_verdict([_outcome(K), _outcome(F)]) is Overall.AMBER
++    assert overall_verdict([_outcome(F), _outcome(E)]) is Overall.RED
++    assert overall_verdict([_outcome(K), _outcome(E)]) is Overall.RED
++    # An empty check list is not GREEN: nothing looked.
++    with pytest.raises(ValueError):
++        overall_verdict([])
++
++
++# ---------------------------------------------------------------------
++# §4: sentinels — imports no writer, calls no write
++# ---------------------------------------------------------------------
++
++#: Every name that opens a write in the new core. The smoke package's own
++#: source may not import or reference one.
++WRITER_NAMES = {
++    "VaultWriter", "VaultWriteStore", "upsert_unit", "create_if_absent", "write_miss_line",
++    "JobStore", "job_run", "as_job", "sweep", "run_beat", "take_beat",
++    "TraderSettingsStore", "CardStore", "AsetStore", "RadarStore", "BarStore",
++    "MissedStore", "MoversStore", "SessionBlockStore", "ensure_schema", "connect_migration",
++}
++WRITER_MODULES = {
++    "cobalt.vaultwrite.writer", "cobalt.vaultwrite.store", "cobalt.jobs.store",
++    "cobalt.jobs.wrapper", "cobalt.settings.store", "cobalt.replay.line",
++    "cobalt.replay.runner", "cobalt.prefill.vault_writer", "cobalt.cards.store",
++    "cobalt.aset.store", "cobalt.radar.store", "cobalt.archiver.store",
++}
++
++
++def test_smoke_imports_no_writer_and_calls_no_write(tmp_path, monkeypatch):
++    # 1) static: no writer module imported, no writer name referenced.
++    offenders = []
++    for path in sorted(SMOKE_SRC.glob("*.py")):
++        tree = ast.parse(path.read_text(), filename=str(path))
++        for node in ast.walk(tree):
++            if isinstance(node, ast.ImportFrom):
++                module = node.module or ""
++                if module in WRITER_MODULES or module == "cobalt.vaultwrite":
++                    offenders.append(f"{path.name}: from {module} import …")
++                offenders += [f"{path.name}: imports {a.name}" for a in node.names if a.name in WRITER_NAMES]
++            elif isinstance(node, ast.Import):
++                offenders += [f"{path.name}: import {a.name}" for a in node.names if a.name in WRITER_MODULES]
++            elif isinstance(node, ast.Name) and node.id in WRITER_NAMES:
++                offenders.append(f"{path.name}: references {node.id}")
++            elif isinstance(node, ast.Attribute) and node.attr in WRITER_NAMES:
++                offenders.append(f"{path.name}: references .{node.attr}")
++    assert offenders == []
++
++    # 2) runtime: the whole committed suite, run through the CLI entry,
++    # with every write surface in the new core armed to explode.
++    tripped: list[str] = []
++
++    def sentinel(name):
++        def boom(*_a, **_k):
++            tripped.append(name)
++            raise AssertionError(f"smoke called a write: {name}")
++
++        return boom
++
++    from cobalt import db
++    from cobalt.jobs.store import JobStore
++    from cobalt.settings.store import TraderSettingsStore
++    from cobalt.vaultwrite.store import VaultWriteStore
++    from cobalt.vaultwrite.writer import VaultWriter
++
++    for cls, names in (
++        (VaultWriter, ["upsert_unit", "upsert_region", "create_if_absent", "restore"]),
++        (VaultWriteStore, ["ensure_schema", "pending_write", "purge_expired"]),
++        (JobStore, ["ensure_schema", "register", "register_all", "mark_running", "beat",
++                    "mark_finished", "mark_wrapper_finished", "record_heartbeat_result",
++                    "mark_zombie", "mark_probe", "set_kill_switch"]),
++        (TraderSettingsStore, ["ensure_schema", "put"]),
++    ):
++        for name in names:
++            # A renamed write method must fail here, not silently un-arm.
++            assert hasattr(cls, name), f"{cls.__name__}.{name} no longer exists"
++            monkeypatch.setattr(cls, name, sentinel(f"{cls.__name__}.{name}"))
++    monkeypatch.setattr(db, "connect", sentinel("db.connect"))
++    monkeypatch.setattr(db, "connect_migration", sentinel("db.connect_migration"))
++    import subprocess
++
++    monkeypatch.setattr(subprocess, "run", sentinel("subprocess.run"))
++    monkeypatch.setattr(subprocess, "Popen", sentinel("subprocess.Popen"))
++
++    drc = tmp_path / "drc.md"
++    drc.write_text(
++        "# DRC\n<!-- cobalt:section drc-misses -->\n<!-- cobalt:unit miss_line -->\n"
++        "Misses …\n<!-- /cobalt:unit miss_line -->\n<!-- /cobalt:section drc-misses -->\n"
++    )
++    seen_sql: list[str] = []
++
++    def read_rows(statement, side):
++        seen_sql.append(statement)
++        return rows(["x"], [1])
++
++    fakes = deps(
++        read_rows=read_rows,
++        launchctl_print=lambda label: LaunchdPrintStatus(label, "running", 1, "(never exited)", 1, "state = running"),
++        launchctl_loaded=lambda label: True,
++        http_get=lambda url: (200, "<th>value</th>"),
++        read_text=lambda path: "HEARTBEAT GREEN — x (2026-09-22 21:45:00 EDT)\nOK   database  ok\nOK   sheet HTTP  ok\n",
++        run_cli=lambda argv: (0, "ok"),
++        job_specs=lambda: checks.load_job_specs(),
++        drc_note_path=lambda day: drc,
++    )
++    result = cli.run("s2", cutoff=CUTOFF, now=NOW, prod=True, deps=fakes)
++    assert tripped == []
++    assert seen_sql, "the sql checks never reached the read path"
++    # Every outcome came from a probe that ran (fakes answer loosely, so
++    # FAIL/ERROR verdicts are expected) — never from a tripped sentinel.
++    assert all("smoke called a write" not in o.detail for o in result.checks)
++
++
++# ---------------------------------------------------------------------
++# §4: the report file
++# ---------------------------------------------------------------------
++
++
++def _report(verdicts=(Verdict.PASS, Verdict.KNOWN, Verdict.FAIL)):
++    outcomes = [_outcome(v, cid=f"K{i + 1}") for i, v in enumerate(verdicts)]
++    return report.build_report("s2", "S2 smoke", ctx(), outcomes)
++
++
++def test_smoke_writes_report_file_with_table(tmp_path):
++    rep = _report()
++    path = report.write_report(rep, reports_dir=tmp_path)
++    assert path.name == "s2-smoke-2026-09-22.md"
++    text = path.read_text()
++    assert "| # | check | verdict | evidence |" in text
++    for outcome in rep.checks:
++        assert f"| {outcome.id} | {outcome.title} | {outcome.verdict.value} |" in text
++    assert "OVERALL: AMBER" in text
++    # The variables the commands were rendered with head the file.
++    assert f"cutoff: {CUTOFF.isoformat()}" in text
++    assert "last_trading_day: 2026-09-22" in text
++    # Each row's exact command and expected output are in the file (R1-24).
++    assert text.count("command:") == len(rep.checks)
++    assert text.count("expected:") == len(rep.checks)
++
++    # A second run the same day lands beside the first, never over it.
++    first = path.read_text()
++    second = report.write_report(rep, reports_dir=tmp_path)
++    assert second != path and second.name.startswith("s2-smoke-2026-09-22-")
++    assert path.read_text() == first
++
++
++def test_json_flag_prints_and_writes_nothing(monkeypatch, capsys, tmp_path):
++    rep = _report((Verdict.PASS,))
++    monkeypatch.setattr(cli, "run", lambda *a, **k: rep)
++    monkeypatch.setattr(report, "REPORTS_DIR", tmp_path)
++    args = cli.build_parser().parse_args(
++        ["smoke", "s2", "--cutoff", CUTOFF.isoformat(), "--json"]
++    )
++    args.func(args)
++    payload = json.loads(capsys.readouterr().out)
++    assert payload["overall"] == "GREEN" and payload["checks"][0]["id"] == "K1"
++    assert list(tmp_path.iterdir()) == []
++
++
++def test_cutoff_is_required_and_must_carry_an_offset():
++    parser = cli.build_parser()
++    with pytest.raises(SystemExit):
++        parser.parse_args(["smoke", "s2"])
++    with pytest.raises(SystemExit):
++        parser.parse_args(["smoke", "s2", "--cutoff", "2026-09-18T20:05:00"])
++
++
++# ---------------------------------------------------------------------
++# One test per check kind, on fakes
++# ---------------------------------------------------------------------
++
++
++def test_kind_launchctl_running_and_registry_match():
++    running = LaunchctlCheck(id="K1", title="radar", kind="launchctl", mode="running",
++                             label="com.cobalt.radar", expect_text="running")
++    up = LaunchdPrintStatus("com.cobalt.radar", "running", 42, "(never exited)", 3, "state = running\npid = 42")
++    down = LaunchdPrintStatus("com.cobalt.radar", "not running", None, "1", 3, "state = not running")
++
++    out = checks.evaluate(running, ctx(), deps(launchctl_print=lambda label: up))
++    assert out.verdict is Verdict.PASS and "pid = 42" in out.raw
++    assert out.command == "launchctl print gui/$(id -u)/com.cobalt.radar"
++    assert checks.evaluate(running, ctx(), deps(launchctl_print=lambda label: down)).verdict is Verdict.FAIL
++
++    def broken(label):
++        raise LaunchdPrintError("exited 113")
++
++    assert checks.evaluate(running, ctx(), deps(launchctl_print=broken)).verdict is Verdict.ERROR
++
++    match = LaunchctlCheck(id="K18", title="drift", kind="launchctl", mode="registry_match",
++                           expect_text="no drift")
++
++    class Spec:
++        def __init__(self, label, enabled):
++            self.label, self.enabled = label, enabled
++
++    specs = [Spec("com.cobalt.radar", True), Spec("com.cobalt.replay", True), Spec("com.cobalt.agent", False)]
++    loaded = {"com.cobalt.radar": True, "com.cobalt.replay": True, "com.cobalt.agent": False}
++    out = checks.evaluate(match, ctx(), deps(job_specs=lambda: specs, launchctl_loaded=loaded.__getitem__))
++    assert out.verdict is Verdict.PASS
++
++    drift = dict(loaded, **{"com.cobalt.replay": False, "com.cobalt.agent": True})
++    out = checks.evaluate(match, ctx(), deps(job_specs=lambda: specs, launchctl_loaded=drift.__getitem__))
++    assert out.verdict is Verdict.FAIL
++    assert "com.cobalt.replay" in out.detail and "com.cobalt.agent" in out.detail
++
++
++def test_kind_sql_renders_literals_through_the_read_path_and_grades_rows():
++    check = SqlCheck.model_validate({
++        "id": "K6", "title": "picks", "kind": "sql", "side": "user",
++        "query": "SELECT count(*) AS fills, count(*) AS missing FROM card_transitions WHERE at >= {cutoff}",
++        "known_if": [{"column": "fills", "op": "eq", "value": 0}],
++        "known_text": "no fill yet",
++        "expect": [{"column": "missing", "op": "eq", "value": 0}],
++        "expect_text": "missing = 0",
++    })
++    calls = []
++
++    def answer(result):
++        def read_rows(statement, side):
++            calls.append((statement, side))
++            return result
++
++        return read_rows
++
++    out = checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["fills", "missing"], [3, 0]))))
++    statement, side = calls[-1]
++    assert side == "user"
++    assert "TIMESTAMPTZ '2026-09-18T20:05:00-04:00'" in statement and "{" not in statement
++    assert out.verdict is Verdict.PASS
++    # The hand command is the same statement through `cobalt db query`.
++    assert out.command.startswith("uv run cobalt db query --side user --prod --format json ")
++    assert shlex.split(out.command)[-1] == statement
++
++    assert checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["fills", "missing"], [3, 1])))).verdict is Verdict.FAIL
++    known = checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["fills", "missing"], [0, 0]))))
++    assert known.verdict is Verdict.KNOWN and "no fill yet" in known.detail
++    # No row is a finding; two rows is a broken probe.
++    assert checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["fills", "missing"])))).verdict is Verdict.FAIL
++    assert checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["fills", "missing"], [1, 0], [2, 0])))).verdict is Verdict.ERROR
++    # A predicate naming a column the query does not return is a broken probe.
++    assert checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["other"], [0])))).verdict is Verdict.ERROR
++
++    def refused(statement, side):
++        raise RuntimeError("connection refused")
++
++    assert checks.evaluate(check, ctx(), deps(read_rows=refused)).verdict is Verdict.ERROR
++
++    # requires_relation: an absent relation is a FAIL, named, and the
++    # main query never runs.
++    seam = SqlCheck.model_validate({
++        "id": "K5.1", "title": "seam", "kind": "sql", "side": "system",
++        "requires_relation": "system.radar_score_run",
++        "query": "SELECT (SELECT status FROM system.radar_score_run LIMIT 1) AS latest_status",
++        "expect": [{"column": "latest_status", "op": "eq", "value": "complete"}],
++        "expect_text": "complete",
++    })
++    calls.clear()
++    out = checks.evaluate(seam, ctx(), deps(read_rows=answer(rows(["present"], [False]))))
++    assert out.verdict is Verdict.FAIL and "system.radar_score_run" in out.detail
++    assert len(calls) == 1 and "to_regclass('system.radar_score_run')" in calls[0][0]
++
++    # Per-predicate `known`: a failing value listed there is KNOWN, not FAIL.
++    pool = SqlCheck.model_validate({
++        "id": "K2", "title": "pool", "kind": "sql", "side": "system",
++        "query": "SELECT failed_stage, members FROM system.radar_pool",
++        "expect": [
++            {"column": "failed_stage", "op": "is_null", "known": ["bars"]},
++            {"column": "members", "op": "le", "value": 50},
++        ],
++        "expect_text": "x",
++    })
++    assert checks.evaluate(pool, ctx(), deps(read_rows=answer(rows(["failed_stage", "members"], ["bars", Decimal("50")])))).verdict is Verdict.KNOWN
++    assert checks.evaluate(pool, ctx(), deps(read_rows=answer(rows(["failed_stage", "members"], ["mirror", 50])))).verdict is Verdict.FAIL
++    assert checks.evaluate(pool, ctx(), deps(read_rows=answer(rows(["failed_stage", "members"], ["bars", 51])))).verdict is Verdict.FAIL
++
++    # Tunables and dates render as literals; a date compares to its text.
++    rendered = checks.render_sql("SELECT {tunable:heartbeat.radar_scan_max_age_s}, {last_trading_day}, {session}", ctx())
++    assert rendered == "SELECT 900, DATE '2026-09-22', 'overnight'"
++    assert checks.render_sql("SELECT {session}", ctx(session="o'x")) == "SELECT 'o''x'"
++
++
++def test_kind_http_status_and_body():
++    check = HttpCheck(id="K4.3", title="radar", kind="http", url="http://127.0.0.1:5010/radar",
++                      status=200, contains=["<th>value</th>"], expect_text="200")
++    out = checks.evaluate(check, ctx(), deps(http_get=lambda url: (200, "<table><th>value</th>")))
++    assert out.verdict is Verdict.PASS
++    assert "curl" in out.command and "http://127.0.0.1:5010/radar" in out.command
++    assert checks.evaluate(check, ctx(), deps(http_get=lambda url: (200, "<th>rank</th>"))).verdict is Verdict.FAIL
++    assert checks.evaluate(check, ctx(), deps(http_get=lambda url: (500, "<th>value</th>"))).verdict is Verdict.FAIL
++
++    def down(url):
++        raise ConnectionRefusedError("refused")
++
++    assert checks.evaluate(check, ctx(), deps(http_get=down)).verdict is Verdict.ERROR
++
++
++def test_kind_log_grep_reads_only_the_newest_block():
++    check = LogGrepCheck(id="K11.2", title="db", kind="log_grep", path="logs/heartbeat.log",
++                         block_start="^HEARTBEAT ", pattern="^OK +database ", present=True,
++                         expect_text="OK database")
++    log = (
++        "HEARTBEAT GREEN — all (2026-09-22 21:30:00 EDT)\n\nOK   database                 cobalt_brain reachable\n"
++        "HEARTBEAT RED — 1 (2026-09-22 21:45:00 EDT)\n\nRED  database                 unreachable\n"
++    )
++    seen = []
++
++    def read_text(path):
++        seen.append(path)
++        return log
++
++    out = checks.evaluate(check, ctx(), deps(read_text=read_text))
++    # The older block's OK line does not rescue the newest block's RED.
++    assert out.verdict is Verdict.FAIL
++    assert seen == [checks.REPO_ROOT / "logs" / "heartbeat.log"]
++    assert "logs/heartbeat.log" in out.command and "grep -E" in out.command
++
++    healthy = log.replace("RED  database                 unreachable", "OK   database                 cobalt_brain reachable")
++    assert checks.evaluate(check, ctx(), deps(read_text=lambda p: healthy)).verdict is Verdict.PASS
++
++    absent = LogGrepCheck(id="K9", title="no failed", kind="log_grep", path="logs/replay.err",
++                          pattern="FAILED", present=False, expect_text="none")
++    assert checks.evaluate(absent, ctx(), deps(read_text=lambda p: "ok\n")).verdict is Verdict.PASS
++    assert checks.evaluate(absent, ctx(), deps(read_text=lambda p: "x FAILED y\n")).verdict is Verdict.FAIL
++
++    assert checks.evaluate(check, ctx(), deps(read_text=lambda p: "no beats\n")).verdict is Verdict.ERROR
++
++    def unreadable(path):
++        raise FileNotFoundError(path)
++
++    assert checks.evaluate(check, ctx(), deps(read_text=unreadable)).verdict is Verdict.ERROR
++
++    with pytest.raises(ValueError):
++        LogGrepCheck(id="K1", title="t", kind="log_grep", path="../secrets", pattern="x", expect_text="x")
++
++
++def test_kind_job_row_state_cadence_age_and_result():
++    from cobalt.jobs.config import load_job_registry
++
++    registry = load_job_registry()
++    spec_of = lambda: registry.jobs  # noqa: E731
++    check = JobRowCheck.model_validate({
++        "id": "K7", "title": "replay", "kind": "job_row", "label": "com.cobalt.replay",
++        "state": "done", "exit_code": 0, "not_missed": True,
++        "result_keys": ["movers", "card_misses"],
++        "result_equals": {"trade_date": "{last_trading_day}", "dry_run": False},
++        "expect_text": "done",
++    })
++    calls = []
++
++    def answer(result):
++        def read_rows(statement, side):
++            calls.append((statement, side))
++            return result
++
++        return read_rows
++
++    out = checks.evaluate(check, ctx(), deps(read_rows=answer(_job_row()), job_specs=spec_of))
++    assert out.verdict is Verdict.PASS, out.detail
++    statement, side = calls[-1]
++    assert side == "system" and "FROM cobalt_jobs WHERE label = 'com.cobalt.replay'" in statement
++    assert out.command.startswith("uv run cobalt db query --side system --prod --format json ")
++
++    assert checks.evaluate(check, ctx(), deps(read_rows=answer(_job_row(state="failed", exit_code=1)), job_specs=spec_of)).verdict is Verdict.FAIL
++    # Yesterday's run tonight is MISSED (21:10 + the 30 min grace passed by
++    # 21:50, and no finish after tonight's due moment).
++    stale = _job_row(finished_at=datetime(2026, 9, 21, 21, 9, tzinfo=ET))
++    out = checks.evaluate(check, ctx(), deps(read_rows=answer(stale), job_specs=spec_of))
++    assert out.verdict is Verdict.FAIL and "missed" in out.detail.lower()
++    wrong_day = _job_row(last_result={**_job_row().rows[0][-1], "trade_date": "2026-09-21"})
++    assert checks.evaluate(check, ctx(), deps(read_rows=answer(wrong_day), job_specs=spec_of)).verdict is Verdict.FAIL
++    no_keys = _job_row(last_result={"trade_date": "2026-09-22", "dry_run": False})
++    assert checks.evaluate(check, ctx(), deps(read_rows=answer(no_keys), job_specs=spec_of)).verdict is Verdict.FAIL
++    assert checks.evaluate(check, ctx(), deps(read_rows=answer(rows(["label"])), job_specs=spec_of)).verdict is Verdict.FAIL
++
++    beat = JobRowCheck(id="K11.1", title="beat", kind="job_row", label="com.cobalt.heartbeat",
++                       max_age_min=20, expect_text="fresh")
++    fresh = _job_row(label="com.cobalt.heartbeat", updated_at=NOW - timedelta(minutes=5))
++    old = _job_row(label="com.cobalt.heartbeat", updated_at=NOW - timedelta(minutes=25))
++    assert checks.evaluate(beat, ctx(), deps(read_rows=answer(fresh))).verdict is Verdict.PASS
++    assert checks.evaluate(beat, ctx(), deps(read_rows=answer(old))).verdict is Verdict.FAIL
++
++    summary = JobRowCheck.model_validate({
++        "id": "K15", "title": "summary", "kind": "job_row", "label": "com.cobalt.heartbeat",
++        "result_equals": {"summary_sent.{last_summary_slot}": "{last_summary_date}"},
++        "expect_text": "sent",
++    })
++    assert checks.evaluate(summary, ctx(), deps(read_rows=answer(fresh))).verdict is Verdict.PASS
++    unsent = _job_row(last_result={"summary_sent": {"07:00": "2026-09-22", "16:30": "2026-09-21"}})
++    assert checks.evaluate(summary, ctx(), deps(read_rows=answer(unsent))).verdict is Verdict.FAIL
++
++    archiver = JobRowCheck(id="K13", title="archiver", kind="job_row", label="com.cobalt.archiver",
++                           exit_code=0, result_positive=["rows_written"], expect_text="rows")
++    empty = _job_row(label="com.cobalt.archiver", last_result={"rows_written": 0})
++    assert checks.evaluate(archiver, ctx(), deps(read_rows=answer(empty))).verdict is Verdict.FAIL
++
++
++def test_kind_vault_unit_reads_markers_and_never_creates(tmp_path):
++    check = VaultUnitCheck(id="K10.1", title="miss line", kind="vault_unit", note="drc",
++                           day="last_trading_day", section="drc-misses", unit="miss_line",
++                           expect_text="present")
++    note = tmp_path / "2026-09-22 DRC.md"
++    body = (
++        "# DRC\n<!-- cobalt:section drc-rules -->\n<!-- /cobalt:section drc-rules -->\n"
++        "<!-- cobalt:section drc-misses -->\n<!-- cobalt:unit miss_line -->\n"
++        "Misses 2026-09-22: cards 2\n<!-- /cobalt:unit miss_line -->\n"
++        "<!-- /cobalt:section drc-misses -->\n"
++    )
++    note.write_text(body)
++    asked = []
++
++    def path_for(day):
++        asked.append(day)
++        return note
++
++    out = checks.evaluate(check, ctx(), deps(drc_note_path=path_for, read_text=lambda p: p.read_text()))
++    assert out.verdict is Verdict.PASS and "Misses 2026-09-22" in out.raw
++    assert asked == [DAY]
++    assert "grep -n -F" in out.command and str(note) in out.command
++    assert note.read_text() == body
++
++    no_unit = body.replace("<!-- cobalt:unit miss_line -->\n", "").replace("<!-- /cobalt:unit miss_line -->\n", "")
++    note.write_text(no_unit)
++    assert checks.evaluate(check, ctx(), deps(drc_note_path=path_for, read_text=lambda p: p.read_text())).verdict is Verdict.FAIL
++
++    note.write_text(body.replace("<!-- /cobalt:section drc-misses -->\n", "<!-- /cobalt:section drc-misses -->\n<!-- /cobalt:section drc-misses -->\n"))
++    assert checks.evaluate(check, ctx(), deps(drc_note_path=path_for, read_text=lambda p: p.read_text())).verdict is Verdict.ERROR
++
++    absent = tmp_path / "absent.md"
++    out = checks.evaluate(check, ctx(), deps(drc_note_path=lambda d: absent, read_text=lambda p: p.read_text()))
++    assert out.verdict is Verdict.FAIL and not absent.exists()
++
++
++def test_kind_cli_exit_code_through_the_allowlist():
++    check = CliCheck(id="K17", title="validate", kind="cli", argv=["cobalt", "validate"],
++                     exit_code=0, expect_text="exit 0")
++    ran = []
++
++    def run_cli(argv):
++        ran.append(argv)
++        return 0, "Placement (docs/PLACEMENT.md): tree clean."
++
++    out = checks.evaluate(check, ctx(), deps(run_cli=run_cli))
++    assert out.verdict is Verdict.PASS and ran == [["cobalt", "validate"]]
++    assert out.command == "uv run cobalt validate"
++    assert checks.evaluate(check, ctx(), deps(run_cli=lambda argv: (1, "FAILED: x"))).verdict is Verdict.FAIL
++
++    def missing(argv):
++        raise FileNotFoundError("uv")
++
++    assert checks.evaluate(check, ctx(), deps(run_cli=missing)).verdict is Verdict.ERROR
++    with pytest.raises(ValueError):
++        CliCheck(id="K1", title="t", kind="cli", argv=["cobalt", "jobs", "check"], expect_text="x")
++
++
++# ---------------------------------------------------------------------
++# R1-24: every committed K row carries its exact command and expected output
++# ---------------------------------------------------------------------
++
++
++def test_every_committed_check_renders_an_exact_command_and_expected_output():
++    suite = load_suite(SUITES_DIR / "s2.yaml")
++    for check in suite.checks:
++        command = checks.command_for(check, ctx())
++        assert command and "{" not in command.replace("'%{http_code}'", ""), check.id
++        assert check.expect_text.strip(), check.id
++    by_id = {c.id: c for c in suite.checks}
++    assert by_id["K6"].known_text == "no fill yet"
++    assert by_id["K5.1"].requires_relation == "system.radar_score_run"
++    assert by_id["K3"].known_if and by_id["K3"].expect
++
++
++# ---------------------------------------------------------------------
++# K3 reaches BOTH paths that write the value pair (R1-19)
++# ---------------------------------------------------------------------
++
++#: What K3's statement must name to grade both writers of
++#: `rank_metric`/`rank_value`. The INSERT path is keyed on `first_seen_at`
++#: — an episode BORN after the deploy. The RETAIN path is not: a
++#: pre-deploy episode retained tonight keeps its old `first_seen_at`, and
++#: `radar/store.py`'s RETAIN branch writes `rank_metric = %s`
++#: unconditionally, so a defect there is reachable only through the pool's
++#: own `last_scan_id`, gated on that scan having run after the cutoff.
++K3_REQUIRED_CLAUSES = (
++    "first_seen_at >= {cutoff}",
++    "left_at IS NULL",
++    "last_scan_id",
++    "system.radar_pool",
++    "last_scan_at >= {cutoff}",
++)
++#: One graded column per set, and one `known_if` count per set — the
++#: "no admitted row yet → KNOWN" semantics hold for the UNION, so both
++#: counts must be zero before the check goes quiet.
++K3_GRADED = ("metric_missing", "rescanned_metric_missing")
++K3_KNOWN_COUNTS = ("post_deploy_admitted", "rescanned_admitted")
++
++
++def k3_gaps(check) -> list[str]:
++    """Every clause or predicate K3 needs and does not have."""
++    query = " ".join(check.query.split())
++    gaps = [f"query does not name {needle!r}" for needle in K3_REQUIRED_CLAUSES
++            if needle not in query]
++    graded = {p.column for p in check.expect}
++    gaps += [f"no expect predicate on {column}" for column in K3_GRADED if column not in graded]
++    known = {p.column for p in check.known_if}
++    gaps += [f"no known_if predicate on {column}" for column in K3_KNOWN_COUNTS
++             if column not in known]
++    return gaps
++
++
++def _k3():
++    return {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}["K3"]
++
++
++def test_k3_covers_the_insert_path_and_the_retain_path():
++    check = _k3()
++    assert k3_gaps(check) == []
++    # It stays on the system side: both relations it reads are system's.
++    assert check.kind == "sql" and check.side == "system"
++    assert '"user".' not in check.query
++    # Both cutoff gates render as the same literal in the hand command.
++    assert check.query.count("{cutoff}") == 2
++    assert checks.command_for(check, ctx()).count(CUTOFF.isoformat()) == 2
++
++
++def test_the_k3_coverage_check_refuses_the_first_seen_at_only_shape():
++    """The bite proof: K3 as it read before this fix — only the INSERT
++    path — is refused, and so is dropping either half of the grading."""
++    old_k3 = SqlCheck.model_validate({
++        "id": "K3", "title": "membership value column (post-deploy admissions)",
++        "kind": "sql", "side": "system",
++        "query": (
++            "SELECT count(*) AS post_deploy_admitted, "
++            "count(*) FILTER (WHERE rank_metric IS NULL) AS metric_missing, "
++            "count(*) FILTER (WHERE rank_value IS NULL) AS value_null "
++            "FROM system.radar_membership "
++            "WHERE entered_at IS NOT NULL AND first_seen_at >= {cutoff}"
++        ),
++        "known_if": [{"column": "post_deploy_admitted", "op": "eq", "value": 0}],
++        "known_text": "no admitted row first seen after the deploy yet",
++        "expect": [{"column": "metric_missing", "op": "eq", "value": 0}],
++        "expect_text": "metric_missing = 0",
++    })
++    gaps = k3_gaps(old_k3)
++    assert any("last_scan_id" in gap for gap in gaps)
++    assert "no expect predicate on rescanned_metric_missing" in gaps
++    assert "no known_if predicate on rescanned_admitted" in gaps
++
++    # The shipped shape with its RETAIN grading removed is refused too.
++    shipped = _k3()
++    ungraded = shipped.model_copy(update={
++        "expect": [p for p in shipped.expect if p.column != "rescanned_metric_missing"]
++    })
++    assert k3_gaps(ungraded) == ["no expect predicate on rescanned_metric_missing"]
++
++
++def test_k3_grades_each_set_and_is_known_only_when_both_are_empty():
++    check = _k3()
++
++    def answer(**values):
++        row = {
++            "post_deploy_admitted": 0, "metric_missing": 0, "value_null": 0,
++            "rescanned_admitted": 0, "rescanned_metric_missing": 0,
++        }
++        row.update(values)
++        columns = list(row)
++        return lambda statement, side: rows(columns, [row[c] for c in columns])
++
++    quiet = checks.evaluate(check, ctx(), deps(read_rows=answer()))
++    assert quiet.verdict is Verdict.KNOWN
++    # Re-scanned rows exist and carry their metric: the check is live and green.
++    live = checks.evaluate(check, ctx(), deps(read_rows=answer(rescanned_admitted=40)))
++    assert live.verdict is Verdict.PASS
++    # THE DEFECT THIS EXISTS FOR: a row the post-deploy scan retained with
++    # no metric. Its `first_seen_at` is pre-cutoff, so the INSERT-path
++    # counters stay clean and only the RETAIN counter bites.
++    retained = checks.evaluate(check, ctx(), deps(
++        read_rows=answer(rescanned_admitted=40, rescanned_metric_missing=1)))
++    assert retained.verdict is Verdict.FAIL and "rescanned_metric_missing" in retained.detail
++    # The INSERT path still bites on its own.
++    inserted = checks.evaluate(check, ctx(), deps(
++        read_rows=answer(post_deploy_admitted=3, metric_missing=1)))
++    assert inserted.verdict is Verdict.FAIL and "metric_missing" in inserted.detail
++    # A set that is empty does not make the other set KNOWN.
++    half = checks.evaluate(check, ctx(), deps(read_rows=answer(post_deploy_admitted=3)))
++    assert half.verdict is Verdict.PASS
++
++
++# ---------------------------------------------------------------------
++# L32: a check never reads across the tenancy wall it declares
++# ---------------------------------------------------------------------
++
++MIGRATIONS = REPO / "src" / "cobalt" / "db_migrations"
++
++#: `GRANT <privs> ON [TABLE|SEQUENCE] <schema>.<relation> TO <roles>;` —
++#: bounded to one statement (`[^;]`), so a `GRANT … ON SCHEMA …` or a
++#: `GRANT <role> TO <role>` never bleeds into the next statement's name.
++GRANT_RE = re.compile(
++    r"\bGRANT\s+(?P<privs>[^;]+?)\s+ON\s+(?:TABLE\s+|SEQUENCE\s+)?"
++    r'(?P<relation>"?[a-z_]+"?\.[a-z_][a-z0-9_]*)\s+TO\s+(?P<roles>[^;]+);',
++    re.IGNORECASE | re.DOTALL,
++)
++SQL_COMMENT_RE = re.compile(r"--[^\n]*")
++#: A `system.`/`"user".`-qualified relation named in a query.
++QUALIFIED_RE = re.compile(r'("user"|system)\.([a-z_][a-z0-9_]*)')
++SIDE_ROLE = {"system": "cobalt_system", "user": "cobalt_user"}
++
++
++def granted_relations() -> dict[str, set[str]]:
++    """`{role: {schema.relation, …}}`, parsed from the shipped migrations.
++
++    Only PER-RELATION grants count, and that is deliberate. `GRANT … ON
++    ALL TABLES IN SCHEMA …` (0001) reaches only the relations that
++    existed when it ran — `system` was empty at that point — and `ALTER
++    DEFAULT PRIVILEGES` reaches only relations CREATED later by the roles
++    it names. Neither reaches a relation MOVED into the schema afterwards
++    by `ALTER TABLE … SET SCHEMA` (0002), which keeps the ACL it had in
++    `public`. `system.cobalt_jobs` is exactly such a moved relation.
++    """
++    granted: dict[str, set[str]] = {}
++    for path in sorted(MIGRATIONS.glob("*.sql")):
++        for match in GRANT_RE.finditer(SQL_COMMENT_RE.sub("", path.read_text())):
++            relation = match.group("relation").replace('"', "")
++            for role in match.group("roles").split(","):
++                granted.setdefault(role.strip(), set()).add(relation)
++    return granted
++
++
++def cross_side_reads(suite_checks) -> list[str]:
++    """Every `kind: sql` check that names a relation on the OTHER side
++    without a migration granting it to the side's role — both directions."""
++    granted = granted_relations()
++    offenders = []
++    for check in suite_checks:
++        if check.kind != "sql":
++            continue
++        role = SIDE_ROLE[check.side]
++        for schema, name in sorted(set(QUALIFIED_RE.findall(check.query))):
++            relation = f"{schema.replace(chr(34), '')}.{name}"
++            if relation.split(".")[0] == check.side:
++                continue  # its own side
++            if relation not in granted.get(role, set()):
++                offenders.append(
++                    f"{check.id} (side: {check.side}) reads {relation}, "
++                    f"which no migration GRANTs to {role}"
++                )
++    return offenders
++
++
++def test_no_smoke_check_reads_across_the_tenancy_wall_it_declares():
++    granted = granted_relations()
++    # The one documented, migration-backed crossing: `0008` grants the user
++    # role SELECT/REFERENCES on `system.movers_daily` for `missed.mover_id`'s
++    # FK, which is what lets K9 read it from `side: user`.
++    assert "system.movers_daily" in granted["cobalt_user"]
++    # `cobalt_jobs` is system-side by declaration (0003) and was MOVED there
++    # by 0002; no migration ever grants it to the user role.
++    assert "system.cobalt_jobs" not in granted["cobalt_user"]
++
++    offenders = cross_side_reads(load_suite(SUITES_DIR / "s2.yaml").checks)
++    assert offenders == [], (
++        "a smoke check would hit `permission denied` on a real connection "
++        "(L32: `cobalt db query` SET ROLEs to the side's role and asserts it).\n"
++        + "\n".join(offenders)
++        + "\nThe only migration-backed crossing today is system.movers_daily "
++        "(0008_radar_value_movers.sql, granted to cobalt_user for missed.mover_id). "
++        "A cross-side read is split into two checks, never granted across."
++    )
++
++
++def test_the_tenancy_wall_check_refuses_a_cross_side_query():
++    """The bite proof: the shape K8 had before the split is refused."""
++    old_k8 = SqlCheck.model_validate({
++        "id": "K8", "title": "missed — card rows complete and equal job.result",
++        "kind": "sql", "side": "user",
++        "query": (
++            "SELECT count(*) FILTER (WHERE m.kind = 'card') AS card_rows, "
++            "(SELECT (j.last_result ->> 'card_misses')::int FROM system.cobalt_jobs j "
++            "WHERE j.label = 'com.cobalt.replay') AS job_card_misses "
++            "FROM \"user\".missed m WHERE m.trade_date = {last_trading_day}"
++        ),
++        "expect": [{"column": "card_rows", "op": "not_null"}],
++        "expect_text": "counts agree",
++    })
++    offenders = cross_side_reads([old_k8])
++    assert len(offenders) == 1 and "system.cobalt_jobs" in offenders[0]
++    assert "cobalt_user" in offenders[0]
++
++    # The reverse direction bites the same way: the system role has no
++    # reach into `"user"` at all (0001 REVOKEs it).
++    system_side = SqlCheck.model_validate({
++        "id": "K8.9", "title": "reverse", "kind": "sql", "side": "system",
++        "query": 'SELECT count(*) AS card_rows FROM "user".missed m',
++        "expect": [{"column": "card_rows", "op": "not_null"}],
++        "expect_text": "x",
++    })
++    offenders = cross_side_reads([system_side])
++    assert len(offenders) == 1 and "user.missed" in offenders[0]
++    assert "cobalt_system" in offenders[0]
++
++    # The granted crossing stays legal: K9 reads system.movers_daily from
++    # the user side because 0008 grants exactly that.
++    granted_crossing = SqlCheck.model_validate({
++        "id": "K9", "title": "movers", "kind": "sql", "side": "user",
++        "query": "SELECT count(*) AS n FROM system.movers_daily WHERE active",
++        "expect": [{"column": "n", "op": "not_null"}],
++        "expect_text": "x",
++    })
++    assert cross_side_reads([granted_crossing]) == []
++
++
++def test_the_k8_split_keeps_every_assertion_on_its_own_side():
++    """K8 became K8.1 (system) + K8.2 (user). Nothing it asserted was
++    dropped, and each half still grades the way the single check did."""
++    by_id = {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}
++    assert "K8" not in by_id
++    k81, k82 = by_id["K8.1"], by_id["K8.2"]
++
++    # K8.1 owns the job row, through the one path that reads cobalt_jobs.
++    assert k81.kind == "job_row" and k81.label == "com.cobalt.replay"
++    assert k81.result_equals["input_stale"] == 0
++    assert k81.result_equals["trade_date"] == "{last_trading_day}"
++    assert "card_misses" in k81.result_keys
++    # K8.2 owns the corpus and names no system relation at all.
++    assert k82.kind == "sql" and k82.side == "user"
++    assert "system." not in k82.query and '"user".missed' in k82.query
++    assert [(p.column, p.op.value, p.value) for p in k82.expect] == [("incomplete", "eq", 0)]
++    # The equality that can no longer be one STATEMENT is K8.3's, a machine
++    # assertion again (`kind: compare`). Neither half asks for an eye
++    # comparison any more, and each names the number K8.3 reads.
++    k83 = by_id["K8.3"]
++    assert k83.kind == "compare" and (k83.left, k83.right) == ("K8.1", "K8.2")
++    assert (k81.result_number, k82.result_number) == ("card_misses", "card_rows")
++    for check in (k81, k82):
++        assert "by eye" not in check.expect_text
++
++    def answer(result):
++        return lambda statement, side: result
++
++    def job(**result):
++        base = {"trade_date": "2026-09-22", "card_misses": 2, "input_stale": 0}
++        return _job_row(last_result={**base, **result})
++
++    assert checks.evaluate(k81, ctx(), deps(read_rows=answer(job()))).verdict is Verdict.PASS
++    stale = checks.evaluate(k81, ctx(), deps(read_rows=answer(job(input_stale=2))))
++    assert stale.verdict is Verdict.FAIL and "input_stale" in stale.detail
++    wrong_day = checks.evaluate(k81, ctx(), deps(read_rows=answer(job(trade_date="2026-09-21"))))
++    assert wrong_day.verdict is Verdict.FAIL and "trade_date" in wrong_day.detail
++    no_count = _job_row(last_result={"trade_date": "2026-09-22", "input_stale": 0})
++    out = checks.evaluate(k81, ctx(), deps(read_rows=answer(no_count)))
++    assert out.verdict is Verdict.FAIL and "card_misses" in out.detail
++
++    complete = rows(["card_rows", "incomplete"], [2, 0])
++    out = checks.evaluate(k82, ctx(), deps(read_rows=answer(complete)))
++    assert out.verdict is Verdict.PASS and "2" in out.raw  # card_rows printed
++    holed = rows(["card_rows", "incomplete"], [2, 1])
++    assert checks.evaluate(k82, ctx(), deps(read_rows=answer(holed))).verdict is Verdict.FAIL
++    # The user-side statement it runs is the one it prints, and it names
++    # no system table (the hand fallback runs as cobalt_user).
++    assert "system." not in out.command
++
++
++# ---------------------------------------------------------------------
++# `kind: compare` — the assertion the K8 split lost, restored as a row
++# ---------------------------------------------------------------------
++
++#: Two checks that each name THE number of their own result, and a compare
++#: row over them. Written as YAML text so every test below goes through the
++#: real loader — the same path the close evening runs.
++LEFT_SQL = (
++    "  - id: K1\n"
++    "    title: left\n"
++    "    kind: sql\n"
++    "    side: user\n"
++    "    query: SELECT count(*) AS card_rows FROM picks\n"
++    "    result_number: card_rows\n"
++    "    expect: [{column: card_rows, op: ge, value: 0}]\n"
++    "    expect_text: card_rows\n"
++)
++RIGHT_JOB = (
++    "  - id: K2\n"
++    "    title: right\n"
++    "    kind: job_row\n"
++    "    label: com.cobalt.replay\n"
++    "    result_keys: [card_misses]\n"
++    "    result_number: card_misses\n"
++    "    expect_text: card_misses\n"
++)
++NUMBERLESS_LAUNCHCTL = (
++    "  - id: K1\n"
++    "    title: radar\n"
++    "    kind: launchctl\n"
++    "    mode: running\n"
++    "    label: com.cobalt.radar\n"
++    "    expect_text: running\n"
++)
++
++
++def _compare_row(cid="K3", left="K1", right="K2", op="eq") -> str:
++    return (
++        f"  - id: {cid}\n"
++        "    title: the two counters agree\n"
++        "    kind: compare\n"
++        f"    left: {left}\n"
++        f"    right: {right}\n"
++        f"    op: {op}\n"
++        "    expect_text: the two numbers are equal\n"
++    )
++
++
++def _pair_deps(card_rows=2, card_misses=2, left_raises=False):
++    def read_rows(statement, side):
++        if "cobalt_jobs" in statement:
++            return _job_row(last_result={"card_misses": card_misses})
++        if left_raises:
++            raise RuntimeError("connection refused")
++        return rows(["card_rows"], [card_rows])
++
++    return deps(read_rows=read_rows)
++
++
++def test_compare_refuses_an_unknown_id_a_self_reference_and_an_operand_with_no_number(tmp_path):
++    suite = load_suite(_write(tmp_path, GOOD_HEAD + LEFT_SQL + RIGHT_JOB + _compare_row()))
++    k3 = {c.id: c for c in suite.checks}["K3"]
++    assert (k3.kind, k3.left, k3.right, k3.op.value) == ("compare", "K1", "K2", "eq")
++
++    def refused(text) -> str:
++        with pytest.raises(SmokeConfigError) as raised:
++            load_suite(_write(tmp_path, text))
++        return str(raised.value)
++
++    # An id no check in the file carries.
++    assert "K7" in refused(GOOD_HEAD + LEFT_SQL + RIGHT_JOB + _compare_row(right="K7"))
++    # A check that names itself on either side.
++    assert "K3" in refused(GOOD_HEAD + LEFT_SQL + RIGHT_JOB + _compare_row(left="K3"))
++    # One check compared with itself: nothing is asserted.
++    assert "K1" in refused(GOOD_HEAD + LEFT_SQL + RIGHT_JOB + _compare_row(right="K1"))
++    # An operand BELOW the compare row has not run when the compare runs.
++    assert "K1" in refused(GOOD_HEAD + _compare_row() + LEFT_SQL + RIGHT_JOB)
++    # An operand that names no number of its own.
++    numberless = LEFT_SQL.replace("    result_number: card_rows\n", "")
++    message = refused(GOOD_HEAD + numberless + RIGHT_JOB + _compare_row())
++    assert "K1" in message and "result_number" in message
++    # A kind that has no numeric result at all.
++    message = refused(GOOD_HEAD + NUMBERLESS_LAUNCHCTL + RIGHT_JOB + _compare_row())
++    assert "K1" in message and "launchctl" in message
++    # An operator the evaluator does not implement: the refusal names the
++    # field and the one operator that exists.
++    message = refused(GOOD_HEAD + LEFT_SQL + RIGHT_JOB + _compare_row(op="gt"))
++    assert "op" in message and "'eq'" in message
++
++
++def test_compare_grades_equal_pass_unequal_fail_and_errors_on_a_bad_operand(tmp_path):
++    suite = load_suite(_write(tmp_path, GOOD_HEAD + LEFT_SQL + RIGHT_JOB + _compare_row()))
++
++    def run(**overrides):
++        return {o.id: o for o in checks.run_suite(suite, ctx(), _pair_deps(**overrides))}
++
++    equal = run(card_rows=2, card_misses=2)
++    assert equal["K3"].verdict is Verdict.PASS
++    # One row, both values printed (L57).
++    assert all(token in equal["K3"].detail for token in ("K1", "K2", "2"))
++    # The hand fallback prints the two ids and the operator (R6 A).
++    assert all(token in equal["K3"].command for token in ("K1", "K2", "eq"))
++
++    unequal = run(card_rows=2, card_misses=3)
++    assert unequal["K3"].verdict is Verdict.FAIL
++    assert "2" in unequal["K3"].detail and "3" in unequal["K3"].detail
++    # The operands' own verdicts are untouched by the comparison.
++    assert unequal["K1"].verdict is Verdict.PASS and unequal["K2"].verdict is Verdict.PASS
++
++    # An operand that ERRORed is never a silent PASS.
++    errored = run(left_raises=True)
++    assert errored["K1"].verdict is Verdict.ERROR
++    assert errored["K3"].verdict is Verdict.ERROR and "K1" in errored["K3"].detail
++
++    # A non-numeric result is ERROR, naming the operand that carries it.
++    text = run(card_misses="two")["K3"]
++    assert text.verdict is Verdict.ERROR and "K2" in text.detail
++    # So is a result key the job row never wrote.
++    missing = {o.id: o for o in checks.run_suite(
++        suite, ctx(), deps(read_rows=lambda statement, side: (
++            _job_row(last_result={"other": 1}) if "cobalt_jobs" in statement
++            else rows(["card_rows"], [2]))))}
++    assert missing["K3"].verdict is Verdict.ERROR and "K2" in missing["K3"].detail
++
++
++def _k8_trio():
++    suite = load_suite(SUITES_DIR / "s2.yaml")
++    by_id = {c.id: c for c in suite.checks}
++    return suite.model_copy(update={"checks": [by_id["K8.1"], by_id["K8.2"], by_id["K8.3"]]})
++
++
++def _k8_deps(card_rows, card_misses):
++    def read_rows(statement, side):
++        if "cobalt_jobs" in statement:
++            return _job_row(last_result={"trade_date": "2026-09-22", "input_stale": 0,
++                                         "card_misses": card_misses})
++        return rows(["card_rows", "incomplete"], [card_rows, 0])
++
++    return deps(read_rows=read_rows)
++
++
++def test_the_shipped_k8_3_asserts_the_two_counters_agree():
++    trio = _k8_trio()
++    agree = {o.id: o for o in checks.run_suite(trio, ctx(), _k8_deps(2, 2))}
++    assert [agree[cid].verdict for cid in ("K8.1", "K8.2", "K8.3")] == [Verdict.PASS] * 3
++    assert overall_verdict(list(agree.values())) is Overall.GREEN
++
++    disagree = {o.id: o for o in checks.run_suite(trio, ctx(), _k8_deps(3, 2))}
++    # Each half still passes on its own side — the disagreement is the row
++    # that exists to see it, and it takes the suite off GREEN.
++    assert disagree["K8.1"].verdict is Verdict.PASS and disagree["K8.2"].verdict is Verdict.PASS
++    assert disagree["K8.3"].verdict is Verdict.FAIL
++    assert "2" in disagree["K8.3"].detail and "3" in disagree["K8.3"].detail
++    assert overall_verdict(list(disagree.values())) is Overall.AMBER
++
++
++def test_the_report_renders_the_compare_row():
++    outcomes = checks.run_suite(_k8_trio(), ctx(), _k8_deps(3, 2))
++    rep = report.build_report("s2", "S2 smoke", ctx(), outcomes)
++    table = report.render_table(rep)
++    assert "| K8.3 |" in table and "FAIL" in table
++    text = report.render_markdown(rep)
++    assert "## K8.3" in text and "- kind: compare" in text
++    # The row prints its two ids, its operator and both values, so the
++    # comparison is replayable from the report alone (R6 A, L57).
++    section = text.split("## K8.3")[1]
++    assert all(token in section for token in ("K8.1", "K8.2", "eq", "2", "3"))
++    payload = json.loads(report.render_json(rep))
++    numbers = {c["id"]: c["number"] for c in payload["checks"]}
++    assert numbers == {"K8.1": "2", "K8.2": "3", "K8.3": None}
++
++
++# ---------------------------------------------------------------------
++# K9 — the stored count against what the export really allowed
++# ---------------------------------------------------------------------
++
++#: The three rows of each side: the user-side count, the job row that
++#: carries what that side's export allowed, and the compare between them.
++K9_SIDES = {"gainers": ("K9.1", "K9.2", "K9.3"), "losers": ("K9.4", "K9.5", "K9.6")}
++
++
++def _k9_trio(side):
++    suite = load_suite(SUITES_DIR / "s2.yaml")
++    by_id = {c.id: c for c in suite.checks}
++    return suite.model_copy(update={"checks": [by_id[cid] for cid in K9_SIDES[side]]})
++
++
++def _k9_deps(*, stored, exported, top_n, not_archived=0, last_result=None):
++    def read_rows(statement, side):
++        if "cobalt_jobs" in statement:
++            result = {"trade_date": "2026-09-22", "movers_by_side": {
++                s: {"exported": exported, "top_n": top_n, "expected": min(top_n, exported)}
++                for s in ("gainers", "losers")}}
++            return _job_row(last_result=result if last_result is None else last_result)
++        return rows(["top_n", "stored", "not_archived"], [top_n, stored, not_archived])
++
++    return deps(read_rows=read_rows)
++
++
++def test_the_shipped_k9_compares_the_stored_count_against_what_the_export_allowed():
++    """K9 became three rows per side. `full_sides` and the hand compare of
++    the cached CSV are gone; `top_n not_null` and `not_archived = 0` stay."""
++    by_id = {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}
++    assert "K9" not in by_id
++    for side, (stored_id, job_id, compare_id) in K9_SIDES.items():
++        stored, job, compare = by_id[stored_id], by_id[job_id], by_id[compare_id]
++        # the user side counts ONE side's active rows and keeps both of
++        # K9's own predicates
++        assert stored.kind == "sql" and stored.side == "user"
++        assert "system.movers_daily" in stored.query and f"side = '{side}'" in stored.query
++        assert [(p.column, p.op.value, p.value) for p in stored.expect] == [
++            ("top_n", "not_null", None), ("not_archived", "eq", 0)]
++        assert stored.result_number == "stored"
++        assert "full_sides" not in stored.query
++        # the job row carries what that side's export allowed
++        assert job.kind == "job_row" and job.label == "com.cobalt.replay"
++        assert job.result_keys == ["movers_by_side"]
++        assert job.result_number == f"movers_by_side.{side}.expected"
++        assert job.result_equals["trade_date"] == "{last_trading_day}"
++        # and the tolerance is a machine assertion, not a hand comparison
++        assert compare.kind == "compare" and (compare.left, compare.right) == (stored_id, job_id)
++        assert compare.op.value == "eq"
++        for check in (stored, job, compare):
++            assert "the hub compares" not in check.expect_text
++            assert "by eye" not in check.expect_text
++
++
++def test_k9_passes_a_short_side_and_fails_a_stored_count_below_what_the_export_allowed():
++    for side, (stored_id, job_id, compare_id) in K9_SIDES.items():
++        trio = _k9_trio(side)
++
++        def run(**kw):
++            return {o.id: o for o in checks.run_suite(trio, ctx(), _k9_deps(**kw))}
++
++        # A FULL side: the export had far more rows than top_n; all 25 stored.
++        full = run(stored=25, exported=151, top_n=25)
++        assert [full[cid].verdict for cid in K9_SIDES[side]] == [Verdict.PASS] * 3
++        assert overall_verdict(list(full.values())) is Overall.GREEN
++
++        # A SHORT side: the export really had 18 rows and 18 are stored.
++        # The plan's "or fewer with export evidence" — now PASS by machine.
++        short = run(stored=18, exported=18, top_n=25)
++        assert [short[cid].verdict for cid in K9_SIDES[side]] == [Verdict.PASS] * 3
++        assert "18" in short[compare_id].detail
++
++        # One row FEWER than the export allowed: FAIL, on the compare row.
++        gap = run(stored=17, exported=18, top_n=25)
++        assert gap[stored_id].verdict is Verdict.PASS and gap[job_id].verdict is Verdict.PASS
++        assert gap[compare_id].verdict is Verdict.FAIL
++        assert "17" in gap[compare_id].detail and "18" in gap[compare_id].detail
++        assert overall_verdict(list(gap.values())) is Overall.AMBER
++
++        # The two predicates K9 always had still bite.
++        unarchived = run(stored=25, exported=151, top_n=25, not_archived=1)
++        assert unarchived[stored_id].verdict is Verdict.FAIL
++        assert "not_archived" in unarchived[stored_id].detail
++
++        # A job result from before the counts existed: FAIL naming the key,
++        # and the compare ERRORs rather than passing quietly.
++        old = run(stored=25, exported=151, top_n=25, last_result={"trade_date": "2026-09-22"})
++        assert old[job_id].verdict is Verdict.FAIL and "movers_by_side" in old[job_id].detail
++        assert old[compare_id].verdict is Verdict.ERROR and job_id in old[compare_id].detail
++        assert overall_verdict(list(old.values())) is Overall.RED
++
++        # A job row for another day cannot validate today's count.
++        other_day = {o.id: o for o in checks.run_suite(trio, ctx(), _k9_deps(
++            stored=25, exported=151, top_n=25,
++            last_result={"trade_date": "2026-09-21", "movers_by_side": {
++                side: {"exported": 151, "top_n": 25, "expected": 25}}}))}
++        assert other_day[job_id].verdict is Verdict.FAIL and "trade_date" in other_day[job_id].detail
++
++
++def _suite_fakes(tmp_path):
++    drc = tmp_path / "drc.md"
++    drc.write_text(
++        "# DRC\n<!-- cobalt:section drc-misses -->\n<!-- cobalt:unit miss_line -->\n"
++        "Misses …\n<!-- /cobalt:unit miss_line -->\n<!-- /cobalt:section drc-misses -->\n"
++    )
++
++    def read_rows(statement, side):
++        if "cobalt_jobs" in statement:
++            return _job_row()
++        return rows(["x"], [1])
++
++    return deps(
++        read_rows=read_rows,
++        launchctl_print=lambda label: LaunchdPrintStatus(label, "running", 1, "(never exited)", 1, "state = running"),
++        launchctl_loaded=lambda label: True,
++        http_get=lambda url: (200, "<th>value</th>"),
++        read_text=lambda path: "HEARTBEAT GREEN — x\nOK   database  ok\nOK   sheet HTTP  ok\n",
++        run_cli=lambda argv: (0, "ok"),
++        job_specs=lambda: checks.load_job_specs(),
++        drc_note_path=lambda day: drc,
++    )
++
++
++def test_a_suite_with_no_compare_row_loads_and_runs_exactly_as_before(tmp_path):
++    """The bound this was built inside: ONE additive kind and ONE additive
++    optional field. A smoke file written before either existed — the
++    shipped suite with every compare row and every `result_number` line
++    stripped out — still loads, and every check it keeps runs to the same
++    verdict, detail, command and evidence as in the shipped suite."""
++    text = (SUITES_DIR / "s2.yaml").read_text()
++    head, marker, body = text.partition("checks:\n")
++    assert marker, "the shipped suite no longer has a `checks:` block"
++    blocks = re.split(r"(?m)^(?=  - id: )", body)
++    old = head + marker + "".join(block for block in blocks if "kind: compare" not in block)
++    old = "".join(f"{line}\n" for line in old.splitlines()
++                  if not line.strip().startswith("result_number:"))
++
++    old_suite = load_suite(_write(tmp_path, old))
++    shipped = load_suite(SUITES_DIR / "s2.yaml")
++    assert [c.id for c in shipped.checks if c.kind != "compare"] == [c.id for c in old_suite.checks]
++    assert any(c.kind == "compare" for c in shipped.checks), "nothing was stripped"
++    assert all(getattr(c, "result_number", None) is None for c in old_suite.checks)
++
++    fakes = _suite_fakes(tmp_path)
++    before = {o.id: o for o in checks.run_suite(old_suite, ctx(), fakes)}
++    after = {o.id: o for o in checks.run_suite(shipped, ctx(), fakes)}
++    for cid, outcome in before.items():
++        twin = after[cid]
++        assert outcome.model_dump(exclude={"number"}) == twin.model_dump(exclude={"number"}), cid
++
++
++def test_context_last_trading_day_waits_for_the_anchor_job_and_skips_holidays():
++    from cobalt.jobs.config import load_job_registry
++
++    spec = load_job_registry().spec("com.cobalt.replay")
++    # 21:50 ET Tuesday: tonight's 21:10 + 1800 s (21:40) has passed -> today.
++    assert checks.last_trading_day(NOW, spec) == DAY
++    # 21:20 ET Tuesday: tonight's run may still be going -> Monday.
++    early = datetime(2026, 9, 22, 21, 20, tzinfo=ET)
++    assert checks.last_trading_day(early, spec) == date(2026, 9, 21)
++    # Monday 2026-12-28 09:00 ET: tonight's run is hours away and Friday
++    # 12-25 is an NYSE holiday, so the answer is Thursday 12-24.
++    assert checks.last_trading_day(datetime(2026, 12, 28, 9, 0, tzinfo=ET), spec) == date(2026, 12, 24)
++
++    built = checks.build_context(now=NOW, report_date=None, cutoff=CUTOFF, prod=True,
++                                 anchor_spec=spec, tunables={"heartbeat.radar_scan_max_age_s": 900})
++    assert built.report_date == DAY and built.last_trading_day == DAY
++    assert built.session == "overnight"
++    assert (built.last_summary_slot, built.last_summary_date) == ("16:30", DAY)
++    morning = checks.build_context(now=datetime(2026, 9, 22, 6, 0, tzinfo=ET), report_date=None,
++                                   cutoff=CUTOFF, prod=True, anchor_spec=spec, tunables={})
++    assert (morning.last_summary_slot, morning.last_summary_date) == ("16:30", date(2026, 9, 21))
++
++
++# ---------------------------------------------------------------------
++# requires_db (hub, cobalt_dev): every committed query parses and runs
++# ---------------------------------------------------------------------
++
++
++@requires_db
++def test_committed_queries_run_read_only_on_cobalt_dev():
++    from cobalt.jobs.config import load_job_registry
++    from cobalt.taxonomy.loader import load_tunables
++
++    registry = load_job_registry()
++    tunables = {key: row.value for key, row in load_tunables().by_key.items()}
++    context = checks.build_context(now=datetime.now(timezone.utc), report_date=None, cutoff=CUTOFF,
++                                   prod=False, anchor_spec=registry.spec("com.cobalt.replay"),
++                                   tunables=tunables)
++    live = checks.default_deps(prod=False)
++    suite = load_suite(SUITES_DIR / "s2.yaml")
++    for check in suite.checks:
++        if check.kind not in ("sql", "job_row"):
++            continue
++        outcome = checks.evaluate(check, context, live)
++        # A missing P2 relation or an empty dev table is a FAIL/KNOWN; a
++        # query the server cannot parse or the role cannot read is ERROR.
++        assert outcome.verdict is not Verdict.ERROR, (check.id, outcome.detail)
+diff --git a/tests/cobalt/test_smoke_k3_sql.py b/tests/cobalt/test_smoke_k3_sql.py
+new file mode 100644
+index 0000000..a08805e
+--- /dev/null
++++ b/tests/cobalt/test_smoke_k3_sql.py
+@@ -0,0 +1,144 @@
++"""K3's committed statement, executed on Postgres (`requires_db`).
++
++Every other smoke test runs on fakes: they prove the framework grades a
++ROW the way the checklist says. Nothing proved that K3's SQL — the one
++committed check with a CTE, a `CROSS JOIN` and five `FILTER` counters —
++parses, runs under `cobalt_system`'s grants, and returns the five
++columns its predicates name. That answer only exists on a server, so it
++lives here, behind the same `requires_db` guard
++`tests/cobalt/test_radar_store.py` uses: SKIPPED offline, run by the hub
++on `cobalt_dev`.
++
++NOTHING PERSISTS. The suite's `dev_db_tx` fixture (autouse, see
++`tests/cobalt/conftest.py`) hands every `db.connect()` caller a savepoint
++proxy over ONE `cobalt_dev` connection whose outer transaction is always
++rolled back — the rows constructed below and the `radar_pool` row they
++change are gone when the test returns, whether it passes or fails.
++
++WHAT THE SECOND TEST IS FOR. `s2-p4-build2-2026-09-18.md` ESCALATE 6:
++K3's second set counts open admitted rows carrying the pool's own
++`last_scan_id`, and `radar/store.py`'s HOLD branch stamps `last_scan_id`
++too. So a pre-deploy episode that tonight's scan HELD because its only
++source was degraded — keeping its pre-deploy NULL `rank_metric` — lands
++in `rescanned_metric_missing` and reads exactly like a RETAIN defect. No
++column tells the two apart. The test CONSTRUCTS that row and records what
++the framework then grades, so the ambiguity is a measured fact in the
++report rather than an argument. It builds no fix: the disposition is
++Dejan's (accept the loud false positive with the `degraded_sources`
++procedure K3's `expect_text` names, add a row-level discriminator, or
++revert K3).
++"""
++
++from __future__ import annotations
++
++import os
++from datetime import date, datetime, timedelta
++from zoneinfo import ZoneInfo
++
++import pytest
++
++from cobalt import db, env
++from cobalt.db import Side
++from cobalt.smoke import checks
++from cobalt.smoke.config import SUITES_DIR, load_suite
++from cobalt.smoke.models import SmokeContext, Verdict
++
++ET = ZoneInfo("America/New_York")
++
++requires_db = pytest.mark.skipif(
++    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
++    reason="requires_db: Postgres env settings not available",
++)
++
++#: The P4 deploy instant the checklist is run with, and the run's clock —
++#: fixed, so the rendered statement is the same string every run.
++CUTOFF = datetime(2026, 9, 18, 20, 5, tzinfo=ET)
++NOW = datetime(2026, 9, 22, 21, 50, tzinfo=ET)
++DAY = date(2026, 9, 22)
++
++#: The columns K3's predicates and `known_if` name. Exactly these, in one
++#: row: `_one_row` makes a second row ERROR, and a missing column is a
++#: KeyError the framework reports as ERROR.
++K3_COLUMNS = {
++    "post_deploy_admitted", "metric_missing", "value_null",
++    "rescanned_admitted", "rescanned_metric_missing",
++}
++
++POOL_KEY = "primary"
++TICKER = "K3HOLD"
++
++
++def _ctx() -> SmokeContext:
++    """A real `SmokeContext`, built by hand rather than by
++    `build_context`, so the cutoff and the clock are fixed values and the
++    test does not depend on the registry's schedule arithmetic."""
++    return SmokeContext(
++        now=NOW, report_date=DAY, session="overnight", cutoff=CUTOFF,
++        last_trading_day=DAY, last_summary_slot="16:30", last_summary_date=DAY,
++        prod=False, tunables={},
++    )
++
++
++def _k3():
++    return {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}["K3"]
++
++
++@requires_db
++def test_k3_statement_parses_and_returns_its_five_counters_on_cobalt_dev():
++    check = _k3()
++    statement = checks.render_sql(check.query, _ctx())
++    assert "{" not in statement, statement
++
++    result = checks.default_deps(prod=False).read_rows(statement, check.side)
++    assert len(result.rows) == 1, f"K3 must return exactly one row, got {len(result.rows)}"
++    assert set(result.columns) == K3_COLUMNS, sorted(result.columns)
++
++
++@requires_db
++def test_k3_hold_row_reads_red_documented_ambiguity():
++    """A frozen HOLD on a pre-deploy episode grades K3 FAIL.
++
++    The constructed row is what `radar/store.py`'s HOLD branch leaves
++    behind: an open, admitted episode first seen BEFORE the cutoff,
++    carrying the pool's latest post-cutoff `last_scan_id` and a NULL
++    `rank_metric` it has held since before the deploy.
++    """
++    conn = db.connect(env.DEV_DB_NAME, side=Side.SYSTEM)
++    scan_id = conn.execute(
++        "SELECT COALESCE(max(last_scan_id), 0) + 1 FROM system.radar_pool"
++    ).fetchone()[0]
++
++    # The pool row the CTE reads. If dev already has a `primary` row it is
++    # CHANGED here, never duplicated — the transaction rolls it back.
++    conn.execute(
++        "INSERT INTO system.radar_pool (pool_key, state, session, members, "
++        "last_scan_id, last_scan_at) VALUES (%s, 'idle', 'overnight', 0, %s, %s) "
++        "ON CONFLICT (pool_key) DO UPDATE SET last_scan_id = EXCLUDED.last_scan_id, "
++        "last_scan_at = EXCLUDED.last_scan_at",
++        (POOL_KEY, scan_id, CUTOFF + timedelta(hours=1)),
++    )
++    # The held episode: born before the deploy, stamped by tonight's scan,
++    # still carrying the NULL pair the deploy never backfilled (0008).
++    first_seen = CUTOFF - timedelta(days=1)
++    conn.execute(
++        "INSERT INTO system.radar_membership (pool_key, ticker, trade_date, first_seen_at, "
++        "entered_at, left_at, source, sources, last_rank, below_cap_streak, session, "
++        "opened_scan_id, last_scan_id, rank_metric, rank_value) "
++        "VALUES (%s, %s, %s, %s, %s, NULL, 'test', '[]'::jsonb, 1, 0, 'rth', %s, %s, NULL, NULL)",
++        (POOL_KEY, TICKER, first_seen.astimezone(ET).date(), first_seen, first_seen,
++         scan_id, scan_id),
++    )
++
++    context = _ctx()
++    check = _k3()
++    result = checks.default_deps(prod=False).read_rows(
++        checks.render_sql(check.query, context), check.side
++    )
++    row = dict(zip(result.columns, result.rows[0]))
++    assert row["rescanned_admitted"] >= 1, row
++    assert row["rescanned_metric_missing"] >= 1, row
++
++    # The framework's own grader, on the row the server returned.
++    outcome = checks.evaluate(check, context, checks.default_deps(prod=False))
++    assert outcome.verdict is Verdict.FAIL, (outcome.verdict.value, outcome.detail)
++    assert "rescanned_metric_missing" in outcome.detail, outcome.detail
+diff --git a/tests/cobalt/test_tenancy.py b/tests/cobalt/test_tenancy.py
+index bbcb0a0..2ef341a 100644
+--- a/tests/cobalt/test_tenancy.py
++++ b/tests/cobalt/test_tenancy.py
+@@ -453,27 +453,35 @@ class TestStoresNameOnlyTheirOwnSide:
+ # ---------------------------------------------------------------------
+ 
+ 
+-def _forward(name: str):
+-    return next(path for path in FORWARD if path.name == name)
++def _named(paths, name: str):
++    """One registered migration BY NAME. Later migrations append to both
++    tuples (S2-P4's 0008/0009), so a position is not an identity."""
++    matches = [path for path in paths if path.name == name]
++    assert len(matches) == 1, f"{name} is not registered exactly once"
++    return matches[0]
+ 
+ 
+-def _reverse(name: str):
+-    return next(path for path in REVERSE if path.name == name)
++FWD_0003 = _named(FORWARD, "0003_heartbeat_vault_outcome.sql")
++FWD_0005 = _named(FORWARD, "0005_heartbeat_note_absent.sql")
++REV_0003 = _named(REVERSE, "0003_heartbeat_vault_outcome.rollback.sql")
++REV_0005 = _named(REVERSE, "0005_heartbeat_note_absent.rollback.sql")
+ 
+ 
+ def test_heartbeat_migration_is_registered_with_a_named_rollback():
+-    assert [path.name for path in FORWARD[2:5]] == [
++    names = [path.name for path in FORWARD]
++    assert names[names.index("0003_heartbeat_vault_outcome.sql"):][:3] == [
+         "0003_heartbeat_vault_outcome.sql",
+         "0004_radar_pool.sql",
+         "0005_heartbeat_note_absent.sql",
+     ]
+-    assert [path.name for path in REVERSE[-4:-1]] == [
++    reverse = [path.name for path in REVERSE]
++    assert reverse[reverse.index("0005_heartbeat_note_absent.rollback.sql"):][:3] == [
+         "0005_heartbeat_note_absent.rollback.sql",
+         "0004_radar_pool.rollback.sql",
+         "0003_heartbeat_vault_outcome.rollback.sql",
+     ]
+-    assert "cobalt_jobs" in _forward("0003_heartbeat_vault_outcome.sql").read_text()
+-    rollback = _reverse("0003_heartbeat_vault_outcome.rollback.sql").read_text()
++    assert "cobalt_jobs" in FWD_0003.read_text()
++    rollback = REV_0003.read_text()
+     assert "DROP COLUMN IF EXISTS vault_outcome" in rollback
+     assert "DROP COLUMN IF EXISTS vault_reason" in rollback
+     assert {"vault_outcome", "vault_reason"} <= set(DIGEST_EXCLUDED_COLUMNS)
+@@ -492,14 +500,19 @@ def test_0005_extends_only_the_vault_outcome_check_and_has_a_refusing_reverse():
+     assert "DROP COLUMN" not in forward + reverse
+ 
+ 
+-def test_down_to_0004_selects_0007_0006_then_0005_reverse():
++def test_down_to_0004_selects_0009_0008_0007_0006_then_0005_reverse():
+     from cobalt.db_migrations.cli import _rollback_paths
+ 
+-    assert [path.name for path in _rollback_paths("0004")] == [
++    names = [path.name for path in _rollback_paths("0004")]
++    assert names == [
++        "0009_picks_missed.rollback.sql",
++        "0008_radar_value_movers.rollback.sql",
+         "0007_radar_cards.rollback.sql",
+         "0006_radar_score.rollback.sql",
+         "0005_heartbeat_note_absent.rollback.sql",
+     ]
++    assert names[-1] == "0005_heartbeat_note_absent.rollback.sql"
++    assert all(int(name[:4]) > 4 for name in names)
+ 
+ 
+ @requires_db
+@@ -512,7 +525,7 @@ def test_populated_job_row_digest_is_unchanged_by_heartbeat_migration():
+     conn = db.connect_migration(env.DEV_DB_NAME)
+     conn.autocommit = False
+     try:
+-        _apply(conn, [_forward("0003_heartbeat_vault_outcome.sql")])
++        _apply(conn, [FWD_0003])
+         conn.execute(
+             "INSERT INTO system.cobalt_jobs "
+             "(label, kind, timeout_s, heartbeat_source, last_result) "
+@@ -520,9 +533,9 @@ def test_populated_job_row_digest_is_unchanged_by_heartbeat_migration():
+             "ON CONFLICT (label) DO UPDATE SET last_result = EXCLUDED.last_result",
+             ("com.cobalt.digest-proof", '{"green": true}'),
+         )
+-        _apply(conn, [_reverse("0003_heartbeat_vault_outcome.rollback.sql")])
++        _apply(conn, [REV_0003])
+         before = _probe(conn, "cobalt_jobs")
+-        _apply(conn, [_forward("0003_heartbeat_vault_outcome.sql")])
++        _apply(conn, [FWD_0003])
+         after = _probe(conn, "cobalt_jobs")
+ 
+         assert before["rows"] and before["rows"] > 0
+@@ -548,7 +561,7 @@ def test_0005_preserves_the_full_job_row_and_round_trips_its_bounded_domain():
+             "UPDATE system.cobalt_jobs SET vault_outcome = 'written' "
+             "WHERE vault_outcome = 'deferred_note_absent'"
+         )
+-        _apply(conn, [_reverse("0005_heartbeat_note_absent.rollback.sql")])
++        _apply(conn, [REV_0005])
+         conn.execute(
+             "INSERT INTO system.cobalt_jobs "
+             "(label, kind, state, timeout_s, heartbeat_source, expected_cadence, "
+@@ -564,14 +577,14 @@ def test_0005_preserves_the_full_job_row_and_round_trips_its_bounded_domain():
+             (label,),
+         ).fetchone()[0]
+ 
+-        _apply(conn, [_forward("0005_heartbeat_note_absent.sql")])
++        _apply(conn, [FWD_0005])
+         after = conn.execute(
+             "SELECT to_jsonb(j) FROM system.cobalt_jobs AS j WHERE label = %s",
+             (label,),
+         ).fetchone()[0]
+         assert after == before
+ 
+-        _apply(conn, [_forward("0005_heartbeat_note_absent.sql")])
++        _apply(conn, [FWD_0005])
+         repeated = conn.execute(
+             "SELECT to_jsonb(j) FROM system.cobalt_jobs AS j WHERE label = %s",
+             (label,),
+@@ -603,7 +616,7 @@ def test_0005_preserves_the_full_job_row_and_round_trips_its_bounded_domain():
+         ).fetchone()[0]
+         conn.execute("SAVEPOINT refusing_reverse")
+         with pytest.raises(psycopg.errors.RaiseException, match="REFUSING 0005 reverse"):
+-            _apply(conn, [_reverse("0005_heartbeat_note_absent.rollback.sql")])
++            _apply(conn, [REV_0005])
+         conn.execute("ROLLBACK TO SAVEPOINT refusing_reverse")
+         assert conn.execute(
+             "SELECT to_jsonb(j) FROM system.cobalt_jobs AS j WHERE label = %s",
+@@ -618,14 +631,14 @@ def test_0005_preserves_the_full_job_row_and_round_trips_its_bounded_domain():
+             "SELECT to_jsonb(j) FROM system.cobalt_jobs AS j WHERE label = %s",
+             (label,),
+         ).fetchone()[0]
+-        _apply(conn, [_reverse("0005_heartbeat_note_absent.rollback.sql")])
++        _apply(conn, [REV_0005])
+         assert conn.execute(
+             "SELECT to_jsonb(j) FROM system.cobalt_jobs AS j WHERE label = %s",
+             (label,),
+         ).fetchone()[0] == old_domain_row
+         assert conn.execute("SELECT to_regclass('system.radar_pool')").fetchone()[0]
+         assert conn.execute("SELECT to_regclass('system.radar_membership')").fetchone()[0]
+-        _apply(conn, [_forward("0005_heartbeat_note_absent.sql")])
++        _apply(conn, [FWD_0005])
+     finally:
+         conn.rollback()
+         conn.close()
+diff --git a/tests/cobalt/test_settings_optional.py b/tests/cobalt/test_settings_optional.py
+new file mode 100644
+index 0000000..c5c6667
+--- /dev/null
++++ b/tests/cobalt/test_settings_optional.py
+@@ -0,0 +1,107 @@
++"""S2-P4 STEP-6 / Astra R1-14 — `radar.benchmark` loads through a real
++settings-loader seam: `cobalt settings load --optional <file> --sha256
++<hash> --dry-run|--apply`, validated by `BenchmarkSettings`, never added to
++`SETTING_KEYS`, hash-verified, and refused inside the market_reset pause.
++"""
++
++from __future__ import annotations
++
++import argparse
++import hashlib
++from datetime import datetime, timezone
++
++import pytest
++
++from cobalt.settings import cli as settings_cli
++from cobalt.settings.models import SETTING_KEYS, BenchmarkSettings, TraderSettingsError
++
++BODY = b"optional_settings:\n  radar.benchmark: {top_n: 20, min_move_pct: 10}\n"
++
++
++class FakeStore:
++    def __init__(self, rows=None):
++        self.rows = dict(rows or {})
++        self.puts = []
++
++    def values(self):
++        return dict(self.rows)
++
++    def put(self, rows, *, source, before_commit=None):
++        self.puts.append((dict(rows), source))
++        self.rows.update(rows)
++        return {k: "created" for k in rows}
++
++
++def _args(path, *, sha=None, apply=False):
++    return argparse.Namespace(optional=str(path), sha256=sha, dry_run=not apply, apply=apply,
++                              from_dir=None, from_git=None)
++
++
++@pytest.fixture
++def store(monkeypatch):
++    fake = FakeStore({"aset.sheet_modes": {"x": 1}})
++    monkeypatch.setattr(settings_cli, "TraderSettingsStore", lambda: fake)
++    return fake
++
++
++def test_optional_key_round_trip_applies_and_rereads(tmp_path, store, capsys):
++    path = tmp_path / "benchmark.yaml"
++    path.write_bytes(BODY)
++    digest = hashlib.sha256(BODY).hexdigest()
++    settings_cli.cmd_load(_args(path, sha=digest, apply=True))
++    assert store.puts == [({"radar.benchmark": {"top_n": 20, "min_move_pct": "10"}}, "optional:benchmark.yaml")]
++    assert BenchmarkSettings.from_rows(store.values()) == BenchmarkSettings(top_n=20, min_move_pct=10)
++    assert "round trip" in capsys.readouterr().out
++    settings_cli.cmd_load(_args(path, sha=digest, apply=True))           # identical: no second put
++    assert len(store.puts) == 1
++
++
++def test_dry_run_prints_the_diff_and_writes_nothing(tmp_path, store, capsys):
++    path = tmp_path / "benchmark.yaml"
++    path.write_bytes(BODY)
++    settings_cli.cmd_load(_args(path))
++    assert store.puts == []
++    assert "+ radar.benchmark" in capsys.readouterr().out
++
++
++def test_hash_mismatch_and_a_missing_hash_on_apply_refuse(tmp_path, store):
++    path = tmp_path / "benchmark.yaml"
++    path.write_bytes(BODY)
++    with pytest.raises(SystemExit, match="sha256 mismatch"):
++        settings_cli.cmd_load(_args(path, sha="0" * 64, apply=True))
++    with pytest.raises(SystemExit, match="needs --sha256"):
++        settings_cli.cmd_load(_args(path, apply=True))
++    assert store.puts == []
++
++
++@pytest.mark.parametrize("body,match", [
++    (b"optional_settings:\n  radar.benchmark: {top_n: 0, min_move_pct: 10}\n", "invalid radar.benchmark"),
++    (b"optional_settings:\n  radar.benchmark: {top_n: 20}\n", "invalid radar.benchmark"),
++    (b"optional_settings:\n  radar.cap: 3\n", "unknown optional setting"),
++    (b"optional_settings:\n  aset.enabled_grades: [A]\n", "required sheet/day-mode setting"),
++    (b"radar.benchmark: {top_n: 20, min_move_pct: 10}\n", "exactly one top-level mapping"),
++])
++def test_absent_or_malformed_benchmark_refuses(tmp_path, store, body, match):
++    path = tmp_path / "benchmark.yaml"
++    path.write_bytes(body)
++    with pytest.raises(SystemExit, match=match):
++        settings_cli.cmd_load(_args(path, sha=hashlib.sha256(body).hexdigest(), apply=True))
++    assert store.puts == []
++
++
++def test_apply_inside_the_market_reset_pause_refuses(tmp_path, store, monkeypatch):
++    from cobalt.session import SessionBlocked
++    from cobalt.session import clock as clock_mod
++
++    monkeypatch.setattr(clock_mod, "now_utc", lambda: datetime(2026, 9, 4, 0, 30, tzinfo=timezone.utc))  # 20:30 ET
++    path = tmp_path / "benchmark.yaml"
++    path.write_bytes(BODY)
++    with pytest.raises(SessionBlocked):
++        settings_cli.cmd_load(_args(path, sha=hashlib.sha256(BODY).hexdigest(), apply=True))
++    assert store.puts == []
++
++
++def test_the_benchmark_never_joins_the_required_keys():
++    assert "radar.benchmark" not in SETTING_KEYS
++    with pytest.raises(TraderSettingsError):
++        BenchmarkSettings.from_rows({"aset.sheet_modes": {}})
+diff --git a/tests/cobalt/test_finviz_consumers.py b/tests/cobalt/test_finviz_consumers.py
+index e977df4..c880501 100644
+--- a/tests/cobalt/test_finviz_consumers.py
++++ b/tests/cobalt/test_finviz_consumers.py
+@@ -4,16 +4,32 @@ ops-2026-09-17 item 5b (P2 build ESCALATE 1). A new Finviz consumer must
+ fail this test, so the total-demand plan grows with it instead of by
+ surprise. The strict xfail records the owed fix: one shared cross-process
+ gate called before every request (P4 STEP-6 shape).
++
++Second subject (AT-1 2.3): every one of those consumers asks for the SAME
++column set. The index list was written out four times in `src/cobalt`;
++`cobalt.radar.config.screener_columns()` is now its one source (L3), and
++the scan at the bottom of this module is the `grep` that keeps it one.
+ """
+ 
+ import re
+ from pathlib import Path
++from types import SimpleNamespace
+ 
+ import pytest
+ 
++from cobalt.archiver.collector import FetchMetrics
++from cobalt.radar import throttle
++from cobalt.radar.collector import FinvizScreenerCollector
++from cobalt.radar.config import load_config
++from cobalt.replay.movers import MoversCollector
++
+ SRC = Path(__file__).resolve().parents[2] / "src" / "cobalt"
+ _REQUEST = re.compile(r"elite\.finviz\.com|\bfinviz_get\(|\bfetch_bars\(")
+ 
++#: What every consumer must send as `c=`, spelled out here rather than
++#: imported, so a change to the one source fails this test loudly.
++COLUMN_PARAM = ",".join(map(str, range(151)))
++
+ #: module -> who runs it and when (ET). The radar-bucket ones share
+ #: `radar.finviz_max_rpm` inside the radar process; the rest do not.
+ CONSUMERS = {
+@@ -51,3 +67,102 @@ def test_every_finviz_consumer_is_in_the_total_demand_inventory():
+ )
+ def test_no_finviz_request_bypasses_the_shared_gate():
+     assert _request_modules() - BUCKETED - {"archiver/runner.py"} == set()
++
++
++# ---------------------------------------------------------------------
++# AT-1 2.3 — one column set, one source
++# ---------------------------------------------------------------------
++
++
++class _NoWait:
++    async def acquire(self):
++        return None
++
++
++def _probe_screen_params(monkeypatch) -> dict:
++    """The throttle probe's own screener request, captured from a CLI run
++    (`cobalt radar throttle-probe`) rather than from `run_probe`'s
++    signature: the probe holds no config of its own, so the wiring under
++    test is `command()` reading `load_config()` and handing the
++    declaration down. Transport, credential, refusal clock and result
++    file are all faked — no network, no vault, nothing written."""
++    seen: dict[str, object] = {}
++
++    async def bars(_ticker, _interval, _token, *, on_metrics):
++        on_metrics(FetchMetrics(status=200, elapsed_ms=1, bytes=1, content_type="text/csv"))
++        return []
++
++    async def screen(_path, params, _token, *, on_metrics):
++        seen.update(params)
++        body = "Ticker,Volume\nAAA,1\n"
++        on_metrics(FetchMetrics(status=200, elapsed_ms=1, bytes=len(body), content_type="text/csv"))
++        return SimpleNamespace(text=body)
++
++    async def token():
++        return "synthetic-token"
++
++    monkeypatch.setattr(throttle, "fetch_bars", bars)
++    monkeypatch.setattr(throttle, "finviz_get", screen)
++    monkeypatch.setattr(throttle, "resolve_token", token)
++    monkeypatch.setattr(throttle, "refusal_reason", lambda _now: None)
++    monkeypatch.setattr(throttle, "write_result", lambda stages, limit: throttle.REPO_ROOT / "data/none.json")
++    throttle.command(SimpleNamespace(names=1, grids="600", cycles=1))
++    assert seen, "the probe sent no screener request"
++    return seen
++
++
++def test_every_finviz_consumer_asks_for_the_same_column_set(monkeypatch, tmp_path):
++    """The radar screen, both movers exports and the throttle probe all
++    send the shipped config's `export.columns`. One shape reaches every
++    parser, so one committed real-shape fixture can stand for all of
++    them (L45)."""
++    config = load_config()
++    screener = FinvizScreenerCollector("synthetic-token", config=config, bucket=_NoWait(), cache_root=tmp_path)
++    movers = MoversCollector("synthetic-token", config=config, bucket=_NoWait(), cache_root=tmp_path)
++
++    assert screener._params()["c"] == COLUMN_PARAM
++    assert movers._params("gainers")["c"] == COLUMN_PARAM
++    assert movers._params("losers")["c"] == COLUMN_PARAM
++    assert _probe_screen_params(monkeypatch)["c"] == COLUMN_PARAM
++
++
++_RANGE_151 = re.compile(r"range\(\s*151\s*\)")
++#: A `c=` request parameter assignment. A literal value is allowed
++#: (`radar/propose.py`'s `ft` comparison probe deliberately asks for the
++#: single column `"0"`); anything else must have come from the one
++#: function, and may never be assembled on the spot.
++_COLUMN_PARAM_ASSIGNMENT = re.compile(r'"c"\s*:\s*[^"\s]')
++_ASSEMBLED = re.compile(r"\.join\(|range\(")
++
++
++def test_only_one_function_in_the_new_core_builds_the_column_set():
++    """`grep -rn "range(151)" src/cobalt` prints nothing: the index list
++    is produced by `cobalt.radar.config.screener_columns()` alone, which
++    derives it from the declaration and never spells the literal (L3).
++
++    Then the shape of every `c=` assignment: never assembled inline, and
++    any module that sends a computed one imports the one function. A
++    fifth consumer that rolls its own fails here, the way a fifth Finviz
++    caller fails the inventory test above.
++    """
++    literals = sorted(
++        path.relative_to(SRC).as_posix() for path in SRC.rglob("*.py") if _RANGE_151.search(path.read_text())
++    )
++    assert literals == []
++
++    assembled = []
++    without_the_one_source = []
++    for path in sorted(SRC.rglob("*.py")):
++        text = path.read_text()
++        computed = False
++        for number, line in enumerate(text.splitlines(), start=1):
++            code = line.split("#", 1)[0]
++            if not _COLUMN_PARAM_ASSIGNMENT.search(code):
++                continue
++            computed = True
++            if _ASSEMBLED.search(code):
++                assembled.append(f"{path.relative_to(SRC).as_posix()}:{number}")
++        if computed and "screener_columns_param" not in text:
++            without_the_one_source.append(path.relative_to(SRC).as_posix())
++    assert assembled == []
++    assert without_the_one_source == []
+diff --git a/tests/cobalt/test_jobs_restarts.py b/tests/cobalt/test_jobs_restarts.py
+index 7c8bf6d..d45d479 100644
+--- a/tests/cobalt/test_jobs_restarts.py
++++ b/tests/cobalt/test_jobs_restarts.py
+@@ -149,3 +149,43 @@ def test_generated_rules_yaml_derives_no_restart(monkeypatch):
+     assert row.escalate is False
+     assert row.restarts == ()
+     assert "no resident" in row.rule
++
++
++def test_a_new_one_shot_plist_derives_an_explicit_bootstrap_and_no_restart(monkeypatch):
++    # S2-P4 R1-22/R2-6: a brand-new one-shot plist used to vanish from the
++    # derivation. Its action is now explicit: bootstrap once, restart nothing.
++    monkeypatch.setattr(restarts, "changes", lambda _range: [
++        Change("ops/com.cobalt.replay.plist", "A"),
++    ])
++    (row,) = classify("HEAD...HEAD")
++    assert row.escalate is False
++    assert row.restarts == ()
++    assert "bootstrap once: com.cobalt.replay" in row.rule
++
++
++def test_a_smoke_suite_file_derives_no_restart_and_no_job_runs_the_smoke(monkeypatch):
++    # S2-P4 §5 (Astra R2-6): `configs/cobalt/smoke/<suite>.yaml` is read only
++    # by `cobalt smoke`, an operator command. No plist runs it, and the only
++    # code that opens a suite file is `smoke/cli.py`'s `run` — both halves of
++    # that claim are checked here, so the rule stops being true the moment
++    # either changes. (Import reach is not the question: `com.cobalt.radar`
++    # enters through `cobalt.cli`, which mounts every command module, so a
++    # change to smoke's CODE still derives that restart by the src/ rule.)
++    monkeypatch.setattr(restarts, "changes", lambda _range: [
++        Change("configs/cobalt/smoke/s2.yaml", "A"),
++    ])
++    (row,) = classify("HEAD...HEAD")
++    assert row.escalate is False
++    assert row.restarts == ()
++    assert "operator command" in row.rule
++
++    from pathlib import Path
++
++    repo = Path(restarts.REPO_ROOT)
++    assert not [p.name for p in (repo / "ops").glob("com.cobalt.*.plist") if "smoke" in p.read_text()]
++    openers = sorted(
++        str(p.relative_to(repo))
++        for p in (repo / "src").rglob("*.py")
++        if any(token in p.read_text() for token in ("load_suite(", "suite_path(", "SUITES_DIR"))
++    )
++    assert openers == ["src/cobalt/smoke/cli.py", "src/cobalt/smoke/config.py"]

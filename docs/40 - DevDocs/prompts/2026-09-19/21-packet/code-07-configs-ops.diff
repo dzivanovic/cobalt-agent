@@ -1,0 +1,669 @@
+diff --git a/configs/cobalt/jobs.yaml b/configs/cobalt/jobs.yaml
+index 658c286..1e60b77 100644
+--- a/configs/cobalt/jobs.yaml
++++ b/configs/cobalt/jobs.yaml
+@@ -189,12 +189,30 @@ jobs:
+     kind: one-shot
+     supervisor: self
+     # The nightly full run took 23m04s and 23m11s on the last two nights.
+-    # 90 minutes is not a target, it is the point past which a silent
+-    # hang is more likely than a slow night.
+-    timeout_s: 5400
++    # 2400 s (40 min) is not a target and does not kill a healthy long
++    # run: it is the END OF THE DECLARED DEMAND WINDOW, 20:30 -> 21:10,
++    # which the L53 total-demand gate reads as this job's Finviz window
++    # (S2-P4 R17). The watchdog flags ZOMBIE only past that AND with a
++    # stale heartbeat, so a slow-but-beating night is never cut.
++    timeout_s: 2400
+     schedule: {at: "20:30", weekdays: [1, 2, 3, 4, 5]}
+     what: "the Bar Archiver nightly full run (uv run archiver)"
+ 
++  - label: com.cobalt.replay
++    kind: one-shot
++    supervisor: self
++    # S2-P4 R3, moved 21:05 -> 21:10 by R17. After the 20:00-21:00 reset
++    # and after the 20:30 archiver, which it refuses to run without
++    # (tonight's occurrence, done, exit 0) — and now also after the
++    # archiver's DECLARED WINDOW ENDS at 21:10, so the two Finviz windows
++    # are disjoint and neither counts the other's rpm against the
++    # ceiling. 30 minutes bounds a stall; the run's own enforced deadline
++    # (replay.backup_margin_s before the 21:40 backup) bounds a healthy
++    # long run.
++    timeout_s: 1800
++    schedule: {at: "21:10", weekdays: [1, 2, 3, 4, 5]}
++    what: "the nightly replay — movers, card misses + counterfactual R, the DRC miss line (uv run cobalt replay nightly)"
++
+   - label: com.cobalt.cards-expire
+     kind: one-shot
+     supervisor: self
+diff --git a/configs/cobalt/smoke/s2.yaml b/configs/cobalt/smoke/s2.yaml
+new file mode 100644
+index 0000000..1e8779d
+--- /dev/null
++++ b/configs/cobalt/smoke/s2.yaml
+@@ -0,0 +1,506 @@
++# `cobalt smoke s2` — the S2 close checklist (S2-P4 STEP-9, R6; plan
++# §2 STEP-9 table K1-K18 as amended by Astra R1-19/R1-24).
++#
++# Loaded through `cobalt.smoke.models.SmokeSuite` (L10): a bad file
++# crashes with its line number, never a partial run. Every check is
++# READ-ONLY: SQL goes through `cobalt db query`'s guarded read path
++# (refused at load if it is not one side-effect-free SELECT/WITH), `cli`
++# argv must be on the read-only allowlist in `cobalt/smoke/models.py`,
++# and a vault read is `find_section` over the note's text.
++#
++# EACH ROW IS ALSO THE HAND FALLBACK (R6 A). The report prints, per row,
++# the exact command the check ran (rendered from this file with the run's
++# variables substituted as literals) and `expect_text`, so the checklist
++# runs blind from the report alone. The rows that run no command are the
++# `kind: compare` ones (K8.3, K9.3, K9.6): each grades two numbers rows
++# above it printed, and prints the two ids and the operator instead of a
++# command.
++#
++# Variables (computed by code, printed at the top of every report):
++#   {now}                UTC instant of the run
++#   {report_date}        ET date (default today)
++#   {session}            the session clock's session at {now}
++#   {cutoff}             the P4 deploy instant — `--cutoff`, required
++#   {last_trading_day}   the latest trading day whose `day_anchor_job`
++#                        occurrence + timeout_s has passed by {now}
++#   {last_summary_slot}  latest `heartbeat.summary_at` slot at/before {now}
++#   {last_summary_date}  that slot's ET date
++#   {tunable:<key>}      a tunables.yaml value
++#
++# Verdicts: PASS · FAIL (a predicate failed) · KNOWN (a check-level
++# `known_if` holds, or every failing predicate's actual value is listed in
++# its `known`) · ERROR (the probe itself could not run). OVERALL: RED any
++# ERROR · AMBER any FAIL · GREEN otherwise; KNOWN never lowers it.
++# S2 done = GREEN only.
++#
++# `known` lists start EMPTY. A value joins one only by Dejan's ruling.
++
++suite: s2
++title: S2 smoke
++day_anchor_job: com.cobalt.replay
++
++checks:
++  - id: K1
++    title: com.cobalt.radar launchctl
++    kind: launchctl
++    mode: running
++    label: com.cobalt.radar
++    expect_text: "`state = running` and a `pid = <n>` line"
++
++  - id: K2
++    title: radar_pool primary
++    kind: sql
++    side: system
++    query: >-
++      SELECT pool_key, state, session, cap, members, failed_stage, failed_detail,
++      last_scan_at, COALESCE(members <= cap, false) AS within_cap,
++      CASE WHEN {session} IN ('premarket', 'rth', 'aftermarket')
++      THEN COALESCE(state = 'scanning' AND last_scan_at >= {now} - make_interval(secs => {tunable:heartbeat.radar_scan_max_age_s}), false)
++      ELSE state IN ('scanning', 'idle', 'paused_market_reset', 'stopped') END AS state_valid
++      FROM system.radar_pool WHERE pool_key = 'primary'
++    expect:
++      - {column: state_valid, op: eq, value: true}
++      - {column: within_cap, op: eq, value: true}
++      - {column: failed_stage, op: is_null}
++    expect_text: >-
++      one row; state_valid = true (inside premarket/rth/aftermarket: state
++      scanning and last_scan_at within heartbeat.radar_scan_max_age_s);
++      within_cap = true (members <= cap); failed_stage null
++
++  # TWO SETS, ONE QUERY, BECAUSE TWO CODE PATHS WRITE THE PAIR.
++  # `first_seen_at >= {cutoff}` reaches only episodes BORN after the
++  # deploy — the INSERT path. A pre-deploy episode that the scan RETAINs
++  # keeps its old `first_seen_at`, and `radar/store.py`'s RETAIN branch
++  # writes `rank_metric = %s` unconditionally: a defect there is invisible
++  # to the first set. The second set is that path — open admitted rows
++  # carrying the pool's own `last_scan_id`, gated on that scan having run
++  # after the cutoff. Both are graded; the check goes quiet only when both
++  # are empty.
++  - id: K3
++    title: membership value column (post-deploy admissions and re-scans)
++    kind: sql
++    side: system
++    query: >-
++      WITH scan AS (
++      SELECT max(last_scan_id) AS id FROM system.radar_pool
++      WHERE pool_key = 'primary' AND last_scan_at >= {cutoff}),
++      admitted AS (
++      SELECT m.rank_metric, m.rank_value,
++      m.first_seen_at >= {cutoff} AS inserted_after,
++      (m.left_at IS NULL AND m.last_scan_id = scan.id) AS rescanned_after
++      FROM system.radar_membership m CROSS JOIN scan
++      WHERE m.entered_at IS NOT NULL)
++      SELECT count(*) FILTER (WHERE inserted_after) AS post_deploy_admitted,
++      count(*) FILTER (WHERE inserted_after AND rank_metric IS NULL) AS metric_missing,
++      count(*) FILTER (WHERE inserted_after AND rank_value IS NULL) AS value_null,
++      count(*) FILTER (WHERE rescanned_after) AS rescanned_admitted,
++      count(*) FILTER (WHERE rescanned_after AND rank_metric IS NULL) AS rescanned_metric_missing
++      FROM admitted
++    known_if:
++      - {column: post_deploy_admitted, op: eq, value: 0}
++      - {column: rescanned_admitted, op: eq, value: 0}
++    known_text: "no admitted row first seen after the deploy, and none re-scanned since it, yet"
++    expect:
++      - {column: metric_missing, op: eq, value: 0}
++      - {column: rescanned_metric_missing, op: eq, value: 0}
++    expect_text: >-
++      metric_missing = 0 over admitted rows FIRST SEEN at/after the cutoff
++      (the INSERT path always writes rank_metric) AND
++      rescanned_metric_missing = 0 over open admitted rows the pool's latest
++      post-cutoff scan touched (the RETAIN path, where a dropped metric would
++      otherwise hide behind a pre-deploy first_seen_at). Both counts 0 →
++      KNOWN. value_null is evidence only: a genuinely absent metric stores
++      rank_value NULL. ONE KNOWN AMBIGUITY in the second set: a frozen HOLD
++      stamps last_scan_id too (radar/store.py's COALESCE branch), so a
++      pre-deploy episode HELD this scan because its only source was degraded
++      carries its pre-deploy NULL into this count, and no column tells it
++      apart from a RETAIN defect. A rescanned_metric_missing FAIL is read
++      against radar_pool.degraded_sources before it is ruled known.
++
++  - id: K4.1
++    title: sheet /api/health
++    kind: http
++    url: http://127.0.0.1:5010/api/health
++    status: 200
++    expect_text: HTTP 200
++
++  - id: K4.2
++    title: sheet GET /
++    kind: http
++    url: http://127.0.0.1:5010/
++    status: 200
++    expect_text: HTTP 200
++
++  - id: K4.3
++    title: sheet GET /radar with value column
++    kind: http
++    url: http://127.0.0.1:5010/radar
++    status: 200
++    contains: ["<th>value</th>"]
++    expect_text: "HTTP 200 and the body contains `<th>value</th>`"
++
++  - id: K4.4
++    title: sheet /api/radar/pool
++    kind: http
++    url: http://127.0.0.1:5010/api/radar/pool
++    status: 200
++    expect_text: HTTP 200
++
++  - id: K5.1
++    title: P2 seam — latest radar_score_run
++    kind: sql
++    side: system
++    requires_relation: system.radar_score_run
++    query: >-
++      SELECT (SELECT status FROM system.radar_score_run WHERE pool_key = 'primary'
++      ORDER BY id DESC LIMIT 1) AS latest_status,
++      (SELECT failed_stage FROM system.radar_pool WHERE pool_key = 'primary') AS failed_stage
++    expect:
++      - {column: latest_status, op: eq, value: complete}
++      - {column: failed_stage, op: is_null}
++    expect_text: >-
++      system.radar_score_run exists (absent = P2 not deployed = FAIL);
++      latest_status = complete; failed_stage null
++
++  - id: K5.2
++    title: P2 seam — radar.cards_enabled reported
++    kind: sql
++    side: user
++    query: >-
++      SELECT (SELECT value FROM trader_settings WHERE key = 'radar.cards_enabled')
++      AS cards_enabled
++    expect:
++      - {column: cards_enabled, op: not_null}
++    expect_text: "cards_enabled not null (true or false both PASS — dark is PASS); absent = FAIL"
++
++  - id: K6
++    title: picks — one row per post-deploy FILLED transition
++    kind: sql
++    side: user
++    query: >-
++      SELECT count(*) AS fills, count(*) FILTER (WHERE p.id IS NULL) AS missing
++      FROM card_transitions t LEFT JOIN picks p ON p.card_id = t.card_id
++      WHERE t.to_state = 'FILLED' AND t.at >= {cutoff}
++    known_if:
++      - {column: fills, op: eq, value: 0}
++    known_text: "no fill yet"
++    expect:
++      - {column: missing, op: eq, value: 0}
++    expect_text: >-
++      missing = 0 over FILLED transitions at/after the cutoff (picks.card_id is
++      UNIQUE, so present = exactly one); fills = 0 → KNOWN: no fill yet.
++      Per-day view: `uv run cobalt cards picks --date <day> --cutoff <cutoff>` exit 0
++
++  - id: K7
++    title: replay job — last run
++    kind: job_row
++    label: com.cobalt.replay
++    state: done
++    exit_code: 0
++    not_missed: true
++    result_keys: [movers, archived, card_misses, mover_misses, formation_replay, line_action]
++    result_equals:
++      trade_date: "{last_trading_day}"
++      dry_run: false
++    expect_text: >-
++      state done, exit_code 0, not missed against its Mon-Fri 21:10 cadence;
++      last_result carries movers/archived/card_misses/mover_misses/
++      formation_replay/line_action; last_result.trade_date = last trading day;
++      dry_run false
++
++  # K8 IS THREE ROWS: ONE PER SIDE OF THE TENANCY WALL (L32), PLUS THE
++  # COMPARISON BETWEEN THEM. The corpus question — "are the miss rows
++  # complete, and do they agree with the job that wrote them?" — spans
++  # `system.cobalt_jobs` and `"user".missed`, and NO role may read both:
++  # `cobalt_user` is never granted `cobalt_jobs` (system-side by
++  # declaration, 0003; moved there by 0002, so neither 0001's schema-wide
++  # grant nor its default privileges reach it), and `cobalt_system` is
++  # REVOKEd from schema `"user"` outright (0001). No cross-side grant is
++  # added for a smoke check. So: K8.1 asks the job row (system side), K8.2
++  # asks the corpus (user side), each names THE number of its result
++  # (`result_number`), and K8.3 compares the two — the one assertion that
++  # can never be a single statement, made by machine again rather than by
++  # eye. Everything K8 asserted is still asserted: input_stale = 0 and
++  # trade_date on K8.1, incomplete = 0 on K8.2, card_rows = card_misses on
++  # K8.3.
++  - id: K8.1
++    title: missed — the replay job's own counters (system side)
++    kind: job_row
++    label: com.cobalt.replay
++    result_keys: [card_misses]
++    result_number: card_misses
++    result_equals:
++      input_stale: 0
++      trade_date: "{last_trading_day}"
++    expect_text: >-
++      last_result.input_stale = 0 (R1-12 coverage); last_result.trade_date =
++      last trading day (same value K7 asserts, repeated here because it is
++      what makes K8.3's comparison valid); last_result.card_misses present —
++      that printed number is K8.3's left operand
++
++  - id: K8.2
++    title: missed — card rows complete (user side)
++    kind: sql
++    side: user
++    query: >-
++      SELECT count(*) FILTER (WHERE m.kind = 'card') AS card_rows,
++      count(*) FILTER (WHERE m.kind = 'card' AND (m.cf_r IS NULL OR m.inputs_sha256 IS NULL)) AS incomplete
++      FROM "user".missed m
++      WHERE m.trade_date = {last_trading_day} AND m.is_current
++    result_number: card_rows
++    expect:
++      - {column: incomplete, op: eq, value: 0}
++    expect_text: >-
++      for current rows of the last trading day: every kind='card' row has cf_r
++      and inputs_sha256 (excluded_by is NOT NULL by schema), so incomplete = 0.
++      card_rows is printed and is K8.3's right operand
++
++  # THE ASSERTION THE SPLIT LOST, RESTORED AS A ROW. It reads nothing: it
++  # grades the two numbers K8.1 and K8.2 already printed. A disagreement
++  # means the corpus and the job that wrote it tell different stories about
++  # the same night — the fact no single query may ask for (L32).
++  - id: K8.3
++    title: missed — the corpus and the job agree on the card count
++    kind: compare
++    left: K8.1
++    right: K8.2
++    op: eq
++    expect_text: >-
++      K8.1's last_result.card_misses = K8.2's card_rows, both printed on
++      their own rows above. Unequal = FAIL; either operand ERRORed = ERROR,
++      never a quiet PASS
++
++  # K9 IS SIX ROWS: THREE PER SIDE, FOR THE SAME REASON K8 IS SPLIT. The
++  # question — "does `movers_daily` hold every row the night's export
++  # allowed?" — cannot be one statement either: the stored rows are in
++  # `system.movers_daily` (granted to the user role by 0008) and the
++  # night's export row count is in `system.cobalt_jobs.last_result`,
++  # which the user role is never granted. So per side: the count (user
++  # side), what that side's export allowed (the job row, system side),
++  # and the `compare` between them.
++  #
++  # `expected` = min(top_n, exported) is computed by the replay and
++  # stored in its own result, so a side whose export really returned
++  # fewer rows than top_n PASSES — the plan's "or fewer with export
++  # evidence", made by machine instead of by a hand count of the cached
++  # CSV — while a side holding fewer rows than its export allowed FAILS.
++  # `side` is CHECK-constrained to these two values (0008), so the two
++  # `not_archived = 0` predicates together cover every active row of the
++  # day.
++  - id: K9.1
++    title: movers_daily — gainers stored (user side)
++    kind: sql
++    side: user
++    query: >-
++      SELECT (SELECT (value ->> 'top_n')::int FROM trader_settings WHERE key = 'radar.benchmark') AS top_n,
++      count(*) AS stored,
++      count(*) FILTER (WHERE NOT bars_archived) AS not_archived
++      FROM system.movers_daily
++      WHERE trade_date = {last_trading_day} AND side = 'gainers' AND active
++    result_number: stored
++    expect:
++      - {column: top_n, op: not_null}
++      - {column: not_archived, op: eq, value: 0}
++    expect_text: >-
++      active gainers rows for the last trading day: radar.benchmark top_n is
++      set; not_archived = 0 (every stored mover has its i1 bars). stored is
++      printed and is K9.3's left operand
++
++  - id: K9.2
++    title: movers — what the gainers export allowed (system side)
++    kind: job_row
++    label: com.cobalt.replay
++    result_keys: [movers_by_side]
++    result_number: movers_by_side.gainers.expected
++    result_equals:
++      trade_date: "{last_trading_day}"
++    expect_text: >-
++      last_result.movers_by_side.gainers = {exported, top_n, expected}: the rows
++      that night's gainers export really returned, the cap in force, and
++      expected = min(top_n, exported); last_result.trade_date = last trading day
++      (what makes K9.3's comparison valid). expected is K9.3's right operand
++
++  - id: K9.3
++    title: movers — gainers stored = what the export allowed
++    kind: compare
++    left: K9.1
++    right: K9.2
++    op: eq
++    expect_text: >-
++      K9.1's stored = K9.2's movers_by_side.gainers.expected, both printed on
++      their own rows above. A short export (fewer rows than top_n) PASSES here;
++      fewer stored rows than the export allowed = FAIL; either operand ERRORed
++      = ERROR, never a quiet PASS
++
++  - id: K9.4
++    title: movers_daily — losers stored (user side)
++    kind: sql
++    side: user
++    query: >-
++      SELECT (SELECT (value ->> 'top_n')::int FROM trader_settings WHERE key = 'radar.benchmark') AS top_n,
++      count(*) AS stored,
++      count(*) FILTER (WHERE NOT bars_archived) AS not_archived
++      FROM system.movers_daily
++      WHERE trade_date = {last_trading_day} AND side = 'losers' AND active
++    result_number: stored
++    expect:
++      - {column: top_n, op: not_null}
++      - {column: not_archived, op: eq, value: 0}
++    expect_text: >-
++      active losers rows for the last trading day: radar.benchmark top_n is
++      set; not_archived = 0 (every stored mover has its i1 bars). stored is
++      printed and is K9.6's left operand
++
++  - id: K9.5
++    title: movers — what the losers export allowed (system side)
++    kind: job_row
++    label: com.cobalt.replay
++    result_keys: [movers_by_side]
++    result_number: movers_by_side.losers.expected
++    result_equals:
++      trade_date: "{last_trading_day}"
++    expect_text: >-
++      last_result.movers_by_side.losers = {exported, top_n, expected}: the rows
++      that night's losers export really returned, the cap in force, and
++      expected = min(top_n, exported); last_result.trade_date = last trading day
++      (what makes K9.6's comparison valid). expected is K9.6's right operand
++
++  - id: K9.6
++    title: movers — losers stored = what the export allowed
++    kind: compare
++    left: K9.4
++    right: K9.5
++    op: eq
++    expect_text: >-
++      K9.4's stored = K9.5's movers_by_side.losers.expected, both printed on
++      their own rows above. A short export (fewer rows than top_n) PASSES here;
++      fewer stored rows than the export allowed = FAIL; either operand ERRORed
++      = ERROR, never a quiet PASS
++
++  - id: K10.1
++    title: miss line unit in the DRC note
++    kind: vault_unit
++    note: drc
++    day: last_trading_day
++    section: drc-misses
++    unit: miss_line
++    expect_text: "both marker lines present: `<!-- cobalt:section drc-misses -->` and `<!-- cobalt:unit miss_line -->` inside it"
++
++  - id: K10.2
++    title: miss line vault_writes row
++    kind: sql
++    side: user
++    query: >-
++      SELECT count(*) AS writes FROM vault_writes
++      WHERE section = 'drc-misses' AND unit = 'miss_line'
++      AND (ts AT TIME ZONE 'America/New_York')::date = {last_trading_day}
++    expect:
++      - {column: writes, op: ge, value: 1}
++    expect_text: "writes >= 1 on the last trading day (ET)"
++
++  - id: K11.1
++    title: heartbeat — last beat age
++    kind: job_row
++    label: com.cobalt.heartbeat
++    max_age_min: 20
++    expect_text: "cobalt_jobs.updated_at for com.cobalt.heartbeat within 20 min of now"
++
++  - id: K11.2
++    title: heartbeat — database probe OK
++    kind: log_grep
++    path: logs/heartbeat.log
++    block_start: "^HEARTBEAT "
++    pattern: "^OK +database "
++    present: true
++    expect_text: "the newest HEARTBEAT block has an `OK   database` line"
++
++  - id: K11.3
++    title: heartbeat — sheet HTTP probe OK
++    kind: log_grep
++    path: logs/heartbeat.log
++    block_start: "^HEARTBEAT "
++    pattern: "^OK +sheet HTTP "
++    present: true
++    expect_text: "the newest HEARTBEAT block has an `OK   sheet HTTP` line"
++
++  - id: K12.1
++    title: prefill-daily last run
++    kind: job_row
++    label: com.cobalt.prefill-daily
++    state: done
++    exit_code: 0
++    not_missed: true
++    expect_text: "state done, exit_code 0, not missed against its cadence"
++
++  - id: K12.2
++    title: prefill-drc last run
++    kind: job_row
++    label: com.cobalt.prefill-drc
++    state: done
++    exit_code: 0
++    not_missed: true
++    expect_text: "state done, exit_code 0, not missed against its cadence"
++
++  - id: K13
++    title: archiver freshness (cadence-aware)
++    kind: job_row
++    label: com.cobalt.archiver
++    exit_code: 0
++    not_missed: true
++    result_positive: [rows_written]
++    expect_text: >-
++      not missed against the Mon-Fri 20:30 cadence (the same `is_missed` the
++      heartbeat archiver probe uses — no flat 30 h cutoff); exit_code 0;
++      last_result.rows_written > 0
++
++  - id: K14
++    title: backup last run
++    kind: job_row
++    label: com.cobalt.backup
++    state: done
++    exit_code: 0
++    not_missed: true
++    expect_text: "state done, exit_code 0, not missed against its cadence"
++
++  - id: K15
++    title: heartbeat summary sent at the last slot
++    kind: job_row
++    label: com.cobalt.heartbeat
++    result_equals:
++      "summary_sent.{last_summary_slot}": "{last_summary_date}"
++    expect_text: >-
++      last_result.summary_sent[<last heartbeat.summary_at slot>] = that slot's
++      ET date (the heartbeat records a slot only after the DM send succeeded)
++
++  - id: K16.1
++    title: cards-expire last run
++    kind: job_row
++    label: com.cobalt.cards-expire
++    state: done
++    exit_code: 0
++    not_missed: true
++    expect_text: "state done, exit_code 0, not missed against its cadence"
++
++  - id: K16.2
++    title: daymode-propose last run
++    kind: job_row
++    label: com.cobalt.daymode-propose
++    state: done
++    exit_code: 0
++    not_missed: true
++    expect_text: "state done, exit_code 0, not missed against its cadence"
++
++  - id: K17
++    title: cobalt validate
++    kind: cli
++    argv: [cobalt, validate]
++    exit_code: 0
++    expect_text: exit 0
++
++  - id: K18
++    title: jobs registry vs launchd
++    kind: launchctl
++    mode: registry_match
++    expect_text: >-
++      every `enabled: true` label in configs/cobalt/jobs.yaml is loaded in
++      launchd and no `enabled: false` label is
+diff --git a/configs/cobalt/taxonomy/tunables.yaml b/configs/cobalt/taxonomy/tunables.yaml
+index 9659368..ea2c96d 100644
+--- a/configs/cobalt/taxonomy/tunables.yaml
++++ b/configs/cobalt/taxonomy/tunables.yaml
+@@ -492,13 +492,13 @@ tunables:
+     consumers: ["cobalt.radar.poller (revision overlap)"]
+ 
+   - key: radar.finviz_max_rpm
+-    value: 45
++    value: 50
+     unit: count
+     scope: global
+     dynamic: false
+     status: solidified
+     source: ruling
+-    consumers: ["S2-P1 throttle report (hub-measured half-rate, 2026-09-10: 4 grids clean to 60 rpm, half-rate 30 held)", "cobalt.radar.collector.TokenBucket", "ruled 45 on 2026-09-16 (Dejan; 09-10 throttle report: 4 grids clean to 60 rpm)"]
++    consumers: ["S2-P1 throttle report (hub-measured half-rate, 2026-09-10: 4 grids clean to 60 rpm, half-rate 30 held)", "cobalt.radar.collector.TokenBucket", "ruled 45 on 2026-09-16 (Dejan; 09-10 throttle report: 4 grids clean to 60 rpm)", "ruled 50 on 2026-09-17 (Dejan, cto-2026-09-17.md R17: = the archiver's pacing bound 60/1.2)"]
+ 
+   # 320 ruled 2026-09-14 (Dejan, key split from the shared radar_max_age_s): heartbeat only.
+   - key: heartbeat.radar_scan_max_age_s
+@@ -642,6 +642,20 @@ tunables:
+     source: ruling
+     consumers: ["cobalt.jobs.watchdog (a one-shot past its cadence by this much = MISSED)"]
+ 
++  # --- nightly replay (S2-P4 STEP-4, plan R1-16) --------------------------
++  # The replay's ENFORCED deadline sits this far before com.cobalt.backup's
++  # schedule, so no replay write is still landing when the 21:40 snapshot
++  # starts. 300 s = the plan's 21:35 cutoff. Not measured yet: proposed, the
++  # first live runs' durations are the measurement.
++  - key: replay.backup_margin_s
++    value: 300
++    unit: duration
++    scope: global
++    dynamic: false
++    status: proposed
++    source: ruling
++    consumers: ["cobalt.replay.runner (deadline)", "cobalt.radar.notes.replay_window (L53 total demand)"]
++
+   # --- F16 hygiene rider (ADR-0008 D7, 2026-09-08) ----------------------
+   # The Mattermost timeout was a `timeout_s:` field on MattermostConfig,
+   # a number living in a config file that F16's sweep had already moved
+diff --git a/ops/README.md b/ops/README.md
+index a8dda17..4f6517b 100644
+--- a/ops/README.md
++++ b/ops/README.md
+@@ -17,7 +17,7 @@ is new on 2026-09-09.
+ This table is not the whole of `ops/`, and never was: `com.cobalt.backup`,
+ `cards-expire`, `daymode-propose`, `heartbeat` and `obsidian` have
+ plists and rows without a row here. **`configs/cobalt/jobs.yaml` is the
+-authoritative list** — fourteen labels, cross-checked against `ops/`
++authoritative list** — sixteen labels (2026-09-17, with `com.cobalt.replay`), cross-checked against `ops/`
+ by `uv run cobalt validate` on every run of the gate. Read this table as
+ prose about the ones with a story attached, not as an inventory.
+ 
+@@ -32,6 +32,7 @@ prose about the ones with a story attached, not as an inventory.
+ | `com.cobalt.herdr.plist` | `/opt/homebrew/bin/herdr server` (the terminal workspace every agent seat lives in) | RunAtLoad + KeepAlive on crash only | — | **yes (2026-09-08 19:21 — the handover)** |
+ | `com.cobalt.generated.plist` | `/Users/cobalt/.local/bin/uv run cobalt generated commit` (commits the files a job rewrote today) | daily 23:37 ET | F17 wrapper | new 2026-09-09 |
+ | `com.cobalt.seat-usage.plist` | `/Users/cobalt/.local/bin/uv run cobalt seat-usage run` (the hourly seat-usage report) | hourly 06:00-23:00 ET, every day | F17 wrapper (`cobalt seat-usage run`) | yes (2026-09-08) |
++| `com.cobalt.replay.plist` | `/Users/cobalt/.local/bin/uv run cobalt replay nightly` (movers, card misses + counterfactual R, DRC miss line — S2-P4) | Mon-Fri 21:10 ET, `RunAtLoad` false | F17 wrapper (`as_job`) | **not yet** — new one-shot: `launchctl bootstrap` once at the P4 deploy (plan-s2-p4 §6 D1 step 4); `cobalt jobs restarts` derives `bootstrap once`, no restart (R1-22/R2-6) |
+ 
+ The table above says which plists are *supposed* to be loaded.
+ `configs/cobalt/jobs.yaml` is the machine-readable version of the same
+diff --git a/ops/com.cobalt.replay.plist b/ops/com.cobalt.replay.plist
+new file mode 100644
+index 0000000..9c6b2fe
+--- /dev/null
++++ b/ops/com.cobalt.replay.plist
+@@ -0,0 +1,51 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0">
++<dict>
++    <key>Label</key>
++    <string>com.cobalt.replay</string>
++    <key>EnvironmentVariables</key>
++    <dict>
++        <key>PATH</key>
++        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
++        <!-- Production, exactly as the prefill plists: the miss line lands
++             in the real vault's DRC note, so the override is explicit. -->
++        <key>COBALT_VAULT_PATH</key>
++        <string>/Users/cobalt/Vault/Think</string>
++        <key>COBALT_ENV</key>
++        <string>production</string>
++    </dict>
++    <key>ProgramArguments</key>
++    <array>
++        <string>/Users/cobalt/.local/bin/uv</string>
++        <string>run</string>
++        <string>cobalt</string>
++        <string>replay</string>
++        <string>nightly</string>
++    </array>
++    <key>WorkingDirectory</key>
++    <string>/Users/cobalt/cobalt</string>
++    <key>AbandonProcessGroup</key>
++    <true/>
++    <!-- S2-P4 R3, moved to 21:10 by R17: Mon-Fri 21:10 local (system TZ
++         = ET) — after the market_reset pause, after the 20:30 archiver
++         (whose tonight's run it requires), and after that archiver's
++         declared demand window ends at 21:10, which keeps the two Finviz
++         windows disjoint. Its vault write therefore falls outside
++         market_reset and before the 21:40 backup captures it. -->
++    <key>StartCalendarInterval</key>
++    <array>
++        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>10</integer></dict>
++        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>10</integer></dict>
++        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>10</integer></dict>
++        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>10</integer></dict>
++        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>21</integer><key>Minute</key><integer>10</integer></dict>
++    </array>
++    <key>RunAtLoad</key>
++    <false/>
++    <key>StandardOutPath</key>
++    <string>/Users/cobalt/cobalt/logs/replay.log</string>
++    <key>StandardErrorPath</key>
++    <string>/Users/cobalt/cobalt/logs/replay.err</string>
++</dict>
++</plist>

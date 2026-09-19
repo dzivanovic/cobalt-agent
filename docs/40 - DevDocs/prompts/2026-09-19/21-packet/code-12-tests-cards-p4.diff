@@ -1,0 +1,1383 @@
+diff --git a/tests/cobalt/test_cards.py b/tests/cobalt/test_cards.py
+index 83cab48..107b571 100644
+--- a/tests/cobalt/test_cards.py
++++ b/tests/cobalt/test_cards.py
+@@ -713,7 +713,7 @@ class TestOneClickFill:
+         card_id = _make_card(aset, ticker="TESTFILL")
+         assert cards.state_of(card_id) is CardState.WATCH
+ 
+-        ids = cards.fill(card_id, actor=Actor.YOU, reason="filled at 10.10")
++        ids = cards.fill(card_id, actor=Actor.YOU, reason="filled at 10.10").transition_ids
+ 
+         assert len(ids) == 3, "one click, three transition rows"
+         assert cards.state_of(card_id) is CardState.FILLED
+@@ -736,7 +736,7 @@ class TestOneClickFill:
+         card_id = _make_card(aset, ticker="TESTFILL2")
+         cards.transition(card_id, CardState.ARMED, actor=Actor.YOU)
+ 
+-        ids = cards.fill(card_id, actor=Actor.YOU)
++        ids = cards.fill(card_id, actor=Actor.YOU).transition_ids
+ 
+         assert len(ids) == 2
+         assert [h["to_state"] for h in cards.history(card_id)[1:]] == [
+diff --git a/tests/cobalt/test_cards_picks.py b/tests/cobalt/test_cards_picks.py
+new file mode 100644
+index 0000000..091dd1f
+--- /dev/null
++++ b/tests/cobalt/test_cards_picks.py
+@@ -0,0 +1,485 @@
++"""S2-P4 STEP-3 — F3 picks: a card reaching FILLED records his pick against
++Cobalt's rank, inside the fill's own transaction, under SAVEPOINT pick.
++
++Charter F3: "DRC shows his pick and Cobalt's rank for every card". The row
++exists now; DRC rendering lands in S3.
++
++Offline tests cover the typed result, the rank/tie arithmetic, the report
++and exit code, and the transaction shape of `fill()` on fakes. The
++`requires_db` tests run in the suite's rolled-back `cobalt_dev` transaction
++and need 0008/0009 applied there (`cobalt db migrate`, hub).
++"""
++
++from __future__ import annotations
++
++import argparse
++import os
++from datetime import date, datetime, timezone
++from decimal import Decimal
++
++import pytest
++from pydantic import ValidationError
++
++from cobalt.aset.engine import compute_sizing
++from cobalt.aset.models import Direction, Grade, SheetMode, SizingInput
++from cobalt.aset.store import AsetStore
++from cobalt.cards import picks as picks_mod
++from cobalt.cards import store as store_mod
++from cobalt.cards.models import Actor, CardState, FillResult, Origin
++from cobalt.cards.picks import (
++    COHORT_STATES,
++    TIE_POLICY,
++    CohortEntry,
++    PickReportRow,
++    rank_in_cohort,
++    render_picks_report,
++)
++from cobalt.cards.store import CardStore
++
++requires_db = pytest.mark.skipif(
++    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
++    reason="requires_db: Postgres env settings not available",
++)
++
++RTH = datetime(2026, 9, 3, 14, 0, tzinfo=timezone.utc)   # the suite's frozen clock
++TEST_POOL = "p4_pick_test"
++
++
++# =====================================================================
++# Offline
++# =====================================================================
++
++
++def test_fill_result_is_typed_and_a_recorded_pick_carries_its_id():
++    ok = FillResult(transition_ids=[1, 2, 3], pick_recorded=True, pick_id=9)
++    assert ok.pick_error is None
++    gap = FillResult(transition_ids=[4], pick_recorded=False, pick_id=None,
++                     pick_error="UndefinedTable: relation picks does not exist")
++    assert not gap.pick_recorded
++    with pytest.raises(ValidationError):
++        FillResult(transition_ids=[1], pick_recorded=True, pick_id=None)
++    with pytest.raises(ValidationError):
++        FillResult(transition_ids=[1], pick_recorded=False, pick_id=None)   # no named error
++    with pytest.raises(ValidationError):
++        FillResult(transition_ids=[], pick_recorded=True, pick_id=1)
++
++
++def test_card_score_rank_ties_share_a_rank_and_the_cohort_includes_the_picked_card():
++    cohort = [
++        CohortEntry(card_id=11, card_score=80, state="ARMED"),
++        CohortEntry(card_id=12, card_score=70, state="WATCH"),
++        CohortEntry(card_id=13, card_score=70, state="FILLED"),   # the pick itself
++        CohortEntry(card_id=14, card_score=50, state="TRIGGERED"),
++    ]
++    assert rank_in_cohort(13, cohort) == 2
++    assert rank_in_cohort(12, cohort) == 2
++    assert rank_in_cohort(14, cohort) == 4
++    assert rank_in_cohort(11, cohort) == 1
++    with pytest.raises(picks_mod.PickError, match="not in its own cohort"):
++        rank_in_cohort(99, cohort)
++    assert "ties share" in TIE_POLICY
++    assert COHORT_STATES == ("WATCH", "ARMED", "TRIGGERED")
++
++
++def _report_row(**overrides):
++    base = dict(
++        transition_id=100, card_id=7, filled_at=RTH, ticker="AAA", state="FILLED", origin="manual",
++        pick_id=1, not_in_pool=False, pool_basis="pool", pool_rank=3, pool_size=50,
++        rank_metric="volume", rank_value=Decimal("1234567.000000"), card_score=None,
++        card_score_rank=None, focus_top4=None, score_basis="unavailable: S2-P2 not merged",
++    )
++    base.update(overrides)
++    return PickReportRow(**base)
++
++
++def test_picks_cli_lists_pick_and_rank_for_every_filled_card_and_exits_1_on_missing():
++    rows = [
++        _report_row(),
++        # CLOSED later: still a FILLED transition that day, still a pick.
++        _report_row(transition_id=101, card_id=8, ticker="BBB", state="CLOSED", pool_rank=None,
++                    not_in_pool=True, rank_metric=None, rank_value=None),
++        _report_row(transition_id=102, card_id=9, ticker="CCC", pick_id=None, not_in_pool=None,
++                    pool_basis=None, pool_rank=None, pool_size=None, rank_metric=None,
++                    rank_value=None, score_basis=None),
++    ]
++    text, missing = render_picks_report(rows, day=date(2026, 9, 3), cutoff=None)
++    assert missing == 1
++    lines = text.splitlines()
++    aaa = next(line for line in lines if " AAA " in line)
++    assert "#3/50" in aaa and "volume 1234567" in aaa and "unavailable: S2-P2 not merged" in aaa
++    bbb = next(line for line in lines if " BBB " in line)
++    assert "not in pool" in bbb and "CLOSED" in bbb
++    ccc = next(line for line in lines if " CCC " in line)
++    assert "MISSING" in ccc
++    assert "1 MISSING" in lines[-1]
++
++
++def test_picks_cli_cutoff_keeps_pre_deploy_missing_visible_without_counting_it():
++    """R1-7 / K6: only FILLED transitions at/after the P4 deploy cutoff count."""
++    cutoff = datetime(2026, 9, 3, 15, 0, tzinfo=timezone.utc)
++    rows = [
++        _report_row(transition_id=1, card_id=1, ticker="OLD", pick_id=None, filled_at=RTH,
++                    not_in_pool=None, pool_basis=None, score_basis=None, pool_rank=None,
++                    pool_size=None, rank_metric=None, rank_value=None),
++        _report_row(transition_id=2, card_id=2, ticker="NEW", filled_at=cutoff),
++    ]
++    text, missing = render_picks_report(rows, day=date(2026, 9, 3), cutoff=cutoff)
++    assert missing == 0
++    assert "MISSING (before cutoff)" in next(line for line in text.splitlines() if " OLD " in line)
++
++
++def test_picks_cli_command_exit_codes(monkeypatch, capsys):
++    from cobalt.cards import cli
++
++    class Store:
++        def __init__(self, rows):
++            self.rows = rows
++
++        def filled_with_picks(self, day):
++            self.day = day
++            return self.rows
++
++    missing = [_report_row(pick_id=None, not_in_pool=None, pool_basis=None, score_basis=None,
++                           pool_rank=None, pool_size=None, rank_metric=None, rank_value=None).model_dump()]
++    monkeypatch.setattr(cli, "_store", lambda: Store(missing))
++    with pytest.raises(SystemExit) as exc:
++        cli.cmd_picks(argparse.Namespace(date="2026-09-03", cutoff=None))
++    assert exc.value.code == 1
++
++    monkeypatch.setattr(cli, "_store", lambda: Store([]))
++    cli.cmd_picks(argparse.Namespace(date="2026-09-03", cutoff=None))
++    assert "no FILLED transitions on 2026-09-03" in capsys.readouterr().out
++
++    with pytest.raises(SystemExit, match="timezone"):
++        cli.cmd_picks(argparse.Namespace(date="2026-09-03", cutoff="2026-09-03T15:00:00"))
++
++
++class _FakeConn:
++    """Records statements; `fail_on` makes one statement raise."""
++
++    def __init__(self, fail_on: str | None = None, fail_commit: bool = False):
++        self.statements: list[str] = []
++        self.fail_on = fail_on
++        self.fail_commit = fail_commit
++        self.autocommit = True
++        self.committed = self.rolled_back = self.closed = False
++
++    def execute(self, sql, params=None):
++        self.statements.append(sql)
++        if self.fail_on and self.fail_on in sql:
++            raise RuntimeError(f"injected failure on {self.fail_on}")
++
++    def commit(self):
++        if self.fail_commit:
++            raise RuntimeError("injected commit failure")
++        self.committed = True
++
++    def rollback(self):
++        self.rolled_back = True
++
++    def close(self):
++        self.closed = True
++
++
++def _fake_store(monkeypatch, conn, *, state=CardState.TRIGGERED, origin=Origin.MANUAL, pick=None):
++    store = CardStore("cobalt_dev")
++    calls = []
++    monkeypatch.setattr(store, "_connect", lambda **_k: conn)
++    monkeypatch.setattr(store, "state_of", lambda _id: state)
++    monkeypatch.setattr(store, "origin_of", lambda _id: origin)
++
++    def transition(card_id, to_state, *, conn=None, **_kwargs):
++        calls.append((to_state, conn))
++        return 100 + len(calls)
++
++    monkeypatch.setattr(store, "transition", transition)
++    monkeypatch.setattr(picks_mod, "record_pick", pick or (lambda c, card_id, tid, now: 555))
++    return store, calls
++
++
++@pytest.mark.parametrize(
++    ("state", "origin", "hops"),
++    [
++        (CardState.WATCH, Origin.MANUAL, 3),       # the one-click shortcut
++        (CardState.ARMED, Origin.MANUAL, 2),
++        (CardState.TRIGGERED, Origin.MANUAL, 1),   # strict manual route
++        (CardState.TRIGGERED, Origin.RADAR, 1),    # strict radar route
++    ],
++)
++def test_every_fill_route_runs_in_one_transaction_with_the_pick_savepoint(monkeypatch, state, origin, hops):
++    conn = _FakeConn()
++    store, calls = _fake_store(monkeypatch, conn, state=state, origin=origin)
++    result = store.fill(7, actor=Actor.YOU, now=RTH)
++    assert len(calls) == hops and all(c is conn for _, c in calls), "every hop on the fill's conn"
++    assert result == FillResult(transition_ids=[101 + i for i in range(hops)], pick_recorded=True, pick_id=555)
++    assert conn.statements == ["SAVEPOINT pick", "RELEASE SAVEPOINT pick"]
++    assert conn.committed and conn.closed and not conn.rolled_back
++
++
++@pytest.mark.parametrize("state", [CardState.WATCH, CardState.TRIGGERED])
++def test_pick_insert_failure_rolls_back_savepoint_only_and_logs_card_and_error_class(monkeypatch, state):
++    from loguru import logger
++
++    conn = _FakeConn()
++
++    def failing_pick(c, card_id, tid, now):
++        c.execute("INSERT INTO picks -- injected")
++        raise KeyError("synthetic pick failure")
++
++    conn.fail_on = None
++    store, _ = _fake_store(monkeypatch, conn, state=state, pick=failing_pick)
++    messages: list[str] = []
++    sink = logger.add(lambda message: messages.append(str(message)), level="ERROR")
++    try:
++        result = store.fill(7, actor=Actor.YOU, now=RTH)
++    finally:
++        logger.remove(sink)
++    assert result.pick_recorded is False and result.pick_id is None
++    assert result.pick_error.startswith("KeyError")
++    assert conn.statements[-1] == "ROLLBACK TO SAVEPOINT pick"
++    assert conn.committed and not conn.rolled_back, "the fill commits"
++    assert any("card 7" in m and "KeyError" in m for m in messages)
++
++
++def test_a_fill_transaction_failure_never_reports_success(monkeypatch):
++    conn = _FakeConn(fail_commit=True)
++    store, _ = _fake_store(monkeypatch, conn)
++    with pytest.raises(RuntimeError, match="injected commit failure"):
++        store.fill(7, actor=Actor.YOU, now=RTH)
++    assert conn.rolled_back and conn.closed
++
++
++def test_a_savepoint_rollback_that_fails_fails_the_fill(monkeypatch):
++    conn = _FakeConn(fail_on="ROLLBACK TO SAVEPOINT")
++
++    def failing_pick(c, card_id, tid, now):
++        raise RuntimeError("pick broke")
++
++    store, _ = _fake_store(monkeypatch, conn, pick=failing_pick)
++    with pytest.raises(RuntimeError, match="ROLLBACK TO SAVEPOINT"):
++        store.fill(7, actor=Actor.YOU, now=RTH)
++    assert conn.rolled_back and not conn.committed
++
++
++def test_record_pick_reads_system_tables_qualified_on_the_passed_connection():
++    """R1-6: one USER connection, cross-schema reads qualified, no second
++    connection or role switch."""
++    import inspect
++
++    source = inspect.getsource(picks_mod)
++    assert "system.radar_membership" in source and "system.radar_pool" in source
++    assert "db.connect" not in source and "SET ROLE" not in source
++    assert "commit(" not in source
++
++
++# =====================================================================
++# cobalt_dev (hub): the fill -> pick path end to end
++# =====================================================================
++
++
++def _make_card(ticker: str) -> int:
++    result = compute_sizing(
++        SizingInput(ticker=ticker, grade=Grade.B, direction=Direction.LONG, sheet_mode=SheetMode.FULL,
++                    risk_dollars=Decimal("60"), entry=Decimal("10.00"), stop=Decimal("9.50"),
++                    last_price=Decimal("10.01"), price_source="p4-test"),
++        [Grade.A, Grade.B],
++        Decimal("10"),
++    )
++    return AsetStore("cobalt_dev").save(result)
++
++
++def _seed_pool(*, members, degraded=False, failed_stage=None):
++    """System rows through the SYSTEM-side store (the suite's shared session)."""
++    from cobalt.radar.pool import Action, Transition
++    from cobalt.radar.store import RadarStore
++
++    store = RadarStore("cobalt_dev")
++    transitions = [
++        Transition(ticker=ticker, action=Action.ADMIT, sources=["test"], source="test", rank=rank,
++                   rank_metric="volume", rank_value=value)
++        for ticker, rank, value in members
++    ]
++    earlier = datetime(2026, 9, 3, 13, 45, tzinfo=timezone.utc)
++    store.apply_membership(pool_key=TEST_POOL, transitions=transitions, scan_id=9910001, now=earlier, session="rth")
++    store.put_pool(
++        {"pool_key": TEST_POOL, "state": "scanning", "degraded": degraded,
++         "degraded_sources": ["list:test"] if degraded else [], "failed_stage": failed_stage,
++         "failed_detail": "synthetic" if failed_stage else None, "sources": [], "session": "rth",
++         "cap": 50, "members": len(members), "last_scan_id": 9910001, "last_scan_at": earlier,
++         "last_scan_ms": 1, "last_poll_at": None, "poll_failures": [], "budget": None, "updated_at": earlier},
++        now=earlier,
++    )
++
++
++def _pick_row(card_id):
++    with CardStore("cobalt_dev")._connect() as conn:
++        cur = conn.execute("SELECT * FROM picks WHERE card_id = %s", (card_id,))
++        rows = cur.fetchall()
++        columns = [d.name for d in cur.description]
++    return [dict(zip(columns, row)) for row in rows]
++
++
++@pytest.fixture
++def pick_pool(monkeypatch):
++    monkeypatch.setattr(picks_mod, "configured_pool_key", lambda: TEST_POOL)
++
++
++@requires_db
++@pytest.mark.integration
++@pytest.mark.usefixtures("dev_db_tx", "pick_pool")
++class TestFillWritesPick:
++    def test_fill_writes_exactly_one_pick_row_in_the_fill_transaction(self):
++        _seed_pool(members=[("P4PICK", 3, Decimal("1234567"))])
++        card_id = _make_card("P4PICK")
++        result = CardStore("cobalt_dev").fill(card_id, actor=Actor.YOU, now=RTH)
++        assert result.pick_recorded and len(result.transition_ids) == 3
++        (row,) = _pick_row(card_id)
++        assert row["id"] == result.pick_id
++        assert row["transition_id"] == result.transition_ids[-1]
++        assert row["picked_at"] == RTH and row["session"] == "rth" and row["origin"] == "manual"
++
++    def test_pick_row_snapshots_pool_rank_metric_and_value_at_pick_time(self):
++        _seed_pool(members=[("P4SNAP", 2, Decimal("987.5")), ("P4OTHER", 1, Decimal("2000"))])
++        card_id = _make_card("P4SNAP")
++        CardStore("cobalt_dev").fill(card_id, actor=Actor.YOU, now=RTH)
++        (row,) = _pick_row(card_id)
++        assert (row["not_in_pool"], row["pool_basis"], row["pool_rank"], row["pool_size"]) == (False, "pool", 2, 2)
++        assert (row["rank_metric"], row["rank_value"]) == ("volume", Decimal("987.500000"))
++        assert row["pool_member_id"] is not None and row["pool_scan_id"] == 9910001
++
++    def test_pick_for_ticker_not_in_pool_records_not_in_pool_and_fill_succeeds(self):
++        _seed_pool(members=[("P4OTHER", 1, Decimal("2000"))])
++        card_id = _make_card("P4NOPOOL")
++        result = CardStore("cobalt_dev").fill(card_id, actor=Actor.YOU, now=RTH)
++        assert result.pick_recorded
++        (row,) = _pick_row(card_id)
++        assert (row["not_in_pool"], row["pool_member_id"], row["pool_rank"], row["pool_basis"]) == (True, None, None, "pool")
++        assert row["pool_size"] == 1
++
++    @pytest.mark.parametrize("pool", ["missing", "degraded", "failed"])
++    def test_degraded_or_missing_pool_row_writes_named_nulls_never_refuses_fill(self, pool):
++        if pool == "degraded":
++            _seed_pool(members=[("P4DEG", 1, Decimal("5"))], degraded=True)
++        elif pool == "failed":
++            _seed_pool(members=[("P4DEG", 1, Decimal("5"))], failed_stage="bars")
++        card_id = _make_card("P4DEG")
++        result = CardStore("cobalt_dev").fill(card_id, actor=Actor.YOU, now=RTH)
++        assert result.pick_recorded
++        (row,) = _pick_row(card_id)
++        assert row["pool_rank"] is None and row["rank_value"] is None and row["not_in_pool"] is True
++        assert row["pool_basis"].startswith("unavailable: ")
++        assert {"missing": "pool row missing", "degraded": "degraded", "failed": "failed_stage=bars"}[pool] in row["pool_basis"]
++
++    def test_card_score_rank_unavailable_before_p2_named_in_score_basis(self):
++        card_id = _make_card("P4NOP2")
++        CardStore("cobalt_dev").fill(card_id, actor=Actor.YOU, now=RTH)
++        (row,) = _pick_row(card_id)
++        with CardStore("cobalt_dev")._connect() as conn:
++            p2 = conn.execute(
++                "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'user' "
++                "AND table_name = 'aset_sizings' AND column_name = 'card_score'"
++            ).fetchone()[0]
++        if p2:
++            pytest.skip("S2-P2's card_score column is present on cobalt_dev")
++        assert row["score_basis"] == "unavailable: S2-P2 not merged"
++        assert row["card_score"] is None and row["card_score_rank"] is None and row["focus_top4"] is None
++        assert row["score_inputs"]["reason"] == "unavailable: S2-P2 not merged"
++
++    def test_score_basis_flips_to_card_score_when_the_p2_columns_are_present(self):
++        """§7: when P2 merges after P4, `record_pick` picks the columns up
++        with no code change. Simulated inside the rolled-back transaction."""
++        cards = CardStore("cobalt_dev")
++        with cards._connect() as conn:
++            if conn.execute(
++                "SELECT 1 FROM pg_constraint WHERE conname = 'aset_sizings_radar_provenance'"
++            ).fetchone():
++                pytest.skip("real S2-P2 0007 applied: radar cards need provenance; "
++                            "the P2 suite owns this path once merged")
++            conn.execute("ALTER TABLE aset_sizings ADD COLUMN IF NOT EXISTS card_score INTEGER, "
++                         "ADD COLUMN IF NOT EXISTS conviction NUMERIC(8,6)")
++        picked, rival, tied = _make_card("P4SCORE"), _make_card("P4RIVAL"), _make_card("P4TIED")
++        with cards._connect() as conn:
++            conn.execute("UPDATE aset_sizings SET card_score = 70, conviction = 0.5 WHERE id = %s", (picked,))
++            conn.execute("UPDATE aset_sizings SET card_score = 90, conviction = 0.5, origin = 'radar' WHERE id = %s", (rival,))
++            conn.execute("UPDATE aset_sizings SET card_score = 70, conviction = 0.5, origin = 'radar' WHERE id = %s", (tied,))
++        cards.fill(picked, actor=Actor.YOU, now=RTH)
++        (row,) = _pick_row(picked)
++        assert (row["score_basis"], row["card_score"], row["card_score_rank"], row["focus_top4"]) == ("card_score", 70, 2, True)
++        cohort = row["score_inputs"]["cohort"]
++        assert {entry["card_id"] for entry in cohort} >= {picked, rival, tied}
++        assert row["score_inputs"]["tie_policy"] == TIE_POLICY
++
++    def test_no_taps_names_the_score_basis(self):
++        cards = CardStore("cobalt_dev")
++        with cards._connect() as conn:
++            conn.execute("ALTER TABLE aset_sizings ADD COLUMN IF NOT EXISTS card_score INTEGER, "
++                         "ADD COLUMN IF NOT EXISTS conviction NUMERIC(8,6)")
++        card_id = _make_card("P4NOTAP")
++        cards.fill(card_id, actor=Actor.YOU, now=RTH)
++        (row,) = _pick_row(card_id)
++        assert row["score_basis"] == "unavailable: no taps" and row["card_score_rank"] is None
++
++    def test_pick_insert_failure_rolls_back_savepoint_only_fill_commits_banner_and_log(self, monkeypatch):
++        real = picks_mod.record_pick
++
++        def broken(conn, card_id, transition_id, now):
++            real(conn, card_id, transition_id, now)            # the row is written...
++            conn.execute("SELECT 1/0")                           # ...then the savepoint fails
++        monkeypatch.setattr(picks_mod, "record_pick", broken)
++        card_id = _make_card("P4FAIL")
++        cards = CardStore("cobalt_dev")
++        from loguru import logger
++
++        messages: list[str] = []
++        sink = logger.add(lambda message: messages.append(str(message)), level="ERROR")
++        try:
++            result = cards.fill(card_id, actor=Actor.YOU, now=RTH)
++        finally:
++            logger.remove(sink)
++        assert not result.pick_recorded and "DivisionByZero" in result.pick_error
++        assert any(f"card {card_id}" in m and "DivisionByZero" in m for m in messages)
++        # The banner the sheet renders from this very result (both HTTP
++        # routes are covered in test_aset_web.TestPickNotRecordedBanner).
++        from cobalt.aset.web import _pick_banner
++
++        assert "pick not recorded" in _pick_banner(card_id, result)
++        assert cards.state_of(card_id) is CardState.FILLED
++        assert _pick_row(card_id) == [], "only the savepoint rolled back"
++
++    def test_picks_cli_reports_savepoint_gap_as_missing(self, monkeypatch):
++        monkeypatch.setattr(picks_mod, "record_pick", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("gap")))
++        card_id = _make_card("P4GAP")
++        cards = CardStore("cobalt_dev")
++        cards.fill(card_id, actor=Actor.YOU, now=RTH)
++        rows = [PickReportRow(**row) for row in cards.filled_with_picks(date(2026, 9, 3))]
++        mine = [row for row in rows if row.card_id == card_id]
++        assert len(mine) == 1 and mine[0].pick_id is None
++        text, missing = render_picks_report(rows, day=date(2026, 9, 3), cutoff=None)
++        assert missing >= 1 and "MISSING" in next(line for line in text.splitlines() if " P4GAP " in line)
++
++    def test_mark_filled_figures_persist_after_a_pick_failure(self, monkeypatch):
++        from cobalt.aset.engine import compute_fill_recompute
++
++        monkeypatch.setattr(picks_mod, "record_pick", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("gap")))
++        aset = AsetStore("cobalt_dev")
++        result = compute_sizing(
++            SizingInput(ticker="P4FIG", grade=Grade.B, direction=Direction.LONG, sheet_mode=SheetMode.FULL,
++                        risk_dollars=Decimal("60"), entry=Decimal("10.00"), stop=Decimal("9.50")),
++            [Grade.A, Grade.B], Decimal("10"),
++        )
++        card_id = aset.save(result)
++        filled = aset.mark_filled(card_id, compute_fill_recompute(result, Decimal("10.10"), Decimal("5")))
++        assert isinstance(filled, FillResult) and not filled.pick_recorded
++        with aset._connect() as conn:
++            actual = conn.execute("SELECT actual_fill FROM aset_sizings WHERE id = %s", (card_id,)).fetchone()[0]
++        assert actual == Decimal("10.1000")
++
++
++@requires_db
++def test_user_side_reads_qualified_radar_tables(real_connect):
++    """ADR-0008: the USER role reads system.radar_* qualified (read-only)."""
++    from cobalt.db import Side
++
++    conn = real_connect(side=Side.USER)
++    assert conn.execute("SELECT count(*) FROM system.radar_membership").fetchone()[0] >= 0
++    assert conn.execute("SELECT count(*) FROM system.radar_pool").fetchone()[0] >= 0
+diff --git a/tests/cobalt/test_aset_store.py b/tests/cobalt/test_aset_store.py
+index a1a163e..2dfdf84 100644
+--- a/tests/cobalt/test_aset_store.py
++++ b/tests/cobalt/test_aset_store.py
+@@ -39,6 +39,10 @@ def _delete_rows(store: AsetStore, ids: list[int]) -> None:
+     to, so test rows left behind become real pollution in the DRC's
+     counts (2026-09-03: 15 stray TEST/FORDATE rows did exactly that)."""
+     with store._connect() as conn:
++        # S2-P4: a fill writes a `picks` row whose card FK is NO ACTION on
++        # purpose (a pick is never deleted with its card silently).
++        if conn.execute("SELECT to_regclass('\"user\".picks')").fetchone()[0]:
++            conn.execute("DELETE FROM picks WHERE card_id = ANY(%s)", (ids,))
+         conn.execute("DELETE FROM aset_sizings WHERE id = ANY(%s)", (ids,))
+ 
+ 
+diff --git a/tests/cobalt/test_aset_web.py b/tests/cobalt/test_aset_web.py
+index 34270ca..897608b 100644
+--- a/tests/cobalt/test_aset_web.py
++++ b/tests/cobalt/test_aset_web.py
+@@ -515,6 +515,80 @@ class TestCardControls:
+         assert ">DISARM<" in html_out
+ 
+ 
++class TestPickNotRecordedBanner:
++    """S2-P4 R2 / Astra R1-5: both HTTP fill paths keep their success
++    banner and APPEND a red "pick not recorded" banner when the fill
++    committed without its pick."""
++
++    GAP = None
++
++    @staticmethod
++    def _result(recorded: bool):
++        from cobalt.cards.models import FillResult
++
++        if recorded:
++            return FillResult(transition_ids=[11, 12, 13], pick_recorded=True, pick_id=5)
++        return FillResult(transition_ids=[11, 12, 13], pick_recorded=False, pick_id=None,
++                          pick_error="UndefinedTable: relation \"picks\" does not exist")
++
++    def _fill_form(self):
++        return dict(BASE_SIZE_FORM, actual_fill="218.91",
++                    orig_timestamp="2026-08-31T09:58:00-04:00", card_row_id="4242")
++
++    def _stub_fill_route(self, monkeypatch, recorded):
++        from types import SimpleNamespace
++
++        result = self._result(recorded)
++
++        class Store:
++            def __init__(self, db_name=None):
++                pass
++
++            def ensure_schema(self):
++                pass
++
++            def mark_filled(self, row_id, fill):
++                return result
++
++        monkeypatch.setattr(web_module, "AsetStore", Store)
++        monkeypatch.setattr(web_module, "save_fill_update",
++                            lambda *a, **k: ("/dev/note.md", SimpleNamespace(action="appended")))
++        monkeypatch.setattr(web_module, "_open_cards_section", lambda: "")
++
++    @pytest.mark.parametrize("recorded", [True, False])
++    def test_fill_form_route(self, monkeypatch, recorded):
++        self._stub_fill_route(monkeypatch, recorded)
++        r = client.post("/fill", data=self._fill_form())
++        assert "aset_sizings id 4242 marked FILLED" in r.text, "the success banner stays"
++        assert ("pick not recorded" in r.text) is (not recorded)
++        if not recorded:
++            assert 'class="failed"' in r.text and "UndefinedTable" in r.text
++            assert "cobalt cards picks" in r.text
++
++    @pytest.mark.parametrize("recorded", [True, False])
++    def test_card_move_fill_route(self, monkeypatch, recorded):
++        result = self._result(recorded)
++
++        class Cards:
++            def ensure_schema(self):
++                pass
++
++            def state_of(self, card_id):
++                from cobalt.cards.models import CardState
++
++                return CardState.WATCH
++
++            def fill(self, card_id, **kwargs):
++                return result
++
++        monkeypatch.setattr(web_module, "CardStore", Cards)
++        monkeypatch.setattr(web_module, "_open_cards_section", lambda: "")
++        r = client.post("/card/7/move", data={"to": "FILLED"})
++        assert "card_transitions id(s) 11, 12, 13" in r.text
++        assert "inserted 2 missing transition row(s)" in r.text
++        assert ("pick not recorded" in r.text) is (not recorded)
++
++
+ class TestDayModeBannerStage:
+     """The stage LABEL and the MODE must come from one rule. Otherwise the
+     banner can read "stage 2 (decided)" while showing the stage-1 floor —
+diff --git a/tests/cobalt/test_p4_asset_type_evidence.py b/tests/cobalt/test_p4_asset_type_evidence.py
+new file mode 100644
+index 0000000..2092310
+--- /dev/null
++++ b/tests/cobalt/test_p4_asset_type_evidence.py
+@@ -0,0 +1,300 @@
++"""S2-P4 AT-0 — the fixture cutter's read-only `evidence` mode.
++
++WHY. Finviz fills the `Asset Type` column only for funds (a fund's asset
++class) and leaves it blank for an ordinary stock, so the radar config's
++`not_equity.values: [Exchange Traded Fund]` matches nothing. Before that
++rule is rebuilt, the hub wants evidence from REAL exports on whether
++"non-blank Asset Type" and "Industry = Exchange Traded Fund" pick out the
++same rows. The mode under test produces that evidence; it is a decision
++aid, not a rule, and it never writes a fixture.
++
++The cutter is a script, not an importable package, so it is loaded by
++path. Every assertion below is against committed real-shape exports
++(L45): `pool-metrics.real-shape.csv` and `movers-gainers.real-shape.csv`
++are both real 151-column screener exports, and since AT-1 2.5 re-cut the
++movers fixtures at the radar's real column set BOTH carry `Asset Type`
++and `Industry`. The movers cut is what gives tables A and B their first
++real rows — 29 fund rows in 60 — so the report's row rendering is no
++longer proved by hand-built report objects alone.
++
++No committed export lacks the two columns any more, so the "counted and
++listed, never silently skipped" path is exercised by `narrowed_export`:
++the real movers fixture with those two columns DELETED. Every remaining
++cell is the real file's. No row is invented anywhere in this module.
++"""
++
++from __future__ import annotations
++
++import csv
++import importlib.util
++import sys
++from pathlib import Path
++
++import pytest
++
++ROOT = Path(__file__).resolve().parents[2]
++FIX = ROOT / "tests" / "fixtures"
++CUTTER = FIX / "replay" / "_cut_p4_fixtures.py"
++POOL_METRICS = FIX / "radar" / "pool-metrics.real-shape.csv"
++MOVERS = FIX / "replay" / "movers-gainers.real-shape.csv"
++
++#: Data-row counts of the two committed fixtures, as cut.
++POOL_METRICS_ROWS = 20
++MOVERS_ROWS = 60
++#: Rows of the movers cut whose `Asset Type` is non-blank, and the two
++#: values they carry. Real content of the committed fixture.
++MOVERS_FUND_ROWS = 29
++MOVERS_ASSET_TYPES = [("CryptoCurrency", 5), ("Equities (Stocks)", 24)]
++#: The narrowed copy's name, asserted on the report's own line.
++NARROWED = "movers-gainers.no-asset-type.csv"
++
++
++def _load_cutter():
++    """The canonical load-a-script-by-path recipe, `sys.modules` entry
++    included: the cutter is `from __future__ import annotations`, so
++    Pydantic resolves its model annotations through the module's entry
++    and fails to build them if it is absent."""
++    spec = importlib.util.spec_from_file_location("_cut_p4_fixtures", CUTTER)
++    module = importlib.util.module_from_spec(spec)
++    sys.modules[spec.name] = module
++    spec.loader.exec_module(module)
++    return module
++
++
++cutter = _load_cutter()
++
++
++def _pool_metrics_tickers() -> list[str]:
++    with POOL_METRICS.open(newline="", encoding="utf-8") as handle:
++        return [row["Ticker"] for row in csv.DictReader(handle)]
++
++
++def _movers_tickers() -> list[str]:
++    with MOVERS.open(newline="", encoding="utf-8") as handle:
++        return [row["Ticker"] for row in csv.DictReader(handle)]
++
++
++@pytest.fixture
++def narrowed_export(tmp_path) -> Path:
++    """The real movers export with `Asset Type` and `Industry` DELETED.
++
++    A cache file written by an older column set is exactly this shape,
++    and it is the only way left to exercise the "file without the
++    columns" path from a real artifact: every committed export now has
++    both columns. Two columns removed, every other cell untouched."""
++    with MOVERS.open(newline="", encoding="utf-8") as handle:
++        rows = list(csv.reader(handle))
++    drop = sorted(
++        (rows[0].index(cutter.ASSET_TYPE_COL), rows[0].index(cutter.INDUSTRY_COL)), reverse=True
++    )
++    for row in rows:
++        for index in drop:
++            del row[index]
++    path = tmp_path / NARROWED
++    with path.open("w", newline="", encoding="utf-8") as handle:
++        csv.writer(handle).writerows(rows)
++    return path
++
++
++# ---------------------------------------------------------------------
++# the no-argument path is untouched
++# ---------------------------------------------------------------------
++
++
++def test_no_argument_path_untouched():
++    """`main()` and every cut it calls survive beside the new mode."""
++    for name in (
++        "main",
++        "evidence_main",
++        "cut_cards_day",
++        "cut_bars_day",
++        "cut_membership_day",
++        "cut_pool_metrics",
++        "cut_movers",
++    ):
++        assert callable(getattr(cutter, name)), name
++
++
++# ---------------------------------------------------------------------
++# 1. read counts
++# ---------------------------------------------------------------------
++
++
++def test_rows_read_counts_both_kinds_of_file(narrowed_export):
++    report = cutter.collect_evidence([POOL_METRICS, narrowed_export])
++    assert report.files_read == 2
++    assert report.rows_with_columns == POOL_METRICS_ROWS
++    assert report.rows_without_columns == MOVERS_ROWS
++
++
++def test_file_without_the_columns_is_listed_never_skipped(narrowed_export):
++    report = cutter.collect_evidence([POOL_METRICS, narrowed_export])
++    assert report.files_without_columns == [NARROWED]
++
++
++def test_both_committed_exports_now_carry_the_two_columns():
++    """AT-1 2.5: the movers fixtures were re-cut at the radar's real
++    column set, so no committed export is missing either column."""
++    report = cutter.collect_evidence([POOL_METRICS, MOVERS])
++    assert report.files_without_columns == []
++    assert report.rows_with_columns == POOL_METRICS_ROWS + MOVERS_ROWS
++    assert report.rows_without_columns == 0
++
++
++def test_input_dirs_are_recorded_as_given():
++    report = cutter.collect_evidence([POOL_METRICS], input_dirs=["/somewhere/cache"])
++    assert report.input_dirs == ["/somewhere/cache"]
++
++
++# ---------------------------------------------------------------------
++# 2-5. the radar fixture as it is: no fund row anywhere
++# ---------------------------------------------------------------------
++
++
++def test_radar_fixture_has_no_fund_rows():
++    """Every `Asset Type` in the real export is blank and no row's
++    `Industry` is `Exchange Traded Fund` — so A, B and C are all empty
++    and both distinct counts are zero. This is the fixture's real
++    content, asserted, not a stand-in for an invented one."""
++    report = cutter.collect_evidence([POOL_METRICS])
++    assert report.table_a == []
++    assert report.table_b == []
++    assert report.table_c_non_blank_not_fund == []
++    assert report.table_c_fund_blank_type == []
++    assert report.distinct_fund_tickers == 0
++    assert report.distinct_asset_types == 0
++    assert report.table_c_total == 0
++
++
++def test_render_prints_none_for_every_empty_table(tmp_path):
++    """One real row, header unchanged, copied verbatim out of the real
++    export — table C is empty and renders as `(none)`."""
++    lines = POOL_METRICS.read_text(encoding="utf-8").splitlines(keepends=True)
++    one_row = tmp_path / "one-real-row.csv"
++    one_row.write_text("".join(lines[:2]), encoding="utf-8")
++
++    report = cutter.collect_evidence([one_row])
++    assert report.rows_with_columns == 1
++    assert report.table_c_total == 0
++
++    text = cutter.render_evidence(report)
++    # An empty table is the whole line `(none)`; the §1 prose markers are
++    # never bare, so counting whole lines counts tables exactly.
++    assert [line for line in text.splitlines() if line == "(none)"] == ["(none)"] * 4
++    assert "- total: 0" in text
++
++
++def test_render_shapes_a_non_empty_table():
++    """The renderer only — NOT a parser tested against an invented
++    export (L45). No committed real-shape export carries a fund row, so
++    the rows the hub's real-cache run will actually print would
++    otherwise render untested; the report objects here are built
++    directly, and the values are labels, not data.
++
++    Written after the implementation, so it has no red line of its own.
++    """
++    report = cutter.EvidenceReport(
++        files_read=1,
++        rows_with_columns=1,
++        table_a=[
++            cutter.PairCount(asset_type="Equity", industry="Shell Companies", rows=3)
++        ],
++        table_b=[cutter.AssetTypeCount(asset_type="<blank>", rows=2)],
++        table_c_non_blank_not_fund=[
++            cutter.DisagreementRow(
++                file="screen.csv",
++                ticker="TICK",
++                asset_type="Equity",
++                industry="Shell Companies",
++            )
++        ],
++    )
++    lines = cutter.render_evidence(report).splitlines()
++
++    assert "| Asset Type | Industry | rows |" in lines
++    assert "| Equity | Shell Companies | 3 |" in lines
++    assert "| <blank> | 2 |" in lines
++    assert "| screen.csv | TICK | Equity | Shell Companies |" in lines
++    assert "- (i) non-blank `Asset Type`, `Industry` != Exchange Traded Fund: 1" in lines
++    assert "- total: 1" in lines
++    # only table C (ii) is empty
++    assert [line for line in lines if line == "(none)"] == ["(none)"]
++
++
++def test_render_reports_the_file_without_the_columns_by_name(narrowed_export):
++    report = cutter.collect_evidence([POOL_METRICS, narrowed_export])
++    text = cutter.render_evidence(report)
++    assert NARROWED in text
++    assert f"rows read (files without the columns): {MOVERS_ROWS}" in text
++
++
++# ---------------------------------------------------------------------
++# the movers fixture as a real input (AT-1 2.5, closing AT-0 ESCALATE 1)
++# ---------------------------------------------------------------------
++
++
++def test_the_movers_fixture_gives_tables_a_and_b_real_rows():
++    """29 of the movers cut's 60 rows carry a non-blank `Asset Type`, in
++    two values. Both are ALSO `Industry = Exchange Traded Fund`, so the
++    two fund signals agree on every row of this cut and table C is empty
++    — the real disagreement rows the hub counted over the whole radar
++    cache are not in these 60 (see ESCALATE)."""
++    report = cutter.collect_evidence([MOVERS])
++    assert report.rows_with_columns == MOVERS_ROWS
++    assert [(row.asset_type, row.rows) for row in report.table_b] == MOVERS_ASSET_TYPES
++    assert [(row.asset_type, row.industry, row.rows) for row in report.table_a] == [
++        (asset_type, cutter.FUND_INDUSTRY, rows) for asset_type, rows in MOVERS_ASSET_TYPES
++    ]
++    assert report.distinct_fund_tickers == MOVERS_FUND_ROWS
++    assert report.distinct_asset_types == len(MOVERS_ASSET_TYPES)
++    assert report.table_c_total == 0
++
++
++def test_a_real_export_renders_non_empty_a_and_b_tables():
++    """The row rendering, exercised from a real artifact rather than from
++    report objects built in the test (AT-0 ESCALATE 1)."""
++    text = cutter.render_evidence(cutter.collect_evidence([MOVERS]))
++    assert f"| Equities (Stocks) | {cutter.FUND_INDUSTRY} | 24 |" in text.splitlines()
++    assert "| CryptoCurrency | 5 |" in text.splitlines()
++    # only table C's two halves are empty
++    assert [line for line in text.splitlines() if line == "(none)"] == ["(none)"] * 2
++    for ticker in _movers_tickers():
++        assert ticker not in cutter.summarize_evidence(cutter.collect_evidence([MOVERS]))
++
++
++# ---------------------------------------------------------------------
++# stdout carries counts only — never a ticker (L32)
++# ---------------------------------------------------------------------
++
++
++def test_stdout_summary_carries_counts_and_no_ticker(narrowed_export):
++    report = cutter.collect_evidence([POOL_METRICS, narrowed_export])
++    summary = cutter.summarize_evidence(report)
++    assert "files: 2" in summary
++    assert f"rows: {POOL_METRICS_ROWS}" in summary
++    assert "distinct fund tickers: 0" in summary
++    assert "distinct Asset Type values: 0" in summary
++    assert "table C total: 0" in summary
++    for ticker in _pool_metrics_tickers():
++        assert ticker not in summary
++
++
++# ---------------------------------------------------------------------
++# fail loud (L1)
++# ---------------------------------------------------------------------
++
++
++def test_unreadable_file_raises_with_its_name(tmp_path):
++    broken = tmp_path / "not-utf8.csv"
++    broken.write_bytes(b'"Ticker","Industry","Asset Type"\n"A\xff","B",""\n')
++    with pytest.raises(cutter.EvidenceError) as excinfo:
++        cutter.collect_evidence([broken])
++    assert "not-utf8.csv" in str(excinfo.value)
++
++
++def test_headerless_file_raises_with_its_name(tmp_path):
++    empty = tmp_path / "empty-cache-write.csv"
++    empty.write_text("", encoding="utf-8")
++    with pytest.raises(cutter.EvidenceError) as excinfo:
++        cutter.collect_evidence([empty])
++    assert "empty-cache-write.csv" in str(excinfo.value)
+diff --git a/tests/cobalt/test_p4_migrations.py b/tests/cobalt/test_p4_migrations.py
+new file mode 100644
+index 0000000..cb5499c
+--- /dev/null
++++ b/tests/cobalt/test_p4_migrations.py
+@@ -0,0 +1,458 @@
++"""S2-P4 STEP-1 — migrations 0008 (system) and 0009 (user).
++
++Offline tests read the registry, the placement map and the SQL text.
++`requires_db` tests run on `cobalt_dev` through the migration connection,
++inside one transaction that is always rolled back (DDL is transactional),
++and switch roles with the ONE `db.apply_side` so the grants that bite are
++the side roles', not the superuser's.
++
++Both merge orders (plan STEP-1, Astra R1-1/R1-3): P2's 0006/0007 are not
++in this tree (P2 not merged — hub report STEP-0). The P2-before-P4 order is
++exercised by adding P2's `aset_sizings.card_score`/`conviction` columns
++before 0008/0009; the P4-before-P2 order by adding them after. The lint
++test proves 0008/0009 name nothing of P2's, which is the property that
++makes either order safe. The hub reruns these on the rebased tree.
++"""
++
++from __future__ import annotations
++
++import os
++import re
++
++import psycopg
++import pytest
++
++from cobalt import db, env, tenant
++from cobalt.db import Side
++from cobalt.db_migrations import FORWARD, MIGRATIONS_DIR, REVERSE
++from cobalt.db_migrations.cli import (
++    DIGEST_EXCLUDED_COLUMNS,
++    _apply,
++    _migration_version,
++    _probe,
++    _rollback_paths,
++)
++from cobalt.db_migrations.placement import (
++    CREATED_TABLES,
++    DECLARED_TABLES,
++    PLACEMENT,
++    side_of,
++)
++
++requires_db = pytest.mark.skipif(
++    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
++    reason="requires_db: Postgres env settings not available",
++)
++
++FWD_0008 = MIGRATIONS_DIR / "0008_radar_value_movers.sql"
++FWD_0009 = MIGRATIONS_DIR / "0009_picks_missed.sql"
++REV_0008 = MIGRATIONS_DIR / "0008_radar_value_movers.rollback.sql"
++REV_0009 = MIGRATIONS_DIR / "0009_picks_missed.rollback.sql"
++
++#: Names that belong to S2-P2's 0006/0007 seam. P4's SQL must name none.
++P2_SEAM_NAMES = (
++    "radar_score", "radar_score_run", "radar_board_v", "desk_regime",
++    "desk_packet", "desk_grade", "card_dots", "card_dot_taps",
++    "radar_cards_v", "shadow_agreement_v", "radar_score_receipt",
++)
++
++
++def _sql(path) -> str:
++    """The statements only — comments stripped, so prose cannot satisfy a test."""
++    return "\n".join(
++        line.split("--", 1)[0] for line in path.read_text().splitlines()
++    )
++
++
++# ---------------------------------------------------------------------
++# Registry and placement
++# ---------------------------------------------------------------------
++
++
++def test_0008_0009_registered_forward_in_version_order_with_named_rollbacks():
++    assert FWD_0008 in FORWARD and FWD_0009 in FORWARD
++    assert REV_0008 in REVERSE and REV_0009 in REVERSE
++    for path in (FWD_0008, FWD_0009, REV_0008, REV_0009):
++        assert path.exists(), path
++    versions = [_migration_version(p) for p in FORWARD]
++    assert versions == sorted(versions), "FORWARD must stay version-ordered"
++    reverse_versions = [_migration_version(p) for p in REVERSE]
++    assert reverse_versions == sorted(reverse_versions, reverse=True)
++
++
++def test_rollback_down_to_0007_reverses_0009_then_0008_only():
++    """R1-23: the explicit boundary is `--down-to 0007`, numerically right
++    whether or not P2's 0007 exists yet — it never reaches 0006/0007."""
++    assert [p.name for p in _rollback_paths("0007")] == [
++        "0009_picks_missed.rollback.sql",
++        "0008_radar_value_movers.rollback.sql",
++    ]
++    assert [p.name for p in _rollback_paths("0008")] == [
++        "0009_picks_missed.rollback.sql"
++    ]
++
++
++def test_placement_movers_daily_system_picks_and_missed_user():
++    assert CREATED_TABLES["movers_daily"] is Side.SYSTEM
++    assert CREATED_TABLES["picks"] is Side.USER
++    assert CREATED_TABLES["missed"] is Side.USER
++    assert "missed" not in DECLARED_TABLES, "missed is built now; it leaves DECLARED"
++    assert side_of("picks") is Side.USER
++    # Every table on exactly one side: the map is a dict, so a name twice
++    # across its parts would silently collapse. Count the parts instead.
++    from cobalt.db_migrations import placement as p
++
++    parts = [
++        p.MOVED_TABLES,
++        p.SEEDED_TABLES,
++        p.MODULE_TABLES,
++        p.CREATED_TABLES,
++        p.CREATED_VIEWS,
++        p.DECLARED_TABLES,
++    ]
++    names = [name for part in parts for name in part]
++    assert len(names) == len(set(names)) == len(PLACEMENT)
++
++
++def test_0008_creates_only_system_objects_and_0009_only_user_tables():
++    s8, s9 = _sql(FWD_0008), _sql(FWD_0009)
++    assert "CREATE TABLE IF NOT EXISTS system.movers_daily" in s8
++    assert "ALTER TABLE system.radar_membership" in s8
++    assert '"user".' not in s8, "0008 is system-side only"
++    assert 'CREATE TABLE IF NOT EXISTS "user".picks' in s9
++    assert 'CREATE TABLE IF NOT EXISTS "user".missed' in s9
++    assert "CREATE TABLE IF NOT EXISTS system." not in s9
++
++
++#: Schedule literals that have MOVED. `21:05` was `com.cobalt.replay`'s
++#: `at` until 2026-09-17 R17 put it at 21:10 (`configs/cobalt/jobs.yaml`);
++#: a migration that still names it sends its reader to an occurrence that
++#: does not exist.
++RETIRED_SCHEDULE_LITERALS = ("21:05",)
++
++
++def test_p4_migration_prose_names_no_retired_schedule_literal():
++    """Read WITH the comments (`_sql` strips them): the prose is the only
++    place a stale schedule can hide in a migration, and it is exactly what
++    a reader trusts. Safe to correct — the runner's digests are of table
++    DATA (`cli.DIGEST_EXCLUDED_COLUMNS`), never of the file's bytes, so a
++    comment edit re-applies and re-proves unchanged.
++    """
++    for path in sorted(MIGRATIONS_DIR.glob("000[89]*.sql")):
++        text = path.read_text()
++        stale = [lit for lit in RETIRED_SCHEDULE_LITERALS if lit in text]
++        assert not stale, (
++            f"{path.name} names the retired schedule literal(s) {stale} — "
++            "com.cobalt.replay runs at 21:10 (2026-09-17 R17)"
++        )
++
++
++def test_0008_0009_name_nothing_of_the_p2_seam_so_either_merge_order_applies():
++    for path in (FWD_0008, FWD_0009, REV_0008, REV_0009):
++        text = _sql(path)
++        found = [n for n in P2_SEAM_NAMES if re.search(rf"\b{n}\b", text)]
++        assert not found, f"{path.name} depends on P2 names {found}"
++
++
++def test_0009_user_tables_carry_user_id_not_null_fk_and_guc_default():
++    s9 = _sql(FWD_0009)
++    for table in ("picks", "missed"):
++        body = re.search(
++            rf'CREATE TABLE IF NOT EXISTS "user"\.{table} \((.*?)\n\);', s9, re.S
++        ).group(1)
++        assert re.search(
++            r"user_id\s+INTEGER NOT NULL\s+DEFAULT \(current_setting\('cobalt\.trader_id'\)::int\)"
++            r'\s+REFERENCES "user"\.traders\(id\)',
++            body,
++        ), table
++        assert not re.search(r"user_id[^,]*DEFAULT\s+\d", body), (
++            f"{table}: a literal default invents an owner"
++        )
++        assert f'ALTER TABLE "user".{table} OWNER TO cobalt_user' in s9
++
++
++def test_0008_owner_and_grants_for_movers_daily():
++    """R1-2: SYSTEM owns it; USER reads it and may REFERENCE it (the FK
++    from `"user".missed.mover_id`), plus the identity sequence grants."""
++    s8 = _sql(FWD_0008)
++    assert "ALTER TABLE system.movers_daily OWNER TO cobalt_system" in s8
++    assert "GRANT SELECT, REFERENCES ON system.movers_daily TO cobalt_user" in s8
++    assert "GRANT USAGE, SELECT ON SEQUENCE system.movers_daily_id_seq TO cobalt_system" in s8
++    assert "GRANT SELECT ON SEQUENCE system.movers_daily_id_seq TO cobalt_user" in s8
++
++
++def test_0008_rank_columns_are_constrained_and_digest_excluded():
++    s8 = _sql(FWD_0008)
++    assert "ADD COLUMN IF NOT EXISTS rank_metric TEXT CHECK (rank_metric IN ('volume','rvol'))" in s8
++    assert "ADD COLUMN IF NOT EXISTS rank_value  NUMERIC(20,6)" in s8
++    assert {"rank_metric", "rank_value"} <= set(DIGEST_EXCLUDED_COLUMNS)
++
++
++def test_missed_carries_an_immutable_receipt_and_current_versioning():
++    """R1-8 (receipt, never hash-only; no cobalt_jobs id) and R2-1/R3-1
++    (run_seq, is_current, superseded_by; partial unique on is_current)."""
++    s9 = _sql(FWD_0009)
++    missed = re.search(r'CREATE TABLE IF NOT EXISTS "user"\.missed \((.*?)\n\);', s9, re.S).group(1)
++    for column in (
++        "receipt              JSONB NOT NULL",
++        "inputs_sha256        TEXT NOT NULL",
++        "replay_run_id        TEXT NOT NULL",
++        "run_seq              INTEGER NOT NULL DEFAULT 1",
++        "is_current           BOOLEAN NOT NULL DEFAULT true",
++        'superseded_by        BIGINT REFERENCES "user".missed(id)',
++        "retired_by_run_id    TEXT",
++    ):
++        assert column in missed, column
++    assert "replay_job_id" not in missed
++    index = re.search(
++        r'CREATE UNIQUE INDEX IF NOT EXISTS missed_one_current_per_subject\s+ON "user"\.missed(.*?);',
++        s9,
++        re.S,
++    ).group(1)
++    assert "WHERE is_current" in index
++    # R1-21: formations key on their trigger time and member.
++    assert "formation_at" in index and "pool_member_id" in index
++    assert "missed_one_per_subject " not in s9
++
++
++def test_picks_record_the_replay_inputs_for_pool_and_score_rank():
++    """R1-6 / L57: the rank cohort is stored, not only the rank."""
++    s9 = _sql(FWD_0009)
++    picks = re.search(r'CREATE TABLE IF NOT EXISTS "user"\.picks \((.*?)\n\);', s9, re.S).group(1)
++    for column in (
++        "card_id              BIGINT NOT NULL UNIQUE REFERENCES \"user\".aset_sizings(id)",
++        "pool_member_id       BIGINT REFERENCES system.radar_membership(id)",
++        "not_in_pool          BOOLEAN NOT NULL",
++        "pool_basis           TEXT NOT NULL",
++        "score_basis          TEXT NOT NULL",
++        "score_inputs         JSONB NOT NULL",
++    ):
++        assert column in picks, column
++    assert "CHECK (not_in_pool = (pool_member_id IS NULL))" in picks
++
++
++def test_rollbacks_drop_only_their_own_objects():
++    r8, r9 = _sql(REV_0008), _sql(REV_0009)
++    assert set(re.findall(r"DROP TABLE IF EXISTS ([\w\".]+)", r9)) == {'"user".missed', '"user".picks'}
++    assert set(re.findall(r"DROP TABLE IF EXISTS ([\w\".]+)", r8)) == {"system.movers_daily"}
++    assert set(re.findall(r"DROP COLUMN IF EXISTS (\w+)", r8)) == {"rank_metric", "rank_value"}
++    assert "DELETE" not in r8 + r9
++
++
++# ---------------------------------------------------------------------
++# Database proofs (hub-run on cobalt_dev)
++# ---------------------------------------------------------------------
++
++
++def _migration_conn():
++    conn = db.connect_migration(env.DEV_DB_NAME)
++    conn.autocommit = False
++    return conn
++
++
++def _named(paths, prefix: str):
++    return [p for p in paths if p.name.startswith(prefix)]
++
++
++def _content(probe: dict) -> dict:
++    """A probe's CONTENT facts — `schema`, `rows`, `digest` — without its
++    wall time.
++
++    `_probe` also returns `seconds`, and that number is a deliverable of
++    the deploy plan, not of this test: it is a fresh stopwatch reading on
++    every call, so comparing two whole probe dicts compares two clocks and
++    fails on a difference of microseconds. This test asserts that the
++    CONTENT never changes, so `seconds` is the only key dropped — every
++    other key, including one added later, is still compared.
++    """
++    return {k: v for k, v in probe.items() if k != "seconds"}
++
++
++def _simulate_p2_card_columns(conn) -> None:
++    """The two P2 columns P4 reads (`record_pick`), nothing else of P2."""
++    conn.execute(
++        'ALTER TABLE "user".aset_sizings ADD COLUMN IF NOT EXISTS card_score INTEGER, '
++        "ADD COLUMN IF NOT EXISTS conviction NUMERIC(8,6)"
++    )
++
++
++def _seed_membership(conn, *, ticker: str, scan_id: int, value) -> int:
++    conn.execute(
++        "INSERT INTO system.radar_pool (pool_key,state,session,members) "
++        "VALUES ('p4_proof','scanning','rth',1) ON CONFLICT (pool_key) DO NOTHING"
++    )
++    return conn.execute(
++        "INSERT INTO system.radar_membership (pool_key,ticker,trade_date,first_seen_at,"
++        "entered_at,source,sources,rank_at_entry,last_rank,session,opened_scan_id,last_scan_id,"
++        "rank_metric,rank_value) VALUES ('p4_proof',%s,'2040-01-03','2040-01-03 15:00+00',"
++        "'2040-01-03 15:00+00','test','[\"test\"]'::jsonb,1,1,'rth',%s,%s,'volume',%s) RETURNING id",
++        (ticker, scan_id, scan_id, value),
++    ).fetchone()[0]
++
++
++@requires_db
++@pytest.mark.parametrize("order", ["p2_before_p4", "p4_before_p2"])
++def test_0008_0009_apply_twice_reverse_and_reapply_on_populated_membership(order):
++    """R1-1: first-apply, second-apply, reverse/reapply on a populated
++    `radar_membership` carrying non-null post-deploy values; the digest
++    (which excludes the two new columns) never changes."""
++    conn = _migration_conn()
++    try:
++        base = [p for p in FORWARD if _migration_version(p) < 8]
++        _apply(conn, base)
++        if order == "p2_before_p4":
++            _simulate_p2_card_columns(conn)
++        _apply(conn, [FWD_0008, FWD_0009])
++        _seed_membership(conn, ticker="P4A", scan_id=9800001, value="1234567.5")
++        before = _content(_probe(conn, "radar_membership"))
++        # Both facts the equalities below rest on are really in the dict,
++        # so an unchanged probe can never be asserted vacuously.
++        assert before["rows"] and before["rows"] > 0 and before["digest"]
++
++        _apply(conn, [FWD_0008, FWD_0009])               # second apply: idempotent
++        assert _content(_probe(conn, "radar_membership")) == before
++        if order == "p4_before_p2":
++            _simulate_p2_card_columns(conn)
++            _apply(conn, [FWD_0008, FWD_0009])
++            assert _content(_probe(conn, "radar_membership")) == before
++
++        _apply(conn, [REV_0009, REV_0008])
++        assert _probe(conn, "radar_membership")["digest"] == before["digest"]
++        assert conn.execute("SELECT to_regclass('system.movers_daily')").fetchone()[0] is None
++        assert conn.execute("SELECT to_regclass('\"user\".picks')").fetchone()[0] is None
++        _apply(conn, [REV_0009, REV_0008])               # repeated reverse is a no-op
++        _apply(conn, [FWD_0008, FWD_0009])
++        assert _probe(conn, "radar_membership")["digest"] == before["digest"]
++    finally:
++        conn.rollback()
++        conn.close()
++
++
++@requires_db
++def test_side_roles_ownership_identity_guc_and_wrong_side_through_real_roles():
++    """R1-2 through the side roles themselves (`db.apply_side`)."""
++    conn = _migration_conn()
++    try:
++        _apply(conn, FORWARD)
++        owners = dict(conn.execute(
++            "SELECT n.nspname || '.' || c.relname, pg_get_userbyid(c.relowner) FROM pg_class c "
++            "JOIN pg_namespace n ON n.oid = c.relnamespace "
++            "WHERE (n.nspname, c.relname) IN (('system','movers_daily'),('user','picks'),('user','missed'))"
++        ).fetchall())
++        assert owners == {
++            "system.movers_daily": "cobalt_system",
++            "user.picks": "cobalt_user",
++            "user.missed": "cobalt_user",
++        }
++
++        db.apply_side(conn, Side.SYSTEM)
++        mover_id = conn.execute(
++            "INSERT INTO system.movers_daily (trade_date,side,rank,ticker,change_pct,"
++            "export_sha256,fetched_at,replay_run_id) VALUES ('2040-01-03','gainers',1,'P4M',"
++            "12.5,'sha','2040-01-03 21:05+00','run-1') RETURNING id"
++        ).fetchone()[0]
++        conn.execute("SAVEPOINT wrong_side")
++        with pytest.raises(psycopg.errors.InsufficientPrivilege):
++            conn.execute('SELECT count(*) FROM "user".missed')
++        conn.execute("ROLLBACK TO SAVEPOINT wrong_side")
++
++        db.apply_side(conn, Side.USER)
++        assert conn.execute("SELECT count(*) FROM system.movers_daily").fetchone()[0] >= 1
++        missed_id = conn.execute(
++            "INSERT INTO missed (trade_date,kind,ticker,mover_id,excluded_by,gate_detail,"
++            "inputs_sha256,receipt,replay_run_id) VALUES ('2040-01-03','mover','P4M',%s,"
++            "'not_in_any_source','{}'::jsonb,'sha','{}'::jsonb,'run-1') RETURNING id, user_id",
++            (mover_id,),
++        ).fetchone()
++        assert missed_id[1] == tenant.trader_id()
++
++        conn.execute("SAVEPOINT user_writes_system")
++        with pytest.raises(psycopg.errors.InsufficientPrivilege):
++            conn.execute(
++                "INSERT INTO system.movers_daily (trade_date,side,rank,ticker,change_pct,"
++                "export_sha256,fetched_at,replay_run_id) VALUES ('2040-01-03','losers',1,'P4X',"
++                "-9,'sha','2040-01-03 21:05+00','run-1')"
++            )
++        conn.execute("ROLLBACK TO SAVEPOINT user_writes_system")
++
++        conn.execute("SAVEPOINT no_guc")
++        conn.execute("SELECT set_config(%s, '', false)", (tenant.TRADER_GUC,))
++        with pytest.raises(psycopg.errors.InvalidTextRepresentation):
++            conn.execute(
++                "INSERT INTO missed (trade_date,kind,ticker,mover_id,excluded_by,gate_detail,"
++                "inputs_sha256,receipt,replay_run_id) VALUES ('2040-01-03','mover','P4N',%s,"
++                "'not_in_any_source','{}'::jsonb,'sha','{}'::jsonb,'run-1')",
++                (mover_id,),
++            )
++        conn.execute("ROLLBACK TO SAVEPOINT no_guc")
++    finally:
++        conn.rollback()
++        conn.close()
++
++
++@requires_db
++def test_missed_rerun_reconciles_in_the_ruled_order_against_the_live_unique_index():
++    """R2-1/R3-1: (1) retire, (2) insert, (3) link — and the naive
++    insert-first order collides with the partial unique index."""
++    conn = _migration_conn()
++    try:
++        _apply(conn, FORWARD)
++        db.apply_side(conn, Side.SYSTEM)
++        mover_id = conn.execute(
++            "INSERT INTO system.movers_daily (trade_date,side,rank,ticker,change_pct,"
++            "export_sha256,fetched_at,replay_run_id) VALUES ('2040-01-03','gainers',1,'P4R',"
++            "12.5,'sha','2040-01-03 21:05+00','run-1') RETURNING id"
++        ).fetchone()[0]
++        db.apply_side(conn, Side.USER)
++        insert = (
++            "INSERT INTO missed (trade_date,kind,ticker,mover_id,excluded_by,gate_detail,"
++            "inputs_sha256,receipt,replay_run_id,run_seq) VALUES ('2040-01-03','mover','P4R',%s,"
++            "'not_in_any_source','{}'::jsonb,%s,%s::jsonb,%s,%s) RETURNING id"
++        )
++        first = conn.execute(insert, (mover_id, "sha-1", '{"v": 1}', "run-1", 1)).fetchone()[0]
++
++        conn.execute("SAVEPOINT naive")
++        with pytest.raises(psycopg.errors.UniqueViolation):
++            conn.execute(insert, (mover_id, "sha-2", '{"v": 2}', "run-2", 2))
++        conn.execute("ROLLBACK TO SAVEPOINT naive")
++
++        conn.execute(
++            "UPDATE missed SET is_current = false, retired_by_run_id = 'run-2' WHERE id = %s",
++            (first,),
++        )
++        second = conn.execute(insert, (mover_id, "sha-2", '{"v": 2}', "run-2", 2)).fetchone()[0]
++        conn.execute("UPDATE missed SET superseded_by = %s WHERE id = %s", (second, first))
++
++        rows = conn.execute(
++            "SELECT id, is_current, superseded_by, receipt FROM missed WHERE ticker='P4R' ORDER BY id"
++        ).fetchall()
++        assert rows == [(first, False, second, {"v": 1}), (second, True, None, {"v": 2})]
++
++        # A subject whose miss disappears on rerun: step (1) only. It keeps
++        # its receipt, names the retiring run, and links to nothing.
++        conn.execute("SAVEPOINT retire_needs_run")
++        with pytest.raises(psycopg.errors.CheckViolation):
++            conn.execute("UPDATE missed SET is_current = false WHERE id = %s", (second,))
++        conn.execute("ROLLBACK TO SAVEPOINT retire_needs_run")
++        conn.execute(
++            "UPDATE missed SET is_current = false, retired_by_run_id = 'run-3' WHERE id = %s",
++            (second,),
++        )
++        assert conn.execute(
++            "SELECT is_current, superseded_by, retired_by_run_id, receipt FROM missed WHERE id = %s",
++            (second,),
++        ).fetchone() == (False, None, "run-3", {"v": 2})
++        assert conn.execute(
++            "SELECT count(*) FROM missed WHERE ticker='P4R' AND is_current"
++        ).fetchone()[0] == 0
++
++        # A current row can never also point at a successor.
++        conn.execute("SAVEPOINT current_superseded")
++        with pytest.raises(psycopg.errors.CheckViolation):
++            conn.execute(insert.replace("run_seq)", "run_seq,superseded_by)").replace(
++                "%s,%s) RETURNING", "%s,%s,%s) RETURNING"),
++                (mover_id, "sha-4", '{"v": 4}', "run-4", 4, first))
++        conn.execute("ROLLBACK TO SAVEPOINT current_superseded")
++    finally:
++        conn.rollback()
++        conn.close()

@@ -1,0 +1,1393 @@
+diff --git a/tests/cobalt/test_replay_cards.py b/tests/cobalt/test_replay_cards.py
+new file mode 100644
+index 0000000..972cff1
+--- /dev/null
++++ b/tests/cobalt/test_replay_cards.py
+@@ -0,0 +1,525 @@
++"""S2-P4 STEP-5 — F12: the day's unfilled cards replayed over i1 bars.
++
++Charter F12: "nightly report lists misses with the gate/variable that
++excluded them". The real-shape fixtures are hub-cut (tests/fixtures/replay/,
++L45): one real trading day shifted to 2026-02-10. KNOWN GAP (hub report
++§STEP-1): the anchor day was an EDT day and only its DATE was shifted, so
++the fixture's UTC offsets are EDT offsets. Tests that use it pass the
++anchor's real close — 20:00 UTC — explicitly rather than asking the
++calendar for a February close (21:00 UTC), which would call every card
++stale. No PASSED-state card exists in the read window, so `passed` is
++proved on a hand-built transition list, never on an invented fixture.
++
++The one-bar vectors below are formula arithmetic, not parser fixtures.
++"""
++
++from __future__ import annotations
++
++import inspect
++import json
++import os
++from datetime import date, datetime, timedelta, timezone
++from decimal import Decimal
++from pathlib import Path
++
++import pytest
++
++from cobalt.archiver.models import Bar, Interval
++from cobalt.cards.expire import radar_expiry
++from cobalt.cards.models import CardState
++from cobalt.replay import cards as cards_mod
++from cobalt.replay.cards import (
++    STATE_GATE,
++    MissedStore,
++    coverage,
++    replay_card,
++    replay_from_receipt,
++    session_close_for,
++    state_at,
++)
++from cobalt.replay.models import (
++    CardCandidate,
++    MissRow,
++    PositionSpan,
++    ReplayInputError,
++    StopEdit,
++    TransitionRow,
++    WindowResolution,
++)
++
++FIX = Path(__file__).resolve().parents[1] / "fixtures" / "replay"
++DAY = date(2026, 2, 10)
++#: The anchor day's real 16:00 EDT close, carried by the shifted fixture.
++CLOSE = datetime(2026, 2, 10, 20, 0, tzinfo=timezone.utc)
++AT_CLOSE = WindowResolution(resolved_end=CLOSE, source="session_close", detail="no preferred_windows_ref")
++
++requires_db = pytest.mark.skipif(
++    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
++    reason="requires_db: Postgres env settings not available",
++)
++
++
++# ---------------------------------------------------------------------------
++# fixture loading (read-only)
++# ---------------------------------------------------------------------------
++
++
++def _ts(raw: str) -> datetime:
++    return datetime.fromisoformat(raw)
++
++
++@pytest.fixture(scope="module")
++def cards_day():
++    return json.loads((FIX / "cards-day.real-shape.json").read_text())
++
++
++@pytest.fixture(scope="module")
++def bars_day():
++    return [
++        Bar(ticker=b["ticker"], interval=Interval.I1, ts=_ts(b["ts"]), open=Decimal(b["open"]),
++            high=Decimal(b["high"]), low=Decimal(b["low"]), close=Decimal(b["close"]),
++            volume=b["volume"])
++        for b in json.loads((FIX / "bars-day.real-shape.json").read_text())
++    ]
++
++
++def _transitions(cards_day, card_id=None):
++    return [
++        TransitionRow(card_id=t["card_id"], from_state=t["from_state"], to_state=t["to_state"], at=_ts(t["at"]))
++        for t in cards_day["transitions"] if card_id is None or t["card_id"] == card_id
++    ]
++
++
++def _positions(cards_day):
++    trs = _transitions(cards_day)
++    spans = []
++    for cid in sorted({t.card_id for t in trs}):
++        filled = [t.at for t in trs if t.card_id == cid and t.to_state == "FILLED"]
++        closed = [t.at for t in trs if t.card_id == cid and t.to_state == "CLOSED"]
++        if filled:
++            spans.append(PositionSpan(card_id=cid, filled_at=min(filled), closed_at=min(closed) if closed else None))
++    return spans
++
++
++def _candidate(cards_day, card_id):
++    s = next(c for c in cards_day["sizings"] if c["id"] == card_id)
++    return CardCandidate(
++        id=s["id"], ticker=s["ticker"], direction=s["direction"], entry=Decimal(s["entry"]),
++        stop=Decimal(s["stop"]), created_at=_ts(s["created_at"]),
++        transitions=tuple(_transitions(cards_day, card_id)),
++    )
++
++
++def _replay_fixture(cards_day, bars_day, card_id, **kw):
++    card = _candidate(cards_day, card_id)
++    return replay_card(
++        card, [b for b in bars_day if b.ticker == card.ticker], trade_date=DAY,
++        window=kw.pop("window", AT_CLOSE), session_close=kw.pop("session_close", CLOSE),
++        positions=kw.pop("positions", _positions(cards_day)), **kw,
++    )
++
++
++# ---------------------------------------------------------------------------
++# hand vectors: one ticker, one minute per bar
++# ---------------------------------------------------------------------------
++
++T0 = datetime(2026, 9, 3, 13, 30, tzinfo=timezone.utc)   # 09:30 EDT
++SYN_DAY = date(2026, 9, 3)
++SYN_CLOSE = datetime(2026, 9, 3, 20, 0, tzinfo=timezone.utc)
++
++
++def bar(minute: int, o, h, l, c, ticker="SYN") -> Bar:
++    return Bar(ticker=ticker, interval=Interval.I1, ts=T0 + timedelta(minutes=minute),
++               open=Decimal(str(o)), high=Decimal(str(h)), low=Decimal(str(l)),
++               close=Decimal(str(c)), volume=100)
++
++
++def full_day(overrides: dict[int, Bar], *, flat=100, last_minute=389) -> list[Bar]:
++    """A covered session: a pre-creation bar at minute -1, a flat tape, and
++    the 15:59 bar — with `overrides` placed at their minutes."""
++    out = {m: bar(m, flat, flat, flat, flat) for m in range(-1, last_minute + 1)}
++    out.update(overrides)
++    return [out[m] for m in sorted(out)]
++
++
++def card(direction="long", entry="101", stop="99", created=0, transitions=None, edits=()):
++    created_at = T0 + timedelta(minutes=created)
++    trs = transitions or (TransitionRow(id=1, card_id=7, from_state=None, to_state="WATCH", at=created_at),)
++    return CardCandidate(id=7, ticker="SYN", direction=direction, entry=Decimal(entry), stop=Decimal(stop),
++                         created_at=created_at, transitions=tuple(trs), stop_edits=tuple(edits))
++
++
++def run(c, bars, *, window_end=SYN_CLOSE, close=SYN_CLOSE, positions=()):
++    return replay_card(c, bars, trade_date=SYN_DAY,
++                       window=WindowResolution(resolved_end=window_end, source="trade_def", detail="t"),
++                       session_close=close, positions=list(positions))
++
++
++# =====================================================================
++# §4 F12 — acceptance sentences
++# =====================================================================
++
++
++def test_trigger_on_unarmed_card_is_missed_row_unarmed(cards_day, bars_day):
++    # Real CRWD card 302: WATCH -> EXPIRED at 20:05, never armed; its short
++    # entry traded through at 13:30 before either fill opened a position.
++    result = _replay_fixture(cards_day, bars_day, 302)
++    assert result.status == "miss"
++    miss = result.miss
++    assert miss.excluded_by == "unarmed"
++    assert miss.trigger_ts == datetime(2026, 2, 10, 13, 30, tzinfo=timezone.utc)
++    assert miss.gate_detail["state"]["state"] == "WATCH"
++    assert miss.gate_detail["rule_10"]["open_card_ids"] == []
++
++
++def test_gate_order_rule_10_then_window_then_state(cards_day, bars_day):
++    # Real MU card 308 is WATCH at its 13:57 trigger (state -> unarmed), but
++    # cards 306 and 307 were FILLED and open: rule_10 is first and wins.
++    real = _replay_fixture(cards_day, bars_day, 308)
++    assert real.miss.excluded_by == "rule_10"
++    assert real.miss.gate_detail["rule_10"]["open_card_ids"] == [306, 307]
++    assert real.miss.gate_detail["state"]["maps_to"] == "unarmed"
++    assert real.miss.gate_detail["order"] == ["rule_10", "window", "state"]
++
++    # window before state: a WATCH card triggering after its window closes.
++    bars = full_day({30: bar(30, 100, 102, 100, 101)})
++    late = run(card(), bars, window_end=T0 + timedelta(minutes=10))
++    assert late.miss.excluded_by == "window"
++    assert late.miss.gate_detail["state"]["maps_to"] == "unarmed"
++
++    # rule_10 before window: the same late trigger with two open positions.
++    both = run(card(), bars, window_end=T0 + timedelta(minutes=10), positions=[
++        PositionSpan(card_id=1, filled_at=T0), PositionSpan(card_id=2, filled_at=T0)])
++    assert both.miss.excluded_by == "rule_10"
++    assert both.miss.gate_detail["window"]["fired"] is True
++
++
++def test_trade_count_band_unset_recorded_in_gate_detail_never_excluded_by(cards_day, bars_day):
++    for card_id in (302, 303, 304, 305, 308):
++        miss = _replay_fixture(cards_day, bars_day, card_id).miss
++        assert miss.gate_detail["trade_count_band"] == "unset"
++        assert miss.excluded_by != "trade_count_band"
++
++
++def test_uncrossed_card_writes_no_row(cards_day, bars_day):
++    # Real MU card 309 (short 905.475, created 13:59): the day's range
++    # crossed that price, but never after the card existed.
++    result = _replay_fixture(cards_day, bars_day, 309)
++    assert result.status == "no_trigger"
++    assert result.miss is None
++
++
++def test_cf_r_stop_touched_first_is_minus_one(cards_day, bars_day):
++    # Real CRWD card 304: short 219.75 / stop 220.55, filled at the planned
++    # entry, stop touched on the trigger bar -> exactly -1R.
++    miss = _replay_fixture(cards_day, bars_day, 304).miss
++    assert (miss.fill_price, miss.exit_price, miss.exit_reason) == (Decimal("219.7500"), Decimal("220.5500"), "stop")
++    assert miss.cf_r == Decimal("-1.0000")
++    # hand vector: long 101/99 fills at entry, stop two bars later
++    bars = full_day({1: bar(1, 100, 101.5, 100, 101), 3: bar(3, 101, 101, 98.5, 99)})
++    hand = run(card(), bars).miss
++    assert (hand.fill_price, hand.exit_ts, hand.cf_r) == (Decimal("101"), T0 + timedelta(minutes=3), Decimal("-1.0000"))
++
++
++def test_cf_r_same_bar_stop_and_trigger_stop_wins():
++    bars = full_day({2: bar(2, 100, 101.5, 98.5, 101.2)})
++    miss = run(card(), bars).miss
++    assert miss.trigger_ts == miss.exit_ts == T0 + timedelta(minutes=2)
++    assert miss.exit_reason == "stop"
++    assert miss.cf_r == Decimal("-1.0000")
++
++
++def test_cf_r_gap_through_fills_at_bar_open(cards_day, bars_day):
++    # R1-9's own vector: long entry 100 / stop 99, the bar opens at 102 and
++    # the stop is hit -> fill 102, exit 99, -3R (planned risk 1).
++    bars = full_day({5: bar(5, 102, 102.5, 98.9, 99)}, flat=99.5)
++    miss = run(card(entry="100", stop="99"), bars).miss
++    assert miss.fill_price == Decimal("102")
++    assert miss.cf_r == Decimal("-3.0000")
++    # Real CRWD card 303: short 220.495, the bar opened at 218.355 (beyond
++    # the entry for a short) -> filled at that open, stopped at 220.55.
++    real = _replay_fixture(cards_day, bars_day, 303).miss
++    assert real.fill_price == Decimal("218.3550")
++    assert real.cf_r == Decimal("-39.9091")
++
++
++def test_cf_r_horizon_end_close_window_or_1600():
++    rising = {m: bar(m, 101 + m / 100, 101.5 + m / 100, 101 + m / 100, 101.2 + m / 100) for m in range(1, 390)}
++    bars = full_day(rising)
++    # window end inside the session -> the close of the last bar whose
++    # minute has ended by the window end
++    w = T0 + timedelta(minutes=60)
++    inside = run(card(), bars, window_end=w).miss
++    assert inside.exit_reason == "horizon_end"
++    assert inside.horizon_end == w
++    assert inside.exit_ts == w - timedelta(minutes=1)
++    # no window -> the session close (16:00 on a full day)
++    at_close = run(card(), bars).miss
++    assert at_close.horizon_end == SYN_CLOSE
++    assert at_close.exit_ts == SYN_CLOSE - timedelta(minutes=1)
++
++
++def test_mfe_r_stored_as_observation():
++    bars = full_day({1: bar(1, 100, 101, 100, 101), 2: bar(2, 101, 104, 100.5, 103), 3: bar(3, 103, 103, 98, 99)})
++    miss = run(card(), bars).miss
++    assert miss.cf_r == Decimal("-1.0000")          # the one R
++    assert miss.mfe_r == Decimal("1.5000")          # (104 - 101) / 2, an observation
++    assert miss.receipt["outputs"]["mfe_r"] == "1.5000"
++    assert "cf_r" in miss.receipt["outputs"] and "mfe_r" in miss.receipt["outputs"]
++
++
++def test_every_missed_number_replays_from_stored_inputs(cards_day, bars_day):
++    for card_id in (302, 303, 304, 305, 308):
++        miss = _replay_fixture(cards_day, bars_day, card_id).miss
++        again = replay_from_receipt(json.loads(json.dumps(miss.receipt))).miss
++        assert again == miss
++        assert again.inputs_sha256 == miss.inputs_sha256
++    # the receipt holds VALUES, not just a hash: the bars it consumed
++    miss = _replay_fixture(cards_day, bars_day, 302).miss
++    assert miss.receipt["inputs"]["bars"][0]["close"]
++    assert miss.receipt["inputs"]["positions"]
++
++
++def test_stale_bars_write_no_row_and_count_input_stale(cards_day, bars_day):
++    # bars that stop at 12:00 ET cannot cover a 16:00 close
++    partial = [b for b in bars_day if b.ticker == "CRWD" and b.ts < datetime(2026, 2, 10, 16, 0, tzinfo=timezone.utc)]
++    card302 = _candidate(cards_day, 302)
++    result = replay_card(card302, partial, trade_date=DAY, window=AT_CLOSE, session_close=CLOSE, positions=[])
++    assert result.status == "input_stale"
++    assert result.miss is None
++    assert "before" in result.reason
++
++
++# =====================================================================
++# Amendments
++# =====================================================================
++
++
++def test_r1_10_explicit_time_window_on_an_early_close_day_never_runs_past_the_close():
++    early_close = T0 + timedelta(minutes=210)          # 13:00 ET
++    rising = {m: bar(m, 101, 101.5, 101, 101.2) for m in range(1, 390)}
++    bars = full_day(rising)
++    miss = run(card(), bars, window_end=SYN_CLOSE, close=early_close).miss   # "16:00" resolved literally
++    assert miss.horizon_end == early_close
++    assert miss.exit_ts == early_close - timedelta(minutes=1)
++    assert all(datetime.fromisoformat(ts) + timedelta(minutes=1) <= early_close
++               for ts in miss.receipt["outputs"]["eligible_bar_ts"])
++
++
++def test_r1_10_a_stop_only_in_the_bar_starting_at_h_is_excluded():
++    w = T0 + timedelta(minutes=30)
++    bars = full_day({1: bar(1, 100, 101.2, 100, 101.1), 30: bar(30, 101, 101, 90, 95)})
++    miss = run(card(), bars, window_end=w).miss
++    assert miss.exit_reason == "horizon_end"
++    assert miss.exit_ts == w - timedelta(minutes=1)
++
++
++def test_r1_10_trigger_at_exactly_h_writes_no_row_input_stale():
++    w = T0 + timedelta(minutes=30)
++    bars = full_day({30: bar(30, 100, 101.5, 100, 101)})
++    result = run(card(), bars, window_end=w)
++    assert result.status == "input_stale"
++    assert "no completed bar" in result.reason
++
++
++def test_r1_10_after_window_trigger_gets_the_session_close_horizon():
++    w = T0 + timedelta(minutes=30)
++    bars = full_day({45: bar(45, 100, 101.5, 100, 101)})
++    miss = run(card(), bars, window_end=w).miss
++    assert miss.excluded_by == "window"
++    assert miss.horizon_end == SYN_CLOSE
++
++
++def test_r1_10_ambiguous_prose_takes_the_resolver_fallback():
++    window = cards_mod.resolve_window("Power hour 3 PM-close", SYN_DAY)
++    assert window.source == "session_close"
++    assert window.resolved_end == session_close_for(SYN_DAY)
++
++
++def test_r1_11_state_mapping_is_exhaustive_over_card_states():
++    assert set(STATE_GATE) == {s.value for s in CardState}
++
++
++@pytest.mark.parametrize("terminal,expected", [("MISSED", "unarmed"), ("EXPIRED", "window"), ("PASSED", "passed")])
++def test_r1_11_terminal_states_map_with_their_reason(terminal, expected):
++    trs = (TransitionRow(id=1, card_id=7, to_state="WATCH", at=T0),
++           TransitionRow(id=2, card_id=7, from_state="WATCH", to_state=terminal, at=T0 + timedelta(minutes=2)))
++    bars = full_day({3: bar(3, 100, 101.5, 100, 101)})
++    assert run(card(transitions=trs), bars).miss.excluded_by == expected
++
++
++def test_r1_11_expired_card_carries_its_own_recorded_reason_into_gate_detail():
++    """EXPIRED has ONE gate value and THREE causes.
++
++    `excluded_by` stays `window` (the vocabulary 0009's CHECK constrains is
++    untouched), but the live path records `stop_before_arm`, `avoid` or
++    `deadline` (`cards/expire.radar_expiry`). The transition's own recorded
++    words ride into `gate_detail`, verbatim, and come back out of the
++    receipt alone (L57).
++    """
++    expired_at = T0 + timedelta(minutes=2)
++    # Not invented here: this is what the live expiry path records for this
++    # card, produced by the real type.
++    expiry = radar_expiry(
++        state=CardState.WATCH, now=expired_at, expires_at=T0 + timedelta(minutes=300),
++        avoided=False, direction="long", stop=Decimal("99"),
++        bars_after_formation=[bar(1, 100, 100, 98.5, 99)],
++    )
++    assert expiry is not None and expiry.cause == "stop_before_arm"
++
++    trs = (TransitionRow(id=1, card_id=7, to_state="WATCH", at=T0),
++           TransitionRow(id=2, card_id=7, from_state="WATCH", to_state="EXPIRED",
++                         at=expired_at, reason=expiry.reason, cause=expiry.evidence["cause"]))
++    miss = run(card(transitions=trs), full_day({3: bar(3, 100, 101.5, 100, 101)})).miss
++
++    assert miss.excluded_by == "window"
++    state = miss.gate_detail["state"]
++    assert state["maps_to"] == "window"
++    assert state["recorded_reason"] == expiry.reason
++    assert state["recorded_cause"] == "stop_before_arm"
++    again = replay_from_receipt(json.loads(json.dumps(miss.receipt))).miss
++    assert again == miss
++    assert again.gate_detail["state"]["recorded_reason"] == expiry.reason
++
++
++def test_a_non_expired_cards_gate_detail_shape_is_unchanged(cards_day, bars_day):
++    """Real CRWD card 302 is WATCH at its trigger. The recorded-reason keys
++    belong to an EXPIRED as-of-trigger state and to nothing else."""
++    miss = _replay_fixture(cards_day, bars_day, 302).miss
++    assert list(miss.gate_detail) == ["order", "rule_10", "window", "state", "trade_count_band"]
++    assert list(miss.gate_detail["state"]) == ["state", "transition_id", "at", "maps_to"]
++
++
++def test_the_candidate_loader_reads_the_transition_reason_and_its_cause():
++    """The recorded reason is only real in production if the loader carries
++    the columns: `card_transitions` stores `reason` and a jsonb `evidence`
++    (`cards/store.py`'s INSERT), and `evidence['cause']` is where the radar
++    expiry path puts its structured cause. Offline this is a static proof;
++    the live read is the hub's `requires_db` run.
++    """
++    source = " ".join(inspect.getsource(MissedStore.candidates).split())
++    assert "FROM card_transitions" in source
++    assert "SELECT id, card_id, from_state, to_state, at, reason, evidence" in source
++    assert 'cause=evidence.get("cause")' in source
++
++
++def test_r1_11_simultaneous_transitions_order_by_id_and_refuse_without_one():
++    same = T0 + timedelta(minutes=1)
++    trs = [TransitionRow(id=11, card_id=7, from_state="WATCH", to_state="ARMED", at=same),
++           TransitionRow(id=10, card_id=7, to_state="WATCH", at=same)]
++    assert state_at(trs, same).to_state == "ARMED"
++    no_ids = [t.model_copy(update={"id": None}) for t in trs]
++    with pytest.raises(ReplayInputError, match="unknowable"):
++        state_at(no_ids, same)
++
++
++def test_r1_11_historically_edited_stop_is_read_as_of_the_trigger():
++    edit = StopEdit(id=1, at=T0 + timedelta(minutes=20), from_stop=Decimal("99"), to_stop=Decimal("100.5"))
++    bars = full_day({2: bar(2, 100, 101.5, 100, 101), 4: bar(4, 101, 101, 98.5, 99)})
++    miss = run(card(stop="100.5", edits=(edit,)), bars).miss       # current stop 100.5, 99 at the trigger
++    assert miss.stop == Decimal("99")
++    assert miss.cf_r == Decimal("-1.0000")
++
++
++def test_r1_11_position_closed_at_the_trigger_instant_is_not_open():
++    trigger = T0 + timedelta(minutes=2)
++    bars = full_day({2: bar(2, 100, 101.5, 100, 101)})
++    positions = [PositionSpan(card_id=1, filled_at=T0), PositionSpan(card_id=2, filled_at=T0, closed_at=trigger)]
++    miss = run(card(), bars, positions=positions).miss
++    assert miss.excluded_by == "unarmed"
++    assert miss.gate_detail["rule_10"]["open_card_ids"] == [1]
++    assert miss.gate_detail["rule_10"]["uncomputed"] == {"stop_at_card_level_exemption": "unavailable"}
++
++
++def test_r1_12_partial_day_wrong_day_and_no_bars_are_input_stale_and_a_full_quiet_day_is_no_trigger():
++    c = card()
++    assert run(c, full_day({}, last_minute=200)).status == "input_stale"          # partial day
++    wrong = [b.model_copy(update={"ts": b.ts - timedelta(days=1)}) for b in full_day({})]
++    assert run(c, wrong).status == "input_stale"                                  # wrong-day export
++    assert run(c, []).status == "input_stale"                                     # no archived bars
++    assert run(c, full_day({})).status == "no_trigger"                            # complete, no trigger
++
++
++def test_coverage_records_gaps_without_gating_on_them():
++    bars = [b for b in full_day({}) if b.ts.minute % 7]            # every 7th minute has no trade
++    cov = coverage(bars, start=T0, end=SYN_CLOSE)
++    assert cov["covered"] is True
++    assert cov["max_gap_min"] == 2
++
++
++def test_rerun_is_idempotent(cards_day, bars_day):
++    first = [_replay_fixture(cards_day, bars_day, i).miss for i in (302, 303, 304, 305, 308)]
++    second = [_replay_fixture(cards_day, bars_day, i).miss for i in (302, 303, 304, 305, 308)]
++    assert [m.inputs_sha256 for m in first] == [m.inputs_sha256 for m in second]
++    assert first == second
++
++
++# =====================================================================
++# The versioned corpus (requires_db, hub on cobalt_dev with 0008/0009)
++# =====================================================================
++
++
++def _row(ticker="SYN", card_id=None, sha="a", excluded_by="not_in_any_source", **kw) -> MissRow:
++    return MissRow(trade_date=SYN_DAY, kind="card" if card_id else "mover", ticker=ticker, card_id=card_id,
++                   excluded_by=excluded_by, gate_detail={}, receipt={"inputs": {}},
++                   inputs_sha256=sha * 64, **kw)
++
++
++@requires_db
++def test_reconcile_insert_supersede_retire_and_identical_rerun_against_the_live_index(dev_db_tx):
++    from cobalt import db
++
++    store = MissedStore()
++    with db.connect(store.db_name, side=db.Side.SYSTEM) as conn:
++        mover_id = conn.execute(
++            "INSERT INTO movers_daily (trade_date, side, rank, ticker, change_pct, export_sha256, "
++            "fetched_at, replay_run_id) VALUES (%s, 'gainers', 1, 'SYN', 12.5, %s, now(), 'r0') RETURNING id",
++            (SYN_DAY, "e" * 64),
++        ).fetchone()[0]
++    a = _row(mover_id=mover_id)
++    first = store.reconcile(run_id="r1", trade_date=SYN_DAY, kind="mover", rows=[a])
++    assert (first.inserted, first.unchanged) == (1, 0)
++    again = store.reconcile(run_id="r2", trade_date=SYN_DAY, kind="mover", rows=[a])
++    assert (again.inserted, again.superseded, again.unchanged) == (0, 0, 1)
++
++    stages = []
++    changed = _row(mover_id=mover_id, sha="b", excluded_by="config_cap")
++    third = store.reconcile(run_id="r3", trade_date=SYN_DAY, kind="mover", rows=[changed], before_commit=stages.append)
++    assert third.superseded == 1 and stages == ["retired", "inserted", "linked"]
++    current = store.current(SYN_DAY, "mover")
++    assert [(r["excluded_by"], r["run_seq"]) for r in current] == [("config_cap", 2)]
++
++    # a mover rising out of the benchmark set: retired, no successor
++    gone = store.reconcile(run_id="r4", trade_date=SYN_DAY, kind="mover", rows=[])
++    assert gone.retired == 1
++    assert store.current(SYN_DAY, "mover") == []
++    with db.connect(store.db_name, side=db.Side.USER) as conn:
++        rows = conn.execute(
++            "SELECT run_seq, is_current, superseded_by IS NOT NULL, retired_by_run_id FROM missed "
++            "WHERE trade_date = %s AND kind = 'mover' ORDER BY id", (SYN_DAY,)).fetchall()
++    assert rows == [(1, False, True, "r3"), (2, False, False, "r4")]
++
++
++@requires_db
++def test_reconcile_failure_between_retire_and_insert_rolls_the_whole_run_back(dev_db_tx):
++    from cobalt import db
++
++    store = MissedStore()
++    with db.connect(store.db_name, side=db.Side.SYSTEM) as conn:
++        mover_id = conn.execute(
++            "INSERT INTO movers_daily (trade_date, side, rank, ticker, change_pct, export_sha256, "
++            "fetched_at, replay_run_id) VALUES (%s, 'losers', 1, 'SYN', -12.5, %s, now(), 'r0') RETURNING id",
++            (SYN_DAY, "e" * 64),
++        ).fetchone()[0]
++    store.reconcile(run_id="r1", trade_date=SYN_DAY, kind="mover", rows=[_row(mover_id=mover_id)])
++
++    def crash(stage):
++        if stage == "retired":
++            raise RuntimeError("killed between (1) and (2)")
++
++    with pytest.raises(RuntimeError, match="between"):
++        store.reconcile(run_id="r2", trade_date=SYN_DAY, kind="mover",
++                        rows=[_row(mover_id=mover_id, sha="c")], before_commit=crash)
++    assert [r["replay_run_id"] for r in store.current(SYN_DAY, "mover")] == ["r1"]
++    resumed = store.reconcile(run_id="r3", trade_date=SYN_DAY, kind="mover", rows=[_row(mover_id=mover_id, sha="c")])
++    assert resumed.superseded == 1
+diff --git a/tests/cobalt/test_replay_demand.py b/tests/cobalt/test_replay_demand.py
+new file mode 100644
+index 0000000..10a555d
+--- /dev/null
++++ b/tests/cobalt/test_replay_demand.py
+@@ -0,0 +1,227 @@
++"""S2-P4 STEP-6 / L53 — ONE total Finviz demand across every consumer.
++
++L53: "A budget check that measures one consumer is not a budget check: the
++total-demand computation across every consumer of a shared transport is the
++rule, with a test proving refusal when the total exceeds the ceiling while
++one consumer alone would pass." Astra R1-13/R2-5: one named shared gate,
++`check_total_demand`, called before the request at every pre-request site —
++radar's `load_sources`, the archiver's runner, and replay's movers exports
++and bar fetches — and the refusal test exercises those call sites.
++"""
++
++from __future__ import annotations
++
++import asyncio
++from datetime import datetime, timezone
++from pathlib import Path
++
++import pytest
++
++from cobalt.archiver import runner as archiver_runner
++from cobalt.radar import notes as notes_mod
++from cobalt.radar.notes import (
++    ARCHIVER_LABEL,
++    REPLAY_LABEL,
++    DemandConsumer,
++    DemandWindow,
++    TotalDemandExceeded,
++    check_scheduled_demand,
++    check_total_demand,
++    load_sources,
++    replay_window,
++    scheduled_consumers,
++    total_demand,
++)
++from cobalt.replay import movers as movers_mod
++
++FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "radar"
++
++
++def w(start: str, end: str) -> DemandWindow:
++    return DemandWindow.between(start, end)
++
++
++def test_total_finviz_demand_refuses_when_sum_exceeds_ceiling_while_replay_alone_passes(monkeypatch):
++    replay = DemandConsumer(name="replay", rpm=30, window=w("21:05", "21:35"), basis="2 + 2 x top_n")
++    archiver = DemandConsumer(name="archiver", rpm=20, window=w("20:30", "22:00"), basis="pacing bound")
++    # alone, replay fits under 40
++    assert check_total_demand([replay], subject="replay", ceiling=40).peak_rpm == 30
++    # together, over the same minutes, they do not
++    with pytest.raises(TotalDemandExceeded, match="replay"):
++        check_total_demand([replay, archiver], subject="replay", ceiling=40)
++
++    # -- and the CALL SITES refuse before any request --------------------
++    monkeypatch.setattr(notes_mod, "scheduled_consumers", lambda **kw: [replay, archiver])
++    monkeypatch.setattr(notes_mod, "_ceiling", lambda: 40)
++
++    requested: list[str] = []
++
++    async def fetch_forbidden(*args, **kwargs):
++        requested.append("request")
++        raise AssertionError("a request was made past a refusing demand gate")
++
++    # replay's movers exports and bar fetches
++    collector = movers_mod.MoversCollector(
++        "token", config=movers_mod.load_radar_config(), bucket=_NoWaitBucket(), cache_root=Path("/nonexistent"),
++        get=fetch_forbidden, fetch_bars=fetch_forbidden,
++    )
++    with pytest.raises(TotalDemandExceeded):
++        asyncio.run(collector.exports(top_n=10, now=datetime(2026, 9, 3, 1, 5, tzinfo=timezone.utc), cache=False))
++    with pytest.raises(TotalDemandExceeded):
++        asyncio.run(collector.bars(["AAA"], top_n=10))
++
++    # the archiver's runner path
++    monkeypatch.setattr(archiver_runner, "resolve_token", fetch_forbidden)
++    monkeypatch.setattr(archiver_runner, "fetch_bars", fetch_forbidden)
++    with pytest.raises(TotalDemandExceeded):
++        asyncio.run(archiver_runner._run_targets([("AAA", archiver_runner.Interval.I1)], mode="full"))
++    assert requested == []
++
++
++def test_radar_load_sources_counts_the_other_consumers_in_its_window():
++    screens, lists = FIXTURES / "radar-screens.example.md", FIXTURES / "radar-lists.example.md"
++    # context_tickers is S2-P2's required kwarg: these fixtures poll none.
++    kwargs = dict(scan_interval=60, poll_interval=60, finviz_max_rpm=100,
++                  list_chunk_size=50, context_tickers=0)
++    alone = load_sources(screens, lists, **kwargs)
++    assert alone.pool_error is None, alone.pool_error
++    planned = alone.planned_rpm
++    overlapping = DemandConsumer(name="archiver", rpm=101 - planned, window=None, basis="test")
++    crowded = load_sources(screens, lists, radar_window=w("04:00", "20:00"),
++                           other_consumers=[overlapping], **kwargs)
++    assert "pool budget exceeded" in crowded.pool_error
++    assert "archiver" in crowded.pool_error
++    disjoint = overlapping.model_copy(update={"window": w("20:30", "22:00")})
++    fine = load_sources(screens, lists, radar_window=w("04:00", "20:00"), other_consumers=[disjoint], **kwargs)
++    assert fine.pool_error is None
++
++
++def test_disjoint_windows_contribute_zero_and_unbounded_windows_always_count():
++    radar = DemandConsumer(name="radar", rpm=36, window=w("04:00", "20:00"), basis="planned")
++    archiver = DemandConsumer(name="archiver", rpm=50, window=w("20:30", "22:00"), basis="bound")
++    assert total_demand([radar, archiver], subject="radar", ceiling=40).peak_rpm == 36
++    assert total_demand([radar, archiver], subject="archiver", ceiling=40).peak_rpm == 50
++    forever = DemandConsumer(name="p2_daily", rpm=5, window=None, basis="unbounded")
++    assert total_demand([radar, archiver, forever], subject="radar", ceiling=40).peak_rpm == 41
++
++
++def test_unmeasured_ceiling_refuses():
++    replay = DemandConsumer(name="replay", rpm=1, window=None, basis="x")
++    with pytest.raises(TotalDemandExceeded, match="unmeasured"):
++        check_total_demand([replay], subject="replay", ceiling=None)
++
++
++def test_scheduled_consumers_read_the_registry_and_never_omit_the_archiver():
++    consumers = {c.name: c for c in scheduled_consumers(replay_top_n=20, ceiling=40)}
++    assert {"radar", "archiver", "replay"} <= set(consumers)
++    assert consumers["archiver"].window.start_min == 20 * 60 + 30
++    assert consumers["archiver"].rpm == pytest.approx(60 / archiver_runner.GENTLE_SLEEP_SECONDS)
++    assert consumers["replay"].window.start_min == 21 * 60 + 10
++    assert consumers["replay"].rpm == 40            # min(2 + 2 x 20, bucket ceiling)
++    # the replay window closes before the 21:40 backup
++    assert consumers["replay"].window.end_min <= 21 * 60 + 40
++
++
++# =====================================================================
++# S2-P4 R17 — ceiling 50, disjoint archiver/replay windows
++#
++# Ruled 2026-09-17 (Dejan, "50 is approved."): three numbers, zero pacing
++# change. `radar.finviz_max_rpm` 45 -> 50 (= the archiver's own pacing
++# bound 60/GENTLE_SLEEP_SECONDS = 60/1.2 = 50.0, so the archiver sits at
++# EXACTLY the ceiling and `50.0 > 50` is False), the archiver's
++# `timeout_s` 5400 -> 2400 (its declared window now ends at 21:10), and
++# the replay's `at` 21:05 -> 21:10 (its window starts where the
++# archiver's ends, so the two are disjoint under `overlaps`).
++#
++# These read the SHIPPED jobs.yaml/tunables.yaml through the real
++# loaders — no mocked numbers. That is the point: they fail the moment
++# any of the three drifts.
++# =====================================================================
++
++#: The radar's planned total transport demand — pool 30.00 + 4 screens
++#: 2.40 + 7 list chunks 4.20 (cto-2026-09-17.md; the same 36.60 the
++#: `screens validate` budget line prints).
++RADAR_PLANNED_RPM = 36.6
++#: The replay's benchmarked top-N: 2 exports + 2 x 20 movers = 42 rpm.
++REPLAY_TOP_N = 20
++
++
++def test_r17_every_scheduled_subject_passes_against_the_shipped_ceiling_of_50():
++    assert notes_mod._ceiling() == 50
++    kw = dict(radar_rpm=RADAR_PLANNED_RPM, replay_top_n=REPLAY_TOP_N)
++    radar = check_scheduled_demand("radar", **kw)
++    archiver = check_scheduled_demand("archiver", **kw)
++    replay = check_scheduled_demand("replay", **kw)
++    # each subject's window holds only its own demand — the windows are disjoint
++    assert radar.peak_rpm == pytest.approx(RADAR_PLANNED_RPM)
++    assert archiver.peak_rpm == pytest.approx(50.0)  # exactly the ceiling, and it passes
++    assert replay.peak_rpm == pytest.approx(42.0)    # 2 + 2 x 20
++    for demand in (radar, archiver, replay):
++        assert demand.ceiling == 50
++        assert demand.peak_rpm <= 50, demand.describe()
++
++
++def test_r17_the_shipped_archiver_and_replay_windows_are_disjoint():
++    consumers = {c.name: c for c in scheduled_consumers(
++        ceiling=50, radar_rpm=RADAR_PLANNED_RPM, replay_top_n=REPLAY_TOP_N)}
++    archiver, replay = consumers["archiver"].window, consumers["replay"].window
++    # 20:30 + 2400 s = 21:10; 21:10 to the 21:40 backup less the 300 s margin
++    assert archiver.describe() == "20:30-21:10 ET"
++    assert replay.describe() == "21:10-21:35 ET"
++    assert replay_window().describe() == "21:10-21:35 ET"
++    # [20:30, 21:10) and [21:10, 21:35) touch but do not overlap
++    assert not archiver.overlaps(replay)
++    assert not replay.overlaps(archiver)
++    # ...and the gate agrees: neither subject counts the other's rpm
++    every = list(consumers.values())
++    assert "replay" not in total_demand(every, subject="archiver", ceiling=50).counted
++    assert "archiver" not in total_demand(every, subject="replay", ceiling=50).counted
++
++
++def test_r17_at_ceiling_49_the_archiver_alone_is_refused_and_at_50_it_is_not():
++    """The exact-boundary proof R17's arithmetic promises: the archiver's
++    pacing bound is 60/1.2 = 50.0 rpm, so 49 refuses it and 50 does not.
++    """
++    consumers = scheduled_consumers(ceiling=49, radar_rpm=RADAR_PLANNED_RPM, replay_top_n=REPLAY_TOP_N)
++    archiver = next(c for c in consumers if c.name == "archiver")
++    assert archiver.rpm == pytest.approx(60 / archiver_runner.GENTLE_SLEEP_SECONDS)
++    assert archiver.rpm == pytest.approx(50.0)
++    with pytest.raises(TotalDemandExceeded, match="archiver"):
++        check_total_demand(consumers, subject="archiver", ceiling=49)
++    assert check_total_demand(consumers, subject="archiver", ceiling=50).peak_rpm == pytest.approx(50.0)
++
++
++def test_r17_a_2105_replay_would_overlap_the_archiver_and_be_refused_at_50():
++    """The overlap detection itself, independent of today's shipped `at`:
++    roll the replay back to its pre-R17 21:05 against the real archiver
++    window and the two windows overlap again — the archiver's 50.0 rpm is
++    counted into the replay's total and 92.0 rpm is refused at 50.
++    """
++    from cobalt.jobs.config import load_job_registry
++
++    shipped = load_job_registry()
++    old = shipped.spec(REPLAY_LABEL)
++    rolled_back = old.model_copy(update={"schedule": old.schedule.model_copy(update={"at": "21:05"})})
++    registry = shipped.model_copy(update={
++        "jobs": [rolled_back if j.label == REPLAY_LABEL else j for j in shipped.jobs]})
++    assert registry.spec(REPLAY_LABEL).schedule.at == "21:05"
++    assert registry.spec(ARCHIVER_LABEL).timeout_s == 2400, "the archiver's real window must be untouched"
++
++    consumers = {c.name: c for c in scheduled_consumers(
++        ceiling=50, radar_rpm=RADAR_PLANNED_RPM, replay_top_n=REPLAY_TOP_N, registry=registry)}
++    archiver, replay = consumers["archiver"].window, consumers["replay"].window
++    assert archiver.describe() == "20:30-21:10 ET"   # the shipped 2400 s, unchanged
++    assert replay.describe() == "21:05-21:35 ET"
++    assert archiver.overlaps(replay) and replay.overlaps(archiver)
++
++    every = list(consumers.values())
++    demand = total_demand(every, subject="replay", ceiling=50)
++    assert set(demand.counted) >= {"archiver", "replay"}
++    assert demand.peak_rpm == pytest.approx(50.0 + 42.0)
++    with pytest.raises(TotalDemandExceeded, match="replay"):
++        check_total_demand(every, subject="replay", ceiling=50)
++
++
++class _NoWaitBucket:
++    async def acquire(self) -> None:
++        return None
+diff --git a/tests/cobalt/test_replay_formations.py b/tests/cobalt/test_replay_formations.py
+new file mode 100644
+index 0000000..3292164
+--- /dev/null
++++ b/tests/cobalt/test_replay_formations.py
+@@ -0,0 +1,352 @@
++"""S2-P4 STEP-5 formations — the positive half of R1-21, bound to S2-P2's
++SHIPPED replay contract (chunk E2).
++
++REAL ARTIFACTS ONLY (L45). Every formation in this module comes out of
++S2-P2's own `replay_formations` run over S2-P2's own hub-cut bar fixture
++(`tests/fixtures/radar/bars-rubberband.real-shape.json`) and the one
++synthetic anatomy-only trade_def the repo ships, built through P2's own
++test helper `radar_p2_support`. Nothing here hand-writes a
++`ReplayFormation`: the contract under test is exactly what P2 produces.
++
++The `with_trend` variant is the same shipped example note with one real
++`valid_setups.relation` value swapped — P2's own helper takes those
++overrides. It is used because it is the variant whose two same-day
++formations of one (ticker, trade_def) both traded through their trigger
++on the real tape, which is the R1-21 case ("two distinct formations
++persisting under the extended key"). The shipped `countertrend` variant's
++own two formations never traded through theirs — the real no-trigger
++case, tested here too.
++
++The counterfactual R is NOT recomputed here: a formation goes through the
++SAME `counterfactual()` the card path uses (L3, one formula).
++"""
++
++from __future__ import annotations
++
++import os
++import re
++from datetime import date, datetime, timedelta, timezone
++from decimal import Decimal
++from functools import lru_cache
++
++import pytest
++
++import radar_p2_support as sup
++from cobalt.radar.evaluate import EVALUATOR_VERSION
++from cobalt.radar.evaluate_cli import replay_formations
++from cobalt.replay.cards import resolve_window, session_close_for
++from cobalt.replay.formations import (
++    SUPPORTED_EVALUATORS,
++    FormationContext,
++    FormationSources,
++    formation_candidates,
++    formation_misses,
++    replay_formation,
++    replay_formation_from_receipt,
++)
++from cobalt.replay.models import FORMULA_VERSION, RadarCardRef, ReplayError, ReplayInputError
++from cobalt.session import session_clock
++
++UTC = timezone.utc
++DAY = sup.TRADE_DATE                                   # 2026-01-06
++CLOSE = session_close_for(DAY)                         # the real 16:00 ET close
++MINUTE = timedelta(minutes=1)
++MEMBER_FTFT = 100                                      # radar_p2_support.members()'s first id
++
++requires_db = pytest.mark.skipif(
++    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
++    reason="requires_db: Postgres env settings not available",
++)
++
++
++# ---------------------------------------------------------------------------
++# S2-P2's real replay, run exactly as its own tests run it
++# ---------------------------------------------------------------------------
++
++
++class ReadOnlyRadar(sup.FakeRadarStore):
++    """P2's `--replay` store: every read works, every write is a failure."""
++
++    def members_for_day(self, pool_key, day):
++        return [dict(m, trade_date=day) for m in self.members]
++
++    def __getattribute__(self, name):
++        if name in {"apply_membership", "put_pool", "open_score_run", "put_scores", "finish_run"}:
++            raise AssertionError(f"the read-only formation replay called the write method {name}")
++        return super().__getattribute__(name)
++
++
++def _daily(ticker, day):
++    return sup.fixture_daily(ticker, datetime(2026, 1, 6, 12, 0, tzinfo=UTC))
++
++
++def with_trend_def():
++    """The shipped example def with one real relation value swapped."""
++    return sup.loaded(sup.anatomy_def(valid_setups=[{"setup_ref": "overextension", "relation": "with_trend"}]))
++
++
++def countertrend_def():
++    """`radar_p2_support.anatomy_def()` exactly as it ships."""
++    return sup.loaded()
++
++
++def _p2_run(variant: str):
++    """One real P2 replay: ~230 scans through the real evaluator."""
++    loaded = with_trend_def() if variant == "with_trend" else countertrend_def()
++    tickers = ("FTFT", "BGFI")
++    radar = ReadOnlyRadar(sup.members(*tickers), {t: sup.fixture_bars(t) for t in tickers})
++    report = replay_formations(
++        DAY, pool_key="pool", slug_filter=None, radar_store=radar,
++        defs_source=lambda: ([loaded], {}), daily_source=_daily, tunables=sup.engine_tunables(),
++        defaults=sup.defaults(), clock=session_clock(), out=lambda _line: None,
++    )
++    return loaded, report
++
++
++#: The run is the expensive part, so it happens once per variant and each
++#: test reads its own deep copy.
++_cached_run = lru_cache(maxsize=None)(_p2_run)
++
++
++def p2_report(variant: str = "with_trend"):
++    return _cached_run(variant)[1].model_copy(deep=True)
++
++
++def context(*, cards=(), bars=None, trade_date=DAY, session_close=CLOSE):
++    series = sup.fixture_bars("FTFT") if bars is None else bars
++    return FormationContext(
++        trade_date=trade_date, session_close=session_close,
++        bars_for=lambda ticker: [b for b in series if b.ticker == ticker],
++        radar_cards=lambda: list(cards),
++    )
++
++
++def misses(report, *, evaluator_version=EVALUATOR_VERSION, **ctx):
++    return formation_misses(report, context=context(**ctx), evaluator_version=evaluator_version)
++
++
++# =====================================================================
++# P2 side: the three fields the `missed` CHECK needs (R1-21)
++# =====================================================================
++
++
++def test_p2_replay_formation_carries_the_membership_id_md5_and_score_receipt_reference():
++    loaded, report = _p2_run("with_trend")
++    assert len(report.formations) == 2, "P2's own fixture day forms twice for this def"
++    for f in report.formations:
++        assert f.membership_id == MEMBER_FTFT
++        assert f.trade_def_md5 == loaded.md5
++        assert re.fullmatch(r"[0-9a-f]{64}", f.score_inputs_sha256)
++    # the reference is the evaluation's own digest: two formations, two
++    # distinct evaluations, two distinct retained score receipts
++    assert report.formations[0].score_inputs_sha256 != report.formations[1].score_inputs_sha256
++    # and it is deterministic — a second real run replays to the same digests
++    assert [f.score_inputs_sha256 for f in _p2_run("with_trend")[1].formations] == \
++        [f.score_inputs_sha256 for f in report.formations]
++
++
++def test_the_shipped_capability_marker_is_the_one_replay_binds_to():
++    assert EVALUATOR_VERSION in SUPPORTED_EVALUATORS
++
++
++# =====================================================================
++# Two formations of one (ticker, trade_def) -> two rows (R1-21)
++# =====================================================================
++
++
++def test_two_same_day_formations_of_one_ticker_and_def_persist_as_two_rows_under_the_extended_key():
++    outcome = misses(p2_report("with_trend"))
++    assert outcome.status == EVALUATOR_VERSION
++    rows = list(outcome.rows)
++    assert (outcome.counts.candidates, outcome.counts.misses, outcome.counts.suppressed) == (2, 2, 0)
++    assert [r.formation_at.isoformat() for r in rows] == [
++        "2026-01-06T16:22:00+00:00", "2026-01-06T18:42:00+00:00"]
++    assert {r.kind for r in rows} == {"formation"}
++    assert {r.ticker for r in rows} == {"FTFT"}
++    assert {r.pool_member_id for r in rows} == {MEMBER_FTFT}
++    assert len({r.trade_def_md5 for r in rows}) == 1
++    # the extended subject key differs in exactly the formation_at slot
++    a, b = (r.subject() for r in rows)
++    assert a != b
++    assert [i for i, (x, y) in enumerate(zip(a, b)) if x != y] == [5]
++
++
++def test_every_formation_row_satisfies_0009s_formation_check():
++    for row in misses(p2_report("with_trend")).rows:
++        assert row.trade_def_md5 is not None and row.formation_at is not None
++        assert row.pool_member_id is not None
++        assert row.card_id is None and row.mover_id is None
++        assert row.excluded_by == "no_card"
++        assert row.formula_version == FORMULA_VERSION
++
++
++@requires_db
++def test_two_formation_rows_land_under_the_live_unique_index(dev_db_tx):
++    from cobalt import db
++    from cobalt.replay.cards import MissedStore
++
++    store = MissedStore()
++    with db.connect(store.db_name, side=db.Side.SYSTEM) as conn:
++        conn.execute("INSERT INTO system.radar_pool (pool_key,state,session,members) "
++                     "VALUES ('e2_proof','scanning','rth',1) ON CONFLICT (pool_key) DO NOTHING")
++        member = conn.execute(
++            "INSERT INTO system.radar_membership (pool_key,ticker,trade_date,first_seen_at,entered_at,"
++            "source,sources,session,opened_scan_id,last_scan_id) VALUES ('e2_proof','FTFT',%s,"
++            "'2026-01-06 14:35+00','2026-01-06 14:35+00','test','[\"test\"]'::jsonb,'rth',1,1) RETURNING id",
++            (DAY,),
++        ).fetchone()[0]
++    rows = [r.model_copy(update={"pool_member_id": member})
++            for r in misses(p2_report("with_trend")).rows]
++    counts = store.reconcile(run_id="e2-proof", trade_date=DAY, kind="formation", rows=rows)
++    assert counts.inserted == 2
++    current = store.current(DAY, "formation")
++    assert len(current) == 2
++    assert {r["excluded_by"] for r in current} == {"no_card"}
++
++
++# =====================================================================
++# Existing-card suppression (R1-21)
++# =====================================================================
++
++
++def _card_ref(direction="long", slug="example-anatomy-reversal", member=MEMBER_FTFT):
++    return RadarCardRef(card_id=7701, pool_member_id=member, trade_def_slug=slug,
++                        direction=direction, state="WATCH",
++                        created_at=datetime(2026, 1, 6, 16, 25, tzinfo=UTC))
++
++
++def test_an_existing_open_radar_card_for_member_def_direction_suppresses_the_miss():
++    outcome = misses(p2_report("with_trend"), cards=[_card_ref()])
++    assert list(outcome.rows) == []
++    assert (outcome.counts.candidates, outcome.counts.misses, outcome.counts.suppressed) == (2, 0, 2)
++
++
++@pytest.mark.parametrize("ref", [
++    _card_ref(direction="short"),                       # the other direction
++    _card_ref(slug="some-other-def"),                   # another trade_def
++    _card_ref(member=101),                              # another pool member
++])
++def test_a_card_on_a_different_member_def_or_direction_does_not_suppress(ref):
++    outcome = misses(p2_report("with_trend"), cards=[ref])
++    assert (outcome.counts.misses, outcome.counts.suppressed) == (2, 0)
++
++
++# =====================================================================
++# cf-R through P2's evaluator values, on the ONE formula (R4, R1-9, L57)
++# =====================================================================
++
++
++def test_cf_r_for_a_formation_is_the_one_formula_over_p2s_own_trigger_and_stop():
++    first, second = misses(p2_report("with_trend")).rows
++    # P2's formation: trigger 5.3500 / stop 5.33; the trigger bar OPENED
++    # beyond the trigger, so the fill is the bar open (R1-9 gap-through)
++    assert (first.entry, first.stop) == (Decimal("5.3500"), Decimal("5.33"))
++    assert first.trigger_ts == datetime(2026, 1, 6, 16, 25, tzinfo=UTC)
++    assert first.fill_price == Decimal("5.3880")
++    assert (first.exit_reason, first.exit_price) == ("stop", Decimal("5.33"))
++    assert first.exit_ts == datetime(2026, 1, 6, 16, 45, tzinfo=UTC)
++    assert (first.cf_r, first.mfe_r) == (Decimal("-2.9000"), Decimal("20.1000"))
++    assert (second.entry, second.stop) == (Decimal("6.5900"), Decimal("6.57"))
++    assert second.fill_price == Decimal("7.1100")
++    assert (second.cf_r, second.mfe_r) == (Decimal("-27.0000"), Decimal("118.5000"))
++    assert second.horizon_end == CLOSE
++
++
++def test_every_formation_number_replays_from_its_stored_receipt():
++    for row in misses(p2_report("with_trend")).rows:
++        again = replay_formation_from_receipt(row.receipt)
++        assert again.status == "miss"
++        assert again.miss.inputs_sha256 == row.inputs_sha256
++        assert (again.miss.cf_r, again.miss.mfe_r) == (row.cf_r, row.mfe_r)
++        assert again.miss.subject() == row.subject()
++
++
++def test_the_receipt_retains_the_p2_contract_facts_and_the_score_receipt_reference():
++    row = misses(p2_report("with_trend")).rows[0]
++    contract = row.receipt["inputs"]["p2_contract"]
++    assert contract["evaluator_version"] == EVALUATOR_VERSION
++    assert contract["module"] == "cobalt.radar.evaluate_cli"
++    assert contract["callable"] == "replay_formations"
++    reference = row.receipt["inputs"]["score_receipt"]
++    assert reference["table"] == "system.radar_score"
++    assert reference["key"] == {"membership_id": MEMBER_FTFT, "trade_def_md5": row.trade_def_md5}
++    assert re.fullmatch(r"[0-9a-f]{64}", reference["inputs_sha256"])
++    assert row.gate_detail["order"] == ["existing_card"]
++    assert row.gate_detail["existing_card"]["fired"] is False
++    assert row.gate_detail["trade_count_band"] == "unset"
++
++
++def test_the_window_comes_from_the_one_public_resolver():
++    row = misses(p2_report("with_trend")).rows[0]
++    resolved = resolve_window(None, DAY)
++    assert row.receipt["inputs"]["window"]["resolved_end"] == resolved.resolved_end.isoformat()
++    assert row.receipt["inputs"]["window"]["source"] == resolved.source
++
++
++# =====================================================================
++# No trigger, stale bars — never a fake R (R1-12)
++# =====================================================================
++
++
++def test_formations_whose_trigger_never_traded_through_write_no_row():
++    report = p2_report("countertrend")
++    assert len(report.formations) == 2, "the shipped def's own two same-day formations"
++    outcome = misses(report)
++    assert list(outcome.rows) == []
++    assert (outcome.counts.candidates, outcome.counts.no_trigger) == (2, 2)
++
++
++def test_bars_that_do_not_cover_the_day_are_input_stale_and_write_no_row():
++    truncated = [b for b in sup.fixture_bars("FTFT") if b.ts < datetime(2026, 1, 6, 19, 0, tzinfo=UTC)]
++    outcome = misses(p2_report("with_trend"), bars=truncated)
++    assert list(outcome.rows) == []
++    assert outcome.counts.input_stale == 2
++
++
++def test_a_formation_with_no_bars_at_all_is_input_stale():
++    outcome = misses(p2_report("with_trend"), bars=[])
++    assert (outcome.counts.misses, outcome.counts.input_stale) == (0, 2)
++
++
++# =====================================================================
++# Fail-loud on the contract itself (L1)
++# =====================================================================
++
++
++def test_an_unsupported_evaluator_version_refuses():
++    with pytest.raises(ReplayError, match="evaluator version"):
++        misses(p2_report("with_trend"), evaluator_version="s9p9.0")
++
++
++def test_a_formation_whose_stop_sits_on_the_wrong_side_of_its_trigger_refuses():
++    report = p2_report("with_trend")
++    report.formations[0] = report.formations[0].model_copy(update={"stop": "9.00"})
++    with pytest.raises(ReplayInputError, match="wrong side of entry"):
++        misses(report)
++
++
++def test_candidates_carry_every_field_the_row_needs():
++    report = p2_report("with_trend")
++    candidates = formation_candidates(report, evaluator_version=EVALUATOR_VERSION)
++    assert [c.formed_at for c in candidates] == [f.formed_bar_ts for f in report.formations]
++    assert [c.seen_at for c in candidates] == [f.seen_at for f in report.formations]
++    assert [(c.entry, c.stop) for c in candidates] == [
++        (Decimal(f.trigger), Decimal(f.stop)) for f in report.formations]
++    assert {c.evaluator_version for c in candidates} == {EVALUATOR_VERSION}
++    assert {c.score_inputs_sha256 for c in candidates} == {f.score_inputs_sha256 for f in report.formations}
++
++
++def test_replay_formation_refuses_a_formation_stamped_for_another_day():
++    candidate = formation_candidates(p2_report("with_trend"), evaluator_version=EVALUATOR_VERSION)[0]
++    other = date(2026, 1, 7)
++    with pytest.raises(ReplayInputError, match="trade date"):
++        replay_formation(candidate, sup.fixture_bars("FTFT"), trade_date=other,
++                         window=resolve_window(None, other), session_close=session_close_for(other),
++                         radar_cards=[])
++
++
++def test_formation_sources_name_every_argument_p2s_entrypoint_takes():
++    import inspect
++
++    taken = set(inspect.signature(replay_formations).parameters) - {"day", "out", "slug_filter"}
++    assert taken <= set(FormationSources.__dataclass_fields__)
+diff --git a/tests/cobalt/test_replay_line.py b/tests/cobalt/test_replay_line.py
+new file mode 100644
+index 0000000..d5373b0
+--- /dev/null
++++ b/tests/cobalt/test_replay_line.py
+@@ -0,0 +1,265 @@
++"""S2-P4 STEP-7 — the ONE miss line, unit `drc-misses/miss_line` (R5, L28, L8).
++
++The DRC note is never copied into the repo (P2 fixture ruling B): committed
++tests render `configs/cobalt/templates/drc.md.j2` exactly as
++test_prefill_drc.py does, and write through the real `VaultWriter` into a
++tmp dir with an in-memory audit store standing in for `vault_writes` (the
++store's own contract is proved in test_vaultwrite.py). The live DRC shape
++is read — never written — by the `requires_vault` test the hub runs.
++"""
++
++from __future__ import annotations
++
++import os
++from contextlib import contextmanager
++from datetime import date, datetime, timezone
++from decimal import Decimal
++from pathlib import Path
++
++import pytest
++
++from cobalt.prefill.drc import _render_template
++from cobalt.replay import line as line_mod
++from cobalt.replay.line import (
++    ANCHOR_SECTION,
++    SECTION,
++    UNIT,
++    DrcNoteAbsent,
++    after_drc_rules,
++    render_line,
++    write_miss_line,
++)
++from cobalt.settings.models import BenchmarkSettings
++from cobalt.vaultwrite import VaultWriter
++from cobalt.vaultwrite.markers import find_section
++from cobalt.vaultwrite.writer import NoteChangedOnDisk, VaultWriteError
++
++DAY = date(2026, 9, 3)
++SETTINGS = BenchmarkSettings(top_n=20, min_move_pct=Decimal("10"))
++
++requires_vault = pytest.mark.skipif(
++    not os.getenv("COBALT_TEST_LIVE_DRC"),
++    reason="requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set",
++)
++
++
++class MemoryWriteStore:
++    """`VaultWriteStore`'s read/write contract, in memory."""
++
++    def __init__(self):
++        self.rows: list[dict] = []
++        self.overrides: list[dict] = []
++
++    def last_after(self, note, section, unit):
++        for row in reversed(self.rows):
++            if (row["note"], row["section"], row["unit"]) == (note, section, unit):
++                return row["unit_after"]
++        return None
++
++    def recent_afters(self, note, section, unit, limit=10):
++        hits = [(r["id"], r["unit_after"]) for r in reversed(self.rows)
++                if (r["note"], r["section"], r["unit"]) == (note, section, unit)]
++        return hits[:limit]
++
++    def get_write(self, write_id):
++        return next((r for r in self.rows if r["id"] == write_id), None)
++
++    def purge_expired(self, days=30):
++        return 0
++
++    @contextmanager
++    def pending_write(self, *, overrides=None, **row):
++        row = {**row, "id": len(self.rows) + 1, "ts": datetime(2026, 9, 3, 21, 6, tzinfo=timezone.utc)}
++        yield row["id"]
++        self.rows.append(row)
++        self.overrides.extend(overrides or [])
++
++
++def drc_text(day: date = DAY) -> str:
++    return _render_template({
++        "date_str": day.isoformat(),
++        "risk_parameters_line": "FULL — A $120 · B $60",
++        "tickers_unit": "Cards written: 2 · Trades taken (FILLED): 1",
++        "rules_check_block": "- [ ] Card first. #process",
++    })
++
++
++@pytest.fixture
++def note(tmp_path):
++    path = tmp_path / "DRC-2026-09-03.md"
++    path.write_text(drc_text())
++    return path
++
++
++def outside_unit(text: str) -> str:
++    """Every byte of the note except the miss-line section."""
++    lines = text.split("\n")
++    sec = find_section(lines, SECTION)
++    if sec is None:
++        return text
++    return "\n".join(lines[: sec.open_line] + lines[sec.close_line + 1:])
++
++
++CARDS = [{"excluded_by": "unarmed", "cf_r": Decimal("-1.0139")},
++         {"excluded_by": "rule_10", "cf_r": Decimal("-1.0000")},
++         {"excluded_by": "unarmed", "cf_r": Decimal("2.5000")}]
++MOVERS = [{"ticker": "CTNT", "excluded_by": "not_in_any_source", "gate_detail": {"change_pct": "164.99"}},
++          {"ticker": "SNYR", "excluded_by": "config_cap", "gate_detail": {"change_pct": "-58.38"}}]
++
++
++def body():
++    return render_line(DAY, card_rows=CARDS, mover_rows=MOVERS, settings=SETTINGS,
++                       formation_replay="unavailable", input_stale=0)
++
++
++# =====================================================================
++# §4 Miss line
++# =====================================================================
++
++
++def test_miss_line_sum_carries_n_and_average_insufficient_below_30():
++    text = body()
++    assert text == (
++        "Misses 2026-09-03: cards 3 (unarmed 2 · passed 0 · not_filled 0 · window 0 · rule_10 1) "
++        "· cf-R Σ +0.5R, n=3 · avg: insufficient data (n<30) "
++        "· movers ≥ 10%: 2 not in play — CTNT +165.0% not_in_any_source · SNYR −58.4% config_cap "
++        "· formations: unavailable until S2-P2"
++    )
++    thirty = [{"excluded_by": "window", "cf_r": Decimal("-0.5")}] * 30
++    full = render_line(DAY, card_rows=thirty, mover_rows=[], settings=SETTINGS,
++                       formation_replay="unavailable", input_stale=0)
++    assert "cf-R Σ −15.0R, n=30 · avg −0.50R" in full
++    assert "insufficient" not in full
++
++
++def test_line_lists_three_movers_then_counts_the_rest_and_surfaces_input_stale():
++    many = [{"ticker": f"T{i}", "excluded_by": "not_in_any_source", "gate_detail": {"change_pct": str(50 - i)}}
++            for i in range(5)]
++    text = render_line(DAY, card_rows=[], mover_rows=many, settings=SETTINGS,
++                       formation_replay="unavailable", input_stale=2)
++    assert "5 not in play — T0 +50.0% not_in_any_source · T1 +49.0% not_in_any_source · T2 +48.0% not_in_any_source (+2 more)" in text
++    assert "cards 0 (unarmed 0" in text and "input_stale 2" in text
++
++
++def test_miss_line_upserts_drc_misses_unit_idempotent(note):
++    store = MemoryWriteStore()
++    first = write_miss_line(note, body(), writer=VaultWriter("replay.nightly", store=store))
++    assert first.action == "updated"
++    text = note.read_text()
++    assert f"<!-- cobalt:section {SECTION} -->" in text and f"<!-- cobalt:unit {UNIT} -->" in text
++    second = write_miss_line(note, body(), writer=VaultWriter("replay.nightly", store=store))
++    assert second.action == "unchanged"
++    assert note.read_text() == text
++    assert len(store.rows) == 1
++
++
++def test_human_edit_to_miss_line_wins_and_logs_override(note):
++    store = MemoryWriteStore()
++    write_miss_line(note, body(), writer=VaultWriter("replay.nightly", store=store))
++    edited = note.read_text().replace("cf-R Σ +0.5R", "cf-R Σ +0.5R (his note: CRWD was news)")
++    note.write_text(edited)
++    newer = render_line(DAY, card_rows=CARDS[:2], mover_rows=MOVERS, settings=SETTINGS,
++                        formation_replay="unavailable", input_stale=0)
++    result = write_miss_line(note, newer, writer=VaultWriter("replay.nightly", store=store))
++    assert "his note: CRWD was news" in note.read_text()
++    assert result.overrides and store.overrides
++    assert outside_unit(note.read_text()) == outside_unit(edited)
++
++
++def test_drc_note_absent_fails_loud_and_creates_nothing(tmp_path, monkeypatch):
++    review = tmp_path / "1 - Trading" / "5 - Review"
++    review.mkdir(parents=True)
++    monkeypatch.setattr(line_mod, "resolve_vault_path", lambda: tmp_path)
++    with pytest.raises(DrcNoteAbsent, match="DRC note absent — prefill-drc owns creation"):
++        line_mod.drc_note_path(DAY)
++    with pytest.raises(DrcNoteAbsent):
++        write_miss_line(review / "DRC-2026-09-03.md", body(), writer=VaultWriter("replay.nightly", store=MemoryWriteStore()))
++    assert list(review.iterdir()) == []
++
++
++def test_dry_run_writes_nothing_and_prints_diff(note):
++    before = note.read_text()
++    store = MemoryWriteStore()
++    result = write_miss_line(note, body(), writer=VaultWriter("replay.nightly", store=store, dry_run=True))
++    assert result.dry_run and result.diff
++    assert "+<!-- cobalt:unit miss_line -->" in result.diff
++    assert note.read_text() == before
++    assert store.rows == []
++
++
++# =====================================================================
++# R1-18 — zero-width placement and the L28 cases
++# =====================================================================
++
++
++def test_r1_18_first_unit_lands_zero_width_right_after_the_drc_rules_close_marker(note):
++    before = note.read_text()
++    write_miss_line(note, body(), writer=VaultWriter("replay.nightly", store=MemoryWriteStore()))
++    lines = note.read_text().split("\n")
++    rules = find_section(lines, ANCHOR_SECTION)
++    misses = find_section(lines, SECTION)
++    assert misses.open_line == rules.close_line + 1
++    assert outside_unit(note.read_text()) == before
++
++
++def test_r1_18_missing_anchor_appends_at_the_end_and_touches_nothing_above(tmp_path):
++    path = tmp_path / "DRC.md"
++    human = "# his DRC\n\nNo Cobalt sections yet.\n"
++    path.write_text(human)
++    result = write_miss_line(path, body(), writer=VaultWriter("replay.nightly", store=MemoryWriteStore()))
++    assert path.read_text().startswith(human)
++    assert any("anchor not found" in n for n in result.notes)
++    assert after_drc_rules().locate(human.split("\n")) is None
++
++
++def test_r1_18_malformed_marker_refuses_and_changes_no_byte(tmp_path):
++    path = tmp_path / "DRC.md"
++    broken = drc_text().replace("<!-- /cobalt:section drc-rules -->", "")
++    path.write_text(broken)
++    with pytest.raises((VaultWriteError, Exception)):
++        write_miss_line(path, body(), writer=VaultWriter("replay.nightly", store=MemoryWriteStore()))
++    assert path.read_text() == broken
++
++
++def test_r1_18_sync_revert_takes_cobalt_text_without_an_override(note):
++    store = MemoryWriteStore()
++    v1 = body()
++    write_miss_line(note, v1, writer=VaultWriter("replay.nightly", store=store))
++    after_v1 = note.read_text()
++    v2 = render_line(DAY, card_rows=CARDS[:1], mover_rows=[], settings=SETTINGS,
++                     formation_replay="unavailable", input_stale=0)
++    write_miss_line(note, v2, writer=VaultWriter("replay.nightly", store=store))
++    note.write_text(after_v1)                                 # Sync puts v1 back
++    v3 = render_line(DAY, card_rows=CARDS, mover_rows=[], settings=SETTINGS,
++                     formation_replay="unavailable", input_stale=0)
++    result = write_miss_line(note, v3, writer=VaultWriter("replay.nightly", store=store))
++    assert v3 in note.read_text()
++    assert not result.overrides and store.overrides == []
++    assert any("SYNC REVERT" in n for n in result.notes)
++    assert outside_unit(note.read_text()) == outside_unit(after_v1)
++
++
++def test_r1_18_mtime_conflict_aborts_and_never_clobbers_the_concurrent_edit(note):
++    human_line = "\nhis line typed while the replay ran\n"
++
++    def racer(path: Path) -> None:
++        path.write_text(path.read_text() + human_line)
++
++    with pytest.raises(NoteChangedOnDisk):
++        write_miss_line(note, body(), writer=VaultWriter("replay.nightly", store=MemoryWriteStore(),
++                                                          precommit_hook=racer))
++    text = note.read_text()
++    assert text.endswith(human_line * 2)
++    assert f"cobalt:section {SECTION}" not in text
++
++
++@requires_vault
++def test_live_drc_shape_accepts_the_unit_placement():
++    """Hub-run, READ ONLY: the live DRC note has a well-formed drc-rules
++    section after which the miss line would land zero-width."""
++    live = Path(os.environ["COBALT_TEST_LIVE_DRC"])
++    lines = live.read_text(encoding="utf-8").split("\n")
++    span = after_drc_rules().locate(lines)
++    rules = find_section(lines, ANCHOR_SECTION)
++    assert rules is not None, "the live DRC has no drc-rules section"
++    assert span == (rules.close_line + 1, rules.close_line + 1)

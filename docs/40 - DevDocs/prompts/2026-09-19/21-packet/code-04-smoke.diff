@@ -1,0 +1,1473 @@
+diff --git a/src/cobalt/smoke/__init__.py b/src/cobalt/smoke/__init__.py
+new file mode 100644
+index 0000000..af4f30a
+--- /dev/null
++++ b/src/cobalt/smoke/__init__.py
+@@ -0,0 +1,12 @@
++"""`cobalt smoke` — the sprint-close smoke checklist, in code (S2-P4 STEP-9, R6 B).
++
++    models.py  — the suite schema (seven read-only check kinds) and outcomes
++    config.py  — loads `configs/cobalt/smoke/<suite>.yaml`; errors carry a line
++    checks.py  — one evaluator per kind, the run's variables, hand commands
++    report.py  — the numbered verdict table and the report file
++    cli.py     — `cobalt smoke <suite> --cutoff … [--prod] [--json]`
++
++Built on day-open's pattern (plan-s2-p4 §1 F17): every check captures its
++raw output, renders PASS | FAIL | KNOWN | ERROR, and the OVERALL line is
++day-open's own roll-up. Read-only end to end; no writer is imported.
++"""
+diff --git a/src/cobalt/smoke/checks.py b/src/cobalt/smoke/checks.py
+new file mode 100644
+index 0000000..64af377
+--- /dev/null
++++ b/src/cobalt/smoke/checks.py
+@@ -0,0 +1,679 @@
++"""The seven check kinds, evaluated read-only (S2-P4 STEP-9, R6).
++
++`evaluate(check, ctx, deps)` returns one `CheckOutcome` and never raises:
++a probe that could not run is `ERROR`, same rule as day-open and the
++heartbeat ("the probe broke" and "the thing is down" are different
++facts). Every collector is a `SmokeDeps` field, so tests hand in fakes
++and `default_deps()` is the only place the real ones are named.
++
++THE ONE KIND THAT COLLECTS NOTHING is `compare`: it grades two numbers
++its operands already collected, so `run_suite` threads the outcomes it
++has produced so far into each `evaluate` call. A check declaring
++`result_number` carries THE number of its result on its outcome; a
++compare over an operand that ERRORed, or that came back with something
++that is not a number, is ERROR naming it — never a silent PASS.
++
++READ-ONLY, AND HOW THAT IS KEPT. SQL and job rows go through
++`cobalt.db_query.read_rows` — the `cobalt db query` read path (guard,
++READ ONLY transaction, timeout, role assertion, rollback). A vault note is
++read as text and parsed with `find_section`; nothing here imports a
++writer, a store or a job wrapper, and `test_smoke_imports_no_writer_and_
++calls_no_write` holds both halves of that (static names, runtime
++sentinels on every write surface).
++
++VARIABLES render as SQL LITERALS, not bind parameters, on purpose: the
++printed hand command must be the statement that actually ran, byte for
++byte, and `cobalt db query` takes no parameters. Every value is a typed
++date/datetime/number/str from `SmokeContext`, never free input; strings
++are quoted with doubled `'`.
++"""
++
++from __future__ import annotations
++
++import os
++import re
++import shlex
++import subprocess
++from dataclasses import dataclass
++from datetime import date, datetime, time, timedelta
++from decimal import Decimal, InvalidOperation
++from pathlib import Path
++from typing import Any, Callable, Optional
++from urllib import request as urlrequest
++from urllib.error import HTTPError
++
++from cobalt.dayopen.launchd import LaunchdPrintStatus, launchctl_print
++from cobalt.db_query import QueryRows, hand_command, read_rows
++from cobalt.session.calendar import TradingCalendar
++from cobalt.session.clock import ET, SessionClock, session_clock
++from cobalt.vaultwrite.markers import MarkerError, find_section
++
++from .config import REPO_ROOT
++from .models import (
++    VAR_RE,
++    CheckOutcome,
++    CliCheck,
++    CompareCheck,
++    CompareOp,
++    HttpCheck,
++    JobRowCheck,
++    LaunchctlCheck,
++    LogGrepCheck,
++    Op,
++    Predicate,
++    SmokeContext,
++    SqlCheck,
++    Verdict,
++    VaultUnitCheck,
++)
++
++HTTP_TIMEOUT_S = 10.0
++CLI_TIMEOUT_S = 300.0
++
++
++@dataclass(frozen=True)
++class SmokeDeps:
++    """Every collector a check can reach. Fakes in tests; `default_deps`."""
++
++    read_rows: Callable[[str, str], QueryRows]
++    launchctl_print: Callable[[str], LaunchdPrintStatus]
++    launchctl_loaded: Callable[[str], bool]
++    http_get: Callable[[str], tuple[int, str]]
++    read_text: Callable[[Path], str]
++    run_cli: Callable[[list[str]], tuple[int, str]]
++    job_specs: Callable[[], list]
++    drc_note_path: Callable[[date], Path]
++    missed_grace: Callable[[], timedelta]
++
++
++# ---------------------------------------------------------------------
++# real collectors
++# ---------------------------------------------------------------------
++
++
++def load_job_specs() -> list:
++    from cobalt.jobs.config import load_job_registry
++
++    return list(load_job_registry().jobs)
++
++
++def _http_get(url: str) -> tuple[int, str]:
++    try:
++        with urlrequest.urlopen(urlrequest.Request(url, method="GET"), timeout=HTTP_TIMEOUT_S) as r:
++            return r.status, r.read().decode("utf-8", "replace")
++    except HTTPError as e:  # a 4xx/5xx is an answer, not a broken probe
++        return e.code, e.read().decode("utf-8", "replace")
++
++
++def _run_cli(argv: list[str]) -> tuple[int, str]:
++    proc = subprocess.run(
++        ["uv", "run", *argv], cwd=REPO_ROOT, capture_output=True, text=True,
++        timeout=CLI_TIMEOUT_S, env=dict(os.environ),
++    )
++    return proc.returncode, proc.stdout + proc.stderr
++
++
++def _launchctl_loaded(label: str) -> bool:
++    from cobalt.jobs.watchdog import launchctl_status
++
++    return launchctl_status(label).loaded
++
++
++def _drc_note_path(day: date) -> Path:
++    """`prefill.yaml` review_dir + drc_filename_pattern in the resolved
++    vault — the same two values prefill-drc and the replay miss line use."""
++    from cobalt.prefill.config import load_prefill_paths
++    from cobalt.vault import resolve_vault_path
++
++    paths = load_prefill_paths()
++    return resolve_vault_path() / paths.review_dir / day.strftime(paths.drc_filename_pattern)
++
++
++def _missed_grace() -> timedelta:
++    from cobalt.jobs.watchdog import MISSED_GRACE_KEY
++    from cobalt.taxonomy.loader import load_tunables
++
++    row = load_tunables().by_key.get(MISSED_GRACE_KEY)
++    if row is None:
++        raise RuntimeError(f"tunable {MISSED_GRACE_KEY!r} is missing from tunables.yaml (F16)")
++    return timedelta(minutes=int(row.value))
++
++
++def default_deps(*, prod: bool) -> SmokeDeps:
++    return SmokeDeps(
++        read_rows=lambda statement, side: read_rows(statement, side=side, prod=prod),
++        launchctl_print=launchctl_print,
++        launchctl_loaded=_launchctl_loaded,
++        http_get=_http_get,
++        read_text=lambda path: Path(path).read_text(),
++        run_cli=_run_cli,
++        job_specs=load_job_specs,
++        drc_note_path=_drc_note_path,
++        missed_grace=_missed_grace,
++    )
++
++
++# ---------------------------------------------------------------------
++# context
++# ---------------------------------------------------------------------
++
++
++def last_trading_day(now: datetime, anchor_spec, calendar: Optional[TradingCalendar] = None) -> date:
++    """The latest trading day whose anchor-job occurrence (`schedule.at` ET)
++    plus that job's `timeout_s` has passed by `now`. Bounded to 14 days."""
++    calendar = calendar or session_clock().calendar
++    if anchor_spec.schedule is None or not anchor_spec.schedule.at:
++        raise ValueError(f"{anchor_spec.label} has no calendar `at` schedule to anchor a day on")
++    hh, _, mm = anchor_spec.schedule.at.partition(":")
++    now_et = SessionClock.to_et(now)
++    day = now_et.date()
++    for _ in range(14):
++        ready = datetime.combine(day, time(int(hh), int(mm)), tzinfo=ET) + timedelta(
++            seconds=anchor_spec.timeout_s
++        )
++        if calendar.is_trading_day(day) and ready <= now_et:
++            return day
++        day -= timedelta(days=1)
++    raise RuntimeError(f"no trading day with a finished {anchor_spec.label} occurrence in 14 days")
++
++
++def build_context(
++    *, now: datetime, report_date: Optional[date], cutoff: datetime, prod: bool,
++    anchor_spec, tunables: dict[str, Any], clock: Optional[SessionClock] = None,
++) -> SmokeContext:
++    from cobalt.heartbeat.runner import summary_at
++
++    clock = clock or session_clock()
++    now_et = SessionClock.to_et(now)
++    slots = summary_at()
++    passed = [slot for slot in slots if slot <= now_et.time()]
++    if passed:
++        slot, slot_date = passed[-1], now_et.date()
++    else:
++        slot, slot_date = slots[-1], now_et.date() - timedelta(days=1)
++    return SmokeContext(
++        now=now,
++        report_date=report_date or now_et.date(),
++        session=clock.session(now).value,
++        cutoff=cutoff,
++        last_trading_day=last_trading_day(now, anchor_spec, clock.calendar),
++        last_summary_slot=f"{slot:%H:%M}",
++        last_summary_date=slot_date,
++        prod=prod,
++        tunables=tunables,
++    )
++
++
++def _var(token_name: str, arg: Optional[str], ctx: SmokeContext) -> Any:
++    if token_name == "tunable":
++        if arg not in ctx.tunables:
++            raise KeyError(f"tunable {arg!r} is not in tunables.yaml")
++        return ctx.tunables[arg]
++    return getattr(ctx, token_name)
++
++
++def sql_literal(value: Any) -> str:
++    if value is None:
++        return "NULL"
++    if isinstance(value, bool):
++        return "true" if value else "false"
++    if isinstance(value, datetime):
++        return f"TIMESTAMPTZ '{value.isoformat()}'"
++    if isinstance(value, date):
++        return f"DATE '{value.isoformat()}'"
++    if isinstance(value, (int, float, Decimal)):
++        return str(value)
++    return "'" + str(value).replace("'", "''") + "'"
++
++
++def text_value(value: Any) -> str:
++    if isinstance(value, (date, datetime)):
++        return value.isoformat()
++    return str(value)
++
++
++def render_sql(template: str, ctx: SmokeContext) -> str:
++    return VAR_RE.sub(lambda m: sql_literal(_var(m.group(1), m.group(2), ctx)), template)
++
++
++def render_text(template: str, ctx: SmokeContext) -> str:
++    return VAR_RE.sub(lambda m: text_value(_var(m.group(1), m.group(2), ctx)), template)
++
++
++def _resolve(value: Any, ctx: SmokeContext) -> Any:
++    """A predicate value: a whole-string `{variable}` becomes its typed
++    value; a string with an embedded variable renders as text."""
++    if isinstance(value, str):
++        whole = VAR_RE.fullmatch(value)
++        if whole:
++            return _var(whole.group(1), whole.group(2), ctx)
++        return render_text(value, ctx)
++    return value
++
++
++# ---------------------------------------------------------------------
++# comparison
++# ---------------------------------------------------------------------
++
++
++def _number(value: Any) -> Optional[Decimal]:
++    if isinstance(value, bool) or value is None:
++        return None
++    if isinstance(value, (int, float, Decimal)):
++        return Decimal(str(value))
++    return None
++
++
++def same(actual: Any, expected: Any) -> bool:
++    """Equality across the types a DB row and a YAML file carry: numbers by
++    value, bools only to bools, dates to their ISO text, else text."""
++    if isinstance(expected, bool) or isinstance(actual, bool):
++        return isinstance(actual, bool) and isinstance(expected, bool) and actual is expected
++    a, e = _number(actual), _number(expected)
++    if a is not None and e is not None:
++        return a == e
++    if actual is None or expected is None:
++        return actual is None and expected is None
++    return text_value(actual) == text_value(expected)
++
++
++def _order(actual: Any, expected: Any) -> int:
++    a, e = _number(actual), _number(expected)
++    if a is None or e is None:
++        try:
++            a, e = Decimal(str(actual)), Decimal(str(expected))
++        except InvalidOperation:
++            if isinstance(actual, (date, datetime)) and type(actual) is type(expected):
++                return (actual > expected) - (actual < expected)
++            raise TypeError(f"cannot order {actual!r} against {expected!r}")
++    return (a > e) - (a < e)
++
++
++def holds(pred: Predicate, row: dict[str, Any], ctx: SmokeContext) -> bool:
++    if pred.column not in row:
++        raise KeyError(f"column {pred.column!r} not returned (got {sorted(row)})")
++    actual = row[pred.column]
++    expected = _resolve(pred.value, ctx)
++    op = pred.op
++    if op is Op.IS_NULL:
++        return actual is None
++    if op is Op.NOT_NULL:
++        return actual is not None
++    if op is Op.EQ:
++        return same(actual, expected)
++    if op is Op.NE:
++        return not same(actual, expected)
++    if op is Op.IN:
++        return any(same(actual, _resolve(v, ctx)) for v in expected)
++    if op is Op.NOT_IN:
++        return not any(same(actual, _resolve(v, ctx)) for v in expected)
++    if actual is None:
++        return False
++    sign = _order(actual, expected)
++    return {Op.LT: sign < 0, Op.LE: sign <= 0, Op.GT: sign > 0, Op.GE: sign >= 0}[op]
++
++
++def _describe(pred: Predicate, row: dict[str, Any]) -> str:
++    value = "" if pred.op in (Op.IS_NULL, Op.NOT_NULL) else f" {pred.value!r}"
++    return f"{pred.column} {pred.op.value}{value} (actual {row.get(pred.column)!r})"
++
++
++def _raw_rows(result: QueryRows) -> str:
++    lines = ["\t".join(result.columns)]
++    lines += ["\t".join("" if v is None else str(v) for v in row) for row in result.rows]
++    return "\n".join(lines)
++
++
++# ---------------------------------------------------------------------
++# commands (the hand fallback, R6 A / Astra R1-24)
++# ---------------------------------------------------------------------
++
++JOB_ROW_SQL = (
++    "SELECT label, state, exit_code, started_at, finished_at, updated_at, registered_at, "
++    "last_result FROM cobalt_jobs WHERE label = {label}"
++)
++RELATION_SQL = "SELECT to_regclass({relation}) IS NOT NULL AS present"
++
++
++def _job_sql(check: JobRowCheck) -> str:
++    return JOB_ROW_SQL.format(label=sql_literal(check.label))
++
++
++def _relation_sql(check: SqlCheck) -> str:
++    return RELATION_SQL.format(relation=sql_literal(check.requires_relation))
++
++
++def command_for(check, ctx: SmokeContext, *, note_path: Optional[Path] = None) -> str:
++    if isinstance(check, LaunchctlCheck):
++        if check.mode == "running":
++            return f"launchctl print gui/$(id -u)/{check.label}"
++        return "launchctl list | grep com.cobalt.  # compare to `enabled` in configs/cobalt/jobs.yaml"
++    if isinstance(check, SqlCheck):
++        main = hand_command(render_sql(check.query, ctx), side=check.side, prod=ctx.prod)
++        if check.requires_relation:
++            return hand_command(_relation_sql(check), side=check.side, prod=ctx.prod) + " && " + main
++        return main
++    if isinstance(check, JobRowCheck):
++        return hand_command(_job_sql(check), side="system", prod=ctx.prod)
++    if isinstance(check, HttpCheck):
++        url = shlex.quote(render_text(check.url, ctx))
++        base = f"curl -s -o /dev/null -w '%{{http_code}}' {url}"
++        for needle in check.contains:
++            base += f" && curl -s {url} | grep -F {shlex.quote(needle)}"
++        return base
++    if isinstance(check, LogGrepCheck):
++        path = shlex.quote(render_text(check.path, ctx))
++        grep = f"grep -E {shlex.quote(check.pattern)}"
++        if check.block_start:
++            return f"tail -r {path} | sed -E '/{check.block_start}/q' | {grep}"
++        return f"{grep} {path}"
++    if isinstance(check, VaultUnitCheck):
++        day = getattr(ctx, check.day)
++        target = shlex.quote(str(note_path)) if note_path else f"<{check.note} note for {day:%Y-%m-%d}>"
++        return (
++            f"grep -n -F -e {shlex.quote(f'<!-- cobalt:section {check.section} -->')} "
++            f"-e {shlex.quote(f'<!-- cobalt:unit {check.unit} -->')} {target}"
++        )
++    if isinstance(check, CliCheck):
++        return "uv run " + " ".join(shlex.quote(render_text(a, ctx)) for a in check.argv)
++    if isinstance(check, CompareCheck):
++        # Not a command: this row runs no probe. It is the hand
++        # instruction (R6 A) — run the two rows it names, then compare the
++        # two numbers they printed.
++        return (
++            f"# compare {check.left} {check.op.value} {check.right} "
++            f"— run both rows above; their two printed numbers must be {check.op.value}"
++        )
++    raise TypeError(f"unknown check type {type(check).__name__}")
++
++
++# ---------------------------------------------------------------------
++# evaluation
++# ---------------------------------------------------------------------
++
++
++def _out(check, verdict: Verdict, detail: str, command: str, raw: str,
++         number: Optional[Decimal] = None) -> CheckOutcome:
++    return CheckOutcome(
++        id=check.id, title=check.title, kind=check.kind, verdict=verdict, detail=detail,
++        command=command, expected=check.expect_text, raw=raw, number=number,
++    )
++
++
++def _launchctl(check: LaunchctlCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
++    command = command_for(check, ctx)
++    if check.mode == "running":
++        status = deps.launchctl_print(check.label)
++        detail = f"state={status.state}, pid={status.pid}, last exit code={status.last_exit_code}"
++        verdict = Verdict.PASS if status.running_with_pid else Verdict.FAIL
++        return _out(check, verdict, detail, command, status.raw)
++    specs = deps.job_specs()
++    lines, not_loaded, loaded_disabled = [], [], []
++    for spec in specs:
++        loaded = deps.launchctl_loaded(spec.label)
++        lines.append(f"{spec.label}\tenabled={spec.enabled}\tloaded={loaded}")
++        if spec.enabled and not loaded:
++            not_loaded.append(spec.label)
++        if not spec.enabled and loaded:
++            loaded_disabled.append(spec.label)
++    if not_loaded or loaded_disabled:
++        detail = (f"enabled but not loaded: {not_loaded or 'none'}; "
++                  f"loaded but enabled: false: {loaded_disabled or 'none'}")
++        return _out(check, Verdict.FAIL, detail, command, "\n".join(lines))
++    return _out(check, Verdict.PASS, f"{len(specs)} registry label(s) match launchd", command, "\n".join(lines))
++
++
++def _grade(check, row: dict[str, Any], expect: list[Predicate], ctx: SmokeContext,
++           command: str, raw: str, number: Optional[Decimal] = None) -> CheckOutcome:
++    failed, known = [], []
++    for pred in expect:
++        if holds(pred, row, ctx):
++            continue
++        if pred.known and any(same(row[pred.column], k) for k in pred.known):
++            known.append(_describe(pred, row))
++        else:
++            failed.append(_describe(pred, row))
++    if failed:
++        return _out(check, Verdict.FAIL, "; ".join(failed), command, raw, number)
++    if known:
++        return _out(check, Verdict.KNOWN, "known: " + "; ".join(known), command, raw, number)
++    return _out(check, Verdict.PASS, "; ".join(f"{p.column} ok" for p in expect), command, raw, number)
++
++
++def _one_row(result: QueryRows) -> Optional[dict[str, Any]]:
++    if len(result.rows) > 1:
++        raise ValueError(f"expected at most one row, got {len(result.rows)}")
++    return dict(zip(result.columns, result.rows[0])) if result.rows else None
++
++
++def _sql(check: SqlCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
++    command = command_for(check, ctx)
++    raw_parts = []
++    if check.requires_relation:
++        present = deps.read_rows(_relation_sql(check), check.side)
++        raw_parts.append(_raw_rows(present))
++        row = _one_row(present)
++        if not row or row.get("present") is not True:
++            return _out(check, Verdict.FAIL, f"relation {check.requires_relation} does not exist",
++                        command, "\n".join(raw_parts))
++    result = deps.read_rows(render_sql(check.query, ctx), check.side)
++    raw_parts.append(_raw_rows(result))
++    raw = "\n".join(raw_parts)
++    row = _one_row(result)
++    if row is None:
++        return _out(check, Verdict.FAIL, "no row returned", command, raw)
++    number = _number(row.get(check.result_number)) if check.result_number else None
++    if check.known_if and all(holds(p, row, ctx) for p in check.known_if):
++        return _out(check, Verdict.KNOWN, f"KNOWN: {check.known_text}", command, raw, number)
++    return _grade(check, row, check.expect, ctx, command, raw, number)
++
++
++def _dig(data: Any, dotted: str) -> tuple[bool, Any]:
++    for part in dotted.split("."):
++        if not isinstance(data, dict) or part not in data:
++            return False, None
++        data = data[part]
++    return True, data
++
++
++def _job_row(check: JobRowCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
++    command = command_for(check, ctx)
++    result = deps.read_rows(_job_sql(check), "system")
++    raw = _raw_rows(result)
++    row = _one_row(result)
++    if row is None:
++        return _out(check, Verdict.FAIL, f"no cobalt_jobs row for {check.label}", command, raw)
++    failed = []
++    if check.state is not None and row.get("state") != check.state:
++        failed.append(f"state {row.get('state')!r} (expected {check.state!r})")
++    if check.exit_code is not None and row.get("exit_code") != check.exit_code:
++        failed.append(f"exit_code {row.get('exit_code')!r} (expected {check.exit_code})")
++    if check.max_age_min is not None:
++        updated = row.get("updated_at")
++        if updated is None or ctx.now - updated > timedelta(minutes=check.max_age_min):
++            failed.append(f"updated_at {updated} older than {check.max_age_min} min")
++    if check.not_missed:
++        from cobalt.jobs.watchdog import is_missed
++
++        spec = next((s for s in deps.job_specs() if s.label == check.label), None)
++        if spec is None:
++            raise KeyError(f"{check.label} is not in configs/cobalt/jobs.yaml")
++        missed, why = is_missed(spec, row, now_et=SessionClock.to_et(ctx.now), grace=deps.missed_grace())
++        if missed:
++            failed.append(f"MISSED — {why}")
++    last = row.get("last_result") or {}
++    for key in check.result_keys:
++        if key not in last:
++            failed.append(f"last_result has no {key!r}")
++    for path_template, expected in check.result_equals.items():
++        path = render_text(path_template, ctx)
++        found, actual = _dig(last, path)
++        want = _resolve(expected, ctx)
++        if not found or not same(actual, want):
++            failed.append(f"last_result.{path} = {actual!r} (expected {text_value(want)!r})")
++    for key in check.result_positive:
++        value = _number(last.get(key))
++        if value is None or value <= 0:
++            failed.append(f"last_result.{key} = {last.get(key)!r} (expected > 0)")
++    number = None
++    if check.result_number:
++        found, value = _dig(last, check.result_number)
++        number = _number(value) if found else None
++    if failed:
++        return _out(check, Verdict.FAIL, "; ".join(failed), command, raw, number)
++    return _out(check, Verdict.PASS, f"{check.label}: state={row.get('state')}, "
++                f"exit={row.get('exit_code')}, finished_at={row.get('finished_at')}",
++                command, raw, number)
++
++
++def _http(check: HttpCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
++    command = command_for(check, ctx)
++    url = render_text(check.url, ctx)
++    status, body = deps.http_get(url)
++    raw = f"HTTP {status}\n{body[:2000]}"
++    failed = []
++    if status != check.status:
++        failed.append(f"HTTP {status} (expected {check.status})")
++    failed += [f"body lacks {needle!r}" for needle in check.contains if needle not in body]
++    if failed:
++        return _out(check, Verdict.FAIL, "; ".join(failed), command, raw)
++    return _out(check, Verdict.PASS, f"HTTP {status}", command, raw)
++
++
++def _log_grep(check: LogGrepCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
++    command = command_for(check, ctx)
++    path = REPO_ROOT / render_text(check.path, ctx)
++    text = deps.read_text(path)
++    lines = text.splitlines()
++    if check.block_start:
++        starts = [i for i, line in enumerate(lines) if re.search(check.block_start, line)]
++        if not starts:
++            return _out(check, Verdict.ERROR, f"no line matching {check.block_start!r} in {check.path}",
++                        command, "\n".join(lines[-20:]))
++        lines = lines[starts[-1]:]
++    hits = [line for line in lines if re.search(check.pattern, line)]
++    raw = "\n".join(lines[:60] if check.block_start else hits[-20:]) or "(no lines)"
++    if bool(hits) == check.present:
++        detail = f"{len(hits)} line(s) match {check.pattern!r}" if hits else f"no line matches {check.pattern!r}"
++        return _out(check, Verdict.PASS, detail, command, raw)
++    detail = (f"no line matches {check.pattern!r}" if check.present
++              else f"{len(hits)} line(s) match {check.pattern!r}")
++    return _out(check, Verdict.FAIL, detail, command, raw)
++
++
++def _vault_unit(check: VaultUnitCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
++    day = getattr(ctx, check.day)
++    path = deps.drc_note_path(day)
++    command = command_for(check, ctx, note_path=path)
++    if not Path(path).is_file():
++        return _out(check, Verdict.FAIL, f"note absent: {path}", command, "")
++    lines = deps.read_text(Path(path)).splitlines()
++    try:
++        section = find_section(lines, check.section)
++    except MarkerError as e:
++        return _out(check, Verdict.ERROR, f"markers unreadable: {e}", command, "")
++    if section is None:
++        return _out(check, Verdict.FAIL, f"section {check.section!r} absent in {path}", command, "")
++    raw = section.text(lines)
++    unit = section.units.get(check.unit)
++    if unit is None:
++        return _out(check, Verdict.FAIL, f"unit {check.section}/{check.unit} absent in {path}", command, raw)
++    return _out(check, Verdict.PASS, f"unit {check.section}/{check.unit} present in {path}", command, raw)
++
++
++def _cli(check: CliCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
++    command = command_for(check, ctx)
++    argv = [render_text(a, ctx) for a in check.argv]
++    code, output = deps.run_cli(argv)
++    raw = f"exit {code}\n" + "\n".join(output.splitlines()[-40:])
++    if code != check.exit_code:
++        return _out(check, Verdict.FAIL, f"exit {code} (expected {check.exit_code})", command, raw)
++    return _out(check, Verdict.PASS, f"exit {code}", command, raw)
++
++
++#: One callable per `CompareOp`. Adding an operator is adding a row here
++#: and its test (the schema refuses anything else at load).
++COMPARE_OPS: dict[CompareOp, Callable[[Decimal, Decimal], bool]] = {
++    CompareOp.EQ: lambda left, right: left == right,
++}
++
++
++def _compare(check: CompareCheck, ctx: SmokeContext,
++             results: dict[str, CheckOutcome]) -> CheckOutcome:
++    """Grade one comparison over two outcomes that have already run.
++
++    Both operands are printed on this row whatever the verdict, so the
++    comparison is replayable from the report alone (L57, R6 A).
++    """
++    command = command_for(check, ctx)
++    operands = []
++    for role, cid in (("left", check.left), ("right", check.right)):
++        outcome = results.get(cid)
++        if outcome is None:
++            # The schema forbids this in a file; reaching it means the
++            # caller evaluated a compare outside `run_suite`.
++            raise KeyError(f"{check.id}.{role} names {cid}, which has not run")
++        operands.append(outcome)
++    left, right = operands
++    raw = "\n".join(
++        f"{o.id}\t{o.verdict.value}\t{'(no number)' if o.number is None else o.number}"
++        for o in operands
++    )
++    errored = [o.id for o in operands if o.verdict is Verdict.ERROR]
++    if errored:
++        return _out(check, Verdict.ERROR,
++                    f"ERROR(operand) — {', '.join(errored)} could not run, so there is "
++                    "nothing to compare", command, raw)
++    absent = [f"{o.id} ({o.kind})" for o in operands if o.number is None]
++    if absent:
++        return _out(check, Verdict.ERROR,
++                    f"ERROR(non-numeric result) — {', '.join(absent)} produced no number to "
++                    "compare", command, raw)
++    detail = (f"{left.id} = {left.number}, {right.id} = {right.number} "
++              f"(op {check.op.value})")
++    if COMPARE_OPS[check.op](left.number, right.number):
++        return _out(check, Verdict.PASS, detail, command, raw)
++    return _out(check, Verdict.FAIL, detail + " — they disagree", command, raw)
++
++
++_EVALUATORS = {
++    "launchctl": _launchctl, "sql": _sql, "job_row": _job_row, "http": _http,
++    "log_grep": _log_grep, "vault_unit": _vault_unit, "cli": _cli,
++}
++
++
++def evaluate(check, ctx: SmokeContext, deps: SmokeDeps,
++             results: Optional[dict[str, CheckOutcome]] = None) -> CheckOutcome:
++    try:
++        if isinstance(check, CompareCheck):
++            return _compare(check, ctx, results or {})
++        return _EVALUATORS[check.kind](check, ctx, deps)
++    except Exception as e:  # noqa: BLE001 — a broken probe is ERROR, never a crash
++        try:
++            command = command_for(check, ctx)
++        except Exception:  # noqa: BLE001
++            command = f"(command not renderable: {check.kind})"
++        return _out(check, Verdict.ERROR, f"ERROR(probe failed) — {type(e).__name__}: {e}", command, str(e))
++
++
++def run_suite(suite, ctx: SmokeContext, deps: SmokeDeps) -> list[CheckOutcome]:
++    """Every check in file order. One broken probe never stops the rest.
++
++    Outcomes are kept by id as they are produced, so a `compare` row
++    grades the numbers the rows above it already collected — one pass,
++    no second read of any source.
++    """
++    outcomes: list[CheckOutcome] = []
++    so_far: dict[str, CheckOutcome] = {}
++    for check in suite.checks:
++        outcome = evaluate(check, ctx, deps, so_far)
++        so_far[outcome.id] = outcome
++        outcomes.append(outcome)
++    return outcomes
++
++
++__all__ = [
++    "COMPARE_OPS", "SmokeDeps", "build_context", "command_for", "default_deps", "evaluate",
++    "holds", "last_trading_day", "load_job_specs", "render_sql", "render_text", "run_suite",
++    "same", "sql_literal",
++]
+diff --git a/src/cobalt/smoke/cli.py b/src/cobalt/smoke/cli.py
+new file mode 100644
+index 0000000..53401e6
+--- /dev/null
++++ b/src/cobalt/smoke/cli.py
+@@ -0,0 +1,100 @@
++"""`cobalt smoke <suite>` — RULED 2026-09-15, R6 B (plan-s2-p4 STEP-9).
++
++    cobalt smoke s2 --cutoff <ISO8601 with offset> [--date YYYY-MM-DD] [--prod] [--json]
++
++Loads `configs/cobalt/smoke/<suite>.yaml` (a bad file crashes with its
++line), runs every check read-only, prints the numbered verdict table and
++OVERALL, and writes `docs/40 - DevDocs/reports/<suite>-smoke-<date>.md`.
++`--json` prints the same content and writes nothing.
++
++`--cutoff` is the P4 deploy instant (the D1 merge time from the deploy
++report). It is REQUIRED and has no default: K3/K6 compare only rows at or
++after it, and a guessed cutoff would silently widen or narrow what they
++judge (L1). `--prod` has `cobalt db query`'s meaning — the production
++database is refused without it.
++
++Exit code: 0 GREEN, 1 AMBER or RED, so a scripted run cannot mistake a
++red smoke for a green one.
++"""
++
++from __future__ import annotations
++
++import argparse
++import sys
++from datetime import date, datetime
++
++from cobalt.session.clock import now_utc
++
++from . import report as report_mod
++from .checks import SmokeDeps, build_context, default_deps, run_suite
++from .config import load_suite, suite_path
++from .models import Overall, SmokeReport
++
++
++def run(
++    suite_name: str, *, cutoff: datetime, report_date: date | None = None,
++    now: datetime | None = None, prod: bool = False, deps: SmokeDeps | None = None,
++) -> SmokeReport:
++    """Load, contextualise, run. Writes nothing — `cmd_run` owns the file."""
++    from cobalt.jobs.config import load_job_registry
++    from cobalt.taxonomy.loader import load_tunables
++
++    suite = load_suite(suite_path(suite_name))
++    now = now or now_utc()
++    registry = load_job_registry()
++    ctx = build_context(
++        now=now, report_date=report_date, cutoff=cutoff, prod=prod,
++        anchor_spec=registry.spec(suite.day_anchor_job),
++        tunables={key: row.value for key, row in load_tunables().by_key.items()},
++    )
++    outcomes = run_suite(suite, ctx, deps or default_deps(prod=prod))
++    return report_mod.build_report(suite.suite, suite.title, ctx, outcomes, generated_at=now)
++
++
++def _cutoff(raw: str) -> datetime:
++    try:
++        value = datetime.fromisoformat(raw)
++    except ValueError as e:
++        raise argparse.ArgumentTypeError(f"--cutoff must be ISO 8601, got {raw!r}") from e
++    if value.tzinfo is None or value.utcoffset() is None:
++        raise argparse.ArgumentTypeError(f"--cutoff {raw!r} has no offset; pass …-04:00 or Z")
++    return value
++
++
++def _date(raw: str) -> date:
++    try:
++        return date.fromisoformat(raw)
++    except ValueError as e:
++        raise argparse.ArgumentTypeError(f"--date must be YYYY-MM-DD, got {raw!r}") from e
++
++
++def cmd_run(args: argparse.Namespace) -> None:
++    rep = run(args.suite, cutoff=args.cutoff, report_date=args.date, prod=args.prod)
++    if args.json:
++        print(report_mod.render_json(rep))
++    else:
++        path = report_mod.write_report(rep, reports_dir=report_mod.REPORTS_DIR)
++        print(f"wrote {path}\n")
++        print(report_mod.render_table(rep))
++    if rep.overall is not Overall.GREEN:
++        sys.exit(1)
++
++
++def add_parser(sub) -> None:
++    smoke = sub.add_parser("smoke", help="Read-only sprint smoke checklist (S2-P4 R6).")
++    smoke.add_argument("suite", help="Suite name: configs/cobalt/smoke/<suite>.yaml (e.g. s2).")
++    smoke.add_argument("--cutoff", type=_cutoff, required=True,
++                       help="Deploy instant, ISO 8601 with offset (K3/K6 compare rows at/after it).")
++    smoke.add_argument("--date", type=_date, default=None, help="Report date (default: today ET).")
++    smoke.add_argument("--prod", action="store_true", help="Read the production database.")
++    smoke.add_argument("--json", action="store_true", help="Print JSON; write no report file.")
++    smoke.set_defaults(func=cmd_run)
++
++
++def build_parser() -> argparse.ArgumentParser:
++    parser = argparse.ArgumentParser(prog="cobalt")
++    add_parser(parser.add_subparsers(dest="group", required=True))
++    return parser
++
++
++__all__ = ["add_parser", "build_parser", "run"]
+diff --git a/src/cobalt/smoke/config.py b/src/cobalt/smoke/config.py
+new file mode 100644
+index 0000000..81bf627
+--- /dev/null
++++ b/src/cobalt/smoke/config.py
+@@ -0,0 +1,82 @@
++"""Loads a smoke suite file — L10: "bad file crashes with a line number".
++
++YAML is parsed twice from the same text: `yaml.compose` keeps the node
++tree with its start marks, `yaml.safe_load` feeds the Pydantic schema.
++A validation error's location (`checks → 3 → expect → 0 → op`) is walked
++down the node tree to the deepest node that exists, and that node's line
++is the one reported. A key the file never wrote (a missing required
++field) resolves to the line of the mapping that should have carried it.
++"""
++
++from __future__ import annotations
++
++from pathlib import Path
++from typing import Optional
++
++import yaml
++from pydantic import ValidationError
++
++from .models import SmokeSuite
++
++REPO_ROOT = Path(__file__).resolve().parents[3]
++SUITES_DIR = REPO_ROOT / "configs" / "cobalt" / "smoke"
++
++
++class SmokeConfigError(RuntimeError):
++    """A suite file that cannot load. `line` is 1-based, or None."""
++
++    def __init__(self, path: Path, line: Optional[int], message: str):
++        self.path = path
++        self.line = line
++        where = f"{path}:{line}" if line is not None else str(path)
++        super().__init__(f"{where}: {message}")
++
++
++def suite_path(name: str) -> Path:
++    return SUITES_DIR / f"{name}.yaml"
++
++
++def _line_for(root: yaml.Node, loc: tuple) -> int:
++    node = root
++    for part in loc:
++        if isinstance(node, yaml.MappingNode):
++            match = next((v for k, v in node.value if getattr(k, "value", None) == part), None)
++            if match is None:
++                continue  # a union tag, or a key the file never wrote
++            node = match
++        elif isinstance(node, yaml.SequenceNode) and isinstance(part, int):
++            if part >= len(node.value):
++                break
++            node = node.value[part]
++        else:
++            break
++    return node.start_mark.line + 1
++
++
++def load_suite(path: Path) -> SmokeSuite:
++    path = Path(path)
++    try:
++        text = path.read_text()
++    except OSError as e:
++        raise SmokeConfigError(path, None, f"unreadable: {e}") from e
++    try:
++        root = yaml.compose(text)
++        raw = yaml.safe_load(text)
++    except yaml.YAMLError as e:
++        mark = getattr(e, "problem_mark", None) or getattr(e, "context_mark", None)
++        line = mark.line + 1 if mark is not None else None
++        raise SmokeConfigError(path, line, f"YAML error: {getattr(e, 'problem', None) or e}") from e
++    if root is None or not isinstance(raw, dict):
++        raise SmokeConfigError(path, 1, "a suite file is a mapping with `suite`, `title`, `checks`")
++    try:
++        return SmokeSuite.model_validate(raw)
++    except ValidationError as e:
++        first = e.errors()[0]
++        loc = tuple(first["loc"])
++        line = _line_for(root, loc)
++        where = " → ".join(str(p) for p in loc)
++        more = f" (+{e.error_count() - 1} more)" if e.error_count() > 1 else ""
++        raise SmokeConfigError(path, line, f"{where}: {first['msg']}{more}") from e
++
++
++__all__ = ["REPO_ROOT", "SUITES_DIR", "SmokeConfigError", "load_suite", "suite_path"]
+diff --git a/src/cobalt/smoke/models.py b/src/cobalt/smoke/models.py
+new file mode 100644
+index 0000000..93a3383
+--- /dev/null
++++ b/src/cobalt/smoke/models.py
+@@ -0,0 +1,440 @@
++"""The shapes `cobalt smoke` loads and renders (S2-P4 STEP-9, R6).
++
++A suite file (`configs/cobalt/smoke/<suite>.yaml`) is one `SmokeSuite`: an
++ordered list of checks, each one of eight kinds, discriminated on `kind`
++(L10: a Pydantic schema per config family, validated on load). Every
++check kind is READ-ONLY by construction, and the schema is where that is
++enforced first:
++
++    sql       — the statement must pass `cobalt db query`'s own guard
++    job_row   — reads one `cobalt_jobs` row through that same read path
++    cli       — argv must start with a prefix in `READ_ONLY_CLI`
++    log_grep  — a repo-relative path, never `..`
++    http      — a GET
++    launchctl — `launchctl print` / `launchctl list`
++    vault_unit — a marker read over the note's text
++    compare   — reads nothing: two checks' already-collected numbers
++
++`compare` exists because of the tenancy wall (L32). An assertion that
++spans both sides — "the corpus has as many card rows as the job that
++wrote them says it wrote" — cannot be one statement, because no role may
++read both `system.cobalt_jobs` and `"user".missed`. So each side is asked
++by its own check, each names THE number of its result (`result_number`),
++and a `compare` row asserts the equality between them. Everything it
++needs is validated at load: an operand that is not a check ABOVE it, or
++one that names no number, crashes the file with its line (L1/L10) rather
++than producing a row that could never run.
++
++The verdict vocabulary and the OVERALL roll-up are day-open's
++(`cobalt.dayopen.models`), not a second copy (L3).
++"""
++
++from __future__ import annotations
++
++import re
++from datetime import date, datetime
++from decimal import Decimal
++from enum import Enum
++from typing import Annotated, Any, Literal, Optional, Union
++
++from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
++
++from cobalt.dayopen.models import Overall, Verdict, overall_verdict
++from cobalt.db_query import QueryRefused, guard_select
++
++#: The variables a suite may name. `{tunable:<key>}` is the one
++#: parameterised form. Values are computed by `checks.build_context`.
++VARIABLES = frozenset({
++    "now", "report_date", "session", "cutoff", "last_trading_day",
++    "last_summary_slot", "last_summary_date",
++})
++VAR_RE = re.compile(r"\{([a-z_]+)(?::([A-Za-z0-9_.]+))?\}")
++
++#: argv prefixes a `cli` check may run. Only commands that neither write a
++#: row, a file nor a vault note, nor run DDL: `cobalt validate` reads config.
++#: (`cobalt jobs check` and `cobalt heartbeat show` sweep and stamp job rows;
++#: `cobalt cards picks` runs `ensure_schema` — none of them is on this list.)
++READ_ONLY_CLI: tuple[tuple[str, ...], ...] = (("cobalt", "validate"),)
++
++CHECK_ID = r"^K\d+(\.\d+)?$"
++
++#: A `result_number`: a column name for `sql`, a dotted `last_result` path
++#: for `job_row`. Lower-case identifiers joined by dots — the same shape
++#: `result_equals` already uses, so one file reads one way.
++RESULT_NUMBER = r"^[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)*$"
++
++
++def variables_in(text: str) -> list[str]:
++    """Every `{name}` / `{tunable:key}` in `text`; raises on an unknown name."""
++    found = []
++    for match in VAR_RE.finditer(text):
++        name, arg = match.group(1), match.group(2)
++        if name == "tunable":
++            if not arg:
++                raise ValueError("`{tunable:<key>}` needs a key")
++        elif arg is not None or name not in VARIABLES:
++            raise ValueError(
++                f"unknown variable {match.group(0)!r} — known: "
++                f"{', '.join(sorted(VARIABLES))}, tunable:<key>"
++            )
++        found.append(match.group(0))
++    return found
++
++
++class CompareOp(str, Enum):
++    """The operators a `compare` row may use between two numbers.
++
++    One member on purpose: `eq` is the assertion the K8 split lost, and an
++    operator nothing asserts is an untested branch. Adding one is adding
++    its test (desk ruling, row 4).
++    """
++
++    EQ = "eq"
++
++
++class Op(str, Enum):
++    EQ = "eq"
++    NE = "ne"
++    LT = "lt"
++    LE = "le"
++    GT = "gt"
++    GE = "ge"
++    IN = "in"
++    NOT_IN = "not_in"
++    IS_NULL = "is_null"
++    NOT_NULL = "not_null"
++
++
++class Predicate(BaseModel):
++    """One comparison over a column of the check's single row.
++
++    `value` may be a literal or a `{variable}` string. `known` lists actual
++    values that make a FAILING predicate KNOWN instead of FAIL — each entry
++    exists only by ruling, so every committed list starts empty.
++    """
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    column: str = Field(min_length=1)
++    op: Op
++    value: Any = None
++    known: list[Any] = Field(default_factory=list)
++
++    @model_validator(mode="after")
++    def _value_shape(self) -> "Predicate":
++        if self.op in (Op.IS_NULL, Op.NOT_NULL):
++            if self.value is not None:
++                raise ValueError(f"op {self.op.value} takes no value")
++        elif self.op in (Op.IN, Op.NOT_IN):
++            if not isinstance(self.value, list):
++                raise ValueError(f"op {self.op.value} needs a list value")
++        elif self.value is None:
++            raise ValueError(f"op {self.op.value} needs a value (use is_null for NULL)")
++        if isinstance(self.value, str):
++            variables_in(self.value)
++        return self
++
++
++class _Check(BaseModel):
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    id: str = Field(pattern=CHECK_ID)
++    title: str = Field(min_length=1)
++    #: The exact expected output, printed beside the command (Astra R1-24).
++    expect_text: str = Field(min_length=1)
++
++
++class LaunchctlCheck(_Check):
++    kind: Literal["launchctl"]
++    #: `running`: one label, `state = running` with a pid.
++    #: `registry_match`: every enabled jobs.yaml label loaded, no disabled one.
++    mode: Literal["running", "registry_match"]
++    label: Optional[str] = None
++
++    @model_validator(mode="after")
++    def _label(self) -> "LaunchctlCheck":
++        if (self.mode == "running") != (self.label is not None):
++            raise ValueError("`label` is required for mode running and forbidden for registry_match")
++        return self
++
++
++class SqlCheck(_Check):
++    kind: Literal["sql"]
++    side: Literal["system", "user"]
++    query: str = Field(min_length=1)
++    expect: list[Predicate] = Field(min_length=1)
++    known_if: list[Predicate] = Field(default_factory=list)
++    known_text: Optional[str] = None
++    #: Checked first with `to_regclass`; absent -> FAIL naming it.
++    requires_relation: Optional[str] = Field(default=None, pattern=r"^[a-z_]+\.[a-z_]+$")
++    #: OPTIONAL and additive: the column of the returned row that IS this
++    #: check's number, for a `compare` row to read. It grades nothing here
++    #: — `expect` still owns this check's own verdict.
++    result_number: Optional[str] = Field(default=None, pattern=RESULT_NUMBER)
++
++    @field_validator("query")
++    @classmethod
++    def _read_only(cls, value: str) -> str:
++        variables_in(value)
++        try:
++            guard_select(value)
++        except QueryRefused as e:
++            raise ValueError(f"not a read-only statement (refused token: {e})") from e
++        return value
++
++    @model_validator(mode="after")
++    def _known_text(self) -> "SqlCheck":
++        if bool(self.known_if) != bool(self.known_text):
++            raise ValueError("`known_if` and `known_text` go together")
++        return self
++
++
++class HttpCheck(_Check):
++    kind: Literal["http"]
++    url: str = Field(pattern=r"^https?://")
++    status: int = 200
++    contains: list[str] = Field(default_factory=list)
++
++
++class LogGrepCheck(_Check):
++    kind: Literal["log_grep"]
++    #: Repo-relative (the production checkout's `logs/`).
++    path: str = Field(min_length=1)
++    #: When set, only the text from the LAST line matching this regex on.
++    block_start: Optional[str] = None
++    #: POSIX ERE-compatible, so the printed `grep -E` runs the same pattern.
++    pattern: str = Field(min_length=1)
++    present: bool = True
++
++    @field_validator("path")
++    @classmethod
++    def _relative(cls, value: str) -> str:
++        if value.startswith("/") or ".." in value.split("/"):
++            raise ValueError(f"log path {value!r} must be repo-relative with no '..'")
++        return value
++
++    @field_validator("pattern", "block_start")
++    @classmethod
++    def _compiles(cls, value: Optional[str]) -> Optional[str]:
++        if value is not None:
++            re.compile(value)
++        return value
++
++
++class JobRowCheck(_Check):
++    kind: Literal["job_row"]
++    label: str = Field(pattern=r"^com\.cobalt\.[a-z0-9-]+$")
++    state: Optional[Literal["pending", "running", "done", "failed", "zombie"]] = None
++    exit_code: Optional[int] = None
++    #: `cobalt.jobs.watchdog.is_missed` against the registry's schedule.
++    not_missed: bool = False
++    #: `updated_at` no older than this.
++    max_age_min: Optional[int] = Field(default=None, gt=0)
++    result_keys: list[str] = Field(default_factory=list)
++    #: dotted path in `last_result` -> expected (literal or `{variable}`).
++    result_equals: dict[str, Any] = Field(default_factory=dict)
++    #: keys in `last_result` whose value must be a number > 0.
++    result_positive: list[str] = Field(default_factory=list)
++    #: OPTIONAL and additive: the dotted `last_result` path that IS this
++    #: check's number, for a `compare` row to read (see `SqlCheck`).
++    result_number: Optional[str] = Field(default=None, pattern=RESULT_NUMBER)
++
++    @model_validator(mode="after")
++    def _asks_something(self) -> "JobRowCheck":
++        asks = [self.state, self.exit_code, self.max_age_min]
++        if not (any(a is not None for a in asks) or self.not_missed or self.result_keys
++                or self.result_equals or self.result_positive):
++            raise ValueError("a job_row check must expect something")
++        for key, value in self.result_equals.items():
++            variables_in(key)
++            if isinstance(value, str):
++                variables_in(value)
++        return self
++
++
++class VaultUnitCheck(_Check):
++    kind: Literal["vault_unit"]
++    note: Literal["drc"]
++    day: Literal["last_trading_day", "report_date"]
++    section: str = Field(min_length=1)
++    unit: str = Field(min_length=1)
++
++
++class CliCheck(_Check):
++    kind: Literal["cli"]
++    argv: list[str] = Field(min_length=1)
++    exit_code: int = 0
++
++    @field_validator("argv")
++    @classmethod
++    def _allowlisted(cls, value: list[str]) -> list[str]:
++        if not any(tuple(value[: len(prefix)]) == prefix for prefix in READ_ONLY_CLI):
++            raise ValueError(
++                f"argv {value!r} is not on the read-only allowlist "
++                f"{[' '.join(p) for p in READ_ONLY_CLI]}"
++            )
++        return value
++
++
++class CompareCheck(_Check):
++    """Two checks' numbers, compared once both have run.
++
++    It reads no source of its own: `left` and `right` name checks ABOVE it
++    in the file, each declaring `result_number`, and the comparison is
++    made over the numbers those two runs already collected. That is what
++    keeps it read-only and what keeps it honest — the numbers it grades
++    are the ones printed on their own rows.
++    """
++
++    kind: Literal["compare"]
++    left: str = Field(pattern=CHECK_ID)
++    right: str = Field(pattern=CHECK_ID)
++    op: CompareOp = CompareOp.EQ
++
++    @model_validator(mode="after")
++    def _two_other_checks(self) -> "CompareCheck":
++        if self.left == self.right:
++            raise ValueError(
++                f"left and right are both {self.left} — a compare names two different checks"
++            )
++        if self.id in (self.left, self.right):
++            raise ValueError(f"check {self.id} compares itself")
++        return self
++
++
++SmokeCheck = Annotated[
++    Union[LaunchctlCheck, SqlCheck, HttpCheck, LogGrepCheck, JobRowCheck, VaultUnitCheck,
++          CliCheck, CompareCheck],
++    Field(discriminator="kind"),
++]
++
++
++class SmokeSuite(BaseModel):
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    suite: str = Field(pattern=r"^[a-z0-9_-]+$")
++    title: str = Field(min_length=1)
++    #: The one-shot whose last finished occurrence defines `{last_trading_day}`.
++    day_anchor_job: str = Field(pattern=r"^com\.cobalt\.[a-z0-9-]+$")
++    checks: list[SmokeCheck] = Field(min_length=1)
++
++    @field_validator("checks")
++    @classmethod
++    def _unique_ids(cls, value: list) -> list:
++        seen: set[str] = set()
++        for check in value:
++            if check.id in seen:
++                raise ValueError(f"duplicate check id {check.id}")
++            seen.add(check.id)
++        return value
++
++    @field_validator("checks")
++    @classmethod
++    def _compare_operands(cls, value: list) -> list:
++        """A `compare` row's operands are resolved at LOAD, never at 21:50.
++
++        Both must be checks EARLIER in the file (the run evaluates in file
++        order, so a later one has no result yet) and both must name a
++        `result_number`. Either mistake crashes the file with its line
++        rather than producing a row that reports ERROR on the close
++        evening (L1).
++        """
++        kinds: dict[str, str] = {}
++        numbered: set[str] = set()
++        for check in value:
++            if isinstance(check, CompareCheck):
++                for role, cid in (("left", check.left), ("right", check.right)):
++                    if cid not in kinds:
++                        above = ", ".join(kinds) or "nothing"
++                        raise ValueError(
++                            f"{check.id}.{role} names {cid}, which is not a check above it "
++                            f"(a compare reads results that have already run; above it: {above})"
++                        )
++                    if cid not in numbered:
++                        raise ValueError(
++                            f"{check.id}.{role} names {cid} (kind {kinds[cid]}), which declares "
++                            "no `result_number` — only a check that names THE number of its "
++                            "result can be compared"
++                        )
++            kinds[check.id] = check.kind
++            if getattr(check, "result_number", None):
++                numbered.add(check.id)
++        return value
++
++
++class SmokeContext(BaseModel):
++    """The run's variables. Printed at the top of the report, so every
++    rendered command is replayable from the file alone (L57)."""
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    now: datetime
++    report_date: date
++    session: str
++    cutoff: datetime
++    last_trading_day: date
++    last_summary_slot: str
++    last_summary_date: date
++    prod: bool
++    tunables: dict[str, Any] = Field(default_factory=dict)
++
++    @field_validator("now", "cutoff")
++    @classmethod
++    def _aware(cls, value: datetime) -> datetime:
++        if value.tzinfo is None or value.utcoffset() is None:
++            raise ValueError("timestamps must carry a timezone")
++        return value
++
++    def printable(self) -> dict[str, str]:
++        return {
++            "now": self.now.isoformat(),
++            "report_date": self.report_date.isoformat(),
++            "session": self.session,
++            "cutoff": self.cutoff.isoformat(),
++            "last_trading_day": self.last_trading_day.isoformat(),
++            "last_summary_slot": self.last_summary_slot,
++            "last_summary_date": self.last_summary_date.isoformat(),
++            "database": "production (--prod)" if self.prod else "COBALT_ENV-resolved",
++        }
++
++
++class CheckOutcome(BaseModel):
++    """One check's verdict with its evidence. `raw` is the collected
++    output, verbatim; `command` + `expected` are the hand fallback."""
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    id: str
++    title: str
++    kind: str
++    verdict: Verdict
++    detail: str
++    command: str
++    expected: str
++    raw: str
++    #: THE number of this check's result, when it declared a
++    #: `result_number` and the run produced one. `None` everywhere else —
++    #: including a check that declared one and came back with a value that
++    #: is not a number, which is what makes a `compare` over it ERROR
++    #: instead of quietly passing.
++    number: Optional[Decimal] = None
++
++
++class SmokeReport(BaseModel):
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    suite: str
++    title: str
++    context: SmokeContext
++    generated_at: datetime
++    checks: list[CheckOutcome] = Field(min_length=1)
++    overall: Overall
++
++
++__all__ = [
++    "CHECK_ID", "CheckOutcome", "CliCheck", "CompareCheck", "CompareOp", "HttpCheck",
++    "JobRowCheck", "LaunchctlCheck", "LogGrepCheck", "Op", "Overall", "Predicate",
++    "READ_ONLY_CLI", "RESULT_NUMBER", "SmokeCheck", "SmokeContext", "SmokeReport",
++    "SmokeSuite", "SqlCheck", "VARIABLES", "VAR_RE", "VaultUnitCheck", "Verdict",
++    "overall_verdict", "variables_in",
++]
+diff --git a/src/cobalt/smoke/report.py b/src/cobalt/smoke/report.py
+new file mode 100644
+index 0000000..1ce8dd6
+--- /dev/null
++++ b/src/cobalt/smoke/report.py
+@@ -0,0 +1,124 @@
++"""Renders and writes `docs/40 - DevDocs/reports/<suite>-smoke-<date>.md`.
++
++Same file discipline as day-open's report (L48): written in the same
++turn the checks run, a plain repo file (no `VaultWriter`, no markers),
++never replacing an existing report — a second run the same day lands
++beside it as `…-<HHMMSS>.md`. The hub commits it under L51(2).
++
++Layout: the run's variables (so every rendered command is replayable),
++the numbered verdict table (# | check | verdict | evidence), OVERALL,
++then one section per check with its exact command, expected output and
++the raw evidence — the hand fallback runs from this file alone (R6 A).
++"""
++
++from __future__ import annotations
++
++import json
++from datetime import datetime
++from pathlib import Path
++
++from cobalt.dayopen.report import REPORTS_DIR
++from cobalt.session.clock import SessionClock, now_utc
++
++from .models import CheckOutcome, SmokeContext, SmokeReport, overall_verdict
++
++
++class ReportPathError(RuntimeError):
++    """A smoke report would replace a file or land outside `reports/`."""
++
++
++def build_report(suite: str, title: str, ctx: SmokeContext, outcomes: list[CheckOutcome],
++                 *, generated_at: datetime | None = None) -> SmokeReport:
++    return SmokeReport(
++        suite=suite, title=title, context=ctx, generated_at=generated_at or ctx.now,
++        checks=outcomes, overall=overall_verdict(outcomes),
++    )
++
++
++def report_path(rep: SmokeReport, *, reports_dir: Path) -> Path:
++    return reports_dir / f"{rep.suite}-smoke-{rep.context.report_date:%Y-%m-%d}.md"
++
++
++def _cell(text: str) -> str:
++    return text.replace("|", "\\|").replace("\n", " ").strip()
++
++
++def render_table(rep: SmokeReport) -> str:
++    lines = ["| # | check | verdict | evidence |", "|---|---|---|---|"]
++    lines += [f"| {c.id} | {_cell(c.title)} | {c.verdict.value} | {_cell(c.detail)} |" for c in rep.checks]
++    return "\n".join(lines + ["", f"OVERALL: {rep.overall.value}"])
++
++
++def render_markdown(rep: SmokeReport) -> str:
++    parts = [
++        f"# {rep.title.upper()} {rep.context.report_date:%Y-%m-%d}",
++        f"Generated: {SessionClock.to_et(rep.generated_at):%Y-%m-%d %H:%M:%S %Z} · "
++        f"`cobalt smoke {rep.suite}` · configs/cobalt/smoke/{rep.suite}.yaml",
++        "",
++        "## Variables",
++        *[f"- {key}: {value}" for key, value in rep.context.printable().items()],
++        "",
++        "## VERDICT",
++        render_table(rep),
++        "",
++        "Rule: RED any ERROR · AMBER any FAIL · GREEN otherwise; KNOWN never lowers it. "
++        f"{rep.suite.upper()} done = GREEN only.",
++        "",
++    ]
++    for c in rep.checks:
++        parts += [
++            f"## {c.id} {c.title} — {c.verdict.value}",
++            f"- kind: {c.kind}",
++            f"- command: `{c.command}`",
++            f"- expected: {c.expected}",
++            f"- verdict detail: {c.detail}",
++            "```",
++            c.raw if c.raw else "(no output captured)",
++            "```",
++            "",
++        ]
++    return "\n".join(parts)
++
++
++def render_json(rep: SmokeReport) -> str:
++    return json.dumps(
++        {
++            "suite": rep.suite,
++            "report_date": rep.context.report_date.isoformat(),
++            "generated_at": rep.generated_at.isoformat(),
++            "variables": rep.context.printable(),
++            "overall": rep.overall.value,
++            "checks": [
++                {"id": c.id, "title": c.title, "kind": c.kind, "verdict": c.verdict.value,
++                 "detail": c.detail, "command": c.command, "expected": c.expected,
++                 # THE number of the check's result, as text: a Decimal
++                 # renders exactly, and a float would not (L57).
++                 "number": None if c.number is None else str(c.number)}
++                for c in rep.checks
++            ],
++        },
++        indent=2,
++    )
++
++
++def write_report(rep: SmokeReport, *, reports_dir: Path | None = None) -> Path:
++    reports_dir = reports_dir or REPORTS_DIR
++    reports_dir.mkdir(parents=True, exist_ok=True)
++    path = report_path(rep, reports_dir=reports_dir)
++    if path.exists():
++        stamp = SessionClock.to_et(now_utc()).strftime("%H%M%S")
++        path = path.with_name(f"{path.stem}-{stamp}.md")
++    if path.resolve().parent != reports_dir.resolve():
++        raise ReportPathError(f"refusing to write {path} outside {reports_dir}")
++    try:
++        with path.open("x") as f:
++            f.write(render_markdown(rep))
++    except FileExistsError as e:
++        raise ReportPathError(f"refusing to replace {path} — a smoke report is never overwritten") from e
++    return path
++
++
++__all__ = [
++    "REPORTS_DIR", "ReportPathError", "build_report", "render_json", "render_markdown",
++    "render_table", "report_path", "write_report",
++]

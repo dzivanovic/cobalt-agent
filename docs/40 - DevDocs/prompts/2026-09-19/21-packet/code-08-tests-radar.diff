@@ -1,0 +1,715 @@
+diff --git a/tests/cobalt/test_radar_config.py b/tests/cobalt/test_radar_config.py
+index 333896e..e966bbd 100644
+--- a/tests/cobalt/test_radar_config.py
++++ b/tests/cobalt/test_radar_config.py
+@@ -4,7 +4,14 @@ from pathlib import Path
+ 
+ import pytest
+ 
+-from cobalt.radar.config import CONFIG_PATH, RadarConfigError, check, load_config
++from cobalt.radar.config import (
++    CONFIG_PATH,
++    RadarConfigError,
++    check,
++    load_config,
++    screener_columns,
++    screener_columns_param,
++)
+ 
+ 
+ def test_shipped_config_and_all_tunables_validate():
+@@ -39,11 +46,44 @@ def test_live_header_capture_has_replaced_unverified_marker():
+ 
+ 
+ 
+-def test_finviz_ceiling_is_the_ruled_45():
+-    """Ruled A by Dejan 2026-09-16 07:18 ET (L53: his number): 40 -> 45."""
++def test_screener_columns_parses_the_two_declarations_the_radar_uses():
++    """`a-b` is inclusive at both ends; a comma list is itself. These are
++    the only two shapes Finviz's `c=` takes, and both reach this one
++    function — `configs/cobalt/radar.yaml`'s `export.columns` and a
++    screen note's own column declaration (L3)."""
++    assert screener_columns("0-150") == list(range(0, 151))
++    assert screener_columns("0-3") == [0, 1, 2, 3]
++    assert screener_columns("7") == [7]
++    assert screener_columns("0,1,65") == [0, 1, 65]
++    assert screener_columns_param("0-3") == "0,1,2,3"
++    assert screener_columns_param(load_config().export.columns) == ",".join(str(i) for i in range(151))
++
++
++@pytest.mark.parametrize(
++    "bad",
++    ["", "0-", "-150", "0-150,7", "0..150", "a-b", "150-0", "0, 1", "<same columns>", "0-150 "],
++)
++def test_a_malformed_column_declaration_crashes(bad):
++    """L1: a column set that is silently wrong ships an export whose shape
++    nobody notices, so a declaration that is not one of the two shapes is
++    a config error, never a best-effort parse. The function tidies
++    nothing — `"0-150 "` is malformed; stripping markdown backticks and
++    whitespace off a trader's note belongs to the note parser."""
++    with pytest.raises(RadarConfigError, match="column declaration"):
++        screener_columns(bad)
++
++
++def test_finviz_ceiling_is_the_ruled_50():
++    """Ruled A by Dejan 2026-09-16 07:18 ET (L53: his number): 40 -> 45,
++    then 45 -> 50 on 2026-09-17 (R17) so the ceiling IS the archiver's
++    pacing bound 60/GENTLE_SLEEP_SECONDS = 60/1.2 = 50.0 rpm — at exactly
++    the ceiling the gate passes (`50.0 > 50` is False). The 09-16 ruling
++    stays on the row: consumers is the audit trail, not the current value.
++    """
+     from cobalt.taxonomy.loader import load_tunables
+ 
+     row = load_tunables().by_key["radar.finviz_max_rpm"]
+-    assert row.value == 45
++    assert row.value == 50
+     assert row.source == "ruling"
+     assert any("ruled 45 on 2026-09-16" in c for c in row.consumers)
++    assert any("ruled 50 on 2026-09-17" in c for c in row.consumers)
+diff --git a/tests/cobalt/test_radar_migration.py b/tests/cobalt/test_radar_migration.py
+index c3049df..84dd817 100644
+--- a/tests/cobalt/test_radar_migration.py
++++ b/tests/cobalt/test_radar_migration.py
+@@ -29,14 +29,14 @@ def test_0004_created_tables_match_placement():
+ def test_rollback_selects_only_newer_files_newest_first():
+     selected = _rollback_paths("0003")
+     assert [p.name for p in selected] == [
++        "0009_picks_missed.rollback.sql",
++        "0008_radar_value_movers.rollback.sql",
+         "0007_radar_cards.rollback.sql",
+         "0006_radar_score.rollback.sql",
+         "0005_heartbeat_note_absent.rollback.sql",
+         "0004_radar_pool.rollback.sql",
+     ]
+-    assert selected == tuple(
+-        p for p in REVERSE if p.name.startswith(("0007", "0006", "0005", "0004"))
+-    )
++    assert selected == tuple(p for p in REVERSE if int(p.name[:4]) > 3)
+ 
+ 
+ def test_rollback_without_bound_refuses():
+diff --git a/tests/cobalt/test_radar_notes.py b/tests/cobalt/test_radar_notes.py
+index 3183175..9a30fd8 100644
+--- a/tests/cobalt/test_radar_notes.py
++++ b/tests/cobalt/test_radar_notes.py
+@@ -154,7 +154,7 @@ def test_over_budget_refusal_names_field_and_computed_numbers():
+     assert "cap=" in error
+ 
+ 
+-def test_dejan_budget_cap_50_at_100_seconds_passes_under_45_rpm():
++def test_dejan_budget_cap_50_at_100_seconds_passes_under_50_rpm():
+     """2026-09-12 amendment: 90s -> 100s after Sol's total-transport objection.
+ 
+     radar-screens.example.md has one ScreenBlock; radar-lists.example.md has
+@@ -173,7 +173,7 @@ def test_dejan_budget_cap_50_at_100_seconds_passes_under_45_rpm():
+             FIXTURES / "radar-lists.example.md",
+             scan_interval=100,
+             poll_interval=100,
+-            finviz_max_rpm=45,
++            finviz_max_rpm=50,
+             list_chunk_size=50,
+             context_tickers=0,
+         )
+@@ -194,7 +194,7 @@ def test_dejan_budget_refuses_when_pool_alone_exceeds_ceiling():
+             FIXTURES / "radar-lists.example.md",
+             scan_interval=100,
+             poll_interval=100,
+-            finviz_max_rpm=45,
++            finviz_max_rpm=50,
+             list_chunk_size=50,
+             context_tickers=0,
+         )
+@@ -207,7 +207,7 @@ def test_dejan_budget_refuses_when_pool_alone_exceeds_ceiling():
+ def test_dejan_budget_refuses_when_total_transport_exceeds_ceiling_though_pool_alone_passes():
+     """The defect Sol found: a budget check that measures one consumer and
+     calls it the budget gives false assurance. Pool cap 50 at 100s is 30.0
+-    rpm alone (passes 45) but inflating the list-chunk count (60 tickers at
++    rpm alone (passes 50) but inflating the list-chunk count (60 tickers at
+     chunk_size 1 -> 60 chunks) pushes the TOTAL well over the ceiling.
+     """
+     text = (FIXTURES / "radar-screens.example.md").read_text().replace("cap: 5", "cap: 50")
+@@ -221,12 +221,12 @@ def test_dejan_budget_refuses_when_total_transport_exceeds_ceiling_though_pool_a
+             FIXTURES / "radar-lists.example.md",
+             scan_interval=100,
+             poll_interval=100,
+-            finviz_max_rpm=45,
++            finviz_max_rpm=50,
+             list_chunk_size=1,
+             context_tickers=0,
+         )
+     pool_only = 50 * 60 / 100
+-    assert pool_only <= 45, "pool alone must pass for this test to prove the total-demand gap"
++    assert pool_only <= 50, "pool alone must pass for this test to prove the total-demand gap"
+     assert parsed.frozen
+     error = scrub(parsed.pool_error or "")
+     assert "pool budget exceeded" in error
+@@ -234,11 +234,12 @@ def test_dejan_budget_refuses_when_total_transport_exceeds_ceiling_though_pool_a
+     assert "lists_chunks=60" in error
+ 
+ 
+-@pytest.mark.parametrize(("cap", "frozen"), [(71, False), (73, True)])
+-def test_dejan_budget_ceiling_45_refuses_only_above_45(cap, frozen):
+-    """Ceiling ruled 45 on 2026-09-16 (Dejan). Total at 100s = cap*0.6 +
+-    1 screen 0.6 + 2 list chunks 1.2: cap 71 -> 44.40 (passes),
+-    cap 73 -> 45.60 (refused). Both totals are above the old 40.
++@pytest.mark.parametrize(("cap", "frozen"), [(79, False), (81, True)])
++def test_dejan_budget_ceiling_50_refuses_only_above_50(cap, frozen):
++    """Ceiling ruled 50 on 2026-09-17 (Dejan, R17). Total at 100s =
++    cap*0.6 + 1 screen 0.6 + 2 list chunks 1.2 = cap*0.6 + 1.8, so the
++    ceiling is crossed at cap 80.33: cap 79 -> 49.20 (passes),
++    cap 81 -> 50.40 (refused). Both totals are above the old 45.
+     """
+     text = (FIXTURES / "radar-screens.example.md").read_text().replace("cap: 5", f"cap: {cap}")
+     from tempfile import TemporaryDirectory
+@@ -251,12 +252,12 @@ def test_dejan_budget_ceiling_45_refuses_only_above_45(cap, frozen):
+             FIXTURES / "radar-lists.example.md",
+             scan_interval=100,
+             poll_interval=100,
+-            finviz_max_rpm=45,
++            finviz_max_rpm=50,
+             list_chunk_size=50,
+             context_tickers=0,
+         )
+     assert parsed.planned_rpm == pytest.approx(cap * 0.6 + 0.6 + 1.2)
+-    assert parsed.planned_rpm > 40
++    assert parsed.planned_rpm > 45
+     assert parsed.frozen is frozen
+ 
+ 
+diff --git a/tests/cobalt/test_radar_panel.py b/tests/cobalt/test_radar_panel.py
+index b8c9742..5885fac 100644
+--- a/tests/cobalt/test_radar_panel.py
++++ b/tests/cobalt/test_radar_panel.py
+@@ -7,6 +7,7 @@ import json
+ import os
+ import re
+ from datetime import UTC, date, datetime, timedelta
++from decimal import Decimal
+ from pathlib import Path
+ from types import SimpleNamespace
+ from typing import ClassVar
+@@ -103,6 +104,12 @@ def _small_snapshot():
+     current["closed_scan_id"] = None
+     departed = copy.deepcopy(next(row for row in admitted[1:] if row["excluded_by"] is not None))
+     never_admitted = copy.deepcopy(excluded[0])
++    # The hub-cut fixture predates 0008. The store's query selects both
++    # columns since S2-P4, and every episode scanned before the deploy
++    # holds NULL in them (R1: no backfill) — that is the shape given here.
++    for row in (current, departed, never_admitted):
++        row.setdefault("rank_metric", None)
++        row.setdefault("rank_value", None)
+     pool_row = copy.deepcopy(POOL_FIXTURE["pool"])
+     pool_row.update(
+         members=1,
+@@ -161,6 +168,8 @@ def test_store_members_for_day_selects_every_episode_column():
+         "opened_scan_id",
+         "last_scan_id",
+         "closed_scan_id",
++        "rank_metric",
++        "rank_value",
+     ]
+     rows = [tuple(range(len(columns)))]
+ 
+@@ -218,6 +227,43 @@ def test_real_shape_episode_ids_distinguish_exclusion_promotion_departure_and_re
+     )
+ 
+ 
++def test_pre_deploy_null_value_renders_dash():
++    view, _ = _build()
++    row = view.pool.current[0]
++    assert (row.rank_metric, row.rank_value) == (None, None)
++    rendered = panel.render_pool(view.pool)
++    cell = re.search(
++        rf'<tr data-episode-id="{row.episode_id}"[^>]*>(.*?)</tr>', rendered
++    ).group(1)
++    assert '<td class="mono rank-value">—</td>' in cell
++
++
++def test_pool_view_shows_value_beside_metric_name():
++    """R1-19: query row -> MembershipRecord -> PoolRow -> HTML, with the
++    per-row metric name (a screen override's name, not the session's)."""
++    pool_row, members = _small_snapshot()
++    members[0].update(rank_metric="volume", rank_value=Decimal("1234567.000000"))
++    members[1].update(rank_metric="rvol", rank_value=Decimal("3.250000"))
++    view, _ = _build(pool_row=pool_row, members=members)
++    assert view.pool.rank_metric == "volume"  # the stored premarket session metric
++    current, departed = view.pool.current[0], view.pool.departed[0]
++    assert (current.rank_metric, current.rank_value) == ("volume", Decimal("1234567.000000"))
++    assert (departed.rank_metric, departed.rank_value) == ("rvol", Decimal("3.250000"))
++    rendered = panel.render_pool(view.pool)
++    assert '<td class="mono rank-value">volume 1234567</td>' in rendered
++    assert '<td class="mono rank-value">rvol 3.25</td>' in rendered
++    assert "<th>value</th>" in rendered
++
++
++def test_membership_row_without_the_value_columns_fails_loud():
++    """The columns are selected on every read; a row missing them is a
++    store that forgot them, not a pre-deploy NULL."""
++    pool_row, members = _small_snapshot()
++    del members[0]["rank_value"]
++    with pytest.raises(panel.RadarPanelError, match="invalid radar membership row"):
++        _build(pool_row=pool_row, members=members)
++
++
+ def test_departed_rows_render_left_time_reason_and_episode_id():
+     view, _ = _build()
+     row = view.pool.departed[0]
+diff --git a/tests/cobalt/test_radar_pool.py b/tests/cobalt/test_radar_pool.py
+index 7182714..002d7b0 100644
+--- a/tests/cobalt/test_radar_pool.py
++++ b/tests/cobalt/test_radar_pool.py
+@@ -2,6 +2,7 @@
+ 
+ import random
+ from datetime import datetime, timezone
++from decimal import Decimal
+ from zoneinfo import ZoneInfo
+ 
+ from cobalt.radar.models import Candidate, ExcludeBlock, ExcludedBy, OpenMember, PoolBlock, ScreenBlock, SourceHealth, SourceSet
+@@ -123,3 +124,60 @@ def test_inactive_degraded_and_not_equity_precedence():
+ 
+     excluded = decide([Candidate(ticker="AAA", sources=["list:x"], excluded_by=ExcludedBy.NOT_EQUITY)], [], _pool(), [], NOW)
+     assert excluded.transitions[0].excluded_by is ExcludedBy.NOT_EQUITY
++
++
++# ---------------------------------------------------------------------
++# S2-P4 STEP-2 (R1): the value of the metric that actually ranked a name
++# ---------------------------------------------------------------------
++
++
++def _by_ticker(result):
++    return {item.ticker: item for item in result.transitions}
++
++
++def test_ranked_transitions_carry_the_session_metric_and_value_on_retain_admit_exclude():
++    """10:30 ET is rth -> the session metric is rvol; a None value stays None."""
++    source = SourceSet(source="list:synthetic@abc", kind="list", tickers=["AAA", "BBB", "CCC"],
++        metrics={"AAA": {"volume": 10, "rvol": 7.5}, "BBB": {"volume": 20, "rvol": 3.25},
++                 "CCC": {"volume": 30, "rvol": None}})
++    incumbent = OpenMember(ticker="AAA", sources=[source.source], entered_at=NOW, below_cap_streak=0,
++        last_rank=1, trade_date="2026-09-03", rank_metric="volume", rank_value=Decimal("1"))
++    candidates = [Candidate(ticker=x, sources=[source.source]) for x in source.tickers]
++    by = _by_ticker(decide(candidates, [incumbent], _pool(cap=2, stickiness=0), [source], NOW))
++    assert (by["AAA"].action, by["AAA"].rank_metric, by["AAA"].rank_value) == (Action.RETAIN, "rvol", Decimal("7.5"))
++    assert (by["BBB"].action, by["BBB"].rank_metric, by["BBB"].rank_value) == (Action.ADMIT, "rvol", Decimal("3.25"))
++    assert (by["CCC"].action, by["CCC"].rank_metric, by["CCC"].rank_value) == (Action.EXCLUDE, "rvol", None)
++
++
++def test_screen_override_metric_value_recorded_under_override_name():
++    pool = _pool(cap=1, stickiness=0).model_copy(update={
++        "overrides": {"morning": {"rank_metric": "volume"}}
++    })
++    source = SourceSet(source="screen:morning@a", kind="screen", tickers=["AAA", "BBB"],
++        metrics={"AAA": {"volume": 10, "rvol": 1}, "BBB": {"volume": 1, "rvol": 1000}})
++    by = _by_ticker(decide([Candidate(ticker=x, sources=[source.source]) for x in source.tickers], [], pool, [source], NOW))
++    assert (by["AAA"].rank_metric, by["AAA"].rank_value) == ("volume", Decimal("10"))
++    assert (by["BBB"].rank_metric, by["BBB"].rank_value) == ("volume", Decimal("1"))
++
++
++def test_list_sourced_value_is_max_across_lists():
++    one = SourceSet(source="list:one@a", kind="list", tickers=["AAA"], metrics={"AAA": {"volume": 1, "rvol": 2.5}})
++    two = SourceSet(source="list:two@b", kind="list", tickers=["AAA"], note_order=1,
++        metrics={"AAA": {"volume": 1, "rvol": 4.75}})
++    three = SourceSet(source="list:three@c", kind="list", tickers=["AAA"], note_order=2,
++        metrics={"AAA": {"volume": 1, "rvol": None}})
++    by = _by_ticker(decide([Candidate(ticker="AAA", sources=[one.source, two.source, three.source])],
++        [], _pool(cap=1), [one, two, three], NOW))
++    assert (by["AAA"].action, by["AAA"].rank_metric, by["AAA"].rank_value) == (Action.ADMIT, "rvol", Decimal("4.75"))
++
++
++def test_hold_keeps_prior_value():
++    degraded = SourceSet(source="list:bad@a", kind="list", tickers=["AAA", "BBB"], health=SourceHealth.DEGRADED)
++    members = [
++        OpenMember(ticker="AAA", sources=[degraded.source], entered_at=NOW, below_cap_streak=0, last_rank=1,
++            rank_metric="volume", rank_value=Decimal("123.5")),
++        OpenMember(ticker="BBB", sources=[degraded.source], entered_at=NOW, below_cap_streak=0, last_rank=2),
++    ]
++    by = _by_ticker(decide([], members, _pool(cap=2), [degraded], NOW))
++    assert (by["AAA"].action, by["AAA"].rank_metric, by["AAA"].rank_value) == (Action.HOLD, "volume", Decimal("123.5"))
++    assert (by["BBB"].action, by["BBB"].rank_metric, by["BBB"].rank_value) == (Action.HOLD, None, None)
+diff --git a/tests/cobalt/test_radar_propose.py b/tests/cobalt/test_radar_propose.py
+index 9ad9005..0c0110d 100644
+--- a/tests/cobalt/test_radar_propose.py
++++ b/tests/cobalt/test_radar_propose.py
+@@ -406,7 +406,7 @@ def test_screens_validate_is_offline_side_effect_free_and_hashes_current_bytes(
+     # 2026-09-12 amendment: 90s -> 100s; budget now covers total transport
+     # demand (pool 30.00 + 4 screens 2.40 + 7 list chunks 4.20 = 36.60), not
+     # the pool alone.
+-    assert "transport budget: 36.60/45 rpm" in output
++    assert "transport budget: 36.60/50 rpm" in output
+     assert "pool=30.00" in output
+     assert "archive targets: 975" in output
+     assert screens.read_bytes() == before
+@@ -439,7 +439,9 @@ def test_screens_validate_refuses_bad_pool_before_http_or_artifact(
+     tmp_path, monkeypatch
+ ):
+     _screens, pool, watchlists = _real_validation_env(tmp_path, monkeypatch)
+-    pool.write_text(yaml.safe_dump(dict(REAL_POOL, cap=66), sort_keys=False))
++    # cap 76 at 100 s = 45.60 pool + 2.40 screens + 4.20 list chunks = 52.20
++    # rpm, over the 50 ceiling (R17). Under the old 45 ceiling this was 66.
++    pool.write_text(yaml.safe_dump(dict(REAL_POOL, cap=76), sort_keys=False))
+     calls = []
+     monkeypatch.setattr(propose_module, "finviz_get", lambda *_a, **_k: calls.append("http"))
+     monkeypatch.setattr(propose_module, "write_artifact", lambda *_a, **_k: calls.append("write"))
+diff --git a/tests/cobalt/test_radar_runner.py b/tests/cobalt/test_radar_runner.py
+index b4206b9..7dee862 100644
+--- a/tests/cobalt/test_radar_runner.py
++++ b/tests/cobalt/test_radar_runner.py
+@@ -3,6 +3,7 @@
+ import asyncio
+ from copy import deepcopy
+ from datetime import datetime, time, timezone
++from decimal import Decimal
+ from pathlib import Path
+ from zoneinfo import ZoneInfo
+ 
+@@ -419,3 +420,60 @@ def test_stage_crossing_matrix(crossing, crossed_stage, committed_before):
+     next_result = asyncio.run(runner.cycle())
+     assert next_result.state == "scanning"
+     assert radar.pool["failed_stage"] == crossed_stage
++
++
++# ---------------------------------------------------------------------
++# S2-P4 STEP-2 (Astra R2-2): real-shaped open_members rows through the scan
++# ---------------------------------------------------------------------
++
++
++class ValueRadar(Radar):
++    """`open_members` rows in the exact shape the store selects."""
++
++    ROWS = [
++        {"ticker": "NVDA", "sources": ["list:index_heavyweights@0123456789ab"],
++         "entered_at": datetime(2026, 9, 3, 13, 30, tzinfo=timezone.utc), "below_cap_streak": 0,
++         "last_rank": 1, "trade_date": "2026-09-03", "rank_metric": "volume",
++         "rank_value": Decimal("5000000.000000")},
++        # A pre-deploy episode: the columns exist and are NULL.
++        {"ticker": "MSFT", "sources": ["list:index_heavyweights@0123456789ab"],
++         "entered_at": datetime(2026, 9, 3, 13, 30, tzinfo=timezone.utc), "below_cap_streak": 0,
++         "last_rank": 2, "trade_date": "2026-09-03", "rank_metric": None, "rank_value": None},
++    ]
++
++    def __init__(self, events):
++        super().__init__(events)
++        self.transitions = []
++
++    def open_members(self, _key):
++        return deepcopy(self.ROWS)
++
++    def apply_membership(self, **kwargs):
++        self.transitions = kwargs["transitions"]
++        super().apply_membership(**kwargs)
++
++
++class ListDownCollector(Collector):
++    async def screen(self, _block, now):
++        return ScreenerSnapshot("screen-synthetic", now,
++            ({"Ticker": "AAA", "Volume": "2", "Relative Volume": "2.5", "Asset Type": "Stock"},),
++            ("Ticker", "Volume", "Relative Volume", "Asset Type"))
++
++    async def listed(self, _block, _now):
++        raise RuntimeError("synthetic list outage")
++
++
++def test_open_member_values_flow_through_the_resident_scan_and_hold_preserves_them():
++    events = []
++    runner = _active_runner(events)
++    radar = ValueRadar(events)
++    runner.radar_store = radar
++    runner.collector = ListDownCollector()
++    result = asyncio.run(runner.cycle())
++    assert result.state == "scanning"
++    by = {item.ticker: item for item in radar.transitions}
++    assert (by["NVDA"].action, by["NVDA"].rank_metric, by["NVDA"].rank_value) == (
++        Action.HOLD, "volume", Decimal("5000000.000000"))
++    assert (by["MSFT"].action, by["MSFT"].rank_metric, by["MSFT"].rank_value) == (Action.HOLD, None, None)
++    assert (by["AAA"].action, by["AAA"].rank_metric, by["AAA"].rank_value) == (
++        Action.ADMIT, "rvol", Decimal("2.5"))
+diff --git a/tests/cobalt/test_radar_score_migration.py b/tests/cobalt/test_radar_score_migration.py
+index 676fa7a..3b76b20 100644
+--- a/tests/cobalt/test_radar_score_migration.py
++++ b/tests/cobalt/test_radar_score_migration.py
+@@ -80,22 +80,34 @@ def _table_body(text: str, qualified: str) -> str:
+ 
+ 
+ def test_0006_and_0007_are_registered_forward_in_order():
++    # A position in FORWARD is not an identity — later sprints append. Assert
++    # by name: 0006 is followed immediately by 0007.
+     names = [p.name for p in FORWARD]
+-    assert names[-2:] == ["0006_radar_score.sql", "0007_radar_cards.sql"]
++    assert "0006_radar_score.sql" in names, names
++    start = names.index("0006_radar_score.sql")
++    assert names[start:][:2] == ["0006_radar_score.sql", "0007_radar_cards.sql"]
+     for path in (SYSTEM_SQL, SYSTEM_ROLLBACK, USER_SQL, USER_ROLLBACK):
+         assert path.exists(), path
+ 
+ 
+-def test_rollback_selects_0007_then_0006_newest_first():
+-    assert [p.name for p in REVERSE[:2]] == [
++def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first():
++    assert [p.name for p in REVERSE[:4]] == [
++        "0009_picks_missed.rollback.sql",
++        "0008_radar_value_movers.rollback.sql",
+         "0007_radar_cards.rollback.sql",
+         "0006_radar_score.rollback.sql",
+     ]
+     assert [p.name for p in _rollback_paths("0005")] == [
++        "0009_picks_missed.rollback.sql",
++        "0008_radar_value_movers.rollback.sql",
+         "0007_radar_cards.rollback.sql",
+         "0006_radar_score.rollback.sql",
+     ]
+-    assert [p.name for p in _rollback_paths("0006")] == ["0007_radar_cards.rollback.sql"]
++    assert [p.name for p in _rollback_paths("0006")] == [
++        "0009_picks_missed.rollback.sql",
++        "0008_radar_value_movers.rollback.sql",
++        "0007_radar_cards.rollback.sql",
++    ]
+ 
+ 
+ # ---------------------------------------------------------------------
+diff --git a/tests/cobalt/test_radar_sources.py b/tests/cobalt/test_radar_sources.py
+index 471800d..871aa60 100644
+--- a/tests/cobalt/test_radar_sources.py
++++ b/tests/cobalt/test_radar_sources.py
+@@ -21,7 +21,7 @@ def _parsed(tmp_path, *, valid=True):
+         FIXTURES / "radar-lists.example.md",
+         scan_interval=90,
+         poll_interval=90,
+-        finviz_max_rpm=45,
++        finviz_max_rpm=50,
+         list_chunk_size=50,
+         context_tickers=0,
+     )
+diff --git a/tests/cobalt/test_radar_store.py b/tests/cobalt/test_radar_store.py
+index 5e1fc5a..4140459 100644
+--- a/tests/cobalt/test_radar_store.py
++++ b/tests/cobalt/test_radar_store.py
+@@ -1,9 +1,14 @@
+ """Radar store transaction-hook behavior with injected connections."""
+ 
++import os
+ from datetime import datetime, timezone
++from decimal import Decimal
++from types import SimpleNamespace
+ 
+ import pytest
+ 
++from cobalt.radar.models import ExcludedBy, OpenMember
++from cobalt.radar.pool import Action, Transition
+ from cobalt.radar.store import RadarStore
+ 
+ 
+@@ -46,3 +51,145 @@ def test_before_commit_runs_last_and_exception_rolls_back():
+         store.put_pool(_row(now), now=now, before_commit=gate)
+     assert events == ["execute", "gate", "rollback", "close"]
+ 
++
++# ---------------------------------------------------------------------
++# S2-P4 STEP-2 (R1): rank_metric / rank_value persistence
++# ---------------------------------------------------------------------
++
++
++class RecordingConn:
++    """Records every statement; cursors report rowcount 0 so EXCLUDE falls
++    through to its INSERT exactly as a first sighting does."""
++
++    def __init__(self):
++        self.statements = []
++        self.autocommit = True
++
++    def cursor(self):
++        conn = self
++
++        class Cursor:
++            rowcount = 0
++
++            def __enter__(self):
++                return self
++
++            def __exit__(self, *_args):
++                return False
++
++            def execute(self, sql, params=None):
++                conn.statements.append((" ".join(sql.split()), params))
++
++        return Cursor()
++
++    def execute(self, sql, params=None):
++        self.statements.append((" ".join(sql.split()), params))
++        return SimpleNamespace(description=[], fetchall=lambda: [])
++
++    def __enter__(self):
++        return self
++
++    def __exit__(self, *_args):
++        return False
++
++    def commit(self):
++        pass
++
++    def rollback(self):
++        pass
++
++    def close(self):
++        pass
++
++
++RTH = datetime(2026, 9, 3, 14, 0, tzinfo=timezone.utc)
++
++
++def _apply(transitions):
++    conn = RecordingConn()
++    RadarStore(connect=lambda: conn).apply_membership(
++        pool_key="primary", transitions=transitions, scan_id=7, now=RTH, session="rth"
++    )
++    return conn.statements
++
++
++def _writes(statements, ticker):
++    return [
++        (sql, params) for sql, params in statements
++        if params and ticker in params and "rank_" in sql
++    ]
++
++
++def test_rank_value_written_on_retain_exclude_insert_with_ranking_metric():
++    statements = _apply([
++        Transition(ticker="RET", action=Action.RETAIN, sources=["s"], rank=1,
++                   rank_metric="rvol", rank_value=Decimal("7.5")),
++        Transition(ticker="EXC", action=Action.EXCLUDE, sources=["s"], rank=3,
++                   rank_metric="rvol", rank_value=None, excluded_by=ExcludedBy.CONFIG_CAP),
++        Transition(ticker="ADM", action=Action.ADMIT, sources=["s"], rank=2,
++                   rank_metric="volume", rank_value=Decimal("99")),
++    ])
++    (retain_sql, retain_params), = _writes(statements, "RET")
++    assert "rank_metric=%s, rank_value=%s" in retain_sql
++    assert "COALESCE" not in retain_sql
++    assert "rvol" in retain_params and Decimal("7.5") in retain_params
++    exclude = _writes(statements, "EXC")
++    # The in-place UPDATE of a never-admitted episode, then the INSERT it
++    # falls through to: both carry the pair.
++    assert len(exclude) == 2 and all("rvol" in params for _, params in exclude)
++    (insert_sql, insert_params), = [w for w in _writes(statements, "ADM") if w[0].startswith("INSERT")]
++    assert "rank_metric,rank_value" in insert_sql
++    assert "volume" in insert_params and Decimal("99") in insert_params
++
++
++def test_hold_update_keeps_the_prior_pair_when_the_transition_carries_none():
++    (sql, params), = _writes(
++        _apply([Transition(ticker="HLD", action=Action.HOLD, sources=["s"], rank=4)]), "HLD"
++    )
++    assert "rank_metric=COALESCE(%s::text, rank_metric)" in sql
++    assert "rank_value=CASE WHEN %s::text IS NULL THEN rank_value ELSE %s::numeric END" in sql
++
++
++def test_leave_does_not_touch_the_last_values():
++    statements = _apply([Transition(ticker="LVE", action=Action.LEAVE, sources=["s"])])
++    assert statements and all("rank_" not in sql for sql, _ in statements)
++
++
++requires_db = pytest.mark.skipif(
++    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
++    reason="requires_db: Postgres env settings not available",
++)
++
++
++@requires_db
++@pytest.mark.usefixtures("dev_db_tx")
++def test_membership_values_round_trip_retain_and_hold_on_cobalt_dev():
++    """0008 applied on cobalt_dev (hub): ADMIT writes the pair, RETAIN
++    replaces it, HOLD with no pair keeps it, and the open row validates
++    as an OpenMember — the resident scan's own conversion."""
++    store = RadarStore("cobalt_dev")
++    key = "p4_value_test"
++
++    def apply(scan_id, transition):
++        store.apply_membership(pool_key=key, transitions=[transition], scan_id=scan_id, now=RTH, session="rth")
++
++    apply(9900001, Transition(ticker="P4VAL", action=Action.ADMIT, sources=["test"], source="test",
++                              rank=1, rank_metric="volume", rank_value=Decimal("1234.5")))
++    apply(9900002, Transition(ticker="P4VAL", action=Action.RETAIN, sources=["test"], source="test",
++                              rank=1, rank_metric="rvol", rank_value=Decimal("3.25")))
++    apply(9900003, Transition(ticker="P4VAL", action=Action.HOLD, sources=["test"], rank=1))
++    (row,) = store.members_for_day(key, RTH.date())
++    assert (row["rank_metric"], row["rank_value"]) == ("rvol", Decimal("3.250000"))
++    (member,) = [OpenMember(**item) for item in store.open_members(key)]
++    assert (member.rank_metric, member.rank_value) == ("rvol", Decimal("3.250000"))
++
++
++def test_open_members_and_members_for_day_select_both_columns():
++    conn = RecordingConn()
++    store = RadarStore(connect=lambda: conn)
++    store.open_members("primary")
++    store.members_for_day("primary", RTH.date())
++    assert len(conn.statements) == 2
++    for sql, _ in conn.statements:
++        assert "rank_metric" in sql and "rank_value" in sql
++
+diff --git a/tests/cobalt/test_radar_throttle.py b/tests/cobalt/test_radar_throttle.py
+index bd9d52c..123a6b2 100644
+--- a/tests/cobalt/test_radar_throttle.py
++++ b/tests/cobalt/test_radar_throttle.py
+@@ -12,6 +12,11 @@ from cobalt.radar.throttle import ProbeError, finviz_max_rpm, refusal_reason
+ 
+ ET = ZoneInfo("America/New_York")
+ 
++#: The probe holds no config; its caller hands the column declaration
++#: down (AT-1 2.3). These stop-first tests care about the stop, not the
++#: shape, so they declare the smallest valid set.
++COLUMNS = "0-1"
++
+ 
+ def test_refuses_trading_window_and_market_reset():
+     assert "09:00-16:00" in refusal_reason(datetime(2026, 9, 10, 12, 0, tzinfo=ET))
+@@ -33,7 +38,7 @@ def test_followed_redirect_stops_first_stage(monkeypatch):
+ 
+     monkeypatch.setattr(throttle, "fetch_bars", bars)
+     stages, limit = asyncio.run(throttle.run_probe(
+-        names=1, grids=[60, 30], cycles=1,
++        names=1, grids=[60, 30], cycles=1, columns=COLUMNS,
+         now=datetime(2026, 9, 12, 12, 0, tzinfo=ET), token="synthetic-token",
+     ))
+     assert len(stages) == 1 and not stages[0]["clean"]
+@@ -53,7 +58,7 @@ def test_non_200_status_stops(monkeypatch, status):
+         raise RuntimeError(f"HTTP {status}")
+ 
+     monkeypatch.setattr(throttle, "fetch_bars", bars)
+-    stages, _ = asyncio.run(throttle.run_probe(names=1, grids=[60], cycles=1,
++    stages, _ = asyncio.run(throttle.run_probe(names=1, grids=[60], cycles=1, columns=COLUMNS,
+         now=datetime(2026, 9, 12, 12, 0, tzinfo=ET), token="synthetic-token"))
+     assert not stages[0]["clean"] and str(status) in stages[0]["stop_reason"]
+ 
+@@ -69,7 +74,7 @@ def test_html_screener_body_stops(monkeypatch):
+ 
+     monkeypatch.setattr(throttle, "fetch_bars", bars)
+     monkeypatch.setattr(throttle, "finviz_get", screen)
+-    stages, _ = asyncio.run(throttle.run_probe(names=1, grids=[60], cycles=1,
++    stages, _ = asyncio.run(throttle.run_probe(names=1, grids=[60], cycles=1, columns=COLUMNS,
+         now=datetime(2026, 9, 12, 12, 0, tzinfo=ET), token="synthetic-token"))
+     assert not stages[0]["clean"] and "non-CSV" in stages[0]["stop_reason"]
+ 
+@@ -88,6 +93,6 @@ def test_header_change_stops(monkeypatch):
+ 
+     monkeypatch.setattr(throttle, "fetch_bars", bars)
+     monkeypatch.setattr(throttle, "finviz_get", screen)
+-    stages, _ = asyncio.run(throttle.run_probe(names=1, grids=[60], cycles=2,
++    stages, _ = asyncio.run(throttle.run_probe(names=1, grids=[60], cycles=2, columns=COLUMNS,
+         now=datetime(2026, 9, 12, 12, 0, tzinfo=ET), token="synthetic-token"))
+     assert not stages[0]["clean"] and "header mismatch" in stages[0]["stop_reason"]
+diff --git a/tests/cobalt/test_radar_cards_db.py b/tests/cobalt/test_radar_cards_db.py
+index 9565e39..9682687 100644
+--- a/tests/cobalt/test_radar_cards_db.py
++++ b/tests/cobalt/test_radar_cards_db.py
+@@ -220,8 +220,10 @@ def test_manual_cards_are_unaffected(world):
+     assert shares == 60
+     cards.transition(card_id, CardState.ARMED, actor=Actor.YOU)
+     assert cards.state_of(card_id) is CardState.ARMED
+-    ids = cards.fill(card_id, actor=Actor.YOU)
+-    assert len(ids) == 2
++    # `fill` returns a FillResult (S2-P4 R1-5), not a list of ids: the two
++    # rows are the one-click manual route's TRIGGERED hop and the FILLED hop.
++    result = cards.fill(card_id, actor=Actor.YOU)
++    assert len(result.transition_ids) == 2
+ 
+ 
+ def test_dot_taps_append_recompute_and_are_never_overwritten_by_a_scan(world):
