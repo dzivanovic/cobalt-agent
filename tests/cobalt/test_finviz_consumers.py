@@ -35,6 +35,12 @@ COLUMN_PARAM = ",".join(map(str, range(151)))
 CONSUMERS = {
     "archiver/collector.py": "transport (finviz_get / fetch_bars)",
     "archiver/runner.py": "com.cobalt.archiver one-shot, 20:30, own 1.2 s pacing",
+    # Added 2026-09-19 with the append-only redesign: `cobalt archiver
+    # restate` / `backfill-missing` re-fetch ONE target to compare it
+    # against storage. By hand, one ticker at a time, and the two
+    # `--apply` forms only run inside the quiet window (spec §8) — which
+    # is OVERNIGHT, when no other consumer is requesting. No bucket.
+    "archiver/cli.py": "cobalt archiver restate / backfill-missing (CLI, by hand, one target), no bucket",
     "radar/collector.py": "com.cobalt.radar resident, radar TokenBucket",
     "radar/propose.py": "cobalt radar screens propose (CLI, by hand), no bucket",
     "radar/throttle.py": "throttle probe (CLI, by hand), no bucket",

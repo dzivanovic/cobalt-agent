@@ -333,4 +333,52 @@ SUITE: **`1800 passed, 315 skipped, 1 xfailed, 15 warnings in 42.21s`**. Against
 passed 1562 → 1800 (+238: 47 S + 48 M + 66 R + 32 P + 45 N) · skipped 315, unchanged (chunk N adds no
 `requires_db` test — the whole chunk runs on fakes).
 
-CONTINUE: step 6
+## Chunk Q — the quiet window and the commands (spec §8, §6, §3 V3-7)
+
+RED FIRST: `uv run pytest -q tests/cobalt/test_archiver_quiet.py` before the code →
+`ImportError: cannot import name 'cli' from 'cobalt.archiver'`, `1 error in 0.11s`.
+Then GREEN: **`39 passed in 0.13s`**.
+
+**`git diff main -- src/cobalt/radar/` → EMPTY (no output).** R8's core condition holds: the live poller
+and every other radar file are untouched by this branch. A second test asserts it from inside the suite —
+`test_the_poller_module_is_imported_never_edited` — by checking the poller's source knows nothing of
+`archive_progress`, `archive_incidents`, `quiet` or `ARCHIVE_RUN_LOCK_KEY`.
+
+| §8 / §15 requirement | test |
+|---|---|
+| Q1 refuses alone, in every scanned session | `test_q1_every_non_overnight_session_refuses_alone` (4 sessions) |
+| `MARKET_RESET` is NOT quiet | `test_market_reset_is_not_quiet` — "the radar is PAUSED there, not idle" |
+| Q2 refuses alone; exact boundary allowed | `test_q2_refuses_alone_when_the_next_scanning_open_is_too_close`, `test_q2_allows_exactly_the_configured_distance` |
+| Q3 refuses alone; exact derived bound allowed | `test_q3_refuses_alone_when_the_derived_cycle_finish_is_too_recent` (34 min), `test_q3_allows_exactly_the_derived_bound` (35 min) |
+| a missing pool row / NULL `last_scan_at` REFUSES | `test_a_missing_pool_row_refuses_because_quiet_cannot_be_PROVEN`, `test_a_null_last_scan_at_refuses_the_same_way` — both carry "cannot prove the radar is quiet" |
+| the refusal text carries every observed value | `test_the_refusal_names_every_observed_value_and_the_earliest_start` — session, last scan start + age + need, next scanning open + distance + need, earliest allowed start, and the preview line; one line per FAILED rule above the summary |
+| earliest allowed start | `test_the_earliest_allowed_start_is_the_later_of_the_two_constraints` |
+| exit code 2 | `test_the_refusal_exit_code_is_two` |
+| **NO `--force`** | `test_there_is_no_force_flag_anywhere` — the parser rejects it on BOTH repairs, and the string is absent from `cli.py`'s and `quiet.py`'s CODE (docstrings stripped: both files say in prose that there is none) |
+| **`test_gemini_close_boundary_poller_lag`** | named exactly as §8 titles it. (i) normal 20:00 → refused by Q1 (`market_reset`); (ii) early-close 17:00 → OVERNIGHT, so Q3 is the whole protection and the repair is refused with "1 min ago"; (iii) the literal 16:00 → RTH, refused by Q1. **Asserts NO bar row changed.** |
+| **`test_astra_open_boundary_repair_crosses_open`** | 03:59:50 refused at START by Q2; 03:49:59 PASSES the start check and the same repair at its 03:50:05 commit does not. **Asserts NO bar row changed.** |
+| the PRE-COMMIT re-check rolls back | `test_the_pre_commit_recheck_rolls_the_repair_back` — a two-instant clock, a transaction with real rollback semantics, and the row restored |
+| both repairs refused in every scanned session | `test_both_mutating_commands_are_refused_in_every_scanned_session` (2 × 4) |
+| previews always run | `test_previews_always_run`, `test_the_read_only_commands_are_the_ones_the_design_names` |
+| `backfill-missing` can only DO NOTHING | `test_backfill_missing_can_only_do_nothing` (`upsert_bars` absent from its handler) + `test_backfill_missing_never_calls_upsert_bars` (a differing key is left exactly as it is) |
+| `restate --apply` needs `--reason`, audit on an incident row | `test_restate_apply_requires_a_reason`, `test_restate_without_apply_is_a_preview`; the handler opens a `restated` incident carrying the reason (spec O-4) |
+| every read-only command calls no write method | `test_every_read_only_command_calls_no_write_method` — over all four handlers' source |
+| `incidents resolve` is explicit and audited | `test_incidents_resolve_is_explicit_and_audited` (`--by` and `--note` both required) |
+| `audit --from`, `shadow-report --nights` | `test_audit_is_read_only_and_takes_a_from_date`, `test_shadow_report_takes_a_night_count` |
+| **Known limit 1, DEMONSTRATED** | `test_known_limit_1_the_poller_keeps_writing_while_a_restated_incident_is_open` — IMPORTS `cobalt.radar.poller`, drives a real `BarPoller`, and shows a new-basis i1 bar landing beside old-basis history. It does not edit the poller. |
+
+`src/cobalt/cli.py` gains ONE new block — `archiver_cli.add_parser(sub)` at the END of the subparser
+group, plus one import line. No neighbour's lines were reflowed (`ops-0919` edits `:214-221`, a different
+region).
+
+**A THIRD L53 FINDING, handled not papered over.** `test_finviz_consumers.py` went red: `archiver/cli.py`
+is a NEW Finviz consumer (`restate` / `backfill-missing` re-fetch one target to compare it against
+storage). The test is L53's total-demand inventory and it did exactly its job. The module is now
+registered with an honest description — "CLI, by hand, one target, no bucket" — and the strict-xfail
+`test_no_finviz_request_bypasses_the_shared_gate` still fails as expected. **This is a real demand change
+and goes to the deploy prompt** (ESCALATE 4).
+
+SUITE: **`1839 passed, 315 skipped, 1 xfailed, 15 warnings in 42.32s`**. Against BASELINE: failed 0 → 0 ·
+passed 1562 → 1839 (+277: 47 S + 48 M + 66 R + 32 P + 45 N + 39 Q) · skipped 315, unchanged.
+
+CONTINUE: step 7

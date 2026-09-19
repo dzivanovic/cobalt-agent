@@ -77,6 +77,7 @@ from cobalt.settings import cli as settings_cli  # noqa: E402
 from cobalt.taxonomy import cli as taxonomy_cli  # noqa: E402
 from cobalt.taxonomy import validate as taxonomy_validate  # noqa: E402
 from cobalt.vaultwrite import VaultWriter, VaultWriteStore  # noqa: E402
+from cobalt.archiver import cli as archiver_cli  # noqa: E402
 
 
 def _store() -> VaultWriteStore:
@@ -483,6 +484,11 @@ def main() -> None:
     radar_cli.add_parser(sub)
     replay_cli.add_parser(sub)
     smoke_cli.add_parser(sub)
+    # The Bar Archiver's operator commands (append-only FINAL design
+    # 2026-09-19): progress, incidents, audit, shadow-report, and the two
+    # quiet-window repairs. A NEW block at the end of this group — it
+    # reflows none of its neighbours.
+    archiver_cli.add_parser(sub)
     jobs_cli.add_stop_parsers(sub)
 
     validate = sub.add_parser(
