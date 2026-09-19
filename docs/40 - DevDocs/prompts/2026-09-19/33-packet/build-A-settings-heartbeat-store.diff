@@ -1,0 +1,2492 @@
+diff --git a/configs/cobalt/taxonomy/tunables.yaml b/configs/cobalt/taxonomy/tunables.yaml
+index 9659368..aab4207 100644
+--- a/configs/cobalt/taxonomy/tunables.yaml
++++ b/configs/cobalt/taxonomy/tunables.yaml
+@@ -520,6 +520,96 @@ tunables:
+     source: ruling
+     consumers: ["cobalt.radar.poller (RTH stale-bar poll_failures entry)"]
+ 
++  # --- Bar Archiver: append-only redesign (2026-09-19) --------------------
++  # FINAL design `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md`
++  # §10, derived by the four-house tribunal (L67) from the owner's R14/R15
++  # ("know where the watermark is for each ticker … only add the new bars")
++  # and his R8 09-19 09:30 ET "A on archiver" (repairs only in a quiet
++  # window; the live radar poller is NOT touched).
++  #
++  # THE MODE SHIPS AS `upsert` — today's behaviour byte for byte. The switch
++  # to `append` is HIS ruling on the shadow numbers (L7): a reviewed commit
++  # to the row below, after N shadow nights, never a default that drifted.
++  # A test pins this value.
++  - key: archiver.write_mode
++    value: upsert
++    unit: label
++    scope: global
++    dynamic: false
++    status: solidified
++    source: ruling
++    consumers: ["cobalt.archiver.settings.ArchiverSettings (upsert | append; the nightly write path)", "solidified by the FINAL design 2026-09-19; the switch to 'append' is the owner's ruling on the shadow numbers (L7)"]
++
++  # PROPOSED (§10): the operational lever if the pre-write shadow read ever
++  # costs a night. Ignored in `append` mode, where the comparison IS the gate.
++  - key: archiver.shadow_compare
++    value: "on"
++    unit: label
++    scope: global
++    dynamic: false
++    status: proposed
++    source: ruling
++    consumers: ["cobalt.archiver.settings.ArchiverSettings (on | off)", "cobalt.archiver.shadow (the pre-write comparison and its nightly artifact)"]
++
++  # PROPOSED (§10): the shadow read's own statement_timeout. The shadow can
++  # never fail or slow-fail a target, so its read is bounded rather than trusted.
++  - key: archiver.shadow_statement_timeout_s
++    value: 10
++    unit: count
++    scope: global
++    dynamic: false
++    status: proposed
++    source: ruling
++    consumers: ["cobalt.archiver.shadow (statement_timeout on the stored-range read)"]
++
++  # PROPOSED (§10): how many nights of `data/archiver-shadow/<date>.jsonl`
++  # are kept. `shadow-report` reads across them for persisted/vanished/appeared.
++  - key: archiver.shadow_retention_nights
++    value: 30
++    unit: count
++    scope: global
++    dynamic: false
++    status: proposed
++    source: ruling
++    consumers: ["cobalt.archiver.shadow (artifact retention)"]
++
++  # THE DESK'S NUMBER (§16). Q2 of the quiet window: a repair may not start
++  # within this many minutes of the next SCANNED session opening.
++  - key: archiver.repair.quiet_before_open_min
++    value: 10
++    unit: min
++    scope: global
++    dynamic: false
++    status: solidified
++    source: ruling
++    consumers: ["cobalt.archiver.quiet (Q2: distance to the next scanning open)", "the desk's number, cto-2026-09-19.md §16 / R8"]
++
++  # THE DESK'S NUMBER (§16). Q3: how long after a cycle is DERIVED to have
++  # completed before the radar counts as quiet.
++  - key: archiver.repair.quiet_after_cycle_min
++    value: 5
++    unit: min
++    scope: global
++    dynamic: false
++    status: solidified
++    source: ruling
++    consumers: ["cobalt.archiver.quiet (Q3: quiet interval after the last poll cycle)", "the desk's number, cto-2026-09-19.md §16 / R8"]
++
++  # PROPOSED (§14 O-2). A STATED UPPER BOUND on a radar cycle's length, not a
++  # measurement: `radar_pool.last_scan_at` holds a cycle's START and the
++  # COMPLETION instant is persisted nowhere (§2), so Q3 derives the finish
++  # from start + this bound. Basis of 30: pool cap x (30 s transport timeout +
++  # token-bucket spacing) for a cap of ~50; the cap is the owner's (L53) and
++  # can change. This estimate IS Gemini's and Astra's recorded dissent (§13).
++  - key: archiver.repair.cycle_max_min
++    value: 30
++    unit: min
++    scope: global
++    dynamic: false
++    status: proposed
++    source: ruling
++    consumers: ["cobalt.archiver.quiet (Q3: the derived cycle completion bound)"]
++
+   # --- S2-P2 radar cards: dot colours (09-14 accepted defaults) ----------
+   # Engine tunables, never trader_settings (L53): `cobalt settings load
+   # --card` refuses any card.dot.* / card.health.* key by name.
+diff --git a/src/cobalt/archiver/incidents.py b/src/cobalt/archiver/incidents.py
+new file mode 100644
+index 0000000..c2ca1c0
+--- /dev/null
++++ b/src/cobalt/archiver/incidents.py
+@@ -0,0 +1,172 @@
++"""`system.archive_incidents` — what a night REFUSED to do, and why.
++
++Spec: `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §6,
++§7 and §11. Table: `db_migrations/0011_archive_incidents.sql`. The five
++kinds are `reconcile.IncidentKind` — defined beside the decisions that
++raise them, imported here, never re-spelled (L3).
++
++OPEN OR REFRESH, NEVER DUPLICATE. `ON CONFLICT` on the partial unique
++index (`(kind, ticker, interval, range_start) WHERE resolved_at IS
++NULL`): a condition that recurs every night for a fortnight is ONE row
++whose `last_seen_at` moves, not fourteen. `first_seen_at` is written
++once and never touched again — it is how long a target has been
++withheld, which is the number an operator actually needs.
++
++EVERY WRITE TAKES THE TARGET'S CONNECTION (§4). One exception matters
++and belongs to the RUNNER, not here: a failed or withheld target's
++transaction is rolled back, so its incident is persisted afterwards in
++a SECOND small transaction (Astra, V3-2 — "persist failure evidence
++separately after rollback"). This module is indifferent to which
++transaction it is called in; the runner decides.
++
++RESOLUTION IS EXPLICIT AND AUDITED. Nothing here resolves itself, no
++run closes a row, and `resolve` refuses an empty `by`: the heartbeat is
++not green while a row is unresolved (§11), and a self-closing incident
++would be a dashboard that goes green on its own.
++"""
++
++from __future__ import annotations
++
++from datetime import datetime
++from typing import Iterable
++
++from psycopg.types.json import Jsonb
++from pydantic import BaseModel, ConfigDict
++
++from .reconcile import IncidentDraft, IncidentKind
++
++TABLE = "archive_incidents"
++
++_COLUMNS = (
++    "id, kind, ticker, interval, range_start, range_end, first_seen_at, "
++    "last_seen_at, detail, resolved_at, resolved_by, run_id"
++)
++
++
++class IncidentRow(BaseModel):
++    model_config = ConfigDict(frozen=True, extra="forbid")
++
++    id: int
++    kind: str
++    ticker: str
++    interval: str
++    range_start: datetime | None
++    range_end: datetime | None
++    first_seen_at: datetime
++    last_seen_at: datetime
++    detail: dict
++    resolved_at: datetime | None
++    resolved_by: str | None
++    run_id: str
++
++
++def open_or_refresh(conn, draft: IncidentDraft, *, run_id: str, now: datetime) -> int:
++    """Open this condition's row, or refresh the open one. Returns its id.
++
++    The `WHERE resolved_at IS NULL` on the conflict target is what names
++    the PARTIAL index: a resolved row is history and must not block the
++    same condition opening again later.
++    """
++    row = conn.execute(
++        f"""
++        INSERT INTO {TABLE} (kind, ticker, interval, range_start, range_end,
++                             first_seen_at, last_seen_at, detail, run_id)
++        VALUES (%(kind)s, %(ticker)s, %(interval)s, %(range_start)s, %(range_end)s,
++                %(now)s, %(now)s, %(detail)s, %(run_id)s)
++        ON CONFLICT (kind, ticker, interval, range_start) WHERE resolved_at IS NULL
++        DO UPDATE SET
++            last_seen_at = EXCLUDED.last_seen_at,
++            range_end = EXCLUDED.range_end,
++            detail = EXCLUDED.detail,
++            run_id = EXCLUDED.run_id
++        RETURNING id
++        """,
++        {
++            "kind": draft.kind.value if isinstance(draft.kind, IncidentKind) else str(draft.kind),
++            "ticker": draft.ticker,
++            "interval": draft.interval,
++            "range_start": draft.range_start,
++            "range_end": draft.range_end,
++            "now": now,
++            "detail": Jsonb(draft.detail),
++            "run_id": run_id,
++        },
++    ).fetchone()
++    return int(row[0])
++
++
++def unresolved(conn, *, ticker: str | None = None) -> list[IncidentRow]:
++    """Every open incident, oldest first. READ-ONLY.
++
++    This is what `cobalt archiver incidents` prints and what the
++    heartbeat's archiver probe counts (§11, O-7).
++    """
++    if ticker:
++        cursor = conn.execute(
++            f"SELECT {_COLUMNS} FROM {TABLE} WHERE resolved_at IS NULL AND ticker = %s "
++            "ORDER BY first_seen_at, id",
++            (ticker,),
++        )
++    else:
++        cursor = conn.execute(
++            f"SELECT {_COLUMNS} FROM {TABLE} WHERE resolved_at IS NULL "
++            "ORDER BY first_seen_at, id"
++        )
++    return [_row(row) for row in cursor.fetchall()]
++
++
++def resolve(conn, incident_id: int, *, by: str, note: str, now: datetime) -> None:
++    """Close one incident, on the record.
++
++    `by` and `note` are mandatory and land on the row: spec O-4 makes
++    this the audit trail for a repair that has no other home — a
++    `restate --apply` in `upsert` mode, or one on a target with no open
++    incident, opens and resolves a `restated` row carrying the
++    operator's `--reason`.
++    """
++    if not by or not by.strip():
++        raise ValueError(
++            "resolving an incident needs --by <who>: the heartbeat goes green "
++            "again on this, and 'somebody' is not an audit trail."
++        )
++    conn.execute(
++        f"""
++        UPDATE {TABLE}
++           SET resolved_at = %(now)s,
++               resolved_by = %(resolved_by)s,
++               detail = detail || %(note)s
++         WHERE id = %(id)s AND resolved_at IS NULL
++        """,
++        {
++            "now": now,
++            "resolved_by": by.strip(),
++            "note": Jsonb({"resolution_note": note, "resolved_at": now.isoformat()}),
++            "id": incident_id,
++        },
++    )
++
++
++def counts_by_kind(rows: Iterable[IncidentRow]) -> dict[str, int]:
++    """Pure: the heartbeat's detail line, built from rows it already has."""
++    counts: dict[str, int] = {}
++    for row in rows:
++        counts[row.kind] = counts.get(row.kind, 0) + 1
++    return counts
++
++
++def _row(row) -> IncidentRow:
++    return IncidentRow(
++        id=row[0], kind=row[1], ticker=row[2], interval=row[3], range_start=row[4],
++        range_end=row[5], first_seen_at=row[6], last_seen_at=row[7],
++        detail=row[8] or {}, resolved_at=row[9], resolved_by=row[10], run_id=row[11],
++    )
++
++
++__all__ = [
++    "IncidentRow",
++    "TABLE",
++    "counts_by_kind",
++    "open_or_refresh",
++    "resolve",
++    "unresolved",
++]
+diff --git a/src/cobalt/archiver/progress.py b/src/cobalt/archiver/progress.py
+new file mode 100644
+index 0000000..0a71b0d
+--- /dev/null
++++ b/src/cobalt/archiver/progress.py
+@@ -0,0 +1,156 @@
++"""`system.archive_progress` — reading and writing the archiver's OWN
++watermark, on the target's connection.
++
++Spec: `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §4
++and §11. Table: `db_migrations/0010_archive_progress.sql`.
++
++THE WRITER REFUSES A TARGET THAT WAS NOT ACCEPTED. §4 says progress
++never moves on a failed, withheld, empty or regressed target, and the
++cheapest way to keep that true is to make it impossible to ask for:
++`upsert_progress` raises when the plan it is handed has no
++`archived_through_after`. The rule lives with the write, not in the
++caller's discipline (L1).
++
++MONOTONIC BY `GREATEST`, IN SQL. Two runs of the same night, a retry
++after a crash, or a repair racing the nightly run must never move the
++watermark backwards, and the only place that can be guaranteed is the
++statement itself — a read-then-compare in Python is a race.
++
++NO ROW IS EVER DELETED HERE. A ticker leaving the trader's Lists note
++keeps its row, which is what makes the dropped-and-re-added sequence
++open a `gap` incident rather than silently skipping the missing days
++(round-2 sequence #8). This module contains no `DELETE`, and a test
++says so.
++"""
++
++from __future__ import annotations
++
++from datetime import datetime
++
++from pydantic import BaseModel, ConfigDict
++
++from .models import Interval
++from .reconcile import TargetPlan
++
++TABLE = "archive_progress"
++
++
++class ProgressRow(BaseModel):
++    """One target's row, as the `progress` command renders it."""
++
++    model_config = ConfigDict(frozen=True, extra="forbid")
++
++    ticker: str
++    interval: str
++    archived_through: datetime
++    export_oldest: datetime
++    export_newest: datetime
++    raw_export_newest: datetime | None
++    fetch_started_at: datetime
++    bootstrap_at: datetime
++    run_id: str
++    updated_at: datetime
++
++
++_COLUMNS = (
++    "ticker, interval, archived_through, export_oldest, export_newest, "
++    "raw_export_newest, fetch_started_at, bootstrap_at, run_id, updated_at"
++)
++
++
++def read_archived_through(conn, ticker: str, interval: Interval) -> datetime | None:
++    """This target's watermark, or `None` — which means BOOTSTRAP.
++
++    `None` is not a default standing in for a missing row: §4 says a
++    target with no progress row reconciles its whole available export
++    once, and the report says `bootstrap` and names the bounds.
++    """
++    row = conn.execute(
++        f"SELECT archived_through FROM {TABLE} WHERE ticker = %s AND interval = %s",
++        (ticker, _interval(interval)),
++    ).fetchone()
++    return row[0] if row else None
++
++
++def read_row(conn, ticker: str, interval: Interval) -> ProgressRow | None:
++    row = conn.execute(
++        f"SELECT {_COLUMNS} FROM {TABLE} WHERE ticker = %s AND interval = %s",
++        (ticker, _interval(interval)),
++    ).fetchone()
++    return _row(row) if row else None
++
++
++def all_rows(conn) -> list[ProgressRow]:
++    """Every target's progress, oldest watermark first — what
++    `cobalt archiver progress` prints. Read-only."""
++    cursor = conn.execute(
++        f"SELECT {_COLUMNS} FROM {TABLE} ORDER BY archived_through, ticker, interval"
++    )
++    return [_row(row) for row in cursor.fetchall()]
++
++
++def upsert_progress(conn, *, plan: TargetPlan, run_id: str, now: datetime) -> None:
++    """Record an ACCEPTED target's new watermark, on `conn`.
++
++    `archived_through` is a BAR timestamp — the `ts` of the newest
++    complete bar of this accepted export — never a clock time, never a
++    bar-close time, never `fetch_started_at` (§4). `now` is only
++    `updated_at`, and `bootstrap_at` is set once and kept.
++    """
++    if plan.archived_through_after is None:
++        raise RuntimeError(
++            f"{plan.ticker}/{plan.interval.value} was not accepted "
++            f"({plan.status.value}: {plan.reason}) — progress does not move on a "
++            "failed, withheld, empty or regressed target (spec §4)."
++        )
++    conn.execute(
++        f"""
++        INSERT INTO {TABLE} ({_COLUMNS})
++        VALUES (%(ticker)s, %(interval)s, %(archived_through)s, %(export_oldest)s,
++                %(export_newest)s, %(raw_export_newest)s, %(fetch_started_at)s,
++                %(bootstrap_at)s, %(run_id)s, %(updated_at)s)
++        ON CONFLICT (ticker, interval) DO UPDATE SET
++            archived_through = GREATEST({TABLE}.archived_through,
++                                        EXCLUDED.archived_through),
++            export_oldest = EXCLUDED.export_oldest,
++            export_newest = EXCLUDED.export_newest,
++            raw_export_newest = EXCLUDED.raw_export_newest,
++            fetch_started_at = EXCLUDED.fetch_started_at,
++            run_id = EXCLUDED.run_id,
++            updated_at = EXCLUDED.updated_at
++        """,
++        {
++            "ticker": plan.ticker,
++            "interval": plan.interval.value,
++            "archived_through": plan.archived_through_after,
++            "export_oldest": plan.export_oldest,
++            "export_newest": plan.export_newest,
++            "raw_export_newest": plan.raw_export_newest,
++            "fetch_started_at": plan.fetch_started_at,
++            "bootstrap_at": now,
++            "run_id": run_id,
++            "updated_at": now,
++        },
++    )
++
++
++def _interval(interval) -> str:
++    return interval.value if isinstance(interval, Interval) else str(interval)
++
++
++def _row(row) -> ProgressRow:
++    return ProgressRow(
++        ticker=row[0], interval=row[1], archived_through=row[2], export_oldest=row[3],
++        export_newest=row[4], raw_export_newest=row[5], fetch_started_at=row[6],
++        bootstrap_at=row[7], run_id=row[8], updated_at=row[9],
++    )
++
++
++__all__ = [
++    "ProgressRow",
++    "TABLE",
++    "all_rows",
++    "read_archived_through",
++    "read_row",
++    "upsert_progress",
++]
+diff --git a/src/cobalt/archiver/settings.py b/src/cobalt/archiver/settings.py
+new file mode 100644
+index 0000000..83a277e
+--- /dev/null
++++ b/src/cobalt/archiver/settings.py
+@@ -0,0 +1,285 @@
++"""The archiver's engine tunables — ONE Pydantic model, read through the
++ONE tunables loader (spec §10; L3, L10, L53).
++
++WHY THIS MODULE EXISTS AT ALL. The append-only redesign
++(`docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md`) adds a
++WRITE MODE to a job that writes market history every night, and L7 says
++a flip from one source of truth to another is never a default that
++drifted — it is a shadow run, numbers, and the owner's ruling. So the
++mode is a config row with exactly two legal spellings, validated on
++load, printed by `cobalt validate`, and pinned to `upsert` by a test.
++
++THERE IS NO SECOND YAML READER HERE (L3). `configs/cobalt/taxonomy/
++tunables.yaml` is the registry that already carries
++`radar.poll_overlap_bars`; this module reads it through
++`cobalt.taxonomy.loader.load_tunables()` exactly as `radar/config.py`
++does, and adds a schema on top.
++
++FAIL LOUD, NAMING THE KEY (L1). Every refusal below names the tunables
++key an operator has to go and fix — `archiver.write_mode`, not
++`write_mode`. A missing row is a crash, never a built-in default: a
++defaulted write mode is the one failure this whole design exists to
++make impossible.
++"""
++
++from __future__ import annotations
++
++from enum import Enum
++
++from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
++
++from cobalt.taxonomy.loader import TaxonomyConfigError, load_tunables
++from cobalt.taxonomy.tunables import TunableRow, TunableUnit
++
++
++class ArchiverSettingsError(RuntimeError):
++    """A tunables row the archiver needs is missing, mistyped or illegal."""
++
++
++class WriteMode(str, Enum):
++    """The nightly write path. EXACTLY these two spellings (§10).
++
++    `upsert` is today's behaviour byte for byte (§5, mode isolation):
++    the whole export through `ON CONFLICT DO UPDATE`. `append` is the
++    design's night: only bars that do not exist are inserted, and no
++    stored row is ever rewritten.
++    """
++
++    UPSERT = "upsert"
++    APPEND = "append"
++
++
++class ShadowCompare(str, Enum):
++    """The pre-write shadow comparison, the evidence for the switch (§5).
++
++    `off` is the operational lever if the shadow read ever costs a
++    night (O-6): it turns the read off without deploying code.
++    """
++
++    ON = "on"
++    OFF = "off"
++
++
++#: The seven rows this module reads, with the unit each one must carry.
++#: The unit check is not ceremony: a `min` row silently read as a
++#: `count` is how a ten-minute quiet window becomes ten of something
++#: else.
++ARCHIVER_TUNABLE_UNITS: dict[str, TunableUnit] = {
++    "archiver.write_mode": TunableUnit.LABEL,
++    "archiver.shadow_compare": TunableUnit.LABEL,
++    "archiver.shadow_statement_timeout_s": TunableUnit.COUNT,
++    "archiver.shadow_retention_nights": TunableUnit.COUNT,
++    "archiver.repair.quiet_before_open_min": TunableUnit.MIN,
++    "archiver.repair.quiet_after_cycle_min": TunableUnit.MIN,
++    "archiver.repair.cycle_max_min": TunableUnit.MIN,
++}
++
++#: `archiver.repair.<name>` -> the field of `RepairSettings`.
++_REPAIR_FIELDS = {
++    "archiver.repair.quiet_before_open_min": "quiet_before_open_min",
++    "archiver.repair.quiet_after_cycle_min": "quiet_after_cycle_min",
++    "archiver.repair.cycle_max_min": "cycle_max_min",
++}
++
++#: `<top-level key>` -> the field of `ArchiverSettings`.
++_TOP_FIELDS = {
++    "archiver.write_mode": "write_mode",
++    "archiver.shadow_compare": "shadow_compare",
++    "archiver.shadow_statement_timeout_s": "shadow_statement_timeout_s",
++    "archiver.shadow_retention_nights": "shadow_retention_nights",
++}
++
++#: field -> the tunables key it came from, for error messages.
++_FIELD_KEYS = {
++    **{field: key for key, field in _TOP_FIELDS.items()},
++    **{field: key for key, field in _REPAIR_FIELDS.items()},
++}
++
++
++def _positive_int(value: object, key: str) -> int:
++    """A count of whole minutes or seconds. `bool` is not an integer here
++    and `"10"` is not a number — a YAML row that quotes its value is a
++    row somebody edited by hand, and coercing it hides that."""
++    if isinstance(value, bool) or not isinstance(value, int):
++        raise ValueError(
++            f"{key} must be a positive INTEGER, got "
++            f"{type(value).__name__} {value!r}"
++        )
++    if value <= 0:
++        raise ValueError(f"{key} must be a positive integer, got {value!r}")
++    return value
++
++
++class RepairSettings(BaseModel):
++    """The quiet window's three numbers (§8).
++
++    `cycle_max_min` is a STATED UPPER BOUND on a radar cycle's length,
++    not a measurement: the radar persists a cycle's START and never its
++    completion (§2), so Q3 derives "the cycle has finished" from
++    start + this bound. That is precisely Gemini's and Astra's dissent
++    (§13) and spec O-2 — it is recorded here so the next reader of this
++    file meets it before relying on the number.
++    """
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    quiet_before_open_min: int
++    quiet_after_cycle_min: int
++    cycle_max_min: int
++
++    @field_validator("quiet_before_open_min", "quiet_after_cycle_min", "cycle_max_min", mode="before")
++    @classmethod
++    def _positive(cls, v, info):
++        return _positive_int(v, _FIELD_KEYS[info.field_name])
++
++
++class ArchiverSettings(BaseModel):
++    """Spec §10's seven keys, resolved once per process."""
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    write_mode: WriteMode
++    shadow_compare: ShadowCompare
++    shadow_statement_timeout_s: int
++    shadow_retention_nights: int
++    repair: RepairSettings
++
++    @field_validator("write_mode", mode="before")
++    @classmethod
++    def _exact_write_mode(cls, v):
++        """No `strip()`, no `lower()`, no coercion (L1).
++
++        `Append`, ` upsert` and `""` are refused rather than repaired,
++        because the repair a human would expect ("they obviously meant
++        append") is exactly the silent switch of the production write
++        path that L7 forbids.
++        """
++        legal = [m.value for m in WriteMode]
++        if not isinstance(v, str) or v not in legal:
++            raise ValueError(
++                f"archiver.write_mode must be EXACTLY one of {legal} — got "
++                f"{v!r}. Case, surrounding whitespace and an empty value are "
++                "all refused: the write mode of the nightly archiver is the "
++                "owner's ruling (L7), never a near-miss that was tidied up."
++            )
++        return v
++
++    @field_validator("shadow_compare", mode="before")
++    @classmethod
++    def _exact_shadow_compare(cls, v):
++        legal = [m.value for m in ShadowCompare]
++        if not isinstance(v, str) or v not in legal:
++            raise ValueError(
++                f"archiver.shadow_compare must be EXACTLY one of {legal} — got {v!r}"
++            )
++        return v
++
++    @field_validator("shadow_statement_timeout_s", "shadow_retention_nights", mode="before")
++    @classmethod
++    def _positive(cls, v, info):
++        return _positive_int(v, _FIELD_KEYS[info.field_name])
++
++    @property
++    def shadow_enabled(self) -> bool:
++        """Whether tonight writes a shadow artifact.
++
++        §5: the shadow compare is the evidence for the switch and runs
++        only in `upsert` mode. In `append` the same comparison IS the
++        gate, so the key is ignored there rather than doubling the read.
++        """
++        return self.write_mode is WriteMode.UPSERT and self.shadow_compare is ShadowCompare.ON
++
++
++def _value(registry: dict[str, TunableRow], key: str) -> object:
++    row = registry.get(key)
++    if row is None:
++        raise ArchiverSettingsError(
++            f"tunables.yaml: missing {key} — the archiver reads every one of "
++            f"its {len(ARCHIVER_TUNABLE_UNITS)} settings from config and has "
++            "no built-in default (L1, L10)."
++        )
++    expected = ARCHIVER_TUNABLE_UNITS[key]
++    if row.unit is not expected:
++        raise ArchiverSettingsError(
++            f"tunables.yaml: {key} has unit {row.unit.value!r}, expected "
++            f"{expected.value!r}"
++        )
++    return row.value
++
++
++def load_archiver_settings(
++    registry: dict[str, TunableRow] | None = None,
++) -> ArchiverSettings:
++    """Resolve spec §10's seven keys into the one settings model.
++
++    `registry` is a TEST seam (the `by_key` mapping the loader already
++    returns); production passes nothing and reads the shipped file.
++    """
++    if registry is None:
++        try:
++            registry = load_tunables().by_key
++        except TaxonomyConfigError as e:
++            raise ArchiverSettingsError(f"archiver settings unavailable: {e}") from e
++
++    payload = {field: _value(registry, key) for key, field in _TOP_FIELDS.items()}
++    payload["repair"] = {
++        field: _value(registry, key) for key, field in _REPAIR_FIELDS.items()
++    }
++    try:
++        return ArchiverSettings(**payload)
++    except ValidationError as e:
++        raise ArchiverSettingsError(
++            "tunables.yaml: invalid archiver settings:\n" + _name_the_keys(e)
++        ) from e
++
++
++def _name_the_keys(error: ValidationError) -> str:
++    """Pydantic reports `write_mode`; an operator needs `archiver.write_mode`.
++
++    The mapping is done here rather than with validation aliases so that
++    the nested `repair.*` rows read the same way as the top-level ones
++    and there is one place to look when a message is wrong.
++    """
++    lines = []
++    for item in error.errors():
++        loc = [str(part) for part in item["loc"] if not str(part).startswith("function-")]
++        field = loc[-1] if loc else ""
++        key = _FIELD_KEYS.get(field, field)
++        lines.append(f"  {key}: {item['msg']}")
++    return "\n".join(lines)
++
++
++def validate_command_lines() -> list[str]:
++    """What `cobalt validate` prints for this config family (L10).
++
++    A list of lines rather than `print` calls so the gate is testable
++    without running the whole F16 sweep (which reads the vault).
++    """
++    settings = load_archiver_settings()
++    return [
++        "",
++        f"Archiver (spec §10): {len(ARCHIVER_TUNABLE_UNITS)} tunables rows resolved.",
++        f"  archiver.write_mode = {settings.write_mode.value} "
++        f"(legal: {', '.join(m.value for m in WriteMode)}; the switch to "
++        "'append' is the owner's ruling on the shadow numbers, L7)",
++        f"  archiver.shadow_compare = {settings.shadow_compare.value} "
++        f"-> shadow artifact tonight: {'yes' if settings.shadow_enabled else 'no'}",
++        f"  archiver.shadow_statement_timeout_s = {settings.shadow_statement_timeout_s}",
++        f"  archiver.shadow_retention_nights = {settings.shadow_retention_nights}",
++        f"  archiver.repair.quiet_before_open_min = {settings.repair.quiet_before_open_min}",
++        f"  archiver.repair.quiet_after_cycle_min = {settings.repair.quiet_after_cycle_min}",
++        f"  archiver.repair.cycle_max_min = {settings.repair.cycle_max_min} "
++        "(a STATED upper bound on a radar cycle, not a measurement — spec O-2)",
++    ]
++
++
++__all__ = [
++    "ARCHIVER_TUNABLE_UNITS",
++    "ArchiverSettings",
++    "ArchiverSettingsError",
++    "RepairSettings",
++    "ShadowCompare",
++    "WriteMode",
++    "load_archiver_settings",
++    "validate_command_lines",
++]
+diff --git a/src/cobalt/archiver/store.py b/src/cobalt/archiver/store.py
+index 9bbbdb9..36e8b8c 100644
+--- a/src/cobalt/archiver/store.py
++++ b/src/cobalt/archiver/store.py
+@@ -13,6 +13,7 @@ DDL lives in exactly one place (migrations/0001_bars.sql) — this module
+ executes that file, it does not carry a second copy (one-path rule).
+ """
+ 
++from contextlib import contextmanager
+ from pathlib import Path
+ from typing import Callable, Optional
+ 
+@@ -20,9 +21,64 @@ from cobalt import db, env
+ from cobalt.db import Side
+ 
+ from .models import Bar
++from .models import Interval  # noqa: E402 — appended, so the diff stays additive
++from .reconcile import values_from_row
+ 
+ MIGRATION_SQL = Path(__file__).parent / "migrations" / "0001_bars.sql"
+ 
++#: §9: ONE constant key for the run-level advisory lock, SESSION level.
++#: Held for the whole of `run_full`, `run_backfill`, `restate --apply`
++#: and `backfill-missing`, in BOTH write modes. The POLLER does not take
++#: it (R8: the live radar's write path is not touched by this build), so
++#: this lock serialises the archiver against ITSELF and against repairs —
++#: it is not, and is not claimed to be, protection against the poller.
++#: The number is arbitrary but FIXED: two holders must collide.
++ARCHIVE_RUN_LOCK_KEY = 20260919
++
++
++class ArchiveLockError(RuntimeError):
++    """Another archive or repair run holds the run-level lock.
++
++    Exit code 2, the same as `QuietRefused` (`quiet.py:73`): §9 says a
++    second holder "refuses loudly …, exit code 2", and §8 says the same
++    of a refused repair. Both are REFUSALS, not failures — nothing was
++    written and nothing is broken — so an operator (and a deploy
++    script) can tell them from the generic `FAILED:`/exit 1 by the
++    status alone. `cobalt.cli.main` maps both.
++    """
++
++    exit_code = 2
++
++
++def try_acquire_run_lock(conn, *, what: str | None = None) -> bool:
++    """Take the run-level lock on `conn`, or return False.
++
++    SESSION level, not transaction level: a repair re-checks the quiet
++    window immediately before COMMIT and rolls back when it has closed
++    (§8), and `pg_try_advisory_xact_lock` would hand the lock away at
++    that rollback while the command is still running.
++
++    `what` turns the refusal into an exception instead of a False, for
++    the callers that cannot continue without it.
++    """
++    held = conn.execute(
++        "SELECT pg_try_advisory_lock(%s)", (ARCHIVE_RUN_LOCK_KEY,)
++    ).fetchone()[0]
++    if held:
++        return True
++    if what is not None:
++        raise ArchiveLockError(
++            f"another archive/repair run holds the lock — refusing to start "
++            f"{what}. One archiver writes to system.bars at a time (spec §9); "
++            "wait for the other run to finish, or find it in `cobalt jobs list`."
++        )
++    return False
++
++
++def release_run_lock(conn) -> None:
++    """Give the run-level lock back. Safe to call when it is not held."""
++    conn.execute("SELECT pg_advisory_unlock(%s)", (ARCHIVE_RUN_LOCK_KEY,))
++
+ 
+ class BarStore:
+     #: ADR-0008 D2 — the side is chosen PER STORE, never per process.
+@@ -60,6 +116,30 @@ class BarStore:
+         values. PK (ticker, interval, ts) makes this a true idempotent
+         upsert either way — no duplicates, ever.
+         """
++        if not bars:
++            return 0
++        with self._connect() as conn:
++            written = self.upsert_bars_on(conn, bars)
++            if before_commit is not None:
++                before_commit()
++        return written
++
++    def upsert_bars_on(self, conn, bars: list[Bar]) -> int:
++        """`upsert_bars`, on a connection the CALLER owns.
++
++        Same statement, one copy of it (L3) — the difference is whose
++        transaction the rows belong to. `restate --apply` needs that:
++        §8's pre-commit re-check raises INSIDE the repair's
++        `target_transaction`, and a rollback there can only undo rows
++        written on that same connection. Until the tribunal's F1 the
++        repair called `upsert_bars`, which opens and commits its own
++        connection, so a refused repair left the rewritten bars behind —
++        exactly the plausible partial write L1 forbids.
++
++        The nightly `upsert` call site (`runner.py:130`) passes no
++        connection and is unchanged: it still goes through
++        `upsert_bars`.
++        """
+         if not bars:
+             return 0
+         rows = [
+@@ -75,23 +155,20 @@ class BarStore:
+             )
+             for b in bars
+         ]
+-        with self._connect() as conn:
+-            with conn.cursor() as cur:
+-                cur.executemany(
+-                    """
+-                    INSERT INTO bars (ticker, interval, ts, open, high, low, close, volume)
+-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+-                    ON CONFLICT (ticker, interval, ts) DO UPDATE SET
+-                        open = EXCLUDED.open,
+-                        high = EXCLUDED.high,
+-                        low = EXCLUDED.low,
+-                        close = EXCLUDED.close,
+-                        volume = EXCLUDED.volume
+-                    """,
+-                    rows,
+-                )
+-            if before_commit is not None:
+-                before_commit()
++        with conn.cursor() as cur:
++            cur.executemany(
++                """
++                INSERT INTO bars (ticker, interval, ts, open, high, low, close, volume)
++                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
++                ON CONFLICT (ticker, interval, ts) DO UPDATE SET
++                    open = EXCLUDED.open,
++                    high = EXCLUDED.high,
++                    low = EXCLUDED.low,
++                    close = EXCLUDED.close,
++                    volume = EXCLUDED.volume
++                """,
++                rows,
++            )
+         return len(rows)
+ 
+     def watermark(self, ticker: str, interval: str = "i1"):
+@@ -107,3 +184,124 @@ class BarStore:
+         with self._connect() as conn:
+             row = conn.execute("SELECT count(*) FROM bars").fetchone()
+         return int(row[0]) if row else 0
++
++    # -- the append path (FINAL design 2026-09-19, §3 V2-1, §4, §9) ----
++    #
++    # EVERY METHOD BELOW TAKES A CONNECTION. §4: one transaction on one
++    # connection per target holds the stored-range read, the inserts, the
++    # progress write, the incident writes and the accepted outcome, so a
++    # crash between any two of them commits none of them. A method that
++    # opened its own connection would break that guarantee silently —
++    # which is why the offline tests assert it with a recording fake
++    # rather than by reading the code.
++
++    @contextmanager
++    def run_lock(self, what: str):
++        """Hold §9's run-level lock for the whole of a run or a repair.
++
++        Its own SESSION, separate from any target's transaction: the
++        lock outlives every per-target commit and rollback, which is
++        exactly what "one archiver writes at a time" means. Released and
++        closed on the way out, whatever happened in between.
++        """
++        conn = self._connect()
++        try:
++            try_acquire_run_lock(conn, what=what)
++            yield conn
++        finally:
++            try:
++                release_run_lock(conn)
++            finally:
++                conn.close()
++
++    @contextmanager
++    def target_transaction(self):
++        """ONE connection, ONE transaction, for one target's whole night.
++
++        Commits on a clean exit, rolls back on any exception, and always
++        closes. A failed or withheld target's transaction is rolled back
++        here; its failure EVIDENCE (the incident) is then persisted in a
++        SECOND small transaction by the runner — Astra's V3-2 point,
++        because evidence written inside the doomed transaction dies with
++        it.
++        """
++        conn = self._connect()
++        conn.autocommit = False
++        try:
++            yield conn
++            conn.commit()
++        except BaseException:
++            conn.rollback()
++            raise
++        finally:
++            conn.close()
++
++    def insert_new_bars(self, conn, bars: list[Bar]) -> int:
++        """Offer `bars`; return how many rows were ACTUALLY inserted.
++
++        `ON CONFLICT … DO NOTHING`, not `DO UPDATE`: this is the whole
++        of the owner's ruling (R14/R15) in one clause — "only add the
++        new [bars] in the database that don't exist". A key already
++        stored is left exactly as it is, whatever the vendor now says
++        about it; a difference is a `restated` incident for a person to
++        look at, never a silent overwrite.
++
++        THE COUNT IS THE SERVER'S, NEVER `len(rows)` (§3 V2-1). A bar
++        the radar poller committed between this transaction's range read
++        and this statement is a CONFLICT — not an error, and not an
++        insert. Reporting `len(rows)` would count it as written and
++        break §7's identity `incoming_only = inserted +
++        concurrent_conflicts`. psycopg sets `rowcount` to the total rows
++        affected across an `executemany`; if the driver cannot say, this
++        FAILS rather than guessing (L1).
++        """
++        if not bars:
++            return 0
++        rows = [
++            (b.ticker, b.interval.value, b.ts, b.open, b.high, b.low, b.close, b.volume)
++            for b in bars
++        ]
++        with conn.cursor() as cur:
++            cur.executemany(
++                """
++                INSERT INTO bars (ticker, interval, ts, open, high, low, close, volume)
++                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
++                ON CONFLICT (ticker, interval, ts) DO NOTHING
++                """,
++                rows,
++            )
++            inserted = cur.rowcount
++        if not isinstance(inserted, int) or inserted < 0:
++            raise RuntimeError(
++                f"the driver reported row count {inserted!r} for an insert of "
++                f"{len(rows)} bar(s). The append night's counters reconcile "
++                "against the number of rows ACTUALLY inserted, so a run that "
++                "cannot learn it fails rather than reporting the number it "
++                "hoped for (L1, L57)."
++            )
++        return inserted
++
++    def _bars_in_range(
++        self, conn, ticker: str, interval: Interval, start, end
++    ) -> dict:
++        """The stored rows of one target over `[start, end]`, normalised.
++
++        PRIVATE and CONNECTION-TAKING on purpose (spec O-5). The
++        unmerged `sprint-2/p4` adds `BarStore.bars_between()`, which
++        opens its own connection; after both land there must be ONE
++        range read, and the second lander folds them into one method
++        with an optional connection (L3). Until then this branch adds
++        exactly one, and the ESCALATE names the overlap.
++
++        Returns `{ts: BarValues}` — already normalised to the column's
++        own `NUMERIC(14,4)` / integer shape, so the comparison in
++        `reconcile` is deciding on values rather than on renderings.
++        """
++        cursor = conn.execute(
++            "SELECT ts, open, high, low, close, volume FROM bars "
++            "WHERE ticker = %s AND interval = %s AND ts >= %s AND ts <= %s "
++            "ORDER BY ts",
++            (ticker, interval.value if isinstance(interval, Interval) else interval,
++             start, end),
++        )
++        return {row[0]: values_from_row(row[1:]) for row in cursor.fetchall()}
+diff --git a/src/cobalt/heartbeat/probes.py b/src/cobalt/heartbeat/probes.py
+index 2d9cae4..1b86b48 100644
+--- a/src/cobalt/heartbeat/probes.py
++++ b/src/cobalt/heartbeat/probes.py
+@@ -258,8 +258,29 @@ def mainframe(host: str = "127.0.0.1", port: int = 1234) -> Probe:
+         return Probe("mainframe", False, f"{host}:{port} refused: {type(e).__name__}")
+ 
+ 
+-def archiver_freshness(store=None, now: Optional[datetime] = None) -> Probe:
+-    """Last run + rows written, checked against the archiver's own
++def archiver_freshness(
++    store=None, now: Optional[datetime] = None, incidents=None
++) -> Probe:
++    """Last run + rows written + UNRESOLVED ARCHIVE INCIDENTS.
++
++    The last of those was added 2026-09-19 with the append-only redesign
++    (FINAL design §11, spec O-7): **this probe is not green while any
++    `system.archive_incidents` row is unresolved**, and the desk's safe
++    default for wording and colour is "not green = the probe's existing
++    FAIL form, detail names the incident count".
++
++    WHY THE HEARTBEAT HAS TO CARRY IT. Known limit 3 (spec §12): a
++    withheld target's new bars age out of the vendor window (i5 ≈ 21
++    days) if nobody repairs it. The incident list and this probe ARE the
++    alarm. A dashboard that stayed green through a fortnight of
++    withholding would make `append` worse than the overlay it replaces.
++
++    ZERO INCIDENTS CHANGES NOTHING. Until an `append` night runs there
++    are none, and this returns exactly what it has always returned — the
++    same object, not a rebuilt one. `incidents` is a TEST seam; in
++    production the probe reads them itself.
++
++    Last run + rows written are checked against the archiver's own
+     Mon-Fri cadence via the same `is_missed` arithmetic F17's watchdog
+     uses — not a flat age window.
+ 
+@@ -292,6 +313,15 @@ def archiver_freshness(store=None, now: Optional[datetime] = None) -> Probe:
+     row = store.get("com.cobalt.archiver")
+     if row is None:
+         return Probe("archiver", False, "no jobs row — not registered")
++    base = _archiver_run_probe(row, ts)
++    return _with_archive_incidents(base, incidents)
++
++
++def _archiver_run_probe(row, ts) -> Probe:
++    """Today's verdict on the last RUN, unchanged."""
++    from cobalt.jobs.config import load_job_registry
++    from cobalt.jobs.watchdog import MISSED_GRACE_KEY, is_missed
++    from cobalt.session.clock import session_clock
+ 
+     spec = load_job_registry().spec("com.cobalt.archiver")
+     now_et = session_clock().to_et(ts)
+@@ -328,6 +358,61 @@ def archiver_freshness(store=None, now: Optional[datetime] = None) -> Probe:
+     return Probe("archiver", True, detail)
+ 
+ 
++def _read_archive_incidents():
++    """The archiver's OWN unresolved query, read-only (§11, O-7).
++
++    Kept behind a function so the probe's default is one named thing
++    and the test seam replaces exactly it.
++    """
++    from cobalt.archiver import incidents as incidents_mod
++    from cobalt.archiver.store import BarStore
++
++    store = BarStore()
++    with store.target_transaction() as conn:
++        return incidents_mod.unresolved(conn)
++
++
++def _with_archive_incidents(base: Probe, incidents) -> Probe:
++    """Fold the incident alarm into the run's verdict.
++
++    ZERO INCIDENTS RETURNS `base` ITSELF — not a rebuilt equal one — so
++    "an upsert night's probe is byte-identical to today's" is true by
++    construction rather than by careful copying.
++
++    AN UNREADABLE TABLE IS RED AND NAMES THE MIGRATION. It is never
++    green (the alarm cannot be read, so nothing can be asserted about
++    it) and it never raises: L1 says fail LOUD, not take the whole
++    heartbeat run down with it.
++    """
++    from cobalt.archiver.incidents import counts_by_kind
++
++    reader = incidents if incidents is not None else _read_archive_incidents
++    try:
++        rows = list(reader())
++    except Exception as e:  # noqa: BLE001 — see the docstring
++        return Probe(
++            "archiver",
++            False,
++            "archive_incidents could not be read — run `cobalt db migrate` "
++            "(0011_archive_incidents.sql); the archiver's incident alarm is "
++            f"unreadable, so nothing here can be called green: "
++            f"{type(e).__name__}: {e}. Last run: {base.detail}",
++        )
++    if not rows:
++        return base
++    oldest = min(rows, key=lambda row: row.first_seen_at)
++    counts = counts_by_kind(rows)
++    tally = ", ".join(f"{kind}={n}" for kind, n in sorted(counts.items()))
++    return Probe(
++        "archiver",
++        False,
++        f"{len(rows)} unresolved archive incident(s) — oldest {oldest.kind} on "
++        f"{oldest.ticker}/{oldest.interval} since "
++        f"{oldest.first_seen_at:%Y-%m-%d %H:%M} UTC ({tally}). "
++        f"List them: `cobalt archiver incidents`. {base.detail}",
++    )
++
++
+ def backup_freshness(now: Optional[datetime] = None) -> Probe:
+     """Age of the newest nightly snapshot, against
+     `heartbeat.backup_max_age_min` (26 h).
+diff --git a/tests/cobalt/test_archiver_append_store.py b/tests/cobalt/test_archiver_append_store.py
+new file mode 100644
+index 0000000..c0cd4ea
+--- /dev/null
++++ b/tests/cobalt/test_archiver_append_store.py
+@@ -0,0 +1,825 @@
++"""Chunk P — the append path's writers, all on the TARGET'S ONE CONNECTION.
++
++Spec `ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §3 (V2-1 as amended by
++V3-2), §4, §9, §11.
++
++§4 is the rule this file exists to enforce: **one transaction on one
++connection per target** holds the stored-range read, the inserts, the
++progress write, the incident writes and the accepted outcome. A crash
++between any two of them commits none of them. So none of these methods
++may open or commit a connection of its own — they TAKE one — and the
++offline half proves that with a recording fake (the shape
++`test_migrate_proof.py` uses) rather than by reading the code.
++
++The `requires_db` half is written here and owed its first run on
++`cobalt_dev` once `p4-verify-0919` releases the lane (L41 interim).
++"""
++
++from __future__ import annotations
++
++import inspect
++import os
++from datetime import datetime, timedelta, timezone
++from decimal import Decimal
++
++import pytest
++
++from cobalt.archiver import incidents as incidents_mod
++from cobalt.archiver import progress as progress_mod
++from cobalt.archiver.models import Bar, Interval
++from cobalt.archiver.reconcile import (
++    BarValues,
++    IncidentDraft,
++    IncidentKind,
++    compare,
++    plan_candidates,
++    reconcile,
++)
++from cobalt.archiver.store import (
++    ARCHIVE_RUN_LOCK_KEY,
++    ArchiveLockError,
++    BarStore,
++    release_run_lock,
++    try_acquire_run_lock,
++)
++
++requires_db = pytest.mark.skipif(
++    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
++    reason="Postgres env settings not available",
++)
++
++UTC = timezone.utc
++
++
++def ts(minute: int) -> datetime:
++    return datetime(2026, 9, 18, 19, minute, tzinfo=UTC)
++
++
++def bar(when: datetime, close="100.00", ticker="TESTARCH", interval=Interval.I5) -> Bar:
++    return Bar(
++        ticker=ticker, interval=interval, ts=when,
++        open=Decimal("99.00"), high=Decimal("101.00"), low=Decimal("98.50"),
++        close=Decimal(close), volume=1234,
++    )
++
++
++# ---------------------------------------------------------------------
++# A recording fake connection — the shape test_migrate_proof.py uses
++# ---------------------------------------------------------------------
++
++
++class _FakeCursor:
++    def __init__(self, conn, rows=(), rowcount=0):
++        self._conn = conn
++        self._rows = list(rows)
++        self.rowcount = rowcount
++
++    def execute(self, query, params=None):
++        self._conn.queries.append((str(query), params))
++        return self
++
++    def executemany(self, query, rows, **kwargs):
++        self._conn.queries.append((str(query), list(rows)))
++        self._conn.executemany_calls += 1
++        self.rowcount = self._conn.executemany_rowcount
++        return self
++
++    def fetchone(self):
++        return self._rows[0] if self._rows else None
++
++    def fetchall(self):
++        return list(self._rows)
++
++    def __enter__(self):
++        return self
++
++    def __exit__(self, *exc):
++        return False
++
++
++class _FakeConn:
++    """Records every statement; refuses to be a connection MANAGER.
++
++    `commit`, `rollback` and `close` are recorded rather than forbidden,
++    so a test can assert they were never called — which is stronger than
++    an exception, because it also catches a call inside a `finally`.
++    """
++
++    def __init__(self, rows=(), executemany_rowcount=0):
++        self.queries: list[tuple[str, object]] = []
++        self.rows = list(rows)
++        self.executemany_rowcount = executemany_rowcount
++        self.executemany_calls = 0
++        self.commits = 0
++        self.rollbacks = 0
++        self.closes = 0
++
++    def execute(self, query, params=None):
++        self.queries.append((str(query), params))
++        return _FakeCursor(self, self.rows)
++
++    def cursor(self, *args, **kwargs):
++        return _FakeCursor(self, self.rows)
++
++    def commit(self):
++        self.commits += 1
++
++    def rollback(self):
++        self.rollbacks += 1
++
++    def close(self):
++        self.closes += 1
++
++    @property
++    def sql(self) -> str:
++        return "\n".join(q for q, _ in self.queries)
++
++
++@pytest.fixture
++def no_connections(monkeypatch):
++    """Any attempt to OPEN a connection inside these methods is a failure."""
++    def _boom(*_a, **_k):
++        raise AssertionError(
++            "a method of the append path opened its own connection — §4 says "
++            "every one of them takes the target's connection"
++        )
++
++    monkeypatch.setattr(BarStore, "_connect", _boom)
++    return _boom
++
++
++def store() -> BarStore:
++    return BarStore(db_name="unused-offline")
++
++
++def code_of(obj) -> str:
++    """Source with docstrings and comments removed.
++
++    Several assertions below are about what the CODE does — which
++    statement is sent, which clause is in it. The prose around that code
++    deliberately names the thing it is not doing (`upsert_bars`'s
++    docstring explains why it is `DO UPDATE` rather than `DO NOTHING`),
++    so a substring search over raw source would read the explanation and
++    fail. `ast.unparse` drops both.
++    """
++    import ast
++    import textwrap
++
++    tree = ast.parse(textwrap.dedent(inspect.getsource(obj)))
++    for node in ast.walk(tree):
++        body = getattr(node, "body", None)
++        if not isinstance(body, list) or not body:
++            continue
++        first = body[0]
++        if (
++            isinstance(first, ast.Expr)
++            and isinstance(first.value, ast.Constant)
++            and isinstance(first.value.value, str)
++        ):
++            node.body = body[1:] or [ast.Pass()]
++    return ast.unparse(tree)
++
++
++# ---------------------------------------------------------------------
++# upsert_bars is UNTOUCHED (§5, mode isolation)
++# ---------------------------------------------------------------------
++
++
++def test_upsert_bars_still_does_update_and_never_do_nothing():
++    """§5's mode isolation, followed to where the statement now lives.
++
++    Tribunal round 1, F1 moved the `DO UPDATE` into the
++    connection-taking sibling `upsert_bars_on`, because `restate
++    --apply` must write on the repair's own transaction. There is still
++    exactly ONE copy of the statement (L3) and `upsert_bars` still
++    reaches it on its OWN connection with the same result — which is
++    what the nightly `upsert` night depends on. Asserted across the
++    pair, so the property survives the indirection rather than being
++    dropped with it.
++    """
++    source = code_of(BarStore.upsert_bars_on)
++    assert "ON CONFLICT (ticker, interval, ts) DO UPDATE SET" in source
++    assert "DO NOTHING" not in source
++    assert "return len(rows)" in source
++
++    caller = code_of(BarStore.upsert_bars)
++    assert "self._connect()" in caller, "the nightly write still owns its connection"
++    assert "self.upsert_bars_on(conn, bars)" in caller
++    assert "before_commit()" in caller
++    assert "ON CONFLICT" not in caller, "a second copy of the statement (L3)"
++
++
++def test_only_one_copy_of_the_upsert_statement_exists():
++    """L3, as an assertion: F1's fix must not leave two `DO UPDATE`s."""
++    source = inspect.getsource(BarStore)
++    assert source.count("ON CONFLICT (ticker, interval, ts) DO UPDATE SET") == 1
++
++
++def test_upsert_bars_on_takes_the_callers_connection_and_never_opens_one(no_connections):
++    """The append path's rule (`store.py`'s own comment): every method
++    below the line TAKES a connection. `upsert_bars_on` joins them —
++    it must not connect, commit or close."""
++    conn = _FakeConn()
++    written = store().upsert_bars_on(conn, [bar(ts(50))])
++    assert written == 1
++    assert "ON CONFLICT (ticker, interval, ts) DO UPDATE SET" in conn.sql
++    assert conn.executemany_calls == 1
++    assert (conn.commits, conn.rollbacks, conn.closes) == (0, 0, 0)
++
++
++def test_upsert_bars_on_is_a_noop_on_an_empty_list(no_connections):
++    conn = _FakeConn()
++    assert store().upsert_bars_on(conn, []) == 0
++    assert conn.queries == []
++
++
++def test_upsert_bars_signature_is_unchanged():
++    sig = inspect.signature(BarStore.upsert_bars)
++    assert list(sig.parameters) == ["self", "bars", "before_commit"]
++    assert sig.parameters["before_commit"].kind is inspect.Parameter.KEYWORD_ONLY
++
++
++# ---------------------------------------------------------------------
++# insert_new_bars — DO NOTHING, ACTUAL inserts, someone else's connection
++# ---------------------------------------------------------------------
++
++
++def test_insert_new_bars_uses_do_nothing_on_the_primary_key(no_connections):
++    conn = _FakeConn(executemany_rowcount=3)
++    store().insert_new_bars(conn, [bar(ts(m)) for m in (50, 55, 58)])
++    assert "ON CONFLICT (ticker, interval, ts) DO NOTHING" in conn.sql
++    assert "DO UPDATE" not in conn.sql
++
++
++def test_insert_new_bars_counts_actual_inserts_not_rows_sent(no_connections):
++    """§3 V2-1: 'counting ACTUAL inserts … never `len(rows)`'. Three bars
++    are sent and the server reports one row affected — two lost the race
++    to the poller. The method must return 1."""
++    conn = _FakeConn(executemany_rowcount=1)
++    assert store().insert_new_bars(conn, [bar(ts(m)) for m in (50, 55, 58)]) == 1
++
++
++def test_insert_new_bars_never_opens_or_commits_a_connection(no_connections):
++    conn = _FakeConn(executemany_rowcount=2)
++    store().insert_new_bars(conn, [bar(ts(50)), bar(ts(55))])
++    assert (conn.commits, conn.rollbacks, conn.closes) == (0, 0, 0)
++
++
++def test_insert_new_bars_of_nothing_touches_the_connection_at_all(no_connections):
++    conn = _FakeConn()
++    assert store().insert_new_bars(conn, []) == 0
++    assert conn.queries == []
++
++
++def test_insert_new_bars_refuses_a_row_count_the_driver_did_not_give(no_connections):
++    """L1: if the driver cannot say how many rows it inserted, the run
++    FAILS rather than reporting the number it hoped for."""
++    conn = _FakeConn(executemany_rowcount=-1)
++    with pytest.raises(RuntimeError) as e:
++        store().insert_new_bars(conn, [bar(ts(50))])
++    assert "row count" in str(e.value).lower()
++
++
++def test_insert_new_bars_sends_one_statement_for_the_whole_batch(no_connections):
++    conn = _FakeConn(executemany_rowcount=50)
++    store().insert_new_bars(conn, [bar(ts(0) + timedelta(minutes=i)) for i in range(50)])
++    assert conn.executemany_calls == 1
++
++
++# ---------------------------------------------------------------------
++# The ONE private range read (spec O-5)
++# ---------------------------------------------------------------------
++
++
++def test_the_range_read_is_one_private_method_that_takes_a_connection(no_connections):
++    rows = [
++        (ts(50), Decimal("99.0000"), Decimal("101.0000"), Decimal("98.5000"),
++         Decimal("100.0000"), 1234),
++    ]
++    conn = _FakeConn(rows=rows)
++    held = store()._bars_in_range(conn, "TESTARCH", Interval.I5, ts(40), ts(59))
++    assert held == {ts(50): BarValues(
++        Decimal("99.0000"), Decimal("101.0000"), Decimal("98.5000"), Decimal("100.0000"), 1234
++    )}
++    assert (conn.commits, conn.closes) == (0, 0)
++    assert "SELECT" in conn.sql and "FROM bars" in conn.sql
++    assert "ts >=" in conn.sql and "ts <=" in conn.sql
++
++
++def test_the_range_read_is_parameterised_never_interpolated(no_connections):
++    conn = _FakeConn()
++    store()._bars_in_range(conn, "TESTARCH", Interval.I5, ts(40), ts(59))
++    (query, params) = conn.queries[0]
++    assert "TESTARCH" not in query
++    assert params == ("TESTARCH", "i5", ts(40), ts(59))
++
++
++def test_there_is_exactly_one_range_read_on_the_store():
++    """L3 / spec O-5. `sprint-2/p4` adds `bars_between()` with its own
++    connection; the two fold into one method at integration. Until then
++    this branch adds exactly one, and it takes a connection."""
++    reads = [
++        name for name in dir(BarStore)
++        if ("range" in name or "between" in name) and callable(getattr(BarStore, name))
++    ]
++    assert reads == ["_bars_in_range"]
++    assert list(inspect.signature(BarStore._bars_in_range).parameters)[:2] == ["self", "conn"]
++
++
++# ---------------------------------------------------------------------
++# Progress — GREATEST, and only on an accepted outcome (§4)
++# ---------------------------------------------------------------------
++
++
++def _accepted_plan():
++    fetch = datetime(2026, 9, 18, 20, 30, tzinfo=UTC)
++    plan = plan_candidates(
++        ticker="TESTARCH", interval=Interval.I5,
++        bars=[bar(ts(50)), bar(ts(55))], fetch_started_at=fetch,
++        archived_through=ts(50),
++    )
++    return reconcile(plan, {ts(50): BarValues(
++        Decimal("99.0000"), Decimal("101.0000"), Decimal("98.5000"), Decimal("100.0000"), 1234
++    )})
++
++
++def test_progress_is_written_with_greatest_and_takes_the_connection(no_connections):
++    conn = _FakeConn()
++    progress_mod.upsert_progress(
++        conn, plan=_accepted_plan(), run_id="probe@2026-09-18T20:30:00Z",
++        now=datetime(2026, 9, 18, 20, 31, tzinfo=UTC),
++    )
++    assert "GREATEST" in conn.sql
++    assert "archive_progress" in conn.sql
++    assert "ON CONFLICT (ticker, interval) DO UPDATE" in conn.sql
++    assert (conn.commits, conn.rollbacks, conn.closes) == (0, 0, 0)
++
++
++def test_progress_refuses_to_write_for_a_target_that_was_not_accepted(no_connections):
++    """§4: progress never moves on a failed, withheld, empty or regressed
++    target. The writer REFUSES rather than trusting its caller."""
++    fetch = datetime(2026, 9, 18, 20, 30, tzinfo=UTC)
++    refused = reconcile(
++        plan_candidates(ticker="TESTARCH", interval=Interval.I5, bars=[],
++                        fetch_started_at=fetch, archived_through=ts(50)),
++        {},
++    )
++    conn = _FakeConn()
++    with pytest.raises(RuntimeError) as e:
++        progress_mod.upsert_progress(conn, plan=refused, run_id="probe", now=fetch)
++    assert "not accepted" in str(e.value)
++    assert conn.queries == []
++
++
++def test_progress_sends_the_bar_timestamp_never_a_clock_time(no_connections):
++    conn = _FakeConn()
++    plan = _accepted_plan()
++    now = datetime(2026, 9, 18, 20, 31, tzinfo=UTC)
++    progress_mod.upsert_progress(conn, plan=plan, run_id="probe", now=now)
++    (_, params) = conn.queries[0]
++    assert params["archived_through"] == plan.archived_through_after == ts(55)
++    assert params["archived_through"] != now
++    assert params["updated_at"] == now
++
++
++def test_reading_progress_takes_the_connection_and_returns_the_bar_timestamp(no_connections):
++    conn = _FakeConn(rows=[(ts(50),)])
++    assert progress_mod.read_archived_through(conn, "TESTARCH", Interval.I5) == ts(50)
++    assert (conn.commits, conn.closes) == (0, 0)
++
++
++def test_a_missing_progress_row_reads_as_none_which_is_a_bootstrap(no_connections):
++    assert progress_mod.read_archived_through(_FakeConn(rows=[]), "TESTARCH", Interval.I5) is None
++
++
++def test_progress_rows_are_never_deleted_by_this_module():
++    """§4: a progress row is NEVER deleted, not even when a ticker leaves
++    the trader's Lists note — that is what makes the dropped-and-re-added
++    sequence open a `gap` rather than skipping the missing days."""
++    assert "DELETE" not in code_of(progress_mod).upper()
++
++
++# ---------------------------------------------------------------------
++# Incidents — open or refresh, on the connection (§11)
++# ---------------------------------------------------------------------
++
++
++def _draft(kind=IncidentKind.GAP):
++    return IncidentDraft(
++        kind=kind, ticker="TESTARCH", interval="i5",
++        range_start=ts(40), range_end=ts(50), detail={"wording": "probe"},
++    )
++
++
++def test_an_incident_is_opened_or_refreshed_never_duplicated(no_connections):
++    conn = _FakeConn(rows=[(7,)])
++    now = datetime(2026, 9, 18, 20, 31, tzinfo=UTC)
++    assert incidents_mod.open_or_refresh(conn, _draft(), run_id="probe", now=now) == 7
++    assert "archive_incidents" in conn.sql
++    assert "ON CONFLICT (kind, ticker, interval, range_start) WHERE resolved_at IS NULL" in conn.sql
++    assert "DO UPDATE SET" in conn.sql and "last_seen_at" in conn.sql
++    assert (conn.commits, conn.rollbacks, conn.closes) == (0, 0, 0)
++
++
++def test_a_refresh_moves_last_seen_at_and_never_first_seen_at(no_connections):
++    conn = _FakeConn(rows=[(7,)])
++    incidents_mod.open_or_refresh(
++        conn, _draft(), run_id="probe", now=datetime(2026, 9, 18, 20, 31, tzinfo=UTC)
++    )
++    update = conn.sql.split("DO UPDATE SET", 1)[1]
++    assert "last_seen_at" in update
++    assert "first_seen_at" not in update
++
++
++@pytest.mark.parametrize("kind", list(IncidentKind))
++def test_every_kind_the_pure_core_can_raise_is_writable(kind, no_connections):
++    conn = _FakeConn(rows=[(1,)])
++    assert incidents_mod.open_or_refresh(
++        conn, _draft(kind), run_id="probe",
++        now=datetime(2026, 9, 18, 20, 31, tzinfo=UTC),
++    ) == 1
++
++
++def test_listing_unresolved_incidents_writes_nothing(no_connections):
++    conn = _FakeConn(rows=[])
++    incidents_mod.unresolved(conn)
++    assert "resolved_at IS NULL" in conn.sql
++    for word in ("INSERT", "UPDATE", "DELETE"):
++        assert word not in conn.sql.upper()
++
++
++def test_resolving_an_incident_is_explicit_and_audited(no_connections):
++    conn = _FakeConn(rows=[(7,)])
++    incidents_mod.resolve(
++        conn, 7, by="operator", note="repaired by restate --apply",
++        now=datetime(2026, 9, 18, 20, 31, tzinfo=UTC),
++    )
++    assert "resolved_at" in conn.sql and "resolved_by" in conn.sql
++    (_, params) = conn.queries[0]
++    assert params["resolved_by"] == "operator"
++    assert params["note"].obj["resolution_note"] == "repaired by restate --apply"
++
++
++def test_resolve_refuses_an_empty_who(no_connections):
++    with pytest.raises(ValueError):
++        incidents_mod.resolve(
++            _FakeConn(), 7, by="", note="x",
++            now=datetime(2026, 9, 18, 20, 31, tzinfo=UTC),
++        )
++
++
++# ---------------------------------------------------------------------
++# The run-level advisory lock (§9)
++# ---------------------------------------------------------------------
++
++
++def test_the_lock_key_is_one_constant():
++    assert isinstance(ARCHIVE_RUN_LOCK_KEY, int)
++    source = code_of(try_acquire_run_lock)
++    assert "ARCHIVE_RUN_LOCK_KEY" in source
++    assert "pg_try_advisory_lock" in source
++
++
++def test_the_lock_is_session_level_not_transaction_level():
++    """§9 says session-level: a repair's pre-commit re-check rolls its
++    transaction back, and a transaction-level lock would be released by
++    that rollback while the command is still running."""
++    assert "pg_try_advisory_xact_lock" not in code_of(try_acquire_run_lock)
++
++
++def test_acquiring_the_lock_asks_the_server_once(no_connections):
++    conn = _FakeConn(rows=[(True,)])
++    assert try_acquire_run_lock(conn) is True
++    assert len(conn.queries) == 1
++    (_, params) = conn.queries[0]
++    assert params == (ARCHIVE_RUN_LOCK_KEY,)
++
++
++def test_a_second_holder_is_refused_loudly(no_connections):
++    conn = _FakeConn(rows=[(False,)])
++    assert try_acquire_run_lock(conn) is False
++    with pytest.raises(ArchiveLockError) as e:
++        try_acquire_run_lock(conn, what="the nightly run")
++    assert "another archive/repair run holds the lock" in str(e.value)
++    assert "the nightly run" in str(e.value)
++
++
++def test_releasing_the_lock_takes_the_connection(no_connections):
++    conn = _FakeConn(rows=[(True,)])
++    release_run_lock(conn)
++    assert "pg_advisory_unlock" in conn.sql
++    assert (conn.commits, conn.closes) == (0, 0)
++
++
++# ---------------------------------------------------------------------
++# requires_db — WRITTEN HERE, first run owed on cobalt_dev
++# ---------------------------------------------------------------------
++
++
++@requires_db
++def test_the_append_path_never_modifies_an_existing_row():
++    st = BarStore()
++    st.ensure_schema()
++    key = datetime(2026, 8, 29, 9, 30, tzinfo=UTC)
++    assert st.upsert_bars([bar(key, close="100.00")]) == 1
++    with st.target_transaction() as conn:
++        inserted = st.insert_new_bars(conn, [bar(key, close="999.00")])
++    assert inserted == 0, "DO NOTHING must not count a conflict as an insert"
++    with st._connect() as conn:
++        row = conn.execute(
++            "SELECT close FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
++            ("TESTARCH", "i5", key),
++        ).fetchone()
++    assert str(row[0]) == "100.0000", "the append path rewrote a stored bar"
++
++
++@requires_db
++def test_a_poller_style_insert_between_the_read_and_the_insert_is_a_counted_conflict():
++    """§9 / the concurrency test: the poller landing a bar in the window
++    between the range read and this insert is a COUNTED CONFLICT, never
++    an error, and the counting identity still closes."""
++    st = BarStore()
++    st.ensure_schema()
++    keys = [datetime(2026, 8, 29, 10, m, tzinfo=UTC) for m in (0, 5)]
++    with st.target_transaction() as conn:
++        held = st._bars_in_range(conn, "TESTARCH", Interval.I5, keys[0], keys[-1])
++        assert keys[0] not in held
++        # ...the poller commits on its own connection, in between.
++        st.upsert_bars([bar(keys[0])])
++        inserted = st.insert_new_bars(conn, [bar(k) for k in keys])
++    assert inserted == 1
++    conflicts = 2 - inserted
++    assert conflicts == 1
++
++
++@requires_db
++def test_a_crash_after_the_inserts_leaves_neither_bars_nor_progress():
++    st = BarStore()
++    st.ensure_schema()
++    key = datetime(2026, 8, 29, 11, 0, tzinfo=UTC)
++    boom = RuntimeError("crash after the inserts, before progress")
++    with pytest.raises(RuntimeError):
++        with st.target_transaction() as conn:
++            st.insert_new_bars(conn, [bar(key)])
++            raise boom
++    with st._connect() as conn:
++        assert conn.execute(
++            "SELECT count(*) FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
++            ("TESTARCH", "i5", key),
++        ).fetchone()[0] == 0
++        assert conn.execute(
++            "SELECT count(*) FROM archive_progress WHERE ticker=%s AND interval=%s",
++            ("TESTARCH", "i5"),
++        ).fetchone()[0] == 0
++
++
++@requires_db
++def test_the_retry_after_a_crash_is_idempotent():
++    st = BarStore()
++    st.ensure_schema()
++    key = datetime(2026, 8, 29, 11, 30, tzinfo=UTC)
++    for expected in (1, 0):
++        with st.target_transaction() as conn:
++            assert st.insert_new_bars(conn, [bar(key)]) == expected
++
++
++@requires_db
++def test_a_second_holder_of_the_advisory_lock_refuses():
++    st = BarStore()
++    first = st._connect()
++    second = st._connect()
++    try:
++        assert try_acquire_run_lock(first) is True
++        assert try_acquire_run_lock(second) is False
++        with pytest.raises(ArchiveLockError):
++            try_acquire_run_lock(second, what="a second nightly run")
++        release_run_lock(first)
++        assert try_acquire_run_lock(second) is True
++        release_run_lock(second)
++    finally:
++        first.close()
++        second.close()
++
++
++@requires_db
++def test_progress_and_an_incident_commit_with_the_bars_or_not_at_all():
++    st = BarStore()
++    st.ensure_schema()
++    plan = _accepted_plan()
++    now = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
++    with pytest.raises(RuntimeError):
++        with st.target_transaction() as conn:
++            st.insert_new_bars(conn, list(plan.to_insert))
++            progress_mod.upsert_progress(conn, plan=plan, run_id="probe", now=now)
++            incidents_mod.open_or_refresh(conn, _draft(), run_id="probe", now=now)
++            raise RuntimeError("crash before commit")
++    with st._connect() as conn:
++        assert conn.execute(
++            "SELECT count(*) FROM archive_progress WHERE ticker=%s", ("TESTARCH",)
++        ).fetchone()[0] == 0
++        assert conn.execute(
++            "SELECT count(*) FROM archive_incidents WHERE ticker=%s", ("TESTARCH",)
++        ).fetchone()[0] == 0
++
++
++@requires_db
++def test_progress_is_monotonic_across_accepted_runs():
++    st = BarStore()
++    st.ensure_schema()
++    plan = _accepted_plan()
++    now = datetime(2026, 8, 29, 12, 30, tzinfo=UTC)
++    with st.target_transaction() as conn:
++        progress_mod.upsert_progress(conn, plan=plan, run_id="probe-1", now=now)
++    older = plan.model_copy(update={"archived_through_after": ts(50)})
++    with st.target_transaction() as conn:
++        progress_mod.upsert_progress(conn, plan=older, run_id="probe-2", now=now)
++    with st._connect() as conn:
++        row = conn.execute(
++            "SELECT archived_through FROM archive_progress WHERE ticker=%s AND interval=%s",
++            ("TESTARCH", "i5"),
++        ).fetchone()
++    assert row[0] == ts(55), "GREATEST must refuse to move the watermark backwards"
++
++
++@requires_db
++def test_a_recurring_incident_refreshes_rather_than_duplicating():
++    st = BarStore()
++    st.ensure_schema()
++    now = datetime(2026, 8, 29, 13, 0, tzinfo=UTC)
++    with st.target_transaction() as conn:
++        first = incidents_mod.open_or_refresh(conn, _draft(), run_id="probe-1", now=now)
++        again = incidents_mod.open_or_refresh(
++            conn, _draft(), run_id="probe-2", now=now + timedelta(days=1)
++        )
++        assert first == again
++        row = conn.execute(
++            "SELECT first_seen_at, last_seen_at FROM archive_incidents WHERE id = %s",
++            (first,),
++        ).fetchone()
++        assert row[0] == now and row[1] == now + timedelta(days=1)
++
++
++# ---------------------------------------------------------------------
++# Tribunal round 1, F1 — the repair's bar write on the repair's own
++# transaction. Offline twins live in `test_archiver_quiet.py`; these two
++# are the real-transaction proof and their FIRST RUN IS OWED on
++# `cobalt_dev`, like every other `requires_db` test on this branch.
++# ---------------------------------------------------------------------
++
++
++@requires_db
++def test_a_rollback_unwrites_an_upsert_made_on_the_targets_connection():
++    """`upsert_bars_on` is the shape `restate --apply` now uses: the
++    `DO UPDATE` lands on the caller's connection, so the caller's
++    rollback — the one §8's pre-commit re-check raises — undoes it.
++
++    The offline test can only assert which METHOD was called; that a
++    real Postgres rollback actually removes the rewritten value is what
++    this one proves.
++    """
++    st = BarStore()
++    st.ensure_schema()
++    key = datetime(2026, 8, 29, 14, 0, tzinfo=UTC)
++    assert st.upsert_bars([bar(key, close="100.00")]) == 1
++
++    boom = RuntimeError("the pre-commit re-check refused")
++    with pytest.raises(RuntimeError):
++        with st.target_transaction() as conn:
++            assert st.upsert_bars_on(conn, [bar(key, close="999.00")]) == 1
++            raise boom
++
++    with st._connect() as conn:
++        row = conn.execute(
++            "SELECT close FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
++            ("TESTARCH", "i5", key),
++        ).fetchone()
++    assert str(row[0]) == "100.0000", (
++        "a rolled-back repair left the rewritten value in place — F1 again"
++    )
++
++
++@requires_db
++def test_the_own_connection_upsert_survives_another_transactions_rollback():
++    """The DEFECT, stated as a passing test so it can never come back
++    unnoticed: `upsert_bars` opens and COMMITS its own connection, so a
++    rollback elsewhere does not touch it.
++
++    Nothing is wrong with that — it is what the poller and the nightly
++    `upsert` night need. It is wrong only inside a repair, which is why
++    `_apply_restate` now takes `upsert_bars_on`.
++    """
++    st = BarStore()
++    st.ensure_schema()
++    key = datetime(2026, 8, 29, 14, 30, tzinfo=UTC)
++    assert st.upsert_bars([bar(key, close="100.00")]) == 1
++
++    with pytest.raises(RuntimeError):
++        with st.target_transaction() as _conn:
++            assert st.upsert_bars([bar(key, close="999.00")]) == 1
++            raise RuntimeError("the pre-commit re-check refused")
++
++    with st._connect() as conn:
++        row = conn.execute(
++            "SELECT close FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
++            ("TESTARCH", "i5", key),
++        ).fetchone()
++    assert str(row[0]) == "999.0000", (
++        "`upsert_bars` is expected to commit on its OWN connection; if this "
++        "now rolls back, the nightly night's write semantics changed"
++    )
++
++
++@requires_db
++def test_backfill_missings_insert_rolls_back_with_its_transaction():
++    """F1's sibling, on the real database: `insert_new_bars` already
++    writes on the caller's connection, so `backfill-missing` never had
++    the defect. Asserted rather than assumed."""
++    st = BarStore()
++    st.ensure_schema()
++    key = datetime(2026, 8, 29, 15, 0, tzinfo=UTC)
++
++    with pytest.raises(RuntimeError):
++        with st.target_transaction() as conn:
++            assert st.insert_new_bars(conn, [bar(key)]) == 1
++            raise RuntimeError("the pre-commit re-check refused")
++
++    with st._connect() as conn:
++        assert conn.execute(
++            "SELECT count(*) FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
++            ("TESTARCH", "i5", key),
++        ).fetchone()[0] == 0
++
++
++# ---------------------------------------------------------------------
++# Spec §15's named races (tribunal round 1, F3 = the desk's Q10)
++#
++# The SEQUENCED forms are offline in `test_archiver_quiet.py`. These
++# two need two REAL connections: which value survives when a poller
++# commit and a repair commit contend for one row is decided by
++# Postgres, not by a fake (L45). First run OWED on cobalt_dev.
++# ---------------------------------------------------------------------
++
++
++@requires_db
++def test_a_committed_poller_write_is_overwritten_by_a_later_repair():
++    """DIFFERING-VALUE RACE, same key: the poller commits X on its own
++    connection inside the repair's transaction window, and the repair's
++    `DO UPDATE` commits after it. Y survives.
++
++    The offline twin asserts which method ran; this one asserts what the
++    database actually holds after two real commits.
++    """
++    st = BarStore()
++    st.ensure_schema()
++    key = datetime(2026, 8, 29, 16, 0, tzinfo=UTC)
++    assert st.upsert_bars([bar(key, close="100.00")]) == 1
++
++    with st.target_transaction() as conn:
++        held = st._bars_in_range(conn, "TESTARCH", Interval.I5, key, key)
++        assert str(held[key].close) == "100.0000"
++        # ...the poller, on its OWN connection, between the read and the
++        # write. It commits the instant it returns.
++        st.upsert_bars([bar(key, close="103.00")])
++        assert st.upsert_bars_on(conn, [bar(key, close="105.00")]) == 1
++
++    with st._connect() as conn:
++        row = conn.execute(
++            "SELECT close FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
++            ("TESTARCH", "i5", key),
++        ).fetchone()
++    assert str(row[0]) == "105.0000", (
++        "the repair committed last; its restated value must be the stored one"
++    )
++
++
++@requires_db
++def test_an_equal_value_race_writes_the_same_value_and_changes_nothing():
++    """EQUAL-VALUE RACE, same key: the poller writes X and the repair
++    independently computes X.
++
++    Two things are asserted, because only one of them is obvious: the
++    stored value is unchanged, AND the repair offers nothing at all —
++    `compare` finds no differing key, so `_apply_restate`'s row list is
++    empty and `upsert_bars_on` returns 0 without sending a statement.
++    """
++    st = BarStore()
++    st.ensure_schema()
++    key = datetime(2026, 8, 29, 16, 30, tzinfo=UTC)
++    assert st.upsert_bars([bar(key, close="105.00")]) == 1
++
++    with st.target_transaction() as conn:
++        held = st._bars_in_range(conn, "TESTARCH", Interval.I5, key, key)
++        comparison = compare([bar(key, close="105.00")], held)
++        assert comparison.differing == ()
++        assert comparison.equal == (key,)
++        rows = [b for b in [bar(key, close="105.00")] if b.ts in {
++            d.ts for d in comparison.differing
++        }]
++        assert st.upsert_bars_on(conn, rows) == 0
++
++    with st._connect() as conn:
++        row = conn.execute(
++            "SELECT close FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
++            ("TESTARCH", "i5", key),
++        ).fetchone()
++    assert str(row[0]) == "105.0000"
+diff --git a/tests/cobalt/test_archiver_settings.py b/tests/cobalt/test_archiver_settings.py
+new file mode 100644
+index 0000000..20169ec
+--- /dev/null
++++ b/tests/cobalt/test_archiver_settings.py
+@@ -0,0 +1,291 @@
++"""Chunk S — `ArchiverSettings`, the ONE model behind spec §10's seven keys.
++
++Spec: `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §10.
++
++The point of this file is the MODE FLAG. `archiver.write_mode` is the
++switch between today's nightly overlay and the append-only night, and
++L7 says the flip is the owner's ruling on shadow numbers — never a
++default that drifted. So two things are tested here that would look
++like over-testing anywhere else:
++
++* the shipped value is PINNED to `upsert`. A commit that changes it
++  fails this test, which is exactly the reviewed-commit gate L7 asks
++  for.
++* every near-miss spelling is REFUSED and the refusal NAMES THE KEY
++  (L1): `Append`, ` upsert`, `""`, `both`, and a missing row. A silent
++  coercion of `Append` to `append` would switch the write mode of the
++  production archiver by typo.
++
++Offline: nothing here opens a database or a network connection.
++"""
++
++from __future__ import annotations
++
++import pytest
++
++from cobalt.archiver.settings import (
++    ARCHIVER_TUNABLE_UNITS,
++    ArchiverSettings,
++    ArchiverSettingsError,
++    ShadowCompare,
++    WriteMode,
++    load_archiver_settings,
++    validate_command_lines,
++)
++from cobalt.taxonomy.loader import load_tunables
++from cobalt.taxonomy.tunables import TunableRow, TunableStatus, TunableUnit
++
++# --- helpers ---------------------------------------------------------
++
++
++def _row(key: str, value, unit: TunableUnit) -> TunableRow:
++    return TunableRow(
++        key=key,
++        value=value,
++        unit=unit,
++        scope="global",
++        dynamic=False,
++        status=TunableStatus.SOLIDIFIED,
++        source="ruling",
++    )
++
++
++def _registry(**overrides) -> dict[str, TunableRow]:
++    """The shipped seven, with per-test overrides. `None` drops a row."""
++    values = {
++        "archiver.write_mode": "upsert",
++        "archiver.shadow_compare": "on",
++        "archiver.shadow_statement_timeout_s": 10,
++        "archiver.shadow_retention_nights": 30,
++        "archiver.repair.quiet_before_open_min": 10,
++        "archiver.repair.quiet_after_cycle_min": 5,
++        "archiver.repair.cycle_max_min": 30,
++    }
++    values.update(overrides)
++    return {
++        key: _row(key, value, ARCHIVER_TUNABLE_UNITS[key])
++        for key, value in values.items()
++        if value is not _DROP
++    }
++
++
++class _Drop:
++    def __repr__(self) -> str:  # pragma: no cover - debugging aid
++        return "<drop>"
++
++
++_DROP = _Drop()
++
++
++# --- the seven keys resolve from the SHIPPED file ---------------------
++
++
++def test_the_seven_keys_resolve_from_the_shipped_tunables_file():
++    """L3: one model, read through the existing tunables loader."""
++    settings = load_archiver_settings()
++    assert settings.write_mode is WriteMode.UPSERT
++    assert settings.shadow_compare is ShadowCompare.ON
++    assert settings.shadow_statement_timeout_s == 10
++    assert settings.shadow_retention_nights == 30
++    assert settings.repair.quiet_before_open_min == 10
++    assert settings.repair.quiet_after_cycle_min == 5
++    assert settings.repair.cycle_max_min == 30
++
++
++def test_the_shipped_rows_carry_the_units_and_statuses_the_design_ruled():
++    rows = load_tunables().by_key
++    for key, unit in ARCHIVER_TUNABLE_UNITS.items():
++        assert key in rows, f"{key} missing from the shipped tunables.yaml"
++        assert rows[key].unit is unit, f"{key} has unit {rows[key].unit}"
++    # §10: PROPOSED exactly where the design says PROPOSED.
++    proposed = {
++        "archiver.shadow_compare",
++        "archiver.shadow_statement_timeout_s",
++        "archiver.shadow_retention_nights",
++        "archiver.repair.cycle_max_min",
++    }
++    for key in ARCHIVER_TUNABLE_UNITS:
++        expected = (
++            TunableStatus.PROPOSED if key in proposed else TunableStatus.SOLIDIFIED
++        )
++        assert rows[key].status is expected, f"{key} status {rows[key].status}"
++    # The desk's two numbers cite the ruling that set them (§16 / R8).
++    for key in (
++        "archiver.repair.quiet_before_open_min",
++        "archiver.repair.quiet_after_cycle_min",
++    ):
++        assert any(
++            "cto-2026-09-19.md §16 / R8" in c for c in rows[key].consumers
++        ), f"{key} does not cite the desk's ruling"
++
++
++def test_the_shipped_write_mode_is_upsert_and_only_a_reviewed_commit_changes_it():
++    """L7. The build DEPLOYS as `upsert` (§5). The switch to `append` is
++    the owner's ruling on the shadow numbers — this assertion is the
++    tripwire that makes the flip a reviewed commit rather than a drift."""
++    row = load_tunables().by_key["archiver.write_mode"]
++    assert row.value == "upsert"
++    assert load_archiver_settings().write_mode is WriteMode.UPSERT
++
++
++# --- write_mode: EXACTLY upsert | append -----------------------------
++
++
++@pytest.mark.parametrize("bad", ["Append", "APPEND", " upsert", "upsert ", "", "both", "append\n"])
++def test_write_mode_refuses_every_near_miss_and_names_the_key(bad):
++    with pytest.raises(ArchiverSettingsError) as e:
++        load_archiver_settings(_registry(**{"archiver.write_mode": bad}))
++    assert "archiver.write_mode" in str(e.value)
++    assert "upsert" in str(e.value) and "append" in str(e.value)
++
++
++def test_write_mode_refuses_a_non_string_value_and_names_the_key():
++    with pytest.raises(ArchiverSettingsError) as e:
++        load_archiver_settings(_registry(**{"archiver.write_mode": 1}))
++    assert "archiver.write_mode" in str(e.value)
++
++
++def test_a_missing_write_mode_row_fails_loud_naming_the_key():
++    with pytest.raises(ArchiverSettingsError) as e:
++        load_archiver_settings(_registry(**{"archiver.write_mode": _DROP}))
++    assert "archiver.write_mode" in str(e.value)
++    assert "missing" in str(e.value)
++
++
++def test_append_is_accepted_so_the_switch_needs_no_code_change():
++    settings = load_archiver_settings(_registry(**{"archiver.write_mode": "append"}))
++    assert settings.write_mode is WriteMode.APPEND
++
++
++def test_a_wrong_unit_on_a_row_fails_loud_naming_the_key():
++    rows = _registry()
++    rows["archiver.write_mode"] = _row(
++        "archiver.write_mode", "upsert", TunableUnit.COUNT
++    )
++    with pytest.raises(ArchiverSettingsError) as e:
++        load_archiver_settings(rows)
++    assert "archiver.write_mode" in str(e.value)
++    assert "unit" in str(e.value)
++
++
++# --- shadow_compare --------------------------------------------------
++
++
++@pytest.mark.parametrize("value,expected", [("on", ShadowCompare.ON), ("off", ShadowCompare.OFF)])
++def test_shadow_compare_on_and_off(value, expected):
++    settings = load_archiver_settings(_registry(**{"archiver.shadow_compare": value}))
++    assert settings.shadow_compare is expected
++    assert settings.shadow_enabled is (expected is ShadowCompare.ON)
++
++
++@pytest.mark.parametrize("bad", ["ON", "true", "", "yes", 1])
++def test_shadow_compare_refuses_anything_else_naming_the_key(bad):
++    with pytest.raises(ArchiverSettingsError) as e:
++        load_archiver_settings(_registry(**{"archiver.shadow_compare": bad}))
++    assert "archiver.shadow_compare" in str(e.value)
++
++
++def test_shadow_compare_is_ignored_in_append_mode():
++    """§5: in `append` the comparison IS the gate; no shadow artifact."""
++    settings = load_archiver_settings(
++        _registry(**{"archiver.write_mode": "append", "archiver.shadow_compare": "on"})
++    )
++    assert settings.shadow_enabled is False
++
++
++# --- the three repair minutes ----------------------------------------
++
++
++@pytest.mark.parametrize(
++    "key",
++    [
++        "archiver.repair.quiet_before_open_min",
++        "archiver.repair.quiet_after_cycle_min",
++        "archiver.repair.cycle_max_min",
++    ],
++)
++@pytest.mark.parametrize("bad", [0, -1, 1.5, "10", None])
++def test_every_repair_minute_must_be_a_positive_integer(key, bad):
++    with pytest.raises(ArchiverSettingsError) as e:
++        load_archiver_settings(_registry(**{key: bad}))
++    assert key in str(e.value)
++
++
++@pytest.mark.parametrize(
++    "key",
++    [
++        "archiver.repair.quiet_before_open_min",
++        "archiver.repair.quiet_after_cycle_min",
++        "archiver.repair.cycle_max_min",
++    ],
++)
++def test_a_missing_repair_row_fails_loud_naming_the_key(key):
++    with pytest.raises(ArchiverSettingsError) as e:
++        load_archiver_settings(_registry(**{key: _DROP}))
++    assert key in str(e.value) and "missing" in str(e.value)
++
++
++@pytest.mark.parametrize("bad", [0, -5, "10"])
++def test_the_two_shadow_counts_must_be_positive_integers(bad):
++    for key in ("archiver.shadow_statement_timeout_s", "archiver.shadow_retention_nights"):
++        with pytest.raises(ArchiverSettingsError) as e:
++            load_archiver_settings(_registry(**{key: bad}))
++        assert key in str(e.value)
++
++
++# --- what `cobalt validate` prints (L10) ------------------------------
++
++
++def test_validate_prints_the_resolved_settings():
++    """The function `cobalt validate` calls, tested directly — the CLI is
++    not run here (it would sweep every config family and read the vault)."""
++    lines = validate_command_lines()
++    body = "\n".join(lines)
++    assert "archiver.write_mode = upsert" in body
++    for key in ARCHIVER_TUNABLE_UNITS:
++        assert key in body, f"{key} is not printed by the gate"
++    # The operator must be able to read the mode's meaning off the gate.
++    assert "append" in body.lower()
++
++
++def test_validate_lines_fail_loud_when_a_row_is_missing(monkeypatch):
++    from cobalt.archiver import settings as settings_mod
++
++    monkeypatch.setattr(
++        settings_mod,
++        "load_archiver_settings",
++        lambda registry=None: (_ for _ in ()).throw(
++            ArchiverSettingsError("tunables.yaml: missing archiver.write_mode")
++        ),
++    )
++    with pytest.raises(ArchiverSettingsError):
++        validate_command_lines()
++
++
++# --- the model itself -------------------------------------------------
++
++
++def test_the_model_is_strict_and_frozen():
++    settings = load_archiver_settings()
++    with pytest.raises(Exception):
++        settings.write_mode = WriteMode.APPEND
++    with pytest.raises(Exception):
++        ArchiverSettings(
++            write_mode="upsert",
++            shadow_compare="on",
++            shadow_statement_timeout_s=10,
++            shadow_retention_nights=30,
++            repair={"quiet_before_open_min": 10, "quiet_after_cycle_min": 5, "cycle_max_min": 30},
++            unexpected_key=1,
++        )
++
++
++def test_there_is_exactly_one_yaml_reader_behind_the_settings():
++    """L3. `settings.py` must not grow a second YAML loader beside
++    `cobalt.taxonomy.loader`."""
++    source = (
++        __import__("pathlib").Path(__import__("cobalt.archiver.settings", fromlist=["x"]).__file__)
++        .read_text(encoding="utf-8")
++    )
++    assert "import yaml" not in source and "yaml.safe_load" not in source
++    assert "load_tunables" in source
+diff --git a/tests/cobalt/test_heartbeat.py b/tests/cobalt/test_heartbeat.py
+index f669280..ec7fc2b 100644
+--- a/tests/cobalt/test_heartbeat.py
++++ b/tests/cobalt/test_heartbeat.py
+@@ -18,9 +18,28 @@ implementation of the same question.
+ 
+ from datetime import datetime, timezone
+ 
++import pytest
++
++from cobalt.heartbeat import probes as probes_mod
+ from cobalt.heartbeat.probes import archiver_freshness, radar
+ from cobalt.session.models import Session
+ 
++
++@pytest.fixture(autouse=True)
++def _no_archive_incidents(monkeypatch):
++    """This file is about RUN FRESHNESS and has never had a database.
++
++    2026-09-19 gave `archiver_freshness` a second input — unresolved
++    `system.archive_incidents` rows (FINAL design §11, spec O-7) — which
++    it reads for itself in production. Offline that read cannot succeed,
++    and the probe correctly refuses to call anything green when its own
++    alarm is unreadable. Pinning the reader to "no incidents" here keeps
++    every test below asserting exactly what it was written to assert;
++    the incident behaviour, including the unreadable case, is covered in
++    `test_heartbeat_archiver_incidents.py`.
++    """
++    monkeypatch.setattr(probes_mod, "_read_archive_incidents", lambda: [])
++
+ FRIDAY_RUN_FINISHED_ET = "2026-09-04 20:53"  # the actual pre-wrapper run
+ REGISTERED_AT = datetime(2026, 9, 5, 2, 19, 45, tzinfo=timezone.utc)  # Fri 22:19:45 ET
+ SUNDAY_MORNING = datetime(2026, 9, 6, 10, 54, tzinfo=timezone.utc)  # Sun 06:54 ET — the RED
+diff --git a/tests/cobalt/test_heartbeat_archiver_incidents.py b/tests/cobalt/test_heartbeat_archiver_incidents.py
+new file mode 100644
+index 0000000..81c4398
+--- /dev/null
++++ b/tests/cobalt/test_heartbeat_archiver_incidents.py
+@@ -0,0 +1,208 @@
++"""Chunk H — the archiver probe sees unresolved archive incidents.
++
++Spec `ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §11 and spec **O-7**:
++"the heartbeat's archiver probe is not green while any [incident] is
++unresolved", with the DESK's safe default for the wording and colour —
++"not green = the probe's existing FAIL form, detail names the incident
++count".
++
++WHY THE HEARTBEAT HAS TO CARRY THIS. Known limit 3 (spec §12): a
++withheld target's new bars age out of the vendor window (i5 ≈ 21 days)
++if nobody repairs it. The incident list and the heartbeat ARE the alarm.
++A dashboard that stayed green through a fortnight of withholding would
++make the append mode worse than the overlay it replaces.
++
++Offline: the probe's existing `_FakeStore` pattern plus an injected
++incident reader. No database.
++"""
++
++from __future__ import annotations
++
++from datetime import datetime, timezone
++
++import pytest
++
++from cobalt.heartbeat.probes import (
++    _archiver_run_probe,
++    _with_archive_incidents,
++    archiver_freshness,
++)
++
++UTC = timezone.utc
++RECENT = datetime(2026, 9, 5, 0, 53, tzinfo=UTC)      # Fri 20:53 ET
++NOW = datetime(2026, 9, 5, 1, 0, tzinfo=UTC)
++
++
++class _FakeStore:
++    def __init__(self, row):
++        self._row = row
++
++    def get(self, label):
++        assert label == "com.cobalt.archiver"
++        return self._row
++
++
++def _row(finished=RECENT, exit_code=0, rows_written=3164539):
++    return {
++        "label": "com.cobalt.archiver",
++        "registered_at": datetime(2026, 9, 5, 2, 19, 45, tzinfo=UTC),
++        "finished_at": finished,
++        "exit_code": exit_code,
++        "last_result": {"rows_written": rows_written},
++    }
++
++
++class _Incident:
++    def __init__(self, kind, ticker="TESTARCH", interval="i5", first_seen_at=None):
++        self.kind = kind
++        self.ticker = ticker
++        self.interval = interval
++        self.first_seen_at = first_seen_at or datetime(2026, 9, 1, 0, 30, tzinfo=UTC)
++
++
++def _reader(*incidents):
++    def _read():
++        return list(incidents)
++
++    return _read
++
++
++def _broken_reader(error):
++    def _read():
++        raise error
++
++    return _read
++
++
++# ---------------------------------------------------------------------
++# Zero incidents changes nothing
++# ---------------------------------------------------------------------
++
++
++def test_zero_incidents_is_exactly_todays_result():
++    """Mode isolation, again: until an `append` night runs there are no
++    incidents, and the probe must be BYTE-IDENTICAL to what it has
++    always reported. Asserted by IDENTITY — the same object comes back,
++    not a rebuilt equal one."""
++    base = _archiver_run_probe(_row(), NOW)
++    assert _with_archive_incidents(base, _reader()) is base
++    probe = archiver_freshness(store=_FakeStore(_row()), now=NOW, incidents=_reader())
++    assert (probe.ok, probe.detail) == (base.ok, base.detail)
++    assert probe.ok is True
++
++
++def test_a_red_run_stays_red_with_its_own_reason():
++    base = _archiver_run_probe(_row(exit_code=1), NOW)
++    probe = archiver_freshness(
++        store=_FakeStore(_row(exit_code=1)), now=NOW, incidents=_reader()
++    )
++    assert probe.ok is False
++    assert probe.detail == base.detail
++    assert "last run FAILED" in probe.detail
++
++
++# ---------------------------------------------------------------------
++# An unresolved incident is never green
++# ---------------------------------------------------------------------
++
++
++def test_one_unresolved_incident_is_not_green():
++    probe = archiver_freshness(
++        store=_FakeStore(_row()), now=NOW, incidents=_reader(_Incident("restated"))
++    )
++    assert probe.ok is False
++
++
++def test_the_detail_names_the_count_and_the_oldest_kind():
++    probe = archiver_freshness(
++        store=_FakeStore(_row()),
++        now=NOW,
++        incidents=_reader(
++            _Incident("gap", first_seen_at=datetime(2026, 9, 3, 1, 0, tzinfo=UTC)),
++            _Incident("restated", ticker="THIN",
++                      first_seen_at=datetime(2026, 9, 1, 1, 0, tzinfo=UTC)),
++            _Incident("gap", ticker="TESTARCH", interval="i1",
++                      first_seen_at=datetime(2026, 9, 4, 1, 0, tzinfo=UTC)),
++        ),
++    )
++    assert probe.ok is False
++    assert "3 unresolved archive incident(s)" in probe.detail
++    assert "oldest restated" in probe.detail            # 09-01, the oldest
++    assert "THIN/i5" in probe.detail
++    assert "2026-09-01" in probe.detail
++    assert "gap=2" in probe.detail and "restated=1" in probe.detail
++    # The run's own line survives, so an operator still sees both facts.
++    assert "last run" in probe.detail
++
++
++def test_the_detail_points_at_the_command_that_lists_them():
++    probe = archiver_freshness(
++        store=_FakeStore(_row()), now=NOW, incidents=_reader(_Incident("gap"))
++    )
++    assert "cobalt archiver incidents" in probe.detail
++
++
++def test_an_incident_outranks_a_healthy_run_but_not_a_stale_one():
++    """A stale run is the bigger fact; the incident line is appended, and
++    neither reading is green."""
++    stale = archiver_freshness(
++        store=_FakeStore(_row(finished=None)),
++        now=datetime(2026, 9, 8, 1, 15, tzinfo=UTC),
++        incidents=_reader(_Incident("gap")),
++    )
++    assert stale.ok is False
++    assert "NEVER" in stale.detail or "STALE" in stale.detail
++
++
++# ---------------------------------------------------------------------
++# A missing table is LOUD, never green, and never a crash
++# ---------------------------------------------------------------------
++
++
++@pytest.mark.parametrize("error", [
++    RuntimeError('relation "archive_incidents" does not exist'),
++    Exception("connection refused"),
++])
++def test_an_unreadable_incident_table_is_a_loud_probe_failure(error):
++    probe = archiver_freshness(
++        store=_FakeStore(_row()), now=NOW, incidents=_broken_reader(error)
++    )
++    assert probe.ok is False
++    assert "archive_incidents" in probe.detail
++    assert "0011_archive_incidents.sql" in probe.detail
++    assert "cobalt db migrate" in probe.detail
++
++
++def test_an_unreadable_incident_table_does_not_crash_the_heartbeat_run():
++    """L1 says fail loud — it does NOT say take the whole heartbeat down.
++    The probe returns a red Probe; it does not raise."""
++    probe = archiver_freshness(
++        store=_FakeStore(_row()),
++        now=NOW,
++        incidents=_broken_reader(RuntimeError("boom")),
++    )
++    assert probe.name == "archiver"
++    assert probe.ok is False
++
++
++def test_the_run_detail_survives_an_unreadable_incident_table():
++    probe = archiver_freshness(
++        store=_FakeStore(_row()), now=NOW, incidents=_broken_reader(RuntimeError("boom"))
++    )
++    assert "rows written 3164539" in probe.detail
++
++
++# ---------------------------------------------------------------------
++# The probe reads incidents by itself in production
++# ---------------------------------------------------------------------
++
++
++def test_the_default_reader_is_the_archivers_own_unresolved_query():
++    import inspect
++
++    source = inspect.getsource(archiver_freshness)
++    assert "incidents" in source
++    assert "unresolved" in source
++    # It must not reach for a writer.
++    for writer in ("open_or_refresh", "resolve(", "upsert_bars", "insert_new_bars"):
++        assert writer not in source, f"the probe reaches {writer}"

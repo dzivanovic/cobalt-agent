@@ -1,0 +1,2640 @@
+diff --git a/src/cobalt/archiver/reconcile.py b/src/cobalt/archiver/reconcile.py
+new file mode 100644
+index 0000000..60f942a
+--- /dev/null
++++ b/src/cobalt/archiver/reconcile.py
+@@ -0,0 +1,933 @@
++"""The append-only night's DECISIONS, as pure functions.
++
++Spec: `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md`
++§3 (V2-3 completeness), §4 (progress and the candidate range), §6 (the
++four-way comparison and withholding), §7 (gaps, empty exports,
++regression, and the counting identities).
++
++NOTHING HERE PERFORMS I/O. No database, no network, no file, and — the
++one that keeps this testable at all — no clock: the fetch instant is an
++argument. The store fetches, the runner calls these functions, and only
++then does anything get written. A test asserts this module's source
++carries none of those names.
++
++WHY A SEPARATE WATERMARK AT ALL. `BarStore.watermark()` is `max(ts)`
++over `system.bars`, and the radar poller writes that table too. The
++poller keeps only bars newer than (its watermark − overlap), so a bar
++that was ABSENT at poll time and appears LATER — a vendor restoration, a
++late print — is dropped by the poller while `max(ts)` moves on without
++it. Three houses produced the same sequence independently (Gemini's
++Monday 14:00 restoration, Astra's Friday 10:02 addition, Grok's NVDA
++Wednesday 10:17), and the same fact defeats a `max(ts)` gap test
++(MSFT 08-27/09-04; AAPL re-added). So `archived_through` is the
++archiver's own record, and the poller's maximum is REPORTED beside the
++counters and used by nothing.
++
++WHAT THE WATERMARK CLAIMS, AND WHAT IT DOES NOT. `archived_through` is
++the `ts` — the bar OPEN, UTC — of the newest COMPLETE bar of an
++ACCEPTED export. It records that the AVAILABLE export was processed
++through that key. It does not claim the vendor supplied every bar, and
++the report never says so: that is Known limit 5 (the newest-timestamp
++check cannot detect interior or prefix truncation).
++
++EVERY COUNT RECONCILES OR THE OBJECT CANNOT BE BUILT (L57).
++`TargetCounts` carries the spec's identities in its own validator, so a
++night whose numbers do not add up raises instead of rendering.
++"""
++
++from __future__ import annotations
++
++from datetime import date, datetime, timedelta, timezone
++from decimal import Decimal
++from enum import Enum
++from typing import Mapping, NamedTuple
++from zoneinfo import ZoneInfo
++
++from pydantic import BaseModel, ConfigDict, Field, model_validator
++
++from .models import Bar, Interval
++
++#: Sessions, and therefore session DATES, are defined in ET and nowhere
++#: else (ADR-0007, and `cobalt.session.clock`'s own rule). Imported as a
++#: zone rather than through the session clock because this module must
++#: stay free of config reads — the calendar is not needed here: a
++#: weekend or a holiday is simply a date the export does not carry.
++ET = ZoneInfo("America/New_York")
++
++#: §3 V2-3: the explicit interval -> duration map. An unknown interval
++#: FAILS LOUD; there is no "assume one minute".
++INTERVAL_MINUTES: dict[Interval, int] = {
++    Interval.I1: 1,
++    Interval.I2: 2,
++    Interval.I5: 5,
++    Interval.I15: 15,
++    Interval.I30: 30,
++}
++
++#: §4, range (b): the current day plus this many most recent COMPLETED
++#: trading sessions that the export actually carries. Two, not one,
++#: because the houses showed one is not enough (a Friday→Monday
++#: boundary loses the Friday additions Astra's sequence turns on).
++STEADY_STATE_SESSIONS = 2
++
++#: `system.bars` stores prices `NUMERIC(14, 4)` and volume `BIGINT`.
++#: Equality is decided AFTER normalising to those, so `100.0` from the
++#: vendor and `100.0000` from storage are the same bar, not a
++#: restatement that withholds a target for a whole night.
++PRICE_QUANTUM = Decimal("0.0001")
++
++#: The wording §7 requires on a gap, verbatim, so the report and the
++#: incident cannot drift apart.
++GAP_WORDING = "unavailable from the tested export interface"
++
++
++class ReconcileError(RuntimeError):
++    """An input this module cannot reason about. Never a default."""
++
++
++class IncidentKind(str, Enum):
++    """The five kinds of `system.archive_incidents` (§11).
++
++    Defined here, beside the decisions that raise them, and imported by
++    the writer — one definition, not two (L3).
++    """
++
++    GAP = "gap"
++    RESTATED = "restated"
++    STORED_ONLY = "stored_only"
++    EMPTY_EXPORT = "empty_export"
++    REGRESSION = "regression"
++
++
++class TargetStatus(str, Enum):
++    """§7. FAILED = `restated`, `regression`, `empty_export`, any
++    exception. DEGRADED = a `gap` with its usable range inserted, or
++    `stored_only` keys seen. `inserted = 0` because everything was
++    already stored is SUCCESS, not a failure."""
++
++    SUCCESS = "success"
++    DEGRADED = "degraded"
++    FAILED = "failed"
++
++
++# ---------------------------------------------------------------------
++# Time and completeness (§3 V2-3)
++# ---------------------------------------------------------------------
++
++
++def interval_duration(interval: object) -> timedelta:
++    """One bar's length. Fails loud on anything not in the map."""
++    try:
++        minutes = INTERVAL_MINUTES[interval]  # type: ignore[index]
++    except (KeyError, TypeError):
++        raise ReconcileError(
++            f"unknown interval {interval!r} — the archiver's completeness rule "
++            f"needs an explicit duration and has none for it. Known: "
++            f"{sorted(i.value for i in INTERVAL_MINUTES)}."
++        ) from None
++    return timedelta(minutes=minutes)
++
++
++def _require_aware(ts: object, what: str) -> datetime:
++    if not isinstance(ts, datetime) or ts.tzinfo is None or ts.utcoffset() is None:
++        raise ReconcileError(
++            f"REFUSED: {what} must be a tz-aware datetime, got {ts!r}. A naive "
++            "value has no instant, and guessing the zone is the defect ADR-0007 "
++            "had to undo across 4.75M bars."
++        )
++    return ts
++
++
++def bar_closes_at(ts: datetime, interval: Interval) -> datetime:
++    """A bar's `ts` is its OPEN; it closes one duration later."""
++    return _require_aware(ts, "a bar timestamp") + interval_duration(interval)
++
++
++def is_complete(ts: datetime, interval: Interval, fetch_started_at: datetime) -> bool:
++    """§3 V2-3: eligible only when `ts + duration <= fetch_started_at`.
++
++    `fetch_started_at` is captured BEFORE the request, so a bar that
++    closes while the response is in flight is not eligible tonight. That
++    makes the rule replayable: the same export and the same instant
++    always select the same bars.
++    """
++    return bar_closes_at(ts, interval) <= _require_aware(
++        fetch_started_at, "the fetch instant"
++    )
++
++
++def et_date(ts: datetime) -> date:
++    """The America/New_York calendar date `ts` belongs to."""
++    return _require_aware(ts, "a bar timestamp").astimezone(ET).date()
++
++
++# ---------------------------------------------------------------------
++# Normalisation (§6)
++# ---------------------------------------------------------------------
++
++
++def normalise_price(value: object) -> Decimal:
++    """To `NUMERIC(14, 4)`, the column's own shape."""
++    try:
++        return Decimal(str(value)).quantize(PRICE_QUANTUM)
++    except Exception as e:  # noqa: BLE001 - any unparseable value is loud
++        raise ReconcileError(f"price {value!r} cannot be normalised: {e}") from e
++
++
++def normalise_volume(value: object) -> int:
++    try:
++        return int(Decimal(str(value)))
++    except Exception as e:  # noqa: BLE001
++        raise ReconcileError(f"volume {value!r} cannot be normalised: {e}") from e
++
++
++class BarValues(NamedTuple):
++    """One bar's OHLCV, normalised. What equality is decided on."""
++
++    open: Decimal
++    high: Decimal
++    low: Decimal
++    close: Decimal
++    volume: int
++
++    def as_strings(self) -> dict[str, str]:
++        return {
++            "open": str(self.open),
++            "high": str(self.high),
++            "low": str(self.low),
++            "close": str(self.close),
++            "volume": str(self.volume),
++        }
++
++
++FIELD_ORDER = ("open", "high", "low", "close", "volume")
++
++
++def bar_values(source: object) -> BarValues:
++    """Normalised OHLCV of a `Bar`, or of anything with those five
++    attributes (a database row wrapper, in the store)."""
++    return BarValues(
++        open=normalise_price(getattr(source, "open")),
++        high=normalise_price(getattr(source, "high")),
++        low=normalise_price(getattr(source, "low")),
++        close=normalise_price(getattr(source, "close")),
++        volume=normalise_volume(getattr(source, "volume")),
++    )
++
++
++def values_from_row(row) -> BarValues:
++    """The same thing from a positional `(open, high, low, close, volume)`
++    row, which is how the store hands over what it read."""
++    o, h, low_, c, v = row
++    return BarValues(
++        open=normalise_price(o),
++        high=normalise_price(h),
++        low=normalise_price(low_),
++        close=normalise_price(c),
++        volume=normalise_volume(v),
++    )
++
++
++# ---------------------------------------------------------------------
++# Splitting an export into what is eligible (§3 V2-3, §7)
++# ---------------------------------------------------------------------
++
++
++class Eligibility(BaseModel):
++    """What an export contains, split the way §7's identity counts it."""
++
++    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
++
++    fetched: int = Field(ge=0)
++    invalid: int = Field(ge=0)
++    duplicate_input_keys: int = Field(ge=0)
++    incomplete: int = Field(ge=0)
++    eligible: tuple[Bar, ...] = ()
++    raw_oldest: datetime | None = None
++    raw_newest: datetime | None = None
++    export_oldest: datetime | None = None
++    export_newest: datetime | None = None
++
++
++def split_export(
++    bars: list[Bar], interval: Interval, fetch_started_at: datetime
++) -> Eligibility:
++    """Duplicates, then completeness. Bounds over ELIGIBLE bars only.
++
++    `invalid` is 0 by construction while the collector fails a whole
++    target on one bad row (`collector.py:146-170`); the counter exists so
++    §7's identity survives a collector that one day returns partials.
++    """
++    _require_aware(fetch_started_at, "the fetch instant")
++    seen: set[datetime] = set()
++    eligible: list[Bar] = []
++    duplicates = 0
++    incomplete = 0
++    raw: list[datetime] = []
++
++    for item in bars:
++        raw.append(item.ts)
++        if item.ts in seen:
++            duplicates += 1
++            continue
++        seen.add(item.ts)
++        if not is_complete(item.ts, interval, fetch_started_at):
++            incomplete += 1
++            continue
++        eligible.append(item)
++
++    eligible.sort(key=lambda b: b.ts)
++    keys = [b.ts for b in eligible]
++    return Eligibility(
++        fetched=len(bars),
++        invalid=0,
++        duplicate_input_keys=duplicates,
++        incomplete=incomplete,
++        eligible=tuple(eligible),
++        raw_oldest=min(raw) if raw else None,
++        raw_newest=max(raw) if raw else None,
++        export_oldest=keys[0] if keys else None,
++        export_newest=keys[-1] if keys else None,
++    )
++
++
++# ---------------------------------------------------------------------
++# The candidate range (§4)
++# ---------------------------------------------------------------------
++
++
++def steady_state_dates(bars, fetch_started_at: datetime) -> tuple[date, ...]:
++    """Range (b): the current ET day plus the `STEADY_STATE_SESSIONS`
++    most recent COMPLETED session dates the export carries.
++
++    Sessions are America/New_York calendar DATES PRESENT IN THE EXPORT —
++    no 24-hour arithmetic. A weekend, a holiday and a half day need no
++    special case: a weekend simply has no date, and a half day has one
++    that ends early. That is why this function needs no calendar.
++    """
++    today = et_date(_require_aware(fetch_started_at, "the fetch instant"))
++    present = sorted({et_date(b.ts) for b in bars})
++    completed = [d for d in present if d < today]
++    return tuple(sorted(set(completed[-STEADY_STATE_SESSIONS:]) | {today}))
++
++
++class CandidatePlan(BaseModel):
++    """Everything decided BEFORE the stored rows are read.
++
++    The store read is bounded by this plan, which is why it is a
++    separate object: one read of the candidate range per target (§6).
++    """
++
++    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
++
++    ticker: str
++    interval: Interval
++    fetch_started_at: datetime
++    bootstrap: bool
++    archived_through_before: datetime | None
++    candidates: tuple[Bar, ...]
++    range_dates: tuple[date, ...]
++    below_range: int = Field(ge=0)
++    eligibility: Eligibility
++
++    @property
++    def needs_stored_read(self) -> bool:
++        """An empty or regressed export is refused before any read."""
++        return not self.refusal and bool(self.candidates)
++
++    @property
++    def refusal(self) -> IncidentKind | None:
++        if not self.eligibility.eligible:
++            return IncidentKind.EMPTY_EXPORT
++        if (
++            self.archived_through_before is not None
++            and self.eligibility.export_newest is not None
++            and self.eligibility.export_newest < self.archived_through_before
++        ):
++            return IncidentKind.REGRESSION
++        return None
++
++    @property
++    def range_start(self) -> datetime | None:
++        """The oldest key the store read must cover."""
++        return self.candidates[0].ts if self.candidates else None
++
++    @property
++    def range_end(self) -> datetime | None:
++        return self.candidates[-1].ts if self.candidates else None
++
++
++def plan_candidates(
++    *,
++    ticker: str,
++    interval: Interval,
++    bars: list[Bar],
++    fetch_started_at: datetime,
++    archived_through: datetime | None = None,
++) -> CandidatePlan:
++    """§4's candidate range: the UNION of
++
++      (a) every eligible bar with `ts > archived_through`, and
++      (b) every eligible bar whose ET date is in `steady_state_dates`.
++
++    NO PROGRESS ROW IS A BOOTSTRAP: every eligible key of the available
++    export is reconciled once, regardless of rows the poller already
++    stored. Range (b) is what catches a bar the vendor adds BELOW the
++    watermark — the case a `max(ts)` watermark loses.
++    """
++    split = split_export(bars, interval, fetch_started_at)
++    bootstrap = archived_through is None
++    if archived_through is not None:
++        _require_aware(archived_through, "archived_through")
++
++    if bootstrap:
++        candidates = split.eligible
++        dates = steady_state_dates(split.eligible, fetch_started_at)
++    else:
++        dates = steady_state_dates(split.eligible, fetch_started_at)
++        date_set = set(dates)
++        candidates = tuple(
++            b
++            for b in split.eligible
++            if b.ts > archived_through or et_date(b.ts) in date_set
++        )
++
++    return CandidatePlan(
++        ticker=ticker,
++        interval=interval,
++        fetch_started_at=fetch_started_at,
++        bootstrap=bootstrap,
++        archived_through_before=archived_through,
++        candidates=candidates,
++        range_dates=dates,
++        below_range=len(split.eligible) - len(candidates),
++        eligibility=split,
++    )
++
++
++# ---------------------------------------------------------------------
++# The four-way comparison (§6)
++# ---------------------------------------------------------------------
++
++
++class FieldDifference(BaseModel):
++    model_config = ConfigDict(frozen=True, extra="forbid")
++
++    field: str
++    stored: str
++    vendor: str
++
++
++class KeyDifference(BaseModel):
++    model_config = ConfigDict(frozen=True, extra="forbid")
++
++    ts: datetime
++    fields: tuple[FieldDifference, ...]
++
++    def as_detail(self) -> dict:
++        return {
++            "ts": self.ts.isoformat(),
++            "fields": [f.model_dump() for f in self.fields],
++        }
++
++
++class Comparison(BaseModel):
++    """The four ways a key can land (§6). Nothing here decides anything —
++    the decision is `reconcile`'s."""
++
++    model_config = ConfigDict(frozen=True, extra="forbid")
++
++    equal: tuple[datetime, ...] = ()
++    differing: tuple[KeyDifference, ...] = ()
++    incoming_only: tuple[datetime, ...] = ()
++    stored_only: tuple[datetime, ...] = ()
++
++
++def compare(candidates, stored: Mapping[datetime, BarValues]) -> Comparison:
++    """`candidates` are the vendor's bars over the candidate range;
++    `stored` is what the database holds OVER THAT SAME RANGE.
++
++    Equality is decided on normalised values, so a difference is a real
++    restatement rather than a rendering of the same number.
++    """
++    equal: list[datetime] = []
++    differing: list[KeyDifference] = []
++    incoming_only: list[datetime] = []
++    incoming_keys = set()
++
++    for item in candidates:
++        incoming_keys.add(item.ts)
++        held = stored.get(item.ts)
++        if held is None:
++            incoming_only.append(item.ts)
++            continue
++        vendor = bar_values(item)
++        if vendor == held:
++            equal.append(item.ts)
++            continue
++        fields = tuple(
++            FieldDifference(
++                field=name,
++                stored=held.as_strings()[name],
++                vendor=vendor.as_strings()[name],
++            )
++            for name in FIELD_ORDER
++            if getattr(held, name) != getattr(vendor, name)
++        )
++        differing.append(KeyDifference(ts=item.ts, fields=fields))
++
++    stored_only = tuple(sorted(k for k in stored if k not in incoming_keys))
++    return Comparison(
++        equal=tuple(sorted(equal)),
++        differing=tuple(sorted(differing, key=lambda d: d.ts)),
++        incoming_only=tuple(sorted(incoming_only)),
++        stored_only=stored_only,
++    )
++
++
++# ---------------------------------------------------------------------
++# The counters (§7) — the identities live in the model
++# ---------------------------------------------------------------------
++
++
++class TargetCounts(BaseModel):
++    """One target's numbers, which RECONCILE or the object does not exist.
++
++    The identities, verbatim from §7:
++
++        fetched = invalid + duplicate_input_keys + incomplete
++                  + below_range + candidates
++        candidates = already_stored_equal + differing + incoming_only
++        incoming_only = new + late
++        WITHHELD: withheld = incoming_only, inserted = 0,
++                  concurrent_conflicts = 0
++        otherwise: withheld = 0,
++                   incoming_only = inserted + concurrent_conflicts
++
++    `stored_only` is reported BESIDE the identities: its keys are not
++    candidates, so folding it in would make the arithmetic lie.
++    """
++
++    model_config = ConfigDict(frozen=True, extra="forbid")
++
++    fetched: int = Field(ge=0)
++    invalid: int = Field(ge=0)
++    duplicate_input_keys: int = Field(ge=0)
++    incomplete: int = Field(ge=0)
++    below_range: int = Field(ge=0)
++    candidates: int = Field(ge=0)
++    already_stored_equal: int = Field(ge=0)
++    differing: int = Field(ge=0)
++    incoming_only: int = Field(ge=0)
++    new: int = Field(ge=0)
++    late: int = Field(ge=0)
++    withheld: int = Field(ge=0)
++    inserted: int = Field(ge=0)
++    concurrent_conflicts: int = Field(ge=0)
++    stored_only: int = Field(ge=0)
++
++    @model_validator(mode="after")
++    def _identities(self) -> "TargetCounts":
++        parts = (
++            self.invalid + self.duplicate_input_keys + self.incomplete
++            + self.below_range + self.candidates
++        )
++        if self.fetched != parts:
++            raise ValueError(
++                f"fetched ({self.fetched}) != invalid + duplicate_input_keys + "
++                f"incomplete + below_range + candidates ({parts})"
++            )
++        split = self.already_stored_equal + self.differing + self.incoming_only
++        if self.candidates != split:
++            raise ValueError(
++                f"candidates ({self.candidates}) != already_stored_equal + "
++                f"differing + incoming_only ({split})"
++            )
++        if self.incoming_only != self.new + self.late:
++            raise ValueError(
++                f"incoming_only ({self.incoming_only}) != new + late "
++                f"({self.new + self.late})"
++            )
++        if self.withheld:
++            if self.withheld != self.incoming_only:
++                raise ValueError(
++                    f"a WITHHELD target withholds every incoming-only key: "
++                    f"withheld ({self.withheld}) != incoming_only "
++                    f"({self.incoming_only})"
++                )
++            if self.inserted or self.concurrent_conflicts:
++                raise ValueError(
++                    "a WITHHELD target inserts nothing: inserted "
++                    f"({self.inserted}) and concurrent_conflicts "
++                    f"({self.concurrent_conflicts}) must both be 0"
++                )
++        else:
++            written = self.inserted + self.concurrent_conflicts
++            if self.incoming_only != written:
++                raise ValueError(
++                    f"incoming_only ({self.incoming_only}) != inserted + "
++                    f"concurrent_conflicts ({written}) — every offered key is "
++                    "either committed by this run or lost the race to the "
++                    "poller; neither is allowed to go unaccounted for"
++                )
++        return self
++
++
++# ---------------------------------------------------------------------
++# The decision (§6, §7)
++# ---------------------------------------------------------------------
++
++
++class IncidentDraft(BaseModel):
++    """What the writer will persist. Pure data — no id, no clock."""
++
++    model_config = ConfigDict(frozen=True, extra="forbid")
++
++    kind: IncidentKind
++    ticker: str
++    interval: str
++    range_start: datetime | None = None
++    range_end: datetime | None = None
++    detail: dict = Field(default_factory=dict)
++
++
++class TargetPlan(BaseModel):
++    """One target's decided night, before anything is written."""
++
++    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
++
++    ticker: str
++    interval: Interval
++    bootstrap: bool
++    status: TargetStatus
++    reason: str
++    fetch_started_at: datetime
++    archived_through_before: datetime | None
++    archived_through_after: datetime | None
++    to_insert: tuple[Bar, ...] = ()
++    withheld: int = Field(default=0, ge=0)
++    incidents: tuple[IncidentDraft, ...] = ()
++    differences: tuple[KeyDifference, ...] = ()
++    stored_only_keys: tuple[datetime, ...] = ()
++    export_oldest: datetime | None = None
++    export_newest: datetime | None = None
++    raw_export_oldest: datetime | None = None
++    raw_export_newest: datetime | None = None
++    unassessed_before: datetime | None = None
++    stored_rows_read: int = Field(default=0, ge=0)
++    range_dates: tuple[date, ...] = ()
++    #: Reported, never used in a decision (§4, §7).
++    poller_watermark: datetime | None = None
++
++    #: Filled by `reconcile`; the raw material of `counts()`.
++    fetched: int = Field(default=0, ge=0)
++    invalid: int = Field(default=0, ge=0)
++    duplicate_input_keys: int = Field(default=0, ge=0)
++    incomplete: int = Field(default=0, ge=0)
++    below_range: int = Field(default=0, ge=0)
++    candidates: int = Field(default=0, ge=0)
++    already_stored_equal: int = Field(default=0, ge=0)
++    differing: int = Field(default=0, ge=0)
++    incoming_only: int = Field(default=0, ge=0)
++    new: int = Field(default=0, ge=0)
++    late: int = Field(default=0, ge=0)
++
++    @property
++    def healthy(self) -> bool:
++        """§7 / V2-9: any FAILED or DEGRADED target makes the nightly
++        job's result not healthy."""
++        return self.status is TargetStatus.SUCCESS
++
++    def counts(self, *, inserted: int, concurrent_conflicts: int) -> TargetCounts:
++        """The validated counters, once the write is known.
++
++        There is no way to build these numbers except through here, and
++        `TargetCounts` refuses a set that does not reconcile — so a night
++        that cannot explain itself raises rather than renders (L57, L1).
++        """
++        return TargetCounts(
++            fetched=self.fetched,
++            invalid=self.invalid,
++            duplicate_input_keys=self.duplicate_input_keys,
++            incomplete=self.incomplete,
++            below_range=self.below_range,
++            candidates=self.candidates,
++            already_stored_equal=self.already_stored_equal,
++            differing=self.differing,
++            incoming_only=self.incoming_only,
++            new=self.new,
++            late=self.late,
++            withheld=self.withheld,
++            inserted=inserted,
++            concurrent_conflicts=concurrent_conflicts,
++            stored_only=len(self.stored_only_keys),
++        )
++
++
++def _base_fields(plan: CandidatePlan, stored_rows_read: int, poller_watermark) -> dict:
++    split = plan.eligibility
++    return {
++        "ticker": plan.ticker,
++        "interval": plan.interval,
++        "bootstrap": plan.bootstrap,
++        "fetch_started_at": plan.fetch_started_at,
++        "archived_through_before": plan.archived_through_before,
++        "export_oldest": split.export_oldest,
++        "export_newest": split.export_newest,
++        "raw_export_oldest": split.raw_oldest,
++        "raw_export_newest": split.raw_newest,
++        "range_dates": plan.range_dates,
++        "stored_rows_read": stored_rows_read,
++        "poller_watermark": poller_watermark,
++        "fetched": split.fetched,
++        "invalid": split.invalid,
++        "duplicate_input_keys": split.duplicate_input_keys,
++        "incomplete": split.incomplete,
++        "below_range": plan.below_range,
++        "candidates": len(plan.candidates),
++    }
++
++
++def reconcile(
++    plan: CandidatePlan,
++    stored: Mapping[datetime, BarValues],
++    *,
++    poller_watermark: datetime | None = None,
++) -> TargetPlan:
++    """The whole of §6 and §7 for one target, as one function (L3).
++
++    `stored` is what the database holds over `plan`'s candidate range.
++    For a refused plan (`empty_export`, `regression`) it is ignored: the
++    refusal is decided before any read, which is why a failed target
++    costs no query.
++    """
++    base = _base_fields(plan, len(stored), poller_watermark)
++    split = plan.eligibility
++
++    # ---- refusals decided before any read ---------------------------
++    refusal = plan.refusal
++    if refusal is IncidentKind.EMPTY_EXPORT:
++        rows = split.fetched
++        return TargetPlan(
++            **{**base, "candidates": 0, "below_range": 0},
++            status=TargetStatus.FAILED,
++            reason=(
++                "empty export — the download carried no eligible complete bar "
++                f"({rows} row(s) fetched, {split.incomplete} incomplete). "
++                "Progress is unchanged and the next non-empty night still "
++                "bootstraps."
++            ),
++            archived_through_after=None,
++            incidents=(
++                IncidentDraft(
++                    kind=IncidentKind.EMPTY_EXPORT,
++                    ticker=plan.ticker,
++                    interval=plan.interval.value,
++                    detail={
++                        "fetched": rows,
++                        "incomplete": split.incomplete,
++                        "duplicate_input_keys": split.duplicate_input_keys,
++                        "fetch_started_at": plan.fetch_started_at.isoformat(),
++                        "raw_newest": split.raw_newest.isoformat() if split.raw_newest else None,
++                    },
++                ),
++            ),
++        )
++
++    if refusal is IncidentKind.REGRESSION:
++        before = plan.archived_through_before
++        newest = split.export_newest
++        return TargetPlan(
++            **{**base, "candidates": 0, "below_range": len(split.eligible)},
++            status=TargetStatus.FAILED,
++            reason=(
++                f"regression — the export's newest eligible bar ({newest.isoformat()}) "
++                f"is strictly older than archived_through ({before.isoformat()}). "
++                "Progress is unchanged; this observation never becomes the baseline."
++            ),
++            archived_through_after=None,
++            incidents=(
++                IncidentDraft(
++                    kind=IncidentKind.REGRESSION,
++                    ticker=plan.ticker,
++                    interval=plan.interval.value,
++                    range_start=newest,
++                    range_end=before,
++                    detail={
++                        "export_newest": newest.isoformat(),
++                        "export_oldest": split.export_oldest.isoformat(),
++                        "archived_through": before.isoformat(),
++                        "raw_export_newest": (
++                            split.raw_newest.isoformat() if split.raw_newest else None
++                        ),
++                        "fetch_started_at": plan.fetch_started_at.isoformat(),
++                    },
++                ),
++            ),
++        )
++
++    # ---- the comparison ---------------------------------------------
++    result = compare(plan.candidates, stored)
++    incidents: list[IncidentDraft] = []
++
++    # GAP is persisted BEFORE progress advances (§7), so it is recorded
++    # first whatever happens below.
++    gap = (
++        not plan.bootstrap
++        and split.export_oldest is not None
++        and plan.archived_through_before is not None
++        and split.export_oldest > plan.archived_through_before
++    )
++    if gap:
++        incidents.append(
++            IncidentDraft(
++                kind=IncidentKind.GAP,
++                ticker=plan.ticker,
++                interval=plan.interval.value,
++                range_start=plan.archived_through_before,
++                range_end=split.export_oldest,
++                detail={
++                    "wording": GAP_WORDING,
++                    "suspected_unavailable": True,
++                    "proven_missing": False,
++                    "archived_through": plan.archived_through_before.isoformat(),
++                    "export_oldest": split.export_oldest.isoformat(),
++                    "export_newest": split.export_newest.isoformat(),
++                    "session_dates": [d.isoformat() for d in plan.range_dates],
++                },
++            )
++        )
++
++    if result.stored_only:
++        incidents.append(
++            IncidentDraft(
++                kind=IncidentKind.STORED_ONLY,
++                ticker=plan.ticker,
++                interval=plan.interval.value,
++                range_start=result.stored_only[0],
++                range_end=result.stored_only[-1],
++                detail={
++                    "keys": [k.isoformat() for k in result.stored_only],
++                    "note": "flagged; NOTHING is deleted",
++                },
++            )
++        )
++
++    incoming = result.incoming_only
++    before = plan.archived_through_before
++    late = 0 if plan.bootstrap else sum(1 for k in incoming if before is not None and k <= before)
++    shared = {
++        **base,
++        "already_stored_equal": len(result.equal),
++        "differing": len(result.differing),
++        "incoming_only": len(incoming),
++        "new": len(incoming) - late,
++        "late": late,
++        "differences": result.differing,
++        "stored_only_keys": result.stored_only,
++        "unassessed_before": split.export_oldest if plan.bootstrap else None,
++    }
++
++    # ---- a restatement WITHHOLDS the whole target (§6) ---------------
++    if result.differing:
++        incidents.append(
++            IncidentDraft(
++                kind=IncidentKind.RESTATED,
++                ticker=plan.ticker,
++                interval=plan.interval.value,
++                range_start=result.differing[0].ts,
++                range_end=result.differing[-1].ts,
++                detail={
++                    "differing": [d.as_detail() for d in result.differing],
++                    "withheld": len(incoming),
++                    "normalisation": "NUMERIC(14,4) prices, integer volume",
++                },
++            )
++        )
++        return TargetPlan(
++            **shared,
++            status=TargetStatus.FAILED,
++            reason=(
++                f"restated — {len(result.differing)} stored key(s) differ from the "
++                "download after normalisation. NO insert for this target tonight, "
++                "stored rows untouched, progress unchanged. There is no automatic "
++                "repair, by constant factor or otherwise: run "
++                f"`cobalt archiver restate {plan.ticker} {plan.interval.value}` "
++                "(preview first, then --apply inside a quiet window)."
++            ),
++            archived_through_after=None,
++            to_insert=(),
++            withheld=len(incoming),
++            incidents=tuple(incidents),
++        )
++
++    # ---- accepted ----------------------------------------------------
++    to_insert = tuple(b for b in plan.candidates if b.ts in set(incoming))
++    newest = split.export_newest
++    after = newest if before is None else max(before, newest)
++
++    if gap:
++        status = TargetStatus.DEGRADED
++        reason = (
++            f"gap — the export begins at {split.export_oldest.isoformat()}, after "
++            f"archived_through {before.isoformat()}. The window between them is "
++            f"{GAP_WORDING} (suspected unavailable, not proven missing). The usable "
++            f"range is appended: {len(to_insert)} key(s) offered."
++        )
++    elif result.stored_only:
++        status = TargetStatus.DEGRADED
++        reason = (
++            f"{len(result.stored_only)} stored key(s) are absent from the download. "
++            "Flagged; nothing deleted."
++        )
++    else:
++        status = TargetStatus.SUCCESS
++        reason = (
++            f"{len(to_insert)} key(s) offered, {len(result.equal)} already stored and "
++            "equal."
++            + ("" if to_insert else " Nothing new — this is a success, not a failure.")
++        )
++
++    return TargetPlan(
++        **shared,
++        status=status,
++        reason=reason,
++        archived_through_after=after,
++        to_insert=to_insert,
++        withheld=0,
++        incidents=tuple(incidents),
++    )
++
++
++__all__ = [
++    "BarValues",
++    "CandidatePlan",
++    "Comparison",
++    "Eligibility",
++    "FIELD_ORDER",
++    "FieldDifference",
++    "GAP_WORDING",
++    "INTERVAL_MINUTES",
++    "IncidentDraft",
++    "IncidentKind",
++    "KeyDifference",
++    "PRICE_QUANTUM",
++    "ReconcileError",
++    "STEADY_STATE_SESSIONS",
++    "TargetCounts",
++    "TargetPlan",
++    "TargetStatus",
++    "bar_closes_at",
++    "bar_values",
++    "compare",
++    "et_date",
++    "interval_duration",
++    "is_complete",
++    "normalise_price",
++    "normalise_volume",
++    "plan_candidates",
++    "reconcile",
++    "split_export",
++    "steady_state_dates",
++    "values_from_row",
++]
+diff --git a/src/cobalt/db_migrations/0010_archive_progress.rollback.sql b/src/cobalt/db_migrations/0010_archive_progress.rollback.sql
+new file mode 100644
+index 0000000..41b0184
+--- /dev/null
++++ b/src/cobalt/db_migrations/0010_archive_progress.rollback.sql
+@@ -0,0 +1,15 @@
++-- 0010 rollback. ADDITIVE migration, ADDITIVE rollback: this drops the
++-- one table 0010 created and touches no other object. `system.bars` is
++-- not read, not written and not altered here.
++--
++-- COST: every target's `archived_through` is lost, so the next `append`
++-- night BOOTSTRAPS each target again (compare + DO NOTHING over the whole
++-- available export, §4). No stored bar is affected — a bootstrap writes
++-- nothing that is already there, it only re-reads. The run report says
++-- `bootstrap` and states that history before the export's bounds is
++-- UNASSESSED.
++--
++-- Run after 0011's rollback; `--down-to 0007` does both in REVERSE order
++-- in one invocation.
++
++DROP TABLE IF EXISTS system.archive_progress;
+diff --git a/src/cobalt/db_migrations/0010_archive_progress.sql b/src/cobalt/db_migrations/0010_archive_progress.sql
+new file mode 100644
+index 0000000..3b13293
+--- /dev/null
++++ b/src/cobalt/db_migrations/0010_archive_progress.sql
+@@ -0,0 +1,75 @@
++-- 0010: system.archive_progress — the Bar Archiver's OWN watermark, per
++-- (ticker, interval). Append-only redesign, FINAL design
++-- `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §4 and §11,
++-- derived by the four-house tribunal (L67) from the owner's R14/R15:
++-- "i want to know where the watermark is for each ticker and I want to
++-- only add the new [bars] in the database that don't exist."
++--
++-- WHY THIS IS NOT `max(ts)`. `BarStore.watermark()` reads `max(ts)` over
++-- `system.bars`, and the RADAR POLLER writes that table too — every 100 s,
++-- i1, with a five-bar overlap. So `max(ts)` advances past bars the
++-- ARCHIVER never saw, and using it as the archiver's progress loses every
++-- bar the vendor adds late (round-2 sequences, `TRIBUNAL-R3.md`). This
++-- table is the archiver's own record and nothing else writes it.
++--
++-- WHAT `archived_through` MEANS, EXACTLY (§4): the `ts` — the bar OPEN, in
++-- UTC — of the newest COMPLETE bar of an ACCEPTED export. A BAR
++-- timestamp, never a clock time, never a bar-close time, never
++-- `fetch_started_at`. It records that the AVAILABLE export was processed
++-- through that key; it does not claim the vendor supplied every bar.
++-- Monotonic across accepted runs (the writer uses `GREATEST`), frozen on a
++-- failed, withheld, empty or regressed target.
++--
++-- A ROW IS NEVER DELETED — not when a ticker leaves the trader's Lists
++-- note. A returning target meets its old `archived_through`, which is what
++-- makes the dropped-and-re-added sequence open a `gap` incident (round-2
++-- sequence #8) instead of silently skipping the missing days.
++--
++-- SYSTEM SIDE (L32): market-data bookkeeping, nothing of one trader's
++-- choice. `cobalt_user` is granted NOTHING here — a wrong-side query must
++-- fail loud, and the user side has no business reading it.
++--
++-- ADDITIVE. `system.bars` is not touched (columns, PK, indexes are
++-- explicitly out of scope, §1 non-goals), and the rollback is a plain
++-- `DROP TABLE` of this table alone. IDEMPOTENT: a second
++-- `cobalt db migrate` is a no-op.
++
++CREATE TABLE IF NOT EXISTS system.archive_progress (
++    -- The key. One row per (ticker, interval) target, for the life of the
++    -- install.
++    ticker            TEXT        NOT NULL,
++    interval          TEXT        NOT NULL,
++
++    -- The watermark itself, and the bounds of the export that set it.
++    -- `export_oldest`/`export_newest` are ELIGIBLE-bar bounds (complete
++    -- bars only, §7); `raw_export_newest` keeps the unfiltered bound as a
++    -- diagnostic and is deliberately NULLABLE — an export whose raw bound
++    -- cannot be read must still be able to record progress.
++    archived_through  TIMESTAMPTZ NOT NULL,
++    export_oldest     TIMESTAMPTZ NOT NULL,
++    export_newest     TIMESTAMPTZ NOT NULL,
++    raw_export_newest TIMESTAMPTZ,
++
++    -- When the run that set this row started its fetch (V2-3's
++    -- completeness instant), when this target was first bootstrapped, and
++    -- which run last wrote the row. `run_id` is
++    -- `<label or command>@<run started_at, UTC ISO>` (§9): `system.cobalt_jobs`
++    -- has one row per LABEL and no per-run id, so the report and this row
++    -- share a TEXT rather than a new run table.
++    fetch_started_at  TIMESTAMPTZ NOT NULL,
++    bootstrap_at      TIMESTAMPTZ NOT NULL,
++    run_id            TEXT        NOT NULL,
++    updated_at        TIMESTAMPTZ NOT NULL,
++
++    PRIMARY KEY (ticker, interval),
++
++    -- The invariant that makes the watermark auditable: progress can
++    -- never be newer than the export it was derived from. If this ever
++    -- fires, the writer computed `archived_through` from something other
++    -- than the accepted export's newest eligible bar (L1: crash, do not
++    -- store a number nobody can replay — L57).
++    CONSTRAINT archive_progress_through_within_export
++        CHECK (archived_through <= export_newest)
++);
++
++ALTER TABLE system.archive_progress OWNER TO cobalt_system;
+diff --git a/src/cobalt/db_migrations/0011_archive_incidents.rollback.sql b/src/cobalt/db_migrations/0011_archive_incidents.rollback.sql
+new file mode 100644
+index 0000000..c483d39
+--- /dev/null
++++ b/src/cobalt/db_migrations/0011_archive_incidents.rollback.sql
+@@ -0,0 +1,14 @@
++-- 0011 rollback. ADDITIVE migration, ADDITIVE rollback: this drops the
++-- one table 0011 created (its two indexes and its sequence go with it)
++-- and touches no other object.
++--
++-- COST: every unresolved incident is lost, and with it the heartbeat's
++-- reason for being non-green. A target that was WITHHELD for a
++-- `restated` difference is still withheld — the condition lives in the
++-- vendor's data, not in this table — but nothing on the dashboard says
++-- so any more. Read `cobalt archiver incidents` and keep the output
++-- before running this.
++--
++-- Runs FIRST in a `--down-to 0007` reverse (REVERSE is newest-first).
++
++DROP TABLE IF EXISTS system.archive_incidents;
+diff --git a/src/cobalt/db_migrations/0011_archive_incidents.sql b/src/cobalt/db_migrations/0011_archive_incidents.sql
+new file mode 100644
+index 0000000..406f7d6
+--- /dev/null
++++ b/src/cobalt/db_migrations/0011_archive_incidents.sql
+@@ -0,0 +1,101 @@
++-- 0011: system.archive_incidents — what the append-only night REFUSED to
++-- do, and why, kept until a person resolves it. FINAL design
++-- `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §6, §7, §11.
++--
++-- THE FIVE KINDS (§11 — `regression` is v3's addition to v2's four):
++--
++--   gap           progress exists and the export's oldest eligible bar is
++--                 NEWER than `archived_through` — the window between them
++--                 is "unavailable from the tested export interface", not
++--                 proven missing. The usable range is still appended; the
++--                 target is DEGRADED.
++--   restated      a key present in BOTH storage and the download differs
++--                 in any of O/H/L/C/V after normalisation. NOTHING is
++--                 inserted for that target tonight, nothing stored is
++--                 touched, progress is unchanged, the target counts
++--                 FAILED. There is no automatic repair, by constant
++--                 factor or otherwise — the remedy is
++--                 `cobalt archiver restate`, previewed, then `--apply`
++--                 inside a quiet window (§8).
++--   stored_only   a key in storage that the download does not carry.
++--                 FLAGGED, never deleted.
++--   empty_export  the export had no rows, or rows but no eligible
++--                 COMPLETE bar. Progress unchanged, target FAILED.
++--   regression    `export_newest < archived_through`, strictly. EQUAL is
++--                 fine: an illiquid name whose newest bar has not moved
++--                 succeeds with zero inserts, and a half-day's newest bar
++--                 is newer than last night's. Only an ACCEPTED export
++--                 ever updates the baseline.
++--
++-- ONE UNRESOLVED ROW PER (kind, ticker, interval, range_start), enforced
++-- by a PARTIAL unique index `WHERE resolved_at IS NULL`. A recurring
++-- night refreshes `last_seen_at`; it never duplicates. Once a row is
++-- resolved the index no longer covers it, so the same condition can open
++-- again and the history of both is kept.
++--
++-- THE HEARTBEAT READS THIS TABLE. `cobalt.heartbeat.probes.archiver_freshness`
++-- is not green while any row is unresolved (§11, O-7) — that is the alarm
++-- behind Known limit 3 (a withheld target whose new bars age out of the
++-- vendor window if nobody repairs it).
++--
++-- Resolution is EXPLICIT and audited on the row (`resolved_by`, and the
++-- operator's `--reason` in `detail`): nothing resolves itself, and a
++-- `restate --apply` leaves its audit trail here (spec O-4).
++--
++-- SYSTEM SIDE (L32). `cobalt_user` is granted NOTHING. ADDITIVE and
++-- IDEMPOTENT; the rollback drops this table alone.
++
++CREATE TABLE IF NOT EXISTS system.archive_incidents (
++    id            BIGSERIAL   PRIMARY KEY,
++
++    kind          TEXT        NOT NULL CHECK (kind IN (
++                      'gap', 'restated', 'stored_only', 'empty_export', 'regression')),
++    ticker        TEXT        NOT NULL,
++    interval      TEXT        NOT NULL,
++
++    -- The affected span of BAR timestamps, when the kind has one. A
++    -- `gap` carries (archived_through, export_oldest); an `empty_export`
++    -- has no span at all, so both are NULLABLE.
++    range_start   TIMESTAMPTZ,
++    range_end     TIMESTAMPTZ,
++
++    first_seen_at TIMESTAMPTZ NOT NULL,
++    last_seen_at  TIMESTAMPTZ NOT NULL,
++
++    -- The evidence, closed payload, validated by the writer before it
++    -- gets here: observed bounds, the differing keys and which of
++    -- O/H/L/C/V differed with both values after normalisation, the
++    -- session dates involved, the operator's --reason on a repair. The
++    -- database only insists it is an object (L57: the stored inputs
++    -- behind every number).
++    detail        JSONB       NOT NULL CHECK (jsonb_typeof(detail) = 'object'),
++
++    resolved_at   TIMESTAMPTZ,
++    resolved_by   TEXT,
++
++    run_id        TEXT        NOT NULL
++);
++
++ALTER TABLE system.archive_incidents OWNER TO cobalt_system;
++
++-- ONE open row per condition. PARTIAL, on purpose: resolved rows are
++-- history and must not block the same condition recurring later.
++--
++-- `NULLS NOT DISTINCT` (Postgres 15+; this install is pg16) is
++-- load-bearing, not tidiness: an `empty_export` incident has no span, so
++-- its `range_start` is NULL, and under the DEFAULT rule every NULL is
++-- distinct from every other — a target failing empty for a month would
++-- open thirty rows for one condition and the heartbeat's "oldest kind"
++-- detail would be meaningless.
++CREATE UNIQUE INDEX IF NOT EXISTS archive_incidents_one_open
++    ON system.archive_incidents (kind, ticker, interval, range_start)
++    NULLS NOT DISTINCT
++    WHERE resolved_at IS NULL;
++
++CREATE INDEX IF NOT EXISTS archive_incidents_unresolved
++    ON system.archive_incidents (resolved_at, kind, first_seen_at)
++    WHERE resolved_at IS NULL;
++
++-- Granted explicitly rather than assumed from 0001's default privileges
++-- (0006's pattern, Astra R1-2). NOTHING is granted to `cobalt_user`.
++GRANT USAGE, SELECT ON SEQUENCE system.archive_incidents_id_seq TO cobalt_system;
+diff --git a/src/cobalt/db_migrations/__init__.py b/src/cobalt/db_migrations/__init__.py
+index 9ddf7bb..4c051ab 100644
+--- a/src/cobalt/db_migrations/__init__.py
++++ b/src/cobalt/db_migrations/__init__.py
+@@ -21,6 +21,23 @@
+                          columns, dots, taps, run receipt, views.
+ `0007_radar_cards.rollback.sql` — deletes radar-origin cards, drops the
+                                   card tables/columns, restores NOT NULL.
++`0010_archive_progress.sql` — the Bar Archiver's own per-(ticker,
++                         interval) watermark, system side (append-only
++                         FINAL design §4, §11). Additive.
++`0010_archive_progress.rollback.sql` — drops that one table; the next
++                         `append` night bootstraps each target again.
++`0011_archive_incidents.sql` — what an append night refused to do and
++                         why: the five kinds, one unresolved row per
++                         condition, read by the heartbeat. Additive.
++`0011_archive_incidents.rollback.sql` — drops that one table.
++
++THE 0008/0009 GAP IS DELIBERATE. Those two numbers belong to the
++unmerged branch `sprint-2/p4` and are never used here. This registry is
++an EXPLICIT ordered tuple and nothing asserts contiguity, so a gap is
++legal; the branch that lands second rebases and keeps BOTH sets in
++numeric order. `_rollback_paths` selects by the numeric prefix, so
++`--down-to 0007` reverses exactly 0011 then 0010 whether or not P4's
++pair is present.
+ 
+ These are the DATABASE-WIDE migrations and they are the only ones that
+ live outside a feature module. A module's own DDL still lives in its own
+@@ -46,10 +63,14 @@ FORWARD = (
+     MIGRATIONS_DIR / "0005_heartbeat_note_absent.sql",
+     MIGRATIONS_DIR / "0006_radar_score.sql",
+     MIGRATIONS_DIR / "0007_radar_cards.sql",
++    MIGRATIONS_DIR / "0010_archive_progress.sql",
++    MIGRATIONS_DIR / "0011_archive_incidents.sql",
+ )
+ 
+ #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
+ REVERSE = (
++    MIGRATIONS_DIR / "0011_archive_incidents.rollback.sql",
++    MIGRATIONS_DIR / "0010_archive_progress.rollback.sql",
+     MIGRATIONS_DIR / "0007_radar_cards.rollback.sql",
+     MIGRATIONS_DIR / "0006_radar_score.rollback.sql",
+     MIGRATIONS_DIR / "0005_heartbeat_note_absent.rollback.sql",
+diff --git a/src/cobalt/db_migrations/placement.py b/src/cobalt/db_migrations/placement.py
+index c81d0c7..55be6f4 100644
+--- a/src/cobalt/db_migrations/placement.py
++++ b/src/cobalt/db_migrations/placement.py
+@@ -75,6 +75,12 @@ CREATED_TABLES: dict[str, Side] = {
+     "card_dots": Side.USER,
+     "card_dot_taps": Side.USER,
+     "radar_score_receipt": Side.USER,
++    # db_migrations/0010 + 0011 — the append-only Bar Archiver's
++    # bookkeeping (FINAL design 2026-09-19 §11). SYSTEM, both: market-data
++    # bookkeeping about `system.bars`, nothing of one trader's choice
++    # (L32). `cobalt_user` is granted nothing on either.
++    "archive_progress": Side.SYSTEM,
++    "archive_incidents": Side.SYSTEM,
+ }
+ 
+ #: VIEWS created by database-wide migrations. On a side like any table
+diff --git a/tests/cobalt/test_archiver_migrations.py b/tests/cobalt/test_archiver_migrations.py
+new file mode 100644
+index 0000000..c5d65b4
+--- /dev/null
++++ b/tests/cobalt/test_archiver_migrations.py
+@@ -0,0 +1,458 @@
++"""Chunk M — migrations 0010 `archive_progress` and 0011 `archive_incidents`.
++
++Spec `ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §11. Both tables are
++ADDITIVE and SYSTEM side (L32: market-data bookkeeping, nothing of one
++trader's choice), and each rollback is a plain `DROP TABLE` of its own
++table — no other object is touched.
++
++WHY 0010/0011 AND NOT 0008/0009. `0008`/`0009` exist only on the
++unmerged branch `sprint-2/p4` and are never used here. The registry is
++an EXPLICIT ordered tuple (`db_migrations/__init__.py`) with no
++contiguity rule, so a gap is legal; the branch that lands second
++rebases and keeps both sets in numeric order. This file asserts the
++registration and the rollback SELECTION, never contiguity.
++
++The `requires_db` half is written here and owed its first run on
++`cobalt_dev` once `p4-verify-0919` releases the lane (L41 interim).
++Everything above it is offline.
++"""
++
++from __future__ import annotations
++
++import os
++import re
++
++import pytest
++
++from cobalt import db, env
++from cobalt.db import Side
++from cobalt.db_migrations import FORWARD, MIGRATIONS_DIR, REVERSE
++from cobalt.db_migrations.cli import _apply, _rollback_paths
++from cobalt.db_migrations.placement import CREATED_TABLES, PLACEMENT, side_of
++
++requires_db = pytest.mark.skipif(
++    not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
++    reason="Postgres env settings not available",
++)
++
++PROGRESS_SQL = MIGRATIONS_DIR / "0010_archive_progress.sql"
++PROGRESS_ROLLBACK = MIGRATIONS_DIR / "0010_archive_progress.rollback.sql"
++INCIDENTS_SQL = MIGRATIONS_DIR / "0011_archive_incidents.sql"
++INCIDENTS_ROLLBACK = MIGRATIONS_DIR / "0011_archive_incidents.rollback.sql"
++
++NEW_TABLES = ("archive_progress", "archive_incidents")
++
++#: §11: the five kinds. `regression` is v3's addition to v2's four.
++INCIDENT_KINDS = ("gap", "restated", "stored_only", "empty_export", "regression")
++
++
++def _code(path) -> str:
++    """The SQL with `--` comment lines removed, so an assertion cannot
++    pass on a sentence in a comment."""
++    return "\n".join(
++        line for line in path.read_text().splitlines() if not line.strip().startswith("--")
++    )
++
++
++# ---------------------------------------------------------------------
++# Registration
++# ---------------------------------------------------------------------
++
++
++def test_forward_ends_0007_0010_0011():
++    assert [p.name for p in FORWARD[-3:]] == [
++        "0007_radar_cards.sql",
++        "0010_archive_progress.sql",
++        "0011_archive_incidents.sql",
++    ]
++
++
++def test_reverse_begins_0011_0010_0007():
++    assert [p.name for p in REVERSE[:3]] == [
++        "0011_archive_incidents.rollback.sql",
++        "0010_archive_progress.rollback.sql",
++        "0007_radar_cards.rollback.sql",
++    ]
++
++
++def test_each_new_migration_has_its_rollback_and_both_are_registered():
++    for path in (PROGRESS_SQL, PROGRESS_ROLLBACK, INCIDENTS_SQL, INCIDENTS_ROLLBACK):
++        assert path.exists(), path
++    assert PROGRESS_SQL in FORWARD and INCIDENTS_SQL in FORWARD
++    assert PROGRESS_ROLLBACK in REVERSE and INCIDENTS_ROLLBACK in REVERSE
++
++
++def test_rollback_down_to_0007_selects_exactly_the_two_new_files():
++    """The bounded reverse an operator runs to undo this branch alone."""
++    assert [p.name for p in _rollback_paths("0007")] == [
++        "0011_archive_incidents.rollback.sql",
++        "0010_archive_progress.rollback.sql",
++    ]
++
++
++def test_the_registry_is_an_explicit_list_so_the_0008_0009_gap_is_legal():
++    """No contiguity rule anywhere — asserted, because the gap is
++    deliberate (P4 owns 0008/0009 on an unmerged branch)."""
++    numbers = [int(p.name.split("_", 1)[0]) for p in FORWARD]
++    assert numbers == sorted(numbers), "FORWARD must be in numeric order"
++    assert 8 not in numbers and 9 not in numbers
++    assert numbers[-2:] == [10, 11]
++    reverse_numbers = [int(p.name.split("_", 1)[0]) for p in REVERSE]
++    assert reverse_numbers == sorted(reverse_numbers, reverse=True)
++
++
++# ---------------------------------------------------------------------
++# Placement — both SYSTEM (L32)
++# ---------------------------------------------------------------------
++
++
++@pytest.mark.parametrize("table", NEW_TABLES)
++def test_both_tables_are_declared_system_side(table):
++    assert side_of(table) is Side.SYSTEM
++    assert PLACEMENT[table] is Side.SYSTEM
++    # Created by a database-wide migration on its final side, so the
++    # migrate proof carries it and a rollback's DROP reads as DROPPED.
++    assert CREATED_TABLES[table] is Side.SYSTEM
++
++
++# ---------------------------------------------------------------------
++# 0010 — archive_progress
++# ---------------------------------------------------------------------
++
++
++def test_progress_carries_its_primary_key_and_the_check():
++    code = _code(PROGRESS_SQL)
++    assert "CREATE TABLE IF NOT EXISTS system.archive_progress" in code
++    assert "PRIMARY KEY (ticker, interval)" in code
++    assert re.search(r"CHECK\s*\(\s*archived_through\s*<=\s*export_newest\s*\)", code), (
++        "§11: archived_through can never be newer than the export it came from"
++    )
++
++
++@pytest.mark.parametrize(
++    "column",
++    [
++        "ticker",
++        "interval",
++        "archived_through",
++        "export_oldest",
++        "export_newest",
++        "raw_export_newest",
++        "fetch_started_at",
++        "bootstrap_at",
++        "run_id",
++        "updated_at",
++    ],
++)
++def test_progress_carries_every_column_the_design_names(column):
++    assert re.search(rf"^\s+{column}\s", _code(PROGRESS_SQL), re.M), column
++
++
++def test_progress_nullability_matches_the_design():
++    code = _code(PROGRESS_SQL)
++    for column in (
++        "archived_through",
++        "export_oldest",
++        "export_newest",
++        "fetch_started_at",
++        "bootstrap_at",
++        "run_id",
++        "updated_at",
++    ):
++        assert re.search(rf"^\s+{column}\s+\w+(\(.*\))?\s+NOT NULL", code, re.M), column
++    # The ONE diagnostic column is deliberately nullable: a vendor export
++    # with no parseable raw bound must still write progress.
++    assert not re.search(r"^\s+raw_export_newest\s+\S+\s+NOT NULL", code, re.M)
++
++
++def test_progress_rollback_drops_only_its_own_table():
++    code = _code(PROGRESS_ROLLBACK)
++    assert "DROP TABLE IF EXISTS system.archive_progress" in code
++    assert code.count("DROP") == 1, "additive migration, additive rollback"
++    assert "archive_incidents" not in code
++    assert "bars" not in code and "radar_pool" not in code
++
++
++# ---------------------------------------------------------------------
++# 0011 — archive_incidents
++# ---------------------------------------------------------------------
++
++
++def test_incidents_carries_the_five_kinds_and_nothing_else():
++    code = _code(INCIDENTS_SQL)
++    assert "CREATE TABLE IF NOT EXISTS system.archive_incidents" in code
++    match = re.search(r"kind\s+TEXT\s+NOT NULL\s+CHECK\s*\(\s*kind\s+IN\s*\(([^)]*)\)", code)
++    assert match, "the kind CHECK is the domain; it must be in the DDL"
++    kinds = {part.strip().strip("'") for part in match.group(1).split(",")}
++    assert kinds == set(INCIDENT_KINDS)
++
++
++def test_incidents_has_the_partial_unique_index_on_unresolved_rows():
++    """§11: ONE unresolved row per (kind, ticker, interval, range_start) —
++    a recurring night refreshes `last_seen_at`, it never duplicates."""
++    code = _code(INCIDENTS_SQL)
++    index = re.search(
++        r"CREATE UNIQUE INDEX[^;]*archive_incidents[^;]*;", code, re.S
++    )
++    assert index, "no unique index on archive_incidents"
++    body = " ".join(index.group(0).split())
++    assert "(kind, ticker, interval, range_start)" in body
++    assert "WHERE resolved_at IS NULL" in body
++    # Tribunal round 1, F7. `NULLS NOT DISTINCT` (pg15+; this install is
++    # pg16) is LOAD-BEARING, not tidiness: an `empty_export` incident has
++    # no span, so its `range_start` is NULL, and under the DEFAULT rule
++    # every NULL is distinct from every other — a target failing empty
++    # for a month would open thirty rows for one condition and the
++    # heartbeat's "oldest kind" detail would be meaningless. The clause
++    # is in the SQL; until this round nothing said it had to stay.
++    assert "NULLS NOT DISTINCT" in body, (
++        "the partial unique index lost NULLS NOT DISTINCT — an "
++        "`empty_export` incident (range_start IS NULL) would duplicate on "
++        f"every run instead of refreshing: {body}"
++    )
++
++
++@pytest.mark.parametrize(
++    "column",
++    [
++        "id",
++        "kind",
++        "ticker",
++        "interval",
++        "range_start",
++        "range_end",
++        "first_seen_at",
++        "last_seen_at",
++        "detail",
++        "resolved_at",
++        "resolved_by",
++        "run_id",
++    ],
++)
++def test_incidents_carries_every_column_the_design_names(column):
++    assert re.search(rf"^\s+{column}\s", _code(INCIDENTS_SQL), re.M), column
++
++
++def test_incidents_id_is_a_bigserial_primary_key():
++    code = _code(INCIDENTS_SQL)
++    assert re.search(r"^\s+id\s+BIGSERIAL\s+PRIMARY KEY", code, re.M)
++
++
++def test_incidents_detail_is_a_json_object():
++    assert "jsonb_typeof(detail) = 'object'" in _code(INCIDENTS_SQL)
++
++
++def test_incidents_rollback_drops_only_its_own_table():
++    code = _code(INCIDENTS_ROLLBACK)
++    assert "DROP TABLE IF EXISTS system.archive_incidents" in code
++    assert code.count("DROP") == 1
++    assert "archive_progress" not in code
++
++
++# ---------------------------------------------------------------------
++# Ownership and grants — 0006's pattern, and NO grant to cobalt_user
++# ---------------------------------------------------------------------
++
++
++@pytest.mark.parametrize("path,table", [(PROGRESS_SQL, "archive_progress"), (INCIDENTS_SQL, "archive_incidents")])
++def test_each_table_is_owned_by_the_system_role(path, table):
++    assert f"ALTER TABLE system.{table} OWNER TO cobalt_system;" in _code(path)
++
++
++@pytest.mark.parametrize("path", [PROGRESS_SQL, INCIDENTS_SQL, PROGRESS_ROLLBACK, INCIDENTS_ROLLBACK])
++def test_nothing_is_granted_to_cobalt_user(path):
++    """§11: `cobalt_user` is granted nothing on either table. The user
++    side has no business reading the archiver's bookkeeping, and a
++    wrong-side query must fail loud (L32 tenancy)."""
++    assert "cobalt_user" not in _code(path)
++
++
++def test_the_incident_sequence_is_granted_to_the_system_role():
++    """0006's pattern, line for line (Astra R1-2): a BIGSERIAL's sequence
++    is granted explicitly, never assumed from default privileges."""
++    assert (
++        "GRANT USAGE, SELECT ON SEQUENCE system.archive_incidents_id_seq TO cobalt_system;"
++        in _code(INCIDENTS_SQL)
++    )
++
++
++@pytest.mark.parametrize("path", [PROGRESS_SQL, INCIDENTS_SQL])
++def test_both_migrations_are_idempotent(path):
++    """A second `cobalt db migrate` is a no-op (Astra R1-3)."""
++    code = _code(path)
++    for statement in re.findall(r"CREATE (TABLE|UNIQUE INDEX|INDEX)([^;]*);", code):
++        assert "IF NOT EXISTS" in statement[1], statement
++
++
++@pytest.mark.parametrize("path", [PROGRESS_SQL, INCIDENTS_SQL])
++def test_neither_migration_touches_bars_or_any_existing_object(path):
++    """ADDITIVE means additive: `system.bars` (columns, PK, indexes) is
++    explicitly out of scope (§1 non-goals) and so is every other table."""
++    code = _code(path)
++    for forbidden in ("ALTER TABLE system.bars", "DROP ", "UPDATE ", "DELETE ", "radar_pool"):
++        assert forbidden not in code, f"{path.name} contains {forbidden!r}"
++
++
++# ---------------------------------------------------------------------
++# requires_db — WRITTEN HERE, first run owed on cobalt_dev
++# ---------------------------------------------------------------------
++
++
++def _migration_conn():
++    conn = db.connect_migration(env.DEV_DB_NAME)
++    conn.autocommit = False
++    return conn
++
++
++@requires_db
++def test_forward_creates_both_tables_on_the_system_side():
++    conn = _migration_conn()
++    try:
++        _apply(conn, FORWARD)
++        for table in NEW_TABLES:
++            assert conn.execute(
++                "SELECT to_regclass(%s)", (f"system.{table}",)
++            ).fetchone()[0], table
++            assert conn.execute(
++                "SELECT to_regclass(%s)", (f'"user".{table}',)
++            ).fetchone()[0] is None, f"{table} must not exist user-side"
++    finally:
++        conn.rollback()
++        conn.close()
++
++
++@requires_db
++def test_migrate_twice_is_idempotent_for_the_two_new_tables():
++    conn = _migration_conn()
++    try:
++        _apply(conn, FORWARD)
++        _apply(conn, FORWARD)
++        for table in NEW_TABLES:
++            assert conn.execute(
++                "SELECT to_regclass(%s)", (f"system.{table}",)
++            ).fetchone()[0], table
++    finally:
++        conn.rollback()
++        conn.close()
++
++
++@requires_db
++def test_rollback_down_to_0007_drops_exactly_those_two_and_nothing_else():
++    conn = _migration_conn()
++    try:
++        _apply(conn, FORWARD)
++        survivors = {
++            name
++            for name in CREATED_TABLES
++            if name not in NEW_TABLES
++            and conn.execute(
++                "SELECT to_regclass(%s)",
++                (f"{'\"user\"' if CREATED_TABLES[name] is Side.USER else 'system'}.{name}",),
++            ).fetchone()[0]
++        }
++        _apply(conn, _rollback_paths("0007"))
++        for table in NEW_TABLES:
++            assert conn.execute(
++                "SELECT to_regclass(%s)", (f"system.{table}",)
++            ).fetchone()[0] is None, f"{table} survived its own rollback"
++        for name in survivors:
++            schema = '"user"' if CREATED_TABLES[name] is Side.USER else "system"
++            assert conn.execute(
++                "SELECT to_regclass(%s)", (f"{schema}.{name}",)
++            ).fetchone()[0], f"{name} was dropped by a rollback that does not own it"
++        # ...and forward again lands back where it started.
++        _apply(conn, FORWARD)
++        for table in NEW_TABLES:
++            assert conn.execute(
++                "SELECT to_regclass(%s)", (f"system.{table}",)
++            ).fetchone()[0], table
++    finally:
++        conn.rollback()
++        conn.close()
++
++
++@requires_db
++@pytest.mark.parametrize("table", NEW_TABLES)
++def test_owner_is_the_system_role(table, real_connect):
++    conn = real_connect(side=Side.SYSTEM)
++    row = conn.execute(
++        """
++        SELECT pg_get_userbyid(c.relowner) FROM pg_class c
++          JOIN pg_namespace n ON n.oid = c.relnamespace
++         WHERE n.nspname = %s AND c.relname = %s
++        """,
++        (Side.SYSTEM.schema, table),
++    ).fetchone()
++    assert row is not None, f"{table} missing — run `cobalt db migrate`"
++    assert row[0] == Side.SYSTEM.role
++
++
++@requires_db
++@pytest.mark.parametrize("table", NEW_TABLES)
++def test_the_user_role_has_no_grant_on_either_table(table, real_connect):
++    conn = real_connect(side=Side.SYSTEM)
++    row = conn.execute(
++        "SELECT has_table_privilege('cobalt_user', %s, 'SELECT')",
++        (f"system.{table}",),
++    ).fetchone()
++    assert row[0] is False, f"cobalt_user can read system.{table}"
++
++
++@requires_db
++def test_the_check_refuses_progress_past_its_own_export(real_connect):
++    conn = real_connect(side=Side.SYSTEM)
++    conn.autocommit = False
++    try:
++        with pytest.raises(Exception) as e:
++            conn.execute(
++                "INSERT INTO archive_progress (ticker, interval, archived_through, "
++                "export_oldest, export_newest, fetch_started_at, bootstrap_at, run_id, "
++                "updated_at) VALUES ('TESTARCH', 'i5', now(), now() - interval '1 day', "
++                "now() - interval '1 hour', now(), now(), 'probe', now())"
++            )
++        assert "archived_through" in str(e.value) or "check" in str(e.value).lower()
++    finally:
++        conn.rollback()
++
++
++@requires_db
++def test_one_unresolved_incident_per_key_then_a_second_after_resolution(real_connect):
++    conn = real_connect(side=Side.SYSTEM)
++    conn.autocommit = False
++    try:
++        insert = (
++            "INSERT INTO archive_incidents (kind, ticker, interval, range_start, "
++            "range_end, first_seen_at, last_seen_at, detail, run_id) VALUES "
++            "('gap', 'TESTARCH', 'i5', '2026-09-01T00:00:00Z', '2026-09-02T00:00:00Z', "
++            "now(), now(), '{}', 'probe') RETURNING id"
++        )
++        first = conn.execute(insert).fetchone()[0]
++        with pytest.raises(Exception):
++            conn.execute(insert)
++        conn.rollback()
++        first = conn.execute(insert).fetchone()[0]
++        conn.execute(
++            "UPDATE archive_incidents SET resolved_at = now(), resolved_by = 'probe' "
++            "WHERE id = %s",
++            (first,),
++        )
++        # Resolved, so the partial index no longer covers it: the same key
++        # may open again.
++        assert conn.execute(insert).fetchone()[0] != first
++    finally:
++        conn.rollback()
++
++
++@requires_db
++def test_the_kind_domain_is_enforced_by_the_database(real_connect):
++    conn = real_connect(side=Side.SYSTEM)
++    conn.autocommit = False
++    try:
++        with pytest.raises(Exception):
++            conn.execute(
++                "INSERT INTO archive_incidents (kind, ticker, interval, first_seen_at, "
++                "last_seen_at, detail, run_id) VALUES ('made_up', 'TESTARCH', 'i5', "
++                "now(), now(), '{}', 'probe')"
++            )
++    finally:
++        conn.rollback()
+diff --git a/tests/cobalt/test_archiver_reconcile.py b/tests/cobalt/test_archiver_reconcile.py
+new file mode 100644
+index 0000000..f20e46a
+--- /dev/null
++++ b/tests/cobalt/test_archiver_reconcile.py
+@@ -0,0 +1,844 @@
++"""Chunk R — `cobalt.archiver.reconcile`, the pure core of the append night.
++
++Spec `ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md` §3 (V2-3), §4, §6, §7.
++
++EVERYTHING HERE IS OFFLINE AND PURE. `reconcile.py` performs no I/O,
++reads no clock (the instant is an argument) and touches no database, so
++the whole of the design's decision-making can be tested exactly — which
++is the point of the structure the build prompt requires.
++
++The dated sequences below are the four the houses wrote in round 2 and
++the tribunal carried into the final design's §15. They are kept on the
++houses' own dates and the houses' own public tickers (L32: no name from
++the trader's lists in a committed fixture; constructed names use
++`TESTARCH`/`THIN`).
++"""
++
++from __future__ import annotations
++
++from datetime import date, datetime, timedelta, timezone
++from decimal import Decimal
++from zoneinfo import ZoneInfo
++
++import pytest
++
++from cobalt.archiver.models import Bar, Interval
++from cobalt.archiver.reconcile import (
++    INTERVAL_MINUTES,
++    IncidentKind,
++    ReconcileError,
++    TargetCounts,
++    TargetStatus,
++    bar_closes_at,
++    bar_values,
++    compare,
++    et_date,
++    interval_duration,
++    is_complete,
++    normalise_price,
++    normalise_volume,
++    plan_candidates,
++    reconcile,
++    split_export,
++    steady_state_dates,
++)
++
++ET = ZoneInfo("America/New_York")
++
++
++# --- fixtures in the vendor's real shape -----------------------------
++
++
++def et(y, m, d, hh, mm) -> datetime:
++    """An ET wall clock, as the vendor's CSV writes it, as a UTC instant."""
++    return datetime(y, m, d, hh, mm, tzinfo=ET).astimezone(timezone.utc)
++
++
++def bar(ts, interval=Interval.I5, ticker="TESTARCH", close="100.00", volume=1234, open_="99.00",
++        high="101.00", low="98.50") -> Bar:
++    return Bar(
++        ticker=ticker,
++        interval=interval,
++        ts=ts,
++        open=Decimal(open_),
++        high=Decimal(high),
++        low=Decimal(low),
++        close=Decimal(close),
++        volume=volume,
++    )
++
++
++def stored_from(bars) -> dict:
++    """The shape the store hands `reconcile`: {ts: BarValues}."""
++    return {b.ts: bar_values(b) for b in bars}
++
++
++def plan_for(bars, *, fetch_started_at, archived_through=None, ticker="TESTARCH",
++             interval=Interval.I5):
++    return plan_candidates(
++        ticker=ticker,
++        interval=interval,
++        bars=bars,
++        fetch_started_at=fetch_started_at,
++        archived_through=archived_through,
++    )
++
++
++# =====================================================================
++# V2-3 — completeness and the interval map
++# =====================================================================
++
++
++def test_the_interval_map_is_explicit_and_covers_every_enum_member():
++    assert {i.value: INTERVAL_MINUTES[i] for i in Interval} == {
++        "i1": 1, "i2": 2, "i5": 5, "i15": 15, "i30": 30
++    }
++    for interval in Interval:
++        assert interval_duration(interval) == timedelta(minutes=INTERVAL_MINUTES[interval])
++
++
++@pytest.mark.parametrize("unknown", ["i60", "d", "", None, 5, "I5"])
++def test_an_unknown_interval_fails_loud(unknown):
++    with pytest.raises(ReconcileError) as e:
++        interval_duration(unknown)
++    assert "interval" in str(e.value).lower()
++
++
++def test_a_bar_closes_one_duration_after_it_opens():
++    ts = et(2026, 9, 18, 12, 30)
++    assert bar_closes_at(ts, Interval.I30) == ts + timedelta(minutes=30)
++    assert bar_closes_at(ts, Interval.I1) == ts + timedelta(minutes=1)
++
++
++def test_completeness_is_close_at_or_before_the_fetch_instant():
++    ts = et(2026, 9, 18, 19, 59)
++    close = ts + timedelta(minutes=1)
++    assert is_complete(ts, Interval.I1, close) is True          # exactly at close
++    assert is_complete(ts, Interval.I1, close - timedelta(seconds=1)) is False
++    assert is_complete(ts, Interval.I1, close + timedelta(hours=1)) is True
++
++
++def test_a_naive_fetch_instant_is_refused():
++    with pytest.raises(ReconcileError):
++        is_complete(et(2026, 9, 18, 19, 59), Interval.I1, datetime(2026, 9, 18, 20, 0))
++
++
++def test_a_future_dated_row_is_incomplete_not_a_poison():
++    """§7: an invalid future-dated row is excluded by V2-3, so it can
++    neither set `export_newest` nor trigger a false regression."""
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, 18, 19, 55)), bar(et(2026, 9, 19, 14, 0))]
++    split = split_export(bars, Interval.I5, fetch)
++    assert split.incomplete == 1
++    assert [b.ts for b in split.eligible] == [et(2026, 9, 18, 19, 55)]
++    assert split.export_newest == et(2026, 9, 18, 19, 55)
++    assert split.raw_newest == et(2026, 9, 19, 14, 0)
++
++
++# =====================================================================
++# TIME — the spec's §15 list, ET dates AND UTC boundaries
++# =====================================================================
++
++
++def test_regular_close_the_1959_i1_bar_completes_at_2000_et():
++    ts = et(2026, 9, 18, 19, 59)              # Friday aftermarket
++    assert ts == datetime(2026, 9, 18, 23, 59, tzinfo=timezone.utc)
++    assert bar_closes_at(ts, Interval.I1) == datetime(2026, 9, 19, 0, 0, tzinfo=timezone.utc)
++    assert is_complete(ts, Interval.I1, et(2026, 9, 18, 20, 0))
++    assert et_date(ts) == date(2026, 9, 18)
++
++
++def test_half_day_the_i30_bar_opening_1230_completes_at_1300_et():
++    """Spec §15, verbatim: 'a 13:00 half-day (an i30 bar opening 12:30
++    completes at 13:00)'. The nightly run is still at 20:30, so it is
++    complete by hours — the point is that the close is 13:00, not 13:30."""
++    ts = et(2026, 11, 27, 12, 30)             # the Friday after Thanksgiving
++    assert bar_closes_at(ts, Interval.I30) == et(2026, 11, 27, 13, 0)
++    assert is_complete(ts, Interval.I30, et(2026, 11, 27, 13, 0))
++    assert not is_complete(ts, Interval.I30, et(2026, 11, 27, 12, 59))
++
++
++def test_extended_hours_bars_are_ordinary_bars_to_this_module():
++    """i1/i5 carry premarket and aftermarket; nothing here filters by
++    session (§3 V2-3: 'no open-session prohibition for the nightly run')."""
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [
++        bar(et(2026, 9, 18, 4, 0), Interval.I1),      # premarket
++        bar(et(2026, 9, 18, 10, 0), Interval.I1),     # RTH
++        bar(et(2026, 9, 18, 19, 59), Interval.I1),    # aftermarket
++    ]
++    split = split_export(bars, Interval.I1, fetch)
++    assert len(split.eligible) == 3
++    assert split.export_oldest == et(2026, 9, 18, 4, 0)
++    assert split.export_newest == et(2026, 9, 18, 19, 59)
++
++
++def test_thanksgiving_thursday_has_no_bars_and_friday_is_a_half_day():
++    """2026: Thanksgiving is Thu 11-26, Fri 11-27 closes 13:00 ET. The
++    export simply carries no 11-26 date — no 24-hour arithmetic (§4)."""
++    fetch = et(2026, 11, 27, 20, 30)
++    bars = [
++        bar(et(2026, 11, 25, 15, 55)),        # Wednesday
++        bar(et(2026, 11, 27, 12, 55)),        # Friday, before the 13:00 close
++    ]
++    split = split_export(bars, Interval.I5, fetch)
++    assert [et_date(b.ts) for b in split.eligible] == [date(2026, 11, 25), date(2026, 11, 27)]
++    assert date(2026, 11, 26) not in {et_date(b.ts) for b in split.eligible}
++    assert steady_state_dates(split.eligible, fetch) == (date(2026, 11, 25), date(2026, 11, 27))
++
++
++def test_a_weekend_is_simply_two_dates_the_export_does_not_carry():
++    fetch = et(2026, 9, 21, 20, 30)           # Monday night
++    bars = [
++        bar(et(2026, 9, 17, 19, 55)),         # Thursday
++        bar(et(2026, 9, 18, 19, 55)),         # Friday
++        bar(et(2026, 9, 21, 19, 55)),         # Monday
++    ]
++    dates = steady_state_dates(split_export(bars, Interval.I5, fetch).eligible, fetch)
++    # Today (Monday) plus the two most recent COMPLETED sessions present.
++    assert dates == (date(2026, 9, 17), date(2026, 9, 18), date(2026, 9, 21))
++
++
++def test_the_0907_holiday_is_skipped_and_0908_is_the_next_session():
++    """Labor Day 2026 is Mon 09-07; the export's dates run 09-04 -> 09-08."""
++    fetch = et(2026, 9, 8, 20, 30)
++    bars = [bar(et(2026, 9, 3, 19, 55)), bar(et(2026, 9, 4, 19, 55)), bar(et(2026, 9, 8, 19, 55))]
++    dates = steady_state_dates(split_export(bars, Interval.I5, fetch).eligible, fetch)
++    assert dates == (date(2026, 9, 3), date(2026, 9, 4), date(2026, 9, 8))
++    assert date(2026, 9, 7) not in dates
++
++
++def test_spring_forward_2026_03_08_keeps_et_dates_and_shifts_utc():
++    before = et(2026, 3, 6, 9, 30)            # EST, UTC-5
++    after = et(2026, 3, 9, 9, 30)             # EDT, UTC-4
++    assert before == datetime(2026, 3, 6, 14, 30, tzinfo=timezone.utc)
++    assert after == datetime(2026, 3, 9, 13, 30, tzinfo=timezone.utc)
++    assert et_date(before) == date(2026, 3, 6) and et_date(after) == date(2026, 3, 9)
++    # A bar that opens on the transition Sunday still closes one duration later.
++    sunday = datetime(2026, 3, 8, 6, 55, tzinfo=timezone.utc)
++    assert bar_closes_at(sunday, Interval.I5) == datetime(2026, 3, 8, 7, 0, tzinfo=timezone.utc)
++
++
++def test_fall_back_2026_11_01_keeps_et_dates_and_shifts_utc():
++    before = et(2026, 10, 30, 9, 30)          # EDT, UTC-4
++    after = et(2026, 11, 2, 9, 30)            # EST, UTC-5
++    assert before == datetime(2026, 10, 30, 13, 30, tzinfo=timezone.utc)
++    assert after == datetime(2026, 11, 2, 14, 30, tzinfo=timezone.utc)
++    assert et_date(before) == date(2026, 10, 30) and et_date(after) == date(2026, 11, 2)
++
++
++def test_a_fetch_that_crosses_a_bar_close_excludes_that_bar():
++    """`fetch_started_at` is captured BEFORE the request (§3 V2-3). A bar
++    that closes while the response is in flight is NOT eligible tonight —
++    tomorrow's run picks it up, which is what makes the rule replayable."""
++    fetch = et(2026, 9, 18, 19, 59, )
++    forming = et(2026, 9, 18, 19, 59)
++    split = split_export([bar(forming, Interval.I1)], Interval.I1, fetch)
++    assert split.eligible == ()
++    assert split.incomplete == 1
++    assert split.export_newest is None
++
++
++# =====================================================================
++# §4 — the candidate range
++# =====================================================================
++
++
++def test_bootstrap_takes_the_whole_eligible_export():
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, d, 19, 55)) for d in (1, 2, 3, 4, 8, 9, 10, 17, 18)]
++    plan = plan_for(bars, fetch_started_at=fetch, archived_through=None)
++    assert plan.bootstrap is True
++    assert len(plan.candidates) == len(bars)
++    assert plan.below_range == 0
++
++
++def test_steady_state_is_the_union_of_newer_than_progress_and_range_b():
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, d, 19, 55)) for d in (3, 4, 8, 9, 10, 17, 18)]
++    # Progress sits at 09-17's newest bar, so (a) is 09-18 alone; (b) adds
++    # 09-18 (today) plus the two most recent completed sessions: 09-10, 09-17.
++    plan = plan_for(bars, fetch_started_at=fetch, archived_through=et(2026, 9, 17, 19, 55))
++    assert plan.bootstrap is False
++    assert [et_date(b.ts) for b in plan.candidates] == [
++        date(2026, 9, 10), date(2026, 9, 17), date(2026, 9, 18)
++    ]
++    assert plan.below_range == 4
++    assert plan.range_dates == (date(2026, 9, 10), date(2026, 9, 17), date(2026, 9, 18))
++
++
++def test_range_b_reaches_back_even_when_progress_is_ahead_of_it():
++    """(a) can be empty and (b) still selects: an illiquid target whose
++    progress already covers the newest bar is still RE-COMPARED over the
++    last two sessions, which is what catches a vendor restatement."""
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, d, 19, 55)) for d in (10, 17, 18)]
++    plan = plan_for(bars, fetch_started_at=fetch, archived_through=et(2026, 9, 18, 19, 55))
++    assert [b.ts for b in plan.candidates] == [b.ts for b in bars]
++    assert plan.below_range == 0
++
++
++def test_todays_date_is_in_range_b_even_with_no_completed_session_in_the_export():
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, 18, 19, 55))]
++    assert steady_state_dates(bars, fetch) == (date(2026, 9, 18),)
++
++
++def test_duplicate_input_keys_are_counted_once_and_not_offered_twice():
++    fetch = et(2026, 9, 18, 20, 30)
++    ts = et(2026, 9, 18, 19, 55)
++    split = split_export([bar(ts), bar(ts, close="101.00")], Interval.I5, fetch)
++    assert split.fetched == 2
++    assert split.duplicate_input_keys == 1
++    assert len(split.eligible) == 1
++
++
++# =====================================================================
++# §7 — regression, gap, empty export
++# =====================================================================
++
++
++def test_a_strict_regression_fails_with_the_evidence_kept():
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, 17, 19, 55))]
++    plan = plan_for(bars, fetch_started_at=fetch, archived_through=et(2026, 9, 18, 19, 55))
++    outcome = reconcile(plan, {})
++    assert outcome.status is TargetStatus.FAILED
++    assert [i.kind for i in outcome.incidents] == [IncidentKind.REGRESSION]
++    incident = outcome.incidents[0]
++    assert incident.detail["export_newest"] == et(2026, 9, 17, 19, 55).isoformat()
++    assert incident.detail["archived_through"] == et(2026, 9, 18, 19, 55).isoformat()
++    assert outcome.archived_through_after is None      # progress unchanged
++    assert outcome.to_insert == ()
++
++
++def test_an_equal_newest_bar_is_not_a_regression_illiquid_thin_three_sessions():
++    """Grok's objection, answered by §7: 'an illiquid name whose last
++    print does not move can fail that same clock check every night'. It
++    does not — EQUAL is fine, and the target SUCCEEDS with zero inserts."""
++    newest = et(2026, 9, 16, 15, 55)
++    for day in (16, 17, 18):
++        fetch = et(2026, 9, day, 20, 30)
++        plan = plan_for(
++            [bar(newest, ticker="THIN")], fetch_started_at=fetch, archived_through=newest,
++            ticker="THIN",
++        )
++        outcome = reconcile(plan, stored_from([bar(newest, ticker="THIN")]))
++        assert outcome.status is TargetStatus.SUCCESS, day
++        assert outcome.incidents == ()
++        assert outcome.to_insert == ()
++        assert outcome.counts(inserted=0, concurrent_conflicts=0).inserted == 0
++
++
++def test_a_half_day_is_not_truncation_and_not_a_regression():
++    """Grok: '13:00/16:00 is "older" than last night's 19:59'. Compared as
++    BAR TIMESTAMPS, Friday 12:55 is NEWER than Wednesday 19:59."""
++    fetch = et(2026, 11, 27, 20, 30)
++    bars = [bar(et(2026, 11, 25, 19, 55)), bar(et(2026, 11, 27, 12, 55))]
++    plan = plan_for(bars, fetch_started_at=fetch, archived_through=et(2026, 11, 25, 19, 55))
++    outcome = reconcile(plan, stored_from([bar(et(2026, 11, 25, 19, 55))]))
++    assert outcome.status is TargetStatus.SUCCESS
++    assert not any(i.kind is IncidentKind.REGRESSION for i in outcome.incidents)
++    assert outcome.archived_through_after == et(2026, 11, 27, 12, 55)
++
++
++def test_the_imcc_case_a_future_dated_row_then_a_valid_unchanged_export():
++    """A failed night's observation is NEVER the baseline (§7). The
++    future-dated row is excluded as incomplete, and the next valid export
++    with an unchanged newest bar succeeds."""
++    fetch1 = et(2026, 9, 17, 20, 30)
++    poisoned = [bar(et(2026, 9, 17, 15, 55)), bar(et(2027, 1, 4, 10, 0))]
++    plan1 = plan_for(poisoned, fetch_started_at=fetch1, archived_through=et(2026, 9, 17, 15, 55))
++    out1 = reconcile(plan1, stored_from([bar(et(2026, 9, 17, 15, 55))]))
++    assert out1.status is TargetStatus.SUCCESS
++    assert out1.export_newest == et(2026, 9, 17, 15, 55)
++    assert out1.raw_export_newest == et(2027, 1, 4, 10, 0)
++
++    fetch2 = et(2026, 9, 18, 20, 30)
++    plan2 = plan_for(
++        [bar(et(2026, 9, 17, 15, 55))], fetch_started_at=fetch2,
++        archived_through=et(2026, 9, 17, 15, 55),
++    )
++    out2 = reconcile(plan2, stored_from([bar(et(2026, 9, 17, 15, 55))]))
++    assert out2.status is TargetStatus.SUCCESS
++
++
++def test_a_gap_opens_when_the_export_starts_after_the_watermark():
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, 17, 19, 55)), bar(et(2026, 9, 18, 19, 55))]
++    plan = plan_for(bars, fetch_started_at=fetch, archived_through=et(2026, 9, 4, 19, 55))
++    outcome = reconcile(plan, {})
++    assert outcome.status is TargetStatus.DEGRADED
++    gap = next(i for i in outcome.incidents if i.kind is IncidentKind.GAP)
++    assert gap.range_start == et(2026, 9, 4, 19, 55)
++    assert gap.range_end == et(2026, 9, 17, 19, 55)
++    assert "unavailable from the tested export interface" in gap.detail["wording"]
++    assert gap.detail["suspected_unavailable"] is True
++    assert gap.detail["proven_missing"] is False
++    # The usable range is still appended, and progress still advances.
++    assert len(outcome.to_insert) == 2
++    assert outcome.archived_through_after == et(2026, 9, 18, 19, 55)
++
++
++def test_no_gap_on_a_bootstrap_the_report_says_unassessed_instead():
++    fetch = et(2026, 9, 18, 20, 30)
++    bars = [bar(et(2026, 9, 18, 19, 55))]
++    outcome = reconcile(plan_for(bars, fetch_started_at=fetch, archived_through=None), {})
++    assert not any(i.kind is IncidentKind.GAP for i in outcome.incidents)
++    assert outcome.bootstrap is True
++    assert outcome.unassessed_before == et(2026, 9, 18, 19, 55)
++
++
++def test_an_export_with_rows_but_no_eligible_bar_is_an_empty_export_failure():
++    fetch = et(2026, 9, 18, 19, 59)
++    plan = plan_for([bar(et(2026, 9, 18, 19, 55))], fetch_started_at=fetch,
++                    archived_through=et(2026, 9, 17, 19, 55))
++    outcome = reconcile(plan, {})
++    assert outcome.status is TargetStatus.FAILED
++    assert [i.kind for i in outcome.incidents] == [IncidentKind.EMPTY_EXPORT]
++    assert outcome.archived_through_after is None
++
++
++def test_an_export_with_no_rows_at_all_is_an_empty_export_failure():
++    outcome = reconcile(plan_for([], fetch_started_at=et(2026, 9, 18, 20, 30)), {})
++    assert outcome.status is TargetStatus.FAILED
++    assert [i.kind for i in outcome.incidents] == [IncidentKind.EMPTY_EXPORT]
++
++
++def test_an_empty_export_does_not_establish_progress_so_the_next_night_bootstraps():
++    empty = reconcile(plan_for([], fetch_started_at=et(2026, 9, 17, 20, 30)), {})
++    assert empty.archived_through_after is None
++    good = reconcile(
++        plan_for([bar(et(2026, 9, 18, 19, 55))], fetch_started_at=et(2026, 9, 18, 20, 30)), {}
++    )
++    assert good.bootstrap is True
++
++
++# =====================================================================
++# §6 — the four-way comparison, normalisation and withholding
++# =====================================================================
++
++
++def test_normalisation_is_numeric_14_4_and_integer_volume():
++    assert normalise_price("100.1") == Decimal("100.1000")
++    assert normalise_price(Decimal("100.10000")) == Decimal("100.1000")
++    assert normalise_price(Decimal("100.10004")) == Decimal("100.1000")
++    assert normalise_volume(Decimal("1234")) == 1234
++    assert normalise_volume(1234) == 1234
++
++
++def test_equal_after_normalisation_is_not_a_difference():
++    ts = et(2026, 9, 18, 19, 55)
++    vendor = [bar(ts, close="100.00")]
++    stored = {ts: bar_values(bar(ts, close="100.0000"))}
++    result = compare(vendor, stored)
++    assert result.equal == (ts,)
++    assert result.differing == () and result.incoming_only == () and result.stored_only == ()
++
++
++def test_a_field_level_difference_is_recorded_with_both_values():
++    ts = et(2026, 9, 18, 19, 55)
++    vendor = [bar(ts, close="105.00", volume=2000)]
++    stored = {ts: bar_values(bar(ts, close="100.00", volume=1234))}
++    result = compare(vendor, stored)
++    (difference,) = result.differing
++    assert difference.ts == ts
++    assert {f.field for f in difference.fields} == {"close", "volume"}
++    close = next(f for f in difference.fields if f.field == "close")
++    assert close.stored == "100.0000" and close.vendor == "105.0000"
++
++
++def test_stored_only_keys_are_flagged_and_nothing_is_deleted():
++    fetch = et(2026, 9, 18, 20, 30)
++    kept = et(2026, 9, 18, 19, 50)
++    vendor = [bar(et(2026, 9, 18, 19, 55))]
++    plan = plan_for(vendor, fetch_started_at=fetch, archived_through=et(2026, 9, 18, 19, 40))
++    outcome = reconcile(plan, stored_from([bar(kept)]))
++    assert outcome.stored_only_keys == (kept,)
++    assert outcome.status is TargetStatus.DEGRADED
++    assert any(i.kind is IncidentKind.STORED_ONLY for i in outcome.incidents)
++    assert outcome.to_insert and all(b.ts != kept for b in outcome.to_insert)
++
++
++def test_any_ohlcv_difference_withholds_the_whole_target():
++    fetch = et(2026, 9, 18, 20, 30)
++    old = et(2026, 9, 18, 19, 50)
++    new = et(2026, 9, 18, 19, 55)
++    plan = plan_for([bar(old, close="105.00"), bar(new)], fetch_started_at=fetch,
++                    archived_through=old)
++    outcome = reconcile(plan, stored_from([bar(old, close="100.00")]))
++    assert outcome.status is TargetStatus.FAILED
++    assert [i.kind for i in outcome.incidents] == [IncidentKind.RESTATED]
++    assert outcome.to_insert == ()                 # NO insert for this target tonight
++    assert outcome.archived_through_after is None  # progress unchanged
++    assert outcome.withheld == 1                   # the one incoming-only key
++    assert "no automatic repair" in outcome.reason or "restate" in outcome.reason
++
++
++@pytest.mark.parametrize("field,kwargs", [
++    ("open", {"open_": "99.50"}),
++    ("high", {"high": "101.50"}),
++    ("low", {"low": "98.00"}),
++    ("close", {"close": "100.25"}),
++    ("volume", {"volume": 9999}),
++])
++def test_a_difference_in_any_one_of_the_five_fields_withholds(field, kwargs):
++    fetch = et(2026, 9, 18, 20, 30)
++    ts = et(2026, 9, 18, 19, 50)
++    plan = plan_for([bar(ts, **kwargs)], fetch_started_at=fetch, archived_through=ts)
++    outcome = reconcile(plan, stored_from([bar(ts)]))
++    assert outcome.status is TargetStatus.FAILED
++    assert outcome.incidents[0].detail["differing"][0]["fields"][0]["field"] == field
++
++
++def test_nothing_is_ever_repaired_automatically():
++    """§6: 'Never an automatic repair, by constant factor or otherwise.'
++    A whole-export constant-factor difference — the split-like case — is
++    still a withholding, never a rescale."""
++    fetch = et(2026, 9, 18, 20, 30)
++    keys = [et(2026, 9, 18, 19, 40 + i) for i in range(0, 15, 5)]
++    plan = plan_for([bar(k, close="50.00", open_="49.50", high="50.50", low="49.25") for k in keys],
++                    fetch_started_at=fetch, archived_through=keys[-1])
++    stored = stored_from([bar(k, close="100.00", open_="99.00", high="101.00", low="98.50")
++                          for k in keys])
++    outcome = reconcile(plan, stored)
++    assert outcome.status is TargetStatus.FAILED
++    assert outcome.to_insert == ()
++    assert len(outcome.incidents[0].detail["differing"]) == 3
++
++
++# =====================================================================
++# The four ROUND-2 SEQUENCES, on the houses' own dates
++# =====================================================================
++
++
++def test_gemini_monday_1400_restoration_seen_on_tuesday():
++    """Gemini, round 2: bars for Monday 14:00-14:05 are RESTORED by the
++    vendor and first appear in Tuesday 09:30's data. The poller's
++    `max(ts)` has long since moved past them, so a `max(ts)` watermark
++    drops them forever. `archived_through` does not: Monday's accepted
++    export set it to Monday's newest bar, and the restored keys lie
++    inside range (b)."""
++    fetch = et(2026, 9, 22, 20, 30)                   # Tuesday night
++    restored = [et(2026, 9, 21, 14, 0), et(2026, 9, 21, 14, 5)]
++    monday_newest = et(2026, 9, 21, 19, 55)
++    export = [bar(t, Interval.I1) for t in restored] + [
++        bar(monday_newest, Interval.I1), bar(et(2026, 9, 22, 19, 55), Interval.I1)
++    ]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=monday_newest,
++                    interval=Interval.I1)
++    # Both restored keys are candidates even though they are OLDER than
++    # the watermark — that is range (b) doing its job.
++    assert set(restored) <= {b.ts for b in plan.candidates}
++    stored = stored_from([bar(monday_newest, Interval.I1)])
++    outcome = reconcile(plan, stored)
++    assert outcome.status is TargetStatus.SUCCESS
++    assert {b.ts for b in outcome.to_insert} == set(restored) | {et(2026, 9, 22, 19, 55)}
++    counts = outcome.counts(inserted=3, concurrent_conflicts=0)
++    assert counts.late == 2 and counts.new == 1
++
++
++def test_astra_friday_1002_late_addition_appears_after_a_weekend():
++    """Astra, round 2: a bar for Friday 10:02 is added by the vendor and
++    is first seen on Monday 09:36. The weekend is not 72 hours of
++    arithmetic — Friday is simply one of the two most recent completed
++    session DATES the export carries (§4)."""
++    fetch = et(2026, 9, 21, 20, 30)                   # Monday night
++    late_key = et(2026, 9, 18, 10, 2)
++    friday_newest = et(2026, 9, 18, 19, 55)
++    export = [
++        bar(et(2026, 9, 17, 19, 55), Interval.I1),
++        bar(late_key, Interval.I1),
++        bar(friday_newest, Interval.I1),
++        bar(et(2026, 9, 21, 19, 55), Interval.I1),
++    ]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=friday_newest,
++                    interval=Interval.I1)
++    assert late_key in {b.ts for b in plan.candidates}
++    assert plan.range_dates == (date(2026, 9, 17), date(2026, 9, 18), date(2026, 9, 21))
++    outcome = reconcile(plan, stored_from([
++        bar(et(2026, 9, 17, 19, 55), Interval.I1), bar(friday_newest, Interval.I1)
++    ]))
++    assert {b.ts for b in outcome.to_insert} == {late_key, et(2026, 9, 21, 19, 55)}
++    counts = outcome.counts(inserted=2, concurrent_conflicts=0)
++    assert counts.late == 1 and counts.new == 1
++
++
++def test_grok_nvda_wednesday_1017_appears_on_thursday():
++    """Grok, round 2: NVDA's Wednesday 10:17 bar appears on Thursday.
++    The poller's maximum never enters the decision — it is reported
++    beside the counters and used by nothing (§7)."""
++    fetch = et(2026, 9, 17, 20, 30)                   # Thursday night
++    late_key = et(2026, 9, 16, 10, 17)
++    wed_newest = et(2026, 9, 16, 19, 55)
++    export = [bar(t, Interval.I1, ticker="NVDA") for t in (
++        late_key, wed_newest, et(2026, 9, 17, 19, 55)
++    )]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=wed_newest,
++                    ticker="NVDA", interval=Interval.I1)
++    outcome = reconcile(
++        plan, stored_from([bar(wed_newest, Interval.I1, ticker="NVDA")]),
++        poller_watermark=et(2026, 9, 17, 19, 55),
++    )
++    assert late_key in {b.ts for b in outcome.to_insert}
++    assert outcome.poller_watermark == et(2026, 9, 17, 19, 55)
++    assert outcome.archived_through_after == et(2026, 9, 17, 19, 55)
++
++
++def test_the_gap_a_poller_backfill_would_have_hidden_msft_0827_to_0904():
++    """Astra, round 2 (MSFT 08-27 / 09-04) and Grok's AAPL re-added: a
++    poller back-fill moves `max(ts)` forward across days the archiver
++    never covered, so a `max(ts)` gap test reads clean. `archived_through`
++    still sits at 08-27 and the gap opens."""
++    fetch = et(2026, 9, 4, 20, 30)
++    export = [bar(et(2026, 9, 3, 19, 55)), bar(et(2026, 9, 4, 19, 55))]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=et(2026, 8, 27, 19, 55))
++    outcome = reconcile(plan, {}, poller_watermark=et(2026, 9, 4, 19, 55))
++    gap = next(i for i in outcome.incidents if i.kind is IncidentKind.GAP)
++    assert gap.range_start == et(2026, 8, 27, 19, 55)
++    assert gap.range_end == et(2026, 9, 3, 19, 55)
++    assert outcome.status is TargetStatus.DEGRADED
++    assert outcome.poller_watermark == et(2026, 9, 4, 19, 55)
++
++
++def test_a_progress_row_survives_a_ticker_leaving_and_returning():
++    """Round-2 sequence #8. AAPL leaves the Lists note for a fortnight and
++    comes back; its progress row was never deleted, so the days it missed
++    are a GAP rather than silence."""
++    fetch = et(2026, 9, 18, 20, 30)
++    export = [bar(et(2026, 9, 17, 19, 55), ticker="AAPL"), bar(et(2026, 9, 18, 19, 55), ticker="AAPL")]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=et(2026, 9, 3, 19, 55),
++                    ticker="AAPL")
++    outcome = reconcile(plan, {})
++    assert any(i.kind is IncidentKind.GAP for i in outcome.incidents)
++    assert outcome.status is TargetStatus.DEGRADED
++
++
++def test_the_poller_maximum_never_enters_any_decision():
++    """Asserted directly: the same inputs with three different poller
++    watermarks produce byte-identical decisions."""
++    fetch = et(2026, 9, 18, 20, 30)
++    export = [bar(et(2026, 9, 18, 19, 55))]
++    outcomes = [
++        reconcile(
++            plan_for(export, fetch_started_at=fetch, archived_through=et(2026, 9, 17, 19, 55)),
++            {},
++            poller_watermark=w,
++        )
++        for w in (None, et(2026, 9, 1, 10, 0), et(2027, 1, 1, 10, 0))
++    ]
++    decisions = {
++        (o.status, o.archived_through_after, tuple(b.ts for b in o.to_insert),
++         tuple(i.kind for i in o.incidents))
++        for o in outcomes
++    }
++    assert len(decisions) == 1
++
++
++# =====================================================================
++# §7 — the counting identities (L57)
++# =====================================================================
++
++
++def test_msft_1959_after_1958_is_new_not_late():
++    fetch = et(2026, 9, 18, 20, 30)
++    previous = et(2026, 9, 18, 19, 58)
++    export = [bar(previous, Interval.I1, ticker="MSFT"), bar(et(2026, 9, 18, 19, 59), Interval.I1, ticker="MSFT")]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=previous,
++                    ticker="MSFT", interval=Interval.I1)
++    outcome = reconcile(plan, stored_from([bar(previous, Interval.I1, ticker="MSFT")]))
++    counts = outcome.counts(inserted=1, concurrent_conflicts=0)
++    assert counts.incoming_only == 1 and counts.new == 1 and counts.late == 0
++
++
++def test_msft_1959_already_stored_equal_is_one_one_zero():
++    """§15, verbatim: 'MSFT 19:59 already stored equal = 1 / 1 / 0'
++    — one candidate, one already-stored-equal, zero incoming-only."""
++    fetch = et(2026, 9, 18, 20, 30)
++    ts = et(2026, 9, 18, 19, 59)
++    plan = plan_for([bar(ts, Interval.I1, ticker="MSFT")], fetch_started_at=fetch,
++                    archived_through=ts, ticker="MSFT", interval=Interval.I1)
++    outcome = reconcile(plan, stored_from([bar(ts, Interval.I1, ticker="MSFT")]))
++    counts = outcome.counts(inserted=0, concurrent_conflicts=0)
++    assert (counts.candidates, counts.already_stored_equal, counts.incoming_only) == (1, 1, 0)
++
++
++def test_groks_hundred_key_case_reconciles():
++    """Equal, differing and incoming-only candidates in one target. The
++    difference withholds, so `withheld == incoming_only` and
++    `inserted == 0` — and every identity still closes."""
++    fetch = et(2026, 9, 18, 20, 30)
++    keys = [et(2026, 9, 18, 9, 30) + timedelta(minutes=5 * i) for i in range(100)]
++    export = [bar(k) for k in keys]
++    export[7] = bar(keys[7], close="999.00")
++    stored = stored_from([bar(k) for k in keys[:60]])
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=keys[59])
++    outcome = reconcile(plan, stored)
++    counts = outcome.counts(inserted=0, concurrent_conflicts=0)
++    assert counts.candidates == 100
++    assert counts.already_stored_equal == 59
++    assert counts.differing == 1
++    assert counts.incoming_only == 40
++    assert counts.withheld == 40 and counts.inserted == 0 and counts.concurrent_conflicts == 0
++
++
++def test_astras_aapl_i5_case_reconciles():
++    fetch = et(2026, 9, 18, 20, 30)
++    keys = [et(2026, 9, 18, 9, 30) + timedelta(minutes=5 * i) for i in range(12)]
++    export = [bar(k, ticker="AAPL") for k in keys]
++    stored = stored_from([bar(k, ticker="AAPL") for k in keys[:8]])
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=keys[7], ticker="AAPL")
++    outcome = reconcile(plan, stored)
++    counts = outcome.counts(inserted=4, concurrent_conflicts=0)
++    assert counts.candidates == counts.already_stored_equal + counts.differing + counts.incoming_only
++    assert counts.incoming_only == counts.inserted + counts.concurrent_conflicts
++    assert counts.fetched == (
++        counts.invalid + counts.duplicate_input_keys + counts.incomplete
++        + counts.below_range + counts.candidates
++    )
++
++
++def test_a_counted_conflict_is_not_an_error():
++    """A poller insert between the range read and this insert shows up as
++    `concurrent_conflicts`, and the identity still closes."""
++    fetch = et(2026, 9, 18, 20, 30)
++    keys = [et(2026, 9, 18, 19, 50), et(2026, 9, 18, 19, 55)]
++    plan = plan_for([bar(k) for k in keys], fetch_started_at=fetch, archived_through=keys[0])
++    outcome = reconcile(plan, stored_from([bar(keys[0])]))
++    counts = outcome.counts(inserted=0, concurrent_conflicts=1)
++    assert counts.incoming_only == 1
++    assert counts.inserted == 0 and counts.concurrent_conflicts == 1
++
++
++@pytest.mark.parametrize("bad", [
++    dict(inserted=5, concurrent_conflicts=0),     # more inserted than offered
++    dict(inserted=0, concurrent_conflicts=5),
++    dict(inserted=-1, concurrent_conflicts=0),
++])
++def test_a_non_reconciling_count_cannot_be_constructed(bad):
++    fetch = et(2026, 9, 18, 20, 30)
++    keys = [et(2026, 9, 18, 19, 50), et(2026, 9, 18, 19, 55)]
++    plan = plan_for([bar(k) for k in keys], fetch_started_at=fetch, archived_through=keys[0])
++    outcome = reconcile(plan, stored_from([bar(keys[0])]))
++    with pytest.raises(Exception):
++        outcome.counts(**bad)
++
++
++def test_the_counts_model_refuses_a_broken_identity_directly():
++    with pytest.raises(Exception) as e:
++        TargetCounts(
++            fetched=10, invalid=0, duplicate_input_keys=0, incomplete=0, below_range=0,
++            candidates=9,                       # 10 != 0+0+0+0+9
++            already_stored_equal=0, differing=0, incoming_only=9, new=9, late=0,
++            withheld=0, inserted=9, concurrent_conflicts=0, stored_only=0,
++        )
++    assert "fetched" in str(e.value)
++
++
++def test_a_withheld_target_has_zero_inserted_and_zero_conflicts():
++    with pytest.raises(Exception):
++        TargetCounts(
++            fetched=1, invalid=0, duplicate_input_keys=0, incomplete=0, below_range=0,
++            candidates=1, already_stored_equal=0, differing=0, incoming_only=1, new=1, late=0,
++            withheld=1, inserted=1, concurrent_conflicts=0, stored_only=0,
++        )
++
++
++def test_late_is_zero_on_a_bootstrap():
++    fetch = et(2026, 9, 18, 20, 30)
++    keys = [et(2026, 9, 18, 19, 50), et(2026, 9, 18, 19, 55)]
++    outcome = reconcile(plan_for([bar(k) for k in keys], fetch_started_at=fetch), {})
++    counts = outcome.counts(inserted=2, concurrent_conflicts=0)
++    assert counts.late == 0 and counts.new == 2
++
++
++def test_invalid_is_zero_by_construction_but_the_counter_survives():
++    """§7: the collector fails a whole target on one bad row, so `invalid`
++    is 0 today. The counter stays so the identity survives a collector
++    change."""
++    outcome = reconcile(
++        plan_for([bar(et(2026, 9, 18, 19, 55))], fetch_started_at=et(2026, 9, 18, 20, 30)), {}
++    )
++    assert outcome.counts(inserted=1, concurrent_conflicts=0).invalid == 0
++    assert "invalid" in TargetCounts.model_fields
++
++
++def test_stored_only_is_reported_beside_the_identities_not_inside_them():
++    fetch = et(2026, 9, 18, 20, 30)
++    vendor = [bar(et(2026, 9, 18, 19, 55))]
++    plan = plan_for(vendor, fetch_started_at=fetch, archived_through=et(2026, 9, 18, 19, 40))
++    outcome = reconcile(plan, stored_from([bar(et(2026, 9, 18, 19, 50))]))
++    counts = outcome.counts(inserted=1, concurrent_conflicts=0)
++    assert counts.stored_only == 1
++    assert counts.candidates == counts.already_stored_equal + counts.differing + counts.incoming_only
++
++
++# =====================================================================
++# Purity
++# =====================================================================
++
++
++def test_the_module_reads_no_clock_no_database_and_no_file():
++    """Purity asserted on the AST, not on prose: the module's docstring
++    explains WHY `max(ts)` is the wrong watermark and names the store
++    while doing it. What must stay absent is the import."""
++    import ast
++    import pathlib
++
++    import cobalt.archiver.reconcile as module
++
++    tree = ast.parse(pathlib.Path(module.__file__).read_text(encoding="utf-8"))
++    imported: set[str] = set()
++    for node in ast.walk(tree):
++        if isinstance(node, ast.Import):
++            imported.update(alias.name.split(".")[0] for alias in node.names)
++        elif isinstance(node, ast.ImportFrom):
++            imported.add((node.module or "").split(".")[0] or ".")
++    assert imported <= {
++        "__future__", "datetime", "decimal", "enum", "typing", "zoneinfo",
++        "pydantic", "models",
++    }, f"reconcile.py must stay pure; it imports {sorted(imported)}"
++    # The one relative import is the Pydantic models, nothing else.
++    relative = {
++        node.module
++        for node in ast.walk(tree)
++        if isinstance(node, ast.ImportFrom) and node.level
++    }
++    assert relative == {"models"}
++
++    called = {
++        node.func.attr
++        for node in ast.walk(tree)
++        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
++    } | {
++        node.func.id
++        for node in ast.walk(tree)
++        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
++    }
++    for forbidden in ("now", "utcnow", "today", "open", "read_text", "execute"):
++        assert forbidden not in called, f"reconcile.py calls {forbidden}()"
++
++
++def test_two_failed_nights_then_a_success_inserts_the_keys_still_in_the_window():
++    """§15: 'two failed nights then success (keys still in the window
++    insert)'. Progress never moved on the failures, so the third night's
++    range (a) still reaches back to the old watermark."""
++    watermark = et(2026, 9, 16, 19, 55)
++    for day in (17, 18):
++        out = reconcile(plan_for([], fetch_started_at=et(2026, 9, day, 20, 30),
++                                 archived_through=watermark), {})
++        assert out.status is TargetStatus.FAILED
++        assert out.archived_through_after is None
++
++    fetch = et(2026, 9, 21, 20, 30)
++    export = [bar(et(2026, 9, d, 19, 55)) for d in (16, 17, 18, 21)]
++    plan = plan_for(export, fetch_started_at=fetch, archived_through=watermark)
++    # The store read is bounded by the candidate range, and 09-16 is below
++    # it (not newer than the watermark, not one of the three range dates),
++    # so the read returns nothing.
++    assert watermark not in {b.ts for b in plan.candidates}
++    outcome = reconcile(plan, {})
++    assert {b.ts for b in outcome.to_insert} == {
++        et(2026, 9, 17, 19, 55), et(2026, 9, 18, 19, 55), et(2026, 9, 21, 19, 55)
++    }
++    assert outcome.archived_through_after == et(2026, 9, 21, 19, 55)
+diff --git a/tests/cobalt/test_radar_migration.py b/tests/cobalt/test_radar_migration.py
+index c3049df..cee6376 100644
+--- a/tests/cobalt/test_radar_migration.py
++++ b/tests/cobalt/test_radar_migration.py
+@@ -27,15 +27,19 @@ def test_0004_created_tables_match_placement():
+ 
+ 
+ def test_rollback_selects_only_newer_files_newest_first():
++    """Asserted as a SUFFIX since 2026-09-19: the archiver's 0010/0011 sit
++    ahead of 0007 in REVERSE, and the property under test is "everything
++    newer than the bound, newest first", never a fixed tuple length."""
+     selected = _rollback_paths("0003")
+-    assert [p.name for p in selected] == [
++    assert [p.name for p in selected][-4:] == [
+         "0007_radar_cards.rollback.sql",
+         "0006_radar_score.rollback.sql",
+         "0005_heartbeat_note_absent.rollback.sql",
+         "0004_radar_pool.rollback.sql",
+     ]
++    assert not any(p.name.startswith(("0003", "0002", "0001")) for p in selected)
+     assert selected == tuple(
+-        p for p in REVERSE if p.name.startswith(("0007", "0006", "0005", "0004"))
++        p for p in REVERSE if not p.name.startswith(("0003", "0002", "0001"))
+     )
+ 
+ 
+diff --git a/tests/cobalt/test_radar_score_migration.py b/tests/cobalt/test_radar_score_migration.py
+index 676fa7a..daa62b4 100644
+--- a/tests/cobalt/test_radar_score_migration.py
++++ b/tests/cobalt/test_radar_score_migration.py
+@@ -80,22 +80,35 @@ def _table_body(text: str, qualified: str) -> str:
+ 
+ 
+ def test_0006_and_0007_are_registered_forward_in_order():
++    """ADJACENCY, not position (2026-09-19): the archiver's 0010/0011 are
++    appended after 0007, so `FORWARD` no longer ends here. What 0006/0007
++    need is to run in that order, with 0006's system seam before 0007's
++    user cards that reference it."""
+     names = [p.name for p in FORWARD]
+-    assert names[-2:] == ["0006_radar_score.sql", "0007_radar_cards.sql"]
++    assert names.index("0007_radar_cards.sql") == names.index("0006_radar_score.sql") + 1
+     for path in (SYSTEM_SQL, SYSTEM_ROLLBACK, USER_SQL, USER_ROLLBACK):
+         assert path.exists(), path
+ 
+ 
+ def test_rollback_selects_0007_then_0006_newest_first():
+-    assert [p.name for p in REVERSE[:2]] == [
++    """The USER cards reverse before the SYSTEM seam they reference — an
++    adjacency in REVERSE, and a suffix of each bounded selection."""
++    reverse_names = [p.name for p in REVERSE]
++    assert (
++        reverse_names.index("0006_radar_score.rollback.sql")
++        == reverse_names.index("0007_radar_cards.rollback.sql") + 1
++    )
++    assert [p.name for p in _rollback_paths("0005")][-2:] == [
+         "0007_radar_cards.rollback.sql",
+         "0006_radar_score.rollback.sql",
+     ]
+-    assert [p.name for p in _rollback_paths("0005")] == [
+-        "0007_radar_cards.rollback.sql",
+-        "0006_radar_score.rollback.sql",
++    assert [p.name for p in _rollback_paths("0006")][-1:] == [
++        "0007_radar_cards.rollback.sql"
+     ]
+-    assert [p.name for p in _rollback_paths("0006")] == ["0007_radar_cards.rollback.sql"]
++    assert not any(
++        p.name.startswith(("0005", "0004", "0003", "0002"))
++        for p in _rollback_paths("0006")
++    )
+ 
+ 
+ # ---------------------------------------------------------------------
+diff --git a/tests/cobalt/test_tenancy.py b/tests/cobalt/test_tenancy.py
+index bbcb0a0..3c472b7 100644
+--- a/tests/cobalt/test_tenancy.py
++++ b/tests/cobalt/test_tenancy.py
+@@ -493,13 +493,20 @@ def test_0005_extends_only_the_vault_outcome_check_and_has_a_refusing_reverse():
+ 
+ 
+ def test_down_to_0004_selects_0007_0006_then_0005_reverse():
++    """Selection is by NUMBER and newest-first, not by position in the
++    tuple. Asserted as a suffix (2026-09-19) because the registry grows at
++    the top: the archiver's 0010/0011 now precede 0007 in REVERSE, and a
++    tail-anchored assertion would have to be rewritten by every migration
++    that lands, which is how a real regression gets edited away."""
+     from cobalt.db_migrations.cli import _rollback_paths
+ 
+-    assert [path.name for path in _rollback_paths("0004")] == [
++    selected = [path.name for path in _rollback_paths("0004")]
++    assert selected[-3:] == [
+         "0007_radar_cards.rollback.sql",
+         "0006_radar_score.rollback.sql",
+         "0005_heartbeat_note_absent.rollback.sql",
+     ]
++    assert not any(name.startswith(("0004", "0003", "0002")) for name in selected)
+ 
+ 
+ @requires_db
