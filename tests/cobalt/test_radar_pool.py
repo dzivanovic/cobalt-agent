@@ -181,3 +181,57 @@ def test_hold_keeps_prior_value():
     by = _by_ticker(decide([], members, _pool(cap=2), [degraded], NOW))
     assert (by["AAA"].action, by["AAA"].rank_metric, by["AAA"].rank_value) == (Action.HOLD, "volume", Decimal("123.5"))
     assert (by["BBB"].action, by["BBB"].rank_metric, by["BBB"].rank_value) == (Action.HOLD, None, None)
+
+
+# ---------------------------------------------------------------------
+# The list `union` ordering, PINNED (tribunal A3, L52)
+#
+# `_ranked`'s union sort key (`pool.py:179-205`) is a 3-tuple:
+#   (max(<list values>, default=None) is None, -(max(<list values>, default=0)), name)
+# i.e. names WITH a value first, then by that value descending, then by
+# name ascending; and `union` feeds only `position = union.index(ticker)
+# + 1` (`pool.py:206`), never the candidate set itself.
+#
+# These two tests pin that order as it stands TODAY. They deliberately do
+# NOT assert the one input whose behaviour the S2-P4 STEP-2 None-filter
+# changed — a name carrying a value on one list and None on another, which
+# raised `TypeError` before the filter and now places normally. That edit
+# is undisclosed under L52 and Dejan's ruling (waive-and-disclose, or
+# revert) is owed; a test asserting it either way would settle his ruling
+# from inside the suite. Both tests below pass under the filtered AND the
+# unfiltered key, so a revert does not silently break them.
+# ---------------------------------------------------------------------
+
+
+def _ranks(result):
+    return {item.ticker: item.rank for item in result.transitions}
+
+
+def test_list_union_orders_by_value_descending_then_name_when_every_value_is_present():
+    """All values present: the order and the rank map are exactly what the
+    key tuple above dictates — value descending, ties broken by name."""
+    source = SourceSet(source="list:synthetic@abc", kind="list",
+        tickers=["AAA", "BBB", "CCC", "DDD"],
+        metrics={"AAA": {"volume": 1, "rvol": 1.0}, "BBB": {"volume": 1, "rvol": 4.0},
+                 "CCC": {"volume": 1, "rvol": 4.0}, "DDD": {"volume": 1, "rvol": 9.0}})
+    candidates = [Candidate(ticker=x, sources=[source.source]) for x in source.tickers]
+    result = decide(candidates, [], _pool(cap=4, stickiness=0), [source], NOW)
+    # 10:30 ET is rth, so the session metric is rvol (as `_pool` declares).
+    # DDD 9.0 · BBB 4.0 = CCC 4.0, name breaks the tie · AAA 1.0
+    assert _ranks(result) == {"DDD": 1, "BBB": 2, "CCC": 3, "AAA": 4}
+    assert all(item.action is Action.ADMIT for item in result.transitions)
+
+
+def test_a_name_with_no_value_on_any_list_sorts_after_every_name_that_has_one():
+    """Element 1 of the key (`… is None`) puts the valueless names last,
+    and among them element 2 is equal (`default=0`), so `name` decides —
+    deterministically, never by dict order."""
+    source = SourceSet(source="list:synthetic@abc", kind="list",
+        tickers=["AAA", "BBB", "YYY", "ZZZ"],
+        metrics={"AAA": {"volume": 1, "rvol": 1.0}, "BBB": {"volume": 1, "rvol": 4.0},
+                 "ZZZ": {"volume": 1, "rvol": None}, "YYY": {"volume": 1, "rvol": None}})
+    candidates = [Candidate(ticker=x, sources=[source.source]) for x in source.tickers]
+    result = decide(candidates, [], _pool(cap=4, stickiness=0), [source], NOW)
+    assert _ranks(result) == {"BBB": 1, "AAA": 2, "YYY": 3, "ZZZ": 4}
+    by = _by_ticker(result)
+    assert (by["YYY"].rank_value, by["ZZZ"].rank_value) == (None, None)
