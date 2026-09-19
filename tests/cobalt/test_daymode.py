@@ -731,3 +731,155 @@ class TestOverBandStepDown:
         )
         assert p.proposed == "reduced"
         assert any("you traded too many times yesterday" in s for s in p.signals)
+
+
+# ---------------------------------------------------------------------
+# Band validation (ops 2026-09-19, item b1 — `cto-2026-09-18.md` §18 F2)
+# ---------------------------------------------------------------------
+
+#: Every band the validator must ACCEPT, with the `day_facts` dict each
+#: one produces. The dicts were computed on the UNTOUCHED code path and
+#: pinned here before `validate_band` existed: this is the test that says
+#: the validation chunk changes no fact for any VALID band. Validation is
+#: a config gate — it is not on the fact-computing path at all.
+_ACCEPTED_BANDS = [
+    ((2, 6), False),      # his live, ruled band
+    ((3, 3), False),      # a one-value band: min == max is a band
+    ((None, None), True),  # unruled -> PLACEHOLDER, deliberately adverse
+    ((2, None), True),     # HALF-SET: still "not ruled yet" today (b2 is scoped out)
+    ((None, 6), True),     # HALF-SET, the other side
+]
+
+
+class TestABandThatIsValidChangesNothing:
+    """L7 / CLAUDE.md HITL: this is the day-mode path. For every band the
+    validator accepts, `day_facts` must be byte-identical to today's."""
+
+    @pytest.mark.parametrize("band,placeholder", _ACCEPTED_BANDS)
+    def test_the_facts_for_an_accepted_band_are_todays_facts(self, band, placeholder):
+        from cobalt.daymode.propose import _facts
+
+        facts = _facts(
+            _cfg(), date(2026, 9, 3),
+            daily_stop_hit=False, drc_note="DRC.md", drc_informative=True,
+            prior_day=date(2026, 9, 2), band=band, prior_filled=2,
+        )
+        assert facts == {
+            "daily_stop_hit": False,
+            "no_prior_drc": False,
+            "drc_not_informative": False,
+            "early_close_today": False,
+            "first_session_after_close": False,
+            "trade_count_band_placeholder": placeholder,
+            "trade_count_over_band": False,
+        }
+
+    @pytest.mark.parametrize("band,placeholder", _ACCEPTED_BANDS)
+    def test_the_validator_accepts_it(self, band, placeholder):
+        from cobalt.daymode.propose import validate_band
+
+        assert validate_band(*band) is None
+
+
+#: Every band the validator must REFUSE. `cto-2026-09-18.md` §18 F2:
+#: "the over-band fact has no guard for an inverted (min > max) or
+#: half-set band". b1 closes the inverted and the non-integer cases; the
+#: half-set case is SCOPED OUT as a DESIGN question (see the accepted
+#: list above and `validate_band`'s docstring).
+_REFUSED_BANDS = [
+    (6, 2),        # inverted — nothing can be inside it
+    (2, "6"),      # a string is not a count
+    (2.5, 6),      # a fraction of a trade is not a count
+    (-1, 6),       # a negative count
+    (True, 6),     # a bool IS an int to Python; it is not a count here
+]
+
+
+class TestTheBandValidatorRefusesWhatCannotBeABand:
+    """L1 fail-loud + L10 config-as-code: a band that cannot be a band is
+    caught at the deploy's `validate`, not at 09:00 by
+    `com.cobalt.daymode-propose`."""
+
+    @pytest.mark.parametrize("band", _REFUSED_BANDS)
+    def test_it_is_refused_naming_both_keys_and_both_values(self, band):
+        from cobalt.daymode.propose import (
+            BAND_MAX_KEY,
+            BAND_MIN_KEY,
+            BandError,
+            validate_band,
+        )
+
+        with pytest.raises(BandError) as excinfo:
+            validate_band(*band)
+        message = str(excinfo.value)
+        # both keys AND both values, so the operator can find the rows
+        assert f"{BAND_MIN_KEY}={band[0]!r}" in message
+        assert f"{BAND_MAX_KEY}={band[1]!r}" in message
+        assert "tunables.yaml" in message
+
+    def test_the_inverted_band_says_why(self):
+        from cobalt.daymode.propose import BandError, validate_band
+
+        with pytest.raises(BandError) as excinfo:
+            validate_band(6, 2)
+        assert "min must be <= max" in str(excinfo.value)
+
+    def test_a_non_integer_names_the_offending_key(self):
+        from cobalt.daymode.propose import BAND_MAX_KEY, BandError, validate_band
+
+        with pytest.raises(BandError) as excinfo:
+            validate_band(2, "6")
+        assert BAND_MAX_KEY in str(excinfo.value).split("—")[1]
+
+
+class _Row:
+    def __init__(self, value):
+        self.value = value
+
+
+class _Tunables:
+    def __init__(self, by_key):
+        self.by_key = by_key
+
+
+def _fake_tunables(band_min, band_max):
+    from cobalt.daymode.propose import BAND_MAX_KEY, BAND_MIN_KEY
+
+    return _Tunables({BAND_MIN_KEY: _Row(band_min), BAND_MAX_KEY: _Row(band_max)})
+
+
+class TestBothReadersOfTheTwoRowsValidate:
+    """L3: ONE validator, two call sites. `daymode/cli.py._band()` is the
+    09:00 reader; `cobalt validate` (`src/cobalt/cli.py`) is the deploy
+    gate that today prints the two rows and checks nothing."""
+
+    @pytest.mark.parametrize("band", _REFUSED_BANDS)
+    def test_band_refuses_it(self, band, monkeypatch):
+        from cobalt.daymode import cli as daymode_cli
+
+        monkeypatch.setattr(daymode_cli, "load_tunables", lambda: _fake_tunables(*band))
+        with pytest.raises(SystemExit) as excinfo:
+            daymode_cli._band()
+        assert "trade-count band" in str(excinfo.value)
+
+    @pytest.mark.parametrize("band,placeholder", _ACCEPTED_BANDS)
+    def test_band_still_returns_an_accepted_band_unchanged(self, band, placeholder, monkeypatch):
+        from cobalt.daymode import cli as daymode_cli
+
+        monkeypatch.setattr(daymode_cli, "load_tunables", lambda: _fake_tunables(*band))
+        assert daymode_cli._band() == band
+
+    def test_cobalt_validate_calls_the_same_validator(self):
+        """`cobalt validate` is not run here (it is not in this offline
+        run's allowlist and whether it needs a database is NOT VERIFIED —
+        `facts.md` "Cross-branch facts"). Its branch is proven by the unit
+        tests above plus this wiring check: the command calls the ONE
+        validator and carries no second copy of the rule (L3)."""
+        import inspect
+
+        from cobalt import cli as cobalt_cli
+
+        source = inspect.getsource(cobalt_cli._cmd_validate)
+        assert "validate_band" in source
+        # no second copy of the rule inside the command
+        assert "min must be <= max" not in source

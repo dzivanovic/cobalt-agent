@@ -85,6 +85,71 @@ from .config import (
 BAND_MIN_KEY = "daymode.trade_count_band.min"
 BAND_MAX_KEY = "daymode.trade_count_band.max"
 
+
+class BandError(ValueError):
+    """The two trade-count-band rows cannot be a band. A config error, so
+    it is loud (L1) and it is the config gate's to catch, never 09:00's."""
+
+
+def validate_band(band_min: Any, band_max: Any) -> None:
+    """Refuse a trade-count band that cannot be a band. ONE validator,
+    called by BOTH readers of these two rows (L3): `daymode/cli.py`'s
+    `_band()`, which `com.cobalt.daymode-propose` runs at 09:00, and
+    `cobalt validate` in `src/cobalt/cli.py`, which is the deploy gate —
+    so a bad band crashes at deploy time with a line number, not on a
+    live morning (L10).
+
+    What it refuses, both values SET: a value that is not a whole
+    non-negative integer (a `bool` is an `int` to Python and is NOT a
+    count here), and an inverted band (`min > max`), which nothing can be
+    inside. Origin: `cto-2026-09-18.md` §18 F2.
+
+    What it does NOT touch — deliberately, and this is the whole of the
+    day-mode contract it must not move:
+
+    * BOTH values null -> accepted. An unruled band is a PLACEHOLDER and
+      is itself an adverse signal (`trade_count_band_placeholder`), not a
+      crash.
+    * EXACTLY ONE value null -> ACCEPTED, unchanged. Today a half-set
+      band is still "not ruled yet": it fires the same placeholder signal
+      and `com.cobalt.daymode-propose` steps down. Making it fail loud
+      would turn that job's 09:00 outcome from "step down" into "job
+      FAILED", which is a day-mode outcome and therefore a trading-logic
+      change (L7 / CLAUDE.md HITL). It is SCOPED OUT of this chunk as a
+      DESIGN call for the desk (ops 2026-09-19 item b2), and
+      `TestABandThatIsValidChangesNothing` pins it.
+
+    For every band this function accepts, `_facts` below produces exactly
+    the same dict it produced before this function existed.
+    """
+    if band_min is None or band_max is None:
+        return
+
+    not_counts = [
+        key
+        for key, value in ((BAND_MIN_KEY, band_min), (BAND_MAX_KEY, band_max))
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0
+    ]
+    if not_counts:
+        raise _band_error(
+            band_min, band_max,
+            f"{' and '.join(not_counts)} must be a whole number >= 0 "
+            "(a count of trades; a string, a fraction, a negative or a bool is not one)",
+        )
+    if band_min > band_max:
+        raise _band_error(band_min, band_max, "min must be <= max — nothing can be inside an inverted band")
+
+
+def _band_error(band_min: Any, band_max: Any, why: str) -> BandError:
+    """Both keys AND both values in every refusal, so the operator can
+    find the two rows without reading the code."""
+    return BandError(
+        f"the trade-count band is not a band: {BAND_MIN_KEY}={band_min!r}, "
+        f"{BAND_MAX_KEY}={band_max!r} — {why}. Fix the two rows in "
+        "configs/cobalt/taxonomy/tunables.yaml; F6 reads the band from config "
+        "and has no built-in default (F16)."
+    )
+
 #: The ET wall-clock boundary between stage 1 and stage 2. F16: "is it
 #: stage 2 yet" is a predicate, so its threshold is a tunables row and
 #: not a literal — read HERE, by `decided_or_stage1`, which is what

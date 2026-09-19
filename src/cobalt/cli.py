@@ -163,7 +163,12 @@ def _cmd_validate(args: argparse.Namespace) -> None:
     from cobalt.aset.config import load_sheet_modes_config
     from cobalt.cards.models import ALLOWED, TERMINAL, CardState
     from cobalt.daymode.config import load_daymode_config
-    from cobalt.daymode.propose import BAND_MAX_KEY, BAND_MIN_KEY
+    from cobalt.daymode.propose import (
+        BAND_MAX_KEY,
+        BAND_MIN_KEY,
+        BandError,
+        validate_band,
+    )
 
     sheets = load_sheet_modes_config()
     print(
@@ -216,13 +221,24 @@ def _cmd_validate(args: argparse.Namespace) -> None:
     )
 
     registry = load_tunables().by_key
+    band: list[object] = []
     for key in (BAND_MIN_KEY, BAND_MAX_KEY):
         row = registry.get(key)
         if row is None:
             print(f"FAILED: tunable {key!r} is missing — F6 has no built-in default (F16).")
             sys.exit(1)
+        band.append(row.value)
         state = "PLACEHOLDER (unruled)" if row.value is None else repr(row.value)
         print(f"Tunable {key}: {state}, consumers {row.consumers}")
+    # Until now this gate PRINTED the band and checked nothing, so an
+    # inverted or non-integer band reached `com.cobalt.daymode-propose`
+    # at 09:00. Same validator the 09:00 reader calls — one rule, two
+    # call sites (L3), caught here at deploy time (L10).
+    try:
+        validate_band(band[0], band[1])
+    except BandError as e:
+        print(f"FAILED: {e}")
+        sys.exit(1)
 
     # The edge table is data; a state with no way in or out is a config
     # error in code form, and it is worth catching in the same gate.

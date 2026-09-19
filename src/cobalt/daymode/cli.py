@@ -24,7 +24,15 @@ from cobalt.taxonomy.loader import load_tunables
 from . import note as daymode_note
 from .config import load_daymode_config
 from .drc import prior_day_inputs
-from .propose import BAND_MAX_KEY, BAND_MIN_KEY, decided_or_stage1, propose, stage1_mode
+from .propose import (
+    BAND_MAX_KEY,
+    BAND_MIN_KEY,
+    BandError,
+    decided_or_stage1,
+    propose,
+    stage1_mode,
+    validate_band,
+)
 from .store import DayModeStore
 
 
@@ -52,7 +60,10 @@ def _store() -> DayModeStore:
 def _band() -> tuple[object, object]:
     """The trade-count band from tunables. PLACEHOLDER until ruled — a
     missing ROW is a config error (F16), a null VALUE is 'not ruled yet'
-    and is an adverse signal, not a crash."""
+    and is an adverse signal, not a crash. A band that is SET but cannot
+    be a band (inverted, or not a whole non-negative count) is refused by
+    `validate_band` — the same function `cobalt validate` calls, so the
+    refusal normally happens at the deploy gate, never at 09:00 (L3, L10)."""
     registry = load_tunables().by_key
     out = []
     for key in (BAND_MIN_KEY, BAND_MAX_KEY):
@@ -63,6 +74,10 @@ def _band() -> tuple[object, object]:
                 "from config and has no built-in default (F16)."
             )
         out.append(row.value)
+    try:
+        validate_band(out[0], out[1])
+    except BandError as e:
+        raise SystemExit(str(e)) from e
     return (out[0], out[1])
 
 
