@@ -1,209 +1,180 @@
-# Facts — cards go-live settings file (Task 1, verbatim-sourced, read-only)
+# Facts — cards go-live settings file, REBUILT with R17's numbers (11:33 ET)
 
-## 0. Headline fact — the file the desk was asked to build does NOT validate
+Read-only, no `uv run`/no execution of repo Python this round (per the coordinator's message);
+every claim below is verified by READING `src/cobalt/settings/card.py` and
+`src/cobalt/cards/scoring.py` line-by-line, not by running them. Prior round's live-code proof
+(load_card_file refusal on the alignment/shadow-bar-only draft) stands from the earlier commit of
+this file and is not re-run here.
 
-`src/cobalt/settings/card.py:157-169` (`CardSettings._enabled_needs_bands_and_curves`)
-requires **`card.proposed_key`** and **`card.curves`** — not `card.alignment_default` /
-`card.shadow_promotion_bar` — non-null before `radar.cards_enabled: true` is accepted:
+## 0. R17 — his own ruling, verbatim, and where it lives
 
+`docs/40 - DevDocs/reports/cto-2026-09-19.md` §4 R17 (11:33 ET), his words: "Key bands A+ >= 90, A
+>= 70, B >= 50, C >= 40 less than 40 = D and pass / ATR > 1 starts the rising count and => 3 is 10
+/ RVOL > 1.2 startd count and >= 5 is a 10 / Leg count is oposit, if we already had 3 legs move is
+probably done so 0-1 legs is 10, 1-2 legs is 6 and 3+ legs is 3 or below / Level proximity, closer
+= higher." Background research: `docs/40 - DevDocs/reports/card-values-sheet-2026-09-19.md`
+(found the real enable-gate is `card.proposed_key` + `card.curves`, `card.py:157-169` — not
+`alignment_default`/`shadow_promotion_bar` as the prior round assumed).
+
+## 1. Schema shape — proof by reading, file:line
+
+- **Bands** — `ProposedKeyBands` (`card.py:85-100`): `a_plus_min`, `a_min`, `b_min`, `c_min`, each
+  `Decimal, ge=0, le=1` (fraction of conviction, NOT a 0-100 percentage — his "90/70/50/40" are
+  **÷100** in the file: `0.90/0.70/0.50/0.40`). `_descending` (card.py:94-100) requires
+  `a_plus_min > a_min > b_min > c_min` strictly — `0.90 > 0.70 > 0.50 > 0.40` passes.
+- **Curves** — `card.curves: dict[str, Curve]` (card.py:153), each `Curve.anchors` a
+  `tuple[CurveAnchor,...]`, `min_length=2` (card.py:108-111). The file's shorthand `[[x, grade],
+  ...]` is accepted by the before-validator `_pairs` (card.py:113-123), which turns each `[x,
+  grade]` pair into `{x: ..., grade: ...}` — **list-of-pairs, not list-of-objects**, confirmed
+  from the validator itself, not inferred. `CurveAnchor.x: Decimal` (unbounded — any real number,
+  not just 0-10) and `CurveAnchor.grade: Decimal, ge=1, le=10` (card.py:103-105).
+- **Factor key is literally `Extension.leg_count`** (a single flat string key inside the
+  `card.curves` mapping, dot-and-all — same pattern as top-level `radar.cards_enabled` already
+  being a flat dotted key, not a nested `radar: {cards_enabled: ...}`). Confirmed against
+  `FACTOR_COMPUTERS = ("atrs_from_open", "rvol", "Extension.leg_count", "htf_level_proximity")`
+  (`radar/evaluate.py:429`) and the real Definition unit `Rubberband.md:94` naming that exact
+  factor name.
+
+## 2. (b) Does the schema allow a DESCENDING or flat grade sequence?
+
+**Yes — confirmed by reading, this is NOT a code change.** `Curve._increasing`
+(`card.py:125-130`):
+```python
+def _increasing(self) -> Curve:
+    xs = [a.x for a in self.anchors]
+    if any(a >= b for a, b in zip(xs, xs[1:])):
+        raise ValueError(f"curve anchors must be strictly increasing in x, got {xs}")
+    return self
 ```
-@model_validator(mode="after")
-def _enabled_needs_bands_and_curves(self) -> CardSettings:
-    if self.cards_enabled:
-        missing = [
-            key for key, value in ((PROPOSED_KEY, self.proposed_key), (CURVES, self.curves))
-            if value is None
-        ]
-        if missing:
-            raise ValueError(...)
+This checks **only `x`** — it never reads or compares `.grade`. There is no monotonicity
+requirement on grade anywhere in `card.py`. So `Extension.leg_count`'s DESCENDING shape
+`[[0,10],[1,10],[2,6],[3,3],[5,1]]` — including the flat segment `[[0,10],[1,10]]` — is legal
+exactly as drafted: `x = [0,1,2,3,5]` is strictly increasing (the only rule checked); each grade
+(10,10,6,3,1) independently satisfies `ge=1, le=10`. Nothing here needed a code change.
+
+## 3. (c) Values outside the anchors — clamped, not an error
+
+`grade_from_curve` (`src/cobalt/cards/scoring.py:117-133`):
+```python
+if value <= anchors[0].x:
+    raw = anchors[0].grade
+elif value >= anchors[-1].x:
+    raw = anchors[-1].grade
+else:
+    ... linear interpolation between the bracketing pair ...
+raw = min(max(raw, ONE), TEN)
 ```
+Below the first anchor → **flat at the first anchor's grade** (never an error, never null).
+Above the last anchor → **flat at the last anchor's grade**. This is exactly what his "ATR ≤ 1 →
+floor" and "≥ 3 is 10" / "≥ 5 is a 10" need: `atrs_from_open: [[1,1],[3,10]]` → ATR ≤ 1 clamps to
+grade 1, ATR ≥ 3 clamps to grade 10, matching "=> 3 is 10" (≥3) literally. `rvol: [[1.2,1],[5,10]]`
+→ RVOL ≤ 1.2 clamps to 1, RVOL ≥ 5 clamps to 10, matching "startd count [at 1.2] … >= 5 is a 10."
+`Extension.leg_count`'s last anchor is `[5,1]`, so 5+ legs clamps flat at grade 1 ("3+ legs is 3 or
+below" — 4 legs interpolates to 2, 5+ legs floors at 1; see §5).
 
-Confirmed live against the real repo module (`.venv/bin/python3`, read-only, no DB/`uv run`/`cobalt`):
-loading `23-packet/p2-live-settings.yaml` (`radar.cards_enabled: true` +
-`card.shadow_promotion_bar` only) through `load_card_file()` raises:
+## 4. (d) Interpolation — linear, rounded half-up once; is a fractional leg count possible
 
-```
-invalid card settings:
-  (settings): Value error, radar.cards_enabled=true requires ['card.proposed_key', 'card.curves']:
-  an enabled radar with no bands or curves would publish keys and grades nobody set
-```
+Same function, the `else` branch: `raw = lo.grade + (value - lo.x) * (hi.grade - lo.grade) / (hi.x
+- lo.x)` — plain linear interpolation between the two bracketing anchors, in `Decimal` at
+`ctx.prec = 28`, clipped to `[1,10]`, then **rounded half-up exactly once** to an integer:
+`int(_half_up(raw))` where `_half_up` is `value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)`
+(`scoring.py:113-114,131-133`). So **2 legs is exactly grade 6** (an exact anchor hit, no rounding
+needed — the loop's boundary condition `lo.x <= value <= hi.x` returns the anchor's own grade
+verbatim when `value == lo.x`). **A fractional leg count is NOT possible**: `Extension.leg_count`'s
+raw observation is `Decimal(ext.leg_count)` where `ext.leg_count: int | None`
+(`radar/evaluate.py:336,458-460` — `Formation.leg_count: int | None`) — always a whole number or
+null, never fractional. So interpolation on this factor only ever fires for an *observed* leg
+count that has no exact anchor (only `4`, between anchors `3` and `5`): `raw = 3 + (4-3)*(1-3)/(5-3)
+= 3 - 1 = 2` → **grade 2** at 4 legs, sliding toward the grade-1 floor at 5+ — consistent with his
+"3+ legs is 3 or below."
 
-`card.proposed_key` (conviction→key bands) and `card.curves` (per-factor piecewise anchors) have
-**no ruled or recorded default anywhere in the record** — they are named explicitly as Dejan's own
-values, never a hub's: `docs/40 - DevDocs/plans/plan-s2-p2-2026-09-15.md:272` ("Dejan sets
-`card.proposed_key` bands and `card.curves` anchors and flips `radar.cards_enabled=true`"), `:288`
-("**Dejan:** … values for `card.proposed_key` and `card.curves`"); `cto-2026-09-17.md:261`
-("curves are HIS values → 09-19 values session"). No cto/deploy/ladder-audit report between
-09-14 and 09-19 records him supplying either. **This — not `alignment_default`/
-`shadow_promotion_bar` — is the actual remaining gate on Monday's switch-on**; ladder-audit-
-2026-09-19.md §7(2) and today's task brief both name the wrong pair of "two required" keys.
-`alignment_default`/`shadow_promotion_bar` ARE real, ARE dark-only-optional, and ARE also open
-09-19-values-session items (`cto-2026-09-17.md:178,261,264`) — just not the ones the code's
-`cards_enabled=true` gate itself checks.
+## 5. Grades his ruled/desk-reading curves actually produce (worked, from §3/§4's exact code)
 
-## 1. Schema of the `--card` file (`src/cobalt/settings/card.py`)
-
-File shape (`load_card_file`, card.py:242-278; format documented card.py:18-33):
-```
-card_settings:
-  radar.cards_enabled: <bool>                    # REQUIRED always
-  card.proposed_key: {a_plus_min, a_min, b_min, c_min}   # Decimal 0..1, strictly descending (card.py:85-100)
-  card.curves: {<factor>: [[x, grade], ...]}             # ≥2 anchors, x strictly increasing, grade 1..10 (card.py:103-133)
-  card.alignment_default: {with_grade 1-10, flat_grade 1-10, against_grade 1-10, flat_pct ≥0}  (card.py:136-140)
-  card.shadow_promotion_bar: {sessions >0, pairs >0, median_max ≥0, within2_min 0..1}  (card.py:143-147)
-```
-- The file is the WHOLE card-settings set: a key it omits is DELETED from the DB (card.py:28-29,
-  `store.py` `put(..., delete=...)`).
-- `radar.cards_enabled` — required, no default, ever (`CardSettings.from_rows`, card.py:172-181:
-  a missing row raises `CardSettingsError`, never guesses).
-- `card.proposed_key`, `card.curves` — dark-only-optional; **required non-null when
-  `cards_enabled: true`** (card.py:157-169, confirmed above).
-- `card.alignment_default`, `card.shadow_promotion_bar` — dark-only-optional; **not checked by
-  `CardSettings` at all when enabling** (no validator references them). `shadow_promotion_bar`
-  IS required by a *different*, unrelated command: `cobalt cards shadow-report` refuses loud if
-  it is `None` (`src/cobalt/cards/shadow_report.py:147-152`) — needed to compute the L7 agreement
-  gate later, not to flip the switch.
-- Unknown keys, `card.dot.*`/`card.health.*` (tunables, L53), and the 7 sheet/day-mode
-  `SETTING_KEYS` are all refused by name (card.py:259-273).
-- Extra/unknown fields inside each sub-object are refused (`ConfigDict(extra="forbid")`,
-  card.py:81-82).
-
-## 2. `card.alignment_default` — plain words
-
-Controls the two "desk" dots that would otherwise need Dejan's own market/sector-alignment
-judgment (`market_alignment`, `sector_alignment`) — a with/flat/against numeric grade map so the
-engine can render *something* on those dots without him tapping every one, per
-`plan-s2-p2-2026-09-15.md:204`. "N/A" on screen (S2's actual behaviour) means the dot shows
-`DEFAULT_UNRULED`/no computed grade at all — hollow, unscored, exactly like an untapped judgment
-dot; it does not mean a placeholder number is guessed.
-
-**Current runtime reality: this setting is NOT read by the running code at all.**
-`src/cobalt/radar/evaluate.py:683-691` (`desk_shadow()`) takes no settings argument and hardcodes:
-```
-return DeskShadow(
-    catalyst=entry("DESK_NA"), market_alignment=entry("DEFAULT_UNRULED"),
-    sector_alignment=entry("DEFAULT_UNRULED"),
-)
-```
-So whatever value `card.alignment_default` holds in the database, market/sector alignment ship
-`DEFAULT_UNRULED` (N/A) through S2 regardless. This matches the plan's own ruling, not an
-oversight: `plan-s2-p2-2026-09-15.md:295` — **[tightened 2026-09-15 per Astra R2-6, BLOCKER]**:
-"MERGED (the 09-14 analyst tribunal) explicitly rejects SPY-sign alignment, and the 10/6/4 ceiling
-is the only numeric source on record and is itself rejected. STEP-5 renders explicit N/A until an
-exact dated ruling authorizes the default-map mapping semantics … If no such ruling is found, this
-stays OPEN for Dejan, not a hub judgment call, and STEP-5 ships N/A for `sector_alignment`/
-`market_alignment` defaults through S2 rather than reviving 10/6/4 or SPY-sign." No later report
-(09-16 through 09-19) records that ruling being supplied. **No default exists** — only `flat_pct:
-0.15` was ever called "accepted" (`plan:204`, "09-14 group-2 A"), and the schema will not accept
-`flat_pct` alone (all four sub-fields are required together, card.py:136-140).
-
-**Choice made in the go-live file:** `card.alignment_default` is left **ABSENT** — matches the
-plan's own designed fallback (ship N/A) exactly, and matches what the code does regardless. This
-is not a silent pick: the alternative (writing a numeric with/flat/against triple, e.g. the
-8/5/2/0.15 values used only as an illustrative test fixture in `tests/cobalt/test_card_settings.py:34`,
-never as a ruling) would write an explicitly-rejected semantic into live `trader_settings` for no
-runtime effect. **Flagged to Dejan, not decided by this desk:** if he wants the with/flat/against
-mapping wired up for real (i.e., `desk_shadow()` changed to read it), that is a code change to
-`radar/evaluate.py` plus the still-missing authorizing ruling — out of scope for Monday's switch.
-
-## 3. `card.shadow_promotion_bar` — plain words + source
-
-The L7 promotion gate for the three desk-graded dots, checked later (S3) by
-`cobalt cards shadow-report` against `"user".shadow_agreement_v`
-(`src/cobalt/cards/shadow_report.py`, `src/cobalt/db_migrations/0007_radar_cards.sql:245-258`):
-
-| Sub-field | Plain words | 09-14 group-2 ruled value | Source |
+| Factor | Input | Grade | Matches his words? |
 |---|---|---|---|
-| `sessions` | minimum distinct ET trading days with ≥1 tap/engine pair, per factor | 10 | `plan-s2-p2-2026-09-15.md:223`; `TAXONOMY-DRAFT-v0_8.md:69`; `shadow_report.py:15-16` |
-| `pairs` | minimum total tap-vs-engine pairs across those sessions | 30 | same |
-| `median_max` | the median of `|tap_grade − engine_grade_at_tap|` over ALL pairs must be ≤ this | 1 | same |
-| `within2_min` | share of pairs with `|Δ| ≤ 2` must be ≥ this | 0.90 | same |
+| `atrs_from_open` | ATR ≤ 1 | 1 (floor) | "ATR > 1 starts the rising count" ✓ |
+| | ATR = 2 (midpoint) | 5 (interpolated, `1 + 1*9/2 = 5.5` → half-up → **6**, not 5 — flagged below) | see note |
+| | ATR ≥ 3 | 10 (ceiling) | "=> 3 is 10" ✓ |
+| `rvol` | RVOL ≤ 1.2 | 1 (floor) | "RVOL > 1.2 startd count" ✓ |
+| | RVOL ≥ 5 | 10 (ceiling) | ">= 5 is a 10" ✓ |
+| `Extension.leg_count` | 0 or 1 legs | 10 | "0-1 legs is 10" ✓ (DESK READING (i)) |
+| | 2 legs | 6 | "1-2 legs is 6" read as 2=6 ✓ (DESK READING (i)) |
+| | 3 legs | 3 | "3+ legs is 3 or below" ✓ (DESK READING (ii)) |
+| | 4 legs | 2 (interpolated) | "sliding to 1" ✓ |
+| | 5+ legs | 1 (floor) | "or below" ✓ |
+| `htf_level_proximity` | 0 (at the level) | 10 | "closer = higher" ✓ (PROVISIONAL endpoint) |
+| | ≥2 ATRs away | 1 (floor) | direction ✓, magnitude PROVISIONAL |
 
-`cobalt cards shadow-report` prints GATE MET/NOT MET and "never flips anything" (`plan:223`,
-`shadow_report.py:19-21`) — it is read-only evidence for the later L7/L8 promotion decision, not
-itself a trading-logic change. **Choice made:** these four values are set exactly as ruled — this
-is a recorded ruling, not a pick.
+**Correction note on `atrs_from_open`'s midpoint**: I computed the ATR=2 grade above to show the
+arithmetic is exact half-up rounding (`5.5 → 6`), not to claim he ruled a midpoint value — he only
+ruled the two endpoints (1→1, ≥3→10); the midpoint is what LINEAR interpolation between them
+produces, an artifact of the schema's shape (piecewise-linear only, no other curve family), not a
+ruling. Flagged for the houses/him: if he meant something other than straight-line between the two
+points, the schema cannot express it without a third anchor.
 
-## 4. What loading writes, restart, market-reset gate, rollback
+## 6. (e) `htf_level_proximity` — raw unit, range, proposed endpoints (PROVISIONAL)
 
-- **Write target:** `"user".trader_settings` (Side.USER — trader-private data, L32), one row per
-  key: `(user_id, key, value jsonb, source, updated_at)`, one transaction, upsert + delete atomic
-  (`src/cobalt/settings/store.py:60-116`, `TraderSettingsStore.put`).
-- **20:00-21:00 ET refusal:** `assert_writable("settings.load.card", …)` (card.py:322) →
-  `src/cobalt/session/guard.py:123-150`: refuses only when `session_clock().session(now) is
-  Session.MARKET_RESET`. **Keyed to trading days, confirmed by direct read**:
-  `src/cobalt/session/clock.py:196-200` — `windows_for(day)` returns `[]` when
-  `not self.calendar.is_trading_day(day)`, and `session()` (clock.py:222-228) falls through to
-  `Session.OVERNIGHT` when no window matches. So the 20:00-21:00 block **cannot fire on a
-  weekend**, regardless of wall clock — resolves the "not verified" note in
-  `ladder-audit-2026-09-19.md:187-190`.
-- **Restart needed:** **No.** `CardSettingsReader.current()` re-reads the store on every call, no
-  cache (card.py:232-239, docstring lines 41-43); proven directly in the real test file at
-  `tests/cobalt/test_card_settings.py:194-201` (`test_settings_are_re_read_on_every_call_not_cached`
-  — not `s2-p2-build-opus-B-2026-09-16.md:53` as cited in the ladder audit; verified against the
-  actual `tests/` tree on `main`, same assertion). S5 evaluate and the card routes call it per
-  scan/request.
-- **`--apply` prints:** per-key diff (`db`/`file` values or `(absent)`), `applied: {...}; deleted:
-  [...]`, then a round-trip check — `CardSettings.from_rows(store.values()) == incoming` — and
-  "round trip: CardSettings.from_rows(db) == reviewed file — EQUAL." (card.py:294-331). A mismatch
-  raises `SystemExit("FAILED: ...")` before ever claiming success.
-- **Rollback:** re-run `cobalt settings load --card
-  data/backups/pre-s2-p2-2026-09-17/p2-dark-settings.yaml --sha256
-  945e42f86997559267b2e7c20783f2d023b9135ae4bb437ca25a4999ca7cd3ca --apply`. File CONFIRMED still
-  present, bytes unchanged, hash reverified this session:
-  `shasum -a 256 data/backups/pre-s2-p2-2026-09-17/p2-dark-settings.yaml` →
-  `945e42f86997559267b2e7c20783f2d023b9135ae4bb437ca25a4999ca7cd3ca` (matches
-  `cto-2026-09-17.md:178` exactly). Note: this directory (`data/`) is gitignored
-  (`.gitignore:6`) — it is a local file on this host only, not in git; that is by design (L32/data
-  policy) but means the rollback file's survival depends on this host's `data/` tree, not git
-  history.
+Raw value (`radar/anatomy/daily.py:141-155`, `htf_level_proximity()`): `distance / daily_ATR(14)`
+where `distance = min(|last − prior_high|, |last − prior_low|)` — an **ATR-normalized distance to
+the nearer of yesterday's high/low**, unitless, `0` = price sitting exactly at that level,
+increasing without a hard ceiling as price moves away. No fixture or doc in the repo gives a
+realistic distribution of this value for Rubberband setups specifically (checked
+`tests/cobalt/radar_p2_support.py:71-81` — factor is declared, no sample values shipped).
 
-## 5. What he sees Monday 04:00+ ET, what's recorded, what could page/alert/write
+R17 ruled **direction only** ("closer = higher") — his own desk reading confirms: "level
+proximity's END POINTS stay provisional — he ruled the direction only; the raw unit is read from
+the code by the helper" (`cto-2026-09-19.md` R17 desk-reading (iv)). Proposed shape in the file:
+`[[0, 10], [2, 1]]` — grade 10 at the level (0 ATRs away), grade 1 at 2+ ATRs away, PROVISIONAL on
+both the "2" cutoff and the linear shape between; needs either his number or a Rubberband-setup
+sample distribution before the shadow numbers on this one dot mean anything precise. This is the
+**one fully-invented number** in the file (a shape, not a value he stated) — everything else above
+either is his literal number or is arithmetic the code performs on his literal numbers.
 
-- **Where:** `GET /radar` on the same ASET-sheet host (`src/cobalt/aset/web.py:845-853`,
-  `build_radar_panel`/`render_radar_page`); linked from the sheet page itself
-  (`web.py:387`, "Trade Radar"). Read-only page; `fetch` POST only for actions, no
-  alert/confirm/prompt (`plan:217`, focus law).
-- **A WATCH card shows:** setup→trade, trigger price, structural stop, `proposed_key` (from
-  `card.proposed_key` bands — **absent in S2 until Dejan sets it**, so `proposed_key` renders none
-  until he does), one dot per `quality_factors[]` entry + the 3 desk dots, `conviction`/
-  `proximity`/`card_score` with scan id + formula/tunables/settings hashes (`plan:12`).
-- **Hollow / his tap:** every judgment-role dot renders **hollow** (unfilled) on the card face
-  regardless of what the engine computed for it — both the human-only dot (`trail_fit`, N/A/
-  MANUAL) and, in S2, the three desk dots (`catalyst`=`DESK_NA`, alignment=`DEFAULT_UNRULED`) and
-  the computable dots (`role=shadow` per R6, `plan:58`, `:203`). Tapping
-  `POST /radar/card/{id}/dot/{factor} {grade 1-10}` is what fills a dot: appends
-  `card_dot_taps`, sets `card_dots.trader_grade`, recomputes conviction (mean of tapped
-  grades ÷ 10, null if none tapped — never a neutral 5) and `card_score = round(conviction ×
-  proximity × 100)` (`plan:205`, `:212`). The engine's own shadow grade is never shown as the
-  face value; it only appears mirrored into the dot's reason text as `desk shadow: n`
-  (`plan:204`) and stored in `radar_score.desk_shadow` (system-side, no trade-specific prose,
-  `plan:175`).
-- **Recorded for the agreement numbers:** each tap writes a `"user".card_dot_taps` row
-  (`grade`, `engine_grade_at_tap`, `factor`, `at`); `"user".shadow_agreement_v`
-  (`db_migrations/0007_radar_cards.sql:245-258`) aggregates per `(user_id, factor, ET trading
-  day)`: `pairs`, `median_abs_delta`, `within2_share`, `deltas[]`. Read via
-  `CardStore.shadow_agreement()` (`cards/store.py:875-883`) → `cobalt cards shadow-report`.
-- **Vault/page/alert side effects of THIS switch specifically:** `POST /radar/card/{id}/key
-  {grade}` (the WATCH key tap, not the switch-on) writes a daily-note card block via the
-  existing `save_card` path (`plan:210`) — this is the pre-existing sheet vault-write mechanism,
-  unchanged by cards going live, and only fires on HIS tap, never on card formation itself. **No
-  evidence found** of any new Mattermost DM, page, or alert being wired to card
-  formation/evaluation in S2 — F18's heartbeat is the only alert channel on record and email was
-  already retired (`ladder-audit-2026-09-19.md:29`); grep of `plan-s2-p2-2026-09-15.md` and
-  `src/cobalt/notify/` for a card-triggered notification found none. **Not fully verified**:
-  I did not exhaustively read every line of `notify/`; flagged rather than asserted absent.
+## 7. `card.shadow_promotion_bar` — unchanged from the prior round
 
-## 6. Dry-run command (L10)
+09-14 group-2 ruling, verbatim values: `{sessions: 10, pairs: 30, median_max: 1, within2_min:
+0.90}` (`docs/40 - DevDocs/plans/plan-s2-p2-2026-09-15.md:223`; `TAXONOMY-DRAFT-v0_8.md:69`). Not
+required by the `cards_enabled=true` gate itself (`card.py:157-169` checks only `proposed_key`/
+`curves`) but required by `cobalt cards shadow-report` (`cards/shadow_report.py:147-152`) — kept
+in the file because it is a clean recorded ruling with no reason to leave it dark.
 
-```
-cobalt settings load --card "docs/40 - DevDocs/prompts/2026-09-19/23-packet/p2-live-settings.yaml" \
-  --sha256 d77106fcb16e270e908a6cf39e5797baeed1d905a322c4b655ad9b4f1e0c4d81 --dry-run
-```
-(`--sha256` is optional on `--dry-run` per the arg parser — only required with `--apply`,
-`settings/card.py:281-288` — but passing it lets the dry run also prove the file is byte-exact
-before anything parses, same as the review packet's own hash.) **This dry run will print the
-per-key diff and then, per §0 above, `load_card_file` will raise `CardSettingsError` before any
-diff is printed at all** — the file does not parse into a valid `CardSettings` regardless of
-`--dry-run`/`--apply`, since validation happens before the diff step (`card.py:290`,
-`cmd_load_card`). A real dry run today would fail this exact way, not print "0 differences."
+## 8. `card.alignment_default` — unchanged, still absent
+
+Still left ABSENT: the plan's own designed fallback (ship N/A, Astra R2-6,
+`plan-s2-p2-excerpt-step5-10.md:53`), and still unread by `desk_shadow()`
+(`radar/evaluate.py:683-691`, unchanged since the prior round — not re-verified by execution this
+round, verified by re-reading the same lines).
+
+## 9. What the schema CANNOT express from his words
+
+- **Discrete steps, not a ramp.** His description ("0-1 is 10, 1-2 is 6, 3+ is 3 or below") reads
+  as step buckets; `card.curves` is piecewise-**linear** only (`card.py:108-133` — no step/
+  constant-segment primitive besides two anchors sharing a grade, which is what `[[0,10],[1,10]]`
+  exploits for the one flat "0-1" segment). Between named integer legs the file interpolates
+  linearly (2→3 legs: 6 down to 3; 3→5 legs: 3 down to 1) — since `leg_count` is always an integer
+  (§4) and every stated integer has its own anchor, this only shows up at the unstated integer 4
+  (interpolates to grade 2, never asked about, but consistent with "or below").
+- **No named default/starting value for the schema's own `flat_pct`-style partial object** — not
+  relevant here since `alignment_default` stays absent.
+- Nothing else in R17's words fails to fit the schema; every stated number is expressible exactly
+  as an anchor or a band threshold.
+
+## 10. Enable-gate re-confirmed by reading (not executed this round)
+
+`CardSettings._enabled_needs_bands_and_curves` (`card.py:157-169`): `cards_enabled=True` requires
+`proposed_key is not None` and `curves is not None` — both now present and non-empty in
+`p2-live-settings.yaml`, so by inspection of the validator's own logic (not by running it) this
+file satisfies the enable-gate. It was NOT re-run through the live module this round per the
+coordinator's read-only-by-reading-only instruction; the three-house check's Q1 (below) is the
+independent second read the loader itself has not yet performed.
+
+## 11. Dry-run — not covered by 18's/23's `--allowedTools`
+
+The loader's own command is `cobalt settings load --card <file> --sha256 <hash> --dry-run` — but
+running it is a `cobalt`/`uv run` invocation, and **no rule in `18-review-ops-0919.md`'s
+`--allowedTools` list (copied byte-for-byte into `23-review-cards-golive.md`) permits `uv run` or a
+bare `cobalt` command.** So the hub CANNOT execute the dry run under this launch line — the
+loader's own validation only happens at Dejan's later approved `--apply` step (or a dry run he or a
+differently-authorized process runs). What the three houses + this schema read stand in for here
+is the pre-check; the dry run itself remains outside this check's reach by design (no new rule was
+added — none was needed for a files-only read).
