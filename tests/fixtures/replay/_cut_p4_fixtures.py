@@ -73,9 +73,10 @@ report comparing the `Asset Type` column against `Industry =
 Exchange Traded Fund`. Read-only — no network, no DB, no fixture
 written, nothing written anywhere but `scratch/asset-type-evidence.md`.
 It exists because Finviz fills `Asset Type` only for funds and leaves it
-blank for an ordinary stock, so the radar config's `not_equity.values:
-[Exchange Traded Fund]` matches nothing; the report is the evidence for
-rebuilding that rule. It is a decision aid, never a rule. Tickers live
+blank for an ordinary stock, so the radar config's former one-column
+rule (`not_equity.values: [Exchange Traded Fund]`) matched nothing; the
+report was the evidence for rebuilding it (R16 "C", now `is_not_equity`).
+It is a decision aid, never a rule. Tickers live
 in the scratch file only (L32) — stdout carries counts.
 
 THIRD MODE, `movers` (AT-1 2.5). Re-cuts ONLY the two movers fixtures,

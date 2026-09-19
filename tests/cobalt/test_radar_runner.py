@@ -58,15 +58,21 @@ class ActiveClock(Clock):
         return value.astimezone(ZoneInfo("America/New_York"))
 
 
+#: R16 "C": not-equity is a non-blank `Asset Type` OR a fund `Industry`,
+#: so an ordinary stock carries a BLANK `Asset Type` and an ordinary
+#: industry — which is what Finviz actually returns for one.
+SCREEN_HEADER = ("Ticker", "Volume", "Relative Volume", "Asset Type", "Industry")
+STOCK_COLUMNS = {"Asset Type": "", "Industry": "Capital Markets"}
+
+
 class Collector:
     async def screen(self, _block, now):
         return ScreenerSnapshot("screen-synthetic", now,
-            ({"Ticker": "AAA", "Volume": "2", "Relative Volume": "1", "Asset Type": "Stock"},),
-            ("Ticker", "Volume", "Relative Volume", "Asset Type"))
+            ({"Ticker": "AAA", "Volume": "2", "Relative Volume": "1", **STOCK_COLUMNS},),
+            SCREEN_HEADER)
 
     async def listed(self, _block, now):
-        return [ScreenerSnapshot("list-synthetic", now, (),
-            ("Ticker", "Volume", "Relative Volume", "Asset Type"))]
+        return [ScreenerSnapshot("list-synthetic", now, (), SCREEN_HEADER)]
 
 
 class Radar:
@@ -223,11 +229,11 @@ class CrossingCollector:
                     "Ticker": ticker,
                     "Volume": str(volume),
                     "Relative Volume": str(rvol),
-                    "Asset Type": "Stock",
+                    **STOCK_COLUMNS,
                 }
                 for ticker, volume, rvol in (("AAA", 30, 1), ("BBB", 20, 2), ("CCC", 10, 3))
             ),
-            ("Ticker", "Volume", "Relative Volume", "Asset Type"),
+            SCREEN_HEADER,
         )
 
     async def listed(self, _block, now):
@@ -456,8 +462,8 @@ class ValueRadar(Radar):
 class ListDownCollector(Collector):
     async def screen(self, _block, now):
         return ScreenerSnapshot("screen-synthetic", now,
-            ({"Ticker": "AAA", "Volume": "2", "Relative Volume": "2.5", "Asset Type": "Stock"},),
-            ("Ticker", "Volume", "Relative Volume", "Asset Type"))
+            ({"Ticker": "AAA", "Volume": "2", "Relative Volume": "2.5", **STOCK_COLUMNS},),
+            SCREEN_HEADER)
 
     async def listed(self, _block, _now):
         raise RuntimeError("synthetic list outage")

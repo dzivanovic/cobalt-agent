@@ -2,11 +2,15 @@
 # byte-for-byte against a real /export/screener header capture (fixture
 # filter exch_nasd,sh_avgvol_o500, 1809 rows, cache
 # data/radar-cache/2026-09-10/screen-example_session_scan-214943.csv).
-# not_equity's "Exchange Traded Fund" value did NOT appear in that capture's
-# Asset Type set (seen: Bonds, Commodities & Metals, CryptoCurrency,
-# Equities (Stocks), Multi-Asset - Tactical / Active, Preferred Stock) —
-# this filter may simply not surface ETFs, not proof the label is wrong;
-# unresolved, watch the first live run's Asset Type values.
+# not_equity is R16 "C", ruled 2026-09-19 on the evidence run over the
+# retained exports: 5,702 distinct fund tickers, 28 distinct non-blank
+# `Asset Type` values, every one of them on an ETF-industry row (0 stock
+# rows hit), and 8 distinct funds carrying a BLANK `Asset Type` — table
+# C(ii) = 16 rows. So neither column names a fund on its own: a row is
+# dropped when `Asset Type` is non-blank OR `Industry` is a fund
+# industry. Counts and their source:
+# docs/40 - DevDocs/reports/s2-p4-verify-2026-09-19.md §2.2.
+# Both columns are read on every row, so both are required_headers.
 pool_key: primary
 notes:
   screens: "1 - Trading/Radar Screens.md"
@@ -14,14 +18,15 @@ notes:
 export:
   v: 152
   columns: "0-150"
-  required_headers: [Ticker, Volume, Relative Volume, Asset Type]
+  required_headers: [Ticker, Volume, Relative Volume, Asset Type, Industry]
   metric_headers:
     volume: Volume
     rvol: Relative Volume
 list_chunk_size: 50
 not_equity:
-  header: Asset Type
-  values: [Exchange Traded Fund]
+  asset_type_header: Asset Type
+  industry_header: Industry
+  industry_values: [Exchange Traded Fund]
 cache:
   dir: data/radar-cache
   retention_days: 7

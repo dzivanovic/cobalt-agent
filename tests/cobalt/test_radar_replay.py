@@ -14,7 +14,8 @@ import pytest
 
 from cobalt.archiver.collector import scrub
 from cobalt.archiver.models import Bar, Interval
-from cobalt.radar.models import ExcludeBlock, ListBlock, ScreenBlock
+from cobalt.radar.collector import ScreenerSnapshot
+from cobalt.radar.models import ExcludeBlock, ExcludedBy, ListBlock, ScreenBlock
 from cobalt.radar.notes import load_sources
 from cobalt.radar.pool import Action
 from cobalt.radar.replay import ReplayCollector, snapshots_from_bars
@@ -227,15 +228,27 @@ def test_all_day_scan_replay_offline_acceptance_matrix(tmp_path, monkeypatch, ca
     cfg = runner_module.load_config()
     cfg = cfg.model_copy(update={"not_equity": cfg.not_equity.model_copy()})
     snapshots = snapshots_from_bars(_generated_bars(tickers), screen_variant, prior_sessions=1)
-    asset_type = next(iter(cfg.not_equity.values))
+    # R16 "C": not-equity is `Asset Type` non-blank OR `Industry` a fund
+    # industry. The fund here is named by `Industry` alone with its
+    # `Asset Type` cell BLANK — the class the old one-column rule could
+    # not see at all; every other row is an ordinary stock (blank type,
+    # an ordinary industry), which the old rule's "Stock" filler would
+    # now drop wholesale.
+    fund_industry = next(iter(cfg.not_equity.industry_values))
     snapshots = [
         replace(
             snapshot,
             rows=tuple(
-                {**row, cfg.not_equity.header: asset_type if row["Ticker"] == etf_ticker else "Stock"}
+                {
+                    **row,
+                    cfg.not_equity.asset_type_header: "",
+                    cfg.not_equity.industry_header: (
+                        fund_industry if row["Ticker"] == etf_ticker else "Capital Markets"
+                    ),
+                }
                 for row in snapshot.rows
             ),
-            header=(*snapshot.header, cfg.not_equity.header),
+            header=(*snapshot.header, cfg.not_equity.asset_type_header, cfg.not_equity.industry_header),
         )
         for snapshot in snapshots
     ]
@@ -317,3 +330,80 @@ def test_all_day_scan_replay_offline_acceptance_matrix(tmp_path, monkeypatch, ca
     assert Session.MARKET_RESET not in called_sessions
     assert Session.MARKET_RESET in {session for _instant, session in clock.seen}
     assert finviz_calls == []
+
+
+# ---------------------------------------------------------------------
+# S2-P4 FR-2 — the ONE not-equity evaluator at the radar's call site
+# ---------------------------------------------------------------------
+
+
+def test_the_radar_call_site_drops_a_fund_by_either_column_on_real_export_rows():
+    """`RadarRunner._collect` is the radar's half of the ONE rule (L3),
+    and here it runs over rows copied verbatim out of the committed
+    real-shape movers export (L45) — a 151-column screener export, the
+    same shape the radar's own screen returns:
+
+    * GEMG — non-blank `Asset Type`, fund `Industry` -> not_equity
+    * SCOP — BLANK `Asset Type`, fund `Industry`     -> not_equity
+    * IMCC, QNME — blank type, an ordinary industry  -> candidates
+
+    The fourth case (a non-blank `Asset Type` on a non-fund `Industry`)
+    has no real row anywhere in the sample; `test_replay_movers.py`
+    states it as the boolean it is.
+    """
+    import asyncio
+    import csv
+    import io
+
+    rows_by_ticker = {
+        row["Ticker"]: row
+        for row in csv.DictReader(io.StringIO(
+            (Path("tests/fixtures/replay") / "movers-gainers.real-shape.csv").read_text(encoding="utf-8")))
+    }
+    wanted = ["GEMG", "SCOP", "IMCC", "QNME"]
+    parsed = load_sources(
+        FIXTURES / "radar-screens.example.md",
+        FIXTURES / "radar-lists.example.md",
+        scan_interval=60,
+        poll_interval=60,
+        finviz_max_rpm=100,
+        list_chunk_size=50,
+        context_tickers=0,
+    )
+    screen_item = next(item for item in parsed.screens.blocks if isinstance(item.block, ScreenBlock))
+    parsed.screens.blocks = [screen_item]
+    parsed.lists.blocks = []
+
+    cfg = runner_module.load_config()
+    instant = datetime(2026, 9, 3, 11, 0, tzinfo=ET)
+    snapshot = ScreenerSnapshot(
+        source=f"screen:{screen_item.block.screen}",
+        at=instant,
+        rows=tuple(rows_by_ticker[ticker] for ticker in wanted),
+        header=tuple(rows_by_ticker[wanted[0]]),
+    )
+
+    class OneSnapshot:
+        async def screen(self, block, now):
+            return snapshot
+
+        async def listed(self, block, now):
+            raise AssertionError(scrub("no list block in this run"))
+
+    runner = runner_module.RadarRunner(
+        config=cfg,
+        sources_loader=lambda: parsed,
+        collector=OneSnapshot(),
+        radar_store=SimpleNamespace(),
+        settings_store=SimpleNamespace(),
+        poller=SimpleNamespace(),
+        clock=ReplayClock(),
+        now=lambda: instant,
+    )
+    candidates, _sources = asyncio.run(runner._collect(parsed, instant, []))
+    assert {item.ticker: item.excluded_by for item in candidates} == {
+        "GEMG": ExcludedBy.NOT_EQUITY,
+        "SCOP": ExcludedBy.NOT_EQUITY,
+        "IMCC": None,
+        "QNME": None,
+    }

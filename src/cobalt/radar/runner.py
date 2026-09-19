@@ -23,7 +23,7 @@ from cobalt.settings.store import TraderSettingsStore
 from cobalt.taxonomy.loader import load_tunables
 
 from .collector import FinvizScreenerCollector, SourceFailure, process_bucket
-from .config import RadarConfig, load_config
+from .config import RadarConfig, is_not_equity, load_config
 from .models import Candidate, ListBlock, OpenMember, ScreenBlock, SourceHealth, SourceSet
 from .notes import ParsedSources, configured_sources, mirror_sources
 from .poller import BarPoller, PollFailure, PollMember, PollResult
@@ -141,7 +141,7 @@ class RadarRunner:
                             "rvol": _number(row.get(self.config.export.metric_headers.rvol)),
                         }
                         candidates[ticker].append(source_id)
-                        if row.get(self.config.not_equity.header) in self.config.not_equity.values:
+                        if is_not_equity(row, self.config.not_equity):
                             excluded.add(ticker)
                 source_sets.append(
                     SourceSet(source=source_id, kind=kind, tickers=list(dict.fromkeys(tickers)), metrics=metrics, note_order=order)

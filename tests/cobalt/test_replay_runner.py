@@ -217,6 +217,35 @@ def test_archive_failures_are_counted_and_fail_the_job_at_the_end():
     assert failed.value.result.archive_failures == 1
 
 
+def test_both_paths_reach_the_benchmark_with_the_same_ingest_verdicts(monkeypatch):
+    """L3, one decision path. The not-equity verdicts are built once from
+    the parsed exports, before anything is stored, and the dry-run and
+    live paths hand `benchmark_misses` the same lookup — there is no
+    dry-run-only branch. This is what makes the rule work live at all:
+    the live path's `StoredMover`s come back out of `movers_daily`, which
+    has no `industry` column."""
+    seen = []
+    original = runner_mod.benchmark_misses
+
+    def recording(movers, episodes, **kw):
+        seen.append(kw["verdicts"])
+        return original(movers, episodes, **kw)
+
+    monkeypatch.setattr(runner_mod, "benchmark_misses", recording)
+    deps, dry_calls = fake_deps()
+    run_nightly(DAY, dry_run=True, deps=deps, live=True)
+    deps, live_calls = fake_deps()
+    run_nightly(DAY, dry_run=False, deps=deps, live=True)
+    assert "movers_store.reconcile" not in dry_calls        # in memory
+    assert "movers_store.reconcile" in live_calls           # through the DB
+    assert len(seen) == 2
+    assert seen[0] == seen[1]                               # the SAME lookup, both paths
+    assert len(seen[0]) == 120
+    assert {key[0] for key in seen[0]} == {"gainers", "losers"}
+    assert seen[0][("gainers", "GEMG")].industry == "Exchange Traded Fund"
+    assert seen[0][("gainers", "IMCC")].industry == "Drug Manufacturers - Specialty & Generic"
+
+
 def test_benchmark_absent_fails_the_movers_step_loud():
     deps, calls = fake_deps(settings={})
     with pytest.raises(StepFailed, match="step movers failed.*radar.benchmark"):

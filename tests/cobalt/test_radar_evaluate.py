@@ -483,14 +483,21 @@ from cobalt.radar.poller import PollResult  # noqa: E402
 from cobalt.radar.runner import RadarRunner  # noqa: E402
 
 
+#: R16 "C": not-equity is a non-blank `Asset Type` OR a fund `Industry`,
+#: so an ordinary stock carries a BLANK `Asset Type` and an ordinary
+#: industry — which is what Finviz actually returns for one.
+_SCREEN_HEADER = ("Ticker", "Volume", "Relative Volume", "Asset Type", "Industry")
+
+
 class _Collector:
     async def screen(self, _block, now):
         return ScreenerSnapshot("screen-synthetic", now,
-                                ({"Ticker": "FTFT", "Volume": "9", "Relative Volume": "4.2", "Asset Type": "Stock"},),
-                                ("Ticker", "Volume", "Relative Volume", "Asset Type"))
+                                ({"Ticker": "FTFT", "Volume": "9", "Relative Volume": "4.2",
+                                  "Asset Type": "", "Industry": "Capital Markets"},),
+                                _SCREEN_HEADER)
 
     async def listed(self, _block, now):
-        return [ScreenerSnapshot("list-synthetic", now, (), ("Ticker", "Volume", "Relative Volume", "Asset Type"))]
+        return [ScreenerSnapshot("list-synthetic", now, (), _SCREEN_HEADER)]
 
 
 class _Pool:
@@ -649,8 +656,9 @@ def test_lifecycle_tickers_polled_only_inside_the_demand_ceiling():
     class BgfiCollector(_Collector):
         async def screen(self, _block, now):
             return ScreenerSnapshot("screen-synthetic", now,
-                                    ({"Ticker": "BGFI", "Volume": "9", "Relative Volume": "1", "Asset Type": "Stock"},),
-                                    ("Ticker", "Volume", "Relative Volume", "Asset Type"))
+                                    ({"Ticker": "BGFI", "Volume": "9", "Relative Volume": "1",
+                                      "Asset Type": "", "Industry": "Capital Markets"},),
+                                    _SCREEN_HEADER)
 
     poller = _Poller()
     runner = _runner(world, session_clock(), lambda: SCAN0 + timedelta(seconds=100), poller=poller)

@@ -303,13 +303,21 @@ class FormationOutcome(_Frozen):
 
 
 class MoverRow(_Frozen):
-    """One ranked row of an unfiltered export, as `movers_daily` stores it."""
+    """One ranked row of an unfiltered export, as parsed.
+
+    `industry` is the one field `movers_daily` does NOT store: the table
+    keeps `asset_type` and nothing else of the R16 rule's two columns, so
+    a `StoredMover` read back from it cannot decide not-equity. The rule
+    is therefore decided at ingest, off these rows, and `StoredMover`,
+    `MoversStore` and the migrations stay exactly as they are.
+    """
 
     side: Side
     rank: int = Field(ge=1)
     ticker: str = Field(min_length=1)
     change_pct: Decimal
     asset_type: Optional[str] = None
+    industry: Optional[str] = None
     volume: Optional[int] = None
     rvol: Optional[Decimal] = None
 

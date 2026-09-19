@@ -1,13 +1,17 @@
 """Strict engine-only radar config tests."""
 
+import copy
 from pathlib import Path
 
 import pytest
+import yaml
 
 from cobalt.radar.config import (
     CONFIG_PATH,
+    NotEquityConfig,
     RadarConfigError,
     check,
+    is_not_equity,
     load_config,
     screener_columns,
     screener_columns_param,
@@ -71,6 +75,102 @@ def test_a_malformed_column_declaration_crashes(bad):
     whitespace off a trader's note belongs to the note parser."""
     with pytest.raises(RadarConfigError, match="column declaration"):
         screener_columns(bad)
+
+
+# ---------------------------------------------------------------------
+# S2-P4 FR-2 — R16 "C": the two-column not-equity rule
+# ---------------------------------------------------------------------
+
+#: The shape `radar.yaml` carried until R16 was ruled, and the shape it
+#: carries now. Both are written out here so the rejection test builds
+#: the old file from the shipped one rather than from a hand-kept copy.
+OLD_NOT_EQUITY = "not_equity:\n  header: Asset Type\n  values: [Exchange Traded Fund]\n"
+NEW_NOT_EQUITY = (
+    "not_equity:\n"
+    "  asset_type_header: Asset Type\n"
+    "  industry_header: Industry\n"
+    "  industry_values: [Exchange Traded Fund]\n"
+)
+
+
+def test_the_shipped_config_carries_the_two_column_not_equity_rule():
+    cfg = load_config()
+    assert cfg.not_equity.asset_type_header == "Asset Type"
+    assert cfg.not_equity.industry_header == "Industry"
+    assert cfg.not_equity.industry_values == ["Exchange Traded Fund"]
+    assert {"Asset Type", "Industry"} <= set(cfg.export.required_headers)
+
+
+def test_the_old_one_column_not_equity_shape_is_refused_naming_its_keys(tmp_path):
+    """L10/L42: the rule reads two columns now, so a config still on the
+    one-column shape is a different rule, not a subset of this one. It is
+    refused by name — both the keys that no longer exist and the three
+    that must."""
+    text = CONFIG_PATH.read_text()
+    assert NEW_NOT_EQUITY in text, "the shipped radar.yaml is not on the R16 shape"
+    path = tmp_path / "radar.yaml"
+    path.write_text(text.replace(NEW_NOT_EQUITY, OLD_NOT_EQUITY))
+    with pytest.raises(RadarConfigError) as excinfo:
+        load_config(path)
+    message = str(excinfo.value)
+    for key in ("not_equity.header", "not_equity.values", "not_equity.asset_type_header",
+                "not_equity.industry_header", "not_equity.industry_values"):
+        assert key in message, key
+
+
+def test_required_headers_must_carry_both_not_equity_headers(tmp_path):
+    """Both columns are read on every row now, so `export.required_headers`
+    has to declare both — the same message shape as any other configured
+    header missing from the export."""
+    raw = yaml.safe_load(CONFIG_PATH.read_text())
+    for header in ("Asset Type", "Industry"):
+        narrowed = copy.deepcopy(raw)
+        narrowed["export"]["required_headers"] = [
+            name for name in raw["export"]["required_headers"] if name != header
+        ]
+        path = tmp_path / "radar.yaml"
+        path.write_text(yaml.safe_dump(narrowed, sort_keys=False))
+        with pytest.raises(RadarConfigError, match=rf"required_headers missing configured headers \['{header}'\]"):
+            load_config(path)
+
+
+def test_the_not_equity_comment_block_records_the_evidence_not_an_open_question():
+    """The block above the rule was a watch item ("unresolved, watch the
+    first live run"). The evidence run answered it, so the comment states
+    what was counted and where the count lives — counts only (L32)."""
+    text = CONFIG_PATH.read_text()
+    assert "unresolved, watch the first live run" not in text
+    assert "s2-p4-verify-2026-09-19.md" in text
+    for phrase in ("5,702 distinct fund tickers", "28 distinct non-blank",
+                   "0 stock", "8 distinct funds", "= 16 rows"):
+        assert phrase in text, phrase
+
+
+def test_the_one_evaluator_reads_both_columns_and_strips():
+    """`is_not_equity` IS the rule (L3): non-blank `Asset Type` OR a fund
+    `Industry`. A missing key, a `None` and a whitespace-only cell are all
+    blank; nothing here guesses."""
+    rule = NotEquityConfig(asset_type_header="Asset Type", industry_header="Industry",
+                           industry_values=["Exchange Traded Fund"])
+    assert is_not_equity({"Asset Type": "Equities (Stocks)", "Industry": "Exchange Traded Fund"}, rule) is True
+    assert is_not_equity({"Asset Type": "", "Industry": "Exchange Traded Fund"}, rule) is True
+    assert is_not_equity({"Asset Type": "Preferred Stock", "Industry": "Capital Markets"}, rule) is True
+    assert is_not_equity({"Asset Type": "", "Industry": "Capital Markets"}, rule) is False
+    assert is_not_equity({"Asset Type": "   ", "Industry": "  Exchange Traded Fund  "}, rule) is True
+    assert is_not_equity({"Asset Type": None, "Industry": None}, rule) is False
+    assert is_not_equity({}, rule) is False
+
+
+def test_the_not_equity_config_refuses_an_empty_header_or_value_list():
+    for bad in (
+        {"asset_type_header": "", "industry_header": "Industry", "industry_values": ["Exchange Traded Fund"]},
+        {"asset_type_header": "Asset Type", "industry_header": "", "industry_values": ["Exchange Traded Fund"]},
+        {"asset_type_header": "Asset Type", "industry_header": "Industry", "industry_values": []},
+        {"asset_type_header": "Asset Type", "industry_header": "Industry",
+         "industry_values": ["Exchange Traded Fund"], "header": "Asset Type"},
+    ):
+        with pytest.raises(Exception):
+            NotEquityConfig(**bad)
 
 
 def test_finviz_ceiling_is_the_ruled_50():

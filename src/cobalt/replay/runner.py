@@ -70,7 +70,13 @@ from .models import (
     StepFailed,
     StoredMover,
 )
-from .movers import archive_movers, benchmark_misses, export_counts, retained_exports
+from .movers import (
+    archive_movers,
+    benchmark_misses,
+    export_counts,
+    not_equity_verdicts,
+    retained_exports,
+)
 
 STEPS = ("movers", "cards", "formations", "line")
 
@@ -318,6 +324,12 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
                                                   trade_date=trade_date))
         else:
             exports = retained_exports(deps.cache_root, trade_date, top_n=settings.top_n, config=deps.radar_config)
+        # The not-equity verdicts, decided AT INGEST off the parsed
+        # export rows and handed to the benchmark unchanged on BOTH
+        # paths (L3). It cannot be rebuilt later: `movers_daily` stores
+        # no `industry` column, so the live path's `StoredMover`s come
+        # back without the second half of the R16 rule.
+        verdicts = not_equity_verdicts(exports)
         # Bookkeeping, before anything is stored: what each side's export
         # really had, and how many rows that allows (`min(top_n,
         # exported)`). Selects nothing — the rows below are the same ones.
@@ -350,7 +362,7 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
 
         episodes = [Episode(**row) for row in deps.radar_store.members_for_day(deps.radar_config.pool_key, trade_date)]
         rows = benchmark_misses(stored, episodes, settings=settings, trade_date=trade_date,
-                                not_equity_values=deps.radar_config.not_equity.values)
+                                not_equity=deps.radar_config.not_equity, verdicts=verdicts)
         for row in rows:
             deps.out(f"MISS mover {row.ticker} excluded_by={row.excluded_by} change={row.gate_detail['change_pct']}%")
         state["mover_rows"] = [r.model_dump() for r in rows]

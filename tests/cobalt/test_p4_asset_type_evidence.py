@@ -2,11 +2,12 @@
 
 WHY. Finviz fills the `Asset Type` column only for funds (a fund's asset
 class) and leaves it blank for an ordinary stock, so the radar config's
-`not_equity.values: [Exchange Traded Fund]` matches nothing. Before that
-rule is rebuilt, the hub wants evidence from REAL exports on whether
-"non-blank Asset Type" and "Industry = Exchange Traded Fund" pick out the
-same rows. The mode under test produces that evidence; it is a decision
-aid, not a rule, and it never writes a fixture.
+former one-column rule (`not_equity.values: [Exchange Traded Fund]`) matched
+nothing. Before the rule was rebuilt, the hub wanted evidence from REAL
+exports on whether "non-blank Asset Type" and "Industry = Exchange Traded
+Fund" pick out the same rows; R16 "C" (2026-09-19) then ruled the OR of the
+two, now built as `is_not_equity`. The mode under test produces that
+evidence; it is a decision aid, not a rule, and it never writes a fixture.
 
 The cutter is a script, not an importable package, so it is loaded by
 path. Every assertion below is against committed real-shape exports

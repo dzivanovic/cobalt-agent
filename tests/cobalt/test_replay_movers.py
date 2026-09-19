@@ -9,10 +9,13 @@ fetched at the radar's own column set — 151 columns including `Asset
 Type`, the same header the radar's screen export carries, byte for byte
 (`test_the_collector_receives_one_export_shape`). Finviz fills `Asset
 Type` only for funds, so most rows are blank and a handful are not; both
-cases are in the fixture. The parser still requires only
-Ticker/Change/Volume, reads `Asset Type` when the column is present, and
-records an absent column as `unreported` — never guessed to be an equity
-or not.
+cases are in the fixture.
+
+THE RULE (R16 "C", ruled 2026-09-19): a row is not equity when its
+`Asset Type` is non-blank OR its `Industry` is a fund industry. Both
+columns are REQUIRED of a movers export now, so an absent column is a
+FAILED parse naming the header and `unreported` means only what it always
+should have: the column is there and this row's cell is blank.
 
 The exports are a different trading day from `membership-day.real-shape
 .json` (the 21-column first cut could not be re-fetched at the real
@@ -37,6 +40,7 @@ from pydantic import ValidationError
 
 from cobalt.archiver.models import Bar, Interval
 from cobalt.radar.collector import SourceFailure
+from cobalt.radar.config import is_not_equity
 from cobalt.replay import movers as movers_mod
 from cobalt.replay.line import render_line
 from cobalt.replay.models import (
@@ -47,11 +51,14 @@ from cobalt.replay.models import (
     StoredMover,
 )
 from cobalt.replay.movers import (
+    REQUIRED_HEADERS,
     SIDES,
     MoversStore,
     archive_movers,
     benchmark_misses,
     export_counts,
+    mover_is_not_equity,
+    not_equity_verdicts,
     parse_change_pct,
     parse_movers,
     replay_request_count,
@@ -76,12 +83,26 @@ def _export(side: str, top_n: int = 60):
 
 
 def _stored(export, trade_date=DAY, start_id=1):
+    """What comes back OUT of `movers_daily`: `StoredMover` has no
+    `industry` field and `MoversStore._COLUMNS` has no such column, so a
+    round trip drops the second half of the R16 rule. Every benchmark
+    test below therefore reads its verdicts from the export, not here."""
     return [
         StoredMover(id=start_id + i, trade_date=trade_date, side=row.side, rank=row.rank, ticker=row.ticker,
                     change_pct=row.change_pct, asset_type=row.asset_type, volume=row.volume, rvol=row.rvol,
                     export_sha256=export.export_sha256, fetched_at=export.fetched_at)
         for i, row in enumerate(export.rows)
     ]
+
+
+#: The shipped R16 "C" rule, as every call site reads it.
+RULE = movers_mod.load_radar_config().not_equity
+
+
+def _both(top_n=61):
+    """Both committed exports, whole — `top_n=61` because the blank-`Asset
+    Type` fund row each side carries is rank 61 (FR-1)."""
+    return [_export(side, top_n=top_n) for side in SIDES]
 
 
 @pytest.fixture(scope="module")
@@ -105,7 +126,7 @@ def test_tesla_class_mover_absent_from_pool_appears_in_miss_line_with_excluded_b
     gainers, losers = _export("gainers"), _export("losers")
     movers = _stored(gainers) + _stored(losers, start_id=1000)
     rows = benchmark_misses(movers, episodes, settings=SETTINGS, trade_date=DAY,
-                            not_equity_values=["Exchange Traded Fund"])
+                            not_equity=RULE, verdicts=not_equity_verdicts([gainers, losers]))
     by_ticker = {r.ticker: r for r in rows}
     # QNME, +92.25%, rank 2 of the day's gainers, has no membership episode
     # at all (rank 1 IMCC was admitted, so it is correctly not a miss)
@@ -119,9 +140,10 @@ def test_tesla_class_mover_absent_from_pool_appears_in_miss_line_with_excluded_b
 
 
 def test_admitted_mover_is_not_a_miss(episodes):
-    movers = _stored(_export("gainers"))
+    gainers = _export("gainers")
+    movers = _stored(gainers)
     rows = benchmark_misses(movers, episodes, settings=BenchmarkSettings(top_n=60, min_move_pct=Decimal("1")),
-                            trade_date=DAY, not_equity_values=[])
+                            trade_date=DAY, not_equity=RULE, verdicts=not_equity_verdicts([gainers]))
     tickers = {r.ticker for r in rows}
     admitted = {e.ticker for e in episodes if e.entered_at is not None}
     in_both = {m.ticker for m in movers} & admitted
@@ -130,9 +152,11 @@ def test_admitted_mover_is_not_a_miss(episodes):
 
 
 def test_never_admitted_episode_supplies_its_excluded_by(episodes):
-    movers = _stored(_export("gainers"))
+    gainers = _export("gainers")
+    movers = _stored(gainers)
     rows = {r.ticker: r for r in benchmark_misses(movers, episodes, settings=SETTINGS, trade_date=DAY,
-                                                   not_equity_values=[])}
+                                                  not_equity=RULE,
+                                                  verdicts=not_equity_verdicts([gainers]))}
     usde = rows["USDE"]                      # +32.17%, never admitted, config_cap
     assert usde.excluded_by == "config_cap"
     assert usde.pool_member_id is None or isinstance(usde.pool_member_id, int)
@@ -341,30 +365,210 @@ def test_r1_20_a_ticker_on_both_sides_resolves_to_one_missed_row(episodes):
     losers = _export("losers", top_n=1)
     twin = _stored(gainers)[1]               # rank 2: rank 1 was admitted, so it is no miss
     other = _stored(losers, start_id=50)[0].model_copy(update={"ticker": twin.ticker, "change_pct": Decimal("-170")})
-    rows = benchmark_misses([twin, other], episodes, settings=SETTINGS, trade_date=DAY, not_equity_values=[])
+    # the losers export row follows the stored copy: the verdict lookup is
+    # keyed by (side, ticker) and every stored row must have its own.
+    verdicts = not_equity_verdicts([gainers])
+    verdicts[("losers", twin.ticker)] = losers.rows[0].model_copy(update={"ticker": twin.ticker})
+    rows = benchmark_misses([twin, other], episodes, settings=SETTINGS, trade_date=DAY,
+                            not_equity=RULE, verdicts=verdicts)
     assert len(rows) == 1
     assert rows[0].mover_id == 50                           # the larger |change| carries the row
     assert sorted(rows[0].gate_detail["sides"]) == ["gainers", "losers"]
 
 
 def test_r1_20_multiple_never_admitted_episodes_pick_the_most_recent(episodes):
-    mover = _stored(_export("gainers", top_n=1))[0]
+    gainers = _export("gainers", top_n=1)
+    mover = _stored(gainers)[0]
     older = Episode(id=1, ticker=mover.ticker, trade_date=DAY, excluded_by="not_equity",
                     first_seen_at=datetime(2026, 2, 10, 9, tzinfo=timezone.utc))
     newer = Episode(id=2, ticker=mover.ticker, trade_date=DAY, excluded_by="screen_inactive",
                     first_seen_at=datetime(2026, 2, 10, 15, tzinfo=timezone.utc))
-    rows = benchmark_misses([mover], [older, newer], settings=SETTINGS, trade_date=DAY, not_equity_values=[])
+    rows = benchmark_misses([mover], [older, newer], settings=SETTINGS, trade_date=DAY,
+                            not_equity=RULE, verdicts=not_equity_verdicts([gainers]))
     assert rows[0].excluded_by == "screen_inactive"
     assert rows[0].pool_member_id == 2
 
 
 def test_not_equity_movers_leave_the_benchmark_and_unreported_asset_type_stays_in(episodes):
-    movers = _stored(_export("gainers", top_n=2))
-    etf = movers[0].model_copy(update={"asset_type": "Exchange Traded Fund"})
-    rows = benchmark_misses([etf, movers[1]], [], settings=SETTINGS, trade_date=DAY,
-                            not_equity_values=["Exchange Traded Fund"])
-    assert [r.ticker for r in rows] == [movers[1].ticker]
+    """R16 "C" rewrote what this scenario means. It used to be "a
+    non-blank `Asset Type` in the configured value list leaves, a blank
+    one stays". Now the deciding column may be either one:
+
+    * GEMG — non-blank `Asset Type`, fund `Industry`: leaves
+    * SCOP — BLANK `Asset Type`, fund `Industry`: leaves too, and the old
+      one-column rule could not see it at all
+    * IMCC — blank `Asset Type`, an ordinary industry: STAYS, and its
+      blank value is still labelled `unreported`
+
+    All three are real rows of the committed gainers export.
+    """
+    gainers = _export("gainers", top_n=61)
+    by_ticker = {m.ticker: m for m in _stored(gainers)}
+    movers = [by_ticker[t] for t in ("GEMG", "SCOP", "IMCC")]
+    settings = BenchmarkSettings(top_n=61, min_move_pct=Decimal("1"))
+    rows = benchmark_misses(movers, [], settings=settings, trade_date=DAY,
+                            not_equity=RULE, verdicts=not_equity_verdicts([gainers]))
+    assert [r.ticker for r in rows] == ["IMCC"]
     assert rows[0].gate_detail["asset_type"] == "unreported"
+    assert rows[0].gate_detail["industry"] == "Drug Manufacturers - Specialty & Generic"
+
+
+# =====================================================================
+# S2-P4 FR-2 — R16 "C": one rule, one evaluator, decided AT INGEST
+# =====================================================================
+
+
+def test_the_r16_rule_on_real_rows_drops_a_fund_by_either_column_and_keeps_a_stock():
+    """Three of the rule's four cases, each on a row taken verbatim from
+    a committed real-shape export (L45):
+
+    * non-blank `Asset Type` + fund `Industry`  -> dropped (GEMG, TDNA's side has ASTT/ASTX)
+    * BLANK `Asset Type` + fund `Industry`      -> dropped (SCOP, TDNA)
+    * blank `Asset Type` + ordinary `Industry`  -> kept    (IMCC, DCX)
+
+    The fourth case — a non-blank `Asset Type` on a NON-fund `Industry` —
+    has no row anywhere in the sample (table C(i) = 0), so it is tested
+    as the boolean it is, from an explicit mapping, never from a
+    fabricated fixture row.
+    """
+    gainers, losers = ({row.ticker: row for row in export.rows} for export in _both())
+    assert mover_is_not_equity(gainers["GEMG"], RULE) is True
+    assert mover_is_not_equity(losers["ASTT"], RULE) is True
+    assert mover_is_not_equity(gainers["SCOP"], RULE) is True
+    assert mover_is_not_equity(losers["TDNA"], RULE) is True
+    assert mover_is_not_equity(gainers["IMCC"], RULE) is False
+    assert mover_is_not_equity(losers["DCX"], RULE) is False
+    # the arm with no real row: the boolean, stated outright
+    assert is_not_equity({RULE.asset_type_header: "Preferred Stock",
+                          RULE.industry_header: "Capital Markets"}, RULE) is True
+
+
+def test_the_asset_type_only_arm_hits_no_row_of_any_committed_export():
+    """Table C(i): a non-blank `Asset Type` sitting on a NON-fund
+    `Industry` — an ordinary stock the type arm alone would drop. The
+    count is asserted and printed rather than folded into a boolean, so
+    the day a real export carries one it is visible. Counts only (L32)."""
+    hit = total = 0
+    paths = [FIX / "radar" / "pool-metrics.real-shape.csv"]
+    paths += [FIX / "replay" / f"movers-{side}.real-shape.csv" for side in SIDES]
+    for path in paths:
+        for raw in csv.DictReader(io.StringIO(path.read_text(encoding="utf-8"))):
+            total += 1
+            hit += bool(
+                (raw["Asset Type"] or "").strip()
+                and (raw["Industry"] or "").strip() not in RULE.industry_values
+            )
+    print(f"asset-type-only arm: {hit} of {total} committed real-shape rows")
+    assert (hit, total) == (0, 142)
+
+
+def test_parse_reads_industry_beside_asset_type_on_every_row():
+    """Both columns are required now, so both are read unconditionally —
+    a blank CELL is `None`, and a missing COLUMN cannot happen."""
+    by_ticker = {row.ticker: row for row in _export("gainers", top_n=61).rows}
+    assert (by_ticker["IMCC"].asset_type, by_ticker["IMCC"].industry) == (
+        None, "Drug Manufacturers - Specialty & Generic")
+    assert (by_ticker["GEMG"].asset_type, by_ticker["GEMG"].industry) == (
+        "Equities (Stocks)", "Exchange Traded Fund")
+    assert (by_ticker["SCOP"].asset_type, by_ticker["SCOP"].industry) == (None, "Exchange Traded Fund")
+
+
+def test_required_headers_carry_both_columns_and_a_missing_one_is_loud():
+    """L1: a column that is simply absent is a FAILED export naming the
+    header, on the same path as a missing `Ticker`/`Change`/`Volume` —
+    never a silent `None` that reads downstream as `unreported`."""
+    assert REQUIRED_HEADERS == ["Ticker", "Change", "Volume", "Asset Type", "Industry"]
+    losers = (FIX / "replay" / "movers-losers.real-shape.csv").read_bytes()
+    header, _, rest = losers.partition(b"\n")
+    for column in ("Asset Type", "Industry"):
+        narrowed = header.replace(f',"{column}"'.encode(), b"")
+        assert narrowed != header, column
+        with pytest.raises(SourceFailure, match=column):
+            parse_movers(narrowed + b"\n" + rest, side="losers", top_n=10, content_type="text/csv",
+                         config=movers_mod.load_radar_config(), fetched_at=FETCHED, source="live")
+
+
+def test_the_verdict_lookup_covers_both_exports_and_refuses_a_repeated_key():
+    """One lookup per run, built once from the parsed exports. A repeated
+    (side, ticker) is loud — silently keeping the last row would make the
+    rule depend on export order."""
+    exports = _both()
+    verdicts = not_equity_verdicts(exports)
+    assert len(verdicts) == sum(len(e.rows) for e in exports) == 122
+    assert {key[0] for key in verdicts} == set(SIDES)
+    # 29 + 1 gainers, 19 + 1 losers: what R16 drops out of these two cuts
+    assert sum(1 for row in verdicts.values() if mover_is_not_equity(row, RULE)) == 50
+    doubled = exports[0].model_copy(update={"rows": (*exports[0].rows, exports[0].rows[0])})
+    with pytest.raises(ReplayInputError, match="gainers"):
+        not_equity_verdicts([doubled])
+
+
+def test_the_benchmark_decides_from_the_export_row_the_db_round_trip_never_carried():
+    """`movers_daily` has no `industry` column and `StoredMover` has no
+    such field, so on the live path a blank-`Asset Type` fund is
+    invisible in the rows the benchmark receives. The verdict lookup
+    built at ingest is what decides."""
+    exports = _both()
+    stored = _stored(exports[0]) + _stored(exports[1], start_id=1000)
+    assert not any(hasattr(m, "industry") for m in stored)
+    settings = BenchmarkSettings(top_n=61, min_move_pct=Decimal("1"))
+    tickers = {r.ticker for r in benchmark_misses(stored, [], settings=settings, trade_date=DAY,
+                                                  not_equity=RULE,
+                                                  verdicts=not_equity_verdicts(exports))}
+    assert not ({"SCOP", "TDNA"} & tickers)          # blank type, fund industry
+    assert not ({"GEMG", "ASTT", "ASTX"} & tickers)  # non-blank type
+    assert {"IMCC", "QNME", "DCX", "USDE"} <= tickers
+
+
+def test_a_staled_stored_asset_type_never_decides_the_benchmark():
+    """L57: the deciding values are this run's export row, not whatever
+    the DB round trip returned. A fund whose stored `asset_type` came
+    back blank still leaves; a stock whose stored `asset_type` came back
+    as a fund value still stays."""
+    gainers = _export("gainers", top_n=61)
+    staled = [
+        m.model_copy(update={"asset_type": None}) if m.ticker == "GEMG"
+        else m.model_copy(update={"asset_type": "Exchange Traded Fund"}) if m.ticker == "IMCC"
+        else m
+        for m in _stored(gainers)
+    ]
+    settings = BenchmarkSettings(top_n=61, min_move_pct=Decimal("1"))
+    rows = {r.ticker: r for r in benchmark_misses(staled, [], settings=settings, trade_date=DAY,
+                                                  not_equity=RULE,
+                                                  verdicts=not_equity_verdicts([gainers]))}
+    assert "GEMG" not in rows
+    assert "IMCC" in rows
+    assert rows["IMCC"].gate_detail["asset_type"] == "unreported"
+    assert rows["IMCC"].receipt["inputs"]["movers"][0]["asset_type"] is None
+
+
+def test_a_stored_mover_with_no_verdict_is_loud():
+    """Every `StoredMover` came from an export row of this same run, so a
+    lookup miss is a bug — named, never guessed around."""
+    gainers = _export("gainers", top_n=2)
+    verdicts = not_equity_verdicts([gainers])
+    verdicts.pop(("gainers", "QNME"))
+    with pytest.raises(ReplayInputError, match="QNME"):
+        benchmark_misses(_stored(gainers), [], settings=SETTINGS, trade_date=DAY,
+                         not_equity=RULE, verdicts=verdicts)
+
+
+def test_the_miss_rows_stored_inputs_carry_the_deciding_values_and_the_rule_marker():
+    """L57. The receipt records both deciding columns per mover row plus
+    the rule that read them, so the row replays without `movers_daily`
+    (which never carried `Industry`) and without radar.yaml."""
+    gainers = _export("gainers", top_n=3)
+    rows = benchmark_misses(_stored(gainers), [], settings=SETTINGS, trade_date=DAY,
+                            not_equity=RULE, verdicts=not_equity_verdicts([gainers]))
+    row = next(r for r in rows if r.ticker == "IMCC")
+    inputs = row.receipt["inputs"]
+    assert inputs["not_equity_rule"] == "asset_type_or_etf_industry"
+    assert inputs["not_equity_industry_values"] == ["Exchange Traded Fund"]
+    assert "not_equity_values" not in inputs
+    assert [(m["asset_type"], m["industry"]) for m in inputs["movers"]] == [
+        (None, "Drug Manufacturers - Specialty & Generic")]
+    assert row.gate_detail["asset_type"] == "unreported"
+    assert row.gate_detail["industry"] == "Drug Manufacturers - Specialty & Generic"
 
 
 def test_r1_20_an_unavailable_historical_date_refuses(tmp_path):

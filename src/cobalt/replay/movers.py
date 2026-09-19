@@ -17,10 +17,19 @@ day's `radar_membership` episodes:
 * no episode at all                             -> `not_in_any_source`
 
 A ticker on both sides becomes one row (the larger |change| carries it,
-both sides recorded). A mover whose export row names a not-equity asset
-type leaves the benchmark; a missing Asset Type column is recorded
-`unreported` and the mover stays in — under-reporting a miss is the silent
-failure, so it is never the default.
+both sides recorded). A mover whose export row is not equity under R16
+"C" — `Asset Type` non-blank OR `Industry` a fund industry — leaves the
+benchmark.
+
+WHICH ROW DECIDES. Both columns are required headers, so a COLUMN is
+never missing: an export without one is a FAILED parse naming it. Only a
+row's own CELL may be blank, and a blank `Asset Type` on an ordinary
+stock is exactly what Finviz returns — that is all `unreported` means in
+`gate_detail`. The decision is taken AT INGEST, off the parsed export
+rows, because `movers_daily` stores no `industry` column: the
+`StoredMover`s the benchmark receives on the live path come back from a
+SELECT that never carried the second half of the rule. Under-reporting a
+miss is the silent failure, so nothing here guesses either way.
 
 HISTORY IS NEVER RELABELLED. A `--date` run for a past day reads the
 exports retained under `data/radar-cache/<date>/movers-<side>-HHMMSS.csv`
@@ -44,7 +53,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -56,7 +65,12 @@ from cobalt.archiver.collector import FetchMetrics, fetch_bars, finviz_get, scru
 from cobalt.archiver.models import Bar, Interval
 from cobalt.db import Side as DbSide
 from cobalt.radar.collector import SourceFailure, parse_screener_csv
-from cobalt.radar.config import RadarConfig, screener_columns_param
+from cobalt.radar.config import (
+    NotEquityConfig,
+    RadarConfig,
+    is_not_equity,
+    screener_columns_param,
+)
 from cobalt.radar.config import load_config as load_radar_config
 from cobalt.radar.notes import check_scheduled_demand
 from cobalt.session.clock import ET
@@ -79,8 +93,10 @@ from .models import (
 #: side -> the export's sort parameter. Gainers descend, losers ascend.
 SIDES: dict[str, str] = {"gainers": "-change", "losers": "change"}
 
-#: What the replay cannot run without. `Asset Type` is read when present.
-REQUIRED_HEADERS = ["Ticker", "Change", "Volume"]
+#: What the replay cannot run without. Both R16 columns are in here, so
+#: neither can go missing quietly: an export without one is a FAILED
+#: parse naming the header, never 61 rows that all read `unreported`.
+REQUIRED_HEADERS = ["Ticker", "Change", "Volume", "Asset Type", "Industry"]
 
 #: The exclusion values a never-admitted membership episode may carry.
 EPISODE_EXCLUSIONS = {"config_cap", "not_equity", "screen_inactive", "manual"}
@@ -89,7 +105,8 @@ _CACHE_NAME = re.compile(r"^movers-(gainers|losers)-(\d{6})\.csv$")
 
 __all__ = [
     "ArchiveOutcome", "MoversCollector", "MoversStore", "REQUIRED_HEADERS", "SIDES",
-    "archive_movers", "benchmark_misses", "export_counts", "load_radar_config", "parse_change_pct",
+    "archive_movers", "benchmark_misses", "export_counts", "load_radar_config",
+    "mover_is_not_equity", "not_equity_verdicts", "parse_change_pct",
     "parse_movers", "replay_request_count", "retained_exports",
 ]
 
@@ -156,7 +173,11 @@ def parse_movers(
     header, raw_rows = parse_screener_csv(
         payload, source=f"movers-{side}", required_headers=REQUIRED_HEADERS, content_type=content_type,
     )
-    asset_header = config.not_equity.header
+    # Both R16 columns are required headers, so both are read on every
+    # row without asking whether the column is there — it is, or the
+    # parse already failed above. A blank CELL stays None.
+    asset_header = config.not_equity.asset_type_header
+    industry_header = config.not_equity.industry_header
     rvol_header = config.export.metric_headers.rvol
     rows: list[MoverRow] = []
     for index, raw in enumerate(raw_rows, start=1):
@@ -165,7 +186,8 @@ def parse_movers(
             raise SourceFailure(f"movers-{side}: row {index} has no ticker")
         rows.append(MoverRow(
             side=side, rank=index, ticker=ticker, change_pct=parse_change_pct(raw.get("Change", "")),
-            asset_type=(raw.get(asset_header) or None) if asset_header in header else None,
+            asset_type=(raw.get(asset_header) or None),
+            industry=(raw.get(industry_header) or None),
             volume=_optional_int(raw.get("Volume")),
             rvol=_optional_decimal(raw.get(rvol_header)) if rvol_header in header else None,
         ))
@@ -187,6 +209,64 @@ def parse_movers(
         header=tuple(header), rows=tuple(rows[:top_n]), exported_rows=len(rows), source=source,
         cache_path=cache_path,
     )
+
+
+def mover_is_not_equity(row: MoverRow, config: NotEquityConfig) -> bool:
+    """A parsed export row through the ONE evaluator (L3).
+
+    The only thing this adds is the two-key mapping `is_not_equity`
+    reads; the OR itself lives there and nowhere else, so the movers
+    benchmark and the radar's candidate gather cannot drift apart.
+    """
+    return is_not_equity(
+        {config.asset_type_header: row.asset_type, config.industry_header: row.industry}, config
+    )
+
+
+def not_equity_verdicts(exports: Sequence[MoversExport]) -> dict[tuple[str, str], MoverRow]:
+    """(side, ticker) -> the export row that decides that mover.
+
+    Built ONCE per run, straight off the parsed exports, before anything
+    is stored. This is the whole reason the rule works on the live path:
+    `movers_daily` has no `industry` column, so the `StoredMover`s that
+    come back from `MoversStore.reconcile` cannot answer the question
+    themselves, and a row reconstructed from them would silently read
+    every blank-`Asset Type` fund as an ordinary stock.
+
+    A repeated (side, ticker) inside one run is loud: keeping the last
+    one would make the verdict depend on export order, and an export
+    that lists a ticker twice is a source fault, not a tie to break.
+    """
+    verdicts: dict[tuple[str, str], MoverRow] = {}
+    for export in exports:
+        for row in export.rows:
+            key = (row.side, row.ticker)
+            if key in verdicts:
+                raise ReplayInputError(
+                    f"movers-{row.side}: {row.ticker} appears twice in one run's exports "
+                    f"(ranks {verdicts[key].rank} and {row.rank}) — no verdict can be chosen"
+                )
+            verdicts[key] = row
+    return verdicts
+
+
+def _verdict(
+    verdicts: Mapping[tuple[str, str], MoverRow], *, side: str, ticker: str
+) -> MoverRow:
+    """The export row behind a stored mover, or a loud failure.
+
+    Every `StoredMover` the benchmark sees came from an `exports` row of
+    this same run, so a lookup miss is a bug in the run, not a data
+    condition — there is no fallback that could guess the two columns
+    back, and guessing is what the whole rule exists to stop (L1).
+    """
+    row = verdicts.get((side, ticker))
+    if row is None:
+        raise ReplayInputError(
+            f"movers-{side}: {ticker} has no export row in this run's not-equity verdicts — "
+            "every stored mover came from one"
+        )
+    return row
 
 
 def export_counts(exports: Sequence[MoversExport], *, top_n: int) -> dict[str, MoversSideCount]:
@@ -325,9 +405,18 @@ def benchmark_misses(
     *,
     settings: BenchmarkSettings,
     trade_date: date,
-    not_equity_values: Sequence[str],
+    not_equity: NotEquityConfig,
+    verdicts: Mapping[tuple[str, str], MoverRow],
 ) -> list[MissRow]:
-    """`kind='mover'` rows for every benchmark mover the pool never admitted."""
+    """`kind='mover'` rows for every benchmark mover the pool never admitted.
+
+    `verdicts` is this run's ingest lookup (`not_equity_verdicts`). The
+    not-equity rule is applied to the EXPORT row it holds, never to the
+    `StoredMover`: `movers_daily` has no `industry` column at all, and
+    its `asset_type` is whatever a round trip returned rather than what
+    tonight's export said. The receipt records the looked-up values for
+    the same reason (L57) — a miss row has to replay without the table.
+    """
     by_ticker: dict[str, list[StoredMover]] = {}
     for mover in movers:
         if mover.trade_date != trade_date:
@@ -344,7 +433,8 @@ def benchmark_misses(
         lead = max(sides, key=lambda m: (abs(m.change_pct), m.id or 0))
         if abs(lead.change_pct) < settings.min_move_pct:
             continue
-        if lead.asset_type is not None and lead.asset_type in not_equity_values:
+        lead_row = _verdict(verdicts, side=lead.side, ticker=lead.ticker)
+        if mover_is_not_equity(lead_row, not_equity):
             continue
         eps = episodes_by.get(ticker, [])
         if any(e.entered_at is not None for e in eps):
@@ -366,23 +456,34 @@ def benchmark_misses(
             for e in sorted(eps, key=lambda e: (e.first_seen_at or datetime.min.replace(tzinfo=ET), e.id or 0),
                             reverse=True)
         ]
+        # `unreported` is a blank CELL on a column that is present — the
+        # ordinary case for a stock. A missing column never gets here.
         gate_detail = {
             "change_pct": str(lead.change_pct), "side": lead.side, "rank": lead.rank,
             "sides": sorted(m.side for m in sides),
-            "asset_type": lead.asset_type if lead.asset_type is not None else "unreported",
+            "asset_type": lead_row.asset_type if lead_row.asset_type is not None else "unreported",
+            "industry": lead_row.industry if lead_row.industry is not None else "unreported",
             "min_move_pct": str(settings.min_move_pct), "episodes": episode_json,
+        }
+        rows_by_side = {
+            m.side: _verdict(verdicts, side=m.side, ticker=m.ticker) for m in sides
         }
         inputs = {
             "trade_date": trade_date.isoformat(),
             "movers": [
                 {"id": m.id, "side": m.side, "rank": m.rank, "ticker": m.ticker, "change_pct": str(m.change_pct),
-                 "asset_type": m.asset_type, "volume": m.volume, "rvol": str(m.rvol) if m.rvol is not None else None,
+                 "asset_type": rows_by_side[m.side].asset_type, "industry": rows_by_side[m.side].industry,
+                 "volume": m.volume, "rvol": str(m.rvol) if m.rvol is not None else None,
                  "export_sha256": m.export_sha256, "fetched_at": m.fetched_at.isoformat()}
                 for m in sorted(sides, key=lambda m: m.side)
             ],
             "episodes": episode_json,
             "settings": settings.row(),
-            "not_equity_values": list(not_equity_values),
+            # The rule the desk names, AND the config value it compared
+            # against: a receipt that dropped the deciding value would no
+            # longer replay the decision it records (L57).
+            "not_equity_rule": "asset_type_or_etf_industry",
+            "not_equity_industry_values": list(not_equity.industry_values),
         }
         receipt = {"inputs": inputs, "outputs": {"excluded_by": excluded_by, "gate_detail": gate_detail}}
         rows.append(MissRow(
