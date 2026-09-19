@@ -1053,6 +1053,18 @@ Seat `archiver-db-0919`, worktree `/Users/cobalt/cobalt-wt/archiver-append`, pro
 `docs/40 - DevDocs/prompts/2026-09-19/35-archiver-db-run.md`. Started 2026-09-19 12:38:15 EDT (`date`).
 This section APPENDS to the report above; `## ROUND 2` and `## ESCALATE` are untouched.
 
+## §0 Headline
+
+**The branch's DB debt is CLOSED, and closing it found three real reds.** 0010/0011 applied AND reversed on
+real `cobalt_dev` — both tables created system-side, every pre-existing digest unchanged, `--rollback
+--down-to 0009` dropped exactly those two and the closing proof is byte-identical to the baseline.
+All 23 owed `requires_db` tests ran for the first time: **20 pass, 3 red** — `cobalt_user` CAN read both new
+tables (§11's grant sentence contradicts the 0006 pattern it also mandates, DB-1 ×2, a ruling), and one
+`upsert_bars` commit test is unobservable under the suite's autouse single-transaction fixture (DB-2, a
+ruling). One test-side defect FIXED (the advisory-lock test needed two sessions, not two savepoint proxies).
+Offline **1866/0/320**, unchanged. All three REVIEW.md UNVERIFIABLE items settled. `cobalt_dev` left at
+0001–0009 unchanged, `.env` removed and proven gone. **ESCALATE: 4.**
+
 ## DB RUN PREFLIGHT
 
 | rule | command | exit | allowed / DENIED |
@@ -1309,3 +1321,280 @@ own step 1 used. It is removed and proven gone at the end of step 2.
 > baseline).**
 
 No code changed in step 1 — the proof surfaced no defect, so this step's commit is report-only.
+
+## DB RUN — WITH-DB SUITE
+
+Scope, exactly as the prompt narrows it: `tests/cobalt/test_archiver_migrations.py`,
+`tests/cobalt/test_archiver_append_store.py`, `tests/cobalt/test_archiver_quiet.py`. Repo-wide
+`requires_db` tests this branch merely touched in passing (`test_radar_score_migration.py`,
+`test_tenancy.py`) were NOT run and are not verified by this run. The whole `tests/cobalt` tree was never
+run with `.env` present.
+
+### Run 1 (12:45 ET) — the prompt's own ordering, run first so the finding is PROVEN, not asserted (L70)
+
+```
+12 failed, 145 passed in 4.38s
+```
+
+**THE PROMPT'S STEP ORDER IS WRONG, and this is the evidence.** Step 1 ends with `cobalt_dev` at 0001–0009 —
+`archive_progress` and `archive_incidents` DROPPED. Step 2's own note assumes "every test that writes cleans
+up; the migration-harness tests … are self-contained round trips". That is true of only 3 of the 23
+(`…forward_creates_both_tables…`, `…migrate_twice_is_idempotent…`, `…rollback_down_to_0007_drops_exactly…`,
+which call `_apply`/`_rollback_paths` on their own connection and roll back). **The other 20 need the two
+tables to already EXIST**: seven via the `real_connect` fixture (which conftest documents as a REAL
+`db.connect` that applies no migrations, `conftest.py:196-223`) and thirteen via `BarStore().ensure_schema()`,
+which executes the bars module DDL only (`archiver/store.py:100-103`) and creates neither new table. Ten went
+red on `relation … does not exist` / `… missing — run cobalt db migrate`:
+
+| test | assertion, verbatim |
+|---|---|
+| `test_owner_is_the_system_role[archive_progress]` | `AssertionError: archive_progress missing — run \`cobalt db migrate\`` |
+| `test_owner_is_the_system_role[archive_incidents]` | `AssertionError: archive_incidents missing — run \`cobalt db migrate\`` |
+| `test_the_user_role_has_no_grant_on_either_table[archive_progress]` | `psycopg.errors.UndefinedTable: relation "system.archive_progress" does not exist` |
+| `test_the_user_role_has_no_grant_on_either_table[archive_incidents]` | `psycopg.errors.UndefinedTable: relation "system.archive_incidents" does not exist` |
+| `test_the_check_refuses_progress_past_its_own_export` | `assert ('archived_through' in 'relation "archive_progress" does not exist…')` |
+| `test_one_unresolved_incident_per_key_then_a_second_after_resolution` | `psycopg.errors.UndefinedTable: relation "archive_incidents" does not exist` |
+| `test_a_crash_after_the_inserts_leaves_neither_bars_nor_progress` | `psycopg.errors.UndefinedTable: relation "archive_progress" does not exist` |
+| `test_progress_and_an_incident_commit_with_the_bars_or_not_at_all` | `psycopg.errors.UndefinedTable: relation "archive_progress" does not exist` |
+| `test_progress_is_monotonic_across_accepted_runs` | `psycopg.errors.UndefinedTable: relation "archive_progress" does not exist` |
+| `test_a_recurring_incident_refreshes_rather_than_duplicating` | `psycopg.errors.UndefinedTable: relation "archive_incidents" does not exist` |
+
+**ASK DESK: should `35`'s step order be swapped (suite BEFORE the rollback) in the next prompt of this
+shape, or is the re-apply the desk wants? [12:45 ET]** Safe default taken, and it is the only one that
+delivers BOTH of step 1's and step 2's stated outcomes: re-apply `COBALT_ENV=dev uv run cobalt db migrate`
+(an allowlisted command this run had already used twice), run the suite for real, then roll back to 0009
+again so `cobalt_dev` is left exactly as step 2's own terminal line requires. Nothing outside the allowlist
+was typed and no step was skipped — step 1's applied-and-reversed proof stands on its own, above.
+
+### Run 2 (12:46 ET) — migrations re-applied, the suite's FIRST REAL RUN
+
+`COBALT_ENV=dev uv run cobalt db migrate` → both tables `CREATED` again, every other table `OK`,
+`content UNCHANGED on every table`. Then:
+
+```
+4 failed, 153 passed in 4.67s
+```
+
+Ten of run 1's twelve went green the moment the tables existed. **Four reds survived — none of them
+caused by the ordering, all four never seen before, because these tests had never run.**
+
+### Run 3 (12:47 ET) — after the one test-side fix
+
+```
+3 failed, 154 passed in 3.22s
+```
+
+> **`cobalt_dev` holds (after this step): 0001–0009, unchanged | db 154/3 (the 23 archiver `requires_db`
+> tests, scoped as above — 20 of the 23 pass, 3 red, all three ESCALATED below)**
+
+**`cobalt_dev` IS unchanged in content, and it is proven, not assumed.** The BEFORE probe of the closing
+`--rollback --down-to 0009` was taken AFTER the whole with-DB suite had run, and every digest in it is
+identical to step 0's baseline — `bars` 1043443 / `2769919a…`, `vault_writes` 184 / `4a965c69…`,
+`cobalt_redactions` 126 / `5c891af7…`, `cobalt_jobs` 13 / `8d9b0861…`, down the table. The mechanism is
+`conftest.dev_db_tx` (autouse): every `db.connect` in the suite returns a `_SavepointConnection` over one
+`cobalt_dev` transaction that is rolled back. The suite committed nothing. The closing `--proof-only` is
+byte-identical to step 0's, including the two `-` rows.
+
+`rm …/.env` → `ls -la .env` → `No such file or directory` ✅.
+
+### The four reds, one row each
+
+**F-DB1 / F-DB2 — `cobalt_user` CAN read both new tables. GENUINE FINDING, ESCALATED, not "fixed".**
+`AssertionError: cobalt_user can read system.archive_progress` (and `…archive_incidents`).
+`has_table_privilege('cobalt_user', 'system.archive_progress', 'SELECT')` returns **true** on real
+`cobalt_dev`. Cause, read from the SQL and not guessed: `0001_schemas.sql:124`
+`GRANT SELECT ON ALL TABLES IN SCHEMA system TO cobalt_user;` — which 0001 replays on every migrate, after
+0010/0011 have created their tables — and `:150-152`
+`ALTER DEFAULT PRIVILEGES FOR ROLE cobalt_system, <login> IN SCHEMA system GRANT SELECT ON TABLES TO cobalt_user`,
+a standing default privilege on every future system table. **The spec contradicts itself** (§11): it asks
+for "`cobalt_user` is granted nothing on them" AND for "Ownership and grants follow `0006_radar_score.sql`'s
+pattern for a system table — the builder reads it, never invents one" — and `0006_radar_score.sql:198-200`
+does the opposite, granting `cobalt_user` SELECT on its own system tables explicitly. **The branch's code is
+consistent with every other system table; the spec sentence is the thing that is not achievable** without an
+explicit `REVOKE SELECT … FROM cobalt_user` that nobody wrote. Per the index card the CODE wins and the
+difference is an ESCALATE line — so it is one, and the test stays RED for the desk to rule. This is exactly
+the L45/L70 class: the offline twin `test_nothing_is_granted_to_cobalt_user` PASSES because it only greps
+the migration TEXT for the string `cobalt_user`; the database says otherwise. **Not fixed here — I do not
+rule a tenancy question, and I do not change real grants.**
+
+**F-DB3 — the advisory-lock test could not observe its own property. TEST-SIDE, FIXED, tests-first.**
+`assert try_acquire_run_lock(second) is False` → `assert True is False`, `where True = try_acquire_run_lock(<conftest._SavepointConnection object …>)`.
+§9's lock is SESSION level (`store.py:53-66`, `pg_try_advisory_lock`, deliberately not `…_xact_lock`), and
+`pg_try_advisory_lock` is re-entrant within one session. The test opened `BarStore()._connect()` twice —
+both of which go through the autouse `dev_db_tx` fixture and come back as savepoint proxies over **one**
+session — so the "second holder" was the first holder. The code is correct; the test could not see it.
+Fixed by taking the two connections from the `real_connect` fixture, which conftest documents for exactly
+this ("a savepoint proxy over one shared connection cannot show that a SYSTEM role is refused a `"user"`
+table, because both proxies are the same session"). It writes no rows, so RULING 7 is untouched. RED before
+(`assert True is False`) → GREEN after (`1 passed`). Own commit.
+
+**F-DB4 — `test_the_own_connection_upsert_survives_another_transactions_rollback`. GENUINE, ESCALATED, left RED.**
+`AssertionError: \`upsert_bars\` is expected to commit on its OWN connection; if this now rolls back, the
+nightly night's write semantics changed`. Same root cause as F-DB3 — under `dev_db_tx` the "own connection"
+`upsert_bars` opens is a savepoint of the SAME transaction as the enclosing `target_transaction()`, so the
+outer rollback takes the inner write with it and the close reads `100.0000` instead of `999.0000`. **But
+unlike F-DB3 there is no fix that does not either narrow the test or break a standing ruling:** the property
+under test is that `upsert_bars` **COMMITS**, and a committing test is what conftest's RULING 7 exists to
+forbid ("Before RULING 7 the test suite wrote REAL rows into the same `cobalt_dev` tables the PRODUCTION
+ASET sheet and both prefill jobs wrote to"). Rewriting it to prove anything weaker is narrowing, which L45's
+companion ruling refuses. **This is a ruling for the desk, not for me** — two options, named: (a) delete the
+`requires_db` twin and rely on the offline pins that already assert `upsert_bars` opens its own connection
+and holds the only `DO UPDATE` (`test_upsert_bars_still_does_update_and_never_do_nothing`,
+`test_upsert_bars_on_takes_the_callers_connection_and_never_opens_one`,
+`test_only_one_copy_of_the_upsert_statement_exists`); or (b) give the suite a sanctioned committing lane
+with mandatory cleanup, which amends RULING 7. I took neither.
+
+**Companion note, not a finding:** F-DB4's sibling `test_a_rollback_unwrites_an_upsert_made_on_the_targets_connection`
+PASSES — but under one shared transaction it would pass whether or not the property held, since everything
+rolls back. Its verdict should be read as UNPROVEN until F-DB4's ruling lands, not as evidence for F1.
+
+## DB RUN — OFFLINE SUITE + RESTARTS + UNVERIFIABLE SETTLED
+
+`ls -la .env` → `No such file or directory` re-confirmed before this step. `uv run pytest -q tests/cobalt tests/taxonomy`:
+
+```
+1866 passed, 320 skipped, 1 xfailed, 15 warnings in 44.43s
+```
+
+**UNVERIFIABLE item 2 of 3, SETTLED: the `1866/0/320` count is REAL.** `passed` 1866 = round 2's close,
+exactly. `failed` **0**. This step touched no offline test, and the one test this run did change (F-DB3) is
+`requires_db`, so it skips offline and moves no count.
+
+**The arithmetic on `skipped`, named rather than waved off — and the prompt's expectation here is wrong.**
+`skipped` is **320**, unchanged, and it MUST be. The prompt expects it to "drop by however many of the 23
+`requires_db` tests ran for real in step 2". It cannot: `requires_db` is
+`pytest.mark.skipif(not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")))`, and step 3 runs with
+`.env` REMOVED, so those two variables are unset and all 23 skip again — exactly as they did at round 2's
+close. The 23 ran in step 2's own separate run, with `.env` present and `COBALT_ENV=dev`. Two runs, two
+environments; the offline number is not supposed to move. `320 - 320 = 0` is the correct arithmetic, not a
+mismatch. (1 xfailed is pre-existing and appears in round 2's close the same way.)
+
+**UNVERIFIABLE item 3 of 3, SETTLED: `uv run cobalt jobs restarts 8838dda..HEAD`, table VERBATIM:**
+
+```
+path	change	rule	restart
+configs/cobalt/taxonomy/tunables.yaml	M	resident reads	com.cobalt.aset,com.cobalt.radar
+docs/40 - DevDocs/cobalt/archiver/__init__.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/cli.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/incidents.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/progress.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/quiet.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/reconcile.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/report.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/runner.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/settings.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/shadow.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/archiver/store.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/db_migrations/__init__.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/db_migrations/placement.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/heartbeat/probes.md	M	DOCS	-
+docs/40 - DevDocs/reports/archiver-append-build-2026-09-19.md	M	DOCS	-
+src/cobalt/archiver/cli.py	A	static import reach	com.cobalt.radar
+src/cobalt/archiver/incidents.py	A	static import reach	com.cobalt.radar
+src/cobalt/archiver/progress.py	A	static import reach	com.cobalt.radar
+src/cobalt/archiver/quiet.py	A	static import reach	com.cobalt.radar
+src/cobalt/archiver/reconcile.py	A	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/archiver/report.py	M	static import reach	-
+src/cobalt/archiver/runner.py	M	static import reach	-
+src/cobalt/archiver/settings.py	A	static import reach	com.cobalt.radar
+src/cobalt/archiver/shadow.py	A	static import reach	com.cobalt.radar
+src/cobalt/archiver/store.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/cli.py	M	static import reach	com.cobalt.radar
+src/cobalt/db_migrations/0010_archive_progress.rollback.sql	A	non-Python src asset	-
+src/cobalt/db_migrations/0010_archive_progress.sql	A	non-Python src asset	-
+src/cobalt/db_migrations/0011_archive_incidents.rollback.sql	A	non-Python src asset	-
+src/cobalt/db_migrations/0011_archive_incidents.sql	A	non-Python src asset	-
+src/cobalt/db_migrations/__init__.py	M	static import reach	com.cobalt.radar
+src/cobalt/db_migrations/placement.py	M	static import reach	com.cobalt.radar
+src/cobalt/heartbeat/probes.py	M	static import reach	com.cobalt.radar
+tests/cobalt/test_archiver_append_store.py	A	test/documentation; no resident	-
+tests/cobalt/test_archiver_migrations.py	A	test/documentation; no resident	-
+tests/cobalt/test_archiver_quiet.py	A	test/documentation; no resident	-
+tests/cobalt/test_archiver_reconcile.py	A	test/documentation; no resident	-
+tests/cobalt/test_archiver_runner.py	A	test/documentation; no resident	-
+tests/cobalt/test_archiver_settings.py	A	test/documentation; no resident	-
+tests/cobalt/test_finviz_consumers.py	M	test/documentation; no resident	-
+tests/cobalt/test_heartbeat.py	M	test/documentation; no resident	-
+tests/cobalt/test_heartbeat_archiver_incidents.py	A	test/documentation; no resident	-
+tests/cobalt/test_radar_migration.py	M	test/documentation; no resident	-
+tests/cobalt/test_radar_score_migration.py	M	test/documentation; no resident	-
+tests/cobalt/test_tenancy.py	M	test/documentation; no resident	-
+RESTARTS: com.cobalt.aset com.cobalt.radar
+```
+
+**0 UNCLASSIFIED — every one of the 46 rows carries a rule.** `RESTARTS: com.cobalt.aset com.cobalt.radar`
+is CORRECT, and now derived rather than asserted. The `aset` half comes from exactly three paths
+(`configs/cobalt/taxonomy/tunables.yaml` by `resident reads`, `archiver/reconcile.py` and `archiver/store.py`
+by `static import reach`); everything else that restarts anything restarts `com.cobalt.radar` alone; the 15
+DevDocs paths derive `-` under L42's 09-13 documentation amendment. Note the two new SQL files classify as
+`non-Python src asset` → `-`: correct, since a migration file is read by the `db migrate` CLI, not by a
+resident — but the deploy still runs `cobalt db migrate --allow-prod` as its own named step (round 1's
+ESCALATE (iv)1), and that is not a restart.
+
+**UNVERIFIABLE item 1 of 3** was run in PREFLIGHT and is restated here rather than rerun: the fresh
+`git diff --stat c974fbf..HEAD -- src tests docs` shows the same nine paths round 2's own close listed, no
+surprise path.
+
+`git status --porcelain` → one line, this report, uncommitted at the moment of writing and committed by the
+close commit below. `git diff --stat 8838dda HEAD -- src tests docs` → 45 files, 10955 insertions, 55
+deletions: 14 DevDocs files + this report, 18 `src/cobalt/...` paths (10 archiver modules, `cli.py`, the four
+0010/0011 SQL files, `db_migrations/__init__.py`, `placement.py`, `heartbeat/probes.py`) and 12 test files.
+Every path is one this prompt or the branch's own prior commits named.
+
+## DB RUN ESCALATE
+
+**CARRIED FORWARD UNTOUCHED — round 1's `## ESCALATE` in full:** (i) the spec §14 OPEN table O-1…O-7 with
+what was built as the safe default; (ii) the never-run `requires_db` tests — **CLOSED by this run, see
+below**; (iii) the cross-branch table (`sprint-2/p4` shares `db_migrations/__init__.py`, `placement.py`,
+`tunables.yaml`, `cli.py`, `archiver/runner.py`, `archiver/store.py`; P4's `_check_demand` call must be
+re-applied at the top of the rewritten `_run_targets`); (iv) the deploy-prompt list 1–6; (v) the five known
+limits of §12; and its numbered findings 1–8. **And round 2's `## ROUND 2 ESCALATE` in full:** R2-1 (the
+shadow artifact's timezone, ET — a ruling still OWED from the desk or the owner), R2-2 (`backfill-missing`
+needed no F1-shaped fix), **R2-3 (the `requires_db` first run) — now CLOSED**, R2-4 (one test rewritten to
+follow F1's refactor). Nothing in this run resolves or supersedes any of the rest.
+
+**NEW THIS RUN — 4 items.**
+
+**DB-1. `cobalt_user` CAN read both new tables; §11's grant sentence is not achievable as written. TWO TESTS RED.**
+Detail and cause above (`0001_schemas.sql:124` + `:150-152`, vs `0006_radar_score.sql:198-200` which §11 told
+the builder to copy). **The desk or the tribunal rules one of two ways:** (a) add an explicit
+`REVOKE SELECT ON system.archive_progress, system.archive_incidents FROM cobalt_user;` to 0010/0011, making
+the spec sentence true and making these two tables the ONLY system tables the user role cannot read — a real
+tenancy decision, not a typo fix; or (b) amend §11 to match 0006's pattern and relax the two tests to assert
+no WRITE grant. **This is the first thing this branch's DB run found that reads clean from the SQL text and
+false from the database — precisely the L45/L70 class, and precisely why the run was owed.**
+
+**DB-2. `test_the_own_connection_upsert_survives_another_transactions_rollback` is unobservable under
+conftest's autouse single-transaction fixture. ONE TEST RED.** Detail and the two options above. Neither
+was taken: (a) narrows the test (L45 companion ruling forbids), (b) amends RULING 7 (not mine).
+
+**DB-3. `35`'s step order is wrong and the next prompt of this shape should not repeat it.** Step 1's
+rollback removes the two tables that 20 of the 23 `requires_db` tests need. Proven, not asserted: run 1 went
+`12 failed, 145 passed` with the ten missing-table reds listed above. The safe default taken (re-apply, run,
+roll back again) delivered both steps' stated outcomes. **ASK DESK line raised in the suite section, 12:45 ET.**
+
+**DB-4. Two index-card drifts, named in PREFLIGHT** — `test_archiver_quiet.py` holds ZERO `requires_db`
+tests (the F3/Q10 twin is in `test_archiver_append_store.py`), and the 0010/0011 `requires_db` half is 10
+tests, not ≈17. The total of 23 is correct.
+
+**IS THE BRANCH'S DB DEBT CLOSED? YES — the debt itself, not every question it opened.** Round 1's ESCALATE
+(ii) and round 2's R2-3 were both "23 `requires_db` tests written, NEVER RUN". **All 23 have now run on real
+`cobalt_dev`: 20 pass, 3 are red and every one of the three is named, explained and escalated above.** The
+migrations are proven applied AND reversed on real Postgres. What the branch now carries in place of the
+debt is two rulings (DB-1, DB-2) and three red tests — which is a shipping gate the house check and Dejan
+decide on, not an unknown.
+
+**The three REVIEW.md UNVERIFIABLE items, by name, with how each was settled:**
+
+| # | item | settled how |
+|---|---|---|
+| 1 | a fresh `git diff` of `c974fbf..archiver/append-0919` | PREFLIGHT ran it: nine paths, identical to round 2's own close listing, no surprise path |
+| 2 | the `1866/0/320` suite pass and the 23 `requires_db` tests | step 3's offline run: **1866 passed / 0 failed / 320 skipped**, exact match; step 2 ran the 23 for real: **20 pass, 3 red** (DB-1 ×2, DB-2) |
+| 3 | the `RESTARTS: com.cobalt.aset com.cobalt.radar` line | `uv run cobalt jobs restarts 8838dda..HEAD` printed above: **0 UNCLASSIFIED**, the line is derived and correct |
+
+**MEMORY:** none proposed — this run changed no law and no standing practice.
+**RULING:** two are owed by the desk or the tribunal — **DB-1** (the `cobalt_user` grant on the two archiver
+tables: REVOKE, or amend §11) and **DB-2** (whether a `requires_db` test may commit, or the twin retires).
+R2-1 (the shadow artifact's timezone) remains owed from round 2 and is untouched by this run.
+
+ARCHIVER DB <CLOSE-SHA> | offline 1866/0 (320 skipped vs round-2 320 — unchanged, and correct: step 3 runs with `.env` removed so all 23 `requires_db` skip again) | db 154/3 (the 23 archiver requires_db tests: 20 pass, 3 red — DB-1 ×2 cobalt_user grant, DB-2 unobservable commit) | migrations 0010/0011: applied on real cobalt_dev (both CREATED system-side, every pre-existing digest unchanged) and reversed (`--rollback --down-to 0009` dropped exactly those two, proof-only byte-identical to the step-0 baseline) | UNVERIFIABLE settled: (1) fresh c974fbf..HEAD diff = round 2's nine paths, no surprise; (2) 1866/0/320 real + the 23 ran for the first time; (3) RESTARTS derived, 0 UNCLASSIFIED | cobalt_dev: 0001–0009, unchanged (every row count and digest identical to this run's step-0 proof) | .env: removed, proven gone | RESTARTS: com.cobalt.aset com.cobalt.radar | OWED: whole-build house check close (Astra), rulings DB-1 + DB-2 + R2-1, next deploy prompt (deploy 3, after P4) | ESCALATE: 4
