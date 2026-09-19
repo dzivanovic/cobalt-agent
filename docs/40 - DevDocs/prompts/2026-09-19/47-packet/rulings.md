@@ -1,0 +1,6 @@
+# The two rulings these commits implement (verbatim rows from `cto-2026-09-19.md` §4)
+
+| R25 | 13:10 ET | "B" — to the desk's A/B of 13:0x (§53 DB-1; desk had recommended A): migrations 0010/0011 carry an EXPLICIT `REVOKE` so `cobalt_user` cannot read `system.archive_progress` / `system.archive_incidents` — the FINAL design's §11 "nothing granted" stands as written; these two are the only system tables that role cannot read (0001's blanket + default-privilege SELECT is overridden for them). The two red tests stay as they are and must go green. | APPROVED — archiver round-3 chunk `40` in draft; memory line at the fold (`areas/cobalt-product-definition.md`) |
+
+| R26 | 13:21 ET | "A" — to the desk's A/B of 13:1x (§53 DB-2): the `requires_db` test `test_archiver_append_store.py::test_the_own_connection_upsert_survives_another_transactions_rollback` is DROPPED (the dev harness's single-transaction fixture makes a real commit unobservable); the three offline pins of `upsert_bars`'s own connection + the only `DO UPDATE` stay. His ruling, so L45's companion ("never narrow the test") is not the desk's to weigh here; no committing lane is added to the harness. | APPROVED — chunk `43` in draft, runs after `ARCHIVER R3`; memory line at the fold |
+

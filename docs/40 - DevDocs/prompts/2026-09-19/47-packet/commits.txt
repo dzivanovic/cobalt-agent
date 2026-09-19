@@ -1,0 +1,3 @@
+ecb817c test(archiver): drop the unobservable own-connection-commit twin (cto-2026-09-19 R26)
+193a2ca fix(db-migrate): REVOKE cobalt_user off system.archive_progress and system.archive_incidents (cto-2026-09-19 R25 "B", DB-1)
+d2099e1 test(archiver): the advisory-lock test needs two SESSIONS, not two savepoint proxies (archiver DB run, F-DB3)
