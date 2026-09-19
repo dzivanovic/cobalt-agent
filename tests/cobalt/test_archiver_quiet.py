@@ -22,8 +22,13 @@ injected reader, and a fake store. No database, no radar.
 from __future__ import annotations
 
 import inspect
+import os
+import subprocess
+import sys
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -36,8 +41,12 @@ from cobalt.archiver.quiet import (
     QuietRefused,
     quiet_verdict,
 )
+from cobalt.archiver.reconcile import bar_values, compare, plan_candidates
 from cobalt.archiver.settings import ArchiverSettings
+from cobalt.archiver.store import ArchiveLockError
 from cobalt.session.models import Session
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 ET = ZoneInfo("America/New_York")
 UTC = timezone.utc
@@ -287,15 +296,64 @@ def test_there_is_no_force_flag_anywhere():
 # =====================================================================
 
 
+class _FakeTxn:
+    """ONE connection, ONE transaction (`store.target_transaction`).
+
+    Writes made ON this connection are PENDING: they land at COMMIT and
+    vanish at ROLLBACK. A write made on a DIFFERENT connection has
+    already committed and is NOT undone by this transaction's rollback —
+    that asymmetry is real Postgres behaviour and it is the whole of the
+    tribunal's F1: `upsert_bars` opens its own connection, so a failed
+    pre-commit re-check could not unwrite it.
+    """
+
+    def __init__(self):
+        self.pending: dict = {}
+        self.incidents: list = []
+
+    def execute(self, *_a, **_k):
+        return self
+
+    def fetchone(self):
+        return (1,)
+
+
 class FakeBars:
     """A store whose bar rows are visible, so 'NO bar row changed' is an
-    assertion rather than a hope."""
+    assertion rather than a hope.
+
+    It answers the whole surface a repair command drives — `run_lock`,
+    `target_transaction`, and the three write methods — so the two
+    repairs can be exercised through their REAL entry points (F1, F2,
+    F4) rather than through `quiet_verdict()` alone.
+    """
 
     def __init__(self):
         self.rows = {}
         self.calls: list[str] = []
+        #: committed incident rows (the repair's audit trail, spec O-4)
+        self.incidents: list = []
+        self.committed = 0
+        self.rolled_back = 0
+
+    # -- what a write on `conn` can see, and where it lands ------------
+
+    def _visible(self, conn):
+        seen = dict(self.rows)
+        if isinstance(conn, _FakeTxn):
+            seen.update(conn.pending)
+        return seen
+
+    def _write(self, conn, key, value):
+        target = conn.pending if isinstance(conn, _FakeTxn) else self.rows
+        target[key] = value
+
+    # -- the write methods --------------------------------------------
 
     def upsert_bars(self, bars, *, before_commit=None):
+        """ITS OWN CONNECTION, exactly as `store.py:95-141` has it: these
+        rows are COMMITTED the moment this returns, whatever the
+        caller's transaction does afterwards."""
         self.calls.append("upsert_bars")
         for b in bars:
             self.rows[(b.ticker, b.interval.value, b.ts)] = str(b.close)
@@ -303,15 +361,47 @@ class FakeBars:
             before_commit()
         return len(bars)
 
+    def upsert_bars_on(self, conn, bars):
+        """The connection-taking sibling (F1): the same `DO UPDATE`, on
+        the caller's connection, so a rollback of that transaction
+        unwrites it."""
+        self.calls.append("upsert_bars_on")
+        for b in bars:
+            self._write(conn, (b.ticker, b.interval.value, b.ts), str(b.close))
+        return len(bars)
+
     def insert_new_bars(self, conn, bars):
         self.calls.append("insert_new_bars")
+        seen = self._visible(conn)
         written = 0
         for b in bars:
             key = (b.ticker, b.interval.value, b.ts)
-            if key not in self.rows:
-                self.rows[key] = str(b.close)
-                written += 1
+            if key in seen:
+                continue
+            self._write(conn, key, str(b.close))
+            seen[key] = str(b.close)
+            written += 1
         return written
+
+    # -- the transaction surface ---------------------------------------
+
+    @contextmanager
+    def run_lock(self, what):
+        self.calls.append("run_lock")
+        yield _FakeTxn()
+
+    @contextmanager
+    def target_transaction(self):
+        conn = _FakeTxn()
+        try:
+            yield conn
+        except BaseException:
+            self.rolled_back += 1
+            raise
+        else:
+            self.rows.update(conn.pending)
+            self.incidents.extend(conn.incidents)
+            self.committed += 1
 
     def snapshot(self):
         return dict(self.rows)
@@ -324,7 +414,177 @@ def _bar(when, close="100.00", ticker="TESTARCH", interval=Interval.I5) -> Bar:
     )
 
 
-def test_gemini_close_boundary_poller_lag():
+# =====================================================================
+# Driving the REAL command path (tribunal round 1, F1/F2/F4)
+#
+# `quiet_verdict()` is a pure function, and a test that stops there
+# cannot see a write escaping the repair's transaction — which is
+# exactly how F1 survived round 1. Everything below drives
+# `_cmd_restate` / `_cmd_backfill_missing` themselves, through the real
+# parser, the real `guarded_repair`, the real `target_transaction` and
+# the real `_apply_restate`. Only the edges are replaced: the settings
+# loader, the store factory, the vendor fetch and the incident writer.
+# =====================================================================
+
+
+RESTATE_TS = datetime(2026, 9, 18, 19, 55, tzinfo=UTC)
+FETCH_AT = datetime(2026, 9, 18, 20, 30, tzinfo=UTC)
+
+#: the two instants the pre-commit re-check sees in Astra's sequence
+QUIET_AT = et(2026, 9, 18, 3, 49, 59)
+NOT_QUIET_AT = et(2026, 9, 18, 3, 50, 5)
+
+
+def scenario(*, stored="100.00", vendor="105.00", ts=RESTATE_TS):
+    """One target's `(plan, comparison)` as `_compared` would return it.
+
+    Built with the REAL `plan_candidates` / `compare`, so `differing`
+    and `incoming_only` are what the production reconciler decides, not
+    what a test asserts into being. `stored=None` = storage holds
+    nothing for the key, which is `backfill-missing`'s case.
+    """
+    vendor_bar = _bar(ts, close=vendor)
+    plan = plan_candidates(
+        ticker="TESTARCH", interval=Interval.I5, bars=[vendor_bar],
+        fetch_started_at=FETCH_AT, archived_through=None,
+    )
+    held = {} if stored is None else {ts: bar_values(_bar(ts, close=stored))}
+    return plan, compare(plan.candidates, held)
+
+
+def observer_of(instants):
+    """`_observer`'s replacement: one scripted observation per check.
+
+    The START check takes the first instant, the pre-commit re-check
+    the second — so a single iterable scripts the whole of §8's
+    "checked at START and AGAIN immediately before COMMIT".
+    """
+
+    def _factory(_settings):
+        def _observe(**_kwargs):
+            now = next(instants)
+            if isinstance(now, QuietObservation):
+                return now
+            return observation(
+                now=now, session=Session.OVERNIGHT,
+                last_scan_at=et(2026, 9, 17, 20, 0),
+                next_scanning_open=et(2026, 9, 18, 4, 0),
+                open_after_overnight=et(2026, 9, 18, 4, 0),
+            )
+
+        return _observe
+
+    return _factory
+
+
+def wire_command_path(monkeypatch, store, instants, *, compared=None):
+    """Everything a repair reaches that is NOT the thing under test."""
+    monkeypatch.setattr(archiver_cli, "load_archiver_settings", cfg)
+    monkeypatch.setattr(archiver_cli, "_store", lambda: store)
+    monkeypatch.setattr(
+        archiver_cli, "_compared", lambda *a, **k: compared or scenario()
+    )
+    monkeypatch.setattr(archiver_cli, "_observer", observer_of(instants))
+    monkeypatch.setattr(
+        archiver_cli.incidents_mod,
+        "open_or_refresh",
+        lambda conn, draft, **kw: conn.incidents.append(
+            (draft.kind, draft.ticker, draft.detail)
+        ),
+    )
+
+
+def run_command(argv):
+    """Through the REAL parser and the REAL handler table."""
+    args = archiver_cli.build_parser().parse_args(argv)
+    return archiver_cli.HANDLERS[args.command](args)
+
+
+RESTATE_ARGV = [
+    "archiver", "restate", "TESTARCH", "i5", "--apply",
+    "--reason", "vendor restated the session",
+]
+BACKFILL_ARGV = ["archiver", "backfill-missing", "TESTARCH", "i5", "--apply"]
+
+
+def test_a_failed_recheck_leaves_zero_changed_bar_rows_in_restate(monkeypatch):
+    """F1, the blocker: `restate --apply`'s bar write must live on the
+    repair's OWN transaction.
+
+    §8's core guarantee is "a failed re-check = ROLLBACK … no bar row
+    surviving". Until this round `_apply_restate` called
+    `store.upsert_bars(rows)`, which opens its own connection and
+    commits there, so the rows outlived the rollback of the transaction
+    the re-check raised in (L1: a plausible partial write is exactly
+    what fail-loud forbids).
+    """
+    store = FakeBars()
+    store.upsert_bars([_bar(RESTATE_TS, close="100.00")])
+    store.calls.clear()
+    before = store.snapshot()
+
+    wire_command_path(monkeypatch, store, iter([QUIET_AT, NOT_QUIET_AT]))
+
+    with pytest.raises(QuietRefused):
+        run_command(RESTATE_ARGV)
+
+    assert store.snapshot() == before, (
+        "a repair whose pre-commit re-check failed left a rewritten bar row "
+        f"behind: {before} -> {store.snapshot()}"
+    )
+    assert store.incidents == [], "the repair's incident row survived the rollback"
+    assert store.rolled_back == 1 and store.committed == 0
+    assert "upsert_bars" not in store.calls, (
+        "the overwrite went through the own-connection `upsert_bars`, which is "
+        f"the F1 defect; calls: {store.calls}"
+    )
+
+
+def test_a_failed_recheck_leaves_zero_changed_bar_rows_in_backfill_missing(monkeypatch):
+    """F1's sibling, which the code ALREADY had right.
+
+    `_cmd_backfill_missing` calls `store.insert_new_bars(conn, …)` — the
+    connection-taking method — inside the same `target_transaction()`
+    block as its re-check, so its write rolls back with it. This test
+    states that as an assertion instead of an assumption; if it ever
+    fails, `backfill-missing` has grown F1's shape.
+    """
+    store = FakeBars()
+    store.upsert_bars([_bar(RESTATE_TS, close="100.00")])
+    store.calls.clear()
+    before = store.snapshot()
+
+    wire_command_path(
+        monkeypatch, store, iter([QUIET_AT, NOT_QUIET_AT]),
+        compared=scenario(stored=None, ts=datetime(2026, 9, 18, 19, 50, tzinfo=UTC)),
+    )
+
+    with pytest.raises(QuietRefused):
+        run_command(BACKFILL_ARGV)
+
+    assert store.snapshot() == before
+    assert store.rolled_back == 1 and store.committed == 0
+    assert "insert_new_bars" in store.calls and "upsert_bars" not in store.calls
+
+
+def test_a_quiet_restate_commits_its_rows_and_its_incident(monkeypatch):
+    """The other half of the same guarantee: when the window HOLDS, the
+    rewrite and its audit incident commit together (spec O-4)."""
+    store = FakeBars()
+    store.upsert_bars([_bar(RESTATE_TS, close="100.00")])
+    store.calls.clear()
+
+    wire_command_path(monkeypatch, store, iter([QUIET_AT, QUIET_AT]))
+    run_command(RESTATE_ARGV)
+
+    assert store.snapshot()[("TESTARCH", "i5", RESTATE_TS)] == "105.00"
+    assert store.committed == 1 and store.rolled_back == 0
+    assert [row[0].value for row in store.incidents] == ["restated"]
+    assert store.incidents[0][2]["rows_rewritten"] == 1
+    assert store.incidents[0][2]["reason"] == "vendor restated the session"
+
+
+def test_gemini_close_boundary_poller_lag(monkeypatch):
     """Gemini's round-3 sequence, placed on THIS radar's real closing
     boundaries (§8).
 
@@ -377,8 +637,41 @@ def test_gemini_close_boundary_poller_lag():
     assert store.snapshot() == before, "a refused repair must not change a bar row"
     assert store.calls == ["upsert_bars"]      # only the setup write
 
+    # (iv) THE SAME SEQUENCE THROUGH THE REAL COMMAND (F2). The three
+    # verdicts above are pure-function checks; they could not have seen
+    # F1, because a write escaping the repair's transaction never
+    # reaches `quiet_verdict`. Here the repair STARTS quiet on the
+    # early-close night and the lagging poller opens a cycle while it is
+    # in flight, so Q3 fails at the PRE-COMMIT re-check — Gemini's lag,
+    # at the only boundary where the radar's own gate does not save us.
+    driven = FakeBars()
+    driven.upsert_bars([_bar(RESTATE_TS, close="100.00")])
+    driven.calls.clear()
+    driven_before = driven.snapshot()
 
-def test_astra_open_boundary_repair_crosses_open():
+    def _at(now, last_scan_at):
+        return observation(
+            now=now, session=Session.OVERNIGHT, last_scan_at=last_scan_at,
+            next_scanning_open=et(2026, 11, 30, 4, 0),
+            open_after_overnight=et(2026, 11, 30, 4, 0),
+        )
+
+    wire_command_path(monkeypatch, driven, iter([
+        _at(et(2026, 11, 27, 17, 40), et(2026, 11, 27, 17, 0)),      # start: quiet
+        _at(et(2026, 11, 27, 17, 40, 10), et(2026, 11, 27, 17, 40)),  # a cycle began
+    ]))
+
+    with pytest.raises(QuietRefused):
+        run_command(RESTATE_ARGV)
+
+    assert driven.snapshot() == driven_before, (
+        "the lagging poller's cycle opened while the repair was in flight, so "
+        "the pre-commit re-check must leave ZERO changed bar rows"
+    )
+    assert driven.incidents == [] and driven.rolled_back == 1
+
+
+def test_astra_open_boundary_repair_crosses_open(monkeypatch):
     """Astra's round-3 sequence (§8): a repair started at 03:59:50, the
     poller fetching at 04:00:05, the repair committing at 04:00:10, the
     poller writing at 04:00:20.
@@ -425,6 +718,26 @@ def test_astra_open_boundary_repair_crosses_open():
 
     assert store.snapshot() == before
     assert store.calls == ["upsert_bars"]
+
+    # ...AND THE SAME SEQUENCE THROUGH THE REAL COMMAND (F2). The three
+    # verdicts above are pure-function checks and cannot see a write
+    # escaping the repair's transaction — which is precisely how F1
+    # survived round 1. This drives `_cmd_restate` itself: it starts at
+    # 03:49:59 (quiet), and the pre-commit re-check at 03:50:05 refuses.
+    driven = FakeBars()
+    driven.upsert_bars([_bar(RESTATE_TS, close="100.00")])
+    driven.calls.clear()
+    driven_before = driven.snapshot()
+
+    wire_command_path(monkeypatch, driven, iter([QUIET_AT, NOT_QUIET_AT]))
+
+    with pytest.raises(QuietRefused):
+        run_command(RESTATE_ARGV)
+
+    assert driven.snapshot() == driven_before, (
+        "a repair that crossed the open must leave ZERO changed bar rows"
+    )
+    assert driven.incidents == [] and driven.rolled_back == 1
 
 
 def test_the_pre_commit_recheck_rolls_the_repair_back():

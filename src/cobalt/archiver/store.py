@@ -107,6 +107,30 @@ class BarStore:
         """
         if not bars:
             return 0
+        with self._connect() as conn:
+            written = self.upsert_bars_on(conn, bars)
+            if before_commit is not None:
+                before_commit()
+        return written
+
+    def upsert_bars_on(self, conn, bars: list[Bar]) -> int:
+        """`upsert_bars`, on a connection the CALLER owns.
+
+        Same statement, one copy of it (L3) — the difference is whose
+        transaction the rows belong to. `restate --apply` needs that:
+        §8's pre-commit re-check raises INSIDE the repair's
+        `target_transaction`, and a rollback there can only undo rows
+        written on that same connection. Until the tribunal's F1 the
+        repair called `upsert_bars`, which opens and commits its own
+        connection, so a refused repair left the rewritten bars behind —
+        exactly the plausible partial write L1 forbids.
+
+        The nightly `upsert` call site (`runner.py:130`) passes no
+        connection and is unchanged: it still goes through
+        `upsert_bars`.
+        """
+        if not bars:
+            return 0
         rows = [
             (
                 b.ticker,
@@ -120,23 +144,20 @@ class BarStore:
             )
             for b in bars
         ]
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                cur.executemany(
-                    """
-                    INSERT INTO bars (ticker, interval, ts, open, high, low, close, volume)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (ticker, interval, ts) DO UPDATE SET
-                        open = EXCLUDED.open,
-                        high = EXCLUDED.high,
-                        low = EXCLUDED.low,
-                        close = EXCLUDED.close,
-                        volume = EXCLUDED.volume
-                    """,
-                    rows,
-                )
-            if before_commit is not None:
-                before_commit()
+        with conn.cursor() as cur:
+            cur.executemany(
+                """
+                INSERT INTO bars (ticker, interval, ts, open, high, low, close, volume)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (ticker, interval, ts) DO UPDATE SET
+                    open = EXCLUDED.open,
+                    high = EXCLUDED.high,
+                    low = EXCLUDED.low,
+                    close = EXCLUDED.close,
+                    volume = EXCLUDED.volume
+                """,
+                rows,
+            )
         return len(rows)
 
     def bars_between(self, ticker: str, interval: Interval, start, end) -> list[Bar]:

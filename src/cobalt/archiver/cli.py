@@ -389,14 +389,24 @@ def _missing_bars(store, ticker: str, interval: Interval | None) -> list:
 
 
 def _apply_restate(store, conn, ticker: str, interval: Interval | None) -> int:
-    """The one overwrite in this build, and it is `upsert_bars` — the
-    same method the poller and the `upsert` night use."""
+    """The one overwrite in this build, and it is the same
+    `ON CONFLICT DO UPDATE` the poller and the `upsert` night use — but
+    ON `conn`, the repair's own transaction.
+
+    That is the whole of the tribunal's F1: `upsert_bars` opens and
+    commits a connection of its own, so the rows it wrote outlived the
+    rollback that §8's pre-commit re-check raises, and "a failed
+    re-check = ROLLBACK, no bar row surviving" was not true for the one
+    command that may overwrite a bar. `upsert_bars_on` takes the
+    connection, exactly as `insert_new_bars` already did for
+    `backfill-missing`.
+    """
     written = 0
     for one in _intervals_for(store, ticker, interval):
         plan, result = _compared(store, ticker, one)
         keys = {d.ts for d in result.differing}
         rows = [b for b in plan.candidates if b.ts in keys]
-        written += store.upsert_bars(rows)
+        written += store.upsert_bars_on(conn, rows)
     return written
 
 

@@ -185,10 +185,51 @@ def code_of(obj) -> str:
 
 
 def test_upsert_bars_still_does_update_and_never_do_nothing():
-    source = code_of(BarStore.upsert_bars)
+    """§5's mode isolation, followed to where the statement now lives.
+
+    Tribunal round 1, F1 moved the `DO UPDATE` into the
+    connection-taking sibling `upsert_bars_on`, because `restate
+    --apply` must write on the repair's own transaction. There is still
+    exactly ONE copy of the statement (L3) and `upsert_bars` still
+    reaches it on its OWN connection with the same result — which is
+    what the nightly `upsert` night depends on. Asserted across the
+    pair, so the property survives the indirection rather than being
+    dropped with it.
+    """
+    source = code_of(BarStore.upsert_bars_on)
     assert "ON CONFLICT (ticker, interval, ts) DO UPDATE SET" in source
     assert "DO NOTHING" not in source
     assert "return len(rows)" in source
+
+    caller = code_of(BarStore.upsert_bars)
+    assert "self._connect()" in caller, "the nightly write still owns its connection"
+    assert "self.upsert_bars_on(conn, bars)" in caller
+    assert "before_commit()" in caller
+    assert "ON CONFLICT" not in caller, "a second copy of the statement (L3)"
+
+
+def test_only_one_copy_of_the_upsert_statement_exists():
+    """L3, as an assertion: F1's fix must not leave two `DO UPDATE`s."""
+    source = inspect.getsource(BarStore)
+    assert source.count("ON CONFLICT (ticker, interval, ts) DO UPDATE SET") == 1
+
+
+def test_upsert_bars_on_takes_the_callers_connection_and_never_opens_one(no_connections):
+    """The append path's rule (`store.py`'s own comment): every method
+    below the line TAKES a connection. `upsert_bars_on` joins them —
+    it must not connect, commit or close."""
+    conn = _FakeConn()
+    written = store().upsert_bars_on(conn, [bar(ts(50))])
+    assert written == 1
+    assert "ON CONFLICT (ticker, interval, ts) DO UPDATE SET" in conn.sql
+    assert conn.executemany_calls == 1
+    assert (conn.commits, conn.rollbacks, conn.closes) == (0, 0, 0)
+
+
+def test_upsert_bars_on_is_a_noop_on_an_empty_list(no_connections):
+    conn = _FakeConn()
+    assert store().upsert_bars_on(conn, []) == 0
+    assert conn.queries == []
 
 
 def test_upsert_bars_signature_is_unchanged():
@@ -615,3 +656,94 @@ def test_a_recurring_incident_refreshes_rather_than_duplicating():
             (first,),
         ).fetchone()
         assert row[0] == now and row[1] == now + timedelta(days=1)
+
+
+# ---------------------------------------------------------------------
+# Tribunal round 1, F1 — the repair's bar write on the repair's own
+# transaction. Offline twins live in `test_archiver_quiet.py`; these two
+# are the real-transaction proof and their FIRST RUN IS OWED on
+# `cobalt_dev`, like every other `requires_db` test on this branch.
+# ---------------------------------------------------------------------
+
+
+@requires_db
+def test_a_rollback_unwrites_an_upsert_made_on_the_targets_connection():
+    """`upsert_bars_on` is the shape `restate --apply` now uses: the
+    `DO UPDATE` lands on the caller's connection, so the caller's
+    rollback — the one §8's pre-commit re-check raises — undoes it.
+
+    The offline test can only assert which METHOD was called; that a
+    real Postgres rollback actually removes the rewritten value is what
+    this one proves.
+    """
+    st = BarStore()
+    st.ensure_schema()
+    key = datetime(2026, 8, 29, 14, 0, tzinfo=UTC)
+    assert st.upsert_bars([bar(key, close="100.00")]) == 1
+
+    boom = RuntimeError("the pre-commit re-check refused")
+    with pytest.raises(RuntimeError):
+        with st.target_transaction() as conn:
+            assert st.upsert_bars_on(conn, [bar(key, close="999.00")]) == 1
+            raise boom
+
+    with st._connect() as conn:
+        row = conn.execute(
+            "SELECT close FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
+            ("TESTARCH", "i5", key),
+        ).fetchone()
+    assert str(row[0]) == "100.0000", (
+        "a rolled-back repair left the rewritten value in place — F1 again"
+    )
+
+
+@requires_db
+def test_the_own_connection_upsert_survives_another_transactions_rollback():
+    """The DEFECT, stated as a passing test so it can never come back
+    unnoticed: `upsert_bars` opens and COMMITS its own connection, so a
+    rollback elsewhere does not touch it.
+
+    Nothing is wrong with that — it is what the poller and the nightly
+    `upsert` night need. It is wrong only inside a repair, which is why
+    `_apply_restate` now takes `upsert_bars_on`.
+    """
+    st = BarStore()
+    st.ensure_schema()
+    key = datetime(2026, 8, 29, 14, 30, tzinfo=UTC)
+    assert st.upsert_bars([bar(key, close="100.00")]) == 1
+
+    with pytest.raises(RuntimeError):
+        with st.target_transaction() as _conn:
+            assert st.upsert_bars([bar(key, close="999.00")]) == 1
+            raise RuntimeError("the pre-commit re-check refused")
+
+    with st._connect() as conn:
+        row = conn.execute(
+            "SELECT close FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
+            ("TESTARCH", "i5", key),
+        ).fetchone()
+    assert str(row[0]) == "999.0000", (
+        "`upsert_bars` is expected to commit on its OWN connection; if this "
+        "now rolls back, the nightly night's write semantics changed"
+    )
+
+
+@requires_db
+def test_backfill_missings_insert_rolls_back_with_its_transaction():
+    """F1's sibling, on the real database: `insert_new_bars` already
+    writes on the caller's connection, so `backfill-missing` never had
+    the defect. Asserted rather than assumed."""
+    st = BarStore()
+    st.ensure_schema()
+    key = datetime(2026, 8, 29, 15, 0, tzinfo=UTC)
+
+    with pytest.raises(RuntimeError):
+        with st.target_transaction() as conn:
+            assert st.insert_new_bars(conn, [bar(key)]) == 1
+            raise RuntimeError("the pre-commit re-check refused")
+
+    with st._connect() as conn:
+        assert conn.execute(
+            "SELECT count(*) FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
+            ("TESTARCH", "i5", key),
+        ).fetchone()[0] == 0
