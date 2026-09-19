@@ -9,6 +9,8 @@ DB-backed proof is the hub's step at merge."
 
 from datetime import date, datetime, timezone
 
+import pytest
+
 from cobalt.dayopen import checks
 from cobalt.dayopen.launchd import LaunchdPrintError, LaunchdPrintStatus
 from cobalt.dayopen.models import Verdict
@@ -16,6 +18,7 @@ from cobalt.session.clock import session_clock
 
 MONDAY = date(2026, 9, 14)  # a real NYSE trading day (loaded calendar)
 SUNDAY = date(2026, 9, 13)  # a real weekend day
+SATURDAY = date(2026, 9, 19)  # the real 09-19 false alarm this guard closes
 MONDAY_0705_ET = datetime(2026, 9, 14, 11, 5, tzinfo=timezone.utc)  # 07:05 ET (DST, UTC-4)
 
 
@@ -180,6 +183,48 @@ def test_c2_fail_zero_rows():
     )
     assert result.verdict is Verdict.FAIL
     assert "no rows" in result.detail
+
+
+@pytest.mark.parametrize("non_trading_day", [SUNDAY, SATURDAY])
+def test_c2_non_trading_day_with_zero_rows_is_pass(non_trading_day):
+    """No scanning session exists on a weekend, so zero rows is the
+    correct state, not a defect: 2026-09-19 (Saturday) day-open went
+    AMBER on C2 alone for exactly this reason. C3 already carries the
+    same calendar guard (`test_c3_weekend_red_is_idle`)."""
+    conn = _FakeConn(
+        [
+            (lambda sql: "count(*)" in sql, _one_row_cursor(0)),
+            (lambda sql: "ORDER BY first_seen_at" in sql, _table_cursor([], _MEMBERSHIP_COLUMNS)),
+        ]
+    )
+    result = checks.check_c2_radar_membership(
+        non_trading_day, now=MONDAY_0705_ET, clock=session_clock(),
+        system_connect=lambda: conn, settings_store=_pool_settings(),
+    )
+    assert result.verdict is Verdict.PASS
+    assert result.detail == f"PASS — no session today ({non_trading_day} is not a trading day)"
+    # the raw block is still produced — the operator still sees the probe
+    assert "count\t0" in result.raw
+    assert "pool block metric" in result.raw
+    assert conn.closed
+
+
+def test_c2_trading_day_zero_rows_still_fails():
+    """The guard is a calendar guard, not a zero-rows amnesty: a trading
+    day with no membership rows stays FAIL (same shape as
+    `test_c2_fail_zero_rows`, kept beside it so the pair is legible)."""
+    conn = _FakeConn(
+        [
+            (lambda sql: "count(*)" in sql, _one_row_cursor(0)),
+            (lambda sql: "ORDER BY first_seen_at" in sql, _table_cursor([], _MEMBERSHIP_COLUMNS)),
+        ]
+    )
+    result = checks.check_c2_radar_membership(
+        MONDAY, now=MONDAY_0705_ET, clock=session_clock(),
+        system_connect=lambda: conn, settings_store=_pool_settings(),
+    )
+    assert result.verdict is Verdict.FAIL
+    assert result.detail == f"FAIL — no rows for {MONDAY}"
 
 
 def test_c2_fail_first_row_before_premarket_open():

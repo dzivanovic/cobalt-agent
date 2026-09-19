@@ -15,6 +15,16 @@ mode (missing file, launchd/DB error, unparseable report) becomes
   `"user".trader_settings` (supplementary — never fails C2 on its own).
   PASS iff count > 0 and the first row's `first_seen_at` (ET) is at or
   after `session.premarket_open`.
+  **Non-trading day:** the calendar is read BEFORE the zero-row verdict.
+  When `clock.windows_for(report_date)` is empty AND the count is 0, the
+  check is `PASS — no session today (<date> is not a trading day)`: no
+  scanning session exists on a weekend or a holiday, so no membership
+  rows is the correct state, not a defect (2026-09-19, a Saturday, went
+  AMBER on this check alone). The raw block — count, the `first_seen_at`
+  ordering and the pool metric note — is still produced, so the operator
+  still sees the probe. A TRADING day with zero rows is still FAIL; the
+  guard is a calendar guard, never a zero-rows amnesty. Same rule as C3
+  below, evaluated one step earlier in the function.
 - **C3** the newest `OK|RED  radar  ...` line in `logs/heartbeat.log`.
   PASS unless it is RED on a trading day at/after
   `session.premarket_open` — a RED line on a weekend/holiday, or before
