@@ -57,6 +57,18 @@ Outputs:
   tests/fixtures/replay/movers-gainers.real-shape.csv
   tests/fixtures/replay/movers-losers.real-shape.csv
   tests/fixtures/radar/pool-metrics.real-shape.csv
+
+SECOND MODE, `evidence` (AT-0). With no CLI argument the script does
+exactly what it did before. With `evidence` it cuts nothing at all: it
+reads every cached Finviz export it can find and writes ONE scratch
+report comparing the `Asset Type` column against `Industry =
+Exchange Traded Fund`. Read-only — no network, no DB, no fixture
+written, nothing written anywhere but `scratch/asset-type-evidence.md`.
+It exists because Finviz fills `Asset Type` only for funds and leaves it
+blank for an ordinary stock, so the radar config's `not_equity.values:
+[Exchange Traded Fund]` matches nothing; the report is the evidence for
+rebuilding that rule. It is a decision aid, never a rule. Tickers live
+in the scratch file only (L32) — stdout carries counts.
 """
 
 from __future__ import annotations
@@ -65,8 +77,13 @@ import csv
 import io
 import json
 import re
+import sys
+from collections import Counter
+from collections.abc import Iterable, Sequence
 from datetime import date, timedelta
 from pathlib import Path
+
+from pydantic import BaseModel
 
 HERE = Path(__file__).parent  # tests/fixtures/replay/
 RADAR_DIR = HERE.parent / "radar"
@@ -229,5 +246,298 @@ def main() -> None:
     cut_movers()
 
 
+# =====================================================================
+# `evidence` mode — READ-ONLY. Writes nothing but EVIDENCE_OUT.
+# =====================================================================
+
+#: The production radar's on-disk Finviz cache. Read only, recursively,
+#: and only by this mode; the cutting functions above never look at it.
+RADAR_CACHE_DIR = Path("/Users/cobalt/cobalt/data/radar-cache")
+
+#: The two unfiltered movers exports the hub already staged in scratch/
+#: for the STEP-1 cut. Included so the evidence covers the `v=152` shape
+#: as well as the cache's own column lists.
+EVIDENCE_SCRATCH_INPUTS = ("movers-gainers-raw.csv", "movers-losers-raw.csv")
+
+EVIDENCE_OUT = SCRATCH / "asset-type-evidence.md"
+
+ASSET_TYPE_COL = "Asset Type"
+INDUSTRY_COL = "Industry"
+TICKER_COL = "Ticker"
+FUND_INDUSTRY = "Exchange Traded Fund"
+
+#: Rendered in place of an empty `Asset Type` so a blank is never
+#: invisible in a table.
+BLANK = "<blank>"
+
+
+class EvidenceError(RuntimeError):
+    """A named input could not be read or parsed. Always carries the
+    file's name — a cache file that is not a CSV is a loud failure, not
+    a skipped row (L1)."""
+
+
+class DisagreementRow(BaseModel):
+    """One row where the two fund signals disagree."""
+
+    file: str
+    ticker: str
+    asset_type: str
+    industry: str
+
+
+class PairCount(BaseModel):
+    """Table A: a distinct (`Asset Type`, `Industry`) pair, with rows."""
+
+    asset_type: str
+    industry: str
+    rows: int
+
+
+class AssetTypeCount(BaseModel):
+    """Table B: a distinct `Asset Type` value, with rows."""
+
+    asset_type: str
+    rows: int
+
+
+class EvidenceReport(BaseModel):
+    """Everything the report file renders. Pure data — building it never
+    touches the filesystem beyond reading the inputs."""
+
+    input_dirs: list[str] = []
+    files_read: int = 0
+    files_without_columns: list[str] = []
+    rows_with_columns: int = 0
+    rows_without_columns: int = 0
+    distinct_fund_tickers: int = 0
+    distinct_asset_types: int = 0
+    table_a: list[PairCount] = []
+    table_b: list[AssetTypeCount] = []
+    table_c_non_blank_not_fund: list[DisagreementRow] = []
+    table_c_fund_blank_type: list[DisagreementRow] = []
+
+    @property
+    def table_c_total(self) -> int:
+        return len(self.table_c_non_blank_not_fund) + len(self.table_c_fund_blank_type)
+
+
+def _read_csv(path: Path) -> tuple[list[str], list[dict]]:
+    """Header + rows of one export. The header row is read, never
+    assumed: every lookup downstream is by column name."""
+    try:
+        with path.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            fieldnames = reader.fieldnames
+            rows = list(reader)
+    except (csv.Error, UnicodeDecodeError, OSError) as exc:
+        raise EvidenceError(f"{path.name}: cannot be read as CSV ({exc})") from exc
+    if not fieldnames:
+        raise EvidenceError(f"{path.name}: cannot be read as CSV (no header row)")
+    return list(fieldnames), rows
+
+
+def collect_evidence(
+    paths: Iterable[Path], input_dirs: Sequence[str] = ()
+) -> EvidenceReport:
+    """Read every path and count how the two fund signals line up.
+
+    A file whose header lacks either column is COUNTED and named, never
+    skipped and never an error — the `v=152` movers exports are exactly
+    that case, and their absence from the comparison is itself evidence.
+    """
+    files_without: list[str] = []
+    rows_with = 0
+    rows_without = 0
+    pairs: Counter[tuple[str, str]] = Counter()
+    fund_types: Counter[str] = Counter()
+    fund_tickers: set[str] = set()
+    asset_types: set[str] = set()
+    non_blank_not_fund: list[DisagreementRow] = []
+    fund_blank_type: list[DisagreementRow] = []
+    files_read = 0
+
+    for path in paths:
+        files_read += 1
+        fieldnames, rows = _read_csv(path)
+        if ASSET_TYPE_COL not in fieldnames or INDUSTRY_COL not in fieldnames:
+            files_without.append(path.name)
+            rows_without += len(rows)
+            continue
+        rows_with += len(rows)
+        for row in rows:
+            asset_type = (row.get(ASSET_TYPE_COL) or "").strip()
+            industry = (row.get(INDUSTRY_COL) or "").strip()
+            ticker = (row.get(TICKER_COL) or "").strip()
+            is_fund_industry = industry == FUND_INDUSTRY
+            if asset_type:
+                pairs[(asset_type, industry)] += 1
+                asset_types.add(asset_type)
+            if is_fund_industry:
+                fund_types[asset_type or BLANK] += 1
+            if not (asset_type or is_fund_industry):
+                continue
+            fund_tickers.add(ticker)
+            if asset_type and not is_fund_industry:
+                non_blank_not_fund.append(
+                    DisagreementRow(
+                        file=path.name,
+                        ticker=ticker,
+                        asset_type=asset_type,
+                        industry=industry,
+                    )
+                )
+            elif is_fund_industry and not asset_type:
+                fund_blank_type.append(
+                    DisagreementRow(
+                        file=path.name,
+                        ticker=ticker,
+                        asset_type=BLANK,
+                        industry=industry,
+                    )
+                )
+
+    return EvidenceReport(
+        input_dirs=list(input_dirs),
+        files_read=files_read,
+        files_without_columns=files_without,
+        rows_with_columns=rows_with,
+        rows_without_columns=rows_without,
+        distinct_fund_tickers=len(fund_tickers),
+        distinct_asset_types=len(asset_types),
+        table_a=[
+            PairCount(asset_type=at, industry=ind, rows=n)
+            for (at, ind), n in sorted(pairs.items())
+        ],
+        table_b=[
+            AssetTypeCount(asset_type=at, rows=n) for at, n in sorted(fund_types.items())
+        ],
+        table_c_non_blank_not_fund=non_blank_not_fund,
+        table_c_fund_blank_type=fund_blank_type,
+    )
+
+
+def _table(header: Sequence[str], rows: Sequence[Sequence[object]]) -> list[str]:
+    if not rows:
+        return ["(none)"]
+    lines = [
+        "| " + " | ".join(header) + " |",
+        "|" + "|".join(["---"] * len(header)) + "|",
+    ]
+    lines += ["| " + " | ".join(str(cell) for cell in row) + " |" for row in rows]
+    return lines
+
+
+def render_evidence(report: EvidenceReport) -> str:
+    """The scratch report. Tickers appear HERE and nowhere else."""
+    without = report.files_without_columns
+    out: list[str] = [
+        "# Asset Type vs Industry — evidence",
+        "",
+        "Read-only evidence for the S2-P4 `not_equity` decision, produced by",
+        "`tests/fixtures/replay/_cut_p4_fixtures.py evidence`. A decision aid,",
+        "not a rule. Contains user data (tickers) — scratch only, never committed.",
+        "",
+        "## 1. Read",
+        "",
+        f"- files read: {report.files_read}",
+        f"- rows read (files with both columns): {report.rows_with_columns}",
+        f"- rows read (files without the columns): {report.rows_without_columns}",
+        f"- files without the columns ({len(without)}): "
+        + (", ".join(without) if without else "(none)"),
+        "- input dirs: " + (", ".join(report.input_dirs) if report.input_dirs else "(none)"),
+        "",
+        "## 2. Distinct counts",
+        "",
+        f"- distinct fund tickers (a row in table A or table B): {report.distinct_fund_tickers}",
+        f"- distinct non-blank `Asset Type` values: {report.distinct_asset_types}",
+        "",
+        "## 3. Table A — (`Asset Type`, `Industry`) pairs, `Asset Type` non-blank",
+        "",
+    ]
+    out += _table(
+        ["Asset Type", "Industry", "rows"],
+        [(r.asset_type, r.industry, r.rows) for r in report.table_a],
+    )
+    out += [
+        "",
+        f"## 4. Table B — `Asset Type` values where `Industry` = {FUND_INDUSTRY}",
+        "",
+    ]
+    out += _table(
+        ["Asset Type", "rows"], [(r.asset_type, r.rows) for r in report.table_b]
+    )
+    out += [
+        "",
+        "## 5. Table C — disagreement rows",
+        "",
+        "COUNTS",
+        "",
+        f"- (i) non-blank `Asset Type`, `Industry` != {FUND_INDUSTRY}: "
+        f"{len(report.table_c_non_blank_not_fund)}",
+        f"- (ii) `Industry` = {FUND_INDUSTRY}, blank `Asset Type`: "
+        f"{len(report.table_c_fund_blank_type)}",
+        f"- total: {report.table_c_total}",
+        "",
+        f"### (i) non-blank `Asset Type`, `Industry` != {FUND_INDUSTRY}",
+        "",
+    ]
+    out += _table(
+        ["file", "ticker", "Asset Type", "Industry"],
+        [(r.file, r.ticker, r.asset_type, r.industry) for r in report.table_c_non_blank_not_fund],
+    )
+    out += [
+        "",
+        f"### (ii) `Industry` = {FUND_INDUSTRY}, blank `Asset Type`",
+        "",
+    ]
+    out += _table(
+        ["file", "ticker", "Asset Type", "Industry"],
+        [(r.file, r.ticker, r.asset_type, r.industry) for r in report.table_c_fund_blank_type],
+    )
+    return "\n".join(out) + "\n"
+
+
+def summarize_evidence(report: EvidenceReport) -> str:
+    """The one stdout line. Counts only — never a ticker (L32)."""
+    return (
+        f"files: {report.files_read} "
+        f"(without the columns: {len(report.files_without_columns)}); "
+        f"rows: {report.rows_with_columns} "
+        f"(without the columns: {report.rows_without_columns}); "
+        f"distinct fund tickers: {report.distinct_fund_tickers}; "
+        f"distinct Asset Type values: {report.distinct_asset_types}; "
+        f"table C total: {report.table_c_total}"
+    )
+
+
+def discover_evidence_inputs() -> tuple[list[Path], list[str]]:
+    """Every `*.csv` under the radar cache, plus the two staged movers
+    exports. A missing input is a loud failure, not an empty run (L1)."""
+    if not RADAR_CACHE_DIR.is_dir():
+        raise EvidenceError(f"radar cache directory not found: {RADAR_CACHE_DIR}")
+    paths = sorted(RADAR_CACHE_DIR.rglob("*.csv"))
+    for name in EVIDENCE_SCRATCH_INPUTS:
+        staged = SCRATCH / name
+        if not staged.is_file():
+            raise EvidenceError(f"staged movers export not found: {staged}")
+        paths.append(staged)
+    return paths, [str(RADAR_CACHE_DIR), str(SCRATCH)]
+
+
+def evidence_main() -> None:
+    paths, input_dirs = discover_evidence_inputs()
+    report = collect_evidence(paths, input_dirs=input_dirs)
+    EVIDENCE_OUT.write_text(render_evidence(report), encoding="utf-8")
+    print(summarize_evidence(report))
+    print(f"wrote {EVIDENCE_OUT}")
+
+
 if __name__ == "__main__":
-    main()
+    mode = sys.argv[1] if len(sys.argv) > 1 else ""
+    if not mode:
+        main()
+    elif mode == "evidence":
+        evidence_main()
+    else:
+        raise SystemExit(f"unknown mode {mode!r}; expected no argument or 'evidence'")
