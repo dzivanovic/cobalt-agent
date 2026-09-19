@@ -1,0 +1,11 @@
+Two ruling rows, quoted verbatim from `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-19.md` §4 (`## §4 Rulings 2026-09-19`). These are Dejan's own rulings, not the desk's or any builder's — they are the spec each fold below must match exactly.
+
+## R16 (fund rule fold)
+
+| R16 | 11:05 ET | "C" — to the desk's A/B/C (11:0x, restated open twice) on the rule that keeps FUNDS out of the radar (09-18 R11 confirmed the intent "funds stay out"; the P4 verify hub built NO rule because its evidence pass over his real exports — 5,702 distinct fund tickers, 28 `Asset Type` values — found 8 funds with a BLANK `Asset Type`): **C = a row is dropped as not-equity when `Asset Type` is non-blank OR `Industry` = `Exchange Traded Fund`** (covers the 5,702 + the 8; 0 stock rows hit on the sample). It changes what the LIVE radar drops once P4 deploys (`configs/cobalt/radar.yaml` `not_equity` shape → RESTARTS `com.cobalt.radar`, named in P4's deploy approval). NEXT: a small tests-first chunk on `sprint-2/p4` (real-shape rows, counts only, L32 / L45), read by the houses as a fold of P4's build check. | APPLIED: this row; `areas/cobalt-product-definition.md` line; chunk prompt in draft (§32) |
+
+## R23 (round-2 / A3 fold)
+
+| R23 | 12:34 ET | "A" — to the desk's A/B of 12:2x (§46) on P4 CHECK C's finding A3 (L52 disclosure): the None-filter in the radar pool's union sort key (`src/cobalt/radar/pool.py:189,198`, shipped undisclosed in S2-P4 STEP-2) STAYS, disclosed, pinned by round 2's order test; no revert. Basis stated to him: crash-removal only — every input that ran before sorts identically, the key sets position, never membership; the round-2 builder re-confirms with file:line or STOPS (then it comes back to him). | APPLIED: this row; `areas/cobalt-sprints.md` 2026-09-19 line |
+
+Note: round 2's own builder found ONE factual error in the desk's A3 pre-read that fed R23 (recorded as ESCALATE R2-2 in the round-2 report) — R23's ruling ("STAYS, disclosed, pinned") is unaffected, but the disclosure text it authorizes should say "one added filter, in element 1, at `pool.py:189`" rather than the pre-read's "both elements carry a new filter." See `round2-report-section.md`'s `ROUND 2 — 3. A3` section and its `ROUND 2 ESCALATE` → `R2-2` paragraph for the full correction. Confirming this correction is one of this check's questions.
