@@ -348,7 +348,7 @@ def _compared(store, ticker: str, interval: Interval):
         archived_through=None,
     )
     with store.target_transaction() as conn:
-        held = store._bars_in_range(
+        held = store.bars_in_range(
             conn, ticker, interval, plan.range_start, plan.range_end
         )
     return plan, compare(plan.candidates, held)

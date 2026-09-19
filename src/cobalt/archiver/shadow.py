@@ -152,7 +152,7 @@ def observe(
     if eligible:
         with store.target_transaction() as conn:
             _bound_statement(conn, settings.shadow_statement_timeout_s)
-            stored = store._bars_in_range(
+            stored = store.bars_in_range(
                 conn, ticker, interval, split.export_oldest, split.export_newest
             )
 

@@ -43,8 +43,10 @@ before the write in the store's recorded call sequence.
 
 ## Data flow in/out
 **In:** the parsed export, the fetch instant, the settings, and one
-read through `store._bars_in_range` on a transaction the shadow opens
-itself.
+read through `store.bars_in_range` on a transaction the shadow opens
+itself (the store's one range read — renamed from `_bars_in_range` when
+it absorbed P4's `bars_between` on 2026-09-19; the shadow's call and
+what it receives are unchanged).
 **Out:** a `ShadowRecord` per target; one JSON-lines file per night at
 `data/archiver-shadow/<YYYY-MM-DD>.jsonl`; the aggregate on the job row.
 

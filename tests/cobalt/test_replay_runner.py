@@ -824,8 +824,12 @@ def fake_deps(*, job_row="default", settings="default", collector=None, now=None
             calls.append("movers_store.mark_bars_archived")
 
     class Bars:
-        def bars_between(self, ticker, interval, start, end):
-            calls.append("bar_store.bars_between")
+        def bars_in_range(self, conn, ticker, interval, start, end,
+                          *, end_inclusive=True, as_bars=False):
+            calls.append("bar_store.bars_in_range")
+            assert (conn, end_inclusive, as_bars) == (None, False, True), (
+                "replay owns no transaction and reads [start, end) as bars"
+            )
             return [b for b in bars if b.ticker == ticker and start <= b.ts < end]
 
         def upsert_bars(self, rows):

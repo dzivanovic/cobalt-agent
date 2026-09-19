@@ -124,8 +124,8 @@ class FakeStore:
             self.rollbacks += 1
             raise
 
-    def _bars_in_range(self, conn, ticker, interval, start, end):
-        self.calls.append(("_bars_in_range", ticker, interval.value if hasattr(interval, "value") else interval))
+    def bars_in_range(self, conn, ticker, interval, start, end):
+        self.calls.append(("bars_in_range", ticker, interval.value if hasattr(interval, "value") else interval))
         held = self.stored.get((ticker, getattr(interval, "value", interval)), {})
         return {k: v for k, v in held.items() if start is None or (start <= k <= end)}
 
@@ -318,7 +318,7 @@ def test_the_complete_list_of_upsert_mode_additions_is_pinned(wired):
     #     range read — all before the write, and nothing else.
     assert on.names == [
         "run_lock", "ensure_schema", "target_transaction", "conn.execute",
-        "_bars_in_range", "upsert_bars",
+        "bars_in_range", "upsert_bars",
     ]
     assert "set_config" in on.calls[3][1], "the shadow read must be time-bounded"
     # (3) the one extra key in the job result.
@@ -374,7 +374,7 @@ def test_the_shadow_runs_after_the_fetch_and_before_the_write(wired):
     store = wired(FakeStore(stored=_stored(NIGHT_1[:2])))
     run([("TESTARCH", Interval.I5)], store=store,
         fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings())
-    assert store.names.index("_bars_in_range") < store.names.index("upsert_bars")
+    assert store.names.index("bars_in_range") < store.names.index("upsert_bars")
 
 
 def test_the_shadow_record_is_labelled_pre_write(wired, tmp_path):
@@ -442,7 +442,7 @@ def test_shadow_compare_off_skips_it_entirely(wired):
     store = wired(FakeStore())
     summary = run([("TESTARCH", Interval.I5)], store=store,
                   fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(shadow_compare="off"))
-    assert "_bars_in_range" not in store.names
+    assert "bars_in_range" not in store.names
     assert summary.shadow_records == []
     assert "shadow" not in summary.job_result()
 

@@ -288,43 +288,66 @@ def test_insert_new_bars_sends_one_statement_for_the_whole_batch(no_connections)
 
 
 # ---------------------------------------------------------------------
-# The ONE private range read (spec O-5)
+# The ONE range read (spec O-5, folded with P4's `bars_between` 2026-09-19)
 # ---------------------------------------------------------------------
 
 
-def test_the_range_read_is_one_private_method_that_takes_a_connection(no_connections):
-    rows = [
-        (ts(50), Decimal("99.0000"), Decimal("101.0000"), Decimal("98.5000"),
-         Decimal("100.0000"), 1234),
-    ]
-    conn = _FakeConn(rows=rows)
-    held = store()._bars_in_range(conn, "TESTARCH", Interval.I5, ts(40), ts(59))
-    assert held == {ts(50): BarValues(
-        Decimal("99.0000"), Decimal("101.0000"), Decimal("98.5000"), Decimal("100.0000"), 1234
-    )}
+#: One row as the folded SELECT returns it: ticker, interval, ts, OHLCV.
+_RANGE_ROW = (
+    "TESTARCH", "i5", ts(50), Decimal("99.0000"), Decimal("101.0000"),
+    Decimal("98.5000"), Decimal("100.0000"), 1234,
+)
+_RANGE_VALUES = BarValues(
+    Decimal("99.0000"), Decimal("101.0000"), Decimal("98.5000"), Decimal("100.0000"), 1234
+)
+
+
+def test_the_range_read_uses_the_connection_it_is_given(no_connections):
+    """The archiver's half of the fold: the caller's transaction, never
+    one of the store's own, and never committed or closed here."""
+    conn = _FakeConn(rows=[_RANGE_ROW])
+    held = store().bars_in_range(conn, "TESTARCH", Interval.I5, ts(40), ts(59))
+    assert held == {ts(50): _RANGE_VALUES}
     assert (conn.commits, conn.closes) == (0, 0)
     assert "SELECT" in conn.sql and "FROM bars" in conn.sql
     assert "ts >=" in conn.sql and "ts <=" in conn.sql
 
 
+def test_the_range_read_renders_bars_on_a_half_open_window_for_replay(no_connections):
+    """P4's half of the fold, on the SAME method: `[start, end)` and
+    `list[Bar]`, exactly what `bars_between` returned to replay."""
+    conn = _FakeConn(rows=[_RANGE_ROW])
+    bars = store().bars_in_range(
+        conn, "TESTARCH", Interval.I5, ts(40), ts(59),
+        end_inclusive=False, as_bars=True,
+    )
+    assert [(b.ticker, b.interval, b.ts, b.close, b.volume) for b in bars] == [
+        ("TESTARCH", Interval.I5, ts(50), Decimal("100.0000"), 1234)
+    ]
+    assert "ts <" in conn.sql and "ts <=" not in conn.sql
+    assert (conn.commits, conn.closes) == (0, 0)
+
+
 def test_the_range_read_is_parameterised_never_interpolated(no_connections):
     conn = _FakeConn()
-    store()._bars_in_range(conn, "TESTARCH", Interval.I5, ts(40), ts(59))
+    store().bars_in_range(conn, "TESTARCH", Interval.I5, ts(40), ts(59))
     (query, params) = conn.queries[0]
     assert "TESTARCH" not in query
     assert params == ("TESTARCH", "i5", ts(40), ts(59))
 
 
 def test_there_is_exactly_one_range_read_on_the_store():
-    """L3 / spec O-5. `sprint-2/p4` adds `bars_between()` with its own
-    connection; the two fold into one method at integration. Until then
-    this branch adds exactly one, and it takes a connection."""
+    """L3 / spec O-5. `sprint-2/p4` shipped `bars_between()` with its own
+    connection on 2026-09-19; this branch's `_bars_in_range` took the
+    caller's. The fold owed at integration is DONE — `bars_in_range` is
+    the one survivor, it still takes the connection first, and `None`
+    there is what now opens one of its own."""
     reads = [
         name for name in dir(BarStore)
         if ("range" in name or "between" in name) and callable(getattr(BarStore, name))
     ]
-    assert reads == ["_bars_in_range"]
-    assert list(inspect.signature(BarStore._bars_in_range).parameters)[:2] == ["self", "conn"]
+    assert reads == ["bars_in_range"]
+    assert list(inspect.signature(BarStore.bars_in_range).parameters)[:2] == ["self", "conn"]
 
 
 # ---------------------------------------------------------------------
@@ -543,7 +566,7 @@ def test_a_poller_style_insert_between_the_read_and_the_insert_is_a_counted_conf
     st.ensure_schema()
     keys = [datetime(2026, 8, 29, 10, m, tzinfo=UTC) for m in (0, 5)]
     with st.target_transaction() as conn:
-        held = st._bars_in_range(conn, "TESTARCH", Interval.I5, keys[0], keys[-1])
+        held = st.bars_in_range(conn, "TESTARCH", Interval.I5, keys[0], keys[-1])
         assert keys[0] not in held
         # ...the poller commits on its own connection, in between.
         st.upsert_bars([bar(keys[0])])
@@ -757,7 +780,7 @@ def test_a_committed_poller_write_is_overwritten_by_a_later_repair():
     assert st.upsert_bars([bar(key, close="100.00")]) == 1
 
     with st.target_transaction() as conn:
-        held = st._bars_in_range(conn, "TESTARCH", Interval.I5, key, key)
+        held = st.bars_in_range(conn, "TESTARCH", Interval.I5, key, key)
         assert str(held[key].close) == "100.0000"
         # ...the poller, on its OWN connection, between the read and the
         # write. It commits the instant it returns.
@@ -790,7 +813,7 @@ def test_an_equal_value_race_writes_the_same_value_and_changes_nothing():
     assert st.upsert_bars([bar(key, close="105.00")]) == 1
 
     with st.target_transaction() as conn:
-        held = st._bars_in_range(conn, "TESTARCH", Interval.I5, key, key)
+        held = st.bars_in_range(conn, "TESTARCH", Interval.I5, key, key)
         comparison = compare([bar(key, close="105.00")], held)
         assert comparison.differing == ()
         assert comparison.equal == (key,)

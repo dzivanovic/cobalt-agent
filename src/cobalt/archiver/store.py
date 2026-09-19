@@ -170,21 +170,6 @@ class BarStore:
             )
         return len(rows)
 
-    def bars_between(self, ticker: str, interval: Interval, start, end) -> list[Bar]:
-        """Stored bars for one ticker/interval with `start <= ts < end`,
-        oldest first — the read the nightly replay's coverage check and
-        counterfactual R consume (S2-P4)."""
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT ticker, interval, ts, open, high, low, close, volume FROM bars "
-                "WHERE ticker = %s AND interval = %s AND ts >= %s AND ts < %s ORDER BY ts",
-                (ticker, Interval(interval).value, start, end),
-            ).fetchall()
-        return [
-            Bar(ticker=r[0], interval=r[1], ts=r[2], open=r[3], high=r[4], low=r[5], close=r[6], volume=r[7])
-            for r in rows
-        ]
-
     def watermark(self, ticker: str, interval: str = "i1"):
         """Newest stored timestamp for one ticker/interval, or None."""
         with self._connect() as conn:
@@ -295,27 +280,67 @@ class BarStore:
             )
         return inserted
 
-    def _bars_in_range(
-        self, conn, ticker: str, interval: Interval, start, end
-    ) -> dict:
-        """The stored rows of one target over `[start, end]`, normalised.
+    def bars_in_range(
+        self,
+        conn,
+        ticker: str,
+        interval: Interval,
+        start,
+        end,
+        *,
+        end_inclusive: bool = True,
+        as_bars: bool = False,
+    ) -> dict | list[Bar]:
+        """THE range read of the store, oldest first — one statement,
+        one path (L3, spec O-5).
 
-        PRIVATE and CONNECTION-TAKING on purpose (spec O-5). The
-        unmerged `sprint-2/p4` adds `BarStore.bars_between()`, which
-        opens its own connection; after both land there must be ONE
-        range read, and the second lander folds them into one method
-        with an optional connection (L3). Until then this branch adds
-        exactly one, and the ESCALATE names the overlap.
+        THE FOLD (owed at P4 integration, performed 2026-09-19). This
+        branch carried a private `_bars_in_range` taking the caller's
+        connection, and `sprint-2/p4` carried a public `bars_between`
+        opening its own; its own docstring named the merge as due once
+        both landed. They were the same read differing on exactly three
+        axes, and each axis is now a parameter rather than a second copy
+        of the SQL:
 
-        Returns `{ts: BarValues}` — already normalised to the column's
-        own `NUMERIC(14,4)` / integer shape, so the comparison in
-        `reconcile` is deciding on values rather than on renderings.
+        * `conn` — the caller's transaction, or `None` to open and
+          close one here. The archiver MUST pass its own: §8's
+          pre-commit re-check compares against rows read inside the
+          repair's `target_transaction`, and a read on another
+          connection cannot see them. Replay passes `None`; it owns no
+          transaction.
+        * `end_inclusive` — `[start, end]` for the archiver's
+          reconcile, `[start, end)` for replay's whole-day windows.
+        * `as_bars` — `{ts: BarValues}` for reconcile, which compares
+          VALUES and wants them normalised to the column's own
+          `NUMERIC(14,4)` / integer shape rather than to their
+          rendering; `list[Bar]` for replay's coverage check and
+          counterfactual R, which carry the ticker and interval with
+          each row.
+
+        Neither caller's result changed in the fold: the two renderings
+        are built from the same row, and the SQL differs from both
+        originals only in the columns it always selects.
         """
-        cursor = conn.execute(
-            "SELECT ts, open, high, low, close, volume FROM bars "
-            "WHERE ticker = %s AND interval = %s AND ts >= %s AND ts <= %s "
-            "ORDER BY ts",
-            (ticker, interval.value if isinstance(interval, Interval) else interval,
-             start, end),
+        sql = (
+            "SELECT ticker, interval, ts, open, high, low, close, volume FROM bars "
+            "WHERE ticker = %s AND interval = %s AND ts >= %s AND "
+            f"ts {'<=' if end_inclusive else '<'} %s ORDER BY ts"
         )
-        return {row[0]: values_from_row(row[1:]) for row in cursor.fetchall()}
+        params = (
+            ticker,
+            interval.value if isinstance(interval, Interval) else interval,
+            start,
+            end,
+        )
+        if conn is None:
+            with self._connect() as owned:
+                rows = owned.execute(sql, params).fetchall()
+        else:
+            rows = conn.execute(sql, params).fetchall()
+        if as_bars:
+            return [
+                Bar(ticker=r[0], interval=r[1], ts=r[2], open=r[3], high=r[4],
+                    low=r[5], close=r[6], volume=r[7])
+                for r in rows
+            ]
+        return {r[2]: values_from_row(r[3:]) for r in rows}

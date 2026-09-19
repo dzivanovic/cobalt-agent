@@ -66,6 +66,43 @@ environment-variable read.
 
 ---
 
+## 2026-09-19 — the fold: ONE range read, `bars_in_range`
+
+The two sections below are history and stay as written. What is LIVE
+after `sprint-2/p4` landed and this branch rebased onto it: the store
+has exactly ONE range read, `bars_in_range`, and both of the methods
+those sections describe are gone into it (L3, spec O-5 — the fold the
+append path's own docstring said was owed "at integration").
+
+```
+bars_in_range(conn, ticker, interval, start, end, *,
+              end_inclusive=True, as_bars=False)
+```
+
+The two reads were the same SELECT differing on three axes, and each is
+now a parameter instead of a second copy:
+
+| axis | archiver (was `_bars_in_range`) | replay (was `bars_between`) |
+|---|---|---|
+| connection | the caller's transaction | `conn=None` → the store opens and closes its own |
+| end bound | `end_inclusive=True` → `[start, end]` | `end_inclusive=False` → `[start, end)` |
+| rendering | `{ts: BarValues}`, normalised to `NUMERIC(14,4)` / integer volume | `as_bars=True` → `list[Bar]`, oldest first |
+
+**Neither caller's result changed.** The archiver must still pass its
+own connection — §8's pre-commit re-check compares against rows read
+inside the repair's `target_transaction`, and a read on another
+connection cannot see them. Replay passes `None` because it owns no
+transaction. The SQL now always selects `ticker, interval` as well, so
+one row shape serves both renderings; the dict is built from the same
+columns it was built from before.
+
+Call sites: `archiver/runner.py`, `archiver/shadow.py`,
+`archiver/cli.py` (connection, closed bound, dict);
+`replay/runner.py` ×2 and `replay/movers.py` (`None`, half-open,
+`list[Bar]`).
+
+---
+
 ## 2026-09-19 — the append path (FINAL design §3 V2-1, §4, §9)
 
 `upsert_bars` IS UNCHANGED, byte for byte. `git diff main -- src/cobalt/archiver/store.py`

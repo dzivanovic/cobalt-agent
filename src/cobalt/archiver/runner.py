@@ -274,7 +274,7 @@ def _append_one(store, summary, ticker, interval, bars, fetch_started_at, clock,
                 fetch_started_at=fetch_started_at, archived_through=archived_through,
             )
             stored = (
-                store._bars_in_range(
+                store.bars_in_range(
                     conn, ticker, interval, plan.range_start, plan.range_end
                 )
                 if plan.needs_stored_read
