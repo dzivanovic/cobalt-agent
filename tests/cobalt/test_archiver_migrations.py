@@ -250,7 +250,8 @@ def test_incidents_rollback_drops_only_its_own_table():
 
 
 # ---------------------------------------------------------------------
-# Ownership and grants — 0006's pattern, and NO grant to cobalt_user
+# Ownership and grants — 0006's pattern for the system role, and an
+# explicit REVOKE of everything from cobalt_user (cto-2026-09-19 R25)
 # ---------------------------------------------------------------------
 
 
@@ -263,8 +264,61 @@ def test_each_table_is_owned_by_the_system_role(path, table):
 def test_nothing_is_granted_to_cobalt_user(path):
     """§11: `cobalt_user` is granted nothing on either table. The user
     side has no business reading the archiver's bookkeeping, and a
-    wrong-side query must fail loud (L32 tenancy)."""
-    assert "cobalt_user" not in _code(path)
+    wrong-side query must fail loud (L32 tenancy).
+
+    The role's NAME now appears in the two forward files: `cto-2026-09-19`
+    R25 ruled an explicit `REVOKE` (pinned below), and a REVOKE has to
+    name the role it takes the privilege from. What must stay absent is a
+    grant in its direction, so this test pins the DIRECTION rather than
+    the bare string. The rollbacks name the role not at all.
+    """
+    code = _code(path)
+    assert "TO cobalt_user" not in code
+    if path in (PROGRESS_ROLLBACK, INCIDENTS_ROLLBACK):
+        assert "cobalt_user" not in code
+
+
+@pytest.mark.parametrize(
+    "path,table", [(PROGRESS_SQL, "archive_progress"), (INCIDENTS_SQL, "archive_incidents")]
+)
+def test_each_table_revokes_everything_from_cobalt_user(path, table):
+    """`cto-2026-09-19` R25 ("B"), from the DB run's DB-1: 0001's blanket
+    `GRANT SELECT ON ALL TABLES IN SCHEMA system TO cobalt_user`
+    (`0001_schemas.sql:124`) and its default-privilege twin (`:149-151`)
+    reach every table schema `system` gains later, these two included — so
+    §11's "granted nothing" is only true if the migration says so out loud.
+
+    `REVOKE ALL`, not `REVOKE SELECT`: §11's word is "nothing", and no
+    other privilege is granted today for the wider form to cost anything.
+    """
+    assert f"REVOKE ALL ON system.{table} FROM cobalt_user;" in _code(path)
+
+
+@pytest.mark.parametrize(
+    "path,table", [(PROGRESS_SQL, "archive_progress"), (INCIDENTS_SQL, "archive_incidents")]
+)
+def test_the_revoke_comes_after_the_table_exists(path, table):
+    """Postgres errors on a REVOKE naming a relation the script has not
+    created yet, so the ORDER is the invariant, not only the presence."""
+    code = _code(path)
+    assert code.index(f"CREATE TABLE IF NOT EXISTS system.{table}") < code.index(
+        f"REVOKE ALL ON system.{table} FROM cobalt_user;"
+    )
+
+
+def test_the_incident_sequence_is_also_revoked_from_cobalt_user():
+    """`id BIGSERIAL PRIMARY KEY` (`0011_archive_incidents.sql:49`) creates
+    `archive_incidents_id_seq` as part of the `CREATE TABLE`, and
+    `0001_schemas.sql:152-154` default-grants SELECT on a new sequence to
+    `cobalt_user` exactly as `:149-151` does for a new table. 0011's own
+    comment says "NOTHING is granted to `cobalt_user`", so the sequence is
+    revoked too rather than the comment narrowed to the table alone.
+    """
+    code = _code(INCIDENTS_SQL)
+    assert "REVOKE ALL ON SEQUENCE system.archive_incidents_id_seq FROM cobalt_user;" in code
+    assert code.index("CREATE TABLE IF NOT EXISTS system.archive_incidents") < code.index(
+        "REVOKE ALL ON SEQUENCE system.archive_incidents_id_seq"
+    )
 
 
 def test_the_incident_sequence_is_granted_to_the_system_role():

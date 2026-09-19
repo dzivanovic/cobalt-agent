@@ -73,3 +73,26 @@ CREATE TABLE IF NOT EXISTS system.archive_progress (
 );
 
 ALTER TABLE system.archive_progress OWNER TO cobalt_system;
+
+-- The grant §11 says this table does NOT have, said out loud because
+-- silence is not enough (`cto-2026-09-19.md` §4 R25 "B", from the DB
+-- run's finding DB-1). `0001_schemas.sql:124` grants SELECT on ALL
+-- tables in schema `system` to `cobalt_user`, and `:149-151` repeats it
+-- as a DEFAULT PRIVILEGE for every table the schema gains afterwards —
+-- so a table created here inherits a read the design never intended, and
+-- the comment above would be aspirational without this line.
+--
+-- REVOKE ALL rather than REVOKE SELECT: §11's word is "nothing", not "no
+-- SELECT specifically". Nothing else is granted to the role today, so
+-- the wider form costs nothing and still holds if a later migration adds
+-- another default grant in this schema.
+--
+-- DELIBERATE DIVERGENCE from `0006_radar_score.sql:198-200`, which grants
+-- `cobalt_user` explicit read on the radar tables: those feed ASET
+-- sizing on the user side. This table is the archiver's own bookkeeping
+-- and the user side has no business reading it (L32). Two patterns, two
+-- tenancy answers — neither is a mistake to reconcile toward the other.
+--
+-- Re-running is safe: a REVOKE of a privilege the role does not hold is
+-- a no-op, not an error, so this file stays idempotent.
+REVOKE ALL ON system.archive_progress FROM cobalt_user;

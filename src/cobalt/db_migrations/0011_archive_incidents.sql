@@ -99,3 +99,24 @@ CREATE INDEX IF NOT EXISTS archive_incidents_unresolved
 -- Granted explicitly rather than assumed from 0001's default privileges
 -- (0006's pattern, Astra R1-2). NOTHING is granted to `cobalt_user`.
 GRANT USAGE, SELECT ON SEQUENCE system.archive_incidents_id_seq TO cobalt_system;
+
+-- And "NOTHING" is now enforced rather than assumed (`cto-2026-09-19.md`
+-- §4 R25 "B", from the DB run's finding DB-1). `0001_schemas.sql:124`
+-- grants SELECT on ALL tables in schema `system` to `cobalt_user` and
+-- `:149-151` makes it a DEFAULT PRIVILEGE for every table created later;
+-- `:125` and `:152-154` do the same for SEQUENCES. `id BIGSERIAL` above
+-- creates `archive_incidents_id_seq` as part of the CREATE TABLE, so the
+-- sequence inherits that default read exactly as the table does — the
+-- comment two lines up was true of neither until these two statements.
+--
+-- REVOKE ALL rather than REVOKE SELECT: §11's word is "nothing". Both
+-- statements are no-ops on a database where they already applied (a
+-- REVOKE of a privilege not held does not error), so the file stays
+-- idempotent.
+--
+-- DELIBERATE DIVERGENCE from `0006_radar_score.sql:198-200`, which grants
+-- `cobalt_user` explicit read on the radar tables because those feed
+-- ASET sizing user-side. Incidents are the archiver's own bookkeeping
+-- (L32) — opposite tenancy answer, not an inconsistency to fix.
+REVOKE ALL ON system.archive_incidents FROM cobalt_user;
+REVOKE ALL ON SEQUENCE system.archive_incidents_id_seq FROM cobalt_user;
