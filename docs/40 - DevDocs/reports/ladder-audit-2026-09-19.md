@@ -151,3 +151,103 @@ the document Dejan wrote the plan into is never the one anyone re-reads or re-wr
   the Agent SDK spike never ran; **zero live mornings** logged against a 2–3 requirement with only
   2–3 trading mornings left before 09-23. Verdict: AT RISK, not LATE yet — recoverable if P4
   merges this weekend and the cards flip live with a shadow run starting Sunday night/Monday.
+
+## §7 CARDS LIVE BY MONDAY — critical path (added after R12/R13, 2026-09-19 10:56/11:00 ET)
+
+**Correction to §2 above:** §2's F8/F10 "to go live" column read L7 as blocking the flip itself.
+It does not — see (2) below. R13 (11:00 ET) already settled this exact question the same way this
+section does; both are recorded here for one evidence trail.
+
+### (1) What keeps the cards dark today, and the exact switch
+
+Dark today by ONE key: `radar.cards_enabled: false`, in the card-settings file the desk wrote
+`/Users/cobalt/cobalt/data/backups/pre-s2-p2-2026-09-17/p2-dark-settings.yaml`, sha256
+`945e42f86997559267b2e7c20783f2d023b9135ae4bb437ca25a4999ca7cd3ca`
+(`cto-2026-09-17.md:178`). Loaded into production as part of the `deploy-2026-09-19` stack
+deploy 08:25 ET (`cto-2026-09-19.md` R7, `deploy-2026-09-19.md`). Absent/false = the radar's S5
+"evaluate" stage (card creation, F8) refuses loudly; S1–S4 (pool scan) still run
+(`cto-2026-09-16.md:79`).
+
+**Switch:** `cobalt settings load --card <file> --sha256 <hash> --apply` — the same command,
+against a NEW file with `radar.cards_enabled: true` plus the two dark-only-optional keys filled
+(below). Built and tested in S2-P2 (`plan-s2-p2-2026-09-15.md` STEP-6 Astra R1-5/R2-2; already
+merged/dark-deployed, so the mechanism itself needs no further code).
+
+**Who may run it:** either (a) Dejan's own hand — exempt from a separate HITL token under
+**L28** [amended 2026-09-15]: "a trader-run `cobalt settings load --apply` … is exempt from the
+HITL token: the trader is already in the loop"; or (b) the CTO desk/a hub, on his explicit typed
+"approve" of the exact file + sha256 in chat, which **L61**'s interim clause makes the HITL
+approval ("Dejan's spoken or typed 'approve' … for the exact action the desk named … IS the HITL
+approval").
+
+**Restart needed?** **No.** `test_settings_are_re_read_on_every_call_not_cached`
+(`s2-p2-build-opus-B-2026-09-16.md:53`) proves card settings are re-read on every call, not
+cached — so **L43**/**L66**'s restart windows (20:00–21:00 ET pause, or overnight idle on a
+trading day) do not gate this change; there is no merge and no resident restart in it. The
+underlying WRITE does still refuse inside the 20:00–21:00 ET `market_reset` block
+(`assert_writable`, `cto-2026-09-17.md:177`, `session/models.py:36`); **not verified** whether
+that block is keyed to trading days or to wall-clock time alone (i.e., whether it would also
+apply on Saturday/Sunday) — moot either way, since Sat/Sun leave many hours outside that one-hour
+window. Sunday is a non-trading day (radar `idle:overnight` all day, confirmed
+`cto-2026-09-19.md` §0 day-open); Monday premarket opens 04:00 ET.
+
+### (2) Every gate between "deployed dark" and "live" — status
+
+| Gate | Text | Met? | Evidence |
+|---|---|---|---|
+| **L52** tribunal before build (scoring/ranking design) | "A design that touches scoring, ranking or anything that reaches the card requires a TRIBUNAL before any build." | **MET** | `tribunal-grok-2026-09-14.md`, `tribunal-analyst-2026-09-14.md` preceded `plan-s2-p2-2026-09-15.md` |
+| **L67** ≥1 other house checks every deployment | "any design, development or DEPLOYMENT is checked by at least ONE house other than its author" | MET for the code already dark-deployed (3-house check before 09-19 08:25, `cto-2026-09-19.md` §5a); **NOT YET MET for the go-live settings file itself** — a new artifact, not yet reviewed | needs a fast review round this weekend (pattern this week: ~15–90 min turnarounds) |
+| **L28**/**L61** approval of the settings load | trader-run = exempt HITL; desk-run = his typed "approve" of file+sha256 | **NOT YET MET** — no go-live file drafted or approved yet as of this audit | — |
+| Two dark-only-optional values (`card.alignment_default`, `card.shadow_promotion_bar`) | code refuses `cards_enabled=true` while these are null (`test_absent_dark_only_optional_keys_are_null_and_enabling_requires_them`, `s2-p2-build-opus-B-2026-09-16.md:53`) | **NOT YET MET** — "09-19 values session" still pending as of 10:56 ET (`areas/cobalt.md` NOW) | `card.shadow_promotion_bar` numeric defaults already tribunal-ruled 09-14 group-2 (`{sessions 10, pairs 30, median_max 1, within2_min 0.90}`, `plan-s2-p2-2026-09-15.md:223`) — likely just needs loading; `card.alignment_default`'s semantic mapping is explicitly OPEN in the plan (Astra R1-23/R2-6) and the plan's own fallback is to ship it N/A through S2 — confirming "ship N/A" is likely all that's needed here, not a fresh design |
+| **L7** shadow-mode promotion ("no variable/grader/detector flips human-fed→engine-fed without a shadow run … and HITL-token approval") | Does this block Monday's flip? | **NO — does not block.** The plan defers the actual flip of computable dots to engine-authoritative to **S3**, not S2: `plan-s2-p2-2026-09-15.md:286` — "S3: … **curve tribunal + L7 promotion for computable dots** (R6) … the three desk dots' HITL flip on `shadow-report` evidence." In S2, dots render **hollow** regardless of the computed value (`s2-p2-build-opus-C-2026-09-16.md:7`: "hollow shadow dots"); the computed score is stored silently (`radar_score.desk_shadow`, mirrored only into the dot's *reason* text as "desk shadow: n", plan:204) and grading stays his tap (`STEP-6`, `POST /card/{id}/key {grade}`). **Confirmed directly**: Dejan ruled R13 (11:00 ET, `cto-2026-09-19.md:26`) — "Yes, Monday to Wednesday can be the shadow run" — cards visible/advisory, he grades by hand on the existing sheet, engine dots recorded beside his for the agreement numbers; this "does NOT cover: the switch-on itself … [or] PROMOTION after the shadow" (still L7/L8 gated, later) |
+| **L8** sample-size (n<30 = "insufficient data", never a number) | EV/auto-grade display | **N/A now** — no EV or engine grade is asserted to him in S2; applies only at the later S3 promotion, per R13's own text ("n stated, L8") | — |
+| **L43**/**L66** restart windows | resident restart timing | **N/A** — no restart required, see (1) | — |
+
+### (3) Dependencies
+
+- **S2-P4** (`sprint-2/p4`, READY, unmerged, blocked on the Asset Type A/B): **not a dependency**
+  for the flip. F8/F10/the settings loader are entirely inside the already-merged S2-P2 code. P4
+  covers F3's pick-vs-rank tail, F12 (missed replay), F13 (benchmark/miss line) — separable, can
+  land after Monday.
+- **S2-P3 panel**: **not an extra dependency** — the live card ladder route (`/radar`) is the
+  same route S2-P3 built the read-only shell for; S2-P2 chunk C wired the real cards into it and
+  that is already dark-deployed together. Pool view has been live since 09-15.
+- **ops-0919 / archiver append-only**: **not a dependency** — parallel, unrelated hardening of
+  the bars/archiver data path. F2 (pool) already runs live on the current archiver.
+
+### (4) Ladder's "S2 smoke" — does it exist, has it run
+
+Command exists: `cobalt smoke s2` (`src/cobalt/smoke/cli.py`, built in S2-P4 chunk C, commit
+`a566cbc` 09-17). Recorded-session config exists: `configs/cobalt/smoke/s2.yaml` (checks K1–K18).
+**Has not produced a green run anywhere in the evidence found** — the only invocation on record
+is `uv run cobalt smoke --help` (`s2-p2-build-opus-C-2026-09-16.md:78`, sic — actually the P4
+build report). By the P4 verify hub's own finding (`s2-p4-verify-2026-09-19.md` ESCALATE 5a),
+some checks (K9.2/K9.3/K9.5/K9.6) read FAIL/ERROR "by design" until the first
+`com.cobalt.replay` job runs — which only exists on the unmerged `sprint-2/p4` branch. **So a
+genuinely green `cobalt smoke s2` cannot happen before P4 merges and one replay cycle completes —
+not by Monday.** Whether the ladder's 2–3-live-mornings credit formally requires a green
+`cobalt smoke s2` first (the ladder's own S2-smoke paragraph sequences it before "live mornings
+1–3") or whether R12/R13 supersede that ordering for schedule reasons is **not settled in any
+record found** — flagged as open, not answered here.
+
+### (5) Dated minimum sequence, Sat 11:30 ET → Mon 04:00 ET
+
+| When | Step | Gate it clears |
+|---|---|---|
+| Sat ~11:30–13:00 ET | Values session: Dejan confirms `card.shadow_promotion_bar` (load the 09-14 tribunal defaults) and `card.alignment_default` (confirm "ship N/A", the plan's own fallback) | the two null-value gate |
+| Sat afternoon | Hub drafts the go-live settings file (`radar.cards_enabled: true` + the two values), sha256, dry-run diff | prerequisite artifact |
+| Sat afternoon/evening | ≥1 non-Fable house reviews the go-live file (Fable is restricted to answering him + Sunday's tribunal under today's R9) | L67 floor |
+| Sat evening or Sun (outside 20:00–21:00 ET) | Dejan approves by file+sha256 and runs `settings load --apply` himself, or approves for the desk/hub to run it | L28/L61 |
+| Immediately after | Read-only proof (`cobalt validate` / radar log) confirms `radar.cards_enabled=true` loaded, S5 no longer refusing | verification |
+| Sun (parallel, non-blocking) | P4 Asset-Type A/B, P4 merge, ops-0919/archiver checks, Sunday 13:05 bars tribunal | unrelated tracks |
+| Sun overnight | Radar `idle:overnight` (session gate) — nothing to observe | — |
+| **Mon 04:00 ET** | Premarket scan cycle re-reads settings (not cached), S5 evaluate stage runs, WATCH cards start forming on precondition (F8) | **first live/shadow morning begins** |
+
+**Gate that cannot be met by Sunday night:** none of the mechanical gates found are structurally
+impossible by Sunday night — the values session, the file draft, one house's review, and his
+approval are all same-day-turnaround items by this week's own pattern. The one gate that
+genuinely cannot complete by Monday is L7's full **promotion** (10 sessions / 30 pairs of
+agreement data, L8's n stated) — but R13 already rules that gate does not apply to Monday's
+go-live; it governs a later S3 flip. The real risk is execution bandwidth, not a law that blocks
+the date: the values session has not happened yet as of this audit, and Dejan is simultaneously
+running two more weekend deploys and Sunday's bars tribunal.
