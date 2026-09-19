@@ -1875,3 +1875,240 @@ authorized by `cto-2026-09-19.md` §4 R25 (13:10 ET, "B" — read in full, quote
 DB-1 in this report's `# DB RUN` section, and §11/§15 of the FINAL design.
 
 ARCHIVER R3 193a2ca (code tip; report cedf3dc, and this line's own docs-only commit on top) | offline 1871/0 (320 skipped, unchanged — `.env` absent so all 23 `requires_db` skip; passed +5 = the five new offline pins) | DB-1: REVOKE in 0010 + 0011 (offline pin green; the sequence `archive_incidents_id_seq` revoked with its table, R3-2; 2 requires_db OWED to the DB re-run, with apply-twice idempotency, R3-3) | DB-2: not touched — ruling owed | §11: confirmed, NOT edited; its "follows 0006's pattern" sentence escalated as R3-1 | RESTARTS: none | ESCALATE: 6 | cobalt_dev: untouched
+
+# ROUND 3b — drop the unobservable requires_db twin (cto-2026-09-19 R26)
+
+Seat `archiver-round3b-0919` (Opus 5), worktree `~/cobalt-wt/archiver-append`, branch `archiver/append-0919`,
+OFFLINE by design — `.env` absent, `cobalt_dev` untouched. Prompt: `prompts/2026-09-19/43-archiver-round3b.md`.
+Branch point for this chunk: round 3's tip `193a2ca` (confirmed as an ancestor of HEAD, not assumed —
+`git log --oneline 193a2ca..HEAD` = `cedf3dc`, `1619587`, then this chunk's `ecb817c`).
+
+## §0 Headline
+
+DB-2 is CLOSED by R26: `test_the_own_connection_upsert_survives_another_transactions_rollback` is DELETED,
+a 2-line citation comment left in its place. The three offline pins R26 says "stay" were named from the
+file and proven GREEN **before** the cut. Offline suite **1871 passed / 0 failed / 319 skipped** — passed
+unchanged, skipped −1, failed 0, exactly the arithmetic the prompt predicted. Nothing else was touched:
+no helper deleted, no other test altered, `docs/30 - Design/` and `src/` not opened. ESCALATE: 1 new.
+
+## Round 3b PREFLIGHT
+
+| rule | command | exit | result |
+|---|---|---|---|
+| `Bash(date*)` | `date` | 0 | allowed — `Sat Sep 19 13:31:06 EDT 2026` |
+| `Bash(git status*)` | `git status --porcelain` | 0 | allowed — EMPTY |
+| `Bash(git status*)` | `git status` | 0 | allowed — `On branch archiver/append-0919` / `nothing to commit, working tree clean`; no rebase in progress |
+| `Bash(git log*)` | `git log --oneline -1` | 0 | allowed — `1619587 docs(report): archiver round 3 — the stop line (code tip 193a2ca, report cedf3dc)` = round 3's closing tip |
+| `Bash(git -C /Users/cobalt/cobalt log*)` | `git -C /Users/cobalt/cobalt log --oneline -1` | 0 | allowed — `bc3da04 docs(desk): 09-19 R27 (no recorded-day mirror; Monday is the first render); archiver 3b + DB re-run prompts (43, 44)` (recorded, no equality required) |
+| `Bash(ls *)` | `ls -la .env` | 1 | allowed — `No such file or directory`, as required: this run never sees the dev database |
+| — (Read tool) | report's LAST LINE | — | quoted verbatim below; starts `ARCHIVER R3 ` → round 3 closed clean, no `CONTINUE:`/`FAILED:` |
+| `Bash(uv run pytest *)` | `uv run pytest --co -q tests/cobalt/test_archiver_append_store.py` | 0 | allowed — **48 tests collected**, cleanly; the file is in the state round 3 left it |
+| `Bash(grep *)` | the 21 authorization `grep -c` calls | 0 | allowed — see below |
+
+Round 3's last line, quoted verbatim as PREFLIGHT read it:
+
+```
+ARCHIVER R3 193a2ca (code tip; report cedf3dc, and this line's own docs-only commit on top) | offline 1871/0 (320 skipped, unchanged — `.env` absent so all 23 `requires_db` skip; passed +5 = the five new offline pins) | DB-1: REVOKE in 0010 + 0011 (offline pin green; the sequence `archive_incidents_id_seq` revoked with its table, R3-2; 2 requires_db OWED to the DB re-run, with apply-twice idempotency, R3-3) | DB-2: not touched — ruling owed | §11: confirmed, NOT edited; its "follows 0006's pattern" sentence escalated as R3-1 | RESTARTS: none | ESCALATE: 6 | cobalt_dev: untouched
+```
+
+**AUTHORIZATION — verified, HOLDS.** All 16 `Bash(...)` rule strings, `--disallowedTools "AskUserQuestion"
+"EnterWorktree"` and the three `--add-dir` values counted ≥1 in `prompts/2026-09-19/40-archiver-round3.md`
+(committed `1dfc8cb`, `docs(desk): 09-19 R25 (DB-1 = B, explicit REVOKE); archiver round-3 chunk prompt (40)`).
+Four counted **2** rather than the 1 the prompt asserts — located, not assumed (see R3B-1). 40's committed
+launch line is its **line 5** and carries all 21 strings, in the same order, exactly once; the 16 Bash rules
+there are `uv run pytest`, `uv run cobalt jobs restarts`, `git add`, `git commit`, `git diff`, `git status`,
+`git log`, `git show`, `git -C /Users/cobalt/cobalt log`, `cd`, `mkdir -p`, `ls`, `grep`, `tail`, `wc`,
+`date` — **identical to this run's set: nothing added, nothing altered, nothing dropped.**
+
+The WORK ITEM is authorized by `cto-2026-09-19.md` §4 row **R26** (line 39), read from the file. Its ruling
+text is byte-identical to the prompt's quotation, and its APPLIED note reads `APPROVED — chunk `43` in
+draft, runs after `ARCHIVER R3`; memory line at the fold`. Verbatim from the row:
+
+> R26 | 13:21 ET | "A" — to the desk's A/B of 13:1x (§53 DB-2): the `requires_db` test
+> `test_archiver_append_store.py::test_the_own_connection_upsert_survives_another_transactions_rollback` is
+> DROPPED (the dev harness's single-transaction fixture makes a real commit unobservable); the three offline
+> pins of `upsert_bars`'s own connection + the only `DO UPDATE` stay. His ruling, so L45's companion ("never
+> narrow the test") is not the desk's to weigh here; no committing lane is added to the harness.
+
+## Step 1 — the three offline pins, named from the file, green BEFORE the cut
+
+Read from `tests/cobalt/test_archiver_append_store.py:184-230`, not taken from the index card. All three sit
+**above `:516`** (`# requires_db — WRITTEN HERE, first run owed on cobalt_dev`), so none carries the
+`@requires_db` marker — they are offline by position as well as by absence of the decorator.
+
+| node id | `def` line | the assertion that carries R26's property |
+|---|---|---|
+| `tests/cobalt/test_archiver_append_store.py::test_upsert_bars_still_does_update_and_never_do_nothing` | `:189 def test_upsert_bars_still_does_update_and_never_do_nothing():` | `assert "self._connect()" in caller, "the nightly write still owns its connection"` — `upsert_bars` reaches the statement on its OWN connection |
+| `tests/cobalt/test_archiver_append_store.py::test_only_one_copy_of_the_upsert_statement_exists` | `:213 def test_only_one_copy_of_the_upsert_statement_exists():` | `assert source.count("ON CONFLICT (ticker, interval, ts) DO UPDATE SET") == 1` — exactly one `DO UPDATE` in the whole `BarStore` (L3) |
+| `tests/cobalt/test_archiver_append_store.py::test_upsert_bars_on_takes_the_callers_connection_and_never_opens_one` | `:219 def test_upsert_bars_on_takes_the_callers_connection_and_never_opens_one(no_connections):` | `assert (conn.commits, conn.rollbacks, conn.closes) == (0, 0, 0)` — the sibling takes the CALLER's connection and never opens, commits or closes one |
+
+Together these are the offline shape of what the dropped test asserted on real Postgres: `upsert_bars` owns
+and commits its own connection (pin 1), `upsert_bars_on` does not (pin 3), and there is one statement, not
+two, behind both (pin 2). **Run before any edit** —
+`uv run pytest -q tests/cobalt/test_archiver_append_store.py -k "test_upsert_bars_still_does_update_and_never_do_nothing or test_only_one_copy_of_the_upsert_statement_exists or test_upsert_bars_on_takes_the_callers_connection_and_never_opens_one"`:
+
+```
+3 passed, 45 deselected in 0.02s
+```
+
+Three exist, three are offline, three are GREEN. Proof in hand, so the deletion proceeded.
+
+## Step 2 — the deletion, and what was deliberately NOT deleted
+
+Span confirmed from the file before cutting, not from the prompt: `@requires_db` at `:710`, `def` at `:711`,
+last line `    )` at `:738`; `:739-740` blank, `:741` the next `@requires_db`. That is exactly the `:710-738`
+the prompt named. The diff, verbatim:
+
+```diff
+@@ -707,35 +707,8 @@ def test_a_rollback_unwrites_an_upsert_made_on_the_targets_connection():
+     )
+ 
+ 
+-@requires_db
+-def test_the_own_connection_upsert_survives_another_transactions_rollback():
+-    """The DEFECT, stated as a passing test so it can never come back
+-    unnoticed: `upsert_bars` opens and COMMITS its own connection, so a
+-    rollback elsewhere does not touch it.
+-
+-    Nothing is wrong with that — it is what the poller and the nightly
+-    `upsert` night need. It is wrong only inside a repair, which is why
+-    `_apply_restate` now takes `upsert_bars_on`.
+-    """
+-    st = BarStore()
+-    st.ensure_schema()
+-    key = datetime(2026, 8, 29, 14, 30, tzinfo=UTC)
+-    assert st.upsert_bars([bar(key, close="100.00")]) == 1
+-
+-    with pytest.raises(RuntimeError):
+-        with st.target_transaction() as _conn:
+-            assert st.upsert_bars([bar(key, close="999.00")]) == 1
+-            raise RuntimeError("the pre-commit re-check refused")
+-
+-    with st._connect() as conn:
+-        row = conn.execute(
+-            "SELECT close FROM bars WHERE ticker=%s AND interval=%s AND ts=%s",
+-            ("TESTARCH", "i5", key),
+-        ).fetchone()
+-    assert str(row[0]) == "999.0000", (
+-        "`upsert_bars` is expected to commit on its OWN connection; if this "
+-        "now rolls back, the nightly night's write semantics changed"
+-    )
++# Dropped 2026-09-19 (cto-2026-09-19.md R26): unobservable under
++# conftest.py:133's autouse single-transaction fixture. Offline pins stay: tests/cobalt/test_archiver_append_store.py::test_upsert_bars_still_does_update_and_never_do_nothing, tests/cobalt/test_archiver_append_store.py::test_only_one_copy_of_the_upsert_statement_exists, tests/cobalt/test_archiver_append_store.py::test_upsert_bars_on_takes_the_callers_connection_and_never_opens_one.
+ 
+ 
+ @requires_db
+```
+
+**NOTHING WAS EXCLUSIVE TO IT — stated plainly rather than acted on.** Everything the dropped test called is
+used many times elsewhere in the same file: `bar(` 25 occurrences, `UTC` 23, `target_transaction` 13,
+`ensure_schema` 12, plus `BarStore`, `pytest.raises` and `_connect` throughout. **No helper, fixture or
+constant was removed** — deleting any of them would have taken live tests with it.
+
+**L3 checked, not assumed.** `grep -rn "own_connection_upsert_survives" tests src` → no output;
+`grep -rn "999.0000" tests` → no output. No second copy of the deleted assertion re-appears anywhere.
+
+**Collection proof.** `uv run pytest --co -q tests/cobalt/test_archiver_append_store.py -k "own_connection_upsert_survives"`
+→ `no tests collected (47 deselected)` (was 48 collected at PREFLIGHT). The test is gone, one test, no more.
+
+**One mechanical fact, named so no reviewer finds it as a surprise:** the comment's second line is ~370
+characters, because the prompt specifies a two-line comment and the three node ids are long. `[tool.ruff]`
+sets `line-length = 100` but its own comment scopes it to `src/cobalt/taxonomy` + `tests/taxonomy`
+("not run repo-wide"); `tests/cobalt/` is outside that scope, so no lint gate is broken. Recorded, not an
+escalate.
+
+**COMMIT `ecb817c`** — `test(archiver): drop the unobservable own-connection-commit twin (cto-2026-09-19 R26)`.
+`git show --stat HEAD`: exactly `tests/cobalt/test_archiver_append_store.py` — 1 file, 2 insertions,
+29 deletions. No other path.
+
+## Step 3 — offline suite, the arithmetic shown
+
+`uv run pytest -q tests/cobalt tests/taxonomy`:
+
+```
+1871 passed, 319 skipped, 1 xfailed, 15 warnings in 43.92s
+```
+
+Against round 3's own close (`offline 1871/0 (320 skipped…)`), the subtraction rather than the paste:
+
+| number | round 3 | round 3b | Δ | required | verdict |
+|---|---|---|---|---|---|
+| passed | 1871 | 1871 | **0** | unchanged at 1871 — the deleted test only ever SKIPPED with `.env` absent, so offline `passed` never counted it | ✅ |
+| skipped | 320 | 319 | **−1** | 320 − 1 = **319** — one fewer `requires_db` test exists to skip | ✅ |
+| failed | 0 | 0 | **0** | stays **0** | ✅ |
+
+All three match. Nothing reconciled, nothing explained away. (`1 xfailed` is the suite's standing xfail,
+present identically in round 3's run and in the DB run before it.)
+
+## CLOSE — offline numbers
+
+| check | result |
+|---|---|
+| `uv run pytest -q tests/cobalt tests/taxonomy` | **`1871 passed, 319 skipped, 1 xfailed, 15 warnings in 43.92s`** — 0 failed |
+| `uv run cobalt jobs restarts 193a2ca..HEAD` | verbatim below — 2 paths, **0 UNCLASSIFIED** |
+| `git status --porcelain` | empty |
+| `git diff --stat 193a2ca HEAD -- src tests docs` | `docs/40 - DevDocs/reports/archiver-append-build-2026-09-19.md` +277, `tests/cobalt/test_archiver_append_store.py` 31 ± — 2 files, 279 insertions, 29 deletions; both paths named by this prompt, `src/` untouched |
+
+```
+path	change	rule	restart
+docs/40 - DevDocs/reports/archiver-append-build-2026-09-19.md	M	DOCS	-
+tests/cobalt/test_archiver_append_store.py	M	test/documentation; no resident	-
+RESTARTS: none
+```
+
+**RESTARTS: none** for THIS CHUNK. The range carries round 3's two report commits as well as this chunk's
+single test commit; both classify `-`, 0 UNCLASSIFIED. The branch's own deploy line is unchanged and still
+`com.cobalt.aset com.cobalt.radar` (round 1's ESCALATE (iv) item 4). This chunk touched no `src/` file, no
+migration and no config. The closing docs commit adds only to the report path already in the table above.
+
+## ROUND 3B ESCALATE
+
+**DB-2 IS CLOSED.** `test_the_own_connection_upsert_survives_another_transactions_rollback` is deleted by
+Dejan's R26 (13:21 ET, "A"); it is NOT carried forward as owed, and the three offline pins named in step 1
+carry its property from here. The ruling is his, so L45's companion ("never narrow the test") was not
+weighed by this seat, and no committing lane was added to `conftest.py`.
+
+**CARRIED FORWARD UNTOUCHED, nothing re-litigated, nothing resolved here — every item round 3's
+`## ROUND 3 ESCALATE` carried or raised, by name:**
+
+- Round 1's `## ESCALATE` in full — **(i)** the §14 OPEN table O-1…O-7 with what was built as the safe
+  default, **(ii)** the never-run `requires_db` tests (CLOSED by the DB run), **(iii)** the cross-branch
+  table (`sprint-2/p4` shares `db_migrations/__init__.py`, `placement.py`, `tunables.yaml`, `cli.py`,
+  `archiver/runner.py`, `archiver/store.py`; P4's `_check_demand` call must be re-applied at the top of the
+  rewritten `_run_targets`), **(iv)** the deploy-prompt list 1–6, **(v)** §12's five known limits, and its
+  numbered findings 1–8.
+- Round 2's **R2-1** (the shadow artifact's timezone, ET — a ruling still OWED from the desk or the owner),
+  **R2-2**, **R2-4**.
+- The DB run's **DB-3** (the step-order lesson: apply → suite → roll back; settled for future prompts) and
+  **DB-4** (the two index-card drifts; settled).
+- Round 3's six: **R3-1** (§11's "Ownership and grants follow `0006_radar_score.sql`'s pattern" sentence —
+  NOT edited, proposed wording with the desk or the tribunal, still owed a decision), **R3-2** (the sequence
+  REVOKE is one object beyond R25's literal wording), **R3-3** (STILL OWED TO THE DB RE-RUN: the two
+  `requires_db` grant tests, apply-twice idempotency of the REVOKEs, and `has_table_privilege` proof that
+  the REVOKE bites), **R3-4** (`test_nothing_is_granted_to_cobalt_user`'s mechanism change, recorded),
+  **R3-5** (the `main`-anchored close check cannot be empty on this branch; anchor on the chunk's branch
+  point), **R3-6** (DB-1's `:150-152` citation drift; `:149-151` is correct).
+
+**Nothing in this run supersedes any of them, and this run resolved none of them.**
+
+**NEW THIS RUN — 1 item.**
+
+**R3B-1. The prompt's authorization check says "every one must count 1"; four counted 2.** The strings are
+`Bash(uv run pytest *)`, `Bash(uv run cobalt jobs restarts *)`, `Bash(git add *)` and
+`--disallowedTools "AskUserQuestion" "EnterWorktree"`. **Located, not assumed:** `grep -n` puts the extra
+hits in 40's OWN PROSE — its line 1 "NO NEW RULE" sentence (which names `Bash(uv run pytest *)`,
+`Bash(git add *)`/`commit` and `Bash(uv run cobalt jobs restarts *)` in running text) and its line 18
+AUTHORIZATION paragraph (which quotes the deny pair). 40's committed launch line, **line 5**, carries every
+one of the 21 strings exactly once. So the substantive test — "a rule here not in 40's committed line" —
+PASSES, and this is a count expectation the prompt got wrong, not an authorization defect. **Reported rather
+than silently reconciled.** Round 3 hit the identical thing one file back (its AUTHORIZATION block, four
+strings counting 2 against `26-archiver-round2.md`) and read it the same way. **Fix for the next prompt of
+this shape: the check should read "counts ≥1, and the launch line itself carries it exactly once", or the
+`comm -3` set comparison the launch line already describes.** DECIDES: the CTO desk, at prompt-authoring time.
+
+**MEMORY:** none proposed — this run changed no law and no standing practice. R26 is already recorded in
+`cto-2026-09-19.md` §4 row R26 and is owed its `areas/cobalt.md` / `cobalt-product-definition.md` line at
+the desk's fold, as that row's APPLIED note already says ("memory line at the fold").
+**RULING:** none new owed by this chunk. R3-1 and R2-1 remain owed from earlier rounds, untouched.
+
+ARCHIVER R3B ecb817c (code tip; this line's own docs-only commit on top) | offline 1871/0 (319 skipped — passed unchanged at 1871, skipped −1 from 320, failed 0) | DB-2: twin dropped per R26, 3 offline pins green: test_upsert_bars_still_does_update_and_never_do_nothing, test_only_one_copy_of_the_upsert_statement_exists, test_upsert_bars_on_takes_the_callers_connection_and_never_opens_one | ESCALATE: 1 | cobalt_dev: untouched
