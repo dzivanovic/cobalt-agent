@@ -6,7 +6,8 @@ schemas and adds a column to six of them is a migration whose claim
 every run captures, per table, BEFORE and AFTER:
 
   * where it lives (`public` / `system` / `"user"`),
-  * `count(*)`,
+  * how many rows the digest folded — counted BY the fold, not by a
+    separate `count(*)` (see `_digest_rows`),
   * a content digest over the rows, ordered by the primary key,
   * how long taking that proof cost, in wall seconds.
 
@@ -106,7 +107,8 @@ TABLE_DIGEST_EXCLUDED_COLUMNS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-#: Where a new-core table may legitimately be found, in look-up order.
+#: The schemas searched for a new-core table. A name found in more than
+#: one of them is an ERROR, not a choice — there is no look-up order.
 SEARCHED_SCHEMAS = ("public", "user", "system")
 
 #: Rows fetched per round trip from the server-side cursor the digest
@@ -121,12 +123,34 @@ class MigrationError(RuntimeError):
 
 
 def _schema_of(conn, table: str) -> Optional[str]:
-    row = conn.execute(
+    """Which searched schema holds `table`, or `None`. Never a guess.
+
+    EVERY match is fetched (2026-09-19, tribunal round 1 — Astra finding
+    1). The query used to end `LIMIT 1` with no `ORDER BY`, so a name
+    present in two searched schemas resolved to whichever row the server
+    handed over first: the proof would then digest THAT relation before
+    and after while the migration changed the other one, and print `OK`.
+    Production carries no such duplicate today (read-only check, desk,
+    2026-09-19), so this never lied in practice — but it is a verifier
+    that COULD, sitting on the production write path, and L1 answers that
+    with a loud failure rather than with a choice.
+    """
+    rows = conn.execute(
         "SELECT schemaname FROM pg_tables "
-        "WHERE tablename = %s AND schemaname = ANY(%s) LIMIT 1",
+        "WHERE tablename = %s AND schemaname = ANY(%s)",
         (table, list(SEARCHED_SCHEMAS)),
-    ).fetchone()
-    return row[0] if row else None
+    ).fetchall()
+    if not rows:
+        return None
+    if len(rows) > 1:
+        found = sorted(row[0] for row in rows)
+        schemas = " and ".join(part for part in (", ".join(found[:-1]), found[-1]) if part)
+        raise MigrationError(
+            f"{table} exists in {schemas}; the proof cannot know which one "
+            "the migration touches, so it will not digest either. Drop or "
+            "rename the copy that does not belong, then run this again."
+        )
+    return rows[0][0]
 
 
 def _pk_columns(conn, schema: str, table: str) -> list[str]:
@@ -456,8 +480,11 @@ def _connect(dbname: str, *, allow_prod: bool, read_only: bool):
     """
     conn = db.connect_migration(dbname, allow_prod=allow_prod)
     try:
-        if read_only:
-            conn.read_only = True
+        # ASSIGNED ON BOTH PATHS. The migrate transaction's read-write
+        # state is a property of this harness, not of whatever default
+        # the server happens to be carrying (2026-09-19, Astra Q1: the
+        # read-write case used to be left implicit).
+        conn.read_only = read_only
         conn.isolation_level = IsolationLevel.REPEATABLE_READ
         conn.autocommit = False
         _assert_utf8(conn)
@@ -468,6 +495,32 @@ def _connect(dbname: str, *, allow_prod: bool, read_only: bool):
 
 
 def cmd_migrate(args: argparse.Namespace) -> None:
+    """Apply the registered migrations, or take the proof, and print it.
+
+    WHAT `OK` MEANS, EXACTLY (stated 2026-09-19 after the tribunal's
+    round 1; Gemini Q5, Grok finding 1, Astra Q5 all read the same
+    property out of the code). `OK` means:
+
+        the content that existed at the transaction's SNAPSHOT, plus
+        this transaction's own writes, is unchanged except where the
+        migration meant to change it.
+
+    It does NOT mean "the live database did not change while this ran".
+    The harness holds ONE REPEATABLE READ snapshot from its first
+    statement, so a row another session INSERTs after that moment is
+    invisible to both probes — and to the migration's own statements.
+
+    THE RULE FOR MIGRATION AUTHORS that follows from it: a FUTURE
+    migration that BACK-FILLS rows of a table other sessions insert into
+    cannot rely on this proof to notice rows inserted after the snapshot.
+    Such a migration either runs with EVERY writer of that table stopped,
+    or is followed by a SECOND IDEMPOTENT PASS that catches what arrived
+    in between. Nothing in the registered set back-fills today — every
+    row-level statement in `FORWARD` is a seed `INSERT … ON CONFLICT DO
+    NOTHING` or an `UPDATE … WHERE user_id IS NULL` that matches no row
+    on a database already past `0002` — so this is a rule for the next
+    migration, not a defect in these.
+    """
     proof_only = args.proof_only
     if proof_only and (args.rollback or args.down_to):
         raise MigrationError(

@@ -1,6 +1,6 @@
 # `src/cobalt/db_migrations/cli.py`
 
-S2-P1 requires a rollback bound before connection, selects only newer reverse files, and computes direction-aware verdicts before commit. `CHANGED` always rolls back. Since 2026-09-18 the content proof is STREAMED (no size ceiling), runs at REPEATABLE READ (one snapshot for both probes), and there is a read-only `--proof-only` mode.
+S2-P1 requires a rollback bound before connection, selects only newer reverse files, and computes direction-aware verdicts before commit. `CHANGED` always rolls back. Since 2026-09-18 the content proof is STREAMED (no size ceiling), runs at REPEATABLE READ (one snapshot for both probes), and there is a read-only `--proof-only` mode. Since 2026-09-19 (the tribunal's round 1) an ambiguous table name is REFUSED rather than resolved, and what `OK` means is written down rather than inferred.
 
 ## What it does
 `cobalt db migrate [--allow-prod] [--rollback --down-to NNNN] [--proof-only]`.
@@ -55,10 +55,65 @@ catches `psycopg.errors.SerializationFailure` specifically, rolls back
 happened: nothing was applied, something is still writing to a table this
 migration touches, stop it and run again. The bare driver text tells an
 operator nothing at 20:40 on a deploy, which is why it is wrapped rather
-than re-raised. DDL under REPEATABLE READ is unaffected — catalog reads
-use their own snapshot, and the dev round trip (`--rollback --down-to
-0005` → `migrate`, 8 tables DROPPED then CREATED, every persistent
-digest identical) is the standing proof that it works.
+than re-raised. The dev round trip (`--rollback --down-to 0005` →
+`migrate`, 8 tables DROPPED then CREATED, every persistent digest
+identical) is the standing proof that DDL commits under this isolation
+level at all.
+
+**DDL after a concurrent commit, MEASURED (2026-09-19, U1).** The earlier
+claim here — "DDL under REPEATABLE READ is unaffected, catalog reads use
+their own snapshot" — was true but too broad to rest a deploy on, and no
+house could settle it from reads. Run on `cobalt_dev` as tests (f) and
+(g): with another session committing an UPDATE to `system.cobalt_jobs`
+between the BEFORE probe and `0003`'s `ALTER TABLE … ADD COLUMN IF NOT
+EXISTS`, the ALTER **completes with no serialization error and the table
+still reads unchanged**; with that other session holding the transaction
+OPEN, the ALTER **waits for ACCESS EXCLUSIVE and completes the moment it
+commits** (asserted as a real lock wait in `pg_locks`, under a 20 s
+ceiling so a hang fails the test instead of the suite). That is the
+interleaving a production deploy runs every time, because the runner
+re-applies `0003` on every run while the heartbeat writes to that table
+every 15 minutes.
+
+## What `OK` means, exactly
+Written down here and in `cmd_migrate`'s docstring rather than inferred,
+because all three houses read the same property out of the code in round
+1 and one of them rated it a blocker:
+
+> `OK` means the content that existed at the transaction's SNAPSHOT, plus
+> this transaction's own writes, is unchanged except where the migration
+> meant to change it.
+
+It does NOT mean "the live database did not change while this ran". One
+REPEATABLE READ snapshot is held from the first statement, so a row
+another session INSERTs after that moment is invisible to both probes and
+to the migration's own statements.
+
+**The rule for migration authors.** A future migration that BACK-FILLS
+rows of a table other sessions insert into cannot rely on this proof to
+notice rows inserted after the snapshot. Such a migration either runs
+with EVERY writer of that table stopped, or is followed by a SECOND
+IDEMPOTENT PASS that catches what arrived in between. Nothing in the
+registered set back-fills today — every row-level statement in `FORWARD`
+is a seed `INSERT … ON CONFLICT DO NOTHING` or an `UPDATE … WHERE
+user_id IS NULL` that matches no row on a database already past `0002` —
+so this is a rule for the next migration, not a defect in these.
+
+## An ambiguous table name is refused
+`_schema_of` fetches EVERY row `pg_tables` returns for the name across
+`SEARCHED_SCHEMAS`. One match behaves as it always did; no match is
+`None` (which is how the proof says `ABSENT`); **more than one raises a
+`MigrationError` naming the table and all of its schemas**, and nothing
+is digested.
+
+It used to end `LIMIT 1` with no `ORDER BY`, so a name present in two
+searched schemas resolved to whichever row the server handed over first.
+The proof would then digest THAT relation before and after while the
+migration changed the other one, and print `OK` — a verifier that lies,
+sitting on the production write path. Production carries no such
+duplicate today, so it never lied in practice; L1 is why it now refuses
+instead of choosing. The comment above `SEARCHED_SCHEMAS` says so: there
+is no look-up order, and there never was one in the SQL.
 
 ### Two designs rejected, and why (the snapshot fix)
 * **Exclude the job/telemetry tables from the proof.** A weaker proof —
@@ -170,7 +225,9 @@ mode would be gone before the first fetch. The ORDER inside `_connect`
 matters: `read_only` and `isolation_level` are set while the connection
 is still in autocommit and idle, then autocommit goes off, then
 `_assert_utf8` runs the first statement — setting either attribute after
-a transaction has opened raises.
+a transaction has opened raises. `conn.read_only = read_only` is assigned
+on BOTH paths (2026-09-19): the migrate transaction's read-write state is
+a property of this harness, not of whatever default the server carries.
 
 `TABLE_DIGEST_EXCLUDED_COLUMNS` (S2-P2) excludes the 25 card columns
 that 0007 adds to `aset_sizings`, from THAT table's digest only. It is
