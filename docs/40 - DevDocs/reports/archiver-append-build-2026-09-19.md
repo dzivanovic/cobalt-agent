@@ -1044,3 +1044,89 @@ whole command) and now documented in the tests rather than being a surprise to t
 this round fixed was already ruled by the FINAL design.
 
 ARCHIVER APPEND R2 9056e73 | on archiver/append-0919 (round 1 c974fbf) | offline 1866/0 (320 skipped; round-1 close 1850/0/315) | F1 restate fixed · backfill-missing shape already-safe | F2 command-path tests added | F3/Q10 race tests offline+requires_db | F4 four tests rewritten fixed | F5 exit code 2 on cobalt fixed | F6 shadow night = ET date fixed | F7 NULLS NOT DISTINCT pinned fixed | radar diff: empty yes | write_mode ships: upsert (unchanged) | RESTARTS: com.cobalt.aset com.cobalt.radar | CARRIED: 23 requires_db tests never run (now includes this round's 5) | ESCALATE: 4
+
+---
+
+# DB RUN
+
+Seat `archiver-db-0919`, worktree `/Users/cobalt/cobalt-wt/archiver-append`, prompt
+`docs/40 - DevDocs/prompts/2026-09-19/35-archiver-db-run.md`. Started 2026-09-19 12:38:15 EDT (`date`).
+This section APPENDS to the report above; `## ROUND 2` and `## ESCALATE` are untouched.
+
+## DB RUN PREFLIGHT
+
+| rule | command | exit | allowed / DENIED |
+|---|---|---|---|
+| `Bash(date*)` | `date` | 0 | allowed — `Sat Sep 19 12:38:15 EDT 2026` |
+| `Bash(git status*)` | `git status --porcelain` | 0 | allowed — **EMPTY** |
+| `Bash(git status*)` | `git status` | 0 | allowed — first two lines verbatim: `On branch archiver/append-0919` / `nothing to commit, working tree clean`. Branch correct; no rebase in progress. |
+| `Bash(git log*)` | `git log --oneline -1` | 0 | allowed — `fb825df docs(report): archiver append round 2 — 7 REAL findings folded, F1 blocker fixed, 1866/0/320 offline, 23 requires_db owed` (first launch, the expected tip) |
+| `Bash(git -C /Users/cobalt/cobalt log*)` | `git -C /Users/cobalt/cobalt log --oneline -1` | 0 | allowed — `d5ea92d docs(desk): 09-19 archiver DB run prompt (35) — 25's line + R18's two archiver env strings; rolls cobalt_dev back to 0009` (recorded, no equality required) |
+| `Bash(ls *)` | `ls -la .env` | 1 | allowed — `ls: /Users/cobalt/cobalt-wt/archiver-append/.env: No such file or directory` ✅ nothing inherited |
+| `Bash(ls *)` | `ls -la /Users/cobalt/cobalt-wt/ops-2026-09-19/.env` | 1 | allowed — `No such file or directory` ✅ `ops-0919-db` released the lane |
+| `Bash(grep *)` | `grep -rln "cobalt_dev" "…/reports/"` | 0 | allowed — see the lane check below |
+| `Bash(git -C … diff*)` | `git -C /Users/cobalt/cobalt-wt/archiver-append diff --stat c974fbf..HEAD -- src tests docs` | 0 | allowed — quoted below |
+| `Bash(uv run pytest *)` | `uv run pytest --co -q <the three files>` | 0 | allowed — `157 tests collected in 0.11s`, no collection error |
+
+**`ops-0919-db`'s stop line, read with the Read tool from `~/cobalt-wt/ops-2026-09-19/docs/40 - DevDocs/reports/ops-2026-09-19.md:1816`, quoted verbatim:**
+
+> `OPS 0919 DB be00506 (code tip; one docs-only commit fills this sha in) | code d860bf7 | offline 1608/0 (302 skipped vs round-2 298; +4 named) | db 61/0 (tests/cobalt/test_migrate_proof.py only) | R1/R11 SET LOCAL does NOT take the snapshot — moved ahead of the BEFORE probe, coverage test added | F1 nested | F3 disposition recorded — ACCEPTED AS DISCLOSED, no edit | F4 marked | F5 marked | cobalt_dev: 0001–0009, unchanged (every row count and digest identical to the step-0 proof) | .env: removed, proven gone | RESTARTS: com.cobalt.radar (d860bf7..HEAD, 0 UNCLASSIFIED; branch 4c14712..HEAD com.cobalt.aset com.cobalt.radar) | OWED: three-house check on this diff, next deploy prompt | ESCALATE: 12`
+
+**Lane check — nobody claimed `cobalt_dev` after `ops-0919-db` closed.** `grep -rln "cobalt_dev"` over
+`~/cobalt/docs/40 - DevDocs/reports/` returns 37 files; only three carry a 2026-09-19 date:
+`harness-round2-2026-09-19.md`, `prod-proof-only-3-2026-09-19.md` and the desk's own `cto-2026-09-19.md`.
+Dated by their commits (`git -C /Users/cobalt/cobalt log --format=…`), the first two landed **07:11–07:55 ET** —
+hours BEFORE `ops-0919-db` launched at 12:0x (`cto-2026-09-19.md` §41) and closed. `cto-2026-09-19.md` is the
+desk's record of that launch, not a second claim on the lane. `ops-2026-09-19.md` itself is not in `~/cobalt`
+(its worktree is unmerged), so it cannot appear in this grep. **No later session claims `.env` or `cobalt_dev`.**
+
+**UNVERIFIABLE item 1 of 3, SETTLED HERE — `git diff --stat c974fbf..HEAD -- src tests docs`, verbatim:**
+
+```
+ .../reports/archiver-append-build-2026-09-19.md    | 634 ++++++++++++++++-
+ src/cobalt/archiver/cli.py                         |  16 +-
+ src/cobalt/archiver/runner.py                      |  23 +-
+ src/cobalt/archiver/store.py                       |  67 +-
+ src/cobalt/cli.py                                  |  13 +
+ tests/cobalt/test_archiver_append_store.py         | 210 +++++-
+ tests/cobalt/test_archiver_migrations.py           |  12 +
+ tests/cobalt/test_archiver_quiet.py                | 753 ++++++++++++++++++++-
+ tests/cobalt/test_archiver_runner.py               |  34 +
+ 9 files changed, 1708 insertions(+), 54 deletions(-)
+```
+
+Nine paths, every one named by round 2's own CLOSE section (`:972`) — five `src`/`tests` files the seven
+findings touched, three more test files, and this report. **No surprise path.** Matches round 2's own
+`git diff --stat c974fbf HEAD` line for line.
+
+**Collection and the `requires_db` count — the report's figure of 23 is CORRECT, its LOCATION is not.**
+157 tests collected across the three files, no error. Counted from the collected node ids:
+
+| file | `requires_db` items |
+|---|---|
+| `tests/cobalt/test_archiver_migrations.py` | **10** (`…forward_creates_both_tables…`, `…migrate_twice_is_idempotent…`, `…rollback_down_to_0007_drops_exactly…`, `…owner_is_the_system_role` ×2, `…user_role_has_no_grant…` ×2, `…check_refuses_progress_past_its_own_export`, `…one_unresolved_incident_per_key…`, `…kind_domain_is_enforced_by_the_database`) |
+| `tests/cobalt/test_archiver_append_store.py` | **13** (`test_the_append_path_never_modifies_an_existing_row` … `test_an_equal_value_race_writes_the_same_value_and_changes_nothing`) |
+| `tests/cobalt/test_archiver_quiet.py` | **0** |
+| **total** | **23** ✅ matches `ROUND 2`'s carried count exactly |
+
+**Two DRIFTS in the prompt's own index card, named as the prompt asks (neither blocks):**
+1. The prompt says `test_archiver_quiet.py` holds "one `requires_db` test (the F3/Q10 race twin)". It holds
+   **none**. `test_archiver_quiet.py:1123-1125` says so in a comment: the twin lives in
+   `test_archiver_append_store.py` (`test_a_committed_poller_write_is_overwritten_by_a_later_repair` and
+   `test_an_equal_value_race_writes_the_same_value_and_changes_nothing`). The file is still run in step 2 —
+   it contributes 0 skipped-to-real, not 1.
+2. The prompt says the 0010/0011 `requires_db` half is "≈17 tests". It is **10**. The three test names it
+   quotes all exist and are among them.
+
+## DB RUN AUTHORIZATION
+
+**R18 VERIFIED MYSELF, not taken from the prompt.** `grep -n "R18" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-19.md"` → line 31, `## §4 Rulings`, row **R18**, 11:33 ET, "approve env". Its text matches
+the prompt's quotation word for word, including all four rule strings, the two REUSED `COBALT_ENV=dev` lines,
+the NEVER block, and `Covers: 25-ops-db-run.md (launch when cobalt_dev is free) and the archiver's DB run
+after its round 2.` **APPLIED marker present**, verbatim: `APPLIED: this row committed before either launch`.
+The row is committed in `~/cobalt` on main (`git -C /Users/cobalt/cobalt log --oneline -1` → `d5ea92d`, above
+it in history). The two rules new to THIS worktree —
+`Bash(cp /Users/cobalt/cobalt/.env /Users/cobalt/cobalt-wt/archiver-append/.env)` and
+`Bash(rm /Users/cobalt/cobalt-wt/archiver-append/.env)` — are two of R18's four strings, by name.
+**No authorization mismatch.** Laws read in full this run: `LAWS.md` (L4, L29, L41, L45, L46, L48, L54, L57,
+L60, L67 bind directly), `UNATTENDED-LAUNCH.md` §2 + §6, memory `INDEX.md` → `areas/cobalt.md ## NOW`.
