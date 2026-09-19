@@ -1873,3 +1873,5 @@ paragraph), never a differing rule; 26's committed launch line (line 5) carries 
 **No rule in this run's line is absent from 26's, none is altered, none added.** The WORK ITEM is
 authorized by `cto-2026-09-19.md` §4 R25 (13:10 ET, "B" — read in full, quoted in step 3's commit),
 DB-1 in this report's `# DB RUN` section, and §11/§15 of the FINAL design.
+
+ARCHIVER R3 193a2ca (code tip; report cedf3dc, and this line's own docs-only commit on top) | offline 1871/0 (320 skipped, unchanged — `.env` absent so all 23 `requires_db` skip; passed +5 = the five new offline pins) | DB-1: REVOKE in 0010 + 0011 (offline pin green; the sequence `archive_incidents_id_seq` revoked with its table, R3-2; 2 requires_db OWED to the DB re-run, with apply-twice idempotency, R3-3) | DB-2: not touched — ruling owed | §11: confirmed, NOT edited; its "follows 0006's pattern" sentence escalated as R3-1 | RESTARTS: none | ESCALATE: 6 | cobalt_dev: untouched
