@@ -486,6 +486,40 @@ def test_an_equal_rendering_is_not_recorded_as_a_difference(wired):
     assert record.bootstrap.would_withhold is False
 
 
+#: 00:30 UTC = 20:30 EDT the PRECEDING day. A run at the nightly hour
+#: lands on a different UTC calendar day than the ET trading night it is
+#: naming, and `FETCH_AT` (20:30 UTC = 16:30 ET, same date) never
+#: exercises it — which is how tribunal round 1's F6 survived.
+FETCH_AT_ET_NIGHT = datetime(2026, 9, 19, 0, 30, tzinfo=UTC)
+
+
+def test_the_artifact_night_is_the_ET_trading_date_not_the_UTC_date(wired, tmp_path):
+    """Tribunal round 1, F6.
+
+    The nightly archiver runs at 20:30 ET. `night=clock().date()` took
+    the `.date()` of a UTC instant, so on every such run the artifact
+    was named for the NEXT calendar day — `2026-09-19.jsonl` for the
+    night of 2026-09-18. Spec §5 names the file
+    `data/archiver-shadow/<YYYY-MM-DD>.jsonl` and states no timezone;
+    this round resolves it to ET per the verdict row (recorded as an
+    ESCALATE — the desk may still rule otherwise).
+    """
+    store = wired(FakeStore(stored=_stored(NIGHT_1[:1])))
+    run([("TESTARCH", Interval.I5)], store=store,
+        fetch=fetcher({("TESTARCH", "i5"): NIGHT_1}), cfg=settings(),
+        now=FETCH_AT_ET_NIGHT)
+
+    et_night = shadow_mod.SHADOW_DIR / "2026-09-18.jsonl"
+    utc_night = shadow_mod.SHADOW_DIR / "2026-09-19.jsonl"
+    assert et_night.exists(), (
+        "the artifact must be named for the ET trading night; files present: "
+        f"{sorted(p.name for p in shadow_mod.SHADOW_DIR.glob('*.jsonl'))}"
+    )
+    assert not utc_night.exists(), (
+        "the UTC calendar date of the run instant named the artifact"
+    )
+
+
 def test_the_artifact_is_json_lines_with_the_recorded_schema(wired, tmp_path):
     store = wired(FakeStore(stored=_stored(NIGHT_1[:1])))
     run([("TESTARCH", Interval.I5)], store=store,

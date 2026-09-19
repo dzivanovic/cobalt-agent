@@ -58,6 +58,27 @@ def _now():
     return clock.now_utc()
 
 
+def _trading_night(now):
+    """The ET calendar date of `now` — the night an artifact is named for.
+
+    Tribunal round 1, F6: this was `now.date()` on a UTC instant. The
+    nightly run happens at 20:30 ET, which is already the NEXT UTC
+    calendar day, so every artifact was named for the day after the
+    trading night it recorded. Spec §5 writes
+    `data/archiver-shadow/<YYYY-MM-DD>.jsonl` and names no timezone;
+    resolved to ET here, which is the zone every other date in this
+    system is stated in (sessions are defined in ET, storage is UTC).
+
+    `SessionClock.to_et` is the conversion the codebase already has
+    (`session/clock.py:262`) — a static method, so no config is loaded
+    and no calendar is consulted, and it REFUSES a naive datetime rather
+    than guessing a zone (ADR-0007).
+    """
+    from cobalt.session.clock import SessionClock
+
+    return SessionClock.to_et(now).date()
+
+
 async def _default_fetch(ticker, interval, token):
     """The real transport, behind the runner's `fetch=` test seam.
 
@@ -173,7 +194,7 @@ async def _upsert_targets(targets, *, store, fetch, token, summary, settings, cl
         if summary.shadow_records:
             path = shadow.write_records(
                 summary.shadow_records,
-                night=clock().date(),
+                night=_trading_night(clock()),
                 retention_nights=settings.shadow_retention_nights,
             )
             logger.info(f"shadow compare: {len(summary.shadow_records)} target(s) -> {path}")
