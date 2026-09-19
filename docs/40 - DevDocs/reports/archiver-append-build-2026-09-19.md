@@ -2377,3 +2377,279 @@ below as DB2-1.
 comparison is against **this run's own step-0 baseline**, printed above — not against the first DB run's. The
 +1 row is inside that baseline, so a closing proof that comes back byte-identical to it proves exactly what
 this run claims: that this run changed nothing.
+
+### Step 1 — FORWARD (13:41 ET): `.env` re-copied, `COBALT_ENV=dev uv run cobalt db migrate`, FULL output
+
+**`--allow-prod` was NOT typed, here or anywhere in this run.** Every command is quoted in full.
+
+```
+cobalt db migrate — FORWARD on cobalt_dev
+-- applying 0001_schemas.sql
+-- applying 0002_move_tables.sql
+-- applying 0003_heartbeat_vault_outcome.sql
+-- applying 0004_radar_pool.sql
+-- applying 0005_heartbeat_note_absent.sql
+-- applying 0006_radar_score.sql
+-- applying 0007_radar_cards.sql
+-- applying 0010_archive_progress.sql
+-- applying 0011_archive_incidents.sql
+
+table                side    schema before -> after     rows            probe secs      digest before -> after verdict
+----------------------------------------------------------------------------------------------------------------------
+archive_incidents    system  - -> system                - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+archive_progress     system  - -> system                - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+aset_sizings         user    user -> user               1 -> 1          0.01 -> 0.00    0824685c -> 0824685c  OK
+bars                 system  system -> system           1043443 -> 1043443 5.39 -> 5.48    2769919a -> 2769919a  OK
+card_dot_taps        user    user -> user               0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+card_dots            user    user -> user               0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+card_stop_edits      user    user -> user               1 -> 1          0.00 -> 0.00    7599f9ab -> 7599f9ab  OK
+card_transitions     user    user -> user               4 -> 4          0.00 -> 0.00    f181e76b -> f181e76b  OK
+cobalt_email_sends   system  system -> system           2 -> 2          0.00 -> 0.00    fba8cf9f -> fba8cf9f  OK
+cobalt_jobs          system  system -> system           13 -> 13        0.00 -> 0.00    8d9b0861 -> 8d9b0861  OK
+cobalt_kill_switch   system  system -> system           1 -> 1          0.00 -> 0.00    2e590e87 -> 2e590e87  OK
+cobalt_redactions    system  system -> system           127 -> 127      0.00 -> 0.00    0f80638d -> 0f80638d  OK
+day_modes            user    user -> user               2 -> 2          0.00 -> 0.00    f2ffb4d4 -> f2ffb4d4  OK
+desk_grade           system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+desk_packet          system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+desk_regime          system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+radar_membership     system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+radar_pool           system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+radar_score          system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+radar_score_receipt  user    user -> user               0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+radar_score_run      system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+session_blocks       system  system -> system           6 -> 6          0.00 -> 0.00    b650702d -> b650702d  OK
+traders              user    user -> user               1 -> 1          0.00 -> 0.00    a64e0148 -> a64e0148  OK
+vault_overrides      user    user -> user               6 -> 6          0.00 -> 0.00    6a8b0520 -> 6a8b0520  OK
+vault_writes         user    user -> user               184 -> 184      0.01 -> 0.01    4a965c69 -> 4a965c69  OK
+----------------------------------------------------------------------------------------------------------------------
+25 table(s) proven; digest excludes user_id, vault_outcome, vault_reason, account_mode, pool_member_id; aset_sizings: 25 card column(s) added by 0007. content UNCHANGED on every table.
+proof cost: BEFORE 5.4 s + AFTER 5.5 s = total 11.0 s; slowest table bars (5.4 s before).
+```
+
+0001–0007 replayed as **idempotent no-ops** (every digest identical before→after), **0010 and 0011 CREATED**,
+both empty, both on the **system** side — and this time both carrying round 3's `REVOKE` statements
+(`0010:98`, `0011:121-122`, confirmed present in the files before this run relied on them).
+`content UNCHANGED on every table` → the run COMMITTED.
+
+### Step 1 — `--proof-only` with both tables applied
+
+FULL output, abridged only where it repeats the FORWARD table verbatim:
+
+```
+cobalt db migrate — PROOF ONLY on cobalt_dev (READ ONLY, nothing applied)
+
+table                side    schema   rows         digest                             secs
+------------------------------------------------------------------------------------------
+archive_incidents    system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.01
+archive_progress     system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+aset_sizings         user    user     1            0824685c130da3c7cb7f0e76191a6819   0.00
+bars                 system  system   1043443      2769919a57144c7bf8720110061dbf72   5.18
+…
+cobalt_redactions    system  system   127          0f80638def1d0d8e46457a59b2771fe7   0.00
+…
+vault_writes         user    user     184          4a965c69340f112d12e6ca21a8a0602c   0.01
+------------------------------------------------------------------------------------------
+25 table(s) probed on cobalt_dev; … Proof cost: total 5.2 s
+NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.
+```
+
+All 25 objects now read with a schema, a row count and a digest — `archive_progress` and `archive_incidents`
+at `system` / `0` / `d41d8cd98f00b204e9800998ecf8427e`. **Every 0001–0009 digest is identical to step 0's
+baseline, row for row** (`bars` 1043443 / `2769919a…`, `vault_writes` 184 / `4a965c69…`, `cobalt_redactions`
+127 / `0f80638d…`, `cobalt_jobs` 13 / `8d9b0861…`, `session_blocks` 6 / `b650702d…`, `traders` 1 /
+`a64e0148…`, `aset_sizings` 1 / `0824685c…`, `card_stop_edits` 1 / `7599f9ab…`, `card_transitions` 4 /
+`f181e76b…`, `cobalt_email_sends` 2 / `fba8cf9f…`, `cobalt_kill_switch` 1 / `2e590e87…`, `day_modes` 2 /
+`f2ffb4d4…`, `vault_overrides` 6 / `6a8b0520…`, and the ten empty tables at `d41d8cd9…`). Nothing `CHANGED`.
+
+### THE WITH-DB SUITE, WHILE APPLIED (13:42 ET) — the order DB-3 says is correct
+
+Scope exactly as narrowed: `tests/cobalt/test_archiver_migrations.py`,
+`tests/cobalt/test_archiver_append_store.py`, `tests/cobalt/test_archiver_quiet.py`. **Out of scope and NOT
+run: `test_radar_score_migration.py` and `test_tenancy.py`** (repo-wide `requires_db` tests this branch merely
+touched in passing) — the whole `tests/cobalt` tree was never run with `.env` present.
+
+`COBALT_ENV=dev uv run pytest -q tests/cobalt/test_archiver_migrations.py tests/cobalt/test_archiver_append_store.py tests/cobalt/test_archiver_quiet.py`, FULL summary line:
+
+```
+161 passed in 3.96s
+```
+
+**161 = the 139 offline tests of the three files + the 22 `requires_db` tests, all of which RAN because `.env`
+was present. 0 failed, 0 skipped, 0 errors.** Contrast with the first DB run's own first attempt in the wrong
+order: `12 failed, 145 passed`. **DB-3 is settled by outcome, not by argument: applying first makes the suite
+run against tables that exist, and it goes green in one pass.**
+
+**The two grant tests, named and quoted as the prompt requires.** Re-run verbosely so the verdicts are on the
+record by name (`COBALT_ENV=dev uv run pytest -v tests/cobalt/test_archiver_migrations.py -k "<the ten>"`):
+
+```
+tests/cobalt/test_archiver_migrations.py::test_forward_creates_both_tables_on_the_system_side PASSED [ 10%]
+tests/cobalt/test_archiver_migrations.py::test_migrate_twice_is_idempotent_for_the_two_new_tables PASSED [ 20%]
+tests/cobalt/test_archiver_migrations.py::test_rollback_down_to_0007_drops_exactly_those_two_and_nothing_else PASSED [ 30%]
+tests/cobalt/test_archiver_migrations.py::test_owner_is_the_system_role[archive_progress] PASSED [ 40%]
+tests/cobalt/test_archiver_migrations.py::test_owner_is_the_system_role[archive_incidents] PASSED [ 50%]
+tests/cobalt/test_archiver_migrations.py::test_the_user_role_has_no_grant_on_either_table[archive_progress] PASSED [ 60%]
+tests/cobalt/test_archiver_migrations.py::test_the_user_role_has_no_grant_on_either_table[archive_incidents] PASSED [ 70%]
+tests/cobalt/test_archiver_migrations.py::test_the_check_refuses_progress_past_its_own_export PASSED [ 80%]
+tests/cobalt/test_archiver_migrations.py::test_one_unresolved_incident_per_key_then_a_second_after_resolution PASSED [ 90%]
+tests/cobalt/test_archiver_migrations.py::test_the_kind_domain_is_enforced_by_the_database PASSED [100%]
+
+====================== 10 passed, 53 deselected in 0.24s =======================
+```
+
+- **`test_the_user_role_has_no_grant_on_either_table[archive_progress]` — PASSED.**
+- **`test_the_user_role_has_no_grant_on_either_table[archive_incidents]` — PASSED.**
+
+Both were RED on real `cobalt_dev` in the first DB run (`AssertionError: cobalt_user can read
+system.archive_progress` / `…archive_incidents`). They assert
+`has_table_privilege('cobalt_user', 'system.<table>', 'SELECT') is False` against live Postgres
+(`test_archiver_migrations.py:444-452`). **DB-1's REVOKE is therefore proved to BITE against
+`0001_schemas.sql:124`'s blanket grant and `:149-151`'s default privilege — L45's real-shape requirement met,
+the SQL text was never the evidence.** R3-3(a) and R3-3(c) are both answered by these two PASSes.
+
+**R3-3(b) — apply-twice idempotency of the new REVOKEs — is also answered, on real Postgres.**
+`test_migrate_twice_is_idempotent_for_the_two_new_tables` PASSED; it calls `_apply(conn, FORWARD)` twice, so
+both `REVOKE ALL …` statements (and 0011's sequence REVOKE) executed a second time against a database where
+they had already applied, without error. That was stated as a Postgres fact in round 3 and is now a test
+result.
+
+**`test_the_own_connection_upsert_survives_another_transactions_rollback` does not appear in the collection at
+all.** Not skipped — ABSENT: `grep -rn` over `tests/` returns exit 1 with no output, and the name is in
+neither the `--co` list nor this verbose run. Round 3b's deletion is confirmed from this session's own
+evidence.
+
+**No other red.** There is nothing to classify as test-side or as a finding about `cobalt_dev`'s real state:
+the summary line is `161 passed`, zero failures.
+
+**SEQUENCE PRIVILEGE CHECK — answered honestly, and it stops here.** Searched the collected test list and
+`test_archiver_migrations.py`'s own source (`grep -n "id_seq\|has_sequence_privilege\|has_table_privilege"`,
+then `grep -rn "id_seq" tests/cobalt/`). **No `requires_db` test checks, on real Postgres, whether
+`cobalt_user` holds any privilege on `system.archive_incidents_id_seq`.** The four `id_seq` hits in this file
+(`:311`, `:318`, `:320`, `:328`) are all inside the OFFLINE block — round 3's text pin
+`test_the_incident_sequence_is_also_revoked_from_cobalt_user` and its system-role twin, both of which grep the
+SQL text via `_code(INCIDENTS_SQL)`; the only live privilege call in the file is
+`has_table_privilege(...)` at `:449`, and it is parametrized over the two TABLES, not the sequence.
+**So the sequence's REVOKE remains proved in the SQL and UNPROVEN on the database.** There is no `psql` rule
+in this session's allowlist and no other Bash-allowed command that reads a live grant, so this run does not
+prove it and does not invent a way to. **Escalated as DB2-2** — the fix is one more `requires_db` test using
+`has_sequence_privilege('cobalt_user', 'system.archive_incidents_id_seq', 'SELECT')`, which any later DB-backed
+run can carry.
+
+**Was `cobalt_dev` changed in content by the suite? NO, and it is proven rather than assumed.** The BEFORE
+probe of the closing `--rollback --down-to 0009` was taken AFTER the whole suite had run, and every one of its
+23 pre-existing digests is identical to step 0's baseline (`bars` 1043443 / `2769919a…`, `cobalt_redactions`
+127 / `0f80638d…`, `vault_writes` 184 / `4a965c69…`, down the table). The mechanism is `conftest.dev_db_tx`
+(autouse): every `db.connect` in the suite returns a `_SavepointConnection` over one `cobalt_dev` transaction
+that is rolled back, and the three migration-harness tests that call `_apply` / `_rollback_paths` directly are
+self-contained round trips that roll back in their own `finally`. **The suite committed nothing.**
+
+> **db 161/0 (22 archiver `requires_db` tests, scoped as above, all passed — including
+> `test_the_user_role_has_no_grant_on_either_table[archive_progress]` and `[archive_incidents]`, both PASSED)**
+
+### Step 1 — ROLLBACK `--down-to 0009`, FULL output
+
+```
+cobalt db migrate — ROLLBACK on cobalt_dev
+-- applying 0011_archive_incidents.rollback.sql
+-- applying 0010_archive_progress.rollback.sql
+
+table                side    schema before -> after     rows            probe secs      digest before -> after verdict
+----------------------------------------------------------------------------------------------------------------------
+archive_incidents    system  system -> -                0 -> -          0.01 -> 0.00    d41d8cd9 -> -         DROPPED
+archive_progress     system  system -> -                0 -> -          0.00 -> 0.00    d41d8cd9 -> -         DROPPED
+aset_sizings         user    user -> user               1 -> 1          0.00 -> 0.00    0824685c -> 0824685c  OK
+bars                 system  system -> system           1043443 -> 1043443 5.26 -> 5.26    2769919a -> 2769919a  OK
+card_dot_taps        user    user -> user               0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+card_dots            user    user -> user               0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+card_stop_edits      user    user -> user               1 -> 1          0.00 -> 0.00    7599f9ab -> 7599f9ab  OK
+card_transitions     user    user -> user               4 -> 4          0.00 -> 0.00    f181e76b -> f181e76b  OK
+cobalt_email_sends   system  system -> system           2 -> 2          0.00 -> 0.00    fba8cf9f -> fba8cf9f  OK
+cobalt_jobs          system  system -> system           13 -> 13        0.00 -> 0.00    8d9b0861 -> 8d9b0861  OK
+cobalt_kill_switch   system  system -> system           1 -> 1          0.00 -> 0.00    2e590e87 -> 2e590e87  OK
+cobalt_redactions    system  system -> system           127 -> 127      0.00 -> 0.00    0f80638d -> 0f80638d  OK
+day_modes            user    user -> user               2 -> 2          0.00 -> 0.00    f2ffb4d4 -> f2ffb4d4  OK
+desk_grade           system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+desk_packet          system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+desk_regime          system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+radar_membership     system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+radar_pool           system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+radar_score          system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+radar_score_receipt  user    user -> user               0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+radar_score_run      system  system -> system           0 -> 0          0.00 -> 0.00    d41d8cd9 -> d41d8cd9  OK
+session_blocks       system  system -> system           6 -> 6          0.00 -> 0.00    b650702d -> b650702d  OK
+traders              user    user -> user               1 -> 1          0.00 -> 0.00    a64e0148 -> a64e0148  OK
+vault_overrides      user    user -> user               6 -> 6          0.00 -> 0.00    6a8b0520 -> 6a8b0520  OK
+vault_writes         user    user -> user               184 -> 184      0.01 -> 0.01    4a965c69 -> 4a965c69  OK
+----------------------------------------------------------------------------------------------------------------------
+25 table(s) proven; digest excludes user_id, vault_outcome, vault_reason, account_mode, pool_member_id; aset_sizings: 25 card column(s) added by 0007. content UNCHANGED on every table.
+proof cost: BEFORE 5.3 s + AFTER 5.3 s = total 10.6 s; slowest table bars (5.3 s before).
+```
+
+**`_rollback_paths("0009")` selected exactly two files, newest first** — `0011_archive_incidents.rollback.sql`
+then `0010_archive_progress.rollback.sql` — and stopped. 0001–0009 were NOT touched: every other row reads
+`OK` with an unchanged digest, and `0007_radar_cards.rollback.sql` (the next entry in `REVERSE`) never ran.
+Live confirmation of the offline `test_rollback_down_to_0007_selects_exactly_the_two_new_files` and of
+`__init__.py`'s numeric-prefix claim, for the second time on real Postgres.
+
+### Step 1 — `--proof-only` after the rollback, compared against step 0 EXPLICITLY
+
+```
+cobalt db migrate — PROOF ONLY on cobalt_dev (READ ONLY, nothing applied)
+
+table                side    schema   rows         digest                             secs
+------------------------------------------------------------------------------------------
+archive_incidents    system  -        -            -                                  0.00
+archive_progress     system  -        -            -                                  0.00
+aset_sizings         user    user     1            0824685c130da3c7cb7f0e76191a6819   0.01
+bars                 system  system   1043443      2769919a57144c7bf8720110061dbf72   5.21
+card_dot_taps        user    user     0            d41d8cd98f00b204e9800998ecf8427e   0.00
+card_dots            user    user     0            d41d8cd98f00b204e9800998ecf8427e   0.00
+card_stop_edits      user    user     1            7599f9ab6018697c2299e20bbacace54   0.00
+card_transitions     user    user     4            f181e76b208a51b503339267865c157c   0.00
+cobalt_email_sends   system  system   2            fba8cf9fc07cd6c95b503af272e26639   0.00
+cobalt_jobs          system  system   13           8d9b0861615861e343009f33118a4931   0.00
+cobalt_kill_switch   system  system   1            2e590e87d4c9576e61d1ee0d5c90bbab   0.00
+cobalt_redactions    system  system   127          0f80638def1d0d8e46457a59b2771fe7   0.00
+day_modes            user    user     2            f2ffb4d41ed0a3bbc3dc2a1c7e6112b9   0.00
+desk_grade           system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+desk_packet          system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+desk_regime          system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_membership     system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_pool           system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_score          system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_score_receipt  user    user     0            d41d8cd98f00b204e9800998ecf8427e   0.00
+radar_score_run      system  system   0            d41d8cd98f00b204e9800998ecf8427e   0.00
+session_blocks       system  system   6            b650702dd6fd624548e05ca940662f08   0.00
+traders              user    user     1            a64e01480038484676fad3b14eb2489f   0.00
+vault_overrides      user    user     6            6a8b05207f55b8e25c253ce990c7a65a   0.00
+vault_writes         user    user     184          4a965c69340f112d12e6ca21a8a0602c   0.01
+------------------------------------------------------------------------------------------
+25 table(s) probed on cobalt_dev; digest excludes user_id, vault_outcome, vault_reason, account_mode, pool_member_id; aset_sizings: 25 card column(s) added by 0007. Proof cost: total 5.3 s — and a migration pays it TWICE (before and after), inside the outage.
+NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.
+```
+
+**COMPARED ROW BY ROW against step 0's table, not asserted equal.** All 25 rows match: the two `-` / `-` / `-`
+rows for `archive_incidents` and `archive_progress` (absent again), and 23 tables whose side, schema, row count
+and digest are character-for-character what step 0 printed — `bars` 1043443 / `2769919a57144c7bf8720110061dbf72`,
+`cobalt_redactions` 127 / `0f80638def1d0d8e46457a59b2771fe7`, `vault_writes` 184 /
+`4a965c69340f112d12e6ca21a8a0602c`, `cobalt_jobs` 13 / `8d9b0861615861e343009f33118a4931`, `session_blocks` 6 /
+`b650702dd6fd624548e05ca940662f08`, `traders` 1 / `a64e01480038484676fad3b14eb2489f`, `vault_overrides` 6 /
+`6a8b05207f55b8e25c253ce990c7a65a`, `aset_sizings` 1 / `0824685c130da3c7cb7f0e76191a6819`, `card_stop_edits` 1 /
+`7599f9ab6018697c2299e20bbacace54`, `card_transitions` 4 / `f181e76b208a51b503339267865c157c`,
+`cobalt_email_sends` 2 / `fba8cf9fc07cd6c95b503af272e26639`, `cobalt_kill_switch` 1 /
+`2e590e87d4c9576e61d1ee0d5c90bbab`, `day_modes` 2 / `f2ffb4d41ed0a3bbc3dc2a1c7e6112b9`, and the ten empty
+tables at `d41d8cd98f00b204e9800998ecf8427e`. **The only fields that differ anywhere in the table are the
+per-table probe `secs` (5.46 → 5.21 on `bars`), which are timings, not content.** `cobalt_dev` is back at
+0001–0009, byte-identical to this run's baseline.
+
+`rm /Users/cobalt/cobalt-wt/archiver-append/.env` → allowed. `ls -la .env` → `ls: .env: No such file or
+directory` ✅ gone (13:42 ET).
+
+> **migrations 0010/0011: applied (both CREATED system-side, carrying the REVOKEs; every pre-existing digest
+> unchanged), the with-DB suite run WHILE APPLIED (161 passed / 0 failed), then reversed
+> (`--rollback --down-to 0009` dropped exactly those two; the closing `--proof-only` is byte-identical to
+> step 0's baseline). Neither new table nor the sequence survives the rollback — both read ABSENT, and a
+> dropped table takes its own sequence and its REVOKE with it.**
+
+**No code changed in step 1.** The proof surfaced no defect: no test needed a fix, and nothing about
+`cobalt_dev`'s real state needed one. This step's commit is report-only, as the prompt provides for.
