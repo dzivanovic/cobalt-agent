@@ -423,7 +423,14 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
                      f"trigger={row.trigger_ts.isoformat()} fill={row.fill_price} "
                      f"exit={row.exit_reason}@{row.exit_price} mfe_r={row.mfe_r}")
         state["formation_rows"] = [r.model_dump() for r in rows]
-        if rows and not dry_run:
+        # Keyed on P2 having RUN, never on the row count (plan STEP-1
+        # R2-1). `reconcile` retires every predecessor of this run, so a
+        # rerun whose formation list is now EMPTY must still reach it —
+        # a row-count guard would leave yesterday's rows current forever.
+        # The ONE case that skips it is P2 absent, which
+        # `formation_replay` marks `FORMATION_UNAVAILABLE` with no rows:
+        # nothing ran, so nothing may be retired.
+        if outcome.status != FORMATION_UNAVAILABLE and not dry_run:
             result.reconcile["formation"] = deps.missed.reconcile(
                 run_id=result.replay_run_id, trade_date=trade_date, kind="formation", rows=rows)
             state["formation_rows"] = deps.missed.current(trade_date, "formation")

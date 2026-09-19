@@ -368,8 +368,56 @@ def test_an_open_radar_card_for_the_formations_subject_suppresses_it_in_the_run(
                                       state="EXPIRED")]
     result = run_nightly(DAY, dry_run=False, deps=deps)
     assert (result.formation_candidates, result.formation_misses, result.formation_suppressed) == (1, 0, 1)
-    assert "missed.reconcile:formation" not in calls
+    # P2 RAN here (available, everything suppressed): an available run with
+    # zero surviving rows still reconciles, so the day's predecessors are
+    # retired (plan STEP-1 R2-1). Only `unavailable` skips the reconcile.
+    assert "missed.reconcile:formation" in calls
+    assert result.reconcile["formation"].inserted == 0
     assert "formations: 0 not taken (no_card) · cf-R Σ +0.0R, n=0 · suppressed 1" in deps.written[-1]
+
+
+def test_an_available_p2_with_no_formations_still_retires_the_days_predecessors():
+    """Plan STEP-1 R2-1: a rerun whose formation list is now EMPTY must
+    retire what the earlier run left current. The reconcile is keyed to
+    P2 having RUN, never to the row count — `reconcile`'s own contract is
+    "retire every predecessor this run", and with a row-count guard a
+    rerun that finds nothing leaves yesterday's rows current forever.
+    """
+    deps, calls = fake_deps(formations=available_but_empty_formations)
+    seeded = (DAY, "formation", "MU", 0, "0123456789abcdef0123456789abcdef",
+              "2026-02-10T15:32:00+00:00", 202)
+    deps.missed.current_rows["formation"][seeded] = {
+        "ticker": "MU", "is_current": True, "inputs_sha256": "sha-yesterday",
+        "replay_run_id": "replay-2026-02-09-20260209T211000-aaaaaa"}
+    seen: dict[str, list] = {}
+    original = deps.missed.reconcile
+
+    def recording(**kw):
+        seen[kw["kind"]] = list(kw["rows"])
+        return original(**kw)
+
+    deps.missed.reconcile = recording
+    result = run_nightly(DAY, dry_run=False, deps=deps)
+
+    assert result.formation_replay == "s2p2.1"                   # P2 ran; it was not absent
+    assert "missed.reconcile:formation" in calls                 # the R2-1 case
+    assert seen["formation"] == []                               # reconciled with ZERO rows
+    assert result.reconcile["formation"].inserted == 0
+    assert seeded not in deps.missed.current_rows["formation"]   # the predecessor is retired
+    assert result.formation_misses == 0
+
+
+def test_an_absent_p2_never_reconciles_the_formation_kind():
+    """The ONE case the skip legitimately covers: S2-P2 is not deployed,
+    so `formation_replay` returns `unavailable` with no rows. Nothing ran,
+    so nothing may be retired — a reconcile here would retire the last
+    real run's rows on the strength of P2 being absent.
+    """
+    deps, calls = fake_deps()            # the default source is `unavailable_formations`
+    result = run_nightly(DAY, dry_run=False, deps=deps)
+    assert result.formation_replay == "unavailable"
+    assert "missed.reconcile:formation" not in calls
+    assert result.formation_misses == 0
 
 
 def test_r1_21_a_present_but_incompatible_p2_fails_loud(monkeypatch):
@@ -611,6 +659,21 @@ def unavailable_formations(trade_date, *, out, sources=None, context=None):
 
     out(FORMATION_UNAVAILABLE_LINE)
     return FormationOutcome(status=FORMATION_UNAVAILABLE)
+
+
+def available_but_empty_formations(trade_date, *, out, sources=None, context=None):
+    """S2-P2 DEPLOYED and compatible, with an EMPTY formation list for the
+    day — the rerun plan STEP-1 R2-1 names, where a bar correction removed
+    yesterday's trigger. Injected exactly like `unavailable_formations`
+    above; the one difference that matters is the status, which is the
+    capability marker (`formations.py:343`, status=evaluator_version)
+    rather than `unavailable`.
+    """
+    from cobalt.replay.formations import SUPPORTED_EVALUATORS
+    from cobalt.replay.models import FormationCounts, FormationOutcome
+
+    return FormationOutcome(status=sorted(SUPPORTED_EVALUATORS)[0],
+                            counts=FormationCounts(candidates=1, no_trigger=1))
 
 
 def fake_deps(*, job_row="default", settings="default", collector=None, now=None, drc_missing=False,
