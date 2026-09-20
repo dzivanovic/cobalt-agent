@@ -28,22 +28,22 @@ weekly_pct_close:
 <!-- cobalt:unit seat-usage:2026-09-19 -->
 | model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
 |---|---|---:|---:|---:|---:|---:|
-| `claude-opus-5` | claude · write seat — L29 floor for vault/DB/migration paths | 784,281,201 | 7,569,224 | 2,188,100 | $519.34 | +$28.30 |
-| `claude-sonnet-5` | claude · mechanical, non-write only — L29 ceiling for this tier | 329,684,940 | 10,527,535 | 3,285,118 | $135.12 | +$8.79 |
-| `grok-4.6-build` | grok · build + research seat | 9,313,024 | 0 | 898,225 | $5.90 | +$0.52 |
+| `claude-opus-5` | claude · write seat — L29 floor for vault/DB/migration paths | 895,085,406 | 7,943,438 | 2,283,369 | $580.87 | $0.00 |
+| `claude-sonnet-5` | claude · mechanical, non-write only — L29 ceiling for this tier | 367,501,697 | 11,168,926 | 3,524,215 | $147.64 | $0.00 |
+| `grok-4.6-build` | grok · build + research seat | 9,744,512 | 0 | 992,881 | $6.37 | $0.00 |
 | `claude-haiku-4-5-20251001` | claude · — | 62,123 | 55,061 | 435 | $0.12 | $0.00 |
 | `mainframe` | qwen · local lane (L23) — delegated mundane work, token conservation | 0 | 0 | 1,067 | $0.00 [^free] | $0.00 |
 | `claude-fable-5-1` | claude · planning + architect seat — L29 above the floor, at Dejan's call | 258,280,706 | 1,930,775 | 739,436 | **unpriced** | — |
-| `gpt-6-astra` | codex · reviewer seat — read-only role (L33) | 7,506,304 | 0 | 49,573 | **unpriced** | — |
+| `gpt-6-astra` | codex · reviewer seat — read-only role (L33) | 7,883,776 | 0 | 55,645 | **unpriced** | — |
 
-**Day total (API-equivalent):** ≥ $660.48 · **1,421,209,646** tokens across 7 model(s), seats: claude, codex, grok, qwen
-**Fresh input tokens:** 4,836,799 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+**Day total (API-equivalent):** ≥ $735.00 · **1,572,486,916** tokens across 7 model(s), seats: claude, codex, grok, qwen
+**Fresh input tokens:** 5,233,448 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
 
 > **UNPRICED MODELS: `claude-fable-5-1`, `gpt-6-astra`.** These were used today and the pinned tool's offline pricing table has no rate for them, so their cost is missing rather than zero, and the day total above is a FLOOR. Fix by bumping the pin in `configs/cobalt/seat_usage.yaml` (a decision, with a diff), never by letting the job reach the network.
 
 [^free]: `mainframe` — the local Qwen3.8-27B MLX server on this Mac (L23's local lane). Its cost is electricity and the Mac Studio, not API spend — $0 here is the true number, not a missing one, so it never raises the hourly unpriced warning.
 
-_Generated 2026-09-19 17:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Generated 2026-09-19 23:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
 _Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20260919 --until 20260919 --by-agent --offline`_
 <!-- /cobalt:unit seat-usage:2026-09-19 -->
 <!-- /cobalt:section seat-usage:2026-09-19 -->
