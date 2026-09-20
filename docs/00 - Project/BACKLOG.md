@@ -61,7 +61,15 @@ don't duplicate them.
 
 ## NOW (in build)
 
-- **S2-P4: picks, value column, nightly replay + counterfactual R, movers benchmark and miss line, `cobalt smoke s2` (2026-09-17). BUILD COMPLETE (chunks A–C); HUB VERIFICATION PENDING.**
+- **STATUS 2026-09-20 (close hub `close-0919`; ladder: `SPRINT-LADDER-v0_1.md` `### Status 2026-09-20`; sprint S2 stop 2026-09-23 — AT RISK).** Three production deploys on 2026-09-19, all LIVE: `deploy-2026-09-19` (`2893a7f`, stack: S2-P2 dark + ops-0918), `deploy-2026-09-19b` (`5b58b7b`, S2-P4), `deploy-2026-09-19c` (`851335e`, ops-0919 + archiver in `upsert`). Cards switched ON 12:30:01 ET (R20) but **never rendered a card**; first render Mon 2026-09-21 04:00 ET (R27); first `com.cobalt.replay` run Mon 21:10 ET; first nightly archiver Mon 20:30 ET. The three S2 rows below are historical build records — their status is DONE-LIVE, not "verification pending".
+- **OFF-LADDER, 09-19 (each carries its ruling):**
+  - Append-only archiver — R4/R5/R8/R25/R26/R34/R35 — DONE-LIVE in `upsert` (deploy 3); ONE shadow night (R35), then his ruling on the numbers; the switch to `append` NOT STARTED.
+  - Ops 0919 (C2 trading-day guard, band validator, `lock_timeout`, test hygiene, migrate names its tip) — DONE-LIVE (deploy 3).
+  - R34 C — stagger the pool cadences (screens/lists poll fast though they change slowly; `PROJECT-LEDGER.md` already names it "the correct long-term fix"): NOT STARTED, "as soon as possible".
+  - Bars-lifecycle tribunal — 09-18 R17, 09-19 R10/R15 — Sunday 2026-09-20 13:05 ET; inherits the migration-proof cost (106.8 s of a 149 s outage reading 8.8 M `system.bars` rows).
+  - Ops items owed: `cmd_migrate` must refuse `--allow-prod` unless `COBALT_ENV=production`; a `git push` allow rule (L55; his "We will update .claude file later"); `31-packet` yaml copies stay untracked.
+
+- **S2-P4: picks, value column, nightly replay + counterfactual R, movers benchmark and miss line, `cobalt smoke s2` (2026-09-17). DONE-LIVE 2026-09-19 (deploy 2, `5b58b7b`, tag `deploy-2026-09-19b`); was BUILD COMPLETE (chunks A–C), HUB VERIFICATION PENDING.**
   - Plan: `docs/40 - DevDocs/plans/plan-s2-p4-2026-09-15.md`. Decision record: ADR-0010.
   - **Builder reports:** `docs/40 - DevDocs/reports/s2-p4-build-opus-{A,B,C}-2026-09-17.md`.
   - **Built:**
@@ -84,12 +92,12 @@ don't duplicate them.
     - `trade_count_band` values.
   - **S2 close:** `cobalt smoke s2 --prod --cutoff <P4 D1 instant>` ≥ 09-22 evening. GREEN = S2 done.
 
-- **S2-P2 — Radar cards: F8 precondition evaluator + F10 dots / ladder / taps (2026-09-16): BUILD CHUNKS A–C COMPLETE, HUB VERIFICATION PENDING.**
+- **S2-P2 — Radar cards: F8 precondition evaluator + F10 dots / ladder / taps (2026-09-16): DONE-LIVE — shipped dark in deploy 1 (`2893a7f`, 2026-09-19 08:25 ET), switched ON 12:30:01 ET (R20, `cards-golive-2026-09-19.md`), first render Mon 2026-09-21 04:00 ET; was BUILD CHUNKS A–C COMPLETE, HUB VERIFICATION PENDING.**
   Plan `docs/40 - DevDocs/plans/plan-s2-p2-2026-09-15.md` (R1–R11), ADR-0009.
   Branch `sprint-2/cards`. Chunk A (`ca184c8`): migrations 0006/0007, the §10.5 predicate AST, anatomy detectors. Chunk B (`17eb35f`): S5 evaluate stage, dots/scoring, snap-down key taps, health pills. Chunk C (uncommitted, builder report `docs/40 - DevDocs/reports/s2-p2-build-opus-C-2026-09-16.md`): `/radar` ladder wired to `"user".radar_cards_v` with badges, hollow shadow dots, the 1–10 tap strip, key row and promote; explicit POST allowlist + GET sentinels; taxonomy v0.8 (schema 0.5 behind the 0.4 loader gate, `taxonomy catalyst-review`/`catalyst-apply`); `cards trail-fit-draft`; `cards shadow-report`; `radar audit-export`.
   Owed before merge (hub): `requires_db` + `requires_vault` tests, `cobalt db migrate` on cobalt_dev (0007 changed again in chunk C), `cobalt validate`, `cobalt jobs restarts main..HEAD`, dev replay, audit bundle staging. Ships dark (R9). Carried: curve tribunal (S3), catalyst markup (Dejan, D3), alignment default ruling (plan §8 item 4), `panel-cards.real-shape.json` cut (hub).
 
-- **S2-P3 — Radar panel (2026-09-15): BUILD COMPLETE, HUB VERIFICATION PENDING.**
+- **S2-P3 — Radar panel (2026-09-15): DONE-LIVE — merged 09-15 (`ebb1231`, tag `deploy-2026-09-15`; `sprint-2/radar-panel` has no commit outside main); §5 acceptance (2–3 live mornings beside DAS) 0 banked, first Mon 2026-09-21; was BUILD COMPLETE, HUB VERIFICATION PENDING.**
   Read-only `GET /radar` pool view + card-ladder shell and
   `GET /api/radar/pool?since=` refresh path built in the ASET process.
   Store read layer, strict Pydantic views, fail-loud source/freshness

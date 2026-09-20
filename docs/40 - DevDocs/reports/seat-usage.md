@@ -19,6 +19,26 @@ size, not as an amount owed.
 Newest day first.
 
 <!-- cobalt:days -->
+<!-- cobalt:section seat-usage:2026-09-20 -->
+### 2026-09-20
+
+weekly_pct_open:
+weekly_pct_close:
+
+<!-- cobalt:unit seat-usage:2026-09-20 -->
+| model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
+|---|---|---:|---:|---:|---:|---:|
+| `mainframe` | qwen · local lane (L23) — delegated mundane work, token conservation | 0 | 0 | 224 | $0.00 [^free] | — |
+
+**Day total (API-equivalent):** $0.00 · **91,971** tokens across 1 model(s), seats: qwen
+**Fresh input tokens:** 91,747 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+
+[^free]: `mainframe` — the local Qwen3.8-27B MLX server on this Mac (L23's local lane). Its cost is electricity and the Mac Studio, not API spend — $0 here is the true number, not a missing one, so it never raises the hourly unpriced warning.
+
+_Generated 2026-09-20 06:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20260920 --until 20260920 --by-agent --offline`_
+<!-- /cobalt:unit seat-usage:2026-09-20 -->
+<!-- /cobalt:section seat-usage:2026-09-20 -->
 <!-- cobalt:section seat-usage:2026-09-19 -->
 ### 2026-09-19
 
