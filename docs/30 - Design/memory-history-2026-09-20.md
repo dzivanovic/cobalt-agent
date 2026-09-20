@@ -63,6 +63,8 @@ Every line: date · what happened · who · file:line. Undated claims are in `##
 
 | Date | Event | Source |
 |---|---|---|
+| **2026-09-03** | **The vault-overwrite incident — the reason a backup exists at all.** Two daily notes lost content; forensics inverted the premise (**Obsidian, not Cobalt, caused both losses**; the destructive 17:36 write was an editor buffer). The finding that matters here: *"There is **no Time Machine, no git, no sync** covering this vault"* — the only recovery path was Obsidian's File Recovery store, **7-day retention, still being written to** | `docs/00 - Project/INCIDENT-2026-09-03-notes.md` §0, §4 |
+| 2026-09-03 | **RE-RULED: not Time Machine** (hourly `backupd` slows the always-on server); plan = restic nightly off-hours | `INCIDENT-2026-09-03-notes.md`; `PROJECT-LEDGER.md:649` |
 | 2026-09-03 | **ClaudeClaw kit filed as L15 reference only, never executed by Code.** (It contains a complete memory architecture: FTS5 + embeddings + salience decay + 5-layer retrieval. Never adopted, never cited in a ruling.) | `_imports/anthropic-2026-09-05/areas/cobalt-product-definition.md:10`; `docs/90 - References/claudeclaw-kit/` |
 | 2026-09-04 | *"backup with proven restore first — restic → B2 + SSD, **NOT Time Machine**"* — the only pre-09-20 use of the phrase, and it means the macOS product | `PROJECT-LEDGER.md:651` |
 | **2026-09-05** | **RESEARCH-2026-09-05-memory-and-capture.md** — the design document of record. Names **Hermes** explicitly: *"MEMORY.md ≈2,200 chars + USER.md ≈1,375 chars pinned; **SQLite FTS+vector archive; agent-initiated recall**; nudge\_interval reflection; flush before compaction; write fails at cap."* Adopts the pinned-block half. Defers the archive half: *"**Postgres side (F21/S5, not before)**: one generic observation store (text, about-whom, source, time, confidence, supersedes, embedding) — concepts as rows, not tables; consolidation job rewrites Cobalt-owned sections through L28 and refreshes INDEX. Retrieval algorithmic (FTS + pgvector); LLM only at synthesis."* Defines **Consolidation ("dreams")**: *"Dream = nightly beside the archiver + on demand before a compact; conservative … volume-driven cadence."* | `docs/30 - Design/RESEARCH-2026-09-05-memory-and-capture.md` §1 |
@@ -200,7 +202,7 @@ The six buckets sum to thirty: USED 14 + BUILT-never-used 1 + DESIGNED 3 + DECID
 | **H5** | **Correct `CLAUDE.md:95`'s "5-pillar" wording** | `ASSESSMENT.md` §4, **2026-08-22** | Never done; unchanged for 30 days | **It caused this investigation.** Every house wakes on a false statement about its own memory |
 | **H6** | **The "dream" consolidation job** | R4, 09-05 | One sentence. No ADR, no design, no backlog row, no code, no owner | The day's material is structured by hand or not at all |
 | **H7** | **Memory retention: PREFERENCE keep-forever / MARKET CONTEXT 24 h / SESSION expiry** | ADR-005, 2026-02-23 | Nothing. `memory_logs` has **no expiry, no dedup, no ANN index** | The store that was meant to be curated is an undifferentiated 871-row grab-bag of system logs, code chunks and chat turns |
-| **H8** | **Before/after state on any file change or update** | L28 / ADR-0004 | **Built and running — for the human vault's marked units.** The memory folder is written with `Write`/`Edit` by hand and produces **no before/after row at all** | The one file class where a bad write already destroyed content (09-17) is the one class with no diff record. Restic's 14 dailies are the entire safety net |
+| **H8** | **Before/after state on any file change or update** | L28 / ADR-0004 | **Built and running — for the human vault's marked units.** The memory folder is written with `Write`/`Edit` by hand and produces **no before/after row at all** | The one file class where a bad write already destroyed content (09-17) is the one class with no diff record. **Restic's 14 dailies are the entire safety net — and they exist only because the 2026-09-03 vault incident proved there was none.** Two days after that incident the memory folder was created inside that same vault |
 | **H9** | **`<MEM>/reports/` — one dated report per working day, inside memory** | Starter kit §2, 09-17 | Never created. Reports live in the repo at `docs/40 - DevDocs/reports/` (3.4 MB, 121 files) | The memory folder has no record of the days; it has only the conclusions someone hand-copied |
 | **H10** | **The sibling: "Dejan's second brain and Cobalt's second brain combined"** | INFRA-2, `COBALT-REQUIREMENTS.md`, 08-21 | The vault-structure ADR on TRIAGE's register was never written | The combined second brain remains two separate brains, one of which is unreadable by the other |
 | **H11** | **`ingest_knowledge.py`'s "automated background syncs" to stop stale retrieval** | ADR-011, 02-26 | Never built | The 203 vault chunks and 170 code chunks in `memory_logs` are a February photograph of a tree that has changed completely |
@@ -262,7 +264,7 @@ A fact is *reachable* when an agent that does not already know it exists can fin
 | Files read in full or by targeted multi-line section | **58** |
 | Databases inspected | **4** — `cobalt_brain`, `cobalt_dev`, `mattermost` (catalog only), `postgres` |
 | Tables inspected | **17 of 17** named in the brief; **77 in total** (cobalt_brain 48 = public 17 + system 16 + user 15; cobalt_dev 29, no `public` schema at all) |
-| Timeline events | **38 dated (several spanning a range) + 3 undated** |
+| Timeline events | **52 dated (several spanning a range) + 3 undated** |
 | Components tracked | **30** |
 | Reached USED | **14** (doing memory's job today: **3**) |
 | Stopped at SAID or DECIDED | **11** (5 SAID + 6 DECIDED) · at DESIGNED **3** · at BUILT-never-used **1** · at nothing at all **1** |
@@ -273,4 +275,4 @@ A fact is *reachable* when an agent that does not already know it exists can fin
 
 ---
 
-MEMORY HISTORY READY · swept: 24877 files · hits: 1180 · read: 671 · tables: 17/17 · timeline events: 38 · components tracked: 30 · reached USED: 14 · stopped at SAID/DECIDED: 11 · holes: 12 · memory hit rate on sampled reports: 72% · UNVERIFIED: 7
+MEMORY HISTORY READY · swept: 24877 files · hits: 1180 · read: 671 · tables: 17/17 · timeline events: 52 · components tracked: 30 · reached USED: 14 · stopped at SAID/DECIDED: 11 · holes: 12 · memory hit rate on sampled reports: 72% · UNVERIFIED: 7
