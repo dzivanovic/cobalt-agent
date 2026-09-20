@@ -550,3 +550,8 @@ writes `status` (never `value` — a value change stays a Dejan ruling).
 30 rows seeded at the v0.7 commit, all `replay_pending` or `proposed`
 (none `solidified` yet) — read `tunables.yaml` directly for the current
 set; do not re-duplicate it here.
+
+## PENDING SITTINGS (standing — the desk carries these on every plate until Dejan holds or cancels them; ruled 2026-09-20 R10)
+| sitting | prepared by | opened | status |
+|---|---|---|---|
+| **LAWS CONSOLIDATION** — 74 laws, 46 carrying amendments, contradictions known (L58 vs SESSION-CLOSE steps 3–4; L29's auto-mode clause vs the build hubs' launch lines; the routing cluster open since 09-13; L46/L54/L68 merge discipline). Three stages: audit → sitting where he rules each conflict → rewrite with a clause-level trace proving nothing was lost (it has been lost twice before: L28's four clauses, L29's auto-mode line). | `laws-audit-0920` → `docs/40 - DevDocs/reports/laws-audit-2026-09-20.md` | 2026-09-20 | **PENDING** — audit running; desk proposes holding it after Monday's shadow morning, not before S2's 09-23 stop |
