@@ -41,7 +41,7 @@ Staleness begins after twice `radar.scan_interval`. Source degradation, stale sc
 
 ## Rendering
 
-`render_pool()` and `render_ladder()` are pure and escape every source-controlled string.
+`render_pool()` and `render_ladder()` are pure and escape every source-controlled string. `render_radar_page()` renders the card ladder FIRST and the pool view BELOW it (desktop and phone frame; ruled 2026-09-21, R3); both layers keep their ids and the refreshers still replace them by id, so the order is page layout only.
 
 - Each displayed card field renders as `data-field="<column>"` with its label and its `COBALT` / `YOU` / `LEDGER` badge (`BADGED_FIELDS`).
 - Each dot is a button that toggles its hidden `tap-strip` of ten `data-grade` buttons.
