@@ -526,6 +526,7 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
 - [x] New reference artifacts in docs/90 - References/ + INDEX entries; licensed
       PPTX local-only under gitignored assets/ (2026-08-24).
 - [x] CLAUDE.md "Current phase" rewritten for build phase (2026-08-24).
+- [2026-09-21 · ops-0921] Bare `uv run pytest -q` stops at collection on tests/test_finviz_extractor.py:34 (ImportError: cannot import name 'FinvizStockData') — old-tree tests under `testpaths = ["tests"]` (pyproject.toml:91); every gate runs `tests/cobalt tests/taxonomy` and never sees it. Desk's call: exclude the old-tree tests from the default collection, or leave the red. Evidence: reports/ops-2026-09-21.md item 4.
 
 ## DONE
 
