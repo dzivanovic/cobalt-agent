@@ -509,6 +509,22 @@ def test_css_has_exact_responsive_contract_and_phone_frame():
     assert 'class="phone-frame"' in panel.render_radar_page(view, phone_frame=True)
 
 
+@pytest.mark.parametrize("phone_frame", [False, True])
+def test_ladder_renders_above_the_pool_in_both_frames(phone_frame):
+    view, _ = _build()
+    page = panel.render_radar_page(view, phone_frame=phone_frame)
+    assert page.count('id="ladder-layer"') == 1
+    assert page.count('id="pool-layer"') == 1
+    assert page.index('id="ladder-layer"') < page.index('id="pool-layer"')
+    pool_at = page.index('id="pool-layer"')
+    for part in ("Current admitted", "Departed admitted", "Never-admitted exclusions"):
+        assert page.index(part, pool_at) > pool_at
+    assert panel.render_pool(view.pool) in page
+    assert panel.render_ladder(view.ladder) in page
+    if phone_frame:
+        assert 'class="phone-frame"' in page
+
+
 def test_refresh_javascript_preserves_ladder_state_and_cursor_on_failure():
     source = panel.PANEL_JS
     assert "oldLayer.replaceWith(next); cursor=payload.pool.observed_watermark" in source
@@ -589,6 +605,15 @@ def test_panel_has_no_write_or_focus_stealing_markup(monkeypatch, route_view):
         'http-equiv="refresh"',
     ):
         assert forbidden not in rendered
+
+
+def test_radar_route_serves_the_ladder_above_the_pool_in_both_frames(monkeypatch, route_view):
+    monkeypatch.setattr(web_module, "build_radar_panel", lambda **_kwargs: route_view)
+    client = TestClient(web_module.app)
+    for path in ("/radar", "/radar?frame=phone"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.text.index('id="ladder-layer"') < response.text.index('id="pool-layer"')
 
 
 def test_sheet_header_links_to_radar():

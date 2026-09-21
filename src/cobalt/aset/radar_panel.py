@@ -1123,7 +1123,7 @@ PANEL_JS = r"""
 def render_radar_page(view: RadarPanelView, *, phone_frame: bool = False) -> str:
     frame_class = "phone-frame" if phone_frame else ""
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Cobalt · Trade Radar</title><style>{PANEL_CSS}</style></head>
-<body class="{frame_class}" data-refresh-seconds="{view.pool.scan_interval}"><main class="radar-wrap"><nav><a href="/">ASET sheet</a></nav>{render_pool(view.pool)}{render_ladder(view.ladder)}</main><script>{PANEL_JS}</script></body></html>'''
+<body class="{frame_class}" data-refresh-seconds="{view.pool.scan_interval}"><main class="radar-wrap"><nav><a href="/">ASET sheet</a></nav>{render_ladder(view.ladder)}{render_pool(view.pool)}</main><script>{PANEL_JS}</script></body></html>'''
 
 
 def render_failed_page(message: str, *, phone_frame: bool = False) -> str:
