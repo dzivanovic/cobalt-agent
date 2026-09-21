@@ -151,6 +151,58 @@ def test_generated_rules_yaml_derives_no_restart(monkeypatch):
     assert "no resident" in row.rule
 
 
+def test_backup_yaml_is_read_by_one_shots_only_and_derives_no_restart(monkeypatch):
+    # 2026-09-22: the 6a commit of `ops/2026-09-21` (the vault key-store file
+    # joins restic's include set) changed configs/cobalt/backup.yaml, and
+    # `cobalt jobs restarts main..HEAD` escalated it UNCLASSIFIED CONFIG
+    # (every resident, exit 1) — round-1 check ops-6a-check-2026-09-22.md
+    # ESCALATE 1. Two one-shots read it, through the one loader
+    # load_backup_config(): com.cobalt.backup (backup/restic.py:164 via
+    # `cobalt backup run`) and com.cobalt.heartbeat (heartbeat/probes.py:431,
+    # backup_freshness, from take_beat). Both halves of that claim are checked
+    # here, so the rule stops being true the moment a new reader appears.
+    from pathlib import Path
+
+    from cobalt.jobs.config import JobKind, load_job_registry
+
+    monkeypatch.setattr(restarts, "changes", lambda _range: [
+        Change("configs/cobalt/backup.yaml", "M"),
+    ])
+    (row,) = classify("HEAD...HEAD")
+    assert row.escalate is False
+    assert row.restarts == ()
+    # The string follows the declared `readers:` order in jobs.yaml.
+    assert row.rule == "no resident reads (one-shot: com.cobalt.backup,com.cobalt.heartbeat)"
+
+    repo = Path(restarts.REPO_ROOT)
+    callers = sorted(
+        str(p.relative_to(repo))
+        for p in (repo / "src").rglob("*.py")
+        if "load_backup_config(" in p.read_text()
+    )
+    # config.py is the definition itself; the other three CALL it.
+    assert callers == [
+        "src/cobalt/backup/cli.py",
+        "src/cobalt/backup/config.py",
+        "src/cobalt/backup/restic.py",
+        "src/cobalt/heartbeat/probes.py",
+    ]
+    literal = sorted(
+        str(p.relative_to(repo))
+        for p in (repo / "src").rglob("*.py")
+        if '"backup.yaml"' in p.read_text()
+    )
+    assert literal == ["src/cobalt/backup/config.py"]  # the one path constant
+
+    declared = load_job_registry().no_resident_read("configs/cobalt/backup.yaml")
+    assert declared is not None
+    assert set(declared.readers) == {"com.cobalt.backup", "com.cobalt.heartbeat"}
+    assert all(
+        load_job_registry().by_label[label].kind is JobKind.ONE_SHOT
+        for label in declared.readers
+    )
+
+
 def test_a_new_one_shot_plist_derives_an_explicit_bootstrap_and_no_restart(monkeypatch):
     # S2-P4 R1-22/R2-6: a brand-new one-shot plist used to vanish from the
     # derivation. Its action is now explicit: bootstrap once, restart nothing.

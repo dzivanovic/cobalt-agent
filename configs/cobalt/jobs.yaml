@@ -314,6 +314,15 @@ no_resident_reads:
       regenerate_rules_config() (prefill/rules_gen.py). load_rules_config()
       (prefill/config.py:125) has no caller; no resident imports either
       path. Added 2026-09-16 (the nightly generated commit escalated it).
+  - path: configs/cobalt/backup.yaml
+    readers: [com.cobalt.backup, com.cobalt.heartbeat]
+    because: >
+      load_backup_config() (backup/config.py:161; the one path :19) is called
+      by backup/restic.py:164,248,269 and backup/cli.py:59 — the one-shot
+      com.cobalt.backup (`cobalt backup run`, ops/run_backup.sh:39) plus
+      status/restore, operator commands — and by heartbeat/probes.py:431
+      (backup_freshness, from runner.py:144), the one-shot com.cobalt.heartbeat.
+      No resident calls either. Added 2026-09-22 (6a range; round-1 check).
 
 # THE KILL PHRASE (F17d). Config, not a literal: `cobalt stop` and any
 # future DM listener compare against this exact string.
