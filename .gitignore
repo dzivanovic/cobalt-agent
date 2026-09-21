@@ -20,6 +20,10 @@ docs/*
 !docs/30 - Design/**
 !docs/40 - DevDocs/
 !docs/40 - DevDocs/**
+# 09-20 R40: a settings packet yaml never enters git (sha256 in the report; loadable copy in data/backups/)
+docs/40 - DevDocs/prompts/2026-09-19/31-packet/p2-dark-settings.yaml
+docs/40 - DevDocs/prompts/2026-09-19/31-packet/p2-live-settings.yaml
+docs/40 - DevDocs/prompts/2026-09-20/16-packet/
 !docs/50 - Roles/
 !docs/50 - Roles/**
 !docs/90 - References/
