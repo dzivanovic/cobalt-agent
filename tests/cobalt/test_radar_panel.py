@@ -798,6 +798,27 @@ def test_degraded_line_never_carries_retained(phone_frame):
     assert "DEGRADED" in line and "RETAINED" not in line and "hidden" not in line
 
 
+def test_degraded_line_carries_the_bars_poll_failure():
+    """Seam of R10 and R21 (L68): the per-ticker bars poll failure is a
+    DEGRADED-level banner, so the red line above the ladder carries it at page
+    load, and the refreshed pool fragment holds the exact inner markup the JS
+    mirror copies into the line."""
+    pool_row, members = _bars_poll_failed_pool()
+    view, _ = _build(pool_row=pool_row, members=members)
+    for phone_frame in (False, True):
+        page = panel.render_radar_page(view, phone_frame=phone_frame)
+        assert page.index('id="degraded-line"') < page.index('id="ladder-layer"')
+        line = _line_element(page)
+        assert "BARS POLL FAILED" in line and "hidden" not in line
+        for ticker in ("GURE", "PFAI", "WBX"):
+            assert ticker in line
+    fragment = panel.pool_api_payload(view.pool)["html"]
+    carried = re.findall(r'<div class="panel-banner (?:degraded|stale)">(.*?)</div>', fragment)
+    assert any("BARS POLL FAILED" in inner for inner in carried)
+    expected = " | ".join(carried)
+    assert panel.render_degraded_line(view.pool) == f'<div id="degraded-line" class="degraded-line">{expected}</div>'
+
+
 def test_refresh_javascript_preserves_ladder_state_and_cursor_on_failure():
     source = panel.PANEL_JS
     assert "oldLayer.replaceWith(next); cursor=payload.pool.observed_watermark" in source
