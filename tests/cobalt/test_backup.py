@@ -62,6 +62,17 @@ class TestConfig:
         assert ssd.repo == "/Volumes/COBALT-BACKUP/restic"
         assert ssd.requires_mount == "/Volumes/COBALT-BACKUP"
 
+    def test_the_cobalt_vault_file_is_in_the_include_set(self):
+        """The committed config backs up the credential vault file.
+
+        Owed since 2026-09-11 (PROJECT-LEDGER.md:1174): a host loss must not
+        take the only copy of every credential. The file is encrypted with
+        the master key, which is NOT in the include set — a repository that
+        held both would let the restic password alone open every secret.
+        """
+        cfg = load_backup_config()
+        assert Path("/Users/cobalt/cobalt/data/.cobalt_vault") in cfg.sources
+
     def test_a_removable_repo_must_declare_its_mount(self):
         """The guard that keeps an unplugged disk from being 'backed up'
         to a same-named directory on the boot disk."""

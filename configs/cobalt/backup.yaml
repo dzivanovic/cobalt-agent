@@ -36,6 +36,9 @@ backup:
   # Finviz history, a hand-written trade note cannot.
   sources:
     - /Users/cobalt/Vault/Think
+    # The encrypted credential vault: a host loss must not take the only
+    # copy of every credential (PROJECT-LEDGER.md:1174, owed since 09-11).
+    - /Users/cobalt/cobalt/data/.cobalt_vault
 
   # A FRESH dump, taken inside the snapshot, not a file lying on disk
   # from some earlier night. `cobalt_brain` only — cobalt_dev is by
