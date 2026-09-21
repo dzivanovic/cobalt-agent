@@ -870,6 +870,20 @@ def render_pool(view: PoolView) -> str:
 </section>'''
 
 
+def render_degraded_line(view: PoolView) -> str:
+    """The slim red line above the card ladder (R10 2026-09-21): a second
+    rendering of the pool view's own banners — the same `view.banners`, the
+    same inner markup — never a second degraded computation (L3). Carries
+    DEGRADED and STALE only, never RETAINED PRIOR-DAY DATA (R11 2026-09-21).
+    Always present so `refreshPool` can mirror into it; `hidden` (no box)
+    when the pool view shows no carried banner."""
+    e = html.escape
+    carried = [banner for banner in view.banners if banner.level in ("degraded", "stale")]
+    inner = " | ".join(f"<b>{e(banner.title)}</b> · {e(banner.detail)}" for banner in carried)
+    hidden = "" if carried else " hidden"
+    return f'<div id="degraded-line" class="degraded-line"{hidden}>{inner}</div>'
+
+
 def _badge(owner: str) -> str:
     return f'<span class="badge badge-{html.escape(owner.lower())}">{html.escape(owner)}</span>'
 
@@ -1061,6 +1075,7 @@ PANEL_CSS = r"""
 @media (max-width:700px){.strip{grid-template-columns:75px 70px 1fr}.strip span:nth-child(4){display:none}.radar-wrap{padding:10px}.pool-stats{text-align:left}.layer-head{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto}}
 @media (max-width:430px){body,.phone-frame{width:100%}.radar-wrap{width:366px;max-width:100%;padding:8px}.expanded{padding:5px}.card-pane,.detail-pane{padding:11px}.card-title strong{font-size:24px}.strip{padding:0 8px}.terminal-row{grid-template-columns:75px 65px 1fr}.terminal-row time{display:none}}
 .phone-frame{width:390px;margin:auto;border:12px solid #05070a;border-radius:26px}.phone-frame .radar-wrap{width:366px;padding:8px}
+.degraded-line{padding:3px 12px;border:1px solid var(--red);background:#351019;color:#ffd0d6;border-radius:5px;margin:6px 0 0;font-size:12px}.degraded-line[hidden]{display:none}
 """
 
 
@@ -1109,6 +1124,7 @@ PANEL_JS = r"""
    const promote=target.closest('[data-promote]');
    if(promote){post(promote.dataset.cardId,promote.dataset.promote==='release'?'/release':'/promote'); return;}
  });
+ function mirrorDegraded(layer){const line=document.getElementById('degraded-line'); const parts=Array.from(layer.querySelectorAll('.refresh-failure,.panel-banner.degraded,.panel-banner.stale')).map(x=>x.innerHTML); const text=parts.join(' | '); if(line.innerHTML!==text){line.innerHTML=text;} const none=parts.length===0; if(line.hidden!==none){line.hidden=none;}}
  let cursor=document.getElementById('pool-layer').dataset.watermark;
  const interval=Number(document.body.dataset.refreshSeconds)*1000;
  async function refreshPool(){
@@ -1119,10 +1135,11 @@ PANEL_JS = r"""
      const payload=await response.json();
      const holder=document.createElement('div'); holder.innerHTML=payload.html;
      const next=holder.firstElementChild; if(!next){throw new Error('empty pool fragment');}
-     oldLayer.replaceWith(next); cursor=payload.pool.observed_watermark;
+     oldLayer.replaceWith(next); cursor=payload.pool.observed_watermark; mirrorDegraded(next);
    }catch(error){
      oldLayer.classList.add('refresh-failed','stale-data');
      oldLayer.querySelector('#refresh-status').innerHTML='<div class="refresh-failure"><b>REFRESH FAILED</b> · retained data is stale · '+String(error)+'</div>';
+     mirrorDegraded(oldLayer);
    }
  }
  window.COBALT_RADAR={collapseAll:collapseAll,topTwo:topTwo,refreshPool:refreshPool,refreshLadder:refreshLadder};
@@ -1134,7 +1151,7 @@ PANEL_JS = r"""
 def render_radar_page(view: RadarPanelView, *, phone_frame: bool = False) -> str:
     frame_class = "phone-frame" if phone_frame else ""
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Cobalt · Trade Radar</title><style>{PANEL_CSS}</style></head>
-<body class="{frame_class}" data-refresh-seconds="{view.pool.scan_interval}"><main class="radar-wrap"><nav><a href="/">ASET sheet</a></nav>{render_ladder(view.ladder)}{render_pool(view.pool)}</main><script>{PANEL_JS}</script></body></html>'''
+<body class="{frame_class}" data-refresh-seconds="{view.pool.scan_interval}"><main class="radar-wrap"><nav><a href="/">ASET sheet</a></nav>{render_degraded_line(view.pool)}{render_ladder(view.ladder)}{render_pool(view.pool)}</main><script>{PANEL_JS}</script></body></html>'''
 
 
 def render_failed_page(message: str, *, phone_frame: bool = False) -> str:
@@ -1168,6 +1185,7 @@ __all__ = [
     "build_radar_panel",
     "parse_since",
     "pool_api_payload",
+    "render_degraded_line",
     "render_failed_page",
     "render_ladder",
     "render_pool",

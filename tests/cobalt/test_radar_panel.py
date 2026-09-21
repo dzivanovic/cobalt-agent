@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import html
 import json
 import os
 import re
@@ -636,6 +637,165 @@ def test_ladder_renders_above_the_pool_in_both_frames(phone_frame):
     assert panel.render_ladder(view.ladder) in page
     if phone_frame:
         assert 'class="phone-frame"' in page
+
+
+HIDDEN_DEGRADED_LINE = '<div id="degraded-line" class="degraded-line" hidden></div>'
+
+
+def _fixture_source_name():
+    """A real source name from the real-shape fixture: the pool row's own
+    `sources` list is empty there, so the first membership `source` is used."""
+    pool_row, _members = _small_snapshot()
+    if pool_row["sources"]:
+        return pool_row["sources"][0]
+    return next(row["source"] for row in POOL_FIXTURE["membership"] if row["source"])
+
+
+def _degraded_pool(source):
+    pool_row, members = _small_snapshot()
+    pool_row["degraded"] = True
+    pool_row["degraded_sources"] = [
+        {"source": source, "reason": "down", "since": pool_row["last_scan_at"]}
+    ]
+    return pool_row, members
+
+
+def _degraded_view(source):
+    pool_row, members = _degraded_pool(source)
+    view, _ = _build(pool_row=pool_row, members=members)
+    assert [banner.level for banner in view.pool.banners] == ["degraded"]
+    return view
+
+
+def _healthy_view():
+    view, _ = _build()
+    assert view.pool.banners == []
+    return view
+
+
+def _retained_view(source=None):
+    """RETAINED PRIOR-DAY DATA, not stale (90 s after the scan, under the 120 s
+    threshold); degraded as well when a source name is given."""
+    if source is None:
+        pool_row, members = _small_snapshot()
+    else:
+        pool_row, members = _degraded_pool(source)
+    pool_row["last_scan_at"] = pool_row["updated_at"] = "2026-01-06 04:59:00+00:00"
+    view, _ = _build(
+        pool_row=pool_row,
+        members=members,
+        now=datetime(2026, 1, 6, 5, 0, 30, tzinfo=UTC),
+        clock_session=Session.OVERNIGHT,
+    )
+    expected = ["retained"] if source is None else ["degraded", "retained"]
+    assert [banner.level for banner in view.pool.banners] == expected
+    return view
+
+
+def _line_element(page):
+    start = page.index('id="degraded-line"')
+    return page[start : page.index("</div>", start)]
+
+
+@pytest.mark.parametrize("phone_frame", [False, True])
+@pytest.mark.parametrize("source", [_fixture_source_name(), "<bad>&"])
+def test_degraded_line_renders_above_the_ladder_when_degraded(source, phone_frame):
+    view = _degraded_view(source)
+    page = panel.render_radar_page(view, phone_frame=phone_frame)
+    assert page.count('id="degraded-line"') == 1
+    assert page.index('id="degraded-line"') < page.index('id="ladder-layer"')
+    line = _line_element(page)
+    assert "DEGRADED" in line and html.escape(source) in line
+    assert "hidden" not in line
+    if source == "<bad>&":
+        assert "&lt;bad&gt;&amp;" in line
+        assert "<bad>" not in page
+    if phone_frame:
+        assert 'class="phone-frame"' in page
+
+
+@pytest.mark.parametrize("phone_frame", [False, True])
+def test_degraded_line_is_hidden_and_empty_when_healthy(phone_frame):
+    page = panel.render_radar_page(_healthy_view(), phone_frame=phone_frame)
+    assert page.count(HIDDEN_DEGRADED_LINE) == 1
+    assert ".degraded-line[hidden]{display:none}" in panel.PANEL_CSS
+
+
+@pytest.mark.parametrize("kind", ["degraded", "healthy", "retained"])
+def test_pool_banners_unchanged_by_the_degraded_line(kind):
+    """Green on main too: the pool view's own banners, RETAINED included, are
+    exactly what they were, and the line adds no `panel-banner` of its own."""
+    view = {
+        "degraded": lambda: _degraded_view(_fixture_source_name()),
+        "healthy": _healthy_view,
+        "retained": _retained_view,
+    }[kind]()
+    page = panel.render_radar_page(view)
+    pool_at = page.index('id="pool-layer"')
+    assert panel.render_pool(view.pool) in page
+    if kind == "degraded":
+        banner = '<div class="panel-banner degraded"><b>DEGRADED</b> · Sources: '
+        assert page.index(banner) > pool_at
+    assert page.count('class="panel-banner ') == len(view.pool.banners)
+
+
+def test_degraded_line_follows_the_refreshed_pool_fragment():
+    name = _fixture_source_name()
+    steps = [
+        ("degraded", _degraded_view(name)),
+        ("healthy", _healthy_view()),
+        ("retained-only", _retained_view()),
+        ("retained+degraded", _retained_view(name)),
+        ("degraded again", _degraded_view(name)),
+    ]
+    for label, view in steps:
+        fragment = panel.pool_api_payload(view.pool)["html"]
+        carried = re.findall(r'<div class="panel-banner (?:degraded|stale)">(.*?)</div>', fragment)
+        line = panel.render_degraded_line(view.pool)
+        parts = re.fullmatch(r'<div id="degraded-line" class="degraded-line"( hidden)?>(.*)</div>', line)
+        assert parts, label
+        assert parts.group(2) == " | ".join(carried), label
+        assert (parts.group(1) is None) == bool(carried), label
+        if label == "retained-only":
+            assert 'class="panel-banner retained"' in fragment
+            assert line == HIDDEN_DEGRADED_LINE
+        if label == "retained+degraded":
+            assert "DEGRADED" in line and "RETAINED" not in line
+    source = panel.PANEL_JS
+    assert "getElementById('degraded-line')" in source
+    assert "querySelectorAll('.refresh-failure,.panel-banner.degraded,.panel-banner.stale')" in source
+    assert "join(' | ')" in source
+    assert "querySelectorAll('.refresh-failure,.panel-banner')" not in source
+    assert "line.innerHTML!==" in source
+    swap = "oldLayer.replaceWith(next); cursor=payload.pool.observed_watermark"
+    assert source.index("mirrorDegraded(next)") > source.index(swap)
+    assert source.index("mirrorDegraded(oldLayer)") > source.index("catch(error)")
+    assert "window.setInterval(refreshPool,interval)" in source
+
+
+def test_radar_route_serves_the_degraded_line_above_the_ladder_in_both_frames(monkeypatch):
+    view = _degraded_view(_fixture_source_name())
+    monkeypatch.setattr(web_module, "build_radar_panel", lambda **_kwargs: view)
+    client = TestClient(web_module.app)
+    for path in ("/radar", "/radar?frame=phone"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert 'id="degraded-line"' in response.text
+        assert response.text.index('id="degraded-line"') < response.text.index('id="ladder-layer"')
+
+
+@pytest.mark.parametrize("phone_frame", [False, True])
+def test_degraded_line_never_carries_retained(phone_frame):
+    """R11 2026-09-21: RETAINED PRIOR-DAY DATA is normal every night until the
+    first scan; the red line means 'do not trust what you see right now'."""
+    retained = _retained_view()
+    page = panel.render_radar_page(retained, phone_frame=phone_frame)
+    assert page.count(HIDDEN_DEGRADED_LINE) == 1
+    assert panel.render_degraded_line(retained.pool) == panel.render_degraded_line(_healthy_view().pool)
+    assert page.index("RETAINED PRIOR-DAY DATA") > page.index('id="pool-layer"')
+    both = panel.render_radar_page(_retained_view(_fixture_source_name()), phone_frame=phone_frame)
+    line = _line_element(both)
+    assert "DEGRADED" in line and "RETAINED" not in line and "hidden" not in line
 
 
 def test_refresh_javascript_preserves_ladder_state_and_cursor_on_failure():
