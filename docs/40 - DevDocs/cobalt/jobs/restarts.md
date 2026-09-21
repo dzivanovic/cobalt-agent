@@ -4,7 +4,7 @@ Derives resident restarts from changed plists, declared runtime reads, and a sta
 
 Documentation paths — anything under `docs/`, or a root markdown file in `ROOT_DOCS` (`README.md`, `CLAUDE.md`, `AGENTS.md`, `QWEN.md`) — that no resident declares in `reads:` are labelled `DOCS` and derive no restart, not even the conservative set (L42 amendment O9, effective 2026-09-15). A documentation path a resident does read still derives that resident, because the reads check runs first.
 
-A config path with no resident reader but a `no_resident_reads` declaration in `jobs.yaml` is ruled `no resident reads (one-shot: <labels>)` and derives no restart instead of `UNCLASSIFIED CONFIG` (ruled 2026-09-15; first row `configs/cobalt/notify.yaml`).
+A config path with no resident reader but a `no_resident_reads` declaration in `jobs.yaml` is ruled `no resident reads (one-shot: <labels>)` and derives no restart instead of `UNCLASSIFIED CONFIG` (ruled 2026-09-15). The rows declared today are `configs/cobalt/notify.yaml` (heartbeat), `configs/cobalt/rules.yaml` (the two prefills) and `configs/cobalt/backup.yaml` (backup + heartbeat, 2026-09-22). A config that only one-shots read is DECLARED in `jobs.yaml` `no_resident_reads`, never hard-coded in `restarts.py` — one path (L3), and a `restarts.py` edit is itself a `src/` change that derives `com.cobalt.radar` through `cobalt.cli`.
 
 Paths under `.claude/` (the Claude Code harness settings, first committed 2026-09-15) are labelled `HARNESS; no Cobalt reader` and derive no restart.
 
