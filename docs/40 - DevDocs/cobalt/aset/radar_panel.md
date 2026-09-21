@@ -6,7 +6,7 @@ View models, builders and renderers for the Trade Radar page. The pool layer (S2
 
 Every structured presentation object is a strict Pydantic model. `PoolRecord` and `MembershipRecord` validate the database-shaped reads before they become `PoolView`, `PoolRow`, `ChurnDelta` and `BannerView`.
 
-`build_pool_view()` reads the pool row first, derives the membership trading day from `last_scan_at` in ET, validates the `radar.pool` mirror through `PoolBlock`, reads `radar.scan_interval`, then requests every membership episode for that pool/day. It fails loudly when any required source is absent or malformed, when a stored stage failed, or when `radar_pool.members` disagrees with the number of open admitted episodes.
+`build_pool_view()` reads the pool row first, derives the membership trading day from `last_scan_at` in ET, validates the `radar.pool` mirror through `PoolBlock`, reads `radar.scan_interval`, then requests every membership episode for that pool/day. It fails loudly when any required source is absent or malformed, when a stored stage failed — except a per-ticker bars poll failure (`failed_stage='bars'` with its `poll failures: <n>` stamp and named rows), which renders as a `BARS POLL FAILED` DEGRADED banner naming each ticker, reason and since-time (R21 2026-09-21); a lifecycle refusal or dropped `bars` stage still fails — or when `radar_pool.members` disagrees with the number of open admitted episodes.
 
 Membership categories are intentionally distinct:
 
