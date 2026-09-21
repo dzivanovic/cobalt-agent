@@ -41,7 +41,7 @@ Staleness begins after twice `radar.scan_interval`. Source degradation, stale sc
 
 ## Rendering
 
-`render_pool()` and `render_ladder()` are pure and escape every source-controlled string. `render_radar_page()` renders the card ladder FIRST and the pool view BELOW it (desktop and phone frame; ruled 2026-09-21, R3); both layers keep their ids and the refreshers still replace them by id, so the order is page layout only.
+`render_pool()` and `render_ladder()` are pure and escape every source-controlled string. `render_radar_page()` renders the card ladder FIRST and the pool view BELOW it (desktop and phone frame; ruled 2026-09-21, R3); both layers keep their ids and the refreshers still replace them by id, so the order is page layout only. `render_degraded_line()` renders the slim red line ABOVE the card ladder (desktop and phone frame; ruled 2026-09-21, R10): the pool view's DEGRADED and STALE banner text — never RETAINED PRIOR-DAY DATA (R11) — `hidden` with no box when there is none, and `refreshPool` mirrors the DEGRADED / STALE banners of the pool layer it placed (or, on a failed refresh, the old layer's REFRESH FAILED) into it, writing only on a change — a second rendering, never a second degraded computation.
 
 - Each displayed card field renders as `data-field="<column>"` with its label and its `COBALT` / `YOU` / `LEDGER` badge (`BADGED_FIELDS`).
 - Each dot is a button that toggles its hidden `tap-strip` of ten `data-grade` buttons.
@@ -58,7 +58,7 @@ At `max-width:1149px` detail drops below the card; the 430 px rule uses a 366 px
 
 - `build_pool_view`, `build_ladder_view`, `build_radar_panel`
 - `parse_since`, `pool_api_payload`
-- `render_pool`, `render_ladder`, `render_radar_page`, `render_failed_page`
+- `render_pool`, `render_degraded_line`, `render_ladder`, `render_radar_page`, `render_failed_page`
 
 ## Gotchas
 
