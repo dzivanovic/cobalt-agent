@@ -474,7 +474,12 @@ def build_pool_view(
         raise RadarPanelError(f"FAILED: invalid radar pool row: {exc}") from exc
     if pool.last_scan_at is None:
         raise RadarPanelError("FAILED: radar pool has no last_scan_at")
-    if pool.failed_stage:
+    poll_only = (
+        pool.failed_stage == "bars"
+        and bool(pool.poll_failures)
+        and pool.failed_detail == f"poll failures: {len(pool.poll_failures)}"
+    )
+    if pool.failed_stage and not poll_only:
         detail = pool.failed_detail or "no failure detail recorded"
         raise RadarPanelError(f"FAILED: radar {pool.failed_stage}: {detail}")
 
@@ -581,6 +586,12 @@ def build_pool_view(
             ", ".join(_source_name(value) for value in pool.degraded_sources) or "unknown source"
         )
         banners.append(BannerView(level="degraded", title="DEGRADED", detail=f"Sources: {names}"))
+    if poll_only:
+        failed = "; ".join(
+            f"{item.ticker} {item.reason} since {clock.to_et(item.since):%H:%M} ET"
+            for item in pool.poll_failures
+        )
+        banners.append(BannerView(level="degraded", title="BARS POLL FAILED", detail=failed))
     if stale:
         banners.append(
             BannerView(

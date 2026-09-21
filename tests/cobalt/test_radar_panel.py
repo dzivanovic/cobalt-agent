@@ -409,6 +409,119 @@ def test_required_pool_inputs_fail_loud_independently(case):
         )
 
 
+def _bars_poll_failed_pool(detail=None, failures=None):
+    """The production row's shape at 10:42 (`cto-2026-09-21.md` §11): the bars
+    stage stamped `poll failures: <n>` with one `{ticker, reason, since}` row
+    per thin ticker (`store.py:267`), times shifted onto the fixture's day.
+    `failures=None` is the three real-shape rows; `[]` is none."""
+    pool_row, members = _small_snapshot()
+    if failures is None:
+        failures = [
+            {"ticker": "GURE", "reason": "stale", "since": "2026-01-05 15:19:00+00:00"},
+            {"ticker": "PFAI", "reason": "stale", "since": "2026-01-05 14:40:00+00:00"},
+            {"ticker": "WBX", "reason": "stale", "since": "2026-01-05 15:36:00+00:00"},
+        ]
+    pool_row["failed_stage"] = "bars"
+    pool_row["poll_failures"] = failures
+    pool_row["failed_detail"] = detail if detail is not None else f"poll failures: {len(failures)}"
+    return pool_row, members
+
+
+@pytest.mark.parametrize("phone_frame", [False, True])
+def test_bars_poll_failures_render_the_page_degraded_with_tickers_named(phone_frame):
+    pool_row, members = _bars_poll_failed_pool()
+    view, _ = _build(pool_row=pool_row, members=members)
+    page = panel.render_radar_page(view, phone_frame=phone_frame)
+    assert page.count('id="ladder-layer"') == 1
+    assert page.count('id="pool-layer"') == 1
+    assert [banner.level for banner in view.pool.banners].count("degraded") == 1
+    banner = next(item for item in view.pool.banners if item.level == "degraded")
+    assert banner.title == "BARS POLL FAILED"
+    for word in ("GURE", "PFAI", "WBX", "stale"):
+        assert word in banner.detail
+    marker = '<div class="panel-banner degraded"><b>BARS POLL FAILED</b>'
+    assert page.count(marker) == 1
+    assert page.index(marker) > page.index('id="pool-layer"')
+    assert panel.render_pool(view.pool) in page
+    assert panel.render_ladder(view.ladder) in page
+    assert "Cobalt · Trade Radar · FAILED" not in page
+    if phone_frame:
+        assert 'class="phone-frame"' in page
+
+
+def test_bars_poll_failures_render_the_routes_and_the_refresh_fragment(monkeypatch):
+    pool_row, members = _bars_poll_failed_pool()
+    # The REAL builder behind the REAL routes, over the file's fake stores;
+    # `NOW` replaces the route's clock so the fixture day is not in the future.
+    monkeypatch.setattr(
+        web_module,
+        "build_radar_panel",
+        lambda **kw: panel.build_radar_panel(
+            **{**kw, "now": NOW},
+            radar_store=FakeRadarStore(pool_row, members),
+            settings_store=FakeSettingsStore(),
+            card_store=FakeCardStore(),
+            clock=FakeClock(),
+            tunables_loader=_tunables(),
+        ),
+    )
+    client = TestClient(web_module.app)
+    for path in ("/radar", "/radar?frame=phone"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert "BARS POLL FAILED" in response.text and "GURE" in response.text
+        assert "Cobalt · Trade Radar · FAILED" not in response.text
+    response = client.get("/api/radar/pool", params={"since": "2026-01-05T15:00:00+00:00"})
+    assert response.status_code == 200
+    fragment = response.json()["html"]
+    assert "BARS POLL FAILED" in fragment
+    for ticker in ("GURE", "PFAI", "WBX"):
+        assert ticker in fragment
+
+
+@pytest.mark.parametrize(
+    ("stage", "detail", "failures"),
+    [
+        ("membership", "boom", []),
+        ("pool_row", "boom", []),
+        ("mirror", "boom", []),
+        ("evaluate", "boom", []),
+        ("bars", "lifecycle polling refused for ['X']: over ceiling", []),
+        ("bars", "lifecycle card read failed: boom", None),
+        ("bars", "stage dropped", []),
+        ("bars", "poll failures: 3", []),
+    ],
+)
+def test_every_other_failed_stage_still_fails_the_page(monkeypatch, stage, detail, failures):
+    """L1: only the per-ticker poll-failure stamp renders; the rest still FAIL."""
+    pool_row, members = _bars_poll_failed_pool(detail=detail, failures=failures)
+    pool_row["failed_stage"] = stage
+    with pytest.raises(panel.RadarPanelError, match="FAILED"):
+        _build(pool_row=pool_row, members=members)
+    monkeypatch.setattr(
+        web_module,
+        "build_radar_panel",
+        lambda **kw: panel.build_radar_panel(
+            **{**kw, "now": NOW},
+            radar_store=FakeRadarStore(pool_row, members),
+            settings_store=FakeSettingsStore(),
+            card_store=FakeCardStore(),
+            clock=FakeClock(),
+            tunables_loader=_tunables(),
+        ),
+    )
+    client = TestClient(web_module.app)
+    assert "Cobalt · Trade Radar · FAILED" in client.get("/radar").text
+    assert client.get("/api/radar/pool", params={"since": "2026-01-05T15:00:00+00:00"}).status_code == 503
+
+
+@pytest.mark.parametrize("phone_frame", [False, True])
+def test_healthy_pool_output_is_unchanged_by_the_bars_gate(phone_frame):
+    view, _ = _build()
+    assert view.pool.banners == []
+    assert "BARS POLL FAILED" not in panel.render_radar_page(view, phone_frame=phone_frame)
+
+
 @pytest.mark.parametrize(
     ("radar_store", "settings_store", "tunables_loader", "message"),
     [
