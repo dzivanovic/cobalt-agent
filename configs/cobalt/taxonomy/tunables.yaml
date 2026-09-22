@@ -243,6 +243,17 @@ tunables:
     source: dwv
     consumers: ["cobalt.radar.anatomy.leg_roles (Leg(opening_drive).terminated_by)"]
 
+  # `A-24` (fix r3 F3, R49): the minimum size of an `impulse` / `pullback` leg
+  # (its high − low, in working-TF ATR). Null = today's roles; his to tune live.
+  - key: leg.min_size_atr
+    value: null
+    unit: atr
+    scope: global
+    dynamic: true
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.anatomy.leg_roles (Leg(pullback), Leg(impulse))"]
+
   # --- D4 Extension lifecycle (setups one build STEP-5) -------------------
   # `A-08`: `reverting` starts at the first bar after the turn that clears the
   # extremes of this many preceding bars (the snapback). While null, the

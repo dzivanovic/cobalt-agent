@@ -60,7 +60,9 @@ from .structure import structural_stop, tracked_extreme
 from .in_play import in_play_state
 from .indicators import ATR_PERIOD, ema, seeded, wilder_atr
 from .leg import legs
-from .leg_roles import OpeningDrive, PullbackRoles, max_retrace, opening_drive, pre_test_bars, pullback_roles
+from .leg_roles import (
+    OpeningDrive, PullbackRoles, max_retrace, min_size, opening_drive, pre_test_bars, pullback_roles,
+)
 from .micro_range import MicroRangeObservation, detect_micro_range, range_params
 from .session_levels import day_range, premarket_levels, prior_day_levels, vwap
 from .slope import slope, slope_bars, slope_norm
@@ -429,13 +431,22 @@ def _d1_resolvers(
 
     # --- STEP-6: pullback / impulse roles, pre_test, the catalyst resolver ------
     def roles() -> PullbackRoles:
-        return once("pullback_roles", lambda: pullback_roles(drive_legs()))
+        """Fix r3 F3 (R49): a null `leg.min_size_atr` = today's roles; a value
+        sizes the pullback / impulse legs against the seeded ATR."""
+        def compute():
+            bound = min_size(tunables)
+            if bound is None:
+                return pullback_roles(drive_legs())
+            return pullback_roles(drive_legs(), min_size=bound, atr=atr())
+        return once("pullback_roles", compute)
 
     def role_atom(which: str, part: str) -> Callable[[], AtomValue]:
         def resolve() -> AtomValue:
             if not run:
                 return AtomValue(kind="unavailable", reason="insufficient_bars")
             r = roles()
+            if r.unavailable is not None:
+                return AtomValue(kind="unavailable", reason=r.unavailable)
             if which == "pullback":
                 leg = r.pullback
             elif which == "impulse":

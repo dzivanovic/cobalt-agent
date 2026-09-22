@@ -110,9 +110,46 @@ Written ONCE to `docs/_inflight/setups-assumed-values-r3-2026-09-22.md`; `git st
 OFFLINE → `2443 passed, 361 skipped, 1 xfailed, 15 warnings in 470.10s (0:07:50)` → **2443/0** = 2438 + 5 new F2 tests. `test_assumed_store.py` is a with-DB file (it holds `requires_db` tests), so the row ran it inside the `.env` pair: `cp …` → `COBALT_ENV=dev uv run pytest -q -p no:cacheprovider -rs --color=no tests/cobalt/test_assumed_store.py tests/cobalt/test_setups_fix_r3.py` → `31 passed in 1.87s` → `rm …/.env` → `ls -la …/.env` → `ls: /Users/cobalt/cobalt-wt/setups-c1/.env: No such file or directory`.
 
 ### COMMIT
+`3194038 fix(setups): round 3 — F2 the assumed-rows reader accepts a per_indicator hole (R48)` — `git show --stat HEAD`: 6 files, `147 insertions(+), 12 deletions(-)`: `ADDING-A-SETUP.md`, `taxonomy/vault_loader.md`, this report, `vault_loader.py`, `test_assumed_store.py`, `test_setups_fix_r3.py`.
+
+## F3
+R49 — the minimum-size rule for `impulse` / `pullback` legs, `A-24` = `leg.min_size_atr`, `value: null`.
+
+Key number: `grep -c "A-24"` on the companion → `0`, on the FINAL → `0` → `A-24` is the next free. Key name: `grep -rn "min_size"` over `configs src tests` and the FINAL → no output (no collision).
+
+### T
+RED-on-`65c08a0` for the change (4), GREEN-as-pin for the null guard (1). New (5): a small last pullback is not a `pullback`, the large earlier one is (with this file's literal minimum between them, L69) · an impulse below the minimum is not an `impulse` (`before` / `before_role` None — `Leg(opening_drive OR impulse)` no longer holds) · on the nine-ema definition-written day the key null forms and a minimum above its pullback removes the pullback atom and the formation · the whole-day null pin (every role, both frames, FTFT and BGFI, every 10 min — 160 observations; the sha was computed on the pre-F3 code, `leg_roles.py` byte-identical to the base, and copied from that run's failure: `F3 roles on the committed day: 160 observations sha=0922dadc29013941a7a2512e038ba9310e4fb791bc3a5e53bdd17a4bf5dd6323`) · the key is a null engine row in the closure of exactly the defs naming the roles, and `assumed_closure` carries it when assumed. Run before C: `4 failed, 1 passed, 9 deselected in 0.88s`; RED lines: `TypeError: pullback_roles() got an unexpected keyword argument 'min_size'` (×2) · `KeyError: 'leg.min_size_atr'` (×2).
+
+### C
+| file | change |
+|---|---|
+| `configs/cobalt/taxonomy/tunables.yaml` | ONE row: `leg.min_size_atr`, `value: null`, unit `atr`, scope `global`, `dynamic: true`, `status: proposed`, `source: dwv` (as the other null engine rows) |
+| `src/cobalt/radar/anatomy/leg_roles.py` | `MIN_SIZE_KEY`, `ROLE_TUNABLE_KEYS`, `min_size(rows)`; `pullback_roles(..., *, min_size=None, atr=None)`; `PullbackRoles.unavailable` |
+| `src/cobalt/radar/anatomy/frame.py` | the `pullback_roles` object passes the key's value and the seeded ATR; a role atom reads `unavailable` when the roles are |
+| `src/cobalt/radar/formation/atoms.py` (the closure) | the five role atoms declare `ROLE_TUNABLE_KEYS`; `_ROLE_REASONS` + `insufficient_seed` |
+`leg.py` (`legs()`) untouched: `git diff configs src/cobalt/radar/anatomy/leg.py` shows only the config row. After C: `F3 nine-ema day, leg.min_size_atr=None: pullback atom=symbol/down evaluation=formed` · `F3 nine-ema day, leg.min_size_atr=1.5: pullback atom=null/None evaluation=not_formed` · `F3 roles on the committed day: 160 observations sha=0922dadc29013941a7a2512e038ba9310e4fb791bc3a5e53bdd17a4bf5dd6323` (unchanged) · `F3 defs naming Leg(impulse) / Leg(pullback): ['nine-ema-scalp', 'vwap-continuation']` · `5 passed`. (The printed `1.5` is this test file's own constructed literal, not a proposal.)
+
+### A1
+The first full offline run after C: `5 failed, 2443 passed, 361 skipped, 1 xfailed` — all five are the card-digest pins, which map `tunables_sha256` back to the start digest by EXCLUDING each row committed config gained (the build's standing A1 shape): `test_setups_registries.py::test_lego_ii_every_card_spec_is_byte_identical_through_the_registries[countertrend|mixed]`, `test_setups_d1.py::test_f11_the_dots_and_card_score_do_not_move[countertrend|mixed]`, `test_rubberband_forms.py::test_t6_a_def_that_formed_before_changes_only_in_the_finals_named_ways` (it imports `test_setups_registries._tunables_digests`), e.g. `AssertionError: assert 'b5f387c348f8...8503ab86dcd58' == '7a0e5796e33e...1f8811573450a'`.
+| test | old | new | row |
+|---|---|---|---|
+| `test_setups_registries.py` `STEP3_KEYS` | the 17 rows the build + r2 added | + `leg.min_size_atr` (same exclusion, same strength; every pinned sha UNCHANGED in text) | F3 |
+| `test_setups_d1.py` `ADDED_KEYS` | the same 17 | + `leg.min_size_atr` | F3 |
+`test_rubberband_forms.py` unchanged in text (it reads the registries helper). No `DEF_WRITTEN_*` moved. After: `85 passed, 6 skipped in 194.47s` over those three files; with-DB (both are with-DB files): `cp …` → `COBALT_ENV=dev uv run pytest -q -p no:cacheprovider -rs --color=no tests/cobalt/test_rubberband_forms.py tests/cobalt/test_setups_d1.py tests/cobalt/test_setups_registries.py tests/cobalt/test_setups_fix_r3.py tests/cobalt/test_radar_cards_db.py tests/cobalt/test_radar_evaluate.py` → `144 passed, 1 skipped in 205.79s (0:03:25)` (the by-design live-note skip) → `rm` → `ls: /Users/cobalt/cobalt-wt/setups-c1/.env: No such file or directory`. `test_setups_registries.py` / `test_setups_d1.py` are outside the CLOSE path list → ESCALATE.
+
+### PROPOSAL
+`A-24`'s proposal is in the gitignored file (written with F2's; see `## PROPOSAL`).
+
+### D
+`radar/anatomy/leg_roles.md`, `radar/anatomy/frame.md`, `radar/formation/atoms.md` + one paragraph each; `ADDING-A-SETUP.md` § Where its dials go + one line naming the key and that it is his to tune (L53).
+
+### SUITE
+OFFLINE → `2448 passed, 361 skipped, 1 xfailed, 15 warnings in 472.11s (0:07:52)` → **2448/0** = 2443 + 5 new F3 tests. With-DB for the touched with-DB files: above (A1).
+
+### COMMIT
 (below)
 
 ## CONTINUE
-next: F2 COMMIT, then F3 (T drafted in the job tmp dir; the base roles pin captured: `F3 roles on the committed day: 160 observations sha=0922dadc29013941a7a2512e038ba9310e4fb791bc3a5e53bdd17a4bf5dd6323`)
+next: F3 COMMIT, then F4 (draft in the job tmp dir) (T drafted in the job tmp dir; the base roles pin captured: `F3 roles on the committed day: 160 observations sha=0922dadc29013941a7a2512e038ba9310e4fb791bc3a5e53bdd17a4bf5dd6323`)
 
 (run in progress — row 2 of 6, next under ## CONTINUE)

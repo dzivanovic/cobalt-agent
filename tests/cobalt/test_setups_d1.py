@@ -54,7 +54,8 @@ ADDED_KEYS = (*STEP3_KEYS, "leg.consolidation_max_retrace", "range.micro.bound_f
               "range.micro.touch_tolerance_atr", "extension.snapback_bars_cleared",
               "catalyst_ref.resolver", "leg.pre_test", "extension.on_leg.form",
               "levels.set", "level.rejected.rule",
-              "range_break.retest_tolerance_atr", "range_prior.rule", "event.stop_hit.source", "turn_candle.rule")
+              "range_break.retest_tolerance_atr", "range_prior.rule", "event.stop_hit.source", "turn_candle.rule",
+              "leg.min_size_atr")  # + fix r3 F3's `A-24` row (R49)
 STEP3_CONVENTIONS = ("dayrange.session", "frame.warmup_source", "vwap.anchor")
 
 

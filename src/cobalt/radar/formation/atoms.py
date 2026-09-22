@@ -96,7 +96,8 @@ _EXT_REASONS = ("insufficient_bars", "incomplete_bucket", "catalyst_ref_unknown"
 _WARM = _indicators.WARMUP_CONVENTION
 _SLOPE_REASONS = ("insufficient_seed", "insufficient_bars", "slope_norm.bars_unset")
 _DIRECTIONS = frozenset({"up", "down"})
-_ROLE_REASONS = ("insufficient_bars", "not_instantiated")
+_ROLE_REASONS = ("insufficient_bars", "not_instantiated", "insufficient_seed")
+_ROLE_KEYS = _leg_roles.ROLE_TUNABLE_KEYS
 #: `A-13`'s convention row (FINAL §6).
 CATALYST_CONVENTION = "catalyst_ref.resolver"
 #: `A-15`: `<Extension atom> on Leg(x)` reads the Extension detector over that leg's bars.
@@ -157,11 +158,15 @@ ATOMS: dict[str, AtomResolver] = _serves(
                  tunable_keys=(*_RANGE_KEYS, *_leg_roles.TUNABLE_KEYS), conventions=(_WARM,),
                  reasons=(*_RANGE_REASONS, "leg.consolidation_max_retrace_unset", "not_instantiated")),
     # --- D3 (STEP-6): pullback / impulse roles ------------------------------
-    AtomResolver("Leg(pullback).direction", "symbol", domain=_DIRECTIONS, reasons=_ROLE_REASONS),
-    AtomResolver("Leg(pullback).end", "number", price=True, reasons=_ROLE_REASONS),
-    AtomResolver("Leg(pullback).index", "number", reasons=_ROLE_REASONS),
-    AtomResolver("Leg(impulse).direction", "symbol", domain=_DIRECTIONS, reasons=_ROLE_REASONS),
-    AtomResolver("Leg(opening_drive OR impulse).direction", "symbol", domain=_DIRECTIONS, reasons=_ROLE_REASONS),
+    # Fix r3 F3 (R49): the roles read `leg.min_size_atr` (`A-24`) — it joins their closure.
+    AtomResolver("Leg(pullback).direction", "symbol", domain=_DIRECTIONS, tunable_keys=_ROLE_KEYS,
+                 reasons=_ROLE_REASONS),
+    AtomResolver("Leg(pullback).end", "number", price=True, tunable_keys=_ROLE_KEYS, reasons=_ROLE_REASONS),
+    AtomResolver("Leg(pullback).index", "number", tunable_keys=_ROLE_KEYS, reasons=_ROLE_REASONS),
+    AtomResolver("Leg(impulse).direction", "symbol", domain=_DIRECTIONS, tunable_keys=_ROLE_KEYS,
+                 reasons=_ROLE_REASONS),
+    AtomResolver("Leg(opening_drive OR impulse).direction", "symbol", domain=_DIRECTIONS, tunable_keys=_ROLE_KEYS,
+                 reasons=_ROLE_REASONS),
     # --- THE ONE NAMED SPECIAL CASE (FINAL §6, R2-2.4 B): `A-13` -------------
     # The catalyst resolver stands in for data the radar does not have: the
     # def's "or setup" branch is read as met by the pool admission. Its

@@ -178,3 +178,129 @@ def test_f2_a_sheet_sourced_per_indicator_row_is_still_refused(tmp_path):
                                            source="sheet")])
     with pytest.raises(VaultTaxonomyError, match="source 'sheet'"):
         load_assumed_tunables(tmp_path, loaded_slugs=set())
+
+
+# =====================================================================
+# F3 — R49: the minimum-size rule for `impulse` / `pullback` legs
+# (`A-24`, `leg.min_size_atr`, `value: null` in committed config)
+# =====================================================================
+
+MIN_SIZE_KEY = "leg.min_size_atr"
+#: This file's own literals (L69): a working-TF ATR and a minimum between the
+#: small and the large legs below (in ATR).
+ATR, MIN_LITERAL = Decimal("0.2"), Decimal("1.5")
+
+
+def _leg(direction, t, low, high):
+    from datetime import datetime, timezone
+
+    from cobalt.radar.anatomy.leg import LegObservation
+
+    ts = datetime(2026, 1, 6, 15, t, tzinfo=timezone.utc)
+    return LegObservation(direction=direction, start_ts=ts, end_ts=ts, bar_count=1, terminated=True,
+                          high=Decimal(high), low=Decimal(low))
+
+
+#: up drive · LARGE pullback (0.60 = 3 ATR) · up impulse · SMALL pullback (0.05 = ¼ ATR)
+SMALL_LAST = [_leg("up", 0, "10.00", "11.00"), _leg("down", 2, "10.40", "11.00"),
+              _leg("up", 4, "10.40", "11.20"), _leg("down", 6, "11.15", "11.20")]
+#: up drive · LARGE pullback · a SMALL up leg (0.05) · LARGE pullback — the only "impulse" is small
+SMALL_IMPULSE = [_leg("up", 0, "10.00", "11.00"), _leg("down", 2, "10.40", "11.00"),
+                 _leg("up", 4, "10.40", "10.45"), _leg("down", 6, "9.80", "10.45")]
+
+
+def test_f3_a_leg_below_the_minimum_is_not_a_pullback_the_large_one_is():
+    from cobalt.radar.anatomy.leg_roles import pullback_roles
+
+    today = pullback_roles(SMALL_LAST)
+    assert today.pullback == SMALL_LAST[3]  # null key: the latest down leg, whatever its size
+    sized = pullback_roles(SMALL_LAST, min_size=MIN_LITERAL, atr=ATR)
+    assert sized.pullback == SMALL_LAST[1] and sized.index == 1
+    assert (sized.before, sized.before_role) == (SMALL_LAST[0], "opening_drive")
+
+
+def test_f3_an_impulse_below_the_minimum_is_not_an_impulse():
+    from cobalt.radar.anatomy.leg_roles import pullback_roles
+
+    today = pullback_roles(SMALL_IMPULSE)
+    assert (today.before_role, today.before.direction) == ("impulse", "up")  # holds today
+    sized = pullback_roles(SMALL_IMPULSE, min_size=MIN_LITERAL, atr=ATR)
+    assert sized.pullback == SMALL_IMPULSE[3] and sized.index == 2
+    assert (sized.before, sized.before_role) == (None, None)  # `Leg(opening_drive OR impulse)` no longer holds
+
+
+def _nine_ema_rows(value):
+    rows = shapes.tunables_for(shapes.load_shape_fresh("nine-ema-scalp"))
+    if value is not None:
+        rows[MIN_SIZE_KEY] = rows[MIN_SIZE_KEY].model_copy(update={"value": value})
+    return rows
+
+
+def test_f3_on_the_definition_written_day_the_minimum_reaches_the_frame_and_the_formation():
+    """The nine-ema day (`test_setups_nine_ema.impulse_pullback_rejection`): its
+    pullback is about half a working-TF ATR. Key null → today's roles and the
+    formation; this file's literal above that pullback → no pullback, no formation."""
+    import test_setups_nine_ema as ne
+    from cobalt.radar.evaluate import evaluate_member, member_frames
+
+    bars = ne.impulse_pullback_rejection()
+    at = ne._scan_after(bars)
+    ld = shapes.load_shape_fresh("nine-ema-scalp")
+    for value, pulls, forms in ((None, True, True), (MIN_LITERAL, False, False)):
+        rows = _nine_ema_rows(value)
+        fr = member_frames(ne._member(bars, at), tunables=rows, defaults=sup.defaults(), clock=session_clock())["long"]
+        atom = fr.atoms["Leg(pullback).direction"]
+        ev = evaluate_member(ld, ne._member(bars, at), tunables=rows, defaults=sup.defaults(), scan_interval=100,
+                             clock=session_clock())
+        print(f"F3 nine-ema day, {MIN_SIZE_KEY}={value}: pullback atom={atom.kind}/{atom.symbol} "
+              f"evaluation={ev.evaluation}")
+        assert (atom.kind == "symbol") is pulls
+        assert (ev.evaluation == "formed") is forms
+
+
+#: The pullback / impulse roles of every leg, both frames, FTFT and BGFI, every
+#: 10 minutes of the committed day — computed on the code BEFORE F3 (`leg_roles.py`
+#: byte-identical to `65c08a0`), copied verbatim from that run's failure output.
+PIN_ROLES_COMMITTED_DAY = "0922dadc29013941a7a2512e038ba9310e4fb791bc3a5e53bdd17a4bf5dd6323"
+
+
+def test_f3_with_the_key_null_every_role_on_the_committed_day_is_the_bases():
+    import hashlib
+    import json
+
+    from cobalt.radar.evaluate import member_frames
+
+    rows = sup.engine_tunables()
+    assert rows.get(MIN_SIZE_KEY) is None or rows[MIN_SIZE_KEY].value is None  # committed config: null
+    dumps = []
+    for ticker in ("FTFT", "BGFI"):
+        for m in range(0, 391, 10):
+            at = shapes.DAY_START + timedelta(minutes=m)
+            frames = member_frames(shapes.member(ticker, at), tunables=rows, defaults=sup.defaults(),
+                                   clock=session_clock())
+            for side in ("long", "short"):
+                r = frames[side].objects["pullback_roles"]
+                dumps.append(r.model_dump(mode="json", include={"pullback", "index", "before", "before_role"}))
+    sha = hashlib.sha256(json.dumps(dumps, sort_keys=True, default=str).encode()).hexdigest()
+    print(f"F3 roles on the committed day: {len(dumps)} observations sha={sha}")
+    assert sha == PIN_ROLES_COMMITTED_DAY
+
+
+def test_f3_the_key_is_a_null_engine_row_in_the_closure_of_every_def_naming_the_roles():
+    from cobalt.radar.evaluate import assumed_closure, closure_keys
+    from cobalt.taxonomy.tunables import TunableSource
+
+    row = sup.engine_tunables()[MIN_SIZE_KEY]
+    assert (row.value, row.unit.value, row.scope) == (None, "atr", "global")
+    naming = {key for key, shape in shapes.SHAPES.items()
+              if any(a.startswith(("Leg(pullback)", "Leg(impulse)", "Leg(opening_drive OR impulse)"))
+                     for p in shapes.load_shape_fresh(key).definition.preconditions for a in p.required_atoms)}
+    print(f"F3 defs naming Leg(impulse) / Leg(pullback): {sorted(naming)}")
+    assert naming == {"nine-ema-scalp", "vwap-continuation"}
+    for key in shapes.SHAPES:
+        td = shapes.load_shape_fresh(key).definition
+        assert (MIN_SIZE_KEY in closure_keys(td)) is (key in naming), key
+    td = shapes.load_shape_fresh("nine-ema-scalp").definition
+    rows = _nine_ema_rows(float(MIN_LITERAL))
+    rows[MIN_SIZE_KEY] = rows[MIN_SIZE_KEY].model_copy(update={"source": TunableSource.ASSUMED})
+    assert MIN_SIZE_KEY in assumed_closure(td, rows)  # a card formed on it is marked ASSUMED

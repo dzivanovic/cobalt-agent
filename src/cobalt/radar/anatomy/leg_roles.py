@@ -115,6 +115,19 @@ def opening_drive_literal(
 # * `Leg(pre_test)` (`A-14`, convention `leg.pre_test`): the run from the
 #   session open to the pullback's first bar — the move before the test.
 PRE_TEST_CONVENTION = "leg.pre_test"
+#: Fix r3 F3 (R49, `A-24`): the minimum size of an `impulse` / `pullback` leg —
+#: its high − low in working-TF ATR. NULL (committed config) = the roles above,
+#: byte for byte; a value → a down leg below it is not a pullback, and the leg
+#: a pullback terminates is an `impulse` only at or above it (the opening drive
+#: carries no size rule). The rule lives at the ROLE; `leg.legs()` is unchanged
+#: (X16). His to tune live (L53).
+MIN_SIZE_KEY = "leg.min_size_atr"
+ROLE_TUNABLE_KEYS = (MIN_SIZE_KEY,)
+
+
+def min_size(rows: Mapping[str, TunableRow]) -> Decimal | None:
+    row = rows[MIN_SIZE_KEY]
+    return None if row.value is None else Decimal(str(row.value))
 
 
 class PullbackRoles(BaseModel):
@@ -125,14 +138,26 @@ class PullbackRoles(BaseModel):
     #: The leg the pullback terminates (impulse or opening drive).
     before: LegObservation | None = None
     before_role: Literal["opening_drive", "impulse"] | None = None
+    #: Why the roles cannot be read (a set minimum with no ATR yet).
+    unavailable: str | None = None
 
 
-def pullback_roles(drive_legs: Sequence[LegObservation]) -> PullbackRoles:
+def pullback_roles(
+    drive_legs: Sequence[LegObservation], *, min_size: Decimal | None = None, atr: Decimal | None = None,
+) -> PullbackRoles:
+    if min_size is not None and atr is None:
+        return PullbackRoles(pullback=None, unavailable="insufficient_seed")
+
+    def sized(leg: LegObservation) -> bool:
+        return min_size is None or leg.high - leg.low >= min_size * atr
+
     for k in range(len(drive_legs) - 1, 0, -1):
-        if drive_legs[k].direction == "down":
-            index = sum(1 for leg in drive_legs[1:k + 1] if leg.direction == "down")
-            return PullbackRoles(pullback=drive_legs[k], index=index, before=drive_legs[k - 1],
-                                 before_role="opening_drive" if k == 1 else "impulse")
+        if drive_legs[k].direction == "down" and sized(drive_legs[k]):
+            index = sum(1 for leg in drive_legs[1:k + 1] if leg.direction == "down" and sized(leg))
+            before, role = drive_legs[k - 1], "opening_drive" if k == 1 else "impulse"
+            if role == "impulse" and not sized(before):
+                before, role = None, None
+            return PullbackRoles(pullback=drive_legs[k], index=index, before=before, before_role=role)
     return PullbackRoles(pullback=None)
 
 
@@ -144,6 +169,6 @@ def pre_test_bars(run: Sequence[WorkingBar], roles: PullbackRoles) -> tuple[Work
 
 
 __all__ = [
-    "OpeningDrive", "PRE_TEST_CONVENTION", "PullbackRoles", "TUNABLE_KEYS", "max_retrace", "opening_drive",
-    "opening_drive_literal", "pre_test_bars", "pullback_roles",
+    "MIN_SIZE_KEY", "OpeningDrive", "PRE_TEST_CONVENTION", "PullbackRoles", "ROLE_TUNABLE_KEYS", "TUNABLE_KEYS",
+    "max_retrace", "min_size", "opening_drive", "opening_drive_literal", "pre_test_bars", "pullback_roles",
 ]
