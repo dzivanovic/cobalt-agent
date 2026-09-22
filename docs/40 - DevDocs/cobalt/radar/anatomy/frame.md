@@ -15,3 +15,32 @@ The acceptance property is F-04's, proved over every scan of the committed day i
 - for predicates, `pred_as_long(mirror(bars)) == pred_as_short(bars)`.
 
 The mirror wraps `WorkingBar` / `DailyBar` only. It never round-trips through the archiver's `Bar` (X6: a negative-price `Bar` constructs, so nothing would stop such a round trip).
+
+## 2026-09-21 — the warm series and the D1 atoms (setups one build STEP-3; FINAL §3 D1, §5)
+
+The frame now holds two series:
+
+- **run** is unchanged: the RTH working bars. Every session-anchored object uses it.
+- **warm** is `premarket` + `run`. `premarket` holds the complete working buckets that open and close in the premarket (`premarket_buckets`); absent and incomplete buckets are dropped. The warm series only seeds `EMA9`, `EMA21` and `ATR(working_tf)`, through `indicators.seeded`.
+
+`SessionInputs` carries the other real-coordinate inputs:
+
+- the seed buckets;
+- the closed i1 bars as one-minute working bars, split into premarket and RTH (`minute_bars`, over the one aggregation path);
+- the member's pool admission.
+
+The short frame mirrors all of it, the same way it mirrors the run and the daily series.
+
+`atoms` is a `LazyAtoms` mapping. The Extension and HTF atoms are computed eagerly, as before. Each D1 atom is computed on first read and kept for the scan: `price`, the EMAs, `ATR(working_tf)`, `EMA9.slope`, `slope_norm(EMA9|VWAP)`, `VWAP`, `DayRange.*`, `PMH/PML`, `PDH/PDL` and `InPlay.state`. So a def reads a tunable only when it names the atom behind it; a Rubberband def reads none of the new keys (X22). An EMA atom's period is its own name (`EMA_PERIODS`): `ma.slow` is 20 while the atom says 21, so the atom does not take the period from config.
+
+Two reads are sampled differently:
+
+- `VWAP` now is taken over every closed RTH i1 bar;
+- the series behind `slope_norm(VWAP)` is sampled at working-bar ends.
+
+`Frame.number(name)` returns a number atom's value or `None`. The F-04 property for the new atoms is proved on the committed day (`tests/cobalt/test_setups_d1.py`):
+
+- a mirrored price, negated back, is the real price;
+- a mirrored slope is the negated real slope;
+- the ATR is equal on both sides;
+- the short frame's `DayRange.high` / `PMH` / `PDH` read the real low-side levels.

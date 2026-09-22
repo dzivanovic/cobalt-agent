@@ -92,3 +92,13 @@ The review found that the slug fallback above accepted any edit under the slug, 
 - **Byte identity (Lego (ii)).** The rubberband shapes and the shipped example produce byte-identical evaluations and card specs through the registries (`tests/cobalt/test_setups_registries.py`). Only named fields are excluded: the added fields above; `formula_sha256`; the dot's key spelling; and `tunables_sha256`, mapped because committed config gained the convention row. The one by-design content change: an already-not-evaluable def now names `Unsupported(<kind>)` (E9).
 
 The ONE `EVALUATOR_VERSION` bump of STEP-1 covers this step. Nothing deploys between the one build's steps (R44).
+
+## 2026-09-21 — D1 and the warm-up (setups one build STEP-3; FINAL C3a, §5, [F-10], [F-11])
+
+- **One frame builder.** `_build_frames` serves both `evaluate_member` and the new `member_frames(member, tunables=, defaults=, clock=)`. It hands each frame its `SessionInputs`: the complete premarket buckets, the premarket and RTH i1 bars, and the pool admission. It also passes the tunables, so the frame's lazy D1 atoms can read `slope_norm.bars` when a def names them. `_closed_i1` and `_daily_ok` are extracted helpers; their behaviour is unchanged.
+- **[F-10].**
+  - `ema9` now takes the long frame's `EMA9` atom: seeded from the premarket, falling back to RTH-only when the seed is short.
+  - `atr_seeded` (the frame's `ATR(working_tf)`) is a NEW seam observation. It sits beside `atr_working`, which keeps its name and meaning (the Extension's RTH-run ATR).
+- **Conventions.** `CONVENTION_LABELS` names the label the code implements for `frame.warmup_source`, `dayrange.session` and `vwap.anchor`. All three rows are null in committed config, so a def naming their atoms carries them as assumed keys.
+- **[F-11], as tests** (`tests/cobalt/test_setups_d1.py`, pins captured on the start-of-step code). The Extension, `atrs_from_open`, `leg_count`, the dots and `card_score` do not move. X14 PASS: 138 refreshes of a FILLED card built on the committed day; no number but `health` moved.
+- **Deploy note (F-10).** The `health` of open cards moves, because EMA9 is now seeded. The ONE `EVALUATOR_VERSION` bump of STEP-1 covers it: nothing deploys between steps (R44).

@@ -89,13 +89,22 @@ FORMATION_ADDED = {"side_frame", "anchor", "trigger_outcome", "stop_outcome"}
 CARD_EXCLUDED = {"formula_sha256"}
 
 
+#: STEP-3 (FINAL C3a) moves three more things by design; the pins normalise
+#: them exactly ([F-10], [F-11]): `MemberEvaluation.ema9` (seeded — the
+#: health input), the new seam observation `atr_seeded`, the D1 atoms a
+#: not-evaluable def no longer lists as missing, and the four rows committed
+#: `tunables.yaml` gains (their keys excluded from the start digest).
+STEP3_KEYS = ("dayrange.session", "frame.warmup_source", "slope_norm.bars", "vwap.anchor")
+
+
 def _tunables_digests() -> tuple[str, str]:
     from cobalt.radar.evaluate import canonical_sha256
 
     rows = {k: row.model_dump(mode="json") for k, row in sorted(sup.engine_tunables().items())}
     defaults = sup.defaults().model_dump(mode="json")
     new = canonical_sha256({"rows": rows, "defaults": defaults})
-    old = canonical_sha256({"rows": {k: v for k, v in rows.items() if k != CONVENTION_KEY}, "defaults": defaults})
+    old = canonical_sha256({"rows": {k: v for k, v in rows.items() if k not in {CONVENTION_KEY, *STEP3_KEYS}},
+                            "defaults": defaults})
     return new, old
 PIN_EVALUATIONS = {
     "countertrend": "fd2f49725ecd80817bfacd857fc349817b7c75a462992c1a0c567e3932b78ad8",
@@ -130,8 +139,23 @@ def without_e9_shapes(dump: dict) -> dict:
             "detail": {**dump["detail"], "missing_atoms": list(seam_safe_missing_atoms(kept))}}
 
 
-def _evaluation_dump(ev) -> dict:
-    dump = without_e9_shapes({k: v for k, v in ev.model_dump(mode="json").items() if k not in EVALUATION_ADDED})
+def _rth_only_ema9(ev) -> str | None:
+    """The start-of-step `ema9`: EMA(ma.fast) of the RTH run alone, as dumped."""
+    from cobalt.radar.anatomy.indicators import InsufficientBars, ema
+
+    try:
+        value = ema(ev.working, sup.defaults().ma.fast).value if ev.working else None
+    except InsufficientBars:
+        value = None
+    return None if value is None else str(value)
+
+
+def _evaluation_dump(ev, ld=None) -> dict:
+    from test_setups_d1 import _unmoved
+
+    step2 = _unmoved(ev, ld)  # STEP-3's exact normalisation (ema9, atr_seeded, served atoms)
+    step2["ema9"] = _rth_only_ema9(ev)
+    dump = without_e9_shapes({k: v for k, v in step2.items() if k not in EVALUATION_ADDED})
     if dump.get("formation"):
         dump["formation"] = {k: v for k, v in dump["formation"].items() if k not in FORMATION_ADDED}
         dump["formation"]["assumed_keys"] = [RENAMED_KEYS.get(k, k) for k in dump["formation"]["assumed_keys"]]
@@ -151,7 +175,8 @@ def _card_dump(card: dict) -> dict:
 
 @pytest.mark.parametrize("name", sorted(PIN_EVALUATIONS))
 def test_lego_ii_every_evaluation_is_byte_identical_through_the_registries(defs, name):
-    dumps = [_evaluation_dump(ev) for ticker in ("FTFT", "BGFI") for _, ev in shapes.every_scan(defs[name], ticker)]
+    dumps = [_evaluation_dump(ev, defs[name]) for ticker in ("FTFT", "BGFI")
+             for _, ev in shapes.every_scan(defs[name], ticker)]
     assert _sha(dumps) == PIN_EVALUATIONS[name]
 
 

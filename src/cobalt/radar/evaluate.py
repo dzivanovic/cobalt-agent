@@ -121,9 +121,10 @@ from cobalt.taxonomy.tunables import TunableRow, TunableSource
 from .anatomy.bars import IncompleteBucket, WorkingBar, rth_only, working_bars
 from .anatomy.daily import DailySeries, NoDailyBars, htf_level_proximity
 from .anatomy.extension import ExtensionObservation, ExtensionParams
-from .anatomy.frame import Frame, build_frame
+from .anatomy.frame import Frame, SessionInputs, build_frame, minute_bars, premarket_buckets
 from .anatomy.freshness import RvolObservation, daily_staleness, intraday_staleness
-from .anatomy.indicators import InsufficientBars, ema
+from .anatomy.indicators import InsufficientBars, WARMUP_CONVENTION
+from .anatomy.session_levels import DAYRANGE_CONVENTION, VWAP_CONVENTION
 from .anatomy.registry import evaluability
 from .anatomy.structure import StructuralStop, TrackedExtreme, TriggerLevel
 from .formation.atoms import ATOMS, AtomValue
@@ -512,6 +513,10 @@ ASSUMED_CONVENTIONS: tuple[str, ...] = ("anatomy.orientation.extension",)
 #: label is refused (`not_evaluable: <key>=<label>`), never guessed.
 CONVENTION_LABELS: dict[str, str] = {
     "anatomy.orientation.extension": "long_opposes_unqualified_extension",
+    # STEP-3 (D1): the conventions the frame's resolvers implement.
+    WARMUP_CONVENTION: "premarket_complete_buckets_else_rth_only",  # A-05, `indicators.seeded`
+    DAYRANGE_CONVENTION: "rth_high_low_since_open",  # A-06, `session_levels.day_range`
+    VWAP_CONVENTION: "rth_anchored_typical_price_i1",  # A-12, `session_levels.vwap`
 }
 
 
@@ -594,6 +599,49 @@ def stop_on_protective_side(direction: str, *, trigger: Decimal, stop: Decimal, 
     return stop > max(trigger, last_close)
 
 
+def _closed_i1(member: MemberInput) -> list[Bar]:
+    today = [bar for bar in member.bars if bar.ts.astimezone(ET).date() == member.trade_date]
+    return [bar for bar in today if bar.ts + timedelta(minutes=1) <= member.as_of]
+
+
+def _daily_ok(member: MemberInput, clock) -> bool:
+    if member.daily is None:
+        return False
+    return not daily_staleness(
+        member.daily, trade_date=member.trade_date, is_trading_day=clock.calendar.is_trading_day
+    ).stale
+
+
+def _build_frames(
+    member: MemberInput, closed_i1: Sequence[Bar], series, run: tuple[WorkingBar, ...], *, daily_ok: bool,
+    tunables: Mapping[str, TunableRow], params: ExtensionParams, last_price: Decimal | None, clock,
+) -> dict[str, Frame]:
+    """FINAL §2.1: one frame per side; the detectors run inside the frame.
+    §5: the seed is the complete premarket working buckets of `series`."""
+    premarket_i1, rth_i1 = minute_bars(closed_i1, as_of=member.as_of, clock=clock)
+    session = SessionInputs(premarket=premarket_buckets(series.bars, clock), premarket_i1=premarket_i1,
+                            rth_i1=rth_i1, departed=member.departed)
+    return {
+        side: build_frame(side, run, daily=member.daily, daily_ok=daily_ok, trade_date=member.trade_date,
+                          params=params, last_close=last_price, session=session, tunables=tunables)
+        for side in ("long", "short")
+    }
+
+
+def member_frames(
+    member: MemberInput, *, tunables: Mapping[str, TunableRow], defaults: TaxonomyDefaults, clock,
+) -> dict[str, Frame]:
+    """Both frames of one member at its `as_of`, built exactly as
+    `evaluate_member` builds them."""
+    closed_i1 = _closed_i1(member)
+    series = working_bars(closed_i1, working_minutes(defaults), as_of=member.as_of)
+    return _build_frames(
+        member, closed_i1, series, tuple(rth_only(series, clock)), daily_ok=_daily_ok(member, clock),
+        tunables=tunables, params=ExtensionParams.from_tunables(tunables),
+        last_price=closed_i1[-1].close if closed_i1 else None, clock=clock,
+    )
+
+
 def evaluate_member(
     ld: LoadedDef,
     member: MemberInput,
@@ -605,8 +653,7 @@ def evaluate_member(
 ) -> MemberEvaluation:
     td = ld.definition
     minutes = working_minutes(defaults)
-    today = [bar for bar in member.bars if bar.ts.astimezone(ET).date() == member.trade_date]
-    closed_i1 = [bar for bar in today if bar.ts + timedelta(minutes=1) <= member.as_of]
+    closed_i1 = _closed_i1(member)
     consumed = tuple(bar_row(bar) for bar in closed_i1)
     last_bar = closed_i1[-1] if closed_i1 else None
     last_price = last_bar.close if last_bar else None
@@ -654,17 +701,9 @@ def evaluate_member(
         intraday_stale = intraday_staleness(
             observed_at=last_bar.ts + timedelta(minutes=1), as_of=member.as_of, scan_interval=scan_interval
         ).stale
-    daily_ok = False
-    if member.daily is not None:
-        daily_ok = not daily_staleness(
-            member.daily, trade_date=member.trade_date, is_trading_day=clock.calendar.is_trading_day
-        ).stale
-    # FINAL §2.1: one frame per side; the detectors run inside the frame.
-    frames = {
-        side: build_frame(side, run, daily=member.daily, daily_ok=daily_ok, trade_date=member.trade_date,
-                          params=params, last_close=last_price)
-        for side in ("long", "short")
-    }
+    daily_ok = _daily_ok(member, clock)
+    frames = _build_frames(member, closed_i1, series, run, daily_ok=daily_ok, tunables=tunables, params=params,
+                           last_price=last_price, clock=clock)
     # R2-4.2 B: factor and seam observations ONCE, on the real bars.
     ext, htf = frames["long"].extension, frames["long"].htf
 
@@ -672,15 +711,16 @@ def evaluate_member(
         ext, member, intraday_stale=intraday_stale, daily_ok=daily_ok, last_price=last_price,
         scan_interval=scan_interval,
     )
-    ema9 = None
-    try:
-        ema9 = ema(run, defaults.ma.fast).value if run else None
-    except InsufficientBars:
-        ema9 = None
+    # [F-10]: EMA9 has ONE definition — seeded, falling back to RTH-only —
+    # and `ema9` (the FILLED card's health input) takes it. `atr_working`
+    # stays the Extension's RTH-run ATR; `atr_seeded` is published beside it.
+    ema9 = frames["long"].number("EMA9")
+    atr_seeded = frames["long"].number("ATR(working_tf)")
     seam_obs = [
         _obs("session_open", ext.session_open, run[0].ts if run else None),
         _obs("last_close", last_price, last_bar.ts if last_bar else None),
         _obs("atr_working", ext.atr.value if ext.atr else None, ext.atr.last_bar_ts if ext.atr else None),
+        _obs("atr_seeded", atr_seeded, frames["long"].warm[-1].ts if atr_seeded is not None else None),
         _obs("distance_from_open_atr", ext.distance_from_open_atr),
         _obs("volume_threshold", ext.band.threshold if ext.band else None, ext.culminating_bar_ts),
         _obs("culminating_volume", ext.culminating_volume, ext.culminating_bar_ts),
@@ -1665,7 +1705,8 @@ def _state(value: str):
 
 __all__ = [
     "ASSUMED_CONVENTIONS", "Anchor", "AtomValue", "CATALYST_REVIEW_FIELDS", "CONVENTION_LABELS", "CardUpdate",
-    "EVALUATOR_VERSION", "SideOutcome", "assumed_closure", "closure_keys", "convention_refusals", "publish_frames",
+    "EVALUATOR_VERSION", "SideOutcome", "assumed_closure", "closure_keys", "convention_refusals", "member_frames",
+    "publish_frames",
     "EvaluateError", "EvaluateStage", "FACTOR_COMPUTERS", "Formation", "LoadedDef", "MemberEvaluation",
     "MemberInput", "OpenRadarCard", "ReceiptChain", "ReplayError", "ReplayedCard", "StageOutcome",
     "UNCLASSIFIED_SETUP", "assumed_keys_of", "build_receipt", "canonical_sha256", "card_dots",

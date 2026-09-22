@@ -43,6 +43,10 @@ from cobalt.taxonomy.predicate import (
 )
 
 from ..anatomy import extension as _extension
+from ..anatomy import in_play as _in_play
+from ..anatomy import indicators as _indicators
+from ..anatomy import session_levels as _levels
+from ..anatomy import slope as _slope
 
 
 class AtomValue(BaseModel):
@@ -62,24 +66,52 @@ class AtomResolver:
     value_kind: Literal["boolean", "number", "symbol"]
     #: A symbol atom's producible values (E8); None for boolean/number atoms.
     domain: frozenset[str] | None = None
-    #: The number is a price: negated back before it is published (X12).
+    #: The number flips sign with the mirror (a price, or a price slope):
+    #: negated back before it is published (X12).
     price: bool = False
     #: R2-2.2 term (2): the serving detector's own `TUNABLE_KEYS`.
     tunable_keys: tuple[str, ...] = ()
     #: R2-2.2 term (3): conventions this atom's resolver implements.
     conventions: tuple[str, ...] = ()
+    #: Every reason the frame can give for no value (X11); a `null` value
+    #: reaches the seam as `not_instantiated`.
+    reasons: tuple[str, ...] = ()
 
 
 def _serves(*resolvers: AtomResolver) -> dict[str, AtomResolver]:
     return {r.name: r for r in resolvers}
 
 
+_EXT_REASONS = ("insufficient_bars", "incomplete_bucket", "catalyst_ref_unknown")
+_WARM = _indicators.WARMUP_CONVENTION
+_SLOPE_REASONS = ("insufficient_seed", "insufficient_bars", "slope_norm.bars_unset")
+
 ATOMS: dict[str, AtomResolver] = _serves(
     AtomResolver("Extension.state", "symbol", domain=frozenset({"culminating", "none"}),
-                 tunable_keys=_extension.TUNABLE_KEYS),
-    AtomResolver("Extension.instantiated", "boolean", tunable_keys=_extension.TUNABLE_KEYS),
-    AtomResolver("Extension.leg_count", "number", tunable_keys=_extension.TUNABLE_KEYS),
-    AtomResolver("RangeBreak(HTF).day_count", "number"),
+                 tunable_keys=_extension.TUNABLE_KEYS, reasons=_EXT_REASONS),
+    AtomResolver("Extension.instantiated", "boolean", tunable_keys=_extension.TUNABLE_KEYS, reasons=_EXT_REASONS),
+    AtomResolver("Extension.leg_count", "number", tunable_keys=_extension.TUNABLE_KEYS,
+                 reasons=(*_EXT_REASONS, "not_instantiated")),
+    AtomResolver("RangeBreak(HTF).day_count", "number",
+                 reasons=("no_daily_bars", "insufficient_bars", "not_instantiated")),
+    # --- D1 (STEP-3): shared indicators + session levels -------------------
+    AtomResolver("price", "number", price=True, reasons=("insufficient_bars",)),
+    AtomResolver("EMA9", "number", price=True, conventions=(_WARM,), reasons=("insufficient_seed",)),
+    AtomResolver("EMA21", "number", price=True, conventions=(_WARM,), reasons=("insufficient_seed",)),
+    AtomResolver("ATR(working_tf)", "number", conventions=(_WARM,), reasons=("insufficient_seed",)),
+    AtomResolver("EMA9.slope", "number", price=True, tunable_keys=_slope.TUNABLE_KEYS, conventions=(_WARM,),
+                 reasons=_SLOPE_REASONS),
+    AtomResolver("slope_norm(EMA9)", "number", price=True, tunable_keys=_slope.TUNABLE_KEYS,
+                 conventions=(_WARM,), reasons=_SLOPE_REASONS),
+    AtomResolver("slope_norm(VWAP)", "number", price=True, tunable_keys=_slope.TUNABLE_KEYS,
+                 conventions=(_levels.VWAP_CONVENTION, _WARM), reasons=_SLOPE_REASONS),
+    AtomResolver("VWAP", "number", price=True, conventions=(_levels.VWAP_CONVENTION,),
+                 reasons=("insufficient_bars",)),
+    *(AtomResolver(f"DayRange.{part}", "number", price=True, conventions=(_levels.DAYRANGE_CONVENTION,),
+                   reasons=("insufficient_bars",)) for part in ("high", "low", "upper_third")),
+    *(AtomResolver(name, "number", price=True, reasons=("not_instantiated",)) for name in ("PMH", "PML")),
+    *(AtomResolver(name, "number", price=True, reasons=("no_daily_bars",)) for name in ("PDH", "PDL")),
+    AtomResolver("InPlay.state", "symbol", domain=_in_play.DOMAIN, tunable_keys=_in_play.TUNABLE_KEYS),
 )
 
 

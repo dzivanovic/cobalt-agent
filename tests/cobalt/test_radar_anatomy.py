@@ -495,8 +495,9 @@ def test_unsupported_atoms_trigger_and_stop_are_named_missing():
     )
     result = evaluability(td)
     assert not result.evaluable
+    # `VWAP` is served from STEP-3 of the setups one build (FINAL §3 D1).
     assert set(result.missing_atoms) == {
-        "Range(micro).instantiated", "Leg(pullback)", "VWAP", "touched",
+        "Range(micro).instantiated", "Leg(pullback)", "touched",
         "trigger:range_break", "stop:structural_extreme:range_base",
     }
 
@@ -522,6 +523,10 @@ def test_shipped_synthetic_def_reports_not_evaluable_with_its_missing_atoms():
 
 
 def test_supported_atoms_are_exactly_the_s2_detectors():
+    # + the D1 atoms of the setups one build STEP-3 (FINAL §3 D1)
     assert frozenset(SUPPORTED_ATOMS) == frozenset(
-        {"Extension.state", "Extension.instantiated", "Extension.leg_count", "RangeBreak(HTF).day_count"}
+        {"Extension.state", "Extension.instantiated", "Extension.leg_count", "RangeBreak(HTF).day_count",
+         "price", "EMA9", "EMA21", "EMA9.slope", "slope_norm(EMA9)", "slope_norm(VWAP)", "VWAP",
+         "ATR(working_tf)", "DayRange.high", "DayRange.low", "DayRange.upper_third", "PMH", "PML", "PDH", "PDL",
+         "InPlay.state"}
     )

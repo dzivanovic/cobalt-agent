@@ -12,3 +12,5 @@ Closed Pydantic payloads for the two JSONB columns of `system.radar_score` (0006
 
 ## Gotchas
 The models forbid unknown keys and are frozen. The database only checks that the columns are JSON objects; the closure lives here. WHY prose, per-trade thresholds and settings content belong to the user side (`card_dots`, `radar_score_receipt`). `test_radar_score_carries_no_trade_def_content` asserts that a valid payload cannot express them.
+
+**2026-09-21 — X11 (setups one build STEP-3).** The closed `UnavailableReason` gains two values. `insufficient_seed` (FINAL §5 [F-14]) is used when a seeded indicator has fewer than `period` premarket buckets and a too-short RTH run. `slope_norm.bars_unset` is used when the `A-11` row is null. X11 was run on the start code: it constructed an `AtomOutcome` for every planned D1 atom × reason, and exactly these two failed validation. Each is a named reason, not free text. Every D1 atom spelling already validated as a bare atom.

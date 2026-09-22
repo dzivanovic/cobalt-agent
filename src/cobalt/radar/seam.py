@@ -44,7 +44,9 @@ from cobalt.taxonomy.predicate import (
 IDENTIFIER = r"^[a-z][a-z0-9_]*$"
 VERSION = r"^[a-z0-9][a-z0-9_.-]*$"
 
-#: Why an atom has no value this run. Closed on purpose.
+#: Why an atom has no value this run. Closed on purpose. X11 (setups one
+#: build STEP-3) added the two a D1 atom can give: `insufficient_seed`
+#: (FINAL §5 [F-14]) and `slope_norm.bars_unset` (a null `A-11` row).
 UnavailableReason = Literal[
     "catalyst_ref_unknown",
     "insufficient_bars",
@@ -52,6 +54,8 @@ UnavailableReason = Literal[
     "no_daily_bars",
     "not_instantiated",
     "detector_missing",
+    "insufficient_seed",
+    "slope_norm.bars_unset",
 ]
 
 

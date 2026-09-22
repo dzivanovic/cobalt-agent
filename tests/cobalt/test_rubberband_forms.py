@@ -481,11 +481,20 @@ CARD_EXCLUDED = {"setup_ref", "why", "card_score", "score_suppressed", "dots", "
 
 def _non_formed(ld) -> list:
     """STEP-2 re-point: minus `by_side` (added) and E9's `Unsupported(<kind>)`
-    names (`test_setups_registries.without_e9_shapes`)."""
-    from test_setups_registries import without_e9_shapes
+    names (`test_setups_registries.without_e9_shapes`). STEP-3 re-point: the
+    seeded `ema9` restored to its RTH-only value, `atr_seeded` dropped, the
+    newly served D1 atoms re-added to `missing` ([F-10], [F-11], §3 D1)."""
+    from test_setups_d1 import _unmoved
+    from test_setups_registries import _rth_only_ema9, without_e9_shapes
 
-    return [without_e9_shapes({k: v for k, v in ev.model_dump(mode="json").items() if k != "by_side"})
-            for ticker in ("FTFT", "BGFI") for _, ev in shapes.every_scan(ld, ticker) if ev.evaluation != "formed"]
+    out = []
+    for ticker in ("FTFT", "BGFI"):
+        for _, ev in shapes.every_scan(ld, ticker):
+            if ev.evaluation == "formed":
+                continue
+            dump = {**_unmoved(ev, ld), "ema9": _rth_only_ema9(ev)}
+            out.append(without_e9_shapes({k: v for k, v in dump.items() if k != "by_side"}))
+    return out
 
 
 def test_t6_non_formed_evaluations_are_byte_identical(defs):
