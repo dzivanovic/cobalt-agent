@@ -375,3 +375,105 @@ def test_f5_stop_buffer_is_labelled_dollars_with_the_committed_value():
     row = load_tunables().by_key["stop.buffer"]
     assert row.unit == TunableUnit.DOLLARS
     assert row.value == committed["value"]  # read from the file, never typed (L69)
+
+
+# =====================================================================
+# F6 — R61: the dials per setup, and one per-trade override proven to
+# reach the evaluator (no source change)
+# =====================================================================
+
+
+def _per_trade_accepted(root, slug, mapping, own_rows, key, unit) -> bool:
+    """Is a `tunables:<slug>` row for `key` accepted by the loader for this def?"""
+    import yaml
+
+    from cobalt.taxonomy.slug import per_trade_scope
+    from cobalt.taxonomy.vault_loader import STRATEGIES_DIR, VaultTaxonomyError, load_vault_trade_defs
+
+    if key in {r["key"] for r in own_rows}:
+        return True  # the note already carries it (its own `cfg(<trade key>.…)` dial)
+    row = {"key": key, "value": 1, "unit": unit, "scope": per_trade_scope(slug), "dynamic": True,
+           "status": "proposed", "source": "ruling", "consumers": ["a probe"]}
+    directory = root / STRATEGIES_DIR
+    directory.mkdir(parents=True, exist_ok=True)
+    body = yaml.safe_dump({"trade_def": mapping}, sort_keys=False).rstrip("\n")
+    unit_text = shapes.TUNABLES_UNIT.format(
+        slug=slug, body=yaml.safe_dump({"tunables": [*own_rows, row]}, sort_keys=False).rstrip("\n"))
+    (directory / f"{slug}.md").write_text(shapes.NOTE.format(slug=slug, name="Probe", body=body, tunables=unit_text))
+    try:
+        load_vault_trade_defs(vault_root=root)
+    except VaultTaxonomyError:
+        return False
+    return True
+
+
+def test_f6_a_the_dials_of_every_setup_and_where_each_is_tuned(tmp_path_factory):
+    """GREEN-as-pin, a report generator: per setup of the corpus (+ the eighth),
+    every key its formation reads (the declared closure + the note's own rows),
+    and whether a `tunables:<slug>` row reaches it. KEYS ONLY — no value."""
+    import test_setups_lego as lego
+    from cobalt.radar.evaluate import closure_keys
+
+    corpus = {key: (shape.note_slug, shape.mapping, shape.rows, shape.engine) for key, shape in shapes.SHAPES.items()}
+    corpus["example-lego-eighth"] = ("example-lego-eighth", lego.eighth_mapping, lambda: [], shapes.D2_CONSTRUCTED)
+    engine = sup.engine_tunables()
+    table = []
+    for setup, (slug, mapping, rows, fills) in corpus.items():
+        ld = shapes.load_note(tmp_path_factory.mktemp(f"dials-{setup}"), slug, mapping(), rows=rows(),
+                              engine=fills)
+        keys = sorted(closure_keys(ld.definition) | set(shapes.user_rows(ld)))
+        for key in keys:
+            unit = engine[key].unit.value if key in engine else shapes.user_rows(ld)[key].unit.value
+            reached = _per_trade_accepted(tmp_path_factory.mktemp(f"probe-{setup}"), slug, mapping(), rows(), key,
+                                          unit)
+            where = "per_trade" if reached else (
+                f"assumed / engine only ({engine[key].scope})" if key in engine else "UNPROVEN")
+            table.append((setup, key, where))
+    print("DIALS setup | key | reachable")
+    for setup, key, where in table:
+        print(f"DIALS {setup} | {key} | {where}")
+    assert not [row for row in table if row[2] == "UNPROVEN"], [row for row in table if row[2] == "UNPROVEN"]
+    # a per-trade dial exists only where the note's own text names `cfg(<trade key>.…)`
+    assert {(s, k) for s, k, w in table if w == "per_trade"} == {
+        ("hitchhiker", "example_drive_then_range.range_duration_band")}
+
+
+#: This file's own literals (L69): the reversal shape's per-trade trigger dial,
+#: the value the neutral shape writes as a literal, and an override of it.
+TUNED_SLUG, TUNED_KEY = "example-tuned-reversal", "example_tuned_reversal.bars_cleared"
+WIDE_SLUG, WIDE_KEY = "example-tuned-reversal-wide", "example_tuned_reversal_wide.bars_cleared"
+AS_WRITTEN, OVERRIDE = 2, 5
+
+
+def _tuned(root, slug, key, value):
+    mapping = shapes.rubberband_mapping(shapes.MIXED, htf_avoid=False)
+    mapping["trigger"]["params"]["bars_cleared"] = f"cfg({key})"
+    row = {"key": key, "value": value, "unit": "bars", "scope": f"per_trade({key.split('.')[0]})",
+           "dynamic": True, "status": "proposed", "source": "ruling", "consumers": ["trigger: bars_cleared"]}
+    return shapes.load_note(root, slug, mapping, rows=[row])
+
+
+def _formed(ld):
+    out = []
+    for m in range(0, 391, 2):
+        at = shapes.DAY_START + timedelta(minutes=m)
+        ev = shapes.evaluate(ld, "FTFT", at)
+        if ev.evaluation == "formed":
+            f = ev.formation
+            out.append((at.isoformat(), f.trade_direction, str(f.trigger.price), f.trigger.bars_cleared))
+    return out
+
+
+def test_f6_b_a_per_trade_override_in_the_notes_unit_reaches_the_evaluator(tmp_path_factory):
+    """GREEN-as-pin (a PROOF of the tuning path R61 relies on): the reversal
+    shape with its trigger's `bars_cleared` as a per-trade dial — at the value
+    the neutral shape writes, the formations equal the literal note's; overridden
+    in the note's `tunables:<slug>` unit, they change."""
+    literal = _formed(shapes.load_shape_fresh("rubberband-without-htf-avoid"))
+    as_written = _formed(_tuned(tmp_path_factory.mktemp("tuned"), TUNED_SLUG, TUNED_KEY, AS_WRITTEN))
+    overridden = _formed(_tuned(tmp_path_factory.mktemp("wide"), WIDE_SLUG, WIDE_KEY, OVERRIDE))
+    print(f"F6 (b) literal note: formed_scans={len(literal)} first={literal[:1]}")
+    print(f"F6 (b) per-trade dial at {AS_WRITTEN}: formed_scans={len(as_written)} first={as_written[:1]}")
+    print(f"F6 (b) per-trade dial overridden to {OVERRIDE}: formed_scans={len(overridden)} first={overridden[:1]}")
+    assert literal and as_written == literal
+    assert overridden != literal

@@ -15,6 +15,8 @@ A setup is a **definition** in a strategy note; the radar evaluates it with the 
 - `leg.min_size_atr` (`A-24`, R49): the minimum high − low, in working-TF ATR, of a `Leg(pullback)` / `Leg(impulse)`; null = no size rule. His to tune live (L53) — through an assumed row, never committed config.
 - An assumed default: `1 - Trading/Assumed Defaults.md`, unit `tunables:assumed`, `source: assumed` until the owner rules it (`ruling`). It fills an engine hole only of the same scope and unit; a `per_indicator(<ind>)` hole takes an assumed row of that same scope (R48). A formation on an assumed key carries the untappable `assumed_formation` dot and no score.
 
+**Tuning is the noise tool (R61).** No per-setup switch exists — `radar.cards_enabled` stays the one switch; a setup that fires too often is quieted by its numbers. Two places, and only two: (1) its OWN numbers — any `cfg(<trade_key>.<field>)` its definition text names — in the note's `tunables:<slug>` unit (`per_trade`); a row there for an engine key is refused (`merge_tunables`: a note may only ADD keys); (2) the engine keys its formation reads (its declared closure, `evaluate.closure_keys`) — `global` / `per_indicator` holes — through `1 - Trading/Assumed Defaults.md` rows. Both are changed by the desk on his word (L65) and loaded by `cobalt taxonomy load`. The per-setup table of which dial sits where: the fix r3 report, `## DIALS`.
+
 ## How to check it before it goes live
 
 1. `cobalt taxonomy validate` / `cobalt taxonomy load` — the note parses and loads.

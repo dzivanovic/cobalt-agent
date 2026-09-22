@@ -195,9 +195,34 @@ After: `102 passed, 6 skipped in 198.16s` over `test_rubberband_forms.py test_se
 OFFLINE → `2451 passed, 361 skipped, 1 xfailed, 15 warnings in 476.25s (0:07:56)` → **2451/0** = 2450 + 1 new F5 test.
 
 ### COMMIT
+`953e22b fix(setups): round 3 — F5 stop.buffer unit label cents to dollars, value unchanged (R51)` — `git show --stat HEAD`: 8 files, `68 insertions(+), 5 deletions(-)`: `tunables.yaml`, `ADDING-A-SETUP.md`, `taxonomy/tunables.md`, this report, `tunables.py`, `test_setups_d1.py`, `test_setups_fix_r3.py`, `test_setups_registries.py`.
+
+## F6
+R61 — the dials per setup, and one per-trade override proven to reach the evaluator. No source change.
+
+### T
+Both GREEN-as-pin (no code change is this row's). (a) a report generator: per setup of `SHAPES` (the seven) + `example-lego-eighth`, every key of `closure_keys(def)` ∪ the note's own rows, and per key whether a `tunables:<slug>` row for it is ACCEPTED by `load_vault_trade_defs` (a probe note written into a `tmp_path` vault per key) — KEYS ONLY. Printed table → `## DIALS` verbatim. It would turn red if a per-trade row began to shadow an engine key, or a setup gained a per-trade dial unannounced. `UNPROVEN` keys: none. (b) the reversal shape (`rubberband-without-htf-avoid`) with its trigger's `bars_cleared` written as `cfg(<trade_key>.bars_cleared)` and a `tunables:<slug>` row — at the value the neutral shape writes as a literal, and overridden by this file's literal — over every 2-minute scan of the committed FTFT day, VERBATIM:
+- `F6 (b) literal note: formed_scans=71 first=[('2026-01-06T16:24:00+00:00', 'short', '4.8500', 2)]`
+- `F6 (b) per-trade dial at 2: formed_scans=71 first=[('2026-01-06T16:24:00+00:00', 'short', '4.8500', 2)]`
+- `F6 (b) per-trade dial overridden to 5: formed_scans=71 first=[('2026-01-06T16:24:00+00:00', 'short', '4.6220', 5)]`
+The override REACHES the evaluator (trigger price and `bars_cleared` change; the same scans form). Also run once on the F1 tree before F2–F5 (same lines). `2 passed, 17 deselected in 26.42s`. It would turn red if the per-trade path stopped reaching the trigger. No `ASK DESK` needed.
+
+### C
+None (tests and the doc only).
+
+### A1
+None.
+
+### D
+`ADDING-A-SETUP.md` § Where its dials go + one paragraph: tuning is the noise tool (R61), per_trade in the note's unit (only the note's own `cfg(<trade_key>.…)` keys — a note row for an engine key is refused), engine keys through `Assumed Defaults` rows, changed by the desk on his word (L65), loaded by `cobalt taxonomy load`. (`wc -l` → 104, under the Lego (v) cap of 120.)
+
+### SUITE
+OFFLINE → `2453 passed, 361 skipped, 1 xfailed, 15 warnings in 503.62s (0:08:23)` → **2453/0** = 2451 + 2 new F6 tests.
+
+### COMMIT
 (below)
 
 ## CONTINUE
-next: F5 COMMIT, then F6 (draft in the job tmp dir, pre-run green on the F1 tree) (T drafted in the job tmp dir; the base roles pin captured: `F3 roles on the committed day: 160 observations sha=0922dadc29013941a7a2512e038ba9310e4fb791bc3a5e53bdd17a4bf5dd6323`)
+next: F6 COMMIT, then CLOSE (T drafted in the job tmp dir; the base roles pin captured: `F3 roles on the committed day: 160 observations sha=0922dadc29013941a7a2512e038ba9310e4fb791bc3a5e53bdd17a4bf5dd6323`)
 
 (run in progress — row 2 of 6, next under ## CONTINUE)
