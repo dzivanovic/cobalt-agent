@@ -1,6 +1,6 @@
 # FACTS PACKET — float handicap H1 (NOT a prompt; the builder of `27-handicap-h1-build.md` reads it at STEP-0), 2026-09-22
 
-Drafted by the Opus prompt seat `handicap-h1-draft-0922` (12:35 ET, `date`), from reads only: v3 `docs/30 - Design/FLOAT-HANDICAP-v3-2026-09-21.md`, the derive-r2 report `docs/40 - DevDocs/reports/float-handicap-tribunal-derive-r2-2026-09-22.md`, `cto-2026-09-22.md` §4 R26, and the code on main `d2d82e7`. **Keys only.** No threshold, factor, cap, time or filter value of his appears here (L32). Every `file:line` below is a CLAIM of this seat, re-read by you before you rely on it (L35).
+Drafted by the Opus prompt seat `handicap-h1-draft-0922` (12:35 ET, `date`), from reads only: v3 `docs/30 - Design/FLOAT-HANDICAP-v3-2026-09-21.md`, the derive-r2 report `docs/40 - DevDocs/reports/float-handicap-tribunal-derive-r2-2026-09-22.md`, `cto-2026-09-22.md` §4 R26, and the code on main `d2d82e7`. **Keys only.** No threshold, factor, cap, time or filter value of his appears here (L32). Every `file:line` below is a CLAIM of this seat, re-read by you before you rely on it (L35). **Re-issued whole** (L19) by the Opus 5.5 prompt seat `build-lane-draft-0922` (2026-09-22 14:4x ET, `date`) to fold his owner rulings R52–R57 (`cto-2026-09-22.md` §4, 14:19–14:23 ET) into §2 and §3; nothing else changed.
 
 ## 1. THE RULING — R26 "B" (his, 12:28 ET, `cto-2026-09-22.md` §4 row R26)
 
@@ -21,7 +21,7 @@ Three nullable columns on `system.radar_membership` (v3 §6 table; one additive 
 | Column | Meaning under B | When NULL |
 |---|---|---|
 | `raw_rank INTEGER` | the `_ranked()` index of this scan: `ranks[ticker]` from `pool.py:210-212`, no factor applied to anyone. Stored under either answer (v3 §1 common ground). | on rows that were not ranked this scan (HOLD, manual EXCLUDE/LEAVE, screen-inactive LEAVE, never-admitted LEAVE) |
-| `handicap_factor NUMERIC(6,4)` | the factor `h` for this name: `handicap.factor` when the verdict applies it (`yes`, or `unknown` with `missing: apply`), otherwise 1. It is the would-be factor even in shadow: grok's O1 is taken; Fable's "applied = 1 in shadow" variant is owner item 9 and is NOT taken. | the block is absent, OR the handicap step failed (§5) |
+| `handicap_factor NUMERIC(6,4)` | the factor `h` for this name: `handicap.factor` when the verdict applies it (`yes`, or `unknown` with `missing: apply`), otherwise 1. It is the would-be factor even in shadow: grok's O1 is taken; Fable's "applied = 1 in shadow" variant is owner item 9 and is NOT taken (R55). **On a scan with a DEAD column (R54, `27` STEP-4A) it is 1 for EVERY name — a computed "inoperative" outcome, stored, never NULL.** | the block is absent, OR the handicap step failed (§5) |
 | `handicap JSONB` | the Pydantic-validated object below | the block is absent, OR the handicap step failed |
 
 The `handicap` object, `extra="forbid"`, exactly v3 §6's keys. `decisive` is H2's and is NOT written by H1:
@@ -31,7 +31,7 @@ The `handicap` object, `extra="forbid"`, exactly v3 §6's keys. `decisive` is H2
 | `float_m` | the `Shares Float` cell of the source `source_for[ticker]` names, parsed by `_number` (`runner.py:391-398`), in millions of shares (F5). `null` when blank, `-` or unparseable. |
 | `market_cap_m` | the `Market Cap` cell of that same source, in $ millions (F5). `null` as above. |
 | `verdict` | `yes` / `no` / `unknown` per [F-10] under the block's `combinator` (`any` / `all`). |
-| `reason` | which test put it in the group (`float` / `cap` / both), or why it is `unknown` (which cell was blank). Plain words; no value of his. |
+| `reason` | which test put it in the group (`float` / `cap` / both), or why it is `unknown` (which cell was blank); on a dead-column scan, `handicap inoperative — dead column: <header> (<source>)` (R54). Plain words; no value of his. |
 | `missing_rule` | the block's `missing` key as read (`apply` / `skip`). This is his value, stored as data on the row, never written in code. |
 | `mode` | the block's `mode` as read (`shadow` / `live`). |
 | `position` | **under B: the name's `raw_rank`**, the dividend of `eff = raw_rank ÷ factor`. It repeats the column so the JSONB replays alone (L57). |
@@ -47,16 +47,16 @@ The 13 items of the derive-r2 report's `## OWNER ITEMS`. None is a precondition 
 
 1. `handicap.float_below_m` and `handicap.market_cap_below_m`: his R28 / R29 values. The desk writes them (L65) only after the deployed parser accepts the block.
 2. `handicap.factor`: the flat size, set after the H1 dry-run.
-3. `handicap.missing`: `apply` / `skip`.
-4. `handicap.combinator`: `any` / `all`. His to flip without a build (R29).
+3. `handicap.missing`: `apply` / `skip`. **RULED R52 "A" (14:19 ET).** His value goes in the block the desk writes (L65), never in code; the build tests both values.
+4. `handicap.combinator`: `any` / `all`. His to flip without a build (R29). **RULED R53 "A" (14:19 ET).** Same: his value in the block; both verdict tables built and tested.
 5. `handicap.mode`: `shadow` until his typed approve of `live`. That approve names the note path, the post-edit sha256 and the dry-run report path, and is not given before H3 is in production.
 6. Shadow length, in sessions, before the approve.
 7. A graded `shape:` key or a per-screen exempt. Later, not this build.
-8. What `missing: apply` means on a DEAD column. grok's reading is taken: apply `h` to every name, and the banner says the order is unchanged.
-9. Storage variant (applied factor = 1 in shadow). Not taken; §2 above stores the would-be factor.
-10. Chunk shape (H1a / H1b split; one-place fail-soft catch). grok's chunk order is taken. The fail-soft catch is decided in §5 below from the code, as the drafting prompt ordered, and is not his item.
-11. Whether a `decisive` name is shown apart on `/radar`. That is H2's concern.
-12. Exact-tie rule: the unhandicapped name first. This lives INSIDE B's text (`(eff, in_group, raw_rank)`), so R26 carried it.
+8. What `missing: apply` means on a DEAD column. **RULED R54 "B" (14:21 ET) — THE ONE DESIGN CHANGE:** Fable's (d) reading, NOT grok's: a DEAD column (a source's whole float / market-cap column blank, or its header missing) makes the handicap INOPERATIVE at factor 1 for that scan, with `handicap` in `degraded_sources` and its reason; it overrides `missing` for that case only; per-name unknowns on a live column still follow `missing` (R52). Built at `27` STEP-4A; written into v3 [F-10] at `27` STEP-0.
+9. Storage variant (applied factor = 1 in shadow). Not taken; §2 above stores the would-be factor. **RULED R55 "A" (14:22 ET): keep the design as written.**
+10. Chunk shape (H1a / H1b split; one-place fail-soft catch). grok's chunk order is taken. The fail-soft catch is decided in §5 below from the code, as the drafting prompt ordered, and is not his item. **RULED R55 "A" (14:22 ET): keep the design as written.**
+11. Whether a `decisive` name is shown apart on `/radar`. That is H2's concern. **RULED R56 "A" (14:23 ET): the `config_cap (handicap)` suffix only, no separate group — H2 builds it; nothing in H1.**
+12. Exact-tie rule: the unhandicapped name first. This lives INSIDE B's text (`(eff, in_group, raw_rank)`), so R26 carried it. **RULED R57 "A" (14:23 ET): confirmed.**
 13. POOL-WIDE vs TIER-BOUND: **RULED — R26 "B".**
 
 ## 4. THE EXPERIMENTS H1 RUNS FIRST (v3 `## First-gate experiments (L70)`; STEP-1 of `27`)
@@ -67,7 +67,7 @@ Each one ends `AS EXPECTED` or `NOT AS EXPECTED`, with its output verbatim. Outp
 |---|---|---|---|
 | **X2 (FIRST)** | the marginal seat's tier on the retained 2026-09-18 RTH scans. After the `first_from` time: equity names on the `first_from` screen against `cap`, and all screen names against `cap`. This is his evidence for B's bite and the dry-run's "tier of the cut" line. | the retained cache `/Users/cobalt/cobalt/data/radar-cache/2026-09-18/` (read-only), his pool block through the existing reader (counts only) | never, alone. It changes the dry-run's WORDING: if the marginal seat is a list, `first_from`, held or stickiness seat, the sentence "keeps its seat iff `p ≤ h × c`" is NOT printed by the dry-run (grok X2). The day being gone from the cache = `UNPROVEN — day expired`, and it runs on the oldest retained day instead, named. |
 | X4 | on MAIN's code, a pool note carrying `handicap:` freezes the pool (`pool_error`, F14) rather than crashing the cycle; under H1's code the same note parses. | offline: `notes.parse_note_bytes` on a scratch copy of `tests/fixtures/radar/radar-screens.real-shape.md` plus a constructed `handicap:` block (builder's literals) | if main CRASHES instead of freezing, the rollback hazard is worse than a freeze. That is an ESCALATE for the deploy's rollback order, not a build stop. |
-| X1 | blank `Shares Float` / `Market Cap` on equity rows, per source, per retained day | the fixtures named in v3 X1 plus every retained cache day | a source that is MOSTLY blank means `missing: apply` un-handicaps that source, and the all-unknown banner must fire PER SOURCE (grok). STOP + ESCALATE: that is a design change. |
+| X1 | blank `Shares Float` / `Market Cap` on equity rows, per source, per retained day; plus (measure only) scans with a DEAD column per source (R54's case) | the fixtures named in v3 X1 plus every retained cache day | a source that is MOSTLY blank means `missing: apply` un-handicaps that source, and the all-unknown banner must fire PER SOURCE (grok). STOP + ESCALATE: that is a design change. (A WHOLLY blank column is no longer that question: R54 makes it inoperative.) |
 | X3 | the live export's cell format (currency symbol, B/M/K suffix, unit) through `_number`; `Price × Shares Outstanding` against `Market Cap` | every cached cell of the two headers | a suffix, a symbol or a unit mismatch. STOP + ESCALATE: the thresholds would leave the export's units. |
 | X5 | the S5 receipt's `pool_unit` carries `SourceSet.metrics` (`runner.py:319-323` dumps `source_sets` whole: from reads, expected YES) | offline: build `pool_unit` from a constructed SourceSet and read the dump; `cobalt_dev`'s stored receipts where any exist | `metrics` absent. STOP + ESCALATE: the L57 claim is false after the cache expires. |
 | X6 | a `degraded_sources` entry for `handicap` renders its reason on the panel (`radar_panel.py:586-588` joins names) | offline panel test | only the name renders. This is NOT a stop: H1's panel change renders the reason (v3 X6's own consequence). |
