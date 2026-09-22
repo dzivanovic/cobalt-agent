@@ -365,7 +365,7 @@ def test_slope_slope_norm_and_a_null_window_key():
     assert n.value == (Decimal("1.9") - Decimal("1.0")) / (3 * Decimal("0.3"))
     assert slope_norm(series, 3, atr=Decimal(0)).unavailable == "insufficient_bars"  # never inf
     assert slope_bars({"slope_norm.bars": _row("slope_norm.bars", None)}) is None  # → `slope_norm.bars_unset`
-    assert slope_bars({"slope_norm.bars": _row("slope_norm.bars", 3)}) == 3
+    assert slope_bars({"slope_norm.bars": _row("slope_norm.bars", 5)}) == 5
     with pytest.raises(KeyError):
         slope_bars({})  # a missing row is a config error, loud
 
@@ -445,7 +445,7 @@ def test_the_committed_day_every_d1_atom_has_a_value_with_a_constructed_window()
     from cobalt.radar.anatomy.session_levels import vwap as _vwap
     from cobalt.session.models import Session
 
-    tunables = {**sup.engine_tunables(), "slope_norm.bars": _row("slope_norm.bars", 3)}
+    tunables = {**sup.engine_tunables(), "slope_norm.bars": _row("slope_norm.bars", 4)}
     frames = _frames(tunables=tunables)
     long = frames["long"]
     for name in D1_ATOMS - {"InPlay.state"}:
@@ -466,7 +466,7 @@ def test_the_committed_day_every_d1_atom_has_a_value_with_a_constructed_window()
 
 
 def test_f04_the_short_frame_reads_the_mirrored_levels():
-    tunables = {**sup.engine_tunables(), "slope_norm.bars": _row("slope_norm.bars", 3)}
+    tunables = {**sup.engine_tunables(), "slope_norm.bars": _row("slope_norm.bars", 4)}
     frames = _frames(tunables=tunables)
     long, short = frames["long"], frames["short"]
     for name in ("price", "EMA9", "EMA21", "VWAP"):

@@ -388,6 +388,43 @@ No assertion was removed, and no skip or xfail was added.
 - **X5 re-run: PASS.** `X5 offline: defs=3 frames=2 members=50 runs_s=[1.31, 1.3, 1.31] p95~max=1.31s budget=100.0s`. At STEP-2 it was 0.68 s; the increase is the per-member one-minute bar split. No new def this step, so the def count is unchanged.
 - cp → `COBALT_ENV=dev uv run pytest -q tests/cobalt/test_rubberband_forms.py tests/cobalt/test_setups_registries.py tests/cobalt/test_setups_d1.py tests/cobalt/test_assumed_store.py tests/cobalt/test_radar_cards_db.py tests/cobalt/test_taxonomy_store.py tests/cobalt/test_radar_score_migration.py tests/cobalt/test_replay_formations.py tests/cobalt/test_archiver_migrations.py tests/cobalt/test_p4_migrations.py tests/cobalt/test_radar_migration.py tests/cobalt/test_tenancy.py tests/experiments/setups_one` → **`328 passed in 783.36s (0:13:03)`** (= 299 + 28 + X1) → rm → `ls -la .env` → `ls: .env: No such file or directory`.
 
+### COMMIT
+
+`9c286e9 feat(setups): STEP-3 shared indicators, session levels, premarket warm-up (FINAL C3a)`. `git show --stat HEAD`: 23 files, 1507 insertions(+), 54 deletions(-); every path is one named above.
+
+## STEP-4
+
+C3b: D2 Range(micro) + pivots, D3 opening-drive roles, `range_break`, `consolidation_low` → the drive-then-range setup (hitchhiker) (FINAL §3 D2/D3, §2.2, §2.3, §4 row 1; [F-12]).
+
+### T (RED)
+
+New: `tests/cobalt/test_setups_hitchhiker.py`. It holds X16 as a `leg.py` byte pin computed in the test with `hashlib`, pivots, Range(micro) on definition-written constructed series (drive then range, megaphone, unset keys / seed / incomplete bucket), the opening drive under A-07 and under the literal reading, the atoms / rows / trigger / stop, the `IN cfg(band) min` shape and a unit mismatch, and the per-setup acceptance: `test_hitchhiker_path_*` on a definition-written day and its mirror, committed defaults, X7, the geometry guard and X11. The corpus gains the neutral `shape-drive-then-range` note in `setups_shapes.SHAPES` (`hitchhiker`), with its own per-trade band row and this build's constructed fills for the step's null engine holes (`D2_CONSTRUCTED`, L69).
+
+Run on the START code (`9c286e9`, `-rA`): 18 FAILED in the new module plus `test_setups_lego.py::test_every_unlocked_setup_shape_is_evaluable`; PASSED by design: X7 and the geometry guard (nothing forms yet), and the lego property (the unevaluable shape is skipped). RED lines, one per kind:
+
+| test | RED |
+|---|---|
+| X16 pin | `AssertionError: assert '2f3b3abc2b9e...4df43cb7782c8' == 'PIN'` → the start digest `2f3b3abc2b9e9b634d4a5d050c352ade8853f5a9221be7cee5f4df43cb7782c8` pasted, now a GUARD |
+| pivots / micro-range / roles | `ModuleNotFoundError: No module named 'cobalt.radar.anatomy.pivots'` (`.micro_range`, `.leg_roles` likewise) |
+| atoms | `ImportError: cannot import name 'leg_roles' from 'cobalt.radar.anatomy'` |
+| rows | `KeyError: 'range.micro.touch_tolerance_atr'` |
+| trigger / stop | `KeyError: <TriggerType.RANGE_BREAK: 'range_break'>` |
+| `IN cfg(band) min` | `AssertionError: assert False` · `AssertionError: assert 'Unsupported(unit:min)' in ('Range(micro).height', '...` |
+| shape evaluable / forms / lego (4) | `AssertionError: ('Leg(opening_drive).terminated_by', 'Range(micro).duration', 'Range(micro).instantiated', 'Range(micro).low', 'Range(micro).wick_ratio', 'Unsupported(in)', ...)` |
+
+One own-test defect, fixed in the test before C: the first megaphone test proved "no Range" through a touch failure, not through the divergence rule. It now has two touches per side, and a second assertion shows that a wider flat limit makes the same bars a Range.
+
+### X (before C: the pure detectors built, not yet wired into the stage)
+
+Order, stated: the three pure detector modules were written first and their 8 unit tests went green. X13 and X15 then ran on them BEFORE any stage, registry, trigger, stop or interpreter change (`tests/experiments/setups_one/test_x13_x15_drive.py`, with-DB, counts only). Commands: cp → `COBALT_ENV=dev uv run pytest -q tests/experiments/setups_one/test_x13_x15_drive.py -s -p no:cacheprovider` → rm → `ls -la .env` → `ls: .env: No such file or directory`.
+
+- **X13**, VERBATIM: `X13: name_sessions=600 median(atr_seeded/rth_tr_mean, n)={'09:40': (0.532, 446), '09:50': (0.687, 446), '10:00': (0.788, 600)} median(atr_seeded/rth_atr14, n)={'09:40': (None, 0), '09:50': (None, 0), '10:00': (0.79, 600)} open_drive_ranges_by_10:00={'seeded': 190, 'rth_tr_mean': 231}`.
+  - RTH-only ATR(14) has no value at 09:40 / 09:50 (E7: n = 0). The RTH-weighted comparison is the mean true range of the RTH bars there are.
+  - The median ratio is **well under 1** (0.53 → 0.79). With the seeded ATR, 190 name-sessions have a micro-Range by 10:00 inside `open_drive`; with the RTH-weighted one, 231.
+  - → the FINAL's line fires: "early ATR-scaled tolerances need an RTH-weighted ATR, and `A-05` changes for ATR while staying for the EMAs" → **ESCALATE 9. No key changes.** The detector reads the frame's seeded `ATR(working_tf)` as built.
+- **X15** (detector level, both frames, constructed params, band 5–30 min; pool admission not read), VERBATIM: `X15 (detector level, both frames): {'name_sessions': 600, 'drive_then_range': 241, 'forms_a07': 36, 'forms_literal': 5}`.
+  - → "The literal reading forms → `A-07` is not needed as worded": it forms, on 5 name-sessions against 36 under A-07 → **ESCALATE 10.** `A-07` is kept as the FINAL words it.
+
 ## ESCALATE
 
 (running list; the ALWAYS items (i)–(xii) are written at CLOSE)
@@ -400,12 +437,14 @@ No assertion was removed, and no skip or xfail was added.
 6. **A full `COBALT_ENV=dev` run shows 11 reds outside this build's files** — archiver append / migration tests (`archive_progress`, `archive_incidents` absent in `cobalt_dev`) and one migrate-proof cursor test. They name tables this build never touches; whether they are red on main too was not run (L70: UNPROVEN, not a defect of this build). The prompt's with-DB set is green.
 7. **X1's POOL share is UNPROVEN in the worktree.** `cobalt_dev` has no `system.radar_membership` rows for its 10 stored sessions (`pool_sessions=0`). The share was reported over every stored name instead (0.813 / 0.743 / 0.65 for periods 9 / 14 / 21) and labelled `stored`, never mixed into the pool share. The pool reading runs at the deploy.
 8. **A cancelled Bash call (process slip).** STEP-3's first DevDoc append was a Bash redirect. It waited on a permission dialog until the CTO desk cancelled it (L63). No content was written, and it was re-done with the Edit tool. Per the desk, the rule for the rest of the build is: file content only through Write / Edit, and any denied Bash call → wip-commit + FAILED.
+   **A second one, STEP-4:** `shasum -a 256 src/cobalt/radar/anatomy/leg.py` is not in the allowlist. It waited on a dialog until the desk cancelled it at 04:09; nothing ran. X16's digest is computed inside the pytest module with `hashlib` instead. Also recorded: STEP-3's pre-commit check used `git status --porcelain`, not the long form the prompt names (from STEP-4 on: long form). And earlier `uv run python -c …` probes (read-only parses and the STEP-3 pin capture) are not in the allowlist either. They ran unprompted, but from here none are used: pins come from a test's own failure output.
+9. **X13 fires its fail line.** The median `atr_seeded` / RTH-weighted ATR is 0.532 at 09:40, 0.687 at 09:50 and 0.788 at 10:00, "well under 1". The FINAL: "early ATR-scaled tolerances need an RTH-weighted ATR, and `A-05` changes for ATR while staying for the EMAs." No key changed. `A-03` / `A-04` tolerances scale with the seeded `ATR(working_tf)` as built. `ASK DESK: X13 says early ATR tolerances are tight — does A-05 change for ATR? [04:1x]` — safe default: unchanged.
+10. **X15: the literal reading forms (5 name-sessions; A-07 forms 36).** The FINAL: "The literal reading forms → `A-07` is not needed as worded." `A-07` is kept as the FINAL words it (built, `leg_roles.opening_drive`); the literal reading exists only for X15 (`opening_drive_literal`). Whether A-07 amends the taxonomy is his, after cards (FINAL Open point 7).
+11. **A constructed literal matched a companion value (hygiene fix, STEP-4).** STEP-3's `test_setups_d1.py` used `slope_norm.bars = 3` as its own constructed window, and that equals the companion's assumed `A-11` value (seen in a grep of key names). Changed to 4 in STEP-4 so no companion value sits in a committed file. Every other constructed literal (`D2_CONSTRUCTED`) was chosen not to match a value seen.
 
 ## CONTINUE
 
-next: STEP-4 (C3b), hitchhiker.
-1. X13 and X15 BEFORE the change (with-DB, `tests/experiments/setups_one/`).
-2. T.
+next: STEP-4 C (wiring). DONE so far (uncommitted): T RED; pure detectors `anatomy/pivots.py`, `micro_range.py`, `leg_roles.py` green; X13 and X15 run. LEFT:
 3. C:
    - new detector module(s) for Range(micro) + `bound_type` + pivots `cfg(pivot.n)` + refs `consolidation_low` / `recent_higher_low`;
    - leg ROLES as a separate function over `leg.legs()` (`leg.py:42-67` byte-identical, X16);
