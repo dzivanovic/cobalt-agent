@@ -2,7 +2,8 @@
 
 ## §0 Headline
 - BUILT: a red `STALE` badge on the pool row and on every active card (strip, ARMED `last`, LEVELS `last`) of a ticker whose bars poll is failing (R36), in `radar_panel.py` only. Branch `s2/stale-marker-0921` on `5b208a0`, tip `ead43a0` (C1 `0d961e6`, D1 `ead43a0`).
-- Offline suite `2230 passed, 351 skipped, 1 xfailed, 0 failed` (baseline 2222); 8 new tests RED on main's code, GREEN on the change; healthy-view pins GREEN on both.
+- Offline suite `2230 passed, 351 skipped, 1 xfailed, 0 failed` (baseline 2222); 8 new tests — 5 RED on main's code then GREEN on the change, 3 guards ((b) ×2, (f)) GREEN on both (T1: `5 failed, 3 passed`); healthy-view pins GREEN on both.
+- [corrected 2026-09-22 — fix round r2, `prompts/2026-09-22/09-stale-marker-fix.md`; round-1 check `68` ESCALATE 2 found this line said "8 new tests RED on main's code, GREEN on the change"; T1 is unchanged.]
 - `cards` / `radar` / `store.py` / `web.py` / `configs` diffs EMPTY. RESTARTS: `com.cobalt.aset` only. No browser ran (L70).
 - ESCALATE: 6 (stale-`last` scoring item is his; browser/layout unproven; three clocks; assumed look; main moved after the cut; two small test/report deviations).
 

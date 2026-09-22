@@ -618,6 +618,175 @@ def test_bars_stale_leaves_the_banner_and_degraded_line_byte_identical():
     assert sha(banner) == PIN_BARS_BANNER_SHA256, sha(banner)
 
 
+# ---------------------------------------------------------------------
+# Fix round 2 (2026-09-22) — F1, F4: mixed-ticker exactness of the STALE badge
+# ---------------------------------------------------------------------
+
+
+def _two_current(failures):
+    """`_bars_poll_failed_pool(failures=…)`'s pool plus ONE extra `current`
+    episode from the real fixture, shaped exactly as `_small_snapshot()`
+    shapes its own current row. Returns (pool_row, members, second_ticker)."""
+    pool_row, members = _bars_poll_failed_pool(failures=failures)
+    second = copy.deepcopy(
+        next(
+            row
+            for row in POOL_FIXTURE["membership"]
+            if row["entered_at"] is not None
+            and row["ticker"] not in {m["ticker"] for m in members}
+        )
+    )
+    second["left_at"] = None
+    second["closed_scan_id"] = None
+    second.setdefault("rank_metric", None)
+    second.setdefault("rank_value", None)
+    pool_row["members"] = 2
+    return pool_row, members + [second], second["ticker"]
+
+
+def test_bars_stale_badge_marks_only_the_stale_one_of_two_current_rows():
+    """F1: the current-row badge must single out the stale ticker among two
+    current rows, never every current row whenever any poll failure exists."""
+    ticker_a = _pool_row_ticker()
+    _, _, ticker_b = _two_current(None)
+    assert ticker_a != ticker_b
+    assert ticker_a != "GURE" and ticker_b != "GURE"
+
+    pool_row0, members0, ticker_b0 = _two_current(None)
+    assert ticker_b0 == ticker_b
+    view0, _ = _build(pool_row=pool_row0, members=members0)
+    assert [b.title for b in view0.pool.banners] == ["BARS POLL FAILED"]
+    assert len(view0.pool.current) == 2
+
+    def _run_case(failures):
+        pool_row, members, _ = _two_current(failures)
+        view, _ = _build(pool_row=pool_row, members=members)
+        assert [b.title for b in view.pool.banners] == ["BARS POLL FAILED"]
+        assert len(view.pool.current) == 2
+        pool = _pool_layer(panel.render_radar_page(view))
+        attr = re.search(r'data-bars-stale="([^"]*)"', pool).group(1)
+        assert json.loads(html.unescape(attr)) == {f["ticker"]: _tip(f) for f in failures}
+        return pool
+
+    # CASE 1 — A stale, B healthy
+    failures_1 = [
+        _failure(ticker_a, "stale", "2026-01-05 15:19:00+00:00"),
+        _failure("GURE", "stale", "2026-01-05 14:40:00+00:00"),
+    ]
+    pool = _run_case(failures_1)
+    assert pool.count('class="bars-stale"') == 1
+    a_cell = (
+        f'<td class="ticker">{ticker_a}'
+        f'<span class="bars-stale" title="{_tip(failures_1[0])}">STALE</span></td>'
+    )
+    b_cell = f'<td class="ticker">{ticker_b}</td>'
+    assert a_cell in pool
+    assert b_cell in pool
+    idx = pool.index(b_cell)
+    row_start = pool.rindex("<tr ", 0, idx)
+    row_end = pool.index("</tr>", idx) + len("</tr>")
+    b_row = pool[row_start:row_end]
+    assert 'data-category="current"' in b_row
+    assert "bars-stale" not in b_row
+
+    # CASE 2 — same, A and B swapped
+    failures_2 = [
+        _failure(ticker_b, "stale", "2026-01-05 15:19:00+00:00"),
+        _failure("GURE", "stale", "2026-01-05 14:40:00+00:00"),
+    ]
+    pool = _run_case(failures_2)
+    assert pool.count('class="bars-stale"') == 1
+    b_cell_stale = (
+        f'<td class="ticker">{ticker_b}'
+        f'<span class="bars-stale" title="{_tip(failures_2[0])}">STALE</span></td>'
+    )
+    a_cell_plain = f'<td class="ticker">{ticker_a}</td>'
+    assert b_cell_stale in pool
+    assert a_cell_plain in pool
+    idx = pool.index(a_cell_plain)
+    row_start = pool.rindex("<tr ", 0, idx)
+    row_end = pool.index("</tr>", idx) + len("</tr>")
+    a_row = pool[row_start:row_end]
+    assert 'data-category="current"' in a_row
+    assert "bars-stale" not in a_row
+
+
+def test_bars_stale_badge_never_marks_a_departed_or_excluded_row_sharing_a_stale_ticker():
+    """F4: a departed or excluded row sharing a ticker with a stale current
+    row must never carry the badge — the badge is per-CATEGORY row, not
+    per ticker."""
+    _, snapshot_members = _small_snapshot()
+    ticker_c, ticker_d, ticker_x = (row["ticker"] for row in snapshot_members)
+    assert len({ticker_c, ticker_d, ticker_x}) == 3
+
+    # (i) current, departed and excluded rows all sharing failures
+    failures = [
+        _failure(ticker_c, "stale", "2026-01-05 15:19:00+00:00"),
+        _failure(ticker_d, "stale", "2026-01-05 14:40:00+00:00"),
+        _failure(ticker_x, "error", "2026-01-05 15:36:00+00:00"),
+    ]
+    pool_row, members = _bars_poll_failed_pool(failures=failures)
+    view, _ = _build(pool_row=pool_row, members=members)
+    pool = _pool_layer(panel.render_radar_page(view))
+    rows = re.findall(r'<tr data-episode-id="\d+" data-category="(\w+)">(.*?)</tr>', pool, re.S)
+    assert [category for category, body in rows if "bars-stale" in body] == ["current"]
+    assert {category for category, _ in rows} == {"current", "departed", "excluded"}
+    assert f'<td class="ticker">{ticker_d}</td>' in pool
+    assert f'<td class="ticker">{ticker_x}</td>' in pool
+    banner = next(b for b in view.pool.banners if b.title == "BARS POLL FAILED")
+    for ticker in (ticker_c, ticker_d, ticker_x):
+        assert ticker in banner.detail
+
+    # (ii) SAME ticker, one admitted episode current and another departed
+    by_ticker: dict[str, list[dict]] = {}
+    for row in POOL_FIXTURE["membership"]:
+        if row["entered_at"] is not None:
+            by_ticker.setdefault(row["ticker"], []).append(row)
+    candidate = None
+    for ticker, episodes in by_ticker.items():
+        if len({e["id"] for e in episodes}) < 2:
+            continue
+        for e2 in episodes:
+            if e2["left_at"] is not None and datetime.fromisoformat(e2["left_at"]) < NOW:
+                e1 = next(e for e in episodes if e["id"] != e2["id"])
+                candidate = (ticker, e1, e2)
+                break
+        if candidate:
+            break
+    assert candidate is not None, (
+        "ASK DESK: no ticker with two admitted episodes in panel-pool.real-shape.json"
+        " — sub-case (ii) not built"
+    )
+    ticker_t, e1, e2 = candidate
+    e1c = copy.deepcopy(e1)
+    e1c["left_at"] = None
+    e1c["closed_scan_id"] = None
+    e1c.setdefault("rank_metric", None)
+    e1c.setdefault("rank_value", None)
+    e2c = copy.deepcopy(e2)
+    e2c.setdefault("rank_metric", None)
+    e2c.setdefault("rank_value", None)
+    t_failure = _failure(ticker_t, "stale", "2026-01-05 15:19:00+00:00")
+    pool_row_ii, members_ii = _bars_poll_failed_pool(failures=[t_failure])
+    if ticker_t == ticker_c:
+        # T is _small_snapshot()'s own current ticker: drop its own current
+        # row rather than carry two current rows for one ticker.
+        members_ii = members_ii[1:]
+    members_ii = members_ii + [e1c, e2c]
+    pool_row_ii["members"] = sum(
+        1 for m in members_ii if m["entered_at"] is not None and m["left_at"] is None
+    )
+    view_ii, _ = _build(pool_row=pool_row_ii, members=members_ii)
+    pool_ii = _pool_layer(panel.render_radar_page(view_ii))
+    t_current_cell = (
+        f'<td class="ticker">{ticker_t}'
+        f'<span class="bars-stale" title="{_tip(t_failure)}">STALE</span></td>'
+    )
+    t_departed_cell = f'<td class="ticker">{ticker_t}</td>'
+    assert t_current_cell in pool_ii
+    assert t_departed_cell in pool_ii
+
+
 @pytest.mark.parametrize(
     ("radar_store", "settings_store", "tunables_loader", "message"),
     [

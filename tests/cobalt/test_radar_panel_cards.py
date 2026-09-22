@@ -501,6 +501,101 @@ def test_bars_stale_badge_marks_a_lifecycle_card_outside_the_pool(evaluated):
     assert page.count(strip) == len(ladder_view.active) == 4  # keyed by ticker, not pool membership
 
 
+def test_bars_stale_badge_marks_only_the_stale_ticker_among_active_cards(evaluated):
+    """F2 (round 2): the card-strip badge must single out the stale ticker
+    among two active cards of different tickers, never every active card.
+    No parametrize over phone_frame here — X4 covers the frame."""
+    rows = copy.deepcopy(evaluated["rows"])
+    extra = copy.deepcopy(rows[0]) | {"card_id": 7, "ticker": "BGFI"}
+    rows.append(extra)
+    ladder_view = _ladder(rows)
+    assert {c.ticker for c in ladder_view.active} == {"FTFT", "BGFI"}
+    assert "BGFI" not in {m["ticker"] for m in pool_tests._small_snapshot()[1]}
+
+    def _articles(page):
+        ladder = page[page.index('id="ladder-layer"') : page.index('id="pool-layer"')]
+        return dict(
+            re.findall(r'<article class="ladder-item[^"]*" data-card-id="(\d+)">(.*?)</article>', ladder, re.S)
+        )
+
+    # CASE 1 — FTFT stale, BGFI healthy
+    case1 = _stale_case(evaluated, row=False, gure=False)
+    assert case1.card_ticker == "FTFT"
+    page1 = _page(case1.pool, ladder_view)
+    articles1 = _articles(page1)
+    ftft_badge = _badge_html(case1.tips["FTFT"])
+    for card in ladder_view.active:
+        if card.ticker == "FTFT":
+            assert f"<b>FTFT{ftft_badge}</b>" in articles1[str(card.id)]
+    bgfi_article1 = articles1["7"]
+    assert "bars-stale" not in bgfi_article1
+    assert "<b>BGFI</b>" in bgfi_article1
+    plain_articles = _articles(_page(pool_tests._build()[0].pool, ladder_view))
+    assert bgfi_article1 == plain_articles["7"]
+
+    # CASE 2 — BGFI stale, FTFT healthy
+    failures2 = [pool_tests._failure("BGFI", "error", "2026-01-05 15:30:00+00:00")]
+    pool_row2, members2 = pool_tests._bars_poll_failed_pool(failures=failures2)
+    built2, _ = pool_tests._build(pool_row=pool_row2, members=members2)
+    tip_bgfi = pool_tests._tip(failures2[0])
+    badge_bgfi = _badge_html(tip_bgfi)
+    page2 = _page(built2.pool, ladder_view)
+    articles2 = _articles(page2)
+    bgfi_article2 = articles2["7"]
+    assert f"<b>BGFI{badge_bgfi}</b>" in bgfi_article2
+    assert bgfi_article2.count('class="bars-stale"') == 2
+    assert "trigger-distance" not in bgfi_article2
+    for card in ladder_view.active:
+        if card.ticker == "FTFT":
+            assert "bars-stale" not in articles2[str(card.id)]
+    markup2 = pool_tests._main_markup(page2)
+    assert markup2.count('class="bars-stale"') == 2
+
+
+@pytest.mark.parametrize("path", ["/radar", "/radar?frame=phone"])
+def test_bars_stale_badge_renders_on_the_card_through_the_real_radar_route(monkeypatch, evaluated, path):
+    """F3 (round 2): the card badge must render through the REAL `/radar`
+    route (build_radar_panel → render_radar_page, unmonkeypatched), not only
+    through the pure renderer functions tests (a)-(c) and X3 call directly."""
+    rows = copy.deepcopy(evaluated["rows"])
+    extra = copy.deepcopy(rows[0]) | {"card_id": 7, "ticker": "BGFI"}
+    rows.append(extra)
+    ladder_view = _ladder(rows)
+    case = _stale_case(evaluated, gure=False)
+    assert case.row_ticker != "BGFI" and case.card_ticker == "FTFT"
+    monkeypatch.setattr(
+        web_module, "build_radar_panel",
+        lambda **kw: panel.RadarPanelView(pool=case.pool, ladder=ladder_view),
+    )
+    response = TestClient(web_module.app).get(path)
+    assert response.status_code == 200
+
+    ladder = response.text[response.text.index('id="ladder-layer"') : response.text.index('id="pool-layer"')]
+    ftft_badge = _badge_html(case.tips[case.card_ticker])
+    expected_ftft = len([c for c in ladder_view.active if c.ticker == "FTFT"])
+    assert ladder.count(f"<b>FTFT{ftft_badge}</b>") == expected_ftft
+    # Each active card's ticker prints twice: once in the strip (badge-eligible)
+    # and once, plain, in the detail pane's own "ticker" field (never badged —
+    # `_field(card, "ticker", "ticker", card.ticker)`, radar_panel.py:1040).
+    assert ladder.count("<b>BGFI</b>") == 2
+    articles = dict(
+        re.findall(r'<article class="ladder-item[^"]*" data-card-id="(\d+)">(.*?)</article>', ladder, re.S)
+    )
+    assert "bars-stale" not in articles["7"]
+
+    pool = pool_tests._pool_layer(response.text)
+    row_badge = _badge_html(case.tips[case.row_ticker])
+    assert f'<td class="ticker">{case.row_ticker}{row_badge}</td>' in pool
+
+    if "phone" in path:
+        assert 'class="phone-frame"' in response.text
+
+    expected = panel.render_radar_page(
+        panel.RadarPanelView(pool=case.pool, ladder=ladder_view), phone_frame="phone" in path
+    )
+    assert response.text == expected
+
+
 def test_bars_stale_follows_the_refreshed_pool_fragment_and_never_moves_the_ladder(evaluated):
     ladder_view = _ladder(evaluated["rows"])
     steps = [_stale_case(evaluated), None, _stale_case(evaluated, card=False)]  # stale -> healthy -> stale
