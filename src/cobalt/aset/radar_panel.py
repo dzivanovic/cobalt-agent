@@ -12,6 +12,7 @@ attests a note.
 from __future__ import annotations
 
 import html
+import json
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal
@@ -189,6 +190,7 @@ class PoolView(_ViewModel):
     stale: bool
     retained_prior_day: bool
     banners: list[BannerView]
+    bars_stale_tickers: dict[str, str] = Field(default_factory=dict, exclude=True)
     churn: ChurnDelta | None
 
 
@@ -608,6 +610,13 @@ def build_pool_view(
                 detail=f"Showing trading day {scan_day.isoformat()}",
             )
         )
+    bars_stale: dict[str, str] = {}
+    if poll_only:
+        for item in pool.poll_failures:
+            tooltip = f"{item.reason} since {clock.to_et(item.since):%H:%M} ET"
+            bars_stale[item.ticker] = (
+                f"{bars_stale[item.ticker]}; {tooltip}" if item.ticker in bars_stale else tooltip
+            )
 
     override_labels = []
     for key, override in block.overrides.items():
@@ -635,6 +644,7 @@ def build_pool_view(
         stale=stale,
         retained_prior_day=retained,
         banners=banners,
+        bars_stale_tickers=bars_stale,
         churn=churn,
     )
 
@@ -816,15 +826,17 @@ def _rank_value_cell(row: PoolRow) -> str:
     return f"{row.rank_metric} {format(row.rank_value.normalize(), 'f')}"
 
 
-def _pool_table(rows: list[PoolRow], title: str) -> str:
+def _pool_table(rows: list[PoolRow], title: str, *, bars_stale: dict[str, str] | None = None) -> str:
     e = html.escape
+    bars_stale = bars_stale or {}
 
     def render_row(row: PoolRow) -> str:
         entered_badge = '<b class="churn-in">ENTERED</b>' if row.entered_since else ""
         left_badge = '<b class="churn-out">LEFT</b>' if row.left_since else ""
+        stale_badge = _bars_stale_badge(bars_stale.get(row.ticker))
         return (
             f'<tr data-episode-id="{row.episode_id}" data-category="{row.category}">'
-            f'<td class="mono">{e(str(row.position or "—"))}</td><td class="ticker">{e(row.ticker)}</td>'
+            f'<td class="mono">{e(str(row.position or "—"))}</td><td class="ticker">{e(row.ticker)}{stale_badge}</td>'
             f'<td class="mono rank-value">{e(_rank_value_cell(row))}</td>'
             f"<td>{e(row.session.value)}</td><td>{e(row.source)}</td>"
             f"<td>{e(_fmt_dt(row.entered_at))} {entered_badge}</td>"
@@ -858,13 +870,18 @@ def render_pool(view: PoolView) -> str:
         )
     overrides = " · ".join(e(value) for value in view.override_labels)
     classes = "pool-layer stale-data" if view.stale else "pool-layer"
-    return f'''<section id="pool-layer" class="{classes}" data-watermark="{e(view.observed_watermark.isoformat())}">
+    stale_attr = (
+        f' data-bars-stale="{e(json.dumps(view.bars_stale_tickers, sort_keys=True))}"'
+        if view.bars_stale_tickers
+        else ""
+    )
+    return f'''<section id="pool-layer" class="{classes}" data-watermark="{e(view.observed_watermark.isoformat())}"{stale_attr}>
 <div id="refresh-status"></div>{banners}
 <header class="layer-head"><div><span class="eyebrow">POOL VIEW · LIVE</span><h2>{e(view.pool_key.upper())}</h2></div>
 <div class="pool-stats"><b>{view.members}</b> / {view.cap} admitted · clock {e(view.clock_session.value)} · scan {e(view.scan_session.value)} · rank by {e(view.rank_metric)}</div></header>
 <div class="pool-meta">Trading day {view.data_date.isoformat()} · last scan {e(_fmt_dt(view.last_scan_at))} · refresh {view.scan_interval}s {churn}</div>
 <div class="override-line">{overrides}</div>
-{_pool_table(view.current, "Current admitted")}
+{_pool_table(view.current, "Current admitted", bars_stale=view.bars_stale_tickers)}
 <details><summary>Departed admitted · {len(view.departed)}</summary>{_pool_table(view.departed, "Departed admitted")}</details>
 <details><summary>Never-admitted exclusions · {len(view.excluded)}</summary>{_pool_table(view.excluded, "Never-admitted exclusions")}</details>
 </section>'''
@@ -888,12 +905,21 @@ def _badge(owner: str) -> str:
     return f'<span class="badge badge-{html.escape(owner.lower())}">{html.escape(owner)}</span>'
 
 
-def _field(card: CardView, field: str, label: str, value: Any, *, tag: str = "span") -> str:
+def _bars_stale_badge(tooltip: str | None) -> str:
+    """The STALE badge (R36 2026-09-21): a second rendering of `poll_failures`,
+    the state the BARS POLL FAILED banner names (L3); wording, size and colour
+    ASSUMED — not ruled."""
+    return "" if not tooltip else f'<span class="bars-stale" title="{html.escape(tooltip)}">STALE</span>'
+
+
+def _field(
+    card: CardView, field: str, label: str, value: Any, *, tag: str = "span", after: str = ""
+) -> str:
     """One displayed card field: its label, its owner badge, its value."""
     shown = "—" if value is None or value == "" else str(value)
     return (
         f'<{tag} class="field" data-field="{field}">{html.escape(label)} {_badge(card.badges[field])} '
-        f'<b>{html.escape(shown)}</b></{tag}>'
+        f'<b>{html.escape(shown)}</b>{after}</{tag}>'
     )
 
 
@@ -952,8 +978,9 @@ def _key_row(card: CardView) -> str:
     return f'<div class="key-row">{"".join(buttons)}</div>'
 
 
-def _card_detail(card: CardView) -> str:
+def _card_detail(card: CardView, *, stale: str | None = None) -> str:
     e = html.escape
+    stale_badge = _bars_stale_badge(stale)
     health = "".join(
         f'<span class="health {item.status.replace("/", "-")}" title="{e(item.note)}">'
         f"{e(item.label)} · {item.status}</span>"
@@ -978,7 +1005,7 @@ def _card_detail(card: CardView) -> str:
     elif card.state is CardState.ARMED:
         state_body = (
             f'<div class="state-block armed-state"><b>ARMED · LOCKED</b>'
-            f'<div class="trigger-distance">last {e(str(card.last or "—"))} · trigger {e(str(card.trigger))}</div>'
+            f'<div class="trigger-distance">last {e(str(card.last or "—"))}{stale_badge} · trigger {e(str(card.trigger))}</div>'
             f"<div>key {e(card.grade or '—')} · {card.shares if card.shares is not None else '—'} sh · stop {e(str(card.stop))}</div></div>"
         )
     elif card.state is CardState.TRIGGERED:
@@ -1008,7 +1035,7 @@ def _card_detail(card: CardView) -> str:
  <div class="card-status" data-card-id="{card.id}"></div>
 </div>
 <aside class="detail-pane">
- <section data-detail="levels"><h4>LEVELS</h4><div class="fields">{_field(card, "entry", "trigger", card.trigger)}{_field(card, "stop", "stop", card.stop)}{_field(card, "trigger_price", "trigger at formation", card.trigger_evidence)}{_field(card, "structural_stop", "structural stop at formation", card.structural_stop)}{_field(card, "last_price", "last", card.last)}<span class="field">1R <b>{e(str(card.target_1r))}</b></span><span class="field">2R <b>{e(str(card.target_2r))}</b></span></div></section>
+ <section data-detail="levels"><h4>LEVELS</h4><div class="fields">{_field(card, "entry", "trigger", card.trigger)}{_field(card, "stop", "stop", card.stop)}{_field(card, "trigger_price", "trigger at formation", card.trigger_evidence)}{_field(card, "structural_stop", "structural stop at formation", card.structural_stop)}{_field(card, "last_price", "last", card.last, after=stale_badge)}<span class="field">1R <b>{e(str(card.target_1r))}</b></span><span class="field">2R <b>{e(str(card.target_2r))}</b></span></div></section>
  <section data-detail="rank"><h4>RANK + WHY</h4><div class="fields">{_field(card, "card_score", "score", card.card_score)}{_field(card, "conviction", "conviction", card.conviction)}{_field(card, "proximity", "proximity", card.proximity)}{_field(card, "pool_position", "pool", card.pool_position)}{_field(card, "proposed_key", "proposed key", card.proposed_key or "tap to propose")}{_field(card, "tapped_grade", "tapped", card.tapped_grade)}{_field(card, "sized_grade", "sized", card.sized_grade)}{_field(card, "grade", "key", card.grade)}{_field(card, "shares", "shares", card.shares)}{_field(card, "risk_budget", "risk $", card.risk_budget)}{_field(card, "snap_notice", "snap", card.snap_notice)}{_field(card, "score_suppressed", "suppressed", card.score_suppressed)}</div></section>
  <section data-detail="card"><h4>CARD</h4><div class="fields">{_field(card, "ticker", "ticker", card.ticker)}{_field(card, "direction", "direction", card.direction)}{_field(card, "state", "state", card.display_state)}{_field(card, "setup_ref", "setup", card.setup)}{_field(card, "trade_def_slug", "trade", card.trade)}{_field(card, "formed_at", "formed", _fmt_dt(card.formed_at))}{_field(card, "expires_at", "expires", _fmt_dt(card.expires_at))}{_field(card, "health", "health", health_summary)}{_field(card, "outside_pool", "outside pool", "yes" if card.outside_pool else "no")}{_field(card, "scan_id", "scan", card.scan_id)}</div></section>
  <section data-detail="news"><h4>NEWS</h4><p>no news source wired to radar cards (S3)</p></section>
@@ -1017,9 +1044,10 @@ def _card_detail(card: CardView) -> str:
 </aside></div>'''
 
 
-def render_ladder(view: LadderView) -> str:
+def render_ladder(view: LadderView, *, bars_stale: dict[str, str] | None = None) -> str:
     """Pure HTML renderer for the card ladder."""
     e = html.escape
+    bars_stale = bars_stale or {}
     if view.empty_message:
         active_html = f'<div class="empty-state">{e(view.empty_message)}</div>'
     else:
@@ -1038,13 +1066,14 @@ def render_ladder(view: LadderView) -> str:
                     'type="button" title="pin to #2">promote ↑</button>'
                 )
             score = "—" if card.card_score is None else str(card.card_score)
+            stale = bars_stale.get(card.ticker)
             rows.append(
                 f'<article class="ladder-item{open_class}" data-card-id="{card.id}">'
                 f'<button class="strip" type="button" data-toggle-card="{card.id}"><span>#{index} · {score}</span>'
-                f"<b>{e(card.ticker)}</b><span>{e(card.setup)} → {e(card.trade)}</span>"
+                f"<b>{e(card.ticker)}{_bars_stale_badge(stale)}</b><span>{e(card.setup)} → {e(card.trade)}</span>"
                 f"<span>{e(card.display_state)} · {e(card.grade or 'no key')} · "
                 f"{card.shares if card.shares is not None else '—'} sh · stop {e(str(card.stop))}</span></button>"
-                f"{_card_detail(card)}{promote}</article>"
+                f"{_card_detail(card, stale=stale)}{promote}</article>"
             )
         active_html = "".join(rows)
     terminal_groups = []
@@ -1076,6 +1105,7 @@ PANEL_CSS = r"""
 @media (max-width:430px){body,.phone-frame{width:100%}.radar-wrap{width:366px;max-width:100%;padding:8px}.expanded{padding:5px}.card-pane,.detail-pane{padding:11px}.card-title strong{font-size:24px}.strip{padding:0 8px}.terminal-row{grid-template-columns:75px 65px 1fr}.terminal-row time{display:none}}
 .phone-frame{width:390px;margin:auto;border:12px solid #05070a;border-radius:26px}.phone-frame .radar-wrap{width:366px;padding:8px}
 .degraded-line{padding:3px 12px;border:1px solid var(--red);background:#351019;color:#ffd0d6;border-radius:5px;margin:6px 0 0;font-size:12px}.degraded-line[hidden]{display:none}
+.bars-stale{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--red);padding:1px 3px;color:var(--red);border-radius:3px;margin-left:4px;vertical-align:middle}
 """
 
 
@@ -1125,6 +1155,7 @@ PANEL_JS = r"""
    if(promote){post(promote.dataset.cardId,promote.dataset.promote==='release'?'/release':'/promote'); return;}
  });
  function mirrorDegraded(layer){const line=document.getElementById('degraded-line'); const parts=Array.from(layer.querySelectorAll('.refresh-failure,.panel-banner.degraded,.panel-banner.stale')).map(x=>x.innerHTML); const text=parts.join(' | '); if(line.innerHTML!==text){line.innerHTML=text;} const none=parts.length===0; if(line.hidden!==none){line.hidden=none;}}
+ function mirrorStale(layer){const stale=JSON.parse(layer.dataset.barsStale||'{}'); Array.from(document.querySelectorAll('.ladder-item')).forEach(function(item){const b=item.querySelector('.strip b'); if(!b||!b.firstChild){return;} const tip=stale[b.firstChild.nodeValue]; let mark=b.querySelector('.bars-stale'); if(tip&&!mark){mark=document.createElement('span'); mark.className='bars-stale'; mark.textContent='STALE'; b.append(mark);} if(mark&&!tip){mark.remove();} if(mark&&tip&&mark.title!==tip){mark.title=tip;}});}
  let cursor=document.getElementById('pool-layer').dataset.watermark;
  const interval=Number(document.body.dataset.refreshSeconds)*1000;
  async function refreshPool(){
@@ -1135,7 +1166,7 @@ PANEL_JS = r"""
      const payload=await response.json();
      const holder=document.createElement('div'); holder.innerHTML=payload.html;
      const next=holder.firstElementChild; if(!next){throw new Error('empty pool fragment');}
-     oldLayer.replaceWith(next); cursor=payload.pool.observed_watermark; mirrorDegraded(next);
+     oldLayer.replaceWith(next); cursor=payload.pool.observed_watermark; mirrorDegraded(next); mirrorStale(next);
    }catch(error){
      oldLayer.classList.add('refresh-failed','stale-data');
      oldLayer.querySelector('#refresh-status').innerHTML='<div class="refresh-failure"><b>REFRESH FAILED</b> · retained data is stale · '+String(error)+'</div>';
@@ -1151,7 +1182,7 @@ PANEL_JS = r"""
 def render_radar_page(view: RadarPanelView, *, phone_frame: bool = False) -> str:
     frame_class = "phone-frame" if phone_frame else ""
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Cobalt · Trade Radar</title><style>{PANEL_CSS}</style></head>
-<body class="{frame_class}" data-refresh-seconds="{view.pool.scan_interval}"><main class="radar-wrap"><nav><a href="/">ASET sheet</a></nav>{render_degraded_line(view.pool)}{render_ladder(view.ladder)}{render_pool(view.pool)}</main><script>{PANEL_JS}</script></body></html>'''
+<body class="{frame_class}" data-refresh-seconds="{view.pool.scan_interval}"><main class="radar-wrap"><nav><a href="/">ASET sheet</a></nav>{render_degraded_line(view.pool)}{render_ladder(view.ladder, bars_stale=view.pool.bars_stale_tickers)}{render_pool(view.pool)}</main><script>{PANEL_JS}</script></body></html>'''
 
 
 def render_failed_page(message: str, *, phone_frame: bool = False) -> str:

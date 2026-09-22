@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import html
 import json
 import os
@@ -521,6 +522,100 @@ def test_healthy_pool_output_is_unchanged_by_the_bars_gate(phone_frame):
     view, _ = _build()
     assert view.pool.banners == []
     assert "BARS POLL FAILED" not in panel.render_radar_page(view, phone_frame=phone_frame)
+
+
+# ---------------------------------------------------------------------
+# The STALE badge (R36 2026-09-21) — a second rendering of `poll_failures`
+# ---------------------------------------------------------------------
+
+
+def _hhmm(since: str) -> str:
+    return datetime.fromisoformat(since).astimezone(ET).strftime("%H:%M")
+
+
+def _failure(ticker: str, reason: str, since: str) -> dict:
+    """One real-shape `{ticker, reason, since}` poll-failure row."""
+    return {"ticker": ticker, "reason": reason, "since": since}
+
+
+def _tip(failure: dict) -> str:
+    """The badge tooltip: the banner's own `<reason> since HH:MM ET` fragment."""
+    return f"{failure['reason']} since {_hhmm(failure['since'])} ET"
+
+
+def _pool_row_ticker() -> str:
+    """The ONE current member `_small_snapshot()` returns."""
+    _, members = _small_snapshot()
+    current = members[0]
+    assert current["entered_at"] is not None and current["left_at"] is None
+    return current["ticker"]
+
+
+def _pool_layer(page: str) -> str:
+    start = page.index('id="pool-layer"')
+    return page[start : page.index("</section>", start) + len("</section>")]
+
+
+def _main_markup(page: str) -> str:
+    """The rendered markup between `<main` and `</main>` — PANEL_CSS / PANEL_JS
+    are asset text that names the class by design and are not part of it."""
+    return page[page.index("<main") : page.index("</main>")]
+
+
+# GOLDEN PINS captured on main's code (`5b208a0`), GREEN there — from then on a GUARD.
+PIN_DEGRADED_LINE_SHA256 = "d010eec4d275aebc376c35857e83d381da6fb1ca81098e9ebe5829ce491ef3fa"
+PIN_BARS_BANNER_SHA256 = "acc897ec31ee136eeaaad613f8a27c592cca57446a46d9eb1d52556e27491c79"
+
+
+def test_bars_stale_leaves_the_api_json_unchanged(monkeypatch):
+    row_ticker = _pool_row_ticker()
+    failures = [
+        _failure(row_ticker, "stale", "2026-01-05 15:19:00+00:00"),
+        _failure("GURE", "stale", "2026-01-05 14:40:00+00:00"),
+    ]
+    pool_row, members = _bars_poll_failed_pool(failures=failures)
+    view, _ = _build(pool_row=pool_row, members=members)
+    assert [b.title for b in view.pool.banners] == ["BARS POLL FAILED"]
+    assert "bars_stale_tickers" in panel.PoolView.model_fields
+    payload = panel.pool_api_payload(view.pool)
+    assert "bars_stale_tickers" not in payload["pool"]
+    assert set(payload["pool"]) == set(panel.PoolView.model_fields) - {"bars_stale_tickers"}
+    badge = f'<td class="ticker">{row_ticker}<span class="bars-stale" title="{_tip(failures[0])}">STALE</span></td>'
+    assert badge in payload["html"]
+    monkeypatch.setattr(
+        web_module,
+        "build_radar_panel",
+        lambda **kw: panel.build_radar_panel(
+            **{**kw, "now": NOW},
+            radar_store=FakeRadarStore(pool_row, members),
+            settings_store=FakeSettingsStore(),
+            card_store=FakeCardStore(),
+            clock=FakeClock(),
+            tunables_loader=_tunables(),
+        ),
+    )
+    client = TestClient(web_module.app)
+    response = client.get("/api/radar/pool", params={"since": "2026-01-05T15:00:00+00:00"})
+    assert response.status_code == 200
+    body = response.json()
+    assert "bars_stale_tickers" not in body["pool"]
+    assert badge in body["html"]
+    for path in ("/radar", "/radar?frame=phone"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert badge in _pool_layer(response.text)
+
+
+def test_bars_stale_leaves_the_banner_and_degraded_line_byte_identical():
+    """A GUARD: both digests were captured on main's code before the change."""
+    pool_row, members = _bars_poll_failed_pool()
+    view, _ = _build(pool_row=pool_row, members=members)
+    page = panel.render_radar_page(view)
+    banner = re.search(r'<div class="panel-banner degraded"><b>BARS POLL FAILED</b>.*?</div>', page).group(0)
+    degraded_line = panel.render_degraded_line(view.pool)
+    sha = lambda text: hashlib.sha256(text.encode()).hexdigest()  # noqa: E731
+    assert sha(degraded_line) == PIN_DEGRADED_LINE_SHA256, sha(degraded_line)
+    assert sha(banner) == PIN_BARS_BANNER_SHA256, sha(banner)
 
 
 @pytest.mark.parametrize(

@@ -14,6 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
+import html
+import json
 import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -23,6 +26,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import radar_p2_support as sup
+import test_radar_panel as pool_tests
 from cobalt.aset import radar_panel as panel
 from cobalt.aset import web as web_module
 from cobalt.aset.engine import size_at_key
@@ -361,6 +365,178 @@ def test_card_panel_escapes_why_and_notices(evaluated):
     rows[0]["why"] = '<script data-x="bad">&'
     rendered = panel.render_ladder(_ladder(rows))
     assert "<script data-x" not in rendered and "&lt;script data-x" in rendered
+
+
+# ---------------------------------------------------------------------
+# the STALE badge (R36 2026-09-21): pool row + card, a second rendering of
+# `poll_failures`. The pool view comes from the pool suite's own helpers.
+# ---------------------------------------------------------------------
+
+# GOLDEN PINS captured on main's code (`5b208a0`), GREEN there — from then on a GUARD.
+PIN_HEALTHY_POOL_SHA256 = "f2e79add6bc4d4286b381154b071b04ec9e7887467ffd15b0f499e9d62181552"
+PIN_HEALTHY_LADDER_SHA256 = "e617c53c1479314b6074de5409f289238479be31fbbd789b4ee19849f55370d7"
+PIN_HEALTHY_API_SHA256 = "450b3415c2346c8b13b53932c5175f56ee6af78877ca9fc8086ca824601c5462"
+
+# Tonight's `mirrorDegraded` line, byte for byte as main has it (`radar_panel.py:1127`).
+MIRROR_DEGRADED_LINE = r""" function mirrorDegraded(layer){const line=document.getElementById('degraded-line'); const parts=Array.from(layer.querySelectorAll('.refresh-failure,.panel-banner.degraded,.panel-banner.stale')).map(x=>x.innerHTML); const text=parts.join(' | '); if(line.innerHTML!==text){line.innerHTML=text;} const none=parts.length===0; if(line.hidden!==none){line.hidden=none;}}"""
+
+BADGE_RE = r'<span class="bars-stale" title="[^"]*">STALE</span>'
+
+
+def _sha(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _badge_html(tip: str) -> str:
+    return f'<span class="bars-stale" title="{html.escape(tip)}">STALE</span>'
+
+
+def _stale_case(evaluated, *, row=True, card=True, gure=True):
+    """The pool view for a stale set built on `_bars_poll_failed_pool` with tickers
+    that come FROM THE FIXTURES: the one current member of `_small_snapshot()`,
+    the evaluated cards' ticker (a card outside the pool) and the fixture's GURE."""
+    row_ticker = pool_tests._pool_row_ticker()
+    card_ticker = evaluated["rows"][0]["ticker"]
+    pool_tickers = {member["ticker"] for member in pool_tests._small_snapshot()[1]}
+    assert card_ticker not in pool_tickers and "GURE" not in pool_tickers
+    assert {r["ticker"] for r in evaluated["rows"]} == {card_ticker}
+    failures = []
+    if row:
+        failures.append(pool_tests._failure(row_ticker, "stale", "2026-01-05 15:19:00+00:00"))
+    if card:
+        failures.append(pool_tests._failure(card_ticker, "error", "2026-01-05 15:30:00+00:00"))
+    if gure:
+        failures.append(pool_tests._failure("GURE", "stale", "2026-01-05 14:40:00+00:00"))
+    pool_row, members = pool_tests._bars_poll_failed_pool(failures=failures)
+    built, _ = pool_tests._build(pool_row=pool_row, members=members)
+    assert [banner.title for banner in built.pool.banners] == ["BARS POLL FAILED"]
+    return SimpleNamespace(
+        row_ticker=row_ticker,
+        card_ticker=card_ticker,
+        tips={item["ticker"]: pool_tests._tip(item) for item in failures},
+        pool=built.pool,
+    )
+
+
+def _page(pool, ladder, phone_frame=False):
+    return panel.render_radar_page(panel.RadarPanelView(pool=pool, ladder=ladder), phone_frame=phone_frame)
+
+
+@pytest.mark.parametrize("phone_frame", [False, True])
+def test_bars_stale_badge_marks_exactly_the_failing_tickers(evaluated, phone_frame):
+    case = _stale_case(evaluated)
+    ladder_view = _ladder(evaluated["rows"])
+    page = _page(case.pool, ladder_view, phone_frame)
+    if phone_frame:
+        assert 'class="phone-frame"' in page
+    row_badge = _badge_html(case.tips[case.row_ticker])
+    card_badge = _badge_html(case.tips[case.card_ticker])
+
+    pool = pool_tests._pool_layer(page)
+    assert pool.count('class="bars-stale"') == 1
+    assert f'<td class="ticker">{case.row_ticker}{row_badge}</td>' in pool
+    rows = re.findall(r'<tr data-episode-id="\d+" data-category="(\w+)">(.*?)</tr>', pool, re.S)
+    assert [category for category, body in rows if "bars-stale" in body] == ["current"]
+    assert {category for category, _ in rows} == {"current", "departed", "excluded"}
+    banner = case.pool.banners[0].detail
+    for tip in case.tips.values():
+        assert tip in banner
+    assert "GURE" in banner
+
+    ladder = page[page.index('id="ladder-layer"') : page.index('id="pool-layer"')]
+    articles = dict(re.findall(r'<article class="ladder-item[^"]*" data-card-id="(\d+)">(.*?)</article>', ladder, re.S))
+    assert sorted(articles) == sorted(str(card.id) for card in ladder_view.active)
+    assert len(ladder_view.active) == 4
+    for card in ladder_view.active:
+        body = articles[str(card.id)]
+        armed = card.state is CardState.ARMED
+        assert f"<b>{case.card_ticker}{card_badge}</b>" in body
+        assert re.search(
+            r'<span class="field" data-field="last_price">last <span class="badge badge-[\w-]+">[^<]+</span> '
+            rf"<b>[^<]*</b>{re.escape(card_badge)}</span>",
+            body,
+        )
+        assert ("trigger-distance" in body) == armed
+        if armed:
+            assert re.search(rf'<div class="trigger-distance">last [^<]+{re.escape(card_badge)} · trigger', body)
+        assert body.count('class="bars-stale"') == (3 if armed else 2)
+    terminal = ladder[ladder.index('class="terminal"') :]
+    assert terminal.count('class="terminal-row"') == len(ladder_view.terminal) == 2
+    assert "bars-stale" not in terminal
+    assert "GURE" not in ladder
+    markup = pool_tests._main_markup(page)
+    assert markup.count('class="bars-stale"') == 1 + 4 * 2 + 1
+    titles = re.findall(r'<span class="bars-stale" title="([^"]*)"', markup)
+    assert set(titles) == {case.tips[case.row_ticker], case.tips[case.card_ticker]}
+    assert not any("GURE" in title for title in titles)
+
+
+@pytest.mark.parametrize("phone_frame", [False, True])
+def test_bars_stale_badge_absent_and_output_unchanged_when_healthy(evaluated, phone_frame):
+    """The pins are a GUARD: captured on main's code, they hold on the change too."""
+    healthy, _ = pool_tests._build()
+    assert healthy.pool.banners == []
+    ladder_view = _ladder(evaluated["rows"])
+    page = _page(healthy.pool, ladder_view, phone_frame)
+    pool_html = panel.render_pool(healthy.pool)
+    ladder_html = panel.render_ladder(ladder_view)
+    api_json = json.dumps(panel.pool_api_payload(healthy.pool), sort_keys=True)
+    for text in (pool_html, ladder_html, api_json, pool_tests._main_markup(page)):
+        assert "bars-stale" not in text
+    assert 'class="bars-stale"' not in page and "data-bars-stale" not in page
+    assert _sha(pool_html) == PIN_HEALTHY_POOL_SHA256, _sha(pool_html)
+    assert _sha(ladder_html) == PIN_HEALTHY_LADDER_SHA256, _sha(ladder_html)
+    assert _sha(api_json) == PIN_HEALTHY_API_SHA256, _sha(api_json)
+
+
+def test_bars_stale_badge_marks_a_lifecycle_card_outside_the_pool(evaluated):
+    case = _stale_case(evaluated, row=False, gure=False)
+    ladder_view = _ladder(evaluated["rows"])
+    assert case.pool.banners[0].detail.startswith(f"{case.card_ticker} error since ")
+    page = _page(case.pool, ladder_view)
+    pool = pool_tests._pool_layer(page)
+    assert 'class="bars-stale"' not in pool  # its ticker has no pool row
+    assert case.card_ticker not in re.findall(r'<td class="ticker">([^<]*)', pool)
+    strip = f"<b>{case.card_ticker}{_badge_html(case.tips[case.card_ticker])}</b>"
+    assert page.count(strip) == len(ladder_view.active) == 4  # keyed by ticker, not pool membership
+
+
+def test_bars_stale_follows_the_refreshed_pool_fragment_and_never_moves_the_ladder(evaluated):
+    ladder_view = _ladder(evaluated["rows"])
+    steps = [_stale_case(evaluated), None, _stale_case(evaluated, card=False)]  # stale -> healthy -> stale
+    for step in steps:
+        if step is None:
+            healthy, _ = pool_tests._build()
+            fragment = panel.pool_api_payload(healthy.pool)["html"]
+            assert "data-bars-stale" not in fragment and "bars-stale" not in fragment
+            continue
+        fragment = panel.pool_api_payload(step.pool)["html"]
+        tag = re.search(r'<section id="pool-layer"[^>]*>', fragment).group(0)
+        attr = re.search(r'data-bars-stale="([^"]*)"', tag)
+        assert attr, tag
+        assert tag.index("data-watermark") < tag.index("data-bars-stale")
+        assert json.loads(html.unescape(attr.group(1))) == step.tips
+        assert f'<td class="ticker">{step.row_ticker}{_badge_html(step.tips[step.row_ticker])}</td>' in fragment
+        # THE LADDER DOES NOT MOVE — take the badges out and it is main's ladder, byte for byte.
+        marked = panel.render_ladder(ladder_view, bars_stale=step.tips)
+        plain = panel.render_ladder(ladder_view)
+        assert re.sub(BADGE_RE, "", marked) == plain
+        assert (marked != plain) == (step.card_ticker in step.tips)
+        bare_pool = panel.render_pool(step.pool.model_copy(update={"bars_stale_tickers": {}}))
+        assert " data-bars-stale=" not in bare_pool and "bars-stale" not in bare_pool
+        assert re.sub(r' data-bars-stale="[^"]*"', "", re.sub(BADGE_RE, "", panel.render_pool(step.pool))) == bare_pool
+    js = panel.PANEL_JS
+    assert "function mirrorStale(layer)" in js
+    assert js.index("mirrorDegraded(next)") < js.index("mirrorStale(next)") < js.index("catch(error)")
+    start = js.index("function mirrorStale(")
+    body = js[start : js.index("\n", start)]
+    for needed in ("dataset.barsStale", "JSON.parse(", "querySelectorAll('.ladder-item')", ".strip b", "firstChild"):
+        assert needed in body, needed
+    for forbidden in ("refreshLadder", "fetch(", "classList", "sort(", "appendChild", "insertBefore",
+                      "replaceWith", "innerHTML", "cursor="):
+        assert forbidden not in body, forbidden
+    assert "window.setInterval(refreshPool,interval)" in js
+    assert MIRROR_DEGRADED_LINE in js
 
 
 # ---------------------------------------------------------------------
