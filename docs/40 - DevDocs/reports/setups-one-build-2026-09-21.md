@@ -835,8 +835,125 @@ No assertion was removed, and no skip or xfail was added.
   - After the re-points: **`2411 passed, 361 skipped, 1 xfailed, 15 warnings in 422.67s (0:07:02)`**, 0 failed. Against STEP-7 (2399), the +12 are exactly `test_setups_second_chance.py`'s 12 tests.
 - **With-DB.** cp → `COBALT_ENV=dev uv run pytest -q` over STEP-7's set + `tests/cobalt/test_setups_second_chance.py` + `tests/experiments/setups_one`, with `-s` → **`446 passed, 1 skipped in 1705.92s (0:28:25)`**. The skip is the live-note proof.
   - VERBATIM: `X7 stored: … 'second-chance': {'scans': 7200, 'both_sides': 0, 'formed': 1883} …` → **X7 stored second-chance: PASS**.
+- COMMIT: `48521a0 feat(setups): STEP-8 range-break lifecycle, events, prior range, sequence, turn_candle — second-chance (FINAL C7)`. `git show --stat HEAD`: 25 files, 858 insertions(+), 24 deletions(-); every path is one named above.
 - rm → `ls -la .env` → `ls: .env: No such file or directory`.
 - **A source fix before the commit** (so STEP-9's Lego test (i) needs no source change). The re-run PREFLIGHT grep found two setup names that I had written into STEP-4 / STEP-8 docstrings: `anatomy/leg_roles.py:22` ("hitchhiker") and `anatomy/range_break.py:20` ("second-chance's"). Both were rewritten in anatomy words ("the drive-then-range shape", "the break-retest-turn trigger steps"). Docstring text only; the offline suite was re-run on it → `2411 passed, 361 skipped, 1 xfailed, 15 warnings in 416.36s (0:06:56)`, 0 failed.
+
+## STEP-9
+
+The LEGO TEST (R44) + ADDING-A-SETUP (R45) + the evaluability report. Tests and one DevDoc ONLY: no source file changed at this step (see COMMIT's `git show --stat`).
+
+### T / X
+
+`tests/cobalt/test_setups_lego.py` grows (i)–(v) and the closing experiments. `docs/40 - DevDocs/cobalt/radar/ADDING-A-SETUP.md` is new (≤120 lines, anatomy words only).
+
+- **The (i) baseline, re-run.** The PREFLIGHT grep, re-run at STEP-8 close: 18 lines. They are the four PREFLIGHT lines (`slug.py:11`, `:21`, `trade_def.py:152`, `:637`) plus 14 lines of the anatomy word `backside`: the D4 Extension state in `radar/anatomy/extension.py` and `radar/formation/atoms.py`, and its `extension.backside_*` engine keys. The PREFLIGHT line `registry.py:3` is GONE (STEP-2 rewrote the docstring). Each line is named in `BASELINE` with its reason.
+- **Two leaks, fixed in STEP-8 before this step.** My own docstrings at `leg_roles.py:22` and `range_break.py:20` named setups; both were rewritten before STEP-8's commit (STEP-8 SUITE), so (i) needed no source change here.
+- **Test outcomes on the tip:**
+  - (i) `LEGO (i): 18 source lines carry a setup word; baseline 18` → PASS. The AST check (no string literal equals a slug or a `trade_key`, and none starts with `<trade_key>.`; the anatomy literal `backside` only in `trade_def.py`, `extension.py`, `atoms.py`) → PASS.
+  - (ii) STEP-2's Lego (ii) pins are GREEN on the tip (`test_setups_registries.py`). The rubberband shape's formation dispatches through `bar_break` / `structural_extreme` / `snapback_candle`, and `evaluate.py` holds none of those strings → PASS.
+  - (iii) `example-lego-eighth` is built from data only: the pool admission + `price > EMA21` + `Range(micro).instantiated`; `bar_break {bars_cleared: 3}`; the `range_base` stop. No corpus def combines these. `evaluability` is True. It forms LONG on the drive-then-range day (trigger 11.00 = the last three buckets' high; stop `structural_stop(10.85, long, 0.02)`), and does NOT form on the same day cut before the range → PASS.
+  - (iv) The eight evaluability lines (see `## LEGO TEST`) → 8 of 8 evaluable.
+  - (v) The drift test: the doc's Triggers / Stop placements / Structural refs / Relations / Atoms lists equal the five registries exactly (a missing key, or a brick no registry holds, fails), and the doc is ≤120 lines → PASS.
+- **X22 over all eight — FAIL, two findings, pinned exactly by the test as a guard** (ESCALATE 18):
+  - `X22 hitchhiker / second-chance / example-lego-eighth: undeclared=['extension.path_a_volume_ma_bars', 'extension.path_a_volume_sigma', 'extension.path_b_atr']` — the stage builds the Extension, and its observations, for every def.
+  - `X22 vwap-continuation: undeclared=[… + 'pivot.n', 'range.micro.bound_flat_slope_atr', 'range.micro.touch_tolerance_atr', 'range.micro.touches_per_side']` — a trigger resolver's detector keys are outside R2-2.2's closure.
+  - rubberband, backside, fashionably-late and nine-ema-scalp: `undeclared=[]`.
+- **The frame property at STEP-9:** `F-04 at STEP-9: atoms=41 checks=164` — for every atom, the short frame of the real member equals the long frame of the mirrored member → PASS.
+- **X5, final corpus (STEP-8):** `X5 offline: defs=9 frames=2 members=50 runs_s=[5.29, 5.18, 5.29] p95~max=5.29s budget=100.0s` → PASS. The corpus has not changed since.
+- **X7 summary** (offline committed day · stored 10 sessions), `both_sides` = 0 everywhere:
+  - rubberband: 0 · 0 (the day-1 HTF avoid; its relation variant forms 104 stored);
+  - hitchhiker: 0 · 17;
+  - backside: 0 · 0;
+  - fashionably-late: 0 · 7;
+  - nine-ema-scalp: 1 · 280;
+  - vwap-continuation: 2 · 0;
+  - second-chance: 55 · 1883.
+
+### D
+
+- New: `radar/ADDING-A-SETUP.md`.
+
+### SUITE
+
+- `uv run pytest -q tests/cobalt tests/taxonomy` (background) → **`2419 passed, 361 skipped, 1 xfailed, 15 warnings in 421.23s (0:07:01)`**, 0 failed. Against STEP-8 (2411), the +8 are exactly the Lego test's 8 new tests: (i) ×2, (ii), (iii), (iv), (v), X22, F-04. No with-DB file changed at this step; CLOSE runs the with-DB set.
+
+### COMMIT
+
+`test(setups): STEP-9 lego test — …`: tests and DevDocs only (the stat is quoted under CLOSE).
+
+## LEGO TEST
+
+`uv run pytest -q tests/cobalt/test_setups_lego.py -s`, VERBATIM:
+
+```
+EVALUABILITY rubberband: evaluable
+EVALUABILITY hitchhiker: evaluable
+EVALUABILITY backside: evaluable
+EVALUABILITY fashionably-late: evaluable
+EVALUABILITY nine-ema-scalp: evaluable
+EVALUABILITY vwap-continuation: evaluable
+EVALUABILITY second-chance: evaluable
+EVALUABILITY example-lego-eighth: evaluable
+```
+
+The count: the FINAL's scope (§0) is seven slugs INCLUDING `rubberband`, so "the eight" here are those seven plus the eighth definition of (iii) (ESCALATE 19). Results:
+
+- (i) no setup name in src: PASS;
+- (ii) rubberband on the registries, byte-identical: PASS;
+- (iii) an eighth def from data only: PASS;
+- (iv) 8 of 8 evaluable;
+- (v) ADDING-A-SETUP matches the registries: PASS.
+
+## EXPERIMENTS
+
+One line per experiment, the whole build:
+
+| X | result | where |
+|---|---|---|
+| X1 | RUN — stored names 0.813 / 0.743 / 0.65 (periods 9 / 14 / 21); POOL share UNPROVEN (no membership rows) | STEP-3 |
+| X2 | RUN — 11 stored sessions, 60 names | STEP-2 |
+| X3 | UNPROVEN — runs at the deploy (`cobalt radar evaluate` not in the allowlist; no radar cache in the worktree) | STEP-1 |
+| X4 | PASS | STEP-2 |
+| X5 | PASS — 5.29 s, 9 defs | STEP-8 |
+| X6 | PASS — the frame wraps `WorkingBar` only | STEP-2 |
+| X7 | PASS — 0 `both_sides` for every def, offline and stored | STEP-4 … 8 |
+| X8 | PASS — tap half (STEP-1, with-DB), source half (STEP-2) | STEP-1, STEP-2 |
+| X9 | PASS — gate 5 refuses another evaluator version | STEP-1 |
+| X10 | FAIL — the backside shape never forms on a day that recovers past the open | STEP-5 |
+| X11 | PASS — every served atom × declared reason | STEP-3 … 8 |
+| X12 | PASS | STEP-2 |
+| X13 | FAIL line fired — median seeded / RTH-weighted ATR 0.53 → 0.79 | STEP-4 |
+| X14 | PASS — only `health` moves | STEP-3 |
+| X15 | FAIL line fired — the literal reading forms (5; A-07 36) | STEP-4 |
+| X16 | PASS — `leg.py` byte-identical, `leg_count` unchanged | STEP-4 |
+| X17 | PASS | STEP-1 |
+| X18 | PASS offline and stored for 2 of 3; `htf_level_proximity` UNPROVEN (daily leg) | STEP-2 |
+| X19 | PASS | STEP-2 |
+| X20 | RUN — NotNullViolation + rollback → R2-3 = B with migration 0013 | STEP-2 |
+| X21 | PASS | STEP-2 |
+| X22 | FAIL — two undeclared-read findings (Extension keys; trigger detector keys) | STEP-9 |
+| X23 | PASS on `tmp_path`; dev vault UNPROVEN (desk's L28 proof) | STEP-2 |
+| X24 | PASS, with-DB | STEP-1 |
+| X25 | PASS | STEP-2 |
+| X26 | PASS — `ValidationError` on `assumed=` | STEP-6 |
+| X27 | PASS | STEP-1 |
+| X28 | UNPROVEN — not assigned (R40 answered B) | STEP-1 |
+
+Counts: **22 PASS or RUN** (X1, X2, X4–X9, X11, X12, X14, X16–X21, X23–X27) · **4 FAIL** (X10, X13, X15, X22) · **2 UNPROVEN** (X3, X28).
+
+## AWAITING_A_DAY
+
+The committed real-shape days are ONE trade date with tickers FTFT and BGFI (`tests/fixtures/radar/_cut_p2_fixtures.py:36-38`).
+
+- **rubberband.** Its full shape carries the day-1 HTF avoid, True on the committed day → `avoided` wherever its relation path forms. Its path forms on the committed day (the `rubberband-without-htf-avoid` variant, and STEP-1's T6 / DEF_WRITTEN). Closed by a DB-backed fixture-cut of a stored day without a day-1 HTF break.
+- **hitchhiker.** Evaluable; on the committed day no scan has the band and the upper third together. Its path forms on the definition-written day and its mirror (`test_hitchhiker_path_*`). Closed by a fixture-cut of a stored drive-then-range day (X7 stored: 17 formed grid scans on `cobalt_dev`).
+
+**AWAITING_A_RULING** (never in `AWAITING_A_DAY`):
+
+- **backside:** X10 (Grok's fix vs Fable's fix).
+- **fashionably-late:** X10 and F1 (its two `per_indicator` flat thresholds).
+- **vwap-continuation:** F1 (`dist.k.vwap`) at production defaults. It forms on the committed day only with this build's constructed fill.
 
 ## ESCALATE
 
@@ -860,18 +977,19 @@ No assertion was removed, and no skip or xfail was added.
 15. **The leg roles carry no size (STEP-6).** `legs()` ends a leg at one opposing bar (taxonomy §3.1, byte-identical by X16), so legs alternate. The leg before a pullback is therefore always the other direction, and the nine-ema shape's `Leg(opening_drive OR impulse).direction == trade_direction` holds whenever a pullback exists. The taxonomy defines no magnitude for `impulse` / `pullback`, and none is invented here. `ASK DESK: should impulse / pullback carry a size rule (a new A-nn key) before cards? [06:0x]` — safe default: none.
 16. **vwap-continuation's `rejected` avoid: the note and the sheet diverge (per the companion). REPORTED, not fixed.** The build follows the note (L32 / L65); the level set and the rejection rule are the null conventions `levels.set` / `level.rejected.rule`, so every card formed on them is marked assumed. The divergence's content is his, in the gitignored companion, and is not quoted here.
 17. **Two constructions the FINAL leaves open, built with a named choice (STEP-8).** (a) `close_above(prior_bar)` is read as a close above the prior bar's HIGH, which is the clear turn; a close above its close would read almost any up bar as a turn. (b) `event(stop_hit)` covers the RangeBreak's own completed sequence only; an earlier formation of the same (ticker, def, day) on a DIFFERENT level is not tracked. Both are resolver rules, not assumed values. `ASK DESK: are these the readings he means? [07:xx]` — safe default: as built.
+18. **X22 FAILS at STEP-9 — two closure gaps (R2-2.2), pinned exactly, NOT repaired (a source change; STEP-9 is tests-only).**
+    - (a) The stage builds the Extension and publishes its observations for EVERY def. So hitchhiker, second-chance, vwap-continuation and the eighth def read `extension.path_a_volume_ma_bars`, `extension.path_a_volume_sigma` and `extension.path_b_atr` without declaring them. None of the three rows is `source: assumed`, so no assumed mark is lost today.
+    - (b) A trigger resolver's detector keys are outside the closure: vwap-continuation's `trendline_break` reads `pivot.n` and the three `range.micro.*` keys. Today no card is under-marked, because vwap-continuation cannot form at production defaults (F1). Once the assumed note fills `A-03` / `A-04` and F1 is ruled, it would be.
+    - Repair: `closure_keys` gains the stage's always-read keys, and every trigger / stop resolver declares `TUNABLE_KEYS`. `ASK DESK: fix before the deploy, in a follow-up build? [08:xx]` — safe default: the deploy waits on it only if F1 is ruled first.
+19. **The prompt counts "the seven slugs + rubberband" as eight; the FINAL's scope (§0) lists seven slugs INCLUDING `rubberband`.** Lego (iv) counts the seven plus the eighth definition of (iii) as "the eight". Test (i)'s slug list is the FINAL's seven.
 
 ## CONTINUE
 
-next: STEP-9 (tests + DevDoc ONLY) in `tests/cobalt/test_setups_lego.py`:
-- (i) no setup name in src: the baseline is `slug.py:11`, `:21`, `trade_def.py:152`, `:637`, plus the D4 anatomy word `backside` in `extension.py` / `atoms.py`;
-- (ii) Rubberband through `TRIGGERS["bar_break"]` / `STOPS["structural_extreme"]`;
-- (iii) the eighth def `example-lego-eighth`;
-- (iv) evaluability for all eight;
-- (v) `docs/40 - DevDocs/cobalt/radar/ADDING-A-SETUP.md` + the drift test;
-- X22 over all eight; the frame property; X5; the X7 summary; `AWAITING_A_DAY` and `AWAITING_A_RULING`.
-
-Then CLOSE.
+next: CLOSE.
+- The offline suite, then the with-DB set.
+- `git diff --stat main`; the empty diffs; `jobs restarts`; `git log`.
+- The L68 table; the ESCALATE always-items (i)–(xii).
+- The stop line, then the report commit.
 
 Rules still in force: file content only through Write / Edit; pins from a test's own failure output; long-form `git status` before a commit; no unlisted commands (scratch probes go in a pytest file under the job's tmp).
 
