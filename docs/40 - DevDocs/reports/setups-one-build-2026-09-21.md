@@ -203,6 +203,36 @@ C2 — the registries, the mirrored frame, the interpreter shapes, the assumed s
 
 **DECISION TABLE ROW:** R1 and R2 HOLD and X20 = violation + rollback → **R2-3 = B WITH its migration.** Home: the database-wide registry `src/cobalt/db_migrations/` (a rollback cannot live in `taxonomy/migrations/`, which `ensure_schema` runs forward on every load). Number: main carries 0001–0011; the unmerged `bars/chunk-2-0920` carries `0012_bars_partitioned_parent` (`git -C /Users/cobalt/cobalt log --oneline --name-only main..bars/chunk-2-0920 -- src/cobalt/db_migrations` → `02d67a6 … 0012_bars_partitioned_parent.sql`, `.rollback.sql`, `__init__.py`, `placement.py`); `bars/chunk-1a-0920` adds no number → **`0013_tunables_slug_nullable`** — an L68 seam on `db_migrations/__init__.py` with `bars/chunk-2-0920`.
 
+### T (RED)
+
+New: `tests/cobalt/test_setups_registries.py` (registries, E8/E9, the frame property, X4/X6/X12/X18/X21/X25, R2-4 B publication and the per-card reads, the closure + convention rows, X8's `source` half, Lego (ii) pins) and `tests/cobalt/test_assumed_store.py` (reader, hole-fill X19, F1 not widened, writer + X23 on `tmp_path`, dry-run, migration 0013). Run on the START-of-step code (STEP-1, `58aa823`): the `-rA` listing shows 34 FAILED, 14 PASSED, 3 SKIPPED (counted from its lines; the run printed no summary line in the captured output). RED lines verbatim, one per kind:
+
+| test | RED |
+|---|---|
+| the five tables | `ModuleNotFoundError: No module named 'cobalt.radar.formation'` |
+| the registry keeps no constants | `AssertionError: SUPPORTED_ATOMS` |
+| E8 domain | `assert not True` (`Evaluability(evaluable=True, …)` for `Extension.state IN {reverting, backside}`) |
+| E9 registry ⇔ interpreter | `AssertionError: ('example-anatomy-reversal', ('Unsupported(arith)',))` — the registry calls an Arith precondition evaluable, the interpreter refuses it |
+| F-04 / R2F-12 / X6 / X18 | `ModuleNotFoundError: No module named 'cobalt.radar.anatomy.frame'` |
+| B published row / X21 | `AttributeError: 'MemberEvaluation' object has no attribute 'by_side'` |
+| B publication rule | `ImportError: cannot import name 'publish_frames' from 'cobalt.radar.evaluate'` |
+| B per-card read (open short card, long frame avoided) | `cobalt.radar.evaluate.EvaluateError: AttributeError: 'MemberEvaluation' obj…` |
+| convention row | `KeyError: 'anatomy.orientation.extension'` |
+| closure names the row key | `AssertionError: assert ('A-01',) == ('anatomy.ori...n.extension',)` |
+| ruled / unimplemented label / X8 source half | `ImportError: cannot import name 'CONVENTION_LABELS' …` / `KeyError: 'anatomy.orientation.extension'` |
+| closure with an assumed cfg / detector key | `AttributeError: type object 'TunableSource' has no attribute 'ASSUMED'` |
+| `TunableSource.ASSUMED` | `ValueError: 'assumed' is not a valid TunableSource` |
+| reader | `ImportError: cannot import name 'load_assumed_tunables' …` · `ImportError: cannot import name 'assumed_note_text' from 'cobalt.taxonomy.cli'` |
+| X19 fill | `ValidationError: 1 validation error for TunableRow` (source `assumed`) · `TaxonomyConfigError: user tunable row(s) ['range.wic…` (a ruling row cannot fill) |
+| dry-run | `ImportError: cannot import name 'assumed_report' from 'cobalt.taxonomy.cli'` |
+| 0013 registered | `AssertionError: assert (PosixPath('…/0013_tunables_slug_nullable.sql') in FORWARD` |
+
+GREEN on the start code by design: the six Lego (ii) pins (below), X4 (the cent-grid sweep: 0 inequalities — see X), X25 and X12 on today's short card, `a detector reads only its own TUNABLE_KEYS`, and the loud-collision rows of X19 that hold today (a `sheet` / `dwv` user row, a strategy-note row on an engine key). With-DB (writer, X23, migration) skipped offline; run under SUITE.
+
+**Lego (ii) byte-identity PINS, captured on the START-of-step code** (sha256 over every `MemberEvaluation.model_dump(mode="json")` on FTFT + BGFI, two-minute scans, and over every card the stage makes on the FTFT formed scans), excluding ONLY: on `MemberEvaluation` `by_side`; on `Formation` `side_frame`, `anchor`, `trigger_outcome`, `stop_outcome` (the fields this step adds); on the card `formula_sha256` (new formula bytes by construction) and the `assumed_formation` dot's `engine_inputs` / `engine_why` (R2-2.2 B: the closure replaces STEP-1's constant — the dot now names the convention ROW key): countertrend `fd2f49725ecd80817bfacd857fc349817b7c75a462992c1a0c567e3932b78ad8` · full `7d868974df741d145c01ced9ce498532b2545f7d061ad4ed7a1c33a5cdd2a44f` · mixed `a8b8f0989a987cab67f30d2754d323e23d982f6e845876269df029831471d024` · shipped `da0f0ef1aa0179ea2b07adf9f6ac4d64eec24dd705152b7e8eee4a2326877be7` (= STEP-1's T6 pin) · cards countertrend `7a0e5796e33ebbd01e68c6b7c66c6946c0a0419258f6adc3bf81f8811573450a` · cards mixed `5c4dcce2c86b4ffb5526c25274b26578dcf24509c8ce119d0c8dde0629d9a3a7`.
+
+**The A-01 convention's row key** is the companion's key NAME for it, `anatomy.orientation.extension` (a key name is anatomy, FINAL §8; its value in committed config is `null`). `ASSUMED_CONVENTIONS` and the dot name that row key; `A-01` stays the design's label in comments and DevDocs.
+
 ## ESCALATE
 
 (running list; the ALWAYS items (i)–(xii) are written at CLOSE)
@@ -216,6 +246,6 @@ C2 — the registries, the mirrored frame, the interpreter shapes, the assumed s
 
 ## CONTINUE
 
-next: STEP-2 (T) — X20 done (R2-3 = B with migration 0013). Write STEP-2's tests first: assumed store (reader, hole-fill truth table X19, migration FORWARD/rollback, writer on tmp_path X23, dry-run), registries (TRIGGERS/STOPS/STRUCTURAL_REFS/ATOMS/RELATIONS, domain check E8/E9, registry⇔interpreter), Frame property F-04, R2-4 B publication (`by_side`, both_sides, :1329/:1342 named test), closure (convention row `anatomy.orientation.extension` for A-01), byte-identity pins captured on the STEP-1 code. Scratch design notes (not committed): `/Users/cobalt/.claude/jobs/ef4d8972/tmp/step2-plan.md`.
+next: STEP-2 (C) — tests written + RED recorded (`test_setups_registries.py`, `test_assumed_store.py`, X20 in `test_taxonomy_store.py`). Build: (1) assumed store — `TunableSource.ASSUMED`, `LoadedTunable.slug` optional, `load_assumed_tunables` + append in `load_vault_trade_defs`, strategy reader refuses `assumed`, hole-fill in `merge_tunables`, `db_migrations/0013_tunables_slug_nullable{,.rollback}.sql` + registry, `taxonomy/cli.py` `assumed_note_text` / `write_assumed` / `assumed_report` + subcommands; (2) `radar/formation/{__init__,triggers,stops,atoms}.py`, `anatomy/frame.py` (mirror_bars, mirror_daily), `registry.py` reads the tables, `evaluate.py` per-side evaluation + `publish_frames` + `by_side` + `CONVENTION_LABELS` + closure, stage reads `by_side[card.direction]`; convention row in `tunables.yaml`. Scratch design notes (not committed): `/Users/cobalt/.claude/jobs/ef4d8972/tmp/step2-plan.md`.
 
 (run in progress — step 2 of 9, next under ## CONTINUE)

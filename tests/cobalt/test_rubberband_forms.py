@@ -262,16 +262,22 @@ def test_x17_start_of_step_equivalence(defs):
 
 
 def test_t3_a_stop_on_the_wrong_side_is_not_formed_and_makes_no_card(defs, monkeypatch):
-    from cobalt.radar import evaluate as evaluate_mod
+    from cobalt.radar.formation import stops as stops_mod
 
-    real = evaluate_mod.structural_stop
+    real = stops_mod.structural_stop
 
     def below_the_trigger(price, direction, buffer):
-        return real(price - Decimal("1.00"), direction, buffer)
+        # STEP-2: the stop resolves in the frame's coordinates (the short trade
+        # is the long side of the mirrored frame), so +1.00 there puts the real
+        # short stop 1.00 BELOW its extreme — under the trigger.
+        return real(price + Decimal("1.00"), direction, buffer)
 
-    monkeypatch.setattr(evaluate_mod, "structural_stop", below_the_trigger)
+    monkeypatch.setattr(stops_mod, "structural_stop", below_the_trigger)
     ev = shapes.evaluate(defs["mixed"], "FTFT", SCAN0)
-    assert ev.evaluation == "not_formed" and ev.note == "stop_wrong_side" and ev.formation is None
+    # STEP-2 (R2-4.1 B): the short frame is refused by the guard; with
+    # neither frame formed the published row is the LONG frame's.
+    assert ev.by_side["short"].evaluation == "not_formed" and ev.by_side["short"].note == "stop_wrong_side"
+    assert ev.evaluation == "not_formed" and ev.formation is None
     world = World(defs=[defs["mixed"]])
     outcome = world.scan(SCAN0)
     assert outcome.created == [] and world.cards.cards == {}
@@ -327,8 +333,9 @@ def test_t5a_create_appends_exactly_one_untappable_assumed_dot(defs):
     (dot,) = _assumed(card["dots"])
     assert dot.position == len(factors)
     assert (dot.source, dot.tier, dot.role, dot.na_reason) == ("cobalt-degraded", "deterministic", "shadow", "ASSUMED")
-    assert dot.engine_inputs == {"assumed_keys": ["A-01"]}
-    assert "A-01" in dot.engine_why and dot.trader_grade is None
+    # STEP-2 (R2-2.2 B): the closure names A-01 by its convention ROW key
+    assert dot.engine_inputs == {"assumed_keys": ["anatomy.orientation.extension"]}
+    assert "anatomy.orientation.extension" in dot.engine_why and dot.trader_grade is None
     assert card["card_score"] is None and "assumed_formation" in card["score_suppressed"]
     assert card["proximity"] is not None and card["conviction"] is None and card["proposed_key"] is None
     relation = next(d for d in card["dots"] if d.factor == "setup_relation")
@@ -420,8 +427,8 @@ def test_t5c5_replay_recomputes_the_created_and_the_refreshed_card(defs):
     world.cards.tap(1, "trail_fit", 7)
     world.scan(SCAN0 + timedelta(seconds=100))
     first, second = world.cards.receipts
-    assert first["tap_versions"]["cards"][0]["assumed_keys"] == ["A-01"]
-    assert second["tap_versions"]["cards"][0]["assumed_keys"] == ["A-01"]
+    assert first["tap_versions"]["cards"][0]["assumed_keys"] == ["anatomy.orientation.extension"]
+    assert second["tap_versions"]["cards"][0]["assumed_keys"] == ["anatomy.orientation.extension"]
     for chain in ([first], [first, second]):
         _evs, cards = replay_receipt(chain, clock=session_clock())
         assert [c.recomputed for c in cards] == [c.published for c in cards] and cards
@@ -467,13 +474,18 @@ PIN_NON_FORMED_FULL_SHAPE = "e5e7a8799e7e83b62be9d552eca1d74cd2348da0f451813107f
 PIN_FORMED_FORMATION = "7c3eaba38d569fe3fc0371c0a9062eb9a70a421be6285a8b7078cbe3b54c04bd"
 PIN_FORMED_CARD = "0724a61afb0b222b7d9a359d7e9ab17f2c771acb5a46f384f9da74f840ba8224"
 PIN_FORMED_CARD_DOTS = "01a579e77814bfa92aa50d204a39b0a839e80496718914eafb649180bfec6e00"
-FORMATION_EXCLUDED = {"setup_ref", "assumed_keys"}
+#: + STEP-2's added fields (`side_frame`, `anchor`, `trigger_outcome`, `stop_outcome`).
+FORMATION_EXCLUDED = {"setup_ref", "assumed_keys", "side_frame", "anchor", "trigger_outcome", "stop_outcome"}
 CARD_EXCLUDED = {"setup_ref", "why", "card_score", "score_suppressed", "dots", "formula_sha256"}
 
 
 def _non_formed(ld) -> list:
-    return [ev.model_dump(mode="json") for ticker in ("FTFT", "BGFI")
-            for _, ev in shapes.every_scan(ld, ticker) if ev.evaluation != "formed"]
+    """STEP-2 re-point: minus `by_side` (added) and E9's `Unsupported(<kind>)`
+    names (`test_setups_registries.without_e9_shapes`)."""
+    from test_setups_registries import without_e9_shapes
+
+    return [without_e9_shapes({k: v for k, v in ev.model_dump(mode="json").items() if k != "by_side"})
+            for ticker in ("FTFT", "BGFI") for _, ev in shapes.every_scan(ld, ticker) if ev.evaluation != "formed"]
 
 
 def test_t6_non_formed_evaluations_are_byte_identical(defs):
@@ -494,6 +506,13 @@ def test_t6_a_def_that_formed_before_changes_only_in_the_finals_named_ways():
     world.scan(SCAN0)
     card = world.cards.cards[1]
     kept = {k: v for k, v in card.items() if k not in CARD_EXCLUDED}
+    # STEP-2: committed tunables.yaml gains the convention row (R2-2.2 B) —
+    # the digest is the snapshot WITH it, mapped back to the one WITHOUT it.
+    from test_setups_registries import _tunables_digests
+
+    new, old = _tunables_digests()
+    assert kept["tunables_sha256"] in (new, old)
+    kept["tunables_sha256"] = old
     assert _sha(kept) == PIN_FORMED_CARD
     dots = [d.model_dump(mode="json") for d in card["dots"] if d.factor != "assumed_formation"]
     assert _sha(dots) == PIN_FORMED_CARD_DOTS
@@ -538,7 +557,8 @@ def _bands():
 def test_t5a_db_the_created_card_carries_the_dot_and_no_score(world):
     card_id = world["scan"](DB_SCAN0).created[0]
     _taps, dot, sizing = _db_row(world["cards"], card_id)
-    assert dot is not None and dot[0] is None and dot[1] == "ASSUMED" and dot[2] == {"assumed_keys": ["A-01"]}
+    assert dot is not None and dot[0] is None and dot[1] == "ASSUMED"
+    assert dot[2] == {"assumed_keys": ["anatomy.orientation.extension"]}
     assert sizing[1] is None and "assumed_formation" in sizing[2]
 
 

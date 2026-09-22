@@ -142,8 +142,9 @@ _SCANS: dict[tuple[str, str], list] = {}
 
 def every_scan(ld: sup.LoadedDef, ticker: str) -> list:
     """One evaluation per two-minute scan across the whole RTH fixture day
-    (computed once per (def md5, ticker))."""
-    key = (ld.md5, ticker)
+    (computed once per (def slug, md5, ticker) — two notes with the same YAML
+    body share an md5, the slug being frontmatter)."""
+    key = (ld.slug, ld.md5, ticker)
     if key not in _SCANS:
         _SCANS[key] = [(DAY_START + timedelta(minutes=m), evaluate(ld, ticker, DAY_START + timedelta(minutes=m)))
                        for m in range(0, 391, 2)]

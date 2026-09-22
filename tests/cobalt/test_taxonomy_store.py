@@ -253,9 +253,14 @@ def test_x20_a_sync_with_one_null_slug_row(store, example_vault):
     the probe is the DATABASE's answer, not the model's)."""
     import psycopg
 
+    from cobalt.db_migrations import MIGRATIONS_DIR
     from cobalt.taxonomy.tunables import TunableRow
     from cobalt.taxonomy.vault_loader import LoadedTunable
 
+    # The schema X20 measured: before 0013. Restored inside the rollback
+    # transaction so the probe means the same thing once cobalt_dev carries 0013.
+    with store._connect() as conn:
+        conn.execute((MIGRATIONS_DIR / "0013_tunables_slug_nullable.rollback.sql").read_text())
     result = load_vault_trade_defs(example_vault)
     row = TunableRow(key="x20.global_probe", value=None, unit="count", scope="global", dynamic=False,
                      status="proposed", source="ruling")

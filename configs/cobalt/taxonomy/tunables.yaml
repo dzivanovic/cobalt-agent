@@ -181,6 +181,22 @@ tunables:
     source: ruling
     consumers: ["gap_give_and_go"]
 
+  # --- conventions (setups one build, FINAL §7 R2-2.2 B) -------------------
+  # A convention is a rule the code implements, recorded as a `label` row so
+  # it can be ruled like any number. `value: null` = not ruled yet: every
+  # formation that rests on it counts it as ASSUMED (the card's untappable
+  # `assumed_formation` dot, score suppressed). A ruled label lives in the
+  # trader's assumed-defaults note, never here (L32 / L53, R2F-09). The code
+  # refuses any label it does not implement (`not_evaluable: <key>=<label>`).
+  - key: anatomy.orientation.extension
+    value: null
+    unit: label
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.evaluate (side binding: a long-side def trades against an unqualified Extension)"]
+
   # --- per_indicator ------------------------------------------------------
   - key: flat_threshold.ema9
     value: null

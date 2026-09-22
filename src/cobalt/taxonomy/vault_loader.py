@@ -85,10 +85,17 @@ from .loader import (
 from .predicate import PredicateSyntaxError
 from .slug import SlugError, per_trade_scope, validate_slug
 from .trade_def import Family, TradeClass, TradeDef
-from .tunables import TunableRegistry, TunableRow
+from .tunables import TunableRegistry, TunableRow, TunableSource
 
 #: Where a trader's strategy notes live, relative to the vault root.
 STRATEGIES_DIR = "1 - Trading/4 - Strategies"
+
+#: FINAL §8 [R2F-07]: the ONE note the assumed defaults live in, OUTSIDE the
+#: Strategies folder (beside the list-config note), in one marker-bounded
+#: unit. Read by `load_assumed_tunables`; an absent note = no assumed rows.
+ASSUMED_NOTE = "1 - Trading/Assumed Defaults.md"
+ASSUMED_SECTION = "assumed"
+ASSUMED_UNIT = "tunables:assumed"
 
 #: The L28 section and the two unit-id prefixes inside it.
 DEFINITION_SECTION = "definition"
@@ -144,7 +151,9 @@ class LoadedTunable(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     key: str
-    slug: str
+    #: The def the row belongs to; None for a `global` assumed row (FINAL
+    #: §8, R2-3 = B — `"user".tunables.slug` is nullable from 0013).
+    slug: Optional[str]
     note_path: str
     row: TunableRow
 
@@ -271,6 +280,12 @@ def _read_tunables_unit(
     expected_scope = per_trade_scope(slug)
     rows: list[LoadedTunable] = []
     for row in registry.tunables:
+        if row.source is TunableSource.ASSUMED:
+            raise VaultTaxonomyError(
+                f"{where}: tunable {row.key!r} is marked `source: assumed`. An assumed "
+                f"default has ONE home, {ASSUMED_NOTE!r} (unit {ASSUMED_UNIT!r}); a row "
+                "in a strategy note is the trader's own ruled number."
+            )
         if row.scope != expected_scope:
             raise VaultTaxonomyError(
                 f"{where}: tunable {row.key!r} has scope {row.scope!r}, expected "
@@ -490,8 +505,71 @@ def load_vault_trade_defs(vault_root: Optional[Path] = None) -> VaultTradeDefs:
         result.user_tunables.extend(tunables)
         result.warnings.extend(warnings)
 
+    result.user_tunables.extend(load_assumed_tunables(root, loaded_slugs={d.slug for d in result.defs}))
+    suppliers: dict[str, str] = {}
+    for tunable in result.user_tunables:
+        if tunable.key in suppliers:
+            raise VaultTaxonomyError(
+                f"duplicate tunable key {tunable.key!r}: supplied by {suppliers[tunable.key]} and "
+                f"{tunable.note_path}. One key, one row."
+            )
+        suppliers[tunable.key] = tunable.note_path
     _resolve_every_cfg(result)
     return result
+
+
+def load_assumed_tunables(vault_root: Path, *, loaded_slugs: set[str]) -> list[LoadedTunable]:
+    """FINAL §8 (R2-3.1 B): the assumed rows, from `ASSUMED_NOTE`'s one unit.
+
+    An absent note is no rows, not an error. Every row validates through
+    `TunableRegistry`, carries scope `global` or `per_trade(<a def loaded in
+    this pass>)` — `per_indicator(...)` is refused as the settled reader
+    words it (derive ESCALATE 4, F1: not widened) — and `source` assumed or
+    ruling. A `global` row has no def: its `slug` is None."""
+    path = Path(vault_root) / ASSUMED_NOTE
+    if not path.exists():
+        return []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    try:
+        section = find_section(lines, ASSUMED_SECTION)
+    except MarkerError as e:
+        raise VaultTaxonomyError(f"{ASSUMED_NOTE}: {e}") from e
+    unit = section.units.get(ASSUMED_UNIT) if section is not None else None
+    if unit is None:
+        raise VaultTaxonomyError(
+            f"{ASSUMED_NOTE}: no unit {ASSUMED_UNIT!r} inside <!-- cobalt:section {ASSUMED_SECTION} -->"
+        )
+    text = _fence("\n".join(unit.body(lines)))
+    if text is None or not text.strip():
+        return []
+    where = f"{ASSUMED_NOTE} ({ASSUMED_UNIT})"
+    raw = _load_mapping(text, where)
+    if not raw.get("tunables"):
+        return []
+    try:
+        registry = TunableRegistry(**raw)
+    except ValidationError as e:
+        raise VaultTaxonomyError(f"{where}: invalid tunables rows:\n{e}") from e
+    per_trade = {per_trade_scope(slug): slug for slug in loaded_slugs}
+    rows: list[LoadedTunable] = []
+    for row in registry.tunables:
+        if row.source not in (TunableSource.ASSUMED, TunableSource.RULING):
+            raise VaultTaxonomyError(
+                f"{where}: tunable {row.key!r} has source {row.source.value!r}; an assumed-defaults row "
+                "reads `assumed` until he rules it, then `ruling`."
+            )
+        if row.scope == "global":
+            slug = None
+        elif row.scope in per_trade:
+            slug = per_trade[row.scope]
+        else:
+            raise VaultTaxonomyError(
+                f"{where}: tunable {row.key!r} has scope {row.scope!r}. The reader accepts `global` "
+                "or `per_trade(<a def loaded in this pass>)` only (a per_indicator hole is not "
+                "fillable here as the design words it)."
+            )
+        rows.append(LoadedTunable(key=row.key, slug=slug, note_path=ASSUMED_NOTE, row=row))
+    return rows
 
 
 def _resolve_every_cfg(result: VaultTradeDefs) -> None:
@@ -520,6 +598,9 @@ def _resolve_every_cfg(result: VaultTradeDefs) -> None:
 
 
 __all__ = [
+    "ASSUMED_NOTE",
+    "ASSUMED_SECTION",
+    "ASSUMED_UNIT",
     "DEFINITION_SECTION",
     "DEF_UNIT_PREFIX",
     "REQUIRED_UNIT_FIELDS",
@@ -530,5 +611,6 @@ __all__ = [
     "LoadedTunable",
     "VaultTaxonomyError",
     "VaultTradeDefs",
+    "load_assumed_tunables",
     "load_vault_trade_defs",
 ]

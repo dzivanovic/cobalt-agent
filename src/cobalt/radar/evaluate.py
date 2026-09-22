@@ -100,7 +100,7 @@ from cobalt.cards.scoring import (
 )
 from cobalt.settings.card import CardSettings
 from cobalt.taxonomy.defaults import TaxonomyDefaults
-from cobalt.taxonomy.loader import resolve_cfg
+from cobalt.taxonomy.loader import iter_cfg_tokens, resolve_cfg
 from cobalt.taxonomy.predicate import (
     And,
     Cfg,
@@ -115,27 +115,20 @@ from cobalt.taxonomy.predicate import (
     Symbol,
     render,
 )
-from cobalt.taxonomy.trade_def import (
-    SimpleTrigger,
-    StructuralExtremePlacement,
-    TradeDef,
-)
-from cobalt.taxonomy.tunables import TunableRow
+from cobalt.taxonomy.trade_def import TradeDef
+from cobalt.taxonomy.tunables import TunableRow, TunableSource
 
 from .anatomy.bars import IncompleteBucket, WorkingBar, rth_only, working_bars
-from .anatomy.daily import DailySeries, NoDailyBars, htf_level_proximity, htf_range_break
-from .anatomy.extension import ExtensionObservation, ExtensionParams, detect_extension
+from .anatomy.daily import DailySeries, NoDailyBars, htf_level_proximity
+from .anatomy.extension import ExtensionObservation, ExtensionParams
+from .anatomy.frame import Frame, build_frame
 from .anatomy.freshness import RvolObservation, daily_staleness, intraday_staleness
 from .anatomy.indicators import InsufficientBars, ema
 from .anatomy.registry import evaluability
-from .anatomy.structure import (
-    StructuralStop,
-    TrackedExtreme,
-    TriggerLevel,
-    bar_break_trigger,
-    structural_stop,
-    tracked_extreme,
-)
+from .anatomy.structure import StructuralStop, TrackedExtreme, TriggerLevel
+from .formation.atoms import ATOMS, AtomValue
+from .formation.stops import StopOutcome, stop_resolver
+from .formation.triggers import TriggerOutcome, trigger_resolver
 from .seam import AtomOutcome, DeskShadow, DeskShadowEntry, RadarScoreDetail, SeamObservation, validate_atom
 
 ET = ZoneInfo("America/New_York")
@@ -159,6 +152,7 @@ _SRC = Path(__file__).resolve().parent
 FORMULA_FILES: tuple[Path, ...] = (
     _SRC / "evaluate.py",
     *sorted((_SRC / "anatomy").glob("*.py")),
+    *sorted((_SRC / "formation").glob("*.py")),
     _SRC.parent / "cards" / "scoring.py",
     _SRC.parent / "cards" / "health.py",
     _SRC.parent / "cards" / "radar.py",
@@ -190,41 +184,12 @@ class EvaluateError(RuntimeError):
 # ---------------------------------------------------------------------
 
 
-class AtomValue(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    kind: Literal["boolean", "number", "symbol", "null", "unavailable"]
-    boolean: bool | None = None
-    number: Decimal | None = None
-    symbol: str | None = None
-    #: `null` = definitely no value (`not_instantiated`); `unavailable` = unknown.
-    reason: str | None = None
-
-
 class Unsupported(ValueError):
-    """An AST shape no S2 detector serves. Carries a generic seam atom."""
+    """An AST shape no served resolver evaluates. Carries a generic seam atom."""
 
     def __init__(self, atom: str, detail: str):
         self.atom = atom
         super().__init__(detail)
-
-
-def _extension_atoms(ext: ExtensionObservation) -> dict[str, AtomValue]:
-    if ext.unavailable is not None:
-        missing = AtomValue(kind="unavailable", reason=ext.unavailable)
-        leg = (
-            AtomValue(kind="number", number=Decimal(ext.leg_count))
-            if ext.leg_count is not None else missing
-        )
-        return {"Extension.state": missing, "Extension.instantiated": missing, "Extension.leg_count": leg}
-    return {
-        "Extension.state": AtomValue(kind="symbol", symbol=ext.state),
-        "Extension.instantiated": AtomValue(kind="boolean", boolean=bool(ext.instantiated)),
-        "Extension.leg_count": (
-            AtomValue(kind="number", number=Decimal(ext.leg_count))
-            if ext.leg_count is not None else AtomValue(kind="null", reason="not_instantiated")
-        ),
-    }
 
 
 def _value(node: Node, atoms: Mapping[str, AtomValue], cfg: Callable[[str], Any], consulted: set[str]):
@@ -336,6 +301,17 @@ class MemberInput(BaseModel):
     pool_position: int | None = None
 
 
+class Anchor(BaseModel):
+    """FINAL §2.4: what a formation hangs on (`extension_direction` becomes
+    this; the old field stays for byte identity)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    object: str
+    direction: Literal["up", "down"] | None
+    bar_ts: AwareDatetime | None
+
+
 class Formation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -349,9 +325,29 @@ class Formation(BaseModel):
     formed_bar_ts: AwareDatetime
     formed_bar_end: AwareDatetime
     leg_count: int | None
-    #: The assumed keys this formation rests on (R2-2 = B): stored on the
-    #: card's `assumed_formation` dot at creation, never re-read from live rows.
+    #: The assumed keys this formation rests on (R2-2 = B): the static
+    #: closure of the definition (R2-2.2), stored on the card's
+    #: `assumed_formation` dot at creation, never re-read from live rows.
     assumed_keys: tuple[str, ...]
+    #: FINAL §2.4: the frame it formed on — `long` = the stored bars,
+    #: `mirrored` = the short side's mirrored bars (prices already negated back).
+    side_frame: Literal["long", "mirrored"] = "long"
+    #: FINAL §2.4: the object the formation hangs on, in real coordinates.
+    anchor: Anchor | None = None
+    #: FINAL §2.2 / §2.3: the resolvers' outcomes, in real coordinates.
+    trigger_outcome: TriggerOutcome | None = None
+    stop_outcome: StopOutcome | None = None
+
+
+class SideOutcome(BaseModel):
+    """One frame's outcome for the scan that computed it (R2-4.1 B): an
+    internal model on `MemberEvaluation`, never the seam."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    evaluation: Evaluation
+    formation: Formation | None = None
+    note: str | None = None
 
 
 class MemberEvaluation(BaseModel):
@@ -380,6 +376,9 @@ class MemberEvaluation(BaseModel):
     working: tuple[WorkingBar, ...] = ()
     ema9: Decimal | None = None
     note: str | None = None
+    #: R2-4.1 B: both frames' outcomes for this scan. Every per-card
+    #: decision reads the CARD'S OWN side here, never the published row.
+    by_side: dict[Literal["long", "short"], SideOutcome] = Field(default_factory=dict)
 
 
 def seam_atom(name: str) -> str:
@@ -502,11 +501,85 @@ def _s(value) -> str | None:
     return None if value is None else str(value)
 
 
-#: FINAL §1 / R2-2.2 term (3): the conventions the direction line below
-#: implements — `A-01`, a long-side def trades against an unqualified
-#: Extension. Until a convention has a row it counts as assumed
-#: unconditionally (the C1 rule).
-ASSUMED_CONVENTIONS: tuple[str, ...] = ("A-01",)
+#: FINAL §1 / R2-2.2 term (3): the conventions the side-binding line below
+#: implements, by their engine ROW key — `A-01` (key
+#: `anatomy.orientation.extension`): a def written long-side trades against an
+#: unqualified Extension (a DOWN Extension for the long frame). From C2 every
+#: convention is also a row (`tunables.yaml`, unit `label`); a null row
+#: counts as assumed unconditionally (the C1 rule, carried until he rules it).
+ASSUMED_CONVENTIONS: tuple[str, ...] = ("anatomy.orientation.extension",)
+#: The label each implemented convention's row may carry; any other non-null
+#: label is refused (`not_evaluable: <key>=<label>`), never guessed.
+CONVENTION_LABELS: dict[str, str] = {
+    "anatomy.orientation.extension": "long_opposes_unqualified_extension",
+}
+
+
+def _anchored_on_extension(td: TradeDef) -> bool:
+    """A-01 applies to a def whose precondition anchor is an unqualified Extension."""
+    return any(atom.startswith("Extension.") for p in td.preconditions for atom in p.required_atoms)
+
+
+def _conventions(td: TradeDef) -> set[str]:
+    conventions: set[str] = set(ASSUMED_CONVENTIONS) if _anchored_on_extension(td) else set()
+    for predicate in [*td.preconditions, *td.avoid]:
+        for atom in predicate.required_atoms:
+            if atom in ATOMS:
+                conventions |= set(ATOMS[atom].conventions)
+    return conventions
+
+
+def convention_refusals(td: TradeDef, tunables: Mapping[str, TunableRow]) -> tuple[str, ...]:
+    """`<key>=<label>` for every convention row whose non-null label the code
+    does not implement. A declared convention with no row is a loud error."""
+    out = []
+    for key in sorted(_conventions(td)):
+        if key not in tunables:
+            raise EvaluateError(f"convention {key!r} has no tunable row — a declared convention must have one")
+        value = tunables[key].value
+        if value is not None and value != CONVENTION_LABELS[key]:
+            out.append(f"{key}={value}")
+    return tuple(out)
+
+
+def assumed_closure(td: TradeDef, tunables: Mapping[str, TunableRow]) -> tuple[str, ...]:
+    """R2-2.2 B, computed ONCE at formation — a static closure of the def:
+    (1) every `cfg(<key>)` the def names (`iter_cfg_tokens`); (2) the
+    `TUNABLE_KEYS` of every detector serving an atom its preconditions or
+    avoids name; (3) the conventions of the branches and resolvers it uses.
+    The assumed keys are the closure's keys whose resolved row reads
+    `source: assumed`, plus every convention whose row is still null."""
+    keys: set[str] = set(iter_cfg_tokens(td))
+    for predicate in [*td.preconditions, *td.avoid]:
+        for atom in predicate.required_atoms:
+            if atom in ATOMS:
+                keys |= set(ATOMS[atom].tunable_keys)
+    out = {key for key in keys if key in tunables and tunables[key].source is TunableSource.ASSUMED}
+    for key in _conventions(td):
+        row = tunables[key]
+        if row.value is None or row.source is TunableSource.ASSUMED:
+            out.add(key)
+    return tuple(sorted(out))
+
+
+def publish_frames(*, long: MemberEvaluation, short: MemberEvaluation) -> MemberEvaluation:
+    """R2-4.1 B — the ONE row per (run, member, def): the frame that formed
+    when exactly one did; `not_formed`, note `both_sides`, with the long
+    frame's detail when both did; the LONG frame's evaluation (the def as
+    written) when neither did. No order among the non-formed states is
+    defined. Both frames' outcomes ride along in `by_side`."""
+    by_side = {
+        "long": SideOutcome(evaluation=long.evaluation, formation=long.formation, note=long.note),
+        "short": SideOutcome(evaluation=short.evaluation, formation=short.formation, note=short.note),
+    }
+    if long.evaluation == "formed" and short.evaluation == "formed":
+        chosen = long.model_copy(update={"evaluation": "not_formed", "note": "both_sides", "formation": None,
+                                         "direction": None, "i1_after": ()})
+    elif short.evaluation == "formed":
+        chosen = short
+    else:
+        chosen = long
+    return chosen.model_copy(update={"by_side": by_side})
 
 
 def stop_on_protective_side(direction: str, *, trigger: Decimal, stop: Decimal, last_close: Decimal) -> bool:
@@ -546,18 +619,30 @@ def evaluate_member(
     def result(evaluation: Evaluation, detail: RadarScoreDetail, **kw) -> MemberEvaluation:
         return MemberEvaluation(**base, evaluation=evaluation, detail=detail, inputs_sha256=inputs_sha, **kw)
 
+    def both(ev: MemberEvaluation) -> MemberEvaluation:
+        """A result that does not depend on the side: the same for both frames."""
+        return publish_frames(long=ev, short=ev)
+
     ev = evaluability(td)
     if not ev.evaluable:
-        return result(
+        return both(result(
             "not_evaluable", RadarScoreDetail(
                 atoms=(), missing_atoms=seam_safe_missing_atoms(ev.missing_atoms), observations=(),
             ),
             direction=None, missing=ev.missing_atoms,
-        )
+        ))
+    refusals = convention_refusals(td, tunables)
+    if refusals:
+        return both(result(
+            "not_evaluable", RadarScoreDetail(
+                atoms=(), missing_atoms=seam_safe_missing_atoms(refusals), observations=(),
+            ),
+            direction=None, missing=refusals, note="a convention row names a rule the code does not implement",
+        ))
 
     series = working_bars(closed_i1, minutes, as_of=member.as_of)
     run = tuple(rth_only(series, clock))
-    ext = detect_extension(run, ExtensionParams.from_tunables(tunables))
+    params = ExtensionParams.from_tunables(tunables)
     if last_bar is None:
         intraday_stale = True
     else:
@@ -569,21 +654,14 @@ def evaluate_member(
         daily_ok = not daily_staleness(
             member.daily, trade_date=member.trade_date, is_trading_day=clock.calendar.is_trading_day
         ).stale
-    atoms = _extension_atoms(ext)
-    htf = None
-    if not daily_ok:
-        atoms["RangeBreak(HTF).day_count"] = AtomValue(kind="unavailable", reason="no_daily_bars")
-    elif not run:
-        atoms["RangeBreak(HTF).day_count"] = AtomValue(kind="unavailable", reason="insufficient_bars")
-    else:
-        htf = htf_range_break(
-            member.daily, member.trade_date,
-            session_high=max(b.high for b in run), session_low=min(b.low for b in run),
-        )
-        atoms["RangeBreak(HTF).day_count"] = (
-            AtomValue(kind="number", number=Decimal(htf.day_count))
-            if htf.day_count is not None else AtomValue(kind="null", reason="not_instantiated")
-        )
+    # FINAL §2.1: one frame per side; the detectors run inside the frame.
+    frames = {
+        side: build_frame(side, run, daily=member.daily, daily_ok=daily_ok, trade_date=member.trade_date,
+                          params=params, last_close=last_price)
+        for side in ("long", "short")
+    }
+    # R2-4.2 B: factor and seam observations ONCE, on the real bars.
+    ext, htf = frames["long"].extension, frames["long"].htf
 
     observations = _factor_observations(
         ext, member, intraday_stale=intraday_stale, daily_ok=daily_ok, last_price=last_price,
@@ -612,87 +690,108 @@ def evaluate_member(
         direction=None,
     )
 
-    def detail(consulted: set[str], path=None, formed_ts=None) -> RadarScoreDetail:
+    def detail(frame: Frame, consulted: set[str], path=None, formed_ts=None) -> RadarScoreDetail:
         outcomes = []
         for name in sorted(consulted):
-            atom = atoms[name]
+            atom = frame.atoms[name]
             if atom.kind == "unavailable":
                 outcomes.append(AtomOutcome(atom=name, value_kind="unavailable", unavailable=atom.reason))
             elif atom.kind == "null":
                 outcomes.append(AtomOutcome(atom=name, value_kind="unavailable", unavailable="not_instantiated"))
             else:
-                outcomes.append(AtomOutcome(atom=name, value_kind=atom.kind, **{atom.kind: getattr(atom, atom.kind)}))
+                value = getattr(atom, atom.kind)
+                if atom.kind == "number" and name in ATOMS and ATOMS[name].price:
+                    value = frame.real(value)  # X12: a mirrored price is negated back before publication
+                outcomes.append(AtomOutcome(atom=name, value_kind=atom.kind, **{atom.kind: value}))
         return RadarScoreDetail(
             atoms=tuple(outcomes), missing_atoms=(), observations=tuple(seam_obs),
             extension_path=path, formed_bar_ts=formed_ts,
         )
 
     if intraday_stale:
-        return result("input_stale", detail(set()), note="intraday bars older than 2 x radar.scan_interval", **extra)
+        return both(result("input_stale", detail(frames["long"], set()),
+                           note="intraday bars older than 2 x radar.scan_interval", **extra))
 
     def cfg(key: str) -> Any:
         return resolve_cfg(key, dict(tunables), defaults)
 
-    consulted: set[str] = set()
-    try:
-        pre_unknown: set[str] = set()
-        pre = [evaluate_node(p.ast, atoms, cfg, consulted, pre_unknown) for p in td.preconditions if p.expr]
-        avoid_unknown: set[str] = set()
-        avoid = [evaluate_node(p.ast, atoms, cfg, consulted, avoid_unknown) for p in td.avoid if p.expr]
-    except Unsupported as e:
-        return result(
-            "not_evaluable",
-            RadarScoreDetail(atoms=(), missing_atoms=(e.atom,), observations=tuple(seam_obs)),
-            missing=(e.atom,), note=str(e), **extra,
-        )
-    path = ext.path
-    if any(r is False for r in pre):
-        return result("not_formed", detail(consulted, path), **extra)
-    if any(r is None for r in pre):
-        if "catalyst_ref_unknown" in pre_unknown:
-            return result("not_evaluable", detail(consulted, "B_only"),
-                          note="Extension path B only — catalyst unknown in S2 (R4)", **extra)
-        if "no_daily_bars" in pre_unknown:
-            return result("input_stale", detail(consulted, path), note="daily bars missing or stale", **extra)
-        return result("not_formed", detail(consulted, path), note=f"unknown: {sorted(pre_unknown)}", **extra)
-    if any(r is True for r in avoid):
-        return result("avoided", detail(consulted, path, ext.culminating_bar_ts), **extra)
-    if any(r is None for r in avoid):
-        state: Evaluation = "input_stale" if "no_daily_bars" in avoid_unknown else "not_formed"
-        return result(state, detail(consulted, path), note=f"avoid unknown: {sorted(avoid_unknown)}", **extra)
+    def value(raw: Any) -> Any:
+        return _cfg_value(raw, tunables, defaults)
 
-    # --- formed: direction, trigger, stop ---------------------------------
-    if ext.direction is None or ext.culminating_bar_ts is None:
-        return result("not_formed", detail(consulted, path), note="no culminating bar to form on", **extra)
-    # A-01 (FINAL §1): a long-side def trades against an unqualified Extension.
-    trade_direction = "short" if ext.direction == "up" else "long"
-    trigger_def = td.trigger
-    assert isinstance(trigger_def, SimpleTrigger)
-    placement = td.stop.placement
-    assert isinstance(placement, StructuralExtremePlacement)
-    try:
-        n = int(_cfg_value(trigger_def.params["bars_cleared"], tunables, defaults))
-        trigger = bar_break_trigger(run, n, trade_direction)
-        extreme = tracked_extreme(run, ext.direction)
-        buffer = Decimal(str(_cfg_value(placement.buffer.cents.value, tunables, defaults)))
-        stop = structural_stop(extreme.price, trade_direction, buffer)
-    except (InsufficientBars, IncompleteBucket) as e:
-        return result("not_formed", detail(consulted, path), note=f"trigger/stop unavailable: {e}", **extra)
-    if not stop_on_protective_side(trade_direction, trigger=trigger.price, stop=stop.price, last_close=last_price):
-        return result("not_formed", detail(consulted, path), note="stop_wrong_side", **extra)
-    formed_end = ext.culminating_bar_ts + timedelta(minutes=minutes)
-    formation = Formation(
-        extension_direction=ext.direction, trade_direction=trade_direction, setup_ref=UNCLASSIFIED_SETUP,
-        trigger=trigger, extreme=extreme, stop=stop, stop_ref=placement.ref.value,
-        formed_bar_ts=ext.culminating_bar_ts, formed_bar_end=formed_end, leg_count=ext.leg_count,
-        assumed_keys=ASSUMED_CONVENTIONS,
-    )
-    extra["direction"] = trade_direction
-    i1_after = tuple(bar for bar in closed_i1 if bar.ts >= formed_end)
-    return result(
-        "formed", detail(consulted, path, ext.culminating_bar_ts), formation=formation,
-        i1_after=i1_after, **extra,
-    )
+    anchored = _anchored_on_extension(td)
+
+    def on_side(frame: Frame) -> MemberEvaluation:
+        """One frame's evaluation of the def's LONG-side text; prices in the
+        returned formation are real-world (FINAL §2.1 [F-04])."""
+        ext = frame.extension
+        consulted: set[str] = set()
+        try:
+            pre_unknown: set[str] = set()
+            pre = [evaluate_node(p.ast, frame.atoms, cfg, consulted, pre_unknown) for p in td.preconditions if p.expr]
+            avoid_unknown: set[str] = set()
+            avoid = [evaluate_node(p.ast, frame.atoms, cfg, consulted, avoid_unknown) for p in td.avoid if p.expr]
+        except Unsupported as e:
+            return result(
+                "not_evaluable",
+                RadarScoreDetail(atoms=(), missing_atoms=(e.atom,), observations=tuple(seam_obs)),
+                missing=(e.atom,), note=str(e), **extra,
+            )
+        path = ext.path
+        if any(r is False for r in pre):
+            return result("not_formed", detail(frame, consulted, path), **extra)
+        if any(r is None for r in pre):
+            if "catalyst_ref_unknown" in pre_unknown:
+                return result("not_evaluable", detail(frame, consulted, "B_only"),
+                              note="Extension path B only — catalyst unknown in S2 (R4)", **extra)
+            if "no_daily_bars" in pre_unknown:
+                return result("input_stale", detail(frame, consulted, path), note="daily bars missing or stale",
+                              **extra)
+            return result("not_formed", detail(frame, consulted, path), note=f"unknown: {sorted(pre_unknown)}",
+                          **extra)
+        if any(r is True for r in avoid):
+            return result("avoided", detail(frame, consulted, path, ext.culminating_bar_ts), **extra)
+        if any(r is None for r in avoid):
+            state: Evaluation = "input_stale" if "no_daily_bars" in avoid_unknown else "not_formed"
+            return result(state, detail(frame, consulted, path), note=f"avoid unknown: {sorted(avoid_unknown)}",
+                          **extra)
+
+        # --- formed: side binding, trigger, stop -------------------------
+        if ext.direction is None or ext.culminating_bar_ts is None:
+            return result("not_formed", detail(frame, consulted, path), note="no culminating bar to form on",
+                          **extra)
+        # A-01 (FINAL §1): the long-side text trades against an unqualified
+        # Extension — in the frame's coordinates, a DOWN one.
+        if anchored and ext.direction != "down":
+            return result("not_formed", detail(frame, consulted, path),
+                          note="the unqualified Extension runs with this side (A-01)", **extra)
+        placement = td.stop.placement
+        try:
+            trigger = trigger_resolver(td.trigger).resolve(frame, td.trigger, value)
+            stop = stop_resolver(placement).resolve(frame, placement, value)
+        except (InsufficientBars, IncompleteBucket) as e:
+            return result("not_formed", detail(frame, consulted, path), note=f"trigger/stop unavailable: {e}",
+                          **extra)
+        if not stop_on_protective_side("long", trigger=trigger.price, stop=stop.price, last_close=frame.last_close):
+            return result("not_formed", detail(frame, consulted, path), note="stop_wrong_side", **extra)
+        side = frame.side
+        trigger, stop = trigger.unmirrored(side), stop.unmirrored(side)
+        real_direction = ext.direction if side == "long" else ("up" if ext.direction == "down" else "down")
+        formed_end = ext.culminating_bar_ts + timedelta(minutes=minutes)
+        formation = Formation(
+            extension_direction=real_direction, trade_direction=side, setup_ref=UNCLASSIFIED_SETUP,
+            trigger=trigger.level, extreme=stop.extreme, stop=stop.structural, stop_ref=placement.ref.value,
+            formed_bar_ts=ext.culminating_bar_ts, formed_bar_end=formed_end, leg_count=ext.leg_count,
+            assumed_keys=assumed_closure(td, tunables), side_frame="long" if side == "long" else "mirrored",
+            anchor=Anchor(object="Extension", direction=real_direction, bar_ts=ext.culminating_bar_ts),
+            trigger_outcome=trigger, stop_outcome=stop,
+        )
+        i1_after = tuple(bar for bar in closed_i1 if bar.ts >= formed_end)
+        return result(
+            "formed", detail(frame, consulted, path, ext.culminating_bar_ts), formation=formation,
+            i1_after=i1_after, **{**extra, "direction": side},
+        )
+
+    return publish_frames(long=on_side(frames["long"]), short=on_side(frames["short"]))
 
 
 def card_why(td: TradeDef, formation: Formation) -> str:
@@ -1405,9 +1504,14 @@ class EvaluateStage:
                 # Chronology: only i1 bars that opened after the formation
                 # bar closed can touch the stop "before arm".
                 formed_end = card.formed_at + timedelta(minutes=working_minutes(defaults))
+                # R2-4.1 B: the avoid that expires a card is the CARD'S OWN
+                # side's, never the published row's. The refresh reads only
+                # frame-independent inputs (observations once on the real
+                # bars, R2-4.2 B; last price; working bars; EMA9).
+                own_side = ev.by_side[card.direction]
                 expiry = radar_expiry(
                     state=_state(card.state), now=instant, expires_at=card.expires_at,
-                    avoided=ev.evaluation == "avoided", direction=card.direction, stop=card.stop,
+                    avoided=own_side.evaluation == "avoided", direction=card.direction, stop=card.stop,
                     bars_after_formation=[b for b in self._i1_closed(members, card) if b.ts >= formed_end],
                 )
                 update = refresh_card(card, ev, ld, settings, enabled, at=instant, thresholds=thresholds,
@@ -1555,7 +1659,8 @@ def _state(value: str):
 
 
 __all__ = [
-    "ASSUMED_CONVENTIONS", "AtomValue", "CATALYST_REVIEW_FIELDS", "CardUpdate", "EVALUATOR_VERSION",
+    "ASSUMED_CONVENTIONS", "Anchor", "AtomValue", "CATALYST_REVIEW_FIELDS", "CONVENTION_LABELS", "CardUpdate",
+    "EVALUATOR_VERSION", "SideOutcome", "assumed_closure", "convention_refusals", "publish_frames",
     "EvaluateError", "EvaluateStage", "FACTOR_COMPUTERS", "Formation", "LoadedDef", "MemberEvaluation",
     "MemberInput", "OpenRadarCard", "ReceiptChain", "ReplayError", "ReplayedCard", "StageOutcome",
     "UNCLASSIFIED_SETUP", "assumed_keys_of", "build_receipt", "canonical_sha256", "card_dots",

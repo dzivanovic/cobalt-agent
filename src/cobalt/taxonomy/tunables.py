@@ -64,6 +64,10 @@ class TunableSource(str, Enum):
     RULING = "ruling"
     SHEET = "sheet"
     DWV = "dwv"
+    #: FINAL §8 [R2F-09]: a default put in place without his ruling. Its one
+    #: home is `1 - Trading/Assumed Defaults.md` (`load_assumed_tunables`); a
+    #: row stops being assumed only when its `source` reads `ruling`.
+    ASSUMED = "assumed"
 
 
 _SCOPE_PATTERN = re.compile(
