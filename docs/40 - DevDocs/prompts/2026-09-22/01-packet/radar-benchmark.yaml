@@ -1,0 +1,2 @@
+optional_settings:
+  radar.benchmark: {top_n: 20, min_move_pct: 10}
