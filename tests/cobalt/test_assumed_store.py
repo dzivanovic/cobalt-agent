@@ -7,7 +7,8 @@
   `VaultTradeDefs.user_tunables` — an absent note is no rows;
 - the strategy-note reader refuses `source: assumed`;
 - `merge_tunables` hole-fill, B's R2-3.2 predicate, as a truth table (X19);
-- F1 NOT widened: a `per_indicator(...)` assumed row is refused;
+- F1 WIDENED by R48 (fix r3 F2): a `per_indicator(...)` assumed row fills only
+  an engine hole of that same scope; any other is refused;
 - the writer (an L28 command over the existing `VaultWriter`) proven on a
   `tmp_path` vault with its unified diff, and X23;
 - the read-only dry-run `cobalt taxonomy tunables --assumed`.
@@ -81,7 +82,9 @@ def test_the_reader_appends_global_and_per_trade_rows_to_user_tunables(tmp_path)
 
 
 @pytest.mark.parametrize(("row", "match"), [
-    (_row(scope="per_indicator(ema9)", key="flat_threshold.ema9"), "per_indicator"),  # F1: NOT widened
+    # fix r3 F2 (R48, F1 WIDENED): a per_indicator row fills only an engine hole of the SAME scope —
+    # was scope `per_indicator(ema9)` (now accepted, `test_setups_fix_r3.py`); a mismatched scope stays refused
+    (_row(scope="per_indicator(vwap)", key="flat_threshold.ema9"), "per_indicator"),
     (_row(scope="per_trade(example_not_loaded)", key="example_not_loaded.x"), "example_not_loaded"),
     (_row(source="sheet"), "source"),
     (_row(source="dwv"), "source"),

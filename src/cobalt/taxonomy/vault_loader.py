@@ -522,10 +522,12 @@ def load_assumed_tunables(vault_root: Path, *, loaded_slugs: set[str]) -> list[L
     """FINAL §8 (R2-3.1 B): the assumed rows, from `ASSUMED_NOTE`'s one unit.
 
     An absent note is no rows, not an error. Every row validates through
-    `TunableRegistry`, carries scope `global` or `per_trade(<a def loaded in
-    this pass>)` — `per_indicator(...)` is refused as the settled reader
-    words it (derive ESCALATE 4, F1: not widened) — and `source` assumed or
-    ruling. A `global` row has no def: its `slug` is None."""
+    `TunableRegistry`, carries scope `global`, `per_trade(<a def loaded in
+    this pass>)` or — R48 (F1 WIDENED, fix r3 F2) — `per_indicator(<ind>)`
+    for a key whose committed engine row carries that SAME scope and a null
+    value (a HOLE); any other `per_indicator` row is refused, naming why
+    (L1). `source` is assumed or ruling. A `global` or `per_indicator` row
+    has no def: its `slug` is None."""
     path = Path(vault_root) / ASSUMED_NOTE
     if not path.exists():
         return []
@@ -551,6 +553,7 @@ def load_assumed_tunables(vault_root: Path, *, loaded_slugs: set[str]) -> list[L
     except ValidationError as e:
         raise VaultTaxonomyError(f"{where}: invalid tunables rows:\n{e}") from e
     per_trade = {per_trade_scope(slug): slug for slug in loaded_slugs}
+    engine = load_tunables().by_key
     rows: list[LoadedTunable] = []
     for row in registry.tunables:
         if row.source not in (TunableSource.ASSUMED, TunableSource.RULING):
@@ -562,11 +565,23 @@ def load_assumed_tunables(vault_root: Path, *, loaded_slugs: set[str]) -> list[L
             slug = None
         elif row.scope in per_trade:
             slug = per_trade[row.scope]
+        elif row.scope.startswith("per_indicator("):
+            hole = engine.get(row.key)
+            why = ("it has no engine row" if hole is None
+                   else f"its engine row's scope is {hole.scope!r}" if hole.scope != row.scope
+                   else "its engine row is not a hole (it carries a value)" if hole.value is not None
+                   else None)
+            if why is not None:
+                raise VaultTaxonomyError(
+                    f"{where}: tunable {row.key!r} has scope {row.scope!r}, but {why}. A per_indicator "
+                    "row fills ONLY an engine hole (`value: null`) of that same per_indicator scope (R48)."
+                )
+            slug = None
         else:
             raise VaultTaxonomyError(
-                f"{where}: tunable {row.key!r} has scope {row.scope!r}. The reader accepts `global` "
-                "or `per_trade(<a def loaded in this pass>)` only (a per_indicator hole is not "
-                "fillable here as the design words it)."
+                f"{where}: tunable {row.key!r} has scope {row.scope!r}. The reader accepts `global`, "
+                "`per_trade(<a def loaded in this pass>)`, or `per_indicator(<ind>)` filling an engine "
+                "hole of that same scope."
             )
         rows.append(LoadedTunable(key=row.key, slug=slug, note_path=ASSUMED_NOTE, row=row))
     return rows

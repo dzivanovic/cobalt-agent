@@ -83,9 +83,36 @@ Appended one paragraph each: `radar/anatomy/extension.md`, `radar/anatomy/frame.
 `uv run pytest -q tests/cobalt tests/taxonomy -p no:cacheprovider --color=no` → `2438 passed, 361 skipped, 1 xfailed, 15 warnings in 470.94s (0:07:50)` → **2438/0** = 2434 + the 4 new F1 tests; skipped unchanged. With-DB not re-run per row: `test_setups_d4.py` / `test_setups_lego.py` hold no DB-backed test (`grep -c -e "requires_db" -e "cobalt_dev" -e "POSTGRES" -e "dev_db"` → `0` each), and the with-DB BASELINE above already ran on the F1 source.
 
 ### COMMIT
+`c4f5fd7 fix(setups): round 3 — F1 backside / fashionably-late bind side through the mirrored frame (R47)` — `git show --stat HEAD`: 10 files, `254 insertions(+), 53 deletions(-)`: the three DevDocs, this report, `extension.py`, `frame.py`, `evaluate.py`, `test_setups_d4.py`, `test_setups_fix_r3.py` (new), `test_setups_lego.py`.
+
+## F2
+R48 — the assumed-rows reader accepts a `per_indicator` HOLE.
+
+### T
+RED-on-`65c08a0` (vault_loader unchanged since the base). New (5 tests: 1 + a 3-case parametrised refusal + 1): a `tmp_path` vault's `Assumed Defaults.md` carries a `per_indicator(ema9)` row for `flat_threshold.ema9` (this file's literal = the build's constructed fill, not a companion value — L69) → loaded, merged over the null engine row, and the fashionably-late card formed on it (F1's constructed series) carries `assumed_formation` naming the key; three refusal cases (non-hole key, mismatched `<ind>`, no engine row); `source: sheet` refused. Run before C: `1 failed, 4 passed, 4 deselected in 0.16s`; RED line: `cobalt.taxonomy.vault_loader.VaultTaxonomyError: 1 - Trading/Assumed Defaults.md (tunables:assumed): tunable 'flat_threshold.ema9' has scope 'per_indicator(ema9)'. The reader accepts \`global\` or \`per_trade(<a def loaded in this pass>)\` only (a per_indicator hole is not fillable here as the design words it).` (The refusal pins were already green — refused by the old blanket rule; after C they are refused by the new named reasons.)
+
+### C
+`src/cobalt/taxonomy/vault_loader.py` only (`load_assumed_tunables` + its docstring, "F1: not widened" → R48's). `loader.py` untouched (the merge's same-scope hole-fill already serves it); the closure untouched (`flat_threshold.ema9` / `.vwap` / `dist.k.vwap` are `cfg()` tokens of the defs, already in it). `configs/` not touched. After C: `F2: assumed_keys=('anatomy.orientation.extension', 'flat_threshold.ema9', 'frame.warmup_source', 'vwap.anchor')`; refusals now read e.g. `tunable 'flat_threshold.ema9' has scope 'per_indicator(vwap)', but its engine row's scope is 'per_indicator(ema9)'. A per_indicator row fills ONLY an engine hole (\`value: null\`) of that same per_indicator scope (R48).`
+
+### A1
+| test | old | new | row |
+|---|---|---|---|
+| `test_assumed_store.py::test_the_reader_refuses_a_row_outside_its_contract[row0-per_indicator]` | a `per_indicator(ema9)` row for `flat_threshold.ema9` is refused (`match="per_indicator"`) | a `per_indicator(vwap)` row for `flat_threshold.ema9` is refused (`match="per_indicator"`, same strength) — the old case is now ACCEPTED by design and pinned in `test_setups_fix_r3.py` | F2 |
+Red before the re-point: `Failed: DID NOT RAISE <class 'cobalt.taxonomy.vault_loader.VaultTaxonomyError'>`. After: `67 passed, 3 skipped` over `test_assumed_store.py test_setups_d1.py test_setups_vwap_cont.py test_setups_fix_r3.py`. `test_assumed_store.py` is outside the CLOSE path list → ESCALATE.
+
+### PROPOSAL
+Written ONCE to `docs/_inflight/setups-assumed-values-r3-2026-09-22.md`; `git status --porcelain` after the Write listed no line for it (ignored). Details under `## PROPOSAL`.
+
+### D
+`taxonomy/vault_loader.md` + one paragraph; `ADDING-A-SETUP.md` § Where its dials go: the assumed-default line now says a `per_indicator(<ind>)` hole takes an assumed row of that same scope (R48).
+
+### SUITE
+OFFLINE → `2443 passed, 361 skipped, 1 xfailed, 15 warnings in 470.10s (0:07:50)` → **2443/0** = 2438 + 5 new F2 tests. `test_assumed_store.py` is a with-DB file (it holds `requires_db` tests), so the row ran it inside the `.env` pair: `cp …` → `COBALT_ENV=dev uv run pytest -q -p no:cacheprovider -rs --color=no tests/cobalt/test_assumed_store.py tests/cobalt/test_setups_fix_r3.py` → `31 passed in 1.87s` → `rm …/.env` → `ls -la …/.env` → `ls: /Users/cobalt/cobalt-wt/setups-c1/.env: No such file or directory`.
+
+### COMMIT
 (below)
 
 ## CONTINUE
-next: F1 COMMIT, then F2 (T already drafted and RED-run: `1 failed, 4 passed` — the accept test RED with `VaultTaxonomyError … has scope 'per_indicator(ema9)'`)
+next: F2 COMMIT, then F3 (T drafted in the job tmp dir; the base roles pin captured: `F3 roles on the committed day: 160 observations sha=0922dadc29013941a7a2512e038ba9310e4fb791bc3a5e53bdd17a4bf5dd6323`)
 
-(run in progress — row 0 of 6, next under ## CONTINUE)
+(run in progress — row 2 of 6, next under ## CONTINUE)

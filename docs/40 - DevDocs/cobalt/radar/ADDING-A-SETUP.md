@@ -12,7 +12,7 @@ A setup is a **definition** in a strategy note; the radar evaluates it with the 
 
 - Its own numbers: its `tunables:<slug>` unit, keys `<trade_key>.<field>`, scope `per_trade(<trade_key>)`.
 - Engine rows: `configs/cobalt/taxonomy/tunables.yaml` — anatomy keys only; a new key lands `value: null`, `status: proposed`. Never a trader's number.
-- An assumed default: `1 - Trading/Assumed Defaults.md`, unit `tunables:assumed`, `source: assumed` until the owner rules it (`ruling`). It fills an engine hole only of the same scope and unit (`per_indicator` holes stay null — F1). A formation on an assumed key carries the untappable `assumed_formation` dot and no score.
+- An assumed default: `1 - Trading/Assumed Defaults.md`, unit `tunables:assumed`, `source: assumed` until the owner rules it (`ruling`). It fills an engine hole only of the same scope and unit; a `per_indicator(<ind>)` hole takes an assumed row of that same scope (R48). A formation on an assumed key carries the untappable `assumed_formation` dot and no score.
 
 ## How to check it before it goes live
 

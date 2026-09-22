@@ -59,3 +59,15 @@ list `_resolve_every_cfg` merges and `TaxonomyStore.sync` writes and
 prunes. One key supplied twice is refused with both paths named. The
 strategy-note reader `_read_tunables_unit` refuses `source: assumed`, so
 the mark has one home.
+
+**2026-09-22 (fix round 3, F2 — R48, F1 WIDENED).** `load_assumed_tunables`
+now also accepts a `per_indicator(<ind>)` row, but ONLY for a key whose
+committed engine row (`load_tunables()`) carries that same scope and
+`value: null` — a hole. Any other `per_indicator` row is refused, naming
+why: no engine row, the engine row's scope differs, or the engine row
+carries a value. Such a row has no def (`slug` None, like a `global` one);
+`merge_tunables` then fills the hole by its existing rule (same scope, same
+unit, source assumed or ruling). The three holes this opens are
+fashionably-late's two flat thresholds and vwap-continuation's
+`dist.k.vwap`; committed config keeps all three null — their values are
+proposed in a gitignored file and written into the note by the desk.
