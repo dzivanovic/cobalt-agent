@@ -375,8 +375,39 @@ def pullback_to_vwap_mapping() -> dict[str, Any]:
     return mapping
 
 
+def break_retest_turn_mapping() -> dict[str, Any]:
+    """The break-retest-turn SHAPE (second-chance's): a level break accepted,
+    and a retest of THAT break; the `sequence` trigger (break close-through →
+    retest → a close above the prior bar); the `turn_candle` stop; the
+    failed-trap-after-retest and stop-hit-back-inside avoids."""
+    mapping = example_mapping()
+    mapping.update(
+        valid_setups=[{"setup_ref": "range_break", "relation": "with_trend"},
+                      {"setup_ref": "volatility_in_range", "relation": "with_trend"}],
+        preconditions=[{"expr": "RangeBreak(level).state == accepted"},
+                       {"expr": "event(retest) on that RangeBreak"}],
+        trigger={"type": "sequence", "steps": [
+            {"name": "break", "predicate": {"expr": "price close_through Level_ref"},
+             "confirmation_policy": {"type": "close_through"}},
+            {"name": "retest", "predicate": {"expr": "event(retest)"}},
+            {"name": "turn", "predicate": {"expr": "close_above(prior_bar)"},
+             "confirmation_policy": {"type": "close_through"}},
+        ]},
+        avoid=[{"expr": "RangeBreak.state == failed_trap after event(retest)"},
+               {"expr": "event(stop_hit) AND price inside Range(prior)"}],
+        quality_factors=sup.ANATOMY_FACTORS, preferred_windows=["morning", "midday"],
+        preferred_windows_ref="anatomy: after the break",
+    )
+    mapping.pop("radar_watch", None)
+    mapping["stop"]["placement"]["ref"] = "turn_candle"
+    return mapping
+
+
 #: STEP-7: + the `per_indicator` distance hole (F1 — filled HERE only).
 D5_CONSTRUCTED: dict[str, tuple[str, str]] = {**D4_CONSTRUCTED, "dist.k.vwap": ("atr", "1.7")}
+#: STEP-8: the failed-trap window (`A-19`) and the retest tolerance (`A-20`).
+D6_CONSTRUCTED: dict[str, tuple[str, str]] = {**D5_CONSTRUCTED, "range_break.failed_trap_bars": ("bars", "3"),
+                                              "range_break.retest_tolerance_atr": ("atr", "0.35")}
 
 
 def drive_then_range_rows() -> list[dict]:
@@ -430,6 +461,13 @@ SHAPES: dict[str, Shape] = {
         engine=D5_CONSTRUCTED,
         notes="pool admission; morning move with the trade; pullback near VWAP by dist/ATR; trendline_break "
               "(flat case: micro-Range top); indicator stop VWAP at_entry; rejected-resistance avoid",
+    ),
+    "second-chance": Shape(
+        note_slug="example-break-retest-turn",
+        mapping=break_retest_turn_mapping,
+        engine=D6_CONSTRUCTED,
+        notes="RangeBreak(level) accepted + retest on that RangeBreak; sequence break→retest→turn; turn_candle "
+              "stop; failed-trap-after-retest and stop-hit-inside-prior avoids",
     ),
 }
 

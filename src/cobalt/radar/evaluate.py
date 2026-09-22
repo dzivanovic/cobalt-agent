@@ -107,6 +107,7 @@ from cobalt.taxonomy.predicate import (
     Between,
     Cfg,
     Compare,
+    EventAtom,
     InTest,
     Node,
     Not,
@@ -132,6 +133,7 @@ from .anatomy.freshness import RvolObservation, daily_staleness, intraday_stalen
 from .anatomy.indicators import PRECISION as INDICATOR_PRECISION
 from .anatomy.indicators import InsufficientBars, WARMUP_CONVENTION
 from .anatomy.leg_roles import PRE_TEST_CONVENTION
+from .anatomy.range_break import PRIOR_RANGE_CONVENTION, STOP_HIT_CONVENTION, TURN_CANDLE_CONVENTION
 from .anatomy.session_levels import DAYRANGE_CONVENTION, VWAP_CONVENTION
 from .anatomy.registry import evaluability
 from .anatomy.structure import StructuralStop, TrackedExtreme, TriggerLevel
@@ -395,6 +397,46 @@ def _on(node: Qualified, context: Mapping[str, Any] | None, unknowns: set[str]) 
     return bool(ext.instantiated)
 
 
+def _on_that_range_break(node: Qualified, atoms, cfg, consulted, unknowns, context) -> bool | None:
+    """`event(retest) on that RangeBreak` (FINAL §4; STEP-8): the anaphora binds
+    to the RangeBreak the previous precondition evaluated True; with no
+    antecedent it is unknown (`no_antecedent`), never "any"."""
+    if context is None or context.get("antecedent") != "RangeBreak":
+        unknowns.add("no_antecedent")
+        return None
+    return evaluate_node(node.subject, atoms, cfg, consulted, unknowns, context=context)
+
+
+def _after(node: Qualified, atoms, cfg, consulted, unknowns, context) -> bool | None:
+    """`RangeBreak.state == failed_trap after event(retest)` (STEP-8): the state
+    holds AND its trap close came after the retest bar."""
+    if context is None:
+        raise Unsupported("after", "after needs its frame")
+    held = evaluate_node(node.subject, atoms, cfg, consulted, unknowns, context=context)
+    if held is not True:
+        return held
+    obs = context["frame"].objects["range_break"]
+    if isinstance(obs, str) or obs is None or obs.retest_index is None or obs.trap_index is None:
+        return False
+    return obs.trap_index > obs.retest_index
+
+
+def _inside(node: Relation, context, unknowns) -> bool | None:
+    """`price inside Range(prior)` (`A-21`, convention `range_prior.rule`;
+    STEP-8): the last close back under the broken level, above the lowest low
+    before the break."""
+    if context is None:
+        raise Unsupported("inside", "inside needs its frame")
+    frame = context["frame"]
+    obs = frame.objects["range_break"]
+    if isinstance(obs, str):
+        unknowns.add(obs)
+        return None
+    if obs is None or obs.accept_index is None or frame.last_close is None:
+        return False
+    return obs.prior_low <= frame.last_close < obs.level
+
+
 def evaluate_node(
     node: Node, atoms: Mapping[str, AtomValue], cfg: Callable[[str], Any], consulted: set[str], unknowns: set[str],
     *, units: Callable[[str], str | None] | None = None, context: Mapping[str, Any] | None = None,
@@ -413,10 +455,26 @@ def evaluate_node(
         return None if any(r is None for r in results) else True
     if isinstance(node, Between):
         return _between(node, context, unknowns)
+    if isinstance(node, EventAtom):  # STEP-8: an event is a boolean atom of the frame
+        text = render(node)
+        if text not in atoms:
+            raise Unsupported(text, f"event {text} has no detector")
+        consulted.add(text)
+        atom = atoms[text]
+        if atom.kind == "unavailable":
+            unknowns.add(atom.reason or "unavailable")
+            return None
+        return bool(atom.boolean)
     if isinstance(node, Relation) and node.op == "touched":
         return _touched(node, context, unknowns)
+    if isinstance(node, Relation) and node.op == "inside":
+        return _inside(node, context, unknowns)
+    if isinstance(node, Qualified) and node.op == "on" and render(node.anchor) == "that RangeBreak":
+        return _on_that_range_break(node, atoms, cfg, consulted, unknowns, context)
     if isinstance(node, Qualified) and node.op == "on":
         return _on(node, context, unknowns)
+    if isinstance(node, Qualified) and node.op == "after":
+        return _after(node, atoms, cfg, consulted, unknowns, context)
     if isinstance(node, Or):
         results = [evaluate_node(op, atoms, cfg, consulted, unknowns, **kw) for op in node.operands]
         if any(r is True for r in results):
@@ -711,6 +769,10 @@ CONVENTION_LABELS: dict[str, str] = {
     # STEP-7 (C6).
     LEVELS_CONVENTION: "pmh_pdh",  # A-17, the level set of `Level_ref(resistance)`
     REJECTED_CONVENTION: "wick_through_close_back_below_still_below",  # A-18, `frame.rejected`
+    # STEP-8 (C7), `anatomy.range_break`.
+    PRIOR_RANGE_CONVENTION: "session_low_before_break_to_level",  # A-21
+    STOP_HIT_CONVENTION: "computed_from_bars_turn_low_less_buffer",  # A-22
+    TURN_CANDLE_CONVENTION: "turn_bar_low",  # A-23
 }
 
 
@@ -974,8 +1036,15 @@ def evaluate_member(
         context = {"frame": frame, "tunables": tunables, "trigger": td.trigger, "minutes": minutes}
         try:
             pre_unknown: set[str] = set()
-            pre = [evaluate_node(p.ast, frame.atoms, cfg, consulted, pre_unknown, units=units, context=context)
-                   for p in td.preconditions if p.expr]
+            pre = []
+            for p in td.preconditions:
+                if not p.expr:
+                    continue
+                pre.append(evaluate_node(p.ast, frame.atoms, cfg, consulted, pre_unknown, units=units,
+                                         context=context))
+                # STEP-8: the anaphora's antecedent — the RangeBreak a precondition evaluated True on
+                if pre[-1] is True and any(a.startswith("RangeBreak") for a in p.required_atoms):
+                    context["antecedent"] = "RangeBreak"
             avoid_unknown: set[str] = set()
             avoid = [evaluate_node(p.ast, frame.atoms, cfg, consulted, avoid_unknown, units=units, context=context)
                      for p in td.avoid if p.expr]

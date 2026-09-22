@@ -20,3 +20,5 @@ The module's own constants (`SUPPORTED_ATOMS`, `SUPPORTED_TRIGGERS`, `SUPPORTED_
 The domain rule: each atom resolver declares the values it can produce, and a comparison against anything else is named, never evaluated as always-false.
 
 **2026-09-22 (setups one build STEP-5).** A SERVED relation's own operands are not counted as unserved atoms (`formation.atoms.relation_operand_names`). For example, the subject `flat(EMA9, window: …)` and the events `turn` / `cross` of `… between turn and cross`: `predicate_gaps` checks those shapes itself and names any it does not serve (`Unsupported(between:<operand>)`). Since STEP-5 `Extension.state` produces `reverting` and `backside`, so the example above is evaluable.
+
+**2026-09-22 (STEP-8).** A trigger resolver with `serves_def` (the `sequence`) is judged on the whole trigger, through `formation.triggers.trigger_resolver`.

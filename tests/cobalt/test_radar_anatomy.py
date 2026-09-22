@@ -502,9 +502,9 @@ def test_unsupported_atoms_trigger_and_stop_are_named_missing():
     gap = _def_with([{"expr": "Range(micro).instantiated"}, {"expr": "Gap.size > 0"}], [],
                     {"type": "sequence", "steps": [{"name": "break", "predicate": {"expr": "Gap.size > 0"},
                                                     "confirmation_policy": {"type": "intrabar"}}]},
-                    stop_ref="turn_candle")
+                    stop_ref="low_of_day")  # `turn_candle` is served from STEP-8; `low_of_day` is not
     assert set(evaluability(gap).missing_atoms) == {"Gap.size", "trigger:sequence",
-                                                    "stop:structural_extreme:turn_candle"}
+                                                    "stop:structural_extreme:low_of_day"}
 
 
 def test_sequence_trigger_is_named_missing_not_a_crash():
@@ -542,5 +542,7 @@ def test_supported_atoms_are_exactly_the_s2_detectors():
          "Leg(pullback).direction", "Leg(pullback).end", "Leg(pullback).index", "Leg(impulse).direction",
          "Leg(opening_drive OR impulse).direction", "catalyst_ref",
          # + STEP-7's rejected-resistance atom (FINAL §3 D5/D6)
-         "Level_ref(resistance).rejected"}
+         "Level_ref(resistance).rejected",
+         # + STEP-8's RangeBreak lifecycle and events (FINAL §3 D6)
+         "RangeBreak(level).state", "RangeBreak.state", "event(retest)", "event(stop_hit)"}
     )

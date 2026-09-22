@@ -61,6 +61,9 @@ UnavailableReason = Literal[
     "range.micro.touch_tolerance_atr_unset",
     "range.micro.bound_flat_slope_atr_unset",
     "leg.consolidation_max_retrace_unset",
+    # X11, STEP-8: the RangeBreak detector's two null engine keys.
+    "range_break.failed_trap_bars_unset",
+    "range_break.retest_tolerance_atr_unset",
 ]
 
 

@@ -88,6 +88,16 @@ def _recent_higher_low(frame) -> TrackedExtreme:
     return TrackedExtreme(side="low", price=lows[-1].price, bar_ts=lows[-1].ts)
 
 
+def _turn_candle(frame) -> TrackedExtreme:
+    """`turn_candle` (`A-23`, convention `turn_candle.rule`; STEP-8): the low of
+    the sequence's turn bar (the long-side text)."""
+    obs = frame.objects["range_break"]
+    if isinstance(obs, str) or obs is None or obs.turn_index is None:
+        raise InsufficientBars("turn_candle (no turn bar)", 1, 0)
+    bar = frame.run[obs.turn_index]
+    return TrackedExtreme(side="low", price=bar.low, bar_ts=bar.ts)
+
+
 #: §3.6 refs -> the resolver of the extreme they name.
 STRUCTURAL_REFS: dict[StructuralRef, Callable[[Any], TrackedExtreme]] = {
     StructuralRef.SNAPBACK_CANDLE: _tracked,
@@ -95,6 +105,7 @@ STRUCTURAL_REFS: dict[StructuralRef, Callable[[Any], TrackedExtreme]] = {
     StructuralRef.CONSOLIDATION_LOW: _range_base,
     StructuralRef.RANGE_BASE: _range_base,
     StructuralRef.RECENT_HIGHER_LOW: _recent_higher_low,
+    StructuralRef.TURN_CANDLE: _turn_candle,
 }
 
 

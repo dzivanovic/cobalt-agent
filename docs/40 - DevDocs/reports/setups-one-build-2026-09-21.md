@@ -754,6 +754,90 @@ No assertion was removed, and no skip or xfail was added. **X5:** `X5 offline: d
   - `X7 stored: … 'vwap-continuation': {'scans': 7200, 'both_sides': 0, 'formed': 0} …` → **X7 stored vwap-continuation: PASS** (vacuous on the stored sessions).
 - rm → `ls -la .env` → `ls: .env: No such file or directory`.
 
+### COMMIT
+
+`e30bc8a feat(setups): STEP-7 trendline, dist, level set, rejected — vwap-continuation (FINAL C6)`. `git show --stat HEAD`: 15 files, 558 insertions(+), 13 deletions(-); every path is one named above. The two STEP-8 files were left untracked, by name. Long-form `git status` came before it.
+
+## STEP-8
+
+C7: D6 RangeBreak lifecycle, `event(retest)` / `event(stop_hit)`, `Range(prior)`, the anaphora, `sequence`, `turn_candle` → the break-retest-turn setup (second-chance) (FINAL §3 D6, §4; `A-19` … `A-23`).
+
+### T (RED)
+
+New: `tests/cobalt/test_setups_second_chance.py`. It holds:
+
+- the rows; the lifecycle on a definition-written day (a premarket with a 10.05 high, a climb under it, a close through it, holding above, a retest back to it, a turn), and its failed-trap variant;
+- the domain / events / relation shapes; the anaphora with no antecedent; the sequence and `turn_candle`;
+- the per-setup acceptance, the committed day, X7, X11.
+
+The corpus gains `second-chance` (`example-break-retest-turn`, `D6_CONSTRUCTED` = D5's + `A-19`, `A-20` filled HERE only).
+
+Run on the START code (STEP-7's tree, since committed as `e30bc8a`): **8 failed, 3 passed**. The 3 are the failed-trap-does-not-form test, X7 and X11, vacuous. RED lines:
+
+| test | RED |
+|---|---|
+| rows | `KeyError: 'range_break.retest_tolerance_atr'` |
+| lifecycle / trap / domain | `KeyError: 'RangeBreak(level).state'` |
+| the anaphora | `cobalt.radar.evaluate.Unsupported: on needs a served subject and leg` |
+| sequence / `turn_candle` | `AssertionError: assert None is not None` (`trigger_resolver` of the sequence) |
+| shape / path | `AssertionError: ('Range(prior)', 'RangeBreak(level).state', 'RangeBreak.state', 'Unsupported(event)', 'Unsupported(on:event(retest))', 'Unsupported(on:that RangeBreak)', …)` |
+
+The committed-day test was added once the shape formed; its `"PIN"`s failed with `assert ('long', '202...3000', '5.21') == ('PIN', 'PIN', 'PIN', 'PIN')`.
+
+### X
+
+- **Per-setup acceptance, second-chance (FINAL §9 gates 1–5, [F-16] (1)–(5)):**
+  - (1) It FORMS on the committed day with this build's constructed `A-19` / `A-20`: `second-chance on the committed day: formed_scans=55 ticker=FTFT first=('long', '2026-01-06T16:22:00+00:00', '5.3000', '5.21')` → `DEF_WRITTEN_SECOND_CHANCE_{SIDE, FORMED_BAR, TRIGGER, STOP}` = long, 16:22 UTC, 5.3000, 5.21, each marked `# engine at STEP-8; a checker house re-derives it blind (66, [F-16] (1))`.
+  - (2) The property holds; it is not in `AWAITING_A_DAY`.
+  - (3) The live-note test: NOT RUN (skipped by design; the deploy runs it and a SKIP is RED — [F-16] (2)).
+  - (4) Evaluable (its `level_significance` read stays human, L11, outside the def's expr).
+  - (5) The geometry guard holds, asserted.
+  - The definition-written path forms long: trigger = the turn bucket's close 10.28, stop = `structural_stop(turn low 10.09, long, 0.02)`, anchor `RangeBreak(level)`. The failed-trap variant does not form.
+  - At production defaults `A-19` / `A-20` are null, so it reads `_unset`. Both are GLOBAL holes, so the assumed note can fill them (not F1).
+- **The anaphora:** with no antecedent → unknown, `no_antecedent` (asserted), never "any".
+- **X7 offline:** `X7 second-chance: scans=392 formed=55 both_sides=0` → PASS.
+- **X11:** `X11 second-chance: atoms=5 failures=[]` → PASS. The closed list gains `range_break.failed_trap_bars_unset` and `range_break.retest_tolerance_atr_unset`.
+- **X5:** `X5 offline: defs=9 frames=2 members=50 runs_s=[5.29, 5.18, 5.29] p95~max=5.29s budget=100.0s` → PASS.
+
+### C
+
+| file | change |
+|---|---|
+| `src/cobalt/radar/anatomy/range_break.py` (new) | `range_break` (lifecycle, retest, turn, prior low), `choose` (the level set's latest break), `range_break_params`; the `A-21` / `A-22` / `A-23` convention names |
+| `src/cobalt/radar/anatomy/frame.py` | `RangeBreak(level).state` / `RangeBreak.state`, `event(retest)`, `event(stop_hit)` (from bars: the turn low less the buffer, touched later); object `range_break` |
+| `src/cobalt/radar/formation/atoms.py` | the four rows; `EventAtom` served; `on … that RangeBreak`, `after`, `inside` shapes; `RELATIONS` `after`, `inside` |
+| `src/cobalt/radar/formation/triggers.py` | `Sequence` (`serves_def`: the three step shapes); `trigger_resolver` prefers `serves_def` |
+| `src/cobalt/radar/formation/stops.py` | `STRUCTURAL_REFS[turn_candle]` |
+| `src/cobalt/radar/formation/anchors.py` | the `RangeBreak(level)` anchor |
+| `src/cobalt/radar/evaluate.py` | EventAtom in `evaluate_node`; `_on_that_range_break` (antecedent from `on_side`); `_after`; `_inside`; three labels |
+| `src/cobalt/radar/seam.py` | two `_unset` reasons (X11) |
+| `configs/cobalt/taxonomy/tunables.yaml` | `range_break.retest_tolerance_atr` (`A-20`, atr, null); label rows `range_prior.rule` (`A-21`), `event.stop_hit.source` (`A-22`), `turn_candle.rule` (`A-23`). `range_break.failed_trap_bars` (`A-19`) was already a null row |
+
+### A1
+
+| test | old assertion | new assertion | FINAL tag |
+|---|---|---|---|
+| `test_radar_anatomy.py::test_unsupported_atoms_trigger_and_stop_are_named_missing` (its STEP-6 naming half) | missing ∋ `stop:structural_extreme:turn_candle` | the same def with `low_of_day` (still unserved); missing = {`Gap.size`, `trigger:sequence`, `stop:structural_extreme:low_of_day`}, exactly | §3 D6 (`turn_candle` served) |
+| `test_radar_anatomy.py::test_supported_atoms_are_exactly_the_s2_detectors` | the STEP-7 set | + the four RangeBreak atoms, exactly | §3 D6 |
+| card pins: [F-11] ×2, Lego (ii) ×2, T6 formed card | `tunables_sha256` mapped without the rows up to STEP-7 | … and without STEP-8's four rows | §3 D6 (new rows) |
+
+No assertion was removed, and no skip or xfail was added.
+
+### D
+
+- New: `radar/anatomy/range_break.md`.
+- Appended: `radar/anatomy/frame.md`, `registry.md`, `radar/formation/atoms.md`, `triggers.md`, `stops.md`, `anchors.md`, `radar/evaluate.md`, `radar/seam.md`.
+
+### SUITE
+
+- **Offline.** `uv run pytest -q tests/cobalt tests/taxonomy` (background).
+  - The first run: `7 failed, 2404 passed` — the A1 rows.
+  - After the re-points: **`2411 passed, 361 skipped, 1 xfailed, 15 warnings in 422.67s (0:07:02)`**, 0 failed. Against STEP-7 (2399), the +12 are exactly `test_setups_second_chance.py`'s 12 tests.
+- **With-DB.** cp → `COBALT_ENV=dev uv run pytest -q` over STEP-7's set + `tests/cobalt/test_setups_second_chance.py` + `tests/experiments/setups_one`, with `-s` → **`446 passed, 1 skipped in 1705.92s (0:28:25)`**. The skip is the live-note proof.
+  - VERBATIM: `X7 stored: … 'second-chance': {'scans': 7200, 'both_sides': 0, 'formed': 1883} …` → **X7 stored second-chance: PASS**.
+- rm → `ls -la .env` → `ls: .env: No such file or directory`.
+- **A source fix before the commit** (so STEP-9's Lego test (i) needs no source change). The re-run PREFLIGHT grep found two setup names that I had written into STEP-4 / STEP-8 docstrings: `anatomy/leg_roles.py:22` ("hitchhiker") and `anatomy/range_break.py:20` ("second-chance's"). Both were rewritten in anatomy words ("the drive-then-range shape", "the break-retest-turn trigger steps"). Docstring text only; the offline suite was re-run on it → `2411 passed, 361 skipped, 1 xfailed, 15 warnings in 416.36s (0:06:56)`, 0 failed.
+
 ## ESCALATE
 
 (running list; the ALWAYS items (i)–(xii) are written at CLOSE)
@@ -775,18 +859,20 @@ No assertion was removed, and no skip or xfail was added. **X5:** `X5 offline: d
 14. **A null `cfg()` was compared as `None` (a latent defect, fixed at STEP-5).** Before, a predicate against a null engine row (the drive-then-range shape's `Range(micro).wick_ratio > cfg(range.wick_ratio_max)`) raised `Unsupported` and made the def `not_evaluable` at production defaults, whenever its preconditions held. It now reads unknown, `<key>_unset`.
 15. **The leg roles carry no size (STEP-6).** `legs()` ends a leg at one opposing bar (taxonomy §3.1, byte-identical by X16), so legs alternate. The leg before a pullback is therefore always the other direction, and the nine-ema shape's `Leg(opening_drive OR impulse).direction == trade_direction` holds whenever a pullback exists. The taxonomy defines no magnitude for `impulse` / `pullback`, and none is invented here. `ASK DESK: should impulse / pullback carry a size rule (a new A-nn key) before cards? [06:0x]` — safe default: none.
 16. **vwap-continuation's `rejected` avoid: the note and the sheet diverge (per the companion). REPORTED, not fixed.** The build follows the note (L32 / L65); the level set and the rejection rule are the null conventions `levels.set` / `level.rejected.rule`, so every card formed on them is marked assumed. The divergence's content is his, in the gitignored companion, and is not quoted here.
+17. **Two constructions the FINAL leaves open, built with a named choice (STEP-8).** (a) `close_above(prior_bar)` is read as a close above the prior bar's HIGH, which is the clear turn; a close above its close would read almost any up bar as a turn. (b) `event(stop_hit)` covers the RangeBreak's own completed sequence only; an earlier formation of the same (ticker, def, day) on a DIFFERENT level is not tracked. Both are resolver rules, not assumed values. `ASK DESK: are these the readings he means? [07:xx]` — safe default: as built.
 
 ## CONTINUE
 
-next: STEP-8 (C7), second-chance. Already drafted (untracked): `src/cobalt/radar/anatomy/range_break.py` and `tests/cobalt/test_setups_second_chance.py`, with RED recorded (8 failed, 3 passed). Re-apply the second-chance shape to `setups_shapes.py` (`break_retest_turn_mapping`, `D6_CONSTRUCTED`, the SHAPES row). Then wire:
-- the frame: `RangeBreak(level).state` / `RangeBreak.state`, `event(retest)`, `event(stop_hit)`, objects `range_break`;
-- EventAtom in the interpreter + `predicate_gaps`;
-- `on` for `event(retest) on that RangeBreak` (anaphora via `context["antecedent"]`);
-- `after`; `inside Range(prior)`;
-- `sequence` (`serves_def`); `turn_candle`;
-- the `RangeBreak(level)` anchor;
-- seam reasons; rows `A-20`, `A-21`, `A-22`, `A-23`.
+next: STEP-9 (tests + DevDoc ONLY) in `tests/cobalt/test_setups_lego.py`:
+- (i) no setup name in src: the baseline is `slug.py:11`, `:21`, `trade_def.py:152`, `:637`, plus the D4 anatomy word `backside` in `extension.py` / `atoms.py`;
+- (ii) Rubberband through `TRIGGERS["bar_break"]` / `STOPS["structural_extreme"]`;
+- (iii) the eighth def `example-lego-eighth`;
+- (iv) evaluability for all eight;
+- (v) `docs/40 - DevDocs/cobalt/radar/ADDING-A-SETUP.md` + the drift test;
+- X22 over all eight; the frame property; X5; the X7 summary; `AWAITING_A_DAY` and `AWAITING_A_RULING`.
+
+Then CLOSE.
 
 Rules still in force: file content only through Write / Edit; pins from a test's own failure output; long-form `git status` before a commit; no unlisted commands (scratch probes go in a pytest file under the job's tmp).
 
-(run in progress — step 8 of 9, next under ## CONTINUE)
+(run in progress — step 9 of 9, next under ## CONTINUE)

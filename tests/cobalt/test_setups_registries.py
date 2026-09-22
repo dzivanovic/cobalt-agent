@@ -99,8 +99,9 @@ STEP3_KEYS = ("dayrange.session", "frame.warmup_source", "slope_norm.bars", "vwa
               "leg.consolidation_max_retrace", "range.micro.bound_flat_slope_atr", "range.micro.touch_tolerance_atr",
               # + STEP-5's `A-08` row, STEP-6's three convention rows
               "extension.snapback_bars_cleared", "catalyst_ref.resolver", "leg.pre_test", "extension.on_leg.form",
-              # + STEP-7's two convention rows
-              "levels.set", "level.rejected.rule")
+              # + STEP-7's two convention rows, STEP-8's four rows
+              "levels.set", "level.rejected.rule", "range_break.retest_tolerance_atr", "range_prior.rule",
+              "event.stop_hit.source", "turn_candle.rule")
 
 
 def _tunables_digests() -> tuple[str, str]:

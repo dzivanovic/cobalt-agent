@@ -63,11 +63,20 @@ def _pullback(frame) -> FrameAnchor | str:
     return FrameAnchor(object="Leg(pullback)", direction="up", bar_ts=roles.pullback.end_ts)
 
 
+def _range_break(frame) -> FrameAnchor | str:
+    obs = frame.objects["range_break"]
+    if isinstance(obs, str) or obs is None or obs.accept_index is None:
+        return "no accepted RangeBreak to form on"
+    return FrameAnchor(object="RangeBreak(level)", direction="up", bar_ts=frame.run[obs.accept_index].ts)
+
+
 ANCHORS: tuple[AnchorResolver, ...] = (
     AnchorResolver("Extension", "Extension.", _extension),
     AnchorResolver("Range(micro)", "Range(micro).", _micro_range),
     # STEP-6: the pullback's last bar (the long-side text's trade side is `up`).
     AnchorResolver("Leg(pullback)", "Leg(pullback)", _pullback),
+    # STEP-8: the RangeBreak's accepting close.
+    AnchorResolver("RangeBreak(level)", "RangeBreak(level)", _range_break),
 )
 
 

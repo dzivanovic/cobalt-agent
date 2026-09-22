@@ -85,3 +85,11 @@ The `indicator_cross` trigger, the `recent_higher_low` / `measured_fraction` sto
 New objects: `pullback_roles` and `pre_test_bars`. The `touched` and `on` relations, the `Leg(pullback)` anchor and the `indicator_rejection` / `indicator` bricks read them.
 
 **2026-09-22 — `Level_ref(resistance).rejected` (STEP-7).** It is served lazily over the frame's own `PMH` / `PDH`: the level set `A-17`, resistance for the long-side text. On the mirrored frame these are the real PML / PDL. A level reads `rejected` when some RTH bar's high reached it and closed back below it, and the last close is still below it (`A-18`). A missing premarket print skips PMH; missing daily bars leave the answer unknown (`no_daily_bars`) unless PMH already decided it.
+
+**2026-09-22 — the RangeBreak (STEP-8).** The object `range_break` is `range_break.choose` over the frame's PMH / PDH, with the seeded ATR. It serves these atoms:
+
+- `RangeBreak(level).state`, with the alias `RangeBreak.state`;
+- `event(retest)`;
+- `event(stop_hit)` (`A-22`): the sequence's stop, the turn candle's low less the buffer, touched by a LATER bar's low. It is computed from bars, never from the card ledger.
+
+The `sequence` trigger, the `turn_candle` stop, the `RangeBreak(level)` anchor, and the `after` / `inside` relations read the same object.

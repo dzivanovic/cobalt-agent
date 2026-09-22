@@ -309,6 +309,47 @@ tunables:
     source: dwv
     consumers: ["cobalt.radar.anatomy.frame (Level_ref(resistance).rejected)"]
 
+  # --- STEP-8 (C7): the RangeBreak lifecycle -----------------------------
+  # `A-20`: a retest comes back within this many ATR(working_tf) of the level.
+  - key: range_break.retest_tolerance_atr
+    value: null
+    unit: atr
+    scope: global
+    dynamic: true
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.anatomy.range_break (event(retest))"]
+
+  # `A-21`: what `Range(prior)` spans.
+  - key: range_prior.rule
+    value: null
+    unit: label
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.evaluate (price inside Range(prior))"]
+
+  # `A-22`: where `event(stop_hit)` comes from (bars, never the card ledger).
+  - key: event.stop_hit.source
+    value: null
+    unit: label
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.anatomy.frame (event(stop_hit))"]
+
+  # `A-23`: what the `turn_candle` ref is.
+  - key: turn_candle.rule
+    value: null
+    unit: label
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.formation.stops (turn_candle)"]
+
   # `A-05`, `A-06`, `A-12`: conventions the frame's resolvers implement.
   - key: frame.warmup_source
     value: null

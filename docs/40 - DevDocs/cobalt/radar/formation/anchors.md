@@ -9,4 +9,6 @@ Added 2026-09-22 in STEP-4 of the setups one build (FINAL §2.4: `extension_dire
 
 **2026-09-22 (STEP-6):** `Leg(pullback)` anchors at the pullback's last bar, direction `up` in frame coordinates. It comes after `Extension` and `Range(micro)` in the table, so a def that names those objects still hangs on them.
 
+**2026-09-22 (STEP-8):** `RangeBreak(level)` anchors at the RangeBreak's accepting close, direction `up`.
+
 Adding an anchor for a new setup is one row here. The stage, the card and the registry are untouched.

@@ -53,7 +53,8 @@ from .extension import (
     extension_lifecycle,
     lifecycle_params,
 )
-from .structure import tracked_extreme
+from .range_break import RangeBreakObservation, choose, range_break_params
+from .structure import structural_stop, tracked_extreme
 from .in_play import in_play_state
 from .indicators import ATR_PERIOD, ema, seeded, wilder_atr
 from .leg import legs
@@ -443,6 +444,50 @@ def _d1_resolvers(
             return AtomValue(kind="unavailable", reason=unknown)
         return AtomValue(kind="boolean", boolean=False)
 
+    # --- STEP-8: RangeBreak(level), retest, the sequence, Range(prior), stop_hit --
+    def rb() -> RangeBreakObservation | str | None:
+        """The level set's RangeBreak, its unset reason, or None (no level)."""
+        def compute():
+            params, unset = range_break_params(tunables)
+            if unset is not None:
+                return unset
+            if atr() is None:
+                return "insufficient_seed"
+            levels = [v.number for v in (premarket("high")(), prior("high")()) if v.kind == "number"]
+            return choose(run, levels, params, atr=atr())
+        return once("range_break", compute)
+
+    def rb_state() -> AtomValue:
+        obs = rb()
+        if isinstance(obs, str):
+            return AtomValue(kind="unavailable", reason=obs)
+        if obs is None:
+            return AtomValue(kind="null", reason="not_instantiated")
+        return AtomValue(kind="symbol", symbol=obs.state)
+
+    def retest_event() -> AtomValue:
+        obs = rb()
+        if isinstance(obs, str):
+            return AtomValue(kind="unavailable", reason=obs)
+        return AtomValue(kind="boolean", boolean=obs is not None and obs.retest_index is not None)
+
+    def stop_hit_event() -> AtomValue:
+        """`A-22`: a completed sequence whose stop (the turn candle's low less
+        the buffer) a LATER bar's low touched — from bars, never the ledger."""
+        obs = rb()
+        if isinstance(obs, str):
+            return AtomValue(kind="unavailable", reason=obs)
+        if obs is None or obs.turn_index is None:
+            return AtomValue(kind="boolean", boolean=False)
+        buffer = Decimal(str(tunables["stop.buffer"].value))
+        stop = structural_stop(run[obs.turn_index].low, "long", buffer).price
+        return AtomValue(kind="boolean", boolean=any(b.low <= stop for b in run[obs.turn_index + 1:]))
+
+    objects.update({"range_break": rb})
+    extension_lazy_step8 = {
+        "RangeBreak(level).state": rb_state, "RangeBreak.state": rb_state,
+        "event(retest)": retest_event, "event(stop_hit)": stop_hit_event,
+    }
     objects.update({
         "Range(micro)": micro, "Leg(opening_drive)": drive,
         "series": lambda: series, "turn_index": turn_index, "cross_index": lambda: cross_index,
@@ -458,6 +503,7 @@ def _d1_resolvers(
         "Leg(opening_drive OR impulse).direction": role_atom("either", "direction"),
         "catalyst_ref": catalyst_ref,
         "Level_ref(resistance).rejected": rejected,
+        **extension_lazy_step8,
     })
 
     return {

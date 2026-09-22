@@ -53,7 +53,8 @@ STEP3_KEYS = ("dayrange.session", "frame.warmup_source", "slope_norm.bars", "vwa
 ADDED_KEYS = (*STEP3_KEYS, "leg.consolidation_max_retrace", "range.micro.bound_flat_slope_atr",
               "range.micro.touch_tolerance_atr", "extension.snapback_bars_cleared",
               "catalyst_ref.resolver", "leg.pre_test", "extension.on_leg.form",
-              "levels.set", "level.rejected.rule")
+              "levels.set", "level.rejected.rule",
+              "range_break.retest_tolerance_atr", "range_prior.rule", "event.stop_hit.source", "turn_candle.rule")
 STEP3_CONVENTIONS = ("dayrange.session", "frame.warmup_source", "vwap.anchor")
 
 

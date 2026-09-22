@@ -134,3 +134,11 @@ The ONE `EVALUATOR_VERSION` bump of STEP-1 covers this step. Nothing deploys bet
 
 - `_value` evaluates `dist(a, b)` as `|a − b|`: unknown and null propagate, and a non-number is `Unsupported(dist)`.
 - `CONVENTION_LABELS` gains `levels.set` → `pmh_pdh` (A-17) and `level.rejected.rule` → `wick_through_close_back_below_still_below` (A-18).
+
+## 2026-09-22 — events, the anaphora, `after`, `inside` (setups one build STEP-8; FINAL C7)
+
+- **Events.** `evaluate_node` evaluates an `EventAtom` as the frame's boolean atom.
+- **The anaphora.** `on_side` records `context["antecedent"] = "RangeBreak"` when a precondition naming a RangeBreak evaluates True. `_on_that_range_break` needs that antecedent, else it is unknown (`no_antecedent`), never "any".
+- **`_after`:** the state holds AND its trap close came after the retest bar.
+- **`_inside`:** the last close is back under the broken level, above `Range(prior)`'s floor.
+- **Labels.** `CONVENTION_LABELS` gains `range_prior.rule` → `session_low_before_break_to_level` (A-21), `event.stop_hit.source` → `computed_from_bars_turn_low_less_buffer` (A-22) and `turn_candle.rule` → `turn_bar_low` (A-23).

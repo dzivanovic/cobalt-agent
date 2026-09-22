@@ -84,3 +84,15 @@ What they declare:
 
 - **`dist(a, b)`** (`dist_operands`) is a served function: `|a − b|` in price, with its operands' gaps walked. The vwap-continuation shape compares it to `cfg(dist.k.vwap) × ATR(working_tf)`. `dist.k.vwap` is a `per_indicator` hole (F1, never widened), so at production defaults it reads `dist.k.vwap_unset`.
 - **`Level_ref(resistance).rejected`** is a boolean row with conventions `levels.set` (`A-17`, the set = {PMH, PDH}) and `level.rejected.rule` (`A-18`: a wick through the level, a close back below, and the last close still below). The frame computes it.
+
+## 2026-09-22 — the RangeBreak lifecycle and its events (setups one build STEP-8)
+
+- **Rows.**
+  - `RangeBreak(level).state` and its alias `RangeBreak.state`, with domain `{forming, break_attempt, accepted, failed_trap}`.
+  - `event(retest)` and `event(stop_hit)`: booleans. `stop_hit` also declares `event.stop_hit.source` (A-22) and `turn_candle.rule` (A-23).
+  - All of them declare `range_break.TUNABLE_KEYS`, the level set and the warm-up.
+- **Shapes.** `predicate_gaps` serves an `EventAtom` whose render is a row, and three new relation shapes:
+  - `event(retest) on that RangeBreak`: the anaphora;
+  - `<RangeBreak state> after event(retest)`;
+  - `price inside Range(prior)`: `RELATIONS["inside"]`, convention `range_prior.rule` (A-21).
+- `relation_operand_names` lists each shape's consumed operands.

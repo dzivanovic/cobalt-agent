@@ -19,7 +19,7 @@ SEPARATE function over its legs plus the Range(micro) observation.
     - otherwise, when the first leg has ended (an opposing bar), `pullback`;
     - a drive still running (no opposing bar, no range) → no termination.
 * `opening_drive_literal` is the taxonomy's literal reading, kept ONLY for
-  X15 ("evaluate hitchhiker … under both readings"): the leg ends at the
+  X15 (the drive-then-range shape "under both readings"): the leg ends at the
   first opposing bar, so it is `consolidation` only when the micro-Range
   already includes that bar; else `pullback`.
 

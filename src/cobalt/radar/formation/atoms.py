@@ -30,6 +30,7 @@ from cobalt.taxonomy.predicate import (
     Between,
     Cfg,
     Compare,
+    EventAtom,
     InTest,
     Node,
     Not,
@@ -50,6 +51,7 @@ from ..anatomy import in_play as _in_play
 from ..anatomy import indicators as _indicators
 from ..anatomy import leg_roles as _leg_roles
 from ..anatomy import micro_range as _micro_range
+from ..anatomy import range_break as _range_break
 from ..anatomy import session_levels as _levels
 from ..anatomy import slope as _slope
 
@@ -102,6 +104,8 @@ ON_LEG_CONVENTION = "extension.on_leg.form"
 #: `A-17`: which levels count (the set); `A-18`: what "rejected" means.
 LEVELS_CONVENTION = "levels.set"
 REJECTED_CONVENTION = "level.rejected.rule"
+_RB_STATES = frozenset({"forming", "break_attempt", "accepted", "failed_trap"})
+_RB_REASONS = ("insufficient_seed", "not_instantiated", *(f"{k}_unset" for k in _range_break.TUNABLE_KEYS))
 _RANGE_KEYS = _micro_range.TUNABLE_KEYS
 _RANGE_REASONS = ("insufficient_seed", "insufficient_bars", "incomplete_bucket",
                   *(f"{key}_unset" for key in _micro_range.TUNABLE_KEYS))
@@ -167,6 +171,15 @@ ATOMS: dict[str, AtomResolver] = _serves(
     # --- D5 / D6 part (STEP-7): the level set and `rejected` ------------------
     AtomResolver("Level_ref(resistance).rejected", "boolean", conventions=(LEVELS_CONVENTION, REJECTED_CONVENTION),
                  reasons=("insufficient_bars", "no_daily_bars")),
+    # --- D6 (STEP-8): the RangeBreak lifecycle and its events -----------------
+    *(AtomResolver(name, "symbol", domain=_RB_STATES, tunable_keys=_range_break.TUNABLE_KEYS,
+                   conventions=(LEVELS_CONVENTION, _WARM), reasons=_RB_REASONS)
+      for name in ("RangeBreak(level).state", "RangeBreak.state")),
+    AtomResolver("event(retest)", "boolean", tunable_keys=_range_break.TUNABLE_KEYS,
+                 conventions=(LEVELS_CONVENTION, _WARM), reasons=_RB_REASONS),
+    AtomResolver("event(stop_hit)", "boolean", tunable_keys=_range_break.TUNABLE_KEYS,
+                 conventions=(LEVELS_CONVENTION, _WARM, _range_break.STOP_HIT_CONVENTION,
+                              _range_break.TURN_CANDLE_CONVENTION), reasons=_RB_REASONS),
 )
 
 
@@ -254,13 +267,36 @@ def _touched_gaps(node: Relation) -> set[str]:
     return gaps
 
 
+#: STEP-8: `event(retest) on that RangeBreak` — the anaphora binds to the
+#: RangeBreak the previous precondition evaluated True (FINAL §4).
+ON_EVENTS = frozenset({"event(retest)"})
+ANAPHORA = frozenset({"that RangeBreak"})
+
+
 def _on_gaps(node: Qualified) -> set[str]:
+    subject, anchor = render(node.subject), render(node.anchor)
+    if subject in ON_EVENTS and anchor in ANAPHORA:
+        return set()
     gaps = set()
-    if render(node.subject) not in ON_SUBJECTS:
-        gaps.add(f"Unsupported(on:{render(node.subject)})")
-    if render(node.anchor) not in ON_LEGS:
-        gaps.add(f"Unsupported(on:{render(node.anchor)})")
+    if subject not in ON_SUBJECTS:
+        gaps.add(f"Unsupported(on:{subject})")
+    if anchor not in ON_LEGS:
+        gaps.add(f"Unsupported(on:{anchor})")
     return gaps
+
+
+def _after_gaps(node: Qualified) -> set[str]:
+    """STEP-8: `RangeBreak.state == failed_trap after event(retest)`."""
+    ok = (isinstance(node.subject, Compare) and render(node.subject.left) in ("RangeBreak.state",
+                                                                            "RangeBreak(level).state")
+          and render(node.anchor) == "event(retest)")
+    return set() if ok else {f"Unsupported(after:{render(node)})"}
+
+
+def _inside_gaps(node: Relation) -> set[str]:
+    """STEP-8: `price inside Range(prior)` (`A-21`)."""
+    ok = render(node.left) == "price" and render(node.right) == "Range(prior)"
+    return set() if ok else {f"Unsupported(inside:{render(node)})"}
 
 
 def relation_operand_names(node: Node) -> set[str]:
@@ -272,6 +308,10 @@ def relation_operand_names(node: Node) -> set[str]:
         return {render(node.left), render(node.right)}
     if isinstance(node, Qualified) and node.op == "on" and not _on_gaps(node):
         return {render(node.subject), render(node.anchor)}
+    if isinstance(node, Qualified) and node.op == "after" and not _after_gaps(node):
+        return {render(node.anchor)}
+    if isinstance(node, Relation) and node.op == "inside" and not _inside_gaps(node):
+        return {render(node.right)}
     if isinstance(node, Compare):  # a bound direction form / a served `dist` is a value, not an atom
         return {render(s) for s in (node.left, node.right) if isinstance(s, Ref) and (
             bound_direction(s) is not None or (dist_operands(s) is not None and not _operand_gaps(s)))}
@@ -290,6 +330,9 @@ RELATIONS: dict[str, RelationResolver] = {
     # Leg(x)` = that atom of the Extension detector run over the leg's bars.
     "touched": RelationResolver("touched"),
     "on": RelationResolver("on", conventions=(_leg_roles.PRE_TEST_CONVENTION, ON_LEG_CONVENTION)),
+    # STEP-8: `<RangeBreak state> after event(retest)`; `price inside Range(prior)` (`A-21`).
+    "after": RelationResolver("after"),
+    "inside": RelationResolver("inside", conventions=(_range_break.PRIOR_RANGE_CONVENTION,)),
 }
 
 #: Symbols bound from the frame (FINAL §4): in a frame, the long-side text's
@@ -396,13 +439,20 @@ def predicate_gaps(node: Node) -> set[str]:
         for item in node.right.items:
             gaps |= _operand_gaps(item)
         return gaps | _domain_gaps(node.left, node.right.items)
+    if isinstance(node, EventAtom):  # STEP-8: an event served as a boolean atom
+        text = render(node)
+        return set() if text in ATOMS else {text}
     if isinstance(node, Relation):
         if node.op == "touched" and node.op in RELATIONS:
             return _touched_gaps(node)
+        if node.op == "inside" and node.op in RELATIONS:
+            return _inside_gaps(node)
         return set() if node.op in RELATIONS else {node.op}
     if isinstance(node, Qualified):
         if node.op == "on" and node.op in RELATIONS:
             return _on_gaps(node)
+        if node.op == "after" and node.op in RELATIONS:
+            return _after_gaps(node) | predicate_gaps(node.subject)
         return set() if node.op in RELATIONS else {node.op}
     if isinstance(node, Between):
         return _between_gaps(node) if "between" in RELATIONS else {"between"}

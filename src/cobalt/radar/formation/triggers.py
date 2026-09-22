@@ -216,12 +216,47 @@ class TrendlineBreak:
                               why="break of the pullback's trendline", level=level)
 
 
+class Sequence:
+    """`sequence {steps[]}` (taxonomy §10.2; FINAL §4; STEP-8): the steps in
+    order, the last step's bar is the trigger bar. Served for exactly the step
+    shapes the frame's RangeBreak observation resolves, in this order:
+    `price close_through Level_ref` (the break of the RangeBreak's level, its
+    accepting close), `event(retest)` (its retest), `close_above(prior_bar)` (the
+    turn: a close above the prior bar's high). The trigger is the turn bar's
+    close; any other step list is not served (named `trigger:sequence`)."""
+
+    kind = "sequence"
+    STEPS = ("price close_through Level_ref", "event(retest)", "close_above(prior_bar)")
+
+    def serves(self, params: dict[str, Any]) -> bool:
+        return False  # a sequence has no params: `serves_def` reads its steps
+
+    def serves_def(self, trigger_def) -> bool:
+        steps = getattr(trigger_def, "steps", None) or ()
+        return tuple(getattr(s.predicate, "expr", None) for s in steps) == self.STEPS
+
+    def resolve(self, frame, trigger_def, value: Callable[[Any], Any]) -> TriggerOutcome:
+        obs = frame.objects["range_break"]
+        if isinstance(obs, str) or obs is None or obs.turn_index is None:
+            raise InsufficientBars("sequence (break → retest → turn not complete)", 1, 0)
+        bar = frame.run[obs.turn_index]
+        level = TriggerLevel(trade_direction="long", price=bar.close, bars_cleared=0,
+                             bar_ts=tuple(frame.run[i].ts for i in (obs.accept_index, obs.retest_index,
+                                                                   obs.turn_index)))
+        return TriggerOutcome(
+            state="armed", price=bar.close, ref_bar_ts=bar.ts, kind=self.kind,
+            inputs={"level": str(obs.level), "steps": list(self.STEPS)},
+            why="break → retest → turn of the level", level=level,
+        )
+
+
 TRIGGERS: dict[TriggerType, TriggerResolver] = {
     TriggerType.BAR_BREAK: BarBreak(),
     TriggerType.RANGE_BREAK: RangeBreak(),
     TriggerType.INDICATOR_CROSS: IndicatorCross(),
     TriggerType.INDICATOR_REJECTION: IndicatorRejection(),
     TriggerType.TRENDLINE_BREAK: TrendlineBreak(),
+    TriggerType.SEQUENCE: Sequence(),
 }
 
 
@@ -231,7 +266,11 @@ def trigger_resolver(trigger_def) -> TriggerResolver | None:
         resolver = TRIGGERS.get(TriggerType(trigger_def.type))
     except ValueError:
         return None
-    if resolver is None or not resolver.serves(getattr(trigger_def, "params", {}) or {}):
+    if resolver is None:
+        return None
+    if hasattr(resolver, "serves_def"):  # a resolver that reads the whole trigger (`sequence`)
+        return resolver if resolver.serves_def(trigger_def) else None
+    if not resolver.serves(getattr(trigger_def, "params", {}) or {}):
         return None
     return resolver
 

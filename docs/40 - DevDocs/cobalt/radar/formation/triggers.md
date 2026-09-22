@@ -25,3 +25,5 @@ Registered so far: `bar_break {bars_cleared}`, which is `structure.bar_break_tri
 - **Otherwise, the sloped line** through the pivot highs (`cfg(pivot.n)`) from the leg before the pullback to now. It needs at least `pivots` of them, descending. The line runs from the first to the last pivot and is extended to the last bar, rounded to 0.0001.
 
 Neither case → `InsufficientBars`.
+
+**2026-09-22 — `sequence` (STEP-8; taxonomy §10.2).** `Sequence` is served for exactly the step list `price close_through Level_ref` → `event(retest)` → `close_above(prior_bar)`: the RangeBreak's accepting close, its retest, then the turn. The last step's bar is the trigger bar, and the trigger price is its close. It reads its steps through `serves_def(trigger_def)`: a sequence has no params. `trigger_resolver` now prefers `serves_def` where a resolver has one. Any other step list is not served (`trigger:sequence`).
