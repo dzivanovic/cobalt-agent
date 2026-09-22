@@ -51,7 +51,7 @@ SCAN0 = shapes.SCAN0
 STEP3_KEYS = ("dayrange.session", "frame.warmup_source", "slope_norm.bars", "vwap.anchor")
 #: + the rows later steps add (each moves the digest by construction).
 ADDED_KEYS = (*STEP3_KEYS, "leg.consolidation_max_retrace", "range.micro.bound_flat_slope_atr",
-              "range.micro.touch_tolerance_atr")
+              "range.micro.touch_tolerance_atr", "extension.snapback_bars_cleared")
 STEP3_CONVENTIONS = ("dayrange.session", "frame.warmup_source", "vwap.anchor")
 
 
@@ -551,10 +551,18 @@ def test_x22_a_rubberband_def_reads_no_d1_key(defs):
     reads none of their keys (X22's property holds at this step)."""
     import test_setups_registries as reg
 
+    from cobalt.radar.evaluate import closure_keys
+
     rows = reg._RecordingRows(sup.engine_tunables())
     for m in range(0, 391, 30):
         shapes.evaluate(defs["mixed"], "FTFT", shapes.DAY_START + timedelta(minutes=m), tunables=rows)
-    assert not rows.read & {"slope_norm.bars", *STEP3_CONVENTIONS, "flat_threshold.ema9", "flat_threshold.vwap"}
+    # STEP-5 re-point (FINAL §3 D4): `Extension.state`'s resolver now declares
+    # `slope_norm.bars` (the lifecycle's rising-EMA9 test), so it is in the
+    # def's closure by design; no OTHER D1 key is read, and every read is declared.
+    declared = closure_keys(defs["mixed"].definition)
+    d1 = {"slope_norm.bars", *STEP3_CONVENTIONS, "flat_threshold.ema9", "flat_threshold.vwap"}
+    assert not rows.read & (d1 - declared)
+    assert rows.read <= declared
 
 
 # =====================================================================

@@ -97,9 +97,40 @@ class RangeBreak:
         )
 
 
+class IndicatorCross:
+    """`indicator_cross {a, b, direction}` (FINAL §2.2; STEP-5): the latest
+    closed working bar where indicator `a` crossed `b` in `direction`, in the
+    frame's coordinates (the long-side text's `a_crosses_above_b` on the
+    mirrored frame is the real cross below). It stamps `cross_point`: the cross
+    bar and its close, which is the entry the card arms at. No cross yet →
+    `InsufficientBars` (the stage reports `not_formed`)."""
+
+    kind = "indicator_cross"
+    INDICATORS = frozenset({"EMA9", "EMA21", "VWAP"})
+    DIRECTIONS = frozenset({"a_crosses_above_b", "a_crosses_below_b"})
+
+    def serves(self, params: dict[str, Any]) -> bool:
+        return (params.get("a") in self.INDICATORS and params.get("b") in self.INDICATORS
+                and params.get("a") != params.get("b") and params.get("direction") in self.DIRECTIONS)
+
+    def resolve(self, frame, trigger_def, value: Callable[[Any], Any]) -> TriggerOutcome:
+        p = trigger_def.params
+        i = frame.objects["cross_index"](p["a"], p["b"], p["direction"])
+        if i is None:
+            raise InsufficientBars(f"indicator_cross ({p['a']} has not crossed {p['b']})", 1, 0)
+        bar = frame.run[i]
+        level = TriggerLevel(trade_direction="long", price=bar.close, bars_cleared=0, bar_ts=(bar.ts,))
+        return TriggerOutcome(
+            state="armed", price=bar.close, ref_bar_ts=bar.ts, kind=self.kind,
+            inputs={"a": p["a"], "b": p["b"], "direction": p["direction"], "cross_point": bar.ts.isoformat()},
+            why=f"{p['a']} cross of {p['b']}", level=level,
+        )
+
+
 TRIGGERS: dict[TriggerType, TriggerResolver] = {
     TriggerType.BAR_BREAK: BarBreak(),
     TriggerType.RANGE_BREAK: RangeBreak(),
+    TriggerType.INDICATOR_CROSS: IndicatorCross(),
 }
 
 
@@ -114,4 +145,5 @@ def trigger_resolver(trigger_def) -> TriggerResolver | None:
     return resolver
 
 
-__all__ = ["BarBreak", "RangeBreak", "TRIGGERS", "TriggerOutcome", "TriggerResolver", "trigger_resolver"]
+__all__ = ["BarBreak", "IndicatorCross", "RangeBreak", "TRIGGERS", "TriggerOutcome", "TriggerResolver",
+           "trigger_resolver"]

@@ -492,6 +492,102 @@ Own-test defect: `tests/taxonomy/test_names_rule.py` refused my note's per-trade
   - **X7 hitchhiker stored: PASS.** It forms on 17 grid scans of the stored sessions, never on both frames.
 - rm → `ls -la .env` → `ls: .env: No such file or directory`.
 
+### COMMIT
+
+`6b0172e wip(setups-one): STEP-4 partial — …` (the checkpoint), then `94897cc feat(setups): STEP-4 micro-range, pivots, opening-drive roles, range_break, consolidation_low — hitchhiker (FINAL C3b)`. `git show --stat HEAD`: 28 files, 635 insertions(+), 59 deletions(-); every path is one named above. Long-form `git status` came before it.
+
+## STEP-5
+
+C4: the D4 Extension lifecycle, `indicator_cross`, `measured_fraction`, `recent_higher_low`, `between` + `flat`, Arith → backside and fashionably-late (FINAL §3 D4, §2.2, §2.3, §4; [F-03 · X10]).
+
+### T (RED)
+
+New: `tests/cobalt/test_setups_d4.py`. It holds:
+
+- the start pin of every `ExtensionObservation` field on the committed day;
+- the NN#16 guard: while `A-08` is null, `Extension.state` is today's value on every scan;
+- X10 and its control, both on a definition-written day: a run down, a culminating bucket, the turn, a snapback, higher highs and higher lows above a rising EMA9, and a micro-Range whose middle base is the counter-pivot;
+- the lifecycle on constructed series;
+- `indicator_cross`, `measured_fraction`, `recent_higher_low`, Arith, a null `cfg`, `between` + `flat`;
+- the two shapes' evaluability, the fashionably-late path and its F1 reading at defaults, X7 ×2 and X11 ×2.
+
+The corpus gains `backside` (`example-extension-backside`) and `fashionably-late` (`example-extension-late-cross`), with this build's constructed fills `D4_CONSTRUCTED` (L69).
+
+Run on the START code (`94897cc`): **18 failed, 4 passed**. The 4 are X7 ×2 and X11 ×2, vacuous with nothing served. The start pin `86254c33003cf4767709ceb927cc96052c7ca6b96ce1e4e744287b62c98166b5` was read from its own failure and pasted; it is now a GUARD. RED lines, one per kind:
+
+| test | RED |
+|---|---|
+| Extension pin | `AssertionError: assert '86254c33003c...87b62c98166b5' == 'PIN'` |
+| lifecycle | `ImportError: cannot import name 'LifecycleParams' from 'cobalt.radar.anatomy.extension'` |
+| the domain / the row | `AssertionError: assert frozenset({'c...ing', 'none'}) == frozenset({'b... 'reverting'})` |
+| `indicator_cross` | `KeyError: <TriggerType.INDICATOR_CROSS: 'indicator_cross'>` |
+| `measured_fraction` | `ImportError: cannot import name 'measured_fraction_price' from 'cobalt.radar.formation.stops'` |
+| `recent_higher_low` | `AssertionError: assert <StructuralRef.RECENT_HIGHER_LOW: 'recent_higher_low'> in {…}` |
+| Arith | `cobalt.radar.evaluate.Unsupported: operand shape 'arith' is not evaluable i…` |
+| a null cfg | `cobalt.radar.evaluate.Unsupported: cannot compare Decimal('0.5') > None` |
+| `between` | `AssertionError: assert 'between' in {}` · `ImportError: cannot import name 'flat_between' …` |
+| shapes / paths | `AssertionError: ('Extension.state∌backside', 'stop:structural_extreme:recent_higher_low')` · `('Extension.state∌backside', 'Extension.state∌reverting', 'between', 'cross', 'flat(EMA9, window: 15 min / working_tf)', 'stop:measured_fraction', ...)` |
+
+Own-test defects, fixed in the test:
+
+- The first micro-Range of the constructed day had its base-touch buckets' highs inside the touch tolerance of the top, so the touches merged into one. It was also too long, so EMA9 caught up with its low. Rewritten from the definition as a sharper rally, then a 7-bucket range with 2 buckets after the deep base.
+- The first fashionably-late path assertion was a placeholder (`in (formed, not_formed, avoided)`). It is now the full formation at 10:30 ET.
+
+### X (X10 FIRST, on the changed code — D4 must exist)
+
+- **X10: FAIL.** VERBATIM: `X10: FAIL evaluation=not_evaluable direction=None long=not_evaluable/Extension path B only — catalyst unknown in S2 (R4) short=not_formed/None`.
+  - The day recovers past the open, so the Extension's direction (sign of last − open, `extension.py:96-103`) flips to up. The long frame's culminating bar is gone and only path B remains; the short frame has no culmination. The backside shape NEVER FORMS.
+  - The control, the same construction before it passes the open, forms LONG: anchor Extension, stop `recent_higher_low`, geometry guard held.
+  - The FINAL's line fires: "`A-01` is not applied to the D4 states as §1 words it", and it offers two fixes, choosing neither → **the backside and fashionably-late acceptances STOP; D4 is KEPT; both defs are pinned `AWAITING_A_RULING`** (`test_setups_lego.AWAITING_A_RULING`, never `AWAITING_A_DAY`). `ASK DESK: X10 failed — which fix, Grok's or Fable's? [05:1x]`. Safe default: neither is built → ESCALATE 12.
+- **What still runs (Lego-style path proofs, [F-21]):**
+  - The fashionably-late shape forms LONG at 10:30 ET on the definition-written day: trigger `indicator_cross` (the EMA9 over VWAP cross bar's close), stop `measured_fraction(entry, turn_low 8.30, 0.4)`, geometry guard held.
+  - At production defaults it reads `flat_threshold.ema9_unset` → **`AWAITING_A_RULING: F1`**.
+  - Backside's path is the X10 control above.
+- **X7 offline:** `X7 backside: scans=392 formed=0 both_sides=0` · `X7 fashionably-late: scans=392 formed=0 both_sides=0` → PASS (vacuous: nothing forms on the committed day). The stored half runs in SUITE.
+- **X11:** `X11 backside: atoms=6 failures=[]` · `X11 fashionably-late: atoms=3 failures=[]` → PASS. No new seam reason was needed: the `between` reasons are node-level unknowns, never an `AtomOutcome`.
+- **X5:** `X5 offline: defs=6 frames=2 members=50 runs_s=[2.97, 2.96, 3.03] p95~max=3.03s budget=100.0s` → PASS.
+
+### C
+
+| file | change |
+|---|---|
+| `src/cobalt/radar/anatomy/extension.py` | `LIFECYCLE_KEYS`, `LifecycleParams`, `lifecycle_params`, `LifecycleObservation`, `extension_lifecycle` (turn, `reverting` by `A-08`, `backside` by HH / HL above a rising EMA9); `detect_extension` untouched |
+| `src/cobalt/radar/anatomy/frame.py` | `Extension.state` served lazily (today's value while `A-08` is null); objects `series`, `turn_index`, `cross_index`, `atr`, `tunables` |
+| `src/cobalt/radar/formation/atoms.py` | `Extension.state` domain + keys + reasons; `RELATIONS["between"]`; `flat_between`, `window_bars`, `_between_gaps`, `relation_operand_names`, `BETWEEN_EVENTS`; Arith `*` / `/` in `predicate_gaps` |
+| `src/cobalt/radar/formation/triggers.py` | `IndicatorCross` |
+| `src/cobalt/radar/formation/stops.py` | `recent_higher_low` (latest pivot low in the micro-Range), `MeasuredFraction`, `measured_fraction_price`; resolvers take `trigger=` |
+| `src/cobalt/radar/anatomy/registry.py` | a served relation's own operands are not unserved atoms |
+| `src/cobalt/radar/evaluate.py` | Arith in `_value` (÷0 → `division_by_zero`); a null `cfg` → `<key>_unset` (a latent defect fixed); `_between` + `evaluate_node(context=)`; `stop_resolver(...).resolve(..., trigger=trigger)`; `stop_ref` from the stop outcome |
+| `configs/cobalt/taxonomy/tunables.yaml` | `extension.snapback_bars_cleared` (`A-08`, bars, null, proposed, global). `A-11` was already a row (STEP-3); `backside_hh_min` / `_hl_min` were already ruled rows |
+
+No convention row is added: this step's resolvers implement no new convention (ESCALATE 13).
+
+### A1
+
+| test | old assertion | new assertion | FINAL tag |
+|---|---|---|---|
+| `test_setups_registries.py::test_the_five_tables_exist_and_serve_the_rubberband_bricks` | the `Extension.state` domain == {culminating, none} | == {culminating, reverting, backside, none} | §3 D4 |
+| `test_setups_registries.py::test_e8_a_symbol_outside_the_atoms_domain_is_not_evaluable` | `IN {reverting, backside}` is ∌-named | `IN {building, resuming}` is ∌-named (no rule produces them); `IN {reverting, backside}` is now evaluable | §3 D4, §2.5 E8 |
+| `test_setups_d1.py::test_x22_a_rubberband_def_reads_no_d1_key` | reads ∩ D1 keys = ∅ | reads ∩ (D1 keys − the declared closure) = ∅ AND reads ⊆ the declared closure (`Extension.state` now declares `slope_norm.bars`; `assumed_closure` reads it at formation) | §3 D4, R2-2.2 B |
+| card pins: [F-11] ×2, Lego (ii) ×2, T6 formed card | `tunables_sha256` mapped without STEP-3/4's rows | … and without `extension.snapback_bars_cleared` | §3 D4 (new row) |
+| `test_setups_lego.py` | the property over every evaluable shape | minus `AWAITING_A_RULING` = {backside, fashionably-late}, named with X10's result | X10 (prompt STEP-5) |
+
+No assertion was removed, and no skip or xfail was added.
+
+### D
+
+- Appended: `radar/anatomy/extension.md` (D4, NN#16, X10), `frame.md`, `registry.md`, `radar/formation/atoms.md`, `triggers.md`, `stops.md`, `radar/evaluate.md`.
+
+### SUITE
+
+- **Offline.** `uv run pytest -q tests/cobalt tests/taxonomy` (background).
+  - The first run: `8 failed, 2366 passed` — the A1 rows above.
+  - After the re-points: **`2374 passed, 361 skipped, 1 xfailed, 15 warnings in 348.58s (0:05:48)`**, 0 failed.
+  - Against STEP-4 (2351 / 361), the +23 are exactly `test_setups_d4.py`'s 23 collected tests. The RED run had 22; `test_fashionably_late_at_production_defaults_reads_its_f1_holes` was added when the path test was tightened.
+- **With-DB.** cp → `COBALT_ENV=dev uv run pytest -q tests/cobalt/test_rubberband_forms.py tests/cobalt/test_setups_registries.py tests/cobalt/test_setups_d1.py tests/cobalt/test_setups_hitchhiker.py tests/cobalt/test_setups_d4.py tests/cobalt/test_setups_lego.py tests/cobalt/test_assumed_store.py tests/cobalt/test_radar_cards_db.py tests/cobalt/test_taxonomy_store.py tests/cobalt/test_radar_score_migration.py tests/cobalt/test_replay_formations.py tests/cobalt/test_radar_evaluate.py tests/cobalt/test_radar_evaluate_cli.py tests/cobalt/test_archiver_migrations.py tests/cobalt/test_p4_migrations.py tests/cobalt/test_radar_migration.py tests/cobalt/test_tenancy.py tests/experiments/setups_one -s` → **`409 passed, 1 skipped in 1258.53s (0:20:58)`**. The skip is the live-note proof, by design.
+  - Its experiment lines, VERBATIM: `X7 stored: sessions=10 grid=30min {'rubberband': {'scans': 7200, 'both_sides': 0, 'formed': 0}, 'hitchhiker': {'scans': 7200, 'both_sides': 0, 'formed': 17}, 'backside': {'scans': 7200, 'both_sides': 0, 'formed': 0}, 'fashionably-late': {'scans': 7200, 'both_sides': 0, 'formed': 7}, 'rubberband-without-htf-avoid': {'scans': 7200, 'both_sides': 0, 'formed': 104}}` → **X7 stored backside / fashionably-late: PASS.** (Fashionably-late formed on 7 grid scans, with this build's constructed F1 fills.) X18 stored is unchanged (`0 / 0`, htf UNPROVEN). X1, X2, X13 and X15 are unchanged from their first runs.
+- rm → `ls -la .env` → `ls: .env: No such file or directory`.
+
 ## ESCALATE
 
 (running list; the ALWAYS items (i)–(xii) are written at CLOSE)
@@ -508,21 +604,24 @@ Own-test defect: `tests/taxonomy/test_names_rule.py` refused my note's per-trade
 9. **X13 fires its fail line.** The median `atr_seeded` / RTH-weighted ATR is 0.532 at 09:40, 0.687 at 09:50 and 0.788 at 10:00, "well under 1". The FINAL: "early ATR-scaled tolerances need an RTH-weighted ATR, and `A-05` changes for ATR while staying for the EMAs." No key changed. `A-03` / `A-04` tolerances scale with the seeded `ATR(working_tf)` as built. `ASK DESK: X13 says early ATR tolerances are tight — does A-05 change for ATR? [04:1x]` — safe default: unchanged.
 10. **X15: the literal reading forms (5 name-sessions; A-07 forms 36).** The FINAL: "The literal reading forms → `A-07` is not needed as worded." `A-07` is kept as the FINAL words it (built, `leg_roles.opening_drive`); the literal reading exists only for X15 (`opening_drive_literal`). Whether A-07 amends the taxonomy is his, after cards (FINAL Open point 7).
 11. **A constructed literal matched a companion value (hygiene fix, STEP-4).** STEP-3's `test_setups_d1.py` used `slope_norm.bars = 3` as its own constructed window, and that equals the companion's assumed `A-11` value (seen in a grep of key names). Changed to 4 in STEP-4 so no companion value sits in a committed file. Every other constructed literal (`D2_CONSTRUCTED`) was chosen not to match a value seen.
+12. **X10 FAILED → backside and fashionably-late are `AWAITING_A_RULING`.** On a day that recovers past the open, the Extension's direction (sign of last − open) flips and the backside shape never forms. The FINAL offers two fixes: Grok's ("they bind side only through the mirrored frame on their own long-side text") and Fable's ("the Extension's direction is stamped at its culminating bar and held through `reverting` / `backside`"). It chooses neither. `ASK DESK: X10 failed — which fix, Grok's or Fable's? [05:1x]`. Safe default: neither is built. D4 is kept. Both paths are proven on definition-written days (the backside control; the fashionably-late path).
+13. **D4 and Rubberband (a decision for the desk).** Growing `Extension.state` past `culminating` means that, once `A-08` is filled, a culminated Extension reads `reverting` after its snapback, and Rubberband's `Extension.state == culminating` stops re-forming on those scans. The first formation, and so the card, is unchanged. Built safe default: while `A-08` is null (committed config), `Extension.state` reads exactly today's value, so Rubberband is byte-identical now (every pin GREEN) and in production until the assumed note fills `A-08`. Also, `Extension.state` does NOT declare the warm-up convention (`frame.warmup_source`, A-05) in its closure, even though the lifecycle's rising-EMA9 test uses the seeded EMA9. Declaring it would mark every Rubberband card "assumed: frame.warmup_source" at committed config, where the lifecycle never runs. `ASK DESK: once A-08 is filled, should Rubberband's precondition hold through reverting, and should Extension.state declare A-05? [05:1x]` — safe default: as built.
+14. **A null `cfg()` was compared as `None` (a latent defect, fixed at STEP-5).** Before, a predicate against a null engine row (the drive-then-range shape's `Range(micro).wick_ratio > cfg(range.wick_ratio_max)`) raised `Unsupported` and made the def `not_evaluable` at production defaults, whenever its preconditions held. It now reads unknown, `<key>_unset`.
 
 ## CONTINUE
 
-next: STEP-5 (C4), backside + fashionably-late.
-1. **X10 FIRST:** a constructed backside fixture with last > open, written from the definition (a run down, a culminating bar, a snapback, a backside above a rising EMA9); then build D4 and run it. `X10: FAIL` → STOP both acceptances, keep D4, `ASK DESK`, pin both `AWAITING_A_RULING`.
-2. T: golden pins on every existing `ExtensionObservation` field at the start of the step.
-3. C:
-   - `anatomy/extension.py`: the state domain grows (`reverting` via `A-08`, `backside` via `extension.backside_hh_min` / `_hl_min` above a rising EMA9), refs `turn_low` / `turn`;
-   - `formation/triggers.py` `indicator_cross`;
-   - `formation/stops.py` `measured_fraction` + `recent_higher_low` (the latest pivot low inside the micro-Range, over `anatomy/pivots.py`, built in STEP-4);
-   - the `between` relation and the `flat` atom (the detector `anatomy/slope.flat` is built);
-   - the Arith shape (Decimal; ÷0 → unknown);
-   - `tunables.yaml` `A-08`, `A-11` (already a row) and the convention rows.
-4. Acceptance ×2. `fashionably-late` at production defaults is `AWAITING_A_RULING: F1`. X7 ×2, X11, X5.
+next: STEP-6 (C5), nine-ema-scalp.
+1. **X26 FIRST:** an offline test that constructs `AtomOutcome(atom=…, value_kind="boolean", boolean=True, assumed="A-13")` and follows the `detail()` caller. Quote the exception.
+2. Then:
+   - roles `Leg(pullback).{direction, end, index}`, `Leg(impulse)`, `Leg(pre_test)` (`A-14`), and `Leg(opening_drive OR impulse)`, over `leg.legs()` in `anatomy/leg_roles.py`;
+   - the relation `touched`;
+   - `trade_direction` / `opposite(x)` / `against(x)` bound from the frame;
+   - `formation/triggers.py` `indicator_rejection`; `formation/stops.py` `indicator` (`at_entry`);
+   - `Extension.instantiated on Leg(x)` (`A-15`);
+   - the catalyst resolver `A-13`: an ATOMS row `catalyst_ref`, reading the pool admission, with `ASSUMED_CONVENTIONS = ("A-13",)` in its closure.
+   - `tunables.yaml`: the convention rows `A-13`, `A-14`, `A-15`. Check the companion for their KEY NAMES only.
+3. Acceptance for `nine-ema-scalp` (L11: `bids_hold` stays human). X1's second reading: quote X1's share beside the def's preferred window. X7, X11, X5.
 
-The rules still in force: file content only through Write / Edit; pins from a test's own failure output; long-form `git status` before a commit.
+Rules still in force: file content only through Write / Edit; pins from a test's own failure output; long-form `git status` before a commit; no unlisted commands (scratch probes go in a pytest file under the job's tmp).
 
-(run in progress — step 5 of 9, next under ## CONTINUE)
+(run in progress — step 6 of 9, next under ## CONTINUE)

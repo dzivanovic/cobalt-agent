@@ -14,3 +14,8 @@ The geometry guard (FINAL §9 point (5)) is not here. It is written once in the 
 Registered so far: `structural_extreme` on `snapback_candle` and `turn_low`, the run's tracked extreme. Both are re-registered with byte-identical output.
 
 **2026-09-22 — `consolidation_low` / `range_base` (setups one build STEP-4; FINAL §2.3).** Both taxonomy aliases of `Range.base` now resolve through `STRUCTURAL_REFS` to the live micro-Range's base, as a `TrackedExtreme` (side `low`, at its latest holding bar). The buffer and the nudge law stay `structure.structural_stop`, and the geometry guard is still the stage's one check. With no instantiated Range the resolver raises `InsufficientBars`, which becomes `not_formed`.
+
+**2026-09-22 — `recent_higher_low`, `measured_fraction` (STEP-5; FINAL §2.3).**
+
+- `recent_higher_low` resolves to the latest pivot low (`cfg(pivot.n)`, `anatomy.pivots`) inside the live micro-Range: the micro-Range's counter-pivot on the trade-opposite side. It uses `structural_extreme`'s buffer and nudge.
+- `MeasuredFraction` serves `{anchor_a, anchor_b, fraction}` when both anchors are `entry` or a `STRUCTURAL_REFS` ref. `entry` is the trigger's price: the stage now hands `trigger=` to every stop resolver. The stop is `measured_fraction_price(a, b, f) = a − f × (a − b)`, floored to the cent. No buffer and no ten-cent nudge: the nudge moves a stop toward a structure, and a measured stop has none. The outcome's `ref` is `anchor_b`, which the stage now takes as `Formation.stop_ref` (for a structural placement that is the same value as before).

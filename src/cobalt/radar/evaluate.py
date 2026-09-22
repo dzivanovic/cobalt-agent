@@ -76,7 +76,7 @@ import hashlib
 import json
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from pathlib import Path
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
@@ -103,6 +103,8 @@ from cobalt.taxonomy.defaults import TaxonomyDefaults
 from cobalt.taxonomy.loader import iter_cfg_tokens, resolve_cfg
 from cobalt.taxonomy.predicate import (
     And,
+    Arith,
+    Between,
     Cfg,
     Compare,
     InTest,
@@ -124,6 +126,7 @@ from .anatomy.daily import DailySeries, NoDailyBars, htf_level_proximity
 from .anatomy.extension import ExtensionObservation, ExtensionParams
 from .anatomy.frame import Frame, SessionInputs, build_frame, minute_bars, premarket_buckets
 from .anatomy.freshness import RvolObservation, daily_staleness, intraday_staleness
+from .anatomy.indicators import PRECISION as INDICATOR_PRECISION
 from .anatomy.indicators import InsufficientBars, WARMUP_CONVENTION
 from .anatomy.session_levels import DAYRANGE_CONVENTION, VWAP_CONVENTION
 from .anatomy.registry import evaluability
@@ -203,7 +206,26 @@ def _value(node: Node, atoms: Mapping[str, AtomValue], cfg: Callable[[str], Any]
         return "value", node.name
     if isinstance(node, Cfg):
         raw = cfg(node.key)
+        if raw is None:  # a null row is unknown, named — never compared (STEP-5)
+            return "unknown", f"{node.key}_unset"
         return "value", Decimal(str(raw)) if isinstance(raw, (int, float, Decimal)) else raw
+    if isinstance(node, Arith) and node.op in ("*", "/"):
+        # FINAL §4 row 2: Decimal at the indicator module's precision; a zero
+        # divisor is unknown with a reason, never inf.
+        states = [_value(side, atoms, cfg, consulted) for side in (node.left, node.right)]
+        for state, value in states:
+            if state == "unknown":
+                return state, value
+        if any(state == "null" for state, _ in states):
+            return "null", None
+        (_, left), (_, right) = states
+        if not isinstance(left, Decimal) or not isinstance(right, Decimal):
+            raise Unsupported(f"Unsupported({node.kind})", f"arith over non-numbers {left!r} {node.op} {right!r}")
+        if node.op == "/" and right == 0:
+            return "unknown", "division_by_zero"
+        with localcontext() as ctx:
+            ctx.prec = INDICATOR_PRECISION
+            return "value", left * right if node.op == "*" else left / right
     if isinstance(node, Ref):
         text = render(node)
         if text not in atoms:
@@ -249,22 +271,68 @@ def _in_band(node: InTest, atoms, cfg, consulted: set[str], unknowns: set[str], 
     return lo <= lv <= hi
 
 
+def _between(node: Between, context: Mapping[str, Any] | None, unknowns: set[str]) -> bool | None:
+    """`flat(<ind>, window: <w>) between turn and cross` (FINAL §4; STEP-5) on
+    the frame in `context`: some window of that many working bars between the
+    move's turn and the def's own cross in which |slope_norm(<ind>)| stays
+    within `cfg(flat_threshold.<ind>)`."""
+    from .anatomy.slope import FLAT_KEYS, flat_threshold, slope_bars
+    from .formation.atoms import _flat_subject, flat_between, window_bars
+
+    if context is None or _flat_subject(node.subject) is None:
+        raise Unsupported(f"Unsupported(between:{render(node.subject)})", "between needs its frame and flat subject")
+    indicator, window_node = _flat_subject(node.subject)
+    frame, tunables, trigger = context["frame"], context["tunables"], context["trigger"]
+    window = window_bars(window_node, context["minutes"])
+    threshold = flat_threshold(tunables, indicator)
+    if threshold is None:
+        unknowns.add(f"{FLAT_KEYS[indicator]}_unset")
+        return None
+    n = slope_bars(tunables)
+    if n is None:
+        unknowns.add("slope_norm.bars_unset")
+        return None
+    atr = frame.objects["atr"]
+    if atr is None or atr == 0:
+        unknowns.add("insufficient_seed")
+        return None
+    edges = {}
+    edges["turn"] = frame.objects["turn_index"]
+    p = getattr(trigger, "params", {}) or {}
+    edges["cross"] = (frame.objects["cross_index"](p["a"], p["b"], p["direction"])
+                      if trigger.type == "indicator_cross" else None)
+    start, end = edges[render(node.start)], edges[render(node.end)]
+    if start is None or end is None:
+        unknowns.add("insufficient_bars")
+        return None
+    values = frame.objects["series"](indicator)
+    with localcontext() as ctx:
+        ctx.prec = INDICATOR_PRECISION
+        norm = [None if i < n or values[i] is None or values[i - n] is None else (values[i] - values[i - n]) / (n * atr)
+                for i in range(len(values))]
+    return flat_between(norm, start=start, end=end, window=window, threshold=threshold)
+
+
 def evaluate_node(
     node: Node, atoms: Mapping[str, AtomValue], cfg: Callable[[str], Any], consulted: set[str], unknowns: set[str],
-    *, units: Callable[[str], str | None] | None = None,
+    *, units: Callable[[str], str | None] | None = None, context: Mapping[str, Any] | None = None,
 ) -> bool | None:
     """Kleene three-valued truth. `unknowns` collects the reasons. `units`
-    names a tunable row's unit (the band shape checks it)."""
+    names a tunable row's unit (the band shape checks it); `context` carries
+    the frame and the def's trigger for a relation (`between`)."""
+    kw = dict(units=units, context=context)
     if isinstance(node, Not):
-        inner = evaluate_node(node.operand, atoms, cfg, consulted, unknowns, units=units)
+        inner = evaluate_node(node.operand, atoms, cfg, consulted, unknowns, **kw)
         return None if inner is None else not inner
     if isinstance(node, And):
-        results = [evaluate_node(op, atoms, cfg, consulted, unknowns, units=units) for op in node.operands]
+        results = [evaluate_node(op, atoms, cfg, consulted, unknowns, **kw) for op in node.operands]
         if any(r is False for r in results):
             return False
         return None if any(r is None for r in results) else True
+    if isinstance(node, Between):
+        return _between(node, context, unknowns)
     if isinstance(node, Or):
-        results = [evaluate_node(op, atoms, cfg, consulted, unknowns, units=units) for op in node.operands]
+        results = [evaluate_node(op, atoms, cfg, consulted, unknowns, **kw) for op in node.operands]
         if any(r is True for r in results):
             return True
         return None if any(r is None for r in results) else False
@@ -806,12 +874,13 @@ def evaluate_member(
         returned formation are real-world (FINAL §2.1 [F-04])."""
         ext = frame.extension
         consulted: set[str] = set()
+        context = {"frame": frame, "tunables": tunables, "trigger": td.trigger, "minutes": minutes}
         try:
             pre_unknown: set[str] = set()
-            pre = [evaluate_node(p.ast, frame.atoms, cfg, consulted, pre_unknown, units=units)
+            pre = [evaluate_node(p.ast, frame.atoms, cfg, consulted, pre_unknown, units=units, context=context)
                    for p in td.preconditions if p.expr]
             avoid_unknown: set[str] = set()
-            avoid = [evaluate_node(p.ast, frame.atoms, cfg, consulted, avoid_unknown, units=units)
+            avoid = [evaluate_node(p.ast, frame.atoms, cfg, consulted, avoid_unknown, units=units, context=context)
                      for p in td.avoid if p.expr]
         except Unsupported as e:
             return result(
@@ -855,7 +924,7 @@ def evaluate_member(
         placement = td.stop.placement
         try:
             trigger = trigger_resolver(td.trigger).resolve(frame, td.trigger, value)
-            stop = stop_resolver(placement).resolve(frame, placement, value)
+            stop = stop_resolver(placement).resolve(frame, placement, value, trigger=trigger)
         except (InsufficientBars, IncompleteBucket) as e:
             return result("not_formed", detail(frame, consulted, path), note=f"trigger/stop unavailable: {e}",
                           **extra)
@@ -869,7 +938,7 @@ def evaluate_member(
             # `extension_direction` stays for byte identity; for another
             # anchor it carries that anchor's (real) direction (§2.4).
             extension_direction=real_direction, trade_direction=side, setup_ref=UNCLASSIFIED_SETUP,
-            trigger=trigger.level, extreme=stop.extreme, stop=stop.structural, stop_ref=placement.ref.value,
+            trigger=trigger.level, extreme=stop.extreme, stop=stop.structural, stop_ref=stop.ref,
             formed_bar_ts=anchor.bar_ts, formed_bar_end=formed_end, leg_count=ext.leg_count,
             assumed_keys=assumed_closure(td, tunables), side_frame="long" if side == "long" else "mirrored",
             anchor=Anchor(object=anchor.object, direction=real_direction, bar_ts=anchor.bar_ts),

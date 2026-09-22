@@ -54,3 +54,17 @@ What they declare:
 - `reasons` include each detector key's `_unset`, and X11 adds those four to the seam's closed list.
 
 `AtomResolver.unit` is new: `Range(micro).duration` is in `min`. `predicate_gaps` now accepts the FINAL §4 row-1 shape `<atom> IN cfg(band) <unit>` when the atom's unit is the Quantity's. Otherwise it names `Unsupported(unit:<q>)` (the atom has no unit) or `Unsupported(unit:<q>≠<atom unit>)`. `unit_mismatch` is the one spelling of that name, shared with the interpreter's runtime check of the band row's own unit.
+
+## 2026-09-22 — D4, `between` + `flat`, Arith (setups one build STEP-5)
+
+- **`Extension.state`.**
+  - The domain is `{culminating, reverting, backside, none}`.
+  - `tunable_keys` add `extension.LIFECYCLE_KEYS` and `slope_norm.bars`.
+  - The reasons add `slope_norm.bars_unset` and `insufficient_seed`.
+  - The warm-up convention is NOT declared on it: while `A-08` is null the lifecycle never runs. That is an ESCALATE in the build report.
+- **`RELATIONS["between"]`** is served.
+  - `_between_gaps` accepts exactly `flat(<EMA9|VWAP>, window: <n> min / working_tf | <n> bars) between <turn|cross> and <turn|cross>`, and names anything else `Unsupported(between:<operand>)`.
+  - `window_bars` converts minutes to working bars, rounding up so the window covers the minutes.
+  - `flat_between` is the pure test: some `window` consecutive bars inside the span with every |normalised slope| ≤ the threshold.
+  - `relation_operand_names` tells the registry which raw names a served relation consumes.
+- **Arith `*` / `/`** (FINAL §4 row 2) is an operand shape: `predicate_gaps` walks both sides. `+` / `-` stay `Unsupported(arith)`.

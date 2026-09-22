@@ -45,7 +45,15 @@ from cobalt.taxonomy.tunables import TunableRow
 from ..formation.atoms import AtomValue
 from .bars import WorkingBar, working_bars
 from .daily import DailySeries, HtfRangeBreak, NoDailyBars, htf_range_break
-from .extension import ExtensionObservation, ExtensionParams, detect_extension
+from .extension import (
+    ExtensionObservation,
+    ExtensionParams,
+    LifecycleObservation,
+    detect_extension,
+    extension_lifecycle,
+    lifecycle_params,
+)
+from .structure import tracked_extreme
 from .in_play import in_play_state
 from .indicators import ATR_PERIOD, ema, seeded, wilder_atr
 from .leg import legs
@@ -187,6 +195,7 @@ def _d1_resolvers(
     last_close: Decimal | None,
     tunables: Mapping[str, TunableRow],
     objects: dict[str, Callable[[], Any]],
+    ext: ExtensionObservation,
 ) -> dict[str, Callable[[], AtomValue]]:
     """The lazy atoms of one frame (every input already in frame coordinates);
     `objects` receives the observations a trigger / stop resolver reads."""
@@ -334,9 +343,61 @@ def _d1_resolvers(
             return AtomValue(kind="null", reason="not_instantiated")
         return AtomValue(kind="symbol", symbol=od.terminated_by)
 
-    objects.update({"Range(micro)": micro, "Leg(opening_drive)": drive})
+    # --- D4 (STEP-5): the Extension lifecycle, indicator series, turn, cross ---
+    def series(name: str) -> list[Decimal | None]:
+        """`name` at every run bar, oldest first (EMA seeded; VWAP at bar ends)."""
+        if not run:
+            return []
+        if name in EMA_PERIODS:
+            return ema_back(EMA_PERIODS[name], len(run) - 1)
+        if name == "VWAP":
+            return vwap_back(len(run) - 1)
+        raise KeyError(f"no series for {name!r}")
+
+    def lifecycle() -> LifecycleObservation | None:
+        """None while `A-08` is null: `Extension.state` then reads today's value."""
+        def compute():
+            params, unset = lifecycle_params(tunables)
+            if unset is not None:
+                return None
+            return extension_lifecycle(run, ext, params, ema9=series("EMA9"), slope_bars=slope_bars(tunables))
+        return once("lifecycle", compute)
+
+    def extension_state() -> AtomValue:
+        life = lifecycle()
+        if life is None or ext.state != "culminating":
+            return AtomValue(kind="symbol", symbol=ext.state)
+        if life.state is None:
+            return AtomValue(kind="unavailable", reason=life.unavailable)
+        return AtomValue(kind="symbol", symbol=life.state)
+
+    def turn_index() -> int | None:
+        if not run or ext.direction is None:
+            return None
+        turn = tracked_extreme(run, ext.direction)
+        return max(i for i, b in enumerate(run) if b.ts == turn.bar_ts)
+
+    def cross_index(a: str, b: str, direction: str) -> int | None:
+        """The latest run bar where `a` crossed `b` in `direction` (frame coordinates)."""
+        sa, sb = series(a), series(b)
+        for i in range(len(run) - 1, 0, -1):
+            if None in (sa[i], sb[i], sa[i - 1], sb[i - 1]):
+                continue
+            if direction == "a_crosses_above_b" and sa[i - 1] <= sb[i - 1] and sa[i] > sb[i]:
+                return i
+            if direction == "a_crosses_below_b" and sa[i - 1] >= sb[i - 1] and sa[i] < sb[i]:
+                return i
+        return None
+
+    objects.update({
+        "Range(micro)": micro, "Leg(opening_drive)": drive,
+        "series": lambda: series, "turn_index": turn_index, "cross_index": lambda: cross_index,
+        "atr": atr, "tunables": lambda: tunables,
+    })
+    extension_lazy = {} if ext.unavailable is not None else {"Extension.state": extension_state}
 
     return {
+        **extension_lazy,
         **{f"Range(micro).{part}": range_atom(part)
            for part in ("instantiated", "duration", "low", "top", "base", "bound", "height", "wick_ratio")},
         "Leg(opening_drive).direction": drive_direction,
@@ -382,6 +443,8 @@ def build_frame(
     run = tuple(run)
     ext = detect_extension(run, params)
     atoms = _extension_atoms(ext)
+    if ext.unavailable is None:
+        del atoms["Extension.state"]  # served lazily: the D4 lifecycle (STEP-5)
     htf = None
     if not daily_ok:
         atoms["RangeBreak(HTF).day_count"] = AtomValue(kind="unavailable", reason="no_daily_bars")
@@ -397,7 +460,8 @@ def build_frame(
         )
     objects: dict[str, Callable[[], Any]] = {}
     lazy = _d1_resolvers(run, session, daily=daily, daily_ok=daily_ok, trade_date=trade_date,
-                         last_close=last_close, tunables=tunables if tunables is not None else {}, objects=objects)
+                         last_close=last_close, tunables=tunables if tunables is not None else {}, objects=objects,
+                         ext=ext)
     return Frame(side=side, run=run, premarket=session.premarket, extension=ext, htf=htf,
                  atoms=LazyAtoms(atoms, lazy), objects=LazyAtoms({}, objects), last_close=last_close)
 

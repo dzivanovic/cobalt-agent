@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict
 
 from cobalt.taxonomy.trade_def import TradeDef
 
-from ..formation.atoms import ATOMS, RELATIONS, predicate_gaps
+from ..formation.atoms import ATOMS, RELATIONS, predicate_gaps, relation_operand_names
 from ..formation.stops import stop_resolver
 from ..formation.triggers import trigger_resolver
 
@@ -48,7 +48,8 @@ def evaluability(td: TradeDef) -> Evaluability:
         if predicate.expr is None:
             human += 1
             continue
-        missing |= {a for a in predicate.required_atoms if a not in ATOMS and a not in RELATIONS}
+        consumed = relation_operand_names(predicate.ast)  # a served relation's own operands
+        missing |= {a for a in predicate.required_atoms if a not in ATOMS and a not in RELATIONS and a not in consumed}
         missing |= predicate_gaps(predicate.ast)
 
     if trigger_resolver(td.trigger) is None:

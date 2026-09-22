@@ -113,3 +113,10 @@ The ONE `EVALUATOR_VERSION` bump of STEP-1 covers this step. Nothing deploys bet
   - `detail.extension_path` and the avoided-bar stamp are an Extension formation's evidence only. They are `None` for another anchor, and unchanged for Extension defs and for defs with no anchor.
 - **The band shape (§4 row 1).** `evaluate_node` gains a keyword `units=` (the tunable row's unit). `_in_band` evaluates `<atom> IN cfg(band) <unit>` as an inclusive `[lo, hi]`. The atom's unit, the Quantity's and the row's must agree; a mismatch is `Unsupported(unit:…)`, named. An absent band row still fails loud in `cfg()`. Any other band value is `Unsupported(band)`. An `Unsupported` raised in the interpreter now reaches the seam through `seam_safe_missing_atoms` (a unit name is not an atom spelling). The atom names that were already valid are unchanged.
 - **`card_why` (F-05)** keeps the Extension sentence byte for byte. For another anchor it is assembled from the trigger's and the stop's own `why` fragments.
+
+## 2026-09-22 — Arith, a null cfg, `between`, the stop's entry (setups one build STEP-5; FINAL C4)
+
+- **Arith `*` / `/`** is evaluated in Decimal at the indicator module's precision. A zero divisor is unknown, `division_by_zero`, never inf.
+- **A null `cfg(<key>)`** is unknown, `<key>_unset`. It used to be compared as `None` and raise `Unsupported` (`not_evaluable`): a latent defect that would have hit the drive-then-range shape's wick-ratio avoid at production defaults.
+- **`evaluate_node(context=)`** carries the frame, the tunables, the def's trigger and the working minutes. The `Between` branch (`_between`) uses them: `flat(<ind>, window) between turn and cross` over the frame's series. Its thresholds are the `per_indicator` rows (F1: null → `flat_threshold.<ind>_unset`), and its events are the turn and the def's own cross.
+- **The stop resolver gets `trigger=`**, so `measured_fraction` can anchor at `entry`. `Formation.stop_ref` is the stop outcome's `ref`.

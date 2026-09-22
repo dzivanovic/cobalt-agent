@@ -59,3 +59,20 @@ How missing inputs read:
 - a drive that has not ended reads `terminated_by = null`.
 
 `Frame.objects` is a second lazy map: `Range(micro)` → the observation (or its `_unset` reason), and `Leg(opening_drive)` → the `OpeningDrive`. The `range_break` trigger, the `consolidation_low` stop and the `Range(micro)` anchor read it, so each computes nothing a scan has not already computed. A def that names none of these atoms still reads none of their keys (X22).
+
+## 2026-09-22 — the lifecycle and the series (setups one build STEP-5; FINAL §3 D4)
+
+`Extension.state` is now served lazily whenever the Extension is available:
+
+- today's `culminating | none` while `A-08` is null;
+- otherwise `extension_lifecycle`'s state, fed the seeded EMA9 at every run bar.
+
+`Frame.objects` gains the pieces the new resolvers read:
+
+- `series(<EMA9|EMA21|VWAP>)`: the indicator at every run bar;
+- `turn_index`: the tracked extreme's bar;
+- `cross_index(a, b, direction)`: the latest bar where `a` crossed `b`;
+- the seeded `atr`;
+- the scan's `tunables`.
+
+The `indicator_cross` trigger, the `recent_higher_low` / `measured_fraction` stops and the `between` relation all read these, so each is computed once per scan.

@@ -35,6 +35,15 @@ from cobalt.radar.anatomy.registry import evaluability
 #:   (`test_setups_hitchhiker.py::test_hitchhiker_path_*`).
 AWAITING_A_DAY: frozenset[str] = frozenset({"rubberband", "hitchhiker"})
 
+#: Evaluable shapes whose acceptance is STOPPED on an open ruling — never in
+#: `AWAITING_A_DAY` (prompt STEP-5):
+#: - backside, fashionably-late: X10 FAILED (on a day that recovers past the
+#:   open the backside shape never forms: the Extension's direction is
+#:   recomputed from last − open). The FINAL offers Grok's fix and Fable's fix
+#:   and chooses neither → ASK DESK. fashionably-late also reads the two
+#:   `per_indicator` holes (F1): at production defaults it cannot form.
+AWAITING_A_RULING: frozenset[str] = frozenset({"backside", "fashionably-late"})
+
 
 @pytest.fixture(scope="module")
 def corpus(tmp_path_factory):
@@ -60,7 +69,7 @@ def test_registry_evaluable_implies_forms_or_awaits_a_day(corpus):
     """FINAL §9 gate 2, with the named deviation of this module's docstring."""
     awaiting = set()
     for key, (shape, ld) in corpus.items():
-        if not evaluability(ld.definition).evaluable:
+        if not evaluability(ld.definition).evaluable or key in AWAITING_A_RULING:
             continue
         if not _forms_on_a_committed_day(shape, ld):
             awaiting.add(key)

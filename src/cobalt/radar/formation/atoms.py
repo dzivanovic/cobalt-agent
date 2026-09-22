@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict
 
 from cobalt.taxonomy.predicate import (
     And,
+    Arith,
     Between,
     Cfg,
     Compare,
@@ -96,8 +97,11 @@ _RANGE_REASONS = ("insufficient_seed", "insufficient_bars", "incomplete_bucket",
                   *(f"{key}_unset" for key in _micro_range.TUNABLE_KEYS))
 
 ATOMS: dict[str, AtomResolver] = _serves(
-    AtomResolver("Extension.state", "symbol", domain=frozenset({"culminating", "none"}),
-                 tunable_keys=_extension.TUNABLE_KEYS, reasons=_EXT_REASONS),
+    # D4 (STEP-5): the lifecycle grows the producible domain (`reverting`,
+    # `backside`); `building` / `extending` / `resuming` have no rule → E8.
+    AtomResolver("Extension.state", "symbol", domain=frozenset({"culminating", "reverting", "backside", "none"}),
+                 tunable_keys=(*_extension.TUNABLE_KEYS, *_extension.LIFECYCLE_KEYS, *_slope.TUNABLE_KEYS),
+                 reasons=(*_EXT_REASONS, "slope_norm.bars_unset", "insufficient_seed")),
     AtomResolver("Extension.instantiated", "boolean", tunable_keys=_extension.TUNABLE_KEYS, reasons=_EXT_REASONS),
     AtomResolver("Extension.leg_count", "number", tunable_keys=_extension.TUNABLE_KEYS,
                  reasons=(*_EXT_REASONS, "not_instantiated")),
@@ -150,7 +154,77 @@ class RelationResolver:
     resolve: Callable = field(repr=False, default=lambda *_a, **_k: None)
 
 
-RELATIONS: dict[str, RelationResolver] = {}
+def flat_between(norm: list[Decimal | None], *, start: int, end: int, window: int, threshold: Decimal) -> bool | None:
+    """`flat(x, window) between start and end` (FINAL §4; STEP-5): some run of
+    `window` consecutive bars inside [start, end] where every normalised slope
+    has |s| ≤ threshold. No span (end < start) is unknown; a span shorter than
+    the window is False; a window with a missing value is skipped."""
+    if end < start:
+        return None
+    for i in range(start, end - window + 2):
+        chunk = norm[i:i + window]
+        if len(chunk) == window and None not in chunk and all(abs(s) <= threshold for s in chunk):
+            return True
+    return False
+
+
+#: The event refs `between` spans: `turn` = the tracked extreme's bar (the
+#: move's turn), `cross` = the def's own `indicator_cross` bar.
+BETWEEN_EVENTS = frozenset({"turn", "cross"})
+
+
+def _flat_subject(node: Node) -> tuple[str, Node] | None:
+    """`flat(<indicator>, window: <w>)` → (indicator, window node), else None."""
+    if not isinstance(node, Ref) or len(node.segments) != 1 or node.segments[0].name != "flat":
+        return None
+    args = node.segments[0].args or ()
+    if len(args) != 2 or args[0].name is not None or args[1].name != "window":
+        return None
+    indicator = render(args[0].value) if isinstance(args[0].value, Ref) else None
+    if indicator not in _slope.FLAT_KEYS:
+        return None
+    return indicator, args[1].value
+
+
+def window_bars(node: Node, working_minutes: int) -> int | None:
+    """A window in working bars: `<n> min / working_tf` (ceil — the window must
+    cover the minutes) or `<n> bars`; any other shape is None (unsupported)."""
+    from math import ceil
+
+    if isinstance(node, Arith) and node.op == "/" and isinstance(node.left, Quantity) \
+            and node.left.unit == "min" and isinstance(node.left.value, Number) \
+            and isinstance(node.right, Ref) and render(node.right) == "working_tf":
+        return max(1, ceil(node.left.value.value / working_minutes))
+    if isinstance(node, Quantity) and node.unit == "bars" and isinstance(node.value, Number):
+        return int(node.value.value)
+    return None
+
+
+def _between_gaps(node: Between) -> set[str]:
+    subject = _flat_subject(node.subject)
+    gaps = set()
+    if subject is None or window_bars(subject[1], 1) is None:
+        gaps.add(f"Unsupported(between:{render(node.subject)})")
+    for edge in (node.start, node.end):
+        if not (isinstance(edge, Ref) and render(edge) in BETWEEN_EVENTS):
+            gaps.add(f"Unsupported(between:{render(edge)})")
+    return gaps
+
+
+def relation_operand_names(node: Node) -> set[str]:
+    """The `required_atoms` names a SERVED relation consumes (its subject and
+    event operands) — the registry does not count them as unserved atoms."""
+    if isinstance(node, Between) and "between" in RELATIONS and not _between_gaps(node):
+        return {render(node.subject), render(node.start), render(node.end)}
+    out: set[str] = set()
+    for op in getattr(node, "operands", ()) or ():
+        out |= relation_operand_names(op)
+    if isinstance(node, Not):
+        out |= relation_operand_names(node.operand)
+    return out
+
+
+RELATIONS: dict[str, RelationResolver] = {"between": RelationResolver("between")}
 
 
 # ---------------------------------------------------------------------
@@ -164,6 +238,8 @@ def _operand_gaps(node: Node) -> set[str]:
     if isinstance(node, Ref):
         text = render(node)
         return set() if text in ATOMS else {text}
+    if isinstance(node, Arith) and node.op in ("*", "/"):
+        return _operand_gaps(node.left) | _operand_gaps(node.right)  # FINAL §4 row 2 (STEP-5)
     return {f"Unsupported({node.kind})"}
 
 
@@ -224,8 +300,11 @@ def predicate_gaps(node: Node) -> set[str]:
     if isinstance(node, Qualified):
         return set() if node.op in RELATIONS else {node.op}
     if isinstance(node, Between):
-        return set() if "between" in RELATIONS else {"between"}
+        return _between_gaps(node) if "between" in RELATIONS else {"between"}
     return {f"Unsupported({node.kind})"}
 
 
-__all__ = ["ATOMS", "AtomResolver", "AtomValue", "RELATIONS", "RelationResolver", "predicate_gaps", "unit_mismatch"]
+__all__ = [
+    "ATOMS", "AtomResolver", "AtomValue", "BETWEEN_EVENTS", "RELATIONS", "RelationResolver", "flat_between",
+    "predicate_gaps", "relation_operand_names", "unit_mismatch", "window_bars",
+]

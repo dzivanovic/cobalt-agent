@@ -251,6 +251,68 @@ def drive_then_range_mapping() -> dict[str, Any]:
     return mapping
 
 
+#: STEP-5's constructed fills (L69; none a value of his or of the companion):
+#: the snapback count (`A-08`), the slope window (`A-11`), the two
+#: `per_indicator` flat thresholds (F1 — filled HERE only; production keeps them
+#: null), and the D2 fills the backside shape's micro-Range needs.
+D4_CONSTRUCTED: dict[str, tuple[str, str]] = {
+    **D2_CONSTRUCTED,
+    "extension.snapback_bars_cleared": ("bars", "3"),
+    "slope_norm.bars": ("bars", "4"),
+    "flat_threshold.ema9": ("ratio", "0.08"),
+    "flat_threshold.vwap": ("ratio", "0.09"),
+}
+
+
+def backside_mapping() -> dict[str, Any]:
+    """The backside SHAPE: an unqualified Extension in its `backside` state; an
+    instantiated micro-Range whose low is above the EMA9, the EMA9 rising;
+    `range_break` on the top; the `recent_higher_low` stop; the day-1 HTF avoid
+    and a human text avoid."""
+    mapping = example_mapping()
+    mapping.update(
+        valid_setups=MIXED, entry_mode="front_side",
+        preconditions=[
+            {"expr": "Extension.state == backside"},
+            {"expr": "Range(micro).instantiated AND Range(micro).low > EMA9 AND EMA9.slope > 0"},
+        ],
+        trigger={"type": "range_break", "params": {"ref": "Range(micro).top"},
+                 "confirmation_policy": {"type": "intrabar"}},
+        avoid=[HTF_AVOID, {"text": "human-only read of the backside"}],
+        quality_factors=sup.ANATOMY_FACTORS, preferred_windows=["morning", "midday"],
+        preferred_windows_ref="anatomy: after the turn",
+    )
+    mapping.pop("radar_watch", None)
+    mapping["stop"]["placement"]["ref"] = "recent_higher_low"
+    return mapping
+
+
+def late_mapping() -> dict[str, Any]:
+    """The fashionably-late SHAPE: an unqualified Extension reverting or on its
+    backside; the EMA9 sloping while the VWAP is flat or falling; the EMA9
+    crossing above the VWAP; a measured-fraction stop between the entry and
+    the turn; the flat-EMA9-between-turn-and-cross avoid and a human text avoid.
+    The fraction is this file's literal."""
+    mapping = example_mapping()
+    mapping.update(
+        valid_setups=MIXED, entry_mode="front_side",
+        preconditions=[
+            {"expr": "Extension.state IN {reverting, backside}"},
+            {"expr": "slope_norm(EMA9) > cfg(flat_threshold.ema9) AND slope_norm(VWAP) <= cfg(flat_threshold.vwap)"},
+        ],
+        trigger={"type": "indicator_cross", "params": {"a": "EMA9", "b": "VWAP", "direction": "a_crosses_above_b"},
+                 "confirmation_policy": {"type": "intrabar"}},
+        avoid=[{"expr": "flat(EMA9, window: 15 min / working_tf) between turn and cross"},
+               {"text": "human-only read of the cross"}],
+        quality_factors=sup.ANATOMY_FACTORS, preferred_windows=["morning", "midday"],
+        preferred_windows_ref="anatomy: after the turn",
+    )
+    mapping.pop("radar_watch", None)
+    mapping["stop"]["placement"] = {"type": "measured_fraction", "anchor_a": "entry", "anchor_b": "turn_low",
+                                    "fraction": 0.4}
+    return mapping
+
+
 def drive_then_range_rows() -> list[dict]:
     # L31 / ADR-0008 D5 (`tests/taxonomy/test_names_rule.py`): a per-trade key
     # in the repo is an `example_` key — the note slug is `example-…` for it.
@@ -274,6 +336,20 @@ SHAPES: dict[str, Shape] = {
         engine=D2_CONSTRUCTED,
         notes="pool admission, opening drive ended by consolidation, micro-Range band + upper third; "
               "range_break on the bound, consolidation_low; two avoids + a human text avoid",
+    ),
+    "backside": Shape(
+        note_slug="example-extension-backside",
+        mapping=backside_mapping,
+        engine=D4_CONSTRUCTED,
+        notes="Extension backside + micro-Range above a rising EMA9; range_break top; recent_higher_low; "
+              "day-1 HTF avoid + a human text avoid",
+    ),
+    "fashionably-late": Shape(
+        note_slug="example-extension-late-cross",
+        mapping=late_mapping,
+        engine=D4_CONSTRUCTED,
+        notes="Extension reverting/backside + EMA9 sloping, VWAP flat; EMA9 crosses above VWAP; "
+              "measured_fraction(entry, turn_low); flat-between avoid + a human text avoid",
     ),
 }
 

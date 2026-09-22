@@ -96,7 +96,9 @@ CARD_EXCLUDED = {"formula_sha256"}
 #: `tunables.yaml` gains (their keys excluded from the start digest).
 STEP3_KEYS = ("dayrange.session", "frame.warmup_source", "slope_norm.bars", "vwap.anchor",
               # + STEP-4's three rows (D2 / D3 detector keys)
-              "leg.consolidation_max_retrace", "range.micro.bound_flat_slope_atr", "range.micro.touch_tolerance_atr")
+              "leg.consolidation_max_retrace", "range.micro.bound_flat_slope_atr", "range.micro.touch_tolerance_atr",
+              # + STEP-5's `A-08` row
+              "extension.snapback_bars_cleared")
 
 
 def _tunables_digests() -> tuple[str, str]:
@@ -210,7 +212,8 @@ def test_the_five_tables_exist_and_serve_the_rubberband_bricks():
     assert {StructuralRef.SNAPBACK_CANDLE, StructuralRef.TURN_LOW} <= set(STRUCTURAL_REFS)
     assert {"Extension.state", "Extension.instantiated", "Extension.leg_count",
             "RangeBreak(HTF).day_count"} <= set(ATOMS)
-    assert ATOMS["Extension.state"].domain == frozenset({"culminating", "none"})
+    # STEP-5 (FINAL §3 D4): the lifecycle grows the producible domain.
+    assert ATOMS["Extension.state"].domain == frozenset({"culminating", "reverting", "backside", "none"})
     assert isinstance(RELATIONS, dict)
 
 
@@ -224,11 +227,14 @@ def test_the_registry_keeps_no_constants_of_its_own():
 def test_e8_a_symbol_outside_the_atoms_domain_is_not_evaluable():
     from cobalt.radar.anatomy.registry import evaluability
 
-    td = sup.anatomy_def(preconditions=[{"expr": "Extension.state IN {reverting, backside}"}])
+    # STEP-5 re-point (FINAL §3 D4): `reverting` / `backside` are produced now;
+    # `building` / `resuming` have no rule, so they are the out-of-domain case.
+    td = sup.anatomy_def(preconditions=[{"expr": "Extension.state IN {building, resuming}"}])
     result = evaluability(td)
     assert not result.evaluable
-    assert {"Extension.state∌reverting", "Extension.state∌backside"} <= set(result.missing_atoms)
+    assert {"Extension.state∌building", "Extension.state∌resuming"} <= set(result.missing_atoms)
     assert evaluability(sup.anatomy_def(preconditions=[{"expr": "Extension.state == culminating"}])).evaluable
+    assert evaluability(sup.anatomy_def(preconditions=[{"expr": "Extension.state IN {reverting, backside}"}])).evaluable
 
 
 def test_e9_every_unsupported_shape_is_named_and_the_registry_agrees_with_the_interpreter(defs):

@@ -243,6 +243,19 @@ tunables:
     source: dwv
     consumers: ["cobalt.radar.anatomy.leg_roles (Leg(opening_drive).terminated_by)"]
 
+  # --- D4 Extension lifecycle (setups one build STEP-5) -------------------
+  # `A-08`: `reverting` starts at the first bar after the turn that clears the
+  # extremes of this many preceding bars (the snapback). While null, the
+  # lifecycle is not computed and `Extension.state` reads `culminating | none`.
+  - key: extension.snapback_bars_cleared
+    value: null
+    unit: bars
+    scope: global
+    dynamic: true
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.anatomy.extension (extension_lifecycle: reverting)"]
+
   # `A-05`, `A-06`, `A-12`: conventions the frame's resolvers implement.
   - key: frame.warmup_source
     value: null
