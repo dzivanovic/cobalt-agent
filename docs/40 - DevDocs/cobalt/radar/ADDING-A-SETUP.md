@@ -27,7 +27,7 @@ No per-setup switch exists. The only switch is the global `radar.cards_enabled` 
 
 ## When a definition asks for a brick that does not exist
 
-`registry.evaluability` names it and the def is `not_evaluable` — "this needs a build, a feature for later": an atom verbatim · a relation word · `trigger:<type>` · `stop:<type>[:<ref>]` · `<atom>∌<value>` (a symbol outside the atom's domain) · `Unsupported(<shape>)` (a shape the interpreter cannot evaluate).
+`registry.evaluability` names it and the def is `not_evaluable` — "this needs a build, a feature for later": an atom verbatim · a relation word · `trigger:<type>` · `stop:<type>[:<ref>]` · `<atom>∌<value>` (a symbol outside the atom's domain) · `Unsupported(<shape>)` (a shape the interpreter cannot evaluate) · `anchor:none` (no precondition names an anchor object — see Anchors below; the def could never form).
 
 ## The bricks
 
@@ -74,6 +74,15 @@ The ONE place each brick is registered (`cobalt.radar.formation`); a new brick i
 - `RangeBreak(level).state` · `RangeBreak.state` · `event(retest)` · `event(stop_hit)` — the level break lifecycle.
 
 Also served as values, not atoms: `trade_direction`, `opposite(x)`, `against(x)`, `dist(a, b)`, `null`, `cfg(<key>)`, `<atom> IN cfg(band) <unit>`, `*` and `/`.
+
+### Anchors (`ANCHORS`)
+What a formation hangs on (`formation/anchors.py`): its bar, and its direction. A def's anchor is the FIRST row, in this order, whose atom prefix one of its preconditions names.
+- `Extension` — prefix `Extension.`: the culminating bar of an Extension with a direction.
+- `Range(micro)` — prefix `Range(micro).`: the bar the live micro-Range instantiated.
+- `Leg(pullback)` — prefix `Leg(pullback)`: the pullback's last bar.
+- `RangeBreak(level)` — prefix `RangeBreak(level)`: the RangeBreak's accepting close.
+
+No row matches → the dry-run says `anchor:none` and the def is not evaluable. `A-01` (FINAL §1): "In a def written long-side, an unqualified `Extension` is the Extension the long trade opposes, so its direction is down." So a def whose preconditions name an `Extension.` atom trades AGAINST that Extension — a with-trend def naming `Extension.state` is anchored on the Extension and forced to the other side.
 
 ## Worked example — the eighth definition
 

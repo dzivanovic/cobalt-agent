@@ -250,7 +250,7 @@ def test_lego_iv_evaluability_for_all_eight(corpus, eighth):
 DOC = REPO / "docs" / "40 - DevDocs" / "cobalt" / "radar" / "ADDING-A-SETUP.md"
 SECTIONS = {"Triggers (`TRIGGERS`)": "TRIGGERS", "Stop placements (`STOPS`)": "STOPS",
             "Structural refs (`STRUCTURAL_REFS`)": "STRUCTURAL_REFS", "Relations (`RELATIONS`)": "RELATIONS",
-            "Atoms (`ATOMS`)": "ATOMS"}
+            "Atoms (`ATOMS`)": "ATOMS", "Anchors (`ANCHORS`)": "ANCHORS"}
 
 
 def _doc_bricks() -> dict[str, set[str]]:
@@ -268,6 +268,7 @@ def _doc_bricks() -> dict[str, set[str]]:
 
 
 def test_lego_v_adding_a_setup_names_exactly_the_registries():
+    from cobalt.radar.formation.anchors import ANCHORS
     from cobalt.radar.formation.atoms import ATOMS, RELATIONS
     from cobalt.radar.formation.stops import STOPS, STRUCTURAL_REFS
     from cobalt.radar.formation.triggers import TRIGGERS
@@ -275,6 +276,8 @@ def test_lego_v_adding_a_setup_names_exactly_the_registries():
     registries = {
         "TRIGGERS": {t.value for t in TRIGGERS}, "STOPS": set(STOPS),
         "STRUCTURAL_REFS": {r.value for r in STRUCTURAL_REFS}, "RELATIONS": set(RELATIONS), "ATOMS": set(ATOMS),
+        # round 2 F1: the anchor table formation dispatches through (FINAL §2.4)
+        "ANCHORS": {row.object for row in ANCHORS},
     }
     doc = _doc_bricks()
     for name, keys in registries.items():
