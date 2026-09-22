@@ -147,9 +147,30 @@ The first full offline run after C: `5 failed, 2443 passed, 361 skipped, 1 xfail
 OFFLINE → `2448 passed, 361 skipped, 1 xfailed, 15 warnings in 472.11s (0:07:52)` → **2448/0** = 2443 + 5 new F3 tests. With-DB for the touched with-DB files: above (A1).
 
 ### COMMIT
+`b737c25 fix(setups): round 3 — F3 minimum-size rule for impulse / pullback legs, A-24 leg.min_size_atr null (R49)` — `git show --stat HEAD`: 12 files, `243 insertions(+), 18 deletions(-)`: `tunables.yaml`, `ADDING-A-SETUP.md`, `frame.md`, `leg_roles.md`, `atoms.md`, this report, `frame.py`, `leg_roles.py`, `atoms.py`, `test_setups_d1.py`, `test_setups_fix_r3.py`, `test_setups_registries.py`.
+
+## F4
+R50 — a FILLED card's health pills skip `assumed_formation`.
+
+### T
+RED-on-`65c08a0`. New (2): `dot_pills` over two graded dots + the `assumed_formation` dot → exactly the two graded pills, no "assumed_formation has no graded value" note; `card_health` → the dot class is the graded dot only, and `assumed_keys_of(dots)` still reads the dot (it stays on the card). Run before C: `2 failed, 14 deselected in 0.08s`; printed `F4 pills: [('factor_a', 'ok'), ('factor_b', 'ok'), ('assumed_formation', 'n/a')]`; RED lines: `AssertionError: assert ['factor_a', ...ed_formation'] == ['factor_a', 'factor_b']` · `AssertionError: assert ['factor_a', ...ed_formation'] == ['factor_a']`.
+
+### C
+`src/cobalt/cards/health.py` only: `dot_pills` skips `dot.factor == ASSUMED_FORMATION` (one comment naming R50). After C: `F4 pills: [('factor_a', 'ok'), ('factor_b', 'ok')]`. Guards (the build's tests, untouched): `… test_setups_fix_r3.py test_card_health.py test_radar_panel_cards.py test_setups_d1.py -k "f4 or health or pill or filled"` → `29 passed, 60 deselected in 49.87s` (`X14: filled-card refreshes=138 non-health numbers moved=False health moved=True`).
+
+### A1
+None.
+
+### D
+`cards/health.md` + one paragraph.
+
+### SUITE
+OFFLINE → `2450 passed, 361 skipped, 1 xfailed, 15 warnings in 472.73s (0:07:52)` → **2450/0** = 2448 + 2 new F4 tests. No with-DB file touched.
+
+### COMMIT
 (below)
 
 ## CONTINUE
-next: F3 COMMIT, then F4 (draft in the job tmp dir) (T drafted in the job tmp dir; the base roles pin captured: `F3 roles on the committed day: 160 observations sha=0922dadc29013941a7a2512e038ba9310e4fb791bc3a5e53bdd17a4bf5dd6323`)
+next: F4 COMMIT, then F5 (T drafted in the job tmp dir; the base roles pin captured: `F3 roles on the committed day: 160 observations sha=0922dadc29013941a7a2512e038ba9310e4fb791bc3a5e53bdd17a4bf5dd6323`)
 
 (run in progress — row 2 of 6, next under ## CONTINUE)

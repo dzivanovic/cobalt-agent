@@ -304,3 +304,56 @@ def test_f3_the_key_is_a_null_engine_row_in_the_closure_of_every_def_naming_the_
     rows = _nine_ema_rows(float(MIN_LITERAL))
     rows[MIN_SIZE_KEY] = rows[MIN_SIZE_KEY].model_copy(update={"source": TunableSource.ASSUMED})
     assert MIN_SIZE_KEY in assumed_closure(td, rows)  # a card formed on it is marked ASSUMED
+
+
+# =====================================================================
+# F4 — R50: a FILLED card's health pills skip `assumed_formation`
+# =====================================================================
+
+
+def _thresholds():
+    from cobalt.cards.health import HealthThresholds
+
+    return HealthThresholds(participation_warn=Decimal("0.7"), participation_bad=Decimal("0.4"),
+                            cost_warn=Decimal("1.5"), cost_bad=Decimal("2.5"), dot_warn_drop=2, dot_bad_max=3,
+                            structural_warn="touched", structural_bad="lost_on_close")  # this file's literals
+
+
+def _graded(factor, position, grade):
+    from cobalt.cards.scoring import Dot
+
+    return Dot(factor=factor, position=position, source="cobalt", tier="deterministic", role="shadow",
+               engine_grade=grade)
+
+
+def _assumed_dot(position):
+    from cobalt.cards.scoring import ASSUMED_FORMATION, Dot
+
+    return Dot(factor=ASSUMED_FORMATION, position=position, source="cobalt-degraded", tier="deterministic",
+               role="shadow", na_reason="ASSUMED", engine_inputs={"assumed_keys": ["a.key"]},
+               engine_why="formed on assumed defaults: a.key")
+
+
+def test_f4_a_filled_cards_dot_pills_skip_assumed_formation():
+    from cobalt.cards.health import dot_pills
+
+    dots = [_graded("factor_a", 0, 7), _graded("factor_b", 1, 6), _assumed_dot(2)]
+    pills = dot_pills(entry_grades={"factor_a": 8, "factor_b": 6}, dots=dots, t=_thresholds())
+    print(f"F4 pills: {[(p.label, p.status) for p in pills]}")
+    assert [p.label for p in pills] == ["factor_a", "factor_b"]
+    assert not any("assumed_formation has no graded value" in p.note for p in pills)
+
+
+def test_f4_card_health_carries_no_assumed_formation_pill_and_the_dot_stays_on_the_card():
+    from datetime import datetime, timezone
+
+    from cobalt.cards.health import EntrySnapshot, card_health
+    from cobalt.radar.evaluate import assumed_keys_of
+
+    dots = [_graded("factor_a", 0, 7), _assumed_dot(1)]
+    snap = EntrySnapshot(captured_at=datetime(2026, 1, 6, 15, tzinfo=timezone.utc), rvol=None, spread=None,
+                         dot_grades={"factor_a": 7})
+    pills = card_health(snapshot=snap, current_rvol=None, current_spread=None, dots=dots, stop=Decimal("9.50"),
+                        direction="long", intrabar=[], closed=[], ema9=None, t=_thresholds())
+    assert [p.label for p in pills if p.klass == "dot"] == ["factor_a"]
+    assert assumed_keys_of(dots) == ("a.key",)  # the dot itself is untouched; the card's ASSUMED mark carries it
