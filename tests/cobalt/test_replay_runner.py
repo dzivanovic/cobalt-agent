@@ -415,7 +415,7 @@ def p2_sources():
 def test_the_nightly_run_binds_to_p2s_shipped_replay_and_reconciles_its_formation_misses():
     deps, calls = fake_deps(formations=runner_mod.formation_replay, formation_sources=p2_sources)
     result = run_nightly(DAY, dry_run=False, deps=deps)
-    assert result.formation_replay == "s2p2.1"          # the shipped capability marker, not a guess
+    assert result.formation_replay == "s2p2.2"          # the shipped capability marker, not a guess
     assert (result.formation_candidates, result.formation_misses) == (1, 1)
     row = deps.missed.current_rows["formation"][
         (DAY, "formation", "MU", 0, "0123456789abcdef0123456789abcdef",
@@ -469,7 +469,7 @@ def test_an_available_p2_with_no_formations_still_retires_the_days_predecessors(
     deps.missed.reconcile = recording
     result = run_nightly(DAY, dry_run=False, deps=deps)
 
-    assert result.formation_replay == "s2p2.1"                   # P2 ran; it was not absent
+    assert result.formation_replay == "s2p2.2"                   # P2 ran; it was not absent
     assert "missed.reconcile:formation" in calls                 # the R2-1 case
     assert seen["formation"] == []                               # reconciled with ZERO rows
     assert result.reconcile["formation"].inserted == 0

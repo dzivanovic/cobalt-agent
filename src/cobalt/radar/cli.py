@@ -38,6 +38,8 @@ def add_parser(sub) -> None:
     evaluate.add_argument("--replay", metavar="YYYY-MM-DD", help="Replay a day; writes nothing.")
     evaluate.add_argument("--candidate", metavar="YYYY-MM-DD", help="Persist candidate rows to cobalt_dev.")
     evaluate.add_argument("--trade-def", dest="trade_def", metavar="SLUG")
+    evaluate.add_argument("--expect-formed", dest="expect_formed", action="store_true",
+                          help="With --replay and --trade-def: exit non-zero when the def formed 0 times.")
     evaluate.add_argument("--settings-file", dest="settings_file", help="Frozen D2 card-settings file.")
     evaluate.add_argument("--sha256", help="sha256 of --settings-file.")
     evaluate.add_argument("--taps", help="Simulated taps file for --candidate.")

@@ -49,3 +49,6 @@ which is the point of keeping it (L57).
 ## Gotchas
 - The replay has no screener snapshot, so its RVOL dot is `input_unavailable`. That changes no formation, only the dot. The candidate harness takes RVOL from receipts instead, so it needs the day's receipts present in cobalt_dev.
 - The parameter is `slug_filter`, not `trade_def`: the names-rule lint reads `trade_def: <word>` as a slug.
+
+## 2026-09-21 — setups one build STEP-1: `--expect-formed`
+`expect_formed_gate(report, slug)` raises `SystemExit` (non-zero) when the replay found 0 formations (FINAL §9 gate 4); `replay_formations`' signature is unchanged (the nightly binding's `FormationSources` mirrors it). `evaluate_command` refuses `--expect-formed` unless `--replay` and `--trade-def` are both given ([F-16] (3)), so the gate always names the one def it proves. The `--candidate` harness now meets the store's refusal: a taps file that names `assumed_formation` stops the run with `CardStateError`. That is a loud error (L1), not a skipped tap.

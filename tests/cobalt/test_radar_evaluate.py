@@ -179,7 +179,7 @@ def test_card_is_born_unsized_in_watch_with_formation_evidence_and_dots():
     assert card["grade"] is None and card["risk_budget"] is None and card["shares"] is None
     assert card["trigger_price"] == card["entry"] and card["structural_stop"] == card["stop"]
     assert card["formed_at"] == FORMED
-    assert card["why"] and card["setup_ref"] == "overextension" and card["trigger_type"] == "bar_break"
+    assert card["why"] and card["setup_ref"] == "unclassified" and card["trigger_type"] == "bar_break"
     # the deadline is resolved from preferred_windows_ref at formation and persisted (R1-16)
     assert card["expires_at"] == datetime(2026, 1, 6, 15, 30, tzinfo=ZoneInfo("America/New_York"))
     genesis = world.cards.transitions[0]
@@ -405,7 +405,8 @@ def test_every_card_number_replays_from_stored_inputs():
     world.cards.tap(1, "tape_absorption_at_bound", 8)
     world.scan(SCAN0 + timedelta(seconds=100))
     card = world.cards.cards[1]
-    assert card["card_score"] is not None
+    assert card["conviction"] is not None
+    assert card["card_score"] is None and "assumed_formation" in card["score_suppressed"]
     receipts = list(world.cards.receipts)
     published_scores = {s["membership_id"]: s for s in world.radar.scores.values() if s["run_id"] == 2}
 
@@ -690,14 +691,22 @@ requires_vault = pytest.mark.skipif(not os.getenv(LIVE_VAULT_ENV),
 
 @requires_vault
 def test_live_defined_notes_evaluate_on_the_fixture_bars_and_only_the_evaluable_one_can_form(capsys):
+    """FINAL §9 gate 3 / [F-16] (2): for every def the registry calls
+    evaluable — never `Setup(relation)` in a `not_evaluable` outcome, and
+    `formed` in its outcome set unless its own avoid is `avoided` on those
+    scans or it is pinned in `AWAITING_A_DAY` (printed). A def the registry
+    does NOT call evaluable is `not_evaluable` on every scan. The deploy runs
+    this with `COBALT_LIVE_VAULT_ROOT` set; a SKIP there is RED."""
+    from cobalt.radar.anatomy.registry import evaluability
     from cobalt.taxonomy.vault_loader import load_vault_trade_defs
+    from test_setups_lego import AWAITING_A_DAY
 
     loaded = load_vault_trade_defs(vault_root=Path(os.environ[LIVE_VAULT_ENV]))
     defs = [sup.LoadedDef(slug=d.slug, md5=d.md5, definition=d.definition) for d in loaded.defs]
     user_rows = {t.key: t.row for t in loaded.user_tunables}
     tunables = {**sup.engine_tunables(), **user_rows}
     bars = sup.fixture_bars("FTFT")
-    seen = {}
+    seen, missing = {}, {}
     for minute in range(0, 180, 2):
         at = datetime(2026, 1, 6, 15, 0, tzinfo=UTC) + timedelta(minutes=minute)
         member = sup_member(bars, at)
@@ -705,13 +714,22 @@ def test_live_defined_notes_evaluate_on_the_fixture_bars_and_only_the_evaluable_
             ev = evaluate_member(ld, member, tunables=tunables, defaults=sup.defaults(), scan_interval=100,
                                  clock=session_clock())
             seen.setdefault(ld.slug, set()).add(ev.evaluation)
+            if ev.evaluation == "not_evaluable":
+                missing.setdefault(ld.slug, set()).update(ev.missing)
     with capsys.disabled():
         for slug, outcomes in sorted(seen.items()):
             print(f"{slug}: {sorted(outcomes)}")
-    for slug, outcomes in seen.items():
-        if slug != "rubberband":
-            assert outcomes == {"not_evaluable"}, slug
-    assert seen["rubberband"] - {"not_evaluable"}, "the evaluable def never evaluated past not_evaluable"
+    for ld in defs:
+        outcomes = seen[ld.slug]
+        if not evaluability(ld.definition).evaluable:
+            assert outcomes == {"not_evaluable"}, ld.slug
+            continue
+        assert "Setup(relation)" not in missing.get(ld.slug, set()), ld.slug
+        if ld.slug in AWAITING_A_DAY:
+            with capsys.disabled():
+                print(f"AWAITING A DAY: {ld.slug}")
+            continue
+        assert "formed" in outcomes or "avoided" in outcomes, (ld.slug, sorted(outcomes))
 
 
 def sup_member(bars, at):

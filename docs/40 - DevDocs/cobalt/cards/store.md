@@ -134,3 +134,5 @@ The persisted evidence of the gap is `cobalt cards picks` reporting MISSING.
 **`filled_with_picks(day)`** backs `cobalt cards picks`. It returns every
 `card_transitions` row with `to_state = 'FILLED'` whose `at` falls on that
 ET date, joined to the card and left-joined to `picks` on `transition_id`.
+
+**2026-09-21 — setups one build STEP-1.** `tap_dot` refuses the factor `assumed_formation`. The refusal sits beside the no-such-dot refusal, before the INSERT. It raises `CardStateError("REFUSED card <id>: assumed_formation is not graded on a card — an assumed default is ruled on the settings surface")`. No tap row is written. The dot's `trader_grade` and the card's conviction, score, suppression and proposed key are not touched. The route turns the error into `409` with that message. Tapping any other dot recomputes as before, and `suppression()` still names `assumed_formation`, so `card_score` stays null (R2-2 = B, X8's tap half).

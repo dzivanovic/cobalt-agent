@@ -31,10 +31,20 @@ nothing is a definite null (`not_instantiated`): `== 1` is False, not
 unknown. AST shapes the S2 detectors do not serve are `not_evaluable`,
 named — never a guessed truth value.
 
-DIRECTION. `instance_direction: computed`: the Extension direction, then
-the def's `valid_setups[].relation` — all countertrend trades against the
-run (up -> short), all with_trend trades with it; a def mixing both has no
-computable direction and is `not_evaluable`.
+DIRECTION (FINAL §1, key `A-01`). Direction comes from the trade's own
+anatomy; `valid_setups[].relation` is NEVER read for it — `relation` is
+the trade's relation to the SETUP's trend (day / higher-timeframe
+context), not to the intraday Extension. A def written long-side trades
+AGAINST an unqualified Extension: up-run -> short, down-run -> long. That
+orientation is the assumed convention `A-01` (`ASSUMED_CONVENTIONS`), so
+every formation carries it in `Formation.assumed_keys` and its card the
+untappable `assumed_formation` dot (R2-2 = B). No setup is detected: the
+card's `setup_ref` is the token `UNCLASSIFIED_SETUP`.
+
+GEOMETRY GUARD (FINAL §9 point (5), X17 PASS): a resolved stop must be on
+the protective side of BOTH the trigger and the last close — long: stop <
+min(trigger, last close); short: stop > max(trigger, last close) — else
+`not_formed`, note `stop_wrong_side`, never a card.
 
 STALENESS (Astra R1-12, `anatomy.freshness`): intraday bars and RVOL use
 2 × `radar.scan_interval`; daily bars the last-completed-session rule;
@@ -80,6 +90,7 @@ from cobalt.cards.expire import radar_deadline, radar_expiry
 from cobalt.cards.health import EntrySnapshot, HealthThresholds, card_health
 from cobalt.cards.radar import RadarCardSpec
 from cobalt.cards.scoring import (
+    ASSUMED_FORMATION,
     Dot,
     FactorObservation,
     colour_thresholds,
@@ -105,7 +116,6 @@ from cobalt.taxonomy.predicate import (
     render,
 )
 from cobalt.taxonomy.trade_def import (
-    Relation,
     SimpleTrigger,
     StructuralExtremePlacement,
     TradeDef,
@@ -129,8 +139,13 @@ from .anatomy.structure import (
 from .seam import AtomOutcome, DeskShadow, DeskShadowEntry, RadarScoreDetail, SeamObservation, validate_atom
 
 ET = ZoneInfo("America/New_York")
-EVALUATOR_VERSION = "s2p2.1"
+#: Bumped ONCE for the whole setups one build (R44: nothing deploys between
+#: its steps). A receipt of another version is refused by replay (§9 gate 5).
+EVALUATOR_VERSION = "s2p2.2"
 DESK_FORMULA_VERSION = "s2p2.1"
+#: FINAL [F-07]: the card's setup token — NOT a `SetupRef` member, so no
+#: definition can list it in `valid_setups`. No setup is detected.
+UNCLASSIFIED_SETUP = "unclassified"
 TIE_POLICY = (
     "pinned(ARMED,TRIGGERED,FILLED) by pool_position nulls last, score desc nulls last, ticker, card_id; "
     "WATCH by card_score desc nulls last, pool_position nulls last, ticker, card_id; "
@@ -334,6 +349,9 @@ class Formation(BaseModel):
     formed_bar_ts: AwareDatetime
     formed_bar_end: AwareDatetime
     leg_count: int | None
+    #: The assumed keys this formation rests on (R2-2 = B): stored on the
+    #: card's `assumed_formation` dot at creation, never re-read from live rows.
+    assumed_keys: tuple[str, ...]
 
 
 class MemberEvaluation(BaseModel):
@@ -484,6 +502,20 @@ def _s(value) -> str | None:
     return None if value is None else str(value)
 
 
+#: FINAL §1 / R2-2.2 term (3): the conventions the direction line below
+#: implements — `A-01`, a long-side def trades against an unqualified
+#: Extension. Until a convention has a row it counts as assumed
+#: unconditionally (the C1 rule).
+ASSUMED_CONVENTIONS: tuple[str, ...] = ("A-01",)
+
+
+def stop_on_protective_side(direction: str, *, trigger: Decimal, stop: Decimal, last_close: Decimal) -> bool:
+    """FINAL §9 point (5) — the geometry guard, written ONCE (X17 PASS)."""
+    if direction == "long":
+        return stop < min(trigger, last_close)
+    return stop > max(trigger, last_close)
+
+
 def evaluate_member(
     ld: LoadedDef,
     member: MemberInput,
@@ -632,19 +664,8 @@ def evaluate_member(
     # --- formed: direction, trigger, stop ---------------------------------
     if ext.direction is None or ext.culminating_bar_ts is None:
         return result("not_formed", detail(consulted, path), note="no culminating bar to form on", **extra)
-    relations = {vs.relation for vs in td.valid_setups}
-    if relations == {Relation.COUNTERTREND}:
-        trade_direction = "short" if ext.direction == "up" else "long"
-    elif relations == {Relation.WITH_TREND}:
-        trade_direction = "long" if ext.direction == "up" else "short"
-    else:
-        return result(
-            "not_evaluable",
-            RadarScoreDetail(atoms=(), missing_atoms=("Setup(relation)",), observations=tuple(seam_obs)),
-            missing=("Setup(relation)",), note="valid_setups mix relations — no computable direction", **extra,
-        )
-    wanted = next(r for r in relations)
-    setup_ref = next(vs.setup_ref.value for vs in td.valid_setups if vs.relation == wanted)
+    # A-01 (FINAL §1): a long-side def trades against an unqualified Extension.
+    trade_direction = "short" if ext.direction == "up" else "long"
     trigger_def = td.trigger
     assert isinstance(trigger_def, SimpleTrigger)
     placement = td.stop.placement
@@ -657,11 +678,14 @@ def evaluate_member(
         stop = structural_stop(extreme.price, trade_direction, buffer)
     except (InsufficientBars, IncompleteBucket) as e:
         return result("not_formed", detail(consulted, path), note=f"trigger/stop unavailable: {e}", **extra)
+    if not stop_on_protective_side(trade_direction, trigger=trigger.price, stop=stop.price, last_close=last_price):
+        return result("not_formed", detail(consulted, path), note="stop_wrong_side", **extra)
     formed_end = ext.culminating_bar_ts + timedelta(minutes=minutes)
     formation = Formation(
-        extension_direction=ext.direction, trade_direction=trade_direction, setup_ref=setup_ref,
+        extension_direction=ext.direction, trade_direction=trade_direction, setup_ref=UNCLASSIFIED_SETUP,
         trigger=trigger, extreme=extreme, stop=stop, stop_ref=placement.ref.value,
         formed_bar_ts=ext.culminating_bar_ts, formed_bar_end=formed_end, leg_count=ext.leg_count,
+        assumed_keys=ASSUMED_CONVENTIONS,
     )
     extra["direction"] = trade_direction
     i1_after = tuple(bar for bar in closed_i1 if bar.ts >= formed_end)
@@ -678,6 +702,44 @@ def card_why(td: TradeDef, formation: Formation) -> str:
         f"{formation.trigger.bars_cleared}-bar break at {formation.trigger.price}; stop "
         f"{formation.stop.price} beyond the {formation.stop_ref} extreme {formation.extreme.price}"
     )
+
+
+def assumed_keys_of(dots: Iterable[Dot]) -> tuple[str, ...]:
+    """The keys a card's OWN stored `assumed_formation` dot names — never a
+    live tunable row, so a row ruled later does not lift an open card. No
+    dot -> no keys."""
+    for dot in dots:
+        if dot.factor == ASSUMED_FORMATION:
+            return tuple(dot.engine_inputs["assumed_keys"])
+    return ()
+
+
+def card_dots(
+    ld: LoadedDef,
+    ev: MemberEvaluation,
+    settings: CardSettings,
+    at: datetime,
+    assumed_keys: Sequence[str],
+    *,
+    previous: Iterable[Dot] | None = None,
+    added_by: Mapping[str, Any] | None = None,
+) -> list[Dot]:
+    """THE one builder of a card's dots (R2-2.1, L3), at all four sites:
+    create, `refresh_card`, `replay_receipt`, the audit export. The quality
+    factors' dots (carried across `refresh_dots` from `previous` when given),
+    then — when `assumed_keys` is non-empty — the ONE untappable
+    `assumed_formation` dot, appended after the refresh."""
+    dots = compute_dots(ld.definition.quality_factors, ev.observations, settings.curves, at=at)
+    if previous is not None:
+        dots = refresh_dots(previous, dots, at=at, added_by=added_by)
+    if assumed_keys:
+        keys = list(assumed_keys)
+        dots.append(Dot(
+            factor=ASSUMED_FORMATION, position=len(ld.definition.quality_factors), source="cobalt-degraded",
+            tier="deterministic", role="shadow", na_reason="ASSUMED", engine_inputs={"assumed_keys": keys},
+            engine_why=f"formed on assumed defaults: {', '.join(keys)}",
+        ))
+    return dots
 
 
 def desk_shadow() -> DeskShadow:
@@ -771,8 +833,8 @@ def refresh_card(
     evaluation. Formation evidence is never touched. `ld` is the def of
     the card's slug as loaded NOW — after a note edit its md5 differs from
     the card's formation md5, and a factor it gained is added once."""
-    fresh = compute_dots(ld.definition.quality_factors, ev.observations, settings.curves, at=at)
-    dots = refresh_dots(card.dots, fresh, at=at, added_by={"definition_md5": ld.md5, "run_id": run_id})
+    dots = card_dots(ld, ev, settings, at, assumed_keys_of(card.dots), previous=card.dots,
+                     added_by={"definition_md5": ld.md5, "run_id": run_id})
     last = ev.last_price if ev.last_price is not None else card.entry
     score = score_card(dots, last=last, trigger=card.entry, stop=card.stop,
                        bands=settings.proposed_key, enabled=enabled)
@@ -1045,6 +1107,13 @@ def replay_receipt(receipts: Sequence[Mapping[str, Any]], *, clock) -> tuple[lis
     in `receipts` (ordered oldest -> newest, `id` present) from receipt
     values only."""
     index = len(receipts) - 1
+    for receipt in receipts:  # §9 gate 5: never recompute another version's receipt with this code
+        written = receipt["observations"]["evaluator_version"]
+        if written != EVALUATOR_VERSION:
+            raise ReplayError(
+                f"receipt {receipt.get('id')} was written by evaluator {written!r}; this code is "
+                f"{EVALUATOR_VERSION!r} — refusing to recompute it"
+            )
     tunables_raw = _resolve_snapshot(receipts, "tunables_snapshot", index)
     settings_raw = _resolve_snapshot(receipts, "settings_snapshot", index)
     defs_raw = _resolve_snapshot(receipts, "definitions_snapshot", index)
@@ -1074,8 +1143,7 @@ def replay_receipt(receipts: Sequence[Mapping[str, Any]], *, clock) -> tuple[lis
         if ev is None:
             raise ReplayError(f"card {card['card_id']}: no evaluation for its member/def in the receipt")
         ld = defs[md5]
-        fresh = compute_dots(ld.definition.quality_factors, ev.observations, settings.curves, at=at)
-        dots = overlay_taps(fresh, card["taps"])
+        dots = overlay_taps(card_dots(ld, ev, settings, at, card["assumed_keys"]), card["taps"])
         last = ev.last_price if ev.last_price is not None else Decimal(card["entry"])
         score = score_card(dots, last=last, trigger=Decimal(card["entry"]), stop=Decimal(card["stop"]),
                            bands=settings.proposed_key, enabled=enabled)
@@ -1380,7 +1448,7 @@ class EvaluateStage:
                     # this scan; the formation is NOT consumed and is
                     # re-evaluated next scan with the extreme where it lands.
                     continue
-                fresh = compute_dots(ld.definition.quality_factors, ev.observations, settings.curves, at=instant)
+                fresh = card_dots(ld, ev, settings, instant, f.assumed_keys)
                 score = score_card(fresh, last=ev.last_price, trigger=f.trigger.price, stop=f.stop.price,
                                    bands=settings.proposed_key, enabled=enabled)
                 score_id = score_ids[(ev.membership_id, ev.md5)]
@@ -1425,7 +1493,7 @@ class EvaluateStage:
                 receipt_cards.append({
                     "card_id": card_id, "pool_member_id": ev.membership_id, "trade_def_md5": ld.md5,
                     "definition_md5": ld.md5, "entry": str(spec.entry), "stop": str(spec.stop), "taps": [],
-                    "published": published_numbers(update),
+                    "assumed_keys": list(f.assumed_keys), "published": published_numbers(update),
                 })
             if copies:
                 self.radar_store.copy_card_values(copies, before_commit=gate("evaluate:copy"))
@@ -1476,7 +1544,7 @@ class EvaluateStage:
         return {
             "card_id": card.card_id, "pool_member_id": card.pool_member_id, "trade_def_md5": card.trade_def_md5,
             "definition_md5": definition_md5, "entry": str(card.entry), "stop": str(card.stop), "taps": card.taps,
-            "published": published_numbers(update),
+            "assumed_keys": list(assumed_keys_of(update.dots)), "published": published_numbers(update),
         }
 
 
@@ -1487,10 +1555,12 @@ def _state(value: str):
 
 
 __all__ = [
-    "AtomValue", "CATALYST_REVIEW_FIELDS", "CardUpdate", "EVALUATOR_VERSION", "EvaluateError", "EvaluateStage",
-    "FACTOR_COMPUTERS", "Formation", "LoadedDef", "MemberEvaluation", "MemberInput", "OpenRadarCard",
-    "ReceiptChain", "ReplayError", "ReplayedCard", "StageOutcome", "build_receipt", "canonical_sha256",
+    "ASSUMED_CONVENTIONS", "AtomValue", "CATALYST_REVIEW_FIELDS", "CardUpdate", "EVALUATOR_VERSION",
+    "EvaluateError", "EvaluateStage", "FACTOR_COMPUTERS", "Formation", "LoadedDef", "MemberEvaluation",
+    "MemberInput", "OpenRadarCard", "ReceiptChain", "ReplayError", "ReplayedCard", "StageOutcome",
+    "UNCLASSIFIED_SETUP", "assumed_keys_of", "build_receipt", "canonical_sha256", "card_dots",
     "card_why", "chain_commit", "desk_shadow", "evaluate_member", "evaluate_node", "formation_changes",
+    "stop_on_protective_side",
     "formula_sha256", "overlay_taps",
     "published_numbers", "rebuild_members", "refresh_card", "replay_receipt", "seam_atom",
 ]
