@@ -142,3 +142,5 @@ The ONE `EVALUATOR_VERSION` bump of STEP-1 covers this step. Nothing deploys bet
 - **`_after`:** the state holds AND its trap close came after the retest bar.
 - **`_inside`:** the last close is back under the broken level, above `Range(prior)`'s floor.
 - **Labels.** `CONVENTION_LABELS` gains `range_prior.rule` → `session_low_before_break_to_level` (A-21), `event.stop_hit.source` → `computed_from_bars_turn_low_less_buffer` (A-22) and `turn_candle.rule` → `turn_bar_low` (A-23).
+
+**2026-09-22 (fix round 2, F3).** `closure_keys` also unions the keys the def's trigger resolver declares (`formation.triggers.trigger_tunable_keys`). Before, the closure held the def's `cfg` tokens, the detectors of the atoms it names, and its conventions — so vwap-continuation's `trendline_break` read `pivot.n` and the `range.micro.*` keys outside it. An assumed fill of `range.micro.touch_tolerance_atr` would then have formed a card with no `assumed_formation` mark. At committed config no row is `source: assumed`, so no card's `assumed_keys` changes.

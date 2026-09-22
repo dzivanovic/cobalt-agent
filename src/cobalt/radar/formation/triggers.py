@@ -20,6 +20,9 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from cobalt.taxonomy.predicate import render
 from cobalt.taxonomy.trade_def import TriggerType
 
+from ..anatomy import micro_range as _micro_range
+from ..anatomy import pivots as _pivots
+from ..anatomy import range_break as _range_break
 from ..anatomy.indicators import InsufficientBars
 from ..anatomy.structure import TriggerLevel, bar_break_trigger
 from .atoms import LEVEL_STEPS, STEP_SHAPES, range_break_observation, step_gaps
@@ -48,6 +51,10 @@ class TriggerOutcome(BaseModel):
 
 class TriggerResolver(Protocol):
     kind: str
+    #: Fix round 2 F3: every engine key this resolver reads (through the
+    #: frame objects it resolves on), declared like an atom resolver's
+    #: `tunable_keys` — so the def's R2-2.2 closure carries them.
+    tunable_keys: tuple[str, ...]
 
     def serves(self, params: dict[str, Any]) -> bool: ...
 
@@ -59,6 +66,7 @@ class BarBreak:
     completed working bars (`structure.bar_break_trigger`)."""
 
     kind = "bar_break"
+    tunable_keys: tuple[str, ...] = ()
 
     def serves(self, params: dict[str, Any]) -> bool:
         return "bars_cleared" in params
@@ -81,6 +89,7 @@ class RangeBreak:
     trigger is a level, not a count of bars cleared."""
 
     kind = "range_break"
+    tunable_keys = _micro_range.TUNABLE_KEYS  # the micro-Range it reads
     REFS = frozenset({"Range(micro).bound", "Range(micro).top"})
 
     def serves(self, params: dict[str, Any]) -> bool:
@@ -108,6 +117,7 @@ class IndicatorCross:
     `InsufficientBars` (the stage reports `not_formed`)."""
 
     kind = "indicator_cross"
+    tunable_keys: tuple[str, ...] = ()
     INDICATORS = frozenset({"EMA9", "EMA21", "VWAP"})
     DIRECTIONS = frozenset({"a_crosses_above_b", "a_crosses_below_b"})
 
@@ -140,6 +150,7 @@ class IndicatorRejection:
     human read (L11)."""
 
     kind = "indicator_rejection"
+    tunable_keys: tuple[str, ...] = ()
     INDICATORS = frozenset({"EMA9", "EMA21", "VWAP"})
     CONTACTS = frozenset({"touch", "penetrate"})
 
@@ -181,6 +192,8 @@ class TrendlineBreak:
     Neither → `InsufficientBars` (`not_formed`)."""
 
     kind = "trendline_break"
+    #: the micro-Range (flat case) and the pivots (sloped case)
+    tunable_keys = (*_micro_range.TUNABLE_KEYS, *_pivots.TUNABLE_KEYS)
     ANCHORS = frozenset({"Leg(pullback)"})
 
     def serves(self, params: dict[str, Any]) -> bool:
@@ -230,6 +243,7 @@ class Sequence:
     `event(retest)` → `close_above(prior_bar)`) is one instance of the walk."""
 
     kind = "sequence"
+    tunable_keys = _range_break.TUNABLE_KEYS  # the RangeBreak observation its steps read
 
     def serves(self, params: dict[str, Any]) -> bool:
         return False  # a sequence has no params: `serves_def` reads its steps
@@ -291,6 +305,13 @@ def trigger_resolver(trigger_def) -> TriggerResolver | None:
     return resolver
 
 
+def trigger_tunable_keys(trigger_def) -> tuple[str, ...]:
+    """The engine keys the resolver serving this trigger reads (F3); none
+    when no resolver serves it."""
+    resolver = trigger_resolver(trigger_def)
+    return tuple(resolver.tunable_keys) if resolver is not None else ()
+
+
 def trigger_gaps(trigger_def) -> set[str]:
     """What keeps this trigger from being served, named: nothing when a
     resolver serves it; a whole-trigger resolver's own gaps (a `sequence`'s
@@ -307,4 +328,4 @@ def trigger_gaps(trigger_def) -> set[str]:
 
 
 __all__ = ["BarBreak", "IndicatorCross", "RangeBreak", "TRIGGERS", "TriggerOutcome", "TriggerResolver",
-           "trigger_gaps", "trigger_resolver"]
+           "trigger_gaps", "trigger_resolver", "trigger_tunable_keys"]

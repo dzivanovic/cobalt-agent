@@ -5,6 +5,8 @@
   dispatches through — L3).
 - F2: a `sequence` walks its steps as predicates, in bar order, through the
   one interpreter's dispatch; an unserved step names its own gap.
+- F3: a key the trigger resolver reads joins the def's declared closure, so
+  an assumed fill of it reaches `assumed_keys` and the card's dot.
 
 Neutral defs of this file's own words and literals (L32 / L69), written into
 a `tmp_path` vault and loaded through the real `load_vault_trade_defs`
@@ -176,3 +178,45 @@ def test_f2_an_unserved_step_names_its_own_gap_never_trigger_sequence(tmp_path):
     assert result.evaluable is False
     assert "Gap.size" in result.missing_atoms and "trigger:sequence" not in result.missing_atoms, \
         result.missing_atoms
+
+
+# =====================================================================
+# F3 — the trigger resolver's reads join the declared closure
+# =====================================================================
+
+#: The two `range.micro.*` engine holes the `trendline_break` trigger reads
+#: through the micro-Range observation, filled as `source: assumed` with the
+#: build's OWN constructed literals (`setups_shapes.D2_CONSTRUCTED`, L69).
+ASSUMED_FILLS = ("range.micro.touch_tolerance_atr", "range.micro.bound_flat_slope_atr")
+
+
+def test_f3_an_assumed_fill_the_trigger_reads_reaches_assumed_keys_and_the_card_dot(tmp_path):
+    from cobalt.radar.evaluate import assumed_keys_of, card_dots
+    from cobalt.settings.card import CardSettings
+    from cobalt.taxonomy.cli import assumed_note_text
+    from cobalt.taxonomy.loader import merge_tunables
+    from cobalt.taxonomy.vault_loader import load_vault_trade_defs
+    from test_radar_evaluate import ENABLED_CARD  # a constructed config (L69)
+
+    rows = [{"key": key, "value": float(shapes.D2_CONSTRUCTED[key][1]), "unit": "atr", "scope": "global",
+             "dynamic": True, "status": "proposed", "source": "assumed", "consumers": ["a detector"]}
+            for key in ASSUMED_FILLS]
+    (tmp_path / "1 - Trading").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "1 - Trading" / "Assumed Defaults.md").write_text(assumed_note_text(rows))
+    engine_fills = {k: v for k, v in shapes.D5_CONSTRUCTED.items() if k not in ASSUMED_FILLS}
+    ld = shapes.load_note(tmp_path, "example-fix-assumed-trigger", shapes.pullback_to_vwap_mapping(),
+                          engine=engine_fills)
+    assumed = {t.key: t.row for t in load_vault_trade_defs(vault_root=tmp_path).user_tunables if t.slug is None}
+    assert set(assumed) == set(ASSUMED_FILLS)
+    tunables = merge_tunables(shapes.tunables_for(ld), assumed)
+
+    settings = CardSettings.from_rows(sup.fixture_settings_rows(**ENABLED_CARD))
+    formed = [(at, ev) for ticker in ("FTFT", "BGFI") for m in range(0, 391, 2)
+              for at in [shapes.DAY_START + timedelta(minutes=m)]
+              for ev in [shapes.evaluate(ld, ticker, at, tunables=tunables)] if ev.evaluation == "formed"]
+    print(f"F3: formed scans={len(formed)}")
+    assert formed
+    for at, ev in formed:
+        assert set(ASSUMED_FILLS) <= set(ev.formation.assumed_keys), (at, ev.formation.assumed_keys)
+        dots = card_dots(ld, ev, settings, at, ev.formation.assumed_keys)
+        assert set(ASSUMED_FILLS) <= set(assumed_keys_of(dots)), (at, assumed_keys_of(dots))

@@ -151,7 +151,7 @@ from .formation.atoms import (
     unit_mismatch,
 )
 from .formation.stops import StopOutcome, stop_resolver
-from .formation.triggers import TriggerOutcome, trigger_resolver
+from .formation.triggers import TriggerOutcome, trigger_resolver, trigger_tunable_keys
 from .seam import AtomOutcome, DeskShadow, DeskShadowEntry, RadarScoreDetail, SeamObservation, validate_atom
 
 ET = ZoneInfo("America/New_York")
@@ -808,9 +808,10 @@ def convention_refusals(td: TradeDef, tunables: Mapping[str, TunableRow]) -> tup
 def closure_keys(td: TradeDef) -> frozenset[str]:
     """R2-2.2 B — the static closure of a definition, the union of (1) every
     `cfg(<key>)` the def names (`iter_cfg_tokens`), (2) the `TUNABLE_KEYS` of
-    every detector serving an atom its preconditions or avoids name, and
+    every detector serving an atom its preconditions or avoids name — and
+    (fix round 2 F3) the keys its TRIGGER resolver declares it reads — and
     (3) the conventions of the branches and resolvers it uses."""
-    keys: set[str] = set(iter_cfg_tokens(td)) | _conventions(td)
+    keys: set[str] = set(iter_cfg_tokens(td)) | _conventions(td) | set(trigger_tunable_keys(td.trigger))
     for predicate in [*td.preconditions, *td.avoid]:
         for atom in predicate.required_atoms:
             if atom in ATOMS:

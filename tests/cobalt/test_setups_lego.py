@@ -305,8 +305,10 @@ ALWAYS_READ_UNDECLARED = frozenset({"extension.path_a_volume_ma_bars", "extensio
 #: can be under-marked by it: vwap-continuation cannot form at production
 #: defaults (F1). The repair (trigger / stop resolvers declare `TUNABLE_KEYS`
 #: into the closure) is a source change, not STEP-9's.
-TRIGGER_READ_UNDECLARED = frozenset({"pivot.n", "range.micro.bound_flat_slope_atr",
-                                     "range.micro.touch_tolerance_atr", "range.micro.touches_per_side"})
+#: Fix round 2 F3: trigger resolvers now declare the keys they read and the
+#: closure unions them — the set is EMPTY by design (was: `pivot.n`, the three
+#: `range.micro.*` keys, for vwap-continuation).
+TRIGGER_READ_UNDECLARED: frozenset[str] = frozenset()
 EXPECTED_UNDECLARED = {
     "rubberband": frozenset(), "backside": frozenset(), "fashionably-late": frozenset(),
     "nine-ema-scalp": frozenset(), "hitchhiker": ALWAYS_READ_UNDECLARED, "second-chance": ALWAYS_READ_UNDECLARED,
