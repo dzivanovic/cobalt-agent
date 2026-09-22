@@ -114,7 +114,7 @@ NO `mkdir`: the first Write creates the folder. Read → Write byte-identical, p
 - `grep -n "bootout\|bootstrap\|kickstart" <staged 05>`
 - `grep -n "restart set" <staged 05>`
 - `grep -n "11:00\|19:55\|19:58\|20:00\|20:30\|21:10\|21:40" <staged 05>`
-- `grep -n "R__A\|R__L\|R3\b\|R39" <staged 05>`
+- `grep -n "R9A\|R9L\|R3\b\|R39" <staged 05>`
 - `grep -n "FAILED" <staged 05>`
 - `grep -n "ASK DESK\|question\|wait" <staged 05>`
 - `grep -n "exclude)docs" <staged 05>`
