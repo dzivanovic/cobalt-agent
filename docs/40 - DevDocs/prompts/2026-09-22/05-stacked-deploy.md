@@ -142,7 +142,7 @@ One row per rule: rule · command · exit · allowed/DENIED + reason verbatim.
   - REFUSED:
     - ANY line whose FIRST column is a letter. That is a STAGED change, and your commits and a revert would carry it → `FAILED PREFLIGHT: staged change on main — <line>`.
     - Any dirty path under `src/`, `tests/`, `ops/` or `configs/` other than `rules.yaml` → `FAILED PREFLIGHT: main dirty — <line>`.
-    - A `??` line equal to a path the stack ADDS. Those are `docs/40 - DevDocs/reports/stale-marker-build-2026-09-21.md`, `ops-2026-09-21.md`, `ops-classifier-fix-2026-09-22.md` and `ops-fix-r3-2026-09-22.md`, and `--ff-only` would refuse to overwrite them → `FAILED PREFLIGHT: untracked file on main is added by the stack — <path>`.
+    - A `??` line equal to a path the stack ADDS. Those are `docs/40 - DevDocs/reports/stale-marker-build-2026-09-21.md`, `stale-marker-fix-r2-2026-09-22.md`, `ops-2026-09-21.md`, `ops-classifier-fix-2026-09-22.md` and `ops-fix-r3-2026-09-22.md`, and `--ff-only` would refuse to overwrite them → `FAILED PREFLIGHT: untracked file on main is added by the stack — <path>`.
   - `git -C /Users/cobalt/cobalt status`, LONG form, quoted in full: no "rebase in progress", no "unmerged paths".
 - **P2** `git -C /Users/cobalt/cobalt tag scratch-allow-probe-0922s` then `git -C /Users/cobalt/cobalt tag -d scratch-allow-probe-0922s`.
 - **P3** `git -C /Users/cobalt/cobalt commit --allow-empty -m "scratch: allowlist probe (reverted next line)"` then `git -C /Users/cobalt/cobalt reset --soft HEAD~1` then `git -C /Users/cobalt/cobalt log --oneline -1`. HEAD must be back on the sha it had before P3; record it.
@@ -151,12 +151,11 @@ One row per rule: rule · command · exit · allowed/DENIED + reason verbatim.
   - It exists (an earlier deploy today) → run the same call for `deploy-2026-09-22b`. Absent → `<tag>` = `deploy-2026-09-22b`. Present → `FAILED PREFLIGHT: tag name — two deploys already tagged today; the desk names this one`.
   - `git -C /Users/cobalt/cobalt rev-parse --verify --quiet refs/tags/pre-stacked-0922` → must be ABSENT. Present → `FAILED PREFLIGHT: rollback tag already exists — an earlier run; the desk clears it`.
 - **P5 THE TWO BUILDS** (L35: the stop lines are read at run time, never from this file):
-  - `tail -n 3 "/Users/cobalt/cobalt-wt/stale-marker/docs/40 - DevDocs/reports/stale-marker-build-2026-09-21.md"`. The LAST NON-BLANK line:
-    - starts `STALE MARKER BUILT `;
+  - `tail -n 3 "/Users/cobalt/cobalt-wt/stale-marker/docs/40 - DevDocs/reports/stale-marker-fix-r2-2026-09-22.md"` (RE-POINTED by the desk 08:1x: the branch took a round-2 FIX — tests only — after its round-1 check; the round-2 report is the build line that ships). The LAST NON-BLANK line:
+    - starts `STALE MARKER FIX R2 BUILT `;
     - has `offline <p>/0`;
-    - carries `card/scoring paths untouched: empty diff` and `RESTARTS: com.cobalt.aset |`;
-    - has no `ESCALATED` field.
-    - `<stale tip>` = the field after `BUILT` (expected `ead43a0`).
+    - carries `code changed: no` (the round-1 build line `STALE MARKER BUILT ead43a0 … RESTARTS: com.cobalt.aset` stands beneath it in `stale-marker-build-2026-09-21.md` — read it too and quote it; its `card/scoring paths untouched: empty diff` still holds because round 2 changed no code).
+    - `<stale tip>` = the field after `BUILT` (expected `fd4c398`).
   - `tail -n 3 "/Users/cobalt/cobalt-wt/ops-0921/docs/40 - DevDocs/reports/ops-fix-r3-2026-09-22.md"`. The LAST NON-BLANK line:
     - starts `OPS FIX R3 BUILT `;
     - has `offline <p>/0`;
@@ -164,8 +163,8 @@ One row per rule: rule · command · exit · allowed/DENIED + reason verbatim.
     - `<ops tip>` = the field after `BUILT` (expected `af77d6b`).
   - Each tip has a docs commit above it. Anything else → `FAILED PREFLIGHT: build not proven — <line verbatim>`.
 - **P6 THE TWO CHECKS** (L67). The stop lines are read now, never from this file. Each file must be COMMITTED: `git -C /Users/cobalt/cobalt log -1 --format=%H -- "<path>"` must be NON-EMPTY.
-  - `tail -n 3 "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/stale-marker-check-2026-09-22.md"`. The LAST NON-BLANK line:
-    - starts `STALE MARKER CHECK DONE`;
+  - `tail -n 3 "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/stale-marker-check-r2-2026-09-22.md"` (RE-POINTED by the desk 08:1x to ROUND 2 — round 1 closed `defects that HOLD: 3 · ready 3 of 4`, the fix round answered them). The LAST NON-BLANK line:
+    - starts `STALE MARKER CHECK R2 DONE`;
     - `houses that checked:` is ≥ `3 of 4`;
     - carries `defects that HOLD: 0`;
     - `ready for the stacked deploy: <r> of <n>` has `<r>` = `<n>`, both ≥ 3 (`68`'s own close shape).
@@ -183,12 +182,12 @@ One row per rule: rule · command · exit · allowed/DENIED + reason verbatim.
   - `git -C /Users/cobalt/cobalt-wt/stale-marker status --short --branch` → EXACTLY one line, `## s2/stale-marker-0921` or beginning `## s2/stale-marker-0921...`.
   - `git -C /Users/cobalt/cobalt-wt/ops-0921 status --short --branch` → EXACTLY one line, `## ops/2026-09-21` or beginning `## ops/2026-09-21...`.
   - Another branch → `FAILED PREFLIGHT: <worktree> is not on <branch> — <line>`. A second line means dirty → `FAILED PREFLIGHT: branch worktree dirty — <lines>` (a rebase needs a clean tree).
-  - `git -C /Users/cobalt/cobalt rev-parse --short s2/stale-marker-0921` (expected `ca9566f`) and `git -C /Users/cobalt/cobalt rev-parse --short ops/2026-09-21` (expected `8f3db83`). Record both. A different tip is recorded, not a stop, as long as the next row holds.
+  - `git -C /Users/cobalt/cobalt rev-parse --short s2/stale-marker-0921` (expected `27eaa0c` — the round-2 fix's report commit above `fd4c398`; the desk's 06:5x expectation `ca9566f` is superseded) and `git -C /Users/cobalt/cobalt rev-parse --short ops/2026-09-21` (expected `8f3db83`). Record both. A different tip is recorded, not a stop, as long as the next row holds.
 - **P9 ONLY DOCS ABOVE THE CHECKED CODE** (pre-rebase, same base):
   - `git -C /Users/cobalt/cobalt diff --stat <stale tip> s2/stale-marker-0921 -- . ':(exclude)docs'` → prints NOTHING.
   - `git -C /Users/cobalt/cobalt diff --stat <ops tip> ops/2026-09-21 -- . ':(exclude)docs'` → prints NOTHING.
   - Any path → `FAILED PREFLIGHT: <branch> moved after the build — <lines>`. The build's suite and the houses' check ran on `<tip>`.
-  - Record `git -C /Users/cobalt/cobalt rev-list --count main..s2/stale-marker-0921` = `<ns>` (expected 3) and `… main..ops/2026-09-21` = `<no>` (expected 12).
+  - Record `git -C /Users/cobalt/cobalt rev-list --count main..s2/stale-marker-0921` = `<ns>` (expected 5 — three build commits + the round-2 fix `fd4c398` + its report `27eaa0c`) and `… main..ops/2026-09-21` = `<no>` (expected 12).
 - **P10 THE GATE WORKTREE THE DESK CUT**:
   - `git -C /Users/cobalt/cobalt-wt/stacked-0922 status --short --branch` → EXACTLY `## deploy/stacked-0922` (one line, clean). Absent → `FAILED PREFLIGHT: gate worktree missing — the desk runs its worktree add first`.
   - `git -C /Users/cobalt/cobalt-wt/stacked-0922 rev-parse --short HEAD` = `<main-at-gate>`.
@@ -235,7 +234,7 @@ One row per rule: rule · command · exit · allowed/DENIED + reason verbatim.
   - `git -C /Users/cobalt/cobalt diff --stat <ops tip> ops/2026-09-21 -- .gitignore configs/cobalt/backup.yaml configs/cobalt/jobs.yaml tests/cobalt/test_backup.py tests/cobalt/test_jobs_restarts.py` → prints NOTHING.
   - Any output → `FAILED: 1.3 — rebase changed the checked code — <paths> · rollback: not used`.
 - EACH BRANCH CARRIES ITS OWN FILES AND NOTHING ELSE:
-  - `git -C /Users/cobalt/cobalt diff --stat main s2/stale-marker-0921` → EXACTLY `src/cobalt/aset/radar_panel.py`, `tests/cobalt/test_radar_panel.py`, `tests/cobalt/test_radar_panel_cards.py`, `docs/40 - DevDocs/cobalt/aset/radar_panel.md` and `docs/40 - DevDocs/reports/stale-marker-build-2026-09-21.md`.
+  - `git -C /Users/cobalt/cobalt diff --stat main s2/stale-marker-0921` → EXACTLY `src/cobalt/aset/radar_panel.py`, `tests/cobalt/test_radar_panel.py`, `tests/cobalt/test_radar_panel_cards.py`, `docs/40 - DevDocs/cobalt/aset/radar_panel.md`, `docs/40 - DevDocs/reports/stale-marker-build-2026-09-21.md` and `docs/40 - DevDocs/reports/stale-marker-fix-r2-2026-09-22.md` (the round-2 report; added by the desk 08:1x).
   - `git -C /Users/cobalt/cobalt diff --stat main ops/2026-09-21` → EXACTLY `.gitignore`, `configs/cobalt/backup.yaml`, `configs/cobalt/jobs.yaml`, `tests/cobalt/test_backup.py`, `tests/cobalt/test_jobs_restarts.py`, and paths under `docs/`. Those docs paths are `docs/00 - Project/BACKLOG.md`, `docs/40 - DevDocs/cobalt/backup/config.md`, `docs/40 - DevDocs/cobalt/db_migrations/cli.md`, `docs/40 - DevDocs/cobalt/jobs/restarts.md`, `docs/40 - DevDocs/prompts/UNATTENDED-LAUNCH.md`, and `docs/40 - DevDocs/reports/ops-2026-09-21.md`, `ops-classifier-fix-2026-09-22.md` and `ops-fix-r3-2026-09-22.md`.
   - Any other path → `FAILED: 1.3 — <branch> carries <path> · rollback: not used`.
   - None of these may be a P1 dirty path. Compare them; if one is → `FAILED: 1.3 — dirty path on main is in the merge — <path> · rollback: not used`.
