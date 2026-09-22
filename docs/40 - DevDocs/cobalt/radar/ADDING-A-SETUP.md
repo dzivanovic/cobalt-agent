@@ -39,7 +39,7 @@ The ONE place each brick is registered (`cobalt.radar.formation`); a new brick i
 - `indicator_cross` — `{a, b, direction}`: the latest cross; stamps `cross_point`.
 - `indicator_rejection` — `{indicator, contact}`: the last bar touches and closes back through.
 - `trendline_break` — `{ref: Level_ref(trendline), anchor_leg, pivots}`: flat case = the micro-Range top.
-- `sequence` — break close-through → retest → a close above the prior bar.
+- `sequence` — `{steps[]}`, walked in bar order; the last step's bar is the trigger. Step shapes: `price close_through Level_ref`, `event(retest)`, `close_above(prior_bar)`; any other step is named (its atom, or `Unsupported(step:…)`).
 
 ### Stop placements (`STOPS`)
 - `structural_extreme` — a structural ref, less `cfg(stop.buffer)`, nudged off round prices.

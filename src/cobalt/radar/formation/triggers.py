@@ -17,10 +17,12 @@ from typing import Any, Callable, Literal, Protocol
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
+from cobalt.taxonomy.predicate import render
 from cobalt.taxonomy.trade_def import TriggerType
 
 from ..anatomy.indicators import InsufficientBars
 from ..anatomy.structure import TriggerLevel, bar_break_trigger
+from .atoms import LEVEL_STEPS, STEP_SHAPES, range_break_observation, step_gaps
 
 
 class TriggerOutcome(BaseModel):
@@ -217,36 +219,50 @@ class TrendlineBreak:
 
 
 class Sequence:
-    """`sequence {steps[]}` (taxonomy §10.2; FINAL §4; STEP-8): the steps in
-    order, the last step's bar is the trigger bar. Served for exactly the step
-    shapes the frame's RangeBreak observation resolves, in this order:
-    `price close_through Level_ref` (the break of the RangeBreak's level, its
-    accepting close), `event(retest)` (its retest), `close_above(prior_bar)` (the
-    turn: a close above the prior bar's high). The trigger is the turn bar's
-    close; any other step list is not served (named `trigger:sequence`)."""
+    """`sequence {steps[]}` (taxonomy §10.2; FINAL §2.2 `:148`, §4; STEP-8,
+    fix round 2 F2): "the steps in order; each step is a predicate evaluated
+    by the same interpreter; the last step's bar is the trigger bar". Each
+    step is checked by the interpreter's gap dispatch (`atoms.step_gaps`; an
+    unserved step names ITS gap) and walked over the working-TF run: step k
+    holds on the FIRST bar after step k−1's bar on which its predicate is
+    true (`atoms.STEP_SHAPES`). The trigger is the last step's bar and its
+    close. The break-retest-turn list (`price close_through Level_ref` →
+    `event(retest)` → `close_above(prior_bar)`) is one instance of the walk."""
 
     kind = "sequence"
-    STEPS = ("price close_through Level_ref", "event(retest)", "close_above(prior_bar)")
 
     def serves(self, params: dict[str, Any]) -> bool:
         return False  # a sequence has no params: `serves_def` reads its steps
 
-    def serves_def(self, trigger_def) -> bool:
+    def gaps_def(self, trigger_def) -> set[str]:
         steps = getattr(trigger_def, "steps", None) or ()
-        return tuple(getattr(s.predicate, "expr", None) for s in steps) == self.STEPS
+        return set().union(*(step_gaps(s.predicate.ast) for s in steps)) if steps else {f"trigger:{self.kind}"}
+
+    def serves_def(self, trigger_def) -> bool:
+        return not self.gaps_def(trigger_def)
 
     def resolve(self, frame, trigger_def, value: Callable[[Any], Any]) -> TriggerOutcome:
-        obs = frame.objects["range_break"]
-        if isinstance(obs, str) or obs is None or obs.turn_index is None:
-            raise InsufficientBars("sequence (break → retest → turn not complete)", 1, 0)
-        bar = frame.run[obs.turn_index]
+        steps = trigger_def.steps
+        shapes = [render(s.predicate.ast) for s in steps]
+        indices: list[int] = []
+        after = -1
+        for step, shape in zip(steps, shapes):
+            holds = STEP_SHAPES[shape]
+            i = next((k for k in range(after + 1, len(frame.run)) if holds(frame, k)), None)
+            if i is None:
+                raise InsufficientBars(f"sequence (step {step.name!r} not complete)", 1, 0)
+            indices.append(i)
+            after = i
+        bar = frame.run[indices[-1]]
+        obs = range_break_observation(frame)
+        on_level = any(shape in LEVEL_STEPS for shape in shapes)
         level = TriggerLevel(trade_direction="long", price=bar.close, bars_cleared=0,
-                             bar_ts=tuple(frame.run[i].ts for i in (obs.accept_index, obs.retest_index,
-                                                                   obs.turn_index)))
+                             bar_ts=tuple(frame.run[i].ts for i in indices))
         return TriggerOutcome(
             state="armed", price=bar.close, ref_bar_ts=bar.ts, kind=self.kind,
-            inputs={"level": str(obs.level), "steps": list(self.STEPS)},
-            why="break → retest → turn of the level", level=level,
+            inputs={"level": str(obs.level) if obs is not None else None,
+                    "steps": [s.predicate.expr for s in steps]},
+            why=" → ".join(s.name for s in steps) + (" of the level" if on_level else ""), level=level,
         )
 
 
@@ -275,5 +291,20 @@ def trigger_resolver(trigger_def) -> TriggerResolver | None:
     return resolver
 
 
+def trigger_gaps(trigger_def) -> set[str]:
+    """What keeps this trigger from being served, named: nothing when a
+    resolver serves it; a whole-trigger resolver's own gaps (a `sequence`'s
+    steps, F2); else `trigger:<type>`."""
+    if trigger_resolver(trigger_def) is not None:
+        return set()
+    try:
+        resolver = TRIGGERS.get(TriggerType(trigger_def.type))
+    except ValueError:
+        resolver = None
+    if resolver is not None and hasattr(resolver, "gaps_def"):
+        return resolver.gaps_def(trigger_def) or {f"trigger:{trigger_def.type}"}
+    return {f"trigger:{trigger_def.type}"}
+
+
 __all__ = ["BarBreak", "IndicatorCross", "RangeBreak", "TRIGGERS", "TriggerOutcome", "TriggerResolver",
-           "trigger_resolver"]
+           "trigger_gaps", "trigger_resolver"]

@@ -24,3 +24,5 @@ The domain rule: each atom resolver declares the values it can produce, and a co
 **2026-09-22 (STEP-8).** A trigger resolver with `serves_def` (the `sequence`) is judged on the whole trigger, through `formation.triggers.trigger_resolver`.
 
 **2026-09-22 (fix round 2, F1).** `evaluability` now also reads `ANCHORS`, through `formation.anchors.anchor_for` — the same lookup formation dispatches through (L3). A def whose preconditions name none of the anchor objects (`Extension.`, `Range(micro).`, `Leg(pullback)`, `RangeBreak(level)`) is NOT evaluable, named `anchor:none`. Before this it was called evaluable and then reported `not_formed: no formation anchor` on every scan. `evaluate_member`'s evaluability gate now reports it `not_evaluable` with `anchor:none` in `missing`; the stage's `no formation anchor` branch stays as the fail-loud backstop.
+
+**2026-09-22 (fix round 2, F2).** The trigger check is now `formation.triggers.trigger_gaps`. For a `sequence` it adds each step's own gap (for example `Gap.size`, or `Unsupported(step:…)`), not `trigger:sequence`.

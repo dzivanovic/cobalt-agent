@@ -33,7 +33,7 @@ from cobalt.taxonomy.trade_def import TradeDef
 from ..formation.anchors import anchor_for
 from ..formation.atoms import ATOMS, RELATIONS, predicate_gaps, relation_operand_names
 from ..formation.stops import stop_resolver
-from ..formation.triggers import trigger_resolver
+from ..formation.triggers import trigger_gaps
 
 
 class Evaluability(BaseModel):
@@ -58,8 +58,7 @@ def evaluability(td: TradeDef) -> Evaluability:
     if anchor_for(td) is None:
         missing.add("anchor:none")
 
-    if trigger_resolver(td.trigger) is None:
-        missing.add(f"trigger:{td.trigger.type}")
+    missing |= trigger_gaps(td.trigger)  # F2: a sequence names its steps' own gaps
 
     placement = td.stop.placement
     if stop_resolver(placement) is None:

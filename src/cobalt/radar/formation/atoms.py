@@ -459,9 +459,74 @@ def predicate_gaps(node: Node) -> set[str]:
     return {f"Unsupported({node.kind})"}
 
 
+# ---------------------------------------------------------------------
+# `sequence` steps (FINAL §2.2 `:148`, §4; fix round 2 F2)
+# ---------------------------------------------------------------------
+# "The steps in order; each step is a predicate evaluated by the same
+# interpreter (§4); the last step's bar is the trigger bar." A step is
+# resolved BAR BY BAR over the working-TF run: step k holds on the first bar
+# after step k−1's bar on which its predicate is true. Each served step shape
+# has its bar-indexed resolution here, `(frame, i) -> bool`, in the frame's
+# coordinates. `Level_ref` inside a step keeps the binding the break-retest-
+# turn tuple always had: the level of the frame's RangeBreak(level)
+# observation — the object the def's `RangeBreak(level)` anchor resolves.
+
+
+def range_break_observation(frame):
+    """The frame's RangeBreak(level) observation, or None (unset / no level)."""
+    obs = frame.objects["range_break"]
+    return None if isinstance(obs, str) or obs is None else obs
+
+
+def _closes_through_level(frame, i: int) -> bool:
+    """`price close_through Level_ref` (FINAL §4: a relation resolver over
+    working-TF closes): bar i closes above the level."""
+    obs = range_break_observation(frame)
+    return obs is not None and frame.run[i].close > obs.level
+
+
+def _is_the_retest(frame, i: int) -> bool:
+    """`event(retest)`: bar i is the RangeBreak observation's retest bar."""
+    obs = range_break_observation(frame)
+    return obs is not None and obs.retest_index == i
+
+
+def _closes_above_prior_bar(frame, i: int) -> bool:
+    """`close_above(prior_bar)` (FINAL §4): bar i closes above the prior
+    bar's high (the turn rule `anatomy.range_break` implements)."""
+    return i > 0 and frame.run[i].close > frame.run[i - 1].high
+
+
+#: Served step shape (its canonical render) -> its bar-indexed resolution.
+STEP_SHAPES: dict[str, Callable] = {
+    "price close_through Level_ref": _closes_through_level,
+    "event(retest)": _is_the_retest,
+    "close_above(prior_bar)": _closes_above_prior_bar,
+}
+#: The step shapes that read the RangeBreak observation's level.
+LEVEL_STEPS = frozenset({"price close_through Level_ref", "event(retest)"})
+
+
+def step_gaps(node: Node) -> set[str]:
+    """What keeps a `sequence` step from being walked, named like every other
+    gap: a served step shape → nothing; `close_through` / `close_above` outside
+    it → `Unsupported(<word>:…)`; anything else is first walked by
+    `predicate_gaps` (an unserved atom or word is named as such), and a
+    predicate the interpreter serves but that has no bar-indexed resolution
+    is `Unsupported(step:<predicate>)`."""
+    text = render(node)
+    if text in STEP_SHAPES:
+        return set()
+    if isinstance(node, Relation) and node.op == "close_through":
+        return {f"Unsupported(close_through:{text})"}
+    if isinstance(node, Ref) and len(node.segments) == 1 and node.segments[0].name == "close_above":
+        return {f"Unsupported(close_above:{text})"}
+    return predicate_gaps(node) or {f"Unsupported(step:{text})"}
+
+
 __all__ = [
     "ATOMS", "AtomResolver", "AtomValue", "BETWEEN_EVENTS", "BOUND_SYMBOLS", "CATALYST_CONVENTION",
-    "LEVELS_CONVENTION", "ON_LEG_CONVENTION", "REJECTED_CONVENTION", "RELATIONS", "RelationResolver",
-    "bound_direction", "dist_operands", "flat_between", "predicate_gaps",
-    "relation_operand_names", "unit_mismatch", "window_bars",
+    "LEVELS_CONVENTION", "LEVEL_STEPS", "ON_LEG_CONVENTION", "REJECTED_CONVENTION", "RELATIONS", "RelationResolver",
+    "STEP_SHAPES", "bound_direction", "dist_operands", "flat_between", "predicate_gaps", "range_break_observation",
+    "relation_operand_names", "step_gaps", "unit_mismatch", "window_bars",
 ]

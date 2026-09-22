@@ -503,8 +503,9 @@ def test_unsupported_atoms_trigger_and_stop_are_named_missing():
                     {"type": "sequence", "steps": [{"name": "break", "predicate": {"expr": "Gap.size > 0"},
                                                     "confirmation_policy": {"type": "intrabar"}}]},
                     stop_ref="low_of_day")  # `turn_candle` is served from STEP-8; `low_of_day` is not
-    assert set(evaluability(gap).missing_atoms) == {"Gap.size", "trigger:sequence",
-                                                    "stop:structural_extreme:low_of_day"}
+    # fix round 2 F2: the sequence's step is walked by the interpreter's gap
+    # dispatch, so its unserved atom is named (`Gap.size`), never `trigger:sequence`
+    assert set(evaluability(gap).missing_atoms) == {"Gap.size", "stop:structural_extreme:low_of_day"}
 
 
 def test_sequence_trigger_is_named_missing_not_a_crash():
@@ -513,7 +514,8 @@ def test_sequence_trigger_is_named_missing_not_a_crash():
     td = _def_with([{"expr": "Extension.state == culminating"}], [],
                    {"type": "sequence", "steps": [step]})
     result = evaluability(td)
-    assert not result.evaluable and result.missing_atoms == ("trigger:sequence",)
+    # fix round 2 F2: a served predicate with no bar-indexed step resolution is named as such
+    assert not result.evaluable and result.missing_atoms == ("Unsupported(step:Extension.state == culminating)",)
 
 
 def test_shipped_synthetic_def_reports_not_evaluable_with_its_missing_atoms():

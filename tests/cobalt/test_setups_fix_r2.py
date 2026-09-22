@@ -3,6 +3,8 @@
 - F1: a def whose preconditions name no anchor object is NOT evaluable,
   named `anchor:none` (the registry reads `ANCHORS`, the table formation
   dispatches through — L3).
+- F2: a `sequence` walks its steps as predicates, in bar order, through the
+  one interpreter's dispatch; an unserved step names its own gap.
 
 Neutral defs of this file's own words and literals (L32 / L69), written into
 a `tmp_path` vault and loaded through the real `load_vault_trade_defs`
@@ -65,3 +67,112 @@ def test_f1_evaluate_member_reports_not_evaluable_naming_anchor_none_on_the_comm
     for m in range(0, 391, 30):
         ev = shapes.evaluate(no_anchor, "FTFT", shapes.DAY_START + timedelta(minutes=m))
         assert ev.evaluation == "not_evaluable" and "anchor:none" in ev.missing, (m, ev.evaluation, ev.note)
+
+
+# =====================================================================
+# F2 — `sequence` evaluates its steps through the one interpreter
+# =====================================================================
+
+
+def break_then_turn_mapping(steps: list[dict]) -> dict:
+    """A RangeBreak-anchored def (the level break accepted, a retest on that
+    RangeBreak) whose trigger is a `sequence` of `steps`; the VWAP stop at
+    entry. This file's words."""
+    mapping = shapes.example_mapping()
+    mapping.update(
+        valid_setups=[{"setup_ref": "range_break", "relation": "with_trend"}],
+        preconditions=[{"expr": "RangeBreak(level).state == accepted"},
+                       {"expr": "event(retest) on that RangeBreak"}],
+        avoid=[{"text": "a human read of the break, this file's words"}],
+        trigger={"type": "sequence", "steps": steps},
+        quality_factors=sup.ANATOMY_FACTORS, preferred_windows=["morning"],
+        preferred_windows_ref="anatomy: after the break",
+    )
+    mapping.pop("radar_watch", None)
+    mapping["stop"]["placement"] = _indicator_stop("VWAP")
+    return mapping
+
+
+TWO_STEPS = [
+    {"name": "through", "predicate": {"expr": "price close_through Level_ref"},
+     "confirmation_policy": {"type": "close_through"}},
+    {"name": "higher", "predicate": {"expr": "close_above(prior_bar)"},
+     "confirmation_policy": {"type": "close_through"}},
+]
+
+
+@pytest.fixture(scope="module")
+def two_step(tmp_path_factory):
+    return shapes.load_note(tmp_path_factory.mktemp("two-step"), "example-fix-two-step",
+                            break_then_turn_mapping(TWO_STEPS), engine=shapes.D6_CONSTRUCTED)
+
+
+def test_f2_a_sequence_other_than_the_three_step_one_is_evaluable(two_step):
+    result = evaluability(two_step.definition)
+    assert result.evaluable, result.missing_atoms
+
+
+def _evaluate_series(ld, bars):
+    import test_setups_second_chance as sc
+    from cobalt.radar.evaluate import evaluate_member
+    from cobalt.session import session_clock
+
+    return evaluate_member(ld, sc._member(bars, sc._scan_after(bars)), tunables=shapes.tunables_for(ld),
+                           defaults=sup.defaults(), scan_interval=100, clock=session_clock())
+
+
+def test_f2_the_two_step_sequence_forms_on_the_first_bar_after_the_break_that_closes_above_the_prior_bar(two_step):
+    """The break-retest-turn day of `test_setups_second_chance.py` (read, not
+    edited): the break bucket (09:36 ET, high 10.14) closes through the 10.05
+    level; the NEXT bucket (09:38 ET) closes 10.18 above that high — step 2's
+    bar, the trigger bar; its close the trigger price."""
+    from decimal import Decimal
+
+    import test_setups_second_chance as sc
+
+    ev = _evaluate_series(two_step, sc.break_retest_turn())
+    assert ev.evaluation == "formed" and ev.direction == "long", (ev.evaluation, ev.missing, ev.note,
+                                                                  ev.by_side["long"].note)
+    f = ev.formation
+    assert f.trigger_outcome.kind == "sequence"
+    assert f.trigger.price == Decimal("10.18") and f.trigger_outcome.ref_bar_ts == sc._et(9, 38)
+    assert f.trigger.bar_ts == (sc._et(9, 36), sc._et(9, 38))  # one bar per step, in order
+    assert f.anchor.object == "RangeBreak(level)" and f.anchor.bar_ts == sc._et(9, 36)
+
+
+def never_higher() -> list:
+    """The same premarket (level 10.05) and break; afterwards every bucket
+    comes back to the level (a retest) and closes AT OR UNDER the prior
+    bucket's high — the last step never holds."""
+    import test_setups_second_chance as sc
+
+    out, t = [], sc._et(8, 0)
+    while t < sc._et(9, 30):
+        out += sc._bucket(t, 10, "10.05" if t == sc._et(9, 0) else "10.01", "9.99", 10)
+        t += timedelta(minutes=2)
+    legs = [("10.00", "10.02", "9.90", "9.92"), ("9.92", "9.98", "9.88", "9.96"), ("9.96", "10.03", "9.94", "10.01"),
+            ("10.01", "10.14", "10.00", "10.12"),  # the break: closes through 10.05
+            ("10.12", "10.13", "10.05", "10.10"), ("10.10", "10.12", "10.05", "10.09"),
+            ("10.09", "10.11", "10.05", "10.08")]
+    for o, h, lo, c in legs:
+        out += sc._bucket(t, o, h, lo, c)
+        t += timedelta(minutes=2)
+    return out
+
+
+def test_f2_the_two_step_sequence_does_not_form_when_its_last_step_never_holds(two_step):
+    ev = _evaluate_series(two_step, never_higher())
+    assert ev.evaluation == "not_formed", (ev.evaluation, ev.note)
+    assert "sequence" in ev.by_side["long"].note, ev.by_side["long"].note
+
+
+def test_f2_an_unserved_step_names_its_own_gap_never_trigger_sequence(tmp_path):
+    steps = [{"name": "through", "predicate": {"expr": "price close_through Level_ref"},
+              "confirmation_policy": {"type": "close_through"}},
+             {"name": "sized", "predicate": {"expr": "Gap.size > 0"}}]
+    ld = shapes.load_note(tmp_path, "example-fix-unserved-step", break_then_turn_mapping(steps),
+                          engine=shapes.D6_CONSTRUCTED)
+    result = evaluability(ld.definition)
+    assert result.evaluable is False
+    assert "Gap.size" in result.missing_atoms and "trigger:sequence" not in result.missing_atoms, \
+        result.missing_atoms
