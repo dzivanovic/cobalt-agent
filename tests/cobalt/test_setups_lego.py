@@ -57,6 +57,30 @@ def _forms_on_a_committed_day(shape, ld) -> bool:
     return any(ev.evaluation == "formed" for ticker in shape.tickers for _, ev in shapes.every_scan(ld, ticker))
 
 
+def test_awaiting_a_ruling_members_are_evaluable_and_form_on_no_committed_scan(corpus):
+    """Round 2 F5 (GREEN-as-pin): gate 2 skips `AWAITING_A_RULING`, so the set
+    is pinned here. A member that starts forming (X10's fix, a hole filled in
+    committed config) — or one that stops being evaluable — turns this red: it
+    must leave the set, announced."""
+    for key in sorted(AWAITING_A_RULING):
+        shape, ld = corpus[key]
+        assert evaluability(ld.definition).evaluable, (key, evaluability(ld.definition).missing_atoms)
+        assert not _forms_on_a_committed_day(shape, ld), key
+
+
+def test_vwap_continuation_without_its_engine_fill_forms_on_no_committed_scan(tmp_path):
+    """Round 2 F5 (GREEN-as-pin): vwap-continuation's `AWAITING_A_RULING: F1`
+    status as an assertion — its shape on the COMMITTED engine rows only (no
+    `engine=` fill, so `dist.k.vwap` stays null) forms on no scan. A null hole
+    filled in committed config, or a resolver that forms without it, turns
+    this red."""
+    shape = shapes.SHAPES["vwap-continuation"]
+    ld = shapes.load_note(tmp_path, "example-fix-vwap-committed-rows", shape.mapping())
+    assert sup.engine_tunables()["dist.k.vwap"].value is None
+    assert evaluability(ld.definition).evaluable, evaluability(ld.definition).missing_atoms
+    assert not _forms_on_a_committed_day(shape, ld)
+
+
 def test_every_unlocked_setup_shape_is_evaluable(corpus):
     """FINAL §9 point (4) / [F-16] (4): the corpus shape of every setup the
     build claims to unlock is `evaluable`, or the missing atom is named."""

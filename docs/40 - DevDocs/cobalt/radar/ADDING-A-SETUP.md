@@ -25,6 +25,16 @@ A setup is a **definition** in a strategy note; the radar evaluates it with the 
 
 No per-setup switch exists. The only switch is the global `radar.cards_enabled` (`settings/card.py:63`). A per-setup switch is an OPEN ITEM for the owner / tribunal (build report, ESCALATE).
 
+## Rolling back after the assumed note
+
+Once `1 - Trading/Assumed Defaults.md` holds rows and `cobalt taxonomy load` has loaded them, a rollback has ONE order:
+
+1. Remove the assumed rows first — empty the note's `tunables:assumed` unit and re-run `cobalt taxonomy load` (the owner's deploy hub does this).
+2. Then roll the code back.
+3. Then roll migration 0013 back.
+
+Why: code older than this build has no `assumed` in `TunableSource` (`ruling`, `sheet`, `dwv` only), so while one assumed row is loaded every scan's tunables read fails on it. And 0013's reverse refuses while any `"user".tunables` row has `slug IS NULL` (a global assumed default) — a rollback never deletes the trader's rows.
+
 ## When a definition asks for a brick that does not exist
 
 `registry.evaluability` names it and the def is `not_evaluable` — "this needs a build, a feature for later": an atom verbatim · a relation word · `trigger:<type>` · `stop:<type>[:<ref>]` · `<atom>∌<value>` (a symbol outside the atom's domain) · `Unsupported(<shape>)` (a shape the interpreter cannot evaluate) · `anchor:none` (no precondition names an anchor object — see Anchors below; the def could never form).

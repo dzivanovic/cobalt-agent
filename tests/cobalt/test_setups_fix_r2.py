@@ -7,6 +7,8 @@
   one interpreter's dispatch; an unserved step names its own gap.
 - F3: a key the trigger resolver reads joins the def's declared closure, so
   an assumed fill of it reaches `assumed_keys` and the card's dot.
+- P1 (coverage): a single-sentence relation used outside its served sentence
+  is reported not evaluable, named `Unsupported(<word>:…)`, never silent.
 
 Neutral defs of this file's own words and literals (L32 / L69), written into
 a `tmp_path` vault and loaded through the real `load_vault_trade_defs`
@@ -220,3 +222,54 @@ def test_f3_an_assumed_fill_the_trigger_reads_reaches_assumed_keys_and_the_card_
         assert set(ASSUMED_FILLS) <= set(ev.formation.assumed_keys), (at, ev.formation.assumed_keys)
         dots = card_dots(ld, ev, settings, at, ev.formation.assumed_keys)
         assert set(ASSUMED_FILLS) <= set(assumed_keys_of(dots)), (at, assumed_keys_of(dots))
+
+
+# =====================================================================
+# P1 — a relation word outside its served sentence is reported, never silent
+# =====================================================================
+
+#: One precondition per relation word, each OUTSIDE the one sentence the word
+#: serves (FINAL §4 "only what the seven need"). This file's sentences.
+OUTSIDE_SENTENCES = {
+    "after": "RangeBreak(level).state == accepted after event(stop_hit)",
+    "inside": "EMA9 inside Range(prior)",
+    "on": "Extension.instantiated on Leg(pullback)",
+    "between": "flat(EMA9, window: 15 min / working_tf) between turn and entry",
+}
+
+
+def outside_mapping(sentence: str) -> dict:
+    mapping = shapes.example_mapping()
+    mapping.update(
+        valid_setups=[{"setup_ref": "range_break", "relation": "with_trend"}],
+        preconditions=[{"expr": "Range(micro).instantiated"}, {"expr": sentence}],
+        avoid=[{"text": "a human read, this file's words"}],
+        trigger={"type": "bar_break", "params": {"bars_cleared": 4, "direction": "any"},
+                 "confirmation_policy": {"type": "intrabar"}},
+        quality_factors=sup.ANATOMY_FACTORS, preferred_windows=["morning"],
+        preferred_windows_ref="anatomy: a probe",
+    )
+    mapping.pop("radar_watch", None)
+    mapping["stop"]["placement"]["ref"] = "range_base"
+    return mapping
+
+
+#: The `Unsupported(<word>:…)` entry each sentence is named by — pasted from
+#: this test's own run (`P1 <word>: <missing_atoms>`), never guessed. A relation
+#: whose resolver silently accepted a sentence outside its served one — or that
+#: named it something other than `Unsupported(<word>:…)` — turns this red.
+NAMED = {
+    "after": "Unsupported(after:RangeBreak(level).state == accepted after event(stop_hit))",
+    "between": "Unsupported(between:entry)",
+    "inside": "Unsupported(inside:EMA9 inside Range(prior))",
+    "on": "Unsupported(on:Leg(pullback))",
+}
+
+
+@pytest.mark.parametrize("word", sorted(OUTSIDE_SENTENCES))
+def test_p1_a_relation_word_outside_its_served_sentence_is_not_evaluable_named(tmp_path, word):
+    ld = shapes.load_note(tmp_path, f"example-fix-outside-{word}", outside_mapping(OUTSIDE_SENTENCES[word]))
+    result = evaluability(ld.definition)
+    print(f"P1 {word}: {result.missing_atoms}")
+    assert result.evaluable is False
+    assert NAMED[word] in result.missing_atoms, result.missing_atoms
