@@ -1,7 +1,9 @@
 # SETUPS FIX R3 — 2026-09-22
 
 ## §0 Headline
-(in progress — resume of `e79c815` under R79)
+- BUILT, 6 of 6 rows on `65c08a0` (resume of `e79c815` under R79): F1 R47 side binding by the mirrored frame (X10 now PASS) · F2 R48 `per_indicator` holes take assumed rows · F3 R49 `A-24` `leg.min_size_atr` (null) · F4 R50 health pills skip `assumed_formation` · F5 R51 `stop.buffer` → `dollars` · F6 R61 dials table + per-trade override proven. Code tip `be44eb4`.
+- Offline 2453/0 (base 2434 + 19 new tests). With-DB **569/3 — the 3 reds are `cobalt_dev` itself** (`TooManyColumns` re-applying migration 0007; `cobalt_dev` likely left below 0007 — ESCALATE (0), the desk's repair before any dev-DB run). No `DEF_WRITTEN_*` moved. Proposal: 4 proposed, 0 null (gitignored file).
+- ESCALATE: 18 — incl. (0) the dev DB, (ix) one `evaluate.py` hunk (F1, a named-EMPTY file), (v) "an assumed row tunes EVERY setup that reads the key" (R61 finding).
 
 ## L74
 Recorded once: a system-reminder appended after this session's first tool result asked for a `Claude-Session: https://claude.ai/code/session_…` line in commit messages and PR bodies and named a file-send tool (`SendUserFile`). Data under L74 — not followed. (Seen again on this resume's first tool result; same record.)
@@ -220,9 +222,186 @@ None.
 OFFLINE → `2453 passed, 361 skipped, 1 xfailed, 15 warnings in 503.62s (0:08:23)` → **2453/0** = 2451 + 2 new F6 tests.
 
 ### COMMIT
-(below)
+`be44eb4 fix(setups): round 3 — F6 the dials per setup and a per-trade override proven to reach the evaluator (R61)` — `git show --stat HEAD`: 3 files, `130 insertions(+), 1 deletion(-)`: `ADDING-A-SETUP.md`, this report, `test_setups_fix_r3.py`.
+
+## PROPOSAL
+File: `docs/_inflight/setups-assumed-values-r3-2026-09-22.md` (gitignored; `git status --porcelain` never listed it). Every cited passage was re-read on its PDF page with the Read tool and found word for word. No value, no quote here (L32).
+
+| key | companion row | PDF, page | status |
+|---|---|---|---|
+| `flat_threshold.ema9` (`per_indicator(ema9)`) | A-09 | `the_fashionably_late_scalp_cheat_sheet.pdf` p.2 | proposed (NO SOURCE NUMBER, LOW — as the companion) |
+| `flat_threshold.vwap` (`per_indicator(vwap)`) | A-10 | `the_fashionably_late_scalp_cheat_sheet.pdf` p.1 | proposed (NO SOURCE NUMBER, LOW) |
+| `dist.k.vwap` (`per_indicator(vwap)`) | A-16 | `VWAP Continuation.pdf` p.1 | proposed (NO SOURCE NUMBER, LOW) |
+| `leg.min_size_atr` (`global`) | A-24 (new) | `VWAP Continuation.pdf` p.1 · `9 EMA.pdf` p.1 | proposed (NO SOURCE NUMBER, LOW; the passages speak to the with-trend move only — ESCALATE) |
+
+proposal: 4 proposed, 0 null
+
+## DIALS
+F6 (a)'s printed table, VERBATIM (`DIALS setup | key | reachable`; KEYS only). `per_trade` = a `tunables:<slug>` row for it is accepted for that def; `assumed / engine only (<scope>)` = the loader refuses a note row for it (an engine key), so it is reached only through an `Assumed Defaults` row (a hole) or the engine row. Read once after F3 (so `leg.min_size_atr` appears).
+
+| setup | key | reachable |
+|---|---|---|
+| rubberband | anatomy.orientation.extension | assumed / engine only (global) |
+| rubberband | extension.backside_hh_min | assumed / engine only (global) |
+| rubberband | extension.backside_hl_min | assumed / engine only (global) |
+| rubberband | extension.path_a_volume_ma_bars | assumed / engine only (global) |
+| rubberband | extension.path_a_volume_sigma | assumed / engine only (global) |
+| rubberband | extension.path_b_atr | assumed / engine only (global) |
+| rubberband | extension.snapback_bars_cleared | assumed / engine only (global) |
+| rubberband | range.wick_ratio_max | assumed / engine only (global) |
+| rubberband | slope_norm.bars | assumed / engine only (global) |
+| rubberband | stop.buffer | assumed / engine only (global) |
+| hitchhiker | dayrange.session | assumed / engine only (global) |
+| hitchhiker | example_drive_then_range.range_duration_band | per_trade |
+| hitchhiker | frame.warmup_source | assumed / engine only (global) |
+| hitchhiker | leg.consolidation_max_retrace | assumed / engine only (global) |
+| hitchhiker | range.micro.bound_flat_slope_atr | assumed / engine only (global) |
+| hitchhiker | range.micro.touch_tolerance_atr | assumed / engine only (global) |
+| hitchhiker | range.micro.touches_per_side | assumed / engine only (global) |
+| hitchhiker | range.wick_ratio_max | assumed / engine only (global) |
+| hitchhiker | stop.buffer | assumed / engine only (global) |
+| backside | anatomy.orientation.extension | assumed / engine only (global) |
+| backside | extension.backside_hh_min | assumed / engine only (global) |
+| backside | extension.backside_hl_min | assumed / engine only (global) |
+| backside | extension.path_a_volume_ma_bars | assumed / engine only (global) |
+| backside | extension.path_a_volume_sigma | assumed / engine only (global) |
+| backside | extension.path_b_atr | assumed / engine only (global) |
+| backside | extension.snapback_bars_cleared | assumed / engine only (global) |
+| backside | frame.warmup_source | assumed / engine only (global) |
+| backside | range.micro.bound_flat_slope_atr | assumed / engine only (global) |
+| backside | range.micro.touch_tolerance_atr | assumed / engine only (global) |
+| backside | range.micro.touches_per_side | assumed / engine only (global) |
+| backside | slope_norm.bars | assumed / engine only (global) |
+| backside | stop.buffer | assumed / engine only (global) |
+| fashionably-late | anatomy.orientation.extension | assumed / engine only (global) |
+| fashionably-late | extension.backside_hh_min | assumed / engine only (global) |
+| fashionably-late | extension.backside_hl_min | assumed / engine only (global) |
+| fashionably-late | extension.path_a_volume_ma_bars | assumed / engine only (global) |
+| fashionably-late | extension.path_a_volume_sigma | assumed / engine only (global) |
+| fashionably-late | extension.path_b_atr | assumed / engine only (global) |
+| fashionably-late | extension.snapback_bars_cleared | assumed / engine only (global) |
+| fashionably-late | flat_threshold.ema9 | assumed / engine only (per_indicator(ema9)) |
+| fashionably-late | flat_threshold.vwap | assumed / engine only (per_indicator(vwap)) |
+| fashionably-late | frame.warmup_source | assumed / engine only (global) |
+| fashionably-late | slope_norm.bars | assumed / engine only (global) |
+| fashionably-late | vwap.anchor | assumed / engine only (global) |
+| nine-ema-scalp | catalyst_ref.resolver | assumed / engine only (global) |
+| nine-ema-scalp | extension.on_leg.form | assumed / engine only (global) |
+| nine-ema-scalp | extension.path_a_volume_ma_bars | assumed / engine only (global) |
+| nine-ema-scalp | extension.path_a_volume_sigma | assumed / engine only (global) |
+| nine-ema-scalp | extension.path_b_atr | assumed / engine only (global) |
+| nine-ema-scalp | frame.warmup_source | assumed / engine only (global) |
+| nine-ema-scalp | leg.min_size_atr | assumed / engine only (global) |
+| nine-ema-scalp | leg.pre_test | assumed / engine only (global) |
+| nine-ema-scalp | stop.buffer | assumed / engine only (global) |
+| vwap-continuation | dist.k.vwap | assumed / engine only (per_indicator(vwap)) |
+| vwap-continuation | frame.warmup_source | assumed / engine only (global) |
+| vwap-continuation | leg.min_size_atr | assumed / engine only (global) |
+| vwap-continuation | level.rejected.rule | assumed / engine only (global) |
+| vwap-continuation | levels.set | assumed / engine only (global) |
+| vwap-continuation | pivot.n | assumed / engine only (global) |
+| vwap-continuation | range.micro.bound_flat_slope_atr | assumed / engine only (global) |
+| vwap-continuation | range.micro.touch_tolerance_atr | assumed / engine only (global) |
+| vwap-continuation | range.micro.touches_per_side | assumed / engine only (global) |
+| vwap-continuation | stop.buffer | assumed / engine only (global) |
+| vwap-continuation | trendline.min_pivots | assumed / engine only (global) |
+| second-chance | event.stop_hit.source | assumed / engine only (global) |
+| second-chance | extension.on_leg.form | assumed / engine only (global) |
+| second-chance | frame.warmup_source | assumed / engine only (global) |
+| second-chance | leg.pre_test | assumed / engine only (global) |
+| second-chance | levels.set | assumed / engine only (global) |
+| second-chance | range_break.failed_trap_bars | assumed / engine only (global) |
+| second-chance | range_break.retest_tolerance_atr | assumed / engine only (global) |
+| second-chance | range_prior.rule | assumed / engine only (global) |
+| second-chance | stop.buffer | assumed / engine only (global) |
+| second-chance | turn_candle.rule | assumed / engine only (global) |
+| example-lego-eighth | frame.warmup_source | assumed / engine only (global) |
+| example-lego-eighth | range.micro.bound_flat_slope_atr | assumed / engine only (global) |
+| example-lego-eighth | range.micro.touch_tolerance_atr | assumed / engine only (global) |
+| example-lego-eighth | range.micro.touches_per_side | assumed / engine only (global) |
+| example-lego-eighth | stop.buffer | assumed / engine only (global) |
+
+UNPROVEN: none. Not in the table by construction: (1) the literal numbers written in a def's own text (e.g. a trigger's `bars_cleared`, a stop's `fraction`) — tuned by editing the note, or turned into a per-trade dial by writing `cfg(<trade_key>.<field>)` there (F6 (b) proves that path); (2) the three `extension.path_*` keys every def reads through the stage's seam observations but only an Extension-anchored def DECLARES (X22's standing finding, `test_setups_lego.ALWAYS_READ_UNDECLARED`). `stop.buffer` has a per-trade override convention in its own docstring (`<trade_id>.stop.buffer`) — as a separately NAMED key, not a row for `stop.buffer` itself.
+
+## CLOSE
+- **OFFLINE** `uv run pytest -q tests/cobalt tests/taxonomy -p no:cacheprovider --color=no` on `be44eb4` → `2453 passed, 361 skipped, 1 xfailed, 15 warnings in 500.73s (0:08:20)` → **2453/0**. Counted: base 2434 + 19 new tests in `test_setups_fix_r3.py` (F1 4 · F2 5, of which one parametrised function = 3 cases · F3 5 · F4 2 · F5 1 · F6 2); skipped unchanged at 361 (the new module holds no with-DB test).
+- **WITH-DB** `cp /Users/cobalt/cobalt/.env /Users/cobalt/cobalt-wt/setups-c1/.env` → the BASELINE command + `tests/cobalt/test_setups_fix_r3.py` (`--color=no`) → **`3 failed, 569 passed, 1 skipped in 1905.69s (0:31:45)`** → `rm /Users/cobalt/cobalt-wt/setups-c1/.env` → `ls -la …/.env` → `ls: /Users/cobalt/cobalt-wt/setups-c1/.env: No such file or directory`. The skip: `SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof` (by design). **The three reds are the `cobalt_dev` DATABASE, not this round's code** — ESCALATE (0):
+  - `tests/cobalt/test_radar_score_migration.py::test_card_checks_index_and_receipt_immutability_on_cobalt_dev` — `psycopg.errors.TooManyColumns: tables can have at most 1600 columns` at `_apply(conn, [SYSTEM_SQL, USER_SQL])` (`:498`), re-applying `0007_radar_cards.sql`;
+  - `tests/cobalt/test_tenancy.py::TestMigrationRoundTrip::test_twice_is_idempotent_and_the_rollback_round_trips` and `::test_the_proof_table_names_every_ruled_table` — `cobalt db migrate` subprocess: `-- applying 0007_radar_cards.sql` / `FAILED: TooManyColumns: tables can have at most 1600 columns`.
+  - Why not this round: `git diff 65c08a0 -- src/cobalt/db_migrations` → no output; `0007_radar_cards.sql` ADDs 25 columns to `"user".aset_sizings` (`ADD COLUMN IF NOT EXISTS` ×25, `:32-56`) and its rollback DROPs them (`:40-64`); PostgreSQL keeps a dropped column counted toward the 1600-attribute limit until the table is rewritten, and `TestMigrationRoundTrip` COMMITS a full rollback + re-migrate on `cobalt_dev` every with-DB run (its docstring: "`db migrate` commits"). The same three tests PASSED in this session's with-DB BASELINE ~2 h earlier (`1 failed, 552 passed` — the one red being the X10 pin). Every other with-DB test of the set, including all of this round's, passed.
+- `git diff --stat 65c08a0` → 26 files, `1138 insertions(+), 56 deletions(-)`: `configs/cobalt/taxonomy/tunables.yaml`; DevDocs `cards/health.md`, `radar/ADDING-A-SETUP.md`, `radar/anatomy/extension.md`, `frame.md`, `leg_roles.md`, `radar/evaluate.md`, `radar/formation/atoms.md`, `taxonomy/tunables.md`, `taxonomy/vault_loader.md`; reports `setups-fix-r3-2026-09-22.md`, `setups-fixture-cut-2026-09-22.md` (`12`'s `a09c6da`, part of the base per R79); `src/cobalt/cards/health.py`, `radar/anatomy/extension.py`, `frame.py`, `leg_roles.py`, `radar/evaluate.py`, `radar/formation/atoms.py`, `taxonomy/tunables.py`, `taxonomy/vault_loader.py`; tests `test_assumed_store.py`, `test_setups_d1.py`, `test_setups_d4.py`, `test_setups_fix_r3.py`, `test_setups_lego.py`, `test_setups_registries.py`. Paths outside the prompt's list → ESCALATE (ix), (x).
+- EMPTY checks, each its own call: `git diff 65c08a0 -- src/cobalt/db_migrations` → no output · `git diff 65c08a0 -- src/cobalt/radar/anatomy/structure.py src/cobalt/radar/formation/stops.py` → no output · `git diff 65c08a0 -- tests/fixtures` → no output · `git diff --stat 65c08a0 -- src/cobalt/cards/store.py src/cobalt/cards/scoring.py src/cobalt/radar/evaluate.py` → `src/cobalt/radar/evaluate.py | 16 ++++++++++------` / `1 file changed, 10 insertions(+), 6 deletions(-)` (NOT empty — ESCALATE (ix)); `store.py` / `scoring.py` untouched · `git diff 65c08a0 -- tests/cobalt/test_rubberband_forms.py tests/cobalt/test_setups_nine_ema.py tests/cobalt/test_setups_vwap_cont.py tests/cobalt/test_setups_second_chance.py` → no output.
+- `git diff 65c08a0 -- configs` → exactly two hunks: `-    unit: cents` / `+    unit: dollars` (the `stop.buffer` row, value `0.02` unchanged), and the new `leg.min_size_atr` row (`value: null`, `unit: atr`, `scope: global`, `dynamic: true`, `status: proposed`, `source: dwv`, one consumer line, two comment lines).
+- **L32 self-check:** `git status --porcelain` never listed `docs/_inflight/…` (ignored; never staged). Each proposal value grepped (`grep -rn -F "<value>" tests/cobalt/test_setups_fix_r3.py configs/cobalt/taxonomy/tunables.yaml "docs/40 - DevDocs/cobalt/radar/ADDING-A-SETUP.md"`, one call each, value withheld here): proposal value 1 (A-09 / A-10's): 2 hits — `test_setups_fix_r3.py:204`, `:207`, my own constructed leg-width comments (unrelated) · proposal value 2 (A-16's): 1 hit — `tunables.yaml:176`, the pre-existing ruled row `gap_retrace_pct_max` (unchanged since the base; unrelated) · proposal value 3 (A-24's): 2 hits — `test_setups_fix_r3.py:205`, `:208`, substrings of my own constructed leg prices (unrelated). No fix needed.
+- `uv run cobalt jobs restarts 65c08a0..HEAD` → VERBATIM:
+```
+path	change	rule	restart
+configs/cobalt/taxonomy/tunables.yaml	M	resident reads	com.cobalt.aset,com.cobalt.radar
+docs/40 - DevDocs/cobalt/cards/health.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/radar/ADDING-A-SETUP.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/radar/anatomy/extension.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/radar/anatomy/frame.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/radar/anatomy/leg_roles.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/radar/evaluate.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/radar/formation/atoms.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/taxonomy/tunables.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/taxonomy/vault_loader.md	M	DOCS	-
+docs/40 - DevDocs/reports/setups-fix-r3-2026-09-22.md	A	DOCS	-
+docs/40 - DevDocs/reports/setups-fixture-cut-2026-09-22.md	A	DOCS	-
+src/cobalt/cards/health.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/radar/anatomy/extension.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/radar/anatomy/frame.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/radar/anatomy/leg_roles.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/radar/evaluate.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/radar/formation/atoms.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/taxonomy/tunables.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/taxonomy/vault_loader.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+tests/cobalt/test_assumed_store.py	M	test/documentation; no resident	-
+tests/cobalt/test_setups_d1.py	M	test/documentation; no resident	-
+tests/cobalt/test_setups_d4.py	M	test/documentation; no resident	-
+tests/cobalt/test_setups_fix_r3.py	A	test/documentation; no resident	-
+tests/cobalt/test_setups_lego.py	M	test/documentation; no resident	-
+tests/cobalt/test_setups_registries.py	M	test/documentation; no resident	-
+RESTARTS: com.cobalt.aset com.cobalt.radar
+```
+(taken before the report's last edits; the report commit adds only a DOCS path). No `UNCLASSIFIED`.
+- `git log --oneline 65c08a0..HEAD` (before the report commit): `be44eb4` F6 · `953e22b` F5 · `e7a2090` F4 · `b737c25` F3 · `3194038` F2 · `c4f5fd7` F1 · `e79c815` (this hub's first-run wip, docs only) · `a09c6da` (`12`'s report, docs only — base per R79).
+- **L68:**
+
+| branch | shared path | commits |
+|---|---|---|
+| `cards/stale-score-0922` | — | not cut (`fatal: ambiguous argument 'cards/stale-score-0922': unknown revision`) |
+| `radar/handicap-h1-0922` | none | (no output) |
+| `bars/chunk-2-0920` | `configs/cobalt/taxonomy/tunables.yaml` | `c941d30`, `c798a0a` |
+| `bars/chunk-1a-0920` | `configs/cobalt/taxonomy/tunables.yaml` | `c597bfe` |
+| `bars/chunk-e-0920` | none | (no output) |
+
+## NOTE FOR THE DESK
+"`prompts/2026-09-22/16-setups-check-r2.md` checks round 2 on `60ddac4..<r2 tip>` and reads `setups-fix-r2-2026-09-22.md`'s last line; it must be RE-POINTED (L19, a full re-issue) to check round 2 AND round 3 together or round 3 alone — its PREFLIGHT `tail` path and `| on 60ddac4 |` gate, its `60ddac4..<tip>` ranges, its boundary path list (`15`'s CLOSE list → this round's), its packet (3) fix report, and its FIX-row question set (F1–F5 + P1 → this round's F1–F6, plus the r2 ESCALATE (viii) stop-resolver question and the proposal file `docs/_inflight/setups-assumed-values-r3-2026-09-22.md` for R48's 'read by the check') — the desk's call. `31`'s TIP is filled from THIS round's report commit if the stale-score build stacks after it. Pins this round moved (F1 only): none → re-derived blind by `23` (committed day) / `13` (cut days)."
+
+Round 3's code tip: `be44eb4` (the report commit sits above it). Base: `65c08a0` (with `12`'s docs-only `a09c6da` and this hub's first-run wip `e79c815` above it, R79). Note for `16`: the range `65c08a0..be44eb4` also lists `a09c6da` and `e79c815` — both docs-only.
+
+## ESCALATE
+(0) **`cobalt_dev` is broken for the whole dev-DB lane — FIRST, the desk's action.** The CLOSE with-DB run's three reds are `TooManyColumns: tables can have at most 1600 columns` on re-applying `0007_radar_cards.sql` (details under `## CLOSE`). `"user".aset_sizings` in `cobalt_dev` has accumulated dropped columns from committed 0007 rollback / re-apply round trips (`TestMigrationRoundTrip`, every with-DB run of every hub). Worse: that test's sequence is `--rollback --down-to 0001` then `migrate`, and the `migrate` failed at 0007 — so `cobalt_dev` is most likely LEFT BELOW 0007 now (0001–0006 re-applied, 0007 + later absent). INFERRED from the test's own code and output, NOT read directly (L70: `cobalt db` is not mine to run). Any hub's with-DB run on `cobalt_dev` will fail until it is repaired: a table rewrite of `"user".aset_sizings` (e.g. `VACUUM FULL` or a dump / restore of `cobalt_dev`), then `cobalt db migrate` on `cobalt_dev`, then this round's with-DB set again. Not production: no prod DB was touched. The same three tests passed ~2 h earlier in this session.
+(i) **The proposal** (`docs/_inflight/setups-assumed-values-r3-2026-09-22.md`, gitignored): `flat_threshold.ema9` (A-09) proposed · `flat_threshold.vwap` (A-10) proposed · `dist.k.vwap` (A-16) proposed · `leg.min_size_atr` (A-24) proposed. Null: none. All four are NO SOURCE NUMBER, LOW (a word only). A-24's passages speak only to the with-trend move ("strong"); NO passage in the two sheets of the defs naming the roles speaks to how big a PULLBACK must be — the check / desk may prefer to leave A-24 null until he tunes it live (R49).
+(ii) The desk writes the proposed rows into his `1 - Trading/Assumed Defaults.md` ONLY after the check reads them (R48, L65, FINAL §8). Until then committed config keeps all four null and nothing changes in production.
+(iii) F5: the rollback line (`ADDING-A-SETUP.md` § Rolling back — code and the `unit: dollars` line revert together; the DB holds no copy of the engine row). The def-side `buffer: {type: fixed, cents: …}` spec key (`StopBuffer.cents`, `predicate.UNITS`) is LEFT as his notes' shape (L45); `TunableUnit.CENTS` stays for it. The spec key now names a unit the value is not in — a naming residue for him, not a behaviour.
+(iv) A1 re-points (none moved a `DEF_WRITTEN_*`; no blind seat owed): F1 `test_setups_d4.py` `X10_RESULT` `"FAIL"` → `"PASS"`; F1 `test_setups_lego.py` `AWAITING_A_RULING` comment only (set unchanged); F2 `test_assumed_store.py` refusal case `per_indicator(ema9)` → `per_indicator(vwap)`; F3 `test_setups_registries.py` `STEP3_KEYS` / `test_setups_d1.py` `ADDED_KEYS` + `leg.min_size_atr`; F5 the same two `_tunables_digests` map `stop.buffer`'s unit back to `cents` for the start digest. Every pinned sha unchanged in text.
+(v) F6: `## DIALS` above; (b) the per-trade override REACHES the evaluator (the trigger moves, same 71 formed scans). UNPROVEN keys: none. **FINDING for R61 (not a defect, no code): per-setup tuning of an ENGINE dial is not possible today.** A note row for an engine key is refused (`merge_tunables`: a note only ADDS keys), and an `Assumed Defaults` row is global (or per_indicator) — it tunes EVERY setup that reads the key (e.g. `stop.buffer`, `frame.warmup_source`, `range.micro.*` sit in 4–8 setups' tables). Only the def's own `cfg(<trade_key>.…)` keys are per-setup; today the corpus has one (hitchhiker's duration band). If "tune the setups so the noise subsides" means per setup, the lever is to write the number into the def as its own `cfg(<trade_key>.…)` (F6 (b)'s path) — the desk's / his call.
+(vi) The r2 ESCALATE (viii) stop-resolver question (stop resolvers not given `tunable_keys`) — carried for `16`, NOT built (not his ruling).
+(vii) `ASK DESK`: none raised; no safe default taken beyond the rows as written.
+(viii) `MEMORY:` / `RULING:` lines: none.
+(ix) **`src/cobalt/radar/evaluate.py` changed (F1)** — a file the CLOSE list names EMPTY and `31`'s stacked file (L68). Three hunks: `_build_frames(..., bind_side=False)` passes the flag through; `evaluate_member` passes `binds_side_by_frame(td)` and reads the seam / factor observations from `frames["long"].observed`. Why needed: `build_frame` has no def, and the side binding is per def (Grok's fix binds only the two defs whose text names a state past the culmination; Rubberband must keep the detector's direction, FINAL fact 3). For every other def `observed is extension`, so no published row changes (the full offline + with-DB suites and every card-digest pin agree).
+(x) **Test files changed outside the CLOSE path list**, each an A1 of its row: `tests/cobalt/test_setups_d4.py` (F1), `tests/cobalt/test_assumed_store.py` (F2), `tests/cobalt/test_setups_registries.py` and `tests/cobalt/test_setups_d1.py` (F3, F5). Also `src/cobalt/radar/anatomy/extension.py` / `frame.py` (F1's side-binding files) and `src/cobalt/radar/formation/atoms.py` (F3's closure) — named by the rows, listed here for the boundary check.
+(xi) **F1's reading, named for the checkers:** a def binds side through the frame when a precondition compares the unqualified `Extension.state` to a state past the culmination (`reverting` / `backside`, taken from the atom's own domain, so no setup word in source — Lego (i) green). For such a def BOTH frames read the DOWN Extension in frame coordinates (`detect_extension(..., direction="down")`; path B then counts only a distance moved down). The formation's `leg_count` / anchor come from that bound Extension; the seam observations stay the detector's own. The stored-session X7 (in the with-DB set) shows `both_sides == 0` for every shape with F1 in place. X10: PASS.
+(xii) **backside and fashionably-late STAY in `AWAITING_A_RULING`, announced** (F1's A1 rule): X10 is closed, but neither forms on any committed scan (`X7 backside: scans=392 formed=0 both_sides=0`, `X7 fashionably-late: scans=392 formed=0 both_sides=0`), and at committed config their lifecycle holes (`A-08`, `A-11`) and fashionably-late's `per_indicator` holes are null. Their blocker is now holes + a day, not a ruling — moving them to `AWAITING_A_DAY` (and a fixture-cut day for them) is the desk's call.
+(xiii) **Process slips, stated plainly (L35):** (a) I began F1's source edits while the offline BASELINE was still running; one test that reads `inspect.getsource(evaluate.evaluate_member)` failed on the line drift (`IndexError`), passing alone afterwards — the baseline is recorded as 2434/0 with that reasoning; (b) the with-DB BASELINE therefore ran on the F1-edited tree, not the pristine base (`1 failed, 552 passed, 1 skipped` — the one red was the X10 pin collected before its re-point); (c) X5's number and the rubberband pins were not quoted BEFORE F1's C on this run (the before-evidence is the offline baseline and r2's X5 line); (d) while waiting on the long suites I re-ran `test_setups_lego.py` / `test_setups_d4.py` (and, before F3 / F6, `test_setups_fix_r3.py -k probe` / `-k f6`) as timers — all green each time; some of those runs overlapped a with-DB run while `.env` was in the worktree, which is harmless only because none of those modules holds a DB-backed test (`grep -c -e "requires_db" -e "cobalt_dev" -e "POSTGRES" -e "dev_db"` → `0` for lego / d4; the new module has none). (e) The F3 base-roles pin was captured by a temporary probe test in the module, removed before F1's commit (never committed red). No denied call; no command outside the list.
+(xiv) **RESTARTS** (`uv run cobalt jobs restarts 65c08a0..HEAD`): `RESTARTS: com.cobalt.aset com.cobalt.radar` (config `resident reads` + `src/` static import reach). No `UNCLASSIFIED`.
+(xv) **L68:** `cards/stale-score-0922` — not cut (`unknown revision`). `radar/handicap-h1-0922` — no commit on any path of this round. `bars/chunk-2-0920` — `c941d30`, `c798a0a` touch `configs/cobalt/taxonomy/tunables.yaml`; `bars/chunk-1a-0920` — `c597bfe` touches it (a textual-conflict risk with F3's row / F5's line at the stacked gate). `bars/chunk-e-0920` — none.
+(xvi) **Proposal hygiene (L32):** the proposal values were grepped in `test_setups_fix_r3.py`, `tunables.yaml`, `ADDING-A-SETUP.md` — hits are my own unrelated literals (constructed leg prices in two test comments / leg tuples) and one pre-existing ruled engine row in `tunables.yaml` (`gap_retrace_pct_max`, unchanged since the base). No proposal value entered a committed file.
+(xvii) **L74** recorded once above.
 
 ## CONTINUE
-next: F6 COMMIT, then CLOSE (T drafted in the job tmp dir; the base roles pin captured: `F3 roles on the committed day: 160 observations sha=0922dadc29013941a7a2512e038ba9310e4fb791bc3a5e53bdd17a4bf5dd6323`)
+next: none — all six rows and CLOSE done; `.env` removed and proven gone. A relaunch has nothing to build. After the desk repairs `cobalt_dev` (ESCALATE (0)), the with-DB set of `## CLOSE` can be re-run on `be44eb4` by any seat holding the `.env` pair.
 
-(run in progress — row 2 of 6, next under ## CONTINUE)
+SETUPS FIX R3 BUILT be44eb4 | on 65c08a0 | offline 2453/0 | with-DB 569/3 | src changed: yes | tests added: 19 (one parametrised function counted as its 3 cases) | .env: removed, proven gone | ESCALATE: 18
