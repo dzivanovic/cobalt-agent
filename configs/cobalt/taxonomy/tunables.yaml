@@ -288,6 +288,27 @@ tunables:
     source: dwv
     consumers: ["cobalt.radar.evaluate (the `on` qualifier)"]
 
+  # --- STEP-7 conventions (C6) --------------------------------------------
+  # `A-17`: which levels `Level_ref(resistance)` means (the level set).
+  - key: levels.set
+    value: null
+    unit: label
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.anatomy.frame (Level_ref(resistance).rejected)"]
+
+  # `A-18`: what "rejected" means for a level.
+  - key: level.rejected.rule
+    value: null
+    unit: label
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.anatomy.frame (Level_ref(resistance).rejected)"]
+
   # `A-05`, `A-06`, `A-12`: conventions the frame's resolvers implement.
   - key: frame.warmup_source
     value: null

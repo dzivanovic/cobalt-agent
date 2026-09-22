@@ -420,6 +420,29 @@ def _d1_resolvers(
             return AtomValue(kind="null", reason="not_instantiated")
         return AtomValue(kind="boolean", boolean=True)
 
+    def rejected() -> AtomValue:
+        """`Level_ref(resistance).rejected` (STEP-7). The level set (`A-17`,
+        `levels.set`) = {PMH, PDH} in the frame's coordinates (resistance for
+        the long-side text); `rejected` (`A-18`, `level.rejected.rule`) = some
+        RTH bar's high reached the level and it closed back below it, and the
+        last close is still below it. A level with no value is skipped (no
+        premarket print) or unknown (no daily bars)."""
+        if not run or last_close is None:
+            return AtomValue(kind="unavailable", reason="insufficient_bars")
+        unknown = None
+        for level in (premarket("high")(), prior("high")()):
+            if level.kind == "unavailable":
+                unknown = level.reason
+                continue
+            if level.kind != "number":
+                continue
+            wicked = any(b.high >= level.number and b.close < level.number for b in run)
+            if wicked and last_close < level.number:
+                return AtomValue(kind="boolean", boolean=True)
+        if unknown is not None:
+            return AtomValue(kind="unavailable", reason=unknown)
+        return AtomValue(kind="boolean", boolean=False)
+
     objects.update({
         "Range(micro)": micro, "Leg(opening_drive)": drive,
         "series": lambda: series, "turn_index": turn_index, "cross_index": lambda: cross_index,
@@ -434,6 +457,7 @@ def _d1_resolvers(
         "Leg(impulse).direction": role_atom("impulse", "direction"),
         "Leg(opening_drive OR impulse).direction": role_atom("either", "direction"),
         "catalyst_ref": catalyst_ref,
+        "Level_ref(resistance).rejected": rejected,
     })
 
     return {

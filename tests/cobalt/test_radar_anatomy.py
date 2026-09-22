@@ -540,5 +540,7 @@ def test_supported_atoms_are_exactly_the_s2_detectors():
          "Leg(opening_drive).direction", "Leg(opening_drive).terminated_by",
          # + STEP-6's roles and the A-13 catalyst resolver (FINAL §3 D3, §6)
          "Leg(pullback).direction", "Leg(pullback).end", "Leg(pullback).index", "Leg(impulse).direction",
-         "Leg(opening_drive OR impulse).direction", "catalyst_ref"}
+         "Leg(opening_drive OR impulse).direction", "catalyst_ref",
+         # + STEP-7's rejected-resistance atom (FINAL §3 D5/D6)
+         "Level_ref(resistance).rejected"}
     )

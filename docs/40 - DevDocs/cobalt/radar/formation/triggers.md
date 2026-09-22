@@ -18,3 +18,10 @@ Registered so far: `bar_break {bars_cleared}`, which is `structure.bar_break_tri
 **2026-09-22 — `indicator_cross` (STEP-5; FINAL §2.2).** `IndicatorCross` serves `{a, b, direction}` with `a ≠ b` in `{EMA9, EMA21, VWAP}` and direction `a_crosses_above_b` / `a_crosses_below_b`. It finds the latest closed working bar where the cross happened, in frame coordinates, through the frame's `cross_index`. It stamps `cross_point` (that bar), and its close is the entry the card arms at. No cross yet raises `InsufficientBars`, which becomes `not_formed`.
 
 **2026-09-22 — `indicator_rejection` (STEP-6; taxonomy §10.2 A.4).** `IndicatorRejection` serves `{indicator ∈ EMA9|EMA21|VWAP, contact ⊆ {touch, penetrate}}`. It is `close_through` by definition: the LAST closed working bar whose low reached the indicator (`touch`: ≤; `penetrate`: <) and whose close is above it is both the trigger and the entry, at its close. The last bar is not a rejection → `InsufficientBars`. Next-bar continuation is the human read (L11).
+
+**2026-09-22 — `trendline_break` (STEP-7; FINAL §2.2, taxonomy §3.7).** `TrendlineBreak` serves `{ref: Level_ref(trendline), anchor_leg: Leg(pullback), pivots}`, intrabar, in frame coordinates. It tries two cases in order:
+
+- **The flat case** (taxonomy `:114`): a micro-Range instantiated after the anchor leg began. The trigger is its top, the far bound.
+- **Otherwise, the sloped line** through the pivot highs (`cfg(pivot.n)`) from the leg before the pullback to now. It needs at least `pivots` of them, descending. The line runs from the first to the last pivot and is extended to the last bar, rounded to 0.0001.
+
+Neither case → `InsufficientBars`.

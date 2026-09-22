@@ -165,11 +165,63 @@ class IndicatorRejection:
         )
 
 
+class TrendlineBreak:
+    """`trendline_break {ref: Level_ref(trendline), anchor_leg, pivots}` (FINAL
+    §2.2, taxonomy §3.7; STEP-7), intrabar, in the frame's coordinates:
+
+    * the FLAT case (taxonomy `:114`: "the pullback consolidated into a
+      micro-Range is the same object with slope 0 — the break must be through
+      the far bound"): a micro-Range instantiated after the anchor leg began →
+      the trigger is its top;
+    * otherwise the line through the pivot highs (`cfg(pivot.n)`) from the
+      anchor leg's first bar to now — at least `pivots` of them, descending —
+      its value extended to the last bar is the trigger.
+    Neither → `InsufficientBars` (`not_formed`)."""
+
+    kind = "trendline_break"
+    ANCHORS = frozenset({"Leg(pullback)"})
+
+    def serves(self, params: dict[str, Any]) -> bool:
+        return params.get("ref") == "Level_ref(trendline)" and params.get("anchor_leg") in self.ANCHORS \
+            and "pivots" in params
+
+    def resolve(self, frame, trigger_def, value: Callable[[Any], Any]) -> TriggerOutcome:
+        from ..anatomy.pivots import pivot_n, pivots
+
+        p = trigger_def.params
+        leg = frame.objects["pullback_roles"].pullback
+        if leg is None:
+            raise InsufficientBars("trendline_break (no pullback leg)", 1, 0)
+        start = frame.objects["pullback_roles"].before.start_ts if frame.objects["pullback_roles"].before \
+            else leg.start_ts
+        obs = frame.objects["Range(micro)"]
+        r = None if isinstance(obs, str) else obs.range
+        if r is not None and r.start_ts >= leg.start_ts:
+            level = TriggerLevel(trade_direction="long", price=r.top, bars_cleared=0, bar_ts=r.top_touch_ts)
+            return TriggerOutcome(state="armed", price=r.top, ref_bar_ts=r.top_touch_ts[-1], kind=self.kind,
+                                  inputs={"case": "flat", "range_start": r.start_ts.isoformat()},
+                                  why="break of the pullback's flat trendline (the micro-Range top)", level=level)
+        need = int(value(p["pivots"]))
+        n = pivot_n(frame.objects["tunables"])
+        window = [b for b in frame.run if b.ts >= start]
+        highs = pivots(window, n).highs if n is not None else ()
+        if len(highs) < need or not highs[-1].price < highs[0].price:
+            raise InsufficientBars(f"trendline_break (fewer than {need} descending pivot highs)", need, len(highs))
+        first, last = highs[0], highs[-1]
+        slope = (last.price - first.price) / (last.index - first.index)
+        price = (last.price + slope * (len(window) - 1 - last.index)).quantize(Decimal("0.0001"))
+        level = TriggerLevel(trade_direction="long", price=price, bars_cleared=0, bar_ts=tuple(h.ts for h in highs))
+        return TriggerOutcome(state="armed", price=price, ref_bar_ts=window[-1].ts, kind=self.kind,
+                              inputs={"case": "sloped", "pivots": len(highs)},
+                              why="break of the pullback's trendline", level=level)
+
+
 TRIGGERS: dict[TriggerType, TriggerResolver] = {
     TriggerType.BAR_BREAK: BarBreak(),
     TriggerType.RANGE_BREAK: RangeBreak(),
     TriggerType.INDICATOR_CROSS: IndicatorCross(),
     TriggerType.INDICATOR_REJECTION: IndicatorRejection(),
+    TriggerType.TRENDLINE_BREAK: TrendlineBreak(),
 }
 
 

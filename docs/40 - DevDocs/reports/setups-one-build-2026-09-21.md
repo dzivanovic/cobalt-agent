@@ -677,6 +677,83 @@ No assertion was removed, and no skip or xfail was added.
   - VERBATIM: `X7 stored: sessions=10 grid=30min {…, 'nine-ema-scalp': {'scans': 7200, 'both_sides': 0, 'formed': 280}, …}` → **X7 stored nine-ema-scalp: PASS** (280 formed grid scans, never on both frames).
 - rm → `ls -la .env` → `ls: .env: No such file or directory`.
 
+### COMMIT
+
+`7233fbd feat(setups): STEP-6 pullback roles, touched, indicator_rejection, indicator stop, catalyst resolver A-13 — nine-ema-scalp (FINAL C5)`. `git show --stat HEAD`: 21 files, 849 insertions(+), 29 deletions(-); every path is one named above. Long-form `git status` came before it.
+
+## STEP-7
+
+C6: D5 trendline + `dist`, the level set and `rejected` → the pullback-to-VWAP continuation setup (vwap-continuation) (FINAL §3 D5, §2.2; `A-16`, `A-17`, `A-18`).
+
+### T (RED)
+
+New: `tests/cobalt/test_setups_vwap_cont.py`. It holds:
+
+- the rows and the F1 hole; `dist`; `trendline_break`; `rejected` on constructed series;
+- the per-setup acceptance: evaluable, the path on a definition-written day (a flat premarket, a drive up, a pullback toward VWAP, a flat micro-Range near VWAP), the F1 reading at defaults, the committed day;
+- X7, X11.
+
+The corpus gains `vwap-continuation` (`example-pullback-to-vwap`, `D5_CONSTRUCTED` = D4's + `dist.k.vwap` filled HERE only). Run on the START code (`7233fbd`): **8 failed, 2 passed**. The 2 are X7 and X11, vacuous. RED lines:
+
+| test | RED |
+|---|---|
+| rows | `KeyError: 'levels.set'` |
+| `dist` | `cobalt.radar.evaluate.Unsupported: atom dist(Leg(pullback).end, VWAP) has no S2 detector` |
+| `trendline_break` | `KeyError: <TriggerType.TRENDLINE_BREAK: 'trendline_break'>` |
+| `rejected` | `KeyError: 'Level_ref(resistance).rejected'` |
+| shape / path / defaults | `AssertionError: ('Level_ref(resistance).rejected', 'dist(Leg(pullback).end, VWAP)', 'trigger:trendline_break')` |
+
+The committed-day test was added once the shape formed; its four `"PIN"`s failed with `assert ('long', '202...120', '24.75') == ('PIN', 'PIN', 'PIN', 'PIN')`.
+
+Own-test defect: the `dist` False case used k = 0.5 × ATR 0.2 = 0.10, exactly the distance, so it was True. k = 0.4 now.
+
+### X
+
+- **Per-setup acceptance, vwap-continuation (FINAL §9 gates 1–5, [F-16] (1)–(5)):**
+  - (1) It FORMS on the committed day with this build's constructed F1 fill. `vwap-continuation on the committed day: formed_scans=2 ticker=BGFI first=('long', '2026-01-06T20:04:00+00:00', '24.8120', '24.75')` → `DEF_WRITTEN_VWAP_CONTINUATION_{SIDE, FORMED_BAR, TRIGGER, STOP}` = long, 20:04 UTC, 24.8120, 24.75, each marked `# engine at STEP-7; a checker house re-derives it blind (66, [F-16] (1))`. BGFI is stale on most scans by design; these two scans are fresh.
+  - (2) The property holds; it is not in `AWAITING_A_DAY`.
+  - (3) The live-note test: NOT RUN (skipped by design; the deploy runs it and a SKIP is RED — [F-16] (2)).
+  - (4) Evaluable, with the text avoid human (L11).
+  - (5) The geometry guard holds, asserted.
+  - The definition-written path forms long: trigger = the flat case's micro-Range top, 10.78; stop = `structural_stop(VWAP at entry, long, 0.02)`.
+  - **At production defaults: `AWAITING_A_RULING: F1`.** `dist.k.vwap` stays null (`dist.k.vwap_unset`, asserted).
+- **The note-versus-sheet divergence** the companion reports for this def's `rejected` avoid: REPORTED, never fixed (L32 / L65). The build follows the NOTE's `Level_ref(resistance).rejected`, and its level set and rule are conventions (`A-17`, `A-18`, null → assumed). Its content stays in the gitignored companion, and this report quotes none of it → ESCALATE 16.
+- **X7 offline:** `X7 vwap-continuation: scans=392 formed=2 both_sides=0` → PASS.
+- **X11:** `X11 vwap-continuation: atoms=5 failures=[]` → PASS.
+
+### C
+
+| file | change |
+|---|---|
+| `src/cobalt/radar/formation/atoms.py` | `dist_operands` (a served function; operand gaps and names); the row `Level_ref(resistance).rejected` (conventions `levels.set`, `level.rejected.rule`); `LEVELS_CONVENTION`, `REJECTED_CONVENTION` |
+| `src/cobalt/radar/anatomy/frame.py` | the `rejected` lazy atom over the frame's PMH / PDH |
+| `src/cobalt/radar/formation/triggers.py` | `TrendlineBreak` (flat case → micro-Range top; else descending pivot highs ≥ `pivots`) |
+| `src/cobalt/radar/evaluate.py` | `dist` in `_value`; two `CONVENTION_LABELS` |
+| `configs/cobalt/taxonomy/tunables.yaml` | label rows `levels.set` (`A-17`), `level.rejected.rule` (`A-18`), null. `dist.k.vwap` (`A-16`) was already a `per_indicator` null row, and it stays null (F1) |
+
+### A1
+
+| test | old assertion | new assertion | FINAL tag |
+|---|---|---|---|
+| `test_radar_anatomy.py::test_supported_atoms_are_exactly_the_s2_detectors` | the STEP-6 set | + `Level_ref(resistance).rejected`, exactly | §3 D5 / D6 |
+| card pins: [F-11] ×2, Lego (ii) ×2, T6 formed card | `tunables_sha256` mapped without the rows up to STEP-6 | … and without `levels.set`, `level.rejected.rule` | §3 D6 (new rows) |
+
+No assertion was removed, and no skip or xfail was added. **X5:** `X5 offline: defs=8 frames=2 members=50 runs_s=[4.6, 4.66, 4.62] p95~max=4.66s budget=100.0s` → PASS.
+
+### D
+
+- Appended: `radar/formation/triggers.md`, `atoms.md`, `radar/anatomy/frame.md`, `radar/evaluate.md`.
+
+### SUITE
+
+- **Offline.** `uv run pytest -q tests/cobalt tests/taxonomy` (background).
+  - The first run: `6 failed, 2393 passed` — the A1 rows.
+  - After the re-points: **`2399 passed, 361 skipped, 1 xfailed, 15 warnings in 396.71s (0:06:36)`**, 0 failed. Against STEP-6 (2388), the +11 are exactly `test_setups_vwap_cont.py`'s 11 tests.
+- **SLIP, recorded.** While that run was going, I began STEP-8's edits (`frame.py`, `setups_shapes.py`, and two new STEP-8 files) before STEP-7 was committed. The run had already collected, so its result is STEP-7's. The STEP-8 hunks in `frame.py` and `setups_shapes.py` were backed out by Edit before the with-DB run and the commit. The two new STEP-8 files stayed untracked and outside STEP-7's runs and commit. STEP-8 re-applies them.
+- **With-DB.** cp → `COBALT_ENV=dev uv run pytest -q` over STEP-6's set + `tests/cobalt/test_setups_vwap_cont.py` + `tests/experiments/setups_one`, with `-s` → **`434 passed, 1 skipped in 1575.43s (0:26:15)`**. The skip is the live-note proof.
+  - `X7 stored: … 'vwap-continuation': {'scans': 7200, 'both_sides': 0, 'formed': 0} …` → **X7 stored vwap-continuation: PASS** (vacuous on the stored sessions).
+- rm → `ls -la .env` → `ls: .env: No such file or directory`.
+
 ## ESCALATE
 
 (running list; the ALWAYS items (i)–(xii) are written at CLOSE)
@@ -697,16 +774,19 @@ No assertion was removed, and no skip or xfail was added.
 13. **D4 and Rubberband (a decision for the desk).** Growing `Extension.state` past `culminating` means that, once `A-08` is filled, a culminated Extension reads `reverting` after its snapback, and Rubberband's `Extension.state == culminating` stops re-forming on those scans. The first formation, and so the card, is unchanged. Built safe default: while `A-08` is null (committed config), `Extension.state` reads exactly today's value, so Rubberband is byte-identical now (every pin GREEN) and in production until the assumed note fills `A-08`. Also, `Extension.state` does NOT declare the warm-up convention (`frame.warmup_source`, A-05) in its closure, even though the lifecycle's rising-EMA9 test uses the seeded EMA9. Declaring it would mark every Rubberband card "assumed: frame.warmup_source" at committed config, where the lifecycle never runs. `ASK DESK: once A-08 is filled, should Rubberband's precondition hold through reverting, and should Extension.state declare A-05? [05:1x]` — safe default: as built.
 14. **A null `cfg()` was compared as `None` (a latent defect, fixed at STEP-5).** Before, a predicate against a null engine row (the drive-then-range shape's `Range(micro).wick_ratio > cfg(range.wick_ratio_max)`) raised `Unsupported` and made the def `not_evaluable` at production defaults, whenever its preconditions held. It now reads unknown, `<key>_unset`.
 15. **The leg roles carry no size (STEP-6).** `legs()` ends a leg at one opposing bar (taxonomy §3.1, byte-identical by X16), so legs alternate. The leg before a pullback is therefore always the other direction, and the nine-ema shape's `Leg(opening_drive OR impulse).direction == trade_direction` holds whenever a pullback exists. The taxonomy defines no magnitude for `impulse` / `pullback`, and none is invented here. `ASK DESK: should impulse / pullback carry a size rule (a new A-nn key) before cards? [06:0x]` — safe default: none.
+16. **vwap-continuation's `rejected` avoid: the note and the sheet diverge (per the companion). REPORTED, not fixed.** The build follows the note (L32 / L65); the level set and the rejection rule are the null conventions `levels.set` / `level.rejected.rule`, so every card formed on them is marked assumed. The divergence's content is his, in the gitignored companion, and is not quoted here.
 
 ## CONTINUE
 
-next: STEP-7 (C6), vwap-continuation.
-1. `Level_ref(trendline, anchor_leg)` through the anchor leg's pivots (≥ `cfg(trendline.min_pivots)`); the flat case is the micro-Range far bound.
-2. `formation/triggers.py` `trendline_break`.
-3. `dist(a, b)` in working-TF ATR with `cfg(dist.k.vwap)` (`A-16`, a `per_indicator` hole, F1).
-4. The level set `A-17` (a convention row); `Level_ref(resistance).rejected` (`A-18`); the `tunables.yaml` convention rows.
-5. Acceptance for `vwap-continuation`. At production defaults it is `AWAITING_A_RULING: F1`. Report the note-vs-sheet divergence of the `rejected` avoid, never fix it (follow the NOTE). X7, X11, X5.
+next: STEP-8 (C7), second-chance. Already drafted (untracked): `src/cobalt/radar/anatomy/range_break.py` and `tests/cobalt/test_setups_second_chance.py`, with RED recorded (8 failed, 3 passed). Re-apply the second-chance shape to `setups_shapes.py` (`break_retest_turn_mapping`, `D6_CONSTRUCTED`, the SHAPES row). Then wire:
+- the frame: `RangeBreak(level).state` / `RangeBreak.state`, `event(retest)`, `event(stop_hit)`, objects `range_break`;
+- EventAtom in the interpreter + `predicate_gaps`;
+- `on` for `event(retest) on that RangeBreak` (anaphora via `context["antecedent"]`);
+- `after`; `inside Range(prior)`;
+- `sequence` (`serves_def`); `turn_candle`;
+- the `RangeBreak(level)` anchor;
+- seam reasons; rows `A-20`, `A-21`, `A-22`, `A-23`.
 
 Rules still in force: file content only through Write / Edit; pins from a test's own failure output; long-form `git status` before a commit; no unlisted commands (scratch probes go in a pytest file under the job's tmp).
 
-(run in progress — step 7 of 9, next under ## CONTINUE)
+(run in progress — step 8 of 9, next under ## CONTINUE)

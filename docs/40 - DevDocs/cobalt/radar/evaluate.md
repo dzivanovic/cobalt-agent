@@ -129,3 +129,8 @@ The ONE `EVALUATOR_VERSION` bump of STEP-1 covers this step. Nothing deploys bet
 - `_on`: `Extension.instantiated` of `detect_extension` over `Leg(pre_test)`'s bars. No pullback → False; too few bars → unknown with the detector's reason.
 - `_conventions` also reads a used relation's own conventions.
 - `CONVENTION_LABELS` gains `catalyst_ref.resolver` → `radar_in_play_admission` (A-13), `leg.pre_test` → `session_open_to_pullback_start` (A-14) and `extension.on_leg.form` → `extension_detector_over_leg_bars` (A-15).
+
+## 2026-09-22 — `dist`, the level labels (setups one build STEP-7; FINAL C6)
+
+- `_value` evaluates `dist(a, b)` as `|a − b|`: unknown and null propagate, and a non-number is `Unsupported(dist)`.
+- `CONVENTION_LABELS` gains `levels.set` → `pmh_pdh` (A-17) and `level.rejected.rule` → `wick_through_close_back_below_still_below` (A-18).

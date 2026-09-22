@@ -83,3 +83,5 @@ The `indicator_cross` trigger, the `recent_higher_low` / `measured_fraction` sto
 - `catalyst_ref`: `A-13`, `True` for an admitted member, `null` for a departed one.
 
 New objects: `pullback_roles` and `pre_test_bars`. The `touched` and `on` relations, the `Leg(pullback)` anchor and the `indicator_rejection` / `indicator` bricks read them.
+
+**2026-09-22 — `Level_ref(resistance).rejected` (STEP-7).** It is served lazily over the frame's own `PMH` / `PDH`: the level set `A-17`, resistance for the long-side text. On the mirrored frame these are the real PML / PDL. A level reads `rejected` when some RTH bar's high reached it and closed back below it, and the last close is still below it (`A-18`). A missing premarket print skips PMH; missing daily bars leave the answer unknown (`no_daily_bars`) unless PMH already decided it.

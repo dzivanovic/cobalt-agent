@@ -343,6 +343,42 @@ def pullback_to_ema_mapping() -> dict[str, Any]:
     return mapping
 
 
+def pullback_to_vwap_mapping() -> dict[str, Any]:
+    """The pullback-to-VWAP continuation SHAPE: the pool admission; the morning
+    move with the trade; a pullback against it that ends near the VWAP (within
+    `cfg(dist.k.vwap)` ATR); the trendline break of the pullback (flat case: the
+    micro-Range top); the VWAP stop at entry; the rejected-resistance avoid and
+    a human text avoid."""
+    mapping = example_mapping()
+    mapping.update(
+        valid_setups=[{"setup_ref": "range_break", "relation": "with_trend"},
+                      {"setup_ref": "volatility_in_range", "relation": "with_trend"}],
+        preconditions=[
+            {"expr": "InPlay.state == active"},
+            {"expr": "Leg(opening_drive OR impulse).direction == trade_direction"},
+            {"expr": "Leg(pullback).direction == opposite(trade_direction) AND "
+                     "dist(Leg(pullback).end, VWAP) <= cfg(dist.k.vwap) * ATR(working_tf)"},
+        ],
+        trigger={"type": "trendline_break",
+                 "params": {"ref": "Level_ref(trendline)", "anchor_leg": "Leg(pullback)",
+                            "pivots": "cfg(trendline.min_pivots)"},
+                 "confirmation_policy": {"type": "intrabar"}},
+        avoid=[{"text": "human-only read of the open"}, {"expr": "Level_ref(resistance).rejected"}],
+        quality_factors=sup.ANATOMY_FACTORS, preferred_windows=["morning", "midday"],
+        preferred_windows_ref="anatomy: after the morning move",
+    )
+    mapping.pop("radar_watch", None)
+    mapping["stop"]["placement"] = {"type": "indicator", "indicator": "VWAP",
+                                    "buffer": {"type": "fixed", "cents": {"value": "cfg(stop.buffer)",
+                                                                          "dynamic": False}},
+                                    "snapshot": "at_entry"}
+    return mapping
+
+
+#: STEP-7: + the `per_indicator` distance hole (F1 — filled HERE only).
+D5_CONSTRUCTED: dict[str, tuple[str, str]] = {**D4_CONSTRUCTED, "dist.k.vwap": ("atr", "1.7")}
+
+
 def drive_then_range_rows() -> list[dict]:
     # L31 / ADR-0008 D5 (`tests/taxonomy/test_names_rule.py`): a per-trade key
     # in the repo is an `example_` key — the note slug is `example-…` for it.
@@ -387,6 +423,13 @@ SHAPES: dict[str, Shape] = {
         engine=D4_CONSTRUCTED,
         notes="pool admission + catalyst_ref (A-13); morning move with the trade; pullback touches EMA9 above "
               "EMA21; indicator_rejection EMA9; indicator stop EMA21 at_entry; Extension-on-pre_test avoid",
+    ),
+    "vwap-continuation": Shape(
+        note_slug="example-pullback-to-vwap",
+        mapping=pullback_to_vwap_mapping,
+        engine=D5_CONSTRUCTED,
+        notes="pool admission; morning move with the trade; pullback near VWAP by dist/ATR; trendline_break "
+              "(flat case: micro-Range top); indicator stop VWAP at_entry; rejected-resistance avoid",
     ),
 }
 

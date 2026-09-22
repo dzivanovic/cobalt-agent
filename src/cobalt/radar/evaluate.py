@@ -141,8 +141,11 @@ from .formation.atoms import (
     CATALYST_CONVENTION,
     ON_LEG_CONVENTION,
     RELATIONS,
+    LEVELS_CONVENTION,
+    REJECTED_CONVENTION,
     AtomValue,
     bound_direction,
+    dist_operands,
     unit_mismatch,
 )
 from .formation.stops import StopOutcome, stop_resolver
@@ -221,6 +224,17 @@ def _value(node: Node, atoms: Mapping[str, AtomValue], cfg: Callable[[str], Any]
         return "value", bound if bound is not None else node.name
     if isinstance(node, Ref) and bound_direction(node) is not None:
         return "value", bound_direction(node)  # `opposite(…)` / `against(…)`
+    if isinstance(node, Ref) and dist_operands(node) is not None:  # `dist(a, b)` = |a − b| (STEP-7)
+        states = [_value(side, atoms, cfg, consulted) for side in dist_operands(node)]
+        for state, value in states:
+            if state == "unknown":
+                return state, value
+        if any(state == "null" for state, _ in states):
+            return "null", None
+        (_, a), (_, b) = states
+        if not isinstance(a, Decimal) or not isinstance(b, Decimal):
+            raise Unsupported("Unsupported(dist)", f"dist over non-numbers {a!r}, {b!r}")
+        return "value", abs(a - b)
     if isinstance(node, Cfg):
         raw = cfg(node.key)
         if raw is None:  # a null row is unknown, named — never compared (STEP-5)
@@ -694,6 +708,9 @@ CONVENTION_LABELS: dict[str, str] = {
     CATALYST_CONVENTION: "radar_in_play_admission",  # A-13, the `catalyst_ref` resolver (FINAL §6)
     PRE_TEST_CONVENTION: "session_open_to_pullback_start",  # A-14, `leg_roles.pre_test_bars`
     ON_LEG_CONVENTION: "extension_detector_over_leg_bars",  # A-15, `evaluate._on`
+    # STEP-7 (C6).
+    LEVELS_CONVENTION: "pmh_pdh",  # A-17, the level set of `Level_ref(resistance)`
+    REJECTED_CONVENTION: "wick_through_close_back_below_still_below",  # A-18, `frame.rejected`
 }
 
 

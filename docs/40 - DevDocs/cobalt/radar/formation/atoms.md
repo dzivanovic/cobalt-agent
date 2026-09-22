@@ -79,3 +79,8 @@ What they declare:
   - `RelationResolver.conventions` is new, and `evaluate._conventions` reads it.
   - Any other operand is `Unsupported(touched:…)` / `Unsupported(on:…)`.
 - **Bound symbols (FINAL §4).** `BOUND_SYMBOLS = {trade_direction: up}` and `opposite(x)` / `against(x)` through `bound_direction`. A bound form is a value, never an atom (`relation_operand_names`), and never an E8 domain miss. `null` is an operand.
+
+## 2026-09-22 — `dist`, the level set, `rejected` (setups one build STEP-7)
+
+- **`dist(a, b)`** (`dist_operands`) is a served function: `|a − b|` in price, with its operands' gaps walked. The vwap-continuation shape compares it to `cfg(dist.k.vwap) × ATR(working_tf)`. `dist.k.vwap` is a `per_indicator` hole (F1, never widened), so at production defaults it reads `dist.k.vwap_unset`.
+- **`Level_ref(resistance).rejected`** is a boolean row with conventions `levels.set` (`A-17`, the set = {PMH, PDH}) and `level.rejected.rule` (`A-18`: a wick through the level, a close back below, and the last close still below). The frame computes it.

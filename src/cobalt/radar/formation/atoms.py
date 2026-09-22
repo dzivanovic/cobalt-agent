@@ -99,6 +99,9 @@ _ROLE_REASONS = ("insufficient_bars", "not_instantiated")
 CATALYST_CONVENTION = "catalyst_ref.resolver"
 #: `A-15`: `<Extension atom> on Leg(x)` reads the Extension detector over that leg's bars.
 ON_LEG_CONVENTION = "extension.on_leg.form"
+#: `A-17`: which levels count (the set); `A-18`: what "rejected" means.
+LEVELS_CONVENTION = "levels.set"
+REJECTED_CONVENTION = "level.rejected.rule"
 _RANGE_KEYS = _micro_range.TUNABLE_KEYS
 _RANGE_REASONS = ("insufficient_seed", "insufficient_bars", "incomplete_bucket",
                   *(f"{key}_unset" for key in _micro_range.TUNABLE_KEYS))
@@ -161,6 +164,9 @@ ATOMS: dict[str, AtomResolver] = _serves(
     # ASSUMED_CONVENTIONS are its row key; the mark reaches the card through
     # the `assumed_formation` dot, never a field on the atom.
     AtomResolver("catalyst_ref", "boolean", conventions=(CATALYST_CONVENTION,), reasons=("not_instantiated",)),
+    # --- D5 / D6 part (STEP-7): the level set and `rejected` ------------------
+    AtomResolver("Level_ref(resistance).rejected", "boolean", conventions=(LEVELS_CONVENTION, REJECTED_CONVENTION),
+                 reasons=("insufficient_bars", "no_daily_bars")),
 )
 
 
@@ -266,8 +272,9 @@ def relation_operand_names(node: Node) -> set[str]:
         return {render(node.left), render(node.right)}
     if isinstance(node, Qualified) and node.op == "on" and not _on_gaps(node):
         return {render(node.subject), render(node.anchor)}
-    if isinstance(node, Compare):  # a bound direction form is a value, not an atom
-        return {render(s) for s in (node.left, node.right) if isinstance(s, Ref) and bound_direction(s) is not None}
+    if isinstance(node, Compare):  # a bound direction form / a served `dist` is a value, not an atom
+        return {render(s) for s in (node.left, node.right) if isinstance(s, Ref) and (
+            bound_direction(s) is not None or (dist_operands(s) is not None and not _operand_gaps(s)))}
     out: set[str] = set()
     for op in getattr(node, "operands", ()) or ():
         out |= relation_operand_names(op)
@@ -289,6 +296,16 @@ RELATIONS: dict[str, RelationResolver] = {
 #: trade direction is `up`; `opposite(x)` / `against(x)` flip a direction.
 BOUND_SYMBOLS = {"trade_direction": "up"}
 DIRECTION_FUNCTIONS = frozenset({"opposite", "against"})
+
+
+def dist_operands(node: Node) -> tuple[Node, Node] | None:
+    """`dist(a, b)` (FINAL §3 D5; STEP-7) → its two operands, else None. Its
+    value is |a − b| in price; a def compares it to `cfg(k) × ATR(working_tf)`."""
+    if isinstance(node, Ref) and len(node.segments) == 1 and node.segments[0].name == "dist":
+        args = node.segments[0].args or ()
+        if len(args) == 2 and all(a.name is None for a in args):
+            return args[0].value, args[1].value
+    return None
 
 
 def bound_direction(node: Node) -> str | None:
@@ -315,6 +332,9 @@ def bound_direction(node: Node) -> str | None:
 def _operand_gaps(node: Node) -> set[str]:
     if isinstance(node, (Number, Symbol, Cfg, Null)):
         return set()
+    if isinstance(node, Ref) and dist_operands(node) is not None:
+        a, b = dist_operands(node)
+        return _operand_gaps(a) | _operand_gaps(b)
     if isinstance(node, Ref):
         text = render(node)
         return set() if text in ATOMS or bound_direction(node) is not None else {text}
@@ -391,6 +411,7 @@ def predicate_gaps(node: Node) -> set[str]:
 
 __all__ = [
     "ATOMS", "AtomResolver", "AtomValue", "BETWEEN_EVENTS", "BOUND_SYMBOLS", "CATALYST_CONVENTION",
-    "ON_LEG_CONVENTION", "RELATIONS", "RelationResolver", "bound_direction", "flat_between", "predicate_gaps",
+    "LEVELS_CONVENTION", "ON_LEG_CONVENTION", "REJECTED_CONVENTION", "RELATIONS", "RelationResolver",
+    "bound_direction", "dist_operands", "flat_between", "predicate_gaps",
     "relation_operand_names", "unit_mismatch", "window_bars",
 ]
