@@ -40,9 +40,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict
 
 from cobalt.session.models import Session
+from cobalt.taxonomy.predicate import And, Compare, InTest, Node, Not, Or, Ref, SetLiteral, Symbol, render
+from cobalt.taxonomy.trade_def import TradeDef
 from cobalt.taxonomy.tunables import TunableRow
 
-from ..formation.atoms import AtomValue
+from ..formation.atoms import ATOMS, AtomValue
 from .bars import WorkingBar, working_bars
 from .daily import DailySeries, HtfRangeBreak, NoDailyBars, htf_range_break
 from .extension import (
@@ -132,6 +134,36 @@ def mirror_daily(series: DailySeries) -> DailySeries:
     )})
 
 
+#: Fix r3 F1 (R47, Grok's fix for X10): the `Extension.state` values past the
+#: culmination (the D4 lifecycle). A def whose long-side text names one of them
+#: reads the Extension it opposes — DOWN in the frame's coordinates — in BOTH
+#: frames, so its side comes from the mirrored frame, never from a direction
+#: recomputed from last close − session open. Every other def (the reversal at
+#: the culmination included, FINAL fact 3) keeps the detector's own direction.
+PAST_CULMINATION = ATOMS["Extension.state"].domain - {"culminating", "none"}
+#: The long-side text's unqualified Extension (A-01), in frame coordinates.
+BOUND_EXTENSION_DIRECTION = "down"
+
+
+def _names_past_culmination(node: Node) -> bool:
+    if isinstance(node, (Compare, InTest)):
+        sides = (node.left, node.right)
+        if any(isinstance(s, Ref) and render(s) == "Extension.state" for s in sides):
+            values = [i for s in sides if isinstance(s, SetLiteral) for i in s.items] + [*sides]
+            return any(isinstance(v, Symbol) and v.name in PAST_CULMINATION for v in values)
+    if isinstance(node, (And, Or)):
+        return any(_names_past_culmination(child) for child in node.operands)
+    if isinstance(node, Not):
+        return _names_past_culmination(node.operand)
+    return False
+
+
+def binds_side_by_frame(td: TradeDef) -> bool:
+    """True when a precondition compares the unqualified `Extension.state` to
+    a state past the culmination (`PAST_CULMINATION`)."""
+    return any(p.expr and _names_past_culmination(p.ast) for p in td.preconditions)
+
+
 class Frame(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
@@ -139,7 +171,12 @@ class Frame(BaseModel):
     run: tuple[WorkingBar, ...]
     #: The complete premarket working buckets (the seed), frame coordinates.
     premarket: tuple[WorkingBar, ...] = ()
+    #: The Extension the def binds to: the detector's own, or (fix r3 F1) the
+    #: `BOUND_EXTENSION_DIRECTION` one when the def binds side by the frame.
     extension: ExtensionObservation
+    #: The detector's own Extension (its direction = the run's sign) — the
+    #: factor / seam observations read this one (R2-4.2 B), whatever `extension` is.
+    observed: ExtensionObservation
     htf: HtfRangeBreak | None
     #: A `LazyAtoms` (typed `Any` so validation never copies — and so never
     #: computes — the lazy values).
@@ -538,9 +575,13 @@ def build_frame(
     last_close: Decimal | None,
     session: SessionInputs | None = None,
     tunables: Mapping[str, TunableRow] | None = None,
+    bind_side: bool = False,
 ) -> Frame:
     """One frame. `run`, `session`, `daily` and `last_close` are REAL; the
-    short frame mirrors them here."""
+    short frame mirrors them here. `bind_side` (fix r3 F1,
+    `binds_side_by_frame`): the frame's Extension is the
+    `BOUND_EXTENSION_DIRECTION` one — every reader of `frame.extension` (the
+    atoms, the D4 lifecycle, the turn, the anchor, the stops) reads it."""
     session = session or SessionInputs()
     if side == "short":
         run = mirror_bars(run)
@@ -551,7 +592,8 @@ def build_frame(
             "rth_i1": mirror_bars(session.rth_i1),
         })
     run = tuple(run)
-    ext = detect_extension(run, params)
+    observed = detect_extension(run, params)
+    ext = detect_extension(run, params, direction=BOUND_EXTENSION_DIRECTION) if bind_side else observed
     atoms = _extension_atoms(ext)
     if ext.unavailable is None:
         del atoms["Extension.state"]  # served lazily: the D4 lifecycle (STEP-5)
@@ -572,11 +614,11 @@ def build_frame(
     lazy = _d1_resolvers(run, session, daily=daily, daily_ok=daily_ok, trade_date=trade_date,
                          last_close=last_close, tunables=tunables if tunables is not None else {}, objects=objects,
                          ext=ext)
-    return Frame(side=side, run=run, premarket=session.premarket, extension=ext, htf=htf,
+    return Frame(side=side, run=run, premarket=session.premarket, extension=ext, observed=observed, htf=htf,
                  atoms=LazyAtoms(atoms, lazy), objects=LazyAtoms({}, objects), last_close=last_close)
 
 
 __all__ = [
-    "EMA_PERIODS", "Frame", "LazyAtoms", "SessionInputs", "Side", "build_frame", "minute_bars", "mirror_bars",
-    "mirror_daily", "premarket_buckets",
+    "BOUND_EXTENSION_DIRECTION", "EMA_PERIODS", "Frame", "LazyAtoms", "PAST_CULMINATION", "SessionInputs", "Side",
+    "binds_side_by_frame", "build_frame", "minute_bars", "mirror_bars", "mirror_daily", "premarket_buckets",
 ]

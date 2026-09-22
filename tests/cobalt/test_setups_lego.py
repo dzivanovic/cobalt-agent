@@ -44,11 +44,15 @@ AWAITING_A_DAY: frozenset[str] = frozenset({"hitchhiker"})
 
 #: Evaluable shapes whose acceptance is STOPPED on an open ruling — never in
 #: `AWAITING_A_DAY` (prompt STEP-5):
-#: - backside, fashionably-late: X10 FAILED (on a day that recovers past the
-#:   open the backside shape never forms: the Extension's direction is
-#:   recomputed from last − open). The FINAL offers Grok's fix and Fable's fix
-#:   and chooses neither → ASK DESK. fashionably-late also reads the two
-#:   `per_indicator` holes (F1): at production defaults it cannot form.
+#: - backside, fashionably-late: X10 FAILED at the build; fix r3 F1 (R47,
+#:   Grok's fix) CLOSED it — both bind side through the mirrored frame and
+#:   X10 PASSES. They STAY here, announced (fix r3 report): re-run after F1,
+#:   neither forms on any committed scan even with the corpus's constructed
+#:   fills (`X7 backside: scans=392 formed=0`, `X7 fashionably-late:
+#:   scans=392 formed=0`), and at committed config their lifecycle holes
+#:   (`A-08`, `A-11`) are null. fashionably-late also reads the two
+#:   `per_indicator` holes (F1, R48): null in committed config until the desk
+#:   writes the assumed rows.
 AWAITING_A_RULING: frozenset[str] = frozenset({"backside", "fashionably-late"})
 
 

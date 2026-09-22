@@ -39,8 +39,9 @@ SYN_DATE = date(2026, 1, 6)
 #: The committed day's `ExtensionObservation` dumps, every scan, on the START
 #: code — D4 must leave every existing field byte-identical.
 PIN_EXTENSION_OBSERVATIONS = "86254c33003cf4767709ceb927cc96052c7ca6b96ce1e4e744287b62c98166b5"
-#: X10's result on this build (quoted in the report).
-X10_RESULT = "FAIL"
+#: X10's result on this build (quoted in the report). Fix r3 F1 (R47, Grok's
+#: fix: the side binds through the mirrored frame): was "FAIL".
+X10_RESULT = "PASS"
 
 
 def _sha(payload) -> str:

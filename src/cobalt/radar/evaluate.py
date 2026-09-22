@@ -128,7 +128,7 @@ from cobalt.taxonomy.tunables import TunableRow, TunableSource
 from .anatomy.bars import IncompleteBucket, WorkingBar, rth_only, working_bars
 from .anatomy.daily import DailySeries, NoDailyBars, htf_level_proximity
 from .anatomy.extension import ExtensionObservation, ExtensionParams
-from .anatomy.frame import Frame, SessionInputs, build_frame, minute_bars, premarket_buckets
+from .anatomy.frame import Frame, SessionInputs, binds_side_by_frame, build_frame, minute_bars, premarket_buckets
 from .anatomy.freshness import RvolObservation, daily_staleness, intraday_staleness
 from .anatomy.indicators import PRECISION as INDICATOR_PRECISION
 from .anatomy.indicators import InsufficientBars, WARMUP_CONVENTION
@@ -874,15 +874,18 @@ def _daily_ok(member: MemberInput, clock) -> bool:
 def _build_frames(
     member: MemberInput, closed_i1: Sequence[Bar], series, run: tuple[WorkingBar, ...], *, daily_ok: bool,
     tunables: Mapping[str, TunableRow], params: ExtensionParams, last_price: Decimal | None, clock,
+    bind_side: bool = False,
 ) -> dict[str, Frame]:
     """FINAL §2.1: one frame per side; the detectors run inside the frame.
-    §5: the seed is the complete premarket working buckets of `series`."""
+    §5: the seed is the complete premarket working buckets of `series`.
+    `bind_side`: fix r3 F1 (`frame.binds_side_by_frame`)."""
     premarket_i1, rth_i1 = minute_bars(closed_i1, as_of=member.as_of, clock=clock)
     session = SessionInputs(premarket=premarket_buckets(series.bars, clock), premarket_i1=premarket_i1,
                             rth_i1=rth_i1, departed=member.departed)
     return {
         side: build_frame(side, run, daily=member.daily, daily_ok=daily_ok, trade_date=member.trade_date,
-                          params=params, last_close=last_price, session=session, tunables=tunables)
+                          params=params, last_close=last_price, session=session, tunables=tunables,
+                          bind_side=bind_side)
         for side in ("long", "short")
     }
 
@@ -962,9 +965,10 @@ def evaluate_member(
         ).stale
     daily_ok = _daily_ok(member, clock)
     frames = _build_frames(member, closed_i1, series, run, daily_ok=daily_ok, tunables=tunables, params=params,
-                           last_price=last_price, clock=clock)
-    # R2-4.2 B: factor and seam observations ONCE, on the real bars.
-    ext, htf = frames["long"].extension, frames["long"].htf
+                           last_price=last_price, clock=clock, bind_side=binds_side_by_frame(td))
+    # R2-4.2 B: factor and seam observations ONCE, on the real bars (the
+    # detector's own Extension, also for a def that binds side by the frame).
+    ext, htf = frames["long"].observed, frames["long"].htf
 
     observations = _factor_observations(
         ext, member, intraday_stale=intraday_stale, daily_ok=daily_ok, last_price=last_price,

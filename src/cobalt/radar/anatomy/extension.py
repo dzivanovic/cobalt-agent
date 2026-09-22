@@ -85,7 +85,13 @@ class ExtensionObservation(BaseModel):
     unavailable: Literal["insufficient_bars", "incomplete_bucket", "catalyst_ref_unknown"] | None = None
 
 
-def detect_extension(run: Sequence[WorkingBar], params: ExtensionParams) -> ExtensionObservation:
+def detect_extension(
+    run: Sequence[WorkingBar], params: ExtensionParams, *, direction: Literal["up", "down"] | None = None,
+) -> ExtensionObservation:
+    """`direction` None = the run's sign (last close − session open), today's
+    rule. A given `direction` (fix r3 F1, R47) is the frame's side binding:
+    the Extension of that direction is read whatever the run's sign, and
+    path B counts only a distance moved in that direction."""
     base = dict(params=params)
     if not run:
         return ExtensionObservation(instantiated=None, state=None, unavailable="insufficient_bars", **base)
@@ -97,11 +103,13 @@ def detect_extension(run: Sequence[WorkingBar], params: ExtensionParams) -> Exte
     session_open, last_close = run[0].open, run[-1].close
     base.update(session_open=session_open, last_close=last_close)
     if last_close > session_open:
-        direction: Literal["up", "down"] | None = "up"
+        run_sign: Literal["up", "down"] | None = "up"
     elif last_close < session_open:
-        direction = "down"
+        run_sign = "down"
     else:
-        direction = None
+        run_sign = None
+    if direction is None:
+        direction = run_sign
 
     n = params.volume_ma_bars
     if len(run) < max(n + 1, ATR_PERIOD):
@@ -138,7 +146,7 @@ def detect_extension(run: Sequence[WorkingBar], params: ExtensionParams) -> Exte
             culminating_bar_ts=bar.ts, culminating_volume=bar.volume,
             culminating_body=bar.body, widest_prior_body=widest_prior, band=band, **base,
         )
-    if distance is not None and distance >= params.path_b_atr:
+    if distance is not None and distance >= params.path_b_atr and direction == run_sign:
         return ExtensionObservation(
             instantiated=None, state=None, path="B_only",
             unavailable="catalyst_ref_unknown", **base,
