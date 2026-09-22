@@ -10,7 +10,7 @@ THE LIST, string by string, is in `reports/stacked-deploy-draft-2026-09-22.md` `
 - 6 are byte for byte in `2026-09-19/53-deploy-d3.md`'s line and absent from `53`'s: `merge-base*`, `cd *`, `uv run pytest *`, `COBALT_ENV=dev uv run pytest *`, `COBALT_ENV=production uv run cobalt validate*` and `COBALT_ENV=dev uv run cobalt db migrate` (added by the desk 07:2x for STEP-2.3 (a2): `cobalt_dev` was never migrated after the archiver landed on production — the setups build's full dev run showed `relation "archive_progress" / "archive_incidents" does not exist`, 11 red; without the migrate the L68 with-DB gate is red for a reason that is not the stack's).
 - 9 are NEW: the ops worktree `rebase main` and `rebase --abort` pair; the three NAMED gate merges and the gate `merge --abort`; the gate worktree's `.env` `cp` and `rm`; and `merge --ff-only deploy/stacked-0922`.
 
-TWO of `53`'s strings are branch-named: `stale-marker rebase main` and `stale-marker rebase --abort`. His R39 (09-21 16:48) approved them for the "TUE 2026-09-22 evening deploy only", and today's R3 moves the deploy to daytime. So they stand for THIS run only on his approval row `R__A` below, with the nine NEW strings. The three denies are byte for byte `53`'s. The radar strings are carried because STEP-2.5's table MAY name the radar, and R3 lets it restart today. If the table does not name it, they are never run.
+TWO of `53`'s strings are branch-named: `stale-marker rebase main` and `stale-marker rebase --abort`. His R39 (09-21 16:48) approved them for the "TUE 2026-09-22 evening deploy only", and today's R3 moves the deploy to daytime. So they stand for THIS run only on his approval row `R10` below, with the nine NEW strings. The three denies are byte for byte `53`'s. The radar strings are carried because STEP-2.5's table MAY name the radar, and R3 lets it restart today. If the table does not name it, they are never run.
 
 # STACKED DEPLOY 2026-09-22 — DAYTIME, FROM 11:00 ET (R3) — `s2/stale-marker-0921` + `ops/2026-09-21`, ONE ff-merge of the gate branch `deploy/stacked-0922`
 
@@ -56,8 +56,8 @@ AUTHORIZATION — VERIFY IT YOURSELF BEFORE YOU RUN ANYTHING. The CTO desk wrote
     - L42: restarts derived by rule.
     - L54: rebase-then-ff; rollback = revert.
     - L35, L62/L63, L71.
-- **HIS APPROVAL OF THIS LAUNCH LINE** (L62) is row **R__A** of `<desk file>`. The desk fills that placeholder with the number of HIS approval row. It must carry his quoted word ("approved" or his equivalent) to the desk's ONE approval list, and that list names the NINE NEW strings AND the two `stale-marker rebase` strings.
-  - `grep -n "^| R__A " <desk file>` → the row must carry `merge --ff-only deploy/stacked-0922`, `ops-0921 rebase main` and `stacked-0922/.env`, plus his quoted word.
+- **HIS APPROVAL OF THIS LAUNCH LINE** (L62) is row **R10** of `<desk file>`. The desk fills that placeholder with the number of HIS approval row. It must carry his quoted word ("approved" or his equivalent) to the desk's ONE approval list, and that list names the NINE NEW strings AND the two `stale-marker rebase` strings.
+  - `grep -n "^| R10 " <desk file>` → the row must carry `merge --ff-only deploy/stacked-0922`, `ops-0921 rebase main` and `stacked-0922/.env`, plus his quoted word.
   - A DESK LAUNCH ROW with "NO WORDS OF HIS" does NOT count.
   - `git -C /Users/cobalt/cobalt log -1 --format=%H -S"merge --ff-only deploy/stacked-0922" -- "docs/40 - DevDocs/reports/cto-2026-09-22.md"` must be NON-EMPTY. Only the desk file counts: this prompt and the drafter's report quote the string and never satisfy the gate.
   - Missing → `FAILED: authorization mismatch — no approval of the new strings · rollback: not used`.
@@ -69,7 +69,7 @@ YOU CAN ALWAYS STOP. If in doubt, write `FAILED: <step> — <concern> · rollbac
 (a) While `.env` sits in the gate worktree, "stop" means removing it and proving it gone FIRST (STEP-2.3 (d)). Only then do you write the stop line.
 (b) From the first bootout on, a resident is DOWN. "Stop" then means STEP-5's safe state first.
 
-**PLACEHOLDER GATE — the first thing you do.** This file ships with two placeholder tokens: `R__A` (HIS approval row) and `R__L` (the desk's launch row). They appear in the AUTHORIZATION paragraph above and in this gate. The desk fills every occurrence before launching. Run exactly:
+**PLACEHOLDER GATE — the first thing you do.** This file ships with two placeholder tokens: `R10` (HIS approval row) and `R__L` (the desk's launch row). They appear in the AUTHORIZATION paragraph above and in this gate. The desk fills every occurrence before launching. Run exactly:
 `grep -n -E "R_[_]" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-22/05-stacked-deploy.md"`
 The bracket form is deliberate: it keeps this command from matching itself. It must print NOTHING and exit 1. One or more hits means the desk has not filled a slot. So does a placeholder still visible in your own launch line. Then the last line is `FAILED: placeholder — <the line numbers grep printed> — nothing touched · rollback: not used`; commit and stop. Quote the grep's exit status in the report either way.
 
