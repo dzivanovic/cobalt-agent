@@ -4,7 +4,11 @@ Prompt: `docs/40 - DevDocs/prompts/2026-09-21/65-setups-one-build.md` (re-issued
 
 ## §0 Headline
 
-- (run in progress — see `## CONTINUE`)
+- **BUILT `dd4a9b9`.** 9 of 9 steps are built on `setups/seven-0921`. Seven setups and rubberband run on one set of registries. Adding a setup is data only: the Lego test passes, the eighth def forms, and `ADDING-A-SETUP.md` matches the registries.
+- **Tests.** Offline `2419 passed / 0 failed` (baseline 2222). With-DB `540 passed / 0 failed`, 1 skip: the live-note proof, which the deploy runs.
+- **Experiments.** 22 PASS or RUN, 4 FAIL (X10, X13, X15, X22), 2 UNPROVEN (X3, X28).
+- **Can form in production today: rubberband only** (every assumed hole is null). Waiting on a day: hitchhiker, rubberband. Waiting on a ruling: backside, fashionably-late (X10), vwap-continuation (F1).
+- **ESCALATE: 12 always-items + 20 found.** The ASK DESK items are 4, 9, 12, 13, 15, 17 and 18. Main has moved to `7b09e10`, so the two-dot proofs also show `rules.yaml` from main's side (ESCALATE 20).
 
 ## L74
 
@@ -955,9 +959,167 @@ The committed real-shape days are ONE trade date with tickers FTFT and BGFI (`te
 - **fashionably-late:** X10 and F1 (its two `per_indicator` flat thresholds).
 - **vwap-continuation:** F1 (`dist.k.vwap`) at production defaults. It forms on the committed day only with this build's constructed fill.
 
+## CLOSE
+
+Branch tip `dd4a9b9` (before this report commit). Merge base `5b208a0`. Main moved during the run: `66e5ce1` at PREFLIGHT → `b28896d` → **`7b09e10`** at CLOSE (`git -C /Users/cobalt/cobalt branch`). Since the cut, main changed ONE non-docs path: `configs/cobalt/rules.yaml` (`97ff2cf docs(close): …`). Every two-dot row below that is not the branch's own comes from main's side, and is named as such.
+
+**Offline** — `uv run pytest -q tests/cobalt tests/taxonomy -p no:cacheprovider` (background), VERBATIM: `2419 passed, 361 skipped, 1 xfailed, 15 warnings in 421.65s (0:07:01)`.
+- `failed` 0.
+- `passed`: 2419 = BASELINE 2222 + 197 new offline tests. Counted step by step from each step's own suite line: STEP-1 +29, STEP-2 +51, STEP-3 +28, STEP-4 +21, STEP-5 +23, STEP-6 +14, STEP-7 +11, STEP-8 +12, STEP-9 +8. Every delta is that step's new test files, named at its SUITE.
+- `skipped` 361 vs BASELINE 351: +10 = this build's new with-DB tests, skipped offline (STEP-1 +5 in `test_rubberband_forms.py`, STEP-2 +5 in the writer / X23 / migration tests). NOT unchanged. No existing test was newly skipped; each STEP's SUITE line names its adds.
+
+**With-DB** — cp → `COBALT_ENV=dev uv run pytest -q -p no:cacheprovider -rs` over the prompt's four (`test_radar_cards_db.py`, `test_taxonomy_store.py`, `test_radar_score_migration.py`, `tests/experiments/setups_one`) + every with-DB file touched (`test_rubberband_forms.py`, `test_setups_registries.py`, `test_setups_d1.py`, `test_setups_hitchhiker.py`, `test_setups_d4.py`, `test_setups_nine_ema.py`, `test_setups_vwap_cont.py`, `test_setups_second_chance.py`, `test_setups_lego.py`, `test_setups_x5.py`, `test_assumed_store.py`, `test_replay_formations.py`, `test_replay_runner.py`, `test_radar_evaluate.py`, `test_radar_evaluate_cli.py`, `test_radar_audit_export.py`, `test_radar_anatomy.py`, `test_archiver_migrations.py`, `test_p4_migrations.py`, `test_radar_migration.py`, `test_tenancy.py`) → VERBATIM **`540 passed, 1 skipped in 1734.56s (0:28:54)`**, 0 failed. The skip, from `-rs`: `SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof` (gate 3, NOT RUN by design; the deploy runs it). Then `rm /Users/cobalt/cobalt-wt/setups-c1/.env` → `ls -la .env` → `ls: .env: No such file or directory`.
+- A first launch of a SHORTER set (13 files) was stopped by me after it started, because it left out the `test_setups_*` files. It was not a failure, and no result was read from it.
+
+**`git diff --stat main...HEAD`** (the branch's own side) → `94 files changed, 10897 insertions(+), 334 deletions(-)`. Every path is one named in STEP-1 … STEP-9:
+- source: `radar/anatomy/*`, `radar/formation/*`, `radar/evaluate*.py`, `radar/seam.py`, `radar/cli.py`, `radar/audit_export.py`, `cards/scoring.py`, `cards/store.py`, `replay/formations.py`, `taxonomy/{cli,loader,tunables,vault_loader}.py`, the 0013 migration pair + `db_migrations/__init__.py`;
+- tests, `tests/experiments/setups_one/`, and `configs/cobalt/taxonomy/tunables.yaml`;
+- DevDocs and this report.
+
+No other path. Two-dot `main` also lists main's own side: `configs/cobalt/rules.yaml` and the desk's docs, as `M` / `D`. Not the branch's.
+
+**EMPTY DIFFS** (each its own call; each "no output"):
+- `git diff main -- src/cobalt/aset/web.py`
+- `… src/cobalt/aset/radar_panel.py` (X24 PASS)
+- `… src/cobalt/archiver`
+- `… src/cobalt/vaultwrite`
+- `… src/cobalt/obsidian.py`
+- `… src/cobalt/vault.py`
+- `… src/cobalt/cards/radar.py`
+- `… src/cobalt/settings`
+- `… src/cobalt/radar/anatomy/leg.py` (X16)
+- `… src/cobalt/taxonomy/migrations`
+- `… configs/cobalt/radar.yaml`
+
+**`src/cobalt/db_migrations`**: EXACTLY one pair plus its registration.
+- `0013_tunables_slug_nullable.sql` (+23) and `0013_tunables_slug_nullable.rollback.sql` (+14). The rollback refuses while a NULL-slug row exists, else restores NOT NULL.
+- `__init__.py` (+11): FORWARD gains 0013 last, REVERSE gains it first, and the docstring says why 0012 is not a gap by accident.
+- Home: `src/cobalt/db_migrations/`. Number 0013. `0012` belongs to unmerged `bars/chunk-2-0920`.
+
+**`configs`**: three-dot `git diff --stat main...HEAD -- configs` → `configs/cobalt/taxonomy/tunables.yaml | 197 +++`, `1 file changed, 197 insertions(+)`.
+- The two-dot form adds `configs/cobalt/rules.yaml | 2 +-`, which is main's `97ff2cf`, not this branch.
+- In `tunables.yaml`: one hunk, `@@ -183,0 +184,197 @@`, a pure insert. No existing row changed. Every added row is `value: null`, `status: proposed`.
+- The 18 added keys: `anatomy.orientation.extension`, `slope_norm.bars`, `range.micro.touch_tolerance_atr`, `range.micro.bound_flat_slope_atr`, `leg.consolidation_max_retrace`, `extension.snapback_bars_cleared`, `catalyst_ref.resolver`, `leg.pre_test`, `extension.on_leg.form`, `levels.set`, `level.rejected.rule`, `range_break.retest_tolerance_atr`, `range_prior.rule`, `event.stop_hit.source`, `turn_candle.rule`, `frame.warmup_source`, `dayrange.session`, `vwap.anchor`.
+
+**`uv run cobalt jobs restarts main..HEAD`** — `RESTARTS: com.cobalt.aset com.cobalt.radar`. No `UNCLASSIFIED` row.
+- The branch's rows, VERBATIM:
+  - `configs/cobalt/taxonomy/tunables.yaml	M	resident reads	com.cobalt.aset,com.cobalt.radar`
+  - every `src/cobalt/radar/anatomy/*`, `radar/formation/{anchors,atoms,stops,triggers}.py`, `radar/evaluate.py`, `radar/seam.py`, `cards/scoring.py`, `cards/store.py`, `taxonomy/{loader,tunables,vault_loader}.py` → `static import reach	com.cobalt.aset,com.cobalt.radar`
+  - `radar/{audit_export,cli,evaluate_cli}.py`, `replay/formations.py`, `taxonomy/cli.py`, `db_migrations/__init__.py` → `static import reach	com.cobalt.radar`
+  - `radar/formation/__init__.py` → `static import reach	-`
+  - the 0013 pair → `non-Python src asset	-`
+  - every test file → `test/documentation; no resident	-`
+  - every DevDoc → `DOCS	-`
+- Main's side in the same two-dot range: `configs/cobalt/rules.yaml	M	no resident reads (one-shot: com.cobalt.prefill-daily,com.cobalt.prefill-drc)	-`, plus the desk's prompts / reports as `D` / `M` `DOCS`.
+- As expected: `com.cobalt.radar` and `com.cobalt.aset`. No `com.cobalt.replay` row appears.
+
+**`git log --oneline main..HEAD`** — 13 commits: the FAILED-PREFLIGHT report, one commit per step (9), and 3 wip (the RECOVERY RULE, at context resets):
+
+```
+dd4a9b9 test(setups): STEP-9 lego test — no setup name in src, rubberband on the registries, an eighth def from data, evaluability, ADDING-A-SETUP checked against the registries (R44, R45)
+48521a0 feat(setups): STEP-8 range-break lifecycle, events, prior range, sequence, turn_candle — second-chance (FINAL C7)
+e30bc8a feat(setups): STEP-7 trendline, dist, level set, rejected — vwap-continuation (FINAL C6)
+7233fbd feat(setups): STEP-6 pullback roles, touched, indicator_rejection, indicator stop, catalyst resolver A-13 — nine-ema-scalp (FINAL C5)
+dc5e594 feat(setups): STEP-5 extension lifecycle, indicator_cross, measured_fraction, recent_higher_low — backside, fashionably-late (FINAL C4)
+94897cc feat(setups): STEP-4 micro-range, pivots, opening-drive roles, range_break, consolidation_low — hitchhiker (FINAL C3b)
+6b0172e wip(setups-one): STEP-4 partial — T RED, pure detectors (pivots, micro_range, leg_roles), X13 + X15 run; stage wiring left
+9c286e9 feat(setups): STEP-3 shared indicators, session levels, premarket warm-up (FINAL C3a)
+c74436c feat(setups): STEP-2 registries, mirrored frame, interpreter shapes, assumed store — R2-3 B by X20, R2-4 B per row (FINAL C2)
+61a283f wip(setups-one): STEP-2 partial — assumed store, migration 0013, registries, frame, R2-4 B publication, closure; full-suite A1 sweep left
+a94fd17 wip(setups-one): STEP-2 partial — X20 run (NotNullViolation + rollback), R2-3 = B with migration 0013
+58aa823 feat(setups): STEP-1 rubberband can form — direction from anatomy, unclassified setup, geometry guard, untappable assumed_formation dot (FINAL C1, R40 B)
+4763db5 docs(report): setups one build — FAILED PREFLIGHT, session launched in auto mode (L29)
+```
+
+**L68 — shared paths with the named unmerged branches** (`git -C /Users/cobalt/cobalt log --oneline main..<branch> -- <paths>`). No branch is new since the drafter besides those named; `s2/stale-marker-0921` moved to `27eaa0c`.
+
+| branch | shared path | both commits |
+|---|---|---|
+| `bars/chunk-1a-0920` | `configs/cobalt/taxonomy/tunables.yaml` | theirs `c597bfe` · ours `61a283f` `9c286e9` `94897cc` `dc5e594` `7233fbd` `e30bc8a` `48521a0` |
+| `bars/chunk-1a-0920` | `tests/cobalt/test_tenancy.py` | theirs `7357efd` `5114af9` `beab8c7` `1404f23` · ours `c74436c` |
+| `bars/chunk-2-0920` | `configs/cobalt/taxonomy/tunables.yaml` | theirs `c798a0a` `c941d30` · ours as above |
+| `bars/chunk-2-0920` | `src/cobalt/db_migrations/__init__.py` (+ its DevDoc) | theirs `02d67a6` (0012) · ours `61a283f` `c74436c` (0013) |
+| `bars/chunk-2-0920` | `tests/cobalt/test_archiver_migrations.py`, `test_p4_migrations.py`, `test_radar_migration.py`, `test_radar_score_migration.py`, `test_tenancy.py` | theirs `02d67a6` · ours `61a283f` `c74436c` |
+| `bars/chunk-e-0920` | `tests/experiments/` (directory only; no shared file) | theirs: `a6488d1 … bab2d19` (`bars_chunk_e/`) · ours: `setups_one/` |
+| `s2/stale-marker-0921` | none (`test_radar_panel.py`, `test_radar_panel_cards.py` only; X24 PASS, not touched here) | — |
+| `ops/2026-09-21` | none (`test_jobs_restarts.py`, `test_backup.py`) | — |
+| `s2/rubberband-proof-0921` | none (`test_rubberband_card_proof.py`, a proof, never merging) | — |
+| queued stale-score design (`61-stale-score-tribunal.md`, no branch) | the same `radar/evaluate.py`, `cards/scoring.py`, `cards/store.py` functions | — (no branch yet; whichever lands second rebases) |
+
 ## ESCALATE
 
-(running list; the ALWAYS items (i)–(xii) are written at CLOSE)
+**ALWAYS items (CLOSE):**
+
+- (i) **`AWAITING_A_DAY`: rubberband, hitchhiker.** Each pin is closed by a DB-backed fixture-cut job and a BLIND expected-values seat BEFORE the deploy (FINAL [F-16] (1), [F-21]; R24: a stored pool day chosen because the DEFINITION forms on it, never because he traded or tagged it). The desk schedules it. X7 stored finds such days for hitchhiker (17 formed scans). Rubberband forms only as its relation variant (104).
+- (ii) **The blind step.** Every `DEF_WRITTEN_*` constant is the engine's value on the bars, pinned from the test's own failure output. Each is pending the checker houses' blind re-derivation (`66`).
+- (iii) **The deploy's own acceptance**, run from `~/cobalt`:
+  - X3 and gate 4 over the stored sessions;
+  - the live-note test with `COBALT_LIVE_VAULT_ROOT` set (SKIPPED here at every step; a SKIP there is RED);
+  - the stored-day X5;
+  - the daily legs of X7 / X18 (`htf_level_proximity` UNPROVEN);
+  - the NN#16 smoke.
+- (iv) **His chat "approve" at the deploy (L7, L61).** This is a trading-logic change for eight defs. Every card of the seven shows NO score for its life until he rules the rows (the untappable `assumed_formation` dot, R40 / R2-2 = B).
+- (v) **`EVALUATOR_VERSION` is bumped once (STEP-1).** Receipts written before the deploy are refused by replay and audit export from then on. The nightly replay's supported set (`replay/formations.py:81`) and `replay/runner.py`'s `SUPPORTED_EVALUATORS` follow it.
+- (vi) **R2-3 = B, as X20 decided it** (NotNullViolation + rollback on the NOT NULL slug).
+  - Migration: home `src/cobalt/db_migrations/`, number **0013** `0013_tunables_slug_nullable`, with a rollback that refuses while a NULL-slug row exists.
+  - Conflicts: it skips 0012, which belongs to unmerged `bars/chunk-2-0920`; whichever lands second keeps both in numeric order, and `__init__.py` is a shared file (L68 table). `cobalt db migrate` was NOT run against prod; dev only, through the tests.
+  - **R2-4 = B**, as R50 names it: B per row. Conflicts: none found.
+- (vii) **F1: the three `per_indicator` holes stay null** (fashionably-late's two flat thresholds; vwap-continuation's `dist.k.vwap`). These cannot form at production defaults: **fashionably-late** and **vwap-continuation** (`AWAITING_A_RULING: F1`). Backside and fashionably-late are also `AWAITING_A_RULING: X10`.
+- (viii) **THE ON / OFF DIAL.** No per-setup "discoverable or not" switch was built; the drafter's (A) holds, and none exists. The only switch is the global `radar.cards_enabled`. The smallest candidate is a design question for the owner / tribunal (`ADDING-A-SETUP.md` § Discoverable or not).
+- (ix) **The assumed note** (`1 - Trading/Assumed Defaults.md`, `tunables:assumed`).
+  - Who writes it: not this build (no vault write here). The writer is the desk's to name; this report names none.
+  - When: AFTER the reader ships ([F-09]; R50: the write FOLLOWS the reader's deploy).
+  - Owed: the writer's dev-vault proof (L28; X23 PASSED on `tmp_path` only).
+  - Until it is written, every numeric assumed hole is null, so ONLY rubberband (convention `A-01` alone) can form in production.
+- (x) **Every A1 re-point, one line each.** Old → new, with the FINAL tag, is in each step's `### A1` table. No assertion was removed and no skip / xfail was added, at any step.
+  - STEP-1 · `test_radar_evaluate.py` card `setup_ref`: `overextension` → `unclassified` [F-07].
+  - STEP-1 · `test_radar_evaluate.py` replay-numbers: `card_score` → `None` + `assumed_formation` (R2-2 = B).
+  - STEP-1 · `test_radar_evaluate.py` live-note gate 3 → registry-driven [F-16] (2).
+  - STEP-1 · `test_radar_audit_export.py` ×2: `card_score` → `None` + suppression named (R2-2 = B).
+  - STEP-1 · `test_radar_evaluate_cli.py` candidate harness: every published `card_score` → `None` (R2-2 = B).
+  - STEP-1 · `test_replay_runner.py` ×2: `s2p2.1` → `s2p2.2` (the ONE bump).
+  - STEP-1 · `test_replay_formations.py`: the with-trend fixture → `triggered`, and the count / price / side pins → the one real short (§1 A-01, §9 (5); 9 rows).
+  - STEP-1 · `test_rubberband_forms.py` X17 → the countertrend control.
+  - STEP-1 · `test_radar_cards_db.py` ×4 (with-DB): dots `+ 1` ×2, `card_score` → `None` ×2 (R2-2 = B).
+  - STEP-2 · `test_radar_anatomy.py` supported atoms: `registry.SUPPORTED_ATOMS` → `formation.atoms.ATOMS` (§2.5).
+  - STEP-2 · `test_rubberband_forms.py` T3 → the frame-coordinate patch + `by_side` (R2-4.1 B).
+  - STEP-2 · `test_rubberband_forms.py` T5: `A-01` → `anatomy.orientation.extension` (R2-2.2 B).
+  - STEP-2 · `test_rubberband_forms.py` T6 formed / non-formed: + the Formation fields, the `tunables_sha256` map, `without_e9_shapes`.
+  - STEP-2 · `test_setups_registries.py` Lego (ii): the three by-design normalisations.
+  - STEP-2 · `test_replay_formations.py` geometry guard → `by_side["short"]`.
+  - STEP-2 · migration tails / heads + `numbers == [1…11, 13]`: `test_archiver_migrations.py` ×4, `test_p4_migrations.py`, `test_radar_migration.py`, `test_radar_score_migration.py`, `test_tenancy.py` (R2-3 = B).
+  - STEP-3 · `test_radar_anatomy.py`: missing − `VWAP`; supported + 16 D1 atoms.
+  - STEP-3 · the Lego (ii) evaluation pins ×4, and the card pins ×2 + T6 formed: the D1 normalisation, and `tunables_sha256` without the four STEP-3 rows.
+  - STEP-3 · T6 non-formed: the same normalisation.
+  - STEP-4 · `test_radar_anatomy.py`: missing → {`Leg(pullback)`, `touched`}; supported + 10 D2 / D3 atoms.
+  - STEP-4 · `test_radar_evaluate.py` not-evaluable def → `Extension(day).state`.
+  - STEP-4 · `test_radar_evaluate_cli.py` replay filter → `Extension(day).state`.
+  - STEP-4 · the shipped-def pins → the shared `_served_later(ld)`.
+  - STEP-4 · the card pins: without STEP-4's three rows.
+  - STEP-4 · `test_setups_x5.py`, `test_x7_x18_stored.py`: each shape on its own merged rows.
+  - STEP-5 · `test_setups_registries.py`: the `Extension.state` domain + the four lifecycle states.
+  - STEP-5 · the E8 ∌ example → `{building, resuming}`.
+  - STEP-5 · `test_setups_d1.py` X22 → reads ⊆ the declared closure.
+  - STEP-5 · the card pins: without `extension.snapback_bars_cleared`.
+  - STEP-5 · `test_setups_lego.py`: minus `AWAITING_A_RULING`.
+  - STEP-6 · `test_radar_anatomy.py`: naming re-asserted on `Gap.size` / `trigger:sequence` / `…:turn_candle`; supported + 5 roles + `catalyst_ref`.
+  - STEP-6 · the card pins: without STEP-6's three rows.
+  - STEP-7 · `test_radar_anatomy.py` supported: + `Level_ref(resistance).rejected`.
+  - STEP-7 · the card pins: without `levels.set` / `level.rejected.rule`.
+  - STEP-8 · `test_radar_anatomy.py` naming: `turn_candle` → `low_of_day`; supported + the four RangeBreak atoms.
+  - STEP-8 · the card pins: without STEP-8's four rows.
+  - STEP-9 · none (tests-only step; its own new tests only).
+- (xi) **Every `ASK DESK`**, with the safe default taken:
+  - (4) should the health dot class skip `assumed_formation`? Unchanged.
+  - (9) X13: does A-05 change for ATR? Unchanged.
+  - (12) X10: Grok's fix or Fable's? Neither is built.
+  - (13) once A-08 is filled, should Rubberband's precondition hold through `reverting`, and should `Extension.state` declare A-05? As built.
+  - (15) should impulse / pullback carry a size rule? None.
+  - (17) are the `close_above` / `stop_hit` readings his? As built.
+  - (18) X22's closure gaps: fix before the deploy, or in a follow-up build? The deploy waits only if F1 is ruled first.
+- (xii) `MEMORY:` / `RULING:` lines: **none**.
+
+**Found in the run** (running list):
 
 1. **PREFLIGHT consumers not named by INDEX CARD 5** — `replay/runner.py:56`, `:219-223` (reads `SUPPORTED_EVALUATORS`; follows the STEP-1 update), `replay/models.py:263`, `radar/store.py:383-385`, `db_migrations/cli.py:111`, `cards/radar.py:55`, `:61`. None changed what a step must do.
 2. **The Lego baseline has two lines beyond the drafter's three** — `taxonomy/trade_def.py:637` (a schema comment naming a corpus example) and `radar/anatomy/registry.py:3` (the registry docstring). Recorded in the baseline with their reasons; STEP-9 (i) compares against the recorded set.
@@ -982,15 +1144,6 @@ The committed real-shape days are ONE trade date with tickers FTFT and BGFI (`te
     - (b) A trigger resolver's detector keys are outside the closure: vwap-continuation's `trendline_break` reads `pivot.n` and the three `range.micro.*` keys. Today no card is under-marked, because vwap-continuation cannot form at production defaults (F1). Once the assumed note fills `A-03` / `A-04` and F1 is ruled, it would be.
     - Repair: `closure_keys` gains the stage's always-read keys, and every trigger / stop resolver declares `TUNABLE_KEYS`. `ASK DESK: fix before the deploy, in a follow-up build? [08:xx]` — safe default: the deploy waits on it only if F1 is ruled first.
 19. **The prompt counts "the seven slugs + rubberband" as eight; the FINAL's scope (§0) lists seven slugs INCLUDING `rubberband`.** Lego (iv) counts the seven plus the eighth definition of (iii) as "the eight". Test (i)'s slug list is the FINAL's seven.
+20. **Main moved to `7b09e10` and carries `configs/cobalt/rules.yaml` (`97ff2cf`), which the branch does not.** Because of it, the two-dot proofs the prompt names (`git diff main -- configs`, `jobs restarts main..HEAD`) show that path as a change. It is main's side, not the branch's; the three-dot proofs above show the branch's side alone. Nothing was rebased or merged (L68). The deploy prompt should read `jobs restarts` over the merge result.
 
-## CONTINUE
-
-next: CLOSE.
-- The offline suite, then the with-DB set.
-- `git diff --stat main`; the empty diffs; `jobs restarts`; `git log`.
-- The L68 table; the ESCALATE always-items (i)–(xii).
-- The stop line, then the report commit.
-
-Rules still in force: file content only through Write / Edit; pins from a test's own failure output; long-form `git status` before a commit; no unlisted commands (scratch probes go in a pytest file under the job's tmp).
-
-(run in progress — step 9 of 9, next under ## CONTINUE)
+SETUPS ONE BUILD BUILT dd4a9b9 | on 7b09e10 | steps: 9 of 9 | offline 2419/0 (baseline 2222/0) | with-DB 540/0 (1 skip: live-note proof, the deploy's) | rubberband: proven | experiments 22/4/2 (FAIL X10 X13 X15 X22; UNPROVEN X3 X28) | migration 0013_tunables_slug_nullable | R2-3: B by X20 | R2-4: B per row | forms on a definition-written fixture: rubberband, hitchhiker, backside, fashionably-late, nine-ema-scalp, vwap-continuation, second-chance, example-lego-eighth | pins: AWAITING_A_DAY rubberband, hitchhiker; AWAITING_A_RULING backside, fashionably-late (X10), vwap-continuation (F1) | ESCALATE 32 (12 always + 20 found)
