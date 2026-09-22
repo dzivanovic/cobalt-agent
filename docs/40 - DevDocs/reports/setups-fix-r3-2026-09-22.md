@@ -168,9 +168,36 @@ None.
 OFFLINE → `2450 passed, 361 skipped, 1 xfailed, 15 warnings in 472.73s (0:07:52)` → **2450/0** = 2448 + 2 new F4 tests. No with-DB file touched.
 
 ### COMMIT
+`e7a2090 fix(setups): round 3 — F4 a FILLED card's health pills skip assumed_formation (R50)` — `git show --stat HEAD`: 4 files, `80 insertions(+), 2 deletions(-)`: `cards/health.md`, this report, `health.py`, `test_setups_fix_r3.py`.
+
+## F5
+R51 — `stop.buffer`'s unit label `cents` → `dollars`; value unchanged; no behaviour change.
+
+### T
+RED-on-`65c08a0`. New (1): the loaded `stop.buffer` row's unit is `TunableUnit.DOLLARS` and its value equals the committed file's (read from the YAML, never typed — L69). Run before C: `1 failed, 16 deselected in 0.13s`; RED line: `AttributeError: type object 'TunableUnit' has no attribute 'DOLLARS'`.
+THE ARITHMETIC PROOF (no new pin): `grep -n "raw = extreme + away \* buffer" src/cobalt/radar/anatomy/structure.py` → before C `104:    raw = extreme + away * buffer`, after C `104:    raw = extreme + away * buffer`; `git diff 65c08a0 -- src/cobalt/radar/anatomy/structure.py src/cobalt/radar/formation/stops.py` → no output. The existing stop pins, unchanged in text, GREEN after C (`-rA`): `PASSED tests/cobalt/test_setups_registries.py::test_x4_the_ten_cent_grid_and_the_stop_sweep_on_negated_extremes` · `nine-ema-scalp on the committed day: formed_scans=1 first=('long', '2026-01-06T15:36:00+00:00', '4.7930', '4.64')` · `vwap-continuation on the committed day: formed_scans=2 ticker=BGFI first=('long', '2026-01-06T20:04:00+00:00', '24.8120', '24.75')` · `second-chance on the committed day: formed_scans=55 ticker=FTFT first=('long', '2026-01-06T16:22:00+00:00', '5.3000', '5.21')` · the three definition-written path tests + hitchhiker's → `8 passed, 81 deselected in 42.63s`; `test_rubberband_forms.py` whole green (its `DEF_WRITTEN_*` stop prices) in the A1 run below.
+
+### C
+`src/cobalt/taxonomy/tunables.py`: `TunableUnit.DOLLARS = "dollars"` with one comment naming R51. `configs/cobalt/taxonomy/tunables.yaml`: the one `unit:` line of `stop.buffer`. The def-side `buffer: {type: fixed, cents: …}` spec key is NOT renamed (L45 — ESCALATE (iii)).
+
+### A1
+First full offline run after C: `5 failed, 2446 passed, 361 skipped, 1 xfailed` — the same five card-digest pins as F3 (the relabel moves `tunables_sha256` by construction).
+| test | old | new | row |
+|---|---|---|---|
+| `test_setups_registries.py` `_tunables_digests` | the start digest = committed rows minus the added keys | … and `stop.buffer`'s `unit` mapped back to `cents` (the label only; every pinned sha UNCHANGED in text) | F5 |
+| `test_setups_d1.py` `_tunables_digests` | same | same mapping | F5 |
+After: `102 passed, 6 skipped in 198.16s` over `test_rubberband_forms.py test_setups_d1.py test_setups_registries.py test_setups_fix_r3.py`; with-DB: `cp …` → `COBALT_ENV=dev uv run pytest -q -p no:cacheprovider -rs --color=no tests/cobalt/test_rubberband_forms.py tests/cobalt/test_setups_d1.py tests/cobalt/test_setups_registries.py tests/cobalt/test_setups_fix_r3.py tests/cobalt/test_radar_cards_db.py tests/cobalt/test_radar_evaluate.py tests/cobalt/test_taxonomy_store.py` → `162 passed, 1 skipped in 209.64s (0:03:29)` (the by-design live-note skip) → `rm` → `ls: /Users/cobalt/cobalt-wt/setups-c1/.env: No such file or directory`.
+
+### D
+`taxonomy/tunables.md` + one paragraph. ROLLBACK NOTE: `ADDING-A-SETUP.md` § Rolling back after the assumed note + one line — the code rollback and the `unit: dollars` line revert TOGETHER; `src/cobalt/taxonomy/store.py` stores only the vault's user rows (`INSERT INTO tunables (key, row, slug, loaded_at)` over `result.user_tunables`), and `stop.buffer` is an engine row, so the DB holds no copy to re-sync.
+
+### SUITE
+OFFLINE → `2451 passed, 361 skipped, 1 xfailed, 15 warnings in 476.25s (0:07:56)` → **2451/0** = 2450 + 1 new F5 test.
+
+### COMMIT
 (below)
 
 ## CONTINUE
-next: F4 COMMIT, then F5 (T drafted in the job tmp dir; the base roles pin captured: `F3 roles on the committed day: 160 observations sha=0922dadc29013941a7a2512e038ba9310e4fb791bc3a5e53bdd17a4bf5dd6323`)
+next: F5 COMMIT, then F6 (draft in the job tmp dir, pre-run green on the F1 tree) (T drafted in the job tmp dir; the base roles pin captured: `F3 roles on the committed day: 160 observations sha=0922dadc29013941a7a2512e038ba9310e4fb791bc3a5e53bdd17a4bf5dd6323`)
 
 (run in progress — row 2 of 6, next under ## CONTINUE)

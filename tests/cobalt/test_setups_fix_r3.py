@@ -357,3 +357,21 @@ def test_f4_card_health_carries_no_assumed_formation_pill_and_the_dot_stays_on_t
                         direction="long", intrabar=[], closed=[], ema9=None, t=_thresholds())
     assert [p.label for p in pills if p.klass == "dot"] == ["factor_a"]
     assert assumed_keys_of(dots) == ("a.key",)  # the dot itself is untouched; the card's ASSUMED mark carries it
+
+
+# =====================================================================
+# F5 — R51: `stop.buffer`'s unit label `cents` → `dollars` (the value is
+# unchanged; the engine already applies it as a price delta)
+# =====================================================================
+
+
+def test_f5_stop_buffer_is_labelled_dollars_with_the_committed_value():
+    import yaml
+
+    from cobalt.taxonomy.loader import TUNABLES_PATH, load_tunables
+    from cobalt.taxonomy.tunables import TunableUnit
+
+    committed = next(r for r in yaml.safe_load(TUNABLES_PATH.read_text())["tunables"] if r["key"] == "stop.buffer")
+    row = load_tunables().by_key["stop.buffer"]
+    assert row.unit == TunableUnit.DOLLARS
+    assert row.value == committed["value"]  # read from the file, never typed (L69)

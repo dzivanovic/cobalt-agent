@@ -34,6 +34,9 @@ class TunableUnit(str, Enum):
     MIN = "min"
     ATR = "atr"
     CENTS = "cents"
+    # A price delta in dollars (R51, fix r3 F5): `stop.buffer`'s 0.02 is applied
+    # as-is by `structure.structural_stop`, so its label reads dollars, not cents.
+    DOLLARS = "dollars"
     COUNT = "count"
     PCT = "pct"
     RATIO = "ratio"

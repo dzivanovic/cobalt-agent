@@ -34,6 +34,8 @@ Once `1 - Trading/Assumed Defaults.md` holds rows and `cobalt taxonomy load` has
 2. Then roll the code back.
 3. Then roll migration 0013 back.
 
+Fix r3 F5 (R51): main's `TunableUnit` has no `dollars`, so the code rollback and `stop.buffer`'s `unit: dollars` line revert TOGETHER (one `git revert` range). The DB keeps no copy of that row (`taxonomy load` stores only the vault's rows, and `stop.buffer` is an engine row), so the rollback's `taxonomy load` has nothing of it to re-sync.
+
 Why: code older than this build has no `assumed` in `TunableSource` (`ruling`, `sheet`, `dwv` only), so while one assumed row is loaded every scan's tunables read fails on it. And 0013's reverse refuses while any `"user".tunables` row has `slug IS NULL` (a global assumed default) — a rollback never deletes the trader's rows.
 
 ## When a definition asks for a brick that does not exist

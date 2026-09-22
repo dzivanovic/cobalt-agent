@@ -31,7 +31,7 @@ tunables:
   # --- stop buffer (ruled 09-03: tunable, not a Pydantic constant) -------
   - key: stop.buffer
     value: 0.02
-    unit: cents
+    unit: dollars
     scope: global
     dynamic: false
     status: solidified

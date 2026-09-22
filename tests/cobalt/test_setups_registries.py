@@ -112,8 +112,9 @@ def _tunables_digests() -> tuple[str, str]:
     rows = {k: row.model_dump(mode="json") for k, row in sorted(sup.engine_tunables().items())}
     defaults = sup.defaults().model_dump(mode="json")
     new = canonical_sha256({"rows": rows, "defaults": defaults})
-    old = canonical_sha256({"rows": {k: v for k, v in rows.items() if k not in {CONVENTION_KEY, *STEP3_KEYS}},
-                            "defaults": defaults})
+    start = {k: v for k, v in rows.items() if k not in {CONVENTION_KEY, *STEP3_KEYS}}
+    start["stop.buffer"] = {**start["stop.buffer"], "unit": "cents"}  # fix r3 F5 (R51): the label only, mapped back
+    old = canonical_sha256({"rows": start, "defaults": defaults})
     return new, old
 PIN_EVALUATIONS = {
     "countertrend": "fd2f49725ecd80817bfacd857fc349817b7c75a462992c1a0c567e3932b78ad8",
