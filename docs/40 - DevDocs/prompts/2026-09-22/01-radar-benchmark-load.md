@@ -26,7 +26,7 @@ P3 `grep -n "" /Users/cobalt/cobalt/data/backups/radar-benchmark-2026-09-22/rada
 ```
 Any other content → `FAILED: file mismatch — <what>` (the `--sha256` gate in STEP 1 is the binding byte check — settings/cli.py:84-100 hashes the file before it parses; this is the human-readable one for the report).
 P4 `git status` (long form, not `--porcelain`) → record verbatim. Expected: only report/machine-written files dirty (e.g. `docs/40 - DevDocs/reports/seat-usage.md`), no merge markers ("You have unmerged paths", "still merging", "rebase in progress"). Anything suggesting another hub is mid-operation on `~/cobalt` → `FAILED: main not clean — <what>`.
-P5 THE HOUSE-CHECK GATE (L67 floor, not re-asked of Dejan): read the LAST NON-BLANK line of `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-benchmark-load-review-2026-09-22.md`. It must begin `RADAR BENCHMARK LOAD REVIEW DONE` (not `FAILED`) and its `blockers:` count must be 0. File missing, last line not that shape, or blockers > 0 → `FAILED: house check gate — <what the line actually says>`. Quote the line verbatim either way.
+P5 THE HOUSE-CHECK GATE (L67 floor, not re-asked of Dejan): read the LAST NON-BLANK line of `/Users/cobalt/cobalt-wt/agy-trial/scratch/tribunal-bars-0920/radar-benchmark-check/REVIEW.md`. It must begin `RADAR BENCHMARK LOAD REVIEW DONE` (not `FAILED`) and its `blockers:` count must be 0. File missing, last line not that shape, or blockers > 0 → `FAILED: house check gate — <what the line actually says>`. Quote the line verbatim either way.
 GATE: all of P0–P5 pass → `CONTINUE: step 1`. Any FAILED above stops here; nothing was touched.
 
 ## 1. `--dry-run` FIRST (rule string 1 — exact command, no variation)
