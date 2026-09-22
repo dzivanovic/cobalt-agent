@@ -24,16 +24,23 @@ from cobalt.radar.anatomy.registry import evaluability
 #: Evaluable setup shapes that form on NO scan of the committed real-shape
 #: day, by setup slug. Closed only by a DB-backed fixture-cut job + a blind
 #: expected-values seat (FINAL [F-16] (1), [F-21]).
-#: - rubberband: its full shape carries the day-1 HTF avoid, which is True on
-#:   the committed day (proof ESCALATE 2) — `avoided` on every scan the
-#:   relation path forms on.
+#: - rubberband: CLOSED 2026-09-22 — forms on the cut fixture
+#:   (`tests/fixtures/radar/bars-setups-rubberband.real-shape.json` +
+#:   `membership-setups-rubberband.real-shape.json` +
+#:   `daily-bars-setups-rubberband.real-shape.csv`, pinned in
+#:   `test_setups_fixture_cut.py`); its full shape still carries the day-1
+#:   HTF avoid and is still `avoided` on the OLD committed FTFT/BGFI day, so
+#:   `_forms_on_a_committed_day` below also checks the cut fixture.
 #: - hitchhiker (STEP-4): evaluable; on FTFT its opening drive reads
 #:   `consolidation` on 22 scans and a micro-Range instantiates on 68, but on
 #:   no scan do the band and the upper-third preconditions hold with them (a
 #:   False precondition, never an unknown); BGFI is stale by design. Its path
 #:   forms on the definition-written day and its mirror
-#:   (`test_setups_hitchhiker.py::test_hitchhiker_path_*`).
-AWAITING_A_DAY: frozenset[str] = frozenset({"rubberband", "hitchhiker"})
+#:   (`test_setups_hitchhiker.py::test_hitchhiker_path_*`). The 2026-09-22
+#:   fixture-cut job tried all 6 stored pool days available and none forms
+#:   it on the production-synced definition (report:
+#:   `docs/40 - DevDocs/reports/setups-fixture-cut-2026-09-22.md`); pin STAYS.
+AWAITING_A_DAY: frozenset[str] = frozenset({"hitchhiker"})
 
 #: Evaluable shapes whose acceptance is STOPPED on an open ruling — never in
 #: `AWAITING_A_DAY` (prompt STEP-5):
@@ -53,8 +60,26 @@ def corpus(tmp_path_factory):
     return loaded
 
 
-def _forms_on_a_committed_day(shape, ld) -> bool:
-    return any(ev.evaluation == "formed" for ticker in shape.tickers for _, ev in shapes.every_scan(ld, ticker))
+#: Closed slugs' cut-day formation check (STEP-4 of `12-setups-fixture-cut.md`):
+#: a second grid over each closed slug's own real-shape cut fixture, through
+#: the real loaders and the replay's own scan grid (`test_setups_fixture_cut`'s
+#: `_formations`) — an `every_scan`-style path, just over the cut day instead
+#: of the OLD committed FTFT/BGFI day. So gate 2 still fails if a closed
+#: slug's cut fixture stops forming, or its pin is removed unannounced.
+def _rubberband_forms_on_its_cut_day(ld) -> bool:
+    import test_setups_fixture_cut as cut
+
+    return bool(cut._formations(ld))
+
+
+CUT_DAY_CHECKS = {"rubberband": _rubberband_forms_on_its_cut_day}
+
+
+def _forms_on_a_committed_day(key, shape, ld) -> bool:
+    if any(ev.evaluation == "formed" for ticker in shape.tickers for _, ev in shapes.every_scan(ld, ticker)):
+        return True
+    check = CUT_DAY_CHECKS.get(key)
+    return bool(check and check(ld))
 
 
 def test_awaiting_a_ruling_members_are_evaluable_and_form_on_no_committed_scan(corpus):
@@ -65,7 +90,7 @@ def test_awaiting_a_ruling_members_are_evaluable_and_form_on_no_committed_scan(c
     for key in sorted(AWAITING_A_RULING):
         shape, ld = corpus[key]
         assert evaluability(ld.definition).evaluable, (key, evaluability(ld.definition).missing_atoms)
-        assert not _forms_on_a_committed_day(shape, ld), key
+        assert not _forms_on_a_committed_day(key, shape, ld), key
 
 
 def test_vwap_continuation_without_its_engine_fill_forms_on_no_committed_scan(tmp_path):
@@ -78,7 +103,7 @@ def test_vwap_continuation_without_its_engine_fill_forms_on_no_committed_scan(tm
     ld = shapes.load_note(tmp_path, "example-fix-vwap-committed-rows", shape.mapping())
     assert sup.engine_tunables()["dist.k.vwap"].value is None
     assert evaluability(ld.definition).evaluable, evaluability(ld.definition).missing_atoms
-    assert not _forms_on_a_committed_day(shape, ld)
+    assert not _forms_on_a_committed_day("vwap-continuation", shape, ld)
 
 
 def test_every_unlocked_setup_shape_is_evaluable(corpus):
@@ -95,7 +120,7 @@ def test_registry_evaluable_implies_forms_or_awaits_a_day(corpus):
     for key, (shape, ld) in corpus.items():
         if not evaluability(ld.definition).evaluable or key in AWAITING_A_RULING:
             continue
-        if not _forms_on_a_committed_day(shape, ld):
+        if not _forms_on_a_committed_day(key, shape, ld):
             awaiting.add(key)
     assert awaiting == set(AWAITING_A_DAY)
 
