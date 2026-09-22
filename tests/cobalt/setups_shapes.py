@@ -313,6 +313,36 @@ def late_mapping() -> dict[str, Any]:
     return mapping
 
 
+def pullback_to_ema_mapping() -> dict[str, Any]:
+    """The pullback-to-EMA9 SHAPE (nine-ema-scalp's): the pool admission; the
+    catalyst read (`catalyst_ref`, served by `A-13`); the morning move with the
+    trade; a pullback that touches the EMA9 while price holds above the EMA21;
+    the EMA9 rejection trigger; the EMA21 stop at entry; the too-big-a-move-
+    before-the-test avoid and a human text avoid."""
+    mapping = example_mapping()
+    mapping.update(
+        valid_setups=[{"setup_ref": "range_break", "relation": "with_trend"},
+                      {"setup_ref": "volatility_in_range", "relation": "with_trend"}],
+        preconditions=[
+            {"expr": "InPlay.state == active"},
+            {"expr": "catalyst_ref != null"},
+            {"expr": "Leg(opening_drive OR impulse).direction == trade_direction"},
+            {"expr": "Leg(pullback) touched EMA9 AND price > EMA21"},
+        ],
+        trigger={"type": "indicator_rejection", "params": {"indicator": "EMA9", "contact": ["touch", "penetrate"]},
+                 "confirmation_policy": {"type": "close_through"}},
+        avoid=[{"expr": "Extension.instantiated on Leg(pre_test)"}, {"text": "human-only read of the bids"}],
+        quality_factors=sup.ANATOMY_FACTORS, preferred_windows=["morning"],
+        preferred_windows_ref="anatomy: the pullback after the morning move",
+    )
+    mapping.pop("radar_watch", None)
+    mapping["stop"]["placement"] = {"type": "indicator", "indicator": "EMA21",
+                                    "buffer": {"type": "fixed", "cents": {"value": "cfg(stop.buffer)",
+                                                                          "dynamic": False}},
+                                    "snapshot": "at_entry"}
+    return mapping
+
+
 def drive_then_range_rows() -> list[dict]:
     # L31 / ADR-0008 D5 (`tests/taxonomy/test_names_rule.py`): a per-trade key
     # in the repo is an `example_` key — the note slug is `example-…` for it.
@@ -350,6 +380,13 @@ SHAPES: dict[str, Shape] = {
         engine=D4_CONSTRUCTED,
         notes="Extension reverting/backside + EMA9 sloping, VWAP flat; EMA9 crosses above VWAP; "
               "measured_fraction(entry, turn_low); flat-between avoid + a human text avoid",
+    ),
+    "nine-ema-scalp": Shape(
+        note_slug="example-pullback-to-ema",
+        mapping=pullback_to_ema_mapping,
+        engine=D4_CONSTRUCTED,
+        notes="pool admission + catalyst_ref (A-13); morning move with the trade; pullback touches EMA9 above "
+              "EMA21; indicator_rejection EMA9; indicator stop EMA21 at_entry; Extension-on-pre_test avoid",
     ),
 }
 

@@ -51,7 +51,8 @@ SCAN0 = shapes.SCAN0
 STEP3_KEYS = ("dayrange.session", "frame.warmup_source", "slope_norm.bars", "vwap.anchor")
 #: + the rows later steps add (each moves the digest by construction).
 ADDED_KEYS = (*STEP3_KEYS, "leg.consolidation_max_retrace", "range.micro.bound_flat_slope_atr",
-              "range.micro.touch_tolerance_atr", "extension.snapback_bars_cleared")
+              "range.micro.touch_tolerance_atr", "extension.snapback_bars_cleared",
+              "catalyst_ref.resolver", "leg.pre_test", "extension.on_leg.form")
 STEP3_CONVENTIONS = ("dayrange.session", "frame.warmup_source", "vwap.anchor")
 
 

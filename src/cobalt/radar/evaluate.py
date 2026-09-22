@@ -110,9 +110,12 @@ from cobalt.taxonomy.predicate import (
     InTest,
     Node,
     Not,
+    Null,
     Number,
     Or,
+    Qualified,
     Quantity,
+    Relation,
     Ref,
     SetLiteral,
     Symbol,
@@ -128,11 +131,20 @@ from .anatomy.frame import Frame, SessionInputs, build_frame, minute_bars, prema
 from .anatomy.freshness import RvolObservation, daily_staleness, intraday_staleness
 from .anatomy.indicators import PRECISION as INDICATOR_PRECISION
 from .anatomy.indicators import InsufficientBars, WARMUP_CONVENTION
+from .anatomy.leg_roles import PRE_TEST_CONVENTION
 from .anatomy.session_levels import DAYRANGE_CONVENTION, VWAP_CONVENTION
 from .anatomy.registry import evaluability
 from .anatomy.structure import StructuralStop, TrackedExtreme, TriggerLevel
 from .formation.anchors import anchor_for
-from .formation.atoms import ATOMS, AtomValue, unit_mismatch
+from .formation.atoms import (
+    ATOMS,
+    CATALYST_CONVENTION,
+    ON_LEG_CONVENTION,
+    RELATIONS,
+    AtomValue,
+    bound_direction,
+    unit_mismatch,
+)
 from .formation.stops import StopOutcome, stop_resolver
 from .formation.triggers import TriggerOutcome, trigger_resolver
 from .seam import AtomOutcome, DeskShadow, DeskShadowEntry, RadarScoreDetail, SeamObservation, validate_atom
@@ -202,8 +214,13 @@ def _value(node: Node, atoms: Mapping[str, AtomValue], cfg: Callable[[str], Any]
     """-> ("value", python value) | ("null", None) | ("unknown", reason)."""
     if isinstance(node, Number):
         return "value", node.value
+    if isinstance(node, Null):
+        return "null", None
     if isinstance(node, Symbol):
-        return "value", node.name
+        bound = bound_direction(node)  # `trade_direction` is the frame's side (FINAL §4)
+        return "value", bound if bound is not None else node.name
+    if isinstance(node, Ref) and bound_direction(node) is not None:
+        return "value", bound_direction(node)  # `opposite(…)` / `against(…)`
     if isinstance(node, Cfg):
         raw = cfg(node.key)
         if raw is None:  # a null row is unknown, named — never compared (STEP-5)
@@ -313,6 +330,57 @@ def _between(node: Between, context: Mapping[str, Any] | None, unknowns: set[str
     return flat_between(norm, start=start, end=end, window=window, threshold=threshold)
 
 
+def _touched(node: Relation, context: Mapping[str, Any] | None, unknowns: set[str]) -> bool | None:
+    """`touched(Leg, indicator)` (taxonomy §3.1; STEP-6): the leg's extreme
+    reached the indicator on one of its bars — a down leg's low at or under
+    it, an up leg's high at or over it (contact, not proximity)."""
+    from .formation.atoms import _touched_gaps
+
+    gaps = _touched_gaps(node)
+    if context is None or gaps:
+        raise Unsupported(min(gaps) if gaps else "touched", "touched needs a served leg and indicator")
+    frame = context["frame"]
+    roles = frame.objects["pullback_roles"]
+    leg = roles.pullback if render(node.left) == "Leg(pullback)" else (
+        roles.before if roles.before_role == "impulse" else None)
+    if leg is None:
+        return False  # no such leg: nothing touched
+    values = frame.objects["series"](render(node.right))
+    seen = False
+    for i, bar in enumerate(frame.run):
+        if not (leg.start_ts <= bar.ts <= leg.end_ts) or values[i] is None:
+            continue
+        seen = True
+        if (bar.low <= values[i]) if leg.direction == "down" else (bar.high >= values[i]):
+            return True
+    if not seen:
+        unknowns.add("insufficient_seed")
+        return None
+    return False
+
+
+def _on(node: Qualified, context: Mapping[str, Any] | None, unknowns: set[str]) -> bool | None:
+    """`Extension.instantiated on Leg(pre_test)` (`A-15`, convention
+    `extension.on_leg.form`; STEP-6): the Extension detector run over the
+    leg's bars — `Leg(pre_test)` is the run from the open to the pullback
+    (`A-14`). No pullback → no pre-test move → False."""
+    from .anatomy.extension import detect_extension
+    from .formation.atoms import _on_gaps
+
+    gaps = _on_gaps(node)
+    if context is None or gaps:
+        raise Unsupported(min(gaps) if gaps else "on", "on needs a served subject and leg")
+    frame = context["frame"]
+    bars = frame.objects["pre_test_bars"]
+    if not bars:
+        return False
+    ext = detect_extension(bars, frame.extension.params)
+    if ext.instantiated is None:
+        unknowns.add(ext.unavailable or "insufficient_bars")
+        return None
+    return bool(ext.instantiated)
+
+
 def evaluate_node(
     node: Node, atoms: Mapping[str, AtomValue], cfg: Callable[[str], Any], consulted: set[str], unknowns: set[str],
     *, units: Callable[[str], str | None] | None = None, context: Mapping[str, Any] | None = None,
@@ -331,6 +399,10 @@ def evaluate_node(
         return None if any(r is None for r in results) else True
     if isinstance(node, Between):
         return _between(node, context, unknowns)
+    if isinstance(node, Relation) and node.op == "touched":
+        return _touched(node, context, unknowns)
+    if isinstance(node, Qualified) and node.op == "on":
+        return _on(node, context, unknowns)
     if isinstance(node, Or):
         results = [evaluate_node(op, atoms, cfg, consulted, unknowns, **kw) for op in node.operands]
         if any(r is True for r in results):
@@ -353,6 +425,8 @@ def evaluate_node(
             if state == "unknown":
                 unknowns.add(value or "unavailable")
                 return None
+        if ls == "null" and rs == "null":
+            return node.op == "=="  # both absent: equal (STEP-6, `x != null`)
         if ls == "null" or rs == "null":
             return node.op == "!="
         try:
@@ -616,6 +690,10 @@ CONVENTION_LABELS: dict[str, str] = {
     WARMUP_CONVENTION: "premarket_complete_buckets_else_rth_only",  # A-05, `indicators.seeded`
     DAYRANGE_CONVENTION: "rth_high_low_since_open",  # A-06, `session_levels.day_range`
     VWAP_CONVENTION: "rth_anchored_typical_price_i1",  # A-12, `session_levels.vwap`
+    # STEP-6 (C5).
+    CATALYST_CONVENTION: "radar_in_play_admission",  # A-13, the `catalyst_ref` resolver (FINAL §6)
+    PRE_TEST_CONVENTION: "session_open_to_pullback_start",  # A-14, `leg_roles.pre_test_bars`
+    ON_LEG_CONVENTION: "extension_detector_over_leg_bars",  # A-15, `evaluate._on`
 }
 
 
@@ -630,6 +708,8 @@ def _conventions(td: TradeDef) -> set[str]:
         for atom in predicate.required_atoms:
             if atom in ATOMS:
                 conventions |= set(ATOMS[atom].conventions)
+            elif atom in RELATIONS:  # STEP-6: a relation's resolver declares its own
+                conventions |= set(RELATIONS[atom].conventions)
     return conventions
 
 

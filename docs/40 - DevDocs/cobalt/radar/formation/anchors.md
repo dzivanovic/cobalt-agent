@@ -7,4 +7,6 @@ Added 2026-09-22 in STEP-4 of the setups one build (FINAL §2.4: `extension_dire
 - **`Extension`** is today's anchor, byte-identical: the culminating bar, and "no culminating bar to form on" otherwise. The stage applies A-01 to it in frame terms.
 - **`Range(micro)`** is the live micro-Range's `instantiated_ts`. Its direction is the long-side text's trade side, `up` in frame coordinates, so the mirrored frame's formation is a short. With no instantiated Range the note is "no instantiated micro-Range to form on".
 
+**2026-09-22 (STEP-6):** `Leg(pullback)` anchors at the pullback's last bar, direction `up` in frame coordinates. It comes after `Extension` and `Range(micro)` in the table, so a def that names those objects still hangs on them.
+
 Adding an anchor for a new setup is one row here. The stage, the card and the registry are untouched.

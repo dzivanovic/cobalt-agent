@@ -588,6 +588,95 @@ No assertion was removed, and no skip or xfail was added.
   - Its experiment lines, VERBATIM: `X7 stored: sessions=10 grid=30min {'rubberband': {'scans': 7200, 'both_sides': 0, 'formed': 0}, 'hitchhiker': {'scans': 7200, 'both_sides': 0, 'formed': 17}, 'backside': {'scans': 7200, 'both_sides': 0, 'formed': 0}, 'fashionably-late': {'scans': 7200, 'both_sides': 0, 'formed': 7}, 'rubberband-without-htf-avoid': {'scans': 7200, 'both_sides': 0, 'formed': 104}}` → **X7 stored backside / fashionably-late: PASS.** (Fashionably-late formed on 7 grid scans, with this build's constructed F1 fills.) X18 stored is unchanged (`0 / 0`, htf UNPROVEN). X1, X2, X13 and X15 are unchanged from their first runs.
 - rm → `ls -la .env` → `ls: .env: No such file or directory`.
 
+### COMMIT
+
+`dc5e594 feat(setups): STEP-5 extension lifecycle, indicator_cross, measured_fraction, recent_higher_low — backside, fashionably-late (FINAL C4)`. `git show --stat HEAD`: 21 files, 1162 insertions(+), 50 deletions(-); every path is one named above. Long-form `git status` came before it.
+
+## STEP-6
+
+C5: D3's pullback / impulse / pre_test roles, `touched`, `indicator_rejection`, the `indicator` stop, `Extension … on Leg(x)`, the bound symbols, and the catalyst resolver `A-13` → the pullback-to-EMA9 setup (nine-ema-scalp) (FINAL §3 D3, §4, §6; R2-2.4 B).
+
+### T (RED)
+
+New: `tests/cobalt/test_setups_nine_ema.py`. It holds:
+
+- X26 first;
+- the `catalyst_ref` row and its convention row, and Extension path B untouched;
+- three-valued `null`, the bound symbols, `touched` / `on`, `indicator_rejection` / `indicator`;
+- the roles on a definition-written day: a flat premarket, a wide, slowly rising impulse (no Extension), a pullback that reaches the EMA9 above the EMA21, and one rejection bucket;
+- the per-setup acceptance and the path tests, X7, X11.
+
+The corpus gains `nine-ema-scalp` (`example-pullback-to-ema`). Run on the START code (`dc5e594`): **9 failed, 4 passed**. The 4 are X26, the path-B guard, X7 and X11, vacuous with nothing served. RED lines, one per kind:
+
+| test | RED |
+|---|---|
+| the resolver row | `KeyError: 'catalyst_ref'` |
+| `null` | `cobalt.radar.evaluate.Unsupported: operand shape 'null' is not evaluable in S2` |
+| bound symbols | `AssertionError: ('Leg(opening_drive OR impulse).direction', 'Leg(pullback).direction', 'opposite(trade_direction)')` |
+| relations | `AssertionError: assert {'on', 'touched'} <= {'between'}` |
+| trigger | `KeyError: <TriggerType.INDICATOR_REJECTION: 'indicator_rejection'>` |
+| roles | `KeyError: 'Leg(pullback).direction'` |
+| the shape / its paths | `AssertionError: ('Leg(opening_drive OR impulse).direction', 'Leg(pre_test)', 'Leg(pullback)', 'Unsupported(null)', 'catalyst_ref', 'on', …)` |
+
+The committed-day formation test was added once the shape formed. Its four constants were `"PIN"`, and the failure printed them: `AssertionError: assert ('long', '202...7930', '4.64') == ('PIN', 'PIN', 'PIN', 'PIN')`.
+
+Own-test defect: the first impulse was 12 buckets, too short for the Extension detector, so the `on Leg(pre_test)` avoid was honestly unknown. It is now 24 buckets, still small against its own ATR.
+
+### X
+
+- **X26 (FIRST): PASS.** VERBATIM: `X26: ValidationError: 1 validation error for AtomOutcome | assumed`. The closed model refuses the mark, and `detail()` never passes `assumed` → R2-2.4's premise holds. The mark rides the `assumed_formation` dot: the path test asserts `catalyst_ref.resolver ∈ Formation.assumed_keys`.
+- **Per-setup acceptance, nine-ema-scalp (FINAL §9 gates 1–5, [F-16] (1)–(5)):**
+  - (1) It FORMS on the committed day. `nine-ema-scalp on the committed day: formed_scans=1 first=('long', '2026-01-06T15:36:00+00:00', '4.7930', '4.64')` → `DEF_WRITTEN_NINE_EMA_SCALP_{SIDE, FORMED_BAR, TRIGGER, STOP}` = long, 15:36 UTC, 4.7930, 4.64, each marked `# engine at STEP-6; a checker house re-derives it blind (66, [F-16] (1))`.
+  - (2) The property holds, and nine-ema-scalp is NOT in `AWAITING_A_DAY`.
+  - (3) The live-note test: NOT RUN (skipped by design; the deploy runs it and a SKIP is RED — [F-16] (2)).
+  - (4) The shape is evaluable, with the tape read human (L11: `human_predicates == 1`).
+  - (5) The geometry guard holds, asserted.
+  - The definition-written path forms long: trigger = the rejection close 10.28, stop = `structural_stop(EMA21 at entry, long, 0.02)`. A departed member does not form.
+- **X1's second reading** (FINAL: "X1 decides whether the def's early window is reachable"). The def's preferred windows are `9 EMA Scalp.md:94`, cited by line only (L32). X1's STEP-3 share (stored names): **0.813 have ≥ 9 and 0.65 have ≥ 21 complete premarket 2m buckets by 09:30**.
+  - So on about two thirds of stored name-sessions, EMA21 carries a seeded value from the open, and the early window is reachable there. On the rest, EMA21 waits for the RTH-only warm-up (~10:12 ET, E7).
+  - The POOL share is UNPROVEN in the worktree (ESCALATE 7).
+- **X7 offline:** `X7 nine-ema-scalp: scans=392 formed=1 both_sides=0` → PASS. Stored half: SUITE.
+- **X11:** `X11 nine-ema-scalp: atoms=7 failures=[]` → PASS (no new seam reason).
+- **X5:** `X5 offline: defs=7 frames=2 members=50 runs_s=[4.31, 4.3, 4.3] p95~max=4.31s budget=100.0s` → PASS.
+
+### C
+
+| file | change |
+|---|---|
+| `src/cobalt/radar/anatomy/leg_roles.py` | `PullbackRoles`, `pullback_roles`, `pre_test_bars`, `PRE_TEST_CONVENTION` (`A-14`) |
+| `src/cobalt/radar/anatomy/frame.py` | the role atoms, `catalyst_ref` (`A-13`: admitted → True, departed → null), objects `pullback_roles`, `pre_test_bars` |
+| `src/cobalt/radar/formation/atoms.py` | the role rows; `catalyst_ref` (conventions `catalyst_ref.resolver`); `RELATIONS` `touched`, `on` (conventions `leg.pre_test`, `extension.on_leg.form`); `RelationResolver.conventions`; `BOUND_SYMBOLS`, `bound_direction`; `null` operand; the shape gaps and operand names |
+| `src/cobalt/radar/formation/triggers.py` | `IndicatorRejection` |
+| `src/cobalt/radar/formation/stops.py` | `IndicatorStop` (`at_entry`) |
+| `src/cobalt/radar/formation/anchors.py` | the `Leg(pullback)` anchor |
+| `src/cobalt/radar/evaluate.py` | `null` / bound symbols in `_value`; two nulls compare equal; `_touched`, `_on`; relation conventions in `_conventions`; three `CONVENTION_LABELS` |
+| `configs/cobalt/taxonomy/tunables.yaml` | label rows `catalyst_ref.resolver` (`A-13`), `leg.pre_test` (`A-14`), `extension.on_leg.form` (`A-15`): null, proposed, global |
+
+Extension path B is untouched (`catalyst_ref_unknown`, asserted). The `catalyst` quality dot stays `DESK_NA` / YOURS: `desk_shadow()` is unchanged.
+
+### A1
+
+| test | old assertion | new assertion | FINAL tag |
+|---|---|---|---|
+| `test_radar_anatomy.py::test_unsupported_atoms_trigger_and_stop_are_named_missing` | missing = {`Leg(pullback)`, `touched`} | that def is now evaluable (missing = ()); the naming is re-asserted, exactly, on an object the FINAL does not build: {`Gap.size`, `trigger:sequence`, `stop:structural_extreme:turn_candle`} | §3 D3 ("Not built: Gap") |
+| `test_radar_anatomy.py::test_supported_atoms_are_exactly_the_s2_detectors` | the STEP-4 set | + the 5 role atoms and `catalyst_ref`, exactly | §3 D3, §6 |
+| card pins: [F-11] ×2, Lego (ii) ×2, T6 formed card | `tunables_sha256` mapped without the rows up to STEP-5 | … and without STEP-6's three convention rows | §6 (new rows) |
+
+No assertion was removed, and no skip or xfail was added.
+
+### D
+
+- Appended: `radar/anatomy/leg_roles.md`, `frame.md`, `radar/formation/atoms.md`, `triggers.md`, `stops.md`, `anchors.md`, `radar/evaluate.md`.
+
+### SUITE
+
+- **Offline.** `uv run pytest -q tests/cobalt tests/taxonomy` (background).
+  - The first run: `7 failed, 2381 passed` — the A1 rows.
+  - After the re-points: **`2388 passed, 361 skipped, 1 xfailed, 15 warnings in 377.89s (0:06:17)`**, 0 failed. Against STEP-5 (2374 / 361), the +14 are exactly `test_setups_nine_ema.py`'s 14 tests.
+- **With-DB.** cp → `COBALT_ENV=dev uv run pytest -q` over STEP-5's set + `tests/cobalt/test_setups_nine_ema.py` + `tests/experiments/setups_one`, with `-s` → **`423 passed, 1 skipped in 1456.70s (0:24:16)`**. The skip is the live-note proof, by design.
+  - VERBATIM: `X7 stored: sessions=10 grid=30min {…, 'nine-ema-scalp': {'scans': 7200, 'both_sides': 0, 'formed': 280}, …}` → **X7 stored nine-ema-scalp: PASS** (280 formed grid scans, never on both frames).
+- rm → `ls -la .env` → `ls: .env: No such file or directory`.
+
 ## ESCALATE
 
 (running list; the ALWAYS items (i)–(xii) are written at CLOSE)
@@ -607,21 +696,17 @@ No assertion was removed, and no skip or xfail was added.
 12. **X10 FAILED → backside and fashionably-late are `AWAITING_A_RULING`.** On a day that recovers past the open, the Extension's direction (sign of last − open) flips and the backside shape never forms. The FINAL offers two fixes: Grok's ("they bind side only through the mirrored frame on their own long-side text") and Fable's ("the Extension's direction is stamped at its culminating bar and held through `reverting` / `backside`"). It chooses neither. `ASK DESK: X10 failed — which fix, Grok's or Fable's? [05:1x]`. Safe default: neither is built. D4 is kept. Both paths are proven on definition-written days (the backside control; the fashionably-late path).
 13. **D4 and Rubberband (a decision for the desk).** Growing `Extension.state` past `culminating` means that, once `A-08` is filled, a culminated Extension reads `reverting` after its snapback, and Rubberband's `Extension.state == culminating` stops re-forming on those scans. The first formation, and so the card, is unchanged. Built safe default: while `A-08` is null (committed config), `Extension.state` reads exactly today's value, so Rubberband is byte-identical now (every pin GREEN) and in production until the assumed note fills `A-08`. Also, `Extension.state` does NOT declare the warm-up convention (`frame.warmup_source`, A-05) in its closure, even though the lifecycle's rising-EMA9 test uses the seeded EMA9. Declaring it would mark every Rubberband card "assumed: frame.warmup_source" at committed config, where the lifecycle never runs. `ASK DESK: once A-08 is filled, should Rubberband's precondition hold through reverting, and should Extension.state declare A-05? [05:1x]` — safe default: as built.
 14. **A null `cfg()` was compared as `None` (a latent defect, fixed at STEP-5).** Before, a predicate against a null engine row (the drive-then-range shape's `Range(micro).wick_ratio > cfg(range.wick_ratio_max)`) raised `Unsupported` and made the def `not_evaluable` at production defaults, whenever its preconditions held. It now reads unknown, `<key>_unset`.
+15. **The leg roles carry no size (STEP-6).** `legs()` ends a leg at one opposing bar (taxonomy §3.1, byte-identical by X16), so legs alternate. The leg before a pullback is therefore always the other direction, and the nine-ema shape's `Leg(opening_drive OR impulse).direction == trade_direction` holds whenever a pullback exists. The taxonomy defines no magnitude for `impulse` / `pullback`, and none is invented here. `ASK DESK: should impulse / pullback carry a size rule (a new A-nn key) before cards? [06:0x]` — safe default: none.
 
 ## CONTINUE
 
-next: STEP-6 (C5), nine-ema-scalp.
-1. **X26 FIRST:** an offline test that constructs `AtomOutcome(atom=…, value_kind="boolean", boolean=True, assumed="A-13")` and follows the `detail()` caller. Quote the exception.
-2. Then:
-   - roles `Leg(pullback).{direction, end, index}`, `Leg(impulse)`, `Leg(pre_test)` (`A-14`), and `Leg(opening_drive OR impulse)`, over `leg.legs()` in `anatomy/leg_roles.py`;
-   - the relation `touched`;
-   - `trade_direction` / `opposite(x)` / `against(x)` bound from the frame;
-   - `formation/triggers.py` `indicator_rejection`; `formation/stops.py` `indicator` (`at_entry`);
-   - `Extension.instantiated on Leg(x)` (`A-15`);
-   - the catalyst resolver `A-13`: an ATOMS row `catalyst_ref`, reading the pool admission, with `ASSUMED_CONVENTIONS = ("A-13",)` in its closure.
-   - `tunables.yaml`: the convention rows `A-13`, `A-14`, `A-15`. Check the companion for their KEY NAMES only.
-3. Acceptance for `nine-ema-scalp` (L11: `bids_hold` stays human). X1's second reading: quote X1's share beside the def's preferred window. X7, X11, X5.
+next: STEP-7 (C6), vwap-continuation.
+1. `Level_ref(trendline, anchor_leg)` through the anchor leg's pivots (≥ `cfg(trendline.min_pivots)`); the flat case is the micro-Range far bound.
+2. `formation/triggers.py` `trendline_break`.
+3. `dist(a, b)` in working-TF ATR with `cfg(dist.k.vwap)` (`A-16`, a `per_indicator` hole, F1).
+4. The level set `A-17` (a convention row); `Level_ref(resistance).rejected` (`A-18`); the `tunables.yaml` convention rows.
+5. Acceptance for `vwap-continuation`. At production defaults it is `AWAITING_A_RULING: F1`. Report the note-vs-sheet divergence of the `rejected` avoid, never fix it (follow the NOTE). X7, X11, X5.
 
 Rules still in force: file content only through Write / Edit; pins from a test's own failure output; long-form `git status` before a commit; no unlisted commands (scratch probes go in a pytest file under the job's tmp).
 
-(run in progress — step 6 of 9, next under ## CONTINUE)
+(run in progress — step 7 of 9, next under ## CONTINUE)

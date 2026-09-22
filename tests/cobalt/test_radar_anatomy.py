@@ -494,11 +494,17 @@ def test_unsupported_atoms_trigger_and_stop_are_named_missing():
         stop_ref="range_base",
     )
     result = evaluability(td)
-    assert not result.evaluable
     # `VWAP` is served from STEP-3 of the setups one build (FINAL §3 D1);
     # `Range(micro).instantiated`, `range_break` and `range_base` from STEP-4
-    # (§3 D2, §2.2, §2.3).
-    assert set(result.missing_atoms) == {"Leg(pullback)", "touched"}
+    # (§3 D2, §2.2, §2.3); `Leg(pullback)` / `touched` from STEP-6 (§3 D3).
+    assert result.evaluable and result.missing_atoms == ()
+    # The naming itself, on an object the FINAL does not build (§3 "Not built: Gap"):
+    gap = _def_with([{"expr": "Range(micro).instantiated"}, {"expr": "Gap.size > 0"}], [],
+                    {"type": "sequence", "steps": [{"name": "break", "predicate": {"expr": "Gap.size > 0"},
+                                                    "confirmation_policy": {"type": "intrabar"}}]},
+                    stop_ref="turn_candle")
+    assert set(evaluability(gap).missing_atoms) == {"Gap.size", "trigger:sequence",
+                                                    "stop:structural_extreme:turn_candle"}
 
 
 def test_sequence_trigger_is_named_missing_not_a_crash():
@@ -531,5 +537,8 @@ def test_supported_atoms_are_exactly_the_s2_detectors():
          # + the D2 / D3 atoms of STEP-4 (FINAL §3 D2, D3)
          "Range(micro).instantiated", "Range(micro).duration", "Range(micro).low", "Range(micro).top",
          "Range(micro).base", "Range(micro).bound", "Range(micro).height", "Range(micro).wick_ratio",
-         "Leg(opening_drive).direction", "Leg(opening_drive).terminated_by"}
+         "Leg(opening_drive).direction", "Leg(opening_drive).terminated_by",
+         # + STEP-6's roles and the A-13 catalyst resolver (FINAL §3 D3, §6)
+         "Leg(pullback).direction", "Leg(pullback).end", "Leg(pullback).index", "Leg(impulse).direction",
+         "Leg(opening_drive OR impulse).direction", "catalyst_ref"}
     )

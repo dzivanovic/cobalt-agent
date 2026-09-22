@@ -256,6 +256,38 @@ tunables:
     source: dwv
     consumers: ["cobalt.radar.anatomy.extension (extension_lifecycle: reverting)"]
 
+  # --- STEP-6 conventions (C5) --------------------------------------------
+  # `A-13`: the `catalyst_ref` resolver (FINAL §6, the one named special
+  # case): the def's "or setup" branch read as met by the radar pool admission.
+  - key: catalyst_ref.resolver
+    value: null
+    unit: label
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.formation.atoms (catalyst_ref)"]
+
+  # `A-14`: `Leg(pre_test)`, the move before the pullback's test.
+  - key: leg.pre_test
+    value: null
+    unit: label
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.anatomy.leg_roles (pre_test_bars)"]
+
+  # `A-15`: `<Extension atom> on Leg(x)`, the Extension detector over that leg.
+  - key: extension.on_leg.form
+    value: null
+    unit: label
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.evaluate (the `on` qualifier)"]
+
   # `A-05`, `A-06`, `A-12`: conventions the frame's resolvers implement.
   - key: frame.warmup_source
     value: null

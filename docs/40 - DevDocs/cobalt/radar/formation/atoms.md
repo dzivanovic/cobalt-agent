@@ -68,3 +68,14 @@ What they declare:
   - `flat_between` is the pure test: some `window` consecutive bars inside the span with every |normalised slope| ≤ the threshold.
   - `relation_operand_names` tells the registry which raw names a served relation consumes.
 - **Arith `*` / `/`** (FINAL §4 row 2) is an operand shape: `predicate_gaps` walks both sides. `+` / `-` stay `Unsupported(arith)`.
+
+## 2026-09-22 — roles, `touched`, `on`, bound symbols, `A-13` (setups one build STEP-6)
+
+- **The role rows:** `Leg(pullback).direction|end|index`, `Leg(impulse).direction` and `Leg(opening_drive OR impulse).direction`; directions have domain `{up, down}`.
+- **`catalyst_ref`** is THE ONE NAMED SPECIAL CASE (FINAL §6, R2-2.4 B). A boolean atom whose resolver stands in for data the radar does not have: the def's "or setup" branch, read as met by the pool admission. Its conventions are `(CATALYST_CONVENTION,)`, the row `catalyst_ref.resolver` (`A-13`), so the formation's closure carries the key and the mark reaches the card through the `assumed_formation` dot. `AtomOutcome` gains nothing: X26 shows `assumed=` is a `ValidationError`. Extension path B keeps `catalyst_ref_unknown`.
+- **Relations.**
+  - `RELATIONS["touched"]` serves `Leg(pullback|impulse) touched EMA9|EMA21|VWAP`.
+  - `RELATIONS["on"]` serves `Extension.instantiated on Leg(pre_test)` and declares the conventions `leg.pre_test` (A-14) and `extension.on_leg.form` (A-15).
+  - `RelationResolver.conventions` is new, and `evaluate._conventions` reads it.
+  - Any other operand is `Unsupported(touched:…)` / `Unsupported(on:…)`.
+- **Bound symbols (FINAL §4).** `BOUND_SYMBOLS = {trade_direction: up}` and `opposite(x)` / `against(x)` through `bound_direction`. A bound form is a value, never an atom (`relation_operand_names`), and never an E8 domain miss. `null` is an operand.

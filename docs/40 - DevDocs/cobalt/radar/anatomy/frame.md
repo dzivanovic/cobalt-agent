@@ -76,3 +76,10 @@ How missing inputs read:
 - the scan's `tunables`.
 
 The `indicator_cross` trigger, the `recent_higher_low` / `measured_fraction` stops and the `between` relation all read these, so each is computed once per scan.
+
+**2026-09-22 — roles and the catalyst resolver (STEP-6).** New lazy atoms:
+
+- `Leg(pullback).{direction, end, index}`, `Leg(impulse).direction` and `Leg(opening_drive OR impulse).direction`, over `leg_roles.pullback_roles`;
+- `catalyst_ref`: `A-13`, `True` for an admitted member, `null` for a departed one.
+
+New objects: `pullback_roles` and `pre_test_bars`. The `touched` and `on` relations, the `Leg(pullback)` anchor and the `indicator_rejection` / `indicator` bricks read them.

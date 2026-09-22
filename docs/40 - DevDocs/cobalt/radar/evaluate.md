@@ -120,3 +120,12 @@ The ONE `EVALUATOR_VERSION` bump of STEP-1 covers this step. Nothing deploys bet
 - **A null `cfg(<key>)`** is unknown, `<key>_unset`. It used to be compared as `None` and raise `Unsupported` (`not_evaluable`): a latent defect that would have hit the drive-then-range shape's wick-ratio avoid at production defaults.
 - **`evaluate_node(context=)`** carries the frame, the tunables, the def's trigger and the working minutes. The `Between` branch (`_between`) uses them: `flat(<ind>, window) between turn and cross` over the frame's series. Its thresholds are the `per_indicator` rows (F1: null → `flat_threshold.<ind>_unset`), and its events are the turn and the def's own cross.
 - **The stop resolver gets `trigger=`**, so `measured_fraction` can anchor at `entry`. `Formation.stop_ref` is the stop outcome's `ref`.
+
+## 2026-09-22 — bound symbols, `null`, `touched`, `on`, A-13's label (setups one build STEP-6; FINAL C5)
+
+- `_value` reads `null`, `trade_direction` (→ `up`) and `opposite(…)` / `against(…)`.
+- A comparison of two nulls is equal. So `catalyst_ref != null` is False for a departed member; it only arises with a `null` literal, which was `Unsupported` before.
+- `_touched`: a leg's extreme reached the indicator on one of its bars.
+- `_on`: `Extension.instantiated` of `detect_extension` over `Leg(pre_test)`'s bars. No pullback → False; too few bars → unknown with the detector's reason.
+- `_conventions` also reads a used relation's own conventions.
+- `CONVENTION_LABELS` gains `catalyst_ref.resolver` → `radar_in_play_admission` (A-13), `leg.pre_test` → `session_open_to_pullback_start` (A-14) and `extension.on_leg.form` → `extension_detector_over_leg_bars` (A-15).

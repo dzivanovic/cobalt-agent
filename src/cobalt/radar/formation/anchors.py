@@ -56,9 +56,18 @@ def _micro_range(frame) -> FrameAnchor | str:
     return FrameAnchor(object="Range(micro)", direction="up", bar_ts=r.instantiated_ts)
 
 
+def _pullback(frame) -> FrameAnchor | str:
+    roles = frame.objects["pullback_roles"]
+    if roles.pullback is None:
+        return "no pullback to form on"
+    return FrameAnchor(object="Leg(pullback)", direction="up", bar_ts=roles.pullback.end_ts)
+
+
 ANCHORS: tuple[AnchorResolver, ...] = (
     AnchorResolver("Extension", "Extension.", _extension),
     AnchorResolver("Range(micro)", "Range(micro).", _micro_range),
+    # STEP-6: the pullback's last bar (the long-side text's trade side is `up`).
+    AnchorResolver("Leg(pullback)", "Leg(pullback)", _pullback),
 )
 
 

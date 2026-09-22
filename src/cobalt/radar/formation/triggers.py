@@ -127,10 +127,49 @@ class IndicatorCross:
         )
 
 
+class IndicatorRejection:
+    """`indicator_rejection {indicator, contact: touch | penetrate}` (taxonomy
+    §10.2 A.4; STEP-6): "the bar that touches/penetrates the indicator and
+    closes on the trade side IS trigger and entry" — `close_through` by
+    definition. In the frame's coordinates: the LAST closed working bar whose
+    low reached the indicator (`touch`: low ≤ it; `penetrate`: low < it) and
+    whose close is above it. Its close is the entry. The last bar is not a
+    rejection → `InsufficientBars` (`not_formed`); next-bar continuation is the
+    human read (L11)."""
+
+    kind = "indicator_rejection"
+    INDICATORS = frozenset({"EMA9", "EMA21", "VWAP"})
+    CONTACTS = frozenset({"touch", "penetrate"})
+
+    def serves(self, params: dict[str, Any]) -> bool:
+        contact = params.get("contact")
+        contacts = set(contact) if isinstance(contact, (list, tuple)) else {contact}
+        return params.get("indicator") in self.INDICATORS and bool(contacts) and contacts <= self.CONTACTS
+
+    def resolve(self, frame, trigger_def, value: Callable[[Any], Any]) -> TriggerOutcome:
+        p = trigger_def.params
+        contact = p["contact"]
+        contacts = set(contact) if isinstance(contact, (list, tuple)) else {contact}
+        values = frame.objects["series"](p["indicator"])
+        if not frame.run or values[-1] is None:
+            raise InsufficientBars(f"indicator_rejection ({p['indicator']} has no value)", 1, 0)
+        bar, level_now = frame.run[-1], values[-1]
+        reached = ("touch" in contacts and bar.low <= level_now) or ("penetrate" in contacts and bar.low < level_now)
+        if not (reached and bar.close > level_now):
+            raise InsufficientBars(f"indicator_rejection (the last bar is no {p['indicator']} rejection)", 1, 0)
+        level = TriggerLevel(trade_direction="long", price=bar.close, bars_cleared=0, bar_ts=(bar.ts,))
+        return TriggerOutcome(
+            state="armed", price=bar.close, ref_bar_ts=bar.ts, kind=self.kind,
+            inputs={"indicator": p["indicator"], "contact": sorted(contacts), "indicator_at_bar": str(level_now)},
+            why=f"{p['indicator']} rejection", level=level,
+        )
+
+
 TRIGGERS: dict[TriggerType, TriggerResolver] = {
     TriggerType.BAR_BREAK: BarBreak(),
     TriggerType.RANGE_BREAK: RangeBreak(),
     TriggerType.INDICATOR_CROSS: IndicatorCross(),
+    TriggerType.INDICATOR_REJECTION: IndicatorRejection(),
 }
 
 

@@ -183,9 +183,43 @@ class MeasuredFraction:
         )
 
 
+class IndicatorStop:
+    """`indicator {indicator, buffer, snapshot}` (taxonomy A.2; STEP-6): the
+    indicator's value at the ENTRY bar (`snapshot: at_entry`, the ruled
+    default), less the buffer, under `structure.structural_stop`'s rounding and
+    nudge (the indicator is the structure). `live` is not served (named)."""
+
+    kind = "indicator"
+    INDICATORS = frozenset({"EMA9", "EMA21", "VWAP"})
+
+    def serves(self, placement) -> bool:
+        indicator = getattr(placement, "indicator", None)
+        snapshot = getattr(placement, "snapshot", None)
+        return (getattr(indicator, "value", None) in self.INDICATORS
+                and getattr(snapshot, "value", None) == "at_entry")
+
+    def resolve(self, frame, placement, value: Callable[[Any], Any], *, trigger=None, **_context) -> StopOutcome:
+        name = placement.indicator.value
+        if trigger is None or trigger.ref_bar_ts is None:
+            raise InsufficientBars(f"indicator stop ({name}: no entry bar)", 1, 0)
+        at = [i for i, b in enumerate(frame.run) if b.ts == trigger.ref_bar_ts]
+        values = frame.objects["series"](name)
+        if not at or values[at[-1]] is None:
+            raise InsufficientBars(f"indicator stop ({name} has no value at entry)", 1, 0)
+        level = values[at[-1]]
+        buffer = Decimal(str(value(placement.buffer.cents.value)))
+        stop = structural_stop(level, "long", buffer)
+        extreme = TrackedExtreme(side="low", price=level, bar_ts=trigger.ref_bar_ts)
+        return StopOutcome(
+            price=stop.price, placement=self.kind, ref=name, inputs={"buffer": str(buffer), "snapshot": "at_entry"},
+            why=f"beyond the {name} at entry", structural=stop, extreme=extreme,
+        )
+
+
 STOPS: dict[str, StopResolver] = {
     "structural_extreme": StructuralExtreme(),
     "measured_fraction": MeasuredFraction(),
+    "indicator": IndicatorStop(),
 }
 
 

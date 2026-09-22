@@ -57,7 +57,7 @@ from .structure import tracked_extreme
 from .in_play import in_play_state
 from .indicators import ATR_PERIOD, ema, seeded, wilder_atr
 from .leg import legs
-from .leg_roles import OpeningDrive, max_retrace, opening_drive
+from .leg_roles import OpeningDrive, PullbackRoles, max_retrace, opening_drive, pre_test_bars, pullback_roles
 from .micro_range import MicroRangeObservation, detect_micro_range, range_params
 from .session_levels import day_range, premarket_levels, prior_day_levels, vwap
 from .slope import slope, slope_bars, slope_norm
@@ -389,12 +389,52 @@ def _d1_resolvers(
                 return i
         return None
 
+    # --- STEP-6: pullback / impulse roles, pre_test, the catalyst resolver ------
+    def roles() -> PullbackRoles:
+        return once("pullback_roles", lambda: pullback_roles(drive_legs()))
+
+    def role_atom(which: str, part: str) -> Callable[[], AtomValue]:
+        def resolve() -> AtomValue:
+            if not run:
+                return AtomValue(kind="unavailable", reason="insufficient_bars")
+            r = roles()
+            if which == "pullback":
+                leg = r.pullback
+            elif which == "impulse":
+                leg = r.before if r.before_role == "impulse" else None
+            else:  # "opening_drive OR impulse": the leg before the pullback, of either role
+                leg = r.before
+            if leg is None:
+                return AtomValue(kind="null", reason="not_instantiated")
+            if part == "direction":
+                return AtomValue(kind="symbol", symbol=leg.direction)
+            if part == "end":
+                return AtomValue(kind="number", number=leg.low if leg.direction == "down" else leg.high)
+            return AtomValue(kind="number", number=Decimal(r.index))
+        return resolve
+
+    def catalyst_ref() -> AtomValue:
+        """`A-13` (FINAL §6): the def's "or setup" branch read as met by the
+        name's radar in-play admission; a departed member has none."""
+        if session.departed:
+            return AtomValue(kind="null", reason="not_instantiated")
+        return AtomValue(kind="boolean", boolean=True)
+
     objects.update({
         "Range(micro)": micro, "Leg(opening_drive)": drive,
         "series": lambda: series, "turn_index": turn_index, "cross_index": lambda: cross_index,
         "atr": atr, "tunables": lambda: tunables,
+        "pullback_roles": roles, "pre_test_bars": lambda: pre_test_bars(run, roles()),
     })
     extension_lazy = {} if ext.unavailable is not None else {"Extension.state": extension_state}
+    extension_lazy.update({
+        "Leg(pullback).direction": role_atom("pullback", "direction"),
+        "Leg(pullback).end": role_atom("pullback", "end"),
+        "Leg(pullback).index": role_atom("pullback", "index"),
+        "Leg(impulse).direction": role_atom("impulse", "direction"),
+        "Leg(opening_drive OR impulse).direction": role_atom("either", "direction"),
+        "catalyst_ref": catalyst_ref,
+    })
 
     return {
         **extension_lazy,

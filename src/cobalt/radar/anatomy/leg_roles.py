@@ -100,4 +100,50 @@ def opening_drive_literal(
                         reading="literal")
 
 
-__all__ = ["OpeningDrive", "TUNABLE_KEYS", "max_retrace", "opening_drive", "opening_drive_literal"]
+# ---------------------------------------------------------------------
+# STEP-6 — pullback, impulse, pre_test (FINAL §3 D3; taxonomy §3.1)
+# ---------------------------------------------------------------------
+#
+# In the frame's coordinates the long-side text's trade direction is `up`, so:
+# * `Leg(pullback)` = the latest DOWN leg that is not the first leg (a pullback
+#   terminates an impulse / the opening drive); `index` = its ordinal among the
+#   pullbacks since the RTH open; `end` = its extreme (the low);
+# * `Leg(impulse)` = the leg the pullback terminates (the one before it);
+#   `Leg(opening_drive OR impulse)` = "the most recent leg of either role that
+#   precedes the pullback" (FINAL §4) — that same leg, which is the opening
+#   drive when the pullback is the second leg;
+# * `Leg(pre_test)` (`A-14`, convention `leg.pre_test`): the run from the
+#   session open to the pullback's first bar — the move before the test.
+PRE_TEST_CONVENTION = "leg.pre_test"
+
+
+class PullbackRoles(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    pullback: LegObservation | None
+    index: int | None = None
+    #: The leg the pullback terminates (impulse or opening drive).
+    before: LegObservation | None = None
+    before_role: Literal["opening_drive", "impulse"] | None = None
+
+
+def pullback_roles(drive_legs: Sequence[LegObservation]) -> PullbackRoles:
+    for k in range(len(drive_legs) - 1, 0, -1):
+        if drive_legs[k].direction == "down":
+            index = sum(1 for leg in drive_legs[1:k + 1] if leg.direction == "down")
+            return PullbackRoles(pullback=drive_legs[k], index=index, before=drive_legs[k - 1],
+                                 before_role="opening_drive" if k == 1 else "impulse")
+    return PullbackRoles(pullback=None)
+
+
+def pre_test_bars(run: Sequence[WorkingBar], roles: PullbackRoles) -> tuple[WorkingBar, ...]:
+    """`Leg(pre_test)`: the run's bars before the pullback's first bar."""
+    if roles.pullback is None:
+        return ()
+    return tuple(b for b in run if b.ts < roles.pullback.start_ts)
+
+
+__all__ = [
+    "OpeningDrive", "PRE_TEST_CONVENTION", "PullbackRoles", "TUNABLE_KEYS", "max_retrace", "opening_drive",
+    "opening_drive_literal", "pre_test_bars", "pullback_roles",
+]

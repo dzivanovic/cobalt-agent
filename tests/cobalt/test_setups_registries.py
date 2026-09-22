@@ -97,8 +97,8 @@ CARD_EXCLUDED = {"formula_sha256"}
 STEP3_KEYS = ("dayrange.session", "frame.warmup_source", "slope_norm.bars", "vwap.anchor",
               # + STEP-4's three rows (D2 / D3 detector keys)
               "leg.consolidation_max_retrace", "range.micro.bound_flat_slope_atr", "range.micro.touch_tolerance_atr",
-              # + STEP-5's `A-08` row
-              "extension.snapback_bars_cleared")
+              # + STEP-5's `A-08` row, STEP-6's three convention rows
+              "extension.snapback_bars_cleared", "catalyst_ref.resolver", "leg.pre_test", "extension.on_leg.form")
 
 
 def _tunables_digests() -> tuple[str, str]:

@@ -33,6 +33,7 @@ from cobalt.taxonomy.predicate import (
     InTest,
     Node,
     Not,
+    Null,
     Number,
     Or,
     Qualified,
@@ -92,6 +93,12 @@ def _serves(*resolvers: AtomResolver) -> dict[str, AtomResolver]:
 _EXT_REASONS = ("insufficient_bars", "incomplete_bucket", "catalyst_ref_unknown")
 _WARM = _indicators.WARMUP_CONVENTION
 _SLOPE_REASONS = ("insufficient_seed", "insufficient_bars", "slope_norm.bars_unset")
+_DIRECTIONS = frozenset({"up", "down"})
+_ROLE_REASONS = ("insufficient_bars", "not_instantiated")
+#: `A-13`'s convention row (FINAL §6).
+CATALYST_CONVENTION = "catalyst_ref.resolver"
+#: `A-15`: `<Extension atom> on Leg(x)` reads the Extension detector over that leg's bars.
+ON_LEG_CONVENTION = "extension.on_leg.form"
 _RANGE_KEYS = _micro_range.TUNABLE_KEYS
 _RANGE_REASONS = ("insufficient_seed", "insufficient_bars", "incomplete_bucket",
                   *(f"{key}_unset" for key in _micro_range.TUNABLE_KEYS))
@@ -142,6 +149,18 @@ ATOMS: dict[str, AtomResolver] = _serves(
     AtomResolver("Leg(opening_drive).terminated_by", "symbol", domain=frozenset({"pullback", "consolidation"}),
                  tunable_keys=(*_RANGE_KEYS, *_leg_roles.TUNABLE_KEYS), conventions=(_WARM,),
                  reasons=(*_RANGE_REASONS, "leg.consolidation_max_retrace_unset", "not_instantiated")),
+    # --- D3 (STEP-6): pullback / impulse roles ------------------------------
+    AtomResolver("Leg(pullback).direction", "symbol", domain=_DIRECTIONS, reasons=_ROLE_REASONS),
+    AtomResolver("Leg(pullback).end", "number", price=True, reasons=_ROLE_REASONS),
+    AtomResolver("Leg(pullback).index", "number", reasons=_ROLE_REASONS),
+    AtomResolver("Leg(impulse).direction", "symbol", domain=_DIRECTIONS, reasons=_ROLE_REASONS),
+    AtomResolver("Leg(opening_drive OR impulse).direction", "symbol", domain=_DIRECTIONS, reasons=_ROLE_REASONS),
+    # --- THE ONE NAMED SPECIAL CASE (FINAL §6, R2-2.4 B): `A-13` -------------
+    # The catalyst resolver stands in for data the radar does not have: the
+    # def's "or setup" branch is read as met by the pool admission. Its
+    # ASSUMED_CONVENTIONS are its row key; the mark reaches the card through
+    # the `assumed_formation` dot, never a field on the atom.
+    AtomResolver("catalyst_ref", "boolean", conventions=(CATALYST_CONVENTION,), reasons=("not_instantiated",)),
 )
 
 
@@ -152,6 +171,8 @@ class RelationResolver:
 
     word: str
     resolve: Callable = field(repr=False, default=lambda *_a, **_k: None)
+    #: R2-2.2 term (3): the conventions this relation's resolver implements.
+    conventions: tuple[str, ...] = ()
 
 
 def flat_between(norm: list[Decimal | None], *, start: int, end: int, window: int, threshold: Decimal) -> bool | None:
@@ -211,11 +232,42 @@ def _between_gaps(node: Between) -> set[str]:
     return gaps
 
 
+#: STEP-6: the leg roles a relation may name, and the indicators `touched` reads.
+TOUCH_LEGS = frozenset({"Leg(pullback)", "Leg(impulse)"})
+TOUCH_INDICATORS = frozenset({"EMA9", "EMA21", "VWAP"})
+ON_LEGS = frozenset({"Leg(pre_test)"})
+ON_SUBJECTS = frozenset({"Extension.instantiated"})
+
+
+def _touched_gaps(node: Relation) -> set[str]:
+    gaps = set()
+    if render(node.left) not in TOUCH_LEGS:
+        gaps.add(f"Unsupported(touched:{render(node.left)})")
+    if render(node.right) not in TOUCH_INDICATORS:
+        gaps.add(f"Unsupported(touched:{render(node.right)})")
+    return gaps
+
+
+def _on_gaps(node: Qualified) -> set[str]:
+    gaps = set()
+    if render(node.subject) not in ON_SUBJECTS:
+        gaps.add(f"Unsupported(on:{render(node.subject)})")
+    if render(node.anchor) not in ON_LEGS:
+        gaps.add(f"Unsupported(on:{render(node.anchor)})")
+    return gaps
+
+
 def relation_operand_names(node: Node) -> set[str]:
     """The `required_atoms` names a SERVED relation consumes (its subject and
     event operands) — the registry does not count them as unserved atoms."""
     if isinstance(node, Between) and "between" in RELATIONS and not _between_gaps(node):
         return {render(node.subject), render(node.start), render(node.end)}
+    if isinstance(node, Relation) and node.op == "touched" and not _touched_gaps(node):
+        return {render(node.left), render(node.right)}
+    if isinstance(node, Qualified) and node.op == "on" and not _on_gaps(node):
+        return {render(node.subject), render(node.anchor)}
+    if isinstance(node, Compare):  # a bound direction form is a value, not an atom
+        return {render(s) for s in (node.left, node.right) if isinstance(s, Ref) and bound_direction(s) is not None}
     out: set[str] = set()
     for op in getattr(node, "operands", ()) or ():
         out |= relation_operand_names(op)
@@ -224,7 +276,35 @@ def relation_operand_names(node: Node) -> set[str]:
     return out
 
 
-RELATIONS: dict[str, RelationResolver] = {"between": RelationResolver("between")}
+RELATIONS: dict[str, RelationResolver] = {
+    "between": RelationResolver("between"),
+    # STEP-6: `touched(Leg, indicator)` = the leg's extreme reached the
+    # indicator (contact, not proximity, taxonomy §3.1); `<Extension atom> on
+    # Leg(x)` = that atom of the Extension detector run over the leg's bars.
+    "touched": RelationResolver("touched"),
+    "on": RelationResolver("on", conventions=(_leg_roles.PRE_TEST_CONVENTION, ON_LEG_CONVENTION)),
+}
+
+#: Symbols bound from the frame (FINAL §4): in a frame, the long-side text's
+#: trade direction is `up`; `opposite(x)` / `against(x)` flip a direction.
+BOUND_SYMBOLS = {"trade_direction": "up"}
+DIRECTION_FUNCTIONS = frozenset({"opposite", "against"})
+
+
+def bound_direction(node: Node) -> str | None:
+    """`trade_direction`, `opposite(…)`, `against(…)` → the frame's direction
+    value, else None (not a bound form)."""
+    if isinstance(node, Symbol) and node.name in BOUND_SYMBOLS:
+        return BOUND_SYMBOLS[node.name]
+    if isinstance(node, Ref) and len(node.segments) == 1 and node.segments[0].name in DIRECTION_FUNCTIONS:
+        args = node.segments[0].args or ()
+        if len(args) == 1 and args[0].name is None:
+            inner = args[0].value
+            inner_symbol = Symbol(kind="symbol", name=render(inner)) if isinstance(inner, Ref) else inner
+            value = bound_direction(inner_symbol)
+            if value is not None:
+                return "down" if value == "up" else "up"
+    return None
 
 
 # ---------------------------------------------------------------------
@@ -233,11 +313,11 @@ RELATIONS: dict[str, RelationResolver] = {"between": RelationResolver("between")
 
 
 def _operand_gaps(node: Node) -> set[str]:
-    if isinstance(node, (Number, Symbol, Cfg)):
+    if isinstance(node, (Number, Symbol, Cfg, Null)):
         return set()
     if isinstance(node, Ref):
         text = render(node)
-        return set() if text in ATOMS else {text}
+        return set() if text in ATOMS or bound_direction(node) is not None else {text}
     if isinstance(node, Arith) and node.op in ("*", "/"):
         return _operand_gaps(node.left) | _operand_gaps(node.right)  # FINAL §4 row 2 (STEP-5)
     return {f"Unsupported({node.kind})"}
@@ -249,7 +329,8 @@ def _domain_gaps(atom_node: Node, values) -> set[str]:
     resolver = ATOMS.get(render(atom_node))
     if resolver is None or resolver.domain is None:
         return set()
-    return {f"{resolver.name}∌{v.name}" for v in values if isinstance(v, Symbol) and v.name not in resolver.domain}
+    return {f"{resolver.name}∌{v.name}" for v in values
+            if isinstance(v, Symbol) and v.name not in resolver.domain and v.name not in BOUND_SYMBOLS}
 
 
 def unit_mismatch(quantity_unit: str, other: str | None) -> str | None:
@@ -296,8 +377,12 @@ def predicate_gaps(node: Node) -> set[str]:
             gaps |= _operand_gaps(item)
         return gaps | _domain_gaps(node.left, node.right.items)
     if isinstance(node, Relation):
+        if node.op == "touched" and node.op in RELATIONS:
+            return _touched_gaps(node)
         return set() if node.op in RELATIONS else {node.op}
     if isinstance(node, Qualified):
+        if node.op == "on" and node.op in RELATIONS:
+            return _on_gaps(node)
         return set() if node.op in RELATIONS else {node.op}
     if isinstance(node, Between):
         return _between_gaps(node) if "between" in RELATIONS else {"between"}
@@ -305,6 +390,7 @@ def predicate_gaps(node: Node) -> set[str]:
 
 
 __all__ = [
-    "ATOMS", "AtomResolver", "AtomValue", "BETWEEN_EVENTS", "RELATIONS", "RelationResolver", "flat_between",
-    "predicate_gaps", "relation_operand_names", "unit_mismatch", "window_bars",
+    "ATOMS", "AtomResolver", "AtomValue", "BETWEEN_EVENTS", "BOUND_SYMBOLS", "CATALYST_CONVENTION",
+    "ON_LEG_CONVENTION", "RELATIONS", "RelationResolver", "bound_direction", "flat_between", "predicate_gaps",
+    "relation_operand_names", "unit_mismatch", "window_bars",
 ]
