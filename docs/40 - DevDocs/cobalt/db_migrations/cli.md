@@ -77,9 +77,10 @@ every 15 minutes.
 
 ## `--lock-timeout-s N` — the migrate transaction's lock ceiling
 `DEFAULT_LOCK_TIMEOUT_S = 30`. The READ-WRITE transaction issues
-`SET LOCAL lock_timeout = '<N>s'` before `_apply`'s first statement,
-forward and rollback alike, so a DDL that cannot get its lock **fails in
-N seconds with nothing applied** instead of waiting.
+`SET LOCAL lock_timeout = '<N>s'` before the BEFORE probe (so before
+`_apply`'s first statement too), forward and rollback alike, so a DDL that
+cannot get its lock **fails in N seconds with nothing applied** instead of
+waiting.
 
 **Why it exists.** Until 2026-09-19 nothing in this file set a
 `lock_timeout` or a `statement_timeout`
@@ -110,18 +111,41 @@ makes a stuck deploy wait longer. The CLI renders it as
 reads. **The operator's next step is to find and stop the holder, not to
 retry with a bigger number.**
 
-**Where the `SET LOCAL` sits, and what that costs.** After the BEFORE
-probe, before `_apply`. The property that must hold is that the BEFORE
-probe and the migration share ONE REPEATABLE READ snapshot; a snapshot is
-taken once per such transaction, so nothing issued after the probe can
-move it. Whether a `SET` is itself a snapshot-taking statement was not
-settled from a citable source during the offline build that wrote this,
-so the statement was put where the question cannot matter. **The price:
-the BEFORE PROBE IS NOT UNDER THE CEILING** — it takes ACCESS SHARE,
-which only an ACCESS EXCLUSIVE holder (another DDL, never a resident's
-INSERT) can block. Moving the `SET LOCAL` into `_connect` would cover the
-probe too, and is the change to make once the snapshot question is
-answered against the Postgres manual.
+**Where the `SET LOCAL` sits, and what that costs.** It is the first
+statement `cmd_migrate` issues after `_connect` returns — BEFORE the
+BEFORE probe, forward and rollback alike — so every lock the transaction
+waits for is under the ceiling: the probe's ACCESS SHARE as well as
+`_apply`'s ACCESS EXCLUSIVE. The probe's lock can only be blocked by an
+ACCESS EXCLUSIVE holder (another DDL, never a resident's INSERT or
+UPDATE); before the move such a holder made the probe wait with no bound
+at all.
+
+**It used to sit after the probe, and the reason it moved.** The
+property that must hold is that the BEFORE probe and the migration share
+ONE REPEATABLE READ snapshot. Whether a bare `SET` is itself the
+statement that TAKES the snapshot could not be settled from a citable
+source by the offline build that wrote the first version, so the
+statement was parked after the probe, at the price that the probe was not
+under the ceiling. It moved on 2026-09-19 (R1/R11) once two `requires_db`
+tests in `tests/cobalt/test_migrate_proof.py` settled it by experiment on
+`cobalt_dev`, timing the snapshot against another session's commit by
+reading the same row's `xmin` from both sides:
+
+* `test_connects_show_server_encoding_does_not_take_the_snapshot` —
+  `_assert_utf8`'s `SHOW server_encoding`, the transaction's literal
+  first statement, does NOT take the snapshot.
+* `test_a_bare_set_local_does_not_take_the_snapshot_either` — neither
+  does a bare `SET LOCAL lock_timeout`.
+* `test_the_instrument_can_see_a_snapshot_that_is_already_fixed` — the
+  negative control: once a REAL query has run, the same reading DOES pin
+  the old row version, so the two results above are an observation and
+  not a vacuous pass.
+
+So the BEFORE probe is still the statement that takes the snapshot,
+exactly as before the move, and the probe and the migration still share
+one snapshot. `test_a_blocked_before_probe_is_under_the_lock_ceiling_too`
+holds the ACCESS EXCLUSIVE lock for real and runs `cmd_migrate` with the
+probe unstubbed.
 
 **`--proof-only` is deliberately NOT given a ceiling.** It takes ACCESS
 SHARE and applies nothing, and it is the command a deploy preflights

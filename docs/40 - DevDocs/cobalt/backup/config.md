@@ -5,6 +5,9 @@ The backup's Pydantic schema — `configs/cobalt/backup.yaml`. Sources,
 the database to dump, excludes, destinations, the vault KEY NAMES for
 the credentials, and the retention policy.
 
+## What the include set holds
+`sources` is the vault (`/Users/cobalt/Vault/Think`) plus the encrypted Cobalt credential file `/Users/cobalt/cobalt/data/.cobalt_vault` (added 2026-09-21, PROJECT-LEDGER.md:1174, pinned by `test_the_cobalt_vault_file_is_in_the_include_set`), with a fresh `cobalt_brain` dump taken inside each snapshot; the master key `~/.cobalt_key` that unlocks the credential file is deliberately NOT in it, so the restic password alone never opens every secret.
+
 ## `enabled` is separate from `repo` being set
 An empty `repo` could have meant "off". It does not. A destination
 declares `enabled` explicitly, and an enabled destination with no `repo`
