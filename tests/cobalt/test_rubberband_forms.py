@@ -638,6 +638,55 @@ def test_t5d_prime_x24_the_shadow_report_and_the_panel_over_a_card_carrying_the_
     assert "n/a ASSUMED" in panel.render_ladder(view)
 
 
+@requires_db
+@pytest.mark.integration
+def test_x8_source_half_db_the_open_card_keeps_its_dot_after_the_convention_is_ruled(world):
+    """X8's `source` half on cobalt_dev (STEP-2; Fable R2 (c): "change the
+    row's `source` to `ruling` and load"): the OPEN card keeps its dot, a
+    null score and the suppression; a NEW formation after the flip carries
+    no dot for that key."""
+    import asyncio
+
+    from cobalt.radar.anatomy.freshness import RvolObservation
+    from cobalt.radar.evaluate import CONVENTION_LABELS, EvaluateStage
+    from cobalt.taxonomy.tunables import TunableSource
+    from test_radar_cards_db import POOL, TICKER
+
+    key = "anatomy.orientation.extension"
+    rows = [dict(sup.engine_tunables())]
+
+    async def daily(ticker, now):
+        return sup.fixture_daily("FTFT", now).model_copy(update={"ticker": ticker})
+
+    radar = world["radar"]
+    stage = EvaluateStage(
+        radar_store=radar, card_store=world["cards"], defs_source=lambda: ([sup.loaded()], {}),
+        settings_values=world["settings"].values, daily_source=daily, tunables_loader=lambda: rows[0],
+        defaults_loader=sup.defaults, clock=session_clock(), now=lambda: DB_SCAN0,
+        members_at=lambda _pool, _at: radar.admitted_members(POOL),
+    )
+
+    def scan(at):
+        stage.now = lambda: at
+        return asyncio.run(stage.run(
+            pool_key=POOL, scan_id=int(at.timestamp() * 1000), session="RTH", instant=at,
+            rvol={TICKER: RvolObservation(ticker=TICKER, value=4.2, observed_at=at, source="screen:s",
+                                          candidates=("screen:s",))},
+            pool_unit={"pool_block": None}, gate=lambda _label: (lambda: None),
+        ))
+
+    card_id = scan(DB_SCAN0).created[0]
+    ruled = dict(rows[0])
+    ruled[key] = ruled[key].model_copy(update={"value": CONVENTION_LABELS[key], "source": TunableSource.RULING})
+    rows[0] = ruled
+    assert scan(DB_SCAN0 + timedelta(seconds=100)).refreshed == [card_id]
+    _taps, dot, sizing = _db_row(world["cards"], card_id)
+    assert dot is not None and dot[1] == "ASSUMED" and dot[2] == {"assumed_keys": [key]}
+    assert sizing[1] is None and "assumed_formation" in sizing[2]
+    fresh = shapes.evaluate(sup.loaded(), "FTFT", DB_SCAN0, tunables=ruled)
+    assert fresh.evaluation == "formed" and fresh.formation.assumed_keys == ()
+
+
 def test_t5b_route_a_refused_tap_reaches_the_page_as_409_with_its_message(monkeypatch):
     from fastapi.testclient import TestClient
 

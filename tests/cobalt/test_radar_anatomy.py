@@ -35,7 +35,8 @@ from cobalt.radar.anatomy.daily import (
 from cobalt.radar.anatomy.extension import ExtensionParams, detect_extension
 from cobalt.radar.anatomy.indicators import InsufficientBars, true_ranges, volume_band, wilder_atr
 from cobalt.radar.anatomy.leg import legs
-from cobalt.radar.anatomy.registry import SUPPORTED_ATOMS, evaluability
+from cobalt.radar.anatomy.registry import evaluability
+from cobalt.radar.formation.atoms import ATOMS as SUPPORTED_ATOMS  # FINAL §2.5: the table formation dispatches through
 from cobalt.radar.anatomy.structure import bar_break_trigger, structural_stop, tracked_extreme
 from cobalt.session.clock import session_clock
 from cobalt.taxonomy.loader import load_tunables
@@ -521,6 +522,6 @@ def test_shipped_synthetic_def_reports_not_evaluable_with_its_missing_atoms():
 
 
 def test_supported_atoms_are_exactly_the_s2_detectors():
-    assert SUPPORTED_ATOMS == frozenset(
+    assert frozenset(SUPPORTED_ATOMS) == frozenset(
         {"Extension.state", "Extension.instantiated", "Extension.leg_count", "RangeBreak(HTF).day_count"}
     )

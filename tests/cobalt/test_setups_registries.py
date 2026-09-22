@@ -501,6 +501,54 @@ def test_a_detector_reads_only_its_own_tunable_keys():
     assert ExtensionParams.from_tunables({k: rows[k] for k in TUNABLE_KEYS}) == ExtensionParams.from_tunables(rows)
 
 
+class _RecordingRows(dict):
+    """X22's test-only instrumentation: every tunable key a resolver reads."""
+
+    def __init__(self, rows):
+        super().__init__(rows)
+        self.read: set[str] = set()
+
+    def __getitem__(self, key):
+        self.read.add(key)
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        self.read.add(key)
+        return super().get(key, default)
+
+    def __contains__(self, key):
+        self.read.add(key)
+        return super().__contains__(key)
+
+
+def test_x22_the_declared_closure_covers_every_instrumented_read(defs):
+    """X22 (FINAL: "Compare declared closures against instrumented reads in
+    fixtures covering cfg, trigger, stop, detector and convention paths") —
+    a verification tool, not a production recorder. Every formed and
+    non-formed scan of the committed day, both frames."""
+    from cobalt.radar.evaluate import closure_keys
+
+    for name in ("mixed", "countertrend", "full"):
+        ld = defs[name]
+        rows = _RecordingRows(sup.engine_tunables())
+        for m in range(0, 391, 10):
+            shapes.evaluate(ld, "FTFT", shapes.DAY_START + timedelta(minutes=m), tunables=rows)
+        declared = closure_keys(ld.definition)
+        print(f"X22 {name}: reads={sorted(rows.read)} declared={sorted(declared)}")
+        assert rows.read <= declared, sorted(rows.read - declared)
+
+
+def test_x7_scans_where_both_frames_satisfy_the_def_on_the_committed_day(defs):
+    """X7 (FINAL, per unlocked def: the count of scans where BOTH frames
+    satisfy the def). Offline half, the committed day; a `both_sides` scan
+    where either frame alone would have formed is a FAIL."""
+    for name in ("mixed", "countertrend", "full"):
+        rows = [ev for ticker in ("FTFT", "BGFI") for _, ev in shapes.every_scan(defs[name], ticker)]
+        both = sum(ev.by_side["long"].evaluation == ev.by_side["short"].evaluation == "formed" for ev in rows)
+        print(f"X7 {name}: scans={len(rows)} both_sides={both}")
+        assert both == 0
+
+
 def test_x8_source_half_an_open_card_keeps_its_dot_after_the_row_is_ruled(defs):
     """X8's `source` half (Fable R2 (c)): the open card keeps the dot, the
     null score and the suppression after its convention row reads `ruling`;

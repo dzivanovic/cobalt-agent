@@ -82,7 +82,7 @@ def test_the_reader_appends_global_and_per_trade_rows_to_user_tunables(tmp_path)
 
 @pytest.mark.parametrize(("row", "match"), [
     (_row(scope="per_indicator(ema9)", key="flat_threshold.ema9"), "per_indicator"),  # F1: NOT widened
-    (_row(scope="per_trade(some_other_def)", key="some_other_def.x"), "some_other_def"),
+    (_row(scope="per_trade(example_not_loaded)", key="example_not_loaded.x"), "example_not_loaded"),
     (_row(source="sheet"), "source"),
     (_row(source="dwv"), "source"),
 ])

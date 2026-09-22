@@ -73,3 +73,22 @@ The review found that the slug fallback above accepted any edit under the slug, 
 - **Gate 5.** `replay_receipt` refuses any receipt in the chain whose `observations.evaluator_version` is not `EVALUATOR_VERSION`. It raises `ReplayError` naming both versions and does not recompute. `EVALUATOR_VERSION` is bumped ONCE for the whole one build, `s2p2.1` → `s2p2.2` (the file's own scheme: the next minor of `s2p2`). `DESK_FORMULA_VERSION` is untouched.
 
 **Every card formed on an assumed value shows NO score for its life.** It carries the untappable `assumed_formation` dot, and `card_score` stays null until he rules the rows it rests on. Rubberband's first cards rest on the convention `A-01` alone. That is the design (FINAL §10, R40), not a defect.
+
+## 2026-09-21 — setups one build STEP-2 (FINAL C2): the Frame, the registries, one published row, the closure
+- **The Frame.** `evaluate_member` builds one `anatomy.frame.Frame` per side: long is the stored bars, short is the mirrored bars and mirrored daily series. It evaluates the def's LONG-side text on each frame (`on_side`) and asks the frame for atoms. It no longer runs a detector itself. Trigger and stop come from the registries (`formation.triggers.TRIGGERS`, `formation.stops.STOPS` / `STRUCTURAL_REFS`) in frame coordinates. They are un-mirrored (`.unmirrored(side)`) before they reach `Formation`, so the formation and the card are in real-world prices. The geometry guard runs once, in frame coordinates, on every placement.
+- **A-01 in frame language.** A def whose preconditions name an unqualified Extension forms in a frame only when that frame's Extension runs DOWN. A real up-run therefore forms on the mirrored (short) frame. The long frame's row is `not_formed`, note `the unqualified Extension runs with this side (A-01)`.
+- **R2-4 = B (the launch row R50), `publish_frames`.** `MemberEvaluation.by_side = {long, short} -> SideOutcome(evaluation, formation, note)`. The ONE published row is:
+  - the frame that formed, when exactly one did;
+  - `not_formed`, note `both_sides`, with the long frame's detail, when both did;
+  - the LONG frame's evaluation, when neither did. No order is defined among the non-formed states.
+  Per-card decisions read the card's own side. The avoid that expires an open card is `by_side[card.direction]`. The refresh reads only frame-independent inputs: the observations are computed once on the real bars (R2-4.2 B), plus the last price, the working bars and EMA9. The other frame is not stored; replay re-derives it from the receipt's inputs (X21).
+- **`Formation` gains** `side_frame` (`long | mirrored`), `anchor` (§2.4 — `extension_direction` stays for byte identity), `trigger_outcome` and `stop_outcome`, all in real coordinates.
+- **The closure (R2-2.2 B).** `closure_keys(td)` is the union of:
+  - `iter_cfg_tokens(td)`;
+  - the `TUNABLE_KEYS` of every detector serving an atom the def names (`ATOMS[...].tunable_keys`);
+  - the conventions (`ASSUMED_CONVENTIONS` for an Extension-anchored def, plus any atom's own).
+
+  `assumed_closure(td, tunables)` = the closure keys whose resolved row reads `source: assumed`, plus every convention whose row is still null. It is computed ONCE at formation. Conventions are rows: A-01 is `anatomy.orientation.extension` (`tunables.yaml`, unit `label`, value null). `CONVENTION_LABELS` names the one label the code implements. Any other non-null label is `not_evaluable`, missing `<key>=<label>`. A convention with no row is a loud `EvaluateError`. X22 shows every tunable key the resolvers read is inside the declared closure.
+- **Byte identity (Lego (ii)).** The rubberband shapes and the shipped example produce byte-identical evaluations and card specs through the registries (`tests/cobalt/test_setups_registries.py`). Only named fields are excluded: the added fields above; `formula_sha256`; the dot's key spelling; and `tunables_sha256`, mapped because committed config gained the convention row. The one by-design content change: an already-not-evaluable def now names `Unsupported(<kind>)` (E9).
+
+The ONE `EVALUATOR_VERSION` bump of STEP-1 covers this step. Nothing deploys between the one build's steps (R44).

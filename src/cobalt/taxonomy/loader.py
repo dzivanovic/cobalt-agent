@@ -122,7 +122,7 @@ def merge_tunables(
     return {**engine, **user, **filled}
 
 
-def _fills_hole(engine: TunableRow, user: TunableRow) -> bool:
+def _fills_hole(engine: TunableRow, supplied: TunableRow) -> bool:
     """FINAL §8, R2-3.2 B (R2-3 = B by X20): a user row fills an engine key
     iff ALL hold — the engine row's value is None; the user row's source is
     assumed or ruling; equal scope; equal unit. It reads row fields only, so
@@ -130,9 +130,9 @@ def _fills_hole(engine: TunableRow, user: TunableRow) -> bool:
     come back from the database with no reader identity)."""
     return (
         engine.value is None
-        and user.source in (TunableSource.ASSUMED, TunableSource.RULING)
-        and user.scope == engine.scope
-        and user.unit == engine.unit
+        and supplied.source in (TunableSource.ASSUMED, TunableSource.RULING)
+        and supplied.scope == engine.scope
+        and supplied.unit == engine.unit
     )
 
 

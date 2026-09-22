@@ -135,3 +135,21 @@ there is no content checksum over a `.sql` file anywhere in this package.
 If P2 is present, its 0007 rollback deleting radar cards that picks/missed
 reference is blocked by the NO ACTION foreign keys and fails loud; nothing
 is lost silently (plan §6 R1-23).
+
+**2026-09-21 — `0013_tunables_slug_nullable` (setups one build STEP-2;
+FINAL §8, R2-3 = B, decided by X20).**
+
+Forward: `ALTER TABLE "user".tunables ALTER COLUMN slug DROP NOT NULL`.
+It is idempotent. It raises a NOTICE and does nothing when the table
+does not exist yet: on a fresh database whose taxonomy store never ran,
+the store later creates the table NOT NULL, the first global assumed row
+fails its sync loudly, and 0013 must be re-run.
+
+Rollback: refuses (`REFUSING 0013 reverse`) while any `slug IS NULL` row
+exists, because a rollback never deletes his rows. Otherwise it restores
+`SET NOT NULL`. This is the bounded pattern of 0005's reverse.
+
+The number 0013 skips 0012 on purpose. 0012 belongs to the unmerged
+`bars/chunk-2-0920` (`0012_bars_partitioned_parent`). Whichever lands
+second keeps both, in numeric order. This is an L68 seam on this
+`__init__.py` and on the migration-list tests.

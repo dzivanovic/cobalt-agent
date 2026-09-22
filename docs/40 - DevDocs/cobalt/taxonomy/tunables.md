@@ -62,3 +62,13 @@ not duplicated here.
 `loader.py` (`load_tunables`, `resolve_cfg`, `iter_cfg_tokens` — the
 `cfg(key)` resolution path), `trade_def.py` (`Tunable[T]` — a distinct,
 older per-field mechanism, not this registry), ADR-0003.
+
+**2026-09-21 — setups one build STEP-2.** `TunableSource` gains
+`ASSUMED`: a default put in place without his ruling (FINAL §8
+[R2F-09]). Its one home is `1 - Trading/Assumed Defaults.md`, read by
+`vault_loader.load_assumed_tunables`. A row stops being assumed only when
+its `source` reads `ruling`. An edited value that still says `assumed`
+keeps the mark. A ruled number never moves into committed
+`tunables.yaml`. Committed `tunables.yaml` also gains the first
+CONVENTION row, `anatomy.orientation.extension` (A-01: unit `label`,
+value `null`, status `proposed`).

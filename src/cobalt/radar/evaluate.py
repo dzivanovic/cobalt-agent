@@ -435,7 +435,7 @@ def working_minutes(defaults: TaxonomyDefaults) -> int:
 
 def _cfg_value(raw: Any, tunables: Mapping[str, TunableRow], defaults: TaxonomyDefaults) -> Any:
     if isinstance(raw, str) and raw.startswith("cfg(") and raw.endswith(")"):
-        return resolve_cfg(raw[4:-1], dict(tunables), defaults)
+        return resolve_cfg(raw[4:-1], tunables, defaults)
     return raw
 
 
@@ -542,18 +542,23 @@ def convention_refusals(td: TradeDef, tunables: Mapping[str, TunableRow]) -> tup
     return tuple(out)
 
 
-def assumed_closure(td: TradeDef, tunables: Mapping[str, TunableRow]) -> tuple[str, ...]:
-    """R2-2.2 B, computed ONCE at formation — a static closure of the def:
-    (1) every `cfg(<key>)` the def names (`iter_cfg_tokens`); (2) the
-    `TUNABLE_KEYS` of every detector serving an atom its preconditions or
-    avoids name; (3) the conventions of the branches and resolvers it uses.
-    The assumed keys are the closure's keys whose resolved row reads
-    `source: assumed`, plus every convention whose row is still null."""
-    keys: set[str] = set(iter_cfg_tokens(td))
+def closure_keys(td: TradeDef) -> frozenset[str]:
+    """R2-2.2 B — the static closure of a definition, the union of (1) every
+    `cfg(<key>)` the def names (`iter_cfg_tokens`), (2) the `TUNABLE_KEYS` of
+    every detector serving an atom its preconditions or avoids name, and
+    (3) the conventions of the branches and resolvers it uses."""
+    keys: set[str] = set(iter_cfg_tokens(td)) | _conventions(td)
     for predicate in [*td.preconditions, *td.avoid]:
         for atom in predicate.required_atoms:
             if atom in ATOMS:
                 keys |= set(ATOMS[atom].tunable_keys)
+    return frozenset(keys)
+
+
+def assumed_closure(td: TradeDef, tunables: Mapping[str, TunableRow]) -> tuple[str, ...]:
+    """Computed ONCE at formation: the closure's keys whose resolved row reads
+    `source: assumed`, plus every convention whose row is still null."""
+    keys = closure_keys(td) - _conventions(td)
     out = {key for key in keys if key in tunables and tunables[key].source is TunableSource.ASSUMED}
     for key in _conventions(td):
         row = tunables[key]
@@ -713,7 +718,7 @@ def evaluate_member(
                            note="intraday bars older than 2 x radar.scan_interval", **extra))
 
     def cfg(key: str) -> Any:
-        return resolve_cfg(key, dict(tunables), defaults)
+        return resolve_cfg(key, tunables, defaults)
 
     def value(raw: Any) -> Any:
         return _cfg_value(raw, tunables, defaults)
@@ -1660,7 +1665,7 @@ def _state(value: str):
 
 __all__ = [
     "ASSUMED_CONVENTIONS", "Anchor", "AtomValue", "CATALYST_REVIEW_FIELDS", "CONVENTION_LABELS", "CardUpdate",
-    "EVALUATOR_VERSION", "SideOutcome", "assumed_closure", "convention_refusals", "publish_frames",
+    "EVALUATOR_VERSION", "SideOutcome", "assumed_closure", "closure_keys", "convention_refusals", "publish_frames",
     "EvaluateError", "EvaluateStage", "FACTOR_COMPUTERS", "Formation", "LoadedDef", "MemberEvaluation",
     "MemberInput", "OpenRadarCard", "ReceiptChain", "ReplayError", "ReplayedCard", "StageOutcome",
     "UNCLASSIFIED_SETUP", "assumed_keys_of", "build_receipt", "canonical_sha256", "card_dots",

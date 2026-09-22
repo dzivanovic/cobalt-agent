@@ -190,7 +190,10 @@ def test_the_days_second_formation_is_refused_by_the_geometry_guard():
                                      daily_status="cache-hit"),
         tunables=sup.engine_tunables(), defaults=sup.defaults(), scan_interval=100, clock=session_clock(),
     )
-    assert (ev.evaluation, ev.note, ev.formation) == ("not_formed", "stop_wrong_side", None)
+    # the short frame is refused by the guard; with neither frame formed the
+    # published row is the LONG frame's (R2-4.1 B, setups one build STEP-2)
+    assert (ev.by_side["short"].evaluation, ev.by_side["short"].note) == ("not_formed", "stop_wrong_side")
+    assert (ev.evaluation, ev.formation) == ("not_formed", None)
 
 
 def test_two_same_day_formations_of_one_ticker_and_def_persist_as_two_rows_under_the_extended_key():

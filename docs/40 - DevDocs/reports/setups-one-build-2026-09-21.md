@@ -233,6 +233,73 @@ GREEN on the start code by design: the six Lego (ii) pins (below), X4 (the cent-
 
 **The A-01 convention's row key** is the companion's key NAME for it, `anatomy.orientation.extension` (a key name is anatomy, FINAL §8; its value in committed config is `null`). `ASSUMED_CONVENTIONS` and the dot name that row key; `A-01` stays the design's label in comments and DevDocs.
 
+### C
+
+| file | change |
+|---|---|
+| `src/cobalt/radar/formation/__init__.py` (new) | the package: the five tables, keyed by the def's own data |
+| `src/cobalt/radar/formation/triggers.py` (new) | `TriggerOutcome {state, price, ref_bar_ts, kind, inputs, why, level}` + `.unmirrored(side)`; `TRIGGERS = {bar_break: BarBreak}` (`serves({bars_cleared})`, `structure.bar_break_trigger` re-registered); `trigger_resolver` |
+| `src/cobalt/radar/formation/stops.py` (new) | `StopOutcome {price, placement, ref, inputs, why, structural, extreme}` + `.unmirrored`; `STRUCTURAL_REFS = {snapback_candle, turn_low: tracked extreme}`; `STOPS = {structural_extreme}`; `stop_resolver` |
+| `src/cobalt/radar/formation/atoms.py` (new) | `AtomValue` (moved from `evaluate.py`); `ATOMS` (the four served atoms: value kind, producible domain, price flag, `tunable_keys`, conventions); `RELATIONS = {}`; `predicate_gaps` — the ONE shape walk |
+| `src/cobalt/radar/anatomy/frame.py` (new) | `mirror_bars`, `mirror_daily`, `Frame`, `build_frame` (detectors run inside the frame; Extension + HTF atoms moved here) |
+| `src/cobalt/radar/anatomy/registry.py` | its three constants DELETED; `evaluability` reads the tables + `predicate_gaps` (E8 `∌`, E9 `Unsupported(<kind>)`) |
+| `src/cobalt/radar/evaluate.py` | one Frame per side; `on_side` evaluates the long-side text per frame; trigger / stop via the registries, un-mirrored into `Formation`; A-01 in frame terms; `publish_frames` (R2-4.1 B, `by_side`); the stage reads `by_side[card.direction]` for the avoid that expires a card; `Formation` + `side_frame`, `anchor`, `trigger_outcome`, `stop_outcome`; `SideOutcome`; `ASSUMED_CONVENTIONS` = the row key; `CONVENTION_LABELS`; `convention_refusals`; `closure_keys` / `assumed_closure` (R2-2.2 B); `FORMULA_FILES` + `formation/*.py`; two needless `dict(tunables)` copies in the cfg path removed (X22's instrumentation needs the reads) |
+| `src/cobalt/taxonomy/tunables.py` | `TunableSource.ASSUMED` |
+| `src/cobalt/taxonomy/loader.py` | `merge_tunables` hole-fill `_fills_hole` (B's R2-3.2, the four clauses) |
+| `src/cobalt/taxonomy/vault_loader.py` | `ASSUMED_NOTE` / `ASSUMED_SECTION` / `ASSUMED_UNIT`; `LoadedTunable.slug` optional; `load_assumed_tunables` (global / per_trade of a loaded def; per_indicator REFUSED — F1 not widened; source assumed / ruling); appended in `load_vault_trade_defs`; duplicate suppliers refused; the strategy-note reader refuses `source: assumed` |
+| `src/cobalt/taxonomy/cli.py` | `assumed_note_text`, `write_assumed` (existing `VaultWriter`: `create_if_absent` + `upsert_unit`), `cmd_assumed_write`, `assumed_report` / `cmd_tunables_assumed`; subcommands `assumed write --from … --dry-run\|--apply` and `tunables --assumed` |
+| `src/cobalt/db_migrations/0013_tunables_slug_nullable.sql` + `.rollback.sql` (new), `db_migrations/__init__.py` | the migration pair registered in `FORWARD` / `REVERSE` |
+| `configs/cobalt/taxonomy/tunables.yaml` | ONE added row, `anatomy.orientation.extension` (unit `label`, `value: null`, `status: proposed`, `dynamic: false`, consumer = the side-binding line) |
+
+`taxonomy/store.py` needs no code change (a `None` slug passes through). `seam.py` untouched (R2-4 = B adds no seam field). Not touched: `vaultwrite/`, `cards/`, `aset/`, `taxonomy/migrations/`.
+
+### A1
+
+| test | old assertion | new assertion | FINAL tag |
+|---|---|---|---|
+| `test_radar_anatomy.py` import + `test_supported_atoms_are_exactly_the_s2_detectors` | `registry.SUPPORTED_ATOMS == frozenset({4 atoms})` | `frozenset(formation.atoms.ATOMS) == frozenset({the same 4 atoms})`; the other use reads the same table | §2.5 (constants deleted) |
+| `test_rubberband_forms.py::test_t3_…` | monkeypatch `evaluate.structural_stop`; published note `stop_wrong_side` | patch `formation.stops.structural_stop` (frame coordinates: `+1.00`); `by_side["short"].note == "stop_wrong_side"`, published `not_formed`, no formation, no card | §2.3, R2-4.1 B |
+| `test_rubberband_forms.py` T5 (a) offline + with-DB, T5 (c)(5) | `assumed_keys == ["A-01"]`, `"A-01" in engine_why` | `== ["anatomy.orientation.extension"]`, that key in `engine_why` | R2-2.2 B (the closure replaces the constant) |
+| `test_rubberband_forms.py` T6 formed-def pins | exclusions `{setup_ref, assumed_keys}`; card `tunables_sha256` as is | + STEP-2's added Formation fields; `tunables_sha256` asserted = snapshot WITH the convention row and mapped to the snapshot WITHOUT it (the pin's start value) | §2.4, R2-2.2 B |
+| `test_rubberband_forms.py` T6 non-formed pins | raw dumps | minus `by_side` and minus E9's `Unsupported(<kind>)` (+ its seam marker) — `without_e9_shapes` | R2-4.1 B, §2.5 E9 |
+| `test_setups_registries.py` Lego (ii) pins (this step's own T) | formation `assumed_keys` as dumped | `anatomy.orientation.extension` mapped back to `A-01`; the card's `tunables_sha256` mapped as above; E9 names stripped — exactly the three by-design changes, everything else byte-identical | R2-2.2 B, §2.5 |
+| `test_replay_formations.py::test_the_days_second_formation_is_refused_by_the_geometry_guard` (STEP-1's) | published `("not_formed", "stop_wrong_side", None)` | `by_side["short"]` carries `stop_wrong_side`; published `not_formed`, formation None | R2-4.1 B |
+| `test_archiver_migrations.py` ×4, `test_p4_migrations.py`, `test_radar_migration.py`, `test_radar_score_migration.py`, `test_tenancy.py` | tails / heads end at `0011`; `1…11 contiguous` | the exact lists with `0013_tunables_slug_nullable` added (heads `[:4]` → `[:5]`, `FORWARD[-4:]` → `[-5:]`); `numbers == [1…11, 13]` exactly | R2-3 = B (migration); L68 seam with `bars/chunk-2-0920` |
+
+DEFECTS of the change, fixed in the CODE / own test, not re-pointed: `test_tenancy.py::test_no_unquoted_user_schema_reference_in_python` flagged `user.` in `loader._fills_hole` → parameter renamed `supplied`; `tests/taxonomy/test_names_rule.py` flagged my test's non-`example_` per-trade key → `example_not_loaded`; `setups_shapes.every_scan` cached by md5 alone, and two neutral notes with the same YAML body share one (the slug is frontmatter) → cache key `(slug, md5, ticker)`; the F-04 test compared `None` extension prices and read incomplete trigger windows → guarded. No assertion removed, no skip / xfail added.
+
+### X
+
+- **X20 — violation + rollback** (above) → R2-3 = B WITH migration 0013.
+- **X19 — PASS** (the built predicate's truth table, one test per clause, + the two holes: a per-trade row never fills a global key; a strategy-note row never fills an engine key; duplicates refused).
+- **X23 — PASS on `tmp_path`**: after the owner-style hand edit of one row's `source`, a second write changing two other values produced exactly this diff (verbatim, paths elided): `-  value: 0.5` / `+  value: 0.55` … `-  value: 1` / `+  value: 2`; the hand-edited `source: ruling` line survived; the second write landed. → one marker unit for all rows works. The real dev vault: **UNPROVEN (dev vault) — no command string; the desk proves the writer there before the production write (L28 "writers off until proven on the dev vault with a diff")**.
+- **Writer proof (L28)**: `created` then `updated`; diff 1 = the whole template (`+# Assumed defaults` … `+<!-- /cobalt:section assumed -->`), diff 2 = the unit body `-tunables: []` → `+tunables:` / `+- key: range.wick_ratio_max` …; `vault_writes` rows inside the rollback transaction.
+- **X22 — PASS**: instrumented reads ⊆ declared closure on every sampled scan, both frames — mixed / countertrend reads `anatomy.orientation.extension`, the three `extension.*` keys, `range.wick_ratio_max` (the closure's own read of the def's `radar_watch` cfg), `stop.buffer`; full shape reads the four without `stop.buffer`; declared = those six.
+- **X8 (`source` half) — PASS offline and with-DB** (see SUITE): after the convention row reads `ruling`, the open card keeps the dot, null score, suppression; a new formation carries `assumed_keys == ()`.
+- **X21 — PASS**: selection deterministic; replay of the receipt reproduces `by_side` exactly.
+- **X25 — PASS**: the board row, the dry-run replay and the card read `short` from a mirrored-frame formation. `grep -rn "\.direction\b\|\[\"direction\"\]\|'direction'"` over `radar/store.py`, `radar/audit_export.py`, `radar/evaluate_cli.py`, `aset/radar_panel.py`, `replay/formations.py`: `radar/store.py:408` writes the published row's `direction`; the panel reads the CARD's direction (`radar_panel.py:743`, `:746`, `:1001`); the nightly binding reads the `ReplayFormation.direction` (`formations.py:159` …). None assumes the long side.
+- **X18 — offline PASS**: `X18: scans=175 differences={'atrs_from_open': 0, 'Extension.leg_count': 0, 'htf_level_proximity': 0}` → computing them once on the real bars (B's R2-4.2) is consistent. Stored-day half: see `## EXPERIMENTS` (X2 first).
+- **X12 — PASS**: the mirrored-frame card's trigger, stop, raw, rounded, extreme are positive; directions `short`; extreme side `high`; `why` names `short` only; no negative atom number.
+- **X4 — PASS**: `_on_ten_cent_grid(Decimal('-10.00'))` True, `(-10.04)` False; the `structural_stop` sweep over 4.80–6.20 (whole and half cents) × buffers 0.01 / 0.02 / 0.05 × both sides: 0 inequalities.
+- **X6 — `X6: a negative-price archiver Bar constructs`** → nothing would stop a round trip, so the Frame wraps `WorkingBar` only (asserted).
+- **X7 (offline) — 0 `both_sides`** on 392 scans for each of mixed / countertrend / full.
+- **X5 (offline) — PASS**: `X5 offline: defs=3 frames=2 members=50 runs_s=[0.65, 0.64, 0.68] p95~max=0.68s budget=100.0s` (the stored-day run is at the deploy).
+- **Frame property F-04 — PASS** on every scan of the committed day (Extension predicates, prices, tracked extreme, `bar_break` both ways, the stop); R2F-12 — the mirrored daily series gives the same HTF day count.
+
+- **Stored-session experiments** (`tests/experiments/setups_one/`, with-DB, counts only; a `conftest.py` inside the folder re-exports `tests/cobalt/conftest.py`'s fixtures — no `tests/experiments/__init__.py`, an L68 seam with `bars/chunk-e-0920`):
+  - **X2** — `X2: stored i1 sessions=11 names=60 rows=451362 names-per-session min=60 max=60` → the stored-session experiments CAN run.
+  - **X7 stored — PASS**: `X7 stored: sessions=10 grid=30min {'rubberband': {'scans': 7200, 'both_sides': 0, 'formed': 0}, 'rubberband-without-htf-avoid': {'scans': 7200, 'both_sides': 0, 'formed': 104}}` — the full shape forms 0 because its day-1 HTF avoid is UNKNOWN without the daily series (the daily leg is UNPROVEN in the worktree).
+  - **X18 stored — PASS for two of three**: `X18 stored: sessions=10 {'scans': 7200, 'atrs_from_open_diff': 0, 'leg_count_diff': 0} htf_level_proximity=UNPROVEN (daily leg)` — runs at the deploy from `~/cobalt`.
+
+### D
+
+New: `radar/formation/__init__.md`, `formation/triggers.md`, `formation/stops.md`, `formation/atoms.md`, `radar/anatomy/frame.md`. Appended (one dated paragraph each): `radar/anatomy/registry.md`, `radar/evaluate.md` (the Frame, R2-4 = B with the row's letter, the closure; the ONE bump covers it), `taxonomy/tunables.md`, `taxonomy/loader.md` (hole-fill, R2-3 = B, X20's line), `taxonomy/vault_loader.md` (the reader; "an absent note = no assumed rows"), `taxonomy/store.md` + `db_migrations/__init__.md` (0013 and its rollback), `taxonomy/cli.md` (the writer and the dry-run).
+
+### SUITE
+
+- `uv run pytest -q tests/cobalt tests/taxonomy` (background) → `2302 passed, 361 skipped, 1 xfailed, 15 warnings in 166.93s (0:02:46)` — 0 failed. Against STEP-1 (2251 / 356): +51 passed = this step's new offline tests (`test_setups_registries.py`, `test_assumed_store.py`, `test_setups_x5.py`); +5 skipped = its new with-DB tests (skipped offline).
+- cp → `COBALT_ENV=dev uv run pytest -q tests/cobalt/test_rubberband_forms.py tests/cobalt/test_setups_registries.py tests/cobalt/test_assumed_store.py tests/cobalt/test_radar_cards_db.py tests/cobalt/test_taxonomy_store.py tests/cobalt/test_radar_score_migration.py tests/cobalt/test_replay_formations.py tests/cobalt/test_archiver_migrations.py tests/cobalt/test_p4_migrations.py tests/cobalt/test_radar_migration.py tests/cobalt/test_tenancy.py tests/experiments/setups_one -s -q` (the printed X-lines above come from this run) → rm → `ls` "No such file"; then the same set without `-s` → **`299 passed in 586.47s (0:09:46)`** (it includes the stored-session experiment module) → rm → `ls -la .env` → `ls: .env: No such file or directory`.
+
 ## ESCALATE
 
 (running list; the ALWAYS items (i)–(xii) are written at CLOSE)
@@ -246,6 +313,6 @@ GREEN on the start code by design: the six Lego (ii) pins (below), X4 (the cent-
 
 ## CONTINUE
 
-next: STEP-2 (C) — tests written + RED recorded (`test_setups_registries.py`, `test_assumed_store.py`, X20 in `test_taxonomy_store.py`). Build: (1) assumed store — `TunableSource.ASSUMED`, `LoadedTunable.slug` optional, `load_assumed_tunables` + append in `load_vault_trade_defs`, strategy reader refuses `assumed`, hole-fill in `merge_tunables`, `db_migrations/0013_tunables_slug_nullable{,.rollback}.sql` + registry, `taxonomy/cli.py` `assumed_note_text` / `write_assumed` / `assumed_report` + subcommands; (2) `radar/formation/{__init__,triggers,stops,atoms}.py`, `anatomy/frame.py` (mirror_bars, mirror_daily), `registry.py` reads the tables, `evaluate.py` per-side evaluation + `publish_frames` + `by_side` + `CONVENTION_LABELS` + closure, stage reads `by_side[card.direction]`; convention row in `tunables.yaml`. Scratch design notes (not committed): `/Users/cobalt/.claude/jobs/ef4d8972/tmp/step2-plan.md`.
+next: STEP-3 (C3a) — D1 shared indicators + session levels + warm-up. X1 FIRST (with-DB, `tests/experiments/setups_one/`), then T (F-10 / F-11 as tests, pins on health-independent outputs), then C (`anatomy/indicators.py` seeded EMA / `atr_seeded`, `frame.py` warm series, new detector modules for DayRange/upper_third, VWAP, PMH/PML/PDH/PDL, slope_norm, flat, InPlay.state; `ATOMS` rows; `tunables.yaml` null rows). Scratch design notes (not committed): `/Users/cobalt/.claude/jobs/ef4d8972/tmp/step2-plan.md`.
 
-(run in progress — step 2 of 9, next under ## CONTINUE)
+(run in progress — step 3 of 9, next under ## CONTINUE)

@@ -40,3 +40,22 @@ and a status write that re-rendered the definition unit would rewrite the
 def and every comment in it. A per-trade row must carry scope
 `per_trade(trade_key(slug))`; a row shadowing an engine key is a loud
 collision, not an override.
+
+**2026-09-21 — setups one build STEP-2: the dedicated reader.**
+`load_assumed_tunables(vault_root, loaded_slugs=)` reads the ONE unit
+`tunables:assumed`, inside `<!-- cobalt:section assumed -->`, of
+`ASSUMED_NOTE = "1 - Trading/Assumed Defaults.md"`. The note sits
+OUTSIDE the Strategies folder, beside the list-config note ([R2F-07]).
+**An absent note means no assumed rows, not an error.** Every row must:
+- validate through `TunableRegistry`;
+- carry scope `global` or `per_trade(<a def loaded in this pass>)`.
+  `per_indicator(...)` is REFUSED, as the settled reader words it. That
+  is F1, NOT widened, so the three per-indicator holes stay null;
+- read `source` `assumed` or `ruling`.
+
+A `global` row's `LoadedTunable.slug` is None; `slug` is now optional.
+`load_vault_trade_defs` APPENDS these rows to `user_tunables`, the same
+list `_resolve_every_cfg` merges and `TaxonomyStore.sync` writes and
+prunes. One key supplied twice is refused with both paths named. The
+strategy-note reader `_read_tunables_unit` refuses `source: assumed`, so
+the mark has one home.
