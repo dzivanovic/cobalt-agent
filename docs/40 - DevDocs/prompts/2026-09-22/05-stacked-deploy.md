@@ -61,15 +61,15 @@ AUTHORIZATION — VERIFY IT YOURSELF BEFORE YOU RUN ANYTHING. The CTO desk wrote
   - A DESK LAUNCH ROW with "NO WORDS OF HIS" does NOT count.
   - `git -C /Users/cobalt/cobalt log -1 --format=%H -S"merge --ff-only deploy/stacked-0922" -- "docs/40 - DevDocs/reports/cto-2026-09-22.md"` must be NON-EMPTY. Only the desk file counts: this prompt and the drafter's report quote the string and never satisfy the gate.
   - Missing → `FAILED: authorization mismatch — no approval of the new strings · rollback: not used`.
-- **THIS LAUNCH** is the desk's row **R__L** of `<desk file>`. The desk fills every `R__L` of this file before launch with the same number.
+- **THIS LAUNCH** is the desk's row **R11** of `<desk file>`. The desk fills every `R11` of this file before launch with the same number.
   - The row names `05-stacked-deploy.md`, the gate worktree's `worktree add` (and its time), and both builds' and both checks' stop lines. It also names the review's stop line and every blocker `06` found that HOLDS as folded into this file.
-  - `grep -n "^| R__L " <desk file>` → the row must name `05-stacked-deploy.md`.
+  - `grep -n "^| R11 " <desk file>` → the row must name `05-stacked-deploy.md`.
   - `git -C /Users/cobalt/cobalt log -1 --format=%H -S"05-stacked-deploy.md" -- "docs/40 - DevDocs/reports/cto-2026-09-22.md"` must be NON-EMPTY.
 YOU CAN ALWAYS STOP. If in doubt, write `FAILED: <step> — <concern> · rollback: not used` as the last line, commit the report (STEP-6's two calls) and stop. TWO ASYMMETRIES:
 (a) While `.env` sits in the gate worktree, "stop" means removing it and proving it gone FIRST (STEP-2.3 (d)). Only then do you write the stop line.
 (b) From the first bootout on, a resident is DOWN. "Stop" then means STEP-5's safe state first.
 
-**PLACEHOLDER GATE — the first thing you do.** This file ships with two placeholder tokens: `R10` (HIS approval row) and `R__L` (the desk's launch row). They appear in the AUTHORIZATION paragraph above and in this gate. The desk fills every occurrence before launching. Run exactly:
+**PLACEHOLDER GATE — the first thing you do.** This file ships with two placeholder tokens: `R10` (HIS approval row) and `R11` (the desk's launch row). They appear in the AUTHORIZATION paragraph above and in this gate. The desk fills every occurrence before launching. Run exactly:
 `grep -n -E "R_[_]" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-22/05-stacked-deploy.md"`
 The bracket form is deliberate: it keeps this command from matching itself. It must print NOTHING and exit 1. One or more hits means the desk has not filled a slot. So does a placeholder still visible in your own launch line. Then the last line is `FAILED: placeholder — <the line numbers grep printed> — nothing touched · rollback: not used`; commit and stop. Quote the grep's exit status in the report either way.
 
@@ -167,7 +167,7 @@ One row per rule: rule · command · exit · allowed/DENIED + reason verbatim.
     - starts `STALE MARKER CHECK R2 DONE`;
     - `houses that checked:` is ≥ `3 of 4`;
     - carries `defects that HOLD: 0`;
-    - `ready for the stacked deploy: <r> of <n>` has `<r>` = `<n>`, both ≥ 3 (`68`'s own close shape).
+    - `ready for the stacked deploy: <r> of 4` has `<r>` EQUAL to the `houses that checked:` count (every house that checked said YES) and ≥ 3. [desk fold 09:2x: round 2 closed `houses that checked: 3 of 4 · defects that HOLD: 0 · ready for the stacked deploy: 3 of 4` — Sol did not check (Codex METER, retry Sep 26); the `of 4` counts SEATS, and L67's floor is three checkers; the earlier "`<r>` = `<n>`" wording would have refused a clean 3-of-3 result.]
   - `tail -n 3 "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/ops-6a-check-r3-2026-09-22.md"`. The LAST NON-BLANK line:
     - starts `OPS 6A CHECK R3 DONE`;
     - carries `defects that HOLD: 0` and `ready for the stacked deploy: yes` (`81`'s COUNT RULE: yes ONLY with ≥3 houses, 0 defects, no `STILL OPEN`, Sol Q2 closed).
@@ -175,7 +175,7 @@ One row per rule: rule · command · exit · allowed/DENIED + reason verbatim.
   - Either file absent, `(run in progress …)`, a `FAILED` line, or any other value → `FAILED PREFLIGHT: not checked — <file> — <last line verbatim>`.
   - L68 SCOPE: a branch that fails its check is DROPPED from a stacked set, and the rest lands (L43 as amended 09-21). THIS FILE IS WRITTEN FOR BOTH. With one branch red, you stop with the FAILED line, and the desk re-issues a one-branch file. You never drop a branch yourself.
 - **P7 THE READ OF THIS PROMPT** (L67): `tail -n 3 "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/stacked-deploy-review-2026-09-22.md"`.
-  - The LAST NON-BLANK line starts `STACKED DEPLOY REVIEW DONE`, its `houses:` is not `0 of 2`, and it carries `blockers: 0`. OR the `R__L` row names every blocker that held as folded into THIS file.
+  - The LAST NON-BLANK line starts `STACKED DEPLOY REVIEW DONE`, its `houses:` is not `0 of 2`, and it carries `blockers: 0`. OR the `R11` row names every blocker that held as folded into THIS file.
   - The file is committed (`git -C /Users/cobalt/cobalt log -1 --format=%H -- "docs/40 - DevDocs/reports/stacked-deploy-review-2026-09-22.md"` NON-EMPTY).
   - Otherwise → `FAILED PREFLIGHT: not reviewed — <line verbatim>`.
 - **P8 THE BRANCH WORKTREES**, each its own call:
