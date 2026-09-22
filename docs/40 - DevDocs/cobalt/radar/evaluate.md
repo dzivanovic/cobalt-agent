@@ -102,3 +102,14 @@ The ONE `EVALUATOR_VERSION` bump of STEP-1 covers this step. Nothing deploys bet
 - **Conventions.** `CONVENTION_LABELS` names the label the code implements for `frame.warmup_source`, `dayrange.session` and `vwap.anchor`. All three rows are null in committed config, so a def naming their atoms carries them as assumed keys.
 - **[F-11], as tests** (`tests/cobalt/test_setups_d1.py`, pins captured on the start-of-step code). The Extension, `atrs_from_open`, `leg_count`, the dots and `card_score` do not move. X14 PASS: 138 refreshes of a FILLED card built on the committed day; no number but `health` moved.
 - **Deploy note (F-10).** The `health` of open cards moves, because EMA9 is now seeded. The ONE `EVALUATOR_VERSION` bump of STEP-1 covers it: nothing deploys between steps (R44).
+
+## 2026-09-22 — the anchor, the band shape, the generic why (setups one build STEP-4; FINAL C3b)
+
+- **The anchor (FINAL §2.4).** `on_side` forms on `formation.anchors.anchor_for(td)`: the first anchor whose object the def's preconditions name.
+  - The Extension anchor is byte-identical: the same notes, the same A-01 check, the same values.
+  - The `Range(micro)` anchor forms at the Range's instantiation bar.
+  - `Formation.formed_bar_ts` / `anchor` come from the anchor. `extension_direction` stays for byte identity and carries the anchor's real direction.
+  - A def with no anchor object reads `not_formed`, note `no formation anchor`.
+  - `detail.extension_path` and the avoided-bar stamp are an Extension formation's evidence only. They are `None` for another anchor, and unchanged for Extension defs and for defs with no anchor.
+- **The band shape (§4 row 1).** `evaluate_node` gains a keyword `units=` (the tunable row's unit). `_in_band` evaluates `<atom> IN cfg(band) <unit>` as an inclusive `[lo, hi]`. The atom's unit, the Quantity's and the row's must agree; a mismatch is `Unsupported(unit:…)`, named. An absent band row still fails loud in `cfg()`. Any other band value is `Unsupported(band)`. An `Unsupported` raised in the interpreter now reaches the seam through `seam_safe_missing_atoms` (a unit name is not an atom spelling). The atom names that were already valid are unchanged.
+- **`card_why` (F-05)** keeps the Extension sentence byte for byte. For another anchor it is assembled from the trigger's and the stop's own `why` fragments.

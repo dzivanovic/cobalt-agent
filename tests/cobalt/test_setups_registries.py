@@ -94,7 +94,9 @@ CARD_EXCLUDED = {"formula_sha256"}
 #: health input), the new seam observation `atr_seeded`, the D1 atoms a
 #: not-evaluable def no longer lists as missing, and the four rows committed
 #: `tunables.yaml` gains (their keys excluded from the start digest).
-STEP3_KEYS = ("dayrange.session", "frame.warmup_source", "slope_norm.bars", "vwap.anchor")
+STEP3_KEYS = ("dayrange.session", "frame.warmup_source", "slope_norm.bars", "vwap.anchor",
+              # + STEP-4's three rows (D2 / D3 detector keys)
+              "leg.consolidation_max_retrace", "range.micro.bound_flat_slope_atr", "range.micro.touch_tolerance_atr")
 
 
 def _tunables_digests() -> tuple[str, str]:

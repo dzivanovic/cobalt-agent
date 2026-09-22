@@ -210,6 +210,39 @@ tunables:
     source: dwv
     consumers: ["cobalt.radar.anatomy.slope (slope_norm(x), EMA9.slope window)"]
 
+  # --- D2 Range(micro) + D3 opening-drive roles (setups one build STEP-4) --
+  # `A-03`: a bar touches a bound within this many ATR(working_tf).
+  - key: range.micro.touch_tolerance_atr
+    value: null
+    unit: atr
+    scope: global
+    dynamic: true
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.anatomy.micro_range (touch tolerance)"]
+
+  # `A-04`: a bound is flat below this slope, in ATR per working bar; bounds
+  # sloping apart beyond it are diverging = no Range.
+  - key: range.micro.bound_flat_slope_atr
+    value: null
+    unit: atr
+    scope: global
+    dynamic: true
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.anatomy.micro_range (bound_type)"]
+
+  # `A-07`: the bounded retrace, as a share of the opening drive, within which
+  # a micro-Range from the drive's extreme terminates it by consolidation.
+  - key: leg.consolidation_max_retrace
+    value: null
+    unit: ratio
+    scope: global
+    dynamic: true
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.radar.anatomy.leg_roles (Leg(opening_drive).terminated_by)"]
+
   # `A-05`, `A-06`, `A-12`: conventions the frame's resolvers implement.
   - key: frame.warmup_source
     value: null

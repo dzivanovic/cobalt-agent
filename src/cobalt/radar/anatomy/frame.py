@@ -48,6 +48,9 @@ from .daily import DailySeries, HtfRangeBreak, NoDailyBars, htf_range_break
 from .extension import ExtensionObservation, ExtensionParams, detect_extension
 from .in_play import in_play_state
 from .indicators import ATR_PERIOD, ema, seeded, wilder_atr
+from .leg import legs
+from .leg_roles import OpeningDrive, max_retrace, opening_drive
+from .micro_range import MicroRangeObservation, detect_micro_range, range_params
 from .session_levels import day_range, premarket_levels, prior_day_levels, vwap
 from .slope import slope, slope_bars, slope_norm
 
@@ -132,6 +135,9 @@ class Frame(BaseModel):
     #: A `LazyAtoms` (typed `Any` so validation never copies — and so never
     #: computes — the lazy values).
     atoms: Any
+    #: The lazy observations a trigger / stop resolver reads by object name
+    #: (`Range(micro)` → `MicroRangeObservation` or its `_unset` reason).
+    objects: Any = None
     #: The last closed i1 close, in the frame's coordinates.
     last_close: Decimal | None
 
@@ -180,8 +186,10 @@ def _d1_resolvers(
     trade_date: date,
     last_close: Decimal | None,
     tunables: Mapping[str, TunableRow],
+    objects: dict[str, Callable[[], Any]],
 ) -> dict[str, Callable[[], AtomValue]]:
-    """The D1 atoms of one frame (every input already in frame coordinates)."""
+    """The lazy atoms of one frame (every input already in frame coordinates);
+    `objects` receives the observations a trigger / stop resolver reads."""
     pre = session.premarket
     cache: dict[str, Any] = {}
 
@@ -266,7 +274,73 @@ def _d1_resolvers(
             return AtomValue(kind="number", number=getattr(levels, part))
         return resolve
 
+    # --- D2 / D3 (STEP-4): Range(micro) and the opening drive's role ----------
+    def micro() -> MicroRangeObservation:
+        def compute():
+            params, unset = range_params(tunables)
+            if unset is not None:
+                return unset
+            return detect_micro_range(run, params, atr=atr())
+        return once("range", compute)
+
+    def range_atom(part: str) -> Callable[[], AtomValue]:
+        def resolve() -> AtomValue:
+            obs = micro()
+            if isinstance(obs, str):
+                return AtomValue(kind="unavailable", reason=obs)
+            if obs.unavailable is not None:
+                return AtomValue(kind="unavailable", reason=obs.unavailable)
+            r = obs.range
+            if part == "instantiated":
+                return AtomValue(kind="boolean", boolean=r is not None)
+            if r is None:
+                return AtomValue(kind="null", reason="not_instantiated")
+            value = {"duration": r.duration_min, "low": r.base, "top": r.top, "base": r.base,
+                     "bound": r.top, "height": r.height, "wick_ratio": r.wick_ratio}[part]
+            return _num(value, "insufficient_bars")
+        return resolve
+
+    def drive_legs():
+        return once("legs", lambda: legs(run))
+
+    def drive_direction() -> AtomValue:
+        lg = drive_legs()
+        if not run:
+            return AtomValue(kind="unavailable", reason="insufficient_bars")
+        if not lg:
+            return AtomValue(kind="null", reason="not_instantiated")
+        return AtomValue(kind="symbol", symbol=lg[0].direction)
+
+    def drive() -> OpeningDrive | str:
+        def compute():
+            if not run:
+                return "insufficient_bars"
+            bound = max_retrace(tunables)
+            if bound is None:
+                return "leg.consolidation_max_retrace_unset"
+            obs = micro()
+            if isinstance(obs, str):
+                return obs
+            if obs.unavailable is not None:
+                return obs.unavailable
+            return opening_drive(run, drive_legs(), obs.range, max_retrace=bound)
+        return once("drive", compute)
+
+    def terminated_by() -> AtomValue:
+        od = drive()
+        if isinstance(od, str):
+            return AtomValue(kind="unavailable", reason=od)
+        if od.terminated_by is None:
+            return AtomValue(kind="null", reason="not_instantiated")
+        return AtomValue(kind="symbol", symbol=od.terminated_by)
+
+    objects.update({"Range(micro)": micro, "Leg(opening_drive)": drive})
+
     return {
+        **{f"Range(micro).{part}": range_atom(part)
+           for part in ("instantiated", "duration", "low", "top", "base", "bound", "height", "wick_ratio")},
+        "Leg(opening_drive).direction": drive_direction,
+        "Leg(opening_drive).terminated_by": terminated_by,
         "price": lambda: _num(last_close, "insufficient_bars"),
         **{name: ema_atom(period) for name, period in EMA_PERIODS.items()},
         "ATR(working_tf)": lambda: _num(atr(), "insufficient_seed"),
@@ -321,10 +395,11 @@ def build_frame(
             AtomValue(kind="number", number=Decimal(htf.day_count))
             if htf.day_count is not None else AtomValue(kind="null", reason="not_instantiated")
         )
+    objects: dict[str, Callable[[], Any]] = {}
     lazy = _d1_resolvers(run, session, daily=daily, daily_ok=daily_ok, trade_date=trade_date,
-                         last_close=last_close, tunables=tunables if tunables is not None else {})
+                         last_close=last_close, tunables=tunables if tunables is not None else {}, objects=objects)
     return Frame(side=side, run=run, premarket=session.premarket, extension=ext, htf=htf,
-                 atoms=LazyAtoms(atoms, lazy), last_close=last_close)
+                 atoms=LazyAtoms(atoms, lazy), objects=LazyAtoms({}, objects), last_close=last_close)
 
 
 __all__ = [

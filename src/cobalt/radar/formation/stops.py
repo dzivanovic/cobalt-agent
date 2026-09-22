@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from cobalt.taxonomy.trade_def import StructuralRef
 
+from ..anatomy.indicators import InsufficientBars
 from ..anatomy.structure import StructuralStop, TrackedExtreme, structural_stop, tracked_extreme
 
 
@@ -58,10 +59,22 @@ def _tracked(frame) -> TrackedExtreme:
     return tracked_extreme(frame.run, frame.extension.direction)
 
 
+def _range_base(frame) -> TrackedExtreme:
+    """`consolidation_low` / `range_base` (= `Range.base`, taxonomy §3.6): the
+    live micro-Range's base, at the latest bar holding it (STEP-4)."""
+    obs = frame.objects["Range(micro)"]
+    r = None if isinstance(obs, str) else obs.range
+    if r is None:
+        raise InsufficientBars("consolidation_low (no instantiated micro-Range)", 1, 0)
+    return TrackedExtreme(side="low", price=r.base, bar_ts=r.base_bar_ts)
+
+
 #: §3.6 refs -> the resolver of the extreme they name.
 STRUCTURAL_REFS: dict[StructuralRef, Callable[[Any], TrackedExtreme]] = {
     StructuralRef.SNAPBACK_CANDLE: _tracked,
     StructuralRef.TURN_LOW: _tracked,
+    StructuralRef.CONSOLIDATION_LOW: _range_base,
+    StructuralRef.RANGE_BASE: _range_base,
 }
 
 

@@ -27,7 +27,13 @@ from cobalt.radar.anatomy.registry import evaluability
 #: - rubberband: its full shape carries the day-1 HTF avoid, which is True on
 #:   the committed day (proof ESCALATE 2) — `avoided` on every scan the
 #:   relation path forms on.
-AWAITING_A_DAY: frozenset[str] = frozenset({"rubberband"})
+#: - hitchhiker (STEP-4): evaluable; on FTFT its opening drive reads
+#:   `consolidation` on 22 scans and a micro-Range instantiates on 68, but on
+#:   no scan do the band and the upper-third preconditions hold with them (a
+#:   False precondition, never an unknown); BGFI is stale by design. Its path
+#:   forms on the definition-written day and its mirror
+#:   (`test_setups_hitchhiker.py::test_hitchhiker_path_*`).
+AWAITING_A_DAY: frozenset[str] = frozenset({"rubberband", "hitchhiker"})
 
 
 @pytest.fixture(scope="module")

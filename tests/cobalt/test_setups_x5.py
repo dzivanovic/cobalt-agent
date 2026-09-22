@@ -28,7 +28,16 @@ POOL = 50
 
 
 def _stage(defs):
+    """STEP-4: the stage gets what a live install would merge — the engine
+    rows with the corpus shapes' constructed fills (L69), and every note's own
+    per-trade rows as the user rows — so each detector runs, not its `_unset`."""
     tickers = [f"ZZ{i:02d}" for i in range(POOL)]
+    engine, user = dict(sup.engine_tunables()), {}
+    for ld in defs:
+        merged = shapes.tunables_for(ld)
+        own = shapes.user_rows(ld)
+        engine.update({k: v for k, v in merged.items() if k not in own})
+        user.update(own)
     bars = {t: [b.model_copy(update={"ticker": t}) for b in shapes.bars("FTFT" if i % 2 == 0 else "BGFI")]
             for i, t in enumerate(tickers)}
     radar = sup.FakeRadarStore(sup.members(*tickers), bars)
@@ -38,9 +47,9 @@ def _stage(defs):
         return series.model_copy(update={"ticker": ticker})
 
     stage = EvaluateStage(
-        radar_store=radar, card_store=sup.FakeCardStore(), defs_source=lambda: (defs, {}),
+        radar_store=radar, card_store=sup.FakeCardStore(), defs_source=lambda: (defs, user),
         settings_values=lambda: sup.fixture_settings_rows(**{"radar.cards_enabled": False}),
-        daily_source=daily, tunables_loader=sup.engine_tunables, defaults_loader=sup.defaults,
+        daily_source=daily, tunables_loader=lambda: engine, defaults_loader=sup.defaults,
         clock=session_clock(), now=lambda: LAST_RTH_SCAN,
     )
     rvol = {t: RvolObservation(ticker=t, value=2.0, observed_at=LAST_RTH_SCAN, source="screen:s",

@@ -60,6 +60,7 @@ def test_x7_and_x18_on_the_stored_sessions(tmp_path):
     clock = session_clock()
     params = ExtensionParams.from_tunables(sup.engine_tunables())
     defs = {key: shapes.load_shape(tmp_path / key, shape) for key, shape in {**shapes.SHAPES, **shapes.VARIANTS}.items()}
+    tunables = {key: shapes.tunables_for(ld) for key, ld in defs.items()}
     x7 = {key: {"scans": 0, "both_sides": 0, "formed": 0} for key in defs}
     x18 = {"scans": 0, "atrs_from_open_diff": 0, "leg_count_diff": 0}
     sessions = 0
@@ -73,7 +74,9 @@ def test_x7_and_x18_on_the_stored_sessions(tmp_path):
                     member = MemberInput(membership_id=1, ticker=ticker, trade_date=day, as_of=at, bars=tuple(bars),
                                          daily=None, daily_status="absent")
                     for key, ld in defs.items():
-                        ev = evaluate_member(ld, member, tunables=sup.engine_tunables(), defaults=sup.defaults(),
+                        # STEP-4: each shape with its own merged rows (the constructed
+                        # fills + its note's per-trade rows); rubberband's are the engine's.
+                        ev = evaluate_member(ld, member, tunables=tunables[key], defaults=sup.defaults(),
                                              scan_interval=100, clock=clock)
                         x7[key]["scans"] += 1
                         x7[key]["formed"] += ev.evaluation == "formed"

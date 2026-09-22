@@ -35,6 +35,7 @@ from cobalt.taxonomy.predicate import (
     Number,
     Or,
     Qualified,
+    Quantity,
     Ref,
     Relation,
     SetLiteral,
@@ -45,6 +46,8 @@ from cobalt.taxonomy.predicate import (
 from ..anatomy import extension as _extension
 from ..anatomy import in_play as _in_play
 from ..anatomy import indicators as _indicators
+from ..anatomy import leg_roles as _leg_roles
+from ..anatomy import micro_range as _micro_range
 from ..anatomy import session_levels as _levels
 from ..anatomy import slope as _slope
 
@@ -76,6 +79,9 @@ class AtomResolver:
     #: Every reason the frame can give for no value (X11); a `null` value
     #: reaches the seam as `not_instantiated`.
     reasons: tuple[str, ...] = ()
+    #: The number's unit when a predicate compares it to a `Quantity` band
+    #: (`IN cfg(band) min`, FINAL §4 row 1); None = unitless.
+    unit: str | None = None
 
 
 def _serves(*resolvers: AtomResolver) -> dict[str, AtomResolver]:
@@ -85,6 +91,9 @@ def _serves(*resolvers: AtomResolver) -> dict[str, AtomResolver]:
 _EXT_REASONS = ("insufficient_bars", "incomplete_bucket", "catalyst_ref_unknown")
 _WARM = _indicators.WARMUP_CONVENTION
 _SLOPE_REASONS = ("insufficient_seed", "insufficient_bars", "slope_norm.bars_unset")
+_RANGE_KEYS = _micro_range.TUNABLE_KEYS
+_RANGE_REASONS = ("insufficient_seed", "insufficient_bars", "incomplete_bucket",
+                  *(f"{key}_unset" for key in _micro_range.TUNABLE_KEYS))
 
 ATOMS: dict[str, AtomResolver] = _serves(
     AtomResolver("Extension.state", "symbol", domain=frozenset({"culminating", "none"}),
@@ -112,6 +121,23 @@ ATOMS: dict[str, AtomResolver] = _serves(
     *(AtomResolver(name, "number", price=True, reasons=("not_instantiated",)) for name in ("PMH", "PML")),
     *(AtomResolver(name, "number", price=True, reasons=("no_daily_bars",)) for name in ("PDH", "PDL")),
     AtomResolver("InPlay.state", "symbol", domain=_in_play.DOMAIN, tunable_keys=_in_play.TUNABLE_KEYS),
+    # --- D2 (STEP-4): Range(micro) ------------------------------------------
+    AtomResolver("Range(micro).instantiated", "boolean", tunable_keys=_RANGE_KEYS, conventions=(_WARM,),
+                 reasons=_RANGE_REASONS),
+    AtomResolver("Range(micro).duration", "number", tunable_keys=_RANGE_KEYS, conventions=(_WARM,),
+                 reasons=(*_RANGE_REASONS, "not_instantiated"), unit="min"),
+    *(AtomResolver(f"Range(micro).{part}", "number", price=True, tunable_keys=_RANGE_KEYS, conventions=(_WARM,),
+                   reasons=(*_RANGE_REASONS, "not_instantiated")) for part in ("low", "top", "base", "bound")),
+    AtomResolver("Range(micro).height", "number", tunable_keys=_RANGE_KEYS, conventions=(_WARM,),
+                 reasons=(*_RANGE_REASONS, "not_instantiated")),
+    AtomResolver("Range(micro).wick_ratio", "number", tunable_keys=_RANGE_KEYS, conventions=(_WARM,),
+                 reasons=(*_RANGE_REASONS, "not_instantiated")),
+    # --- D3 (STEP-4): the opening drive's role -----------------------------
+    AtomResolver("Leg(opening_drive).direction", "symbol", domain=frozenset({"up", "down"}),
+                 reasons=("insufficient_bars", "not_instantiated")),
+    AtomResolver("Leg(opening_drive).terminated_by", "symbol", domain=frozenset({"pullback", "consolidation"}),
+                 tunable_keys=(*_RANGE_KEYS, *_leg_roles.TUNABLE_KEYS), conventions=(_WARM,),
+                 reasons=(*_RANGE_REASONS, "leg.consolidation_max_retrace_unset", "not_instantiated")),
 )
 
 
@@ -150,6 +176,23 @@ def _domain_gaps(atom_node: Node, values) -> set[str]:
     return {f"{resolver.name}∌{v.name}" for v in values if isinstance(v, Symbol) and v.name not in resolver.domain}
 
 
+def unit_mismatch(quantity_unit: str, other: str | None) -> str | None:
+    """The named `Unsupported` of a band whose unit is not the other side's."""
+    if other == quantity_unit:
+        return None
+    return f"Unsupported(unit:{quantity_unit})" if other is None else f"Unsupported(unit:{quantity_unit}≠{other})"
+
+
+def _unit_gaps(atom_node: Node, quantity_unit: str) -> set[str]:
+    """FINAL §4 row 1: `IN cfg(band) <unit>` needs an atom measured in that
+    unit (the row's own unit is checked when the band resolves)."""
+    resolver = ATOMS.get(render(atom_node)) if isinstance(atom_node, Ref) else None
+    if resolver is None:
+        return set()
+    gap = unit_mismatch(quantity_unit, resolver.unit)
+    return set() if gap is None else {gap}
+
+
 def predicate_gaps(node: Node) -> set[str]:
     """Everything that keeps the interpreter from evaluating `node`."""
     if isinstance(node, Not):
@@ -168,6 +211,8 @@ def predicate_gaps(node: Node) -> set[str]:
             gaps |= _domain_gaps(node.left, [node.right]) | _domain_gaps(node.right, [node.left])
         return gaps
     if isinstance(node, InTest):
+        if isinstance(node.right, Quantity) and isinstance(node.right.value, Cfg):
+            return _operand_gaps(node.left) | _unit_gaps(node.left, node.right.unit)
         if not isinstance(node.right, SetLiteral):
             return _operand_gaps(node.left) | {f"Unsupported({node.kind})"}
         gaps = _operand_gaps(node.left)
@@ -183,4 +228,4 @@ def predicate_gaps(node: Node) -> set[str]:
     return {f"Unsupported({node.kind})"}
 
 
-__all__ = ["ATOMS", "AtomResolver", "AtomValue", "RELATIONS", "RelationResolver", "predicate_gaps"]
+__all__ = ["ATOMS", "AtomResolver", "AtomValue", "RELATIONS", "RelationResolver", "predicate_gaps", "unit_mismatch"]

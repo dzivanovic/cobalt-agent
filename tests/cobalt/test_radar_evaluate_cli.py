@@ -78,7 +78,8 @@ def test_replay_filters_to_one_trade_def_and_names_not_evaluable_defs():
         defaults=sup.defaults(), clock=session_clock(), out=lines.append,
     )
     assert report.formations == []
-    assert "Range(micro).instantiated" in report.not_evaluable["example-range-break"]
+    # STEP-4 of the setups one build serves the Range(micro) atoms (FINAL §3 D2).
+    assert "Extension(day).state" in report.not_evaluable["example-range-break"]
     assert any("not evaluable: missing atoms" in line for line in lines)
     with pytest.raises(SystemExit, match="no loaded trade_def"):
         replay_formations(

@@ -12,3 +12,5 @@ A `StopOutcome` carries `price`, `placement`, `ref`, `inputs`, a `why` fragment,
 The geometry guard (FINAL §9 point (5)) is not here. It is written once in the stage (`evaluate.stop_on_protective_side`), so every placement registered here inherits it.
 
 Registered so far: `structural_extreme` on `snapback_candle` and `turn_low`, the run's tracked extreme. Both are re-registered with byte-identical output.
+
+**2026-09-22 — `consolidation_low` / `range_base` (setups one build STEP-4; FINAL §2.3).** Both taxonomy aliases of `Range.base` now resolve through `STRUCTURAL_REFS` to the live micro-Range's base, as a `TrackedExtreme` (side `low`, at its latest holding bar). The buffer and the nudge law stay `structure.structural_stop`, and the geometry guard is still the stage's one check. With no instantiated Range the resolver raises `InsufficientBars`, which becomes `not_formed`.

@@ -110,6 +110,7 @@ from cobalt.taxonomy.predicate import (
     Not,
     Number,
     Or,
+    Quantity,
     Ref,
     SetLiteral,
     Symbol,
@@ -127,7 +128,8 @@ from .anatomy.indicators import InsufficientBars, WARMUP_CONVENTION
 from .anatomy.session_levels import DAYRANGE_CONVENTION, VWAP_CONVENTION
 from .anatomy.registry import evaluability
 from .anatomy.structure import StructuralStop, TrackedExtreme, TriggerLevel
-from .formation.atoms import ATOMS, AtomValue
+from .formation.anchors import anchor_for
+from .formation.atoms import ATOMS, AtomValue, unit_mismatch
 from .formation.stops import StopOutcome, stop_resolver
 from .formation.triggers import TriggerOutcome, trigger_resolver
 from .seam import AtomOutcome, DeskShadow, DeskShadowEntry, RadarScoreDetail, SeamObservation, validate_atom
@@ -222,20 +224,47 @@ _CMP = {
 }
 
 
+def _in_band(node: InTest, atoms, cfg, consulted: set[str], unknowns: set[str], units) -> bool | None:
+    """FINAL §4 row 1: `<atom> IN cfg(band) <unit>` — an inclusive [lo, hi]
+    band. The atom's unit, the Quantity's unit and the band row's own unit
+    must all agree; any mismatch is `Unsupported`, named."""
+    q = node.right
+    atom = ATOMS.get(render(node.left)) if isinstance(node.left, Ref) else None
+    gap = unit_mismatch(q.unit, atom.unit if atom else None)
+    row_unit = units(q.value.key) if units is not None else None
+    if gap is None and row_unit is not None:  # an absent row fails loud in `cfg()` below
+        gap = unit_mismatch(q.unit, row_unit)
+    if gap is not None:
+        raise Unsupported(gap, f"band unit {q.unit!r} does not match")
+    ls, lv = _value(node.left, atoms, cfg, consulted)
+    if ls == "unknown":
+        unknowns.add(lv or "unavailable")
+        return None
+    if ls == "null":
+        return False
+    band = cfg(q.value.key)
+    if not isinstance(band, (list, tuple)) or len(band) != 2:
+        raise Unsupported("Unsupported(band)", f"cfg({q.value.key}) is not a [lo, hi] band")
+    lo, hi = (Decimal(str(v)) for v in band)
+    return lo <= lv <= hi
+
+
 def evaluate_node(
-    node: Node, atoms: Mapping[str, AtomValue], cfg: Callable[[str], Any], consulted: set[str], unknowns: set[str]
+    node: Node, atoms: Mapping[str, AtomValue], cfg: Callable[[str], Any], consulted: set[str], unknowns: set[str],
+    *, units: Callable[[str], str | None] | None = None,
 ) -> bool | None:
-    """Kleene three-valued truth. `unknowns` collects the reasons."""
+    """Kleene three-valued truth. `unknowns` collects the reasons. `units`
+    names a tunable row's unit (the band shape checks it)."""
     if isinstance(node, Not):
-        inner = evaluate_node(node.operand, atoms, cfg, consulted, unknowns)
+        inner = evaluate_node(node.operand, atoms, cfg, consulted, unknowns, units=units)
         return None if inner is None else not inner
     if isinstance(node, And):
-        results = [evaluate_node(op, atoms, cfg, consulted, unknowns) for op in node.operands]
+        results = [evaluate_node(op, atoms, cfg, consulted, unknowns, units=units) for op in node.operands]
         if any(r is False for r in results):
             return False
         return None if any(r is None for r in results) else True
     if isinstance(node, Or):
-        results = [evaluate_node(op, atoms, cfg, consulted, unknowns) for op in node.operands]
+        results = [evaluate_node(op, atoms, cfg, consulted, unknowns, units=units) for op in node.operands]
         if any(r is True for r in results):
             return True
         return None if any(r is None for r in results) else False
@@ -262,6 +291,8 @@ def evaluate_node(
             return bool(_CMP[node.op](lv, rv))
         except TypeError as e:
             raise Unsupported(render(node), f"cannot compare {lv!r} {node.op} {rv!r}") from e
+    if isinstance(node, InTest) and isinstance(node.right, Quantity) and isinstance(node.right.value, Cfg):
+        return _in_band(node, atoms, cfg, consulted, unknowns, units)
     if isinstance(node, InTest) and isinstance(node.right, SetLiteral):
         ls, lv = _value(node.left, atoms, cfg, consulted)
         if ls == "unknown":
@@ -764,6 +795,11 @@ def evaluate_member(
         return _cfg_value(raw, tunables, defaults)
 
     anchored = _anchored_on_extension(td)
+    anchor_row = anchor_for(td)
+    on_extension = anchor_row is not None and anchor_row.object == "Extension"
+
+    def units(key: str) -> str | None:
+        return tunables[key].unit.value if key in tunables else None
 
     def on_side(frame: Frame) -> MemberEvaluation:
         """One frame's evaluation of the def's LONG-side text; prices in the
@@ -772,16 +808,21 @@ def evaluate_member(
         consulted: set[str] = set()
         try:
             pre_unknown: set[str] = set()
-            pre = [evaluate_node(p.ast, frame.atoms, cfg, consulted, pre_unknown) for p in td.preconditions if p.expr]
+            pre = [evaluate_node(p.ast, frame.atoms, cfg, consulted, pre_unknown, units=units)
+                   for p in td.preconditions if p.expr]
             avoid_unknown: set[str] = set()
-            avoid = [evaluate_node(p.ast, frame.atoms, cfg, consulted, avoid_unknown) for p in td.avoid if p.expr]
+            avoid = [evaluate_node(p.ast, frame.atoms, cfg, consulted, avoid_unknown, units=units)
+                     for p in td.avoid if p.expr]
         except Unsupported as e:
             return result(
                 "not_evaluable",
-                RadarScoreDetail(atoms=(), missing_atoms=(e.atom,), observations=tuple(seam_obs)),
+                RadarScoreDetail(atoms=(), missing_atoms=seam_safe_missing_atoms((e.atom,)),
+                                 observations=tuple(seam_obs)),
                 missing=(e.atom,), note=str(e), **extra,
             )
-        path = ext.path
+        # The Extension path is an Extension formation's evidence only.
+        path = ext.path if on_extension or anchor_row is None else None
+        avoided_ts = ext.culminating_bar_ts if on_extension or anchor_row is None else None
         if any(r is False for r in pre):
             return result("not_formed", detail(frame, consulted, path), **extra)
         if any(r is None for r in pre):
@@ -794,19 +835,21 @@ def evaluate_member(
             return result("not_formed", detail(frame, consulted, path), note=f"unknown: {sorted(pre_unknown)}",
                           **extra)
         if any(r is True for r in avoid):
-            return result("avoided", detail(frame, consulted, path, ext.culminating_bar_ts), **extra)
+            return result("avoided", detail(frame, consulted, path, avoided_ts), **extra)
         if any(r is None for r in avoid):
             state: Evaluation = "input_stale" if "no_daily_bars" in avoid_unknown else "not_formed"
             return result(state, detail(frame, consulted, path), note=f"avoid unknown: {sorted(avoid_unknown)}",
                           **extra)
 
-        # --- formed: side binding, trigger, stop -------------------------
-        if ext.direction is None or ext.culminating_bar_ts is None:
-            return result("not_formed", detail(frame, consulted, path), note="no culminating bar to form on",
-                          **extra)
+        # --- formed: the anchor (FINAL §2.4), side binding, trigger, stop --
+        if anchor_row is None:
+            return result("not_formed", detail(frame, consulted, path), note="no formation anchor", **extra)
+        anchor = anchor_row.resolve(frame)
+        if isinstance(anchor, str):
+            return result("not_formed", detail(frame, consulted, path), note=anchor, **extra)
         # A-01 (FINAL §1): the long-side text trades against an unqualified
         # Extension — in the frame's coordinates, a DOWN one.
-        if anchored and ext.direction != "down":
+        if anchored and on_extension and anchor.direction != "down":
             return result("not_formed", detail(frame, consulted, path),
                           note="the unqualified Extension runs with this side (A-01)", **extra)
         placement = td.stop.placement
@@ -820,19 +863,21 @@ def evaluate_member(
             return result("not_formed", detail(frame, consulted, path), note="stop_wrong_side", **extra)
         side = frame.side
         trigger, stop = trigger.unmirrored(side), stop.unmirrored(side)
-        real_direction = ext.direction if side == "long" else ("up" if ext.direction == "down" else "down")
-        formed_end = ext.culminating_bar_ts + timedelta(minutes=minutes)
+        real_direction = anchor.direction if side == "long" else ("up" if anchor.direction == "down" else "down")
+        formed_end = anchor.bar_ts + timedelta(minutes=minutes)
         formation = Formation(
+            # `extension_direction` stays for byte identity; for another
+            # anchor it carries that anchor's (real) direction (§2.4).
             extension_direction=real_direction, trade_direction=side, setup_ref=UNCLASSIFIED_SETUP,
             trigger=trigger.level, extreme=stop.extreme, stop=stop.structural, stop_ref=placement.ref.value,
-            formed_bar_ts=ext.culminating_bar_ts, formed_bar_end=formed_end, leg_count=ext.leg_count,
+            formed_bar_ts=anchor.bar_ts, formed_bar_end=formed_end, leg_count=ext.leg_count,
             assumed_keys=assumed_closure(td, tunables), side_frame="long" if side == "long" else "mirrored",
-            anchor=Anchor(object="Extension", direction=real_direction, bar_ts=ext.culminating_bar_ts),
+            anchor=Anchor(object=anchor.object, direction=real_direction, bar_ts=anchor.bar_ts),
             trigger_outcome=trigger, stop_outcome=stop,
         )
         i1_after = tuple(bar for bar in closed_i1 if bar.ts >= formed_end)
         return result(
-            "formed", detail(frame, consulted, path, ext.culminating_bar_ts), formation=formation,
+            "formed", detail(frame, consulted, path, anchor.bar_ts), formation=formation,
             i1_after=i1_after, **{**extra, "direction": side},
         )
 
@@ -840,6 +885,16 @@ def evaluate_member(
 
 
 def card_why(td: TradeDef, formation: Formation) -> str:
+    """FINAL §2.4 [F-05]: assembled from the resolvers' own fragments. The
+    Extension formation keeps its sentence byte for byte."""
+    if formation.anchor is not None and formation.anchor.object != "Extension":
+        t, s = formation.trigger_outcome, formation.stop_outcome
+        return (
+            f"{formation.setup_ref} · {formation.anchor.object} (bar "
+            f"{formation.formed_bar_ts.astimezone(ET):%H:%M} ET) — {formation.trade_direction} on the "
+            f"{t.why if t else 'trigger'} at {formation.trigger.price}; stop {formation.stop.price} "
+            f"{s.why if s else ''}".rstrip()
+        )
     return (
         f"{formation.setup_ref} · Extension culminating (path A, {formation.leg_count} legs, "
         f"bar {formation.formed_bar_ts.astimezone(ET):%H:%M} ET) — {formation.trade_direction} on a "

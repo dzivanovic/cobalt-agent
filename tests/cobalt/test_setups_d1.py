@@ -49,6 +49,9 @@ SCAN0 = shapes.SCAN0
 #: The keys committed `tunables.yaml` gains at this step (their rows move
 #: `tunables_sha256` by construction; the pins map the digest back).
 STEP3_KEYS = ("dayrange.session", "frame.warmup_source", "slope_norm.bars", "vwap.anchor")
+#: + the rows later steps add (each moves the digest by construction).
+ADDED_KEYS = (*STEP3_KEYS, "leg.consolidation_max_retrace", "range.micro.bound_flat_slope_atr",
+              "range.micro.touch_tolerance_atr")
 STEP3_CONVENTIONS = ("dayrange.session", "frame.warmup_source", "vwap.anchor")
 
 
@@ -117,15 +120,45 @@ SERVED_AT_STEP3 = {
 }
 
 
+#: STEP-4 serves more (the registry's by-design change again): the D2 / D3
+#: atoms, `range_break`, the `range_base` / `consolidation_low` stop and the
+#: `IN cfg(band) <unit>` shape (its E9 name `Unsupported(in)`).
+SERVED_AT_STEP4 = {
+    "Range(micro).instantiated", "Range(micro).duration", "Range(micro).low", "Range(micro).top",
+    "Range(micro).base", "Range(micro).bound", "Range(micro).height", "Range(micro).wick_ratio",
+    "Leg(opening_drive).direction", "Leg(opening_drive).terminated_by",
+}
+SERVED_TRIGGERS_AT_STEP4 = {"range_break"}
+SERVED_STOP_REFS_AT_STEP4 = {"range_base", "consolidation_low"}
+
+
+def _served_later(ld) -> set[str]:
+    """The names a not-evaluable def listed as missing at the START of STEP-3
+    that a later step now serves — derived from the def itself."""
+    from cobalt.taxonomy.predicate import InTest, Quantity
+
+    td = ld.definition
+    named = {a for p in [*td.preconditions, *td.avoid] for a in p.required_atoms}
+    out = named & (SERVED_AT_STEP3 | SERVED_AT_STEP4)
+    if td.trigger.type in SERVED_TRIGGERS_AT_STEP4:
+        out.add(f"trigger:{td.trigger.type}")
+    ref = getattr(td.stop.placement, "ref", None)
+    if ref is not None and ref.value in SERVED_STOP_REFS_AT_STEP4:
+        out.add(f"stop:{td.stop.placement.type}:{ref.value}")
+    if any(isinstance(p.ast, InTest) and isinstance(p.ast.right, Quantity) for p in td.preconditions if p.expr):
+        out.add("Unsupported(in)")
+    return out
+
+
 def _unmoved(ev, ld=None) -> dict:
+    from cobalt.radar.evaluate import seam_safe_missing_atoms
+
     dump = {k: v for k, v in ev.model_dump(mode="json").items() if k not in F11_MOVES}
     dump["detail"] = {**dump["detail"], "observations": [
         o for o in dump["detail"]["observations"] if o["name"] not in NEW_OBSERVATIONS]}
     if ld is not None and dump["evaluation"] == "not_evaluable" and dump["missing"]:
-        named = {a for p in [*ld.definition.preconditions, *ld.definition.avoid] for a in p.required_atoms}
-        readd = named & SERVED_AT_STEP3
-        dump["missing"] = sorted(set(dump["missing"]) | readd)
-        dump["detail"]["missing_atoms"] = sorted(set(dump["detail"]["missing_atoms"]) | readd)
+        dump["missing"] = sorted(set(dump["missing"]) | _served_later(ld))
+        dump["detail"]["missing_atoms"] = list(seam_safe_missing_atoms(dump["missing"]))
     return dump
 
 
@@ -135,7 +168,7 @@ def _tunables_digests() -> tuple[str, str]:
     rows = {k: row.model_dump(mode="json") for k, row in sorted(sup.engine_tunables().items())}
     defaults = sup.defaults().model_dump(mode="json")
     new = canonical_sha256({"rows": rows, "defaults": defaults})
-    old = canonical_sha256({"rows": {k: v for k, v in rows.items() if k not in STEP3_KEYS}, "defaults": defaults})
+    old = canonical_sha256({"rows": {k: v for k, v in rows.items() if k not in ADDED_KEYS}, "defaults": defaults})
     return new, old
 
 

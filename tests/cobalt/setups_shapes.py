@@ -232,7 +232,7 @@ def drive_then_range_mapping() -> dict[str, Any]:
             {"expr": "InPlay.state == active"},
             {"expr": "Leg(opening_drive).terminated_by == consolidation"},
             {"expr": "Range(micro).instantiated"},
-            {"expr": "Range(micro).duration IN cfg(shape_drive_then_range.range_duration_band) min"},
+            {"expr": "Range(micro).duration IN cfg(example_drive_then_range.range_duration_band) min"},
             {"expr": "Range(micro).low >= DayRange.upper_third"},
         ],
         trigger={"type": "range_break", "params": {"ref": "Range(micro).bound"},
@@ -252,8 +252,10 @@ def drive_then_range_mapping() -> dict[str, Any]:
 
 
 def drive_then_range_rows() -> list[dict]:
-    return [{"key": "shape_drive_then_range.range_duration_band", "value": [5, 30], "unit": "min",
-             "scope": "per_trade(shape_drive_then_range)", "dynamic": True, "status": "proposed",
+    # L31 / ADR-0008 D5 (`tests/taxonomy/test_names_rule.py`): a per-trade key
+    # in the repo is an `example_` key — the note slug is `example-…` for it.
+    return [{"key": "example_drive_then_range.range_duration_band", "value": [5, 30], "unit": "min",
+             "scope": "per_trade(example_drive_then_range)", "dynamic": True, "status": "proposed",
              "source": "ruling", "consumers": ["preconditions: Range(micro).duration band"]}]
 
 
@@ -266,7 +268,7 @@ SHAPES: dict[str, Shape] = {
         notes="4 countertrend + 1 with_trend setup refs; the day-1 HTF avoid; a human text avoid",
     ),
     "hitchhiker": Shape(
-        note_slug="shape-drive-then-range",
+        note_slug="example-drive-then-range",
         mapping=drive_then_range_mapping,
         rows=drive_then_range_rows,
         engine=D2_CONSTRUCTED,

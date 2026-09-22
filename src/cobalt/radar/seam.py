@@ -56,6 +56,11 @@ UnavailableReason = Literal[
     "detector_missing",
     "insufficient_seed",
     "slope_norm.bars_unset",
+    # X11, STEP-4: the null engine keys of the D2 / D3 detectors.
+    "range.micro.touches_per_side_unset",
+    "range.micro.touch_tolerance_atr_unset",
+    "range.micro.bound_flat_slope_atr_unset",
+    "leg.consolidation_max_retrace_unset",
 ]
 
 

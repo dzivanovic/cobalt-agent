@@ -495,11 +495,10 @@ def test_unsupported_atoms_trigger_and_stop_are_named_missing():
     )
     result = evaluability(td)
     assert not result.evaluable
-    # `VWAP` is served from STEP-3 of the setups one build (FINAL §3 D1).
-    assert set(result.missing_atoms) == {
-        "Range(micro).instantiated", "Leg(pullback)", "touched",
-        "trigger:range_break", "stop:structural_extreme:range_base",
-    }
+    # `VWAP` is served from STEP-3 of the setups one build (FINAL §3 D1);
+    # `Range(micro).instantiated`, `range_break` and `range_base` from STEP-4
+    # (§3 D2, §2.2, §2.3).
+    assert set(result.missing_atoms) == {"Leg(pullback)", "touched"}
 
 
 def test_sequence_trigger_is_named_missing_not_a_crash():
@@ -528,5 +527,9 @@ def test_supported_atoms_are_exactly_the_s2_detectors():
         {"Extension.state", "Extension.instantiated", "Extension.leg_count", "RangeBreak(HTF).day_count",
          "price", "EMA9", "EMA21", "EMA9.slope", "slope_norm(EMA9)", "slope_norm(VWAP)", "VWAP",
          "ATR(working_tf)", "DayRange.high", "DayRange.low", "DayRange.upper_third", "PMH", "PML", "PDH", "PDL",
-         "InPlay.state"}
+         "InPlay.state",
+         # + the D2 / D3 atoms of STEP-4 (FINAL §3 D2, D3)
+         "Range(micro).instantiated", "Range(micro).duration", "Range(micro).low", "Range(micro).top",
+         "Range(micro).base", "Range(micro).bound", "Range(micro).height", "Range(micro).wick_ratio",
+         "Leg(opening_drive).direction", "Leg(opening_drive).terminated_by"}
     )

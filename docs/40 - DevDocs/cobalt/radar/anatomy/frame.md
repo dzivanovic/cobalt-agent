@@ -44,3 +44,18 @@ Two reads are sampled differently:
 - a mirrored slope is the negated real slope;
 - the ATR is equal on both sides;
 - the short frame's `DayRange.high` / `PMH` / `PDH` read the real low-side levels.
+
+## 2026-09-22 — Range(micro) and the opening drive (setups one build STEP-4; FINAL §3 D2/D3)
+
+The same lazy closure now serves the D2 / D3 atoms:
+
+- `Range(micro).{instantiated, duration, low, top, base, bound, height, wick_ratio}` come from `micro_range.detect_micro_range`, fed the frame's seeded ATR. `low` is `base` and `bound` is `top`: the long-side text's trade-side bound.
+- `Leg(opening_drive).direction` comes from `leg.legs`; `Leg(opening_drive).terminated_by` from `leg_roles.opening_drive`, under `A-07`.
+
+How missing inputs read:
+
+- a null detector key reads `<key>_unset`, a missing seed `insufficient_seed`, an incomplete last bucket `incomplete_bucket`;
+- no Range reads `instantiated = False`, with the numbers `null`;
+- a drive that has not ended reads `terminated_by = null`.
+
+`Frame.objects` is a second lazy map: `Range(micro)` → the observation (or its `_unset` reason), and `Leg(opening_drive)` → the `OpeningDrive`. The `range_break` trigger, the `consolidation_low` stop and the `Range(micro)` anchor read it, so each computes nothing a scan has not already computed. A def that names none of these atoms still reads none of their keys (X22).

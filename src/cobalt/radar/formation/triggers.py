@@ -19,6 +19,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from cobalt.taxonomy.trade_def import TriggerType
 
+from ..anatomy.indicators import InsufficientBars
 from ..anatomy.structure import TriggerLevel, bar_break_trigger
 
 
@@ -69,8 +70,36 @@ class BarBreak:
         )
 
 
+class RangeBreak:
+    """`range_break {ref: Range(micro).bound | .top}` (FINAL §2.2; STEP-4): the
+    trade-side bound of the live micro-Range, intrabar. In the frame's
+    coordinates the long-side text's trade-side bound is the `top` (`bound`
+    = long → `top`, taxonomy §3.0); on the mirrored frame that is the real
+    base. The level carries the top's touch bars; `bars_cleared` is 0 — the
+    trigger is a level, not a count of bars cleared."""
+
+    kind = "range_break"
+    REFS = frozenset({"Range(micro).bound", "Range(micro).top"})
+
+    def serves(self, params: dict[str, Any]) -> bool:
+        return params.get("ref") in self.REFS
+
+    def resolve(self, frame, trigger_def, value: Callable[[Any], Any]) -> TriggerOutcome:
+        obs = frame.objects["Range(micro)"]
+        r = None if isinstance(obs, str) else obs.range
+        if r is None:
+            raise InsufficientBars("range_break trigger (no instantiated micro-Range)", 1, 0)
+        level = TriggerLevel(trade_direction="long", price=r.top, bars_cleared=0, bar_ts=r.top_touch_ts)
+        return TriggerOutcome(
+            state="armed", price=r.top, ref_bar_ts=r.top_touch_ts[-1], kind=self.kind,
+            inputs={"ref": trigger_def.params["ref"], "range_start": r.start_ts.isoformat()},
+            why="break of the micro-Range bound", level=level,
+        )
+
+
 TRIGGERS: dict[TriggerType, TriggerResolver] = {
     TriggerType.BAR_BREAK: BarBreak(),
+    TriggerType.RANGE_BREAK: RangeBreak(),
 }
 
 
@@ -85,4 +114,4 @@ def trigger_resolver(trigger_def) -> TriggerResolver | None:
     return resolver
 
 
-__all__ = ["BarBreak", "TRIGGERS", "TriggerOutcome", "TriggerResolver", "trigger_resolver"]
+__all__ = ["BarBreak", "RangeBreak", "TRIGGERS", "TriggerOutcome", "TriggerResolver", "trigger_resolver"]

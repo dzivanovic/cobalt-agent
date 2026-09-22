@@ -37,3 +37,20 @@ A new field, `reasons`, lists every unavailability reason an atom can give. X11 
 The existing four rows now declare their reasons too. Nothing else about them changed: the Lego (ii) pins hold under STEP-3's named normalisation.
 
 `flat(x, window)` is not a row yet. Its detector exists (`anatomy/slope.flat`); the atom arrives with `between` at STEP-5.
+
+## 2026-09-22 — the D2 / D3 rows and the band shape (setups one build STEP-4)
+
+Ten new rows:
+
+- `Range(micro).instantiated|duration|low|top|base|bound|height|wick_ratio`
+- `Leg(opening_drive).direction`, domain `{up, down}`
+- `Leg(opening_drive).terminated_by`, domain `{pullback, consolidation}`
+
+What they declare:
+
+- The Range rows declare `micro_range.TUNABLE_KEYS` and the warm-up convention: their tolerances scale with the seeded ATR.
+- `terminated_by` also declares `leg_roles.TUNABLE_KEYS`.
+- `low|top|base|bound` flip with the mirror; `height`, `duration` and `wick_ratio` do not.
+- `reasons` include each detector key's `_unset`, and X11 adds those four to the seam's closed list.
+
+`AtomResolver.unit` is new: `Range(micro).duration` is in `min`. `predicate_gaps` now accepts the FINAL §4 row-1 shape `<atom> IN cfg(band) <unit>` when the atom's unit is the Quantity's. Otherwise it names `Unsupported(unit:<q>)` (the atom has no unit) or `Unsupported(unit:<q>≠<atom unit>)`. `unit_mismatch` is the one spelling of that name, shared with the interpreter's runtime check of the band row's own unit.

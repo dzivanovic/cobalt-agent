@@ -425,6 +425,73 @@ Order, stated: the three pure detector modules were written first and their 8 un
 - **X15** (detector level, both frames, constructed params, band 5–30 min; pool admission not read), VERBATIM: `X15 (detector level, both frames): {'name_sessions': 600, 'drive_then_range': 241, 'forms_a07': 36, 'forms_literal': 5}`.
   - → "The literal reading forms → `A-07` is not needed as worded": it forms, on 5 name-sessions against 36 under A-07 → **ESCALATE 10.** `A-07` is kept as the FINAL words it.
 
+The pure detectors and the experiment were committed as a wip checkpoint (`6b0172e`, RECOVERY RULE) before the wiring.
+
+### C
+
+| file | change |
+|---|---|
+| `src/cobalt/radar/anatomy/pivots.py` (new) | `pivots(bars, n)` (strict, `n` each side), `pivot_n`; `TUNABLE_KEYS = ("pivot.n",)` |
+| `src/cobalt/radar/anatomy/micro_range.py` (new) | `detect_micro_range` (the longest non-diverging window with ≥ k touches per bound; `bound_type`, `duration`, `height`, `wick_ratio`, `instantiated_ts`, `base_bar_ts`), `range_params` (null → `<key>_unset`); `A-03`, `A-04` |
+| `src/cobalt/radar/anatomy/leg_roles.py` (new) | `opening_drive` (`A-07`, Gemini's wording [F-12]), `opening_drive_literal` (X15 only), `max_retrace` |
+| `src/cobalt/radar/anatomy/frame.py` | the D2 / D3 lazy atoms; `Frame.objects` (`Range(micro)`, `Leg(opening_drive)`) |
+| `src/cobalt/radar/formation/atoms.py` | 10 rows; `AtomResolver.unit`; `predicate_gaps` accepts `IN cfg(band) <unit>`; `unit_mismatch` |
+| `src/cobalt/radar/formation/anchors.py` (new) | `ANCHORS` (`Extension`, `Range(micro)`), `anchor_for` (FINAL §2.4) |
+| `src/cobalt/radar/formation/triggers.py` | `RangeBreak {ref: Range(micro).bound \| .top}` |
+| `src/cobalt/radar/formation/stops.py` | `STRUCTURAL_REFS` + `consolidation_low`, `range_base` (= `Range.base`) |
+| `src/cobalt/radar/evaluate.py` | the anchor in `on_side` (the Extension branch byte-identical); `_in_band` + `evaluate_node(units=)`; an interpreter `Unsupported` reaches the seam through `seam_safe_missing_atoms`; `card_why` assembled from the resolvers' `why` for a non-Extension anchor |
+| `src/cobalt/radar/seam.py` | `UnavailableReason` + the four D2 / D3 `_unset` reasons (X11) |
+| `configs/cobalt/taxonomy/tunables.yaml` | `range.micro.touch_tolerance_atr` (`A-03`, atr), `range.micro.bound_flat_slope_atr` (`A-04`, atr), `leg.consolidation_max_retrace` (`A-07`, ratio): engine rows, null, proposed, global |
+
+Not changed: `leg.py` (X16 pin GREEN on the tip); `registry.py` (it reads the tables); the card, replay, audit and CLI readers, because `Formation.trigger` stays a `TriggerLevel`.
+
+A DEFECT of my change, found while wiring and fixed in the CODE: an absent band row would have read as a unit mismatch. It now fails loud in `cfg()`.
+
+### A1
+
+| test | old assertion | new assertion | FINAL tag |
+|---|---|---|---|
+| `test_radar_anatomy.py::test_unsupported_atoms_trigger_and_stop_are_named_missing` | missing = {`Range(micro).instantiated`, `Leg(pullback)`, `touched`, `trigger:range_break`, `stop:structural_extreme:range_base`} | = {`Leg(pullback)`, `touched`} exactly | §3 D2, §2.2, §2.3 |
+| `test_radar_anatomy.py::test_supported_atoms_are_exactly_the_s2_detectors` | the STEP-3 set | + the 10 D2 / D3 atoms, exactly | §3 D2, D3 |
+| `test_radar_evaluate.py::test_def_without_evaluable_precondition_renders_not_evaluable_never_a_card` | `Range(micro).instantiated` ∈ missing; `Trigger(range_break)` ∈ seam missing | missing == (`Extension(day).state`,) exactly; it is in the seam's missing | §3 D2, §2.2, §2.3 |
+| `test_radar_evaluate_cli.py::test_replay_filters_to_one_trade_def_and_names_not_evaluable_defs` | `Range(micro).instantiated` ∈ the def's not-evaluable list | `Extension(day).state` ∈ it | §3 D2 |
+| shipped-def pins: `test_setups_d1.py` [F-11] (shipped), `test_setups_registries.py` Lego (ii) (shipped), `test_rubberband_forms.py` T6 non-formed | STEP-3's re-add of the served D1 atoms | the ONE shared normaliser `_served_later(ld)`, derived from the def itself: its named atoms served now, `trigger:range_break`, `stop:structural_extreme:range_base`, and `Unsupported(in)` for its band precondition, re-added; the seam list is recomputed by `seam_safe_missing_atoms` | §3 D2, §2.2, §2.3, §4 row 1 |
+| card pins: [F-11] dots / card_score ×2, Lego (ii) cards ×2, T6 formed card | `tunables_sha256` mapped without the STEP-3 rows | … and without STEP-4's three rows | §3 D2 / D3 (new rows) |
+| `test_setups_x5.py` (this build's own) | the stage merged engine rows only | + the corpus's constructed fills and each note's per-trade rows, so the range detector runs rather than stopping at `_unset` | X5 ("the def count grown") |
+| `tests/experiments/setups_one/test_x7_x18_stored.py` (this build's own) | every shape on the engine rows | each shape on its own merged rows (Rubberband's are the engine's, unchanged) | X7 for the new def |
+
+Own-test defect: `tests/taxonomy/test_names_rule.py` refused my note's per-trade key (`shape_drive_then_range.…`, L31 / ADR-0008 D5). The note slug became `example-drive-then-range`, and its key is `example_drive_then_range.range_duration_band`. No assertion was removed, and no skip or xfail was added.
+
+### X (on the changed code)
+
+- **Per-setup acceptance, hitchhiker (FINAL §9 gates 1–5, [F-16] (1)–(5)):**
+  - (1) The shape forms on NO scan of the committed day (FTFT, BGFI), with constructed config. FTFT: on 22 scans the drive reads `consolidation`, and on 68 a micro-Range instantiates, but the band and upper-third preconditions never hold with them (a False, never an unknown). BGFI is stale by design. → `hitchhiker` joins `AWAITING_A_DAY`. Its path forms on the definition-written day (`test_hitchhiker_path_forms_long_on_the_definition_written_day`: long, formed bar 09:46 ET, trigger 11.00 = the top, stop = `structural_stop(10.85, long, 0.02)`, anchor `Range(micro)`) and on its mirror (short, trigger 9.00, `mirrored`).
+  - (2) The property holds with `AWAITING_A_DAY == {rubberband, hitchhiker}`.
+  - (3) The live-note test: `NOT RUN (skipped by design; the deploy runs it and a SKIP is RED — [F-16] (2))`.
+  - (4) The corpus shape is evaluable: `test_every_unlocked_setup_shape_is_evaluable` GREEN, with the text avoid human (L11).
+  - (5) The geometry guard holds for every formation (the definition-written ones; none on the committed day).
+  - At committed defaults the shape stays unknown, with `_unset` in the note (never a guess).
+- **X7 hitchhiker offline:** `X7 hitchhiker: scans=392 formed=0 both_sides=0` → PASS (vacuous on this day: nothing forms). Stored half: see SUITE.
+- **X11 hitchhiker:** `X11 hitchhiker: atoms=7 failures=[]` → PASS. The build-wide X11 over every served atom is also GREEN.
+- **X16:** `X16: leg.py sha256=2f3b3abc2b9e9b634d4a5d050c352ade8853f5a9221be7cee5f4df43cb7782c8` equals the START pin → PASS. `Extension.leg_count` is unchanged: every Rubberband pin (STEP-1 T6, Lego (ii), [F-11]) is GREEN.
+- **X5:** `X5 offline: defs=4 frames=2 members=50 runs_s=[1.79, 1.77, 1.78] p95~max=1.79s budget=100.0s` → PASS.
+
+### D
+
+- New: `radar/anatomy/pivots.md`, `micro_range.md`, `leg_roles.md`, `radar/formation/anchors.md`.
+- Appended: `radar/anatomy/frame.md`, `radar/formation/atoms.md`, `triggers.md`, `stops.md`, `radar/evaluate.md`, `radar/seam.md`.
+
+### SUITE
+
+- **Offline.** `uv run pytest -q tests/cobalt tests/taxonomy` (background).
+  - The first run: `13 failed, 2338 passed, 361 skipped, 1 xfailed`. The failures are the A1 rows above plus the names-rule own-test defect.
+  - After the re-points: **`2351 passed, 361 skipped, 1 xfailed, 15 warnings in 306.03s (0:05:06)`**, 0 failed. Against STEP-3 (2330 / 361), the +21 are exactly `test_setups_hitchhiker.py`'s 21 tests.
+- **With-DB.** cp → `COBALT_ENV=dev uv run pytest -q tests/cobalt/test_rubberband_forms.py tests/cobalt/test_setups_registries.py tests/cobalt/test_setups_d1.py tests/cobalt/test_setups_hitchhiker.py tests/cobalt/test_setups_lego.py tests/cobalt/test_assumed_store.py tests/cobalt/test_radar_cards_db.py tests/cobalt/test_taxonomy_store.py tests/cobalt/test_radar_score_migration.py tests/cobalt/test_replay_formations.py tests/cobalt/test_radar_evaluate.py tests/cobalt/test_radar_evaluate_cli.py tests/cobalt/test_archiver_migrations.py tests/cobalt/test_p4_migrations.py tests/cobalt/test_radar_migration.py tests/cobalt/test_tenancy.py tests/experiments/setups_one` → **`386 passed, 1 skipped in 1136.44s (0:18:56)`**.
+  - The skip, from `-rs` on `test_radar_evaluate.py`: `SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof` (gate 3, NOT RUN by design).
+- **X7 / X18 stored** (after the stored module was pointed at each shape's own rows): `COBALT_ENV=dev uv run pytest -q tests/experiments/setups_one/test_x7_x18_stored.py -s` → `X7 stored: sessions=10 grid=30min {'rubberband': {'scans': 7200, 'both_sides': 0, 'formed': 0}, 'hitchhiker': {'scans': 7200, 'both_sides': 0, 'formed': 17}, 'rubberband-without-htf-avoid': {'scans': 7200, 'both_sides': 0, 'formed': 104}}` · `X18 stored: sessions=10 {'scans': 7200, 'atrs_from_open_diff': 0, 'leg_count_diff': 0} htf_level_proximity=UNPROVEN (daily leg)` → `1 passed`.
+  - **X7 hitchhiker stored: PASS.** It forms on 17 grid scans of the stored sessions, never on both frames.
+- rm → `ls -la .env` → `ls: .env: No such file or directory`.
+
 ## ESCALATE
 
 (running list; the ALWAYS items (i)–(xii) are written at CLOSE)
@@ -444,16 +511,18 @@ Order, stated: the three pure detector modules were written first and their 8 un
 
 ## CONTINUE
 
-next: STEP-4 C (wiring). DONE so far (uncommitted): T RED; pure detectors `anatomy/pivots.py`, `micro_range.py`, `leg_roles.py` green; X13 and X15 run. LEFT:
+next: STEP-5 (C4), backside + fashionably-late.
+1. **X10 FIRST:** a constructed backside fixture with last > open, written from the definition (a run down, a culminating bar, a snapback, a backside above a rising EMA9); then build D4 and run it. `X10: FAIL` → STOP both acceptances, keep D4, `ASK DESK`, pin both `AWAITING_A_RULING`.
+2. T: golden pins on every existing `ExtensionObservation` field at the start of the step.
 3. C:
-   - new detector module(s) for Range(micro) + `bound_type` + pivots `cfg(pivot.n)` + refs `consolidation_low` / `recent_higher_low`;
-   - leg ROLES as a separate function over `leg.legs()` (`leg.py:42-67` byte-identical, X16);
-   - `Leg(opening_drive).{direction, terminated_by}` with `A-07`;
-   - `formation/triggers.py` `range_break`; `formation/stops.py` `consolidation_low`;
-   - the interpreter shape `IN cfg(band) min`;
-   - `tunables.yaml` rows `A-03`, `A-04`, `A-07`.
-4. The per-setup acceptance for `hitchhiker` (a neutral note in `setups_shapes.SHAPES`), X7, X11, X5.
+   - `anatomy/extension.py`: the state domain grows (`reverting` via `A-08`, `backside` via `extension.backside_hh_min` / `_hl_min` above a rising EMA9), refs `turn_low` / `turn`;
+   - `formation/triggers.py` `indicator_cross`;
+   - `formation/stops.py` `measured_fraction` + `recent_higher_low` (the latest pivot low inside the micro-Range, over `anatomy/pivots.py`, built in STEP-4);
+   - the `between` relation and the `flat` atom (the detector `anatomy/slope.flat` is built);
+   - the Arith shape (Decimal; ÷0 → unknown);
+   - `tunables.yaml` `A-08`, `A-11` (already a row) and the convention rows.
+4. Acceptance ×2. `fashionably-late` at production defaults is `AWAITING_A_RULING: F1`. X7 ×2, X11, X5.
 
-File content goes ONLY through Write / Edit (the desk's rule after the STEP-3 slip). The D1 atoms hitchhiker needs are built: `InPlay.state`, `DayRange.upper_third`.
+The rules still in force: file content only through Write / Edit; pins from a test's own failure output; long-form `git status` before a commit.
 
-(run in progress — step 4 of 9, next under ## CONTINUE)
+(run in progress — step 5 of 9, next under ## CONTINUE)

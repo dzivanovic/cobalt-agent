@@ -118,8 +118,11 @@ def test_def_without_evaluable_precondition_renders_not_evaluable_never_a_card()
     outcome = world.scan(SCAN0)
     ev = outcome.evaluations[0]
     assert ev.evaluation == "not_evaluable" and ev.formation is None
-    assert ev.missing and "Range(micro).instantiated" in ev.missing
-    assert "Trigger(range_break)" in ev.detail.missing_atoms
+    # Setups one build STEP-4 serves its Range(micro) atoms, `range_break`
+    # and `range_base` (FINAL §3 D2, §2.2, §2.3): the one atom still missing
+    # is its avoid's `Extension(day).state`.
+    assert ev.missing == ("Extension(day).state",)
+    assert "Extension(day).state" in ev.detail.missing_atoms
     assert world.cards.cards == {}
     assert world.radar.runs[1]["status"] == "complete"
 
