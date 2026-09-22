@@ -1,9 +1,9 @@
 # drc-design-2026-09-22 — DRC automation proposal (seat `drc-design-0922`, Opus 5.5)
 
 ## §0 Headline
-- WROTE `docs/30 - Design/DRC-AUTOMATION-PROPOSAL-2026-09-22.md` (190 lines, keys only) + `docs/_inflight/drc-automation-values-2026-09-22.md` (`no values needed`; gitignored — `.gitignore:43-45` `!docs/_inflight/` · `docs/_inflight/*` · `!docs/_inflight/README.md`). Nothing built, nothing committed, no DB / vault / git write.
+- WROTE `docs/30 - Design/DRC-AUTOMATION-PROPOSAL-2026-09-22.md` (298 lines, keys only; §13 DIFF MODEL added 15:55 ET on R68, verified at `cto-2026-09-22.md:35`: 39 section rows + 35 per-ticker rows, 13 PROPOSED additions, nothing of the coach spec dropped) + `docs/_inflight/drc-automation-values-2026-09-22.md` (`no values needed`; gitignored — `.gitignore:43-45` `!docs/_inflight/` · `docs/_inflight/*` · `!docs/_inflight/README.md`). Nothing built, nothing committed, no DB / vault / git write.
 - Design: ONE import page `/drc` on the existing ASET app (FastAPI, `aset/web.py:83`); DAS CSV + one TradeZella screenshot per trade → typed event → the build creates the DRC from HIS template; the 15:40 job retires; R67 folded (DAS reconciles legs; open positions carry).
-- 5 chunks (32 h seats, ≈45 h with fix rounds), 1 migration, no new dependency, reaches scoring: no. 11 tribunal items, 18 owner items, ESCALATE 6.
+- 5 chunks (32 h seats, ≈45 h with fix rounds), 1 migration, no new dependency, reaches scoring: no. 11 tribunal items, 19 owner items (O19 = rule the diff), ESCALATE 6.
 - Written 15:48–15:52 ET. R67 folded on the desk's message (verified at `cto-2026-09-22.md:35`).
 
 ## UNPROVEN rows (each = a first-gate experiment, L70)
@@ -44,7 +44,8 @@ READING:
 6. **Record correction.** `DRC-2026-09-21.md` was rendered from the repo copy `drc.md.j2`, not his Obsidian template (proposal F4) — the "Cobalt currently uses Obsidian DRC template" fact recorded at `cto-2026-09-22.md:197` does not hold for that note. For the desk's record; R65 (d) already moves the build to his template.
 
 ## CONTINUE
-- The desk: launch the L67 tribunal (Astra, Grok, Gemini, Fable seat) on the proposal; T1–T11 are its agenda.
+- FIRST (R68): he rules the §13 diff model — per row KEEP / MERGE / DROP + WRITER, and which (C) additions stay (O19). The desk records his rulings; the proposal is re-cut from them before the tribunal.
+- Then the desk launches the L67 tribunal (Astra, Grok, Gemini, Fable seat) on the proposal as ruled; T1–T11 are its agenda.
 - In parallel (L72): ask him for E1's DAS export and E2's screenshot (one each, any recent day) — they gate D1/D2, not the tribunal.
 - Owner items O1–O18 to him one per message after the tribunal derives (O3, O5, O18 first — they touch law/acceptance text).
 - No rule strings were needed; no ASK DESK raised.
@@ -65,7 +66,8 @@ Chunks: D1 DAS parser + trade pairing + open-position carry + tables (7 h, 1 mig
 Later slices (8): TradeZella OCR · DAS stop-move history · voice capture · ledgers + weekly pack · premarket keys/sleep trigger/opening window/dated rules · sector map · daily-note stub + wider 09:00 quote · setup-sheet reads.
 New dependency: none this slice (OCR would be one — his choice, O1).
 Reaches scoring: no.
-His (18 owner items), first three: O3 no-trade day vs "no inputs, no DRC"; O5 one source for the daily stop and grade dollars (four today, one of them a committed file); O18 the "15:41" acceptance wording. Also: typed cells vs OCR, where the files live, which DAS accounts count, his template's example blocks, the packet questions still open (Q2, Q4–Q8, Q10–Q14).
+His (19 owner items), first: O19 the diff model (R68); then O3 no-trade day vs "no inputs, no DRC"; O5 one source for the daily stop and grade dollars (four today, one of them a committed file); O18 the "15:41" acceptance wording. Also: typed cells vs OCR, where the files live, which DAS accounts count, his template's example blocks, the packet questions still open (Q2, Q4–Q8, Q10–Q14).
+Diff model (§13, R68 — his to rule BEFORE the tribunal): every heading and prompt of today's DRC plus every coach-spec item in one list (39 rows), each with KEEP / MERGE / DROP and who writes it: AUTO (Cobalt fills it, source named), PRE (Cobalt drafts, he edits), HIS (judgment only he has, e.g. the entry self-tag, self-grade, lessons, the self-observation). No DROP proposed. New sections from the coach: premarket block, session scores (copied from his daily note), playbookable trade, corrections, next-day review grade, discretion audit, open items carried. Per-ticker (35 rows): all 14 of today's bullets kept or merged; 21 coach fields added as bullets or lines (entry tag, exit structure, stop-move structure, lesson, exit time/hold, P&L, legs, card-first, risk overrun, planned/realized R, MAE/MFE, window, seat state, losses in a row, rule results, flags, review grade…). Additions (13, PROPOSED): pick vs rank, confirmed realized R, "R had Cobalt's stop held", stop gap, plan-vs-fill drift, the day's radar cards, his human-only dot, logging accuracy vs DAS, P&L by window, expectancy per setup, all-rules streak, TradeZella-vs-DAS P&L check, tomorrow's If/Then offered into the next daily note. Every rate carries its n; n<30 = insufficient data.
 For the tribunal (11): the import place + file home; build in-request vs job; miss line on an absent note; table names (`fills` vs v3's strike, `public.trades` collision); engine as L7 shadow; his answers inside Cobalt's unit; R67 reconcile through v3's one correction writer (seams on C1's source column and C2's writer); template reader rules; one-source mechanism for his dollar values; smoke re-keying; open-position carry.
 
-DRC AUTOMATION PROPOSED · chunks this week: 5 · later slices: 8 · write-path chunks: 5 · migrations: 1 · import place: /drc page on the ASET app (aset/web.py) · new dependency: none · reaches scoring: no · build estimate: 32 h · open to the tribunal: 11 · owner items: 18 · ESCALATE: 6
+DRC AUTOMATION PROPOSED · chunks this week: 5 · later slices: 8 · write-path chunks: 5 · migrations: 1 · import place: /drc page on the ASET app (aset/web.py) · new dependency: none · reaches scoring: no · build estimate: 32 h · open to the tribunal: 11 · owner items: 19 · diff rows: 74 · additions: 13 · ESCALATE: 6

@@ -177,7 +177,7 @@ Later slices (named, not proposed as this week's build): **L1** TradeZella OCR (
 
 ## 11. OWNER ITEMS (his, one per message)
 
-O1 TradeZella figures: typed cells (MVP) vs OCR (new dependency) · O2 file home: vault `_imports/drc/<date>/` vs a non-synced data directory · O3 a no-trade day: what counts as "both placed" (SPEC §9 streak vs R66 "no inputs, no DRC") · O4 which DAS accounts count · O5 ONE source for the daily stop and grade dollars (today: `daily.md.j2:18`, Rules.md rules 2/12, the ASET sheet-mode config, SPEC §7 `account.*`/`grades.*`) · O6 config home: `trader_settings` vs a keyed unit in his note · O7 rule number → checker binding · O8 his template's example blocks · O9 his per-trade answers inside Cobalt's unit vs his own block · O10 voice channel and timing · O11 premarket keys (meditated, tone, hotkey, sleep hours vs the `Sleep:` value) · O12 the packet questions still his: Q2 (confirm "none" from R65 b), Q4, Q5, Q6, Q7 (SPEC's session-score segments?), Q8 (SPEC §4 rule-10 / prevented as the definition?), Q10, Q11, Q12, Q13, Q14 · O13 rule-engine shadow length N + agreement definition · O14 inputs dropped inside `market_reset` · O15 consent to a redacted real-shape DAS fixture in git · O16 the PnL heading placeholder: his, or Cobalt fills it · O17 `trades.jsonl` / `days.jsonl` files wanted beside Postgres · O18 Charter F14 / S3-smoke "15:41" wording.
+O1 TradeZella figures: typed cells (MVP) vs OCR (new dependency) · O2 file home: vault `_imports/drc/<date>/` vs a non-synced data directory · O3 a no-trade day: what counts as "both placed" (SPEC §9 streak vs R66 "no inputs, no DRC") · O4 which DAS accounts count · O5 ONE source for the daily stop and grade dollars (today: `daily.md.j2:18`, Rules.md rules 2/12, the ASET sheet-mode config, SPEC §7 `account.*`/`grades.*`) · O6 config home: `trader_settings` vs a keyed unit in his note · O7 rule number → checker binding · O8 his template's example blocks · O9 his per-trade answers inside Cobalt's unit vs his own block · O10 voice channel and timing · O11 premarket keys (meditated, tone, hotkey, sleep hours vs the `Sleep:` value) · O12 the packet questions still his: Q2 (confirm "none" from R65 b), Q4, Q5, Q6, Q7 (SPEC's session-score segments?), Q8 (SPEC §4 rule-10 / prevented as the definition?), Q10, Q11, Q12, Q13, Q14 · O13 rule-engine shadow length N + agreement definition · O14 inputs dropped inside `market_reset` · O15 consent to a redacted real-shape DAS fixture in git · O16 the PnL heading placeholder: his, or Cobalt fills it · O17 `trades.jsonl` / `days.jsonl` files wanted beside Postgres · O18 Charter F14 / S3-smoke "15:41" wording · O19 the diff model (§13): KEEP / MERGE / DROP and WRITER per row, and which additions (C) stay — ruled BEFORE the tribunal (R68).
 
 Packet §4 against the spec + rulings: answered — Q1 (R65 a/d), Q3 (R65 d), Q9 (SPEC §2: P&L from fills → DAS, confirmed), Q15 (R65 c). Partly — Q2 (R65 b reading), Q7 (SPEC §1.2 per-day session scores), Q8 (SPEC §4). His — the rest (O12).
 
@@ -188,3 +188,111 @@ Nothing this slice builds feeds a score, a rank, an admission, a grade or a size
 ## TRIBUNAL — open items (T)
 
 T1 import place = `/drc` on the ASET app + files in vault `_imports/` · T2 build synchronous in the request vs a one-shot job · T3 replay line on an absent note → `pending`, rendered later by the build · T4 table names (`drc_fills` vs declared `fills`, v3 O16) and the `public.trades` collision · T5 engine as L7 shadow beside his checkboxes · T6 his answers inside a Cobalt unit across rebuilds · T7 DAS-vs-legs reconcile per R67: shown, then written as correction / new-leg rows through C2's one writer, source named; seams S-C1 / S-C2 / S-C2b (R66 sets aside v3 `:237` for this reconcile only) · T11 open-position carry: pairing seeded from the prior `drc_rows`, one trade_id across days, no unrealized P&L invented · T8 template reader: date token only, repo copy dies · T9 one source for the daily stop / grade dollars (L3; O5 is his value, the mechanism is the tribunal's) · T10 S2/S3 smoke re-keyed to the input-driven build.
+
+## 13. DIFF MODEL — current DRC vs coach spec (R68; he rules this BEFORE the tribunal)
+
+Keys and line refs only (L32). `DRC:n` = `DRC-2026-09-21.md` line n; `SPEC §n` = the coach spec. ACTION = KEEP · MERGE → (target) · DROP. WRITER = **AUTO** (Cobalt populates; source named) · **PRE** (Cobalt drafts, he edits) · **HIS** (judgment only he can give). His default applied: AUTO wherever data exists; HIS only where no data can say it. No row is DROPped: every coach item survives as its own row or inside a named MERGE target.
+
+### (A) SECTIONS
+
+| # | Item | Today | ACTION | WRITER · source |
+|---|---|---|---|---|
+| A1 | title line | DRC:5 | KEEP | AUTO · his template |
+| A2 | date line | DRC:7 | KEEP | AUTO · template date token |
+| A3 | `### Tickers:` dataview | DRC:9-14 | KEEP | AUTO · Obsidian dataview over trade notes |
+| A4 | `### Theme:` embed (target folder empty, packet §2) | DRC:15-17 | MERGE ← SPEC §5.1-2 market tone | AUTO · embed re-pointed to the day's daily note `### Market Context:` (`daily.md.j2:51`) |
+| A5 | `### My GOAL for today:` + one-goal prompt | DRC:22-24 | MERGE ← SPEC §1.1 row 4 goal, §5.1-2 goal | PRE · daily note `1% goal:` key |
+| A6 | goal-format prompts (sentences / specific) | DRC:27-29 | MERGE → A5 | template prompt text, unchanged |
+| A7 | progress-toward-goal summary + paragraph | DRC:32-35 | MERGE ← SPEC §4 goal progress | PRE · metric line from config `goal.metric` over the day's tags (count AUTO, tags HIS, n shown); paragraph HIS |
+| A8 | `Grade:` + why prompt | DRC:38-40 | MERGE ← SPEC §1.2 per-day overall score | HIS (self-grade; the 09:00 reader's source, F12) |
+| A9 | `### How I managed risk:` prompt | DRC:45-47 | KEEP | PRE · facts above his paragraph: planned vs actual risk, overrun flags, distance to daily stop, rules 2/10/12 results (DAS + cards + engine) |
+| A10 | `### PnL on the day:` | DRC:49 | KEEP | AUTO · DAS net P&L (placement O16) |
+| A11 | risk-parameters unit + allocation prompt | DRC:51-57 | KEEP | AUTO · sheet-mode config + cards (existing unit) |
+| A12 | `### Catalyst + Set Up + Trades` | DRC:62 | KEEP | per trade → table (B) |
+| A13 | cards written · trades taken | DRC:66 | KEEP | AUTO · `aset_sizings` + DAS trades |
+| A14 | `### Technology:` (2 prompts) | DRC:167-169 | KEEP | HIS |
+| A15 | `### Collaboration:` (3 prompts) | DRC:173-179 | KEEP | HIS |
+| A16 | `### What I learned (from the trading day)` (3 prompts) | DRC:183-189 | MERGE ← SPEC §1.2 per-trade mistakes/lesson | PRE · his per-trade lesson lines gathered; paragraph HIS |
+| A17 | `### What I learned (from myself)` (3 prompts) | DRC:193-199 | KEEP | HIS (SPEC §9: nothing inferred about state) |
+| A18 | `### Selectivity notes:` passed-on ticker + why | DRC:203-205 | MERGE ← SPEC §1.2 passes, §4 prevented column | PRE · list AUTO: cards with no DAS trade, radar cards passed/expired (`card_transitions`), engine-detected stand-downs/cooldowns; reasons HIS |
+| A19 | passed-on: mistake not repeated | DRC:206 | KEEP | HIS |
+| A20 | `### Tomorrow's one percent better:` If / Then / Because | DRC:211-223 | MERGE ← SPEC §1.2 tomorrow's goal / IF-THEN | HIS |
+| A21 | `### Cobalt Rules Check` checkboxes | DRC:228-244 | KEEP | AUTO · Rules.md (existing) + engine shadow unit (§5) |
+| A22 | card reconcile (taken / passed / discarded) | DRC:246-249 | KEEP | PRE · "taken" AUTO from DAS match; passed vs discarded HIS |
+| A23 | miss line | unit `drc-misses` | KEEP | AUTO · replay 21:10 (§8) |
+| A24 | header: rules line first, W/L, sniper x/y | SPEC §5.1-1 | MERGE → summary unit (§6) | AUTO (rules, W/L from engine + DAS); sniper x/y count AUTO over HIS tags |
+| A25 | premarket block: sleep, meditated, tone, goal, sheet mode / hotkey file, score | SPEC §5.1-2, §1.1 row 4 | NEW section under A5 | PRE · daily note keys (F21), sheet + hotkey from the day-mode attestation row; meditated / tone per O11; score HIS |
+| A26 | session scores (premarket + four blocks + overall) | SPEC §1.2 per day, §5.1-4 | NEW section | PRE · copied from the daily note's `Score -` lines (`daily.md.j2:84-99`); the grades are HIS (packet Q7) |
+| A27 | playbookable trade | SPEC §1.2, §5.1-8 | NEW section | PRE · candidates AUTO (trades with every auto rule `pass`); choice HIS |
+| A28 | disputes / correction lines | SPEC §1.2, §8 step 8 | NEW unit | HIS input; AUTO override log with reason (SPEC §9) |
+| A29 | next-day review grade per trade → grade log | SPEC §1.2, §5.1-7, §4 | NEW section on the prior DRC | HIS grade; AUTO slot + miss direction vs grade at card |
+| A30 | discretion audit entries | SPEC §5.1-6, §4 | NEW section | PRE · stop moves AUTO (DAS order log if E1; v3 stop edits); structure HIS |
+| A31 | open items carried forward | SPEC §5.1-10 | NEW section | AUTO · open positions (R67), unanswered reconcile, `needs_voice` rules, unresolved leg mismatches, prior DRC's empty HIS rows |
+| A32 | streak | SPEC §4 | MERGE → summary | AUTO · `drc_rows` day rows |
+| A33 | rule-break ledger (core vs new) | SPEC §4 | weekly | AUTO · engine rows (shadow) |
+| A34 | sniper tally vs target | SPEC §4 | weekly | AUTO count over HIS tags, n shown (L8) |
+| A35 | exit-efficiency distribution | SPEC §4 | weekly | AUTO when MFE present (O1), n |
+| A36 | rule-10 ledger (cost vs prevented) | SPEC §4 | weekly | PRE · counts AUTO, cost instances HIS (voice) |
+| A37 | playbook instances per setup | SPEC §4 | weekly | AUTO · setup key per trade, n |
+| A38 | structured trade / day records | SPEC §5.2 | KEEP as DB | AUTO · `drc_rows` (file export O17) |
+| A39 | weekly review pack | SPEC §5.3 | separate weekly note (later slice) | AUTO |
+
+### (B) PER-TICKER — `### Catalyst + Set Up + Trades` block vs SPEC per-trade fields
+
+| # | DRC bullet (DRC:68-162 shape) | SPEC field | ACTION | WRITER · source |
+|---|---|---|---|---|
+| B1 | `Ticker:` | §2 ticker, trade_id | KEEP | AUTO · DAS |
+| B2 | `Entry #n — time` | §2 entry_time, attempt_number, thesis_key | MERGE (n = attempt per thesis) | AUTO · DAS + card time |
+| B3 | re-entry #2 what's-new line | §1.2 re-entry what's new, §6 what_new | KEEP | HIS (presence AUTO-checked, rule 7) |
+| B4 | Grade · Direction · Sheet mode | §2 grade_at_card, side; §6 card.sheet_mode | KEEP | AUTO · card |
+| B5 | Entry · Stop · Shares · Risk budget | §2 planned_entry, planned_stop, planned_shares, risk_budget | KEEP | AUTO · card |
+| B6 | Fill update | §2 avg_entry, shares (actual) | MERGE → plan-vs-DAS line | AUTO · DAS + `aset_sizings` fill columns |
+| B7 | `Catalyst:` | §1.2 catalyst | KEEP | PRE · daily-note Trade Ideas `Catalyst` column (`daily.md.j2:65`) / radar card WHY |
+| B8 | `Set Up:` | §1.2 setup name, §6 setup_family / setup_name | KEEP | PRE · card `trade_def` (v3 seam 2) / trade note / TZ tag |
+| B9 | `Trade Notes:` | §1.2 read at entry + flip condition | MERGE → "read / flip" | HIS |
+| B10 | `Keys to success here:` | — (no SPEC field) | KEEP | HIS |
+| B11 | setup + self observation | §6 narrative (verbatim) | KEEP | HIS (SPEC §9) |
+| B12 | ideal vs actual dots on chart | §1.2 entry self-tag (closest) | KEEP + NEW tag line (B15) | HIS |
+| B13 | `Insert Chart with Executions:` | §6 attachments | KEEP | AUTO · embed of the dropped screenshot |
+| B14 | excitement question (reversion-tagged only, `prefill/drc.py` scaffold) | — (no SPEC field) | KEEP | HIS (packet Q14) |
+| B15 | — | §1.2 entry self-tag | NEW bullet | HIS (config enum) |
+| B16 | — | §1.2 exit reasoning, §6 exit_structure | NEW bullet | HIS (config list offered) |
+| B17 | — | §1.2 stop-move structure | NEW line per stop move | PRE · time/price AUTO (order log, E1); structure HIS |
+| B18 | — | §1.2 mistakes / lesson | NEW bullet | HIS (feeds A16) |
+| B19 | — | §2 exit_time, hold_minutes | NEW line | AUTO · DAS |
+| B20 | — | §2 avg_exit, gross/net P&L, commissions | NEW line | AUTO · DAS |
+| B21 | — | §2 legs / scale events, R at exit | NEW table | AUTO · DAS (+ reconcile R67) |
+| B22 | — | §2 card_first, card_lead_seconds | NEW line | AUTO · card + DAS (E4) |
+| B23 | — | §2 card_regenerations | NEW line | AUTO · `aset_sizings` |
+| B24 | — | §2 planned/actual risk, risk_overrun_pct | NEW line | AUTO |
+| B25 | — | §2 planned_R, realized_R | NEW line | AUTO · `realized_r.1`; planned R needs a target (typed / TZ) |
+| B26 | — | §2 MAE, MFE, exit_efficiency, best_exit_gap_R | NEW line | AUTO when typed/OCR (O1) |
+| B27 | — | §2 window | NEW line | AUTO · config windows |
+| B28 | — | §2 seat_state_at_entry | NEW line | AUTO · DAS day |
+| B29 | — | §2 consecutive_losses_before, minutes since last loss | NEW line | AUTO |
+| B30 | — | §2 stop_moves, positive_pnl_stop | NEW table | AUTO · order log (E1) |
+| B31 | — | §2 discretion_delta_R | NEW line | AUTO |
+| B32 | — | §2 known_family, written_exit_exists | NEW line | AUTO · setup sheets (later slice) |
+| B33 | — | §6 rule_results per trade | NEW line | AUTO · engine (shadow) |
+| B34 | — | §5.1-3 flags (card after fill, regenerations, overrun, winner→loser, late tag at size) | NEW line | AUTO (late-tag flag needs HIS tag) |
+| B35 | — | §1.2 next-day review grade, §6 grade_review | NEW line (next day) | HIS |
+
+### (C) ADDITIONS — neither has them; all PROPOSED
+
+| # | Addition | Source | n rule (L8) |
+|---|---|---|---|
+| C1 | pick vs Cobalt's rank per filled card | `picks` rows (`cards/picks.py`) | per-day list; agreement rate only at n≥30 |
+| C2 | realized R confirmed after the DAS reconcile (no longer provisional) | v3 `realized_r.1` over reconciled legs | per trade; averages n≥30 |
+| C3 | "R had Cobalt's stop held" | v3 seam 7, 21:10 replay | per trade; Σ with n |
+| C4 | stop gap: his stop vs Cobalt's structural stop | v3 `stop_in_force` − `structural_stop` | per trade |
+| C5 | plan-vs-fill drift | `aset_sizings.distance_change_pct` vs DAS avg entry | per trade |
+| C6 | the day's radar cards (armed / triggered / expired / missed) linked to trades | `card_transitions`, `missed` | counts with n |
+| C7 | human-only dot per card, shown as his (L11) | card dots | — |
+| C8 | logging accuracy: his taps / held-counts vs DAS mismatches | R67 reconcile rows | weekly rate, n≥30 |
+| C9 | P&L and R by window (config windows) | `drc_rows` | weekly, n per window; <30 = insufficient data |
+| C10 | expectancy per setup | `drc_rows` × setup key | n≥30 else insufficient data |
+| C11 | all-rules-pass streak (shadow) | engine rows | count days |
+| C12 | TradeZella vs DAS P&L cross-check flag | typed TZ figure vs DAS | per trade |
+| C13 | tomorrow's If/Then offered into the next daily note's blank `1% goal:` (L28 clause 2a, blank → value only) | A20 | — |
+
+None of (C) feeds a score or rank; all are displays / review rows (§12 unchanged).
