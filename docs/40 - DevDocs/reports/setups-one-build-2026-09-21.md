@@ -186,7 +186,22 @@ No assertion removed, no skip / xfail added. With-DB re-points (`test_radar_card
 
 ### COMMIT
 
-(below)
+`58aa823 feat(setups): STEP-1 rubberband can form — direction from anatomy, unclassified setup, geometry guard, untappable assumed_formation dot (FINAL C1, R40 B)` — `git show --stat HEAD`: 24 files, 1361 insertions(+), 139 deletions(-); every path one named above (7 DevDocs + this report, 7 `src/` files, 6 re-pointed test files, 3 new test files). `tests/cobalt/test_taxonomy_store.py` (STEP-2's X20 test, drafted early) left out on purpose.
+
+## STEP-2
+
+C2 — the registries, the mirrored frame, the interpreter shapes, the assumed store (FINAL §2, §4, §7-B, §8; R2-3 by X20, R2-4 = B per R50).
+
+### X (before C)
+
+**X20 — RUN FIRST.** `tests/cobalt/test_taxonomy_store.py::test_x20_a_sync_with_one_null_slug_row` (the `store` fixture inside the suite's rollback transaction; the `LoadedTunable` built with `model_construct` because the model types `slug: str`) — cp → `COBALT_ENV=dev uv run pytest -q tests/cobalt/test_taxonomy_store.py -k x20 -s` → rm → `ls` "No such file". VERBATIM: `X20: NotNullViolation: null value in column "slug" of relation "tunables" violates not-null constraint` · `1 passed, 14 deselected in 0.10s` — the test asserts `store.slugs() == [] and store.tunable_keys() == []` after the failed sync: the WHOLE sync rolled back (the example def's upsert included).
+
+**The three reads B rests on, re-read on this branch:**
+- (R1) HOLDS — `src/cobalt/radar/evaluate.py:1253-1255` (after STEP-1's line shift): `engine_rows = dict(self.tunables_loader())` / `defs, user_rows = self.defs_source()` / `tunables = merge_tunables(engine_rows, user_rows)`; the resident's `defs_source` is `TradeDefStore.loaded_for_evaluation` — `taxonomy/store.py:127` `SELECT key, row FROM tunables ORDER BY key`, `:132` `{key: TunableRow.model_validate(row) …}` — bare rows, no reader identity.
+- (R2) HOLDS — `grep -rn "INTO tunables\|FROM tunables\|UPDATE tunables" src/cobalt`: the only writer is `taxonomy/store.py:185` `INSERT INTO tunables (key, row, slug, loaded_at)` inside `sync`, which prunes at `:202` `DELETE FROM tunables WHERE NOT (key = ANY(%s)) RETURNING key`.
+- (R3) HOLDS — `taxonomy/migrations/0001_trade_defs.sql:63` `slug       TEXT NOT NULL REFERENCES trade_defs(slug) ON DELETE CASCADE,`.
+
+**DECISION TABLE ROW:** R1 and R2 HOLD and X20 = violation + rollback → **R2-3 = B WITH its migration.** Home: the database-wide registry `src/cobalt/db_migrations/` (a rollback cannot live in `taxonomy/migrations/`, which `ensure_schema` runs forward on every load). Number: main carries 0001–0011; the unmerged `bars/chunk-2-0920` carries `0012_bars_partitioned_parent` (`git -C /Users/cobalt/cobalt log --oneline --name-only main..bars/chunk-2-0920 -- src/cobalt/db_migrations` → `02d67a6 … 0012_bars_partitioned_parent.sql`, `.rollback.sql`, `__init__.py`, `placement.py`); `bars/chunk-1a-0920` adds no number → **`0013_tunables_slug_nullable`** — an L68 seam on `db_migrations/__init__.py` with `bars/chunk-2-0920`.
 
 ## ESCALATE
 
@@ -201,6 +216,6 @@ No assertion removed, no skip / xfail added. With-DB re-points (`test_radar_card
 
 ## CONTINUE
 
-next: STEP-1 (SUITE) — C, A1, D done and uncommitted; offline suite GREEN (2251/356/1 xfailed); the step's with-DB files GREEN (121 passed); a full `COBALT_ENV=dev` run is in flight — read it, then COMMIT STEP-1 by explicit paths (NOT `tests/cobalt/test_taxonomy_store.py`: its X20 test is STEP-2's, drafted early).
+next: STEP-2 (T) — X20 done (R2-3 = B with migration 0013). Write STEP-2's tests first: assumed store (reader, hole-fill truth table X19, migration FORWARD/rollback, writer on tmp_path X23, dry-run), registries (TRIGGERS/STOPS/STRUCTURAL_REFS/ATOMS/RELATIONS, domain check E8/E9, registry⇔interpreter), Frame property F-04, R2-4 B publication (`by_side`, both_sides, :1329/:1342 named test), closure (convention row `anatomy.orientation.extension` for A-01), byte-identity pins captured on the STEP-1 code. Scratch design notes (not committed): `/Users/cobalt/.claude/jobs/ef4d8972/tmp/step2-plan.md`.
 
-(run in progress — step 1 of 9, next under ## CONTINUE)
+(run in progress — step 2 of 9, next under ## CONTINUE)
