@@ -1,0 +1,131 @@
+# SHAPE: constructed — model replies written by hand for C3's Plan
+# validation tests (43-voice-v1-build.md C3). No value of the trader's
+# (L32): tickers are XYZ-style, prices invented. Each case: the
+# transcript, the candidate ids offered, the model's raw reply content,
+# and the expected outcome (`ok` with the plan kind, or the failure class).
+cases:
+  - name: open cards read
+    transcript: what are my open cards
+    candidates: [card-1, card-2]
+    reply: '{"kind": "answer", "tool": "cards.open", "args": {}, "say": null}'
+    expect: ok
+    kind: answer
+
+  - name: stop act with a ticker span and a price span
+    transcript: move the stop on XYZ to 4.50
+    candidates: [card-1]
+    reply: '{"kind": "act", "tool": "cards.set_stop", "args": {"card": {"span": "XYZ"}, "stop": {"span": "4.50"}}, "say": null}'
+    expect: ok
+    kind: act
+
+  - name: stop act with a candidate id
+    transcript: move that stop to 4.50
+    candidates: [card-7]
+    reply: '{"kind": "act", "tool": "cards.set_stop", "args": {"card": {"candidate": "card-7"}, "stop": {"span": "4.50"}}, "say": null}'
+    expect: ok
+    kind: act
+
+  - name: clarify
+    transcript: move the stop
+    candidates: [card-1, card-2]
+    reply: '{"kind": "clarify", "tool": null, "args": {}, "say": "Which card?"}'
+    expect: ok
+    kind: clarify
+
+  - name: unsupported
+    transcript: write my journal for me
+    candidates: []
+    reply: '{"kind": "unsupported", "tool": null, "args": {}, "say": null}'
+    expect: ok
+    kind: unsupported
+
+  - name: refuse
+    transcript: buy one hundred XYZ at market
+    candidates: []
+    reply: '{"kind": "refuse", "tool": null, "args": {}, "say": null}'
+    expect: ok
+    kind: refuse
+
+  - name: not json
+    transcript: what are my open cards
+    candidates: []
+    reply: 'Sure! Here are your open cards.'
+    expect: plan_parse
+
+  - name: fenced json is not a plan
+    transcript: what are my open cards
+    candidates: []
+    reply: "```json\n{\"kind\": \"answer\", \"tool\": \"cards.open\", \"args\": {}, \"say\": null}\n```"
+    expect: plan_parse
+
+  - name: unknown kind
+    transcript: what are my open cards
+    candidates: []
+    reply: '{"kind": "execute", "tool": "cards.open", "args": {}, "say": null}'
+    expect: plan_parse
+
+  - name: extra field
+    transcript: what are my open cards
+    candidates: []
+    reply: '{"kind": "answer", "tool": "cards.open", "args": {}, "say": null, "confidence": 0.9}'
+    expect: plan_parse
+
+  - name: tool outside the allowlist
+    transcript: buy one hundred XYZ
+    candidates: []
+    reply: '{"kind": "act", "tool": "orders.place", "args": {}, "say": null}'
+    expect: plan_tool
+
+  - name: act kind on a read tool
+    transcript: what are my open cards
+    candidates: []
+    reply: '{"kind": "act", "tool": "cards.open", "args": {}, "say": null}'
+    expect: plan_shape
+
+  - name: answer kind on an act tool
+    transcript: move the stop on XYZ to 4.50
+    candidates: [card-1]
+    reply: '{"kind": "answer", "tool": "cards.set_stop", "args": {"card": {"span": "XYZ"}, "stop": {"span": "4.50"}}, "say": null}'
+    expect: plan_shape
+
+  - name: answer with no tool
+    transcript: what are my open cards
+    candidates: []
+    reply: '{"kind": "answer", "tool": null, "args": {}, "say": "You have two."}'
+    expect: plan_shape
+
+  - name: an arg the tool does not take
+    transcript: move the stop on XYZ to 4.50
+    candidates: [card-1]
+    reply: '{"kind": "act", "tool": "cards.set_stop", "args": {"card": {"span": "XYZ"}, "stop": {"span": "4.50"}, "shares": {"span": "100"}}, "say": null}'
+    expect: plan_shape
+
+  - name: a span that is not in the transcript (invented price)
+    transcript: move the stop on XYZ to 4.50
+    candidates: [card-1]
+    reply: '{"kind": "act", "tool": "cards.set_stop", "args": {"card": {"span": "XYZ"}, "stop": {"span": "4.55"}}, "say": null}'
+    expect: plan_span
+
+  - name: a span normalised by the model is not verbatim
+    transcript: move the stop on X Y Z to 4.50
+    candidates: [card-1]
+    reply: '{"kind": "act", "tool": "cards.set_stop", "args": {"card": {"span": "XYZ"}, "stop": {"span": "4.50"}}, "say": null}'
+    expect: plan_span
+
+  - name: a candidate id not on the closed list
+    transcript: move that stop to 4.50
+    candidates: [card-7]
+    reply: '{"kind": "act", "tool": "cards.set_stop", "args": {"card": {"candidate": "card-8"}, "stop": {"span": "4.50"}}, "say": null}'
+    expect: plan_candidate
+
+  - name: an arg with both a span and a candidate
+    transcript: move the stop on XYZ to 4.50
+    candidates: [card-1]
+    reply: '{"kind": "act", "tool": "cards.set_stop", "args": {"card": {"span": "XYZ", "candidate": "card-1"}, "stop": {"span": "4.50"}}, "say": null}'
+    expect: plan_parse
+
+  - name: an empty span
+    transcript: move the stop on XYZ to 4.50
+    candidates: [card-1]
+    reply: '{"kind": "act", "tool": "cards.set_stop", "args": {"card": {"span": ""}, "stop": {"span": "4.50"}}, "say": null}'
+    expect: plan_parse
