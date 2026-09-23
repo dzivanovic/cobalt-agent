@@ -1,0 +1,125 @@
+DERIVE ROW: R109
+
+MODEL: `claude-opus-5-5`, the DERIVE SEAT named by his STANDING R109 (`cto-2026-09-22.md` §4, 19:34 ET, "Make all Opus 5.5 for now": every Fable-type seat — the tribunal seat, the derive, forensics — on `claude-opus-5-5` until his next word; filled at drafting, so there is nothing for the desk to fill). This is the THIRD and LAST derive of the VOICE v3 tribunal; the first was `15`, the second `26`. You derive the FINAL from the derived design and the round-2 and round-3 rulings, and you WRITE IT WHATEVER ROUND 3 LEAVES. You build, launch and commit nothing · SEAT: `voice-v3-derive-r3-0923`, launched by the CTO desk in the background ONLY after BOTH round-3 stop lines are committed (hub `33`, the Anthropic seat `34`). YOUR POSITION, STATED: the proposal, both earlier seats, both earlier derives and the round-3 seat are all the Anthropic house, on `claude-opus-5-5`, in other sessions. You are a fresh session that ruled nothing, but you are that house again, so you recommend nothing (L37): the `DESK RECOMMENDATION` slots you write stay EMPTY for the desk. The Anthropic seat's wordings pass the same filter as every house's, and a house's equally correct wording is preferred over it. Two bare commands: `cd /Users/cobalt/cobalt-wt/agy-trial` then `claude --bg "Read '/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-23/35-voice-v3-derive-r3.md' and follow it exactly." --model claude-opus-5-5 --permission-mode auto --remote-control voice-v3-derive-r3-0923 --allowedTools "Bash(git -C /Users/cobalt/cobalt show*)" "Bash(git -C /Users/cobalt/cobalt log*)" "Bash(ls *)" "Bash(grep *)" "Bash(tail *)" "Bash(wc *)" "Bash(date*)" --disallowedTools "AskUserQuestion" "EnterWorktree" "Bash(git push*)" --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt --add-dir /Users/cobalt/cobalt-wt`. These are the SAME seven READ-ONLY strings and three denies as `26-voice-v3-derive-r2.md`, `15-voice-v3-derive.md` and `prompts/2026-09-21/22-draft-setups-tribunal.md` (09-20 R13) — nothing new · SESSION: fresh. The round-3 seats' context is NOT carried; their reports are on disk · auto mode on; never `bypassPermissions`; NO database, NO docker, NO pytest, NO git write, NO launch of any agent or house (L36), no vault write, no memory-folder write (L58). You write exactly TWO files, with the Write tool · METER: Anthropic Opus 5.5. An honest estimate:
+- the round-3 hub report ≈ 12–18k tokens
+- the raw round-3 rulings of the houses that ruled ≈ 6–12k
+- the Anthropic seat's round-3 report ≈ 7–10k
+- the second derive's report ≈ 6k (24,502 B)
+- the round-2 hub report's check sections ≈ 5k; the round-2 seat report ≈ 7k
+- the derived design ≈ 14k (read whole — the FINAL is it amended)
+- LAWS.md ≈ 20.5k
+- code re-opened only where a fold turns on it ≈ 3–6k
+- output: the FINAL ≈ 17–20k tokens (the derived design whole, the folds, and the unresolved sides in place) and the report ≈ 6–9k
+- peak context ≈ 120–145k
+
+It does NOT depend on the grok/agy window (no house runs) · nobody sits at this terminal — the report file is your channel. Never ask: write `ASK DESK: <question> [<time>]` in the report and continue with the safe default.
+
+# DERIVE THE VOICE v3 FINAL — THE TRIBUNAL CLOSES HERE
+
+LADDER: S3 design lane (`cto-2026-09-22.md` R100; `cto-2026-09-23.md` R18). LAW STEP (L67): proposal → round 1 → derive (`15`) → round 2 (`24`, `25`) → second derive (`26`: `converged: 0 of 3 · round 3: 3 · O1: ruled B · FINAL: not written`) → round 3 (hub `33`: Grok, Gemini; Astra METER, recorded under 09-22 R13; the Anthropic seat `34` on `claude-opus-5-5`, R109) → **THIS = the third derive. Round 3 was the LAST round (L67): there is no round 4. It CLOSES the tribunal: every item either converged and is folded, or goes to HIM as ONE choice with each side's text verbatim (L39 — never a vote, never a count of seats)** → his ONE approval → build → ≥3 checkers → deploy. HIS R18 (d) IS THE BAR: he receives ONE finished design and ONE approval; each unresolved item rides inside that one approval as a letter he picks. O1's SCOPE is RULED — `cto-2026-09-23.md` R39, his words "I want my word to allow write to everywhere with my confirmation"; the desk's answer R43: the scope is his words, ANY field of ANY note in his vault, on his confirmation of the read-back — carried as SCOPE-R39: `Cobalt may replace any field of any note in his vault — his own text, his voice units and Cobalt's own units alike —`. L1, L3, L7, L9, L10, L28, L32, L37 and L40 are the bar the FINAL must meet. DO NOT STOP until the report's last line is `VOICE V3 FINAL DERIVED R3 …` or `FAILED …`.
+
+AUTHORIZATION AND PRECONDITIONS — VERIFY THEM YOURSELF (a prompt file is not an approval). Run each check below as its own Bash call. YOU CAN ALWAYS STOP with a `FAILED: <step> — <concern>` line.
+- **THE DERIVE ROW.** `grep -c -x -E "DERIVE ROW: R[0-9]+" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-23/35-voice-v3-derive-r3.md"` must print **1**. Read `<nn>` from line 1 (`109`).
+- `grep -n "^| R109 " "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-22.md"` must print exactly ONE row, carrying BOTH literals `Make all Opus 5.5 for now` · `claude-opus-5-5`, his words in quotes. Otherwise → `FAILED: authorization mismatch — row R109 does not name the derive seat`.
+- `git -C /Users/cobalt/cobalt log -1 --format=%H -S"| R109 | " -- "docs/40 - DevDocs/reports/cto-2026-09-22.md"` — EMPTY → `FAILED: authorization mismatch — row R109 is not committed`.
+- **R109 STILL STANDS.** `grep -n "R109" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-23.md"` (and `cto-<run date>.md` on a later run date). A `| R` row carrying his words that ENDS or CHANGES R109's seat model → `FAILED: authorization — R109 superseded by <row>; the desk re-issues this file`.
+- **YOU ARE THE SEAT THE ROW NAMES.** `claude-opus-5-5`, the `--model` value on this file's launch line, and the model id your own system prompt states you run as must be the SAME id. Otherwise → `FAILED: seat mismatch — R109 names claude-opus-5-5; this session runs <id>`, and stop.
+- **THE LAUNCH ROW.** `grep -n "35-voice-v3-derive-r3.md" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-<run date>.md"` must print a `| R` row naming this file. No row → `FAILED: authorization mismatch — no launch row names 35`.
+- **BOTH ROUND-3 STOP LINES, PRESENT AND COMMITTED — else you REFUSE:**
+  - `tail -n 3 "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/voice-v3-tribunal-r3-2026-09-23.md"` — the LAST NON-BLANK line must start `VOICE V3 TRIBUNAL R3 DONE `. Anything else, including the in-progress line, `FAILED` and a missing file → `FAILED: refused — hub round 3 not done — last line: <line verbatim>`.
+  - `tail -n 3 "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/voice-v3-tribunal-fable-r3-2026-09-23.md"` — must start `VOICE V3 TRIBUNAL FABLE R3 DONE `. Otherwise → `FAILED: refused — Anthropic-seat round 3 not done — last line: <line verbatim>`.
+  - `git -C /Users/cobalt/cobalt log -1 --format=%H -S"VOICE V3 TRIBUNAL R3 DONE" -- "docs/40 - DevDocs/reports/voice-v3-tribunal-r3-2026-09-23.md"` and `git -C /Users/cobalt/cobalt log -1 --format=%H -S"VOICE V3 TRIBUNAL FABLE R3 DONE" -- "docs/40 - DevDocs/reports/voice-v3-tribunal-fable-r3-2026-09-23.md"` — either EMPTY → `FAILED: refused — <report> stop line is not committed on main`.
+- **A HOUSE MUST HAVE RULED.** If the hub's stop line shows `houses that ruled: 0 of 3`, or its `## Rulings table` shows no house (Grok or Gemini) answering ANY of R2-1, R2-2, R2-3 with `ADOPT` / `NEITHER` → `FAILED: no house ruled round 3 — the desk relaunches 33`. A house that produced no ruling has not used its round (L67), so the desk may relaunch it; the Anthropic seat alone never settles an item.
+- **ASTRA (09-22 R13).** The hub's `astra:` field is `METER — proceed on three` or `SKIPPED — R13 (probe UP, recorded)`. This is RECORDED, not a refusal: derive from the seats that ruled, mark the FINAL's header `ASTRA PENDING (R13)`, and name in §0 that Astra reads the FINAL on Sat 09-26.
+- **THIS LAUNCH LINE ADDS NO RULE.** Run `grep -c -F -e "<rule>" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-21/22-draft-setups-tribunal.md"` for each of the seven allow strings and the three deny strings, quotes included. Each must count **≥1**.
+- **O1, RULED.** `grep -n "^| R39 " "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-23.md"` must carry `write to everywhere with my confirmation`; `grep -n "^| R43 " "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-23.md"` must carry `houses rule mechanics only`. Record both rows VERBATIM in the report. Then `grep -n "O1" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-<d>.md"` on each desk file from 2026-09-24 through `cto-<run date>.md`, one call each: a LATER `| R` row carrying HIS words in quotes that changes the O1 scope → the later row stands, both are quoted, and SCOPE-R39 is replaced by nothing — `ASK DESK: <row> changes O1's scope after round 3 ruled under SCOPE-R39 — re-issue? [<time>]`, and the FINAL is still written with SCOPE-R39 marked `SUPERSEDED? — see ASK DESK`. A DESK row marked "NO WORDS OF HIS" never counts. You never infer his answer.
+
+INDEX CARD — read in this order:
+1. `/Users/cobalt/Vault/Think/6 - Permanent/Memory/LAWS.md` in full (L59). Binding here:
+   - **L1**, **L3**, **L7**, **L9**, **L10**, **L19**
+   - **L28** — his law; O1 amends it ONLY by his ruling (R39) and his approval of the FINAL; the desk applies the fold under L58, never you
+   - **L32** — the FINAL and your report are COMMITTED: no audio, transcript, note line, ticker, price or P&L of his
+   - **L35**
+   - **L36**
+   - **L37** — you derive; a SPLIT is carried, never settled by count; a seat that holds a side recommends nothing to him, and neither do you
+   - **L38 / L40**
+   - **L39** — round 3 was the last; unresolved → Dejan, ONE choice per item, each side verbatim; a law file is never voted
+   - **L42**
+   - **L48**
+   - **L52**
+   - **L58** — you write no memory or law file
+   - **L67**
+   - **L68** — migration NUMBERS are the gate's
+   - **L70**, **L71**, **L72**, **L73**, **L74**
+   - CLAUDE.md's absolute boundary: nothing in the FINAL reads, writes or infers from his trading platform, and no order is ever placed.
+2. THE ROUND-3 RULINGS:
+   - The hub report, `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/voice-v3-tribunal-r3-2026-09-23.md`, whole: `## Rulings table`, `## Wording offered, verbatim`, `## Anthropic-seat round-2 claims, file-checked` (C9–C22), `## Checked against the files`, `## Experiments named (L70)`, `## OWNER answers`, `## Independence`, `## ESCALATE`. Its HOLDS / DOES NOT HOLD tables are your filter, with the round-2 hub's (C1–C8, G1–G13, K1–K20).
+   - The raw round-3 rulings of every house that ruled, in `/Users/cobalt/cobalt-wt/agy-trial/scratch/tribunal-bars-0920/voice-v3-tribunal/r3/` (`grok-ruling-r3.md`, `gemini-ruling-r3.md`). The raw file is what "verbatim" means, but you never copy a user-data span out of it.
+   - The Anthropic seat's round-3 report, `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/voice-v3-tribunal-fable-r3-2026-09-23.md`. Its SELF-ATTACK and WITHDRAWN lines bind you: a sentence that seat withdrew (in round 2 or round 3) is never folded. The round-3 hub checked the seat's ROUND-2 claims (C9–C22), so a NEW round-3 seat claim the hub did not check is UNCHECKED. You may rest on it only after opening the file it cites yourself, and the fold row then says `UNCHECKED by a hub — read by the derive at <file:line>`, as `15` and `26` did.
+3. THE POSITIONS: the second derive's report, `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/voice-v3-derive-r2-2026-09-23.md` — `## Fold table`, `## NEEDS ROUND 3` (the position texts VERBATIM, one block per item), `## OWNER TEST`, `## FOR DEJAN`, `## ESCALATE`. The position labels round 3 used (`33`'s QUESTIONS-R3): R2-1 `B` (grok and gemini, round 2) · `N1` (the Anthropic seat); R2-2 `S` (grok) · `P` (gemini) · `N2` (the Anthropic seat); R2-3 `B` (grok) · `A-V1` (gemini) · `A-V5` (the Anthropic seat). Also the round-2 hub report's check sections and the Anthropic seat's round-2 report, where a position's text or a check row lives.
+4. The derived design, `/Users/cobalt/cobalt/docs/30 - Design/VOICE-v3-derived-2026-09-23.md`, whole.
+5. Only where a fold turns on it: the real file a file-check cites — read it to check, never to copy.
+
+THE RULES OF THIS DERIVE — `26`'s rules, UNCHANGED where they are restated here, plus the CLOSING rules of the last round:
+- **Take a wording VERBATIM.** Take a seat's `NEITHER` replacement, the position text an `ADOPT <label>` names (quoted in the second derive's `## NEEDS ROUND 3`), and the paste-ready lines a seat wrote for it (`§5:`, `V4:`, `§6:`, `FOLD:`, `§9:`, `F-07:`). Take it word for word, or not at all: you choose, and you never blend, edit or improve. A wording whose supporting claim DOES NOT HOLD in a hub's file-check, or that the Anthropic seat WITHDREW (round 2 or round 3), is NOT taken.
+- **SCOPE-R39 in every fold.** A `FOLD:` line is taken only if `grep -c -F` of SCOPE-R39 on its source file counts ≥1 AND the line carries it verbatim as its scope clause. A fold text whose scope is not SCOPE-R39, or a `§6:` line that excludes a unit class, a note or a field from a confirmed voice edit, RE-OPENS A RULING (R39): not folded, carried in `## Dissents, verbatim`, named in `## ESCALATE`, and never a side in `## FOR DEJAN`.
+- **When an item is CONVERGED.** Count the SEATS that ruled it in ROUND 3: the houses (Grok, Gemini) plus the Anthropic seat. An item is CONVERGED when:
+  - (i) every seat that ruled it gave the same answer — `ADOPT` the same label, or `NEITHER` texts the hub's file-check shows are the same mechanism — **with at least one HOUSE among them**; or
+  - (ii) every HOUSE that ruled it gave the same answer, and the Anthropic seat's contrary answer rests on a claim that DOES NOT HOLD in a hub's C1–C22 or file-check table, or that the seat itself WITHDREW.
+
+  The Anthropic seat's answer alone never settles an item. Everything else is UNRESOLVED.
+- **The paste-ready lines of a converged item.** Take them from ONE seat whose answer converged: a house's over the Anthropic seat's. Where the converged seats' lines for the same slot (`§5:`, `V4:`, `§6:`, `FOLD:`, `§9:`, `F-07:`) are identical, or the hub shows them to be the same mechanism, take the HOUSE's line (between two houses, the shorter one; say which). Where they differ in MECHANISM, that SLOT is unresolved: it goes to `## FOR DEJAN` as its own choice, with each seat's line verbatim, and the rest of the item is folded.
+- **Prefer the smaller mechanism** only BETWEEN texts the seats agree are correct. A disagreement about correctness is unresolved.
+- **UNRESOLVED → `## FOR DEJAN`, never settled by you (L39, R18 (d)).** ONE block per unresolved item (or slot):
+  - the question in HIS terms, ≤4 lines: what he would say to the widget, what he would hear back, what changes where, and why no house decided it (round 3 was the last);
+  - every DISTINCT position the round-3 answers hold, each a lettered side — **A**, **B**, and **C** only when three distinct positions remain — lettered in the order of the round-3 labels (`B` before `N1`; `S`, `P`, `N2`; `B`, `A-V1`, `A-V5`; a round-3 `NEITHER` after them), NEVER ordered, weighted or counted by seats. Each side: its text VERBATIM (the paste-ready lines included), the seats that hold it (named, no count as an argument), and the hub rows beside it — every HOLDS / DOES NOT HOLD row its supporting claims rest on, quoted by id. A side whose supporting claim DOES NOT HOLD is still shown — marked `(supporting claim <row> DOES NOT HOLD)` — because he rules, not you; a side that RE-OPENS A RULING is not a side (above);
+  - the slot `DESK RECOMMENDATION: <filled by the desk before it sends; the derive writes nothing here — L37>`;
+  - what each side builds: the slice rows and hours it changes (arithmetic only, from the sides' own numbers).
+- **THE FINAL IS WRITTEN — WHATEVER ROUND 3 LEAVES.** Converged items are folded; unresolved items stand IN PLACE with every side verbatim, so the FINAL is complete under whichever letter he picks.
+- **His R18, R39, R92, R93, R99, R100 are NEVER re-opened.** A round-3 wording that refuses trading-logic requests as a class, keeps audio, adds a second widget, narrows 'any command', or narrows SCOPE-R39 is NOT folded. It is carried in `## Dissents, verbatim` and named in `## ESCALATE` as `RE-OPENS A RULING (<R-row>)`.
+- **A house's closing `TRIBUNAL R3: DO NOT BUILD …`** whose defect HOLDS in the hub's file-check is carried VERBATIM in `## FOR DEJAN`, directly above the APPROVE line, as `HOUSE OBJECTION (<house>, defect HOLDS: <row>): "<verbatim>"`, and named in `## ESCALATE`. One whose defect does not hold goes to `## ESCALATE` only.
+- **O1 is RULED; its MECHANICS are R2-2's.** The FINAL's `## OWNER ITEMS` carries O1 as `RULED B — cto-2026-09-23.md R39, his words: "<verbatim>"; scope (R43): <R43's scope sentence, verbatim>`, and the fold text: R2-2's converged `FOLD:` line verbatim, or, when R2-2 is unresolved, a pointer to its `## FOR DEJAN` block, where each side's `FOLD:` line is shown. Round 2's FOLD A / FOLD B texts and the round-1 fold texts move to `## Dissents, verbatim` as superseded by R39. The FOLD into LAWS.md is the desk's under L58, at his approval of the FINAL — never yours; the FINAL states that as a fact. §6's his-text class and, under SCOPE-R39, its Cobalt-owned-unit row follow R2-2's converged `§6:` line (or its sides); "only if O1 is ruled" markers in §6 and §9 become "O1 RULED B (R39)".
+- **Invent nothing.** Add no mechanism, number, key, slice, file or hour that no round-2 or round-3 wording or earlier text contains. **Engine tunables are the houses'**: a proposed VALUE is recorded as `<key>: value proposed by <seat> — <file>:<line>`, and taken only with its measurement. **Every "not checkable from reads" claim becomes a first-gate experiment** in the FINAL's list, placed before the slice it gates (L70). A round-3 experiment that repeats a derived E / X row or a round-2 one (the E7 sharpening → merged into E7; X20; X21; the G2 / K5 run; K10 = X2) is merged into that row and attributed, never duplicated. **Dissents carried VERBATIM**: `## Dissents, verbatim` gains every round-2 and round-3 answer the FINAL does not follow, with seat, round and item. **No user data** (L32): each span is replaced by `[user data: <file:line>]` and counted.
+
+WRITE (Write tool):
+- **ALWAYS, FIRST:** `/Users/cobalt/cobalt/docs/30 - Design/VOICE-v3-FINAL-2026-09-23.md`. Use this name WHATEVER the date of the run. It is the derived design, whole, with each open point REPLACED in place — a converged point by the converged wording, verbatim, tagged `[R3F-nn]` (a row of your fold table); an unresolved point by its sides, each verbatim, labelled `**[R3-<item> side <A|B|C> — <seats>]**`, followed by one line `HIS LETTER SELECTS ONE SIDE (## FOR DEJAN, item <k>); the build reads only the side he selects.` The open points are:
+  - the header's "Open after round 1" line (it becomes the round-3 outcome, one line per item);
+  - §2.4's `[F-22]` note ("who else may delete them is R2-1") and its `[F-07 — OPEN, R2-3 …]` marker (R2-3's `F-07:` line);
+  - §5's `[F-12 — OPEN, R2-1 …]` marker and the crash-leftover bullet (R2-1's `§5:` line);
+  - §6's write-class table: the `A Cobalt-owned unit` row (R2-2's `§6:` line) and the `HIS NON-BLANK TEXT outside markers` row (O1 RULED B — R39; its op and basis follow R2-2's `FOLD:` mechanics);
+  - §9's V1 row's "scratch lifecycle + sweep" only if R2-1's `§5:` line changes V1's work, the V4 row (R2-1's `V4:` line), and the slice R2-3 names (its `§9:` row exactly as the wording states it — a new V5 row only if that wording adds one), and V3's "O1 for the overwrite class only" dependency (now RULED);
+  - the total hours line — recomputed ONLY from the rows' own numbers, with the arithmetic shown in the report; where R2-3 is unresolved, one total per side; the words "GUESS / UNVERIFIED" are kept;
+  - `## L52 and the bar`'s L7, L28 and L40 lines;
+  - `## OWNER ITEMS` (O1 RULED, above);
+  - `## Dissents, verbatim` (extended).
+
+  The FINAL also carries:
+  - a header naming the derived design; the round-2 and round-3 hub reports; the raw rulings of every house that ruled round 2 or round 3; the Anthropic seat's round-2 and round-3 reports; the second derive's report; the fold table's path; R18 / R39 / R43 / R92 / R93 / R99 / R100 / R109; and `ASTRA PENDING (R13)`;
+  - a `## Status after round 3` section: per item, converged (whose text) or unresolved (its `## FOR DEJAN` item number), and the slice each gates;
+  - `## First-gate experiments (L70)` = the derived list plus every round-2 and round-3 experiment the fold takes;
+  - `## L52 and the bar`, re-answered for the FINAL;
+  - `## FOR DEJAN` as the LAST section, holding EXACTLY, in this order:
+    - (1) **O1** — one line: `O1 — ruled B, cto-2026-09-23.md R39: "<his words verbatim>"; scope per the desk's R43: any field of any note, on his confirmation.` Nothing asked.
+    - (2) one block per unresolved item or slot, numbered from 2, in the shape the rules above give.
+    - (3) every `HOUSE OBJECTION` line, if any.
+    - (4) the ONE approval R18 (d) promises: `APPROVE: the VOICE v3 FINAL design (docs/30 - Design/VOICE-v3-FINAL-2026-09-23.md, sha256 taken by the desk at commit) for build<, with item 2 = A / B[ / C]; item 3 = …> — yes / no`. With no unresolved item, the bracketed part is omitted.
+
+  Nothing else goes in it. Committable: no user data.
+- **ALWAYS, SECOND:** `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/voice-v3-derive-r3-2026-09-23.md`. Layout, in this order:
+  - §0 Headline ≤5 lines: converged / for Dejan, whose text, FINAL written, O1 ruled B, Astra pending.
+  - `## DIGEST FOR THE DESK` (≤30 lines): per item, converged (whose text) or FOR DEJAN (its sides and their seats); the slice R2-3 names and its hours (per side if unresolved); V1's sweep and V4's probe under R2-1; the O1 fold's mechanics under R2-2 and the §6 Cobalt-owned-unit row; the seats that ruled round 3, and who MOVED from round 2; what the build prompts wait on (his approval and letters; the L28 fold by the desk under L58; the S1 seam before V1; DRC D2 + D3 before V2; the first-gate experiments).
+  - `## Preconditions` — one row per check above.
+  - `## Fold table` — `R3F-nn · item (R2-1, R2-2, R2-3; a slot where a fold turns on one) · seats that ruled it in round 3 (<n>, named) · answers (per seat; round-2 answer beside it) · whose wording · adopted verbatim? yes / no / FOR DEJAN / not taken · why (≤25 words, citing a hub's file-check row or C<n>, or UNCHECKED by a hub — read by the derive at <file:line>, or RE-OPENS A RULING (<R-row>))`.
+  - `## FOR DEJAN` — the FINAL's section, copied.
+  - `## OWNER TEST` — every item any round-3 seat sent him · PASSES / FAILS · where it went (O1 is RULED; an item that fails goes to `## ESCALATE` for the desk, as `26` did).
+  - `## Redactions` (count, and where)
+  - `## READING`
+  - `## ESCALATE` — every `RE-OPENS A RULING`, every DOES-NOT-HOLD wording a seat still presses, every `HOUSE OBJECTION`, every owner item a seat wrote as a precondition, every `ASK DESK`, the hours recomputation if it changed the total, and any unresolved item with THREE sides (`ASK DESK: <item> leaves three distinct sides after the last round — send A / B / C as drafted, or does the desk narrow it under L39? [<time>]`; safe default: all three sides stay, lettered).
+  - `## CONTINUE`
+  - the last line.
+
+  Write both in the same turn as the work (L48). While you work, the report's last non-blank line is EXACTLY `(run in progress — next step under ## CONTINUE)`. The breadcrumb lives inside `## CONTINUE` only. No other line may START with `VOICE V3 FINAL DERIVED`, `FAILED` or `CONTINUE`. RECOVERY (L60): a relaunch first runs `ls` on both file paths, reads its own report first, and continues from `## CONTINUE`. A FINAL already written is re-read, never re-derived from scratch. One command per Bash call, bare shape, no pipe, no redirect. Use `date` for every time you write.
+
+STOP LINE (the last non-blank line of the report, L71): `VOICE V3 FINAL DERIVED R3 · converged: <n> of 3 · for Dejan: <n> · O1: ruled B · FINAL: written · ESCALATE: <n>` — or `FAILED: <step> — <reason>`. Here `converged` counts ITEMS folded whole, and `for Dejan` counts the numbered blocks of `## FOR DEJAN` after O1 (items and slots). Then stop.
+
+NEXT STEP, not yours: the desk commits both files, fills each `DESK RECOMMENDATION` slot, and brings him `## FOR DEJAN` — O1 is already ruled; each unresolved item as ONE A/B (one per message), then the ONE approval with his letters. On his approval, the desk folds the L28 amendment (the `FOLD:` text of his letter) under L58 and drafts the build prompts: the first-gate experiments first, then V1, ordered against the S1 seam and the DRC build at the L68 gate. Astra reads the FINAL on Sat 09-26 (09-22 R13).
