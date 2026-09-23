@@ -191,14 +191,22 @@ def evaluate(ld: sup.LoadedDef, ticker: str, at: datetime, *, tunables=None):
 _SCANS: dict[tuple[str, str], list] = {}
 
 
-def every_scan(ld: sup.LoadedDef, ticker: str) -> list:
+def _grid(ld: sup.LoadedDef, ticker: str, tunables=None) -> list:
+    return [(DAY_START + timedelta(minutes=m),
+             evaluate(ld, ticker, DAY_START + timedelta(minutes=m), tunables=tunables))
+            for m in range(0, 391, 2)]
+
+
+def every_scan(ld: sup.LoadedDef, ticker: str, *, tunables=None) -> list:
     """One evaluation per two-minute scan across the whole RTH fixture day
     (computed once per (def slug, md5, ticker) — two notes with the same YAML
-    body share an md5, the slug being frontmatter)."""
+    body share an md5, the slug being frontmatter). `tunables` given (a live
+    def's merged rows): evaluated with them, never cached."""
+    if tunables is not None:
+        return _grid(ld, ticker, tunables)
     key = (ld.slug, ld.md5, ticker)
     if key not in _SCANS:
-        _SCANS[key] = [(DAY_START + timedelta(minutes=m), evaluate(ld, ticker, DAY_START + timedelta(minutes=m)))
-                       for m in range(0, 391, 2)]
+        _SCANS[key] = _grid(ld, ticker)
     return _SCANS[key]
 
 

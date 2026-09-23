@@ -699,10 +699,14 @@ def test_live_defined_notes_evaluate_on_the_fixture_bars_and_only_the_evaluable_
     `formed` in its outcome set unless its own avoid is `avoided` on those
     scans or it is pinned in `AWAITING_A_DAY` (printed). A def the registry
     does NOT call evaluable is `not_evaluable` on every scan. The deploy runs
-    this with `COBALT_LIVE_VAULT_ROOT` set; a SKIP there is RED."""
+    this with `COBALT_LIVE_VAULT_ROOT` set; a SKIP there is RED, pinned in
+    AWAITING_A_DAY, AWAITING_A_RULING or AWAITING_AN_ENGINE_FILL while its hole
+    is null (printed), or proven on its committed day through gate 2's check
+    with his merged rows (FINAL §9 gate 3, "on its fixture day")."""
     from cobalt.radar.anatomy.registry import evaluability
     from cobalt.taxonomy.vault_loader import load_vault_trade_defs
-    from test_setups_lego import AWAITING_A_DAY
+    from test_setups_lego import AWAITING_A_DAY, AWAITING_A_RULING, AWAITING_AN_ENGINE_FILL, _forms_on_a_committed_day
+    import setups_shapes as shapes
 
     loaded = load_vault_trade_defs(vault_root=Path(os.environ[LIVE_VAULT_ENV]))
     defs = [sup.LoadedDef(slug=d.slug, md5=d.md5, definition=d.definition) for d in loaded.defs]
@@ -728,11 +732,26 @@ def test_live_defined_notes_evaluate_on_the_fixture_bars_and_only_the_evaluable_
             assert outcomes == {"not_evaluable"}, ld.slug
             continue
         assert "Setup(relation)" not in missing.get(ld.slug, set()), ld.slug
-        if ld.slug in AWAITING_A_DAY:
+        if ld.slug in AWAITING_A_DAY or ld.slug in AWAITING_A_RULING:
             with capsys.disabled():
-                print(f"AWAITING A DAY: {ld.slug}")
+                print(f"AWAITING A {'DAY' if ld.slug in AWAITING_A_DAY else 'RULING'}: {ld.slug}")
             continue
-        assert "formed" in outcomes or "avoided" in outcomes, (ld.slug, sorted(outcomes))
+        if "formed" in outcomes or "avoided" in outcomes:
+            continue
+        # FINAL §9 gate 3: formed "on its fixture day" — gate 2's committed-day
+        # check (test_setups_lego), run on HIS live def with HIS merged rows.
+        assert ld.slug in shapes.SHAPES, (ld.slug, sorted(outcomes))
+        forms = _forms_on_a_committed_day(ld.slug, shapes.SHAPES[ld.slug], ld, tunables)
+        holes = [key for key in AWAITING_AN_ENGINE_FILL.get(ld.slug, ())
+                 if tunables.get(key) is None or tunables[key].value is None]
+        if holes:
+            # Pinned like gate 2's `<slug>_without_its_engine_fill` tests: the
+            # hole's row is not in his vault yet; the day it is, this asserts forms.
+            with capsys.disabled():
+                print(f"AWAITING ITS ENGINE FILL: {ld.slug} ({', '.join(holes)} null)")
+            assert not forms, (ld.slug, holes)
+            continue
+        assert forms, (ld.slug, sorted(outcomes))
 
 
 def sup_member(bars, at):

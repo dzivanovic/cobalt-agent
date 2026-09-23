@@ -55,6 +55,22 @@ AWAITING_A_DAY: frozenset[str] = frozenset({"hitchhiker"})
 #:   writes the assumed rows.
 AWAITING_A_RULING: frozenset[str] = frozenset({"backside", "fashionably-late"})
 
+#: Evaluable setups that form on NO committed scan while an ENGINE hole their
+#: atoms read is null in committed config (FINAL §8: an engine hole is filled
+#: only by a ruled or assumed row, never here), keyed by setup slug:
+#: - vwap-continuation: `dist.k.vwap` (`A-16`), R119's row, written by the
+#:   setups deploy; pinned by
+#:   `test_vwap_continuation_without_its_engine_fill_forms_on_no_committed_scan`.
+#: - second-chance: `range_break.failed_trap_bars` (`A-19`) and
+#:   `range_break.retest_tolerance_atr` (`A-20`) — `range_break_params` refuses
+#:   on either null, so `RangeBreak(level)` never reaches `accepted`; no value
+#:   is ruled yet (owner item, 2026-09-23); pinned by
+#:   `test_second_chance_without_its_engine_fill_forms_on_no_committed_scan`.
+AWAITING_AN_ENGINE_FILL: dict[str, tuple[str, ...]] = {
+    "vwap-continuation": ("dist.k.vwap",),
+    "second-chance": ("range_break.failed_trap_bars", "range_break.retest_tolerance_atr"),
+}
+
 
 @pytest.fixture(scope="module")
 def corpus(tmp_path_factory):
@@ -79,8 +95,9 @@ def _rubberband_forms_on_its_cut_day(ld) -> bool:
 CUT_DAY_CHECKS = {"rubberband": _rubberband_forms_on_its_cut_day}
 
 
-def _forms_on_a_committed_day(key, shape, ld) -> bool:
-    if any(ev.evaluation == "formed" for ticker in shape.tickers for _, ev in shapes.every_scan(ld, ticker)):
+def _forms_on_a_committed_day(key, shape, ld, tunables=None) -> bool:
+    if any(ev.evaluation == "formed" for ticker in shape.tickers
+           for _, ev in shapes.every_scan(ld, ticker, tunables=tunables)):
         return True
     check = CUT_DAY_CHECKS.get(key)
     return bool(check and check(ld))
@@ -108,6 +125,20 @@ def test_vwap_continuation_without_its_engine_fill_forms_on_no_committed_scan(tm
     assert sup.engine_tunables()["dist.k.vwap"].value is None
     assert evaluability(ld.definition).evaluable, evaluability(ld.definition).missing_atoms
     assert not _forms_on_a_committed_day("vwap-continuation", shape, ld)
+
+
+def test_second_chance_without_its_engine_fill_forms_on_no_committed_scan(tmp_path):
+    """GREEN-as-pin (09-24 fix round): the break-retest-turn shape on the
+    COMMITTED engine rows only (no `engine=` fill, so A-19 / A-20 stay null)
+    forms on no scan. A hole filled in committed config, or a RangeBreak that
+    accepts without them, turns this red; with its D6 fills the same shape
+    forms (gate 2 above)."""
+    shape = shapes.SHAPES["second-chance"]
+    ld = shapes.load_note(tmp_path, "example-fix-break-retest-committed-rows", shape.mapping())
+    for key in AWAITING_AN_ENGINE_FILL["second-chance"]:
+        assert sup.engine_tunables()[key].value is None, key
+    assert evaluability(ld.definition).evaluable, evaluability(ld.definition).missing_atoms
+    assert not _forms_on_a_committed_day("second-chance", shape, ld)
 
 
 def test_every_unlocked_setup_shape_is_evaluable(corpus):
