@@ -35,6 +35,18 @@
                          why: the five kinds, one unresolved row per
                          condition, read by the heartbeat. Additive.
 `0011_archive_incidents.rollback.sql` — drops that one table.
+`0016_drc.sql` — DRC D1: `"user".drc_imports` (one row per dropped
+                         file, + the input event's state), `drc_fills`
+                         (one row per execution) and the declared
+                         `drc_rows` (trades, open positions, stats rows,
+                         the day — inputs + derived + fn_version). Additive.
+`0016_drc.rollback.sql` — drops those three tables, children first.
+
+0012–0015 ARE NOT GAPS BY ACCIDENT: 0012 is the unmerged
+`bars/chunk-2-0920`, 0013 the setups one build, 0014 handicap H1
+(reserved), 0015 stale score (reserved, conditional) —
+`reports/devdb-builds-reissue-2026-09-23.md`. Whichever lands later keeps
+every set, in numeric order; the desk renumbers at the L68 gate.
 
 0006/0007 are S2-P2's, 0008/0009 are S2-P4's. Both tuples stay ordered by
 version; every file is idempotent and neither 0008 nor 0009 names a P2
@@ -76,10 +88,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0009_picks_missed.sql",
     MIGRATIONS_DIR / "0010_archive_progress.sql",
     MIGRATIONS_DIR / "0011_archive_incidents.sql",
+    MIGRATIONS_DIR / "0016_drc.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0016_drc.rollback.sql",
     MIGRATIONS_DIR / "0011_archive_incidents.rollback.sql",
     MIGRATIONS_DIR / "0010_archive_progress.rollback.sql",
     MIGRATIONS_DIR / "0009_picks_missed.rollback.sql",
