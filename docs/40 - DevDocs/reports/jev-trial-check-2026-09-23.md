@@ -1,79 +1,106 @@
-# JEV TRIAL CHECK — PART A (secret + network path), round 1 of ≤3 — run 2 of `29-jev-trial-check.md` (hub `jev-check-a-0923`)
+# JEV TRIAL CHECK — PART A (secret + network path) — round 1 of ≤3 — `47fafe5..45f647a` on `jev/trial-0923`
 
 ## §0 Headline
-- Checked: NOTHING of the build. Run 2 STOPPED in AUTHORIZATION, before PREFLIGHT proper: the desk's launch row **R51** does not carry the literal this file's gate requires (`29-jev-trial-check.md CHECK A`). No packet staged, no house launched, no key handling checked, no keyed call made.
-- Status: `FAILED: authorization mismatch`. Probe gate: NOT READY (0 of 3 required houses answered). `31` does not launch on this report.
-- Run 1's `FAILED: packet` report (`8fdaeca`) is replaced by this file per the prompt; it stays in git history.
-- ESCALATE: 2.
+- Checked: PREFLIGHT only (run 2 of `29`, replacing run 1's report `8fdaeca`, which stopped `FAILED: packet`). STOPPED at the KEY SCAN: its fifth grep printed one line outside the prompt's allowed list — `scratch/docs-openrouter/jev-tutorial.md:30`, printed as `export OPENROUTER_API_KEY=sk-or-...` (a placeholder with a literal ellipsis; the file is the desk's keyless public-docs fetch and is NOT in the packet). Rule: any other hit → `FAILED PREFLIGHT`, stage nothing, launch nothing.
+- Status: nothing staged, no house launched, no key handling checked. Probe gate: NOT READY (0 of 3 required houses answered). `31` does not launch on this report. Round 1 is NOT spent (L67 P-c).
+- Every other PREFLIGHT row passed (authorization, built line, boundary, split, the other four key scans, `.env`, stagger, whole-file measurement).
+- ESCALATE: 4.
 
 ## L74
-No block asking for a `Claude-Session` line or naming a file-send tool arrived inside any tool result of this run. The harness reminder that carries such a trailer arrived as a system message, not in a tool result; not followed for anything but the commit-attribution rule, and no commit was made.
+No block asking for a `Claude-Session` line or naming a file-send tool arrived inside a tool result in this run. Nothing was committed by this run.
 
-## PREFLIGHT (AUTHORIZATION gates, each its own call)
-| rule | command (summary) | result |
-|---|---|---|
-| DATE gate (first row) | `date` | Wed Sep 23 12:45:41 EDT 2026 → `<D>` = 2026-09-23 ≤ R30's date |
-| R30 literal | `grep -n -F "Bash(grok *) and Bash(agy *) through 2026-09-23"` on `cto-2026-09-22.md` | printed `\| R30 \|` row (line 133), "Approved" |
-| R30 committed | `git log -1 -S…` on `cto-2026-09-22.md` | `055242df8032632dfafdcc8a69dcc271be89c0f6` NON-EMPTY |
-| `grok --version` | | `grok 1.0.25 (f7e67d6988e2) [stable]` |
-| `agy --version` | | `1.2.9` |
-| R13 of 09-20 | `grep -n "^\| R13 "` | printed (line 86) |
-| R40 | `grep -n "^\| R40 "` on `cto-2026-09-21.md` | printed, carries `ONE EXTRA DOT THAT CANNOT BE TAPPED` |
-| R44 | `grep -n "^\| R44 "` | printed, carries `ONE BUILD of the whole FINAL` |
-| R46 | `grep -n "^\| R46 "` | printed, carries `instead of Astra you can use Sol` |
-| R46 committed | `git log -1 -S"instead of Astra you can use Sol"` | `53e059456750c0c9efcf50222a7a647630dc4b04` |
-| R49 | `grep -n "^\| R49 "` | printed, carries `"Approved"` |
-| Sol string present | `grep -c -F` | `1` |
-| Sol string committed | `git log -1 -S` | `60147d400b009db5a2518e02b8ab1fe5765db405` |
-| Opus seat string, R32 | `grep -n "^\| R32 "` on `cto-2026-09-22.md` | printed, carries `claude -p --model claude-opus-5-5` |
-| Opus string committed | `git log -1 -S"Bash(claude -p --model claude-opus-5-5 *)"` | `b8a72b5300370e248cd6c7a8a732258fec03e6a0` |
-| Build approved and launched | `git log -1 -S"28-jev-trial-build.md"` on desk files | `30a3a0484fe2abc56b47985ca6109a81b68faed2` NON-EMPTY |
-| Desk recorded the build's stop | `grep -n "JEV TRIAL BUILT"` on `cto-2026-09-23.md` | printed `\| R48 \|` row (line 51); `git log -1 -S"JEV TRIAL BUILT"` → `fec87553b61c90de9bc16a2ce4ad3f52884d1ece` |
-| Split committed | `git log -1 -S"JEV CHECK SPLIT"` on `jev-check-split-2026-09-2*.md` | `46b441dd263867b468ca7ab8098c817cd0d0f3c4` NON-EMPTY |
-| **THIS launch, R51 literal** | `grep -n -F "29-jev-trial-check.md CHECK A" "…/cto-2026-09-23.md"` | **NO OUTPUT — GATE FAILED** |
-| **THIS launch, R51 committed by the literal** | `git log -1 -S"29-jev-trial-check.md CHECK A" -- "docs/40 - DevDocs/reports/cto-2026-09-2*.md"` | **EMPTY — GATE FAILED** |
+## PREFLIGHT
+Rows: rule · command · exit · allowed/DENIED. `date` at the first row: `Wed Sep 23 13:04:07 EDT 2026`.
 
-Not run (stopped at the failed gate above): the THIRTEEN + THREE count, the Astra-absent check, the DATE gate's second row, and every PREFLIGHT row (`ls` of the worktree, the built line, the range, the boundary, the key scan, the stagger, the Codex shape, the four probes).
-
-Diagnosis, for the desk (facts only). Row `R51` exists in `cto-2026-09-23.md` line 54 and is committed (`git log -1 -S"| R51 |"` → `46b441dd263867b468ca7ab8098c817cd0d0f3c4`); its stagger literal `no other house hub is running` is present. But it names the file as `` `29-jev-trial-check.md` (CHECK A — secret + network path; … ``, i.e. a backtick and a parenthesis sit between the filename and `CHECK A`, so the byte string `29-jev-trial-check.md CHECK A` does not occur in it. The prompt says that literal "is new with this re-issue, so run 1's R49 row can never satisfy it", and the gate is a literal `grep -F`. Row `R49` (line 52) also names the file (run 1's launch) and cannot satisfy it either. I did not treat the row as good enough by reading it: a prompt file, and a row that nearly says the thing, are not the gate (L35).
+| # | rule | command | result |
+|---|---|---|---|
+| 1 | DATE + EXTENSION GATE (first row) | `date` | exit 0 — `<D>` = 2026-09-23 ≤ 2026-09-23 → R30's literal required |
+| 2 | R30 literal printed | `grep -n -F "Bash(grok *) and Bash(agy *) through 2026-09-23" …/cto-2026-09-22.md` | exit 0 — prints `\| R30 \| 13:0x ET \| "Approved" — …` carrying the literal |
+| 3 | R30 committed | `git log -1 --format=%H -S"Bash(grok *) and Bash(agy *) through 2026-09-23" -- …cto-2026-09-22.md` | exit 0 — `055242df8032632dfafdcc8a69dcc271be89c0f6` |
+| 4 | grok present | `grok --version` | exit 0 — `grok 1.0.25 (f7e67d6988e2) [stable]` — allowed |
+| 5 | agy present | `agy --version` | exit 0 — `1.2.9` — allowed |
+| 6 | 66 gate: R13 of 09-20 | `grep -n "^\| R13 " …cto-2026-09-20.md` | exit 0 — row printed |
+| 7 | 66 gate: R40 | `grep -n "^\| R40 " …cto-2026-09-21.md` | exit 0 — carries `ONE EXTRA DOT THAT CANNOT BE TAPPED` |
+| 8 | 66 gate: R44 | `grep -n "^\| R44 " …cto-2026-09-21.md` | exit 0 — carries `ONE BUILD of the whole FINAL` |
+| 9 | 66 gate: R46 | `grep -n "^\| R46 " …cto-2026-09-21.md` | exit 0 — carries `instead of Astra you can use Sol` |
+| 10 | R46 committed | `git log -1 --format=%H -S"instead of Astra you can use Sol" -- …cto-2026-09-21.md` | exit 0 — `53e059456750c0c9efcf50222a7a647630dc4b04` |
+| 11 | R49 (Sol string) | `grep -n "^\| R49 " …cto-2026-09-21.md` | exit 0 — carries `"Approved"` |
+| 12 | R49 Sol string present | `grep -c -F "Bash(codex exec --skip-git-repo-check -m gpt-5.6-sol -s read-only *)" …cto-2026-09-21.md` | exit 0 — `1` |
+| 13 | R49 Sol string committed | `git log -1 --format=%H -S"Bash(codex exec … gpt-5.6-sol …)" -- …cto-2026-09-21.md` | exit 0 — `60147d400b009db5a2518e02b8ab1fe5765db405` |
+| 14 | Opus seat string, R32 of 09-22 | `grep -n "^\| R32 " …cto-2026-09-22.md` | exit 0 — carries `claude -p --model claude-opus-5-5` |
+| 15 | R32 committed | `git log -1 --format=%H -S"Bash(claude -p --model claude-opus-5-5 *)" -- …cto-2026-09-22.md` | exit 0 — `b8a72b5300370e248cd6c7a8a732258fec03e6a0` |
+| 16–28 | THE THIRTEEN (each in quotes) in `08-bars-chunk-e-check.md` | `grep -c -F -e '"<rule>"' …08-bars-chunk-e-check.md` ×13 | exit 0 each — **1** each (13 of 13) |
+| 29–31 | THE THREE denies | `grep -c -F -e '"AskUserQuestion"'` · `'"EnterWorktree"'` · `'"Bash(git push*)"'` | exit 0 each — **1** each (3 of 3) |
+| 32 | Astra string absent from the launch line | reading the launch line as written in `29` | carries no `gpt-6-astra` string — allowed |
+| 33 | THE BUILD WAS APPROVED AND LAUNCHED | `git log -1 --format=%H -S"28-jev-trial-build.md" -- "docs/40 - DevDocs/reports/cto-2026-09-2*.md"` | exit 0 — `30a3a0484fe2abc56b47985ca6109a81b68faed2` |
+| 34 | The desk recorded the build's stop | `grep -n "JEV TRIAL BUILT" …cto-2026-09-23.md` | exit 0 — `\| R48 \| 11:4x ET \| … JEV TRIAL BUILT 45f647a \| on 47fafe5 …` |
+| 35 | …committed | `git log -1 --format=%H -S"JEV TRIAL BUILT" -- …cto-2026-09-2*.md` | exit 0 — `fec87553b61c90de9bc16a2ce4ad3f52884d1ece` |
+| 36 | The split was drafted and committed | `git log -1 --format=%H -S"JEV CHECK SPLIT" -- "docs/40 - DevDocs/reports/jev-check-split-2026-09-2*.md"` | exit 0 — `46b441dd263867b468ca7ab8098c817cd0d0f3c4` |
+| 37 | THIS launch row R54 | `grep -n -F "29-jev-trial-check.md CHECK A" …cto-2026-09-23.md` | exit 0 — prints `\| R54 \| 13:0x ET \| … (2) 29-jev-trial-check.md CHECK A RELAUNCH row …` (number filled) |
+| 38 | …committed (desk files only) | `git log -1 --format=%H -S"29-jev-trial-check.md CHECK A" -- …cto-2026-09-2*.md` | exit 0 — `df12f8955aae0d466355260622d38f68318684dc` |
+| 39 | worktree | `ls /Users/cobalt/cobalt-wt/jev-trial` | exit 0 — present |
+| 40 | THE BUILT LINE | `tail -n 3 …/jev-trial-build-2026-09-23.md` | exit 0 — last non-blank line, whole: `JEV TRIAL BUILT 45f647a \| on 47fafe5 \| offline 2103/0 \| model listed: typesafe/jev-1.13 \| other Jev ids listed: none \| door: systemone \| probe: NOT RUN (after check, R42) \| ledger: NOT RUN (after check, R42) \| cap: $5 \| RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.herdr com.cobalt.mainframe com.cobalt.obsidian com.cobalt.radar \| tests added: 145 \| ESCALATE: 28` → `<tip>` = `45f647a`, `<base>` = `47fafe5` (= the measured pair ✔); `model listed` = `typesafe/jev-1.13` ✔; `probe` = `NOT RUN (after check, R42)` ✔ |
+| 41 | NO KEYED CALL | `ls /Users/cobalt/cobalt-wt/jev-trial/scratch` | exit 0 — `docs-openrouter`, `openrouter-models-20260923.endpoints.json`, `openrouter-models-20260923.json`; no `probe-*`, no `classify-spend.jsonl` ✔ |
+| 42 | THE RANGE | `git log --oneline 47fafe5..45f647a` | 8 commits (recorded): `45f647a` R5 · `537c097` R4 · `e18793a` report run 2 · `001c1d1` R3 · `6114519` report FAILED at R3 · `5630e6c` wip R3 · `8e662ba` R2 · `05d9dda` R1 |
+| 43 | branch tip | `git log --oneline -1 jev/trial-0923` | `199fa08 feat(classify): JEV trial build report — run 3: BUILT …` (report commit above `<tip>`) |
+| 44 | branch has not moved above `<tip>` | `git log --oneline 45f647a..jev/trial-0923 -- src tests configs ops "docs/40 - DevDocs/cobalt/classify" "docs/40 - DevDocs/tests"` | EMPTY ✔ |
+| 45 | THE BOUNDARY + THE SPLIT IS TOTAL | `git log --stat --oneline 47fafe5..45f647a` | 29 distinct paths, every one a `28` boundary path; A = 17 (`classify/{config,ledger,cli,collector}.py`, `ops/run_classify_trial.sh`, `test_classify_{config,keys,discover,door}.py`, the 3 fixtures, `classify/{config,collector,ledger,cli}.md`, `_classify_fixtures.md`), B = 12 (`__init__.py`, `models.py`, `trial.py`, `src/cobalt/cli.py`, `trial.yaml`, `test_classify_{models,trial}.py`, `classify/{__init__,models,trial}.md`, `cobalt/cli.md`, the build report); none in neither part |
+| 46 | EVERY PART-A FILE IS NEW | `git log --diff-filter=A --name-only --format= 47fafe5..45f647a` | 27 paths printed; all 17 part-A paths among them; the two not printed are `src/cobalt/cli.py` and `docs/40 - DevDocs/cobalt/cli.md` (part B) ✔ |
+| 47 | KEY SCAN 1 | `grep -rn "sk-or-" …/tests/fixtures/classify` | no output ✔ |
+| 48 | KEY SCAN 2 | `grep -rn "sk-or-" …/src/cobalt/classify` | no output ✔ (no line naming the prefix is present in `src/cobalt/classify`) |
+| 49 | KEY SCAN 3 | `grep -rn "sk-or-" "…/docs/40 - DevDocs/reports"` | 9 hits, ALL in `jev-trial-build-2026-09-23.md` lines 120, 122, 170, 196, 321, 331, 340, 364, 398 — the same nine lines run 1 quoted: the prompt's placeholder `sk-or-v1-TESTONLY-<32 hex>` (120, 331, 398), quoted `grep "sk-or-"` commands with `0` / `(no output)` (170, 196, 321, 340, 364), and a prefix-only mention `sk-or-v1-` (122). No characters follow any prefix; no key material |
+| 50 | KEY SCAN 4 | `grep -rn -i "bearer " …/tests/fixtures/classify` | no output ✔ |
+| 51 | **KEY SCAN 5** | `grep -rn "sk-or-" /Users/cobalt/cobalt-wt/jev-trial/scratch/docs-openrouter` | **1 hit — `jev-tutorial.md:30`: `export OPENROUTER_API_KEY=sk-or-...`** — not the tests' constructed fake key, not a guard pattern in `src/cobalt/classify`, not in the build report → **outside the allowed list → FAILED PREFLIGHT** (the printed line is a placeholder ending in a literal `...`; the file is not one of the packet excerpts, which come from `submit-a-system-one-request.md`) |
+| 52 | `.env` | `ls /Users/cobalt/cobalt-wt/jev-trial/.env` | exit 1 — "No such file or directory" ✔ |
+| 53 | RECOVERY | `ls scratch/tribunal-bars-0920/jev-trial-check` | exit 1 — "No such file" = fresh run |
+| 54 | THE STAGGER (house lane) | `grep -n -F "no other house hub is running" …cto-2026-09-23.md` | exit 0 — the R54 row (line 57), which names `29-jev-trial-check.md CHECK A`, carries the literal ✔ |
+| — | not run after row 51 | Codex launch shape · the four probes · the second DATE gate | not reached — FAILED PREFLIGHT; no meter was spent |
 
 ## Packet
-Not staged. No `scratch/tribunal-bars-0920/jev-trial-check/` folder exists from this run.
+Nothing staged (the KEY SCAN is BEFORE ANY STAGING). Read-only measurement done after the scan for the desk's re-issue only: the 12 part-A code / test / fixture whole files (`wc -c`) total **95,295 B** and the 5 part-A DevDocs total **15,311 B** = **110,606 B**, every file equal to the table's count (config.py 14,014 · ledger.py 4,433 · cli.py 6,449 · run_classify_trial.sh 954 · collector.py 25,239 · test_classify_config.py 6,942 · test_classify_keys.py 9,264 · test_classify_discover.py 8,095 · test_classify_door.py 16,420 · the three fixtures 1,076 / 298 / 2,111 · DevDocs 2,425 / 5,913 / 1,551 / 3,385 / 2,037). No mismatch. No `mkdir`, no `s2-p2-cards` string, no Astra launch, no checker CLI was run; `scratch/tribunal-bars-0920/jev-trial-check/` does not exist.
 
 ## CONTINUE
-next: none — run stopped in AUTHORIZATION. A relaunch of this same file starts again from AUTHORIZATION (`ls scratch/tribunal-bars-0920/jev-trial-check` first, per RECOVERY; nothing was staged, so it is a fresh run).
+next: none. The run stops here with `FAILED PREFLIGHT`. A relaunch of this same file first runs `ls scratch/tribunal-bars-0920/jev-trial-check` (fresh: "No such file"), and hits the same fifth scan unless the desk changes the prompt's allowed-lines list (L19, whole file) or the file `scratch/docs-openrouter/jev-tutorial.md` is not in the scanned tree.
 
 ## Secrets
-Not checked — no checker was launched.
+Not reached — no house was launched. S-1 … S-9: no checker answers exist.
 
 ## Per step
-Not checked.
+Not reached. R1-config, R2, R3, R4, R6-docs: no checker answers exist.
 
 ## Spend
-Not checked. No keyed call, no classify command, no database, no network beyond the two CLI `--version` probes (local), was made by this run.
+Not reached — no checker answers exist.
 
 ## Plan conformity
-Not checked.
+Not reached — no checker answers exist.
 
 ## Assertions and boundary
-Not checked.
+No checker answers exist, so (a) (b) (c) per checker are not reached. The facts this hub could state without a packet:
+- (i) `git log --stat --oneline 47fafe5..45f647a` names only PREFLIGHT's boundary paths, each in exactly one part (row 45).
+- (ii)–(vi) of §3 (protected paths, the one-vault-reader and no-other-network greps, the wrapper counts, test-diff history) were NOT run: they are collate checks that follow the checkers' answers.
+- (vii) L32: no ticker written in this report. L41: no key material written in this report — it names `OPENROUTER_API_KEY` as a name and quotes the one scan hit exactly as grep printed it (a placeholder with a literal `...`), plus the build report's own placeholder pattern.
+- (viii) RESTARTS (L42), the build report's own `RESTARTS:` line, quoted: `com.cobalt.agent com.cobalt.aset com.cobalt.herdr com.cobalt.mainframe com.cobalt.obsidian com.cobalt.radar`. NOT CHECKABLE FROM READS — `uv run cobalt jobs restarts 47fafe5..45f647a`.
 
 ## Checked against the branch
-Not checked. Nothing was read from `jev/trial-0923`.
+Not reached — no checker made a claim.
 
 ## Ready for the probe
-No checker answered. Gate by §4's rule: houses answering with a `CHECK JEV A:` line = 0 of 3 required → `probe gate: NOT READY`.
+| checker | CHECK JEV A line | ready | reason |
+|---|---|---|---|
+| grok | not launched | — | FAILED PREFLIGHT (key scan 5) |
+| gemini | not launched | — | FAILED PREFLIGHT (key scan 5) |
+| sol | not probed / not launched | — | FAILED PREFLIGHT (key scan 5) |
+| opus | not probed / not launched | — | FAILED PREFLIGHT (key scan 5) |
+
+Gate by §4's rule, as its three counts: houses answering with a `CHECK JEV A:` line = **0** (need ≥ 3) · `secrets LEAK that HOLD` = **0** · `defects that HOLD` = **0** → `probe gate: NOT READY` (the houses count fails).
 
 ## FOR THE CLASSIFIER
-none — no claim was made or checked.
+none — no checker claim exists to file-check (L75: a classifier receives only claims that HOLD).
 
 ## ESCALATE
-1. `FAILED: authorization mismatch` — the desk's launch row R51 in `cto-2026-09-23.md` (line 54) does not carry the literal `29-jev-trial-check.md CHECK A`; `grep -n -F` on it prints nothing and `git log -1 -S"29-jev-trial-check.md CHECK A"` on the desk files is empty. To relaunch, the desk adds the literal to the launch row (or a new committed row) and commits it, then relaunches this same file. The two commands are otherwise unchanged; the meter, the date gate (R30, through 2026-09-23 23:59 ET) and every other gate above passed.
-2. Time: the R30 grok/agy extension expires 2026-09-23 23:59 ET. A relaunch on a later date needs a committed row of HIS extending `Bash(grok *) and Bash(agy *)` (`70`'s DATE + EXTENSION GATE).
+1. **FAILED PREFLIGHT: key scan 5.** `grep -rn "sk-or-" /Users/cobalt/cobalt-wt/jev-trial/scratch/docs-openrouter` printed `jev-tutorial.md:30: export OPENROUTER_API_KEY=sk-or-...`. The prompt's allowed list (the tests' constructed fake key, a guard pattern in `src/cobalt/classify`, and three kinds of build-report line) does not include it, and the rule for any other hit is `FAILED PREFLIGHT` with nothing staged. This hub stopped on the rule's letter.
+2. **ASK DESK:** the printed line is a placeholder ending in a literal `...` (no characters of a key); the file is the desk's keyless public-docs fetch and is not one of the packet's excerpts (`submit-a-system-one-request.md` lines 337–436 and 843–1032). The rule's remedy line says the desk asks him to rotate `OPENROUTER_API_KEY`; on the printed line alone that is the desk's call, not this hub's. Does the desk re-issue `29` (L19, whole file) with the fifth scan's allowed list widened by this one placeholder line, or exclude `jev-tutorial.md` from the scan? Nothing else in PREFLIGHT failed; every other row above would pass again unchanged. No retry by this hub. [13:1x ET, 2026-09-23]
+3. **Fact, recorded not judged:** on a relaunch the house lane is unchanged (`19` paused, no other house hub running per R54); the Sol and Opus probes were not run this time, so their state is what run 1 recorded at 12:2x ET (both UP) and is stale.
+4. **Standing line (as the prompt words it):** "This check covers PART A (the secret and network path) of the JEV trial build, `47fafe5..45f647a` of `jev/trial-0923` — 17 files; part B (`37`) covers the other 12. It is round 1 of ≤3 (L67 / L39). With three houses checked, `secrets LEAK that HOLD: 0` and `defects that HOLD: 0`, the build is READY for the ONE keyed probe `31` (N2, his R42 condition); the merge of this branch and the trial runs also need part B's gate READY; a HOLD goes to a classifier and a fix round (L75), and `31` does not launch." — On this report ZERO houses checked, so the build is NOT READY for `31`; round 1 is NOT spent (L67 P-c). And: "Nothing in this check measures the product. The build made no keyed call: its public reads answered U1, U2 and U5 (`build-report.md` `## DISCOVERY`); U3, U4 and U6 are answered only by the probe `31`, after this check; the trial's bars (plan §4) are measured only by the trial run."
 
-Standing lines carried for the desk:
-- **"This check covers PART A (the secret and network path) of the JEV trial build, `47fafe5..45f647a` of `jev/trial-0923` — 17 files; part B (`37`) covers the other 12. It is round 1 of ≤3 (L67 / L39). With three houses checked, `secrets LEAK that HOLD: 0` and `defects that HOLD: 0`, the build is READY for the ONE keyed probe `31` (N2, his R42 condition); the merge of this branch and the trial runs also need part B's gate READY; a HOLD goes to a classifier and a fix round (L75), and `31` does not launch."** This run checked nothing, so none of it is met.
-- **"Nothing in this check measures the product. The build made no keyed call: its public reads answered U1, U2 and U5 (`build-report.md` `## DISCOVERY`); U3, U4 and U6 are answered only by the probe `31`, after this check; the trial's bars (plan §4) are measured only by the trial run."**
-- L32: no ticker written. L41: no key material written.
-
-FAILED: authorization mismatch — launch row R51 (cto-2026-09-23.md line 54) does not carry the literal "29-jev-trial-check.md CHECK A"; grep -F prints nothing and git log -S is empty — nothing staged, no house launched, probe gate NOT READY
+FAILED PREFLIGHT: possible key material in /Users/cobalt/cobalt-wt/jev-trial/scratch/docs-openrouter/jev-tutorial.md:30 — nothing staged, no house launched; the printed line is a placeholder (`export OPENROUTER_API_KEY=sk-or-...`), the desk decides whether to rotate `OPENROUTER_API_KEY` or re-issue `29` with the scan's allowed list widened
