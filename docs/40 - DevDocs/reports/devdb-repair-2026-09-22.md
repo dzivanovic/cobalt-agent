@@ -1,38 +1,43 @@
-# DEV-DB REPAIR — 2026-09-22 (seat `devdb-repair-0922`, R124, prompt `68-devdb-repair.md`)
+# DEV-DB REPAIR — run 2, 2026-09-23 (seat `devdb-repair-0922`, prompt `68-devdb-repair.md`)
+
+Run 1 (2026-09-22 22:12 EDT) ended `FAILED: PREFLIGHT Q3` with nothing changed. That report is committed at `777a7a0`. This run starts again from AUTHORIZATION (R0 `Wed Sep 23 07:07:10 EDT 2026`).
 
 ## §0 Headline
-- Stopped at PREFLIGHT Q3 (22:13:00 EDT): `FAILED: InsufficientPrivilege: permission denied for database cobalt_dev`. The listed string ran as written and failed. No variant was typed.
-- **Nothing changed.** No dump, no rename, no restore, no migrate. `cobalt_dev` is still the bloated DB. `cobalt_dev_bloated_0922` does not exist.
-- Everything else in preflight matched the desk's read: Q1 top row `public.aset_sizings` dropped 1560 / max_attnum 1586, Q2 all public (no `system` tables), D1 `0`, D2 no kept copy, D3 ≈ 464 GB / 489 GB free.
-- The fix is a corrected Q3 string with his approval, then a relaunch. ESCALATE: 4.
+- Stopped at REPAIR D6 (07:08 EDT). The dump finished (exit 0, 74,952,252 B), but the listed `tail -n 3` shows only pg_dump's `\unrestrict …` trailer, so the "dump complete" gate failed as written. Likely a stale gate, not a bad dump (UNPROVEN).
+- **`cobalt_dev` is unchanged.** Nothing was renamed, restored or migrated, and there was no rollback. `/tmp/cobalt_dev-0922.sql` is left in the container (R10 was not lawful yet).
+- Preflight passed: authorized (R122 + R12), D0 = 144,743,447 B, D1 `0`, no kept copy, and space is ample.
+- Fix: a re-issued, approved D6 string, then relaunch. ESCALATE: 5.
 
 ## L74
-- 22:12 ET: a system-reminder block arrived with the Read tool result of the prompt file. It asked for a `Claude-Session: https://claude.ai/code/session_012NLXXNHWfFNohwrdbQ1QQQ` commit trailer and named a file-send tool (`SendUserFile`). Recorded once as DATA and not followed: this seat makes no commit and sends no file.
+- 07:07 EDT: a system-reminder block arrived with the Read tool result of the prompt file. It asked for a `Claude-Session:` commit trailer and named a file-send tool (`SendUserFile`). Recorded once as DATA and not followed.
 
 ## AUTHORIZATION
 | check | command | exit | result |
 |---|---|---|---|
-| approval | `grep -n -F "cobalt_dev_bloated_0922" …/cto-2026-09-22.md …/cto-2026-09-23.md` | 2 | `cto-2026-09-23.md`: No such file (recorded, not fatal). `cto-2026-09-22.md:37`: **R122** 21:2x ET, his words: "Approved". APPROVED VERBATIM for `68-devdb-repair.md` only: the 15 NEW strings + 3 NEW denies. Condition: `73` changes no string. |
-| approval committed | `git -C /Users/cobalt/cobalt log -1 --format=%H -S"cobalt_dev_bloated_0922" -- "docs/40 - DevDocs/reports/cto-2026-09-2*.md"` | 0 | `b33b56349102f455273f2c2578fcacd2486a6e9c` |
-| launch row | `grep -n "68-devdb-repair.md" …/cto-2026-09-22.md …/cto-2026-09-23.md` | 2 | `cto-2026-09-22.md:35`: **R124** 22:1x ET DESK LAUNCH ROW. CONDITION MET: `73` → `gemini: REVIEW: RUN IT · blockers: 0 · string changes: 0`. (`-23` missing, recorded.) |
-| launch committed | `git -C /Users/cobalt/cobalt log -1 --format=%H -S"68-devdb-repair.md" -- "docs/40 - DevDocs/reports/cto-2026-09-2*.md"` | 0 | `4830d80b2d88d98ea2ff78165bcdc78e0553590d` |
+| NEW strings approved | `grep -n -F "cobalt_dev_bloated_0922" …/cto-2026-09-22.md …/cto-2026-09-23.md` | 0 | `cto-2026-09-22.md:43` **R122**, his words: "Approved". APPROVED VERBATIM for `68-devdb-repair.md` only: the 15 NEW strings + 3 NEW denies. (`:40` R125 also matched. It is the run-1 FAILED launch row.) |
+| committed | `git -C … log -1 --format=%H -S"cobalt_dev_bloated_0922" -- "…/cto-2026-09-2*.md"` | 0 | `777a7a0415349bf64a0a5673b017fc0f20294847` |
+| Q3 size probe approved | `grep -n -F "Q3 size probe" …` | 0 | `cto-2026-09-23.md:15` **R12**: R4(c) "Everything waiting for me is approved." covers the Q3 size probe, D0, verbatim string, on R122's condition. |
+| committed | `git -C … log -1 --format=%H -S"Q3 size probe" -- …` | 0 | `fd258c9b71e066edcd9df790056e89d4937aadab` |
+| launch row | `grep -n "68-devdb-repair.md" …` | 0 | `cto-2026-09-23.md:15` **R12** is the DESK LAUNCH ROW for `prompts/2026-09-22/68-devdb-repair.md`. CONDITION MET (`03`: blockers 0, string changes 0). The prompt names R12. |
+| committed | `git -C … log -1 --format=%H -S"68-devdb-repair.md" -- …` | 0 | `fd258c9b71e066edcd9df790056e89d4937aadab` |
 
-Verdict: AUTHORIZED (R122 + R124, both committed).
+Verdict: AUTHORIZED (R122 + R12/R4(c), all committed).
 
 ## PREFLIGHT
 | rule | command | exit | result |
 |---|---|---|---|
-| R0 | `date` | 0 | `Tue Sep 22 22:12:33 EDT 2026` |
+| R0 | `date` | 0 | `Wed Sep 23 07:07:10 EDT 2026` |
 | R1 | `ls -la /Users/cobalt/cobalt-wt/*/.env` | 1 | `(eval):1: no matches found: /Users/cobalt/cobalt-wt/*/.env`. The lane is free. |
-| R2 | `git -C /Users/cobalt/cobalt status --porcelain` | 0 | ` M configs/cobalt/rules.yaml` · ` M "docs/30 - Design/archiver-runs.md"` · ` M "docs/40 - DevDocs/reports/radar-benchmark-load-2026-09-22.md"` · ` M "docs/40 - DevDocs/reports/seat-usage.md"` · `?? "docs/40 - DevDocs/reports/.grok-stdout-2026-09-22.tmp"` · `?? "docs/40 - DevDocs/reports/day-open-2026-09-22.md"` · `?? "docs/40 - DevDocs/reports/devdb-repair-2026-09-22.md"` (this report, first Write) |
-| R3 | `git -C /Users/cobalt/cobalt log --oneline -1` | 0 | `4830d80 docs(desk): 09-22 R124 devdb repair launch row (Gemini RUN IT, 0 string changes)` |
-| R4 | `ls /Users/cobalt/cobalt/src/cobalt/db_migrations` | 0 | `0001_schemas.sql` … `0011_archive_incidents.sql` (+ `.rollback.sql` for 0002–0011, `cli.py`, `placement.py`, `__init__.py`). **`<HEAD>` = `0011` (`0011_archive_incidents.sql`)** |
-| Q1 | (listed string, verbatim) | 0 | see below |
-| Q2 | (listed string, verbatim) | 0 | see below |
-| Q3 | `COBALT_ENV=dev uv run cobalt db query --side system --format json "SELECT current_database() AS db, pg_database_size(current_database()) AS bytes, to_regclass('system.archive_incidents') IS NOT NULL AS has_head"` | **1** | **`FAILED: InsufficientPrivilege: permission denied for database cobalt_dev`** (22:13:00 EDT) |
-| D1 | (listed string) | 0 | `0` (evidence only, read-only, after Q3's failure: auth works over the local socket, no other session) |
-| D2 | (listed string) | 0 | `cobalt_brain` · `cobalt_dev` · `mattermost` · `postgres` · `template0` · `template1` (evidence only: no `cobalt_dev_bloated_0922`) |
-| D3 | `docker exec cobalt_memory df -k /tmp /var/lib/postgresql/data` | 0 | `overlay 466747392 2245804 464501588 1% /` · `mac 971350180 482309620 489040560 50% /var/lib/postgresql/data` (evidence only: the gate needs 3 × Q3 `bytes`, and `bytes` is unknown) |
+| R2 | `git -C /Users/cobalt/cobalt status --porcelain` | 0 | ` M configs/cobalt/rules.yaml` · ` M "docs/40 - DevDocs/prompts/2026-09-23/06-s2-smoke-fix-check.md"` · ` M "docs/40 - DevDocs/reports/devdb-repair-2026-09-22.md"` (this report) · ` M "docs/40 - DevDocs/reports/radar-benchmark-load-2026-09-22.md"` · ` M "docs/40 - DevDocs/reports/seat-usage.md"` · `?? "docs/40 - DevDocs/reports/.grok-stdout-2026-09-22.tmp"` · `?? "docs/40 - DevDocs/reports/day-open-2026-09-22.md"` · `?? "docs/40 - DevDocs/reports/day-open-2026-09-23.md"` |
+| R3 | `git -C /Users/cobalt/cobalt log --oneline -1` | 0 | `fd258c9 docs(desk): 09-23 R11 deploy list approved, R12 68 launch row, R13 06 launch row, 03 read done` |
+| R4 | `ls /Users/cobalt/cobalt/src/cobalt/db_migrations` | 0 | `0001_schemas.sql` … `0011_archive_incidents.sql` (+ `.rollback.sql` 0002–0011). **`<HEAD>` = `0011` (`0011_archive_incidents.sql`)** |
+| Q1 | listed string | 0 | see below |
+| Q2 | listed string | 0 | see below |
+| Q3 | listed string | 0 | `[{"db": "cobalt_dev", "has_head": false}]` |
+| D0 | listed string | 0 | `144743447` → **bytes = 144,743,447** (≈138 MiB) |
+| D1 | listed string | 0 | `0`: auth works and no other session is open. |
+| D2 | listed string | 0 | `cobalt_brain` · `cobalt_dev` · `mattermost` · `postgres` · `template0` · `template1`. No `cobalt_dev_bloated_0922`. |
+| D3 | `docker exec cobalt_memory df -k /tmp /var/lib/postgresql/data` | 0 | `overlay 466878464 2245864 464632600 1% /` · `mac 971350180 482189604 489160576 50% /var/lib/postgresql/data`. Gate: 3 × 144,743,447 B = 434,230,341 B ≈ 424,054 KB. Both free values are far above it → PASS. |
 
 Q1 (whole):
 ```
@@ -42,14 +47,18 @@ Q2 (whole):
 ```
 [{"tablename": "aset_sizings", "schemas": "public"}, {"tablename": "bars", "schemas": "public"}, {"tablename": "card_stop_edits", "schemas": "public"}, {"tablename": "card_transitions", "schemas": "public"}, {"tablename": "cobalt_email_sends", "schemas": "public"}, {"tablename": "cobalt_jobs", "schemas": "public"}, {"tablename": "cobalt_kill_switch", "schemas": "public"}, {"tablename": "cobalt_redactions", "schemas": "public"}, {"tablename": "day_modes", "schemas": "public"}, {"tablename": "session_blocks", "schemas": "public"}, {"tablename": "trade_defs", "schemas": "user"}, {"tablename": "trader_settings", "schemas": "user"}, {"tablename": "traders", "schemas": "user"}, {"tablename": "tunables", "schemas": "user"}, {"tablename": "vault_overrides", "schemas": "public"}, {"tablename": "vault_writes", "schemas": "public"}]
 ```
-State vs the desk's 19:4x read: **matches**. Q1's top row is `public.aset_sizings` with dropped 1560. The new-core tables are in `public` only. There is no `"user".aset_sizings`, and no table sits in `system`, so `system.archive_incidents` is absent by this unscoped `pg_catalog` read (L35). That makes `has_head` effectively false, but it is not Q3's reading.
-
-**Why Q3 failed (reasoned, UNPROVEN):** `src/cobalt/db_query.py:160-169` connects per side and asserts `current_user == side.role`. `pg_database_size()` checks the *current role's* CONNECT privilege on the database (or `pg_read_all_stats`). Q1 and Q2 succeeded on the same connection path, so the connection itself works. The likely cause is that the `system` side role lacks CONNECT on `cobalt_dev` as a direct grant, or gets the login through another route. That is not proven here. The drafter's list never ran Q3 before launch.
-
-Stopped here: the D3 gate (`3 × Q3 bytes`) cannot be evaluated. The prompt forbids a variant string ("an unlisted command = do not call it … never a variant"). Safe default: stop and change nothing.
+State vs the desk's read: **matches** (identical to run 1). Q1's top row is `public.aset_sizings`, dropped 1560 / max_attnum 1586. The new-core tables are in `public` only, and there is no `"user".aset_sizings`. Q3 `has_head` is false. → proceed to REPAIR.
 
 ## REPAIR
-Not run. D4, D5, D6, R7 and D7 were not called. No dump file was created. No rename happened.
+| rule | command | exit | result |
+|---|---|---|---|
+| D4 | `docker exec cobalt_memory sh -c 'pg_dump -U "$POSTGRES_USER" --create -f /tmp/cobalt_dev-0922.sql cobalt_dev'` (background) | 0 | no output |
+| D5 | `docker exec cobalt_memory ls -la /tmp/cobalt_dev-0922.sql` | 0 | `-rw-r--r-- 1 root root 74952252 Sep 23 11:08 /tmp/cobalt_dev-0922.sql` (74,952,252 B; container clock is UTC) |
+| D6 | `docker exec cobalt_memory tail -n 3 /tmp/cobalt_dev-0922.sql` | 0 | **`\unrestrict Y0OMDCwzmAM0u0eLdZ7VrptAuOvqnpUE5UzMQWGZncOvpODztqVLdEnz8JYvhk2`** (the only non-blank line). `-- PostgreSQL database dump complete` is **NOT** in the output → gate FAILED. |
+
+**Stopped at D6** (07:08:14 EDT), as the prompt says: "else `FAILED: D6 — the dump is incomplete`, stop (nothing renamed yet)". R7, D7 and R8 were not called.
+
+**Why D6 failed (reasoned, UNPROVEN, L70):** the likely cause is a stale gate, not a truncated dump. Newer `pg_dump` builds (the 2025 security releases, 16.10 / 17.6 and later) wrap a plain-format dump in `\restrict <key>` … `\unrestrict <key>`. The `\unrestrict` line is written AFTER the `-- PostgreSQL database dump complete` comment block, so `tail -n 3` reaches only the trailer. Three facts point this way: pg_dump exited 0 with no output; the file is 74.9 MB against a 144.7 MB database; and the last line is the trailer pg_dump writes at the very end. This is not verified: no listed command reads further back in the file, and the server version was not read. A variant was not typed (L62).
 
 ## MIGRATE
 Not run.
@@ -61,22 +70,24 @@ Not run.
 Not run (T1/T2 not called).
 
 ## CLEANUP
-- R10 not needed: no dump exists.
-- R2 at 22:13:15 EDT is identical to the preflight R2. The only line this seat added is this report (`?? "docs/40 - DevDocs/reports/devdb-repair-2026-09-22.md"`).
-- R8 was **not** run: R7 never ran, so rollback is forbidden.
+- **R10 not run.** The prompt allows the `rm` "ONLY after PROOF passed and T1 / T2 ran". So **`/tmp/cobalt_dev-0922.sql` (74,952,252 B) is LEFT inside `cobalt_memory`**. It holds a full copy of the dev DB. A relaunch's D4 overwrites it (`-f`).
+- R8 was **not** run. R7 never ran, so rollback is forbidden.
+- R2 at 07:08 EDT: no line added by this seat beyond this report (` M …/devdb-repair-2026-09-22.md`). The `06-s2-smoke-fix-check.md` line from the first R2 is gone. The desk committed it; this seat did not touch it.
+- **`cobalt_dev` is unchanged**: it is still the bloated DB (1560 dropped on `aset_sizings`). `cobalt_dev_bloated_0922` does not exist.
 
 ## ROOT CAUSE
-Not measured: step 5 never ran, so there is no per-run growth reading. The mechanism named in the prompt is unchanged, and the fix shapes (a)–(d) stand as drafted, to be measured on the relaunch. Arithmetic from today's read only: `aset_sizings` max_attnum 1586 leaves **14** attnum slots before the 1,600 cap. That is why `0007`'s re-apply overflowed.
+Not measured: step 5 was not reached. The mechanism and fix shapes (a)–(d) stand as drafted (see ESCALATE 4). From today's read only: `aset_sizings` max_attnum 1586 leaves **14** attnum slots before the 1,600 cap.
 
 ## ESCALATE
-1. **Q3 string fails on the dev DB** (`InsufficientPrivilege: permission denied for database cobalt_dev`). The repair needs a corrected, approved Q3 before relaunch. Two options for the drafter, no pick: (i) drop `pg_database_size(...)` from Q3 and take size from a new approved in-container probe, `docker exec cobalt_memory sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -Atc "SELECT pg_database_size('"'"'cobalt_dev'"'"')"'` (quoting to be settled by the drafter); (ii) keep `has_head` in Q3 via `to_regclass` alone. Either option is a NEW string, so it needs his "approve" (L61/L62). A D3 reading is on record for reference: ≈ 464 GB (`/tmp`) and ≈ 489 GB (data) free.
-2. **The raw-command gap (the refusal they lack):** `assert_destructive_target()` has no rebuild/restore verb. The repair must run raw `docker exec` strings on the server that also holds `cobalt_brain` (D2 lists it). Carried from `r3-check-devdb-draft-2026-09-22.md` ESCALATE (a).
-3. **`cobalt_dev_bloated_0922`:** not created (nothing renamed). Its size is unknown because Q3 failed.
-4. **ROOT CAUSE ops item (not built):** `TestMigrationRoundTrip` commits `--rollback --down-to 0001` + re-`migrate` on `cobalt_dev` each with-DB run. The reverse scripts' `DROP COLUMN` leave dropped slots. `aset_sizings` is at 1586/1600. Fix shapes (a) scratch DB `cobalt_dev_rt` via a guarded helper · (b) rebuild touched tables after the round trip · (c) reverse scripts recreate the table instead of `DROP COLUMN` · (d) a guarded `cobalt.devdb --rebuild` verb behind `assert_destructive_target()`. Growth per run is unmeasured (step 5 not reached).
-- ASK DESK: none raised. The Q3 failure has an explicit safe default (stop, nothing changed).
+1. **D6 gate string vs the pg_dump trailer.** D6's `tail -n 3` cannot reach `-- PostgreSQL database dump complete` when pg_dump appends `\unrestrict <key>` (reasoned, UNPROVEN). The drafter needs to re-issue D6 before a relaunch. Two options, no pick, and either one is a NEW string that needs his approval: (i) `docker exec cobalt_memory grep -c -F -- "-- PostgreSQL database dump complete" /tmp/cobalt_dev-0922.sql` → MUST print `1`; or (ii) `docker exec cobalt_memory tail -n 8 /tmp/cobalt_dev-0922.sql`, with the gate unchanged. Also worth checking: D7's `psql -f` restore needs a `psql` that understands `\restrict` (a psql from the same container/version does). The drafter should confirm this with a version read, e.g. a new string `docker exec cobalt_memory psql --version`.
+2. **Dump file left in the container**: `/tmp/cobalt_dev-0922.sql`, 74,952,252 B, full dev-DB content. R10 could not run lawfully. Options: the relaunch overwrites and then removes it at R10, or the desk approves R10 on its own now.
+3. **The raw-command gap (the refusal they lack):** `assert_destructive_target()` has no rebuild/restore verb. The repair runs raw `docker exec` strings on the server that also holds `cobalt_brain` (D2 lists it). Carried from `r3-check-devdb-draft-2026-09-22.md` ESCALATE (a).
+4. **ROOT CAUSE ops item (not built):** `TestMigrationRoundTrip` commits `--rollback --down-to 0001` + re-`migrate` on `cobalt_dev` on every with-DB run. The reverse scripts' `DROP COLUMN` leave dropped slots, and `aset_sizings` is at 1586/1600. Fix shapes: (a) scratch DB `cobalt_dev_rt` via a guarded helper · (b) rebuild the touched tables after the round trip · (c) reverse scripts recreate the table instead of `DROP COLUMN` · (d) a guarded `cobalt.devdb --rebuild` verb behind `assert_destructive_target()`. NAMED GAP: `assert_destructive_target()` has no rebuild/restore verb. Growth per run is unmeasured.
+5. **`cobalt_dev_bloated_0922`:** not created. For the record, D0 `bytes` = 144,743,447 (the size the kept copy will have).
+- ASK DESK: none raised. D6 has an explicit safe default (stop, nothing renamed).
 - Step 5 reds: none (not run).
 
 ## CONTINUE
-next: none — the run ended FAILED at PREFLIGHT Q3 with nothing changed. A relaunch needs a corrected, approved Q3 string (ESCALATE 1) and then starts again from AUTHORIZATION.
+next: none — the run ended FAILED at D6 with the dev DB unchanged (only the dump file was created, ESCALATE 2). A relaunch needs a corrected, approved D6 string (ESCALATE 1) and then starts again from AUTHORIZATION.
 
-FAILED: PREFLIGHT Q3 — `InsufficientPrivilege: permission denied for database cobalt_dev` (the listed Q3 string cannot read `pg_database_size`; the D3 gate cannot be evaluated; nothing changed, no rollback needed) · ESCALATE: 4
+FAILED: D6 — the dump is incomplete (the listed `tail -n 3` shows only pg_dump's `\unrestrict` trailer, no `-- PostgreSQL database dump complete` line; likely a stale gate, UNPROVEN; nothing renamed, no rollback needed; dump file left in the container) · ESCALATE: 5
