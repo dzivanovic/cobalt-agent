@@ -84,3 +84,11 @@ The morning sweep, in code: `cobalt.dayopen.cli.add_parser` mounts
 [--date] [--prod] [--json]`, the read-only sprint smoke checklist
 (`smoke/cli.md`). The module docstring's command map now also lists
 `cobalt replay nightly` and `cobalt smoke`.
+
+## 2026-09-23 — voice V1: `cobalt voice turn`
+
+One registration pair: `from cobalt.voice import cli as voice_cli` and
+`voice_cli.add_parser(sub)` (after the archiver's block, reflowing none of
+its neighbours) mounts `cobalt voice turn --text | --audio | --confirm
+[--dry-run] [--session]` — the voice turn function's CLI caller
+(`voice/cli.md`). `--confirm` refuses in production.
