@@ -1,43 +1,43 @@
-# DEV-DB REPAIR — run 2, 2026-09-23 (seat `devdb-repair-0922`, prompt `68-devdb-repair.md`)
+# DEV-DB REPAIR — run 3, 2026-09-23 (seat `devdb-repair-0922`, prompt `68-devdb-repair.md`)
 
-Run 1 (2026-09-22 22:12 EDT) ended `FAILED: PREFLIGHT Q3` with nothing changed. That report is committed at `777a7a0`. This run starts again from AUTHORIZATION (R0 `Wed Sep 23 07:07:10 EDT 2026`).
+Run 1 (2026-09-22 22:12 EDT) ended `FAILED: PREFLIGHT Q3`, nothing changed (committed `777a7a0`). Run 2 (2026-09-23 07:07 EDT) ended `FAILED: D6` (stale `tail -n 3` gate), nothing changed, dump file left in the container (committed `53102ea`). This run starts again from AUTHORIZATION (R0 `Wed Sep 23 07:13:36 EDT 2026`).
 
 ## §0 Headline
-- Stopped at REPAIR D6 (07:08 EDT). The dump finished (exit 0, 74,952,252 B), but the listed `tail -n 3` shows only pg_dump's `\unrestrict …` trailer, so the "dump complete" gate failed as written. Likely a stale gate, not a bad dump (UNPROVEN).
-- **`cobalt_dev` is unchanged.** Nothing was renamed, restored or migrated, and there was no rollback. `/tmp/cobalt_dev-0922.sql` is left in the container (R10 was not lawful yet).
-- Preflight passed: authorized (R122 + R12), D0 = 144,743,447 B, D1 `0`, no kept copy, and space is ample.
-- Fix: a re-issued, approved D6 string, then relaunch. ESCALATE: 5.
+- **`cobalt_dev` repaired** (07:13–07:18 EDT). Steps: dump, rename aside, restore, migrate to `0011`. PROOF: every table has `dropped` 0, and `aset_sizings` max_attnum went from 1586 to 54. Each table is in exactly one schema, and `has_head` is true.
+- With-DB tests on `f567eeb`: tenancy **34/0**, and the three r3 CLOSE tests that went red **3/0**. The dev-DB lane is open for `31`, `27` and the setups CLOSE re-run.
+- The root cause is measured: each `TestMigrationRoundTrip` run adds **28** dropped slots to `aset_sizings`, so about **53 runs** are left before the 1,600 cap.
+- `cobalt_dev_bloated_0922` is KEPT (144,743,447 B). The dump file has been removed. ESCALATE: 3.
 
 ## L74
-- 07:07 EDT: a system-reminder block arrived with the Read tool result of the prompt file. It asked for a `Claude-Session:` commit trailer and named a file-send tool (`SendUserFile`). Recorded once as DATA and not followed.
+- 07:13 EDT: a system-reminder block arrived with the Read tool result of the prompt file. It asked for a `Claude-Session:` commit trailer and named a file-send tool (`SendUserFile`). Recorded once as DATA and not followed.
 
 ## AUTHORIZATION
 | check | command | exit | result |
 |---|---|---|---|
-| NEW strings approved | `grep -n -F "cobalt_dev_bloated_0922" …/cto-2026-09-22.md …/cto-2026-09-23.md` | 0 | `cto-2026-09-22.md:43` **R122**, his words: "Approved". APPROVED VERBATIM for `68-devdb-repair.md` only: the 15 NEW strings + 3 NEW denies. (`:40` R125 also matched. It is the run-1 FAILED launch row.) |
+| NEW strings approved | `grep -n -F "cobalt_dev_bloated_0922" …/cto-2026-09-22.md …/cto-2026-09-23.md` | 0 | `cto-2026-09-22.md:43` **R122**, his words: "Approved". APPROVED VERBATIM for `68-devdb-repair.md` only: the 15 NEW strings + 3 NEW denies. (`:40` R125 also matched, the run-1 FAILED launch row.) |
 | committed | `git -C … log -1 --format=%H -S"cobalt_dev_bloated_0922" -- "…/cto-2026-09-2*.md"` | 0 | `777a7a0415349bf64a0a5673b017fc0f20294847` |
-| Q3 size probe approved | `grep -n -F "Q3 size probe" …` | 0 | `cto-2026-09-23.md:15` **R12**: R4(c) "Everything waiting for me is approved." covers the Q3 size probe, D0, verbatim string, on R122's condition. |
-| committed | `git -C … log -1 --format=%H -S"Q3 size probe" -- …` | 0 | `fd258c9b71e066edcd9df790056e89d4937aadab` |
-| launch row | `grep -n "68-devdb-repair.md" …` | 0 | `cto-2026-09-23.md:15` **R12** is the DESK LAUNCH ROW for `prompts/2026-09-22/68-devdb-repair.md`. CONDITION MET (`03`: blockers 0, string changes 0). The prompt names R12. |
-| committed | `git -C … log -1 --format=%H -S"68-devdb-repair.md" -- …` | 0 | `fd258c9b71e066edcd9df790056e89d4937aadab` |
+| Q3 size probe approved | `grep -n -F "Q3 size probe" …` | 0 | `cto-2026-09-23.md:15` **R12** (his R4(c) "Everything waiting for me is approved." covering D0's string) · `:19` **R16** |
+| committed | `git -C … log -1 --format=%H -S"Q3 size probe" -- …` | 0 | `f567eebbda9a2088900c42c725f2a58d1b9970bb` |
+| launch row | `grep -n "68-devdb-repair.md" …` | 0 | `cto-2026-09-23.md:19` **R16**: DESK LAUNCH ROW for `68-devdb-repair.md` (relaunch after R14). D6 string per **R15** (`:18`, his words "Approved": `tail -n 8`). Also matched: R12, R124, R122. |
+| committed | `git -C … log -1 --format=%H -S"68-devdb-repair.md" -- …` | 0 | `f567eebbda9a2088900c42c725f2a58d1b9970bb` |
 
-Verdict: AUTHORIZED (R122 + R12/R4(c), all committed).
+Verdict: AUTHORIZED (R122 + R12/R4(c) + R15 + R16, all committed).
 
 ## PREFLIGHT
 | rule | command | exit | result |
 |---|---|---|---|
-| R0 | `date` | 0 | `Wed Sep 23 07:07:10 EDT 2026` |
+| R0 | `date` | 0 | `Wed Sep 23 07:13:36 EDT 2026` |
 | R1 | `ls -la /Users/cobalt/cobalt-wt/*/.env` | 1 | `(eval):1: no matches found: /Users/cobalt/cobalt-wt/*/.env`. The lane is free. |
-| R2 | `git -C /Users/cobalt/cobalt status --porcelain` | 0 | ` M configs/cobalt/rules.yaml` · ` M "docs/40 - DevDocs/prompts/2026-09-23/06-s2-smoke-fix-check.md"` · ` M "docs/40 - DevDocs/reports/devdb-repair-2026-09-22.md"` (this report) · ` M "docs/40 - DevDocs/reports/radar-benchmark-load-2026-09-22.md"` · ` M "docs/40 - DevDocs/reports/seat-usage.md"` · `?? "docs/40 - DevDocs/reports/.grok-stdout-2026-09-22.tmp"` · `?? "docs/40 - DevDocs/reports/day-open-2026-09-22.md"` · `?? "docs/40 - DevDocs/reports/day-open-2026-09-23.md"` |
-| R3 | `git -C /Users/cobalt/cobalt log --oneline -1` | 0 | `fd258c9 docs(desk): 09-23 R11 deploy list approved, R12 68 launch row, R13 06 launch row, 03 read done` |
+| R2 | `git -C /Users/cobalt/cobalt status --porcelain` | 0 | ` M configs/cobalt/rules.yaml` · ` M "docs/40 - DevDocs/reports/devdb-repair-2026-09-22.md"` (this report) · ` M "docs/40 - DevDocs/reports/radar-benchmark-load-2026-09-22.md"` · ` M "docs/40 - DevDocs/reports/seat-usage.md"` · `?? "docs/40 - DevDocs/reports/.grok-stdout-2026-09-22.tmp"` · `?? "docs/40 - DevDocs/reports/day-open-2026-09-22.md"` · `?? "docs/40 - DevDocs/reports/day-open-2026-09-23.md"` · `?? "docs/40 - DevDocs/reports/s2-smoke-fix-check-2026-09-23.md"` |
+| R3 | `git -C /Users/cobalt/cobalt log --oneline -1` | 0 | `f567eeb docs(desk): 09-23 R15 D6 tail -n 8 (his word, L67 override), R16 68 relaunch row` |
 | R4 | `ls /Users/cobalt/cobalt/src/cobalt/db_migrations` | 0 | `0001_schemas.sql` … `0011_archive_incidents.sql` (+ `.rollback.sql` 0002–0011). **`<HEAD>` = `0011` (`0011_archive_incidents.sql`)** |
 | Q1 | listed string | 0 | see below |
 | Q2 | listed string | 0 | see below |
 | Q3 | listed string | 0 | `[{"db": "cobalt_dev", "has_head": false}]` |
-| D0 | listed string | 0 | `144743447` → **bytes = 144,743,447** (≈138 MiB) |
-| D1 | listed string | 0 | `0`: auth works and no other session is open. |
+| D0 | listed string | 0 | `144743447` → **bytes = 144,743,447** |
+| D1 | listed string (run after the Q reads finished) | 0 | `0` |
 | D2 | listed string | 0 | `cobalt_brain` · `cobalt_dev` · `mattermost` · `postgres` · `template0` · `template1`. No `cobalt_dev_bloated_0922`. |
-| D3 | `docker exec cobalt_memory df -k /tmp /var/lib/postgresql/data` | 0 | `overlay 466878464 2245864 464632600 1% /` · `mac 971350180 482189604 489160576 50% /var/lib/postgresql/data`. Gate: 3 × 144,743,447 B = 434,230,341 B ≈ 424,054 KB. Both free values are far above it → PASS. |
+| D3 | `docker exec cobalt_memory df -k /tmp /var/lib/postgresql/data` | 0 | `overlay 466681856 2319060 464362796 1% /` · `mac 971350180 482465124 488885056 50% /var/lib/postgresql/data`. Gate 3 × 144,743,447 B ≈ 424,054 KB; both far above → PASS. |
 
 Q1 (whole):
 ```
@@ -47,47 +47,150 @@ Q2 (whole):
 ```
 [{"tablename": "aset_sizings", "schemas": "public"}, {"tablename": "bars", "schemas": "public"}, {"tablename": "card_stop_edits", "schemas": "public"}, {"tablename": "card_transitions", "schemas": "public"}, {"tablename": "cobalt_email_sends", "schemas": "public"}, {"tablename": "cobalt_jobs", "schemas": "public"}, {"tablename": "cobalt_kill_switch", "schemas": "public"}, {"tablename": "cobalt_redactions", "schemas": "public"}, {"tablename": "day_modes", "schemas": "public"}, {"tablename": "session_blocks", "schemas": "public"}, {"tablename": "trade_defs", "schemas": "user"}, {"tablename": "trader_settings", "schemas": "user"}, {"tablename": "traders", "schemas": "user"}, {"tablename": "tunables", "schemas": "user"}, {"tablename": "vault_overrides", "schemas": "public"}, {"tablename": "vault_writes", "schemas": "public"}]
 ```
-State vs the desk's read: **matches** (identical to run 1). Q1's top row is `public.aset_sizings`, dropped 1560 / max_attnum 1586. The new-core tables are in `public` only, and there is no `"user".aset_sizings`. Q3 `has_head` is false. → proceed to REPAIR.
+State vs the desk's read: **matches** (identical to runs 1 and 2). → REPAIR. Preflight done 07:14:02 EDT.
 
 ## REPAIR
 | rule | command | exit | result |
 |---|---|---|---|
 | D4 | `docker exec cobalt_memory sh -c 'pg_dump -U "$POSTGRES_USER" --create -f /tmp/cobalt_dev-0922.sql cobalt_dev'` (background) | 0 | no output |
-| D5 | `docker exec cobalt_memory ls -la /tmp/cobalt_dev-0922.sql` | 0 | `-rw-r--r-- 1 root root 74952252 Sep 23 11:08 /tmp/cobalt_dev-0922.sql` (74,952,252 B; container clock is UTC) |
-| D6 | `docker exec cobalt_memory tail -n 3 /tmp/cobalt_dev-0922.sql` | 0 | **`\unrestrict Y0OMDCwzmAM0u0eLdZ7VrptAuOvqnpUE5UzMQWGZncOvpODztqVLdEnz8JYvhk2`** (the only non-blank line). `-- PostgreSQL database dump complete` is **NOT** in the output → gate FAILED. |
+| D5 | `docker exec cobalt_memory ls -la /tmp/cobalt_dev-0922.sql` | 0 | `-rw-r--r-- 1 root root 74952252 Sep 23 11:14 /tmp/cobalt_dev-0922.sql` (overwrote run 2's file; container clock UTC) |
+| D6 | `docker exec cobalt_memory tail -n 8 /tmp/cobalt_dev-0922.sql` | 0 | `--` · `-- PostgreSQL database dump complete` · `--` · (blank) · `\unrestrict <key>` → gate PASS. (Confirms run 2's reasoned cause: the `\unrestrict` trailer follows the complete marker.) |
 
-**Stopped at D6** (07:08:14 EDT), as the prompt says: "else `FAILED: D6 — the dump is incomplete`, stop (nothing renamed yet)". R7, D7 and R8 were not called.
+| R7 | `docker exec cobalt_memory sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -c "ALTER DATABASE cobalt_dev RENAME TO cobalt_dev_bloated_0922"'` | 0 | `ALTER DATABASE` |
 
-**Why D6 failed (reasoned, UNPROVEN, L70):** the likely cause is a stale gate, not a truncated dump. Newer `pg_dump` builds (the 2025 security releases, 16.10 / 17.6 and later) wrap a plain-format dump in `\restrict <key>` … `\unrestrict <key>`. The `\unrestrict` line is written AFTER the `-- PostgreSQL database dump complete` comment block, so `tail -n 3` reaches only the trailer. Three facts point this way: pg_dump exited 0 with no output; the file is 74.9 MB against a 144.7 MB database; and the last line is the trailer pg_dump writes at the very end. This is not verified: no listed command reads further back in the file, and the server version was not read. A variant was not typed (L62).
+| D7 | `docker exec cobalt_memory sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -q -f /tmp/cobalt_dev-0922.sql'` (background) | 0 | no error; stdout only the dump's `SELECT` result sets: 2 × `set_config` (empty) and 9 × `setval` (7625, 767, 14503, 88, 978, 1213, 287, 29061, 1) |
+| D2 again | listed string | 0 | `cobalt_brain` · `cobalt_dev` · `cobalt_dev_bloated_0922` · `mattermost` · `postgres` · `template0` · `template1` → both listed ✓ |
 
 ## MIGRATE
-Not run.
+R9 `COBALT_ENV=dev uv run cobalt db migrate` (background) → exit 0. Verbatim:
+```
+cobalt db migrate — FORWARD on cobalt_dev
+-- applying 0001_schemas.sql
+-- applying 0002_move_tables.sql
+-- applying 0003_heartbeat_vault_outcome.sql
+-- applying 0004_radar_pool.sql
+-- applying 0005_heartbeat_note_absent.sql
+-- applying 0006_radar_score.sql
+-- applying 0007_radar_cards.sql
+-- applying 0008_radar_value_movers.sql
+-- applying 0009_picks_missed.sql
+-- applying 0010_archive_progress.sql
+-- applying 0011_archive_incidents.sql
+
+table                side    schema before -> after     rows            probe secs      digest before -> after verdict
+----------------------------------------------------------------------------------------------------------------------
+archive_incidents    system  - -> system                - -> 0          0.01 -> 0.00    - -> d41d8cd9         CREATED
+archive_progress     system  - -> system                - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+aset_sizings         user    public -> user             1 -> 1          0.01 -> 0.00    0824685c -> 0824685c  OK
+bars                 system  public -> system           1043443 -> 1043443 5.53 -> 5.44    2769919a -> 2769919a  OK
+card_dot_taps        user    - -> user                  - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+card_dots            user    - -> user                  - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+card_stop_edits      user    public -> user             1 -> 1          0.00 -> 0.00    7599f9ab -> 7599f9ab  OK
+card_transitions     user    public -> user             4 -> 4          0.00 -> 0.00    f181e76b -> f181e76b  OK
+cobalt_email_sends   system  public -> system           2 -> 2          0.00 -> 0.00    fba8cf9f -> fba8cf9f  OK
+cobalt_jobs          system  public -> system           13 -> 13        0.00 -> 0.00    8d9b0861 -> 8d9b0861  OK
+cobalt_kill_switch   system  public -> system           1 -> 1          0.00 -> 0.00    2e590e87 -> 2e590e87  OK
+cobalt_redactions    system  public -> system           137 -> 137      0.00 -> 0.00    094847ab -> 094847ab  OK
+day_modes            user    public -> user             2 -> 2          0.00 -> 0.00    f2ffb4d4 -> f2ffb4d4  OK
+desk_grade           system  - -> system                - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+desk_packet          system  - -> system                - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+desk_regime          system  - -> system                - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+missed               user    - -> user                  - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+movers_daily         system  - -> system                - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+picks                user    - -> user                  - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+radar_membership     system  - -> system                - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+radar_pool           system  - -> system                - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+radar_score          system  - -> system                - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+radar_score_receipt  user    - -> user                  - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+radar_score_run      system  - -> system                - -> 0          0.00 -> 0.00    - -> d41d8cd9         CREATED
+session_blocks       system  public -> system           6 -> 6          0.00 -> 0.00    b650702d -> b650702d  OK
+traders              user    user -> user               1 -> 1          0.00 -> 0.00    a64e0148 -> a64e0148  OK
+vault_overrides      user    public -> user             6 -> 6          0.00 -> 0.00    6a8b0520 -> 6a8b0520  OK
+vault_writes         user    public -> user             184 -> 184      0.01 -> 0.01    4a965c69 -> 4a965c69  OK
+----------------------------------------------------------------------------------------------------------------------
+28 table(s) proven; digest excludes user_id, vault_outcome, vault_reason, account_mode, pool_member_id, rank_metric, rank_value; aset_sizings: 25 card column(s) added by 0007. content UNCHANGED on every table.
+proof cost: BEFORE 5.6 s + AFTER 5.5 s = total 11.0 s; slowest table bars (5.5 s before).
+code: f567eeb (DIRTY: 8 path(s)) · /Users/cobalt/cobalt
+```
+Gate: last `-- applying` = `0011_archive_incidents.sql` = `<HEAD>` ✓ · summary `content UNCHANGED on every table.` ✓. (`DIRTY: 8 path(s)` = the R2 lines, none under `src/`.)
 
 ## PROOF
-Not run.
+| rule | exit | result |
+|---|---|---|
+| Q1 | 0 | 31 tables, **every `dropped` = 0**. **max dropped: 0**; max `max_attnum` = 54 (`user.aset_sizings`, down from 1586) |
+| Q2 | 0 | 31 tables, each in exactly ONE schema (`system` or `user`); none in `public`, none in two |
+| Q3 | 0 | `[{"db": "cobalt_dev", "has_head": true}]` |
+
+Q1 (whole):
+```
+[{"sch": "user", "tbl": "aset_sizings", "dropped": 0, "max_attnum": 54}, {"sch": "user", "tbl": "missed", "dropped": 0, "max_attnum": 33}, {"sch": "user", "tbl": "picks", "dropped": 0, "max_attnum": 24}, {"sch": "system", "tbl": "radar_membership", "dropped": 0, "max_attnum": 19}, {"sch": "system", "tbl": "desk_grade", "dropped": 0, "max_attnum": 18}, {"sch": "system", "tbl": "radar_pool", "dropped": 0, "max_attnum": 17}, {"sch": "user", "tbl": "card_dots", "dropped": 0, "max_attnum": 17}, {"sch": "user", "tbl": "vault_writes", "dropped": 0, "max_attnum": 16}, {"sch": "system", "tbl": "cobalt_jobs", "dropped": 0, "max_attnum": 16}, {"sch": "user", "tbl": "radar_score_receipt", "dropped": 0, "max_attnum": 16}, {"sch": "system", "tbl": "radar_score_run", "dropped": 0, "max_attnum": 15}, {"sch": "system", "tbl": "radar_score", "dropped": 0, "max_attnum": 14}, {"sch": "system", "tbl": "movers_daily", "dropped": 0, "max_attnum": 14}, {"sch": "user", "tbl": "day_modes", "dropped": 0, "max_attnum": 14}, {"sch": "user", "tbl": "vault_overrides", "dropped": 0, "max_attnum": 13}, {"sch": "system", "tbl": "desk_packet", "dropped": 0, "max_attnum": 13}, {"sch": "system", "tbl": "archive_incidents", "dropped": 0, "max_attnum": 12}, {"sch": "user", "tbl": "card_transitions", "dropped": 0, "max_attnum": 10}, {"sch": "system", "tbl": "archive_progress", "dropped": 0, "max_attnum": 10}, {"sch": "user", "tbl": "card_stop_edits", "dropped": 0, "max_attnum": 10}, {"sch": "system", "tbl": "bars", "dropped": 0, "max_attnum": 8}, {"sch": "user", "tbl": "card_dot_taps", "dropped": 0, "max_attnum": 8}, {"sch": "system", "tbl": "cobalt_kill_switch", "dropped": 0, "max_attnum": 7}, {"sch": "system", "tbl": "session_blocks", "dropped": 0, "max_attnum": 7}, {"sch": "user", "tbl": "trade_defs", "dropped": 0, "max_attnum": 7}, {"sch": "system", "tbl": "cobalt_email_sends", "dropped": 0, "max_attnum": 6}, {"sch": "system", "tbl": "desk_regime", "dropped": 0, "max_attnum": 6}, {"sch": "user", "tbl": "trader_settings", "dropped": 0, "max_attnum": 5}, {"sch": "system", "tbl": "cobalt_redactions", "dropped": 0, "max_attnum": 5}, {"sch": "user", "tbl": "tunables", "dropped": 0, "max_attnum": 5}, {"sch": "user", "tbl": "traders", "dropped": 0, "max_attnum": 3}]
+```
+Q2 (whole):
+```
+[{"tablename": "archive_incidents", "schemas": "system"}, {"tablename": "archive_progress", "schemas": "system"}, {"tablename": "aset_sizings", "schemas": "user"}, {"tablename": "bars", "schemas": "system"}, {"tablename": "card_dot_taps", "schemas": "user"}, {"tablename": "card_dots", "schemas": "user"}, {"tablename": "card_stop_edits", "schemas": "user"}, {"tablename": "card_transitions", "schemas": "user"}, {"tablename": "cobalt_email_sends", "schemas": "system"}, {"tablename": "cobalt_jobs", "schemas": "system"}, {"tablename": "cobalt_kill_switch", "schemas": "system"}, {"tablename": "cobalt_redactions", "schemas": "system"}, {"tablename": "day_modes", "schemas": "user"}, {"tablename": "desk_grade", "schemas": "system"}, {"tablename": "desk_packet", "schemas": "system"}, {"tablename": "desk_regime", "schemas": "system"}, {"tablename": "missed", "schemas": "user"}, {"tablename": "movers_daily", "schemas": "system"}, {"tablename": "picks", "schemas": "user"}, {"tablename": "radar_membership", "schemas": "system"}, {"tablename": "radar_pool", "schemas": "system"}, {"tablename": "radar_score", "schemas": "system"}, {"tablename": "radar_score_receipt", "schemas": "user"}, {"tablename": "radar_score_run", "schemas": "system"}, {"tablename": "session_blocks", "schemas": "system"}, {"tablename": "trade_defs", "schemas": "user"}, {"tablename": "trader_settings", "schemas": "user"}, {"tablename": "traders", "schemas": "user"}, {"tablename": "tunables", "schemas": "user"}, {"tablename": "vault_overrides", "schemas": "user"}, {"tablename": "vault_writes", "schemas": "user"}]
+```
+**PROOF PASS** · head: 0011 · max dropped: 0. R8 no longer applies.
 
 ## WITH-DB
-Not run (T1/T2 not called).
+| rule | command | exit | summary (verbatim) |
+|---|---|---|---|
+| T1 | `COBALT_ENV=dev uv run pytest -q -p no:cacheprovider tests/cobalt/test_tenancy.py` (background) | 0 | `34 passed in 58.57s` → **34/0** |
+
+Q1 after T1 (whole):
+```
+[{"sch": "user", "tbl": "aset_sizings", "dropped": 28, "max_attnum": 82}, {"sch": "user", "tbl": "missed", "dropped": 0, "max_attnum": 33}, {"sch": "user", "tbl": "picks", "dropped": 0, "max_attnum": 24}, {"sch": "system", "tbl": "radar_membership", "dropped": 0, "max_attnum": 19}, {"sch": "system", "tbl": "desk_grade", "dropped": 0, "max_attnum": 18}, {"sch": "system", "tbl": "cobalt_jobs", "dropped": 2, "max_attnum": 18}, {"sch": "system", "tbl": "radar_pool", "dropped": 0, "max_attnum": 17}, {"sch": "user", "tbl": "vault_writes", "dropped": 1, "max_attnum": 17}, {"sch": "user", "tbl": "card_dots", "dropped": 0, "max_attnum": 17}, {"sch": "user", "tbl": "day_modes", "dropped": 2, "max_attnum": 16}, {"sch": "user", "tbl": "radar_score_receipt", "dropped": 0, "max_attnum": 16}, {"sch": "system", "tbl": "radar_score_run", "dropped": 0, "max_attnum": 15}, {"sch": "system", "tbl": "radar_score", "dropped": 0, "max_attnum": 14}, {"sch": "user", "tbl": "vault_overrides", "dropped": 1, "max_attnum": 14}, {"sch": "system", "tbl": "movers_daily", "dropped": 0, "max_attnum": 14}, {"sch": "system", "tbl": "desk_packet", "dropped": 0, "max_attnum": 13}, {"sch": "system", "tbl": "archive_incidents", "dropped": 0, "max_attnum": 12}, {"sch": "user", "tbl": "card_transitions", "dropped": 1, "max_attnum": 11}, {"sch": "user", "tbl": "card_stop_edits", "dropped": 1, "max_attnum": 11}, {"sch": "system", "tbl": "archive_progress", "dropped": 0, "max_attnum": 10}, {"sch": "system", "tbl": "bars", "dropped": 0, "max_attnum": 8}, {"sch": "user", "tbl": "card_dot_taps", "dropped": 0, "max_attnum": 8}, {"sch": "system", "tbl": "cobalt_kill_switch", "dropped": 0, "max_attnum": 7}, {"sch": "system", "tbl": "session_blocks", "dropped": 0, "max_attnum": 7}, {"sch": "user", "tbl": "trade_defs", "dropped": 0, "max_attnum": 7}, {"sch": "system", "tbl": "cobalt_email_sends", "dropped": 0, "max_attnum": 6}, {"sch": "system", "tbl": "desk_regime", "dropped": 0, "max_attnum": 6}, {"sch": "user", "tbl": "trader_settings", "dropped": 0, "max_attnum": 5}, {"sch": "system", "tbl": "cobalt_redactions", "dropped": 0, "max_attnum": 5}, {"sch": "user", "tbl": "tunables", "dropped": 0, "max_attnum": 5}, {"sch": "user", "tbl": "traders", "dropped": 0, "max_attnum": 3}]
+```
+
+| T2 | `COBALT_ENV=dev uv run pytest -q -p no:cacheprovider tests/cobalt/test_radar_score_migration.py::test_card_checks_index_and_receipt_immutability_on_cobalt_dev tests/cobalt/test_tenancy.py::TestMigrationRoundTrip::test_twice_is_idempotent_and_the_rollback_round_trips tests/cobalt/test_tenancy.py::TestMigrationRoundTrip::test_the_proof_table_names_every_ruled_table` (background) | 0 | `3 passed in 58.22s` → **3/0** |
+
+Q1 after T2 (whole):
+```
+[{"sch": "user", "tbl": "aset_sizings", "dropped": 56, "max_attnum": 110}, {"sch": "user", "tbl": "missed", "dropped": 0, "max_attnum": 33}, {"sch": "user", "tbl": "picks", "dropped": 0, "max_attnum": 24}, {"sch": "system", "tbl": "cobalt_jobs", "dropped": 4, "max_attnum": 20}, {"sch": "system", "tbl": "radar_membership", "dropped": 0, "max_attnum": 19}, {"sch": "system", "tbl": "desk_grade", "dropped": 0, "max_attnum": 18}, {"sch": "user", "tbl": "day_modes", "dropped": 4, "max_attnum": 18}, {"sch": "user", "tbl": "vault_writes", "dropped": 2, "max_attnum": 18}, {"sch": "user", "tbl": "card_dots", "dropped": 0, "max_attnum": 17}, {"sch": "system", "tbl": "radar_pool", "dropped": 0, "max_attnum": 17}, {"sch": "user", "tbl": "radar_score_receipt", "dropped": 0, "max_attnum": 16}, {"sch": "user", "tbl": "vault_overrides", "dropped": 2, "max_attnum": 15}, {"sch": "system", "tbl": "radar_score_run", "dropped": 0, "max_attnum": 15}, {"sch": "system", "tbl": "radar_score", "dropped": 0, "max_attnum": 14}, {"sch": "system", "tbl": "movers_daily", "dropped": 0, "max_attnum": 14}, {"sch": "system", "tbl": "desk_packet", "dropped": 0, "max_attnum": 13}, {"sch": "user", "tbl": "card_stop_edits", "dropped": 2, "max_attnum": 12}, {"sch": "user", "tbl": "card_transitions", "dropped": 2, "max_attnum": 12}, {"sch": "system", "tbl": "archive_incidents", "dropped": 0, "max_attnum": 12}, {"sch": "system", "tbl": "archive_progress", "dropped": 0, "max_attnum": 10}, {"sch": "system", "tbl": "bars", "dropped": 0, "max_attnum": 8}, {"sch": "user", "tbl": "card_dot_taps", "dropped": 0, "max_attnum": 8}, {"sch": "system", "tbl": "cobalt_kill_switch", "dropped": 0, "max_attnum": 7}, {"sch": "system", "tbl": "session_blocks", "dropped": 0, "max_attnum": 7}, {"sch": "user", "tbl": "trade_defs", "dropped": 0, "max_attnum": 7}, {"sch": "system", "tbl": "cobalt_email_sends", "dropped": 0, "max_attnum": 6}, {"sch": "system", "tbl": "desk_regime", "dropped": 0, "max_attnum": 6}, {"sch": "user", "tbl": "trader_settings", "dropped": 0, "max_attnum": 5}, {"sch": "system", "tbl": "cobalt_redactions", "dropped": 0, "max_attnum": 5}, {"sch": "user", "tbl": "tunables", "dropped": 0, "max_attnum": 5}, {"sch": "user", "tbl": "traders", "dropped": 0, "max_attnum": 3}]
+```
+
+Per-run growth (`dropped`: PROOF → after T1 → after T2). Tables not listed stayed at 0.
+| table | PROOF | after T1 | after T2 | per run |
+|---|---|---|---|---|
+| user.aset_sizings | 0 | 28 | 56 | +28 |
+| system.cobalt_jobs | 0 | 2 | 4 | +2 |
+| user.day_modes | 0 | 2 | 4 | +2 |
+| user.vault_writes | 0 | 1 | 2 | +1 |
+| user.vault_overrides | 0 | 1 | 2 | +1 |
+| user.card_stop_edits | 0 | 1 | 2 | +1 |
+| user.card_transitions | 0 | 1 | 2 | +1 |
+
+Reds: none.
 
 ## CLEANUP
-- **R10 not run.** The prompt allows the `rm` "ONLY after PROOF passed and T1 / T2 ran". So **`/tmp/cobalt_dev-0922.sql` (74,952,252 B) is LEFT inside `cobalt_memory`**. It holds a full copy of the dev DB. A relaunch's D4 overwrites it (`-f`).
-- R8 was **not** run. R7 never ran, so rollback is forbidden.
-- R2 at 07:08 EDT: no line added by this seat beyond this report (` M …/devdb-repair-2026-09-22.md`). The `06-s2-smoke-fix-check.md` line from the first R2 is gone. The desk committed it; this seat did not touch it.
-- **`cobalt_dev` is unchanged**: it is still the bloated DB (1560 dropped on `aset_sizings`). `cobalt_dev_bloated_0922` does not exist.
+| rule | command | exit | result |
+|---|---|---|---|
+| R10 | `docker exec cobalt_memory rm /tmp/cobalt_dev-0922.sql` | 0 | no output |
+| D5 | `docker exec cobalt_memory ls -la /tmp/cobalt_dev-0922.sql` | 2 | `ls: cannot access '/tmp/cobalt_dev-0922.sql': No such file or directory` ✓ |
+| R2 | `git -C /Users/cobalt/cobalt status --porcelain` | 0 | identical to the first R2 (8 lines). The only line that is this seat's is ` M …/devdb-repair-2026-09-22.md` (this report) ✓ |
+| — | `date` | 0 | `Wed Sep 23 07:18:14 EDT 2026` |
 
-## ROOT CAUSE
-Not measured: step 5 was not reached. The mechanism and fix shapes (a)–(d) stand as drafted (see ESCALATE 4). From today's read only: `aset_sizings` max_attnum 1586 leaves **14** attnum slots before the 1,600 cap.
+`cobalt_dev_bloated_0922` is KEPT as the rollback copy. Dropping it is the desk's call, with his word.
+
+## ROOT CAUSE (ops item — NOT built here)
+- **The test that grows the counts:** `tests/cobalt/test_tenancy.py` `TestMigrationRoundTrip`. It runs the real CLI in a subprocess, so `--rollback --down-to 0001` and the re-`migrate` both COMMIT on `cobalt_dev`. Every reverse script's `ALTER TABLE … DROP COLUMN` leaves one dropped `attnum` slot, and the forward re-apply takes a new slot. T1 (the whole file) and T2 (the round-trip tests plus the radar test) each added exactly one round trip's worth, which shows that one with-DB run = one round trip.
+- **Growth per run (measured):** `aset_sizings` +28 (the 25 radar-card columns of `0007`, plus `user_id` and 2 more from the reverse chain) · `cobalt_jobs` +2 · `day_modes` +2 · `vault_writes`, `vault_overrides`, `card_stop_edits` and `card_transitions` +1 each.
+- **Runs left:** (1600 − 110) ÷ 28 = **53** with-DB runs of any worktree before `aset_sizings` hits 1,600 again (counted from after T2). Each future FORWARD migration that adds columns to `aset_sizings` shortens this.
+- **Fix shapes (one line each, no pick):**
+  - (a) Run the round trip against a scratch DATABASE that the test creates and drops (e.g. `cobalt_dev_rt`), through a guarded helper. `assert_destructive_target` would have to learn that name.
+  - (b) Keep the round trip, but rebuild the touched tables afterwards (dump/restore or `CREATE TABLE … AS`).
+  - (c) Make the reverse scripts recreate the table instead of using `ALTER … DROP COLUMN`.
+  - (d) A guarded `cobalt.devdb --rebuild` verb that runs THIS repair behind `assert_destructive_target()`, so the next repair is not raw.
+- **NAMED GAP:** `assert_destructive_target()` has no rebuild or restore verb at all.
 
 ## ESCALATE
-1. **D6 gate string vs the pg_dump trailer.** D6's `tail -n 3` cannot reach `-- PostgreSQL database dump complete` when pg_dump appends `\unrestrict <key>` (reasoned, UNPROVEN). The drafter needs to re-issue D6 before a relaunch. Two options, no pick, and either one is a NEW string that needs his approval: (i) `docker exec cobalt_memory grep -c -F -- "-- PostgreSQL database dump complete" /tmp/cobalt_dev-0922.sql` → MUST print `1`; or (ii) `docker exec cobalt_memory tail -n 8 /tmp/cobalt_dev-0922.sql`, with the gate unchanged. Also worth checking: D7's `psql -f` restore needs a `psql` that understands `\restrict` (a psql from the same container/version does). The drafter should confirm this with a version read, e.g. a new string `docker exec cobalt_memory psql --version`.
-2. **Dump file left in the container**: `/tmp/cobalt_dev-0922.sql`, 74,952,252 B, full dev-DB content. R10 could not run lawfully. Options: the relaunch overwrites and then removes it at R10, or the desk approves R10 on its own now.
-3. **The raw-command gap (the refusal they lack):** `assert_destructive_target()` has no rebuild/restore verb. The repair runs raw `docker exec` strings on the server that also holds `cobalt_brain` (D2 lists it). Carried from `r3-check-devdb-draft-2026-09-22.md` ESCALATE (a).
-4. **ROOT CAUSE ops item (not built):** `TestMigrationRoundTrip` commits `--rollback --down-to 0001` + re-`migrate` on `cobalt_dev` on every with-DB run. The reverse scripts' `DROP COLUMN` leave dropped slots, and `aset_sizings` is at 1586/1600. Fix shapes: (a) scratch DB `cobalt_dev_rt` via a guarded helper · (b) rebuild the touched tables after the round trip · (c) reverse scripts recreate the table instead of `DROP COLUMN` · (d) a guarded `cobalt.devdb --rebuild` verb behind `assert_destructive_target()`. NAMED GAP: `assert_destructive_target()` has no rebuild/restore verb. Growth per run is unmeasured.
-5. **`cobalt_dev_bloated_0922`:** not created. For the record, D0 `bytes` = 144,743,447 (the size the kept copy will have).
-- ASK DESK: none raised. D6 has an explicit safe default (stop, nothing renamed).
-- Step 5 reds: none (not run).
+1. **The raw-command gap (the refusal they lack):** this repair ran raw `docker exec` psql and pg_dump strings on the server that also holds `cobalt_brain` (D2 lists it). No `assert_destructive_target()` guarded them. Only the fixed strings, the deny list and his approval stood in. Carried from `r3-check-devdb-draft-2026-09-22.md` ESCALATE (a).
+2. **`cobalt_dev_bloated_0922` is KEPT.** Its size before the repair was 144,743,447 B (D0). It is the rollback copy and still holds 1,560 dropped slots on `aset_sizings`. Dropping it needs the desk and his word.
+3. **ROOT CAUSE ops item:** see `## ROOT CAUSE`. At +28 per with-DB run, about 53 runs are left before `cobalt_dev` hits the 1,600 cap again. Fix shapes (a)–(d) are listed with no pick. NAMED GAP: `assert_destructive_target()` has no rebuild/restore verb.
+- Step-5 reds: none (T1 34/0, T2 3/0).
+- ASK DESK: none raised.
+- Note (no action): D6 `tail -n 8` confirmed run 2's reasoned cause. `-- PostgreSQL database dump complete` sits 4 lines above pg_dump's `\unrestrict` trailer.
 
 ## CONTINUE
-next: none — the run ended FAILED at D6 with the dev DB unchanged (only the dump file was created, ESCALATE 2). A relaunch needs a corrected, approved D6 string (ESCALATE 1) and then starts again from AUTHORIZATION.
+next: none — run complete.
 
-FAILED: D6 — the dump is incomplete (the listed `tail -n 3` shows only pg_dump's `\unrestrict` trailer, no `-- PostgreSQL database dump complete` line; likely a stale gate, UNPROVEN; nothing renamed, no rollback needed; dump file left in the container) · ESCALATE: 5
+DEVDB REPAIRED · head: 0011 · max dropped: 0 · tenancy: 34/0 · r3 reds: 3/0 · ESCALATE: 3
