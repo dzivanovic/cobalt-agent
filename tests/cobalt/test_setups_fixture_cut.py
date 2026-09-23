@@ -1,7 +1,7 @@
 """FINAL §9 point (1)/(4), [F-16] (1), [F-21] — the fixture cut's PIN
 (prompt `12-setups-fixture-cut.md`). Closes rubberband's `AWAITING_A_DAY`
-pin on a stored pool day the DEFINITION forms on: real day 2026-09-21,
-re-dated 2026-01-07, selected by the engine's own `--expect-formed` exit
+pin on a stored pool day the DEFINITION forms on: the real stored day (see
+the fixture-cut report of prompt `12`, `## FIND — rubberband`), re-dated 2026-01-07, selected by the engine's own `--expect-formed` exit
 code (STEP-2, R24 — never a day because he traded or tagged it; the
 fixture-cut report has the replay command and its exit code).
 

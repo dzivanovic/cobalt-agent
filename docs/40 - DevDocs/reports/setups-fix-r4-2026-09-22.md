@@ -63,13 +63,34 @@ None. r3's F6 tests: `uv run pytest -q -s -p no:cacheprovider tests/cobalt/test_
 OFFLINE → `2455 passed, 361 skipped, 1 xfailed, 15 warnings in 485.05s (0:08:05)` → **2455/0** = 2453 + 2 new F1 tests.
 
 ### COMMIT
-(below)
+`2817896 fix(setups): round 4 — F1 the dials probe refuses only on the engine-key refusal, any other error fails loudly` — `git show --stat HEAD`: `.../reports/setups-fix-r4-2026-09-22.md | 101 +++…` · `tests/cobalt/test_setups_fix_r3.py | 17 +++-` · `tests/cobalt/test_setups_fix_r4.py | 42 +++…` · `3 files changed, 158 insertions(+), 2 deletions(-)`.
 
 ## F2
-(pending)
+`A-24` → null in the gitignored proposal.
+
+### C
+Read the file; ONE Edit, on the `A-24` row's PROPOSED-value cell only (every other cell of the row, and rows `A-09`, `A-10`, `A-16`, untouched). Committed config untouched (`leg.min_size_atr` already `value: null`).
+- Read back (`grep -n "A-24" docs/_inflight/setups-assumed-values-r3-2026-09-22.md`, row 10), the changed cell only, no value: `` `null` — `status: null` — reason: `no passage speaks to pullback size (check r2r3, unanimous)` (fix r4 F2) ``.
+- `git status --porcelain` → (no output): no line for `docs/_inflight/…` — the file stays untracked and ignored. No commit (nothing tracked changed).
+- NOT edited (row-only rule): the file's line 12 paragraph explaining the old A-24 value and its closing tally line `proposal: 4 proposed, 0 null` — now stale; ESCALATE (ii).
 
 ## F3
-(pending)
+No real-day literal in the cut's committed test.
+
+### T
+RED-on-`8da261a`, in `tests/cobalt/test_setups_fix_r4.py`: `test_f3_every_iso_date_in_the_cut_is_a_synthetic_day`, parametrised over `test_setups_fixture_cut.py` and `_cut_setups_fixtures.py` (2 cases): every `\d{4}-\d{2}-\d{2}` literal ∈ `{2026-01-06, 2026-01-07, 2026-01-08}`. The message COUNTS outsiders and never prints them (L32). `-k f3` → `1 failed, 1 passed, 2 deselected in 0.11s`; failing lines VERBATIM: `E       AssertionError: test_setups_fixture_cut.py: 1 ISO date literal(s) outside the synthetic allowlist` / `E       assert 1 == 0` (`tests/cobalt/test_setups_fix_r4.py:66`). The cutter case was already GREEN.
+
+### C
+`tests/cobalt/test_setups_fixture_cut.py` module docstring only: `real day <real day>,` → `the real stored day (see` / `` the fixture-cut report of prompt `12`, `## FIND — rubberband`), `` — the synthetic day stays. **Deviation from the row's wording, named (ESCALATE (iii-a)):** the row's text `(see \`setups-fixture-cut-2026-09-22.md\`)` itself carries an ISO date (`2026-09-22`, the report's filename) — it would keep this row's own pin RED and fail the CLOSE `grep -rn "2026-09-" …` self-check. Safe default taken: the pin and the self-check win; the report is named by its prompt and section instead. For the same reason this module's own docstring names the check and drafter reports by prompt number, not by dated filename. After C: `-k f3` → `2 passed, 2 deselected in 0.07s`; `grep -rn "2026-09-" tests/cobalt/test_setups_fix_r4.py tests/cobalt/test_setups_fixture_cut.py` → (no output).
+
+### A1
+None.
+
+### SUITE
+OFFLINE → `2457 passed, 361 skipped, 1 xfailed, 15 warnings in 487.30s (0:08:07)` → **2457/0** = 2455 + 2 new F3 cases.
+
+### COMMIT
+(below)
 
 ## F4
 (pending)
@@ -96,6 +117,6 @@ OFFLINE → `2455 passed, 361 skipped, 1 xfailed, 15 warnings in 485.05s (0:08:0
 (pending)
 
 ## CONTINUE
-next: F1
+next: F3 (F1 committed `2817896`; F2 done, gitignored, no commit)
 
 (run in progress — row 0 of 5, next under ## CONTINUE)
