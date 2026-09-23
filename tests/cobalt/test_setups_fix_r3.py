@@ -9,6 +9,7 @@ companion (L32). R24 holds: no day is chosen because he traded it.
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from decimal import Decimal
 
@@ -402,9 +403,21 @@ def _per_trade_accepted(root, slug, mapping, own_rows, key, unit) -> bool:
     (directory / f"{slug}.md").write_text(shapes.NOTE.format(slug=slug, name="Probe", body=body, tunables=unit_text))
     try:
         load_vault_trade_defs(vault_root=root)
-    except VaultTaxonomyError:
-        return False
+    except VaultTaxonomyError as e:
+        # Only the ENGINE-KEY refusal reads "not reachable": `merge_tunables`
+        # (taxonomy/loader.py) raises it, `_resolve_every_cfg` re-raises it.
+        # Any other refusal is a broken probe and fails loudly (L1, fix r4 F1).
+        if _ENGINE_KEY_REFUSAL.search(str(e)):
+            return False
+        raise
     return True
+
+
+#: The fixed words of `merge_tunables`' collision refusal — a pattern, never a value.
+_ENGINE_KEY_REFUSAL = re.compile(
+    r"user tunable row\(s\) .* shadow engine keys in .*A per-trade row in a strategy note may only\s+ADD keys",
+    re.S,
+)
 
 
 def test_f6_a_the_dials_of_every_setup_and_where_each_is_tuned(tmp_path_factory):
