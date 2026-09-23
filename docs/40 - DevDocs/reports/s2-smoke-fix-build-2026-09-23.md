@@ -101,9 +101,30 @@ After: GREEN — `uv run pytest -q tests/cobalt/test_smoke.py -p no:cacheprovide
 `uv run pytest -q tests/cobalt -p no:cacheprovider` → `1969 passed, 349 skipped, 1 xfailed in 63.57s (0:01:03)`, exit 0. **1969/0.**
 
 ### COMMIT
-(hash recorded at the top of `## F3`)
+`7ec24b2` fix(s2-smoke): F2 K4.4 asks the pool API with since = the cutoff, percent-encoded — `git show --stat HEAD`: 5 files changed, 90 insertions(+), 9 deletions(-) (`s2.yaml` 4, `checks.md` 3, report 23, `checks.py` 14, `test_smoke.py` 55).
+
+## F3
+Gate: K3 PROOF row quoted under AUTHORIZATION — `ranked_without_metric 0` → BUILT.
+
+### T
+Appended OFFLINE `test_k3_grades_only_a_ranked_row_that_stored_no_metric` to `tests/cobalt/test_smoke_k3_sql.py` (CTE selects `m.last_rank`; both graded counters' FILTER carries `rank_metric IS NULL` and `last_rank IS NOT NULL`; `unranked_retained` is selected over the first set as `rank_metric IS NULL AND last_rank IS NULL`, and appears in no `expect` predicate; `value_null` ungraded; `known_if` unchanged = `post_deploy_admitted eq 0`, `rescanned_admitted eq 0`; `{cutoff}` still twice). `K3_COLUMNS` (the with-DB test's expected column set) gains `unranked_retained`; that test renamed `…_its_six_counters_…`; module docstring updated.
+On the base (F2 committed): RED — `1 failed, 2 skipped in 0.09s`: `assert 'm.last_rank' in "WITH scan AS ( SELECT max(last_scan_id) AS id FROM system.radar_pool …"`.
+
+### C
+`configs/cobalt/smoke/s2.yaml` K3 ONLY: `admitted` CTE selects `m.last_rank`; `metric_missing` and `rescanned_metric_missing` count `rank_metric IS NULL AND last_rank IS NOT NULL`; new column `unranked_retained`; `expect_text` rewritten (cites `radar/pool.py:50-54` and `plan-s2-p4-2026-09-15.md:243`; HOLD-ambiguity paragraph kept verbatim); comment block above K3 gains the two sentences. `src/cobalt/radar/**` untouched.
+After: GREEN — `uv run pytest -q tests/cobalt/test_smoke_k3_sql.py tests/cobalt/test_smoke.py -p no:cacheprovider` → `32 passed, 3 skipped in 0.90s`.
+The with-DB HOLD test (`test_k3_hold_row_reads_red_documented_ambiguity`) constructs `last_rank = 1`, so by reading it still grades FAIL under the new counters — UNPROVEN until run on `cobalt_dev` (OWED (68)).
+
+### D
+`docs/40 - DevDocs/cobalt/smoke/config.md`: K3 section gains the F3 paragraph; the K9 bullet's `expected` formula updated to `min(top_n, exported - unranked)` (F1's rule, carried in this commit because the file was untouched until now).
+
+### SUITE
+`uv run pytest -q tests/cobalt -p no:cacheprovider` → `1970 passed, 349 skipped, 1 xfailed in 63.86s (0:01:03)`, exit 0. **1970/0.**
+
+### COMMIT
+(hash recorded under `## CLOSE`)
 
 ## CONTINUE
-next: F2 COMMIT, then F3 (F3 test already appended to `tests/cobalt/test_smoke_k3_sql.py`, RED recorded)
+next: F3 COMMIT, then CLOSE
 
 (run in progress — next step under ## CONTINUE)

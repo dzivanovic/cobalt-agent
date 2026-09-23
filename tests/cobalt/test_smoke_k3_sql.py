@@ -2,9 +2,11 @@
 
 Every other smoke test runs on fakes: they prove the framework grades a
 ROW the way the checklist says. Nothing proved that K3's SQL — the one
-committed check with a CTE, a `CROSS JOIN` and five `FILTER` counters —
-parses, runs under `cobalt_system`'s grants, and returns the five
-columns its predicates name. That answer only exists on a server, so it
+committed check with a CTE, a `CROSS JOIN` and its `FILTER` counters —
+parses, runs under `cobalt_system`'s grants, and returns the columns its
+predicates name (six since S2 smoke fix F3 added `unranked_retained`).
+The last test below is OFFLINE: it reads the statement's text, not a
+server. That answer only exists on a server, so it
 lives here, behind the same `requires_db` guard
 `tests/cobalt/test_radar_store.py` uses: SKIPPED offline, run by the hub
 on `cobalt_dev`.
@@ -32,6 +34,7 @@ revert K3).
 from __future__ import annotations
 
 import os
+import re
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -60,7 +63,7 @@ DAY = date(2026, 9, 22)
 #: row: `_one_row` makes a second row ERROR, and a missing column is a
 #: KeyError the framework reports as ERROR.
 K3_COLUMNS = {
-    "post_deploy_admitted", "metric_missing", "value_null",
+    "post_deploy_admitted", "metric_missing", "value_null", "unranked_retained",
     "rescanned_admitted", "rescanned_metric_missing",
 }
 
@@ -84,7 +87,7 @@ def _k3():
 
 
 @requires_db
-def test_k3_statement_parses_and_returns_its_five_counters_on_cobalt_dev():
+def test_k3_statement_parses_and_returns_its_six_counters_on_cobalt_dev():
     check = _k3()
     statement = checks.render_sql(check.query, _ctx())
     assert "{" not in statement, statement
@@ -142,3 +145,43 @@ def test_k3_hold_row_reads_red_documented_ambiguity():
     outcome = checks.evaluate(check, context, checks.default_deps(prod=False))
     assert outcome.verdict is Verdict.FAIL, (outcome.verdict.value, outcome.detail)
     assert "rescanned_metric_missing" in outcome.detail, outcome.detail
+
+
+# ---------------------------------------------------------------------
+# S2 smoke fix F3 — OFFLINE: what K3's statement grades (no server)
+# ---------------------------------------------------------------------
+
+
+def _filter_of(query: str, column: str) -> str:
+    """The `FILTER (WHERE …)` condition of the counter named `column`."""
+    match = re.search(r"FILTER \(WHERE ([^)]*)\) AS " + column + r"\b", query)
+    assert match, f"no FILTER counter named {column}"
+    return match.group(1)
+
+
+def _op(predicate) -> str:
+    return str(getattr(predicate.op, "value", predicate.op))
+
+
+def test_k3_grades_only_a_ranked_row_that_stored_no_metric():
+    """A sticky RETAIN of a member the scan no longer ranks writes
+    `last_rank`, `rank_metric`, `rank_value` = NULL, NULL, NULL by design
+    (`radar/pool.py` Transition: "None where no ranking happened"), so a
+    NULL metric alone is not the write-path defect K3 exists for — a NULL
+    metric on a row the scan RANKED (`last_rank IS NOT NULL`) is."""
+    check = _k3()
+    query = " ".join(check.query.split())
+    assert "m.last_rank" in query
+    for column in ("metric_missing", "rescanned_metric_missing"):
+        condition = _filter_of(query, column)
+        assert "rank_metric IS NULL" in condition and "last_rank IS NOT NULL" in condition, column
+    # the designed class is printed as evidence, never graded
+    unranked = _filter_of(query, "unranked_retained")
+    assert "inserted_after" in unranked
+    assert "rank_metric IS NULL" in unranked and "last_rank IS NULL" in unranked
+    assert "last_rank IS NOT NULL" not in unranked
+    assert "unranked_retained" not in {p.column for p in check.expect}
+    assert "value_null" not in {p.column for p in check.expect}
+    assert [(p.column, _op(p), p.value) for p in check.known_if] == [
+        ("post_deploy_admitted", "eq", 0), ("rescanned_admitted", "eq", 0)]
+    assert check.query.count("{cutoff}") == 2
