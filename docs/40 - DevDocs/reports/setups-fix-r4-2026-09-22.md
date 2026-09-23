@@ -93,7 +93,26 @@ OFFLINE → `2457 passed, 361 skipped, 1 xfailed, 15 warnings in 487.30s (0:08:0
 (below)
 
 ## F4
-(pending)
+The cutter keeps the New York wall clock; re-cut; pins re-copied.
+
+### T
+RED-on-`b77d8e5` (the cutter is unchanged since `8da261a`), in `tests/cobalt/test_setups_fix_r4.py`, the cutter's `_shift_datetime_str` loaded by path (`importlib.util.spec_from_file_location`), on constructed days of this file's own (two June/July EDT days, one December EST day — no stored day, no `2026-09-`). 5 functions = 7 cases. `-k f4` → `5 failed, 2 passed, 4 deselected in 0.12s`. RED lines VERBATIM:
+- EDT → EST keeps the NY clock (2 cases, space + `T`/fraction): `E       AssertionError: assert '2025-12-10 13:30:00+00:00' == '2025-12-10 14:30:00+00:00'` · `E       AssertionError: assert '2025-12-10T0....469346+00:00' == '2025-12-10T0....469346+00:00'` (diff `- …T09:01:57…` / `+ …T08:01:57…`).
+- a UTC time moves by its NY LOCAL date: `E       AssertionError: assert '2025-12-11 00:00:00+00:00' == '2025-12-11 01:00:00+00:00'`.
+- a time not in UTC fails loudly (2 cases, naive + `-04:00`): `E       Failed: DID NOT RAISE <class 'SystemExit'>` ×2.
+- GREEN guards: EDT → EDT keeps `13:30:00+00:00` (today's behaviour); a bare date moves by the delta.
+
+### C (commit 1 of 2)
+`tests/fixtures/radar/_cut_setups_fixtures.py` only: `_shift_datetime_str` re-dates on the NY wall clock (aware UTC → `ZoneInfo("America/New_York")` → local date + delta, local clock kept → UTC; the input's separator and fractional digits kept, `+00:00` kept); a bare `YYYY-MM-DD` moves by the delta; a time not ending `+00:00` → `SystemExit` naming it. `_DATETIME_RE`'s optional offset widened from `(?:\+00:00)?` to `(?:[+-]\d{2}:\d{2}|Z)?` so a non-UTC offset REACHES that check instead of silently passing through unshifted (ESCALATE (iv-b)); two module constants (`_UTC_SUFFIX`, `_NEW_YORK`), imports `timezone` / `ZoneInfo`, and ONE module-docstring line "Every time is re-dated on the New York wall clock (fix r4 F4)." `cut_daily` untouched. After C: `uv run pytest -q -p no:cacheprovider tests/cobalt/test_setups_fix_r4.py` → `11 passed in 0.16s`.
+
+### A1
+None (commit 1: the committed fixtures are not yet re-cut).
+
+### SUITE (commit 1)
+OFFLINE → `2464 passed, 361 skipped, 1 xfailed, 15 warnings in 483.71s (0:08:03)` → **2464/0** = 2457 + 7 new F4 cases.
+
+### COMMIT (commit 1)
+(below)
 
 ## F5
 (pending)

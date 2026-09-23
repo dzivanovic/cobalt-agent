@@ -16,6 +16,7 @@ Outputs, written next to this file:
 
 The real day is NEVER a literal in this file or in any output — it comes in
 by argv only, and is used solely to compute the re-dating delta.
+Every time is re-dated on the New York wall clock (fix r4 F4).
 """
 
 from __future__ import annotations
@@ -25,14 +26,17 @@ import io
 import json
 import re
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 HERE = Path(__file__).parent
 
 _DATETIME_RE = re.compile(
-    r"^(\d{4})-(\d{2})-(\d{2})([ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:\+00:00)?)?$"
+    r"^(\d{4})-(\d{2})-(\d{2})([ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2}|Z)?)?$"
 )
+_UTC_SUFFIX = "+00:00"
+_NEW_YORK = ZoneInfo("America/New_York")
 
 #: Precedent's trim window (`_cut_p2_fixtures.py`): the trailing daily rows a
 #: daily-level detector actually needs (prior-session H/L/C + ATR warm-up).
@@ -45,12 +49,30 @@ _MEMBERSHIP_KEEP = ("ticker", "trade_date", "entered_at", "left_at")
 
 
 def _shift_datetime_str(value: str, delta_days: int) -> str:
+    """A bare date moves by the delta. A time is re-dated on the New York
+    wall clock: its New York LOCAL date moves by the delta and its local
+    clock is kept, so a real day and a synthetic day on different UTC
+    offsets (EDT / EST) keep the session's shape. Written back in UTC, in
+    the input's own spelling. A time not in `+00:00` fails loudly (L1)."""
     m = _DATETIME_RE.match(value)
     if not m:
         return value
     year, month, day, rest = m.groups()
-    d = date(int(year), int(month), int(day)) + timedelta(days=delta_days)
-    return f"{d.isoformat()}{rest or ''}"
+    d = date(int(year), int(month), int(day))
+    if rest is None:
+        return (d + timedelta(days=delta_days)).isoformat()
+    if not rest.endswith(_UTC_SUFFIX):
+        raise SystemExit(
+            f"cannot re-date {value!r} on the New York wall clock: its time is not in "
+            f"{_UTC_SUFFIX} (never guessed)"
+        )
+    sep, clock = rest[0], rest[1:-len(_UTC_SUFFIX)]
+    hms, _, frac = clock.partition(".")
+    hh, mm, ss = (int(x) for x in hms.split(":"))
+    local = datetime(d.year, d.month, d.day, hh, mm, ss, tzinfo=timezone.utc).astimezone(_NEW_YORK)
+    moved = datetime.combine(local.date() + timedelta(days=delta_days), local.time(), tzinfo=_NEW_YORK)
+    back = moved.astimezone(timezone.utc)
+    return f"{back.date().isoformat()}{sep}{back.strftime('%H:%M:%S')}{'.' + frac if frac else ''}{_UTC_SUFFIX}"
 
 
 def _shift_value(value, delta_days: int):

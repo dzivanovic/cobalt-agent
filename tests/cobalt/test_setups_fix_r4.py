@@ -6,7 +6,9 @@ file's own only (L32 / L69).
 
 from __future__ import annotations
 
+import importlib.util
 import re
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -64,3 +66,53 @@ def test_f3_every_iso_date_in_the_cut_is_a_synthetic_day(path):
     found = set(re.findall(r"\d{4}-\d{2}-\d{2}", path.read_text()))
     outside = len(found - SYNTHETIC_DAYS)
     assert outside == 0, f"{path.name}: {outside} ISO date literal(s) outside the synthetic allowlist"
+
+
+# =====================================================================
+# F4 — the cutter re-dates on the New York wall clock
+# =====================================================================
+
+#: Constructed days of this file's own (never a stored day): two EDT days
+#: and one EST day.
+EDT_DAY, EDT_LATER, EST_DAY = date(2025, 6, 10), date(2025, 7, 15), date(2025, 12, 10)
+
+
+def _shift():
+    spec = importlib.util.spec_from_file_location("_cut_setups_fixtures_r4", CUTTER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module._shift_datetime_str
+
+
+def _delta(real, synthetic):
+    return (synthetic - real).days
+
+
+@pytest.mark.parametrize("value, expected", [
+    ("2025-06-10 13:30:00+00:00", "2025-12-10 14:30:00+00:00"),
+    ("2025-06-10T08:01:57.469346+00:00", "2025-12-10T09:01:57.469346+00:00"),
+])
+def test_f4_an_edt_time_re_dated_onto_an_est_day_keeps_its_new_york_clock(value, expected):
+    """RED on 8da261a: the UTC clock was kept, so 09:30 ET read 08:30 ET."""
+    assert _shift()(value, _delta(EDT_DAY, EST_DAY)) == expected
+
+
+def test_f4_between_two_edt_days_the_utc_clock_is_unchanged():
+    """GREEN guard: the same offset on both days is today's behaviour."""
+    assert _shift()("2025-06-10 13:30:00+00:00", _delta(EDT_DAY, EDT_LATER)) == "2025-07-15 13:30:00+00:00"
+
+
+def test_f4_a_time_moves_by_its_new_york_local_date():
+    """00:00Z on the 11th is 20:00 ET on the 10th: it moves as the 10th."""
+    assert _shift()("2025-06-11 00:00:00+00:00", _delta(EDT_DAY, EST_DAY)) == "2025-12-11 01:00:00+00:00"
+
+
+def test_f4_a_bare_date_moves_by_the_delta():
+    assert _shift()("2025-06-10", _delta(EDT_DAY, EST_DAY)) == "2025-12-10"
+
+
+@pytest.mark.parametrize("value", ["2025-06-10 13:30:00", "2025-06-10 09:30:00-04:00"])
+def test_f4_a_time_not_in_utc_fails_the_cutter_loudly(value):
+    """L1: a time without `+00:00` is never guessed."""
+    with pytest.raises(SystemExit, match="00:00"):
+        _shift()(value, _delta(EDT_DAY, EST_DAY))
