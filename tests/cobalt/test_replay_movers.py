@@ -715,3 +715,37 @@ class _FakeBars:
 class _NoWait:
     async def acquire(self):
         return None
+
+
+# =====================================================================
+# S2 smoke fix F1-FX / F1 — a blank `Change` cell is unranked, not fatal
+# =====================================================================
+
+#: Cut by `_cut_p4_fixtures.py movers-blank` from the gainers export whose
+#: parse failed the 2026-09-22 replay (L45): the raw header, the export's
+#: top 25 data rows, and every row whose `Change` cell is empty, in
+#: export order. Never hand-edited.
+BLANK_FIXTURE = FIX / "replay" / "movers-gainers-blank-change.real-shape.csv"
+
+
+def _blank_fixture_rows() -> list[dict]:
+    return list(csv.DictReader(io.StringIO(BLANK_FIXTURE.read_text(encoding="utf-8"))))
+
+
+def _is_blank_change(row: dict) -> bool:
+    return (row["Change"] or "").strip() == ""
+
+
+def test_the_blank_change_fixture_is_the_real_export_shape():
+    """L45. The committed movers fixtures are the TOP of an export, so the
+    blank-`Change` tail that failed the night was cut away. This one keeps
+    it: same header as the committed movers fixture, byte for byte, and
+    real blank-`Change` rows below the ranked top."""
+    header = (FIX / "replay" / "movers-gainers.real-shape.csv").read_bytes().split(b"\n", 1)[0]
+    assert BLANK_FIXTURE.read_bytes().split(b"\n", 1)[0] == header
+    rows = _blank_fixture_rows()
+    blank = [i for i, row in enumerate(rows) if _is_blank_change(row)]
+    assert blank, "the fixture carries no blank-Change row"
+    assert len(rows) - len(blank) == 25
+    # every blank row sits below the ranked top, as the raw export had them
+    assert min(blank) == 25
