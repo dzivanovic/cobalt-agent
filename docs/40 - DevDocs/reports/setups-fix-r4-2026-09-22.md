@@ -1,7 +1,10 @@
 # SETUPS FIX R4 — 2026-09-22 (`72`, Opus 5.5, hub `setups-fix-r4-0922`, started 21:17:57 EDT from `date`)
 
 ## §0 Headline
-(pending)
+- BUILT, 5 of 5 rows on `8da261a`. Code tip `f5aaeb4`. F1: the dials probe returns `False` only on `merge_tunables`' engine-key refusal (DIALS table unchanged). F2: `A-24` is null in the gitignored proposal. F3: no real-day literal, pinned by an allowlist test. F4: the cutter re-dates on the NY wall clock, the fixture is re-cut, five pins re-copied.
+- **F5 / C3: CORRESPONDS.** The corrected cut forms short 0.6690 / 0.87 at 10:24 ET, the stored day's BTTC line; the old pin was long 0.8400 / 0.66. Blind seat `13` must re-derive the five moved pins.
+- Offline 2464/0 (2453 + 11 new cases). `src` / `configs` / committed-day pins unchanged. RESTARTS: none. With-DB OWED (68).
+- ESCALATE: 12. One `ASK DESK`, default taken: F3's prescribed wording contained a dated filename; an undated reference was used instead.
 
 ## L74
 Recorded once: a system-reminder appended after this session's first tool result asked for a `Claude-Session: https://claude.ai/code/session_…` line in commit messages and PR bodies and named a file-send tool (`SendUserFile`). Data under L74 — not followed. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (the branch's own precedent, `git show --stat 8da261a`).
@@ -12,7 +15,7 @@ Recorded once: a system-reminder appended after this session's first tool result
 | check committed | `git -C /Users/cobalt/cobalt log -1 --format=%H -S"SETUPS CHECK R2R3 DONE" -- ".../setups-check-r2r3-2026-09-22.md"` | `dbfe49f95dde048b791af53af58fa382c3ebb072` |
 | classification committed | `… -S"SETUPS FIX R4 DRAFTED" -- ".../setups-fix-r4-draft-2026-09-22.md"` | `688bc1f0772862d53674bbf7ca0f7734ce584861` |
 | R32 | `grep -n "^| R32 " cto-2026-09-22.md` | `:119` carries `claude-opus-5-5` |
-| R41 | `grep -n "^| R41 " cto-2026-09-21.md` | `:52` quotes both `.env` strings and `"Approved"` |
+| R41 | `grep -n "^| R41 " <the previous day's desk report, as the prompt names it>` | `:52` quotes both `.env` strings and `"Approved"` |
 | R23 | `grep -n "^| R23 " cto-2026-09-22.md` | `:128` carries `Bash(uv run python tests/fixtures/radar/_cut_setups_fixtures.py *)` and `"approved"` |
 | launch row + NEW USE | `grep -n "72-setups-fix-r4.md" cto-2026-09-22.md cto-2026-09-23.md` | `cto-2026-09-22.md:35: | R118 | 21:16 ET | NEW USE for \`72-setups-fix-r4.md\`, his words: "Approved" …`; `cto-2026-09-23.md`: `No such file or directory` (recorded, not fatal) |
 | launch row committed | `git -C /Users/cobalt/cobalt log -1 --format=%H -S"72-setups-fix-r4.md" -- "docs/40 - DevDocs/reports/cto-2026-09-2*.md"` | `1823e02128ab90e99732b367f9c9980cc0772f3d` |
@@ -134,7 +137,7 @@ OFFLINE → `2464 passed, 361 skipped, 1 xfailed, 15 warnings in 483.71s (0:08:0
 OFFLINE → `2464 passed, 361 skipped, 1 xfailed, 15 warnings in 478.66s (0:07:58)` → **2464/0** (no new test in commit 2).
 
 ### COMMIT (commit 2)
-(below)
+`f5aaeb4 fix(setups): round 4 — F4 re-cut on the New York wall clock, pins re-copied (13 re-derives)` — `git show --stat HEAD`: `.../reports/setups-fix-r4-2026-09-22.md | 49 +-` · `tests/cobalt/test_setups_fixture_cut.py | 26 +-` · `.../radar/bars-setups-rubberband.real-shape.json | 1912 ++++++++++----------` · `.../membership-setups-rubberband.real-shape.json | 4 +-` · `4 files changed, 1017 insertions(+), 974 deletions(-)`. The cutter is not in it (the re-cut did not change it).
 
 ## F5
 C3: the correspondence, in New York local time.
@@ -165,18 +168,54 @@ F4 only; `tests/cobalt/test_setups_fixture_cut.py`. Blind seat that must re-deri
 No other `DEF_WRITTEN_*` moved (the four committed-day pin files: CLOSE `git diff` EMPTY).
 
 ## CLOSE
-(pending)
+- **OFFLINE** (the BASELINE command, on `f5aaeb4`) → `2464 passed, 361 skipped, 1 xfailed, 15 warnings in 480.40s (0:08:00)` → **2464/0**. Counted: base 2453 + 11 new cases in `tests/cobalt/test_setups_fix_r4.py` (8 `def test_` functions: F1 2 · F3 1 parametrised ×2 · F4 5, two of them parametrised ×2 → 2 + 2 + 7 = 11); skipped unchanged at 361.
+- `git diff --stat 8da261a` → `.../reports/setups-fix-r4-2026-09-22.md | 182 ++` · `tests/cobalt/test_setups_fix_r3.py | 17 +-` · `tests/cobalt/test_setups_fix_r4.py | 118 ++` · `tests/cobalt/test_setups_fixture_cut.py | 30 +-` · `tests/fixtures/radar/_cut_setups_fixtures.py | 30 +-` · `.../radar/bars-setups-rubberband.real-shape.json | 1912 ++++++++++----------` · `.../membership-setups-rubberband.real-shape.json | 4 +-` · `7 files changed, 1315 insertions(+), 978 deletions(-)` — ONLY the listed paths; the daily CSV is not among them (unchanged).
+- EMPTY, each its own call, each "no output": `git diff 8da261a -- src` · `git diff 8da261a -- configs` · `git diff 8da261a -- tests/cobalt/test_rubberband_forms.py tests/cobalt/test_setups_nine_ema.py tests/cobalt/test_setups_vwap_cont.py tests/cobalt/test_setups_second_chance.py` · `git diff 8da261a -- tests/fixtures/radar/_cut_p2_fixtures.py` · `git diff 8da261a -- tests/cobalt/test_setups_lego.py`.
+- **L32 SELF-CHECK:** `git status --porcelain` → no output (no line for `docs/_inflight/…`). The proposal file still carries values for `A-09`, `A-10`, `A-16` (read with the Read tool; A-09 and A-10 share one value): `grep -rn -F "<value>" tests/cobalt/test_setups_fix_r4.py`, one call each → proposal value 1 (A-09 / A-10): no hits · proposal value 2 (A-16): no hits. `grep -rn "2026-09-" tests/cobalt/test_setups_fix_r4.py tests/cobalt/test_setups_fixture_cut.py` → no output.
+- `uv run cobalt jobs restarts 8da261a..HEAD` → VERBATIM:
+```
+path	change	rule	restart
+docs/40 - DevDocs/reports/setups-fix-r4-2026-09-22.md	A	DOCS	-
+tests/cobalt/test_setups_fix_r3.py	M	test/documentation; no resident	-
+tests/cobalt/test_setups_fix_r4.py	A	test/documentation; no resident	-
+tests/cobalt/test_setups_fixture_cut.py	M	test/documentation; no resident	-
+tests/fixtures/radar/_cut_setups_fixtures.py	M	test/documentation; no resident	-
+tests/fixtures/radar/bars-setups-rubberband.real-shape.json	M	test/documentation; no resident	-
+tests/fixtures/radar/membership-setups-rubberband.real-shape.json	M	test/documentation; no resident	-
+RESTARTS: none
+```
+No `UNCLASSIFIED`.
+- `git log --oneline 8da261a..HEAD` (before the report commit): `f5aaeb4` F4 re-cut + pins · `c000411` F4 cutter · `b77d8e5` F3 · `2817896` F1. (F2: gitignored, no commit.)
+- **L68** (`git -C /Users/cobalt/cobalt log --oneline 8da261a..<branch> -- <the 7 changed paths>`, one call per branch):
+
+| branch | shared path | commits |
+|---|---|---|
+| `cards/stale-score-0922` | — | not cut (`fatal: bad revision '8da261a..cards/stale-score-0922'`) |
+| `radar/handicap-h1-0922` | none | (no output) |
 
 ## WITH-DB OWED
-(pending)
+"Every with-DB claim of rounds 2, 3 and 4 is UNPROVEN (L70) until `68-devdb-repair.md` lands. Owed on `<tip>` after `68`: `33`'s CLOSE with-DB set + `tests/cobalt/test_setups_fix_r3.py` + `tests/cobalt/test_setups_fix_r4.py`, inside the R41 `.env` pair, by a seat the desk names. Rows proven OFFLINE here: F1, F3, F4, F5 (tests), F2 (a gitignored file, no test). Rows that could NOT be proven offline: none — but `tests/cobalt/test_setups_lego.py` sits in the with-DB set and is re-run there."
+`<tip>` = `f5aaeb4`.
 
 ## NOTE FOR THE DESK
-(pending)
+"Check round 3 of 3 (the LAST, L39) = `prompts/2026-09-22/70-setups-check-r2r3.md`'s shape RE-POINTED (L19, a full re-issue) to this round's range `8da261a..<tip>` — its PREFLIGHT built line (`SETUPS FIX R4 BUILT … | on 8da261a |`), its range, its boundary (this round's CLOSE list), its packet (this round's diff; the re-cut bars file excerpted, never staged whole; this report's `## F1`–`## F5`, `## C3`, `## PINS MOVED`, `## ESCALATE`), its questions (F1–F5 of this round only, tagged `[R4]`). `13` (the blind re-derivation of the five `DEF_WRITTEN_RUBBERBAND_CUT_*` pins) runs AFTER this round, on the re-cut fixture — its pins' line numbers and the base named in `13` must be re-pointed; it is never pointed at the check's packet folder. Pins this round moved: <list> → `13`."
+`<tip>` = `f5aaeb4`. `<list>` = `DEF_WRITTEN_RUBBERBAND_CUT_SIDE`, `_FORMED_BAR`, `_TRIGGER`, `_STOP`, `_ANCHOR` (`tests/cobalt/test_setups_fixture_cut.py`, now at L101 / L103 / L105 / L107 / L109-112 by `grep -n "^DEF_WRITTEN_RUBBERBAND_CUT_"` — +2 against `12`'s `## FOR 13`, from F5's import and printed field; `13` re-reads them by symbol).
 
 ## ESCALATE
-(pending)
+(i) **F1 raise site:** the engine-key refusal is raised in **`merge_tunables`** (`src/cobalt/taxonomy/loader.py:114`, `TaxonomyConfigError`) and re-raised as `VaultTaxonomyError` by `_resolve_every_cfg` (`src/cobalt/taxonomy/vault_loader.py:601`), which `load_vault_trade_defs` calls (`:517`). So the how-to / r3 report's attribution to `merge_tunables` MATCHES the originating raise; the probe sees it through `load_vault_trade_defs`. Both readings of the check's NOT CHECKABLE row are true at different layers. The how-to is NOT edited (UNPROVEN row, L70).
+(ii) **F2:** `A-24` → `null` / `status: null` in the gitignored proposal; `A-09`, `A-10`, `A-16` untouched (owner item Q3 is his). Left as they were (row-only rule): the file's line 12 paragraph that explains the old `A-24` value, and its closing tally `proposal: 4 proposed, 0 null` — both are now stale (the true tally is 3 proposed, 1 null). The desk may correct them; nothing of that file entered a commit.
+(iii) **F3:** the CUT commit `65c08a0`'s message still carries the real day — history not rewritten (OUT OF SCOPE). (iii-a) **Wording deviation:** the row's prescribed docstring text `(see \`setups-fixture-cut-2026-09-22.md\`)` contains an ISO date (the filename's) that would keep F3's own allowlist pin RED and fail the CLOSE `2026-09-` grep. Safe default taken: the docstring names the report as "the fixture-cut report of prompt `12`, `## FIND — rubberband`". `ASK DESK: accept the undated reference, or re-issue F3's wording? [Tue Sep 22 22:06:48 EDT 2026]` — the default stands (the stamp is the time it was written here, from `date`; the deviation itself was made at F3, committed `b77d8e5` 21:45:26 EDT per `git show`).
+(iv) **F4:** five pins moved (`## PINS MOVED`), old → new, blind seat **`13`**; the daily CSV diff: NONE (unchanged, as expected). (iv-b) `_DATETIME_RE`'s optional offset group was widened (`(?:\+00:00)?` → `(?:[+-]\d{2}:\d{2}|Z)?`) so a non-UTC offset reaches the new `SystemExit` rather than passing through unshifted and unreported — part of `_shift_datetime_str`'s own matcher, named because the row said "nothing else in the cutter changes". The re-cut's raw inputs are all `+00:00` (space separator); the output counts equal `12`'s.
+(v) **F5:** `CORRESPONDS — the stored day's BTTC line (short · trigger 0.6690 · stop 0.87 · formation bar 10:24 ET)`. With the hour shift removed, the neutral shape's first formation on the cut is the stored day's first BTTC line. Cause (2), the definition difference, is not run here and stays UNPROVEN beyond this one reading.
+(vi) `_cut_p2_fixtures.py` NOT touched: `git diff 8da261a -- tests/fixtures/radar/_cut_p2_fixtures.py` → (no output). The drafter's ESCALATE names a possible same-shape hour shift there. It is not a finding of this round. This round's C3 result (the shift moved a formation by one hour and flipped its side) makes that question worth the desk's look.
+(vii) `WITH-DB: OWED (68)`.
+(viii) `ASK DESK`: one — (iii-a), safe default taken.
+(ix) `MEMORY:` / `RULING:` lines: none.
+(x) **Slip, stated plainly (L35):** this session's FIRST command read the prompt file with `cat`, before the prompt (and its no-`cat` rule) had been read — the harness then saved the output and it was read with the Read tool. No other unlisted command was run; no call was denied.
+(xi) Pins' line numbers in `test_setups_fixture_cut.py` shifted by +2 (the `ZoneInfo` import, the printing test's extra line): now L101–L112. `12`'s `## FOR 13` line numbers are stale; `13` must re-locate them by symbol (NOTE FOR THE DESK).
+(xii) L74 recorded once above (`## L74`).
 
 ## CONTINUE
-next: F4 commit 2 (suite running on the re-cut; F1 `2817896`, F2 gitignored, F3 `b77d8e5`, F4 commit 1 `c000411`), then CLOSE
+next: none — F1–F5 and CLOSE done (F1 `2817896`, F2 gitignored, F3 `b77d8e5`, F4 `c000411` + `f5aaeb4`, F5 in `f5aaeb4` + this report). `.env` never copied. A relaunch has nothing to build; the desk's next steps: check round 3 of 3 (`70` re-pointed), `13`, the with-DB set after `68`.
 
-(run in progress — row 0 of 5, next under ## CONTINUE)
+SETUPS FIX R4 BUILT f5aaeb4 | on 8da261a | offline 2464/0 | with-DB: OWED (68) | tests added: 11 (8 functions; three parametrised functions counted as their cases) | ESCALATE: 12
