@@ -736,21 +736,24 @@ def test_live_defined_notes_evaluate_on_the_fixture_bars_and_only_the_evaluable_
             with capsys.disabled():
                 print(f"AWAITING A {'DAY' if ld.slug in AWAITING_A_DAY else 'RULING'}: {ld.slug}")
             continue
+        holes = [key for key in AWAITING_AN_ENGINE_FILL.get(ld.slug, ())
+                 if tunables.get(key) is None or tunables[key].value is None]
+        if holes:
+            # Pinned like gate 2's `<slug>_without_its_engine_fill` tests: the
+            # hole's row is not in his vault yet; the day it is, this asserts forms.
+            # Checked BEFORE the window's early pass: a pinned def forms nowhere.
+            with capsys.disabled():
+                print(f"AWAITING ITS ENGINE FILL: {ld.slug} ({', '.join(holes)} null)")
+            assert "formed" not in outcomes, (ld.slug, holes, sorted(outcomes))
+            assert ld.slug in shapes.SHAPES, (ld.slug, holes)
+            assert not _forms_on_a_committed_day(ld.slug, shapes.SHAPES[ld.slug], ld, tunables), (ld.slug, holes)
+            continue
         if "formed" in outcomes or "avoided" in outcomes:
             continue
         # FINAL §9 gate 3: formed "on its fixture day" — gate 2's committed-day
         # check (test_setups_lego), run on HIS live def with HIS merged rows.
         assert ld.slug in shapes.SHAPES, (ld.slug, sorted(outcomes))
         forms = _forms_on_a_committed_day(ld.slug, shapes.SHAPES[ld.slug], ld, tunables)
-        holes = [key for key in AWAITING_AN_ENGINE_FILL.get(ld.slug, ())
-                 if tunables.get(key) is None or tunables[key].value is None]
-        if holes:
-            # Pinned like gate 2's `<slug>_without_its_engine_fill` tests: the
-            # hole's row is not in his vault yet; the day it is, this asserts forms.
-            with capsys.disabled():
-                print(f"AWAITING ITS ENGINE FILL: {ld.slug} ({', '.join(holes)} null)")
-            assert not forms, (ld.slug, holes)
-            continue
         assert forms, (ld.slug, sorted(outcomes))
 
 
