@@ -31,6 +31,10 @@ set -e
 
 export COBALT_VAULT_PATH="/Users/cobalt/Vault/Think"
 export COBALT_ENV="production"
+# Voice V1 (FINAL §5): production's scratch audio dir, outside repo, vault and backup.
+export COBALT_VOICE_SCRATCH_DIR="/Users/cobalt/.cobalt/voice-scratch"
+# Voice V1 (FINAL §5): production's speech-to-text model files, fetched by the deploy step.
+export COBALT_VOICE_MODEL_DIR="/Users/cobalt/.cobalt/voice-models"
 
 REPO_ROOT="/Users/cobalt/cobalt"
 LOG_DIR="$REPO_ROOT/logs"

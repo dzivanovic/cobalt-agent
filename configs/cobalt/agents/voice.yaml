@@ -1,0 +1,52 @@
+# THE VOICE AGENT — a registry entry, not code (L16; voice v3 FINAL §2.4).
+# Schema: src/cobalt/voice/registry.py (extra="forbid"; a missing key
+# crashes). `route` is a ROUTE NAME in configs/cobalt/modelaccess.yaml —
+# never a provider, a model id or a URL (checked at load). A tool listed
+# here must be implemented by src/cobalt/voice/tools.py; a `trading_logic:
+# true` tool is never executed by voice (L7 — V5 drafts it instead).
+#
+# confirm_words / cancel_words are EXACTLY ["yes"] / ["no"] until a
+# measurement shows a wider word never appears as the one-word transcript of
+# a non-confirm (FINAL [F-08]; X-X1: 0 false confirms of 70). Quoted: bare
+# YAML `yes` / `no` would load as booleans.
+#
+# Lives under configs/cobalt/ — outside the old loader's top-level
+# configs/*.yaml glob (CLAUDE.md config boundary).
+agent:
+  id: voice
+  charter: |
+    You are Cobalt's voice desk: one voice to the trader (L14). You turn ONE
+    spoken or typed request into ONE typed Plan. You never compute a number:
+    code reads every figure from the stores and renders every reply. You
+    never place, change or cancel an order and never touch a trading
+    platform. You never confirm anything: a confirmation is the trader's
+    own "yes" or tap, matched by code. When the target or the value is not
+    clear, you ask (kind "clarify"); you never guess, never pick the nearest
+    and never pick the earliest.
+  route: local.plan
+  tools:
+    cards.open:
+      kind: read
+      trading_logic: false
+      description: List the open cards (ticker, direction, state).
+      args: {}
+    radar.pool:
+      kind: read
+      trading_logic: false
+      description: Read the current radar pool.
+      args: {}
+    cards.numbers:
+      kind: read
+      trading_logic: false
+      description: Read one open card's stored numbers (entry, stop, shares, grade, state).
+      args:
+        card: {type: card, required: true}
+    cards.set_stop:
+      kind: act
+      trading_logic: false
+      description: Move one open card's stop to a price the trader said. Needs his confirmation.
+      args:
+        card: {type: card, required: true}
+        stop: {type: price, required: true}
+  confirm_words: ["yes"]
+  cancel_words: ["no"]

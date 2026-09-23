@@ -169,7 +169,44 @@ STUB pid=2999 BIND FAILED 48
 ### X-G2/K5
 The config refusal `scratch_max_age_s ≤ stt_timeout_s` is a C2 TEST (side B's text keeps it). Under side B the sweep runs ONLY at process start, before the first request is served, so a sweep firing mid-transcribe inside ONE process cannot happen by construction. The cross-process case (an orphan still transcribing while a respawn starts) is X-X22's, and C4's directory lock is its guard. OUTCOME: NO CHANGE (C2 test).
 
+## C1
+### T
+Tests written first: `tests/cobalt/test_modelaccess_silence.py`, `test_modelaccess_config.py`, `test_modelaccess_client.py` (seam §4 whole: route resolution / non-loopback refusal / `fallback` refusal; guard → `prompt_refused` with ZERO transport calls; think policy `absent` / `empty_removed` / `think_leak`; every error kind over a fake loopback server; the call line carries no message content; `call()` never blocks a running loop; no non-loopback socket at import (fresh-interpreter probe) or during a call). ORDER NOTE: the first RED run of the silence file happened while X-E2's first run was in the background — i.e. C1's T began before X-A had finished; no C1 code existed until every X-A experiment had its result, and X-E2b re-measured latency uncontended. RED, quoted: `E   AssertionError: {'attempts': [], 'error': "ModuleNotFoundError: No module named 'cobalt.modelaccess'", 'module': 'cobalt.modelaccess'}` and, for the other two files, `E   ModuleNotFoundError: No module named 'cobalt.modelaccess'` (`2 errors during collection`). The probe line printed by the same run: `LITELLM IMPORT PROBE: {"module": "litellm", "attempts": [], "error": null}`.
+### C
+`src/cobalt/modelaccess/{__init__,models,config,guard,adapters,client}.py` + `configs/cobalt/modelaccess.yaml` (route `local.plan` → `http://127.0.0.1:1234/v1`, `mainframe`, `no_think: true`, `think_policy: forbid_nonempty`, `timeout_s` / `max_output_tokens` / `response_format` marked `# set by X-E4`). **Adapter decision (seam §2.4 (5)) — the `openai` client, with the evidence:** litellm's import IS silent (above). With the litellm adapter the first green attempt read `3 failed, 60 passed`: `test_an_empty_think_block_is_removed_and_recorded` → `'absent' == 'empty_removed'` (the fake server sent `<think>\n\n</think>\n{"kind":"answer"}`; litellm delivered `{"kind":"answer"}` — it REWROTE the reply before the module's think policy could see it), `test_unreachable` → `assert 'http_status' == 'unreachable'`, `test_bad_response` → `assert 'http_status' == 'bad_response'`. The seam forbids exactly this (the module never repairs content; it applies its own think policy, §2.4 (2)(3)(6)), so `adapters.py` uses the pinned `openai` client (`max_retries=0`, `httpx.Client(trust_env=False)`); the interface is unchanged; nothing in `src/cobalt` imports litellm. One seam addition, named: a route key `response_format: json_schema | in_prompt` (X-E4's evidence home for "passes `response_format` only if the server honours it", §2.4 (3)). JEV re-point: NOT done — `src/cobalt/classify` is absent on main (PREFLIGHT) → OWED by `jev/trial-0923`'s merge (ESCALATE).
+### D
+`docs/40 - DevDocs/cobalt/modelaccess/{__init__,models,config,guard,adapters,client}.md` (new, one per `.py`).
+### SUITE
+`uv run pytest -q tests/cobalt/test_modelaccess_config.py tests/cobalt/test_modelaccess_client.py tests/cobalt/test_modelaccess_silence.py -p no:cacheprovider` → `63 passed in 16.42s`. Full offline `uv run pytest -q tests/cobalt -p no:cacheprovider` → `2021 passed, 349 skipped, 1 xfailed in 83.20s (0:01:23)` — failed 0.
+### COMMIT
+`c16af92d feat(modelaccess): C1 seam S1 — the new core's one model-access module, local lane only` — `17 files changed, 1535 insertions(+)` (`git show --stat HEAD`: the six `.py`, the yaml, three test files, six DevDocs, this report).
+
+## C2
+### T
+`tests/cobalt/test_voice_config.py` first. RED: `E   ModuleNotFoundError: No module named 'cobalt.voice'` (`1 error during collection`).
+### C
+`src/cobalt/voice/{__init__,config,registry}.py`, `configs/cobalt/voice.yaml` (every tunable with a `# source:` line — X-E2 for `stt_model tiny.en` / `stt_revision 0d3d19a3…` / `stt_compute_type int8` / `stt_timeout_s 20`; "engine default — FINAL §11 W7" for `max_clip_s 30`, `max_upload_bytes 2000000`, `confirm_ttl_s 60`, `scratch_max_age_s 120`; `history_turns 4` marked `# set by X-E4`), `configs/cobalt/agents/voice.yaml` (charter, `route: local.plan` checked against the model-access registry, the four V1 tools with kind / `trading_logic: false` / arg schema, `confirm_words: ["yes"]`, `cancel_words: ["no"]` — quoted, since bare YAML `yes`/`no` load as booleans), `ops/start_aset.sh` (the two production exports beside `:32`, one comment line each). Config boundary: `grep -n "configs" /Users/cobalt/cobalt/.gitignore` → only `50:configs/dev/aset.local.yaml` and `54:configs/dev/rules.generated.yaml` ignore anything under `configs/`; `git status --porcelain` after `git add` shows `A  configs/cobalt/agents/voice.yaml`, `A  configs/cobalt/voice.yaml` — both TRACKED, both under `configs/cobalt/`, outside the old loader's top-level `configs/*.yaml` glob.
+**A seam found by the suite, and the choice taken (ESCALATE):** the first version refused `scratch_dir` / `model_dir` under a `backup.yaml` source by calling `load_backup_config()` inside the loader. The full suite went `1 failed, 2073 passed`: `tests/cobalt/test_jobs_restarts.py::test_backup_yaml_is_read_by_one_shots_only_and_derives_no_restart` — `AssertionError: ['cobalt.backup.cli._restore', …]` — `configs/cobalt/jobs.yaml` DECLARES `backup.yaml` has no resident reader, and the ASET resident loading voice config would have made that false (L42's derivation). Changing `jobs.yaml` / that pin is outside my paths. So: the resident loader keeps the relative / docs / repo-root / production-vault / resolved-vault refusals (which already cover both of today's sources: the vault, and `data/.cobalt_vault` under the repo root) and refuses under backup sources only when the caller passes `backup_sources=`; the suite loads the committed dev paths AND `ops/start_aset.sh`'s production overrides with every real `backup.yaml` source passed, and asserts the resident module never names `load_backup_config`. `ASK DESK: C2 — make com.cobalt.aset a declared backup.yaml reader (jobs.yaml + the restarts pin) so the runtime refuses a future backup source too, or keep the suite check? [14:1x ET]` — safe default taken: the suite check.
+### D
+`docs/40 - DevDocs/cobalt/voice/{__init__,config,registry}.md`.
+### SUITE
+`uv run pytest -q tests/cobalt/test_voice_config.py tests/cobalt/test_jobs_restarts.py -p no:cacheprovider` → `74 passed in 9.11s`. Full offline (with C3's files also present in the tree) → `2109 passed, 349 skipped, 1 xfailed in 86.15s (0:01:26)` — failed 0.
+### COMMIT
+(below, in the commit that carries this section)
+
+## C3
+### T
+`tests/cobalt/test_voice_plan.py` + `tests/fixtures/voice/plan-replies.constructed.yaml` (20 constructed replies: 6 valid kinds; not-JSON, a fenced block, an unknown kind, an extra field, a tool off the allowlist, act-on-read, answer-on-act, answer-without-tool, an extra arg, an invented price span, a model-normalised `XYZ` for a transcript `X Y Z`, a candidate off the list, span+candidate together, an empty span) + the prompt tests (whitelisted keys only; no env value / path / key name in the rendered prompt; a constructed secret through each of transcript / history said / history reply / candidate label / clock → `prompt_refused` by the S1 guard, zero bytes out) + ONE call per turn on the registry route, no retry. RED: `E   ImportError: cannot import name 'agent' from 'cobalt.voice'`.
+### C
+`src/cobalt/voice/models.py` (`Plan`, `Span`, `CandidateRef`, `CardCandidate`, `HistoryTurn`, `PromptInputs`, `PendingAction`, `TurnState` + `EDGES`, `TurnOutcome`, `DegradedLine`), `src/cobalt/voice/agent.py` (`build_messages`, `validate_plan`, `plan_turn`, `PLAN_SCHEMA`, `PlanFailed` with `failure_class = "voice_plan"`).
+### D
+`docs/40 - DevDocs/cobalt/voice/{models,agent}.md`; `docs/40 - DevDocs/tests/fixtures/voice/_voice_fixtures.md`.
+### SUITE
+`uv run pytest -q tests/cobalt/test_voice_plan.py -p no:cacheprovider` → `32 passed in 0.25s`; the full offline run above (`2109 passed … failed 0`) covered C2 and C3 together.
+### COMMIT
+(below)
+
 ## CONTINUE
-next: C1 (tests already written RED — see ## C1 ### T)
+next: commit C2, commit C3, then X-E4 (live Plan call), then C4
 
 (run in progress — next step under ## CONTINUE)
