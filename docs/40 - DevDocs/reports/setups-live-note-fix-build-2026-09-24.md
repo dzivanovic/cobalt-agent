@@ -4,9 +4,9 @@ Seat `setups-live-note-fix-0924` · Opus 5.5 · prompt `/Users/cobalt/cobalt/doc
 
 ## §0 Headline
 
-- **FAILED at D5 (17:33 ET).** The offline suite printed `3 failed`. All three are the **gitignored scratch print files** in `tests/cobalt/scratch/`, which `tests/cobalt` collects. They raise `KeyError: 'COBALT_LIVE_VAULT_ROOT'` without the live-vault prefix. No committed test failed.
-- Fix built and committed as `c9a11e14` (4 test files, red first). D2 proved second-chance waits on A-19 + A-20 alone. Classes: STALE 4 · NO CHANGE 2 · PINNED 1 · DEFECT 0.
-- Live-note run `131 passed / 0 failed`; lego file `13 passed`. Offline run with the scratch folder excluded (informational only): `2483 passed, 361 skipped, 1 xfailed`, 0 failed. D5b (with-DB) was not run, and `.env` was never copied.
+- **BUILT `c9a11e14` (4 test files, red first), all three suites green.** The first launch stopped at D5 on the gitignored scratch prints. The desk moved them out (R91), and the relaunch `CONTINUE: D5` finished the run at 17:55 ET.
+- Gate counts: live-note `131/0` · offline `2483/0` · with-DB (`cobalt_dev`) `2838/0`. `.env` was removed and proven gone. RESTARTS: none.
+- D2 proved second-chance waits on A-19 + A-20 alone. Classes: STALE 4 · NO CHANGE 2 · PINNED 1 · DEFECT 0.
 - ORDER seam: `+R119=False`. After STEP-6, the live-note test would go RED on vwap-continuation. ESCALATE: 8.
 
 ## L74
@@ -372,38 +372,59 @@ Each one fails at its first line, `load_vault_trade_defs(vault_root=Path(os.envi
 
 INFORMATIONAL, not the gate. The same command with the scratch folder excluded, on the committed tree only: `uv run pytest -q tests/cobalt tests/taxonomy --ignore=tests/cobalt/scratch` → exit 0 · **`2483 passed, 361 skipped, 1 xfailed, 15 warnings in 504.42s (0:08:24)`**. 2487 tests ran in the gate run and 2483 here. The difference of 4 is the four scratch tests: the three failures plus `test_seam_dump_0923.py`'s one passing test.
 
+**RERUN after R91 (relaunch `CONTINUE: D5`), on `<tip>` = `c9a11e14`:**
+
+| step | command | exit | result |
+|---|---|---|---|
+| scratch gone | `ls /Users/cobalt/cobalt-wt/setups-c1/tests/cobalt/scratch` | 1 | `No such file or directory` |
+| no .env | `ls /Users/cobalt/cobalt-wt/setups-c1/.env` | 1 | `ls: /Users/cobalt/cobalt-wt/setups-c1/.env: No such file or directory` |
+| GATE | `uv run pytest -q tests/cobalt tests/taxonomy` | 0 | **`2483 passed, 361 skipped, 1 xfailed, 15 warnings in 505.53s (0:08:25)`** |
+
+`<p>` = 2483, `<f>` = 0 → GATE MET (`0 failed`, `0 errors`).
+
 ## D5b WITH-DB
 
-NOT RUN (D5 gate). `.env` was never copied, so nothing is on disk: `.env: never present` (D5 `ls` above).
+(first launch: NOT RUN, D5 gate.) Relaunch, on `<tip>` = `c9a11e14`:
+
+| step | command | exit | result |
+|---|---|---|---|
+| (a) lock | `ls -la /Users/cobalt/cobalt-wt/*/.env` | 1 | `(eval):1: no matches found: /Users/cobalt/cobalt-wt/*/.env` → lock free, taken |
+| (b) copy | `cp /Users/cobalt/cobalt/.env /Users/cobalt/cobalt-wt/setups-c1/.env` | 0 | (no output; never read, never printed) |
+| (b) listed | `ls /Users/cobalt/cobalt-wt/setups-c1/.env` | 0 | `/Users/cobalt/cobalt-wt/setups-c1/.env` |
+| (c) GATE | `COBALT_ENV=dev uv run pytest -q tests/cobalt tests/taxonomy` | 0 | **`2838 passed, 6 skipped, 1 xfailed, 15 warnings in 650.26s (0:10:50)`** |
+| (d) remove | `rm /Users/cobalt/cobalt-wt/setups-c1/.env` | 0 | (no output) |
+| (d) gone | `ls /Users/cobalt/cobalt-wt/setups-c1/.env` | 1 | `ls: /Users/cobalt/cobalt-wt/setups-c1/.env: No such file or directory` |
+
+`<dp>` = 2838, `<df>` = 0 → GATE MET. No `cobalt db migrate` was run. **`.env: removed, proven gone`.**
 
 ## RESTARTS
 
-NOT RUN (D5 stop). `<base>..<tip>` changes 4 test paths only (D3 `git diff --stat`).
+`uv run cobalt jobs restarts 9e775fd6..c9a11e14` → exit 0:
+```
+path	change	rule	restart
+tests/cobalt/setups_shapes.py	M	test/documentation; no resident	-
+tests/cobalt/test_radar_evaluate.py	M	test/documentation; no resident	-
+tests/cobalt/test_setups_lego.py	M	test/documentation; no resident	-
+tests/taxonomy/test_predicate.py	M	test/documentation; no resident	-
+RESTARTS: none
+```
+= EXPECTED (four test paths, no resident).
 
 ## CONTINUE
 
-next: D5, on the desk's ruling (ESCALATE 1). The code commit `c9a11e14` is on the branch and this report is wip-committed. A relaunch with `CONTINUE: D5` resumes at D5's `ls` + suite. It needs one of these first:
-- the desk has removed the scratch files, or
-- the desk rules the scratch exclusion.
+RELAUNCH `CONTINUE: D5` (desk row R91, `cto-2026-09-23.md:94`: scratch prints moved to `setups-c1/scratch/prints-0923/`, `tests/cobalt/scratch/` removed). Recovery, 17:35 ET: `git status --short --branch` → `## setups/seven-0921`; `git log --oneline -3` → `9a59178c wip(live-note): D5 stop …`, `c9a11e14 fix(live-note): …`, `9e775fd6 docs(live-note): D2 — defect printed`; `ls …/tests/cobalt/scratch` → `No such file or directory`.
 
-After that come D5b, RESTARTS and CLOSE.
+next: none. D5, D5b, RESTARTS and CLOSE are done (17:55 ET). The desk's next step is `02-setups-live-note-fix-check.md`.
 
 ## ESCALATE
 
-1. **D5 red = the scratch print files, not the branch. The desk decides the resume.** `tests/cobalt/scratch/` sits inside `tests/cobalt`, so the gate command collects every gitignored scratch print. Those prints read `os.environ["COBALT_LIVE_VAULT_ROOT"]` and error without it. D5b's `COBALT_ENV=dev uv run pytest -q tests/cobalt tests/taxonomy` would collect the same files and fail the same way. Two options:
-   - (a) The desk removes `tests/cobalt/scratch/test_live_note_print_0923.py` and `test_second_chance_print_0924.py`. This seat has no `rm` string for them, and that cleanup is already owed. `02`'s hub reads them first, or reads their output quoted here and in `64`'s report. Then relaunch with `CONTINUE: D5`.
-   - (b) The desk rules that D5 / D5b run with `--ignore=tests/cobalt/scratch`. This command is already inside the `uv run pytest *` / `COBALT_ENV=dev uv run pytest *` strings.
-
-   The deploy's gate in `~/cobalt` never sees these files, because they exist only in this worktree. The informational committed-tree run above is green: 2483 / 0.
+1. **RESOLVED by the desk (R91).** The first launch's D5 went red on the gitignored scratch prints under `tests/cobalt/scratch/`, which the gate command collects. The desk moved them to `setups-c1/scratch/prints-0923/` and removed the folder. The rerun gate ran unchanged, with no `--ignore`, and printed 2483/0. Standing lesson for future print seats: a scratch print placed under `tests/cobalt` breaks the suite gate, so place prints outside the collected tree.
 2. **THE ORDER SEAM, now with its boolean: `ASSUMED vwap-continuation · +R119=False`.** The deploy's live-note proof (its 2.3 (d)) runs BEFORE STEP-6, so both engine-fill pins hold there. After STEP-6 writes R119's rows, `dist.k.vwap` is no longer null, so vwap-continuation leaves its pin. The next live-note run then asserts it forms, and at R119's values it does NOT, so that run goes **RED**. The desk must know before the deploy. For contrast, `+A16=True` at the constructed value shows the pin is correct and the gap lies between R119's value and the constructed one. Deploy delta row 19's post-STEP-6 run would catch it.
 3. **second-chance stays pinned until HE rules A-19 / A-20.** `ASSUMED second-chance · +companion=True`: at the companion's values it forms on its committed day, so the pin lift would be green. The owner item is carried from the drafter (FOR DEJAN 1).
 4. **The UNPROVEN read is now PROVEN:** `LADDER second-chance · merged=False · +A19+A20=True · +D6=True`. A-19 + A-20 alone are what second-chance waits on.
 5. **HARNESS note (informational):** `HARNESS rubberband · engine_only=ERROR TaxonomyConfigError … · merged=False`. With his merged rows, rubberband evaluates (no ERROR) but does not form on the old FTFT/BGFI grid; the HTF avoid applies there. T2 never reaches the committed-day check for rubberband, because `avoided` is in its FTFT outcomes. If it ever did, `CUT_DAY_CHECKS` covers its cut day.
-6. **R81 (GATE EARLY)** is recorded once: the desk's direction, applied by the drafter to this file. This run got as far as the offline leg; the with-DB leg is owed.
-7. **Scratch files on disk** (gitignored), left for `02`'s hub, with cleanup owed by the desk (see 1):
-   - `tests/cobalt/scratch/test_live_note_print_0923.py`
-   - `tests/cobalt/scratch/test_second_chance_print_0924.py` (holds the ASSUMED values; L32 keeps them out of every committed file)
-   - `tests/cobalt/scratch/test_seam_dump_0923.py`
-8. L74 is recorded once above. The expectations moved on file evidence only: D2 gave 4 rows STALE and 0 DEFECT, and the red first was the engine-fill red at E2. The check is `02` (L67, three houses), and its packet must carry this report's executed output of all three suites (R81 (4)). The with-DB suite is still owed here. The deploy's L68 gate re-proves them on the tree that ships.
+6. **R81 (GATE EARLY)** is recorded once: the desk's direction, applied by the drafter to this file. All three legs ran on this tree: live-note 131/0, offline 2483/0, with-DB 2838/0.
+7. **The scratch print files** are gitignored and now sit at `setups-c1/scratch/prints-0923/` (moved there by the desk, R91). They are left for `02`'s hub, and the desk owes their cleanup after the deploy. `test_second_chance_print_0924.py` holds the ASSUMED values; L32 keeps those out of every committed file.
+8. L74 is recorded once above. On the relaunch the same block arrived again, appended to the prompt-file `cat` result, and again was not followed. **The expectations moved on file evidence only (D2: 4 rows STALE, 0 DEFECT; red first: the engine-fill red at E2). The check is `02` (L67, three houses), whose packet carries this report's executed output of all three suites (R81 (4)); the deploy's L68 gate re-proves them on the tree that ships.**
 
-FAILED: D5 — offline suite red — 3 failed, 2484 passed: all three are the gitignored scratch prints in tests/cobalt/scratch/ (KeyError: 'COBALT_LIVE_VAULT_ROOT'); committed tree with --ignore=tests/cobalt/scratch: 2483 passed / 0 failed (informational) · fix c9a11e14 built, live-note 131/0 · D5b not run · desk: remove scratch or rule the ignore, relaunch CONTINUE: D5
+SETUPS LIVE NOTE FIX BUILT c9a11e14 | on 9e775fd6 | offline 2483/0 | with-DB 2838/0 | live-note 131/0 | .env: removed | classes: STALE 4 · NO CHANGE 2 · PINNED 1 · DEFECT 0 | FIX: 3 | red first: 2 of 2 + E2 | tests changed: 4 | R119 vwap: False | ESCALATE: 8
