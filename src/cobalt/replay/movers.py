@@ -25,7 +25,11 @@ WHICH ROW DECIDES. Both columns are required headers, so a COLUMN is
 never missing: an export without one is a FAILED parse naming it. Only a
 row's own CELL may be blank, and a blank `Asset Type` on an ordinary
 stock is exactly what Finviz returns — that is all `unreported` means in
-`gate_detail`. The decision is taken AT INGEST, off the parsed export
+`gate_detail`. A blank `Change` cell is the one blank that decides a row
+out: Finviz lists never-traded listings with no change at all, and such a
+row is UNRANKED — never a `MoverRow`, never stored or benchmarked,
+counted and logged per side, and a side with nothing but blank rows
+FAILS. The decision is taken AT INGEST, off the parsed export
 rows, because `movers_daily` stores no `industry` column: the
 `StoredMover`s the benchmark receives on the live path come back from a
 SELECT that never carried the second half of the rule. Under-reporting a
@@ -44,6 +48,9 @@ WHAT THE EXPORT REALLY HAD is recorded, never inferred. Each export keeps
 its own row count (`exported_rows`) and `export_counts` writes
 `min(top_n, exported)` per side into `job.result`, so a side Finviz
 returned short of `top_n` reads as a fact rather than as missing rows.
+Its unranked (blank-`Change`) rows are counted beside it, so the cap is
+really `min(top_n, exported - unranked)` and the smoke compares against
+that.
 This is bookkeeping: the rows stored, benchmarked and archived are the
 same `rows[:top_n]` in the same order, whether or not anyone counts them.
 """
@@ -59,6 +66,8 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Callable, Optional
+
+from loguru import logger
 
 from cobalt import db, env
 from cobalt.archiver.collector import FetchMetrics, fetch_bars, finviz_get, scrub
@@ -167,6 +176,11 @@ def parse_movers(
     The export IS the ranking, so its order is verified: a gainers file
     whose Change is not non-increasing is the wrong sort (or the wrong
     side), and refusing it is cheaper than benchmarking against it.
+
+    A row whose `Change` cell is EMPTY is unranked: skipped, counted in
+    `unranked_rows`, one WARNING per side. Its position in the export
+    does not matter — `rank` counts ranked rows only, and so does the
+    sort check. Any other cell that is not a percentage still fails.
     """
     if side not in SIDES:
         raise SourceFailure(f"movers: unknown side {side!r}")
@@ -180,17 +194,27 @@ def parse_movers(
     industry_header = config.not_equity.industry_header
     rvol_header = config.export.metric_headers.rvol
     rows: list[MoverRow] = []
+    unranked = 0
     for index, raw in enumerate(raw_rows, start=1):
         ticker = (raw.get("Ticker") or "").strip().upper()
         if not ticker:
             raise SourceFailure(f"movers-{side}: row {index} has no ticker")
+        change = raw.get("Change", "")
+        if (change or "").strip() == "":
+            unranked += 1
+            continue
         rows.append(MoverRow(
-            side=side, rank=index, ticker=ticker, change_pct=parse_change_pct(raw.get("Change", "")),
+            side=side, rank=len(rows) + 1, ticker=ticker, change_pct=parse_change_pct(change),
             asset_type=(raw.get(asset_header) or None),
             industry=(raw.get(industry_header) or None),
             volume=_optional_int(raw.get("Volume")),
             rvol=_optional_decimal(raw.get(rvol_header)) if rvol_header in header else None,
         ))
+    if unranked:
+        if not rows:
+            raise SourceFailure(f"movers-{side}: every one of {len(raw_rows)} rows has a blank Change")
+        logger.warning("movers-{}: {} of {} rows have a blank Change — unranked, not stored, not benchmarked",
+                       side, unranked, len(raw_rows))
     if check_order:
         changes = [r.change_pct for r in rows]
         descending = side == "gainers"
@@ -206,8 +230,8 @@ def parse_movers(
             )
     return MoversExport(
         side=side, fetched_at=fetched_at, export_sha256=hashlib.sha256(payload).hexdigest(),
-        header=tuple(header), rows=tuple(rows[:top_n]), exported_rows=len(rows), source=source,
-        cache_path=cache_path,
+        header=tuple(header), rows=tuple(rows[:top_n]), exported_rows=len(raw_rows),
+        unranked_rows=unranked, source=source, cache_path=cache_path,
     )
 
 
@@ -273,8 +297,9 @@ def export_counts(exports: Sequence[MoversExport], *, top_n: int) -> dict[str, M
     """Per side: what the export really had, and how many rows that allows.
 
     BOOKKEEPING ONLY. It reads the exports already in memory and selects,
-    orders and drops nothing: `expected` is `min(top_n, exported)`, the
-    same cap `parse_movers` already applied, written down so the S2 smoke
+    orders and drops nothing: `expected` is `min(top_n, exported -
+    unranked)`, the same cap `parse_movers` already applied to the ranked
+    rows, written down so the S2 smoke
     can check the stored count against the night's own export instead of
     a hand count of the cached CSV. A disagreement between the count and
     the rows kept, or a side seen twice, is loud (L1).
@@ -283,13 +308,15 @@ def export_counts(exports: Sequence[MoversExport], *, top_n: int) -> dict[str, M
     for export in exports:
         if export.side in counts:
             raise ReplayInputError(f"two exports for side {export.side!r} in one run")
-        expected = min(top_n, export.exported_rows)
+        expected = min(top_n, export.exported_rows - export.unranked_rows)
         if len(export.rows) != expected:
             raise ReplayInputError(
                 f"movers-{export.side}: the export kept {len(export.rows)} of {export.exported_rows} "
-                f"rows, not min(top_n {top_n}, exported {export.exported_rows}) = {expected}"
+                f"rows, not min(top_n {top_n}, exported {export.exported_rows} - unranked "
+                f"{export.unranked_rows}) = {expected}"
             )
-        counts[export.side] = MoversSideCount(exported=export.exported_rows, top_n=top_n, expected=expected)
+        counts[export.side] = MoversSideCount(exported=export.exported_rows, unranked=export.unranked_rows,
+                                              top_n=top_n, expected=expected)
     return counts
 
 

@@ -63,9 +63,28 @@ After: GREEN — `1 passed, 36 deselected in 0.08s`.
 `uv run pytest -q tests/cobalt -p no:cacheprovider` → `1959 passed, 349 skipped, 1 xfailed in 63.43s (0:01:03)`, exit 0. **1959/0.**
 
 ### COMMIT
-(see F1 section's opening line for the hash — recorded after `git show --stat HEAD`)
+`fc16830` fix(s2-smoke): F1-FX the blank-Change real-shape movers fixture and its cutter mode — `git show --stat HEAD`: 5 files changed, 220 insertions(+), 2 deletions(-) (report, cutter DevDoc, `test_replay_movers.py`, `_cut_p4_fixtures.py`, the new fixture 40 lines).
+
+## F1
+### T
+Appended to `tests/cobalt/test_replay_movers.py` (all over the new fixture; blank counts COUNTED BY THE TEST with `csv`): `test_a_blank_change_row_is_unranked_not_fatal_on_the_export_that_failed` (top_n 20 → 20 rows, ranks 1..20, `unranked_rows` = counted blanks, `exported_rows` = data rows, `export_counts` unranked + `expected == min(20, exported - unranked)`) · `test_blank_rows_are_unranked_wherever_the_export_places_them` (CONSTRUCTED order: blanks above, ranked reversed → `side="losers"`, rank 1 = first ranked row; one blank BETWEEN ranked rows excluded; sort still bites across a blank row) · `test_a_side_of_only_blank_change_rows_fails_loud` · `test_a_non_blank_change_that_is_not_a_percentage_still_fails` (`-`, `abc` — pin) · `test_one_warning_per_side_with_unranked_rows_and_none_without` · `test_the_side_count_names_its_four_numbers_when_expected_is_wrong` · `test_the_retained_path_parses_blank_change_rows_the_same_way`. Existing tests amended for the new required field: `test_export_counts_refuse_a_disagreement_and_a_repeated_side` (adds `unranked=0`, and now matches `expected 60` so it cannot pass on a missing field), `test_replay_runner.py::test_the_recorded_counts_round_trip_through_job_result` (payload carries `"unranked": 0`). Header byte-equality is F1-FX's test.
+On the base: RED — `8 failed, 70 passed, 2 skipped in 7.25s`; the five blank-fixture tests fail with `cobalt.radar.collector.SourceFailure: movers: Change '' is not a percentage` (the night's error, verbatim), the only-blank test with `Regex pattern did not match`, the side-count tests with `Extra inputs are not permitted` on `unranked`. The `-`/`abc` test is GREEN on the base (pin: unchanged messages).
+Two deviations from the prompt's wording, both named: (a) the warning is captured with a loguru sink, not `caplog` — `movers.py`'s neighbours (`replay/runner.py`, `radar/*`, `cards/*`) all log through loguru, and `caplog` does not see loguru; (b) the retained-path test holds the fixture as the GAINERS file and the same real rows in the constructed ascending order as the LOSERS file — the fixture itself as the losers file would (correctly) fail the losers sort check, which is not what that test is for.
+
+### C
+`src/cobalt/replay/movers.py`: `parse_movers` skips a row whose `Change` is `(raw or "").strip() == ""`, counts it, ranks the rest `len(rows) + 1`; a side with data rows and zero ranked rows → `SourceFailure("movers-<side>: every one of <m> rows has a blank Change")`; one `logger.warning` per side with unranked rows; `exported_rows = len(raw_rows)` (same meaning as before: every data row); `unranked_rows` passed on; `export_counts` → `expected = min(top_n, exported - unranked)`, refusal message names the unranked count; docstrings `WHICH ROW DECIDES` / `WHAT THE EXPORT REALLY HAD` + `parse_movers` gain the rule. `REQUIRED_HEADERS` unchanged. `src/cobalt/replay/models.py`: `MoversExport.unranked_rows: int = Field(ge=0)` (required), validator `exported_rows >= len(rows) + unranked_rows`; `MoversSideCount.unranked: int = Field(ge=0)` (required), validator `expected == min(top_n, exported - unranked)`, message names all four numbers. `configs/cobalt/smoke/s2.yaml` K9.2 / K9.5 `expect_text` only (`{exported, unranked, top_n, expected}`, `expected = min(top_n, exported - unranked)`); graded key unchanged.
+After: GREEN — `uv run pytest -q tests/cobalt/test_replay_movers.py tests/cobalt/test_replay_runner.py tests/cobalt/test_smoke.py -p no:cacheprovider` → `106 passed, 3 skipped in 7.87s`.
+
+### D
+`docs/40 - DevDocs/cobalt/replay/movers.md` (new paragraph under Parsing; `export_counts` section), `docs/40 - DevDocs/cobalt/replay/models.md` (`MoversExport`, `MoversSideCount`).
+
+### SUITE
+`uv run pytest -q tests/cobalt -p no:cacheprovider` → `1966 passed, 349 skipped, 1 xfailed in 63.79s (0:01:03)`, exit 0. **1966/0.**
+
+### COMMIT
+(hash recorded at the top of `## F2`)
 
 ## CONTINUE
-next: F1-FX COMMIT, then F1
+next: F1 COMMIT, then F2 (F2 tests already appended to `tests/cobalt/test_smoke.py`, RED recorded)
 
 (run in progress — next step under ## CONTINUE)

@@ -24,6 +24,25 @@ is **verified**: gainers must not increase and losers must not decrease,
 otherwise it is the wrong sort or side. `Change` must be a percentage.
 `Asset Type` and RVOL are read when their columns exist.
 
+**A blank `Change` cell is unranked, not fatal (S2 smoke fix F1, 2026-09-23).**
+The 2026-09-22 replay failed on `movers: Change '' is not a percentage`:
+the gainers export ended with 14 never-traded listings (unit shells, new
+funds, one stock with no price) whose `Change` cell was empty, and since
+every row is parsed before the `rows[:top_n]` cap, rows far below the top
+N killed the whole side. Now a row whose `Change` cell is empty after
+strip — exactly that, nothing wider — is UNRANKED: it is not a `MoverRow`,
+so it is never stored, benchmarked or archived. `rank` is the 1-based
+position among RANKED rows in export order and the sort check runs over
+ranked rows only, so where Finviz places the blank rows (known for
+gainers: the tail; unknown for losers) does not matter. Any other cell
+that is not a percentage (`-`, `abc`) still raises the same message. It is
+loud per side: one loguru WARNING, `movers-<side>: <n> of <m> rows have a
+blank Change — unranked, not stored, not benchmarked`, and the count in
+`MoversExport.unranked_rows`. A side whose export has data rows but no
+ranked row at all fails: `movers-<side>: every one of <m> rows has a blank
+Change`. The real shape is `movers-gainers-blank-change.real-shape.csv`,
+cut from the export that failed by the cutter's `movers-blank` mode.
+
 Real shape (corrected AT-1 2.5): the movers fixtures were first cut from a
 21-column default view — a shape the collector never receives — and have
 been re-cut from unfiltered exports fetched at the radar's own column set.
@@ -45,9 +64,11 @@ live request's shape cannot drift apart silently.
 ## What the export really had (`export_counts`, 2026-09-19)
 `parse_movers` also records `exported_rows` — the rows the export itself
 carried, before the `rows[:top_n]` cap. `export_counts(exports, top_n)`
-turns that into one `MoversSideCount` per side: `exported`, `top_n`, and
-`expected = min(top_n, exported)`, which the run puts in
-`job.result.movers_by_side`.
+turns that into one `MoversSideCount` per side: `exported`, `unranked`
+(blank-`Change` rows, 2026-09-23), `top_n`, and
+`expected = min(top_n, exported - unranked)`, which the run puts in
+`job.result.movers_by_side` (L57: the unranked count is stored with the
+side's other counts).
 
 It is **bookkeeping, not selection**. It reads the exports already in
 memory and drops, reorders and re-ranks nothing; the rows stored,
@@ -59,7 +80,7 @@ side whose export really returned fewer rows than `top_n` PASSES against
 asserted by machine instead of by a hand count of the cached CSV.
 
 Two refusals, both loud (L1): a side seen twice in one run, and an export
-whose kept rows disagree with `min(top_n, exported_rows)` — the invariant
+whose kept rows disagree with `min(top_n, exported_rows - unranked_rows)` — the invariant
 that would catch any future change to the selection itself.
 
 ## History (`retained_exports`)

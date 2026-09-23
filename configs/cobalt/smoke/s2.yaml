@@ -315,9 +315,10 @@ checks:
     result_equals:
       trade_date: "{last_trading_day}"
     expect_text: >-
-      last_result.movers_by_side.gainers = {exported, top_n, expected}: the rows
-      that night's gainers export really returned, the cap in force, and
-      expected = min(top_n, exported); last_result.trade_date = last trading day
+      last_result.movers_by_side.gainers = {exported, unranked, top_n, expected}:
+      the rows that night's gainers export really returned, how many of them had
+      a blank Change (unranked, never stored), the cap in force, and
+      expected = min(top_n, exported - unranked); last_result.trade_date = last trading day
       (what makes K9.3's comparison valid). expected is K9.3's right operand
 
   - id: K9.3
@@ -360,9 +361,10 @@ checks:
     result_equals:
       trade_date: "{last_trading_day}"
     expect_text: >-
-      last_result.movers_by_side.losers = {exported, top_n, expected}: the rows
-      that night's losers export really returned, the cap in force, and
-      expected = min(top_n, exported); last_result.trade_date = last trading day
+      last_result.movers_by_side.losers = {exported, unranked, top_n, expected}:
+      the rows that night's losers export really returned, how many of them had
+      a blank Change (unranked, never stored), the cap in force, and
+      expected = min(top_n, exported - unranked); last_result.trade_date = last trading day
       (what makes K9.6's comparison valid). expected is K9.6's right operand
 
   - id: K9.6

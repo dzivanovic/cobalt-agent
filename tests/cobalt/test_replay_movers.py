@@ -36,6 +36,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from loguru import logger
 from pydantic import ValidationError
 
 from cobalt.archiver.models import Bar, Interval
@@ -348,11 +349,11 @@ def test_export_counts_refuse_a_disagreement_and_a_repeated_side():
     with pytest.raises(ReplayInputError, match="two exports for side"):
         export_counts([export, export], top_n=60)
     # `expected` is min(top_n, exported) or the model refuses to exist
-    with pytest.raises(ValidationError):
-        MoversSideCount(exported=5, top_n=60, expected=60)
-    with pytest.raises(ValidationError):
-        MoversSideCount(exported=60, top_n=25, expected=60)
-    assert MoversSideCount(exported=5, top_n=60, expected=5).expected == 5
+    with pytest.raises(ValidationError, match="expected 60"):
+        MoversSideCount(exported=5, unranked=0, top_n=60, expected=60)
+    with pytest.raises(ValidationError, match="expected 60"):
+        MoversSideCount(exported=60, unranked=0, top_n=25, expected=60)
+    assert MoversSideCount(exported=5, unranked=0, top_n=60, expected=5).expected == 5
 
 
 # =====================================================================
@@ -749,3 +750,127 @@ def test_the_blank_change_fixture_is_the_real_export_shape():
     assert len(rows) - len(blank) == 25
     # every blank row sits below the ranked top, as the raw export had them
     assert min(blank) == 25
+
+
+def _blank_fixture_lines() -> tuple[bytes, list[bytes], list[bytes]]:
+    """The fixture as (header, ranked lines, blank-`Change` lines), each
+    line the fixture's own bytes. One record per line is the cutter's
+    guard, re-proved here with the `csv` module before any line moves."""
+    raw = BLANK_FIXTURE.read_bytes()
+    lines = raw.splitlines(keepends=True)
+    assert len(list(csv.reader(io.StringIO(raw.decode("utf-8"))))) == len(lines)
+    header, data = lines[0], lines[1:]
+    ranked, blank = [], []
+    for line in data:
+        row = next(csv.DictReader(io.StringIO((header + line).decode("utf-8"))))
+        (blank if _is_blank_change(row) else ranked).append(line)
+    return header, ranked, blank
+
+
+def _parse(payload: bytes, side: str = "gainers", top_n: int = 20):
+    return parse_movers(payload, side=side, top_n=top_n, content_type="text/csv",
+                        config=movers_mod.load_radar_config(), fetched_at=FETCHED, source="live")
+
+
+def _with_change(line: bytes, header: bytes, value: str) -> bytes:
+    """One real row with its `Change` cell set to `value` — a CONSTRUCTED
+    cell (L69), re-serialised through the `csv` module."""
+    columns = next(csv.reader([header.decode("utf-8")]))
+    cells = next(csv.reader([line.decode("utf-8")]))
+    cells[columns.index("Change")] = value
+    out = io.StringIO()
+    csv.writer(out, lineterminator="\n").writerow(cells)
+    return out.getvalue().encode("utf-8")
+
+
+def test_a_blank_change_row_is_unranked_not_fatal_on_the_export_that_failed():
+    """F1. The 2026-09-22 replay died on `Change ''` in rows far below
+    the top N. Now those rows are unranked: not a `MoverRow`, not stored,
+    not benchmarked — and counted."""
+    rows = _blank_fixture_rows()
+    blank = sum(1 for row in rows if _is_blank_change(row))
+    export = _parse(BLANK_FIXTURE.read_bytes())
+    assert len(export.rows) == 20
+    assert [r.rank for r in export.rows] == list(range(1, 21))
+    assert export.unranked_rows == blank
+    assert export.exported_rows == len(rows)
+    counts = export_counts([export], top_n=20)["gainers"]
+    assert (counts.exported, counts.unranked, counts.top_n) == (len(rows), blank, 20)
+    assert counts.expected == min(20, len(rows) - blank)
+
+
+def test_blank_rows_are_unranked_wherever_the_export_places_them():
+    """The LOSERS side has never been fetched with blank rows in it, so
+    where Finviz puts them on `o=change` is unknown. The same real rows in
+    a CONSTRUCTED order — every blank row ABOVE the ranked ones, the
+    ranked ones reversed so Change ascends — parse as losers, rank 1 on
+    the first ranked row. A blank row BETWEEN two ranked rows is excluded
+    and the sort is checked over the ranked rows only."""
+    header, ranked, blank = _blank_fixture_lines()
+    losers = _parse(header + b"".join(blank) + b"".join(reversed(ranked)), side="losers")
+    first = next(csv.DictReader(io.StringIO((header + ranked[-1]).decode("utf-8"))))
+    assert losers.rows[0].rank == 1 and losers.rows[0].ticker == first["Ticker"].strip().upper()
+    assert (losers.unranked_rows, losers.exported_rows) == (len(blank), len(ranked) + len(blank))
+    between = _parse(header + ranked[0] + blank[0] + b"".join(ranked[1:]), top_n=len(ranked))
+    assert [r.rank for r in between.rows] == list(range(1, len(ranked) + 1))
+    assert between.unranked_rows == 1
+    # the sort check still bites, over ranked rows, across a blank row
+    with pytest.raises(SourceFailure, match="not sorted descending"):
+        _parse(header + ranked[1] + blank[0] + ranked[0] + b"".join(ranked[2:]))
+
+
+def test_a_side_of_only_blank_change_rows_fails_loud():
+    header, _, blank = _blank_fixture_lines()
+    with pytest.raises(SourceFailure, match=f"movers-gainers: every one of {len(blank)} rows has a blank Change"):
+        _parse(header + b"".join(blank))
+
+
+def test_a_non_blank_change_that_is_not_a_percentage_still_fails():
+    """The fix widens nothing (L75): only an EMPTY cell is unranked."""
+    header, ranked, _ = _blank_fixture_lines()
+    for value, message in (("-", "Change '-' is not a percentage"), ("abc", "Change 'abc' is not a percentage")):
+        payload = header + ranked[0] + _with_change(ranked[1], header, value) + b"".join(ranked[2:])
+        with pytest.raises(SourceFailure, match=message):
+            _parse(payload)
+
+
+def test_one_warning_per_side_with_unranked_rows_and_none_without():
+    header, ranked, blank = _blank_fixture_lines()
+    warnings: list[str] = []
+    sink = logger.add(lambda message: warnings.append(message.record["message"]), level="WARNING")
+    try:
+        _parse(BLANK_FIXTURE.read_bytes())
+        _parse(header + b"".join(reversed(ranked)), side="losers")
+    finally:
+        logger.remove(sink)
+    assert warnings == [
+        f"movers-gainers: {len(blank)} of {len(ranked) + len(blank)} rows have a blank Change "
+        "— unranked, not stored, not benchmarked"
+    ]
+
+
+def test_the_side_count_names_its_four_numbers_when_expected_is_wrong():
+    with pytest.raises(ValidationError) as caught:
+        MoversSideCount(exported=39, unranked=14, top_n=30, expected=30)
+    message = str(caught.value)
+    for number in ("39", "14", "30", "25"):
+        assert number in message
+    assert MoversSideCount(exported=39, unranked=14, top_n=30, expected=25).expected == 25
+
+
+def test_the_retained_path_parses_blank_change_rows_the_same_way(tmp_path):
+    """L3: one parse path. The gainers file is the fixture itself; the
+    losers file is the same real rows in the constructed ascending order
+    (a descending file cannot pass the losers sort check)."""
+    header, ranked, blank = _blank_fixture_lines()
+    folder = tmp_path / DAY.isoformat()
+    folder.mkdir()
+    (folder / "movers-gainers-211004.csv").write_bytes(BLANK_FIXTURE.read_bytes())
+    (folder / "movers-losers-211004.csv").write_bytes(header + b"".join(blank) + b"".join(reversed(ranked)))
+    exports = retained_exports(tmp_path, DAY, top_n=20, config=movers_mod.load_radar_config())
+    live = _parse(BLANK_FIXTURE.read_bytes())
+    assert (exports[0].rows, exports[0].unranked_rows, exports[0].exported_rows) == (
+        live.rows, live.unranked_rows, live.exported_rows)
+    counts = export_counts(exports, top_n=20)
+    assert [(c.exported, c.unranked, c.expected) for c in counts.values()] == [
+        (len(ranked) + len(blank), len(blank), 20)] * 2

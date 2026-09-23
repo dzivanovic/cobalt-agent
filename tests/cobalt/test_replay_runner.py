@@ -583,8 +583,8 @@ def test_the_recorded_counts_round_trip_through_job_result():
     result = run_nightly(DAY, dry_run=False, deps=deps)
     payload = result.job_result()
     assert payload["movers_by_side"] == {
-        "gainers": {"exported": 61, "top_n": 60, "expected": 60},
-        "losers": {"exported": 61, "top_n": 60, "expected": 60},
+        "gainers": {"exported": 61, "unranked": 0, "top_n": 60, "expected": 60},
+        "losers": {"exported": 61, "unranked": 0, "top_n": 60, "expected": 60},
     }
     assert ReplayResult.model_validate(payload) == result    # what `job.result` stores replays
 
