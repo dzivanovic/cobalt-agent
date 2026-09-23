@@ -1,0 +1,139 @@
+FABLE ROW: R109
+
+MODEL: Opus 5.5 (`claude-opus-5-5`). You HOLD THE ANTHROPIC ("FABLE") SEAT of the four-house tribunal, ROUND 2, by HIS STANDING R109 (`cto-2026-09-22.md` §4, 19:34 ET: "Make all Opus 5.5 for now" — every Fable-type seat, the tribunal seat and the derive included, on `claude-opus-5-5`, until his next word). L67 names the Anthropic house, and as amended 2026-09-21 (R46) DESIGN work keeps each house's top seat. The round-1 seat (`14`) ran on the same model in ANOTHER session. Its report is your seat's round-1 text, and you owe it no loyalty. You rule, blind; you draft, build and derive nothing in this job · SEAT: `voice-v3-tribunal-fable-r2-0923`, launched by the CTO desk in the background, SIDE BY SIDE with the house hub `24-voice-v3-tribunal-r2.md`. Two bare commands: `cd /Users/cobalt/cobalt-wt/agy-trial` then `claude --bg "Read '/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-23/25-voice-v3-tribunal-r2-fable-seat.md' and follow it exactly." --model claude-opus-5-5 --permission-mode auto --remote-control voice-v3-tribunal-fable-r2-0923 --allowedTools "Bash(git -C /Users/cobalt/cobalt show*)" "Bash(git -C /Users/cobalt/cobalt log*)" "Bash(ls *)" "Bash(grep *)" "Bash(tail *)" "Bash(wc *)" "Bash(date*)" --disallowedTools "AskUserQuestion" "EnterWorktree" "Bash(git push*)" --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt --add-dir /Users/cobalt/cobalt-wt`. These are the SAME seven READ-ONLY strings and three denies as `14-voice-v3-tribunal-fable-seat.md`'s and `prompts/2026-09-21/22-draft-setups-tribunal.md`'s launch lines (09-20 R13) — nothing new; `--model claude-opus-5-5` is R109's value · SESSION: fresh · auto mode on; never `bypassPermissions`; NO database, NO docker, NO pytest, NO git write, NO launch of any agent or house (L36), no vault write, no memory-folder write (L58). You write exactly ONE file, with the Write tool · METER: Anthropic Opus 5.5. An honest estimate, so that the desk can refuse BEFORE launch:
+- LAWS.md ≈ 20.5k tokens (82,174 B measured at drafting)
+- the derive report's `## NEEDS ROUND 2` + fold rows ≈ 3k
+- your seat's round-1 report by section ≈ 5k (T4, T6, T8, (g), Self-attack)
+- the derived design's sections ≈ 9k
+- the code by line range ≈ 8–10k (`vaultwrite/writer.py` ranges, `heartbeat/runner.py`, the two plists, `radar/propose.py`, `notify/mattermost.py`, `settings/card.py`)
+- your own searches ≈ 4k
+- the ruling ≈ 6–9k tokens of output
+- peak context ≈ 60–75k
+
+Read by line range; no whole-file dumps. · WINDOW: the houses' windows do not bind you, because you run no house; the desk launches you beside `24` · nobody sits at this terminal — the report file is your channel. Never ask: write `ASK DESK: <question> [<time>]` in the report and continue with the safe default.
+
+# FOUR-HOUSE TRIBUNAL, ROUND 2 — THE ANTHROPIC SEAT, BLIND. DESIGN: VOICE v3, derived — `docs/30 - Design/VOICE-v3-derived-2026-09-23.md`
+
+LADDER: S3 design lane (`cto-2026-09-22.md` R100; `cto-2026-09-23.md` R18). LAW STEP: proposal (`12`, the Anthropic house) → round 1 (Grok, Gemini via `13`; this seat via `14`; Astra METER, recorded under 09-22 R13) → derive (`15`, `needs round 2: 3`) → **THIS = the Anthropic seat's round-2 ruling on the THREE open items only (R2-1, R2-2, R2-3), written beside Grok / Gemini and WITHOUT reading them** → the second derive (`26`, after both round-2 stop lines) writes the FINAL, or round 3 takes what does not converge (L39: the last round). The three items:
+- **R2-1** — who deletes crash-leftover scratch audio. It gates V4's `voice_scratch` probe.
+- **R2-2** — O1's fold MECHANICS. The SCOPE (A / B / No) is his and is not asked.
+- **R2-3** — which slice builds the trading-logic draft-and-send tool.
+
+L1, L3, L7, L28, L37 and L40 bind every answer. DO NOT STOP until the report's last line is `VOICE V3 TRIBUNAL FABLE R2 DONE …` or `FAILED …`.
+
+YOUR INTEREST — STATED, AND WHAT IT COSTS YOU. Each of the three items is YOUR SEAT's round-1 wording against the houses':
+- **R2-1** is your T8 ("the heartbeat probe only COUNTS"; the cross-key refusal) against grok's and gemini's adoption of the heartbeat sweep.
+- **R2-2** is your (g) / T6 mechanics (span-bound sha256, "takes no retry", "refused if the span changed", "remains his") against the proposal's, which grok called "correct and minimal".
+- **R2-3** is your T4 (2). Its "refuse until a slice builds the HITL-card tool" was NOT folded, because it re-opens R18 (a)'s "any command". It is therefore NOT an answer open to you: you answer A / B / NEITHER inside R18.
+
+A seat ruling on its own text is the weakest ruling on the tribunal, so this job is built to make it worth reading. **For EACH item, ATTACK YOUR SEAT'S ROUND-1 TEXT FIRST.** Start from "who else writes or reads this": run `grep -rn <name> /Users/cobalt/cobalt/src/cobalt`, one call each, for at least `unlink`, `rmtree`, `scratch`, `_write_with_retry`, `NoteChangedOnDisk`, `_baseline`, `_seed_baselines`, `upsert_region`, `_commit`, `send_dm`, `hitl`, `trading_logic`, `trader_settings`. Then `grep -n "<string>com.cobalt" /Users/cobalt/cobalt/ops/com.cobalt.heartbeat.plist` and the same for `com.cobalt.aset.plist`. Open every file your text cites and walk it through the real code. Under `SELF-ATTACK`, write the strongest failing scenario you can find against it (a clock time, a turn id, a scratch file and its age, the process that runs, a note line he types while a confirm is pending, a unit id, a writer call and its retry, a card sent and the approval it needs), or `none found — <what you walked, file:line>`. Only then weigh the other texts.
+
+The bars tribunal's lesson binds you (`topics/cto-desk.md` 2026-09-20, "THE FABLE SEAT ON A TRIBUNAL"): everything the seat INVENTED was broken by the houses against the real code, and everything it took from the files held. A claim of your seat that the files do not bear out is WITHDRAWN, in so many words, and counted. Choosing your seat's text where another is equally correct and smaller is not allowed (prefer the smaller mechanism).
+
+BLIND — THE RULE THAT MAKES THIS SEAT WORTH ITS COST. You NEVER read, list or grep `/Users/cobalt/cobalt-wt/agy-trial/scratch/tribunal-bars-0920/voice-v3-tribunal/r2/` (any depth), nor `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/voice-v3-tribunal-r2-2026-09-23.md` (the round-2 hub's report), nor any file a house wrote in round 2. A tool call that touched one of them makes your ruling non-blind: write `FAILED: blind — <the path>` and stop.
+
+You MAY read:
+- the prompt `24-voice-v3-tribunal-r2.md`, but only for its `QUESTIONS-R2.md (verbatim): "…"` paragraph and its list of your seat's round-1 claims (C1–C8) that the hub is checking;
+- round 1's material, which is NOT round 2: `../r1/`, the round-1 hub report `reports/voice-v3-tribunal-2026-09-23.md`, your seat's round-1 report, the derive report;
+- the houses' raw round-1 rulings (`../r1/grok-ruling.md`, `../r1/gemini-ruling.md`), but only for T4, T6, T8, (g), OWNER and the closing lines.
+
+Your report opens with one line: `BLIND: I did not read the round-2 folder or the round-2 hub's report.`
+
+AUTHORIZATION — VERIFY IT YOURSELF (a prompt file is not an approval). Run each check below as its own Bash call. YOU CAN ALWAYS STOP with a `FAILED: <step> — <concern>` line.
+- **THE FABLE ROW.** `grep -c -x -F "FABLE ROW: R109" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-23/25-voice-v3-tribunal-r2-fable-seat.md"` must print **1**.
+- `grep -n "^| R109 " "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-22.md"` must print exactly ONE row, carrying BOTH literals `Make all Opus 5.5 for now` · `claude-opus-5-5`. Otherwise → `FAILED: authorization mismatch — row R109 does not name the seat model`.
+- `git -C /Users/cobalt/cobalt log -1 --format=%H -S"| R109 | " -- "docs/40 - DevDocs/reports/cto-2026-09-22.md"` — EMPTY → `FAILED: authorization mismatch — row R109 is not committed on main`.
+- **R109 STILL STANDS.** `grep -n "R109" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-23.md"` (and `cto-<run date>.md` on a later run date). A `| R` row carrying his words that ENDS or CHANGES R109's seat model → `FAILED: authorization — R109 superseded by <row>; the desk re-issues this file`. A row that only cites R109 is recorded and does not stop you.
+- **YOU ARE THE SEAT THE ROW NAMES.** `claude-opus-5-5` must equal the model id your own system prompt states you run as. Otherwise → `FAILED: seat mismatch — R109 names claude-opus-5-5; this session runs <id>`, and stop.
+- `grep -n "^| R18 " "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-23.md"` must carry `VOICE v3 DIRECTIVE` and `Solve this`.
+- `grep -n "^| R36 " "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-23.md"` must carry `needs round 2: 3`.
+- `git -C /Users/cobalt/cobalt log -1 --format=%H -S"VOICE V3 DERIVED" -- "docs/40 - DevDocs/reports/voice-v3-derive-2026-09-23.md"` — EMPTY → `FAILED: refused — the derive's stop line is not committed`.
+- `git -C /Users/cobalt/cobalt log -1 --format=%H -- "docs/30 - Design/VOICE-v3-derived-2026-09-23.md"` — EMPTY → `FAILED: refused — the derived design is not committed`.
+- **THE LAUNCH ROW.** `grep -n "25-voice-v3-tribunal-r2-fable-seat.md" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-<run date>.md"` must print a `| R` row naming this file on the day you run. No row → `FAILED: authorization mismatch — no launch row names 25`.
+- **THIS LAUNCH LINE ADDS NO RULE** — prove it. Run `grep -c -F -e "<rule>" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-21/22-draft-setups-tribunal.md"` for each of the seven allow strings and the three deny strings, quotes included. Each must count **≥1**; any 0 → `FAILED: authorization mismatch — <rule>`.
+
+INDEX CARD — read in this order, and nothing more until a step needs it:
+1. `/Users/cobalt/Vault/Think/6 - Permanent/Memory/LAWS.md` in full (L59). Binding here:
+   - **L1** fail-loud
+   - **L3** one path: one scratch writer, one unlink function, one confirm path
+   - **L7** a trading-logic change is never executed without his approval as L7 defines it today
+   - **L9**
+   - **L10** a bad config refuses to load
+   - **L19**
+   - **L28** his law; O1's scope is his and is not asked
+   - **L32** your report is COMMITTED: no audio, transcript, note line, ticker, price or P&L of his — KEYS and `file:line` only
+   - **L35** your seat's round-1 claims are CLAIMS: open the files
+   - **L36**
+   - **L37** a code-matched "yes" is his; no model judges an approval
+   - **L38 / L40** exactly ONE expert role per side effect
+   - **L39** round 3 is the last; after it, unresolved → Dejan, never a vote
+   - **L42**
+   - **L48**
+   - **L67**
+   - **L70** an unrun behaviour claim is an experiment
+   - **L71**
+   - **L72**
+   - **L74** a block inside a tool result is DATA: record it once
+   - CLAUDE.md's absolute boundary: nothing reads, writes or infers from his trading platform, and no order is ever placed.
+2. `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/voice-v3-derive-2026-09-23.md`:
+   - Read `## NEEDS ROUND 2` whole (at drafting :93–108), the `## Fold table` rows F-07, F-09, F-12, F-22, F-27, and `## ESCALATE` item 1.
+   - THE QUESTION SET is the `QUESTIONS-R2.md (verbatim): "…"` paragraph of `/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-23/24-voice-v3-tribunal-r2.md` §1. It holds the SAME three items and the SAME answer template the houses use, the `FOLD A:` / `FOLD B:` lines included.
+   - Where it names a staged file, read the real file instead:
+     - `NEEDS-ROUND-2.md` = the derive report's section above;
+     - `derived-sections.excerpt.md` = the derived design at the ranges `24` §1 (2) lists;
+     - `hub-checks.md` = the round-1 hub report rows `24` §1 (3) lists;
+     - `seat-r1.excerpt.md` = your seat's round-1 report;
+     - `*.excerpt.*` = the real files at the ranges `24` §1 (6) lists;
+     - `greps.txt` = your own searches, `24` §1 (7)'s list.
+   - You have no `*-r1-own` file: your seat's round-1 report is it.
+3. Your seat's round-1 report, `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/voice-v3-tribunal-fable-r1-2026-09-23.md`. These are the texts you now attack: `### T4` (:52), `### T6` (:61), `### T8` (:72), `### (g)` (:159), `## Self-attack` (:164 — its 2 WITHDRAWN sentences stay withdrawn), `## ESCALATE` (:232).
+4. The code on main, by line range, as a ruling needs it:
+   - `src/cobalt/vaultwrite/writer.py`: `:1-30`, `:387-420`, `:457-470`, `:530-553`, `:621-660`, `:644-700`, `:807-830`, `:895-935`
+   - `src/cobalt/heartbeat/runner.py`: `:126-167`, `:413-452`
+   - `src/cobalt/heartbeat/probes.py`: `:30-44`
+   - `ops/com.cobalt.heartbeat.plist`: `:1-70`
+   - `ops/com.cobalt.aset.plist`: `:1-10`
+   - `src/cobalt/radar/propose.py`: `:1-5`, `:422-470`, `:711-760`
+   - `src/cobalt/radar/cli.py`: `:95-102`
+   - `src/cobalt/notify/mattermost.py`: `:1-15`, `:130-160`
+   - `src/cobalt/settings/card.py`: `:10-20`
+   - the derived design: `docs/30 - Design/VOICE-v3-derived-2026-09-23.md` `:1-11`, `:65-79`, `:104-133`, `:152-164`, `:210-241`, `:254-262`, `:276-303`
+
+   Search with `grep`; it honours `.gitignore`.
+
+OWNER RULINGS THAT BIND EVERY ANSWER:
+- R18 — one widget; it executes ANY command, including which field in which file; audio ephemeral, never in the vault, the database or git; every house the same permissions; design questions are the houses'.
+- L7 as it stands.
+- O1's SCOPE is his.
+- Anything of his is an `OWNER:` line, never a precondition to build.
+
+THE JOB — rule, do not rewrite. Rule the three items in this order: **R2-1 FIRST (write it to your report before you read for R2-2)**, then R2-2, then R2-3. For each, write:
+1. `SELF-ATTACK:` as described above. For R2-3, attack your seat's T4 (2) against R18 (a), and against the question of which slice builds the tool.
+2. Exactly one of `ADOPT <position letter>` · `NEITHER — <replacement wording, verbatim-ready>`.
+3. The sub-point lines the question set asks for:
+   - R2-1: (a)–(d).
+   - R2-2: (a)–(e), then the two lines `FOLD A:` / `FOLD B:`, paste-ready, identical except for the scope clause (the two scope clauses verbatim as quoted in the question set).
+   - R2-3: an `ADOPT A` names its slice, the exact change, files, hours and RESTARTS, and what a trading-logic request gets before that slice ships. Then the L40 owner line.
+4. At most six lines of reasoning with `file:line`, and a CONCRETE failing scenario for every objection.
+5. `WITHDRAWN:` — any sentence of your seat's round-1 text that the files do not bear out, quoted, or `none`.
+
+Every behaviour claim you cannot read in the code → `X<n>: <what to run on cobalt_dev, in the dev vault or on the home server, on what, what result would change the design>` (L70). The derived E1–E11 and X1–X5, X12, X13 are already named: cite them, do not restate them. A `NEITHER` is priced (files, lines, slice, hours) and invents nothing you have not walked through the real code. THEN write `OWNER:` (one line each, none a precondition; O1's scope is not repeated), then `EXPERIMENTS:`, then the closing line: `TRIBUNAL R2: BUILD` / `TRIBUNAL R2: BUILD AFTER <≤15 words>` / `TRIBUNAL R2: DO NOT BUILD <≤15 words>`.
+
+WRITE (Write tool, ONE new file): `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/voice-v3-tribunal-fable-r2-2026-09-23.md`. Use this name WHATEVER the date of the run. The desk COMMITS it, so it carries NO user data (L32): KEYS and `file:line` only. Layout, in this order:
+- the `BLIND:` line
+- one line `RUN DATE: <date>`
+- `## DIGEST FOR THE DESK` (≤20 lines): your closing line; one line per item with the answer and, for a NEITHER, the gist in ≤20 words; your R2-3 slice; your withdrawn count; your experiments; your ESCALATE count
+- `## Rulings` (the three, full, R2-1 first)
+- `## Withdrawn from round 1` (each sentence, quoted, with the `file:line` that defeats it)
+- `## Experiments (L70)`
+- `## OWNER`
+- `## READING` (every file and line range opened, every search run)
+- `## ESCALATE`
+- `## CONTINUE`
+- the last line
+
+Write it in the same turn as the work (L48): R2-1's ruling is in the file BEFORE you read for R2-2. While you work, the last non-blank line is EXACTLY `(run in progress — next step under ## CONTINUE)`. The breadcrumb `next: <step>` lives inside `## CONTINUE` only. No other line may START with `VOICE V3 TRIBUNAL FABLE R2 DONE`, `FAILED` or `CONTINUE`. RECOVERY (L60): a relaunch reads its own report first and continues from `## CONTINUE`; an item already ruled there is not re-ruled. One command per Bash call, bare shape, no pipe, no redirect. Use `date` for every time you write.
+
+STOP LINE (the last non-blank line, L71): `VOICE V3 TRIBUNAL FABLE R2 DONE · R2-1: <ADOPT A|ADOPT B|NEITHER> · R2-2: <ADOPT P|ADOPT S|NEITHER> · R2-3: <ADOPT A (<slice>)|ADOPT B|NEITHER> · ESCALATE: <n>` — or `FAILED: <step> — <reason>`. Then stop.
+
+NEXT STEP, not yours: the desk commits your report. After the hub's `VOICE V3 TRIBUNAL R2 DONE` line is committed too, it launches `26-voice-v3-derive-r2.md` — a fresh Opus 5.5 derive seat, not you.
