@@ -135,3 +135,26 @@ there is no content checksum over a `.sql` file anywhere in this package.
 If P2 is present, its 0007 rollback deleting radar cards that picks/missed
 reference is blocked by the NO ACTION foreign keys and fails loud; nothing
 is lost silently (plan §6 R1-23).
+
+## 2026-09-23 — DRC D1: `0016_drc`
+
+`0016_drc.sql` adds three USER tables, each with `user_id NOT NULL` + the
+GUC default + an FK to `"user".traders`, and each owned by `cobalt_user`:
+- `drc_imports` — one row per dropped file, with its sha256,
+  `parsed` / `partial` / `failed`, the reason and line, `supersedes`,
+  and D2's input-event state (`pending` / `running` / `done` / `failed`).
+- `drc_fills` — one row per execution. Every field except the line is
+  nullable, so a partial file stores what it has.
+- `drc_rows` — the declared table, now built. It holds the trade, open
+  position, stats row and day rows, with `inputs`, `derived` and
+  `fn_version` (L57).
+
+`0016_drc.rollback.sql` drops the three tables children-first. It
+touches nothing else.
+
+**The number is `0016`, not the next free one on `main`.** `0012` is
+`bars/chunk-2-0920`, `0013` the setups build, `0014` handicap H1
+(reserved) and `0015` stale score (reserved, conditional). That table
+lives in `reports/devdb-builds-reissue-2026-09-23.md`. On this branch the
+registry reads `1…11, 16`. The combined pin is the desk's, at the L68
+gate.
