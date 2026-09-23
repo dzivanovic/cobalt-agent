@@ -1,0 +1,15 @@
+MODEL: Opus 5.5 (`claude-opus-5-5`, R36 / R109) — DRAFTING seat (fold of a production deploy prompt) · SEAT: drafter `deploy-fold-0923`, launched by the CTO desk in the background. Two bare commands: `cd /Users/cobalt/cobalt` then `claude --bg "Read '/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-23/21-fold-stacked-deploy.md' and follow it exactly." --model claude-opus-5-5 --permission-mode auto --remote-control deploy-fold-0923 --allowedTools "Bash(git -C /Users/cobalt/cobalt show*)" "Bash(git -C /Users/cobalt/cobalt log*)" "Bash(ls *)" "Bash(grep *)" "Bash(tail *)" "Bash(wc *)" "Bash(date*)" --disallowedTools "AskUserQuestion" "EnterWorktree" "Bash(git push*)" --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt --add-dir /Users/cobalt/cobalt-wt` (the seven precedented READ-ONLY strings, 09-20 R13) · SESSION: fresh · auto mode on; never `bypassPermissions`; NO database, NO git write, NO launch (L36), no vault / memory write (L58) — Write tool only, the REPORT LAST · METER: Anthropic small · never ask: `ASK DESK: <question> [<time>]` in the report, continue with the safe default. Never end a turn between steps.
+
+# FOLD THE L67 READ OF `07` INTO A FULL RE-ISSUE OF `07` (L19)
+
+LADDER: S2 (stops 2026-09-23) — today's ONE stacked deploy on his DONE TRADING word (R5). LAW STEP: `08` stopped `STACKED DEPLOY REVIEW DONE · houses: 2 of 3 · other houses: 1 of 2 · blockers: 1 · folds: 6` (`reports/stacked-deploy-review-2026-09-23.md`, `## Folds proposed` 1–6, `## Checked against the files`); `08` is ONE round — folds are not re-read (its own rule).
+
+INDEX CARD: `LAWS.md` in full (L59) — L19, L35, L42, L62 / L63, L66, L67, L71. Files: `prompts/2026-09-23/07-stacked-deploy.md` (whole — the file you re-issue, in place), `reports/stacked-deploy-review-2026-09-23.md` (whole), `reports/cto-2026-09-23.md` §4 R11 (his approval list and its condition), R22, R26.
+
+FOLDS:
+- Fold 1 (P6, the blocker) is ALREADY folded by the desk under his R26 override (P6 now names the round-2 report and the R26 case). VERIFY it reads correctly and consistently with STEP-0's other rows; change nothing else in P6 unless it contradicts itself (then say so under ESCALATE).
+- Folds 2, 3, 4 — fold as proposed, smallest text change, each backed by its `## Checked against the files` row.
+- Folds 5, 6 — NARROW the two launch-line strings exactly as proposed (`cobalt jobs *` → `cobalt jobs restarts *`; `cobalt validate*` → `cobalt validate`), in the launch line AND the prompt's own rule-string list. Prove every command `07` runs with `jobs` / `validate` still matches the narrowed string (grep the prompt); if any does not, do NOT narrow that one and say why. A narrowing is a subset of his R11 approval — state it so.
+- Everything else byte for byte. Keep `R__A` / `R__L` placeholders.
+
+REPORT (write LAST): `docs/40 - DevDocs/reports/deploy-fold-2026-09-23.md` — §0 ≤5 lines · one row per fold (before → after, line numbers) · the narrowing proof · `## ESCALATE` · last non-blank line: `DEPLOY PROMPT FOLDED · folds applied: <n> · strings narrowed: <n> · strings widened or added: 0 · ESCALATE: <n>` or `FAILED: <step> — <reason>`.
