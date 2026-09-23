@@ -35,7 +35,8 @@ voice:
   confirm_ttl_s: 60
   # source: engine default — FINAL §11 W7; must exceed stt_timeout_s (G2/K5); read by V4's voice_scratch probe
   scratch_max_age_s: 120
-  # set by X-E4 — PLACEHOLDER until the live Plan-call measurement lands
+  # source: X-E4 — a Plan prompt with NO history was 508–516 input tokens at p50 2492 ms;
+  # 4 short turns add a few hundred tokens at most (the prompt carries transcript + reply only)
   history_turns: 4
   # source: FINAL [F-23] — a ROUTE NAME in configs/cobalt/modelaccess.yaml, never a provider
   plan_route: local.plan

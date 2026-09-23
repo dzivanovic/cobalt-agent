@@ -28,12 +28,14 @@ routes:
     # An empty <think> block is removed and recorded; a non-empty one FAILS
     # the call (think_leak) — the turn never executes (seam §2.4 (2)).
     think_policy: forbid_nonempty
-    # set by X-E4 — PLACEHOLDER until the live measurement lands.
-    timeout_s: 60
-    # set by X-E4 — PLACEHOLDER until the live measurement lands.
-    max_output_tokens: 512
-    # set by X-E4 — json_schema only where the server honours it; in_prompt
-    # otherwise (the caller validates with Pydantic either way).
+    # source: X-E4 (build report ### X-E4) — solo p95 3146 ms, max 3486 ms over 65
+    # Plan calls; 15 s ≈ 4× the max. Contended calls queued 60–72 s behind a
+    # second client and FAIL here loud (timeout) instead of hanging a turn.
+    timeout_s: 15
+    # source: X-E4 — Plans used 23–48 output tokens; 256 is ≈ 5× the largest.
+    max_output_tokens: 256
+    # source: X-E4 — the server accepted response_format json_schema (no 4xx)
+    # and 65/65 replies parsed as a Plan (the caller validates anyway).
     response_format: json_schema
     # LM Studio needs no key today. If it ever does: a VaultManager NAME,
     # fetched at call time — never a value (L4).
