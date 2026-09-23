@@ -247,3 +247,16 @@ exactly as before: the success banner from the returned `StopEdit`
 and anything else. `_check_entry_allowed` stays HERE; `card_stop.py`
 imports it at call time. Pin: `tests/cobalt/test_voice_card_stop.py`
 (five route outputs captured on the base, byte-identical after).
+
+### Voice V1 wiring
+- `app.include_router(voice_web.router)` — the `/voice/*` routes
+  (`voice/web.md`). The POST allowlist test now names `/voice/turn`,
+  `/voice/confirm`, `/voice/cancel`.
+- `app.add_event_handler("startup", voice_web.voice_startup)` (and the
+  matching shutdown): before the first request, the voice scratch-dir lock
+  and side B's start sweep; a lock held by another process FAILS the ASET
+  start loud (X-X22 measured an orphaned child outliving its job).
+- The widget partial: `_render` places `voice_web.widget_html()` before
+  `</body>` on the sheet; `GET /radar` places the same partial into the
+  panel's page (after the panel renders, touching no sheet helper — the
+  `/radar` sentinels still hold).

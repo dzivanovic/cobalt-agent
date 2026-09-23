@@ -24,6 +24,8 @@ carries a span that is not a VERBATIM substring of the transcript
 (`plan_candidate`). A model-access error keeps its own kind. No retry:
 one call per turn; the raw result stays on the failure as a stored input.
 
-## `PLAN_SCHEMA`
+## `plan_schema(agent)`
 The JSON schema sent with the call (as `response_format` or in the system
-message, per the route), built from the committed registry's tool list.
+message, per the route), built from the registry entry's tool list at call
+time — nothing is read at import, because the ASET resident imports this
+module through the voice router.

@@ -144,7 +144,7 @@ def test_plan_turn_makes_exactly_one_call_on_the_registry_route(monkeypatch):
     out = ag.plan_turn(_inputs(), agent=AGENT, turn_id="t-1")
     assert len(calls) == 1
     assert calls[0].route == AGENT.route and calls[0].caller == "voice.plan" and calls[0].request_id == "t-1"
-    assert calls[0].response_schema == ag.PLAN_SCHEMA
+    assert calls[0].response_schema == ag.plan_schema(AGENT)
     assert out.plan.kind == "answer" and out.result.model_returned == "m-returned"
 
 
@@ -175,5 +175,5 @@ def test_a_model_call_error_becomes_a_voice_plan_failure(monkeypatch):
 
 
 def test_the_plan_schema_names_every_allowlisted_tool():
-    tools = ag.PLAN_SCHEMA["properties"]["tool"]["enum"]
+    tools = ag.plan_schema(AGENT)["properties"]["tool"]["enum"]
     assert set(t for t in tools if t) == set(AGENT.tools)

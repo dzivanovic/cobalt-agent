@@ -80,8 +80,16 @@ from .radar_panel import (
 from .store import AsetStore
 from .account_mode import AccountModeUnresolved, resolve as resolve_account_mode
 from .card_stop import set_card_stop
+from cobalt.voice import web as voice_web
 
 app = FastAPI(title="Cobalt ASET Sheet", docs_url=None, redoc_url=None)
+
+# Voice V1 (voice v3 FINAL §9): the `/voice/*` routes, and — before the
+# first request — the scratch-dir lock + side-B start sweep; a lock held by
+# another process fails this start loud (X-X22's guard).
+app.include_router(voice_web.router)
+app.add_event_handler("startup", voice_web.voice_startup)
+app.add_event_handler("shutdown", voice_web.voice_shutdown)
 
 
 class DevEntryRefused(RuntimeError):
@@ -434,7 +442,7 @@ window.SHEET_MODE_DOLLARS = {json.dumps(mode_dollars)};
 window.INITIAL_TICKER = {json.dumps(initial_ticker)};
 </script>
 <script>{JS}</script>
-</div></body></html>"""
+</div>{voice_web.widget_html()}</body></html>"""
 
 
 
@@ -861,11 +869,13 @@ def radar(frame: str | None = None) -> str:
     phone_frame = frame == "phone"
     try:
         view = build_radar_panel(since=None, snapshot=True)
-        return render_radar_page(view, phone_frame=phone_frame)
+        page = render_radar_page(view, phone_frame=phone_frame)
     except Exception as exc:
         message = str(exc) if isinstance(exc, RadarPanelError) else f"{type(exc).__name__}: {exc}"
         logger.error("radar panel FAILED: {}", message)
-        return render_failed_page(message, phone_frame=phone_frame)
+        page = render_failed_page(message, phone_frame=phone_frame)
+    # Voice V1: the same widget partial the sheet carries (no sheet helper runs).
+    return page.replace("</body>", voice_web.widget_html() + "</body>", 1)
 
 
 @app.get("/api/radar/pool")

@@ -75,15 +75,11 @@ def _plan_schema(tools: list[str]) -> dict:
     }
 
 
-def _registry_tools() -> list[str]:
-    from .registry import load_agent
-
-    return sorted(load_agent().tools)
-
-
-#: The JSON schema the Plan call sends (as `response_format` or in the
-#: system message, per the route) — built from the committed registry.
-PLAN_SCHEMA = _plan_schema(_registry_tools())
+def plan_schema(agent: AgentSpec) -> dict:
+    """The JSON schema the Plan call sends (as `response_format` or in the
+    system message, per the route), built from the registry entry at CALL
+    time — nothing is read at import (the ASET resident imports this)."""
+    return _plan_schema(sorted(agent.tools))
 
 
 def build_messages(inputs: PromptInputs, agent: AgentSpec) -> list[ModelMessage]:
@@ -162,7 +158,7 @@ def plan_turn(
 ) -> PlanOutcome:
     """ONE model call, through the one module, on the registry's route."""
     req = ModelRequest(route=agent.route, caller=CALLER, request_id=turn_id,
-                       messages=build_messages(inputs, agent), response_schema=PLAN_SCHEMA)
+                       messages=build_messages(inputs, agent), response_schema=plan_schema(agent))
     try:
         result = call_sync(req, config=config)
     except ModelCallError as e:
@@ -176,4 +172,4 @@ def plan_turn(
     return PlanOutcome(plan=plan, result=result)
 
 
-__all__ = ["CALLER", "PLAN_SCHEMA", "PlanFailed", "PlanOutcome", "build_messages", "plan_turn", "validate_plan"]
+__all__ = ["CALLER", "plan_schema", "PlanFailed", "PlanOutcome", "build_messages", "plan_turn", "validate_plan"]

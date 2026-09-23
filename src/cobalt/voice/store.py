@@ -40,7 +40,7 @@ UPDATABLE = frozenset({
     "transcript", "stt_engine", "stt_model", "stt_revision", "stt_ms",
     "audio_sha256", "audio_bytes", "audio_duration_ms", "audio_deleted_at",
     "plan", "plan_route", "model_returned", "plan_latency_ms", "plan_usage",
-    "resolution", "reply", "pending_action", "expert_write_kind", "expert_write_id",
+    "resolution", "reply", "pending_action", "confirm_of", "expert_write_kind", "expert_write_id",
     "failure_class", "failure_detail",
 })
 _JSON = frozenset({"plan", "plan_usage", "resolution", "pending_action"})
