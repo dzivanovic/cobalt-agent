@@ -237,6 +237,7 @@ def migrated(monkeypatch):
 def weekday_calendar(monkeypatch):
     """The shipped NYSE calendar covers recent years only; the fixtures'
     constructed 2001 dates get a constructed rule: the prior weekday."""
+    import importlib
     from datetime import timedelta
 
     def _prior(day: date) -> date:
@@ -245,7 +246,10 @@ def weekday_calendar(monkeypatch):
             probe -= timedelta(days=1)
         return probe
 
-    monkeypatch.setattr("cobalt.daymode.propose.prior_trading_day", _prior)
+    # By MODULE object: `cobalt.daymode` re-exports a function named
+    # `propose`, so the dotted-string form resolves the wrong object.
+    module = importlib.import_module("cobalt.daymode.propose")
+    monkeypatch.setattr(module, "prior_trading_day", _prior)
 
 
 def _trading(path: Path, day: date = D):
