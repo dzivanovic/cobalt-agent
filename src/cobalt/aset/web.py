@@ -79,6 +79,7 @@ from .radar_panel import (
 )
 from .store import AsetStore
 from .account_mode import AccountModeUnresolved, resolve as resolve_account_mode
+from .card_stop import set_card_stop
 
 app = FastAPI(title="Cobalt ASET Sheet", docs_url=None, redoc_url=None)
 
@@ -1246,22 +1247,15 @@ async def card_stop(card_id: int, request: Request) -> str:
     """
     form = {k: str(v) for k, v in (await request.form()).items()}
     try:
-        _check_entry_allowed()
-        store = CardStore()
-        store.ensure_schema()
-        before = store.open_cards()
-        current = next((c for c in before if c["id"] == card_id), None)
-        if current is None:
-            raise CardStateError(f"card {card_id} is not open — its stop is settled.")
-        new_stop = Decimal(form.get("stop", ""))
-        store.record_stop_edit(card_id, from_stop=current["stop"], to_stop=new_stop)
+        # ONE card-stop function for the sheet and for voice (FINAL [F-06]).
+        edit = set_card_stop(card_id, form.get("stop", ""))
     except (CardStateError, SessionBlocked, DevEntryRefused, InvalidOperation) as e:
         logger.error("card {} stop edit REFUSED: {}", card_id, e)
         return _render(banner=_failed(str(e)))
     except Exception as e:
         return _render(banner=_failed(f"{type(e).__name__}: {e}"))
     return _render(
-        banner=f'<div class="saved">card {card_id}: stop {current["stop"]} → {new_stop} '
+        banner=f'<div class="saved">card {card_id}: stop {edit.from_stop} → {edit.to_stop} '
         "(YOURS — not a state change; it rides in the next transition\'s evidence)</div>"
     )
 
