@@ -35,6 +35,15 @@
                          why: the five kinds, one unresolved row per
                          condition, read by the heartbeat. Additive.
 `0011_archive_incidents.rollback.sql` — drops that one table.
+`0017_voice_turns.sql` — `"user".voice_turns`, voice V1's turn rows
+                         (voice v3 FINAL §7): the state machine, no audio
+                         bytes of any kind. Additive.
+`0017_voice_turns.rollback.sql` — drops that one table.
+
+0012–0016 ARE NOT A GAP BY ACCIDENT: they belong to unmerged branches
+(0012 `bars/chunk-2-0920`, 0013 `setups/seven-0921`, 0014 the H1 build,
+0015 DRC D1, 0016 reserved for stale-score — the desk's L68 assignment).
+Whichever lands later keeps every number, in numeric order.
 
 0006/0007 are S2-P2's, 0008/0009 are S2-P4's. Both tuples stay ordered by
 version; every file is idempotent and neither 0008 nor 0009 names a P2
@@ -76,10 +85,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0009_picks_missed.sql",
     MIGRATIONS_DIR / "0010_archive_progress.sql",
     MIGRATIONS_DIR / "0011_archive_incidents.sql",
+    MIGRATIONS_DIR / "0017_voice_turns.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0017_voice_turns.rollback.sql",
     MIGRATIONS_DIR / "0011_archive_incidents.rollback.sql",
     MIGRATIONS_DIR / "0010_archive_progress.rollback.sql",
     MIGRATIONS_DIR / "0009_picks_missed.rollback.sql",

@@ -86,6 +86,9 @@ CREATED_TABLES: dict[str, Side] = {
     # (L32). `cobalt_user` is granted nothing on either.
     "archive_progress": Side.SYSTEM,
     "archive_incidents": Side.SYSTEM,
+    # db_migrations/0017_voice_turns.sql — voice V1's turn rows (voice v3
+    # FINAL §7). USER: one trader's words and the command they ran (L32).
+    "voice_turns": Side.USER,
 }
 
 #: VIEWS created by database-wide migrations. On a side like any table
