@@ -463,7 +463,10 @@ def test_rollback_down_to_0009_drops_this_branch_alone_and_0007_also_reaches_p4(
         survivors = {
             name
             for name in CREATED_TABLES
-            if name not in NEW_TABLES and name not in P4_TABLES and _regclass(conn, name)
+            # voice V1's 0017 sits ABOVE both bounds, so both rollbacks
+            # correctly drop voice_turns too; it is not a survivor.
+            if name not in NEW_TABLES and name not in P4_TABLES and name != "voice_turns"
+            and _regclass(conn, name)
         }
 
         # (1) THE ARCHIVER'S OWN BOUND: `--down-to 0009` is this branch alone.

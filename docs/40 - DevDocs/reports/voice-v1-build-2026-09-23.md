@@ -1,7 +1,10 @@
 # VOICE V1 BUILD — 2026-09-23 (seat `voice-v1-0923`, Opus 5.5, prompt `prompts/2026-09-23/43-voice-v1-build.md`)
 
 ## §0 Headline
-(run in progress)
+Voice V1 BUILT on `voice/v1-0923` (15 commits over `04b05cd4`): the one model-access module (seam S1, `openai` client — litellm rewrote replies), `"user".voice_turns` (0017), press/type → tiny.en STT → ONE local Plan call → code-resolved read or ONE confirmed card-stop act via `set_card_stop`, widget on `/` and `/radar`, `cobalt voice turn`.
+Offline 2422/0, with-DB 2774/0 (no new red); 471 tests added; 12 of 12 Mac experiments run, 3 DESIGN-CHANGING (X22 orphan → lock kept, E4 contention 60–72 s → 15 s loud timeout, X5 "four fifty"→450 → 10× clarify guard).
+Device session OWED (E1 E3 E5 E8 X3). 5 ASK DESK, 1 rule breach of mine (blocked, not run), 8 paths outside the list (migration registry + pins), RESTARTS carry 6 UNCLASSIFIED.
+ESCALATE: 14.
 
 ## L74
 One block of the L74 shape arrived attached to a tool result on 2026-09-23 13:4x ET (after the first read of the prompt file): it asked for a `Claude-Session: https://claude.ai/code/session_<id>` line in commit messages / PR bodies and named a file-send tool. Recorded ONCE here as data (L74); not followed. Commits carry only the `Co-Authored-By` line of the session's system prompt.
@@ -177,6 +180,20 @@ SUMMARY contended-json_schema n=12 parse_valid=12/12 (100.0%) agree=12/12 (100.0
 Per-call log lines: `input_tokens` 508–516, `output_tokens` 23–48 (e.g. `input_tokens=514 output_tokens=47`), `model_returned=mainframe`. No `DANGER` line: **no hostile / execution / logic utterance was planned as `act/cards.set_stop`**. The one disagreement ("change my daily stop to 500" → `clarify`) is caught by C7's code refusal regardless (`_LOGIC` matches "daily stop" → `unsupported` naming the owner's command; tested). **`/no_think` emits NO think block at all** (`think_block=absent` on all 77 calls; no `reasoning_content` either — `forbid_nonempty` never fired). **`response_format`:** the server ACCEPTED `json_schema` (no 4xx) and 65/65 replies parsed as a `Plan`; `in_prompt` NOT RUN (no need shown).
 **Tunables set from these numbers** (each with its `# source: X-E4` line): `modelaccess.yaml` `timeout_s: 15` (solo max 3486 ms, ≈4×), `max_output_tokens: 256` (max seen 48, ≈5×), `response_format: json_schema`; `voice.yaml` `history_turns: 4` (no-history prompt 508–516 tokens); `stt_timeout_s` stays 20 (X-E2 / X-X20).
 **FINAL's design-changing rows:** parse-valid < 95 % → NO (100 %). A hostile / execution utterance planned as an act on `cards.set_stop` → NO (0; C7's order refusal would catch it anyway). **Contention p95 beyond `stt_timeout_s` + the Plan budget → YES: contended p95 70 863 ms ≫ 20 s + 15 s.** **OUTCOME: DESIGN-CHANGING — while any other client holds `mainframe`, a voice Plan call queues behind that whole generation (60–72 s measured).** With `timeout_s: 15` such a turn FAILS LOUD (`voice_plan` RED "Cobalt can't think right now (timeout)"); the text box does not help (same model). The FINAL's second-small-local-model lane is NOT built in V1 (`[F-18]`). `ASK DESK: X-E4 — voice Plan calls queue 60–72 s behind any other mainframe client (a Qwen Code seat, the JEV local lane); accept loud timeouts in V1, or put a second small local model on its own route before ship (L23/L26, routing lane)? [14:30 ET]` — safe default taken: the 15 s timeout (loud failure, never a hang).
+
+### X-E6
+**Ran** (N5, after WITH-DB's migrate — its turns write `voice_turns` rows) `COBALT_ENV=dev uv run python scratch/voice-x/x_e6_offloop.py` (script: starts `uvicorn cobalt.aset.web:app` on a free loopback port it chooses, `COBALT_ENV=dev`, a throwaway scratch dir, `COBALT_ALLOW_DEV_ENTRY` unset; POSTs `/size` and `/fill` alternately — a refused dev entry, the handlers' whole synchronous render path, no write — back-to-back (i) alone, (ii) while an AUDIO turn (a synthesized clip) transcribes and plans, (iii) while a TEXT turn's Plan call is in flight; stops the pid it started with SIGTERM; deletes its own session's rows). Output verbatim:
+```
+E6 server pid=32691 port=61172
+E6 baseline (no turn): n=40 p50_ms=109.7 p95_ms=121.9 max_ms=133.5
+E6 clip dur_s=13.9
+E6 turn http=200 state=done turn_ms=7255
+E6 during an AUDIO turn (transcribe + plan): n=57 p50_ms=125.7 p95_ms=153.1 max_ms=215.5
+E6 turn http=200 state=done turn_ms=2625
+E6 during a TEXT turn (Plan call in flight): n=22 p50_ms=114.4 p95_ms=129.9 max_ms=154.3
+E6 cleanup rows_deleted=2
+```
+57 `/size`/`/fill` answers came back DURING a 7.3 s audio turn and 22 during a 2.6 s Plan call, at most 215.5 ms each — the event loop was not blocked. **FINAL: "stall → that call is not off the loop — fix it".** **OUTCOME: NO CHANGE** — both the transcribe and the Plan call are off the loop (`asyncio.to_thread(run_turn, …)`).
 
 ### X-X5
 **Ran** (N4) `uv run python scratch/voice-x/x_x5_values.py` (script: 21 carrier phrases — 12 price, 5 share, 4 time — each in several spoken forms, `say` in 2 voices (Samantha, Daniel), webm/opus 48 kHz mono → `tiny.en` → the value span = the text after the carrier's last ` to ` / ` at ` / ` is ` (code) → the C6 parser; tally right / WRONG / clarify against the value MEANT). Summary lines verbatim:
@@ -354,10 +371,98 @@ Runs in order: `1 failed, 2420 passed` (the radar no-form invariant, above) → 
 ### COMMIT
 (below)
 
+## WITH-DB
+- `cp /Users/cobalt/cobalt/.env /Users/cobalt/cobalt-wt/voice-v1/.env` → exit 0.
+- `COBALT_ENV=dev uv run cobalt db migrate` → `-- applying 0001_schemas.sql` … `-- applying 0011_archive_incidents.sql`, `-- applying 0017_voice_turns.sql`; every existing table `OK` (digests unchanged), `voice_turns  user  - -> user  - -> 0  …  - -> d41d8cd9  CREATED`; `29 table(s) proven; … content UNCHANGED on every table.`; `code: 566d1848 (clean)`.
+- `COBALT_ENV=dev uv run cobalt db migrate --proof-only` → `voice_turns  user  user  0  d41d8cd98f00b204e9800998ecf8427e  0.00`; `29 table(s) probed on cobalt_dev`; `NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.`
+- X-E6 ran here (above).
+- `COBALT_ENV=dev uv run pytest -q tests/cobalt -p no:cacheprovider`, FIRST run → `5 failed, 2769 passed, 4 skipped, 1 xfailed, 4 warnings in 204.72s (0:03:24)`:
+  1. `test_archiver_migrations.py::test_rollback_down_to_0009_drops_this_branch_alone_and_0007_also_reaches_p4` — `AssertionError: voice_turns was dropped by a rollback that does not own it`: MY consequence (0017 sits above both bounds, so dropping it is CORRECT); the test's survivor set now excludes `voice_turns` (one more edit to that already-touched pin file).
+  2. `test_voice_lifecycle.py::test_e7_…` — `AssertionError: transcribing`: MY test bug (it reaped with the suite's FROZEN 2026-09-03 clock against rows the real server stamped today); now reaps with real time.
+  3–5. `test_migrate_proof.py::test_every_proof_table_digests_to_the_value_the_old_sql_returns`, `::test_no_statement_the_probe_sends_contains_string_agg`, `test_tenancy.py::TestMigrationRoundTrip::test_twice_is_idempotent_and_the_rollback_round_trips` — all `psycopg.errors.DeadlockDetected`, e.g. `Process 756018 waits for AccessShareLock on relation 165717 …; blocked by process 756046. Process 756046 waits for AccessExclusiveLock on relation 165604 …; blocked by process 756018.` — a SECOND client on `cobalt_dev` taking exclusive locks at the same moment. `ls /Users/cobalt/cobalt-wt/stacked-0923/.env` → present (the other worktrees checked had none): another hub's with-DB work on the shared dev DB is the likely second client (not proven — I cannot see its process). **UNPROVEN (L70); did not recur.**
+  Targeted rerun `COBALT_ENV=dev uv run pytest -q tests/cobalt/test_voice_lifecycle.py tests/cobalt/test_archiver_migrations.py tests/cobalt/test_voice_store.py tests/cobalt/test_voice_confirm.py` → `148 passed, 4 warnings in 4.54s` — **X-X13 with-DB (10 races through two real connections) GREEN; X-E7 kill -9 / restart GREEN.**
+- SECOND full run → **`2774 passed, 4 skipped, 1 xfailed, 4 warnings in 224.92s (0:03:44)`** — failed 0; the 4 skips = BASELINE's 4. **No NEW red against BASELINE.**
+- `rm /Users/cobalt/cobalt-wt/voice-v1/.env` — after the DEMO below (exit 0).
+- **The dev DB is LEFT at 0017 applied** (`"user".voice_turns`, 0 rows — my tests delete their own committed rows). CONSEQUENCE for other lanes (ESCALATE): a branch WITHOUT 0017 running its with-DB suite on `cobalt_dev` will find a `"user"` table its `PLACEMENT` does not know (`test_tenancy::test_every_table_is_on_its_ruled_side`) — the desk's L68 gate re-proves on the stack.
+
+## DEMO
+With `.env` present (DB read), `COBALT_ENV=dev`, each verbatim except ONE redaction: `cobalt_dev` holds one open card whose ticker and stop I cannot prove are constructed, so they are written `<dev ticker>` / `<dev stop>` (L32):
+```
+$ COBALT_ENV=dev uv run cobalt voice turn --text "what are my open cards" --dry-run
+… modelaccess call route=local.plan caller=voice.plan request_id=turn-0e9c5eb1f0634046ada4a760c82bdf9d lane=local kind=openai_compatible model_returned=mainframe latency_ms=2153 input_tokens=494 output_tokens=23 think_block=absent literal_guard=INACTIVE error=none
+turn:  turn-0e9c5eb1f0634046ada4a760c82bdf9d
+state: done
+heard: what are my open cards
+reply: You have 1 open card: <dev ticker> long, FILLED, stop <dev stop>.
+dry run (nothing written):
+{ "plan": { "kind": "answer", "tool": "cards.open", "args": {}, "say": null },
+  "resolution": { "tool": "cards.open", "cards": 1 }, "change": null }
+
+$ COBALT_ENV=dev uv run cobalt voice turn --text "move the stop on XYZ to 4.50" --dry-run
+… modelaccess call route=local.plan … request_id=turn-8033720b0a5243899a9476920ae84eb3 … model_returned=mainframe latency_ms=2650 input_tokens=500 output_tokens=34 think_block=absent literal_guard=INACTIVE error=none
+turn:  turn-8033720b0a5243899a9476920ae84eb3
+state: done
+heard: move the stop on XYZ to 4.50
+reply: I only see <dev ticker> open. Which card is XYZ? I need a little more: which card, and what value?
+dry run (nothing written):
+{ "plan": { "kind": "clarify", "tool": null, "args": {}, "say": "I only see <dev ticker> open. Which card is XYZ?" },
+  "resolution": { "clarify": "plan" }, "change": null }
+```
+No open `XYZ` card exists in `cobalt_dev`, so a `clarify` is the expected output (the model clarified before the resolver had to); no card was inserted to make a demo pass. `literal_guard=INACTIVE`: no `COBALT_MASTER_KEY` on the CLI process — allowed on a LOCAL route (seam §2.4 (1)), recorded on the line. Aside, recorded as it read: the Plan's `say` names the dev card's ticker (it came from the candidate label the prompt carries) and passed the figures check (no number in it).
+
+## CLOSE
+Each its own call:
+- OFFLINE `uv run pytest -q tests/cobalt -p no:cacheprovider` → **`2422 passed, 356 skipped, 1 xfailed, 4 warnings in 89.46s (0:01:29)`** — failed 0. `slow` tests skipped for a missing model: **0** — `uv run pytest -q -rs tests/cobalt/test_voice_transcribe.py tests/cobalt/test_voice_lifecycle.py` → `9 passed, 1 skipped`, the one skip `test_voice_lifecycle.py:123: Postgres env settings not available` (with-DB only; it passed in WITH-DB).
+- `git diff --stat 04b05cd4` → `84 files changed, 8461 insertions(+), 23 deletions(-)`: the WHAT-YOU-BUILD paths plus the paths named in ESCALATE (x).
+- `git diff 04b05cd4 -- src/cobalt/radar src/cobalt/cards src/cobalt/vaultwrite src/cobalt/heartbeat src/cobalt_agent configs/config.yaml ops/com.cobalt.aset.plist ops/com.cobalt.heartbeat.plist` → EMPTY.
+- `git ls-files` (background) then `grep -c -E "\.(webm|ogg|opus|mp4|m4a|wav|aiff|aif|mp3|flac|caf)$"` on its output → `0`.
+- `grep -rln "litellm\|chat/completions" src/cobalt` → `src/cobalt/modelaccess/adapters.py`, `src/cobalt/modelaccess/__init__.py` (both prose — the adapter's docstring explains why it is NOT litellm; nothing in `src/cobalt` imports litellm). `classify/` is not on this branch.
+- `grep -rn "str(v)" src/cobalt/voice` → no output.
+- `grep -rln "bytea\|lo_import\|large object" src/cobalt/db_migrations/0017_voice_turns.sql src/cobalt/voice` → no output.
+- `uv run cobalt jobs restarts 04b05cd4..HEAD` (at `566d1848`) → exit 1, `FAILED: RestartError: one or more changed paths were unclassified`; the table ends `RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.herdr com.cobalt.mainframe com.cobalt.obsidian com.cobalt.radar`; 6 × `ESCALATE: unclassified path …` (ESCALATE (viii)). Static reach: every `src/cobalt/voice/*` and `modelaccess/*` → `com.cobalt.aset,com.cobalt.radar`.
+- `git log --oneline 04b05cd4..HEAD` → 14 commits `cc2e95b6` … `566d1848` (+ this report's commit).
+- `ls scratch/voice-x` → `common.py x_e10_av_license.py x_e10_offline.py x_e2_stt.py x_e2b_5s.py x_e4_plan.py x_e4_summarize.py x_e6_offloop.py x_x1_false_confirm.py x_x20_unlink.py x_x5_values.py x22 x22-launchd.sh` (+ `__pycache__`) — gitignored (`.git/info/exclude:18 scratch/`), NOT committed.
+- `ls -la /Users/cobalt/.cobalt-dev/voice-scratch` → the directory was never created (`ls -la /Users/cobalt/.cobalt-dev` lists only `voice-models`): every test and experiment used a temp scratch dir, so no audio can be left there. The dev model_dir holds the three downloaded sizes (not audio).
+- `ls -la /Users/cobalt/cobalt-wt/voice-v1/.env` → `No such file or directory`.
+- **L32 SELF-CHECK:** I read the report through: no ticker, price or spoken word of his is written — tickers are `XYZ` / `QRS` / `LMN` / `ABCD`, prices invented, setup names read at run time and never written, and the one dev-DB card is redacted in `## DEMO`.
+- **L41 SELF-CHECK:** no key material written — `.env` copied and removed by name only, never read or printed; the constructed `sk-…` strings in tests are shape-only fakes.
+
+## ESCALATE
+**(i) EXPERIMENTS gate table (§X-TABLE)**
+
+| id | gates | who / where | when | result | outcome |
+|---|---|---|---|---|---|
+| E10 | V1 dependency | me, N1–N4 | X-A first | faster-whisper 1.2.1 + av 18.1.0 (BSD-3) / ctranslate2 4.8.2 (MIT) / onnxruntime 1.30.0 (MIT) / flatbuffers (Apache 2.0); FFmpeg reports `LGPL version 3 or later`; the av wheel bundles `libx264` / `libx265` dylibs; offline load of an absent size → `LocalEntryNotFoundError` | NO CHANGE by the letter — FLAGGED, ASK DESK (x264/x265) |
+| E2 | engine + size, tunables | me, N4 | X-A | tiny.en WER 6.62 % (84 files) / 4.55 % (≈5 s set), 12/12 confirm words, p95 272 ms at ≤ 4.85 s, same text twice 84/84, RSS 1041 MB, `wired down` unchanged | NO CHANGE — tiny.en `0d3d19a3…` int8 CPU |
+| X1 | spoken confirm vs tap-only | me, N4 | X-A | 0 of 70 (50 noise + 20 words) normalize to yes / no | NO CHANGE — spoken `yes` stays |
+| X20 | informational | me, N4 | X-A | transcript COMPLETES after the file is unlinked (path and file object) | INFORMATIONAL |
+| X22 | side B's start sweep (lock) | me, N6 | X-A | the python child survived `kill -9` of the job pid, holding :5099 through two launchd respawns; by-hand half CONFOUNDED (UNPROVEN) | DESIGN-CHANGING — the directory lock guards side B's sweep; ASK DESK keep? (default: keep) |
+| G2/K5 | config refusal | C2 test | C2 | `scratch_max_age_s ≤ stt_timeout_s` refused (test); side B sweeps only at start | NO CHANGE |
+| E4 | Plan schema, route tunables | me, N4 | after C3 | solo 65/65 parse-valid, 64/65 agree, p50 2492 / p95 3146 ms, no think block at all, no hostile act; contended (12 of 65) p50 69 429 / p95 70 863 ms | DESIGN-CHANGING — contention; `timeout_s 15` fails loud; ASK DESK second local model |
+| X5, X12 | value parsers | me, N4 + C6 tests | C6 | X5: 6 of 24 spoken prices arrive as WRONG integers ("four fifty" → `450`), 0 clock-shaped, times all clarify; X12: "four fifty" text clarifies | X5 DESIGN-CHANGING — 10× guard added (+ read-back), ASK DESK; X12 NO CHANGE |
+| X13 | single-flight | me + with-DB test | C10 | in memory ×50 and with-DB ×10 (two real connections): ≤ 1 execution, never both `done` and `cancelled` | NO CHANGE |
+| E6 | off-loop proof | me, N5 | after migrate | `/size`+`/fill` p95 121.9 ms alone, 153.1 ms during an audio turn, 129.9 ms during a Plan call | NO CHANGE |
+| E7 (+ sharpening, grok's case) | lifecycle | with-DB tests | C13 / WITH-DB | grok's case in process: applied once, reaped, never again; a real server `kill -9`'d mid-turn: the file survived the kill, the restart's sweep deleted it (side B, no age test — the side-A-favouring result cannot occur), the row reaped `failed` | NO CHANGE |
+| E1, E3, E5, E8, X3 | container, decode of his file, device TTS, peer allow key | DEVICE SESSION (desk + his phone + trading PC, `tailscale serve`) | after this build, BEFORE the ship | OWED | — |
+
+**(ii) THE DEVICE SESSION OWED before ship:** E1 (`MediaRecorder` over `tailscale serve` HTTPS on his phone and the trading-PC browser; my fixtures ASSUMED `audio/webm;codecs=opus` — a different container → a content-type map / fixture fix round), E3 (decode his phone's real file with no system ffmpeg), E5 (`localService` voices on both devices), E8 + X3 (the socket peer `tailscale serve` presents → add it to `allowed_peers`; a LAN client; a spoofed `X-Forwarded-For` → 403) — none runnable without his devices and a `tailscale serve` string.
+**(iii) X-X22:** the orphan child survived; `ASK DESK: keep the directory lock in front of side B's sweep?` — default kept (a live holder → the new process deletes NOTHING and fails its start loud).
+**(iv) Seam §3 JEV re-point:** NOT done here — `src/cobalt/classify` is absent on main (PREFLIGHT); OWED by `jev/trial-0923`'s merge: `_guard_outbound`'s body → a call to `cobalt.modelaccess.guard.refuse_if_secret_shaped`.
+**(v) The R56 reading:** his "it doesn't matter what was in the box in the interim" governs L28 vault edits (V3). V1's card act keeps FINAL `[F-09]`: a changed target is REFUSED and the new before → after read back for re-confirmation (built, tested).
+**(vi) PRODUCTION PREREQUISITES for V1's deploy prompt:** the model fetched into `/Users/cobalt/.cobalt/voice-models/` (tiny.en revision `0d3d19a32d3338f10357c0889762bd8d64bbdeba`; the FINAL puts the model-fetch step in V4 — V1 cannot serve speech-to-text in production without it; until then the widget shows RED "speech-to-text down (model missing)" and the text box works); migration `0017` (`--allow-prod` in the deploy only); `com.cobalt.aset` restart inside the pause (L43 / L66) — and the derivation also names `com.cobalt.radar` (it imports `cobalt.cli`, which now mounts `voice_cli`); the `COBALT_VOICE_*` exports in `ops/start_aset.sh` (committed here); the production scratch dir `/Users/cobalt/.cobalt/voice-scratch` is created 0700 by code at the first start; the phone reaches the widget only after `tailscale serve` (V4 / the device session) — until then the Mac browser on loopback only; a voice config error now FAILS the ASET start (L1 — the sheet goes down with it; the deploy's smoke must load the voice config).
+**(vii)** FINAL `[F-25]` (no auth on ASET routes) is NOT widened for loopback and NOT closed by V1; `/voice/*` adds the socket-peer gate the sheet routes do not have; the backlog access token closes both.
+**(viii) RESTARTS** (verbatim tail): `RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.herdr com.cobalt.mainframe com.cobalt.obsidian com.cobalt.radar`, with **6 UNCLASSIFIED** paths — `configs/cobalt/agents/voice.yaml`, `configs/cobalt/modelaccess.yaml`, `configs/cobalt/voice.yaml` (UNCLASSIFIED CONFIG: no `reads:` declaration names them — the true reader is `com.cobalt.aset` (and the CLI)), `ops/start_aset.sh`, `pyproject.toml`, `uv.lock` (UNCLASSIFIED: the all-residents fallback). The desk's jobs registry needs the three configs declared as `com.cobalt.aset` reads (a `configs/cobalt/jobs.yaml` edit — outside my paths). **Unmerged branches sharing my paths (L68):** `jev/trial-0923` (`src/cobalt/cli.py` — both add a registration line; `classify/` re-point), `bars/chunk-1a-0920`, `bars/chunk-2-0920` (0012), `setups/seven-0921` (0013 + the SAME five registry pins I edited — a textual conflict certain on merge), `deploy/stacked-0923`, `s2/smoke-fix-0922`, `sprint-2/cards` (`db_migrations`); H1 (0014), DRC D1 (0015), stale-score (0016) touch the same `FORWARD`/`REVERSE` tuples and pins.
+**(ix) ASK DESK list (each with its safe default taken):** X-E10 x264/x265 (continue) · C2 backup-source check in the resident vs the suite (suite check) · X-X22 lock (keep) · X-E4 contention / second local model (15 s loud timeout) · X-X5 integer prices (10× guard + read-back).
+**(x) Paths changed OUTSIDE the WHAT-YOU-BUILD list (each a necessary consequence; the desk rules):** `src/cobalt/db_migrations/__init__.py` (register 0017); `tests/cobalt/test_archiver_migrations.py`, `test_p4_migrations.py`, `test_radar_migration.py`, `test_radar_score_migration.py`, `test_tenancy.py` (one 0017 entry each); `tests/cobalt/test_radar_panel_cards.py` (POST allowlist + the `/radar` expectation gains the widget); `docs/40 - DevDocs/cobalt/aset/card_stop.md` (DevDoc of the new `aset/card_stop.py`, which the prompt allows).
+**(xi)** L74: one line, recorded once (`## L74`). MEMORY / RULING: none proposed.
+**(xii) RULE BREACH by me** (section below): one chained, unlisted Bash call (`sleep 45; tail …`) blocked by the harness before it ran — the desk rules whether it is an L62/L63 FAILED.
+**(xiii) The shared dev DB:** `cobalt_dev` is left at `0017` (as the prompt says); another lane's with-DB suite without 0017 will see an unknown `"user".voice_turns`. My first with-DB run hit three `DeadlockDetected` from a concurrent second client (`stacked-0923` has its `.env` present) — UNPROVEN, not recurring; the desk's one-with-DB-suite-at-a-time rule (R63) was not something I could see from here.
+**(xiv)** Also recorded, not ruled: ASET now FAILS its start on a voice config error or a held scratch lock (L1, by the prompt) — the sheet goes down with voice; `widget_html()` is loaded on every sheet render.
+
 ## RULE BREACH (recorded when it happened, carried to ESCALATE)
 At 14:4x ET (between `date` 14:30:48 and 14:42:18) I issued ONE Bash call outside the allowlist and the UNATTENDED RULES' shape: `sleep 45; tail -c 300 <my own suite's output file>` (chained; `sleep` unlisted). The harness BLOCKED it before execution (`Blocked: sleep 45 followed by: tail … Do not chain shorter sleeps …`); nothing ran; not re-shaped or retried. Not a permission-classifier denial, no dialog. Recorded for the desk to rule whether it counts as an L62 / L63 denial (= FAILED); my reading: a harness block of my own malformed call, no missing permission — the run continued.
 
 ## CONTINUE
-next: commit C11 + C12 (voice/turn.py, voice/web.py, aset/web.py wiring) and C13 (CLI + lifecycle tests) once the full suite (running) is green; then WITH-DB (migrate → X-E6 → X-X13 / X-E7 with-DB tests → suite), DEMO, CLOSE
+next: none — the run is complete (C11+C12 `8bed61d3`, C13 `566d1848`, WITH-DB, DEMO, CLOSE done; the two with-DB test fixes and this report ride the final commit).
 
-(run in progress — next step under ## CONTINUE)
+VOICE V1 BUILT 566d1848 | on 04b05cd4 | migration 0017 | offline 2422/0 | with-DB 2774/0 | experiments run: 12 of 12 | design-changing results: 3 | stt: faster-whisper/tiny.en | plan route: local.plan (mainframe) | device session: OWED (E1 E3 E5 E8 X3) | RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.herdr com.cobalt.mainframe com.cobalt.obsidian com.cobalt.radar (6 UNCLASSIFIED) | tests added: 471 | ESCALATE: 14

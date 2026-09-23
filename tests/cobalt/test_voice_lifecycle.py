@@ -163,9 +163,11 @@ def test_e7_kill_mid_turn_then_restart_sweeps_the_file_and_the_row_is_reaped(tmp
         assert [p.name for p in scratch.iterdir()] == [".lock"]
         rows = [r for r in _rows(store, session)]
         assert len(rows) == 1 and rows[0]["state"] in ("received", "transcribing", "planned", "failed")
-        from cobalt.session import clock as clock_mod
+        from datetime import datetime, timezone
 
-        store.reap(now=clock_mod.now_utc() + timedelta(minutes=10),
+        # The server stamped its row with the REAL clock; the suite freezes
+        # `session.clock.now_utc` at 2026-09-03, so the reap uses real time.
+        store.reap(now=datetime.now(timezone.utc) + timedelta(minutes=10),
                    limits=reap_limits(stt_timeout_s=20, plan_timeout_s=15))
         row = store.get(rows[0]["turn_id"])
         assert row["state"] == "failed", row["state"]
