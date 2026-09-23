@@ -169,6 +169,32 @@ STEP-1: 17 experiments, 17 AS EXPECTED, 0 NOT, 0 UNPROVEN. No stop.
 
 ## STEP-2
 
+### T (RED)
+File `tests/cobalt/test_stale_score.py` (17 tests; new `src/` symbols imported INSIDE each test so every test goes red on its own). Run against the BASE code (`src/` untouched): `uv run pytest -q tests/cobalt/test_stale_score.py -p no:cacheprovider --tb=line` → `15 failed, 2 passed in 6.17s`. RED lines VERBATIM:
+
+| T | test | RED line |
+|---|---|---|
+| (iii) X1 | `test_x1_all_dots_tapped_on_stale_bars_scores_nothing_and_names_the_close` | `AssertionError: card_score 64 published on stale bars` |
+| (iii) X5a | `test_x5a_no_closed_bar_today_gives_no_proximity_not_the_maximum` | `AssertionError: proximity 1 from no bar` |
+| (i) | `test_intraday_stale_is_required_and_set_on_every_return_path` | `assert (None is not None)` (no such field) |
+| (ii) | `test_score_last_is_none_iff_stale_and_raises_on_a_fresh_member_without_a_price` | `ImportError: cannot import name 'score_last' from 'cobalt.cards.scoring'` |
+| (ii) X18 | `test_every_score_card_caller_takes_its_last_from_score_last` | `AssertionError: [('audit_export.py', 364, 'score = score_card(dots, last=ev.last_price if ev.last_price is not None else trigger, …` |
+| (iii) | `test_score_card_with_no_last_nulls_proximity_and_score_and_keeps_dot_reasons` | `AttributeError: module 'cobalt.cards.scoring' has no attribute 'stale_reason'` |
+| (iv) X12 | `test_null_proximity_publishes_json_null_never_the_string_none` | `AssertionError: assert <class 'decimal.Decimal'> == (Decimal \| None)` |
+| (v) X6 | `test_htf_level_proximity_on_stale_bars_is_input_stale_with_no_engine_grade` | `AssertionError: assert (False is True)` (`FactorObservation(… stale=False …)`) |
+| (vi) X14 | `test_daily_missing_input_stale_with_a_fresh_close_keeps_proximity` | `AttributeError: 'MemberEvaluation' object has no attribute 'intraday_stale'` |
+| (vii) | `test_one_new_version_string_and_the_previous_is_not_supported` | `AssertionError: assert ('s2p2.2' == 's2p2.1'` |
+| (viii) | `test_audit_export_refuses_another_version_by_name_before_the_replay[None]` | `AssertionError: replay_receipt reached — the version gate must refuse first` |
+| (viii) | `…[s2p2.2]` | `AssertionError: replay_receipt reached — the version gate must refuse first` |
+| (ix) X11 | `test_audit_replay_path_never_emits_proximity_one_for_a_member_without_a_price` | `Failed: DID NOT RAISE <class 'cobalt.radar.evaluate.EvaluateError'>` |
+| (xi) R38 | `test_r38_premarket_stale_bar_nulls_and_the_next_bar_lifts_it_with_no_tap` | `AttributeError: 'MemberEvaluation' object has no attribute 'intraday_stale'` |
+| (xii) X27 | `test_stale_card_stage_and_replay_reason_are_byte_identical` | `AssertionError: assert (Decimal('0.919355') is None)` |
+| (x) R37+R41 | `test_r37_r41_a_null_watch_card_sinks_below_every_scored_one_and_nulls_order_by_pool_position` | GREEN-as-pin (`ladder_order` untouched; red if the WATCH key stops putting NULL last or NULL ties stop falling to `pool_position`) |
+| (viii) guard | `test_audit_export_same_version_run_still_exports` | GREEN by design (the gate must not refuse a same-version run) |
+
+### C
+Not started — LANE STOP at 14:15:34 (the with-DB BASELINE must run on the base tree before the first `src/` edit; `## LANE`).
+
 ## STEP-3
 
 ## STEP-4
@@ -192,12 +218,21 @@ STEP-1: 17 experiments, 17 AS EXPECTED, 0 NOT, 0 UNPROVEN. No stop.
 | time (`date`) | (a) `ls -la /Users/cobalt/cobalt-wt/*/.env` | (b) `ls /Users/cobalt/cobalt-wt/DEVDB-HOLD` | result |
 |---|---|---|---|
 | 14:02:16 (PREFLIGHT) | `(eval):1: no matches found: /Users/cobalt/cobalt-wt/*/.env` | `No such file or directory` | pass (no copy needed yet) |
+| 14:15:34 (retry before STEP-2 C) | `-rw-------  1 cobalt  staff  2186 Sep 23 14:15 /Users/cobalt/cobalt-wt/drc-d1/.env` | `No such file or directory` | **LANE STOP** — held by `/Users/cobalt/cobalt-wt/drc-d1/.env` |
 | 14:13:43 (BASELINE with-DB) | `-rw-------  1 cobalt  staff  2186 Sep 23 14:13 /Users/cobalt/cobalt-wt/drc-d1/.env` | `No such file or directory` | **HELD by `/Users/cobalt/cobalt-wt/drc-d1/.env`** — no copy; offline STEP-1 runs on (no gate needed); gate re-tried before any `src/` change |
 
 ## ESCALATE
 
+1. **MIGRATION NUMBER CONFLICT (L72 P-b).** This prompt settles `0015` as this build's R40 view migration (under X30 (A)), `0016` = DRC D1. The desk's launch rows say otherwise: R66 (`cto-2026-09-23.md:69`) "Migration, if its STEP-3 builds one: `0016` (reserved, R63)"; R62 (`:65`) gives `0015` to DRC D1 (`53`); R63 (`:66`) "0015 D1, 0016 reserved for stale-score's conditional migration, 0017 voice". I pick neither silently. It matters only if X30 = (A). `ASK DESK: which number does the R40 view migration take — 0015 (this prompt) or 0016 (R62/R63/R66)? [14:15]` Safe default until answered (the prompt's own for a number question): no migration, decision (B)'s ASK.
+2. PREFLIGHT grep `intraday_stale: bool` hit `evaluate.py:696` — the keyword of `_factor_observations`, not the `MemberEvaluation` field; `score_last` absent. Informational, no action.
+3. **LANE STOP 14:15:34** — the dev-DB lane is held by `/Users/cobalt/cobalt-wt/drc-d1/.env` (DRC D1 build `53`, R62, which the desk launched in parallel "takes cobalt_dev only when no other .env exists"). R58 09-23 put this build FIRST in the lane; `53` took it at 14:13. Not a failure; relaunch the same line when the lane is free.
+4. The setups branch tip moved to `9efddbc5` (a docs commit above the BASE) — recorded, not fatal (PREFLIGHT).
+
 ## CONTINUE
 
-next: BASELINE (AUTHORIZATION + PREFLIGHT passed 14:0x)
+next: BASELINE with-DB — LANE HELD by /Users/cobalt/cobalt-wt/drc-d1/.env at 14:15:34 (`date`)
 
-(run in progress — step 0 of 5, next under ## CONTINUE)
+DONE: AUTHORIZATION, PREFLIGHT, BASELINE offline (2482 passed / 0 failed), STEP-1 (17/17 AS EXPECTED, commit `1a5c6928`), STEP-2 T (RED recorded; `tests/cobalt/test_stale_score.py` wip-committed RED).
+ON RELAUNCH: `git status` / `git log --oneline 51afdad0..HEAD` / `ls -la .env` → LANE GATE → cp → `COBALT_ENV=dev uv run cobalt db migrate` → with-DB suite (background) → rm → `ls` proof (the tree's `src/` is still the BASE's: only tests/docs changed) → then STEP-2 C (design recorded in the T table; nothing of C written yet). Note: the wip test file is RED by design until STEP-2 C; the with-DB baseline counts those 15 red lines as this build's own, not `cobalt_dev`'s.
+
+(run in progress — step 2 of 5, next under ## CONTINUE)
