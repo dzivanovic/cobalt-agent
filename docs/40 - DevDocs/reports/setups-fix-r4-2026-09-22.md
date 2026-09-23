@@ -112,16 +112,57 @@ None (commit 1: the committed fixtures are not yet re-cut).
 OFFLINE → `2464 passed, 361 skipped, 1 xfailed, 15 warnings in 483.71s (0:08:03)` → **2464/0** = 2457 + 7 new F4 cases.
 
 ### COMMIT (commit 1)
+`c000411 fix(setups): round 4 — F4 cutter keeps the New York wall clock` — `git show --stat HEAD`: `.../reports/setups-fix-r4-2026-09-22.md | 21 ++++++++-` · `tests/cobalt/test_setups_fix_r4.py | 52 +++…` · `tests/fixtures/radar/_cut_setups_fixtures.py | 30 +++++++++++--` · `3 files changed, 98 insertions(+), 5 deletions(-)`.
+
+### THE RE-CUT (commit 2 of 2)
+- `uv run python tests/fixtures/radar/_cut_setups_fixtures.py <12's argv, § CUT 3.3>` (background; `12`'s own raw bars / membership files and the production daily-cache CSV, read by path, none edited) → exit 0, VERBATIM: `wrote /Users/cobalt/cobalt-wt/setups-c1/tests/fixtures/radar/membership-setups-rubberband.real-shape.json (1 rows)` / `wrote …/bars-setups-rubberband.real-shape.json (956 bars)` / `wrote …/daily-bars-setups-rubberband.real-shape.csv (40 rows)` — = `12`'s counts.
+- Leak proofs: `grep -rl "2026-09-" tests/fixtures/radar/` → `tests/fixtures/radar/_cut_panel_fixtures.py` / `tests/fixtures/radar/_cut_p2_fixtures.py` (the two precedent `.py` files only — none of the three outputs) · `grep -c "user_id" tests/fixtures/radar/bars-setups-rubberband.real-shape.json` → `0`.
+- `git diff --stat -- tests/fixtures/radar` → `.../radar/bars-setups-rubberband.real-shape.json | 1912 ++++++++++----------` / `.../membership-setups-rubberband.real-shape.json | 4 +-` / `2 files changed, 958 insertions(+), 958 deletions(-)`. The daily CSV: **UNCHANGED** (as expected — date-only rows, `cut_daily` untouched). Membership diff VERBATIM: `-    "entered_at": "2026-01-07 08:01:57.469346+00:00",` → `+    "entered_at": "2026-01-07 09:01:57.469346+00:00",` · `-    "left_at": "2026-01-08 00:00:00+00:00",` → `+    "left_at": "2026-01-08 01:00:00+00:00",` (+1 h in UTC = the same New York wall clock on an EST day).
+- F5's field added to the printing test in THIS commit (`formed_bar_ny=…`, `from zoneinfo import ZoneInfo`; no assertion changed).
+- THE PIN: `uv run pytest tests/cobalt/test_setups_fixture_cut.py -s -k engine_output` → `1 passed, 1 deselected in 4.50s`, line VERBATIM:
+  `CUT ENGINE OUTPUT side=short formed_bar_ts=2026-01-07T15:24:00+00:00 trigger.price=0.6690 stop.price=0.87 anchor=Anchor(object='Extension', direction='up', bar_ts=datetime.datetime(2026, 1, 7, 15, 24, tzinfo=datetime.timezone.utc)) scan_instant=2026-01-07T15:26:40+00:00 formed_bar_ny=2026-01-07T10:24:00-05:00`
+- The five constants re-copied from that line VERBATIM under the `DEF_WRITTEN_*` RULE, each comment `# engine on the corrected cut day at R4-F4 on 8da261a; a blind house re-derives it (13, [F-16] (1))` → `## PINS MOVED`. The geometry guard holds by the test (short → stop above trigger).
+
+### A1 (commit 2)
+| test | old | new | row |
+|---|---|---|---|
+| `test_setups_fixture_cut.py::test_rubberband_forms_on_the_cut_day` (the five `DEF_WRITTEN_RUBBERBAND_CUT_*` it asserts) | the mis-timed cut's values | the corrected cut's values (`## PINS MOVED`), same five assertions + the geometry guard, same strength | F4 (by design) |
+
+`uv run pytest tests/cobalt/test_setups_fixture_cut.py tests/cobalt/test_setups_lego.py -q` → `14 passed in 131.42s (0:02:11)`; `grep -n "AWAITING_A_DAY" tests/cobalt/test_setups_lego.py` → `43:AWAITING_A_DAY: frozenset[str] = frozenset({"hitchhiker"})` (unchanged; gate 2's `CUT_DAY_CHECKS` passes on the re-cut).
+
+### SUITE (commit 2)
+OFFLINE → `2464 passed, 361 skipped, 1 xfailed, 15 warnings in 478.66s (0:07:58)` → **2464/0** (no new test in commit 2).
+
+### COMMIT (commit 2)
 (below)
 
 ## F5
-(pending)
+C3: the correspondence, in New York local time.
+
+### C
+T: the printing test `test_rubberband_cut_day_engine_output` gained ONE field, `formed_bar_ny=<formed_bar_ts in America/New_York, isoformat>` — added in F4's commit 2 (said so there); no assertion changed. C: `## C3` below. Every time in it is printed output (the stored day's from `12`'s `## FIND — rubberband` lines; the pin's from the new field) — none is my arithmetic (L35).
 
 ## C3
-(pending)
+| source | line VERBATIM | formed bar, New York local |
+|---|---|---|
+| stored day, `12` `## FIND — rubberband` (the replay of the PRODUCTION-synced definition on `<real day>`), the cut ticker's FORMED line | `10:26:40 ET BTTC rubberband FORMED short trigger 0.6690 stop 0.87 (formation bar 10:24 ET)` | `10:24 ET` |
+| corrected cut pin (the NEUTRAL test shape `setups_shapes.SHAPES["rubberband"]` on the re-cut fixture, F4 commit 2) | `CUT ENGINE OUTPUT side=short formed_bar_ts=2026-01-07T15:24:00+00:00 trigger.price=0.6690 stop.price=0.87 … formed_bar_ny=2026-01-07T10:24:00-05:00` | `10:24:00-05:00` |
+| (for the record) the OLD, mis-timed cut pin, `12` `## PIN` 4.1 | `CUT ENGINE OUTPUT side=long formed_bar_ts=2026-01-07T15:34:00+00:00 trigger.price=0.8400 stop.price=0.66 …` | not printed then (no NY field) |
+
+**Verdict: `CORRESPONDS — the stored day's BTTC line (short · trigger 0.6690 · stop 0.87 · formation bar 10:24 ET)`.** Side, trigger, stop and the New York formation-bar time all match the stored day's first BTTC line. The hour shift (cause (1) of the check) is REMOVED by F4 (`test_f4_an_edt_time_re_dated_onto_an_est_day_keeps_its_new_york_clock`, `test_f4_a_time_moves_by_its_new_york_local_date`). The definition difference (cause (2): the production-synced note vs the neutral shape, `12` ESCALATE (i)) is NOT RUN here (his note, L32; no production command in this line) — on this day it does not change the first formation. That is a reading of two printed lines, not proof the two definitions agree in general → UNPROVEN beyond that reading.
 
 ## PINS MOVED
-(pending)
+F4 only; `tests/cobalt/test_setups_fixture_cut.py`. Blind seat that must re-derive them: **`13`** (on the re-cut fixture, AFTER this round).
+
+| constant | old | new |
+|---|---|---|
+| `DEF_WRITTEN_RUBBERBAND_CUT_SIDE` | `"long"` | `"short"` |
+| `DEF_WRITTEN_RUBBERBAND_CUT_FORMED_BAR` | `datetime.fromisoformat("2026-01-07T15:34:00+00:00")` | `datetime.fromisoformat("2026-01-07T15:24:00+00:00")` |
+| `DEF_WRITTEN_RUBBERBAND_CUT_TRIGGER` | `"0.8400"` | `"0.6690"` |
+| `DEF_WRITTEN_RUBBERBAND_CUT_STOP` | `"0.66"` | `"0.87"` |
+| `DEF_WRITTEN_RUBBERBAND_CUT_ANCHOR` | `"Anchor(object='Extension', direction='down', bar_ts=datetime.datetime(2026, 1, 7, 15, 34, tzinfo=datetime.timezone.utc))"` | `"Anchor(object='Extension', direction='up', bar_ts=datetime.datetime(2026, 1, 7, 15, 24, tzinfo=datetime.timezone.utc))"` |
+
+No other `DEF_WRITTEN_*` moved (the four committed-day pin files: CLOSE `git diff` EMPTY).
 
 ## CLOSE
 (pending)
@@ -136,6 +177,6 @@ OFFLINE → `2464 passed, 361 skipped, 1 xfailed, 15 warnings in 483.71s (0:08:0
 (pending)
 
 ## CONTINUE
-next: F3 (F1 committed `2817896`; F2 done, gitignored, no commit)
+next: F4 commit 2 (suite running on the re-cut; F1 `2817896`, F2 gitignored, F3 `b77d8e5`, F4 commit 1 `c000411`), then CLOSE
 
 (run in progress — row 0 of 5, next under ## CONTINUE)

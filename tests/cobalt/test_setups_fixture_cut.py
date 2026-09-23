@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import radar_p2_support as sup
 import setups_shapes as shapes
@@ -90,23 +91,24 @@ def test_rubberband_cut_day_engine_output():
     print(
         f"CUT ENGINE OUTPUT side={f.trade_direction} formed_bar_ts={f.formed_bar_ts.isoformat()} "
         f"trigger.price={f.trigger.price} stop.price={f.stop.price} anchor={f.anchor!r} "
-        f"scan_instant={at.isoformat()}"
+        f"scan_instant={at.isoformat()} "
+        f"formed_bar_ny={f.formed_bar_ts.astimezone(ZoneInfo('America/New_York')).isoformat()}"
     )
 
 
 # --- FINAL §9 point (1): the five values, from the DEFINITION on the cut bars ---
-# engine on the cut day at 74eefd8; a blind house re-derives it (13, [F-16] (1))
-DEF_WRITTEN_RUBBERBAND_CUT_SIDE = "long"
-# engine on the cut day at 74eefd8; a blind house re-derives it (13, [F-16] (1))
-DEF_WRITTEN_RUBBERBAND_CUT_FORMED_BAR = datetime.fromisoformat("2026-01-07T15:34:00+00:00")
-# engine on the cut day at 74eefd8; a blind house re-derives it (13, [F-16] (1))
-DEF_WRITTEN_RUBBERBAND_CUT_TRIGGER = "0.8400"
-# engine on the cut day at 74eefd8; a blind house re-derives it (13, [F-16] (1))
-DEF_WRITTEN_RUBBERBAND_CUT_STOP = "0.66"
-# engine on the cut day at 74eefd8; a blind house re-derives it (13, [F-16] (1))
+# engine on the corrected cut day at R4-F4 on 8da261a; a blind house re-derives it (13, [F-16] (1))
+DEF_WRITTEN_RUBBERBAND_CUT_SIDE = "short"
+# engine on the corrected cut day at R4-F4 on 8da261a; a blind house re-derives it (13, [F-16] (1))
+DEF_WRITTEN_RUBBERBAND_CUT_FORMED_BAR = datetime.fromisoformat("2026-01-07T15:24:00+00:00")
+# engine on the corrected cut day at R4-F4 on 8da261a; a blind house re-derives it (13, [F-16] (1))
+DEF_WRITTEN_RUBBERBAND_CUT_TRIGGER = "0.6690"
+# engine on the corrected cut day at R4-F4 on 8da261a; a blind house re-derives it (13, [F-16] (1))
+DEF_WRITTEN_RUBBERBAND_CUT_STOP = "0.87"
+# engine on the corrected cut day at R4-F4 on 8da261a; a blind house re-derives it (13, [F-16] (1))
 DEF_WRITTEN_RUBBERBAND_CUT_ANCHOR = (
-    "Anchor(object='Extension', direction='down', "
-    "bar_ts=datetime.datetime(2026, 1, 7, 15, 34, tzinfo=datetime.timezone.utc))"
+    "Anchor(object='Extension', direction='up', "
+    "bar_ts=datetime.datetime(2026, 1, 7, 15, 24, tzinfo=datetime.timezone.utc))"
 )
 
 
