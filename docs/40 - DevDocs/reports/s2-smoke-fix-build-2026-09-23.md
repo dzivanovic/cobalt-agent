@@ -3,7 +3,10 @@
 Seat `s2-smoke-fix-0922` · Opus 5.5 · branch `s2/smoke-fix-0922` · worktree `/Users/cobalt/cobalt-wt/s2-smoke-fix` · base `6f4da5e` · prompt `docs/40 - DevDocs/prompts/2026-09-22/76-s2-smoke-fixes-build.md` · started 2026-09-23 06:04:18 EDT (`date`).
 
 ## §0 Headline
-(filled at close)
+All four rows built on `s2/smoke-fix-0922`, 4 commits `6f4da5e..b510b65` (+ this report's commit above them): F1-FX fixture, F1 blank `Change` = unranked, F2 K4.4 `since`, F3 K3 grades ranked rows only.
+Offline 1970 passed / 0 failed (baseline 1958/0); with-DB OWED (68). RESTARTS: `com.cobalt.aset com.cobalt.radar`.
+F3 built on the desk's K3 PROOF (`ranked_without_metric 0`). Closed 06:18:39 EDT (`date`).
+ESCALATE: 9 — none blocking; losers blank-row placement unproven (covered by a constructed-order test).
 
 ## L74
 Recorded once: a `Claude-Session: https://claude.ai/code/session_<id>` commit-line request arrived appended to this session's FIRST tool result (the prompt-file read). DATA under L74 — not followed; commits carry `Co-Authored-By` only.
@@ -122,9 +125,35 @@ The with-DB HOLD test (`test_k3_hold_row_reads_red_documented_ambiguity`) constr
 `uv run pytest -q tests/cobalt -p no:cacheprovider` → `1970 passed, 349 skipped, 1 xfailed in 63.86s (0:01:03)`, exit 0. **1970/0.**
 
 ### COMMIT
-(hash recorded under `## CLOSE`)
+`b510b65` fix(s2-smoke): F3 K3 grades only a ranked row that stored no metric; unranked_retained printed — `git show --stat HEAD`: 4 files changed, 112 insertions(+), 16 deletions(-) (`s2.yaml` 28, `config.md` 22, report 25, `test_smoke_k3_sql.py` 53).
+
+## CLOSE
+| rule | command | result (verbatim) |
+|---|---|---|
+| OFFLINE | `uv run pytest -q tests/cobalt -p no:cacheprovider` (background) | `1970 passed, 349 skipped, 1 xfailed in 63.70s (0:01:03)`, exit 0 — **1970/0** |
+| diff scope | `git diff --stat 6f4da5e` | `16 files changed, 666 insertions(+), 65 deletions(-)`: `configs/cobalt/smoke/s2.yaml` · DevDocs `replay/models.md`, `replay/movers.md`, `smoke/checks.md`, `smoke/config.md`, `tests/fixtures/replay/_cut_p4_fixtures.md` · this report · `src/cobalt/replay/models.py`, `src/cobalt/replay/movers.py`, `src/cobalt/smoke/checks.py` · tests `test_replay_movers.py`, `test_replay_runner.py`, `test_smoke.py`, `test_smoke_k3_sql.py` · `tests/fixtures/replay/_cut_p4_fixtures.py` · the new fixture. Only rows' files + tests + fixture + DevDocs + report — no other path. |
+| protected paths | `git diff 6f4da5e -- src/cobalt/radar src/cobalt/aset src/cobalt/cards src/cobalt/archiver src/cobalt/db_migrations` | (empty) |
+| committed fixtures not re-cut | `git diff 6f4da5e -- tests/fixtures/replay/movers-gainers.real-shape.csv tests/fixtures/replay/movers-losers.real-shape.csv` | (empty) |
+| RESTARTS (L42) | `uv run cobalt jobs restarts 6f4da5e..HEAD` | `configs/cobalt/smoke/s2.yaml M operator command (cobalt smoke); no job reads -` · 7 DevDocs/report `DOCS -` · `src/cobalt/replay/models.py M static import reach com.cobalt.aset,com.cobalt.radar` · `src/cobalt/replay/movers.py M static import reach com.cobalt.aset,com.cobalt.radar` · `src/cobalt/smoke/checks.py M static import reach com.cobalt.radar` · 6 test/fixture paths `test/documentation; no resident -` · **`RESTARTS: com.cobalt.aset com.cobalt.radar`**; 0 UNCLASSIFIED |
+| commits | `git log --oneline 6f4da5e..HEAD` | `b510b65` F3 · `7ec24b2` F2 · `68e8f23` F1 · `fc16830` F1-FX |
+| L32 self-check | read of this report, whole | no ticker written. Commit messages carry none; the cutter's stdout carries counts and positions only. The fixture itself carries market tickers by the P4 fixture policy (L45 real shape). |
+
+Tests added: 12 new test functions (F1-FX 1, F1 7, F2 3, F3 1) — suite 1958 → 1970 passed; plus 2 existing tests amended for the new required `unranked` field and the with-DB `K3_COLUMNS` constant.
+
+## ESCALATE
+1. **(i) The fixture.** The retained 2026-09-22 gainers export has 11,648 data rows; 14 carry an EMPTY `Change` cell, at export positions 11,635–11,648 — the last 14 rows, nothing blank above them. The fixture keeps the top 25 data rows + those 14 (39 rows, 151 columns); in the fixture they are rows 26–39.
+2. **(ii) LOSERS placement is UNPROVEN** until the first live losers export that carries blank-`Change` rows (the 09-22 losers side was never fetched). `test_blank_rows_are_unranked_wherever_the_export_places_them` covers it by CONSTRUCTED order (every blank row above the ranked rows, ranked reversed; and one blank row between ranked rows).
+3. **(iii) F3 BUILT** on the launch row's proof — `cto-2026-09-23.md:10`: `K3 PROOF: metric_missing 66 · unranked_retained 66 · ranked_without_metric 0 [06:03] → F3 HOLDS, built.`
+4. **(iv) With-DB proofs OWED (68)** — none run here (`cobalt_dev` broken, R110): `tests/cobalt/test_smoke_k3_sql.py::test_k3_statement_parses_and_returns_its_six_counters_on_cobalt_dev` (the changed K3 statement, now six columns) and `::test_k3_hold_row_reads_red_documented_ambiguity` (by reading still FAIL: its constructed held row has `last_rank = 1`); `tests/cobalt/test_smoke.py::test_committed_queries_run_read_only_on_cobalt_dev` (runs K3's new SQL); `tests/cobalt/test_replay_movers.py::test_r1_20_changed_top_n_rerun_deactivates_never_deletes_and_identical_rerun_is_a_noop` (`MoversStore.reconcile` over exports that now carry `unranked_rows`); `tests/cobalt/test_replay_runner.py::test_r2_3_each_phase_runs_on_its_own_side_and_the_wrong_side_is_refused` (the runner's with-DB path through `movers_by_side`).
+5. **(v) Readers of `movers_by_side`** (`grep -rn "movers_by_side" src tests`): `src/cobalt/replay/models.py:438` (the `ReplayResult` field) and `src/cobalt/replay/runner.py:336` (the one writer) in `src`; tests `test_replay_runner.py`, `test_smoke.py`. The smoke reads `last_result` as raw JSON by dotted key (`movers_by_side.<side>.expected`), never through the model. No `src` code validates an OLD job row against `ReplayResult`/`MoversSideCount` (`grep -rn ReplayResult src` → construction only in `runner.py:276`), so a pre-fix `job.result` lacking `unranked` breaks nothing; the one `ReplayResult.model_validate(payload)` is a test round-trip of a fresh result.
+6. **RESTARTS: `com.cobalt.aset com.cobalt.radar`** (static import reach from `replay/models.py`, `replay/movers.py`, `smoke/checks.py`) — the stacked deploy restarts both residents, the radar inside the 20:00–21:00 pause (L43 / L66). `com.cobalt.replay` is a one-shot and picks the fix up at 21:10.
+7. **Two named deviations from the prompt's test wording** (both in `## F1 ### T`): the one-warning-per-side test captures with a loguru sink, not `caplog` (the module's neighbours all log through loguru; `caplog` cannot see it); the retained-path test uses the fixture as the gainers file and the same real rows in the constructed ascending order as the losers file (the fixture itself cannot pass the losers sort check).
+8. **Disclosure.** This session's first Bash call was `cat` of the prompt file — read-only, made before the prompt's command rules had been read; not on the allowlist, not denied. Every later call is on the list.
+9. Pre-existing, NOT fixed (L75, out of scope): `docs/40 - DevDocs/cobalt/replay/movers.md:22` still lists `REQUIRED_HEADERS = [Ticker, Change, Volume]` (the code has five since R16 "C").
+
+(vi) ASK DESK: none. (vii) `MEMORY:` a prompt that names `caplog` for a loguru-logging module means a loguru sink (`logger.add` / `logger.remove`), the idiom `test_cards_picks.py` already uses. No `RULING:` line.
 
 ## CONTINUE
-next: F3 COMMIT, then CLOSE
+next: none — built. The desk verifies the artifact (L35) and launches the three-house check on `6f4da5e..b510b65` (+ the report commit).
 
-(run in progress — next step under ## CONTINUE)
+S2 SMOKE FIX BUILT b510b65 | on 6f4da5e | offline 1970/0 | with-DB: OWED (68) | RESTARTS: com.cobalt.aset com.cobalt.radar | F3: built | tests added: 12 | ESCALATE: 9
