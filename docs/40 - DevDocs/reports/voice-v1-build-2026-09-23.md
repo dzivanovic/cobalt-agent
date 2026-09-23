@@ -166,6 +166,19 @@ STUB pid=2999 BIND FAILED 48
 
 **OUTCOME: DESIGN-CHANGING — the old holder survives a `kill -9` of the job pid while launchd respawns ⇒ "a delete-ALL start sweep deletes a live turn's audio" (a start sweep in the respawned process runs before its bind fails: uvicorn runs lifespan startup before it binds).** Side B is HIS letter (R56) and is not reopened: the sweep stays delete-ALL, and C4's DIRECTORY LOCK (built in every case) turns side B's premise into a CHECK — the orphan still holds the flock it took at start, so the new process's sweep deletes NOTHING, logs RED naming the holder, and the start FAILS loud. `ASK DESK: X22 — the orphan child (2566) survived kill -9 of the job pid and held the port through two launchd respawns; the lock guard stands in front of side B's sweep; keep? [13:59 ET]` — safe default taken: **keep the lock**.
 
+### X-X5
+**Ran** (N4) `uv run python scratch/voice-x/x_x5_values.py` (script: 21 carrier phrases — 12 price, 5 share, 4 time — each in several spoken forms, `say` in 2 voices (Samantha, Daniel), webm/opus 48 kHz mono → `tiny.en` → the value span = the text after the carrier's last ` to ` / ` at ` / ` is ` (code) → the C6 parser; tally right / WRONG / clarify against the value MEANT). Summary lines verbatim:
+```
+X5 SUMMARY price: n=24 right=16 WRONG=6 clarify=2 clarify_share=8%
+X5 SUMMARY shares: n=10 right=10 WRONG=0 clarify=0 clarify_share=0%
+X5 SUMMARY time: n=8 right=0 WRONG=0 clarify=8 clarify_share=100%
+X5 PRICE-AS-CLOCK transcripts=0 all_clarified=True
+```
+The six WRONG rows, verbatim (both voices): `said='move the stop to four fifty' heard='Move the stock to 450.' … -> WRONG Decimal('450')` (and `'Move the stop to 450.'`), `said='move the stop to twelve twenty five' heard='Move the stop to 1225.' -> WRONG Decimal('1225')` ×2, `said='move the stop to nine seventy five' heard='Move the stop to 975.' -> WRONG Decimal('975')` ×2. The engine itself writes the spoken dollars-and-cents form WITHOUT "point" as an integer; the parser sees digits and cannot tell. Forms with "point", with "$", "four dollars and fifty cents" and digit forms were all right. Times came back as `945`, `10.30 am`, `3.05 pm` → every one clarified (no `H:MM` from this engine at all). **FINAL: "A price transcribed as a clock time and parsed as a price would be a wrong value → that parser must refuse H:MM shapes."** → did not occur (0 clock-shaped price transcripts); the parser refuses `H:MM` anyway (C6 test). **OUTCOME: DESIGN-CHANGING — a NEW wrong-value path: "four fifty" → `450` (6 of 24 price clips).** The FINAL's own guard stands: the read-back speaks the PARSED value before any confirm ([F-05], §2.4 "a mis-hearing is caught before it lands"). Safe default ADDED (strictly stricter, no model): the stop act CLARIFIES when the parsed stop is ≥ 10× or ≤ 0.1× the card's current stop (C8), naming what was heard. `ASK DESK: X-X5 — spoken prices without "point" arrive as wrong integers (450 for 4.50); keep the 10× clarify guard + read-back, or also refuse any integer-only stop span? [14:18 ET]`.
+
+### X-X12
+C6 parser test on the synthetic TEXT, no model: `parse_price("4.50") == Decimal("4.50")`; `parse_price("four fifty")` → `Unparseable: 'four fifty' is ambiguous (a spoken price without 'point')` (`test_x12_spoken_and_digit_forms_do_not_meet_in_silence`, green). **FINAL: "Same decimal → the parser accepts spoken numbers; otherwise clarify."** → not the same decimal → the TEXT form clarifies. **OUTCOME: NO CHANGE** to the parser rule — but X-X5 shows the ENGINE never hands the parser the words "four fifty": it hands it `450`, which is why X5's guard lives in the act, not in the parser.
+
 ### X-G2/K5
 The config refusal `scratch_max_age_s ≤ stt_timeout_s` is a C2 TEST (side B's text keeps it). Under side B the sweep runs ONLY at process start, before the first request is served, so a sweep firing mid-transcribe inside ONE process cannot happen by construction. The cross-process case (an orphan still transcribing while a respawn starts) is X-X22's, and C4's directory lock is its guard. OUTCOME: NO CHANGE (C2 test).
 
@@ -186,7 +199,7 @@ Tests written first: `tests/cobalt/test_modelaccess_silence.py`, `test_modelacce
 `tests/cobalt/test_voice_config.py` first. RED: `E   ModuleNotFoundError: No module named 'cobalt.voice'` (`1 error during collection`).
 ### C
 `src/cobalt/voice/{__init__,config,registry}.py`, `configs/cobalt/voice.yaml` (every tunable with a `# source:` line — X-E2 for `stt_model tiny.en` / `stt_revision 0d3d19a3…` / `stt_compute_type int8` / `stt_timeout_s 20`; "engine default — FINAL §11 W7" for `max_clip_s 30`, `max_upload_bytes 2000000`, `confirm_ttl_s 60`, `scratch_max_age_s 120`; `history_turns 4` marked `# set by X-E4`), `configs/cobalt/agents/voice.yaml` (charter, `route: local.plan` checked against the model-access registry, the four V1 tools with kind / `trading_logic: false` / arg schema, `confirm_words: ["yes"]`, `cancel_words: ["no"]` — quoted, since bare YAML `yes`/`no` load as booleans), `ops/start_aset.sh` (the two production exports beside `:32`, one comment line each). Config boundary: `grep -n "configs" /Users/cobalt/cobalt/.gitignore` → only `50:configs/dev/aset.local.yaml` and `54:configs/dev/rules.generated.yaml` ignore anything under `configs/`; `git status --porcelain` after `git add` shows `A  configs/cobalt/agents/voice.yaml`, `A  configs/cobalt/voice.yaml` — both TRACKED, both under `configs/cobalt/`, outside the old loader's top-level `configs/*.yaml` glob.
-**A seam found by the suite, and the choice taken (ESCALATE):** the first version refused `scratch_dir` / `model_dir` under a `backup.yaml` source by calling `load_backup_config()` inside the loader. The full suite went `1 failed, 2073 passed`: `tests/cobalt/test_jobs_restarts.py::test_backup_yaml_is_read_by_one_shots_only_and_derives_no_restart` — `AssertionError: ['cobalt.backup.cli._restore', …]` — `configs/cobalt/jobs.yaml` DECLARES `backup.yaml` has no resident reader, and the ASET resident loading voice config would have made that false (L42's derivation). Changing `jobs.yaml` / that pin is outside my paths. So: the resident loader keeps the relative / docs / repo-root / production-vault / resolved-vault refusals (which already cover both of today's sources: the vault, and `data/.cobalt_vault` under the repo root) and refuses under backup sources only when the caller passes `backup_sources=`; the suite loads the committed dev paths AND `ops/start_aset.sh`'s production overrides with every real `backup.yaml` source passed, and asserts the resident module never names `load_backup_config`. `ASK DESK: C2 — make com.cobalt.aset a declared backup.yaml reader (jobs.yaml + the restarts pin) so the runtime refuses a future backup source too, or keep the suite check? [14:1x ET]` — safe default taken: the suite check.
+**A seam found by the suite, and the choice taken (ESCALATE):** the first version refused `scratch_dir` / `model_dir` under a `backup.yaml` source by calling `load_backup_config()` inside the loader. The full suite went `1 failed, 2073 passed`: `tests/cobalt/test_jobs_restarts.py::test_backup_yaml_is_read_by_one_shots_only_and_derives_no_restart` — `AssertionError: ['cobalt.backup.cli._restore', …]` — `configs/cobalt/jobs.yaml` DECLARES `backup.yaml` has no resident reader, and the ASET resident loading voice config would have made that false (L42's derivation). Changing `jobs.yaml` / that pin is outside my paths. So: the resident loader keeps the relative / docs / repo-root / production-vault / resolved-vault refusals (which already cover both of today's sources: the vault, and `data/.cobalt_vault` under the repo root) and refuses under backup sources only when the caller passes `backup_sources=`; the suite loads the committed dev paths AND `ops/start_aset.sh`'s production overrides with every real `backup.yaml` source passed, and asserts the resident module never names `load_backup_config`. `ASK DESK: C2 — make com.cobalt.aset a declared backup.yaml reader (jobs.yaml + the restarts pin) so the runtime refuses a future backup source too, or keep the suite check? [14:08 ET]` — safe default taken: the suite check.
 ### D
 `docs/40 - DevDocs/cobalt/voice/{__init__,config,registry}.md`.
 ### SUITE
@@ -206,7 +219,46 @@ Tests written first: `tests/cobalt/test_modelaccess_silence.py`, `test_modelacce
 ### COMMIT
 (below)
 
+### COMMIT (C2, C3)
+`cf856dad feat(voice-v1): C2 voice config + agent registry` (11 files, 778 insertions, 1 deletion) · `f81ea150 feat(voice-v1): C3 the Plan and the whitelisted prompt builder` (7 files, 709 insertions).
+
+## C4
+### T
+`tests/cobalt/test_voice_scratch.py` (one writer: dir 0700 / file 0600 / closed content-type map / `O_EXCL` / no path escape / zero-byte refused; one unlink: RED on a read-only dir; `turn_audio` unlinks on success, on an exception, and raises `ScratchUnlinkFailed` when its own unlink fails; the start sweep deletes every file with AMBER lines, has no age test, RED on a failed unlink, never sweeps `.lock`; a lock held by ANOTHER process (a child the test starts and kills by its own pid) → nothing deleted + `ScratchLocked` naming that pid; the lock is exclusive within one process too; the sweep refuses without the lock; `os.unlink(` appears exactly once in the module). RED: `E   ImportError: cannot import name 'scratch' from 'cobalt.voice'`.
+### C
+`src/cobalt/voice/scratch.py` (`write_scratch`, `unlink_scratch`, `turn_audio` / `HeldAudio`, `DirectoryLock`, `start_sweep`, `CONTENT_TYPES`). The row's `audio_deleted_at` is set from `HeldAudio.deleted_at` by the turn (C11); the transcribe-failure / Plan-failure `finally:` cases are re-proven through `run_turn` in C11.
+### D
+`docs/40 - DevDocs/cobalt/voice/scratch.md`.
+### SUITE
+`uv run pytest -q tests/cobalt/test_voice_scratch.py -p no:cacheprovider` → `35 passed in 0.07s`. Full offline (C4 + C5 + C6 files in the tree) → `2217 passed, 351 skipped, 1 xfailed, 3 warnings in 96.00s (0:01:36)` — failed 0; the 2 extra skips were C5's two `slow` speech tests, skipped by a collection-time `skipif` that ran before conftest pins `COBALT_ENV` (read as "model absent") — FIXED (a fixture now checks inside the test): `uv run pytest -q -rs tests/cobalt/test_voice_transcribe.py` → `8 passed, 3 warnings` (0 skipped; the warnings are `PytestUnknownMarkWarning: Unknown pytest.mark.slow` — `slow` cannot be registered: `pyproject.toml` changes only through N1 in this build).
+### COMMIT
+(below)
+
+## C5
+### T
+`tests/cobalt/test_voice_transcribe.py` — speech SYNTHESIZED at test time (`say` → PyAV → webm/opus 48 kHz mono) into `tmp_path`; `slow`; skipped only when the pinned model is absent. Speech → text with every field; same text twice; duration probed before decode; a missing model → `str(e) == "speech-to-text down (model missing)"`; a non-audio file → `undecodable`; timeout → named; off the loop (a ticker keeps ticking); one engine. RED: `E   ImportError: cannot import name 'transcribe' from 'cobalt.voice'`.
+### C
+`src/cobalt/voice/transcribe.py` (`Transcriber`, `Transcript`, `FasterWhisperTranscriber` — `WhisperModel(stt_model, device="cpu", compute_type, download_root=model_dir, local_files_only=True, revision=stt_revision)`, loaded once per process — `SttDown`, `model_present`, `probe_duration_s`, `transcribe_with_timeout`, `transcribe_async`, `ENGINES`).
+### D
+`docs/40 - DevDocs/cobalt/voice/transcribe.md`.
+### SUITE
+as C4 (`8 passed` for the file after the skip fix).
+### COMMIT
+(below)
+
+## C6
+### T
+`tests/cobalt/test_voice_resolve.py` — candidates + labels; a unique ticker binds; spoken letters normalize; two matches clarify reading both back; side word and ordinal narrow; zero matches / no argument (even with ONE open card) / no open cards clarify; a candidate ref binds only from the list; prices that parse (digits, `$`, "dollars", spoken WITH "point") and that clarify (`4:50`, `4:50 pm`, `10:05 a.m.`, "four fifty", "twelve twenty five", zero, negative, 5 decimals, words around it); X-X12; share counts; times. RED: `E   ImportError: cannot import name 'resolve' from 'cobalt.voice'`.
+### C
+`src/cobalt/voice/resolve.py` (`card_candidates`, `resolve_card`, `parse_price`, `parse_shares`, `parse_time`, `Unparseable`).
+### D
+`docs/40 - DevDocs/cobalt/voice/resolve.md`.
+### SUITE
+`uv run pytest -q tests/cobalt/test_voice_resolve.py -p no:cacheprovider` → `67 passed in 0.04s`; full offline as C4.
+### COMMIT
+(below)
+
 ## CONTINUE
-next: commit C2, commit C3, then X-E4 (live Plan call), then C4
+next: commit C4, C5, C6; X-E4 contended pass still running (stop after ≈12 samples); then C7
 
 (run in progress — next step under ## CONTINUE)
