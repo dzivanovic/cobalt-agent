@@ -142,9 +142,9 @@ checks:
   - id: K4.4
     title: sheet /api/radar/pool
     kind: http
-    url: http://127.0.0.1:5010/api/radar/pool
+    url: http://127.0.0.1:5010/api/radar/pool?since={cutoff}
     status: 200
-    expect_text: HTTP 200
+    expect_text: "HTTP 200 (since = the deploy cutoff: a past, tz-aware instant — the API's ruled contract, P3 plan R2-1)"
 
   - id: K5.1
     title: P2 seam — latest radar_score_run

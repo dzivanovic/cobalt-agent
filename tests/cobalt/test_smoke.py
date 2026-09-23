@@ -27,7 +27,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from cobalt.dayopen.launchd import LaunchdPrintError, LaunchdPrintStatus
-from cobalt.db_query import QueryRows
+from cobalt.db_query import QueryRows, hand_command
 from cobalt.smoke import checks, cli, report
 from cobalt.smoke.config import SUITES_DIR, SmokeConfigError, load_suite
 from cobalt.smoke.models import (
@@ -1390,3 +1390,56 @@ def test_committed_queries_run_read_only_on_cobalt_dev():
         # A missing P2 relation or an empty dev table is a FAIL/KNOWN; a
         # query the server cannot parse or the role cannot read is ERROR.
         assert outcome.verdict is not Verdict.ERROR, (check.id, outcome.detail)
+
+
+# ---------------------------------------------------------------------
+# S2 smoke fix F2: K4.4 asks the pool API with its required `since`
+# ---------------------------------------------------------------------
+
+#: A CONSTRUCTED cutoff per offset shape, and what its query value must
+#: read: `+` and `:` percent-encoded, so `+00:00` never decodes as a space.
+F2_CUTOFFS = (
+    (datetime(2026, 9, 19, 19, 11, 42, tzinfo=timezone.utc), "2026-09-19T19%3A11%3A42%2B00%3A00"),
+    (datetime(2026, 9, 19, 15, 11, 42, tzinfo=ET), "2026-09-19T15%3A11%3A42-04%3A00"),
+)
+
+
+def _k4_4():
+    return {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}["K4.4"]
+
+
+def test_k4_4_asks_the_pool_api_with_the_cutoff_as_since():
+    """The endpoint REQUIRES `since` (P3 plan R2-1: missing values are
+    rejected, never defaulted); the check was written without it."""
+    check = _k4_4()
+    assert check.url == "http://127.0.0.1:5010/api/radar/pool?since={cutoff}"
+
+
+def test_render_url_percent_encodes_each_value_and_the_api_parses_it_back():
+    from urllib.parse import unquote
+
+    from cobalt.aset.radar_panel import parse_since
+
+    check = _k4_4()
+    for cutoff, encoded in F2_CUTOFFS:
+        url = checks.render_url(check.url, ctx(cutoff=cutoff))
+        assert url == f"http://127.0.0.1:5010/api/radar/pool?since={encoded}"
+        assert parse_since(unquote(url.split("?since=", 1)[1]), now=NOW) == cutoff
+        # the printed hand fallback carries the same encoded value
+        assert f"?since={encoded}" in checks.command_for(check, ctx(cutoff=cutoff))
+        # and the run asks exactly that URL
+        seen = []
+        out = checks.evaluate(check, ctx(cutoff=cutoff),
+                              deps(http_get=lambda u: (seen.append(u), (200, "{}"))[1]))
+        assert seen == [url] and out.verdict is Verdict.PASS
+
+
+def test_a_url_without_variables_and_every_non_http_render_is_unchanged():
+    """Pin: only a `kind: http` URL's substituted values are encoded."""
+    assert checks.render_url("http://127.0.0.1:5010/api/health", ctx()) == "http://127.0.0.1:5010/api/health"
+    plus = ctx(cutoff=F2_CUTOFFS[0][0])
+    assert checks.render_text("since={cutoff}", plus) == "since=2026-09-19T19:11:42+00:00"
+    k3 = {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}["K3"]
+    assert checks.command_for(k3, plus) == hand_command(checks.render_sql(k3.query, plus), side="system",
+                                                        prod=True)
+    assert "TIMESTAMPTZ '2026-09-19T19:11:42+00:00'" in checks.render_sql(k3.query, plus)

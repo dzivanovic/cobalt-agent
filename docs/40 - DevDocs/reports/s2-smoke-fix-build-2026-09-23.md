@@ -82,9 +82,28 @@ After: GREEN — `uv run pytest -q tests/cobalt/test_replay_movers.py tests/coba
 `uv run pytest -q tests/cobalt -p no:cacheprovider` → `1966 passed, 349 skipped, 1 xfailed in 63.79s (0:01:03)`, exit 0. **1966/0.**
 
 ### COMMIT
-(hash recorded at the top of `## F2`)
+`68e8f23` fix(s2-smoke): F1 a blank Change cell is unranked, counted and loud, not fatal — `git show --stat HEAD`: 8 files changed, 250 insertions(+), 44 deletions(-) (`s2.yaml` 14, `models.md` 13, `movers.md` 29, report 23, `models.py` 31, `movers.py` 45, `test_replay_movers.py` 135, `test_replay_runner.py` 4).
+
+## F2
+### T
+Appended to `tests/cobalt/test_smoke.py`: `test_k4_4_asks_the_pool_api_with_the_cutoff_as_since` (loaded K4.4 url = `…/api/radar/pool?since={cutoff}`) · `test_render_url_percent_encodes_each_value_and_the_api_parses_it_back` (CONSTRUCTED cutoffs `+00:00` → `2026-09-19T19%3A11%3A42%2B00%3A00` and `-04:00` → `2026-09-19T15%3A11%3A42-04%3A00`; `unquote` → `parse_since(…, now=NOW)` from `cobalt.aset.radar_panel` (read, unchanged) returns the cutoff; the hand-fallback command carries the encoded value; the run's `http_get` receives exactly that URL, PASS) · `test_a_url_without_variables_and_every_non_http_render_is_unchanged` (pin: a variable-free URL unchanged; `render_text` still `+00:00`; K3's command = `hand_command(render_sql(…))`, SQL literal unencoded).
+On the base (with F1 committed): RED — `3 failed, 29 deselected in 0.29s`: `AssertionError: assert 'http://127.0...pi/radar/pool' == 'http://127.0...ince={cutoff}'` and twice `AttributeError: module 'cobalt.smoke.checks' has no attribute 'render_url'. Did you mean: 'render_sql'?` (the pin test cannot run without the new function; its `render_text` / K3 halves are pins).
+First post-fix run: `1 failed, 30 passed, 1 skipped` — a TEST defect (asserted a raw SQL literal inside the shlex-quoted hand command); the assertion was moved to `render_sql`'s output, no code change.
+
+### C
+`src/cobalt/smoke/checks.py`: `render_url(template, ctx)` = `VAR_RE.sub(… quote(text_value(v), safe=""))`, used by `command_for`'s http branch and by `_http`; exported in `__all__`; `from urllib.parse import quote`. `render_text` / `render_sql` unchanged. `configs/cobalt/smoke/s2.yaml` K4.4: `url: http://127.0.0.1:5010/api/radar/pool?since={cutoff}`, `expect_text: "HTTP 200 (since = the deploy cutoff: a past, tz-aware instant — the API's ruled contract, P3 plan R2-1)"`. `src/cobalt/aset/**` untouched.
+After: GREEN — `uv run pytest -q tests/cobalt/test_smoke.py -p no:cacheprovider` → `31 passed, 1 skipped in 0.94s`.
+
+### D
+`docs/40 - DevDocs/cobalt/smoke/checks.md`: rendering helpers — `render_url` paragraph; `render_text` no longer claims URLs.
+
+### SUITE
+`uv run pytest -q tests/cobalt -p no:cacheprovider` → `1969 passed, 349 skipped, 1 xfailed in 63.57s (0:01:03)`, exit 0. **1969/0.**
+
+### COMMIT
+(hash recorded at the top of `## F3`)
 
 ## CONTINUE
-next: F1 COMMIT, then F2 (F2 tests already appended to `tests/cobalt/test_smoke.py`, RED recorded)
+next: F2 COMMIT, then F3 (F3 test already appended to `tests/cobalt/test_smoke_k3_sql.py`, RED recorded)
 
 (run in progress — next step under ## CONTINUE)
