@@ -258,7 +258,34 @@ as C4 (`8 passed` for the file after the skip fix).
 ### COMMIT
 (below)
 
+### COMMIT (C4, C5, C6)
+`b0dcf7cd feat(voice-v1): C4 scratch lifecycle …` (4 files, 573 insertions, 2 deletions) · `7df7a339 feat(voice-v1): C5 the Transcriber …` (3 files, 379 insertions) · `2fe2d7f9 feat(voice-v1): C6 the resolver and the value parsers (X-X5, X-X12)` (3 files, 385 insertions).
+
+## C7
+### T
+`tests/cobalt/test_voice_tools.py`: the code implements exactly the registry's tools; templates for open cards / numbers (stored fields only, `unsized`) / pool (≤10 names, STALE flag); `radar.pool` goes through the route function itself (a monkeypatched `aset.web.api_radar_pool` is what gets called); a 503 from it is a named failure; no sizer / `/size` / score name in the module's CODE; the figures check (8 cases incl. `4.4` ≠ `4.40`, `440` ≠ `4.40`); a failing `say` is dropped; 8 order phrasings refused WHATEVER the Plan says; 7 trading-logic phrasings → `unsupported` naming `cobalt settings load --card <file> --sha256 <hash> --apply`; 7 ordinary requests NOT refused; a `trading_logic: true` tool is never executed; the dry run (exact change, both hashes, expiry, read-back) and X-X5's 10× guard. RED: `E   ImportError: cannot import name 'tools' from 'cobalt.voice'`. One test of mine then failed on my own docstring (`AssertionError: /size` — the module docstring says "No tool calls `/size`"); the test now reads code only (`inspect.getsource(tl).replace(tl.__doc__, "")`).
+### C
+`src/cobalt/voice/tools.py` (`code_refusal`, `REFUSE_SENTENCE`, `LOGIC_SENTENCE`, `UNSUPPORTED_SENTENCE`, `figures_ok`, `compose_reply`, `render_*`, `read_open_cards`, `read_pool`, `stop_dry_run`, `STOP_RATIO_GUARD = 10`).
+### D
+`docs/40 - DevDocs/cobalt/voice/tools.md`.
+### SUITE
+`uv run pytest -q tests/cobalt/test_voice_tools.py -p no:cacheprovider` → `48 passed in 0.36s`. Full offline (C7 + C8 in the tree) → `2280 passed, 349 skipped, 1 xfailed, 3 warnings in 96.36s (0:01:36)` — failed 0; skipped = BASELINE's 349 (no voice test skipped).
+### COMMIT
+(below)
+
+## C8
+### T
+FIRST the pin (`tests/cobalt/test_voice_card_stop.py`): `_render` replaced by a recorder, `CardStore` by a constructed fake, and the route's output for (1) an open card, (2) a card that is not open, (3) a bad decimal, (4) the dev-entry refusal, (5) a store refusal, written as literal strings and run on the BASE code → `5 passed` (the 3 `set_card_stop` tests RED: `ModuleNotFoundError: No module named 'cobalt.aset.card_stop'`). Then the voice act's tests: re-check + one write; a target moved in between → `TargetChanged` carrying the new read-back, nothing written; a card no longer open → refused; in DEV without `COBALT_ALLOW_DEV_ENTRY=1` → `DevEntryRefused` whose text the reply speaks; the act reaches the card only through `set_card_stop(`. RED: `AttributeError: module 'cobalt.voice.tools' has no attribute 'execute_stop'` (×4) and the `set_card_stop(` source check.
+### C
+`src/cobalt/aset/card_stop.py` (`set_card_stop`, `StopEdit` — the route body `:1247-1257` moved unchanged; `_check_entry_allowed` IMPORTED at call time, never moved or copied; `CardStore` read from `aset.web`'s namespace). `src/cobalt/aset/web.py`: ONE import line + the route body → `edit = set_card_stop(card_id, form.get("stop", ""))`, success banner from `edit.from_stop` / `edit.to_stop`. `src/cobalt/voice/tools.py`: `execute_stop`, `TargetChanged`; `read_open_cards` reads through `aset.web.CardStore` (the sheet's own class). After the extraction: `uv run pytest -q tests/cobalt/test_voice_card_stop.py tests/cobalt/test_aset_web.py` → `46 passed` (the five pins byte-identical), then `13 passed` for the file.
+### D
+`docs/40 - DevDocs/cobalt/aset/card_stop.md` (new), a dated paragraph in `docs/40 - DevDocs/cobalt/aset/web.md`, `…/voice/tools.md` (execute).
+### SUITE
+the full offline run under C7 (`2280 passed … failed 0`).
+### COMMIT
+(below)
+
 ## CONTINUE
-next: commit C4, C5, C6; X-E4 contended pass still running (stop after ≈12 samples); then C7
+next: commit C7, C8; X-E4 contended pass running (9 samples at 14:27); then C9 (tests written)
 
 (run in progress — next step under ## CONTINUE)
