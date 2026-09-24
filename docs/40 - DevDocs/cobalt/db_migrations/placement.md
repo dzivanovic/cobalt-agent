@@ -53,3 +53,8 @@ The live `user_id` assertion in `test_tenancy` reads `CREATED_TABLES`,
 so it covers the three new tables wherever 0016 has been applied.
 `test_drc_store.py` runs the same assertion inside its never-committed
 migration transaction.
+
+## 2026-09-24 — DRC K1
+
+`CREATED_TABLES` gains `drc_stated_books`, on the USER side, from `0018`.
+It holds his own statements (L32).

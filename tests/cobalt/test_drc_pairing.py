@@ -262,16 +262,6 @@ def test_a_carried_short_closes_on_the_next_days_buy_with_its_seed():
     assert day2.open_positions == []
 
 
-def test_a_first_import_reads_a_leading_buy_as_a_long_until_he_rules():
-    """First import only: the file cannot tell a cover from an open (E1: a cover is B). Pinned as built until his ruling — reports/drc-d1-fix-r1-draft-2026-09-24.md ## OWNER ITEMS. Any later day is covered by the seed chain (check_contiguity, and F3's not-computed FAIL).
-
-    `54` rows 1 / 11. GREEN-as-pin: no src change backs it."""
-    day2 = _pair(CARRIED_SHORT_DAY2, D_NEXT)
-    (ggg,) = _by_symbol(day2, "GGG")
-    assert ggg.status is TradeStatus.OPEN and ggg.direction is Direction.LONG
-    assert ggg.held_shares == 40
-
-
 def _set_stats_cell(data: bytes, line: int, column: str, value: str) -> bytes:
     """A one-cell mutation of a stats log, quoted where a cell needs it."""
     records = list(csv.reader(io.StringIO(data.decode(), newline="")))
@@ -286,7 +276,7 @@ def test_an_empty_open_date_cell_is_never_reported_as_an_empty_open_time():
     reason names the pair jointly — never `Open Time` alone as if proven
     empty."""
     stats = _set_stats_cell(STATS.read_bytes(), 2, stats_log.OPEN_DATE, "")
-    day = build_day(_parsed(E1.read_bytes()), StatsLogSource().parse(stats, detect_kind("s.md", stats)))
+    day = build_day(_parsed(E1.read_bytes()), StatsLogSource().parse(stats, detect_kind("s.md", stats)), seed=())
     (u,) = day.unmatched
     assert u.row.line == 2
     assert u.reason == "unmatched — empty: Open Date or Open Time"
@@ -331,7 +321,7 @@ def test_a_partial_file_missing_a_pairing_input_is_not_paired_and_says_so(column
     records = list(csv.reader(io.StringIO(E1.read_text(), newline="")))
     i = records[0].index(column)
     data = "".join(",".join(r[:i] + r[i + 1:]) + "\n" for r in records).encode()
-    day = build_day(_parsed(data))
+    day = build_day(_parsed(data), seed=())
     assert day.trades == []
     assert day.not_computed == {"pairing": f"not computed — missing: {column}"}
 

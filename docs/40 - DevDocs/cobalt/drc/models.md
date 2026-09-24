@@ -56,3 +56,27 @@ field is a pydantic `AwareDatetime`, imported under the local name
 - `DayPairing` — one day's trades, the positions it leaves open, the
   unmatched stats rows and the steps not computed.
 - `PairingError` — the whole-file failure of pairing.
+
+## 2026-09-24 — DRC K1 (the overnight-position lane)
+- **A stated position has no cost and no time** (v3 `[F-04]`).
+  - The time and price of `Lot` may be `None`, and so may those of an
+    entry `Leg`.
+  - `OpenPosition.entry_time`, `Trade.entry_time` and `Trade.avg_entry`
+    may also be `None`.
+  - An EXIT `Leg` still requires both its time and its price (a
+    validator).
+- **`Trade.gross_pnl`** is a `Decimal` or exactly the literal
+  `CARRIED_COST_NOT_STATED` (`not computed — carried cost not stated`).
+  It is never `None` and never `0`.
+- **`OPENING_NOT_STATED`** is `not computed — opening book not stated`.
+  It is the `pairing` reason of a day with no stated book.
+- **`StatedPosition`** and **`StatedResolve`** are the validated position
+  shapes of an `opening` or `resolve` statement.
+- **`StatedBook`** is one `drc_stated_books` row. Its `id` is `None` on a
+  preview.
+- **`SeedBook`** is the book a day starts from: `source` is `carried` or
+  `stated`, plus `positions`, `from_day`, `from_book_sha256` (hex-64) and
+  `stated_book_id`. A validator ties each source to its own link. K2
+  adds `no_trade_carry`.
+- `StatedKind` and `Via` are the `drc_stated_books` domains (R52:
+  `drc_page` / `voice_widget` / `cli`).

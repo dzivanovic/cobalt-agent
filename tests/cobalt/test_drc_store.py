@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import psycopg
@@ -27,7 +27,7 @@ from cobalt.db_migrations.cli import _apply, _rollback_paths
 from cobalt.db_migrations.placement import CREATED_TABLES, DECLARED_TABLES, PLACEMENT, side_of
 from cobalt.drc import trading_log
 from cobalt.drc.detect import detect_kind
-from cobalt.drc.models import Kind, OpenPosition, Outcome, PairingError
+from cobalt.drc.models import Kind, OpenPosition, Outcome, PairingError, SeedBook
 from cobalt.drc.pairing import build_day, pair_day
 from cobalt.drc.stats_log import StatsLogSource
 from cobalt.drc.store import DrcStore
@@ -62,8 +62,8 @@ def _code(path: Path) -> str:
 
 def test_the_pair_exists_and_is_registered_last():
     assert SQL.exists() and ROLLBACK.exists()
-    assert FORWARD[-1] == SQL
-    assert REVERSE[0] == ROLLBACK
+    assert FORWARD[-2] == SQL and FORWARD[-1].name == "0018_drc_stated_books.sql"
+    assert REVERSE[1] == ROLLBACK and REVERSE[0].name == "0018_drc_stated_books.rollback.sql"
 
 
 def test_three_tables_on_the_user_side_and_no_fourth():
@@ -137,7 +137,10 @@ def test_the_rollback_drops_exactly_the_three_tables_children_first():
 
 
 def test_down_to_0011_on_this_tree_selects_only_this_rollback():
-    assert [p.name for p in _rollback_paths("0011")] == ["0016_drc.rollback.sql"]
+    assert [p.name for p in _rollback_paths("0011")] == [
+        "0018_drc_stated_books.rollback.sql",
+        "0016_drc.rollback.sql",
+    ]
 
 
 # ---------------------------------------------------------------------
@@ -264,6 +267,17 @@ def _stats():
     return data, StatsLogSource().parse(data, detect_kind(STATS.name, data))
 
 
+#: 10:00 ET on a constructed trading day — outside market_reset (K1).
+_TEN_ET = datetime(2026, 9, 3, 14, 0, tzinfo=timezone.utc)
+
+
+def _stated_flat(store: DrcStore, day: date = D) -> SeedBook:
+    """K1: every recorded day names its book — here his recorded flat
+    `opening` statement for `day`, as the `SeedBook` it seeds."""
+    row = store.record_stated_book(day, "opening", [], via="cli", now=_TEN_ET)
+    return SeedBook(source="stated", positions=[], stated_book_id=row.id, from_book_sha256=row.book_sha256)
+
+
 @requires_db
 def test_forward_creates_the_three_tables_user_side_with_the_tenant_column(migrated):
     for table in TABLES:
@@ -370,13 +384,14 @@ def test_a_day_stores_every_trade_stats_row_and_the_day_with_inputs_and_fn_versi
         Kind.TRADING_LOG: store.record_import(D, trading.result, t_data, trading.executions),
         Kind.STATS_LOG: store.record_import(D, stats.result, s_data),
     }
-    day = build_day(trading, stats)
-    written = store.record_day(day, ids)
+    seed = _stated_flat(store)
+    day = build_day(trading, stats, seed=())
+    written = store.record_day(day, ids, seed)
     kinds = dict(migrated.execute(
         'SELECT kind, count(*) FROM "user".drc_rows WHERE day = %s GROUP BY kind', (D,)
     ).fetchall())
-    assert kinds == {"trade": 4, "stats_row": 4, "day": 1}
-    assert written == 9
+    assert kinds == {"trade": 4, "stats_row": 4, "day": 1, "seed": 1, "book_close": 1}
+    assert written == 11
     inputs, derived, fn = migrated.execute(
         """SELECT inputs, derived, fn_version FROM "user".drc_rows
            WHERE day = %s AND kind = 'trade' AND ref LIKE 'AAA-%%'""", (D,)
@@ -385,12 +400,12 @@ def test_a_day_stores_every_trade_stats_row_and_the_day_with_inputs_and_fn_versi
     assert sorted(inputs["fill_lines"]) == [2, 3, 4, 6, 7, 8, 9]
     assert derived["playbooks"] == ["Alpha Setup Long", "Beta Setup Long"]
     assert derived["stats"]["stop"] is None
-    assert fn == "drc.pairing/1"
+    assert fn == "drc.pairing/2"
     # Recording the same day again replaces, never duplicates.
-    store.record_day(day, ids)
+    store.record_day(day, ids, seed)
     assert migrated.execute(
         'SELECT count(*) FROM "user".drc_rows WHERE day = %s', (D,)
-    ).fetchone()[0] == 9
+    ).fetchone()[0] == 11
 
 
 @requires_db
@@ -398,8 +413,8 @@ def test_the_seed_round_trips_through_the_store(migrated, weekday_calendar):
     store = DrcStore()
     data, day1 = _trading(DAY1, D)
     ids = {Kind.TRADING_LOG: store.record_import(D, day1.result, data, day1.executions)}
-    store.record_day(build_day(day1), ids)
-    seed = store.seed_for(D_NEXT)
+    store.record_day(build_day(day1, seed=()), ids, _stated_flat(store))
+    seed = store.seed_for(D_NEXT).positions
     assert [(p.symbol, p.held_shares) for p in seed] == [("DDD", 30)]
     assert isinstance(seed[0], OpenPosition)
     _, day2 = _trading(SEED, D_NEXT)
@@ -413,14 +428,14 @@ def test_a_skipped_prior_trading_day_fails_the_seed_loudly(migrated, weekday_cal
     store = DrcStore()
     data, day1 = _trading(DAY1, D)
     ids = {Kind.TRADING_LOG: store.record_import(D, day1.result, data, day1.executions)}
-    store.record_day(build_day(day1), ids)
+    store.record_day(build_day(day1, seed=()), ids, _stated_flat(store))
     with pytest.raises(PairingError, match="prior trading day 2001-01-03 has no import"):
         store.seed_for(date(2001, 1, 4))
 
 
 @requires_db
 def test_the_first_import_ever_has_an_empty_seed(migrated, weekday_calendar):
-    assert DrcStore().seed_for(D) == []
+    assert DrcStore().seed_for(D) is None
 
 
 @requires_db
@@ -440,11 +455,11 @@ def test_a_prior_day_whose_pairing_was_not_computed_fails_the_seed(migrated, wee
     records = DAY1.read_text().splitlines()
     data = ("\n".join(",".join(r.split(",")[:1] + r.split(",")[2:]) for r in records) + "\n").encode()
     day1 = TradingLogSource().parse(data, D, detect_kind("half.md", data))
-    day = build_day(day1)
+    day = build_day(day1, seed=())
     assert "pairing" in day.not_computed
     store = DrcStore()
     ids = {Kind.TRADING_LOG: store.record_import(D, day1.result, data, day1.executions)}
-    store.record_day(day, ids)
+    store.record_day(day, ids, _stated_flat(store))
     with pytest.raises(PairingError, match="2001-01-02 has pairing not computed"):
         store.seed_for(D_NEXT)
 
@@ -455,7 +470,7 @@ def test_an_open_position_row_carries_its_trades_inputs(migrated):
     store = DrcStore()
     data, day1 = _trading(DAY1, D)
     ids = {Kind.TRADING_LOG: store.record_import(D, day1.result, data, day1.executions)}
-    store.record_day(build_day(day1), ids)
+    store.record_day(build_day(day1, seed=()), ids, _stated_flat(store))
     rows = migrated.execute(
         """SELECT kind, ref, inputs FROM "user".drc_rows
            WHERE day = %s AND kind IN ('trade', 'open_position')""", (D,)

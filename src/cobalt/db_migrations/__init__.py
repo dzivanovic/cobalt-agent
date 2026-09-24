@@ -41,12 +41,20 @@
                          `drc_rows` (trades, open positions, stats rows,
                          the day — inputs + derived + fn_version). Additive.
 `0016_drc.rollback.sql` — drops those three tables, children first.
+`0018_drc_stated_books.sql` — DRC K1: `"user".drc_stated_books` (his
+                         stated opening books, resolves and no-trade
+                         statements; append-only) and `drc_rows.kind`
+                         widened by `seed` / `book_close`. Additive.
+`0018_drc_stated_books.rollback.sql` — deletes the `seed` / `book_close`
+                         rows, restores the four-kind CHECK, drops the
+                         table (his statements with it — its COST line).
 
 0012–0015 ARE NOT GAPS BY ACCIDENT: 0012 is the unmerged
 `bars/chunk-2-0920`, 0013 the setups one build, 0014 handicap H1
 (reserved), 0015 stale score (reserved, conditional) —
 `reports/devdb-builds-reissue-2026-09-23.md`. Whichever lands later keeps
-every set, in numeric order; the desk renumbers at the L68 gate.
+every set, in numeric order; the desk renumbers at the L68 gate. 0017 is
+the voice branch's `0017_voice_turns`, left free here for the same reason.
 
 0006/0007 are S2-P2's, 0008/0009 are S2-P4's. Both tuples stay ordered by
 version; every file is idempotent and neither 0008 nor 0009 names a P2
@@ -89,10 +97,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0010_archive_progress.sql",
     MIGRATIONS_DIR / "0011_archive_incidents.sql",
     MIGRATIONS_DIR / "0016_drc.sql",
+    MIGRATIONS_DIR / "0018_drc_stated_books.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0018_drc_stated_books.rollback.sql",
     MIGRATIONS_DIR / "0016_drc.rollback.sql",
     MIGRATIONS_DIR / "0011_archive_incidents.rollback.sql",
     MIGRATIONS_DIR / "0010_archive_progress.rollback.sql",

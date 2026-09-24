@@ -50,6 +50,58 @@ does it return the prior trading day's `open_position` rows as
 raises `PairingError`: the position is never assumed flat, and a phantom
 is never carried.
 
+## 2026-09-24 — DRC K1 (book records)
+- **`record_stated_book(day, kind, positions, *, via, turn_id,
+  readback_sha256, supersedes, expected_sha256, now)`** is THE one
+  writer of `drc_stated_books` (L3, L40). Every caller uses it: the
+  page, the widget and the CLI. It runs in this order:
+  1. `assert_writable` runs first, so every caller is refused inside
+     `market_reset` (`[F-01]`, X6).
+  2. The positions are validated by kind: `opening` =
+     `StatedPosition`s, one symbol at most once; `resolve` = exactly one
+     `StatedResolve`; `no_trade` = `[]`.
+  3. The `via` rules are checked: `turn_id` and `readback_sha256` are
+     BOTH given for `voice_widget`, and neither is given for any other
+     caller.
+  4. `book_sha256` is taken over the canonical rows (an `opening` is
+     sorted by symbol). A different `expected_sha256` is refused before
+     any write.
+  5. Under `LOCK TABLE … SHARE ROW EXCLUSIVE`:
+     - `reason` is derived: `first import` / `chain broken at <P>` /
+       `closed outside export` / `no-trade DRC`.
+     - A current row of the same day and kind (and, for a resolve, the
+       same trade_id) is refused unless `supersedes` names it.
+     - A `supersedes` that names no single current row is refused.
+     - Then one INSERT.
+  A `resolve` or `no_trade` row is stored only; its effect is K2's.
+- **`preview_stated_book(…)`** returns the same row, without its id. It
+  runs no gate and makes no write.
+- **`seed_for(day)`** now returns `Optional[SeedBook]`. Let P be the
+  prior trading day:
+  - P recorded and not computed → FAIL.
+  - P recorded with no `book_close` → FAIL naming `rebuild <P>`.
+  - The recomputed hash ≠ the stored hash → FAIL.
+  - P recorded and a current `opening` row for the day → FAIL. This is
+    K2's R51 rebuild.
+  - P recorded otherwise → carried.
+  - P not recorded, with a statement → stated.
+  - P not recorded, no statement, an earlier day recorded → the
+    contiguity FAIL.
+  - Nothing at all → `None`.
+  Two current openings FAIL, naming both ids. So does a current resolve
+  of a returned `trade_id` (until K2).
+- **`record_day(pairing, import_ids, seed)`** — `seed` is REQUIRED, and a
+  computed pairing with `seed=None` is refused. It writes:
+  - `seed` / `book` (inputs `source`, `from_day`, `from_book_sha256`,
+    `stated_book_id`; derived `count`, `trade_ids`);
+  - `book_close` / `book` on every computed day (derived `count`,
+    `trade_ids`, `book_sha256`; inputs `trading_log_import_id`,
+    `seed_ref`);
+  - `inputs.carried_from` on a carried trade: `{day, trade_id,
+    from_book_sha256}` or `{stated_book_id}`;
+  - `stated_book_id` on the `day` row when the book was stated.
+- `STATED_TABLE` names the table for a caller's printout.
+
 ## Tests
 `tests/cobalt/test_drc_store.py` has an offline half (the SQL, the
 registry, the placement map, the one-writer grep). Its with-DB half

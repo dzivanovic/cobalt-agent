@@ -84,3 +84,9 @@ The morning sweep, in code: `cobalt.dayopen.cli.add_parser` mounts
 [--date] [--prod] [--json]`, the read-only sprint smoke checklist
 (`smoke/cli.md`). The module docstring's command map now also lists
 `cobalt replay nightly` and `cobalt smoke`.
+
+## 2026-09-24 — DRC K1: the `drc` group
+
+`drc_cli.add_parser(sub)` mounts `cobalt drc state-book`. It dry-runs by
+default and writes only with `--apply --sha256` (`drc/cli.md`). This is
+the ONE `drc` group: D3's `cobalt drc build` joins it later (L3).

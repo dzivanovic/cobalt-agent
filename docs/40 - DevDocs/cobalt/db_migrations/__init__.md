@@ -158,3 +158,11 @@ touches nothing else.
 lives in `reports/devdb-builds-reissue-2026-09-23.md`. On this branch the
 registry reads `1…11, 16`. The combined pin is the desk's, at the L68
 gate.
+
+## 2026-09-24 — DRC K1: `0018_drc_stated_books`
+
+`0018` creates the append-only `"user".drc_stated_books` table and widens
+`drc_rows.kind` with `seed` / `book_close` under the constraint's proven
+name, `drc_rows_kind_check`. Its rollback states its COST and restores the
+four-kind CHECK. It is a new file, never a fold into `0016` (X5). `0017`
+is the voice branch's number, so the registry reads `1…11, 16, 18`.

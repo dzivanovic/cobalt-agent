@@ -5,20 +5,34 @@ renderer prints it `not given`; nothing here ever fills it with a
 default, a zero or a guess (R91, L1). A field that a later step could not
 compute because an input column was absent is named on the result's
 `not_computed`, never defaulted (R17 (5)).
+
+A STATED position (K1, v3 `[F-04]`) is his word, not a fill: it may carry
+no cost and no time. Its lot, its entry leg and its open position then
+hold `None` for both — never an invented figure — and a realized figure
+against a missing cost is the literal `CARRIED_COST_NOT_STATED`, never a
+number (v3 X3).
 """
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from decimal import Decimal
 from enum import Enum
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 # Every DRC time is timezone-aware: a naive time fails validation (L1).
 from pydantic import AwareDatetime as datetime
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 NOT_GIVEN = "not given"
+
+#: A realized figure against a stated lot with no cost (v3 `[F-04]`).
+CARRIED_COST_NOT_STATED = "not computed — carried cost not stated"
+#: A day whose opening book was never stated (v3 §2c option A, §4 row 1).
+OPENING_NOT_STATED = "not computed — opening book not stated"
+
+_HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 
 class Kind(str, Enum):
@@ -84,30 +98,38 @@ class Leg(_Frozen):
     are never merged (nothing is guessed about which belong together)."""
 
     kind: Literal["entry", "exit"]
-    time: datetime
-    price: Decimal
+    time: Optional[datetime]   # None only on a STATED entry (K1)
+    price: Optional[Decimal]   # None only on a STATED entry with no cost
     shares: int = Field(gt=0)
     line: Optional[int] = None  # None = a lot carried in from a prior day
     carried: bool = False
 
+    @model_validator(mode="after")
+    def _an_exit_is_a_fill(self) -> "Leg":
+        if self.kind == "exit" and (self.time is None or self.price is None):
+            raise ValueError("an exit leg is an execution: its time and price are required")
+        return self
+
 
 class Lot(_Frozen):
-    """An open FIFO lot: what is still held, at what price, since when."""
+    """An open FIFO lot: what is still held, at what price, since when.
+    A STATED lot may carry no time and no cost (`None`, v3 `[F-04]`)."""
 
-    time: datetime
-    price: Decimal
+    time: Optional[datetime]
+    price: Optional[Decimal]
     shares: int = Field(gt=0)
 
 
 class OpenPosition(_Frozen):
-    """A position open at the end of a day (R67) — the next day's seed."""
+    """A position open at the end of a day (R67) — the next day's seed.
+    A STATED position has no `entry_time` (K1): never an invented one."""
 
     trade_id: str
     symbol: str
     direction: Direction
     held_shares: int = Field(gt=0)
     lots: list[Lot]
-    entry_time: datetime
+    entry_time: Optional[datetime]
     opened_on: date
     day: date  # the import day whose file left it open
 
@@ -154,14 +176,16 @@ class Trade(_Frozen):
     symbol: str
     direction: Direction
     status: TradeStatus
-    entry_time: datetime
+    entry_time: Optional[datetime]     # None: a stated position (K1)
     exit_time: Optional[datetime] = None
     hold_seconds: Optional[int] = None
-    avg_entry: Decimal
+    avg_entry: Optional[Decimal]       # None when any entry has no stated cost
     avg_exit: Optional[Decimal] = None
     shares: int = Field(gt=0)          # every share entered on this trade
     held_shares: int = Field(ge=0)     # 0 when closed
-    gross_pnl: Decimal                 # realized on this day's exits only
+    # Realized on this day's exits only; the literal when any exit met a
+    # stated lot with no cost (v3 `[F-04]`) — never None, never a 0.
+    gross_pnl: Union[Decimal, Literal["not computed — carried cost not stated"]]
     unrealized: Literal["not computed"] = "not computed"
     entries: list[Leg]
     legs: list[Leg]                    # the exit legs
@@ -267,8 +291,90 @@ class PairingError(ValueError):
     contradicts, a carried symbol with no prior row, a broken chain."""
 
 
+# ---------------------------------------------------------------------
+# K1 — the book a day starts from (v3 §2b, §2c, §3)
+# ---------------------------------------------------------------------
+
+StatedKind = Literal["opening", "resolve", "no_trade"]
+#: Who made a statement (R52 (a): the third literal is `cli`).
+Via = Literal["drc_page", "voice_widget", "cli"]
+
+
+class StatedPosition(_Frozen):
+    """One position of a stated `opening` book: his word, not a fill.
+    `avg_cost` is optional (v3 `[F-04]`): `None` is stored as `None`."""
+
+    symbol: str = Field(min_length=1)
+    direction: Direction
+    shares: int = Field(gt=0)
+    avg_cost: Optional[Decimal] = Field(default=None, gt=0)
+
+
+class StatedResolve(_Frozen):
+    """The one position of a `resolve` statement: a carried `trade_id`
+    closed outside the export (v3 `[F-06]`). Its effect is K2's."""
+
+    trade_id: str = Field(min_length=1)
+    exit_price: Optional[Decimal] = Field(default=None, gt=0)
+    exit_time: Optional[datetime] = None
+
+
+class StatedBook(_Frozen):
+    """One stated-book row, as `DrcStore` stores it (v3 `:128-141`). `id` and
+    `created_at` are None on a preview (nothing written)."""
+
+    id: Optional[int] = None
+    day: date
+    kind: StatedKind
+    positions: list[dict]  # the canonical JSON the hash is taken over
+    book_sha256: str
+    via: Via
+    turn_id: Optional[str] = None
+    readback_sha256: Optional[str] = None
+    reason: str
+    supersedes: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    @field_validator("book_sha256")
+    @classmethod
+    def _hex64(cls, v: str) -> str:
+        if not _HEX64.match(v):
+            raise ValueError("book_sha256 must be 64 lowercase hex characters")
+        return v
+
+
+class SeedBook(_Frozen):
+    """The book a day's pairing starts from, with where it came from
+    (L57, v3 §2b step 3): `carried` from the prior day's hash-checked
+    close, or `stated` by his `opening` statement. K2 adds
+    `no_trade_carry`."""
+
+    source: Literal["carried", "stated"]
+    positions: list[OpenPosition]
+    from_day: Optional[date] = None
+    from_book_sha256: str
+    stated_book_id: Optional[int] = None
+
+    @field_validator("from_book_sha256")
+    @classmethod
+    def _hex64(cls, v: str) -> str:
+        if not _HEX64.match(v):
+            raise ValueError("from_book_sha256 must be 64 lowercase hex characters")
+        return v
+
+    @model_validator(mode="after")
+    def _source_names_its_link(self) -> "SeedBook":
+        if self.source == "carried" and (self.from_day is None or self.stated_book_id is not None):
+            raise ValueError("a carried book names its from_day and no stated_book_id")
+        if self.source == "stated" and (self.stated_book_id is None or self.from_day is not None):
+            raise ValueError("a stated book names its stated_book_id and no from_day")
+        return self
+
+
 __all__ = [
+    "CARRIED_COST_NOT_STATED",
     "NOT_GIVEN",
+    "OPENING_NOT_STATED",
     "DayPairing",
     "Detection",
     "Direction",
@@ -283,8 +389,14 @@ __all__ = [
     "PairingError",
     "ParsedStatsLog",
     "ParsedTradingLog",
+    "SeedBook",
+    "StatedBook",
+    "StatedKind",
+    "StatedPosition",
+    "StatedResolve",
     "StatsRow",
     "Trade",
     "TradeStatus",
     "Unmatched",
+    "Via",
 ]

@@ -60,7 +60,7 @@ def _day(stats_data: bytes = None, trades_data: bytes = None):
     t = trades_data or TRADES.read_bytes()
     s = stats_data or STATS.read_bytes()
     trading = TradingLogSource().parse(t, DAY, detect_kind("t.md", t))
-    return build_day(trading, _parse(s))
+    return build_day(trading, _parse(s), seed=())
 
 
 def test_e1s_cut_parses_four_rows_and_flags_the_unread_vendor_column():

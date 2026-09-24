@@ -20,12 +20,23 @@ FAILS THE WHOLE FILE (`PairingError`, L1):
 - a broken import chain (`check_contiguity`, the ASK-DESK safe default);
 - a seed whose prior day's pairing was not computed (store.seed_for).
 
-THE SEED. The prior day's stored open positions; each keeps its
-`trade_id` and remaining FIFO lots, so realized P&L on the closing day
-uses the prices the lots were opened at. `unrealized: not computed`
-(v2 `[F-10]`). A first import has no seed and no chain: a leading B
-there is read as an open, not a cover (the file cannot tell them apart);
-his ruling on that day is pending (fix r1 draft, OWNER ITEMS).
+THE SEED. The book the day starts from, held by the caller: the prior
+day's stored open positions (carried — each keeps its `trade_id` and
+remaining FIFO lots, so realized P&L on the closing day uses the prices
+the lots were opened at), or the positions he STATED for that day (v3
+§2c option A). `unrealized: not computed` (v2 `[F-10]`). `build_day`'s
+`seed=None` means NO BOOK WAS STATED: the day is not paired and says so,
+`not computed — opening book not stated` — never an assumed flat book
+(L1; v3 `:118` retires R22's "A for now"). A list, even `[]`, is the book
+the caller holds. `pair_day` is the FIFO engine and holds no book policy.
+
+A STATED lot with no cost carries no price: a reduction against it moves
+shares only, and the trade's realized figure is the literal
+`not computed — carried cost not stated` (v3 `[F-04]`), never a number.
+
+THE BOOK HASH (`book_sha256`, v3 X4): sha256 of the canonical JSON of the
+positions — `model_dump(mode="json")` sorted by `trade_id`, `json.dumps`
+with sorted keys, `(",", ":")` separators, UTF-8. `[]` hashes `b"[]"`.
 
 THE STATS MATCH (D1-4). EXACT on what both files carry: symbol +
 direction + entry time to the second (E1: 4 of 4). No tolerance exists
@@ -35,15 +46,19 @@ carried and shown, never dropped, never guessed.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Union
 from zoneinfo import ZoneInfo
 
 from . import stats_log, trading_log
 from .models import (
+    CARRIED_COST_NOT_STATED,
+    OPENING_NOT_STATED,
     DayPairing,
     Direction,
     ExecSide,
@@ -54,14 +69,16 @@ from .models import (
     PairingError,
     ParsedStatsLog,
     ParsedTradingLog,
+    StatedPosition,
     StatsRow,
     Trade,
     TradeStatus,
     Unmatched,
 )
 
-#: Bumped whenever a derived figure's rule changes (L57).
-FN_VERSION = "drc.pairing/1"
+#: Bumped whenever a derived figure's rule changes (L57). /2 (K1): an
+#: unstated book is not paired; a stated lot may carry no cost.
+FN_VERSION = "drc.pairing/2"
 
 
 def trade_id(symbol: str, direction: Direction, entry_time: datetime) -> str:
@@ -69,16 +86,56 @@ def trade_id(symbol: str, direction: Direction, entry_time: datetime) -> str:
     return f"{symbol}-{direction.value}-{entry_time.isoformat()}"
 
 
+def stated_trade_id(symbol: str, direction: Direction, day: date) -> str:
+    """A stated position has no entry time: its id names the day it was
+    stated for, stable across restatements of that day (the drafter's pin,
+    carried to the K1 check — v3 names no shape)."""
+    return f"{symbol}-{direction.value}-stated-{day.isoformat()}"
+
+
+def canonical_sha256(rows: list[dict]) -> str:
+    """sha256 hex of `rows`' canonical JSON bytes — THE PINNED ENCODING
+    (v3 X4). The caller orders `rows`; the keys are sorted here."""
+    data = json.dumps(rows, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def book_sha256(positions: Iterable[OpenPosition]) -> str:
+    """The book hash: the positions' JSON dumps sorted by `trade_id`."""
+    return canonical_sha256(
+        [p.model_dump(mode="json") for p in sorted(positions, key=lambda p: p.trade_id)]
+    )
+
+
+def stated_open_positions(day: date, positions: Iterable[StatedPosition]) -> list[OpenPosition]:
+    """His stated `opening` book for `day` as the pairing's seed: ONE lot
+    per position, its cost `None` when he gave none, NO time (v3
+    `[F-04]`; never an invented one), opened on the stated day."""
+    return [
+        OpenPosition(
+            trade_id=stated_trade_id(p.symbol, p.direction, day),
+            symbol=p.symbol,
+            direction=p.direction,
+            held_shares=p.shares,
+            lots=[Lot(time=None, price=p.avg_cost, shares=p.shares)],
+            entry_time=None,
+            opened_on=day,
+            day=day,
+        )
+        for p in positions
+    ]
+
+
 @dataclass
 class _Book:
     symbol: str
     direction: Direction
     trade_id: str
-    entry_time: datetime
+    entry_time: Optional[datetime]
     lots: deque = field(default_factory=deque)
     entries: list = field(default_factory=list)
     exits: list = field(default_factory=list)
-    realized: Decimal = Decimal(0)
+    realized: Union[Decimal, str] = Decimal(0)
     carried_from: Optional[date] = None
 
     @property
@@ -88,7 +145,7 @@ class _Book:
 
 def _avg(legs: list[Leg]) -> Optional[Decimal]:
     shares = sum(leg.shares for leg in legs)
-    if not shares:
+    if not shares or any(leg.price is None for leg in legs):
         return None
     return sum(leg.price * leg.shares for leg in legs) / shares
 
@@ -102,7 +159,12 @@ def _trade(book: _Book, status: TradeStatus) -> Trade:
         status=status,
         entry_time=book.entry_time,
         exit_time=exit_time,
-        hold_seconds=int((exit_time - book.entry_time).total_seconds()) if exit_time else None,
+        # A stated position has no entry time, so no hold time either.
+        hold_seconds=(
+            int((exit_time - book.entry_time).total_seconds())
+            if exit_time and book.entry_time
+            else None
+        ),
         avg_entry=_avg(book.entries),
         avg_exit=_avg(book.exits),
         shares=sum(leg.shares for leg in book.entries),
@@ -119,8 +181,13 @@ def _reduce(book: _Book, e: Execution) -> None:
     while remaining:
         lot = book.lots[0]
         take = min(lot.shares, remaining)
-        per_share = e.price - lot.price if book.direction is Direction.LONG else lot.price - e.price
-        book.realized += per_share * take
+        if lot.price is None:
+            # A stated lot with no cost (v3 `[F-04]`): shares move, no
+            # price arithmetic runs, and the figure says why.
+            book.realized = CARRIED_COST_NOT_STATED
+        elif book.realized != CARRIED_COST_NOT_STATED:
+            per_share = e.price - lot.price if book.direction is Direction.LONG else lot.price - e.price
+            book.realized += per_share * take
         remaining -= take
         if take == lot.shares:
             book.lots.popleft()
@@ -232,7 +299,11 @@ def pair_day(
                 day=day,
             )
         )
-    trades.sort(key=lambda t: (t.entry_time, t.symbol))
+    # A stated position (no entry time) sorts first, by symbol — never
+    # given an invented time to sort by.
+    trades.sort(
+        key=lambda t: (t.entry_time is not None, t.entry_time.timestamp() if t.entry_time else 0.0, t.symbol)
+    )
     return DayPairing(day=day, trades=trades, open_positions=open_positions)
 
 
@@ -319,13 +390,18 @@ def match_stats(
 def build_day(
     trading: ParsedTradingLog,
     stats: Optional[ParsedStatsLog] = None,
-    seed: Iterable[OpenPosition] = (),
+    seed: Optional[Iterable[OpenPosition]] = None,
 ) -> DayPairing:
     """A parsed day → its pairing (+ the stats match when a stats log is
     given). A step whose input columns are absent does not run and says
-    so, `not computed — missing: <columns>` (R17 (5))."""
-    if "pairing" in trading.result.not_computed:
-        pairing = DayPairing(day=trading.import_date, not_computed=dict(trading.result.not_computed))
+    so, `not computed — missing: <columns>` (R17 (5)). `seed=None` means
+    no book was stated: the day is not paired, `not computed — opening
+    book not stated` (L1, v3 §2c); a list, even `[]`, is the book."""
+    not_computed = dict(trading.result.not_computed)
+    if "pairing" not in not_computed and seed is None:
+        not_computed["pairing"] = OPENING_NOT_STATED
+    if "pairing" in not_computed:
+        pairing = DayPairing(day=trading.import_date, not_computed=not_computed)
         if stats is not None:
             pairing = pairing.model_copy(
                 update={
@@ -340,9 +416,13 @@ def build_day(
 
 __all__ = [
     "FN_VERSION",
+    "book_sha256",
     "build_day",
+    "canonical_sha256",
     "check_contiguity",
     "match_stats",
     "pair_day",
+    "stated_open_positions",
+    "stated_trade_id",
     "trade_id",
 ]

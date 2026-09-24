@@ -71,3 +71,34 @@ This is the one entry for a parsed day. When the trading log's
 `not_computed` carries `pairing`, it pairs nothing and says why. It then
 does not match, and every stats row is unmatched with the reason given.
 Nothing is defaulted.
+
+## 2026-09-24 — DRC K1: `drc.pairing/2`
+- **B8 is replaced.** The signature is now `build_day(trading,
+  stats=None, seed=None)`, and `seed=None` means NO BOOK WAS STATED.
+  - The day is not paired: `not_computed["pairing"] = "not computed —
+    opening book not stated"`, with no trades.
+  - Every stats row is `unmatched — no trades were paired`.
+  - A list, even `[]`, is the book the caller holds.
+  - `pair_day` is unchanged. It is the FIFO engine and holds no book
+    policy.
+  - This retires O1 = A (R22, v3 `:118`).
+- **A stated lot with no cost.** When `_reduce` meets one, it still
+  reduces the shares, but it runs no price arithmetic. The trade's
+  `gross_pnl` becomes `CARRIED_COST_NOT_STATED`.
+  - `hold_seconds` is `None` when there is no entry time.
+  - `avg_entry` is `None` when any entry has no price.
+  - Trades with no entry time sort first, then by symbol.
+- **`book_sha256(positions)`** takes the positions'
+  `model_dump(mode="json")`, sorted by `trade_id`, and passes them to
+  **`canonical_sha256(rows)`**.
+  - The encoding is `json.dumps(sort_keys=True, separators=(",", ":"),
+    ensure_ascii=False)`, as UTF-8.
+  - `[]` hashes `b"[]"`.
+  - This is the encoding pinned by X4.
+- **`stated_open_positions(day, positions)`** turns his stated book into
+  a seed.
+  - Each position gets ONE lot `(time=None, price=avg_cost)`,
+    `entry_time=None` and `opened_on=day`.
+  - Its `trade_id` comes from **`stated_trade_id`**:
+    `<symbol>-<direction>-stated-<day>`. This is the drafter's pin, and
+    it is stable across restatements.
