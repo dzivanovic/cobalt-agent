@@ -31,10 +31,20 @@ nothing is a definite null (`not_instantiated`): `== 1` is False, not
 unknown. AST shapes the S2 detectors do not serve are `not_evaluable`,
 named — never a guessed truth value.
 
-DIRECTION. `instance_direction: computed`: the Extension direction, then
-the def's `valid_setups[].relation` — all countertrend trades against the
-run (up -> short), all with_trend trades with it; a def mixing both has no
-computable direction and is `not_evaluable`.
+DIRECTION (FINAL §1, key `A-01`). Direction comes from the trade's own
+anatomy; `valid_setups[].relation` is NEVER read for it — `relation` is
+the trade's relation to the SETUP's trend (day / higher-timeframe
+context), not to the intraday Extension. A def written long-side trades
+AGAINST an unqualified Extension: up-run -> short, down-run -> long. That
+orientation is the assumed convention `A-01` (`ASSUMED_CONVENTIONS`), so
+every formation carries it in `Formation.assumed_keys` and its card the
+untappable `assumed_formation` dot (R2-2 = B). No setup is detected: the
+card's `setup_ref` is the token `UNCLASSIFIED_SETUP`.
+
+GEOMETRY GUARD (FINAL §9 point (5), X17 PASS): a resolved stop must be on
+the protective side of BOTH the trigger and the last close — long: stop <
+min(trigger, last close); short: stop > max(trigger, last close) — else
+`not_formed`, note `stop_wrong_side`, never a card.
 
 STALENESS (Astra R1-12, `anatomy.freshness`): intraday bars and RVOL use
 2 × `radar.scan_interval`; daily bars the last-completed-session rule;
@@ -66,7 +76,7 @@ import hashlib
 import json
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from pathlib import Path
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
@@ -80,6 +90,7 @@ from cobalt.cards.expire import radar_deadline, radar_expiry
 from cobalt.cards.health import EntrySnapshot, HealthThresholds, card_health
 from cobalt.cards.radar import RadarCardSpec
 from cobalt.cards.scoring import (
+    ASSUMED_FORMATION,
     Dot,
     FactorObservation,
     colour_thresholds,
@@ -89,48 +100,68 @@ from cobalt.cards.scoring import (
 )
 from cobalt.settings.card import CardSettings
 from cobalt.taxonomy.defaults import TaxonomyDefaults
-from cobalt.taxonomy.loader import resolve_cfg
+from cobalt.taxonomy.loader import iter_cfg_tokens, resolve_cfg
 from cobalt.taxonomy.predicate import (
     And,
+    Arith,
+    Between,
     Cfg,
     Compare,
+    EventAtom,
     InTest,
     Node,
     Not,
+    Null,
     Number,
     Or,
+    Qualified,
+    Quantity,
+    Relation,
     Ref,
     SetLiteral,
     Symbol,
     render,
 )
-from cobalt.taxonomy.trade_def import (
-    Relation,
-    SimpleTrigger,
-    StructuralExtremePlacement,
-    TradeDef,
-)
-from cobalt.taxonomy.tunables import TunableRow
+from cobalt.taxonomy.trade_def import TradeDef
+from cobalt.taxonomy.tunables import TunableRow, TunableSource
 
 from .anatomy.bars import IncompleteBucket, WorkingBar, rth_only, working_bars
-from .anatomy.daily import DailySeries, NoDailyBars, htf_level_proximity, htf_range_break
-from .anatomy.extension import ExtensionObservation, ExtensionParams, detect_extension
+from .anatomy.daily import DailySeries, NoDailyBars, htf_level_proximity
+from .anatomy.extension import ExtensionObservation, ExtensionParams
+from .anatomy.frame import Frame, SessionInputs, binds_side_by_frame, build_frame, minute_bars, premarket_buckets
 from .anatomy.freshness import RvolObservation, daily_staleness, intraday_staleness
-from .anatomy.indicators import InsufficientBars, ema
+from .anatomy.indicators import PRECISION as INDICATOR_PRECISION
+from .anatomy.indicators import InsufficientBars, WARMUP_CONVENTION
+from .anatomy.leg_roles import PRE_TEST_CONVENTION
+from .anatomy.range_break import PRIOR_RANGE_CONVENTION, STOP_HIT_CONVENTION, TURN_CANDLE_CONVENTION
+from .anatomy.session_levels import DAYRANGE_CONVENTION, VWAP_CONVENTION
 from .anatomy.registry import evaluability
-from .anatomy.structure import (
-    StructuralStop,
-    TrackedExtreme,
-    TriggerLevel,
-    bar_break_trigger,
-    structural_stop,
-    tracked_extreme,
+from .anatomy.structure import StructuralStop, TrackedExtreme, TriggerLevel
+from .formation.anchors import anchor_for
+from .formation.atoms import (
+    ATOMS,
+    CATALYST_CONVENTION,
+    ON_LEG_CONVENTION,
+    RELATIONS,
+    LEVELS_CONVENTION,
+    REJECTED_CONVENTION,
+    AtomValue,
+    bound_direction,
+    dist_operands,
+    unit_mismatch,
 )
+from .formation.stops import StopOutcome, stop_resolver
+from .formation.triggers import TriggerOutcome, trigger_resolver, trigger_tunable_keys
 from .seam import AtomOutcome, DeskShadow, DeskShadowEntry, RadarScoreDetail, SeamObservation, validate_atom
 
 ET = ZoneInfo("America/New_York")
-EVALUATOR_VERSION = "s2p2.1"
+#: Bumped ONCE for the whole setups one build (R44: nothing deploys between
+#: its steps). A receipt of another version is refused by replay (§9 gate 5).
+EVALUATOR_VERSION = "s2p2.2"
 DESK_FORMULA_VERSION = "s2p2.1"
+#: FINAL [F-07]: the card's setup token — NOT a `SetupRef` member, so no
+#: definition can list it in `valid_setups`. No setup is detected.
+UNCLASSIFIED_SETUP = "unclassified"
 TIE_POLICY = (
     "pinned(ARMED,TRIGGERED,FILLED) by pool_position nulls last, score desc nulls last, ticker, card_id; "
     "WATCH by card_score desc nulls last, pool_position nulls last, ticker, card_id; "
@@ -144,6 +175,7 @@ _SRC = Path(__file__).resolve().parent
 FORMULA_FILES: tuple[Path, ...] = (
     _SRC / "evaluate.py",
     *sorted((_SRC / "anatomy").glob("*.py")),
+    *sorted((_SRC / "formation").glob("*.py")),
     _SRC.parent / "cards" / "scoring.py",
     _SRC.parent / "cards" / "health.py",
     _SRC.parent / "cards" / "radar.py",
@@ -175,52 +207,58 @@ class EvaluateError(RuntimeError):
 # ---------------------------------------------------------------------
 
 
-class AtomValue(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    kind: Literal["boolean", "number", "symbol", "null", "unavailable"]
-    boolean: bool | None = None
-    number: Decimal | None = None
-    symbol: str | None = None
-    #: `null` = definitely no value (`not_instantiated`); `unavailable` = unknown.
-    reason: str | None = None
-
-
 class Unsupported(ValueError):
-    """An AST shape no S2 detector serves. Carries a generic seam atom."""
+    """An AST shape no served resolver evaluates. Carries a generic seam atom."""
 
     def __init__(self, atom: str, detail: str):
         self.atom = atom
         super().__init__(detail)
 
 
-def _extension_atoms(ext: ExtensionObservation) -> dict[str, AtomValue]:
-    if ext.unavailable is not None:
-        missing = AtomValue(kind="unavailable", reason=ext.unavailable)
-        leg = (
-            AtomValue(kind="number", number=Decimal(ext.leg_count))
-            if ext.leg_count is not None else missing
-        )
-        return {"Extension.state": missing, "Extension.instantiated": missing, "Extension.leg_count": leg}
-    return {
-        "Extension.state": AtomValue(kind="symbol", symbol=ext.state),
-        "Extension.instantiated": AtomValue(kind="boolean", boolean=bool(ext.instantiated)),
-        "Extension.leg_count": (
-            AtomValue(kind="number", number=Decimal(ext.leg_count))
-            if ext.leg_count is not None else AtomValue(kind="null", reason="not_instantiated")
-        ),
-    }
-
-
 def _value(node: Node, atoms: Mapping[str, AtomValue], cfg: Callable[[str], Any], consulted: set[str]):
     """-> ("value", python value) | ("null", None) | ("unknown", reason)."""
     if isinstance(node, Number):
         return "value", node.value
+    if isinstance(node, Null):
+        return "null", None
     if isinstance(node, Symbol):
-        return "value", node.name
+        bound = bound_direction(node)  # `trade_direction` is the frame's side (FINAL §4)
+        return "value", bound if bound is not None else node.name
+    if isinstance(node, Ref) and bound_direction(node) is not None:
+        return "value", bound_direction(node)  # `opposite(…)` / `against(…)`
+    if isinstance(node, Ref) and dist_operands(node) is not None:  # `dist(a, b)` = |a − b| (STEP-7)
+        states = [_value(side, atoms, cfg, consulted) for side in dist_operands(node)]
+        for state, value in states:
+            if state == "unknown":
+                return state, value
+        if any(state == "null" for state, _ in states):
+            return "null", None
+        (_, a), (_, b) = states
+        if not isinstance(a, Decimal) or not isinstance(b, Decimal):
+            raise Unsupported("Unsupported(dist)", f"dist over non-numbers {a!r}, {b!r}")
+        return "value", abs(a - b)
     if isinstance(node, Cfg):
         raw = cfg(node.key)
+        if raw is None:  # a null row is unknown, named — never compared (STEP-5)
+            return "unknown", f"{node.key}_unset"
         return "value", Decimal(str(raw)) if isinstance(raw, (int, float, Decimal)) else raw
+    if isinstance(node, Arith) and node.op in ("*", "/"):
+        # FINAL §4 row 2: Decimal at the indicator module's precision; a zero
+        # divisor is unknown with a reason, never inf.
+        states = [_value(side, atoms, cfg, consulted) for side in (node.left, node.right)]
+        for state, value in states:
+            if state == "unknown":
+                return state, value
+        if any(state == "null" for state, _ in states):
+            return "null", None
+        (_, left), (_, right) = states
+        if not isinstance(left, Decimal) or not isinstance(right, Decimal):
+            raise Unsupported(f"Unsupported({node.kind})", f"arith over non-numbers {left!r} {node.op} {right!r}")
+        if node.op == "/" and right == 0:
+            return "unknown", "division_by_zero"
+        with localcontext() as ctx:
+            ctx.prec = INDICATOR_PRECISION
+            return "value", left * right if node.op == "*" else left / right
     if isinstance(node, Ref):
         text = render(node)
         if text not in atoms:
@@ -241,20 +279,204 @@ _CMP = {
 }
 
 
+def _in_band(node: InTest, atoms, cfg, consulted: set[str], unknowns: set[str], units) -> bool | None:
+    """FINAL §4 row 1: `<atom> IN cfg(band) <unit>` — an inclusive [lo, hi]
+    band. The atom's unit, the Quantity's unit and the band row's own unit
+    must all agree; any mismatch is `Unsupported`, named."""
+    q = node.right
+    atom = ATOMS.get(render(node.left)) if isinstance(node.left, Ref) else None
+    gap = unit_mismatch(q.unit, atom.unit if atom else None)
+    row_unit = units(q.value.key) if units is not None else None
+    if gap is None and row_unit is not None:  # an absent row fails loud in `cfg()` below
+        gap = unit_mismatch(q.unit, row_unit)
+    if gap is not None:
+        raise Unsupported(gap, f"band unit {q.unit!r} does not match")
+    ls, lv = _value(node.left, atoms, cfg, consulted)
+    if ls == "unknown":
+        unknowns.add(lv or "unavailable")
+        return None
+    if ls == "null":
+        return False
+    band = cfg(q.value.key)
+    if not isinstance(band, (list, tuple)) or len(band) != 2:
+        raise Unsupported("Unsupported(band)", f"cfg({q.value.key}) is not a [lo, hi] band")
+    lo, hi = (Decimal(str(v)) for v in band)
+    return lo <= lv <= hi
+
+
+def _between(node: Between, context: Mapping[str, Any] | None, unknowns: set[str]) -> bool | None:
+    """`flat(<ind>, window: <w>) between turn and cross` (FINAL §4; STEP-5) on
+    the frame in `context`: some window of that many working bars between the
+    move's turn and the def's own cross in which |slope_norm(<ind>)| stays
+    within `cfg(flat_threshold.<ind>)`."""
+    from .anatomy.slope import FLAT_KEYS, flat_threshold, slope_bars
+    from .formation.atoms import _flat_subject, flat_between, window_bars
+
+    if context is None or _flat_subject(node.subject) is None:
+        raise Unsupported(f"Unsupported(between:{render(node.subject)})", "between needs its frame and flat subject")
+    indicator, window_node = _flat_subject(node.subject)
+    frame, tunables, trigger = context["frame"], context["tunables"], context["trigger"]
+    window = window_bars(window_node, context["minutes"])
+    threshold = flat_threshold(tunables, indicator)
+    if threshold is None:
+        unknowns.add(f"{FLAT_KEYS[indicator]}_unset")
+        return None
+    n = slope_bars(tunables)
+    if n is None:
+        unknowns.add("slope_norm.bars_unset")
+        return None
+    atr = frame.objects["atr"]
+    if atr is None or atr == 0:
+        unknowns.add("insufficient_seed")
+        return None
+    edges = {}
+    edges["turn"] = frame.objects["turn_index"]
+    p = getattr(trigger, "params", {}) or {}
+    edges["cross"] = (frame.objects["cross_index"](p["a"], p["b"], p["direction"])
+                      if trigger.type == "indicator_cross" else None)
+    start, end = edges[render(node.start)], edges[render(node.end)]
+    if start is None or end is None:
+        unknowns.add("insufficient_bars")
+        return None
+    values = frame.objects["series"](indicator)
+    with localcontext() as ctx:
+        ctx.prec = INDICATOR_PRECISION
+        norm = [None if i < n or values[i] is None or values[i - n] is None else (values[i] - values[i - n]) / (n * atr)
+                for i in range(len(values))]
+    return flat_between(norm, start=start, end=end, window=window, threshold=threshold)
+
+
+def _touched(node: Relation, context: Mapping[str, Any] | None, unknowns: set[str]) -> bool | None:
+    """`touched(Leg, indicator)` (taxonomy §3.1; STEP-6): the leg's extreme
+    reached the indicator on one of its bars — a down leg's low at or under
+    it, an up leg's high at or over it (contact, not proximity)."""
+    from .formation.atoms import _touched_gaps
+
+    gaps = _touched_gaps(node)
+    if context is None or gaps:
+        raise Unsupported(min(gaps) if gaps else "touched", "touched needs a served leg and indicator")
+    frame = context["frame"]
+    roles = frame.objects["pullback_roles"]
+    leg = roles.pullback if render(node.left) == "Leg(pullback)" else (
+        roles.before if roles.before_role == "impulse" else None)
+    if leg is None:
+        return False  # no such leg: nothing touched
+    values = frame.objects["series"](render(node.right))
+    seen = False
+    for i, bar in enumerate(frame.run):
+        if not (leg.start_ts <= bar.ts <= leg.end_ts) or values[i] is None:
+            continue
+        seen = True
+        if (bar.low <= values[i]) if leg.direction == "down" else (bar.high >= values[i]):
+            return True
+    if not seen:
+        unknowns.add("insufficient_seed")
+        return None
+    return False
+
+
+def _on(node: Qualified, context: Mapping[str, Any] | None, unknowns: set[str]) -> bool | None:
+    """`Extension.instantiated on Leg(pre_test)` (`A-15`, convention
+    `extension.on_leg.form`; STEP-6): the Extension detector run over the
+    leg's bars — `Leg(pre_test)` is the run from the open to the pullback
+    (`A-14`). No pullback → no pre-test move → False."""
+    from .anatomy.extension import detect_extension
+    from .formation.atoms import _on_gaps
+
+    gaps = _on_gaps(node)
+    if context is None or gaps:
+        raise Unsupported(min(gaps) if gaps else "on", "on needs a served subject and leg")
+    frame = context["frame"]
+    bars = frame.objects["pre_test_bars"]
+    if not bars:
+        return False
+    ext = detect_extension(bars, frame.extension.params)
+    if ext.instantiated is None:
+        unknowns.add(ext.unavailable or "insufficient_bars")
+        return None
+    return bool(ext.instantiated)
+
+
+def _on_that_range_break(node: Qualified, atoms, cfg, consulted, unknowns, context) -> bool | None:
+    """`event(retest) on that RangeBreak` (FINAL §4; STEP-8): the anaphora binds
+    to the RangeBreak the previous precondition evaluated True; with no
+    antecedent it is unknown (`no_antecedent`), never "any"."""
+    if context is None or context.get("antecedent") != "RangeBreak":
+        unknowns.add("no_antecedent")
+        return None
+    return evaluate_node(node.subject, atoms, cfg, consulted, unknowns, context=context)
+
+
+def _after(node: Qualified, atoms, cfg, consulted, unknowns, context) -> bool | None:
+    """`RangeBreak.state == failed_trap after event(retest)` (STEP-8): the state
+    holds AND its trap close came after the retest bar."""
+    if context is None:
+        raise Unsupported("after", "after needs its frame")
+    held = evaluate_node(node.subject, atoms, cfg, consulted, unknowns, context=context)
+    if held is not True:
+        return held
+    obs = context["frame"].objects["range_break"]
+    if isinstance(obs, str) or obs is None or obs.retest_index is None or obs.trap_index is None:
+        return False
+    return obs.trap_index > obs.retest_index
+
+
+def _inside(node: Relation, context, unknowns) -> bool | None:
+    """`price inside Range(prior)` (`A-21`, convention `range_prior.rule`;
+    STEP-8): the last close back under the broken level, above the lowest low
+    before the break."""
+    if context is None:
+        raise Unsupported("inside", "inside needs its frame")
+    frame = context["frame"]
+    obs = frame.objects["range_break"]
+    if isinstance(obs, str):
+        unknowns.add(obs)
+        return None
+    if obs is None or obs.accept_index is None or frame.last_close is None:
+        return False
+    return obs.prior_low <= frame.last_close < obs.level
+
+
 def evaluate_node(
-    node: Node, atoms: Mapping[str, AtomValue], cfg: Callable[[str], Any], consulted: set[str], unknowns: set[str]
+    node: Node, atoms: Mapping[str, AtomValue], cfg: Callable[[str], Any], consulted: set[str], unknowns: set[str],
+    *, units: Callable[[str], str | None] | None = None, context: Mapping[str, Any] | None = None,
 ) -> bool | None:
-    """Kleene three-valued truth. `unknowns` collects the reasons."""
+    """Kleene three-valued truth. `unknowns` collects the reasons. `units`
+    names a tunable row's unit (the band shape checks it); `context` carries
+    the frame and the def's trigger for a relation (`between`)."""
+    kw = dict(units=units, context=context)
     if isinstance(node, Not):
-        inner = evaluate_node(node.operand, atoms, cfg, consulted, unknowns)
+        inner = evaluate_node(node.operand, atoms, cfg, consulted, unknowns, **kw)
         return None if inner is None else not inner
     if isinstance(node, And):
-        results = [evaluate_node(op, atoms, cfg, consulted, unknowns) for op in node.operands]
+        results = [evaluate_node(op, atoms, cfg, consulted, unknowns, **kw) for op in node.operands]
         if any(r is False for r in results):
             return False
         return None if any(r is None for r in results) else True
+    if isinstance(node, Between):
+        return _between(node, context, unknowns)
+    if isinstance(node, EventAtom):  # STEP-8: an event is a boolean atom of the frame
+        text = render(node)
+        if text not in atoms:
+            raise Unsupported(text, f"event {text} has no detector")
+        consulted.add(text)
+        atom = atoms[text]
+        if atom.kind == "unavailable":
+            unknowns.add(atom.reason or "unavailable")
+            return None
+        return bool(atom.boolean)
+    if isinstance(node, Relation) and node.op == "touched":
+        return _touched(node, context, unknowns)
+    if isinstance(node, Relation) and node.op == "inside":
+        return _inside(node, context, unknowns)
+    if isinstance(node, Qualified) and node.op == "on" and render(node.anchor) == "that RangeBreak":
+        return _on_that_range_break(node, atoms, cfg, consulted, unknowns, context)
+    if isinstance(node, Qualified) and node.op == "on":
+        return _on(node, context, unknowns)
+    if isinstance(node, Qualified) and node.op == "after":
+        return _after(node, atoms, cfg, consulted, unknowns, context)
     if isinstance(node, Or):
-        results = [evaluate_node(op, atoms, cfg, consulted, unknowns) for op in node.operands]
+        results = [evaluate_node(op, atoms, cfg, consulted, unknowns, **kw) for op in node.operands]
         if any(r is True for r in results):
             return True
         return None if any(r is None for r in results) else False
@@ -275,12 +497,16 @@ def evaluate_node(
             if state == "unknown":
                 unknowns.add(value or "unavailable")
                 return None
+        if ls == "null" and rs == "null":
+            return node.op == "=="  # both absent: equal (STEP-6, `x != null`)
         if ls == "null" or rs == "null":
             return node.op == "!="
         try:
             return bool(_CMP[node.op](lv, rv))
         except TypeError as e:
             raise Unsupported(render(node), f"cannot compare {lv!r} {node.op} {rv!r}") from e
+    if isinstance(node, InTest) and isinstance(node.right, Quantity) and isinstance(node.right.value, Cfg):
+        return _in_band(node, atoms, cfg, consulted, unknowns, units)
     if isinstance(node, InTest) and isinstance(node.right, SetLiteral):
         ls, lv = _value(node.left, atoms, cfg, consulted)
         if ls == "unknown":
@@ -321,6 +547,17 @@ class MemberInput(BaseModel):
     pool_position: int | None = None
 
 
+class Anchor(BaseModel):
+    """FINAL §2.4: what a formation hangs on (`extension_direction` becomes
+    this; the old field stays for byte identity)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    object: str
+    direction: Literal["up", "down"] | None
+    bar_ts: AwareDatetime | None
+
+
 class Formation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -334,6 +571,29 @@ class Formation(BaseModel):
     formed_bar_ts: AwareDatetime
     formed_bar_end: AwareDatetime
     leg_count: int | None
+    #: The assumed keys this formation rests on (R2-2 = B): the static
+    #: closure of the definition (R2-2.2), stored on the card's
+    #: `assumed_formation` dot at creation, never re-read from live rows.
+    assumed_keys: tuple[str, ...]
+    #: FINAL §2.4: the frame it formed on — `long` = the stored bars,
+    #: `mirrored` = the short side's mirrored bars (prices already negated back).
+    side_frame: Literal["long", "mirrored"] = "long"
+    #: FINAL §2.4: the object the formation hangs on, in real coordinates.
+    anchor: Anchor | None = None
+    #: FINAL §2.2 / §2.3: the resolvers' outcomes, in real coordinates.
+    trigger_outcome: TriggerOutcome | None = None
+    stop_outcome: StopOutcome | None = None
+
+
+class SideOutcome(BaseModel):
+    """One frame's outcome for the scan that computed it (R2-4.1 B): an
+    internal model on `MemberEvaluation`, never the seam."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    evaluation: Evaluation
+    formation: Formation | None = None
+    note: str | None = None
 
 
 class MemberEvaluation(BaseModel):
@@ -362,6 +622,9 @@ class MemberEvaluation(BaseModel):
     working: tuple[WorkingBar, ...] = ()
     ema9: Decimal | None = None
     note: str | None = None
+    #: R2-4.1 B: both frames' outcomes for this scan. Every per-card
+    #: decision reads the CARD'S OWN side here, never the published row.
+    by_side: dict[Literal["long", "short"], SideOutcome] = Field(default_factory=dict)
 
 
 def seam_atom(name: str) -> str:
@@ -418,7 +681,7 @@ def working_minutes(defaults: TaxonomyDefaults) -> int:
 
 def _cfg_value(raw: Any, tunables: Mapping[str, TunableRow], defaults: TaxonomyDefaults) -> Any:
     if isinstance(raw, str) and raw.startswith("cfg(") and raw.endswith(")"):
-        return resolve_cfg(raw[4:-1], dict(tunables), defaults)
+        return resolve_cfg(raw[4:-1], tunables, defaults)
     return raw
 
 
@@ -484,6 +747,163 @@ def _s(value) -> str | None:
     return None if value is None else str(value)
 
 
+#: FINAL §1 / R2-2.2 term (3): the conventions the side-binding line below
+#: implements, by their engine ROW key — `A-01` (key
+#: `anatomy.orientation.extension`): a def written long-side trades against an
+#: unqualified Extension (a DOWN Extension for the long frame). From C2 every
+#: convention is also a row (`tunables.yaml`, unit `label`); a null row
+#: counts as assumed unconditionally (the C1 rule, carried until he rules it).
+ASSUMED_CONVENTIONS: tuple[str, ...] = ("anatomy.orientation.extension",)
+#: The label each implemented convention's row may carry; any other non-null
+#: label is refused (`not_evaluable: <key>=<label>`), never guessed.
+CONVENTION_LABELS: dict[str, str] = {
+    "anatomy.orientation.extension": "long_opposes_unqualified_extension",
+    # STEP-3 (D1): the conventions the frame's resolvers implement.
+    WARMUP_CONVENTION: "premarket_complete_buckets_else_rth_only",  # A-05, `indicators.seeded`
+    DAYRANGE_CONVENTION: "rth_high_low_since_open",  # A-06, `session_levels.day_range`
+    VWAP_CONVENTION: "rth_anchored_typical_price_i1",  # A-12, `session_levels.vwap`
+    # STEP-6 (C5).
+    CATALYST_CONVENTION: "radar_in_play_admission",  # A-13, the `catalyst_ref` resolver (FINAL §6)
+    PRE_TEST_CONVENTION: "session_open_to_pullback_start",  # A-14, `leg_roles.pre_test_bars`
+    ON_LEG_CONVENTION: "extension_detector_over_leg_bars",  # A-15, `evaluate._on`
+    # STEP-7 (C6).
+    LEVELS_CONVENTION: "pmh_pdh",  # A-17, the level set of `Level_ref(resistance)`
+    REJECTED_CONVENTION: "wick_through_close_back_below_still_below",  # A-18, `frame.rejected`
+    # STEP-8 (C7), `anatomy.range_break`.
+    PRIOR_RANGE_CONVENTION: "session_low_before_break_to_level",  # A-21
+    STOP_HIT_CONVENTION: "computed_from_bars_turn_low_less_buffer",  # A-22
+    TURN_CANDLE_CONVENTION: "turn_bar_low",  # A-23
+}
+
+
+def _anchored_on_extension(td: TradeDef) -> bool:
+    """A-01 applies to a def whose precondition anchor is an unqualified Extension."""
+    return any(atom.startswith("Extension.") for p in td.preconditions for atom in p.required_atoms)
+
+
+def _conventions(td: TradeDef) -> set[str]:
+    conventions: set[str] = set(ASSUMED_CONVENTIONS) if _anchored_on_extension(td) else set()
+    for predicate in [*td.preconditions, *td.avoid]:
+        for atom in predicate.required_atoms:
+            if atom in ATOMS:
+                conventions |= set(ATOMS[atom].conventions)
+            elif atom in RELATIONS:  # STEP-6: a relation's resolver declares its own
+                conventions |= set(RELATIONS[atom].conventions)
+    return conventions
+
+
+def convention_refusals(td: TradeDef, tunables: Mapping[str, TunableRow]) -> tuple[str, ...]:
+    """`<key>=<label>` for every convention row whose non-null label the code
+    does not implement. A declared convention with no row is a loud error."""
+    out = []
+    for key in sorted(_conventions(td)):
+        if key not in tunables:
+            raise EvaluateError(f"convention {key!r} has no tunable row — a declared convention must have one")
+        value = tunables[key].value
+        if value is not None and value != CONVENTION_LABELS[key]:
+            out.append(f"{key}={value}")
+    return tuple(out)
+
+
+def closure_keys(td: TradeDef) -> frozenset[str]:
+    """R2-2.2 B — the static closure of a definition, the union of (1) every
+    `cfg(<key>)` the def names (`iter_cfg_tokens`), (2) the `TUNABLE_KEYS` of
+    every detector serving an atom its preconditions or avoids name — and
+    (fix round 2 F3) the keys its TRIGGER resolver declares it reads — and
+    (3) the conventions of the branches and resolvers it uses."""
+    keys: set[str] = set(iter_cfg_tokens(td)) | _conventions(td) | set(trigger_tunable_keys(td.trigger))
+    for predicate in [*td.preconditions, *td.avoid]:
+        for atom in predicate.required_atoms:
+            if atom in ATOMS:
+                keys |= set(ATOMS[atom].tunable_keys)
+    return frozenset(keys)
+
+
+def assumed_closure(td: TradeDef, tunables: Mapping[str, TunableRow]) -> tuple[str, ...]:
+    """Computed ONCE at formation: the closure's keys whose resolved row reads
+    `source: assumed`, plus every convention whose row is still null."""
+    keys = closure_keys(td) - _conventions(td)
+    out = {key for key in keys if key in tunables and tunables[key].source is TunableSource.ASSUMED}
+    for key in _conventions(td):
+        row = tunables[key]
+        if row.value is None or row.source is TunableSource.ASSUMED:
+            out.add(key)
+    return tuple(sorted(out))
+
+
+def publish_frames(*, long: MemberEvaluation, short: MemberEvaluation) -> MemberEvaluation:
+    """R2-4.1 B — the ONE row per (run, member, def): the frame that formed
+    when exactly one did; `not_formed`, note `both_sides`, with the long
+    frame's detail when both did; the LONG frame's evaluation (the def as
+    written) when neither did. No order among the non-formed states is
+    defined. Both frames' outcomes ride along in `by_side`."""
+    by_side = {
+        "long": SideOutcome(evaluation=long.evaluation, formation=long.formation, note=long.note),
+        "short": SideOutcome(evaluation=short.evaluation, formation=short.formation, note=short.note),
+    }
+    if long.evaluation == "formed" and short.evaluation == "formed":
+        chosen = long.model_copy(update={"evaluation": "not_formed", "note": "both_sides", "formation": None,
+                                         "direction": None, "i1_after": ()})
+    elif short.evaluation == "formed":
+        chosen = short
+    else:
+        chosen = long
+    return chosen.model_copy(update={"by_side": by_side})
+
+
+def stop_on_protective_side(direction: str, *, trigger: Decimal, stop: Decimal, last_close: Decimal) -> bool:
+    """FINAL §9 point (5) — the geometry guard, written ONCE (X17 PASS)."""
+    if direction == "long":
+        return stop < min(trigger, last_close)
+    return stop > max(trigger, last_close)
+
+
+def _closed_i1(member: MemberInput) -> list[Bar]:
+    today = [bar for bar in member.bars if bar.ts.astimezone(ET).date() == member.trade_date]
+    return [bar for bar in today if bar.ts + timedelta(minutes=1) <= member.as_of]
+
+
+def _daily_ok(member: MemberInput, clock) -> bool:
+    if member.daily is None:
+        return False
+    return not daily_staleness(
+        member.daily, trade_date=member.trade_date, is_trading_day=clock.calendar.is_trading_day
+    ).stale
+
+
+def _build_frames(
+    member: MemberInput, closed_i1: Sequence[Bar], series, run: tuple[WorkingBar, ...], *, daily_ok: bool,
+    tunables: Mapping[str, TunableRow], params: ExtensionParams, last_price: Decimal | None, clock,
+    bind_side: bool = False,
+) -> dict[str, Frame]:
+    """FINAL §2.1: one frame per side; the detectors run inside the frame.
+    §5: the seed is the complete premarket working buckets of `series`.
+    `bind_side`: fix r3 F1 (`frame.binds_side_by_frame`)."""
+    premarket_i1, rth_i1 = minute_bars(closed_i1, as_of=member.as_of, clock=clock)
+    session = SessionInputs(premarket=premarket_buckets(series.bars, clock), premarket_i1=premarket_i1,
+                            rth_i1=rth_i1, departed=member.departed)
+    return {
+        side: build_frame(side, run, daily=member.daily, daily_ok=daily_ok, trade_date=member.trade_date,
+                          params=params, last_close=last_price, session=session, tunables=tunables,
+                          bind_side=bind_side)
+        for side in ("long", "short")
+    }
+
+
+def member_frames(
+    member: MemberInput, *, tunables: Mapping[str, TunableRow], defaults: TaxonomyDefaults, clock,
+) -> dict[str, Frame]:
+    """Both frames of one member at its `as_of`, built exactly as
+    `evaluate_member` builds them."""
+    closed_i1 = _closed_i1(member)
+    series = working_bars(closed_i1, working_minutes(defaults), as_of=member.as_of)
+    return _build_frames(
+        member, closed_i1, series, tuple(rth_only(series, clock)), daily_ok=_daily_ok(member, clock),
+        tunables=tunables, params=ExtensionParams.from_tunables(tunables),
+        last_price=closed_i1[-1].close if closed_i1 else None, clock=clock,
+    )
+
+
 def evaluate_member(
     ld: LoadedDef,
     member: MemberInput,
@@ -495,8 +915,7 @@ def evaluate_member(
 ) -> MemberEvaluation:
     td = ld.definition
     minutes = working_minutes(defaults)
-    today = [bar for bar in member.bars if bar.ts.astimezone(ET).date() == member.trade_date]
-    closed_i1 = [bar for bar in today if bar.ts + timedelta(minutes=1) <= member.as_of]
+    closed_i1 = _closed_i1(member)
     consumed = tuple(bar_row(bar) for bar in closed_i1)
     last_bar = closed_i1[-1] if closed_i1 else None
     last_price = last_bar.close if last_bar else None
@@ -514,58 +933,57 @@ def evaluate_member(
     def result(evaluation: Evaluation, detail: RadarScoreDetail, **kw) -> MemberEvaluation:
         return MemberEvaluation(**base, evaluation=evaluation, detail=detail, inputs_sha256=inputs_sha, **kw)
 
+    def both(ev: MemberEvaluation) -> MemberEvaluation:
+        """A result that does not depend on the side: the same for both frames."""
+        return publish_frames(long=ev, short=ev)
+
     ev = evaluability(td)
     if not ev.evaluable:
-        return result(
+        return both(result(
             "not_evaluable", RadarScoreDetail(
                 atoms=(), missing_atoms=seam_safe_missing_atoms(ev.missing_atoms), observations=(),
             ),
             direction=None, missing=ev.missing_atoms,
-        )
+        ))
+    refusals = convention_refusals(td, tunables)
+    if refusals:
+        return both(result(
+            "not_evaluable", RadarScoreDetail(
+                atoms=(), missing_atoms=seam_safe_missing_atoms(refusals), observations=(),
+            ),
+            direction=None, missing=refusals, note="a convention row names a rule the code does not implement",
+        ))
 
     series = working_bars(closed_i1, minutes, as_of=member.as_of)
     run = tuple(rth_only(series, clock))
-    ext = detect_extension(run, ExtensionParams.from_tunables(tunables))
+    params = ExtensionParams.from_tunables(tunables)
     if last_bar is None:
         intraday_stale = True
     else:
         intraday_stale = intraday_staleness(
             observed_at=last_bar.ts + timedelta(minutes=1), as_of=member.as_of, scan_interval=scan_interval
         ).stale
-    daily_ok = False
-    if member.daily is not None:
-        daily_ok = not daily_staleness(
-            member.daily, trade_date=member.trade_date, is_trading_day=clock.calendar.is_trading_day
-        ).stale
-    atoms = _extension_atoms(ext)
-    htf = None
-    if not daily_ok:
-        atoms["RangeBreak(HTF).day_count"] = AtomValue(kind="unavailable", reason="no_daily_bars")
-    elif not run:
-        atoms["RangeBreak(HTF).day_count"] = AtomValue(kind="unavailable", reason="insufficient_bars")
-    else:
-        htf = htf_range_break(
-            member.daily, member.trade_date,
-            session_high=max(b.high for b in run), session_low=min(b.low for b in run),
-        )
-        atoms["RangeBreak(HTF).day_count"] = (
-            AtomValue(kind="number", number=Decimal(htf.day_count))
-            if htf.day_count is not None else AtomValue(kind="null", reason="not_instantiated")
-        )
+    daily_ok = _daily_ok(member, clock)
+    frames = _build_frames(member, closed_i1, series, run, daily_ok=daily_ok, tunables=tunables, params=params,
+                           last_price=last_price, clock=clock, bind_side=binds_side_by_frame(td))
+    # R2-4.2 B: factor and seam observations ONCE, on the real bars (the
+    # detector's own Extension, also for a def that binds side by the frame).
+    ext, htf = frames["long"].observed, frames["long"].htf
 
     observations = _factor_observations(
         ext, member, intraday_stale=intraday_stale, daily_ok=daily_ok, last_price=last_price,
         scan_interval=scan_interval,
     )
-    ema9 = None
-    try:
-        ema9 = ema(run, defaults.ma.fast).value if run else None
-    except InsufficientBars:
-        ema9 = None
+    # [F-10]: EMA9 has ONE definition — seeded, falling back to RTH-only —
+    # and `ema9` (the FILLED card's health input) takes it. `atr_working`
+    # stays the Extension's RTH-run ATR; `atr_seeded` is published beside it.
+    ema9 = frames["long"].number("EMA9")
+    atr_seeded = frames["long"].number("ATR(working_tf)")
     seam_obs = [
         _obs("session_open", ext.session_open, run[0].ts if run else None),
         _obs("last_close", last_price, last_bar.ts if last_bar else None),
         _obs("atr_working", ext.atr.value if ext.atr else None, ext.atr.last_bar_ts if ext.atr else None),
+        _obs("atr_seeded", atr_seeded, frames["long"].warm[-1].ts if atr_seeded is not None else None),
         _obs("distance_from_open_atr", ext.distance_from_open_atr),
         _obs("volume_threshold", ext.band.threshold if ext.band else None, ext.culminating_bar_ts),
         _obs("culminating_volume", ext.culminating_volume, ext.culminating_bar_ts),
@@ -580,104 +998,187 @@ def evaluate_member(
         direction=None,
     )
 
-    def detail(consulted: set[str], path=None, formed_ts=None) -> RadarScoreDetail:
+    def detail(frame: Frame, consulted: set[str], path=None, formed_ts=None) -> RadarScoreDetail:
         outcomes = []
         for name in sorted(consulted):
-            atom = atoms[name]
+            atom = frame.atoms[name]
             if atom.kind == "unavailable":
                 outcomes.append(AtomOutcome(atom=name, value_kind="unavailable", unavailable=atom.reason))
             elif atom.kind == "null":
                 outcomes.append(AtomOutcome(atom=name, value_kind="unavailable", unavailable="not_instantiated"))
             else:
-                outcomes.append(AtomOutcome(atom=name, value_kind=atom.kind, **{atom.kind: getattr(atom, atom.kind)}))
+                value = getattr(atom, atom.kind)
+                if atom.kind == "number" and name in ATOMS and ATOMS[name].price:
+                    value = frame.real(value)  # X12: a mirrored price is negated back before publication
+                outcomes.append(AtomOutcome(atom=name, value_kind=atom.kind, **{atom.kind: value}))
         return RadarScoreDetail(
             atoms=tuple(outcomes), missing_atoms=(), observations=tuple(seam_obs),
             extension_path=path, formed_bar_ts=formed_ts,
         )
 
     if intraday_stale:
-        return result("input_stale", detail(set()), note="intraday bars older than 2 x radar.scan_interval", **extra)
+        return both(result("input_stale", detail(frames["long"], set()),
+                           note="intraday bars older than 2 x radar.scan_interval", **extra))
 
     def cfg(key: str) -> Any:
-        return resolve_cfg(key, dict(tunables), defaults)
+        return resolve_cfg(key, tunables, defaults)
 
-    consulted: set[str] = set()
-    try:
-        pre_unknown: set[str] = set()
-        pre = [evaluate_node(p.ast, atoms, cfg, consulted, pre_unknown) for p in td.preconditions if p.expr]
-        avoid_unknown: set[str] = set()
-        avoid = [evaluate_node(p.ast, atoms, cfg, consulted, avoid_unknown) for p in td.avoid if p.expr]
-    except Unsupported as e:
-        return result(
-            "not_evaluable",
-            RadarScoreDetail(atoms=(), missing_atoms=(e.atom,), observations=tuple(seam_obs)),
-            missing=(e.atom,), note=str(e), **extra,
-        )
-    path = ext.path
-    if any(r is False for r in pre):
-        return result("not_formed", detail(consulted, path), **extra)
-    if any(r is None for r in pre):
-        if "catalyst_ref_unknown" in pre_unknown:
-            return result("not_evaluable", detail(consulted, "B_only"),
-                          note="Extension path B only — catalyst unknown in S2 (R4)", **extra)
-        if "no_daily_bars" in pre_unknown:
-            return result("input_stale", detail(consulted, path), note="daily bars missing or stale", **extra)
-        return result("not_formed", detail(consulted, path), note=f"unknown: {sorted(pre_unknown)}", **extra)
-    if any(r is True for r in avoid):
-        return result("avoided", detail(consulted, path, ext.culminating_bar_ts), **extra)
-    if any(r is None for r in avoid):
-        state: Evaluation = "input_stale" if "no_daily_bars" in avoid_unknown else "not_formed"
-        return result(state, detail(consulted, path), note=f"avoid unknown: {sorted(avoid_unknown)}", **extra)
+    def value(raw: Any) -> Any:
+        return _cfg_value(raw, tunables, defaults)
 
-    # --- formed: direction, trigger, stop ---------------------------------
-    if ext.direction is None or ext.culminating_bar_ts is None:
-        return result("not_formed", detail(consulted, path), note="no culminating bar to form on", **extra)
-    relations = {vs.relation for vs in td.valid_setups}
-    if relations == {Relation.COUNTERTREND}:
-        trade_direction = "short" if ext.direction == "up" else "long"
-    elif relations == {Relation.WITH_TREND}:
-        trade_direction = "long" if ext.direction == "up" else "short"
-    else:
-        return result(
-            "not_evaluable",
-            RadarScoreDetail(atoms=(), missing_atoms=("Setup(relation)",), observations=tuple(seam_obs)),
-            missing=("Setup(relation)",), note="valid_setups mix relations — no computable direction", **extra,
+    anchored = _anchored_on_extension(td)
+    anchor_row = anchor_for(td)
+    on_extension = anchor_row is not None and anchor_row.object == "Extension"
+
+    def units(key: str) -> str | None:
+        return tunables[key].unit.value if key in tunables else None
+
+    def on_side(frame: Frame) -> MemberEvaluation:
+        """One frame's evaluation of the def's LONG-side text; prices in the
+        returned formation are real-world (FINAL §2.1 [F-04])."""
+        ext = frame.extension
+        consulted: set[str] = set()
+        context = {"frame": frame, "tunables": tunables, "trigger": td.trigger, "minutes": minutes}
+        try:
+            pre_unknown: set[str] = set()
+            pre = []
+            for p in td.preconditions:
+                if not p.expr:
+                    continue
+                pre.append(evaluate_node(p.ast, frame.atoms, cfg, consulted, pre_unknown, units=units,
+                                         context=context))
+                # STEP-8: the anaphora's antecedent — the RangeBreak a precondition evaluated True on
+                if pre[-1] is True and any(a.startswith("RangeBreak") for a in p.required_atoms):
+                    context["antecedent"] = "RangeBreak"
+            avoid_unknown: set[str] = set()
+            avoid = [evaluate_node(p.ast, frame.atoms, cfg, consulted, avoid_unknown, units=units, context=context)
+                     for p in td.avoid if p.expr]
+        except Unsupported as e:
+            return result(
+                "not_evaluable",
+                RadarScoreDetail(atoms=(), missing_atoms=seam_safe_missing_atoms((e.atom,)),
+                                 observations=tuple(seam_obs)),
+                missing=(e.atom,), note=str(e), **extra,
+            )
+        # The Extension path is an Extension formation's evidence only.
+        path = ext.path if on_extension or anchor_row is None else None
+        avoided_ts = ext.culminating_bar_ts if on_extension or anchor_row is None else None
+        if any(r is False for r in pre):
+            return result("not_formed", detail(frame, consulted, path), **extra)
+        if any(r is None for r in pre):
+            if "catalyst_ref_unknown" in pre_unknown:
+                return result("not_evaluable", detail(frame, consulted, "B_only"),
+                              note="Extension path B only — catalyst unknown in S2 (R4)", **extra)
+            if "no_daily_bars" in pre_unknown:
+                return result("input_stale", detail(frame, consulted, path), note="daily bars missing or stale",
+                              **extra)
+            return result("not_formed", detail(frame, consulted, path), note=f"unknown: {sorted(pre_unknown)}",
+                          **extra)
+        if any(r is True for r in avoid):
+            return result("avoided", detail(frame, consulted, path, avoided_ts), **extra)
+        if any(r is None for r in avoid):
+            state: Evaluation = "input_stale" if "no_daily_bars" in avoid_unknown else "not_formed"
+            return result(state, detail(frame, consulted, path), note=f"avoid unknown: {sorted(avoid_unknown)}",
+                          **extra)
+
+        # --- formed: the anchor (FINAL §2.4), side binding, trigger, stop --
+        if anchor_row is None:
+            return result("not_formed", detail(frame, consulted, path), note="no formation anchor", **extra)
+        anchor = anchor_row.resolve(frame)
+        if isinstance(anchor, str):
+            return result("not_formed", detail(frame, consulted, path), note=anchor, **extra)
+        # A-01 (FINAL §1): the long-side text trades against an unqualified
+        # Extension — in the frame's coordinates, a DOWN one.
+        if anchored and on_extension and anchor.direction != "down":
+            return result("not_formed", detail(frame, consulted, path),
+                          note="the unqualified Extension runs with this side (A-01)", **extra)
+        placement = td.stop.placement
+        try:
+            trigger = trigger_resolver(td.trigger).resolve(frame, td.trigger, value)
+            stop = stop_resolver(placement).resolve(frame, placement, value, trigger=trigger)
+        except (InsufficientBars, IncompleteBucket) as e:
+            return result("not_formed", detail(frame, consulted, path), note=f"trigger/stop unavailable: {e}",
+                          **extra)
+        if not stop_on_protective_side("long", trigger=trigger.price, stop=stop.price, last_close=frame.last_close):
+            return result("not_formed", detail(frame, consulted, path), note="stop_wrong_side", **extra)
+        side = frame.side
+        trigger, stop = trigger.unmirrored(side), stop.unmirrored(side)
+        real_direction = anchor.direction if side == "long" else ("up" if anchor.direction == "down" else "down")
+        formed_end = anchor.bar_ts + timedelta(minutes=minutes)
+        formation = Formation(
+            # `extension_direction` stays for byte identity; for another
+            # anchor it carries that anchor's (real) direction (§2.4).
+            extension_direction=real_direction, trade_direction=side, setup_ref=UNCLASSIFIED_SETUP,
+            trigger=trigger.level, extreme=stop.extreme, stop=stop.structural, stop_ref=stop.ref,
+            formed_bar_ts=anchor.bar_ts, formed_bar_end=formed_end, leg_count=ext.leg_count,
+            assumed_keys=assumed_closure(td, tunables), side_frame="long" if side == "long" else "mirrored",
+            anchor=Anchor(object=anchor.object, direction=real_direction, bar_ts=anchor.bar_ts),
+            trigger_outcome=trigger, stop_outcome=stop,
         )
-    wanted = next(r for r in relations)
-    setup_ref = next(vs.setup_ref.value for vs in td.valid_setups if vs.relation == wanted)
-    trigger_def = td.trigger
-    assert isinstance(trigger_def, SimpleTrigger)
-    placement = td.stop.placement
-    assert isinstance(placement, StructuralExtremePlacement)
-    try:
-        n = int(_cfg_value(trigger_def.params["bars_cleared"], tunables, defaults))
-        trigger = bar_break_trigger(run, n, trade_direction)
-        extreme = tracked_extreme(run, ext.direction)
-        buffer = Decimal(str(_cfg_value(placement.buffer.cents.value, tunables, defaults)))
-        stop = structural_stop(extreme.price, trade_direction, buffer)
-    except (InsufficientBars, IncompleteBucket) as e:
-        return result("not_formed", detail(consulted, path), note=f"trigger/stop unavailable: {e}", **extra)
-    formed_end = ext.culminating_bar_ts + timedelta(minutes=minutes)
-    formation = Formation(
-        extension_direction=ext.direction, trade_direction=trade_direction, setup_ref=setup_ref,
-        trigger=trigger, extreme=extreme, stop=stop, stop_ref=placement.ref.value,
-        formed_bar_ts=ext.culminating_bar_ts, formed_bar_end=formed_end, leg_count=ext.leg_count,
-    )
-    extra["direction"] = trade_direction
-    i1_after = tuple(bar for bar in closed_i1 if bar.ts >= formed_end)
-    return result(
-        "formed", detail(consulted, path, ext.culminating_bar_ts), formation=formation,
-        i1_after=i1_after, **extra,
-    )
+        i1_after = tuple(bar for bar in closed_i1 if bar.ts >= formed_end)
+        return result(
+            "formed", detail(frame, consulted, path, anchor.bar_ts), formation=formation,
+            i1_after=i1_after, **{**extra, "direction": side},
+        )
+
+    return publish_frames(long=on_side(frames["long"]), short=on_side(frames["short"]))
 
 
 def card_why(td: TradeDef, formation: Formation) -> str:
+    """FINAL §2.4 [F-05]: assembled from the resolvers' own fragments. The
+    Extension formation keeps its sentence byte for byte."""
+    if formation.anchor is not None and formation.anchor.object != "Extension":
+        t, s = formation.trigger_outcome, formation.stop_outcome
+        return (
+            f"{formation.setup_ref} · {formation.anchor.object} (bar "
+            f"{formation.formed_bar_ts.astimezone(ET):%H:%M} ET) — {formation.trade_direction} on the "
+            f"{t.why if t else 'trigger'} at {formation.trigger.price}; stop {formation.stop.price} "
+            f"{s.why if s else ''}".rstrip()
+        )
     return (
         f"{formation.setup_ref} · Extension culminating (path A, {formation.leg_count} legs, "
         f"bar {formation.formed_bar_ts.astimezone(ET):%H:%M} ET) — {formation.trade_direction} on a "
         f"{formation.trigger.bars_cleared}-bar break at {formation.trigger.price}; stop "
         f"{formation.stop.price} beyond the {formation.stop_ref} extreme {formation.extreme.price}"
     )
+
+
+def assumed_keys_of(dots: Iterable[Dot]) -> tuple[str, ...]:
+    """The keys a card's OWN stored `assumed_formation` dot names — never a
+    live tunable row, so a row ruled later does not lift an open card. No
+    dot -> no keys."""
+    for dot in dots:
+        if dot.factor == ASSUMED_FORMATION:
+            return tuple(dot.engine_inputs["assumed_keys"])
+    return ()
+
+
+def card_dots(
+    ld: LoadedDef,
+    ev: MemberEvaluation,
+    settings: CardSettings,
+    at: datetime,
+    assumed_keys: Sequence[str],
+    *,
+    previous: Iterable[Dot] | None = None,
+    added_by: Mapping[str, Any] | None = None,
+) -> list[Dot]:
+    """THE one builder of a card's dots (R2-2.1, L3), at all four sites:
+    create, `refresh_card`, `replay_receipt`, the audit export. The quality
+    factors' dots (carried across `refresh_dots` from `previous` when given),
+    then — when `assumed_keys` is non-empty — the ONE untappable
+    `assumed_formation` dot, appended after the refresh."""
+    dots = compute_dots(ld.definition.quality_factors, ev.observations, settings.curves, at=at)
+    if previous is not None:
+        dots = refresh_dots(previous, dots, at=at, added_by=added_by)
+    if assumed_keys:
+        keys = list(assumed_keys)
+        dots.append(Dot(
+            factor=ASSUMED_FORMATION, position=len(ld.definition.quality_factors), source="cobalt-degraded",
+            tier="deterministic", role="shadow", na_reason="ASSUMED", engine_inputs={"assumed_keys": keys},
+            engine_why=f"formed on assumed defaults: {', '.join(keys)}",
+        ))
+    return dots
 
 
 def desk_shadow() -> DeskShadow:
@@ -771,8 +1272,8 @@ def refresh_card(
     evaluation. Formation evidence is never touched. `ld` is the def of
     the card's slug as loaded NOW — after a note edit its md5 differs from
     the card's formation md5, and a factor it gained is added once."""
-    fresh = compute_dots(ld.definition.quality_factors, ev.observations, settings.curves, at=at)
-    dots = refresh_dots(card.dots, fresh, at=at, added_by={"definition_md5": ld.md5, "run_id": run_id})
+    dots = card_dots(ld, ev, settings, at, assumed_keys_of(card.dots), previous=card.dots,
+                     added_by={"definition_md5": ld.md5, "run_id": run_id})
     last = ev.last_price if ev.last_price is not None else card.entry
     score = score_card(dots, last=last, trigger=card.entry, stop=card.stop,
                        bands=settings.proposed_key, enabled=enabled)
@@ -1045,6 +1546,13 @@ def replay_receipt(receipts: Sequence[Mapping[str, Any]], *, clock) -> tuple[lis
     in `receipts` (ordered oldest -> newest, `id` present) from receipt
     values only."""
     index = len(receipts) - 1
+    for receipt in receipts:  # §9 gate 5: never recompute another version's receipt with this code
+        written = receipt["observations"]["evaluator_version"]
+        if written != EVALUATOR_VERSION:
+            raise ReplayError(
+                f"receipt {receipt.get('id')} was written by evaluator {written!r}; this code is "
+                f"{EVALUATOR_VERSION!r} — refusing to recompute it"
+            )
     tunables_raw = _resolve_snapshot(receipts, "tunables_snapshot", index)
     settings_raw = _resolve_snapshot(receipts, "settings_snapshot", index)
     defs_raw = _resolve_snapshot(receipts, "definitions_snapshot", index)
@@ -1074,8 +1582,7 @@ def replay_receipt(receipts: Sequence[Mapping[str, Any]], *, clock) -> tuple[lis
         if ev is None:
             raise ReplayError(f"card {card['card_id']}: no evaluation for its member/def in the receipt")
         ld = defs[md5]
-        fresh = compute_dots(ld.definition.quality_factors, ev.observations, settings.curves, at=at)
-        dots = overlay_taps(fresh, card["taps"])
+        dots = overlay_taps(card_dots(ld, ev, settings, at, card["assumed_keys"]), card["taps"])
         last = ev.last_price if ev.last_price is not None else Decimal(card["entry"])
         score = score_card(dots, last=last, trigger=Decimal(card["entry"]), stop=Decimal(card["stop"]),
                            bands=settings.proposed_key, enabled=enabled)
@@ -1337,9 +1844,14 @@ class EvaluateStage:
                 # Chronology: only i1 bars that opened after the formation
                 # bar closed can touch the stop "before arm".
                 formed_end = card.formed_at + timedelta(minutes=working_minutes(defaults))
+                # R2-4.1 B: the avoid that expires a card is the CARD'S OWN
+                # side's, never the published row's. The refresh reads only
+                # frame-independent inputs (observations once on the real
+                # bars, R2-4.2 B; last price; working bars; EMA9).
+                own_side = ev.by_side[card.direction]
                 expiry = radar_expiry(
                     state=_state(card.state), now=instant, expires_at=card.expires_at,
-                    avoided=ev.evaluation == "avoided", direction=card.direction, stop=card.stop,
+                    avoided=own_side.evaluation == "avoided", direction=card.direction, stop=card.stop,
                     bars_after_formation=[b for b in self._i1_closed(members, card) if b.ts >= formed_end],
                 )
                 update = refresh_card(card, ev, ld, settings, enabled, at=instant, thresholds=thresholds,
@@ -1380,7 +1892,7 @@ class EvaluateStage:
                     # this scan; the formation is NOT consumed and is
                     # re-evaluated next scan with the extreme where it lands.
                     continue
-                fresh = compute_dots(ld.definition.quality_factors, ev.observations, settings.curves, at=instant)
+                fresh = card_dots(ld, ev, settings, instant, f.assumed_keys)
                 score = score_card(fresh, last=ev.last_price, trigger=f.trigger.price, stop=f.stop.price,
                                    bands=settings.proposed_key, enabled=enabled)
                 score_id = score_ids[(ev.membership_id, ev.md5)]
@@ -1425,7 +1937,7 @@ class EvaluateStage:
                 receipt_cards.append({
                     "card_id": card_id, "pool_member_id": ev.membership_id, "trade_def_md5": ld.md5,
                     "definition_md5": ld.md5, "entry": str(spec.entry), "stop": str(spec.stop), "taps": [],
-                    "published": published_numbers(update),
+                    "assumed_keys": list(f.assumed_keys), "published": published_numbers(update),
                 })
             if copies:
                 self.radar_store.copy_card_values(copies, before_commit=gate("evaluate:copy"))
@@ -1476,7 +1988,7 @@ class EvaluateStage:
         return {
             "card_id": card.card_id, "pool_member_id": card.pool_member_id, "trade_def_md5": card.trade_def_md5,
             "definition_md5": definition_md5, "entry": str(card.entry), "stop": str(card.stop), "taps": card.taps,
-            "published": published_numbers(update),
+            "assumed_keys": list(assumed_keys_of(update.dots)), "published": published_numbers(update),
         }
 
 
@@ -1487,10 +1999,14 @@ def _state(value: str):
 
 
 __all__ = [
-    "AtomValue", "CATALYST_REVIEW_FIELDS", "CardUpdate", "EVALUATOR_VERSION", "EvaluateError", "EvaluateStage",
-    "FACTOR_COMPUTERS", "Formation", "LoadedDef", "MemberEvaluation", "MemberInput", "OpenRadarCard",
-    "ReceiptChain", "ReplayError", "ReplayedCard", "StageOutcome", "build_receipt", "canonical_sha256",
+    "ASSUMED_CONVENTIONS", "Anchor", "AtomValue", "CATALYST_REVIEW_FIELDS", "CONVENTION_LABELS", "CardUpdate",
+    "EVALUATOR_VERSION", "SideOutcome", "assumed_closure", "closure_keys", "convention_refusals", "member_frames",
+    "publish_frames",
+    "EvaluateError", "EvaluateStage", "FACTOR_COMPUTERS", "Formation", "LoadedDef", "MemberEvaluation",
+    "MemberInput", "OpenRadarCard", "ReceiptChain", "ReplayError", "ReplayedCard", "StageOutcome",
+    "UNCLASSIFIED_SETUP", "assumed_keys_of", "build_receipt", "canonical_sha256", "card_dots",
     "card_why", "chain_commit", "desk_shadow", "evaluate_member", "evaluate_node", "formation_changes",
+    "stop_on_protective_side",
     "formula_sha256", "overlay_taps",
     "published_numbers", "rebuild_members", "refresh_card", "replay_receipt", "seam_atom",
 ]

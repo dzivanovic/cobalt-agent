@@ -33,3 +33,6 @@ None directly. Callers pass `card.curves`, `card.proposed_key` (trader settings,
 
 ## Gotchas
 Shadow grades rank nothing: they are stored and shown, never counted in conviction, until a curve tribunal and an L7 run promote them. `curve_unset` also suppresses the score until the dot is tapped, which is why a dark or pre-D2 card has `card_score = NULL`.
+
+## 2026-09-21 — setups one build STEP-1: `ASSUMED`
+`NaReason` gains `"ASSUMED"`. `ASSUMED_FORMATION = "assumed_formation"` is the one constant that names the dot marking a formation resting on an assumed default (R2-2 = B). `radar/evaluate.py` and `cards/store.py` both import it from here, because `cards/` never imports from `radar/`. The dot is computed (`cobalt-degraded`, `deterministic`) and is never tapped, since the store refuses the tap. So `suppression()` names it on every path that recomputes, and `card_score` stays null for the card's life. The logic of `suppression()` is unchanged. Only its reason text changes: it drops ` (tap to grade)` when every blocker is `ASSUMED`, because an assumed default is ruled on the settings surface, not tapped. `conviction`, `card_score` and `score_card` are unchanged.

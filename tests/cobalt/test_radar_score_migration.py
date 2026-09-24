@@ -101,23 +101,24 @@ def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first
     newest four are named explicitly: P4's 0008/0009 and the archiver's
     0010/0011 both reverse before 0007."""
     newest_four = [
+        "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",
         "0008_radar_value_movers.rollback.sql",
     ]
     reverse_names = [p.name for p in REVERSE]
-    assert reverse_names[:4] == newest_four
+    assert reverse_names[:5] == newest_four
     assert (
         reverse_names.index("0006_radar_score.rollback.sql")
         == reverse_names.index("0007_radar_cards.rollback.sql") + 1
     )
-    assert [p.name for p in _rollback_paths("0005")][:4] == newest_four
+    assert [p.name for p in _rollback_paths("0005")][:5] == newest_four
     assert [p.name for p in _rollback_paths("0005")][-2:] == [
         "0007_radar_cards.rollback.sql",
         "0006_radar_score.rollback.sql",
     ]
-    assert [p.name for p in _rollback_paths("0006")][:4] == newest_four
+    assert [p.name for p in _rollback_paths("0006")][:5] == newest_four
     assert [p.name for p in _rollback_paths("0006")][-1:] == [
         "0007_radar_cards.rollback.sql"
     ]

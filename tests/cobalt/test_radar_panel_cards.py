@@ -373,8 +373,9 @@ def test_card_panel_escapes_why_and_notices(evaluated):
 # ---------------------------------------------------------------------
 
 # GOLDEN PINS captured on main's code (`5b208a0`), GREEN there — from then on a GUARD.
+# LADDER pin re-captured 2026-09-23 on setups/seven-0921 (b007ce2e): the setups ladder change adds the assumed_formation dot (R2-2 = B); healthy bars still add nothing (seam-fix-build-2026-09-23.md D3).
 PIN_HEALTHY_POOL_SHA256 = "f2e79add6bc4d4286b381154b071b04ec9e7887467ffd15b0f499e9d62181552"
-PIN_HEALTHY_LADDER_SHA256 = "e617c53c1479314b6074de5409f289238479be31fbbd789b4ee19849f55370d7"
+PIN_HEALTHY_LADDER_SHA256 = "0ac9b5d038cf1d598d79867d316fe7976cdec1c8f9df77ecee37753f3d1be051"
 PIN_HEALTHY_API_SHA256 = "450b3415c2346c8b13b53932c5175f56ee6af78877ca9fc8086ca824601c5462"
 
 # Tonight's `mirrorDegraded` line, byte for byte as main has it (`radar_panel.py:1127`).

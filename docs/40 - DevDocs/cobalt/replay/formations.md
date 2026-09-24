@@ -137,3 +137,10 @@ of a real `replay_formations` run over S2-P2's own hub-cut bar fixture
 traded through their trigger (the real no-trigger case); the `with_trend`
 variant's two do, and are the R1-21 two-rows case. The end-to-end run
 through `run_nightly` is in `tests/cobalt/test_replay_runner.py`.
+
+**2026-09-21 — setups one build STEP-1.** `SUPPORTED_EVALUATORS` is now
+`{"s2p2.2"}`, the one bump for the whole one build. Nothing this binding
+consumes changed: `FORMATION_REQUIRED_FIELDS` of `ReplayFormation` are the
+same. Without this update the nightly `com.cobalt.replay` would refuse
+every night after the deploy. `s2p2.1` is dropped because that code no
+longer exists. Any other version is still a loud refusal.
