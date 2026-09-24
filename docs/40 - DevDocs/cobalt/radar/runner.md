@@ -22,3 +22,5 @@ A transaction that reaches `market_reset` rolls back and records its stage on th
 ## Float handicap H1 (2026-09-24)
 
 `_collect` now puts two more numbers into each name's `SourceSet.metrics` row — `float_m` and `market_cap_m`, parsed by the same `_number` from the columns `export.handicap_headers` names — beside `volume` and `rvol`. They are the stored inputs of the handicap's group verdict: because the S5 receipt's `pool_unit` dumps every `SourceSet` whole, every scan's handicap decision replays from stored data after the retained CSVs expire (v3 §6, L57; experiment X5). A blank or `-` cell is `None`, never zero.
+
+The cycle hands `decide()` `export.handicap_headers` (the dead-column reason names the configured header), and `_pool_row` writes each degraded source's reason from `Decision.reasons` when the decision knows it — today the `handicap` entry — else the long-standing `source failure`.

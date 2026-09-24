@@ -187,7 +187,11 @@ class RadarRunner:
         open_rows = self.radar_store.open_members(self.config.pool_key)
         opens = [OpenMember(**row) for row in open_rows]
         candidates, source_sets = await self._collect(parsed, instant, open_rows)
-        decision = decide(candidates, opens, [item.block for item in parsed.screens.blocks + parsed.lists.blocks] if not parsed.frozen else None, source_sets, instant)
+        decision = decide(
+            candidates, opens,
+            [item.block for item in parsed.screens.blocks + parsed.lists.blocks] if not parsed.frozen else None,
+            source_sets, instant, handicap_headers=self.config.export.handicap_headers,
+        )
         elapsed_started = time.monotonic()
         pending_drop = self._pending_drop
 
@@ -373,7 +377,7 @@ class RadarRunner:
             "state": "scanning",
             "degraded": decision.degraded or parsed.frozen,
             "degraded_sources": [
-                {"source": source, "reason": "source failure", "since": instant.isoformat()}
+                {"source": source, "reason": decision.reasons.get(source, "source failure"), "since": instant.isoformat()}
                 for source in decision.degraded_sources
             ] + ([{"source": "pool_block", "reason": parsed.pool_error, "since": instant.isoformat()}] if parsed.pool_error else []),
             "failed_stage": "bars" if carried else None,
