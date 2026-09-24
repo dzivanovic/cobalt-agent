@@ -53,8 +53,9 @@ class VoiceConfig(BaseModel):
     confirm_ttl_s: float = Field(gt=0)
     scratch_max_age_s: float = Field(gt=0)
     history_turns: int = Field(ge=0, le=20)
-    #: A route NAME in `configs/cobalt/modelaccess.yaml` (checked by the
-    #: agent registry, which carries the same name).
+    #: A route NAME in `configs/cobalt/modelaccess.yaml`. The agent registry
+    #: validates the route; `load_voice_config` refuses a `plan_route` that is
+    #: not EXACTLY the registry's `route` (`_check_plan_route`).
     plan_route: str = Field(min_length=1)
     #: SOCKET-PEER addresses allowed on `/voice/*` (W11 [F-03]). IP
     #: literals only; a header is never the allow key.
@@ -101,6 +102,20 @@ def _check_path(name: str, raw: Path, backup_sources: Optional[list[Path]]) -> P
     return p
 
 
+def _check_plan_route(plan_route: str) -> None:
+    """L3: the agent registry is the route's one home; `plan_route` must
+    equal it EXACTLY, or the load crashes naming both (L1)."""
+    from .registry import CONFIG_PATH as AGENT_PATH, AgentConfigError, load_agent
+
+    try:
+        route = load_agent().route
+    except AgentConfigError as e:
+        raise VoiceConfigError(f"plan_route: the agent registry could not be read to check against ({e})") from None
+    if plan_route != route:
+        raise VoiceConfigError(f"plan_route {plan_route!r} is not the agent registry's route {route!r} "
+                               f"({AGENT_PATH}) — the two must be the same route name")
+
+
 def load_voice_config(path: Path = CONFIG_PATH, *, backup_sources: Optional[list[Path]] = None) -> VoiceConfig:
     """The validated voice config, or a loud `VoiceConfigError`.
 
@@ -126,14 +141,19 @@ def load_voice_config(path: Path = CONFIG_PATH, *, backup_sources: Optional[list
     if not isinstance(raw, dict) or not isinstance(raw.get("voice"), dict):
         raise VoiceConfigError(f"{path}: expected a 'voice' mapping")
     data = dict(raw["voice"])
-    if os.getenv(SCRATCH_ENV):
-        data["scratch_dir"] = os.environ[SCRATCH_ENV]
-    if os.getenv(MODEL_ENV):
-        data["model_dir"] = os.environ[MODEL_ENV]
+    for var, key in ((SCRATCH_ENV, "scratch_dir"), (MODEL_ENV, "model_dir")):
+        value = os.environ.get(var)
+        if value is None:
+            continue  # unset → the committed (dev) value
+        if not value.strip():
+            raise VoiceConfigError(f"{var} is set but empty — set a path, or unset it for the committed "
+                                   "default; an empty override never falls back (L1)")
+        data[key] = value
     try:
         cfg = VoiceConfig(**data)
     except ValidationError as e:
         raise VoiceConfigError(f"{path}: invalid voice config:\n{e}") from None
+    _check_plan_route(cfg.plan_route)
     if cfg.scratch_max_age_s <= cfg.stt_timeout_s:
         raise VoiceConfigError(
             f"scratch_max_age_s ({cfg.scratch_max_age_s}) must exceed stt_timeout_s "

@@ -65,6 +65,10 @@ class ScratchUnlinkFailed(RuntimeError):
     """A turn's own audio could not be deleted — the turn FAILS loud."""
 
 
+class ScratchWriteFailed(RuntimeError):
+    """The clip could not be written whole — no partial file is left; RED."""
+
+
 class ScratchLocked(RuntimeError):
     """Another process holds the scratch directory — nothing was deleted."""
 
@@ -115,10 +119,20 @@ def write_scratch(directory: Path, turn_id: str, data: bytes, content_type: str)
     except FileExistsError:
         raise ScratchRefused(f"{path.name} already exists — one file per turn") from None
     try:
-        os.write(fd, data)
-    finally:
-        os.close(fd)
-    os.chmod(path, 0o600)
+        try:
+            written = os.write(fd, data)
+        finally:
+            os.close(fd)
+        if written != len(data):
+            raise OSError(f"short write ({written} of {len(data)} bytes)")
+        os.chmod(path, 0o600)
+    except OSError as e:
+        # Never a truncated clip: the partial file goes through the ONE unlink.
+        r = unlink_scratch(path, "write failed")
+        text = (f"voice scratch {path.name} write FAILED ({type(e).__name__}: {e}); "
+                f"partial file {'removed' if r.ok else 'NOT removed'}")
+        logger.error("RED {}", text)
+        raise ScratchWriteFailed(text) from None
     return path
 
 
@@ -126,6 +140,7 @@ def write_scratch(directory: Path, turn_id: str, data: bytes, content_type: str)
 class UnlinkResult:
     ok: bool
     line: DegradedLine
+    already_gone: bool = False
 
 
 def unlink_scratch(path: Path, reason: str) -> UnlinkResult:
@@ -133,7 +148,8 @@ def unlink_scratch(path: Path, reason: str) -> UnlinkResult:
     try:
         os.unlink(path)
     except FileNotFoundError:
-        return UnlinkResult(True, DegradedLine(level="amber", text=f"voice scratch {Path(path).name} already gone ({reason})"))
+        return UnlinkResult(True, DegradedLine(level="amber", text=f"voice scratch {Path(path).name} already gone ({reason})"),
+                            already_gone=True)
     except OSError as e:
         text = f"voice scratch {Path(path).name} could NOT be deleted ({reason}): {type(e).__name__}"
         logger.error("RED {}", text)
@@ -157,6 +173,8 @@ class HeldAudio:
         if not r.ok:
             self.lines.append(r.line)
             raise ScratchUnlinkFailed(r.line.text)
+        if r.already_gone:
+            self.lines.append(r.line)  # FINAL §5: the AMBER line is kept
         self.deleted_at = datetime.now(timezone.utc)
 
 
@@ -246,6 +264,6 @@ def start_sweep(directory: Path, lock: DirectoryLock) -> SweepReport:
 
 __all__ = [
     "CONTENT_TYPES", "DirectoryLock", "EXTENSIONS", "HeldAudio", "LOCK_NAME", "ScratchLocked",
-    "ScratchRefused", "ScratchUnlinkFailed", "SweepReport", "UnlinkResult", "ensure_dir", "ext_for",
+    "ScratchRefused", "ScratchUnlinkFailed", "ScratchWriteFailed", "SweepReport", "UnlinkResult", "ensure_dir", "ext_for",
     "start_sweep", "turn_audio", "unlink_scratch", "write_scratch",
 ]

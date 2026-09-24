@@ -238,10 +238,10 @@ _WIDGET = """
    const v = speechSynthesis.getVoices().filter(v => v.localService);
    return v.length ? v[0] : null;
  }
- function speak(text){
+ function speak(text, degraded){
    if (muted || !text) return;
    const voice = localVoice();
-   if (!voice){ banner([{level:'amber', text:'no local voice on this device'}]); return; }
+   if (!voice){ banner((degraded || []).concat([{level:'amber', text:'no local voice on this device'}])); return; }
    const u = new SpeechSynthesisUtterance(text); u.voice = voice; speechSynthesis.speak(u);
  }
  function show(j){
@@ -249,7 +249,7 @@ _WIDGET = """
    pendingTurn = (j.state === 'awaiting_confirm') ? j.pending_turn_id : null;
    $('cv-pending').hidden = !pendingTurn;
    banner(j.degraded || []);
-   speak(j.reply);
+   speak(j.reply, j.degraded || []);
  }
  async function post(url, fd){
    fd.append('session', SESSION);
@@ -296,7 +296,7 @@ _WIDGET = """
  $('cv-text').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sendText(); } });
  $('cv-confirm').addEventListener('click', () => { if (!pendingTurn) return; const fd = new FormData(); fd.append('turn_id', pendingTurn); post('/voice/confirm', fd); });
  $('cv-cancel').addEventListener('click', () => { if (!pendingTurn) return; const fd = new FormData(); fd.append('turn_id', pendingTurn); post('/voice/cancel', fd); });
- fetch('/voice/status').then(r => r.json()).then(j => { lines = j.lines || []; banner(); }).catch(() => { lines = [{level:'red', text:'voice status unreadable'}]; banner(); });
+ fetch('/voice/status').then(r => { if (!r.ok) { lines = [{level:'red', text:'voice status refused (HTTP ' + r.status + ')'}]; banner(); return null; } return r.json(); }).then(j => { if (!j) return; lines = j.lines || []; banner(); }).catch(() => { lines = [{level:'red', text:'voice status unreadable'}]; banner(); });
  if (!pickType()) { lines.push({level:'red', text:'no microphone on this device'}); banner(); }
 })();
 </script>

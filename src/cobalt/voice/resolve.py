@@ -3,8 +3,8 @@
 CARDS. Candidates are the OPEN cards (`CardStore().open_cards()`), each
 with a code-rendered label. The Plan's card argument is a verbatim span
 (ticker text, spoken letters allowed) or a candidate id from that closed
-list; the transcript's own side word (long / short) and ordinal (first /
-second / third) narrow. Exactly one → bound. Zero or two-plus → clarify,
+list; a side word (long / short) and an ordinal (first / second / third)
+INSIDE that card span narrow — the rest of the transcript never does. Exactly one → bound. Zero or two-plus → clarify,
 reading the candidates back by label. Never the nearest, never the
 earliest, and the floating widget sends no card id — so no argument means
 clarify, even with one open card.
@@ -54,6 +54,8 @@ class CardResolution:
 
 
 _ORDINALS = {"first": 0, "second": 1, "third": 2, "fourth": 3}
+#: Words of a card span that qualify the card, not spell its ticker.
+_SPAN_QUALIFIERS = {"the", "long", "short", *_ORDINALS}
 
 
 def _ticker_of(span: str) -> str:
@@ -76,11 +78,15 @@ def resolve_card(args: dict, transcript: str, candidates: list[CardCandidate]) -
             return CardResolution(True, hit[0].card_id, hit[0])
         return CardResolution(False, clarify=f"Which card? Open: {_readback(candidates)}.")
     assert isinstance(value, Span)
-    ticker = _ticker_of(value.span)
+    # The side word and the ordinal are read from the Plan's card SPAN only —
+    # never from the rest of the transcript (FINAL §4 item 2; fix r1 B1).
+    span_words = value.span.split()
+    words = {w for t in span_words for w in re.findall(r"[a-z]+", t.lower())}
+    ticker_words = [t for t in span_words if t.lower() not in _SPAN_QUALIFIERS] or span_words
+    ticker = _ticker_of(" ".join(ticker_words))
     matches = [c for c in candidates if c.ticker == ticker]
     if not matches:
         return CardResolution(False, clarify=f"There is no open card on {ticker or 'that'}. Open: {_readback(candidates)}.")
-    words = set(re.findall(r"[a-z]+", transcript.lower()))
     sides = {"long", "short"} & words
     if len(matches) > 1 and len(sides) == 1:
         side = next(iter(sides))

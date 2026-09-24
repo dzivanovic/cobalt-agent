@@ -37,6 +37,8 @@ from typing import Any, Callable, Literal, Optional
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from cobalt import env
+
 from . import agent as agent_mod
 from . import confirm as confirm_mod
 from . import scratch, tools
@@ -199,6 +201,10 @@ def _hear(inp: TurnInput, deps: TurnDeps, rec: _Rec, degraded: list[DegradedLine
         degraded.append(DegradedLine(level="red", text=str(e)))
         raise _Fail("scratch_unlink", "The recording could not be deleted — the turn stops here.", red=True,
                     detail=str(e)) from None
+    except scratch.ScratchWriteFailed as e:
+        degraded.append(DegradedLine(level="red", text=str(e)))
+        raise _Fail("scratch_write", "The recording could not be saved — the turn stops here.", red=True,
+                    detail=str(e)) from None
     finally:
         if held is not None:
             rec.update(audio_sha256=hashlib.sha256(inp.audio).hexdigest(), audio_bytes=held.size,
@@ -228,6 +234,16 @@ def _answer_pending(inp: TurnInput, deps: TurnDeps, rec: _Rec, row: dict, transc
     return _after_pending(deps, rec, res)
 
 
+#: A confirmed act that did not land is a RED line he sees (FINAL §7, L1):
+#: it failed, or its expert refused it.
+_RED_OUTCOMES = ("failed", "refused")
+
+#: [F-02] / L37: in production an act is confirmed only by the widget.
+CLI_CONFIRM_REFUSED = ("In production an act is confirmed only in the widget (a tap, or your next turn there) — "
+                       "no house confirms a production act (L37, FINAL [F-02]). The change is still pending there; "
+                       "nothing was done.")
+
+
 def _after_pending(deps: TurnDeps, rec: _Rec, res: confirm_mod.PendingOutcome) -> TurnOutcome:
     if res.kind == "target_changed" and res.new_pending is not None:
         rec.go(TurnState.PLANNED)
@@ -235,7 +251,7 @@ def _after_pending(deps: TurnDeps, rec: _Rec, res: confirm_mod.PendingOutcome) -
         return _outcome(rec, TurnState.AWAITING_CONFIRM, res.reply, pending_turn_id=rec.tid,
                         readback=res.new_pending.readback)
     rec.go(TurnState.DONE, reply=res.reply, resolution={"pending_outcome": res.kind})
-    degraded = [DegradedLine(level="red", text=res.reply)] if res.kind in ("failed",) else []
+    degraded = [DegradedLine(level="red", text=res.reply)] if res.kind in _RED_OUTCOMES else []
     return _outcome(rec, TurnState.DONE, res.reply, degraded=degraded)
 
 
@@ -255,7 +271,7 @@ def _tap(inp: TurnInput, deps: TurnDeps) -> TurnOutcome:
         return _after_pending(deps, rec2, res)
     state = TurnState.DONE
     return _outcome(rec, state, res.reply,
-                    degraded=[DegradedLine(level="red", text=res.reply)] if res.kind == "failed" else [])
+                    degraded=[DegradedLine(level="red", text=res.reply)] if res.kind in _RED_OUTCOMES else [])
 
 
 # --- the Plan and what follows it ------------------------------------------------------------
@@ -385,6 +401,11 @@ def run_turn(inp: TurnInput, deps: TurnDeps) -> TurnOutcome:
         transcript = transcript.strip()
         if not inp.dry_run:
             row = deps.store.pending_for_session(inp.session_id)
+            if row is not None and inp.source != "widget" and env.is_production():
+                # Refused WHOLE: nothing executed, the pending row left
+                # `awaiting_confirm` for the widget ([F-02], L37).
+                raise _Fail("cli_confirm_refused", CLI_CONFIRM_REFUSED, red=True,
+                            detail=f"a {inp.source} turn found pending act {row['turn_id']} in production")
             if row is not None:
                 if _expired(row, deps.now()):
                     deps.store.transition(row["turn_id"], {TurnState.AWAITING_CONFIRM}, TurnState.EXPIRED,

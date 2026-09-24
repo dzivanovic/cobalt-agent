@@ -95,10 +95,18 @@ def confirm_pending(store, row: dict[str, Any], *, now: datetime,
                          failure_class="execute_error", failure_detail=f"{type(e).__name__}: {e}"[:500])
         logger.error("voice act {} FAILED: {}: {}", tid, type(e).__name__, e)
         return PendingOutcome("failed", f"The change failed ({type(e).__name__}); nothing is assumed done.")
+    edit_id = int(edit.stop_edit_id)
+    if not store.transition(tid, {TurnState.EXECUTING}, TurnState.DONE, at=now,
+                            expert_write_kind="card_stop_edits", expert_write_id=edit_id):
+        # [F-15]: the reaper failed this row while the expert wrote. The stop
+        # WAS written; the turn record says `failed`. Never "Done.", no retry.
+        logger.error("voice act {} wrote stop edit {} but its turn row was reaped mid-way — NOT marked done",
+                     tid, edit_id)
+        return PendingOutcome(
+            "failed", f"The stop WAS written as edit {edit_id}, but this turn's record was reaped mid-way. "
+                      f"Check card {pending.card_id} before you act again.", stop_edit_id=edit_id)
     reply = f"Done. The stop on {pending.ticker}, card {pending.card_id}, is now {pending.to_stop}."
-    store.transition(tid, {TurnState.EXECUTING}, TurnState.DONE, at=now,
-                     expert_write_kind="card_stop_edits", expert_write_id=int(edit.stop_edit_id))
-    return PendingOutcome("done", reply, stop_edit_id=int(edit.stop_edit_id))
+    return PendingOutcome("done", reply, stop_edit_id=edit_id)
 
 
 def cancel_pending(store, row: dict[str, Any], *, now: datetime, reason: str) -> PendingOutcome:

@@ -6,7 +6,9 @@
 
 Any house runs the SAME path in DEV with synthetic audio or text ([F-02]).
 `--dry-run` prints the Plan, the resolution and the exact change and writes
-nothing — no row, no pending action. `--confirm` is REFUSED when
+nothing — no row, no pending action; `--confirm` with `--dry-run` is refused
+before any turn runs. A failed turn or any RED line exits non-zero.
+`--confirm` is REFUSED when
 `COBALT_ENV=production`: in production an act is confirmed only by the
 widget (a tap, or his next spoken / typed turn); no house confirms a
 production act (L37). `--audio` takes the scratch-dir lock for the length
@@ -36,6 +38,9 @@ def _fail(msg: str) -> None:
 
 def cmd_turn(args: argparse.Namespace) -> None:
     session = args.session
+    if args.confirm and args.dry_run:
+        _fail("--confirm with --dry-run is refused: a confirm executes the act, and --dry-run writes nothing "
+              "(FINAL [F-02]). Run one or the other.")
     if args.confirm:
         if env.is_production():
             _fail("--confirm is refused in production: an act there is confirmed only by the widget "
@@ -78,7 +83,9 @@ def _run(inp: TurnInput, args: argparse.Namespace, *, lock) -> None:
     if out.dry_run is not None:
         print("dry run (nothing written):")
         print(json.dumps(out.dry_run, indent=2, default=str))
-    if out.state.value == "failed":
+    # FINAL §7, L1: a failed turn OR any RED line (a failed act, an expert
+    # refusal, the production-confirm refusal) is a non-zero exit.
+    if out.state.value == "failed" or any(line.level == "red" for line in out.degraded):
         sys.exit(1)
 
 

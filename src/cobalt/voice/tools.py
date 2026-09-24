@@ -47,9 +47,15 @@ UNSUPPORTED_SENTENCE = "I can't do that yet."
 #: X-X5: a parsed stop this far from the card's current stop clarifies.
 STOP_RATIO_GUARD = Decimal(10)
 
+#: Order verbs as PHRASES and the platform names (FINAL :84). Never a bare
+#: `long` / `short` / `close` / `exit`: a card side and a price field stay
+#: readable ("the XYZ short", "what did the pool close at").
 _ORDER = re.compile(
     r"\b(buy|buying|sell|selling|cover|covering|flatten|execute|at market|market order|limit order|"
-    r"stop order|place (an? )?(\w+ )?order|(cancel|modify|change|send) (my |the |an? )?(\w+ )?orders?)\b",
+    r"stop order|place (an? )?(\w+ )?order|(cancel|modify|change|send) (my |the |an? )?(\w+ )?orders?|"
+    r"das|lightspeed|tradestation|centerpoint|trading platform|platform|"
+    r"short(ing)? \d+|go (long|short)|(exit|close) (out of )?(my |the |this )?(\w+ )?position|"
+    r"get me out|take (my )?profits?|scale (in|out))\b",
     re.I)
 _LOGIC = re.compile(
     r"\b(max(imum)? risk|risk budget|risk per trade|daily stop|settings?|rules?|strateg(y|ies)|"
