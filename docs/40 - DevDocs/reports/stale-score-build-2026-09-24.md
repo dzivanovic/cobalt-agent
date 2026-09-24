@@ -337,6 +337,43 @@ By explicit paths: `store.py`, `db_migrations/__init__.py`, the `0015` pair, `te
 
 ## STEP-5
 
+STEP-4's commit: `[cards/stale-score-0922 01ee8bcd] feat(cards): stale score S2 — tap keeps the stale sentence, taps-moved recomputes on this scan's proximity (v2 [F-06]; R45 Fable (i); R40 migration 0015)`. `git show --stat HEAD` → exactly the 14 named paths (`14 files changed, 469 insertions(+), 28 deletions(-)`). **`01ee8bcd` is the LAST code commit (`<tip>`).**
+
+### X4
+`X4: AS EXPECTED` (CHANGE). Run: `uv run pytest -q -s tests/experiments/stale_score/test_x4_audit_stale_card.py`. Output: `X4: self_check_all_equal=True published_proximity=None published_card_score=None json_null=True reason_is_sentence=True pre_change_refused_by_version=True mismatch_path=False nothing_written=True`, `1 passed in 0.32s`.
+- A same-version STALE card replays equal to what was published, JSON null included, and `audit-export --run` writes the bundle.
+- A pre-change receipt (`evaluator_version` `s2p2.2`) is refused by the version message, not by the mismatch path, and nothing is written.
+
+### X17
+`X17: AS EXPECTED`. Command: `uv run cobalt jobs restarts de48c19b..HEAD`. VERBATIM, the non-documentation rows:
+
+```
+src/cobalt/cards/scoring.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/cards/store.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/db_migrations/0015_shadow_agreement_stale.rollback.sql	A	non-Python src asset	-
+src/cobalt/db_migrations/0015_shadow_agreement_stale.sql	A	non-Python src asset	-
+src/cobalt/db_migrations/__init__.py	M	static import reach	com.cobalt.radar
+src/cobalt/radar/audit_export.py	M	static import reach	com.cobalt.radar
+src/cobalt/radar/evaluate.py	M	static import reach	com.cobalt.aset,com.cobalt.radar
+src/cobalt/replay/formations.py	M	static import reach	com.cobalt.radar
+RESTARTS: com.cobalt.aset com.cobalt.radar
+```
+
+Every other row (8 DevDocs/report paths `DOCS -`; the 42 `tests/…` paths `test/documentation; no resident -`) has no resident; 0 `UNCLASSIFIED`.
+- This matches the expected list (`com.cobalt.radar`, `com.cobalt.aset`), and no resident is added.
+- `com.cobalt.replay` is a one-shot, not a resident: it reads `s2p2.3` on its next run.
+- The `0015` pair needs the deploy's migrate step, not a restart.
+
+### X29
+`X29: AS EXPECTED` (measurement; the browser half is UNPROVEN, as the prompt allows). Run: `uv run pytest -q -s tests/experiments/stale_score/test_x29_ladder_render.py`. Output: `X29: server_order_before=[1, 2] server_order_after_reload=[2, 1] periodic_refreshPool_rerenders_ladder=False tap_post_rerenders_ladder=True stale_badge_mirrored_each_refreshPool=True browser_timing=UNPROVEN(no browser in the suite)`, `1 passed in 0.34s`.
+- **Server render** (`build_ladder_view` + `render_ladder` over `radar_cards_v`-shaped rows from the real evaluator, scores of the test's own construction): the nulled card sinks below the scored one on the next render.
+- **The page's own script:** `refreshPool` replaces only the pool layer and calls `mirrorStale(next)`, so the STALE badge follows within one `refreshPool`. It never calls `refreshLadder`. `post()` (a tap) does `await refreshLadder()`.
+- **Result:** chip and slot change at the next tap or reload, not on the periodic refresh (R43).
+- **Not proven:** the browser's actual timing is not driven here (no browser in the suite). That half is read from the script and marked UNPROVEN.
+
+### COMMIT
+Recorded under `## CLOSE`: this commit carries the text above.
+
 ## EXPERIMENTS
 
 `46`'s STEP-1 (17, by reference, `stale-score-build-2026-09-23.md` `## STEP-1`): X10, X27, X1, X5a, X5b, X6, X7, X8, X11, X12, X14, X15, X18, X19, X20, X22, X26 — each AS EXPECTED. X10, X18/X19 and X20/X22 were re-run on the rebased tree with the same result (STEP-R). X18 was re-run again after STEP-2 C with the flip (`on_score_last=4`).
@@ -353,7 +390,7 @@ This run:
 | R40 EXCLUDED (B) | X30 decided (A). Then `tests/cobalt/test_stale_score_db.py::test_r40_the_view_drops_pre_fix_stale_graded_taps_and_keeps_fresh_and_post_fix_ones`, `::test_r40_on_cobalt_dev_the_view_drops_exactly_x25s_pre_fix_count`, `::test_0015_applies_twice_and_its_rollback_restores_0007s_view_inside_one_rolled_back_transaction`, `::test_0015_is_registered_after_0013_and_its_rollback_first` | `FileNotFoundError: … 0015_shadow_agreement_stale.sql` (×2); `assert (' SELECT user...' == …) and 'evaluator_version' in …`; `assert PosixPath('…0013…') == …/'0015_shadow_agreement_stale.sql'` | all four passed in the STEP-4 with-DB suite (`2879 passed`); `0015` never committed (XL76 at CLOSE) |
 | R41 TIES (A) | the R37 test (NULL ties fall to `pool_position`: `[4, 2, 3, 1]`) | GREEN-as-pin | passed at STEP-2 |
 | R42 PILLS UNCHANGED (A) | `git diff de48c19b -- src/cobalt/cards/health.py` | — | no output (STEP-2, CLOSE) |
-| R43 WHEN THE LADDER MOVES (A) | X29 (STEP-5) | — (measurement) | see STEP-5 |
+| R43 WHEN THE LADDER MOVES (A) | `tests/experiments/stale_score/test_x29_ladder_render.py::test_x29_chip_and_slot_move_at_the_next_render_not_on_the_periodic_refresh` | — (measurement) | AS EXPECTED: the server order changes on the next render; `refreshPool` never re-renders the ladder, while a tap does; the badge follows each `refreshPool` (browser timing UNPROVEN) |
 | R44 THE LOOK (A) | X22 re-run at STEP-R (`panel_calls_a_scorer=False`) + `git diff de48c19b -- src/cobalt/aset/radar_panel.py` + the seam pin `test_radar_panel_cards.py` untouched and GREEN | — | no output; seam pin green in every suite |
 | R45 FRESH TAP RACE (B) | `tests/cobalt/test_stale_score_db.py::test_r45_a_tap_racing_a_fresh_scan_scores_the_taps_conviction_on_this_scans_proximity` | `AssertionError: card_score 60 beside proximity 0.849462: expected 56 (the tap's conviction on this scan's proximity)` | passed in the STEP-4 with-DB suite (`2879 passed`) |
 
@@ -376,7 +413,7 @@ This run:
 ## FOR THE DEPLOY
 
 The deploy prompt's drafter copies these. This build runs none of them.
-- **RESTARTS:** X17's table (STEP-5).
+- **RESTARTS:** X17 (STEP-5): `RESTARTS: com.cobalt.aset com.cobalt.radar` (`uv run cobalt jobs restarts de48c19b..HEAD`, 0 UNCLASSIFIED). `com.cobalt.radar` restarts only inside the 20:00–21:00 pause or in overnight idle, with the residents down before the merge (L43, L66). The one-shot `com.cobalt.replay` reads `s2p2.3` on its next run.
 - **THE MIGRATION:** X30 decided (A), so there is one: `src/cobalt/db_migrations/0015_shadow_agreement_stale.sql` goes forward on production inside the deploy (`cobalt db migrate --allow-prod` is the deploy hub's, L61). The rollback file is `0015_shadow_agreement_stale.rollback.sql` (it restores 0007's view exactly). It is additive and view-only, with no data change. `FORWARD` order applies `0014` (H1, `43`) before `0015` if both ship in one set; `0016`/`0017`/`0018` belong to other branches. When H1 lands, its registry pins and this branch's (the `[:6]`/`[-6:]` lists and `numbers == [*range(1, 12), 13, 15]`) must be re-pointed together (L68 seam).
 - **THE STACK (L68):** this branch is REBASED onto `de48c19b`, a descendant of `deploy-2026-09-24` = `a2d320b8`. Its deploy is rebase-then-ff (L54), or it goes as a sibling in the evening's stacked gate. Unmerged branches that share its paths: `## CLOSE` L68 table.
 - **THE GATE (L68):** the deploy's integrated gate re-proves offline, with-DB and live-note on the combined tree. The with-DB gate takes the lock alone and MAY run `TestMigrationRoundTrip`; the deselect is this build's, under L76.
@@ -425,7 +462,7 @@ The check packet carries the executed output of all three suites (L68). What to 
 
 ## CONTINUE
 
-next: STEP-5 (X4, X17, X29; drafts `test_x4_audit_stale_card.py`, `test_x29_ladder_render.py` in the folder; XL76 module written for CLOSE). STEP-4 SUITE done: offline 2518/0 (369 skipped), with-DB 2879/0; STEP-4 committed (see `### COMMIT`). (T RED recorded 17:57; C, A1, D written, uncommitted: store.py, 0015 pair, db_migrations/__init__.py, 7 re-pointed test files, test_stale_score_db.py, 2 DevDocs; offline run 17:59 `bpxw2jz50`, then the with-DB run inside THE LOCK — never overlapped), then COMMIT. STEP-3 committed `3894d1a1`; STEP-2 `d0274dc0`. STEP-4's T file parked as a stub (full text in `$CLAUDE_JOB_DIR/tmp/test_stale_score_db.py`). Earlier: the 17:33 offline run showed 9 reds outside `test_stale_score.py`; A1 in progress: `test_rubberband_forms.py` t6 + `test_setups_d1.py` `_unmoved` (shared normaliser: minus `intraday_stale`, htf `stale` mapped back) — subset re-run 17:38; then re-run the offline suite (C, A1, D written, uncommitted; `test_stale_score.py` 17 passed; offline suite running 17:33) then with-DB inside THE LOCK, then COMMIT by explicit paths (scoring.py, evaluate.py, audit_export.py, formations.py, test_replay_runner.py, the four DevDocs, this report). (BASELINE done: offline 2503/15, with-DB 2856/15 (2 deselected), live-note 131/0 = R56. Uncommitted drafts in the tree, NOT yet run: `tests/cobalt/stale_db_support.py`, `tests/cobalt/test_stale_score_db.py` (STEP-4 T), `tests/experiments/stale_score/stale_predicates.py` + the STEP-3 `*_db.py` modules; DevDoc STEP-2 paragraphs written. Scratch drafts: `$CLAUDE_JOB_DIR/tmp/0015_*.sql`, `t_iv_block.py`, `test_x29_ladder_render.py`.)
+next: STEP-5 COMMIT (X4, X17, X29 run and recorded), then CLOSE. XL76 module is written (uncommitted, goes with the CLOSE report commit). STEP-4 SUITE done: offline 2518/0 (369 skipped), with-DB 2879/0; STEP-4 committed (see `### COMMIT`). (T RED recorded 17:57; C, A1, D written, uncommitted: store.py, 0015 pair, db_migrations/__init__.py, 7 re-pointed test files, test_stale_score_db.py, 2 DevDocs; offline run 17:59 `bpxw2jz50`, then the with-DB run inside THE LOCK — never overlapped), then COMMIT. STEP-3 committed `3894d1a1`; STEP-2 `d0274dc0`. STEP-4's T file parked as a stub (full text in `$CLAUDE_JOB_DIR/tmp/test_stale_score_db.py`). Earlier: the 17:33 offline run showed 9 reds outside `test_stale_score.py`; A1 in progress: `test_rubberband_forms.py` t6 + `test_setups_d1.py` `_unmoved` (shared normaliser: minus `intraday_stale`, htf `stale` mapped back) — subset re-run 17:38; then re-run the offline suite (C, A1, D written, uncommitted; `test_stale_score.py` 17 passed; offline suite running 17:33) then with-DB inside THE LOCK, then COMMIT by explicit paths (scoring.py, evaluate.py, audit_export.py, formations.py, test_replay_runner.py, the four DevDocs, this report). (BASELINE done: offline 2503/15, with-DB 2856/15 (2 deselected), live-note 131/0 = R56. Uncommitted drafts in the tree, NOT yet run: `tests/cobalt/stale_db_support.py`, `tests/cobalt/test_stale_score_db.py` (STEP-4 T), `tests/experiments/stale_score/stale_predicates.py` + the STEP-3 `*_db.py` modules; DevDoc STEP-2 paragraphs written. Scratch drafts: `$CLAUDE_JOB_DIR/tmp/0015_*.sql`, `t_iv_block.py`, `test_x29_ladder_render.py`.)
 
 DONE: AUTHORIZATION (PASS), PREFLIGHT (PASS; `<main tip>` = `de48c19b`), STEP-R (rebase DONE — never redo: `red` = `7bffdbcb`, STEP-1 = `f0798537`, PREFLIGHT wip = `f17814c6`; re-runs X10/X18/X19/X20/X22 same as `46`).
 
