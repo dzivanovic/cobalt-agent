@@ -431,6 +431,23 @@ class ReconcileCounts(_Frozen):
     unchanged: int = 0
 
 
+class ArchivePartial(_Frozen):
+    """A fetched mover whose source i1 bars do not span the RTH session
+    (R113): its bars are kept, `bars_archived` stays false, and this row
+    names it with `coverage()`'s detail, replayable from the stored bars."""
+
+    ticker: str
+    sides: list[Side]
+    code: Literal["source_bars_short"]
+    count: int
+    first: str
+    last: str
+    start: str
+    end: str
+    max_gap_min: int
+    reason: str
+
+
 class ReplayResult(BaseModel):
     """`job.result` (STEP-4) plus the coverage counts R1-12 surfaces."""
 
@@ -448,6 +465,10 @@ class ReplayResult(BaseModel):
     archived: int = 0
     archive_failures: int = 0
     archive_incomplete: int = 0
+    #: the S2 smoke's K9 compares archive_partial_by_side against the stored not-archived rows.
+    archive_partial: list[ArchivePartial] = Field(default_factory=list)
+    #: the S2 smoke's K9 compares archive_partial_by_side against the stored not-archived rows.
+    archive_partial_by_side: dict[Side, int] = Field(default_factory=lambda: {"gainers": 0, "losers": 0})
     card_candidates: int = 0
     card_misses: int = 0
     mover_misses: int = 0
@@ -471,7 +492,7 @@ class ReplayResult(BaseModel):
 
 
 __all__ = [
-    "CardCandidate", "CardReplay", "CfOutcome", "Counterfactual", "Direction", "Episode", "ExcludedBy",
+    "ArchivePartial", "CardCandidate", "CardReplay", "CfOutcome", "Counterfactual", "Direction", "Episode", "ExcludedBy",
     "FORMATION_UNAVAILABLE", "FORMATION_UNAVAILABLE_LINE", "FORMULA_VERSION",
     "FormationCandidate", "FormationCounts", "FormationOutcome", "FormationReplay",
     "MissKind", "MissRow", "MoverRow", "MoversExport", "MoversSideCount", "PositionSpan", "RadarCardRef",

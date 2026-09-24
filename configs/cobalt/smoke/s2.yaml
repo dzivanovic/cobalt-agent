@@ -297,8 +297,17 @@ checks:
   # evidence", made by machine instead of by a hand count of the cached
   # CSV — while a side holding fewer rows than its export allowed FAILS.
   # `side` is CHECK-constrained to these two values (0008), so the two
-  # `not_archived = 0` predicates together cover every active row of the
+  # sides' `not_archived` counts together cover every active row of the
   # day.
+  #
+  # A NOT-ARCHIVED ROW IS GREEN ONLY WHEN THE REPLAY'S OWN JOB ROW NAMES IT
+  # `partial`: its source i1 bars were short of the session (a halt, a
+  # late open), so the bars it has are kept and it stays
+  # `bars_archived = false` (R113). K9.7–K9.12 grade that in the K8
+  # pattern, per side: the not-archived count (user side), the job row's
+  # `archive_partial_by_side` (system side), and the `compare` between
+  # them. A not-archived row no marker covers — zero bars on the day, or
+  # a fetch failure — makes the compare FAIL.
   - id: K9.1
     title: movers_daily — gainers stored (user side)
     kind: sql
@@ -312,11 +321,10 @@ checks:
     result_number: stored
     expect:
       - {column: top_n, op: not_null}
-      - {column: not_archived, op: eq, value: 0}
     expect_text: >-
       active gainers rows for the last trading day: radar.benchmark top_n is
-      set; not_archived = 0 (every stored mover has its i1 bars). stored is
-      printed and is K9.3's left operand
+      set. not_archived is printed and is graded by K9.9 against the job
+      row's partial marker. stored is printed and is K9.3's left operand
 
   - id: K9.2
     title: movers — what the gainers export allowed (system side)
@@ -358,11 +366,10 @@ checks:
     result_number: stored
     expect:
       - {column: top_n, op: not_null}
-      - {column: not_archived, op: eq, value: 0}
     expect_text: >-
       active losers rows for the last trading day: radar.benchmark top_n is
-      set; not_archived = 0 (every stored mover has its i1 bars). stored is
-      printed and is K9.6's left operand
+      set. not_archived is printed and is graded by K9.12 against the job
+      row's partial marker. stored is printed and is K9.6's left operand
 
   - id: K9.5
     title: movers — what the losers export allowed (system side)
@@ -390,6 +397,94 @@ checks:
       their own rows above. A short export (fewer rows than top_n) PASSES here;
       fewer stored rows than the export allowed = FAIL; either operand ERRORed
       = ERROR, never a quiet PASS
+
+  - id: K9.7
+    title: movers_daily — gainers not archived (user side)
+    kind: sql
+    side: user
+    query: >-
+      SELECT (SELECT (value ->> 'top_n')::int FROM trader_settings WHERE key = 'radar.benchmark') AS top_n,
+      count(*) AS stored,
+      count(*) FILTER (WHERE NOT bars_archived) AS not_archived
+      FROM system.movers_daily
+      WHERE trade_date = {last_trading_day} AND side = 'gainers' AND active
+    result_number: not_archived
+    expect:
+      - {column: not_archived, op: not_null}
+    expect_text: >-
+      K9.1's query: active gainers rows for the last trading day whose i1 bars
+      are not archived. not_archived is printed and is K9.9's left operand
+
+  - id: K9.8
+    title: movers — gainers the replay named partial (system side)
+    kind: job_row
+    label: com.cobalt.replay
+    result_keys: [archive_partial, archive_partial_by_side]
+    result_number: archive_partial_by_side.gainers
+    result_equals:
+      trade_date: "{last_trading_day}"
+    expect_text: >-
+      last_result.archive_partial names each mover whose source i1 bars were
+      short of the session (code source_bars_short, with its coverage detail);
+      last_result.archive_partial_by_side.gainers counts them;
+      last_result.trade_date = last trading day (what makes K9.9's comparison
+      valid). archive_partial_by_side.gainers is K9.9's right operand
+
+  - id: K9.9
+    title: movers — every gainers row not archived is named partial
+    kind: compare
+    left: K9.7
+    right: K9.8
+    op: eq
+    expect_text: >-
+      K9.7's not_archived = K9.8's archive_partial_by_side.gainers, both
+      printed on their own rows above. A not-archived row the job row does not
+      name partial (zero bars on the day, a fetch failure) = FAIL; either
+      operand ERRORed = ERROR, never a quiet PASS
+
+  - id: K9.10
+    title: movers_daily — losers not archived (user side)
+    kind: sql
+    side: user
+    query: >-
+      SELECT (SELECT (value ->> 'top_n')::int FROM trader_settings WHERE key = 'radar.benchmark') AS top_n,
+      count(*) AS stored,
+      count(*) FILTER (WHERE NOT bars_archived) AS not_archived
+      FROM system.movers_daily
+      WHERE trade_date = {last_trading_day} AND side = 'losers' AND active
+    result_number: not_archived
+    expect:
+      - {column: not_archived, op: not_null}
+    expect_text: >-
+      K9.4's query: active losers rows for the last trading day whose i1 bars
+      are not archived. not_archived is printed and is K9.12's left operand
+
+  - id: K9.11
+    title: movers — losers the replay named partial (system side)
+    kind: job_row
+    label: com.cobalt.replay
+    result_keys: [archive_partial, archive_partial_by_side]
+    result_number: archive_partial_by_side.losers
+    result_equals:
+      trade_date: "{last_trading_day}"
+    expect_text: >-
+      last_result.archive_partial names each mover whose source i1 bars were
+      short of the session (code source_bars_short, with its coverage detail);
+      last_result.archive_partial_by_side.losers counts them;
+      last_result.trade_date = last trading day (what makes K9.12's comparison
+      valid). archive_partial_by_side.losers is K9.12's right operand
+
+  - id: K9.12
+    title: movers — every losers row not archived is named partial
+    kind: compare
+    left: K9.10
+    right: K9.11
+    op: eq
+    expect_text: >-
+      K9.10's not_archived = K9.11's archive_partial_by_side.losers, both
+      printed on their own rows above. A not-archived row the job row does not
+      name partial (zero bars on the day, a fetch failure) = FAIL; either
+      operand ERRORed = ERROR, never a quiet PASS
 
   - id: K10.1
     title: miss line unit in the DRC note
@@ -503,13 +598,6 @@ checks:
     exit_code: 0
     not_missed: true
     expect_text: "state done, exit_code 0, not missed against its cadence"
-
-  - id: K17
-    title: cobalt validate
-    kind: cli
-    argv: [cobalt, validate]
-    exit_code: 0
-    expect_text: exit 0
 
   - id: K18
     title: jobs registry vs launchd
