@@ -18,7 +18,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from .config import HandicapHeaders
-from .models import HandicapBlock, SourceSet
+from .models import HandicapBlock, SourceHealth, SourceSet
 
 Verdict = Literal["yes", "no", "unknown"]
 
@@ -81,6 +81,38 @@ def handicap_group(metrics_row: Mapping[str, float | None] | None, block: Handic
 #: sorts on the handicap; the live division is H2's.
 LIVE_NEEDS_H2 = "mode live needs H2 — ranking raw"
 
+#: R54: the inoperative reason's prefix — Fable (d)'s `column missing: <header>`, per source.
+INOPERATIVE = "handicap inoperative — "
+
+
+def dead_columns(sources: Sequence[SourceSet], ranked: set[str], headers: HandicapHeaders) -> list[str]:
+    """R54 (his "B"; v3 [F-10] as amended): the handicap columns DEAD on
+    this scan, as `<header> (<source>)`.
+
+    A source's column is DEAD when its header is absent from the export —
+    `runner._collect` then stores `None` for every name — or when every
+    equity row of that source that reaches ranking (`ranked`: not-equity,
+    manually excluded and held names never do) has the cell blank, `-` or
+    unparseable. One parseable cell makes it LIVE. Only healthy, active
+    sources carry an export. A source with NO equity row reaching ranking
+    has no column to judge and is neither dead nor live (the vacuous case,
+    ESCALATED in the H1 build report: one of his lists carries only funds)."""
+    dead: list[str] = []
+    for source in sources:
+        if not source.active or source.health is not SourceHealth.HEALTHY:
+            continue
+        rows = [source.metrics.get(ticker) or {} for ticker in source.tickers if ticker in ranked]
+        if not rows:
+            continue
+        for key, header in (("float_m", headers.float), ("market_cap_m", headers.market_cap)):
+            if all(row.get(key) is None for row in rows):
+                dead.append(f"{header} ({source.source})")
+    return dead
+
+
+def inoperative_reason(dead: Sequence[str]) -> str:
+    return INOPERATIVE + "; ".join(f"dead column: {item}" for item in dead)
+
 
 class HandicapRecord(BaseModel):
     """The membership row's `handicap` JSONB (v3 §6; `29` §2 under R26 B):
@@ -133,6 +165,9 @@ def shadow_rank(
 
     block_sha256 = canonical_sha256(block.model_dump(mode="json"))
     by_source = {source.source: source for source in sources}
+    # R54 first, before any factor: a dead column makes the whole scan
+    # inoperative at factor 1 — every name, whatever `missing` says.
+    dead = dead_columns(sources, set(ordered), headers)
     one = Decimal(1)
     factors: dict[str, Decimal] = {}
     applied: dict[str, bool] = {}
@@ -142,6 +177,10 @@ def shadow_rank(
         source = by_source.get(source_for.get(ticker, ""))
         verdict = handicap_group(source.metrics.get(ticker) if source else None, block)
         verdicts[ticker] = verdict
+        if dead:
+            factors[ticker], applied[ticker] = one, False
+            reasons[ticker] = inoperative_reason(dead)
+            continue
         applies = verdict.in_group == "yes" or (verdict.in_group == "unknown" and block.missing == "apply")
         factors[ticker] = block.factor if applies else one
         applied[ticker] = applies
@@ -167,11 +206,11 @@ def shadow_rank(
         )
         for ticker in ordered
     }
-    degraded = LIVE_NEEDS_H2 if block.mode == "live" else None
+    degraded = inoperative_reason(dead) if dead else (LIVE_NEEDS_H2 if block.mode == "live" else None)
     return ShadowRank(factors=factors, records=records, degraded=degraded)
 
 
 __all__ = [
-    "GroupVerdict", "HandicapRecord", "LIVE_NEEDS_H2", "ShadowRank", "Verdict",
-    "handicap_group", "shadow_rank",
+    "GroupVerdict", "HandicapRecord", "INOPERATIVE", "LIVE_NEEDS_H2", "ShadowRank", "Verdict",
+    "dead_columns", "handicap_group", "inoperative_reason", "shadow_rank",
 ]
