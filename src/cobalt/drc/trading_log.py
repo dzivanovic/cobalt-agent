@@ -6,7 +6,7 @@ after `detect.detect_kind` classified it `trading_log`, complete or
 `partial` (R114, R17 (5)). The name and extension of the file are never
 read — his files end `.md` and change name every day.
 
-THE SHAPE (E1, 2026-09-18, `reports/drc-d1-build-2026-09-23.md` `## E1`):
+THE SHAPE (E1, `reports/drc-d1-build-2026-09-23.md` `## E1`):
 ten named columns and a trailing empty cell, newest row first, `Time` as
 `HH:MM:SS` with NO date and NO zone, side codes `B` / `S` / `SS`.
 
@@ -187,7 +187,7 @@ class TradingLogSource:
         try:
             text = _decode(data)
         except UnicodeDecodeError as e:
-            raise TradingLogError(1, f"not UTF-8 text ({e.reason})") from None
+            raise TradingLogError(e.object.count(b"\n", 0, e.start) + 1, f"not UTF-8 text ({e.reason})") from None
         records = list(csv.reader(io.StringIO(text, newline="")))
         header = records[0]
         present = {name: i for i, name in enumerate(header) if name in _FIELD}

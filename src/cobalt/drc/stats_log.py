@@ -291,7 +291,7 @@ class StatsLogSource:
         try:
             text = data.decode("utf-8-sig")
         except UnicodeDecodeError as e:
-            raise StatsLogError(1, f"not UTF-8 text ({e.reason})") from None
+            raise StatsLogError(e.object.count(b"\n", 0, e.start) + 1, f"not UTF-8 text ({e.reason})") from None
         records = list(csv.reader(io.StringIO(text, newline="")))
         header = records[0]
         at = {name: i for i, name in enumerate(header) if name in REQUIRED}

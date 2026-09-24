@@ -37,7 +37,7 @@ the line, and with zero executions. These fail the file:
 - a wrong cell count
 - a value under the unnamed trailing column
 - a blank line inside the file
-- non-UTF-8 bytes
+- non-UTF-8 bytes, reported on the line the bad byte sits on
 
 Trailing blank lines at end of file are not rows.
 

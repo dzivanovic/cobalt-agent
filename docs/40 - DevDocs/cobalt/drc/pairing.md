@@ -56,7 +56,10 @@ The caller (`DrcStore.seed_for`) supplies
   every name in order.
 - **Unmatched rows are shown, never dropped or guessed:**
   - a row matching 0 or several trades
-  - a row with an empty match cell
+  - a row with an empty match cell. The reason names only what is proven
+    empty: `Symbol`, `Side`, or `Open Date or Open Time` (the row carries
+    only the combined entry time, so an empty date and an empty time are
+    named jointly)
   - two rows claiming one trade (both rows unmatched)
 
   Each goes to `unmatched` with its reason.

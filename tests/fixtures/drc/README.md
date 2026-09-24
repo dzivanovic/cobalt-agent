@@ -1,7 +1,7 @@
 # DRC D1 fixtures — stripped real shape (L45 / L32, consent R103)
 
 These four files are cut from E1: one real trading day of his two daily
-files (`1 - Trading/5 - Review/_imports/drc/2026-09-18/`, R91 / R92 /
+files (`1 - Trading/5 - Review/_imports/drc/<E1 date>/`, R91 / R92 /
 R114). They carry E1's SHAPE and none of his VALUES.
 
 Detection never reads a file's name or extension (R114). The `.csv`

@@ -36,7 +36,7 @@ from psycopg.types.json import Jsonb
 from cobalt import db, env
 from cobalt.db import Side
 
-from .models import DayPairing, Execution, ImportResult, Kind, OpenPosition, Outcome
+from .models import DayPairing, Execution, ImportResult, Kind, OpenPosition, Outcome, PairingError
 from .pairing import FN_VERSION, check_contiguity
 
 TABLES = ("drc_imports", "drc_fills", "drc_rows")
@@ -110,7 +110,9 @@ class DrcStore:
                     result.outcome.value,
                     result.reason,
                     result.line,
-                    result.degraded,
+                    f"{result.degraded}: {', '.join(result.extras)}"
+                    if result.degraded and result.extras
+                    else result.degraded,
                     prior[0] if prior else None,
                 ),
             ).fetchone()[0]
@@ -154,20 +156,17 @@ class DrcStore:
         trading_id = import_ids.get(Kind.TRADING_LOG)
         stats_id = import_ids.get(Kind.STATS_LOG)
         out: list[tuple[str, str, dict, dict]] = []
+        trade_inputs: dict[str, dict] = {}
         for t in pairing.trades:
             lines = sorted(leg.line for leg in [*t.entries, *t.legs] if leg.line is not None)
-            out.append((
-                "trade",
-                t.trade_id,
-                {
-                    "trading_log_import_id": trading_id,
-                    "fill_lines": lines,
-                    "carried_lots": [leg.model_dump(mode="json") for leg in t.entries if leg.carried],
-                    "stats_log_import_id": stats_id if t.stats else None,
-                    "stats_line": t.stats.line if t.stats else None,
-                },
-                t.model_dump(mode="json"),
-            ))
+            trade_inputs[t.trade_id] = {
+                "trading_log_import_id": trading_id,
+                "fill_lines": lines,
+                "carried_lots": [leg.model_dump(mode="json") for leg in t.entries if leg.carried],
+                "stats_log_import_id": stats_id if t.stats else None,
+                "stats_line": t.stats.line if t.stats else None,
+            }
+            out.append(("trade", t.trade_id, trade_inputs[t.trade_id], t.model_dump(mode="json")))
             if t.stats is not None:
                 out.append((
                     "stats_row",
@@ -176,12 +175,8 @@ class DrcStore:
                     {"match": "matched", "trade_id": t.trade_id, "row": t.stats.model_dump(mode="json")},
                 ))
         for p in pairing.open_positions:
-            out.append((
-                "open_position",
-                p.trade_id,
-                {"trading_log_import_id": trading_id},
-                p.model_dump(mode="json"),
-            ))
+            # L57: the position is its trade's remainder — the same inputs.
+            out.append(("open_position", p.trade_id, trade_inputs[p.trade_id], p.model_dump(mode="json")))
         for u in pairing.unmatched:
             out.append((
                 "stats_row",
@@ -238,6 +233,15 @@ class DrcStore:
                 ).fetchall()
             ]
             check_contiguity(day, prior, recorded)
+            if conn.execute(
+                f"SELECT 1 FROM drc_rows WHERE user_id = {_TENANT} "
+                "AND kind = 'day' AND day = %s AND derived->'not_computed' ? 'pairing'",
+                (prior,),
+            ).fetchone():
+                raise PairingError(
+                    f"{day}: the prior trading day {prior} has pairing not computed — its open "
+                    "positions are unknown; never assumed flat"
+                )
             rows = conn.execute(
                 f"SELECT derived FROM drc_rows WHERE user_id = {_TENANT} "
                 "AND kind = 'open_position' AND day = %s ORDER BY ref",

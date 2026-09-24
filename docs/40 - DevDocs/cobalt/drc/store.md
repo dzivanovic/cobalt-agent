@@ -17,7 +17,8 @@ and the three tables exist. If they are missing it raises
   - The row carries the kind, the name, the sha256 of the exact bytes,
     and `parse_status` (`parsed` / `partial` / `failed`).
   - `reason` holds the `PARTIAL — missing: …` flag or the failure,
-    `failed_line` the failing line, and `degraded` the shape flag.
+    `failed_line` the failing line, and `degraded` the shape flag
+    followed by the added column names (`trading_log_shape: Added`).
   - `supersedes` points at the same day's latest file of that kind, so
     nothing is ever overwritten.
   - Unless the file failed, one `drc_fills` row is written per execution.
@@ -27,7 +28,8 @@ and the three tables exist. If they are missing it raises
 - **`record_day(pairing, import_ids)`** — replaces the day's `drc_rows`
   in one transaction. It writes one row each for:
   - every trade (`ref` = `trade_id`)
-  - every open position (the next day's seed, R67)
+  - every open position (the next day's seed, R67), storing the same
+    `inputs` as its trade row
   - every stats row (`ref` = `line <n>`, with `match` = `matched` or the
     `unmatched — …` reason, so it is shown, never dropped)
   - the day itself: counts and `not_computed`
@@ -40,7 +42,9 @@ and the three tables exist. If they are missing it raises
 **`seed_for(day)`** first checks that the chain of recorded days is
 unbroken. It gets the prior trading day from
 `daymode.propose.prior_trading_day`, then runs
-`pairing.check_contiguity` against every earlier `day` row. Only then
+`pairing.check_contiguity` against every earlier `day` row. If the prior
+trading day's `day` row says pairing was not computed, it raises
+`PairingError`: that day's open positions are unknown. Only then
 does it return the prior trading day's `open_position` rows as
 `OpenPosition`s. The very first import returns `[]`. A broken chain
 raises `PairingError`: the position is never assumed flat, and a phantom

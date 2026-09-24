@@ -17,12 +17,15 @@ FAILS THE WHOLE FILE (`PairingError`, L1):
   the open position — with no seed that is "a carried symbol with no
   prior row", named (v2 `[F-10]`);
 - a file contradicting the seed of a carried position;
-- a broken import chain (`check_contiguity`, the ASK-DESK safe default).
+- a broken import chain (`check_contiguity`, the ASK-DESK safe default);
+- a seed whose prior day's pairing was not computed (store.seed_for).
 
 THE SEED. The prior day's stored open positions; each keeps its
 `trade_id` and remaining FIFO lots, so realized P&L on the closing day
 uses the prices the lots were opened at. `unrealized: not computed`
-(v2 `[F-10]`).
+(v2 `[F-10]`). A first import has no seed and no chain: a leading B
+there is read as an open, not a cover (the file cannot tell them apart);
+his ruling on that day is pending (fix r1 draft, OWNER ITEMS).
 
 THE STATS MATCH (D1-4). EXACT on what both files carry: symbol +
 direction + entry time to the second (E1: 4 of 4). No tolerance exists
@@ -272,11 +275,19 @@ def match_stats(
     claims: dict[str, list[StatsRow]] = {}
     unmatched: list[Unmatched] = []
     for row in stats.rows:
+        # `open_time` is the combined date + time: None proves only that one
+        # of the two cells is empty, so the pair is named jointly.
         empty = [
-            c for c, v in zip(stats_log.MATCH_INPUTS, (row.symbol, row.side, row.open_time, row.open_time)) if v is None
+            c
+            for c, v in (
+                (stats_log.SYMBOL, row.symbol),
+                (stats_log.SIDE, row.side),
+                (f"{stats_log.OPEN_DATE} or {stats_log.OPEN_TIME}", row.open_time),
+            )
+            if v is None
         ]
         if empty:
-            unmatched.append(Unmatched(row=row, reason=f"unmatched — empty: {', '.join(dict.fromkeys(empty))}"))
+            unmatched.append(Unmatched(row=row, reason=f"unmatched — empty: {', '.join(empty)}"))
             continue
         hits = [
             t

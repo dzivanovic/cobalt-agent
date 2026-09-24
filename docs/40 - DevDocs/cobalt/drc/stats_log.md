@@ -52,7 +52,8 @@ read as a playbook. Mapping a name to a setup is D3's job (R116).
 - **Fail-loud.** One bad cell fails the whole file, naming the line,
   with zero rows. Bad cells include a non-number, a side other than
   `long`/`short`, a bad date or clock or zone, a non-integer execution
-  count, and a wrong cell count.
+  count, and a wrong cell count. A non-UTF-8 byte fails the file on the
+  line the byte sits on.
 - **Empty cells.** An empty cell in a numeric column is `None`. E1 has
   many legitimately blank figures.
 - **Partial.** An absent column's field is `None` on every row. If a
