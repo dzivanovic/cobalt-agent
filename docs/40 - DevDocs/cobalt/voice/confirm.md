@@ -17,6 +17,10 @@ the model (FINAL [F-08], L37).
   target_changed` and the new read-back returned for re-confirmation;
   an expert refusal (entry guard, `market_reset`, state) → `failed:
   expert_refused`, spoken; anything else → `failed: execute_error`.
+  If the final `executing → done` step finds the row already reaped (fix
+  r1, [F-15]), the outcome is `failed` — never "Done." — its reply says
+  the stop WAS written and names the edit id, and an error line names the
+  turn; nothing is retried.
 - `cancel_pending(store, row, now, reason)`: `awaiting_confirm → cancelled`
   (a `no`, a Cancel tap, or any other transcript — nothing executed).
 

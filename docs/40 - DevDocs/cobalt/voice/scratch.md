@@ -12,7 +12,11 @@ the extension comes from a CLOSED content-type map (webm, ogg, m4a, wav) —
 anything else is refused by name, as is a zero-byte payload or a turn id
 that is not a plain file name. `turn_audio` unlinks the file in `finally:`
 whatever happened; if that unlink fails the turn raises
-`ScratchUnlinkFailed` — a file is never silently left.
+`ScratchUnlinkFailed` — a file is never silently left. Since fix r1 a write
+that raises or comes back short is `ScratchWriteFailed`: the partial file is
+removed through the one unlink and a RED line names the failure (never a
+truncated clip); and an unlink that finds the file already gone keeps its
+AMBER "already gone" line on the held audio.
 
 ## The start sweep — R2-1 side B
 His letter (R56): at every ASET start, before the first request, EVERY

@@ -38,5 +38,8 @@ endpoint, the last reply, a mute toggle, Confirm / Cancel only while an act
 is pending, and the degraded banner (no microphone, speech-to-text down,
 Cobalt can't think, a refusal, no local voice, scratch RED). Replies are
 spoken by the device with a `localService` voice only; none → text plus an
-AMBER "no local voice on this device". It sends no card id; the widget
+AMBER "no local voice on this device" — added to the turn's own RED /
+AMBER lines, never replacing them (fix r1). A `/voice/status` answer that is
+not OK (a 403, a 500) is a RED "voice status refused (HTTP <status>)", never
+an empty all-clear banner (fix r1). It sends no card id; the widget
 session id is random per page load. No reply audio exists on the server.

@@ -10,6 +10,10 @@ the Plan route NAME and the socket peers allowed on `/voice/*`.
 ## Fail-loud (L1, L10)
 Every key is required; an unknown key crashes; `stt_engine` has one legal
 value (no cloud engine exists — W4); `allowed_peers` must be IP literals.
+Since fix r1: a directory override that is SET but empty crashes naming the
+variable (unset still means the committed value), and `plan_route` must
+equal the agent registry's `route` exactly (`_check_plan_route`), or the
+load crashes naming both.
 
 ## The path refusals (FINAL §5)
 `scratch_dir` and `model_dir` — from the file, or from

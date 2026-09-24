@@ -8,8 +8,11 @@ Answers "which card" and "which value" with code (FINAL §4).
 (`card-<id>` + the label `TICKER direction STATE (card N)`).
 `resolve_card` binds the Plan's `card` argument: a candidate id from that
 list, or a verbatim span whose letters (spoken `X Y Z`, `x.y.z.`) normalize
-to a ticker. With two-plus matches, the transcript's own side word (long /
-short) and then an ordinal (first / second / …, in card-id order) narrow.
+to a ticker. With two-plus matches, a side word (long / short) and then an
+ordinal (first / second / …, in card-id order) narrow — read from the
+Plan's card SPAN only (fix r1: "first, move …" or "… before long" elsewhere
+in the transcript never picks a card); those qualifier words and "the" are
+dropped from the span before the ticker is spelled.
 Exactly one → bound; zero or two-plus → a clarify line that reads the
 candidates back. No argument → clarify, even with one open card: the
 floating widget sends no card id and nothing is picked for him ([F-10]).

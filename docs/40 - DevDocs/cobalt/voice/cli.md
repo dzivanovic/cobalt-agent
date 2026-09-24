@@ -9,7 +9,9 @@
 
 It prints the turn id, state, what was heard, the reply, any RED / AMBER
 lines and, for `--dry-run`, the Plan, the resolution and the exact change
-(nothing written). Exit 1 when the turn failed, 2 on a refusal.
+(nothing written). Exit 1 when the turn failed OR printed any RED line (a
+failed act, an expert refusal — fix r1), 2 on a refusal; `--confirm` with
+`--dry-run` is refused (exit 2) before any turn runs.
 
 ## Rules
 - `--confirm` is REFUSED under `COBALT_ENV=production`: a production act

@@ -22,7 +22,11 @@ passes on the digits of `4.40`). `compose_reply` speaks the template, with
 
 ## Hard refusals, whatever the Plan says
 `code_refusal`: an order / platform request (buy, sell, cover, flatten,
-"at market", order words) → `refuse` with ONE fixed sentence; a settings /
+"at market", order words; since fix r1 also the platform names — DAS,
+Lightspeed, TradeStation, CenterPoint, "platform" — and order PHRASES such
+as "go long", "short 100", "exit my … position", "take profits", "scale
+out"; never a bare long / short / close / exit, so card sides and price
+fields stay readable) → `refuse` with ONE fixed sentence; a settings /
 rules / strategy / risk request, or a registry tool marked
 `trading_logic: true` → `unsupported` naming
 `cobalt settings load --card <file> --sha256 <hash> --apply` ([R3F-11]);
