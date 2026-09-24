@@ -19,6 +19,33 @@ size, not as an amount owed.
 Newest day first.
 
 <!-- cobalt:days -->
+<!-- cobalt:section seat-usage:2026-09-23 -->
+### 2026-09-23
+
+weekly_pct_open:
+weekly_pct_close:
+
+<!-- cobalt:unit seat-usage:2026-09-23 -->
+| model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
+|---|---|---:|---:|---:|---:|---:|
+| `claude-sonnet-5` | claude · mechanical, non-write only — L29 ceiling for this tier | 579,752,237 | 10,235,645 | 3,337,291 | $190.26 | +$19.75 |
+| `grok-4.7-build` | grok · — | 13,625,984 | 0 | 898,970 | $7.89 | +$0.40 |
+| `gpt-5.6-sol` | codex · — | 46,848 | 0 | 533 | $0.13 | $0.00 |
+| `mainframe` | qwen · local lane (L23) — delegated mundane work, token conservation | 0 | 0 | 2,963 | $0.00 [^free] | $0.00 |
+| `claude-opus-5-5` | claude · — | 1,022,982,766 | 15,694,877 | 4,575,702 | **unpriced** | — |
+| `gpt-6-astra` | codex · reviewer seat — read-only role (L33) | 12,160 | 0 | 5 | **unpriced** | — |
+
+**Day total (API-equivalent):** ≥ $198.28 · **1,655,913,077** tokens across 6 model(s), seats: claude, codex, grok, qwen
+**Fresh input tokens:** 4,747,096 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+
+> **UNPRICED MODELS: `claude-opus-5-5`, `gpt-6-astra`.** These were used today and the pinned tool's offline pricing table has no rate for them, so their cost is missing rather than zero, and the day total above is a FLOOR. Fix by bumping the pin in `configs/cobalt/seat_usage.yaml` (a decision, with a diff), never by letting the job reach the network.
+
+[^free]: `mainframe` — the local Qwen3.8-27B MLX server on this Mac (L23's local lane). Its cost is electricity and the Mac Studio, not API spend — $0 here is the true number, not a missing one, so it never raises the hourly unpriced warning.
+
+_Generated 2026-09-23 22:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20260923 --until 20260923 --by-agent --offline`_
+<!-- /cobalt:unit seat-usage:2026-09-23 -->
+<!-- /cobalt:section seat-usage:2026-09-23 -->
 <!-- cobalt:section seat-usage:2026-09-22 -->
 ### 2026-09-22
 

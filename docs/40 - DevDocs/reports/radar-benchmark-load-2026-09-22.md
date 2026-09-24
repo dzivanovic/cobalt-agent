@@ -111,4 +111,15 @@ STEP 4 — not entered.
 | 2 | P4: `configs/cobalt/rules.yaml` is dirty on `~/cobalt` main. It is not a report or machine-written file, and it was already dirty before this run started. There are no merge or rebase markers, so it is not a gate failure. This hub did not stage or commit it. The desk should confirm who owns it. | For the desk |
 | — | `replay.err`: the only lines are the 09-21 21:10 missing-row failures. Nothing new. | Informational |
 
+## Close — git status after commit `b452d2c`
+```
+On branch main
+Your branch is ahead of 'origin/main' by 32 commits.
+	modified:   configs/cobalt/rules.yaml
+	modified:   docs/40 - DevDocs/reports/cto-2026-09-22.md
+	modified:   docs/40 - DevDocs/reports/seat-usage.md
+Untracked: 31-packet/p2-dark-settings.yaml, 31-packet/p2-live-settings.yaml, 2026-09-20/16-packet/, day-open-2026-09-22.md, stale-marker-check-2026-09-22.md
+```
+The commit's own file is clean in that output. Adding this section changes it again, so this section is the only uncommitted part of this report.
+
 RADAR BENCHMARK LOADED 07:04 ET · row: top_n 20 · min_move_pct 10 · sha256 verified · replay next run: 21:10 ET · ESCALATE: 2
