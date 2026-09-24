@@ -18,3 +18,7 @@ A transaction that reaches `market_reset` rolls back and records its stage on th
   - Any other failure stamps `failed_stage='evaluate'` with the scrubbed detail and returns `scanning`; S1–S4 results stand.
   - Card refusals collected by a published run are stamped the same way.
 - **Settings freshness.** The resident's stage reads trader settings every cycle and resolves today's rung from `DayModeStore` + `decided_or_stage1`.
+
+## Float handicap H1 (2026-09-24)
+
+`_collect` now puts two more numbers into each name's `SourceSet.metrics` row — `float_m` and `market_cap_m`, parsed by the same `_number` from the columns `export.handicap_headers` names — beside `volume` and `rvol`. They are the stored inputs of the handicap's group verdict: because the S5 receipt's `pool_unit` dumps every `SourceSet` whole, every scan's handicap decision replays from stored data after the retained CSVs expire (v3 §6, L57; experiment X5). A blank or `-` cell is `None`, never zero.

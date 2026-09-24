@@ -139,6 +139,10 @@ class RadarRunner:
                         metrics[ticker] = {
                             "volume": _number(row.get(self.config.export.metric_headers.volume)),
                             "rvol": _number(row.get(self.config.export.metric_headers.rvol)),
+                            # Float handicap H1 (v3 §6 replay): stored inputs
+                            # of the group verdict, in every receipt's pool_unit.
+                            "float_m": _number(row.get(self.config.export.handicap_headers.float)),
+                            "market_cap_m": _number(row.get(self.config.export.handicap_headers.market_cap)),
                         }
                         candidates[ticker].append(source_id)
                         if is_not_equity(row, self.config.not_equity):
