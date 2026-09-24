@@ -270,9 +270,14 @@ def test_all_live_defined_notes_parse_and_report_missing_atoms(capsys):
     with capsys.disabled():
         for slug, result in sorted(report.items()):
             print(f"{slug}: evaluable={result.evaluable} missing={list(result.missing_atoms)}")
-    rubberband = report.pop("rubberband")
-    assert rubberband.evaluable, rubberband.missing_atoms
-    # R2: Rubberband is the only def evaluable end-to-end in S2; every
-    # other def names exactly what it is missing, never a fake card.
+    # Setups ladder change (09-21 R44; setups FINAL §9 point (4)): the seven
+    # setups are evaluable end-to-end at defaults — the S2 "rubberband only"
+    # rule (R2) is superseded. Every other def still names exactly what it is
+    # missing, never a fake card. Same seven as test_setups_lego.SETUP_SLUGS.
+    setups = {"rubberband", "hitchhiker", "backside", "second-chance", "fashionably-late",
+              "nine-ema-scalp", "vwap-continuation"}
+    evaluable = {slug for slug, result in report.items() if result.evaluable}
+    assert evaluable == setups, (sorted(evaluable - setups), sorted(setups - evaluable))
     for slug, result in report.items():
-        assert not result.evaluable and result.missing_atoms, slug
+        if slug not in setups:
+            assert not result.evaluable and result.missing_atoms, slug

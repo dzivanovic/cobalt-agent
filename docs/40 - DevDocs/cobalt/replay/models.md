@@ -106,3 +106,11 @@ datetimes. `sha256_json` hashes that text. Every `inputs_sha256` is
   night's own export instead of a hand count of the cached CSV. It is
   recorded on every path — live, dry run and a retained `--date` run —
   because all three go through the same exports.
+- `ArchivePartial` (2026-09-24, R113): one mover whose source i1 bars did
+  not span the RTH session — `ticker`, `sides`, `code =
+  source_bars_short`, and `coverage()`'s detail (`count, first, last,
+  start, end, max_gap_min, reason`), replayable from the stored bars.
+  `ReplayResult.archive_partial` lists them and
+  `archive_partial_by_side` counts them per side (default 0 / 0); the S2
+  smoke's K9.9 / K9.12 compare that count against the stored
+  not-archived rows.

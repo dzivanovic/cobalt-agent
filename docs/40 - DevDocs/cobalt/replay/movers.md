@@ -107,8 +107,12 @@ not-equity values. There is no cf-R: without a trade_def there is no trigger.
 ## The archive (`archive_movers`)
 Each top-N ticker whose stored i1 bars do not cover RTH open → close
 (`cards.coverage`) is fetched and upserted, then **re-checked**. Only a
-covered ticker's movers are `archived_ids`. A fetch that still leaves a gap
-is `incomplete`, and a fetch error is a `failure`. A dry run, or a
+covered ticker's movers are `archived_ids`. A fetch that stored some i1
+bars but still leaves a gap (a halt, a late open) is `partial`: the
+`ArchiveOutcome.partial` dict holds `coverage()`'s whole detail for it plus
+`code = source_bars_short`, and it is never marked archived (R113). A fetch
+that returned zero bars on the day stays `incomplete`, and a fetch error is a
+`failure`. A dry run, or a
 historical run, fetches nothing and lists `would_fetch`. If the fetches
 cannot finish before the deadline at the bucket rate, it refuses before the
 first request (R1-16).

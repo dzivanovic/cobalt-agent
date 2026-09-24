@@ -38,8 +38,8 @@ TRADE_DATE = date(2026, 1, 6)
 FORMED_AT = datetime(2026, 1, 6, 16, 40, tzinfo=timezone.utc)  # 11:40 ET, path A per the fixture
 
 
-def fixture_bars(ticker: str) -> list[Bar]:
-    rows = json.loads((FIXTURES / "bars-rubberband.real-shape.json").read_text())
+def fixture_bars(ticker: str, filename: str = "bars-rubberband.real-shape.json") -> list[Bar]:
+    rows = json.loads((FIXTURES / filename).read_text())
     return [
         Bar(ticker=r["ticker"], interval=Interval(r["interval"]), ts=datetime.fromisoformat(r["ts"]),
             open=Decimal(r["open"]), high=Decimal(r["high"]), low=Decimal(r["low"]),
@@ -48,8 +48,9 @@ def fixture_bars(ticker: str) -> list[Bar]:
     ]
 
 
-def fixture_daily(ticker: str, fetched_at: datetime | None = None) -> DailySeries:
-    with (FIXTURES / "daily-bars.real-shape.csv").open() as f:
+def fixture_daily(ticker: str, fetched_at: datetime | None = None,
+                  filename: str = "daily-bars.real-shape.csv") -> DailySeries:
+    with (FIXTURES / filename).open() as f:
         rows = [r for r in csv.DictReader(f) if r["Ticker"] == ticker]
     return DailySeries(
         ticker=ticker,

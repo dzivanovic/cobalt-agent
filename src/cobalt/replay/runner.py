@@ -62,6 +62,7 @@ from .line import render_line, write_miss_line
 from .models import (
     FORMATION_UNAVAILABLE,
     FORMATION_UNAVAILABLE_LINE,
+    ArchivePartial,
     Episode,
     FormationOutcome,
     MissRow,
@@ -354,9 +355,29 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
         result.archived = len(outcome.archived_ids)
         result.archive_failures = len(outcome.failures)
         result.archive_incomplete = len(outcome.incomplete) + (0 if (live or dry_run) else len(outcome.would_fetch))
+        # R113: a clean fetch short of the session is PARTIAL, named with
+        # its coverage detail and counted per side for the smoke's K9.
+        result.archive_partial = [
+            ArchivePartial(
+                ticker=ticker, sides=sorted({m.side for m in stored if m.ticker == ticker}),
+                code=detail["code"], count=detail["count"], first=detail["first"], last=detail["last"],
+                start=detail["start"], end=detail["end"], max_gap_min=detail["max_gap_min"],
+                reason=detail["reason"],
+            )
+            for ticker, detail in sorted(outcome.partial.items())
+        ]
+        result.archive_partial_by_side = {
+            side: sum(1 for p in result.archive_partial if side in p.sides) for side in ("gainers", "losers")
+        }
         state["archive_failures"] = outcome.failures
         for ticker, error in sorted(outcome.failures.items()):
             logger.error("replay movers archive: {} FAILED — {}", ticker, error)
+        for p in result.archive_partial:
+            logger.warning("replay movers archive: {} PARTIAL — {} ({} i1 bars, {} → {})",
+                           p.ticker, p.reason, p.count, p.first, p.last)
+        for ticker in outcome.incomplete:
+            logger.error("replay movers archive: {} INCOMPLETE — a clean fetch returned no i1 bars for {}",
+                         ticker, trade_date)
         if dry_run and live and outcome.would_fetch:
             deps.out(f"DRY RUN would archive i1 bars for: {', '.join(outcome.would_fetch)}")
 

@@ -150,7 +150,8 @@ def test_smoke_checks_load_through_schema_bad_file_crashes_with_line(tmp_path):
     # The committed suite loads, whole, through the schema.
     suite = load_suite(SUITES_DIR / "s2.yaml")
     ids = [c.id for c in suite.checks]
-    assert {i.split(".")[0] for i in ids} == {f"K{n}" for n in range(1, 19)}
+    # K17 (`cobalt validate`) left the S2 smoke by `cto-2026-09-23.md` R114.
+    assert {i.split(".")[0] for i in ids} == {f"K{n}" for n in range(1, 19)} - {"K17"}
     assert len(ids) == len(set(ids))
 
     # A validation error names the line of the offending value.
@@ -1206,12 +1207,17 @@ def _k9_trio(side):
     return suite.model_copy(update={"checks": [by_id[cid] for cid in K9_SIDES[side]]})
 
 
-def _k9_deps(*, stored, exported, top_n, not_archived=0, last_result=None):
+def _k9_deps(*, stored, exported, top_n, not_archived=0, last_result=None, partial_by_side=None):
     def read_rows(statement, side):
         if "cobalt_jobs" in statement:
             result = {"trade_date": "2026-09-22", "movers_by_side": {
                 s: {"exported": exported, "top_n": top_n, "expected": min(top_n, exported)}
                 for s in ("gainers", "losers")}}
+            if partial_by_side is not None:
+                result["archive_partial_by_side"] = dict(partial_by_side)
+                result["archive_partial"] = [
+                    {"ticker": f"P{s[0].upper()}{i}", "sides": [s], "code": "source_bars_short"}
+                    for s, n in sorted(partial_by_side.items()) for i in range(n)]
             return _job_row(last_result=result if last_result is None else last_result)
         return rows(["top_n", "stored", "not_archived"], [top_n, stored, not_archived])
 
@@ -1220,7 +1226,9 @@ def _k9_deps(*, stored, exported, top_n, not_archived=0, last_result=None):
 
 def test_the_shipped_k9_compares_the_stored_count_against_what_the_export_allowed():
     """K9 became three rows per side. `full_sides` and the hand compare of
-    the cached CSV are gone; `top_n not_null` and `not_archived = 0` stay."""
+    the cached CSV are gone; `top_n not_null` stays. `not_archived = 0`
+    left these rows by `cto-2026-09-23.md` R113: not_archived is printed
+    here and graded against the job row's partial marker (K9.9 / K9.12)."""
     by_id = {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}
     assert "K9" not in by_id
     for side, (stored_id, job_id, compare_id) in K9_SIDES.items():
@@ -1229,8 +1237,8 @@ def test_the_shipped_k9_compares_the_stored_count_against_what_the_export_allowe
         # K9's own predicates
         assert stored.kind == "sql" and stored.side == "user"
         assert "system.movers_daily" in stored.query and f"side = '{side}'" in stored.query
-        assert [(p.column, p.op.value, p.value) for p in stored.expect] == [
-            ("top_n", "not_null", None), ("not_archived", "eq", 0)]
+        assert [(p.column, p.op.value, p.value) for p in stored.expect] == [("top_n", "not_null", None)]
+        assert "not_archived" in stored.query
         assert stored.result_number == "stored"
         assert "full_sides" not in stored.query
         # the job row carries what that side's export allowed
@@ -1271,10 +1279,11 @@ def test_k9_passes_a_short_side_and_fails_a_stored_count_below_what_the_export_a
         assert "17" in gap[compare_id].detail and "18" in gap[compare_id].detail
         assert overall_verdict(list(gap.values())) is Overall.AMBER
 
-        # The two predicates K9 always had still bite.
+        # not_archived no longer gates the stored row (`cto-2026-09-23.md`
+        # R113): it is graded against the job row's partial marker by
+        # K9.9 / K9.12 — see the committed-K9 partial-marker test below.
         unarchived = run(stored=25, exported=151, top_n=25, not_archived=1)
-        assert unarchived[stored_id].verdict is Verdict.FAIL
-        assert "not_archived" in unarchived[stored_id].detail
+        assert unarchived[stored_id].verdict is Verdict.PASS
 
         # A job result from before the counts existed: FAIL naming the key,
         # and the compare ERRORs rather than passing quietly.
@@ -1289,6 +1298,63 @@ def test_k9_passes_a_short_side_and_fails_a_stored_count_below_what_the_export_a
             last_result={"trade_date": "2026-09-21", "movers_by_side": {
                 side: {"exported": 151, "top_n": 25, "expected": 25}}}))}
         assert other_day[job_id].verdict is Verdict.FAIL and "trade_date" in other_day[job_id].detail
+
+
+#: Per side: the not_archived count (user side), the job row's partial
+#: marker for that side (system side), and the compare between them.
+K9_PARTIAL = {"gainers": ("K9.7", "K9.8", "K9.9"), "losers": ("K9.10", "K9.11", "K9.12")}
+
+
+def test_committed_k9_passes_a_not_archived_row_only_with_the_job_rows_partial_marker():
+    """`cto-2026-09-23.md` R113 ("If ticker is halted and has no bars, it
+    should have been closed with bars it has"): a not-archived mover row is
+    green ONLY when the replay's own job row names it `partial` on that
+    side — the K8 pattern, one user-side count, one job-row number, one
+    compare. A not-archived row no marker covers stays red."""
+    by_id = {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}
+    for side, (count_id, job_id, compare_id) in K9_PARTIAL.items():
+        stored_id = K9_SIDES[side][0]
+        count, job, compare = by_id[count_id], by_id[job_id], by_id[compare_id]
+        assert count.kind == "sql" and count.side == "user"
+        assert count.query == by_id[stored_id].query
+        assert count.result_number == "not_archived"
+        assert [(p.column, p.op.value) for p in count.expect] == [("not_archived", "not_null")]
+        assert job.kind == "job_row" and job.label == "com.cobalt.replay"
+        assert job.result_keys == ["archive_partial", "archive_partial_by_side"]
+        assert job.result_number == f"archive_partial_by_side.{side}"
+        assert job.result_equals["trade_date"] == "{last_trading_day}"
+        assert compare.kind == "compare" and (compare.left, compare.right) == (count_id, job_id)
+        assert compare.op.value == "eq"
+
+        ids = K9_SIDES[side] + K9_PARTIAL[side]
+        six = load_suite(SUITES_DIR / "s2.yaml").model_copy(update={"checks": [by_id[cid] for cid in ids]})
+        other = "losers" if side == "gainers" else "gainers"
+
+        def run(not_archived, marker):
+            return {o.id: o for o in checks.run_suite(six, ctx(), _k9_deps(
+                stored=25, exported=151, top_n=25, not_archived=not_archived,
+                partial_by_side={side: marker, other: 0}))}
+
+        named = run(1, 1)
+        assert [named[cid].verdict for cid in ids] == [Verdict.PASS] * 6, side
+        assert named[stored_id].verdict is Verdict.PASS
+        assert overall_verdict(list(named.values())) is Overall.GREEN
+
+        unnamed = run(1, 0)
+        assert unnamed[compare_id].verdict is Verdict.FAIL, side
+        assert unnamed[count_id].verdict is Verdict.PASS and unnamed[job_id].verdict is Verdict.PASS
+
+        clean = run(0, 0)
+        assert [clean[cid].verdict for cid in ids] == [Verdict.PASS] * 6, side
+
+
+def test_the_s2_smoke_carries_no_docs_placement_check():
+    """`cto-2026-09-23.md` R114 ("yes A. Thank you."): K17 (`cobalt
+    validate`, docs placement) is out of the S2 product smoke. Docs
+    placement lives only in the nightly close's `validate`."""
+    suite = load_suite(SUITES_DIR / "s2.yaml")
+    assert "K17" not in {c.id for c in suite.checks}
+    assert not [c.id for c in suite.checks if c.kind == "cli" and list(c.argv) == ["cobalt", "validate"]]
 
 
 def _suite_fakes(tmp_path):

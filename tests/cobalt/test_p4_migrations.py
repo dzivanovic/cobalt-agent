@@ -99,6 +99,7 @@ def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     now reverses all four, newest first. P4's own bound is still pinned
     below it: nothing at or below the bound is ever selected."""
     assert [p.name for p in _rollback_paths("0007")] == [
+        "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",
@@ -108,11 +109,13 @@ def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     above_0009 = [p.name for p in _rollback_paths("0009")]
     assert not [n for n in above_0009 if n.startswith(("0008", "0009"))], above_0009
     assert above_0009 == [
+        "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
     ]
     # ...and at 0008 exactly 0009 and everything newer, 0008 itself excluded.
     assert [p.name for p in _rollback_paths("0008")] == [
+        "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",

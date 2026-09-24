@@ -62,3 +62,23 @@ not duplicated here.
 `loader.py` (`load_tunables`, `resolve_cfg`, `iter_cfg_tokens` — the
 `cfg(key)` resolution path), `trade_def.py` (`Tunable[T]` — a distinct,
 older per-field mechanism, not this registry), ADR-0003.
+
+**2026-09-21 — setups one build STEP-2.** `TunableSource` gains
+`ASSUMED`: a default put in place without his ruling (FINAL §8
+[R2F-09]). Its one home is `1 - Trading/Assumed Defaults.md`, read by
+`vault_loader.load_assumed_tunables`. A row stops being assumed only when
+its `source` reads `ruling`. An edited value that still says `assumed`
+keeps the mark. A ruled number never moves into committed
+`tunables.yaml`. Committed `tunables.yaml` also gains the first
+CONVENTION row, `anatomy.orientation.extension` (A-01: unit `label`,
+value `null`, status `proposed`).
+
+**2026-09-22 (fix round 3, F5 — R51).** `TunableUnit` gains `DOLLARS =
+"dollars"` (a price delta in dollars), and committed `stop.buffer`'s
+label moves `cents` → `dollars`; its value is unchanged. The engine
+already applied it as a price delta (`structure.structural_stop`,
+`raw = extreme + away * buffer`), so the old label read as a hundredth of
+what was applied. No arithmetic changed. `CENTS` stays (the def-side
+`StopBuffer.cents` spec key and the predicate unit vocabulary use the
+word). Rollback: code and config revert together — code without `DOLLARS`
+cannot load a `unit: dollars` row.

@@ -92,6 +92,7 @@ H = actual session close otherwise (the after-window trigger still gets a horizo
   - no episode → `not_in_any_source`.
 - A mover row has no cf_r: there is no trigger without a trade_def.
 - `radar.benchmark` lives in `"user".trader_settings`, applied by Dejan (L53). It is not a `SETTING_KEYS` member.
+- [amended 2026-09-24, cto-2026-09-23.md R113] A fetched mover whose source i1 bars do not span the session is archived-partial: its bars are kept, it stays bars_archived = false, the replay's job row names it (archive_partial, by side) and the S2 smoke's K9 is green only with that marker; zero bars on the day stays incomplete, a fetch failure stays a failure.
 
 **Formations** reuse S2-P2's evaluator once it ships. Until then the job logs exactly `trade_def replay: not available until S2-P2` and writes no rows. A present-but-incompatible P2 fails loud (Astra R1-21).
 
@@ -117,7 +118,7 @@ H = actual session close otherwise (the after-window trigger still gets a horizo
 ## Consequences
 
 - The corpus answers "what did discipline cost" with numbers that replay, and it says `input_stale` rather than guessing when the bars cannot support an answer.
-- `cobalt smoke s2` (STEP-9, R6) checks this corpus on the S2 close. K6 checks picks, K7 the replay job, K8 missed rows equal `job.result` with zero `input_stale`, K9 movers and K10 the miss line.
+- `cobalt smoke s2` (STEP-9, R6) checks this corpus on the S2 close. K6 checks picks, K7 the replay job, K8 missed rows equal `job.result` with zero `input_stale`, K9 movers and K10 the miss line (K17, cobalt validate, left the S2 smoke 2026-09-24 — R114).
 - **Open, not decided here** (plan §8, the build C report's ESCALATE):
   - The L53 total-demand gate refuses the archiver and replay under the unchanged `finviz_max_rpm` ceiling. This is a deploy gate, and the ceiling number is Dejan's ruling.
   - `trade_count_band` values are unset.
