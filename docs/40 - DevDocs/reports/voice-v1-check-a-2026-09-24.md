@@ -156,4 +156,55 @@ Facts the prompt names, checked by me:
 11. Standing line: **"V1's production deploy needs, beyond the merge: the migration (`--allow-prod`), the model files in the production `model_dir`, the `COBALT_VOICE_*` exports live in `ops/start_aset.sh`, and `com.cobalt.aset` restarted inside the pause (L43 / L66) — the deploy prompt carries each (build ESCALATE (vi))."**
 12. Standing line: **"L68 GATE EARLY (amended 2026-09-24) asks every BUILD's stop line to quote offline, with-DB AND live-note results; V1's built line (09-23, before the clause) quotes offline and with-DB only — the desk rules whether the live-note result is owed before the merge."**
 
-VOICE V1 CHECK DONE · part: A (the ordered act) · grok: HARNESS — check file could not be written, no CHECK VOICE V1 A line · opus: CHECK VOICE V1 A: DEFECT REMAINS A1 A2 · ready for a deploy prompt: NO · platform refusal gap; target_sha256 re-check has no test · sol: METER — retry after Sep 26th, 2026 6:47 AM · astra: NOT SEATED (Sol's Codex meter, Sep 26th, 2026 6:47 AM; no string on this line) · defects that HOLD: 3 · ESCALATE: 12
+## GROK RERUN 09:2x ET
+
+Why: the CTO desk (message from the "cto desk prompt review" session, matched by its own row R34 in `cto-2026-09-24.md`) answered ESC 4 — rerun Grok alone on the same staged packet after a bare `cd /Users/cobalt/cobalt-wt/agy-trial` (a house with no ruling has not spent a round, L67 P-c; no third attempt) — and ESC 5 (see the amendment below).
+
+- `cd /Users/cobalt/cobalt-wt/agy-trial` as its own bare Bash call → exit 0; the session's working directory became `agy-trial`.
+- `date` before launch: **Thu Sep 24 09:19:31 EDT 2026**. Launch: the SAME grok string as the first attempt (same sentence, same `--sandbox cobalt-job --allow "Write(/Users/cobalt/cobalt-wt/agy-trial/scratch/tribunal-bars-0920/**)"`, no `--always-approve`), `run_in_background`.
+- `date` at the completion notice: **Thu Sep 24 09:35:02 EDT 2026** (≈ 15.5 min, under the 45-minute clock). Its stdout ended with the path `/Users/cobalt/cobalt-wt/agy-trial/scratch/tribunal-bars-0920/voice-v1-check-a/grok-check-a.md`; the file exists (9,201 B, written by Grok through its approved `--allow`, kept whole in the packet folder).
+- Written-nothing proof: `ls -la` of the packet folder after the return: the only new entry since the Opus listing is `grok-check-a.md` (Grok's own); `ls -la /Users/cobalt/cobalt-wt/voice-v1` identical to the pre-launch listing (newest mtime Sep 23 15:08). `grep -c -i "denied\|not allowed\|permission"` on `grok-check-a.md` = 0.
+- **Grok's check line (verbatim): `CHECK VOICE V1 A: BUILD STANDS EXCEPT C7, C10 · ready for a deploy prompt: NO · Some platform requests still pass and punctuated Yes. still executes`**
+
+### Per chunk — Grok's column (the table above gains it)
+
+| chunk | grok | checkers answering CLOSED (now) |
+|---|---|---|
+| C7 | NOT CLOSED — `tools.py:50`: "Platform requests are not [refused]. `_ORDER` matches buy / sell / cover / flatten / execute / "at market" / order words only. It has no platform phrase." | 0 of 2 |
+| C8 | CLOSED | 2 of 2 |
+| C9 | CLOSED | 2 of 2 |
+| C10 | NOT CLOSED — `confirm.py:41`: "`Yes.` does execute. So do `yes!`, `Yes?`, and fullwidth `ｙｅｓ`." (normalization wider than the FINAL's "casefold, strip") | 0 of 2 |
+
+Grok says the other C10 clauses hold, including "both `diff_sha256` and `target_sha256` are required (`tools.py:233`)". It did not raise the A2 test gap; Opus's A2 stands alone on that point.
+
+### Laws and boundary — Grok
+
+(a) "NONE. The five registry pins change expected tails so 0017 is newest and reverses first, and the archiver survivor set excludes `voice_turns` … That is the stated numeric-rollback rule, not an expected value bent to a wrong output." (b) Not under radar / cards / vaultwrite / heartbeat / `src/cobalt_agent` / `configs/config.yaml` / `ops/*.plist`; lists outside WHAT YOU BUILD: `src/cobalt/db_migrations/__init__.py`, `test_archiver_migrations.py`, `test_p4_migrations.py`, `test_radar_migration.py`, `test_radar_score_migration.py`, `test_tenancy.py` ("named in the build report"). (c) "NO PATH. A matching refusal returns `refuse` or `unsupported` and does not call `set_card_stop`. `execute_stop` writes only after both hashes match. Expert refusal, `Clarify`, and any other exception become `refused` or `failed` … the row leaves `executing`." (d) "NONE."
+
+**Contradiction, not smoothed:** Opus (c) — "`confirm.py:99` DOES (A5). The `EXECUTING → DONE` return value is ignored…" — against Grok (c) — "NO PATH." Grok's sentence about the row leaving `executing` covers the exception branches; it does not address the ignored return of the final `DONE` transition at `confirm.py:99-101`, which I re-read: unchanged, the return is discarded. My file-check row 3 above stands.
+
+### Checked against the branch — Grok's claims
+
+| # | claim · who | file:line | verdict | note |
+|---|---|---|---|---|
+| G1 | C7 NOT CLOSED: platform transcripts (`open DAS`, `log into Lightspeed`, `send it to TradeStation`) fall through `code_refusal` and return `None` with an `answer` or `act` plan · grok | `tools.py:50-58,77-88` | **HOLDS** | None of the three matches `_ORDER` (`send` needs `…order(s)`) or `_LOGIC`; `plan.kind` is `answer`/`act`, so `code_refusal` returns `None`. The order test (`test_voice_tools.py:133-141`) names no platform text. This is the platform half of A1 (classifier item 1); second checker agrees with Opus. |
+| G2 | C10 NOT CLOSED: `Yes.` / `yes!` / `Yes?` / fullwidth execute; wider than "casefold, strip" · grok | `confirm.py:40-41`; `test_voice_confirm.py:47` | HOLDS (fact) — **not a HOLD**: the desk's reading R34 (`cto-2026-09-24.md`, 09:19 ET) rules the builder's normalization STANDS as a wording amendment to the FINAL's confirm clause | The code does exactly what Grok says; the desk ruled that the amendment stands and that A3 is a FACT row. Not counted, not on the classifier list. |
+| G3 | C8 banner: `edit.from_stop` / `edit.to_stop` are the same values as `current["stop"]` / `new_stop`; `web.py:1261`, `web.py:1268` · grok | `aset/web.py:1261,1268`; `card_stop.py:40-48` | consistent with the files | Lines confirmed by Read of the worktree file at the tip; `set_card_stop` returns `StopEdit(from_stop=current["stop"], to_stop=new_stop)`. |
+| G4 | C9 shape claims (no bytes column, `user_id` NOT NULL + GUC + FK, USER side, single-flight `UPDATE … ANY(%s) RETURNING`, reaper marks only, one-DROP rollback) · grok | `0017_voice_turns.sql:22,30`; `store.py:48,116,140`; `0017_voice_turns.rollback.sql:5` | consistent with the files | Each read against the staged and original files; my `grep -rn "bytea\|large object\|lo_import"` over `src/cobalt/db_migrations src/cobalt/voice` printed nothing. |
+| G5 | NOT CHECKABLE items (`turn.py`, `cli.py`, the X-X1 count, with-DB counts) · grok | — | PART D — carried to `19` (turn / CLI); X-X1 and with-DB counts NOT CHECKABLE FROM READS | Counted in neither total. |
+
+### Ready for a deploy — Grok
+
+| checker | check line | ready | reason (verbatim) |
+|---|---|---|---|
+| grok | `CHECK VOICE V1 A: BUILD STANDS EXCEPT C7, C10 · ready for a deploy prompt: NO · Some platform requests still pass and punctuated Yes. still executes` | NO | Some platform requests still pass and punctuated Yes. still executes |
+
+### FOR THE CLASSIFIER — as amended
+
+Items 1–3 above stand unchanged. Item 1 (A1, C7 order/platform refusal regex) is now raised by BOTH seated checkers (Opus: platform terms and order verbs; Grok: platform phrases). Grok's C10 finding (G2) is not added: it is a FACT row after the desk's R34 reading. `defects that HOLD: 3` (unchanged).
+
+### ESCALATE — as amended (12 → 11)
+
+1. Opus: `DEFECT REMAINS A1 A2`. 2. Grok: `BUILD STANDS EXCEPT C7, C10` (C7 = the platform half of A1; C10 = the normalization FACT row G2, ruled STANDS by R34). 3. `## FOR THE CLASSIFIER` items 1–3 (A1 · A2 · A5). 4. The Opus / Grok (c) contradiction quoted above. 5. Claims carried to part D (`19`): opus's no-model-call routing / not-planned-same-turn / CLI `--confirm` in production, and Grok's matching `NOT CHECKABLE FROM READS` items. 6. `sol: METER — retry after Sep 26th, 2026 6:47 AM` · `astra: NOT SEATED` — the desk seats both from then (L62 R19). 7. L74 (recorded once under `## L74`). 8–11. The four standing lines of the earlier `## ESCALATE` (items 9–12 there), unchanged. ANSWERED and dropped from the list: the `ASK DESK` on Grok (rerun done above) and on the confirm-word normalization (desk R34: STANDS, a FACT row); the hub-environment note (cause established by the desk in R34: the launch's `cd` did not carry into the launch call).
+
+VOICE V1 CHECK DONE · part: A (the ordered act) · grok: CHECK VOICE V1 A: BUILD STANDS EXCEPT C7, C10 · ready for a deploy prompt: NO · Some platform requests still pass and punctuated Yes. still executes · opus: CHECK VOICE V1 A: DEFECT REMAINS A1 A2 · ready for a deploy prompt: NO · platform refusal gap; target_sha256 re-check has no test · sol: METER — retry after Sep 26th, 2026 6:47 AM · astra: NOT SEATED (Sol's Codex meter, Sep 26th, 2026 6:47 AM; no string on this line) · defects that HOLD: 3 · ESCALATE: 11
