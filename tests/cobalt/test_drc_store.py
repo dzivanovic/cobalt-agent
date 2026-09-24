@@ -17,6 +17,7 @@ import re
 from datetime import date
 from pathlib import Path
 
+import psycopg
 import pytest
 
 from cobalt import db, env
@@ -24,6 +25,7 @@ from cobalt.db import Side
 from cobalt.db_migrations import FORWARD, MIGRATIONS_DIR, REVERSE
 from cobalt.db_migrations.cli import _apply, _rollback_paths
 from cobalt.db_migrations.placement import CREATED_TABLES, DECLARED_TABLES, PLACEMENT, side_of
+from cobalt.drc import trading_log
 from cobalt.drc.detect import detect_kind
 from cobalt.drc.models import Kind, OpenPosition, Outcome, PairingError
 from cobalt.drc.pairing import build_day, pair_day
@@ -344,7 +346,8 @@ def test_a_partial_file_stores_its_partial_flag_as_the_reason(migrated):
     status, reason = migrated.execute(
         'SELECT parse_status, reason FROM "user".drc_imports WHERE id = %s', (import_id,)
     ).fetchone()
-    assert status == "partial" and reason.startswith("PARTIAL — missing: ")
+    # `54` row 9: the exact reason, naming the column removed (index 7).
+    assert status == "partial" and reason == f"PARTIAL — missing: {trading_log.ACCOUNT}"
 
 
 @requires_db
@@ -422,8 +425,60 @@ def test_the_first_import_ever_has_an_empty_seed(migrated, weekday_calendar):
 
 @requires_db
 def test_the_system_role_cannot_read_the_drc_tables(migrated):
+    """`54` row 7: schema-qualified, so a missing relation cannot pass."""
     migrated.execute("SAVEPOINT wrong_side")
     db.apply_side(migrated, Side.SYSTEM)
-    with pytest.raises(Exception):
-        migrated.execute("SELECT 1 FROM drc_imports")
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        migrated.execute('SELECT 1 FROM "user".drc_imports')
     migrated.execute("ROLLBACK TO SAVEPOINT wrong_side")
+
+
+@requires_db
+def test_a_prior_day_whose_pairing_was_not_computed_fails_the_seed(migrated, weekday_calendar):
+    """`54` row 2: a prior day recorded with pairing NOT computed has
+    unknown open positions — the seed fails, never assumed flat."""
+    records = DAY1.read_text().splitlines()
+    data = ("\n".join(",".join(r.split(",")[:1] + r.split(",")[2:]) for r in records) + "\n").encode()
+    day1 = TradingLogSource().parse(data, D, detect_kind("half.md", data))
+    day = build_day(day1)
+    assert "pairing" in day.not_computed
+    store = DrcStore()
+    ids = {Kind.TRADING_LOG: store.record_import(D, day1.result, data, day1.executions)}
+    store.record_day(day, ids)
+    with pytest.raises(PairingError, match="2001-01-02 has pairing not computed"):
+        store.seed_for(D_NEXT)
+
+
+@requires_db
+def test_an_open_position_row_carries_its_trades_inputs(migrated):
+    """`54` row 14 (L57): the open position's inputs are its trade's."""
+    store = DrcStore()
+    data, day1 = _trading(DAY1, D)
+    ids = {Kind.TRADING_LOG: store.record_import(D, day1.result, data, day1.executions)}
+    store.record_day(build_day(day1), ids)
+    rows = migrated.execute(
+        """SELECT kind, ref, inputs FROM "user".drc_rows
+           WHERE day = %s AND kind IN ('trade', 'open_position')""", (D,)
+    ).fetchall()
+    positions = [(ref, inputs) for kind, ref, inputs in rows if kind == "open_position"]
+    trades = {ref: inputs for kind, ref, inputs in rows if kind == "trade"}
+    assert len(positions) == 1
+    for ref, inputs in positions:
+        assert inputs == trades[ref]
+        assert {"trading_log_import_id", "fill_lines", "carried_lots"} <= set(inputs)
+
+
+@requires_db
+def test_a_degraded_file_stores_the_names_it_added(migrated):
+    """`54` row 15: `degraded` names the added column, not the bare flag.
+    Widened exactly as `test_drc_trading_log.py`'s extra-column test."""
+    records = E1.read_text().splitlines()
+    data = ("\n".join(
+        ",".join(r.split(",")[:-1] + (["Added"] if i == 0 else ["x"]) + [""]) for i, r in enumerate(records)
+    ) + "\n").encode()
+    parsed = TradingLogSource().parse(data, D, detect_kind("wide.md", data))
+    assert parsed.result.extras == ["Added"]
+    import_id = DrcStore().record_import(D, parsed.result, data, parsed.executions)
+    assert migrated.execute(
+        'SELECT degraded FROM "user".drc_imports WHERE id = %s', (import_id,)
+    ).fetchone()[0] == "trading_log_shape: Added"
