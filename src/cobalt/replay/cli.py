@@ -116,7 +116,7 @@ def cmd_nightly(args: argparse.Namespace) -> None:
         job.result = result.job_result()
     print(
         f"replay {trade_date}{' DRY RUN' if args.dry_run else ''}: movers {result.movers} · archived "
-        f"{result.archived} · partial {sum(result.archive_partial_by_side.values())} · card misses {result.card_misses} · mover misses {result.mover_misses} · "
+        f"{result.archived} · card misses {result.card_misses} · mover misses {result.mover_misses} · "
         f"input_stale {result.input_stale} · formations {result.formation_replay} "
         f"({result.formation_misses} misses, {result.formation_suppressed} suppressed) · "
         f"line {result.line_action}"

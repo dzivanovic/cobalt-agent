@@ -415,7 +415,7 @@ def p2_sources():
 def test_the_nightly_run_binds_to_p2s_shipped_replay_and_reconciles_its_formation_misses():
     deps, calls = fake_deps(formations=runner_mod.formation_replay, formation_sources=p2_sources)
     result = run_nightly(DAY, dry_run=False, deps=deps)
-    assert result.formation_replay == "s2p2.2"          # the shipped capability marker, not a guess
+    assert result.formation_replay == "s2p2.1"          # the shipped capability marker, not a guess
     assert (result.formation_candidates, result.formation_misses) == (1, 1)
     row = deps.missed.current_rows["formation"][
         (DAY, "formation", "MU", 0, "0123456789abcdef0123456789abcdef",
@@ -469,7 +469,7 @@ def test_an_available_p2_with_no_formations_still_retires_the_days_predecessors(
     deps.missed.reconcile = recording
     result = run_nightly(DAY, dry_run=False, deps=deps)
 
-    assert result.formation_replay == "s2p2.2"                   # P2 ran; it was not absent
+    assert result.formation_replay == "s2p2.1"                   # P2 ran; it was not absent
     assert "missed.reconcile:formation" in calls                 # the R2-1 case
     assert seen["formation"] == []                               # reconciled with ZERO rows
     assert result.reconcile["formation"].inserted == 0
@@ -894,110 +894,3 @@ def fake_deps(*, job_row="default", settings="default", collector=None, now=None
 
     deps.writer_factory = writer_factory
     return deps, calls
-
-
-# =====================================================================
-# Archived-partial movers (`cto-2026-09-23.md` R113)
-# =====================================================================
-
-
-def _session(ticker, *, minutes=None):
-    """One ticker's i1 session from the RTH open to the close, or its first
-    `minutes` bars only — a source day that stops short (a halt)."""
-    total = int((CLOSE - RTH_OPEN) / timedelta(minutes=1))
-    return [Bar(ticker=ticker, interval=Interval.I1, ts=RTH_OPEN + timedelta(minutes=m), open=Decimal(1),
-                high=Decimal(1), low=Decimal(1), close=Decimal(1), volume=1)
-            for m in range(total if minutes is None else minutes)]
-
-
-class SessionCollector(FakeCollector):
-    """Returns a full session for every fetched ticker, except `short`
-    (picked by `pick_short` from the tickers actually fetched), which gets
-    30 bars."""
-
-    def __init__(self, pick_short=None):
-        super().__init__()
-        self.pick_short = pick_short
-        self.short = None
-
-    async def bars(self, tickers, *, top_n):
-        self.calls.append("collector.bars")
-        self.short = self.pick_short(tickers) if self.pick_short else None
-        return {t: _session(t, minutes=30 if t == self.short else None) for t in tickers}, {}
-
-
-def _storing(deps):
-    """Wrap the fake bar store so `upsert_bars` is visible to the coverage
-    re-read, keyed by (ticker, ts) the way the real upsert is."""
-    inner = deps.bar_store
-    added: dict[tuple, Bar] = {}
-
-    class Storing:
-        def bars_in_range(self, conn, ticker, interval, start, end, *, end_inclusive=True, as_bars=False):
-            base = inner.bars_in_range(conn, ticker, interval, start, end,
-                                       end_inclusive=end_inclusive, as_bars=as_bars)
-            merged = {b.ts: b for b in base}
-            merged.update({ts: b for (t, ts), b in added.items() if t == ticker and start <= ts < end})
-            return list(merged.values())
-
-        def upsert_bars(self, rows):
-            for b in rows:
-                added[(b.ticker, b.ts)] = b
-            return inner.upsert_bars(rows)
-
-    deps.bar_store = Storing()
-
-
-def _losers_only():
-    from cobalt.replay.movers import load_radar_config, parse_movers
-
-    def side(name):
-        export = parse_movers((FIX / "replay" / f"movers-{name}.real-shape.csv").read_bytes(), side=name,
-                              top_n=60, content_type="text/csv", config=load_radar_config(),
-                              fetched_at=NOW, source="live")
-        return {r.ticker for r in export.rows}
-
-    return side("losers") - side("gainers")
-
-
-def test_a_partial_mover_is_counted_by_side_and_is_not_incomplete():
-    """`cto-2026-09-23.md` R113 ("it should have been closed with bars it
-    has"): one stored loser whose source day stops short is PARTIAL — named
-    in `archive_partial` with code `source_bars_short` and its side, counted
-    in `archive_partial_by_side`, and never in `archive_incomplete`."""
-    fixture_tickers = {b.ticker for b in _load_bars()}
-    losers = _losers_only()
-
-    def pick(tickers):
-        return next(t for t in tickers if t in losers and t not in fixture_tickers)
-
-    collector = SessionCollector(pick_short=pick)
-    deps, calls = fake_deps(collector=collector)
-    _storing(deps)
-    result = run_nightly(DAY, dry_run=False, deps=deps, live=True)
-    assert collector.short is not None
-    assert result.archive_partial_by_side == {"gainers": 0, "losers": 1}
-    assert result.archive_incomplete == 0
-    assert result.archive_failures == 0
-    assert len(result.archive_partial) == 1
-    partial = result.archive_partial[0]
-    assert partial.ticker == collector.short
-    assert partial.code == "source_bars_short"
-    assert partial.sides == ["losers"]
-    assert partial.count == 30
-    payload = result.job_result()
-    assert "archive_partial" in payload and "archive_partial_by_side" in payload
-    assert payload["archive_partial_by_side"] == {"gainers": 0, "losers": 1}
-    assert ReplayResult.model_validate(payload) == result
-
-
-def test_a_clean_run_reports_zero_partial_on_both_sides():
-    """`cto-2026-09-23.md` R113: the marker the S2 smoke's K9 compares is
-    present on every run, zero on both sides when every fetched mover
-    covers the session."""
-    deps, calls = fake_deps(collector=SessionCollector())
-    _storing(deps)
-    result = run_nightly(DAY, dry_run=False, deps=deps, live=True)
-    assert result.archive_partial_by_side == {"gainers": 0, "losers": 0}
-    assert result.archive_partial == []
-    assert result.archive_incomplete == 0

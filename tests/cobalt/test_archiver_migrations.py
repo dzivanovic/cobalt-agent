@@ -77,20 +77,18 @@ def test_forward_ends_0008_0009_0010_0011():
     """The tail after the P4 rebase: P4's pair, then this branch's pair,
     in numeric order. The invariant is unchanged — 0010 and 0011 are the
     LAST two registered, and nothing of this branch's was displaced."""
-    assert [p.name for p in FORWARD[-5:]] == [
+    assert [p.name for p in FORWARD[-4:]] == [
         "0008_radar_value_movers.sql",
         "0009_picks_missed.sql",
         "0010_archive_progress.sql",
         "0011_archive_incidents.sql",
-        "0013_tunables_slug_nullable.sql",  # the setups one build (R2-3 = B); 0012 is bars/chunk-2-0920's
     ]
 
 
 def test_reverse_begins_0011_0010_0009_0008():
     """The exact mirror of the tail above: this branch's pair reverses
     FIRST, then P4's."""
-    assert [p.name for p in REVERSE[:5]] == [
-        "0013_tunables_slug_nullable.rollback.sql",
+    assert [p.name for p in REVERSE[:4]] == [
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",
@@ -113,12 +111,10 @@ def test_rollback_down_to_0009_undoes_this_branch_alone_and_0007_also_reaches_p4
     because selection is by numeric prefix and P4 now sits between.
     Both are pinned so neither can drift."""
     assert [p.name for p in _rollback_paths("0009")] == [
-        "0013_tunables_slug_nullable.rollback.sql",
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
     ]
     assert [p.name for p in _rollback_paths("0007")] == [
-        "0013_tunables_slug_nullable.rollback.sql",
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",
@@ -137,10 +133,8 @@ def test_the_registry_is_an_explicit_contiguous_list_and_reverse_mirrors_it():
     numbers = [int(p.name.split("_", 1)[0]) for p in FORWARD]
     assert numbers == sorted(numbers), "FORWARD must be in numeric order"
     assert len(numbers) == len(set(numbers)), f"duplicate migration number in {numbers}"
-    # The setups one build adds 0013; 0012 belongs to the unmerged
-    # bars/chunk-2-0920 and closes the gap when it lands (L68 seam).
-    assert numbers == [*range(1, 12), 13], f"1…11 then 13, got {numbers}"
-    assert numbers[-3:-1] == [10, 11], "this branch's pair is still in place"
+    assert numbers == list(range(1, 12)), f"1…11 contiguous, got {numbers}"
+    assert numbers[-2:] == [10, 11], "this branch's pair is still the tail"
     reverse_numbers = [int(p.name.split("_", 1)[0]) for p in REVERSE]
     assert reverse_numbers == sorted(reverse_numbers, reverse=True)
     assert reverse_numbers == [n for n in reversed(numbers) if n != 1], (

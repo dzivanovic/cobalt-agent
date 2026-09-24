@@ -12,13 +12,3 @@ True range, Wilder ATR and the volume band. Every convention a recompute needs i
 
 ## Gotchas
 All arithmetic uses `Decimal` at 28 significant digits (`PRECISION`), so a float recompute agrees well inside 1e-6. The observation records `last_bar_ts` for intraday windows and `last_session_date` for daily ones.
-
-## 2026-09-21 — seeding (setups one build STEP-3; FINAL §5 `A-05`, [F-10])
-
-`seeded(fn, premarket, run, period) -> Seeded` is the ONE warm-up rule for the rolling indicators. It runs the ONE function each indicator already has (`ema`, `wilder_atr`) over the series it picks:
-
-- with at least `period` complete premarket working buckets, the series is premarket + RTH run (`source="premarket"`), so the first RTH value continues the seeded series;
-- otherwise, the RTH run alone (`source="rth_only"`);
-- with neither long enough, `unavailable="insufficient_seed"` — later, never guessed.
-
-So `atr_seeded` and the Extension's `atr_working` are both `wilder_atr`: one function, two named inputs ([F-10]). No second ATR function exists; a test asserts `__all__`. The frame picks the complete premarket buckets (`frame.premarket_buckets`). `WARMUP_CONVENTION = "frame.warmup_source"` names the `A-05` convention row this rule implements.

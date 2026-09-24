@@ -78,9 +78,7 @@ from .models import (
 
 #: The S2-P2 capability markers this binding was written against. A value
 #: outside this set is a loud refusal, never a silent degrade (R1-21).
-#: `s2p2.2` (the setups one build) changes no `ReplayFormation` field this
-#: binding consumes (`FORMATION_REQUIRED_FIELDS`); `s2p2.1` code no longer exists.
-SUPPORTED_EVALUATORS = frozenset({"s2p2.2"})
+SUPPORTED_EVALUATORS = frozenset({"s2p2.1"})
 
 #: P2's shipped replay entrypoint, recorded in the receipt of every row.
 P2_MODULE = "cobalt.radar.evaluate_cli"

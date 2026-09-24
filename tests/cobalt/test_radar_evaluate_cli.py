@@ -78,8 +78,7 @@ def test_replay_filters_to_one_trade_def_and_names_not_evaluable_defs():
         defaults=sup.defaults(), clock=session_clock(), out=lines.append,
     )
     assert report.formations == []
-    # STEP-4 of the setups one build serves the Range(micro) atoms (FINAL §3 D2).
-    assert "Extension(day).state" in report.not_evaluable["example-range-break"]
+    assert "Range(micro).instantiated" in report.not_evaluable["example-range-break"]
     assert any("not evaluable: missing atoms" in line for line in lines)
     with pytest.raises(SystemExit, match="no loaded trade_def"):
         replay_formations(
@@ -171,10 +170,8 @@ def test_candidate_harness_persists_with_frozen_settings_and_simulated_taps(tmp_
     assert report.cards_created and report.taps_applied == 2 * len(report.cards_created)
     card = cards.cards[report.cards_created[0]]
     assert {d.factor: d.trader_grade for d in card["dots"]}["trail_fit"] == 6
-    published = [r["tap_versions"]["cards"][0]["published"] for r in cards.receipts if r["tap_versions"]["cards"]]
-    assert any(p["conviction"] is not None for p in published)
-    assert published and all(p["card_score"] is None and "assumed_formation" in p["score_suppressed"]
-                             for p in published)
+    assert any(r["tap_versions"]["cards"] and r["tap_versions"]["cards"][0]["published"]["card_score"] is not None
+               for r in cards.receipts)
     assert live_settings["radar.cards_enabled"] is False  # trader_settings never written
 
 

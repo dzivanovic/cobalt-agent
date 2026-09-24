@@ -40,34 +40,3 @@ and a status write that re-rendered the definition unit would rewrite the
 def and every comment in it. A per-trade row must carry scope
 `per_trade(trade_key(slug))`; a row shadowing an engine key is a loud
 collision, not an override.
-
-**2026-09-21 — setups one build STEP-2: the dedicated reader.**
-`load_assumed_tunables(vault_root, loaded_slugs=)` reads the ONE unit
-`tunables:assumed`, inside `<!-- cobalt:section assumed -->`, of
-`ASSUMED_NOTE = "1 - Trading/Assumed Defaults.md"`. The note sits
-OUTSIDE the Strategies folder, beside the list-config note ([R2F-07]).
-**An absent note means no assumed rows, not an error.** Every row must:
-- validate through `TunableRegistry`;
-- carry scope `global` or `per_trade(<a def loaded in this pass>)`.
-  `per_indicator(...)` is REFUSED, as the settled reader words it. That
-  is F1, NOT widened, so the three per-indicator holes stay null;
-- read `source` `assumed` or `ruling`.
-
-A `global` row's `LoadedTunable.slug` is None; `slug` is now optional.
-`load_vault_trade_defs` APPENDS these rows to `user_tunables`, the same
-list `_resolve_every_cfg` merges and `TaxonomyStore.sync` writes and
-prunes. One key supplied twice is refused with both paths named. The
-strategy-note reader `_read_tunables_unit` refuses `source: assumed`, so
-the mark has one home.
-
-**2026-09-22 (fix round 3, F2 — R48, F1 WIDENED).** `load_assumed_tunables`
-now also accepts a `per_indicator(<ind>)` row, but ONLY for a key whose
-committed engine row (`load_tunables()`) carries that same scope and
-`value: null` — a hole. Any other `per_indicator` row is refused, naming
-why: no engine row, the engine row's scope differs, or the engine row
-carries a value. Such a row has no def (`slug` None, like a `global` one);
-`merge_tunables` then fills the hole by its existing rule (same scope, same
-unit, source assumed or ruling). The three holes this opens are
-fashionably-late's two flat thresholds and vwap-continuation's
-`dist.k.vwap`; committed config keeps all three null — their values are
-proposed in a gitignored file and written into the note by the desk.

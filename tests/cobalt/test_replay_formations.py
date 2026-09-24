@@ -8,22 +8,14 @@ synthetic anatomy-only trade_def the repo ships, built through P2's own
 test helper `radar_p2_support`. Nothing here hand-writes a
 `ReplayFormation`: the contract under test is exactly what P2 produces.
 
-The `triggered` variant is the same shipped example note with one real
-value swapped — the trigger's `bars_cleared` 2 -> 1 — through P2's own
-helper. It is used because its formation traded through its trigger on the
-real tape. The shipped `countertrend` variant's formation never traded
-through its own — the real no-trigger case, tested here too.
-
-SETUPS ONE BUILD STEP-1 (FINAL §1 `A-01`, §9 point (5)): `relation` is
-never read for direction, so the former `with_trend` variant (two long
-formations on the up-run) no longer exists — and point (5)'s geometry
-guard refuses the day's second formation (seen at 18:45 UTC with the last
-close already through its stop, `stop_wrong_side`). The committed day now
-yields ONE real formation per (ticker, def), so the R1-21 two-rows case
-("two distinct formations persisting under the extended key") is proven on
-the real row and a copy of it differing ONLY in `formation_at` — named in
-the build report's ESCALATE until a DB-backed fixture-cut day with two real
-formations restores it.
+The `with_trend` variant is the same shipped example note with one real
+`valid_setups.relation` value swapped — P2's own helper takes those
+overrides. It is used because it is the variant whose two same-day
+formations of one (ticker, trade_def) both traded through their trigger
+on the real tape, which is the R1-21 case ("two distinct formations
+persisting under the extended key"). The shipped `countertrend` variant's
+own two formations never traded through theirs — the real no-trigger
+case, tested here too.
 
 The counterfactual R is NOT recomputed here: a formation goes through the
 SAME `counterfactual()` the card path uses (L3, one formula).
@@ -88,10 +80,9 @@ def _daily(ticker, day):
     return sup.fixture_daily(ticker, datetime(2026, 1, 6, 12, 0, tzinfo=UTC))
 
 
-def triggered_def():
-    """The shipped example def with one real value swapped (`bars_cleared` 1)."""
-    return sup.loaded(sup.anatomy_def(trigger={"type": "bar_break", "params": {"bars_cleared": 1, "direction": "any"},
-                                               "confirmation_policy": {"type": "intrabar"}}))
+def with_trend_def():
+    """The shipped example def with one real relation value swapped."""
+    return sup.loaded(sup.anatomy_def(valid_setups=[{"setup_ref": "overextension", "relation": "with_trend"}]))
 
 
 def countertrend_def():
@@ -101,7 +92,7 @@ def countertrend_def():
 
 def _p2_run(variant: str):
     """One real P2 replay: ~230 scans through the real evaluator."""
-    loaded = triggered_def() if variant == "triggered" else countertrend_def()
+    loaded = with_trend_def() if variant == "with_trend" else countertrend_def()
     tickers = ("FTFT", "BGFI")
     radar = ReadOnlyRadar(sup.members(*tickers), {t: sup.fixture_bars(t) for t in tickers})
     report = replay_formations(
@@ -117,7 +108,7 @@ def _p2_run(variant: str):
 _cached_run = lru_cache(maxsize=None)(_p2_run)
 
 
-def p2_report(variant: str = "triggered"):
+def p2_report(variant: str = "with_trend"):
     return _cached_run(variant)[1].model_copy(deep=True)
 
 
@@ -140,26 +131,17 @@ def misses(report, *, evaluator_version=EVALUATOR_VERSION, **ctx):
 
 
 def test_p2_replay_formation_carries_the_membership_id_md5_and_score_receipt_reference():
-    from cobalt.radar.evaluate import MemberInput, evaluate_member
-
-    loaded, report = _p2_run("triggered")
-    assert len(report.formations) == 1, "P2's own fixture day forms once for this def (FINAL §9 (5))"
+    loaded, report = _p2_run("with_trend")
+    assert len(report.formations) == 2, "P2's own fixture day forms twice for this def"
     for f in report.formations:
         assert f.membership_id == MEMBER_FTFT
         assert f.trade_def_md5 == loaded.md5
         assert re.fullmatch(r"[0-9a-f]{64}", f.score_inputs_sha256)
-    # the reference is the evaluation's own digest: the evaluation at the
-    # formation's own scan, recomputed, hashes to the same retained receipt
-    f = report.formations[0]
-    ev = evaluate_member(
-        loaded, MemberInput(membership_id=MEMBER_FTFT, ticker="FTFT", trade_date=DAY, as_of=f.seen_at,
-                            bars=tuple(b for b in sup.fixture_bars("FTFT") if b.ts < f.seen_at),
-                            daily=_daily("FTFT", DAY), daily_status="cache-hit", pool_position=1),
-        tunables=sup.engine_tunables(), defaults=sup.defaults(), scan_interval=100, clock=session_clock(),
-    )
-    assert ev.evaluation == "formed" and ev.inputs_sha256 == f.score_inputs_sha256
+    # the reference is the evaluation's own digest: two formations, two
+    # distinct evaluations, two distinct retained score receipts
+    assert report.formations[0].score_inputs_sha256 != report.formations[1].score_inputs_sha256
     # and it is deterministic — a second real run replays to the same digests
-    assert [f.score_inputs_sha256 for f in _p2_run("triggered")[1].formations] == \
+    assert [f.score_inputs_sha256 for f in _p2_run("with_trend")[1].formations] == \
         [f.score_inputs_sha256 for f in report.formations]
 
 
@@ -172,35 +154,11 @@ def test_the_shipped_capability_marker_is_the_one_replay_binds_to():
 # =====================================================================
 
 
-def _two_rows():
-    """The day's one real row, and a copy of it differing ONLY in
-    `formation_at` (the 18:42 UTC bar the start-of-step code also formed on,
-    now refused by the geometry guard) — see the module docstring."""
-    (real,) = misses(p2_report("triggered")).rows
-    return [real, real.model_copy(update={"formation_at": datetime(2026, 1, 6, 18, 42, tzinfo=UTC)})]
-
-
-def test_the_days_second_formation_is_refused_by_the_geometry_guard():
-    from cobalt.radar.evaluate import MemberInput, evaluate_member
-
-    at = datetime(2026, 1, 6, 18, 45, tzinfo=UTC)
-    ev = evaluate_member(
-        triggered_def(), MemberInput(membership_id=MEMBER_FTFT, ticker="FTFT", trade_date=DAY, as_of=at,
-                                     bars=tuple(sup.fixture_bars("FTFT")), daily=_daily("FTFT", DAY),
-                                     daily_status="cache-hit"),
-        tunables=sup.engine_tunables(), defaults=sup.defaults(), scan_interval=100, clock=session_clock(),
-    )
-    # the short frame is refused by the guard; with neither frame formed the
-    # published row is the LONG frame's (R2-4.1 B, setups one build STEP-2)
-    assert (ev.by_side["short"].evaluation, ev.by_side["short"].note) == ("not_formed", "stop_wrong_side")
-    assert (ev.evaluation, ev.formation) == ("not_formed", None)
-
-
 def test_two_same_day_formations_of_one_ticker_and_def_persist_as_two_rows_under_the_extended_key():
-    outcome = misses(p2_report("triggered"))
+    outcome = misses(p2_report("with_trend"))
     assert outcome.status == EVALUATOR_VERSION
-    assert (outcome.counts.candidates, outcome.counts.misses, outcome.counts.suppressed) == (1, 1, 0)
-    rows = _two_rows()
+    rows = list(outcome.rows)
+    assert (outcome.counts.candidates, outcome.counts.misses, outcome.counts.suppressed) == (2, 2, 0)
     assert [r.formation_at.isoformat() for r in rows] == [
         "2026-01-06T16:22:00+00:00", "2026-01-06T18:42:00+00:00"]
     assert {r.kind for r in rows} == {"formation"}
@@ -214,7 +172,7 @@ def test_two_same_day_formations_of_one_ticker_and_def_persist_as_two_rows_under
 
 
 def test_every_formation_row_satisfies_0009s_formation_check():
-    for row in misses(p2_report("triggered")).rows:
+    for row in misses(p2_report("with_trend")).rows:
         assert row.trade_def_md5 is not None and row.formation_at is not None
         assert row.pool_member_id is not None
         assert row.card_id is None and row.mover_id is None
@@ -237,7 +195,8 @@ def test_two_formation_rows_land_under_the_live_unique_index(dev_db_tx):
             "'2026-01-06 14:35+00','2026-01-06 14:35+00','test','[\"test\"]'::jsonb,'rth',1,1) RETURNING id",
             (DAY,),
         ).fetchone()[0]
-    rows = [r.model_copy(update={"pool_member_id": member}) for r in _two_rows()]
+    rows = [r.model_copy(update={"pool_member_id": member})
+            for r in misses(p2_report("with_trend")).rows]
     counts = store.reconcile(run_id="e2-proof", trade_date=DAY, kind="formation", rows=rows)
     assert counts.inserted == 2
     current = store.current(DAY, "formation")
@@ -250,26 +209,26 @@ def test_two_formation_rows_land_under_the_live_unique_index(dev_db_tx):
 # =====================================================================
 
 
-def _card_ref(direction="short", slug="example-anatomy-reversal", member=MEMBER_FTFT):
+def _card_ref(direction="long", slug="example-anatomy-reversal", member=MEMBER_FTFT):
     return RadarCardRef(card_id=7701, pool_member_id=member, trade_def_slug=slug,
                         direction=direction, state="WATCH",
                         created_at=datetime(2026, 1, 6, 16, 25, tzinfo=UTC))
 
 
 def test_an_existing_open_radar_card_for_member_def_direction_suppresses_the_miss():
-    outcome = misses(p2_report("triggered"), cards=[_card_ref()])
+    outcome = misses(p2_report("with_trend"), cards=[_card_ref()])
     assert list(outcome.rows) == []
-    assert (outcome.counts.candidates, outcome.counts.misses, outcome.counts.suppressed) == (1, 0, 1)
+    assert (outcome.counts.candidates, outcome.counts.misses, outcome.counts.suppressed) == (2, 0, 2)
 
 
 @pytest.mark.parametrize("ref", [
-    _card_ref(direction="long"),                        # the other direction
+    _card_ref(direction="short"),                       # the other direction
     _card_ref(slug="some-other-def"),                   # another trade_def
     _card_ref(member=101),                              # another pool member
 ])
 def test_a_card_on_a_different_member_def_or_direction_does_not_suppress(ref):
-    outcome = misses(p2_report("triggered"), cards=[ref])
-    assert (outcome.counts.misses, outcome.counts.suppressed) == (1, 0)
+    outcome = misses(p2_report("with_trend"), cards=[ref])
+    assert (outcome.counts.misses, outcome.counts.suppressed) == (2, 0)
 
 
 # =====================================================================
@@ -278,19 +237,23 @@ def test_a_card_on_a_different_member_def_or_direction_does_not_suppress(ref):
 
 
 def test_cf_r_for_a_formation_is_the_one_formula_over_p2s_own_trigger_and_stop():
-    (first,) = misses(p2_report("triggered")).rows
-    # P2's formation (engine at STEP-1 of the setups one build): a short
-    assert (first.entry, first.stop) == (Decimal("5.3200"), Decimal("5.64"))
-    assert first.trigger_ts == datetime(2026, 1, 6, 16, 45, tzinfo=UTC)
-    assert first.fill_price == Decimal("5.3200")
-    assert (first.exit_reason, first.exit_price) == ("stop", Decimal("5.64"))
-    assert first.exit_ts == datetime(2026, 1, 6, 17, 16, tzinfo=UTC)
-    assert (first.cf_r, first.mfe_r) == (Decimal("-1.0000"), Decimal("0.6563"))
-    assert first.horizon_end == CLOSE
+    first, second = misses(p2_report("with_trend")).rows
+    # P2's formation: trigger 5.3500 / stop 5.33; the trigger bar OPENED
+    # beyond the trigger, so the fill is the bar open (R1-9 gap-through)
+    assert (first.entry, first.stop) == (Decimal("5.3500"), Decimal("5.33"))
+    assert first.trigger_ts == datetime(2026, 1, 6, 16, 25, tzinfo=UTC)
+    assert first.fill_price == Decimal("5.3880")
+    assert (first.exit_reason, first.exit_price) == ("stop", Decimal("5.33"))
+    assert first.exit_ts == datetime(2026, 1, 6, 16, 45, tzinfo=UTC)
+    assert (first.cf_r, first.mfe_r) == (Decimal("-2.9000"), Decimal("20.1000"))
+    assert (second.entry, second.stop) == (Decimal("6.5900"), Decimal("6.57"))
+    assert second.fill_price == Decimal("7.1100")
+    assert (second.cf_r, second.mfe_r) == (Decimal("-27.0000"), Decimal("118.5000"))
+    assert second.horizon_end == CLOSE
 
 
 def test_every_formation_number_replays_from_its_stored_receipt():
-    for row in misses(p2_report("triggered")).rows:
+    for row in misses(p2_report("with_trend")).rows:
         again = replay_formation_from_receipt(row.receipt)
         assert again.status == "miss"
         assert again.miss.inputs_sha256 == row.inputs_sha256
@@ -299,7 +262,7 @@ def test_every_formation_number_replays_from_its_stored_receipt():
 
 
 def test_the_receipt_retains_the_p2_contract_facts_and_the_score_receipt_reference():
-    row = misses(p2_report("triggered")).rows[0]
+    row = misses(p2_report("with_trend")).rows[0]
     contract = row.receipt["inputs"]["p2_contract"]
     assert contract["evaluator_version"] == EVALUATOR_VERSION
     assert contract["module"] == "cobalt.radar.evaluate_cli"
@@ -314,7 +277,7 @@ def test_the_receipt_retains_the_p2_contract_facts_and_the_score_receipt_referen
 
 
 def test_the_window_comes_from_the_one_public_resolver():
-    row = misses(p2_report("triggered")).rows[0]
+    row = misses(p2_report("with_trend")).rows[0]
     resolved = resolve_window(None, DAY)
     assert row.receipt["inputs"]["window"]["resolved_end"] == resolved.resolved_end.isoformat()
     assert row.receipt["inputs"]["window"]["source"] == resolved.source
@@ -327,22 +290,22 @@ def test_the_window_comes_from_the_one_public_resolver():
 
 def test_formations_whose_trigger_never_traded_through_write_no_row():
     report = p2_report("countertrend")
-    assert len(report.formations) == 1, "the shipped def's own same-day formation (FINAL §9 (5))"
+    assert len(report.formations) == 2, "the shipped def's own two same-day formations"
     outcome = misses(report)
     assert list(outcome.rows) == []
-    assert (outcome.counts.candidates, outcome.counts.no_trigger) == (1, 1)
+    assert (outcome.counts.candidates, outcome.counts.no_trigger) == (2, 2)
 
 
 def test_bars_that_do_not_cover_the_day_are_input_stale_and_write_no_row():
     truncated = [b for b in sup.fixture_bars("FTFT") if b.ts < datetime(2026, 1, 6, 19, 0, tzinfo=UTC)]
-    outcome = misses(p2_report("triggered"), bars=truncated)
+    outcome = misses(p2_report("with_trend"), bars=truncated)
     assert list(outcome.rows) == []
-    assert outcome.counts.input_stale == 1
+    assert outcome.counts.input_stale == 2
 
 
 def test_a_formation_with_no_bars_at_all_is_input_stale():
-    outcome = misses(p2_report("triggered"), bars=[])
-    assert (outcome.counts.misses, outcome.counts.input_stale) == (0, 1)
+    outcome = misses(p2_report("with_trend"), bars=[])
+    assert (outcome.counts.misses, outcome.counts.input_stale) == (0, 2)
 
 
 # =====================================================================
@@ -352,18 +315,18 @@ def test_a_formation_with_no_bars_at_all_is_input_stale():
 
 def test_an_unsupported_evaluator_version_refuses():
     with pytest.raises(ReplayError, match="evaluator version"):
-        misses(p2_report("triggered"), evaluator_version="s9p9.0")
+        misses(p2_report("with_trend"), evaluator_version="s9p9.0")
 
 
 def test_a_formation_whose_stop_sits_on_the_wrong_side_of_its_trigger_refuses():
-    report = p2_report("triggered")
-    report.formations[0] = report.formations[0].model_copy(update={"stop": "1.00"})  # a SHORT's stop below entry
+    report = p2_report("with_trend")
+    report.formations[0] = report.formations[0].model_copy(update={"stop": "9.00"})
     with pytest.raises(ReplayInputError, match="wrong side of entry"):
         misses(report)
 
 
 def test_candidates_carry_every_field_the_row_needs():
-    report = p2_report("triggered")
+    report = p2_report("with_trend")
     candidates = formation_candidates(report, evaluator_version=EVALUATOR_VERSION)
     assert [c.formed_at for c in candidates] == [f.formed_bar_ts for f in report.formations]
     assert [c.seen_at for c in candidates] == [f.seen_at for f in report.formations]
@@ -374,7 +337,7 @@ def test_candidates_carry_every_field_the_row_needs():
 
 
 def test_replay_formation_refuses_a_formation_stamped_for_another_day():
-    candidate = formation_candidates(p2_report("triggered"), evaluator_version=EVALUATOR_VERSION)[0]
+    candidate = formation_candidates(p2_report("with_trend"), evaluator_version=EVALUATOR_VERSION)[0]
     other = date(2026, 1, 7)
     with pytest.raises(ReplayInputError, match="trade date"):
         replay_formation(candidate, sup.fixture_bars("FTFT"), trade_date=other,

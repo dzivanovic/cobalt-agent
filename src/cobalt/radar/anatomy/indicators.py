@@ -23,23 +23,13 @@ Volume band
   * threshold = mean + k·sigma, k from `extension.path_a_volume_sigma`;
   * fewer than `n` prior bars → `InsufficientBars`.
 
-Seeding (FINAL §5, `A-05`; [F-10])
-  * `seeded(fn, premarket, run, period)` is the ONE warm-up rule for the
-    rolling indicators, over the ONE function each already has (`ema`,
-    `wilder_atr`): with at least `period` complete premarket working
-    buckets the series is premarket + RTH run (the first RTH value
-    continues the premarket-seeded series); otherwise the RTH run alone;
-    with neither long enough, `unavailable: insufficient_seed` — later,
-    never guessed. Choosing the complete premarket buckets is the frame's
-    job (`frame.premarket_buckets`).
-
 All arithmetic is `Decimal` at 28 significant digits, so the stored value
 and an independent float recompute agree well inside 1e-6.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal, localcontext
 from typing import Literal, Protocol
@@ -48,8 +38,6 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict
 
 ATR_PERIOD = 14
 PRECISION = 28
-#: `A-05`, the convention `seeded` implements (a `label` row in `tunables.yaml`).
-WARMUP_CONVENTION = "frame.warmup_source"
 
 
 class InsufficientBars(ValueError):
@@ -183,38 +171,7 @@ def ema(bars: Sequence[OHLCV], period: int) -> EmaObservation:
     )
 
 
-class Seeded(BaseModel):
-    """A rolling indicator's value under the warm-up rule (`seeded`)."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    value: Decimal | None
-    source: Literal["premarket", "rth_only"] | None
-    premarket_buckets: int
-    bars_used: int
-    unavailable: Literal["insufficient_seed"] | None = None
-
-
-def seeded(
-    fn: Callable[[Sequence[OHLCV], int], EmaObservation | AtrObservation],
-    premarket: Sequence[OHLCV],
-    run: Sequence[OHLCV],
-    period: int,
-) -> Seeded:
-    """`fn` (`ema` or `wilder_atr`) over the warm series, falling back to the
-    RTH run when the premarket seed is short."""
-    if len(premarket) >= period:
-        series, source = [*premarket, *run], "premarket"
-    elif len(run) >= period:
-        series, source = list(run), "rth_only"
-    else:
-        return Seeded(value=None, source=None, premarket_buckets=len(premarket), bars_used=0,
-                      unavailable="insufficient_seed")
-    return Seeded(value=fn(series, period).value, source=source, premarket_buckets=len(premarket),
-                  bars_used=len(series))
-
-
 __all__ = [
-    "ATR_PERIOD", "AtrObservation", "EmaObservation", "InsufficientBars", "OHLCV", "Seeded", "VolumeBand",
-    "WARMUP_CONVENTION", "ema", "seeded", "true_ranges", "volume_band", "wilder_atr",
+    "ATR_PERIOD", "AtrObservation", "EmaObservation", "InsufficientBars", "OHLCV", "VolumeBand",
+    "ema", "true_ranges", "volume_band", "wilder_atr",
 ]

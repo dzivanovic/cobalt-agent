@@ -1,39 +1,41 @@
-"""What the radar can evaluate — and, for everything else, exactly what is missing.
+"""What S2 can evaluate — and, for everything else, exactly what is missing (R2).
 
-ONE PATH (FINAL §2.5, L3; setups one build STEP-2). This module keeps no
-constants of its own. It reads the tables formation dispatches through —
-`TRIGGERS`, `STOPS` / `STRUCTURAL_REFS`, `ATOMS`, `RELATIONS` and `ANCHORS`
-(`cobalt.radar.formation`) — and walks every predicate through the same
-shapes the interpreter evaluates (`formation.atoms.predicate_gaps`). So a
-def the registry calls evaluable is one the interpreter can evaluate (E9),
-and a symbol compared to a value its atom can never produce is named
-`<atom>∌<value>` (E8), never served-but-never-true. No trade name appears
-here (L31/L32): the rule is data-driven, never slug-driven.
+R2: Rubberband is evaluable end-to-end; the other defs parse and report
+"not evaluable: missing atoms […]", never a card. The rule is data-driven
+rather than slug-driven — no trade name appears here (L31/L32): a def is
+evaluable when every atom its preconditions and avoids require
+(`Predicate.required_atoms`), its trigger type and its stop placement are
+all served by an S2 detector.
 
 `text` predicates are human (L11) and never block evaluability; they are
 counted so the dry-run can say how many human reads the card carries.
-`radar_watch[]` is a watch-state list, not a card gate, and is out of the
-evaluation's scope.
+`radar_watch[]` is a watch-state list, not a card gate, and is out of S2's
+evaluation scope.
 
-Missing entries are named so the dry-run line reads on its own: atoms
-verbatim (`Leg(pullback)`), relation words (`touched`), shapes the
-interpreter cannot evaluate (`Unsupported(arith)`), out-of-domain symbols
-(`Extension.state∌reverting`), triggers as `trigger:<type>`, stops as
-`stop:<type>[:<ref>]`, a def whose preconditions name no anchor object as
-`anchor:none` (fix round 2 F1: formation has nothing to hang on, so the def
-could never form) — "this needs a build: a feature for later".
+Missing entries are named so the dry-run line reads on its own:
+atoms verbatim (`Leg(pullback)`), relation words (`touched`), triggers as
+`trigger:<type>`, stops as `stop:<type>[:<ref>]`.
 """
 
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from cobalt.taxonomy.trade_def import TradeDef
+from cobalt.taxonomy.trade_def import StructuralExtremePlacement, TradeDef
 
-from ..formation.anchors import anchor_for
-from ..formation.atoms import ATOMS, RELATIONS, predicate_gaps, relation_operand_names
-from ..formation.stops import stop_resolver
-from ..formation.triggers import trigger_gaps
+#: Atoms served by `extension.py` and `daily.py`.
+SUPPORTED_ATOMS: frozenset[str] = frozenset({
+    "Extension.state",
+    "Extension.instantiated",
+    "Extension.leg_count",
+    "RangeBreak(HTF).day_count",
+})
+
+#: bar_break with `bars_cleared` (structure.bar_break_trigger).
+SUPPORTED_TRIGGERS: frozenset[str] = frozenset({"bar_break"})
+
+#: structural_extreme on the tracked extreme (structure.tracked_extreme).
+SUPPORTED_STOP_REFS: frozenset[str] = frozenset({"snapback_candle", "turn_low"})
 
 
 class Evaluability(BaseModel):
@@ -45,23 +47,23 @@ class Evaluability(BaseModel):
 
 
 def evaluability(td: TradeDef) -> Evaluability:
-    missing: set[str] = set()
+    required: set[str] = set()
     human = 0
     for predicate in [*td.preconditions, *td.avoid]:
         if predicate.expr is None:
             human += 1
-            continue
-        consumed = relation_operand_names(predicate.ast)  # a served relation's own operands
-        missing |= {a for a in predicate.required_atoms if a not in ATOMS and a not in RELATIONS and a not in consumed}
-        missing |= predicate_gaps(predicate.ast)
+        required |= predicate.required_atoms
+    missing = set(required - SUPPORTED_ATOMS)
 
-    if anchor_for(td) is None:
-        missing.add("anchor:none")
-
-    missing |= trigger_gaps(td.trigger)  # F2: a sequence names its steps' own gaps
+    trigger_type = td.trigger.type
+    if trigger_type not in SUPPORTED_TRIGGERS or "bars_cleared" not in getattr(td.trigger, "params", {}):
+        missing.add(f"trigger:{trigger_type}")
 
     placement = td.stop.placement
-    if stop_resolver(placement) is None:
+    if not (
+        isinstance(placement, StructuralExtremePlacement)
+        and placement.ref.value in SUPPORTED_STOP_REFS
+    ):
         ref = getattr(placement, "ref", None)
         suffix = f":{ref.value}" if ref is not None else ""
         missing.add(f"stop:{placement.type}{suffix}")
@@ -71,4 +73,7 @@ def evaluability(td: TradeDef) -> Evaluability:
     )
 
 
-__all__ = ["Evaluability", "evaluability"]
+__all__ = [
+    "Evaluability", "SUPPORTED_ATOMS", "SUPPORTED_STOP_REFS", "SUPPORTED_TRIGGERS",
+    "evaluability",
+]

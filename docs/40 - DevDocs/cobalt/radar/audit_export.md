@@ -38,6 +38,3 @@ One canonical JSON file each (sorted keys, 2-space indent, trailing newline):
 ## Gotchas
 - Runs audited before D2 are dark or carry null scores (curves unset); the enable gate needs the candidate-harness run (`radar evaluate --candidate` on cobalt_dev, Astra R1-11) exported with `--run`.
 - The bundle carries the trader's definitions and settings (user data): it belongs in a gitignored scratch path, never in a commit.
-
-## 2026-09-21 — setups one build STEP-1
-The replay candidate's dots come from `evaluate.card_dots(...)` with the formation's `assumed_keys`, not from bare `compute_dots`. A candidate formed on an assumed default therefore carries the `assumed_formation` dot, a null `card_score` and the same suppression the card has (L52 (d)). A `--run` export's self-check replays through `replay_receipt`. That refuses a receipt written under another `EVALUATOR_VERSION`, so runs recorded before the one build's deploy no longer export.

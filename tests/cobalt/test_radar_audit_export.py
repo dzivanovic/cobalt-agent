@@ -114,8 +114,7 @@ def test_run_bundle_carries_bars_window_settings_tunables_ast_and_published_card
     assert pre["expr"] == "Extension.state == culminating" and pre["ast"]["node"] == "Compare"
     assert "Extension" in " ".join(pre["required_atoms"])
     card = _load(out, "cards.json")["cards"][0]
-    assert card["published"]["card_score"] is None and card["taps"]
-    assert "assumed_formation" in card["published"]["score_suppressed"]
+    assert card["published"]["card_score"] is not None and card["taps"]
     assert {d["factor"] for d in card["published"]["dots"]} >= {"rvol", "trail_fit"}
     seam = _load(out, "seam.json")
     assert seam["run"]["id"] == 2 and seam["scores"][0]["evaluation"] == "formed"
@@ -140,9 +139,7 @@ def test_the_card_numbers_recompute_from_the_bundle_files_alone(tmp_path):
     published = card["published"]
     assert abs(Decimal(published["proximity"]) - prox) <= Decimal("1e-6")
     assert abs(Decimal(published["conviction"]) - conviction) <= Decimal("1e-6")
-    # the untappable assumed_formation dot suppresses the score for the card's life (R2-2 = B)
-    assert published["card_score"] is None and "assumed_formation" in published["score_suppressed"]
-    assert [d["factor"] for d in published["dots"]][-1] == "assumed_formation"
+    assert published["card_score"] == int((conviction * prox * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
 def test_the_bundle_is_frozen_an_existing_nonempty_out_dir_is_refused(tmp_path):

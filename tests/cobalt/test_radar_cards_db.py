@@ -124,7 +124,7 @@ def test_s5_end_to_end_writes_on_cobalt_dev_and_replays(world):
                             (card_id,)).fetchone()
     assert card[:6] == ("radar", "WATCH", None, None, None, None)
     assert card[6] == card[7] and card[8] == board[0]["id"]
-    assert dots == len(sup.ANATOMY_FACTORS) + 1  # + the untappable assumed_formation dot (R2-2 = B)
+    assert dots == len(sup.ANATOMY_FACTORS)
     assert genesis == [(None, "WATCH", "cobalt", str(first.run_id))]
     assert view == (False, "formed")
     chain = cards.receipts_chain(second.receipt_id)
@@ -235,8 +235,7 @@ def test_dot_taps_append_recompute_and_are_never_overwritten_by_a_scan(world):
     bands = CardSettings.from_rows(ENABLED).proposed_key
     cards.tap_dot(card_id, "trail_fit", 8, bands=bands, enabled=[Grade.A, Grade.B, Grade.C])
     result = cards.tap_dot(card_id, "trail_fit", 9, bands=bands, enabled=[Grade.A, Grade.B, Grade.C])
-    assert result["conviction"] == "0.9" and result["card_score"] is None
-    assert "assumed_formation" in result["score_suppressed"]
+    assert result["conviction"] == "0.9" and result["card_score"] is not None
     with cards._connect() as conn:
         taps = conn.execute("SELECT grade FROM card_dot_taps WHERE card_id = %s ORDER BY id", (card_id,)).fetchall()
         conn.execute("SAVEPOINT immutable_probe")
@@ -341,8 +340,7 @@ def test_audit_export_of_a_cobalt_dev_run_verifies_and_writes_the_bundle(world, 
     for name, digest in manifest.files.items():
         assert hashlib.sha256((out / name).read_bytes()).hexdigest() == digest
     cards = json.loads((out / "cards.json").read_text())["cards"]
-    assert cards and cards[0]["card_id"] == card_id and cards[0]["published"]["card_score"] is None
-    assert "assumed_formation" in cards[0]["published"]["score_suppressed"]
+    assert cards and cards[0]["card_id"] == card_id and cards[0]["published"]["card_score"] is not None
 
 
 def test_the_ladder_reads_radar_cards_v_with_its_dots_on_cobalt_dev(world):
@@ -357,7 +355,7 @@ def test_the_ladder_reads_radar_cards_v_with_its_dots_on_cobalt_dev(world):
     rows = world["cards"].radar_board_cards(sup.TRADE_DATE)
     row = next(r for r in rows if r["card_id"] == card_id)
     assert set(row) - {"dots"} == set(FIELD_OWNERS)
-    assert len(row["dots"]) == len(sup.ANATOMY_FACTORS) + 1 and row["pool_position"] == 1  # + assumed_formation
+    assert len(row["dots"]) == len(sup.ANATOMY_FACTORS) and row["pool_position"] == 1
     view = panel.build_ladder_view(
         card_store=world["cards"], settings_store=world["settings"], clock=session_clock(),
         now=SCAN0 + timedelta(seconds=60), rung_source=lambda _at, _cfg: "reduced",

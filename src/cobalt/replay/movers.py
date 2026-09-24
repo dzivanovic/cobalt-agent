@@ -530,7 +530,6 @@ def benchmark_misses(
 class ArchiveOutcome:
     archived_ids: list[int] = field(default_factory=list)
     incomplete: list[str] = field(default_factory=list)
-    partial: dict[str, dict[str, Any]] = field(default_factory=dict)
     failures: dict[str, str] = field(default_factory=dict)
     would_fetch: list[str] = field(default_factory=list)
     rows_written: int = 0
@@ -555,9 +554,6 @@ async def archive_movers(
     "Some bars that day" is not coverage (R1-12): the stored bars must span
     the RTH open to the close before a mover is marked archived, and a
     fetch that still leaves a gap is counted `incomplete`, never archived.
-    A fetched ticker whose source bars are short of the session is
-    `partial` — its bars kept, it named with its coverage detail, never
-    marked archived — while zero bars on the day stays `incomplete` (R113).
     Work that cannot finish before the deadline at the bucket's rate
     refuses before the first request (R1-16).
     """
@@ -568,17 +564,17 @@ async def archive_movers(
     for mover in movers:
         ids_by_ticker.setdefault(mover.ticker, []).append(mover.id)
 
-    def coverage_of(ticker: str) -> dict[str, Any]:
+    def covered(ticker: str) -> bool:
         stored = day_bars(
             bar_store.bars_in_range(
                 None, ticker, Interval.I1, day_start, day_end,
                 end_inclusive=False, as_bars=True),
             trade_date)
-        return coverage(stored, start=rth_open, end=close)
+        return coverage(stored, start=rth_open, end=close)["covered"]
 
     to_fetch = []
     for ticker in ids_by_ticker:
-        if coverage_of(ticker)["covered"]:
+        if covered(ticker):
             outcome.archived_ids.extend(i for i in ids_by_ticker[ticker] if i is not None)
         else:
             to_fetch.append(ticker)
@@ -600,11 +596,8 @@ async def archive_movers(
         if ticker not in fetched:
             continue
         outcome.rows_written += bar_store.upsert_bars(fetched[ticker])
-        detail = coverage_of(ticker)
-        if detail["covered"]:
+        if covered(ticker):
             outcome.archived_ids.extend(i for i in ids_by_ticker[ticker] if i is not None)
-        elif detail["count"] > 0:
-            outcome.partial[ticker] = {**detail, "code": "source_bars_short"}
         else:
             outcome.incomplete.append(ticker)
     outcome.archived_ids.sort()

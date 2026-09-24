@@ -36,7 +36,7 @@ from typing import Any, Literal, Mapping, Sequence
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
-from .scoring import ASSUMED_FORMATION, Dot
+from .scoring import Dot
 
 HEALTH_KEYS = (
     "card.health.participation_warn", "card.health.participation_bad",
@@ -133,8 +133,6 @@ def dot_pills(*, entry_grades: Mapping[str, int], dots: Sequence[Dot], t: Health
     for dot in dots:
         if not dot.computed:
             continue  # L11: judgment and desk dots are never health-scored
-        if dot.factor == ASSUMED_FORMATION:
-            continue  # R50 (fix r3 F4): no graded value; the card's ASSUMED mark carries it
         entry = entry_grades.get(dot.factor)
         current = dot.engine_grade
         if entry is None or current is None:

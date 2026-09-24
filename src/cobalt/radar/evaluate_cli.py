@@ -1,7 +1,7 @@
 """`cobalt radar evaluate` — the dry-run replay and the dev-persistence
 harness (S2-P2 STEP-4, R3/R9, Astra R1-11).
 
-    cobalt radar evaluate --replay <YYYY-MM-DD> [--trade-def <slug>] [--expect-formed]
+    cobalt radar evaluate --replay <YYYY-MM-DD> [--trade-def <slug>]
     cobalt radar evaluate --candidate <YYYY-MM-DD> --settings-file <d2.yaml>
                           --sha256 <hash> [--taps <taps.yaml>] [--trade-def <slug>]
 
@@ -15,9 +15,7 @@ every admitted member x def through the SAME `evaluate_member` the
 resident runs, and prints each formation once (ticker, def, direction,
 trigger, stop, formation bar), every path-B-only formation (not evaluable
 in S2, R4), and every def's "not evaluable: missing atoms […]" line
-(R2). This is the list Dejan reviews before enable. `--expect-formed`
-(FINAL §9 gate 4, [F-16] (3)) makes a replay that formed NOTHING exit
-non-zero; it needs `--trade-def`, so the gate names the one def it proves.
+(R2). This is the list Dejan reviews before enable.
 
 `--candidate` PERSISTS, AND ONLY TO cobalt_dev. Before D2 the hub freezes
 the exact proposed card settings (curves, bands) in a reviewed file,
@@ -233,13 +231,6 @@ def replay_formations(
     return report
 
 
-def expect_formed_gate(report: ReplayReport, slug: str) -> ReplayReport:
-    """FINAL §9 gate 4: a replay that formed NOTHING exits non-zero."""
-    if not report.formations:
-        raise SystemExit(f"--expect-formed: {slug} formed 0 times on {report.day} — RED")
-    return report
-
-
 class CachedDailyBars:
     """Daily bars from the radar cache ONLY — the read-only half of
     `FinvizDailyBarsCollector` (same `<root>/<ET date>/daily/<T>.csv`
@@ -406,19 +397,15 @@ def evaluate_command(args: argparse.Namespace) -> None:
 
     if bool(args.replay) == bool(args.candidate):
         raise SystemExit("cobalt radar evaluate: pass exactly one of --replay <date> or --candidate <date>")
-    if args.expect_formed and not (args.replay and args.trade_def):
-        raise SystemExit("cobalt radar evaluate: --expect-formed needs --trade-def <slug> and --replay <date>")
     config = load_config()
     clock = session_clock()
     cache = CachedDailyBars(Path(config.cache.dir))
     if args.replay:
-        report = replay_formations(
+        replay_formations(
             date.fromisoformat(args.replay), pool_key=config.pool_key, slug_filter=args.trade_def,
             radar_store=RadarStore(), defs_source=TradeDefStore().loaded_for_evaluation,
             daily_source=cache.load, tunables=load_tunables().by_key, defaults=load_defaults(), clock=clock,
         )
-        if args.expect_formed:
-            expect_formed_gate(report, args.trade_def)
         return
 
     assert_dev_database()
@@ -455,6 +442,5 @@ def evaluate_command(args: argparse.Namespace) -> None:
 __all__ = [
     "CachedDailyBars", "CandidateRefused", "CandidateReport", "ReplayFormation", "ReplayReport",
     "admitted_at", "assert_dev_database", "candidate_run", "curve_coverage_gaps", "evaluate_command",
-    "expect_formed_gate",
     "replay_formations", "scan_instants",
 ]

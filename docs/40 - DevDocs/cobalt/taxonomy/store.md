@@ -29,11 +29,3 @@ about is the failure mode of a replace.
 DEFINED trades only — a draft has no row in `trade_defs`. It was a second
 YAML file the loader had to keep equal to the def; a view cannot disagree
 with what it selects from.
-
-**2026-09-21 — setups one build STEP-2.** `sync` code is unchanged. A
-`global` assumed row reaches it with `slug = None` and is stored as NULL.
-That needs migration `db_migrations/0013_tunables_slug_nullable`: X20
-showed that without it the INSERT raises `NotNullViolation` and the WHOLE
-sync rolls back. `taxonomy/migrations/0001_trade_defs.sql` is untouched,
-because a rollback cannot live in a folder `ensure_schema` runs forward.
-A per-trade row keeps its slug and the foreign key.

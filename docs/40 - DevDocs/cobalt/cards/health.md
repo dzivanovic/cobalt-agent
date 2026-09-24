@@ -20,5 +20,3 @@ Health pills for a FILLED radar card (S2-P2 STEP-7). The threshold table is P3's
 
 ## Gotchas
 Cobalt has no spread source in S2, so `cost` is `n/a` on every card. The snapshot is taken on the scan after the fill, not at the fill tick; `captured_at` says when. EMA9's convention lives in `radar/anatomy/indicators.ema`.
-
-**2026-09-22 (fix round 3, F4 — R50).** `dot_pills` skips the `assumed_formation` dot (`scoring.ASSUMED_FORMATION`): it has no graded value, so a FILLED card no longer shows an extra `n/a` pill "assumed_formation has no graded value"; the card's ASSUMED mark carries it. Every other dot is unchanged, and the dot itself (on the card, refused on tap, suppressing the score) is untouched — only the health pill list changes.

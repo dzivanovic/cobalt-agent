@@ -511,8 +511,7 @@ def test_down_to_0004_selects_0009_0008_0007_0006_then_0005_reverse():
 
     selected = [path.name for path in _rollback_paths("0004")]
     names = selected
-    assert selected[:5] == [
-        "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)
+    assert selected[:4] == [
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",

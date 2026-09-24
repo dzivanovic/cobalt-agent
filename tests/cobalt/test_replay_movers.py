@@ -613,11 +613,7 @@ def test_dry_run_export_is_not_cached(tmp_path, monkeypatch):
     assert cached[0].cache_path
 
 
-def test_archive_counts_failures_partial_and_incomplete_and_never_marks_them_archived():
-    """`cto-2026-09-23.md` R113 ("If ticker is halted and has no bars, it
-    should have been closed with bars it has"): a clean fetch whose 30 bars
-    stop short of the close is PARTIAL — kept, named with its coverage
-    detail — not incomplete, and still never marked archived."""
+def test_archive_counts_failures_and_incomplete_coverage_and_never_marks_them_archived():
     movers = _stored(_export("gainers", top_n=3))
 
     class Collector:
@@ -628,51 +624,8 @@ def test_archive_counts_failures_partial_and_incomplete_and_never_marks_them_arc
     outcome = asyncio.run(archive_movers(movers, collector=Collector(), bar_store=_FakeBars(), trade_date=SYN_DAY,
                                          rth_open=RTH_OPEN, close=CLOSE, top_n=3, dry_run=False))
     assert outcome.archived_ids == [1]
-    assert outcome.incomplete == []
-    assert set(outcome.partial) == {"QNME"}
-    detail = outcome.partial["QNME"]
-    assert detail["count"] == 30
-    assert detail["covered"] is False
-    assert detail["reason"].startswith("bars end")
-    assert outcome.failures == {"REFR": "CollectorError: HTTP 429"}
-
-
-def test_archive_a_fetch_with_zero_bars_on_the_day_stays_incomplete_never_partial():
-    """`cto-2026-09-23.md` R113, his R7 "A" of 2026-09-24: a clean fetch
-    that returns NO i1 bars for a top mover is a source defect (L9) — it
-    stays `incomplete` (red), never `partial`, never archived."""
-    movers = _stored(_export("gainers", top_n=2))
-
-    class Collector:
-        async def bars(self, tickers, *, top_n):
-            return {"IMCC": _session_bars("IMCC"), "QNME": []}, {}
-
-    outcome = asyncio.run(archive_movers(movers, collector=Collector(), bar_store=_FakeBars(), trade_date=SYN_DAY,
-                                         rth_open=RTH_OPEN, close=CLOSE, top_n=2, dry_run=False))
     assert outcome.incomplete == ["QNME"]
-    assert "QNME" not in outcome.partial
-    qnme_ids = [m.id for m in movers if m.ticker == "QNME"]
-    assert qnme_ids and not set(qnme_ids) & set(outcome.archived_ids)
-    assert outcome.archived_ids == [1]
-
-
-def test_archive_a_late_open_is_partial_with_bars_begin_reason():
-    """`cto-2026-09-23.md` R113: a mover whose source day begins after the
-    RTH open (a late open) keeps the bars it has and is PARTIAL, its
-    coverage reason naming where the bars begin."""
-    movers = _stored(_export("gainers", top_n=2))
-
-    class Collector:
-        async def bars(self, tickers, *, top_n):
-            return {"IMCC": _session_bars("IMCC"), "QNME": _session_bars("QNME")[45:]}, {}
-
-    outcome = asyncio.run(archive_movers(movers, collector=Collector(), bar_store=_FakeBars(), trade_date=SYN_DAY,
-                                         rth_open=RTH_OPEN, close=CLOSE, top_n=2, dry_run=False))
-    assert outcome.archived_ids == [1]
-    assert outcome.incomplete == []
-    assert set(outcome.partial) == {"QNME"}
-    assert outcome.partial["QNME"]["reason"].startswith("bars begin")
-    assert outcome.partial["QNME"]["count"] == 391 - 45
+    assert outcome.failures == {"REFR": "CollectorError: HTTP 429"}
 
 
 def test_archive_skips_tickers_already_covered_and_dry_run_fetches_nothing():

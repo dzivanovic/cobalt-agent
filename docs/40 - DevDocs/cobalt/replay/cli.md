@@ -13,8 +13,7 @@ of `com.cobalt.replay` (`ops/com.cobalt.replay.plist`, Mon–Fri 21:10, with
   `job.result = ReplayResult.job_result()` on success. On a `ReplayError`
   the partial result is attached first, so a failed row still says which
   step failed and what ran.
-- It prints one summary line: movers, archived, `partial` (the sum of
-  `archive_partial_by_side`, 2026-09-24), card and mover misses,
+- It prints one summary line: movers, archived, card and mover misses,
   input_stale, the formation marker with its miss and suppressed counts,
   and the line action.
 

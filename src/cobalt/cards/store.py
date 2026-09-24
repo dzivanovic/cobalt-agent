@@ -1184,7 +1184,7 @@ class CardStore:
         """Append the tap, set the dot's trader grade and recompute
         conviction / card_score / proposed key from the locked dots and the
         card's stored proximity — one transaction under the row lock."""
-        from .scoring import ASSUMED_FORMATION, card_score, conviction, proposed_key, suppression
+        from .scoring import card_score, conviction, proposed_key, suppression
 
         if not 1 <= int(grade) <= 10:
             raise CardStateError(f"a dot grade is 1-10, got {grade}")
@@ -1202,11 +1202,6 @@ class CardStore:
             ).fetchone()
             if dot is None:
                 raise CardStateError(f"card {card_id} has no dot {factor!r}")
-            if factor == ASSUMED_FORMATION:
-                raise CardStateError(
-                    f"REFUSED card {card_id}: assumed_formation is not graded on a card — "
-                    "an assumed default is ruled on the settings surface"
-                )
             session = session_clock().session(ts)
             conn.execute(
                 "INSERT INTO card_dot_taps (card_id, factor, grade, engine_grade_at_tap, at, session) "

@@ -53,7 +53,7 @@ from typing import Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict
 
-from cobalt.cards.scoring import score_card
+from cobalt.cards.scoring import compute_dots, score_card
 from cobalt.settings.card import CardSettings
 from cobalt.taxonomy.defaults import TaxonomyDefaults
 from cobalt.taxonomy.trade_def import TradeDef
@@ -69,7 +69,6 @@ from .evaluate import (
     _resolve_snapshot,
     bar_row,
     canonical_sha256,
-    card_dots,
     daily_row,
     evaluate_member,
     formula_sha256,
@@ -360,7 +359,7 @@ def export_replay(
         if ev.evaluation != "formed" or ev.formation is None:
             raise AuditExportError(f"{formation.ticker} {formation.slug}: re-evaluation at {formation.seen_at} did not form")
         trigger, stop = ev.formation.trigger.price, ev.formation.stop.price
-        dots = card_dots(ld, ev, card_settings, formation.seen_at, ev.formation.assumed_keys)
+        dots = compute_dots(ld.definition.quality_factors, ev.observations, card_settings.curves, at=formation.seen_at)
         score = score_card(dots, last=ev.last_price if ev.last_price is not None else trigger, trigger=trigger,
                            stop=stop, bands=card_settings.proposed_key, enabled=[])
         candidates.append({

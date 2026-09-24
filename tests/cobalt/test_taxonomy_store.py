@@ -245,33 +245,6 @@ def test_the_def_column_round_trips_the_model(store, example_vault):
     assert reloaded == result.defs[0].definition
 
 
-def test_x20_a_sync_with_one_null_slug_row(store, example_vault):
-    """X20 (FINAL §8, setups one build STEP-2): `TaxonomyStore.sync` with one
-    user row whose slug is NULL. Expected (the FINAL): NOT NULL violation and
-    the whole transaction rolled back. `LoadedTunable` types `slug: str`, so
-    the row is built with `model_construct` (validation bypassed on purpose —
-    the probe is the DATABASE's answer, not the model's)."""
-    import psycopg
-
-    from cobalt.db_migrations import MIGRATIONS_DIR
-    from cobalt.taxonomy.tunables import TunableRow
-    from cobalt.taxonomy.vault_loader import LoadedTunable
-
-    # The schema X20 measured: before 0013. Restored inside the rollback
-    # transaction so the probe means the same thing once cobalt_dev carries 0013.
-    with store._connect() as conn:
-        conn.execute((MIGRATIONS_DIR / "0013_tunables_slug_nullable.rollback.sql").read_text())
-    result = load_vault_trade_defs(example_vault)
-    row = TunableRow(key="x20.global_probe", value=None, unit="count", scope="global", dynamic=False,
-                     status="proposed", source="ruling")
-    result.user_tunables.append(LoadedTunable.model_construct(
-        key="x20.global_probe", slug=None, note_path="1 - Trading/Assumed Defaults.md", row=row))
-    with pytest.raises(psycopg.errors.NotNullViolation) as caught:
-        store.sync(result)
-    print(f"X20: {type(caught.value).__name__}: {str(caught.value).splitlines()[0]}")
-    assert store.slugs() == [] and store.tunable_keys() == []  # the whole sync rolled back
-
-
 def test_the_example_note_and_the_yaml_helper_agree():
     """Guards the fixture itself: if the shipped note's shape changes, the
     helpers in this file must change with it."""

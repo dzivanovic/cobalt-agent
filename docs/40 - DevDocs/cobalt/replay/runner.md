@@ -25,13 +25,6 @@ historical run reads what was retained.
 - Per-ticker archive failures are counted and raise `ReplayError("N movers
   archive failure(s)…")` **after** the line (archiver semantics).
   Incomplete coverage is counted, not failed.
-- **Archived-partial movers (2026-09-24, R113).** `movers_step` turns
-  `outcome.partial` into `result.archive_partial` (one `ArchivePartial` per
-  ticker, `sides` read from the stored movers) and counts
-  `result.archive_partial_by_side` per side. Each partial is logged as one
-  WARNING (`… PARTIAL — <reason> (<n> i1 bars, <first> → <last>)`), and
-  each incomplete ticker — a clean fetch with zero bars — as one ERROR
-  naming it. `archive_incomplete` no longer counts partial tickers.
 - **What the export really had (2026-09-19).** Between the exports and the
   first write, `movers_step` records `result.movers_by_side =
   export_counts(exports, top_n=settings.top_n)` — per side, the export's
