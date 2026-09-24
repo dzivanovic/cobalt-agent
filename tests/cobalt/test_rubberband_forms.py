@@ -483,7 +483,8 @@ def _non_formed(ld) -> list:
     """STEP-2 re-point: minus `by_side` (added) and E9's `Unsupported(<kind>)`
     names (`test_setups_registries.without_e9_shapes`). STEP-3 re-point: the
     seeded `ema9` restored to its RTH-only value, `atr_seeded` dropped, the
-    newly served D1 atoms re-added to `missing` ([F-10], [F-11], §3 D1)."""
+    newly served D1 atoms re-added to `missing` ([F-10], [F-11], §3 D1).
+    STALE-SCORE S1: `_unmoved` maps back the stale-score build's two changes."""
     from test_setups_d1 import _unmoved
     from test_setups_registries import _rth_only_ema9, without_e9_shapes
 

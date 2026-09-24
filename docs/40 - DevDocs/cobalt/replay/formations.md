@@ -144,3 +144,9 @@ consumes changed: `FORMATION_REQUIRED_FIELDS` of `ReplayFormation` are the
 same. Without this update the nightly `com.cobalt.replay` would refuse
 every night after the deploy. `s2p2.1` is dropped because that code no
 longer exists. Any other version is still a loud refusal.
+
+**2026-09-24 — stale score S1.** `SUPPORTED_EVALUATORS` is now
+`{"s2p2.3"}`. It moves with the evaluator's own bump (`[F-08]`: one new
+string, and the previous one is not kept in the set). The nightly binding
+passes the LIVE module constant (X20), so no stored binding is refused. No
+`ReplayFormation` field this binding consumes changed.

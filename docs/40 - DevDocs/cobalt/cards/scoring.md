@@ -36,3 +36,21 @@ Shadow grades rank nothing: they are stored and shown, never counted in convicti
 
 ## 2026-09-21 — setups one build STEP-1: `ASSUMED`
 `NaReason` gains `"ASSUMED"`. `ASSUMED_FORMATION = "assumed_formation"` is the one constant that names the dot marking a formation resting on an assumed default (R2-2 = B). `radar/evaluate.py` and `cards/store.py` both import it from here, because `cards/` never imports from `radar/`. The dot is computed (`cobalt-degraded`, `deterministic`) and is never tapped, since the store refuses the tap. So `suppression()` names it on every path that recomputes, and `card_score` stays null for the card's life. The logic of `suppression()` is unchanged. Only its reason text changes: it drops ` (tap to grade)` when every blocker is `ASSUMED`, because an assumed default is ruled on the settings surface, not tapped. `conviction`, `card_score` and `score_card` are unchanged.
+
+## 2026-09-24 — stale score S1: no fresh `last`, no proximity (STALE-SCORE v2 §2 C; `[F-06]` `[F-13]` `[F-14]` `[F-16]`)
+The rule is: if there is no fresh `last`, there is no proximity, and so no score. Three new names implement it.
+
+- `score_last(ev)` is the ONLY `last` rule for every caller of `score_card`. There are four callers: `refresh_card`, `replay_receipt`, the stage's create call, and `audit_export`'s replay scorer. It returns `None` if and only if `ev.intraday_stale` is set. It returns `ev.last_price` otherwise. A fresh evaluation that has no last price raises `EvaluateError`. It never substitutes a price: the old `card.entry` and `trigger` fallbacks are deleted, not replaced. `EvaluateError` lives in `radar/evaluate.py`, so the import is lazy, inside the function. That is the same shape as `cards/store.py`'s lazy import of `OpenRadarCard`, and it avoids a cycle, because `evaluate` imports this module.
+- `stale_reason(ev)` returns the bars-stale sentence. It is a pure function of the evaluation, so the stage and the replay write the same bytes (X27):
+  - `"bars stale — no closed bar"` when no bar has closed;
+  - otherwise `"bars stale — last close HH:MM:SS ET, older than 2 × radar.scan_interval"`, with the close taken as `last_bar_ts + 1 minute` in New York time.
+
+  It returns `None` for an evaluation that is not intraday-stale.
+- `score_card(…, last, stale_reason=None)`:
+  - A `None` last must carry its reason, and a price must carry none. Any other combination is a `ValueError`.
+  - With `None`, proximity is `None`, and `card_score` is `None` through the existing `card_score()` guard.
+  - `score_suppressed` is the sentence, followed by `; <suppression(dots)>` when a dot also suppresses.
+- `CardScore.proximity` is now `Decimal | None`.
+- `PROXIMITY_UNKNOWN = "bars stale — no proximity"` is defined once here. It is what the tap route writes when proximity is NULL and no sentence is stored (S2, `[F-06]`).
+
+Conviction, the proposed key, the dots and `suppression()` are computed exactly as before.
