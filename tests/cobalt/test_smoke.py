@@ -150,7 +150,8 @@ def test_smoke_checks_load_through_schema_bad_file_crashes_with_line(tmp_path):
     # The committed suite loads, whole, through the schema.
     suite = load_suite(SUITES_DIR / "s2.yaml")
     ids = [c.id for c in suite.checks]
-    assert {i.split(".")[0] for i in ids} == {f"K{n}" for n in range(1, 19)}
+    # K17 (`cobalt validate`) left the S2 smoke by `cto-2026-09-23.md` R114.
+    assert {i.split(".")[0] for i in ids} == {f"K{n}" for n in range(1, 19)} - {"K17"}
     assert len(ids) == len(set(ids))
 
     # A validation error names the line of the offending value.
