@@ -33,12 +33,23 @@ class MetricHeaders(BaseModel):
     rvol: str = Field(min_length=1)
 
 
+class HandicapHeaders(BaseModel):
+    """The two export columns the float handicap reads (v3 §3, F5). Engine
+    config, not his values; deliberately NOT in `required_headers`: a renamed
+    column degrades the handicap (R54), it never kills every source."""
+
+    model_config = ConfigDict(extra="forbid")
+    float: str = Field(min_length=1)
+    market_cap: str = Field(min_length=1)
+
+
 class ExportConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     v: int
     columns: str = Field(pattern=r"^0-150$")
     required_headers: list[str] = Field(min_length=1)
     metric_headers: MetricHeaders
+    handicap_headers: HandicapHeaders
 
 
 #: The two shapes a Finviz `c=` declaration takes: an inclusive `a-b`
@@ -213,6 +224,7 @@ def command(_args) -> None:
 
 __all__ = [
     "CONFIG_PATH",
+    "HandicapHeaders",
     "NotEquityConfig",
     "RadarConfig",
     "RadarConfigError",
