@@ -76,6 +76,40 @@ def test_an_empty_payload_is_refused(sdir):
         sc.write_scratch(sdir, "turn-0000aaaa", b"", "audio/webm")
 
 
+@pytest.mark.parametrize("mode", ["enospc", "short"])
+@pytest.mark.parametrize("via", ["write_scratch", "turn_audio"])
+def test_a_failed_write_leaves_no_partial_file(sdir, monkeypatch, mode, via):
+    """C1 (voice-v1-check-c-2026-09-24.md FOR THE CLASSIFIER 1; FINAL §5 / §7
+    scratch RED, L1): a raising or SHORT `os.write` is a named scratch
+    error, the partial file is unlinked, and a RED line names the write."""
+    import errno
+
+    from loguru import logger
+
+    real_write = os.write
+
+    def fake_write(fd, data):
+        if mode == "enospc":
+            raise OSError(errno.ENOSPC, "constructed: no space left on device")
+        return real_write(fd, bytes(data)[: len(data) - 1])  # short by one byte
+
+    monkeypatch.setattr(os, "write", fake_write)
+    lines: list[str] = []
+    sink = logger.add(lambda m: lines.append(str(m)), level="ERROR")
+    try:
+        with pytest.raises(sc.ScratchWriteFailed) as e:
+            if via == "write_scratch":
+                sc.write_scratch(sdir, "turn-0000aaaa", b"synthesized-bytes", "audio/webm")
+            else:
+                with sc.turn_audio(sdir, "turn-0000aaaa", b"synthesized-bytes", "audio/webm"):
+                    pass
+    finally:
+        logger.remove(sink)
+    assert "write" in str(e.value).lower()
+    assert list(sdir.glob("turn-0000aaaa.*")) == []
+    assert any("RED" in l and "write" in l.lower() for l in lines), lines
+
+
 def test_a_too_open_existing_dir_is_tightened_to_0700(sdir):
     sdir.mkdir(mode=0o755)
     os.chmod(sdir, 0o755)
@@ -122,6 +156,17 @@ def test_the_turn_context_fails_loud_when_its_unlink_fails(sdir):
             os.chmod(sdir, 0o500)
     os.chmod(sdir, 0o700)
     assert held.path.exists() and held.deleted_at is None  # never silently left: it raised
+
+
+def test_a_file_already_gone_keeps_its_amber_line(sdir):
+    """C4 (voice-v1-check-c-2026-09-24.md FOR THE CLASSIFIER 4; FINAL §5 "AMBER
+    line per file"): the unlink finds no file → `deleted_at` is set AND the
+    AMBER `already gone` line is kept on the held audio."""
+    sdir.mkdir(mode=0o700)
+    held = sc.HeldAudio(path=sdir / "turn-gone0001.webm", size=1)
+    held.unlink_now("turn finally")
+    assert held.deleted_at is not None
+    assert [(l.level, "already gone" in l.text) for l in held.lines] == [("amber", True)]
 
 
 def test_the_turn_context_early_unlink_is_idempotent(sdir):
@@ -236,3 +281,19 @@ def test_one_unlink_function_serves_turn_and_sweep():
 
     src = inspect.getsource(sc)
     assert src.count("os.unlink(") == 1, "L3: exactly one unlink call in the voice scratch module"
+
+
+def test_one_deleter_across_every_voice_module():
+    """C7 (voice-v1-check-c-2026-09-24.md FOR THE CLASSIFIER 7; L3): every
+    deleter spelling (`os.unlink(`, `os.remove(`, `.unlink(`,
+    `shutil.rmtree(`) across EVERY src/cobalt/voice/*.py → exactly ONE, in
+    scratch.py's `unlink_scratch`."""
+    import inspect
+    import re
+
+    deleter = re.compile(r"os\.remove\(|shutil\.rmtree\(|\.unlink\(")  # `.unlink(` covers `os.unlink(`
+    voice_dir = Path(sc.__file__).parent
+    hits = {p.name: len(deleter.findall(p.read_text())) for p in sorted(voice_dir.glob("*.py"))}
+    assert sum(hits.values()) == 1, hits
+    assert hits["scratch.py"] == 1, hits
+    assert len(deleter.findall(inspect.getsource(sc.unlink_scratch))) == 1

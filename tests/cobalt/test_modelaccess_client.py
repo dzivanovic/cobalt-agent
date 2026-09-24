@@ -274,11 +274,13 @@ def test_empty(server, content):
 
 
 def test_no_choices_is_empty(server):
+    """B2 (voice-v1-check-b-2026-09-24.md FOR THE CLASSIFIER 2): seam §2.4 (6)
+    "no choices / no content → `empty`" — exactly `empty`."""
     server.body = json.dumps({"id": "x", "object": "chat.completion", "created": 1,
                               "model": "m", "choices": []}).encode()
     with pytest.raises(ModelCallError) as e:
         call_sync(_req(), config=_cfg(server.port))
-    assert e.value.kind in ("empty", "bad_response")
+    assert e.value.kind == "empty"
 
 
 def test_the_error_kinds_are_exactly_the_seams():

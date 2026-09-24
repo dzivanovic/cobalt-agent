@@ -347,6 +347,27 @@ def test_x5_guard_and_unparseable_values_clarify(deps):
         assert out.state is TurnState.DONE and out.pending_turn_id is None and deps.executed == []
 
 
+@pytest.mark.parametrize("transcript,span,stop", [
+    ("Move the stock to 450.", "450", "4.40"),
+    ("Move the stop to 1225.", "1225", "12.30"),
+    ("Move the stop to 975.", "975", "9.80"),
+])
+def test_x5_measured_wrong_value_shapes_clarify(deps, transcript, span, stop):
+    """X5 (desk R41; build report `### X-X5`; FINAL :88 §2.6 read-back + §7
+    "unparseable value → clarify"; L45 real SHAPE): X-X5's three wrong-value
+    transcript shapes as the engine returned them (synthetic TTS of
+    constructed sentences) against a constructed card → clarify naming what
+    was heard; no pending action, nothing executed."""
+    deps.read_cards = lambda: [{**CARDS[0], "stop": Decimal(stop)}]
+    deps.plan = FakePlanner({transcript: Plan(kind="act", tool="cards.set_stop",
+                                              args={"card": {"span": "XYZ"}, "stop": {"span": span}})})
+    out = tn.run_turn(_text(transcript), deps)
+    assert out.state is TurnState.DONE and out.pending_turn_id is None and deps.executed == []
+    assert span in out.reply and "point" in out.reply
+    row = deps.store.get(out.turn_id)
+    assert row["resolution"]["clarify"] == "value_guard" and row["resolution"]["heard"] == span
+
+
 def test_an_ambiguous_card_clarifies(deps):
     deps.read_cards = lambda: [CARDS[0], {**CARDS[0], "id": 13, "direction": "short"}]
     deps.plan = FakePlanner({"move the stop on XYZ to 4.50": STOP_ACT})
@@ -386,9 +407,29 @@ def test_dry_run_prints_the_change_and_writes_nothing(deps):
     assert out.dry_run["change"]["from_stop"] == "4.40" and out.dry_run["change"]["to_stop"] == "4.50"
 
 
-def test_run_turn_is_the_one_turn_function():
+def test_run_turn_is_the_one_turn_function(deps, monkeypatch):
+    """D10 (voice-v1-check-d-2026-09-24.md FOR THE CLASSIFIER 10): behavioural —
+    the `run_turn` name the web route uses is called once, with the widget's
+    source, for a text turn POSTed from loopback."""
     import inspect
 
+    from fastapi.testclient import TestClient
+
+    from cobalt.aset import web as aset_web
     from cobalt.voice import web
 
     assert "run_turn" in inspect.getsource(web)  # the CLI caller is pinned in C13's tests
+    calls = []
+
+    def recording(inp, d):
+        calls.append(inp)
+        return tn.run_turn(inp, deps)
+
+    monkeypatch.setattr(web, "run_turn", recording)
+    monkeypatch.setattr(web, "get_config", lambda: deps.cfg)
+    monkeypatch.setattr(web, "get_deps", lambda: deps)
+    deps.plan = FakePlanner({"what are my open cards": READ_OPEN})
+    r = TestClient(aset_web.app, client=("127.0.0.1", 51000)).post(
+        "/voice/turn", data={"session": "sess-web10", "text": "what are my open cards"})
+    assert r.status_code == 200, r.text
+    assert len(calls) == 1 and calls[0].source == "widget"

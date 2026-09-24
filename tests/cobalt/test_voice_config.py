@@ -62,11 +62,21 @@ def test_committed_files_sit_outside_the_old_loader_glob():
 
 
 def test_every_tunable_names_its_source_in_the_committed_file():
-    text = vc.CONFIG_PATH.read_text()
-    for key in ("max_clip_s", "max_upload_bytes", "stt_timeout_s", "confirm_ttl_s",
-                "scratch_max_age_s", "history_turns", "stt_model", "stt_revision", "stt_compute_type"):
-        block = text.split(f"  {key}:")[0].rsplit("\n\n", 1)[-1]
-        assert "# source:" in block or "# source:" in text.split(f"  {key}:")[1].split("\n")[0], key
+    """C5 (voice-v1-check-c-2026-09-24.md FOR THE CLASSIFIER 5): each key's
+    OWN comment block — the comment lines directly above it, back to the
+    previous key or the section line — holds `# source:`."""
+    lines = vc.CONFIG_PATH.read_text().splitlines()
+    checked = []
+    for key in GOOD_VOICE["voice"]:
+        (at,) = [i for i, l in enumerate(lines) if l.startswith(f"  {key}:")]
+        block = []
+        i = at - 1
+        while i >= 0 and lines[i].lstrip().startswith("#") and lines[i].startswith("  "):
+            block.append(lines[i])
+            i -= 1
+        assert any("# source:" in l for l in block), key
+        checked.append(key)
+    assert checked == list(GOOD_VOICE["voice"]) and len(checked) == 14
 
 
 # --- W7: a missing key crashes ---------------------------------------------
@@ -126,7 +136,13 @@ def test_a_path_under_docs_is_refused(tmp_path, dirs, field):
     s, m = dirs
     with pytest.raises(vc.VoiceConfigError) as e:
         vc.load_voice_config(_voice(tmp_path, s, m, **{field: str(vc.REPO_ROOT / "docs" / "voice")}))
-    assert "docs" in str(e.value) or "repo" in str(e.value)
+    # C8 (voice-v1-check-c-2026-09-24.md FOR THE CLASSIFIER 8): the docs
+    # refusal's exact message, its fixed tail read from config.py's source.
+    import inspect
+
+    (src_line,) = [l for l in inspect.getsource(vc._check_path).splitlines() if "sits under docs/" in l]
+    tail = src_line.split("{p} ", 1)[1].split('"', 1)[0]
+    assert str(e.value) == f"{field} {(vc.REPO_ROOT / 'docs' / 'voice').resolve()} {tail}"
 
 
 @pytest.mark.parametrize("field", ["scratch_dir", "model_dir"])
@@ -226,6 +242,30 @@ def test_env_overrides_win_and_are_checked_too(tmp_path, dirs, monkeypatch):
     monkeypatch.setenv(vc.SCRATCH_ENV, "relative")
     with pytest.raises(vc.VoiceConfigError):
         vc.load_voice_config(p)
+
+
+@pytest.mark.parametrize("which", ["scratch", "model"])
+@pytest.mark.parametrize("value", ["", "   "])
+def test_a_set_but_empty_env_override_crashes(tmp_path, dirs, monkeypatch, which, value):
+    """C3 (voice-v1-check-c-2026-09-24.md FOR THE CLASSIFIER 3; L1 "a config
+    error crashes; it never silently falls back"): an override that is SET
+    but empty is an error naming the variable — never the committed default."""
+    s, m = dirs
+    var = vc.SCRATCH_ENV if which == "scratch" else vc.MODEL_ENV
+    monkeypatch.setenv(var, value)
+    with pytest.raises(vc.VoiceConfigError) as e:
+        vc.load_voice_config(_voice(tmp_path, s, m))
+    assert var in str(e.value)
+
+
+def test_plan_route_must_equal_the_agent_registry_route(tmp_path, dirs):
+    """C9 (voice-v1-check-c-2026-09-24.md FOR THE CLASSIFIER 9; L1, L3): a
+    `plan_route` that is not the agent registry's `route` crashes, naming both."""
+    s, m = dirs
+    registry_route = vr.load_agent().route
+    with pytest.raises(vc.VoiceConfigError) as e:
+        vc.load_voice_config(_voice(tmp_path, s, m, plan_route="local.other"))
+    assert "local.other" in str(e.value) and registry_route in str(e.value)
 
 
 @pytest.mark.parametrize("field", ["allowed_peers"])

@@ -160,6 +160,23 @@ def test_a_target_that_changed_is_refused_with_the_new_readback(pinned, monkeypa
     assert "from 4.42 to 4.50" in e.value.new.readback
 
 
+def test_a_changed_card_state_alone_refuses_the_act(pinned, monkeypatch):
+    """A2 (voice-v1-check-a-2026-09-24.md FOR THE CLASSIFIER 2; FINAL :90
+    [F-09]): only the card's STATE moves between the read-back and the
+    confirm — the stop is unchanged, so `diff_sha256` is unchanged and only
+    the `target_sha256` clause (tools.execute_stop) can refuse it."""
+    from cobalt.voice import tools as tl
+
+    p = _pending()
+    monkeypatch.setitem(OPEN[0], "state", "ARMED")  # the sheet moved the card, not its stop
+    with pytest.raises(tl.TargetChanged) as e:
+        tl.execute_stop(p)
+    assert FakeCards.edits == []
+    assert e.value.new.diff_sha256 == p.diff_sha256, "the change itself is identical"
+    assert e.value.new.target_sha256 != p.target_sha256
+    assert e.value.new.card_state == "ARMED" and "from 4.40 to 4.50" in e.value.new.readback
+
+
 def test_a_card_that_closed_is_refused(pinned, monkeypatch):
     from cobalt.voice import tools as tl
 

@@ -154,6 +154,38 @@ def test_an_expert_refusal_fails_the_act_loud_and_names_it():
     assert s.get("t-pending")["state"] == "failed" and s.get("t-pending")["failure_class"] == "expert_refused"
 
 
+class ReapedWhileExecuting(MemStore):
+    """The reaper failed the row (`reaped_executing`) while the expert wrote:
+    the `EXECUTING → DONE` step finds no `executing` row and returns False."""
+
+    def transition(self, turn_id, expected, new, *, at, **fields):
+        if new is TurnState.DONE:
+            self.rows[turn_id].update(state="failed", failure_class="reaped_executing")
+            return False
+        return super().transition(turn_id, expected, new, at=at, **fields)
+
+
+def test_a_reaped_row_never_reports_done():
+    """A5 (voice-v1-check-a-2026-09-24.md FOR THE CLASSIFIER 3; FINAL :170
+    [F-15], L1): the stop WAS written, the turn row was reaped mid-way —
+    never "Done.", the write named, a RED log line naming the turn."""
+    from loguru import logger
+
+    s = ReapedWhileExecuting()
+    lines: list[str] = []
+    sink = logger.add(lambda m: lines.append(str(m)), level="ERROR")
+    try:
+        out = cf.confirm_pending(s, _pending_row(s), now=NOW,
+                                 execute=lambda p: type("E", (), {"stop_edit_id": 501})())
+    finally:
+        logger.remove(sink)
+    assert out.kind != "done" and out.kind == "failed"
+    assert not out.reply.startswith("Done") and "501" in out.reply
+    assert "nothing is assumed done" not in out.reply
+    assert out.stop_edit_id == 501
+    assert any("t-pending" in l and "501" in l for l in lines), lines
+
+
 def test_x13_confirm_and_cancel_race_in_memory():
     """X-X13 in memory: tap Confirm and a transcript `no` in flight together."""
     for _ in range(50):

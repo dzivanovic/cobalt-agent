@@ -141,6 +141,33 @@ def test_orders_are_refused_whatever_the_plan_says(text):
 
 
 @pytest.mark.parametrize("text", [
+    "log into Lightspeed", "open DAS and buy 100 XYZ", "send it to TradeStation", "open CenterPoint",
+    "switch my trading platform", "short 100 QRS", "go long XYZ", "go short QRS", "exit my XYZ position",
+    "close my position in XYZ", "get me out of QRS", "take profits on XYZ", "scale out of QRS",
+])
+@pytest.mark.parametrize("kind", ["answer", "act"])
+def test_platform_and_order_phrasings_are_refused_whatever_the_plan(text, kind):
+    """A1 (voice-v1-check-a-2026-09-24.md FOR THE CLASSIFIER 1; FINAL :84 HARD
+    REFUSALS — "touches his trading platform"): platform names and order
+    verbs are refused by code whatever the Plan's kind. `open DAS and buy 100
+    XYZ` is the control (refused through `buy` before this fix)."""
+    plan = _plan("answer", "cards.open") if kind == "answer" else _plan("act", "cards.set_stop")
+    r = tl.code_refusal(text, plan, AGENT)
+    assert r is not None and r.kind == "refuse" and r.reply == tl.REFUSE_SENTENCE
+
+
+@pytest.mark.parametrize("text", [
+    "move the stop on the XYZ short to 4.50", "what is the stop on my long XYZ card", "read my open cards",
+    "what did the pool close at", "how many shares on the second XYZ card",
+])
+def test_card_sides_and_price_fields_stay_readable(text):
+    """A1's NOT-refused set: a card side (`long` / `short`) and a price field
+    (`close`) are never refused on their own."""
+    for plan in (_plan("answer", "cards.open"), _plan("act", "cards.set_stop")):
+        assert tl.code_refusal(text, plan, AGENT) is None
+
+
+@pytest.mark.parametrize("text", [
     "set my max risk to 200", "change my daily stop to 500", "enable grade C",
     "change the pullback rule to two legs", "turn off the radar volume filter",
     "update my strategy settings", "raise the risk per trade",

@@ -226,6 +226,34 @@ def test_speech_synthesis_is_local_voices_only():
     assert "no local voice on this device" in js
 
 
+def _status_block(js: str) -> str:
+    start = js.index("fetch('/voice/status')")
+    return js[start:js.index("\n", start)]
+
+
+def test_the_widget_reads_a_refused_status_as_red_never_all_clear():
+    """D3 (voice-v1-check-d-2026-09-24.md FOR THE CLASSIFIER 3; FINAL §7 loud
+    states, L9): the `/voice/status` fetch tests `r.ok` BEFORE `r.json()`,
+    and its non-OK branch pushes a RED `voice status refused (HTTP <status>)`
+    line. A static pin of the widget script — there is no JS runner here."""
+    block = _status_block(vw.widget_html())
+    assert "r.ok" in block and "r.json()" in block
+    assert block.index("r.ok") < block.index("r.json()")
+    assert "level:'red', text:'voice status refused (HTTP ' + r.status + ')'" in block
+
+
+def test_no_local_voice_keeps_the_turns_red_lines_on_the_banner():
+    """D4 (voice-v1-check-d-2026-09-24.md FOR THE CLASSIFIER 4; FINAL §2.5 /
+    §7, L1): `speak()` takes the turn's degraded lines, and its no-local-voice
+    repaint is those lines PLUS the amber line — never the amber line alone.
+    `show()` passes the turn's degraded lines through. A static pin."""
+    js = vw.widget_html()
+    assert "function speak(text, degraded){" in js
+    assert "banner((degraded || []).concat([{level:'amber', text:'no local voice on this device'}]))" in js
+    assert "banner([{level:'amber', text:'no local voice on this device'}])" not in js
+    assert "speak(j.reply, j.degraded || []);" in js
+
+
 def test_the_widget_carries_no_form_or_focus_stealing_markup():
     """The radar panel's own invariant (test_radar_panel), applied to the partial."""
     low = vw.widget_html().lower()

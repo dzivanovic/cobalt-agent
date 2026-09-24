@@ -50,13 +50,20 @@ class CrashBeforeDone(MemStore):
     def transition(self, turn_id, expected, new, *, at, **fields):
         if new is TurnState.DONE:
             raise RuntimeError("constructed crash: the process died after the expert committed")
-        return super().transition(turn_id, expected, new, at=at, **fields)
+        moved = super().transition(turn_id, expected, new, at=at, **fields)
+        if moved:
+            self.rows[turn_id][f"{new.value}_at"] = at
+        return moved
 
     def reap(self, *, now, limits):
+        """D8 (voice-v1-check-d-2026-09-24.md FOR THE CLASSIFIER 8): honours
+        `now` and `limits` — an `executing` row is reaped only when its age
+        exceeds the `executing` limit (the store's own rule, store.reap)."""
         out = []
+        limit = timedelta(seconds=limits[TurnState.EXECUTING])
         for tid, row in self.rows.items():
-            if row["state"] == "executing":
-                row.update(state="failed", failure_class="reaped_executing")
+            if row["state"] == "executing" and row["executing_at"] < now - limit:
+                row.update(state="failed", failure_class="reaped_executing", failed_at=now)
                 out.append((tid, "executing"))
         return out
 
@@ -74,8 +81,12 @@ def test_a_crash_after_the_write_is_reaped_and_never_applied_again():
     with pytest.raises(RuntimeError):
         cf.confirm_pending(s, s.get("t-pending"), now=NOW, execute=execute)
     assert s.get("t-pending")["state"] == "executing"
-    assert s.reap(now=NOW + timedelta(hours=1), limits=reap_limits(stt_timeout_s=20, plan_timeout_s=15)) == [
+    reap_at = NOW + timedelta(hours=1)
+    # D8: a row YOUNGER than the executing limit is NOT reaped
+    s.put("t-young", TurnState.EXECUTING, executing_at=reap_at - timedelta(seconds=1))
+    assert s.reap(now=reap_at, limits=reap_limits(stt_timeout_s=20, plan_timeout_s=15)) == [
         ("t-pending", "executing")]
+    assert s.get("t-young")["state"] == "executing"
     again = cf.confirm_pending(s, s.get("t-pending"), now=NOW, execute=execute)
     assert again.kind == "no_pending"
     assert writes == [(11, "4.50")], "the stop was applied once and never again"
@@ -162,23 +173,42 @@ def test_e7_kill_mid_turn_then_restart_sweeps_the_file_and_the_row_is_reaped(tmp
         assert not files[0].exists(), "(b) side B's start sweep deletes the leftover, whatever its age"
         assert [p.name for p in scratch.iterdir()] == [".lock"]
         rows = [r for r in _rows(store, session)]
-        assert len(rows) == 1 and rows[0]["state"] in ("received", "transcribing", "planned", "failed")
+        # D7 (voice-v1-check-d-2026-09-24.md FOR THE CLASSIFIER 7): the ONE
+        # state the killed turn was in — its audio was on disk, so it was
+        # mid-transcribe — read from the row, never a four-way `in`.
+        assert len(rows) == 1
+        killed_in = rows[0]["state"]
+        assert killed_in == "transcribing", killed_in
         from datetime import datetime, timezone
 
-        # The server stamped its row with the REAL clock; the suite freezes
-        # `session.clock.now_utc` at 2026-09-03, so the reap uses real time.
-        store.reap(now=datetime.now(timezone.utc) + timedelta(minutes=10),
-                   limits=reap_limits(stt_timeout_s=20, plan_timeout_s=15))
+        from cobalt.modelaccess import load_routes
+        from cobalt.voice.config import load_voice_config
+        from cobalt.voice.registry import load_agent
+
+        # The reap is the RESTARTED SERVER's own: wait until the row's age
+        # exceeds its state's limit (the config's own timeouts), then POST a
+        # text turn to the second server — run_turn reaps before anything else.
+        # The server stamps with the REAL clock (the suite freezes
+        # `session.clock.now_utc`), so the wait is on real time.
+        cfg = load_voice_config()
+        limit = reap_limits(stt_timeout_s=cfg.stt_timeout_s,
+                            plan_timeout_s=load_routes().routes[load_agent().route].timeout_s)[TurnState(killed_in)]
+        stamp = store.get(rows[0]["turn_id"])[f"{killed_in}_at"]
+        while datetime.now(timezone.utc) <= stamp + timedelta(seconds=limit + 1):
+            time.sleep(0.5)
+        httpx.post(f"http://127.0.0.1:{port}/voice/turn", data={"session": f"{session}-r", "text": "what is on radar"},
+                   timeout=120)
         row = store.get(rows[0]["turn_id"])
         assert row["state"] == "failed", row["state"]
-        if row["failure_class"] is not None and row["failure_class"].startswith("reaped_"):
-            assert row["failed_at"] is not None
+        assert row["failure_class"] == f"reaped_{killed_in}"
+        assert row["failed_at"] is not None
     finally:
         for p in (first, second):
             if p is not None and p.poll() is None:
                 p.send_signal(signal.SIGKILL)
                 p.wait(timeout=10)
         store.delete_test_rows(session)
+        store.delete_test_rows(f"{session}-r")
 
 
 def _raw_connect():

@@ -101,6 +101,44 @@ def test_duration_is_probed_before_any_decode(tmp_path):
     assert 0.3 < d < 5
 
 
+def test_the_configured_revision_reaches_the_model_load(monkeypatch, tmp_path):
+    """C6 (voice-v1-check-c-2026-09-24.md FOR THE CLASSIFIER 6; FINAL [F-08]
+    pinned model): the configured `stt_revision` is the revision argument of
+    the model-load call itself (a captured fake loader), local files only."""
+    import faster_whisper
+
+    captured: list[dict] = []
+
+    class FakeWhisperModel:
+        def __init__(self, name, **kw):
+            captured.append({"name": name, **kw})
+
+        def transcribe(self, path, **kw):
+            info = type("I", (), {"language": "en", "duration": 1.0})()
+            return iter([]), info
+
+    cfg = _cfg().model_copy(update={"stt_revision": "ab" * 20})
+    monkeypatch.setattr(faster_whisper, "WhisperModel", FakeWhisperModel)
+    monkeypatch.setattr(tr, "_MODELS", {})
+    t = tr.FasterWhisperTranscriber(cfg).transcribe(tmp_path / "never-read.webm")
+    assert len(captured) == 1
+    assert captured[0]["revision"] == "ab" * 20 and captured[0]["local_files_only"] is True
+    assert captured[0]["name"] == cfg.stt_model and t.revision == "ab" * 20
+
+
+@pytest.mark.slow
+def test_a_revision_absent_from_model_dir_is_the_named_red(tmp_path, monkeypatch, needs_model):
+    """C6 (b): the model IS present, but a config naming a revision that is
+    not in `model_dir` → the named RED `speech-to-text down (model missing)`."""
+    cfg = _cfg().model_copy(update={"stt_revision": "f" * 40})
+    monkeypatch.setattr(tr, "_MODELS", {})
+    assert tr.model_present(cfg) is False
+    with pytest.raises(tr.SttDown) as e:
+        tr.FasterWhisperTranscriber(cfg).transcribe(tmp_path / "never-read.webm")
+    assert e.value.kind == "model_missing"
+    assert str(e.value) == "speech-to-text down (model missing)"
+
+
 def test_a_missing_model_is_a_named_red(tmp_path, monkeypatch):
     empty = tmp_path / "models"
     empty.mkdir()

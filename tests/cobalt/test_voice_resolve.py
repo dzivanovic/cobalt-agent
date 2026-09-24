@@ -44,7 +44,8 @@ def test_a_unique_ticker_binds():
 
 @pytest.mark.parametrize("span", ["X Y Z", "xyz", "X.Y.Z.", "XYZ"])
 def test_spoken_letter_forms_normalize(span):
-    r = rv.resolve_card({"card": Span(span=span)}, f"move the stop on {span} long to 4.50", cands())
+    # B1: the side word is read from the Plan's card SPAN, so the span carries it
+    r = rv.resolve_card({"card": Span(span=f"{span} long")}, f"move the stop on {span} long to 4.50", cands())
     assert r.bound and r.card_id == 11  # "long" narrows the two XYZ cards
 
 
@@ -55,13 +56,38 @@ def test_two_matches_clarify_reading_the_candidates_back():
 
 
 def test_a_side_word_narrows():
-    r = rv.resolve_card({"card": Span(span="XYZ")}, "move the stop on the XYZ short to 4.95", cands())
+    # B1: the side word sits INSIDE the Plan's card span
+    r = rv.resolve_card({"card": Span(span="the XYZ short")}, "move the stop on the XYZ short to 4.95", cands())
     assert r.bound and r.card_id == 13
 
 
 def test_an_ordinal_narrows_by_card_order():
-    r = rv.resolve_card({"card": Span(span="XYZ")}, "move the stop on the second XYZ card to 4.95", cands())
+    # B1: the ordinal sits INSIDE the Plan's card span
+    r = rv.resolve_card({"card": Span(span="the second XYZ")}, "move the stop on the second XYZ card to 4.95", cands())
     assert r.bound and r.card_id == 13
+
+
+@pytest.mark.parametrize("transcript", [
+    "first, move the stop on XYZ to 4.50",
+    "move the stop on XYZ to 4.50, give me a second",
+    "move the stop on XYZ to 4.50 before long",
+])
+def test_a_side_or_ordinal_word_outside_the_card_span_never_binds(transcript):
+    """B1 (voice-v1-check-b-2026-09-24.md FOR THE CLASSIFIER 1; FINAL :111
+    "The Plan's spans (ticker text, side, ordinal …) are matched by code …
+    Never the nearest, never the earliest"): filler words elsewhere in the
+    transcript never pick one of two XYZ cards."""
+    r = rv.resolve_card({"card": Span(span="XYZ")}, transcript, cands())
+    assert not r.bound and r.clarify
+    assert "XYZ long WATCH (card 11)" in r.clarify and "XYZ short WATCH (card 13)" in r.clarify
+
+
+@pytest.mark.parametrize("span,card_id", [("the second XYZ", 13), ("the XYZ short", 13), ("the first XYZ", 11),
+                                          ("XYZ long", 11)])
+def test_a_side_or_ordinal_inside_the_card_span_binds(span, card_id):
+    """B1: the side / ordinal word INSIDE the Plan's card span still narrows."""
+    r = rv.resolve_card({"card": Span(span=span)}, f"move the stop on {span} to 4.95", cands())
+    assert r.bound and r.card_id == card_id
 
 
 def test_zero_matches_clarify():
