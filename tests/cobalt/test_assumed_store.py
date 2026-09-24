@@ -241,8 +241,10 @@ def test_0013_is_registered_forward_and_reverse():
 
     assert MIGRATIONS_DIR / "0013_tunables_slug_nullable.sql" in FORWARD
     assert MIGRATIONS_DIR / "0013_tunables_slug_nullable.rollback.sql" in REVERSE
-    assert FORWARD[-1].name == "0013_tunables_slug_nullable.sql"
-    assert REVERSE[0].name == "0013_tunables_slug_nullable.rollback.sql"
+    assert FORWARD[-1].name == "0015_shadow_agreement_stale.sql"  # the stale-score build (R40) now tops it
+    assert REVERSE[0].name == "0015_shadow_agreement_stale.rollback.sql"
+    assert FORWARD[-2].name == "0013_tunables_slug_nullable.sql"
+    assert REVERSE[1].name == "0013_tunables_slug_nullable.rollback.sql"
 
 
 @requires_db

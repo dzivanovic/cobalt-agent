@@ -40,6 +40,17 @@
                          setups one build, FINAL §8, R2-3 = B by X20).
 `0013_tunables_slug_nullable.rollback.sql` — refuses while a NULL-slug row
                          exists, else restores NOT NULL.
+`0015_shadow_agreement_stale.sql` — `"user".shadow_agreement_v` drops the
+                         `htf_level_proximity` taps graded on a stale price
+                         by a pre-fix evaluator (the stale-score build, R40
+                         by X30 (A)). Additive: the view only.
+`0015_shadow_agreement_stale.rollback.sql` — the view exactly as 0007
+                         defines it.
+
+0014 IS NOT A GAP BY ACCIDENT: it belongs to the unmerged handicap H1
+build (`radar/handicap-h1-0922`); 0016/0017/0018 to DRC D1, voice V1 and
+DRC K1 (the settled seam, `reports/devdb-builds-reissue-2026-09-23.md`
+`## MIGRATION SEAM`). Whichever lands later keeps all, in numeric order.
 
 0012 IS NOT A GAP BY ACCIDENT: it belongs to the unmerged
 `bars/chunk-2-0920` (`0012_bars_partitioned_parent`). Whichever lands
@@ -86,10 +97,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0010_archive_progress.sql",
     MIGRATIONS_DIR / "0011_archive_incidents.sql",
     MIGRATIONS_DIR / "0013_tunables_slug_nullable.sql",
+    MIGRATIONS_DIR / "0015_shadow_agreement_stale.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0015_shadow_agreement_stale.rollback.sql",
     MIGRATIONS_DIR / "0013_tunables_slug_nullable.rollback.sql",
     MIGRATIONS_DIR / "0011_archive_incidents.rollback.sql",
     MIGRATIONS_DIR / "0010_archive_progress.rollback.sql",

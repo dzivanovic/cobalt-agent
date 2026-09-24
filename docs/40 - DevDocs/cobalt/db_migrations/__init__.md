@@ -153,3 +153,13 @@ The number 0013 skips 0012 on purpose. 0012 belongs to the unmerged
 `bars/chunk-2-0920` (`0012_bars_partitioned_parent`). Whichever lands
 second keeps both, in numeric order. This is an L68 seam on this
 `__init__.py` and on the migration-list tests.
+
+## 2026-09-24 — `0015_shadow_agreement_stale` (stale-score build, R40 by X30 (A))
+`FORWARD` gains `0015_shadow_agreement_stale.sql` after `0013`, and `REVERSE` gains its rollback before `0013`'s.
+- **The forward file** re-creates `"user".shadow_agreement_v` with the same columns (so `CREATE OR REPLACE`; it is idempotent). The view gains one `NOT EXISTS` exclusion: an `htf_level_proximity` tap graded at tap time is dropped when BOTH of these hold:
+  - the latest complete run of its card's pool at the tap's instant has an `input_stale` `radar_score` row for the card's member and formation def;
+  - that run's stored `evaluator_version` is a PRE-fix string (`s2p2.1`, `s2p2.2`).
+- **The rollback** re-creates 0007's view exactly.
+- **Additive:** no table, no column, no data. `placement.py` is unchanged, because the view keeps its `Side.USER`.
+- **Numbering:** the number is the settled seam. `0014` belongs to handicap H1; `0016`/`0017`/`0018` belong to DRC D1, voice V1 and DRC K1. The migration-list tests are re-pointed with `0015` at the head; every `0013` membership pin is kept.
+- **Tests (L76):** `tests/cobalt/test_stale_score_db.py` T (iv) applies it only inside a rolled-back transaction, never committed to `cobalt_dev`.
