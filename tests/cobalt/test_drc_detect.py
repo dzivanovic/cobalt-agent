@@ -310,18 +310,23 @@ def test_a_set_with_a_both_kinds_file_lists_it_failed():
         ("mix.md", ",".join(t + s_).encode() + b"\n"),
     ])
     assert [d.name for d in s.failed] == ["mix.md"]
+    # `54` row 8 — `53` D1-2a's set rule: one file per kind → pass, the
+    # failed file listed.
+    assert s.status == "pass"
+    assert s.by_kind[Kind.TRADING_LOG].name == "t.md"
+    assert s.by_kind[Kind.STATS_LOG].name == "s.md"
 
 
 # --- the _imports/drc/ tree -------------------------------------------
 
 
-@pytest.mark.parametrize("folder", ["_reference", "2026-9-18", "20260918", "2026-09-18x", "notes"])
+@pytest.mark.parametrize("folder", ["_reference", "2001-1-2", "20010102", "2001-01-02x", "notes"])
 def test_only_a_yyyy_mm_dd_folder_is_an_import_folder(folder):
     assert detect.import_folder_date(folder) is None
 
 
 def test_a_date_folder_names_its_import_date():
-    assert detect.import_folder_date("2026-09-18") == date(2026, 9, 18)
+    assert detect.import_folder_date("2001-01-02") == date(2001, 1, 2)
 
 
 def test_a_reference_folder_beside_a_date_folder_is_never_read(tmp_path):

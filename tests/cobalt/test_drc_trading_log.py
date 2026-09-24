@@ -164,8 +164,11 @@ def test_a_blank_line_inside_the_file_fails_it_but_trailing_blank_lines_do_not()
 
 
 def test_undecodable_bytes_after_the_header_fail_the_file():
+    """`54` rows 3 / 10: the failure names the line the bad byte sits on —
+    the line after the fixture's last."""
     p = _parse(E1.read_bytes() + b"\xff\xfe,,\n")
     assert p.result.outcome is Outcome.FAILED
+    assert p.result.line == E1.read_bytes().count(b"\n") + 1
 
 
 def test_two_accounts_are_one_bucket_read_and_stored_never_a_gate():

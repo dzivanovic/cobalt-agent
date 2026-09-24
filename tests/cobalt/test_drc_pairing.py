@@ -131,14 +131,16 @@ import csv  # noqa: E402
 import io  # noqa: E402
 from pathlib import Path  # noqa: E402
 
-from cobalt.drc import trading_log  # noqa: E402
+from cobalt.drc import stats_log, trading_log  # noqa: E402
 from cobalt.drc.detect import detect_kind  # noqa: E402
 from cobalt.drc.models import PairingError  # noqa: E402
 from cobalt.drc.pairing import build_day, check_contiguity, pair_day, trade_id  # noqa: E402
+from cobalt.drc.stats_log import StatsLogSource  # noqa: E402
 from cobalt.drc.trading_log import TradingLogSource  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "drc"
 E1 = FIXTURES / "trading_log_e1.csv"
+STATS = FIXTURES / "stats_log_e1.csv"
 DAY1 = FIXTURES / "trading_log_carry_day1.csv"
 SEED = FIXTURES / "trading_log_carry_seed.csv"
 D = date(2001, 1, 2)
@@ -234,6 +236,60 @@ def test_the_seed_round_trips_across_the_two_fixture_days():
     (fff,) = _by_symbol(day2, "FFF")
     assert fff.direction is Direction.SHORT and fff.gross_pnl == Decimal("20.0")
     assert day2.open_positions == []
+
+
+def _header(path: Path) -> bytes:
+    return path.read_bytes().split(b"\n", 1)[0] + b"\n"
+
+
+CARRIED_SHORT_DAY1 = _header(DAY1) + b"10:00:00,GGG,SS,20.0,40,ROUTE1,BRK1,ACCT1,Short,H0000000000301,\n"
+CARRIED_SHORT_DAY2 = _header(DAY1) + b"09:40:00,GGG,B,19.5,40,ROUTE1,BRK1,ACCT1,Margin,H0000000000302,\n"
+
+
+def test_a_carried_short_closes_on_the_next_days_buy_with_its_seed():
+    """`54` rows 1 / 11: a short held overnight, covered by the next day's
+    `B` (E1: a cover is `B`), closes as ONE short trade with its seed.
+    GREEN-as-pin: no src change backs it."""
+    day1 = _pair(CARRIED_SHORT_DAY1)
+    (pos,) = day1.open_positions
+    assert pos.symbol == "GGG" and pos.direction is Direction.SHORT and pos.held_shares == 40
+    day2 = _pair(CARRIED_SHORT_DAY2, D_NEXT, seed=day1.open_positions)
+    (ggg,) = _by_symbol(day2, "GGG")
+    assert ggg.status is TradeStatus.CLOSED and ggg.direction is Direction.SHORT
+    assert ggg.trade_id == pos.trade_id
+    assert ggg.carried_from == D
+    assert ggg.gross_pnl == Decimal("20.0")
+    assert day2.open_positions == []
+
+
+def test_a_first_import_reads_a_leading_buy_as_a_long_until_he_rules():
+    """First import only: the file cannot tell a cover from an open (E1: a cover is B). Pinned as built until his ruling — reports/drc-d1-fix-r1-draft-2026-09-24.md ## OWNER ITEMS. Any later day is covered by the seed chain (check_contiguity, and F3's not-computed FAIL).
+
+    `54` rows 1 / 11. GREEN-as-pin: no src change backs it."""
+    day2 = _pair(CARRIED_SHORT_DAY2, D_NEXT)
+    (ggg,) = _by_symbol(day2, "GGG")
+    assert ggg.status is TradeStatus.OPEN and ggg.direction is Direction.LONG
+    assert ggg.held_shares == 40
+
+
+def _set_stats_cell(data: bytes, line: int, column: str, value: str) -> bytes:
+    """A one-cell mutation of a stats log, quoted where a cell needs it."""
+    records = list(csv.reader(io.StringIO(data.decode(), newline="")))
+    records[line - 1][records[0].index(column)] = value
+    out = io.StringIO()
+    csv.writer(out, lineterminator="\n", quoting=csv.QUOTE_MINIMAL).writerows(records)
+    return out.getvalue().encode()
+
+
+def test_an_empty_open_date_cell_is_never_reported_as_an_empty_open_time():
+    """`54` row 5: `StatsRow` carries only the combined entry time, so the
+    reason names the pair jointly — never `Open Time` alone as if proven
+    empty."""
+    stats = _set_stats_cell(STATS.read_bytes(), 2, stats_log.OPEN_DATE, "")
+    day = build_day(_parsed(E1.read_bytes()), StatsLogSource().parse(stats, detect_kind("s.md", stats)))
+    (u,) = day.unmatched
+    assert u.row.line == 2
+    assert u.reason == "unmatched — empty: Open Date or Open Time"
 
 
 def test_a_carried_symbol_with_no_prior_row_fails_naming_it():

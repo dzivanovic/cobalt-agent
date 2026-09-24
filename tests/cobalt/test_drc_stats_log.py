@@ -201,6 +201,16 @@ def test_a_row_with_the_wrong_cell_count_fails_the_stats_file():
     assert p.result.outcome is Outcome.FAILED and p.result.line == 3
 
 
+def test_undecodable_bytes_on_a_data_line_name_that_line():
+    """`54` row 4: the failure names the line the bad byte sits on — the
+    line after the fixture's last — and keeps no rows."""
+    data = STATS.read_bytes()
+    p = _parse(data + b"\xff\xfe,,\n")
+    assert p.result.outcome is Outcome.FAILED
+    assert p.result.line == data.count(b"\n") + 1
+    assert p.rows == []
+
+
 def test_the_parser_is_reached_only_through_a_stats_log_detection():
     data = TRADES.read_bytes()
     with pytest.raises(ValueError, match="only through detect_kind"):
