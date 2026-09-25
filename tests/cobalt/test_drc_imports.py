@@ -449,7 +449,8 @@ def test_an_unstated_first_day_records_unpaired_and_the_build_is_not_built(world
     assert result.status_line == "not computed — opening book not stated · state your opening book for 2001-01-02"
     assert world.drc.imports[0]["event_state"] == "failed"
     assert world.drc.imports[0]["event_error"] == "build not built (D3)"
-    assert world.drc.writes[-3:] == ["mark_event:pending", "mark_event:running", "mark_event:failed"]
+    # pending → the [F-17] route (`record_day`) → running → failed (D2-3's order).
+    assert world.drc.writes[-4:] == ["mark_event:pending", "record_day", "mark_event:running", "mark_event:failed"]
 
 
 def test_a_seed_for_raise_fails_the_event_verbatim_and_keeps_the_files(world):
@@ -758,6 +759,17 @@ def test_a_bad_date_on_the_page_is_failed_never_guessed(page, world):
     response = page.get("/drc", params={"date": "2001-02-30"})
     assert "FAILED" in response.text
     assert world.drc.writes == []
+
+
+def test_the_r51_line_renders_as_the_store_returns_it():
+    """Text nodes keep the apostrophe of "<P>'s close" (seam (8): the
+    line as returned); `<` / `&` are still escaped."""
+    from cobalt.aset import drc_page
+    from cobalt.drc.imports import DayView
+
+    line = "stated book for 2001-01-03 differed from 2001-01-02's close: X-long-<b>&"
+    page = drc_page.render(DayView(date=D_NEXT, stated_difference=line, status_line="waiting for: trading log"))
+    assert "stated book for 2001-01-03 differed from 2001-01-02's close: X-long-&lt;b&gt;&amp;" in page
 
 
 def test_the_existing_routes_are_still_served():

@@ -406,6 +406,116 @@ class DrcStore:
             ).fetchone() is not None
 
     # -----------------------------------------------------------------
+    # D2 — the input event (L18), on the day's trading-log import row
+    # -----------------------------------------------------------------
+
+    #: L18: pending → running → done | failed. A re-fire (a superseding
+    #: file, a later stats log) moves ANY state back to `pending`; nothing
+    #: else skips a step, and nothing reaches `done` except from `running`.
+    EVENT_MOVES: dict[Optional[str], frozenset[str]] = {
+        None: frozenset(),
+        "pending": frozenset({"running", "failed"}),
+        "running": frozenset({"done", "failed"}),
+        "done": frozenset(),
+        "failed": frozenset(),
+    }
+
+    def mark_event(self, import_id: int, state: str, error: Optional[str] = None) -> None:
+        """Move the `DrcInputsPlaced` event on import `import_id` (a
+        `trading_log` row, `0016_drc.sql:35-37`) to `state`. `failed`
+        names its reason (L1); no other state carries one. An illegal move
+        is refused, nothing written. The event's payload is never stored:
+        `event_for` rebuilds it from the rows (L57)."""
+        if state not in ("pending", "running", "done", "failed"):
+            raise ValueError(f"event state {state!r} is not pending / running / done / failed")
+        if (state == "failed") != bool(error):
+            raise ValueError(f"event {state}: a failed event names its reason, no other state carries one")
+        conn = self._connect()
+        conn.autocommit = False
+        try:
+            row = conn.execute(
+                f"SELECT kind, event_state FROM drc_imports WHERE user_id = {_TENANT} AND id = %s FOR UPDATE",
+                (import_id,),
+            ).fetchone()
+            if row is None or row[0] != Kind.TRADING_LOG.value:
+                raise ValueError(f"import #{import_id} is not a stored trading log — the event has no row")
+            if state != "pending" and state not in self.EVENT_MOVES[row[1]]:
+                raise ValueError(f"event on import #{import_id}: {row[1]} → {state} is not a move (L18)")
+            conn.execute(
+                f"UPDATE drc_imports SET event_state = %s, event_updated_at = now(), event_error = %s "
+                f"WHERE user_id = {_TENANT} AND id = %s",
+                (state, error, import_id),
+            )
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def event_for(self, day: date) -> dict[str, Any]:
+        """The day's event and the stored rows it is built from — a READ.
+
+        `import_id` / `state` / `updated_at` / `error`: the event on the
+        day's CURRENT trading-log import (the row no other supersedes), all
+        `None` when there is none. `imports`: every `drc_imports` row of
+        the day, oldest first, each with `current` and its `fills` count.
+        `day`: the day's `day` row (`inputs`, `derived`) or `None`.
+        `trades`: the day's trade ids. `rows`: the day's row count per
+        kind. Nothing is computed here; the page and the event read it."""
+        with self._connect() as conn:
+            imports = [
+                dict(zip(
+                    ("id", "kind", "name", "sha256", "trade_key", "parse_status", "reason", "failed_line",
+                     "supersedes", "event_state", "event_updated_at", "event_error", "current", "fills"),
+                    r,
+                ))
+                for r in conn.execute(
+                    f"""
+                    SELECT i.id, i.kind, i.name, i.sha256, i.trade_key, i.parse_status, i.reason,
+                           i.failed_line, i.supersedes, i.event_state, i.event_updated_at, i.event_error,
+                           i.id NOT IN (SELECT supersedes FROM drc_imports
+                                         WHERE supersedes IS NOT NULL AND user_id = {_TENANT}),
+                           (SELECT count(*) FROM drc_fills f WHERE f.user_id = {_TENANT} AND f.import_id = i.id)
+                      FROM drc_imports i
+                     WHERE i.user_id = {_TENANT} AND i.import_date = %s
+                     ORDER BY i.id
+                    """,
+                    (day,),
+                ).fetchall()
+            ]
+            day_row = conn.execute(
+                f"SELECT inputs, derived FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'day' AND day = %s",
+                (day,),
+            ).fetchone()
+            trades = [
+                r[0]
+                for r in conn.execute(
+                    f"SELECT ref FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'trade' AND day = %s "
+                    "ORDER BY ref",
+                    (day,),
+                ).fetchall()
+            ]
+            rows = dict(
+                conn.execute(
+                    f"SELECT kind, count(*) FROM drc_rows WHERE user_id = {_TENANT} AND day = %s GROUP BY kind",
+                    (day,),
+                ).fetchall()
+            )
+        current = [r for r in imports if r["current"] and r["kind"] == Kind.TRADING_LOG.value]
+        event = current[-1] if current else None
+        return {
+            "import_id": None if event is None else event["id"],
+            "state": None if event is None else event["event_state"],
+            "updated_at": None if event is None else event["event_updated_at"],
+            "error": None if event is None else event["event_error"],
+            "imports": imports,
+            "day": None if day_row is None else {"inputs": day_row[0], "derived": day_row[1]},
+            "trades": trades,
+            "rows": {k: int(rows.get(k, 0)) for k in ("trade", "open_position", "stats_row")},
+        }
+
+    # -----------------------------------------------------------------
     # K2 — the one re-pair (`_repair`) and the one write (`_commit`)
     # -----------------------------------------------------------------
 

@@ -263,3 +263,27 @@ into the central settings (`"user".trader_settings`).
 
 Tests: `tests/cobalt/test_drc_settings.py` (offline, constructed store),
 `tests/cobalt/test_drc_settings_db.py` (`cobalt_dev`, rollback).
+
+---
+
+## 2026-09-25 — DRC D2-4: the `/drc` import page
+
+The block at the END of the file (THE SEAM, L72: it shares nothing with
+D4's block after `/attest`; its own imports — `date` as `_drc_date`,
+`File` / `Form` / `UploadFile`, `cobalt.drc.imports` as `drc_imports`,
+`drc_page` — sit inside it). The routes own no side effect (L40):
+- `GET /drc?date=YYYY-MM-DD` (default today ET) → `drc_imports.day_view`
+  → `drc_page.render`. Writes nothing. A date that is not a date → the
+  FAILED page.
+- `POST /drc/import` (multipart: `date`, `files` — one or more, any name,
+  NO kind field — optional `trade_key`) → `drc_imports.place`.
+- `POST /drc/no-trade` (`date`) → `drc_imports.no_trade`.
+- `POST /drc/scan` (`date`) → `drc_imports.scan_folder` (a non-date is
+  the FAILED page; nothing read).
+- `_drc_render(day, result)` reads the day's cards (`AsetStore.for_date`,
+  read only; a failed read is a FAILED line) for the "cards with no
+  trade" count. Any exception is the FAILED page, never a blank.
+
+Tests: `tests/cobalt/test_drc_imports.py` (TestClient, offline double),
+`tests/cobalt/test_drc_imports_db.py` (TestClient, `cobalt_dev`
+rollback), `tests/cobalt/test_drc_web_seam.py` (the seam, by `ast`).

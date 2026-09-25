@@ -177,6 +177,22 @@ read of a stated row's day (L3). `effect_day` now calls it, and its result
 and its raise are unchanged. The CLI's rebuild trigger calls it too, to
 test the superseded row's day for a recorded chain (F-1r2).
 
+## 2026-09-25 — DRC D2 (the input event)
+Two methods, nothing else of the store moved. **`mark_event(import_id,
+state, error=None)`** moves the `DrcInputsPlaced` event on a stored
+`trading_log` import row (`event_state` / `event_updated_at` /
+`event_error`, `0016_drc.sql:35-37`) under `SELECT … FOR UPDATE`: L18's
+moves only (`EVENT_MOVES`: pending → running | failed, running → done |
+failed; ANY state → `pending` is a re-fire); `failed` must name its
+reason and no other state carries one; an illegal move or a non-trading-
+log row is refused, nothing written. It is not session-gated: the drop
+that fires it is gated at its start (`imports.place`). **`event_for(day)`**
+is a READ: the event on the day's CURRENT trading-log import (`import_id`,
+`state`, `updated_at`, `error`, all `None` without one) plus the stored
+rows it is built from — every `drc_imports` row of the day with `current`
+and its `fills` count, the `day` row, the trade ids, and the row count
+per kind. The event's payload is never stored (L57).
+
 ## Tests
 `tests/cobalt/test_drc_store.py` has an offline half (the SQL, the
 registry, the placement map, the one-writer grep). Its with-DB half

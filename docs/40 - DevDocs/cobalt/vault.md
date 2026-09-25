@@ -68,6 +68,13 @@ vault. Now:
   `prefill/*` writer (via `prefill/vault_writer.py`) call this instead
   of carrying their own copy.
 
+- `IMPORTS_REL = "1 - Trading/5 - Review/_imports"` and `DRC_IMPORTS_REL
+  = IMPORTS_REL + "/drc"` (DRC D2, R92): the vault's Cobalt-owned
+  `_imports/` location, relative to the vault root. His dropped files live
+  in `DRC_IMPORTS_REL/<YYYY-MM-DD>/`, written only by
+  `VaultWriter.write_import_bytes`; `_reference/` beside the date folders
+  is never an input.
+
 ## Data flow in/out
 **In:** `configs/dev/vault.yaml` (committed — the path itself isn't a
 secret) or the `COBALT_VAULT_PATH` env var.

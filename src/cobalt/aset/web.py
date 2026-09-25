@@ -1507,3 +1507,100 @@ async def radar_card_promote(card_id: int):
 @app.post("/radar/card/{card_id}/release")
 async def radar_card_release(card_id: int):
     return await _promote(card_id, False)
+
+
+# ---------------------------------------------------------------------------
+# DRC D2-4: the `/drc` import page (v2 §2–§3; v3 §2b, §5). THE SEAM WITH D4
+# (L72): this block — `GET /drc`, `POST /drc/import`, `POST /drc/no-trade`,
+# `POST /drc/scan` and the `_drc_*` helpers they alone use — sits at the END
+# of the file, after every existing route, and shares nothing with D4's
+# settings block after `/attest`. The routes own no side effect (L40): each
+# calls `cobalt.drc.imports` (place / scan_folder / no_trade / day_view) and
+# renders `drc_page`; the one other read is the day's cards (read only).
+# ---------------------------------------------------------------------------
+
+from datetime import date as _drc_date  # noqa: E402 — the block's own imports
+
+from fastapi import File, Form, UploadFile  # noqa: E402
+
+from cobalt.drc import imports as drc_imports  # noqa: E402
+
+from . import drc_page  # noqa: E402
+
+
+def _drc_day(text: str | None) -> _drc_date:
+    """The page's date: `YYYY-MM-DD`, or today ET when none is given. A
+    date that is not a date raises — shown FAILED, never guessed."""
+    if not text:
+        return _today_et()
+    return _drc_date.fromisoformat(text)
+
+
+def _drc_render(day: _drc_date, result=None) -> str:
+    """The page for `day` (reads only), with the action just taken on top."""
+    cards, cards_error = None, None
+    try:
+        cards = AsetStore().for_date(day)
+    except Exception as exc:  # noqa: BLE001 — shown, never swallowed
+        cards_error = f"{type(exc).__name__}: {exc}"
+    try:
+        view = drc_imports.day_view(day, cards=cards)
+    except Exception as exc:  # noqa: BLE001
+        return drc_page.failed_page(f"DRC {day}: {type(exc).__name__}: {exc}", CSS)
+    return drc_page.render(view, result, cards_error=cards_error, css=CSS)
+
+
+@app.get("/drc", response_class=HTMLResponse)
+def drc(date: str | None = None) -> str:
+    """The date's DRC inputs. WRITES NOTHING."""
+    try:
+        day = _drc_day(date)
+    except ValueError as exc:
+        return drc_page.failed_page(f"date {date!r}: {exc}", CSS)
+    return _drc_render(day)
+
+
+@app.post("/drc/import", response_class=HTMLResponse)
+async def drc_import(
+    date: str = Form(...),
+    files: list[UploadFile] = File(...),
+    trade_key: str | None = Form(None),
+) -> str:
+    """One drop (his files, any names, NO kind field — R114), or with a
+    `trade_key` one trade's screenshots."""
+    try:
+        day = _drc_day(date)
+    except ValueError as exc:
+        return drc_page.failed_page(f"date {date!r}: {exc}", CSS)
+    payload = [(f.filename or "unnamed", await f.read()) for f in files]
+    try:
+        result = drc_imports.place(day, payload, trade_key or None)
+    except Exception as exc:  # noqa: BLE001
+        return drc_page.failed_page(f"DRC {day}: {type(exc).__name__}: {exc}", CSS)
+    return _drc_render(day, result)
+
+
+@app.post("/drc/no-trade", response_class=HTMLResponse)
+async def drc_no_trade(date: str = Form(...)) -> str:
+    """R93: "No trades today" — his `no_trade` statement for the date."""
+    try:
+        day = _drc_day(date)
+    except ValueError as exc:
+        return drc_page.failed_page(f"date {date!r}: {exc}", CSS)
+    try:
+        result = drc_imports.no_trade(day)
+    except Exception as exc:  # noqa: BLE001
+        return drc_page.failed_page(f"DRC {day}: {type(exc).__name__}: {exc}", CSS)
+    return _drc_render(day, result)
+
+
+@app.post("/drc/scan", response_class=HTMLResponse)
+async def drc_scan(date: str = Form(...)) -> str:
+    """R17 (2): import the files he dropped by hand into the date's folder."""
+    try:
+        result = drc_imports.scan_folder(date)
+    except Exception as exc:  # noqa: BLE001
+        return drc_page.failed_page(f"DRC {date}: {type(exc).__name__}: {exc}", CSS)
+    if result.date is None:
+        return drc_page.failed_page(result.refused or f"date {date!r}", CSS)
+    return _drc_render(result.date, result)
