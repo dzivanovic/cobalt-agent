@@ -368,22 +368,28 @@ class DrcStore:
             f"{', '.join(derived['stated_differs'])}"
         )
 
+    def stated_day(self, stated_id: int) -> date:
+        """The `day` of the `drc_stated_books` row `stated_id` — any row,
+        current or superseded. THE one read of a stated row's day (L3),
+        used by `effect_day` and by the CLI's rebuild trigger (K2 fix r2
+        F-1r2). An unknown id raises `ValueError`; nothing is assumed."""
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT day FROM drc_stated_books WHERE user_id = {_TENANT} AND id = %s",
+                (stated_id,),
+            ).fetchone()
+        if row is None:
+            raise ValueError(f"supersedes #{stated_id} names no stated row — nothing assumed")
+        return row[0]
+
     def effect_day(self, day: date, supersedes: Optional[int]) -> date:
         """The day a statement's rebuild starts from (K2 fix r1 F-1): `day`,
         or — for a restatement — the earlier of `day` and the superseded
         row's day, so the superseded resolve's effect leaves every stored
         row (L1; v3 `[F-06]` `:190`). An unknown id raises `ValueError`;
-        nothing is assumed."""
-        if supersedes is None:
-            return day
-        with self._connect() as conn:
-            row = conn.execute(
-                f"SELECT day FROM drc_stated_books WHERE user_id = {_TENANT} AND id = %s",
-                (supersedes,),
-            ).fetchone()
-        if row is None:
-            raise ValueError(f"supersedes #{supersedes} names no stated row — nothing assumed")
-        return min(day, row[0])
+        nothing is assumed. K2 fix r2: the superseded row's day is read by
+        `stated_day`, the one read (L3)."""
+        return day if supersedes is None else min(day, self.stated_day(supersedes))
 
     def has_current_import(self, day: date, kind: Kind) -> bool:
         """Whether `day` has a current (not superseded) import of `kind`."""

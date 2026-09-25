@@ -133,13 +133,19 @@ def _rebuilds(store, req: StateBookRequest) -> bool:
     neither there is nothing to re-pair yet: the statement waits for the
     day's import (AMENDED C7). K2 fix r1 F-1: the day tested is
     `effect_day` — a restatement's rebuild starts at the earlier of its
-    day and the superseded row's day."""
+    day and the superseded row's day. K2 fix r2 F-1r2: the day (b) tests
+    for a recorded chain is the SUPERSEDED row's day for a restatement
+    (`DrcStore.stated_day`) — a restatement whose superseded row's day
+    joins a recorded chain rebuilds from `effect_day`, because the
+    superseded effect may be stored there (L1; v3 `[F-06]` `:190`;
+    AMENDED C7 (r2))."""
     from .models import Kind
 
-    day = store.effect_day(req.day, req.supersedes)
-    if store.has_current_import(day, Kind.TRADING_LOG):
+    effect = store.effect_day(req.day, req.supersedes)
+    if store.has_current_import(effect, Kind.TRADING_LOG):
         return True
-    return req.kind in ("no_trade", "resolve") and store.has_chain_through(day)
+    tested = req.day if req.supersedes is None else store.stated_day(req.supersedes)
+    return req.kind in ("no_trade", "resolve") and store.has_chain_through(tested)
 
 
 def cmd_state_book(args: argparse.Namespace) -> None:
@@ -175,7 +181,7 @@ def cmd_state_book(args: argparse.Namespace) -> None:
     _print_row(row)
     print(f"\nwritten: {DrcStore.STATED_TABLE} #{row.id} (book_sha256 {row.book_sha256})")
     if not rebuilds:
-        print(f"stated; {req.day.isoformat()} has no import yet")
+        print(f"stated; {effect.isoformat()} has no import yet")
         return
     try:
         dates = store.rebuild(effect)

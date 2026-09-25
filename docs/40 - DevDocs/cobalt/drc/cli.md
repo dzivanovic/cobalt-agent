@@ -71,3 +71,13 @@ The CLI still inserts nothing itself (L3).
 The day the CLI tests, prints and rebuilds is
 `DrcStore.effect_day(day, supersedes)`: a restatement's rebuild starts at
 the earlier of its day and the superseded row's day (F-1, AMENDED C7).
+
+## 2026-09-25 — DRC K2 fix r2
+For a restatement, the recorded-chain test now reads the SUPERSEDED row's
+day (`DrcStore.stated_day`), not the new day. So a resolve restated to an
+earlier day with no import, while the superseded row's day is recorded,
+now rebuilds from `effect_day`. That rebuild is refused loud (`not
+rebuilt: … nothing to re-pair ([F-05])`, exit 1, the statement kept),
+never the silent exit 0 it was before (F-1r2, AMENDED C7 (r2)). The
+`stated; <day> has no import yet` line now names the effect day, which is
+the day actually tested for an import.

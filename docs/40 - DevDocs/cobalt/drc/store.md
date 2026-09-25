@@ -170,6 +170,13 @@ input with its own file's missing columns and always re-matches it; a
 partial import re-pairs through `trading_log.pairing_not_computed`, as
 its first record did (F-2 … F-5).
 
+## 2026-09-25 — DRC K2 fix r2
+New read `stated_day(stated_id)`: the `day` of one `drc_stated_books` row,
+current or superseded, or `ValueError` for an unknown id. It is the one
+read of a stated row's day (L3). `effect_day` now calls it, and its result
+and its raise are unchanged. The CLI's rebuild trigger calls it too, to
+test the superseded row's day for a recorded chain (F-1r2).
+
 ## Tests
 `tests/cobalt/test_drc_store.py` has an offline half (the SQL, the
 registry, the placement map, the one-writer grep). Its with-DB half
