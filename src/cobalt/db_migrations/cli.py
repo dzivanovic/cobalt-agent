@@ -111,6 +111,10 @@ TABLE_DIGEST_EXCLUDED_COLUMNS: dict[str, tuple[str, ...]] = {
         "score_suppressed", "radar_score_id", "scan_id", "formula_sha256",
         "tunables_sha256", "settings_sha256", "health", "promoted_at",
     ),
+    # 0014_radar_handicap.sql — the float handicap's shadow record: three
+    # nullable columns on a populated table are not content corruption, and
+    # dropping them on rollback must not read as CHANGED.
+    "radar_membership": ("raw_rank", "handicap_factor", "handicap"),
 }
 
 #: Seconds the migrate transaction will wait for any single lock before

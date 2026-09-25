@@ -19,6 +19,7 @@ from decimal import Decimal
 
 import pytest
 from pydantic import ValidationError
+from radar_migrated_support import migrated_radar  # noqa: F401  (fixture: 0014 inside the test's transaction, L76)
 
 from cobalt.aset.engine import compute_sizing
 from cobalt.aset.models import Direction, Grade, SheetMode, SizingInput
@@ -328,6 +329,7 @@ def pick_pool(monkeypatch):
 @pytest.mark.integration
 @pytest.mark.usefixtures("dev_db_tx", "pick_pool")
 class TestFillWritesPick:
+    @pytest.mark.usefixtures("migrated_radar")
     def test_fill_writes_exactly_one_pick_row_in_the_fill_transaction(self):
         _seed_pool(members=[("P4PICK", 3, Decimal("1234567"))])
         card_id = _make_card("P4PICK")
@@ -338,6 +340,7 @@ class TestFillWritesPick:
         assert row["transition_id"] == result.transition_ids[-1]
         assert row["picked_at"] == RTH and row["session"] == "rth" and row["origin"] == "manual"
 
+    @pytest.mark.usefixtures("migrated_radar")
     def test_pick_row_snapshots_pool_rank_metric_and_value_at_pick_time(self):
         _seed_pool(members=[("P4SNAP", 2, Decimal("987.5")), ("P4OTHER", 1, Decimal("2000"))])
         card_id = _make_card("P4SNAP")
@@ -347,6 +350,7 @@ class TestFillWritesPick:
         assert (row["rank_metric"], row["rank_value"]) == ("volume", Decimal("987.500000"))
         assert row["pool_member_id"] is not None and row["pool_scan_id"] == 9910001
 
+    @pytest.mark.usefixtures("migrated_radar")
     def test_pick_for_ticker_not_in_pool_records_not_in_pool_and_fill_succeeds(self):
         _seed_pool(members=[("P4OTHER", 1, Decimal("2000"))])
         card_id = _make_card("P4NOPOOL")
@@ -356,6 +360,7 @@ class TestFillWritesPick:
         assert (row["not_in_pool"], row["pool_member_id"], row["pool_rank"], row["pool_basis"]) == (True, None, None, "pool")
         assert row["pool_size"] == 1
 
+    @pytest.mark.usefixtures("migrated_radar")
     @pytest.mark.parametrize("pool", ["missing", "degraded", "failed"])
     def test_degraded_or_missing_pool_row_writes_named_nulls_never_refuses_fill(self, pool):
         if pool == "degraded":

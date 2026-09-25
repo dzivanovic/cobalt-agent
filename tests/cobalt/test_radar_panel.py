@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
+from radar_migrated_support import migrated_radar  # noqa: F401  (fixture: 0014 inside the test's transaction, L76)
 
 from cobalt.aset import radar_panel as panel
 from cobalt.aset import web as web_module
@@ -1212,6 +1213,7 @@ requires_db = pytest.mark.skipif(
 @pytest.mark.integration
 @pytest.mark.usefixtures("dev_db_tx")
 @requires_db
+@pytest.mark.usefixtures("migrated_radar")
 def test_members_for_day_db_returns_both_open_and_left_and_scopes_pool_and_day():
     store = RadarStore("cobalt_dev")
     target_day = date(2040, 1, 3)

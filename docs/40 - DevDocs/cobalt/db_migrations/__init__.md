@@ -153,3 +153,10 @@ The number 0013 skips 0012 on purpose. 0012 belongs to the unmerged
 `bars/chunk-2-0920` (`0012_bars_partitioned_parent`). Whichever lands
 second keeps both, in numeric order. This is an L68 seam on this
 `__init__.py` and on the migration-list tests.
+
+`0014_radar_handicap` (float handicap H1, 2026-09-24; the number settled
+under L72 P-b) is registered last in `FORWARD` and first in `REVERSE`. It
+adds three nullable columns to `system.radar_membership` — `raw_rank`,
+`handicap_factor NUMERIC(6,4)`, `handicap JSONB` — with no CHECK, and its
+rollback drops exactly those three. Builds prove it only inside a test's
+own rolled-back transaction (L76); production applies it in the deploy.

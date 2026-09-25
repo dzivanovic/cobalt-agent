@@ -360,3 +360,10 @@ unchanged, not by a version row.
 `DIGEST_EXCLUDED_COLUMNS` gains `rank_metric` and `rank_value` (Astra
 R1-1). Adding two nullable columns to a populated `radar_membership` is not
 content corruption, and dropping them on rollback must not read as CHANGED.
+
+`TABLE_DIGEST_EXCLUDED_COLUMNS["radar_membership"]` (float handicap H1,
+2026-09-24) excludes `0014`'s three columns from that one table's digest,
+for the same reason: without it the migrate's own content proof would read
+the populated membership table CHANGED after `0014` and roll the migration
+back. Per table, because `handicap` is too generic a name to drop from
+every table's digest.

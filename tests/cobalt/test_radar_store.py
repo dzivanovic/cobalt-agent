@@ -6,6 +6,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
+from radar_migrated_support import migrated_radar  # noqa: F401  (fixture: 0014 inside the test's transaction, L76)
 
 from cobalt.radar.models import ExcludedBy, OpenMember
 from cobalt.radar.pool import Action, Transition
@@ -162,7 +163,7 @@ requires_db = pytest.mark.skipif(
 
 
 @requires_db
-@pytest.mark.usefixtures("dev_db_tx")
+@pytest.mark.usefixtures("migrated_radar")
 def test_membership_values_round_trip_retain_and_hold_on_cobalt_dev():
     """0008 applied on cobalt_dev (hub): ADMIT writes the pair, RETAIN
     replaces it, HOLD with no pair keeps it, and the open row validates
