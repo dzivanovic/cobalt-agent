@@ -40,6 +40,9 @@
                          setups one build, FINAL §8, R2-3 = B by X20).
 `0013_tunables_slug_nullable.rollback.sql` — refuses while a NULL-slug row
                          exists, else restores NOT NULL.
+`0014_radar_handicap.sql` — membership raw_rank / handicap_factor / handicap
+                         (the float handicap's shadow record, H1). Additive.
+`0014_radar_handicap.rollback.sql` — drops exactly those three columns.
 
 0012 IS NOT A GAP BY ACCIDENT: it belongs to the unmerged
 `bars/chunk-2-0920` (`0012_bars_partitioned_parent`). Whichever lands
@@ -86,10 +89,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0010_archive_progress.sql",
     MIGRATIONS_DIR / "0011_archive_incidents.sql",
     MIGRATIONS_DIR / "0013_tunables_slug_nullable.sql",
+    MIGRATIONS_DIR / "0014_radar_handicap.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0014_radar_handicap.rollback.sql",
     MIGRATIONS_DIR / "0013_tunables_slug_nullable.rollback.sql",
     MIGRATIONS_DIR / "0011_archive_incidents.rollback.sql",
     MIGRATIONS_DIR / "0010_archive_progress.rollback.sql",

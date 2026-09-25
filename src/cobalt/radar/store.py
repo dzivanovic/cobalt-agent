@@ -11,9 +11,18 @@ from cobalt import db, env
 from cobalt.db import Side
 from cobalt.session import assert_writable
 
+from .handicap import HandicapRecord
 from .pool import Action, Transition
 
 ET = ZoneInfo("America/New_York")
+
+
+def _handicap_json(item: Transition) -> str | None:
+    """The row's `handicap` JSONB (0014): the record re-validated against
+    `HandicapRecord` before it is written (v3 §6), or NULL."""
+    if item.handicap is None:
+        return None
+    return HandicapRecord.model_validate(item.handicap.model_dump(mode="json")).model_dump_json()
 
 
 class RadarStore:
@@ -55,7 +64,8 @@ class RadarStore:
                 "SELECT id, pool_key, ticker, trade_date, first_seen_at, "
                 "entered_at, left_at, source, sources, rank_at_entry, last_rank, "
                 "below_cap_streak, excluded_by, session, opened_scan_id, "
-                "last_scan_id, closed_scan_id, rank_metric, rank_value FROM radar_membership "
+                "last_scan_id, closed_scan_id, rank_metric, rank_value, "
+                "raw_rank, handicap_factor, handicap FROM radar_membership "
                 "WHERE pool_key = %s AND trade_date = %s ORDER BY id",
                 (pool_key, trade_date),
             )
@@ -86,11 +96,14 @@ class RadarStore:
                     if item.action is Action.RETAIN:
                         cur.execute(
                             "UPDATE radar_membership SET sources=%s::jsonb, last_rank=%s, "
-                            "below_cap_streak=%s, last_scan_id=%s, rank_metric=%s, rank_value=%s "
+                            "below_cap_streak=%s, last_scan_id=%s, rank_metric=%s, rank_value=%s, "
+                            "raw_rank=%s, handicap_factor=%s, handicap=%s::jsonb "
                             "WHERE pool_key=%s AND ticker=%s AND left_at IS NULL "
                             "AND last_scan_id < %s",
                             (json.dumps(item.sources), item.rank, item.below_cap_streak, scan_id,
-                             item.rank_metric, item.rank_value, pool_key, item.ticker, scan_id),
+                             item.rank_metric, item.rank_value,
+                             item.raw_rank, item.handicap_factor, _handicap_json(item),
+                             pool_key, item.ticker, scan_id),
                         )
                     elif item.action is Action.HOLD:
                         # Frozen pool (S2-P4 R1): the pair is kept, never
@@ -132,12 +145,14 @@ class RadarStore:
                         if item.action is Action.EXCLUDE:
                             cur.execute(
                                 "UPDATE radar_membership SET sources=%s::jsonb, last_rank=%s, "
-                                "excluded_by=%s, last_scan_id=%s, rank_metric=%s, rank_value=%s "
+                                "excluded_by=%s, last_scan_id=%s, rank_metric=%s, rank_value=%s, "
+                                "raw_rank=%s, handicap_factor=%s, handicap=%s::jsonb "
                                 "WHERE pool_key=%s AND ticker=%s "
                                 "AND left_at IS NULL AND entered_at IS NULL AND last_scan_id < %s",
                                 (json.dumps(item.sources), item.rank,
                                  item.excluded_by.value if item.excluded_by else None,
                                  scan_id, item.rank_metric, item.rank_value,
+                                 item.raw_rank, item.handicap_factor, _handicap_json(item),
                                  pool_key, item.ticker, scan_id),
                             )
                             if cur.rowcount:
@@ -146,8 +161,8 @@ class RadarStore:
                             "INSERT INTO radar_membership "
                             "(pool_key,ticker,trade_date,first_seen_at,entered_at,source,sources,"
                             "rank_at_entry,last_rank,below_cap_streak,excluded_by,session,opened_scan_id,last_scan_id,"
-                            "rank_metric,rank_value) "
-                            "VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                            "rank_metric,rank_value,raw_rank,handicap_factor,handicap) "
+                            "VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb) "
                             "ON CONFLICT (pool_key, opened_scan_id, ticker) DO NOTHING",
                             (
                                 pool_key, item.ticker, now.astimezone(ET).date(), now, entered,
@@ -157,6 +172,7 @@ class RadarStore:
                                 item.excluded_by.value if item.excluded_by else None,
                                 session, scan_id, scan_id,
                                 item.rank_metric, item.rank_value,
+                                item.raw_rank, item.handicap_factor, _handicap_json(item),
                             ),
                         )
             if before_commit:

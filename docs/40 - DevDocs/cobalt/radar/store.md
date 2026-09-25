@@ -51,3 +51,7 @@ Both are plain SELECTs; `radar.audit_export.export_run` pairs them with the user
 - LEAVE touches neither column: the departed episode keeps its last values.
 
 No backfill (L57): rows written before 0008 stay NULL.
+
+## 2026-09-24 — float handicap H1 (migration 0014)
+
+`apply_membership` writes the three `0014` columns wherever it writes a rank: the RETAIN update, the never-admitted EXCLUDE update and every INSERT carry `raw_rank`, `handicap_factor` and `handicap`, the last one the transition's `HandicapRecord` re-validated through the model and serialised to JSON just before the write. A HOLD's update and a LEAVE leave all three untouched, like the rank columns. When the pool block has no handicap the factor and record are NULL and `raw_rank` is still stored. `members_for_day` selects the three (the panel and the dry-run read them); `open_members` does not — the resident's own read into `OpenMember` is unchanged.

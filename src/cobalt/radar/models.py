@@ -8,7 +8,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Annotated, List, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from cobalt.archiver.models import Interval
 
@@ -96,6 +96,23 @@ class RankMetric(BaseModel):
     aftermarket: Literal["volume", "rvol"]
 
 
+class HandicapBlock(BaseModel):
+    """The float / market-cap handicap (FLOAT-HANDICAP-v3 [F-12]): his six
+    keys, every one required, none with a code default — a value he has not
+    ruled never reaches production. Units are the export's own: millions of
+    shares and $ millions (v3 F5). The thresholds are strict `<`."""
+
+    model_config = ConfigDict(extra="forbid")
+    float_below_m: Decimal = Field(gt=0)
+    market_cap_below_m: Decimal = Field(gt=0)
+    # At most four decimals: the membership row stores it as NUMERIC(6,4)
+    # (v3 §6), and a stored factor must replay the would-be rank (L57).
+    factor: Decimal = Field(gt=0, le=1, decimal_places=4)
+    missing: Literal["apply", "skip"]
+    mode: Literal["shadow", "live"]
+    combinator: Literal["any", "all"]
+
+
 class PoolBlock(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -105,6 +122,19 @@ class PoolBlock(BaseModel):
     rank_metric: RankMetric
     overrides: dict[str, PoolOverride]
     stickiness_scans: int = Field(ge=0)
+    # v3 §5: absent until he rules, and absent = OFF. The one optional part
+    # of the block; nothing inside it has a default.
+    handicap: HandicapBlock | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_handicap(self, handler):
+        """An absent handicap leaves every dump of the block byte-identical
+        to the pre-H1 one (the settings mirror, the S5 receipt's
+        `pool_unit`)."""
+        data = handler(self)
+        if self.handicap is None and isinstance(data, dict):
+            data.pop("handicap", None)
+        return data
 
     @model_validator(mode="after")
     def _priority(self) -> "PoolBlock":
@@ -207,7 +237,7 @@ class OpenMember(BaseModel):
 
 
 __all__ = [
-    "Candidate", "ExcludeBlock", "ExcludedBy", "ListBlock", "OpenMember",
+    "Candidate", "ExcludeBlock", "ExcludedBy", "HandicapBlock", "ListBlock", "OpenMember",
     "PoolBlock", "PoolOverride", "RankMetric", "RankMetricName", "ScreenBlock",
     "SourceHealth", "SourceSet",
 ]

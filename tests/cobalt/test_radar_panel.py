@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
+from radar_migrated_support import migrated_radar  # noqa: F401  (fixture: 0014 inside the test's transaction, L76)
 
 from cobalt.aset import radar_panel as panel
 from cobalt.aset import web as web_module
@@ -112,6 +113,8 @@ def _small_snapshot():
     for row in (current, departed, never_admitted):
         row.setdefault("rank_metric", None)
         row.setdefault("rank_value", None)
+        for key in ("raw_rank", "handicap_factor", "handicap"):  # H1: pre-0014 rows
+            row.setdefault(key, None)
     pool_row = copy.deepcopy(POOL_FIXTURE["pool"])
     pool_row.update(
         members=1,
@@ -579,7 +582,9 @@ def test_bars_stale_leaves_the_api_json_unchanged(monkeypatch):
     assert "bars_stale_tickers" in panel.PoolView.model_fields
     payload = panel.pool_api_payload(view.pool)
     assert "bars_stale_tickers" not in payload["pool"]
-    assert set(payload["pool"]) == set(panel.PoolView.model_fields) - {"bars_stale_tickers"}
+    # H1: the handicap header state is rendered, not serialized (the healthy API pin).
+    assert set(payload["pool"]) == set(panel.PoolView.model_fields) - {
+        "bars_stale_tickers", "handicap_state", "handicap_detail"}
     badge = f'<td class="ticker">{row_ticker}<span class="bars-stale" title="{_tip(failures[0])}">STALE</span></td>'
     assert badge in payload["html"]
     monkeypatch.setattr(
@@ -640,6 +645,8 @@ def _two_current(failures):
     second["closed_scan_id"] = None
     second.setdefault("rank_metric", None)
     second.setdefault("rank_value", None)
+    for key in ("raw_rank", "handicap_factor", "handicap"):  # H1: pre-0014 rows
+        second.setdefault(key, None)
     pool_row["members"] = 2
     return pool_row, members + [second], second["ticker"]
 
@@ -766,6 +773,9 @@ def test_bars_stale_badge_never_marks_a_departed_or_excluded_row_sharing_a_stale
     e2c = copy.deepcopy(e2)
     e2c.setdefault("rank_metric", None)
     e2c.setdefault("rank_value", None)
+    for key in ("raw_rank", "handicap_factor", "handicap"):  # H1: pre-0014 rows
+        e1c.setdefault(key, None)
+        e2c.setdefault(key, None)
     t_failure = _failure(ticker_t, "stale", "2026-01-05 15:19:00+00:00")
     pool_row_ii, members_ii = _bars_poll_failed_pool(failures=[t_failure])
     if ticker_t == ticker_c:
@@ -1210,8 +1220,8 @@ requires_db = pytest.mark.skipif(
 
 
 @pytest.mark.integration
-@pytest.mark.usefixtures("dev_db_tx")
 @requires_db
+@pytest.mark.usefixtures("migrated_radar")
 def test_members_for_day_db_returns_both_open_and_left_and_scopes_pool_and_day():
     store = RadarStore("cobalt_dev")
     target_day = date(2040, 1, 3)
