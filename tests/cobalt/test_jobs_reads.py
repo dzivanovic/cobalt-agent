@@ -79,7 +79,7 @@ class TestTheDerivedRows:
         text = (REPO_ROOT / "configs" / "cobalt" / "jobs.yaml").read_text()
         for label in (
             "com.cobalt.mainframe", "com.cobalt.obsidian",
-            "com.cobalt.agent", "com.cobalt.herdr",
+            "com.cobalt.herdr",
         ):
             spec = load_job_registry().spec(label)
             assert spec.reads == []
@@ -87,6 +87,19 @@ class TestTheDerivedRows:
         # a registry-level table, not a job's key.
         keys = [line for line in text.splitlines() if line.strip().startswith("reads:")]
         assert len(keys) == 6, "one per resident, none on a one-shot"
+
+    def test_every_resident_that_starts_through_uv_run_re_reads_the_uv_files(self):
+        """`uv run` syncs the environment from pyproject.toml / uv.lock when
+        the process starts, so a change to either reaches a resident only by
+        restart. Three residents start that way: the sheet
+        (ops/start_aset.sh:73), the radar (ops/com.cobalt.radar.plist) and
+        the old-tree agent (cobalt.sh:59, via ops/com.cobalt.agent.plist:25).
+        Stack seam check 2026-09-25, claim 1 — the agent was missing."""
+        agent = load_job_registry().spec("com.cobalt.agent")
+        assert agent.reads == ["pyproject.toml", "uv.lock"]
+        for path in ("pyproject.toml", "uv.lock"):
+            readers = load_job_registry().readers_of(path)
+            assert [r.label for r in readers] == [SHEET, "com.cobalt.agent", "com.cobalt.radar"]
 
 
 class TestTheModelRefusesNonsense:

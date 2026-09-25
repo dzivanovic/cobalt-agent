@@ -131,14 +131,16 @@ jobs:
     # It gets a row because F18 must be able to say it is down; it gets
     # no wrapper because the strangler rule (CLAUDE.md) says the old tree
     # stays untouched and no new-core code is added to it.
-    # EMPTY, and it needs the caveat. The old tree loads `configs/*.yaml`
+    # NOT EMPTY since the stack seam fix r1 (2026-09-25): the two uv files below. The caveat stands: the old tree loads `configs/*.yaml`
     # ONCE into a singleton at first construction
     # (cobalt_agent/config.py:410) and `Config.load()` returns the cached
     # object thereafter — so it does not RE-READ anything, which is what
     # this field records. It still has to be restarted when one of those
     # files changes, because it is running the old values. That is the
     # read-once class; it wants its own field (09-09 ESCALATE).
-    reads: []
+    reads:
+      - "pyproject.toml"                           # cobalt.sh:59 (nohup uv run src/cobalt_agent/main.py), started by ops/com.cobalt.agent.plist:25 (cobalt.sh start): uv syncs the environment from it when the process starts
+      - "uv.lock"                                  # cobalt.sh:59 (nohup uv run src/cobalt_agent/main.py), started by ops/com.cobalt.agent.plist:25 (cobalt.sh start): uv syncs the environment from it when the process starts
     imports: [cobalt_agent.main]
     what: "the OLD-TREE agent (cobalt.sh start -> cobalt_agent/main.py), detached; liveness from its PID file"
 
