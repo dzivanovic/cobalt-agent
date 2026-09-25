@@ -29,6 +29,7 @@ from cobalt.cards import TERMINAL, CardState, CardStore
 from cobalt.cards.models import KEY_EDITABLE
 from cobalt.cards.radar import FIELD_OWNERS, LadderEntry, ladder_order
 from cobalt.cards.scoring import Dot, colour_thresholds, dot_colour
+from cobalt.radar.handicap import INOPERATIVE, HandicapRecord
 from cobalt.radar.models import PoolBlock, RankMetricName
 from cobalt.radar.store import RadarStore
 from cobalt.session.clock import now_utc, session_clock
@@ -123,6 +124,11 @@ class MembershipRecord(_ViewModel):
     # MISSING the keys is a store that did not select them, and fails.
     rank_metric: RankMetricName | None
     rank_value: Decimal | None
+    # H1 (v3 §4, §6) — required, nullable, the same rule: NULL is a
+    # pre-0014 episode or a fail-soft scan; a missing key fails.
+    raw_rank: int | None
+    handicap_factor: Decimal | None
+    handicap: HandicapRecord | None
 
     @field_validator("first_seen_at", "entered_at", "left_at")
     @classmethod
@@ -162,6 +168,10 @@ class PoolRow(_ViewModel):
     category: Literal["current", "departed", "excluded"]
     entered_since: bool = False
     left_since: bool = False
+    # H1 — rendered, not serialized (the API's `html` carries them).
+    raw_rank: int | None = Field(default=None, exclude=True)
+    handicap_factor: Decimal | None = Field(default=None, exclude=True)
+    handicap: HandicapRecord | None = Field(default=None, exclude=True)
 
 
 class ChurnDelta(_ViewModel):
@@ -192,6 +202,10 @@ class PoolView(_ViewModel):
     banners: list[BannerView]
     bars_stale_tickers: dict[str, str] = Field(default_factory=dict, exclude=True)
     churn: ChurnDelta | None
+    #: H1 header state (v3 §4): never "live" — H1 cannot rank by the handicap.
+    #: Rendered, not serialized: the API's `html` carries it (healthy pins).
+    handicap_state: Literal["not configured", "shadow", "degraded", "degraded — inoperative"] = Field(exclude=True)
+    handicap_detail: str | None = Field(default=None, exclude=True)
 
 
 # ---------------------------------------------------------------------
@@ -405,6 +419,31 @@ def _source_name(value: SourceDegradation | str) -> str:
     return value.source if isinstance(value, SourceDegradation) else value
 
 
+def _banner_name(value: SourceDegradation | str) -> str:
+    """A degraded source's banner name; the handicap entry carries its
+    reason, since it alone is not a feed (v3 §4)."""
+    if isinstance(value, SourceDegradation) and value.source == "handicap":
+        return f"handicap ({value.reason})"
+    return _source_name(value)
+
+
+def _handicap_state(block: PoolBlock, pool: PoolRecord) -> tuple[str, str | None]:
+    """The header's handicap state (v3 §4): the stored degradation first,
+    then the block. `mode: live` is degraded under H1 — never shown live."""
+    if block.handicap is None:
+        return "not configured", None
+    for value in pool.degraded_sources:
+        if _source_name(value) != "handicap":
+            continue
+        reason = value.reason if isinstance(value, SourceDegradation) else None
+        if reason is not None and reason.startswith(INOPERATIVE):
+            return "degraded — inoperative", reason.removeprefix(INOPERATIVE)
+        return "degraded", reason
+    if block.handicap.mode == "live":
+        return "degraded", None
+    return "shadow", None
+
+
 def _row(
     record: MembershipRecord,
     category: Literal["current", "departed", "excluded"],
@@ -429,6 +468,9 @@ def _row(
         left_since=bool(
             admitted and since is not None and record.left_at is not None and record.left_at > since
         ),
+        raw_rank=record.raw_rank,
+        handicap_factor=record.handicap_factor,
+        handicap=record.handicap,
     )
 
 
@@ -583,9 +625,13 @@ def build_pool_view(
     retained = scan_day != clock.to_et(instant).date()
     stale = instant - pool.last_scan_at > timedelta(seconds=2 * interval)
     banners: list[BannerView] = []
-    if pool.degraded:
+    handicap_state, handicap_detail = _handicap_state(block, pool)
+    # A handicap-only degradation leaves `pool.degraded` False (the raw
+    # ranks are valid) and is still bannered.
+    handicap_entry = any(_source_name(value) == "handicap" for value in pool.degraded_sources)
+    if pool.degraded or handicap_entry:
         names = (
-            ", ".join(_source_name(value) for value in pool.degraded_sources) or "unknown source"
+            ", ".join(_banner_name(value) for value in pool.degraded_sources) or "unknown source"
         )
         banners.append(BannerView(level="degraded", title="DEGRADED", detail=f"Sources: {names}"))
     if poll_only:
@@ -646,6 +692,8 @@ def build_pool_view(
         banners=banners,
         bars_stale_tickers=bars_stale,
         churn=churn,
+        handicap_state=handicap_state,
+        handicap_detail=handicap_detail,
     )
 
 
@@ -826,6 +874,27 @@ def _rank_value_cell(row: PoolRow) -> str:
     return f"{row.rank_metric} {format(row.rank_value.normalize(), 'f')}"
 
 
+def _handicap_cell(row: PoolRow) -> str:
+    """The pool row's H1 shadow marks (v3 §4; X6): a COBALT-owned
+    `HANDICAP (shadow)` badge and its line when the factor applied (< 1);
+    the line alone, `unknown → not applied`, for an unknown name the block
+    skipped; nothing at factor 1 or NULL. The row never moves (it orders
+    by `last_rank`)."""
+    record = row.handicap
+    if record is None or row.handicap_factor is None:
+        return ""
+    shown = lambda value: "—" if value is None else str(value)
+    head = f"float {shown(record.float_m)}M / cap ${shown(record.market_cap_m)}M"
+    if row.handicap_factor < 1:
+        badge = '<span class="badge badge-cobalt" title="owner COBALT">HANDICAP (shadow)</span>'
+        line = f"{head} → group ({record.reason}) · pos {record.position} → {record.effective_position}"
+        return f'{badge}<div class="handicap-line">{html.escape(line)}</div>'
+    if record.verdict == "unknown":
+        line = f"{head} → group (unknown) · unknown → not applied"
+        return f'<div class="handicap-line">{html.escape(line)}</div>'
+    return ""
+
+
 def _pool_table(rows: list[PoolRow], title: str, *, bars_stale: dict[str, str] | None = None) -> str:
     e = html.escape
     bars_stale = bars_stale or {}
@@ -836,7 +905,7 @@ def _pool_table(rows: list[PoolRow], title: str, *, bars_stale: dict[str, str] |
         stale_badge = _bars_stale_badge(bars_stale.get(row.ticker))
         return (
             f'<tr data-episode-id="{row.episode_id}" data-category="{row.category}">'
-            f'<td class="mono">{e(str(row.position or "—"))}</td><td class="ticker">{e(row.ticker)}{stale_badge}</td>'
+            f'<td class="mono">{e(str(row.position or "—"))}</td><td class="ticker">{e(row.ticker)}{stale_badge}{_handicap_cell(row)}</td>'
             f'<td class="mono rank-value">{e(_rank_value_cell(row))}</td>'
             f"<td>{e(row.session.value)}</td><td>{e(row.source)}</td>"
             f"<td>{e(_fmt_dt(row.entered_at))} {entered_badge}</td>"
@@ -854,6 +923,12 @@ def _pool_table(rows: list[PoolRow], title: str, *, bars_stale: dict[str, str] |
     )
 
 
+def _handicap_header(view: PoolView) -> str:
+    """`handicap: <state>`, with its reason when it has one (v3 §4)."""
+    detail = f" ({view.handicap_detail})" if view.handicap_detail else ""
+    return f"handicap: {view.handicap_state}{detail}"
+
+
 def render_pool(view: PoolView) -> str:
     """Pure HTML renderer for the complete refreshable pool layer."""
     e = html.escape
@@ -869,6 +944,11 @@ def render_pool(view: PoolView) -> str:
             f'<b class="churn-out">−{view.churn.left}</b> left</span>'
         )
     overrides = " · ".join(e(value) for value in view.override_labels)
+    # Block absent: the pool layer is main's, byte for byte (the healthy
+    # pins); `render_radar_page` shows `handicap: not configured` above it.
+    handicap = ""
+    if view.handicap_state != "not configured":
+        handicap = f' · <span class="handicap-state">{e(_handicap_header(view))}</span>'
     classes = "pool-layer stale-data" if view.stale else "pool-layer"
     stale_attr = (
         f' data-bars-stale="{e(json.dumps(view.bars_stale_tickers, sort_keys=True))}"'
@@ -878,7 +958,7 @@ def render_pool(view: PoolView) -> str:
     return f'''<section id="pool-layer" class="{classes}" data-watermark="{e(view.observed_watermark.isoformat())}"{stale_attr}>
 <div id="refresh-status"></div>{banners}
 <header class="layer-head"><div><span class="eyebrow">POOL VIEW · LIVE</span><h2>{e(view.pool_key.upper())}</h2></div>
-<div class="pool-stats"><b>{view.members}</b> / {view.cap} admitted · clock {e(view.clock_session.value)} · scan {e(view.scan_session.value)} · rank by {e(view.rank_metric)}</div></header>
+<div class="pool-stats"><b>{view.members}</b> / {view.cap} admitted · clock {e(view.clock_session.value)} · scan {e(view.scan_session.value)} · rank by {e(view.rank_metric)}{handicap}</div></header>
 <div class="pool-meta">Trading day {view.data_date.isoformat()} · last scan {e(_fmt_dt(view.last_scan_at))} · refresh {view.scan_interval}s {churn}</div>
 <div class="override-line">{overrides}</div>
 {_pool_table(view.current, "Current admitted", bars_stale=view.bars_stale_tickers)}
@@ -1181,8 +1261,13 @@ PANEL_JS = r"""
 
 def render_radar_page(view: RadarPanelView, *, phone_frame: bool = False) -> str:
     frame_class = "phone-frame" if phone_frame else ""
+    unconfigured = ""
+    if view.pool.handicap_state == "not configured":
+        # Shown, never implied (v3 §4) — outside the pool layer, whose
+        # healthy output is pinned; a page load re-reads it.
+        unconfigured = f'<div class="pool-meta" id="handicap-unconfigured">{html.escape(_handicap_header(view.pool))}</div>'
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Cobalt · Trade Radar</title><style>{PANEL_CSS}</style></head>
-<body class="{frame_class}" data-refresh-seconds="{view.pool.scan_interval}"><main class="radar-wrap"><nav><a href="/">ASET sheet</a></nav>{render_degraded_line(view.pool)}{render_ladder(view.ladder, bars_stale=view.pool.bars_stale_tickers)}{render_pool(view.pool)}</main><script>{PANEL_JS}</script></body></html>'''
+<body class="{frame_class}" data-refresh-seconds="{view.pool.scan_interval}"><main class="radar-wrap"><nav><a href="/">ASET sheet</a></nav>{render_degraded_line(view.pool)}{render_ladder(view.ladder, bars_stale=view.pool.bars_stale_tickers)}{unconfigured}{render_pool(view.pool)}</main><script>{PANEL_JS}</script></body></html>'''
 
 
 def render_failed_page(message: str, *, phone_frame: bool = False) -> str:
