@@ -263,3 +263,23 @@ def test_live_drc_shape_accepts_the_unit_placement():
     rules = find_section(lines, ANCHOR_SECTION)
     assert rules is not None, "the live DRC has no drc-rules section"
     assert span == (rules.close_line + 1, rules.close_line + 1)
+
+
+def test_a_cut_formations_segment_says_partial():
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 2):
+    a formations step cut at the deadline still writes its line, and the
+    formations segment SAYS it is partial (L1) — scan time in ET, scans
+    done of planned. No cut: byte-identical to today's line."""
+    from cobalt.replay.models import FormationCut
+
+    rows = [{"cf_r": Decimal("-1.0000")}, {"cf_r": Decimal("0.5000")}]
+    kw = dict(card_rows=CARDS, mover_rows=MOVERS, settings=SETTINGS, formation_replay="s2p2.2", input_stale=0,
+              formation_rows=rows, formation_suppressed=1)
+    today = render_line(DAY, **kw)
+    cut = FormationCut(scans_done=140, scans_planned=235,
+                       cut_before=datetime(2026, 9, 3, 19, 31, 40, tzinfo=timezone.utc))
+    partial = render_line(DAY, **kw, formation_cut=cut)
+    clause = " · PARTIAL: cut before the 15:31 ET scan (140 of 235 scans) — later formations not evaluated"
+    assert partial == today + clause
+    assert "formations: 2 not taken (no_card) · cf-R Σ −0.5R, n=2 · suppressed 1" + clause in partial
+    assert render_line(DAY, **kw, formation_cut=None) == today

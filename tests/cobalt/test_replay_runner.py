@@ -192,10 +192,10 @@ def test_r1_16_a_synchronous_step_is_not_cut_mid_flight_the_documented_limitatio
 
     The deadline bounds only (a) work handed to `run_async` (under
     `asyncio.wait_for`) and (b) the `check_deadline` points between steps
-    and immediately before the vault write. `formation_source(...)` and
-    `missed.reconcile(...)` are synchronous and run to completion even when
-    the clock passes the deadline WHILE they run; the run then stops at the
-    NEXT check. `runner.py:26-31` documents exactly this design and spec
+    and immediately before the vault write. The formations step is cut
+    between scans (R95 fix); `missed.reconcile(...)` stays synchronous and
+    uncut: it runs to completion even when the clock passes the deadline
+    WHILE it runs; the run then stops at the NEXT check. `runner.py:26-31` documents exactly this design and spec
     R1-16's stated bar (no late vault write, a measured margin) is met by
     the test above.
 
@@ -720,7 +720,7 @@ class FakeCollector:
         return ({t: [] for t in tickers if t not in self.fail}, {t: "CollectorError: 429" for t in tickers if t in self.fail})
 
 
-def unavailable_formations(trade_date, *, out, sources=None, context=None):
+def unavailable_formations(trade_date, *, out, sources=None, context=None, cut_at=None):
     """The formation step with S2-P2 NOT deployed, injected the way every
     other store is injected here. The tests below are about the run's
     order, its commits and its failures — not about the P2 binding, which
@@ -731,7 +731,7 @@ def unavailable_formations(trade_date, *, out, sources=None, context=None):
     return FormationOutcome(status=FORMATION_UNAVAILABLE)
 
 
-def available_but_empty_formations(trade_date, *, out, sources=None, context=None):
+def available_but_empty_formations(trade_date, *, out, sources=None, context=None, cut_at=None):
     """S2-P2 DEPLOYED and compatible, with an EMPTY formation list for the
     day — the rerun plan STEP-1 R2-1 names, where a bar correction removed
     yesterday's trigger. Injected exactly like `unavailable_formations`
@@ -1001,3 +1001,89 @@ def test_a_clean_run_reports_zero_partial_on_both_sides():
     assert result.archive_partial_by_side == {"gainers": 0, "losers": 0}
     assert result.archive_partial == []
     assert result.archive_incomplete == 0
+
+
+# =====================================================================
+# The formations step is cut before the deadline (`cto-2026-09-24.md`
+# R95; `reports/replay-deadline-fix-draft-2026-09-24.md` FIX 2)
+# =====================================================================
+
+RESERVE_KEY = "replay.formations_reserve_s"
+NOT_PASSED = "cut_at was not passed"
+
+
+def _reserve(deps, seconds=120):
+    """A CONSTRUCTED reserve row (never the committed value's assertion)."""
+    from cobalt.taxonomy.tunables import TunableRow
+
+    deps.tunables = {**deps.tunables, RESERVE_KEY: TunableRow(
+        key=RESERVE_KEY, value=seconds, unit="duration", scope="global", dynamic=False, status="proposed",
+        source="dwv", consumers=["test"])}
+
+
+def test_the_formations_step_is_cut_before_the_deadline_and_the_line_still_lands():
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 2):
+    the formations step's `cut_at` answers True once the clock reaches the
+    deadline less `replay.formations_reserve_s`; the cut run's rows are
+    reconciled, the line IS written and says PARTIAL, and the job then
+    FAILS AT THE END (L1) — not as a failed step."""
+    from cobalt.replay.formations import SUPPORTED_EVALUATORS
+    from cobalt.replay.models import FormationCounts, FormationCut, FormationOutcome
+
+    clock = Clock(NOW)
+    deps, calls = fake_deps(now=clock)
+    _reserve(deps)
+    seen = {}
+    cut = FormationCut(scans_done=140, scans_planned=235, cut_before=datetime(2026, 2, 10, 19, 0, tzinfo=timezone.utc))
+
+    def cutting(trade_date, *, out, sources=None, context=None, cut_at=NOT_PASSED):
+        seen["cut_at"] = cut_at
+        seen["before"] = cut_at(RTH_OPEN)
+        clock.at = datetime(2026, 2, 10, 21, 33, 30, tzinfo=ET)   # past 21:35 − 120 s, before 21:35
+        seen["after"] = cut_at(RTH_OPEN)
+        return FormationOutcome(status=sorted(SUPPORTED_EVALUATORS)[0], counts=FormationCounts(), cut=cut)
+
+    deps.formation_source = cutting
+    with pytest.raises(ReplayError) as raised:
+        run_nightly(DAY, dry_run=False, deps=deps)
+    assert (seen["before"], seen["after"]) == (False, True)
+    assert not isinstance(raised.value, StepFailed)
+    assert str(raised.value).startswith("formations cut at the deadline — 140 of 235 scans")
+    result = raised.value.result
+    assert result.formation_cut == cut
+    assert result.failed_step is None
+    assert "line" in result.steps_done
+    assert "missed.reconcile:formation" in calls
+    assert calls.count("writer.upsert_unit") == 1
+    assert "PARTIAL: cut before the 14:00 ET scan (140 of 235 scans)" in deps.written[-1]
+    assert result.job_result()["formation_cut"]["scans_done"] == 140
+
+
+def test_no_deadline_means_no_cut():
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 2):
+    a dry run, and a run started after the backup, have no deadline — the
+    formation source is handed `cut_at=None`, so nothing is cut."""
+    for dry_run, now in ((True, NOW), (False, datetime(2026, 2, 10, 22, 30, tzinfo=ET))):
+        deps, _ = fake_deps(now=Clock(now))
+        seen = {}
+
+        def recording(trade_date, *, out, sources=None, context=None, cut_at=NOT_PASSED):
+            seen["cut_at"] = cut_at
+            return unavailable_formations(trade_date, out=out)
+
+        deps.formation_source = recording
+        result = run_nightly(DAY, dry_run=dry_run, deps=deps)
+        assert seen["cut_at"] is None, (dry_run, now)
+        assert result.formation_cut is None
+
+
+def test_the_formations_reserve_is_required():
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 2),
+    L1: tunables without `replay.formations_reserve_s` refuse the run
+    before any step, naming the key — never a default."""
+    deps, calls = fake_deps()
+    deps.tunables = {k: v for k, v in deps.tunables.items() if k != RESERVE_KEY}
+    with pytest.raises(ReplayError, match=RESERVE_KEY.replace(".", r"\.")) as raised:
+        run_nightly(DAY, dry_run=False, deps=deps)
+    assert calls == ["job_store.get"]
+    assert raised.value.result.steps_done == []

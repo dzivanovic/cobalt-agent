@@ -180,3 +180,104 @@ def test_candidate_harness_persists_with_frozen_settings_and_simulated_taps(tmp_
 
 async def _async(value):
     return value
+
+
+# ---------------------------------------------------------------------
+# The nightly replay's formations step (`cto-2026-09-24.md` R95;
+# `reports/replay-deadline-fix-draft-2026-09-24.md` FIX 1 + FIX 2)
+# ---------------------------------------------------------------------
+
+
+def _replay(**kw):
+    radar = ReadOnlyRadar(sup.members("FTFT", "BGFI"), {t: sup.fixture_bars(t) for t in ("FTFT", "BGFI")})
+    lines: list[str] = []
+    report = replay_formations(
+        sup.TRADE_DATE, pool_key="pool", slug_filter=None, radar_store=radar,
+        defs_source=lambda: ([sup.loaded()], {}), daily_source=_daily, tunables=sup.engine_tunables(),
+        defaults=sup.defaults(), clock=session_clock(), out=lines.append, **kw,
+    )
+    return report, lines
+
+
+def test_replay_formations_is_unchanged_by_the_shared_prep():
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 1):
+    the replay with one member prep per scan equals the OLD loop re-stated
+    here — `evaluate_member` per def with no prep — in its formations,
+    counts, path-B lines and printed lines; an uncut replay plans and
+    evaluates the same scans and names no cut."""
+    from cobalt.radar.evaluate import MemberInput, evaluate_member
+    from cobalt.radar.evaluate_cli import ReplayFormation, admitted_at, scan_instants
+
+    report, lines = _replay()
+
+    clock, rows, ld = session_clock(), sup.engine_tunables(), sup.loaded()
+    members = [dict(m, trade_date=sup.TRADE_DATE) for m in sup.members("FTFT", "BGFI")]
+    bars = {t: sup.fixture_bars(t) for t in ("FTFT", "BGFI")}
+    first = min(m["entered_at"] for m in members)
+    formations, counts, path_b, ref_lines = [], {}, [], []
+    seen, b_seen = set(), set()
+    instants = scan_instants(sup.TRADE_DATE, clock, int(rows["radar.scan_interval"].value), first)
+    for instant in instants:
+        for m in admitted_at(members, instant):
+            inp = MemberInput(membership_id=m["id"], ticker=m["ticker"], trade_date=sup.TRADE_DATE, as_of=instant,
+                              bars=tuple(b for b in bars[m["ticker"]] if b.ts < instant),
+                              daily=_daily(m["ticker"], sup.TRADE_DATE), daily_status="cache-hit", rvol=None,
+                              pool_position=m.get("last_rank"))
+            ev = evaluate_member(ld, inp, tunables=rows, defaults=sup.defaults(),
+                                 scan_interval=int(rows["radar.scan_interval"].value), clock=clock)
+            counts[ev.evaluation] = counts.get(ev.evaluation, 0) + 1
+            if ev.evaluation == "formed" and ev.formation is not None:
+                key = (m["ticker"], ld.slug, ev.formation.formed_bar_ts.isoformat())
+                if key not in seen:
+                    seen.add(key)
+                    f = ev.formation
+                    formations.append(ReplayFormation(
+                        seen_at=instant, ticker=m["ticker"], slug=ld.slug, direction=f.trade_direction,
+                        trigger=str(f.trigger.price), stop=str(f.stop.price), formed_bar_ts=f.formed_bar_ts,
+                        membership_id=ev.membership_id, trade_def_md5=ev.md5, score_inputs_sha256=ev.inputs_sha256))
+                    ref_lines.append(
+                        f"{clock.to_et(instant):%H:%M:%S} ET {m['ticker']} {ld.slug} FORMED {f.trade_direction} "
+                        f"trigger {f.trigger.price} stop {f.stop.price} "
+                        f"(formation bar {clock.to_et(f.formed_bar_ts):%H:%M} ET)")
+            elif ev.evaluation == "not_evaluable" and ev.detail.extension_path == "B_only":
+                if (m["ticker"], ld.slug) not in b_seen:
+                    b_seen.add((m["ticker"], ld.slug))
+                    line = (f"{clock.to_et(instant):%H:%M:%S} ET {m['ticker']} {ld.slug} path B only "
+                            "— not evaluable in S2 (catalyst unknown, R4)")
+                    path_b.append(line)
+                    ref_lines.append(line)
+    ref_lines.append(
+        f"replay {sup.TRADE_DATE}: scans={len(instants)} formations={len(formations)} "
+        f"path_b_only={len(path_b)} counts={dict(sorted(counts.items()))} writes: none")
+
+    assert report.formations == formations
+    assert report.counts == counts
+    assert report.path_b_only == path_b
+    assert lines == ref_lines
+    assert report.scans_planned == report.scans == len(instants)
+    assert report.cut_before is None
+
+
+def test_replay_formations_stops_before_the_scan_the_cut_names_and_says_so():
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 2):
+    `cut_at` is asked before each scan instant; from the k-th it answers
+    True, so scans 1..k-1 are evaluated, the k-th is `cut_before`, nothing
+    at or after it is a formation, and the cut is printed — never silent (L1)."""
+    k = 60
+    asked: list = []
+
+    def cut_at(instant):
+        asked.append(instant)
+        return len(asked) >= k
+
+    report, lines = _replay(cut_at=cut_at)
+    full, _ = _replay()
+    assert report.scans == k - 1
+    assert report.scans_planned == full.scans_planned == full.scans
+    assert report.cut_before == asked[k - 1]
+    assert all(f.seen_at < report.cut_before for f in report.formations)
+    at = session_clock().to_et(report.cut_before)
+    text = "\n".join(lines)
+    assert "CUT — the deadline stopped the formations replay before the" in text
+    assert f"before the {at:%H:%M:%S} ET scan ({k - 1} of {full.scans} scans evaluated)" in text
+    assert lines[-1].endswith(f"· CUT before {at:%H:%M:%S} ET")

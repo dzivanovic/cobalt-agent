@@ -385,5 +385,54 @@ def test_replay_formation_refuses_a_formation_stamped_for_another_day():
 def test_formation_sources_name_every_argument_p2s_entrypoint_takes():
     import inspect
 
-    taken = set(inspect.signature(replay_formations).parameters) - {"day", "out", "slug_filter"}
+    # `cut_at` (R95 fix) is per-run, handed by the runner like `out`, never a source.
+    taken = set(inspect.signature(replay_formations).parameters) - {"day", "out", "slug_filter", "cut_at"}
     assert taken <= set(FormationSources.__dataclass_fields__)
+
+
+# =====================================================================
+# The deadline fix (`cto-2026-09-24.md` R95;
+# `reports/replay-deadline-fix-draft-2026-09-24.md` FIX 2 + FIX 3)
+# =====================================================================
+
+
+def test_formation_misses_reads_each_tickers_bars_once():
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 3):
+    one bar-window read per TICKER, never one per formation — and the rows
+    are exactly those of the per-candidate read (re-stated here)."""
+    report = p2_report("triggered")
+    (real,) = report.formations
+    report.formations.append(real.model_copy(update={"slug": "example-anatomy-reversal-b",
+                                                     "trade_def_md5": "fedcba9876543210fedcba9876543210"}))
+    report.formations.append(real.model_copy(update={"ticker": "BGFI", "membership_id": 101}))
+    series = sup.fixture_bars("FTFT") + sup.fixture_bars("BGFI")
+    read: list[str] = []
+
+    def bars_for(ticker):
+        read.append(ticker)
+        return [b for b in series if b.ticker == ticker]
+
+    ctx = FormationContext(trade_date=DAY, session_close=CLOSE, bars_for=bars_for, radar_cards=lambda: [])
+    outcome = formation_misses(report, context=ctx, evaluator_version=EVALUATOR_VERSION)
+    assert sorted(read) == ["BGFI", "FTFT"]
+
+    reference = []
+    for candidate in formation_candidates(report, evaluator_version=EVALUATOR_VERSION):
+        replayed = replay_formation(candidate, [b for b in series if b.ticker == candidate.ticker], trade_date=DAY,
+                                    window=resolve_window(None, DAY), session_close=CLOSE, radar_cards=[])
+        if replayed.status == "miss":
+            reference.append(replayed.miss)
+    assert list(outcome.rows) == reference
+    assert outcome.counts.candidates == 3
+
+
+def test_a_cut_report_carries_its_cut_into_the_outcome():
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 2):
+    a formations replay cut at the deadline hands its cut to the outcome,
+    so the job row and the line can say PARTIAL (L1); an uncut one names none."""
+    from cobalt.replay.models import FormationCut
+
+    at = datetime(2026, 1, 6, 17, 0, tzinfo=UTC)
+    cut = p2_report("triggered").model_copy(update={"scans": 3, "scans_planned": 10, "cut_before": at})
+    assert misses(cut).cut == FormationCut(scans_done=3, scans_planned=10, cut_before=at)
+    assert misses(p2_report("triggered")).cut is None
