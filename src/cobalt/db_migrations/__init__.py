@@ -43,10 +43,21 @@
 `0014_radar_handicap.sql` — membership raw_rank / handicap_factor / handicap
                          (the float handicap's shadow record, H1). Additive.
 `0014_radar_handicap.rollback.sql` — drops exactly those three columns.
+`0015_shadow_agreement_stale.sql` — `"user".shadow_agreement_v` drops the
+                         `htf_level_proximity` taps graded on a stale price
+                         by a pre-fix evaluator (the stale-score build, R40
+                         by X30 (A)). Additive: the view only.
+`0015_shadow_agreement_stale.rollback.sql` — the view exactly as 0007
+                         defines it.
 
-0012 IS NOT A GAP BY ACCIDENT: it belongs to the unmerged
-`bars/chunk-2-0920` (`0012_bars_partitioned_parent`). Whichever lands
-second keeps both, in numeric order.
+0012 AND 0016 ARE NOT GAPS BY ACCIDENT: 0012 belongs to the unmerged
+`bars/chunk-2-0920` (`0012_bars_partitioned_parent`) and 0016 to DRC D1
+(`0016_drc`); 0018 is DRC K1's (`0018_drc_stated_books`), 0019 the DRC
+D2 fix round's (`0019_drc_events`) and 0020 DRC D3's
+(`0020_drc_build_kinds`) — the settled seam
+(`reports/devdb-builds-reissue-2026-09-23.md` `## MIGRATION SEAM`;
+`reports/cto-2026-09-25.md` R64 (5)). Whichever lands later keeps every
+number, in numeric order.
 
 0006/0007 are S2-P2's, 0008/0009 are S2-P4's. Both tuples stay ordered by
 version; every file is idempotent and neither 0008 nor 0009 names a P2
@@ -90,10 +101,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0011_archive_incidents.sql",
     MIGRATIONS_DIR / "0013_tunables_slug_nullable.sql",
     MIGRATIONS_DIR / "0014_radar_handicap.sql",
+    MIGRATIONS_DIR / "0015_shadow_agreement_stale.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0015_shadow_agreement_stale.rollback.sql",
     MIGRATIONS_DIR / "0014_radar_handicap.rollback.sql",
     MIGRATIONS_DIR / "0013_tunables_slug_nullable.rollback.sql",
     MIGRATIONS_DIR / "0011_archive_incidents.rollback.sql",

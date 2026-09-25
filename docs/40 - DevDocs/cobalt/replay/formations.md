@@ -151,3 +151,8 @@ once per formation. The rows are unchanged. When P2's report carries a
 `cut_before`, the outcome's `cut` is
 `FormationCut(scans_done=report.scans, scans_planned=report.scans_planned, cut_before=report.cut_before)`,
 otherwise None.
+**2026-09-24 — stale score S1.** `SUPPORTED_EVALUATORS` is now
+`{"s2p2.3"}`. It moves with the evaluator's own bump (`[F-08]`: one new
+string, and the previous one is not kept in the set). The nightly binding
+passes the LIVE module constant (X20), so no stored binding is refused. No
+`ReplayFormation` field this binding consumes changed.

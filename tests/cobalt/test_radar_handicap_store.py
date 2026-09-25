@@ -80,7 +80,9 @@ def test_rollback_drops_exactly_the_three_and_nothing_else():
 
 
 def test_down_to_0013_selects_only_this_rollback():
-    assert [p.name for p in _rollback_paths("0013")] == ["0014_radar_handicap.rollback.sql"]
+    # every rollback newer than 0013, newest first — 0014 is the oldest (the stack seam)
+    assert [p.name for p in _rollback_paths("0013")] == [
+        "0015_shadow_agreement_stale.rollback.sql", "0014_radar_handicap.rollback.sql"]
 
 
 def test_no_new_table_and_membership_stays_system_side():

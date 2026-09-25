@@ -98,6 +98,8 @@ from cobalt.cards.scoring import (
     compute_dots,
     refresh_dots,
     score_card,
+    score_last,
+    stale_reason,
 )
 from cobalt.settings.card import CardSettings
 from cobalt.taxonomy.defaults import TaxonomyDefaults
@@ -158,8 +160,8 @@ from .seam import AtomOutcome, DeskShadow, DeskShadowEntry, RadarScoreDetail, Se
 ET = ZoneInfo("America/New_York")
 #: Bumped ONCE for the whole setups one build (R44: nothing deploys between
 #: its steps). A receipt of another version is refused by replay (§9 gate 5).
-EVALUATOR_VERSION = "s2p2.2"
-DESK_FORMULA_VERSION = "s2p2.1"
+EVALUATOR_VERSION = "s2p2.3"
+DESK_FORMULA_VERSION = "s2p2.3"
 #: FINAL [F-07]: the card's setup token — NOT a `SetupRef` member, so no
 #: definition can list it in `valid_setups`. No setup is detected.
 UNCLASSIFIED_SETUP = "unclassified"
@@ -606,6 +608,11 @@ class MemberEvaluation(BaseModel):
     md5: str
     departed: bool
     evaluation: Evaluation
+    #: [F-10]: no closed i1 bar today, or the last one closed more than
+    #: 2 × `radar.scan_interval` ago. Required, on every return path; the
+    #: score guards read THIS, never `evaluation` (W3: `input_stale` also
+    #: means "daily bars missing").
+    intraday_stale: bool
     direction: Literal["long", "short"] | None
     detail: RadarScoreDetail
     #: Every missing item by name, including trigger/stop types (user side).
@@ -734,7 +741,7 @@ def _factor_observations(
         try:
             prox = htf_level_proximity(member.daily, member.trade_date, last_price)
             out["htf_level_proximity"] = FactorObservation(
-                value=prox.value,
+                value=prox.value, stale=intraday_stale,  # a function of `last` (W4, X6)
                 inputs={"reference": prox.reference, "level": str(prox.level), "last_price": str(last_price),
                         "daily_atr": str(prox.atr.value), "prior_session": prox.prior.session_date.isoformat()},
                 formula="min(|last - prior high|, |last - prior low|) / daily ATR(14)",
@@ -981,10 +988,16 @@ def evaluate_member(
     consumed = prep.consumed
     last_bar = prep.last_bar
     last_price = prep.last_price
+    if last_bar is None:
+        intraday_stale = True
+    else:
+        intraday_stale = intraday_staleness(
+            observed_at=last_bar.ts + timedelta(minutes=1), as_of=member.as_of, scan_interval=scan_interval
+        ).stale
     base = dict(
         membership_id=member.membership_id, ticker=member.ticker, slug=ld.slug, md5=ld.md5,
         departed=member.departed, consumed_bars=consumed, last_price=last_price,
-        last_bar_ts=last_bar.ts if last_bar else None,
+        last_bar_ts=last_bar.ts if last_bar else None, intraday_stale=intraday_stale,
     )
     inputs_sha = canonical_sha256({
         "def_md5": ld.md5, "bars": consumed, "as_of": member.as_of.isoformat(),
@@ -1018,12 +1031,6 @@ def evaluate_member(
 
     run = prep.run
     params = prep.params
-    if last_bar is None:
-        intraday_stale = True
-    else:
-        intraday_stale = intraday_staleness(
-            observed_at=last_bar.ts + timedelta(minutes=1), as_of=member.as_of, scan_interval=scan_interval
-        ).stale
     daily_ok = prep.daily_ok
     frames = prep.frames(binds_side_by_frame(td))
     # R2-4.2 B: factor and seam observations ONCE, on the real bars (the
@@ -1284,7 +1291,8 @@ class CardUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     card_id: int
-    proximity: Decimal
+    #: NULL while the bars are stale (no fresh `last`, v2 §2 C step 6).
+    proximity: Decimal | None
     conviction: Decimal | None
     card_score: int | None
     score_suppressed: str | None
@@ -1334,9 +1342,8 @@ def refresh_card(
     the card's formation md5, and a factor it gained is added once."""
     dots = card_dots(ld, ev, settings, at, assumed_keys_of(card.dots), previous=card.dots,
                      added_by={"definition_md5": ld.md5, "run_id": run_id})
-    last = ev.last_price if ev.last_price is not None else card.entry
-    score = score_card(dots, last=last, trigger=card.entry, stop=card.stop,
-                       bands=settings.proposed_key, enabled=enabled)
+    score = score_card(dots, last=score_last(ev), stale_reason=stale_reason(ev), trigger=card.entry,
+                       stop=card.stop, bands=settings.proposed_key, enabled=enabled)
     health = card.health
     if card.state == "FILLED" and thresholds is not None:
         snapshot = (health or {}).get("entry_snapshot")
@@ -1589,7 +1596,7 @@ class ReplayedCard(BaseModel):
 
 def published_numbers(update: CardUpdate) -> dict[str, Any]:
     return {
-        "proximity": str(update.proximity),
+        "proximity": None if update.proximity is None else str(update.proximity),
         "conviction": None if update.conviction is None else str(update.conviction),
         "card_score": update.card_score, "score_suppressed": update.score_suppressed,
         "proposed_key": update.proposed_key,
@@ -1643,9 +1650,8 @@ def replay_receipt(receipts: Sequence[Mapping[str, Any]], *, clock) -> tuple[lis
             raise ReplayError(f"card {card['card_id']}: no evaluation for its member/def in the receipt")
         ld = defs[md5]
         dots = overlay_taps(card_dots(ld, ev, settings, at, card["assumed_keys"]), card["taps"])
-        last = ev.last_price if ev.last_price is not None else Decimal(card["entry"])
-        score = score_card(dots, last=last, trigger=Decimal(card["entry"]), stop=Decimal(card["stop"]),
-                           bands=settings.proposed_key, enabled=enabled)
+        score = score_card(dots, last=score_last(ev), stale_reason=stale_reason(ev), trigger=Decimal(card["entry"]),
+                           stop=Decimal(card["stop"]), bands=settings.proposed_key, enabled=enabled)
         recomputed = published_numbers(CardUpdate(
             card_id=card["card_id"], proximity=score.proximity, conviction=score.conviction,
             card_score=score.card_score, score_suppressed=score.score_suppressed,
@@ -1953,8 +1959,8 @@ class EvaluateStage:
                     # re-evaluated next scan with the extreme where it lands.
                     continue
                 fresh = card_dots(ld, ev, settings, instant, f.assumed_keys)
-                score = score_card(fresh, last=ev.last_price, trigger=f.trigger.price, stop=f.stop.price,
-                                   bands=settings.proposed_key, enabled=enabled)
+                score = score_card(fresh, last=score_last(ev), stale_reason=stale_reason(ev), trigger=f.trigger.price,
+                                   stop=f.stop.price, bands=settings.proposed_key, enabled=enabled)
                 score_id = score_ids[(ev.membership_id, ev.md5)]
                 spec = RadarCardSpec(
                     ticker=ev.ticker, direction=f.trade_direction, session=session, pool_member_id=ev.membership_id,

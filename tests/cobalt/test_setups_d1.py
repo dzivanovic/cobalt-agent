@@ -156,9 +156,17 @@ def _served_later(ld) -> set[str]:
 
 
 def _unmoved(ev, ld=None) -> dict:
+    """STALE-SCORE S1 re-point: minus `intraday_stale` (added, v2 [F-10])
+    and, on an intraday-stale evaluation, `htf_level_proximity`'s `stale`
+    flag mapped back to its pre-change value (v2 §2 C step 5, X6) — the
+    computed branch (the one carrying `inputs.last_price`) wrote no flag."""
     from cobalt.radar.evaluate import seam_safe_missing_atoms
 
-    dump = {k: v for k, v in ev.model_dump(mode="json").items() if k not in F11_MOVES}
+    dump = {k: v for k, v in ev.model_dump(mode="json").items()
+            if k not in F11_MOVES and k != "intraday_stale"}
+    htf = dump["observations"].get("htf_level_proximity")
+    if ev.intraday_stale and htf and "last_price" in (htf.get("inputs") or {}):
+        dump["observations"] = {**dump["observations"], "htf_level_proximity": {**htf, "stale": False}}
     dump["detail"] = {**dump["detail"], "observations": [
         o for o in dump["detail"]["observations"] if o["name"] not in NEW_OBSERVATIONS]}
     if ld is not None and dump["evaluation"] == "not_evaluable" and dump["missing"]:

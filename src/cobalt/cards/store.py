@@ -1016,11 +1016,17 @@ class CardStore:
     def refresh_radar_card(self, update, *, now: Optional[datetime] = None, before_commit=None) -> bool:
         """This scan's numbers on an open card, under its row lock. Taps
         are never overwritten: a tap that landed after the stage read the
-        card leaves conviction/score/key to the tap route's own recompute
-        (the next scan reconciles), and only engine fields move."""
+        card keeps its conviction and proposed key (the tap route's), and
+        the score is recomputed from THAT conviction on THIS scan's
+        proximity through `card_score()` — never an old-price score beside a
+        new proximity (R45, Fable (i)); a NULL proximity nulls it with the
+        stale reason."""
+        from .scoring import card_score
+
         def work(conn, ts):
             locked = conn.execute(
-                "SELECT state, (SELECT coalesce(max(id), 0) FROM card_dot_taps WHERE card_id = %s) "
+                "SELECT state, (SELECT coalesce(max(id), 0) FROM card_dot_taps WHERE card_id = %s), "
+                "conviction, score_suppressed "
                 "FROM aset_sizings WHERE id = %s AND origin = 'radar' FOR UPDATE",
                 (update.card_id, update.card_id),
             ).fetchone()
@@ -1028,10 +1034,13 @@ class CardStore:
                 raise CardStateError(f"no radar card with id {update.card_id}")
             taps_moved = int(locked[1]) != update.tap_version
             if taps_moved:
+                suppressed = update.score_suppressed if update.proximity is None else locked[3]
+                score = card_score(locked[2], update.proximity, suppressed)
                 conn.execute(
                     "UPDATE aset_sizings SET proximity = %s, last_price = COALESCE(%s, last_price), "
+                    "card_score = %s, score_suppressed = %s, "
                     "health = %s::jsonb, radar_score_id = %s WHERE id = %s",
-                    (update.proximity, update.last_price,
+                    (update.proximity, update.last_price, score, suppressed,
                      json.dumps(update.health, default=str) if update.health else None,
                      update.radar_score_id, update.card_id),
                 )
@@ -1183,15 +1192,19 @@ class CardStore:
                 now: Optional[datetime] = None) -> dict[str, Any]:
         """Append the tap, set the dot's trader grade and recompute
         conviction / card_score / proposed key from the locked dots and the
-        card's stored proximity — one transaction under the row lock."""
-        from .scoring import ASSUMED_FORMATION, card_score, conviction, proposed_key, suppression
+        card's stored proximity — one transaction under the row lock. While
+        that proximity is NULL (bars stale) the score stays NULL and the
+        stored reason is kept, or `PROXIMITY_UNKNOWN` written: a tap never
+        erases the helper's sentence ([F-06])."""
+        from .scoring import ASSUMED_FORMATION, PROXIMITY_UNKNOWN, card_score, conviction, proposed_key, suppression
 
         if not 1 <= int(grade) <= 10:
             raise CardStateError(f"a dot grade is 1-10, got {grade}")
 
         def work(conn, ts):
             locked = conn.execute(
-                "SELECT state, origin, proximity FROM aset_sizings WHERE id = %s FOR UPDATE", (card_id,)
+                "SELECT state, origin, proximity, score_suppressed FROM aset_sizings WHERE id = %s FOR UPDATE",
+                (card_id,),
             ).fetchone()
             if locked is None or locked[1] != "radar":
                 raise CardStateError(f"no radar card with id {card_id}")
@@ -1220,7 +1233,10 @@ class CardStore:
             dots = self._dots_for(conn, [card_id])[card_id]
             conv = conviction(dots)
             prox = Decimal(locked[2]) if locked[2] is not None else None
-            suppressed = suppression(dots)
+            if prox is None:  # [F-06]: the sentence is the refresh helper's; the tap keeps it
+                suppressed = locked[3] if locked[3] is not None else PROXIMITY_UNKNOWN
+            else:
+                suppressed = suppression(dots)
             score = card_score(conv, prox, suppressed)
             key, key_reason = proposed_key(conv, bands, enabled)
             conn.execute(
