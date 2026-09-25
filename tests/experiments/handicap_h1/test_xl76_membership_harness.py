@@ -171,3 +171,25 @@ def test_xl76_2_3_harness_shape_at_step_1(monkeypatch):
         conn.close()
         print(f"XL76: harness_applies={applies}")
     assert applies
+
+
+@requires_db
+def test_xl76_close_0014_absent_on_cobalt_dev():
+    """CLOSE (L76): READ-ONLY — `pg_catalog`, one SELECT, rolled back. The
+    three `0014` columns must be ABSENT from `cobalt_dev` (expected 0)."""
+    from cobalt import db, env
+
+    conn = db.connect_migration(env.DEV_DB_NAME)
+    conn.autocommit = False
+    try:
+        count = conn.execute(
+            "SELECT count(*) FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid "
+            "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'system' "
+            "AND c.relname = 'radar_membership' "
+            "AND a.attname IN ('raw_rank','handicap_factor','handicap') AND NOT a.attisdropped"
+        ).fetchone()[0]
+    finally:
+        conn.rollback()
+        conn.close()
+    print(f"XL76: 0014_columns_on_cobalt_dev={count}")
+    assert count == 0
