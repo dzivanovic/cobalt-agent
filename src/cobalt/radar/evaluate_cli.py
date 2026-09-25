@@ -18,6 +18,8 @@ in S2, R4), and every def's "not evaluable: missing atoms […]" line
 (R2). This is the list Dejan reviews before enable. `--expect-formed`
 (FINAL §9 gate 4, [F-16] (3)) makes a replay that formed NOTHING exit
 non-zero; it needs `--trade-def`, so the gate names the one def it proves.
+The nightly replay may cut the day between scans at its deadline
+(`cut_at`); a cut is printed and recorded, never silent.
 
 `--candidate` PERSISTS, AND ONLY TO cobalt_dev. Before D2 the hub freezes
 the exact proposed card settings (curves, bands) in a reviewed file,
@@ -47,6 +49,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from loguru import logger
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from cobalt import env
@@ -55,7 +58,7 @@ from cobalt.session import Session
 from .anatomy.daily import DailySeries, parse_daily_csv
 from .evaluate import ET
 from .anatomy.registry import evaluability
-from .evaluate import FACTOR_COMPUTERS, EvaluateStage, LoadedDef, MemberInput, evaluate_member
+from .evaluate import FACTOR_COMPUTERS, EvaluateStage, LoadedDef, MemberInput, evaluate_member, prepare_member
 
 
 class CandidateRefused(RuntimeError):
@@ -100,6 +103,10 @@ class ReplayReport(BaseModel):
 
     day: date
     scans: int = 0
+    #: The scan instants the day planned; `scans` < this only when cut (R95).
+    scans_planned: int = 0
+    #: The first scan instant NOT evaluated when `cut_at` stopped the day (R95).
+    cut_before: AwareDatetime | None = None
     formations: list[ReplayFormation] = Field(default_factory=list)
     path_b_only: list[str] = Field(default_factory=list)
     not_evaluable: dict[str, list[str]] = Field(default_factory=dict)
@@ -157,8 +164,10 @@ def replay_formations(
     defaults,
     clock,
     out: Callable[[str], None] = print,
+    cut_at: Callable[[datetime], bool] | None = None,
 ) -> ReplayReport:
-    """Read-only. See the module docstring."""
+    """Read-only. See the module docstring. `cut_at` (R95) is asked before
+    each scan instant; True stops the day there, printed and recorded."""
     from cobalt.taxonomy.loader import merge_tunables
 
     defs, user_rows = defs_source()
@@ -182,7 +191,17 @@ def replay_formations(
     b_seen: set[tuple[str, str]] = set()
     evaluable = [ld for ld in defs if ld.slug not in report.not_evaluable]
     day_start = datetime.combine(day, datetime.min.time(), ET)
-    for instant in scan_instants(day, clock, scan_interval, first) if admitted_ever else []:
+    instants = scan_instants(day, clock, scan_interval, first) if admitted_ever else []
+    report.scans_planned = len(instants)
+    for instant in instants:
+        if cut_at is not None and cut_at(instant):
+            report.cut_before = instant
+            line = (f"replay {day}: CUT — the deadline stopped the formations replay before the "
+                    f"{clock.to_et(instant):%H:%M:%S} ET scan ({report.scans} of {report.scans_planned} scans "
+                    "evaluated); later formations were not evaluated")
+            out(line)
+            logger.warning(line)
+            break
         report.scans += 1
         for member in admitted_at(members, instant):
             ticker = member["ticker"]
@@ -200,8 +219,10 @@ def replay_formations(
                 bars=tuple(b for b in bars_cache[ticker] if b.ts < instant), daily=daily, daily_status=status,
                 rvol=None, pool_position=member.get("last_rank"),
             )
+            prep = prepare_member(inp, tunables=rows, defaults=defaults, clock=clock)
             for ld in evaluable:
-                ev = evaluate_member(ld, inp, tunables=rows, defaults=defaults, scan_interval=scan_interval, clock=clock)
+                ev = evaluate_member(ld, inp, tunables=rows, defaults=defaults, scan_interval=scan_interval, clock=clock,
+                                     prep=prep)
                 report.counts[ev.evaluation] = report.counts.get(ev.evaluation, 0) + 1
                 if ev.evaluation == "formed" and ev.formation is not None:
                     key = (ticker, ld.slug, ev.formation.formed_bar_ts.isoformat())
@@ -229,6 +250,7 @@ def replay_formations(
     out(
         f"replay {day}: scans={report.scans} formations={len(report.formations)} "
         f"path_b_only={len(report.path_b_only)} counts={dict(sorted(report.counts.items()))} writes: none"
+        + (f" · CUT before {clock.to_et(report.cut_before):%H:%M:%S} ET" if report.cut_before else "")
     )
     return report
 

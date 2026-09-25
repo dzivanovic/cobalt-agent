@@ -65,6 +65,11 @@ datetimes. `sha256_json` hashes that text. Every `inputs_sha256` is
   input_stale — every formation the day produced, none silently dropped.
 - `FormationOutcome`: the formation step's whole answer — the capability
   marker it bound to (or `unavailable`), its rows and its counts.
+- `FormationCut` (2026-09-25, R95): `scans_done`, `scans_planned`,
+  `cut_before` (the first scan NOT evaluated) of a formations replay cut
+  at the deadline. Carried as `FormationOutcome.cut` and
+  `ReplayResult.formation_cut` (in `job.result`); None when uncut. The line
+  then says PARTIAL and the job fails at the end.
 
 ## Mover side (F13)
 - `MoverRow`: one ranked export row.

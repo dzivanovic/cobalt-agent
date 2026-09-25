@@ -144,3 +144,10 @@ consumes changed: `FORMATION_REQUIRED_FIELDS` of `ReplayFormation` are the
 same. Without this update the nightly `com.cobalt.replay` would refuse
 every night after the deploy. `s2p2.1` is dropped because that code no
 longer exists. Any other version is still a loud refusal.
+
+**2026-09-25 — the replay deadline fix (`cto-2026-09-24.md` R95).**
+`formation_misses` reads `context.bars_for(ticker)` once per TICKER, not
+once per formation. The rows are unchanged. When P2's report carries a
+`cut_before`, the outcome's `cut` is
+`FormationCut(scans_done=report.scans, scans_planned=report.scans_planned, cut_before=report.cut_before)`,
+otherwise None.

@@ -288,6 +288,15 @@ class FormationCounts(_Frozen):
     input_stale: int = 0
 
 
+class FormationCut(_Frozen):
+    """A formations replay stopped between scans before the deadline (R95)."""
+
+    scans_done: int
+    scans_planned: int
+    #: The first scan instant NOT evaluated.
+    cut_before: AwareDatetime
+
+
 class FormationOutcome(_Frozen):
     """The formation step's whole answer: the capability marker it bound
     to (or `unavailable`), its rows, and every count behind them."""
@@ -295,6 +304,8 @@ class FormationOutcome(_Frozen):
     status: str
     rows: tuple[MissRow, ...] = ()
     counts: FormationCounts = FormationCounts()
+    #: A cut formations step (R95): the line says PARTIAL and the job fails at the end.
+    cut: Optional[FormationCut] = None
 
 
 # ---------------------------------------------------------------------------
@@ -480,6 +491,8 @@ class ReplayResult(BaseModel):
     formation_suppressed: int = 0
     formation_no_trigger: int = 0
     formation_input_stale: int = 0
+    #: A cut formations step (R95): the line says PARTIAL and the job fails at the end.
+    formation_cut: Optional[FormationCut] = None
     line_action: Optional[str] = None
     line_diff: Optional[str] = None
     steps_done: list[str] = Field(default_factory=list)
@@ -494,7 +507,7 @@ class ReplayResult(BaseModel):
 __all__ = [
     "ArchivePartial", "CardCandidate", "CardReplay", "CfOutcome", "Counterfactual", "Direction", "Episode", "ExcludedBy",
     "FORMATION_UNAVAILABLE", "FORMATION_UNAVAILABLE_LINE", "FORMULA_VERSION",
-    "FormationCandidate", "FormationCounts", "FormationOutcome", "FormationReplay",
+    "FormationCandidate", "FormationCounts", "FormationCut", "FormationOutcome", "FormationReplay",
     "MissKind", "MissRow", "MoverRow", "MoversExport", "MoversSideCount", "PositionSpan", "RadarCardRef",
     "ReconcileCounts", "ReplayError", "ReplayInputError", "ReplayResult", "Side",
     "StepFailed", "StopEdit", "StoredMover", "TransitionRow", "WindowResolution",

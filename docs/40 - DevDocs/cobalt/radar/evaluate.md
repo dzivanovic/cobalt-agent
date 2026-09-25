@@ -146,3 +146,14 @@ The ONE `EVALUATOR_VERSION` bump of STEP-1 covers this step. Nothing deploys bet
 **2026-09-22 (fix round 2, F3).** `closure_keys` also unions the keys the def's trigger resolver declares (`formation.triggers.trigger_tunable_keys`). Before, the closure held the def's `cfg` tokens, the detectors of the atoms it names, and its conventions — so vwap-continuation's `trendline_break` read `pivot.n` and the `range.micro.*` keys outside it. An assumed fill of `range.micro.touch_tolerance_atr` would then have formed a card with no `assumed_formation` mark. At committed config no row is `source: assumed`, so no card's `assumed_keys` changes.
 
 **2026-09-22 (fix round 3, F1 — R47).** `evaluate_member` passes `bind_side=binds_side_by_frame(td)` to `_build_frames` (default False, so `member_frames` is unchanged), and reads the factor / seam observations from `frames["long"].observed` — the detector's own Extension — instead of `frames["long"].extension`. For every def that does not bind side by the frame the two are the same object, so no published row changes; for the two that do, the formation hangs on the side-bound Extension while the observations stay the real bars' own (R2-4.2 B). No other line of the stage changed.
+
+## 2026-09-25 — one member prep per scan (`cto-2026-09-24.md` R95)
+- **Why.** The nightly replay called `evaluate_member` once per (scan × member × def) and rebuilt the member's def-independent work each time, about 82,000 times with 7 evaluable defs.
+- **`MemberPrep`** holds that work for ONE member at ONE `as_of`:
+  - eager: `closed_i1`, `consumed`, `last_bar`, `last_price`;
+  - lazy (computed where `evaluate_member` first used them): `series`, `run`, `params`, `daily_ok`;
+  - `frames(bind_side)`: the frame pair, built once per `bind_side` value.
+- **`prepare_member(member, *, tunables, defaults, clock)`** is the only builder.
+- **`evaluate_member(…, prep=None)`** builds its own prep through `prepare_member` when none is given (the resident's path, L3). A prep of another membership or instant raises `EvaluateError`.
+- **Sharing is safe.** A frame's lazy atoms take only the frame's own inputs and `tunables`, so sharing a prep is correct only across defs evaluated with the SAME `tunables` / `defaults` / `clock`, which is what `replay_formations` does.
+- No output byte changes, and `EVALUATOR_VERSION` is unchanged. `member_frames` is `prepare_member(...).frames(False)`.

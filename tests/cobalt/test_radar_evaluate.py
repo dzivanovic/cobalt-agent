@@ -765,3 +765,108 @@ def sup_member(bars, at):
         daily=sup.fixture_daily("FTFT", at), daily_status="cache-hit",
         rvol=RvolObservation(ticker="FTFT", value=4.2, observed_at=at, source="screen:s", candidates=("screen:s",)),
     )
+
+
+# ---------------------------------------------------------------------
+# One member prep per scan (`cto-2026-09-24.md` R95; FIX 1 of
+# `reports/replay-deadline-fix-draft-2026-09-24.md`)
+# ---------------------------------------------------------------------
+
+
+def _corpus():
+    """Every committed setups corpus shape (`setups_shapes.SHAPES`), and ONE
+    merged tunables mapping for all of them — what `replay_formations` hands
+    every def of a scan (`merge_tunables(engine, user rows)`): the committed
+    engine rows, the corpus' constructed engine fills (`D6_CONSTRUCTED` is
+    the superset) and every shape's own per-trade rows."""
+    import setups_shapes as shapes
+
+    lds = [shapes.load_shape_fresh(key) for key in sorted(shapes.SHAPES)]
+    rows = shapes.tunables_for(shapes.load_shape_fresh("second-chance"))
+    for ld in lds:
+        rows.update(shapes.user_rows(ld))
+    return lds, rows
+
+
+def _instants():
+    from cobalt.radar.evaluate_cli import scan_instants
+
+    every = scan_instants(sup.TRADE_DATE, session_clock(), 100)
+    return [every[0], every[len(every) // 2], SCAN0, every[-1]]
+
+
+def test_a_shared_member_prep_gives_every_def_byte_identical_evaluations():
+    """`cto-2026-09-24.md` R95, the drafter's FIX 1 (`replay-deadline-fix-draft-2026-09-24.md`):
+    ONE `prepare_member` per (member, scan instant), SHARED by every def of
+    the loop, yields the byte-identical evaluation each def gets when it
+    builds its own (the resident's path, `prep=None`). L7 / L57: proven,
+    never assumed."""
+    from cobalt.radar.anatomy.frame import binds_side_by_frame
+    from cobalt.radar.evaluate import prepare_member
+    import setups_shapes as shapes
+
+    lds, rows = _corpus()
+    binds = {ld.slug: binds_side_by_frame(ld.definition) for ld in lds}
+    assert sum(1 for b in binds.values() if not b) >= 2, binds
+    assert sum(1 for b in binds.values() if b) >= 1, binds      # the corpus has side-binding defs
+    compared = 0
+    for ticker in ("FTFT", "BGFI"):
+        for at in _instants():
+            member = shapes.member(ticker, at)
+            prep = prepare_member(member, tunables=rows, defaults=sup.defaults(), clock=session_clock())
+            for ld in lds:
+                shared = evaluate_member(ld, member, tunables=rows, defaults=sup.defaults(), scan_interval=100,
+                                         clock=session_clock(), prep=prep)
+                own = evaluate_member(ld, member, tunables=rows, defaults=sup.defaults(), scan_interval=100,
+                                      clock=session_clock())
+                assert shared.model_dump(mode="json") == own.model_dump(mode="json"), (ld.slug, ticker, at)
+                compared += 1
+    assert compared == len(lds) * 2 * len(_instants())
+
+
+def test_a_prep_builds_each_frame_pair_once_whatever_the_def_count(monkeypatch):
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 1):
+    the structural guard that a growing setup count cannot multiply the
+    member's work again — N defs on one prep build the frame pair once per
+    distinct `bind_side` value asked, never N times."""
+    import cobalt.radar.evaluate as evaluate_mod
+    from cobalt.radar.anatomy.frame import binds_side_by_frame
+    import setups_shapes as shapes
+
+    lds, rows = _corpus()
+    assert len(lds) >= 3
+    built: list[bool] = []
+    real = evaluate_mod._build_frames
+
+    def counting(*args, **kwargs):
+        built.append(kwargs.get("bind_side", False))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(evaluate_mod, "_build_frames", counting)
+    member = shapes.member("FTFT", SCAN0)
+    prep = evaluate_mod.prepare_member(member, tunables=rows, defaults=sup.defaults(), clock=session_clock())
+    for ld in lds:
+        evaluate_member(ld, member, tunables=rows, defaults=sup.defaults(), scan_interval=100,
+                        clock=session_clock(), prep=prep)
+    asked = {binds_side_by_frame(ld.definition) for ld in lds}
+    assert sorted(built) == sorted(asked), (built, asked)
+
+
+def test_a_prep_for_another_member_or_instant_is_refused():
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 1):
+    a prep is bound to ONE (membership, as_of); handed to another member or
+    another scan instant it is refused loudly, naming both (L1)."""
+    from cobalt.radar.evaluate import prepare_member
+    import setups_shapes as shapes
+
+    lds, rows = _corpus()
+    a = shapes.member("FTFT", SCAN0)
+    prep = prepare_member(a, tunables=rows, defaults=sup.defaults(), clock=session_clock())
+    b = a.model_copy(update={"membership_id": 101})
+    with pytest.raises(EvaluateError, match="100.*101|101.*100"):
+        evaluate_member(lds[0], b, tunables=rows, defaults=sup.defaults(), scan_interval=100,
+                        clock=session_clock(), prep=prep)
+    later = SCAN0 + timedelta(seconds=100)
+    with pytest.raises(EvaluateError, match="16:30.*16:31|16:31.*16:30"):
+        evaluate_member(lds[0], shapes.member("FTFT", later), tunables=rows, defaults=sup.defaults(),
+                        scan_interval=100, clock=session_clock(), prep=prep)

@@ -24,6 +24,10 @@ Misses 2026-09-03: cards 3 (unarmed 2 · passed 0 · not_filled 0 · window 0 ·
   wrote only the unavailable text; this is its extension. A suppressed
   formation (an open radar card already covers that member, def and
   direction) is not a second miss and appears only as its count.
+- **A cut formations step (2026-09-25, R95).** `formation_cut` (a
+  `FormationCut`) appends to the formations segment
+  ` · PARTIAL: cut before the <HH:MM> ET scan (<k> of <n> scans) — later formations not evaluated`.
+  None leaves the line byte-identical.
 
 ## Writing (L28)
 - `drc_note_path(day)`: `prefill.yaml` `review_dir` +

@@ -111,6 +111,7 @@ H = actual session close otherwise (the after-window trigger still gets a horizo
 
 - `com.cobalt.replay` is a one-shot at 21:05 ET, Mon–Fri. It refuses unless **tonight's** 20:30 archiver occurrence finished `done` with exit 0.
 - Its order is movers → cards → miss line, each with its own per-side commit boundary. An enforced deadline sits `replay.backup_margin_s` before the 21:40 backup.
+- [amended 2026-09-25, cto-2026-09-24.md R95] The formations step is cut between scans replay.formations_reserve_s before the replay deadline: the miss line is written for the scans evaluated and says PARTIAL, the job row records formation_cut and the job fails at the end; the replay builds each member's def-independent work once per scan (evaluate.prepare_member), not once per def.
 - It writes ONE line, as unit `drc-misses/miss_line`, into that day's existing DRC note through `VaultWriter.upsert_unit`. The unit is placed zero-width after the `drc-rules` section. The write is versioned, diffed, human-wins, and never creates the note (L28).
 - The cf-R sum always carries its n. An average renders only at n ≥ 30 (L8).
 - The plist is new, so `cobalt jobs restarts` derives **bootstrap once**, no restart (R1-22/R2-6).
