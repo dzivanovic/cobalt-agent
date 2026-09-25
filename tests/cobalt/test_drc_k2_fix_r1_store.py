@@ -18,7 +18,6 @@ Constructed symbols and dates only (L32 / L45).
 
 from __future__ import annotations
 
-import json
 from datetime import date
 
 import pytest
@@ -49,6 +48,7 @@ from test_drc_k2_experiments import (
     _row,
     _snapshot,
     _stated_rows,
+    _without_stale,
 )
 from test_drc_pairing import CARRIED_SHORT_DAY1, CARRIED_SHORT_DAY2
 from test_drc_store import (  # noqa: F401 — fixtures are used by name
@@ -64,18 +64,6 @@ from test_drc_store import (  # noqa: F401 — fixtures are used by name
 #: A constructed weekday under `weekday_calendar` (`51` S2's list).
 D4 = date(2001, 1, 5)
 STALE = {"root": "2001-01-02", "reason": _NOT_COMPUTED_PRIOR}
-
-
-def _without_stale(snapshot):
-    """A `_snapshot` with `book_stale` removed from its `day` row."""
-    out = []
-    for kind, ref, inputs, derived in snapshot:
-        if kind == "day":
-            d = json.loads(derived)
-            d.pop("book_stale", None)
-            derived = json.dumps(d, sort_keys=True)
-        out.append((kind, ref, inputs, derived))
-    return sorted(out)
 
 
 def _rows_of(conn, day: date):

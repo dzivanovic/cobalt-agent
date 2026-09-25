@@ -475,6 +475,8 @@ def test_two_current_openings_for_one_day_fail_naming_both(migrated, weekday_cal
 
 @requires_db
 def test_a_stated_day_records_its_seed_and_its_close_with_their_inputs(migrated, weekday_calendar):
+    """The `fn_version` pin moves to `drc.pairing/4` with K2 fix r1 (its
+    `FN_VERSION` row)."""
     from cobalt.drc.pairing import book_sha256
 
     stated = _state(D)
@@ -494,7 +496,7 @@ def test_a_stated_day_records_its_seed_and_its_close_with_their_inputs(migrated,
     assert d_inputs["stated_book_id"] == stated.id
     assert migrated.execute(
         'SELECT DISTINCT fn_version FROM "user".drc_rows WHERE day = %s', (D,)
-    ).fetchall() == [("drc.pairing/3",)]
+    ).fetchall() == [("drc.pairing/4",)]
 
 
 @requires_db

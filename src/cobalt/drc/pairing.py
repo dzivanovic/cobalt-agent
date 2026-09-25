@@ -83,8 +83,11 @@ from .models import (
 #: Bumped whenever a derived figure's rule changes (L57). /2 (K1): an
 #: unstated book is not paired; a stated lot may carry no cost. /3 (K2):
 #: a later day is re-paired from the earlier close (R51); a resolve
-#: closes a carried trade outside the export (`[F-06]`).
-FN_VERSION = "drc.pairing/3"
+#: closes a carried trade outside the export (`[F-06]`). /4 (K2 fix r1):
+#: a stopped chain's later days carry `book_stale`; `record_day` stores the
+#: no-trade seed; a re-paired day's stats are re-matched; a partial file
+#: re-pairs as its first record did.
+FN_VERSION = "drc.pairing/4"
 
 
 def trade_id(symbol: str, direction: Direction, entry_time: datetime) -> str:

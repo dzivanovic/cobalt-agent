@@ -158,6 +158,18 @@ is never carried.
   - `day.derived.resolves` (every outcome, when any).
   The rebuild never writes `drc_stated_books` (R51, L7).
 
+## 2026-09-25 — DRC K2 fix r1
+A resolve's key is now its trade id on any day: `record_stated_book`
+refuses a second current one (naming `#id (day)`) and accepts a
+restatement across days, whose rebuild starts at `effect_day(day,
+supersedes)` — the earlier day (F-1). A stopped chain now writes
+`derived.book_stale = {root, reason}` on each later day's own `day` row,
+and `_carried` refuses a marked prior; `record_day` and `_repair` share
+one no-trade seed rule (`_no_trade_seed`); a re-pair rebuilds the stats
+input with its own file's missing columns and always re-matches it; a
+partial import re-pairs through `trading_log.pairing_not_computed`, as
+its first record did (F-2 … F-5).
+
 ## Tests
 `tests/cobalt/test_drc_store.py` has an offline half (the SQL, the
 registry, the placement map, the one-writer grep). Its with-DB half

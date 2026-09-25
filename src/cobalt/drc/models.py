@@ -33,6 +33,9 @@ CARRIED_COST_NOT_STATED = "not computed — carried cost not stated"
 OPENING_NOT_STATED = "not computed — opening book not stated"
 #: A resolved trade whose exit price no export carries (K2, v3 `[F-06]`, §4 row 11).
 EXIT_NOT_IN_ANY_EXPORT = "not computed — exit not in any export"
+#: A partial file's stored reason starts with this, then its missing
+#: columns (`partial_flag`; read back by `missing_of`, K2 fix r1 F-5).
+PARTIAL_PREFIX = "PARTIAL — missing: "
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -233,7 +236,7 @@ class Detection(_Frozen):
     def partial_flag(self) -> Optional[str]:
         """The LOUD flag a partial file carries to the page and the DRC."""
         if self.outcome is Outcome.PARTIAL:
-            return f"PARTIAL — missing: {', '.join(self.missing)}"
+            return f"{PARTIAL_PREFIX}{', '.join(self.missing)}"
         return None
 
 
@@ -259,8 +262,21 @@ class ImportResult(_Frozen):
     @property
     def partial_flag(self) -> Optional[str]:
         if self.outcome is Outcome.PARTIAL:
-            return f"PARTIAL — missing: {', '.join(self.missing)}"
+            return f"{PARTIAL_PREFIX}{', '.join(self.missing)}"
         return None
+
+
+def missing_of(outcome: Outcome, reason: str) -> list[str]:
+    """The missing columns a STORED import names: the one inverse of
+    `partial_flag` (K2 fix r1 F-5; v3 `:181`, `FR14`). `[]` unless the
+    import is `partial`; a partial reason that is not the flag raises
+    `ValueError` — never guessed (L1)."""
+    if outcome is not Outcome.PARTIAL:
+        return []
+    if not reason.startswith(PARTIAL_PREFIX):
+        raise ValueError(f"a partial import's reason {reason!r} does not start {PARTIAL_PREFIX!r}")
+    names = reason[len(PARTIAL_PREFIX):]
+    return names.split(", ") if names else []
 
 
 class ParsedTradingLog(_Frozen):
@@ -431,6 +447,7 @@ __all__ = [
     "EXIT_NOT_IN_ANY_EXPORT",
     "NOT_GIVEN",
     "OPENING_NOT_STATED",
+    "PARTIAL_PREFIX",
     "DayPairing",
     "Detection",
     "Direction",
@@ -457,4 +474,5 @@ __all__ = [
     "TradeStatus",
     "Unmatched",
     "Via",
+    "missing_of",
 ]

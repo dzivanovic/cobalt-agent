@@ -21,7 +21,9 @@ K2: a statement's EFFECT is `DrcStore.rebuild(day)`. A `no_trade`, a
 `resolve`, or an `opening` for a day that already has its trading log
 is re-paired after `--apply` (`rebuilt: <dates>`), and the dry run names
 that effect. A refused rebuild prints why and exits non-zero; the
-statement stays written.
+statement stays written. K2 fix r1 F-1: the day rebuilt is
+`DrcStore.effect_day(day, supersedes)` — a restatement's rebuild starts
+at the earlier of its day and the superseded row's day.
 """
 
 from __future__ import annotations
@@ -129,12 +131,15 @@ def _rebuilds(store, req: StateBookRequest) -> bool:
     that already has its trading log, and a no-trade DRC or a resolve for
     a day that joins a recorded chain (a `day` row on or before it). With
     neither there is nothing to re-pair yet: the statement waits for the
-    day's import (builder reading of C7, carried to the check)."""
+    day's import (AMENDED C7). K2 fix r1 F-1: the day tested is
+    `effect_day` — a restatement's rebuild starts at the earlier of its
+    day and the superseded row's day."""
     from .models import Kind
 
-    if store.has_current_import(req.day, Kind.TRADING_LOG):
+    day = store.effect_day(req.day, req.supersedes)
+    if store.has_current_import(day, Kind.TRADING_LOG):
         return True
-    return req.kind in ("no_trade", "resolve") and store.has_chain_through(req.day)
+    return req.kind in ("no_trade", "resolve") and store.has_chain_through(day)
 
 
 def cmd_state_book(args: argparse.Namespace) -> None:
@@ -143,6 +148,7 @@ def cmd_state_book(args: argparse.Namespace) -> None:
     req = request_from_args(args)
     store = DrcStore()
     try:
+        effect = store.effect_day(req.day, req.supersedes)
         rebuilds = _rebuilds(store, req)
         if not req.apply:
             preview = store.preview_stated_book(
@@ -152,7 +158,7 @@ def cmd_state_book(args: argparse.Namespace) -> None:
             _print_row(preview)
             if rebuilds:
                 # What is reviewed names its effect (L7).
-                print(f"on --apply: rebuild {req.day.isoformat()} and every later recorded day")
+                print(f"on --apply: rebuild {effect.isoformat()} and every later recorded day")
             print(
                 "\nDRY RUN — nothing written. To write: the same command with "
                 f"--apply --sha256 {preview.book_sha256}"
@@ -172,7 +178,7 @@ def cmd_state_book(args: argparse.Namespace) -> None:
         print(f"stated; {req.day.isoformat()} has no import yet")
         return
     try:
-        dates = store.rebuild(req.day)
+        dates = store.rebuild(effect)
     except (PairingError, ValueError) as e:
         # The statement stays written — it is his input; the day did not
         # re-pair, and why is printed (L1).

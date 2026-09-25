@@ -50,6 +50,10 @@ Trailing blank lines at end of file are not rows.
   loud `PARTIAL — missing: …` flag.
 - An added column parses and sets `degraded: trading_log_shape`, naming
   it. A reorder alone changes nothing.
+- 2026-09-25, DRC K2 fix r1 (F-5): the rule lives in one function,
+  `pairing_not_computed(missing)`, which the parser and every re-pair
+  (`DrcStore._repair`) call; a file missing only a non-pairing column
+  pairs at its first record and on every re-pair.
 
 ## Accounts (R94)
 The account column is read and stored per execution. It is ONE bucket:

@@ -66,3 +66,8 @@ The narrowing for `no_trade` / `resolve` is a builder reading of the K2
 contract's C7, carried to the check. It keeps a statement for a day that
 has no recorded chain from being refused for having nothing to re-pair.
 The CLI still inserts nothing itself (L3).
+
+## 2026-09-25 — DRC K2 fix r1
+The day the CLI tests, prints and rebuilds is
+`DrcStore.effect_day(day, supersedes)`: a restatement's rebuild starts at
+the earlier of its day and the superseded row's day (F-1, AMENDED C7).

@@ -105,3 +105,9 @@ field is a pydantic `AwareDatetime`, imported under the local name
   became of it. `DayPairing.resolves` lists the outcomes.
 - **`Trade.gross_pnl`** also takes `EXIT_NOT_IN_ANY_EXPORT` (`not
   computed — exit not in any export`, v3 `[F-06]`, §4 row 11).
+
+## 2026-09-25 — DRC K2 fix r1
+`partial_flag` builds from the new `PARTIAL_PREFIX`, and
+`missing_of(outcome, reason)` reads a stored import's missing columns
+back from it (`[]` unless `partial`; an unreadable partial reason raises
+`ValueError`, never guessed) — the re-pair's input for F-4 and F-5.

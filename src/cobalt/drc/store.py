@@ -82,7 +82,7 @@ from .models import (
     StatedResolve,
     StatsRow,
     TradeStatus,
-    Unmatched,
+    missing_of,
 )
 from .pairing import (
     FN_VERSION,
@@ -315,6 +315,8 @@ class DrcStore:
                         f"{pairing.day}: no trading-log import and no no-trade DRC statement — "
                         "record_day refused; nothing written ([F-05])"
                     )
+                # K2 fix r1 F-3: the one no-trade seed rule `_repair` uses (L3).
+                seed = self._no_trade_seed(seed, no_trade_id)
             written, _ = self._commit(conn, pairing, import_ids, seed, no_trade_id)
             conn.commit()
         except BaseException:
@@ -365,6 +367,23 @@ class DrcStore:
             f"stated book for {day} differed from {inputs['from_day']}'s close: "
             f"{', '.join(derived['stated_differs'])}"
         )
+
+    def effect_day(self, day: date, supersedes: Optional[int]) -> date:
+        """The day a statement's rebuild starts from (K2 fix r1 F-1): `day`,
+        or — for a restatement — the earlier of `day` and the superseded
+        row's day, so the superseded resolve's effect leaves every stored
+        row (L1; v3 `[F-06]` `:190`). An unknown id raises `ValueError`;
+        nothing is assumed."""
+        if supersedes is None:
+            return day
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT day FROM drc_stated_books WHERE user_id = {_TENANT} AND id = %s",
+                (supersedes,),
+            ).fetchone()
+        if row is None:
+            raise ValueError(f"supersedes #{supersedes} names no stated row — nothing assumed")
+        return min(day, row[0])
 
     def has_current_import(self, day: date, kind: Kind) -> bool:
         """Whether `day` has a current (not superseded) import of `kind`."""
@@ -449,14 +468,23 @@ class DrcStore:
                 ).fetchall()
             ]
             outcome = Outcome(status)
+            try:
+                missing = missing_of(outcome, reason)
+            except ValueError as e:
+                raise PairingError(
+                    f"{day}: its current trading log {name} is partial with an unreadable reason — "
+                    "nothing assumed"
+                ) from e
             result = ImportResult(
                 name=name,
                 kind=Kind.TRADING_LOG,
                 outcome=outcome,
                 reason=reason,
-                # A partial file re-pairs `not computed`, its stored reason
-                # the why (the drafter's pin, C5; v3 `[F-29]` B).
-                not_computed={"pairing": reason} if outcome is Outcome.PARTIAL else {},
+                missing=missing,
+                # K2 fix r1 F-5 (v3 `:181` "exactly as its first record
+                # did", `FR14`; L3): the parser's ONE partial-import rule,
+                # on the file's own stored missing columns.
+                not_computed=trading_log.pairing_not_computed(missing),
             )
             ids[Kind.TRADING_LOG] = int(import_id)
         elif no_trade_id is not None:
@@ -481,50 +509,69 @@ class DrcStore:
             ).fetchall()
         ]
         stats: Optional[ParsedStatsLog] = None
-        kept_match: Optional[str] = None
         if stored_rows:
+            # K2 fix r1 F-4 (A1 `:179`, a DESK READING of R51: "Re-run
+            # `match_stats` … from those stored rows against the new
+            # pairing"): the stats input is rebuilt with its OWN file's
+            # missing columns and always re-matched — a day still not
+            # computed stores "pairing did not run" (true), a paired day
+            # matches exactly as its first record (a `Side`-less file to the
+            # same `not computed — missing: Side`: no match invented).
             stats_id = ((day_row[0] if day_row else {}).get("import_ids") or {}).get(Kind.STATS_LOG.value)
-            if stats_id is not None:
-                ids[Kind.STATS_LOG] = int(stats_id)
-            kept_match = ((day_row[1] if day_row else {}).get("not_computed") or {}).get("match")
-            if kept_match is None:
-                # `missing = []` is exact: `match_stats` reads only
-                # MATCH_INPUTS ∩ missing, empty when the match ran (G12).
-                stats = ParsedStatsLog(
-                    result=ImportResult(name="stored stats_row rows", kind=Kind.STATS_LOG, outcome=Outcome.PARSED),
-                    rows=[StatsRow.model_validate(d["row"]) for d in stored_rows],
-                )
-
-        seed = self._seed(conn, day, overlay)
-        if (
-            seed is not None
-            and imp is None
-            and seed.source == "carried"
-            and seed.stated_book_id is None
-        ):
-            seed = SeedBook(
-                source="no_trade_carry",
-                positions=seed.positions,
-                from_day=seed.from_day,
-                from_book_sha256=seed.from_book_sha256,
-                no_trade_id=no_trade_id,
-                resolves=seed.resolves,
-                resolve_outcomes=seed.resolve_outcomes,
+            if stats_id is None:
+                raise PairingError(f"{day}: stats rows are stored with no stats import named — nothing assumed")
+            ids[Kind.STATS_LOG] = int(stats_id)
+            stats_name, stats_status, stats_reason = conn.execute(
+                f"SELECT name, parse_status, reason FROM drc_imports WHERE user_id = {_TENANT} AND id = %s",
+                (int(stats_id),),
+            ).fetchone()
+            stats_outcome = Outcome(stats_status)
+            try:
+                stats_missing = missing_of(stats_outcome, stats_reason)
+            except ValueError as e:
+                raise PairingError(
+                    f"{day}: its stats log {stats_name} is partial with an unreadable reason — nothing assumed"
+                ) from e
+            stats = ParsedStatsLog(
+                result=ImportResult(
+                    name=stats_name, kind=Kind.STATS_LOG, outcome=stats_outcome, missing=stats_missing
+                ),
+                rows=[StatsRow.model_validate(d["row"]) for d in stored_rows],
             )
+
+        seed = self._no_trade_seed(self._seed(conn, day, overlay), no_trade_id if imp is None else None)
         pairing = build_day(
             parsed,
             stats,
             seed=None if seed is None else seed.positions,
             resolves=() if seed is None else seed.resolves,
         )
-        if kept_match is not None:
-            # A1: "If `not_computed.match` is set, keep it and do not
-            # invent a match" — the stored rows go back unchanged.
-            pairing = pairing.model_copy(update={
-                "unmatched": [Unmatched(row=StatsRow.model_validate(d["row"]), reason=d["match"]) for d in stored_rows],
-                "not_computed": {**pairing.not_computed, "match": kept_match},
-            })
         return pairing, ids, seed, (no_trade_id if imp is None else None)
+
+    @staticmethod
+    def _no_trade_seed(seed: Optional[SeedBook], no_trade_id: Optional[int]) -> Optional[SeedBook]:
+        """THE no-trade seed rule (K2 fix r1 F-3; v3 §2b `:97`, `[F-05]`;
+        L3), called by `_repair` and by `record_day`: a `carried` book with
+        no statement, on a day whose input is his `no_trade` DRC, is
+        `no_trade_carry` naming it. A carried book naming his statement
+        stays `carried` with its link and difference (R51, L7); anything
+        else is returned unchanged."""
+        if (
+            seed is None
+            or no_trade_id is None
+            or seed.source != "carried"
+            or seed.stated_book_id is not None
+        ):
+            return seed
+        return SeedBook(
+            source="no_trade_carry",
+            positions=seed.positions,
+            from_day=seed.from_day,
+            from_book_sha256=seed.from_book_sha256,
+            no_trade_id=no_trade_id,
+            resolves=seed.resolves,
+            resolve_outcomes=seed.resolve_outcomes,
+        )
 
     def _commit(
         self,
@@ -539,7 +586,17 @@ class DrcStore:
         trigger too). All in memory first; any later day that raises →
         `PairingError` naming it and nothing written. A day that comes out
         `not computed` STOPS the chain: every later day keeps its rows and
-        is named in `not_repaired` (the ESCALATE default, C4)."""
+        is named in `not_repaired` (the ESCALATE default, C4).
+
+        K2 fix r1 F-2 (L1; v3 §4 `:214`, `:232`; L72): each day named in
+        `not_repaired` also carries `derived.book_stale = {root, reason}`
+        on its OWN `day` row, in this transaction — one `UPDATE` of that
+        row's `derived` (`drc_rows` has no append-only trigger; only
+        `drc_stated_books` does, `0018_drc_stated_books.sql:51`). Nothing
+        else of that day is touched. `_carried` refuses a marked prior. A
+        re-pair that reaches a marked day rewrites its rows whole through
+        `_rows`, so the mark leaves with the stale book; nothing else
+        clears it."""
         later = [
             r[0]
             for r in conn.execute(
@@ -551,14 +608,19 @@ class DrcStore:
         extra: dict[str, Any] = {}
         writes: list[tuple[date, list]] = []
         dates = [pairing.day]
+        stale: list[date] = []
+        stale_mark: dict[str, str] = {}
         if later:
             overlay = {pairing.day: _Close.of(pairing, seed)}
-            stop = None if _Close.computed(pairing) else _stopped(pairing.day)
+            root = None if _Close.computed(pairing) else pairing.day
+            stop = None if root is None else _stopped(root)
             repaired: list[str] = []
             not_repaired: list[dict] = []
             for n in later:
                 if stop is not None:
                     not_repaired.append({"day": n.isoformat(), "reason": stop})
+                    stale.append(n)
+                    stale_mark = {"root": root.isoformat(), "reason": stop}
                     continue
                 try:
                     p, ids, s, nt = self._repair(conn, n, overlay)
@@ -571,7 +633,7 @@ class DrcStore:
                 repaired.append(n.isoformat())
                 dates.append(n)
                 if not _Close.computed(p):
-                    stop = _stopped(n)
+                    root, stop = n, _stopped(n)
             extra["repaired"] = repaired
             if not_repaired:
                 extra["not_repaired"] = not_repaired
@@ -586,6 +648,12 @@ class DrcStore:
                     """,
                     [(d, kind, ref, Jsonb(i), Jsonb(dv), FN_VERSION) for kind, ref, i, dv in out],
                 )
+        for d in stale:
+            conn.execute(
+                f"UPDATE drc_rows SET derived = derived || %s WHERE user_id = {_TENANT} "
+                "AND day = %s AND kind = 'day'",
+                (Jsonb({"book_stale": stale_mark}), d),
+            )
         return len(rows), dates
 
     @staticmethod
@@ -856,6 +924,20 @@ class DrcStore:
                 f"{day}: the prior trading day {prior} has pairing not computed — its open "
                 "positions are unknown; never assumed flat"
             )
+        stale = conn.execute(
+            f"SELECT derived->'book_stale' FROM drc_rows WHERE user_id = {_TENANT} "
+            "AND kind = 'day' AND day = %s AND derived ? 'book_stale'",
+            (prior,),
+        ).fetchone()
+        if stale:
+            # K2 fix r1 F-2: a day left behind a not-computed root holds a
+            # book that root's new file may contradict (L1).
+            root = stale[0]["root"]
+            raise PairingError(
+                f"{day}: the prior trading day {prior} is stale — {root} was re-recorded with pairing "
+                f"not computed, so {prior}'s book is unknown; state {root}'s book and rebuild {root}; "
+                "never carried"
+            )
         close = conn.execute(
             f"SELECT derived FROM drc_rows WHERE user_id = {_TENANT} "
             "AND kind = 'book_close' AND day = %s AND ref = 'book'",
@@ -1012,15 +1094,23 @@ class DrcStore:
         try:
             conn.execute('LOCK TABLE "user".drc_stated_books IN SHARE ROW EXCLUSIVE MODE')
             reason = self._reason(conn, day, kind)
-            current = [
-                r[0]
-                for r in conn.execute(
-                    f"SELECT id FROM drc_stated_books WHERE {_CURRENT} AND day = %s AND kind = %s "
-                    "AND (%s::text IS NULL OR positions->0->>'trade_id' = %s) ORDER BY id",
-                    (day, kind, trade, trade),
+            if kind == "resolve":
+                # K2 fix r1 F-1 (v3 `[F-01]` `:126`, `:134`): a resolve's
+                # key is its trade id, ON ANY DAY — a second current one is
+                # refused, and a restatement on another day supersedes it.
+                rows = conn.execute(
+                    f"SELECT id, day FROM drc_stated_books WHERE {_CURRENT} AND kind = 'resolve' "
+                    "AND positions->0->>'trade_id' = %s ORDER BY id",
+                    (trade,),
                 ).fetchall()
-            ]
-            named = ", ".join(f"#{i}" for i in current) or "none"
+            else:
+                rows = conn.execute(
+                    f"SELECT id, day FROM drc_stated_books WHERE {_CURRENT} AND day = %s AND kind = %s "
+                    "ORDER BY id",
+                    (day, kind),
+                ).fetchall()
+            current = [r[0] for r in rows]
+            named = ", ".join(f"#{i} ({d})" for i, d in rows) or "none"
             if supersedes is None and current:
                 raise ValueError(
                     f"{what}: {self.STATED_TABLE} {named} is current — a restatement names it "

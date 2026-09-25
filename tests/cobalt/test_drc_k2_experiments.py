@@ -130,6 +130,19 @@ def _snapshot(conn, day: date) -> list[tuple[str, str, str, str]]:
     )
 
 
+def _without_stale(snapshot):
+    """A `_snapshot` with `book_stale` removed from its `day` row (K2 fix
+    r1 F-2: the one mark a stopped chain adds to a later day)."""
+    out = []
+    for kind, ref, inputs, derived in snapshot:
+        if kind == "day":
+            d = json.loads(derived)
+            d.pop("book_stale", None)
+            derived = json.dumps(d, sort_keys=True)
+        out.append((kind, ref, inputs, derived))
+    return sorted(out)
+
+
 def _fn_versions(conn, day: date) -> list[str]:
     return [
         r[0]
@@ -435,19 +448,18 @@ def test_x9_pass_d_a_failed_current_import_fails_the_re_pair(migrated, weekday_c
 def test_x9_pass_d_a_partial_current_import_re_pairs_not_computed(migrated, weekday_calendar):
     """X9 (v3 `:325`) PASS (d), `FR14`: a `partial` current import for
     D_NEXT (its `Price` column absent) → the re-pair records D_NEXT
-    `not computed` with `not_computed.pairing` = the import's stored
-    `reason` (the drafter's pin, C5)."""
+    `not computed` with `not_computed.pairing` = the first record's text
+    (K2 fix r1 F-5; v3 :181, FR14). K2 fix r1 F-5 replaced the drafter's
+    pin (C5): the re-pair stores what the first record stores for a
+    `Price`-less file."""
     _day1_carrying_ddd()
     _route(SEED.read_bytes(), D_NEXT)
     half = _drop_column(SEED.read_bytes(), "Price")
     parsed, ids = _import(half, D_NEXT, "half.md")
     assert parsed.result.outcome.value == "partial"
-    reason = migrated.execute(
-        'SELECT reason FROM "user".drc_imports WHERE id = %s', (ids[Kind.TRADING_LOG],)
-    ).fetchone()[0]
     assert DrcStore().rebuild(D) == [D, D_NEXT]
     _, day_row = _row(migrated, D_NEXT, "day")
-    assert day_row["not_computed"]["pairing"] == reason
+    assert day_row["not_computed"]["pairing"] == f"not computed — missing: Price"
     assert _row(migrated, D_NEXT, "book_close") is None
 
 
@@ -526,13 +538,15 @@ def test_x10_pass_a_not_computed_prior_stops_the_chain(migrated, weekday_calenda
     """X10 PASS, THE NOT-COMPUTED CASE (C4, the ESCALATE default): D
     recorded with pairing `not computed` under a stated D_NEXT → D is
     recorded, D_NEXT's rows unchanged, D's `day` row names D_NEXT in
-    `not_repaired`."""
+    `not_repaired`. K2 fix r1 F-2: D_NEXT's rows are unchanged but for the
+    `book_stale` mark its own `day` row now carries."""
     _state(D_NEXT)
     _route(CARRIED_SHORT_DAY2, D_NEXT)
     before = _snapshot(migrated, D_NEXT)
     pairing, _, book = _route(CARRIED_SHORT_DAY1, D)
     assert book is None and "pairing" in pairing.not_computed
-    assert _snapshot(migrated, D_NEXT) == before
+    assert _without_stale(_snapshot(migrated, D_NEXT)) == before
+    assert _row(migrated, D_NEXT, "day")[1]["book_stale"] == {"root": "2001-01-02", "reason": _NOT_COMPUTED_PRIOR}
     _, day_row = _row(migrated, D, "day")
     assert day_row["repaired"] == []
     assert day_row["not_repaired"] == [{"day": "2001-01-03", "reason": _NOT_COMPUTED_PRIOR}]

@@ -377,6 +377,8 @@ def test_a_second_file_of_one_kind_for_one_day_supersedes_the_first(migrated):
 
 @requires_db
 def test_a_day_stores_every_trade_stats_row_and_the_day_with_inputs_and_fn_version(migrated):
+    """The `fn_version` pin moves to `drc.pairing/4` with K2 fix r1 (its
+    `FN_VERSION` row)."""
     store = DrcStore()
     t_data, trading = _trading(E1)
     s_data, stats = _stats()
@@ -400,7 +402,7 @@ def test_a_day_stores_every_trade_stats_row_and_the_day_with_inputs_and_fn_versi
     assert sorted(inputs["fill_lines"]) == [2, 3, 4, 6, 7, 8, 9]
     assert derived["playbooks"] == ["Alpha Setup Long", "Beta Setup Long"]
     assert derived["stats"]["stop"] is None
-    assert fn == "drc.pairing/3"
+    assert fn == "drc.pairing/4"
     # Recording the same day again replaces, never duplicates.
     store.record_day(day, ids, seed)
     assert migrated.execute(

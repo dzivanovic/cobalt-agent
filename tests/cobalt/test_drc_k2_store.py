@@ -19,7 +19,7 @@ from psycopg.types.json import Jsonb
 
 from cobalt.drc.models import Kind, PairingError
 from cobalt.drc.pairing import pair_day
-from cobalt.drc.store import DrcStore
+from cobalt.drc.store import _STATED_COLUMNS, DrcStore, _stated
 
 from test_drc_k1_store import (  # noqa: F401 — fixtures are used by name
     D3,
@@ -38,10 +38,12 @@ from test_drc_k2_experiments import (
     DDD_COVER,
     EEE_ROUND,
     HHH_ROUND,
+    _NOT_COMPUTED_PRIOR,
     _import,
     _route,
     _snapshot,
     _stated_rows,
+    _without_stale,
 )
 from test_drc_pairing import CARRIED_SHORT_DAY1, CARRIED_SHORT_DAY2
 from test_drc_store import (  # noqa: F401 — fixtures are used by name
@@ -185,12 +187,15 @@ def test_a_pre_lane_day_is_rebuilt_and_the_next_day_then_carries(migrated, weekd
 
 @requires_db
 def test_a_not_computed_prior_keeps_the_later_day_and_its_seed_still_fails(migrated, weekday_calendar):
+    """K2 fix r1 F-2: the later day's rows are unchanged but for the
+    `book_stale` mark its own `day` row now carries."""
     _state(D_NEXT)
     _route(CARRIED_SHORT_DAY2, D_NEXT)
     books = _stated_rows(migrated)
     before = _snapshot(migrated, D_NEXT)
     _route(CARRIED_SHORT_DAY1, D)
-    assert _snapshot(migrated, D_NEXT) == before
+    assert _without_stale(_snapshot(migrated, D_NEXT)) == before
+    assert _row(migrated, D_NEXT, "day")[1]["book_stale"] == {"root": "2001-01-02", "reason": _NOT_COMPUTED_PRIOR}
     _, day_row = _row(migrated, D, "day")
     assert [n["day"] for n in day_row["not_repaired"]] == ["2001-01-03"]
     with pytest.raises(PairingError, match="2001-01-02 has pairing not computed"):
@@ -312,10 +317,18 @@ def test_a_resolve_dated_before_the_day_still_held_names_its_rebuild(migrated, w
 @requires_db
 def test_two_current_resolves_for_one_trade_fail_naming_both(migrated, weekday_calendar):
     """`40` ESCALATE 4 / v3 §4 row 15: the store filters on `day`, so both
-    are stored; the reader FAILS naming both ids."""
+    are stored; the reader FAILS naming both ids. The writer refuses the
+    second row since K2 fix r1 F-1; the reader's FAIL is the guard for a
+    row no caller can write."""
     (pos,) = _day1_carrying_ddd().open_positions
     first = _state(D_NEXT, kind="resolve", positions=[{"trade_id": pos.trade_id}])
-    second = _state(D3, kind="resolve", positions=[{"trade_id": pos.trade_id}])
+    with DrcStore()._connect() as conn:
+        second = _stated(conn.execute(
+            f"""INSERT INTO drc_stated_books (day, kind, positions, book_sha256, via, reason)
+                SELECT %s, kind, positions, book_sha256, via, reason FROM drc_stated_books
+                 WHERE id = %s RETURNING {_STATED_COLUMNS}""",
+            (D3, first.id),
+        ).fetchone())
     _state(D_NEXT, kind="no_trade")
     both = rf"#{first.id}.*#{second.id}"
     with pytest.raises(PairingError, match=both):

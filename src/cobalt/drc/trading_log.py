@@ -33,7 +33,7 @@ import io
 import re
 from datetime import date, datetime, time
 from decimal import Decimal, InvalidOperation
-from typing import Protocol
+from typing import Iterable, Protocol
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
@@ -68,6 +68,17 @@ REQUIRED: tuple[str, ...] = (TIME, SYMBOL, SIDE, PRICE, QTY, ROUTE, BROKER, ACCO
 #: What FIFO pairing reads. A `partial` file missing any of these parses,
 #: and pairing says `not computed — missing: <columns>` (R17 (5)).
 PAIRING_INPUTS: tuple[str, ...] = (TIME, SYMBOL, SIDE, PRICE, QTY)
+
+
+def pairing_not_computed(missing: Iterable[str]) -> dict[str, str]:
+    """THE partial-import rule (K2 fix r1 F-5; v3 `:181`, `FR14`; L3): a
+    file missing a column pairing reads is `not computed — missing:
+    <columns>`; one missing only other columns pairs. The parser's first
+    record and every re-pair (`DrcStore._repair`) call this one copy."""
+    missing = list(missing)
+    absent = [c for c in PAIRING_INPUTS if c in missing]
+    return {"pairing": f"not computed — missing: {', '.join(absent)}"} if absent else {}
+
 
 _FIELD = {
     TIME: "time",
@@ -167,8 +178,7 @@ class TradingLogSource:
                     extras=list(detection.extras),
                 ),
             )
-        absent = [c for c in PAIRING_INPUTS if c in detection.missing]
-        not_computed = {"pairing": f"not computed — missing: {', '.join(absent)}"} if absent else {}
+        not_computed = pairing_not_computed(detection.missing)
         return ParsedTradingLog(
             import_date=import_date,
             executions=executions,
@@ -238,4 +248,5 @@ __all__ = [
     "TradingLogError",
     "TradingLogSource",
     "chronological",
+    "pairing_not_computed",
 ]

@@ -131,3 +131,9 @@ Nothing is defaulted.
   compared as multisets of `(symbol, direction, shares)` — never the open
   day, the cost or the trade id. It returns the sorted ids of every
   unmatched position in EITHER book.
+
+## 2026-09-25 — DRC K2 fix r1: `drc.pairing/4`
+`FN_VERSION = "drc.pairing/4"`: four stored shapes changed in the store —
+`day.derived.book_stale`, a no-trade day's seed via `record_day`, a
+re-paired day's stats match, and a partial re-pair's `not_computed`
+text. Nothing else in this module changed.
