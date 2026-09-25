@@ -28,7 +28,10 @@ The run's own deadline is `replay.backup_margin_s` before the backup's
 schedule: a run starting inside that margin refuses; a running step is cut
 at the deadline (async work under `wait_for`); the vault write is re-checked
 immediately before it lands, so no write is ever late. A run started after
-the backup time has no deadline to race.
+the backup time has no deadline to race. The formations step is cut
+between scans `replay.formations_reserve_s` before the deadline, so the
+line is written for what was evaluated and says PARTIAL; the job then
+fails at the end.
 
 DRY RUN (R1-17) writes nothing — no DDL, no DML, no job stamp (the CLI
 uses `as_job(skip=True)`), no radar-cache file, no vault byte — and prints
@@ -80,6 +83,8 @@ from .movers import (
 )
 
 STEPS = ("movers", "cards", "formations", "line")
+#: The formations step stops this far before the deadline (R95).
+FORMATIONS_RESERVE_KEY = "replay.formations_reserve_s"
 
 
 class DeadlineExceeded(ReplayError):
@@ -179,6 +184,7 @@ def formation_replay(
     out: Callable[[str], None],
     sources: Optional[FormationSources] = None,
     context: Optional[FormationContext] = None,
+    cut_at: Optional[Callable[[datetime], bool]] = None,
 ) -> FormationOutcome:
     """Bind to S2-P2's replay, or say exactly that it is not there.
 
@@ -231,7 +237,7 @@ def formation_replay(
     report = call(
         trade_date, pool_key=sources.pool_key, slug_filter=None, radar_store=sources.radar_store,
         defs_source=sources.defs_source, daily_source=sources.daily_source, tunables=sources.tunables,
-        defaults=sources.defaults, clock=sources.clock, out=out,
+        defaults=sources.defaults, clock=sources.clock, out=out, cut_at=cut_at,
     )
     return formation_misses(report, context=context, evaluator_version=version)
 
@@ -286,6 +292,12 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
             deps.job_store.get(ARCHIVER_LABEL), trade_date=trade_date, now=started, registry=deps.registry
         )
         deadline = None if dry_run else replay_deadline(started, registry=deps.registry, tunables=deps.tunables)
+        reserve = None
+        if deadline is not None:
+            row = deps.tunables.get(FORMATIONS_RESERVE_KEY)
+            if row is None or row.value is None:
+                raise ReplayError(f"tunables.yaml: {FORMATIONS_RESERVE_KEY} is missing or unmeasured")
+            reserve = timedelta(seconds=int(row.value))
     except ReplayError as e:
         raise attach(e)
     deps.out(f"replay {trade_date} run {result.replay_run_id}{' DRY RUN' if dry_run else ''}: {result.precondition}")
@@ -432,11 +444,18 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
                 end_inclusive=False, as_bars=True),
             radar_cards=lambda: deps.missed.radar_cards(trade_date),
         )
+        cut_at = None if deadline is None else (lambda _instant: deps.now() >= deadline - reserve)
         outcome = deps.formation_source(
             trade_date, out=deps.out,
             sources=deps.formation_sources() if deps.formation_sources else None, context=context,
+            cut_at=cut_at,
         )
         result.formation_replay = outcome.status
+        result.formation_cut = outcome.cut
+        if outcome.cut is not None:
+            logger.warning("replay {} formations CUT before {} ET — {} of {} scans evaluated",
+                           trade_date, _et(outcome.cut.cut_before).strftime("%H:%M:%S"),
+                           outcome.cut.scans_done, outcome.cut.scans_planned)
         result.formation_candidates = outcome.counts.candidates
         result.formation_suppressed = outcome.counts.suppressed
         result.formation_no_trigger = outcome.counts.no_trigger
@@ -467,7 +486,8 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
                            input_stale=result.input_stale,
                            formation_rows=state.get("formation_rows", []),
                            formation_suppressed=result.formation_suppressed,
-                           formation_input_stale=result.formation_input_stale)
+                           formation_input_stale=result.formation_input_stale,
+                           formation_cut=result.formation_cut)
         path = deps.drc_path(trade_date)
         check_deadline("line (before the vault write)")
         written = write_miss_line(path, body, writer=deps.writer_factory(dry_run))
@@ -487,12 +507,18 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
             raise failed from e
         result.steps_done.append(name)
 
+    failed: list[str] = []
     if state["archive_failures"]:
         failures = state["archive_failures"]
-        raise attach(ReplayError(
+        failed.append(
             f"{len(failures)} movers archive failure(s): "
             + "; ".join(f"{t}: {err}" for t, err in sorted(failures.items())[:5])
-        ))
+        )
+    if result.formation_cut is not None:
+        cut = result.formation_cut
+        failed.append(f"formations cut at the deadline — {cut.scans_done} of {cut.scans_planned} scans")
+    if failed:
+        raise attach(ReplayError("; ".join(failed)))
     return result
 
 

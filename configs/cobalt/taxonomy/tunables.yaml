@@ -954,6 +954,18 @@ tunables:
     source: ruling
     consumers: ["cobalt.replay.runner (deadline)", "cobalt.radar.notes.replay_window (L53 total demand)"]
 
+  # The formations step stops this far before the replay deadline, between
+  # scans, so the reconcile and the miss line still land inside it (R95).
+  # Not measured yet: proposed, the first cut or uncut nights are the measurement.
+  - key: replay.formations_reserve_s
+    value: 120
+    unit: duration
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.replay.runner (formations cut)"]
+
   # --- F16 hygiene rider (ADR-0008 D7, 2026-09-08) ----------------------
   # The Mattermost timeout was a `timeout_s:` field on MattermostConfig,
   # a number living in a config file that F16's sweep had already moved
