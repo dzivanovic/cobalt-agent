@@ -26,3 +26,12 @@ Wake-up path the close feeds, for every house: `CLAUDE.md` / `AGENTS.md` /
 Refuse and report rather than guess when a required source is absent or
 unreadable, a citation cannot be verified, a classification or number is
 contested, or the block would exceed the cap (LAWS.md, "Fold-at-session-close").
+
+## DIFF
+ONE row added, between step 2 and step 3, numbered `2a` in the routine's own shape (the `4a` precedent); every other byte is the live file's (proof: `diff` of the live file against this file minus this section prints one added line).
+
+- BEFORE: (no row between `| 2 | **LAWS fold or proposals** …` and `| 3 | **Rewrite `## NOW`** …`)
+- AFTER: `| 2a | **Lessons gate** (ruled 2026-09-25, Dejan — …) — read the updated: date of topics/cto-desk-contract.md; every LESSONS OF … line, and every other [stated … · Code] practice line, of topics/cto-desk.md stated on or after that date must map to a ## Checklist rule … that cites its line …; list every unmapped line or item under Checklist — OWED … with the rule it proposes …; the hub PROPOSES, the desk APPLIES under L58 …; nothing unmapped = Checklist — OWED: none. | … | the Checklist — OWED list, or none |` (full text in the table above).
+- Drafter's reading beyond the card's words: "stated ON OR AFTER `updated:`" instead of "after" — a lesson appended on the same day as the cut (the contract's `updated:` is that day) would otherwise never be gated; a line already cited by a rule passes, so same-day lines cost nothing twice.
+
+Apply: the desk replaces `docs/40 - DevDocs/SESSION-CLOSE.md` with everything ABOVE `## DIFF` (the live file has no `## DIFF` section). The file sits outside `prompts/`, so the next `99-close.md` the desk writes names step 2a in its card.
