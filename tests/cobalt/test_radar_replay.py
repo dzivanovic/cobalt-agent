@@ -332,6 +332,76 @@ def test_all_day_scan_replay_offline_acceptance_matrix(tmp_path, monkeypatch, ca
     assert finviz_calls == []
 
 
+def test_replay_from_bars_reports_handicap_not_replayable(tmp_path, monkeypatch, capsys):
+    """F3 (`45` ESCALATE 7, `handicap-h1-check-2026-09-24.md:333`; v3 §3
+    `:139` "That tool reports `handicap: not replayable from bars` and does
+    not guess."). The note's pool block carries a CONSTRUCTED `handicap:`
+    block (this test's literals). (i) the replay summary says so; (ii) "does
+    not guess": the bars header has no float or cap column (R54's missing
+    header), so no ranked transition carries a factor below 1."""
+    from cobalt.radar.models import HandicapBlock
+
+    parsed = load_sources(
+        FIXTURES / "radar-screens.example.md",
+        FIXTURES / "radar-lists.example.md",
+        scan_interval=60,
+        poll_interval=60,
+        finviz_max_rpm=100,
+        list_chunk_size=50,
+        context_tickers=0,
+    )
+    screen_item = next(item for item in parsed.screens.blocks if isinstance(item.block, ScreenBlock))
+    pool_item = next(item for item in parsed.screens.blocks if item.key == "pool")
+    list_item = next(item for item in parsed.lists.blocks if isinstance(item.block, ListBlock))
+    exclude = next(item.block for item in parsed.lists.blocks if isinstance(item.block, ExcludeBlock))
+    tickers = [ticker for ticker in list_item.block.tickers if ticker not in exclude.tickers][:10]
+    handicap = HandicapBlock(
+        float_below_m=Decimal("11"), market_cap_below_m=Decimal("222"), factor=Decimal("0.55"),
+        missing="apply", mode="shadow", combinator="any",
+    )
+    pool_variant = pool_item.block.model_copy(update={"handicap": handicap})
+    parsed.screens.blocks = [
+        replace(item, block=pool_variant) if item is pool_item else item for item in parsed.screens.blocks
+    ]
+    parsed.pool = pool_variant
+
+    cfg = runner_module.load_config()
+    snapshots = snapshots_from_bars(_generated_bars(tickers), screen_item.block, prior_sessions=1)
+    replay_dir = tmp_path / "replay"
+    replay_dir.mkdir()
+    (replay_dir / "2026-09-03.json").write_text(
+        json.dumps([{"at": item.at.isoformat(), "rows": list(item.rows)} for item in snapshots])
+    )
+
+    async def no_finviz(*args, **kwargs):
+        raise AssertionError(scrub("Finviz called during offline replay"))
+
+    monkeypatch.setattr(runner_module, "Path", lambda value: replay_dir if str(value) == "data/radar-replay" else Path(value))
+    monkeypatch.setattr(runner_module, "RadarStore", ReplayRadarStore)
+    monkeypatch.setattr(runner_module, "TraderSettingsStore", ReplaySettingsStore)
+    monkeypatch.setattr(runner_module, "configured_sources", lambda: parsed)
+    monkeypatch.setattr(runner_module, "load_config", lambda: cfg)
+    monkeypatch.setattr(runner_module, "session_clock", lambda: ReplayClock())
+    monkeypatch.setattr(
+        runner_module,
+        "load_tunables",
+        lambda: SimpleNamespace(by_key={"radar.scan_interval": SimpleNamespace(value=60)}),
+    )
+    monkeypatch.setattr("cobalt.archiver.collector.finviz_get", no_finviz)
+    monkeypatch.setattr("cobalt.radar.collector.finviz_get", no_finviz)
+
+    runner_module.scan_command(
+        argparse.Namespace(replay="2026-09-03", from_time="09:59", to_time="10:02")
+    )
+    output = scrub(capsys.readouterr().out)
+    summary = next(line for line in output.splitlines() if line.startswith("replay 2026-09-03:"))
+    assert "handicap: not replayable from bars" in summary                       # (i)
+
+    ranked = [row for _instant, row in ReplayRadarStore.last.events if row.raw_rank is not None]
+    assert ranked, "the replay produced no ranked transition: (ii) would be vacuous"
+    assert all(row.handicap_factor in (None, Decimal(1)) for row in ranked)       # (ii)
+
+
 # ---------------------------------------------------------------------
 # S2-P4 FR-2 — the ONE not-equity evaluator at the radar's call site
 # ---------------------------------------------------------------------
