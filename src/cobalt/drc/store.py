@@ -485,6 +485,13 @@ class DrcStore:
             return "no-trade DRC"
         from cobalt.daymode.propose import prior_trading_day
 
+        earlier = conn.execute(
+            f"SELECT 1 FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'day' AND day < %s LIMIT 1",
+            (day,),
+        ).fetchone()
+        if not earlier:
+            return "first import"
+        # Only a day with history asks the calendar (a recorded P implies it).
         prior = prior_trading_day(day)
         if conn.execute(
             f"SELECT 1 FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'day' AND day = %s LIMIT 1",
@@ -495,11 +502,7 @@ class DrcStore:
                 "(v3 §2b; R51: the close wins); a stated opening is taken only on a first "
                 "import or a broken chain (v3 §2c); nothing written"
             )
-        earlier = conn.execute(
-            f"SELECT 1 FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'day' AND day < %s LIMIT 1",
-            (day,),
-        ).fetchone()
-        return f"chain broken at {prior}" if earlier else "first import"
+        return f"chain broken at {prior}"
 
     def preview_stated_book(
         self,
