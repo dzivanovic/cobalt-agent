@@ -156,7 +156,7 @@ Template: `configs/cobalt/templates/daily.md.j2`.
 |---|---|---|
 | `Sleep/Readiness/RHR` | blank | **human**: 80 / 81 / 56 |
 | `1% goal:` | blank | **human**: "exit on structure break, not on hope" |
-| `Daily HARD Stop: $420`, `STOP TRADING AFTER 11AM`, 2× `I WILL NOT TOLERATE…` | present (literal template text) | **ABSENT** |
+| `Daily HARD Stop: [user data: daily-stop value redacted 2026-09-25, L32 / L45]`, `STOP TRADING AFTER 11AM`, 2× `I WILL NOT TOLERATE…` | present (literal template text) | **ABSENT** |
 | `<!-- cobalt-slot:rules -->` + 12 rule checkboxes + sheet-mode line + mantras | present | **ABSENT** |
 | `### Trading` table | SPY/QQQ/IWM filled with prices | present but **all cells empty** |
 | `### Market Context:` | `-` | **human**: full Vitals Macro Brief (~170 lines) |
@@ -1057,7 +1057,7 @@ Daily prefill [WRITE]: created — /Users/cobalt/Vault/Think/1 - Trading/1- Dail
 +
 +1% goal:
 +
-+Daily HARD Stop: $420
++Daily HARD Stop: [user data: daily-stop value redacted 2026-09-25, L32 / L45]
 +STOP TRADING AFTER 11AM until one month green 4 out of 5 days a week
 +I WILL NOT TOLERATE THE MISTAKE OF OVERSIZING RISK ON A SINGLE TRADE THAT I DID NOT PLAN JUST TO MAKE A LARGFE POSITION
 +I WILL NOT TOLERATE THE MISTAKE OF HAVING MORE THAN 3 LOSSES IN A ROW IN A TRADING DAY
@@ -1256,7 +1256,7 @@ temp vaults from the 00:24 test run).
 |---|---|---|
 | written | 2026-09-04 05:15:04 | 2026-09-04 06:30:19 |
 | sha256 | `d6f6e9ab…` (vault_writes 525-528) | `e4b005ba…` |
-| shape | 118 lines, `#### 2026-09-04 T 05:15`, `Daily HARD Stop: $420`, filled rules/market table/market calendar, `cobalt:section` markers | 76 lines / 1423 bytes, `#### 2026-09-04`, all sections empty, zero markers |
+| shape | 118 lines, `#### 2026-09-04 T 05:15`, `Daily HARD Stop: [user data: daily-stop value redacted 2026-09-25, L32 / L45]`, filled rules/market table/market calendar, `cobalt:section` markers | 76 lines / 1423 bytes, `#### 2026-09-04`, all sections empty, zero markers |
 | provenance | `prefill.daily`, run_id `a83292db9d4d` | `5 - Templates/Daily.md` with `{{date:YYYY-MM-DD}}` expanded — Obsidian daily-notes plugin |
 
 Supporting timeline (unified log + `obsidian.log`, which logs in UTC):
