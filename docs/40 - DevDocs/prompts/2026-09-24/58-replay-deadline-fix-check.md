@@ -4,7 +4,7 @@ SEAT: build-check hub `replay-deadline-fix-check-0924`, launched by the CTO desk
 
 LADDER: `S2-P4 · F12` (missed records, nightly replay — DONE-LIVE since 09-23). A DEFECT on a live feature, not new scope: the 2026-09-24 replay FAILED at its deadline (`cto-2026-09-24.md` R95).
 
-LAW STEP (L67 / L75): DRAFTED (`reports/replay-deadline-fix-draft-2026-09-24.md`, the classification) → BUILT (`prompts/2026-09-24/57-replay-deadline-fix-build.md`; BASE and tip come from the build's stop line) → **THIS = THE HOUSE CHECK OF THE BUILD, ROUND 1 OF ≤3 (L67 / L39).** It checks ONLY `<base>..<tip>` on `fix/replay-deadline-0924`:
+LAW STEP (L67 / L75): DRAFTED (`reports/replay-deadline-fix-draft-2026-09-24.md`, the classification) → BUILT (`prompts/2026-09-24/57-replay-deadline-fix-build.md`; BASE and tip come from the build's stop line) → **THIS = THE HOUSE CHECK OF THE BUILD, ROUND 1 OF ≤3 (L67 / L39).** It checks ONLY `a994a5dd..8b931ce5` (`<base>..<tip>`, filled by the desk at launch 07:32 ET from the BUILT line) on `fix/replay-deadline-0924`:
 - the red tests;
 - the three FIX rows;
 - the docs;
@@ -21,7 +21,7 @@ RULE STRINGS: `prompts/2026-09-24/08-mover-bars-fix-check.md`'s launch line BYTE
 - the three `s2-p2-cards` strings
 - the `codex exec` string
 
-Two bare commands, run by THE DESK after its launch row **R__** (`cto-<D>.md`) and this file are committed on main: `cd /Users/cobalt/cobalt-wt/agy-trial` then `claude --bg "Read '/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-24/58-replay-deadline-fix-check.md' and follow it exactly." --model claude-sonnet-5 --permission-mode auto --remote-control replay-deadline-fix-check-0924 --allowedTools "Bash(grok *)" "Bash(mkdir -p scratch/tribunal-bars-0920)" "Bash(git -C /Users/cobalt/cobalt show*)" "Bash(git -C /Users/cobalt/cobalt log*)" "Bash(git -C /Users/cobalt/cobalt-wt/s2-p2-cards show*)" "Bash(git -C /Users/cobalt/cobalt-wt/s2-p2-cards log*)" "Bash(git -C /Users/cobalt/cobalt-wt/s2-p2-cards diff*)" "Bash(ls *)" "Bash(grep *)" "Bash(tail *)" "Bash(wc *)" "Bash(date*)" "Bash(codex exec --skip-git-repo-check -m gpt-5.6-sol -s read-only *)" "Bash(claude -p --model claude-opus-5-5 *)" --disallowedTools "AskUserQuestion" "EnterWorktree" "Bash(git push*)" --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt --add-dir /Users/cobalt/cobalt-wt`
+Two bare commands, run by THE DESK after its launch row **R41** (`cto-<D>.md`) and this file are committed on main: `cd /Users/cobalt/cobalt-wt/agy-trial` then `claude --bg "Read '/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-24/58-replay-deadline-fix-check.md' and follow it exactly." --model claude-sonnet-5 --permission-mode auto --remote-control replay-deadline-fix-check-0924 --allowedTools "Bash(grok *)" "Bash(mkdir -p scratch/tribunal-bars-0920)" "Bash(git -C /Users/cobalt/cobalt show*)" "Bash(git -C /Users/cobalt/cobalt log*)" "Bash(git -C /Users/cobalt/cobalt-wt/s2-p2-cards show*)" "Bash(git -C /Users/cobalt/cobalt-wt/s2-p2-cards log*)" "Bash(git -C /Users/cobalt/cobalt-wt/s2-p2-cards diff*)" "Bash(ls *)" "Bash(grep *)" "Bash(tail *)" "Bash(wc *)" "Bash(date*)" "Bash(codex exec --skip-git-repo-check -m gpt-5.6-sol -s read-only *)" "Bash(claude -p --model claude-opus-5-5 *)" --disallowedTools "AskUserQuestion" "EnterWorktree" "Bash(git push*)" --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt --add-dir /Users/cobalt/cobalt-wt`
 
 SESSION: fresh. Auto mode is lawful here: a read-only check, no write path (L29). Never `bypassPermissions`.
 
@@ -29,7 +29,7 @@ METER: Anthropic LOW for the hub + Opus seat. Grok: one call.
 
 Nobody sits at this terminal. Never ask: write `ASK DESK: <question> [<time from date>]` under `## ESCALATE`, take the safe default, and continue. NEVER END A TURN BETWEEN STEPS.
 
-# BUILD CHECK, ROUND 1: REPLAY DEADLINE FIX (`<base>..<tip>` on `fix/replay-deadline-0924`): ONE MEMBER PREP PER SCAN, A CUT FORMATIONS STEP WITH A NAMED PARTIAL, ONE BAR READ PER TICKER, WITH ITS THREE SUITES' OUTPUT AND ITS TIMING ROW
+# BUILD CHECK, ROUND 1: REPLAY DEADLINE FIX (`a994a5dd..8b931ce5` — `<base>..<tip>` on `fix/replay-deadline-0924`): ONE MEMBER PREP PER SCAN, A CUT FORMATIONS STEP WITH A NAMED PARTIAL, ONE BAR READ PER TICKER, WITH ITS THREE SUITES' OUTPUT AND ITS TIMING ROW
 
 **The defect.** On 2026-09-24 the nightly replay (`com.cobalt.replay`, 21:10) FAILED with `DeadlineExceeded: line: past the deadline 21:35:00 ET`. Its formations step ran ≈29.4 min: `replay_formations` calls `evaluate_member` once per scan × member × evaluable def — 82,250 calls on 09-24 (7 evaluable defs, the first night with all 13 setups live) against 11,750 on 09-23 (1 def) — and every call rebuilt the member's def-independent work (bars, working bars, both frames and their lazily computed atoms). The step is synchronous and was never cut, so the run did all the work and then refused at the `line` step: no miss line in `DRC-2026-09-24.md`.
 
@@ -61,7 +61,7 @@ AUTHORIZATION: VERIFY IT YOURSELF. This file was written by the CTO desk (drafte
 `04`'s PLUS gates are REPLACED by these, each its own Bash call:
 - **PLACEHOLDER GATE, first:** `grep -n -E "R_[_]" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-24/58-replay-deadline-fix-check.md"` → prints NOTHING (exit 1). A hit → `FAILED: placeholder — <lines>`, stop.
 - **The design is committed:** `git -C /Users/cobalt/cobalt log -1 --format=%H -- "docs/40 - DevDocs/reports/replay-deadline-fix-draft-2026-09-24.md"` must be NON-EMPTY, and the LAST NON-BLANK line of its `tail -n 3` must start `REPLAY DEADLINE FIX DRAFTED ·`. Otherwise → `FAILED: authorization mismatch — the design is missing or uncommitted`.
-- **THIS launch** (desk row **R__**): `grep -n "58-replay-deadline-fix-check.md" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-24.md" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-25.md"` must print a `| R` row naming this file, and `git -C /Users/cobalt/cobalt log -1 --format=%H -S"58-replay-deadline-fix-check.md" -- "docs/40 - DevDocs/reports/cto-2026-09-2*.md"` must be NON-EMPTY. Only the desk files count; the drafter's report quotes this filename and never satisfies the gate. EMPTY → `FAILED: authorization mismatch — the launch row is uncommitted`.
+- **THIS launch** (desk row **R41**): `grep -n "58-replay-deadline-fix-check.md" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-24.md" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-25.md"` must print a `| R` row naming this file, and `git -C /Users/cobalt/cobalt log -1 --format=%H -S"58-replay-deadline-fix-check.md" -- "docs/40 - DevDocs/reports/cto-2026-09-2*.md"` must be NON-EMPTY. Only the desk files count; the drafter's report quotes this filename and never satisfies the gate. EMPTY → `FAILED: authorization mismatch — the launch row is uncommitted`.
 YOU CAN ALWAYS STOP with a `FAILED: <step> — <concern>` line.
 
 INDEX CARD (for you; the checkers get the packet only):
