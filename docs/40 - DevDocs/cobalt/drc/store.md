@@ -68,7 +68,10 @@ is never carried.
      any write.
   5. Under `LOCK TABLE … SHARE ROW EXCLUSIVE`:
      - `reason` is derived: `first import` / `chain broken at <P>` /
-       `closed outside export` / `no-trade DRC`.
+       `closed outside export` / `no-trade DRC`. An `opening` for a day
+       whose prior trading day is recorded is refused with a
+       `ValueError`, nothing written — that day starts from P's close
+       (K1 fix r1, H2); `preview_stated_book` refuses the same.
      - A current row of the same day and kind (and, for a resolve, the
        same trade_id) is refused unless `supersedes` names it.
      - A `supersedes` that names no single current row is refused.
@@ -100,6 +103,10 @@ is never carried.
   - `inputs.carried_from` on a carried trade: `{day, trade_id,
     from_book_sha256}` or `{stated_book_id}`;
   - `stated_book_id` on the `day` row when the book was stated.
+  A not-computed day with `seed=None` IS recorded by the route (K1 fix
+  r1, H3): one `day` row carrying `not_computed.pairing`, no `seed`, no
+  `book_close`, so the next day's `seed_for` fails `pairing not computed`
+  until D is stated and re-paired.
 - `STATED_TABLE` names the table for a caller's printout.
 
 ## Tests

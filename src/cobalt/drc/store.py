@@ -475,18 +475,31 @@ class DrcStore:
 
     @staticmethod
     def _reason(conn, day: date, kind: str) -> str:
-        """Derived by the store, never passed in (v3 `:139`)."""
+        """Derived by the store, never passed in (v3 `:139`). An `opening`
+        for a day whose prior trading day is recorded is REFUSED: that day
+        starts from the recorded close (R51), and neither reason v3 names
+        would be true of it (L1)."""
         if kind == "resolve":
             return "closed outside export"
         if kind == "no_trade":
             return "no-trade DRC"
         from cobalt.daymode.propose import prior_trading_day
 
+        prior = prior_trading_day(day)
+        if conn.execute(
+            f"SELECT 1 FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'day' AND day = %s LIMIT 1",
+            (prior,),
+        ).fetchone():
+            raise ValueError(
+                f"{day} opening: {prior} is recorded — {day} starts from {prior}'s close "
+                "(v3 §2b; R51: the close wins); a stated opening is taken only on a first "
+                "import or a broken chain (v3 §2c); nothing written"
+            )
         earlier = conn.execute(
             f"SELECT 1 FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'day' AND day < %s LIMIT 1",
             (day,),
         ).fetchone()
-        return f"chain broken at {prior_trading_day(day)}" if earlier else "first import"
+        return f"chain broken at {prior}" if earlier else "first import"
 
     def preview_stated_book(
         self,

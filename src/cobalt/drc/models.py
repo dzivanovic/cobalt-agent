@@ -130,7 +130,8 @@ class OpenPosition(_Frozen):
     held_shares: int = Field(gt=0)
     lots: list[Lot]
     entry_time: Optional[datetime]
-    opened_on: date
+    # None = not stated — a stated position's open day is his to give (v3 :134 names none); never the stated day (L1).
+    opened_on: Optional[date]
     day: date  # the import day whose file left it open
 
 

@@ -98,7 +98,10 @@ Nothing is defaulted.
 - **`stated_open_positions(day, positions)`** turns his stated book into
   a seed.
   - Each position gets ONE lot `(time=None, price=avg_cost)`,
-    `entry_time=None` and `opened_on=day`.
+    `entry_time=None` and `opened_on=None` (K1 fix r1, H1: its open day
+    is not stated; a seeded book keeps its position's `opened_on`, `None`
+    included, on every carry, and only a book opened by an execution
+    takes the day).
   - Its `trade_id` comes from **`stated_trade_id`**:
     `<symbol>-<direction>-stated-<day>`. This is the drafter's pin, and
     it is stable across restatements.

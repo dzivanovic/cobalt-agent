@@ -63,6 +63,8 @@ field is a pydantic `AwareDatetime`, imported under the local name
     entry `Leg`.
   - `OpenPosition.entry_time`, `Trade.entry_time` and `Trade.avg_entry`
     may also be `None`.
+  - `OpenPosition.opened_on` may be `None` (K1 fix r1, H1): a stated
+    position's open day is not stated, never the stated day (L1).
   - An EXIT `Leg` still requires both its time and its price (a
     validator).
 - **`Trade.gross_pnl`** is a `Decimal` or exactly the literal

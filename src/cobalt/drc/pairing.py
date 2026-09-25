@@ -110,7 +110,7 @@ def book_sha256(positions: Iterable[OpenPosition]) -> str:
 def stated_open_positions(day: date, positions: Iterable[StatedPosition]) -> list[OpenPosition]:
     """His stated `opening` book for `day` as the pairing's seed: ONE lot
     per position, its cost `None` when he gave none, NO time (v3
-    `[F-04]`; never an invented one), opened on the stated day."""
+    `[F-04]`; never an invented one), its open day not stated."""
     return [
         OpenPosition(
             trade_id=stated_trade_id(p.symbol, p.direction, day),
@@ -119,7 +119,7 @@ def stated_open_positions(day: date, positions: Iterable[StatedPosition]) -> lis
             held_shares=p.shares,
             lots=[Lot(time=None, price=p.avg_cost, shares=p.shares)],
             entry_time=None,
-            opened_on=day,
+            opened_on=None,
             day=day,
         )
         for p in positions
@@ -137,6 +137,7 @@ class _Book:
     exits: list = field(default_factory=list)
     realized: Union[Decimal, str] = Decimal(0)
     carried_from: Optional[date] = None
+    seeded: bool = False
 
     @property
     def held(self) -> int:
@@ -214,6 +215,7 @@ def _seeded(position: OpenPosition) -> _Book:
         position.trade_id,
         position.entry_time,
         carried_from=position.opened_on,
+        seeded=True,
     )
     for lot in position.lots:
         book.lots.append(lot)
@@ -295,7 +297,9 @@ def pair_day(
                 held_shares=book.held,
                 lots=list(book.lots),
                 entry_time=book.entry_time,
-                opened_on=book.carried_from or day,
+                # A seeded book keeps its position's open day, None
+                # included; a book opened today opened today.
+                opened_on=book.carried_from if book.seeded else day,
                 day=day,
             )
         )
