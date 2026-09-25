@@ -156,9 +156,25 @@ def test_platform_and_order_phrasings_are_refused_whatever_the_plan(text, kind):
     assert r is not None and r.kind == "refuse" and r.reply == tl.REFUSE_SENTENCE
 
 
+@pytest.mark.parametrize("text", ["exit QRS", "get out of QRS", "close out QRS", "short QRS"])
+@pytest.mark.parametrize("kind", ["answer", "act"])
+def test_a_bare_exit_close_or_short_of_a_ticker_is_refused_whatever_the_plan(text, kind):
+    """A1, fix r2 (voice-v1-fix-r1-check-2026-09-24.md:140, :157; FINAL :84
+    HARD REFUSALS — "anything that places, changes or cancels an order"; the
+    `_ORDER` comment's own "never a bare exit/close"): a bare exit / close /
+    close out / get out of / share-count-free short OF A TICKER is an order,
+    refused by code whatever the Plan's kind."""
+    plan = _plan("answer", "cards.open") if kind == "answer" else _plan("act", "cards.set_stop")
+    r = tl.code_refusal(text, plan, AGENT)
+    assert r is not None and r.kind == "refuse" and r.reply == tl.REFUSE_SENTENCE
+
+
 @pytest.mark.parametrize("text", [
     "move the stop on the XYZ short to 4.50", "what is the stop on my long XYZ card", "read my open cards",
     "what did the pool close at", "how many shares on the second XYZ card",
+    # A1, fix r2 (voice-v1-fix-r1-check-2026-09-24.md:140): the short-side
+    # mirror of the long case above — a card side stays readable.
+    "what is the stop on my short XYZ card",
 ])
 def test_card_sides_and_price_fields_stay_readable(text):
     """A1's NOT-refused set: a card side (`long` / `short`) and a price field

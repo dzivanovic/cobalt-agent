@@ -2,7 +2,9 @@
 classification (`reports/voice-v1-fix-r1-draft-2026-09-24.md`, U2 U5 U6 U8
 U9) as a cheap run whose output the build report quotes. A RUN that is red
 on the fix commit is a RESULT for round 2, kept here as a strict xfail and
-never fixed in fix r1 (L70 / L75). Constructed values only (L32).
+never fixed in fix r1 (L70 / L75). Fix r2 builds RUN-2, RUN-4c and RUN-7
+(oversize) as FIX rows and removes their three strict-xfail marks; each test
+body is unchanged. Constructed values only (L32).
 """
 
 from __future__ import annotations
@@ -47,7 +49,6 @@ def deps(tmp_path, monkeypatch):
 # --- RUN-2: the card is read twice ----------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="RUN-2 red on a1f8404a — a round-2 finding, not fixed in fix r1 (L70/L75)")
 def test_run2_a_stop_moved_between_the_two_reads_is_refused(monkeypatch):
     """RUN-2 (voice-v1-check-a-2026-09-24.md row 7, A4, NOT CHECKABLE FROM
     READS): `execute_stop` reads the card (tools.py `read_open_cards`), then
@@ -106,7 +107,6 @@ def test_run4b_a_non_act_plan_carrying_a_tool_executes_nothing(deps, kind, reply
 # --- RUN-4c: an untyped error inside plan_turn -------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="RUN-4c red on a1f8404a — a round-2 finding, not fixed in fix r1 (L70/L75)")
 def test_run4c_an_untyped_plan_error_fails_loud_named(deps, monkeypatch):
     """RUN-4c (voice-v1-check-b-2026-09-24.md row 6, carried to D): a
     `ValueError` (config / budget) raised inside `plan_turn` → the turn FAILS
@@ -163,8 +163,7 @@ def _parse(argv):
 
 @pytest.mark.parametrize("size", [
     "zero",
-    pytest.param("over_max_upload_bytes", marks=pytest.mark.xfail(
-        strict=True, reason="RUN-7 red on a1f8404a — a round-2 finding, not fixed in fix r1 (L70/L75)")),
+    "over_max_upload_bytes",
 ])
 def test_run7_cli_audio_zero_byte_and_oversize_are_refused(deps, tmp_path, monkeypatch, capsys, size):
     """RUN-7 (voice-v1-check-d-2026-09-24.md row 14; FINAL [F-19]): the CLI

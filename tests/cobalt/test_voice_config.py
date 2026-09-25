@@ -196,8 +196,8 @@ def test_the_production_overrides_are_exported_by_the_aset_launcher():
 def test_every_real_path_is_clear_of_every_backup_source(which, monkeypatch):
     """FINAL §5 against the REAL backup.yaml: the committed dev values and
     the production overrides in ops/start_aset.sh load with every backup
-    source passed (the resident itself does not read backup.yaml — see
-    load_voice_config's docstring)."""
+    source passed (C2, fix r2: the resident's own load reads the same
+    sources through the one loader — FINAL :118, L42)."""
     monkeypatch.delenv(vc.SCRATCH_ENV, raising=False)
     monkeypatch.delenv(vc.MODEL_ENV, raising=False)
     if which == "production":
@@ -210,11 +210,33 @@ def test_every_real_path_is_clear_of_every_backup_source(which, monkeypatch):
         assert not any(str(p).startswith(s) for s in srcs)
 
 
-def test_the_resident_loader_reads_no_backup_config():
+def test_the_resident_loader_reads_backup_sources_through_the_one_loader():
+    """C2, fix r2 (prompts/2026-09-24/54-voice-v1-fix-r2-build.md; FINAL :118
+    "The config schema REFUSES to load … under any `backup.yaml` source"):
+    reverses `43`'s pin that the resident loader read no backup config — the
+    load reads the sources through the ONE loader, `load_backup_config`."""
     import inspect
 
     src = inspect.getsource(vc)
-    assert "load_backup_config" not in src and "backup.config" not in src
+    assert "load_backup_config" in src
+
+
+def test_the_resident_load_refuses_a_path_under_a_backup_source(tmp_path, dirs, monkeypatch):
+    """C2, fix r2 (voice-v1-fix-r1-check-2026-09-24.md ESCALATE 10; FINAL
+    :118; L42): `load_voice_config` with NO `backup_sources=` — the
+    resident's call — reads `backup.yaml`'s sources through the one loader
+    and refuses a path under any of them, naming the source. The loader
+    returns the REAL backup.yaml with only `sources` replaced (L45)."""
+    from cobalt.backup.config import load_backup_config
+
+    s, m = dirs
+    src = tmp_path / "backed-up"
+    real = load_backup_config()
+    monkeypatch.setattr(vc, "load_backup_config",
+                        lambda *a, **k: real.model_copy(update={"sources": [src]}))
+    with pytest.raises(vc.VoiceConfigError) as e:
+        vc.load_voice_config(_voice(tmp_path, s, m, scratch_dir=str(src / "voice")))
+    assert str(src) in str(e.value) and "backup" in str(e.value)
 
 
 # --- G2 / K5 --------------------------------------------------------------

@@ -242,6 +242,27 @@ def test_the_widget_reads_a_refused_status_as_red_never_all_clear():
     assert "level:'red', text:'voice status refused (HTTP ' + r.status + ')'" in block
 
 
+def test_a_device_red_line_survives_every_status_callback():
+    """D3, fix r2 (voice-v1-fix-r1-check-2026-09-24.md:141, :158; FINAL :175
+    §7 "No microphone / permission denied | widget red: \"no microphone on
+    this device\"", L9): the device's RED line lives in its own `device`
+    array, which `banner()` always draws and the `/voice/status` callbacks
+    never assign — so a refused status AND an OK status (`lines = j.lines ||
+    []`) both leave it on the banner. A static pin of the widget script —
+    there is no JS runner here."""
+    js = vw.widget_html()
+    (decl,) = [l for l in js.splitlines() if l.strip().startswith("let ") and "lines = []" in l]
+    assert "device = []" in decl, decl
+    assert "lines.concat(device, extra || [])" in js
+    assert "device.push({level:'red', text:'no microphone on this device'})" in js
+    assert "lines.push({level:'red', text:'no microphone on this device'})" not in js
+    block = _status_block(js)
+    assert "lines = [{level:'red', text:'voice status refused (HTTP ' + r.status + ')'}]" in block
+    assert "lines = j.lines || []" in block
+    assert "lines = [{level:'red', text:'voice status unreadable'}]" in block
+    assert "device" not in block
+
+
 def test_no_local_voice_keeps_the_turns_red_lines_on_the_banner():
     """D4 (voice-v1-check-d-2026-09-24.md FOR THE CLASSIFIER 4; FINAL §2.5 /
     §7, L1): `speak()` takes the turn's degraded lines, and its no-local-voice

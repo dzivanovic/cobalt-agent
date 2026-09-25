@@ -174,6 +174,24 @@ EXPECTED_BACKUP_YAML_READERS = frozenset({
     "cobalt.heartbeat.runner.run_beat",
     "cobalt.heartbeat.cli.cmd_beat",
     "cobalt.heartbeat.cli.cmd_show",
+    # C2, voice V1 fix r2 (FINAL :118, L42): the resident's voice-config load
+    # reads backup.yaml's sources — voice/config.py load_voice_config, and
+    # every function whose calls reach it.
+    "cobalt.voice.config.load_voice_config",
+    "cobalt.voice.web.get_config",
+    "cobalt.voice.web.get_deps",
+    "cobalt.voice.web.peer_gate",
+    "cobalt.voice.web.voice_turn",
+    "cobalt.voice.web._run",
+    "cobalt.voice.web._tap",
+    "cobalt.voice.web.voice_confirm",
+    "cobalt.voice.web.voice_cancel",
+    "cobalt.voice.web.status_lines",
+    "cobalt.voice.web.voice_status",
+    "cobalt.voice.web.voice_startup",
+    "cobalt.voice.turn.default_deps",
+    "cobalt.voice.cli.cmd_turn",
+    "cobalt.voice.cli._run",
 })
 
 
@@ -340,7 +358,15 @@ def _backup_yaml_readers(root: Path) -> tuple[set[str], set[str], set[str], set[
     return readers, entrypoints, referrers, unresolved
 
 
-def test_backup_yaml_is_read_by_one_shots_only_and_derives_no_restart(monkeypatch):
+def test_backup_yaml_readers_are_pinned_and_derive_the_aset_restart(monkeypatch):
+    """C2, voice V1 fix r2 (prompts/2026-09-24/54-voice-v1-fix-r2-build.md;
+    FINAL :118; L42 "config in a resident's `reads:` → that resident"): the
+    resident com.cobalt.aset now reads configs/cobalt/backup.yaml at its
+    voice-config load, so the file sits in that job's `reads:` and a change
+    to it derives the com.cobalt.aset restart. The reader walk below pins
+    every function that reaches the loader; the voice ones run inside
+    com.cobalt.aset (the widget routes and the startup hook, aset/web.py) or
+    are the operator command `cobalt voice turn`."""
     # 2026-09-22: the 6a commit of `ops/2026-09-21` (the vault key-store file
     # joins restic's include set) changed configs/cobalt/backup.yaml, and
     # `cobalt jobs restarts main..HEAD` escalated it UNCLASSIFIED CONFIG
@@ -362,9 +388,9 @@ def test_backup_yaml_is_read_by_one_shots_only_and_derives_no_restart(monkeypatc
     ])
     (row,) = classify("HEAD...HEAD")
     assert row.escalate is False
-    assert row.restarts == ()
-    # The string follows the declared `readers:` order in jobs.yaml.
-    assert row.rule == "no resident reads (one-shot: com.cobalt.backup,com.cobalt.heartbeat)"
+    assert row.restarts == ("com.cobalt.aset",)
+    # restarts.classify's rule for a path in a resident's `reads:`.
+    assert row.rule == "resident reads"
 
     readers, entrypoints, referrers, unresolved = _backup_yaml_readers(Path(restarts.REPO_ROOT))
     assert unresolved == set(), sorted(unresolved)
@@ -374,16 +400,33 @@ def test_backup_yaml_is_read_by_one_shots_only_and_derives_no_restart(monkeypatc
     #   cmd_beat  -> `cobalt heartbeat beat` -> com.cobalt.heartbeat
     #                (ops/com.cobalt.heartbeat.plist:30-43)
     #   _status, _restore, cmd_show -> operator commands, no job.
+    #   C2 (fix r2): voice_turn / voice_confirm / voice_cancel / voice_status
+    #   and their Depends(peer_gate) -> the /voice/* routes com.cobalt.aset
+    #   serves (aset/web.py:90 include_router); voice_startup -> its startup
+    #   hook (aset/web.py:91); cmd_turn -> `cobalt voice turn`, an operator
+    #   command, no job.
     assert entrypoints == {
         "cobalt.backup.cli._run",
         "cobalt.backup.cli._status",
         "cobalt.backup.cli._restore",
         "cobalt.heartbeat.cli.cmd_beat",
         "cobalt.heartbeat.cli.cmd_show",
+        "cobalt.voice.web.peer_gate",
+        "cobalt.voice.web.voice_turn",
+        "cobalt.voice.web.voice_confirm",
+        "cobalt.voice.web.voice_cancel",
+        "cobalt.voice.web.voice_status",
+        "cobalt.voice.web.voice_startup",
+        "cobalt.voice.cli.cmd_turn",
     }, sorted(entrypoints)
     assert referrers == {
         "cobalt.backup.cli.add_parser",
         "cobalt.heartbeat.cli.add_parser",
+        # C2 (fix r2): the route decorators' Depends(peer_gate), the ASET
+        # app's startup hook, and set_defaults(func=cmd_turn).
+        "cobalt.voice.web.<module>",
+        "cobalt.aset.web.<module>",
+        "cobalt.voice.cli.add_parser",
     }, sorted(referrers)
     # No import-time read: nothing reads the file at module scope, so no
     # resident's static import reach (the classifier's own walk) can read it
@@ -395,13 +438,12 @@ def test_backup_yaml_is_read_by_one_shots_only_and_derives_no_restart(monkeypatc
         if job.kind is JobKind.RESIDENT and job.imports:
             assert not restarts.reachable(job.imports, graph, unknown)[0] & import_time, job.label
 
-    declared = load_job_registry().no_resident_read("configs/cobalt/backup.yaml")
-    assert declared is not None
-    assert set(declared.readers) == {"com.cobalt.backup", "com.cobalt.heartbeat"}
-    assert all(
-        load_job_registry().by_label[label].kind is JobKind.ONE_SHOT
-        for label in declared.readers
-    )
+    # The schema refuses a path both in a resident's `reads:` and under
+    # `no_resident_reads` (jobs/config.py:393-397): the resident row is it.
+    assert load_job_registry().no_resident_read("configs/cobalt/backup.yaml") is None
+    assert [j.label for j in load_job_registry().readers_of("configs/cobalt/backup.yaml")] == [
+        "com.cobalt.aset"
+    ]
 
 
 # Sol's three cases (round-2 check row 15), each planted in a fresh copy of
