@@ -309,6 +309,27 @@ def test_the_reason_is_derived_first_import_then_chain_broken(migrated, weekday_
 
 
 @requires_db
+def test_an_opening_is_refused_while_its_prior_trading_day_is_recorded(migrated, weekday_calendar):
+    """H2 (`drc-k1-check-2026-09-24.md:150`; L1; v3 §2c `:108`, `:139`;
+    R51 "the close wins"): with D recorded, an `opening` for D_NEXT is
+    refused — by the writer and by the preview — and no row is stored, so
+    no false `chain broken at <P>` text is ever written to the append-only
+    table. The lawful cases stay: a real broken chain, and `no_trade`."""
+    _day1_carrying_ddd()
+    before = _stated_count(migrated)
+    with pytest.raises(ValueError, match="is recorded"):
+        _state(D_NEXT)
+    with pytest.raises(ValueError, match="is recorded"):
+        DrcStore().preview_stated_book(D_NEXT, "opening", [], via="cli")
+    assert _stated_count(migrated) == before
+    assert migrated.execute(
+        'SELECT count(*) FROM "user".drc_stated_books WHERE day = %s', (D_NEXT,)
+    ).fetchone()[0] == 0
+    assert _state(D3).reason == "chain broken at 2001-01-03"
+    assert _state(D3, kind="no_trade").reason == "no-trade DRC"
+
+
+@requires_db
 def test_a_resolve_names_exactly_one_trade(migrated):
     with pytest.raises(ValueError):
         _state(D, kind="resolve", positions=[{"trade_id": "a"}, {"trade_id": "b"}])
@@ -392,8 +413,9 @@ def test_seed_iii_a_close_row_that_does_not_match_its_positions_fails(migrated, 
 
 @requires_db
 def test_seed_iv_a_statement_beside_a_recorded_close_fails_until_k2(migrated, weekday_calendar):
-    _day1_carrying_ddd()
+    """Case (iv) FAILS until K2's rebuild. R51's order: the later day stated first, the earlier day recorded after (H2 refuses the other order)."""
     stated = _state(D_NEXT)
+    _day1_carrying_ddd()
     with pytest.raises(PairingError, match=f"stated opening book #{stated.id} and 2001-01-02's recorded close both exist"):
         DrcStore().seed_for(D_NEXT)
 
@@ -411,13 +433,15 @@ def test_seed_v_a_recorded_prior_day_is_carried_with_its_hash(migrated, weekday_
 
 @requires_db
 def test_seed_vi_a_stated_book_seeds_a_first_import(migrated, weekday_calendar):
+    """H1 (`drc-k1-check-2026-09-24.md:149`; K1 fix r1): the stated
+    position's open day is NOT STATED (`None`), never the stated day (L1)."""
     stated = _state(D, positions=[GGG_SHORT])
     seed = DrcStore().seed_for(D)
     assert seed.source == "stated" and seed.stated_book_id == stated.id and seed.from_day is None
     assert seed.from_book_sha256 == stated.book_sha256
     (pos,) = seed.positions
     assert pos.trade_id == "GGG-short-stated-2001-01-02" and pos.held_shares == 40
-    assert pos.opened_on == D and pos.day == D and pos.entry_time is None
+    assert pos.opened_on is None and pos.day == D and pos.entry_time is None
 
 
 @requires_db
@@ -537,6 +561,39 @@ def test_a_not_computed_day_writes_no_close(migrated, weekday_calendar):
     assert _row(migrated, D, "seed") is None
     _, day = _row(migrated, D, "day")
     assert day["not_computed"]["pairing"] == "not computed — opening book not stated"
+
+
+@requires_db
+def test_the_route_records_an_unpaired_day_and_the_next_day_fails_until_it_is_stated(migrated, weekday_calendar):
+    """H3 (`drc-k1-check-2026-09-24.md:151`; v3 §4 row 1 `:212`, X2 (a)
+    `:313`; L72), GREEN-as-pin — the store already allows it
+    (`store.py:212-217`); the seam text is the fix. An unpaired day is
+    RECORDED: one `day` row, no `trade` / `seed` / `book_close`; the next
+    day FAILS `pairing not computed` until D is stated and re-paired."""
+    from cobalt.drc.pairing import build_day
+
+    store = DrcStore()
+    data, parsed = _trading(DAY1, D)
+    ids = {Kind.TRADING_LOG: store.record_import(D, parsed.result, data, parsed.executions)}
+    assert store.seed_for(D) is None
+    pairing = build_day(parsed, seed=None)
+    assert pairing.not_computed["pairing"] == "not computed — opening book not stated"
+    store.record_day(pairing, ids, None)
+    rows = migrated.execute(
+        'SELECT kind, derived FROM "user".drc_rows WHERE day = %s', (D,)
+    ).fetchall()
+    assert [kind for kind, _ in rows] == ["day"]
+    assert rows[0][1]["not_computed"]["pairing"] == "not computed — opening book not stated"
+    for kind in ("trade", "seed", "book_close"):
+        assert _row(migrated, D, kind) is None
+    with pytest.raises(PairingError, match="2001-01-02 has pairing not computed"):
+        store.seed_for(D_NEXT)
+
+    assert _state(D).reason == "first import"
+    seed = store.seed_for(D)
+    assert seed.source == "stated"
+    store.record_day(build_day(parsed, seed=seed.positions), ids, seed)
+    assert store.seed_for(D_NEXT).source == "carried"
 
 
 @requires_db
