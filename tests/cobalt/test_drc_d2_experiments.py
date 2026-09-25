@@ -179,7 +179,9 @@ def test_x13_a_superseding_log_that_drops_a_bound_trade_lists_the_binding_orphan
     line = f"orphaned: shot.png — trade {key} not in the current trading log"
     assert line in result.orphaned
     assert result.event is not None and line in result.event.orphaned
-    assert line in imports.render_page(imports.day_view(D))
+    from cobalt.aset import drc_page
+
+    assert line in drc_page.render(imports.day_view(D))
     with DrcStore()._connect() as conn:
         assert conn.execute(
             "SELECT trade_key, supersedes FROM drc_imports WHERE id = %s", (shot,)
