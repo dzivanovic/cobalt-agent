@@ -140,3 +140,109 @@ def test_x12_every_drc_field_is_none_without_rows():
         model = getattr(drc, family)
         for name in type(model).model_fields:
             assert getattr(model, name) is None, f"{family}.{name}"
+
+
+# ---------------------------------------------------------------------
+# E3 — the change line against cobalt_dev (inside the rollback)
+# ---------------------------------------------------------------------
+
+
+def _constructed_sheets():
+    """Constructed grade dollars, written over whatever `cobalt_dev` holds
+    INSIDE the rollback, so every asserted value is this file's (L69)."""
+    return {
+        "aset.sheet_modes": {
+            "sheets": {
+                "half": {"A_plus": "8", "A": "7", "B": "30", "C": "2", "D": "0"},
+                "full": {"A_plus": "16", "A": "14", "B": "60", "C": "4", "D": "0"},
+            },
+            "order": ["half", "full"],
+        },
+        "aset.enabled_grades": ["A", "B"],
+    }
+
+
+def _change_form(**over):
+    rows = _constructed_sheets()["aset.sheet_modes"]
+    form = {"account.daily_stop_full": "", "account.daily_stop_half": ""}
+    for sheet, grades in rows["sheets"].items():
+        for g, v in grades.items():
+            form[f"aset.sheet_modes.{sheet}.{g}"] = v
+    form.update(over)
+    return form
+
+
+@pytest.fixture
+def change_page(monkeypatch):
+    from fastapi.testclient import TestClient
+    from test_aset_web import _offline_daymode_config, _offline_sheet_modes_config
+
+    from cobalt.aset import web as web_module
+    from cobalt.settings.store import TraderSettingsStore
+
+    store = TraderSettingsStore()
+    _clear_drc_rows()
+    store.put(_constructed_sheets(), source="test:d4-sheets")
+    cfg = _offline_daymode_config()
+    monkeypatch.setattr(web_module, "load_sheet_modes_config", _offline_sheet_modes_config)
+    monkeypatch.setattr(
+        web_module,
+        "_daymode_state",
+        lambda: {
+            "cfg": cfg, "day": None,
+            "row": {"attested_sheet": cfg.hotkey_file_for_mode(cfg.lowest_enabled)},
+            "mode": cfg.lowest_enabled, "stage": "stage 1 (system rule)", "error": None,
+        },
+    )
+    return TestClient(web_module.app), store
+
+
+@requires_db
+def test_e3_a_good_apply_writes_through_the_store_and_reads_back(change_page):
+    from cobalt.settings.drc import propose_daily_change
+
+    client, store = change_page
+    form = _change_form(**{"account.daily_stop_full": "31337", "aset.sheet_modes.full.B": "61"})
+    proposal = propose_daily_change(form)
+    r = client.post("/settings/daily/apply", data=dict(form, sha256=proposal.sha256))
+    assert "saved" in r.text, r.text[-2000:]
+    values = store.values()
+    for key, value in proposal.payload.items():
+        assert values[key] == value, key
+    assert values["account.daily_stop_full"] == "31337"
+    assert values["aset.sheet_modes"]["sheets"]["full"]["B"] == "61"
+    # The trace the store keeps: the row's own source (carrying the
+    # payload hash) and its updated_at.
+    row = [r for r in store.rows() if r["key"] == "account.daily_stop_full"][0]
+    assert proposal.sha256 in row["source"]
+    assert row["updated_at"] is not None
+
+
+@requires_db
+def test_e3_an_apply_inside_market_reset_writes_nothing(change_page, monkeypatch):
+    from datetime import datetime, timezone
+
+    from cobalt.session import clock as clock_mod
+    from cobalt.settings.drc import propose_daily_change
+
+    client, store = change_page
+    before = store.rows()
+    form = _change_form(**{"account.daily_stop_full": "31337"})
+    sha = propose_daily_change(form).sha256
+    monkeypatch.setattr(clock_mod, "now_utc", lambda: datetime(2026, 9, 4, 0, 30, tzinfo=timezone.utc))
+    r = client.post("/settings/daily/apply", data=dict(form, sha256=sha))
+    assert "FAILED" in r.text and "MARKET RESET" in r.text
+    after = store.rows()
+    assert len(after) == len(before)
+    assert after == before
+
+
+@requires_db
+def test_e3_a_two_key_apply_with_one_bad_key_writes_neither(change_page):
+    client, store = change_page
+    before = store.rows()
+    form = _change_form(**{"account.daily_stop_full": "31337", "aset.sheet_modes.full.B": "-1"})
+    r = client.post("/settings/daily/apply", data=dict(form, sha256="0" * 64))
+    assert "FAILED" in r.text and "aset.sheet_modes.full.B" in r.text
+    assert store.rows() == before
+    assert "account.daily_stop_full" not in store.values()
