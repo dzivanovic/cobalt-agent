@@ -178,12 +178,22 @@ def change_page(monkeypatch):
     from test_aset_web import _offline_daymode_config, _offline_sheet_modes_config
 
     from cobalt.aset import web as web_module
+    from cobalt.aset.config import SheetModesConfig
+    from cobalt.settings.models import DAYMODE_KEYS, TraderSettings
     from cobalt.settings.store import TraderSettingsStore
 
     store = TraderSettingsStore()
     _clear_drc_rows()
-    store.put(_constructed_sheets(), source="test:d4-sheets")
     cfg = _offline_daymode_config()
+    # A COHERENT constructed set: the sheet rows AND the day-mode rows they
+    # are cross-checked against (`reduced_enabled_grades` may only narrow
+    # `aset.enabled_grades`), so no pre-existing `cobalt_dev` row is mixed in.
+    sheets = _constructed_sheets()
+    sm = SheetModesConfig(**sheets["aset.sheet_modes"], enabled_grades=sheets["aset.enabled_grades"])
+    daymode_rows = {
+        k: v for k, v in TraderSettings(sheet_modes=sm, daymode=cfg).rows().items() if k in DAYMODE_KEYS
+    }
+    store.put({**sheets, **daymode_rows}, source="test:d4-sheets")
     monkeypatch.setattr(web_module, "load_sheet_modes_config", _offline_sheet_modes_config)
     monkeypatch.setattr(
         web_module,
