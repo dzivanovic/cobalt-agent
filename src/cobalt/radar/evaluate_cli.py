@@ -55,7 +55,7 @@ from cobalt.session import Session
 from .anatomy.daily import DailySeries, parse_daily_csv
 from .evaluate import ET
 from .anatomy.registry import evaluability
-from .evaluate import FACTOR_COMPUTERS, EvaluateStage, LoadedDef, MemberInput, evaluate_member
+from .evaluate import FACTOR_COMPUTERS, EvaluateStage, LoadedDef, MemberInput, evaluate_member, prepare_member
 
 
 class CandidateRefused(RuntimeError):
@@ -200,8 +200,10 @@ def replay_formations(
                 bars=tuple(b for b in bars_cache[ticker] if b.ts < instant), daily=daily, daily_status=status,
                 rvol=None, pool_position=member.get("last_rank"),
             )
+            prep = prepare_member(inp, tunables=rows, defaults=defaults, clock=clock)
             for ld in evaluable:
-                ev = evaluate_member(ld, inp, tunables=rows, defaults=defaults, scan_interval=scan_interval, clock=clock)
+                ev = evaluate_member(ld, inp, tunables=rows, defaults=defaults, scan_interval=scan_interval, clock=clock,
+                                     prep=prep)
                 report.counts[ev.evaluation] = report.counts.get(ev.evaluation, 0) + 1
                 if ev.evaluation == "formed" and ev.formation is not None:
                     key = (ticker, ld.slug, ev.formation.formed_bar_ts.isoformat())

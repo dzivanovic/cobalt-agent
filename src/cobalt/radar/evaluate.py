@@ -77,6 +77,7 @@ import json
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, localcontext
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
@@ -890,18 +891,69 @@ def _build_frames(
     }
 
 
+class MemberPrep:
+    """The def-independent work of ONE member at ONE scan instant (R95):
+    what `evaluate_member` builds before any def is read, built once and
+    shared by every def of that scan. Built only by `prepare_member`, for
+    the `tunables` / `defaults` / `clock` every def of the scan is
+    evaluated with. The eager values are the ones `evaluate_member` read
+    first; `series`, `run`, `params`, `daily_ok` and the frames are lazy,
+    so each is computed at the point of first use, as before. A frame's
+    lazy atoms take only the frame's own inputs and `tunables`
+    (`anatomy/frame.py` `_d1_resolvers`), so one frame pair serves every
+    def asking the same `bind_side` (`frames`, memoized per value)."""
+
+    def __init__(self, member: MemberInput, *, tunables: Mapping[str, TunableRow],
+                 defaults: TaxonomyDefaults, clock):
+        self.member, self.tunables, self.defaults, self.clock = member, tunables, defaults, clock
+        self.membership_id = member.membership_id
+        self.as_of = member.as_of
+        self.closed_i1 = _closed_i1(member)
+        self.consumed = tuple(bar_row(bar) for bar in self.closed_i1)
+        self.last_bar = self.closed_i1[-1] if self.closed_i1 else None
+        self.last_price = self.last_bar.close if self.last_bar else None
+        self._frames: dict[bool, dict[str, Frame]] = {}
+
+    @cached_property
+    def series(self):
+        return working_bars(self.closed_i1, working_minutes(self.defaults), as_of=self.member.as_of)
+
+    @cached_property
+    def run(self) -> tuple[WorkingBar, ...]:
+        return tuple(rth_only(self.series, self.clock))
+
+    @cached_property
+    def params(self) -> ExtensionParams:
+        return ExtensionParams.from_tunables(self.tunables)
+
+    @cached_property
+    def daily_ok(self) -> bool:
+        return _daily_ok(self.member, self.clock)
+
+    def frames(self, bind_side: bool) -> dict[str, Frame]:
+        if bind_side not in self._frames:
+            self._frames[bind_side] = _build_frames(
+                self.member, self.closed_i1, self.series, self.run, daily_ok=self.daily_ok,
+                tunables=self.tunables, params=self.params, last_price=self.last_price, clock=self.clock,
+                bind_side=bind_side,
+            )
+        return self._frames[bind_side]
+
+
+def prepare_member(
+    member: MemberInput, *, tunables: Mapping[str, TunableRow], defaults: TaxonomyDefaults, clock,
+) -> MemberPrep:
+    """ONE member's def-independent work at its `as_of` (R95) — the one
+    path: `evaluate_member` without a prep builds its own here (L3)."""
+    return MemberPrep(member, tunables=tunables, defaults=defaults, clock=clock)
+
+
 def member_frames(
     member: MemberInput, *, tunables: Mapping[str, TunableRow], defaults: TaxonomyDefaults, clock,
 ) -> dict[str, Frame]:
     """Both frames of one member at its `as_of`, built exactly as
     `evaluate_member` builds them."""
-    closed_i1 = _closed_i1(member)
-    series = working_bars(closed_i1, working_minutes(defaults), as_of=member.as_of)
-    return _build_frames(
-        member, closed_i1, series, tuple(rth_only(series, clock)), daily_ok=_daily_ok(member, clock),
-        tunables=tunables, params=ExtensionParams.from_tunables(tunables),
-        last_price=closed_i1[-1].close if closed_i1 else None, clock=clock,
-    )
+    return prepare_member(member, tunables=tunables, defaults=defaults, clock=clock).frames(False)
 
 
 def evaluate_member(
@@ -912,13 +964,23 @@ def evaluate_member(
     defaults: TaxonomyDefaults,
     scan_interval: int,
     clock,
+    prep: MemberPrep | None = None,
 ) -> MemberEvaluation:
+    """`prep`: one member's shared def-independent work (R95); None builds
+    it here through `prepare_member`. A prep of another membership or
+    instant is refused."""
     td = ld.definition
     minutes = working_minutes(defaults)
-    closed_i1 = _closed_i1(member)
-    consumed = tuple(bar_row(bar) for bar in closed_i1)
-    last_bar = closed_i1[-1] if closed_i1 else None
-    last_price = last_bar.close if last_bar else None
+    prep = prep if prep is not None else prepare_member(member, tunables=tunables, defaults=defaults, clock=clock)
+    if (prep.membership_id, prep.as_of) != (member.membership_id, member.as_of):
+        raise EvaluateError(
+            f"a member prep for membership {prep.membership_id} at {prep.as_of.isoformat()} handed to "
+            f"membership {member.membership_id} at {member.as_of.isoformat()}"
+        )
+    closed_i1 = prep.closed_i1
+    consumed = prep.consumed
+    last_bar = prep.last_bar
+    last_price = prep.last_price
     base = dict(
         membership_id=member.membership_id, ticker=member.ticker, slug=ld.slug, md5=ld.md5,
         departed=member.departed, consumed_bars=consumed, last_price=last_price,
@@ -954,18 +1016,16 @@ def evaluate_member(
             direction=None, missing=refusals, note="a convention row names a rule the code does not implement",
         ))
 
-    series = working_bars(closed_i1, minutes, as_of=member.as_of)
-    run = tuple(rth_only(series, clock))
-    params = ExtensionParams.from_tunables(tunables)
+    run = prep.run
+    params = prep.params
     if last_bar is None:
         intraday_stale = True
     else:
         intraday_stale = intraday_staleness(
             observed_at=last_bar.ts + timedelta(minutes=1), as_of=member.as_of, scan_interval=scan_interval
         ).stale
-    daily_ok = _daily_ok(member, clock)
-    frames = _build_frames(member, closed_i1, series, run, daily_ok=daily_ok, tunables=tunables, params=params,
-                           last_price=last_price, clock=clock, bind_side=binds_side_by_frame(td))
+    daily_ok = prep.daily_ok
+    frames = prep.frames(binds_side_by_frame(td))
     # R2-4.2 B: factor and seam observations ONCE, on the real bars (the
     # detector's own Extension, also for a def that binds side by the frame).
     ext, htf = frames["long"].observed, frames["long"].htf
@@ -2003,10 +2063,10 @@ __all__ = [
     "EVALUATOR_VERSION", "SideOutcome", "assumed_closure", "closure_keys", "convention_refusals", "member_frames",
     "publish_frames",
     "EvaluateError", "EvaluateStage", "FACTOR_COMPUTERS", "Formation", "LoadedDef", "MemberEvaluation",
-    "MemberInput", "OpenRadarCard", "ReceiptChain", "ReplayError", "ReplayedCard", "StageOutcome",
+    "MemberInput", "MemberPrep", "OpenRadarCard", "ReceiptChain", "ReplayError", "ReplayedCard", "StageOutcome",
     "UNCLASSIFIED_SETUP", "assumed_keys_of", "build_receipt", "canonical_sha256", "card_dots",
     "card_why", "chain_commit", "desk_shadow", "evaluate_member", "evaluate_node", "formation_changes",
     "stop_on_protective_side",
     "formula_sha256", "overlay_taps",
-    "published_numbers", "rebuild_members", "refresh_card", "replay_receipt", "seam_atom",
+    "prepare_member", "published_numbers", "rebuild_members", "refresh_card", "replay_receipt", "seam_atom",
 ]
