@@ -134,26 +134,36 @@ def test_every_drc_key_is_optional_and_none_is_required():
 
 
 @pytest.mark.parametrize(
-    "key,value",
+    "key,value,typed",
     [
-        ("account.daily_stop_full", "250"),
-        ("account.daily_stop_half", 125),
-        ("limits.card_match_window_minutes", 15),
-        ("windows.premarket_end", "09:30"),
-        ("windows.first_window_minutes", 15),
-        ("windows.prime", ["09:30", "11:00"]),
-        ("windows.dead", ["11:00", "14:00"]),
-        ("windows.second", ["14:00", "15:45"]),
-        ("goal.primary", "constructed goal"),
-        ("goal.metric", "constructed metric"),
-        ("goal.target_pct", [60, 65]),
-        ("goal.switch_threshold_pct", 60),
+        ("account.daily_stop_full", "250", Decimal("250")),
+        ("account.daily_stop_half", 125, Decimal("125")),
+        ("limits.card_match_window_minutes", 15, 15),
+        ("windows.premarket_end", "09:30", "09:30"),
+        ("windows.first_window_minutes", 15, 15),
+        ("windows.prime", ["09:30", "11:00"], ("09:30", "11:00")),
+        ("windows.dead", ["11:00", "14:00"], ("11:00", "14:00")),
+        ("windows.second", ["14:00", "15:45"], ("14:00", "15:45")),
+        ("goal.primary", "constructed goal", "constructed goal"),
+        ("goal.metric", "constructed metric", "constructed metric"),
+        ("goal.target_pct", [60, 65], (Decimal("60"), Decimal("65"))),
+        ("goal.switch_threshold_pct", 60, Decimal("60")),
     ],
 )
-def test_each_drc_key_validates_a_good_constructed_value(key, value):
+def test_each_drc_key_validates_a_good_constructed_value(key, value, typed):
+    """D4 fix r1 F-5 (drc-d4-check-2026-09-25.md:129): the good value is
+    TYPED as the family model declares it (`DrcKey.validate`,
+    models.py:199), not merely accepted, and the stored row round-trips."""
     from cobalt.settings.models import OPTIONAL_SETTING_MODELS
 
-    OPTIONAL_SETTING_MODELS[key].from_rows({key: value}).row()
+    adapter = OPTIONAL_SETTING_MODELS[key]
+    got = adapter.validate(value)
+    assert got == typed and type(got) is type(typed), (key, got)
+    if isinstance(typed, tuple):
+        assert [type(v) for v in got] == [type(v) for v in typed], (key, got)
+    row = adapter.from_rows({key: value}).row()
+    assert adapter.from_rows({key: row}).row() == row
+    assert adapter.validate(row) == typed
 
 
 @pytest.mark.parametrize(
@@ -238,25 +248,63 @@ def _py_files(root: Path):
     return sorted(p for p in root.rglob("*.py") if "__pycache__" not in p.parts)
 
 
-def test_one_reader_of_the_daily_stop_and_the_grade_dollars():
-    """L3: the daily-stop key names appear only in `settings/` and in the
-    ONE caller in `prefill/daily.py`; no DRC module reads `sheet_modes`;
-    `prefill/daily.py` calls the sheet loader exactly once."""
-    offenders, hits = [], []
-    for path in _py_files(SRC):
-        rel = path.relative_to(SRC).as_posix()
+#: Every way a module can name the daily stop's keys (D4 fix r1 F-4).
+_STOP_KEY_TOKENS = ("daily_stop_full", "daily_stop_half", "DAILY_STOP_KEYS", "account.daily_stop")
+#: The ONE reader's entry points, and the two modules allowed to call them.
+_READER_CALLS = ("daily_risk_values(", "load_drc_settings(")
+_READER_CALLERS = ("prefill/daily.py", "aset/web.py")
+
+
+def _second_readers(root: Path) -> list[str]:
+    """Every hit, under `root`, of a second way to read the daily stop or
+    the grade dollars: (a) a key token outside `settings/`; (b) a reader
+    call outside `settings/` and the two named callers (the daily note and
+    the change line's form, web.py:1200); (c) `sheet_modes` in a `drc/`
+    module."""
+    offenders = []
+    for path in _py_files(root):
+        rel = path.relative_to(root).as_posix()
         text = path.read_text(encoding="utf-8")
-        for name in ("daily_stop_full", "daily_stop_half"):
-            if name in text:
-                hits.append(f"{rel}: {name}")
-                if not (rel.startswith("settings/") or rel == "prefill/daily.py"):
-                    offenders.append(f"{rel}: {name}")
+        in_settings = rel.startswith("settings/")
+        for token in _STOP_KEY_TOKENS:
+            if token in text and not in_settings:
+                offenders.append(f"{rel}: {token}")
+        for call in _READER_CALLS:
+            if call in text and not (in_settings or rel in _READER_CALLERS):
+                offenders.append(f"{rel}: {call}")
         if rel.startswith("drc/") and "sheet_modes" in text:
             offenders.append(f"{rel}: sheet_modes")
-    assert not offenders, f"a second reader: {offenders} (all daily_stop hits: {hits})"
+    return offenders
+
+
+def test_one_reader_of_the_daily_stop_and_the_grade_dollars():
+    """L3: the daily-stop key names appear only in `settings/`; the ONE
+    reader is called only by `prefill/daily.py` and the change line's form
+    in `aset/web.py`; no DRC module reads `sheet_modes`; `prefill/daily.py`
+    calls the sheet loader exactly once (D4 fix r1 F-4,
+    drc-d4-check-2026-09-25.md:126)."""
+    offenders = _second_readers(SRC)
+    assert offenders == [], f"a second reader: {offenders}"
     daily = (SRC / "prefill" / "daily.py").read_text(encoding="utf-8")
     assert daily.count("load_sheet_modes_config()") == 1
     assert daily.count("daily_risk_values(") == 1
+
+
+def test_the_one_reader_walk_flags_a_second_reader(tmp_path):
+    """D4 fix r1 F-4's NEGATIVE CONTROL (drc-d4-check-2026-09-25.md:126):
+    the walk names a key token and a reader call in a constructed `drc/`
+    module, and a dotted key in a constructed `aset/` module."""
+    (tmp_path / "drc").mkdir()
+    (tmp_path / "aset").mkdir()
+    (tmp_path / "drc" / "x.py").write_text(
+        "from x import DAILY_STOP_KEYS\nrisk = daily_risk_values()\n", encoding="utf-8"
+    )
+    (tmp_path / "aset" / "y.py").write_text('KEY = "account.daily_stop"\n', encoding="utf-8")
+    assert sorted(_second_readers(tmp_path)) == [
+        "aset/y.py: account.daily_stop",
+        "drc/x.py: DAILY_STOP_KEYS",
+        "drc/x.py: daily_risk_values(",
+    ]
 
 
 # ---------------------------------------------------------------------
@@ -467,15 +515,38 @@ def test_saved_only_after_the_read_back_equals_the_payload(page, world):
     r = page.post("/settings/daily/apply", data=dict(form, sha256=_sha({"account.daily_stop_full": "31337"})))
     assert "FAILED" in r.text
     assert "Settings saved" not in r.text
+    assert "differs from what was applied" in r.text
+    assert "account.daily_stop_full" in r.text
+
+
+_ISO_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?")
+_HEX64 = re.compile(r"[0-9a-f]{64}")
+
+
+def _leaks(message: str, figures: tuple[str, ...]) -> list[str]:
+    """What of his a log message still carries once its timestamps are
+    masked: each constructed figure it contains, and `digest` when a
+    64-hex run remains (a digest of a small-value payload IS the value,
+    D4 fix r1 F-8)."""
+    masked = _ISO_TIME.sub("<time>", message)
+    found = [f for f in figures if f in masked]
+    if _HEX64.search(masked):
+        found.append("digest")
+    return found
 
 
 def test_no_log_line_carries_a_value(page, world):
+    """D4 fix r1 F-8 (drc-d4-check-2026-09-25.md:131, :178; L32): the one
+    log line names the keys, never a value and never a digest of one."""
     from loguru import logger
 
+    stop, grade = "31337", "7061"
+    assert _leaks(f"x · {grade} · at 2026-09-03T14:00:00+00:00", (stop, grade)) == [grade]
+    assert _leaks("source aset.change_line@sha256:" + "ab" * 32, (stop, grade)) == ["digest"]
     messages = []
     sink = logger.add(lambda m: messages.append(str(m)), format="{message}")
     try:
-        form = _form(**{"account.daily_stop_full": "31337", "aset.sheet_modes.full.B": "61"})
+        form = _form(**{"account.daily_stop_full": stop, "aset.sheet_modes.full.B": grade})
         from cobalt.settings.drc import propose_daily_change
 
         sha = propose_daily_change(form).sha256
@@ -486,9 +557,9 @@ def test_no_log_line_carries_a_value(page, world):
     applied = [m for m in messages if "settings applied" in m]
     assert len(applied) == 1, messages
     assert "account.daily_stop_full" in applied[0] and "aset.sheet_modes" in applied[0]
-    assert sha in applied[0]
+    assert sha not in applied[0]
     for m in messages:
-        assert "31337" not in m, m
+        assert _leaks(m, (stop, grade)) == [], m
 
 
 # ---------------------------------------------------------------------
