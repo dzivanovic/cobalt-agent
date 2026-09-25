@@ -127,9 +127,13 @@ def test_an_empty_stated_book_is_a_book_and_pairs():
 
 
 def test_a_stated_position_is_one_lot_with_no_time_and_a_stable_id():
+    """H1 (`drc-k1-check-2026-09-24.md:149`; K1 fix r1, prompt `48`): a
+    stated position's open day is NOT STATED (`None`) — never the stated
+    day, a date known false for a swing opened before it (L1; v3 `:134`
+    names no open day). The one assertion reversed here."""
     (pos,) = _stated(GGG_SHORT)
     assert pos.trade_id == "GGG-short-stated-2001-01-03"
-    assert pos.opened_on == D_NEXT and pos.day == D_NEXT
+    assert pos.opened_on is None and pos.day == D_NEXT
     assert pos.entry_time is None and pos.held_shares == 40
     assert [(lot.time, lot.price, lot.shares) for lot in pos.lots] == [(None, None, 40)]
 
@@ -158,6 +162,48 @@ def test_a_stated_position_with_no_time_sorts_first_deterministically():
     seed = _stated(GGG_SHORT)
     day = pair_day(_parsed(NEW_LONG).executions, D_NEXT, seed)
     assert [t.symbol for t in day.trades] == ["GGG", "HHH"]
+
+
+def test_a_stated_positions_open_day_stays_not_stated_through_the_carry():
+    """H1 (`drc-k1-check-2026-09-24.md:149`; v3 `:134`): a stated position
+    untouched by the day's file keeps `opened_on is None` — on the stated
+    day and on the next day it is carried to — and its trade names no
+    `carried_from`. Control: the long the file opens keeps its day."""
+    day = pair_day(_parsed(NEW_LONG).executions, D_NEXT, _stated(GGG_SHORT))
+    by_symbol = {p.symbol: p for p in day.open_positions}
+    assert by_symbol["GGG"].opened_on is None
+    (ggg,) = [t for t in day.trades if t.symbol == "GGG"]
+    assert ggg.carried_from is None
+    assert by_symbol["HHH"].opened_on == D_NEXT
+
+    after_day = date(2001, 1, 4)
+    after = pair_day(_parsed(_header(DAY1), after_day).executions, after_day, day.open_positions)
+    carried = {p.symbol: p for p in after.open_positions}
+    assert carried["GGG"].opened_on is None
+    assert carried["HHH"].opened_on == D_NEXT
+
+
+def test_a_carried_positions_open_day_is_kept():
+    """H1 pin, GREEN-as-pin (`drc-k1-check-2026-09-24.md:149`): a seed
+    position with a real open day, carried untouched, keeps it (the D1
+    behaviour, pinned beside the not-stated one)."""
+    from cobalt.drc.models import Lot, OpenPosition
+    from cobalt.drc.pairing import trade_id
+
+    t0 = datetime(2001, 1, 2, 10, 0, tzinfo=ET)
+    seed = OpenPosition(
+        trade_id=trade_id("GGG", Direction.SHORT, t0),
+        symbol="GGG",
+        direction=Direction.SHORT,
+        held_shares=40,
+        lots=[Lot(time=t0, price=Decimal("20.0"), shares=40)],
+        entry_time=t0,
+        opened_on=D,
+        day=D,
+    )
+    day = pair_day(_parsed(NEW_LONG).executions, D_NEXT, [seed])
+    (ggg,) = [p for p in day.open_positions if p.symbol == "GGG"]
+    assert ggg.opened_on == D and ggg.day == D_NEXT
 
 
 # ---------------------------------------------------------------------
