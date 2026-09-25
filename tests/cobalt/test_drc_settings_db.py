@@ -76,18 +76,29 @@ def test_x12_size_still_sizes_without_drc_keys(monkeypatch):
     → `/size` still serves and sizes; `cobalt drc build` fails naming the
     missing key (T5's `OPTIONAL_SETTING_KEYS` placement)." — the `/size`
     half (the `cobalt drc build` half is D3's). A GREEN-as-pin on the base.
+
+    D4 fix r1 F-2: the sheet rows are cobalt_dev's (constructed inside the
+    rollback); the loader is not patched. `_daymode_state` stays patched:
+    the day's attestation row is not X12's input.
     """
+    from decimal import Decimal
+
     from fastapi.testclient import TestClient
 
     from cobalt.aset import web as web_module
     from cobalt.aset.daily_note import DailyNoteRefused
+    from cobalt.settings.store import TraderSettingsStore
     from test_aset_web import (
         BASE_SIZE_FORM,
         _offline_daymode_config,
         _offline_sheet_modes_config,
     )
 
+    _write_constructed_set(TraderSettingsStore(), b_full="73")
     _clear_drc_rows()
+    sm = web_module.load_sheet_modes_config()
+    assert sm.sheets["full"].B == Decimal("73")
+    assert sm.sheets["full"].B != _offline_sheet_modes_config().sheets["full"].B
 
     class _Store:
         db_name = "cobalt_dev"
@@ -108,7 +119,6 @@ def test_x12_size_still_sizes_without_drc_keys(monkeypatch):
     monkeypatch.setenv("COBALT_ALLOW_DEV_ENTRY", "1")
     monkeypatch.setattr(web_module, "AsetStore", _Store)
     monkeypatch.setattr(web_module, "save_card", _refuse_note)
-    monkeypatch.setattr(web_module, "load_sheet_modes_config", _offline_sheet_modes_config)
     monkeypatch.setattr(
         web_module,
         "_daymode_state",
@@ -172,28 +182,39 @@ def _change_form(**over):
     return form
 
 
+def _write_constructed_set(store, *, b_full: str = "60") -> None:
+    """Inside the rollback: write a COHERENT constructed set — the sheet
+    rows AND the day-mode rows they are cross-checked against
+    (`reduced_enabled_grades` may only narrow `aset.enabled_grades`), so
+    no pre-existing `cobalt_dev` row is mixed in. `b_full` sets the
+    constructed `full.B` dollar."""
+    from test_aset_web import _offline_daymode_config
+
+    from cobalt.aset.config import SheetModesConfig
+    from cobalt.settings.models import DAYMODE_KEYS, TraderSettings
+
+    cfg = _offline_daymode_config()
+    sheets = _constructed_sheets()
+    sheets["aset.sheet_modes"]["sheets"]["full"]["B"] = b_full
+    sm = SheetModesConfig(**sheets["aset.sheet_modes"], enabled_grades=sheets["aset.enabled_grades"])
+    daymode_rows = {
+        k: v for k, v in TraderSettings(sheet_modes=sm, daymode=cfg).rows().items() if k in DAYMODE_KEYS
+    }
+    store.put({**sheets, **daymode_rows}, source="test:d4-sheets")
+
+
 @pytest.fixture
 def change_page(monkeypatch):
     from fastapi.testclient import TestClient
     from test_aset_web import _offline_daymode_config, _offline_sheet_modes_config
 
     from cobalt.aset import web as web_module
-    from cobalt.aset.config import SheetModesConfig
-    from cobalt.settings.models import DAYMODE_KEYS, TraderSettings
     from cobalt.settings.store import TraderSettingsStore
 
     store = TraderSettingsStore()
     _clear_drc_rows()
     cfg = _offline_daymode_config()
-    # A COHERENT constructed set: the sheet rows AND the day-mode rows they
-    # are cross-checked against (`reduced_enabled_grades` may only narrow
-    # `aset.enabled_grades`), so no pre-existing `cobalt_dev` row is mixed in.
-    sheets = _constructed_sheets()
-    sm = SheetModesConfig(**sheets["aset.sheet_modes"], enabled_grades=sheets["aset.enabled_grades"])
-    daymode_rows = {
-        k: v for k, v in TraderSettings(sheet_modes=sm, daymode=cfg).rows().items() if k in DAYMODE_KEYS
-    }
-    store.put({**sheets, **daymode_rows}, source="test:d4-sheets")
+    _write_constructed_set(store)
     monkeypatch.setattr(web_module, "load_sheet_modes_config", _offline_sheet_modes_config)
     monkeypatch.setattr(
         web_module,
@@ -249,6 +270,7 @@ def test_e3_an_apply_inside_market_reset_writes_nothing(change_page, monkeypatch
 
 @requires_db
 def test_e3_a_two_key_apply_with_one_bad_key_writes_neither(change_page):
+    """Validation fails before apply_settings (drc.py:258); the one-transaction proof is test_e3_a_failure_inside_the_one_put_writes_neither_key (D4 fix r1 F-3)."""
     client, store = change_page
     before = store.rows()
     form = _change_form(**{"account.daily_stop_full": "31337", "aset.sheet_modes.full.B": "-1"})
@@ -256,3 +278,46 @@ def test_e3_a_two_key_apply_with_one_bad_key_writes_neither(change_page):
     assert "FAILED" in r.text and "aset.sheet_modes.full.B" in r.text
     assert store.rows() == before
     assert "account.daily_stop_full" not in store.values()
+
+
+@requires_db
+def test_e3_a_failure_inside_the_one_put_writes_neither_key(change_page, monkeypatch):
+    """D4 fix r1 F-3 (drc-d4-check-2026-09-25.md:124; D4-4 "a partial write
+    … is impossible — one transaction"; store.py:85-116): a VALID two-key
+    change whose `put` fails AFTER both upserts ran (`before_commit`,
+    store.py:109-110) leaves every row as it was — the rollback at
+    store.py:112-113 is what is proven. NEGATIVE CONTROL: the same post
+    with no failure saves both constructed keys, so the upserts were real."""
+    from decimal import Decimal
+
+    from cobalt.settings.drc import propose_daily_change
+    from cobalt.settings.store import TraderSettingsStore
+
+    client, store = change_page
+    before = store.rows()
+    form = _change_form(**{"account.daily_stop_full": "31337", "aset.sheet_modes.full.B": "67"})
+    sha = propose_daily_change(form).sha256
+
+    original = TraderSettingsStore.put
+    fail = {"on": True}
+
+    def _boom():
+        raise RuntimeError("constructed failure after both upserts")
+
+    def wrapper(self, rows, *, source, delete=(), before_commit=None):
+        return original(
+            self, rows, source=source, delete=delete,
+            before_commit=_boom if fail["on"] else before_commit,
+        )
+
+    monkeypatch.setattr(TraderSettingsStore, "put", wrapper)
+    r = client.post("/settings/daily/apply", data=dict(form, sha256=sha))
+    assert "FAILED" in r.text and "constructed failure" in r.text, r.text[-2000:]
+    assert store.rows() == before
+
+    fail["on"] = False
+    r = client.post("/settings/daily/apply", data=dict(form, sha256=sha))
+    assert "Settings saved" in r.text, r.text[-2000:]
+    values = store.values()
+    assert values["account.daily_stop_full"] == "31337"
+    assert Decimal(values["aset.sheet_modes"]["sheets"]["full"]["B"]) == Decimal("67")
