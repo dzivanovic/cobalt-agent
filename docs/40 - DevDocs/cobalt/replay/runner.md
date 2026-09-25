@@ -69,6 +69,15 @@ async collector work through `asyncio.wait_for`. A slow collector that is
 still heartbeating is cut at the deadline. A dry run has no deadline
 because it writes nothing.
 
+**2026-09-25 — the formations cut (`cto-2026-09-24.md` R95).**
+- **The reserve.** With a deadline, the run also reads `replay.formations_reserve_s` at start. If it is missing or null the run raises `ReplayError` naming it (L1), before any step.
+- **The cut.** The formations step hands the formation source `cut_at = now >= deadline − reserve`, which is asked between scans (`evaluate_cli.replay_formations`). With no deadline (dry run, or a start after the backup) `cut_at` is None.
+- **A cut run:**
+  - sets `ReplayResult.formation_cut` (`FormationCut`);
+  - reconciles its rows as usual;
+  - writes the line with the PARTIAL clause (the pre-write deadline check still guards it);
+  - then FAILS AT THE END with `ReplayError("formations cut at the deadline — k of n scans")`, in the archive failures' place. Both together make one error, archive failures first. `failed_step` stays None.
+
 ## `formation_replay(trade_date, *, out, sources=None, context=None)` (R4, R1-21)
 
 **2026-09-18 — S2-P4 chunk E2.** The adapter is now BOUND. It returns a
