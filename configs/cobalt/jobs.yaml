@@ -73,6 +73,14 @@ jobs:
       # (com.cobalt.backup, ops/run_backup.sh:39; status/restore are operator commands) and by heartbeat/probes.py:431
       # (backup_freshness, from runner.py:144 — com.cobalt.heartbeat). One-shots derive nothing. Added there 2026-09-22.
       - "configs/cobalt/backup.yaml"
+      # voice V1's six paths, classified at the stack seam build 2026-09-25 (L42). The sheet serves voice
+      # (aset/web.py:90 include_router(voice_web.router)), so this process runs voice's loaders.
+      - "configs/cobalt/voice.yaml"                # voice/config.py:32 CONFIG_PATH + :120 (load_voice_config); cached per process in voice/web.py:59 _CONFIG, so a change reaches the sheet only by restart
+      - "configs/cobalt/agents/voice.yaml"         # voice/registry.py:23 CONFIG_PATH + :85 (load_agent), called from voice/web.py:176
+      - "configs/cobalt/modelaccess.yaml"          # modelaccess/config.py:28 CONFIG_PATH + :106 (load_routes), called from voice/web.py:176
+      - "ops/start_aset.sh"                        # ops/com.cobalt.aset.plist:25 (the program); its exports (start_aset.sh:35, :37 COBALT_VOICE_*) reach the process only at a restart
+      - "pyproject.toml"                           # ops/start_aset.sh:73 (exec uv run python -m cobalt.aset): uv syncs the environment from it when the process starts
+      - "uv.lock"                                  # ops/start_aset.sh:73 (exec uv run python -m cobalt.aset): uv syncs the environment from it when the process starts
     imports: [cobalt.aset.__main__, cobalt.aset.web]
     what: "the ASET semi-auto sheet on :5010 — the surface he trades beside"
 
@@ -173,6 +181,8 @@ jobs:
     reads:
       - "configs/cobalt/radar.yaml"                # radar/config.py:67 (load_config)
       - "configs/cobalt/taxonomy/tunables.yaml"    # taxonomy/loader.py:79 (load_tunables)
+      - "pyproject.toml"                           # ops/com.cobalt.radar.plist:18–22 (uv run cobalt radar run): uv syncs the environment from it when the process starts
+      - "uv.lock"                                  # ops/com.cobalt.radar.plist:18–22 (uv run cobalt radar run): uv syncs the environment from it when the process starts
     imports: [cobalt.cli]
     what: "the resident radar pool scanner and Finviz i1 bar poller"
 

@@ -115,8 +115,10 @@ def test_a_resident_wrapper_script_is_not_an_operator_script(monkeypatch):
         Change("ops/start_aset.sh", "M"),
     ])
     (row,) = classify("HEAD...HEAD")
-    assert row.escalate is True
-    assert row.restarts  # the conservative set, until someone rules on it
+    # Classified 2026-09-25 (stack seam build): com.cobalt.aset reads it (jobs.yaml) — the ruling this pin waited for.
+    assert row.escalate is False
+    assert row.rule == "resident reads"
+    assert "com.cobalt.aset" in row.restarts
 
 
 def test_an_unknown_dotfile_still_escalates(monkeypatch):
