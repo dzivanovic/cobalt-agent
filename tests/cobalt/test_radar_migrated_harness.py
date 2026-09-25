@@ -67,3 +67,19 @@ def test_no_migrated_radar_caller_also_names_dev_db_tx():
     the autouse `dev_db_tx` (set up first, patched over, torn down last)."""
     stacked = stacked_tests()
     assert stacked == [], f"tests naming both migrated_radar and dev_db_tx: {stacked}"
+
+
+@requires_db
+def test_a_migrated_radar_test_holds_one_transaction_on_cobalt_dev(dev_db_tx, migrated_radar):
+    """F1's run-time half (L70, L76 "one owner"): while a `migrated_radar`
+    test runs, `dev_db_tx`'s own `cobalt_dev` connection must not sit
+    `idle in transaction` beside the migration connection's. Read-only."""
+    from cobalt import db
+
+    assert "migrated_radar" in db.connect.__qualname__                     # (i) the router
+    state = migrated_radar.execute(
+        "SELECT state FROM pg_stat_activity WHERE pid = %s", (dev_db_tx.info.backend_pid,)
+    ).fetchone()[0]
+    print(f"F1 probe: dev_db_tx backend state = {state!r}")
+    print(f"F1 probe: two connections = {dev_db_tx.info.backend_pid != migrated_radar.info.backend_pid}")
+    assert state != "idle in transaction"                                   # (ii) one open transaction
