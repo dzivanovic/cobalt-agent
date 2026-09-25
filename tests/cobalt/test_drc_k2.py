@@ -69,10 +69,14 @@ def _resolve(trade_id: str, **kw):
 # ---------------------------------------------------------------------
 
 
-def test_the_pairing_version_is_3():
+def test_the_pairing_version_is_4():
+    """K2 fix r1 (L75) moves four stored shapes: `day.derived.book_stale`
+    (F-2), a no-trade day's `seed.inputs.source` via `record_day` (F-3), a
+    re-paired day's stats match (F-4), a partial re-pair's
+    `not_computed.pairing` text (F-5)."""
     from cobalt.drc.pairing import FN_VERSION
 
-    assert FN_VERSION == "drc.pairing/3"
+    assert FN_VERSION == "drc.pairing/4"
 
 
 # ---------------------------------------------------------------------
