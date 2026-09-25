@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from . import config, propose, replay, runner, sources, throttle
+from . import config, handicap_dry_run, propose, replay, runner, sources, throttle
 
 
 def add_parser(sub) -> None:
@@ -76,6 +76,13 @@ def add_parser(sub) -> None:
     lists_propose.set_defaults(func=propose.lists_propose)
     lists_apply = lsub.add_parser("apply")
     _apply_args(lists_apply, "lists")
+
+    dry_run = rsub.add_parser(
+        "handicap-dry-run",
+        help="Replay a retained day with and without the float handicap; writes nothing",
+    )
+    dry_run.add_argument("--day", required=True, metavar="YYYY-MM-DD")
+    dry_run.set_defaults(func=handicap_dry_run.command)
 
     source_cmd = rsub.add_parser("sources", help="Validate and list note-derived sources")
     source_cmd.add_argument("--json", action="store_true")
