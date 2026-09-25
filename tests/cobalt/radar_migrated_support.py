@@ -8,6 +8,7 @@ connection (the shape of `drc/d1-trading-log`'s `migrated` fixture), and
 `conn.rollback()` at teardown. Nothing commits. `tests/cobalt/conftest.py`
 is not edited (every branch shares it, L68): a test file opts in by
 importing the fixture from here.
+dev_db_tx is autouse (conftest.py), so it is declared here: set up first, patched over, torn down last; tests name migrated_radar alone.
 """
 
 from __future__ import annotations
@@ -69,7 +70,7 @@ class SavepointProxy:
 
 
 @pytest.fixture
-def migrated_radar(monkeypatch):
+def migrated_radar(monkeypatch, dev_db_tx):
     """Every registered migration applied inside this test's own
     transaction; rolled back at teardown. Skips without `cobalt_dev`."""
     if not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")):

@@ -8,6 +8,7 @@ A transaction that reaches `market_reset` rolls back and records its stage on th
 
 ## S5 evaluate (S2-P2 R1)
 `RadarRunner` takes `evaluator` (an `evaluate.EvaluateStage`) and `ceiling_rpm`. `build_runner` always wires both. `None` is the S1–S4-only shape, used by the pre-S5 tests and by the membership replay tool (`scan --replay`), and that choice is written at their call sites. Supplying an evaluator without a ceiling raises.
+The membership replay tool's summary line ends `handicap: not replayable from bars` (v3 §3): its snapshots carry only `Ticker, Volume, Relative Volume`, so there is no float or cap to handicap by, and it says so rather than guess.
 
 - **Lifecycle polling (Astra R1-15).** Before S4 the runner asks the stage for the tickers of open radar cards whose member left the pool. `notes.lifecycle_poll_demand` then decides against the total planned demand:
   - inside the ceiling: they join the S4 poll list;

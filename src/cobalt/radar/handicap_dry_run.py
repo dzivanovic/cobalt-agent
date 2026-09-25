@@ -334,7 +334,7 @@ def _group(transition: Transition) -> str:
 
 def _cut_tier(cut: Transition, last: Transition | None, *, seats: int, held: int, pool: PoolBlock,
               now: datetime) -> str:
-    """The tier that decided one cut ([F-16]; the rule X2 tallies): a name
+    """The tier that decided one cut ([F-16], X12: the tier of every cut; NOT X2's per-scan marginal-seat tally, which ranks held first and stops at one tier per scan — test_h1_x2_marginal_seat.py _tier): a name
     inside the seats that still left was displaced by `stickiness`; a name
     that fits the cap but not the seats lost to `held` members; otherwise the
     first key component where it loses to the last admitted name —
@@ -481,9 +481,7 @@ def render(report: DryRun) -> list[str]:
         )
     inoperative = sum(1 for line in report.lines if line.inoperative)
     out.append(f"scans with the handicap INOPERATIVE (R54): {inoperative} of {report.scans}")
-    # X2 (grok): 40 of 118 marginal seats on the retained RTH day were decided
-    # by stickiness or priority, so the "keeps its seat iff p ≤ h × c"
-    # sentence is never printed; the tier tally says what decided each cut.
+    # X2 (grok, the per-scan marginal-seat experiment): 40 of 118 marginal seats on the retained RTH day were decided by stickiness or priority, so the "keeps its seat iff p ≤ h × c" sentence is never printed. The tally below is _cut_tier's per-cut rule ([F-16], X12), not X2's.
     out.append("cut tiers, the day: " + (", ".join(f"{k} {tally[k]}" for k in TIERS if tally[k]) or "none"))
     return out
 

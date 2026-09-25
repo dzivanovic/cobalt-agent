@@ -1220,7 +1220,6 @@ requires_db = pytest.mark.skipif(
 
 
 @pytest.mark.integration
-@pytest.mark.usefixtures("dev_db_tx")
 @requires_db
 @pytest.mark.usefixtures("migrated_radar")
 def test_members_for_day_db_returns_both_open_and_left_and_scopes_pool_and_day():

@@ -327,7 +327,7 @@ def pick_pool(monkeypatch):
 
 @requires_db
 @pytest.mark.integration
-@pytest.mark.usefixtures("dev_db_tx", "pick_pool")
+@pytest.mark.usefixtures("pick_pool")
 class TestFillWritesPick:
     @pytest.mark.usefixtures("migrated_radar")
     def test_fill_writes_exactly_one_pick_row_in_the_fill_transaction(self):

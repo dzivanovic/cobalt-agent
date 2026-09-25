@@ -548,9 +548,10 @@ async def _scan_replay(args) -> None:
             counts["admit"] += sum(item.action is Action.ADMIT for item in result.decision.transitions)
             counts["leave"] += sum(item.action is Action.LEAVE for item in result.decision.transitions)
         virtual[0] += timedelta(seconds=interval)
+    # v3 §3: replay-from-bars has no float or cap — it reports so and does not guess (R54's missing-header case stores factor 1).
     print(
         f"replay {trade_day}: cycles={counts['cycles']} "
-        f"admit={counts['admit']} leave={counts['leave']}"
+        f"admit={counts['admit']} leave={counts['leave']} · handicap: not replayable from bars"
     )
 
 
