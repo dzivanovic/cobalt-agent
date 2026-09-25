@@ -16,6 +16,12 @@ reviewed (the `cobalt settings load` shape).
 It inserts NOTHING itself (L3, L40): the preview and the write are both
 `DrcStore`'s, with `via = cli` (R52 (a)); `turn_id` and `readback_sha256`
 stay NULL (voice caller only). It writes no vault note (L28).
+
+K2: a statement's EFFECT is `DrcStore.rebuild(day)`. A `no_trade`, a
+`resolve`, or an `opening` for a day that already has its trading log
+is re-paired after `--apply` (`rebuilt: <dates>`), and the dry run names
+that effect. A refused rebuild prints why and exits non-zero; the
+statement stays written.
 """
 
 from __future__ import annotations
@@ -118,18 +124,35 @@ def _print_row(row: StatedBook) -> None:
     print(f"book_sha256: {row.book_sha256}")
 
 
+def _rebuilds(store, req: StateBookRequest) -> bool:
+    """K2: whether `--apply` re-pairs the day — any statement for a day
+    that already has its trading log, and a no-trade DRC or a resolve for
+    a day that joins a recorded chain (a `day` row on or before it). With
+    neither there is nothing to re-pair yet: the statement waits for the
+    day's import (builder reading of C7, carried to the check)."""
+    from .models import Kind
+
+    if store.has_current_import(req.day, Kind.TRADING_LOG):
+        return True
+    return req.kind in ("no_trade", "resolve") and store.has_chain_through(req.day)
+
+
 def cmd_state_book(args: argparse.Namespace) -> None:
     from .store import DrcStore
 
     req = request_from_args(args)
     store = DrcStore()
     try:
+        rebuilds = _rebuilds(store, req)
         if not req.apply:
             preview = store.preview_stated_book(
                 req.day, req.kind, req.positions, via=VIA, supersedes=req.supersedes
             )
             print("cobalt drc state-book — DRY RUN\n")
             _print_row(preview)
+            if rebuilds:
+                # What is reviewed names its effect (L7).
+                print(f"on --apply: rebuild {req.day.isoformat()} and every later recorded day")
             print(
                 "\nDRY RUN — nothing written. To write: the same command with "
                 f"--apply --sha256 {preview.book_sha256}"
@@ -145,6 +168,17 @@ def cmd_state_book(args: argparse.Namespace) -> None:
     print("cobalt drc state-book — APPLY\n")
     _print_row(row)
     print(f"\nwritten: {DrcStore.STATED_TABLE} #{row.id} (book_sha256 {row.book_sha256})")
+    if not rebuilds:
+        print(f"stated; {req.day.isoformat()} has no import yet")
+        return
+    try:
+        dates = store.rebuild(req.day)
+    except (PairingError, ValueError) as e:
+        # The statement stays written — it is his input; the day did not
+        # re-pair, and why is printed (L1).
+        print(f"not rebuilt: {e}")
+        raise SystemExit(1) from e
+    print(f"rebuilt: {', '.join(d.isoformat() for d in dates)}")
 
 
 def add_parser(sub) -> None:

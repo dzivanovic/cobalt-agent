@@ -105,3 +105,29 @@ Nothing is defaulted.
   - Its `trade_id` comes from **`stated_trade_id`**:
     `<symbol>-<direction>-stated-<day>`. This is the drafter's pin, and
     it is stable across restatements.
+
+## 2026-09-25 — DRC K2: `drc.pairing/3`
+- **`FN_VERSION = "drc.pairing/3"`**: a later day may now be re-paired
+  from the earlier close (R51), and a resolve's realized figure is new.
+- **`_trade`**: a CLOSED book with no exits has `exit_time = None`. This
+  is X11: before K2, `book.exits[-1]` raised `IndexError`.
+- **`resolved_trade(position, resolve)`**: a carried position closed
+  outside the export, built through `_trade` from `_seeded`.
+  - It has ONE exit leg (`line=None`) only when both the exit price and
+    the exit time are stored.
+  - Its realized figure: `EXIT_NOT_IN_ANY_EXPORT` with no price;
+    `CARRIED_COST_NOT_STATED` when a lot has no cost; otherwise FIFO
+    over the lots, signed by direction.
+- **`build_day(…, resolves=())`**: each resolve must name a seed
+  position, or `PairingError`.
+  - If the day's executions touch that symbol, the export is the truth:
+    the resolve is `superseded`, with the reason `superseded — <day>'s
+    export touches <symbol> (R67: the export is the truth)`.
+  - Otherwise the position leaves the book before `pair_day`, and its
+    resolved trade joins the day's trades (`applied`).
+  - A not-computed day applies none.
+  - `pair_day` is unchanged.
+- **`stated_differs(stated, close)`**: R51's compare. The two books are
+  compared as multisets of `(symbol, direction, shares)` — never the open
+  day, the cost or the trade id. It returns the sorted ids of every
+  unmatched position in EITHER book.

@@ -58,6 +58,7 @@ from zoneinfo import ZoneInfo
 from . import stats_log, trading_log
 from .models import (
     CARRIED_COST_NOT_STATED,
+    EXIT_NOT_IN_ANY_EXPORT,
     OPENING_NOT_STATED,
     DayPairing,
     Direction,
@@ -69,7 +70,10 @@ from .models import (
     PairingError,
     ParsedStatsLog,
     ParsedTradingLog,
+    ResolveInput,
+    ResolveOutcome,
     StatedPosition,
+    StatedResolve,
     StatsRow,
     Trade,
     TradeStatus,
@@ -77,8 +81,10 @@ from .models import (
 )
 
 #: Bumped whenever a derived figure's rule changes (L57). /2 (K1): an
-#: unstated book is not paired; a stated lot may carry no cost.
-FN_VERSION = "drc.pairing/2"
+#: unstated book is not paired; a stated lot may carry no cost. /3 (K2):
+#: a later day is re-paired from the earlier close (R51); a resolve
+#: closes a carried trade outside the export (`[F-06]`).
+FN_VERSION = "drc.pairing/3"
 
 
 def trade_id(symbol: str, direction: Direction, entry_time: datetime) -> str:
@@ -152,7 +158,9 @@ def _avg(legs: list[Leg]) -> Optional[Decimal]:
 
 
 def _trade(book: _Book, status: TradeStatus) -> Trade:
-    exit_time = book.exits[-1].time if status is TradeStatus.CLOSED else None
+    # A resolved trade (K2, X11) is CLOSED with no exit leg when its exit
+    # time or price is not stored: no exit time, never an invented one.
+    exit_time = book.exits[-1].time if status is TradeStatus.CLOSED and book.exits else None
     return Trade(
         trade_id=book.trade_id,
         symbol=book.symbol,
@@ -226,6 +234,50 @@ def _seeded(position: OpenPosition) -> _Book:
             f"{position.held_shares}"
         )
     return book
+
+
+def resolved_trade(position: OpenPosition, resolve: StatedResolve) -> Trade:
+    """A carried position closed outside the export (v3 `[F-06]`, X11),
+    built THROUGH `_trade` from its seeded book. The exit leg exists only
+    when both the exit price and time are stored (an exit leg is an
+    execution, K1). Realized: no exit price → `EXIT_NOT_IN_ANY_EXPORT`; a
+    lot with no cost → `CARRIED_COST_NOT_STATED`; else FIFO over the lots
+    at the exit price, signed by direction — never a guess (L1, L57)."""
+    book = _seeded(position)
+    price = resolve.exit_price
+    if price is None:
+        book.realized = EXIT_NOT_IN_ANY_EXPORT
+    elif any(lot.price is None for lot in book.lots):
+        book.realized = CARRIED_COST_NOT_STATED
+    else:
+        long_ = book.direction is Direction.LONG
+        book.realized = sum(
+            ((price - lot.price) if long_ else (lot.price - price)) * lot.shares for lot in book.lots
+        )
+    if price is not None and resolve.exit_time is not None:
+        book.exits.append(Leg(kind="exit", time=resolve.exit_time, price=price, shares=book.held, line=None))
+    book.lots.clear()
+    return _trade(book, TradeStatus.CLOSED)
+
+
+def stated_differs(stated: Iterable[OpenPosition], close: Iterable[OpenPosition]) -> list[str]:
+    """R51's comparison of his stated book with the recorded close: the
+    two books as multisets of `(symbol, direction, shares)` — never the
+    open day, the cost or the `trade_id` (`48` `## FOR K2`). Returns the
+    sorted trade ids of every position in EITHER book with no equal
+    counterpart in the other; `[]` when the books are equal."""
+    unmatched: list[str] = []
+    pools: dict[tuple, list[str]] = {}
+    for p in sorted(close, key=lambda p: p.trade_id):
+        pools.setdefault((p.symbol, p.direction, p.held_shares), []).append(p.trade_id)
+    for p in sorted(stated, key=lambda p: p.trade_id):
+        pool = pools.get((p.symbol, p.direction, p.held_shares))
+        if pool:
+            pool.pop(0)
+        else:
+            unmatched.append(p.trade_id)
+    unmatched.extend(tid for pool in pools.values() for tid in pool)
+    return sorted(unmatched)
 
 
 def pair_day(
@@ -303,12 +355,14 @@ def pair_day(
                 day=day,
             )
         )
+    trades.sort(key=_trade_order)
+    return DayPairing(day=day, trades=trades, open_positions=open_positions)
+
+
+def _trade_order(t: Trade) -> tuple:
     # A stated position (no entry time) sorts first, by symbol — never
     # given an invented time to sort by.
-    trades.sort(
-        key=lambda t: (t.entry_time is not None, t.entry_time.timestamp() if t.entry_time else 0.0, t.symbol)
-    )
-    return DayPairing(day=day, trades=trades, open_positions=open_positions)
+    return (t.entry_time is not None, t.entry_time.timestamp() if t.entry_time else 0.0, t.symbol)
 
 
 def check_contiguity(
@@ -391,16 +445,53 @@ def match_stats(
     return pairing.model_copy(update={"trades": trades, "unmatched": unmatched})
 
 
+def _apply_resolves(
+    day: date,
+    executions: list[Execution],
+    seed: list[OpenPosition],
+    resolves: Iterable[ResolveInput],
+) -> tuple[list[OpenPosition], list[Trade], list[ResolveOutcome]]:
+    """`[F-06]` on the day a resolve names: the day's export touches the
+    symbol → the export is the truth and the resolve is superseded (R67);
+    otherwise the position leaves the book as a resolved trade."""
+    by_id = {p.trade_id: p for p in seed}
+    touched = {e.symbol for e in executions}
+    left, trades, outcomes = list(seed), [], []
+    for r in resolves:
+        tid = r.resolve.trade_id
+        position = by_id.get(tid)
+        if position is None:
+            raise PairingError(f"{day}: resolve #{r.id} names {tid}, which {day}'s opening book does not hold")
+        if position.symbol in touched:
+            outcomes.append(ResolveOutcome(
+                resolve_id=r.id, trade_id=tid, status="superseded",
+                reason=f"superseded — {day}'s export touches {position.symbol} (R67: the export is the truth)",
+            ))
+            continue
+        left.remove(position)
+        trades.append(resolved_trade(position, r.resolve))
+        outcomes.append(ResolveOutcome(
+            resolve_id=r.id, trade_id=tid, status="applied",
+            reason=f"applied — closed outside the export (resolve #{r.id})",
+        ))
+    return left, trades, outcomes
+
+
 def build_day(
     trading: ParsedTradingLog,
     stats: Optional[ParsedStatsLog] = None,
     seed: Optional[Iterable[OpenPosition]] = None,
+    resolves: Iterable[ResolveInput] = (),
 ) -> DayPairing:
     """A parsed day → its pairing (+ the stats match when a stats log is
     given). A step whose input columns are absent does not run and says
     so, `not computed — missing: <columns>` (R17 (5)). `seed=None` means
     no book was stated: the day is not paired, `not computed — opening
-    book not stated` (L1, v3 §2c); a list, even `[]`, is the book."""
+    book not stated` (L1, v3 §2c); a list, even `[]`, is the book.
+
+    `resolves` (K2) are the stored resolves dated this day, each naming a
+    position of `seed` (`SeedBook.resolves`); a not-computed day applies
+    none. Their outcomes are `DayPairing.resolves`."""
     not_computed = dict(trading.result.not_computed)
     if "pairing" not in not_computed and seed is None:
         not_computed["pairing"] = OPENING_NOT_STATED
@@ -414,7 +505,14 @@ def build_day(
                 }
             )
         return pairing
-    pairing = pair_day(trading.executions, trading.import_date, seed)
+    book, resolved, outcomes = _apply_resolves(
+        trading.import_date, trading.executions, list(seed), resolves
+    )
+    pairing = pair_day(trading.executions, trading.import_date, book)
+    if resolved or outcomes:
+        trades = [*pairing.trades, *resolved]
+        trades.sort(key=_trade_order)
+        pairing = pairing.model_copy(update={"trades": trades, "resolves": outcomes})
     return match_stats(pairing, stats) if stats is not None else pairing
 
 
@@ -426,6 +524,8 @@ __all__ = [
     "check_contiguity",
     "match_stats",
     "pair_day",
+    "resolved_trade",
+    "stated_differs",
     "stated_open_positions",
     "stated_trade_id",
     "trade_id",

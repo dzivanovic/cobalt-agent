@@ -109,6 +109,55 @@ is never carried.
   until D is stated and re-paired.
 - `STATED_TABLE` names the table for a caller's printout.
 
+## 2026-09-25 — DRC K2 (no-trade carry, forward re-pair, R51, resolve)
+- **`record_day(pairing, import_ids, seed)`**: same signature, same
+  return (rows written for `pairing.day`). It now also:
+  - refuses a pairing with no trading-log id unless a current `no_trade`
+    statement exists for the day; the `day` row then names `no_trade_id`
+    (`[F-05]`);
+  - re-pairs every LATER recorded day, in date order, when one exists.
+    Each later day goes through `_repair`, its seed read from the
+    previous day's in-memory close (`_Close`). All days are written in
+    ONE transaction. If any later day raises, the error is
+    `PairingError "<P>: not recorded — the forward re-pair of <N>
+    failed: …"`, and nothing in `drc_rows` is written (the import row
+    stays committed, `[F-25]`). A not-computed day stops the chain: the
+    later days keep their rows and are listed in the `day` row's
+    `derived.not_repaired`. The days that were re-paired are listed in
+    `derived.repaired`. Both keys are written only when a later day
+    exists.
+- **`rebuild(day) -> list[date]`**: the one re-pair of a day from its
+  STORED inputs, then forward. Its inputs:
+  - the fills of the CURRENT trading-log import (a `failed` one FAILS;
+    a `partial` one → `not_computed.pairing` = its stored reason), or
+    the day's `no_trade` statement (the seed then becomes
+    `no_trade_carry`);
+  - the stored `stats_row` rows, re-matched with `missing = []`, or kept
+    unchanged when `not_computed.match` was stored;
+  - the seed from `_seed`, the same rule as `seed_for`.
+  It returns the dates written, the rebuilt day first.
+- **`seed_for` / `_seed`**: one rule, with an optional in-memory overlay.
+  - A stated opening beside a recorded prior close no longer raises. The
+    carried book is returned with `stated_book_id` and `stated_differs`
+    (`pairing.stated_differs`, R51).
+  - `_with_resolves` is the `[F-06]` reader. Two current resolves for
+    one trade FAIL, naming both ids. A resolve dated D that names a held
+    trade → `SeedBook.resolves`. One that names a trade an earlier export
+    closed → a `superseded` outcome. Any other resolve dated D FAILS.
+    A resolve dated before D whose trade is still held, and which was not
+    superseded on its own day, FAILS with `rebuild <R>`.
+- **`stated_difference(day)`**: the R51 line `stated book for <N>
+  differed from <P>'s close: <ids>`, read from the stored `seed` row, or
+  `None`.
+- **`has_current_import`, `has_chain_through`**: reads the CLI uses to
+  decide whether `--apply` rebuilds.
+- Row additions:
+  - `seed.inputs.no_trade_id` (no-trade carry);
+  - `seed.derived.stated_differs` (a carried book naming a statement);
+  - `trade.inputs.resolve_id` (an applied resolve);
+  - `day.derived.resolves` (every outcome, when any).
+  The rebuild never writes `drc_stated_books` (R51, L7).
+
 ## Tests
 `tests/cobalt/test_drc_store.py` has an offline half (the SQL, the
 registry, the placement map, the one-writer grep). Its with-DB half

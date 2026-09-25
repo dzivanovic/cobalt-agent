@@ -32,11 +32,25 @@ WHAT IS WRITTEN
   none is stated: the prior trading day's hash-checked close (carried),
   or his current `opening` statement for D (stated). Every other case
   FAILS loud, never flat (L1; v3 §2b, §4).
+
+K2 (v3 §6 K2, R51, R52)
+- `record_day` re-pairs every LATER recorded day forward from the day it
+  records, in one transaction, or writes nothing (`[F-03]`); a first
+  record of an earlier day is a trigger too (R51). A day with no trading
+  log needs its `no_trade` statement (`[F-05]`).
+- `rebuild` — THE one re-pair of a day from its stored inputs (A1, a desk
+  reading of R51), then forward. `_repair` is the one path (L3).
+- `seed_for` — a statement beside a recorded close: the close wins, the
+  statement stays history with `stated_differs` (R51); the `[F-06]`
+  reader applies, supersedes or FAILS every current resolve.
+- `stated_difference` — the R51 line, read from the stored `seed` row.
+- The rebuild never writes his statements (L7).
 """
 
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Iterable, Optional
 
@@ -48,20 +62,37 @@ from cobalt.db import Side
 from cobalt.session import assert_writable
 from cobalt.session import clock as clock_mod
 
+from . import trading_log
 from .models import (
     DayPairing,
+    ExecSide,
     Execution,
     ImportResult,
     Kind,
     OpenPosition,
     Outcome,
     PairingError,
+    ParsedStatsLog,
+    ParsedTradingLog,
+    ResolveInput,
+    ResolveOutcome,
     SeedBook,
     StatedBook,
     StatedPosition,
     StatedResolve,
+    StatsRow,
+    TradeStatus,
+    Unmatched,
 )
-from .pairing import FN_VERSION, book_sha256, canonical_sha256, check_contiguity, stated_open_positions
+from .pairing import (
+    FN_VERSION,
+    book_sha256,
+    build_day,
+    canonical_sha256,
+    check_contiguity,
+    stated_differs,
+    stated_open_positions,
+)
 
 TABLES = ("drc_imports", "drc_fills", "drc_rows", "drc_stated_books")
 
@@ -85,6 +116,57 @@ _STATED_COLUMNS = (
 
 def _stated(row) -> StatedBook:
     return StatedBook(**dict(zip([c.strip() for c in _STATED_COLUMNS.split(",")], row)))
+
+
+def _stopped(day: date) -> str:
+    """Why the forward re-pair stops at a not-computed day (C4)."""
+    return f"{day} has pairing not computed — its open positions are unknown"
+
+
+def _outcomes(pairing: DayPairing, seed: Optional[SeedBook]) -> list[ResolveOutcome]:
+    """Every resolve outcome of a computed day: the ones its book already
+    decided (`seed_for`), then the ones `build_day` decided. A
+    not-computed day applies none (C2)."""
+    if "pairing" in pairing.not_computed:
+        return []
+    return [*(seed.resolve_outcomes if seed is not None else []), *pairing.resolves]
+
+
+@dataclass(frozen=True)
+class _Close:
+    """A day re-paired in memory during ONE forward re-pair: what the next
+    day's seed rule reads instead of the store (`[F-03]`)."""
+
+    is_computed: bool
+    positions: tuple[OpenPosition, ...]
+    closed: frozenset[str]
+    resolves: tuple[dict, ...]
+
+    @staticmethod
+    def computed(pairing: DayPairing) -> bool:
+        return "pairing" not in pairing.not_computed
+
+    @classmethod
+    def of(cls, pairing: DayPairing, seed: Optional[SeedBook]) -> "_Close":
+        return cls(
+            is_computed=cls.computed(pairing),
+            positions=tuple(pairing.open_positions),
+            closed=frozenset(t.trade_id for t in pairing.trades if t.status is TradeStatus.CLOSED),
+            resolves=tuple(o.model_dump(mode="json") for o in _outcomes(pairing, seed)),
+        )
+
+    def seed(self, day: date, prior: date) -> SeedBook:
+        """`_carried`'s book, from memory (the hash is the one `record_day`
+        will store for `prior`)."""
+        if not self.is_computed:
+            raise PairingError(
+                f"{day}: the prior trading day {prior} has pairing not computed — its open "
+                "positions are unknown; never assumed flat"
+            )
+        positions = sorted(self.positions, key=lambda p: p.trade_id)
+        return SeedBook(
+            source="carried", positions=positions, from_day=prior, from_book_sha256=book_sha256(positions)
+        )
 
 
 class DrcStore:
@@ -203,20 +285,322 @@ class DrcStore:
         seed: Optional[SeedBook],
     ) -> int:
         """Replace the day's derived rows with `pairing`'s. Returns the
-        number of rows written.
+        number of rows written for `pairing.day`.
 
         `seed` is the book the pairing ran from (`seed_for`), REQUIRED of
         every caller: a COMPUTED pairing with `seed=None` is refused — no
         assumed book (L1). A not-computed day (no book stated, or a
-        partial file) writes no `book_close`: it left no known book."""
+        partial file) writes no `book_close`: it left no known book.
+
+        K2: a day with no trading-log import is refused unless his
+        `no_trade` statement for it is current (`[F-05]`). When a LATER
+        day is recorded, every later recorded day is re-paired from this
+        day's close in memory, in date order (`_repair`), and all of them
+        are written in ONE transaction with this day — or, when any later
+        day fails, nothing in `drc_rows` is (`[F-03]`, R51)."""
         computed = "pairing" not in pairing.not_computed
         if computed and seed is None:
             raise ValueError(
                 f"{pairing.day}: a computed pairing with no book — record_day needs the "
                 "SeedBook it ran from (seed_for); nothing written (L1)"
             )
+        conn = self._connect()
+        conn.autocommit = False
+        try:
+            no_trade_id = None
+            if Kind.TRADING_LOG not in import_ids:
+                no_trade_id = self._no_trade_id(conn, pairing.day)
+                if no_trade_id is None:
+                    raise ValueError(
+                        f"{pairing.day}: no trading-log import and no no-trade DRC statement — "
+                        "record_day refused; nothing written ([F-05])"
+                    )
+            written, _ = self._commit(conn, pairing, import_ids, seed, no_trade_id)
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return written
+
+    def rebuild(self, day: date) -> list[date]:
+        """THE one re-pair of a recorded (or no-trade) day from its STORED
+        inputs (A1 — R51 sub-item (iii), a DESK READING), then the forward
+        re-pair of every later recorded day (C4), one transaction. Returns
+        the dates written, `day` first. The same `_repair` is
+        `record_day`'s forward step (L3). A remedy for a statement made
+        after the day was recorded (a no-trade DRC, a resolve, an opening
+        for an unpaired day) and for a pre-lane day (`rebuild <P>`, v3 §4
+        row 4). It never writes his statements (R51, L7)."""
+        conn = self._connect()
+        conn.autocommit = False
+        try:
+            pairing, ids, seed, no_trade_id = self._repair(conn, day, {})
+            _, dates = self._commit(conn, pairing, ids, seed, no_trade_id)
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return dates
+
+    def stated_difference(self, day: date) -> Optional[str]:
+        """R51's line for `/drc`, read from `day`'s stored `seed` row: his
+        statement kept as history beside a close that differs from it —
+        else `None`. Nothing is computed here."""
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT inputs, derived FROM drc_rows WHERE user_id = {_TENANT} "
+                "AND kind = 'seed' AND day = %s AND ref = 'book'",
+                (day,),
+            ).fetchone()
+        if row is None:
+            return None
+        inputs, derived = row
+        if inputs.get("stated_book_id") is None or not derived.get("stated_differs"):
+            return None
+        return (
+            f"stated book for {day} differed from {inputs['from_day']}'s close: "
+            f"{', '.join(derived['stated_differs'])}"
+        )
+
+    def has_current_import(self, day: date, kind: Kind) -> bool:
+        """Whether `day` has a current (not superseded) import of `kind`."""
+        with self._connect() as conn:
+            return self._current_import(conn, day, kind) is not None
+
+    def has_chain_through(self, day: date) -> bool:
+        """Whether a `day` row exists on or before `day` — a recorded chain
+        a rebuild of `day` would join."""
+        with self._connect() as conn:
+            return conn.execute(
+                f"SELECT 1 FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'day' AND day <= %s LIMIT 1",
+                (day,),
+            ).fetchone() is not None
+
+    # -----------------------------------------------------------------
+    # K2 — the one re-pair (`_repair`) and the one write (`_commit`)
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def _current_import(conn, day: date, kind: Kind):
+        """The day's current import of `kind`: the row no other row
+        supersedes (`record_import`'s predicate)."""
+        return conn.execute(
+            f"""
+            SELECT id, name, parse_status, reason FROM drc_imports
+             WHERE user_id = {_TENANT} AND import_date = %s AND kind = %s
+               AND id NOT IN (SELECT supersedes FROM drc_imports
+                               WHERE supersedes IS NOT NULL AND user_id = {_TENANT})
+             ORDER BY id DESC LIMIT 1
+            """,
+            (day, kind.value),
+        ).fetchone()
+
+    @staticmethod
+    def _no_trade_id(conn, day: date) -> Optional[int]:
+        row = conn.execute(
+            f"SELECT id FROM drc_stated_books WHERE {_CURRENT} AND day = %s AND kind = 'no_trade' "
+            "ORDER BY id DESC LIMIT 1",
+            (day,),
+        ).fetchone()
+        return None if row is None else int(row[0])
+
+    def _repair(
+        self, conn, day: date, overlay: dict[date, "_Close"]
+    ) -> tuple[DayPairing, dict[Kind, int], Optional[SeedBook], Optional[int]]:
+        """`day` paired again from its STORED inputs (A1): the fills of its
+        CURRENT trading-log import (never the ids on its old `day` row), or
+        its current `no_trade` statement; its stored `stats_row` rows,
+        read before any delete; and its seed by `seed_for`'s one rule, with
+        a prior day re-paired in this call read from `overlay`."""
+        imp = self._current_import(conn, day, Kind.TRADING_LOG)
+        no_trade_id = self._no_trade_id(conn, day)
+        ids: dict[Kind, int] = {}
+        if imp is not None:
+            import_id, name, status, reason = imp
+            if status == Outcome.FAILED.value:
+                raise PairingError(
+                    f"{day}: its current trading log {name} failed ({reason}) — nothing to re-pair; "
+                    "never assumed empty (L1)"
+                )
+            executions = [
+                Execution(
+                    line=line,
+                    time=None if at is None else at.astimezone(trading_log.ET),
+                    symbol=symbol,
+                    side=None if side is None else ExecSide(side),
+                    price=price,
+                    qty=qty,
+                    route=route,
+                    broker=broker,
+                    account=account,
+                    order_type=order_type,
+                    order_id=order_id,
+                )
+                for line, at, symbol, side, price, qty, route, broker, account, order_type, order_id
+                in conn.execute(
+                    f"""SELECT line, executed_at, symbol, side, price, qty, route, broker, account,
+                               order_type, order_id
+                          FROM drc_fills WHERE user_id = {_TENANT} AND import_id = %s ORDER BY line""",
+                    (import_id,),
+                ).fetchall()
+            ]
+            outcome = Outcome(status)
+            result = ImportResult(
+                name=name,
+                kind=Kind.TRADING_LOG,
+                outcome=outcome,
+                reason=reason,
+                # A partial file re-pairs `not computed`, its stored reason
+                # the why (the drafter's pin, C5; v3 `[F-29]` B).
+                not_computed={"pairing": reason} if outcome is Outcome.PARTIAL else {},
+            )
+            ids[Kind.TRADING_LOG] = int(import_id)
+        elif no_trade_id is not None:
+            executions = []
+            result = ImportResult(name="no-trade DRC", kind=Kind.TRADING_LOG, outcome=Outcome.PARSED)
+        else:
+            raise PairingError(
+                f"{day}: no trading-log import and no no-trade DRC — nothing to re-pair ([F-05])"
+            )
+        parsed = ParsedTradingLog(result=result, import_date=day, executions=executions)
+
+        day_row = conn.execute(
+            f"SELECT inputs, derived FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'day' AND day = %s",
+            (day,),
+        ).fetchone()
+        stored_rows = [
+            r[0]
+            for r in conn.execute(
+                f"SELECT derived FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'stats_row' "
+                "AND day = %s ORDER BY ref",
+                (day,),
+            ).fetchall()
+        ]
+        stats: Optional[ParsedStatsLog] = None
+        kept_match: Optional[str] = None
+        if stored_rows:
+            stats_id = ((day_row[0] if day_row else {}).get("import_ids") or {}).get(Kind.STATS_LOG.value)
+            if stats_id is not None:
+                ids[Kind.STATS_LOG] = int(stats_id)
+            kept_match = ((day_row[1] if day_row else {}).get("not_computed") or {}).get("match")
+            if kept_match is None:
+                # `missing = []` is exact: `match_stats` reads only
+                # MATCH_INPUTS ∩ missing, empty when the match ran (G12).
+                stats = ParsedStatsLog(
+                    result=ImportResult(name="stored stats_row rows", kind=Kind.STATS_LOG, outcome=Outcome.PARSED),
+                    rows=[StatsRow.model_validate(d["row"]) for d in stored_rows],
+                )
+
+        seed = self._seed(conn, day, overlay)
+        if (
+            seed is not None
+            and imp is None
+            and seed.source == "carried"
+            and seed.stated_book_id is None
+        ):
+            seed = SeedBook(
+                source="no_trade_carry",
+                positions=seed.positions,
+                from_day=seed.from_day,
+                from_book_sha256=seed.from_book_sha256,
+                no_trade_id=no_trade_id,
+                resolves=seed.resolves,
+                resolve_outcomes=seed.resolve_outcomes,
+            )
+        pairing = build_day(
+            parsed,
+            stats,
+            seed=None if seed is None else seed.positions,
+            resolves=() if seed is None else seed.resolves,
+        )
+        if kept_match is not None:
+            # A1: "If `not_computed.match` is set, keep it and do not
+            # invent a match" — the stored rows go back unchanged.
+            pairing = pairing.model_copy(update={
+                "unmatched": [Unmatched(row=StatsRow.model_validate(d["row"]), reason=d["match"]) for d in stored_rows],
+                "not_computed": {**pairing.not_computed, "match": kept_match},
+            })
+        return pairing, ids, seed, (no_trade_id if imp is None else None)
+
+    def _commit(
+        self,
+        conn,
+        pairing: DayPairing,
+        import_ids: dict[Kind, int],
+        seed: Optional[SeedBook],
+        no_trade_id: Optional[int],
+    ) -> tuple[int, list[date]]:
+        """Write `pairing.day` and re-pair every later recorded day forward
+        (`[F-03]`, R51 side A: a first record of an earlier day is a
+        trigger too). All in memory first; any later day that raises →
+        `PairingError` naming it and nothing written. A day that comes out
+        `not computed` STOPS the chain: every later day keeps its rows and
+        is named in `not_repaired` (the ESCALATE default, C4)."""
+        later = [
+            r[0]
+            for r in conn.execute(
+                f"SELECT DISTINCT day FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'day' "
+                "AND day > %s ORDER BY day",
+                (pairing.day,),
+            ).fetchall()
+        ]
+        extra: dict[str, Any] = {}
+        writes: list[tuple[date, list]] = []
+        dates = [pairing.day]
+        if later:
+            overlay = {pairing.day: _Close.of(pairing, seed)}
+            stop = None if _Close.computed(pairing) else _stopped(pairing.day)
+            repaired: list[str] = []
+            not_repaired: list[dict] = []
+            for n in later:
+                if stop is not None:
+                    not_repaired.append({"day": n.isoformat(), "reason": stop})
+                    continue
+                try:
+                    p, ids, s, nt = self._repair(conn, n, overlay)
+                except PairingError as e:
+                    raise PairingError(
+                        f"{pairing.day}: not recorded — the forward re-pair of {n} failed: {e}"
+                    ) from e
+                writes.append((n, self._rows(p, ids, s, nt, {})))
+                overlay[n] = _Close.of(p, s)
+                repaired.append(n.isoformat())
+                dates.append(n)
+                if not _Close.computed(p):
+                    stop = _stopped(n)
+            extra["repaired"] = repaired
+            if not_repaired:
+                extra["not_repaired"] = not_repaired
+        rows = self._rows(pairing, import_ids, seed, no_trade_id, extra)
+        for d, out in [(pairing.day, rows), *writes]:
+            conn.execute(f"DELETE FROM drc_rows WHERE user_id = {_TENANT} AND day = %s", (d,))
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """
+                    INSERT INTO drc_rows (day, kind, ref, inputs, derived, fn_version)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    [(d, kind, ref, Jsonb(i), Jsonb(dv), FN_VERSION) for kind, ref, i, dv in out],
+                )
+        return len(rows), dates
+
+    @staticmethod
+    def _rows(
+        pairing: DayPairing,
+        import_ids: dict[Kind, int],
+        seed: Optional[SeedBook],
+        no_trade_id: Optional[int],
+        extra: dict[str, Any],
+    ) -> list[tuple[str, str, dict, dict]]:
+        """The day's `drc_rows`, each with its inputs (L57)."""
+        computed = "pairing" not in pairing.not_computed
         trading_id = import_ids.get(Kind.TRADING_LOG)
         stats_id = import_ids.get(Kind.STATS_LOG)
+        applied = {o.trade_id: o.resolve_id for o in pairing.resolves if o.status == "applied"}
         out: list[tuple[str, str, dict, dict]] = []
         trade_inputs: dict[str, dict] = {}
         for t in pairing.trades:
@@ -234,9 +618,11 @@ class DrcStore:
                 trade_inputs[t.trade_id]["carried_from"] = (
                     {"day": seed.from_day.isoformat(), "trade_id": t.trade_id,
                      "from_book_sha256": seed.from_book_sha256}
-                    if seed.source == "carried"
+                    if seed.from_day is not None
                     else {"stated_book_id": seed.stated_book_id}
                 )
+            if t.trade_id in applied:
+                trade_inputs[t.trade_id]["resolve_id"] = applied[t.trade_id]
             out.append(("trade", t.trade_id, trade_inputs[t.trade_id], t.model_dump(mode="json")))
             if t.stats is not None:
                 out.append((
@@ -258,30 +644,37 @@ class DrcStore:
         day_inputs: dict[str, Any] = {"import_ids": {k.value: v for k, v in import_ids.items()}}
         if seed is not None and seed.source == "stated":
             day_inputs["stated_book_id"] = seed.stated_book_id
-        out.append((
-            "day",
-            "day",
-            day_inputs,
-            {
-                "trades": len(pairing.trades),
-                "open_positions": len(pairing.open_positions),
-                "unmatched": len(pairing.unmatched),
-                "not_computed": dict(pairing.not_computed),
-            },
-        ))
+        if no_trade_id is not None:
+            day_inputs["no_trade_id"] = no_trade_id  # `[F-05]`: the empty day's input
+        day_derived: dict[str, Any] = {
+            "trades": len(pairing.trades),
+            "open_positions": len(pairing.open_positions),
+            "unmatched": len(pairing.unmatched),
+            "not_computed": dict(pairing.not_computed),
+        }
+        outcomes = _outcomes(pairing, seed)
+        if outcomes:
+            day_derived["resolves"] = [o.model_dump(mode="json") for o in outcomes]
+        day_derived.update(extra)
+        out.append(("day", "day", day_inputs, day_derived))
         if seed is not None:
             # What the day started from (v3 §2b step 3).
-            out.append((
-                "seed",
-                "book",
-                {
-                    "source": seed.source,
-                    "from_day": seed.from_day.isoformat() if seed.from_day else None,
-                    "from_book_sha256": seed.from_book_sha256,
-                    "stated_book_id": seed.stated_book_id,
-                },
-                {"count": len(seed.positions), "trade_ids": sorted(p.trade_id for p in seed.positions)},
-            ))
+            seed_inputs: dict[str, Any] = {
+                "source": seed.source,
+                "from_day": seed.from_day.isoformat() if seed.from_day else None,
+                "from_book_sha256": seed.from_book_sha256,
+                "stated_book_id": seed.stated_book_id,
+            }
+            if seed.no_trade_id is not None:
+                seed_inputs["no_trade_id"] = seed.no_trade_id
+            seed_derived: dict[str, Any] = {
+                "count": len(seed.positions),
+                "trade_ids": sorted(p.trade_id for p in seed.positions),
+            }
+            if seed.source == "carried" and seed.stated_book_id is not None:
+                # R51 / L7: his statement kept by id, the difference stored.
+                seed_derived["stated_differs"] = list(seed.stated_differs)
+            out.append(("seed", "book", seed_inputs, seed_derived))
         if computed:
             # What the day left (v3 §2a): stored on every computed day,
             # `count = 0` included — "flat" is a fact, never an absence.
@@ -298,96 +691,158 @@ class DrcStore:
                     "book_sha256": book_sha256(pairing.open_positions),
                 },
             ))
-        conn = self._connect()
-        conn.autocommit = False
-        try:
-            conn.execute(
-                f"DELETE FROM drc_rows WHERE user_id = {_TENANT} AND day = %s", (pairing.day,)
-            )
-            with conn.cursor() as cur:
-                cur.executemany(
-                    """
-                    INSERT INTO drc_rows (day, kind, ref, inputs, derived, fn_version)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """,
-                    [(pairing.day, kind, ref, Jsonb(i), Jsonb(d), FN_VERSION) for kind, ref, i, d in out],
-                )
-            conn.commit()
-        except BaseException:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
-        return len(out)
+        return out
 
     def seed_for(self, day: date) -> Optional[SeedBook]:
         """The book `day` starts from, or `None` when no book is stated.
 
         P = the prior trading day. P recorded → P's `book_close`, checked
-        against a hash recomputed over P's `open_position` rows (carried).
-        P not recorded → his current `opening` statement for `day`
+        against a hash recomputed over P's `open_position` rows (carried);
+        when his `opening` statement for `day` also exists, the close wins
+        and the statement is kept as history with the difference (R51,
+        K2). P not recorded → his current `opening` statement for `day`
         (stated: the first import, or a chain he mended). Nothing recorded
-        before `day` and nothing stated → `None`. Every other case FAILS
-        loud, naming why — never an assumed flat book (L1, v3 §2b, §4)."""
+        before `day` and nothing stated → `None`. The day's stored resolves
+        are read (`[F-06]`). Every other case FAILS loud, naming why —
+        never an assumed flat book (L1, v3 §2b, §4)."""
+        with self._connect() as conn:
+            return self._seed(conn, day, {})
+
+    def _seed(self, conn, day: date, overlay: dict[date, "_Close"]) -> Optional[SeedBook]:
+        """`seed_for`'s ONE rule (L3), also `_repair`'s: a day re-paired
+        earlier in the same call is read from `overlay`, never the store."""
         from cobalt.daymode.propose import prior_trading_day
 
         prior = prior_trading_day(day)
-        with self._connect() as conn:
-            recorded = [
-                r[0]
-                for r in conn.execute(
-                    f"SELECT DISTINCT day FROM drc_rows WHERE user_id = {_TENANT} "
-                    "AND kind = 'day' AND day < %s",
-                    (day,),
-                ).fetchall()
-            ]
-            openings = [
-                _stated(r)
-                for r in conn.execute(
-                    f"SELECT {_STATED_COLUMNS} FROM drc_stated_books WHERE {_CURRENT} "
-                    "AND day = %s AND kind = 'opening' ORDER BY id",
-                    (day,),
-                ).fetchall()
-            ]
-            if len(openings) > 1:
-                raise PairingError(
-                    f"{day}: {len(openings)} current opening books are stated — "
-                    f"{' and '.join(f'#{b.id}' for b in openings)}; one restatement must "
-                    "supersede the other (v3 [F-01]); nothing assumed"
-                )
-            stated = openings[0] if openings else None
-
-            if prior in recorded:
-                book = self._carried(conn, day, prior)
-                if stated is not None:
-                    raise PairingError(
-                        f"{day}: stated opening book #{stated.id} and {prior}'s recorded close "
-                        "both exist — R51's rebuild (the close wins, the statement kept as "
-                        "history) is K2's; nothing assumed"
-                    )
-            elif stated is not None:
-                book = SeedBook(
-                    source="stated",
-                    positions=stated_open_positions(day, _OPENING.validate_python(stated.positions)),
-                    stated_book_id=stated.id,
-                    from_book_sha256=stated.book_sha256,
-                )
-            else:
-                check_contiguity(day, prior, recorded)  # names P when an earlier day exists
-                return None
-
-            held = {p.trade_id for p in book.positions}
-            for resolve_id, resolved in conn.execute(
-                f"SELECT id, positions->0->>'trade_id' FROM drc_stated_books WHERE {_CURRENT} "
-                "AND kind = 'resolve' AND day <= %s ORDER BY id",
+        recorded = {
+            r[0]
+            for r in conn.execute(
+                f"SELECT DISTINCT day FROM drc_rows WHERE user_id = {_TENANT} "
+                "AND kind = 'day' AND day < %s",
                 (day,),
-            ).fetchall():
-                if resolved in held:
+            ).fetchall()
+        } | {d for d in overlay if d < day}
+        openings = [
+            _stated(r)
+            for r in conn.execute(
+                f"SELECT {_STATED_COLUMNS} FROM drc_stated_books WHERE {_CURRENT} "
+                "AND day = %s AND kind = 'opening' ORDER BY id",
+                (day,),
+            ).fetchall()
+        ]
+        if len(openings) > 1:
+            raise PairingError(
+                f"{day}: {len(openings)} current opening books are stated — "
+                f"{' and '.join(f'#{b.id}' for b in openings)}; one restatement must "
+                "supersede the other (v3 [F-01]); nothing assumed"
+            )
+        stated = openings[0] if openings else None
+
+        if prior in recorded:
+            book = overlay[prior].seed(day, prior) if prior in overlay else self._carried(conn, day, prior)
+            if stated is not None:
+                # R51 (side A of R2-1): the close wins; his statement is kept
+                # as history, with the difference stored and shown.
+                said = stated_open_positions(day, _OPENING.validate_python(stated.positions))
+                book = SeedBook(
+                    source="carried",
+                    positions=book.positions,
+                    from_day=book.from_day,
+                    from_book_sha256=book.from_book_sha256,
+                    stated_book_id=stated.id,
+                    stated_differs=stated_differs(said, book.positions),
+                )
+        elif stated is not None:
+            book = SeedBook(
+                source="stated",
+                positions=stated_open_positions(day, _OPENING.validate_python(stated.positions)),
+                stated_book_id=stated.id,
+                from_book_sha256=stated.book_sha256,
+            )
+        else:
+            check_contiguity(day, prior, recorded)  # names P when an earlier day exists
+            return None
+        return self._with_resolves(conn, day, book, overlay)
+
+    def _with_resolves(self, conn, day: date, book: SeedBook, overlay: dict[date, "_Close"]) -> SeedBook:
+        """The `[F-06]` reader: every CURRENT `resolve` row, all days.
+        Two for one trade id FAIL naming both (`[F-01]`, v3 §4 row 15). One
+        dated `day` naming a held trade is applied by `build_day`; naming a
+        trade an earlier export closed, it is superseded; naming anything
+        else, it FAILS. One dated before `day` whose trade is still held
+        and was not superseded on its own day FAILS naming `rebuild <R>` —
+        a later day never silently carries a resolved trade."""
+        rows = conn.execute(
+            f"SELECT id, day, positions->0 FROM drc_stated_books WHERE {_CURRENT} "
+            "AND kind = 'resolve' ORDER BY id"
+        ).fetchall()
+        by_trade: dict[str, list[int]] = {}
+        for resolve_id, _, position in rows:
+            by_trade.setdefault(position["trade_id"], []).append(resolve_id)
+        for trade_id, ids in by_trade.items():
+            if len(ids) > 1:
+                raise PairingError(
+                    f"{day}: {len(ids)} current resolves name {trade_id} — "
+                    f"{' and '.join(f'#{i}' for i in ids)}; one restatement must supersede the "
+                    "other (v3 [F-01]); nothing assumed"
+                )
+        held = {p.trade_id for p in book.positions}
+        inputs: list[ResolveInput] = []
+        outcomes: list[ResolveOutcome] = []
+        for resolve_id, resolve_day, position in rows:
+            resolve = _RESOLVE.validate_python([position])[0]
+            trade_id = resolve.trade_id
+            if resolve_day == day:
+                if trade_id in held:
+                    inputs.append(ResolveInput(id=resolve_id, resolve=resolve))
+                    continue
+                closed_on = self._closed_on(conn, trade_id, day, overlay)
+                if closed_on is None:
                     raise PairingError(
-                        f"{day}: resolve #{resolve_id} for {resolved} is stored and not applied — "
-                        "RESOLVE is K2's; nothing assumed"
+                        f"{day}: resolve #{resolve_id} names {trade_id}, which {day}'s opening book "
+                        "does not hold"
                     )
-        return book
+                outcomes.append(ResolveOutcome(
+                    resolve_id=resolve_id, trade_id=trade_id, status="superseded",
+                    reason=f"superseded — closed by the export of {closed_on}",
+                ))
+            elif resolve_day < day and trade_id in held and not self._superseded_on(
+                conn, resolve_day, resolve_id, overlay
+            ):
+                raise PairingError(
+                    f"{day}: resolve #{resolve_id} for {trade_id} dated {resolve_day} is not applied "
+                    f"— rebuild {resolve_day}"
+                )
+        return book.model_copy(update={"resolves": inputs, "resolve_outcomes": outcomes})
+
+    @staticmethod
+    def _closed_on(conn, trade_id: str, day: date, overlay: dict[date, "_Close"]) -> Optional[date]:
+        """The latest recorded day before `day` whose trades closed `trade_id`."""
+        days = {d for d, c in overlay.items() if d < day and trade_id in c.closed}
+        days |= {
+            r[0]
+            for r in conn.execute(
+                f"SELECT day FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'trade' AND ref = %s "
+                "AND derived->>'status' = 'closed' AND day < %s",
+                (trade_id, day),
+            ).fetchall()
+            if r[0] not in overlay
+        }
+        return max(days) if days else None
+
+    @staticmethod
+    def _superseded_on(conn, day: date, resolve_id: int, overlay: dict[date, "_Close"]) -> bool:
+        """Whether `day`'s pairing recorded this resolve as superseded."""
+        if day in overlay:
+            outcomes = overlay[day].resolves
+        else:
+            row = conn.execute(
+                f"SELECT derived->'resolves' FROM drc_rows WHERE user_id = {_TENANT} "
+                "AND kind = 'day' AND day = %s",
+                (day,),
+            ).fetchone()
+            outcomes = (row[0] if row else None) or []
+        return any(o["resolve_id"] == resolve_id and o["status"] == "superseded" for o in outcomes)
 
     @staticmethod
     def _carried(conn, day: date, prior: date) -> SeedBook:

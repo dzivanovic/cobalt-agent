@@ -82,3 +82,26 @@ field is a pydantic `AwareDatetime`, imported under the local name
   adds `no_trade_carry`.
 - `StatedKind` and `Via` are the `drc_stated_books` domains (R52:
   `drc_page` / `voice_widget` / `cli`).
+
+## 2026-09-25 — DRC K2
+- **`SeedBook.source`** gains `no_trade_carry`: a prior close carried
+  through a no-trade day. It must name `from_day` and `no_trade_id`, and
+  no `stated_book_id`.
+- **New `SeedBook` fields**:
+  - `stated_differs` (sorted trade ids);
+  - `no_trade_id`;
+  - `resolves` (a list of `ResolveInput`);
+  - `resolve_outcomes` (a list of `ResolveOutcome`).
+- **The validator**:
+  - A `carried` book MAY name his statement (`stated_book_id`, R51: the
+    close wins and the statement is kept as history). When it does, it
+    must pass `stated_differs` explicitly, `[]` when the books are equal
+    — the comparison is never left unstated (L7).
+  - `stated_differs` requires `stated_book_id`.
+  - A `stated` book carries no difference.
+- **`ResolveInput`** (`id`, `resolve: StatedResolve`) is a stored
+  resolve as a pairing input. **`ResolveOutcome`** (`resolve_id`,
+  `trade_id`, `status` `applied` / `superseded`, `reason`) is what
+  became of it. `DayPairing.resolves` lists the outcomes.
+- **`Trade.gross_pnl`** also takes `EXIT_NOT_IN_ANY_EXPORT` (`not
+  computed — exit not in any export`, v3 `[F-06]`, §4 row 11).

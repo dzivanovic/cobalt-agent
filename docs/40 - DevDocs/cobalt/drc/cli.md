@@ -46,3 +46,23 @@ nothing itself (L3, L40). It prints the table name from
 `DrcStore.STATED_TABLE`. It writes no vault note (L28). `turn_id` and
 `readback_sha256` stay NULL, because they belong to the voice caller
 only.
+
+## 2026-09-25 — DRC K2: the statement's effect
+After `--apply`, the CLI calls `DrcStore.rebuild(day)` in two cases:
+- the day has a current trading-log import (any kind of statement);
+- the statement is a `no_trade` or a `resolve` for a day that joins a
+  recorded chain (a `day` row on or before it).
+
+In those cases:
+- The dry run prints one more line after the row: `on --apply: rebuild
+  <day> and every later recorded day`.
+- The apply prints `rebuilt: <dates>`.
+- A refused rebuild prints `not rebuilt: <reason>` and exits 1. The
+  statement stays written, because it is his input.
+
+Otherwise the apply prints `stated; <day> has no import yet`.
+
+The narrowing for `no_trade` / `resolve` is a builder reading of the K2
+contract's C7, carried to the check. It keeps a statement for a day that
+has no recorded chain from being refused for having nothing to re-pair.
+The CLI still inserts nothing itself (L3).

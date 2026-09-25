@@ -400,7 +400,7 @@ def test_a_day_stores_every_trade_stats_row_and_the_day_with_inputs_and_fn_versi
     assert sorted(inputs["fill_lines"]) == [2, 3, 4, 6, 7, 8, 9]
     assert derived["playbooks"] == ["Alpha Setup Long", "Beta Setup Long"]
     assert derived["stats"]["stop"] is None
-    assert fn == "drc.pairing/2"
+    assert fn == "drc.pairing/3"
     # Recording the same day again replaces, never duplicates.
     store.record_day(day, ids, seed)
     assert migrated.execute(

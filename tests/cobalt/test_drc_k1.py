@@ -63,7 +63,7 @@ GGG_SHORT = {"symbol": "GGG", "direction": "short", "shares": 40, "avg_cost": No
 def test_the_pairing_version_is_2():
     from cobalt.drc.pairing import FN_VERSION
 
-    assert FN_VERSION == "drc.pairing/2"
+    assert FN_VERSION == "drc.pairing/3"
 
 
 def test_an_empty_book_hashes_the_empty_json_array():

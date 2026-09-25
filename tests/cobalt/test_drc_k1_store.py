@@ -412,15 +412,6 @@ def test_seed_iii_a_close_row_that_does_not_match_its_positions_fails(migrated, 
 
 
 @requires_db
-def test_seed_iv_a_statement_beside_a_recorded_close_fails_until_k2(migrated, weekday_calendar):
-    """Case (iv) FAILS until K2's rebuild. R51's order: the later day stated first, the earlier day recorded after (H2 refuses the other order)."""
-    stated = _state(D_NEXT)
-    _day1_carrying_ddd()
-    with pytest.raises(PairingError, match=f"stated opening book #{stated.id} and 2001-01-02's recorded close both exist"):
-        DrcStore().seed_for(D_NEXT)
-
-
-@requires_db
 def test_seed_v_a_recorded_prior_day_is_carried_with_its_hash(migrated, weekday_calendar):
     from cobalt.drc.pairing import book_sha256
 
@@ -477,15 +468,6 @@ def test_two_current_openings_for_one_day_fail_naming_both(migrated, weekday_cal
         DrcStore().seed_for(D)
 
 
-@requires_db
-def test_a_stored_resolve_of_a_carried_trade_fails_until_k2(migrated, weekday_calendar):
-    day1 = _day1_carrying_ddd()
-    (pos,) = day1.open_positions
-    resolve = _state(D_NEXT, kind="resolve", positions=[{"trade_id": pos.trade_id}])
-    with pytest.raises(PairingError, match=f"resolve #{resolve.id} for {re.escape(pos.trade_id)} is stored and not applied"):
-        DrcStore().seed_for(D_NEXT)
-
-
 # ---------------------------------------------------------------------
 # WITH-DB — record_day (C5)
 # ---------------------------------------------------------------------
@@ -512,7 +494,7 @@ def test_a_stated_day_records_its_seed_and_its_close_with_their_inputs(migrated,
     assert d_inputs["stated_book_id"] == stated.id
     assert migrated.execute(
         'SELECT DISTINCT fn_version FROM "user".drc_rows WHERE day = %s', (D,)
-    ).fetchall() == [("drc.pairing/2",)]
+    ).fetchall() == [("drc.pairing/3",)]
 
 
 @requires_db

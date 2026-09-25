@@ -5,10 +5,11 @@ hub-run read of one of his own files (v3 `:306`, `:328`): not run here.
 Each X has a GATE and a PASS test:
 
 - a GATE test runs on the code as it stands (the fact the design rests
-  on). X7's and X9's stay green after K2. X10's and X11's are facts of
-  the BASE that K2 replaces by design (the case (iv) raise; the
-  `IndexError` of a CLOSED book with no exits) — their results are
-  recorded in the build report at S2.
+  on). X7's, X8's and X9's stay green after K2. X10's and X11's were
+  facts of the BASE that K2 replaces by design (the case (iv) raise; the
+  `IndexError` of a CLOSED book with no exits): they ran at S2, their
+  results are in the build report, and they were removed with the K2
+  code (their placeholders below say so).
 - a PASS test states v3's pass condition against THE K2 CONTRACT of the
   build prompt. Every K2 symbol is imported INSIDE the test body, so each
   is its own red until the K2 code exists.
@@ -37,7 +38,7 @@ from cobalt.drc.stats_log import StatsLogSource
 from cobalt.drc.store import DrcStore
 from cobalt.drc.trading_log import TradingLogSource
 
-from test_drc_k1_store import D3, GGG_SHORT, _day1_carrying_ddd, _record, _row, _state
+from test_drc_k1_store import D3, GGG_SHORT, _day1_carrying_ddd, _row, _state
 from test_drc_pairing import CARRIED_SHORT_DAY1, CARRIED_SHORT_DAY2, STATS, _header, _set_stats_cell
 from test_drc_store import (  # noqa: F401 — fixtures are used by name
     D,
@@ -455,27 +456,22 @@ def test_x9_pass_d_a_partial_current_import_re_pairs_not_computed(migrated, week
 # ---------------------------------------------------------------------
 
 
+# X10's GATE (`test_x10_gate_r51s_order_reaches_k1s_case_iv`) ran on the
+# BASE at S2 — R51's order reached K1's case (iv) raise — and was removed
+# with the K2 code that replaces that raise; its result is in the build
+# report's `## S2 EXPERIMENTS X7–X12`.
+
+
 @requires_db
-def test_x10_gate_r51s_order_reaches_k1s_case_iv(migrated, weekday_calendar):
+def test_x10_pass_the_earlier_close_rebuilds_the_stated_later_day(migrated, weekday_calendar):
     """X10 (v3 `:326`): "Record Wed stated `flat`, then Tue (a first file)
     leaving a short open: is Wed re-paired from Tue's book, and does the
     page show the stated-vs-carried difference?" Result that changes the
     design: "the trigger stays "superseding file" only → the gap R2-1
     names remains; which side of `OPEN FOR DEJAN — R2-1` he takes decides
-    which result is the pass" — he took A (R51). GATE, on the BASE: R51's
-    order reaches K1's case (iv) and `seed_for(D_NEXT)` raises the K1
-    message K2 replaces."""
-    _state(D_NEXT)
-    _record(CARRIED_SHORT_DAY2, D_NEXT, DrcStore().seed_for(D_NEXT))
-    _state(D)
-    _record(CARRIED_SHORT_DAY1, D, DrcStore().seed_for(D))
-    with pytest.raises(PairingError, match=r"R51's rebuild .* is K2's"):
-        DrcStore().seed_for(D_NEXT)
+    which result is the pass" — he took A (R51).
 
-
-@requires_db
-def test_x10_pass_the_earlier_close_rebuilds_the_stated_later_day(migrated, weekday_calendar):
-    """X10 (v3 `:326`) PASS, R51 side A: recording D does NOT raise ("the
+    PASS, R51 side A: recording D does NOT raise ("the
     import does not stop"); D_NEXT is re-paired from D's close — its `B`
     closes the carried short; its `seed` names the statement as history
     and the difference; `drc_stated_books` is byte-identical."""
@@ -547,23 +543,20 @@ def test_x10_pass_a_not_computed_prior_stops_the_chain(migrated, weekday_calenda
 # ---------------------------------------------------------------------
 
 
-def test_x11_gate_a_closed_book_with_no_exits_raises_index_error():
+# X11's GATE (`test_x11_gate_a_closed_book_with_no_exits_raises_index_error`)
+# ran on the BASE at S2 — `_trade` of a CLOSED book with no exits raised
+# `IndexError` at `pairing.py:155` — and was removed with the K2 `_trade`
+# change that removes it; its result is in the build report.
+
+
+def test_x11_pass_a_resolve_with_no_exit_price_closes_the_carried_trade_offline():
     """X11 (v3 `:327`): "A resolve with no exit price on a carried trade:
     CLOSED, `legs = []`, realized `not computed — exit not in any export`,
     no `IndexError` at `pairing.py:97`. Also gates K3." Result that
     changes the design: "an exception → the resolved trade is not built
-    through `_trade`". GATE, on the BASE: `_trade` of a CLOSED book with no
-    exits reads `book.exits[-1]` and raises `IndexError` — the fact the
-    resolved trade's builder must change."""
-    from cobalt.drc.pairing import _Book, _trade
+    through `_trade`".
 
-    book = _Book("DDD", Direction.LONG, "DDD-long-constructed", None)
-    with pytest.raises(IndexError):
-        _trade(book, TradeStatus.CLOSED)
-
-
-def test_x11_pass_a_resolve_with_no_exit_price_closes_the_carried_trade_offline():
-    """X11 (v3 `:327`) PASS, offline: `build_day(…, seed=…, resolves=…)`
+    PASS, offline: `build_day(…, seed=…, resolves=…)`
     on a file that does not touch the carried `DDD` → the trade CLOSED,
     `legs == []`, the literal realized figure, no exception."""
     from cobalt.drc.models import ResolveInput, StatedResolve
