@@ -11,6 +11,12 @@ copied), the open-card lookup, the `Decimal` parse, and
 EXISTING engine (FINAL [F-26]). Returns a `StopEdit` whose
 `stop_edit_id` (the `card_stop_edits` row) is voice's write reference.
 
+Since fix r2 (RUN-2) it takes a keyword `expect_from_stop`, passed only by
+the voice act: when the stop it reads differs from the stop the confirmed
+read-back was computed from, it raises `StopMoved` (a `CardStateError`
+carrying the fresh card row) BEFORE any stop edit is recorded. The route
+never passes it, so its behaviour and rendered output are unchanged.
+
 ## Why its own module
 `aset/web.py` includes the voice router and the voice tool calls this;
 `web` is imported at call time, so neither module imports the other at

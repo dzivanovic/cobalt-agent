@@ -23,16 +23,16 @@ explicit override, the same pattern as `COBALT_VAULT_PATH`, exported by
 repo root, under the production vault, or under the resolved vault. Audio
 must never reach git, the vault or a backup (R18 (b)).
 
-## Backup sources — checked by the suite, not by the resident
-A path under a `configs/cobalt/backup.yaml` source is refused when the
-caller passes `backup_sources=`. The ASET resident does NOT read
-`backup.yaml`: doing so would make that file a resident read, contradicting
-`configs/cobalt/jobs.yaml`'s declared no-resident-read and L42's restart
-derivation (`test_jobs_restarts.py` pins the readers). Today's two sources
-(the vault; `data/.cobalt_vault` under the repo root) are already refused
-by the vault and repo checks, and `test_voice_config.py` loads the
-committed dev paths AND the production overrides with every real backup
-source passed. The choice is an ESCALATE in the V1 build report.
+## Backup sources — checked on every load, the resident's included
+A path under any `configs/cobalt/backup.yaml` source is refused. A caller
+may pass `backup_sources=`; when none are passed (the ASET resident's
+call), `load_voice_config` reads them through the one loader,
+`cobalt.backup.config.load_backup_config()`, and a `BackupConfigError`
+becomes a `VoiceConfigError` naming it (fix r2, C2; FINAL :118). So
+`backup.yaml` sits in `com.cobalt.aset`'s `reads:` in
+`configs/cobalt/jobs.yaml`, and a change to it derives that resident's
+restart (L42) — the resident caches the voice config at its first load
+(`voice/web.py` `get_config`), so only a restart re-reads it.
 
 ## G2 / K5
 `scratch_max_age_s ≤ stt_timeout_s` is refused: V4's probe counts files

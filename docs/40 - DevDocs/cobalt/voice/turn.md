@@ -38,7 +38,9 @@ clock); `default_deps()` wires the real ones and crashes on a config error.
 `cli_confirm_refused`,
 `empty_transcript`, `tool_read`, `voice_plan` ("Cobalt can't think right
 now (<kind>)"), `turn_error` — each on the row and in the reply, with a
-RED line where the widget's banner needs one.
+RED line where the widget's banner needs one. Since fix r2 any other error
+raised by the Plan call (a `ValueError`, say) is also `voice_plan`, "Cobalt
+can't think right now (<class>)", RED — FINAL §7's row — not `turn_error`.
 
 ## Dry run
 `dry_run=True` returns the Plan, the resolution and the exact change and

@@ -18,5 +18,8 @@ failed act, an expert refusal — fix r1), 2 on a refusal; `--confirm` with
   is confirmed only by the widget — his tap or his own next turn. No
   house confirms a production act (L37, FINAL [F-02]).
 - `--audio` accepts webm / ogg / m4a / wav, and takes the scratch-dir lock
-  for its turn; while a server holds it the command refuses by name.
+  for its turn; while a server holds it the command refuses by name. Since
+  fix r2 the file is read once and a file over `max_upload_bytes` (the
+  route's own bound) is refused by name (exit 2) before the lock and before
+  any turn runs.
 - Any house runs this in DEV with synthetic audio or text (L44, [F-02]).
