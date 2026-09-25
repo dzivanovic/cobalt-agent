@@ -1265,7 +1265,7 @@ async def settings_daily_apply(request: Request) -> str:
 
     His hand needs no HITL token (L28 as amended 09-15); the trace is each
     row's `source` (`aset.change_line@sha256:<hash>`) + `updated_at`, and
-    the one log line (keys + hash + time, never values)."""
+    the one log line (keys, source kind and time — never a value or a digest of one)."""
     form = {k: str(v) for k, v in (await request.form()).items()}
     reviewed = form.pop("sha256", "").strip().lower()
     try:

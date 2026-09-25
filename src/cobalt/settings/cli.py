@@ -7,8 +7,13 @@ own settings (ADR-0008 D3.4).
     cobalt settings load --optional <file> [--sha256 <hash>] --dry-run | --apply
     cobalt settings show
 
-Every apply goes through `apply_settings` — the one write function the
-ASET change line (DRC D4-4) calls too.
+Every apply of `cobalt settings load` (--from, --from-git, --optional,
+--card) and the ASET change line (DRC D4-4) goes through `apply_settings`
+— the one write function for his settings (L3; D4 fix r1 F-1 routed
+--card through it). The radar's vault-note mirror (`radar/notes.py`
+`mirror_sources`, the `radar.note.*` keys) is the one other writer of
+`trader_settings` rows: a machine mirror with its own market-reset
+refusal, not a settings load.
 
 `--card` (S2-P2, `.card`) and `--optional` (S2-P4) each load their own
 reviewed file — the card settings (`radar.cards_enabled`, `card.*`) and
@@ -76,23 +81,25 @@ def apply_settings(
     store: TraderSettingsStore | None = None,
     delete: Iterable[str] = (),
 ) -> dict[str, str]:
-    """THE ONE APPLY (L3 / L40, DRC D4-4). `cobalt settings load --apply`
-    and the ASET change line both write `"user".trader_settings` through
-    this function and nothing else.
+    """THE ONE APPLY (L3 / L40, DRC D4-4). Every `cobalt settings load
+    --apply` form (--card included, D4 fix r1 F-1) and the ASET change line
+    write `"user".trader_settings` through this function and nothing else.
 
     In order: refused inside `market_reset` (L66 — `assert_writable`
     raises `SessionBlocked` naming the window before anything is written);
     ONE `put` (one transaction: every key lands or none does); a
     round-trip read — the caller may only say "saved" once what the
-    database returns equals the payload; one log line naming the keys,
-    the payload hash and the time. NEVER the values: they are his user
-    data (L32). The store's own trace is each row's `source` and
+    database returns equals the payload; ONE log line naming the keys,
+    the deleted keys, the source KIND (the source label up to `@sha256:`)
+    and the time — never a value and never a digest of one (a digest of a
+    small-value payload is the value, L32; D4 fix r1 F-8). The store's
+    own trace is each written row's `source` (the reviewed payload hash
+    for the change line, the loader's own label for the CLI) and its
     `updated_at`.
     """
     assert_writable(actor, target=TARGET)
     store = store or TraderSettingsStore()
     delete = list(delete)
-    digest = payload_sha256(rows)
     extra = {"delete": delete} if delete else {}
     outcome = store.put(rows, source=source, **extra)
     reloaded = store.values()
@@ -104,8 +111,8 @@ def apply_settings(
             f"differs: {drift or 'none'}; still present after delete: {lingering or 'none'}"
         )
     logger.info(
-        "settings applied: keys {} · deleted {} · sha256 {} · source {} · at {}",
-        sorted(rows), delete, digest, source,
+        "settings applied: keys {} · deleted {} · source {} · at {}",
+        sorted(rows), delete, source.split("@sha256:", 1)[0],
         datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
     return outcome

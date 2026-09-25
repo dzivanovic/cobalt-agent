@@ -73,15 +73,21 @@ The real load path for optional keys (today only `radar.benchmark`):
   written); ONE `store.put` (one transaction); a re-read, and a
   `TraderSettingsError` if any written key reads back different (a caller
   may say "saved" only after this returns); one loguru line
-  `settings applied: keys … · deleted … · sha256 … · source … · at …` —
-  keys and hash, NEVER values (L32).
+  `settings applied: keys … · deleted … · source … · at …` — keys, deleted
+  keys, the source KIND (the label up to `@sha256:`) and the time; NEVER a
+  value and never a digest of one (2026-09-25, D4 fix r1 F-8: a digest of a
+  daily-stop-only payload can be enumerated back to the value, L32). The
+  reviewed hash stays in each written row's `source`.
 - `payload_sha256(rows)` — sha256 of the payload's canonical JSON
   (`sort_keys`, compact). The change line shows it for review and its
   Apply must carry it back.
 - `cmd_load` / `cmd_load_optional` call `apply_settings` and keep their own
   typed round-trip checks after it. `settings/card.py`'s `cmd_load_card`
-  still calls `store.put` itself — it was out of D4's file list (see the
-  D4 build report's ESCALATE).
+  calls it too since D4 fix r1 F-1 (2026-09-25; before that it called
+  `store.put` itself), keeping its `CardSettings` round trip on top. The
+  one other writer of `trader_settings` rows is the radar's vault-note
+  mirror (`radar/notes.py` `mirror_sources`, `radar.note.*`) — a machine
+  mirror with its own market-reset refusal, not a settings load.
 - `cmd_show` (D4-5, the DRC family's dry-run) ends with a
   `DRC keys (optional; absent = not given):` block: every key in
   `DRC_SETTING_KEYS`, its stored JSON, or `not given`.
