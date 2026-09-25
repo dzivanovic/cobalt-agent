@@ -664,6 +664,7 @@ POST_ALLOWLIST = {
     "/size", "/fill", "/attest", "/card/{card_id}/move", "/card/{card_id}/stop",
     "/radar/card/{card_id}/key", "/radar/card/{card_id}/dot/{factor}",
     "/radar/card/{card_id}/promote", "/radar/card/{card_id}/release",
+    "/settings/daily", "/settings/daily/apply",
 }
 GET_ONLY = {"/", "/radar", "/api/radar/pool", "/api/health", "/api/prefill"}
 
