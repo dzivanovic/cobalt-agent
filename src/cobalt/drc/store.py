@@ -1098,19 +1098,19 @@ class DrcStore:
                 # K2 fix r1 F-1 (v3 `[F-01]` `:126`, `:134`): a resolve's
                 # key is its trade id, ON ANY DAY — a second current one is
                 # refused, and a restatement on another day supersedes it.
-                rows = conn.execute(
+                found = conn.execute(
                     f"SELECT id, day FROM drc_stated_books WHERE {_CURRENT} AND kind = 'resolve' "
                     "AND positions->0->>'trade_id' = %s ORDER BY id",
                     (trade,),
                 ).fetchall()
             else:
-                rows = conn.execute(
+                found = conn.execute(
                     f"SELECT id, day FROM drc_stated_books WHERE {_CURRENT} AND day = %s AND kind = %s "
                     "ORDER BY id",
                     (day, kind),
                 ).fetchall()
-            current = [r[0] for r in rows]
-            named = ", ".join(f"#{i} ({d})" for i, d in rows) or "none"
+            current = [r[0] for r in found]
+            named = ", ".join(f"#{i} ({d})" for i, d in found) or "none"
             if supersedes is None and current:
                 raise ValueError(
                     f"{what}: {self.STATED_TABLE} {named} is current — a restatement names it "
