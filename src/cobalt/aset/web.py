@@ -67,6 +67,8 @@ from .daily_note import DailyNoteRefused, save_card, save_fill_update
 from .engine import KeyRefused, SizingError, compute_fill_recompute, compute_sizing, size_at_key
 from .models import Direction, Grade, SizingInput
 from cobalt.settings import TraderSettingsError
+from cobalt.settings import cli as settings_cli
+from cobalt.settings import drc as settings_drc
 from cobalt.settings.card import CardSettingsReader
 from .prefill import PrefillError, fetch_last_price
 from .radar_panel import (
@@ -560,7 +562,7 @@ def _daymode_banner(dm: dict) -> str:
     e = html.escape
     if dm["error"]:
         return (f'<div class="mode mismatch">⚠ DAY MODE UNRESOLVED — cards are refused '
-                f'until this is fixed: {e(dm["error"])}</div>')
+                f'until this is fixed: {e(dm["error"])}</div>') + _settings_daily_form()
 
     cfg, row, mode = dm["cfg"], dm["row"], dm["mode"]
     sheet = cfg.sheet_for(mode)
@@ -616,7 +618,8 @@ def _daymode_banner(dm: dict) -> str:
         '</select>'
         '<button type="submit">Attest</button></form>'
     )
-    return f'<div class="{klass}">' + "".join(lines) + "</div>"
+    # DRC D4-4: the settings change line sits with the attestation form.
+    return f'<div class="{klass}">' + "".join(lines) + "</div>" + _settings_daily_form()
 
 
 def _card_controls(card: dict) -> str:
@@ -1175,6 +1178,120 @@ async def attest(request: Request) -> str:
         banner=f'<div class="saved">Attested {html.escape(filename)} '
         f"(= the {html.escape(sheet)} sheet). Cards are checked against this until "
         f"you change it.{html.escape(note_line)}</div>"
+    )
+
+
+# ---------------------------------------------------------------------------
+# DRC D4-4: the settings CHANGE LINE (R96 / R102). THE SEAM WITH D2 (L72):
+# this block — `POST /settings/daily`, `POST /settings/daily/apply` and the
+# `_settings_daily_*` helpers they alone use — sits directly after `/attest`
+# and shares nothing with D2's `/drc` block at the end of the file.
+# ---------------------------------------------------------------------------
+
+
+def _settings_daily_form() -> str:
+    """The change line as the page shows it: the CURRENT daily stop and
+    dollars per grade, read through the ONE reader
+    (`settings.drc.daily_risk_values`), each an input he may retype.
+    Never raises — an unreadable setting renders FAILED, never a blank
+    that looks like a value."""
+    e = html.escape
+    try:
+        risk = settings_drc.daily_risk_values()
+        fields = settings_drc.change_line_fields(risk)
+    except Exception as exc:  # noqa: BLE001 - rendered, never swallowed
+        return _failed(f"Daily stop / $ per grade unreadable: {type(exc).__name__}: {exc}")
+    stops = " · ".join(f"{sheet} {settings_drc.shown(v)}" for sheet, v in risk.daily_stop.items())
+    inputs = "".join(
+        f'<div><label>{e(f.label)} <span class="muted">now {e(f.current or settings_drc.NOT_GIVEN)}'
+        f'</span></label><input name="{e(f.name)}" value="{e(f.current)}" inputmode="decimal"></div>'
+        for f in fields
+    )
+    return (
+        '<form class="card" method="post" action="/settings/daily">'
+        "<label>Daily stop &amp; $ per grade — central settings (change line)</label>"
+        f'<div class="muted">daily stop: {e(stops)} · a blank daily-stop box leaves it as it is</div>'
+        f'<div class="row" style="flex-wrap:wrap">{inputs}</div>'
+        '<button type="submit">Review change</button></form>'
+    )
+
+
+def _settings_daily_review(form: dict, proposal) -> str:
+    """The per-key diff (old → new), the payload's sha256, and the Apply
+    button carrying the same inputs and that hash back."""
+    e = html.escape
+    rows = "".join(
+        f"<tr><td>{e(name)}</td><td>{e(old)}</td><td>→</td><td>{e(new)}</td></tr>"
+        for name, old, new in proposal.diff
+    )
+    hidden = "".join(
+        f'<input type="hidden" name="{e(k)}" value="{e(v)}">'
+        for k, v in form.items()
+        if k != "sha256"
+    )
+    return (
+        '<div class="card"><label>Review — nothing is written until you apply</label>'
+        f"<table>{rows}</table>"
+        f'<div class="muted">keys: {e(", ".join(sorted(proposal.payload)))} · sha256 '
+        f"{e(proposal.sha256)}</div>"
+        f'<form method="post" action="/settings/daily/apply">{hidden}'
+        f'<input type="hidden" name="sha256" value="{e(proposal.sha256)}">'
+        '<button class="primary" type="submit">Apply</button></form></div>'
+    )
+
+
+@app.post("/settings/daily", response_class=HTMLResponse)
+async def settings_daily(request: Request) -> str:
+    """Review a change to the daily stop / $ per grade. Writes nothing."""
+    form = {k: str(v) for k, v in (await request.form()).items()}
+    try:
+        proposal = settings_drc.propose_daily_change(form)
+    except TraderSettingsError as exc:
+        return _render(banner=_failed(str(exc)))
+    except Exception as exc:  # noqa: BLE001
+        return _render(banner=_failed(f"{type(exc).__name__}: {exc}"))
+    if not proposal.payload:
+        return _render(banner='<div class="warn">No differences — nothing to apply.</div>')
+    return _render(banner=_settings_daily_review(form, proposal))
+
+
+@app.post("/settings/daily/apply", response_class=HTMLResponse)
+async def settings_daily_apply(request: Request) -> str:
+    """Apply the REVIEWED change: the payload is rebuilt from the posted
+    inputs against what is stored now and must hash to the sha256 he
+    reviewed; then the ONE apply (`settings.cli.apply_settings`, the same
+    function `cobalt settings load --apply` uses) — refused inside
+    `market_reset`, one transaction, read back before `saved` is shown.
+
+    His hand needs no HITL token (L28 as amended 09-15); the trace is each
+    row's `source` (`aset.change_line@sha256:<hash>`) + `updated_at`, and
+    the one log line (keys + hash + time, never values)."""
+    form = {k: str(v) for k, v in (await request.form()).items()}
+    reviewed = form.pop("sha256", "").strip().lower()
+    try:
+        proposal = settings_drc.propose_daily_change(form)
+        if not proposal.payload:
+            raise TraderSettingsError("no differences — nothing to apply; nothing written.")
+        if reviewed != proposal.sha256:
+            raise TraderSettingsError(
+                f"sha256 mismatch — reviewed {reviewed or '(none)'}, the payload is now "
+                f"{proposal.sha256}. Review the change again; nothing written."
+            )
+        settings_cli.apply_settings(
+            proposal.payload,
+            source=f"aset.change_line@sha256:{proposal.sha256}",
+            actor="aset.settings",
+        )
+    except SessionBlocked as exc:
+        return _render(banner=_failed(f"{exc}\nNothing written."))
+    except TraderSettingsError as exc:
+        return _render(banner=_failed(str(exc)))
+    except Exception as exc:  # noqa: BLE001
+        return _render(banner=_failed(f"{type(exc).__name__}: {exc}"))
+    return _render(
+        banner='<div class="saved">Settings saved — read back equal: '
+        f'{html.escape(", ".join(sorted(proposal.payload)))} · sha256 '
+        f"{html.escape(proposal.sha256)}</div>"
     )
 
 

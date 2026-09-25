@@ -43,3 +43,33 @@ source.
 - `OPTIONAL_SETTING_KEYS` / `OPTIONAL_SETTING_MODELS` are the one registry
   of optional keys and their models. The `--optional` loader and every
   reader use it.
+
+---
+
+## 2026-09-25 — DRC D4-1: the DRC key families (SPEC §7 names; v2 [F-16] / [F-18])
+
+- ONE ROW PER LEAF, keyed by the dotted SPEC path, like the `daymode.*`
+  rows. Four family models, every field `Optional` (absent → `None` →
+  callers print `not given`, L1): `DrcAccountSettings`
+  (`daily_stop_full`, `daily_stop_half`: Decimal > 0),
+  `DrcLimitsSettings` (`card_match_window_minutes`: strict int > 0),
+  `DrcWindowsSettings` (`premarket_end` HH:MM; `first_window_minutes`
+  strict int > 0; `prime` / `dead` / `second` as `[start, end]` HH:MM with
+  start < end), `DrcGoalSettings` (`primary` / `metric` non-empty text;
+  `target_pct` `[low, high]` within 0–100, low ≤ high;
+  `switch_threshold_pct` 0–100).
+- `DRC_FAMILIES` (family → model), `DRC_SETTING_KEYS` (the 12 dotted keys),
+  `DAILY_STOP_KEYS` (sheet id → its daily-stop key).
+- `DrcKey(key)` is the registry adapter for one leaf: `validate(value)`
+  returns the typed leaf or raises `TraderSettingsError` NAMING THE KEY (a
+  stored null is refused too); `from_rows(rows).row()` gives the JSON
+  value, like `BenchmarkSettings`.
+- Every DRC key is in `OPTIONAL_SETTING_KEYS` (and `OPTIONAL_SETTING_MODELS`
+  maps it to its `DrcKey`), NEVER in `SETTING_KEYS`: a missing DRC key must
+  not touch the ASET sheet's reader.
+- Left out on purpose: `grades.*` (the dollars per grade are the existing
+  `aset.sheet_modes` row — a copy is an L3 defect), `account.sheet_mode_default`
+  (the day mode rules which sheet a day uses), `sleep_trigger.*` and the
+  other `limits.*` names (no reader yet; no rule→checker map, R101).
+- `TraderSettingsError` now sits above these models (they raise it); its
+  meaning is unchanged.

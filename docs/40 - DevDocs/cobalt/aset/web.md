@@ -233,3 +233,33 @@ Both fill routes **append** it after their unchanged success banner:
   `transition_ids` from the result)
 
 Tests: `test_aset_web.TestPickNotRecordedBanner`.
+
+---
+
+## 2026-09-25 — DRC D4-4: the settings change line (R96 / R102)
+
+His daily stop and dollars per grade are changed HERE, from the sheet,
+into the central settings (`"user".trader_settings`).
+
+- `_settings_daily_form()` is appended by `_daymode_banner` right after the
+  attestation form (both the resolved and the UNRESOLVED banner). It reads
+  the current values through `settings.drc.daily_risk_values()` — the one
+  reader — and renders one input per daily-stop key and per sheet × grade
+  (`aset.sheet_modes.<sheet>.<A_plus|A|B|C|D>`). It never raises: an
+  unreadable setting renders a FAILED block.
+- `POST /settings/daily` → `settings.drc.propose_daily_change(form)` → the
+  per-key diff (old → new), the payload's sha256, and an Apply form that
+  posts the same inputs plus that hash. Writes nothing. A bad field
+  (non-number, ≤ 0, a blank grade, a non-zero D) is refused naming it.
+- `POST /settings/daily/apply` rebuilds the proposal against what is stored
+  NOW, refuses if its sha256 is not the reviewed one, then calls
+  `settings.cli.apply_settings` — the same function `cobalt settings load
+  --apply` uses — with `source="aset.change_line@sha256:<hash>"`,
+  `actor="aset.settings"`. Inside `market_reset` it is refused with the
+  guard's reason and "Nothing written." `Settings saved` is shown only after
+  `apply_settings` returned, i.e. after the read-back equalled the payload.
+- THE SEAM WITH D2 (L72): this route block sits directly after `/attest`;
+  D2's `/drc` block goes at the end of the file; they share no helper.
+
+Tests: `tests/cobalt/test_drc_settings.py` (offline, constructed store),
+`tests/cobalt/test_drc_settings_db.py` (`cobalt_dev`, rollback).

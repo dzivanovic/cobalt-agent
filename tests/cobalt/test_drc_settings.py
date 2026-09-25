@@ -443,7 +443,7 @@ def test_a_good_apply_writes_through_the_one_apply_function_then_reads_back(
 
     proposal = propose_daily_change(form)
     r = page.post("/settings/daily/apply", data=dict(form, sha256=proposal.sha256))
-    assert "saved" in r.text, r.text[-1500:]
+    assert "Settings saved" in r.text, r.text[-1500:]
     assert len(calls) == 1
     assert len(world.puts) == 1 and set(world.puts[0][0]) == {"account.daily_stop_full", "aset.sheet_modes"}
     assert world.data["account.daily_stop_full"] == "31337"
@@ -466,7 +466,7 @@ def test_saved_only_after_the_read_back_equals_the_payload(page, world):
     form = _form(**{"account.daily_stop_full": "31337"})
     r = page.post("/settings/daily/apply", data=dict(form, sha256=_sha({"account.daily_stop_full": "31337"})))
     assert "FAILED" in r.text
-    assert "saved" not in r.text.split("FAILED", 1)[1][:200]
+    assert "Settings saved" not in r.text
 
 
 def test_no_log_line_carries_a_value(page, world):
@@ -480,7 +480,7 @@ def test_no_log_line_carries_a_value(page, world):
 
         sha = propose_daily_change(form).sha256
         r = page.post("/settings/daily/apply", data=dict(form, sha256=sha))
-        assert "saved" in r.text
+        assert "Settings saved" in r.text
     finally:
         logger.remove(sink)
     applied = [m for m in messages if "settings applied" in m]

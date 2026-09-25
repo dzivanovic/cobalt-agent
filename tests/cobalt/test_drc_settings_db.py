@@ -205,7 +205,7 @@ def test_e3_a_good_apply_writes_through_the_store_and_reads_back(change_page):
     form = _change_form(**{"account.daily_stop_full": "31337", "aset.sheet_modes.full.B": "61"})
     proposal = propose_daily_change(form)
     r = client.post("/settings/daily/apply", data=dict(form, sha256=proposal.sha256))
-    assert "saved" in r.text, r.text[-2000:]
+    assert "Settings saved" in r.text, r.text[-2000:]
     values = store.values()
     for key, value in proposal.payload.items():
         assert values[key] == value, key
