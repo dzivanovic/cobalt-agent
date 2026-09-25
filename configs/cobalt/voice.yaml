@@ -1,0 +1,44 @@
+# VOICE V1 — engine settings (voice v3 FINAL §5, §11 W7). Schema:
+# src/cobalt/voice/config.py (extra="forbid"; every key REQUIRED — a missing
+# key crashes the load, L1/L10). These are ENGINE TUNABLES, not rulings
+# (L53 reserves only the Finviz ceiling, the scan cadence and pool settings).
+#
+# scratch_dir / model_dir: the committed values are the DEV paths (like
+# configs/dev/vault.yaml's dev default). Production sets its own through the
+# explicit env overrides COBALT_VOICE_SCRATCH_DIR / COBALT_VOICE_MODEL_DIR in
+# ops/start_aset.sh. The loader REFUSES either path when it is relative, or
+# under the repo root, docs/, the vault, or any configs/cobalt/backup.yaml
+# source (FINAL §5) — audio never reaches git, the vault or a backup.
+#
+# Lives under configs/cobalt/ — outside the old loader's top-level
+# configs/*.yaml glob (CLAUDE.md config boundary).
+voice:
+  # source: FINAL §5 (dev value; production override in ops/start_aset.sh)
+  scratch_dir: /Users/cobalt/.cobalt-dev/voice-scratch
+  # source: FINAL §5 (dev value; production override in ops/start_aset.sh)
+  model_dir: /Users/cobalt/.cobalt-dev/voice-models
+  # source: FINAL §2.3 — CPU faster-whisper; no cloud engine exists (W4)
+  stt_engine: faster-whisper
+  # source: X-E2 — the smallest size meeting the bar (WER 6.62 % / 4.55 %, 12/12 confirm words, p95 272 ms at clips up to 4.85 s)
+  stt_model: tiny.en
+  # source: X-E2 — the pinned snapshot downloaded into model_dir
+  stt_revision: 0d3d19a32d3338f10357c0889762bd8d64bbdeba
+  # source: X-E2 — the compute type every E2 / X1 / X20 number was measured with
+  stt_compute_type: int8
+  # source: engine default — FINAL §11 W7 (Whisper decodes a 30 s window; X-E2 clips were ≤ 4.85 s)
+  max_clip_s: 30
+  # source: engine default — FINAL §11 W7 (30 s of Opus at 256 kbit/s ≈ 0.96 MB, ×2 headroom)
+  max_upload_bytes: 2000000
+  # source: X-E2 / X-X20 — tiny.en p95 272 ms on ≈5 s clips; a 16.5 s clip decoded in 3.76–3.89 s; 20 s covers a 30 s clip with headroom
+  stt_timeout_s: 20
+  # source: engine default — FINAL §11 W7
+  confirm_ttl_s: 60
+  # source: engine default — FINAL §11 W7; must exceed stt_timeout_s (G2/K5); read by V4's voice_scratch probe
+  scratch_max_age_s: 120
+  # source: X-E4 — a Plan prompt with NO history was 508–516 input tokens at p50 2492 ms;
+  # 4 short turns add a few hundred tokens at most (the prompt carries transcript + reply only)
+  history_turns: 4
+  # source: FINAL [F-23] — a ROUTE NAME in configs/cobalt/modelaccess.yaml, never a provider
+  plan_route: local.plan
+  # source: FINAL §11 W11 [F-03] — socket peers only; E8 adds the `tailscale serve` peer in the device session
+  allowed_peers: ["127.0.0.1", "::1"]

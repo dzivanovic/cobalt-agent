@@ -242,12 +242,14 @@ def test_0013_is_registered_forward_and_reverse():
     assert MIGRATIONS_DIR / "0013_tunables_slug_nullable.sql" in FORWARD
     assert MIGRATIONS_DIR / "0013_tunables_slug_nullable.rollback.sql" in REVERSE
     # 0014 (the float handicap H1) now follows it; 0013 stays directly before.
-    assert FORWARD[-3].name == "0013_tunables_slug_nullable.sql"
-    assert FORWARD[-2].name == "0014_radar_handicap.sql"
-    assert REVERSE[2].name == "0013_tunables_slug_nullable.rollback.sql"
-    assert REVERSE[1].name == "0014_radar_handicap.rollback.sql"
-    assert FORWARD[-1].name == "0015_shadow_agreement_stale.sql"  # the stale-score build (R40) now tops it
-    assert REVERSE[0].name == "0015_shadow_agreement_stale.rollback.sql"
+    assert FORWARD[-4].name == "0013_tunables_slug_nullable.sql"
+    assert FORWARD[-3].name == "0014_radar_handicap.sql"
+    assert REVERSE[3].name == "0013_tunables_slug_nullable.rollback.sql"
+    assert REVERSE[2].name == "0014_radar_handicap.rollback.sql"
+    assert FORWARD[-2].name == "0015_shadow_agreement_stale.sql"  # the stale-score build (R40)
+    assert REVERSE[1].name == "0015_shadow_agreement_stale.rollback.sql"
+    assert FORWARD[-1].name == "0017_voice_turns.sql"
+    assert REVERSE[0].name == "0017_voice_turns.rollback.sql"
 
 
 @requires_db

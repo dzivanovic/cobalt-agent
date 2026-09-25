@@ -78,6 +78,7 @@ from cobalt.taxonomy import cli as taxonomy_cli  # noqa: E402
 from cobalt.taxonomy import validate as taxonomy_validate  # noqa: E402
 from cobalt.vaultwrite import VaultWriter, VaultWriteStore  # noqa: E402
 from cobalt.archiver import cli as archiver_cli  # noqa: E402
+from cobalt.voice import cli as voice_cli  # noqa: E402
 from cobalt.archiver.quiet import QuietRefused  # noqa: E402
 from cobalt.archiver.store import ArchiveLockError  # noqa: E402
 
@@ -508,6 +509,7 @@ def main() -> None:
     # reflows none of its neighbours.
     archiver_cli.add_parser(sub)
     jobs_cli.add_stop_parsers(sub)
+    voice_cli.add_parser(sub)
 
     validate = sub.add_parser(
         "validate", help="Validate every config family (F16 sweep gate)."

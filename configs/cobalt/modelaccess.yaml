@@ -1,0 +1,42 @@
+# MODEL-ACCESS ROUTE REGISTRY — the new core's ONE model-access module
+# (voice v3 seam S1, docs/30 - Design/VOICE-v3-SEAM-S1-2026-09-23.md §2.3).
+# Schema: src/cobalt/modelaccess/config.py (extra="forbid"; every key is
+# REQUIRED — a missing key crashes the load, L1/L10).
+#
+# A caller names a ROUTE; it never sees a URL, a key, a provider or a model
+# file. V1 accepts one lane (local), one kind (openai_compatible), one think
+# policy (forbid_nonempty); a local route must point at a LOOPBACK host.
+#
+# There is NO `fallback` key and the schema refuses one: whether any lane
+# carries a fallback is the routing lane's (L23 / L25, frozen until the
+# routing tribunal rules — FINAL [F-23]). The routing build extends THIS
+# file; it never builds a second registry.
+#
+# Lives under configs/cobalt/ — outside the old loader's top-level
+# configs/*.yaml glob (CLAUDE.md config boundary).
+routes:
+  local.plan:
+    lane: local
+    kind: openai_compatible
+    # LM Studio's OpenAI-compatible server (heartbeat/probes.py `mainframe`).
+    api_base: http://127.0.0.1:1234/v1
+    # The LM Studio alias; ModelResult.model_returned records what the
+    # server actually answered with.
+    model: mainframe
+    # Append the `/no_think` soft switch to the last user message (FINAL F8).
+    no_think: true
+    # An empty <think> block is removed and recorded; a non-empty one FAILS
+    # the call (think_leak) — the turn never executes (seam §2.4 (2)).
+    think_policy: forbid_nonempty
+    # source: X-E4 (build report ### X-E4) — solo p95 3146 ms, max 3486 ms over 65
+    # Plan calls; 15 s ≈ 4× the max. Contended calls queued 60–72 s behind a
+    # second client and FAIL here loud (timeout) instead of hanging a turn.
+    timeout_s: 15
+    # source: X-E4 — Plans used 23–48 output tokens; 256 is ≈ 5× the largest.
+    max_output_tokens: 256
+    # source: X-E4 — the server accepted response_format json_schema (no 4xx)
+    # and 65/65 replies parsed as a Plan (the caller validates anyway).
+    response_format: json_schema
+    # LM Studio needs no key today. If it ever does: a VaultManager NAME,
+    # fetched at call time — never a value (L4).
+    key_name: null

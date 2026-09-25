@@ -99,6 +99,7 @@ def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     now reverses all four, newest first. P4's own bound is still pinned
     below it: nothing at or below the bound is ever selected."""
     assert [p.name for p in _rollback_paths("0007")] == [
+        "0017_voice_turns.rollback.sql",  # voice V1
         "0015_shadow_agreement_stale.rollback.sql",  # the stale-score build (R40, X30 (A))
         "0014_radar_handicap.rollback.sql",  # the float handicap H1
         "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)
@@ -111,6 +112,7 @@ def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     above_0009 = [p.name for p in _rollback_paths("0009")]
     assert not [n for n in above_0009 if n.startswith(("0008", "0009"))], above_0009
     assert above_0009 == [
+        "0017_voice_turns.rollback.sql",  # voice V1
         "0015_shadow_agreement_stale.rollback.sql",  # the stale-score build (R40, X30 (A))
         "0014_radar_handicap.rollback.sql",  # the float handicap H1
         "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)
@@ -119,6 +121,7 @@ def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     ]
     # ...and at 0008 exactly 0009 and everything newer, 0008 itself excluded.
     assert [p.name for p in _rollback_paths("0008")] == [
+        "0017_voice_turns.rollback.sql",  # voice V1
         "0015_shadow_agreement_stale.rollback.sql",  # the stale-score build (R40, X30 (A))
         "0014_radar_handicap.rollback.sql",  # the float handicap H1
         "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)

@@ -49,6 +49,10 @@
                          by X30 (A)). Additive: the view only.
 `0015_shadow_agreement_stale.rollback.sql` — the view exactly as 0007
                          defines it.
+`0017_voice_turns.sql` — `"user".voice_turns`, voice V1's turn rows
+                         (voice v3 FINAL §7): the state machine, no audio
+                         bytes of any kind. Additive.
+`0017_voice_turns.rollback.sql` — drops that one table.
 
 0012 AND 0016 ARE NOT GAPS BY ACCIDENT: 0012 belongs to the unmerged
 `bars/chunk-2-0920` (`0012_bars_partitioned_parent`) and 0016 to DRC D1
@@ -102,10 +106,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0013_tunables_slug_nullable.sql",
     MIGRATIONS_DIR / "0014_radar_handicap.sql",
     MIGRATIONS_DIR / "0015_shadow_agreement_stale.sql",
+    MIGRATIONS_DIR / "0017_voice_turns.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0017_voice_turns.rollback.sql",
     MIGRATIONS_DIR / "0015_shadow_agreement_stale.rollback.sql",
     MIGRATIONS_DIR / "0014_radar_handicap.rollback.sql",
     MIGRATIONS_DIR / "0013_tunables_slug_nullable.rollback.sql",

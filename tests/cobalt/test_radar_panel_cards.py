@@ -594,6 +594,10 @@ def test_bars_stale_badge_renders_on_the_card_through_the_real_radar_route(monke
     expected = panel.render_radar_page(
         panel.RadarPanelView(pool=case.pool, ladder=ladder_view), phone_frame="phone" in path
     )
+    # voice V1: /radar carries the voice widget partial before </body>, nothing else changes
+    from cobalt.voice.web import widget_html
+
+    expected = expected.replace("</body>", widget_html() + "</body>", 1)
     assert response.text == expected
 
 
@@ -665,6 +669,8 @@ POST_ALLOWLIST = {
     "/size", "/fill", "/attest", "/card/{card_id}/move", "/card/{card_id}/stop",
     "/radar/card/{card_id}/key", "/radar/card/{card_id}/dot/{factor}",
     "/radar/card/{card_id}/promote", "/radar/card/{card_id}/release",
+    # voice V1 (FINAL §9): the widget's turn and its Confirm / Cancel taps
+    "/voice/turn", "/voice/confirm", "/voice/cancel",
 }
 GET_ONLY = {"/", "/radar", "/api/radar/pool", "/api/health", "/api/prefill"}
 

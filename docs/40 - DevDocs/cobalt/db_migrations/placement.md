@@ -38,3 +38,11 @@ is built. Every table still sits in exactly one part of the map
 (`test_placement_movers_daily_system_picks_and_missed_user`).
 `TestTenantGuc` now checks `user_id` NOT NULL + GUC default on every USER
 table in `CREATED_TABLES` as well as the moved ones.
+
+## 2026-09-23 — voice V1: `voice_turns` (USER, from 0017)
+
+`CREATED_TABLES` gains `voice_turns` on the USER side: a voice turn is one
+trader's words and the command they ran (L32). Created by the
+database-wide migration `0017_voice_turns.sql` directly on its side, so
+the migrate proof carries it and a rollback reads it as DROPPED. It
+carries `user_id` NOT NULL + FK + the GUC default like every user table.

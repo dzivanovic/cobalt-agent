@@ -169,3 +169,16 @@ own rolled-back transaction (L76); production applies it in the deploy.
 - **Additive:** no table, no column, no data. `placement.py` is unchanged, because the view keeps its `Side.USER`.
 - **Numbering:** the number is the settled seam. `0014` belongs to handicap H1; `0016`/`0017`/`0018` belong to DRC D1, voice V1 and DRC K1. The migration-list tests are re-pointed with `0015` at the head; every `0013` membership pin is kept.
 - **Tests (L76):** `tests/cobalt/test_stale_score_db.py` T (iv) applies it only inside a rolled-back transaction, never committed to `cobalt_dev`.
+## 2026-09-23 — voice V1: 0017 `voice_turns`
+
+`FORWARD` gains `0017_voice_turns.sql` (last) and `REVERSE` its rollback
+(first). The number is the desk's L68 assignment: 0012–0016 belong to
+unmerged branches (bars chunk 2, the setups build, H1, DRC D1, the
+stale-score reserve), so the registry reads `…, 0011, 0017` until they
+land — whichever lands later keeps every number in numeric order, as
+0008–0011 did. The four registry pins that name the tail
+(`test_archiver_migrations`, `test_p4_migrations`, `test_radar_migration`,
+`test_tenancy`) gain the one 0017 entry each. The table is additive
+(`CREATE … IF NOT EXISTS`, touches no existing object); its rollback drops
+that one table and nothing else. No bytes column of any kind — voice audio
+never reaches the database (R18 (b)).
