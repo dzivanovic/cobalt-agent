@@ -32,9 +32,23 @@ class StopEdit:
     stop_edit_id: int
 
 
-def set_card_stop(card_id: int, to_stop) -> StopEdit:
+class StopMoved(CardStateError):
+    """The card's stop, read here, is not the `expect_from_stop` the caller
+    confirmed against ([F-09]); nothing was recorded. `card` is that fresh
+    card row, for the new before → after read-back."""
+
+    def __init__(self, card: dict, expected: Decimal):
+        self.card = card
+        super().__init__(f"card {card['id']}'s stop is {card['stop']}, not {expected} — it moved; nothing was changed.")
+
+
+def set_card_stop(card_id: int, to_stop, *, expect_from_stop=None) -> StopEdit:
     """Raises what the route renders: `DevEntryRefused`, `CardStateError`,
-    `InvalidOperation`, `SessionBlocked` (and anything else, named)."""
+    `InvalidOperation`, `SessionBlocked` (and anything else, named).
+
+    `expect_from_stop` (the voice act only; the route never passes it): the
+    stop the confirmed read-back was computed from — a different stop read
+    here raises `StopMoved` before any edit is recorded (fix r2, RUN-2)."""
     from cobalt.aset import web as _web
 
     _web._check_entry_allowed()
@@ -44,9 +58,11 @@ def set_card_stop(card_id: int, to_stop) -> StopEdit:
     current = next((c for c in before if c["id"] == card_id), None)
     if current is None:
         raise CardStateError(f"card {card_id} is not open — its stop is settled.")
+    if expect_from_stop is not None and Decimal(str(current["stop"])) != Decimal(expect_from_stop):
+        raise StopMoved(current, Decimal(expect_from_stop))
     new_stop = Decimal(to_stop)
     edit_id = store.record_stop_edit(card_id, from_stop=current["stop"], to_stop=new_stop)
     return StopEdit(card_id=card_id, from_stop=current["stop"], to_stop=new_stop, stop_edit_id=edit_id)
 
 
-__all__ = ["StopEdit", "set_card_stop"]
+__all__ = ["StopEdit", "StopMoved", "set_card_stop"]

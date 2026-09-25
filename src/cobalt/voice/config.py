@@ -8,10 +8,10 @@ the committed value is the DEV path; production sets its own through an
 explicit env override (`COBALT_VOICE_SCRATCH_DIR` / `COBALT_VOICE_MODEL_DIR`
 in `ops/start_aset.sh`). Whatever the source, the path is REFUSED when it
 is relative, or sits under the repo root, under `docs/`, under the
-resolved vault (and always under the production vault), or — when the
-caller passes them — under any `configs/cobalt/backup.yaml` source
-(see `load_voice_config`) — audio must never reach git, the vault or a
-backup (R18 (b)). `scratch_max_age_s ≤ stt_timeout_s` is
+resolved vault (and always under the production vault), or under any
+`configs/cobalt/backup.yaml` source, read through the one loader on every
+load, the resident's included (C2, fix r2; FINAL :118, L42) — audio must
+never reach git, the vault or a backup (R18 (b)). `scratch_max_age_s ≤ stt_timeout_s` is
 refused too (G2 / K5).
 """
 
@@ -26,6 +26,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from cobalt import vault as vault_mod
+from cobalt.backup.config import BackupConfigError, load_backup_config
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "configs" / "cobalt" / "voice.yaml"
@@ -119,15 +120,11 @@ def _check_plan_route(plan_route: str) -> None:
 def load_voice_config(path: Path = CONFIG_PATH, *, backup_sources: Optional[list[Path]] = None) -> VoiceConfig:
     """The validated voice config, or a loud `VoiceConfigError`.
 
-    `backup_sources`: when given, a path under any of them is refused too.
-    The RESIDENT (com.cobalt.aset) does not pass them: reading
-    `configs/cobalt/backup.yaml` from a resident would make that file a
-    resident read, contradicting `configs/cobalt/jobs.yaml`'s declared
-    no-resident-read and L42's derivation (`test_jobs_restarts.py`). The
-    vault and repo refusals already cover both of today's sources; the
-    suite checks the committed dev paths and `ops/start_aset.sh`'s
-    production overrides against every `backup.yaml` source
-    (`test_voice_config.py`). Build report ESCALATE carries the choice.
+    `backup_sources`: a path under any of them is refused too. Not passed
+    (the resident com.cobalt.aset's call), they are read from
+    `configs/cobalt/backup.yaml` through the one loader
+    `load_backup_config()`, so that file is in com.cobalt.aset's `reads:`
+    and a change to it restarts the resident (C2, fix r2; FINAL :118, L42).
     """
     path = Path(path)
     if not path.exists():
@@ -159,6 +156,11 @@ def load_voice_config(path: Path = CONFIG_PATH, *, backup_sources: Optional[list
             f"scratch_max_age_s ({cfg.scratch_max_age_s}) must exceed stt_timeout_s "
             f"({cfg.stt_timeout_s}) — a file younger than one transcribe is never 'old' (G2/K5)"
         )
+    if backup_sources is None:
+        try:
+            backup_sources = [Path(p) for p in load_backup_config().sources]
+        except BackupConfigError as e:
+            raise VoiceConfigError(f"the backup sources could not be read to check against ({e})") from None
     cfg.scratch_dir = _check_path("scratch_dir", cfg.scratch_dir, backup_sources)
     cfg.model_dir = _check_path("model_dir", cfg.model_dir, backup_sources)
     return cfg

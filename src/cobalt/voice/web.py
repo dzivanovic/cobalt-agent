@@ -226,10 +226,10 @@ _WIDGET = """
  const $ = id => document.getElementById(id);
  const SESSION = 'w-' + (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + String(Math.random()).slice(2));
  const TYPES = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'];
- let rec = null, chunks = [], pendingTurn = null, muted = false, downAt = 0, lines = [];
+ let rec = null, chunks = [], pendingTurn = null, muted = false, downAt = 0, lines = [], device = [];
 
  function banner(extra){
-   const all = lines.concat(extra || []);
+   const all = lines.concat(device, extra || []);
    $('cv-banner').innerHTML = '';
    for (const l of all){ const d = document.createElement('div'); d.className = l.level === 'red' ? 'cv-red' : 'cv-amber'; d.textContent = l.text; $('cv-banner').appendChild(d); }
  }
@@ -297,7 +297,7 @@ _WIDGET = """
  $('cv-confirm').addEventListener('click', () => { if (!pendingTurn) return; const fd = new FormData(); fd.append('turn_id', pendingTurn); post('/voice/confirm', fd); });
  $('cv-cancel').addEventListener('click', () => { if (!pendingTurn) return; const fd = new FormData(); fd.append('turn_id', pendingTurn); post('/voice/cancel', fd); });
  fetch('/voice/status').then(r => { if (!r.ok) { lines = [{level:'red', text:'voice status refused (HTTP ' + r.status + ')'}]; banner(); return null; } return r.json(); }).then(j => { if (!j) return; lines = j.lines || []; banner(); }).catch(() => { lines = [{level:'red', text:'voice status unreadable'}]; banner(); });
- if (!pickType()) { lines.push({level:'red', text:'no microphone on this device'}); banner(); }
+ if (!pickType()) { device.push({level:'red', text:'no microphone on this device'}); banner(); }
 })();
 </script>
 """

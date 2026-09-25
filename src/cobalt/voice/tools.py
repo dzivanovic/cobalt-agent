@@ -49,13 +49,16 @@ STOP_RATIO_GUARD = Decimal(10)
 
 #: Order verbs as PHRASES and the platform names (FINAL :84). Never a bare
 #: `long` / `short` / `close` / `exit`: a card side and a price field stay
-#: readable ("the XYZ short", "what did the pool close at").
+#: readable ("the XYZ short", "what did the pool close at"). A bare exit /
+#: close / short OF A TICKER (an upper-case 1-5 letter token) is an order
+#: (FINAL :84, fix r2).
 _ORDER = re.compile(
     r"\b(buy|buying|sell|selling|cover|covering|flatten|execute|at market|market order|limit order|"
     r"stop order|place (an? )?(\w+ )?order|(cancel|modify|change|send) (my |the |an? )?(\w+ )?orders?|"
     r"das|lightspeed|tradestation|centerpoint|trading platform|platform|"
     r"short(ing)? \d+|go (long|short)|(exit|close) (out of )?(my |the |this )?(\w+ )?position|"
-    r"get me out|take (my )?profits?|scale (in|out))\b",
+    r"get me out|take (my )?profits?|scale (in|out)|"
+    r"(?<!the )(?<!my )(?<!a )short (?-i:[A-Z]{1,5})\b|(exit|close out|close|get out of) (?-i:[A-Z]{1,5})\b)\b",
     re.I)
 _LOGIC = re.compile(
     r"\b(max(imum)? risk|risk budget|risk per trade|daily stop|settings?|rules?|strateg(y|ies)|"
@@ -228,7 +231,7 @@ def execute_stop(pending: PendingAction, *, now: datetime | None = None, ttl_s: 
     turn's write reference)."""
     from datetime import timezone
 
-    from cobalt.aset.card_stop import set_card_stop
+    from cobalt.aset.card_stop import StopMoved, set_card_stop
     from cobalt.cards import CardStateError
 
     current = next((c for c in read_open_cards() if c["id"] == pending.card_id), None)
@@ -238,7 +241,13 @@ def execute_stop(pending: PendingAction, *, now: datetime | None = None, ttl_s: 
                          now=now or datetime.now(timezone.utc))
     if fresh.diff_sha256 != pending.diff_sha256 or fresh.target_sha256 != pending.target_sha256:
         raise TargetChanged(fresh)
-    return set_card_stop(pending.card_id, pending.to_stop)
+    try:
+        return set_card_stop(pending.card_id, pending.to_stop, expect_from_stop=pending.from_stop)
+    except StopMoved as e:
+        # The stop moved between this read and the expert's own (fix r2,
+        # RUN-2): REFUSED, the new before → after read aloud ([F-09]).
+        raise TargetChanged(stop_dry_run(e.card, Decimal(pending.to_stop), ttl_s=ttl_s,
+                                         now=now or datetime.now(timezone.utc))) from None
 
 
 __all__ = [

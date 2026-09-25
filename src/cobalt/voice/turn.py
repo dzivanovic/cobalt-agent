@@ -299,6 +299,9 @@ def _plan_and_act(inp: TurnInput, deps: TurnDeps, rec: _Rec, transcript: str) ->
                        plan_usage=e.result.usage.model_dump())
         raise _Fail("voice_plan", f"Cobalt can't think right now ({e.kind}).", red=True,
                     detail=f"{e.kind}: {e.detail}") from None
+    except Exception as e:  # noqa: BLE001 - FINAL §7 :178: any Plan-step error is the Plan step's RED
+        raise _Fail("voice_plan", f"Cobalt can't think right now ({type(e).__name__}).", red=True,
+                    detail=f"{type(e).__name__}: {e}") from None
     plan = po.plan
     rec.go(TurnState.PLANNED, plan=plan.model_dump(mode="json"), plan_route=po.result.route,
            model_returned=po.result.model_returned, plan_latency_ms=po.result.latency_ms,

@@ -54,11 +54,16 @@ def cmd_turn(args: argparse.Namespace) -> None:
         if ctype is None:
             _fail(f"unsupported audio file type {path.suffix!r} — the closed map is {sorted(scratch.EXTENSIONS)}")
         cfg = load_voice_config()
+        # One read; the route's size bound, before the lock and any turn
+        # (FINAL §2.2 / W7, fix r2 RUN-7).
+        data = path.read_bytes()
+        if len(data) > cfg.max_upload_bytes:
+            _fail(f"the audio file {path} exceeds {cfg.max_upload_bytes} bytes (max_upload_bytes)")
         try:
             lock = scratch.DirectoryLock(cfg.scratch_dir)
         except scratch.ScratchLocked as e:
             _fail(f"{e} (a server owns the scratch dir; use the widget or --text)")
-        inp = TurnInput(session_id=session, source="cli", audio=path.read_bytes(), content_type=ctype,
+        inp = TurnInput(session_id=session, source="cli", audio=data, content_type=ctype,
                         dry_run=args.dry_run)
         return _run(inp, args, lock=lock)
     inp = TurnInput(session_id=session, source="cli", text=args.text, dry_run=args.dry_run)
