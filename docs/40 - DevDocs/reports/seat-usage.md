@@ -19,6 +19,24 @@ size, not as an amount owed.
 Newest day first.
 
 <!-- cobalt:days -->
+<!-- cobalt:section seat-usage:2026-09-26 -->
+### 2026-09-26
+
+weekly_pct_open:
+weekly_pct_close:
+
+<!-- cobalt:unit seat-usage:2026-09-26 -->
+| model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
+|---|---|---:|---:|---:|---:|---:|
+| _no seat activity recorded_ | — | 0 | 0 | 0 | $0.00 | — |
+
+**Day total (API-equivalent):** $0.00 · **0** tokens across 0 model(s)
+**Fresh input tokens:** 0 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+
+_Generated 2026-09-26 23:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20260926 --until 20260926 --by-agent --offline`_
+<!-- /cobalt:unit seat-usage:2026-09-26 -->
+<!-- /cobalt:section seat-usage:2026-09-26 -->
 <!-- cobalt:section seat-usage:2026-09-25 -->
 ### 2026-09-25
 
