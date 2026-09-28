@@ -1124,8 +1124,6 @@ async def fill(request: Request) -> str:
         )
         filled, fill_result = outcome.result, outcome.recompute
         original = fill_result.original
-
-        note_path, note_write = save_fill_update(cfg, fill_result, orig_timestamp)
     except IllegalTransition as e:
         return _render(
             banner=_failed(
@@ -1140,18 +1138,33 @@ async def fill(request: Request) -> str:
     except Exception as e:
         return _render(banner=_failed(f"{type(e).__name__}: {e}"), form=form)
 
-    if note_write is None:
-        banner = (
+    # THE fill has committed. A daily-note failure from here on must not
+    # hide what the database now holds (L1): the failure, that the card
+    # IS FILLED, and the fill's drift outcome exactly as on success.
+    try:
+        note_path, note_write = save_fill_update(cfg, fill_result, orig_timestamp)
+    except Exception as e:
+        refused = isinstance(e, (SizingError, ConfigError, DailyNoteRefused, DevEntryRefused,
+                                 SessionBlocked, CardStateError))
+        banner = _failed(str(e) if refused else f"{type(e).__name__}: {e}")
+        banner += (
             f'<div class="warn">aset_sizings id {html.escape(card_row_raw)} marked '
-            "FILLED · ⚠ DAILY-NOTE WRITE IS DISABLED (daily_note.write_enabled="
-            "false) — the FILL UPDATE is NOT in the journal.</div>"
+            "FILLED — the daily-note write failed after the DB commit; the FILL "
+            "UPDATE is NOT in the journal.</div>"
         )
     else:
-        banner = (
-            f'<div class="saved">aset_sizings id {html.escape(card_row_raw)} marked '
-            f"FILLED · fill update {html.escape(note_write.action)} in "
-            f"{html.escape(str(note_path))}</div>"
-        )
+        if note_write is None:
+            banner = (
+                f'<div class="warn">aset_sizings id {html.escape(card_row_raw)} marked '
+                "FILLED · ⚠ DAILY-NOTE WRITE IS DISABLED (daily_note.write_enabled="
+                "false) — the FILL UPDATE is NOT in the journal.</div>"
+            )
+        else:
+            banner = (
+                f'<div class="saved">aset_sizings id {html.escape(card_row_raw)} marked '
+                f"FILLED · fill update {html.escape(note_write.action)} in "
+                f"{html.escape(str(note_path))}</div>"
+            )
     banner += _pick_banner(int(card_row_raw), filled)
     if fill_result.drift_warned is None:
         # v3 §4 / L1: his drift P is missing — the fill IS recorded; the

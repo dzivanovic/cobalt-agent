@@ -192,9 +192,9 @@ class TestAbsurdFillRejectAtWebLayer:
         from cobalt.aset.models import SizingResult
 
         row = {
-            "ticker": "NVDA", "grade": "B", "direction": "long", "sheet_mode": "full",
-            "risk_budget": Decimal("60"), "entry": Decimal("218.595"), "stop": Decimal("217.90"),
-            "per_share_risk": Decimal("0.695"), "shares": 86, "used_risk": Decimal("59.77"),
+            "ticker": "TEST", "grade": "B", "direction": "long", "sheet_mode": "full",
+            "risk_budget": Decimal("60"), "entry": Decimal("220.0000"), "stop": Decimal("218.0000"),
+            "per_share_risk": Decimal("2.0000"), "shares": 30, "used_risk": Decimal("60.00"),
             "warnings": [], "last_price": None, "price_source": None,
         }
 
@@ -577,8 +577,8 @@ class TestPickNotRecordedBanner:
 
         result = self._result(recorded)
         original = compute_sizing(
-            SizingInput(ticker="NVDA", grade=Grade.B, direction=Direction.LONG, sheet_mode=SheetMode.FULL,
-                        risk_dollars=Decimal("60"), entry=Decimal("218.595"), stop=Decimal("217.90")),
+            SizingInput(ticker="TEST", grade=Grade.B, direction=Direction.LONG, sheet_mode=SheetMode.FULL,
+                        risk_dollars=Decimal("60"), entry=Decimal("220.0000"), stop=Decimal("218.0000")),
             [Grade.A, Grade.B], Decimal("10"),
         )
 
