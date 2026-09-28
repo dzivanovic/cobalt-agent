@@ -54,8 +54,10 @@ def _code(path) -> str:
 
 def test_both_files_exist_and_are_registered_last_and_first():
     assert SQL.exists() and ROLLBACK.exists()
-    assert FORWARD[-1] == SQL and REVERSE[0] == ROLLBACK
-    assert [p.name for p in _rollback_paths("0015")] == ["0017_voice_turns.rollback.sql"]
+    assert FORWARD[-2] == SQL and REVERSE[1] == ROLLBACK
+    assert [p.name for p in _rollback_paths("0015")] == [
+        "0018_drc_stated_books.rollback.sql", "0017_voice_turns.rollback.sql",
+        "0016_drc.rollback.sql"]
 
 
 def test_the_table_is_user_side_with_the_tenancy_shape():

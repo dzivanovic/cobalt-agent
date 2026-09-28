@@ -113,12 +113,15 @@ def _raises(exc, sql, params=None):
 def test_the_pair_exists_and_is_registered_after_0016():
     assert SQL.exists() and ROLLBACK.exists()
     names = [p.name for p in FORWARD]
-    assert names[-2:] == ["0016_drc.sql", "0018_drc_stated_books.sql"]
-    assert REVERSE[0] == ROLLBACK and REVERSE[1].name == "0016_drc.rollback.sql"
+    assert names[-3:] == ["0016_drc.sql", "0017_voice_turns.sql", "0018_drc_stated_books.sql"]
+    assert REVERSE[0] == ROLLBACK and [p.name for p in REVERSE[1:3]] == [
+        "0017_voice_turns.rollback.sql", "0016_drc.rollback.sql"]
 
 
 def test_down_to_0016_selects_only_the_k1_rollback():
-    assert [p.name for p in _rollback_paths("0016")] == ["0018_drc_stated_books.rollback.sql"]
+    # every rollback newer than 0016, newest first — voice V1's 0017 sits between (numeric order)
+    assert [p.name for p in _rollback_paths("0016")] == [
+        "0018_drc_stated_books.rollback.sql", "0017_voice_turns.rollback.sql"]
 
 
 def test_the_table_is_placed_user_side():

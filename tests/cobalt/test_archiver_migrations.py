@@ -157,14 +157,7 @@ def test_the_registry_is_an_explicit_contiguous_list_and_reverse_mirrors_it():
     its numbers run 1…11 contiguously with no duplicate, and REVERSE is
     FORWARD reversed — minus 0001, which is deliberately never reversed
     (`db_migrations/__init__.py`). Selection stays by numeric prefix,
-    never by position.
-
-    DRC D1 (`drc/d1-trading-log`) adds 0016 on a `main` base. 0012–0015
-    are the SIBLINGS', absent from this tree: 0012 `bars/chunk-2-0920`
-    (`0012_bars_partitioned_parent`, unmerged), 0013 `setups/seven-0921`
-    (`0013_tunables_slug_nullable`), 0014 handicap H1
-    (`0014_radar_handicap`, reserved), 0015 stale score (reserved,
-    conditional). The combined pin is written at the L68 gate."""
+    never by position."""
     numbers = [int(p.name.split("_", 1)[0]) for p in FORWARD]
     assert numbers == sorted(numbers), "FORWARD must be in numeric order"
     assert len(numbers) == len(set(numbers)), f"duplicate migration number in {numbers}"
