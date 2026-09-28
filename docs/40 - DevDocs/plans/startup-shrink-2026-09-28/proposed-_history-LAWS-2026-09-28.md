@@ -1,0 +1,29 @@
+## 2026-09-28 — startup shrink (`cto-2026-09-28.md` R2, R4): wording replaced before apply
+Destination: appended to `6 - Permanent/Memory/LAWS-HISTORY.md` after the 2026-09-27 snapshot (APPLY step 1b). Each line below is the `startup-redesign-2026-09-27/final/LAWS.md` wording that the shrink replaced, verbatim, with its final line number. The live wording these derive from is in the 2026-09-27 snapshot; L64's live 2026-09-28 amendment is in `H-L64-rc`. A1–A6: when a law is read (R2). B1–B14: one current text per entry — explanation, evidence and amendment layers out (R4).
+
+A2 · Preamble (final:18), last sentence: Every house starts at its startup file → `areas/cobalt.md` → INDEX → this file.
+A1 · L59 (final:226), first sentence: Architect, hub, builder and reviewer round 1 read LAWS.md in full.
+A6 · L76 heading (final:291): ### L76 One owner, one lock for `cobalt_dev`
+A4 · Fold at session close (final:295), second sentence: The close hub's inputs: the live ledger's newly dated rulings, this file and LAWS-HISTORY.md, Memory INDEX + the always-loaded cap's profile/preferences companions, and Dejan's session rulings with dated provenance.
+A5 · Fold at session close (final:295), fifth sentence: The desk's work: apply each APPROVED candidate — for an amendment, rewrite the entry in place and move the replaced wording verbatim into LAWS-HISTORY.md; for a new law, the next free number (L58).
+B1 · L4 (final:30): Gemini-era failure post-mortem: `.env` is static and cannot call the vault — composition happens in application boot code, two-phase (settings → unlock vault → fetch password → build DSN), never in dotenv.
+B2 · L11 (final:54): Today that variable is the tape read (context feel); per the 09-02 taxonomy ruling ("tape = FRONTIER not nature") it may flip to computed once L2/Time&Sales ingestion lands, provided another human-only variable takes its place as the capability frontier moves.
+B3 · L12 (final:57): Design-phase time is now bounded by L67's three-round cap and L73 (no law step is ever skipped for speed) rather than by a planning-cap law of its own.
+B4 · L15 (final:68): The clause "vault/.env/personal layer excluded" that previously qualified the carve-out's scope is removed: L44 (09-12) gives every house equal read access to the vault, and a build-time tool carve-out may not narrow that.
+B5 · L17 (final:76): Privacy default flipped: vault and personal layer are exposable to any vendor or local model at Dejan's choice (opt-out, not opt-in); secrets excluded on every channel.
+B6 · L28 (final:116), last sentence: Nothing else in this law changes.
+B7 · L32 (final:133): L45 (real-artifact test fixtures) does not revoke the "repo ships one synthetic anatomy-only trade_def" clause above: L45 governs what tests are specified against, this law governs what leaves the repo as user data. Both stand together — every test fixture follows L45's real-shape rule while the shipped repo carries no user data.
+B8 · L33 (final:137), last two sentences: The network settings (reviewer: no network; researcher: web) are unchanged by the access clause. The 09-07 profile wording is retained in H-L33-access; it cannot override L44.
+B9 · L45 (final:177), last sentence: The 09-10 R2 rule restricting the repo to a single synthetic example screen is REVOKED as the root cause of the 09-12 production failure; the revocation stands (exact revoked wording: LAWS-HISTORY H-R2).
+B9 · L45 (final:178), label: Companion rulings, current: fixture policy = real-shape
+B10 · L46 (final:181), last sentence: With several agents working in parallel later this becomes unmanageable, so the discipline starts now.
+B11 · L47 (final:186): The 09-10 rule ("one relaunch with a CONTINUE line; a second stop hands the report + diff to the other house") survives as the bounded form of this law's wait-exception: when the wait-exception applies, at most one relaunch is taken before handover — it does not reinstate waiting as the default.
+B12 · L48 (final:189), last sentence: A cleared session takes its narrative with it and only the file survives.
+B13 · L62 (final:236): A dated grant ("through <date> 23:59", the 09-22 R30 shape) is used only when he words it that way.
+B14 · L67 (final:255), last sentence: (This restates the preamble — "Dejan rules" — for this law specifically, at his request.)
+B14 · L67 (final:254), label: EMERGENCY, defined by him:
+B14 · L67 (final:256): This settles what L29's "two parties, ≤3 rounds" becomes under this law: four houses, ≤3 rounds each; L39's termination rule (no fourth round; unresolved → Dejan; a law file is never voted) is unchanged.
+B14 · L67 (final:258): from 2026-09-24 it reads no code check and no deploy read, and each derive states whether a Gemini finding held (his evidence for removing it). The counts, the floor, the round cap, the shrink-to-two clause and "the meter is a precondition" (L47) are unchanged; Sol and Astra draw on the same Codex allowance — the probe stays a preflight. Applies to every prompt drafted from 2026-09-23 18:10 ET (prompts drafted earlier run as written). The reduced seats for code checks and deploy reads hold "while we follow the new gate rule" (L68's GATE EARLY clause).
+B14 · L67 (final:258), last sentence: L29's routing text is not rewritten here (routing tribunal).
+B14 · L67 (final:260), last sentence: The floor, the shrink-to-two clause and the cap's number are unchanged.
+L64 (final:244) — replaced by the LIVE 2026-09-28 amendment (R5 / R6), not by this cut: The desk runs as a background session with both exposures at all times: the herdr "CTO" tab and remote control `cto-desk`. It refreshes by HANDOVER, never `/clear`; the successor ends the predecessor; no session stops itself. A crash is answered by the same wake-up file. The desk is the only session he talks to, and he reaches it from the phone. It relaunches only from `~/cobalt`; whether a dropped remote-control link can be re-bound on a running session is not known.

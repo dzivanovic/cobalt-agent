@@ -49,3 +49,15 @@ which is the point of keeping it (L57).
 ## Gotchas
 - The replay has no screener snapshot, so its RVOL dot is `input_unavailable`. That changes no formation, only the dot. The candidate harness takes RVOL from receipts instead, so it needs the day's receipts present in cobalt_dev.
 - The parameter is `slug_filter`, not `trade_def`: the names-rule lint reads `trade_def: <word>` as a slug.
+
+## 2026-09-21 — setups one build STEP-1: `--expect-formed`
+`expect_formed_gate(report, slug)` raises `SystemExit` (non-zero) when the replay found 0 formations (FINAL §9 gate 4); `replay_formations`' signature is unchanged (the nightly binding's `FormationSources` mirrors it). `evaluate_command` refuses `--expect-formed` unless `--replay` and `--trade-def` are both given ([F-16] (3)), so the gate always names the one def it proves. The `--candidate` harness now meets the store's refusal: a taps file that names `assumed_formation` stops the run with `CardStateError`. That is a loud error (L1), not a skipped tap.
+
+## 2026-09-25 — the replay deadline fix (`cto-2026-09-24.md` R95)
+- **One prep per member.** `replay_formations` builds ONE `prepare_member` per (member, scan instant) and hands it to every evaluable def (`evaluate.md`).
+- **`cut_at`.** `cut_at: Callable[[datetime], bool] | None` is asked before each scan instant. When it answers True the day stops:
+  - `ReplayReport.cut_before` is the first instant NOT evaluated;
+  - the report records `scans_planned` (always) beside `scans`;
+  - one line is printed and logged at WARNING: `replay <day>: CUT — the deadline stopped the formations replay before the <HH:MM:SS> ET scan (<k> of <n> scans evaluated); later formations were not evaluated`;
+  - the summary line gains ` · CUT before <HH:MM:SS> ET`.
+- `--replay` passes no `cut_at`, so nothing is cut. `cut_at` is not a `FormationSources` field: the runner passes it per run, like `out`.

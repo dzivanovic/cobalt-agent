@@ -137,3 +137,22 @@ of a real `replay_formations` run over S2-P2's own hub-cut bar fixture
 traded through their trigger (the real no-trigger case); the `with_trend`
 variant's two do, and are the R1-21 two-rows case. The end-to-end run
 through `run_nightly` is in `tests/cobalt/test_replay_runner.py`.
+
+**2026-09-21 — setups one build STEP-1.** `SUPPORTED_EVALUATORS` is now
+`{"s2p2.2"}`, the one bump for the whole one build. Nothing this binding
+consumes changed: `FORMATION_REQUIRED_FIELDS` of `ReplayFormation` are the
+same. Without this update the nightly `com.cobalt.replay` would refuse
+every night after the deploy. `s2p2.1` is dropped because that code no
+longer exists. Any other version is still a loud refusal.
+
+**2026-09-25 — the replay deadline fix (`cto-2026-09-24.md` R95).**
+`formation_misses` reads `context.bars_for(ticker)` once per TICKER, not
+once per formation. The rows are unchanged. When P2's report carries a
+`cut_before`, the outcome's `cut` is
+`FormationCut(scans_done=report.scans, scans_planned=report.scans_planned, cut_before=report.cut_before)`,
+otherwise None.
+**2026-09-24 — stale score S1.** `SUPPORTED_EVALUATORS` is now
+`{"s2p2.3"}`. It moves with the evaluator's own bump (`[F-08]`: one new
+string, and the previous one is not kept in the set). The nightly binding
+passes the LIVE module constant (X20), so no stored binding is refused. No
+`ReplayFormation` field this binding consumes changed.

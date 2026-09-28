@@ -288,6 +288,15 @@ class FormationCounts(_Frozen):
     input_stale: int = 0
 
 
+class FormationCut(_Frozen):
+    """A formations replay stopped between scans before the deadline (R95)."""
+
+    scans_done: int
+    scans_planned: int
+    #: The first scan instant NOT evaluated.
+    cut_before: AwareDatetime
+
+
 class FormationOutcome(_Frozen):
     """The formation step's whole answer: the capability marker it bound
     to (or `unavailable`), its rows, and every count behind them."""
@@ -295,6 +304,8 @@ class FormationOutcome(_Frozen):
     status: str
     rows: tuple[MissRow, ...] = ()
     counts: FormationCounts = FormationCounts()
+    #: A cut formations step (R95): the line says PARTIAL and the job fails at the end.
+    cut: Optional[FormationCut] = None
 
 
 # ---------------------------------------------------------------------------
@@ -328,7 +339,9 @@ class MoversExport(_Frozen):
     `exported_rows` is BOOKKEEPING, not selection: how many rows the
     export really carried, before the top-N cap kept `rows`. A side whose
     export returned fewer rows than `top_n` is a fact about the source,
-    and this is where that fact is first written down.
+    and this is where that fact is first written down. `unranked_rows`
+    counts the rows whose `Change` cell was blank — in the export, never
+    in `rows`.
     """
 
     side: Side
@@ -336,17 +349,20 @@ class MoversExport(_Frozen):
     export_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     header: tuple[str, ...]
     rows: tuple[MoverRow, ...]
-    #: Rows in the export itself — always >= len(rows).
+    #: Rows in the export itself, ranked or not — always >= len(rows) + unranked_rows.
     exported_rows: int = Field(ge=0)
+    #: Rows whose `Change` cell was blank: unranked, never stored.
+    unranked_rows: int = Field(ge=0)
     source: Literal["live", "retained"]
     cache_path: Optional[str] = None
 
     @model_validator(mode="after")
     def _counted_the_whole_export(self) -> "MoversExport":
-        if self.exported_rows < len(self.rows):
+        if self.exported_rows < len(self.rows) + self.unranked_rows:
             raise ValueError(
                 f"movers-{self.side}: exported_rows {self.exported_rows} is fewer than the "
-                f"{len(self.rows)} rows kept — the count is of the export, never of the selection"
+                f"{len(self.rows)} rows kept plus {self.unranked_rows} unranked — the count is of "
+                "the export, never of the selection"
             )
         return self
 
@@ -357,23 +373,27 @@ class MoversSideCount(_Frozen):
     `expected` is `min(top_n, exported)` — the ONLY number a stored-row
     count may be checked against, because an export that returned fewer
     rows than the cap is a fact about the source, not a failure of the
-    run. Stored with its two inputs, so the check replays from the row
-    alone (L57).
+    run. Stored with its inputs, so the check replays from the row
+    alone (L57). Blank-`Change` rows are never stored, so the cap is
+    really `min(top_n, exported - unranked)` and `unranked` is stored too.
     """
 
-    #: Rows the export really had.
+    #: Rows the export really had, ranked or not.
     exported: int = Field(ge=0)
+    #: Rows whose `Change` cell was blank — unranked, never stored.
+    unranked: int = Field(ge=0)
     #: `radar.benchmark.top_n` in force for the run.
     top_n: int = Field(ge=1)
-    #: Rows `movers_daily` should hold for the side: `min(top_n, exported)`.
+    #: Rows `movers_daily` should hold for the side: `min(top_n, exported - unranked)`.
     expected: int = Field(ge=0)
 
     @model_validator(mode="after")
     def _expected_is_the_smaller_of_its_inputs(self) -> "MoversSideCount":
-        if self.expected != min(self.top_n, self.exported):
+        allowed = min(self.top_n, self.exported - self.unranked)
+        if self.expected != allowed:
             raise ValueError(
-                f"expected {self.expected} is not min(top_n {self.top_n}, exported {self.exported}) "
-                f"= {min(self.top_n, self.exported)}"
+                f"expected {self.expected} is not min(top_n {self.top_n}, exported {self.exported} "
+                f"- unranked {self.unranked}) = {allowed}"
             )
         return self
 
@@ -422,6 +442,23 @@ class ReconcileCounts(_Frozen):
     unchanged: int = 0
 
 
+class ArchivePartial(_Frozen):
+    """A fetched mover whose source i1 bars do not span the RTH session
+    (R113): its bars are kept, `bars_archived` stays false, and this row
+    names it with `coverage()`'s detail, replayable from the stored bars."""
+
+    ticker: str
+    sides: list[Side]
+    code: Literal["source_bars_short"]
+    count: int
+    first: str
+    last: str
+    start: str
+    end: str
+    max_gap_min: int
+    reason: str
+
+
 class ReplayResult(BaseModel):
     """`job.result` (STEP-4) plus the coverage counts R1-12 surfaces."""
 
@@ -439,6 +476,10 @@ class ReplayResult(BaseModel):
     archived: int = 0
     archive_failures: int = 0
     archive_incomplete: int = 0
+    #: the S2 smoke's K9 compares archive_partial_by_side against the stored not-archived rows.
+    archive_partial: list[ArchivePartial] = Field(default_factory=list)
+    #: the S2 smoke's K9 compares archive_partial_by_side against the stored not-archived rows.
+    archive_partial_by_side: dict[Side, int] = Field(default_factory=lambda: {"gainers": 0, "losers": 0})
     card_candidates: int = 0
     card_misses: int = 0
     mover_misses: int = 0
@@ -450,6 +491,8 @@ class ReplayResult(BaseModel):
     formation_suppressed: int = 0
     formation_no_trigger: int = 0
     formation_input_stale: int = 0
+    #: A cut formations step (R95): the line says PARTIAL and the job fails at the end.
+    formation_cut: Optional[FormationCut] = None
     line_action: Optional[str] = None
     line_diff: Optional[str] = None
     steps_done: list[str] = Field(default_factory=list)
@@ -462,9 +505,9 @@ class ReplayResult(BaseModel):
 
 
 __all__ = [
-    "CardCandidate", "CardReplay", "CfOutcome", "Counterfactual", "Direction", "Episode", "ExcludedBy",
+    "ArchivePartial", "CardCandidate", "CardReplay", "CfOutcome", "Counterfactual", "Direction", "Episode", "ExcludedBy",
     "FORMATION_UNAVAILABLE", "FORMATION_UNAVAILABLE_LINE", "FORMULA_VERSION",
-    "FormationCandidate", "FormationCounts", "FormationOutcome", "FormationReplay",
+    "FormationCandidate", "FormationCounts", "FormationCut", "FormationOutcome", "FormationReplay",
     "MissKind", "MissRow", "MoverRow", "MoversExport", "MoversSideCount", "PositionSpan", "RadarCardRef",
     "ReconcileCounts", "ReplayError", "ReplayInputError", "ReplayResult", "Side",
     "StepFailed", "StopEdit", "StoredMover", "TransitionRow", "WindowResolution",

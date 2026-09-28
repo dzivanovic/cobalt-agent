@@ -512,9 +512,13 @@ def test_down_to_0004_selects_0009_0008_0007_0006_then_0005_reverse():
 
     selected = [path.name for path in _rollback_paths("0004")]
     names = selected
-    assert selected[:6] == [
+    assert selected[:10] == [
         "0018_drc_stated_books.rollback.sql",  # DRC K1
+        "0017_voice_turns.rollback.sql",  # voice V1
         "0016_drc.rollback.sql",  # DRC D1
+        "0015_shadow_agreement_stale.rollback.sql",  # the stale-score build (R40, X30 (A))
+        "0014_radar_handicap.rollback.sql",  # the float handicap H1
+        "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",

@@ -139,6 +139,10 @@ class RadarRunner:
                         metrics[ticker] = {
                             "volume": _number(row.get(self.config.export.metric_headers.volume)),
                             "rvol": _number(row.get(self.config.export.metric_headers.rvol)),
+                            # Float handicap H1 (v3 §6 replay): stored inputs
+                            # of the group verdict, in every receipt's pool_unit.
+                            "float_m": _number(row.get(self.config.export.handicap_headers.float)),
+                            "market_cap_m": _number(row.get(self.config.export.handicap_headers.market_cap)),
                         }
                         candidates[ticker].append(source_id)
                         if is_not_equity(row, self.config.not_equity):
@@ -183,7 +187,11 @@ class RadarRunner:
         open_rows = self.radar_store.open_members(self.config.pool_key)
         opens = [OpenMember(**row) for row in open_rows]
         candidates, source_sets = await self._collect(parsed, instant, open_rows)
-        decision = decide(candidates, opens, [item.block for item in parsed.screens.blocks + parsed.lists.blocks] if not parsed.frozen else None, source_sets, instant)
+        decision = decide(
+            candidates, opens,
+            [item.block for item in parsed.screens.blocks + parsed.lists.blocks] if not parsed.frozen else None,
+            source_sets, instant, handicap_headers=self.config.export.handicap_headers,
+        )
         elapsed_started = time.monotonic()
         pending_drop = self._pending_drop
 
@@ -369,7 +377,7 @@ class RadarRunner:
             "state": "scanning",
             "degraded": decision.degraded or parsed.frozen,
             "degraded_sources": [
-                {"source": source, "reason": "source failure", "since": instant.isoformat()}
+                {"source": source, "reason": decision.reasons.get(source, "source failure"), "since": instant.isoformat()}
                 for source in decision.degraded_sources
             ] + ([{"source": "pool_block", "reason": parsed.pool_error, "since": instant.isoformat()}] if parsed.pool_error else []),
             "failed_stage": "bars" if carried else None,
@@ -540,9 +548,10 @@ async def _scan_replay(args) -> None:
             counts["admit"] += sum(item.action is Action.ADMIT for item in result.decision.transitions)
             counts["leave"] += sum(item.action is Action.LEAVE for item in result.decision.transitions)
         virtual[0] += timedelta(seconds=interval)
+    # v3 §3: replay-from-bars has no float or cap — it reports so and does not guess (R54's missing-header case stores factor 1).
     print(
         f"replay {trade_day}: cycles={counts['cycles']} "
-        f"admit={counts['admit']} leave={counts['leave']}"
+        f"admit={counts['admit']} leave={counts['leave']} · handicap: not replayable from bars"
     )
 
 

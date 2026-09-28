@@ -65,18 +65,26 @@ datetimes. `sha256_json` hashes that text. Every `inputs_sha256` is
   input_stale — every formation the day produced, none silently dropped.
 - `FormationOutcome`: the formation step's whole answer — the capability
   marker it bound to (or `unavailable`), its rows and its counts.
+- `FormationCut` (2026-09-25, R95): `scans_done`, `scans_planned`,
+  `cut_before` (the first scan NOT evaluated) of a formations replay cut
+  at the deadline. Carried as `FormationOutcome.cut` and
+  `ReplayResult.formation_cut` (in `job.result`); None when uncut. The line
+  then says PARTIAL and the job fails at the end.
 
 ## Mover side (F13)
 - `MoverRow`: one ranked export row.
 - `MoversExport`: one side's top rows, the sha256 of the raw bytes, the
   header, and `live | retained`. `exported_rows` (2026-09-19) is how many
   rows the export REALLY carried, before the top-N cap kept `rows` — a
-  count, never a selection; the validator refuses a model whose
-  `exported_rows` is smaller than the rows it kept.
+  count, never a selection. `unranked_rows` (2026-09-23, S2 smoke fix
+  F1) counts the export's blank-`Change` rows, which are never in
+  `rows`; the validator refuses a model whose `exported_rows` is smaller
+  than the rows it kept plus the unranked ones.
 - `MoversSideCount` (2026-09-19): one side's export bookkeeping as
-  `job.result` records it — `exported`, the `top_n` in force, and
-  `expected = min(top_n, exported)`, which the model validates rather
-  than trusts. `expected` is the only number a stored-row count may be
+  `job.result` records it — `exported`, `unranked` (required, 2026-09-23),
+  the `top_n` in force, and `expected = min(top_n, exported - unranked)`,
+  which the model validates rather than trusts; the refusal names all
+  four numbers. `expected` is the only number a stored-row count may be
   checked against: an export that returned fewer rows than the cap is a
   fact about the source, not a failure of the run, and storing the two
   inputs beside the answer is what makes the check replay (L57).
@@ -103,3 +111,11 @@ datetimes. `sha256_json` hashes that text. Every `inputs_sha256` is
   night's own export instead of a hand count of the cached CSV. It is
   recorded on every path — live, dry run and a retained `--date` run —
   because all three go through the same exports.
+- `ArchivePartial` (2026-09-24, R113): one mover whose source i1 bars did
+  not span the RTH session — `ticker`, `sides`, `code =
+  source_bars_short`, and `coverage()`'s detail (`count, first, last,
+  start, end, max_gap_min, reason`), replayable from the stored bars.
+  `ReplayResult.archive_partial` lists them and
+  `archive_partial_by_side` counts them per side (default 0 / 0); the S2
+  smoke's K9.9 / K9.12 compare that count against the stored
+  not-archived rows.

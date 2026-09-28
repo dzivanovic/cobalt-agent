@@ -84,3 +84,48 @@ override's name included), not the view-level session metric.
 prints `<metric> <value>`, with the stored NUMERIC normalized (trailing
 zeros dropped, never rounded). It prints `—` when both are NULL and
 `<metric> —` when only the value is NULL.
+
+## 2026-09-24 — float handicap H1 STEP-7: the pool-row badge and the header state (v3 §4)
+
+`MembershipRecord` gains `raw_rank`, `handicap_factor` and `handicap`
+(`HandicapRecord | None`, validated against radar's own model). Like
+`rank_metric`, they are required but nullable. `PoolRow` carries them
+with `exclude=True`. `_handicap_cell`, in the ticker cell, renders the
+following:
+
+- A factor below 1 renders the COBALT-owned `HANDICAP (shadow)` badge
+  plus `float <v>M / cap $<v>M → group (<reason>) · pos <p> → <effective>`.
+- An unknown name the block skipped renders only the line
+  `… → group (unknown) · unknown → not applied`.
+- Factor 1 or NULL renders nothing.
+
+Rows still sort by `last_rank`: shadow never moves a row.
+
+`PoolView.handicap_state` and `handicap_detail` are both `exclude=True`
+and are computed by `_handicap_state` from the block and
+`degraded_sources`:
+
+| Condition | handicap_state | handicap_detail |
+|---|---|---|
+| Block absent | `not configured` | — |
+| `handicap` entry whose reason starts with `radar.handicap.INOPERATIVE` | `degraded — inoperative` | the reason minus that prefix (R54) |
+| Any other `handicap` entry | `degraded` | its reason |
+| `mode: live` | `degraded` | — (H1 never shows live) |
+| Otherwise | `shadow` | — |
+
+For a configured block, the pool header renders
+`handicap: <state> (<detail>)`. The DEGRADED banner now appears when
+`pool.degraded` is set or a `handicap` entry exists. A handicap-only
+degradation leaves `degraded` False, and `_banner_name` names it
+`handicap (<reason>)`.
+
+**Gotcha — the healthy pins:** `test_radar_panel_cards.py`
+SHA-pins the block-absent pool HTML and the API JSON, and that file is
+not touched. So, with the block absent:
+
+- `render_pool` output is main's, byte for byte.
+- `render_radar_page` shows `handicap: not configured` in
+  `#handicap-unconfigured`, above the pool layer. That line updates on
+  page load only; a pool refresh does not update it.
+- The new fields never reach `pool_api_payload`'s `pool` dict; its `html`
+  carries them.

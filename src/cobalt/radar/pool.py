@@ -9,10 +9,14 @@ from enum import Enum
 from typing import Iterable, Sequence
 from zoneinfo import ZoneInfo
 
+from loguru import logger
 from pydantic import BaseModel, ConfigDict
 
 from cobalt.session import session_clock
 
+from . import handicap as handicap_step
+from .config import HandicapHeaders
+from .handicap import HandicapRecord
 from .models import (
     Candidate,
     ExcludeBlock,
@@ -53,6 +57,14 @@ class Transition(BaseModel):
     # pair; None where no ranking happened or the export had no value.
     rank_metric: RankMetricName | None = None
     rank_value: Decimal | None = None
+    # Float handicap H1 (R26 B, shadow): `raw_rank` is the `_ranked()` index,
+    # set wherever `rank` comes from it (equal to it in H1); the factor and
+    # the record are the would-be pool-wide rank, stored and never sorted.
+    # NULL: not ranked this scan (raw_rank), or the block absent / the
+    # handicap step failed (the other two).
+    raw_rank: int | None = None
+    handicap_factor: Decimal | None = None
+    handicap: HandicapRecord | None = None
 
 
 def _as_decimal(value: float | None) -> Decimal | None:
@@ -67,6 +79,9 @@ class Decision(BaseModel):
     degraded: bool = False
     degraded_sources: list[str] = []
     frozen: bool = False
+    #: Why a `degraded_sources` entry is there, when the decision knows it
+    #: (today: `handicap`); the pool row writes it, else "source failure".
+    reasons: dict[str, str] = {}
 
 
 def _source_key(source: SourceSet) -> str:
@@ -218,8 +233,13 @@ def decide(
     blocks: PoolBlock | Sequence[object] | None,
     sources: Iterable[SourceSet],
     now: datetime,
+    *,
+    handicap_headers: HandicapHeaders | None = None,
 ) -> Decision:
-    """Implement D3's precedence table with provisional winners kept separate."""
+    """Implement D3's precedence table with provisional winners kept separate.
+
+    `handicap_headers` (`export.handicap_headers`) is read only when the pool
+    block carries a `handicap:` sub-block."""
     pool, screen_blocks, excluded = _blocks(blocks)
     source_rows = list(sources)
     episodes = {item.ticker: item for item in open_members}
@@ -325,9 +345,39 @@ def decide(
     }
     ordered, ranks, source_for, values = _ranked(ranked_candidates, pool, source_rows, now)
 
+    # Float handicap H1 (his R26 "B"; `29` §5): the ONE call site of the
+    # shadow step and the ONE catch around it. The would-be pool-wide rank is
+    # computed and stored, never sorted on; `ordered` / `ranks` below are
+    # untouched. `decide()` runs outside the resident's S1 `try`, so an
+    # exception here would end the cycle — it is caught, logged once, and
+    # flagged as the degraded source `handicap` (L9), the pool ranking raw.
+    # A block refused at parse never reaches here (it froze the pool).
+    shadow: handicap_step.ShadowRank | None = None
+    handicap_reason: str | None = None
+    if pool.handicap is not None:
+        try:
+            if handicap_headers is None:
+                raise ValueError("decide() was not given export.handicap_headers")
+            shadow = handicap_step.shadow_rank(
+                ordered, ranks, source_for, source_rows, pool.handicap, handicap_headers
+            )
+            handicap_reason = shadow.degraded
+        except Exception as error:
+            shadow = None
+            handicap_reason = f"handicap step failed: {type(error).__name__}: {error}"
+            logger.opt(exception=error).error("radar handicap step FAILED, ranking raw: {}", handicap_reason)
+
+    def shadow_of(ticker: str) -> dict:
+        """`raw_rank` wherever `rank` comes from `ranks`, and the name's
+        would-be record when the shadow step ran."""
+        payload: dict = {"raw_rank": ranks.get(ticker)}
+        if shadow is not None and ticker in shadow.records:
+            payload.update(handicap_factor=shadow.factors[ticker], handicap=shadow.records[ticker])
+        return payload
+
     def value_of(ticker: str) -> dict:
         metric, value = values.get(ticker, (None, None))
-        return {"rank_metric": metric, "rank_value": value}
+        return {"rank_metric": metric, "rank_value": value, **shadow_of(ticker)}
 
     seats = max(0, pool.cap - len(held))
     winners = ordered[:seats]
@@ -350,7 +400,7 @@ def decide(
         if streak > pool.stickiness_scans:
             reason = ExcludedBy.CONFIG_CAP if ticker in candidate_map else None
             transitions.append(
-                Transition(ticker=ticker, action=Action.LEAVE, sources=member.sources, rank=ranks.get(ticker), below_cap_streak=streak, excluded_by=reason)
+                Transition(ticker=ticker, action=Action.LEAVE, sources=member.sources, rank=ranks.get(ticker), below_cap_streak=streak, excluded_by=reason, **shadow_of(ticker))
             )
         else:
             retained_below.append((member, streak, ranks.get(ticker)))
@@ -367,7 +417,7 @@ def decide(
         available = [ticker for ticker in provisional if ticker in newcomers]
         if not available:
             transitions.append(
-                Transition(ticker=member.ticker, action=Action.LEAVE, sources=member.sources, rank=rank, below_cap_streak=streak, excluded_by=ExcludedBy.CONFIG_CAP if rank else None)
+                Transition(ticker=member.ticker, action=Action.LEAVE, sources=member.sources, rank=rank, below_cap_streak=streak, excluded_by=ExcludedBy.CONFIG_CAP if rank else None, **shadow_of(member.ticker))
             )
             continue
         loser = max(available, key=lambda ticker: ranks[ticker])
@@ -399,7 +449,17 @@ def decide(
 
     if len(admitted) > pool.cap:
         raise AssertionError(f"pool cap violated: {len(admitted)} > {pool.cap}")
-    return Decision(transitions=transitions, degraded=bool(degraded), degraded_sources=degraded)
+    # `handicap` joins the degraded SOURCES with its reason; the pool-level
+    # `degraded` flag stays the sources' — the raw ranks are valid whatever
+    # the handicap did (picks and the heartbeat read that flag).
+    reasons: dict[str, str] = {}
+    degraded_sources = list(degraded)
+    if handicap_reason is not None:
+        degraded_sources.append("handicap")
+        reasons["handicap"] = handicap_reason
+    return Decision(
+        transitions=transitions, degraded=bool(degraded), degraded_sources=degraded_sources, reasons=reasons,
+    )
 
 
 __all__ = ["Action", "Decision", "Transition", "decide"]

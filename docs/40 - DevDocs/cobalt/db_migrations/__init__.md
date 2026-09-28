@@ -136,6 +136,53 @@ If P2 is present, its 0007 rollback deleting radar cards that picks/missed
 reference is blocked by the NO ACTION foreign keys and fails loud; nothing
 is lost silently (plan §6 R1-23).
 
+**2026-09-21 — `0013_tunables_slug_nullable` (setups one build STEP-2;
+FINAL §8, R2-3 = B, decided by X20).**
+
+Forward: `ALTER TABLE "user".tunables ALTER COLUMN slug DROP NOT NULL`.
+It is idempotent. It raises a NOTICE and does nothing when the table
+does not exist yet: on a fresh database whose taxonomy store never ran,
+the store later creates the table NOT NULL, the first global assumed row
+fails its sync loudly, and 0013 must be re-run.
+
+Rollback: refuses (`REFUSING 0013 reverse`) while any `slug IS NULL` row
+exists, because a rollback never deletes his rows. Otherwise it restores
+`SET NOT NULL`. This is the bounded pattern of 0005's reverse.
+
+The number 0013 skips 0012 on purpose. 0012 belongs to the unmerged
+`bars/chunk-2-0920` (`0012_bars_partitioned_parent`). Whichever lands
+second keeps both, in numeric order. This is an L68 seam on this
+`__init__.py` and on the migration-list tests.
+
+`0014_radar_handicap` (float handicap H1, 2026-09-24; the number settled
+under L72 P-b) is registered last in `FORWARD` and first in `REVERSE`. It
+adds three nullable columns to `system.radar_membership` — `raw_rank`,
+`handicap_factor NUMERIC(6,4)`, `handicap JSONB` — with no CHECK, and its
+rollback drops exactly those three. Builds prove it only inside a test's
+own rolled-back transaction (L76); production applies it in the deploy.
+## 2026-09-24 — `0015_shadow_agreement_stale` (stale-score build, R40 by X30 (A))
+`FORWARD` gains `0015_shadow_agreement_stale.sql` after `0013`, and `REVERSE` gains its rollback before `0013`'s.
+- **The forward file** re-creates `"user".shadow_agreement_v` with the same columns (so `CREATE OR REPLACE`; it is idempotent). The view gains one `NOT EXISTS` exclusion: an `htf_level_proximity` tap graded at tap time is dropped when BOTH of these hold:
+  - the latest complete run of its card's pool at the tap's instant has an `input_stale` `radar_score` row for the card's member and formation def;
+  - that run's stored `evaluator_version` is a PRE-fix string (`s2p2.1`, `s2p2.2`).
+- **The rollback** re-creates 0007's view exactly.
+- **Additive:** no table, no column, no data. `placement.py` is unchanged, because the view keeps its `Side.USER`.
+- **Numbering:** the number is the settled seam. `0014` belongs to handicap H1; `0016`/`0017`/`0018` belong to DRC D1, voice V1 and DRC K1. The migration-list tests are re-pointed with `0015` at the head; every `0013` membership pin is kept.
+- **Tests (L76):** `tests/cobalt/test_stale_score_db.py` T (iv) applies it only inside a rolled-back transaction, never committed to `cobalt_dev`.
+## 2026-09-23 — voice V1: 0017 `voice_turns`
+
+`FORWARD` gains `0017_voice_turns.sql` (last) and `REVERSE` its rollback
+(first). The number is the desk's L68 assignment: 0012–0016 belong to
+unmerged branches (bars chunk 2, the setups build, H1, DRC D1, the
+stale-score reserve), so the registry reads `…, 0011, 0017` until they
+land — whichever lands later keeps every number in numeric order, as
+0008–0011 did. The four registry pins that name the tail
+(`test_archiver_migrations`, `test_p4_migrations`, `test_radar_migration`,
+`test_tenancy`) gain the one 0017 entry each. The table is additive
+(`CREATE … IF NOT EXISTS`, touches no existing object); its rollback drops
+that one table and nothing else. No bytes column of any kind — voice audio
+never reaches the database (R18 (b)).
+
 ## 2026-09-23 — DRC D1: `0016_drc`
 
 `0016_drc.sql` adds three USER tables, each with `user_id NOT NULL` + the

@@ -67,6 +67,20 @@ jobs:
     reads:
       - "configs/dev/aset.yaml"                    # aset/config.py:134 (load_config); the name says dev, but there is no configs/cobalt/aset.yaml — this IS the production sheet's config
       - "configs/cobalt/taxonomy/tunables.yaml"    # taxonomy/loader.py:79 (load_tunables); the 09-09 R1 case
+      # voice/config.py load_voice_config — the FINAL §5 backup refusal; read at the voice config's load, which the resident caches (voice/web.py _CONFIG), so a change reaches it only by restart — L42; voice V1 fix r2
+      # Moved from no_resident_reads (the schema refuses a path in both). Its one-shot readers, provenance kept:
+      # load_backup_config() (backup/config.py:161) is called by backup/restic.py:164,248,269 and backup/cli.py:59
+      # (com.cobalt.backup, ops/run_backup.sh:39; status/restore are operator commands) and by heartbeat/probes.py:431
+      # (backup_freshness, from runner.py:144 — com.cobalt.heartbeat). One-shots derive nothing. Added there 2026-09-22.
+      - "configs/cobalt/backup.yaml"
+      # voice V1's six paths, classified at the stack seam build 2026-09-25 (L42). The sheet serves voice
+      # (aset/web.py:90 include_router(voice_web.router)), so this process runs voice's loaders.
+      - "configs/cobalt/voice.yaml"                # voice/config.py:32 CONFIG_PATH + :120 (load_voice_config); cached per process in voice/web.py:59 _CONFIG, so a change reaches the sheet only by restart
+      - "configs/cobalt/agents/voice.yaml"         # voice/registry.py:23 CONFIG_PATH + :85 (load_agent), called from voice/web.py:176
+      - "configs/cobalt/modelaccess.yaml"          # modelaccess/config.py:28 CONFIG_PATH + :106 (load_routes), called from voice/web.py:176
+      - "ops/start_aset.sh"                        # ops/com.cobalt.aset.plist:25 (the program); its exports (start_aset.sh:35, :37 COBALT_VOICE_*) reach the process only at a restart
+      - "pyproject.toml"                           # ops/start_aset.sh:73 (exec uv run python -m cobalt.aset): uv syncs the environment from it when the process starts
+      - "uv.lock"                                  # ops/start_aset.sh:73 (exec uv run python -m cobalt.aset): uv syncs the environment from it when the process starts
     imports: [cobalt.aset.__main__, cobalt.aset.web]
     what: "the ASET semi-auto sheet on :5010 — the surface he trades beside"
 
@@ -117,14 +131,16 @@ jobs:
     # It gets a row because F18 must be able to say it is down; it gets
     # no wrapper because the strangler rule (CLAUDE.md) says the old tree
     # stays untouched and no new-core code is added to it.
-    # EMPTY, and it needs the caveat. The old tree loads `configs/*.yaml`
+    # NOT EMPTY since the stack seam fix r1 (2026-09-25): the two uv files below. The caveat stands: the old tree loads `configs/*.yaml`
     # ONCE into a singleton at first construction
     # (cobalt_agent/config.py:410) and `Config.load()` returns the cached
     # object thereafter — so it does not RE-READ anything, which is what
     # this field records. It still has to be restarted when one of those
     # files changes, because it is running the old values. That is the
     # read-once class; it wants its own field (09-09 ESCALATE).
-    reads: []
+    reads:
+      - "pyproject.toml"                           # cobalt.sh:59 (nohup uv run src/cobalt_agent/main.py), started by ops/com.cobalt.agent.plist:25 (cobalt.sh start): uv syncs the environment from it when the process starts
+      - "uv.lock"                                  # cobalt.sh:59 (nohup uv run src/cobalt_agent/main.py), started by ops/com.cobalt.agent.plist:25 (cobalt.sh start): uv syncs the environment from it when the process starts
     imports: [cobalt_agent.main]
     what: "the OLD-TREE agent (cobalt.sh start -> cobalt_agent/main.py), detached; liveness from its PID file"
 
@@ -167,6 +183,8 @@ jobs:
     reads:
       - "configs/cobalt/radar.yaml"                # radar/config.py:67 (load_config)
       - "configs/cobalt/taxonomy/tunables.yaml"    # taxonomy/loader.py:79 (load_tunables)
+      - "pyproject.toml"                           # ops/com.cobalt.radar.plist:18–22 (uv run cobalt radar run): uv syncs the environment from it when the process starts
+      - "uv.lock"                                  # ops/com.cobalt.radar.plist:18–22 (uv run cobalt radar run): uv syncs the environment from it when the process starts
     imports: [cobalt.cli]
     what: "the resident radar pool scanner and Finviz i1 bar poller"
 
@@ -314,15 +332,6 @@ no_resident_reads:
       regenerate_rules_config() (prefill/rules_gen.py). load_rules_config()
       (prefill/config.py:125) has no caller; no resident imports either
       path. Added 2026-09-16 (the nightly generated commit escalated it).
-  - path: configs/cobalt/backup.yaml
-    readers: [com.cobalt.backup, com.cobalt.heartbeat]
-    because: >
-      load_backup_config() (backup/config.py:161; the one path :19) is called
-      by backup/restic.py:164,248,269 and backup/cli.py:59 — the one-shot
-      com.cobalt.backup (`cobalt backup run`, ops/run_backup.sh:39) plus
-      status/restore, operator commands — and by heartbeat/probes.py:431
-      (backup_freshness, from runner.py:144), the one-shot com.cobalt.heartbeat.
-      No resident calls either. Added 2026-09-22 (6a range; round-1 check).
 
 # THE KILL PHRASE (F17d). Config, not a literal: `cobalt stop` and any
 # future DM listener compare against this exact string.

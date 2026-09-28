@@ -28,13 +28,23 @@ CONVICTION = mean of the TAPPED trader grades ÷ 10 — shadow grades do not
 count, and an empty tap set is null, never zero.
 
 SUPPRESSION (the settled rule): a required computed dot that is N/A and
-untapped suppresses `card_score`, with the reason. Tapping it lifts it.
+untapped suppresses `card_score`, with the reason. Tapping it lifts it —
+except the `assumed_formation` dot (`na_reason` ASSUMED, R2-2 = B), whose
+tap the store refuses: it suppresses the score for the card's life.
 
 PROXIMITY = clamp(1 − |last − trigger| ÷ (3 × |trigger − stop|), 0, 1).
 The caller passes the card's LIVE sizing inputs (`entry`, `stop`): a
 stop he moved changes the risk the proximity is measured in. The
 formation evidence (`trigger_price`, `structural_stop`) stays immutable
 on the row for replay (Astra R1-7).
+
+NO FRESH LAST → NO PROXIMITY (STALE-SCORE v2 §2 C). `score_last` is the
+ONE `last` rule for every caller of `score_card`: None iff the evaluation
+is intraday-stale, never a substituted price ([F-13], [F-14]). A None
+`last` nulls proximity and `card_score` and writes the bars-stale
+sentence (`stale_reason`, a pure function of the evaluation, [F-16]) ahead
+of any dot reason. A tap while proximity is NULL keeps the stored sentence
+or writes `PROXIMITY_UNKNOWN` ([F-06]).
 
 ROUNDING, once and on stored values: conviction and proximity are
 quantized to 6 dp half-up (the NUMERIC(8,6) columns), and `card_score` is
@@ -49,9 +59,10 @@ propose").
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal, localcontext
 from typing import Any, Iterable, Literal, Mapping
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -69,7 +80,17 @@ SIX_DP = Decimal("0.000001")
 ONE = Decimal(1)
 TEN = Decimal(10)
 
-NaReason = Literal["curve_unset", "MANUAL", "input_stale", "input_unavailable", "DESK_NA", "DEFAULT_UNRULED"]
+NaReason = Literal[
+    "curve_unset", "MANUAL", "input_stale", "input_unavailable", "DESK_NA", "DEFAULT_UNRULED", "ASSUMED",
+]
+#: The one dot that marks a formation resting on an assumed default (R2-2 = B,
+#: FINAL §7): never tapped on a card, so it suppresses `card_score` for the
+#: card's life. Both `radar/evaluate.py` and `cards/store.py` import it here.
+ASSUMED_FORMATION = "assumed_formation"
+#: [F-06]: what a tap writes as the reason when proximity is NULL and no
+#: sentence is stored. The close-time sentence is `stale_reason`'s only.
+PROXIMITY_UNKNOWN = "bars stale — no proximity"
+ET = ZoneInfo("America/New_York")
 
 
 class FactorObservation(BaseModel):
@@ -245,10 +266,12 @@ def conviction(dots: Iterable[Dot]) -> Decimal | None:
 
 
 def suppression(dots: Iterable[Dot]) -> str | None:
-    blocked = [f"{d.factor}: {d.na_reason}" for d in dots if d.computed and d.na_reason and d.trader_grade is None]
-    if not blocked:
+    blockers = [d for d in dots if d.computed and d.na_reason and d.trader_grade is None]
+    if not blockers:
         return None
-    return "required computed dot N/A and untapped — " + "; ".join(blocked) + " (tap to grade)"
+    reason = "required computed dot N/A and untapped — " + "; ".join(f"{d.factor}: {d.na_reason}" for d in blockers)
+    # An ASSUMED blocker is ruled on the settings surface, never tapped.
+    return reason if all(d.na_reason == "ASSUMED" for d in blockers) else reason + " (tap to grade)"
 
 
 def proximity(*, last: Decimal, trigger: Decimal, stop: Decimal) -> Decimal:
@@ -309,26 +332,60 @@ class CardScore(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     conviction: Decimal | None
-    proximity: Decimal
+    proximity: Decimal | None
     card_score: int | None
     score_suppressed: str | None
     proposed_key: Grade | None
     proposed_key_reason: str | None
 
 
+def stale_reason(ev: Any) -> str | None:
+    """[F-16]: the bars-stale sentence, a pure function of the evaluation
+    (`intraday_stale`, `last_bar_ts`), so the stage and the replay write
+    the same bytes. None when the evaluation is not intraday-stale."""
+    if not ev.intraday_stale:
+        return None
+    if ev.last_bar_ts is None:
+        return "bars stale — no closed bar"
+    close = (ev.last_bar_ts + timedelta(minutes=1)).astimezone(ET)
+    return f"bars stale — last close {close:%H:%M:%S} ET, older than 2 × radar.scan_interval"
+
+
+def score_last(ev: Any) -> Decimal | None:
+    """[F-13]: the ONE `last` rule. None iff `ev.intraday_stale`; a fresh
+    evaluation without a last price is an engine error (L1), never a
+    substituted price."""
+    if ev.intraday_stale:
+        return None
+    if ev.last_price is None:
+        from cobalt.radar.evaluate import EvaluateError  # lazy: evaluate imports this module
+
+        raise EvaluateError(f"{ev.ticker} {ev.slug}: fresh evaluation with no last price — nothing to score from")
+    return ev.last_price
+
+
 def score_card(
     dots: Iterable[Dot],
     *,
-    last: Decimal,
+    last: Decimal | None,
     trigger: Decimal,
     stop: Decimal,
     bands: ProposedKeyBands | None,
     enabled: Iterable[Grade],
+    stale_reason: str | None = None,
 ) -> CardScore:
+    """`last` from `score_last`; a None `last` carries its `stale_reason`
+    (and a price carries none)."""
+    if (last is None) != (stale_reason is not None):
+        raise ValueError(f"last {last!r} with stale_reason {stale_reason!r}: a NULL last needs its reason, a price none")
     dots = list(dots)
     conv = conviction(dots)
-    prox = proximity(last=last, trigger=trigger, stop=stop)
     suppressed = suppression(dots)
+    if last is None:
+        prox = None
+        suppressed = stale_reason if suppressed is None else f"{stale_reason}; {suppressed}"
+    else:
+        prox = proximity(last=last, trigger=trigger, stop=stop)
     key, reason = proposed_key(conv, bands, list(enabled))
     return CardScore(
         conviction=conv, proximity=prox, card_score=card_score(conv, prox, suppressed),
@@ -337,7 +394,8 @@ def score_card(
 
 
 __all__ = [
-    "COMPUTED_SOURCES", "CardScore", "DESK_FACTORS", "Dot", "FactorObservation",
-    "card_score", "colour_thresholds", "compute_dots", "conviction", "dot_colour",
-    "grade_from_curve", "proposed_key", "proximity", "refresh_dots", "score_card", "suppression",
+    "ASSUMED_FORMATION", "COMPUTED_SOURCES", "CardScore", "DESK_FACTORS", "Dot", "FactorObservation",
+    "PROXIMITY_UNKNOWN", "card_score", "colour_thresholds", "compute_dots", "conviction", "dot_colour",
+    "grade_from_curve", "proposed_key", "proximity", "refresh_dots", "score_card", "score_last", "stale_reason",
+    "suppression",
 ]

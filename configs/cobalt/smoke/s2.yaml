@@ -76,6 +76,11 @@ checks:
   # carrying the pool's own `last_scan_id`, gated on that scan having run
   # after the cutoff. Both are graded; the check goes quiet only when both
   # are empty.
+  # A sticky RETAIN of an open member the scan no longer ranks writes
+  # `last_rank`, `rank_metric`, `rank_value` = NULL, NULL, NULL by design
+  # (`radar/pool.py` Transition: "None where no ranking happened"), so a
+  # NULL metric alone is not a defect. `last_rank` is the column that tells
+  # the two apart: a row the scan RANKED yet stored no metric is.
   - id: K3
     title: membership value column (post-deploy admissions and re-scans)
     kind: sql
@@ -85,16 +90,17 @@ checks:
       SELECT max(last_scan_id) AS id FROM system.radar_pool
       WHERE pool_key = 'primary' AND last_scan_at >= {cutoff}),
       admitted AS (
-      SELECT m.rank_metric, m.rank_value,
+      SELECT m.rank_metric, m.rank_value, m.last_rank,
       m.first_seen_at >= {cutoff} AS inserted_after,
       (m.left_at IS NULL AND m.last_scan_id = scan.id) AS rescanned_after
       FROM system.radar_membership m CROSS JOIN scan
       WHERE m.entered_at IS NOT NULL)
       SELECT count(*) FILTER (WHERE inserted_after) AS post_deploy_admitted,
-      count(*) FILTER (WHERE inserted_after AND rank_metric IS NULL) AS metric_missing,
+      count(*) FILTER (WHERE inserted_after AND rank_metric IS NULL AND last_rank IS NOT NULL) AS metric_missing,
       count(*) FILTER (WHERE inserted_after AND rank_value IS NULL) AS value_null,
+      count(*) FILTER (WHERE inserted_after AND rank_metric IS NULL AND last_rank IS NULL) AS unranked_retained,
       count(*) FILTER (WHERE rescanned_after) AS rescanned_admitted,
-      count(*) FILTER (WHERE rescanned_after AND rank_metric IS NULL) AS rescanned_metric_missing
+      count(*) FILTER (WHERE rescanned_after AND rank_metric IS NULL AND last_rank IS NOT NULL) AS rescanned_metric_missing
       FROM admitted
     known_if:
       - {column: post_deploy_admitted, op: eq, value: 0}
@@ -105,12 +111,18 @@ checks:
       - {column: rescanned_metric_missing, op: eq, value: 0}
     expect_text: >-
       metric_missing = 0 over admitted rows FIRST SEEN at/after the cutoff
-      (the INSERT path always writes rank_metric) AND
+      that the scan RANKED (last_rank not null) yet stored no rank_metric AND
       rescanned_metric_missing = 0 over open admitted rows the pool's latest
-      post-cutoff scan touched (the RETAIN path, where a dropped metric would
-      otherwise hide behind a pre-deploy first_seen_at). Both counts 0 →
-      KNOWN. value_null is evidence only: a genuinely absent metric stores
-      rank_value NULL. ONE KNOWN AMBIGUITY in the second set: a frozen HOLD
+      post-cutoff scan touched, counted the same way (the RETAIN path, where
+      a dropped metric would otherwise hide behind a pre-deploy
+      first_seen_at). Both admitted counts 0 → KNOWN. A sticky-retained
+      member the scan no longer ranks stores last_rank, rank_metric,
+      rank_value = NULL, NULL, NULL by design (radar/pool.py:50-54,
+      Transition: "None where no ranking happened"), so it is NOT graded: it
+      is printed as unranked_retained. Only a write-path defect fails K3,
+      not a designed NULL (plan-s2-p4-2026-09-15.md:243, Astra R1-19 /
+      R1-24). value_null and unranked_retained are evidence only: a genuinely
+      absent metric stores rank_value NULL. ONE KNOWN AMBIGUITY in the second set: a frozen HOLD
       stamps last_scan_id too (radar/store.py's COALESCE branch), so a
       pre-deploy episode HELD this scan because its only source was degraded
       carries its pre-deploy NULL into this count, and no column tells it
@@ -142,9 +154,9 @@ checks:
   - id: K4.4
     title: sheet /api/radar/pool
     kind: http
-    url: http://127.0.0.1:5010/api/radar/pool
+    url: http://127.0.0.1:5010/api/radar/pool?since={cutoff}
     status: 200
-    expect_text: HTTP 200
+    expect_text: "HTTP 200 (since = the deploy cutoff: a past, tz-aware instant — the API's ruled contract, P3 plan R2-1)"
 
   - id: K5.1
     title: P2 seam — latest radar_score_run
@@ -285,8 +297,17 @@ checks:
   # evidence", made by machine instead of by a hand count of the cached
   # CSV — while a side holding fewer rows than its export allowed FAILS.
   # `side` is CHECK-constrained to these two values (0008), so the two
-  # `not_archived = 0` predicates together cover every active row of the
+  # sides' `not_archived` counts together cover every active row of the
   # day.
+  #
+  # A NOT-ARCHIVED ROW IS GREEN ONLY WHEN THE REPLAY'S OWN JOB ROW NAMES IT
+  # `partial`: its source i1 bars were short of the session (a halt, a
+  # late open), so the bars it has are kept and it stays
+  # `bars_archived = false` (R113). K9.7–K9.12 grade that in the K8
+  # pattern, per side: the not-archived count (user side), the job row's
+  # `archive_partial_by_side` (system side), and the `compare` between
+  # them. A not-archived row no marker covers — zero bars on the day, or
+  # a fetch failure — makes the compare FAIL.
   - id: K9.1
     title: movers_daily — gainers stored (user side)
     kind: sql
@@ -300,11 +321,10 @@ checks:
     result_number: stored
     expect:
       - {column: top_n, op: not_null}
-      - {column: not_archived, op: eq, value: 0}
     expect_text: >-
       active gainers rows for the last trading day: radar.benchmark top_n is
-      set; not_archived = 0 (every stored mover has its i1 bars). stored is
-      printed and is K9.3's left operand
+      set. not_archived is printed and is graded by K9.9 against the job
+      row's partial marker. stored is printed and is K9.3's left operand
 
   - id: K9.2
     title: movers — what the gainers export allowed (system side)
@@ -315,9 +335,10 @@ checks:
     result_equals:
       trade_date: "{last_trading_day}"
     expect_text: >-
-      last_result.movers_by_side.gainers = {exported, top_n, expected}: the rows
-      that night's gainers export really returned, the cap in force, and
-      expected = min(top_n, exported); last_result.trade_date = last trading day
+      last_result.movers_by_side.gainers = {exported, unranked, top_n, expected}:
+      the rows that night's gainers export really returned, how many of them had
+      a blank Change (unranked, never stored), the cap in force, and
+      expected = min(top_n, exported - unranked); last_result.trade_date = last trading day
       (what makes K9.3's comparison valid). expected is K9.3's right operand
 
   - id: K9.3
@@ -345,11 +366,10 @@ checks:
     result_number: stored
     expect:
       - {column: top_n, op: not_null}
-      - {column: not_archived, op: eq, value: 0}
     expect_text: >-
       active losers rows for the last trading day: radar.benchmark top_n is
-      set; not_archived = 0 (every stored mover has its i1 bars). stored is
-      printed and is K9.6's left operand
+      set. not_archived is printed and is graded by K9.12 against the job
+      row's partial marker. stored is printed and is K9.6's left operand
 
   - id: K9.5
     title: movers — what the losers export allowed (system side)
@@ -360,9 +380,10 @@ checks:
     result_equals:
       trade_date: "{last_trading_day}"
     expect_text: >-
-      last_result.movers_by_side.losers = {exported, top_n, expected}: the rows
-      that night's losers export really returned, the cap in force, and
-      expected = min(top_n, exported); last_result.trade_date = last trading day
+      last_result.movers_by_side.losers = {exported, unranked, top_n, expected}:
+      the rows that night's losers export really returned, how many of them had
+      a blank Change (unranked, never stored), the cap in force, and
+      expected = min(top_n, exported - unranked); last_result.trade_date = last trading day
       (what makes K9.6's comparison valid). expected is K9.6's right operand
 
   - id: K9.6
@@ -376,6 +397,94 @@ checks:
       their own rows above. A short export (fewer rows than top_n) PASSES here;
       fewer stored rows than the export allowed = FAIL; either operand ERRORed
       = ERROR, never a quiet PASS
+
+  - id: K9.7
+    title: movers_daily — gainers not archived (user side)
+    kind: sql
+    side: user
+    query: >-
+      SELECT (SELECT (value ->> 'top_n')::int FROM trader_settings WHERE key = 'radar.benchmark') AS top_n,
+      count(*) AS stored,
+      count(*) FILTER (WHERE NOT bars_archived) AS not_archived
+      FROM system.movers_daily
+      WHERE trade_date = {last_trading_day} AND side = 'gainers' AND active
+    result_number: not_archived
+    expect:
+      - {column: not_archived, op: not_null}
+    expect_text: >-
+      K9.1's query: active gainers rows for the last trading day whose i1 bars
+      are not archived. not_archived is printed and is K9.9's left operand
+
+  - id: K9.8
+    title: movers — gainers the replay named partial (system side)
+    kind: job_row
+    label: com.cobalt.replay
+    result_keys: [archive_partial, archive_partial_by_side]
+    result_number: archive_partial_by_side.gainers
+    result_equals:
+      trade_date: "{last_trading_day}"
+    expect_text: >-
+      last_result.archive_partial names each mover whose source i1 bars were
+      short of the session (code source_bars_short, with its coverage detail);
+      last_result.archive_partial_by_side.gainers counts them;
+      last_result.trade_date = last trading day (what makes K9.9's comparison
+      valid). archive_partial_by_side.gainers is K9.9's right operand
+
+  - id: K9.9
+    title: movers — every gainers row not archived is named partial
+    kind: compare
+    left: K9.7
+    right: K9.8
+    op: eq
+    expect_text: >-
+      K9.7's not_archived = K9.8's archive_partial_by_side.gainers, both
+      printed on their own rows above. A not-archived row the job row does not
+      name partial (zero bars on the day, a fetch failure) = FAIL; either
+      operand ERRORed = ERROR, never a quiet PASS
+
+  - id: K9.10
+    title: movers_daily — losers not archived (user side)
+    kind: sql
+    side: user
+    query: >-
+      SELECT (SELECT (value ->> 'top_n')::int FROM trader_settings WHERE key = 'radar.benchmark') AS top_n,
+      count(*) AS stored,
+      count(*) FILTER (WHERE NOT bars_archived) AS not_archived
+      FROM system.movers_daily
+      WHERE trade_date = {last_trading_day} AND side = 'losers' AND active
+    result_number: not_archived
+    expect:
+      - {column: not_archived, op: not_null}
+    expect_text: >-
+      K9.4's query: active losers rows for the last trading day whose i1 bars
+      are not archived. not_archived is printed and is K9.12's left operand
+
+  - id: K9.11
+    title: movers — losers the replay named partial (system side)
+    kind: job_row
+    label: com.cobalt.replay
+    result_keys: [archive_partial, archive_partial_by_side]
+    result_number: archive_partial_by_side.losers
+    result_equals:
+      trade_date: "{last_trading_day}"
+    expect_text: >-
+      last_result.archive_partial names each mover whose source i1 bars were
+      short of the session (code source_bars_short, with its coverage detail);
+      last_result.archive_partial_by_side.losers counts them;
+      last_result.trade_date = last trading day (what makes K9.12's comparison
+      valid). archive_partial_by_side.losers is K9.12's right operand
+
+  - id: K9.12
+    title: movers — every losers row not archived is named partial
+    kind: compare
+    left: K9.10
+    right: K9.11
+    op: eq
+    expect_text: >-
+      K9.10's not_archived = K9.11's archive_partial_by_side.losers, both
+      printed on their own rows above. A not-archived row the job row does not
+      name partial (zero bars on the day, a fetch failure) = FAIL; either
+      operand ERRORed = ERROR, never a quiet PASS
 
   - id: K10.1
     title: miss line unit in the DRC note
@@ -489,13 +598,6 @@ checks:
     exit_code: 0
     not_missed: true
     expect_text: "state done, exit_code 0, not missed against its cadence"
-
-  - id: K17
-    title: cobalt validate
-    kind: cli
-    argv: [cobalt, validate]
-    exit_code: 0
-    expect_text: exit 0
 
   - id: K18
     title: jobs registry vs launchd

@@ -28,7 +28,8 @@ Variables render as **SQL literals** (`sql_literal`), not bind parameters. The p
 
 The rendering helpers:
 - `render_sql` renders SQL.
-- `render_text` renders URLs, paths, argv and dotted result paths.
+- `render_text` renders paths, argv and dotted result paths.
+- `render_url` (S2 smoke fix F2, 2026-09-23) renders a `kind: http` URL, for BOTH the probe and the printed hand-fallback `curl`: each substituted variable's text is percent-encoded with `urllib.parse.quote(…, safe="")`, the template's own text is left alone. It exists because K4.4 now passes the deploy cutoff as `/api/radar/pool?since={cutoff}` — the endpoint requires `since` (P3 plan R2-1: missing, malformed, naive or future values are rejected, never defaulted), and an unencoded ISO instant's `+00:00` would reach the server as a space and be rejected again. A URL with no variable renders byte for byte as before.
 - `_resolve` turns a whole-string `{variable}` predicate value into its typed value.
 
 ## Comparison

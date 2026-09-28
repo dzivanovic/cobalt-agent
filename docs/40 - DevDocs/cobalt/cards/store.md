@@ -134,3 +134,13 @@ The persisted evidence of the gap is `cobalt cards picks` reporting MISSING.
 **`filled_with_picks(day)`** backs `cobalt cards picks`. It returns every
 `card_transitions` row with `to_state = 'FILLED'` whose `at` falls on that
 ET date, joined to the card and left-joined to `picks` on `transition_id`.
+
+**2026-09-21 — setups one build STEP-1.** `tap_dot` refuses the factor `assumed_formation`. The refusal sits beside the no-such-dot refusal, before the INSERT. It raises `CardStateError("REFUSED card <id>: assumed_formation is not graded on a card — an assumed default is ruled on the settings surface")`. No tap row is written. The dot's `trader_grade` and the card's conviction, score, suppression and proposed key are not touched. The route turns the error into `409` with that message. Tapping any other dot recomputes as before, and `suppression()` still names `assumed_formation`, so `card_score` stays null (R2-2 = B, X8's tap half).
+
+**2026-09-24 — stale score S2 (v2 `[F-06]`; step 8 replaced by R45, Fable (i)).** Two writer branches change. Both are under the row lock and both use the one formula, `scoring.card_score()`; there is no SQL arithmetic.
+- **`tap_dot`:** the lock SELECT also reads `score_suppressed`. While the stored proximity is NULL (bars stale), the score stays NULL: `card_score()` returns None for a None proximity. The reason written is then the stored sentence, or `scoring.PROXIMITY_UNKNOWN` when none is stored, never `suppression(dots)`. A tap therefore cannot erase the refresh helper's `bars stale — …` sentence. With a proximity, nothing changes. Conviction and the proposed key always update from the tap, as before.
+- **`refresh_radar_card`:** the lock SELECT also reads `conviction, score_suppressed`. When a tap landed after the stage read the card (taps-moved), the branch now also writes `card_score` and `score_suppressed`:
+  - `suppressed` is the update's reason when this scan's proximity is NULL, and the locked (tap route's) reason otherwise;
+  - `score = card_score(locked conviction, this scan's proximity, suppressed)`.
+
+  A stale scan therefore leaves NULL beside NULL, with the stale reason (X3). A fresh scan scores the tap's conviction on this scan's proximity, so the row never holds an old-price score beside a new proximity (the R45 race). Conviction and the proposed key stay the tap route's.

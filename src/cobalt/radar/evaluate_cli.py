@@ -1,7 +1,7 @@
 """`cobalt radar evaluate` — the dry-run replay and the dev-persistence
 harness (S2-P2 STEP-4, R3/R9, Astra R1-11).
 
-    cobalt radar evaluate --replay <YYYY-MM-DD> [--trade-def <slug>]
+    cobalt radar evaluate --replay <YYYY-MM-DD> [--trade-def <slug>] [--expect-formed]
     cobalt radar evaluate --candidate <YYYY-MM-DD> --settings-file <d2.yaml>
                           --sha256 <hash> [--taps <taps.yaml>] [--trade-def <slug>]
 
@@ -15,7 +15,11 @@ every admitted member x def through the SAME `evaluate_member` the
 resident runs, and prints each formation once (ticker, def, direction,
 trigger, stop, formation bar), every path-B-only formation (not evaluable
 in S2, R4), and every def's "not evaluable: missing atoms […]" line
-(R2). This is the list Dejan reviews before enable.
+(R2). This is the list Dejan reviews before enable. `--expect-formed`
+(FINAL §9 gate 4, [F-16] (3)) makes a replay that formed NOTHING exit
+non-zero; it needs `--trade-def`, so the gate names the one def it proves.
+The nightly replay may cut the day between scans at its deadline
+(`cut_at`); a cut is printed and recorded, never silent.
 
 `--candidate` PERSISTS, AND ONLY TO cobalt_dev. Before D2 the hub freezes
 the exact proposed card settings (curves, bands) in a reviewed file,
@@ -45,6 +49,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from loguru import logger
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from cobalt import env
@@ -53,7 +58,7 @@ from cobalt.session import Session
 from .anatomy.daily import DailySeries, parse_daily_csv
 from .evaluate import ET
 from .anatomy.registry import evaluability
-from .evaluate import FACTOR_COMPUTERS, EvaluateStage, LoadedDef, MemberInput, evaluate_member
+from .evaluate import FACTOR_COMPUTERS, EvaluateStage, LoadedDef, MemberInput, evaluate_member, prepare_member
 
 
 class CandidateRefused(RuntimeError):
@@ -98,6 +103,10 @@ class ReplayReport(BaseModel):
 
     day: date
     scans: int = 0
+    #: The scan instants the day planned; `scans` < this only when cut (R95).
+    scans_planned: int = 0
+    #: The first scan instant NOT evaluated when `cut_at` stopped the day (R95).
+    cut_before: AwareDatetime | None = None
     formations: list[ReplayFormation] = Field(default_factory=list)
     path_b_only: list[str] = Field(default_factory=list)
     not_evaluable: dict[str, list[str]] = Field(default_factory=dict)
@@ -155,8 +164,10 @@ def replay_formations(
     defaults,
     clock,
     out: Callable[[str], None] = print,
+    cut_at: Callable[[datetime], bool] | None = None,
 ) -> ReplayReport:
-    """Read-only. See the module docstring."""
+    """Read-only. See the module docstring. `cut_at` (R95) is asked before
+    each scan instant; True stops the day there, printed and recorded."""
     from cobalt.taxonomy.loader import merge_tunables
 
     defs, user_rows = defs_source()
@@ -180,7 +191,17 @@ def replay_formations(
     b_seen: set[tuple[str, str]] = set()
     evaluable = [ld for ld in defs if ld.slug not in report.not_evaluable]
     day_start = datetime.combine(day, datetime.min.time(), ET)
-    for instant in scan_instants(day, clock, scan_interval, first) if admitted_ever else []:
+    instants = scan_instants(day, clock, scan_interval, first) if admitted_ever else []
+    report.scans_planned = len(instants)
+    for instant in instants:
+        if cut_at is not None and cut_at(instant):
+            report.cut_before = instant
+            line = (f"replay {day}: CUT — the deadline stopped the formations replay before the "
+                    f"{clock.to_et(instant):%H:%M:%S} ET scan ({report.scans} of {report.scans_planned} scans "
+                    "evaluated); later formations were not evaluated")
+            out(line)
+            logger.warning(line)
+            break
         report.scans += 1
         for member in admitted_at(members, instant):
             ticker = member["ticker"]
@@ -198,8 +219,10 @@ def replay_formations(
                 bars=tuple(b for b in bars_cache[ticker] if b.ts < instant), daily=daily, daily_status=status,
                 rvol=None, pool_position=member.get("last_rank"),
             )
+            prep = prepare_member(inp, tunables=rows, defaults=defaults, clock=clock)
             for ld in evaluable:
-                ev = evaluate_member(ld, inp, tunables=rows, defaults=defaults, scan_interval=scan_interval, clock=clock)
+                ev = evaluate_member(ld, inp, tunables=rows, defaults=defaults, scan_interval=scan_interval, clock=clock,
+                                     prep=prep)
                 report.counts[ev.evaluation] = report.counts.get(ev.evaluation, 0) + 1
                 if ev.evaluation == "formed" and ev.formation is not None:
                     key = (ticker, ld.slug, ev.formation.formed_bar_ts.isoformat())
@@ -227,7 +250,15 @@ def replay_formations(
     out(
         f"replay {day}: scans={report.scans} formations={len(report.formations)} "
         f"path_b_only={len(report.path_b_only)} counts={dict(sorted(report.counts.items()))} writes: none"
+        + (f" · CUT before {clock.to_et(report.cut_before):%H:%M:%S} ET" if report.cut_before else "")
     )
+    return report
+
+
+def expect_formed_gate(report: ReplayReport, slug: str) -> ReplayReport:
+    """FINAL §9 gate 4: a replay that formed NOTHING exits non-zero."""
+    if not report.formations:
+        raise SystemExit(f"--expect-formed: {slug} formed 0 times on {report.day} — RED")
     return report
 
 
@@ -397,15 +428,19 @@ def evaluate_command(args: argparse.Namespace) -> None:
 
     if bool(args.replay) == bool(args.candidate):
         raise SystemExit("cobalt radar evaluate: pass exactly one of --replay <date> or --candidate <date>")
+    if args.expect_formed and not (args.replay and args.trade_def):
+        raise SystemExit("cobalt radar evaluate: --expect-formed needs --trade-def <slug> and --replay <date>")
     config = load_config()
     clock = session_clock()
     cache = CachedDailyBars(Path(config.cache.dir))
     if args.replay:
-        replay_formations(
+        report = replay_formations(
             date.fromisoformat(args.replay), pool_key=config.pool_key, slug_filter=args.trade_def,
             radar_store=RadarStore(), defs_source=TradeDefStore().loaded_for_evaluation,
             daily_source=cache.load, tunables=load_tunables().by_key, defaults=load_defaults(), clock=clock,
         )
+        if args.expect_formed:
+            expect_formed_gate(report, args.trade_def)
         return
 
     assert_dev_database()
@@ -442,5 +477,6 @@ def evaluate_command(args: argparse.Namespace) -> None:
 __all__ = [
     "CachedDailyBars", "CandidateRefused", "CandidateReport", "ReplayFormation", "ReplayReport",
     "admitted_at", "assert_dev_database", "candidate_run", "curve_coverage_gaps", "evaluate_command",
+    "expect_formed_gate",
     "replay_formations", "scan_instants",
 ]

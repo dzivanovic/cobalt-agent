@@ -35,12 +35,30 @@
                          why: the five kinds, one unresolved row per
                          condition, read by the heartbeat. Additive.
 `0011_archive_incidents.rollback.sql` — drops that one table.
+`0013_tunables_slug_nullable.sql` — `"user".tunables.slug` nullable, so a
+                         global assumed default stores slug NULL (the
+                         setups one build, FINAL §8, R2-3 = B by X20).
+`0013_tunables_slug_nullable.rollback.sql` — refuses while a NULL-slug row
+                         exists, else restores NOT NULL.
+`0014_radar_handicap.sql` — membership raw_rank / handicap_factor / handicap
+                         (the float handicap's shadow record, H1). Additive.
+`0014_radar_handicap.rollback.sql` — drops exactly those three columns.
+`0015_shadow_agreement_stale.sql` — `"user".shadow_agreement_v` drops the
+                         `htf_level_proximity` taps graded on a stale price
+                         by a pre-fix evaluator (the stale-score build, R40
+                         by X30 (A)). Additive: the view only.
+`0015_shadow_agreement_stale.rollback.sql` — the view exactly as 0007
+                         defines it.
 `0016_drc.sql` — DRC D1: `"user".drc_imports` (one row per dropped
                          file, + the input event's state), `drc_fills`
                          (one row per execution) and the declared
                          `drc_rows` (trades, open positions, stats rows,
                          the day — inputs + derived + fn_version). Additive.
 `0016_drc.rollback.sql` — drops those three tables, children first.
+`0017_voice_turns.sql` — `"user".voice_turns`, voice V1's turn rows
+                         (voice v3 FINAL §7): the state machine, no audio
+                         bytes of any kind. Additive.
+`0017_voice_turns.rollback.sql` — drops that one table.
 `0018_drc_stated_books.sql` — DRC K1: `"user".drc_stated_books` (his
                          stated opening books, resolves and no-trade
                          statements; append-only) and `drc_rows.kind`
@@ -49,12 +67,14 @@
                          rows, restores the four-kind CHECK, drops the
                          table (his statements with it — its COST line).
 
-0012–0015 ARE NOT GAPS BY ACCIDENT: 0012 is the unmerged
-`bars/chunk-2-0920`, 0013 the setups one build, 0014 handicap H1
-(reserved), 0015 stale score (reserved, conditional) —
-`reports/devdb-builds-reissue-2026-09-23.md`. Whichever lands later keeps
-every set, in numeric order; the desk renumbers at the L68 gate. 0017 is
-the voice branch's `0017_voice_turns`, left free here for the same reason.
+0012 AND 0016 ARE NOT GAPS BY ACCIDENT: 0012 belongs to the unmerged
+`bars/chunk-2-0920` (`0012_bars_partitioned_parent`) and 0016 to DRC D1
+(`0016_drc`); 0018 is DRC K1's (`0018_drc_stated_books`), 0019 the DRC
+D2 fix round's (`0019_drc_events`) and 0020 DRC D3's
+(`0020_drc_build_kinds`) — the settled seam
+(`reports/devdb-builds-reissue-2026-09-23.md` `## MIGRATION SEAM`;
+`reports/cto-2026-09-25.md` R64 (5)). Whichever lands later keeps every
+number, in numeric order.
 
 0006/0007 are S2-P2's, 0008/0009 are S2-P4's. Both tuples stay ordered by
 version; every file is idempotent and neither 0008 nor 0009 names a P2
@@ -96,14 +116,22 @@ FORWARD = (
     MIGRATIONS_DIR / "0009_picks_missed.sql",
     MIGRATIONS_DIR / "0010_archive_progress.sql",
     MIGRATIONS_DIR / "0011_archive_incidents.sql",
+    MIGRATIONS_DIR / "0013_tunables_slug_nullable.sql",
+    MIGRATIONS_DIR / "0014_radar_handicap.sql",
+    MIGRATIONS_DIR / "0015_shadow_agreement_stale.sql",
     MIGRATIONS_DIR / "0016_drc.sql",
+    MIGRATIONS_DIR / "0017_voice_turns.sql",
     MIGRATIONS_DIR / "0018_drc_stated_books.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
     MIGRATIONS_DIR / "0018_drc_stated_books.rollback.sql",
+    MIGRATIONS_DIR / "0017_voice_turns.rollback.sql",
     MIGRATIONS_DIR / "0016_drc.rollback.sql",
+    MIGRATIONS_DIR / "0015_shadow_agreement_stale.rollback.sql",
+    MIGRATIONS_DIR / "0014_radar_handicap.rollback.sql",
+    MIGRATIONS_DIR / "0013_tunables_slug_nullable.rollback.sql",
     MIGRATIONS_DIR / "0011_archive_incidents.rollback.sql",
     MIGRATIONS_DIR / "0010_archive_progress.rollback.sql",
     MIGRATIONS_DIR / "0009_picks_missed.rollback.sql",

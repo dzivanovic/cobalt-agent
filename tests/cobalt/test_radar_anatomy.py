@@ -35,7 +35,8 @@ from cobalt.radar.anatomy.daily import (
 from cobalt.radar.anatomy.extension import ExtensionParams, detect_extension
 from cobalt.radar.anatomy.indicators import InsufficientBars, true_ranges, volume_band, wilder_atr
 from cobalt.radar.anatomy.leg import legs
-from cobalt.radar.anatomy.registry import SUPPORTED_ATOMS, evaluability
+from cobalt.radar.anatomy.registry import evaluability
+from cobalt.radar.formation.atoms import ATOMS as SUPPORTED_ATOMS  # FINAL §2.5: the table formation dispatches through
 from cobalt.radar.anatomy.structure import bar_break_trigger, structural_stop, tracked_extreme
 from cobalt.session.clock import session_clock
 from cobalt.taxonomy.loader import load_tunables
@@ -493,11 +494,18 @@ def test_unsupported_atoms_trigger_and_stop_are_named_missing():
         stop_ref="range_base",
     )
     result = evaluability(td)
-    assert not result.evaluable
-    assert set(result.missing_atoms) == {
-        "Range(micro).instantiated", "Leg(pullback)", "VWAP", "touched",
-        "trigger:range_break", "stop:structural_extreme:range_base",
-    }
+    # `VWAP` is served from STEP-3 of the setups one build (FINAL §3 D1);
+    # `Range(micro).instantiated`, `range_break` and `range_base` from STEP-4
+    # (§3 D2, §2.2, §2.3); `Leg(pullback)` / `touched` from STEP-6 (§3 D3).
+    assert result.evaluable and result.missing_atoms == ()
+    # The naming itself, on an object the FINAL does not build (§3 "Not built: Gap"):
+    gap = _def_with([{"expr": "Range(micro).instantiated"}, {"expr": "Gap.size > 0"}], [],
+                    {"type": "sequence", "steps": [{"name": "break", "predicate": {"expr": "Gap.size > 0"},
+                                                    "confirmation_policy": {"type": "intrabar"}}]},
+                    stop_ref="low_of_day")  # `turn_candle` is served from STEP-8; `low_of_day` is not
+    # fix round 2 F2: the sequence's step is walked by the interpreter's gap
+    # dispatch, so its unserved atom is named (`Gap.size`), never `trigger:sequence`
+    assert set(evaluability(gap).missing_atoms) == {"Gap.size", "stop:structural_extreme:low_of_day"}
 
 
 def test_sequence_trigger_is_named_missing_not_a_crash():
@@ -506,7 +514,8 @@ def test_sequence_trigger_is_named_missing_not_a_crash():
     td = _def_with([{"expr": "Extension.state == culminating"}], [],
                    {"type": "sequence", "steps": [step]})
     result = evaluability(td)
-    assert not result.evaluable and result.missing_atoms == ("trigger:sequence",)
+    # fix round 2 F2: a served predicate with no bar-indexed step resolution is named as such
+    assert not result.evaluable and result.missing_atoms == ("Unsupported(step:Extension.state == culminating)",)
 
 
 def test_shipped_synthetic_def_reports_not_evaluable_with_its_missing_atoms():
@@ -521,6 +530,21 @@ def test_shipped_synthetic_def_reports_not_evaluable_with_its_missing_atoms():
 
 
 def test_supported_atoms_are_exactly_the_s2_detectors():
-    assert SUPPORTED_ATOMS == frozenset(
-        {"Extension.state", "Extension.instantiated", "Extension.leg_count", "RangeBreak(HTF).day_count"}
+    # + the D1 atoms of the setups one build STEP-3 (FINAL §3 D1)
+    assert frozenset(SUPPORTED_ATOMS) == frozenset(
+        {"Extension.state", "Extension.instantiated", "Extension.leg_count", "RangeBreak(HTF).day_count",
+         "price", "EMA9", "EMA21", "EMA9.slope", "slope_norm(EMA9)", "slope_norm(VWAP)", "VWAP",
+         "ATR(working_tf)", "DayRange.high", "DayRange.low", "DayRange.upper_third", "PMH", "PML", "PDH", "PDL",
+         "InPlay.state",
+         # + the D2 / D3 atoms of STEP-4 (FINAL §3 D2, D3)
+         "Range(micro).instantiated", "Range(micro).duration", "Range(micro).low", "Range(micro).top",
+         "Range(micro).base", "Range(micro).bound", "Range(micro).height", "Range(micro).wick_ratio",
+         "Leg(opening_drive).direction", "Leg(opening_drive).terminated_by",
+         # + STEP-6's roles and the A-13 catalyst resolver (FINAL §3 D3, §6)
+         "Leg(pullback).direction", "Leg(pullback).end", "Leg(pullback).index", "Leg(impulse).direction",
+         "Leg(opening_drive OR impulse).direction", "catalyst_ref",
+         # + STEP-7's rejected-resistance atom (FINAL §3 D5/D6)
+         "Level_ref(resistance).rejected",
+         # + STEP-8's RangeBreak lifecycle and events (FINAL §3 D6)
+         "RangeBreak(level).state", "RangeBreak.state", "event(retest)", "event(stop_hit)"}
     )

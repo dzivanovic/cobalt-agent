@@ -53,7 +53,7 @@ from typing import Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict
 
-from cobalt.cards.scoring import compute_dots, score_card
+from cobalt.cards.scoring import score_card, score_last, stale_reason
 from cobalt.settings.card import CardSettings
 from cobalt.taxonomy.defaults import TaxonomyDefaults
 from cobalt.taxonomy.trade_def import TradeDef
@@ -69,6 +69,7 @@ from .evaluate import (
     _resolve_snapshot,
     bar_row,
     canonical_sha256,
+    card_dots,
     daily_row,
     evaluate_member,
     formula_sha256,
@@ -103,7 +104,9 @@ FORMULAS_IN_WORDS = {
     "conviction": "mean(trader_grade of the tapped dots) ÷ 10, half-up to 6 dp; no taps → null; shadow grades never count",
     "proximity": (
         "clamp(1 − |last − trigger| ÷ (3 × |trigger − stop|), 0, 1), half-up to 6 dp; trigger/stop are the card's live "
-        "entry/stop; last is the close of the last closed i1 bar"
+        "entry/stop; last is the close of the last closed i1 bar; null (and card_score null, score_suppressed "
+        "the bars-stale sentence) when no i1 bar has closed today or the last one closed more than "
+        "2 × radar.scan_interval before as_of"
     ),
     "dot_grade": (
         "piecewise-linear through card.curves[factor] anchors (x ascending), flat beyond the end anchors, clipped to "
@@ -212,6 +215,15 @@ def export_run(run_id: int, *, radar_store, card_store, out: Path, clock, genera
     if receipt_id is None:
         raise AuditExportError(f"radar_score_run {run_id} has no receipt — its numbers have no stored inputs (L57)")
     chain = card_store.receipts_chain(receipt_id)
+    # [F-08]: a receipt written by another evaluator is refused by name here,
+    # before any replay — never reported as a replay mismatch.
+    for receipt in chain:
+        written = receipt["observations"].get("evaluator_version")
+        if written != EVALUATOR_VERSION:
+            raise AuditExportError(
+                f"run {run_id}: receipt {receipt.get('id')} was written at evaluator version {written!r}; "
+                f"this code is evaluator version {EVALUATOR_VERSION!r} — refusing before the replay"
+            )
     index = len(chain) - 1
     try:
         tunables = _resolve_snapshot(chain, "tunables_snapshot", index)
@@ -359,8 +371,8 @@ def export_replay(
         if ev.evaluation != "formed" or ev.formation is None:
             raise AuditExportError(f"{formation.ticker} {formation.slug}: re-evaluation at {formation.seen_at} did not form")
         trigger, stop = ev.formation.trigger.price, ev.formation.stop.price
-        dots = compute_dots(ld.definition.quality_factors, ev.observations, card_settings.curves, at=formation.seen_at)
-        score = score_card(dots, last=ev.last_price if ev.last_price is not None else trigger, trigger=trigger,
+        dots = card_dots(ld, ev, card_settings, formation.seen_at, ev.formation.assumed_keys)
+        score = score_card(dots, last=score_last(ev), stale_reason=stale_reason(ev), trigger=trigger,
                            stop=stop, bands=card_settings.proposed_key, enabled=[])
         candidates.append({
             "ticker": formation.ticker, "slug": ld.slug, "md5": ld.md5, "membership_id": member["id"],
@@ -370,7 +382,8 @@ def export_replay(
             "detail": ev.detail.model_dump(mode="json"),
             "observations": {k: v.model_dump(mode="json") for k, v in sorted(ev.observations.items())},
             "candidate": {
-                "proximity": str(score.proximity), "conviction": None, "card_score": score.card_score,
+                "proximity": None if score.proximity is None else str(score.proximity), "conviction": None,
+                "card_score": score.card_score,
                 "score_suppressed": score.score_suppressed,
                 "dots": [d.model_dump(mode="json") for d in dots],
             },

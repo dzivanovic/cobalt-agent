@@ -41,12 +41,13 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
+from cobalt.session.clock import ET
 from cobalt.settings.models import BenchmarkSettings
 from cobalt.vault import resolve_vault_path
 from cobalt.vaultwrite import Placement, VaultWriter, WriteResult
 from cobalt.vaultwrite.markers import find_section
 
-from .models import FORMATION_UNAVAILABLE, ReplayError
+from .models import FORMATION_UNAVAILABLE, FormationCut, ReplayError
 
 SECTION = "drc-misses"
 UNIT = "miss_line"
@@ -90,6 +91,7 @@ def render_line(
     formation_rows: Sequence[dict[str, Any]] = (),
     formation_suppressed: int = 0,
     formation_input_stale: int = 0,
+    formation_cut: Optional[FormationCut] = None,
 ) -> str:
     """The line body. `card_rows`/`mover_rows` are CURRENT `"user".missed` rows."""
     counts = {gate: 0 for gate in CARD_GATES}
@@ -136,6 +138,10 @@ def render_line(
             segment += f" · suppressed {formation_suppressed}"
         if formation_input_stale:
             segment += f" · input_stale {formation_input_stale}"
+        if formation_cut is not None:  # R95: a cut step says it is partial (L1)
+            segment += (f" · PARTIAL: cut before the {formation_cut.cut_before.astimezone(ET):%H:%M} ET scan "
+                        f"({formation_cut.scans_done} of {formation_cut.scans_planned} scans) — later formations "
+                        "not evaluated")
         parts.append(segment)
     return " · ".join(parts)
 

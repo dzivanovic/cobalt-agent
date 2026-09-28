@@ -98,3 +98,22 @@ rows, with a collision made LOUD. A user row that shadowed an engine key
 would mean two installs computing different answers from configs that
 both look right. `resolve_cfg` takes the union and does not care which
 side a key came from, only that exactly one side defined it.
+
+**2026-09-21 — setups one build STEP-2: hole-fill (R2-3 = B, decided by
+X20).** `merge_tunables` gains exactly one rule, `_fills_hole`. A user
+row that collides with an engine key FILLS it only if all four hold:
+- the engine row's `value is None`;
+- the user row's `source` is `assumed` or `ruling`;
+- the scopes are equal;
+- the units are equal.
+
+The merged row is the ENGINE row with `value` and `source` taken from
+the user row; key, unit, scope, `dynamic` and `consumers` stay the
+engine's. Every other collision still raises, including a user row
+meeting an engine row that is no longer null. The predicate reads row
+fields only, because the radar merges rows read back from the database,
+where no reader identity survives. That makes it give the same answer
+at all four merge sites. X19's truth table is
+`tests/cobalt/test_assumed_store.py`. Two consequences of scope
+equality: a per-trade row never fills a global key, and a strategy-note
+row, being per-trade, never fills an engine key.

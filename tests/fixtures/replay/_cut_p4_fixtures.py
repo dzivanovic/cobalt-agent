@@ -99,6 +99,19 @@ real row for every class in `GUARANTEED_ROW_CLASSES` — a non-blank
 `Asset Type`, and a fund named by `Industry` alone with the `Asset Type`
 cell left blank — see `cut_movers`. The fixture is never hand-edited: a
 divergence is fixed here and the mode re-run.
+
+FOURTH MODE, `movers-blank <raw-export-path>` (S2 smoke fix F1-FX). Cuts
+ONE new fixture, `movers-gainers-blank-change.real-shape.csv`, from the
+raw export named on the command line — READ ONLY, run on the retained
+gainers export whose parse failed the 2026-09-22 replay (`Change ''`).
+The committed movers fixtures are the export's TOP rows, so the tail
+where Finviz lists never-traded listings with an EMPTY `Change` cell was
+cut away and no test could see the shape that failed. This cut keeps the
+raw header byte for byte, the first `BLANK_TOP_ROWS` data rows, and EVERY
+data row whose `Change` cell is empty, in export order, each through
+`_anonymize`. A raw export holding no such row FAILS the mode loud. The
+other modes are untouched. Stdout carries counts only (L32) — never a
+ticker, same posture as the `evidence` mode.
 """
 
 from __future__ import annotations
@@ -411,6 +424,56 @@ def cut_movers() -> None:
             + "; ".join(notes)
             + ")"
         )
+
+
+#: Data rows taken from the top of the export by the `movers-blank` cut —
+#: enough ranked rows above any benchmark `top_n` a test asks for.
+BLANK_TOP_ROWS = 25
+CHANGE_COL = "Change"
+BLANK_CHANGE_FIXTURE = HERE / "movers-gainers-blank-change.real-shape.csv"
+
+
+def _has_blank_change(row: dict) -> bool:
+    """EXACTLY the cell `parse_movers` leaves unranked: empty after strip."""
+    return (row.get(CHANGE_COL) or "").strip() == ""
+
+
+def cut_movers_blank(raw_path: Path) -> None:
+    """The top `BLANK_TOP_ROWS` rows of one raw movers export plus every
+    row whose `Change` cell is empty, in export order (L45).
+
+    Rows are the `csv` module's records: the guard below proves one
+    record per line before any line is kept, the same guard `cut_movers`
+    uses, so a quoted field spanning lines can never split a row. The
+    header is the raw file's own and `_anonymize` must leave it byte for
+    byte. A blank row inside the top rows is kept once, where it sits.
+    """
+    raw_text = Path(raw_path).read_text()
+    lines = raw_text.splitlines(keepends=True)
+    records = list(csv.reader(io.StringIO(raw_text)))
+    assert len(records) == len(lines), (
+        f"movers-blank: {len(records)} CSV records over {len(lines)} lines — a field spans "
+        "lines, so cutting by line would split a row"
+    )
+    header, data = lines[0], lines[1:]
+    assert _anonymize(header) == header, "movers-blank: _anonymize rewrote the header row"
+    assert CHANGE_COL in records[0], f"movers-blank: the raw export has no {CHANGE_COL} column"
+
+    blank_at = [
+        position for position, line in enumerate(data, start=1)
+        if _has_blank_change(_one_row(header, line))
+    ]
+    if not blank_at:
+        raise SystemExit(f"movers-blank: NO row with a blank {CHANGE_COL} exists in the raw export")
+    keep = sorted(set(range(1, min(BLANK_TOP_ROWS, len(data)) + 1)) | set(blank_at))
+    kept = [data[position - 1] for position in keep]
+    BLANK_CHANGE_FIXTURE.write_text(_anonymize("".join([header] + kept)))
+    print(
+        f"wrote {BLANK_CHANGE_FIXTURE} ({len(kept)} rows kept of {len(data)} data rows, "
+        f"{len(records[0])} columns; {len(blank_at)} with a blank {CHANGE_COL}, kept at export "
+        f"positions {blank_at[0]}-{blank_at[-1]}; "
+        f"top {min(BLANK_TOP_ROWS, len(data))} rows kept above them)"
+    )
 
 
 def main() -> None:
@@ -735,5 +798,11 @@ if __name__ == "__main__":
         evidence_main()
     elif mode == "movers":
         cut_movers()
+    elif mode == "movers-blank":
+        if len(sys.argv) != 3:
+            raise SystemExit("movers-blank takes exactly one argument: the raw export's path")
+        cut_movers_blank(Path(sys.argv[2]))
     else:
-        raise SystemExit(f"unknown mode {mode!r}; expected no argument, 'evidence' or 'movers'")
+        raise SystemExit(
+            f"unknown mode {mode!r}; expected no argument, 'evidence', 'movers' or 'movers-blank <path>'"
+        )

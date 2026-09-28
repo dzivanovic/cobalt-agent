@@ -236,6 +236,33 @@ Tests: `test_aset_web.TestPickNotRecordedBanner`.
 
 ---
 
+## 2026-09-23 — voice V1: `set_card_stop` extracted (FINAL [F-06])
+
+The body of `POST /card/{id}/stop` moved, unchanged, into
+`cobalt.aset.card_stop.set_card_stop(card_id, to_stop)` — the ONE card-stop
+function the voice act also calls (L3). The route now calls it and renders
+exactly as before: the success banner from the returned `StopEdit`
+(`from_stop` → `to_stop`), and the same `_failed(...)` banners for
+`CardStateError`, `SessionBlocked`, `DevEntryRefused`, `InvalidOperation`
+and anything else. `_check_entry_allowed` stays HERE; `card_stop.py`
+imports it at call time. Pin: `tests/cobalt/test_voice_card_stop.py`
+(five route outputs captured on the base, byte-identical after).
+
+### Voice V1 wiring
+- `app.include_router(voice_web.router)` — the `/voice/*` routes
+  (`voice/web.md`). The POST allowlist test now names `/voice/turn`,
+  `/voice/confirm`, `/voice/cancel`.
+- `app.add_event_handler("startup", voice_web.voice_startup)` (and the
+  matching shutdown): before the first request, the voice scratch-dir lock
+  and side B's start sweep; a lock held by another process FAILS the ASET
+  start loud (X-X22 measured an orphaned child outliving its job).
+- The widget partial: `_render` places `voice_web.widget_html()` before
+  `</body>` on the sheet; `GET /radar` places the same partial into the
+  panel's page (after the panel renders, touching no sheet helper — the
+  `/radar` sentinels still hold).
+
+---
+
 ## 2026-09-25 — DRC D4-4: the settings change line (R96 / R102)
 
 His daily stop and dollars per grade are changed HERE, from the sheet,

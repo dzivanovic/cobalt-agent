@@ -118,8 +118,11 @@ def test_def_without_evaluable_precondition_renders_not_evaluable_never_a_card()
     outcome = world.scan(SCAN0)
     ev = outcome.evaluations[0]
     assert ev.evaluation == "not_evaluable" and ev.formation is None
-    assert ev.missing and "Range(micro).instantiated" in ev.missing
-    assert "Trigger(range_break)" in ev.detail.missing_atoms
+    # Setups one build STEP-4 serves its Range(micro) atoms, `range_break`
+    # and `range_base` (FINAL §3 D2, §2.2, §2.3): the one atom still missing
+    # is its avoid's `Extension(day).state`.
+    assert ev.missing == ("Extension(day).state",)
+    assert "Extension(day).state" in ev.detail.missing_atoms
     assert world.cards.cards == {}
     assert world.radar.runs[1]["status"] == "complete"
 
@@ -179,7 +182,7 @@ def test_card_is_born_unsized_in_watch_with_formation_evidence_and_dots():
     assert card["grade"] is None and card["risk_budget"] is None and card["shares"] is None
     assert card["trigger_price"] == card["entry"] and card["structural_stop"] == card["stop"]
     assert card["formed_at"] == FORMED
-    assert card["why"] and card["setup_ref"] == "overextension" and card["trigger_type"] == "bar_break"
+    assert card["why"] and card["setup_ref"] == "unclassified" and card["trigger_type"] == "bar_break"
     # the deadline is resolved from preferred_windows_ref at formation and persisted (R1-16)
     assert card["expires_at"] == datetime(2026, 1, 6, 15, 30, tzinfo=ZoneInfo("America/New_York"))
     genesis = world.cards.transitions[0]
@@ -405,7 +408,8 @@ def test_every_card_number_replays_from_stored_inputs():
     world.cards.tap(1, "tape_absorption_at_bound", 8)
     world.scan(SCAN0 + timedelta(seconds=100))
     card = world.cards.cards[1]
-    assert card["card_score"] is not None
+    assert card["conviction"] is not None
+    assert card["card_score"] is None and "assumed_formation" in card["score_suppressed"]
     receipts = list(world.cards.receipts)
     published_scores = {s["membership_id"]: s for s in world.radar.scores.values() if s["run_id"] == 2}
 
@@ -690,14 +694,26 @@ requires_vault = pytest.mark.skipif(not os.getenv(LIVE_VAULT_ENV),
 
 @requires_vault
 def test_live_defined_notes_evaluate_on_the_fixture_bars_and_only_the_evaluable_one_can_form(capsys):
+    """FINAL §9 gate 3 / [F-16] (2): for every def the registry calls
+    evaluable — never `Setup(relation)` in a `not_evaluable` outcome, and
+    `formed` in its outcome set unless its own avoid is `avoided` on those
+    scans or it is pinned in `AWAITING_A_DAY` (printed). A def the registry
+    does NOT call evaluable is `not_evaluable` on every scan. The deploy runs
+    this with `COBALT_LIVE_VAULT_ROOT` set; a SKIP there is RED, pinned in
+    AWAITING_A_DAY, AWAITING_A_RULING or AWAITING_AN_ENGINE_FILL while its hole
+    is null (printed), or proven on its committed day through gate 2's check
+    with his merged rows (FINAL §9 gate 3, "on its fixture day")."""
+    from cobalt.radar.anatomy.registry import evaluability
     from cobalt.taxonomy.vault_loader import load_vault_trade_defs
+    from test_setups_lego import AWAITING_A_DAY, AWAITING_A_RULING, AWAITING_AN_ENGINE_FILL, _forms_on_a_committed_day
+    import setups_shapes as shapes
 
     loaded = load_vault_trade_defs(vault_root=Path(os.environ[LIVE_VAULT_ENV]))
     defs = [sup.LoadedDef(slug=d.slug, md5=d.md5, definition=d.definition) for d in loaded.defs]
     user_rows = {t.key: t.row for t in loaded.user_tunables}
     tunables = {**sup.engine_tunables(), **user_rows}
     bars = sup.fixture_bars("FTFT")
-    seen = {}
+    seen, missing = {}, {}
     for minute in range(0, 180, 2):
         at = datetime(2026, 1, 6, 15, 0, tzinfo=UTC) + timedelta(minutes=minute)
         member = sup_member(bars, at)
@@ -705,13 +721,40 @@ def test_live_defined_notes_evaluate_on_the_fixture_bars_and_only_the_evaluable_
             ev = evaluate_member(ld, member, tunables=tunables, defaults=sup.defaults(), scan_interval=100,
                                  clock=session_clock())
             seen.setdefault(ld.slug, set()).add(ev.evaluation)
+            if ev.evaluation == "not_evaluable":
+                missing.setdefault(ld.slug, set()).update(ev.missing)
     with capsys.disabled():
         for slug, outcomes in sorted(seen.items()):
             print(f"{slug}: {sorted(outcomes)}")
-    for slug, outcomes in seen.items():
-        if slug != "rubberband":
-            assert outcomes == {"not_evaluable"}, slug
-    assert seen["rubberband"] - {"not_evaluable"}, "the evaluable def never evaluated past not_evaluable"
+    for ld in defs:
+        outcomes = seen[ld.slug]
+        if not evaluability(ld.definition).evaluable:
+            assert outcomes == {"not_evaluable"}, ld.slug
+            continue
+        assert "Setup(relation)" not in missing.get(ld.slug, set()), ld.slug
+        if ld.slug in AWAITING_A_DAY or ld.slug in AWAITING_A_RULING:
+            with capsys.disabled():
+                print(f"AWAITING A {'DAY' if ld.slug in AWAITING_A_DAY else 'RULING'}: {ld.slug}")
+            continue
+        holes = [key for key in AWAITING_AN_ENGINE_FILL.get(ld.slug, ())
+                 if tunables.get(key) is None or tunables[key].value is None]
+        if holes:
+            # Pinned like gate 2's `<slug>_without_its_engine_fill` tests: the
+            # hole's row is not in his vault yet; the day it is, this asserts forms.
+            # Checked BEFORE the window's early pass: a pinned def forms nowhere.
+            with capsys.disabled():
+                print(f"AWAITING ITS ENGINE FILL: {ld.slug} ({', '.join(holes)} null)")
+            assert "formed" not in outcomes, (ld.slug, holes, sorted(outcomes))
+            assert ld.slug in shapes.SHAPES, (ld.slug, holes)
+            assert not _forms_on_a_committed_day(ld.slug, shapes.SHAPES[ld.slug], ld, tunables), (ld.slug, holes)
+            continue
+        if "formed" in outcomes or "avoided" in outcomes:
+            continue
+        # FINAL §9 gate 3: formed "on its fixture day" — gate 2's committed-day
+        # check (test_setups_lego), run on HIS live def with HIS merged rows.
+        assert ld.slug in shapes.SHAPES, (ld.slug, sorted(outcomes))
+        forms = _forms_on_a_committed_day(ld.slug, shapes.SHAPES[ld.slug], ld, tunables)
+        assert forms, (ld.slug, sorted(outcomes))
 
 
 def sup_member(bars, at):
@@ -722,3 +765,108 @@ def sup_member(bars, at):
         daily=sup.fixture_daily("FTFT", at), daily_status="cache-hit",
         rvol=RvolObservation(ticker="FTFT", value=4.2, observed_at=at, source="screen:s", candidates=("screen:s",)),
     )
+
+
+# ---------------------------------------------------------------------
+# One member prep per scan (`cto-2026-09-24.md` R95; FIX 1 of
+# `reports/replay-deadline-fix-draft-2026-09-24.md`)
+# ---------------------------------------------------------------------
+
+
+def _corpus():
+    """Every committed setups corpus shape (`setups_shapes.SHAPES`), and ONE
+    merged tunables mapping for all of them — what `replay_formations` hands
+    every def of a scan (`merge_tunables(engine, user rows)`): the committed
+    engine rows, the corpus' constructed engine fills (`D6_CONSTRUCTED` is
+    the superset) and every shape's own per-trade rows."""
+    import setups_shapes as shapes
+
+    lds = [shapes.load_shape_fresh(key) for key in sorted(shapes.SHAPES)]
+    rows = shapes.tunables_for(shapes.load_shape_fresh("second-chance"))
+    for ld in lds:
+        rows.update(shapes.user_rows(ld))
+    return lds, rows
+
+
+def _instants():
+    from cobalt.radar.evaluate_cli import scan_instants
+
+    every = scan_instants(sup.TRADE_DATE, session_clock(), 100)
+    return [every[0], every[len(every) // 2], SCAN0, every[-1]]
+
+
+def test_a_shared_member_prep_gives_every_def_byte_identical_evaluations():
+    """`cto-2026-09-24.md` R95, the drafter's FIX 1 (`replay-deadline-fix-draft-2026-09-24.md`):
+    ONE `prepare_member` per (member, scan instant), SHARED by every def of
+    the loop, yields the byte-identical evaluation each def gets when it
+    builds its own (the resident's path, `prep=None`). L7 / L57: proven,
+    never assumed."""
+    from cobalt.radar.anatomy.frame import binds_side_by_frame
+    from cobalt.radar.evaluate import prepare_member
+    import setups_shapes as shapes
+
+    lds, rows = _corpus()
+    binds = {ld.slug: binds_side_by_frame(ld.definition) for ld in lds}
+    assert sum(1 for b in binds.values() if not b) >= 2, binds
+    assert sum(1 for b in binds.values() if b) >= 1, binds      # the corpus has side-binding defs
+    compared = 0
+    for ticker in ("FTFT", "BGFI"):
+        for at in _instants():
+            member = shapes.member(ticker, at)
+            prep = prepare_member(member, tunables=rows, defaults=sup.defaults(), clock=session_clock())
+            for ld in lds:
+                shared = evaluate_member(ld, member, tunables=rows, defaults=sup.defaults(), scan_interval=100,
+                                         clock=session_clock(), prep=prep)
+                own = evaluate_member(ld, member, tunables=rows, defaults=sup.defaults(), scan_interval=100,
+                                      clock=session_clock())
+                assert shared.model_dump(mode="json") == own.model_dump(mode="json"), (ld.slug, ticker, at)
+                compared += 1
+    assert compared == len(lds) * 2 * len(_instants())
+
+
+def test_a_prep_builds_each_frame_pair_once_whatever_the_def_count(monkeypatch):
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 1):
+    the structural guard that a growing setup count cannot multiply the
+    member's work again — N defs on one prep build the frame pair once per
+    distinct `bind_side` value asked, never N times."""
+    import cobalt.radar.evaluate as evaluate_mod
+    from cobalt.radar.anatomy.frame import binds_side_by_frame
+    import setups_shapes as shapes
+
+    lds, rows = _corpus()
+    assert len(lds) >= 3
+    built: list[bool] = []
+    real = evaluate_mod._build_frames
+
+    def counting(*args, **kwargs):
+        built.append(kwargs.get("bind_side", False))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(evaluate_mod, "_build_frames", counting)
+    member = shapes.member("FTFT", SCAN0)
+    prep = evaluate_mod.prepare_member(member, tunables=rows, defaults=sup.defaults(), clock=session_clock())
+    for ld in lds:
+        evaluate_member(ld, member, tunables=rows, defaults=sup.defaults(), scan_interval=100,
+                        clock=session_clock(), prep=prep)
+    asked = {binds_side_by_frame(ld.definition) for ld in lds}
+    assert sorted(built) == sorted(asked), (built, asked)
+
+
+def test_a_prep_for_another_member_or_instant_is_refused():
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 1):
+    a prep is bound to ONE (membership, as_of); handed to another member or
+    another scan instant it is refused loudly, naming both (L1)."""
+    from cobalt.radar.evaluate import prepare_member
+    import setups_shapes as shapes
+
+    lds, rows = _corpus()
+    a = shapes.member("FTFT", SCAN0)
+    prep = prepare_member(a, tunables=rows, defaults=sup.defaults(), clock=session_clock())
+    b = a.model_copy(update={"membership_id": 101})
+    with pytest.raises(EvaluateError, match="100.*101|101.*100"):
+        evaluate_member(lds[0], b, tunables=rows, defaults=sup.defaults(), scan_interval=100,
+                        clock=session_clock(), prep=prep)
+    later = SCAN0 + timedelta(seconds=100)
+    with pytest.raises(EvaluateError, match="16:30.*16:31|16:31.*16:30"):
+        evaluate_member(lds[0], shapes.member("FTFT", later), tunables=rows, defaults=sup.defaults(),
+                        scan_interval=100, clock=session_clock(), prep=prep)

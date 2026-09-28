@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib import request as urlrequest
 from urllib.error import HTTPError
+from urllib.parse import quote
 
 from cobalt.dayopen.launchd import LaunchdPrintStatus, launchctl_print
 from cobalt.db_query import QueryRows, hand_command, read_rows
@@ -240,6 +241,13 @@ def render_text(template: str, ctx: SmokeContext) -> str:
     return VAR_RE.sub(lambda m: text_value(_var(m.group(1), m.group(2), ctx)), template)
 
 
+def render_url(template: str, ctx: SmokeContext) -> str:
+    """A `kind: http` URL: each substituted value PERCENT-ENCODED, the
+    template's own text untouched. An ISO instant's `+` would otherwise
+    decode as a space server-side and the API would reject the value."""
+    return VAR_RE.sub(lambda m: quote(text_value(_var(m.group(1), m.group(2), ctx)), safe=""), template)
+
+
 def _resolve(value: Any, ctx: SmokeContext) -> Any:
     """A predicate value: a whole-string `{variable}` becomes its typed
     value; a string with an embedded variable renders as text."""
@@ -356,7 +364,7 @@ def command_for(check, ctx: SmokeContext, *, note_path: Optional[Path] = None) -
     if isinstance(check, JobRowCheck):
         return hand_command(_job_sql(check), side="system", prod=ctx.prod)
     if isinstance(check, HttpCheck):
-        url = shlex.quote(render_text(check.url, ctx))
+        url = shlex.quote(render_url(check.url, ctx))
         base = f"curl -s -o /dev/null -w '%{{http_code}}' {url}"
         for needle in check.contains:
             base += f" && curl -s {url} | grep -F {shlex.quote(needle)}"
@@ -528,7 +536,7 @@ def _job_row(check: JobRowCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOut
 
 def _http(check: HttpCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
     command = command_for(check, ctx)
-    url = render_text(check.url, ctx)
+    url = render_url(check.url, ctx)
     status, body = deps.http_get(url)
     raw = f"HTTP {status}\n{body[:2000]}"
     failed = []
@@ -674,6 +682,6 @@ def run_suite(suite, ctx: SmokeContext, deps: SmokeDeps) -> list[CheckOutcome]:
 
 __all__ = [
     "COMPARE_OPS", "SmokeDeps", "build_context", "command_for", "default_deps", "evaluate",
-    "holds", "last_trading_day", "load_job_specs", "render_sql", "render_text", "run_suite",
+    "holds", "last_trading_day", "load_job_specs", "render_sql", "render_text", "render_url", "run_suite",
     "same", "sql_literal",
 ]

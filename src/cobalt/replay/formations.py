@@ -65,6 +65,7 @@ from .models import (
     FORMULA_VERSION,
     FormationCandidate,
     FormationCounts,
+    FormationCut,
     FormationOutcome,
     FormationReplay,
     MissRow,
@@ -78,7 +79,10 @@ from .models import (
 
 #: The S2-P2 capability markers this binding was written against. A value
 #: outside this set is a loud refusal, never a silent degrade (R1-21).
-SUPPORTED_EVALUATORS = frozenset({"s2p2.1"})
+#: `s2p2.3` (the stale-score build, [F-08]: one new string, the previous
+#: not kept) changes no `ReplayFormation` field this binding consumes
+#: (`FORMATION_REQUIRED_FIELDS`); the `s2p2.2` and `s2p2.1` code no longer exists.
+SUPPORTED_EVALUATORS = frozenset({"s2p2.3"})
 
 #: P2's shipped replay entrypoint, recorded in the receipt of every row.
 P2_MODULE = "cobalt.radar.evaluate_cli"
@@ -325,9 +329,12 @@ def formation_misses(report: Any, *, context: FormationContext, evaluator_versio
     window = resolve_window(None, context.trade_date)
     rows: list[MissRow] = []
     tally = {"suppressed": 0, "no_trigger": 0, "input_stale": 0}
+    bars: dict[str, list[Bar]] = {}   # one bar-window read per ticker (R95)
     for candidate in candidates:
+        if candidate.ticker not in bars:
+            bars[candidate.ticker] = context.bars_for(candidate.ticker)
         replayed = replay_formation(
-            candidate, context.bars_for(candidate.ticker), trade_date=context.trade_date,
+            candidate, bars[candidate.ticker], trade_date=context.trade_date,
             window=window, session_close=context.session_close, radar_cards=cards,
         )
         if replayed.status == "miss":
@@ -339,9 +346,11 @@ def formation_misses(report: Any, *, context: FormationContext, evaluator_versio
         raise ReplayInputError(
             "two formation rows share one subject — the extended key (member, formation_at) did not separate them"
         )
+    cut = FormationCut(scans_done=report.scans, scans_planned=report.scans_planned,
+                       cut_before=report.cut_before) if getattr(report, "cut_before", None) else None
     return FormationOutcome(
         status=evaluator_version, rows=tuple(rows),
-        counts=FormationCounts(candidates=len(candidates), misses=len(rows), **tally),
+        counts=FormationCounts(candidates=len(candidates), misses=len(rows), **tally), cut=cut,
     )
 
 

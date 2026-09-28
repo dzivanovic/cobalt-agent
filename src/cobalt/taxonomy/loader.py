@@ -38,7 +38,7 @@ from pydantic import BaseModel, ValidationError
 
 from .defaults import TaxonomyDefaults
 from .trade_def import StopBuffer, Tunable
-from .tunables import TunableRegistry, TunableRow
+from .tunables import TunableRegistry, TunableRow, TunableSource
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TAXONOMY_DIR = REPO_ROOT / "configs" / "cobalt" / "taxonomy"
@@ -101,15 +101,39 @@ def merge_tunables(
     value for an engine key, that is a ruling on the engine row, not a
     private copy of it.
     """
-    collisions = sorted(set(engine) & set(user))
+    filled: dict[str, TunableRow] = {}
+    collisions = []
+    for key in sorted(set(engine) & set(user)):
+        if _fills_hole(engine[key], user[key]):
+            # The ENGINE row, with value and source taken from the user row;
+            # key, unit, scope, dynamic and consumers stay the engine's.
+            filled[key] = engine[key].model_copy(update={"value": user[key].value, "source": user[key].source})
+        else:
+            collisions.append(key)
     if collisions:
         raise TaxonomyConfigError(
             f"user tunable row(s) {collisions} shadow engine keys in "
             f"{TUNABLES_PATH.name}. A per-trade row in a strategy note may only "
             "ADD keys (scope per_trade(...)), never redefine an engine key — "
-            "change the engine row if the value is wrong."
+            "change the engine row if the value is wrong. (An engine hole — "
+            "`value: null` — is filled only by a row of the same scope and unit "
+            "whose source is assumed or ruling.)"
         )
-    return {**engine, **user}
+    return {**engine, **user, **filled}
+
+
+def _fills_hole(engine: TunableRow, supplied: TunableRow) -> bool:
+    """FINAL §8, R2-3.2 B (R2-3 = B by X20): a user row fills an engine key
+    iff ALL hold — the engine row's value is None; the user row's source is
+    assumed or ruling; equal scope; equal unit. It reads row fields only, so
+    it answers the same at all four merge sites (the rows the radar merges
+    come back from the database with no reader identity)."""
+    return (
+        engine.value is None
+        and supplied.source in (TunableSource.ASSUMED, TunableSource.RULING)
+        and supplied.scope == engine.scope
+        and supplied.unit == engine.unit
+    )
 
 
 def resolve_cfg(

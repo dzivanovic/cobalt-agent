@@ -100,7 +100,11 @@ def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     below it: nothing at or below the bound is ever selected."""
     assert [p.name for p in _rollback_paths("0007")] == [
         "0018_drc_stated_books.rollback.sql",  # DRC K1
+        "0017_voice_turns.rollback.sql",  # voice V1
         "0016_drc.rollback.sql",  # DRC D1
+        "0015_shadow_agreement_stale.rollback.sql",  # the stale-score build (R40, X30 (A))
+        "0014_radar_handicap.rollback.sql",  # the float handicap H1
+        "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",
@@ -111,14 +115,22 @@ def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     assert not [n for n in above_0009 if n.startswith(("0008", "0009"))], above_0009
     assert above_0009 == [
         "0018_drc_stated_books.rollback.sql",
+        "0017_voice_turns.rollback.sql",  # voice V1
         "0016_drc.rollback.sql",
+        "0015_shadow_agreement_stale.rollback.sql",  # the stale-score build (R40, X30 (A))
+        "0014_radar_handicap.rollback.sql",  # the float handicap H1
+        "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
     ]
     # ...and at 0008 exactly 0009 and everything newer, 0008 itself excluded.
     assert [p.name for p in _rollback_paths("0008")] == [
         "0018_drc_stated_books.rollback.sql",
+        "0017_voice_turns.rollback.sql",  # voice V1
         "0016_drc.rollback.sql",
+        "0015_shadow_agreement_stale.rollback.sql",  # the stale-score build (R40, X30 (A))
+        "0014_radar_handicap.rollback.sql",  # the float handicap H1
+        "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",

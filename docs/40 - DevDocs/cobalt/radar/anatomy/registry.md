@@ -11,3 +11,18 @@
 
 ## Gotchas
 `text` predicates are human (L11), never block evaluability, and are counted. `radar_watch[]` is not a card gate and is out of scope. A `sequence` trigger has no params and is reported as `trigger:sequence`, not a crash. The live-note proof (all 13 defined notes parse; Rubberband evaluable; the rest name what they miss) is the hub-run `requires_vault` test in `tests/taxonomy/test_predicate.py`.
+
+## 2026-09-21 — setups one build STEP-2: one path for "what is served" (FINAL §2.5, E8, E9)
+The module's own constants (`SUPPORTED_ATOMS`, `SUPPORTED_TRIGGERS`, `SUPPORTED_STOP_REFS`) are deleted. `evaluability` now reads the tables formation dispatches through: `ATOMS`, `RELATIONS` (`formation/atoms.py`), `TRIGGERS` (`formation/triggers.py`) and `STOPS` / `STRUCTURAL_REFS` (`formation/stops.py`). It walks every predicate with `predicate_gaps`, the same shape walk the interpreter evaluates. That adds two new kinds of missing entry:
+- `Unsupported(<kind>)` for a shape the interpreter cannot evaluate (E9). The shipped example's `IN cfg(band) min` now reads `Unsupported(in)`.
+- `<atom>∌<value>` for a symbol compared to a value outside its atom's producible domain (E8). Example: `Extension.state IN {reverting, backside}` is not evaluable today.
+
+The domain rule: each atom resolver declares the values it can produce, and a comparison against anything else is named, never evaluated as always-false.
+
+**2026-09-22 (setups one build STEP-5).** A SERVED relation's own operands are not counted as unserved atoms (`formation.atoms.relation_operand_names`). For example, the subject `flat(EMA9, window: …)` and the events `turn` / `cross` of `… between turn and cross`: `predicate_gaps` checks those shapes itself and names any it does not serve (`Unsupported(between:<operand>)`). Since STEP-5 `Extension.state` produces `reverting` and `backside`, so the example above is evaluable.
+
+**2026-09-22 (STEP-8).** A trigger resolver with `serves_def` (the `sequence`) is judged on the whole trigger, through `formation.triggers.trigger_resolver`.
+
+**2026-09-22 (fix round 2, F1).** `evaluability` now also reads `ANCHORS`, through `formation.anchors.anchor_for` — the same lookup formation dispatches through (L3). A def whose preconditions name none of the anchor objects (`Extension.`, `Range(micro).`, `Leg(pullback)`, `RangeBreak(level)`) is NOT evaluable, named `anchor:none`. Before this it was called evaluable and then reported `not_formed: no formation anchor` on every scan. `evaluate_member`'s evaluability gate now reports it `not_evaluable` with `anchor:none` in `missing`; the stage's `no formation anchor` branch stays as the fail-loud backstop.
+
+**2026-09-22 (fix round 2, F2).** The trigger check is now `formation.triggers.trigger_gaps`. For a `sequence` it adds each step's own gap (for example `Gap.size`, or `Unsupported(step:…)`), not `trigger:sequence`.

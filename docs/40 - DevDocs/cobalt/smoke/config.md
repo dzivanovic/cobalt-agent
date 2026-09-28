@@ -51,7 +51,8 @@ denied, and OVERALL goes RED.
   user) count ONE side's active rows and keep both of old K9's
   predicates — `top_n not_null`, `not_archived = 0` — and print `stored`;
   `K9.2`/`K9.5` (`job_row`, system) print
-  `movers_by_side.<side>.expected` = `min(top_n, exported)` from the
+  `movers_by_side.<side>.expected` = `min(top_n, exported - unranked)`
+  (blank-`Change` rows are unranked, S2 smoke fix F1) from the
   replay's own result, and assert `trade_date = {last_trading_day}` so
   the comparison is about the night being checked; `K9.3`/`K9.6`
   (`compare`) assert the two are equal. `side` is CHECK-constrained to
@@ -91,6 +92,25 @@ One statement, one row, five counters: `post_deploy_admitted` /
 are graded; `known_if` needs BOTH population counts at zero, so the "no
 admitted row yet → KNOWN" semantics now hold for the union rather than for
 half of it.
+
+**Only a RANKED row without a metric is graded (S2 smoke fix F3,
+2026-09-23).** The 2026-09-22 smoke look read K3 red at
+`post_deploy_admitted=301, metric_missing=66, value_null=66`, and every one
+of the 66 was designed behaviour: an episode inserted WITH a metric and
+later STICKY-RETAINed after the scan stopped ranking it gets `rank=None`
+and `value_of()` → `(None, None)` (`radar/pool.py`, Transition: "None where
+no ranking happened"), which `radar/store.py`'s RETAIN branch writes as
+`last_rank`, `rank_metric`, `rank_value` = NULL, NULL, NULL. `last_rank` is
+the column that tells that class apart from the write-path defect K3
+exists for (a row the scan RANKED yet stored no metric), so both graded
+counters now count `rank_metric IS NULL AND last_rank IS NOT NULL`, and a
+new printed-not-graded column `unranked_retained` (`rank_metric IS NULL
+AND last_rank IS NULL` over the first set) shows the designed class beside
+`value_null`. This is the P4 plan's corrected K3 (`plan-s2-p4-2026-09-15.md:243`,
+Astra R1-19 / R1-24: a designed NULL is not a K3 failure). The desk's
+production proof before the build: `metric_missing 66 · unranked_retained
+66 · ranked_without_metric 0`. The HOLD ambiguity below is unchanged — a
+held row keeps its prior `last_rank`, so it is still graded.
 
 One ambiguity is named in `expect_text` rather than hidden: a frozen HOLD
 (the COALESCE branch) also stamps `last_scan_id`, so a pre-deploy episode

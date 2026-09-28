@@ -192,10 +192,10 @@ def test_r1_16_a_synchronous_step_is_not_cut_mid_flight_the_documented_limitatio
 
     The deadline bounds only (a) work handed to `run_async` (under
     `asyncio.wait_for`) and (b) the `check_deadline` points between steps
-    and immediately before the vault write. `formation_source(...)` and
-    `missed.reconcile(...)` are synchronous and run to completion even when
-    the clock passes the deadline WHILE they run; the run then stops at the
-    NEXT check. `runner.py:26-31` documents exactly this design and spec
+    and immediately before the vault write. The formations step is cut
+    between scans (R95 fix); `missed.reconcile(...)` stays synchronous and
+    uncut: it runs to completion even when the clock passes the deadline
+    WHILE it runs; the run then stops at the NEXT check. `runner.py:26-31` documents exactly this design and spec
     R1-16's stated bar (no late vault write, a measured margin) is met by
     the test above.
 
@@ -415,7 +415,7 @@ def p2_sources():
 def test_the_nightly_run_binds_to_p2s_shipped_replay_and_reconciles_its_formation_misses():
     deps, calls = fake_deps(formations=runner_mod.formation_replay, formation_sources=p2_sources)
     result = run_nightly(DAY, dry_run=False, deps=deps)
-    assert result.formation_replay == "s2p2.1"          # the shipped capability marker, not a guess
+    assert result.formation_replay == "s2p2.3"          # the shipped capability marker, not a guess
     assert (result.formation_candidates, result.formation_misses) == (1, 1)
     row = deps.missed.current_rows["formation"][
         (DAY, "formation", "MU", 0, "0123456789abcdef0123456789abcdef",
@@ -469,7 +469,7 @@ def test_an_available_p2_with_no_formations_still_retires_the_days_predecessors(
     deps.missed.reconcile = recording
     result = run_nightly(DAY, dry_run=False, deps=deps)
 
-    assert result.formation_replay == "s2p2.1"                   # P2 ran; it was not absent
+    assert result.formation_replay == "s2p2.3"                   # P2 ran; it was not absent
     assert "missed.reconcile:formation" in calls                 # the R2-1 case
     assert seen["formation"] == []                               # reconciled with ZERO rows
     assert result.reconcile["formation"].inserted == 0
@@ -583,8 +583,8 @@ def test_the_recorded_counts_round_trip_through_job_result():
     result = run_nightly(DAY, dry_run=False, deps=deps)
     payload = result.job_result()
     assert payload["movers_by_side"] == {
-        "gainers": {"exported": 61, "top_n": 60, "expected": 60},
-        "losers": {"exported": 61, "top_n": 60, "expected": 60},
+        "gainers": {"exported": 61, "unranked": 0, "top_n": 60, "expected": 60},
+        "losers": {"exported": 61, "unranked": 0, "top_n": 60, "expected": 60},
     }
     assert ReplayResult.model_validate(payload) == result    # what `job.result` stores replays
 
@@ -720,7 +720,7 @@ class FakeCollector:
         return ({t: [] for t in tickers if t not in self.fail}, {t: "CollectorError: 429" for t in tickers if t in self.fail})
 
 
-def unavailable_formations(trade_date, *, out, sources=None, context=None):
+def unavailable_formations(trade_date, *, out, sources=None, context=None, cut_at=None):
     """The formation step with S2-P2 NOT deployed, injected the way every
     other store is injected here. The tests below are about the run's
     order, its commits and its failures — not about the P2 binding, which
@@ -731,7 +731,7 @@ def unavailable_formations(trade_date, *, out, sources=None, context=None):
     return FormationOutcome(status=FORMATION_UNAVAILABLE)
 
 
-def available_but_empty_formations(trade_date, *, out, sources=None, context=None):
+def available_but_empty_formations(trade_date, *, out, sources=None, context=None, cut_at=None):
     """S2-P2 DEPLOYED and compatible, with an EMPTY formation list for the
     day — the rerun plan STEP-1 R2-1 names, where a bar correction removed
     yesterday's trigger. Injected exactly like `unavailable_formations`
@@ -894,3 +894,196 @@ def fake_deps(*, job_row="default", settings="default", collector=None, now=None
 
     deps.writer_factory = writer_factory
     return deps, calls
+
+
+# =====================================================================
+# Archived-partial movers (`cto-2026-09-23.md` R113)
+# =====================================================================
+
+
+def _session(ticker, *, minutes=None):
+    """One ticker's i1 session from the RTH open to the close, or its first
+    `minutes` bars only — a source day that stops short (a halt)."""
+    total = int((CLOSE - RTH_OPEN) / timedelta(minutes=1))
+    return [Bar(ticker=ticker, interval=Interval.I1, ts=RTH_OPEN + timedelta(minutes=m), open=Decimal(1),
+                high=Decimal(1), low=Decimal(1), close=Decimal(1), volume=1)
+            for m in range(total if minutes is None else minutes)]
+
+
+class SessionCollector(FakeCollector):
+    """Returns a full session for every fetched ticker, except `short`
+    (picked by `pick_short` from the tickers actually fetched), which gets
+    30 bars."""
+
+    def __init__(self, pick_short=None):
+        super().__init__()
+        self.pick_short = pick_short
+        self.short = None
+
+    async def bars(self, tickers, *, top_n):
+        self.calls.append("collector.bars")
+        self.short = self.pick_short(tickers) if self.pick_short else None
+        return {t: _session(t, minutes=30 if t == self.short else None) for t in tickers}, {}
+
+
+def _storing(deps):
+    """Wrap the fake bar store so `upsert_bars` is visible to the coverage
+    re-read, keyed by (ticker, ts) the way the real upsert is."""
+    inner = deps.bar_store
+    added: dict[tuple, Bar] = {}
+
+    class Storing:
+        def bars_in_range(self, conn, ticker, interval, start, end, *, end_inclusive=True, as_bars=False):
+            base = inner.bars_in_range(conn, ticker, interval, start, end,
+                                       end_inclusive=end_inclusive, as_bars=as_bars)
+            merged = {b.ts: b for b in base}
+            merged.update({ts: b for (t, ts), b in added.items() if t == ticker and start <= ts < end})
+            return list(merged.values())
+
+        def upsert_bars(self, rows):
+            for b in rows:
+                added[(b.ticker, b.ts)] = b
+            return inner.upsert_bars(rows)
+
+    deps.bar_store = Storing()
+
+
+def _losers_only():
+    from cobalt.replay.movers import load_radar_config, parse_movers
+
+    def side(name):
+        export = parse_movers((FIX / "replay" / f"movers-{name}.real-shape.csv").read_bytes(), side=name,
+                              top_n=60, content_type="text/csv", config=load_radar_config(),
+                              fetched_at=NOW, source="live")
+        return {r.ticker for r in export.rows}
+
+    return side("losers") - side("gainers")
+
+
+def test_a_partial_mover_is_counted_by_side_and_is_not_incomplete():
+    """`cto-2026-09-23.md` R113 ("it should have been closed with bars it
+    has"): one stored loser whose source day stops short is PARTIAL — named
+    in `archive_partial` with code `source_bars_short` and its side, counted
+    in `archive_partial_by_side`, and never in `archive_incomplete`."""
+    fixture_tickers = {b.ticker for b in _load_bars()}
+    losers = _losers_only()
+
+    def pick(tickers):
+        return next(t for t in tickers if t in losers and t not in fixture_tickers)
+
+    collector = SessionCollector(pick_short=pick)
+    deps, calls = fake_deps(collector=collector)
+    _storing(deps)
+    result = run_nightly(DAY, dry_run=False, deps=deps, live=True)
+    assert collector.short is not None
+    assert result.archive_partial_by_side == {"gainers": 0, "losers": 1}
+    assert result.archive_incomplete == 0
+    assert result.archive_failures == 0
+    assert len(result.archive_partial) == 1
+    partial = result.archive_partial[0]
+    assert partial.ticker == collector.short
+    assert partial.code == "source_bars_short"
+    assert partial.sides == ["losers"]
+    assert partial.count == 30
+    payload = result.job_result()
+    assert "archive_partial" in payload and "archive_partial_by_side" in payload
+    assert payload["archive_partial_by_side"] == {"gainers": 0, "losers": 1}
+    assert ReplayResult.model_validate(payload) == result
+
+
+def test_a_clean_run_reports_zero_partial_on_both_sides():
+    """`cto-2026-09-23.md` R113: the marker the S2 smoke's K9 compares is
+    present on every run, zero on both sides when every fetched mover
+    covers the session."""
+    deps, calls = fake_deps(collector=SessionCollector())
+    _storing(deps)
+    result = run_nightly(DAY, dry_run=False, deps=deps, live=True)
+    assert result.archive_partial_by_side == {"gainers": 0, "losers": 0}
+    assert result.archive_partial == []
+    assert result.archive_incomplete == 0
+
+
+# =====================================================================
+# The formations step is cut before the deadline (`cto-2026-09-24.md`
+# R95; `reports/replay-deadline-fix-draft-2026-09-24.md` FIX 2)
+# =====================================================================
+
+RESERVE_KEY = "replay.formations_reserve_s"
+NOT_PASSED = "cut_at was not passed"
+
+
+def _reserve(deps, seconds=120):
+    """A CONSTRUCTED reserve row (never the committed value's assertion)."""
+    from cobalt.taxonomy.tunables import TunableRow
+
+    deps.tunables = {**deps.tunables, RESERVE_KEY: TunableRow(
+        key=RESERVE_KEY, value=seconds, unit="duration", scope="global", dynamic=False, status="proposed",
+        source="dwv", consumers=["test"])}
+
+
+def test_the_formations_step_is_cut_before_the_deadline_and_the_line_still_lands():
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 2):
+    the formations step's `cut_at` answers True once the clock reaches the
+    deadline less `replay.formations_reserve_s`; the cut run's rows are
+    reconciled, the line IS written and says PARTIAL, and the job then
+    FAILS AT THE END (L1) — not as a failed step."""
+    from cobalt.replay.formations import SUPPORTED_EVALUATORS
+    from cobalt.replay.models import FormationCounts, FormationCut, FormationOutcome
+
+    clock = Clock(NOW)
+    deps, calls = fake_deps(now=clock)
+    _reserve(deps)
+    seen = {}
+    cut = FormationCut(scans_done=140, scans_planned=235, cut_before=datetime(2026, 2, 10, 19, 0, tzinfo=timezone.utc))
+
+    def cutting(trade_date, *, out, sources=None, context=None, cut_at=NOT_PASSED):
+        seen["cut_at"] = cut_at
+        seen["before"] = cut_at(RTH_OPEN)
+        clock.at = datetime(2026, 2, 10, 21, 33, 30, tzinfo=ET)   # past 21:35 − 120 s, before 21:35
+        seen["after"] = cut_at(RTH_OPEN)
+        return FormationOutcome(status=sorted(SUPPORTED_EVALUATORS)[0], counts=FormationCounts(), cut=cut)
+
+    deps.formation_source = cutting
+    with pytest.raises(ReplayError) as raised:
+        run_nightly(DAY, dry_run=False, deps=deps)
+    assert (seen["before"], seen["after"]) == (False, True)
+    assert not isinstance(raised.value, StepFailed)
+    assert str(raised.value).startswith("formations cut at the deadline — 140 of 235 scans")
+    result = raised.value.result
+    assert result.formation_cut == cut
+    assert result.failed_step is None
+    assert "line" in result.steps_done
+    assert "missed.reconcile:formation" in calls
+    assert calls.count("writer.upsert_unit") == 1
+    assert "PARTIAL: cut before the 14:00 ET scan (140 of 235 scans)" in deps.written[-1]
+    assert result.job_result()["formation_cut"]["scans_done"] == 140
+
+
+def test_no_deadline_means_no_cut():
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 2):
+    a dry run, and a run started after the backup, have no deadline — the
+    formation source is handed `cut_at=None`, so nothing is cut."""
+    for dry_run, now in ((True, NOW), (False, datetime(2026, 2, 10, 22, 30, tzinfo=ET))):
+        deps, _ = fake_deps(now=Clock(now))
+        seen = {}
+
+        def recording(trade_date, *, out, sources=None, context=None, cut_at=NOT_PASSED):
+            seen["cut_at"] = cut_at
+            return unavailable_formations(trade_date, out=out)
+
+        deps.formation_source = recording
+        result = run_nightly(DAY, dry_run=dry_run, deps=deps)
+        assert seen["cut_at"] is None, (dry_run, now)
+        assert result.formation_cut is None
+
+
+def test_the_formations_reserve_is_required():
+    """`cto-2026-09-24.md` R95 (`replay-deadline-fix-draft-2026-09-24.md` FIX 2),
+    L1: tunables without `replay.formations_reserve_s` refuse the run
+    before any step, naming the key — never a default."""
+    deps, calls = fake_deps()
+    deps.tunables = {k: v for k, v in deps.tunables.items() if k != RESERVE_KEY}
+    with pytest.raises(ReplayError, match=RESERVE_KEY.replace(".", r"\.")) as raised:
+        run_nightly(DAY, dry_run=False, deps=deps)
+    assert calls == ["job_store.get"]
+    assert raised.value.result.steps_done == []
