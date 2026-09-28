@@ -73,7 +73,7 @@ def test_xs_the_card_load_path_refuses_the_drift_key(tmp_path):
 
     path = tmp_path / "card.yaml"
     path.write_text("fills.drift_warning_pct: 20\n", encoding="utf-8")
-    with pytest.raises((TraderSettingsError, ValueError)):
+    with pytest.raises(TraderSettingsError, match="unknown card setting 'fills.drift_warning_pct'"):
         load_card_file(path, expected_sha256=None)
 
 

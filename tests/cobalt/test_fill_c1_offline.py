@@ -372,6 +372,39 @@ def test_fill_with_p_missing_is_recorded_and_bannered(monkeypatch):
     assert BANNER in r.text
 
 
+def _note_refused(monkeypatch):
+    """The daily-note FILL UPDATE refuses AFTER `mark_filled` returned —
+    the DB commit has happened (fix r1 F2)."""
+    from cobalt.aset import web as web_module
+    from cobalt.aset.daily_note import DailyNoteRefused
+
+    def refuse(*a, **k):
+        raise DailyNoteRefused("constructed note refusal")
+
+    monkeypatch.setattr(web_module, "save_fill_update", refuse)
+
+
+def test_a_note_failure_after_the_commit_keeps_the_p_missing_banner(monkeypatch):
+    _FillRoute.install(monkeypatch, p=None)
+    _note_refused(monkeypatch)
+    r = _post(_FillRoute.FORM)
+    assert "FAILED" in r.text and "constructed note refusal" in r.text
+    assert "marked FILLED" in r.text, r.text
+    assert BANNER in r.text, r.text
+
+
+def test_a_note_failure_after_the_commit_keeps_the_drift_warning(monkeypatch):
+    import html
+
+    _FillRoute.install(monkeypatch, p=Decimal("20"))  # the 27 % fill warns at P = 20
+    _note_refused(monkeypatch)
+    r = _post(_FillRoute.FORM)
+    assert "FAILED" in r.text and "constructed note refusal" in r.text
+    assert "marked FILLED" in r.text, r.text
+    assert html.escape(engine.STRUCTURAL_WARNING) in r.text, r.text
+    assert BANNER not in r.text
+
+
 def test_the_fill_form_asks_for_the_shares(monkeypatch):
     from cobalt.aset import web as web_module
 
