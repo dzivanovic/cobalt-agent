@@ -77,9 +77,42 @@ def _counts(conn) -> tuple[int, int, int]:
     )
 
 
+def _fingerprint(conn) -> dict[str, str]:
+    """D2 fix r1 F-3 (`drc-d2-check-2026-09-25.md:144`, `:180`; L35): (a)
+    for each `drc_*` table of `store.TABLES`, the md5 of its rows, ordered;
+    (b) for EVERY table of EVERY schema, this transaction's `n_tup_ins +
+    n_tup_upd + n_tup_del` from `pg_stat_xact_user_tables` — every
+    connection of a with-DB test is the one migration transaction, so a
+    write by any code in any table moves its counter (no full-table read
+    of a large table)."""
+    from cobalt.drc import store
+
+    out = {
+        f"md5:{t}": conn.execute(
+            f"SELECT coalesce(md5(string_agg(t::text, '|' ORDER BY t::text)), '') FROM \"user\".{t} t"
+        ).fetchone()[0]
+        for t in store.TABLES
+    }
+    out.update(
+        (f"writes:{schema}.{table}", str(n))
+        for schema, table, n in conn.execute(
+            "SELECT schemaname, relname, n_tup_ins + n_tup_upd + n_tup_del FROM pg_stat_xact_user_tables"
+        ).fetchall()
+    )
+    return out
+
+
 def _page(lane, day: date) -> str:
+    from cobalt.aset import drc_page
+
     response = lane.get("/drc", params={"date": day.isoformat()})
     assert response.status_code == 200, response.text
+    # F-3: never the route's whole-page failure (`drc_page.failed_page`),
+    # always the status block (`drc_page.render`).
+    marker = drc_page.failed_page("x").split("\nx", 1)[0].rsplit("\n", 1)[-1]
+    assert marker == '<div class="failed">FAILED'
+    assert marker not in response.text, response.text
+    assert '<div class="status">' in response.text, response.text
     return response.text
 
 
@@ -176,29 +209,55 @@ def test_the_earlier_close_rebuilds_the_stated_later_day_and_the_page_shows_r51(
 def test_the_morning_line_names_the_prior_close_before_any_drop(lane, migrated):
     _state(D)
     _drop(D, DAY1.read_bytes(), STATS.read_bytes())
-    before = _counts(migrated)
+    before = _fingerprint(migrated)
     page = _page(lane, D_NEXT)
     assert "Starting book from DRC 2001-01-02: 1 open (DDD)" in page
-    assert _counts(migrated) == before
+    assert _fingerprint(migrated) == before
 
 
 @requires_db
 def test_the_morning_line_shows_a_stated_position_opened_not_stated(lane, migrated):
     _state(D, positions=[GGG_SHORT])
-    before = _counts(migrated)
+    before = _fingerprint(migrated)
     page = _page(lane, D)
     assert "1 open (GGG)" in page and "opened: not stated" in page
-    assert _counts(migrated) == before
+    assert _fingerprint(migrated) == before
 
 
 @requires_db
 def test_get_drc_writes_nothing(lane, migrated):
     _state(D)
     _drop(D, DAY1.read_bytes(), STATS.read_bytes())
-    before = _counts(migrated)
+    before = _fingerprint(migrated)
     for day in (D, D_NEXT, D3, SATURDAY):
         _page(lane, day)
-    assert _counts(migrated) == before
+    assert _fingerprint(migrated) == before
+
+
+@requires_db
+def test_the_fingerprint_and_the_page_check_can_fail(lane, migrated, monkeypatch):
+    """F-3's NEGATIVE CONTROL (inside the rollback): a constructed UPDATE of
+    one `drc_rows` value between two fingerprints moves BOTH halves (the
+    table's md5 and its `pg_stat_xact_user_tables` counter); a `day_view`
+    that raises makes the route's whole-page failure, which `_page`
+    refuses."""
+    from cobalt.drc import imports
+
+    _state(D)
+    _drop(D, DAY1.read_bytes(), STATS.read_bytes())
+    before = _fingerprint(migrated)
+    with DrcStore()._connect() as conn:
+        conn.execute("UPDATE drc_rows SET fn_version = 'constructed' WHERE day = %s AND kind = 'day'", (D,))
+    after = _fingerprint(migrated)
+    moved = {k for k in before.keys() | after.keys() if before.get(k) != after.get(k)}
+    assert moved == {"md5:drc_rows", "writes:user.drc_rows"}, moved
+
+    def _raise(*args, **kwargs):
+        raise RuntimeError("constructed page failure")
+
+    monkeypatch.setattr(imports, "day_view", _raise)
+    with pytest.raises(AssertionError):
+        _page(lane, D)
 
 
 # ---------------------------------------------------------------------
@@ -238,7 +297,9 @@ def test_no_trade_after_a_recorded_day_states_it_and_records_the_carried_book(la
     ).fetchall()
     assert stated == [("no_trade", "drc_page")]
     assert _row(migrated, D_NEXT, "seed")[0]["source"] == "no_trade_carry"
-    assert "no-trade day recorded — its DRC build waits on the no-trade event home (ESCALATE X-NT)" in response.text
+    # D2 fix r1 S-1 NAMED REVERSAL (NO_TRADE_WAITS removed): the file-less
+    # event fires; with no D3 build it lands failed, never done (L1).
+    assert "DRC build FAILED: build — build not built (D3)" in response.text
 
 
 @requires_db
@@ -297,13 +358,20 @@ def test_a_second_no_trade_shows_the_stores_refusal_verbatim(lane, migrated):
 
 @requires_db
 def test_the_event_moves_pending_running_then_failed_while_the_build_is_not_built(lane, migrated, monkeypatch):
+    # D2 fix r1 S-1 §1 test 4: `pending` is `fire_event`'s, the rest
+    # `mark_event`'s, keyed by the `drc_events` row.
     moves: list[str] = []
-    real = DrcStore.mark_event
+    real_fire, real = DrcStore.fire_event, DrcStore.mark_event
 
-    def spy(self, import_id, state, error=None):
+    def fire(self, day, **kw):
+        moves.append("pending")
+        return real_fire(self, day, **kw)
+
+    def spy(self, event_id, state, error=None, **kw):
         moves.append(state)
-        return real(self, import_id, state, error)
+        return real(self, event_id, state, error, **kw)
 
+    monkeypatch.setattr(DrcStore, "fire_event", fire)
     monkeypatch.setattr(DrcStore, "mark_event", spy)
     _state(D)
     _drop(D, DAY1.read_bytes(), STATS.read_bytes())

@@ -62,9 +62,9 @@ def _code(path: Path) -> str:
 
 def test_the_pair_exists_and_is_registered_last():
     assert SQL.exists() and ROLLBACK.exists()
-    assert FORWARD[-3] == SQL and [p.name for p in FORWARD[-2:]] == [
+    assert FORWARD[-4] == SQL and [p.name for p in FORWARD[-3:-1]] == [
         "0017_voice_turns.sql", "0018_drc_stated_books.sql"]
-    assert REVERSE[2] == ROLLBACK and [p.name for p in REVERSE[:2]] == [
+    assert REVERSE[3] == ROLLBACK and [p.name for p in REVERSE[1:3]] == [
         "0018_drc_stated_books.rollback.sql", "0017_voice_turns.rollback.sql"]
 
 
@@ -140,6 +140,7 @@ def test_the_rollback_drops_exactly_the_three_tables_children_first():
 
 def test_down_to_0011_on_this_tree_selects_only_this_rollback():
     assert [p.name for p in _rollback_paths("0011")] == [
+        "0019_drc_events.rollback.sql",
         "0018_drc_stated_books.rollback.sql",
         "0017_voice_turns.rollback.sql",
         "0016_drc.rollback.sql",
@@ -315,7 +316,8 @@ def test_every_created_user_table_carries_the_tenant_column_inside_the_transacti
 
 @requires_db
 def test_the_rollback_drops_them_and_forward_brings_them_back(migrated):
-    _apply(migrated, [ROLLBACK])
+    # D2 fix r1: 0019's `drc_events` references `drc_imports`; its rollback goes first.
+    _apply(migrated, [MIGRATIONS_DIR / "0019_drc_events.rollback.sql", ROLLBACK])
     for table in TABLES:
         assert migrated.execute("SELECT to_regclass(%s)", (f'"user".{table}',)).fetchone()[0] is None
     _apply(migrated, FORWARD)

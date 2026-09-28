@@ -167,14 +167,9 @@ def test_x13_a_superseding_log_that_drops_a_bound_trade_lists_the_binding_orphan
         key = conn.execute(
             "SELECT ref FROM drc_rows WHERE day = %s AND kind = 'trade' ORDER BY ref LIMIT 1", (D,)
         ).fetchone()[0]
-        # The screenshot row's SHAPE is 0016's (`kind = 'screenshot'`, a
-        # `trade_key`); constructed here because no store path writes one
-        # on this tree (the build report's ESCALATE names the gap).
-        shot = conn.execute(
-            "INSERT INTO drc_imports (import_date, kind, name, sha256, trade_key, parse_status) "
-            "VALUES (%s, 'screenshot', 'shot.png', %s, %s, 'parsed') RETURNING id",
-            (D, "0" * 64, key),
-        ).fetchone()[0]
+    # D2 fix r1 S-2 §2 test 4: the screenshot row is WRITTEN by the one
+    # screenshot writer (`DRC-D2-SEAM-2026-09-25.md` §2), never inserted.
+    shot = DrcStore().record_screenshot(D, "shot.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 16, key)
     result = imports.place(D, [("c.md", EEE_ROUND)], now=TEN_ET)
     line = f"orphaned: shot.png — trade {key} not in the current trading log"
     assert line in result.orphaned
@@ -210,16 +205,33 @@ def test_xnt_a_file_less_no_trade_event_row_has_no_home_in_the_ruled_schema(migr
 
     _raises(
         psycopg.errors.NotNullViolation,
-        "INSERT INTO drc_imports (import_date, kind, parse_status, event_state, event_updated_at) "
-        "VALUES (%s, 'trading_log', 'parsed', 'pending', now())",
+        "INSERT INTO drc_imports (import_date, kind, parse_status) "
+        "VALUES (%s, 'trading_log', 'parsed')",
         (D,),
     )
     _raises(
         psycopg.errors.CheckViolation,
-        "INSERT INTO drc_imports (import_date, kind, name, sha256, parse_status, event_state, "
-        "event_updated_at) VALUES (%s, 'no_trade', 'no-trade day', %s, 'parsed', 'pending', now())",
+        "INSERT INTO drc_imports (import_date, kind, name, sha256, parse_status) "
+        "VALUES (%s, 'no_trade', 'no-trade day', %s, 'parsed')",
         (D, "0" * 64),
     )
+
+
+@requires_db
+def test_xnt_reversed_a_file_less_no_trade_event_row_is_written_by_fire_event(migrated):
+    """X-NT REVERSED (D2 fix r1, S-1 §1 test 11, `DRC-D2-SEAM-2026-09-25.md`
+    `:179`): X-NT's pass condition — "a file-less `no_trade` event row can
+    be written by an existing path" — now HOLDS: `DrcStore.fire_event(D,
+    stated_book_id=<the current no_trade statement>)` writes ONE
+    `drc_events` row, `source = stated_book`, `pending`, no import. The two
+    refusal tests above stay: `drc_imports` still refuses a file-less row."""
+    statement = _state(D, kind="no_trade")
+    event_id = DrcStore().fire_event(D, stated_book_id=statement.id)
+    with DrcStore()._connect() as conn:
+        rows = conn.execute(
+            "SELECT id, day, source, import_id, stated_book_id, state, error, note_path FROM drc_events"
+        ).fetchall()
+    assert rows == [(event_id, D, "stated_book", None, statement.id, "pending", None, None)]
 
 
 @requires_db

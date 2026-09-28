@@ -347,7 +347,8 @@ def test_x5_gate_an_edited_0016_applied_over_the_old_one_leaves_the_check_unchan
     assert text.count(OLD_KIND_CHECK) == 1
     edited = text.replace(OLD_KIND_CHECK, WIDE_KIND_CHECK)
     assert edited.count(WIDE_KIND_CHECK) == 1 and OLD_KIND_CHECK not in edited
-    k1 = [p for p in REVERSE if p.name.startswith("0018_")]
+    # D2 fix r1: 0019's `drc_events` references `drc_stated_books`; its rollback goes first.
+    k1 = [p for p in REVERSE if p.name.startswith(("0019_", "0018_"))]
     if k1:
         _apply(migrated, k1)
     migrated.execute(edited)
@@ -367,7 +368,8 @@ def test_x5_pass_0018_widens_the_kind_check_and_its_rollback_narrows_it(migrated
     assert migrated.execute(
         """SELECT count(*) FROM "user".drc_rows WHERE kind = 'seed'"""
     ).fetchone()[0] == 1
-    _apply(migrated, [rollback])
+    # D2 fix r1: 0019's `drc_events` references `drc_stated_books`; its rollback goes first.
+    _apply(migrated, [MIGRATIONS_DIR / "0019_drc_events.rollback.sql", rollback])
     with pytest.raises(psycopg.errors.CheckViolation):
         _insert_kind("seed")
 

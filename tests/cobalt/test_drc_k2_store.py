@@ -377,7 +377,17 @@ def test_no_difference_line_without_a_differing_statement(migrated, weekday_cale
 
 
 @requires_db
-def test_the_cli_no_trade_apply_rebuilds_the_day(migrated, capsys, at_ten, weekday_calendar):
+def test_the_cli_no_trade_apply_rebuilds_the_day(migrated, capsys, at_ten, weekday_calendar, monkeypatch):
+    # D2 fix r1 (S-1): `--no-trade --apply` now runs the day's file-less
+    # event through `imports.no_trade_event`, which exits non-zero on a
+    # failed event; D3's entry is stubbed to return so this test keeps
+    # proving the rebuild (every assertion below unchanged).
+    import sys
+    import types
+
+    build = types.ModuleType("cobalt.drc.build")
+    build.run_drc_build = lambda event: "constructed/DRC-note.md"
+    monkeypatch.setitem(sys.modules, "cobalt.drc.build", build)
     _day1_carrying_ddd()
     before = _stated_count(migrated)
     code, out = _cli(capsys, "--no-trade", "2001-01-03")

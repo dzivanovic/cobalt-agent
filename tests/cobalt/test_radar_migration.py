@@ -32,6 +32,7 @@ def test_rollback_selects_only_newer_files_newest_first():
     newer than the bound, newest first", never a fixed tuple length."""
     selected = _rollback_paths("0003")
     assert [p.name for p in selected][:10] == [
+        "0019_drc_events.rollback.sql",  # DRC D2 fix r1
         "0018_drc_stated_books.rollback.sql",  # DRC K1
         "0017_voice_turns.rollback.sql",  # voice V1
         "0016_drc.rollback.sql",  # DRC D1
@@ -41,7 +42,6 @@ def test_rollback_selects_only_newer_files_newest_first():
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
         "0009_picks_missed.rollback.sql",
-        "0008_radar_value_movers.rollback.sql",
     ]
     assert [p.name for p in selected][-4:] == [
         "0007_radar_cards.rollback.sql",
