@@ -20,6 +20,7 @@ updated: 2026-09-28
 - 5–10 sentences, plain prose: no bullets, bold headers or tables. "Recorded." — never his ruling back. A question goes last, restated until answered. Longer replies = refresh.
 - Routine launches, clean stop lines and helper digests go unreported; a stop line reaches him as one sentence, only if it changes something for him or needs him.
 - Phone push only for a list, a FAILED or a done job.
+- Before an A/B reaches him, grep his §4 rows and T-rulings for it: a ruled item is folded on its ruled side and never listed; a house's contrary view stays in that house's report (L77).
 ## Seats [stated ≤2026-09-25 · Dejan]
 - Fable-type seats run Opus 5.5 until his word. Judgment drafters (classification, design proposals, distillation) on Opus 5.5; mechanical drafters (re-issue, re-point) and every hub on Sonnet 5.
 - [stated 2026-09-27 · Dejan] A drafter copying an established precedent runs on Sonnet; use Opus only for judgment the precedent does not cover, named in the launch row. Tribunal seats receive the same complete files and instructions; each reads them itself. Stage unchanged copies only where access requires it; ordered parts follow a demonstrated read failure.
