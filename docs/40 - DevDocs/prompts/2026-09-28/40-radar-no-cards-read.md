@@ -1,0 +1,20 @@
+MODEL: Sonnet 5 (`claude-sonnet-5`) · SEAT: read-only helper `radar-no-cards-0928`, launched by the CTO desk in the background · SESSION: fresh · auto mode (read-only, L62) · METER: Anthropic small · LADDER: `OFF-LADDER — cto-2026-09-28.md R92–R93` · nobody sits at this terminal: the report is your channel; `ASK DESK: <question> [<time from date>]` under `## ESCALATE`, take the safe default, continue.
+
+Launch (the desk's): `cd /Users/cobalt/cobalt-wt/_desk-scratch`, then `claude --bg "Read '/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-28/40-radar-no-cards-read.md' and follow it exactly." --model claude-sonnet-5 --permission-mode auto --remote-control radar-no-cards-0928 --name radar-no-cards-0928 --allowedTools "Bash(ls *)" "Bash(grep *)" "Bash(tail *)" "Bash(head *)" "Bash(wc *)" "Bash(date*)" "Bash(git -C /Users/cobalt/cobalt log*)" "Bash(git -C /Users/cobalt/cobalt show*)" --disallowedTools "AskUserQuestion" "EnterWorktree" "Bash(git push*)" --add-dir /Users/cobalt/cobalt --add-dir /Users/cobalt/Vault`
+
+# WHY DID THE RADAR MAKE NO CARDS ON MON 2026-09-28?
+
+AUTHORIZATION: written by the CTO desk, not by Dejan. Verify: `grep -n "^| R93 " "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-28.md"` prints a row naming `40-radar-no-cards-read.md`; `git -C /Users/cobalt/cobalt log -1 --format=%H -S"40-radar-no-cards-read.md" -- "docs/40 - DevDocs/reports/cto-2026-09-28.md"` NON-EMPTY. Else last line `FAILED: authorization mismatch`, stop.
+
+RULES: reads only. One bare command per Bash call, exactly a listed prefix; no pipe, no redirect, no `cd …&&`; grep patterns are plain fixed strings (`grep -n -F`), one per call; or the Read tool. Never run `uv`, `cobalt`, `psql`, `docker`, `launchctl`, any database query, any `COBALT_ENV=production` command; never edit code, config or the vault. Never read `.env` or print a secret (L4, L41). Write only your report, with the Write tool. L32: no ticker, value or real file name of his in the report beyond what the cause needs.
+
+FACTS THE DESK HOLDS (R92): `/radar` at 16:1x ET shows "No radar cards today" (`src/cobalt/aset/radar_panel.py:773`), `handicap: not configured`, the pool 50 / 50 admitted. `logs/radar.err` today: `radar cycle: scanning` cycles, no card line, no error. Two WATCH cards (416, 437) expired at the 16:00 close (`logs/cards-expire.log`). LIVE = `deploy-2026-09-27` `3349466f` (migrations 0014 0015 0017).
+
+STEPS — `date` first; write the report after each step:
+1. Trace the path from a radar scan cycle to a radar card in `src/cobalt/radar/` (`runner.py`, `evaluate.py`, `propose.py`, `seam.py`, `store.py`, `handicap.py`) and `radar_panel.py` at `main`: every condition that must hold for a card to be written and shown, each `file:line`.
+2. For each condition, the evidence for today from `logs/` (`radar.err`, `radar.log` if present, `aset.log`, `heartbeat.log`, `agent_2026-09-28.log`) and `configs/` (read-only; `git -C /Users/cobalt/cobalt show HEAD:configs/<path>` where a working copy is modified): HOLDS / FAILS / NOT CHECKABLE FROM READS — `<what query or run would settle it>`.
+3. Compare with the last trading day that made radar cards: find it in the logs; name what differs (config, deploy `3349466f` diffs under `src/cobalt/radar` via `git -C /Users/cobalt/cobalt log --oneline deploy-2026-09-25..deploy-2026-09-27 -- src/cobalt/radar src/cobalt/aset/radar_panel.py` if those tags exist, the handicap line).
+4. State the cause in one sentence, or the two readings the evidence leaves open. Name the fix owner's step, never build it.
+
+REPORT: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-no-cards-2026-09-28.md` — `## §0 Headline` (≤5 lines: the cause or the open readings; intended or defect) → `## Path` → `## Today` → `## Last card day` → `## ESCALATE` → last line. Per `topics/writing-rules.md` (`/Users/cobalt/Vault/Think/6 - Permanent/Memory/topics/writing-rules.md`). While you run, the last non-blank line is `(run in progress)`.
+STOP LINE (L71): `RADAR NO-CARDS READ DONE · cause: <one line|OPEN — <n> readings> · intended: <yes|no|unknown> · ESCALATE: <n>` — or `FAILED: <step> — <reason>`. Then stop.
