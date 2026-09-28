@@ -98,6 +98,9 @@ CREATED_TABLES: dict[str, Side] = {
     # db_migrations/0018_drc_stated_books.sql — DRC K1: his stated opening
     # books, resolves and no-trade statements. USER: his own word (L32).
     "drc_stated_books": Side.USER,
+    # db_migrations/0019_drc_events.sql — DRC D2 fix r1: the input event's
+    # state for both day types. USER: one trader's own runs (L32).
+    "drc_events": Side.USER,
 }
 
 #: VIEWS created by database-wide migrations. On a side like any table

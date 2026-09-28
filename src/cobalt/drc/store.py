@@ -94,7 +94,7 @@ from .pairing import (
     stated_open_positions,
 )
 
-TABLES = ("drc_imports", "drc_fills", "drc_rows", "drc_stated_books")
+TABLES = ("drc_imports", "drc_fills", "drc_rows", "drc_stated_books", "drc_events")
 
 _TENANT = "current_setting('cobalt.trader_id')::int"
 
@@ -192,7 +192,7 @@ class DrcStore:
         if absent:
             raise db.SchemaMissingError(
                 f"table(s) {', '.join(absent)} do not exist — migration 0016_drc / "
-                "0018_drc_stated_books has not run here. Run `cobalt db migrate`."
+                "0018_drc_stated_books / 0019_drc_events has not run here. Run `cobalt db migrate`."
             )
 
     def record_import(
@@ -406,7 +406,9 @@ class DrcStore:
             ).fetchone() is not None
 
     # -----------------------------------------------------------------
-    # D2 — the input event (L18), on the day's trading-log import row
+    # D2 — the input event (L18). D2 fix r1 (DRC-D2-SEAM-2026-09-25 §1):
+    # ONE `drc_events` row per source — the day's current trading-log
+    # import, or its current `no_trade` statement — for both day types.
     # -----------------------------------------------------------------
 
     #: L18: pending → running → done | failed. A re-fire (a superseding
@@ -420,31 +422,107 @@ class DrcStore:
         "failed": frozenset(),
     }
 
-    def mark_event(self, import_id: int, state: str, error: Optional[str] = None) -> None:
-        """Move the `DrcInputsPlaced` event on import `import_id` (a
-        `trading_log` row, `0016_drc.sql:35-37`) to `state`. `failed`
-        names its reason (L1); no other state carries one. An illegal move
-        is refused, nothing written. The event's payload is never stored:
-        `event_for` rebuilds it from the rows (L57)."""
+    def fire_event(
+        self, day: date, *, import_id: Optional[int] = None, stated_book_id: Optional[int] = None
+    ) -> int:
+        """THE ONLY way an event row reaches `pending` (L18). Exactly one
+        source: `import_id` — a stored `trading_log` row of `day`; or
+        `stated_book_id` — the CURRENT `no_trade` statement of `day`
+        (`_no_trade_id`). Anything else is refused naming why, nothing
+        written. The source's row is inserted `pending`, or — a re-fire —
+        moved back to `pending` with its error and note path cleared.
+        Returns the event id."""
+        if (import_id is None) == (stated_book_id is None):
+            raise ValueError(
+                "an event fires from exactly one source — an import_id or a stated_book_id; nothing written"
+            )
+        conn = self._connect()
+        conn.autocommit = False
+        try:
+            if import_id is not None:
+                row = conn.execute(
+                    f"SELECT kind, import_date FROM drc_imports WHERE user_id = {_TENANT} AND id = %s",
+                    (import_id,),
+                ).fetchone()
+                if row is None or row[0] != Kind.TRADING_LOG.value:
+                    raise ValueError(f"import #{import_id} is not a stored trading log — nothing written")
+                if row[1] != day:
+                    raise ValueError(f"import #{import_id} is {row[1]}'s trading log, not {day}'s — nothing written")
+                source, column, key = "import", "import_id", import_id
+            else:
+                current = self._no_trade_id(conn, day)
+                if current != stated_book_id:
+                    row = conn.execute(
+                        f"SELECT day, kind FROM drc_stated_books WHERE user_id = {_TENANT} AND id = %s",
+                        (stated_book_id,),
+                    ).fetchone()
+                    if row is None:
+                        why = "names no stated row"
+                    elif row[1] != "no_trade":
+                        why = f"is a {row[1]} statement, not a no_trade one"
+                    elif row[0] != day:
+                        why = f"is {row[0]}'s statement, not {day}'s"
+                    else:
+                        why = f"is superseded — {day}'s current no_trade statement is #{current}"
+                    raise ValueError(f"statement #{stated_book_id} {why} — nothing written")
+                source, column, key = "stated_book", "stated_book_id", stated_book_id
+            found = conn.execute(
+                f"SELECT id FROM drc_events WHERE user_id = {_TENANT} AND {column} = %s FOR UPDATE",
+                (key,),
+            ).fetchone()
+            if found is None:
+                event_id = conn.execute(
+                    f"INSERT INTO drc_events (day, source, {column}, state) VALUES (%s, %s, %s, 'pending') "
+                    "RETURNING id",
+                    (day, source, key),
+                ).fetchone()[0]
+            else:
+                event_id = found[0]
+                conn.execute(
+                    f"UPDATE drc_events SET state = 'pending', updated_at = now(), error = NULL, note_path = NULL "
+                    f"WHERE user_id = {_TENANT} AND id = %s",
+                    (event_id,),
+                )
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return int(event_id)
+
+    def mark_event(
+        self, event_id: int, state: str, error: Optional[str] = None, *, note_path: Optional[str] = None
+    ) -> None:
+        """Move event `event_id` (a `drc_events` row) to `state` by
+        `EVENT_MOVES` — never to `pending` (`fire_event`'s alone). `failed`
+        names its reason (L1) and `done` the note path the build returned;
+        no other state carries either. An illegal move is refused, nothing
+        written. The event's payload is never stored: `event_for` rebuilds
+        it from the rows (L57)."""
         if state not in ("pending", "running", "done", "failed"):
             raise ValueError(f"event state {state!r} is not pending / running / done / failed")
+        if state == "pending":
+            raise ValueError(f"event #{event_id}: only fire_event moves an event to pending (L18)")
         if (state == "failed") != bool(error):
             raise ValueError(f"event {state}: a failed event names its reason, no other state carries one")
+        if (state == "done") != bool(note_path):
+            raise ValueError(f"event {state}: a done event names its note path, no other state carries one")
         conn = self._connect()
         conn.autocommit = False
         try:
             row = conn.execute(
-                f"SELECT kind, event_state FROM drc_imports WHERE user_id = {_TENANT} AND id = %s FOR UPDATE",
-                (import_id,),
+                f"SELECT state FROM drc_events WHERE user_id = {_TENANT} AND id = %s FOR UPDATE",
+                (event_id,),
             ).fetchone()
-            if row is None or row[0] != Kind.TRADING_LOG.value:
-                raise ValueError(f"import #{import_id} is not a stored trading log — the event has no row")
-            if state != "pending" and state not in self.EVENT_MOVES[row[1]]:
-                raise ValueError(f"event on import #{import_id}: {row[1]} → {state} is not a move (L18)")
+            if row is None:
+                raise ValueError(f"event #{event_id} is not a stored event — nothing written")
+            if state not in self.EVENT_MOVES[row[0]]:
+                raise ValueError(f"event #{event_id}: {row[0]} → {state} is not a move (L18)")
             conn.execute(
-                f"UPDATE drc_imports SET event_state = %s, event_updated_at = now(), event_error = %s "
+                f"UPDATE drc_events SET state = %s, updated_at = now(), error = %s, note_path = %s "
                 f"WHERE user_id = {_TENANT} AND id = %s",
-                (state, error, import_id),
+                (state, error, note_path, event_id),
             )
             conn.commit()
         except BaseException:
@@ -456,24 +534,32 @@ class DrcStore:
     def event_for(self, day: date) -> dict[str, Any]:
         """The day's event and the stored rows it is built from — a READ.
 
-        `import_id` / `state` / `updated_at` / `error`: the event on the
-        day's CURRENT trading-log import (the row no other supersedes), all
-        `None` when there is none. `imports`: every `drc_imports` row of
-        the day, oldest first, each with `current` and its `fills` count.
-        `day`: the day's `day` row (`inputs`, `derived`) or `None`.
-        `trades`: the day's trade ids. `rows`: the day's row count per
-        kind. Nothing is computed here; the page and the event read it."""
+        THE DAY'S EVENT (§1's three-step rule): the `drc_events` row of the
+        day's CURRENT trading-log import; else of its current `no_trade`
+        statement; else none. `import_id`: the current trading-log import
+        (`None` on a file-less day). `stated_book_id` / `stated_book_sha256`:
+        with no current trading log, the day's current `no_trade` statement
+        and its `book_sha256` (whether or not its event has fired), else
+        `None`. `event_id` / `source` / `state` / `updated_at` / `error` /
+        `note_path`: that event row's, all `None` when there is none.
+        `seed`: the day's `seed` row inputs (`source`, `from_day`,
+        `from_book_sha256`, `stated_book_id`, `no_trade_id`) or `None`.
+        `imports`: every `drc_imports` row of the day, oldest first, each
+        with `current` and its `fills` count. `day`: the day's `day` row
+        (`inputs`, `derived`) or `None`. `trades`: the day's trade ids.
+        `rows`: the day's row count per kind. Nothing is computed here; the
+        page and the event read it."""
         with self._connect() as conn:
             imports = [
                 dict(zip(
                     ("id", "kind", "name", "sha256", "trade_key", "parse_status", "reason", "failed_line",
-                     "supersedes", "event_state", "event_updated_at", "event_error", "current", "fills"),
+                     "supersedes", "current", "fills"),
                     r,
                 ))
                 for r in conn.execute(
                     f"""
                     SELECT i.id, i.kind, i.name, i.sha256, i.trade_key, i.parse_status, i.reason,
-                           i.failed_line, i.supersedes, i.event_state, i.event_updated_at, i.event_error,
+                           i.failed_line, i.supersedes,
                            i.id NOT IN (SELECT supersedes FROM drc_imports
                                          WHERE supersedes IS NOT NULL AND user_id = {_TENANT}),
                            (SELECT count(*) FROM drc_fills f WHERE f.user_id = {_TENANT} AND f.import_id = i.id)
@@ -484,6 +570,28 @@ class DrcStore:
                     (day,),
                 ).fetchall()
             ]
+            current = [r for r in imports if r["current"] and r["kind"] == Kind.TRADING_LOG.value]
+            import_id = current[-1]["id"] if current else None
+            stated_book_id = None if import_id is not None else self._no_trade_id(conn, day)
+            stated_book_sha256 = None if stated_book_id is None else conn.execute(
+                f"SELECT book_sha256 FROM drc_stated_books WHERE user_id = {_TENANT} AND id = %s",
+                (stated_book_id,),
+            ).fetchone()[0]
+            event = None
+            if import_id is not None or stated_book_id is not None:
+                column, key = (
+                    ("import_id", import_id) if import_id is not None else ("stated_book_id", stated_book_id)
+                )
+                event = conn.execute(
+                    f"SELECT id, source, state, updated_at, error, note_path FROM drc_events "
+                    f"WHERE user_id = {_TENANT} AND {column} = %s",
+                    (key,),
+                ).fetchone()
+            seed_row = conn.execute(
+                f"SELECT inputs FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'seed' AND day = %s "
+                "AND ref = 'book'",
+                (day,),
+            ).fetchone()
             day_row = conn.execute(
                 f"SELECT inputs, derived FROM drc_rows WHERE user_id = {_TENANT} AND kind = 'day' AND day = %s",
                 (day,),
@@ -502,18 +610,68 @@ class DrcStore:
                     (day,),
                 ).fetchall()
             )
-        current = [r for r in imports if r["current"] and r["kind"] == Kind.TRADING_LOG.value]
-        event = current[-1] if current else None
+        seed_keys = ("source", "from_day", "from_book_sha256", "stated_book_id", "no_trade_id")
         return {
-            "import_id": None if event is None else event["id"],
-            "state": None if event is None else event["event_state"],
-            "updated_at": None if event is None else event["event_updated_at"],
-            "error": None if event is None else event["event_error"],
+            "import_id": import_id,
+            "event_id": None if event is None else event[0],
+            "source": None if event is None else event[1],
+            "state": None if event is None else event[2],
+            "updated_at": None if event is None else event[3],
+            "error": None if event is None else event[4],
+            "note_path": None if event is None else event[5],
+            "stated_book_id": stated_book_id,
+            "stated_book_sha256": stated_book_sha256,
+            "seed": None if seed_row is None else {k: seed_row[0].get(k) for k in seed_keys},
             "imports": imports,
             "day": None if day_row is None else {"inputs": day_row[0], "derived": day_row[1]},
             "trades": trades,
             "rows": {k: int(rows.get(k, 0)) for k in ("trade", "open_position", "stats_row")},
         }
+
+    # -----------------------------------------------------------------
+    # D2 fix r1 — the ONE screenshot writer (DRC-D2-SEAM-2026-09-25 §2)
+    # -----------------------------------------------------------------
+
+    def record_screenshot(self, day: date, name: str, data: bytes, trade_key: str) -> int:
+        """THE one writer of `drc_imports` rows with `kind = 'screenshot'`
+        (L3, L40): one row per bound image — its name, the sha256 of its
+        exact bytes, its `trade_key`, `parsed`; `supersedes` = the CURRENT
+        screenshot row of the same day + trade key (D2-3: "the prior row of
+        that kind + date + trade key"). Nothing overwritten, nothing
+        deleted. Empty bytes, a non-PNG / JPEG header and an empty key are
+        refused, naming why (L1). `record_import` stays the one writer of
+        the file kinds; `models.Kind` does not name a screenshot."""
+        if not data:
+            raise ValueError(f"{name}: an empty file is not an image — nothing stored")
+        if not data.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff")):  # PNG, JPEG
+            raise ValueError(f"{name}: not a PNG / JPEG header — nothing stored")
+        if not trade_key:
+            raise ValueError(f"{name}: a screenshot binds to a trade key and none was given — nothing stored")
+        conn = self._connect()
+        conn.autocommit = False
+        try:
+            prior = conn.execute(
+                f"""
+                SELECT id FROM drc_imports
+                 WHERE user_id = {_TENANT} AND import_date = %s AND kind = 'screenshot' AND trade_key = %s
+                   AND id NOT IN (SELECT supersedes FROM drc_imports
+                                   WHERE supersedes IS NOT NULL AND user_id = {_TENANT})
+                 ORDER BY id DESC LIMIT 1
+                """,
+                (day, trade_key),
+            ).fetchone()
+            import_id = conn.execute(
+                "INSERT INTO drc_imports (import_date, kind, name, sha256, trade_key, parse_status, supersedes) "
+                "VALUES (%s, 'screenshot', %s, %s, %s, 'parsed', %s) RETURNING id",
+                (day, name, hashlib.sha256(data).hexdigest(), trade_key, prior[0] if prior else None),
+            ).fetchone()[0]
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return int(import_id)
 
     # -----------------------------------------------------------------
     # K2 — the one re-pair (`_repair`) and the one write (`_commit`)

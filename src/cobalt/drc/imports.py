@@ -22,19 +22,29 @@ the one date rule.
 BOTH-PLACED (R91; L2 — deterministic, in the request, no poller, no
 LLM): a `parsed`/`partial` trading log AND a `parsed`/`partial` stats log
 → READY; a trading log with ZERO executions is the no-trade DAY (no stats
-log needed). Either fires the event on the day's CURRENT trading-log
-import row (L18: pending → running → done | failed), then THE `[F-17]`
+log needed). Either fires the event of the day's CURRENT trading-log
+import (L18: pending → running → done | failed, one event-home row per
+source — D2 fix r1, `DRC-D2-SEAM-2026-09-25.md` §1), then THE `[F-17]`
 ROUTE as K1 / K2 built it — `seed_for` → `build_day` → `record_day` —
 never a pairing, seed or statement of its own (L72), then D3's ONE build
 entry, `cobalt.drc.build.run_drc_build(event)`. Until D3 exists that
 import fails and the event lands `failed: build not built (D3)` — loud,
-never `done` (L1).
+never `done` (L1). ANY exception after `pending` lands the event
+`failed` naming its step (D2 fix r1 F-1): no row is left `pending` or
+`running` by an exception.
 
 THE NO-TRADE ACTION (R93 as v3 `[F-05]`): `no_trade()` writes his
 `no_trade` statement through the ONE writer (`record_stated_book`,
-`via = "drc_page"`) and rebuilds EXACTLY as the CLI's trigger does
-(AMENDED C7). A FILE-LESS no-trade day has no event row in the ruled
-schema (X-NT, the build report's ESCALATE): its build is not called.
+`via = "drc_page"`); a FILE-LESS no-trade day then runs `no_trade_event`
+— its event's source is that statement (§1): `fire_event` → the rebuild
+(AMENDED C7) → `running` → the build → `done` with its note path |
+`failed`. The CLI's `state-book --no-trade --apply` calls the SAME
+function (L3).
+
+THE SCREENSHOT DROP (§2): a PNG / JPEG on a trade of the day's CURRENT
+computed trading log is written by the one bytes writer and bound by
+`DrcStore.record_screenshot`, the one writer of screenshot rows; a READY
+day re-fires.
 
 MARKET RESET (R102): every door refuses 20:00–21:00 ET before anything
 is read or written, with the reason.
@@ -52,7 +62,7 @@ from pathlib import Path
 from typing import Any, Iterable, Literal, Optional
 
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from cobalt.session import SessionBlocked, assert_writable
 from cobalt.vault import DRC_IMPORTS_REL, resolve_vault_path
@@ -83,13 +93,7 @@ READY = "READY"
 NO_TRADE = "no-trade"
 #: v3 §2c / seam (2): a day recorded with no book stated.
 UNPAIRED = "not computed — opening book not stated · state your opening book for {day}"
-#: X-NT (the build report's ESCALATE): a file-less no-trade day's event has no row.
-NO_TRADE_WAITS = "no-trade day recorded — its DRC build waits on the no-trade event home (ESCALATE X-NT)"
 BUILD_NOT_BUILT = "build not built (D3)"
-SCREENSHOT_NOT_BUILT = (
-    "screenshot binding not built: no store path writes a screenshot row (drc_imports.kind = "
-    "'screenshot' with its trade_key) on this tree — ESCALATE; nothing stored, nothing bound"
-)
 
 _PLACED = (Outcome.PARSED.value, Outcome.PARTIAL.value)
 _PNG = b"\x89PNG\r\n\x1a\n"
@@ -132,16 +136,52 @@ class DrcInputsPlaced(BaseModel):
     """THE event (v2 §3, L57): what D3's build is built from — the ids and
     sha256s of the stored rows, never a second copy of them. `partial`
     names each partial file's missing columns (R17 (5)); `orphaned` each
-    screenshot binding a superseding trading log left behind (X13)."""
+    screenshot binding a superseding trading log left behind (X13).
+
+    D2 fix r1 (`DRC-D2-SEAM-2026-09-25.md` §1): `event_id` is its row in
+    the event home. Its source is EXACTLY one of `import_id` (a file
+    day) and `stated_book_id` (a file-less no-trade day, with the
+    statement's `stated_book_sha256`); a stated source is `no_trade` with
+    no stats, no screenshots, no partial file and no file sha256s — a
+    breach is a `ValidationError` (L1). `seed_from_day` /
+    `seed_from_book_sha256`: the day's `seed` row, `None` without one."""
 
     date: _Date
-    import_id: int
+    event_id: int
+    import_id: Optional[int] = None
+    stated_book_id: Optional[int] = None
+    stated_book_sha256: Optional[str] = None
+    seed_from_day: Optional[_Date] = None
+    seed_from_book_sha256: Optional[str] = None
     stats_import_id: Optional[int] = None
     screenshot_import_ids: list[int] = Field(default_factory=list)
     sha256s: dict[str, str] = Field(default_factory=dict)
     partial: dict[str, list[str]] = Field(default_factory=dict)
     kind: Literal["trades", "no_trade"]
     orphaned: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _one_source(self) -> "DrcInputsPlaced":
+        if (self.import_id is None) == (self.stated_book_id is None):
+            raise ValueError("an event names exactly one source: import_id or stated_book_id")
+        if self.stated_book_id is not None:
+            breaches = [
+                name
+                for name, bad in (
+                    ("kind is not no_trade", self.kind != "no_trade"),
+                    ("a stats import", self.stats_import_id is not None),
+                    ("screenshots", bool(self.screenshot_import_ids)),
+                    ("a partial file", bool(self.partial)),
+                    ("file sha256s", bool(self.sha256s)),
+                    ("no hex-64 stated_book_sha256",
+                     not (isinstance(self.stated_book_sha256, str)
+                          and re.fullmatch(r"[0-9a-f]{64}", self.stated_book_sha256))),
+                )
+                if bad
+            ]
+            if breaches:
+                raise ValueError(f"a file-less (stated) event carries {', '.join(breaches)}")
+        return self
 
 
 class PlaceResult(BaseModel):
@@ -216,8 +256,13 @@ def _placed(row: Optional[dict]) -> bool:
 
 
 def _state(view: dict) -> str:
-    """The date's STATE, deterministic (L2), from the stored rows."""
+    """The date's STATE, deterministic (L2), from the stored rows. D2 fix
+    r1 (§1): no current trading log but a current `no_trade` statement
+    (`event_for`'s `stated_book_id`, the store's `_no_trade_id` rule) is
+    the file-less no-trade day."""
     trading, stats = _current(view, Kind.TRADING_LOG.value), _current(view, Kind.STATS_LOG.value)
+    if trading is None and view["stated_book_id"] is not None:
+        return NO_TRADE
     if not _placed(trading):
         return WAITING_TRADING
     if trading["fills"] == 0:
@@ -244,14 +289,31 @@ def _orphans(view: dict) -> list[str]:
 
 
 def _event(day: date, view: dict, orphaned: list[str]) -> DrcInputsPlaced:
-    """The event, built from the stored rows (L57)."""
+    """The event, built from the stored rows (L57) — `event_for`'s, never
+    a second copy: a file day's from its current files, a file-less
+    no-trade day's from its current `no_trade` statement (§1)."""
     trading = _current(view, Kind.TRADING_LOG.value)
+    seed = view["seed"] or {}
+    common = dict(
+        date=day,
+        event_id=view["event_id"],
+        seed_from_day=seed.get("from_day"),
+        seed_from_book_sha256=seed.get("from_book_sha256"),
+        orphaned=orphaned,
+    )
+    if trading is None:
+        return DrcInputsPlaced(
+            **common,
+            stated_book_id=view["stated_book_id"],
+            stated_book_sha256=view["stated_book_sha256"],
+            kind="no_trade",
+        )
     stats = _current(view, Kind.STATS_LOG.value)
     stats = stats if _placed(stats) else None
     shots = [r for r in view["imports"] if r["current"] and r["kind"] == "screenshot"]
     rows = [r for r in (trading, stats, *shots) if r is not None]
     return DrcInputsPlaced(
-        date=day,
+        **common,
         import_id=trading["id"],
         stats_import_id=None if stats is None else stats["id"],
         screenshot_import_ids=[r["id"] for r in shots],
@@ -262,7 +324,6 @@ def _event(day: date, view: dict, orphaned: list[str]) -> DrcInputsPlaced:
             if r is not None and r["parse_status"] == Outcome.PARTIAL.value
         },
         kind="no_trade" if trading["fills"] == 0 else "trades",
-        orphaned=orphaned,
     )
 
 
@@ -307,7 +368,7 @@ def place(
     except SessionBlocked:
         return PlaceResult(date=day, refused=RESET_REFUSAL)
     if trade_key is not None:
-        return _screenshots(day, files)
+        return _screenshots(day, files, trade_key, _root(vault_root))
 
     verdict = detect_set(files)
     detections = [detect_kind(name, data) for name, data in files]
@@ -358,29 +419,54 @@ def place(
     return _after(day, store, lines, this_drop, root)
 
 
-def _screenshots(day: date, files: list[tuple[str, bytes]]) -> PlaceResult:
-    """A per-trade drop (v2 `[F-07]`): its image header decides. The
-    binding itself has no store path on this tree (the report's
-    ESCALATE): every screenshot is refused, nothing stored or written."""
-    lines = []
+def _screenshots(day: date, files: list[tuple[str, bytes]], trade_key: str, root: Path) -> PlaceResult:
+    """A per-trade drop (v2 `[F-07]`; D2 fix r1 S-2, `DRC-D2-SEAM-2026-09-
+    25.md` §2): its image header decides; the key must be a trade of the
+    day's CURRENT computed trading log, else FAILED and nothing bound or
+    written; then the bytes through the ONE bytes writer and the row
+    through the ONE screenshot writer (`record_screenshot`). A READY day
+    re-fires (v2 `:82`); a day not yet READY only stores the binding."""
+    store = DrcStore()
+    trades = set(store.event_for(day)["trades"])
+    writer = None
+    lines: list[FileLine] = []
     for name, data in files:
         if not data:
             reason = "an empty file is not an image"
         elif not (data.startswith(_PNG) or data.startswith(_JPEG)):
             reason = "not a PNG / JPEG header"
+        elif trade_key not in trades:
+            reason = f"trade {trade_key} is not in the current trading log"
         else:
-            reason = SCREENSHOT_NOT_BUILT
+            writer = writer or VaultWriter("drc.import", store=VaultWriteStore())
+            try:
+                written = writer.write_import_bytes(root, f"{DRC_IMPORTS_REL}/{day.isoformat()}/{name}", data)
+            except SessionBlocked:
+                return PlaceResult(date=day, refused=RESET_REFUSAL, files=lines)
+            except VaultWriteError as e:
+                reason = f"not written: {e}"
+            else:
+                import_id = store.record_screenshot(day, written.name, data, trade_key)
+                lines.append(FileLine(name=written.name, kind="screenshot", status="parsed", import_id=import_id))
+                continue
         lines.append(FileLine(name=name, kind="screenshot", status="failed", reason=reason))
-    return PlaceResult(date=day, files=lines)
+    if not any(line.status == "parsed" for line in lines):
+        return PlaceResult(date=day, files=lines)
+    view = store.event_for(day)
+    state = _state(view)
+    if state != READY:
+        return PlaceResult(date=day, files=lines, state=state, status_line=state)
+    return _after(day, store, lines, {}, root)
 
 
 def _after(day: date, store: DrcStore, lines: list[FileLine], this_drop: dict, root: Path) -> PlaceResult:
     """Recompute the date's state from the stored rows; on READY or the
-    no-trade day, fire the event and run the `[F-17]` route."""
+    no-trade day of a stored trading log, fire the event and run the
+    `[F-17]` route. (A file-less no-trade day's event is `no_trade_event`'s.)"""
     view = store.event_for(day)
     state = _state(view)
     result = PlaceResult(date=day, files=lines, state=state, status_line=state)
-    if state not in (READY, NO_TRADE):
+    if state not in (READY, NO_TRADE) or _current(view, Kind.TRADING_LOG.value) is None:
         return result
     return _fire(day, store, view, this_drop, root, result)
 
@@ -409,60 +495,83 @@ def _load(day: date, row: dict, kind: Kind, this_drop: dict, root: Path):
     return _parse(kind, data, day, det)
 
 
+def _failer(day: date, store: DrcStore, event_id: int, source: str, result: PlaceResult):
+    """THE one `failed` path of an event (L1, L18): the row names its
+    reason, the status line names the step."""
+
+    def fail(step: str, reason: str, *, uncaught: bool = False) -> PlaceResult:
+        # D2 fix r1 F-1: an exception no step names is stored with its
+        # step, `<step> — <Type>: <message>` (the named ones verbatim).
+        error = f"{step} — {reason}" if uncaught else reason
+        store.mark_event(event_id, "failed", error)
+        result.status_line = f"DRC build FAILED: {step} — {reason}"
+        logger.error(f"DRC {day}: event #{event_id} ({source}) failed at {step}: {reason}")
+        return result
+
+    return fail
+
+
+def _uncaught(e: Exception) -> str:
+    return f"{type(e).__name__}: {e}"
+
+
 def _fire(day: date, store: DrcStore, view: dict, this_drop: dict, root: Path, result: PlaceResult) -> PlaceResult:
     trading = _current(view, Kind.TRADING_LOG.value)
     stats = _current(view, Kind.STATS_LOG.value)
     stats = stats if _placed(stats) else None
-    import_id = trading["id"]
-    store.mark_event(import_id, "pending")
-    result.event = _event(day, view, [])
+    event_id = store.fire_event(day, import_id=trading["id"])
+    fail = _failer(day, store, event_id, f"import #{trading['id']}", result)
 
-    def fail(step: str, reason: str) -> PlaceResult:
-        store.mark_event(import_id, "failed", reason)
-        result.status_line = f"DRC build FAILED: {step} — {reason}"
-        logger.error(f"DRC {day}: event on import #{import_id} failed at {step}: {reason}")
-        return result
+    # D2 fix r1 F-1 (L18, v2 `[F-08]`): between `pending` and the terminal
+    # move EVERY exception lands the event `failed` — the named ones with
+    # their verbatim texts, any other as `<step> — <Type>: <message>`.
+    step = "inputs"
+    try:
+        result.event = _event(day, store.event_for(day), [])
+        try:
+            t_parsed: ParsedTradingLog = _load(day, trading, Kind.TRADING_LOG, this_drop, root)
+            s_parsed: Optional[ParsedStatsLog] = (
+                None if stats is None else _load(day, stats, Kind.STATS_LOG, this_drop, root)
+            )
+        except _LoadError as e:
+            return fail("inputs", str(e))
+        ids = {Kind.TRADING_LOG: trading["id"]}
+        if stats is not None:
+            ids[Kind.STATS_LOG] = stats["id"]
 
-    try:
-        t_parsed: ParsedTradingLog = _load(day, trading, Kind.TRADING_LOG, this_drop, root)
-        s_parsed: Optional[ParsedStatsLog] = (
-            None if stats is None else _load(day, stats, Kind.STATS_LOG, this_drop, root)
-        )
-    except _LoadError as e:
-        return fail("inputs", str(e))
-    ids = {Kind.TRADING_LOG: trading["id"]}
-    if stats is not None:
-        ids[Kind.STATS_LOG] = stats["id"]
+        # THE [F-17] ROUTE (seam (1)–(3)) — K1 / K2's, called, never re-implemented.
+        step = "seed"
+        try:
+            book = store.seed_for(day)
+        except PairingError as e:
+            return fail("seed", str(e))  # verbatim, loud; the files stay stored
+        step = "record"
+        try:
+            if book is None:
+                pairing = build_day(t_parsed, s_parsed, seed=None)
+                store.record_day(pairing, ids, None)
+            else:
+                pairing = build_day(t_parsed, s_parsed, seed=book.positions, resolves=book.resolves)
+                store.record_day(pairing, ids, book)
+        except (PairingError, ValueError) as e:
+            return fail("record", str(e))  # `drc_rows` unchanged ([F-25])
 
-    # THE [F-17] ROUTE (seam (1)–(3)) — K1 / K2's, called, never re-implemented.
-    try:
-        book = store.seed_for(day)
-    except PairingError as e:
-        return fail("seed", str(e))  # verbatim, loud; the files stay stored
-    try:
-        if book is None:
-            pairing = build_day(t_parsed, s_parsed, seed=None)
-            store.record_day(pairing, ids, None)
-        else:
-            pairing = build_day(t_parsed, s_parsed, seed=book.positions, resolves=book.resolves)
-            store.record_day(pairing, ids, book)
-    except (PairingError, ValueError) as e:
-        return fail("record", str(e))  # `drc_rows` unchanged ([F-25])
-
-    after = store.event_for(day)
-    result.orphaned = _orphans(after)
-    result.event = _event(day, after, result.orphaned)
-    unpaired = pairing.not_computed.get("pairing") == OPENING_NOT_STATED
-    store.mark_event(import_id, "running")
-    try:
-        note = _run_build(result.event)
-    except Exception as e:  # noqa: BLE001 — any exception is `failed`, never `done` (L1)
-        reason = str(e) if isinstance(e, BuildNotBuilt) else f"{type(e).__name__}: {e}"
-        fail("build", reason)
-        if unpaired:
-            result.status_line = UNPAIRED.format(day=day.isoformat())
-        return result
-    store.mark_event(import_id, "done")
+        step = "build"
+        after = store.event_for(day)
+        result.orphaned = _orphans(after)
+        result.event = _event(day, after, result.orphaned)
+        unpaired = pairing.not_computed.get("pairing") == OPENING_NOT_STATED
+        store.mark_event(event_id, "running")
+        try:
+            note = _run_build(result.event)
+            store.mark_event(event_id, "done", note_path=str(note))
+        except Exception as e:  # noqa: BLE001 — any exception is `failed`, never `done` (L1)
+            fail("build", str(e) if isinstance(e, BuildNotBuilt) else _uncaught(e))
+            if unpaired:
+                result.status_line = UNPAIRED.format(day=day.isoformat())
+            return result
+    except Exception as e:  # noqa: BLE001 — F-1: never left pending / running
+        return fail(step, _uncaught(e), uncaught=True)
     result.note_path = str(note)
     if unpaired:
         result.status_line = UNPAIRED.format(day=day.isoformat())
@@ -552,19 +661,64 @@ def no_trade(day: date, *, now: Optional[datetime] = None) -> PlaceResult:
             refused=f"refused: {day} has a trading log with {trading['fills']} executions — not a no-trade day",
         )
     try:
-        store.record_stated_book(day, "no_trade", [], via="drc_page", now=now)
+        stated = store.record_stated_book(day, "no_trade", [], via="drc_page", now=now)
     except SessionBlocked:
         return PlaceResult(date=day, refused=RESET_REFUSAL)
     except ValueError as e:
         return PlaceResult(date=day, refused=str(e))  # the store's words, verbatim
     if store.has_current_import(day, Kind.TRADING_LOG) or store.has_chain_through(day):
+        if trading is None:
+            # D2 fix r1 S-1: the FILE-LESS day's event, its source the
+            # statement just written (`DRC-D2-SEAM-2026-09-25.md` §1).
+            return no_trade_event(day, stated.id, now=now)
         try:
             store.rebuild(store.effect_day(day, None))
         except (PairingError, ValueError) as e:
             return PlaceResult(date=day, message=f"not rebuilt: {e}")  # the statement is kept
-        # A zero-execution trading log's event sits on its import row (D2-3).
-        return PlaceResult(date=day, message=NO_TRADE_WAITS if trading is None else "no-trade day recorded")
+        # A zero-execution trading log's event sits on its import (D2-3).
+        return PlaceResult(date=day, message="no-trade day recorded")
     return PlaceResult(date=day, message=f"stated; {day} has no import yet")
+
+
+def no_trade_event(day: date, stated_book_id: int, *, now: Optional[datetime] = None) -> PlaceResult:
+    """THE file-less no-trade day's event (D2 fix r1 S-1, `DRC-D2-SEAM-
+    2026-09-25.md` §1) — ONE path for the page's `no_trade` AND the CLI's
+    `state-book --no-trade --apply` (L3): `fire_event(day, stated_book_id=
+    …)` → `pending`; the rebuild (AMENDED C7, `rebuild(effect_day(day,
+    None))`: a `PairingError` / `ValueError` → `failed` with its text
+    verbatim, the statement kept); `event_for` → the event; `running`; D3's
+    build; `done` with its note path — or `failed` on ANY exception, never
+    `done` (L1, L18). Refused inside `market_reset` before anything is
+    written (R102)."""
+    try:
+        assert_writable("drc.no_trade_event", target=day.isoformat(), now=now)
+    except SessionBlocked:
+        return PlaceResult(date=day, refused=RESET_REFUSAL)
+    store = DrcStore()
+    result = PlaceResult(date=day, state=NO_TRADE, status_line=NO_TRADE)
+    event_id = store.fire_event(day, stated_book_id=stated_book_id)
+    fail = _failer(day, store, event_id, f"statement #{stated_book_id}", result)
+    step = "record"
+    try:
+        try:
+            dates = store.rebuild(store.effect_day(day, None))
+        except (PairingError, ValueError) as e:
+            result.message = f"not rebuilt: {e}"  # the statement is kept
+            return fail("record", str(e))
+        result.message = f"rebuilt: {', '.join(d.isoformat() for d in dates)}"
+        step = "build"
+        result.event = _event(day, store.event_for(day), [])
+        store.mark_event(event_id, "running")
+        try:
+            note = _run_build(result.event)
+            store.mark_event(event_id, "done", note_path=str(note))
+        except Exception as e:  # noqa: BLE001 — any exception is `failed`, never `done` (L1)
+            return fail("build", str(e) if isinstance(e, BuildNotBuilt) else _uncaught(e))
+    except Exception as e:  # noqa: BLE001 — F-1: never left pending / running
+        return fail(step, _uncaught(e), uncaught=True)
+    result.note_path = str(note)
+    result.status_line = f"no-trade day recorded → DRC built: {note}"
+    return result
 
 
 # ---------------------------------------------------------------------
@@ -637,7 +791,6 @@ def day_view(day: date, *, cards: Optional[list[dict]] = None, vault_root: Optio
         if r["current"] and r["kind"] != "screenshot"
     ]
     derived = view["day"]["derived"] if view["day"] else {}
-    inputs = view["day"]["inputs"] if view["day"] else {}
     pairing_nc = derived.get("not_computed", {}).get("pairing")
     if pairing_nc == OPENING_NOT_STATED:
         out.unpaired = UNPAIRED.format(day=day.isoformat())
@@ -680,11 +833,10 @@ def day_view(day: date, *, cards: Optional[list[dict]] = None, vault_root: Optio
         out.event_line = f"event: {ev_state}" + (f" — {ev_error}" if ev_error else "")
     if out.unpaired:
         out.status_line = out.unpaired
-    elif trading is None and inputs.get("no_trade_id") is not None:
-        out.status_line = NO_TRADE_WAITS
     elif out.state in (READY, NO_TRADE) and ev_state == "done":
+        # D2 fix r1 (§1): the note path the `done` event row stores.
         prefix = "no-trade day recorded" if out.state == NO_TRADE else "READY"
-        out.status_line = f"{prefix} → DRC built: (the note path is returned on the drop; not stored — D3)"
+        out.status_line = f"{prefix} → DRC built: {view['note_path']}"
     elif out.state in (READY, NO_TRADE) and ev_state == "failed":
         out.status_line = f"DRC build FAILED: event — {ev_error}"
     elif out.state in (READY, NO_TRADE) and ev_state in ("pending", "running"):
@@ -704,7 +856,6 @@ def render_status(view: DayView) -> str:
 
 __all__ = [
     "BUILD_NOT_BUILT",
-    "NO_TRADE_WAITS",
     "RESET_REFUSAL",
     "UNPAIRED",
     "DayView",
@@ -715,6 +866,7 @@ __all__ = [
     "folder_pending",
     "is_trading_day",
     "no_trade",
+    "no_trade_event",
     "place",
     "render_status",
     "scan_folder",

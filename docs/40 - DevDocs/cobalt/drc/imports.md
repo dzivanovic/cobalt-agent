@@ -92,8 +92,35 @@ stale / not-re-paired notes read from the `day` row, the current files,
 the orphans, the folder's files not on a row, the counts, and the status
 line. `render_status(view)` is that one line.
 
+## 2026-09-28 — DRC D2 fix r1
+`docs/30 - Design/DRC-D2-SEAM-2026-09-25.md` §1 / §2 (R64) and the
+round-1 check's F-1. THE EVENT: `DrcInputsPlaced` gains `event_id`,
+`stated_book_id`, `stated_book_sha256`, `seed_from_day`,
+`seed_from_book_sha256`; `import_id` is optional; the model rule (exactly
+one source; a stated source is `no_trade` with no stats, screenshots,
+partial or file sha256s and a hex-64 statement hash) is a validator.
+`_fire` fires through `DrcStore.fire_event(day, import_id=…)` and moves
+by the event id, its order unchanged, `done` storing the note path; ANY
+exception after `pending` lands `failed` — the named ones verbatim, any
+other as `<step> — <Type>: <message>` — never left `pending` /
+`running`. THE FILE-LESS DAY: **`no_trade_event(day, stated_book_id, *,
+now=None)`** — `fire_event(stated_book_id=…)` → the rebuild (a refusal →
+`failed`, `not rebuilt: …`, the statement kept) → `running` → the build
+→ `done` | `failed`; `no_trade` calls it for a day with no trading log (a
+zero-execution log's event stays its import's), and so does the CLI's
+`state-book --no-trade --apply`. `NO_TRADE_WAITS` is gone; `_state` is
+`no-trade` for a file-less day with a current `no_trade` statement; the
+page's `done` line reads the stored note path for both day types. THE
+SCREENSHOT DROP: a PNG / JPEG on a trade of the day's current computed
+trading log → the bytes writer, then `DrcStore.record_screenshot`; a key
+not in the log is `FAILED: trade <key> is not in the current trading
+log`, nothing bound or written; a READY day re-fires. `SCREENSHOT_NOT_BUILT`
+is gone.
+
 ## Tests
 `tests/cobalt/test_drc_imports.py` (offline, an in-memory `DrcStore`
 double), `tests/cobalt/test_drc_imports_db.py` (with-DB, inside
 `test_drc_store.py`'s rolled-back migration transaction),
-`tests/cobalt/test_drc_d2_experiments.py` (E5 / E11 / X13 / X-NT).
+`tests/cobalt/test_drc_d2_experiments.py` (E5 / E11 / X13 / X-NT),
+`tests/cobalt/test_drc_d2_fix_r1.py` / `test_drc_d2_fix_r1_db.py` /
+`test_drc_d2_fix_r1_runs.py` (D2 fix r1).

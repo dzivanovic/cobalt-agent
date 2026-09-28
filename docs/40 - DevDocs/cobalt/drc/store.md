@@ -193,6 +193,32 @@ rows it is built from — every `drc_imports` row of the day with `current`
 and its `fills` count, the `day` row, the trade ids, and the row count
 per kind. The event's payload is never stored (L57).
 
+## 2026-09-28 — DRC D2 fix r1 (the event home, the screenshot writer)
+`docs/30 - Design/DRC-D2-SEAM-2026-09-25.md` §1 / §2 (R64). THE EVENT
+HOME moves to `"user".drc_events` (`0019_drc_events`; `TABLES` names it):
+ONE row per source — a trading-log import (`source = import`) or a
+current `no_trade` statement (`source = stated_book`, the file-less
+no-trade day). **`fire_event(day, *, import_id=None, stated_book_id=None)
+-> int`** is the ONLY way a row reaches `pending`: exactly one source; an
+import must be a stored `trading_log` of `day`, a statement the CURRENT
+`no_trade` statement of `day` (`_no_trade_id`); anything else refused
+naming why, nothing written; a re-fire moves the source's row back to
+`pending` with its error and note path cleared. **`mark_event(event_id,
+state, error=None, *, note_path=None)`** is keyed by the event id; the
+moves are `EVENT_MOVES` (unchanged) and never to `pending`; `failed` names
+its reason, `done` the note path the build returned. **`event_for(day)`**
+keeps every key and reads the event by the three-step rule (the current
+trading-log import's; else the current `no_trade` statement's; else
+none), adding `event_id`, `source`, `note_path`, `stated_book_id` /
+`stated_book_sha256` (with no current trading log: the day's current
+`no_trade` statement, fired or not) and `seed` (the day's `seed` row
+inputs, read only); the `imports` rows lose their `event_*` keys.
+**`record_screenshot(day, name, data, trade_key) -> int`** is the ONE
+writer of `kind = 'screenshot'` rows: refuses empty bytes, a non-PNG /
+JPEG header and an empty key; `supersedes` the current screenshot row of
+the same day + key; nothing overwritten or deleted. `record_import`,
+`models.Kind` and `detect_set` are untouched.
+
 ## Tests
 `tests/cobalt/test_drc_store.py` has an offline half (the SQL, the
 registry, the placement map, the one-writer grep). Its with-DB half

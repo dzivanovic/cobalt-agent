@@ -66,3 +66,8 @@ migration transaction.
 
 `CREATED_TABLES` gains `drc_stated_books`, on the USER side, from `0018`.
 It holds his own statements (L32).
+
+## 2026-09-28 — DRC D2 fix r1
+
+`CREATED_TABLES` gains `drc_events`, on the USER side, from `0019`. It
+holds the state of his own DRC runs (L32).

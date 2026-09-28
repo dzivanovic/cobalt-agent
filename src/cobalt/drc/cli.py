@@ -23,7 +23,10 @@ is re-paired after `--apply` (`rebuilt: <dates>`), and the dry run names
 that effect. A refused rebuild prints why and exits non-zero; the
 statement stays written. K2 fix r1 F-1: the day rebuilt is
 `DrcStore.effect_day(day, supersedes)` — a restatement's rebuild starts
-at the earlier of its day and the superseded row's day.
+at the earlier of its day and the superseded row's day. D2 fix r1: a
+`no_trade` statement's effect is `imports.no_trade_event` — the rebuild
+AND the day's file-less event, the page's one path (L3); a failed event
+exits non-zero.
 """
 
 from __future__ import annotations
@@ -182,6 +185,23 @@ def cmd_state_book(args: argparse.Namespace) -> None:
     print(f"\nwritten: {DrcStore.STATED_TABLE} #{row.id} (book_sha256 {row.book_sha256})")
     if not rebuilds:
         print(f"stated; {effect.isoformat()} has no import yet")
+        return
+    from .models import Kind
+
+    if row.kind == "no_trade" and not store.has_current_import(req.day, Kind.TRADING_LOG):
+        # D2 fix r1 S-1 (`DRC-D2-SEAM-2026-09-25.md` §1, L3): the day's
+        # file-less event through the page's ONE path, which runs the
+        # rebuild; a failed event or a refused rebuild exits non-zero. (A
+        # zero-execution trading log's event stays its import's, as on
+        # the page: that day only rebuilds, below.)
+        from .imports import no_trade_event
+
+        result = no_trade_event(req.day, row.id)
+        for line in (result.refused, result.message, result.status_line):
+            if line:
+                print(line)
+        if result.note_path is None:
+            raise SystemExit(1)
         return
     try:
         dates = store.rebuild(effect)

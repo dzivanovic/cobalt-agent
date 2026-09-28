@@ -81,3 +81,15 @@ rebuilt: … nothing to re-pair ([F-05])`, exit 1, the statement kept),
 never the silent exit 0 it was before (F-1r2, AMENDED C7 (r2)). The
 `stated; <day> has no import yet` line now names the effect day, which is
 the day actually tested for an import.
+
+## 2026-09-28 — DRC D2 fix r1
+`--no-trade DAY --apply` on a day with no trading log, once the statement
+is written and the day joins a recorded chain, no longer runs its own
+rebuild: it calls `imports.no_trade_event(DAY, <the statement's id>)`,
+the page's ONE path (L3; `DRC-D2-SEAM-2026-09-25.md` §1), which runs the
+rebuild AND fires the day's file-less event. It prints the function's
+lines (`rebuilt: <dates>` or `not rebuilt: …`, then the status line) and
+exits 1 unless the event is `done` — with no D3 build that is `DRC build
+FAILED: build — build not built (D3)`. `via` stays `cli`. The `opening` /
+`resolve` branches, the dry run, `_rebuilds`, a zero-execution day and
+the `stated; <day> has no import yet` path are unchanged.

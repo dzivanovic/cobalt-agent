@@ -213,3 +213,16 @@ gate.
 name, `drc_rows_kind_check`. Its rollback states its COST and restores the
 four-kind CHECK. It is a new file, never a fold into `0016` (X5). `0017`
 is the voice branch's number, so the registry reads `1…11, 16, 18`.
+
+## 2026-09-28 — DRC D2 fix r1: `0019_drc_events`
+
+`0019` creates `"user".drc_events`, the ONE home of the DRC input event's
+state for both day types (`DRC-D2-SEAM-2026-09-25.md` §1): one row per
+source (a trading-log import or a `no_trade` statement), four CHECKs
+(source ⇔ its FK, `failed` ⇔ a non-empty error, `done` ⇔ a note path),
+one row per source. It drops the never-shipped `drc_imports.event_*`
+columns. Its rollback states its COST (event history), restores the
+three columns and both CHECKs as `0016` declares them, and is a no-op
+when its objects are absent (`IF EXISTS`; the `to_regclass` guard). The
+number is the desk's (R64 (5)); D3's `drc_build_kinds` is `0020`.
+`FORWARD` ends `…, 18, 19`; `0019`'s rollback is `REVERSE[0]`.

@@ -66,6 +66,14 @@
 `0018_drc_stated_books.rollback.sql` — deletes the `seed` / `book_close`
                          rows, restores the four-kind CHECK, drops the
                          table (his statements with it — its COST line).
+`0019_drc_events.sql` — DRC D2 fix r1: `"user".drc_events`, the ONE home
+                         of the input event's state for both day types
+                         (a trading-log import or a `no_trade` statement
+                         as its source); drops the never-shipped
+                         `drc_imports.event_*` columns.
+`0019_drc_events.rollback.sql` — drops that table (event history with it —
+                         its COST line) and restores the three columns
+                         and both CHECKs as 0016 declares them.
 
 0012 AND 0016 ARE NOT GAPS BY ACCIDENT: 0012 belongs to the unmerged
 `bars/chunk-2-0920` (`0012_bars_partitioned_parent`) and 0016 to DRC D1
@@ -122,10 +130,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0016_drc.sql",
     MIGRATIONS_DIR / "0017_voice_turns.sql",
     MIGRATIONS_DIR / "0018_drc_stated_books.sql",
+    MIGRATIONS_DIR / "0019_drc_events.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0019_drc_events.rollback.sql",
     MIGRATIONS_DIR / "0018_drc_stated_books.rollback.sql",
     MIGRATIONS_DIR / "0017_voice_turns.rollback.sql",
     MIGRATIONS_DIR / "0016_drc.rollback.sql",

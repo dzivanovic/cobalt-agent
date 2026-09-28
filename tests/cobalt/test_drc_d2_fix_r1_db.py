@@ -163,7 +163,7 @@ def test_s1_12_the_rollback_round_trips_and_is_a_no_op_when_its_objects_are_abse
     assert [c for c in _columns(migrated, "drc_imports") if c.startswith("event_")] == [
         "event_state", "event_updated_at", "event_error"]
     checks = _checks(migrated, "drc_imports")
-    assert "CHECK ((event_state IS NULL) OR (event_updated_at IS NOT NULL))" in checks
+    assert "CHECK (((event_state IS NULL) OR (event_updated_at IS NOT NULL)))" in checks
     assert any("event_state" in c and "'pending'::text" in c and "'failed'::text" in c for c in checks)
     _apply(migrated, [ROLLBACK])  # repeated: a no-op
     _apply(migrated, [SQL])
