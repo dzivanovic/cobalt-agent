@@ -1,0 +1,44 @@
+---
+name: cobalt
+description: Start here — state, then rules for working on Cobalt.
+updated: 2026-09-27
+---
+## Start here [stated 2026-09-27 · Dejan]
+- Read `## NOW`, then [[INDEX]].
+
+## NOW
+«snapshot ≤1,500 chars, rewritten whole at every close and desk refresh»
+
+## What Cobalt is [stated ≤2026-09-05 · export]
+- Trading wingman: scanner → in-play pool → graded cards → sizing → alert. He trades by hand; Cobalt never touches a platform or trades.
+
+## Sources [stated 2026-08-29 · export]
+- `docs/00 - Project/`: LEDGER, MVP-CHARTER, SPRINT-LADDER, BACKLOG, COBALT-REQUIREMENTS. `20 - Assessment/TRIAGE.md`: frozen, read before building. `30 - Design/`. `10 - Decisions/`.
+
+## Build rules [stated ≤2026-08-22 · CLAUDE.md]
+- Python · Pydantic · Postgres + pgvector · rotating logs. Behavior in config, never code; schemas ready for swing and options.
+- LLMs read cached, validated data only; code computes every number.
+- Sprint close: tests, review, ADR, PDD, DevDocs per .py. Test before building more.
+- Three model failures → next tier.
+- Never commit vault content, secrets or gitignored files. Quote the source of every figure.
+- [stated ≤2026-09-05 · export] Ruling-heavy sessions end with a ledger appendix. Engineering choices: decided-with-veto.
+
+## Working rules [stated ≤2026-09-10 · CLAUDE.md]
+- Report: §0 ≤5 lines → tables → ESCALATE; facts only.
+- State to vault/DB before `/clear`; avoid `/compact`. Prompts carry paths, not contents; never paste into an auto-mode pane without text.
+- Never commit reviewer captures or Codex logs.
+
+## Production and dev [stated ≤2026-08-31 · CLAUDE.md]
+- Prod = live install, Postgres, vault (via `COBALT_VAULT_PATH` only). Dev = worktree, `cobalt_dev`, `~/dev-vault-cobalt` (default), `configs/dev`, dev Mattermost token.
+- Sprint done = green smoke test of everything delivered. Order by income; nothing takes the agent down.
+
+## Strangler rebuild [stated ≤2026-08-28 · CLAUDE.md]
+- Old tree: untouched, runnable; KILL code dies there. New code: `src/cobalt/` only, never touching prod. KEEP-AS-IS ports via tests; KEEP-CONCEPT/REBUILD use old code as spec; REDESIGN needs an ADR.
+- New config: `configs/dev/`, `configs/cobalt/`, `src/cobalt/` — never top-level `configs/*.yaml`.
+
+## Docs tree [stated 2026-09-13 · CLAUDE.md]
+- `docs/` = vault `0 - Projects/Cobalt`: 00 Project · 10 Decisions · 20 Assessment · 30 Design · 40 DevDocs (PLACEMENT.md) · 50 Roles · 90 References · `_archive`. Git: one carve-out per numbered folder, never widened; never `90 - References/assets/`, `60 - Agent Output/`, `0 - Projects/`. Nothing under docs/ is deleted. Root markdown: CLAUDE, AGENTS, QWEN, README, REQUIREMENTS stub.
+
+## Repo facts [stated ≤2026-08-31 · CLAUDE.md]
+- Old tree: `validation_alias` fields read env only (their `config.yaml` keys are dead); `scribe.py` resolves separately. Memory code says `_hilt_`, schema `hitl_`: log, don't fix.
+- `cobalt_master_context.txt` is stale (regenerate: `dev_utils/generate_context.py`). Never run `dev_utils/wipe_memory.py` or `reset_memory_table.py`.
