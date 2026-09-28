@@ -169,10 +169,11 @@ def x21_session_b_outcome(monkeypatch) -> str:
 
 
 @requires_db
-def test_x21_today_session_b_does_not_wait(monkeypatch):
-    """EXPECTED today (v3 X21): B does NOT wait — the autocommit
-    connection released A's lock the moment its SELECT ran."""
-    assert x21_session_b_outcome(monkeypatch) == "acquired"
+def test_x21_after_c2_session_b_waits_on_the_stop_edit_lock(monkeypatch):
+    """E1 recorded today's result (B did NOT wait: `acquired`, commit
+    80e0c8a2). After C2-6 the stop edit is ONE transaction holding the
+    card lock to its commit, so B meets the lock."""
+    assert x21_session_b_outcome(monkeypatch) == "waits"
 
 
 # ---------------------------------------------------------------------
@@ -181,37 +182,42 @@ def test_x21_today_session_b_does_not_wait(monkeypatch):
 
 
 @requires_db
-def test_x20_today_a_stop_between_planned_entry_and_fill_is_refused(aset):
-    from cobalt.aset.engine import SizingError
+def test_x20_after_c2_a_stop_between_planned_entry_and_fill_is_accepted(aset):
+    """E1 recorded today: `SizingError` (the planned-entry side check).
+    After C2: side-checked against the fill 10.05 — accepted."""
     from cobalt.cards.store import CardStore
 
     card_id = _x20_filled(aset)
-    with pytest.raises(SizingError, match="must be below entry"):
-        CardStore(aset.db_name).record_stop_edit(card_id, from_stop=Decimal("9.90"), to_stop=Decimal("10.02"))
+    CardStore(aset.db_name).record_stop_edit(card_id, from_stop=Decimal("9.90"), to_stop=Decimal("10.02"))
+    row = card_row(aset, card_id)
+    assert row["stop"] == Decimal("10.0200")
+    assert row["per_share_risk"] == Decimal("0.0300") and row["used_risk"] == Decimal("1.98"), "0.03 x 66 held"
+    assert row["shares"] == 100
 
 
 @requires_db
-def test_x20_today_used_risk_is_the_planned_distance_on_the_planned_shares(aset):
+def test_x20_after_c2_used_risk_is_the_fill_distance_on_the_running_shares(aset):
+    """E1 recorded today: 5.00 (0.05 x 100). After C2: 0.10 x running."""
     from cobalt.cards.store import CardStore
 
     card_id = _x20_filled(aset)
     CardStore(aset.db_name).record_stop_edit(card_id, from_stop=Decimal("9.90"), to_stop=Decimal("9.95"))
     row = card_row(aset, card_id)
-    assert row["used_risk"] == Decimal("5.00"), "0.05 (planned entry 10.00 - 9.95) x 100"
-    assert row["shares"] == 100
+    assert row["used_risk"] == Decimal("6.60"), "0.10 (fill 10.05 - 9.95) x 66 running"
+    assert row["shares"] == 100, "aset_sizings.shares still 100"
 
 
 @requires_db
-def test_x19_today_used_risk_is_priced_on_the_planned_shares_not_the_held(aset):
-    """Filled 66 at a drifted 10.05; stop to 9.85. Today: |10.00 - 9.85| x
-    100 planned = 15.00, not the 66 held."""
+def test_x19_after_c2_used_risk_is_priced_on_the_shares_he_holds(aset):
+    """Filled 66 at a drifted 10.05; stop to 9.85. E1 recorded today:
+    15.00 (|10.00 - 9.85| x 100 planned). After C2: 0.20 x 66 = 13.20."""
     from cobalt.cards.store import CardStore
 
     card_id = _x20_filled(aset, shares=66)
     CardStore(aset.db_name).record_stop_edit(card_id, from_stop=Decimal("9.90"), to_stop=Decimal("9.85"))
     row = card_row(aset, card_id)
-    assert row["used_risk"] == Decimal("15.00")
-    assert row["per_share_risk"] == Decimal("0.1500")
+    assert row["used_risk"] == Decimal("13.20")
+    assert row["per_share_risk"] == Decimal("0.2000")
 
 
 # ---------------------------------------------------------------------
