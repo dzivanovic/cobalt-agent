@@ -9,3 +9,4 @@ One row per desk wake-up, appended by the waking desk (READ 7 of `prompts/CTO-DE
 | 2026-09-28 | 08:11 | 7a86cd02 | 63,833 | 121,474 | −47.5% | 63,833 | −47.5% (new mark) | first wake-up on the applied startup files (b0e5b903) |
 | 2026-09-28 | 08:5x | 7a86cd02 | — | — | — | 63,833 | — | refresh line 500,000 → 250,000 (his R26 "A"); low-water unchanged |
 | 2026-09-28 | 09:19 | 6f5275b5 | 61,406 | 63,833 | −3.8% | 61,406 | −3.8% (new mark) | applied startup files; HANDOVER from 7a86cd02 |
+| 2026-09-28 | 10:42 | 0081a582 | 79,939 | 61,406 | +30.2% | 61,406 | +30.2% | read `_retired/cto-desk-contract.md` (16,887 B) by a `find` before the live `topics/` file; predecessor busy → live-hub work (merge-build dialog, pane reads, tool schemas) absorbed into the wake-up; R44 |
