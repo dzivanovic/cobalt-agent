@@ -64,10 +64,11 @@ from cobalt.vault import VaultConfigError, dev_entry_allowed, is_production, res
 
 from .config import ConfigError, load_config, load_sheet_modes_config
 from .daily_note import DailyNoteRefused, save_card, save_fill_update
-from .engine import KeyRefused, SizingError, compute_fill_recompute, compute_sizing, size_at_key
+from .engine import KeyRefused, SizingError, compute_sizing, size_at_key
 from .models import Direction, Grade, SizingInput
 from cobalt.settings import TraderSettingsError
 from cobalt.settings.card import CardSettingsReader
+from cobalt.settings.fills import DRIFT_NOT_EVALUATED
 from .prefill import PrefillError, fetch_last_price
 from .radar_panel import (
     RadarPanelError,
@@ -854,6 +855,8 @@ def _result_card(result, form: dict, fill=None) -> str:
     <form class="card" method="post" action="/fill">{hidden}
      <label>Actual fill $ <span class="muted">(recompute shares at the real fill; appends a FILL UPDATE block)</span></label>
      <input name="actual_fill" type="number" step="0.0001" required value="{html.escape(form.get("actual_fill", ""))}">
+     <label>Shares filled <span class="muted">(what the broker filled — the entry leg)</span></label>
+     <input name="fill_shares" type="number" step="1" min="1" required value="{html.escape(form.get("fill_shares", ""))}">
      <button type="submit">Recompute at actual fill</button>
     </form>"""
 
@@ -1066,12 +1069,18 @@ async def fill(request: Request) -> str:
         # thing up front instead of half of it.
         assert_writable("aset.fill", target=form.get("ticker") or None)
         cfg = load_config()
-        sheet_modes_cfg = load_sheet_modes_config()
-        inp = _parse_input(form, sheet_modes_cfg)
-        original = compute_sizing(
-            inp, sheet_modes_cfg.enabled_grades, cfg.validation.max_stop_distance_pct
-        )  # deterministic recompute; no re-persist
 
+        # S3 C1 (v3 §2 [F-22]): the form contributes the typed PRICE and
+        # the typed SHARES, nothing else. The sizing is the card's own row,
+        # rebuilt by `SizingResult.from_card` inside THE fill under the
+        # card lock — never a re-size of the posted fields.
+        card_row_raw = form.get("card_row_id", "")
+        if not card_row_raw.isdigit():
+            raise SizingError(
+                "No aset_sizings row id on this form — compute & persist a card "
+                "first, then recompute its actual fill. (Refusing to write a fill "
+                "update that cannot be tied to its card row.)"
+            )
         orig_ts_raw = form.get("orig_timestamp", "")
         if not orig_ts_raw:
             raise SizingError(
@@ -1080,36 +1089,41 @@ async def fill(request: Request) -> str:
             )
         orig_timestamp = datetime.fromisoformat(orig_ts_raw)
 
-        try:
-            actual_fill = Decimal(form.get("actual_fill", ""))
-        except InvalidOperation as e:
-            raise SizingError(f"Invalid actual fill price: {form.get('actual_fill')!r}") from e
-
-        fill_result = compute_fill_recompute(
-            original, actual_fill, cfg.validation.max_fill_distance_pct
-        )
-
-        # L28 step 3 (2026-09-03): the recompute is an UPDATE to the card
-        # row it belongs to — status FILLED + the actual-fill figures.
-        # Before this it created no row at all, which is why the 09-03
-        # TSLA FILL UPDATE (10:02:36) was unrecoverable from Postgres.
-        # DB first: a fill reported in the note but missing from the DB
-        # is exactly the failure mode being closed.
-        card_row_raw = form.get("card_row_id", "")
-        if not card_row_raw.isdigit():
+        raw_price = form.get("actual_fill", "").strip()
+        if not raw_price:
             raise SizingError(
-                "No aset_sizings row id on this form — compute & persist a card "
-                "first, then recompute its actual fill. (Refusing to write a fill "
-                "update that cannot be tied to its card row.)"
+                "REFUSED: a fill with no price. Type the price the broker filled you at. "
+                "Nothing written."
             )
+        try:
+            actual_fill = Decimal(raw_price)
+        except InvalidOperation as e:
+            raise SizingError(f"Invalid actual fill price: {raw_price!r}. Nothing written.") from e
+        raw_shares = form.get("fill_shares", "").strip()
+        if not raw_shares.isdigit() or int(raw_shares) == 0:
+            raise SizingError(
+                f"REFUSED: a fill with no share count ({raw_shares!r}). Type the shares the "
+                "broker filled. Nothing written."
+            )
+
+        # DB first (L28 step 3, 2026-09-03): a fill reported in the note
+        # but missing from the DB is the failure mode being closed. THE
+        # fill is one transaction — the FILLED transition, the entry leg
+        # and the fill cache land together or not at all; a card that is
+        # not TRIGGERED (radar) raises IllegalTransition naming the edge.
         store = AsetStore()
         store.ensure_schema()
-        # F7: a fill is TRIGGERED -> FILLED and nothing else. If the card
-        # has not been armed and marked triggered, mark_filled raises
-        # IllegalTransition naming the edge — it is NOT coerced, because
-        # a card that reached FILLED without ever being TRIGGERED makes
-        # the MISSED count (Charter §3 F7) meaningless.
-        filled = store.mark_filled(int(card_row_raw), fill_result)
+        outcome = store.mark_filled(
+            int(card_row_raw),
+            price=actual_fill,
+            shares=int(raw_shares),
+            flag="confirmed",
+            price_source="typed",
+            price_asof=None,
+            source="sheet",
+        )
+        filled, fill_result = outcome.result, outcome.recompute
+        original = fill_result.original
 
         note_path, note_write = save_fill_update(cfg, fill_result, orig_timestamp)
     except IllegalTransition as e:
@@ -1139,6 +1153,10 @@ async def fill(request: Request) -> str:
             f"{html.escape(str(note_path))}</div>"
         )
     banner += _pick_banner(int(card_row_raw), filled)
+    if fill_result.drift_warned is None:
+        # v3 §4 / L1: his drift P is missing — the fill IS recorded; the
+        # warning was not evaluated, and that is said, never implied.
+        banner += f'<div class="warn">⚠ {html.escape(DRIFT_NOT_EVALUATED)}</div>'
     return _render(
         banner=banner,
         result=_result_card(original, form, fill=fill_result),
@@ -1201,33 +1219,30 @@ async def card_move(card_id: int, request: Request) -> str:
     form = {k: str(v) for k, v in (await request.form()).items()}
     try:
         _check_entry_allowed()
+        to_state = CardState(form.get("to", ""))
+        if to_state is FILL_TARGET:
+            # ONE PATH TO FILLED (S3 C1, v3 §2 [F-22]): a fill carries his
+            # price and shares and lands with its entry leg, so it is
+            # written only by THE fill (`AsetStore.mark_filled`). A FILLED
+            # from here would be the priceless fill of F8.
+            raise CardStateError(
+                f"REFUSED card {card_id}: {FILL_TARGET.value} — this route never fills. "
+                "A fill is written only by the fill (POST /fill with the price and shares "
+                "the broker filled)."
+            )
         store = CardStore()
         store.ensure_schema()
         before = store.state_of(card_id)
-        to_state = CardState(form.get("to", ""))
         filled = None
-        if to_state is FILL_TARGET:
-            # ONE PATH TO FILLED (S1-P3): the same `fill()` the
-            # actual-fill form calls, so the one-click completion happens
-            # here too and a radar card is refused here too. `tids` is
-            # every row it wrote — three on a WATCH manual card.
-            filled = store.fill(
+        tids = [
+            store.transition(
                 card_id,
+                to_state,
                 actor=Actor.YOU,
                 evidence={"via": "aset.sheet"},
                 reason=(form.get("reason") or "").strip() or None,
             )
-            tids = filled.transition_ids
-        else:
-            tids = [
-                store.transition(
-                    card_id,
-                    to_state,
-                    actor=Actor.YOU,
-                    evidence={"via": "aset.sheet"},
-                    reason=(form.get("reason") or "").strip() or None,
-                )
-            ]
+        ]
     except (IllegalTransition, CardStateError, SessionBlocked, DevEntryRefused) as e:
         logger.error("card {} move REFUSED: {}", card_id, e)
         return _render(banner=_failed(str(e)))

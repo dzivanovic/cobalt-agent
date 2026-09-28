@@ -76,6 +76,14 @@ def test_the_forward_adds_the_three_column_sets():
         assert f"ADD COLUMN IF NOT EXISTS {column}" in code, column
 
 
+def test_the_migrate_proof_does_not_read_the_added_columns_as_content():
+    from cobalt.db_migrations.cli import TABLE_DIGEST_EXCLUDED_COLUMNS
+
+    assert {"trade_note_path", "drift_warning_pct", "drift_warned"} <= set(
+        TABLE_DIGEST_EXCLUDED_COLUMNS["aset_sizings"])
+    assert TABLE_DIGEST_EXCLUDED_COLUMNS["card_stop_edits"] == ("kind",)
+
+
 def test_the_rollback_removes_exactly_what_the_forward_adds():
     code = _code(ROLLBACK)
     assert 'DROP VIEW IF EXISTS "user".legs_current_v' in code

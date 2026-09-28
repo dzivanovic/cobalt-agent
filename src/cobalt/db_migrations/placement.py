@@ -89,6 +89,9 @@ CREATED_TABLES: dict[str, Side] = {
     # db_migrations/0017_voice_turns.sql — voice V1's turn rows (voice v3
     # FINAL §7). USER: one trader's words and the command they ran (L32).
     "voice_turns": Side.USER,
+    # db_migrations/0021_legs.sql — S3 exits M1: his fills and exits (L32).
+    # Declared USER by ADR-0008 D2; it leaves DECLARED now that it is built.
+    "legs": Side.USER,
 }
 
 #: VIEWS created by database-wide migrations. On a side like any table
@@ -101,6 +104,8 @@ CREATED_VIEWS: dict[str, Side] = {
     # 0007: the card-joined board, and tap-vs-shadow agreement
     "radar_cards_v": Side.USER,
     "shadow_agreement_v": Side.USER,
+    # 0021: the current leg row per (card, seq)
+    "legs_current_v": Side.USER,
 }
 
 #: Declared by ADR-0008 D2 before they are built, so the first migration
@@ -108,8 +113,8 @@ CREATED_VIEWS: dict[str, Side] = {
 #: yet; the placement test only checks tables that DO exist.
 DECLARED_TABLES: dict[str, Side] = {
     # S3 — named now so the placement test knows them on sight. `missed`
-    # left this list when S2-P4's 0009 built it.
-    "legs": Side.USER,
+    # left this list when S2-P4's 0009 built it, `legs` when S3's 0021 did;
+    # `fills` stays declared and unbuilt (S3 exits v3 O16, default).
     "fills": Side.USER,
     "drc_rows": Side.USER,
     "prediction_records": Side.USER,

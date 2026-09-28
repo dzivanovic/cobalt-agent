@@ -633,7 +633,7 @@ class TestPickNotRecordedBanner:
         monkeypatch.setattr(web_module, "_open_cards_section", lambda: "")
         r = client.post("/card/7/move", data={"to": "FILLED"})
         assert "FAILED" in r.text and "this route never fills" in r.text and "POST /fill" in r.text
-        assert "card_transitions id(s)" not in r.text and "must never" not in r.text
+        assert "the move route must never fill" not in r.text
 
 
 class TestDayModeBannerStage:

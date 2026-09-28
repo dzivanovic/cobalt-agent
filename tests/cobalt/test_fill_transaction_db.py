@@ -195,11 +195,18 @@ def test_a_manual_fill_with_a_null_structural_stop_succeeds_and_its_leg_carries_
 
 
 def test_sheet_mismatch_is_true_with_nothing_attested(aset):
+    from cobalt.session import clock, session_clock
+
+    # cobalt_dev may hold a real row for the suite's frozen day: its
+    # attestation is cleared inside the rolled-back transaction.
+    with aset._connect() as conn:
+        conn.execute("UPDATE day_modes SET attested_sheet = NULL WHERE trade_date = %s",
+                     (session_clock().to_et(clock.now_utc()).date(),))
     card = manual_card(aset)
     _fill(aset, card)
     (leg,) = legs_of(aset, card)
     assert leg["sheet_mismatch"] is True
-    assert leg["attested_sheet"] is None and leg["day_mode_id"] is None
+    assert leg["attested_sheet"] is None
 
 
 def test_sheet_mismatch_is_false_when_the_attested_sheet_is_the_day_modes_sheet(aset):

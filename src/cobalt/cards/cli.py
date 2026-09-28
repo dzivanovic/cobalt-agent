@@ -20,7 +20,6 @@ the clock rather than sleeping until 16:05.
 from __future__ import annotations
 
 import argparse
-import sys
 from datetime import date, datetime
 
 from cobalt import env
@@ -72,42 +71,27 @@ def cmd_history(args: argparse.Namespace) -> None:
 
 
 def cmd_move(args: argparse.Namespace) -> None:
+    to_state = CardState(args.to)
+    if to_state is FILL_TARGET:
+        # ONE PATH TO FILLED (S3 C1, v3 §2 [F-22]): a fill carries his
+        # price and shares and lands with its entry leg in one transaction
+        # (`AsetStore.mark_filled`). This command has neither, so it never
+        # fills — refused before anything is read or written.
+        raise SystemExit(
+            f"REFUSED card {args.card_id}: `cobalt cards move … {FILL_TARGET.value}` never fills. "
+            "A fill is written only by the fill — the sheet's POST /fill with the price and "
+            "shares the broker filled."
+        )
     store = _store()
     before = store.state_of(args.card_id)
-    to_state = CardState(args.to)
-    # ONE PATH TO FILLED (S1-P3) — the CLI takes the same route the sheet
-    # and the actual-fill form take, so a manual card gets its missing
-    # rows here too and a radar card is refused here too.
-    filled = None
-    if to_state is FILL_TARGET:
-        filled = store.fill(
-            args.card_id,
-            actor=Actor(args.actor),
-            reason=args.reason,
-            evidence={"via": "cobalt cards move"},
-        )
-        tids = filled.transition_ids
-    else:
-        tids = [
-            store.transition(
-                args.card_id,
-                to_state,
-                actor=Actor(args.actor),
-                reason=args.reason,
-                evidence={"via": "cobalt cards move"},
-            )
-        ]
-    tid = ", ".join(str(i) for i in tids)
+    tid = store.transition(
+        args.card_id,
+        to_state,
+        actor=Actor(args.actor),
+        reason=args.reason,
+        evidence={"via": "cobalt cards move"},
+    )
     print(f"card {args.card_id}: {before} -> {args.to}  (card_transitions id {tid})")
-    if filled is not None and not filled.pick_recorded:
-        # The fill COMMITTED (R2); the pick did not. Exit 1 so a script
-        # cannot mistake the gap for a clean fill.
-        print(
-            f"PICK NOT RECORDED for card {args.card_id}: {filled.pick_error} — the fill "
-            "stands; `cobalt cards picks` reports this card MISSING.",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
 
 
 def cmd_picks(args: argparse.Namespace) -> None:

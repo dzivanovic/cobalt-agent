@@ -182,3 +182,23 @@ land — whichever lands later keeps every number in numeric order, as
 (`CREATE … IF NOT EXISTS`, touches no existing object); its rollback drops
 that one table and nothing else. No bytes column of any kind — voice audio
 never reaches the database (R18 (b)).
+
+## 2026-09-28 — S3 exits C1: `0021_legs` (M1)
+
+`FORWARD` gains `0021_legs.sql` (last) and `REVERSE` its rollback (first);
+0016 and 0018–0020 are the DRC lane's (the S-MIG seam), so the registry
+reads `…, 0017, 0021`. The forward creates `"user".legs` (S-LEGS: the
+entry and exit legs, append-only through `refuse_row_update()`, one
+original per seq and one original entry per card as partial unique
+indexes, `legs_current_v` = the greatest id per `(card_id, seq)`), adds
+`card_stop_edits.kind` (`edit` / `reset`, default `edit`, R38) and
+`aset_sizings.trade_note_path`, `drift_warning_pct`, `drift_warned`.
+Idempotent (IF NOT EXISTS, a guarded trigger, CREATE OR REPLACE VIEW). The
+rollback drops exactly those: the view, the table, the four columns
+(`refuse_row_update()` is 0007's and stays). `placement.py`: `legs` leaves
+`DECLARED_TABLES` for `CREATED_TABLES` (USER), `legs_current_v` joins
+`CREATED_VIEWS` (USER), `fills` stays declared. `cli.py`: the four added
+columns join `TABLE_DIGEST_EXCLUDED_COLUMNS` (`aset_sizings`,
+`card_stop_edits`) so the migrate proof does not read an added column as a
+content change (the 0014 precedent). The registry pins in the suite gain
+the one 0021 entry each.

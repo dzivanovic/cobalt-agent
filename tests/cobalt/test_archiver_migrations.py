@@ -159,8 +159,10 @@ def test_the_registry_is_an_explicit_contiguous_list_and_reverse_mirrors_it():
     # The stale-score build adds 0015 (R40); 0014 is handicap H1's (same seam).
     # Voice V1 adds 0017; 0012 and 0016 belong to unmerged branches and close
     # the gap as they land (L68 seam).
-    assert numbers == [*range(1, 12), 13, 14, 15, 17], f"1…11 then 13, 14, 15, 17, got {numbers}"
-    assert numbers[-6:-4] == [10, 11], "this branch's pair is still in place"
+    # S3 exits C1 adds 0021; 0016 and 0018-0020 are the DRC lane's (L68 seam).
+    assert numbers == [*range(1, 12), 13, 14, 15, 17, 21], (
+        f"1…11 then 13, 14, 15, 17, 21, got {numbers}")
+    assert numbers[-7:-5] == [10, 11], "this branch's pair is still in place"
     reverse_numbers = [int(p.name.split("_", 1)[0]) for p in REVERSE]
     assert reverse_numbers == sorted(reverse_numbers, reverse=True)
     assert reverse_numbers == [n for n in reversed(numbers) if n != 1], (

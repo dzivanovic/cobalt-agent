@@ -143,7 +143,8 @@ def test_placement_declares_the_new_tables_and_views_on_their_sides():
     for name in USER_TABLES | USER_VIEWS:
         assert PLACEMENT[name] is Side.USER, name
     assert SYSTEM_TABLES | USER_TABLES <= set(CREATED_TABLES)
-    assert SYSTEM_VIEWS | USER_VIEWS == set(CREATED_VIEWS)
+    # S3 exits C1's 0021 adds legs_current_v, the one view not 0006/0007's.
+    assert SYSTEM_VIEWS | USER_VIEWS == set(CREATED_VIEWS) - {"legs_current_v"}
     assert not set(CREATED_VIEWS) & set(CREATED_TABLES)
 
 

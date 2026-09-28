@@ -435,8 +435,17 @@ class CardStore:
         reason: Optional[str] = None,
         now: Optional[datetime] = None,
         allow_prod: bool = False,
+        conn=None,
     ) -> FillResult:
-        """Fill a card. THE entry point for reaching FILLED.
+        """Fill a card. The state-machine half of THE fill.
+
+        S3 C1 (v3 §2 [F-22]): `AsetStore.mark_filled` is THE fill — it
+        passes its OPEN transaction here as `conn` and, in that same
+        transaction, writes the entry leg and the fill cache. With a
+        `conn` this method follows `transition()`'s rule: it neither
+        opens, commits, rolls back nor closes; the caller owns all four.
+        Without one (the tests and tooling that exercise the state machine
+        alone) it owns its own transaction, as before.
 
         Returns a `FillResult`: the `card_transitions` row ids written, in
         order — three on a one-click fill from WATCH, one on a fill of an
@@ -473,8 +482,24 @@ class CardStore:
         existed.
         """
         ts = now or clock_mod.now_utc()
-        state = self.state_of(card_id)
-        origin = self.origin_of(card_id)
+        owned = conn is None
+        if owned:
+            state = self.state_of(card_id)
+            origin = self.origin_of(card_id)
+        else:
+            # On the caller's transaction, which already holds the card's
+            # row lock: no second connection, no read outside the lock.
+            row = conn.execute(
+                "SELECT state, origin FROM aset_sizings WHERE id = %s", (card_id,)
+            ).fetchone()
+            if row is None:
+                raise CardStateError(f"no aset_sizings row with id {card_id}")
+            if row[0] is None:
+                raise CardStateError(
+                    f"card {card_id} has NO STATE — run `cobalt cards backfill` "
+                    "before moving it (F7: no card exists without a state)."
+                )
+            state, origin = CardState(row[0]), Origin(row[1])
 
         if state is FILL_TARGET:
             raise IllegalTransition(state, FILL_TARGET, card_id)
@@ -490,8 +515,9 @@ class CardStore:
         # — a state with a ledger row behind it and no decision behind
         # the row. All of it lands, or none of it does.
         ids: list[int] = []
-        conn = self._connect(allow_prod=allow_prod)
-        conn.autocommit = False
+        if owned:
+            conn = self._connect(allow_prod=allow_prod)
+            conn.autocommit = False
         try:
             if not strict:
                 for hop in route[:-1]:
@@ -516,12 +542,15 @@ class CardStore:
                 )
             )
             pick_id, pick_error = self._record_pick(conn, card_id, ids[-1], ts)
-            conn.commit()
+            if owned:
+                conn.commit()
         except BaseException:
-            conn.rollback()
+            if owned:
+                conn.rollback()
             raise
         finally:
-            conn.close()
+            if owned:
+                conn.close()
         return FillResult(
             transition_ids=ids,
             pick_recorded=pick_id is not None,

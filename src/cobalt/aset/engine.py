@@ -36,11 +36,10 @@ from .models import Direction, FillRecompute, Grade, SizingInput, SizingResult
 
 CENTS = Decimal("0.01")
 
-# ≥25% distance change between the planned and actual-fill entry means
-# the stop was likely picked against a different price than what was
-# actually paid — flag it as possibly no longer structural rather than
-# silently recomputing and moving on.
-FILL_DISTANCE_WARNING_PCT = Decimal("25")
+# The drift warning's threshold is HIS setting, `fills.drift_warning_pct`
+# (S3 exits v3 §4), read by `cobalt.settings.fills` and passed in by the
+# caller. The hard-coded 25 that lived here died in S3 C1.
+STRUCTURAL_WARNING = "stop may no longer be structural — re-read the level."
 
 
 class SizingError(ValueError):
@@ -268,9 +267,20 @@ def compute_fill_recompute(
     original: SizingResult,
     actual_fill: Decimal,
     max_fill_distance_pct: Decimal,
+    *,
+    drift_warning_pct: Decimal | None,
 ) -> FillRecompute:
     """Recompute shares at the actual fill price, same grade dollars and
-    same stop. Note-only — never persisted to Postgres as a new row."""
+    same stop — the fill cache `AsetStore.mark_filled` writes.
+
+    THE DRIFT WARNING (S3 exits v3 §4): `distance_change_pct > P`, the
+    Charter's comparator, P = his `fills.drift_warning_pct`. It never
+    refuses (the fill is already done at the broker). `drift_warning_pct`
+    is keyword-only and has no default on purpose: None means his setting
+    is missing, the warning is NOT evaluated (`drift_warned` None) and the
+    caller banners that — never a silent "no warning". No ATR term (O3 A).
+    The typo guard (`max_fill_distance_pct`) is unchanged and still refuses.
+    """
     if actual_fill <= 0:
         raise SizingError("actual_fill must be positive")
 
@@ -297,9 +307,8 @@ def compute_fill_recompute(
         abs(new_distance - planned_distance) / planned_distance * Decimal("100")
     ).quantize(CENTS)
 
-    structural_warning = None
-    if distance_change_pct >= FILL_DISTANCE_WARNING_PCT:
-        structural_warning = "stop may no longer be structural — re-read the level."
+    drift_warned = None if drift_warning_pct is None else distance_change_pct > drift_warning_pct
+    structural_warning = STRUCTURAL_WARNING if drift_warned else None
 
     return FillRecompute(
         original=original,
@@ -309,4 +318,6 @@ def compute_fill_recompute(
         share_delta=recomputed_shares - original.shares,
         distance_change_pct=distance_change_pct,
         structural_warning=structural_warning,
+        drift_warning_pct=drift_warning_pct,
+        drift_warned=drift_warned,
     )

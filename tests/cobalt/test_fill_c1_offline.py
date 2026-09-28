@@ -227,6 +227,16 @@ def test_mark_filled_refuses_a_fill_with_no_price_before_touching_the_database(m
 # ---------------------------------------------------------------------
 
 
+def _bare_page(monkeypatch):
+    """The page chrome reads the day mode and his sheets from the database;
+    these routes are tested for what they write into the banner and the
+    result card, so the chrome is reduced to exactly those two."""
+    from cobalt.aset import web as web_module
+
+    monkeypatch.setattr(web_module, "_render",
+                        lambda banner="", result="", form=None: banner + result)
+
+
 def test_the_move_route_refuses_filled_naming_the_fill_route(monkeypatch):
     from fastapi.testclient import TestClient
 
@@ -250,7 +260,7 @@ def test_the_move_route_refuses_filled_naming_the_fill_route(monkeypatch):
             raise AssertionError("the move route must never write FILLED")
 
     monkeypatch.setattr(web_module, "CardStore", Cards)
-    monkeypatch.setattr(web_module, "_open_cards_section", lambda: "")
+    _bare_page(monkeypatch)
     r = TestClient(web_module.app).post("/card/7/move", data={"to": "FILLED"})
     assert "FAILED" in r.text and "this route never fills" in r.text and "POST /fill" in r.text
     assert "must never" not in r.text
@@ -323,7 +333,7 @@ class _FillRoute:
         monkeypatch.setattr(web_module, "compute_sizing", never)
         monkeypatch.setattr(web_module, "save_fill_update",
                             lambda *a, **k: ("/dev/note.md", SimpleNamespace(action="appended")))
-        monkeypatch.setattr(web_module, "_open_cards_section", lambda: "")
+        _bare_page(monkeypatch)
         return seen
 
 

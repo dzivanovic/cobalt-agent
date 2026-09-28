@@ -53,12 +53,19 @@
                          (voice v3 FINAL §7): the state machine, no audio
                          bytes of any kind. Additive.
 `0017_voice_turns.rollback.sql` — drops that one table.
+`0021_legs.sql` — S3 exits M1: `"user".legs` (entry + exit legs, append-
+                         only, corrections as new rows), `legs_current_v`,
+                         `card_stop_edits.kind`, `aset_sizings`
+                         `trade_note_path` / `drift_warning_pct` /
+                         `drift_warned`. Additive.
+`0021_legs.rollback.sql` — drops exactly those: the view, the table, the
+                         four columns.
 
 0012 AND 0016 ARE NOT GAPS BY ACCIDENT: 0012 belongs to the unmerged
 `bars/chunk-2-0920` (`0012_bars_partitioned_parent`) and 0016 to DRC D1
 (`0016_drc`); 0018 is DRC K1's (`0018_drc_stated_books`), 0019 the DRC
 D2 fix round's (`0019_drc_events`) and 0020 DRC D3's
-(`0020_drc_build_kinds`) — the settled seam
+(`0020_drc_build_kinds`); 0021 is S3 exits C1's (`0021_legs`) — the settled seam
 (`reports/devdb-builds-reissue-2026-09-23.md` `## MIGRATION SEAM`;
 `reports/cto-2026-09-25.md` R64 (5)). Whichever lands later keeps every
 number, in numeric order.
@@ -107,10 +114,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0014_radar_handicap.sql",
     MIGRATIONS_DIR / "0015_shadow_agreement_stale.sql",
     MIGRATIONS_DIR / "0017_voice_turns.sql",
+    MIGRATIONS_DIR / "0021_legs.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0021_legs.rollback.sql",
     MIGRATIONS_DIR / "0017_voice_turns.rollback.sql",
     MIGRATIONS_DIR / "0015_shadow_agreement_stale.rollback.sql",
     MIGRATIONS_DIR / "0014_radar_handicap.rollback.sql",

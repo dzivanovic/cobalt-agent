@@ -120,3 +120,9 @@ the `FillResult` (Astra R1-5) so the sheet can render "pick not recorded".
 A pick gap never stops the fill-figures UPDATE that follows, and that
 UPDATE's own exactly-one-row check is unchanged
 (`test_mark_filled_figures_persist_after_a_pick_failure`).
+
+---
+
+## 2026-09-28 — S3 exits C1: `mark_filled` is THE fill, one transaction
+
+`mark_filled(row_id, *, price, shares, flag, price_source, price_asof, source, now=None, drift_settings=None) -> FillOutcome` is the one fill path (v3 §2 [F-22]; S-FILL). It refuses a fill with no price or no shares before any connection, reads the aset config (typo guard) and the day-mode ladder, then opens ONE connection with `autocommit = False` (`db.connect` opens autocommit) and, in that transaction: locks the card (`SELECT * FROM aset_sizings WHERE id = %s FOR UPDATE`), rebuilds the sizing with `SizingResult.from_card(row)`, reads the drift P (`cobalt.settings.fills`, on the same transaction unless a constructed `drift_settings` is passed), runs `compute_fill_recompute`, calls `CardStore.fill(conn=…)`, writes the entry leg through `cards.legs.insert_entry_leg` (the card's stop read under the lock as `stop_in_force`; `day_mode_id` / `attested_sheet` from the fill day's `day_modes` row; `sheet_mismatch` true when nothing is attested, the file is not a declared one, or its sheet is not the day mode's sheet — O18 default), and the fill cache UPDATE (`filled_at`, `actual_fill`, `recomputed_shares`, `recomputed_used_risk`, `share_delta`, `distance_change_pct`, `drift_warning_pct`, `drift_warned`) — then ONE commit; any exception rolls all of it back (X1). `FillOutcome` = `(result: FillResult, recompute: FillRecompute, leg_id, sheet_mismatch)`. The FILLED transition's evidence also carries the shares, the P and whether it warned. `for_date`'s SELECT list and meanings are unchanged.
