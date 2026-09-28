@@ -25,7 +25,7 @@ from typing import Any, Optional
 
 import pytest
 
-from cobalt.drc.models import Kind, Outcome, PairingError, StatedBook
+from cobalt.drc.models import Kind, Outcome, PairingError, SeedBook, StatedBook
 from cobalt.session import SessionBlocked
 from cobalt.vaultwrite.writer import VaultWriteError, VaultWriter
 
@@ -60,13 +60,16 @@ class _WriteStore:
 
 @dataclass
 class _Drc:
-    """`DrcStore`, in memory: the rows `imports` writes and reads."""
+    """`DrcStore`, in memory: the rows `imports` writes and reads. D2 fix
+    r1 (S-1): the event rows live in their own `events` list (the
+    `drc_events` home), one per source, never on an import row."""
 
     imports: list[dict] = field(default_factory=list)
     days: dict = field(default_factory=dict)
     stated: list[StatedBook] = field(default_factory=list)
     rebuilt: list[date] = field(default_factory=list)
     writes: list[str] = field(default_factory=list)
+    events: list[dict] = field(default_factory=list)
     seed: Any = None
     seed_error: Optional[str] = None
 
@@ -74,6 +77,10 @@ class _Drc:
         superseded = {r["supersedes"] for r in self.imports if r["supersedes"]}
         rows = [r for r in self.imports if r["import_date"] == day and r["kind"] == kind and r["id"] not in superseded]
         return rows[-1] if rows else None
+
+    def _no_trade_id(self, day):
+        rows = [s for s in self.stated if s.day == day and s.kind == "no_trade"]
+        return rows[-1].id if rows else None
 
     def record_import(self, import_date, result, data, executions=()):
         if result.kind is None or result.outcome is Outcome.IGNORED:
@@ -84,15 +91,46 @@ class _Drc:
             id=len(self.imports) + 1, import_date=import_date, kind=result.kind.value, name=result.name,
             sha256=hashlib.sha256(data).hexdigest(), trade_key=None, parse_status=result.outcome.value,
             reason=result.reason, failed_line=result.line, supersedes=prior["id"] if prior else None,
-            executions=list(executions), event_state=None, event_error=None,
+            executions=list(executions),
         )
         self.imports.append(row)
         return row["id"]
 
-    def mark_event(self, import_id, state, error=None):
+    def record_screenshot(self, day, name, data, trade_key):
+        self.writes.append("record_screenshot")
+        superseded = {r["supersedes"] for r in self.imports if r["supersedes"]}
+        prior = [
+            r for r in self.imports
+            if r["import_date"] == day and r["kind"] == "screenshot" and r["trade_key"] == trade_key
+            and r["id"] not in superseded
+        ]
+        row = dict(
+            id=len(self.imports) + 1, import_date=day, kind="screenshot", name=name,
+            sha256=hashlib.sha256(data).hexdigest(), trade_key=trade_key, parse_status="parsed", reason="",
+            failed_line=None, supersedes=prior[-1]["id"] if prior else None, executions=[],
+        )
+        self.imports.append(row)
+        return row["id"]
+
+    def fire_event(self, day, *, import_id=None, stated_book_id=None):
+        self.writes.append("fire_event:pending")
+        source = "import" if import_id is not None else "stated_book"
+        row = next(
+            (e for e in self.events
+             if (e["source"], e["import_id"], e["stated_book_id"]) == (source, import_id, stated_book_id)),
+            None,
+        )
+        if row is None:
+            row = dict(id=len(self.events) + 1, day=day, source=source, import_id=import_id,
+                       stated_book_id=stated_book_id)
+            self.events.append(row)
+        row.update(state="pending", error=None, note_path=None)
+        return row["id"]
+
+    def mark_event(self, event_id, state, error=None, *, note_path=None):
         self.writes.append(f"mark_event:{state}")
-        row = next(r for r in self.imports if r["id"] == import_id)
-        row["event_state"], row["event_error"] = state, error
+        row = next(e for e in self.events if e["id"] == event_id)
+        row.update(state=state, error=error, note_path=note_path)
 
     def event_for(self, day):
         superseded = {r["supersedes"] for r in self.imports if r["supersedes"]}
@@ -106,13 +144,25 @@ class _Drc:
             if r["import_date"] == day
         ]
         cur = self._current(day, "trading_log")
+        stated_id = None if cur is not None else self._no_trade_id(day)
+        stated = next((s for s in self.stated if s.id == stated_id), None)
+        key = ("import", cur["id"], None) if cur is not None else ("stated_book", None, stated_id)
+        event = next(
+            (e for e in self.events if (e["source"], e["import_id"], e["stated_book_id"]) == key), None
+        ) if (cur is not None or stated_id is not None) else None
         recorded = self.days.get(day)
         pairing = recorded[0] if recorded else None
         return {
             "import_id": cur["id"] if cur else None,
-            "state": cur["event_state"] if cur else None,
+            "event_id": event["id"] if event else None,
+            "source": event["source"] if event else None,
+            "state": event["state"] if event else None,
             "updated_at": None,
-            "error": cur["event_error"] if cur else None,
+            "error": event["error"] if event else None,
+            "note_path": event["note_path"] if event else None,
+            "stated_book_id": stated_id,
+            "stated_book_sha256": stated.book_sha256 if stated else None,
+            "seed": None,
             "imports": rows,
             "day": None if pairing is None else {"inputs": {}, "derived": {
                 "trades": len(pairing.trades), "open_positions": len(pairing.open_positions),
@@ -398,13 +448,24 @@ def test_a_screenshot_is_refused_by_its_header_before_anything(world):
     assert world.drc.imports == [] and _files(world.folder()) == {}
 
 
-def test_a_screenshot_binding_has_no_store_path_on_this_tree_and_binds_nothing(world):
+def test_a_screenshot_on_a_current_trade_is_bound_through_the_one_writer(world):
+    """D2 fix r1 S-2 NAMED REVERSAL of `test_a_screenshot_binding_has_no_
+    store_path_on_this_tree_and_binds_nothing` (`DRC-D2-SEAM-2026-09-25.md`
+    §2, `:219`–`:223`): a real PNG on a trade of the current log → ONE
+    `record_screenshot` call on the double, the bytes written in the
+    `tmp_path` vault by the one bytes writer."""
     from cobalt.drc import imports
 
-    result = imports.place(D, [("shot.png", PNG)], trade_key="T1")
-    assert result.files[0].status == "failed"
-    assert "screenshot binding not built" in result.files[0].text()
-    assert world.drc.imports == [] and _files(world.folder()) == {}
+    world.drc.seed = SeedBook(source="stated", positions=[], stated_book_id=1, from_book_sha256="a" * 64)
+    imports.place(D, [("t.md", E1.read_bytes()), ("s.md", STATS.read_bytes())])
+    trades = world.drc.event_for(D)["trades"]
+    before = list(world.drc.writes)
+    result = imports.place(D, [("shot.png", PNG)], trade_key=trades[0])
+    assert [f.text() for f in result.files] == ["✓ shot.png — screenshot parsed"]
+    assert world.drc.writes[len(before):].count("record_screenshot") == 1
+    (shot,) = [r for r in world.drc.imports if r["kind"] == "screenshot"]
+    assert (shot["name"], shot["trade_key"], shot["supersedes"]) == ("shot.png", trades[0], None)
+    assert _files(world.folder())["shot.png"] == PNG
 
 
 @pytest.mark.parametrize("action", ["place", "scan_folder", "no_trade"])
@@ -447,10 +508,10 @@ def test_an_unstated_first_day_records_unpaired_and_the_build_is_not_built(world
     pairing, ids, seed = world.drc.days[D]
     assert seed is None and "pairing" in pairing.not_computed
     assert result.status_line == "not computed — opening book not stated · state your opening book for 2001-01-02"
-    assert world.drc.imports[0]["event_state"] == "failed"
-    assert world.drc.imports[0]["event_error"] == "build not built (D3)"
+    assert world.drc.events[0]["state"] == "failed"
+    assert world.drc.events[0]["error"] == "build not built (D3)"
     # pending → the [F-17] route (`record_day`) → running → failed (D2-3's order).
-    assert world.drc.writes[-4:] == ["mark_event:pending", "record_day", "mark_event:running", "mark_event:failed"]
+    assert world.drc.writes[-4:] == ["fire_event:pending", "record_day", "mark_event:running", "mark_event:failed"]
 
 
 def test_a_seed_for_raise_fails_the_event_verbatim_and_keeps_the_files(world):
@@ -458,8 +519,8 @@ def test_a_seed_for_raise_fails_the_event_verbatim_and_keeps_the_files(world):
 
     world.drc.seed_error = "2001-01-02: the prior trading day 2001-01-01 has no import and no no-trade record"
     result = imports.place(D, [("t.md", E1.read_bytes()), ("s.md", STATS.read_bytes())])
-    assert world.drc.imports[0]["event_state"] == "failed"
-    assert world.drc.imports[0]["event_error"] == world.drc.seed_error
+    assert world.drc.events[0]["state"] == "failed"
+    assert world.drc.events[0]["error"] == world.drc.seed_error
     assert D not in world.drc.days and len(world.drc.imports) == 2
     assert result.status_line == f"DRC build FAILED: seed — {world.drc.seed_error}"
 
@@ -654,13 +715,23 @@ def test_no_trade_with_no_import_and_no_chain_is_stated_only(world):
     assert result.message == "stated; 2001-01-02 has no import yet"
 
 
-def test_no_trade_with_a_chain_rebuilds_and_waits_on_the_event_home(world):
+def test_no_trade_with_a_chain_rebuilds_and_fires_the_file_less_event(world):
+    """D2 fix r1 S-1 NAMED REVERSAL of `test_no_trade_with_a_chain_rebuilds_
+    and_waits_on_the_event_home` (`DRC-D2-SEAM-2026-09-25.md` §1, `:96`–
+    `:104`): the statement, the rebuild, then `fire_event(stated_book_id=…)`
+    → `running` → `failed: build not built (D3)` on the double."""
     from cobalt.drc import imports
 
     world.drc.days[date(2001, 1, 1)] = object()
     result = imports.no_trade(D)
     assert world.drc.rebuilt == [D]
-    assert result.message == "no-trade day recorded — its DRC build waits on the no-trade event home (ESCALATE X-NT)"
+    assert world.drc.writes == [
+        "record_stated_book", "fire_event:pending", "rebuild", "mark_event:running", "mark_event:failed",
+    ]
+    (event,) = world.drc.events
+    assert (event["source"], event["stated_book_id"], event["import_id"]) == ("stated_book", 1, None)
+    assert (event["state"], event["error"]) == ("failed", "build not built (D3)")
+    assert result.status_line == "DRC build FAILED: build — build not built (D3)"
 
 
 def test_a_second_no_trade_shows_the_stores_refusal_verbatim(world):

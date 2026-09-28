@@ -93,11 +93,49 @@ def test_d4s_block_sits_directly_after_attest_and_holds_its_four_names():
     assert {r for n in d4 for r in _routes(n)} == {("post", "/settings/daily"), ("post", "/settings/daily/apply")}
 
 
+def _d2_is_last(body) -> list[str]:
+    """D2 fix r1 F-2 (`drc-d2-check-2026-09-25.md:143`, `:179`): over the
+    WHOLE module body — every route-decorated function of `D2_ROUTES` sits
+    after EVERY route-decorated function that is not D2's, and the route
+    functions after `radar_card_release` are exactly D2's. The offenders,
+    listed; `[]` when the block is last."""
+    routed = [(i, n) for i, n in enumerate(body) if _routes(n)]
+    d2 = [(i, n.name) for i, n in routed if _routes(n) & D2_ROUTES]
+    others = [(i, n.name) for i, n in routed if not (_routes(n) & D2_ROUTES)]
+    offenders = [
+        f"{name}: a D2 route before {other}"
+        for i, name in d2
+        for j, other in others
+        if i < j
+    ]
+    anchor = [i for i, n in enumerate(body) if getattr(n, "name", None) == "radar_card_release"]
+    if not anchor:
+        offenders.append("radar_card_release: not a top-level def")
+    else:
+        after = {name for i, name in [*d2, *others] if i > anchor[0]}
+        offenders += [f"{name}: not in D2's block after radar_card_release" for _, name in d2 if name not in after]
+        offenders += [f"{name}: after radar_card_release but not D2's" for i, name in others if i > anchor[0]]
+    return offenders
+
+
 def test_d2s_block_sits_at_the_end_after_every_existing_route():
     _, d2 = _blocks()
     assert d2, "D2's /drc block is not at the end of web.py"
     assert {r for n in d2 for r in _routes(n)} == D2_ROUTES
-    assert _index("radar_card_release") < min(BODY.index(n) for n in d2)
+    assert _d2_is_last(BODY) == []
+
+
+def test_the_last_block_check_flags_a_drc_route_placed_before_an_existing_one():
+    """F-2's NEGATIVE CONTROL: a constructed module source with one `/drc`
+    route placed BEFORE a non-D2 route → `_d2_is_last` names it."""
+    src = (
+        "@app.get('/drc')\ndef drc_page(): ...\n"
+        "@app.post('/cards/release')\ndef radar_card_release(): ...\n"
+        "@app.post('/drc/import')\ndef drc_import(): ...\n"
+    )
+    offenders = _d2_is_last(ast.parse(src).body)
+    assert offenders and all(o.startswith("drc_page: ") for o in offenders), offenders
+    assert "drc_page: a D2 route before radar_card_release" in offenders
 
 
 def test_the_two_blocks_reference_nothing_defined_in_the_other():
