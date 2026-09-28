@@ -29,6 +29,10 @@ from cobalt.aset.daily_note import (
     target_path,
 )
 from cobalt.aset.engine import compute_fill_recompute, compute_sizing
+
+#: A CONSTRUCTED drift P (L69) — S3 C1 deleted the hard-coded 25; the
+#: engine takes his `fills.drift_warning_pct` from its caller.
+DRIFT_P = Decimal("25")
 from cobalt.aset.models import Direction, Grade, SheetMode, SizingInput
 
 
@@ -215,7 +219,8 @@ class TestFillUpdate:
 
         original = make_result()
         fill = compute_fill_recompute(
-            original, actual_fill=Decimal("10.30"), max_fill_distance_pct=Decimal("5")
+            original, actual_fill=Decimal("10.30"), max_fill_distance_pct=Decimal("5"),
+            drift_warning_pct=DRIFT_P,
         )
         fill_when = datetime(2026, 8, 26, 9, 45, 0)
         fill_path, _ = save_fill_update(make_cfg(), fill, orig_timestamp, when=fill_when)
@@ -232,10 +237,11 @@ class TestFillUpdate:
 
         original = make_result()
         # 11.00 is 10% from entry 10.00 — beyond the 5% default hard
-        # floor, so widen it here to exercise the softer >=25%
-        # distance_change_pct structural warning instead.
+        # floor, so widen it here to exercise the softer drift warning
+        # (distance_change_pct > P, P constructed — S3 C1) instead.
         fill = compute_fill_recompute(
-            original, actual_fill=Decimal("11.00"), max_fill_distance_pct=Decimal("20")
+            original, actual_fill=Decimal("11.00"), max_fill_distance_pct=Decimal("20"),
+            drift_warning_pct=DRIFT_P,
         )  # big distance jump
         path, _ = save_fill_update(make_cfg(), fill, orig_timestamp, when=orig_when)
         content = path.read_text()
@@ -248,7 +254,8 @@ class TestFillUpdate:
         # directories under REPO_ROOT from a test.
         original = make_result()
         fill = compute_fill_recompute(
-            original, actual_fill=Decimal("10.30"), max_fill_distance_pct=Decimal("5")
+            original, actual_fill=Decimal("10.30"), max_fill_distance_pct=Decimal("5"),
+            drift_warning_pct=DRIFT_P,
         )
         monkeypatch.setattr(daily_note_module, "resolve_vault_path", lambda: REPO_ROOT)
         cfg = make_cfg(daily_notes_dir="tests/cobalt")
