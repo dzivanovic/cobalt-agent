@@ -7,6 +7,8 @@ DESK'S COMMANDS, in order, after the launch row and this file are committed on m
 
 RULE STRINGS: 23 allow, 3 deny = `prompts/2026-09-28/22-s3-exits-c2-build.md` line 6 less `Bash(mkdir -p *)`, with this file's path, `radar-stop-record-build` in `--remote-control` / `--name` and this worktree in the two `.env` strings. NEW (2): `Bash(cp /Users/cobalt/cobalt/.env /Users/cobalt/cobalt-wt/radar-stop-record/.env)` · `Bash(rm /Users/cobalt/cobalt-wt/radar-stop-record/.env)`. Never typed: `uv run python`, `uv add`, `uv lock`, `cat`, `git checkout`, `git restore`, `git stash`, `git rm`, `git rebase`, `git merge`, `psql`, `docker`, `sleep`, `launchctl`, `claude`, any `COBALT_ENV=production`.
 
+RE-ISSUE R123 (desk, 18:0x ET, his A): run 1 stopped `FAILED: W — offline red` on 9 byte-identity pins moved by `detail.formation` (its `## ESCALATE`). This relaunch starts at `CONTINUE: SR-4` on the branch as run 1 left it (`85a15af5`, code `67e78a2e`): AUTHORIZATION (all its gates), then SR-4, then W (a)–(f), RESTARTS, CLOSE; PREFLIGHT, E0, E2 and E3 are run 1's and are NOT rerun. Every run-1 section stays; new work goes under `(run 2)` headings. No new rule string. Radar misses the 09-28 window; target = the next evening window (L43).
+
 # RADAR STOP RECORD — THE FORMATION'S STOP AND TRIGGER IN `radar_score.detail`, ONE LOG LINE PER STOP-BEFORE-ARM SKIP
 
 LADDER: `OFF-LADDER — cto-2026-09-28.md R92, R99, R102, R108`. LAW STEP: R108 (his A) → drafter `45` (`reports/radar-stop-record-draft-2026-09-28.md`) → **THIS = the build** → `47-radar-stop-record-check.md` → tonight's deploy window with the voice config change (L43). DO NOT STOP until the last line is `RADAR STOP RECORD BUILT …` or `FAILED …`.
@@ -28,6 +30,7 @@ THIS BUILD RECORDS; IT FIXES NOTHING. The skip at `evaluate.py:1955-1960` keeps 
                     )
 ```
 `logger` is the module's loguru import (`:85`); the resident's stderr is `logs/radar.err` (`ops/com.cobalt.radar.plist:36`). No other log line, no level change.
+- **SR-4 — the byte-identity re-point (`tests/cobalt/test_setups_d1.py`, R123).** In `_unmoved` (`:158`), where it rebuilds `dump["detail"]` (`:170-171`), also drop the key `formation` from `dump["detail"]` — the added key is the build's one intended change, as `intraday_stale` was for S1. Add one docstring clause naming it (`formation` — the radar stop record, R108). No pin constant changes. `test_setups_registries.py:166` and `test_rubberband_forms.py:488` import `_unmoved` and are not edited. Rerun `uv run pytest -q -rs -p no:cacheprovider tests/cobalt/test_setups_d1.py tests/cobalt/test_setups_registries.py tests/cobalt/test_rubberband_forms.py` → the 9 ids of run 1's stop line green, quoted; commit `test(radar): _unmoved drops detail.formation — the stop record's one intended change (cto-2026-09-28 R123)` with that file only; `<tip>` = that commit. `## CONTINUE`: `next: W`.
 
 ## INDEX CARD — read in this order
 (1) `/Users/cobalt/Vault/Think/6 - Permanent/Memory/LAWS.md` `## Preamble`, `## Index`, `## Reading`, then each entry (`grep -n "^### L<n> "`, body to the next heading): **L1** · **L29** · **L32** the seam carries prices, never def text · **L35** · **L42** · **L43** · **L45** real-shape fixtures (the FTFT bars) · **L46** · **L48** · **L52** no score or card value moves · **L57** the reason for SR-1 · **L60** · **L62 / L63** · **L67** checked by `47` · **L68** GATE EARLY · **L70** · **L71** · **L74** commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only · **L76**.
@@ -39,7 +42,8 @@ THIS BUILD RECORDS; IT FIXES NOTHING. The skip at `evaluate.py:1955-1960` keeps 
 - PLACEHOLDER GATE, first: `grep -n -E "R_[_]" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-28/46-radar-stop-record-build.md"` → prints NOTHING. A hit → `FAILED: placeholder — <lines>`, stop.
 - HIS RULING: `grep -n -F "| R108 |" <desk file>` → the row carrying `radar fix draft` and `P-HIS`; `grep -n -F "## R108" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-09-28-words.md"` → a hit.
 - THE DRAFT: `git -C /Users/cobalt/cobalt log -1 --format=%H -- "docs/40 - DevDocs/reports/radar-stop-record-draft-2026-09-28.md"` NON-EMPTY; `tail -n 3 "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-stop-record-draft-2026-09-28.md"` → the last non-blank line starts `RADAR STOP RECORD PROMPTS DRAFTED ·`.
-- THIS LAUNCH is the desk's row R115 of `<desk file>`: `grep -n "^| R115 " <desk file>` → a row naming `46-radar-stop-record-build.md`, `<base>`, the literal `no with-DB run in flight` and HIS approval word for the two NEW `.env` strings; `git -C /Users/cobalt/cobalt log -1 --format=%H -S"46-radar-stop-record-build.md" -- "docs/40 - DevDocs/reports/cto-2026-09-28.md"` NON-EMPTY.
+- THIS RELAUNCH is the desk's row R123 of `<desk file>`: `grep -n "^| R123 " <desk file>` → a row naming `46-radar-stop-record-build.md`, `SR-4` and `P-HIS`; `git -C /Users/cobalt/cobalt log -1 --format=%H -S"| R123 |" -- "docs/40 - DevDocs/reports/cto-2026-09-28.md"` NON-EMPTY.
+- THE FIRST LAUNCH is the desk's row R115 of `<desk file>`: `grep -n "^| R115 " <desk file>` → a row naming `46-radar-stop-record-build.md`, `<base>`, the literal `no with-DB run in flight` and HIS approval word for the two NEW `.env` strings; `git -C /Users/cobalt/cobalt log -1 --format=%H -S"46-radar-stop-record-build.md" -- "docs/40 - DevDocs/reports/cto-2026-09-28.md"` NON-EMPTY.
 Missing → `FAILED: authorization mismatch — <which>`, stop. YOU CAN ALWAYS STOP: `FAILED: <step> — <concern>` as the LAST line; while `.env` sits here or a migration above `0013` is applied, W (f) FIRST.
 
 ## UNATTENDED RULES, RECOVERY, THE LOCK, W
@@ -79,13 +83,13 @@ Rerun E2's offline command → SR-T1…T3 green, quoted. Commit `feat(radar): st
 `uv run cobalt jobs restarts <base>..<tip>` → quote the table WHOLE; `UNCLASSIFIED` → `FAILED: RESTARTS — UNCLASSIFIED <path>`. `RESTARTS:` in the stop line = the table's last line, never trimmed. EXPECTED: `com.cobalt.radar` among the set — it restarts only inside tonight's 20:00–21:00 pause (L43). `## CONTINUE`: `next: CLOSE`.
 
 ## `## FOR THE CHECK`
-E0's and E2's quoted outputs; `git -C /Users/cobalt/cobalt log --oneline <base>..<tip>`; `git diff --stat <base> <tip>` (EXPECTED: `seam.py`, `evaluate.py`, the three test files, nothing else); SR-3's inserted block quoted from the tree with its real line numbers (Read tool); W's executed commands whole and the three results; `<F0>` / `<F2>`; the RESTARTS table.
+E0's and E2's quoted outputs; `git -C /Users/cobalt/cobalt log --oneline <base>..<tip>`; `git diff --stat <base> <tip>` (EXPECTED: `seam.py`, `evaluate.py`, the three test files, `test_setups_d1.py` (SR-4), nothing else); SR-3's inserted block quoted from the tree with its real line numbers (Read tool); W's executed commands whole and the three results; `<F0>` / `<F2>`; the RESTARTS table.
 
 ## CLOSE
 - `## ESCALATE`: every `ASK DESK`, every moved anchor, a `.env` another worktree held, the L74 line if a block arrived, and **"The build is checked by `47-radar-stop-record-check.md` (a new build's first check: Fable as Opus 5.5 · Astra · Grok, L67) before tonight's deploy; the builder decided nothing."**
 - `## §0 Headline` (≤5 lines): the stored keys; the log line; the three results; migration none; RESTARTS.
 - Write the stop line. Then `git add "docs/40 - DevDocs/reports/radar-stop-record-build-<D>.md"` and `git commit -m "docs(radar): radar stop record build report — <tip>" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- "docs/40 - DevDocs/reports/radar-stop-record-build-<D>.md"`. Quote in your final chat message: `git status --short --branch` → `## radar/stop-record-0928` only; `ls -la /Users/cobalt/cobalt-wt/*/.env` → `no matches found`.
 - STOP LINE (L71), the LAST NON-BLANK line, exactly:
-`RADAR STOP RECORD BUILT <tip> | on <base> | files: 5 (src 2, tests 3) | migration none | offline <p>/0 | with-DB <d>/0 | live-note <l>/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: <as derived> | target: 2026-09-28 20:00–21:00 ET window with the voice config change | ESCALATE: <n>`
+`RADAR STOP RECORD BUILT <tip> | on <base> | files: 6 (src 2, tests 4) | migration none | offline <p>/0 | with-DB <d>/0 | live-note <l>/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: <as derived> | target: the next evening window (L43) | ESCALATE: <n>`
   — or `FAILED: <step> — <reason>` / `FAILED PREFLIGHT: <rule>`.
   While you run, the last line is `(run in progress — next step under ## CONTINUE)`.
