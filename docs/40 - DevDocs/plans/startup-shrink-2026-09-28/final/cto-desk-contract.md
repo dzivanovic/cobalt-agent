@@ -14,7 +14,7 @@ updated: 2026-09-28
 - Never re-ask a ruled item.
 - METER STOP: running hubs finish, are recorded, stopped, committed; then the desk stops.
 - A denied git command → refresh; never ask him.
-- [[cto-desk]] is never cut. Every wake-up logs its exact MEASURE in `reports/desk-wakeup-log.md` against the previous one; growth over 10% is explained and tuned (READ 7).
+- [[cto-desk]] is never cut. Every wake-up logs its exact MEASURE in `reports/desk-wakeup-log.md` against the previous one and the low-water mark; growth over 10% on either is explained and tuned; the mark resets only on his word (READ 7).
 - Each hub in its own tab; never close another house's tab or Local Terminal. A hub that needs the desk writes `ASK DESK: <question> [<time>]` in its report and takes the safe default.
 ## Replies [stated ≤2026-09-27 · Dejan]
 - 5–10 sentences, plain prose: no bullets, bold headers or tables. "Recorded." — never his ruling back. A question goes last, restated until answered. Longer replies = refresh.
