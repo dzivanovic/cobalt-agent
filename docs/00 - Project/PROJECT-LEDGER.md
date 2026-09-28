@@ -2111,3 +2111,153 @@ Source: `docs/40 - DevDocs/reports/cto-2026-09-24.md` §0–§5 (§4 Rulings 202
 - SITTING PACKETS (`sitting-packets-draft-2026-09-24.md`): `SITTING PACKETS DRAFTED · packets: 2 · decisions: vwap 3 · second-chance 4 · settled by houses: 13 · ESCALATE: 1` — `sitting-second-chance-2026-09-24.md`, `sitting-vwap-continuation-2026-09-24.md`; PENDING SITTINGS, UNHELD (R13 / R14: Second Chance first; on his word).
 - BUILDS + CHECKS (stop lines, quoted): setups live-note fix `SETUPS LIVE NOTE FIX BUILT c9a11e14 | on 9e775fd6 | offline 2483/0 | with-DB 2838/0 | live-note 131/0 | … FIX: 3 | … ESCALATE: 8` → check `SETUPS LIVE NOTE FIX CHECK DONE · round: 1 · … gemini: DEFECT REMAINS · defects that HOLD: 1 · ESCALATE: 5` → setups fix r2 build ends `FAILED: D5b — Monitor wait on the with-DB output denied by the auto-mode classifier ([Credential Leakage]); with-DB summary UNPROVEN (exit 0 per task notice only); .env removed, proven gone; fix df7817a6 committed` → check `SETUPS FIX R2 CHECK DONE · round: 2 · opus / grok FIX STANDS · defects that HOLD: 0 · ESCALATE: 9` · mover-bars `MOVER BARS FIX BUILT b69a6681 | on 4cc6811a | offline 2258/0 | with-DB 2603/0 | live-note 142/0 | FIX: 2 | ESCALATE: 5` → `MOVER BARS FIX CHECK DONE · round: 1 · … FIX STANDS ×2 · defects that HOLD: 0 · ESCALATE: 9` · voice V1 check A `… defects that HOLD: 3` · B `… 2` · C `… 9` · D `… 10` (24 HOLDS, R43) → fix r1 `VOICE V1 FIX R1 BUILT d4e48f22 | offline 2772/0 | with-DB 3115/0 | live-note 142/0 | FIX: 23 of 24 (C2 NOT BUILT …) | ESCALATE: 13` → `VOICE V1 FIX R1 CHECK DONE · round: 2 · opus: DEFECT REMAINS · grok: FIX STANDS · defects that HOLD: 3 · ESCALATE: 12` → fix r2 `VOICE V1 FIX R2 BUILT d319e4f3 | on 137c1928 | offline 2786/0 | with-DB 3129/0 | live-note 142/0 | 0017: rolled back | FIX: 7 of 7 | ESCALATE: 8` (round-3 check `55` queued) · DRC D1 `DRC D1 FIX R1 BUILT d1342595 | offline 2412/0 | with-DB 2768/0 | live-note 142/0 | FIX: 13` → `DRC D1 FIX R1 CHECK DONE · round: 2 · FIX STANDS ×2 · defects that HOLD: 0` (D1 BUILT + CHECKED, tip `38a70947`) · DRC K1 `DRC K1 BUILT 9a0fc900 | offline 2438/0 | with-DB 2843/0 | live-note 142/0 | 0018: rolled back | ESCALATE: 9` → `DRC K1 CHECK DONE · round: 1 · … defects that HOLD: 3 · ready for K2: NO · ESCALATE: 14` → fix r1 `DRC K1 FIX R1 BUILT 40cf173e | on 9a0fc900 | offline 2441/0 | with-DB 2848/0 | live-note 142/0 | FIX: 3 | ESCALATE: 10` (first run `FAILED: D8`, resumed R91; check `49` queued) · K2 drafted `DRC K2 BUILD DRAFTED · migration: none · new rule strings: 0 · ESCALATE: 7` (`51` / `52`) · stale-score r2 `STALE SCORE BUILT 01ee8bcd | offline 2518/0 | with-DB 2879/0 | live-note 131/0 | migration: 0015 rolled back | ESCALATE: 11` → `STALE SCORE CHECK DONE · round: 1 · BUILD STANDS ×2 · defects that HOLD: 0 · ESCALATE: 12` · handicap H1 r2 `HANDICAP H1 BUILT 27df13f1 | on f6643d41 | offline 2619/0 | with-DB 2976/0 | live-note 131/0 | migration: 0014 rolled back | h=1 identity: proven | ESCALATE: 12` → check `45` `HANDICAP H1 CHECK DONE · round: 1 · opus: CHECK: FIX — 1) remove dev_db_tx from the five XL76 callers that now also use migrated_radar … 2) correct _cut_tier's docstring … · grok: CHECK: BUILD STANDS · sol: NOT SEATED (METER) · gemini: NOT SEATED · defects that HOLD: 2 · ready for a deploy prompt: 1 of 2 · ESCALATE: 14` (the report was `(run in progress — next step under ## CONTINUE)` when the close began and reached this stop line before the close commit; the desk committed it `ddb41fbd`).
 - S2 SMOKE LOOK 09-24 (21:40–21:43 ET, read-only, `46`): `S2 SMOKE LOOK DONE · deploy: deploy-2026-09-24 · replay ran: yes 21:40 FAILED · checks: 36 green / 3 red · K9.4: not_archived 1 · named partial 1 (PASS) · real reds: 3 · smoke green: no · ESCALATE: 5` — reds K7, K10.1, K10.2 (the miss line for 09-24 not written); K9.4 fix shows (gainers 0/0, losers 1/1); K17 gone. Replay cause as R95 records it: 13 setups live → formations step ≈29.5 min on 3,225 formed → `DeadlineExceeded` 21:35 ET.
+
+### 2026-09-25 — Stacked set built and checked, D4 override, V1 loopback-only, card cut, meter 99% moves deploy to Sunday
+Source: `docs/40 - DevDocs/reports/cto-2026-09-25.md` §0, §4 (rows R1–R95; R96 written 2026-09-27), §5; the last line of every report dated 09-25 (`ls`); `close-2026-09-27.md`. Bare "R<n>" below = `09-25 R<n>`. No prose narration — dated record only. 09-26 has no desk record and no report: no block.
+- `09-25 R1` 00:13 ET NO WORDS OF HIS — desk record: `66` H1 fix r2 BUILT `c782e58e` (`offline 2624/0 · with-DB 2984/0 · live-note 131/0`); `51` K2 build launched on the L76 lock.
+- `09-25 R2` 00:1x ET NO WORDS OF HIS — desk launch row: `67` H1 fix r2 check, round 3 of 3 (L39).
+- `09-25 R3` 00:31 ET NO WORDS OF HIS — desk record: `67` `HANDICAP H1 FIX R2 CHECK DONE · round: 3 · … BUILD STANDS ×2 · defects that HOLD: 0 · ready for a deploy prompt: 2 of 2 · ESCALATE: 11` → H1 CHECKED, joins the 09-25 set.
+- `09-25 R4` 00:41 ET NO WORDS OF HIS — desk record: `51` `DRC K2 BUILT 09ce3742 | … offline 2463/0 | with-DB 2902/0 | live-note 142/0`; launch row `52` K2 check.
+- `09-25 R5` 00:53 ET NO WORDS OF HIS — desk record: `52` `FAILED: packet — 265,319 B … over the 260,000 B ceiling`; ceiling moved to 300,000 B (desk reading); hub resumed by message.
+- `09-25 R6` 01:24 ET NO WORDS OF HIS — desk record: `52` `DRC K2 CHECK DONE · round: 1 · … defects that HOLD: 9 · ready for K3: NO`; launch row drafter `01`.
+- `09-25 R7` 01:42 ET NO WORDS OF HIS — `01` `DRC K2 FIX R1 DRAFTED · FIX: 8 · NOT REAL: 11 …`; launch row `02` K2 fix r1 build.
+- `09-25 R8` 02:01 ET NO WORDS OF HIS — `02` `DRC K2 FIX R1 BUILT 4626a1f2 | … offline 2467/0 | with-DB 2915/0`; launch row `03` check (round 2).
+- `09-25 R9` 02:08 ET NO WORDS OF HIS — desk reading: K3 waits for D2 + D3; launch row `04` D4 / D2 / D3 re-issue drafter.
+- `09-25 R10` 02:3x ET NO WORDS OF HIS — `04` `DRC D4 D2 D3 REISSUED · … migrations: 0019 (D3) · ESCALATE: 20`; queue D4 → D2 → D3.
+- `09-25 R11` 02:40 ET NO WORDS OF HIS — `03` `DRC K2 FIX R1 CHECK DONE · round: 2 · … defects that HOLD: 2 · ready for K3: NO` → round 3, the last.
+- `09-25 R12` 02:45 ET NO WORDS OF HIS — desk launch row: `11` K2 fix r2 drafter (desk `2e1b969c`).
+- `09-25 R13` 03:02 ET NO WORDS OF HIS — `11` `DRC K2 FIX R2 DRAFTED · FIX: 2 …`; launch row `12` K2 fix r2 build.
+- `09-25 R14` 03:14 ET NO WORDS OF HIS — `12` `DRC K2 FIX R2 BUILT f5c6946b | … with-DB 2918/0`; launch row `13` check (round 3).
+- `09-25 R15` 03:44 ET NO WORDS OF HIS — `13` `DRC K2 FIX R2 CHECK DONE · round: 3 · … defects that HOLD: 0 · ready for K3: YES` → K2 CHECKED; launch row `05` D4 build.
+- `09-25 R16` 05:31 ET NO WORDS OF HIS — desk record: `05` builder sat on a `$` permission dialog 03:50–05:31; Escape + resume by message.
+- `09-25 R17` 05:47 ET NO WORDS OF HIS — `05` `FAILED: E6 — offline suite red — … POST_ALLOWLIST …`; desk reading YES (allowlist edit under D4-4); resumed by message.
+- `09-25 R18` 05:50 ET "approve command" — P-HIS: the three `57` strings approved (two `.env` for `replay-deadline`, `radar evaluate --replay 2026-09-24`).
+- `09-25 R19` 05:54 ET NO WORDS OF HIS — `05` `FAILED: E7 — with-DB suite red — 3 failed …` (E3 fixture, one cause); resumed by message.
+- `09-25 R20` 06:02 ET NO WORDS OF HIS — `05` `DRC D4 BUILT 5d4f8201 | … with-DB 2973/0`; launch rows `06` D4 check and `57` replay-deadline fix build.
+- `09-25 R21` 06:0x ET his question, no ruling — "others are combining local wisper and local kokoro why are we not using kokoro …"; desk answered from the record; OPEN.
+- `09-25 R22` 06:13 ET his question, no ruling — restated to the successor desk (what am I checking in; why not whisper + Kokoro together); desk answered from the record; OPEN.
+- `09-25 R23` 06:20 ET "Do A, We will build Kokoro next on a side lane so A and drafter for Kokoro, but it can land in later deploy" — 09-24 R107 CLOSED "A" (voice V1 joins the set); Kokoro = voice VT side lane.
+- `09-25 R24` 06:2x ET NO WORDS OF HIS — desk launch row: `14` VT proposal drafter.
+- `09-25 R25` 06:33 ET NO WORDS OF HIS — `14` `VOICE TTS PROPOSED · chunks: 5 · … owner items: 2 · ESCALATE: 3`.
+- `09-25 R26` 06:3x ET NO WORDS OF HIS — desk launch row: `15` VT tribunal drafter.
+- `09-25 R27` 06:39 ET "I want your A, but I want to raise to 500,000." — refresh line 500,000; the wake-up card cut (A).
+- `09-25 R28` 06:4x ET NO WORDS OF HIS — desk launch row: `19` card-cut drafter.
+- `09-25 R29` 06:43 ET NO WORDS OF HIS — `57` builder on a `git -C … diff` permission dialog; Escape + resume by message.
+- `09-25 R30` 06:45 ET NO WORDS OF HIS — `06` `DRC D4 CHECK DONE · round: 1 · … defects that HOLD: 12 · ready for D2: NO` → fix round.
+- `09-25 R31` 06:4x ET NO WORDS OF HIS — desk launch row: `20` D4 fix r1 drafter.
+- `09-25 R32` 06:48 ET NO WORDS OF HIS — `15` `VOICE TTS TRIBUNAL DRAFTED · prompts: 3 · … ESCALATE: 3`.
+- `09-25 R33` 06:5x ET NO WORDS OF HIS — desk launch rows: `16` + `17` VT tribunal round 1.
+- `09-25 R34` 06:5x ET "A is fine" — drafter seats: judgment drafters Opus 5.5, mechanical drafters and every hub Sonnet 5.
+- `09-25 R35` 06:55 ET NO WORDS OF HIS — `19` `DESK CARD CUT DRAFTED · … lines mapped: 139 of 139`; card cut APPLIED by the desk (L58).
+- `09-25 R36` 07:06 ET "Push" — PUSH (L55): `de48c19b..171c6792` (122 commits), no tag; `origin/main..main` = 0.
+- `09-25 R37` 07:22 ET NO WORDS OF HIS — `57` `REPLAY DEADLINE FIX BUILT 8b931ce5 | … with-DB 2867/0 | live-note 146/0`; `20` `DRC D4 FIX R1 DRAFTED · FIX: 10 …`; watch lesson.
+- `09-25 R38` 07:22 ET NO WORDS OF HIS — desk launch row: `21` D4 fix r1 build.
+- `09-25 R39` 07:29 ET NO WORDS OF HIS — `16` `VOICE TTS TRIBUNAL DONE · round: 1 · … houses that ruled: 3 of 3 · dissents: 1 · ESCALATE: 13`.
+- `09-25 R40` 07:30 ET NO WORDS OF HIS — desk launch row: `18` VT derive.
+- `09-25 R41` 07:32 ET NO WORDS OF HIS — desk launch row: `58` replay-deadline fix check.
+- `09-25 R42` 07:38 ET NO WORDS OF HIS — `21` `DRC D4 FIX R1 BUILT e96f0be7 | … with-DB 2980/0`; his two questions (token split docs vs code; lean vault sync) answered as A/Bs.
+- `09-25 R43` 07:41 ET "No, everything stays in the vault. Let's not do anything." — lean: nothing changes.
+- `09-25 R44` 07:43 ET "Okay, we can do those sittings after I'm done trading today." — the two sittings held for his "done trading".
+- `09-25 R45` 07:48 ET NO WORDS OF HIS — `18` `VOICE TTS DERIVED · DRAFT FINAL · folds: 57 · … needs round 2: 4 · ESCALATE: 9`.
+- `09-25 R46` 07:49 ET NO WORDS OF HIS — desk launch row: `23` VT round-2 drafter.
+- `09-25 R47` 07:58 ET NO WORDS OF HIS — `58` `REPLAY DEADLINE FIX CHECK DONE · round: 1 · … ready for a deploy prompt: YES` → replay fix CHECKED, joins the set.
+- `09-25 R48` 07:58 ET NO WORDS OF HIS — desk launch row: `22` D4 fix r1 check (round 2).
+- `09-25 R49` 08:08 ET NO WORDS OF HIS — `23` `VOICE TTS R2 DRAFTED · … launch not before: 2026-09-26 06:47 ET`.
+- `09-25 R50` 08:25 ET "push" — PUSH (L55): `171c6792..e40942a6` (24 commits), no tag; verified `origin/main..main` = 0.
+- `09-25 R51` 08:26 ET NO WORDS OF HIS — `22` `DRC D4 FIX R1 CHECK DONE · round: 2 · … defects that HOLD: 1 · ready for D2: NO` → round 3.
+- `09-25 R52` 08:29 ET NO WORDS OF HIS — desk launch row: `27` D4 fix r2 drafter.
+- `09-25 R53` 08:44 ET NO WORDS OF HIS — desk launch row: `28` D4 fix r2 build (round 3, last).
+- `09-25 R54` 08:53 ET NO WORDS OF HIS — `28` `DRC D4 FIX R2 BUILT 02b0a199 | … code: unchanged | … with-DB 2980/0`.
+- `09-25 R55` 08:54 ET NO WORDS OF HIS — desk launch row: `29` D4 fix r2 check (round 3, last).
+- `09-25 R56` 09:22 ET NO WORDS OF HIS — `29` `DRC D4 FIX R2 CHECK DONE · round: 3 · … DEFECT REMAINS ×2 · defects that HOLD: 3 · ready for D2: NO` (report wording, code unchanged) → to him as A/B.
+- `09-25 R57` 09:25 ET "A" — P-HIS: D4 counts CHECKED on the code evidence; his per-case override (L73), the three wording HOLDs stand as record.
+- `09-25 R58` 09:27 ET NO WORDS OF HIS — desk launch row: `07` D2 build stacked on D4.
+- `09-25 R59` 09:59 ET NO WORDS OF HIS — `07` `DRC D2 BUILT 6777c463 | … design-changing: 1 | with-DB 3071/0`; two design gaps for the desk.
+- `09-25 R60` 09:59 ET NO WORDS OF HIS — desk launch row: `08` D2 check.
+- `09-25 R61` 10:03 ET NO WORDS OF HIS — desk launch row: `30` D2 → D3 seam drafter.
+- `09-25 R62` 10:09 ET NO WORDS OF HIS — desk launch row: `31` stacked deploy drafter (four branches, one set, L43).
+- `09-25 R63` 10:12 ET NO WORDS OF HIS — `08` `FAILED: packet — … 306,320 B …`; ceiling 400,000 B (desk ruling per case); `08` relaunched.
+- `09-25 R64` 10:14 ET NO WORDS OF HIS — `30` `DRC D2 SEAM DRAFTED · X-NT home: B one drc_events table …`; seam of record adopted; `0019` / `0020` assigned.
+- `09-25 R65` 10:20 ET NO WORDS OF HIS — desk record: a NOW rewrite matched the frontmatter, repaired the same turn; lesson folded.
+- `09-25 R66` 10:40 ET NO WORDS OF HIS — `31` `STACKED DEPLOY DRAFTED · … new rule strings: 8 · ESCALATE: 16`; the stack does not merge clean → a seam build.
+- `09-25 R67` 10:48 ET NO WORDS OF HIS — desk launch row: `38` stack seam drafter.
+- `09-25 R68` 11:03 ET NO WORDS OF HIS — `08` `DRC D2 CHECK DONE · round: 1 · … defects that HOLD: 11 · ready for D3: NO`.
+- `09-25 R69` 11:05 ET NO WORDS OF HIS — desk launch row: `35` D2 fix r1 drafter.
+- `09-25 R70` 11:05 ET NO WORDS OF HIS — desk launch row: `33` house read of `32`.
+- `09-25 R71` 11:07 ET NO WORDS OF HIS — `33` `FAILED: placeholder` (desk miss, L7); relaunched filled.
+- `09-25 R72` 11:10 ET NO WORDS OF HIS — desk `daf600ba` wake-up; `38` `STACK SEAM DRAFTED · … new rule strings: 7`; his ONE message sent.
+- `09-25 R73` 11:19 ET NO WORDS OF HIS — `33` `FAILED: staging — safety classifier stopped the hub …`; relaunched.
+- `09-25 R74` 11:23 ET "approved" — P-HIS: STACKED DEPLOY 2026-09-25 APPROVED — the 15 new strings of `32` + `39`, the three production migrations 0014 / 0015 / 0017, the dev rollback; V1 device session read as A.
+- `09-25 R75` 11:22 ET NO WORDS OF HIS — `35` `DRC D2 FIX R1 DRAFTED · FIX: 10 · … seam rows: 2 · ESCALATE: 8`.
+- `09-25 R76` 11:24 ET NO WORDS OF HIS — desk launch row: `39` stack seam build (worktree `stacked-0925` cut from `main` `2b71fe49`).
+- `09-25 R77` 12:22 ET NO WORDS OF HIS — `39` run 1 `FAILED: M3 — seam — conflict docs/40 - DevDocs/cobalt/db_migrations/__init__.md, … (DevDoc paths no rule names …)`; watch miss (W1); `39` re-issued, relaunched.
+- `09-25 R78` 12:37 ET NO WORDS OF HIS — `33` `STACKED DEPLOY REVIEW DONE · … defects that HOLD: 3 · ready to run: NO`; `32` re-issue as `42`.
+- `09-25 R79` 12:59 ET NO WORDS OF HIS — `39` run 2 `FAILED: W (c1) — with-DB pass 1 red on the stack — … DeadlockDetected …`; one relaunch (run 3).
+- `09-25 R80` 13:22 ET NO WORDS OF HIS — `39` `STACK SEAM BUILT a7296b44 | branches: 4 | offline 3198/0 | with-DB 3575/0 | live-note 146/0 | … RESTARTS: com.cobalt.aset com.cobalt.radar`; launch row `40` seam check.
+- `09-25 R81` 13:25 ET NO WORDS OF HIS — desk launch row: `41` re-issue drafter for `42`.
+- `09-25 R82` 13:25 ET NO WORDS OF HIS — desk launch row: `36` D2 fix r1 build — HELD, not launched (R83 (2)).
+- `09-25 R83` 13:26 ET "I'm done trading, but we're not going to be able to do the sitting or anything else. The overall Anthropic meter is at 95%. And I think we need to keep it just for building." — P-HIS: done trading; sittings cancelled today; build only; desk-model and wake-up-cost question; radar tuning (low-float names ranked after other scanners, triggers tuned) to BACKLOG; V1 device-session A/B.
+- `09-25 R84` 13:40 ET NO WORDS OF HIS — `41` `STACKED DEPLOY RE-ISSUED · folds: 13 of 13 · … ESCALATE: 8`.
+- `09-25 R85` 13:43 ET NO WORDS OF HIS — desk `24574d72` wake-up record.
+- `09-25 R86` 13:48 ET "Ship without sitting.  We will have sitting after antropic meter resets" — P-HIS: V1 ships loopback-only in the set (B); device session becomes a sitting after the reset (his per-case override, L73).
+- `09-25 R87` 13:53 ET NO WORDS OF HIS — `40` `FAILED: packet — 304,246 B staged … 4,246 B over the 300,000 B ceiling`; ceiling 360,000 B; relaunched.
+- `09-25 R88` 14:08 ET NO WORDS OF HIS — `40` `FAILED: packet — 49,993 B over the 360,000 B ceiling`; ceiling 450,000 B; the desk's memory write of the K17 lesson DENIED by the classifier, folded 09-27.
+- `09-25 R89` 14:20 ET "A" — P-HIS: three desk-only allow strings (`Edit`, `Write`, `Bash(python3 *)`) on the desk launch line; the desk's own edit denied twice; his own edit 14:42, commit `78fa0305`.
+- `09-25 R90` 14:33 ET NO WORDS OF HIS — `40` `STACK SEAM CHECK DONE · round: 1 · … defects that HOLD: 1 · ready for the gate: NO` (`com.cobalt.agent` `reads: []`).
+- `09-25 R91` 14:37 ET NO WORDS OF HIS — desk launch row: `43` stack seam fix r1 drafter.
+- `09-25 R92` 14:51 ET NO WORDS OF HIS — `43` `STACK SEAM FIX R1 DRAFTED · FIX: 5 · … agent restart: IN · new rule strings: 4`; launch row `44`; the four agent-restart strings put to him as A/B.
+- `09-25 R93` 15:24 ET NO WORDS OF HIS — `44` `STACK SEAM FIX R1 BUILT 41c9c962 | on 57420087 | … with-DB 3576/0 | RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.radar`; launch row `45` check (round 2).
+- `09-25 R94` 15:27 ET "You will run into usage limit.   99% now.  Will this resume o. Sunday after 1?" — meter 99%; the deploy re-slots to Sunday 09-27 evening (L47), nothing dropped; METER STOP PLAN in §5.
+- `09-25 R95` 15:58 ET NO WORDS OF HIS — `45` `STACK SEAM FIX R1 CHECK DONE · round: 2 · opus: FIX STANDS · grok: FIX — U1 …; U2 … · defects that HOLD: 0 · ready for the gate: NO`; fix round 2 REPORT-ONLY on Sunday.
+- `09-25 R96` written 2026-09-27 14:5x ET NO WORDS OF HIS — desk record: restates R86 with the literal `V1 LOOPBACK-ONLY — his B (09-25 R86)` for the P-V1 gate of `50`.
+- BUILDS + CHECKS (stop lines, from each report's last line, L35): H1 fix r2 `HANDICAP H1 FIX R2 BUILT c782e58e | on 4a628c4f | code: unchanged | offline 2624/0 | with-DB 2984/0 | live-note 131/0 …` → check r3 (R3) · K2 `DRC K2 BUILT 09ce3742` → check r1 `defects that HOLD: 9` → fix r1 `4626a1f2` → check r2 `defects that HOLD: 2` → fix r2 `f5c6946b` → check r3 `defects that HOLD: 0 · ready for K3: YES · ESCALATE: 12` (K2 CHECKED) · D4 `DRC D4 BUILT 5d4f8201` (two resumes) → check r1 `HOLD 12` → fix r1 `e96f0be7` → check r2 `HOLD 1` → fix r2 `02b0a199` (code unchanged) → check r3 `DEFECT REMAINS ×2 · defects that HOLD: 3 · ready for D2: NO` → his override R57 · D2 `DRC D2 BUILT 6777c463` → check r1 `defects that HOLD: 11 · ready for D3: NO`; fix r1 drafted (`36` / `37`), build HELD · replay fix `REPLAY DEADLINE FIX BUILT 8b931ce5` → check `ready for a deploy prompt: YES` (CHECKED) · stale-score `358f1f75` and V1 `d319e4f3` CHECKED earlier (09-24 R88, 09-25 R23).
+- STACK SEAM (`deploy/stacked-0925`): `STACK SEAM BUILT a7296b44` (after `FAILED: M3` and `FAILED: W (c1)`) → check r1 `ready for the gate: NO` → `STACK SEAM FIX R1 BUILT 41c9c962` → check r2 `defects that HOLD: 0 · ready for the gate: NO` (Grok, two report-text shortfalls); fix r2 report-only owed Sunday (R95).
+- DESIGNS: voice TTS (VT) proposal `VOICE TTS PROPOSED` → tribunal r1 `VOICE TTS TRIBUNAL DONE · round: 1 · … houses that ruled: 3 of 3` → derive `VOICE TTS DERIVED · DRAFT FINAL` (round 2 not before 09-26 06:47 ET, not launched) · D2 seam of record `docs/30 - Design/DRC-D2-SEAM-2026-09-25.md` (R64).
+- PUSHES (L55): R36 `de48c19b..171c6792`; R50 `171c6792..e40942a6`; later pushes are in the 09-27 block; `git log -1 origin/main` = `4f81613a` at this close.
+- DESK: card cut applied (R35: `topics/cto-desk-contract.md` new; refresh line 500,000 per R27); desk write allows applied by his own edit (R89, `78fa0305`, `git log` verified).
+- NO DEPLOY on 09-25: `git tag --list "deploy-2026-09-2*"` lists no `deploy-2026-09-25`; the set moved to Sunday by the meter (R94, L47). LAWS: nothing folded or applied on 09-25 (see `close-2026-09-27.md`).
+- DAY-OPEN 09-25: `SEAT VERDICT: SEAT VERDICT: GREEN — all six checks PASS, radar scanning premarket, 322 membership rows since 04:00:50 ET, max beat gap 15.1 min` (`day-open-2026-09-25.md`).
+
+### 2026-09-27 — Stacked deploy lands (`3349466f`), two hotfixes, pushed; ALL STOP for the startup redesign; smoke look moved to Monday
+Source: `docs/40 - DevDocs/reports/cto-2026-09-27.md` §0, §4 (rows R1–R33), §5 CURRENT; `deploy-2026-09-27.md`; `side-lanes-2026-09-27.md`; the last line of every report dated 09-27; `close-2026-09-27.md`. Bare "R<n>" below = `09-27 R<n>`. No prose narration — dated record only.
+- `09-27 R1` 13:11 ET "Ok 13:00 passed and meter is full.   I want you to finish what's prepared to do today and prepared for deployment,  and then all stop since we are going to review and refactor all the files you are reading art wakeup until it's really lean." — P-HIS: finish the stacked deploy, THEN ALL STOP; the next item is the wake-up read-set refactor (his session, off-ladder).
+- `09-27 R2` 13:12 ET NO WORDS OF HIS — desk launch row: `47` fix r2 drafter (Opus 5.5).
+- `09-27 R3` 13:14 ET "Approved all" — P-HIS: the four agent-restart strings (`cobalt.sh status` / `cobalt.sh stop` / `launchctl kickstart gui/501/com.cobalt.agent` / `ps -p *`) for the deploy line.
+- `09-27 R4` 13:22 ET NO WORDS OF HIS — desk record + launch row: `47` `STACK SEAM FIX R2 DRAFTED · FIX: 3 · … code change: NONE`; `48` fix r2 build, report-only.
+- `09-27 R5` 13:26 ET NO WORDS OF HIS — desk ruling (his word overrules): the deploy runs any time today after the gate is green (non-trading day); the 20:20:00–20:34:59 archiver guard kept.
+- `09-27 R6` 13:26 ET NO WORDS OF HIS — desk launch row: `46` `42` re-issue drafter (Sonnet 5).
+- `09-27 R7` 13:49 ET NO WORDS OF HIS — `46` `STACKED DEPLOY RE-ISSUED r3` → `50-stacked-deploy-r3.md`; ESCALATE 1–5 accepted as desk readings.
+- `09-27 R8` 13:51 ET NO WORDS OF HIS — desk `3b43cf04` wake-up record; memory folds applied.
+- `09-27 R9` 13:57 ET NO WORDS OF HIS — `48` `STACK SEAM FIX R2 BUILT 41c9c962 | on 52540593 | report-only | offline 3199/0 | with-DB 3576/0 | live-note 146/0 …`; launch row `49` check (Opus 5.5 · Sol · Grok).
+- `09-27 R10` 14:1x ET "Ok let me know when ready to refactor startup route for the CTO desk" — P-HIS: Sunday window kept (deploy as soon as ready); the desk tells him when the refactor is ready.
+- `09-27 R11` 14:48 ET NO WORDS OF HIS — `49` `STACK SEAM FIX R2 CHECK DONE · round: 3 · … defects that HOLD: 0 · ready for the gate: YES`; launch row `50` GATE PHASE with two desk gate corrections.
+- `09-27 R12` 14:54 ET NO WORDS OF HIS — `50` gate phase launched 14:53; the watch on the deploy report DENIED by the classifier, not reshaped.
+- `09-27 R13` 16:30 ET NO WORDS OF HIS — gate green 15:20:49 (`c501e025`); relaunch row `32 DEPLOY RELAUNCH`, `CONTINUE: DEPLOY`.
+- `09-27 R14` 17:1x ET "A" and "Use edit tools.  Yes I want A" — P-HIS: deploy hotfix; the first deploy run ended `FAILED PREFLIGHT: D1 — <RB> refused — ProgrammingError: only '%s', '%b', '%t' are allowed as placeholders, got '%e' · rollback: not used` (nothing merged); `50` HOTFIX r3.1 `33a43207` (`strpos`, re-run branch).
+- `09-27 R15` 17:39 ET NO WORDS OF HIS — desk launch row: `51` read of the hotfix (Opus 5.5 · Sol · Grok).
+- `09-27 R16` 18:04 ET NO WORDS OF HIS — `51` `DEPLOY HOTFIX READ DONE · … defects that HOLD: 1 · ready for the relaunch: NO`; HOTFIX r3.2 `978119a6` (relaunch rule reads every deploy-phase part).
+- `09-27 R17` 18:08 ET NO WORDS OF HIS — desk launch row: `52` hotfix read round 2.
+- `09-27 R18` 18:07 ET "Okay, next time the desk restarts, please restart it using Opus 5.5. We're gonna continue the desk on 5.5 Opus going forward for now." — P-HIS: desk seat Opus 5.5 until his word.
+- `09-27 R19` 18:07 ET "please start a Fable 5.1 session for me for CTO desk startup routine. Tuning." — P-HIS: startup-tuning sitting `0797b7d5` launched 18:10 (off-ladder), IN PROGRESS.
+- `09-27 R20` 18:36 ET NO WORDS OF HIS — `52` `DEPLOY HOTFIX READ R2 DONE · round: 2 · … defects that HOLD: 0 · ready for the relaunch: YES`; second `32 DEPLOY RELAUNCH`.
+- `09-27 R21` 18:5x ET "ok do A" — P-HIS: his allow of the two smoke `ls` reads outside the launch line's `--add-dir`.
+- `09-27 R22` 20:44 ET NO WORDS OF HIS — `STACKED DEPLOY DONE 3349466f · tag deploy-2026-09-27 · branches: 4 · migrations: 0014 0015 0017 · residents down 220 s · /radar 200 · rollback: not used · ESCALATE: 14`; push list named.
+- `09-27 R23` 20:45 ET "push" — PUSH (L55): `main` `e40942a6..4f81613a` (179 commits) + tags `deploy-2026-09-27`, `pre-stacked-0925`; verified `origin/main..main` = 0 and `ls-remote --tags`.
+- `09-27 R24` 20:48 ET NO WORDS OF HIS — desk `e7b58182` (Opus 5.5, R18) wake-up record.
+- `09-27 R25` 20:56 ET "Since I put an all stop to all future development until we create a wake up routine proposal that significantly shrinks and makes wake up routine more functional, please tell me what is next in the plate …" (message cut) — ALL STOP restated.
+- `09-27 R26` 20:59 ET "A, because we want to do the smoke routine and everything tonight. We want to close this uh, deployment." — `34` smoke look at 21:41, the closes tonight.
+- `09-27 R27` 21:02 ET "Okay, as soon as we finish redesigning the startup routine, and deploy all the tuned files we're going to continue with what's needed for right now …" — P-HIS: development resumes only after the tuned startup files are live (cause: token cost of the wake-up routine).
+- `09-27 R28` 21:17 ET NO WORDS OF HIS — desk record: a side-lanes survey answered with an in-process Agent-tool helper (L61 / L64 miss named by him 21:21); A/B offered.
+- `09-27 R29` 21:33 ET "We already ruled B." — B stands (every helper `--bg` + rc + tab); the A/B withdrawn.
+- `09-27 R30` 21:40 ET "those hundred and thirty-eight thousand tokens were Sonnet tokens, and it matters because they're different meter." — correction: Sonnet is a separate meter; mechanical / survey helpers = `--bg` Sonnet sessions with rc + tab.
+- `09-27 R31` 21:41 ET NO WORDS OF HIS — desk record: `ops/com.cobalt.replay.plist` fires Weekday 1–5 only, no Sunday replay; `34` NOT LAUNCHED; A/B offered.
+- `09-27 R32` 21:42 ET "yes A" — the S2 smoke look moves to Mon 2026-09-28 at/after 21:41 (the first real replay, 21:10); the closes run tonight.
+- `09-27 R33` 21:44 ET NO WORDS OF HIS — desk launch row: `99-close.md` (one close, 09-25 + 09-27; Sonnet 5, rc `close-0927`).
+- DEPLOY (L35): `git tag --list "deploy-2026-09-2*"` = `deploy-2026-09-21`, `-21b`, `-21h`, `-22`, `-23`, `-24`, `deploy-2026-09-27`; `deploy-2026-09-27` → `3349466f` (`Merge branch 'main' into deploy/stacked-0925`), `pre-stacked-0925` → `62fc0c99`. Stop line (`deploy-2026-09-27.md`): `STACKED DEPLOY DONE 3349466f · tag deploy-2026-09-27 · branches: 4 · migrations: 0014 0015 0017 · residents down 220 s · /radar 200 · rollback: not used · ESCALATE: 14`. Gate phase before it (15:20:49 EDT, `c501e025`): offline 3199/0 · with-DB 3576/0 · live-note 146/0 · validate exit 0. FAILED attempt before it (R14): `FAILED PREFLIGHT: D1 — <RB> refused — ProgrammingError: only '%s', '%b', '%t' are allowed as placeholders, got '%e' · rollback: not used`. The two hotfixes: r3.1 `33a43207` (R14), r3.2 `978119a6` (R16); read clean by `52` (R20).
+- PUSH R23 verified at this close: `git log -1 origin/main` = `4f81613a`; `git status --branch` = `main...origin/main [ahead 13]` (docs commits since).
+- DESK SEAT (R18): OPUS 5.5 from the next refresh; desk `e7b58182` launched 20:47 on it (R24).
+- STARTUP-TUNING SITTING (R19): `desk-startup-tuning-2026-09-27.md` last line `(sitting in progress — next step under ## CONTINUE)` — IN PROGRESS, not judged; `plans/startup-redesign-2026-09-27/` is his live sitting.
+- ALL STOP (R1, R25) and its gate (R27): no build, check or design lane opens until the tuned startup files are live; the DRC lane resumes at `36` → `37` → `09` after that.
+- SMOKE LOOK moved (R31 / R32): Mon 2026-09-28 ≥21:41; no Sunday replay (`ops/com.cobalt.replay.plist` `StartCalendarInterval` Weekday 1–5 at 21:10; `logs/replay.err` last written 09-25 21:39 `DeadlineExceeded` on the pre-deploy code).
+- HELPER RULINGS (R28–R30): every helper a `--bg` session with rc + tab (L61 / L64 unchanged); Sonnet a separate meter; desk practice, not law.
+- `side-lanes-2026-09-27.md`: 17 off-ladder lanes listed; ESCALATE 3 — JEV house question open 3+ days, bars chunks 1a / 2 unmerged past L46's 3-day cap, the H1 doc timestamp (`FLOAT-HANDICAP-v3-2026-09-21.md:75`).

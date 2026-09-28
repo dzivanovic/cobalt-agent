@@ -19,6 +19,30 @@ size, not as an amount owed.
 Newest day first.
 
 <!-- cobalt:days -->
+<!-- cobalt:section seat-usage:2026-09-27 -->
+### 2026-09-27
+
+weekly_pct_open:
+weekly_pct_close:
+
+<!-- cobalt:unit seat-usage:2026-09-27 -->
+| model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
+|---|---|---:|---:|---:|---:|---:|
+| `claude-sonnet-5` | claude · mechanical, non-write only — L29 ceiling for this tier | 68,644,898 | 1,171,140 | 441,500 | $22.83 | $0.00 |
+| `gpt-5.6-sol` | codex · — | 2,214,784 | 0 | 26,135 | $3.26 | $0.00 |
+| `grok-4.7-build` | grok · — | 1,779,328 | 0 | 150,625 | $0.98 | $0.00 |
+| `claude-opus-5-5` | claude · — | 54,508,808 | 1,809,290 | 368,047 | **unpriced** | — |
+| `claude-fable-5-1` | claude · planning + architect seat — L29 above the floor, at Dejan's call | 96,055,147 | 1,859,379 | 399,422 | **unpriced** | — |
+
+**Day total (API-equivalent):** ≥ $27.07 · **230,254,193** tokens across 5 model(s), seats: claude, codex, grok
+**Fresh input tokens:** 825,690 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+
+> **UNPRICED MODELS: `claude-fable-5-1`, `claude-opus-5-5`.** These were used today and the pinned tool's offline pricing table has no rate for them, so their cost is missing rather than zero, and the day total above is a FLOOR. Fix by bumping the pin in `configs/cobalt/seat_usage.yaml` (a decision, with a diff), never by letting the job reach the network.
+
+_Generated 2026-09-27 21:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20260927 --until 20260927 --by-agent --offline`_
+<!-- /cobalt:unit seat-usage:2026-09-27 -->
+<!-- /cobalt:section seat-usage:2026-09-27 -->
 <!-- cobalt:section seat-usage:2026-09-26 -->
 ### 2026-09-26
 
