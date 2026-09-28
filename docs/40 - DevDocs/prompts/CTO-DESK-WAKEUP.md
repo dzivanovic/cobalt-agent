@@ -8,7 +8,7 @@ SEAT PROFILE — the active vendor’s commands; changes only on his ruling. The
 - VIEW: `herdr tab list` (find the "CTO" tab); `herdr tab create --workspace w2 --cwd /Users/cobalt/cobalt --label "CTO" --no-focus`, then `herdr pane run <pane> "claude attach <id>"`; alive = `pgrep -fl "claude attach <id>"`
 - LIST: `claude agents --json` (id, cwd, state; `--all` includes ended) + `ListAgents` (busy / idle)
 - STOP: `claude stop <id>`; a replaced desk, once stopped, is removed with `claude rm <id>` (stop keeps it listed in the app) · MESSAGE: `SendMessage` · WAIT: the report’s changed last non-blank stop line via `wait-stop-line.sh`; `notify_when_idle` is a session notification, not completion evidence.
-- MEASURE: `sh /Users/cobalt/.claude/ops/desk-context.sh <id> 500000`
+- MEASURE: `sh /Users/cobalt/.claude/ops/desk-context.sh <id> 250000`
 
 STEP 0 — HANDOVER
 1. Read the last line of the newest `docs/40 - DevDocs/reports/cto-<date>.md`.
