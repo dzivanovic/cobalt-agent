@@ -71,6 +71,15 @@ AUTO_FILL_EVIDENCE = {"auto": "manual_fill"}
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
+#: `card_stop_edits.kind` (0021, R38): a stop he typed, or the ↺ reset to
+#: Cobalt's `structural_stop`. The owner of the stop is derived from the
+#: last row (`stop_owner`), never stored twice.
+STOP_EDIT = "edit"
+STOP_RESET = "reset"
+STOP_EDIT_KINDS = (STOP_EDIT, STOP_RESET)
+STOP_OWNER_YOURS = "yours"
+STOP_OWNER_COBALT = "cobalt"
+
 #: The evidence marker every backfilled genesis row carries, so a row
 #: Cobalt classified retrospectively is never mistaken for one it watched
 #: happen. Queryable: `evidence->>'backfill' = 'S1-P2'`.
@@ -347,12 +356,13 @@ class CardStore:
                     )
                 if pending_ids:
                     # Marked BY ID, not by "everything still unfolded for
-                    # this card". `record_stop_edit` does not take the
-                    # card lock, so an edit inserted between the SELECT
-                    # above and this UPDATE would otherwise be marked
-                    # folded into a transition whose evidence never
+                    # this card". Before S3 C2 `record_stop_edit` did not
+                    # hold the card lock, so an edit inserted between the
+                    # SELECT above and this UPDATE would otherwise have been
+                    # marked folded into a transition whose evidence never
                     # carried it — silently losing the one record of a
-                    # moved stop, which is the 09-03 lesson exactly.
+                    # moved stop, which is the 09-03 lesson exactly. It
+                    # holds the lock now (C2-6); marking by id stays.
                     cur.execute(
                         "UPDATE card_stop_edits SET folded_into = %s WHERE id = ANY(%s)",
                         (transition_id, pending_ids),
@@ -677,23 +687,37 @@ class CardStore:
         to_stop,
         actor: Actor = Actor.YOU,
         now: Optional[datetime] = None,
+        kind: str = STOP_EDIT,
     ) -> int:
         """Log a stop move. NOT a state change — no transition row.
 
         Refused unless the card is in a state where the stop is his to
         move (decision 11: WATCH and IN-TRADE/FILLED). In ARMED the whole
         summary strip is locked; in a terminal state the card is done.
+
+        ONE TRANSACTION (S3 C2-6, v3 §5 / R67): one connection with
+        autocommit off, the card row lock held from the SELECT to the
+        commit — the edit row and the card UPDATE land together, and no
+        leg or second edit can move the card in between (X21).
+
+        IN FILLED (the live defect, X19 / X20): open risk is priced on the
+        shares he still HOLDS — `legs.running_shares`, the one running
+        read — at the per-share risk from HIS FILL: |entry-leg price − new
+        stop| (no entry leg: `actual_fill`; neither: the planned `entry`),
+        side-checked against that price. The UPDATE writes `stop`,
+        `per_share_risk`, `used_risk` and never `shares`: the planned count
+        stays the plan.
+
+        `kind = 'reset'` (R38) only when the caller passes it (the ↺
+        control) AND `to_stop` is the card's `structural_stop`; a card with
+        no `structural_stop` (a manual card) has no Cobalt stop to reset to
+        and is refused (O19 A). A typed stop that happens to equal
+        `structural_stop` stays an `edit`, and his.
         """
+        if kind not in STOP_EDIT_KINDS:
+            raise CardStateError(f"REFUSED card {card_id}: stop-edit kind {kind!r} is not one of {STOP_EDIT_KINDS}.")
         ts = now or clock_mod.now_utc()
         session = assert_writable("cards.stop_edit", target=str(card_id), now=ts)
-        state = self.state_of(card_id)
-        if state not in STOP_EDITABLE:
-            raise CardStateError(
-                f"REFUSED: the stop is not editable in {state.value}. Decision 11 — "
-                "the stop moves with structure in WATCH and in-trade (FILLED); from "
-                "ARMED onward the summary strip is locked, because the key is a risk "
-                f"commitment. Editable states: {', '.join(sorted(s.value for s in STOP_EDITABLE))}."
-            )
         # Decision 11: "stop edits recompute shares/risk/targets/room
         # live". Updating `stop` alone would leave `shares` and
         # `used_risk` describing the OLD stop — a card that lies about
@@ -703,15 +727,40 @@ class CardStore:
         from cobalt.aset.engine import recompute_for_stop, stop_distance
         from cobalt.aset.models import Direction
 
-        with self._connect() as conn:
+        from . import legs
+
+        new_stop = Decimal(str(to_stop))
+        conn = self._connect()
+        conn.autocommit = False
+        try:
             card = conn.execute(
-                "SELECT entry, direction, risk_budget, shares, state FROM aset_sizings "
-                "WHERE id = %s FOR UPDATE",
+                "SELECT entry, direction, risk_budget, state, structural_stop, actual_fill "
+                "FROM aset_sizings WHERE id = %s FOR UPDATE",
                 (card_id,),
             ).fetchone()
             if card is None:
                 raise CardStateError(f"no aset_sizings row with id {card_id}")
-            entry, direction, risk_budget, shares, locked_state = card
+            entry, direction, risk_budget, locked_state, structural_stop, actual_fill = card
+            state = CardState(locked_state)
+            if state not in STOP_EDITABLE:
+                raise CardStateError(
+                    f"REFUSED: the stop is not editable in {state.value}. Decision 11 — "
+                    "the stop moves with structure in WATCH and in-trade (FILLED); from "
+                    "ARMED onward the summary strip is locked, because the key is a risk "
+                    f"commitment. Editable states: {', '.join(sorted(s.value for s in STOP_EDITABLE))}."
+                )
+            if kind == STOP_RESET:
+                if structural_stop is None:
+                    raise CardStateError(
+                        f"REFUSED card {card_id}: a reset returns the stop to Cobalt's structural stop, "
+                        "and this card has none (a manual card) — no Cobalt stop to reset to. Type the "
+                        "stop instead. Nothing written."
+                    )
+                if new_stop != structural_stop:
+                    raise CardStateError(
+                        f"REFUSED card {card_id}: a reset goes to Cobalt's structural stop "
+                        f"{structural_stop}, not {new_stop}. Nothing written."
+                    )
 
             if risk_budget is None:
                 # AN UNSIZED RADAR CARD (S2-P2, Astra R1-6). No key tapped,
@@ -720,53 +769,96 @@ class CardStore:
                 # through the one distance path) and the live per-share risk
                 # still updates, so proximity and a later key tap read the
                 # stop he chose; the sizing columns stay NULL.
-                if CardState(locked_state) is not CardState.WATCH:
+                if state is not CardState.WATCH:
                     raise CardStateError(
                         f"card {card_id} is unsized in {locked_state} — only a WATCH card may be unsized"
                     )
-                distance = stop_distance(
-                    entry=entry, stop=Decimal(str(to_stop)), direction=Direction(direction)
-                )
-                row = conn.execute(
-                    "INSERT INTO card_stop_edits "
-                    "(card_id, at, session, in_state, from_stop, to_stop, actor) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                    (card_id, ts, session.value, state.value, from_stop, to_stop, actor.value),
-                ).fetchone()
+                distance = stop_distance(entry=entry, stop=new_stop, direction=Direction(direction))
+                edit_id = self._insert_stop_edit(conn, card_id, ts, session, state, from_stop, to_stop, actor, kind)
                 conn.execute(
                     "UPDATE aset_sizings SET stop = %s, per_share_risk = %s WHERE id = %s",
                     (to_stop, distance, card_id),
                 )
-                return int(row[0])
+            elif state is CardState.FILLED:
+                # In-trade the shares are already bought; a moved stop
+                # cannot un-buy them, so it changes OPEN RISK, not size —
+                # on the shares he still holds, from the price he paid.
+                running = legs.running_shares(conn, card_id)
+                if running.entry_price is not None:
+                    priced_from = running.entry_price
+                elif actual_fill is not None:
+                    priced_from = actual_fill
+                else:
+                    priced_from = entry
+                recomputed = recompute_for_stop(
+                    entry=priced_from,
+                    stop=new_stop,
+                    direction=Direction(direction),
+                    risk_budget=risk_budget,
+                    in_trade_shares=running.shares,
+                )
+                edit_id = self._insert_stop_edit(conn, card_id, ts, session, state, from_stop, to_stop, actor, kind)
+                conn.execute(
+                    "UPDATE aset_sizings SET stop = %s, per_share_risk = %s, used_risk = %s WHERE id = %s",
+                    (to_stop, recomputed.per_share_risk, recomputed.used_risk, card_id),
+                )
+            else:
+                recomputed = recompute_for_stop(
+                    entry=entry,
+                    stop=new_stop,
+                    direction=Direction(direction),
+                    risk_budget=risk_budget,
+                )
+                edit_id = self._insert_stop_edit(conn, card_id, ts, session, state, from_stop, to_stop, actor, kind)
+                conn.execute(
+                    "UPDATE aset_sizings SET stop = %s, per_share_risk = %s, shares = %s, "
+                    "used_risk = %s WHERE id = %s",
+                    (
+                        to_stop,
+                        recomputed.per_share_risk,
+                        recomputed.shares,
+                        recomputed.used_risk,
+                        card_id,
+                    ),
+                )
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return edit_id
 
-            recomputed = recompute_for_stop(
-                entry=entry,
-                stop=Decimal(str(to_stop)),
-                direction=Direction(direction),
-                risk_budget=risk_budget,
-                # In-trade the shares are already bought; a wider stop
-                # cannot un-buy them, so it changes OPEN RISK, not size.
-                in_trade_shares=shares if state is CardState.FILLED else None,
-            )
-
-            row = conn.execute(
-                "INSERT INTO card_stop_edits "
-                "(card_id, at, session, in_state, from_stop, to_stop, actor) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                (card_id, ts, session.value, state.value, from_stop, to_stop, actor.value),
-            ).fetchone()
-            conn.execute(
-                "UPDATE aset_sizings SET stop = %s, per_share_risk = %s, shares = %s, "
-                "used_risk = %s WHERE id = %s",
-                (
-                    to_stop,
-                    recomputed.per_share_risk,
-                    recomputed.shares,
-                    recomputed.used_risk,
-                    card_id,
-                ),
-            )
+    @staticmethod
+    def _insert_stop_edit(conn, card_id, ts, session, state, from_stop, to_stop, actor, kind) -> int:
+        """The `card_stop_edits` row. An `edit` leaves `kind` to its column
+        default (`'edit'`, 0021), so a WATCH edit writes the same row it
+        always did; a `reset` names its kind."""
+        columns = "card_id, at, session, in_state, from_stop, to_stop, actor"
+        values = [card_id, ts, session.value, state.value, from_stop, to_stop, actor.value]
+        if kind != STOP_EDIT:
+            columns += ", kind"
+            values.append(kind)
+        row = conn.execute(
+            f"INSERT INTO card_stop_edits ({columns}) "
+            f"VALUES ({', '.join(['%s'] * len(values))}) RETURNING id",
+            values,
+        ).fetchone()
         return int(row[0])
+
+    def stop_owner(self, card_id: int) -> str:
+        """Who owns the card's stop, DERIVED (v3 §5, R38): `yours` when the
+        last `card_stop_edits` row has actor YOU and kind `edit`, else
+        `cobalt` (no edit yet, or his last move was the ↺ reset). A read;
+        never stored twice."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT actor, kind FROM card_stop_edits WHERE card_id = %s ORDER BY id DESC LIMIT 1",
+                (card_id,),
+            ).fetchone()
+        if row is not None and row[0] == Actor.YOU.value and row[1] == STOP_EDIT:
+            return STOP_OWNER_YOURS
+        return STOP_OWNER_COBALT
 
     # -- backfill -----------------------------------------------------
 

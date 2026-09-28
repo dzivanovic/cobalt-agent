@@ -2,6 +2,7 @@
 
     cobalt cards state <id>
     cobalt cards history <id>
+    cobalt cards legs <id>
     cobalt cards move <id> --to STATE [--actor you|cobalt] [--reason ...]
     cobalt cards backfill [--dry-run]
     cobalt cards expire [--at ISO8601] [--dry-run]
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import date, datetime
+from decimal import Decimal
 
 from cobalt import env
 from cobalt.session.clock import ET, now_utc, session_clock
@@ -92,6 +94,36 @@ def cmd_move(args: argparse.Namespace) -> None:
         evidence={"via": "cobalt cards move"},
     )
     print(f"card {args.card_id}: {before} -> {args.to}  (card_transitions id {tid})")
+
+
+def cmd_legs(args: argparse.Namespace) -> None:
+    """S3 C2-7: one card's CURRENT legs, THE running read and its basis,
+    realized R (`realized_r.1`) and whether it is provisional, and who owns
+    the stop. READ ONLY: no schema call, nothing written — the running read
+    takes the card lock on a transaction that is rolled back."""
+    from .legs import LegRefused, read_position
+
+    try:
+        pos = read_position(args.card_id)
+    except LegRefused as refused:
+        raise SystemExit(str(refused))
+    card = pos.card
+    print(f"card {card['id']}  {card['ticker']}  {card['direction']}  {card['state']}  "
+          f"stop {card['stop']}  cobalt stop {card['structural_stop'] if card['structural_stop'] is not None else '—'}")
+    print(f"{'id':>7} {'seq':>3} {'kind':<5} {'shares':>6} {'price':>10} {'flag':<9} {'source':<11} "
+          f"{'preset':<6} {'run_before':>10} {'stop':>10} {'corrects':>8} {'held':>5}")
+    for leg in pos.legs:
+        print(
+            f"{leg['id']:>7} {leg['seq']:>3} {leg['kind']:<5} {leg['shares']:>6} {leg['price']:>10} "
+            f"{leg['flag']:<9} {leg['source']:<11} {leg['preset'] or '—':<6} {leg['running_before']:>10} "
+            f"{leg['stop_in_force']:>10} {leg['corrects'] or '—':>8} "
+            f"{'—' if leg['held_stated'] is None else leg['held_stated']:>5}"
+        )
+    print(f"running: {pos.running.shares} (basis: {pos.running.basis})")
+    r = pos.realized
+    figure = r.reason if r.value is None else f"{r.value.quantize(Decimal('0.01'))}"
+    print(f"realized R: {figure} {'provisional' if r.provisional else 'final'} [{r.function_id}]")
+    print(f"stop owner: {CardStore().stop_owner(args.card_id)}")
 
 
 def cmd_picks(args: argparse.Namespace) -> None:
@@ -183,6 +215,12 @@ def add_parser(sub) -> None:
     history = csub.add_parser("history", help="Every transition of one card.")
     history.add_argument("card_id", type=int)
     history.set_defaults(func=cmd_history)
+
+    legs = csub.add_parser(
+        "legs", help="One card's current legs, running (and its basis), realized R, stop owner. Read only."
+    )
+    legs.add_argument("card_id", type=int)
+    legs.set_defaults(func=cmd_legs)
 
     move = csub.add_parser("move", help="Move a card through a legal edge.")
     move.add_argument("card_id", type=int)

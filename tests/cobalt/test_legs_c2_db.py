@@ -152,14 +152,18 @@ def test_a_failing_close_rolls_the_leg_back_with_it(aset, monkeypatch):
     from cobalt.cards.store import CardStore
 
     card = filled(aset, 100)
+    real_transition = CardStore.transition
 
     def broken(self, *a, **k):
         raise RuntimeError("transition broke")
 
+    # Restore ONLY this patch: `monkeypatch.undo()` would also undo the
+    # suite's `db.connect` patch and send the reads below to a real
+    # session, which blocks behind this transaction's `apply_0021` locks.
     monkeypatch.setattr(CardStore, "transition", broken)
     with pytest.raises(RuntimeError, match="transition broke"):
         tap(card, "flat", 100)
-    monkeypatch.undo()
+    monkeypatch.setattr(CardStore, "transition", real_transition)
     assert [l["kind"] for l in legs_of(aset, card)] == ["entry"], "the leg rolled back with the close"
     assert card_row(aset, card)["state"] == "FILLED"
 

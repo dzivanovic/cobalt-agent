@@ -8,6 +8,7 @@
 |---|---|
 | `state <id>` | the card's current state |
 | `history <id>` | every transition, oldest first, with evidence |
+| `legs <id>` | READ ONLY (S3 C2-7): the current legs, `running: <n> (basis: <legs\|recomputed_shares\|shares>)`, `realized R: <value\|reason> <provisional\|final> [realized_r.1]`, `stop owner: <yours\|cobalt>`; a card with no position exits with the refusal text |
 | `move <id> --to STATE [--actor] [--reason]` | one transition through the gates |
 | `backfill [--dry-run]` | give every state-less card a state + genesis row |
 | `expire [--at ISO] [--dry-run]` | what `com.cobalt.cards-expire` runs at 16:05 ET |
