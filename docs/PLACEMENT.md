@@ -3,10 +3,10 @@
 Dated 2026-09-13, Dejan ruled (tree cleanup). Enforced by `cobalt validate`
 (the placement sweep in `src/cobalt/placement/check.py`). Every new
 markdown artifact under `docs/` files into one of these — never at repo
-root, never in a new ad-hoc folder (CLAUDE.md's Documentation standard).
+root, never in a new ad-hoc folder (`areas/cobalt.md` `## Docs tree`).
 The four D6 tiers this cleanup did not touch — `10 - Decisions/`,
 `20 - Assessment/`, `30 - Design/`, `50 - Roles/` — stay governed by
-CLAUDE.md's Documentation standard and are out of scope of this map; the
+`areas/cobalt.md` `## Docs tree` and are out of scope of this map; the
 placement sweep allows their existing content through unchanged.
 
 - **Plans** — working plans and briefs (any stage, any author) live in
@@ -19,7 +19,7 @@ placement sweep allows their existing content through unchanged.
   incident.
   (`docs/40 - DevDocs/` also carries the per-.py-file DevDocs wiki proper —
   `cobalt/`, `ops/`, `tests/`, `INDEX.md`, loose topic docs — pre-existing,
-  CLAUDE.md-governed, unchanged by this map.)
+  `areas/cobalt.md`-governed, unchanged by this map.)
 - **`docs/_archive/captures/`** is gitignored — raw reviewer/session
   captures and duplicate-content dumps are preserved on disk (never
   deleted) but never enter git; everything else under `docs/_archive/`
@@ -45,7 +45,7 @@ placement sweep allows their existing content through unchanged.
   to empty (or to only its live in-progress drop subdirectories).
 - **`docs/00 - Project/` is record-only** — canonically
   `PROJECT-LEDGER.md`, `BACKLOG.md`, `COBALT-REQUIREMENTS.md`,
-  `README.md` (CLAUDE.md's Documentation standard, pre-existing law),
+  `README.md` (`areas/cobalt.md` `## Docs tree`, pre-existing law),
   plus this cleanup's additions: `MVP-CHARTER*`, `SPRINT-LADDER*`, a
   `TRIAGE` pointer file, dated ledger-appendix files, and dated
   `INCIDENT-*-notes.md` project-level incident records. No captures, no
