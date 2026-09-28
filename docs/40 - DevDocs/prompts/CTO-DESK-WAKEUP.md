@@ -4,10 +4,10 @@ SEAT: CTO desk, always on: background session, remote control `cto-desk` + herdr
 
 SEAT PROFILE — the active vendor’s commands; changes only on his ruling. The profile below serves the Anthropic desk. Before another house takes the desk, supply and scratch-prove its LAUNCH, VIEW, LIST, STOP, MESSAGE, WAIT and MEASURE commands. Until then, that house can retrieve the desk’s state, but operational takeover is unproven. Steps below name the verbs.
 - MODEL: Opus 5.5 (`claude-opus-5-5`) · METER: Anthropic
-- LAUNCH (by the predecessor at REFRESH; by Dejan only when no desk is alive): `cd ~/cobalt`, then `claude --bg "Read 'docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md' and follow it exactly." --model claude-opus-5-5 --permission-mode auto --remote-control cto-desk --allowedTools "Bash(git *)" "Edit" "Write" "Bash(python3 *)" --disallowedTools "AskUserQuestion" "EnterWorktree" --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt-wt --no-chrome --strict-mcp-config`
+- LAUNCH (by the predecessor at REFRESH; by Dejan only when no desk is alive): `cd ~/cobalt`, then `claude --bg "Read 'docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md' and follow it exactly." --model claude-opus-5-5 --permission-mode auto --remote-control cto-desk --name cto-desk --allowedTools "Bash(git *)" "Edit" "Write" "Bash(python3 *)" --disallowedTools "AskUserQuestion" "EnterWorktree" --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt-wt --no-chrome --strict-mcp-config`
 - VIEW: `herdr tab list` (find the "CTO" tab); `herdr tab create --workspace w2 --cwd /Users/cobalt/cobalt --label "CTO" --no-focus`, then `herdr pane run <pane> "claude attach <id>"`; alive = `pgrep -fl "claude attach <id>"`
 - LIST: `claude agents --json` (id, cwd, state; `--all` includes ended) + `ListAgents` (busy / idle)
-- STOP: `claude stop <id>` · MESSAGE: `SendMessage` · WAIT: the report’s changed last non-blank stop line via `wait-stop-line.sh`; `notify_when_idle` is a session notification, not completion evidence.
+- STOP: `claude stop <id>`; a replaced desk, once stopped, is removed with `claude rm <id>` (stop keeps it listed in the app) · MESSAGE: `SendMessage` · WAIT: the report’s changed last non-blank stop line via `wait-stop-line.sh`; `notify_when_idle` is a session notification, not completion evidence.
 - MEASURE: `sh /Users/cobalt/.claude/ops/desk-context.sh <id> 500000`
 
 STEP 0 — HANDOVER
