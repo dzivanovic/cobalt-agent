@@ -214,7 +214,7 @@ class TestAbsurdFillRejectAtWebLayer:
         form = dict(
             BASE_SIZE_FORM,
             actual_fill="2518.91",
-            fill_shares="86",
+            fill_shares="30",
             card_row_id="4242",
             orig_timestamp="2026-08-31T09:58:00-04:00",
         )
@@ -248,7 +248,7 @@ class TestAbsurdFillRejectAtWebLayer:
         form = dict(
             BASE_SIZE_FORM,
             actual_fill="218.91",
-            fill_shares="86",
+            fill_shares="30",
             orig_timestamp="2026-08-31T09:58:00-04:00",
             card_row_id="4242",
         )
@@ -564,7 +564,7 @@ class TestPickNotRecordedBanner:
                           pick_error="UndefinedTable: relation \"picks\" does not exist")
 
     def _fill_form(self):
-        return dict(BASE_SIZE_FORM, actual_fill="218.91", fill_shares="86",
+        return dict(BASE_SIZE_FORM, actual_fill="218.91", fill_shares="30",
                     orig_timestamp="2026-08-31T09:58:00-04:00", card_row_id="4242")
 
     def _stub_fill_route(self, monkeypatch, recorded):
