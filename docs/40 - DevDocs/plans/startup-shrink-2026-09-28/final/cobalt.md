@@ -14,6 +14,7 @@ updated: 2026-09-28
 ## What Cobalt is
 [stated ≤2026-09-05 · export]
 - Trading wingman: scanner → in-play pool → graded cards → sizing → alert. He trades by hand; Cobalt never touches a platform or trades.
+- Absolute boundaries: never integrate with or touch his trading platforms (DAS Trader Pro, TradeStation) — read-only awareness only; never execute or automate a trade; secrets live only in VaultManager (COBALT_MASTER_KEY), never hardcoded, printed or logged; trading-logic and risky changes go behind HITL approval.
 
 ## Working rules
 [stated ≤2026-09-10 · CLAUDE.md]
