@@ -45,7 +45,9 @@ def _sizing(entry: str = "10.0000", stop: str = "9.9000", risk: str = "60"):
 @pytest.mark.parametrize("fill", ["10.0270", "9.9730"])
 def test_x15_distance_change_pct_is_27_on_both_sides(fill):
     original = _sizing()
-    recompute = compute_fill_recompute(original, Decimal(fill), Decimal("5"))
+    # C1-5: the P is the caller's (his setting); X15 is about the figure,
+    # so P is left unevaluated here.
+    recompute = compute_fill_recompute(original, Decimal(fill), Decimal("5"), drift_warning_pct=None)
     assert recompute.distance_change_pct == Decimal("27.00")
 
 

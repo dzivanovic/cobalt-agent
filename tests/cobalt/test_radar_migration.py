@@ -31,7 +31,8 @@ def test_rollback_selects_only_newer_files_newest_first():
     ahead of 0007 in REVERSE, and the property under test is "everything
     newer than the bound, newest first", never a fixed tuple length."""
     selected = _rollback_paths("0003")
-    assert [p.name for p in selected][:8] == [
+    assert [p.name for p in selected][:9] == [
+        "0021_legs.rollback.sql",  # S3 exits C1 (M1)
         "0017_voice_turns.rollback.sql",  # voice V1
         "0015_shadow_agreement_stale.rollback.sql",  # the stale-score build (R40, X30 (A))
         "0014_radar_handicap.rollback.sql",  # the float handicap H1

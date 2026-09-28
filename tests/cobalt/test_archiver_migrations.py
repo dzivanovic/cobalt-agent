@@ -77,7 +77,7 @@ def test_forward_ends_0008_0009_0010_0011():
     """The tail after the P4 rebase: P4's pair, then this branch's pair,
     in numeric order. The invariant is unchanged — 0010 and 0011 are the
     LAST two registered, and nothing of this branch's was displaced."""
-    assert [p.name for p in FORWARD[-8:]] == [
+    assert [p.name for p in FORWARD[-9:]] == [
         "0008_radar_value_movers.sql",
         "0009_picks_missed.sql",
         "0010_archive_progress.sql",
@@ -86,13 +86,15 @@ def test_forward_ends_0008_0009_0010_0011():
         "0014_radar_handicap.sql",  # the float handicap H1 (L72 P-b)
         "0015_shadow_agreement_stale.sql",  # the stale-score build (R40, X30 (A)); 0014 is handicap H1's
         "0017_voice_turns.sql",  # voice V1; 0012 and 0016 are unmerged branches' (L68)
+        "0021_legs.sql",  # S3 exits C1 (M1); 0016/0018-0020 are the DRC lane's (L68)
     ]
 
 
 def test_reverse_begins_0011_0010_0009_0008():
     """The exact mirror of the tail above: this branch's pair reverses
     FIRST, then P4's."""
-    assert [p.name for p in REVERSE[:8]] == [
+    assert [p.name for p in REVERSE[:9]] == [
+        "0021_legs.rollback.sql",  # S3 exits C1 (M1)
         "0017_voice_turns.rollback.sql",  # voice V1
         "0015_shadow_agreement_stale.rollback.sql",
         "0014_radar_handicap.rollback.sql",
@@ -119,6 +121,7 @@ def test_rollback_down_to_0009_undoes_this_branch_alone_and_0007_also_reaches_p4
     because selection is by numeric prefix and P4 now sits between.
     Both are pinned so neither can drift."""
     assert [p.name for p in _rollback_paths("0009")] == [
+        "0021_legs.rollback.sql",  # S3 exits C1 (M1)
         "0017_voice_turns.rollback.sql",  # voice V1
         "0015_shadow_agreement_stale.rollback.sql",
         "0014_radar_handicap.rollback.sql",
@@ -127,6 +130,7 @@ def test_rollback_down_to_0009_undoes_this_branch_alone_and_0007_also_reaches_p4
         "0010_archive_progress.rollback.sql",
     ]
     assert [p.name for p in _rollback_paths("0007")] == [
+        "0021_legs.rollback.sql",  # S3 exits C1 (M1)
         "0017_voice_turns.rollback.sql",  # voice V1
         "0015_shadow_agreement_stale.rollback.sql",
         "0014_radar_handicap.rollback.sql",
@@ -479,9 +483,11 @@ def test_rollback_down_to_0009_drops_this_branch_alone_and_0007_also_reaches_p4(
         survivors = {
             name
             for name in CREATED_TABLES
-            # voice V1's 0017 sits ABOVE both bounds, so both rollbacks
-            # correctly drop voice_turns too; it is not a survivor.
-            if name not in NEW_TABLES and name not in P4_TABLES and name != "voice_turns"
+            # voice V1's 0017 and S3 exits C1's 0021 sit ABOVE both bounds,
+            # so both rollbacks correctly drop voice_turns and legs too;
+            # neither is a survivor.
+            if name not in NEW_TABLES and name not in P4_TABLES
+            and name not in ("voice_turns", "legs")
             and _regclass(conn, name)
         }
 

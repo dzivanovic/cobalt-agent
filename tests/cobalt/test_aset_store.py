@@ -20,6 +20,7 @@ import pytest
 from cobalt.aset.engine import compute_sizing
 from cobalt.aset.models import Direction, Grade, SheetMode, SizingInput
 from cobalt.aset.store import AsetStore
+from legs_db_support import apply_0021, fill_kwargs, patch_daymode
 
 # RULING 7.1d: every DB test runs inside a cobalt_dev transaction that
 # is rolled back (tests/cobalt/conftest.py). The per-test id cleanup
@@ -43,6 +44,9 @@ def _delete_rows(store: AsetStore, ids: list[int]) -> None:
         # purpose (a pick is never deleted with its card silently).
         if conn.execute("SELECT to_regclass('\"user\".picks')").fetchone()[0]:
             conn.execute("DELETE FROM picks WHERE card_id = ANY(%s)", (ids,))
+        # S3 C1: an entry leg's card FK is NO ACTION too.
+        if conn.execute("SELECT to_regclass('\"user\".legs')").fetchone()[0]:
+            conn.execute("DELETE FROM legs WHERE card_id = ANY(%s)", (ids,))
         conn.execute("DELETE FROM aset_sizings WHERE id = ANY(%s)", (ids,))
 
 
@@ -129,7 +133,7 @@ def test_for_date_returns_todays_cards_oldest_first():
 
 
 @requires_db
-def test_mark_filled_updates_the_card_row():
+def test_mark_filled_updates_the_card_row(monkeypatch):
     """The fill recompute used to persist NOTHING — the 09-03 TSLA FILL
     UPDATE (10:02:36) had no DB row at all. It is an UPDATE to the card
     row now, plus a TRIGGERED -> FILLED transition.
@@ -139,12 +143,13 @@ def test_mark_filled_updates_the_card_row():
     `test_mark_filled_refuses_a_card_that_was_never_triggered` below for
     the other half. `status` is no longer written; `state` is the truth.
     """
-    from cobalt.aset.engine import compute_fill_recompute
     from cobalt.cards.models import Actor, CardState
     from cobalt.cards.store import CardStore
 
     store = AsetStore("cobalt_dev")
     store.ensure_schema()
+    apply_0021(store)
+    patch_daymode(monkeypatch)
     result = compute_sizing(
         SizingInput(
             ticker="TEST",
@@ -164,8 +169,7 @@ def test_mark_filled_updates_the_card_row():
         cards.transition(row_id, CardState.ARMED, actor=Actor.YOU)
         cards.transition(row_id, CardState.TRIGGERED, actor=Actor.YOU)
 
-        fill = compute_fill_recompute(result, Decimal("10.10"), Decimal("5"))
-        store.mark_filled(row_id, fill)
+        fill = store.mark_filled(row_id, **fill_kwargs(price="10.10")).recompute
         row = [r for r in store.recent(limit=10) if r["id"] == row_id][0]
         assert row["state"] == "FILLED"
         assert cards.state_of(row_id) is CardState.FILLED
@@ -184,13 +188,13 @@ def test_mark_filled_updates_the_card_row():
         assert shares == fill.recomputed_shares
 
         with pytest.raises(Exception, match="no aset_sizings row with id -1"):
-            store.mark_filled(-1, fill)
+            store.mark_filled(-1, **fill_kwargs(price="10.10"))
     finally:
         _delete_rows(store, [row_id])
 
 
 @requires_db
-def test_mark_filled_on_a_manual_card_walks_the_missing_rows_itself():
+def test_mark_filled_on_a_manual_card_walks_the_missing_rows_itself(monkeypatch):
     """F7 ONE-CLICK FILL (S1-P3, CTO review of S1-P2).
 
     Until this prompt, filling a WATCH card was refused by name: FILLED
@@ -207,12 +211,13 @@ def test_mark_filled_on_a_manual_card_walks_the_missing_rows_itself():
     timestamp — rather than making him tap three buttons to describe a
     trade he has already taken.
     """
-    from cobalt.aset.engine import compute_fill_recompute
     from cobalt.cards.models import Actor, CardState
     from cobalt.cards.store import CardStore
 
     store = AsetStore("cobalt_dev")
     store.ensure_schema()
+    apply_0021(store)
+    patch_daymode(monkeypatch)
     result = compute_sizing(
         SizingInput(
             ticker="TEST",
@@ -230,8 +235,7 @@ def test_mark_filled_on_a_manual_card_walks_the_missing_rows_itself():
     try:
         cards = CardStore("cobalt_dev")
         assert cards.state_of(row_id) is CardState.WATCH
-        fill = compute_fill_recompute(result, Decimal("10.10"), Decimal("5"))
-        store.mark_filled(row_id, fill)
+        store.mark_filled(row_id, **fill_kwargs(price="10.10"))
 
         assert cards.state_of(row_id) is CardState.FILLED
         history = cards.history(row_id)
@@ -259,20 +263,21 @@ def test_mark_filled_on_a_manual_card_walks_the_missing_rows_itself():
 
 
 @requires_db
-def test_mark_filled_refuses_the_shortcut_on_a_radar_card():
+def test_mark_filled_refuses_the_shortcut_on_a_radar_card(monkeypatch):
     """A card the S2 radar proposed gets NO one-click fill.
 
     The detector's entire claim is that it saw the arm and the trigger
     happen, so a fill that skipped them is a hole in the detector's
     record — refused by name, exactly as every fill was before the
     shortcut existed."""
-    from cobalt.aset.engine import compute_fill_recompute
     from cobalt.cards.models import CardState, IllegalTransition, Origin
     from cobalt.cards.store import CardStore
     from cobalt.radar.store import RadarStore
 
     store = AsetStore("cobalt_dev")
     store.ensure_schema()
+    apply_0021(store)
+    patch_daymode(monkeypatch)
     result = compute_sizing(
         SizingInput(
             ticker="TEST",
@@ -324,9 +329,8 @@ def test_mark_filled_refuses_the_shortcut_on_a_radar_card():
                 "WHERE id = %s",
                 (Origin.RADAR.value, score_id, member_id, row_id),
             )
-        fill = compute_fill_recompute(result, Decimal("10.10"), Decimal("5"))
         with pytest.raises(IllegalTransition, match="WATCH -> FILLED"):
-            store.mark_filled(row_id, fill)
+            store.mark_filled(row_id, **fill_kwargs(price="10.10"))
         assert CardStore("cobalt_dev").state_of(row_id) is CardState.WATCH
         with store._connect() as conn:
             actual = conn.execute(
