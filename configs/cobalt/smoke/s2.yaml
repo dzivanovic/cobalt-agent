@@ -498,7 +498,9 @@ checks:
     day: last_trading_day
     section: drc-misses
     unit: miss_line
+    requires_relation: user.drc_events
     expect_text: >-
+      user.drc_events exists (absent = the DRC migrations not applied = FAIL);
       no DRC event for the day = KNOWN pending; the event failed (or left
       pending / running) = FAIL; the event done = both marker lines present:
       `<!-- cobalt:section drc-misses -->` and `<!-- cobalt:unit miss_line -->` inside it
@@ -507,6 +509,7 @@ checks:
     title: miss line vault_writes row
     kind: sql
     side: user
+    requires_relation: user.drc_events
     query: >-
       SELECT (SELECT e.state FROM drc_events e WHERE e.day = {last_trading_day} AND (
       e.import_id = (SELECT max(i.id) FROM drc_imports i WHERE i.import_date = {last_trading_day}
@@ -528,6 +531,7 @@ checks:
       - {column: event_state, op: is_null}
     known_text: "pending — no DRC event for the last trading day"
     expect_text: >-
+      user.drc_events exists (absent = the DRC migrations not applied = FAIL);
       no DRC event for the day = KNOWN pending; otherwise event_state = done
       and writes >= 1 on the last trading day (ET)
 

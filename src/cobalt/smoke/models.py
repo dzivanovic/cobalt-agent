@@ -258,6 +258,8 @@ class VaultUnitCheck(_Check):
     day: Literal["last_trading_day", "report_date"]
     section: str = Field(min_length=1)
     unit: str = Field(min_length=1)
+    #: Checked first with `to_regclass`; absent -> FAIL naming it.
+    requires_relation: Optional[str] = Field(default=None, pattern=r"^[a-z_]+\.[a-z_]+$")
 
 
 class CliCheck(_Check):

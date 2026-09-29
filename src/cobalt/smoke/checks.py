@@ -347,7 +347,7 @@ def _job_sql(check: JobRowCheck) -> str:
     return JOB_ROW_SQL.format(label=sql_literal(check.label))
 
 
-def _relation_sql(check: SqlCheck) -> str:
+def _relation_sql(check: SqlCheck | VaultUnitCheck) -> str:
     return RELATION_SQL.format(relation=sql_literal(check.requires_relation))
 
 
@@ -378,10 +378,14 @@ def command_for(check, ctx: SmokeContext, *, note_path: Optional[Path] = None) -
     if isinstance(check, VaultUnitCheck):
         day = getattr(ctx, check.day)
         target = shlex.quote(str(note_path)) if note_path else f"<{check.note} note for {day:%Y-%m-%d}>"
-        return (
+        main = (
             f"grep -n -F -e {shlex.quote(f'<!-- cobalt:section {check.section} -->')} "
             f"-e {shlex.quote(f'<!-- cobalt:unit {check.unit} -->')} {target}"
         )
+        if check.requires_relation:
+            # The DRC branch reads its event on the USER side (`_drc_event`).
+            return hand_command(_relation_sql(check), side="user", prod=ctx.prod) + " && " + main
+        return main
     if isinstance(check, CliCheck):
         return "uv run " + " ".join(shlex.quote(render_text(a, ctx)) for a in check.argv)
     if isinstance(check, CompareCheck):
@@ -454,16 +458,28 @@ def _one_row(result: QueryRows) -> Optional[dict[str, Any]]:
     return dict(zip(result.columns, result.rows[0])) if result.rows else None
 
 
+def _relation_absent(check: SqlCheck | VaultUnitCheck, side: str, command: str, deps: SmokeDeps,
+                     raw_parts: list[str]) -> Optional[CheckOutcome]:
+    """`requires_relation`, checked first with `to_regclass`: absent →
+    FAIL naming it, and the caller runs nothing else. `None` = present
+    (or no relation declared)."""
+    if not check.requires_relation:
+        return None
+    present = deps.read_rows(_relation_sql(check), side)
+    raw_parts.append(_raw_rows(present))
+    row = _one_row(present)
+    if not row or row.get("present") is not True:
+        return _out(check, Verdict.FAIL, f"relation {check.requires_relation} does not exist",
+                    command, "\n".join(raw_parts))
+    return None
+
+
 def _sql(check: SqlCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
     command = command_for(check, ctx)
     raw_parts = []
-    if check.requires_relation:
-        present = deps.read_rows(_relation_sql(check), check.side)
-        raw_parts.append(_raw_rows(present))
-        row = _one_row(present)
-        if not row or row.get("present") is not True:
-            return _out(check, Verdict.FAIL, f"relation {check.requires_relation} does not exist",
-                        command, "\n".join(raw_parts))
+    absent = _relation_absent(check, check.side, command, deps, raw_parts)
+    if absent is not None:
+        return absent
     result = deps.read_rows(render_sql(check.query, ctx), check.side)
     raw_parts.append(_raw_rows(result))
     raw = "\n".join(raw_parts)
@@ -597,9 +613,14 @@ def _vault_unit(check: VaultUnitCheck, ctx: SmokeContext, deps: SmokeDeps) -> Ch
     event decides first — none → KNOWN `pending` (no DRC is his lawful
     choice, R66); `failed`, or a build left `pending` / `running` → FAIL;
     `done` → the note and the unit's markers must both be there. Nothing
-    requires the note at 15:41 (R103 O18)."""
+    requires the note at 15:41 (R103 O18). A declared `requires_relation`
+    is checked FIRST, on the USER side the event read uses (D3-9): absent
+    → FAIL naming it, the event never read, the note never asked."""
     day = getattr(ctx, check.day)
     if check.note == "drc":
+        absent = _relation_absent(check, "user", command_for(check, ctx), deps, [])
+        if absent is not None:
+            return absent
         event, event_raw = _drc_event(day, deps)
         event_command = hand_command(DRC_EVENT_SQL.format(day=sql_literal(day)), side="user", prod=ctx.prod)
         if event is None:
