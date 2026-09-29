@@ -427,9 +427,21 @@ def test_a_correction_posted_on_one_card_never_writes_another_cards_leg(panel_wo
     assert _counts(panel_world) == before
 
 
+def _sheet_day_is_the_suite_day(monkeypatch) -> None:
+    """`web.py` binds `now_utc` by name, so its `_today_et()` reads the real
+    clock unless `web` was first imported inside the suite's frozen-clock
+    patch; the fill's transition is stamped by the frozen clock. Pin the
+    sheet's day to the suite's clock (as `test_radar_panel.py` does)."""
+    from cobalt.aset import web as web_module
+    from cobalt.session import clock
+
+    monkeypatch.setattr(web_module, "now_utc", lambda: clock.now_utc())
+
+
 def test_a_sheet_flat_without_the_check_closes_and_is_listed_for_correction(panel_world, monkeypatch):
     from cobalt.aset import web as web_module
 
+    _sheet_day_is_the_suite_day(monkeypatch)
     # C1's /fill, with its daily-note write stubbed (no vault write in a test, L28)
     monkeypatch.setattr(web_module, "save_fill_update",
                         lambda *a, **k: ("/dev/null", SimpleNamespace(action="stubbed")))
@@ -445,6 +457,8 @@ def test_a_sheet_flat_without_the_check_closes_and_is_listed_for_correction(pane
     assert (leg["flag"], leg["price_source"]) == ("estimated", "typed")
     page = client.get("/")
     assert page.status_code == 200
+    section = page.text[page.text.find("Open cards (F7)"):page.text.find('<form class="card" method="post" action="/size">')]
+    assert f"/radar/card/{card_id}/correct" in page.text, section
     fields = _form(page.text, f"/radar/card/{card_id}/correct", leg_id=str(leg["id"]))
     assert fields["source"] == "sheet"
 
@@ -486,9 +500,10 @@ def test_run_r1_a_nan_or_negative_price_posted_to_the_taps(panel_world):
     print(f"R1 state of {triggered} now: {panel_world['cards'].state_of(triggered).value}")
 
 
-def test_run_r2_the_sheet_get_and_the_radar_get_count_every_row(panel_world):
+def test_run_r2_the_sheet_get_and_the_radar_get_count_every_row(panel_world, monkeypatch):
     from cobalt.aset import web as web_module
 
+    _sheet_day_is_the_suite_day(monkeypatch)
     client = TestClient(web_module.app, raise_server_exceptions=False)
     live = _filled_manual(panel_world)
     closed = _filled_manual(panel_world)
