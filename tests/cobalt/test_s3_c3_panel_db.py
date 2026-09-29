@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 
 from legs_db_support import apply_0021, fill_kwargs, manual_card, patch_daymode
 from test_radar_cards_db import SCAN0, TICKER, world  # noqa: F401  (the fixture)
+from trade_note_support import make_vault
 
 pytestmark = pytest.mark.skipif(
     not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")),
@@ -41,10 +42,12 @@ COUNTED = ("aset_sizings", "legs", "card_transitions", "card_stop_edits", "picks
 
 
 @pytest.fixture
-def panel_world(world, monkeypatch):  # noqa: F811
+def panel_world(world, monkeypatch, tmp_path):  # noqa: F811
     from cobalt.aset import web as web_module
     from cobalt.aset.store import AsetStore
 
+    # C4's fill note and leg units go to a tmp_path vault (L28; C4 fix r1 F1)
+    world["vault"] = make_vault(monkeypatch, tmp_path)
     patch_daymode(monkeypatch)
     monkeypatch.setenv("COBALT_ALLOW_DEV_ENTRY", "1")
     aset = AsetStore("cobalt_dev")

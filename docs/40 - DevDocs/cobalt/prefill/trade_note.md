@@ -76,3 +76,9 @@ The fill event, the units and the retry:
 Human wins through `VaultWriter`'s merge (an override row). The DB leg is never changed from the note (no reverse parse). X3's measured limit (human wins ONCE — the next write of that unit replaces his line) is the writer's, and is ESCALATEd in the C4 build report.
 
 Tests: `tests/cobalt/test_s3_c4_trade_note_offline.py`, `tests/cobalt/test_s3_c4_trade_note_db.py`, `tests/cobalt/test_s3_c4_experiments.py` (X14 / X3 / X16 / X18; the stripped real-shape template fixture is `tests/fixtures/trade_note/individual-trade-template.stripped.md`).
+
+---
+
+## 2026-09-29 — S3 exits C4 fix r1
+
+The test guard: `tests/cobalt/conftest.py` autouse fixture `trade_note_path_guard` wraps this module's `resolve_target`; a path outside the pytest base temp raises before any read or write and fails the test at teardown (the web note helpers swallow exceptions). A test that writes a trade note gets a `tmp_path` vault through `trade_note_support.make_vault` (`panel_world` does; `note_world` reuses it).

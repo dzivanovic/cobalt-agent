@@ -38,10 +38,10 @@ LEG_NOT_WRITTEN = "leg saved, note unit NOT written"
 
 
 @pytest.fixture
-def note_world(panel_world, monkeypatch, tmp_path):  # noqa: F811
+def note_world(panel_world, monkeypatch):  # noqa: F811
     from cobalt.aset import web as web_module
 
-    panel_world["vault"] = make_vault(monkeypatch, tmp_path)
+    # the tmp_path vault is panel_world's (`make_vault` once per tmp_path, C4 fix r1 F1)
     # C1's /fill writes its daily-note FILL UPDATE too (O4 A); stubbed —
     # no vault write outside tmp_path in a test (L28).
     monkeypatch.setattr(web_module, "save_fill_update",
