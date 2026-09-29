@@ -18,6 +18,7 @@ import hashlib
 import re
 import sys
 import types
+import warnings
 from pathlib import Path
 
 import psycopg
@@ -104,6 +105,35 @@ def _checks(conn, table: str) -> set[str]:
     ).fetchall()}
 
 
+def _check_rows(conn, table: str) -> list[tuple[str, str]]:
+    """D2 fix r2 F-5: EVERY CHECK on `table` — `(conname,
+    pg_get_constraintdef)`, a list (duplicates kept), compared whole."""
+    return conn.execute(
+        "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint "
+        "WHERE conrelid = %s::regclass AND contype = 'c' ORDER BY conname",
+        (f'"user".{table}',),
+    ).fetchall()
+
+
+def _to_0018(conn) -> None:
+    """D2 fix r2 F-5: the tree forwarded to `0018` WITHOUT `0019`, inside the
+    transaction — down to `0015`, then `0016`, `0017`, `0018` in order."""
+    _apply(conn, _rollback_paths("0015"))
+    _apply(conn, [p for p in FORWARD if p.name[:4] in ("0016", "0017", "0018")])
+
+
+def _hashes_of(conn, statement: int, day) -> tuple[str, str]:
+    """D2 fix r2 F-6: the statement's stored `book_sha256` and `day`'s stored
+    `seed` row's `inputs.from_book_sha256`, read by id / day."""
+    ((book,),) = conn.execute(
+        'SELECT book_sha256 FROM "user".drc_stated_books WHERE id = %s', (statement,)
+    ).fetchall()
+    ((inputs,),) = conn.execute(
+        """SELECT inputs FROM "user".drc_rows WHERE day = %s AND kind = 'seed'""", (day,)
+    ).fetchall()
+    return book, inputs["from_book_sha256"]
+
+
 # ---------------------------------------------------------------------
 # §1 test 12 — the registry, the placement map, the SQL (offline)
 # ---------------------------------------------------------------------
@@ -162,9 +192,16 @@ def test_s1_12_the_rollback_round_trips_and_is_a_no_op_when_its_objects_are_abse
     assert migrated.execute("SELECT to_regclass('\"user\".drc_events')").fetchone()[0] is None
     assert [c for c in _columns(migrated, "drc_imports") if c.startswith("event_")] == [
         "event_state", "event_updated_at", "event_error"]
-    checks = _checks(migrated, "drc_imports")
-    assert "CHECK (((event_state IS NULL) OR (event_updated_at IS NOT NULL)))" in checks
-    assert any("event_state" in c and "'pending'::text" in c and "'failed'::text" in c for c in checks)
+    _to_0018(migrated)
+    before = _check_rows(migrated, "drc_imports")
+    _apply(migrated, [SQL, ROLLBACK])
+    after = _check_rows(migrated, "drc_imports")
+    warnings.warn(
+        f"RUN-6: CHECK names before 0019 = {sorted(n for n, _ in before)}; "
+        f"after 0019 + rollback = {sorted(n for n, _ in after)}",
+        UserWarning,
+    )
+    assert sorted(d for _, d in after) == sorted(d for _, d in before)
     _apply(migrated, [ROLLBACK])  # repeated: a no-op
     _apply(migrated, [SQL])
     _apply(migrated, [SQL])  # idempotent
@@ -224,6 +261,9 @@ def test_s1_1_a_file_less_no_trade_day_fires_one_stated_book_event(lane, migrate
         assert result.status_line == f"no-trade day recorded → DRC built: {NOTE_PATH}"
         assert result.event.stated_book_id == statement and result.event.import_id is None
         assert result.event.kind == "no_trade" and result.event.seed_from_day == D
+        book_sha256, seed_sha256 = _hashes_of(migrated, statement, D_NEXT)
+        assert result.event.stated_book_sha256 == book_sha256
+        assert result.event.seed_from_book_sha256 == seed_sha256 and seed_sha256 is not None
     else:
         assert result.status_line == f"DRC build FAILED: build — {expected[1]}"
         assert "DRC built" not in imports.render_status(imports.day_view(D_NEXT))

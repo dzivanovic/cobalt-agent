@@ -14,6 +14,7 @@ every vault write lands in a `tmp_path` vault.
 
 from __future__ import annotations
 
+import re
 import sys
 from datetime import date
 
@@ -256,7 +257,10 @@ def test_the_fingerprint_and_the_page_check_can_fail(lane, migrated, monkeypatch
         raise RuntimeError("constructed page failure")
 
     monkeypatch.setattr(imports, "day_view", _raise)
-    with pytest.raises(AssertionError):
+    response = lane.get("/drc", params={"date": D.isoformat()})
+    assert response.status_code == 200
+    assert '<div class="failed">FAILED' in response.text and "constructed page failure" in response.text
+    with pytest.raises(AssertionError, match=re.escape('<div class="failed">FAILED')):
         _page(lane, D)
 
 
