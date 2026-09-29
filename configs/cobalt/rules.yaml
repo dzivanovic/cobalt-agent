@@ -6,25 +6,29 @@
 
 generated:
   source: /Users/cobalt/Vault/Think/1 - Trading/5 - Review/Rules.md
-  source_sha256: e183f123950ac4050d5203b3a48dc2c7dcf1753ce31f02ccac7d8646658215b6
-  generated_at: '2026-09-25T19:40:00+00:00'
+  source_sha256: e995dd183b3b666296df109623312df9dd53827cca909b06eb763275caf18d24
+  generated_at: '2026-09-28T19:40:00+00:00'
 rules:
 - id: rule_01
   category: process
   text: 'Card first: grade → $ risk → shares **written before every entry**. No card,
-    no trade.'
+    no trade. Any re-entry carries a **"what''s new"** line.'
 - id: rule_02
   category: sizing
-  text: 'Grades: **B = $30, A = $70.** Nothing bigger. C = pass.'
+  text: 'Grades: **B = $30, A = $70, C = $11.** Nothing bigger. **At grade: 9 EMA
+    continuation/rejection and Rubberband/overextension only.** Every other family
+    trades at **C** until 10 instances at C show positive net R and ≥70% sniper tags.'
 - id: rule_03
   category: process
   text: Stop at **structure**, never a default distance. If R:R < 2:1, pass.
 - id: rule_04
   category: time_window
-  text: 'Prime window only: **9:30–11:00.** Nothing before, nothing after.'
+  text: 'Prime window only: **9:30–11:00.** Nothing before, nothing after. **First
+    15 minutes (to 9:45): C key, every trade.**'
 - id: rule_05
   category: sizing
-  text: '**Max 5 trades.**'
+  text: '**Max 5 trades, counted from 9:45.** First-15 C entries don''t count toward
+    the five; they count in every other metric.'
 - id: rule_06
   category: process
   text: 'Reversion entry needs all three: **my level + exhaustion printed + trigger.**
@@ -47,18 +51,24 @@ rules:
     nothing. Rule 9 cooldown takes precedence.
 - id: rule_11
   category: process
-  text: 'Exits and scaling follow the setup''s sheet as written; no written exit =
-    no trade. Exit structure read live — prior 2-min bar, the EMA the stock is tracking
-    (9/21), or drive-hold (≤40% retracement, stop below consolidation). Every stop
-    on a winner is a positive-P&L stop. Stop moves logged by structure, not conviction.
-    Leaving the screen: flat, or a resting stop under a positive-R higher low — never
-    break-even.'
+  text: '**Exits follow the setup''s written ladder.** No first profit-take before
+    1R. **9 EMA:** 2–3 portions, each into strength or on a 9 EMA breach; last piece
+    on invalidation — a 2-min close through the 9 EMA followed by continuation or
+    a failed reclaim. **Rubberband:** per the sheet, VWAP is the target; last piece
+    may hold through VWAP while VWAP holds. **Tuition (C) families:** once in profit,
+    never let the trade invalidate the prior consolidation. Every stop on a winner
+    is a positive-P&L stop. Stop moves logged by structure, not conviction. B/E-on-first-pullback
+    is not a ladder step. Leaving the screen: flat, or a resting stop under a positive-R
+    higher low — never break-even.'
 - id: rule_12
   category: hard_stop
   text: Daily stop hit ($215 live) → **done trading.** Watch only.
 mantras:
+- id: primary_goal
+  text: 'Primary goal: Exits per the ladder — clean exits ÷ total exits, target 70–75%.
+    Sniper entries in maintenance (60% floor, still tagged).'
 - id: tape_check
   text: 'Tape check: In because criteria met — or because it excites me?'
 - id: identity
   text: 'Identity: My sizing is arithmetic, not habit. Stand-down gives me back my
-    eyes.'
+    eyes. The ladder decides the exit, not the pullback.'
