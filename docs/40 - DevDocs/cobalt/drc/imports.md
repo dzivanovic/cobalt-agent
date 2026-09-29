@@ -117,10 +117,24 @@ not in the log is `FAILED: trade <key> is not in the current trading
 log`, nothing bound or written; a READY day re-fires. `SCREENSHOT_NOT_BUILT`
 is gone.
 
+## 2026-09-28 — DRC D2 fix r2
+The round-2 check's fix rows (`drc-d2-fix-r1-check-2026-09-25.md`). A
+BUILD THAT RETURNS NO NOTE PATH (F-10): in `_fire` and `no_trade_event`,
+D3's build returning `None` or an empty path lands the event `failed`
+through the one `fail()` with the step `build` and
+**`NO_NOTE_PATH`** (`the build returned no note path (None) — never done
+(L1)`), never `done` — `done` is written only with a non-empty note path
+(the `drc_events` CHECK's `done` ⇔ `note_path` contract). A NOT-COMPUTED
+DAY'S SCREENSHOTS (F-11): `day_view` lists each current screenshot binding
+in the page's notes as `screenshot <name> — trade <key>: not checked,
+pairing not computed`; `_orphans`, `event.orphaned` and the counts are
+unchanged (X13's orphan lines stay a computed day's).
+
 ## Tests
 `tests/cobalt/test_drc_imports.py` (offline, an in-memory `DrcStore`
 double), `tests/cobalt/test_drc_imports_db.py` (with-DB, inside
 `test_drc_store.py`'s rolled-back migration transaction),
 `tests/cobalt/test_drc_d2_experiments.py` (E5 / E11 / X13 / X-NT),
 `tests/cobalt/test_drc_d2_fix_r1.py` / `test_drc_d2_fix_r1_db.py` /
-`test_drc_d2_fix_r1_runs.py` (D2 fix r1).
+`test_drc_d2_fix_r1_runs.py` (D2 fix r1), `test_drc_d2_fix_r2.py` /
+`test_drc_d2_fix_r2_db.py` (D2 fix r2).

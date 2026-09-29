@@ -94,6 +94,8 @@ NO_TRADE = "no-trade"
 #: v3 §2c / seam (2): a day recorded with no book stated.
 UNPAIRED = "not computed — opening book not stated · state your opening book for {day}"
 BUILD_NOT_BUILT = "build not built (D3)"
+#: D2 fix r2 F-10: `done` needs a note path (seam §1, `0019_drc_events.sql`).
+NO_NOTE_PATH = "the build returned no note path ({note!r}) — never done (L1)"
 
 _PLACED = (Outcome.PARSED.value, Outcome.PARTIAL.value)
 _PNG = b"\x89PNG\r\n\x1a\n"
@@ -108,6 +110,10 @@ _Date = date
 
 class BuildNotBuilt(RuntimeError):
     """D3's build entry does not exist on this tree."""
+
+
+class _NoNotePath(RuntimeError):
+    """D3's build returned no note path (`NO_NOTE_PATH`): `failed`, never `done`."""
 
 
 class FileLine(BaseModel):
@@ -564,9 +570,11 @@ def _fire(day: date, store: DrcStore, view: dict, this_drop: dict, root: Path, r
         store.mark_event(event_id, "running")
         try:
             note = _run_build(result.event)
+            if note is None or not str(note):
+                raise _NoNotePath(NO_NOTE_PATH.format(note=note))
             store.mark_event(event_id, "done", note_path=str(note))
         except Exception as e:  # noqa: BLE001 — any exception is `failed`, never `done` (L1)
-            fail("build", str(e) if isinstance(e, BuildNotBuilt) else _uncaught(e))
+            fail("build", str(e) if isinstance(e, (BuildNotBuilt, _NoNotePath)) else _uncaught(e))
             if unpaired:
                 result.status_line = UNPAIRED.format(day=day.isoformat())
             return result
@@ -711,9 +719,11 @@ def no_trade_event(day: date, stated_book_id: int, *, now: Optional[datetime] = 
         store.mark_event(event_id, "running")
         try:
             note = _run_build(result.event)
+            if note is None or not str(note):
+                raise _NoNotePath(NO_NOTE_PATH.format(note=note))
             store.mark_event(event_id, "done", note_path=str(note))
         except Exception as e:  # noqa: BLE001 — any exception is `failed`, never `done` (L1)
-            return fail("build", str(e) if isinstance(e, BuildNotBuilt) else _uncaught(e))
+            return fail("build", str(e) if isinstance(e, (BuildNotBuilt, _NoNotePath)) else _uncaught(e))
     except Exception as e:  # noqa: BLE001 — F-1: never left pending / running
         return fail(step, _uncaught(e), uncaught=True)
     result.note_path = str(note)
@@ -801,6 +811,14 @@ def day_view(day: date, *, cards: Optional[list[dict]] = None, vault_root: Optio
         out.notes.append(f"book stale (root {stale['root']}): {stale['reason']}")
     for item in derived.get("not_repaired", []):
         out.notes.append(f"not re-paired: {item['day']} — {item['reason']}")
+    if not _computed(view):
+        # D2 fix r2 F-11 (X13): `_orphans` cannot check a binding against a
+        # pairing that is not computed — each current one is listed, unchecked.
+        out.notes.extend(
+            f"screenshot {r['name']} — trade {r['trade_key']}: not checked, pairing not computed"
+            for r in view["imports"]
+            if r["current"] and r["kind"] == "screenshot"
+        )
     out.orphaned = _orphans(view)
     out.trades = list(view["trades"])
     try:
@@ -856,6 +874,7 @@ def render_status(view: DayView) -> str:
 
 __all__ = [
     "BUILD_NOT_BUILT",
+    "NO_NOTE_PATH",
     "RESET_REFUSAL",
     "UNPAIRED",
     "DayView",
