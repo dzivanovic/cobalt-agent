@@ -1,6 +1,9 @@
 {
   "permissions": {
-    "additionalDirectories": ["/Users/cobalt/cobalt-wt", "/Users/cobalt/Vault"],
+    "additionalDirectories": [
+      "/Users/cobalt/cobalt-wt",
+      "/Users/cobalt/Vault"
+    ],
     "allow": [
       "Bash(uv run cobalt db query *)",
       "Bash(COBALT_ENV=production uv run cobalt db query *)",
@@ -13,8 +16,12 @@
       "Bash(git status*)",
       "Bash(git log*)",
       "Bash(git diff*)",
-      "Bash(claude stop *)"
+      "Bash(claude stop *)",
+      "Bash(claude rm *)",
+      "Bash(herdr *)"
     ]
   },
-  "worktree": {"bgIsolation": "none"}
+  "worktree": {
+    "bgIsolation": "none"
+  }
 }
