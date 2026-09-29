@@ -125,22 +125,27 @@ def test_f2_another_notes_miss_line_never_passes_k10_2(built, migrated):
 
 
 @requires_db
-def test_f7_the_snapshot_helper_fails_after_a_rebuild_with_the_changed_card(built, migrated):
-    """F-7 (`drc-d3-check-2026-09-25.md:110`): the same card change, then a
-    RE-BUILD of D through the build's own function with the same deps → the
-    rows and the note carry the new stop, so `_snapshot_holds(…, build-time
-    stop)` FAILS; the old re-read of the Python dict alone could not."""
+def test_f7r2_the_snapshot_helper_fails_through_its_note_half_where_the_old_rows_check_passes(built, migrated):
+    """F-7r2 (`drc-d3-fix-r1-check-2026-09-29.md:117`; L35): on ONE input the
+    OLD assertion (`_build_rows(…) == before`, `test_drc_build_db.py:155`@
+    a8c622ca) PASSES while `_snapshot_holds` FAILS — through its note half
+    (`test_drc_build_db.py:173`, whose message is the `  - card: ` line),
+    never through its rows half (`:168`, no message)."""
     root, cards, real_build = built
     cards.append(dict(CARD))
     _state(D)
     _drop(D, E1.read_bytes(), STATS.read_bytes())
     before = _build_rows(migrated, D)
     _snapshot_holds(migrated, root, before, Decimal("49.9"))
+    # the input: fix r1's, verbatim
     cards[0]["stop"] = Decimal("48.0")
     real_build.run_drc_build(real_build.event_of(D, DrcStore()), deps=real_build.default_deps())
-    with pytest.raises(AssertionError):
+    # the old assertion passes on the input
+    assert _build_rows(migrated, D) == before
+    # the new one fails through its note half only
+    with pytest.raises(AssertionError) as e:
         _snapshot_holds(migrated, root, before, Decimal("49.9"))
-    _snapshot_holds(migrated, root, _build_rows(migrated, D), Decimal("48.0"))
+    assert str(e.value).startswith("  - card: "), str(e.value)
 
 
 @requires_db

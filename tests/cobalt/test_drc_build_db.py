@@ -146,12 +146,21 @@ def test_a_placed_day_builds_the_note_and_its_build_rows(built, migrated):
 def test_the_card_snapshot_survives_a_later_card_change(built, migrated):
     """`[F-19]`: the stored inputs snapshot the card at build time; a later
     change to the card the build read does not move the stored rows."""
-    root, cards, _ = built
+    from cobalt.drc import units
+
+    root, cards, real_build = built
     cards.append(dict(CARD))
     _state(D)
     _drop(D, E1.read_bytes(), STATS.read_bytes())
     before = _build_rows(migrated, D)
     cards[0]["stop"] = Decimal("48.0")
+    # D3 fix r2 F-7r2 (c): the change is REAL where the build reads the card
+    # — a plan (writes nothing, L10) through the build's own read carries it.
+    plan = real_build.plan_note(D, deps=real_build.default_deps(), event=real_build.event_of(D, DrcStore()), check=True)
+    aaa_ref = next(r[2] for r in before if r[2].startswith("AAA-"))
+    (unit,) = [u for u in plan.units if u.section == "drc-trades" and u.unit == f"trade-{aaa_ref}"]
+    (planned,) = [line for line in unit.body.split("\n") if line.startswith("  - card: ")]
+    assert f" · stop {units.money(Decimal('48.0'))} · " in planned, planned
     _snapshot_holds(migrated, root, before, Decimal("49.9"))
     aaa = next(r for r in before if r[2].startswith("AAA-"))
     assert aaa[3]["card"]["stop"] == "49.9"
