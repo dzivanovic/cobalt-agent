@@ -9,8 +9,8 @@ PATHS — every file is opened by the exact path below. Never `find`, `ls -R` or
 - NOTE = `M/areas/cobalt.md` · LAWS = `M/LAWS.md` · PREFS = `M/preferences.md` · PROFILE = `M/profile.md` · WRITING = `M/topics/writing-rules.md`
 
 SEAT PROFILE — the active vendor’s commands; changes only on his ruling. The profile below serves the Anthropic desk. Before another house takes the desk, supply and scratch-prove its LAUNCH, VIEW, LIST, STOP, MESSAGE, WAIT and MEASURE commands. Until then, that house can retrieve the desk’s state, but operational takeover is unproven. Steps below name the verbs.
-- MODEL: Opus 5.5 (`claude-opus-5-5`) · METER: Anthropic
-- LAUNCH (by the predecessor at REFRESH; by Dejan only when no desk is alive): `cd ~/cobalt`, then `claude --bg "Read 'docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md' and follow it exactly." --model claude-opus-5-5 --permission-mode auto --remote-control cto-desk --name cto-desk --allowedTools "Bash(git *)" "Edit" "Write" "Bash(python3 *)" --disallowedTools "AskUserQuestion" "EnterWorktree" --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt-wt --no-chrome --strict-mcp-config`
+- MODEL: Fable 5.1 (`claude-fable-5-1`, his 09-29 R16) · METER: Anthropic
+- LAUNCH (by the predecessor at REFRESH; by Dejan only when no desk is alive): `cd ~/cobalt`, then `claude --bg "Read 'docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md' and follow it exactly." --model claude-fable-5-1 --permission-mode auto --remote-control cto-desk --name cto-desk --allowedTools "Bash(git *)" "Edit" "Write" "Bash(python3 *)" --disallowedTools "AskUserQuestion" "EnterWorktree" --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt-wt --no-chrome --strict-mcp-config`
 - VIEW: the CTO pane id is in §5 CURRENT — use it, never `herdr pane list`; no id there → `herdr tab list` (find the "CTO" tab); `herdr tab create --workspace w2 --cwd /Users/cobalt/cobalt --label "CTO" --no-focus`, then `herdr pane run <pane> "claude attach <id>"`; alive = `pgrep -fl "claude attach <id>"`
 - LIST: `sh /Users/cobalt/.claude/ops/desk-list.sh` — live sessions only (id · name · cwd · status · state), run ONCE per wake-up; `claude agents --json --all` only to check a relaunch.
 - STOP: `claude stop <id>`; a replaced desk, once stopped, is removed with `claude rm <id>` (stop keeps it listed in the app) · MESSAGE: `SendMessage` · WAIT: the report’s changed last non-blank stop line via `sh /Users/cobalt/.claude/ops/wait-stop-line.sh <report> <regex> <seconds>` (`run_in_background`); `notify_when_idle` is a session notification, not completion evidence.
@@ -23,7 +23,7 @@ STEP 0 — HANDOVER
 3. No HANDOVER line (crash, reboot, hand launch) → no predecessor. Your id = LIST's background row with cwd `~/cobalt`, started now. READ steps 5–6 rebuild the rest.
 4. One herdr tab "CTO" with a live VIEW of you; create or re-attach as needed; close any other desk tab.
 5. Another desk BUSY in LIST → write nothing until it is idle.
-6. An Edit refused or a STOP denied → say so in the plate; never retry another way, never write through the vault symlink.
+6. A read, Edit or command refused → try ONCE more by a different reasonable approach (another tool; one item at a time instead of a batch; a bare command instead of a compound one) — his 09-29 R16; only a second failure goes in the plate, naming both tries. Never write through the vault symlink.
 
 READ at start, in order, each one hop, each by its PATHS entry; everything else waits for its trigger:
 1. NOTE from its top down to the line `## Build rules` (`grep -n "^## Build rules"` gives the line; read only the lines above). Its `## Start here` is satisfied by this list — do not open INDEX. Then PREFS whole, PROFILE whole, LAWS from its top down to `## Reading`, CONTRACT whole.
