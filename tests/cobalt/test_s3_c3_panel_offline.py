@@ -115,6 +115,9 @@ def world(monkeypatch):
             legs_module, name,
             (lambda n: lambda *a, **k: cards.calls.append((n, a, k)) or _result(n))(name),
         )
+    # C3 fix r1 F2: `/correct` reads card 1's current legs (401, 301) first.
+    monkeypatch.setattr(legs_module, "read_position", lambda card_id: legs_module.Position(
+        {"id": card_id}, [{"id": 301}, {"id": 401}] if card_id == 1 else [], None, None))
     return cards
 
 
@@ -259,6 +262,20 @@ def test_a_correction_with_a_typed_price_names_its_source(world):
     (name, args, kw), = world.calls
     assert (name, args) == ("record_correction", (401,))
     assert (kw["price"], kw["price_source"], kw["source"], kw["shares"]) == (Decimal("5.39"), "typed", "panel", None)
+
+
+def test_a_correction_of_another_cards_leg_is_refused_before_the_writer(world, monkeypatch):
+    """C3 fix r1 F2: the URL's card binds the leg — a leg that is not one
+    of card 1's current legs is refused before `record_correction`."""
+    monkeypatch.setattr(legs_module, "record_correction",
+                        _raise(AssertionError("the writer was reached with another card's leg")))
+    response = client.post("/radar/card/1/correct", data={"leg_id": "999", "price": "5.39"})
+    assert response.status_code == 422, response.text
+    reason = response.json()["reason"]
+    assert "is not a current leg of card" in reason
+    assert reason == ("REFUSED card 1: leg 999 is not a current leg of card 1 — reload the card. "
+                      "Nothing written.")
+    assert world.calls == []
 
 
 def test_a_held_refusal_reaches_the_page_verbatim(world, monkeypatch):
@@ -538,3 +555,95 @@ def test_the_sheet_renders_a_manual_cards_in_trade_controls_with_the_same_routes
     assert "Cobalt stop NULL — no Cobalt stop" in fragment
     assert "gap NULL — no Cobalt stop" in fragment
     assert re.search(r'<input[^>]*name="price"[^>]*value=""', fragment), "no last price on the sheet: empty"
+
+
+# ---------------------------------------------------------------------
+# C3 fix r1 — F1: every tap has a status sink; F3 / F4: the sheet
+# ---------------------------------------------------------------------
+
+#: The CLOSED card added to the fixture's ladder (constructed, L32).
+CLOSED_ID = 7
+
+
+def _with_a_closed_card(evaluated) -> list[dict]:
+    rows = copy.deepcopy(evaluated["rows"])
+    closed = copy.deepcopy(next(r for r in rows if r["state"] == "FILLED"))
+    closed.update(card_id=CLOSED_ID, state="CLOSED")
+    return rows + [closed]
+
+
+def _closed_legs():
+    """A confirmed entry and one `estimated` flat exit (running 0)."""
+    return [_leg(flag="confirmed", price_source="typed"),
+            _leg(id=307, seq=1, kind="exit", price=Decimal("5.40"), preset="flat")]
+
+
+def _closed_reader(card_id: int):
+    if card_id == CLOSED_ID:
+        return _position(legs=_closed_legs(), running=0)
+    return _position()
+
+
+def _terminal_block(rendered: str, card_id: int) -> str:
+    start = rendered.index(f'<div class="terminal-legs" data-card-id="{card_id}"')
+    end = re.search(r'<div class="terminal-row"|<h4>|</details>', rendered[start:])
+    return rendered[start:start + end.start()] if end else rendered[start:]
+
+
+def test_a_closed_cards_correction_has_a_status_sink(evaluated):
+    view = _view(_with_a_closed_card(evaluated), reader=_closed_reader)
+    block = _terminal_block(panel.render_ladder(view), CLOSED_ID)
+    (correct,) = _taps(block, CLOSED_ID, "/correct")
+    assert _hidden(correct, "leg_id") == ["307"]
+    assert re.search(rf'<div class="card-status[^"]*" data-card-id="{CLOSED_ID}"', block), (
+        f"card {CLOSED_ID}: its terminal ✓ correct has no status sink")
+
+
+def test_every_card_tap_has_a_status_sink(evaluated):
+    view = _view(_with_a_closed_card(evaluated), reader=_closed_reader)
+    rendered = panel.render_ladder(view)
+    tapped = set(re.findall(r'data-card-id="(\d+)" data-path="[^"]*" data-card-tap="1"', rendered))
+    sinks = set(re.findall(r'class="card-status[^"]*" data-card-id="(\d+)"', rendered))
+    assert str(CLOSED_ID) in tapped
+    missing = sorted(tapped - sinks, key=int)
+    assert not missing, f"card taps with no status sink: {missing}"
+
+
+class SheetCards:
+    """The sheet's card reads: no live card, one CLOSED manual card filled today."""
+
+    def __init__(self, filled):
+        self.filled = filled
+        self.days = []
+
+    def ensure_schema(self):
+        return None
+
+    def open_cards(self):
+        return []
+
+    def filled_with_picks(self, day):
+        self.days.append(day)
+        return copy.deepcopy(self.filled)
+
+
+def test_the_sheet_lists_a_closed_manual_cards_estimated_leg(monkeypatch):
+    filled = [{"transition_id": 71, "card_id": 9, "filled_at": AT, "ticker": "TEST", "state": "CLOSED",
+               "origin": "manual", "pick_id": None}]
+    cards = SheetCards(filled)
+    monkeypatch.setattr(web_module, "CardStore", lambda *a, **k: cards)
+    monkeypatch.setattr(panel, "read_in_trade", lambda card_id: _position(legs=_closed_legs(), running=0))
+    section = web_module._open_cards_section()
+    assert 'method="post" action="/radar/card/9/correct"' in section
+    (correct,) = _taps(section, 9, "/correct")
+    assert _hidden(correct, "leg_id") == ["307"] and _hidden(correct, "source") == ["sheet"]
+    assert "/radar/card/9/exit" not in section, "a CLOSED card lists its estimated legs only"
+
+
+def test_the_sheets_failed_position_read_keeps_the_structural_stop_line(monkeypatch):
+    monkeypatch.setattr(panel, "read_in_trade", _raise(RuntimeError("legs offline")))
+    fragment = web_module._sheet_in_trade(
+        {"id": 9, "state": "FILLED", "origin": "manual", "direction": "long", "stop": Decimal("9.90")})
+    assert "FAILED" in fragment and "position unreadable" in fragment
+    assert "Cobalt stop NULL — no Cobalt stop" in fragment
+    assert "/stop/reset" not in fragment

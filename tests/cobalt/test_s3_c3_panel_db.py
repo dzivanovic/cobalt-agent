@@ -21,6 +21,7 @@ import os
 import re
 from datetime import datetime, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -387,3 +388,123 @@ def test_get_radar_and_the_in_trade_render_write_nothing(panel_world):
     fragment = _fragment(_render(panel_world), card_id)
     assert "running 100 sh" in fragment
     assert _counts(panel_world) == before
+
+
+# ---------------------------------------------------------------------
+# C3 fix r1 — F2: `/correct` binds the URL's card; F3: the sheet lists a
+# CLOSED manual card's estimated leg
+# ---------------------------------------------------------------------
+
+
+def _filled_manual(world) -> int:  # noqa: F811
+    """A manual card filled through THE fill (100 sh @ 10.10, P = 20)."""
+    aset = world["aset"]
+    card_id = manual_card(aset)
+    aset.mark_filled(card_id, **fill_kwargs(price="10.10", shares=100, p=20))
+    return card_id
+
+
+def _sheet_flat(world, card_id: int, *, price: str = "10.20"):  # noqa: F811
+    """A flat from the sheet with a typed price and NO ✓ — `estimated`."""
+    return world["client"].post(f"/radar/card/{card_id}/exit", data={
+        "source": "sheet", "preset": "flat", "price": price, "prefill": "", "running_before": "100",
+    })
+
+
+def test_a_correction_posted_on_one_card_never_writes_another_cards_leg(panel_world):
+    card_a = _filled(panel_world, shares=100)
+    card_b = _filled_manual(panel_world)
+    flat = _sheet_flat(panel_world, card_b)
+    assert flat.status_code == 200, flat.text
+    (b_exit,) = [l for l in _legs(panel_world, card_b) if l["kind"] == "exit"]
+    assert b_exit["flag"] == "estimated"
+    legs_b, before = _legs(panel_world, card_b), _counts(panel_world)
+    response = panel_world["client"].post(f"/radar/card/{card_a}/correct",
+                                          data={"leg_id": str(b_exit["id"]), "price": "10.2500"})
+    assert response.status_code == 422, (response.status_code, response.text[:300], _legs(panel_world, card_b))
+    assert "is not a current leg of card" in response.json()["reason"]
+    assert _legs(panel_world, card_b) == legs_b
+    assert _counts(panel_world) == before
+
+
+def test_a_sheet_flat_without_the_check_closes_and_is_listed_for_correction(panel_world, monkeypatch):
+    from cobalt.aset import web as web_module
+
+    # C1's /fill, with its daily-note write stubbed (no vault write in a test, L28)
+    monkeypatch.setattr(web_module, "save_fill_update",
+                        lambda *a, **k: ("/dev/null", SimpleNamespace(action="stubbed")))
+    client = panel_world["client"]
+    card_id = manual_card(panel_world["aset"])
+    filled = client.post("/fill", data={"card_row_id": str(card_id), "orig_timestamp": "2026-09-03T10:05:00-04:00",
+                                        "actual_fill": "10.10", "fill_shares": "100"})
+    assert filled.status_code == 200 and panel_world["cards"].state_of(card_id).value == "FILLED", filled.text[:500]
+    flat = _sheet_flat(panel_world, card_id)
+    assert flat.status_code == 200, flat.text[:500]
+    assert panel_world["cards"].state_of(card_id).value == "CLOSED"
+    (leg,) = [l for l in _legs(panel_world, card_id) if l["kind"] == "exit"]
+    assert (leg["flag"], leg["price_source"]) == ("estimated", "typed")
+    page = client.get("/")
+    assert page.status_code == 200
+    fields = _form(page.text, f"/radar/card/{card_id}/correct", leg_id=str(leg["id"]))
+    assert fields["source"] == "sheet"
+
+
+# ---------------------------------------------------------------------
+# C3 fix r1 — RUN R1 / RUN R2 (L70): run, never argued. They PRINT what
+# happened and assert NOTHING about the outcome.
+# ---------------------------------------------------------------------
+
+
+def _day_modes(world) -> int:  # noqa: F811
+    with world["aset"]._connect() as conn:
+        return conn.execute("SELECT count(*) FROM day_modes").fetchone()[0]
+
+
+def test_run_r1_a_nan_or_negative_price_posted_to_the_taps(panel_world):
+    from cobalt.aset import web as web_module
+
+    client = TestClient(web_module.app, raise_server_exceptions=False)
+    radar = _filled(panel_world, shares=100, price=str(LAST))  # the untouched prefill → an estimated entry
+    half = _form(_fragment(_render(panel_world), radar), f"/radar/card/{radar}/exit", preset="half")
+    (entry,) = _legs(panel_world, radar)
+    triggered = manual_card(panel_world["aset"])  # TRIGGERED
+    posts = [
+        (f"/radar/card/{radar}/exit", {**half, "price": "NaN"}),
+        (f"/radar/card/{radar}/exit", {**half, "price": "-1"}),
+        (f"/radar/card/{triggered}/fill", {"price": "NaN", "shares": "100", "prefill": ""}),
+        (f"/radar/card/{radar}/correct", {"leg_id": str(entry["id"]), "price": "-1"}),
+    ]
+    print(f"\nRUN R1 · radar card {radar} (FILLED, entry leg {entry['id']} estimated) · manual card {triggered} "
+          f"(TRIGGERED) · counted {COUNTED} (legs among them)")
+    for path, data in posts:
+        before = _counts(panel_world)
+        response = client.post(path, data=data)
+        after = _counts(panel_world)
+        print(f"R1 POST {path} price={data['price']!r} → {response.status_code} · body[:200]={response.text[:200]!r}")
+        print(f"R1   counts before {before} · after {after} · legs {before['legs']} → {after['legs']}")
+    print(f"R1 legs of {radar} now: {[(l['id'], l['kind'], str(l['price']), l['flag']) for l in _legs(panel_world, radar)]}")
+    print(f"R1 state of {triggered} now: {panel_world['cards'].state_of(triggered).value}")
+
+
+def test_run_r2_the_sheet_get_and_the_radar_get_count_every_row(panel_world):
+    from cobalt.aset import web as web_module
+
+    client = TestClient(web_module.app, raise_server_exceptions=False)
+    live = _filled_manual(panel_world)
+    closed = _filled_manual(panel_world)
+    flat = _sheet_flat(panel_world, closed)
+    print(f"\nRUN R2 · manual card {live} FILLED · manual card {closed} after a sheet flat without ✓: "
+          f"{flat.status_code}, {panel_world['cards'].state_of(closed).value}, legs "
+          f"{[(l['kind'], l['flag']) for l in _legs(panel_world, closed)]}")
+    before, days_before = _counts(panel_world), _day_modes(panel_world)
+    sheet = client.get("/")
+    after_sheet, days_sheet = _counts(panel_world), _day_modes(panel_world)
+    radar = client.get("/radar")
+    after_radar, days_radar = _counts(panel_world), _day_modes(panel_world)
+    print(f"R2 GET / → {sheet.status_code} · carries /radar/card/{closed}/correct: "
+          f"{f'/radar/card/{closed}/correct' in sheet.text} · carries /radar/card/{live}/exit: "
+          f"{f'/radar/card/{live}/exit' in sheet.text}")
+    print(f"R2   counts before {before} · after GET / {after_sheet} · legs {before['legs']} → {after_sheet['legs']}")
+    print(f"R2   day_modes before {days_before} · after GET / {days_sheet}")
+    print(f"R2 GET /radar → {radar.status_code} · page carries FAILED: {'FAILED' in radar.text}")
+    print(f"R2   counts after GET /radar {after_radar} · legs {after_radar['legs']} · day_modes {days_radar}")
