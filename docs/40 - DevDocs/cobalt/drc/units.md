@@ -19,3 +19,6 @@ A section is ONE marked block (`vaultwrite.markers` refuses a duplicate), so `dr
 
 ## What it never writes
 A line beginning `Grade:` or `Goal:` (the 09:00 reader's regexes, `[F-23]`); a rules line or engine unit (R101); the `open_positions` unit (K3).
+
+## 2026-09-29 — DRC D3 fix r1 (F-4)
+`facts` is now `drc-risk-facts/facts`, the one unit of its OWN section. `RISK_FACTS_PLACEMENT` (`^###\s*How I managed risk`) puts it directly under his `### How I managed risk:` heading, above his paragraph (v2 §13 A9 "facts above his paragraph"). It needs its own section because a section is one marked block and `markers.find_section` refuses a duplicate: `facts` cannot sit above that paragraph while `pnl` stays under `### PnL on the day:`. `drc-risk` keeps `pnl` and `risk_parameters` under the PnL heading. This supersedes the `drc-risk/…facts…` table row and the paragraph after the table.

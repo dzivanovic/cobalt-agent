@@ -45,6 +45,9 @@ from cobalt.session import SessionBlocked
 from .models import PairingError, StatedBook
 
 VIA = "cli"
+#: What a dry run's rules unit says instead of regenerating the rules file
+#: (L10: a dry run writes nothing; the real build regenerates, F41).
+DRY_RUN_RULES = "rules: not regenerated on a dry run — the build re-reads Rules.md"
 
 
 @dataclass(frozen=True)
@@ -274,7 +277,10 @@ def cmd_build(args: argparse.Namespace, deps=None) -> None:
     try:
         event = build.event_of(args.date, deps.store)
         if args.dry_run:
-            print(build.plan_note(args.date, deps=deps, event=event, check=True).report())
+            import dataclasses
+
+            planning = dataclasses.replace(deps, rules_block=lambda: DRY_RUN_RULES)
+            print(build.plan_note(args.date, deps=planning, event=event, check=True).report())
             return
         path = build.run_drc_build(event, deps=deps)
     except (build.BuildError, ValueError, PairingError) as e:

@@ -303,11 +303,12 @@ def test_e3_every_unit_sits_under_its_heading_and_his_lines_stay_byte_identical_
 
     assert opens("drc-summary") == lines.index(f"### {D.isoformat()}") + 1
     assert opens("drc-day") == lines.index("<!-- /cobalt:section drc-summary -->") + 1
+    assert opens("drc-risk-facts") == lines.index("### How I managed risk:") + 1
     assert opens("drc-risk") == next(i for i, l in enumerate(lines) if l.startswith("### PnL on the day:")) + 1
     assert opens("drc-trades") == lines.index("### Catalyst + Set Up + Trades") + 1
-    assert opens("drc-rules") > next(i for i, l in enumerate(lines) if l.startswith("###  Take all"))
+    assert opens("drc-rules") > next(i for i, l in enumerate(lines) if l.startswith("###  Take all"))
     for section, unit in (
-        ("drc-summary", "summary"), ("drc-day", "premarket"), ("drc-risk", "pnl"), ("drc-risk", "facts"),
+        ("drc-summary", "summary"), ("drc-day", "premarket"), ("drc-risk", "pnl"), ("drc-risk-facts", "facts"),
         ("drc-risk", "risk_parameters"), ("drc-trades", "tickers"), ("drc-trades", "reconcile"),
         ("drc-rules", "rules_check"),
     ):

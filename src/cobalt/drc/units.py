@@ -13,7 +13,9 @@ THE UNITS, by section, each under HIS heading (v2 §6 table; unit ids stable):
     drc-day     / voice-no-trades  HIS blank unit, created once
     drc-day     / premarket        the four daily-note keys (R102 O11)
     drc-risk    / pnl              under `### PnL on the day:` (R102 O16)
-    drc-risk    / facts            planned vs actual risk, the daily stop
+    drc-risk-facts / facts         planned vs actual risk, the daily stop —
+                                   under `### How I managed risk:`, above
+                                   his paragraph (v2 §13 A9)
     drc-risk    / risk_parameters  existing (sheet-mode dollars)
     drc-trades  / tickers          the trade count line
     drc-trades  / trade-<id>       one block per stored trade (B-rows)
@@ -23,9 +25,9 @@ THE UNITS, by section, each under HIS heading (v2 §6 table; unit ids stable):
                                    with no trade) — `prefill.drc`'s helpers
 
 A SECTION IS ONE BLOCK (`vaultwrite.markers`: a duplicate section is
-refused), so `drc-risk`'s three units sit together under `### PnL on the
-day:` — `facts` there too, not above his `How I managed risk` paragraph
-(the build report's ESCALATE names this).
+refused), so `facts` is the unit of its OWN section `drc-risk-facts`
+(D3 fix r1 F-4): `drc-risk` keeps `pnl` and `risk_parameters` under `### PnL
+on the day:`.
 
 `[F-23]`: no unit writes a line the 09:00 reader reads (`Grade:` /
 `Goal:`, `daymode/drc.py:116`–`:117`). R101: no rules line, no engine unit.
@@ -47,7 +49,7 @@ NO_TRADE = ("drc-day", "no_trade")
 VOICE_NO_TRADES = ("drc-day", "voice-no-trades")
 PREMARKET = ("drc-day", "premarket")
 PNL = ("drc-risk", "pnl")
-FACTS = ("drc-risk", "facts")
+FACTS = ("drc-risk-facts", "facts")
 RISK_PARAMETERS = ("drc-risk", "risk_parameters")
 TICKERS = ("drc-trades", "tickers")
 RECONCILE = ("drc-trades", "reconcile")
@@ -90,6 +92,10 @@ DAY_PLACEMENT = Placement("under the drc-summary section", _after_section(SUMMAR
 #: `drc-risk`: under `### PnL on the day:` (his heading carries a U+00A0;
 #: `\s` matches it).
 PNL_PLACEMENT = after_pattern(re.compile(r"^###\s*PnL on the day"), "under '### PnL on the day:'")
+#: `drc-risk-facts`: directly under `### How I managed risk:`, above his
+#: paragraph (v2 §13 A9; D3 fix r1 F-4). Its own section: a section is one
+#: block, and `drc-risk` stays under `### PnL on the day:`.
+RISK_FACTS_PLACEMENT = after_pattern(re.compile(r"^###\s*How I managed risk"), "under '### How I managed risk:'")
 
 
 # ---------------------------------------------------------------------
@@ -193,7 +199,7 @@ def build_rows_by_ref(rows: Iterable[dict]) -> dict[str, dict]:
 
 __all__ = [
     "DAY_PLACEMENT", "FACTS", "NOT_GIVEN", "NO_TRADE", "PNL", "PNL_PLACEMENT", "PREMARKET", "RECONCILE",
-    "RISK_PARAMETERS", "RULES_CHECK", "SUMMARY", "TICKERS", "TRADE_PREFIX", "VOICE_NO_TRADES", "VOICE_PREFIX",
+    "RISK_FACTS_PLACEMENT", "RISK_PARAMETERS", "RULES_CHECK", "SUMMARY", "TICKERS", "TRADE_PREFIX", "VOICE_NO_TRADES", "VOICE_PREFIX",
     "WHY_NO_TRADES", "build_rows_by_ref", "date_line_placement", "facts", "given", "money", "no_trade",
     "orphaned", "pnl", "premarket", "reconcile", "summary", "tickers", "trade_block",
     "trade_unit", "voice_unit",

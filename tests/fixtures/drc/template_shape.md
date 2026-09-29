@@ -2,7 +2,7 @@
 fixture: shape-only
 ---
 
-# Dejan Zivanovic DRC 
+# Example Trader DRC 
 
 ### {{date:YYYY-MM-DD}}
 
@@ -46,7 +46,7 @@ shape line 40
 
 shape line 47
 
-### PnL on the day:  $XXXX
+### PnL on the day:  $XXXX
 
 shape line 51
 
@@ -125,13 +125,13 @@ shape line 123
 
 ---
 
-### Technology: 
+### Technology: 
 
 shape line 130
 
 ---
 
-### Collaboration: 
+### Collaboration: 
 
 shape line 136
 
@@ -153,7 +153,7 @@ shape line 150
 
 ### What I learned (from myself)
 
-### 1-2 paragraphs about observations on how you felt throughout the day 
+### 1-2 paragraphs about observations on how you felt throughout the day 
 
 ### especially focused on specific situations when presented
 
@@ -170,9 +170,9 @@ shape line 168
 
 ---
 
-### Tomorrow’s one percent better: 
+### Tomorrow’s one percent better: 
 
-###  Take all the learning from above and have one clear way to get 1% better tomorrow. Create a simple IF : Then statement with a clear action item. ideally connected to your overall goal)
+###  Take all the learning from above and have one clear way to get 1% better tomorrow. Create a simple IF : Then statement with a clear action item. ideally connected to your overall goal)
 
 shape line 177
 

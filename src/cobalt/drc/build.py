@@ -542,7 +542,7 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
         add(UnitWrite(*units.VOICE_NO_TRADES, "", units.DAY_PLACEMENT, create_once=True))
     add(UnitWrite(*units.PREMARKET, units.premarket(day_build), units.DAY_PLACEMENT))
     add(UnitWrite(*units.PNL, units.pnl(day_build), units.PNL_PLACEMENT))
-    add(UnitWrite(*units.FACTS, units.facts(day_build, builds), units.PNL_PLACEMENT))
+    add(UnitWrite(*units.FACTS, units.facts(day_build, builds), units.RISK_FACTS_PLACEMENT))
     add(UnitWrite(*units.RISK_PARAMETERS, f"Risk Parameters: {deps.risk_parameters(cards)}", units.PNL_PLACEMENT))
     add(UnitWrite(*units.TICKERS, units.tickers(day_build), TRADES_PLACEMENT))
     by_ref = {b["ref"]: b for b in builds}
@@ -629,8 +629,7 @@ def _trade_lines(t: dict, inputs: dict, d: dict, card: Optional[dict], window: O
         f"target: {stats.text('target')} · MAE {stats.text('price_mae')} · MFE {stats.text('price_mfe')} · "
         f"best exit {stats.text('best_exit_price')}"
     )
-    stop = None if stats.row is None else stats.row.get("stop")
-    lines.append(f"stop: {units.NOT_GIVEN if stop is None else stop}")
+    lines.append(f"stop: {stats.text('stop')}")
     if not windows:
         lines.append("window: not given")
     else:

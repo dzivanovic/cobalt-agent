@@ -34,3 +34,6 @@ When the replay row is for this date and says `pending (no DRC)`, the build rend
 
 ## What it never does
 No event state, no pairing, no statement, no leg write (D5), no `open_positions` unit (K3), no engine unit or rules line (R101), no `Grade:` / `Goal:` line (`[F-23]`), no daily-note write, no second template, no Jinja.
+
+## 2026-09-29 — DRC D3 fix r1
+F-3: the trade block's `stop:` line renders `_Stats.text("stop")`, like every other stats-fed value. So a trade left unmatched because a PARTIAL stats file lacks a match column reads `stop: not computed — missing: <columns>`, not `not given`. A matched row with no stop still reads `not given`, and a stop the row holds renders as-is (R17 (4)). F-4: the `facts` unit is added with `units.RISK_FACTS_PLACEMENT`, as the unit of its own section `drc-risk-facts` (see `units.md`); the unit order is unchanged.

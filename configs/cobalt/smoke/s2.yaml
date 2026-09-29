@@ -523,7 +523,16 @@ checks:
       (SELECT supersedes FROM drc_stated_books WHERE supersedes IS NOT NULL))))) AS event_state,
       (SELECT count(*) FROM vault_writes
       WHERE section = 'drc-misses' AND unit = 'miss_line'
-      AND (ts AT TIME ZONE 'America/New_York')::date = {last_trading_day}) AS writes
+      AND note = (SELECT e.note_path FROM drc_events e WHERE e.day = {last_trading_day} AND (
+      e.import_id = (SELECT max(i.id) FROM drc_imports i WHERE i.import_date = {last_trading_day}
+      AND i.kind = 'trading_log' AND i.id NOT IN
+      (SELECT supersedes FROM drc_imports WHERE supersedes IS NOT NULL))
+      OR (NOT EXISTS (SELECT 1 FROM drc_imports i WHERE i.import_date = {last_trading_day}
+      AND i.kind = 'trading_log' AND i.id NOT IN
+      (SELECT supersedes FROM drc_imports WHERE supersedes IS NOT NULL))
+      AND e.stated_book_id = (SELECT max(s.id) FROM drc_stated_books s WHERE s.day = {last_trading_day}
+      AND s.kind = 'no_trade' AND s.id NOT IN
+      (SELECT supersedes FROM drc_stated_books WHERE supersedes IS NOT NULL)))))) AS writes
     expect:
       - {column: event_state, op: eq, value: done}
       - {column: writes, op: ge, value: 1}
@@ -533,7 +542,7 @@ checks:
     expect_text: >-
       user.drc_events exists (absent = the DRC migrations not applied = FAIL);
       no DRC event for the day = KNOWN pending; otherwise event_state = done
-      and writes >= 1 on the last trading day (ET)
+      and writes >= 1 for the day's DRC note (any clock time)
 
   - id: K11.1
     title: heartbeat — last beat age

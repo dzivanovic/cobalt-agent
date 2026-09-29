@@ -105,3 +105,5 @@ unit and every `build_trade` / `build_day` row it would write
 `imports.no_trade` (its refusals, its AMENDED C7 rebuild, its file-less
 event). A refusal prints `FAILED: <Type>: <reason>` and exits 1. `prefill
 drc` is retired (`prefill/cli.py`): this is the ONE DRC CLI (L3).
+
+**2026-09-29 — DRC D3 fix r1 (F-1).** `--dry-run` plans with `dataclasses.replace(deps, rules_block=…)` returning ONE line, `DRY_RUN_RULES` = `rules: not regenerated on a dry run — the build re-reads Rules.md`. The real rules block (`prefill.drc.rules_checkbox_block` → `regenerate_rules_config`) writes the generated rules file, so a dry run never calls it (L10). The real build (`run_drc_build`), `plan_note` and `default_deps` are unchanged; the build still regenerates the rules inside the resident (F41).

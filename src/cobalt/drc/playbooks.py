@@ -94,7 +94,7 @@ def read_strategies(vault_root: Path) -> Strategies:
         try:
             fm, _ = split_frontmatter(note.read_text(encoding="utf-8"))
             slugs[title] = validate_slug((fm or {}).get("trade_def"), where=str(note))
-        except (SlugError, FrontmatterError, OSError) as e:
+        except (SlugError, FrontmatterError, OSError, UnicodeDecodeError) as e:
             errors[title] = str(e)
     return Strategies(readable=True, slugs=slugs, errors=errors)
 
