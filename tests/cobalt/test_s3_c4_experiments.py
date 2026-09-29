@@ -196,21 +196,27 @@ def test_x3_human_wins_once_without_a_race(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------
 
 
-def test_x16_two_cards_same_ticker_same_second_today(monkeypatch, tmp_path):
-    """What `upsert_trade_note` does TODAY with two cards whose fill instants
-    share a second: the second call MERGES into the first card's note."""
-    from legs_db_support import sizing
+def test_x16_two_cards_same_ticker_same_second(monkeypatch, tmp_path):
+    """X16, run at E1 on `<base>` with the `SizingResult` signature:
+    `created …` then `updated …` — the second card MERGED into the first
+    card's note (quoted in the build report). Kept on the converted writer:
+    without `create_only` the writer still merges; the fill event passes
+    `create_only`, and the second card is refused, never merged (C4-2)."""
+    from decimal import Decimal
 
     make_vault(monkeypatch, tmp_path)
     when = datetime(2026, 9, 3, 10, 12, 30)
     store = MemoryWriteStore()
-    first = sizing()
-    second = sizing(entry=first.input.entry + 1, stop=first.input.stop + 1)
-    path1, action1 = trade_note_module.upsert_trade_note(first, when, make_paths(), writer=memory_writer(store))
-    path2, action2 = trade_note_module.upsert_trade_note(second, when, make_paths(), writer=memory_writer(store))
-    print(f"\nX16 today: {action1} {path1.name} · {action2} {path2.name}")
-    assert path1 == path2
-    assert (action1, action2) == ("created", "updated")   # a silent merge -> C4-2's refusal is built
+    first = {"ticker": "TEST", "direction": "long", "stop": Decimal("9.9000")}
+    second = {"ticker": "TEST", "direction": "long", "stop": Decimal("10.9000")}
+    write = trade_note_module.upsert_trade_note
+    path1, action1 = write(first, when, make_paths(), entry_price=Decimal("10.0000"), writer=memory_writer(store))
+    path2, action2 = write(second, when, make_paths(), entry_price=Decimal("11.0000"), writer=memory_writer(store))
+    print(f"\nX16 writer: {action1} {path1.name} · {action2} {path2.name}")
+    assert path1 == path2 and (action1, action2) == ("created", "updated")
+    with pytest.raises(trade_note_module.TradeNoteRefused, match="already exists"):
+        write(second, when, make_paths(), entry_price=Decimal("11.0000"), create_only=True,
+              writer=memory_writer(store))
 
 
 # ---------------------------------------------------------------------

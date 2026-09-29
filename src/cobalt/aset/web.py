@@ -1039,7 +1039,12 @@ async def size(request: Request) -> str:
 
     try:
         prefill_paths = load_prefill_paths()
-        trade_path, trade_action = upsert_trade_note(result, when, prefill_paths)
+        # S3 C4 (O4 A): the ONE trade-note writer takes the card; the
+        # sizing note keeps the sizing time and the planned entry.
+        inp = result.input
+        card = {"id": row_id, "ticker": inp.ticker, "direction": inp.direction.value, "stop": inp.stop,
+                "trade_def_slug": None}
+        trade_path, trade_action = upsert_trade_note(card, when, prefill_paths, entry_price=inp.entry)
     except (PrefillConfigError, VaultWriteError) as e:
         banner = _failed(
             f"Persisted: aset_sizings id {row_id} ({store.db_name}) — daily note "
@@ -1172,6 +1177,13 @@ async def fill(request: Request) -> str:
                 f"FILLED · fill update {html.escape(note_write.action)} in "
                 f"{html.escape(str(note_path))}</div>"
             )
+    # S3 C4 (F22, v3 §7): the card's trade note, after the fill committed,
+    # in this request. A failure leaves the card FILLED and says so (L1).
+    note, note_failed = _fill_note(int(card_row_raw))
+    if note is not None:
+        banner += f'<div class="saved">{html.escape(_note_saved(note))}</div>'
+    else:
+        banner += f'<div class="warn">⚠ {html.escape(note_failed)}</div>'
     banner += _pick_banner(int(card_row_raw), filled)
     if fill_result.drift_warned is None:
         # v3 §4 / L1: his drift P is missing — the fill IS recorded; the
@@ -1467,9 +1479,14 @@ def _tap_price(raw: str | None, *, what: str) -> Decimal | None:
     if not raw:
         return None
     try:
-        return Decimal(raw)
+        price = Decimal(raw)
     except InvalidOperation as e:
         raise _TapInputRefused(f"REFUSED: {what} {raw!r} is not a price. Nothing written.") from e
+    # S3 C4-06 (L1): a leg price is a finite number > 0 — the `legs.price`
+    # rule `CHECK (price > 0)`, refused here before any writer.
+    if not price.is_finite() or price <= 0:
+        raise _TapInputRefused(f"REFUSED: {what} {raw!r} is not a positive price. Nothing written.")
+    return price
 
 
 def _tap_int(raw: str | None, *, what: str) -> int | None:
@@ -1507,6 +1524,53 @@ def _tap_reply(source: str, status: int, *, reason: str | None = None, payload: 
     if reason is not None:
         return _refused(status, reason)
     return {"status": "ok", **(payload or {})}
+
+
+#: S3 C4 (v3 §7): what a failed note write shows. The DB write has
+#: committed; the note is the one thing missing, said with its retry (L1).
+NOTE_NOT_WRITTEN = "FILLED — trade note NOT written"
+UNIT_NOT_WRITTEN = "leg saved, note unit NOT written"
+
+
+def _note_reason(e: BaseException) -> str:
+    from cobalt.prefill.trade_note import TradeNoteRefused
+
+    known = (TradeNoteRefused, VaultWriteError, SessionBlocked, PrefillConfigError)
+    return str(e) if isinstance(e, known) else f"{type(e).__name__}: {e}"
+
+
+def _fill_note(card_id: int):
+    """The card's trade note at the fill (C4-2), called only after THE fill
+    returned (its transaction committed): `(CardNoteResult, None)` or
+    `(None, failure line)`. Never raises — the card IS FILLED either way;
+    on failure `trade_note_path` is NULL and the line names the retry."""
+    from cobalt.prefill.trade_note import write_card_note
+
+    try:
+        return write_card_note(card_id), None
+    except Exception as e:
+        logger.error("card {}: trade note NOT written after the fill: {}", card_id, e)
+        return None, (f"{NOTE_NOT_WRITTEN}: {_note_reason(e)} · trade_note_path NULL · "
+                      f"retry: cobalt cards trade-note {card_id}")
+
+
+def _note_saved(note) -> str:
+    units = " · ".join(f"{unit} {action}" for unit, action in note.units)
+    return f"trade note {note.action}: {note.relative} · {units}"
+
+
+def _leg_note(card_id: int, leg_id: int, *, closed: bool) -> str | None:
+    """The leg's unit in the card's trade note (C4-3), after the leg
+    writer committed: None, or the notice naming why nothing was written
+    in the vault. Never raises — the leg IS saved."""
+    from cobalt.prefill.trade_note import write_leg_unit
+
+    try:
+        write_leg_unit(card_id, leg_id, closed=closed)
+    except Exception as e:
+        logger.error("card {}: leg {} saved, note unit NOT written: {}", card_id, leg_id, e)
+        return f"{UNIT_NOT_WRITTEN}: {_note_reason(e)} · retry: cobalt cards trade-note {card_id}"
+    return None
 
 
 async def _card_tap(card_id: int, request: Request, gate: str, work):
@@ -1572,6 +1636,11 @@ async def radar_card_fill(card_id: int, request: Request):
             notices.append(DRIFT_NOT_EVALUATED)
         if not outcome.result.pick_recorded:
             notices.append(f"pick not recorded ({outcome.result.pick_error})")
+        # S3 C4: the trade note, after THE fill committed (never inside it).
+        note, note_failed = _fill_note(card_id)
+        payload["trade_note_path"] = None if note is None else note.relative
+        if note_failed:
+            notices.insert(0, note_failed)
         if notices:
             payload["notice"] = " · ".join(notices)
         return payload, " · ".join([f"card {card_id}: FILLED ({flag}, entry leg {outcome.leg_id})", *notices])
@@ -1629,9 +1698,16 @@ async def radar_card_exit(card_id: int, request: Request):
                   f"{result.running_before} → {result.running_after}")
         if result.closed:
             banner += " · CLOSED"
+        notices = []
         if flag == "estimated":
-            payload["notice"] = "estimated — listed for correction"
-            banner += " · estimated — listed for correction"
+            notices.append("estimated — listed for correction")
+        # S3 C4: the leg's unit in the trade note, after the commit.
+        unit_failed = _leg_note(card_id, result.leg_id, closed=result.closed)
+        if unit_failed:
+            notices.append(unit_failed)
+        if notices:
+            payload["notice"] = " · ".join(notices)
+            banner += " · " + " · ".join(notices)
         return payload, banner
     return await _card_tap(card_id, request, "aset.radar.exit", work)
 
@@ -1647,10 +1723,16 @@ async def radar_card_held(card_id: int, request: Request):
         if held is None:
             raise _TapInputRefused(f"REFUSED card {card_id}: HOLDING names the shares you hold. Nothing written.")
         result = legs.record_held(card_id, held, source=source, now=session_clock_mod.now_utc())
-        return ({"leg_id": result.leg_id, "corrects": result.corrects, "running_after": result.running_after,
-                 "closed": result.closed, "transition_id": result.transition_id},
-                f"card {card_id}: holding {held} · running {result.running_after}"
-                + (" · CLOSED" if result.closed else ""))
+        payload = {"leg_id": result.leg_id, "corrects": result.corrects, "running_after": result.running_after,
+                   "closed": result.closed, "transition_id": result.transition_id}
+        banner = f"card {card_id}: holding {held} · running {result.running_after}" + (
+            " · CLOSED" if result.closed else "")
+        # S3 C4: the held count rewrites the entry leg's unit (`leg-0`).
+        unit_failed = _leg_note(card_id, result.leg_id, closed=result.closed)
+        if unit_failed:
+            payload["notice"] = unit_failed
+            banner += f" · {unit_failed}"
+        return payload, banner
     return await _card_tap(card_id, request, "aset.radar.held", work)
 
 
@@ -1678,10 +1760,16 @@ async def radar_card_correct(card_id: int, request: Request):
             shares=_tap_int(form.get("shares"), what="the corrected share count"), source=source,
             now=session_clock_mod.now_utc(),
         )
-        return ({"leg_id": result.leg_id, "corrects": result.corrects, "running_after": result.running_after,
-                 "closed": result.closed, "transition_id": result.transition_id},
-                f"card {card_id}: leg {result.corrects} corrected by leg {result.leg_id} · running "
-                f"{result.running_after}" + (" · CLOSED" if result.closed else ""))
+        payload = {"leg_id": result.leg_id, "corrects": result.corrects, "running_after": result.running_after,
+                   "closed": result.closed, "transition_id": result.transition_id}
+        banner = (f"card {card_id}: leg {result.corrects} corrected by leg {result.leg_id} · running "
+                  f"{result.running_after}" + (" · CLOSED" if result.closed else ""))
+        # S3 C4: a correction rewrites the SAME `leg-<seq>` unit (v3 §7).
+        unit_failed = _leg_note(card_id, result.leg_id, closed=result.closed)
+        if unit_failed:
+            payload["notice"] = unit_failed
+            banner += f" · {unit_failed}"
+        return payload, banner
     return await _card_tap(card_id, request, "aset.radar.correct", work)
 
 

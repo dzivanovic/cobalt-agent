@@ -38,6 +38,13 @@ def make_result(**overrides):
     return compute_sizing(SizingInput(**base), ENABLED_GRADES, MAX_STOP_DISTANCE_PCT)
 
 
+def upsert(result, when, paths):
+    """`/size`'s call since S3 C4: the card's values + the planned entry."""
+    i = result.input
+    card = {"ticker": i.ticker, "direction": i.direction.value, "stop": i.stop, "trade_def_slug": None}
+    return trade_note_module.upsert_trade_note(card, when, paths, entry_price=i.entry)
+
+
 def make_paths() -> PrefillPathsConfig:
     return PrefillPathsConfig(
         trades_dir="1 - Trading/2 - Trades",
@@ -57,7 +64,7 @@ def fake_vault(monkeypatch, tmp_path):
 
 def test_create_writes_expected_frontmatter_and_body(fake_vault):
     when = datetime(2026, 8, 31, 9, 31, 5)
-    path, action = trade_note_module.upsert_trade_note(make_result(), when, make_paths())
+    path, action = upsert(make_result(), when, make_paths())
     assert action == "created"
     assert path.name == "Trade-2026-08-31 09-31-05 -NVDA.md"
     content = path.read_text()
@@ -78,7 +85,7 @@ def test_create_writes_expected_frontmatter_and_body(fake_vault):
 def test_rerun_same_card_updates_only_cobalt_fields(fake_vault):
     when = datetime(2026, 8, 31, 9, 31, 5)
     paths = make_paths()
-    path, _ = trade_note_module.upsert_trade_note(make_result(), when, paths)
+    path, _ = upsert(make_result(), when, paths)
 
     # simulate Dejan filling in his own fields + body after the fact
     manual = path.read_text()
@@ -92,7 +99,7 @@ def test_rerun_same_card_updates_only_cobalt_fields(fake_vault):
 
     # re-run with a slightly different entry (e.g. a corrected card)
     result2 = make_result(entry=Decimal("228.50"))
-    path2, action = trade_note_module.upsert_trade_note(result2, when, paths)
+    path2, action = upsert(result2, when, paths)
     assert action == "updated"
     assert path2 == path
 
@@ -109,4 +116,4 @@ def test_refuses_to_update_a_file_with_no_frontmatter(fake_vault, tmp_path):
     filename = "Trade-2026-08-31 09-31-05 -NVDA.md"
     (fake_vault / "1 - Trading" / "2 - Trades" / filename).write_text("no frontmatter here\n")
     with pytest.raises(VaultWriteError, match="no recognizable frontmatter"):
-        trade_note_module.upsert_trade_note(make_result(), when, paths)
+        upsert(make_result(), when, paths)

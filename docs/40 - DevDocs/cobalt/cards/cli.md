@@ -45,3 +45,21 @@ lives in `picks.render_picks_report`.
 `cobalt cards move <id> FILLED` now reads `FillResult.transition_ids`. If
 the fill committed but the pick did not, it prints `PICK NOT RECORDED …` to
 stderr and exits 1, so a script cannot mistake the gap for a clean fill.
+
+## 2026-09-29 — S3 exits C4: `cobalt cards trade-note <card_id>` (C4-4)
+
+The retry for a trade note that was not written at the fill (L1: a banner,
+`trade_note_path` NULL, and this command). It applies to a FILLED or CLOSED
+card and runs `prefill.trade_note.write_card_note(card_id, retry=True)`:
+- the session gate;
+- the SAME `upsert_trade_note` as the fill (create, or update an existing
+  note — `create_if_absent` alone is not the retry);
+- one `upsert_unit` per current leg seq;
+- sets `trade_note_path`.
+
+It prints `card <id>: trade note <action>: <path>`, one `  leg-<seq>: <action>`
+line per unit, then `trade_note_path: <relative path>`. `market_reset` →
+`REFUSED card <id>: <the gate's message> Nothing written.` (exit non-zero;
+nothing touched). Any other failure → `FAILED card <id>: trade note NOT
+written: <reason> — trade_note_path NULL` (exit non-zero). That includes a
+card not FILLED / CLOSED and a path another card holds.

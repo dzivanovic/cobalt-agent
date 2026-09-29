@@ -3,6 +3,7 @@
     cobalt cards state <id>
     cobalt cards history <id>
     cobalt cards legs <id>
+    cobalt cards trade-note <id>
     cobalt cards move <id> --to STATE [--actor you|cobalt] [--reason ...]
     cobalt cards backfill [--dry-run]
     cobalt cards expire [--at ISO8601] [--dry-run]
@@ -134,6 +135,30 @@ def cmd_legs(args: argparse.Namespace) -> None:
     print(f"stop owner: {CardStore().stop_owner(args.card_id)}")
 
 
+def cmd_trade_note(args: argparse.Namespace) -> None:
+    """S3 C4-4: re-write one FILLED or CLOSED card's trade note — the SAME
+    writer as the fill (`upsert_trade_note`, create or update) and one
+    `upsert_unit` per current leg seq; sets `trade_note_path`. Prints the
+    path and each unit's action. A refusal (`market_reset`, a card not
+    FILLED / CLOSED, a path another card holds) exits non-zero, verbatim;
+    any failure after the gate leaves `trade_note_path` NULL (L1)."""
+    from cobalt.prefill.trade_note import write_card_note
+    from cobalt.session import SessionBlocked
+
+    try:
+        note = write_card_note(args.card_id, retry=True)
+    except SessionBlocked as blocked:
+        raise SystemExit(f"REFUSED card {args.card_id}: {blocked} Nothing written.")
+    except Exception as failed:
+        raise SystemExit(
+            f"FAILED card {args.card_id}: trade note NOT written: {failed} — trade_note_path NULL"
+        )
+    print(f"card {args.card_id}: trade note {note.action}: {note.path}")
+    for unit, action in note.units:
+        print(f"  {unit}: {action}")
+    print(f"trade_note_path: {note.relative}")
+
+
 def cmd_picks(args: argparse.Namespace) -> None:
     """F3: pick vs rank for every FILLED transition on one ET day.
 
@@ -229,6 +254,13 @@ def add_parser(sub) -> None:
     )
     legs.add_argument("card_id", type=int)
     legs.set_defaults(func=cmd_legs)
+
+    trade_note = csub.add_parser(
+        "trade-note",
+        help="Re-write a FILLED or CLOSED card's trade note and one unit per current leg; sets trade_note_path.",
+    )
+    trade_note.add_argument("card_id", type=int)
+    trade_note.set_defaults(func=cmd_trade_note)
 
     move = csub.add_parser("move", help="Move a card through a legal edge.")
     move.add_argument("card_id", type=int)

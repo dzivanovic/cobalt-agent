@@ -316,3 +316,17 @@ suite transaction with `0021` applied there). The POST allowlist in
 - F2 (2026-09-29): `radar_card_correct` reads `legs.read_position(card_id)` (rolled back) before `record_correction`; a `leg_id` that is not one of the URL card's current legs → 422 `REFUSED card <id>: leg <leg> is not a current leg of card <id> — reload the card. Nothing written.`
 - F3 (2026-09-29): `_sheet_closed_estimated` (beside `_sheet_in_trade`) lists, below the live cards and even when none is live, each MANUAL card `filled_with_picks(<today ET>)` returns CLOSED — its `estimated` legs only, through `radar_panel.render_estimated_legs`, each `✓ correct` posting `/radar/card/<id>/correct` with `source=sheet`; a failed read says `FAILED · position unreadable: …` on that card. Window: cards filled today (ET).
 - F4 (2026-09-29): `_sheet_in_trade`'s failed read renders the `_failed(…)` line AND `radar_panel.render_stop_block(…, structural_stop=None, owner=None, source="sheet")` — his stop, `Cobalt stop NULL — no Cobalt stop`, no ↺.
+
+## 2026-09-29 — S3 exits C4: the note calls (F22, v3 §7) and C4-06
+
+Every note call runs AFTER the DB writer returned (its transaction committed), in the same request, and never inside it:
+- `/size` (O4 A): passes the card's values (`id`, `ticker`, `direction`, `stop`) and the planned entry to the one writer `upsert_trade_note`; the sizing note is unchanged.
+- `/fill` (manual) and `POST /radar/card/{id}/fill`: `_fill_note(card_id)` → `prefill.trade_note.write_card_note`. It writes the note at the FILLED transition's time, `leg-0`, and `aset_sizings.trade_note_path`.
+  - On ANY failure the card stays FILLED, `trade_note_path` is NULL, and the page shows `FILLED — trade note NOT written: <reason> · trade_note_path NULL · retry: cobalt cards trade-note <id>`: a `warn` div on the sheet; the panel's `notice`, first.
+  - The panel payload carries `trade_note_path`. A second card with the same ticker in the same second is refused (X16), never merged.
+- `/radar/card/{id}/exit`, `/held`, `/correct` (panel and sheet alike): `_leg_note(card_id, leg_id, closed=…)` → `write_leg_unit`. It writes the unit `leg-<seq>` of the leg the writer returned; a correction rewrites the same unit, and a held count rewrites `leg-0`.
+  - `trade_note_path` NULL, its file absent, or any failure → the notice (panel) / banner (sheet) `leg saved, note unit NOT written: <reason> · retry: cobalt cards trade-note <id>`. Nothing is written in the vault.
+  - A commit that CLOSED the card also fills his blank exit keys.
+- Refusals return before the writer, as before: nothing committed, nothing to note.
+- C4-06: `_tap_price` (the one tap-price parser) refuses a parsed price that is not finite or not `> 0` (the `legs.price` rule `CHECK (price > 0)`): `REFUSED: <what> <raw!r> is not a positive price. Nothing written.` → 422 through `_card_tap`, before any writer. Before this, `/exit price=NaN` → 200 and a NaN leg was stored, and `/correct price=-1` → 500.
+- Tests: `tests/cobalt/test_s3_c4_trade_note_db.py`, and the `/size` call in `tests/cobalt/test_s3_c4_trade_note_offline.py`.

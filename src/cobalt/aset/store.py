@@ -394,6 +394,66 @@ class AsetStore:
                 "that was not persisted."
             )
 
+    def card_for_note(self, card_id: int) -> dict[str, Any]:
+        """The card row as the trade note reads it (S3 C4, v3 §7): every
+        column, plus the latest FILLED and CLOSED transition times
+        (`filled_transition_at` / `closed_transition_at`, NULL when none).
+        A read."""
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                SELECT s.*,
+                       (SELECT max(t.at) FROM card_transitions t
+                        WHERE t.card_id = s.id AND t.to_state = 'FILLED') AS filled_transition_at,
+                       (SELECT max(t.at) FROM card_transitions t
+                        WHERE t.card_id = s.id AND t.to_state = 'CLOSED') AS closed_transition_at
+                FROM aset_sizings s WHERE s.id = %s
+                """,
+                (card_id,),
+            )
+            found = cur.fetchone()
+            if found is None:
+                raise RuntimeError(f"no aset_sizings row with id {card_id}")
+            return dict(zip([d.name for d in cur.description], found))
+
+    def set_trade_note_path(self, card_id: int, path: Optional[str]) -> None:
+        """THE one writer of `aset_sizings.trade_note_path` (S-NOTE, L40):
+        the fill note's path relative to the vault root, or NULL when the
+        note write failed. Two cards never hold one path: under a
+        transaction-scoped advisory lock on the path, a path another card
+        already holds is REFUSED (X16 — two cards, one ticker, one second),
+        nothing written. One transaction, one commit."""
+        conn = self._connect()
+        conn.autocommit = False
+        try:
+            if path is not None:
+                conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (path,))
+                holder = conn.execute(
+                    "SELECT id FROM aset_sizings WHERE trade_note_path = %s AND id <> %s LIMIT 1",
+                    (path, card_id),
+                ).fetchone()
+                if holder is not None:
+                    from cobalt.prefill.trade_note import TradeNoteRefused
+
+                    raise TradeNoteRefused(
+                        f"REFUSED card {card_id}: trade note {path} is card {holder[0]}'s (same ticker, "
+                        "same second, X16). Nothing merged, nothing written."
+                    )
+            cur = conn.execute(
+                "UPDATE aset_sizings SET trade_note_path = %s WHERE id = %s", (path, card_id)
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError(
+                    f"trade_note_path UPDATE matched {cur.rowcount} rows for aset_sizings id {card_id} "
+                    "(expected exactly 1)"
+                )
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def account_mode_for(self, row_id: int) -> str:
         with self._connect() as conn:
             row = conn.execute(

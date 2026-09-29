@@ -127,7 +127,7 @@ def test_a_manual_fill_writes_its_note_with_trade_def_blank(note_world):
     assert f"trade note created: {TRADES_DIR}/{MANUAL_NOTE}" in response.text
     path = _note(note_world, MANUAL_NOTE)
     front = _fm(path)
-    assert front["entry_price"] == "10.10" and front["entry_time"] == "2026-09-03 10:00"
+    assert front["entry_price"] == "10.1000" and front["entry_time"] == "2026-09-03 10:00"   # the entry leg's price
     for key in ("trade_def", "exit_price", "exit_time", "profit_loss", "RVOL"):
         assert front[key] is None, key
     assert card_row(note_world["aset"], card_id)["trade_note_path"] == f"{TRADES_DIR}/{MANUAL_NOTE}"
@@ -151,17 +151,16 @@ def test_two_cards_one_ticker_one_second_is_refused_never_merged(note_world):
 
 def test_a_vault_write_failure_leaves_the_card_filled_and_the_path_null(note_world, monkeypatch, capsys):
     card_id = manual_card(note_world["aset"])
-    _break_the_note_writer(monkeypatch)
-    response = _manual_fill(note_world, card_id)
+    with monkeypatch.context() as patch:
+        _break_the_note_writer(patch)
+        response = _manual_fill(note_world, card_id)
     assert "marked FILLED" in response.text
     assert (f"{FAILED_PREFIX}constructed vault failure · trade_note_path NULL · retry: "
             f"cobalt cards trade-note {card_id}") in response.text, response.text[-1500:]
     assert note_world["cards"].state_of(card_id).value == "FILLED"
     assert card_row(note_world["aset"], card_id)["trade_note_path"] is None
     assert _notes(note_world) == []
-    monkeypatch.undo()   # the writer back; the retry
-    make_vault(monkeypatch, note_world["vault"].parent)
-    out = _retry(card_id, capsys)
+    out = _retry(card_id, capsys)   # the writer back (the context closed); the retry
     assert f"trade note created: {_note(note_world, MANUAL_NOTE)}" in out and "leg-0: updated" in out, out
     assert card_row(note_world["aset"], card_id)["trade_note_path"] == f"{TRADES_DIR}/{MANUAL_NOTE}"
     assert _notes(note_world) == [MANUAL_NOTE]
@@ -318,7 +317,7 @@ def test_the_retry_in_market_reset_is_refused_and_writes_nothing(note_world, mon
     path = _note(note_world, RADAR_NOTE)
     before = path.read_text()
     monkeypatch.setattr(clock, "now_utc", lambda: RESET)
-    with pytest.raises(SystemExit, match="market_reset"):
+    with pytest.raises(SystemExit, match="MARKET RESET"):
         _retry(card_id, capsys)
     assert path.read_text() == before
     assert card_row(note_world["aset"], card_id)["trade_note_path"] == f"{TRADES_DIR}/{RADAR_NOTE}"
