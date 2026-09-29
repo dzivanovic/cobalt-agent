@@ -16,6 +16,7 @@ inside `test_drc_store.py`'s never-committed migration transaction (L76).
 
 from __future__ import annotations
 
+import html
 import re
 import sys
 import types
@@ -199,19 +200,50 @@ def test_run4_the_real_cards_read_inside_get_drc_writes_nothing(lane, migrated, 
 # ---------------------------------------------------------------------
 
 
+#: RUN-5's constructed trade key (not a trade of the day).
+KEY = "ZZZ-long-constructed"
+
+
+def _binding_line(name: str, key: str) -> str:
+    """The exact notes line `imports.day_view` renders for a current
+    binding on a not-computed day (D2 fix r2 F-11, `imports.py:818`)."""
+    return f"screenshot {name} — trade {key}: not checked, pairing not computed"
+
+
+def _binding_listed(notes: list[str], page: str, name: str, key: str) -> None:
+    """D3 row 0c (`58` `## FOR DEJAN` 3): the EXACT line — its text and its
+    trade key — in `day_view`'s notes AND on the rendered page."""
+    line = _binding_line(name, key)
+    assert line in notes, (line, notes)
+    assert html.escape(line, quote=False) in page, line
+
+
+def _binding_not_listed(notes: list[str], page: str, name: str, key: str) -> None:
+    """D3 row 0c: a binding that is NOT current is listed nowhere."""
+    line = _binding_line(name, key)
+    assert line not in notes, (line, notes)
+    assert html.escape(line, quote=False) not in page, line
+
+
 def test_run5_a_not_computed_days_unbound_screenshot_is_listed_somewhere(world):
     """RUN-5 (`08` `:151`). On the `_Drc` double: a day whose `day` row
     carries `not_computed.pairing` (no book stated) and ONE current
     screenshot row whose key is not a trade → what `_orphans` returns and
     whether the page lists the binding anywhere. PASS (X13, D2-3: "listed
-    `orphaned`, never re-bound, never deleted"): listed somewhere."""
+    `orphaned`, never re-bound, never deleted"): listed somewhere.
+
+    D3 row 0c (`58` `## FOR DEJAN` 3, a NAMED EDIT): the listing is asserted
+    EXACTLY — the line `imports.py:818` renders, with its trade key, in
+    `imports.day_view(D).notes` and on the page — and the `current` filter:
+    a second `shot2.png` on the same trade key supersedes `shot.png`, after
+    which only `shot2.png`'s line is listed."""
     from cobalt.aset import drc_page
     from cobalt.drc import imports
 
     imports.place(D, [("t.md", E1.read_bytes()), ("s.md", STATS.read_bytes())])
     view = world.drc.event_for(D)
     assert "pairing" in view["day"]["derived"]["not_computed"]
-    world.drc.record_screenshot(D, "shot.png", PNG, "ZZZ-long-constructed")
+    world.drc.record_screenshot(D, "shot.png", PNG, KEY)
     view = world.drc.event_for(D)
     orphans = imports._orphans(view)
     page = drc_page.render(imports.day_view(D))
@@ -222,3 +254,10 @@ def test_run5_a_not_computed_days_unbound_screenshot_is_listed_somewhere(world):
         UserWarning,
     )
     assert listed
+    _binding_listed(imports.day_view(D).notes, page, "shot.png", KEY)
+
+    world.drc.record_screenshot(D, "shot2.png", PNG, KEY)  # supersedes shot.png (same key)
+    notes = imports.day_view(D).notes
+    page = drc_page.render(imports.day_view(D))
+    _binding_listed(notes, page, "shot2.png", KEY)
+    _binding_not_listed(notes, page, "shot.png", KEY)
