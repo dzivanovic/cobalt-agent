@@ -9,7 +9,7 @@ WRITES (named here, the only two): `/Users/cobalt/cobalt/docs/30 - Design/F15-PR
 
 DERIVE ROW: R109
 
-LAUNCH ROW: R__
+LAUNCH ROW: R136
 
 # DERIVE THE F15 FINAL from the DRAFT FINAL and the round-2 rulings of EVERY SEAT THAT RULED. LADDER: `S3-P3 · F15` (`SPRINT-LADDER-v0_1.md:648`; S3 stops 10-07 and is AT RISK: the FINAL is needed by about 10-01). LAW STEP (L67): proposal DONE → round 1 DONE (Grok, Gemini via hub `12`; the Anthropic seat via `13`; Astra TIMEOUT) → derive DONE (`14`: DRAFT FINAL, `folds: 31 · needs round 2: 6`) → round 2 DONE without Astra (hub `17`: Grok and Gemini; the Anthropic seat `18`; Astra METER until 2026-10-04, his R119 — L67's meter floor) on R2-1 … R2-5 and R2-A's two owner items → **THIS = the round-2 derive: it NAMES THE FINAL** (or L39 → Dejan for what did not converge) → the desk brings him the owner items and ONE approval, then drafts the P1 and P2 build prompts from the FINAL's `## CHUNKS` and `## SEAM` (P1 and P2 in parallel worktrees, L72) → ≥3 checkers → the stacked S3 + DRC + F15 deploy. L1, L3, L7, L8, L10, L28, L32, L45, L52, L57, L68 and L72 are the bar the FINAL must meet. DO NOT STOP until the report's last line is `F15 DERIVED · FINAL …` or `FAILED …`.
 
