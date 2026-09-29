@@ -673,7 +673,11 @@ def test_kind_vault_unit_reads_markers_and_never_creates(tmp_path):
         asked.append(day)
         return note
 
-    out = checks.evaluate(check, ctx(), deps(drc_note_path=path_for, read_text=lambda p: p.read_text()))
+    # DRC D3-6 re-point: the DRC note's row reads the day's DRC event first
+    # (`test_drc_build.py` holds the pending / failed outcomes); THIS test
+    # grades the note itself, so its event is `done`.
+    done = lambda statement, side: rows(["event_state", "event_error"], ["done", None])  # noqa: E731
+    out = checks.evaluate(check, ctx(), deps(drc_note_path=path_for, read_text=lambda p: p.read_text(), read_rows=done))
     assert out.verdict is Verdict.PASS and "Misses 2026-09-22" in out.raw
     assert asked == [DAY]
     assert "grep -n -F" in out.command and str(note) in out.command
@@ -681,13 +685,16 @@ def test_kind_vault_unit_reads_markers_and_never_creates(tmp_path):
 
     no_unit = body.replace("<!-- cobalt:unit miss_line -->\n", "").replace("<!-- /cobalt:unit miss_line -->\n", "")
     note.write_text(no_unit)
-    assert checks.evaluate(check, ctx(), deps(drc_note_path=path_for, read_text=lambda p: p.read_text())).verdict is Verdict.FAIL
+    assert checks.evaluate(check, ctx(), deps(drc_note_path=path_for, read_text=lambda p: p.read_text(),
+                                              read_rows=done)).verdict is Verdict.FAIL
 
     note.write_text(body.replace("<!-- /cobalt:section drc-misses -->\n", "<!-- /cobalt:section drc-misses -->\n<!-- /cobalt:section drc-misses -->\n"))
-    assert checks.evaluate(check, ctx(), deps(drc_note_path=path_for, read_text=lambda p: p.read_text())).verdict is Verdict.ERROR
+    assert checks.evaluate(check, ctx(), deps(drc_note_path=path_for, read_text=lambda p: p.read_text(),
+                                              read_rows=done)).verdict is Verdict.ERROR
 
     absent = tmp_path / "absent.md"
-    out = checks.evaluate(check, ctx(), deps(drc_note_path=lambda d: absent, read_text=lambda p: p.read_text()))
+    out = checks.evaluate(check, ctx(), deps(drc_note_path=lambda d: absent, read_text=lambda p: p.read_text(),
+                                             read_rows=done))
     assert out.verdict is Verdict.FAIL and not absent.exists()
 
 

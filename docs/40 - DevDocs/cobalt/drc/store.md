@@ -219,6 +219,18 @@ JPEG header and an empty key; `supersedes` the current screenshot row of
 the same day + key; nothing overwritten or deleted. `record_import`,
 `models.Kind` and `detect_set` are untouched.
 
+## 2026-09-29 — DRC D3: `record_build` and its read
+**`rows_for(day) -> list[dict]`** reads every `drc_rows` row of the day
+(`kind`, `ref`, `inputs`, `derived`, `fn_version`), oldest first — the
+build renders only what these hold (L57). **`record_build(day, rows) ->
+int`** is the ONE writer of the build's two kinds, `build_trade` and
+`build_day` (`0020_drc_build_kinds`): it replaces exactly those two kinds
+for the day in one transaction and touches no K kind; a row of any other
+kind is refused, nothing written. K2's `record_day` / `rebuild` delete
+EVERY kind of a day they re-pair — the build rows with them — and the DRC
+build re-builds them for each re-paired date (D3-2r). Both methods sit at
+the class's end, so no seam line above them moved.
+
 ## Tests
 `tests/cobalt/test_drc_store.py` has an offline half (the SQL, the
 registry, the placement map, the one-writer grep). Its with-DB half

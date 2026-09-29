@@ -1412,5 +1412,59 @@ class DrcStore:
             conn.close()
         return _stated(row)
 
+    # -----------------------------------------------------------------
+    # D3 — the build's derived rows (`0020_drc_build_kinds`, L57)
+    # -----------------------------------------------------------------
+
+    #: The two kinds the DRC build writes; `record_build` touches no other.
+    BUILD_KINDS = ("build_trade", "build_day")
+
+    def rows_for(self, day: date) -> list[dict[str, Any]]:
+        """Every `drc_rows` row of `day` — `kind`, `ref`, `inputs`,
+        `derived`, `fn_version` — oldest first. A READ: the DRC build
+        renders only what these hold (L57)."""
+        with self._connect() as conn:
+            return [
+                dict(zip(("kind", "ref", "inputs", "derived", "fn_version"), r))
+                for r in conn.execute(
+                    f"SELECT kind, ref, inputs, derived, fn_version FROM drc_rows "
+                    f"WHERE user_id = {_TENANT} AND day = %s ORDER BY id",
+                    (day,),
+                ).fetchall()
+            ]
+
+    def record_build(self, day: date, rows: Iterable[dict[str, Any]]) -> int:
+        """Replace `day`'s `build_trade` / `build_day` rows with `rows` (each
+        `kind`, `ref`, `inputs`, `derived`, `fn_version`) in ONE transaction.
+        No other kind is touched: K1 / K2's rows stay as recorded. A row of
+        any other kind is refused, nothing written. Returns the count.
+        (K2's `record_day` deletes EVERY kind of a day it re-pairs, these
+        two with them; D3's build re-builds them — D3-2r.)"""
+        rows = list(rows)
+        wrong = sorted({r["kind"] for r in rows} - set(self.BUILD_KINDS))
+        if wrong:
+            raise ValueError(
+                f"record_build writes only {' / '.join(self.BUILD_KINDS)}, not {', '.join(wrong)} — nothing written"
+            )
+        conn = self._connect()
+        conn.autocommit = False
+        try:
+            conn.execute(
+                f"DELETE FROM drc_rows WHERE user_id = {_TENANT} AND day = %s AND kind = ANY(%s)",
+                (day, list(self.BUILD_KINDS)),
+            )
+            with conn.cursor() as cur:
+                cur.executemany(
+                    "INSERT INTO drc_rows (day, kind, ref, inputs, derived, fn_version) VALUES (%s, %s, %s, %s, %s, %s)",
+                    [(day, r["kind"], r["ref"], Jsonb(r["inputs"]), Jsonb(r["derived"]), r["fn_version"]) for r in rows],
+                )
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return len(rows)
+
 
 __all__ = ["TABLES", "DrcStore"]

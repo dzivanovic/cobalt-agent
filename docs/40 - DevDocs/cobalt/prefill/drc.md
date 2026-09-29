@@ -58,3 +58,21 @@ note under the resolved vault root, or a raised error.
 Reads its frontmatter through the shared
 `vaultwrite.frontmatter.split_frontmatter` rather than a second copy of
 the regex.
+
+---
+
+## 2026-09-29 — DRC D3: the 15:40 prefill is retired
+Everything above describes the RETIRED 15:40 prefill (kept as history,
+D6). The DRC note is now created by ONE function, the input-driven DRC
+build (`drc/build.md`), from HIS template (`drc/template.md`); the repo
+template `configs/cobalt/templates/drc.md.j2` and
+`ops/com.cobalt.prefill-drc.plist` are deleted (v2 §8 `[F-22]`). What this
+module keeps is what the build REUSES (v2 §8 `[F-26]`), each the one copy:
+`format_risk_parameters`, `format_card_reconcile_block` (now given the
+cards with NO TRADE — the build's card match — as card dicts; one line per
+card at its ET time), `format_rules_check_block` ("cards with no trade"),
+and the placements `RISK_PLACEMENT` / `TRADES_PLACEMENT` /
+`RULES_PLACEMENT`. `run_drc_prefill`, the template render, the create
+step, `format_tickers_block`, `parse_fill_updates`,
+`find_trade_note_for_card` and `EntryRender` left with the job; their
+tests left with them (the D3 build report names each).

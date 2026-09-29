@@ -52,8 +52,9 @@ DAILY = "1 - Trading/1- Daily Notes"
 #: no unit ever writes a line either one reads.
 GRADE_RE = re.compile(r"^\s*[-*]?\s*(?:\*\*)?Grade(?:\*\*)?\s*[:|]\s*(.+)$")
 GOAL_RE = re.compile(r"^\s*[-*]?\s*(?:\*\*)?Goal(?:\*\*)?\s*[:|]\s*(.+)$")
-#: Constructed strategy titles (none is his): title -> `trade_def:` slug.
-TITLES = {"Alpha Setup": "alpha-setup", "Beta Setup": "beta-setup", "Omega Setup": "omega-setup"}
+#: Constructed strategy titles (none is his): title -> `trade_def:` slug
+#: (`example-…`, the repo's names rule, L31 / ADR-0008 D5).
+TITLES = {"Alpha Setup": "example-alpha-setup", "Beta Setup": "example-beta-setup", "Omega Setup": "example-omega-setup"}
 
 
 # ---------------------------------------------------------------------
@@ -214,12 +215,13 @@ def _deps(store: _Store, root: Path, **over):
     from cobalt.drc import build
 
     cards = over.pop("cards", [])
+    window = over.pop("window", None)
     values = dict(
         store=store,
         vault_root=root,
         cards=lambda day: list(cards),
         card_counts=lambda day: (len(cards), sum(1 for c in cards if c.get("status") == "FILLED")),
-        drc_settings=lambda: _Settings(over.get("window")),
+        drc_settings=lambda: _Settings(window),
         daily_stop=lambda: {"full": None, "half": None},
         risk_parameters=lambda cards: "no sheet-mode cards today",
         rules_block=lambda: "- [ ] constructed rule one #process",
@@ -228,7 +230,6 @@ def _deps(store: _Store, root: Path, **over):
         write_store=MemoryWriteStore(),
         now=lambda: TEN_ET,
     )
-    over.pop("window", None)
     values.update(over)
     return build.BuildDeps(**values)
 
@@ -287,8 +288,14 @@ def test_e3_every_unit_sits_under_its_heading_and_his_lines_stay_byte_identical_
     assert Path(path) == _note(root)
     first = Path(path).read_text()
     assert "{{" not in first
-    expected = SHAPE.read_text().replace("{{date:YYYY-MM-DD}}", D.isoformat())
-    assert _outside_sections(first) == expected.split("\n")
+    expected = SHAPE.read_text().replace("{{date:YYYY-MM-DD}}", D.isoformat()).split("\n")
+    outside = _outside_sections(first)
+    # His lines, byte-identical and in order; after them only the writer's
+    # own two blank lines: the separator L28's end placement puts before the
+    # appended `drc-rules` section (`writer.py:737`) and the file's final
+    # newline (`_ensure_trailing_newline`).
+    assert outside[: len(expected)] == expected
+    assert outside[len(expected):] == ["", ""]
     lines = first.split("\n")
 
     def opens(section):
@@ -682,14 +689,14 @@ def _resolved(names, root):
 
 @pytest.mark.parametrize("name", ["Alpha Setup Long", "Alpha Setup short", "Alpha Setup LONG", "Alpha Setup"])
 def test_a_name_equal_to_a_title_after_one_side_strip_is_that_setup(tmp_path, name):
-    assert _resolved([name], _vault(tmp_path)) == [f"{name} → alpha-setup"]
+    assert _resolved([name], _vault(tmp_path)) == [f"{name} → example-alpha-setup"]
 
 
 def test_the_side_is_stripped_once_and_only_as_a_whole_word(tmp_path):
     root = _vault(tmp_path)
     assert _resolved(["Alpha Setup Long Long"], root) == ["unmapped: Alpha Setup Long Long"]
-    _strategy(root, "Alpha Setup Long", "alpha-setup-long")
-    assert _resolved(["Alpha Setup Long Long"], root) == ["Alpha Setup Long Long → alpha-setup-long"]
+    _strategy(root, "Alpha Setup Long", "example-alpha-setup-long")
+    assert _resolved(["Alpha Setup Long Long"], root) == ["Alpha Setup Long Long → example-alpha-setup-long"]
     assert _resolved(["Alpha SetupLong", "Alpha Setup Longer", "Alpha Setp Long"], root) == [
         "unmapped: Alpha SetupLong", "unmapped: Alpha Setup Longer", "unmapped: Alpha Setp Long"]
 
@@ -708,7 +715,7 @@ def test_two_names_on_one_trade_render_both_in_order(tmp_path):
     root = _vault(tmp_path)
     build.run_drc_build(_record(store), deps=_deps(store, root))
     block = _unit_body(_note(root), "drc-trades", f"trade-{_trade_id('AAA', store)}")
-    assert "  - playbooks: Alpha Setup Long → alpha-setup, Beta Setup Long → beta-setup" in block
+    assert "  - playbooks: Alpha Setup Long → example-alpha-setup, Beta Setup Long → example-beta-setup" in block
     omega = _unit_body(_note(root), "drc-trades", f"trade-{_trade_id('BBB', store)}")
     summary = _unit_body(_note(root), "drc-summary", "summary")
     assert any(l.startswith("  - playbooks: ") for l in omega)
@@ -744,16 +751,16 @@ def test_a_title_added_between_two_builds_maps_on_the_second(tmp_path):
     """The titles are read AT BUILD TIME (L32 / L45): no code change."""
     root = _vault(tmp_path, titles={})
     assert _resolved(["Alpha Setup Long"], root) == ["unmapped: Alpha Setup Long"]
-    _strategy(root, "Alpha Setup", "alpha-setup")
-    assert _resolved(["Alpha Setup Long"], root) == ["Alpha Setup Long → alpha-setup"]
+    _strategy(root, "Alpha Setup", "example-alpha-setup")
+    assert _resolved(["Alpha Setup Long"], root) == ["Alpha Setup Long → example-alpha-setup"]
 
 
 def test_only_top_level_md_files_are_titles(tmp_path):
     root = _vault(tmp_path, titles={})
     nested = root / STRATEGIES / "sub"
     nested.mkdir()
-    (nested / "Alpha Setup.md").write_text("---\ntrade_def: alpha-setup\n---\n")
-    (root / STRATEGIES / "Alpha Setup.txt").write_text("---\ntrade_def: alpha-setup\n---\n")
+    (nested / "Alpha Setup.md").write_text("---\ntrade_def: example-alpha-setup\n---\n")
+    (root / STRATEGIES / "Alpha Setup.txt").write_text("---\ntrade_def: example-alpha-setup\n---\n")
     assert _resolved(["Alpha Setup"], root) == ["unmapped: Alpha Setup"]
 
 

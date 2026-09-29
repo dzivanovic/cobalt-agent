@@ -101,7 +101,8 @@ def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first
     newest four are named explicitly: P4's 0008/0009 and the archiver's
     0010/0011 both reverse before 0007."""
     newest_four = [
-        "0019_drc_events.rollback.sql",  # DRC D2 fix r1 (the name stays; the list is the newest ten)
+        "0020_drc_build_kinds.rollback.sql",  # DRC D3 (the name stays; the list is the newest ten)
+        "0019_drc_events.rollback.sql",  # DRC D2 fix r1
         "0018_drc_stated_books.rollback.sql",  # DRC K1
         "0017_voice_turns.rollback.sql",  # voice V1
         "0016_drc.rollback.sql",  # DRC D1
@@ -110,7 +111,6 @@ def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first
         "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
-        "0009_picks_missed.rollback.sql",
     ]
     reverse_names = [p.name for p in REVERSE]
     assert reverse_names[:10] == newest_four

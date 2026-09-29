@@ -495,6 +495,10 @@ class ReplayResult(BaseModel):
     formation_cut: Optional[FormationCut] = None
     line_action: Optional[str] = None
     line_diff: Optional[str] = None
+    #: DRC D3-3 (`[F-24]`): the EXACT `render_line` arguments when the DRC
+    #: note was absent (`line_action` = `pending (no DRC)`), stored with the
+    #: run in `job.result` — the DRC build's only input for that line.
+    line_inputs: Optional[dict[str, Any]] = None
     steps_done: list[str] = Field(default_factory=list)
     failed_step: Optional[str] = None
     precondition: Optional[str] = None

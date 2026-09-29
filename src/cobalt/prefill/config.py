@@ -111,6 +111,11 @@ class PrefillPathsConfig(BaseModel):
     review_dir: str = Field(min_length=1)
     drc_filename_pattern: str = Field(min_length=1)
     trade_filename_pattern: str = Field(min_length=1)
+    #: DRC D3 (`[F-20]`): HIS template, vault-relative — the one template
+    #: the DRC build reads (`cobalt.drc.template`). Optional in the schema
+    #: so a paths object built for another writer needs no DRC key; the
+    #: build refuses loudly when it is absent (never a default path, L1).
+    drc_template: Optional[str] = Field(default=None, min_length=1)
 
 
 def _load_yaml_mapping(path: Path, top_key: str) -> dict:

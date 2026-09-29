@@ -27,7 +27,7 @@ prose about the ones with a story attached, not as an inventory.
 | `com.cobalt.mainframe.plist` | `ops/start_mainframe.sh` (local LLM — the L23 local lane) | RunAtLoad only | `ops/start_mainframe.sh` | yes |
 | `com.cobalt.archiver.plist` | `/Users/cobalt/.local/bin/uv run archiver` (nightly bar archiver) | Mon-Fri 20:30 ET | — | yes (2026-09-03 — was not loaded before this) |
 | `com.cobalt.prefill-daily.plist` | `/Users/cobalt/.local/bin/uv run prefill daily` | Mon-Fri 05:15 ET | — | yes (reloaded 2026-09-03 with the absolute-path fix) |
-| `com.cobalt.prefill-drc.plist` | `/Users/cobalt/.local/bin/uv run prefill drc` | Mon-Fri 15:40 ET | — | yes (reloaded 2026-09-03 with the absolute-path fix) |
+| ~~`com.cobalt.prefill-drc.plist`~~ | RETIRED by DRC D3 (v2 §8 `[F-22]`): the DRC note is built by the input-driven build (`cobalt drc build`, the `/drc` drop) — the plist left `ops/` and `configs/cobalt/jobs.yaml`; `prefill drc` left the CLI | was Mon-Fri 15:40 ET | — | **the DRC deploy boots it out** (`launchctl bootout gui/$(id -u)/com.cobalt.prefill-drc`) and removes it from `~/Library/LaunchAgents` |
 | `com.cobalt.aset.plist` | `ops/start_aset.sh` → `uv run python -m cobalt.aset` (ASET sizing widget, :5010) | RunAtLoad + KeepAlive (persistent) | `ops/start_aset.sh` | yes |
 | `com.cobalt.herdr.plist` | `/opt/homebrew/bin/herdr server` (the terminal workspace every agent seat lives in) | RunAtLoad + KeepAlive on crash only | — | **yes (2026-09-08 19:21 — the handover)** |
 | `com.cobalt.generated.plist` | `/Users/cobalt/.local/bin/uv run cobalt generated commit` (commits the files a job rewrote today) | daily 23:37 ET | F17 wrapper | new 2026-09-09 |

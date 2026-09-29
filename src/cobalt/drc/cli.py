@@ -1,10 +1,11 @@
 """`cobalt drc` — the DRC command group (K1; D3's `cobalt drc build`
-joins THIS group later, never a second one, L3).
+joins THIS group, never a second one, L3).
 
     cobalt drc state-book --opening DAY (--flat | --position SYMBOL DIRECTION SHARES [AVG_COST] ...)
     cobalt drc state-book --no-trade DAY
     cobalt drc state-book --resolve DAY TRADE_ID [--exit-price P] [--exit-time T]
         [--supersedes ID] [--apply --sha256 HASH]
+    cobalt drc build --date DAY [--dry-run] [--no-trades]      (D3-4, `cmd_build`)
 
 The landing set's statement caller while K3's `/drc` form is not checked
 (R52 (c); v3 `[F-10]`). DRY-RUN BY DEFAULT: it prints the row it would
@@ -240,5 +241,46 @@ def add_parser(sub) -> None:
     state.add_argument("--sha256", metavar="HASH", help="The book_sha256 the dry run printed.")
     state.set_defaults(func=cmd_state_book)
 
+    build = gsub.add_parser(
+        "build",
+        help="Build DAY's DRC note from its stored rows (the page's build); --dry-run writes nothing.",
+    )
+    build.add_argument("--date", required=True, type=_day, metavar="DAY", help="The DRC's trading day.")
+    build.add_argument("--dry-run", dest="dry_run", action="store_true",
+                       help="Print the units and the build rows it would write; write nothing.")
+    build.add_argument("--no-trades", dest="no_trades", action="store_true",
+                       help="DAY's no-trade DRC through the page's one path (imports.no_trade).")
+    build.set_defaults(func=cmd_build)
 
-__all__ = ["StateBookRequest", "add_parser", "cmd_state_book", "request_from_args"]
+
+def cmd_build(args: argparse.Namespace, deps=None) -> None:
+    """`cobalt drc build` (DRC D3-4, `[F-17]` seam (6)): the SAME function
+    the page's event calls (`drc.build.run_drc_build`) over the day's
+    stored rows and its event — the CLI moves no event state (D2's). With
+    `--no-trades` it is D2's `imports.no_trade` (its refusals, its AMENDED
+    C7 rebuild, its file-less event) — one path (L3)."""
+    from . import build
+    from .imports import no_trade
+
+    if args.no_trades:
+        result = no_trade(args.date)
+        for line in (result.refused, result.message, result.status_line):
+            if line:
+                print(line)
+        if result.refused or (result.status_line and result.status_line.startswith("DRC build FAILED")):
+            raise SystemExit(1)
+        return
+    deps = deps if deps is not None else build.default_deps()
+    try:
+        event = build.event_of(args.date, deps.store)
+        if args.dry_run:
+            print(build.plan_note(args.date, deps=deps, event=event, check=True).report())
+            return
+        path = build.run_drc_build(event, deps=deps)
+    except (build.BuildError, ValueError, PairingError) as e:
+        print(f"FAILED: {type(e).__name__}: {e}")
+        raise SystemExit(1) from e
+    print(f"DRC built: {path}")
+
+
+__all__ = ["StateBookRequest", "add_parser", "cmd_build", "cmd_state_book", "request_from_args"]

@@ -8,6 +8,9 @@ prefill:
   trades_dir: "1 - Trading/2 - Trades"
   review_dir: "1 - Trading/5 - Review"
   drc_filename_pattern: "DRC-%Y-%m-%d.md"
+  # DRC D3 ([F-20], R65 d): HIS template, relative to the vault root — the
+  # one template the DRC build reads (only `{{date:YYYY-MM-DD}}` replaced).
+  drc_template: "5 - Templates/DRC.md"
   # {ticker} is filled in by trade_note.py, not strftime — the rest of
   # the pattern IS strftime (matches the vault's own Templater-authored
   # filenames exactly, e.g. "Trade-2025-09-24 12-51-52 -MU.md").

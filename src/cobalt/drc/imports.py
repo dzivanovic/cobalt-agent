@@ -570,7 +570,7 @@ def _fire(day: date, store: DrcStore, view: dict, this_drop: dict, root: Path, r
         store.mark_event(event_id, "running")
         try:
             note = _run_build(result.event)
-            if note is None or not str(note):
+            if note is None or not str(note).strip() or str(note) == ".":
                 raise _NoNotePath(NO_NOTE_PATH.format(note=note))
             store.mark_event(event_id, "done", note_path=str(note))
         except Exception as e:  # noqa: BLE001 — any exception is `failed`, never `done` (L1)
@@ -719,7 +719,7 @@ def no_trade_event(day: date, stated_book_id: int, *, now: Optional[datetime] = 
         store.mark_event(event_id, "running")
         try:
             note = _run_build(result.event)
-            if note is None or not str(note):
+            if note is None or not str(note).strip() or str(note) == ".":
                 raise _NoNotePath(NO_NOTE_PATH.format(note=note))
             store.mark_event(event_id, "done", note_path=str(note))
         except Exception as e:  # noqa: BLE001 — any exception is `failed`, never `done` (L1)

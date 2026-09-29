@@ -41,3 +41,10 @@ All three files above. `rules.yaml`'s real provenance is now the
 vault's Rules.md — see `rules_gen.py`, not this module, for how it gets
 (re)written. `strategies.yaml` is a seed list off the Individual Trade
 Template's own Strategy dropdown.
+
+## 2026-09-29 — DRC D3: `drc_template`
+`PrefillPathsConfig.drc_template` (`prefill.yaml`: `5 - Templates/DRC.md`)
+names HIS DRC template, vault-relative — the one template the DRC build
+reads (`drc/template.md`, `[F-20]`). It is Optional in the schema so a
+paths object built for another writer needs no DRC key; the build refuses
+loudly when it is absent, never a default path (L1).

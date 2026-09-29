@@ -93,3 +93,15 @@ exits 1 unless the event is `done` — with no D3 build that is `DRC build
 FAILED: build — build not built (D3)`. `via` stays `cli`. The `opening` /
 `resolve` branches, the dry run, `_rebuilds`, a zero-execution day and
 the `stated; <day> has no import yet` path are unchanged.
+
+## 2026-09-29 — DRC D3: `cobalt drc build`
+`cobalt drc build --date DAY [--dry-run] [--no-trades]` joins THIS group
+(`[F-17]` seam (6); `src/cobalt/cli.py` is not edited). `cmd_build` calls
+the SAME function the page's event calls — `drc.build.run_drc_build` over
+the day's stored rows and its event (`build.event_of`, D2's
+`imports._event`) — and moves no event state. `--dry-run` prints every
+unit and every `build_trade` / `build_day` row it would write
+(`BuildPlan.report`) and writes nothing. `--no-trades` is D2's
+`imports.no_trade` (its refusals, its AMENDED C7 rebuild, its file-less
+event). A refusal prints `FAILED: <Type>: <reason>` and exits 1. `prefill
+drc` is retired (`prefill/cli.py`): this is the ONE DRC CLI (L3).

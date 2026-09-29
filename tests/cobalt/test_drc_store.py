@@ -62,9 +62,9 @@ def _code(path: Path) -> str:
 
 def test_the_pair_exists_and_is_registered_last():
     assert SQL.exists() and ROLLBACK.exists()
-    assert FORWARD[-4] == SQL and [p.name for p in FORWARD[-3:-1]] == [
+    assert FORWARD[-5] == SQL and [p.name for p in FORWARD[-4:-2]] == [
         "0017_voice_turns.sql", "0018_drc_stated_books.sql"]
-    assert REVERSE[3] == ROLLBACK and [p.name for p in REVERSE[1:3]] == [
+    assert REVERSE[4] == ROLLBACK and [p.name for p in REVERSE[2:4]] == [
         "0018_drc_stated_books.rollback.sql", "0017_voice_turns.rollback.sql"]
 
 
@@ -140,6 +140,7 @@ def test_the_rollback_drops_exactly_the_three_tables_children_first():
 
 def test_down_to_0011_on_this_tree_selects_only_this_rollback():
     assert [p.name for p in _rollback_paths("0011")] == [
+        "0020_drc_build_kinds.rollback.sql",
         "0019_drc_events.rollback.sql",
         "0018_drc_stated_books.rollback.sql",
         "0017_voice_turns.rollback.sql",

@@ -74,6 +74,12 @@
 `0019_drc_events.rollback.sql` — drops that table (event history with it —
                          its COST line) and restores the three columns
                          and both CHECKs as 0016 declares them.
+`0020_drc_build_kinds.sql` — DRC D3: `drc_rows.kind` widened by
+                         `build_trade` / `build_day`, the DRC build's derived
+                         rows (`DrcStore.record_build`). No table. Additive.
+`0020_drc_build_kinds.rollback.sql` — deletes those two kinds' rows
+                         (derived — a re-build restores them) and restores
+                         0018's six-kind CHECK; a no-op without `drc_rows`.
 
 0012 AND 0016 ARE NOT GAPS BY ACCIDENT: 0012 belongs to the unmerged
 `bars/chunk-2-0920` (`0012_bars_partitioned_parent`) and 0016 to DRC D1
@@ -131,10 +137,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0017_voice_turns.sql",
     MIGRATIONS_DIR / "0018_drc_stated_books.sql",
     MIGRATIONS_DIR / "0019_drc_events.sql",
+    MIGRATIONS_DIR / "0020_drc_build_kinds.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0020_drc_build_kinds.rollback.sql",
     MIGRATIONS_DIR / "0019_drc_events.rollback.sql",
     MIGRATIONS_DIR / "0018_drc_stated_books.rollback.sql",
     MIGRATIONS_DIR / "0017_voice_turns.rollback.sql",

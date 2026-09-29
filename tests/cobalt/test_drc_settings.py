@@ -252,7 +252,10 @@ def _py_files(root: Path):
 _STOP_KEY_TOKENS = ("daily_stop_full", "daily_stop_half", "DAILY_STOP_KEYS", "account.daily_stop")
 #: The ONE reader's entry points, and the two modules allowed to call them.
 _READER_CALLS = ("daily_risk_values(", "load_drc_settings(")
-_READER_CALLERS = ("prefill/daily.py", "aset/web.py")
+#: DRC D3 re-point: D4's own `## FOR D3` (`drc-d4-fix-r2-build-2026-09-25.md:170`–`:171`)
+#: names D3's build as the caller of `daily_risk_values` / `load_drc_settings` — the
+#: third named caller; it still reads no key token and no `sheet_modes` (rules (a), (c)).
+_READER_CALLERS = ("prefill/daily.py", "aset/web.py", "drc/build.py")
 
 
 def _second_readers(root: Path) -> list[str]:

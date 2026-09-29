@@ -17,6 +17,7 @@ from __future__ import annotations
 import psycopg
 
 from cobalt.db_migrations import FORWARD
+from cobalt.drc.store import DrcStore
 
 from test_drc_k1_store import _raises
 from test_drc_store import D, migrated, requires_db  # noqa: F401 — fixtures are used by name
@@ -27,14 +28,60 @@ INSERT = (
 )
 
 
-@requires_db
-def test_xk_drc_rows_refuses_a_build_kind_before_0020(migrated):
-    """X-K at E1: FORWARD ends at `0019`; the CHECK is `0018`'s six kinds,
-    so a `build_day` row is refused by `drc_rows_kind_check`."""
-    assert FORWARD[-1].name == "0019_drc_events.sql"
-    ((definition,),) = migrated.execute(
+def _kind_check(conn) -> str:
+    ((definition,),) = conn.execute(
         "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
         "WHERE conrelid = '\"user\".drc_rows'::regclass AND conname = 'drc_rows_kind_check'"
     ).fetchall()
-    assert "build_day" not in definition
+    return definition
+
+
+@requires_db
+def test_xk_drc_rows_refuses_a_build_kind_before_0020(migrated):
+    """X-K at E1 — REVERSED at E4 (a NAMED REVERSAL, `## E4` D3-M): at E1
+    FORWARD ended at `0019` and the insert was REFUSED by
+    `drc_rows_kind_check` (`0018`'s six kinds) — the experiment's recorded
+    result. With `0020` applied (FORWARD's last) the SAME insert PASSES;
+    rolled back to `0019` (`0020`'s rollback) it is refused again."""
+    from cobalt.db_migrations import MIGRATIONS_DIR
+    from cobalt.db_migrations.cli import _apply
+
+    assert FORWARD[-1].name == "0020_drc_build_kinds.sql"
+    assert "build_day" in _kind_check(migrated) and "build_trade" in _kind_check(migrated)
+    with DrcStore()._connect() as conn:
+        conn.execute(INSERT, (D,))
+    _apply(migrated, [MIGRATIONS_DIR / "0020_drc_build_kinds.rollback.sql"])
+    assert "build_day" not in _kind_check(migrated)
+    assert migrated.execute("""SELECT count(*) FROM "user".drc_rows WHERE kind = 'build_day'""").fetchone()[0] == 0
     _raises(psycopg.errors.CheckViolation, INSERT, (D,))
+    _apply(migrated, [MIGRATIONS_DIR / "0020_drc_build_kinds.rollback.sql"])  # repeated: a no-op
+    _apply(migrated, [MIGRATIONS_DIR / "0020_drc_build_kinds.sql", MIGRATIONS_DIR / "0020_drc_build_kinds.sql"])
+    assert "build_day" in _kind_check(migrated)
+
+
+@requires_db
+def test_the_0020_rollback_is_a_no_op_when_drc_rows_is_absent(migrated):
+    """The rollback contract (`0014`–`0019`): its objects absent → nothing."""
+    from cobalt.db_migrations import MIGRATIONS_DIR
+    from cobalt.db_migrations.cli import _apply, _rollback_paths
+
+    _apply(migrated, _rollback_paths("0015"))  # 0020 → 0016 in order: drc_rows gone
+    assert migrated.execute("""SELECT to_regclass('"user".drc_rows')""").fetchone()[0] is None
+    _apply(migrated, [MIGRATIONS_DIR / "0020_drc_build_kinds.rollback.sql"])
+    _apply(migrated, FORWARD)
+    assert "build_trade" in _kind_check(migrated)
+
+
+def test_0020_is_registered_last_and_its_rollback_first():
+    from cobalt.db_migrations import MIGRATIONS_DIR, REVERSE
+    from cobalt.db_migrations.cli import _rollback_paths
+
+    assert FORWARD[-1] == MIGRATIONS_DIR / "0020_drc_build_kinds.sql"
+    assert FORWARD[-2].name == "0019_drc_events.sql"
+    assert REVERSE[0] == MIGRATIONS_DIR / "0020_drc_build_kinds.rollback.sql"
+    assert REVERSE[1].name == "0019_drc_events.rollback.sql"
+    assert [p.name for p in _rollback_paths("0019")] == ["0020_drc_build_kinds.rollback.sql"]
+    code = "\n".join(l for l in FORWARD[-1].read_text().splitlines() if not l.strip().startswith("--"))
+    assert "CREATE TABLE" not in code and "'build_trade', 'build_day'" in code
+    back = REVERSE[0].read_text()
+    assert "-- COST:" in back and "to_regclass('\"user\".drc_rows')" in back

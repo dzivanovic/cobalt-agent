@@ -122,7 +122,7 @@ def _launchctl_loaded(label: str) -> bool:
 
 def _drc_note_path(day: date) -> Path:
     """`prefill.yaml` review_dir + drc_filename_pattern in the resolved
-    vault — the same two values prefill-drc and the replay miss line use."""
+    vault — the same two values the DRC build and the replay miss line use."""
     from cobalt.prefill.config import load_prefill_paths
     from cobalt.vault import resolve_vault_path
 
@@ -569,8 +569,45 @@ def _log_grep(check: LogGrepCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckO
     return _out(check, Verdict.FAIL, detail, command, raw)
 
 
+#: DRC D3-6 (`[F-25]`, R103 O18): the day's DRC event — the event of its
+#: CURRENT trading-log import, else of its current `no_trade` statement
+#: (`DrcStore.event_for`'s rule) — read-only, USER side. No row = no event.
+DRC_EVENT_SQL = (
+    "SELECT e.state AS event_state, e.error AS event_error FROM drc_events e "
+    "WHERE e.day = {day} AND ("
+    "e.import_id = (SELECT max(i.id) FROM drc_imports i WHERE i.import_date = {day} "
+    "AND i.kind = 'trading_log' AND i.id NOT IN "
+    "(SELECT supersedes FROM drc_imports WHERE supersedes IS NOT NULL)) "
+    "OR (NOT EXISTS (SELECT 1 FROM drc_imports i WHERE i.import_date = {day} AND i.kind = 'trading_log' "
+    "AND i.id NOT IN (SELECT supersedes FROM drc_imports WHERE supersedes IS NOT NULL)) "
+    "AND e.stated_book_id = (SELECT max(s.id) FROM drc_stated_books s WHERE s.day = {day} "
+    "AND s.kind = 'no_trade' AND s.id NOT IN "
+    "(SELECT supersedes FROM drc_stated_books WHERE supersedes IS NOT NULL))))"
+)
+
+
+def _drc_event(day: date, deps: SmokeDeps) -> tuple[Optional[dict[str, Any]], str]:
+    statement = DRC_EVENT_SQL.format(day=sql_literal(day))
+    result = deps.read_rows(statement, "user")
+    return _one_row(result), _raw_rows(result)
+
+
 def _vault_unit(check: VaultUnitCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
+    """A marked unit in a vault note. For the DRC note (D3-6): the day's DRC
+    event decides first — none → KNOWN `pending` (no DRC is his lawful
+    choice, R66); `failed`, or a build left `pending` / `running` → FAIL;
+    `done` → the note and the unit's markers must both be there. Nothing
+    requires the note at 15:41 (R103 O18)."""
     day = getattr(ctx, check.day)
+    if check.note == "drc":
+        event, event_raw = _drc_event(day, deps)
+        event_command = hand_command(DRC_EVENT_SQL.format(day=sql_literal(day)), side="user", prod=ctx.prod)
+        if event is None:
+            return _out(check, Verdict.KNOWN, f"pending — no DRC event for {day:%Y-%m-%d}",
+                        event_command, event_raw)
+        if event["event_state"] != "done":
+            why = f" — {event['event_error']}" if event.get("event_error") else ""
+            return _out(check, Verdict.FAIL, f"DRC event {event['event_state']}{why}", event_command, event_raw)
     path = deps.drc_note_path(day)
     command = command_for(check, ctx, note_path=path)
     if not Path(path).is_file():

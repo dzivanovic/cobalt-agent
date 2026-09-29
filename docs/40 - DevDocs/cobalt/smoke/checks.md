@@ -88,4 +88,5 @@ The compare line is the one entry that is not a command, because that row runs n
   - Absent note is FAIL, and nothing is created.
   - A `MarkerError` is ERROR; a missing section or unit is FAIL.
   - `raw` is the section text.
+  - **The DRC note (`note: drc`, DRC D3-6, 2026-09-29, `[F-25]` / R103 O18).** The day's DRC event decides first, read-only on the USER side (`DRC_EVENT_SQL`: the event of the day's CURRENT trading-log import, else of its current `no_trade` statement — `DrcStore.event_for`'s rule). No event → KNOWN `pending — no DRC event for <day>` (no DRC is his lawful choice, R66). `failed`, or a build left `pending` / `running` → FAIL naming the state and its error. `done` → the note and the unit's markers as above. Nothing requires the note at 15:41. No new check kind: the conditional lives in this evaluator. K10.2 (a `sql` row in `s2.yaml`) carries the same event read with `known_if: event_state is_null`.
 - **cli:** the exit code against `exit_code`; `raw` is the last 40 output lines.

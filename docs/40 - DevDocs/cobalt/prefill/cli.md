@@ -25,3 +25,10 @@ lines for `daily`), or a `FAILED:` stderr line + exit code 1.
 ## Config it reads
 None directly — delegates entirely to `daily.run_daily_prefill` /
 `drc.run_drc_prefill`.
+
+## 2026-09-29 — DRC D3: `prefill drc` retired
+The `drc` subcommand, `_run_drc` and `DRC_JOB` (`com.cobalt.prefill-drc`)
+are removed (F39; v2 §8 `[F-22]`): the DRC is built by `cobalt drc build`
+(K1's `drc` group) and the `/drc` drop's event. `uv run prefill drc` now
+exits 2, `invalid choice: 'drc'`. The `prefill` script entry in
+`pyproject.toml` stays — it runs `prefill daily`.

@@ -226,3 +226,18 @@ three columns and both CHECKs as `0016` declares them, and is a no-op
 when its objects are absent (`IF EXISTS`; the `to_regclass` guard). The
 number is the desk's (R64 (5)); D3's `drc_build_kinds` is `0020`.
 `FORWARD` ends `…, 18, 19`; `0019`'s rollback is `REVERSE[0]`.
+
+## 2026-09-29 — DRC D3: `0020_drc_build_kinds`
+
+`0020` creates no table: it widens `drc_rows.kind`'s CHECK
+(`drc_rows_kind_check`, the name `0018` proved) with the DRC build's two
+kinds, `build_trade` and `build_day` (`DrcStore.record_build`, L57). X-K
+proved `0018`'s CHECK refuses them. Its rollback states its COST (the
+derived build rows — a re-build restores them), deletes those two kinds'
+rows, restores `0018`'s six-kind CHECK, and is a no-op when
+`"user".drc_rows` is absent (the `to_regclass` guard, `0018`'s shape).
+A new file, never a fold into `0016` / `0018` (v3 `[F-02]`). `FORWARD`
+ends `…, 18, 19, 20`; `0020`'s rollback is `REVERSE[0]`. `placement.py`
+names it in its comment block (no new table, no placement row). Applied
+only by `cobalt db migrate` at the DRC deploy; every test applies it only
+inside the suite's rolled-back transaction (L76).

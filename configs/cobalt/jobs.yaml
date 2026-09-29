@@ -73,6 +73,11 @@ jobs:
       # (com.cobalt.backup, ops/run_backup.sh:39; status/restore are operator commands) and by heartbeat/probes.py:431
       # (backup_freshness, from runner.py:144 — com.cobalt.heartbeat). One-shots derive nothing. Added there 2026-09-22.
       - "configs/cobalt/backup.yaml"
+      # DRC D3 ([F-28], F41): the DRC build runs IN THIS PROCESS (the /drc drop's request calls
+      # cobalt.drc.build.run_drc_build) and its rules unit calls regenerate_rules_config()
+      # (prefill/rules_gen.py), which writes this generated file. Moved from no_resident_reads (the schema
+      # refuses a path in both); its one-shot reader, provenance kept: prefill/daily.py (com.cobalt.prefill-daily).
+      - "configs/cobalt/rules.yaml"
       # voice V1's six paths, classified at the stack seam build 2026-09-25 (L42). The sheet serves voice
       # (aset/web.py:90 include_router(voice_web.router)), so this process runs voice's loaders.
       - "configs/cobalt/voice.yaml"                # voice/config.py:32 CONFIG_PATH + :120 (load_voice_config); cached per process in voice/web.py:59 _CONFIG, so a change reaches the sheet only by restart
@@ -196,13 +201,6 @@ jobs:
     schedule: {at: "05:15", weekdays: [1, 2, 3, 4, 5]}
     what: "the morning daily-note prefill (uv run prefill daily)"
 
-  - label: com.cobalt.prefill-drc
-    kind: one-shot
-    supervisor: self
-    timeout_s: 600
-    schedule: {at: "15:40", weekdays: [1, 2, 3, 4, 5]}
-    what: "the evening DRC prefill (uv run prefill drc)"
-
   - label: com.cobalt.archiver
     kind: one-shot
     supervisor: self
@@ -324,14 +322,9 @@ no_resident_reads:
       (send_dm, reached from heartbeat/runner.py:304 — the one-shot
       heartbeat) and by `cobalt validate` (cli.py:261, an operator
       command, not a job). No resident sends a DM. Ruled 2026-09-15.
-  - path: configs/cobalt/rules.yaml
-    readers: [com.cobalt.prefill-daily, com.cobalt.prefill-drc]
-    because: >
-      GENERATED from the vault's Rules.md and re-read on every prefill run:
-      prefill/daily.py:465 and prefill/drc.py:381 call
-      regenerate_rules_config() (prefill/rules_gen.py). load_rules_config()
-      (prefill/config.py:125) has no caller; no resident imports either
-      path. Added 2026-09-16 (the nightly generated commit escalated it).
+  # configs/cobalt/rules.yaml LEFT this list in DRC D3 ([F-28]): the DRC build
+  # calls regenerate_rules_config() inside com.cobalt.aset — it is now in that
+  # job's `reads:` (the 15:40 prefill-drc reader is retired).
 
 # THE KILL PHRASE (F17d). Config, not a literal: `cobalt stop` and any
 # future DM listener compare against this exact string.
