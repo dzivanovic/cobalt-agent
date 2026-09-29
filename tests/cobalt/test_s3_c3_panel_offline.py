@@ -388,6 +388,14 @@ def _view(rows, reader):
     )
 
 
+def _filled_only(card_id: int):
+    """A reader that fails the test (BaseException — never caught as a
+    position error) on any read but the fixture's FILLED card, id 4."""
+    if card_id != 4:
+        pytest.fail(f"a position read for card {card_id}, which is not FILLED / CLOSED")
+    return _position()
+
+
 def _card_html(rendered: str, card_id: int) -> str:
     start = rendered.index(f'<article class="ladder-item')
     for match in re.finditer(r'<article class="ladder-item[^"]*" data-card-id="(\d+)"', rendered):
@@ -402,23 +410,34 @@ def _hidden(fragment: str, name: str) -> list[str]:
     return re.findall(rf'<input type="hidden" name="{name}" value="([^"]*)"', fragment)
 
 
+def _taps(fragment: str, card_id: int, path: str) -> list[str]:
+    """The bodies of the tap blocks posting to `/radar/card/{card_id}{path}`
+    — `<div data-card-tap>` on the panel, `<form>` on the sheet."""
+    return [body for _tag, body in re.findall(
+        rf'<(div|form) class="s3-form[^"]*" data-card-id="{card_id}" data-path="{re.escape(path)}"[^>]*>(.*?)</\1>',
+        fragment, re.S,
+    )]
+
+
 def test_a_triggered_card_shows_last_entry_stop_and_a_filled_form_prefilled_from_last(evaluated):
-    view = _view(evaluated["rows"], reader=lambda card: pytest.fail("no position read for TRIGGERED"))
+    view = _view(evaluated["rows"], reader=_filled_only)
     card = next(c for c in view.active if c.state is CardState.TRIGGERED)
     fragment = _card_html(panel.render_ladder(view), card.id)
     assert "last 5.48" in fragment and f"entry {card.trigger}" in fragment and f"stop {card.stop}" in fragment
     assert "bar time not stored" in fragment
-    assert re.search(r'action="/radar/card/3/fill"', fragment)
-    assert re.search(r'<input[^>]*name="price"[^>]*value="5.48"', fragment)
-    assert _hidden(fragment, "prefill") == ["5.48"]
-    assert re.search(rf'<input[^>]*name="shares"[^>]*value="{card.shares}"', fragment)
-    assert 'action="/radar/card/3/pass"' in fragment
+    (fill,) = _taps(fragment, 3, "/fill")
+    assert re.search(r'<input[^>]*name="price"[^>]*value="5.48"', fill)
+    assert _hidden(fill, "prefill") == ["5.48"]
+    assert re.search(rf'<input[^>]*name="shares"[^>]*value="{card.shares}"', fill)
+    assert "FILLED @" in fill
+    assert len(_taps(fragment, 3, "/pass")) == 1
+    assert "<form" not in fragment, "the panel posts by fetch only (focus law)"
 
 
 def test_a_triggered_card_with_no_last_price_leaves_the_price_empty_never_the_entry(evaluated):
     rows = copy.deepcopy(evaluated["rows"])
     next(r for r in rows if r["state"] == "TRIGGERED")["last_price"] = None
-    view = _view(rows, reader=lambda card: pytest.fail("no position read"))
+    view = _view(rows, reader=_filled_only)
     card = next(c for c in view.active if c.state is CardState.TRIGGERED)
     fragment = _card_html(panel.render_ladder(view), card.id)
     assert re.search(r'<input[^>]*name="price"[^>]*value=""', fragment)
@@ -427,9 +446,9 @@ def test_a_triggered_card_with_no_last_price_leaves_the_price_empty_never_the_en
 
 
 def test_an_armed_card_offers_the_triggered_tap(evaluated):
-    view = _view(evaluated["rows"], reader=lambda card: pytest.fail("no position read"))
+    view = _view(evaluated["rows"], reader=_filled_only)
     card = next(c for c in view.active if c.state is CardState.ARMED)
-    assert f'action="/radar/card/{card.id}/triggered"' in _card_html(panel.render_ladder(view), card.id)
+    assert len(_taps(_card_html(panel.render_ladder(view), card.id), card.id, "/triggered")) == 1
 
 
 def test_in_trade_render_carries_every_control_and_the_running_it_posts(evaluated):
@@ -439,30 +458,32 @@ def test_in_trade_render_carries_every_control_and_the_running_it_posts(evaluate
     card = next(c for c in view.active if c.state is CardState.FILLED)
     fragment = _card_html(panel.render_ladder(view), card.id)
     assert "running 50 sh" in fragment
+    exits = {(_hidden(body, "preset") or [None])[0]: body for body in _taps(fragment, card.id, "/exit")}
+    assert set(exits) == {"half", "third", "flat", "typed"}
     for preset, label in (("half", "½"), ("third", "⅓"), ("flat", "flat"), ("typed", "typed")):
-        form = re.search(rf'<form[^>]*action="/radar/card/{card.id}/exit"[^>]*>(?:(?!</form>).)*'
-                         rf'name="preset" value="{preset}"(?:(?!</form>).)*</form>', fragment, re.S)
-        assert form, preset
-        assert _hidden(form.group(0), "running_before") == ["50"], preset
-        assert label in form.group(0)
-    flat = re.search(r'<form(?:(?!</form>).)*value="flat"(?:(?!</form>).)*</form>', fragment, re.S).group(0)
-    assert 'name="confirm" value="1"' in flat and "✓" in flat
-    assert re.search(r'<input[^>]*name="price"[^>]*value="5.48"', flat), "flat's price is prefilled, editable"
-    assert f'action="/radar/card/{card.id}/held"' in fragment and "HOLDING" in fragment
+        assert _hidden(exits[preset], "running_before") == ["50"], preset
+        assert label in exits[preset]
+    assert 'name="confirm" value="1"' in exits["flat"] and "✓" in exits["flat"]
+    assert re.search(r'<input[^>]*name="price"[^>]*value="5.48"', exits["flat"]), "flat's price: prefilled, editable"
+    assert 'name="shares"' in exits["typed"]
+    (held,) = _taps(fragment, card.id, "/held")
+    assert "HOLDING" in held and 'name="held"' in held
     # both legs listed; the estimated one carries a correct control, naming its leg
     assert "5.4800" in fragment and "5.40" in fragment and "estimated" in fragment
-    corrections = re.findall(r'<form[^>]*action="/radar/card/\d+/correct"(?:(?!</form>).)*</form>', fragment, re.S)
+    corrections = _taps(fragment, card.id, "/correct")
     assert [_hidden(f, "leg_id") for f in corrections] == [["301"], ["302"]]
     assert "realized R 0.2500" in fragment and "provisional" in fragment
     assert "drift 27.00% vs P 20%" in fragment
     # the stop: his, YOURS, the delta; Cobalt's beside it; ↺ with its value; the per-leg gap
     assert '<span class="yours">YOURS</span>' in fragment
     assert f"Cobalt stop {card.structural_stop}" in fragment
-    assert f"↺ {card.structural_stop}" in fragment and f'action="/radar/card/{card.id}/stop/reset"' in fragment
+    (reset,) = _taps(fragment, card.id, "/stop/reset")
+    assert f"↺ {card.structural_stop}" in reset
     assert f"Δ {card.stop - card.structural_stop}" in fragment
     for in_force in (Decimal("5.8100"), Decimal("5.7000")):  # stop_in_force − structural_stop, per leg
         assert f"gap {in_force - card.structural_stop}" in fragment
-    assert f'action="/radar/card/{card.id}/stop"' in fragment
+    assert len(_taps(fragment, card.id, "/stop")) == 1
+    assert "<form" not in fragment and 'method="post"' not in fragment
 
 
 def test_in_trade_render_names_a_pre_c1_basis_and_the_missing_p(evaluated):
@@ -493,8 +514,11 @@ def test_the_notes_line_keeps_its_text(evaluated):
     assert "no notes source wired to radar cards (S3)" in panel.render_ladder(view)
 
 
-def test_the_panel_script_posts_every_card_form(evaluated):
-    assert "data-card-form" in panel.PANEL_JS and "new FormData" in panel.PANEL_JS
+def test_the_panel_script_posts_every_card_tap(evaluated):
+    js = panel.PANEL_JS
+    assert "closest('[data-card-tap]')" in js and "querySelectorAll('input[name]')" in js
+    assert "field.type==='checkbox'&&!field.checked" in js  # an unticked ✓ posts no confirm
+    assert "post(block.dataset.cardId,block.dataset.path,body)" in js
 
 
 # ---------------------------------------------------------------------
@@ -507,7 +531,8 @@ def test_the_sheet_renders_a_manual_cards_in_trade_controls_with_the_same_routes
         9, _position(owner="yours"), direction="long", stop=Decimal("9.90"), structural_stop=None,
         last=None, source="sheet",
     )
-    assert 'action="/radar/card/9/exit"' in fragment and 'action="/radar/card/9/held"' in fragment
+    assert 'method="post" action="/radar/card/9/exit"' in fragment and 'action="/radar/card/9/held"' in fragment
+    assert len(_taps(fragment, 9, "/exit")) == 4 and 'type="submit"' in fragment
     assert _hidden(fragment, "source").count("sheet") == len(_hidden(fragment, "source")) > 0
     assert "↺" not in fragment and "/stop/reset" not in fragment
     assert "Cobalt stop NULL — no Cobalt stop" in fragment

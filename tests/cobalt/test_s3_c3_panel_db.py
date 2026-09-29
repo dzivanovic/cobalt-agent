@@ -112,8 +112,15 @@ def _fragment(rendered: str, card_id: int) -> str:
 
 
 def _form(fragment: str, path: str, **match) -> dict:
-    """The fields a submit of one rendered form posts (checkboxes left out)."""
-    for form in re.findall(rf'<form[^>]*action="{re.escape(path)}"[^>]*>(.*?)</form>', fragment, re.S):
+    """The fields one rendered tap posts to `path` (`/radar/card/<id>/<tap>`)
+    — the panel's `<div data-card-tap>` (posted by the panel script) or the
+    sheet's `<form>`; an unticked checkbox posts nothing, as in both."""
+    card_id, tail = re.fullmatch(r"/radar/card/(\d+)(/.+)", path).groups()
+    blocks = re.findall(
+        rf'<(div|form) class="s3-form[^"]*" data-card-id="{card_id}" data-path="{re.escape(tail)}"[^>]*>(.*?)</\1>',
+        fragment, re.S,
+    )
+    for _tag, form in blocks:
         fields = {}
         for tag in re.findall(r"<input[^>]*>", form):
             if 'type="checkbox"' in tag:
@@ -293,7 +300,9 @@ def test_a_correction_of_an_estimated_leg_is_confirmed(panel_world):
 def test_a_stop_edit_shows_yours_and_the_delta_and_the_reset_gives_it_back(panel_world):
     card_id = _filled(panel_world, shares=100)
     client = panel_world["client"]
-    structural = panel_world["cards"].radar_card(card_id)["stop"]
+    with panel_world["aset"]._connect() as conn:
+        (structural,) = conn.execute("SELECT structural_stop FROM aset_sizings WHERE id = %s", (card_id,)).fetchone()
+    assert structural is not None
     assert client.post(f"/radar/card/{card_id}/stop", data={"to_stop": "5.7000"}).status_code == 200
     assert panel_world["cards"].stop_owner(card_id) == "yours"
     fragment = _fragment(_render(panel_world), card_id)
@@ -330,8 +339,11 @@ def test_a_manual_card_gets_its_in_trade_controls_on_the_sheet_and_no_reset(pane
     fragment = sheet[start:] if end < 0 else sheet[start:end]
     fields = _form(fragment, f"/radar/card/{card_id}/exit", preset="half")
     assert fields["source"] == "sheet" and fields["running_before"] == "100"
-    assert "↺" not in fragment and "/stop/reset" not in fragment
-    assert "Cobalt stop NULL — no Cobalt stop" in fragment
+    # the sheet's own wording ("↺ reset = re-enter the card stop", v3 §5) stays on
+    # its row; the IN-TRADE block renders no ↺ control and nothing posts a reset
+    in_trade = fragment[fragment.index('<div class="in-trade"'):]
+    assert "↺" not in in_trade and "/stop/reset" not in fragment
+    assert "Cobalt stop NULL — no Cobalt stop" in in_trade
     refused = panel_world["client"].post(f"/radar/card/{card_id}/stop/reset", data={"source": "sheet"})
     assert refused.status_code == 409
     assert "this card has none (a manual card) — no Cobalt stop to reset to" in html_lib.unescape(refused.text)

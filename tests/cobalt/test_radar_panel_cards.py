@@ -173,10 +173,24 @@ def _tunables():
     return lambda: SimpleNamespace(by_key=rows)
 
 
+#: S3 C3: the FILLED card's position, constructed (L32) — the IN-TRADE block
+#: reads it through `position_reader`, so the ladder (and its pin) never
+#: depends on what a database holds.
+POSITION = panel.InTradeView(
+    running=100, basis="legs", realized_value=None, realized_provisional=True,
+    realized_reason="not computed — zero risk unit", stop_owner="cobalt",
+    distance_change_pct=None, drift_warning_pct=None, drift_warned=None,
+    legs=[panel.LegView(id=1, seq=0, kind="entry", shares=100, price=Decimal("5.48"), flag="estimated",
+                        price_source="last_poll", at=SCAN0, stop_in_force=Decimal("5.81"), preset=None,
+                        held_stated=None)],
+)
+
+
 def _ladder(rows, *, rung="reduced", now=SCAN0 + timedelta(seconds=200)):
     return panel.build_ladder_view(
         card_store=RowStore(rows), settings_store=Settings(SETTINGS_ROWS), clock=session_clock(), now=now,
         tunables_loader=_tunables(), rung_source=lambda instant, cfg: rung,
+        position_reader=lambda card_id: POSITION,
     )
 
 
@@ -339,7 +353,9 @@ def test_ladder_renders_every_real_shape_card_state(evaluated):
     rendered = panel.render_ladder(_ladder(evaluated["rows"]))
     for label in ("WATCH", "ARMED · LOCKED", "TRIGGERED", "IN-TRADE", "PASSED", "EXPIRED"):
         assert label in rendered
-    assert "FILLED" not in rendered.replace('data-state="FILLED"', "")
+    # The STATE reads IN-TRADE, never FILLED; the one "FILLED" is the TRIGGERED
+    # card's tap label, the design's words (S3 C3, v3 §2 "FILLED @ [price] [shares]").
+    assert "FILLED" not in rendered.replace('data-state="FILLED"', "").replace(">FILLED @</button>", "")
 
 
 def test_first_two_open_detail_order_and_terminal_below_active(evaluated):
@@ -374,8 +390,9 @@ def test_card_panel_escapes_why_and_notices(evaluated):
 
 # GOLDEN PINS captured on main's code (`5b208a0`), GREEN there — from then on a GUARD.
 # LADDER pin re-captured 2026-09-23 on setups/seven-0921 (b007ce2e): the setups ladder change adds the assumed_formation dot (R2-2 = B); healthy bars still add nothing (seam-fix-build-2026-09-23.md D3).
+# LADDER pin re-captured 2026-09-28 on s3/exits-c3 (was 0ac9b5d0…): C3 adds the TRIGGERED tap (ARMED), the FILLED @ / PASS taps (TRIGGERED) and the IN-TRADE block over the constructed POSITION; healthy bars still add nothing (s3-exits-c3-build-2026-09-28.md E3).
 PIN_HEALTHY_POOL_SHA256 = "f2e79add6bc4d4286b381154b071b04ec9e7887467ffd15b0f499e9d62181552"
-PIN_HEALTHY_LADDER_SHA256 = "0ac9b5d038cf1d598d79867d316fe7976cdec1c8f9df77ecee37753f3d1be051"
+PIN_HEALTHY_LADDER_SHA256 = "b018e70e9e221ce2ada3bc608103a9e8de3013f101e86c90d49010f79f4d9183"
 PIN_HEALTHY_API_SHA256 = "450b3415c2346c8b13b53932c5175f56ee6af78877ca9fc8086ca824601c5462"
 
 # Tonight's `mirrorDegraded` line, byte for byte as main has it (`radar_panel.py:1127`).
@@ -671,6 +688,10 @@ POST_ALLOWLIST = {
     "/radar/card/{card_id}/promote", "/radar/card/{card_id}/release",
     # voice V1 (FINAL §9): the widget's turn and its Confirm / Cancel taps
     "/voice/turn", "/voice/confirm", "/voice/cancel",
+    # S3 exits C3 (v3 §2 / §3 / §5): the trade taps, one block after /release
+    "/radar/card/{card_id}/triggered", "/radar/card/{card_id}/fill", "/radar/card/{card_id}/pass",
+    "/radar/card/{card_id}/exit", "/radar/card/{card_id}/held", "/radar/card/{card_id}/correct",
+    "/radar/card/{card_id}/stop", "/radar/card/{card_id}/stop/reset",
 }
 GET_ONLY = {"/", "/radar", "/api/radar/pool", "/api/health", "/api/prefill"}
 

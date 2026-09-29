@@ -745,7 +745,8 @@ def _open_cards_section() -> str:
         return ('<div class="card"><label>Open cards (F7)</label>'
                 '<div class="muted">No card is in a live state. Terminal cards '
                 '(CLOSED / PASSED / EXPIRED / MISSED) are not listed.</div></div>')
-    rows = "".join(_card_controls(c) for c in cards)
+    # S3 C3-4: a FILLED manual card's IN-TRADE controls follow its row.
+    rows = "".join(_card_controls(c) + _sheet_in_trade(c) for c in cards)
     return (f'<div class="card"><label>Open cards (F7) — every button writes a '
             f'transition</label><div class="cards">{rows}</div></div>')
 
@@ -1432,3 +1433,293 @@ async def radar_card_promote(card_id: int):
 @app.post("/radar/card/{card_id}/release")
 async def radar_card_release(card_id: int):
     return await _promote(card_id, False)
+
+
+# ---------------------------------------------------------------------
+# S3 exits C3 — the trade taps (v3 §2 / §3 / §5; R67, R38). One block,
+# directly after `/release` (S-WEB). A route owns no side effect (L40): it
+# parses the form and calls C1 / C2's writers — `AsetStore.mark_filled`
+# (THE fill), `cards.legs.record_exit` / `record_held` / `record_correction`,
+# `CardStore.transition`, the one card-stop function and
+# `CardStore.record_stop_edit` — and the stores' reads, nothing else. Every
+# refusal those writers raise reaches the page VERBATIM with a 4xx: JSON
+# `{"status": "REFUSED", "reason": …}` for the panel's fetch, the sheet's
+# page with the FAILED banner for `source=sheet` (C3-4). The session gate
+# runs first, exactly as the other radar tap routes run it.
+# ---------------------------------------------------------------------
+
+#: Where he tapped — the panel, or the sheet's open-cards list (C3-4).
+S3_TAP_SOURCES = ("panel", "sheet")
+
+
+class _TapInputRefused(ValueError):
+    """A posted field the writers cannot be called with. Nothing written."""
+
+
+def _tap_price(raw: str | None, *, what: str) -> Decimal | None:
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        return Decimal(raw)
+    except InvalidOperation as e:
+        raise _TapInputRefused(f"REFUSED: {what} {raw!r} is not a price. Nothing written.") from e
+
+
+def _tap_int(raw: str | None, *, what: str) -> int | None:
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError as e:
+        raise _TapInputRefused(f"REFUSED: {what} {raw!r} is not a whole number. Nothing written.") from e
+
+
+def _tap_price_source(price: Decimal | None, prefill: str) -> tuple[str, str]:
+    """(price_source, flag): the untouched prefill is the poll's price,
+    `estimated` (v3 §3 — a tap with no keystroke); a price he typed or
+    edited is his, `confirmed`."""
+    if price is not None and prefill.strip() and price == Decimal(prefill.strip()):
+        return "last_poll", "estimated"
+    return "typed", "confirmed"
+
+
+def _tap_board_row(store, card_id: int) -> dict | None:
+    """The card's `radar_cards_v` row (its `last_price`, `structural_stop`),
+    or None for a card that is not a radar card. A read."""
+    return next((r for r in store.radar_board_cards(_today_et()) if r["card_id"] == card_id), None)
+
+
+def _tap_reply(source: str, status: int, *, reason: str | None = None, payload: dict | None = None,
+               banner: str = ""):
+    if source == "sheet":
+        if reason is not None:
+            logger.error("card tap REFUSED ({}): {}", status, reason)
+            return HTMLResponse(_render(banner=_failed(reason)), status_code=status)
+        return HTMLResponse(_render(banner=f'<div class="saved">{html.escape(banner)}</div>'))
+    if reason is not None:
+        return _refused(status, reason)
+    return {"status": "ok", **(payload or {})}
+
+
+async def _card_tap(card_id: int, request: Request, gate: str, work):
+    """Run one tap: the dev-entry guard and the session gate FIRST, then
+    `work(form, source) -> (payload, banner)`; every refusal verbatim."""
+    form = await _radar_form(request)
+    source = form.get("source", "").strip() or "panel"
+    if source not in S3_TAP_SOURCES:
+        return _refused(422, f"REFUSED: source {source!r} is not one of {S3_TAP_SOURCES}. Nothing written.")
+    try:
+        _check_entry_allowed()
+        assert_writable(gate, target=str(card_id))
+        payload, banner = work(form, source)
+    except DevEntryRefused as e:
+        return _tap_reply(source, 403, reason=str(e))
+    except (_TapInputRefused, SizingError) as e:
+        return _tap_reply(source, 422, reason=str(e))
+    except InvalidOperation as e:
+        return _tap_reply(source, 422, reason=f"REFUSED: not a number ({e!r}). Nothing written.")
+    except (CardStateError, IllegalTransition, SessionBlocked) as e:
+        return _tap_reply(source, 409, reason=str(e))
+    except ConfigError as e:
+        return _tap_reply(source, 503, reason=str(e))
+    return _tap_reply(source, 200, payload={"card_id": card_id, **payload}, banner=banner)
+
+
+@app.post("/radar/card/{card_id}/triggered")
+async def radar_card_triggered(card_id: int, request: Request):
+    """ARMED -> TRIGGERED, his tap (v3 §2; O7 A). Evidence: the card's
+    `last_price` and its bar time — no column stores that time (X6-R), so
+    `last_price_at` is null, said, never guessed."""
+    def work(form, source):
+        store = CardStore()
+        row = _tap_board_row(store, card_id)
+        last = None if row is None else row["last_price"]
+        tid = store.transition(
+            card_id, CardState.TRIGGERED, actor=Actor.YOU,
+            evidence={"via": f"{source}.triggered", "last_price": None if last is None else str(last),
+                      "last_price_at": None},
+        )
+        return ({"state": CardState.TRIGGERED.value, "transition_id": tid},
+                f"card {card_id}: TRIGGERED (card_transitions id {tid})")
+    return await _card_tap(card_id, request, "aset.radar.triggered", work)
+
+
+@app.post("/radar/card/{card_id}/fill")
+async def radar_card_fill(card_id: int, request: Request):
+    """FILLED @ [price] [shares] through THE fill (`mark_filled`, S-FILL).
+    The untouched prefill → `last_poll` / `estimated`; a typed or edited
+    price → `typed` / `confirmed`; no price → the fill's own refusal."""
+    def work(form, source):
+        price = _tap_price(form.get("price"), what="the fill price")
+        shares = _tap_int(form.get("shares"), what="the share count")
+        price_source, flag = _tap_price_source(price, form.get("prefill", ""))
+        outcome = AsetStore().mark_filled(
+            card_id, price=price, shares=shares, flag=flag, price_source=price_source,
+            price_asof=None, source=source,
+        )
+        payload = {"state": CardState.FILLED.value, "leg_id": outcome.leg_id, "price_source": price_source,
+                   "flag": flag, "pick_recorded": outcome.result.pick_recorded}
+        notices = []
+        if outcome.recompute.drift_warned is None:
+            notices.append(DRIFT_NOT_EVALUATED)
+        if not outcome.result.pick_recorded:
+            notices.append(f"pick not recorded ({outcome.result.pick_error})")
+        if notices:
+            payload["notice"] = " · ".join(notices)
+        return payload, " · ".join([f"card {card_id}: FILLED ({flag}, entry leg {outcome.leg_id})", *notices])
+    return await _card_tap(card_id, request, "aset.radar.fill", work)
+
+
+@app.post("/radar/card/{card_id}/pass")
+async def radar_card_pass(card_id: int, request: Request):
+    """TRIGGERED -> PASSED, his tap (v3 §2)."""
+    def work(form, source):
+        tid = CardStore().transition(card_id, CardState.PASSED, actor=Actor.YOU,
+                                     evidence={"via": f"{source}.pass"})
+        return ({"state": CardState.PASSED.value, "transition_id": tid},
+                f"card {card_id}: PASSED (card_transitions id {tid})")
+    return await _card_tap(card_id, request, "aset.radar.pass", work)
+
+
+@app.post("/radar/card/{card_id}/exit")
+async def radar_card_exit(card_id: int, request: Request):
+    """½ · ⅓ · flat · typed through `legs.record_exit` (R67). The tap posts
+    the `running_before` its screen rendered. Flat commits `confirmed` only
+    with his ✓ (`confirm=1`) — its price then his (`typed`); an untouched
+    flat stays `estimated` and is listed for correction (v3 §3)."""
+    def work(form, source):
+        from cobalt.cards import legs
+        from cobalt.session import clock as session_clock_mod
+
+        preset = form.get("preset", "").strip()
+        price = _tap_price(form.get("price"), what="the exit price")
+        if price is None:
+            raise _TapInputRefused(
+                f"REFUSED card {card_id}: an exit with no price. Type the price you took. Nothing written."
+            )
+        running_before = _tap_int(form.get("running_before"), what="running_before")
+        if running_before is None:
+            raise _TapInputRefused(
+                f"REFUSED card {card_id}: the tap carries no running_before — reload the card. Nothing written."
+            )
+        prefill = form.get("prefill", "")
+        price_source, flag = _tap_price_source(price, prefill)
+        if preset == "flat":
+            confirmed = form.get("confirm", "").strip() == "1"
+            flag = "confirmed" if confirmed else "estimated"
+            if confirmed:
+                price_source = "typed"
+        result = legs.record_exit(
+            card_id, preset=preset, shares=_tap_int(form.get("shares"), what="the typed share count"),
+            price=price, price_source=price_source, price_asof=None, flag=flag, source=source,
+            running_before=running_before, now=session_clock_mod.now_utc(),
+        )
+        payload = {"leg_id": result.leg_id, "shares": result.shares, "running_before": result.running_before,
+                   "running_after": result.running_after, "closed": result.closed,
+                   "transition_id": result.transition_id, "flag": flag}
+        banner = (f"card {card_id}: exit {preset} {result.shares} sh @ {price} ({flag}) · running "
+                  f"{result.running_before} → {result.running_after}")
+        if result.closed:
+            banner += " · CLOSED"
+        if flag == "estimated":
+            payload["notice"] = "estimated — listed for correction"
+            banner += " · estimated — listed for correction"
+        return payload, banner
+    return await _card_tap(card_id, request, "aset.radar.exit", work)
+
+
+@app.post("/radar/card/{card_id}/held")
+async def radar_card_held(card_id: int, request: Request):
+    """HOLDING X — his held count through `legs.record_held` (R67 (1), S-HELD)."""
+    def work(form, source):
+        from cobalt.cards import legs
+        from cobalt.session import clock as session_clock_mod
+
+        held = _tap_int(form.get("held"), what="the held count")
+        if held is None:
+            raise _TapInputRefused(f"REFUSED card {card_id}: HOLDING names the shares you hold. Nothing written.")
+        result = legs.record_held(card_id, held, source=source, now=session_clock_mod.now_utc())
+        return ({"leg_id": result.leg_id, "corrects": result.corrects, "running_after": result.running_after,
+                 "closed": result.closed, "transition_id": result.transition_id},
+                f"card {card_id}: holding {held} · running {result.running_after}"
+                + (" · CLOSED" if result.closed else ""))
+    return await _card_tap(card_id, request, "aset.radar.held", work)
+
+
+@app.post("/radar/card/{card_id}/correct")
+async def radar_card_correct(card_id: int, request: Request):
+    """A correction of one leg through `legs.record_correction` (R67): a
+    typed price names its source (`typed`, L57) and is `confirmed`."""
+    def work(form, source):
+        from cobalt.cards import legs
+        from cobalt.session import clock as session_clock_mod
+
+        leg_id = _tap_int(form.get("leg_id"), what="leg_id")
+        if leg_id is None:
+            raise _TapInputRefused(f"REFUSED card {card_id}: a correction names its leg. Nothing written.")
+        price = _tap_price(form.get("price"), what="the corrected price")
+        result = legs.record_correction(
+            leg_id, price=price, price_source=None if price is None else "typed",
+            shares=_tap_int(form.get("shares"), what="the corrected share count"), source=source,
+            now=session_clock_mod.now_utc(),
+        )
+        return ({"leg_id": result.leg_id, "corrects": result.corrects, "running_after": result.running_after,
+                 "closed": result.closed, "transition_id": result.transition_id},
+                f"card {card_id}: leg {result.corrects} corrected by leg {result.leg_id} · running "
+                f"{result.running_after}" + (" · CLOSED" if result.closed else ""))
+    return await _card_tap(card_id, request, "aset.radar.correct", work)
+
+
+@app.post("/radar/card/{card_id}/stop")
+async def radar_card_stop(card_id: int, request: Request):
+    """His stop edit (R38: his stop is the plan until he resets it), through
+    the one card-stop function — `record_stop_edit(kind='edit')`."""
+    def work(form, source):
+        from cobalt.aset import card_stop
+
+        edit = card_stop.set_card_stop(card_id, form.get("to_stop", ""))
+        return ({"stop_edit_id": edit.stop_edit_id, "from_stop": str(edit.from_stop), "to_stop": str(edit.to_stop)},
+                f"card {card_id}: stop {edit.from_stop} → {edit.to_stop} (YOURS)")
+    return await _card_tap(card_id, request, "aset.radar.stop", work)
+
+
+@app.post("/radar/card/{card_id}/stop/reset")
+async def radar_card_stop_reset(card_id: int, request: Request):
+    """↺ — the stop back to Cobalt's structural stop, `kind='reset'` (R38,
+    v3 §5 [F-11]). A card with no structural stop (a manual card) is not
+    offered ↺ (O19 A); posted anyway, the writer refuses it by name."""
+    def work(form, source):
+        store = CardStore()
+        current = next((c for c in store.open_cards() if c["id"] == card_id), None)
+        if current is None:
+            raise CardStateError(f"card {card_id} is not open — its stop is settled.")
+        row = _tap_board_row(store, card_id)
+        structural = None if row is None else row["structural_stop"]
+        to_stop = current["stop"] if structural is None else structural
+        edit_id = store.record_stop_edit(card_id, from_stop=current["stop"], to_stop=to_stop, kind="reset")
+        return ({"stop_edit_id": edit_id, "from_stop": str(current["stop"]), "to_stop": str(to_stop)},
+                f"card {card_id}: stop {current['stop']} → {to_stop} (↺ Cobalt's)")
+    return await _card_tap(card_id, request, "aset.radar.stop_reset", work)
+
+
+def _sheet_in_trade(card: dict) -> str:
+    """C3-4: a FILLED MANUAL card is not on `/radar` (X-M: `radar_cards_v`
+    is `origin = 'radar'`), so its IN-TRADE controls render here, on the
+    sheet's open-cards list, posting to the SAME routes with
+    `source=sheet` — never a second set of writers. A manual card has no
+    structural stop: no ↺ (O19 A), gap `NULL — no Cobalt stop`. No last
+    price is read here, so every price field is empty and he types."""
+    from .radar_panel import read_in_trade, render_in_trade
+
+    if card.get("state") != CardState.FILLED.value or card.get("origin") != Origin.MANUAL.value:
+        return ""
+    try:
+        position = read_in_trade(card["id"])
+    except Exception as e:  # noqa: BLE001 — said on the card
+        return _failed(f"card {card['id']}: position unreadable: {type(e).__name__}: {e}")
+    return render_in_trade(
+        card["id"], position, direction=str(card["direction"]), stop=card["stop"], structural_stop=None,
+        last=None, source="sheet",
+    )

@@ -129,3 +129,68 @@ not touched. So, with the block absent:
   page load only; a pool refresh does not update it.
 - The new fields never reach `pool_api_payload`'s `pool` dict; its `html`
   carries them.
+
+## 2026-09-28 — S3 exits C3: TRIGGERED and IN-TRADE (v3 §2 / §3 / §5; R67, R38)
+
+**Models.** `LegView` (one `legs_current_v` row: `id`, `seq`, `kind`,
+`shares`, `price`, `flag`, `price_source`, `at`, `stop_in_force`, `preset`,
+`held_stated`) and `InTradeView` (`running`, `basis`, `legs`,
+`realized_value` / `realized_provisional` / `realized_reason`, `stop_owner`,
+`distance_change_pct` / `drift_warning_pct` / `drift_warned`). `CardView`
+gains `position: InTradeView | None` and `position_error: str | None`.
+`RadarCardRow` is unchanged (it must equal `FIELD_OWNERS`).
+
+**The read.** `read_in_trade(card_id)` — READ-ONLY: `legs.read_position`
+(THE running read + `realized_r`, on a transaction it rolls back),
+`CardStore.stop_owner`, and the drift stored AT THE FILL = the FILLED
+transition's evidence (`distance_change_pct`, `drift_warning_pct`,
+`drift_warned`; an entry-price correction never rewrites it).
+`build_ladder_view(…, position_reader=None)` reads it for every FILLED /
+CLOSED row (default `read_in_trade`; `build_radar_panel` passes the argument
+through). A read that fails is said ON THE CARD (`position_error` → a
+`FAILED · position unreadable: …` line) instead of failing the ladder; a
+CLOSED card with no legs (`no_position`, closed before C1) has none.
+
+**Render.** Every tap is `_card_form(card_id, path, inner, source=…)`:
+- on the panel, a `<div class="s3-form" data-card-id data-path data-card-tap>`
+  whose `type="button" data-tap` button the panel script posts by `fetch`
+  (the click handler collects the block's `input[name]` fields; an unticked
+  checkbox posts nothing) — the ladder keeps its **focus law** (no `<form`,
+  no native POST, no navigation; `test_rendered_page_with_cards_keeps_the_focus_law`);
+- on the sheet (`source="sheet"`), a plain `<form method="post">` to the same
+  route.
+
+- **ARMED**: the `TRIGGERED` tap (O7 A).
+- **TRIGGERED** (`_triggered_block`): three numbers — `last <price> · bar time
+  not stored` (X6-R), `entry`, `stop` — the `FILLED @` tap (price prefilled
+  from `last_price`, EMPTY when it is NULL — never the entry; hidden
+  `prefill` = what the screen showed; shares prefilled from the card's
+  `shares`, editable) and `PASS`.
+- **IN-TRADE** (`_in_trade_block` → `render_in_trade`): `running <n> sh`
+  (+ `(basis <b>)` when not `legs`), realized R with `(provisional)` or its
+  reason, the drift line `drift <pct>% vs P <P>%` (`· WARNING — past plan`
+  when warned) or `⚠ RE-READ STOP — setting fills.drift_warning_pct missing,
+  warning not evaluated` when P was NULL at the fill; the stop line — his
+  stop, the amber `YOURS` badge and `Δ <stop − structural> vs Cobalt` when
+  `stop_owner` is `yours`, `Cobalt stop <structural_stop>` ALWAYS beside it
+  (`NULL — no Cobalt stop` on a manual card); the note line — `↺ <cobalt
+  value>` only when `structural_stop` is not NULL (O19 A) and `move stop`;
+  ½ · ⅓ · flat (✓ checkbox, `confirm=1`) · typed (shares), each carrying
+  `running_before` = the running it rendered and `prefill`; `HOLDING`; the
+  current legs (price, shares, flag · source, ET time, `gap <stop_in_force −
+  structural_stop>`) with `✓ correct` on each `estimated` leg.
+- **CLOSED** (terminal): `_terminal_legs` lists the card's `estimated` legs
+  with `✓ correct` ("estimated — confirm the price", v3 §3).
+- `used_risk` is not rendered in IN-TRADE (C2's X-UR: it stays at the
+  pre-exit count until the next stop edit). The NOTES section keeps its text
+  (the note is C4's).
+
+`PANEL_JS`: the `[data-tap]` branch of the click handler; the status line
+shows `payload.notice` (e.g. the drift banner on a fill, "estimated — listed
+for correction" on an exit) as it shows `snap_notice`.
+
+**Gotcha — the pins.** `test_radar_panel_cards.py`'s `_ladder` passes a
+constructed `POSITION` (L32) so the ladder never depends on a database, and
+`PIN_HEALTHY_LADDER_SHA256` was re-captured for C3's new blocks (the pool and
+API pins are untouched). The "FILLED never shows" check exempts the
+`FILLED @` tap label (the design's words).

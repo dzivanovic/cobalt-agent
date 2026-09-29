@@ -7,6 +7,15 @@ strip, the key row and promote. Every write the ladder offers is a
 `fetch` POST to one of the allowlisted `/radar/card/{id}/…` routes in
 `web.py`; this module itself never writes, initializes a schema, or
 attests a note.
+
+S3 exits C3 (v3 §2 / §3 / §5; R67, R38) adds the trade taps: TRIGGERED on
+an ARMED card; the FILLED @ [price] [shares] form and PASS on a TRIGGERED
+card; and on an IN-TRADE card THE position (`legs.read_position`, the one
+running read), ½ · ⅓ · flat · typed, HOLDING, the current legs with a
+correct control on each `estimated` one, realized R, the drift stored at
+the fill, his stop with Cobalt's beside it and ↺. Every form posts to a
+`/radar/card/{id}/…` route of `web.py`'s S3 block; the sheet renders the
+same IN-TRADE forms for a manual card (`render_in_trade`, `source=sheet`).
 """
 
 from __future__ import annotations
@@ -34,6 +43,7 @@ from cobalt.radar.models import PoolBlock, RankMetricName
 from cobalt.radar.store import RadarStore
 from cobalt.session.clock import now_utc, session_clock
 from cobalt.session.models import Session
+from cobalt.settings.fills import DRIFT_NOT_EVALUATED
 from cobalt.settings.store import TraderSettingsStore
 from cobalt.taxonomy.loader import load_tunables
 
@@ -323,6 +333,48 @@ class HealthView(_ViewModel):
     note: str = Field(min_length=1)
 
 
+class LegView(_ViewModel):
+    """One current `legs` row (`legs_current_v`), as the IN-TRADE block shows it."""
+
+    id: int
+    seq: int = Field(ge=0)
+    kind: Literal["entry", "exit"]
+    shares: int = Field(gt=0)
+    price: Decimal
+    flag: Literal["estimated", "confirmed"]
+    price_source: str = Field(min_length=1)
+    at: datetime
+    stop_in_force: Decimal
+    preset: str | None
+    held_stated: int | None
+
+    @field_validator("at")
+    @classmethod
+    def _at_aware(cls, value: datetime) -> datetime:
+        return _aware(value, "leg at")  # type: ignore[return-value]
+
+
+class InTradeView(_ViewModel):
+    """THE position of one FILLED / CLOSED card — read, never stored (S3 C3).
+
+    `running` / `basis` are `legs.running_shares`' (the one running read);
+    the realized fields are `legs.realized_r`'s; `stop_owner` is
+    `CardStore.stop_owner`'s; the drift fields are the ones stored at the
+    fill (the FILLED transition's evidence), `drift_warning_pct` None = the
+    warning was not evaluated (v3 §4)."""
+
+    running: int = Field(ge=0)
+    basis: Literal["legs", "recomputed_shares", "shares"]
+    legs: list[LegView]
+    realized_value: Decimal | None
+    realized_provisional: bool
+    realized_reason: str | None
+    stop_owner: Literal["yours", "cobalt"]
+    distance_change_pct: Decimal | None
+    drift_warning_pct: Decimal | None
+    drift_warned: bool | None
+
+
 class CardView(_ViewModel):
     id: int
     ticker: str = Field(min_length=1)
@@ -363,6 +415,9 @@ class CardView(_ViewModel):
     expires_at: datetime | None
     scan_id: int
     board_evaluation: str | None
+    #: S3 C3: the position of a FILLED / CLOSED card, or why it could not be read.
+    position: InTradeView | None = None
+    position_error: str | None = None
 
     @property
     def display_state(self) -> str:
@@ -740,6 +795,40 @@ def _health_views(health: dict[str, Any] | None) -> list[HealthView]:
     return [HealthView(label=p["label"], status=p["status"], note=p["note"]) for p in pills]
 
 
+def _decimal_or_none(value: Any) -> Decimal | None:
+    return None if value is None else Decimal(str(value))
+
+
+def read_in_trade(card_id: int) -> InTradeView:
+    """THE position of one card, READ-ONLY (S3 C3): `legs.read_position`
+    (the one running read + `realized_r`, on a transaction it rolls back),
+    `CardStore.stop_owner`, and the drift stored at the fill — the FILLED
+    transition's evidence (`AsetStore.mark_filled` writes it; an entry-price
+    correction never rewrites it). Writes nothing."""
+    from cobalt.cards import legs
+
+    store = CardStore()
+    position = legs.read_position(card_id)
+    fill = next((t for t in reversed(store.history(card_id)) if t["to_state"] == CardState.FILLED.value), None)
+    evidence = (fill or {}).get("evidence") or {}
+    return InTradeView(
+        running=position.running.shares,
+        basis=position.running.basis,
+        legs=[LegView(**{k: leg[k] for k in LegView.model_fields}) for leg in position.legs],
+        realized_value=position.realized.value,
+        realized_provisional=position.realized.provisional,
+        realized_reason=position.realized.reason,
+        stop_owner=store.stop_owner(card_id),
+        distance_change_pct=_decimal_or_none(evidence.get("distance_change_pct")),
+        drift_warning_pct=_decimal_or_none(evidence.get("drift_warning_pct")),
+        drift_warned=evidence.get("drift_warned"),
+    )
+
+
+#: The states whose card shows a position (IN-TRADE) or its legs (CLOSED).
+POSITION_STATES = (CardState.FILLED, CardState.CLOSED)
+
+
 def build_ladder_view(
     *,
     card_store: CardStore | None = None,
@@ -748,12 +837,19 @@ def build_ladder_view(
     now: datetime | None = None,
     tunables_loader=load_tunables,
     rung_source=None,
+    position_reader=None,
 ) -> LadderView:
     """Read `"user".radar_cards_v` for today and build the ladder.
 
     The rung, the sheet dollars and the dot colour thresholds are read
     only when there is a card to render; an empty ladder needs none of
-    them. Every read or validation failure is a loud `RadarPanelError`."""
+    them. Every read or validation failure is a loud `RadarPanelError`.
+
+    S3 C3: each FILLED / CLOSED card's position is read through
+    `position_reader(card_id)` (default `read_in_trade`). A position that
+    cannot be read is said ON THAT CARD (`position_error`, rendered as a
+    FAILED line) rather than blanking the whole ladder; a CLOSED card that
+    holds no legs (`no_position`, closed before C1) simply has none."""
     from cobalt.aset.engine import key_ladder
     from cobalt.settings.models import TraderSettings
 
@@ -794,12 +890,24 @@ def build_ladder_view(
         for r in rows
     ])
     by_id = {r.card_id: r for r in rows}
+    reader = position_reader or read_in_trade
+
+    def in_trade(r: RadarCardRow) -> tuple[InTradeView | None, str | None]:
+        if r.state not in POSITION_STATES:
+            return None, None
+        try:
+            return reader(r.card_id), None
+        except Exception as exc:  # noqa: BLE001 — said on the card, never swallowed
+            if r.state is CardState.CLOSED and getattr(exc, "code", None) == "no_position":
+                return None, None
+            return None, f"{type(exc).__name__}: {exc}"
 
     def view(position) -> CardView:
         r = by_id[position.card_id]
         live = r.state not in TERMINAL
         sign = Decimal(1) if r.direction == "long" else Decimal(-1)
         distance = abs(r.entry - r.stop)
+        held, held_error = in_trade(r)
         return CardView(
             id=r.card_id, ticker=r.ticker, direction=r.direction, state=r.state, setup=r.setup_ref or "",
             trade=r.trade_def_slug, why=r.why or "", trigger=r.entry, trigger_evidence=r.trigger_price,
@@ -820,6 +928,7 @@ def build_ladder_view(
             dots=[_dot_view(d, live_card=live, red=red, amber=amber) for d in r.dots],
             health=_health_views(r.health), badges=dict(FIELD_OWNERS), state_at=r.state_at,
             formed_at=r.formed_at, expires_at=r.expires_at, scan_id=r.scan_id, board_evaluation=r.board_evaluation,
+            position=held, position_error=held_error,
         )
 
     return LadderView(
@@ -841,6 +950,7 @@ def build_radar_panel(
     now: datetime | None = None,
     tunables_loader=load_tunables,
     rung_source=None,
+    position_reader=None,
 ) -> RadarPanelView:
     pool = build_pool_view(
         since=since,
@@ -853,7 +963,7 @@ def build_radar_panel(
     )
     ladder = build_ladder_view(
         card_store=card_store, settings_store=settings_store, clock=clock, now=now,
-        tunables_loader=tunables_loader, rung_source=rung_source,
+        tunables_loader=tunables_loader, rung_source=rung_source, position_reader=position_reader,
     )
     return RadarPanelView(pool=pool, ladder=ladder)
 
@@ -1058,6 +1168,207 @@ def _key_row(card: CardView) -> str:
     return f'<div class="key-row">{"".join(buttons)}</div>'
 
 
+# ---------------------------------------------------------------------
+# S3 C3 — the trade forms (TRIGGERED, FILLED @, PASS, IN-TRADE)
+# ---------------------------------------------------------------------
+
+#: The words a card with no Cobalt stop (a manual card) shows (v3 §5 [F-28]).
+NO_COBALT_STOP = "NULL — no Cobalt stop"
+TRIGGERED_BUTTON = "<button>TRIGGERED</button>"
+
+
+def _shown(value: Any) -> str:
+    return "" if value is None else str(value)
+
+
+def _hidden_input(name: str, value: Any) -> str:
+    return f'<input type="hidden" name="{name}" value="{html.escape(_shown(value))}">'
+
+
+def _price_input(value: Any) -> str:
+    """An editable price field. Prefilled from `last_price` when there is
+    one; EMPTY when there is none — never the entry (L1, the W6 pattern)."""
+    return (f'<input name="price" type="number" step="0.0001" min="0" placeholder="price" '
+            f'value="{html.escape(_shown(value))}">')
+
+
+def _card_form(card_id: int, path: str, inner: str, *, source: str, cls: str = "s3-form") -> str:
+    """One tap posting its fields to `/radar/card/{id}{path}`; `source` is
+    where he tapped. ON THE PANEL it is a block the panel script posts by
+    `fetch` (`data-card-tap`; a `type="button"` tap) — the ladder keeps its
+    focus law: no `<form`, no native POST, no navigation. ON THE SHEET it
+    is a plain form, like every other sheet control. Same fields, same
+    route, either way."""
+    attrs = f'class="{cls}" data-card-id="{card_id}" data-path="{html.escape(path)}"'
+    body = _hidden_input("source", source) + inner
+    if source == "sheet":
+        body = body.replace("<button", '<button type="submit"')
+        return f'<form {attrs} method="post" action="/radar/card/{card_id}{html.escape(path)}">{body}</form>'
+    body = body.replace("<button", '<button type="button" data-tap="1"')
+    return f'<div {attrs} data-card-tap="1">{body}</div>'
+
+
+def _triggered_block(card: CardView) -> str:
+    """TRIGGERED (v3 §2): three numbers — last with its bar time, entry,
+    stop — the FILLED @ [price] [shares] form and PASS."""
+    e = html.escape
+    last = card.last
+    fill = _card_form(
+        card.id, "/fill",
+        _hidden_input("prefill", last) + _price_input(last)
+        + f'<input name="shares" type="number" step="1" min="1" placeholder="shares" '
+        f'value="{e(_shown(card.shares))}"><button>FILLED @</button>',
+        source="panel", cls="s3-form fill-form",
+    )
+    passed = _card_form(card.id, "/pass", '<button class="danger">PASS</button>', source="panel")
+    return (
+        f'<div class="state-block triggered-state"><b>TRIGGERED</b>'
+        f'<div class="strike-numbers"><span>last {e(_shown(last) or "—")} · bar time not stored</span>'
+        f"<span>entry {e(str(card.trigger))}</span><span>stop {e(str(card.stop))}</span></div>"
+        f"{fill}{passed}</div>"
+    )
+
+
+def _stop_block(card_id: int, *, stop: Decimal, structural_stop: Decimal | None, owner: str | None,
+                source: str) -> str:
+    """His stop (amber YOURS + the delta when he owns it), Cobalt's
+    structural stop ALWAYS beside it, `↺ <cobalt value>` on the note line
+    only when there is a Cobalt stop (O19 A), and the stop edit (R38)."""
+    e = html.escape
+    badge = delta = ""
+    if owner == "yours":
+        badge = ' <span class="yours">YOURS</span>'
+        delta = f" Δ {stop - structural_stop} vs Cobalt" if structural_stop is not None else f" Δ {NO_COBALT_STOP}"
+    cobalt = f"Cobalt stop {structural_stop}" if structural_stop is not None else f"Cobalt stop {NO_COBALT_STOP}"
+    reset = "" if structural_stop is None else _card_form(
+        card_id, "/stop/reset", f"<button>↺ {e(str(structural_stop))}</button>", source=source,
+    )
+    edit = _card_form(
+        card_id, "/stop",
+        f'<input name="to_stop" type="number" step="0.0001" value="{e(str(stop))}">'
+        "<button>move stop</button>",
+        source=source,
+    )
+    return (
+        f'<div class="stop-line">his stop <b>{e(str(stop))}</b>{badge}{e(delta)} · '
+        f'<span class="cobalt-stop">{e(cobalt)}</span></div><div class="note-line">{reset}{edit}</div>'
+    )
+
+
+def _leg_rows(card_id: int, position: InTradeView, *, structural_stop: Decimal | None, source: str,
+              estimated_only: bool = False) -> str:
+    """The current legs: price, shares, flag, time, the gap `stop_in_force
+    − structural_stop` (v3 §5 [F-28]); a correct control on each
+    `estimated` leg (v3 §3: listed for correction)."""
+    e = html.escape
+    rows = []
+    for leg in position.legs:
+        if estimated_only and leg.flag != "estimated":
+            continue
+        gap = NO_COBALT_STOP if structural_stop is None else str(leg.stop_in_force - structural_stop)
+        what = leg.kind if leg.preset is None else f"{leg.kind} {leg.preset}"
+        held = "" if leg.held_stated is None else f" · holding {leg.held_stated}"
+        correct = ""
+        if leg.flag == "estimated":
+            correct = _card_form(
+                card_id, "/correct",
+                _hidden_input("leg_id", leg.id) + _price_input(leg.price) + "<button>✓ correct</button>",
+                source=source,
+            )
+        rows.append(
+            f'<tr class="leg leg-{leg.flag}"><td>#{leg.seq}</td><td>{e(what)}{e(held)}</td><td>{leg.shares} sh</td>'
+            f"<td>{e(str(leg.price))}</td><td>{e(leg.flag)} · {e(leg.price_source)}</td>"
+            f"<td>{e(session_clock().to_et(leg.at).strftime('%H:%M:%S'))}</td><td>gap {e(gap)}</td>"
+            f"<td>{correct}</td></tr>"
+        )
+    if not rows:
+        return ""
+    return f'<table class="legs"><tbody>{"".join(rows)}</tbody></table>'
+
+
+def render_in_trade(
+    card_id: int, position: InTradeView, *, direction: str, stop: Decimal, structural_stop: Decimal | None,
+    last: Decimal | None, source: str,
+) -> str:
+    """The IN-TRADE controls of one card (S3 C3-3), for the panel and —
+    with `source="sheet"` — the sheet's manual cards (C3-4): the same
+    forms, the same routes. Every exit form posts the running count it
+    rendered as `running_before` (R67: a stale tap is refused)."""
+    e = html.escape
+    running = f"running {position.running} sh"
+    if position.basis != "legs":
+        running += f" (basis {position.basis})"
+
+    def exit_form(preset: str, label: str, extra: str = "") -> str:
+        return _card_form(
+            card_id, "/exit",
+            _hidden_input("preset", preset) + _hidden_input("running_before", position.running)
+            + _hidden_input("prefill", last) + extra + _price_input(last) + f"<button>{label}</button>",
+            source=source, cls="s3-form exit-form",
+        )
+
+    exits = (
+        exit_form("half", "½") + exit_form("third", "⅓")
+        + exit_form("flat", "flat", '<label class="confirm"><input type="checkbox" name="confirm" value="1"> ✓</label>')
+        + exit_form("typed", "typed", '<input name="shares" type="number" step="1" min="1" placeholder="shares">')
+    )
+    held = _card_form(
+        card_id, "/held",
+        '<input name="held" type="number" step="1" min="0" placeholder="shares"><button>HOLDING</button>',
+        source=source,
+    )
+    if position.realized_value is None:
+        realized = f"realized R {position.realized_reason}"
+    else:
+        realized = f"realized R {position.realized_value}" + (" (provisional)" if position.realized_provisional else "")
+    if position.drift_warning_pct is None:
+        drift = f'<div class="warn">⚠ {e(DRIFT_NOT_EVALUATED)}</div>'
+    else:
+        warned = " · WARNING — past plan" if position.drift_warned else ""
+        drift = (f'<div class="drift">drift {e(_shown(position.distance_change_pct) or "—")}% vs P '
+                 f"{e(str(position.drift_warning_pct))}%{warned}</div>")
+    return (
+        f'<div class="in-trade" data-card-id="{card_id}"><div class="running"><b>{e(running)}</b> · '
+        f"{e(direction)} · {e(realized)}</div>{drift}"
+        f'{_stop_block(card_id, stop=stop, structural_stop=structural_stop, owner=position.stop_owner, source=source)}'
+        f'<div class="exits">{exits}</div>{held}'
+        f"{_leg_rows(card_id, position, structural_stop=structural_stop, source=source)}</div>"
+    )
+
+
+def _in_trade_block(card: CardView) -> str:
+    e = html.escape
+    head = (f'<div class="state-block in-trade-state"><b>IN-TRADE</b> · stop {e(str(card.stop))} · '
+            f"next exits {e(str(card.target_1r))} / {e(str(card.target_2r))}</div>")
+    if card.position is None:
+        failed = (f'<div class="card-status refused">FAILED · position unreadable: '
+                  f'{e(card.position_error or "no position read")}</div>')
+        return head + failed + _stop_block(card.id, stop=card.stop, structural_stop=card.structural_stop,
+                                           owner=None, source="panel")
+    return head + render_in_trade(
+        card.id, card.position, direction=card.direction, stop=card.stop,
+        structural_stop=card.structural_stop, last=card.last, source="panel",
+    )
+
+
+def _terminal_legs(card: CardView) -> str:
+    """A CLOSED card's estimated legs, listed for correction (v3 §3), or
+    the reason its legs could not be read."""
+    if card.state is not CardState.CLOSED:
+        return ""
+    if card.position_error:
+        return (f'<div class="terminal-legs" data-card-id="{card.id}"><div class="card-status refused">'
+                f"FAILED · position unreadable: {html.escape(card.position_error)}</div></div>")
+    if card.position is None:
+        return ""
+    rows = _leg_rows(card.id, card.position, structural_stop=card.structural_stop, source="panel",
+                     estimated_only=True)
+    if not rows:
+        return ""
+    return (f'<div class="terminal-legs" data-card-id="{card.id}"><span class="muted">estimated — confirm '
+            f"the price</span>{rows}</div>")
+
+
 def _card_detail(card: CardView, *, stale: str | None = None) -> str:
     e = html.escape
     stale_badge = _bars_stale_badge(stale)
@@ -1086,19 +1397,14 @@ def _card_detail(card: CardView, *, stale: str | None = None) -> str:
         state_body = (
             f'<div class="state-block armed-state"><b>ARMED · LOCKED</b>'
             f'<div class="trigger-distance">last {e(str(card.last or "—"))}{stale_badge} · trigger {e(str(card.trigger))}</div>'
-            f"<div>key {e(card.grade or '—')} · {card.shares if card.shares is not None else '—'} sh · stop {e(str(card.stop))}</div></div>"
+            f"<div>key {e(card.grade or '—')} · {card.shares if card.shares is not None else '—'} sh · stop {e(str(card.stop))}</div>"
+            # S3 C3 (O7 A): ARMED -> TRIGGERED is his tap until the S4 detector.
+            f"{_card_form(card.id, '/triggered', TRIGGERED_BUTTON, source='panel')}</div>"
         )
     elif card.state is CardState.TRIGGERED:
-        state_body = (
-            f'<div class="state-block triggered-state"><b>TRIGGERED</b>'
-            f'<div class="strike-numbers"><span>KEY {e(card.grade or "—")}</span>'
-            f"<span>SHARES {card.shares if card.shares is not None else '—'}</span><span>STOP {e(str(card.stop))}</span></div></div>"
-        )
+        state_body = _triggered_block(card)
     else:
-        state_body = (
-            f'<div class="state-block in-trade-state"><b>IN-TRADE</b> · stop {e(str(card.stop))} · '
-            f"next exits {e(str(card.target_1r))} / {e(str(card.target_2r))}</div>"
-        )
+        state_body = _in_trade_block(card)
     outside = '<span class="outside-pool">OUTSIDE POOL</span>' if card.outside_pool else ""
     chip = "—" if card.card_score is None else str(card.card_score)
     rank = "—" if card.rank_chip is None else f"#{card.rank_chip}"
@@ -1165,7 +1471,7 @@ def render_ladder(view: LadderView, *, bars_stale: dict[str, str] | None = None)
             f'<div class="terminal-row"><span>{e(card.display_state)}</span><b>{e(card.ticker)}</b>'
             f"<span>{e(card.direction)} · {e(card.grade or 'no key')} · "
             f"{card.shares if card.shares is not None else '—'} sh · stop {e(str(card.stop))}</span>"
-            f"<time>{e(_fmt_dt(card.state_at))}</time></div>"
+            f"<time>{e(_fmt_dt(card.state_at))}</time></div>{_terminal_legs(card)}"
             for card in cards
         )
         terminal_groups.append(f"<h4>{state.value} · {len(cards)}</h4>{group_rows}")
@@ -1186,6 +1492,7 @@ PANEL_CSS = r"""
 .phone-frame{width:390px;margin:auto;border:12px solid #05070a;border-radius:26px}.phone-frame .radar-wrap{width:366px;padding:8px}
 .degraded-line{padding:3px 12px;border:1px solid var(--red);background:#351019;color:#ffd0d6;border-radius:5px;margin:6px 0 0;font-size:12px}.degraded-line[hidden]{display:none}
 .bars-stale{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--red);padding:1px 3px;color:var(--red);border-radius:3px;margin-left:4px;vertical-align:middle}
+.s3-form{display:inline-flex;gap:4px;align-items:center;margin:4px 6px 4px 0;flex-wrap:wrap}.s3-form input{width:90px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:6px}.s3-form button{min-height:40px;padding:0 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:7px}.s3-form button.danger{border-color:var(--red);color:var(--red)}.s3-form .confirm{display:inline-flex;gap:3px;align-items:center;font-size:13px}.s3-form .confirm input{width:auto}.yours{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--amber);color:var(--amber);padding:1px 4px;border-radius:3px}.cobalt-stop{color:var(--blue)}.stop-line,.running,.drift{font-size:13px;padding:4px 0}.warn{color:var(--amber);font-size:13px;padding:4px 0}.legs{margin-top:6px}.leg-estimated td{color:var(--amber)}.terminal-legs{padding:4px 18px 8px}
 """
 
 
@@ -1216,7 +1523,8 @@ PANEL_JS = r"""
      const payload=await response.json().catch(()=>({}));
      if(!response.ok){status(cardId,'REFUSED '+response.status+' · '+(payload.reason||payload.error||'no reason given'),'refused'); return;}
      await refreshLadder();
-     status(cardId,payload.snap_notice?('saved · '+payload.snap_notice):'saved','ok');
+     const notice=payload.snap_notice||payload.notice;
+     status(cardId,notice?('saved · '+notice):'saved','ok');
    }catch(failure){status(cardId,'FAILED · '+String(failure),'refused');}
  }
  document.addEventListener('click',function(event){
@@ -1233,6 +1541,8 @@ PANEL_JS = r"""
    if(key){post(key.dataset.cardId,'/key',{grade:key.dataset.key}); return;}
    const promote=target.closest('[data-promote]');
    if(promote){post(promote.dataset.cardId,promote.dataset.promote==='release'?'/release':'/promote'); return;}
+   const tap=target.closest('[data-tap]');
+   if(tap){const block=tap.closest('[data-card-tap]'); const body={}; block.querySelectorAll('input[name]').forEach(function(field){if(field.type==='checkbox'&&!field.checked){return;} body[field.name]=field.value;}); post(block.dataset.cardId,block.dataset.path,body); return;}
  });
  function mirrorDegraded(layer){const line=document.getElementById('degraded-line'); const parts=Array.from(layer.querySelectorAll('.refresh-failure,.panel-banner.degraded,.panel-banner.stale')).map(x=>x.innerHTML); const text=parts.join(' | '); if(line.innerHTML!==text){line.innerHTML=text;} const none=parts.length===0; if(line.hidden!==none){line.hidden=none;}}
  function mirrorStale(layer){const stale=JSON.parse(layer.dataset.barsStale||'{}'); Array.from(document.querySelectorAll('.ladder-item')).forEach(function(item){const b=item.querySelector('.strip b'); if(!b||!b.firstChild){return;} const tip=stale[b.firstChild.nodeValue]; let mark=b.querySelector('.bars-stale'); if(tip&&!mark){mark=document.createElement('span'); mark.className='bars-stale'; mark.textContent='STALE'; b.append(mark);} if(mark&&!tip){mark.remove();} if(mark&&tip&&mark.title!==tip){mark.title=tip;}});}
@@ -1288,9 +1598,12 @@ __all__ = [
     "ChurnDelta",
     "DotView",
     "HealthView",
+    "InTradeView",
     "KeyView",
     "LadderView",
+    "LegView",
     "MembershipRecord",
+    "NO_COBALT_STOP",
     "PoolRow",
     "PoolView",
     "RadarCardRow",
@@ -1301,8 +1614,10 @@ __all__ = [
     "build_radar_panel",
     "parse_since",
     "pool_api_payload",
+    "read_in_trade",
     "render_degraded_line",
     "render_failed_page",
+    "render_in_trade",
     "render_ladder",
     "render_pool",
     "render_radar_page",

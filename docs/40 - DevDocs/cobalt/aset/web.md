@@ -260,3 +260,54 @@ imports it at call time. Pin: `tests/cobalt/test_voice_card_stop.py`
   `</body>` on the sheet; `GET /radar` places the same partial into the
   panel's page (after the panel renders, touching no sheet helper — the
   `/radar` sentinels still hold).
+
+---
+
+## 2026-09-28 — S3 exits C3: the trade taps (v3 §2 / §3 / §5; R67, R38)
+
+ONE block, directly after `POST /radar/card/{card_id}/release` (S-WEB: never
+after `/attest`, never a second block at the file's end). A route owns no side
+effect (L40): it parses the form and calls C1 / C2's writers and the stores'
+reads — nothing else.
+
+| route | form fields | calls | notes |
+|---|---|---|---|
+| `POST /radar/card/{id}/triggered` | — | `CardStore.transition(TRIGGERED, actor=YOU)` | ARMED → TRIGGERED is his tap until S4 (O7 A). Evidence `{via, last_price, last_price_at}`: `last_price` from the card's `radar_cards_v` row; `last_price_at` is `null` — no column stores the bar time (X6-R). |
+| `POST /radar/card/{id}/fill` | `price`, `shares`, `prefill` | `AsetStore.mark_filled(…, price_asof=None, source=<source>)` — THE fill (S-FILL) | untouched prefill → `last_poll` / `estimated`; a typed or edited price → `typed` / `confirmed`; no price → `mark_filled`'s own refusal (422), nothing written. |
+| `POST /radar/card/{id}/pass` | — | `CardStore.transition(PASSED, actor=YOU)` | |
+| `POST /radar/card/{id}/exit` | `preset`, `shares` (typed), `price`, `prefill`, `running_before`, `confirm` | `legs.record_exit` | `running_before` = the count the screen rendered (R67: C2 refuses a stale / duplicate tap). ½ ⅓ typed follow the prefill rule; **flat** commits `confirmed` only with `confirm=1` (its price then `typed`), otherwise `estimated` — listed for correction. No price / no `running_before` → a 422 argument refusal, nothing written. |
+| `POST /radar/card/{id}/held` | `held` | `legs.record_held` | HOLDING X (S-HELD). |
+| `POST /radar/card/{id}/correct` | `leg_id`, `price`, `shares` | `legs.record_correction` | a typed price names `price_source='typed'` → `confirmed` (the ✓ on an estimated leg). |
+| `POST /radar/card/{id}/stop` | `to_stop` | `card_stop.set_card_stop` → `record_stop_edit(kind='edit')` | the one card-stop function (L3). |
+| `POST /radar/card/{id}/stop/reset` | — | `CardStore.record_stop_edit(kind='reset', to_stop=structural_stop)` | ↺ (R38). `structural_stop` from the card's `radar_cards_v` row; a card with none (manual) posts its current stop and the writer refuses by name (O19 A). |
+
+`_card_tap(card_id, request, gate, work)` runs every tap: `source` (`panel` —
+the default — or `sheet`), the dev-entry guard, the session gate
+(`assert_writable(gate)`, FIRST, as the other radar taps), then `work`.
+Refusals, verbatim: `DevEntryRefused` 403 · `_TapInputRefused` /
+`SizingError` / `InvalidOperation` 422 · `CardStateError` (incl.
+`LegRefused`) / `IllegalTransition` / `SessionBlocked` 409 · `ConfigError`
+503. `_tap_reply`: the panel gets JSON (`{"status": "ok", …}` /
+`_refused`'s `{"status": "REFUSED", "reason": …}`); `source=sheet` gets the
+sheet page (`_render`) with the saved / FAILED banner and the same status.
+
+Helpers (new, in the block): `S3_TAP_SOURCES`, `_TapInputRefused`,
+`_tap_price`, `_tap_int`, `_tap_price_source`, `_tap_board_row`,
+`_tap_reply`, `_card_tap`, `_sheet_in_trade`.
+
+**C3-4 — the manual card on the sheet.** X-M: `/radar` reads
+`radar_cards_v`, which is `origin = 'radar'`, so a FILLED manual card is not
+on the panel. `_open_cards_section` now appends `_sheet_in_trade(card)` after
+each row: for a FILLED manual card, `radar_panel.render_in_trade(…,
+structural_stop=None, last=None, source="sheet")` — the SAME forms posting to
+the SAME routes (plain `<form method="post">` here; the sheet has no fetch
+script). No ↺ (no Cobalt stop; the row's own "↺ reset = re-enter the card
+stop" wording stays, v3 §5); price fields empty (no last price is read here).
+`_card_controls` is unchanged — its FILLED row still carries the edge-table
+CLOSE button, which posts to C2 fix r1's F1 refusal.
+
+Tests: `tests/cobalt/test_s3_c3_panel_offline.py` (routes through TestClient
+with recorders, refusals verbatim, `market_reset`, the S-WEB seam),
+`tests/cobalt/test_s3_c3_panel_db.py` (end to end on `cobalt_dev`, inside the
+suite transaction with `0021` applied there). The POST allowlist in
+`test_radar_panel_cards.py` names the eight routes.
