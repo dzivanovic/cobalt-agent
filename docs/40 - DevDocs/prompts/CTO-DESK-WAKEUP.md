@@ -18,7 +18,7 @@ SEAT PROFILE — the active vendor’s commands; changes only on his ruling. The
 - MEASURE: `sh /Users/cobalt/.claude/ops/desk-context.sh <id> 250000`
 
 STEP 0 — HANDOVER
-1. Read the last line of the newest `D/reports/cto-<date>.md`.
+1. Read the last line of the newest `D/reports/cto-<date>.md`. A HANDOVER there that does not name you → `tail -n 1` once more before any other read (the predecessor writes it seconds after LAUNCH; wake-up log 09-29 08:55).
 2. `HANDOVER: predecessor <p> → successor <s> at <time>` → you are `<s>`; record it in §5 and open CHECKLIST `## handover`. Your session ID = your job directory's name (`$CLAUDE_JOB_DIR`) or LIST's newest background row with cwd `~/cobalt`. A HANDOVER applies only when its successor ID matches yours. Predecessor still `working` in LIST → WAIT-DESK once, nothing else until it returns: no status checks, pane reads or Monitor; its output is the final line to re-read. End it only in the safe state (CHECKLIST H2). A missing process-list row alone does not establish death. A pane → leave it, name it in the plate as closable.
 3. No HANDOVER line (crash, reboot, hand launch) → no predecessor. Your id = LIST's background row with cwd `~/cobalt`, started now. READ steps 5–6 rebuild the rest.
 4. One herdr tab "CTO" with a live VIEW of you; create or re-attach as needed; close any other desk tab.
