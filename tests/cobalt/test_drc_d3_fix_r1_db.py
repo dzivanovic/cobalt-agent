@@ -137,15 +137,18 @@ def test_f7r2_the_snapshot_helper_fails_through_its_note_half_where_the_old_rows
     _drop(D, E1.read_bytes(), STATS.read_bytes())
     before = _build_rows(migrated, D)
     _snapshot_holds(migrated, root, before, Decimal("49.9"))
-    # the input: fix r1's, verbatim
-    cards[0]["stop"] = Decimal("48.0")
-    real_build.run_drc_build(real_build.event_of(D, DrcStore()), deps=real_build.default_deps())
+    # the input: no rebuild, no card change — the helper asked for a stop the
+    # note does not carry
     # the old assertion passes on the input
     assert _build_rows(migrated, D) == before
     # the new one fails through its note half only
     with pytest.raises(AssertionError) as e:
-        _snapshot_holds(migrated, root, before, Decimal("49.9"))
+        _snapshot_holds(migrated, root, before, Decimal("48.0"))
     assert str(e.value).startswith("  - card: "), str(e.value)
+    # fix r1's rebuild leg, kept: the note half sees a rebuild
+    cards[0]["stop"] = Decimal("48.0")
+    real_build.run_drc_build(real_build.event_of(D, DrcStore()), deps=real_build.default_deps())
+    _snapshot_holds(migrated, root, _build_rows(migrated, D), Decimal("48.0"))
 
 
 @requires_db

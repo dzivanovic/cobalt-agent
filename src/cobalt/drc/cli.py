@@ -48,6 +48,12 @@ VIA = "cli"
 #: What a dry run's rules unit says instead of regenerating the rules file
 #: (L10: a dry run writes nothing; the real build regenerates, F41).
 DRY_RUN_RULES = "rules: not regenerated on a dry run — the build re-reads Rules.md"
+#: `build --dry-run --no-trades` is refused (L10, L1): the no-trade path
+#: writes a statement, and its one preview is `state-book`'s dry run (L3).
+DRY_RUN_NO_TRADES = (
+    "refused: --dry-run with --no-trades — a no-trade DRC is a statement; preview it with "
+    "cobalt drc state-book --no-trade DAY (a dry run unless --apply)"
+)
 
 
 @dataclass(frozen=True)
@@ -262,6 +268,9 @@ def cmd_build(args: argparse.Namespace, deps=None) -> None:
     stored rows and its event — the CLI moves no event state (D2's). With
     `--no-trades` it is D2's `imports.no_trade` (its refusals, its AMENDED
     C7 rebuild, its file-less event) — one path (L3)."""
+    if args.dry_run and args.no_trades:
+        print(DRY_RUN_NO_TRADES)
+        raise SystemExit(2)
     from . import build
     from .imports import no_trade
 
