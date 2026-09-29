@@ -284,3 +284,44 @@ def test_e8_on_the_real_rows_a_vanished_trade_keeps_its_voice_unit_orphaned(buil
     assert lines[at + 1] == "my CCC answer"
     assert lines[at - 2] == f"orphaned — trade {ccc} is not in the current trading log"
     assert _event(migrated, D)[0] == "done"
+
+
+# ---------------------------------------------------------------------
+# D3-9 (09-29 R32 / R33) — the K10 guards resolve `user.drc_events`
+# ---------------------------------------------------------------------
+
+
+@requires_db
+@pytest.mark.parametrize("check_id", ["K10.1", "K10.2"])
+def test_the_k10_guards_find_drc_events_in_the_migrated_transaction(migrated, tmp_path, check_id):
+    """The committed row through `checks.default_deps(prod=False)`'s read
+    path inside the migration transaction: the `to_regclass('user.drc_events')`
+    statement is read and answers `present = True`, so the verdict is NOT
+    the guard's FAIL — EXPECTED `KNOWN` pending (no event on the
+    constructed day)."""
+    import dataclasses
+
+    from cobalt.smoke import checks
+    from cobalt.smoke.config import SUITES_DIR, load_suite
+    from cobalt.smoke.models import Verdict
+
+    from test_smoke import ctx
+
+    check = {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}[check_id]
+    live = checks.default_deps(prod=False)
+    seen = []
+
+    def spy(statement, side):
+        result = live.read_rows(statement, side)
+        seen.append((statement, side, result))
+        return result
+
+    note = tmp_path / "DRC.md"
+    note.write_text("")
+    deps = dataclasses.replace(live, read_rows=spy, drc_note_path=lambda day: note)
+    out = checks.evaluate(check, ctx(prod=False, last_trading_day=D), deps)
+    guard = [s for s in seen if "to_regclass('user.drc_events')" in s[0]]
+    assert len(guard) == 1, [s[0] for s in seen]
+    assert guard[0][1] == "user" and guard[0][2].rows == [(True,)]
+    assert not (out.verdict is Verdict.FAIL and "user.drc_events" in out.detail), out.detail
+    assert out.verdict is Verdict.KNOWN, out.detail

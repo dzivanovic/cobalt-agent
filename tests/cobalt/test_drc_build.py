@@ -1010,8 +1010,10 @@ def test_the_miss_line_smoke_row_is_pending_fail_or_pass_by_the_event(tmp_path, 
         path.write_text("<!-- cobalt:section drc-misses -->\n<!-- cobalt:unit miss_line -->\nMisses\n"
                         "<!-- /cobalt:unit miss_line -->\n<!-- /cobalt:section drc-misses -->\n")
     answer = rows(["event_state", "event_error"], *([] if state is None else [[state, "x" if state == "failed" else None]]))
+    present = rows(["present"], [True])  # D3-9: the `user.drc_events` guard answers first
     out = checks.evaluate(check, _smoke_ctx(), smoke_deps(
-        read_rows=lambda statement, side: answer, drc_note_path=lambda day: path,
+        read_rows=lambda statement, side: present if "to_regclass" in statement else answer,
+        drc_note_path=lambda day: path,
         read_text=lambda p: Path(p).read_text()))
     assert out.verdict.value == expected, out.detail
 
@@ -1029,7 +1031,9 @@ def test_the_miss_line_write_smoke_row_is_conditional_too(state, writes, expecte
 
     check = {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}["K10.2"]
     answer = rows(["event_state", "writes"], [state, writes])
-    out = checks.evaluate(check, _smoke_ctx(), smoke_deps(read_rows=lambda statement, side: answer))
+    present = rows(["present"], [True])  # D3-9: the `user.drc_events` guard answers first
+    out = checks.evaluate(check, _smoke_ctx(), smoke_deps(
+        read_rows=lambda statement, side: present if "to_regclass" in statement else answer))
     assert out.verdict.value == expected, out.detail
 
 

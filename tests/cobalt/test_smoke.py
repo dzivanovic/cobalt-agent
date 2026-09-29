@@ -1516,3 +1516,59 @@ def test_a_url_without_variables_and_every_non_http_render_is_unchanged():
     assert checks.command_for(k3, plus) == hand_command(checks.render_sql(k3.query, plus), side="system",
                                                         prod=True)
     assert "TIMESTAMPTZ '2026-09-19T19:11:42+00:00'" in checks.render_sql(k3.query, plus)
+
+
+# ---------------------------------------------------------------------
+# DRC D3-9 (09-29 R32 / R33): an absent DRC relation is a FAIL naming it,
+# never an ERROR — K10.1 / K10.2 guarded on `user.drc_events`
+# ---------------------------------------------------------------------
+
+#: `0019`'s table: its foreign keys name `drc_imports` and
+#: `drc_stated_books`, so its presence proves the three K10 reads.
+DRC_GUARD = "user.drc_events"
+DRC_RELATION = re.compile(r"\bdrc_[a-z_]+\b")
+
+
+def _drc_sql(check) -> str:
+    """The SQL a committed check reads: a `sql` row's query, or the DRC
+    event read a `vault_unit` row with `note: drc` makes."""
+    if check.kind == "sql":
+        return check.query
+    if check.kind == "vault_unit" and check.note == "drc":
+        return checks.DRC_EVENT_SQL
+    return ""
+
+
+def test_every_committed_drc_read_declares_the_drc_events_guard():
+    """Every committed check whose SQL names a `drc_` relation declares
+    `requires_relation: user.drc_events` — else, before the DRC deploy's
+    migrate step (and on `cobalt_dev`, L76), its probe ERRORs (the E7 red)."""
+    suite = load_suite(SUITES_DIR / "s2.yaml")
+    reading = [c for c in suite.checks if DRC_RELATION.search(_drc_sql(c))]
+    assert {c.id for c in reading} >= {"K10.1", "K10.2"}
+    unguarded = [c.id for c in reading if getattr(c, "requires_relation", None) != DRC_GUARD]
+    assert unguarded == [], f"DRC reads without requires_relation: {DRC_GUARD}: {unguarded}"
+
+
+@pytest.mark.parametrize("check_id", ["K10.1", "K10.2"])
+def test_an_absent_drc_relation_fails_k10_naming_it_never_errors(check_id):
+    """The committed row against a database without the DRC tables:
+    `to_regclass` answers `present = False`, any other statement raises
+    the E7 red's error. EXPECTED `FAIL` naming `user.drc_events` after
+    exactly one read — the main / event query never run, the note never
+    asked (`drc_note_path` unexpected)."""
+    from psycopg.errors import UndefinedTable
+
+    check = {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}[check_id]
+    read = []
+
+    def read_rows(statement, side):
+        read.append((statement, side))
+        if "to_regclass" in statement:
+            return rows(["present"], [False])
+        raise UndefinedTable('relation "drc_events" does not exist')
+
+    out = checks.evaluate(check, ctx(), deps(read_rows=read_rows))
+    assert out.verdict is Verdict.FAIL, out.detail
+    assert DRC_GUARD in out.detail
+    assert len(read) == 1, read
