@@ -294,3 +294,38 @@ def test_market_reset_refuses_the_note_write(vault):
         write(card(), [leg()], store, create_only=True, now=lambda: RESET)
     assert list((vault / TRADES_DIR).iterdir()) == []
     assert store.rows == []
+
+
+# ---------------------------------------------------------------------
+# C4 fix r1 — F1: the test guard (conftest `trade_note_path_guard`)
+# ---------------------------------------------------------------------
+
+
+def test_a_trade_note_path_outside_tmp_path_fails_loud(trade_note_path_guard):
+    with pytest.raises(AssertionError, match="outside tmp_path"):
+        trade_note_module.resolve_target(TRADES_DIR, "x.md")
+    assert len(trade_note_path_guard) == 1
+    trade_note_path_guard.clear()   # tripped on purpose; the teardown then passes
+
+
+# ---------------------------------------------------------------------
+# C4 fix r1 — RUN U2 (L70): run, never argued. It PRINTS what happened
+# and asserts NOTHING about the outcome.
+# ---------------------------------------------------------------------
+
+
+def _line(path, key):
+    return next((line for line in path.read_text().split("\n") if line.startswith(f"{key}:")), None)
+
+
+def test_run_u2_a_typed_exit_price_after_a_later_write(vault):
+    store = MemoryWriteStore()
+    path, _ = write(card(), [leg()], store, create_only=True)
+    path.write_text(path.read_text().replace("exit_price:\n", "exit_price: 5.10\n"))   # the test's hand edit
+    before = _line(path, "exit_price")
+    _, action = write(_closed(card()), [leg(), exit_leg(shares=100, preset="flat")], store)
+    print(f"\nRUN U2 · close write {action} (one confirmed exit leg @ 5.6000)")
+    print(f"U2 exit_price before: {before!r}")
+    print(f"U2 exit_price after:  {_line(path, 'exit_price')!r}")
+    print(f"U2 entry_time after:  {_line(path, 'entry_time')!r}")
+    print(f"U2 exit_time after:   {_line(path, 'exit_time')!r}")

@@ -331,6 +331,32 @@ def test_the_retry_refuses_a_card_that_is_not_filled(note_world, capsys):
 
 
 # ---------------------------------------------------------------------
+# C4 fix r1 — RUN U1 (L70): run, never argued. It PRINTS what happened
+# and asserts NOTHING about the outcome.
+# ---------------------------------------------------------------------
+
+
+def test_run_u1_a_nan_or_negative_price_posted_to_the_manual_fill(note_world):
+    from test_s3_c3_panel_db import _counts
+
+    client = TestClient(note_world["client"].app, raise_server_exceptions=False)
+    print("\nRUN U1 · POST /fill on a fresh manual card per input")
+    for price in ("NaN", "-1"):
+        card_id = manual_card(note_world["aset"])
+        before = _counts(note_world)
+        response = client.post("/fill", data={
+            "card_row_id": str(card_id), "orig_timestamp": "2026-09-03T10:00:00-04:00",
+            "actual_fill": price, "fill_shares": "100"})
+        after = _counts(note_world)
+        row = card_row(note_world["aset"], card_id)
+        print(f"U1 /fill card {card_id} actual_fill={price!r} → {response.status_code} · "
+              f"body[:200]={response.text[:200]!r}")
+        print(f"U1   counts before {before} · after {after} · legs {before['legs']} → {after['legs']}")
+        print(f"U1   card row: state={row['state']!r} actual_fill={row['actual_fill']!r} "
+              f"trade_note_path={row['trade_note_path']!r}")
+
+
+# ---------------------------------------------------------------------
 # X3 on the real `vault_writes` store (the offline finding, repeated)
 # ---------------------------------------------------------------------
 

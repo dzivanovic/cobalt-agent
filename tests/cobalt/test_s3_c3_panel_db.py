@@ -500,6 +500,16 @@ def test_run_r1_a_nan_or_negative_price_posted_to_the_taps(panel_world):
     print(f"R1 state of {triggered} now: {panel_world['cards'].state_of(triggered).value}")
 
 
+def test_a_panel_fill_writes_its_note_in_the_tmp_path_vault(panel_world):
+    """C4 fix r1 — F1: the fill's note lands in the fixture's tmp_path vault (L28)."""
+    from legs_db_support import card_row
+    from trade_note_support import TRADES_DIR
+
+    card_id = _filled(panel_world)
+    assert (panel_world["vault"] / TRADES_DIR / "Trade-2026-09-03 10-00-00 -ZZPB.md").exists()
+    assert card_row(panel_world["aset"], card_id)["trade_note_path"] is not None
+
+
 def test_run_r2_the_sheet_get_and_the_radar_get_count_every_row(panel_world, monkeypatch):
     from cobalt.aset import web as web_module
 
