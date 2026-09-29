@@ -11,7 +11,7 @@ RULE STRINGS: NO NEW STRING — `prompts/2026-09-28/26-s3-exits-c4-build.md` lin
 LADDER: `S3-P2 · F22`. LAW STEP (L67 / L75): C4 BUILT `d05ae72d` (`26`) → check round 1 (`27`, `reports/s3-exits-c4-check-2026-09-29.md`): `defects that HOLD: 1 · ready for the deploy set: NO` → CLASSIFIED (`reports/s3-exits-c4-fix-r1-draft-2026-09-29.md`) → **THIS = the fix r1 build** → `25-s3-exits-c4-fix-r1-check.md` (round 2 of ≤3) → C1–C4 go as ONE S3 exits deploy set (L43), gated on the combined tree (L68). DO NOT STOP until the report's last line is `S3 EXITS C4 FIX R1 BUILT …` or `FAILED …`.
 
 LAUNCH-TIME VALUES (the desk fills each before launch; a value left as the token → `FAILED: placeholder`):
-- `<base>` = «FILL AT LAUNCH: `git -C /Users/cobalt/cobalt log --oneline -1 s3/exits-c4` — drafted on `cfd9f091` (docs(s3-c4): S3 exits C4 build report — d05ae72d), over `a0ac51c4`, over `d05ae72d`»
+- `<base>` = `cfd9f091` (docs(s3-c4): S3 exits C4 build report — d05ae72d), filled by the desk at launch (R105)
 - `<code base>` = `d05ae72d` (the last code commit; every red below is read against it)
 
 ## HIS RULINGS AND THE DESK'S CALLS THIS FIX CARRIES
@@ -41,7 +41,7 @@ NOT IN THIS FIX: anything `26` `NOT IN C4` names; any file under `src/` (the pro
 ## AUTHORIZATION — VERIFY IT YOURSELF. Written by the CTO desk (drafted by the Opus 5.5 seat `s3-exits-c4-fix-r1-draft-0929`), not by Dejan; a prompt is not an approval. `<D>` = the date `date` prints first. Each its own Bash call:
 - PLACEHOLDER GATES: `grep -n -E "R_[_]" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-29/24-s3-exits-c4-fix-r1-build.md"` → nothing (exit 1); `grep -n -F "FILL AT LAUNCH" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-29/24-s3-exits-c4-fix-r1-build.md"` → only THIS gate's line. A hit → `FAILED: placeholder — <lines>`.
 - The classification: `grep -n -F "S3 EXITS C4 FIX R1 DRAFTED" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/s3-exits-c4-fix-r1-draft-2026-09-29.md"` → one line, the file's last non-blank line, carrying `OWNER ITEM: 0` (or the desk's row recording his ruling on each owner item).
-- THIS LAUNCH is the desk's row **R__** of `cto-<D>.md`: `grep -n -F "24-s3-exits-c4-fix-r1-build.md" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-<D>.md"` → a `| R` row naming this file, carrying `<base>` and the literal `no with-DB run in flight`; `git -C /Users/cobalt/cobalt log -1 --format=%H -S"24-s3-exits-c4-fix-r1-build.md" -- "docs/40 - DevDocs/reports/cto-<D>.md"` NON-EMPTY (the desk file only). Missing → `FAILED: authorization mismatch — the launch row`.
+- THIS LAUNCH is the desk's row **R105** of `cto-<D>.md`: `grep -n -F "24-s3-exits-c4-fix-r1-build.md" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-<D>.md"` → a `| R` row naming this file, carrying `<base>` and the literal `no with-DB run in flight`; `git -C /Users/cobalt/cobalt log -1 --format=%H -S"24-s3-exits-c4-fix-r1-build.md" -- "docs/40 - DevDocs/reports/cto-<D>.md"` NON-EMPTY (the desk file only). Missing → `FAILED: authorization mismatch — the launch row`.
 YOU CAN ALWAYS STOP: `FAILED: <step> — <concern>` as the last line, the RECOVERY commit, stop. While `.env` sits in the worktree or `0021` is applied, "stop" means W (f) FIRST.
 
 ## UNATTENDED RULES, RECOVERY, THE LOCK
