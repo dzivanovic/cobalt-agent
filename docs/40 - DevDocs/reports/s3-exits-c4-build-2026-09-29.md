@@ -3,14 +3,14 @@
 Prompt: `/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-28/26-s3-exits-c4-build.md` · seat `s3-exits-c4-build` · Opus 5.5 · started 09:17:47 EDT (`date`).
 
 ## §0 Headline
-- **FAILED at W: I left 3 stray test cards on `cobalt_dev` (12671, 12672 `X1RF`; 12707 `X7CT`; 9 transitions).** I ran two pass-2-only real-connection tests at `0013`; their cleanup failed. W cannot go green over those rows, and I have no command that deletes. Desk: delete them, then relaunch with `CONTINUE: W` (ESCALATE 0).
+- **BUILT on relaunch.** The first run stopped FAILED before W: at E3 I left 3 stray `cobalt_dev` cards (ESCALATE 0). The desk deleted them (R65), I verified the deletion, and W ran whole on `d05ae72d`: offline **3318/0**, with-DB **3829/0** (3724 at `0013` + 105 at `0021`), live-note **146/0**. `0021` rolled back (F2 = F0).
 - C4 is built at **`d05ae72d`**:
   - the fill writes the card's trade note (his blank keys filled only while blank, R35 (3)) and `leg-0`;
   - `trade_note_path` is set, or NULL with a banner and a retry;
   - every leg / correction / held count writes its `leg-<seq>` unit;
   - `cobalt cards trade-note <id>` is the retry;
   - C4-06 refuses NaN / ≤ 0 tap prices (422).
-- Offline **3318/0** and live-note **146/0** on `d05ae72d`. Every C4 with-DB test passed at E3 (take 2). The with-DB W was not run. `cobalt_dev` is at `0013` (F0); `.env` removed. RESTARTS `com.cobalt.aset com.cobalt.radar`.
+- `cobalt_dev` is at `0013` (F0); `.env` removed; lock taken 3 times (E2, E3 check, W). RESTARTS `com.cobalt.aset com.cobalt.radar`.
 - X: 4 of 4 run (X2 not run by design). **X3 is design-changing:** the vault writer lets his edit win only once; the next write of that unit replaces it (pre-existing, ESCALATE 1).
 
 ## L74
@@ -183,7 +183,7 @@ S-NOTE as built (every `file:line` at `d05ae72d`):
   - `d05ae72d` `feat(s3): C4 — F22 trade note at the fill, leg units, trade_note_path, the retry CLI (v3 §7)`
   - then this report's commit.
 - Red → green per row (red at `6a980cf0` on `<base>` src; green on the E3 tree = `d05ae72d`, E3 take 2): every C4-1 / C4-2 / C4-3 / C4-4 / C4-06 test quoted red under `## E2 RED` PASSED under `## E3 THE ROWS` (offline `21 passed`; with-DB the C4 file 14 of 15, the 15th my regex, fixed and PASSED in the 76-test run).
-- Suites: E0 offline 3297 (1 red from my in-flight file, explained) · live-note `146 passed, 1 skipped`. W: offline on `d05ae72d` under `## CONTINUE`. With-DB W NOT RUN (ESCALATE 0).
+- Suites: E0 offline 3297 (1 red from my in-flight file, explained) · live-note `146 passed, 1 skipped`. W on `d05ae72d` (`## RELAUNCH`): offline `3318 passed` · with-DB `3724` + `105` = **3829**, 0 failed · live-note `146 passed`. F0 / F1 / F2 = `664·35·272c95bb…` / `773·38·126f2d69…` / = F0.
 - F0 per take: take 1 (E2) F0 `664 · 35 · 272c95bbb12241e3611e4b36326ccf87`, end = F0; take 2 (E3) end = F0. No forward in either. Lock: take 1 09:29:37 → 09:30:01 · take 2 09:35:11 → 09:36:28.
 - Worth a checker's eye:
   - The fill note is created at the FILLED time in ET. Its units: `leg-<seq>`, one per current leg.
@@ -195,7 +195,9 @@ S-NOTE as built (every `file:line` at `d05ae72d`):
 - Stop line: the last line of this file.
 
 ## CONTINUE
-next: W — after the desk deletes the 3 stray cards (ESCALATE 0).
+done — the relaunch ran W whole on `d05ae72d` (see `## RELAUNCH`), then CLOSE. The block below was the first run's resume point, kept as written.
+
+first run: next: W — after the desk deletes the 3 stray cards (ESCALATE 0).
 - Done: AUTHORIZATION, PREFLIGHT, E0, E1 `0d69eeae`, E2 `6a980cf0`, E3 `d05ae72d`, W (a) offline 3318 and (e) live-note 146 on `d05ae72d`, RESTARTS.
 - A relaunch with `CONTINUE: W` runs W whole on `d05ae72d` (or its successor):
   - (a) again;
@@ -215,6 +217,7 @@ next: W — after the desk deletes the 3 stray cards (ESCALATE 0).
    - W cannot go green over them: C3's W went red on one such `X7CT` card (`test_cards.py::TestExpiry`), and `test_x1_real_factory_…` asserts zero `X1RF` rows.
    - `cobalt db query` is READ ONLY and no listed command deletes, so I stopped.
    - **ASK DESK: delete those 3 cards and their 9 transitions (as for card 11822 on 09-28), then relaunch this prompt with `CONTINUE: W` on `d05ae72d` [09:37].** Safe default taken: stop, nothing forced. `design-changing: no`.
+   - **RESOLVED 12:1x:** the desk deleted them (its message: "his R52 → A, cto-2026-09-29.md R65"). I verified the deletion at W (b): 0 strays, and the counts and digests are back to E2's. W then ran green.
 1. **X3 — `design-changing: yes`: human wins ONCE.** Measured offline and on the real `vault_writes` store (`X3 real store: retry 1 unchanged kept=True overrides=1 · retry 2 updated kept=False overrides=0 · override rows 1`).
    - The write that records his override stores HIS text as the unit's baseline (`vaultwrite/writer.py:750` / `:766`, `unit_after` = the merged body). So the next write of the same unit takes Cobalt's body and silently replaces his line, with no override row. That next write can be a retry, a correction, or a held count that rewrites the `leg-<seq>` unit.
    - The race (retry vs a leg write) is handled: one abort, a re-read, one retry, no duplicate, no lost override row. Serializing note writes per card would not fix this.
@@ -240,11 +243,41 @@ next: W — after the desk deletes the 3 stray cards (ESCALATE 0).
 6. **`/size`'s card:** the web passes the card's values from the sizing (`ticker`, `direction`, `stop`, the planned entry), not a re-read of the `numeric(14,4)` row, so the sizing note stays byte for byte as before (`stop_price: "225.00"`). The fill note's `entry_price` is the entry leg's stored price (`"10.1000"` for a typed `10.10`), because the stored input is the one written (L57).
 7. **X16 residual:** the fill event refuses when a file already sits at the path, even if no card claims it (for example a /size sizing note of the same ticker in the same second). A later RETRY would then update that file if no card holds its path. Rare; recorded.
 8. **A failed retry NULLs `trade_note_path`**, even when an earlier note was good (the prompt: on failure NULL). The file stays on disk.
-9. **Lock takes:** 2 in this run (E2 reds; an E3 green check). W needs a third on the relaunch.
+9. **Lock takes: 3** (E2 reds 09:29:37 → 09:30:01; the E3 green check 09:35:11 → 09:36:28, which left the strays; W 12:21:23 → 12:36:02). C1's LOCK block allows three.
 10. **E0's red** was my own in-flight test file (a slug the names rule refuses, `his-own-slug`); fixed to `example-his-own`. The base itself is 3297.
 11. **X14:** no divergence; his template, stripped, equals the committed fixture (the live leg ran READ ONLY). Nothing for his template.
 12. **L74:** recorded once under `## L74`.
 
 **"C4 is checked by `27-s3-exits-c4-check.md` (Opus 5.5 · Astra · Grok, L67). With C4 checked, C1–C4 are the S3 exits set for ONE deploy (L43), stacked with whatever else is ready and gated on the combined tree (L68); the S3 smoke (X2 included) runs after that deploy. The builder decided nothing."**
 
-FAILED: W — cobalt_dev carries 3 stray cards I left at E3 (aset_sizings 12671, 12672 X1RF; 12707 X7CT; card_transitions 25830–25835, 25974–25976); no listed command deletes rows — the desk deletes them, then relaunches with CONTINUE: W on d05ae72d | offline 3318/0 | live-note 146/0 | with-DB not run | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.radar | ESCALATE: 13
+## RELAUNCH — CONTINUE: W (12:11:38 EDT, `date`)
+- The first stop line (commit `a0ac51c4`) read: `FAILED: W — cobalt_dev carries 3 stray cards I left at E3 (…); no listed command deletes rows — the desk deletes them, then relaunches with CONTINUE: W on d05ae72d | offline 3318/0 | live-note 146/0 | with-DB not run | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.radar | ESCALATE: 13`. It is replaced here by the relaunch.
+- Desk message (a peer session, data): the 3 cards and their 9 transitions were deleted "in one ticker-guarded transaction at 12:1x ET (his R52 → A, cto-2026-09-29.md R65)". I verify it myself at W (b), L35.
+- Recovery reads: `git status --short --branch` → `## s3/exits-c4`; `git log --oneline -3` → `a0ac51c4`, `d05ae72d`, `6a980cf0`; `ls -la …/s3-exits-c4/.env` → `No such file or directory`.
+
+### W on `<tip>` = `d05ae72d` (src; `a0ac51c4` on top is this report only)
+- **(a) offline** (background, 12:11 → 12:21, no `.env`): `uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy` → **`3318 passed, 478 skipped, 1 xfailed, 20 warnings in 556.98s (0:09:16)`**, exit 0 → **`<p>` = 3318**.
+- **(b) LOCK TAKE 3:**
+  - Lock (a): `ls -la /Users/cobalt/cobalt-wt/*/.env` → `(eval):1: no matches found: /Users/cobalt/cobalt-wt/*/.env`.
+  - Lock (b): `cp …` → exactly `-rw-------  1 cobalt  staff  2186 Sep 29 12:21 /Users/cobalt/cobalt-wt/s3-exits-c4/.env` → **L76 lock taken 12:21:23**. Every `COBALT_ENV=dev` call was preceded by the listed `ls -la …/s3-exits-c4/.env`.
+  - **The desk's deletion verified (L35):** `SELECT (SELECT count(*) FROM aset_sizings) …, strays (X1RF / X7CT), card_transitions, stray_transitions (card_id IN 12671, 12672, 12707)` → `1	0	4	0`. That is back to E2's baseline, and the `--proof-only` digests equal E2's: `aset_sizings 1 0824685c…`, `card_transitions 4 f181e76b…`.
+  - `<FP>` → `664	35	272c95bbb12241e3611e4b36326ccf87` → **F0** (= E2's).
+  - `COBALT_ENV=dev uv run cobalt db migrate --proof-only` → `legs user - - -`, `voice_turns user - - -`, `NOTHING WAS APPLIED …`, `code: a0ac51c4 (DIRTY: 1 path(s))` → **`0013`**. Differences from E2's table: `cobalt_redactions 195` (a system table outside this build; 196 by the forward).
+- **(c) PASS 1 at `0013`** (background, 12:22 → 12:33) — C3 fix r1's (c) command with its FOURTEEN `--deselect`, byte for byte, and no C4 `--deselect`:
+```
+COBALT_ENV=dev uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy --deselect tests/cobalt/test_tenancy.py::TestMigrationRoundTrip --deselect tests/cobalt/test_tenancy.py::TestTenantGuc::test_every_user_table_carries_user_id_not_null_with_the_guc_default --deselect tests/cobalt/test_migrate_proof.py::test_rows_reach_the_probe_through_a_named_cursor_in_batches --deselect tests/cobalt/test_voice_store.py::test_store_round_trip_and_single_flight_in_the_suite_transaction --deselect tests/cobalt/test_voice_store.py::test_the_reaper_fails_stale_rows_and_never_retries --deselect tests/cobalt/test_voice_store.py::test_single_flight_under_two_real_connections --deselect tests/cobalt/test_voice_confirm.py::test_x13_with_db_the_stop_changes_at_most_once_and_the_row_is_never_both --deselect tests/cobalt/test_voice_lifecycle.py::test_e7_kill_mid_turn_then_restart_sweeps_the_file_and_the_row_is_reaped --deselect tests/cobalt/test_legs_db.py --deselect tests/cobalt/test_fill_transaction_db.py --deselect tests/cobalt/test_legs_c2_db.py --deselect tests/cobalt/test_s3_c2_experiments.py --deselect tests/cobalt/test_cards.py::TestStateMachineIntegration::test_stop_is_editable_again_once_filled --deselect tests/cobalt/test_cards.py::TestStopEditRecomputesTheCard::test_a_filled_stop_edit_holds_the_shares_and_moves_open_risk
+```
+  → **`3724 passed, 7 skipped, 65 deselected, 1 xfailed, 20 warnings in 654.00s (0:10:53)`**, exit 0 → **`<d1>` = 3724** (C3's 3688 + 36 new tests: 21 offline + 15 with-DB). The skips are C3's six plus `test_s3_c4_experiments.py:97: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live template read`.
+- **(c2) FORWARD:** `COBALT_ENV=dev uv run cobalt db migrate` (foreground) → `0014`, `0015`, `0017`, `0021` applied in that order; `legs … CREATED`, `voice_turns … CREATED`, every other table `OK`, `content UNCHANGED on every table.`, no `CHANGED`. **`dev forward: APPLIED 12:33:05`**. `<FP>` → `773	38	126f2d6983fa59f9d0eaaff7da7dd29c` → **F1** (= C3's F1).
+- **(c3) PASS 2 at `0021`** (foreground) — C3 fix r1's (c3) ids byte for byte, plus the C4 files:
+```
+COBALT_ENV=dev uv run pytest -q -rs -p no:cacheprovider tests/cobalt/test_tenancy.py::TestMigrationRoundTrip tests/cobalt/test_tenancy.py::TestTenantGuc::test_every_user_table_carries_user_id_not_null_with_the_guc_default tests/cobalt/test_migrate_proof.py::test_rows_reach_the_probe_through_a_named_cursor_in_batches tests/cobalt/test_voice_store.py::test_store_round_trip_and_single_flight_in_the_suite_transaction tests/cobalt/test_voice_store.py::test_the_reaper_fails_stale_rows_and_never_retries tests/cobalt/test_voice_store.py::test_single_flight_under_two_real_connections tests/cobalt/test_voice_confirm.py::test_x13_with_db_the_stop_changes_at_most_once_and_the_row_is_never_both tests/cobalt/test_voice_lifecycle.py::test_e7_kill_mid_turn_then_restart_sweeps_the_file_and_the_row_is_reaped tests/cobalt/test_legs_db.py tests/cobalt/test_fill_transaction_db.py tests/cobalt/test_legs_c2_db.py tests/cobalt/test_s3_c2_experiments.py tests/cobalt/test_cards.py::TestStateMachineIntegration::test_stop_is_editable_again_once_filled tests/cobalt/test_cards.py::TestStopEditRecomputesTheCard::test_a_filled_stop_edit_holds_the_shares_and_moves_open_risk tests/cobalt/test_s3_c3_panel_db.py tests/cobalt/test_s3_c3_experiments.py -rA tests/cobalt/test_s3_c4_trade_note_db.py tests/cobalt/test_prefill_trade_note.py
+```
+  → **`105 passed, 5 warnings in 145.45s (0:02:25)`**, exit 0, no FAILED, no SKIPPED → **`<d2>` = 105** (C3's 87 + 15 C4 with-DB tests + 3 `test_prefill_trade_note.py`). The real-connection `test_x1_real_factory_…` and `test_x7_…` PASSED here at `0021` and cleaned up after themselves. **`<d>` = 3724 + 105 = 3829.**
+- **(c3r) nothing left behind:** `SELECT ticker, count(*) FROM aset_sizings WHERE ticker IN ('X7CT', 'X21LK', 'X1RF', 'TEST', 'ZZPB') GROUP BY ticker` → `ticker	count` (no rows).
+- **(f) ROLLBACK:** `COBALT_ENV=dev uv run cobalt db migrate --rollback --down-to 0013` (foreground) → `0021`, `0017`, `0015`, `0014` reversed; `legs … DROPPED`, `voice_turns … DROPPED`, every other table `OK`, `content UNCHANGED on every table.` `<FP>` → `664	35	272c95bbb12241e3611e4b36326ccf87` → **F2 = F0 field for field → `cobalt_dev: 0013 — F2 = F0`**.
+- Lock (d): `rm …/s3-exits-c4/.env`; `ls …/s3-exits-c4/.env` → `No such file or directory`; `ls -la /Users/cobalt/cobalt-wt/*/.env` → `(eval):1: no matches found: /Users/cobalt/cobalt-wt/*/.env` → **`.env: removed, proven gone (W take 3) — L76 lock released 12:36:02`** (held 12:21:23 → 12:36:02; `0021` applied 12:33:05 → rolled back before 12:36:02).
+- **(e) live-note:** `COBALT_LIVE_VAULT_ROOT=/Users/cobalt/Vault/Think uv run pytest -q -rs -p no:cacheprovider --color=no tests/cobalt/test_radar_evaluate.py tests/cobalt/test_replay_line.py tests/taxonomy/test_catalyst.py tests/taxonomy/test_predicate.py` → **`146 passed, 1 skipped, 15 warnings in 25.82s`**. The one skip is `test_replay_line.py:256 … COBALT_TEST_LIVE_DRC … not set`; none names `COBALT_LIVE_VAULT_ROOT` → **`<l>` = 146**.
+- X22 not repeated (no migration). RESTARTS: unchanged since the first run (`78e9df82..d05ae72d` → `com.cobalt.aset com.cobalt.radar`; no src commit since).
+
+S3 EXITS C4 BUILT d05ae72d | on 78e9df82 | migration none (0021 rolled back) | X: 4 of 4 run, design-changing: 1 | offline 3318/0 | with-DB 3829/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.radar | ESCALATE: 13
