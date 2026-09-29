@@ -15,6 +15,10 @@ write lands in the lane's `tmp_path` vault.
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from cobalt.db_migrations.cli import _apply
 
 from test_drc_d2_fix_r1_db import (
@@ -23,10 +27,12 @@ from test_drc_d2_fix_r1_db import (
     SQL,
     _check_rows,
     _checks,
+    _event_source_assertions,
     _events,
     _hashes_of,
     _no_trade_ids,
     _recorded_prior,
+    _stored_hash_assertions,
     _stub_build,
     _to_0018,
 )
@@ -100,7 +106,9 @@ def test_forged_event_hashes_fail_the_stored_hash_comparison(lane, migrated, mon
     item 2; seam §1 / L57 "the event object carries … its `book_sha256`
     and the seed row's `from_day` / `from_book_sha256`"): the file-less
     day's event matches the stored hashes; the same comparison on a copy
-    with constructed hashes fails on EACH field."""
+    with constructed hashes fails on EACH field. D3 row 0d: the control
+    calls BOTH helpers of the `returns` branch on each one-field forgery —
+    the old one passes it, the new one fails it."""
     from cobalt.drc import imports
 
     _recorded_prior()
@@ -110,6 +118,36 @@ def test_forged_event_hashes_fail_the_stored_hash_comparison(lane, migrated, mon
     book_sha256, seed_sha256 = _hashes_of(migrated, statement, D_NEXT)
     assert seed_sha256 is not None
     assert (result.event.stated_book_sha256, result.event.seed_from_book_sha256) == (book_sha256, seed_sha256)
-    forged = result.event.model_copy(update={"seed_from_book_sha256": "b" * 64, "stated_book_sha256": "c" * 64})
-    assert forged.stated_book_sha256 != book_sha256
-    assert forged.seed_from_book_sha256 != seed_sha256
+    # D3 row 0d (`58` `## FOR DEJAN` 4: "It never shows the forged copy
+    # passing the old assertions"): ONE field forged at a time — the OLD
+    # helper PASSES the copy, the NEW stored-hash helper FAILS it.
+    _event_source_assertions(result.event, statement)
+    _stored_hash_assertions(result.event, migrated, statement)
+    for field, value in (("stated_book_sha256", "c" * 64), ("seed_from_book_sha256", "b" * 64)):
+        forged = result.event.model_copy(update={field: value})
+        _event_source_assertions(forged, statement)
+        with pytest.raises(AssertionError):
+            _stored_hash_assertions(forged, migrated, statement)
+
+
+# ---------------------------------------------------------------------
+# D3 rows 0a / 0b — with-DB: an empty note path is `failed` on the row
+# ---------------------------------------------------------------------
+
+
+@requires_db
+@pytest.mark.parametrize("returned", [Path(""), ""], ids=["Path('')", "empty"])
+def test_a_file_less_build_returning_an_empty_path_is_failed_on_the_event_row(lane, migrated, monkeypatch, returned):
+    """Rows 0a / 0b (`58` `## FOR DEJAN` 1 and 2), the file-less shape of
+    F-10's test: the build stub returns `Path("")` (0a — RED on `6ebfe634`:
+    the row `done` with `note_path` `'.'`) or `""` (0b — a PIN) → the
+    `drc_events` row is `failed` with `NO_NOTE_PATH`, `note_path` NULL."""
+    from cobalt.drc import imports
+
+    _recorded_prior()
+    _stub_build(monkeypatch, lambda event: returned)
+    result = imports.no_trade(D_NEXT, now=TEN_ET)
+    (statement,) = _no_trade_ids(migrated, D_NEXT)
+    reason = imports.NO_NOTE_PATH.format(note=returned)
+    assert _events(migrated, D_NEXT) == [("stated_book", None, statement, "failed", reason, None)]
+    assert result.status_line == f"DRC build FAILED: build — {reason}"

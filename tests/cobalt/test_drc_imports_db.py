@@ -50,7 +50,11 @@ def lane(migrated, weekday_calendar, tmp_path, monkeypatch):
     root = tmp_path / "vault"
     (root / "1 - Trading" / "5 - Review").mkdir(parents=True)
     monkeypatch.setenv("COBALT_VAULT_PATH", str(root))
-    monkeypatch.delitem(sys.modules, "cobalt.drc.build", raising=False)
+    # D3 (`prompts/2026-09-28/10-drc-d3-build.md`): with the build on the
+    # tree, "not built" is made explicit — `None` in `sys.modules` makes the
+    # import raise `ModuleNotFoundError` naming `cobalt.drc.build`, D2's
+    # `BuildNotBuilt` path, exactly as the module's absence did.
+    monkeypatch.setitem(sys.modules, "cobalt.drc.build", None)
 
     class _Cards:
         def for_date(self, day):

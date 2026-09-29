@@ -134,6 +134,20 @@ def _hashes_of(conn, statement: int, day) -> tuple[str, str]:
     return book, inputs["from_book_sha256"]
 
 
+def _event_source_assertions(event, statement: int) -> None:
+    """The `returns` branch's OLD assertions (the source and the kind)."""
+    assert event.stated_book_id == statement and event.import_id is None
+    assert event.kind == "no_trade" and event.seed_from_day == D
+
+
+def _stored_hash_assertions(event, conn, statement: int) -> None:
+    """The `returns` branch's NEW assertions (D2 fix r2 F-6): the event's
+    two hashes against the stored rows."""
+    book_sha256, seed_sha256 = _hashes_of(conn, statement, D_NEXT)
+    assert event.stated_book_sha256 == book_sha256
+    assert event.seed_from_book_sha256 == seed_sha256 and seed_sha256 is not None
+
+
 # ---------------------------------------------------------------------
 # §1 test 12 — the registry, the placement map, the SQL (offline)
 # ---------------------------------------------------------------------
@@ -259,11 +273,10 @@ def test_s1_1_a_file_less_no_trade_day_fires_one_stated_book_event(lane, migrate
     assert (event["state"], event["error"], event["note_path"]) == expected
     if build == "returns":
         assert result.status_line == f"no-trade day recorded → DRC built: {NOTE_PATH}"
-        assert result.event.stated_book_id == statement and result.event.import_id is None
-        assert result.event.kind == "no_trade" and result.event.seed_from_day == D
-        book_sha256, seed_sha256 = _hashes_of(migrated, statement, D_NEXT)
-        assert result.event.stated_book_sha256 == book_sha256
-        assert result.event.seed_from_book_sha256 == seed_sha256 and seed_sha256 is not None
+        # D3 row 0d (`58` `## FOR DEJAN` 4, a NAMED EDIT): the same
+        # assertions, moved into two helpers so F-6's control can call each.
+        _event_source_assertions(result.event, statement)
+        _stored_hash_assertions(result.event, migrated, statement)
     else:
         assert result.status_line == f"DRC build FAILED: build — {expected[1]}"
         assert "DRC built" not in imports.render_status(imports.day_view(D_NEXT))

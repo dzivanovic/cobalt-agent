@@ -17,6 +17,7 @@ Constructed names, dates and symbols; D1's fixtures only (L32 / L45).
 from __future__ import annotations
 
 import hashlib
+import sys
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
@@ -231,6 +232,11 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setenv("COBALT_VAULT_PATH", str(root))
     drc = _Drc()
     wstore = _WriteStore()
+    # D3 (`prompts/2026-09-28/10-drc-d3-build.md`): the build is on the tree;
+    # this double's D2 tests keep it NOT BUILT explicitly (`None` in
+    # `sys.modules` → `ModuleNotFoundError` naming `cobalt.drc.build`, D2's
+    # `BuildNotBuilt` path, as the module's absence did).
+    monkeypatch.setitem(sys.modules, "cobalt.drc.build", None)
     monkeypatch.setattr(imports, "DrcStore", lambda: drc)
     monkeypatch.setattr(imports, "VaultWriteStore", lambda: wstore)
     monkeypatch.setattr(SessionBlockStore, "record", lambda self, **kw: None)
