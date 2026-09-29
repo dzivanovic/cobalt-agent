@@ -152,9 +152,25 @@ def test_the_card_snapshot_survives_a_later_card_change(built, migrated):
     _drop(D, E1.read_bytes(), STATS.read_bytes())
     before = _build_rows(migrated, D)
     cards[0]["stop"] = Decimal("48.0")
-    assert _build_rows(migrated, D) == before
+    _snapshot_holds(migrated, root, before, Decimal("49.9"))
     aaa = next(r for r in before if r[2].startswith("AAA-"))
     assert aaa[3]["card"]["stop"] == "49.9"
+
+
+def _snapshot_holds(conn, root: Path, before, stop: Decimal) -> None:
+    """D3 fix r1 F-7 (`drc-d3-check-2026-09-25.md:110`, L35): the snapshot
+    holds only if BOTH the stored `build_*` rows EQUAL `before` AND the
+    note's `card:` line for the AAA trade still carries `stop` — a rebuild
+    with the changed card moves both, so this can fail."""
+    from cobalt.drc import units
+    from cobalt.vaultwrite.markers import find_section
+
+    assert _build_rows(conn, D) == before
+    aaa = next(r[2] for r in before if r[2].startswith("AAA-"))
+    lines = _note(root, D).read_text().split("\n")
+    body = find_section(lines, "drc-trades").units[f"trade-{aaa}"].body(lines)
+    (card,) = [line for line in body if line.startswith("  - card: ")]
+    assert f" · stop {units.money(stop)} · " in card, card
 
 
 @requires_db
@@ -189,6 +205,7 @@ def test_a_re_pair_rebuilds_the_later_days_build_rows_and_note(built, migrated):
     _drop(D_NEXT, EEE_ROUND, STATS.read_bytes())
     later_before = {r[0] for r in _build_rows(migrated, D_NEXT)}
     assert later_before
+    before_text = _summary_text(root, D_NEXT)
     _state(D)
     _drop(D, DAY1.read_bytes(), STATS.read_bytes())
     ((derived,),) = migrated.execute(
@@ -200,6 +217,26 @@ def test_a_re_pair_rebuilds_the_later_days_build_rows_and_note(built, migrated):
     (day_row,) = [r for r in _build_rows(migrated, D_NEXT) if r[1] == "build_day"]
     assert day_row[3]["seed"]["source"] == "carried" and day_row[3]["seed"]["from_day"] == D.isoformat()
     assert _note(root, D_NEXT).is_file()
+    _note_rebuilt(root, D_NEXT, before_text, day_row)
+
+
+def _summary_text(root: Path, day: date) -> str:
+    from cobalt.vaultwrite.markers import find_section
+
+    lines = _note(root, day).read_text().split("\n")
+    return "\n".join(find_section(lines, "drc-summary").units["summary"].body(lines))
+
+
+def _note_rebuilt(root: Path, day: date, before_text: str, day_row) -> None:
+    """D3 fix r1 F-8 (`drc-d3-check-2026-09-25.md:111`, L35): the later
+    day's note was REWRITTEN — its `drc-summary/summary` text differs from
+    the text before the re-pair AND equals `units.summary(<the re-paired
+    build_day row>)` as the note holds it (`is_file()` alone cannot fail)."""
+    from cobalt.drc import units
+
+    after = _summary_text(root, day)
+    assert after != before_text
+    assert after == units.summary({"inputs": day_row[3], "derived": day_row[4]})
 
 
 # ---------------------------------------------------------------------
