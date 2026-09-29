@@ -199,7 +199,6 @@ def test_run4_the_real_cards_read_inside_get_drc_writes_nothing(lane, migrated, 
 # ---------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="RUN-5 red on 8e8762ca — a round-3 finding, not fixed in fix r1 (L70/L75)")
 def test_run5_a_not_computed_days_unbound_screenshot_is_listed_somewhere(world):
     """RUN-5 (`08` `:151`). On the `_Drc` double: a day whose `day` row
     carries `not_computed.pairing` (no book stated) and ONE current

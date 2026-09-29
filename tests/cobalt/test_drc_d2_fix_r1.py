@@ -36,6 +36,12 @@ def _stub_build(monkeypatch, run):
     monkeypatch.setitem(sys.modules, "cobalt.drc.build", module)
 
 
+def _holders(root: Path, needle: bytes) -> list[Path]:
+    """Every FILE under `root` whose bytes hold `needle` — any extension
+    (D2 fix r2 F-8: `grep -rn -F` over `src`, not `*.py` under the package)."""
+    return sorted(p for p in root.rglob("*") if p.is_file() and needle in p.read_bytes())
+
+
 def _ready_day(world):
     """A READY, computed day on the double: both logs placed from a flat book."""
     from cobalt.drc import imports
@@ -105,8 +111,9 @@ def test_s1_10_a_done_file_less_day_shows_its_stored_note_path_and_no_trade_wait
     assert view.state == "no-trade" and view.status_line == line
     assert f'<div class="status">{line}</div>' in drc_page.render(view)
     assert not hasattr(imports, "NO_TRADE_WAITS")
-    src = Path(imports.__file__).resolve().parents[1]
-    assert [p for p in src.rglob("*.py") if "NO_TRADE_WAITS" in p.read_text()] == []
+    src = Path(imports.__file__).resolve().parents[2]
+    assert src.name == "src"
+    assert _holders(src, b"NO_TRADE_WAITS") == []
 
 
 # ---------------------------------------------------------------------
