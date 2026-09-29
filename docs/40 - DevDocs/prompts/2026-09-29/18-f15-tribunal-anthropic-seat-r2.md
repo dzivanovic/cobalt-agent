@@ -10,7 +10,7 @@ REPORT (named ONCE here, and identical in `17` §3): `/Users/cobalt/cobalt/docs/
 
 FABLE ROW: R109
 
-LAUNCH ROW: R__
+LAUNCH ROW: R107
 
 # DESIGN TRIBUNAL, ROUND 2 — THE ANTHROPIC SEAT, BLIND. DESIGN: F15 PREDICTION RECORDS + `replay(card_id)`, the DRAFT FINAL `docs/30 - Design/F15-PREDICTION-RECORDS-v2-2026-09-29.md`. LADDER: `S3-P3 · F15` (`SPRINT-LADDER-v0_1.md:648`; S3 stops 10-07 and is AT RISK: the FINAL is needed by about 10-01). LAW STEP (L67): proposal → round 1 (Grok, Gemini, you; Astra TIMEOUT, no round spent) → derive (you, second job: `F15 DERIVED · DRAFT FINAL · folds: 31 · verbatim: 14 · needs round 2: 6 · …`) → **THIS = your round-2 ruling on R2-1 … R2-5 ONLY, written beside Astra / Grok / Gemini and WITHOUT reading them** (Astra rules the 20 round-1 items and R2-A; you do not rule R2-A, and you do not rule the items Astra marks INCORRECT — they are sent to the houses that launch after her) → the round-2 derive (`19`, you again, after both round-2 stop lines) → the FINAL. **R2-1 gates P1's write site, R2-2 P1's migration, R2-3 P1's column, R2-4 P1's base tree, R2-5 the L52 (c) seam a build prompt cites.** His rulings (R57, R59, R95–R97, R109) are NEVER re-opened; round 2 settles mechanism. DO NOT STOP until the report's last line is `F15 ANTHROPIC R2 DONE …` or `FAILED …`.
 
