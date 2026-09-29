@@ -284,6 +284,57 @@ def test_an_entry_price_correction_rewrites_the_cache_and_keeps_the_fill_evidenc
     assert now_entry["corrects"] == entry["id"] and now_entry["shares"] == entry["shares"]
 
 
+def test_an_entry_price_correction_after_a_filled_stop_edit_prices_the_plan_at_the_fill(aset):
+    from cobalt.aset import config as aset_config
+    from cobalt.aset.engine import compute_fill_recompute
+    from cobalt.aset.models import SizingResult
+    from cobalt.cards.legs import record_correction
+    from cobalt.cards.store import CardStore
+
+    card = filled(aset, 100, price="10.10")
+    at_fill = card_row(aset, card)
+    entry = entry_leg(aset, card)
+    assert entry["stop_in_force"] == at_fill["stop"] == Decimal("9.9000")
+    CardStore(aset.db_name).record_stop_edit(card, from_stop=Decimal("9.90"), to_stop=Decimal("9.95"))
+    before = card_row(aset, card)
+    assert before["stop"] == Decimal("9.9500"), "the FILLED stop edit moved the card's stop"
+
+    record_correction(entry["id"], price=Decimal("10.0270"), price_source="typed", source="sheet", now=_now())
+    want = compute_fill_recompute(
+        SizingResult.from_card(at_fill), Decimal("10.0270"),
+        aset_config.load_config().validation.max_fill_distance_pct,
+        drift_warning_pct=at_fill["drift_warning_pct"],
+    )
+    row = card_row(aset, card)
+    assert (row["actual_fill"], row["recomputed_shares"], row["recomputed_used_risk"], row["share_delta"],
+            row["distance_change_pct"], row["drift_warned"]) == (
+        want.actual_fill, want.recomputed_shares, want.recomputed_used_risk, want.share_delta,
+        want.distance_change_pct, want.drift_warned)
+    assert (row["filled_at"], row["drift_warning_pct"]) == (before["filled_at"], before["drift_warning_pct"])
+
+
+def test_a_card_filled_before_c1_closed_by_a_flat_takes_its_confirm_and_reads_its_legs(aset):
+    from cobalt.cards.legs import read_position, record_correction
+    from cobalt.cards.models import Actor, CardState
+    from cobalt.cards.store import CardStore
+
+    card = manual_card(aset)
+    CardStore(aset.db_name).transition(card, CardState.FILLED, actor=Actor.YOU)  # no entry leg
+    held = running(aset, card).shares
+    assert held == card_row(aset, card)["shares"]
+    out = tap(card, "flat", held)
+    assert out.closed is True and card_row(aset, card)["state"] == "CLOSED"
+
+    fix = record_correction(out.leg_id, price=Decimal("10.30"), price_source="typed", source="panel", now=_now())
+    (leg,) = [l for l in current(aset, card) if l["kind"] == "exit"]
+    assert leg["id"] == fix.leg_id and leg["corrects"] == out.leg_id and leg["flag"] == "confirmed"
+    assert fix.running_after == 0 and fix.closed is False
+    assert card_row(aset, card)["state"] == "CLOSED"
+    assert len([h for h in history(aset, card) if h["to_state"] == "CLOSED"]) == 1
+    pos = read_position(card)
+    assert (pos.running.shares, pos.running.basis) == (0, "shares")
+
+
 def test_a_trading_log_correction_needs_its_import_id_and_leaves_his_rows_untouched(aset):
     from cobalt.cards.legs import LegRefused, record_correction
 
