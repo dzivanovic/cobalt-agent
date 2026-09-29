@@ -311,3 +311,8 @@ with recorders, refusals verbatim, `market_reset`, the S-WEB seam),
 `tests/cobalt/test_s3_c3_panel_db.py` (end to end on `cobalt_dev`, inside the
 suite transaction with `0021` applied there). The POST allowlist in
 `test_radar_panel_cards.py` names the eight routes.
+
+## 2026-09-29 — S3 exits C3 fix r1
+- F2 (2026-09-29): `radar_card_correct` reads `legs.read_position(card_id)` (rolled back) before `record_correction`; a `leg_id` that is not one of the URL card's current legs → 422 `REFUSED card <id>: leg <leg> is not a current leg of card <id> — reload the card. Nothing written.`
+- F3 (2026-09-29): `_sheet_closed_estimated` (beside `_sheet_in_trade`) lists, below the live cards and even when none is live, each MANUAL card `filled_with_picks(<today ET>)` returns CLOSED — its `estimated` legs only, through `radar_panel.render_estimated_legs`, each `✓ correct` posting `/radar/card/<id>/correct` with `source=sheet`; a failed read says `FAILED · position unreadable: …` on that card. Window: cards filled today (ET).
+- F4 (2026-09-29): `_sheet_in_trade`'s failed read renders the `_failed(…)` line AND `radar_panel.render_stop_block(…, structural_stop=None, owner=None, source="sheet")` — his stop, `Cobalt stop NULL — no Cobalt stop`, no ↺.

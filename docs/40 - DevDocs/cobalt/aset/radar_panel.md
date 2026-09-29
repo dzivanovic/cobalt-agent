@@ -194,3 +194,8 @@ constructed `POSITION` (L32) so the ladder never depends on a database, and
 `PIN_HEALTHY_LADDER_SHA256` was re-captured for C3's new blocks (the pool and
 API pins are untouched). The "FILLED never shows" check exempts the
 `FILLED @` tap label (the design's words).
+
+## 2026-09-29 — S3 exits C3 fix r1
+- F1 (2026-09-29): `_terminal_legs` puts `<div class="card-status" data-card-id="<id>">` inside `.terminal-legs` whenever it lists leg rows, so `PANEL_JS`'s `status()` shows the result (or C2's refusal) of a ✓ correct tapped from the TERMINAL list. `PANEL_JS` unchanged.
+- F3 (2026-09-29): `render_estimated_legs(card_id, position, *, structural_stop, source)` — the public face of `_leg_rows(…, estimated_only=True)`, the one leg-row renderer; `_terminal_legs` and the sheet's closed manual cards (`web._sheet_closed_estimated`) both call it.
+- F4 (2026-09-29): `_stop_block` is now `render_stop_block` (a rename, same body — the one stop renderer), called by `render_in_trade`, `_in_trade_block`'s failed path and the sheet's failed read (`web._sheet_in_trade`).

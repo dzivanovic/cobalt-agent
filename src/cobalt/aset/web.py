@@ -741,14 +741,20 @@ def _open_cards_section() -> str:
     except Exception as e:  # noqa: BLE001
         return (f'<div class="card"><div class="failed">FAILED\nOpen cards unreadable: '
                 f'{html.escape(f"{type(e).__name__}: {e}")}</div></div>')
+    # S3 C3 fix r1 F3: below the live cards, today's CLOSED manual cards'
+    # estimated legs, listed for correction — even when no card is live.
+    closed = _sheet_closed_estimated(store)
+    if closed:
+        closed = (f'<label>Closed manual cards — estimated legs to confirm</label>'
+                  f'<div class="cards">{closed}</div>')
     if not cards:
         return ('<div class="card"><label>Open cards (F7)</label>'
                 '<div class="muted">No card is in a live state. Terminal cards '
-                '(CLOSED / PASSED / EXPIRED / MISSED) are not listed.</div></div>')
+                f'(CLOSED / PASSED / EXPIRED / MISSED) are not listed.</div>{closed}</div>')
     # S3 C3-4: a FILLED manual card's IN-TRADE controls follow its row.
     rows = "".join(_card_controls(c) + _sheet_in_trade(c) for c in cards)
     return (f'<div class="card"><label>Open cards (F7) — every button writes a '
-            f'transition</label><div class="cards">{rows}</div></div>')
+            f'transition</label><div class="cards">{rows}</div>{closed}</div>')
 
 def _failed(message: str) -> str:
     return f'<div class="failed">FAILED\n{html.escape(message)}</div>'
@@ -1651,7 +1657,9 @@ async def radar_card_held(card_id: int, request: Request):
 @app.post("/radar/card/{card_id}/correct")
 async def radar_card_correct(card_id: int, request: Request):
     """A correction of one leg through `legs.record_correction` (R67): a
-    typed price names its source (`typed`, L57) and is `confirmed`."""
+    typed price names its source (`typed`, L57) and is `confirmed`. The
+    URL's card binds the leg (fix r1 F2): a leg that is not one of its
+    current legs is refused before the writer — a read, rolled back."""
     def work(form, source):
         from cobalt.cards import legs
         from cobalt.session import clock as session_clock_mod
@@ -1659,6 +1667,11 @@ async def radar_card_correct(card_id: int, request: Request):
         leg_id = _tap_int(form.get("leg_id"), what="leg_id")
         if leg_id is None:
             raise _TapInputRefused(f"REFUSED card {card_id}: a correction names its leg. Nothing written.")
+        if leg_id not in {leg["id"] for leg in legs.read_position(card_id).legs}:
+            raise _TapInputRefused(
+                f"REFUSED card {card_id}: leg {leg_id} is not a current leg of card {card_id} — reload the card. "
+                "Nothing written."
+            )
         price = _tap_price(form.get("price"), what="the corrected price")
         result = legs.record_correction(
             leg_id, price=price, price_source=None if price is None else "typed",
@@ -1711,15 +1724,53 @@ def _sheet_in_trade(card: dict) -> str:
     `source=sheet` — never a second set of writers. A manual card has no
     structural stop: no ↺ (O19 A), gap `NULL — no Cobalt stop`. No last
     price is read here, so every price field is empty and he types."""
-    from .radar_panel import read_in_trade, render_in_trade
+    from .radar_panel import read_in_trade, render_in_trade, render_stop_block
 
     if card.get("state") != CardState.FILLED.value or card.get("origin") != Origin.MANUAL.value:
         return ""
     try:
         position = read_in_trade(card["id"])
     except Exception as e:  # noqa: BLE001 — said on the card
-        return _failed(f"card {card['id']}: position unreadable: {type(e).__name__}: {e}")
+        # fix r1 F4: the stop line stays — his stop, `Cobalt stop NULL`, no ↺
+        # — as the panel's failed read keeps it (the one stop renderer).
+        return _failed(f"card {card['id']}: position unreadable: {type(e).__name__}: {e}") + render_stop_block(
+            card["id"], stop=card["stop"], structural_stop=None, owner=None, source="sheet",
+        )
     return render_in_trade(
         card["id"], position, direction=str(card["direction"]), stop=card["stop"], structural_stop=None,
         last=None, source="sheet",
     )
+
+
+def _sheet_closed_estimated(store) -> str:
+    """fix r1 F3 (v3 §3: an untouched flat "stays `estimated` and is listed
+    for correction"): each MANUAL card filled today (ET) that is now
+    CLOSED, with its `estimated` legs and their `✓ correct` forms posting
+    to `/radar/card/{id}/correct` with `source=sheet` — the SAME route, the
+    one leg-row renderer. Read through `filled_with_picks` (a read); a card
+    with no estimated leg renders nothing; a failed read is said on that
+    card."""
+    from .radar_panel import read_in_trade, render_estimated_legs
+
+    try:
+        filled = store.filled_with_picks(_today_et())
+    except Exception as e:  # noqa: BLE001 — said on the sheet
+        return _failed(f"closed manual cards unreadable: {type(e).__name__}: {e}")
+    seen: set[int] = set()
+    blocks = []
+    for row in filled:
+        card_id = row["card_id"]
+        if card_id in seen or row.get("state") != CardState.CLOSED.value or row.get("origin") != Origin.MANUAL.value:
+            continue
+        seen.add(card_id)
+        head = (f'<div class="top"><span class="tk">{html.escape(str(row["ticker"]))}</span>'
+                f'<span class="st st-CLOSED">CLOSED</span><span class="muted">#{card_id} · estimated — '
+                "confirm the price</span></div>")
+        try:
+            legs_html = render_estimated_legs(card_id, read_in_trade(card_id), structural_stop=None, source="sheet")
+        except Exception as e:  # noqa: BLE001 — said on the card
+            legs_html = (f'<div class="failed">FAILED · position unreadable: '
+                         f"{html.escape(f'{type(e).__name__}: {e}')}</div>")
+        if legs_html:
+            blocks.append(f'<div class="crow">{head}{legs_html}</div>')
+    return "".join(blocks)

@@ -1229,11 +1229,12 @@ def _triggered_block(card: CardView) -> str:
     )
 
 
-def _stop_block(card_id: int, *, stop: Decimal, structural_stop: Decimal | None, owner: str | None,
-                source: str) -> str:
+def render_stop_block(card_id: int, *, stop: Decimal, structural_stop: Decimal | None, owner: str | None,
+                      source: str) -> str:
     """His stop (amber YOURS + the delta when he owns it), Cobalt's
     structural stop ALWAYS beside it, `↺ <cobalt value>` on the note line
-    only when there is a Cobalt stop (O19 A), and the stop edit (R38)."""
+    only when there is a Cobalt stop (O19 A), and the stop edit (R38).
+    The one stop renderer — the panel and the sheet's failed read alike."""
     e = html.escape
     badge = delta = ""
     if owner == "yours":
@@ -1286,6 +1287,14 @@ def _leg_rows(card_id: int, position: InTradeView, *, structural_stop: Decimal |
     return f'<table class="legs"><tbody>{"".join(rows)}</tbody></table>'
 
 
+def render_estimated_legs(card_id: int, position: InTradeView, *, structural_stop: Decimal | None,
+                          source: str) -> str:
+    """A closed card's `estimated` legs, each with its `✓ correct` (v3 §3:
+    listed for correction) — the one leg-row renderer, for the panel's
+    terminal list and the sheet's closed manual cards. Empty when none."""
+    return _leg_rows(card_id, position, structural_stop=structural_stop, source=source, estimated_only=True)
+
+
 def render_in_trade(
     card_id: int, position: InTradeView, *, direction: str, stop: Decimal, structural_stop: Decimal | None,
     last: Decimal | None, source: str,
@@ -1330,7 +1339,7 @@ def render_in_trade(
     return (
         f'<div class="in-trade" data-card-id="{card_id}"><div class="running"><b>{e(running)}</b> · '
         f"{e(direction)} · {e(realized)}</div>{drift}"
-        f'{_stop_block(card_id, stop=stop, structural_stop=structural_stop, owner=position.stop_owner, source=source)}'
+        f'{render_stop_block(card_id, stop=stop, structural_stop=structural_stop, owner=position.stop_owner, source=source)}'
         f'<div class="exits">{exits}</div>{held}'
         f"{_leg_rows(card_id, position, structural_stop=structural_stop, source=source)}</div>"
     )
@@ -1343,8 +1352,8 @@ def _in_trade_block(card: CardView) -> str:
     if card.position is None:
         failed = (f'<div class="card-status refused">FAILED · position unreadable: '
                   f'{e(card.position_error or "no position read")}</div>')
-        return head + failed + _stop_block(card.id, stop=card.stop, structural_stop=card.structural_stop,
-                                           owner=None, source="panel")
+        return head + failed + render_stop_block(card.id, stop=card.stop, structural_stop=card.structural_stop,
+                                                 owner=None, source="panel")
     return head + render_in_trade(
         card.id, card.position, direction=card.direction, stop=card.stop,
         structural_stop=card.structural_stop, last=card.last, source="panel",
@@ -1353,7 +1362,8 @@ def _in_trade_block(card: CardView) -> str:
 
 def _terminal_legs(card: CardView) -> str:
     """A CLOSED card's estimated legs, listed for correction (v3 §3), or
-    the reason its legs could not be read."""
+    the reason its legs could not be read. The listed legs carry the
+    card's status sink, so a refusal of their ✓ correct is shown (L1)."""
     if card.state is not CardState.CLOSED:
         return ""
     if card.position_error:
@@ -1361,12 +1371,11 @@ def _terminal_legs(card: CardView) -> str:
                 f"FAILED · position unreadable: {html.escape(card.position_error)}</div></div>")
     if card.position is None:
         return ""
-    rows = _leg_rows(card.id, card.position, structural_stop=card.structural_stop, source="panel",
-                     estimated_only=True)
+    rows = render_estimated_legs(card.id, card.position, structural_stop=card.structural_stop, source="panel")
     if not rows:
         return ""
     return (f'<div class="terminal-legs" data-card-id="{card.id}"><span class="muted">estimated — confirm '
-            f"the price</span>{rows}</div>")
+            f'the price</span>{rows}<div class="card-status" data-card-id="{card.id}"></div></div>')
 
 
 def _card_detail(card: CardView, *, stale: str | None = None) -> str:
