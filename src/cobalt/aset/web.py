@@ -1243,6 +1243,16 @@ async def card_move(card_id: int, request: Request) -> str:
                 "A fill is written only by the fill (POST /fill with the price and shares "
                 "the broker filled)."
             )
+        if to_state is CardState.CLOSED:
+            # CLOSED ONLY BY THE ZERO-RUNNING LEG (S3 C2 fix r1, v3 §2):
+            # FILLED -> CLOSED is written by the leg writer whose exit,
+            # correction or held count brings running to 0 (`cards.legs`).
+            # A CLOSED from here would close a card still holding shares.
+            raise CardStateError(
+                f"REFUSED card {card_id}: {CardState.CLOSED.value} — this route never closes. "
+                "A card closes only when an exit leg, a correction or a held count brings "
+                "running to 0."
+            )
         store = CardStore()
         store.ensure_schema()
         before = store.state_of(card_id)

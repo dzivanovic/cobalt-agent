@@ -357,29 +357,32 @@ class AsetStore:
         in_force = ladder.sheet_for(decided_or_stage1(row, ladder, ts))
         return row["trade_date"], attested, attested_sheet != in_force
 
-    def _update_fill_cache(self, conn, row_id: int, fill: FillRecompute) -> None:
-        """The F6 fill columns — a cache of the entry leg + the recompute,
-        written only by `mark_filled`, on its transaction (v3 Q4)."""
+    def _update_fill_cache(self, conn, row_id: int, fill: FillRecompute, *, at_fill: bool = True) -> None:
+        """The F6 fill columns — a cache of the entry leg + the recompute —
+        and THE ONE UPDATE of them (L3, v3 Q4 [F-04]), on the caller's
+        transaction. Two callers: `mark_filled` (the fill, `at_fill=True`)
+        and `cards.legs._rewrite_fill_cache` (an entry-price correction,
+        R67 N, `at_fill=False`: `filled_at` and `drift_warning_pct` stay
+        the fill's and are left out of the SET)."""
+        fill_stamps = "filled_at = now(), drift_warning_pct = %s, " if at_fill else ""
         cur = conn.execute(
-            """
+            f"""
             UPDATE aset_sizings SET
-                filled_at = now(),
-                actual_fill = %s,
+                {fill_stamps}actual_fill = %s,
                 recomputed_shares = %s,
                 recomputed_used_risk = %s,
                 share_delta = %s,
                 distance_change_pct = %s,
-                drift_warning_pct = %s,
                 drift_warned = %s
             WHERE id = %s
             """,
             (
+                *((fill.drift_warning_pct,) if at_fill else ()),
                 fill.actual_fill,
                 fill.recomputed_shares,
                 fill.recomputed_used_risk,
                 fill.share_delta,
                 fill.distance_change_pct,
-                fill.drift_warning_pct,
                 fill.drift_warned,
                 row_id,
             ),

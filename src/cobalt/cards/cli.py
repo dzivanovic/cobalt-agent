@@ -84,6 +84,14 @@ def cmd_move(args: argparse.Namespace) -> None:
             "A fill is written only by the fill — the sheet's POST /fill with the price and "
             "shares the broker filled."
         )
+    if to_state is CardState.CLOSED:
+        # CLOSED ONLY BY THE ZERO-RUNNING LEG (S3 C2 fix r1, v3 §2): the leg
+        # writer that brings running to 0 writes FILLED -> CLOSED in its own
+        # transaction (`cards.legs`). Refused before anything is read.
+        raise SystemExit(
+            f"REFUSED card {args.card_id}: cobalt cards move … {CardState.CLOSED.value} never closes. "
+            "A card closes only when an exit leg, a correction or a held count brings running to 0."
+        )
     store = _store()
     before = store.state_of(args.card_id)
     tid = store.transition(

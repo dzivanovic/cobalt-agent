@@ -290,9 +290,12 @@ def running_shares(conn, card_id: int) -> Running:
     (`FOR UPDATE` — re-entrant for a caller that already holds it), so the
     count it returns cannot move before that transaction ends.
 
-    A FILLED card with NO entry leg was filled before C1 (O21 A): its base
-    is `recomputed_shares`, else `shares`, and `basis` names which. A card
-    with no entry leg in any other state holds no position — refused.
+    A card with NO entry leg was filled before C1 (O21 A): its base is
+    `recomputed_shares`, else `shares`, and `basis` names which — while it
+    is FILLED, and once it is CLOSED by its own exit legs (at least one
+    current exit leg), so a correction of the closing exit (the ✓ confirm)
+    and `cobalt cards legs` still read it. A card with no entry leg and no
+    exit leg in any state but FILLED holds no position — refused.
     """
     from .models import CardState
 
@@ -309,16 +312,19 @@ def running_shares(conn, card_id: int) -> Running:
         "SELECT id, shares, price FROM legs_current_v WHERE card_id = %s AND kind = 'entry'",
         (card_id,),
     )
-    exits = int(conn.execute(
-        "SELECT COALESCE(sum(shares), 0) FROM legs_current_v WHERE card_id = %s AND kind = 'exit'",
+    exit_legs, exits = (int(v) for v in conn.execute(
+        "SELECT count(*), COALESCE(sum(shares), 0) FROM legs_current_v WHERE card_id = %s AND kind = 'exit'",
         (card_id,),
-    ).fetchone()[0])
+    ).fetchone())
+    pre_c1 = card["state"] == CardState.FILLED.value or (
+        card["state"] == CardState.CLOSED.value and exit_legs > 0
+    )
 
     if entry is not None:
         base, basis = int(entry["shares"]), BASIS_LEGS
-    elif card["state"] == CardState.FILLED.value and card["recomputed_shares"] is not None:
+    elif pre_c1 and card["recomputed_shares"] is not None:
         base, basis = int(card["recomputed_shares"]), BASIS_RECOMPUTED
-    elif card["state"] == CardState.FILLED.value and card["shares"] is not None:
+    elif pre_c1 and card["shares"] is not None:
         base, basis = int(card["shares"]), BASIS_SHARES
     else:
         raise LegRefused(
@@ -453,11 +459,14 @@ def _rewrite_fill_cache(conn, card: Mapping[str, Any], entry: Mapping[str, Any],
     (the one rebuild) with the stop in force at the fill — the entry leg's
     `stop_in_force` — since a FILLED stop edit has moved the card's stop
     since. The P is the one stored at the fill (`drift_warning_pct`; NULL
-    stays not evaluated). `filled_at` and `drift_warning_pct` are not
-    touched; the fill transition's evidence keeps the fill-time figures."""
+    stays not evaluated). It writes through THE ONE cache writer,
+    `AsetStore._update_fill_cache(…, at_fill=False)` (L3, L40): `filled_at`
+    and `drift_warning_pct` are not touched; the fill transition's evidence
+    keeps the fill-time figures."""
     from cobalt.aset import config as aset_config
     from cobalt.aset.engine import compute_fill_recompute
     from cobalt.aset.models import SizingResult
+    from cobalt.aset.store import AsetStore
 
     stop_at_fill = Decimal(entry["stop_in_force"])
     plan = {**card, "stop": stop_at_fill, "per_share_risk": abs(Decimal(card["entry"]) - stop_at_fill)}
@@ -465,22 +474,7 @@ def _rewrite_fill_cache(conn, card: Mapping[str, Any], entry: Mapping[str, Any],
     fill = compute_fill_recompute(
         SizingResult.from_card(plan), price, guard, drift_warning_pct=card["drift_warning_pct"],
     )
-    cur = conn.execute(
-        """
-        UPDATE aset_sizings SET
-            actual_fill = %s,
-            recomputed_shares = %s,
-            recomputed_used_risk = %s,
-            share_delta = %s,
-            distance_change_pct = %s,
-            drift_warned = %s
-        WHERE id = %s
-        """,
-        (fill.actual_fill, fill.recomputed_shares, fill.recomputed_used_risk, fill.share_delta,
-         fill.distance_change_pct, fill.drift_warned, card["id"]),
-    )
-    if cur.rowcount != 1:
-        raise RuntimeError(f"legs: the fill-cache rewrite matched {cur.rowcount} rows for card {card['id']}")
+    AsetStore()._update_fill_cache(conn, card["id"], fill, at_fill=False)
 
 
 def record_correction(
