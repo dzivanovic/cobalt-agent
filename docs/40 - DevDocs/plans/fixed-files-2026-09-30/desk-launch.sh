@@ -166,6 +166,7 @@ if [ "$kind" = "close" ]; then
         20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
         *) refuse "close: '$cday' is not a date YYYY-MM-DD" ;;
     esac
+    [ "$(date -j -f %Y-%m-%d "$cday" +%Y-%m-%d 2>/dev/null)" = "$cday" ] || refuse "close: '$cday' is not a calendar date"
     fixed="$PROMPTS/CLOSE-HUB.md"
     [ -f "$fixed" ] || refuse "the fixed file is not installed: $fixed"
     if grep -q '«INSTALL' "$fixed"; then
@@ -271,10 +272,16 @@ if [ "$kind" = "prompt" ]; then
     esac
     # every write-path launch is a fixed file: refuse the write-path modes and the write strings
     case "$line" in
-        *"--permission-mode acceptEdits"*|*"--permission-mode dontAsk"*) refuse "a write-path permission mode (acceptEdits, dontAsk): a write-path launch is a fixed file (build, check, deploy, close)" ;;
         *bypassPermissions*) refuse "bypassPermissions (L55)" ;;
-        *"--permission-mode "*) ;;
-        *) refuse "the launch line states no --permission-mode (L62)" ;;
+    esac
+    pm_n=$(printf '%s\n' "$line" | grep -o -e '--permission-mode' | wc -l | tr -d ' ')
+    [ "$pm_n" -le 1 ] || refuse "the launch line states --permission-mode more than once"
+    [ "$pm_n" -eq 1 ] || refuse "the launch line states no --permission-mode (L62)"
+    # the mode word: quotes, '=' and blanks stripped (scratch test 2, D4); only auto and plan pass
+    pm=$(printf '%s\n' "$line" | sed -n 's/.*--permission-mode[ =]*\([^ ]*\).*/\1/p' | tr -d "\"'")
+    case "$pm" in
+        auto|plan) ;;
+        *) refuse "permission mode '$pm': a one-off prompt runs auto or plan; every write-path launch is a fixed file (build, check, deploy, close)" ;;
     esac
     for w in "git add" "git commit" "git merge" "Bash(git *)" "uv run" "launchctl" "COBALT_ENV="; do
         case "$line" in
