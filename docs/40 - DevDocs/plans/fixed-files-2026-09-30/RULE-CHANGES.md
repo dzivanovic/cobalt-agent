@@ -848,3 +848,7 @@ Also the CONTRACT `## Replies` A/B line (`:27`, "Before an A/B reaches him…") 
 
 ### 58 · CHECKLIST H1 `:8` and the handover count
 No text change beyond row 56: H1 ("Refresh at a quiet point…") stays; the per-day count of `HANDOVER:` lines is no longer kept (removed with H1a's last sentence).
+
+
+### 59 · THE OPS SCRIPTS AND THE HOOK ARE TRACKED (desk, from the brain's DF-2; NOT A TEXT ROW)
+HOME: `DESK-LINE.md` §2a and `STANDING-LIST.md` §4. At the fold: the desk creates `/Users/cobalt/cobalt/ops/desk/` with the four scripts (copies of the fixed `desk-launch.sh`, `desk-context.sh` and the two `wait-*` scripts) and the hook, makes the two symlinks (`/Users/cobalt/.claude/ops/<name>`, `.git/hooks/pre-commit`), commits, all before the desk line narrows. Replaces DRAFT4 DECISION 15's "his hand edit". No law text changes.
