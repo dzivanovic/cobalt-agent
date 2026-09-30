@@ -1,4 +1,9 @@
-"""CLI entrypoint: `uv run prefill daily` / `uv run prefill drc`.
+"""CLI entrypoint: `uv run prefill daily`.
+
+`prefill drc` is RETIRED (DRC D3, v2 §8 `[F-22]`, F39): the DRC note is
+built by the input-driven build, `cobalt drc build` (K1's `drc` group) —
+one creator of the note, one CLI (L3). Its job `com.cobalt.prefill-drc`
+left `configs/cobalt/jobs.yaml` and `ops/` in the same deploy.
 
 Same secret-leak mitigation as aset/__main__.py and archiver/runner.py:
 prefill.market/calendar import aset.prefill, which transitively imports
@@ -12,17 +17,14 @@ os.environ.setdefault("LOGURU_LEVEL", "INFO")
 import argparse  # noqa: E402
 import asyncio  # noqa: E402
 import sys  # noqa: E402
-from datetime import date  # noqa: E402
 
 from loguru import logger  # noqa: E402
 
 from cobalt.jobs.entrypoint import JobStopped, as_job  # noqa: E402
 
 from .daily import run_daily_prefill  # noqa: E402
-from .drc import run_drc_prefill  # noqa: E402
 
 DAILY_JOB = "com.cobalt.prefill-daily"
-DRC_JOB = "com.cobalt.prefill-drc"
 
 
 def _run_daily(dry_run: bool) -> None:
@@ -43,18 +45,8 @@ def _run_daily(dry_run: bool) -> None:
     print(report)
 
 
-def _run_drc(target_date: str | None, dry_run: bool) -> None:
-    for_date_ = date.fromisoformat(target_date) if target_date else None
-    with as_job(DRC_JOB, skip=dry_run) as job:
-        result = asyncio.run(run_drc_prefill(for_date_=for_date_, dry_run=dry_run))
-        job.result = {"action": result.action, "path": str(result.path)}
-    report = result.report()
-    logger.info(report)
-    print(report)
-
-
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="prefill", description="Cobalt DRC & Daily prefill engine")
+    parser = argparse.ArgumentParser(prog="prefill", description="Cobalt Daily prefill engine")
     sub = parser.add_subparsers(dest="command", required=True)
 
     # --dry-run on EVERY entrypoint (L28): compute the whole edit, print
@@ -64,19 +56,10 @@ def main() -> None:
         "--dry-run", action="store_true", help="Show the unified diff; write nothing."
     )
 
-    drc_parser = sub.add_parser("drc", help="Prefill the evening DRC draft.")
-    drc_parser.add_argument("--date", help="Target date YYYY-MM-DD (default: today).")
-    drc_parser.add_argument(
-        "--dry-run", action="store_true", help="Show the unified diff; write nothing."
-    )
-
     args = parser.parse_args()
 
     try:
-        if args.command == "daily":
-            _run_daily(args.dry_run)
-        else:
-            _run_drc(args.date, args.dry_run)
+        _run_daily(args.dry_run)
     except JobStopped as e:
         # Exit 0 — see cobalt/cli.py's note. A deliberate stop is not a
         # failure and must not turn the heartbeat red.

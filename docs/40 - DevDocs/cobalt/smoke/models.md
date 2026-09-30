@@ -31,9 +31,11 @@ Every kind carries `id` (`K<n>` or `K<n>.<m>`), `title` and `expect_text`. `expe
 | `HttpCheck` | `url`, `status`, `contains` | GET |
 | `LogGrepCheck` | `path` (repo-relative, no `..`), `block_start`, `pattern` (compiled at load), `present` | file read |
 | `JobRowCheck` | `label`, `state`, `exit_code`, `not_missed`, `max_age_min`, `result_keys`, `result_equals` (dotted path → value, variables allowed in both), `result_positive`, `result_number`; must expect something | one `cobalt_jobs` row through the read path |
-| `VaultUnitCheck` | `note` (`drc`), `day`, `section`, `unit` | text read + `find_section` |
+| `VaultUnitCheck` | `note` (`drc`), `day`, `section`, `unit`, `requires_relation` | text read + `find_section` |
 | `CliCheck` | `argv`, `exit_code` | `argv` must start with a prefix in `READ_ONLY_CLI` |
 | `CompareCheck` | `left`, `right` (check ids), `op` (`CompareOp`) | reads nothing at all: two numbers two other checks already collected |
+
+**`VaultUnitCheck.requires_relation` (DRC D3-9, 2026-09-29, R32 / R33).** The same field as `SqlCheck`'s, byte for byte (comment, `Optional[str]`, the `^[a-z_]+\.[a-z_]+$` pattern) — the smallest extension: one relation, no list, no new kind. A `note: drc` row's event read touches `drc_*` tables, so K10.1 declares `user.drc_events`; `checks._relation_absent` checks it first and an absent relation is FAIL naming it, never ERROR.
 
 ## `result_number` and `compare` — an assertion the tenancy wall forbids
 A question that spans both sides of L32 — "does the corpus hold as many

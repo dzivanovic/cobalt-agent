@@ -119,3 +119,8 @@ datetimes. `sha256_json` hashes that text. Every `inputs_sha256` is
   `archive_partial_by_side` counts them per side (default 0 / 0); the S2
   smoke's K9.9 / K9.12 compare that count against the stored
   not-archived rows.
+- `ReplayResult.line_inputs` (2026-09-29, DRC D3-3): when the DRC note is
+  absent at 21:10 (`line_action` = `pending (no DRC)`), the EXACT
+  `render_line` arguments as JSON (`line.stored_line_inputs`), stored with
+  the run in `job.result`; the DRC build renders the line from it
+  (`line.render_stored`). `None` on every other run.

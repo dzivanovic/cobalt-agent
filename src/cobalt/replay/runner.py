@@ -11,7 +11,10 @@
                       compatible -> USER commit (missed, formation);
                       absent -> one exact unavailable line, no rows;
                       incompatible -> loud (R4, R1-21)
-    (4) line          the DRC miss line from the reconciled current set
+    (4) line          the DRC miss line from the reconciled current set;
+                      no DRC note → `line: pending (no DRC)`, its exact
+                      arguments stored on the result (`line_inputs`), the
+                      run green — the DRC build writes it later (D3-3)
 
 PER-SIDE COMMITS (R2-3). No connection or role spans the two schemas in
 one transaction: every SYSTEM write commits in a SYSTEM store, every USER
@@ -44,6 +47,7 @@ import asyncio
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 from loguru import logger
@@ -61,7 +65,10 @@ from .formations import (
     FormationSources,
     formation_misses,
 )
-from .line import render_line, write_miss_line
+from .line import LINE_PENDING, DrcNoteAbsent, render_line, stored_line_inputs, write_miss_line
+
+#: What the run prints when the note is absent (the in-memory line follows).
+LINE_PENDING_OUT = "line: pending (no DRC)"
 from .models import (
     FORMATION_UNAVAILABLE,
     FORMATION_UNAVAILABLE_LINE,
@@ -481,14 +488,28 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
         result.formation_misses = len(state["formation_rows"])
 
     def line_step() -> None:
-        body = render_line(trade_date, card_rows=state["card_rows"], mover_rows=state["mover_rows"],
-                           settings=state.get("settings"), formation_replay=result.formation_replay,
-                           input_stale=result.input_stale,
-                           formation_rows=state.get("formation_rows", []),
-                           formation_suppressed=result.formation_suppressed,
-                           formation_input_stale=result.formation_input_stale,
-                           formation_cut=result.formation_cut)
-        path = deps.drc_path(trade_date)
+        args = dict(card_rows=state["card_rows"], mover_rows=state["mover_rows"],
+                    settings=state.get("settings"), formation_replay=result.formation_replay,
+                    input_stale=result.input_stale,
+                    formation_rows=state.get("formation_rows", []),
+                    formation_suppressed=result.formation_suppressed,
+                    formation_input_stale=result.formation_input_stale,
+                    formation_cut=result.formation_cut)
+        body = render_line(trade_date, **args)
+        try:
+            path = deps.drc_path(trade_date)
+        except DrcNoteAbsent:
+            path = None
+        if path is None or not Path(path).is_file():
+            # DRC D3-3 (`[F-24]`, R66): no DRC note at 21:10 is his lawful
+            # choice, never a failure. Nothing is created; the EXACT
+            # `render_line` arguments are stored on this run's result, and
+            # the DRC build — once `drc-rules` exists — is the only later
+            # writer of this line from them (E6: the same bytes).
+            result.line_action = LINE_PENDING
+            result.line_inputs = stored_line_inputs(trade_date, args)
+            deps.out(f"{LINE_PENDING_OUT} — {body}")
+            return
         check_deadline("line (before the vault write)")
         written = write_miss_line(path, body, writer=deps.writer_factory(dry_run))
         result.line_action = written.action

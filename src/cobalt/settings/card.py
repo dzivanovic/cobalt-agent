@@ -55,8 +55,6 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from cobalt.session import assert_writable
-
 from .models import SETTING_KEYS, TraderSettingsError
 from .store import TraderSettingsStore
 
@@ -319,8 +317,15 @@ def cmd_load_card(args: argparse.Namespace) -> None:
         print(f"\nDRY RUN — {changed} card setting(s) would change. Nothing written.")
         return
 
-    assert_writable("settings.load.card", target='"user".trader_settings')
-    outcome = store.put(new_rows, source=f"card:{path.name}@sha256:{digest}", delete=deletes)
+    from . import cli as settings_cli
+
+    outcome = settings_cli.apply_settings(
+        new_rows,
+        source=f"card:{path.name}@sha256:{digest}",
+        actor="settings.load.card",
+        store=store,
+        delete=deletes,
+    )
     print(f"\napplied: {outcome}; deleted: {deletes}")
     reloaded = CardSettings.from_rows(store.values())
     if reloaded != incoming:

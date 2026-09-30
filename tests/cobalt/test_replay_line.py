@@ -1,8 +1,9 @@
 """S2-P4 STEP-7 — the ONE miss line, unit `drc-misses/miss_line` (R5, L28, L8).
 
 The DRC note is never copied into the repo (P2 fixture ruling B): committed
-tests render `configs/cobalt/templates/drc.md.j2` exactly as
-test_prefill_drc.py does, and write through the real `VaultWriter` into a
+tests render his template's SHAPE (`tests/fixtures/drc/template_shape.md`)
+through the DRC build's one renderer (DRC D3 — the repo template
+`drc.md.j2` is deleted), and write through the real `VaultWriter` into a
 tmp dir with an in-memory audit store standing in for `vault_writes` (the
 store's own contract is proved in test_vaultwrite.py). The live DRC shape
 is read — never written — by the `requires_vault` test the hub runs.
@@ -18,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from cobalt.prefill.drc import _render_template
+from cobalt.drc.template import render_template
 from cobalt.replay import line as line_mod
 from cobalt.replay.line import (
     ANCHOR_SECTION,
@@ -31,10 +32,12 @@ from cobalt.replay.line import (
 )
 from cobalt.settings.models import BenchmarkSettings
 from cobalt.vaultwrite import VaultWriter
-from cobalt.vaultwrite.markers import find_section
+from cobalt.vaultwrite.markers import find_section, render_section, render_unit
 from cobalt.vaultwrite.writer import NoteChangedOnDisk, VaultWriteError
 
 DAY = date(2026, 9, 3)
+#: His DRC template's SHAPE (L32 / L45) — the fixture DRC D3 committed.
+SHAPE = Path(__file__).resolve().parent.parent / "fixtures" / "drc" / "template_shape.md"
 SETTINGS = BenchmarkSettings(top_n=20, min_move_pct=Decimal("10"))
 
 requires_vault = pytest.mark.skipif(
@@ -76,12 +79,19 @@ class MemoryWriteStore:
 
 
 def drc_text(day: date = DAY) -> str:
-    return _render_template({
-        "date_str": day.isoformat(),
-        "risk_parameters_line": "FULL — A $120 · B $60",
-        "tickers_unit": "Cards written: 2 · Trades taken (FILLED): 1",
-        "rules_check_block": "- [ ] Card first. #process",
-    })
+    """DRC D3 re-point (D3-5): the note is his template's SHAPE rendered by
+    the ONE renderer (`drc.template.render_template`), with the three
+    Cobalt sections the repo template (`drc.md.j2`, deleted) carried —
+    `drc-risk`, `drc-trades`, `drc-rules` — each one marked unit, so the
+    miss line's anchor (`drc-rules`) is where the build puts it."""
+    text = render_template(SHAPE.read_text(), day)
+    for section, unit, body in (
+        ("drc-risk", "risk_parameters", "Risk Parameters: FULL — A $120 · B $60"),
+        ("drc-trades", "tickers", "trades: 1"),
+        ("drc-rules", "rules_check", "- [ ] Card first. #process"),
+    ):
+        text += "\n" + "\n".join(render_section(section, render_unit(unit, body)))
+    return text + "\n"
 
 
 @pytest.fixture
@@ -170,7 +180,7 @@ def test_drc_note_absent_fails_loud_and_creates_nothing(tmp_path, monkeypatch):
     review = tmp_path / "1 - Trading" / "5 - Review"
     review.mkdir(parents=True)
     monkeypatch.setattr(line_mod, "resolve_vault_path", lambda: tmp_path)
-    with pytest.raises(DrcNoteAbsent, match="DRC note absent — prefill-drc owns creation"):
+    with pytest.raises(DrcNoteAbsent, match="DRC note absent — the DRC build owns creation"):
         line_mod.drc_note_path(DAY)
     with pytest.raises(DrcNoteAbsent):
         write_miss_line(review / "DRC-2026-09-03.md", body(), writer=VaultWriter("replay.nightly", store=MemoryWriteStore()))

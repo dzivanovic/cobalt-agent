@@ -63,6 +63,19 @@ markers raise `MarkerError` and the note is **not written to**.
   the ONE marker-less variant, for YAML frontmatter only (see below).
 - `restore(write_id) -> WriteResult` — puts a section back to a recorded
   before-state, through this same writer.
+- `write_import_bytes(vault_root, rel_path, data) -> ImportWrite` (DRC
+  D2, v2 `[F-06]`) — the ONE bytes path, for a file he drops: `rel_path`
+  must be `vault.DRC_IMPORTS_REL/<YYYY-MM-DD>/<name>` (the date by D1's
+  `import_folder_date`; a `..`, an absolute path, a sub-folder, a hidden
+  name or a non-date folder is refused, `VaultWriteError`). Create-if-
+  absent ONLY: a name on disk gets the next free `<stem>.<n><ext>`, the
+  old bytes are never touched. Atomic: temp file in the same folder,
+  `fsync`, then `os.link` to the name — the link refuses an existing name
+  at the instant of the write (the create-if-absent guard); the temp file
+  is always removed. Audited: one `vault_writes` row, `hash_after` = the
+  sha256 of the bytes, committed only if the link succeeded. Refused in
+  `market_reset` by the same `_session_gate`. It never calls the text
+  `_commit` (FC5). `ImportWrite.name` is the name actually stored.
 - Every one of them honours `VaultWriter(dry_run=True)`: full diff
   computed, nothing written — not the note, not Postgres, not even the
   retention purge.

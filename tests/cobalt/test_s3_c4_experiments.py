@@ -7,8 +7,6 @@ X14  `_render_body` vs his Individual Trade Template's body, through a
 X3   create-if-absent twice, a `leg-0` unit, his hand edit, a retry, and a
      retry racing a leg write on the same note.
 X16  two cards, one ticker, fill instants in the same second.
-X18  `find_trade_note_for_card` on a manual card with a sizing note and a
-     fill note (read only; recorded for the DRC lane).
 
 Every write goes to a `tmp_path` vault through the real `VaultWriter` with
 an in-memory audit store. Constructed values only.
@@ -217,23 +215,3 @@ def test_x16_two_cards_same_ticker_same_second(monkeypatch, tmp_path):
     with pytest.raises(trade_note_module.TradeNoteRefused, match="already exists"):
         write(second, when, make_paths(), entry_price=Decimal("11.0000"), create_only=True,
               writer=memory_writer(store))
-
-
-# ---------------------------------------------------------------------
-# X18 — the DRC's nearest-timestamp match with two notes for one card
-# ---------------------------------------------------------------------
-
-
-def test_x18_find_trade_note_for_card_with_a_sizing_note_and_a_fill_note(tmp_path):
-    from cobalt.prefill.drc import find_trade_note_for_card
-
-    trades = tmp_path / "trades"
-    trades.mkdir()
-    sizing_note = trades / "Trade-2026-09-03 09-58-10 -TEST.md"
-    fill_note = trades / "Trade-2026-09-03 10-12-30 -TEST.md"
-    sizing_note.write_text("---\n---\n")
-    fill_note.write_text("---\n---\n")
-    created_at = datetime(2026, 9, 3, 9, 58, 9)          # naive = host local, as the DRC reads it
-    found = find_trade_note_for_card(trades, "TEST", created_at)
-    print(f"\nX18: created_at {created_at} -> {found.name if found else None}")
-    assert found == sizing_note                           # the sizing note, never the fill note

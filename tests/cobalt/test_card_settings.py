@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from cobalt.settings import card as card_mod
+from cobalt.settings import cli as settings_cli
 from cobalt.settings.card import (
     CARD_SETTING_KEYS,
     CardSettings,
@@ -169,7 +170,7 @@ def test_apply_requires_the_hash_verifies_the_round_trip_and_is_one_put(tmp_path
     path, digest = _write(tmp_path, DARK)
     store = FakeStore({"card.curves": {"rvol": [[1, 1], [2, 2]]}, "aset.enabled_grades": ["A"]})
     monkeypatch.setattr(card_mod, "TraderSettingsStore", lambda: store)
-    monkeypatch.setattr(card_mod, "assert_writable", lambda *a, **k: None)
+    monkeypatch.setattr(settings_cli, "assert_writable", lambda *a, **k: None)
     with pytest.raises(SystemExit, match="--sha256"):
         card_mod.cmd_load_card(_args(path, apply=True))
     assert store.puts == []
@@ -185,7 +186,7 @@ def test_a_failed_apply_leaves_the_store_untouched(tmp_path, monkeypatch):
     path, digest = _write(tmp_path, ENABLED)
     store = FakeStore({"radar.cards_enabled": False}, fail=True)
     monkeypatch.setattr(card_mod, "TraderSettingsStore", lambda: store)
-    monkeypatch.setattr(card_mod, "assert_writable", lambda *a, **k: None)
+    monkeypatch.setattr(settings_cli, "assert_writable", lambda *a, **k: None)
     with pytest.raises(RuntimeError, match="synthetic"):
         card_mod.cmd_load_card(_args(path, sha=digest, apply=True))
     assert store.data == {"radar.cards_enabled": False}

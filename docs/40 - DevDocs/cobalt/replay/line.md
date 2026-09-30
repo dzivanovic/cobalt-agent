@@ -46,3 +46,16 @@ row and the dry-run diff all belong to the writer (`vaultwrite/writer.md`).
 The tests prove each one keeps every human byte outside the unit unchanged
 (`tests/cobalt/test_replay_line.py`). The `requires_vault` test reads the
 live DRC shape read-only: set `COBALT_TEST_LIVE_DRC` to a note path.
+
+## 2026-09-29 — DRC D3-3: the absent-note branch
+The DRC note is the DRC build's (the 15:40 prefill is retired):
+`DrcNoteAbsent` now reads "DRC note absent — the DRC build owns
+creation". `LINE_PENDING` (`pending (no DRC)`) is the runner's
+`line_action` when the note is absent at 21:10. `stored_line_inputs(day,
+args)` turns the exact `render_line` arguments into JSON for the run's
+`job.result.line_inputs`; `render_stored(blob)` renders the line from that
+blob ONLY — the DRC build's one call for a pending line, written with
+`write_miss_line` under this module's `WRITER` (`replay.nightly`, one
+writer identity for the unit). The committed tests' DRC note is now his
+template's SHAPE rendered by `drc.template.render_template` plus the three
+Cobalt sections (`drc.md.j2` is deleted).

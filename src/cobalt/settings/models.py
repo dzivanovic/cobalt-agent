@@ -16,12 +16,13 @@ rather than believed.
 from __future__ import annotations
 
 import json
+import re
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Optional
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from cobalt.aset.config import SheetModesConfig
 from cobalt.daymode.config import DayModeConfig
@@ -52,13 +53,173 @@ DAYMODE_FILENAME = "daymode.yaml"
 #: must fail the replay's movers step loudly, not the ASET sheet.
 BENCHMARK_KEY = "radar.benchmark"
 
-#: Every optional key the `--optional` loader path accepts, with the model
-#: that validates it. One registry, so the loader and every reader agree.
-OPTIONAL_SETTING_KEYS = (BENCHMARK_KEY,)
-
-
 class TraderSettingsError(RuntimeError):
     """Settings missing or invalid — crash, never fall back."""
+
+
+# ---------------------------------------------------------------------
+# DRC D4: the DRC key families (SPEC §7 NAMES; v2 [F-16] / [F-18])
+# ---------------------------------------------------------------------
+#
+# ONE ROW PER LEAF, keyed by its dotted SPEC path (`account.daily_stop_full`,
+# `limits.card_match_window_minutes`), the same shape the `daymode.*` rows
+# already use. Each FAMILY is one Pydantic model whose every field is
+# Optional: a key that has no row is `None`, and callers render that as
+# `not given` (L1) — there is no default here, because a daily stop Cobalt
+# invented is a risk limit nobody chose.
+#
+# OPTIONAL, NEVER REQUIRED ([F-16]): every DRC key sits in
+# `OPTIONAL_SETTING_KEYS`, so a missing DRC key never touches the ASET
+# sheet's reader (`SETTING_KEYS`).
+#
+# NOT HERE, on purpose: SPEC §7's `grades.*` (the dollars per grade ARE the
+# existing `aset.sheet_modes` row — a second copy is an L3 defect, [F-18]),
+# `account.sheet_mode_default` (which sheet a day uses is the day mode's
+# ruling — a second source beside `daymode.*` would be an L3 defect too),
+# `sleep_trigger.*` (a later slice) and every other `limits.*` name (no
+# reader yet; no rule->checker map, R101).
+
+_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def _hhmm(value: str) -> str:
+    if not isinstance(value, str) or not _HHMM.match(value):
+        raise ValueError(f"expected an ET clock time HH:MM, got {value!r}")
+    return value
+
+
+class DrcAccountSettings(BaseModel):
+    """`account.*` — the daily stop, per sheet (R95 / R96 / R102: one
+    place, the central settings, changed by his change line in ASET)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    daily_stop_full: Optional[Decimal] = Field(default=None, gt=0)
+    daily_stop_half: Optional[Decimal] = Field(default=None, gt=0)
+
+
+class DrcLimitsSettings(BaseModel):
+    """`limits.*` — only the card-match window is read in this slice (D3's
+    card match)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    card_match_window_minutes: Optional[int] = Field(default=None, gt=0, strict=True)
+
+
+class DrcWindowsSettings(BaseModel):
+    """`windows.*` — the day's session windows, ET clock times."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    premarket_end: Optional[str] = None
+    first_window_minutes: Optional[int] = Field(default=None, gt=0, strict=True)
+    prime: Optional[tuple[str, str]] = None
+    dead: Optional[tuple[str, str]] = None
+    second: Optional[tuple[str, str]] = None
+
+    @field_validator("premarket_end")
+    @classmethod
+    def _clock(cls, v):
+        return None if v is None else _hhmm(v)
+
+    @field_validator("prime", "dead", "second")
+    @classmethod
+    def _span(cls, v):
+        if v is None:
+            return None
+        start, end = _hhmm(v[0]), _hhmm(v[1])
+        if start >= end:
+            raise ValueError(f"a window must start before it ends, got [{start}, {end}]")
+        return (start, end)
+
+
+class DrcGoalSettings(BaseModel):
+    """`goal.*` — the stated process goal and its bands (percent)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    primary: Optional[str] = Field(default=None, min_length=1)
+    metric: Optional[str] = Field(default=None, min_length=1)
+    target_pct: Optional[tuple[Decimal, Decimal]] = None
+    switch_threshold_pct: Optional[Decimal] = Field(default=None, ge=0, le=100)
+
+    @field_validator("target_pct")
+    @classmethod
+    def _band(cls, v):
+        if v is None:
+            return None
+        low, high = v
+        if not (0 <= low <= high <= 100):
+            raise ValueError(f"target_pct must be [low, high] within 0-100, low <= high; got {list(v)}")
+        return v
+
+
+#: family name -> its model. The dotted key is `<family>.<field>`.
+DRC_FAMILIES: dict[str, type[BaseModel]] = {
+    "account": DrcAccountSettings,
+    "limits": DrcLimitsSettings,
+    "windows": DrcWindowsSettings,
+    "goal": DrcGoalSettings,
+}
+
+#: Every DRC key this slice reads, in family order.
+DRC_SETTING_KEYS = tuple(
+    f"{family}.{field}" for family, model in DRC_FAMILIES.items() for field in model.model_fields
+)
+
+#: The daily stop's keys, by the sheet each one belongs to.
+DAILY_STOP_KEYS: dict[str, str] = {
+    "full": "account.daily_stop_full",
+    "half": "account.daily_stop_half",
+}
+
+
+class _DrcLeaf:
+    """One validated DRC leaf value, in the registry's `.row()` shape."""
+
+    def __init__(self, value: Any):
+        self._value = value
+
+    def row(self) -> Any:
+        return self._value
+
+
+class DrcKey:
+    """The registry adapter for ONE DRC leaf key: validates the leaf through
+    its family's model, and names the KEY (not the Python field) when it
+    fails — the trader edits keys."""
+
+    def __init__(self, key: str):
+        family, _, field = key.partition(".")
+        if family not in DRC_FAMILIES or field not in DRC_FAMILIES[family].model_fields:
+            raise TraderSettingsError(f"not a DRC setting: {key!r}")
+        self.key, self.family, self.field = key, family, field
+
+    def validate(self, value: Any) -> Any:
+        """The leaf as the family model accepts it (a typed value)."""
+        if value is None:
+            raise TraderSettingsError(
+                f"invalid {self.key}: a stored null is not a value — delete the row instead"
+            )
+        try:
+            model = DRC_FAMILIES[self.family](**{self.field: value})
+        except ValidationError as e:
+            msgs = "; ".join(err["msg"] for err in e.errors())
+            raise TraderSettingsError(f"invalid {self.key}: {msgs} (got {value!r})") from e
+        return getattr(model, self.field)
+
+    def from_rows(self, rows: dict[str, Any]) -> _DrcLeaf:
+        if self.key not in rows:
+            raise TraderSettingsError(f'"user".trader_settings has no {self.key!r} row')
+        typed = self.validate(rows[self.key])
+        model = DRC_FAMILIES[self.family](**{self.field: typed})
+        return _DrcLeaf(_jsonable(model.model_dump(mode="json")[self.field]))
+
+
+#: Every optional key the `--optional` loader path accepts, with the model
+#: that validates it. One registry, so the loader and every reader agree.
+OPTIONAL_SETTING_KEYS = (BENCHMARK_KEY, *DRC_SETTING_KEYS)
 
 
 class BenchmarkSettings(BaseModel):
@@ -95,7 +256,12 @@ class BenchmarkSettings(BaseModel):
         return _jsonable(self.model_dump(mode="json"))
 
 
-OPTIONAL_SETTING_MODELS: dict[str, type[BaseModel]] = {BENCHMARK_KEY: BenchmarkSettings}
+#: key -> what validates it: a model class, or a `DrcKey` adapter — both
+#: answer `.from_rows({key: value}).row()`.
+OPTIONAL_SETTING_MODELS: dict[str, Any] = {
+    BENCHMARK_KEY: BenchmarkSettings,
+    **{key: DrcKey(key) for key in DRC_SETTING_KEYS},
+}
 
 
 def _jsonable(value: Any) -> Any:
@@ -254,7 +420,15 @@ __all__ = [
     "ASET_FILENAME",
     "BENCHMARK_KEY",
     "BenchmarkSettings",
+    "DAILY_STOP_KEYS",
     "DAYMODE_FILENAME",
+    "DRC_FAMILIES",
+    "DRC_SETTING_KEYS",
+    "DrcAccountSettings",
+    "DrcGoalSettings",
+    "DrcKey",
+    "DrcLimitsSettings",
+    "DrcWindowsSettings",
     "OPTIONAL_SETTING_KEYS",
     "OPTIONAL_SETTING_MODELS",
     "DAYMODE_KEYS",

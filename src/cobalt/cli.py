@@ -65,6 +65,7 @@ from cobalt.generated import cli as generated_cli  # noqa: E402
 from cobalt.db_migrations import cli as db_cli  # noqa: E402
 from cobalt.backup import cli as backup_cli  # noqa: E402
 from cobalt.dayopen import cli as dayopen_cli  # noqa: E402
+from cobalt.drc import cli as drc_cli  # noqa: E402
 from cobalt.heartbeat import cli as heartbeat_cli  # noqa: E402
 from cobalt.jobs import cli as jobs_cli  # noqa: E402
 from cobalt.jobs.wrapper import JobStopped  # noqa: E402
@@ -508,6 +509,7 @@ def main() -> None:
     # quiet-window repairs. A NEW block at the end of this group — it
     # reflows none of its neighbours.
     archiver_cli.add_parser(sub)
+    drc_cli.add_parser(sub)
     jobs_cli.add_stop_parsers(sub)
     voice_cli.add_parser(sub)
 

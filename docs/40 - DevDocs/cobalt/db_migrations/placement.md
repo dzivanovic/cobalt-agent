@@ -46,3 +46,28 @@ trader's words and the command they ran (L32). Created by the
 database-wide migration `0017_voice_turns.sql` directly on its side, so
 the migrate proof carries it and a rollback reads it as DROPPED. It
 carries `user_id` NOT NULL + FK + the GUC default like every user table.
+
+## 2026-09-23 — DRC D1
+
+`CREATED_TABLES` gains `drc_imports`, `drc_fills` and `drc_rows`, all
+USER, from `0016_drc.sql`: his imported files, their executions, and the
+derived DRC rows (L32). `drc_rows` leaves `DECLARED_TABLES` now that it
+is built.
+
+`fills` stays declared and unbuilt. DRC D1 stores executions in
+`drc_fills` (v2 `[F-35]`), and `legs` remains S3's.
+
+The live `user_id` assertion in `test_tenancy` reads `CREATED_TABLES`,
+so it covers the three new tables wherever 0016 has been applied.
+`test_drc_store.py` runs the same assertion inside its never-committed
+migration transaction.
+
+## 2026-09-24 — DRC K1
+
+`CREATED_TABLES` gains `drc_stated_books`, on the USER side, from `0018`.
+It holds his own statements (L32).
+
+## 2026-09-28 — DRC D2 fix r1
+
+`CREATED_TABLES` gains `drc_events`, on the USER side, from `0019`. It
+holds the state of his own DRC runs (L32).

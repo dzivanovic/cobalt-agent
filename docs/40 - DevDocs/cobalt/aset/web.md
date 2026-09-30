@@ -263,6 +263,60 @@ imports it at call time. Pin: `tests/cobalt/test_voice_card_stop.py`
 
 ---
 
+## 2026-09-25 — DRC D4-4: the settings change line (R96 / R102)
+
+His daily stop and dollars per grade are changed HERE, from the sheet,
+into the central settings (`"user".trader_settings`).
+
+- `_settings_daily_form()` is appended by `_daymode_banner` right after the
+  attestation form (both the resolved and the UNRESOLVED banner). It reads
+  the current values through `settings.drc.daily_risk_values()` — the one
+  reader — and renders one input per daily-stop key and per sheet × grade
+  (`aset.sheet_modes.<sheet>.<A_plus|A|B|C|D>`). It never raises: an
+  unreadable setting renders a FAILED block.
+- `POST /settings/daily` → `settings.drc.propose_daily_change(form)` → the
+  per-key diff (old → new), the payload's sha256, and an Apply form that
+  posts the same inputs plus that hash. Writes nothing. A bad field
+  (non-number, ≤ 0, a blank grade, a non-zero D) is refused naming it.
+- `POST /settings/daily/apply` rebuilds the proposal against what is stored
+  NOW, refuses if its sha256 is not the reviewed one, then calls
+  `settings.cli.apply_settings` — the same function `cobalt settings load
+  --apply` uses — with `source="aset.change_line@sha256:<hash>"`,
+  `actor="aset.settings"`. Inside `market_reset` it is refused with the
+  guard's reason and "Nothing written." `Settings saved` is shown only after
+  `apply_settings` returned, i.e. after the read-back equalled the payload.
+- THE SEAM WITH D2 (L72): this route block sits directly after `/attest`;
+  D2's `/drc` block goes at the end of the file; they share no helper.
+
+Tests: `tests/cobalt/test_drc_settings.py` (offline, constructed store),
+`tests/cobalt/test_drc_settings_db.py` (`cobalt_dev`, rollback).
+
+---
+
+## 2026-09-25 — DRC D2-4: the `/drc` import page
+
+The block at the END of the file (THE SEAM, L72: it shares nothing with
+D4's block after `/attest`; its own imports — `date` as `_drc_date`,
+`File` / `Form` / `UploadFile`, `cobalt.drc.imports` as `drc_imports`,
+`drc_page` — sit inside it). The routes own no side effect (L40):
+- `GET /drc?date=YYYY-MM-DD` (default today ET) → `drc_imports.day_view`
+  → `drc_page.render`. Writes nothing. A date that is not a date → the
+  FAILED page.
+- `POST /drc/import` (multipart: `date`, `files` — one or more, any name,
+  NO kind field — optional `trade_key`) → `drc_imports.place`.
+- `POST /drc/no-trade` (`date`) → `drc_imports.no_trade`.
+- `POST /drc/scan` (`date`) → `drc_imports.scan_folder` (a non-date is
+  the FAILED page; nothing read).
+- `_drc_render(day, result)` reads the day's cards (`AsetStore.for_date`,
+  read only; a failed read is a FAILED line) for the "cards with no
+  trade" count. Any exception is the FAILED page, never a blank.
+
+Tests: `tests/cobalt/test_drc_imports.py` (TestClient, offline double),
+`tests/cobalt/test_drc_imports_db.py` (TestClient, `cobalt_dev`
+rollback), `tests/cobalt/test_drc_web_seam.py` (the seam, by `ast`).
+
+---
+
 ## 2026-09-28 — S3 exits C3: the trade taps (v3 §2 / §3 / §5; R67, R38)
 
 ONE block, directly after `POST /radar/card/{card_id}/release` (S-WEB: never

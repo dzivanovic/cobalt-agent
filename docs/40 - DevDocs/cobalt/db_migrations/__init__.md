@@ -183,6 +183,65 @@ land — whichever lands later keeps every number in numeric order, as
 that one table and nothing else. No bytes column of any kind — voice audio
 never reaches the database (R18 (b)).
 
+## 2026-09-23 — DRC D1: `0016_drc`
+
+`0016_drc.sql` adds three USER tables, each with `user_id NOT NULL` + the
+GUC default + an FK to `"user".traders`, and each owned by `cobalt_user`:
+- `drc_imports` — one row per dropped file, with its sha256,
+  `parsed` / `partial` / `failed`, the reason and line, `supersedes`,
+  and D2's input-event state (`pending` / `running` / `done` / `failed`).
+- `drc_fills` — one row per execution. Every field except the line is
+  nullable, so a partial file stores what it has.
+- `drc_rows` — the declared table, now built. It holds the trade, open
+  position, stats row and day rows, with `inputs`, `derived` and
+  `fn_version` (L57).
+
+`0016_drc.rollback.sql` drops the three tables children-first. It
+touches nothing else.
+
+**The number is `0016`, not the next free one on `main`.** `0012` is
+`bars/chunk-2-0920`, `0013` the setups build, `0014` handicap H1
+(reserved) and `0015` stale score (reserved, conditional). That table
+lives in `reports/devdb-builds-reissue-2026-09-23.md`. On this branch the
+registry reads `1…11, 16`. The combined pin is the desk's, at the L68
+gate.
+
+## 2026-09-24 — DRC K1: `0018_drc_stated_books`
+
+`0018` creates the append-only `"user".drc_stated_books` table and widens
+`drc_rows.kind` with `seed` / `book_close` under the constraint's proven
+name, `drc_rows_kind_check`. Its rollback states its COST and restores the
+four-kind CHECK. It is a new file, never a fold into `0016` (X5). `0017`
+is the voice branch's number, so the registry reads `1…11, 16, 18`.
+
+## 2026-09-28 — DRC D2 fix r1: `0019_drc_events`
+
+`0019` creates `"user".drc_events`, the ONE home of the DRC input event's
+state for both day types (`DRC-D2-SEAM-2026-09-25.md` §1): one row per
+source (a trading-log import or a `no_trade` statement), four CHECKs
+(source ⇔ its FK, `failed` ⇔ a non-empty error, `done` ⇔ a note path),
+one row per source. It drops the never-shipped `drc_imports.event_*`
+columns. Its rollback states its COST (event history), restores the
+three columns and both CHECKs as `0016` declares them, and is a no-op
+when its objects are absent (`IF EXISTS`; the `to_regclass` guard). The
+number is the desk's (R64 (5)); D3's `drc_build_kinds` is `0020`.
+`FORWARD` ends `…, 18, 19`; `0019`'s rollback is `REVERSE[0]`.
+
+## 2026-09-29 — DRC D3: `0020_drc_build_kinds`
+
+`0020` creates no table: it widens `drc_rows.kind`'s CHECK
+(`drc_rows_kind_check`, the name `0018` proved) with the DRC build's two
+kinds, `build_trade` and `build_day` (`DrcStore.record_build`, L57). X-K
+proved `0018`'s CHECK refuses them. Its rollback states its COST (the
+derived build rows — a re-build restores them), deletes those two kinds'
+rows, restores `0018`'s six-kind CHECK, and is a no-op when
+`"user".drc_rows` is absent (the `to_regclass` guard, `0018`'s shape).
+A new file, never a fold into `0016` / `0018` (v3 `[F-02]`). `FORWARD`
+ends `…, 18, 19, 20`; `0020`'s rollback is `REVERSE[0]`. `placement.py`
+names it in its comment block (no new table, no placement row). Applied
+only by `cobalt db migrate` at the DRC deploy; every test applies it only
+inside the suite's rolled-back transaction (L76).
+
 ## 2026-09-28 — S3 exits C1: `0021_legs` (M1)
 
 `FORWARD` gains `0021_legs.sql` (last) and `REVERSE` its rollback (first);
@@ -202,3 +261,14 @@ columns join `TABLE_DIGEST_EXCLUDED_COLUMNS` (`aset_sizings`,
 `card_stop_edits`) so the migrate proof does not read an added column as a
 content change (the 0014 precedent). The registry pins in the suite gain
 the one 0021 entry each.
+
+## 2026-09-30 — the seam: DRC D3 × S3 exits C1–C4
+
+Both lanes on one tree. `FORWARD` ends `0015, 0016, 0017, 0018, 0019,
+0020, 0021`; `REVERSE` begins `0021, 0020, 0019, 0018, 0017, 0016, 0015`.
+Each entry above that quotes a shorter tail (`…, 0017, 0021`; `…, 18, 19,
+20`; "`0020`'s rollback is `REVERSE[0]`") describes its own branch before
+this merge. `placement.py`: `CREATED_TABLES` carries DRC's entries, then
+`legs`; `DECLARED_TABLES` carries neither `legs` nor `drc_rows`. The
+registry pins in the suite sit one place further out on the DRC side and
+name `0021_legs.rollback.sql` first in every rollback list.

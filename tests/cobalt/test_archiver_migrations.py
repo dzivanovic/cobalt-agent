@@ -49,6 +49,10 @@ NEW_TABLES = ("archive_progress", "archive_incidents")
 #: pins can say which bound owns what instead of asserting "mine only".
 P4_TABLES = ("movers_daily", "picks", "missed")
 
+#: DRC D1's tables (0016), K1's (0018) and D2 fix r1's (0019), numbered
+#: ABOVE this branch's pair: every rollback bound below 0016 reverses them too.
+DRC_D1_TABLES = ("drc_imports", "drc_fills", "drc_rows", "drc_stated_books", "drc_events")
+
 #: §11: the five kinds. `regression` is v3's addition to v2's four.
 INCIDENT_KINDS = ("gap", "restated", "stored_only", "empty_export", "regression")
 
@@ -77,15 +81,17 @@ def test_forward_ends_0008_0009_0010_0011():
     """The tail after the P4 rebase: P4's pair, then this branch's pair,
     in numeric order. The invariant is unchanged — 0010 and 0011 are the
     LAST two registered, and nothing of this branch's was displaced."""
-    assert [p.name for p in FORWARD[-9:]] == [
-        "0008_radar_value_movers.sql",
-        "0009_picks_missed.sql",
+    assert [p.name for p in FORWARD[-11:]] == [
         "0010_archive_progress.sql",
         "0011_archive_incidents.sql",
         "0013_tunables_slug_nullable.sql",  # the setups one build (R2-3 = B); 0012 is bars/chunk-2-0920's
         "0014_radar_handicap.sql",  # the float handicap H1 (L72 P-b)
         "0015_shadow_agreement_stale.sql",  # the stale-score build (R40, X30 (A)); 0014 is handicap H1's
+        "0016_drc.sql",  # DRC D1; 0012–0015 are the siblings' (see the registry pin)
         "0017_voice_turns.sql",  # voice V1; 0012 and 0016 are unmerged branches' (L68)
+        "0018_drc_stated_books.sql",  # DRC K1; 0017 is the voice branch's
+        "0019_drc_events.sql",  # DRC D2 fix r1 (R64 (5))
+        "0020_drc_build_kinds.sql",  # DRC D3 (R64 (5))
         "0021_legs.sql",  # S3 exits C1 (M1); 0016/0018-0020 are the DRC lane's (L68)
     ]
 
@@ -93,16 +99,18 @@ def test_forward_ends_0008_0009_0010_0011():
 def test_reverse_begins_0011_0010_0009_0008():
     """The exact mirror of the tail above: this branch's pair reverses
     FIRST, then P4's."""
-    assert [p.name for p in REVERSE[:9]] == [
+    assert [p.name for p in REVERSE[:11]] == [
         "0021_legs.rollback.sql",  # S3 exits C1 (M1)
+        "0020_drc_build_kinds.rollback.sql",  # DRC D3
+        "0019_drc_events.rollback.sql",  # DRC D2 fix r1
+        "0018_drc_stated_books.rollback.sql",
         "0017_voice_turns.rollback.sql",  # voice V1
+        "0016_drc.rollback.sql",
         "0015_shadow_agreement_stale.rollback.sql",
         "0014_radar_handicap.rollback.sql",
         "0013_tunables_slug_nullable.rollback.sql",
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
-        "0009_picks_missed.rollback.sql",
-        "0008_radar_value_movers.rollback.sql",
     ]
 
 
@@ -122,7 +130,11 @@ def test_rollback_down_to_0009_undoes_this_branch_alone_and_0007_also_reaches_p4
     Both are pinned so neither can drift."""
     assert [p.name for p in _rollback_paths("0009")] == [
         "0021_legs.rollback.sql",  # S3 exits C1 (M1)
+        "0020_drc_build_kinds.rollback.sql",  # DRC D3
+        "0019_drc_events.rollback.sql",  # DRC D2 fix r1
+        "0018_drc_stated_books.rollback.sql",
         "0017_voice_turns.rollback.sql",  # voice V1
+        "0016_drc.rollback.sql",
         "0015_shadow_agreement_stale.rollback.sql",
         "0014_radar_handicap.rollback.sql",
         "0013_tunables_slug_nullable.rollback.sql",
@@ -131,7 +143,11 @@ def test_rollback_down_to_0009_undoes_this_branch_alone_and_0007_also_reaches_p4
     ]
     assert [p.name for p in _rollback_paths("0007")] == [
         "0021_legs.rollback.sql",  # S3 exits C1 (M1)
+        "0020_drc_build_kinds.rollback.sql",  # DRC D3
+        "0019_drc_events.rollback.sql",  # DRC D2 fix r1
+        "0018_drc_stated_books.rollback.sql",
         "0017_voice_turns.rollback.sql",  # voice V1
+        "0016_drc.rollback.sql",
         "0015_shadow_agreement_stale.rollback.sql",
         "0014_radar_handicap.rollback.sql",
         "0013_tunables_slug_nullable.rollback.sql",
@@ -159,10 +175,11 @@ def test_the_registry_is_an_explicit_contiguous_list_and_reverse_mirrors_it():
     # The stale-score build adds 0015 (R40); 0014 is handicap H1's (same seam).
     # Voice V1 adds 0017; 0012 and 0016 belong to unmerged branches and close
     # the gap as they land (L68 seam).
-    # S3 exits C1 adds 0021; 0016 and 0018-0020 are the DRC lane's (L68 seam).
-    assert numbers == [*range(1, 12), 13, 14, 15, 17, 21], (
-        f"1…11 then 13, 14, 15, 17, 21, got {numbers}")
-    assert numbers[-7:-5] == [10, 11], "this branch's pair is still in place"
+    # DRC D2 fix r1 adds 0019 (R64 (5)); DRC D3 adds 0020 (R64 (5)).
+    # S3 exits C1 adds 0021, above the DRC lane's 0016 and 0018-0020 (L68 seam).
+    assert numbers == [*range(1, 12), *range(13, 22)], f"1…11 then 13–21, got {numbers}"
+    assert numbers[-11:-9] == [10, 11], "this branch's pair is still in place"
+    assert numbers[-1] == 21, "S3 exits C1's 0021 is the tail"
     reverse_numbers = [int(p.name.split("_", 1)[0]) for p in REVERSE]
     assert reverse_numbers == sorted(reverse_numbers, reverse=True)
     assert reverse_numbers == [n for n in reversed(numbers) if n != 1], (
@@ -482,20 +499,26 @@ def test_rollback_down_to_0009_drops_this_branch_alone_and_0007_also_reaches_p4(
     conn = _migration_conn()
     try:
         _apply(conn, FORWARD)
+        # DRC D1's 0016 and K1's 0018 sit ABOVE both bounds, so each bound reverses them
+        # too (`_rollback_paths` selects by number); its tables are owned
+        # by both rollbacks, never survivors.
         survivors = {
             name
             for name in CREATED_TABLES
             # voice V1's 0017 and S3 exits C1's 0021 sit ABOVE both bounds,
             # so both rollbacks correctly drop voice_turns and legs too;
             # neither is a survivor.
-            if name not in NEW_TABLES and name not in P4_TABLES
+            if name not in NEW_TABLES
+            and name not in P4_TABLES
+            and name not in DRC_D1_TABLES
             and name not in ("voice_turns", "legs")
             and _regclass(conn, name)
         }
 
-        # (1) THE ARCHIVER'S OWN BOUND: `--down-to 0009` is this branch alone.
+        # (1) THE ARCHIVER'S OWN BOUND: `--down-to 0009` is this branch
+        # (and everything numbered above it) alone.
         _apply(conn, _rollback_paths("0009"))
-        for table in NEW_TABLES:
+        for table in (*NEW_TABLES, *DRC_D1_TABLES):
             assert _regclass(conn, table) is None, f"{table} survived its own rollback"
         for name in P4_TABLES:
             assert _regclass(conn, name), (
@@ -509,7 +532,7 @@ def test_rollback_down_to_0009_drops_this_branch_alone_and_0007_also_reaches_p4(
 
         # (2) `--down-to 0007` REACHES P4 TOO, and stops there.
         _apply(conn, _rollback_paths("0007"))
-        for table in (*NEW_TABLES, *P4_TABLES):
+        for table in (*NEW_TABLES, *P4_TABLES, *DRC_D1_TABLES):
             assert _regclass(conn, table) is None, (
                 f"{table} survived --down-to 0007, which reverses everything above 0007"
             )
@@ -520,7 +543,7 @@ def test_rollback_down_to_0009_drops_this_branch_alone_and_0007_also_reaches_p4(
 
         # ...and forward again lands back where it started.
         _apply(conn, FORWARD)
-        for table in (*NEW_TABLES, *P4_TABLES):
+        for table in (*NEW_TABLES, *P4_TABLES, *DRC_D1_TABLES):
             assert _regclass(conn, table), table
     finally:
         conn.rollback()

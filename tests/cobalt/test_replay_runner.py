@@ -322,12 +322,17 @@ def test_benchmark_absent_fails_the_movers_step_loud():
         run_nightly(DAY, dry_run=False, deps=deps)
 
 
-def test_drc_note_absent_fails_the_line_step_and_creates_nothing():
+def test_drc_note_absent_stores_the_line_inputs_ends_green_and_creates_nothing():
+    """DRC D3-3 NAMED REVERSAL of `test_drc_note_absent_fails_the_line_step_
+    and_creates_nothing` (`[F-24]`, R66: no DRC at 21:10 is his lawful
+    choice): the line step does not raise, creates nothing, writes nothing,
+    and stores the exact `render_line` arguments on the run
+    (`job.result.line_inputs`, `line_action` = `pending (no DRC)`)."""
     deps, calls = fake_deps(drc_missing=True)
-    with pytest.raises(StepFailed, match="DRC note absent — prefill-drc owns creation") as failed:
-        run_nightly(DAY, dry_run=False, deps=deps)
-    assert failed.value.step == "line"
-    assert not any(c.startswith("writer") for c in calls)
+    result = run_nightly(DAY, dry_run=False, deps=deps)
+    assert result.failed_step is None and result.steps_done[-1] == "line"
+    assert result.line_action == "pending (no DRC)" and result.line_inputs["trade_date"] == DAY.isoformat()
+    assert not any(c.startswith("writer") for c in calls) and not deps.drc.exists()
 
 
 # =====================================================================
@@ -750,7 +755,6 @@ def fake_deps(*, job_row="default", settings="default", collector=None, now=None
               formations=unavailable_formations, formation_sources=None):
     import tempfile
 
-    from cobalt.prefill.drc import _render_template
     from cobalt.replay.cards import MissedStore
     from cobalt.replay.models import ReconcileCounts
     from cobalt.replay.movers import load_radar_config
@@ -843,11 +847,12 @@ def fake_deps(*, job_row="default", settings="default", collector=None, now=None
 
     folder = Path(tempfile.mkdtemp())
     drc = folder / "DRC-2026-02-10.md"
-    if not drc_missing:
-        drc.write_text(_render_template({"date_str": "2026-02-10", "risk_parameters_line": "x",
-                                         "tickers_unit": "y", "rules_check_block": "z"}))
+    from test_replay_line import MemoryWriteStore, drc_text
 
-    from test_replay_line import MemoryWriteStore
+    if not drc_missing:
+        # DRC D3 re-point: his template's shape + the three Cobalt sections
+        # (the repo template `drc.md.j2` is deleted) — `test_replay_line.drc_text`.
+        drc.write_text(drc_text(DAY))
 
     collector = collector or FakeCollector()
     collector.calls = calls
