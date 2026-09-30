@@ -75,7 +75,7 @@ A miss → `FAILED: authorization mismatch — <which> · rollback: not used`. Y
 | `validate`, `jobs restarts *`, `heartbeat show*`, `backup status*`, `backup run*` | G (d2), STEP-R, D1, D2.4 |
 | `db migrate --allow-prod --proof-only`, production `db query *` | D1 (the harmless variants of 4.4's migrate and of the read-back) |
 | `launchctl print gui/501/*`, `cobalt.sh status`, `ps -p *`, `curl …` | here and D1 |
-| NO HARMLESS VARIANT, exact strings with no wildcard: the two `bootout`, `cobalt.sh stop`, `merge --ff-only <branch>`, the two `bootstrap`, the two `kickstart -k`, `kickstart gui/501/com.cobalt.agent`, `revert --no-edit *`, `revert --abort` | first used at STEP-4 / STEP-5. A denial of the FIRST bootout leaves production untouched; a denial after it sends you to STEP-5 (3) |
+| NO HARMLESS VARIANT, strings with no wildcard (an unstarred allow matches by PREFIX — probe G, scratch test 2 part 5: trailing arguments to the SAME command are admitted, never another command; desk reading, accepted): the two `bootout`, `cobalt.sh stop`, `merge --ff-only <branch>`, the two `bootstrap`, the two `kickstart -k`, `kickstart gui/501/com.cobalt.agent`, `revert --no-edit *`, `revert --abort` | first used at STEP-4 / STEP-5. A denial of the FIRST bootout leaves production untouched; a denial after it sends you to STEP-5 (3) |
 - `## CONTINUE`: `next: STEP-T`.
 
 ## STEP-T — THE TREE (L54, L68): the heads of `TIP` merged into `<BRANCH>`, in order; NO conflict resolution exists in this run

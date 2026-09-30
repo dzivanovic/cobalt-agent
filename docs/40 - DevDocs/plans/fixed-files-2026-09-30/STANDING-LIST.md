@@ -94,6 +94,8 @@ THE TOKEN TOTAL of a check is not the session's to report: the desk measures it 
 
 ## 3. `DEPLOY-HUB.md` — 58 allow with one head and a migration (55 without a migration; +1 per extra head), 7 deny · `--permission-mode dontAsk` · `--add-dir /Users/cobalt/Vault /Users/cobalt/cobalt /Users/cobalt/cobalt-wt /Users/cobalt/Library/LaunchAgents`
 
+PREFIX NOTE (probe G, R62 session): an allow with no `*` matches by PREFIX — `Bash(echo hi)` ran `echo hi there`. Every 'exact' string in this table therefore also admits trailing arguments to the same command; none admits another command. The two production `migrate` dangers (`--rollback`, `--down-to`) are denied above; the rest is accepted as the same command (desk reading).
+
 THE FILE-TOOL STRINGS — 4 (F1): `Read` · `Grep` · `Glob` (proven) and **NEW** `Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-*)` (R62: narrowed from `reports/**`; the hub never edits `cto-<date>.md`): the report is a `reports/deploy-<name>.md` file; the deploy line carries NO worktree Edit (the brain's DF-1: `DEPLOY-HUB.md` forbids any Edit or Write inside a worktree, rule B).
 
 `<worktree>` = the gate worktree, `<branch>` = the gate branch, `<head>` = a branch head of the card's `TIP`; `desk-launch.sh` writes the exact values into the line. Two PATTERNS are approved here beside the `.env` pair: the head merge and the fast-forward, each an exact string per deploy.
