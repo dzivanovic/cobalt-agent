@@ -556,10 +556,11 @@ def _db_row(cards, card_id):
     return taps, dot, sizing
 
 
-def _bands():
+def _settings():
+    """F15 P1 [F-05]: a tap takes the whole CardSettings (bands = its proposed_key)."""
     from cobalt.settings.card import CardSettings
 
-    return CardSettings.from_rows(DB_ENABLED).proposed_key
+    return CardSettings.from_rows(DB_ENABLED)
 
 
 @requires_db
@@ -582,7 +583,7 @@ def test_t5b_db_a_tap_on_the_assumed_dot_is_refused_and_the_row_is_unchanged(wor
     cards = world["cards"]
     before = _db_row(cards, card_id)
     with pytest.raises(CardStateError, match="assumed_formation is not graded on a card"):
-        cards.tap_dot(card_id, "assumed_formation", 7, bands=_bands(), enabled=[Grade.A, Grade.B, Grade.C])
+        cards.tap_dot(card_id, "assumed_formation", 7, settings=_settings(), enabled=[Grade.A, Grade.B, Grade.C])
     assert _db_row(cards, card_id) == before
 
 
@@ -595,7 +596,7 @@ def test_t5c1_x8_db_a_tap_on_every_other_dot_leaves_the_score_null(world):
     cards = world["cards"]
     result = None
     for name in [q.name for q in sup.loaded().definition.quality_factors]:
-        result = cards.tap_dot(card_id, name, 8, bands=_bands(), enabled=[Grade.A, Grade.B, Grade.C])
+        result = cards.tap_dot(card_id, name, 8, settings=_settings(), enabled=[Grade.A, Grade.B, Grade.C])
     assert result["conviction"] == "0.8"
     assert result["card_score"] is None and "assumed_formation" in result["score_suppressed"]
     _taps, dot, sizing = _db_row(cards, card_id)
@@ -609,7 +610,7 @@ def test_t5d_x8_db_a_scan_after_a_tap_keeps_the_dot_and_the_null_score(world):
 
     card_id = world["scan"](DB_SCAN0).created[0]
     cards = world["cards"]
-    cards.tap_dot(card_id, "trail_fit", 8, bands=_bands(), enabled=[Grade.A, Grade.B, Grade.C])
+    cards.tap_dot(card_id, "trail_fit", 8, settings=_settings(), enabled=[Grade.A, Grade.B, Grade.C])
     second = world["scan"](DB_SCAN0 + timedelta(seconds=100))
     assert second.refreshed == [card_id]
     _taps, dot, sizing = _db_row(cards, card_id)
@@ -631,7 +632,7 @@ def test_t5d_prime_x24_the_shadow_report_and_the_panel_over_a_card_carrying_the_
         engine = conn.execute(
             "SELECT engine_grade FROM card_dots WHERE card_id = %s AND factor = 'rvol'", (card_id,)
         ).fetchone()[0]
-    cards.tap_dot(card_id, "rvol", engine, bands=_bands(), enabled=[Grade.A, Grade.B, Grade.C], now=DB_SCAN0)
+    cards.tap_dot(card_id, "rvol", engine, settings=_settings(), enabled=[Grade.A, Grade.B, Grade.C], now=DB_SCAN0)
     rows = cards.shadow_agreement(None)
     assert "assumed_formation" not in {r["factor"] for r in rows}
     report = sr.shadow_report(rows, bar=CardSettings.from_rows(
@@ -708,7 +709,7 @@ def test_t5b_route_a_refused_tap_reaches_the_page_as_409_with_its_message(monkey
             "an assumed default is ruled on the settings surface")
 
     class Refusing(FakeCards):
-        def tap_dot(self, card_id, factor, grade, *, bands, enabled, now=None):
+        def tap_dot(self, card_id, factor, grade, *, settings, enabled, now=None):
             raise CardStateError(text)
 
     fake = Refusing()

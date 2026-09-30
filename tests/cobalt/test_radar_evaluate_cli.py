@@ -136,7 +136,7 @@ class DayRadar(sup.FakeRadarStore):
 
 
 class TappingCards(sup.FakeCardStore):
-    def tap_dot(self, card_id, factor, grade, *, bands, enabled, now=None):
+    def tap_dot(self, card_id, factor, grade, *, settings, enabled, now=None):
         self.tap(card_id, factor, grade)
         return {"card_id": card_id}
 

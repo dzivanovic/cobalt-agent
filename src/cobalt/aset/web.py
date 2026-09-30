@@ -1538,7 +1538,7 @@ async def radar_card_dot(card_id: int, factor: str, request: Request):
         settings = CardSettingsReader().current()
         dm = _todays_rung()
         return CardStore().tap_dot(
-            card_id, factor, grade, bands=settings.proposed_key,
+            card_id, factor, grade, settings=settings,
             enabled=dm["cfg"].enabled_grades_for(dm["mode"]),
         )
     except DevEntryRefused as e:

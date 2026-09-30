@@ -393,9 +393,31 @@ def score_card(
     )
 
 
+def grade_why(output: Mapping[str, Any]) -> str:
+    """F15 P1 (FINAL §3 `why`): the ONE sentence a prediction record
+    carries, built from the record's `output` fields only — card score or
+    its suppression, conviction, proximity, the proposed key and its
+    reason, the tapped and the engine dots. Deterministic, no clock, no
+    other source, never an LLM. It explains the numbers; it decides none."""
+    score = output.get("card_score")
+    parts = [f"card_score {score}" if score is not None else "no card_score"]
+    if output.get("score_suppressed"):
+        parts.append(f"suppressed: {output['score_suppressed']}")
+    parts.append(f"conviction {output.get('conviction') if output.get('conviction') is not None else 'none'}")
+    parts.append(f"proximity {output.get('proximity') if output.get('proximity') is not None else 'none'}")
+    key, reason = output.get("proposed_key"), output.get("proposed_key_reason")
+    parts.append(f"key {key}" if key else "no key" + (f" ({reason})" if reason else ""))
+    dots = list(output.get("dots") or [])
+    tapped = [f"{d['factor']} {d['trader_grade']}" for d in dots if d.get("trader_grade") is not None]
+    engine = [f"{d['factor']} {d['engine_grade']}" for d in dots if d.get("engine_grade") is not None]
+    parts.append("tapped " + (", ".join(tapped) if tapped else "none"))
+    parts.append("engine " + (", ".join(engine) if engine else "none"))
+    return " · ".join(parts)
+
+
 __all__ = [
     "ASSUMED_FORMATION", "COMPUTED_SOURCES", "CardScore", "DESK_FACTORS", "Dot", "FactorObservation",
     "PROXIMITY_UNKNOWN", "card_score", "colour_thresholds", "compute_dots", "conviction", "dot_colour",
-    "grade_from_curve", "proposed_key", "proximity", "refresh_dots", "score_card", "score_last", "stale_reason",
-    "suppression",
+    "grade_from_curve", "grade_why", "proposed_key", "proximity", "refresh_dots", "score_card", "score_last",
+    "stale_reason", "suppression",
 ]

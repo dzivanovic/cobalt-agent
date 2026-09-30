@@ -98,6 +98,9 @@ class DevWorld:
         self.radar, self.cards = RadarStore("cobalt_dev"), CardStore("cobalt_dev")
         self.settings, self.bar_store = TraderSettingsStore("cobalt_dev"), BarStore("cobalt_dev")
         self.cards.ensure_schema()
+        from predictions_db_support import apply_0022
+
+        apply_0022(self.cards)  # F15 P1: every card write records; 0022 inside the suite's rollback only (L76)
         with self.radar._connect() as conn:
             conn.execute(
                 "INSERT INTO radar_pool (pool_key, state, session, members) VALUES (%s, 'scanning', 'rth', 1) "
@@ -167,7 +170,10 @@ class DevWorld:
                                 (card_id, factor)).fetchone()[0]
 
     def tap(self, card_id: int, factor: str, grade: int, at: datetime) -> dict:
-        return self.cards.tap_dot(card_id, factor, grade, bands=bands(), enabled=enabled(), now=at)
+        from cobalt.settings.card import CardSettings
+
+        return self.cards.tap_dot(card_id, factor, grade, settings=CardSettings.from_rows(ENABLED),
+                                  enabled=enabled(), now=at)
 
     def tap_all(self, card_id: int, grade: int, at: datetime) -> None:
         for factor in self.dots(card_id):

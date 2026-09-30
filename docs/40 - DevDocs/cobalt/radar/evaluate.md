@@ -165,3 +165,6 @@ The ONE `EVALUATOR_VERSION` bump of STEP-1 covers this step. Nothing deploys bet
 - **Null proximity.** `CardUpdate.proximity` is `Decimal | None`, and `published_numbers` writes JSON null for a null proximity, never the string `"None"`.
 - **Version.** `EVALUATOR_VERSION` and `DESK_FORMULA_VERSION` are both `s2p2.3`. That is one new string, and the previous strings are not kept (`[F-08]`). Receipts written at `s2p2.2` are refused by `replay_receipt`, and by `audit-export` before the replay.
 - **Unchanged.** The ladder order (`cards/radar.py`) is untouched: a null score sinks under the existing nulls-last rule, and null ties fall back to pool position (R37, R41). The R36 stamp, the health pills (R42) and the panel (X22 found no scorer there, R44) are also unchanged. There is no session gate either: the clock is the evaluator's every-session rule, so premarket counts too (R38).
+
+## 2026-09-30 — f15-p1
+`CardUpdate` gains `last_price_bar_ts` (the evaluation's `last_bar_ts`, the i1 bar START, `[F-37]`) and `proposed_key_reason` (the scorer's, for the refresh record); `refresh_card` sets both. The stage passes `run_id=run_id` to `refresh_radar_card` and `proposed_key_reason=score.proposed_key_reason` to `create_radar_card`. `published_numbers`, the receipt, `write_receipt` and `EVALUATOR_VERSION` are unchanged (X3).

@@ -101,7 +101,8 @@ def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first
     newest four are named explicitly: P4's 0008/0009 and the archiver's
     0010/0011 both reverse before 0007."""
     newest_four = [
-        "0021_legs.rollback.sql",  # S3 exits C1 (M1) (the name stays; the list is the newest eleven)
+        "0022_prediction_records.rollback.sql",  # F15 P1 (M1) (the name stays; the list is the newest twelve)
+        "0021_legs.rollback.sql",  # S3 exits C1 (M1)
         "0020_drc_build_kinds.rollback.sql",  # DRC D3
         "0019_drc_events.rollback.sql",  # DRC D2 fix r1
         "0018_drc_stated_books.rollback.sql",  # DRC K1
@@ -114,17 +115,17 @@ def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first
         "0010_archive_progress.rollback.sql",
     ]
     reverse_names = [p.name for p in REVERSE]
-    assert reverse_names[:11] == newest_four
+    assert reverse_names[:12] == newest_four
     assert (
         reverse_names.index("0006_radar_score.rollback.sql")
         == reverse_names.index("0007_radar_cards.rollback.sql") + 1
     )
-    assert [p.name for p in _rollback_paths("0005")][:11] == newest_four
+    assert [p.name for p in _rollback_paths("0005")][:12] == newest_four
     assert [p.name for p in _rollback_paths("0005")][-2:] == [
         "0007_radar_cards.rollback.sql",
         "0006_radar_score.rollback.sql",
     ]
-    assert [p.name for p in _rollback_paths("0006")][:11] == newest_four
+    assert [p.name for p in _rollback_paths("0006")][:12] == newest_four
     assert [p.name for p in _rollback_paths("0006")][-1:] == [
         "0007_radar_cards.rollback.sql"
     ]

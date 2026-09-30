@@ -79,7 +79,8 @@ def test_taps_moved_with_a_null_proximity_writes_a_null_score_and_the_stale_reas
     update = sds.update_for(world, card_id, stale_at, kept)  # the stage's read
     assert update.proximity is None and update.score_suppressed.startswith("bars stale — ")
     world.tap(card_id, "trail_fit", 9, stale_at + timedelta(seconds=1))  # lands before the stage's write
-    wrote_all = world.cards.refresh_radar_card(update, now=stale_at + timedelta(seconds=2))
+    wrote_all = world.cards.refresh_radar_card(update, run_id=world.radar.latest_run_id(POOL),
+                                               now=stale_at + timedelta(seconds=2))
     row = world.row(card_id)
     assert wrote_all is False  # the taps-moved branch
     assert row["proximity"] is None
@@ -104,7 +105,8 @@ def test_r45_a_tap_racing_a_fresh_scan_scores_the_taps_conviction_on_this_scans_
     assert update.proximity is not None and update.proximity != stored  # a new price, a new proximity
     tapped = world.tap(card_id, "trail_fit", 3, later + timedelta(seconds=1))  # a tap lands: conviction moves
     locked = world.row(card_id)  # what the lock SELECT reads under the write
-    world.cards.refresh_radar_card(update, now=later + timedelta(seconds=2))  # the stage writes
+    world.cards.refresh_radar_card(update, run_id=world.radar.latest_run_id(POOL),
+                                   now=later + timedelta(seconds=2))  # the stage writes
     row = world.row(card_id)
     expected = card_score(Decimal(tapped["conviction"]), update.proximity, locked["score_suppressed"])
     old_price_score = card_score(Decimal(tapped["conviction"]), stored, locked["score_suppressed"])
@@ -156,11 +158,11 @@ def _predicates():
 def test_0015_is_registered_after_0013_and_its_rollback_first():
     from cobalt.db_migrations import FORWARD, MIGRATIONS_DIR, REVERSE
 
-    # 0016–0020 (DRC, voice V1) and 0021 (S3 exits C1) now follow it.
-    assert FORWARD[-7] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.sql"
-    assert REVERSE[6] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.rollback.sql"
-    assert FORWARD[-9].name == "0013_tunables_slug_nullable.sql"
-    assert REVERSE[8].name == "0013_tunables_slug_nullable.rollback.sql"
+    # 0016–0020 (DRC, voice V1), 0021 (S3 exits C1) and 0022 (F15 P1) now follow it.
+    assert FORWARD[-8] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.sql"
+    assert REVERSE[7] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.rollback.sql"
+    assert FORWARD[-10].name == "0013_tunables_slug_nullable.sql"
+    assert REVERSE[9].name == "0013_tunables_slug_nullable.rollback.sql"
 
 
 def test_0015_applies_twice_and_its_rollback_restores_0007s_view_inside_one_rolled_back_transaction():

@@ -50,8 +50,11 @@ def world():
     from cobalt.session import session_clock
     from cobalt.settings.store import TraderSettingsStore
 
+    from predictions_db_support import apply_0022
+
     radar, cards, settings = RadarStore("cobalt_dev"), CardStore("cobalt_dev"), TraderSettingsStore("cobalt_dev")
     cards.ensure_schema()
+    apply_0022(cards)  # F15 P1: every card write records; 0022 inside the suite's rollback only (L76)
     with radar._connect() as conn:
         conn.execute(
             "INSERT INTO radar_pool (pool_key, state, session, members) VALUES (%s, 'scanning', 'rth', 1) "
@@ -152,7 +155,7 @@ def test_the_database_holds_one_open_radar_card_per_member_def_direction(world):
         formula_sha256="a" * 64, tunables_sha256="b" * 64, settings_sha256="c" * 64, proximity=Decimal("0.5"),
         dots=[], evidence={"retry": True},
     )
-    assert cards.create_radar_card(spec, now=SCAN0) is None  # a retry: already open, not a second card
+    assert cards.create_radar_card(spec, proposed_key_reason=None, now=SCAN0) is None  # a retry: not a second card
 
 
 def test_unsized_arm_is_refused_inside_the_locked_transition_and_sized_arm_passes(world):
@@ -232,9 +235,9 @@ def test_dot_taps_append_recompute_and_are_never_overwritten_by_a_scan(world):
 
     card_id = world["scan"](SCAN0).created[0]
     cards = world["cards"]
-    bands = CardSettings.from_rows(ENABLED).proposed_key
-    cards.tap_dot(card_id, "trail_fit", 8, bands=bands, enabled=[Grade.A, Grade.B, Grade.C])
-    result = cards.tap_dot(card_id, "trail_fit", 9, bands=bands, enabled=[Grade.A, Grade.B, Grade.C])
+    settings = CardSettings.from_rows(ENABLED)
+    cards.tap_dot(card_id, "trail_fit", 8, settings=settings, enabled=[Grade.A, Grade.B, Grade.C])
+    result = cards.tap_dot(card_id, "trail_fit", 9, settings=settings, enabled=[Grade.A, Grade.B, Grade.C])
     assert result["conviction"] == "0.9" and result["card_score"] is None
     assert "assumed_formation" in result["score_suppressed"]
     with cards._connect() as conn:
@@ -262,7 +265,7 @@ def test_shadow_agreement_v_pairs_taps_with_the_engine_grade_per_factor_and_et_d
 
     card_id = world["scan"](SCAN0).created[0]
     cards = world["cards"]
-    bands = CardSettings.from_rows(ENABLED).proposed_key
+    settings = CardSettings.from_rows(ENABLED)
     with cards._connect() as conn:
         engine = conn.execute(
             "SELECT engine_grade FROM card_dots WHERE card_id = %s AND factor = 'rvol'", (card_id,)
@@ -270,10 +273,11 @@ def test_shadow_agreement_v_pairs_taps_with_the_engine_grade_per_factor_and_et_d
     assert engine is not None
     enabled = [Grade.A, Grade.B, Grade.C]
     next_day = SCAN0 + timedelta(days=1)
-    cards.tap_dot(card_id, "rvol", engine, bands=bands, enabled=enabled, now=SCAN0)
-    cards.tap_dot(card_id, "rvol", max(1, engine - 3), bands=bands, enabled=enabled, now=SCAN0 + timedelta(minutes=1))
-    cards.tap_dot(card_id, "setup_relation", 7, bands=bands, enabled=enabled, now=SCAN0)  # no engine grade: no pair
-    cards.tap_dot(card_id, "rvol", engine, bands=bands, enabled=enabled, now=next_day)
+    cards.tap_dot(card_id, "rvol", engine, settings=settings, enabled=enabled, now=SCAN0)
+    cards.tap_dot(card_id, "rvol", max(1, engine - 3), settings=settings, enabled=enabled,
+                  now=SCAN0 + timedelta(minutes=1))
+    cards.tap_dot(card_id, "setup_relation", 7, settings=settings, enabled=enabled, now=SCAN0)  # no engine grade
+    cards.tap_dot(card_id, "rvol", engine, settings=settings, enabled=enabled, now=next_day)
     rows = [r for r in cards.shadow_agreement(None)
             if r["trade_date"] in (date(2026, 1, 6), date(2026, 1, 7))]
     assert {r["factor"] for r in rows} == {"rvol"}
@@ -331,7 +335,7 @@ def test_audit_export_of_a_cobalt_dev_run_verifies_and_writes_the_bundle(world, 
     from cobalt.settings.card import CardSettings
 
     card_id = world["scan"](SCAN0).created[0]
-    world["cards"].tap_dot(card_id, "trail_fit", 7, bands=CardSettings.from_rows(ENABLED).proposed_key,
+    world["cards"].tap_dot(card_id, "trail_fit", 7, settings=CardSettings.from_rows(ENABLED),
                            enabled=[Grade.A, Grade.B, Grade.C], now=SCAN0 + timedelta(seconds=30))
     second = world["scan"](SCAN0 + timedelta(seconds=100))
     out = tmp_path / "bundle"

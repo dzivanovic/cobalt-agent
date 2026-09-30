@@ -87,12 +87,19 @@
                          `drift_warned`. Additive.
 `0021_legs.rollback.sql` — drops exactly those: the view, the table, the
                          four columns.
+`0022_prediction_records.sql` — F15 P1: `"user".prediction_records` (one
+                         append-only record per card grade write, immutable
+                         BEFORE UPDATE OR DELETE, R2-2 B) and
+                         `aset_sizings.last_price_bar_ts`. Additive.
+`0022_prediction_records.rollback.sql` — drops exactly those: the table,
+                         the one column.
 
 0012 AND 0016 ARE NOT GAPS BY ACCIDENT: 0012 belongs to the unmerged
 `bars/chunk-2-0920` (`0012_bars_partitioned_parent`) and 0016 to DRC D1
 (`0016_drc`); 0018 is DRC K1's (`0018_drc_stated_books`), 0019 the DRC
 D2 fix round's (`0019_drc_events`) and 0020 DRC D3's
-(`0020_drc_build_kinds`); 0021 is S3 exits C1's (`0021_legs`) — the settled seam
+(`0020_drc_build_kinds`); 0021 is S3 exits C1's (`0021_legs`), 0022 F15
+P1's (`0022_prediction_records`, FINAL `## SEAM`) — the settled seam
 (`reports/devdb-builds-reissue-2026-09-23.md` `## MIGRATION SEAM`;
 `reports/cto-2026-09-25.md` R64 (5)). Whichever lands later keeps every
 number, in numeric order.
@@ -146,10 +153,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0019_drc_events.sql",
     MIGRATIONS_DIR / "0020_drc_build_kinds.sql",
     MIGRATIONS_DIR / "0021_legs.sql",
+    MIGRATIONS_DIR / "0022_prediction_records.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0022_prediction_records.rollback.sql",
     MIGRATIONS_DIR / "0021_legs.rollback.sql",
     MIGRATIONS_DIR / "0020_drc_build_kinds.rollback.sql",
     MIGRATIONS_DIR / "0019_drc_events.rollback.sql",

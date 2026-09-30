@@ -61,3 +61,6 @@ which is the point of keeping it (L57).
   - one line is printed and logged at WARNING: `replay <day>: CUT — the deadline stopped the formations replay before the <HH:MM:SS> ET scan (<k> of <n> scans evaluated); later formations were not evaluated`;
   - the summary line gains ` · CUT before <HH:MM:SS> ET`.
 - `--replay` passes no `cut_at`, so nothing is cut. `cut_at` is not a `FormationSources` field: the runner passes it per run, like `out`.
+
+## 2026-09-30 — f15-p1
+The candidate harness's simulated taps pass `settings=frozen` (the frozen `CardSettings`) to `tap_dot` instead of `bands=frozen.proposed_key` (F15 `[F-05]`).

@@ -54,3 +54,6 @@ The rule is: if there is no fresh `last`, there is no proximity, and so no score
 - `PROXIMITY_UNKNOWN = "bars stale — no proximity"` is defined once here. It is what the tap route writes when proximity is NULL and no sentence is stored (S2, `[F-06]`).
 
 Conviction, the proposed key, the dots and `suppression()` are computed exactly as before.
+
+## 2026-09-30 — f15-p1
+`grade_why(output)` (F15 FINAL §3 `why`): the ONE deterministic sentence a prediction record carries, built from the record's `output` fields only — `card_score N` (or `no card_score`), `suppressed: …`, `conviction`, `proximity`, `key K` (or `no key (reason)`), `tapped f g, …`, `engine f g, …`, joined by ` · `. No clock, no other source, never an LLM. No number changes; the file's bytes change, so `formula_sha256` does (FINAL §8 NOTE).

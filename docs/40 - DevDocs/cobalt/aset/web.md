@@ -384,3 +384,6 @@ Every note call runs AFTER the DB writer returned (its transaction committed), i
 - Refusals return before the writer, as before: nothing committed, nothing to note.
 - C4-06: `_tap_price` (the one tap-price parser) refuses a parsed price that is not finite or not `> 0` (the `legs.price` rule `CHECK (price > 0)`): `REFUSED: <what> <raw!r> is not a positive price. Nothing written.` → 422 through `_card_tap`, before any writer. Before this, `/exit price=NaN` → 200 and a NaN leg was stored, and `/correct price=-1` → 500.
 - Tests: `tests/cobalt/test_s3_c4_trade_note_db.py`, and the `/size` call in `tests/cobalt/test_s3_c4_trade_note_offline.py`.
+
+## 2026-09-30 — f15-p1
+`POST /radar/card/{id}/dot/{factor}` passes `settings=` (the `CardSettings` it reads) to `CardStore.tap_dot` instead of `bands=settings.proposed_key` (F15 `[F-05]`); the store writes the tap's prediction record with that settings' `sha256()`.

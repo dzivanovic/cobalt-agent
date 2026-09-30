@@ -409,7 +409,7 @@ async def candidate_run(
         for card_id in outcome.created:
             report.cards_created.append(card_id)
             for tap in taps:
-                card_store.tap_dot(card_id, tap["factor"], int(tap["grade"]), bands=frozen.proposed_key,
+                card_store.tap_dot(card_id, tap["factor"], int(tap["grade"]), settings=frozen,
                                    enabled=enabled, now=at)
                 report.taps_applied += 1
     return report
