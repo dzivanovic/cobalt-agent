@@ -357,6 +357,58 @@ def test_run_u1_a_nan_or_negative_price_posted_to_the_manual_fill(note_world):
 
 
 # ---------------------------------------------------------------------
+# C4 fix r2 — RUN U3 (L70): the refusal text of U1's page. It PRINTS
+# and asserts NOTHING about the outcome.
+# ---------------------------------------------------------------------
+
+
+def test_run_u3_the_refusal_text_of_a_nan_or_negative_manual_fill(note_world):
+    client = TestClient(note_world["client"].app, raise_server_exceptions=False)
+    print("\nRUN U3 · POST /fill on a fresh manual card per input · the page's refusal lines")
+    for price in ("NaN", "-1"):
+        card_id = manual_card(note_world["aset"])
+        response = client.post("/fill", data={
+            "card_row_id": str(card_id), "orig_timestamp": "2026-09-03T10:00:00-04:00",
+            "actual_fill": price, "fill_shares": "100"})
+        hits = [line[:300] for line in response.text.split("\n")
+                if any(word in line for word in ("FAILED", "REFUSED", "Nothing written"))][:5]
+        print(f"U3 /fill card {card_id} actual_fill={price!r} → {response.status_code}")
+        for hit in hits:
+            print(f"U3   {hit}")
+        if not hits:
+            print("U3   NO REFUSAL TEXT")
+
+
+# ---------------------------------------------------------------------
+# C4 fix r2 — B1 through the close (`web.py:1569`) and the retry
+# (`cards/cli.py:149`): his typed line keeps its bytes (L28, R35 (3)).
+# ---------------------------------------------------------------------
+
+
+def _line(path, key):
+    return next((line for line in path.read_text().split("\n") if line.startswith(f"{key}:")), None)
+
+
+def _block(path):
+    lines = path.read_text().split("\n")
+    return lines[:lines.index("---", 1) + 1]
+
+
+def test_his_typed_exit_price_keeps_its_bytes_through_the_close_and_the_retry(note_world, capsys):
+    card_id = _filled(note_world, shares=100, price=str(LAST))
+    path = _note(note_world, RADAR_NOTE)
+    path.write_text(path.read_text().replace("exit_price:\n", "exit_price: 5.10\n"))   # his typed value
+    flat = _exit(note_world, card_id, preset="flat", confirm="1")
+    assert flat.status_code == 200 and flat.json()["closed"] is True, flat.text
+    assert _line(path, "exit_price") == "exit_price: 5.10"
+    closed = _block(path)
+    out = _retry(card_id, capsys)
+    assert f"trade note updated: {path}" in out, out
+    assert _line(path, "exit_price") == "exit_price: 5.10"
+    assert _block(path) == closed
+
+
+# ---------------------------------------------------------------------
 # X3 on the real `vault_writes` store (the offline finding, repeated)
 # ---------------------------------------------------------------------
 

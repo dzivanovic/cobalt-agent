@@ -329,3 +329,133 @@ def test_run_u2_a_typed_exit_price_after_a_later_write(vault):
     print(f"U2 exit_price after:  {_line(path, 'exit_price')!r}")
     print(f"U2 entry_time after:  {_line(path, 'entry_time')!r}")
     print(f"U2 exit_time after:   {_line(path, 'exit_time')!r}")
+
+
+# ---------------------------------------------------------------------
+# C4 fix r2 — B1: a later Cobalt write keeps every byte of his
+# frontmatter lines (L28 "human text preserved verbatim"; R35 (3)).
+# Only Cobalt's five and a blank key it fills are rendered.
+# ---------------------------------------------------------------------
+
+
+def _block(path):
+    """The frontmatter's raw lines, between the two `---`."""
+    lines = path.read_text().split("\n")
+    return lines[1:lines.index("---", 1)]
+
+
+def _set_line(path, old, new):
+    text = path.read_text()
+    assert text.count(old) == 1, old
+    path.write_text(text.replace(old, new))
+
+
+def _replace_block(path, block):
+    lines = path.read_text().split("\n")
+    path.write_text("\n".join(["---", *block, *lines[lines.index("---", 1):]]))
+
+
+def _his_lines(block):
+    return [line for line in block if line.split(":", 1)[0] not in trade_note_module.COBALT_OWNED_FIELDS]
+
+
+def _close(store, c=None):
+    return write(_closed(c or card()), [leg(), exit_leg(shares=100, preset="flat")], store)
+
+
+#: His block (constructed): `trade_def` above `date`, his own keys, a
+#: comment, flow lists, numbers YAML would re-read as floats.
+HIS_BLOCK = [
+    f"trade_def: {SLUG}",
+    "date: 2026-09-03 10:00",
+    "symbol: ZZPB",
+    "direction: Long",
+    "# a constructed comment",
+    'stop_price: "5.2000"',
+    'entry_price: "5.4800"',
+    "exit_price:",
+    'entry_time: "2026-09-03 10:00"',
+    "exit_time:",
+    "profit_loss: -120.50",
+    "setup: [a, b]",
+    "RVOL: 3.50",
+    "tags: [trade, example]",
+]
+HIS_OWN = [f"trade_def: {SLUG}", "# a constructed comment", "profit_loss: -120.50", "setup: [a, b]",
+           "RVOL: 3.50", "tags: [trade, example]"]
+
+
+def test_his_typed_exit_price_keeps_its_bytes_after_the_close_write(vault):
+    store = MemoryWriteStore()
+    path, _ = write(card(), [leg()], store, create_only=True)
+    _set_line(path, "exit_price:\n", "exit_price: 5.10\n")
+    before = _block(path)
+    _, action = _close(store)
+    assert action == "updated"
+    assert _line(path, "exit_price") == "exit_price: 5.10"
+    # every line but Cobalt's five as before — the blank exit_time filled (N pins that side)
+    expected = [line if line != "exit_time:" else 'exit_time: "2026-09-03 10:31"' for line in _his_lines(before)]
+    assert _his_lines(_block(path)) == expected
+
+
+def test_his_edit_of_a_value_cobalt_filled_keeps_its_bytes(vault):
+    store = MemoryWriteStore()
+    path, _ = write(card(), [leg()], store, create_only=True)
+    assert _line(path, "entry_time") == 'entry_time: "2026-09-03 10:00"'   # Cobalt filled it at creation
+    _set_line(path, 'entry_time: "2026-09-03 10:00"\n', "entry_time: 2026-09-03 10:02\n")
+    _close(store)
+    assert _line(path, "entry_time") == "entry_time: 2026-09-03 10:02"
+
+
+def test_his_typed_exit_time_keeps_its_bytes(vault):
+    store = MemoryWriteStore()
+    path, _ = write(card(), [leg()], store, create_only=True)
+    _set_line(path, "exit_time:\n", "exit_time: 10:31\n")
+    _close(store)
+    assert _line(path, "exit_time") == "exit_time: 10:31"
+
+
+def test_his_own_lines_keep_their_bytes_and_order(vault):
+    store = MemoryWriteStore()
+    path, _ = write(card(), [leg()], store, create_only=True)
+    _replace_block(path, HIS_BLOCK)
+    _close(store)
+    assert [line for line in _block(path) if line in HIS_OWN] == HIS_OWN
+
+
+def test_the_size_write_keeps_his_typed_exit_price_bytes(vault):
+    """/size's call shape (`web.py:1047`): no fills, no legs section."""
+    store = MemoryWriteStore()
+
+    def size():
+        return trade_note_module.upsert_trade_note(card(), when_of(card()), make_paths(),
+                                                   entry_price=Decimal("5.4500"), writer=memory_writer(store))
+
+    path, action = size()
+    assert action == "created"
+    _set_line(path, "exit_price:\n", "exit_price: 5.10\n")
+    before = _block(path)
+    size()
+    assert _line(path, "exit_price") == "exit_price: 5.10"
+    assert _block(path) == before
+
+
+def test_a_frontmatter_the_line_merge_cannot_map_is_refused_untouched(vault):
+    store = MemoryWriteStore()
+    path, _ = write(card(), [leg()], store, create_only=True)
+    _replace_block(path, ['{date: "2026-09-03 10:00", symbol: ZZPB, exit_price: 5.10}'])   # a flow mapping
+    before = path.read_bytes()
+    with pytest.raises(trade_note_module.VaultWriteError, match="refusing to guess at its shape"):
+        _close(store)
+    assert path.read_bytes() == before
+
+
+def test_the_merge_still_refreshes_cobalts_five_and_fills_a_blank(vault):
+    """The negative control: B1-4's block, Cobalt's side still written."""
+    store = MemoryWriteStore()
+    path, _ = write(card(), [leg()], store, create_only=True)
+    _replace_block(path, HIS_BLOCK)
+    _close(store, card(stop=Decimal("5.1000")))
+    assert _line(path, "stop_price") == 'stop_price: "5.1000"'
+    assert _line(path, "exit_price") == 'exit_price: "5.6000"'
+    assert _line(path, "exit_time") == 'exit_time: "2026-09-03 10:31"'
