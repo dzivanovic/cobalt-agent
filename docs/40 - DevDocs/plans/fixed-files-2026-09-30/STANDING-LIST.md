@@ -92,9 +92,9 @@ THE SEAT ORDER AND THE SECOND PASS change no string: pass 2 starts house B with 
 
 THE TOKEN TOTAL of a check is not the session's to report: the desk measures it at the stop line (`sh /Users/cobalt/.claude/ops/desk-context.sh <id>`, a command already on the desk's side) and writes it beside the stop line's `files opened`. `desk-launch.sh` refuses a check while the lock is held.
 
-## 3. `DEPLOY-HUB.md` — 54 allow with one head and a migration (51 without a migration; +1 per extra head), 3 deny · `--permission-mode dontAsk` · `--add-dir /Users/cobalt/Vault /Users/cobalt/cobalt /Users/cobalt/cobalt-wt /Users/cobalt/Library/LaunchAgents`
+## 3. `DEPLOY-HUB.md` — 58 allow with one head and a migration (55 without a migration; +1 per extra head), 7 deny · `--permission-mode dontAsk` · `--add-dir /Users/cobalt/Vault /Users/cobalt/cobalt /Users/cobalt/cobalt-wt /Users/cobalt/Library/LaunchAgents`
 
-THE FILE-TOOL STRINGS — 4 (F1): `Read` · `Grep` · `Glob` (proven) and **NEW** `Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/reports/**)`: the report is written under the `reports/**` glob; the deploy line carries NO worktree Edit (the brain's DF-1: `DEPLOY-HUB.md` forbids any Edit or Write inside a worktree, rule B).
+THE FILE-TOOL STRINGS — 4 (F1): `Read` · `Grep` · `Glob` (proven) and **NEW** `Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-*)` (R62: narrowed from `reports/**`; the hub never edits `cto-<date>.md`): the report is a `reports/deploy-<name>.md` file; the deploy line carries NO worktree Edit (the brain's DF-1: `DEPLOY-HUB.md` forbids any Edit or Write inside a worktree, rule B).
 
 `<worktree>` = the gate worktree, `<branch>` = the gate branch, `<head>` = a branch head of the card's `TIP`; `desk-launch.sh` writes the exact values into the line. Two PATTERNS are approved here beside the `.env` pair: the head merge and the fast-forward, each an exact string per deploy.
 
@@ -103,9 +103,9 @@ THE FILE-TOOL STRINGS — 4 (F1): `Read` · `Grep` · `Glob` (proven) and **NEW*
 | `Bash(git -C /Users/cobalt/cobalt add *)` | staging the deploy report, by explicit path | `main`'s index: that one file | `src/`, `configs/`, `ops/` |
 | `Bash(git -C /Users/cobalt/cobalt commit *)` | the report commits (D2.0, STEP-7, a FAILED ending) and the allowlist probe's empty commit | `main`: docs commits of the report | code; never pushed |
 | `Bash(git -C /Users/cobalt/cobalt reset --soft HEAD~1)` | undoing the probe's empty commit | `main`'s tip, one empty commit back | a real commit; never `--hard` |
-| `Bash(git -C /Users/cobalt/cobalt tag *)` | the rollback tag, the deploy tag, the probe tag and its `-d` | local tags | never pushed by the hub |
+| `Bash(git -C /Users/cobalt/cobalt tag scratch-allow-probe-<job>)` · `… tag -d scratch-allow-probe-<job>)` · `… tag pre-<job>)` · `… tag -d pre-<job>)` · `… tag <tag>)` | FIVE exact strings `desk-launch.sh` fills from the card (R62, the other-house read, finding 7): the probe tag and its `-d`, the rollback tag and its `-d`, the deploy tag | those five local tags | any other tag (an earlier deploy's rollback anchor); never pushed |
 | `Bash(git -C /Users/cobalt/cobalt merge --ff-only <branch>)` | PATTERN — THE DEPLOY: fast-forward `main` to the gate | `main` = production's tree | any branch but the gate; never a non-ff merge |
-| `Bash(git -C /Users/cobalt/cobalt revert --no-edit *)` | STEP-5: ONE `revert -m 2` of the landed merge | `main` | never `reset --hard` |
+| `Bash(git -C /Users/cobalt/cobalt revert --no-edit -m 2 *)` | STEP-5: ONE `revert -m 2` of the landed merge (R62: narrowed from `revert --no-edit *`) | `main` | `-m 1` (keeps the new tree); never `reset --hard` |
 | `Bash(git -C /Users/cobalt/cobalt revert --abort)` | backing out of a conflicted revert | `main`'s in-progress revert | — |
 | `Bash(git -C /Users/cobalt/cobalt-wt/<worktree> merge --no-edit <head>)` | PATTERN — one per head: the set into the gate | the gate branch | `main`; any commit not on the card |
 | `Bash(git -C /Users/cobalt/cobalt-wt/<worktree> merge --no-edit main)` | `main` into the gate before the fast-forward (L68) | the gate branch | `main` |
@@ -139,7 +139,7 @@ THE FILE-TOOL STRINGS — 4 (F1): `Read` · `Grep` · `Glob` (proven) and **NEW*
 | `Bash(curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/*)` | the sheet and radar `200` reads | GETs on the local sheet; the body goes to `/dev/null` | no POST; no other host |
 | `Bash(grep *)` · `Bash(tail *)` · `Bash(ls *)` · `Bash(date*)` | logs, markers, last lines, the lock, the clock | read only | never `.env`'s contents; never `ls` of `/Users/cobalt/Library/LaunchAgents` |
 
-Deny: `AskUserQuestion`, `EnterWorktree`, `Bash(git push*)`. PATHS: every absolute path above sits under one of the four roots; `/Users/cobalt/Library/LaunchAgents` is on the line for the radar bootstrap string alone. `/dev/null` (curl's sink) is a device, under no root, and ran green in both deploys of 2026-09-30. NOT ON THIS LIST, by design: retiring or installing a launchd job (a `bootout` of any other label, an `rm` of a plist); a production schema rollback; `git worktree add` (run by `desk-launch.sh`, on no hub line and no longer on the desk's).
+Deny (7; R62): `AskUserQuestion`, `EnterWorktree`, `Bash(git push*)`, and NEW `Bash(git -C * commit*--no-verify*)` · `Bash(git -C * commit* -n*)` (the pre-commit guard cannot be skipped) · `Bash(COBALT_ENV=production uv run cobalt db migrate*--rollback*)` · `Bash(COBALT_ENV=production uv run cobalt db migrate*--down-to*)` (a production schema rollback is his). PATHS: every absolute path above sits under one of the four roots; `/Users/cobalt/Library/LaunchAgents` is on the line for the radar bootstrap string alone. `/dev/null` (curl's sink) is a device, under no root, and ran green in both deploys of 2026-09-30. NOT ON THIS LIST, by design: retiring or installing a launchd job (a `bootout` of any other label, an `rm` of a plist); a production schema rollback; `git worktree add` (run by `desk-launch.sh`, on no hub line and no longer on the desk's).
 
 ## 4. THE DESK'S OWN LINE — proposed in `DESK-LINE.md`; approved with this list or struck from it
 Strings the narrower desk line would carry. Proven = the string already stands in tracked `.claude/settings.json` or on a proven hub line. **NEW** = on no proven line; each with its reason.
