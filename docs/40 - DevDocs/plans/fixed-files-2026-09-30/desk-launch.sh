@@ -541,6 +541,7 @@ n=$(grep -c '^claude --bg ' "$fixed")
 line=$(grep '^claude --bg ' "$fixed" | sed \
     -e "s|<card>|$card|g" \
     -e "s|<job>|$job|g" \
+    -e "s|<tag>|$tag|g" \
     -e "s|<worktree>|$wt|g" \
     -e "s|<branch>|$branch|g" \
     -e "s|<tip merges>|$merges|" \
