@@ -1,0 +1,52 @@
+#!/bin/sh
+# ---- deploy guard (begin) ---------------------------------------------------------------------
+if [ "$(git rev-parse --show-toplevel 2>/dev/null)" = "/Users/cobalt/cobalt" ] \
+   && [ "$(git symbolic-ref --short -q HEAD)" = "main" ]; then
+    guard_other=$(git -c core.quotePath=false diff --cached --name-only \
+        | grep -v '^docs/40 - DevDocs/reports/deploy-[^/]*\.md$')
+    if [ -n "$guard_other" ]; then
+        guard_live=$(claude agents --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    rows = json.load(sys.stdin)
+except Exception:
+    print("UNREADABLE")
+    sys.exit(0)
+hit = 0
+for a in rows:
+    if a.get("pid") and str(a.get("name", "")).startswith("deploy-hub-"):
+        print("%s %s" % (a.get("id", "?"), a.get("name")))
+        hit = 1
+if not hit:
+    print("NONE")
+' 2>/dev/null || echo UNREADABLE)
+        case "$guard_live" in
+            NONE)
+                ;;
+            ""|UNREADABLE*)
+                echo "pre-commit: deploy guard could not read the session list (claude agents --json); NOT enforced for this commit." >&2
+                ;;
+            *)
+                echo "pre-commit: a deploy hub is live — no desk commit on main until its stop line:" >&2
+                echo "$guard_live" >&2
+                echo "Write by Edit / Write only; commit after DEPLOYED or FAILED, once the hub is stopped and removed." >&2
+                exit 1
+                ;;
+        esac
+    fi
+fi
+# ---- deploy guard (end) — the desk row gate below stays the hook's last command ----------------
+# Desk writing gate (cto-2026-09-29 R127, R129; checklist C6): a desk §4 row is ≤300 characters.
+# A LAUNCHED row counts without its backticked gate literals (checklist R2: "≤300 characters plus the grepped literals"; R143).
+git diff --cached -U0 -- 'docs/40 - DevDocs/reports/cto-2*.md' ':(exclude)docs/40 - DevDocs/reports/cto-*-words.md' | python3 -c '
+import re, sys
+def size(l):
+    body = l[1:]
+    if body.rstrip().endswith("| LAUNCHED |"):
+        body = re.sub(r"`[^`]*`", "", body)
+    return len(body)
+long = [l[1:13] + "… (%d chars)" % size(l) for l in sys.stdin.read().split("\n") if l.startswith("+| R") and size(l) > 300]
+if long:
+    sys.stderr.write("pre-commit: desk rows over 300 characters — cut each to ≤300 (detail → the words file or the linked report):\n" + "\n".join(long) + "\n")
+    sys.exit(1)
+'
