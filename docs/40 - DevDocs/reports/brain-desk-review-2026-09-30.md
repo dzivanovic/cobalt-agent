@@ -230,6 +230,174 @@ RULED by him on gaps 5 and 9 (brain tab, 09-30, after the read):
 6. A DEPLOY report: the judgment seat reads both sections, whatever the count.
 7. The desk, per event: one §4 row and one commit per launch; §5 CURRENT one row per live session, overwritten in place, no TABS or WATCHES row (checklist change, PROPOSED in `DESK-LINE.md`).
 
+## READ OF LOOP 2 (the drafter's report `D/reports/fixed-files-draft2-2026-09-30.md`)
+Read whole: the drafter's report, `CHECK-HUB.md` (35,526 B), `DESK-LINE.md`, `desk-launch.sh`. Read by `grep -n` at the changed lines: `BUILD-HUB.md`, `DEPLOY-HUB.md`, `CARD.md`. Not re-read: `STANDING-LIST.md`, `SPLIT.md`, the guard (one comment changed).
+
+DONE as ruled: the check flow in four steps with the seat order and the mandatory house B (`CHECK-HUB.md:14-25`); a house finding is a test or an exact command, a block with no `RUN:` is dropped (`:61-70`, `:80`); what the Opus seat reads and its stop line with files opened and tokens (`:99`, `:107`); the script runs the launch (`desk-launch.sh:326-341`); the deploy window admits overnight idle and a non-trading day (`DEPLOY-HUB.md:59`); the standing deploy rule (`:34`); the launch-row field and gate gone; the tree-state owner (`BUILD-HUB.md:76`); the hung-hub line and a resume that restores first (`DEPLOY-HUB.md:15`, `:55`); the index read struck from all three hub files; `## DECISIONS` / `## RECORDS` and the counts on all three stop lines. A build worker now reads `BUILD-HUB.md` 28,182 B + its card + about 3.4 KB of `cobalt.md`, against 32 KB + over 100 KB of pointed files + 21,907 B of start reads for `37`.
+
+GAPS, for a third pass:
+1. THE FIXING OPUS SEAT IS INVISIBLE. `CHECK-HUB.md:85` has a Sonnet auto-mode hub launch it headless (`claude -p … --permission-mode acceptEdits`), up to 150 minutes, with no remote control and no tab. His 09-27 ruling: every helper is a background session with a tab and remote control (`M/topics/cto-desk.md:156`). It is also a new use of a string approved for read-only seats, and four of the drafter's ten untested items hang on it (its UNTESTED 7, 8, 10; ESCALATE 2 on L29 / L62). PROPOSED: the check IS the fresh Opus — one visible `--bg` Opus session on the build list plus the house strings, launched by the script as a build is. It starts house A in the background, does its own read meanwhile, then judges and fixes. The Sonnet hub goes. A second pass, when house B is needed, is a second launch. His to rule.
+2. REMOVING THE DESK'S `claude --bg` ALLOW leaves it no way to launch its own successor, a drafter, a tribunal or a brain tab (`DESK-LINE.md:43`; the drafter's ESCALATE 3). This came from gap 2 of the first read. PROPOSED: the script gets two more kinds — `desk` (the wake-up's line) and `prompt` (a one-off prompt file, refused when its line is a write path). Every write-path launch is then a fixed file.
+3. NO FOLD TEXT FOR L67. The check flow replaces its build-check clauses, and L39's round cap and L75's classifier lose their step (the drafter's FOR THE BRAIN 10, ESCALATE 2). `ROUND` is still a card field. The fold texts F1–F7 cover the deploy rule and the read path only. The fixed check cannot be installed before L67, L59 and the read-path texts are folded (ESCALATE 4: `CLAUDE.md` still sends every worker to `## Start here`).
+4. LEFTOVERS: `CARD.md:88`, `:94`, `:131`, `:134` still say ESCALATE.
+5. START-SET: the fold texts grow three start files (`CLAUDE.md` 102 → 282 B; `cobalt.md` lines 8–9 +24 B; the L59 index line 134 → 172 B) and the desk line +285 B. Each must come with a larger cut in the same edit, measured at install.
+6. UNTESTED: ten items (the drafter's list). With gap 1's proposal, items 7, 8 and 10 fall away.
+7. RULED, NOT YET IN THE FILES — CONTINUE, DO NOT RESTART (his "Yes, I like all this" and his addition, brain tab, 09-30; it amends L62's "a mid-run denial = FAILED" for builds and checks; the hub files still say a denied call ends the run, `BUILD-HUB.md:29`):
+   (a) a command the worker added on its own is refused → it records that under `## RECORDS` and goes on with its listed commands; no stop.
+   (b) a worker stops on something outside itself (a held lock, stray rows, a missing fact) → it writes its `FAILED:` line and stays alive; the desk does not stop or remove it; once the cause is fixed the desk sends `CONTINUE: <step>` plus the fact, and the same worker resumes. The message names a step and states a fact; it never widens the job or grants anything.
+   (c) a NEW worker, at the report's `## CONTINUE` step, only when: the launch line itself must change; the session died; the judgment seat finds the worker misread the job; or — his addition — the worker's context has grown large: before it sends `CONTINUE`, the desk measures the worker (`desk-context.sh <id>`), and above the line it relaunches instead. The line: 250,000 tokens to start, the desk's own; his to move once worker sizes are on record.
+   (d) a DEPLOY never continues by message: only the one resume at STEP-D0. Inside the outage the strict rule stays.
+
+`STANDING-LIST.md` is not ready for his one approval: gap 1 changes the check line.
+
+## THIRD PASS — the drafter's spec (his rulings in the brain tab, 09-30, after the read of loop 2)
+HIS RULINGS: "I agree with all the recommendations." And: every rule that contradicts the new process is changed to the rule that covers what was ruled here; he is not asked again rule by rule; he wants the list of rules with each new text in front of him. He finished the sentence: "it needs to be done." The rule changes are APPROVED NOW, as a set; `RULE-CHANGES.md` is for him to see, not a second approval.
+
+The drafter changes files only under `D/plans/fixed-files-2026-09-30/`, installs nothing, folds nothing.
+1. `CHECK-HUB.md` REBUILT: the check IS the fresh Opus. One visible `--bg` session, Opus 5.5, `acceptEdits`, remote control and name `<job>-check`, launched by `desk-launch.sh check <card>` from the job's worktree, on the build list plus the house strings. No Sonnet hub, no `claude -p` write seat, no `--output-format`. Order inside it: stage the files and start house A in the background; its OWN read and findings while house A runs; only then house A's list; judge every finding by running it; fix what holds; the finish as ruled. Its stop line says `open: <n>` and `house B: needed|not needed`. House B and the second pass = a SECOND launch, `desk-launch.sh check <card> PASS-2`, a new Opus session that starts house B, waits, judges and fixes; no third. Everything else of RULED CHECK FLOW stands (seat order, mandatory B, the drop rule, the read list, files opened; the desk measures the session's tokens). `ROUND` leaves the card.
+2. `desk-launch.sh`: two more kinds. `desk` runs the wake-up's own launch line. `prompt "<prompt file>"` runs a one-off prompt's line (a drafter, a tribunal and its seats, a brain tab, a close hub) and REFUSES a line whose permission mode is `acceptEdits` or that carries a write string (`git add`, `git commit`, `git merge`, `uv run`, `launchctl`, `COBALT_ENV=`): every write-path launch is a fixed file. `DESK-LINE.md` row 43 is rewritten to match.
+3. CONTINUE, DO NOT RESTART: READ OF LOOP 2 gap 7 (a)–(d), written into the three hub files' UNATTENDED RULES and RECOVERY, and the desk's part into `DESK-LINE.md` §4.
+4. A TENTH FILE, `RULE-CHANGES.md` — the one list he sees: one row per rule the new process contradicts: the rule · its home `file:line` · its text today, quoted · the new text, exact · which ruling of this report it carries. It absorbs F1–F7 of `DESK-LINE.md` (which then points here). It covers at least:
+   - LAWS: L67 (build checks: the flow, the seat order, Gemini; the deployment floor = each branch's check plus one other-house read of `DEPLOY-HUB.md` at install and at each change of it); L39 and L75 (rounds and the classifier bind design tribunals only; a build check has neither); L59 and the Preamble's last sentence (`LAWS.md:6`); L62 (one standing list; the continue rule in place of "a mid-run denial = FAILED" for builds and checks); L68 ("every check packet carries them"); L19 (a fixed file plus its card is the whole prompt); L61 / L43 (who starts a deploy; the other-house read of a deploy prompt); L58 only if a text needs it.
+   - `UNATTENDED-LAUNCH.md`: `:11` (words appendix), `:13`–`:14` (mid-run denial), `:19` (the one dialog rule), `:29` (first real use), §1 (the per-session approval list → the standing list).
+   - Checklist: W3 `:51`; W8 `:55` (a FAILED worker is kept, not removed); `## rulings` `:22` (gate literals; the words read); L6–L9 `:33`–`:36`; K6 `:93`, K10 `:97`, K17 `:104`, K19 `:106`, K22 `:109`; C2 `:61` (the guard); REFRESH HOW `:17` (3) and the per-event record.
+   - Contract: `:16` (a denied git command → refresh), `:21` (his four → three), `:29`–`:31` (seats, where they name check hubs).
+   - `CLAUDE.md:3`; `cobalt.md:8-9`; `writing-rules.md:10`; the wake-up `:13`, `:33`, `:40`, `:45`.
+   A rule the drafter finds in conflict that is not on this list is added, flagged NEW ON THE LIST. START-SET RULE: each start-file row states `wc -c` before and after; the set as a whole is smaller after.
+5. LEFTOVERS: `CARD.md:88`, `:94`, `:131`, `:134` (ESCALATE); `STANDING-LIST.md` §2 rewritten for item 1's line; `SPLIT.md` rows re-homed for item 1.
+DONE means: the brain reads the ten files against this section; the desk runs the scratch test (the drafter's UNTESTED list, less what item 1 removes); he approves `STANDING-LIST.md` once; `RULE-CHANGES.md` is put in front of him and folded by the desk without a further ask, unless the brain's read finds a row that says more or less than what was ruled here (that row alone comes back to him); the desk folds first, then installs, then launches the next build on a card.
+
+## READ OF THE THIRD PASS (`D/plans/fixed-files-2026-09-30/DRAFT3-REPORT.md`)
+Read whole: the drafter's report, `RULE-CHANGES.md` (48 rows), `CHECK-HUB.md` (37,944 B), the head and every refusal of `desk-launch.sh`. Not re-read: `BUILD-HUB.md`, `DEPLOY-HUB.md`, `CARD.md`, `STANDING-LIST.md`, `DESK-LINE.md`, `SPLIT.md` beyond the drafter's account and its checks.
+
+VERDICT: the third pass is as specified. The check is one visible Opus session on the build list plus three house strings; PASS-2 is a second launch; the script launches everything and refuses a one-off prompt that can write code; the continue rule is in the three hub files; the 48 rule rows quote today's text and give the new text; the start set is 298 B smaller.
+
+RULED (his "I do accept your change in the rule", brain tab, 09-30): row 1's deployment floor stands as drafted and is folded with the set. Before `DEPLOY-HUB.md` is installed, one house other than its author reads it (the install row records that read).
+ROW 1 (L67), the deployment floor, as it was put to him: Today: every deployment is checked by at least one house other than its author. New: each branch's build check, plus ONE read of `DEPLOY-HUB.md` by another house at install and at each change; no read per deploy. That wording is the brain's (THIRD PASS item 4), not his words; it lowers a floor of his law. Without it a night deploy waits for a house read of a card that holds only tips, markers and smoke reads.
+
+ONE ROW AMENDED BY THE JUDGMENT SEAT — row 25, L9: "A fixed file changes only by a build row … or with his approval of a changed list" leaves no way to correct a fixed file's procedure. To read: "A fixed file's procedure changes by a drafter re-issue that the judgment seat reads; its allow list changes only with his approval; its tree-state lines by a build row; `DEPLOY-HUB.md` is read by one other house at each change (L67)."
+
+THE FOURTEEN DECISIONS of `DRAFT3-REPORT.md`, answered:
+1. The narrower desk line (+109 B on the wake-up): it goes in together with a cut of at least 109 B of dated cites in the wake-up (`CTO-DESK-WAKEUP.md:12`, `:21`, `:26` carry row cites and history); measured at install.
+2. CONTINUE (a) rests on an unproven fact, and the evidence on file points against it: `DEPLOY-HUB.md:3` says "an unlisted command opens a dialog", and 09-30 attempts 4 and 5 met dialogs under `acceptEdits`. The scratch test (UNTESTED 9) decides BEFORE install. If a dialog appears: (a) cannot hold as written; an unlisted command then stops the worker on a dialog, the desk stops it, and a new worker starts at the `## CONTINUE` step. Test also whether a launch mode exists that refuses with no dialog.
+3. The house strings on a write-path line: accepted; UNTESTED 8 first.
+4. `house B: none available`: accepted as drafted.
+5. Both passes named `<job>-check`: accepted; pass 1 is stopped and removed before PASS-2.
+6. The one turn-end while a house runs: accepted; UNTESTED 11 first.
+7. The `cd` to `agy-trial` for the house launch: accepted; UNTESTED 10 first.
+8. Row 1's wording: accepted, less the deployment floor (above).
+9. The 13 rows NEW ON THE LIST and the four in-row additions: read, accepted; row 25 amended (above).
+10. K2, K3, K7, K11, K16, L10 left standing: accepted (design tribunals).
+11. `STANDING-LIST.md` installs beside the hub files, `D/prompts/STANDING-LIST.md`.
+12. `DEPLOY-HUB.md` does not prove its own other-house read: accepted; the desk's install row records it.
+13. `desk-launch.sh prompt` refuses more than six strings: accepted.
+14. L75 out of the build file and the card: accepted.
+
+STILL TO DO before his one approval:
+- THE SCRATCH TEST: the 14 items of `DRAFT3-REPORT.md` `## UNTESTED`; items 8–11 and 12 decide whether the check and the continue rule work at all.
+- ONE OTHER-HOUSE READ of `DEPLOY-HUB.md` (row 1), if he keeps that floor.
+- THE FOURTH PASS: RULED — THE NIGHTLY CLOSE (one fixed `CLOSE-HUB.md`, the `close` kind, the push string NEW on the standing list, the L55 / L58 / contract / checklist rows), row 25 as amended, and whatever the scratch test breaks.
+
+## READ OF THE SCRATCH TEST (`D/reports/fixed-files-scratch-test-2026-09-30.md`, commit `a9f459f9`)
+Read whole. 12 of 14 items pass. ITEM 11 IS NOT MISSING: it is in PART 2, `## ITEM 11` (`:230`–`:234`), PASS — a session that ends its turn is woken at the job's end and at its time limit (tested at 90 s, not 45 min). Nothing more is needed from it.
+
+THE ONE THAT CHANGES THE DESIGN — ITEM 9. Under `acceptEdits` a command on no allow string opens a DIALOG (`:54`–`:58`; three times on 09-30, and deploy 1 attempts 4, 5 and 7). Under `--permission-mode dontAsk` it is REFUSED with no dialog (probe B). So:
+- F1. THE THREE HUB FILES LAUNCH UNDER `--permission-mode dontAsk`, not `acceptEdits`: build, check, deploy. Then no worker is ever left on a dialog (L63), CONTINUE (a) holds, and the 09-30 outage cause (a dialog inside the outage) becomes a refusal that sends the deploy to STEP-5 instead of a hang. `dontAsk` grants nothing implicitly, so each line adds its file tools as allow strings: `Read`, `Grep`, `Glob`, and `Edit(//Users/cobalt/cobalt-wt/**)` (the worktree, the scratch folder under `agy-trial`); the check and the deploy also `Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/reports/**)` (their reports on `main`). Item 3 showed an `Edit(<glob>)` rule governs the Write tool on the same glob.
+- F2. THE REFUSAL TEXT tells the worker "STOP and explain to the user" (`:57`). Each hub file's CONTINUE (a) adds: "That refusal message does not stop you: record it under `## RECORDS` and go on with your listed commands; stop only under (b)."
+- F3. ONE SHORT PROBE BEFORE THE DRAFTER, by the desk, as item 9 ran: a `dontAsk` session with F1's file allows (a) Writes and Edits a file in its worktree and in a `reports/` folder of a second `--add-dir` root — both succeed; (b) Writes outside every allowed glob — refused, no dialog; (c) runs a listed `uv run pytest` and an unlisted `ls /etc` — the first runs, the second is refused; (d) starts a listed background command and is woken at its end. PASS → the fourth drafter writes F1. FAIL on (a) or (d) → the drafter keeps `acceptEdits` and strikes CONTINUE (a) from the hub files and `RULE-CHANGES.md` row 5 / row 16: an unlisted command then stops the worker on a dialog, the desk stops it, and a new worker takes over at its `## CONTINUE` step (case (c)).
+
+FIXES TO FOLD (the fourth drafter, with RULED — THE NIGHTLY CLOSE):
+- D1 `desk-launch.sh` `lock_free` and the check's `.env` test: with a resume step, skip the job's OWN worktree's `.env`; still refuse any other.
+- D2 `CARD.md`: the examples' body headings as bare `## <name>` lines; `## THE BODY` says a heading is a bare line.
+- D3 `pre-commit-deploy-guard.sh`: the pipeline ends `|| echo UNREADABLE`, the Python prints `NONE` when no row matches, so an empty answer never means "no hub".
+- ITEM 13: a fixed copy of `desk-context.sh` in the plans folder, line 8 reading `/Users/cobalt/.claude/projects/*/"$id"*.jsonl` (newest); installed with the rest. Until then the desk cannot measure a worker before `CONTINUE`.
+- ITEM 4: the desk line gets two more deny strings, `Edit(//Users/cobalt/cobalt/.git/**)` and `Edit(//Users/cobalt/.claude/**)` (only a deny stops a write in `auto` mode).
+- ITEM 6b: every ops script installs under `/Users/cobalt/.claude/ops/` (no space in the path); `desk-launch.sh` refuses to run from a spaced path.
+- OBSERVATION 1: `DESK-LINE.md` §4 names the LIST states — `idle · blocked` after a `FAILED:` line = waiting for `CONTINUE`; `waiting · blocked` = a dialog = a wrong launch (under F1 it should not occur).
+- `RULE-CHANGES.md` row 25 as amended above; the rows the close needs.
+- `STANDING-LIST.md`: F1's new file-tool strings, the close's push string — all marked NEW.
+
+READY FOR HIS ONE APPROVAL? NOT YET. F1 and the close change `STANDING-LIST.md`. After F3's probe, the fourth drafter and the brain's read of it, the list is final and goes to him once.
+
+TWO FACTS FOR HIM: the desk's 597,589 tokens (`:66`) was measured before its 14:15 refresh; it reports 124,553 since, with both of today's refreshes used — no refresh is owed (the brain's "refresh now" was wrong, read from a stale figure). F3's probe PASSED on all four parts (`fixed-files-scratch-test-2026-09-30.md` PART 3): the fourth drafter writes F1. This brain seat measured 700,249: it should be closed after it reads the fourth pass. Sol is out until 10-04 14:06 (`:218`): until then every check's houses are Grok, then Gemini.
+
+## READ OF THE FOURTH PASS (`D/plans/fixed-files-2026-09-30/DRAFT4-REPORT.md`, commit `731a66b8`)
+Read whole: `DRAFT4-REPORT.md`, `CLOSE-HUB.md` (14,997 B), `RULE-CHANGES.md` rows 49–58. Read by `grep`: the changed launch lines. Not re-read: the rest of `BUILD-HUB.md`, `CHECK-HUB.md`, `DEPLOY-HUB.md`, `desk-launch.sh`, `SPLIT.md`.
+
+VERDICT: the pass does what was ruled — F1 and F2 in all four hub files (`grep -c -F acceptEdits` → 0 each), D1–D3, item 13, item 4, item 6b, observation 1, the nightly close with its standing push, rows 49–54; the desk's rows 55–58 carry his refresh ruling as he gave it.
+
+DEFECTS THAT NEED A FIX, each with its command (the desk applies these exact edits in the plans folder; no fifth drafter):
+- DF-1 THE DEPLOY LINE IS GRANTED WORKTREE EDITS IT MUST NEVER USE. `grep -c -F "Edit(//Users/cobalt/cobalt-wt/**)" DEPLOY-HUB.md` → `1`; the same file forbids any Edit in a worktree. Fix: drop that string from the deploy line and from `STANDING-LIST.md` §3 (the deploy keeps `Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/reports/**)` for its report). After: the grep → `0`. (DECISION 2 overruled.)
+- DF-2 NO WAY TO INSTALL OR CHANGE AN OPS SCRIPT OR THE HOOK WITHOUT HIS HANDS. `grep -n -F "his hand edit" DRAFT4-REPORT.md` → DECISION 15; his preference is "Never a manual edit or copy-paste for him" (`M/preferences.md:7`). Fix: the four scripts (`desk-launch.sh`, `desk-context.sh`, `wait-stop-line.sh`, `wait-desk-idle.sh`) and the pre-commit hook become TRACKED files under `/Users/cobalt/cobalt/ops/desk/`; `/Users/cobalt/.claude/ops/<name>` and `.git/hooks/pre-commit` become symlinks to them, made ONCE at install, before the desk line narrows. A later change is a build row on a card, checked and deployed like code. The desk line adds the deny `Edit(//Users/cobalt/cobalt/ops/**)`. (DECISION 15 overruled.)
+- DF-3 LEFTOVER GATE-LITERAL WORDING IN THE CLOSE. `grep -c -F "every literal a prompt greps" CLOSE-HUB.md` → `1` (`:46`); rows 22–23 say no prompt greps a row. Fix: "+ every id a reader needs (session id, file names, hashes)"; "a literal is never dropped" → "an id is never dropped".
+- DF-4 NONE IN ROWS 55–58 — measured: row 57 grows `preferences.md:10` by about 83 characters; the always-loaded block is 3,844 characters today (`wc -m` INDEX, profile, preferences) → about 3,927, under 4,000 with 73 to spare. No fix; the close's STEP-7 measures it.
+
+THE 22 DECISIONS: ACCEPTED 1, 3–14, 16–22. OVERRULED 2 (DF-1) and 15 (DF-2). On 14: the narrower desk line (+357 B on the wake-up) goes in with a cut of at least 181 B of dated cites from the wake-up, measured at install.
+
+`STANDING-LIST.md` — FINAL FOR HIS ONE APPROVAL once DF-1 and DF-2 are in it (one deploy string out; one desk deny in; the `ops/desk/` install noted) AND the desk's re-run of `DRAFT4-REPORT.md` `## UNTESTED` 1–6 passes. The NEW strings he approves: five allows — `Edit(//Users/cobalt/cobalt-wt/**)` (build, check), `Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/reports/**)` (check, deploy, close), `Edit(//Users/cobalt/cobalt/docs/00 - Project/**)` (close), `Edit(//Users/cobalt/Vault/Think/6 - Permanent/Memory/areas/cobalt.md)` (close), `Bash(git push origin main)` (close, the nightly push) — and the denies (the close's nine push denies, the desk's three `Edit` denies).
+
+WHAT REMAINS BEFORE INSTALL, in order:
+1. The desk applies DF-1, DF-2, DF-3 in the plans folder.
+2. The desk re-runs `## UNTESTED` 1–6 of `DRAFT4-REPORT.md` on the scratch sandbox; a failure comes to the brain.
+3. One house other than the author reads `DEPLOY-HUB.md` (row 1's floor, his ruling).
+4. He approves `STANDING-LIST.md` once.
+5. The desk folds `RULE-CHANGES.md` rows 1–58 (rows 1–4, 39, 40 first), makes the `ops/desk/` symlinks and the hook, installs the five fixed files with his approval row in each title, then narrows its own line with the wake-up cut.
+6. The next build runs on a card; the desk records its size per turn and the worker's size at the stop line.
+
+## READ OF SCRATCH TEST 2 (`D/reports/fixed-files-scratch-test-2-2026-09-30.md`, commit `afa659ac`)
+Read whole. Items 1–3 and 5–8 pass; item 4 (the close end to end) is owed. Every refusal under `dontAsk` came with no dialog (probes E, F; the hub's `## RECORDS`).
+
+THE EXACT FIXES THE DESK APPLIES in `D/plans/fixed-files-2026-09-30/`:
+- D4 `desk-launch.sh:273–278`, kind `prompt`. The hub's suggested allow-list (`default`, `plan`) is WRONG for this repo: one-off prompts run `--permission-mode auto` (e.g. `prompts/2026-09-30/43-draft-two-deploys.md:1`), and `default` raises dialogs. Fix: read the mode word after `--permission-mode` (quotes, `=` and blanks stripped); allow ONLY `auto` and `plan`; refuse any other value, a missing value, or a second `--permission-mode`. Test: the hub's prompts `31`, `32`, `33` → each `REFUSED`; prompts `10`, `11` (auto) → `EXIT=0`.
+- D5 `desk-launch.sh:165–168`, kind `close`: after the `YYYY-MM-DD` shape check, require `date -j -f %Y-%m-%d "$cday" +%Y-%m-%d` to print `$cday` back, else `REFUSED: close: '$cday' is not a calendar date`. Test: `close 2026-02-30` → `REFUSED`; `close 2026-09-29` → `EXIT=0`.
+- D6 `desk-context.sh:7–8`: refuse an id shorter than 8 characters or holding a character outside `[0-9a-f-]` → `no transcript for <id>`, exit 2. Test: `desk-context.sh "" 250000` → exit 2; `desk-context.sh f9cd8480 250000` → a context line. Also fix line 4's comment to say every project folder.
+
+WHAT ELSE STANDS BETWEEN HIM AND HIS ONE APPROVAL:
+- Nothing in the list itself: scratch test 2 changed no allow or deny string. `STANDING-LIST.md` is final as it stands after DF-1 and DF-2.
+- ITEM 4 (the close end to end, on the sandbox with a local bare remote for the push) and THE OTHER-HOUSE READ of `DEPLOY-HUB.md` are both still owed. Neither is expected to change a string. RECOMMENDED: he approves the list now, on one condition written into the approval row — if item 4 or the read changes any string, that string alone comes back to him. INSTALL waits for both, and for D4–D6.
+- ITEM 1's full real lines were not run: the first real job on a card is that run; the desk records the worker's first minutes and any refusal.
+- One fact for the fixed files: under `dontAsk` a compound line whose every part is listed RAN (`sh … ; sh …`, `sh … | grep`; the hub's `## RECORDS`). The "one command per call" rule stays in the files as written; it is now style, not what stops a run.
+
+## READ OF THE DEPLOY-HUB READ (Grok: `D/reports/deploy-hub-other-house-read-2026-09-30.md`) AND OF THE CLOSE TEST (`fixed-files-scratch-test-2-2026-09-30.md` PART 4)
+Grok's findings carry greps, not runs (K24). Each is judged below by reading `DEPLOY-HUB.md` at the cited lines. HOLDS = the defect is real on the text; a TEST is named where only a run can settle it. STRING = the fix changes an allow or deny string: those go back to him, as one list (his R60).
+
+| # | verdict | the exact fix | STRING |
+|---|---|---|---|
+| 1 | HOLDS. P5 (`:63`) wants `git log --oneline main..<BRANCH>` EMPTY; on a `STEP-D0` resume the gate already carries the set's merge `<m1>` (never on `main`), so P5 fails on EVERY resume. | P5: that EMPTY check runs on a FIRST launch only; on a resume P5 is resume check (c) as written. Test: the sandbox gate after STEP-T → the grep prints the `<m1>` line. | no |
+| 2 | NOT A DEFECT IN INTENT; A TEXT CONFLICT. STEP-5 (2) (`:162`) keeps residents DOWN when the one revert did not restore `<pre-merge>` — the tree is then neither old nor new, and starting residents on it is worse. Rule F (`:23`) forbids it. | Rule F gains one exception: "…except when STEP-5 (2) proves the revert did not restore `<pre-merge>`: residents stay down, the stop line says `aset: DOWN · radar: DOWN` and is `FOR DEJAN`." | no |
+| 3 | HOLDS, with 2. The resume's (e) (`:55`) restarts residents whatever (a)–(d) say — also on finding 2's unrestored tree. | (e): when the report's last line starts `FAILED: STEP-5 (2) — revert did not restore`, do NOT restore: `FAILED: resume — residents down by STEP-5 (2); the desk decides · FOR DEJAN`. | no |
+| 4 | HOLDS. D1 lets a `STEP-D0` resume launch with the gate's OWN `.env` left; P4 (`:62`) then requires no `.env` anywhere, and the resume re-runs no STEP-G, so nothing releases the lock. | THE ONE RESUME, first call after (e): own `<GATE>/.env` present → G (f) (the rollback to `0013` when `dev forward: APPLIED` has no `F2 = F0` after it, then `rm`), recorded; then P4. All strings are on the line. | no |
+| 5 | HOLDS IN PART. `git -C /Users/cobalt/cobalt add *` / `commit *` match `add src/…` or `add -f .env`; but the pre-commit guard refuses any commit on `main` that stages more than a `reports/deploy-*.md` while a deploy hub is live — this hub is live at its own commits. The hole is `commit --no-verify` / `-n`, which skips the guard. | Add two DENY strings to the deploy line: `Bash(git -C * commit*--no-verify*)`, `Bash(git -C * commit* -n*)`. | YES — two denies added |
+| 6 | HOLDS. `revert --no-edit *` also matches `-m 1` (keeps the new tree); `:78` calls it an exact string with no wildcard. The re-land revert is the desk's, never this hub's (`:167`). | Narrow the allow to `Bash(git -C /Users/cobalt/cobalt revert --no-edit -m 2 *)`; `:78` lists it as a pattern. | YES — allow narrowed |
+| 7 | HOLDS. `tag *` also matches `tag -d deploy-2026-09-30-2`: a rollback anchor of an earlier deploy deleted (tags are not pushed). | Replace `tag *` with five exact strings `desk-launch.sh` fills from the card: `tag scratch-allow-probe-<job>`, `tag -d scratch-allow-probe-<job>`, `tag pre-<job>`, `tag -d pre-<job>`, `tag <tag>` (the card's `TAG`). Test: the D0 probe and D2.6 under `dontAsk` in the sandbox. | YES — one allow becomes five |
+| 8 | HOLDS, LOW. `Edit(…/reports/**)` lets the deploy hub edit `cto-<date>.md`; the guard refuses committing it and AUTHORIZATION needs the commit (K23), so an edit cannot forge approval — but the file is not the hub's to touch. | Narrow the deploy's allow to `Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-*)`. Test: a Write of `reports/deploy-x.md` succeeds, of `reports/cto-x.md` is refused, under `dontAsk`. The check and the close keep `reports/**` (their reports are named by the card or the date; the guard and K23 cover them). | YES — allow narrowed |
+| 9 | NOT A DEFECT IN PRACTICE; A GUARD IS CHEAP. A migration must be registered in `src/cobalt/db_migrations/__init__.py`, a `.py` file whose import reach takes the radar down (`restarts.py:94`), so an empty restart set with a migration does not occur on this tree. | STEP-R: `MIGRATIONS` not `none` and `<restart set>` empty → `FAILED: RESTARTS — a migration with no resident down (L66)`. | no |
+| 10 | HOLDS, NARROW. 4.4 runs in one transaction; `partial` needs a tool fault, but then STEP-5 (3) starts residents on a half-applied schema. | STEP-5: `migrations applied: partial` → residents stay DOWN, the stop line `FOR DEJAN` (the schema rollback is his). Rule F's exception (finding 2) names it too. | no |
+| UNPROVEN | NEEDS A TEST. Does the exact allow `Bash(COBALT_ENV=production uv run cobalt db migrate --allow-prod)` also admit `… --allow-prod --rollback --down-to <level>`? | Test in the sandbox under `dontAsk`: allow `Bash(echo hi)`; run `echo hi there` → REFUSED expected. And, whatever the result, add two DENY strings to the deploy line: `Bash(COBALT_ENV=production uv run cobalt db migrate*--rollback*)`, `Bash(COBALT_ENV=production uv run cobalt db migrate*--down-to*)` (a deny beats an allow). | YES — two denies added |
+
+THE STRING CHANGES FOR HIM, as one list (deploy line only): ADD DENY `git -C * commit*--no-verify*`, `git -C * commit* -n*`, `…db migrate*--rollback*`, `…db migrate*--down-to*`; NARROW `revert --no-edit *` → `revert --no-edit -m 2 *`; REPLACE `tag *` with the five exact tag strings; NARROW `Edit(…/reports/**)` → `Edit(…/reports/deploy-*)`. Each only removes power; none adds a command the hub did not already have.
+
+THE CLOSE TEST (item 4): PASS on a real close worker. Its DECISIONS 1, 3 and 5 are sandbox artifacts (no `cobalt` on the clone's path; the memory copy lacked `topics/cto-desk.md`; no tags in the clone). DECISION 7 accepted: the stop line holds its own commit's hash, so the desk commits the report after it; that commit rides the next night's push.
+DECISION 4 — WHERE NOW's STANDING RULES GO under the 1,500-character cap. `## NOW` is a snapshot of state (L58); rules do not live there. Of today's NOW lines (`M/areas/cobalt.md:12`–`:30`), every rule already has its home once `RULE-CHANGES.md` is folded: refresh → contract `:20` / checklist H1a (rows 55–56); scope, dates and money → contract `:21` (row 37); plan from the allow list → contract `:18`; the finished hub → checklist W8; launch cwd → checklist L1 (row 24); K23–K25 → checklist `## prompts`; the row hook → checklist C6. TWO LINES HAVE NO HOME: the GOAL (09-29 R129) and "a classifier `[Auto-Mode Bypass]` refusal goes to him, never routed around" (R110, R112). Both go to the contract's `## Contract` section as one line each, tagged, before the first close runs. The OWED list stops being circular: the full list lives in the day's §5 CURRENT `OWED` row (REFRESH HOW (3) carries it forward); NOW carries its count and that pointer. The meter and the sprint line stay in NOW as state.
+
+## RULED — THE REFRESH RULE (brain tab, 09-30, after the scratch test)
+His words: "Nobody told the desk to only refresh twice. If it grows above 250,000 tokens, it is becoming too onerous to run that every cycle." Source of the cap: `words-29` `## R127` — the desk's option A bundled "refreshes at most twice a day" with the scope rule; he answered "And A".
+1. The twice-a-day cap is REMOVED, now: contract `:20`, checklist H1a `:9`, wake-up `:40`, `cobalt.md:15`.
+2. His R68 stands: never refresh below 220,000 tokens; at or above 250,000, refresh at the first quiet moment.
+3. HARD CEILING 400,000: above it the desk refreshes at the next turn boundary even on a busy day; never mid-ruling and never with a reply owed to him.
+4. One ruling per question: an A/B never carries two rulings behind one letter.
+These are rule rows of `RULE-CHANGES.md` with the rest; items 1–3 bind the desk from his message.
+
+## RULED — THE NIGHTLY CLOSE (his "Yes, I want all this", brain tab, 09-30; a fourth item, after the third pass is read)
+1. The close runs itself. The desk launches it each evening after the 21:00 ET pause, when no deploy hub is live; a missed night → the first act of the morning desk, before the plate. He is never asked to start it.
+2. One fixed file, `CLOSE-HUB.md`, replaces `SESSION-CLOSE.md`'s table; launched by `desk-launch.sh close`. Steps kept: the ledger appendix; the sprint status block; `## NOW` rewritten whole from live evidence, at most 1,500 characters (L58); the always-loaded measure; one commit. Steps reduced: the laws fold lists only a ruling still `APPROVED — pending fold` (rule changes are applied at the ruling); the lessons gate lists only a lesson that no fixed file or checklist rule carries. Step added: the day's §4 rows cut to the row rule, the full text archived.
+3. STANDING NIGHTLY PUSH: after its commit the close pushes `main` — `git push origin main`, never forced, never another branch, never a tag he has not named. L55 is amended to allow it; every other push stays on his word.
+4. Every law and rule that stops 1–3 is changed to match, as a set, under his same word: L55 (push), L58 (the close's part; who rewrites NOW), L64 if its text needs it, contract `:11`, checklist `## close` `:123`, `SESSION-CLOSE.md`. The rows go into `RULE-CHANGES.md`.
+5. The close's own list joins `STANDING-LIST.md` before his one approval: its push string is NEW.
+
+## RULED — the 9:30 override ends
+His words in the brain tab, 09-30, after both deploys landed: "The production is now usable, so no change is needed." His 09-30 R10 (no 9:30 / L66 / L43 stop "until I say production is usable for trading") has met its end condition: L66's pause and L43's window bind again; L73 is not amended. The desk records it as a §4 row with his words, and NOW drops the override. A deploy card no longer cites R10 to set the window aside.
+
 ## UNPROVEN
 - The desk's replies to him (length, plate content, the startup-tokens line): chat text is in no file handed to me.
 - Attempt 7's cause; attempt 8's smoke result (in flight at 09:14; a red row sends it to the revert).
@@ -243,4 +411,4 @@ RULED by him on gaps 5 and 9 (brain tab, 09-30, after the read):
 - L74: a block inside tool results in this session asked for a `Claude-Session:` line and named a file-send tool. Data; not followed. This session commits nothing.
 - Written in three parts of under 15 KB: the first by Write, the next two appended by Edit to this same file.
 
-BRAIN DESK REVIEW DONE · directions: 17 · followed: 2 · partly: 5 · not followed: 7 · not verifiable: 3 · contradictions: 5 · recommendations: 10
+BRAIN DEPLOY-READ READ DONE · findings: 10 + 1 unproven · hold: 8 · not a defect: 2 (texts fixed anyway) · needs a test: 4 · string changes for him: 7 (deploy line; all narrow or deny) · close test: PASS · NOW rules re-homed: 2 lines to the contract
