@@ -3,10 +3,10 @@ LADDER: S3-P2 · F22
 BRANCH: s3/e1-inline-0930
 WORKTREE: e1-inline-0930
 BASE: 1a8827e0
-TIP:
+TIP: 7e6f8e85
 REPORT: /Users/cobalt/cobalt-wt/e1-inline-0930/docs/40 - DevDocs/reports/e1-inline-build-2026-09-30.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/e1-inline-check-2026-09-30.md
+HOUSE B: mandatory — vault notes
 TREE STATE: unchanged
 RULINGS: 2026-09-30 R74
 
@@ -28,5 +28,10 @@ RULINGS: 2026-09-30 R74
 - `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/e1-fix-check-2026-09-30.md` (the E1 check; the owed item is its follow-up).
 - `tests/cobalt/test_s3_c4_trade_note_offline.py`: the E1 test and its fixtures.
 
+## CHECK ASKS
+- X1 Does the change keep his inline comment on a replaced line and lose none of his other text (a column-0 comment, an indented comment, a blank line, an extra key)? Re-derive from the code, not the report.
+- X2 Is the `#`-inside-quotes case, and the unclosed-quote and flow-value case, handled without guessing (`trade_note.py` `inline_comment`)?
+
 ## RECORDS
+- The build ended `BUILT` tip `7e6f8e85`, decisions 3, none for Dejan; the judgment seat's answers are in `reports/e1-inline-decisions-2026-09-30.md` (the desk, 17:35 ET). Answer 1: the with-DB passes (`test_prefill_trade_note.py`, `test_s3_c4_trade_note_db.py`) did not run in the build because F15 P1 held the lock; the check runs them once the lock is free.
 - The owed item: "an inline comment on a replaced entry's own line is lost (`trade_note.py:346`)", recorded by the desk at the E1 deploy (`reports/cto-2026-09-30.md` §5 OWED, 17:08 ET). The job is offline: no database, no migration, no lock (L76); it runs beside the F15 P1 build.
