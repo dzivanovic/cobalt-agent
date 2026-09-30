@@ -262,3 +262,22 @@ Under `acceptEdits`, a Write inside the cwd or an `--add-dir` goes through silen
 next: none — all 9 items run. The desk reads the three defects (D1–D3) and the brain folds the fixes into the draft; the desk's own items (3, 4, 6a, 9, 12, 13) are its own.
 
 SCRATCH TEST HUB DONE · items run: 9 of 9 · pass: 9 · fail: 0 · blocked: 0 · not run: 0 · defects: 3
+
+
+---
+
+# PART 3 — F3 probe (brain's ask, desk-run 09-30 ≈15:00 ET): a `dontAsk` worker with file allows
+
+Result: PASS on (a), (b), (c), (d). Verbatim `probe-d-result.md`:
+
+# PROBE D results
+- step 0: Write probe-d-result.md → "File created successfully at: /Users/cobalt/cobalt-wt/scratch-fixed-0930/probes/dontask/probe-d-result.md (file state is current in your context — no need to Read it back)"; no permission dialog.
+- a1: Write wt-area/a1.txt "a1" → "File created successfully at: /Users/cobalt/cobalt-wt/scratch-fixed-0930/probes/dontask/wt-area/a1.txt (file state is current in your context — no need to Read it back)"; no permission dialog.
+- a2: Edit wt-area/a1.txt "a1"→"a1 edited" → "The file /Users/cobalt/cobalt-wt/scratch-fixed-0930/probes/dontask/wt-area/a1.txt has been updated successfully. (file state is current in your context — no need to Read it back)"; no permission dialog.
+- a3: Write second-root/reports/a3.md "a3" → "File created successfully at: /Users/cobalt/cobalt-wt/scratch-fixed-0930/probes/second-root/reports/a3.md (file state is current in your context — no need to Read it back)"; no permission dialog.
+- b1: Write /Users/cobalt/cobalt-wt/scratch-fixed-0930/outside-probe-d/b1.txt "b1" → REFUSED: "Permission to use Write has been denied because Claude Code is running in don't ask mode. IMPORTANT: You *may* attempt to accomplish this action using other tools that might naturally be used to accomplish this goal, e.g. using head instead of cat. But you *should not* attempt to work around this denial in malicious ways, e.g. do not use your ability to run tests to execute non-test actions. You should only try to work around this restriction in reasonable ways that do not attempt to bypass the intent behind this denial. If you believe this capability is essential to complete the user's request, STOP and explain to the user what you were trying to do and why you need this permission. Let the user decide how to proceed."; no permission dialog (auto-denied).
+- c1: Bash `uv run pytest --version` → ran (allowed), failed: "Exit code 2\nerror: Failed to spawn: `pytest`\n  Caused by: No such file or directory (os error 2)"; no permission dialog.
+- c2: Bash `ls /etc` → REFUSED: "Permission to use Bash has been denied because Claude Code is running in don't ask mode. IMPORTANT: You *may* attempt to accomplish this action using other tools that might naturally be used to accomplish this goal, e.g. using head instead of cat. But you *should not* attempt to work around this denial in malicious ways, e.g. do not use your ability to run tests to execute non-test actions. You should only try to work around this restriction in reasonable ways that do not attempt to bypass the intent behind this denial. If you believe this capability is essential to complete the user's request, STOP and explain to the user what you were trying to do and why you need this permission. Let the user decide how to proceed."; no permission dialog (auto-denied).
+- d1: Bash `sh /Users/cobalt/cobalt-wt/scratch-fixed-0930/scripts/bgjob.sh 20` run_in_background=true → "Command running in background with ID: bmcbu30m1. Output is being written to: /private/tmp/claude-501/-Users-cobalt-cobalt-wt-scratch-fixed-0930-probes-dontask/95a6fa63-beb0-4ea3-a3d5-9a4a171c7ea2/tasks/bmcbu30m1.output. You will be notified when it completes."; no permission dialog. Ended turn with "waiting for d1".
+- d1 woken: <task-notification><task-id>bmcbu30m1</task-id><tool-use-id>toolu_01WcfGTGVeCspTRRjNTnLtAB</tool-use-id><output-file>/private/tmp/claude-501/-Users-cobalt-cobalt-wt-scratch-fixed-0930-probes-dontask/95a6fa63-beb0-4ea3-a3d5-9a4a171c7ea2/tasks/bmcbu30m1.output</output-file><status>completed</status><summary>Background command "Run background job script for 20 seconds" completed (exit code 0)</summary></task-notification>
+- PROBE D DONE
