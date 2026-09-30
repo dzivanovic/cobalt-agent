@@ -459,3 +459,59 @@ def test_the_merge_still_refreshes_cobalts_five_and_fills_a_blank(vault):
     assert _line(path, "stop_price") == 'stop_price: "5.1000"'
     assert _line(path, "exit_price") == 'exit_price: "5.6000"'
     assert _line(path, "exit_time") == 'exit_time: "2026-09-03 10:31"'
+
+
+# ---------------------------------------------------------------------
+# E1 (09-30 R3) — a comment he INDENTS under an entry Cobalt replaces or
+# fills is his and is kept, like a column-0 comment and a blank line.
+# ---------------------------------------------------------------------
+
+#: His block (constructed): an indented comment before any entry, under a
+#: Cobalt-owned entry (with a blank line), under a blank key Cobalt fills;
+#: a Cobalt-owned entry and a filled key with a column-0 comment or nothing
+#: under them.
+E1_BLOCK = [
+    "  # a constructed comment before any entry",
+    f"trade_def: {SLUG}",
+    "date: 2026-09-03 10:00",
+    "symbol: ZZPB",
+    'direction: "Long"',
+    'stop_price: "5.2000"',
+    "  # typed at close",
+    "",
+    'entry_price: "5.4800"',
+    "exit_price:",
+    "  # a constructed comment under a blank key",
+    'entry_time: "2026-09-03 10:00"',
+    "exit_time:",
+    "# a constructed column-0 comment",
+    "profit_loss: -120.50",
+    "RVOL: 3.50",
+    "tags: [trade, example]",
+]
+
+
+def test_an_indented_comment_under_a_replaced_entry_is_kept(vault):
+    store = MemoryWriteStore()
+    path, _ = write(card(), [leg()], store, create_only=True)
+    _replace_block(path, E1_BLOCK)
+    _close(store, card(stop=Decimal("5.1000")))
+    replaced = {'stop_price: "5.2000"': 'stop_price: "5.1000"', "exit_price:": 'exit_price: "5.6000"',
+                "exit_time:": 'exit_time: "2026-09-03 10:31"'}
+    assert _block(path) == [replaced.get(line, line) for line in E1_BLOCK]
+
+
+def test_a_value_line_he_typed_that_starts_with_a_hash_stays_as_a_line(vault):
+    """A Cobalt-owned key he retyped as a block scalar whose text starts
+    with `#`: the entry is refreshed, his `#` line stays under it (YAML
+    then reads it as a comment) — no line of his that starts with `#` is
+    deleted."""
+    store = MemoryWriteStore()
+    path, _ = write(card(), [leg()], store, create_only=True)
+    block = [line for line in E1_BLOCK if line != "symbol: ZZPB"]
+    block[3:3] = ["symbol: |", "  #ZZPB"]
+    _replace_block(path, block)
+    assert fm(path)["symbol"] == "#ZZPB\n"
+    _close(store)
+    assert _block(path)[3:5] == ["symbol: ZZPB", "  #ZZPB"]
+    assert fm(path)["symbol"] == "ZZPB"
