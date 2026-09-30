@@ -118,14 +118,11 @@ def _render_value(key: str, value) -> str:
     return f'{key}: "{value}"'
 
 
-def _render_frontmatter(fields: dict, *, every_key: bool = True) -> str:
+def _render_frontmatter(fields: dict) -> str:
     """A NEW note renders every FIELD_ORDER key (his blank). An existing
-    note's merge passes `every_key=False`: a key absent from his file is
-    never added back (R35 (3)); Cobalt's five are always in `fields`."""
+    note is never re-rendered: `_merge_frontmatter_lines` keeps his lines."""
     lines = ["---"]
     for key in FIELD_ORDER:
-        if not every_key and key not in fields:
-            continue
         if key == "tags":
             lines.append("tags:")
             for tag in fields.get("tags") or ["trade"]:
@@ -245,8 +242,8 @@ def upsert_trade_note(
     Converted to the ONE write path 2026-09-03 (LAW L28): a note that
     does not exist is created whole; one that does takes the merge path
     through `VaultWriter.upsert_region`, guarded, audited and diffed like
-    every other vault write. Dejan's own frontmatter keys are merged
-    key-wise here (as before), and the writer's three-way merge is the
+    every other vault write. Dejan's own frontmatter lines are kept byte
+    for byte (`_merge_frontmatter_lines`), and the writer's three-way merge is the
     second line of defence — if he edited one of Cobalt's own five keys,
     HIS value wins and an override row records it.
     """
@@ -279,21 +276,78 @@ def upsert_trade_note(
             f"{path}: existing file has no recognizable frontmatter block — "
             "refusing to guess at its shape, not touching it."
         )
-    merged = dict(fm)
-    merged.update(fresh)  # Cobalt's five keys refreshed; every other key/value untouched
-    for key, value in fills.items():
-        # O5 / O6 = A: blank → value only; a present value is his; an
-        # absent key is never added.
-        if key in fm and _is_blank(fm[key]):
-            merged[key] = value
     writer.upsert_region(
         path,
         FRONTMATTER_SECTION,
         FRONTMATTER_REGION,
-        _render_frontmatter(merged, every_key=False).rstrip("\n"),
+        _merge_frontmatter_lines(path, existing, fm, fresh, fills),
         locate=frontmatter_span,
     )
     return path, "updated"
+
+
+def _merge_frontmatter_lines(path: Path, existing: str, fm: Mapping, fresh: dict, fills: Mapping[str, str]) -> str:
+    """His frontmatter block written back LINE BY LINE, in HIS order,
+    every byte of his kept (L28; C4 fix r2 B1). The YAML read (`fm`) only
+    says which keys exist and which are blank; it is never re-rendered —
+    `5.10` stays `5.10`, `10:31` stays `10:31`, his comments and list
+    shapes stay.
+
+    A top-level entry starts at a line with no leading whitespace whose
+    text before its first `:` (stripped, unquoted) is a key of `fm`; every
+    other line (indented, a `- ` item, a `#` comment, blank) belongs to the
+    entry above it, or to a prefix kept before the first entry. Rendered
+    are only: a Cobalt-owned key (its value lines replaced by
+    `_render_value`), and a key of his that is blank and has a fill
+    (blank → value only, R35 (3)). A comment or blank line under a
+    replaced entry is his and is kept. A Cobalt-owned key absent from his
+    block is appended before the closing `---`, in FIELD_ORDER; an absent
+    key of his is never added. A parsed key with no top-level line of its
+    own (a flow mapping, a repeated key) is refused, nothing written (L1).
+    """
+    lines = existing.split("\n")
+    span = frontmatter_span(lines)
+    keys = {str(key) for key in fm}
+    refused = VaultWriteError(
+        f"{path}: its frontmatter block does not map line by line onto its keys — "
+        "refusing to guess at its shape, not touching it."
+    )
+    if span is None:
+        raise refused
+    start, end = span
+    prefix: list[str] = []
+    entries: list[tuple[str, list[str]]] = []
+    for line in lines[start + 1:end - 1]:
+        key = None
+        if line and not line[0].isspace() and not line.startswith(("#", "- ")) and ":" in line:
+            key = line.split(":", 1)[0].strip().strip("\"'")
+        if key in keys:
+            if any(seen == key for seen, _ in entries):
+                raise refused
+            entries.append((key, [line]))
+        elif entries:
+            entries[-1][1].append(line)
+        else:
+            prefix.append(line)
+    if {key for key, _ in entries} != keys:
+        raise refused
+
+    out = [lines[start], *prefix]
+    for key, entry in entries:
+        if key in COBALT_OWNED_FIELDS:
+            rendered = _render_value(key, fresh[key])
+        elif key in fills and _is_blank(fm[key]):
+            rendered = _render_value(key, fills[key])
+        else:
+            out.extend(entry)
+            continue
+        # his comment / blank lines under the entry stay; the value's own lines go
+        tail = [line for line in entry[1:] if line.strip() == "" or line.startswith("#")]
+        out.extend([rendered, *tail])
+    out.extend(_render_value(key, fresh[key]) for key in FIELD_ORDER
+               if key in COBALT_OWNED_FIELDS and key not in keys)
+    out.append(lines[end - 1])
+    return "\n".join(out)
 
 
 # ---------------------------------------------------------------------

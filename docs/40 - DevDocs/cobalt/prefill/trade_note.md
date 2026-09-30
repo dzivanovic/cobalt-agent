@@ -82,3 +82,7 @@ Tests: `tests/cobalt/test_s3_c4_trade_note_offline.py`, `tests/cobalt/test_s3_c4
 ## 2026-09-29 — S3 exits C4 fix r1
 
 The test guard: `tests/cobalt/conftest.py` autouse fixture `trade_note_path_guard` wraps this module's `resolve_target`; a path outside the pytest base temp raises before any read or write and fails the test at teardown (the web note helpers swallow exceptions). A test that writes a trade note gets a `tmp_path` vault through `trade_note_support.make_vault` (`panel_world` does; `note_world` reuses it).
+
+## 2026-09-29 — S3 exits C4 fix r2
+
+The frontmatter merge keeps his raw lines: `_merge_frontmatter_lines` writes an existing note's block back line by line, in his order, byte for byte; only Cobalt's five and a blank key of his that has a fill are rendered (a block it cannot map line by line onto its keys is refused, nothing written).
