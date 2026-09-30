@@ -78,6 +78,7 @@ jobs:
       # (prefill/rules_gen.py), which writes this generated file. Moved from no_resident_reads (the schema
       # refuses a path in both); its one-shot reader, provenance kept: prefill/daily.py (com.cobalt.prefill-daily).
       - "configs/cobalt/rules.yaml"
+      - "configs/cobalt/prefill.yaml"              # prefill/config.py:157 (load_prefill_paths), called from aset/web.py:1034 at the fill
       # voice V1's six paths, classified at the stack seam build 2026-09-25 (L42). The sheet serves voice
       # (aset/web.py:90 include_router(voice_web.router)), so this process runs voice's loaders.
       - "configs/cobalt/voice.yaml"                # voice/config.py:32 CONFIG_PATH + :120 (load_voice_config); cached per process in voice/web.py:59 _CONFIG, so a change reaches the sheet only by restart
@@ -322,6 +323,21 @@ no_resident_reads:
       (send_dm, reached from heartbeat/runner.py:304 — the one-shot
       heartbeat) and by `cobalt validate` (cli.py:261, an operator
       command, not a job). No resident sends a DM. Ruled 2026-09-15.
+  - path: configs/cobalt/templates/daily.md.j2
+    readers: [com.cobalt.prefill-daily]
+    because: >
+      Loaded only by prefill/daily.py:239 (env.get_template("daily.md.j2"),
+      FileSystemLoader(TEMPLATES_DIR) at :238), the com.cobalt.prefill-daily
+      one-shot. No resident renders it. Ruled 2026-09-30.
+  - path: configs/cobalt/templates/drc.md.j2
+    readers: [com.cobalt.prefill-daily]
+    because: >
+      DRC D3 deleted this template. No code loads it: the two remaining
+      mentions are prose (prefill/drc.py:6, a docstring; daymode/drc.py:121,
+      a comment). Its one reader was the retired 15:40 DRC prefill job.
+      com.cobalt.prefill-daily is the one job whose loader reaches
+      configs/cobalt/templates/ (prefill/daily.py:238, FileSystemLoader(TEMPLATES_DIR)).
+      Ruled 2026-09-30.
   # configs/cobalt/rules.yaml LEFT this list in DRC D3 ([F-28]): the DRC build
   # calls regenerate_rules_config() inside com.cobalt.aset — it is now in that
   # job's `reads:` (the 15:40 prefill-drc reader is retired).
