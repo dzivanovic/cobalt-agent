@@ -64,12 +64,13 @@ from cobalt.vault import VaultConfigError, dev_entry_allowed, is_production, res
 
 from .config import ConfigError, load_config, load_sheet_modes_config
 from .daily_note import DailyNoteRefused, save_card, save_fill_update
-from .engine import KeyRefused, SizingError, compute_fill_recompute, compute_sizing, size_at_key
+from .engine import KeyRefused, SizingError, compute_sizing, size_at_key
 from .models import Direction, Grade, SizingInput
 from cobalt.settings import TraderSettingsError
 from cobalt.settings import cli as settings_cli
 from cobalt.settings import drc as settings_drc
 from cobalt.settings.card import CardSettingsReader
+from cobalt.settings.fills import DRIFT_NOT_EVALUATED
 from .prefill import PrefillError, fetch_last_price
 from .radar_panel import (
     RadarPanelError,
@@ -743,13 +744,20 @@ def _open_cards_section() -> str:
     except Exception as e:  # noqa: BLE001
         return (f'<div class="card"><div class="failed">FAILED\nOpen cards unreadable: '
                 f'{html.escape(f"{type(e).__name__}: {e}")}</div></div>')
+    # S3 C3 fix r1 F3: below the live cards, today's CLOSED manual cards'
+    # estimated legs, listed for correction — even when no card is live.
+    closed = _sheet_closed_estimated(store)
+    if closed:
+        closed = (f'<label>Closed manual cards — estimated legs to confirm</label>'
+                  f'<div class="cards">{closed}</div>')
     if not cards:
         return ('<div class="card"><label>Open cards (F7)</label>'
                 '<div class="muted">No card is in a live state. Terminal cards '
-                '(CLOSED / PASSED / EXPIRED / MISSED) are not listed.</div></div>')
-    rows = "".join(_card_controls(c) for c in cards)
+                f'(CLOSED / PASSED / EXPIRED / MISSED) are not listed.</div>{closed}</div>')
+    # S3 C3-4: a FILLED manual card's IN-TRADE controls follow its row.
+    rows = "".join(_card_controls(c) + _sheet_in_trade(c) for c in cards)
     return (f'<div class="card"><label>Open cards (F7) — every button writes a '
-            f'transition</label><div class="cards">{rows}</div></div>')
+            f'transition</label><div class="cards">{rows}</div>{closed}</div>')
 
 def _failed(message: str) -> str:
     return f'<div class="failed">FAILED\n{html.escape(message)}</div>'
@@ -857,6 +865,8 @@ def _result_card(result, form: dict, fill=None) -> str:
     <form class="card" method="post" action="/fill">{hidden}
      <label>Actual fill $ <span class="muted">(recompute shares at the real fill; appends a FILL UPDATE block)</span></label>
      <input name="actual_fill" type="number" step="0.0001" required value="{html.escape(form.get("actual_fill", ""))}">
+     <label>Shares filled <span class="muted">(what the broker filled — the entry leg)</span></label>
+     <input name="fill_shares" type="number" step="1" min="1" required value="{html.escape(form.get("fill_shares", ""))}">
      <button type="submit">Recompute at actual fill</button>
     </form>"""
 
@@ -1032,7 +1042,12 @@ async def size(request: Request) -> str:
 
     try:
         prefill_paths = load_prefill_paths()
-        trade_path, trade_action = upsert_trade_note(result, when, prefill_paths)
+        # S3 C4 (O4 A): the ONE trade-note writer takes the card; the
+        # sizing note keeps the sizing time and the planned entry.
+        inp = result.input
+        card = {"id": row_id, "ticker": inp.ticker, "direction": inp.direction.value, "stop": inp.stop,
+                "trade_def_slug": None}
+        trade_path, trade_action = upsert_trade_note(card, when, prefill_paths, entry_price=inp.entry)
     except (PrefillConfigError, VaultWriteError) as e:
         banner = _failed(
             f"Persisted: aset_sizings id {row_id} ({store.db_name}) — daily note "
@@ -1069,12 +1084,18 @@ async def fill(request: Request) -> str:
         # thing up front instead of half of it.
         assert_writable("aset.fill", target=form.get("ticker") or None)
         cfg = load_config()
-        sheet_modes_cfg = load_sheet_modes_config()
-        inp = _parse_input(form, sheet_modes_cfg)
-        original = compute_sizing(
-            inp, sheet_modes_cfg.enabled_grades, cfg.validation.max_stop_distance_pct
-        )  # deterministic recompute; no re-persist
 
+        # S3 C1 (v3 §2 [F-22]): the form contributes the typed PRICE and
+        # the typed SHARES, nothing else. The sizing is the card's own row,
+        # rebuilt by `SizingResult.from_card` inside THE fill under the
+        # card lock — never a re-size of the posted fields.
+        card_row_raw = form.get("card_row_id", "")
+        if not card_row_raw.isdigit():
+            raise SizingError(
+                "No aset_sizings row id on this form — compute & persist a card "
+                "first, then recompute its actual fill. (Refusing to write a fill "
+                "update that cannot be tied to its card row.)"
+            )
         orig_ts_raw = form.get("orig_timestamp", "")
         if not orig_ts_raw:
             raise SizingError(
@@ -1083,38 +1104,41 @@ async def fill(request: Request) -> str:
             )
         orig_timestamp = datetime.fromisoformat(orig_ts_raw)
 
-        try:
-            actual_fill = Decimal(form.get("actual_fill", ""))
-        except InvalidOperation as e:
-            raise SizingError(f"Invalid actual fill price: {form.get('actual_fill')!r}") from e
-
-        fill_result = compute_fill_recompute(
-            original, actual_fill, cfg.validation.max_fill_distance_pct
-        )
-
-        # L28 step 3 (2026-09-03): the recompute is an UPDATE to the card
-        # row it belongs to — status FILLED + the actual-fill figures.
-        # Before this it created no row at all, which is why the 09-03
-        # TSLA FILL UPDATE (10:02:36) was unrecoverable from Postgres.
-        # DB first: a fill reported in the note but missing from the DB
-        # is exactly the failure mode being closed.
-        card_row_raw = form.get("card_row_id", "")
-        if not card_row_raw.isdigit():
+        raw_price = form.get("actual_fill", "").strip()
+        if not raw_price:
             raise SizingError(
-                "No aset_sizings row id on this form — compute & persist a card "
-                "first, then recompute its actual fill. (Refusing to write a fill "
-                "update that cannot be tied to its card row.)"
+                "REFUSED: a fill with no price. Type the price the broker filled you at. "
+                "Nothing written."
             )
+        try:
+            actual_fill = Decimal(raw_price)
+        except InvalidOperation as e:
+            raise SizingError(f"Invalid actual fill price: {raw_price!r}. Nothing written.") from e
+        raw_shares = form.get("fill_shares", "").strip()
+        if not raw_shares.isdigit() or int(raw_shares) == 0:
+            raise SizingError(
+                f"REFUSED: a fill with no share count ({raw_shares!r}). Type the shares the "
+                "broker filled. Nothing written."
+            )
+
+        # DB first (L28 step 3, 2026-09-03): a fill reported in the note
+        # but missing from the DB is the failure mode being closed. THE
+        # fill is one transaction — the FILLED transition, the entry leg
+        # and the fill cache land together or not at all; a card that is
+        # not TRIGGERED (radar) raises IllegalTransition naming the edge.
         store = AsetStore()
         store.ensure_schema()
-        # F7: a fill is TRIGGERED -> FILLED and nothing else. If the card
-        # has not been armed and marked triggered, mark_filled raises
-        # IllegalTransition naming the edge — it is NOT coerced, because
-        # a card that reached FILLED without ever being TRIGGERED makes
-        # the MISSED count (Charter §3 F7) meaningless.
-        filled = store.mark_filled(int(card_row_raw), fill_result)
-
-        note_path, note_write = save_fill_update(cfg, fill_result, orig_timestamp)
+        outcome = store.mark_filled(
+            int(card_row_raw),
+            price=actual_fill,
+            shares=int(raw_shares),
+            flag="confirmed",
+            price_source="typed",
+            price_asof=None,
+            source="sheet",
+        )
+        filled, fill_result = outcome.result, outcome.recompute
+        original = fill_result.original
     except IllegalTransition as e:
         return _render(
             banner=_failed(
@@ -1129,19 +1153,45 @@ async def fill(request: Request) -> str:
     except Exception as e:
         return _render(banner=_failed(f"{type(e).__name__}: {e}"), form=form)
 
-    if note_write is None:
-        banner = (
+    # THE fill has committed. A daily-note failure from here on must not
+    # hide what the database now holds (L1): the failure, that the card
+    # IS FILLED, and the fill's drift outcome exactly as on success.
+    try:
+        note_path, note_write = save_fill_update(cfg, fill_result, orig_timestamp)
+    except Exception as e:
+        refused = isinstance(e, (SizingError, ConfigError, DailyNoteRefused, DevEntryRefused,
+                                 SessionBlocked, CardStateError))
+        banner = _failed(str(e) if refused else f"{type(e).__name__}: {e}")
+        banner += (
             f'<div class="warn">aset_sizings id {html.escape(card_row_raw)} marked '
-            "FILLED · ⚠ DAILY-NOTE WRITE IS DISABLED (daily_note.write_enabled="
-            "false) — the FILL UPDATE is NOT in the journal.</div>"
+            "FILLED — the daily-note write failed after the DB commit; the FILL "
+            "UPDATE is NOT in the journal.</div>"
         )
     else:
-        banner = (
-            f'<div class="saved">aset_sizings id {html.escape(card_row_raw)} marked '
-            f"FILLED · fill update {html.escape(note_write.action)} in "
-            f"{html.escape(str(note_path))}</div>"
-        )
+        if note_write is None:
+            banner = (
+                f'<div class="warn">aset_sizings id {html.escape(card_row_raw)} marked '
+                "FILLED · ⚠ DAILY-NOTE WRITE IS DISABLED (daily_note.write_enabled="
+                "false) — the FILL UPDATE is NOT in the journal.</div>"
+            )
+        else:
+            banner = (
+                f'<div class="saved">aset_sizings id {html.escape(card_row_raw)} marked '
+                f"FILLED · fill update {html.escape(note_write.action)} in "
+                f"{html.escape(str(note_path))}</div>"
+            )
+    # S3 C4 (F22, v3 §7): the card's trade note, after the fill committed,
+    # in this request. A failure leaves the card FILLED and says so (L1).
+    note, note_failed = _fill_note(int(card_row_raw))
+    if note is not None:
+        banner += f'<div class="saved">{html.escape(_note_saved(note))}</div>'
+    else:
+        banner += f'<div class="warn">⚠ {html.escape(note_failed)}</div>'
     banner += _pick_banner(int(card_row_raw), filled)
+    if fill_result.drift_warned is None:
+        # v3 §4 / L1: his drift P is missing — the fill IS recorded; the
+        # warning was not evaluated, and that is said, never implied.
+        banner += f'<div class="warn">⚠ {html.escape(DRIFT_NOT_EVALUATED)}</div>'
     return _render(
         banner=banner,
         result=_result_card(original, form, fill=fill_result),
@@ -1318,33 +1368,40 @@ async def card_move(card_id: int, request: Request) -> str:
     form = {k: str(v) for k, v in (await request.form()).items()}
     try:
         _check_entry_allowed()
+        to_state = CardState(form.get("to", ""))
+        if to_state is FILL_TARGET:
+            # ONE PATH TO FILLED (S3 C1, v3 §2 [F-22]): a fill carries his
+            # price and shares and lands with its entry leg, so it is
+            # written only by THE fill (`AsetStore.mark_filled`). A FILLED
+            # from here would be the priceless fill of F8.
+            raise CardStateError(
+                f"REFUSED card {card_id}: {FILL_TARGET.value} — this route never fills. "
+                "A fill is written only by the fill (POST /fill with the price and shares "
+                "the broker filled)."
+            )
+        if to_state is CardState.CLOSED:
+            # CLOSED ONLY BY THE ZERO-RUNNING LEG (S3 C2 fix r1, v3 §2):
+            # FILLED -> CLOSED is written by the leg writer whose exit,
+            # correction or held count brings running to 0 (`cards.legs`).
+            # A CLOSED from here would close a card still holding shares.
+            raise CardStateError(
+                f"REFUSED card {card_id}: {CardState.CLOSED.value} — this route never closes. "
+                "A card closes only when an exit leg, a correction or a held count brings "
+                "running to 0."
+            )
         store = CardStore()
         store.ensure_schema()
         before = store.state_of(card_id)
-        to_state = CardState(form.get("to", ""))
         filled = None
-        if to_state is FILL_TARGET:
-            # ONE PATH TO FILLED (S1-P3): the same `fill()` the
-            # actual-fill form calls, so the one-click completion happens
-            # here too and a radar card is refused here too. `tids` is
-            # every row it wrote — three on a WATCH manual card.
-            filled = store.fill(
+        tids = [
+            store.transition(
                 card_id,
+                to_state,
                 actor=Actor.YOU,
                 evidence={"via": "aset.sheet"},
                 reason=(form.get("reason") or "").strip() or None,
             )
-            tids = filled.transition_ids
-        else:
-            tids = [
-                store.transition(
-                    card_id,
-                    to_state,
-                    actor=Actor.YOU,
-                    evidence={"via": "aset.sheet"},
-                    reason=(form.get("reason") or "").strip() or None,
-                )
-            ]
+        ]
     except (IllegalTransition, CardStateError, SessionBlocked, DevEntryRefused) as e:
         logger.error("card {} move REFUSED: {}", card_id, e)
         return _render(banner=_failed(str(e)))
@@ -1511,6 +1568,417 @@ async def radar_card_promote(card_id: int):
 @app.post("/radar/card/{card_id}/release")
 async def radar_card_release(card_id: int):
     return await _promote(card_id, False)
+
+
+# ---------------------------------------------------------------------
+# S3 exits C3 — the trade taps (v3 §2 / §3 / §5; R67, R38). One block,
+# directly after `/release` (S-WEB). A route owns no side effect (L40): it
+# parses the form and calls C1 / C2's writers — `AsetStore.mark_filled`
+# (THE fill), `cards.legs.record_exit` / `record_held` / `record_correction`,
+# `CardStore.transition`, the one card-stop function and
+# `CardStore.record_stop_edit` — and the stores' reads, nothing else. Every
+# refusal those writers raise reaches the page VERBATIM with a 4xx: JSON
+# `{"status": "REFUSED", "reason": …}` for the panel's fetch, the sheet's
+# page with the FAILED banner for `source=sheet` (C3-4). The session gate
+# runs first, exactly as the other radar tap routes run it.
+# ---------------------------------------------------------------------
+
+#: Where he tapped — the panel, or the sheet's open-cards list (C3-4).
+S3_TAP_SOURCES = ("panel", "sheet")
+
+
+class _TapInputRefused(ValueError):
+    """A posted field the writers cannot be called with. Nothing written."""
+
+
+def _tap_price(raw: str | None, *, what: str) -> Decimal | None:
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        price = Decimal(raw)
+    except InvalidOperation as e:
+        raise _TapInputRefused(f"REFUSED: {what} {raw!r} is not a price. Nothing written.") from e
+    # S3 C4-06 (L1): a leg price is a finite number > 0 — the `legs.price`
+    # rule `CHECK (price > 0)`, refused here before any writer.
+    if not price.is_finite() or price <= 0:
+        raise _TapInputRefused(f"REFUSED: {what} {raw!r} is not a positive price. Nothing written.")
+    return price
+
+
+def _tap_int(raw: str | None, *, what: str) -> int | None:
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError as e:
+        raise _TapInputRefused(f"REFUSED: {what} {raw!r} is not a whole number. Nothing written.") from e
+
+
+def _tap_price_source(price: Decimal | None, prefill: str) -> tuple[str, str]:
+    """(price_source, flag): the untouched prefill is the poll's price,
+    `estimated` (v3 §3 — a tap with no keystroke); a price he typed or
+    edited is his, `confirmed`."""
+    if price is not None and prefill.strip() and price == Decimal(prefill.strip()):
+        return "last_poll", "estimated"
+    return "typed", "confirmed"
+
+
+def _tap_board_row(store, card_id: int) -> dict | None:
+    """The card's `radar_cards_v` row (its `last_price`, `structural_stop`),
+    or None for a card that is not a radar card. A read."""
+    return next((r for r in store.radar_board_cards(_today_et()) if r["card_id"] == card_id), None)
+
+
+def _tap_reply(source: str, status: int, *, reason: str | None = None, payload: dict | None = None,
+               banner: str = ""):
+    if source == "sheet":
+        if reason is not None:
+            logger.error("card tap REFUSED ({}): {}", status, reason)
+            return HTMLResponse(_render(banner=_failed(reason)), status_code=status)
+        return HTMLResponse(_render(banner=f'<div class="saved">{html.escape(banner)}</div>'))
+    if reason is not None:
+        return _refused(status, reason)
+    return {"status": "ok", **(payload or {})}
+
+
+#: S3 C4 (v3 §7): what a failed note write shows. The DB write has
+#: committed; the note is the one thing missing, said with its retry (L1).
+NOTE_NOT_WRITTEN = "FILLED — trade note NOT written"
+UNIT_NOT_WRITTEN = "leg saved, note unit NOT written"
+
+
+def _note_reason(e: BaseException) -> str:
+    from cobalt.prefill.trade_note import TradeNoteRefused
+
+    known = (TradeNoteRefused, VaultWriteError, SessionBlocked, PrefillConfigError)
+    return str(e) if isinstance(e, known) else f"{type(e).__name__}: {e}"
+
+
+def _fill_note(card_id: int):
+    """The card's trade note at the fill (C4-2), called only after THE fill
+    returned (its transaction committed): `(CardNoteResult, None)` or
+    `(None, failure line)`. Never raises — the card IS FILLED either way;
+    on failure `trade_note_path` is NULL and the line names the retry."""
+    from cobalt.prefill.trade_note import write_card_note
+
+    try:
+        return write_card_note(card_id), None
+    except Exception as e:
+        logger.error("card {}: trade note NOT written after the fill: {}", card_id, e)
+        return None, (f"{NOTE_NOT_WRITTEN}: {_note_reason(e)} · trade_note_path NULL · "
+                      f"retry: cobalt cards trade-note {card_id}")
+
+
+def _note_saved(note) -> str:
+    units = " · ".join(f"{unit} {action}" for unit, action in note.units)
+    return f"trade note {note.action}: {note.relative} · {units}"
+
+
+def _leg_note(card_id: int, leg_id: int, *, closed: bool) -> str | None:
+    """The leg's unit in the card's trade note (C4-3), after the leg
+    writer committed: None, or the notice naming why nothing was written
+    in the vault. Never raises — the leg IS saved."""
+    from cobalt.prefill.trade_note import write_leg_unit
+
+    try:
+        write_leg_unit(card_id, leg_id, closed=closed)
+    except Exception as e:
+        logger.error("card {}: leg {} saved, note unit NOT written: {}", card_id, leg_id, e)
+        return f"{UNIT_NOT_WRITTEN}: {_note_reason(e)} · retry: cobalt cards trade-note {card_id}"
+    return None
+
+
+async def _card_tap(card_id: int, request: Request, gate: str, work):
+    """Run one tap: the dev-entry guard and the session gate FIRST, then
+    `work(form, source) -> (payload, banner)`; every refusal verbatim."""
+    form = await _radar_form(request)
+    source = form.get("source", "").strip() or "panel"
+    if source not in S3_TAP_SOURCES:
+        return _refused(422, f"REFUSED: source {source!r} is not one of {S3_TAP_SOURCES}. Nothing written.")
+    try:
+        _check_entry_allowed()
+        assert_writable(gate, target=str(card_id))
+        payload, banner = work(form, source)
+    except DevEntryRefused as e:
+        return _tap_reply(source, 403, reason=str(e))
+    except (_TapInputRefused, SizingError) as e:
+        return _tap_reply(source, 422, reason=str(e))
+    except InvalidOperation as e:
+        return _tap_reply(source, 422, reason=f"REFUSED: not a number ({e!r}). Nothing written.")
+    except (CardStateError, IllegalTransition, SessionBlocked) as e:
+        return _tap_reply(source, 409, reason=str(e))
+    except ConfigError as e:
+        return _tap_reply(source, 503, reason=str(e))
+    return _tap_reply(source, 200, payload={"card_id": card_id, **payload}, banner=banner)
+
+
+@app.post("/radar/card/{card_id}/triggered")
+async def radar_card_triggered(card_id: int, request: Request):
+    """ARMED -> TRIGGERED, his tap (v3 §2; O7 A). Evidence: the card's
+    `last_price` and its bar time — no column stores that time (X6-R), so
+    `last_price_at` is null, said, never guessed."""
+    def work(form, source):
+        store = CardStore()
+        row = _tap_board_row(store, card_id)
+        last = None if row is None else row["last_price"]
+        tid = store.transition(
+            card_id, CardState.TRIGGERED, actor=Actor.YOU,
+            evidence={"via": f"{source}.triggered", "last_price": None if last is None else str(last),
+                      "last_price_at": None},
+        )
+        return ({"state": CardState.TRIGGERED.value, "transition_id": tid},
+                f"card {card_id}: TRIGGERED (card_transitions id {tid})")
+    return await _card_tap(card_id, request, "aset.radar.triggered", work)
+
+
+@app.post("/radar/card/{card_id}/fill")
+async def radar_card_fill(card_id: int, request: Request):
+    """FILLED @ [price] [shares] through THE fill (`mark_filled`, S-FILL).
+    The untouched prefill → `last_poll` / `estimated`; a typed or edited
+    price → `typed` / `confirmed`; no price → the fill's own refusal."""
+    def work(form, source):
+        price = _tap_price(form.get("price"), what="the fill price")
+        shares = _tap_int(form.get("shares"), what="the share count")
+        price_source, flag = _tap_price_source(price, form.get("prefill", ""))
+        outcome = AsetStore().mark_filled(
+            card_id, price=price, shares=shares, flag=flag, price_source=price_source,
+            price_asof=None, source=source,
+        )
+        payload = {"state": CardState.FILLED.value, "leg_id": outcome.leg_id, "price_source": price_source,
+                   "flag": flag, "pick_recorded": outcome.result.pick_recorded}
+        notices = []
+        if outcome.recompute.drift_warned is None:
+            notices.append(DRIFT_NOT_EVALUATED)
+        if not outcome.result.pick_recorded:
+            notices.append(f"pick not recorded ({outcome.result.pick_error})")
+        # S3 C4: the trade note, after THE fill committed (never inside it).
+        note, note_failed = _fill_note(card_id)
+        payload["trade_note_path"] = None if note is None else note.relative
+        if note_failed:
+            notices.insert(0, note_failed)
+        if notices:
+            payload["notice"] = " · ".join(notices)
+        return payload, " · ".join([f"card {card_id}: FILLED ({flag}, entry leg {outcome.leg_id})", *notices])
+    return await _card_tap(card_id, request, "aset.radar.fill", work)
+
+
+@app.post("/radar/card/{card_id}/pass")
+async def radar_card_pass(card_id: int, request: Request):
+    """TRIGGERED -> PASSED, his tap (v3 §2)."""
+    def work(form, source):
+        tid = CardStore().transition(card_id, CardState.PASSED, actor=Actor.YOU,
+                                     evidence={"via": f"{source}.pass"})
+        return ({"state": CardState.PASSED.value, "transition_id": tid},
+                f"card {card_id}: PASSED (card_transitions id {tid})")
+    return await _card_tap(card_id, request, "aset.radar.pass", work)
+
+
+@app.post("/radar/card/{card_id}/exit")
+async def radar_card_exit(card_id: int, request: Request):
+    """½ · ⅓ · flat · typed through `legs.record_exit` (R67). The tap posts
+    the `running_before` its screen rendered. Flat commits `confirmed` only
+    with his ✓ (`confirm=1`) — its price then his (`typed`); an untouched
+    flat stays `estimated` and is listed for correction (v3 §3)."""
+    def work(form, source):
+        from cobalt.cards import legs
+        from cobalt.session import clock as session_clock_mod
+
+        preset = form.get("preset", "").strip()
+        price = _tap_price(form.get("price"), what="the exit price")
+        if price is None:
+            raise _TapInputRefused(
+                f"REFUSED card {card_id}: an exit with no price. Type the price you took. Nothing written."
+            )
+        running_before = _tap_int(form.get("running_before"), what="running_before")
+        if running_before is None:
+            raise _TapInputRefused(
+                f"REFUSED card {card_id}: the tap carries no running_before — reload the card. Nothing written."
+            )
+        prefill = form.get("prefill", "")
+        price_source, flag = _tap_price_source(price, prefill)
+        if preset == "flat":
+            confirmed = form.get("confirm", "").strip() == "1"
+            flag = "confirmed" if confirmed else "estimated"
+            if confirmed:
+                price_source = "typed"
+        result = legs.record_exit(
+            card_id, preset=preset, shares=_tap_int(form.get("shares"), what="the typed share count"),
+            price=price, price_source=price_source, price_asof=None, flag=flag, source=source,
+            running_before=running_before, now=session_clock_mod.now_utc(),
+        )
+        payload = {"leg_id": result.leg_id, "shares": result.shares, "running_before": result.running_before,
+                   "running_after": result.running_after, "closed": result.closed,
+                   "transition_id": result.transition_id, "flag": flag}
+        banner = (f"card {card_id}: exit {preset} {result.shares} sh @ {price} ({flag}) · running "
+                  f"{result.running_before} → {result.running_after}")
+        if result.closed:
+            banner += " · CLOSED"
+        notices = []
+        if flag == "estimated":
+            notices.append("estimated — listed for correction")
+        # S3 C4: the leg's unit in the trade note, after the commit.
+        unit_failed = _leg_note(card_id, result.leg_id, closed=result.closed)
+        if unit_failed:
+            notices.append(unit_failed)
+        if notices:
+            payload["notice"] = " · ".join(notices)
+            banner += " · " + " · ".join(notices)
+        return payload, banner
+    return await _card_tap(card_id, request, "aset.radar.exit", work)
+
+
+@app.post("/radar/card/{card_id}/held")
+async def radar_card_held(card_id: int, request: Request):
+    """HOLDING X — his held count through `legs.record_held` (R67 (1), S-HELD)."""
+    def work(form, source):
+        from cobalt.cards import legs
+        from cobalt.session import clock as session_clock_mod
+
+        held = _tap_int(form.get("held"), what="the held count")
+        if held is None:
+            raise _TapInputRefused(f"REFUSED card {card_id}: HOLDING names the shares you hold. Nothing written.")
+        result = legs.record_held(card_id, held, source=source, now=session_clock_mod.now_utc())
+        payload = {"leg_id": result.leg_id, "corrects": result.corrects, "running_after": result.running_after,
+                   "closed": result.closed, "transition_id": result.transition_id}
+        banner = f"card {card_id}: holding {held} · running {result.running_after}" + (
+            " · CLOSED" if result.closed else "")
+        # S3 C4: the held count rewrites the entry leg's unit (`leg-0`).
+        unit_failed = _leg_note(card_id, result.leg_id, closed=result.closed)
+        if unit_failed:
+            payload["notice"] = unit_failed
+            banner += f" · {unit_failed}"
+        return payload, banner
+    return await _card_tap(card_id, request, "aset.radar.held", work)
+
+
+@app.post("/radar/card/{card_id}/correct")
+async def radar_card_correct(card_id: int, request: Request):
+    """A correction of one leg through `legs.record_correction` (R67): a
+    typed price names its source (`typed`, L57) and is `confirmed`. The
+    URL's card binds the leg (fix r1 F2): a leg that is not one of its
+    current legs is refused before the writer — a read, rolled back."""
+    def work(form, source):
+        from cobalt.cards import legs
+        from cobalt.session import clock as session_clock_mod
+
+        leg_id = _tap_int(form.get("leg_id"), what="leg_id")
+        if leg_id is None:
+            raise _TapInputRefused(f"REFUSED card {card_id}: a correction names its leg. Nothing written.")
+        if leg_id not in {leg["id"] for leg in legs.read_position(card_id).legs}:
+            raise _TapInputRefused(
+                f"REFUSED card {card_id}: leg {leg_id} is not a current leg of card {card_id} — reload the card. "
+                "Nothing written."
+            )
+        price = _tap_price(form.get("price"), what="the corrected price")
+        result = legs.record_correction(
+            leg_id, price=price, price_source=None if price is None else "typed",
+            shares=_tap_int(form.get("shares"), what="the corrected share count"), source=source,
+            now=session_clock_mod.now_utc(),
+        )
+        payload = {"leg_id": result.leg_id, "corrects": result.corrects, "running_after": result.running_after,
+                   "closed": result.closed, "transition_id": result.transition_id}
+        banner = (f"card {card_id}: leg {result.corrects} corrected by leg {result.leg_id} · running "
+                  f"{result.running_after}" + (" · CLOSED" if result.closed else ""))
+        # S3 C4: a correction rewrites the SAME `leg-<seq>` unit (v3 §7).
+        unit_failed = _leg_note(card_id, result.leg_id, closed=result.closed)
+        if unit_failed:
+            payload["notice"] = unit_failed
+            banner += f" · {unit_failed}"
+        return payload, banner
+    return await _card_tap(card_id, request, "aset.radar.correct", work)
+
+
+@app.post("/radar/card/{card_id}/stop")
+async def radar_card_stop(card_id: int, request: Request):
+    """His stop edit (R38: his stop is the plan until he resets it), through
+    the one card-stop function — `record_stop_edit(kind='edit')`."""
+    def work(form, source):
+        from cobalt.aset import card_stop
+
+        edit = card_stop.set_card_stop(card_id, form.get("to_stop", ""))
+        return ({"stop_edit_id": edit.stop_edit_id, "from_stop": str(edit.from_stop), "to_stop": str(edit.to_stop)},
+                f"card {card_id}: stop {edit.from_stop} → {edit.to_stop} (YOURS)")
+    return await _card_tap(card_id, request, "aset.radar.stop", work)
+
+
+@app.post("/radar/card/{card_id}/stop/reset")
+async def radar_card_stop_reset(card_id: int, request: Request):
+    """↺ — the stop back to Cobalt's structural stop, `kind='reset'` (R38,
+    v3 §5 [F-11]). A card with no structural stop (a manual card) is not
+    offered ↺ (O19 A); posted anyway, the writer refuses it by name."""
+    def work(form, source):
+        store = CardStore()
+        current = next((c for c in store.open_cards() if c["id"] == card_id), None)
+        if current is None:
+            raise CardStateError(f"card {card_id} is not open — its stop is settled.")
+        row = _tap_board_row(store, card_id)
+        structural = None if row is None else row["structural_stop"]
+        to_stop = current["stop"] if structural is None else structural
+        edit_id = store.record_stop_edit(card_id, from_stop=current["stop"], to_stop=to_stop, kind="reset")
+        return ({"stop_edit_id": edit_id, "from_stop": str(current["stop"]), "to_stop": str(to_stop)},
+                f"card {card_id}: stop {current['stop']} → {to_stop} (↺ Cobalt's)")
+    return await _card_tap(card_id, request, "aset.radar.stop_reset", work)
+
+
+def _sheet_in_trade(card: dict) -> str:
+    """C3-4: a FILLED MANUAL card is not on `/radar` (X-M: `radar_cards_v`
+    is `origin = 'radar'`), so its IN-TRADE controls render here, on the
+    sheet's open-cards list, posting to the SAME routes with
+    `source=sheet` — never a second set of writers. A manual card has no
+    structural stop: no ↺ (O19 A), gap `NULL — no Cobalt stop`. No last
+    price is read here, so every price field is empty and he types."""
+    from .radar_panel import read_in_trade, render_in_trade, render_stop_block
+
+    if card.get("state") != CardState.FILLED.value or card.get("origin") != Origin.MANUAL.value:
+        return ""
+    try:
+        position = read_in_trade(card["id"])
+    except Exception as e:  # noqa: BLE001 — said on the card
+        # fix r1 F4: the stop line stays — his stop, `Cobalt stop NULL`, no ↺
+        # — as the panel's failed read keeps it (the one stop renderer).
+        return _failed(f"card {card['id']}: position unreadable: {type(e).__name__}: {e}") + render_stop_block(
+            card["id"], stop=card["stop"], structural_stop=None, owner=None, source="sheet",
+        )
+    return render_in_trade(
+        card["id"], position, direction=str(card["direction"]), stop=card["stop"], structural_stop=None,
+        last=None, source="sheet",
+    )
+
+
+def _sheet_closed_estimated(store) -> str:
+    """fix r1 F3 (v3 §3: an untouched flat "stays `estimated` and is listed
+    for correction"): each MANUAL card filled today (ET) that is now
+    CLOSED, with its `estimated` legs and their `✓ correct` forms posting
+    to `/radar/card/{id}/correct` with `source=sheet` — the SAME route, the
+    one leg-row renderer. Read through `filled_with_picks` (a read); a card
+    with no estimated leg renders nothing; a failed read is said on that
+    card."""
+    from .radar_panel import read_in_trade, render_estimated_legs
+
+    try:
+        filled = store.filled_with_picks(_today_et())
+    except Exception as e:  # noqa: BLE001 — said on the sheet
+        return _failed(f"closed manual cards unreadable: {type(e).__name__}: {e}")
+    seen: set[int] = set()
+    blocks = []
+    for row in filled:
+        card_id = row["card_id"]
+        if card_id in seen or row.get("state") != CardState.CLOSED.value or row.get("origin") != Origin.MANUAL.value:
+            continue
+        seen.add(card_id)
+        head = (f'<div class="top"><span class="tk">{html.escape(str(row["ticker"]))}</span>'
+                f'<span class="st st-CLOSED">CLOSED</span><span class="muted">#{card_id} · estimated — '
+                "confirm the price</span></div>")
+        try:
+            legs_html = render_estimated_legs(card_id, read_in_trade(card_id), structural_stop=None, source="sheet")
+        except Exception as e:  # noqa: BLE001 — said on the card
+            legs_html = (f'<div class="failed">FAILED · position unreadable: '
+                         f"{html.escape(f'{type(e).__name__}: {e}')}</div>")
+        if legs_html:
+            blocks.append(f'<div class="crow">{head}{legs_html}</div>')
+    return "".join(blocks)
 
 
 # ---------------------------------------------------------------------------

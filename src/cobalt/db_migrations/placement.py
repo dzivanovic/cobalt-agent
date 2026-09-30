@@ -103,6 +103,9 @@ CREATED_TABLES: dict[str, Side] = {
     "drc_events": Side.USER,
     # db_migrations/0020_drc_build_kinds.sql — DRC D3: no table; it widens
     # `drc_rows.kind` (placed above, USER) by the build's two kinds.
+    # db_migrations/0021_legs.sql — S3 exits M1: his fills and exits (L32).
+    # Declared USER by ADR-0008 D2; it leaves DECLARED now that it is built.
+    "legs": Side.USER,
 }
 
 #: VIEWS created by database-wide migrations. On a side like any table
@@ -115,6 +118,8 @@ CREATED_VIEWS: dict[str, Side] = {
     # 0007: the card-joined board, and tap-vs-shadow agreement
     "radar_cards_v": Side.USER,
     "shadow_agreement_v": Side.USER,
+    # 0021: the current leg row per (card, seq)
+    "legs_current_v": Side.USER,
 }
 
 #: Declared by ADR-0008 D2 before they are built, so the first migration
@@ -123,9 +128,9 @@ CREATED_VIEWS: dict[str, Side] = {
 DECLARED_TABLES: dict[str, Side] = {
     # S3 — named now so the placement test knows them on sight. `missed`
     # left this list when S2-P4's 0009 built it, `drc_rows` when DRC D1's
-    # 0016 did. `fills` stays declared and unbuilt (DRC D1 stores its
-    # executions in `drc_fills`, v2 [F-35]).
-    "legs": Side.USER,
+    # 0016 did, `legs` when S3's 0021 did. `fills` stays declared and
+    # unbuilt (DRC D1 stores its executions in `drc_fills`, v2 [F-35];
+    # S3 exits v3 O16, default).
     "fills": Side.USER,
     "prediction_records": Side.USER,
     # S2-P2 — taxonomy anatomy instances (regime, range, gap, extension,

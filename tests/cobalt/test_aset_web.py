@@ -178,13 +178,44 @@ class TestStopSideAndDistanceRejectAtWebLayer:
 
 
 class TestAbsurdFillRejectAtWebLayer:
-    def test_replay_d2_absurd_fill_refused_no_note_write(self):
+    def test_replay_d2_absurd_fill_refused_no_note_write(self, monkeypatch):
         # Real 2026-08-31 10:00:xx cards: a 2518.91 fill against an NVDA
         # card with entry 218.595 was persisted twice before the real
         # fill (218.91) came in. Must refuse outright now.
+        #
+        # S3 C1: the guard runs inside THE fill (`mark_filled`, on the card
+        # row read under its lock, rebuilt by `from_card`), so the store
+        # here runs the real engine on that card's row and nothing else.
+        from decimal import Decimal
+
+        from cobalt.aset.engine import compute_fill_recompute
+        from cobalt.aset.models import SizingResult
+
+        row = {
+            "ticker": "TEST", "grade": "B", "direction": "long", "sheet_mode": "full",
+            "risk_budget": Decimal("60"), "entry": Decimal("220.0000"), "stop": Decimal("218.0000"),
+            "per_share_risk": Decimal("2.0000"), "shares": 30, "used_risk": Decimal("60.00"),
+            "warnings": [], "last_price": None, "price_source": None,
+        }
+
+        class Store:
+            def __init__(self, db_name=None):
+                pass
+
+            def ensure_schema(self):
+                pass
+
+            def mark_filled(self, row_id, *, price, **kwargs):
+                compute_fill_recompute(SizingResult.from_card(row), price, Decimal("5"),
+                                       drift_warning_pct=Decimal("20"))
+                raise AssertionError("the guard must refuse first")
+
+        monkeypatch.setattr(web_module, "AsetStore", Store)
         form = dict(
             BASE_SIZE_FORM,
             actual_fill="2518.91",
+            fill_shares="30",
+            card_row_id="4242",
             orig_timestamp="2026-08-31T09:58:00-04:00",
         )
         r = client.post("/fill", data=form)
@@ -217,6 +248,7 @@ class TestAbsurdFillRejectAtWebLayer:
         form = dict(
             BASE_SIZE_FORM,
             actual_fill="218.91",
+            fill_shares="30",
             orig_timestamp="2026-08-31T09:58:00-04:00",
             card_row_id="4242",
         )
@@ -532,13 +564,23 @@ class TestPickNotRecordedBanner:
                           pick_error="UndefinedTable: relation \"picks\" does not exist")
 
     def _fill_form(self):
-        return dict(BASE_SIZE_FORM, actual_fill="218.91",
+        return dict(BASE_SIZE_FORM, actual_fill="218.91", fill_shares="30",
                     orig_timestamp="2026-08-31T09:58:00-04:00", card_row_id="4242")
 
     def _stub_fill_route(self, monkeypatch, recorded):
+        from decimal import Decimal
         from types import SimpleNamespace
 
+        from cobalt.aset.engine import compute_fill_recompute, compute_sizing
+        from cobalt.aset.models import Direction, Grade, SheetMode, SizingInput
+        from cobalt.aset.store import FillOutcome
+
         result = self._result(recorded)
+        original = compute_sizing(
+            SizingInput(ticker="TEST", grade=Grade.B, direction=Direction.LONG, sheet_mode=SheetMode.FULL,
+                        risk_dollars=Decimal("60"), entry=Decimal("220.0000"), stop=Decimal("218.0000")),
+            [Grade.A, Grade.B], Decimal("10"),
+        )
 
         class Store:
             def __init__(self, db_name=None):
@@ -547,8 +589,13 @@ class TestPickNotRecordedBanner:
             def ensure_schema(self):
                 pass
 
-            def mark_filled(self, row_id, fill):
-                return result
+            def mark_filled(self, row_id, **kwargs):
+                return FillOutcome(
+                    result=result,
+                    recompute=compute_fill_recompute(original, kwargs["price"], Decimal("5"),
+                                                     drift_warning_pct=Decimal("20")),
+                    leg_id=1, sheet_mismatch=False,
+                )
 
         monkeypatch.setattr(web_module, "AsetStore", Store)
         monkeypatch.setattr(web_module, "save_fill_update",
@@ -565,9 +612,10 @@ class TestPickNotRecordedBanner:
             assert 'class="failed"' in r.text and "UndefinedTable" in r.text
             assert "cobalt cards picks" in r.text
 
-    @pytest.mark.parametrize("recorded", [True, False])
-    def test_card_move_fill_route(self, monkeypatch, recorded):
-        result = self._result(recorded)
+    def test_card_move_no_longer_fills(self, monkeypatch):
+        """S3 C1 (v3 §2 [F-22]): the move route never fills — a FILLED
+        with no price is the radar fill that recorded no price (F8). The
+        one HTTP fill path is /fill, through `mark_filled`."""
 
         class Cards:
             def ensure_schema(self):
@@ -579,14 +627,13 @@ class TestPickNotRecordedBanner:
                 return CardState.WATCH
 
             def fill(self, card_id, **kwargs):
-                return result
+                raise AssertionError("the move route must never fill")
 
         monkeypatch.setattr(web_module, "CardStore", Cards)
         monkeypatch.setattr(web_module, "_open_cards_section", lambda: "")
         r = client.post("/card/7/move", data={"to": "FILLED"})
-        assert "card_transitions id(s) 11, 12, 13" in r.text
-        assert "inserted 2 missing transition row(s)" in r.text
-        assert ("pick not recorded" in r.text) is (not recorded)
+        assert "FAILED" in r.text and "this route never fills" in r.text and "POST /fill" in r.text
+        assert "the move route must never fill" not in r.text
 
 
 class TestDayModeBannerStage:

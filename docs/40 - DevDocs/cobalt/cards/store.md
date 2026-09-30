@@ -37,7 +37,10 @@ name — the correct answer.
 state change. It lands in `card_stop_edits`, and the *next* transition
 folds every unfolded edit into its `evidence` JSON under `stop_edits`,
 then marks them `folded_into` so one edit is never counted twice.
-Refused unless the card is in `STOP_EDITABLE` (`WATCH`, `FILLED`).
+Refused unless the card is in `STOP_EDITABLE` (`WATCH`, `FILLED`). In
+FILLED it prices open risk on the running shares from the fill (S3 C2-6,
+below); a `reset` goes back to Cobalt's `structural_stop`; `stop_owner`
+derives whose stop it is.
 
 ## Backfill
 `backfill(today=...)` classifies every state-less card: `status='FILLED'`
@@ -54,7 +57,7 @@ ended and does not know how it got there.
 ## Key methods
 `ensure_schema` · `state_of` · `history` · `open_cards` ·
 `state_distribution` · `transition` · `create_state` ·
-`record_stop_edit` · `backfill`
+`record_stop_edit` · `stop_owner` · `backfill`
 
 ## Who calls it
 `aset/store.py` (`save` creates the genesis row in its own transaction;
@@ -144,3 +147,7 @@ ET date, joined to the card and left-joined to `picks` on `transition_id`.
   - `score = card_score(locked conviction, this scan's proximity, suppressed)`.
 
   A stale scan therefore leaves NULL beside NULL, with the stale reason (X3). A fresh scan scores the tap's conviction on this scan's proximity, so the row never holds an old-price score beside a new proximity (the R45 race). Conviction and the proposed key stay the tap route's.
+
+**2026-09-28 — S3 exits C1: `fill(…, conn=None)`.** `fill()` is now the state-machine half of THE fill (`AsetStore.mark_filled`). Given a `conn` it follows `transition()`'s rule: it neither opens, commits, rolls back nor closes; it reads the card's state and origin on that connection (the caller already holds the row lock) and runs every hop and the pick savepoint there, so the FILLED transition, the entry leg and the fill cache commit together. Without a `conn` it owns its transaction, as before. Its callers outside the store are gone: `/card/{id}/move` and `cobalt cards move … FILLED` now refuse naming the fill route (a FILLED with no price was F8's hole). The one-click manual walk and the radar strict path (O7 default A) are unchanged. `record_stop_edit`'s FILLED path (`in_trade_shares=shares`, per-share risk from the planned `entry`) is left UNCHANGED for C2.
+
+**2026-09-28 — S3 exits C2-6: the FILLED stop edit (v3 §5, R67, R38).** `record_stop_edit(card_id, *, from_stop, to_stop, actor=YOU, now=None, kind='edit')` is ONE transaction: the session gate first, then one connection with `autocommit = False`, `SELECT entry, direction, risk_budget, state, structural_stop, actual_fill FROM aset_sizings WHERE id = %s FOR UPDATE`, the `STOP_EDITABLE` check on the state read under that lock, the `card_stop_edits` row and the card UPDATE, one commit — the lock is held to the commit (X21: before C2 the autocommit connection released it the moment the SELECT ran). In FILLED, open risk is priced on the shares he still HOLDS (`legs.running_shares`, the one running read) at the per-share risk from HIS FILL — `|entry-leg price − new stop|` (no entry leg: `actual_fill`; neither: the planned `entry`) — side-checked against that price through `engine.recompute_for_stop` (unchanged; it is passed the fill price as `entry`). The FILLED UPDATE writes `stop`, `per_share_risk`, `used_risk` and never `shares` (the planned count stays the plan). WATCH behaviour is unchanged (sized: `shares` resized on the budget; unsized radar: `stop` and `per_share_risk` only). `kind = 'reset'` (`STOP_RESET`) only when the caller passes it AND `to_stop` equals the card's `structural_stop`, else refused naming the structural stop; a card with NULL `structural_stop` (manual) has no Cobalt stop and the reset is refused (O19 A). A typed stop that equals `structural_stop` stays `kind = 'edit'`. An `edit` row leaves `kind` to its column default (0021), so the INSERT is the one it always was. `stop_owner(card_id)` (read) derives the owner: `yours` when the last `card_stop_edits` row has actor `you` and kind `edit`, else `cobalt`. Constants: `STOP_EDIT`, `STOP_RESET`, `STOP_EDIT_KINDS`, `STOP_OWNER_YOURS`, `STOP_OWNER_COBALT`. The FILLED path and `stop_owner` read tables of `0021` (`legs_current_v`, `card_stop_edits.kind`).

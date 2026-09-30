@@ -2,6 +2,8 @@
 
     cobalt cards state <id>
     cobalt cards history <id>
+    cobalt cards legs <id>
+    cobalt cards trade-note <id>
     cobalt cards move <id> --to STATE [--actor you|cobalt] [--reason ...]
     cobalt cards backfill [--dry-run]
     cobalt cards expire [--at ISO8601] [--dry-run]
@@ -20,8 +22,8 @@ the clock rather than sleeping until 16:05.
 from __future__ import annotations
 
 import argparse
-import sys
 from datetime import date, datetime
+from decimal import Decimal
 
 from cobalt import env
 from cobalt.session.clock import ET, now_utc, session_clock
@@ -72,42 +74,89 @@ def cmd_history(args: argparse.Namespace) -> None:
 
 
 def cmd_move(args: argparse.Namespace) -> None:
+    to_state = CardState(args.to)
+    if to_state is FILL_TARGET:
+        # ONE PATH TO FILLED (S3 C1, v3 §2 [F-22]): a fill carries his
+        # price and shares and lands with its entry leg in one transaction
+        # (`AsetStore.mark_filled`). This command has neither, so it never
+        # fills — refused before anything is read or written.
+        raise SystemExit(
+            f"REFUSED card {args.card_id}: `cobalt cards move … {FILL_TARGET.value}` never fills. "
+            "A fill is written only by the fill — the sheet's POST /fill with the price and "
+            "shares the broker filled."
+        )
+    if to_state is CardState.CLOSED:
+        # CLOSED ONLY BY THE ZERO-RUNNING LEG (S3 C2 fix r1, v3 §2): the leg
+        # writer that brings running to 0 writes FILLED -> CLOSED in its own
+        # transaction (`cards.legs`). Refused before anything is read.
+        raise SystemExit(
+            f"REFUSED card {args.card_id}: cobalt cards move … {CardState.CLOSED.value} never closes. "
+            "A card closes only when an exit leg, a correction or a held count brings running to 0."
+        )
     store = _store()
     before = store.state_of(args.card_id)
-    to_state = CardState(args.to)
-    # ONE PATH TO FILLED (S1-P3) — the CLI takes the same route the sheet
-    # and the actual-fill form take, so a manual card gets its missing
-    # rows here too and a radar card is refused here too.
-    filled = None
-    if to_state is FILL_TARGET:
-        filled = store.fill(
-            args.card_id,
-            actor=Actor(args.actor),
-            reason=args.reason,
-            evidence={"via": "cobalt cards move"},
-        )
-        tids = filled.transition_ids
-    else:
-        tids = [
-            store.transition(
-                args.card_id,
-                to_state,
-                actor=Actor(args.actor),
-                reason=args.reason,
-                evidence={"via": "cobalt cards move"},
-            )
-        ]
-    tid = ", ".join(str(i) for i in tids)
+    tid = store.transition(
+        args.card_id,
+        to_state,
+        actor=Actor(args.actor),
+        reason=args.reason,
+        evidence={"via": "cobalt cards move"},
+    )
     print(f"card {args.card_id}: {before} -> {args.to}  (card_transitions id {tid})")
-    if filled is not None and not filled.pick_recorded:
-        # The fill COMMITTED (R2); the pick did not. Exit 1 so a script
-        # cannot mistake the gap for a clean fill.
+
+
+def cmd_legs(args: argparse.Namespace) -> None:
+    """S3 C2-7: one card's CURRENT legs, THE running read and its basis,
+    realized R (`realized_r.1`) and whether it is provisional, and who owns
+    the stop. READ ONLY: no schema call, nothing written — the running read
+    takes the card lock on a transaction that is rolled back."""
+    from .legs import LegRefused, read_position
+
+    try:
+        pos = read_position(args.card_id)
+    except LegRefused as refused:
+        raise SystemExit(str(refused))
+    card = pos.card
+    print(f"card {card['id']}  {card['ticker']}  {card['direction']}  {card['state']}  "
+          f"stop {card['stop']}  cobalt stop {card['structural_stop'] if card['structural_stop'] is not None else '—'}")
+    print(f"{'id':>7} {'seq':>3} {'kind':<5} {'shares':>6} {'price':>10} {'flag':<9} {'source':<11} "
+          f"{'preset':<6} {'run_before':>10} {'stop':>10} {'corrects':>8} {'held':>5}")
+    for leg in pos.legs:
         print(
-            f"PICK NOT RECORDED for card {args.card_id}: {filled.pick_error} — the fill "
-            "stands; `cobalt cards picks` reports this card MISSING.",
-            file=sys.stderr,
+            f"{leg['id']:>7} {leg['seq']:>3} {leg['kind']:<5} {leg['shares']:>6} {leg['price']:>10} "
+            f"{leg['flag']:<9} {leg['source']:<11} {leg['preset'] or '—':<6} {leg['running_before']:>10} "
+            f"{leg['stop_in_force']:>10} {leg['corrects'] or '—':>8} "
+            f"{'—' if leg['held_stated'] is None else leg['held_stated']:>5}"
         )
-        raise SystemExit(1)
+    print(f"running: {pos.running.shares} (basis: {pos.running.basis})")
+    r = pos.realized
+    figure = r.reason if r.value is None else f"{r.value.quantize(Decimal('0.01'))}"
+    print(f"realized R: {figure} {'provisional' if r.provisional else 'final'} [{r.function_id}]")
+    print(f"stop owner: {CardStore().stop_owner(args.card_id)}")
+
+
+def cmd_trade_note(args: argparse.Namespace) -> None:
+    """S3 C4-4: re-write one FILLED or CLOSED card's trade note — the SAME
+    writer as the fill (`upsert_trade_note`, create or update) and one
+    `upsert_unit` per current leg seq; sets `trade_note_path`. Prints the
+    path and each unit's action. A refusal (`market_reset`, a card not
+    FILLED / CLOSED, a path another card holds) exits non-zero, verbatim;
+    any failure after the gate leaves `trade_note_path` NULL (L1)."""
+    from cobalt.prefill.trade_note import write_card_note
+    from cobalt.session import SessionBlocked
+
+    try:
+        note = write_card_note(args.card_id, retry=True)
+    except SessionBlocked as blocked:
+        raise SystemExit(f"REFUSED card {args.card_id}: {blocked} Nothing written.")
+    except Exception as failed:
+        raise SystemExit(
+            f"FAILED card {args.card_id}: trade note NOT written: {failed} — trade_note_path NULL"
+        )
+    print(f"card {args.card_id}: trade note {note.action}: {note.path}")
+    for unit, action in note.units:
+        print(f"  {unit}: {action}")
+    print(f"trade_note_path: {note.relative}")
 
 
 def cmd_picks(args: argparse.Namespace) -> None:
@@ -199,6 +248,19 @@ def add_parser(sub) -> None:
     history = csub.add_parser("history", help="Every transition of one card.")
     history.add_argument("card_id", type=int)
     history.set_defaults(func=cmd_history)
+
+    legs = csub.add_parser(
+        "legs", help="One card's current legs, running (and its basis), realized R, stop owner. Read only."
+    )
+    legs.add_argument("card_id", type=int)
+    legs.set_defaults(func=cmd_legs)
+
+    trade_note = csub.add_parser(
+        "trade-note",
+        help="Re-write a FILLED or CLOSED card's trade note and one unit per current leg; sets trade_note_path.",
+    )
+    trade_note.add_argument("card_id", type=int)
+    trade_note.set_defaults(func=cmd_trade_note)
 
     move = csub.add_parser("move", help="Move a card through a legal edge.")
     move.add_argument("card_id", type=int)

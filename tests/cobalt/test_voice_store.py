@@ -54,8 +54,10 @@ def _code(path) -> str:
 
 def test_both_files_exist_and_are_registered_last_and_first():
     assert SQL.exists() and ROLLBACK.exists()
-    assert FORWARD[-4] == SQL and REVERSE[3] == ROLLBACK
+    # DRC's 0018–0020 and S3 exits C1's 0021 now follow it.
+    assert FORWARD[-5] == SQL and REVERSE[4] == ROLLBACK
     assert [p.name for p in _rollback_paths("0015")] == [
+        "0021_legs.rollback.sql",
         "0020_drc_build_kinds.rollback.sql",
         "0019_drc_events.rollback.sql",
         "0018_drc_stated_books.rollback.sql", "0017_voice_turns.rollback.sql",

@@ -18,8 +18,9 @@ the data-model ADR; see the note in 0001.
 """
 
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 from loguru import logger
 
 from cobalt import db, env
@@ -28,7 +29,19 @@ from cobalt.session import clock as session_clock_mod
 from cobalt.session import session_clock
 from .models import FillRecompute, SizingResult
 
+if TYPE_CHECKING:  # `cobalt.cards` imports this module (the import cycle)
+    from cobalt.cards.models import FillResult
+
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+
+
+class FillOutcome(NamedTuple):
+    """What THE fill (`AsetStore.mark_filled`) committed, in one transaction."""
+
+    result: "FillResult"        # the FILLED transition ids + the pick outcome
+    recompute: FillRecompute    # the cache figures, the P in force, whether it warned
+    leg_id: int                 # the entry leg (`"user".legs`, seq 0)
+    sheet_mismatch: bool        # recorded on the leg, never a refusal
 
 
 class AsetStore:
@@ -183,78 +196,263 @@ class AsetStore:
         return session_clock().to_et(ts).date()
 
     def mark_filled(
-        self, row_id: int, fill: "FillRecompute", *, now: Optional[datetime] = None
-    ) -> "FillResult":
-        """Fill-recompute persists as an UPDATE to the card row it
-        belongs to (2026-09-03, LAW L28 step 3).
+        self,
+        row_id: int,
+        *,
+        price: Optional[Decimal],
+        shares: Optional[int],
+        flag: str,
+        price_source: str,
+        price_asof: Optional[datetime],
+        source: str,
+        now: Optional[datetime] = None,
+        drift_settings=None,
+    ) -> FillOutcome:
+        """THE FILL (S3 exits v3 §2 [F-22]; L3). `/fill`, the panel (C3)
+        and every later caller fill a card through this and nothing else.
 
-        Before this, the recompute wrote a note block and NOTHING to
-        Postgres — the 09-03 forensics found the 10:02:36 TSLA FILL
-        UPDATE had no DB row at all, which is why the DB could not be
-        used to rebuild a note and could not answer "how many cards
-        became trades". Fail-loud: a row id that matches nothing raises
-        rather than silently updating zero rows."""
-        # F7 (S1-P2): a fill is a STATE TRANSITION and it goes through
-        # the state machine like every other move — gates, ledger row,
-        # evidence, session stamp. `status` is NO LONGER WRITTEN here
-        # (the column stays readable; see migrations/0006). The figures
-        # below are the fill's own numbers, which belong on the card row,
-        # not in the transition.
-        #
-        # S1-P3: it calls `CardStore.fill()`, not `transition()`, so the
-        # actual-fill form and the FILLED button on the open-cards list
-        # take the SAME path — including the one-click completion on a
-        # manual card. Two ways to fill a card that disagreed about what
-        # a fill requires would be exactly the second write path the
-        # one-path rule forbids.
-        #
-        # S2-P4 (Astra R1-5): the fill's `FillResult` is RETURNED, not
-        # dropped — the sheet renders "pick not recorded" from it. A pick
-        # gap never stops the fill figures below from persisting.
+        ONE CONNECTION, ONE TRANSACTION (`[R2F-03]`: `db.connect` opens
+        autocommit, so it is switched off here, as `transition()` does):
+
+          1. the card row, `SELECT … FOR UPDATE` — the lock `transition()`
+             takes; everything below reads the card as locked;
+          2. `SizingResult.from_card(row)` — the only rebuild — and
+             `compute_fill_recompute` at `price`, with the drift P in force
+             (`cobalt.settings.fills`; None = not evaluated, bannered);
+          3. `CardStore.fill(conn=…)` — the FILLED transition(s) and the
+             pick, on this transaction;
+          4. `legs.insert_entry_leg` — his shares at his price, the stop in
+             force (the card's stop read under the lock), today's day-mode
+             attestation and whether it matched (O18 default: against
+             today's day mode, never refusing);
+          5. the fill cache UPDATE (the F6 columns + the P and whether it
+             warned);
+        then ONE commit. Any exception rolls all of it back and re-raises:
+        the card stays where it was, with no transition, no leg, no pick,
+        no cache (X1).
+
+        Refused BEFORE any connection: a fill with no price, or no shares.
+        The typo guard and the session gate (`market_reset`) refuse inside
+        the transaction, which rolls back whole. The day-mode ladder is
+        read (its own read) before the transaction opens; it is config.
+
+        `drift_settings` is the settings source for the P — None reads
+        `trader_settings` on this transaction; a test passes a constructed
+        store (L69).
+        """
+        from cobalt.aset import config as aset_config
+        from cobalt.cards import legs
         from cobalt.cards.models import Actor
-        from cobalt.cards.store import CardStore
+        from cobalt.cards.store import CardStateError, CardStore
+        from cobalt.daymode import config as daymode_config
+        from cobalt.settings.fills import drift_warning_pct
 
-        filled = CardStore(self.db_name).fill(
-            row_id,
-            actor=Actor.YOU,
-            evidence={
-                "actual_fill": str(fill.actual_fill),
-                "recomputed_shares": fill.recomputed_shares,
-                "share_delta": fill.share_delta,
-                "distance_change_pct": str(fill.distance_change_pct),
-                "structural_warning": fill.structural_warning,
-            },
-            reason=f"filled at {fill.actual_fill}",
-            now=now,
+        from .engine import SizingError, compute_fill_recompute
+
+        if price is None:
+            raise SizingError(
+                f"REFUSED card {row_id}: a fill with no price. Type the price the broker "
+                "filled you at — a FILLED with no price is a trade whose R cannot be read. "
+                "Nothing written."
+            )
+        if shares is None or int(shares) <= 0:
+            raise SizingError(
+                f"REFUSED card {row_id}: a fill with no share count ({shares!r}). Type the "
+                "shares the broker filled. Nothing written."
+            )
+        ts = now or session_clock_mod.now_utc()
+        guard = aset_config.load_config().validation.max_fill_distance_pct
+        ladder = daymode_config.load_daymode_config()
+
+        conn = self._connect()
+        conn.autocommit = False
+        try:
+            cur = conn.execute(
+                "SELECT * FROM aset_sizings WHERE id = %s FOR UPDATE", (row_id,)
+            )
+            found = cur.fetchone()
+            if found is None:
+                raise CardStateError(f"no aset_sizings row with id {row_id}")
+            card = dict(zip([d.name for d in cur.description], found))
+            if card["account_mode"] not in {"live", "sim"}:
+                raise CardStateError(
+                    f"card {row_id} has no valid account_mode stamp "
+                    f"({card['account_mode']!r}) — its entry leg cannot be stamped"
+                )
+
+            original = SizingResult.from_card(card)
+            pct = drift_warning_pct(conn if drift_settings is None else drift_settings)
+            recompute = compute_fill_recompute(original, price, guard, drift_warning_pct=pct)
+
+            filled = CardStore(self.db_name).fill(
+                row_id,
+                actor=Actor.YOU,
+                evidence={
+                    "actual_fill": str(recompute.actual_fill),
+                    "shares": int(shares),
+                    "recomputed_shares": recompute.recomputed_shares,
+                    "share_delta": recompute.share_delta,
+                    "distance_change_pct": str(recompute.distance_change_pct),
+                    "drift_warning_pct": None if pct is None else str(pct),
+                    "drift_warned": recompute.drift_warned,
+                    "structural_warning": recompute.structural_warning,
+                    "price_source": price_source,
+                    "source": source,
+                },
+                reason=f"filled at {recompute.actual_fill}",
+                now=ts,
+                conn=conn,
+            )
+
+            day_mode_id, attested, mismatch = self._attestation(conn, ts, ladder)
+            leg_id = legs.insert_entry_leg(
+                conn,
+                row_id,
+                shares=int(shares),
+                price=price,
+                at=ts,
+                flag=flag,
+                price_source=price_source,
+                price_asof=price_asof,
+                source=source,
+                stop_in_force=card["stop"],
+                session=session_clock().session(ts).value,
+                account_mode=card["account_mode"],
+                day_mode_id=day_mode_id,
+                attested_sheet=attested,
+                sheet_mismatch=mismatch,
+            )
+            self._update_fill_cache(conn, row_id, recompute)
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return FillOutcome(result=filled, recompute=recompute, leg_id=leg_id, sheet_mismatch=mismatch)
+
+    @staticmethod
+    def _attestation(conn, ts: datetime, ladder) -> tuple[Optional[date], Optional[str], bool]:
+        """(day_modes key, attested file, sheet_mismatch) for the fill's ET
+        day, on the fill's transaction. Mismatch when nothing is attested,
+        when the attested file is not a declared one, or when its sheet is
+        not the sheet of the day mode in force (S3 exits v3 §8; O18
+        default). Recorded, never refused."""
+        from cobalt.daymode import decided_or_stage1
+        from cobalt.daymode.config import ConfigError
+
+        day = session_clock().to_et(ts).date()
+        cur = conn.execute("SELECT * FROM day_modes WHERE trade_date = %s", (day,))
+        found = cur.fetchone()
+        if found is None:
+            return None, None, True
+        row = dict(zip([d.name for d in cur.description], found))
+        attested = row.get("attested_sheet")
+        if not attested:
+            return row["trade_date"], None, True
+        try:
+            attested_sheet = ladder.sheet_for_hotkey_file(attested)
+        except ConfigError:
+            return row["trade_date"], attested, True
+        in_force = ladder.sheet_for(decided_or_stage1(row, ladder, ts))
+        return row["trade_date"], attested, attested_sheet != in_force
+
+    def _update_fill_cache(self, conn, row_id: int, fill: FillRecompute, *, at_fill: bool = True) -> None:
+        """The F6 fill columns — a cache of the entry leg + the recompute —
+        and THE ONE UPDATE of them (L3, v3 Q4 [F-04]), on the caller's
+        transaction. Two callers: `mark_filled` (the fill, `at_fill=True`)
+        and `cards.legs._rewrite_fill_cache` (an entry-price correction,
+        R67 N, `at_fill=False`: `filled_at` and `drift_warning_pct` stay
+        the fill's and are left out of the SET)."""
+        fill_stamps = "filled_at = now(), drift_warning_pct = %s, " if at_fill else ""
+        cur = conn.execute(
+            f"""
+            UPDATE aset_sizings SET
+                {fill_stamps}actual_fill = %s,
+                recomputed_shares = %s,
+                recomputed_used_risk = %s,
+                share_delta = %s,
+                distance_change_pct = %s,
+                drift_warned = %s
+            WHERE id = %s
+            """,
+            (
+                *((fill.drift_warning_pct,) if at_fill else ()),
+                fill.actual_fill,
+                fill.recomputed_shares,
+                fill.recomputed_used_risk,
+                fill.share_delta,
+                fill.distance_change_pct,
+                fill.drift_warned,
+                row_id,
+            ),
         )
+        if cur.rowcount != 1:
+            raise RuntimeError(
+                f"FILL UPDATE matched {cur.rowcount} rows for aset_sizings id "
+                f"{row_id} (expected exactly 1) — refusing to report a fill "
+                "that was not persisted."
+            )
+
+    def card_for_note(self, card_id: int) -> dict[str, Any]:
+        """The card row as the trade note reads it (S3 C4, v3 §7): every
+        column, plus the latest FILLED and CLOSED transition times
+        (`filled_transition_at` / `closed_transition_at`, NULL when none).
+        A read."""
         with self._connect() as conn:
             cur = conn.execute(
                 """
-                UPDATE aset_sizings SET
-                    filled_at = now(),
-                    actual_fill = %s,
-                    recomputed_shares = %s,
-                    recomputed_used_risk = %s,
-                    share_delta = %s,
-                    distance_change_pct = %s
-                WHERE id = %s
+                SELECT s.*,
+                       (SELECT max(t.at) FROM card_transitions t
+                        WHERE t.card_id = s.id AND t.to_state = 'FILLED') AS filled_transition_at,
+                       (SELECT max(t.at) FROM card_transitions t
+                        WHERE t.card_id = s.id AND t.to_state = 'CLOSED') AS closed_transition_at
+                FROM aset_sizings s WHERE s.id = %s
                 """,
-                (
-                    fill.actual_fill,
-                    fill.recomputed_shares,
-                    fill.recomputed_used_risk,
-                    fill.share_delta,
-                    fill.distance_change_pct,
-                    row_id,
-                ),
+                (card_id,),
+            )
+            found = cur.fetchone()
+            if found is None:
+                raise RuntimeError(f"no aset_sizings row with id {card_id}")
+            return dict(zip([d.name for d in cur.description], found))
+
+    def set_trade_note_path(self, card_id: int, path: Optional[str]) -> None:
+        """THE one writer of `aset_sizings.trade_note_path` (S-NOTE, L40):
+        the fill note's path relative to the vault root, or NULL when the
+        note write failed. Two cards never hold one path: under a
+        transaction-scoped advisory lock on the path, a path another card
+        already holds is REFUSED (X16 — two cards, one ticker, one second),
+        nothing written. One transaction, one commit."""
+        conn = self._connect()
+        conn.autocommit = False
+        try:
+            if path is not None:
+                conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (path,))
+                holder = conn.execute(
+                    "SELECT id FROM aset_sizings WHERE trade_note_path = %s AND id <> %s LIMIT 1",
+                    (path, card_id),
+                ).fetchone()
+                if holder is not None:
+                    from cobalt.prefill.trade_note import TradeNoteRefused
+
+                    raise TradeNoteRefused(
+                        f"REFUSED card {card_id}: trade note {path} is card {holder[0]}'s (same ticker, "
+                        "same second, X16). Nothing merged, nothing written."
+                    )
+            cur = conn.execute(
+                "UPDATE aset_sizings SET trade_note_path = %s WHERE id = %s", (path, card_id)
             )
             if cur.rowcount != 1:
                 raise RuntimeError(
-                    f"FILL UPDATE matched {cur.rowcount} rows for aset_sizings id "
-                    f"{row_id} (expected exactly 1) — refusing to report a fill "
-                    "that was not persisted."
+                    f"trade_note_path UPDATE matched {cur.rowcount} rows for aset_sizings id {card_id} "
+                    "(expected exactly 1)"
                 )
-        return filled
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def account_mode_for(self, row_id: int) -> str:
         with self._connect() as conn:

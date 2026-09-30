@@ -110,11 +110,16 @@ TABLE_DIGEST_EXCLUDED_COLUMNS: dict[str, tuple[str, ...]] = {
         "snap_notice", "conviction", "proximity", "card_score",
         "score_suppressed", "radar_score_id", "scan_id", "formula_sha256",
         "tunables_sha256", "settings_sha256", "health", "promoted_at",
+        # 0021_legs.sql — the trade-note path and the drift P at the fill.
+        "trade_note_path", "drift_warning_pct", "drift_warned",
     ),
     # 0014_radar_handicap.sql — the float handicap's shadow record: three
     # nullable columns on a populated table are not content corruption, and
     # dropping them on rollback must not read as CHANGED.
     "radar_membership": ("raw_rank", "handicap_factor", "handicap"),
+    # 0021_legs.sql — a stop edit's kind (R38); every existing row reads
+    # its default 'edit', so adding and dropping it is not a content change.
+    "card_stop_edits": ("kind",),
 }
 
 #: Seconds the migrate transaction will wait for any single lock before

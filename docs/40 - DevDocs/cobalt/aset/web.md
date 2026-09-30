@@ -314,3 +314,73 @@ D4's block after `/attest`; its own imports — `date` as `_drc_date`,
 Tests: `tests/cobalt/test_drc_imports.py` (TestClient, offline double),
 `tests/cobalt/test_drc_imports_db.py` (TestClient, `cobalt_dev`
 rollback), `tests/cobalt/test_drc_web_seam.py` (the seam, by `ast`).
+
+---
+
+## 2026-09-28 — S3 exits C3: the trade taps (v3 §2 / §3 / §5; R67, R38)
+
+ONE block, directly after `POST /radar/card/{card_id}/release` (S-WEB: never
+after `/attest`, never a second block at the file's end). A route owns no side
+effect (L40): it parses the form and calls C1 / C2's writers and the stores'
+reads — nothing else.
+
+| route | form fields | calls | notes |
+|---|---|---|---|
+| `POST /radar/card/{id}/triggered` | — | `CardStore.transition(TRIGGERED, actor=YOU)` | ARMED → TRIGGERED is his tap until S4 (O7 A). Evidence `{via, last_price, last_price_at}`: `last_price` from the card's `radar_cards_v` row; `last_price_at` is `null` — no column stores the bar time (X6-R). |
+| `POST /radar/card/{id}/fill` | `price`, `shares`, `prefill` | `AsetStore.mark_filled(…, price_asof=None, source=<source>)` — THE fill (S-FILL) | untouched prefill → `last_poll` / `estimated`; a typed or edited price → `typed` / `confirmed`; no price → `mark_filled`'s own refusal (422), nothing written. |
+| `POST /radar/card/{id}/pass` | — | `CardStore.transition(PASSED, actor=YOU)` | |
+| `POST /radar/card/{id}/exit` | `preset`, `shares` (typed), `price`, `prefill`, `running_before`, `confirm` | `legs.record_exit` | `running_before` = the count the screen rendered (R67: C2 refuses a stale / duplicate tap). ½ ⅓ typed follow the prefill rule; **flat** commits `confirmed` only with `confirm=1` (its price then `typed`), otherwise `estimated` — listed for correction. No price / no `running_before` → a 422 argument refusal, nothing written. |
+| `POST /radar/card/{id}/held` | `held` | `legs.record_held` | HOLDING X (S-HELD). |
+| `POST /radar/card/{id}/correct` | `leg_id`, `price`, `shares` | `legs.record_correction` | a typed price names `price_source='typed'` → `confirmed` (the ✓ on an estimated leg). |
+| `POST /radar/card/{id}/stop` | `to_stop` | `card_stop.set_card_stop` → `record_stop_edit(kind='edit')` | the one card-stop function (L3). |
+| `POST /radar/card/{id}/stop/reset` | — | `CardStore.record_stop_edit(kind='reset', to_stop=structural_stop)` | ↺ (R38). `structural_stop` from the card's `radar_cards_v` row; a card with none (manual) posts its current stop and the writer refuses by name (O19 A). |
+
+`_card_tap(card_id, request, gate, work)` runs every tap: `source` (`panel` —
+the default — or `sheet`), the dev-entry guard, the session gate
+(`assert_writable(gate)`, FIRST, as the other radar taps), then `work`.
+Refusals, verbatim: `DevEntryRefused` 403 · `_TapInputRefused` /
+`SizingError` / `InvalidOperation` 422 · `CardStateError` (incl.
+`LegRefused`) / `IllegalTransition` / `SessionBlocked` 409 · `ConfigError`
+503. `_tap_reply`: the panel gets JSON (`{"status": "ok", …}` /
+`_refused`'s `{"status": "REFUSED", "reason": …}`); `source=sheet` gets the
+sheet page (`_render`) with the saved / FAILED banner and the same status.
+
+Helpers (new, in the block): `S3_TAP_SOURCES`, `_TapInputRefused`,
+`_tap_price`, `_tap_int`, `_tap_price_source`, `_tap_board_row`,
+`_tap_reply`, `_card_tap`, `_sheet_in_trade`.
+
+**C3-4 — the manual card on the sheet.** X-M: `/radar` reads
+`radar_cards_v`, which is `origin = 'radar'`, so a FILLED manual card is not
+on the panel. `_open_cards_section` now appends `_sheet_in_trade(card)` after
+each row: for a FILLED manual card, `radar_panel.render_in_trade(…,
+structural_stop=None, last=None, source="sheet")` — the SAME forms posting to
+the SAME routes (plain `<form method="post">` here; the sheet has no fetch
+script). No ↺ (no Cobalt stop; the row's own "↺ reset = re-enter the card
+stop" wording stays, v3 §5); price fields empty (no last price is read here).
+`_card_controls` is unchanged — its FILLED row still carries the edge-table
+CLOSE button, which posts to C2 fix r1's F1 refusal.
+
+Tests: `tests/cobalt/test_s3_c3_panel_offline.py` (routes through TestClient
+with recorders, refusals verbatim, `market_reset`, the S-WEB seam),
+`tests/cobalt/test_s3_c3_panel_db.py` (end to end on `cobalt_dev`, inside the
+suite transaction with `0021` applied there). The POST allowlist in
+`test_radar_panel_cards.py` names the eight routes.
+
+## 2026-09-29 — S3 exits C3 fix r1
+- F2 (2026-09-29): `radar_card_correct` reads `legs.read_position(card_id)` (rolled back) before `record_correction`; a `leg_id` that is not one of the URL card's current legs → 422 `REFUSED card <id>: leg <leg> is not a current leg of card <id> — reload the card. Nothing written.`
+- F3 (2026-09-29): `_sheet_closed_estimated` (beside `_sheet_in_trade`) lists, below the live cards and even when none is live, each MANUAL card `filled_with_picks(<today ET>)` returns CLOSED — its `estimated` legs only, through `radar_panel.render_estimated_legs`, each `✓ correct` posting `/radar/card/<id>/correct` with `source=sheet`; a failed read says `FAILED · position unreadable: …` on that card. Window: cards filled today (ET).
+- F4 (2026-09-29): `_sheet_in_trade`'s failed read renders the `_failed(…)` line AND `radar_panel.render_stop_block(…, structural_stop=None, owner=None, source="sheet")` — his stop, `Cobalt stop NULL — no Cobalt stop`, no ↺.
+
+## 2026-09-29 — S3 exits C4: the note calls (F22, v3 §7) and C4-06
+
+Every note call runs AFTER the DB writer returned (its transaction committed), in the same request, and never inside it:
+- `/size` (O4 A): passes the card's values (`id`, `ticker`, `direction`, `stop`) and the planned entry to the one writer `upsert_trade_note`; the sizing note is unchanged.
+- `/fill` (manual) and `POST /radar/card/{id}/fill`: `_fill_note(card_id)` → `prefill.trade_note.write_card_note`. It writes the note at the FILLED transition's time, `leg-0`, and `aset_sizings.trade_note_path`.
+  - On ANY failure the card stays FILLED, `trade_note_path` is NULL, and the page shows `FILLED — trade note NOT written: <reason> · trade_note_path NULL · retry: cobalt cards trade-note <id>`: a `warn` div on the sheet; the panel's `notice`, first.
+  - The panel payload carries `trade_note_path`. A second card with the same ticker in the same second is refused (X16), never merged.
+- `/radar/card/{id}/exit`, `/held`, `/correct` (panel and sheet alike): `_leg_note(card_id, leg_id, closed=…)` → `write_leg_unit`. It writes the unit `leg-<seq>` of the leg the writer returned; a correction rewrites the same unit, and a held count rewrites `leg-0`.
+  - `trade_note_path` NULL, its file absent, or any failure → the notice (panel) / banner (sheet) `leg saved, note unit NOT written: <reason> · retry: cobalt cards trade-note <id>`. Nothing is written in the vault.
+  - A commit that CLOSED the card also fills his blank exit keys.
+- Refusals return before the writer, as before: nothing committed, nothing to note.
+- C4-06: `_tap_price` (the one tap-price parser) refuses a parsed price that is not finite or not `> 0` (the `legs.price` rule `CHECK (price > 0)`): `REFUSED: <what> <raw!r> is not a positive price. Nothing written.` → 422 through `_card_tap`, before any writer. Before this, `/exit price=NaN` → 200 and a NaN leg was stored, and `/correct price=-1` → 500.
+- Tests: `tests/cobalt/test_s3_c4_trade_note_db.py`, and the `/size` call in `tests/cobalt/test_s3_c4_trade_note_offline.py`.

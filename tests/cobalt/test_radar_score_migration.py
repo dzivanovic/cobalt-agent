@@ -101,7 +101,8 @@ def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first
     newest four are named explicitly: P4's 0008/0009 and the archiver's
     0010/0011 both reverse before 0007."""
     newest_four = [
-        "0020_drc_build_kinds.rollback.sql",  # DRC D3 (the name stays; the list is the newest ten)
+        "0021_legs.rollback.sql",  # S3 exits C1 (M1) (the name stays; the list is the newest eleven)
+        "0020_drc_build_kinds.rollback.sql",  # DRC D3
         "0019_drc_events.rollback.sql",  # DRC D2 fix r1
         "0018_drc_stated_books.rollback.sql",  # DRC K1
         "0017_voice_turns.rollback.sql",  # voice V1
@@ -113,17 +114,17 @@ def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first
         "0010_archive_progress.rollback.sql",
     ]
     reverse_names = [p.name for p in REVERSE]
-    assert reverse_names[:10] == newest_four
+    assert reverse_names[:11] == newest_four
     assert (
         reverse_names.index("0006_radar_score.rollback.sql")
         == reverse_names.index("0007_radar_cards.rollback.sql") + 1
     )
-    assert [p.name for p in _rollback_paths("0005")][:10] == newest_four
+    assert [p.name for p in _rollback_paths("0005")][:11] == newest_four
     assert [p.name for p in _rollback_paths("0005")][-2:] == [
         "0007_radar_cards.rollback.sql",
         "0006_radar_score.rollback.sql",
     ]
-    assert [p.name for p in _rollback_paths("0006")][:10] == newest_four
+    assert [p.name for p in _rollback_paths("0006")][:11] == newest_four
     assert [p.name for p in _rollback_paths("0006")][-1:] == [
         "0007_radar_cards.rollback.sql"
     ]
@@ -144,7 +145,8 @@ def test_placement_declares_the_new_tables_and_views_on_their_sides():
     for name in USER_TABLES | USER_VIEWS:
         assert PLACEMENT[name] is Side.USER, name
     assert SYSTEM_TABLES | USER_TABLES <= set(CREATED_TABLES)
-    assert SYSTEM_VIEWS | USER_VIEWS == set(CREATED_VIEWS)
+    # S3 exits C1's 0021 adds legs_current_v, the one view not 0006/0007's.
+    assert SYSTEM_VIEWS | USER_VIEWS == set(CREATED_VIEWS) - {"legs_current_v"}
     assert not set(CREATED_VIEWS) & set(CREATED_TABLES)
 
 

@@ -20,17 +20,23 @@ from decimal import Decimal
 
 import pytest
 
-from cobalt.aset.engine import (
-    FILL_DISTANCE_WARNING_PCT,
-    SizingError,
-    compute_fill_recompute,
-    compute_sizing,
-)
+from cobalt.aset.engine import SizingError, compute_sizing
+from cobalt.aset.engine import compute_fill_recompute as _compute_fill_recompute
 from cobalt.aset.models import Direction, Grade, SheetMode, SizingInput
 
 ENABLED_GRADES = (Grade.A, Grade.B)
 MAX_STOP_DISTANCE_PCT = Decimal("10")
 MAX_FILL_DISTANCE_PCT = Decimal("5")
+#: A CONSTRUCTED drift P (L69). S3 C1 deleted the hard-coded 25: the
+#: engine takes his `fills.drift_warning_pct` from its caller. These
+#: pre-C1 cases keep their warn / no-warn outcomes at P = 25.
+DRIFT_P = Decimal("25")
+
+
+def compute_fill_recompute(original, actual_fill, max_fill_distance_pct, drift_warning_pct=DRIFT_P):
+    return _compute_fill_recompute(
+        original, actual_fill, max_fill_distance_pct, drift_warning_pct=drift_warning_pct
+    )
 
 
 def make_input(**overrides):
@@ -176,16 +182,17 @@ class TestFillRecompute:
         fill = compute_fill_recompute(
             original, actual_fill=Decimal("100.05"), max_fill_distance_pct=MAX_FILL_DISTANCE_PCT
         )
-        assert fill.distance_change_pct < FILL_DISTANCE_WARNING_PCT
-        assert fill.structural_warning is None
+        assert fill.distance_change_pct < DRIFT_P
+        assert fill.structural_warning is None and fill.drift_warned is False
 
     def test_large_distance_change_warns_not_structural(self):
         original = size(direction=Direction.LONG, entry=Decimal("100"), stop=Decimal("99"))
         fill = compute_fill_recompute(
             original, actual_fill=Decimal("101.50"), max_fill_distance_pct=MAX_FILL_DISTANCE_PCT
         )  # distance 2.50 vs 1.00 = 150% (fill is only 1.5% from entry — passes the hard floor)
-        assert fill.distance_change_pct >= FILL_DISTANCE_WARNING_PCT
+        assert fill.distance_change_pct > DRIFT_P
         assert fill.structural_warning == "stop may no longer be structural — re-read the level."
+        assert fill.drift_warned is True
 
     def test_actual_fill_must_be_positive(self):
         original = size()

@@ -251,3 +251,40 @@ def frozen_session_clock(monkeypatch):
     """
     monkeypatch.setattr(session_clock_module, "now_utc", lambda: FROZEN_NOW)
     yield FROZEN_NOW
+
+
+# ---------------------------------------------------------------------
+# S3 C4 fix r1 — F1: a trade-note path outside tmp_path fails loud (L1, L28)
+# ---------------------------------------------------------------------
+
+
+def _outside_tmp_path(path) -> str:
+    return (f"L28: a trade-note path resolved outside tmp_path in a test: {path}. Nothing read or "
+            "written — point the test at a tmp_path vault (trade_note_support.make_vault).")
+
+
+@pytest.fixture(autouse=True)
+def trade_note_path_guard(monkeypatch, tmp_path_factory):
+    """Wrap the trade-note writer's ONE resolver (`upsert_trade_note` and
+    `write_leg_unit` both call it): a path outside the session's pytest
+    base temp is recorded and refused BEFORE any read or write. The web
+    note helpers swallow every exception into a notice, so the teardown
+    fails the test on any recorded path. Yields the record (a test that
+    trips the guard on purpose clears it)."""
+    from cobalt.prefill import trade_note as trade_note_module
+
+    base = tmp_path_factory.getbasetemp().resolve()
+    original = trade_note_module.resolve_target
+    tripped: list = []
+
+    def guarded(vault_relative_dir, filename):
+        path = original(vault_relative_dir, filename)
+        if not path.resolve().is_relative_to(base):
+            tripped.append(path)
+            raise AssertionError(_outside_tmp_path(path))
+        return path
+
+    monkeypatch.setattr(trade_note_module, "resolve_target", guarded)
+    yield tripped
+    if tripped:
+        pytest.fail("\n".join(_outside_tmp_path(path) for path in tripped))

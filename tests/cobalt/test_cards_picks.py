@@ -463,17 +463,19 @@ class TestFillWritesPick:
         assert missing >= 1 and "MISSING" in next(line for line in text.splitlines() if " P4GAP " in line)
 
     def test_mark_filled_figures_persist_after_a_pick_failure(self, monkeypatch):
-        from cobalt.aset.engine import compute_fill_recompute
+        from legs_db_support import apply_0021, fill_kwargs, patch_daymode
 
         monkeypatch.setattr(picks_mod, "record_pick", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("gap")))
+        patch_daymode(monkeypatch)
         aset = AsetStore("cobalt_dev")
+        apply_0021(aset)
         result = compute_sizing(
             SizingInput(ticker="P4FIG", grade=Grade.B, direction=Direction.LONG, sheet_mode=SheetMode.FULL,
                         risk_dollars=Decimal("60"), entry=Decimal("10.00"), stop=Decimal("9.50")),
             [Grade.A, Grade.B], Decimal("10"),
         )
         card_id = aset.save(result)
-        filled = aset.mark_filled(card_id, compute_fill_recompute(result, Decimal("10.10"), Decimal("5")))
+        filled = aset.mark_filled(card_id, **fill_kwargs(price="10.10")).result
         assert isinstance(filled, FillResult) and not filled.pick_recorded
         with aset._connect() as conn:
             actual = conn.execute("SELECT actual_fill FROM aset_sizings WHERE id = %s", (card_id,)).fetchone()[0]

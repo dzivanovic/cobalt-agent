@@ -46,7 +46,7 @@ def test_xk_drc_rows_refuses_a_build_kind_before_0020(migrated):
     from cobalt.db_migrations import MIGRATIONS_DIR
     from cobalt.db_migrations.cli import _apply
 
-    assert FORWARD[-1].name == "0020_drc_build_kinds.sql"
+    assert FORWARD[-2].name == "0020_drc_build_kinds.sql"  # S3 exits C1's 0021 follows it
     assert "build_day" in _kind_check(migrated) and "build_trade" in _kind_check(migrated)
     with DrcStore()._connect() as conn:
         conn.execute(INSERT, (D,))
@@ -76,12 +76,14 @@ def test_0020_is_registered_last_and_its_rollback_first():
     from cobalt.db_migrations import MIGRATIONS_DIR, REVERSE
     from cobalt.db_migrations.cli import _rollback_paths
 
-    assert FORWARD[-1] == MIGRATIONS_DIR / "0020_drc_build_kinds.sql"
-    assert FORWARD[-2].name == "0019_drc_events.sql"
-    assert REVERSE[0] == MIGRATIONS_DIR / "0020_drc_build_kinds.rollback.sql"
-    assert REVERSE[1].name == "0019_drc_events.rollback.sql"
-    assert [p.name for p in _rollback_paths("0019")] == ["0020_drc_build_kinds.rollback.sql"]
-    code = "\n".join(l for l in FORWARD[-1].read_text().splitlines() if not l.strip().startswith("--"))
+    # S3 exits C1's 0021 now follows it (the last of the DRC lane, second-last overall).
+    assert FORWARD[-2] == MIGRATIONS_DIR / "0020_drc_build_kinds.sql"
+    assert FORWARD[-3].name == "0019_drc_events.sql"
+    assert REVERSE[1] == MIGRATIONS_DIR / "0020_drc_build_kinds.rollback.sql"
+    assert REVERSE[2].name == "0019_drc_events.rollback.sql"
+    assert [p.name for p in _rollback_paths("0019")] == [
+        "0021_legs.rollback.sql", "0020_drc_build_kinds.rollback.sql"]
+    code = "\n".join(l for l in FORWARD[-2].read_text().splitlines() if not l.strip().startswith("--"))
     assert "CREATE TABLE" not in code and "'build_trade', 'build_day'" in code
-    back = REVERSE[0].read_text()
+    back = REVERSE[1].read_text()
     assert "-- COST:" in back and "to_regclass('\"user\".drc_rows')" in back

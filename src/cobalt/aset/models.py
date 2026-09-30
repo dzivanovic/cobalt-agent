@@ -19,9 +19,10 @@ config edit only, never a code change.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from decimal import Decimal
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -97,6 +98,14 @@ class SizingInput(BaseModel):
         return self
 
 
+#: Every card-row column `SizingResult.from_card` reads. None may be NULL:
+#: a default for any of them would be a second sizing (S3 exits v3 §2).
+FROM_CARD_COLUMNS = (
+    "ticker", "grade", "direction", "sheet_mode", "risk_budget",
+    "entry", "stop", "per_share_risk", "shares", "used_risk", "warnings",
+)
+
+
 class SizingResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -108,6 +117,52 @@ class SizingResult(BaseModel):
     target_1r: Decimal
     target_2r: Decimal
     warnings: list[str]
+
+    @classmethod
+    def from_card(cls, row: Mapping[str, Any]) -> "SizingResult":
+        """THE ONLY REBUILD of a sizing from a persisted card row (S3 exits
+        v3 §2 [F-22]; L3).
+
+        Copies `entry`, `stop`, `per_share_risk`, `shares`, `risk_budget`
+        and `direction` — and the rest of the sizing's own columns — off
+        the row as stored. Nothing is recomputed and nothing is defaulted:
+        a NULL (an unsized radar card, a legacy row) raises naming the
+        column, because a default here would be a second sizing and would
+        move `distance_change_pct` and the drift warning with it. The
+        targets are the stored entry ± the stored per-share risk, the
+        expression `compute_sizing` uses (X10 is the parity proof).
+        """
+        missing = [c for c in FROM_CARD_COLUMNS if c not in row or row[c] is None]
+        if missing:
+            raise ValueError(
+                f"card {row.get('id', '?')}: cannot rebuild its sizing — "
+                f"{', '.join(missing)} {'is' if len(missing) == 1 else 'are'} NULL on the "
+                "card row. No default is taken: a default is a second sizing."
+            )
+        inp = SizingInput(
+            ticker=row["ticker"],
+            grade=row["grade"],
+            direction=row["direction"],
+            sheet_mode=row["sheet_mode"],
+            risk_dollars=row["risk_budget"],
+            entry=row["entry"],
+            stop=row["stop"],
+            last_price=row.get("last_price"),
+            price_source=row.get("price_source"),
+        )
+        entry, distance = Decimal(row["entry"]), Decimal(row["per_share_risk"])
+        sign = Decimal(1) if inp.direction is Direction.LONG else Decimal(-1)
+        cents = Decimal("0.01")
+        return cls(
+            input=inp,
+            risk_budget=Decimal(row["risk_budget"]),
+            per_share_risk=distance,
+            shares=int(row["shares"]),
+            used_risk=Decimal(row["used_risk"]),
+            target_1r=(entry + sign * distance).quantize(cents),
+            target_2r=(entry + sign * distance * 2).quantize(cents),
+            warnings=list(row["warnings"]),
+        )
 
 
 class FillRecompute(BaseModel):
@@ -124,3 +179,8 @@ class FillRecompute(BaseModel):
     share_delta: int
     distance_change_pct: Decimal
     structural_warning: Optional[str] = None
+    #: S3 C1 (v3 §4): the drift P in force at the fill — his
+    #: `fills.drift_warning_pct` — and whether `distance_change_pct > P`.
+    #: Both None = the warning was NOT evaluated (P missing, L1: bannered).
+    drift_warning_pct: Optional[Decimal] = None
+    drift_warned: Optional[bool] = None
