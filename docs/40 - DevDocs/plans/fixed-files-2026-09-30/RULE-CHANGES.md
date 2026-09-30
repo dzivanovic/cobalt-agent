@@ -852,3 +852,9 @@ No text change beyond row 56: H1 ("Refresh at a quiet point…") stays; the per-
 
 ### 59 · THE OPS SCRIPTS AND THE HOOK ARE TRACKED (desk, from the brain's DF-2; NOT A TEXT ROW)
 HOME: `DESK-LINE.md` §2a and `STANDING-LIST.md` §4. At the fold: the desk creates `/Users/cobalt/cobalt/ops/desk/` with the four scripts (copies of the fixed `desk-launch.sh`, `desk-context.sh` and the two `wait-*` scripts) and the hook, makes the two symlinks (`/Users/cobalt/.claude/ops/<name>`, `.git/hooks/pre-commit`), commits, all before the desk line narrows. Replaces DRAFT4 DECISION 15's "his hand edit". No law text changes.
+
+### 60 · CONTRACT `## Contract` — two lines NOW loses under the 1,500-character cap (desk, from the brain's DECISION 4 answer)
+HOME: `M/topics/cto-desk-contract.md`, after `:21`. Fold BEFORE the first close runs. NEW (one line each, tagged):
+- `- [stated 2026-09-29 · Dejan, R129] GOAL: first builds good enough that a check closes in 1–2 rounds; the desk runs the project, picks tools that work, wastes no token or round.`
+- `- [stated 2026-09-09 · Dejan, R110, R112] A classifier `[Auto-Mode Bypass]` refusal goes to him, never routed around.`
+Every other NOW rule already has its home in rows 1–59 (brain: refresh → rows 55–56; scope → row 37; allow list → contract `:18`; finished hub → W8; launch cwd → L1; K23–K25; C6). The OWED list lives in the day's §5 CURRENT `OWED` row; NOW carries its count and that pointer.
