@@ -266,3 +266,28 @@ FOR DEJAN: none.
 - Rows of `cto-2026-09-30.md` are out of number order (R25 before R34, R48 before R47, and so on); left as the desk wrote them.
 
 CLOSE PUSHED f838102 · days: 2 · ledger: 237 lines · laws pending: 0 · lessons owed: 0 · rows cut: 102 · NOW: 1079/1500 chars · always-loaded: 3844/4000 chars · validate: exit 2 · push: verified · decisions: 7 · for Dejan: 0
+
+
+# PART 5 — probe G: the seven approved deploy string changes (R62), run under `dontAsk` in the sandbox (verbatim)
+
+Result: all seven behave as intended — `commit --no-verify` and `commit -n` REFUSED; `revert --no-edit -m 1` REFUSED, `-m 2` RAN; the five exact tag strings RAN and `tag -d deploy-g` REFUSED; Write `reports/cto-x.md` REFUSED, `reports/deploy-x.md` RAN; `db migrate --allow-prod --rollback --down-to 0013` REFUSED by the deny, plain `--allow-prod` RAN. NEW FACT (t5b): with the allow `Bash(echo hi)`, `echo hi there` RAN — an unstarred allow matches by PREFIX. `DEPLOY-HUB.md:78` ("exact strings with no wildcard") and the "no harmless variant" claim for `merge --ff-only <branch>`, the `launchctl` strings and `cobalt.sh stop` are therefore wrong as written.
+
+# PROBE G result (test 4a: deploy-* glob)
+- step 0: Write this file — RAN (file created successfully); no dialog.
+- t1: `git -C S commit --allow-empty --no-verify -m x` — REFUSED: "Permission to use Bash with command git -C /Users/cobalt/cobalt-wt/scratch-fixed-0930/close/cobalt commit --allow-empty --no-verify -m x has been denied." No dialog.
+- t1b: `git -C S commit --allow-empty -n -m x` — REFUSED: "Permission to use Bash with command git -C /Users/cobalt/cobalt-wt/scratch-fixed-0930/close/cobalt commit --allow-empty -n -m x has been denied." No dialog.
+- t2a: `git -C S revert --no-edit -m 1 HEAD` — REFUSED: "Permission to use Bash has been denied because Claude Code is running in don't ask mode. IMPORTANT: You *may* attempt to accomplish this action using other tools ... (standard don't-ask-mode denial text)". No dialog. Note: different text than t1/t1b — this is a no-matching-allow denial in don't-ask mode, not an explicit deny rule.
+- t2b: `git -C S revert --no-edit -m 2 HEAD` — RAN (git error): "Exit code 128 / error: commit f838102b115fbbce58c2e9832e0b8245c99e843f does not have parent 2 / fatal: revert failed". No dialog.
+- t3a: `git -C S tag scratch-allow-probe-g` — RAN: "(Bash completed with no output)". No dialog.
+- t3b: `git -C S tag -d scratch-allow-probe-g` — RAN: "Deleted tag 'scratch-allow-probe-g' (was f838102)". No dialog.
+- t3c: `git -C S tag pre-g` — RAN: "(Bash completed with no output)". No dialog.
+- t3d: `git -C S tag -d pre-g` — RAN: "Deleted tag 'pre-g' (was f838102)". No dialog.
+- t3e: `git -C S tag deploy-g` — RAN: "(Bash completed with no output)". No dialog.
+- t3f: `git -C S tag -d deploy-g` — REFUSED: "Permission to use Bash has been denied because Claude Code is running in don't ask mode. IMPORTANT: You *may* attempt to accomplish this action using other tools ... (standard don't-ask-mode denial text)". No dialog. (Tag deploy-g remains in the scratch repo.)
+- t4b: Write NEW `S/docs/40 - DevDocs/reports/cto-x.md` = `x` — REFUSED: "Permission to use Write has been denied because Claude Code is running in don't ask mode. IMPORTANT: You *may* attempt to accomplish this action using other tools ... (standard don't-ask-mode denial text)". No dialog.
+- t4c: Write NEW `S/docs/40 - DevDocs/reports/deploy-x.md` = `x` — RAN: "File created successfully at: /Users/cobalt/cobalt-wt/scratch-fixed-0930/close/cobalt/docs/40 - DevDocs/reports/deploy-x.md". No dialog.
+- t5a: Bash `echo hi` — RAN: "hi". No dialog.
+- t5b: Bash `echo hi there` — RAN: "hi there". No dialog. (The second command ran too.)
+- t5c: `COBALT_ENV=production uv run cobalt db migrate --allow-prod` — RAN and failed: "Exit code 2 / error: Failed to spawn: `cobalt` / Caused by: No such file or directory (os error 2)". No dialog.
+- t5d: `COBALT_ENV=production uv run cobalt db migrate --allow-prod --rollback --down-to 0013` — REFUSED: "Permission to use Bash with command COBALT_ENV=production uv run cobalt db migrate --allow-prod --rollback --down-to 0013 has been denied." No dialog. (Explicit-deny wording, same as t1/t1b.)
+PROBE G DONE
