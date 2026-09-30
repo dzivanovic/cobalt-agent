@@ -260,6 +260,10 @@ def _x14_updates(ld) -> tuple[list[dict], list]:
         update = refresh_card(card, ev, ld, settings, [], at=at, thresholds=thresholds)
         card = card.model_copy(update={"health": update.health, "dots": update.dots})
         dump = update.model_dump(mode="json")
+        # F15 P1 adds two record-only fields (the bar start, the key's reason); neither is a
+        # published number, so they leave the pin and the pin still proves no number moved (X3).
+        dump.pop("last_price_bar_ts")
+        dump.pop("proposed_key_reason")
         healths.append(dump.pop("health"))
         others.append(dump)
     return others, healths
