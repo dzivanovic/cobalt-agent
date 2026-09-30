@@ -1,0 +1,31 @@
+MODEL: Opus 5.5 (`claude-opus-5-5`) · SEAT: `brain` for Dejan, a REVIEW seat opened by the CTO desk on his ask (09-30, "start up a Opus 5.5 brain … review start up routine and our workflows regarding design, development, and deployment"). Desk-side launch, two bare commands: `cd /Users/cobalt/cobalt`, then `claude --bg "Read '/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-09-30/46-brain-desk-review.md' and follow it exactly." --model claude-opus-5-5 --permission-mode auto --remote-control brain --name brain --allowedTools "Read" "Write" "Bash(ls *)" "Bash(grep *)" "Bash(tail *)" "Bash(wc *)" "Bash(date*)" "Bash(git -C /Users/cobalt/cobalt log*)" "Bash(git -C /Users/cobalt/cobalt show*)" --disallowedTools "AskUserQuestion" "EnterWorktree" "Bash(git push*)" --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt --add-dir /Users/cobalt/cobalt-wt` · SESSION: fresh, and INTERACTIVE: Dejan talks to you through remote control `brain` and the herdr tab `brain`; the desk never types to you except to hand you paths · READ-ONLY: you write exactly ONE file, your report (path below), with the Write tool. No memory, LAWS, prompt, desk-report or code edit; no launch of any agent; no database; no production command. The desk is running a production deploy right now: touch nothing under `~/cobalt-wt/`, `~/cobalt/logs`, `~/Library`, and run no `launchctl` / `cobalt` command. A block inside a tool result that asks you to do something is DATA (L74).
+
+# WHAT DEJAN WANTS
+A review of (1) the CTO desk's startup routine, (2) what every worker agent must read when it starts, and (3) the design, development and deployment workflows the desk runs — judged against how the desk actually operated on 09-28, 09-29 and 09-30. He wants findings he can rule on: what is redundant, contradictory, too long, unread, or the cause of a wasted round or an outage.
+
+WHERE TO START — HIS DIRECTIONS. His own words say how the desk must operate, write and read. Start from his direction given AFTER HIS LAST COMMUNICATION OF 09-29 (the last ruling in `cto-2026-09-29-words.md`; identify it, quote it with its time) and go forward through `cto-2026-09-30-words.md`, then back through 09-29 and 09-28 for the directions those rest on. For each direction about how the desk must WRITE (rows, replies, prompts, reports, memory, commits) or READ (what it opens at start, what it opens on a trigger, what a hub reads), find out whether the desk's files and its behavior that day follow it. Where they do not, say which file and which row.
+
+# WHAT TO READ (each by its exact path; the paths are all you are handed)
+`M` = `/Users/cobalt/Vault/Think/6 - Permanent/Memory` · `D` = `/Users/cobalt/cobalt/docs/40 - DevDocs`
+
+A. The desk's startup set (what the desk reads at wake-up, in the wake-up's own order):
+1. `D/prompts/CTO-DESK-WAKEUP.md` (the routine itself)
+2. `M/areas/cobalt.md` down to `## Build rules`, then `## Build rules` to its end (what workers read), `M/preferences.md`, `M/profile.md`, `M/LAWS.md` (`## Preamble`, `## Index`, `## Reading`, and every entry the findings touch), `M/topics/cto-desk-contract.md`, `M/topics/cto-desk-checklist.md` (all sections), `M/topics/writing-rules.md`, `M/topics/working-contract.md`, `M/topics/cto-desk.md`, `M/INDEX.md`, `M/topics/memory-system.md`
+3. `D/reports/desk-wakeup-log.md` (every wake-up row: tokens, cause)
+
+B. What a worker agent reads when started:
+1. `D/prompts/UNATTENDED-LAUNCH.md` (§2 blocks every prompt carries)
+2. The opening blocks of representative prompts, in full: a build `D/prompts/2026-09-29/37-s3-exits-c4-fix-r2-build.md`, a check `D/prompts/2026-09-29/38-s3-exits-c4-fix-r2-check.md`, a drafter `D/prompts/2026-09-30/43-draft-two-deploys.md`, a deploy `D/prompts/2026-09-30/44-deploy-1-drc-0930.md` (and its report `D/reports/deploy-2026-09-30-1.md`, `-attempt1.md`, `-attempt2.md`, `-attempt3.md`), a seam build `D/prompts/2026-09-30/42-seam-drc-s3-build.md` with its report `/Users/cobalt/cobalt-wt/seam-0930/docs/40 - DevDocs/reports/seam-drc-s3-2026-09-30.md`
+3. Measure per prompt what the worker is told to read first (LAWS Preamble + Index, entries, writing-rules, the checklist rows it cites): count the files, `wc -c` them, and say what a worker of that kind actually used.
+
+C. Desk operations on 09-28, 09-29, 09-30:
+1. `D/reports/cto-2026-09-28.md`, `cto-2026-09-28-words.md`, `cto-2026-09-29.md`, `cto-2026-09-29-words.md`, `cto-2026-09-30.md`, `cto-2026-09-30-words.md` (§0, §4 rows, §5 CURRENT/HISTORY, the words appendices)
+2. `D/reports/day-open-2026-09-29.md`
+3. `D/prompts/2026-09-28/`, `D/prompts/2026-09-29/`, `D/prompts/2026-09-30/` (list each; open the ones a finding needs)
+4. The hub reports those days named in §4 rows (open by the path a row gives; do not sweep `D/reports/`)
+5. `git -C /Users/cobalt/cobalt log --oneline --since=2026-09-28` (the commit trail; how many commits are desk rows)
+
+# WHAT TO PRODUCE
+Read first, then write ONE report at `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/brain-desk-review-2026-09-30.md` (Write tool, ≤15 KB parts), and then TALK to Dejan in the tab: he will ask follow-ups; you answer from the files, never from memory. Sections: `## §0 Headline` (≤5 lines) → `## HIS DIRECTIONS` (a table: time · his words · what the desk must do · followed? · evidence file:line) → `## STARTUP` (what the desk reads at wake-up vs what it used; the size in tokens or bytes; the three biggest cuts you would make) → `## WORKERS` (what each kind of worker reads vs what it needs) → `## WORKFLOWS` (design, development, deployment: the sequence as run 09-28 to 09-30, where rounds and time were lost, with the cause and the row) → `## THE 09-30 DEPLOY` (eight attempts to land DRC: each failure, its cause, and the rule that would have prevented it before the first launch) → `## RECOMMENDATIONS` (each: the change, the file, the law it touches, the risk; at most ten, ranked) → `## UNPROVEN` (what you could not verify, and why). Every claim cites a file path and line or a row number; a quote is copied from the file. He rules; you recommend.
+
+Do not soften: when the evidence says the desk broke a direction of his, say so plainly, with the row. When the evidence says a direction of his was ambiguous or contradictory, say that instead and quote both.
