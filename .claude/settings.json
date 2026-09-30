@@ -18,7 +18,17 @@
       "Bash(git diff*)",
       "Bash(claude stop *)",
       "Bash(claude rm *)",
-      "Bash(herdr *)"
+      "Bash(herdr *)",
+      "Edit(//Users/cobalt/Vault/Think/6 - Permanent/Memory/**)",
+      "Edit(docs/40 - DevDocs/**)",
+      "Bash(date*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(grep *)",
+      "Bash(tail *)",
+      "Bash(sh /Users/cobalt/.claude/ops/*)",
+      "Read(//Users/cobalt/Vault/**)",
+      "Read(//Users/cobalt/cobalt-wt/**)"
     ]
   },
   "worktree": {
