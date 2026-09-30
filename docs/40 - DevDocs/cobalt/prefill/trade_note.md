@@ -90,3 +90,7 @@ The frontmatter merge keeps his raw lines: `_merge_frontmatter_lines` writes an 
 ## 2026-09-30 — e1-inline
 
 A ` #` comment he types at the end of a replaced or filled entry's own line is kept after the new value, with his spacing; a `#` inside quotes is his value, and a quote that does not close on the line or a flow `[`/`{` value is not guessed (the comment goes with the old value).
+
+## 2026-09-30 — e1-inline check (O1)
+
+A `!tag` or `&anchor` before his value is passed over before the quote check, so a `#` inside the quotes that follow it (`stop_price: !!str "5.2 # x"`) is never taken as his comment.

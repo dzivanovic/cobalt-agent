@@ -303,7 +303,8 @@ def _merge_frontmatter_lines(path: Path, existing: str, fm: Mapping, fresh: dict
     replaced entry is his and is kept; so is a ` #` comment at the end of
     its own line, written after the new value with his spacing — unless
     the `#` cannot be told from one inside quotes (a quote that does not
-    close on the line, a flow `[`/`{` value): then it is not guessed and
+    close on the line, a flow `[`/`{` value; a `!tag` / `&anchor` before
+    the value is passed over first): then it is not guessed and
     goes with the old value. A Cobalt-owned key absent from his
     block is appended before the closing `---`, in FIELD_ORDER; an absent
     key of his is never added. A parsed key with no top-level line of its
@@ -342,6 +343,9 @@ def _merge_frontmatter_lines(path: Path, existing: str, fm: Mapping, fresh: dict
         `#` inside quotes cannot be ruled out."""
         rest = line.split(":", 1)[1]
         value = rest.lstrip(" \t")
+        while value[:1] in ("!", "&"):   # a tag / anchor before the value: its quote is looked at
+            j = next((i for i, ch in enumerate(value) if ch in " \t"), len(value))
+            value = value[j:].lstrip(" \t")
         if value[:1] in ("[", "{"):
             return ""
         if value[:1] in ('"', "'"):
