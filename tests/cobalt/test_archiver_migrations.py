@@ -510,13 +510,13 @@ def test_rollback_down_to_0009_drops_this_branch_alone_and_0007_also_reaches_p4(
         survivors = {
             name
             for name in CREATED_TABLES
-            # voice V1's 0017 and S3 exits C1's 0021 sit ABOVE both bounds,
-            # so both rollbacks correctly drop voice_turns and legs too;
-            # neither is a survivor.
+            # voice V1's 0017, S3 exits C1's 0021 and F15 P1's 0022 sit ABOVE
+            # both bounds, so both rollbacks correctly drop voice_turns, legs
+            # and prediction_records too; none is a survivor.
             if name not in NEW_TABLES
             and name not in P4_TABLES
             and name not in DRC_D1_TABLES
-            and name not in ("voice_turns", "legs")
+            and name not in ("voice_turns", "legs", "prediction_records")
             and _regclass(conn, name)
         }
 
