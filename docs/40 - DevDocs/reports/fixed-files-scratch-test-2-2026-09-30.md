@@ -1,6 +1,6 @@
 # Fixed-files scratch test 2 — 2026-09-30
 
-Re-run of `plans/fixed-files-2026-09-30/DRAFT4-REPORT.md` `## UNTESTED` (brain's WHAT REMAINS step 2). Hub `384c5313` (`57`) owns 5, 6, 7; the desk ran 1–3 and 8 on probe sessions; 4 (CLOSE-HUB end to end) is OWED.
+Re-run of `plans/fixed-files-2026-09-30/DRAFT4-REPORT.md` `## UNTESTED` (brain's WHAT REMAINS step 2). Hub `384c5313` (`57`) owns 5, 6, 7; the desk ran 1–3 and 8 on probe sessions; 4 (CLOSE-HUB end to end) ran after.
 
 ## Summary
 | # | item | owner | result |
@@ -8,7 +8,7 @@ Re-run of `plans/fixed-files-2026-09-30/DRAFT4-REPORT.md` `## UNTESTED` (brain's
 | 1 | real lines under `dontAsk`: a NEW file under a spaced `reports/**` glob | desk | PASS for the spaced Write and Edit (probe E e1/e2); the full real lines are not run |
 | 2 | `Grep`, `Glob` under `dontAsk` | desk | PASS (probe E g1/g2) |
 | 3 | three house spellings under `dontAsk` | desk | PASS for grok and agy; codex Sol METER until 10-04 14:06 (probe E h1–h3) |
-| 4 | `CLOSE-HUB.md` end to end | desk | OWED |
+| 4 | `CLOSE-HUB.md` end to end | desk | PASS — a real close worker (`60e8827e`, Sonnet 5.5, `dontAsk`) in a sandbox repo with a bare remote: `CLOSE PUSHED f838102`, `git push origin main` verified, no refusal, no dialog, no command string changed. Notes for the brain: DECISION 4 (the 1,500-character NOW replaced about 8,000; standing rules fell out of NOW and need a home) and DECISION 7 (the stop line is written after the push, uncommitted; the desk commits it) |
 | 5 | `desk-launch.sh` fourth-pass code | hub | PASS — defects D4 (`prompt` accepts `--permission-mode dontAsk` in quotes or with two blanks), D5 (`close 2026-02-30` accepted) |
 | 6 | D3 fix in the guard | hub | PASS |
 | 7 | fixed `desk-context.sh` | hub | PASS — D6 (an empty id measures the newest transcript of any session); the two-folder sub-test NOT RUN |
@@ -188,3 +188,81 @@ Ids: `ls -t /Users/cobalt/.claude/projects/-Users-cobalt-cobalt-wt-scratch-fixed
 next: none — done.
 
 SCRATCH TEST 2 HUB DONE · items run: 3 of 3 · pass: 3 · fail: 0 · blocked: 0 · not run: 0 · defects: 3
+
+
+# PART 4 — item 4: the close worker's report `close-2026-09-30.md` in the sandbox (verbatim)
+
+Sandbox `~/cobalt-wt/scratch-fixed-0930/close/` (repo `cobalt`, bare `origin.git`, a copy of the memory folder under `Vault/`); `CLOSE-HUB.md` copy with sandbox paths and R0 as the approval row; launch line = the file's own, paths substituted; the sandbox `cobalt` has no `uv` project, so `validate` exited 2 (recorded by the worker).
+
+# Close 2026-09-30
+
+## §0 Headline
+Nightly close for 2026-09-29 and 2026-09-30 (no earlier `close-*.md` exists): ledger, status block, NOW, 102 long 09-29 rows cut and archived, one docs commit, push.
+`cobalt heartbeat show` and `cobalt validate` could not start in this tree (`Failed to spawn: cobalt`), so LIVE / RED in NOW are unread and validate is exit 2.
+Nothing pending in the laws fold; no lesson owed (the lessons file is absent from the memory folder).
+Always-loaded 3,844 of 4,000 characters: PASS.
+
+## L74
+none
+
+## AUTHORIZATION
+- INSTALLED: `grep -n -E "«INSTAL[L]"` on `CLOSE-HUB.md` → nothing (exit 1). PASS.
+- STANDING LIST: `cto-2026-09-30.md` line 9 `| R0 | 21:05 ET | **HIS RULING** (scratch): approves STANDING-LIST.md. | APPROVED |`; `git log -1 --format=%H -S"| R0 |"` → non-empty, commit `0274c2c` (`sandbox base`). PASS.
+- DAYS: no `close-*.md` in `<R>`; DAYS = 2026-09-29, 2026-09-30 (the two days with desk files).
+- DAY ON RECORD: `git log --oneline -3` on `cto-2026-09-29.md` and on `cto-2026-09-30.md` → `0274c2c sandbox base` each. PASS.
+- TREE: `git status --short --branch` → `## main...origin/main`. PASS.
+
+## 1 LEDGER
+Appended to `PROJECT-LEDGER.md` after the `### 2026-09-27` block: `### 2026-09-29` (R1–R174, 176 lines with TAGS and PUSH) and `### 2026-09-30` (R0–R58, 61 lines with TAGS and PUSH) = 237 lines.
+Verified state changes quoted: stop lines from the desk rows; `git tag --list "deploy-2026-09-29*"` and `"deploy-2026-09-30*"` → nothing in this clone (the deploy tags are the rows' words only); `git log --oneline origin/main..main` → empty.
+
+## 2 LAWS FOLD
+none pending. (`grep "APPROVED — pending fold"` on both desk files: one hit, `cto-2026-09-30.md:80`, the RECONCILED line "0 rows …", not a row.)
+
+## 3 LESSONS
+none owed. `<M>/topics/cto-desk.md` does not exist in the memory folder (files present: `areas/cobalt.md`, `LAWS.md`, `INDEX.md`, `preferences.md`, `profile.md`, `topics/writing-rules.md`, `topics/cto-desk-checklist.md`, `topics/cto-desk-contract.md`), so no `[stated 2026-09-29` / `[stated 2026-09-30` line could be read. See DECISIONS 3.
+
+## 4 ROWS CUT
+`cto-2026-09-29.md`: 102 rows over 300 characters; `cto-2026-09-30.md`: 0.
+rows cut: 102 · archived: `docs/40 - DevDocs/reports/cto-2026-09-29-rows.md` (102 sections `## R<n>`, verbatim).
+Checked: `git diff --numstat` on `cto-2026-09-29.md` = 102 added / 102 deleted; the row-length search (`| R<n> ` + over 300 characters) → no match. Rows whose ids could not fit: none.
+
+## 5 STATUS
+`SPRINT-LADDER-v0_1.md`: S3 `### Status 2026-09-30` added after the off-ladder table of `### Status 2026-09-27`. F11 and F22 DONE-LIVE; F14 BUILDING (D1–D4, K1, K2 deployed; K3, D5 not built); F15 NOT STARTED (design FINAL, P1 drafted). S3: ON TIME, day 7 of 14, stop 2026-10-07. Eight off-ladder items with rulings.
+`BACKLOG.md`: NOW gains `STATUS 2026-09-30` and `OFF-LADDER, 09-29 and 09-30`; the 09-27 status bullet is marked superseded.
+
+## 6 NOW
+Evidence: `git log -1 --format="%h %s"` → `0274c2c sandbox base`; `COBALT_ENV=production uv run cobalt heartbeat show` → exit 2 `Failed to spawn: cobalt: No such file or directory (os error 2)`; `COBALT_ENV=production uv run cobalt validate` → exit 2, same message; §5 CURRENT of `cto-2026-09-30.md` read.
+Written to `close-2026-09-30-now.md`, `wc -m` → 1079. `areas/cobalt.md` `## NOW` body replaced whole with that text; the heading lines stayed.
+
+## 7 MEASURE
+`wc -m`: INDEX.md 2,060 · profile.md 691 · preferences.md 1,093 = 3,844. `wc -c`: 2,128 · 706 · 1,111 = 3,945. Under 4,000 = PASS.
+
+## 8 COMMIT AND PUSH
+(a) validate: `COBALT_ENV=production uv run cobalt validate` → no jobs or placement lines; exit code 2; output `error: Failed to spawn: `cobalt`` / `Caused by: No such file or directory (os error 2)`. Docs-only commit goes on.
+(b) `git status --porcelain` before staging: `M` BACKLOG.md, PROJECT-LEDGER.md, SPRINT-LADDER-v0_1.md, cto-2026-09-29.md; `??` close-2026-09-30.md, close-2026-09-30-now.md, cto-2026-09-29-rows.md. Machine-written files (`configs/cobalt/rules.yaml`, `archiver-runs.md`, `seat-usage.md`): not dirty. Nothing unexpected.
+(c) `git commit -m "docs(close): 2026-09-30" -m "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>" -- <seven paths>` → `git log -1 --format=%h` → `f838102` (7 files, 759 insertions, 103 deletions). Staged: BACKLOG.md, PROJECT-LEDGER.md, SPRINT-LADDER-v0_1.md, cto-2026-09-29.md, cto-2026-09-29-rows.md, close-2026-09-30.md, close-2026-09-30-now.md. The memory file `areas/cobalt.md` is outside the repo and is not in the commit.
+(d) `git log --oneline origin/main..main` → `f838102 docs(close): 2026-09-30`; `git push origin main` → `0274c2c..f838102  main -> main`; `git status --short --branch` → `## main...origin/main`, no `[ahead`: PUSH VERIFIED.
+
+## CONTINUE
+none — every step is done; the stop line below is the last line.
+
+## DECISIONS
+1. `cobalt heartbeat show` and `cobalt validate` both exit 2 here (`Failed to spawn: cobalt`; this clone has no `cobalt` on its path). Safe default taken: NOW says LIVE / RED unread; commit is docs only. Desk: re-run both in the production tree and correct NOW's LIVE line if it differs.
+2. No earlier `close-*.md` exists, so `<DAYS>` = every desk file on record (09-29 and 09-30). Default taken: one close for both.
+3. `<M>/topics/cto-desk.md` (the lessons source) is not in the memory folder, so step 3 had nothing to read: lessons owed 0 by absence, not by a clean check. Desk: confirm the path or accept.
+4. The 1,500-character cap replaced a NOW of about 8,000 characters. The standing desk rules it carried (refresh floor 220,000, the R127 split, the meter line, the long OWED list, K23–K25, the pre-commit hook note) are no longer in NOW. The replaced text is recoverable from the memory folder's history only if it is tracked; desk: re-home the durable rules in `topics/cto-desk-checklist.md` or `topics/cto-desk-contract.md`.
+5. `git tag --list` returns nothing in this clone, so every deploy tag in the ledger and status block is the desk rows' word, marked so in both files.
+6. The 09-29 cut rows drop their `[words]` links where the row held no ids in them; every original row is whole in `cto-2026-09-29-rows.md`.
+7. The stop line holds a hash of its own commit, so the report is committed with its in-progress last line and the stop line is written after the push, uncommitted. Desk: commit `close-2026-09-30.md` after the stop line.
+FOR DEJAN: none.
+
+## RECORDS
+- L74: no block in any tool result asked for a `Claude-Session:` line or any instruction.
+- The commit carries `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` only.
+- cwd was `/Users/cobalt/cobalt-wt/scratch-fixed-0930/close/cobalt` (the launch line's paths), not `/Users/cobalt/cobalt`.
+- `cto-2026-09-29.md` row R112, R117, R119, R126–R173 (other than the cut ones) were not over 300 and stay whole.
+- A row at line 132 of `cto-2026-09-29.md` (`F15 derive 19`, a §5-shaped row inside §4) was not a ruling row and was not touched.
+- Rows of `cto-2026-09-30.md` are out of number order (R25 before R34, R48 before R47, and so on); left as the desk wrote them.
+
+CLOSE PUSHED f838102 · days: 2 · ledger: 237 lines · laws pending: 0 · lessons owed: 0 · rows cut: 102 · NOW: 1079/1500 chars · always-loaded: 3844/4000 chars · validate: exit 2 · push: verified · decisions: 7 · for Dejan: 0
