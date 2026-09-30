@@ -21,7 +21,7 @@ MIGRATIONS (`FORWARD` order): DRC `0016` `0018` `0019` `0020`. Production is at 
 LIVE = `deploy-2026-09-27` = `3349466f`.
 
 THE LAUNCH-TIME VALUES (the desk fills each, read at launch):
-- `<main base>` = «FILL AT LAUNCH: `git -C /Users/cobalt/cobalt log --oneline -1 main` at bare command (0)»
+- `<main base>` = `8635cde1` (`git -C /Users/cobalt/cobalt log --oneline -1 main` at bare command (0), 07:0x ET)
 - the launch row = R14
 - `<set>` = ONE
 
