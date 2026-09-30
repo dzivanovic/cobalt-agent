@@ -300,7 +300,11 @@ def _merge_frontmatter_lines(path: Path, existing: str, fm: Mapping, fresh: dict
     are only: a Cobalt-owned key (its value lines replaced by
     `_render_value`), and a key of his that is blank and has a fill
     (blank → value only, R35 (3)). A comment or blank line under a
-    replaced entry is his and is kept. A Cobalt-owned key absent from his
+    replaced entry is his and is kept; so is a ` #` comment at the end of
+    its own line, written after the new value with his spacing — unless
+    the `#` cannot be told from one inside quotes (a quote that does not
+    close on the line, a flow `[`/`{` value): then it is not guessed and
+    goes with the old value. A Cobalt-owned key absent from his
     block is appended before the closing `---`, in FIELD_ORDER; an absent
     key of his is never added. A parsed key with no top-level line of its
     own (a flow mapping, a repeated key) is refused, nothing written (L1).
@@ -332,6 +336,34 @@ def _merge_frontmatter_lines(path: Path, existing: str, fm: Mapping, fresh: dict
     if {key for key, _ in entries} != keys:
         raise refused
 
+    def inline_comment(line: str) -> str:
+        """His comment at the end of an entry's first line, with the spaces
+        or tabs he typed before its `#`; "" when there is none, or when a
+        `#` inside quotes cannot be ruled out."""
+        rest = line.split(":", 1)[1]
+        value = rest.lstrip(" \t")
+        if value[:1] in ("[", "{"):
+            return ""
+        if value[:1] in ('"', "'"):
+            quote, i = value[0], 1
+            while i < len(value):
+                if quote == '"' and value[i] == "\\":
+                    i += 2
+                elif value[i] != quote:
+                    i += 1
+                elif quote == "'" and value[i + 1:i + 2] == "'":
+                    i += 2
+                else:
+                    break
+            else:
+                return ""
+            after = value[i + 1:]
+            return after if after[:1] in (" ", "\t") and after.lstrip(" \t").startswith("#") else ""
+        for i, ch in enumerate(rest):
+            if ch == "#" and i > 0 and rest[i - 1] in " \t":
+                return rest[len(rest[:i].rstrip(" \t")):]
+        return ""
+
     out = [lines[start], *prefix]
     for key, entry in entries:
         if key in COBALT_OWNED_FIELDS:
@@ -343,6 +375,8 @@ def _merge_frontmatter_lines(path: Path, existing: str, fm: Mapping, fresh: dict
             continue
         # his comment / blank lines under the entry stay; the value's own lines go
         tail = [line for line in entry[1:] if line.strip() == "" or line.lstrip().startswith("#")]
+        if "\n" not in rendered:
+            rendered += inline_comment(entry[0])
         out.extend([rendered, *tail])
     out.extend(_render_value(key, fresh[key]) for key in FIELD_ORDER
                if key in COBALT_OWNED_FIELDS and key not in keys)

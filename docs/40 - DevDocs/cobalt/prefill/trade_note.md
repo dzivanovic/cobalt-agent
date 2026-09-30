@@ -86,3 +86,7 @@ The test guard: `tests/cobalt/conftest.py` autouse fixture `trade_note_path_guar
 ## 2026-09-29 — S3 exits C4 fix r2
 
 The frontmatter merge keeps his raw lines: `_merge_frontmatter_lines` writes an existing note's block back line by line, in his order, byte for byte; only Cobalt's five and a blank key of his that has a fill are rendered (a block it cannot map line by line onto its keys is refused, nothing written).
+
+## 2026-09-30 — e1-inline
+
+A ` #` comment he types at the end of a replaced or filled entry's own line is kept after the new value, with his spacing; a `#` inside quotes is his value, and a quote that does not close on the line or a flow `[`/`{` value is not guessed (the comment goes with the old value).
