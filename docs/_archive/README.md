@@ -53,3 +53,15 @@ DevDocs `notify/cli.md`, `email.md`, `store.md` are all readable at
 `cobalt_email_sends` migration stays at
 `src/cobalt/notify/migrations/0001_cobalt_email_sends.sql` because the
 table still exists; dropping it is a separate HITL.
+
+## The 15:40 DRC prefill, retired 2026-09-29 (DRC D3) — not archived here
+
+The evening `com.cobalt.prefill-drc` job and its repo template
+`configs/cobalt/templates/drc.md.j2` were retired by DRC D3 (v2 §8
+`[F-22]`, `[F-28]`): the DRC note is built by the input-driven build from
+HIS template. By the 2026-09-15 ruling above, the retired files are not
+copied here — `ops/com.cobalt.prefill-drc.plist` and
+`configs/cobalt/templates/drc.md.j2` are readable at the D3 build's base
+`f52ed883` (`git show f52ed883:<path>`). Their DevDocs stay where they
+are, each with a dated "retired" section (D6: never deleted):
+`docs/40 - DevDocs/cobalt/prefill/drc.md`, `prefill/cli.md`.

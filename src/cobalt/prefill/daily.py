@@ -70,6 +70,7 @@ from cobalt.prefill.errors import PrefillFetchError
 from cobalt.prefill.market import MarketRow, fetch_market_table
 from cobalt.prefill.rules_gen import regenerate_rules_config
 from cobalt.prefill.vault_writer import read_if_exists, resolve_target
+from cobalt.settings.drc import NOT_GIVEN, DailyRisk, daily_risk_values
 from cobalt.vaultwrite import VaultWriteStore, VaultWriter, WriteResult, after_pattern, wrap_span
 from cobalt.vaultwrite.markers import find_section, legacy_slot_present
 
@@ -160,6 +161,22 @@ def format_sizing_rule_text(text: str, sheet_modes_cfg) -> str:
 
 def apply_mode_aware_sizing(rules: list[RuleItem], sheet_modes_cfg) -> list[RuleItem]:
     return [r.model_copy(update={"text": format_sizing_rule_text(r.text, sheet_modes_cfg)}) for r in rules]
+
+
+def format_daily_stop(risk: Optional[DailyRisk], error: Optional[str] = None) -> str:
+    """The template's `Daily HARD Stop:` value (DRC D4-3, R95 / R102).
+
+    The number used to be typed into the committed template — his value in
+    git, and a second place beside the settings. It now comes from the ONE
+    reader (`cobalt.settings.drc`), per sheet: `full $X · half $Y`, and an
+    absent key reads `not given` — never the old literal, never a blank
+    that looks like a number. A failed read renders FAILED, never blank."""
+    if error is not None or risk is None:
+        return f"FAILED: {error or 'the daily stop was not read'}"
+    return " · ".join(
+        f"{sheet} {NOT_GIVEN if value is None else f'${value}'}"
+        for sheet, value in risk.daily_stop.items()
+    )
 
 
 def format_rules_checkbox_block(rules: list[RuleItem]) -> str:
@@ -513,6 +530,14 @@ async def run_daily_prefill(
         rules_cfg, sheet_modes_cfg, format_mode_hint(cards),
         build_sheet_mode_block(),
     )
+    # DRC D4-3: the daily stop, from the one reader. Fail-soft in the L28
+    # sense only: a settings failure is a visible FAILED line in the new
+    # note, not a lost 05:15 run.
+    try:
+        context["daily_stop"] = format_daily_stop(daily_risk_values())
+    except Exception as e:  # noqa: BLE001 - rendered in the note, never swallowed
+        logger.error("daily prefill: the daily stop was not read ({})", type(e).__name__)
+        context["daily_stop"] = format_daily_stop(None, f"daily stop unreadable ({type(e).__name__}: {e})")
 
     # L28.1: a note that does not exist is created whole from the
     # template. A note that DOES exist always takes the merge path below

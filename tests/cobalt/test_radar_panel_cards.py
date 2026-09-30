@@ -669,10 +669,12 @@ POST_ALLOWLIST = {
     "/size", "/fill", "/attest", "/card/{card_id}/move", "/card/{card_id}/stop",
     "/radar/card/{card_id}/key", "/radar/card/{card_id}/dot/{factor}",
     "/radar/card/{card_id}/promote", "/radar/card/{card_id}/release",
+    "/settings/daily", "/settings/daily/apply",
+    "/drc/import", "/drc/no-trade", "/drc/scan",  # DRC D2-4 (the /drc import page)
     # voice V1 (FINAL §9): the widget's turn and its Confirm / Cancel taps
     "/voice/turn", "/voice/confirm", "/voice/cancel",
 }
-GET_ONLY = {"/", "/radar", "/api/radar/pool", "/api/health", "/api/prefill"}
+GET_ONLY = {"/", "/radar", "/api/radar/pool", "/api/health", "/api/prefill", "/drc"}
 
 
 def test_post_routes_are_exactly_the_explicit_allowlist():

@@ -146,17 +146,20 @@ def test_a_declared_one_shot_only_config_derives_no_restart(monkeypatch):
 
 
 
-def test_generated_rules_yaml_derives_no_restart(monkeypatch):
-    # 2026-09-16: configs/cobalt/rules.yaml is regenerated and re-read by the
+def test_generated_rules_yaml_derives_the_aset_restart(monkeypatch):
+    # 2026-09-16: configs/cobalt/rules.yaml was regenerated and re-read by the
     # prefill one-shots only (daily.py / drc.py -> regenerate_rules_config);
     # the nightly generated commit escalated it as UNCLASSIFIED CONFIG.
+    # DRC D3 NAMED REVERSAL (was `test_generated_rules_yaml_derives_no_restart`;
+    # v2 `[F-28]`, F41): the DRC build calls regenerate_rules_config() INSIDE
+    # com.cobalt.aset, so the file moved from no_resident_reads to that job's
+    # `reads:` — a change to it now derives the aset restart, never escalates.
     monkeypatch.setattr(restarts, "changes", lambda _range: [
         Change("configs/cobalt/rules.yaml", "M"),
     ])
     (row,) = classify("HEAD...HEAD")
     assert row.escalate is False
-    assert row.restarts == ()
-    assert "no resident" in row.rule
+    assert row.restarts == ("com.cobalt.aset",)
 
 
 _LOADER = "cobalt.backup.config.load_backup_config"

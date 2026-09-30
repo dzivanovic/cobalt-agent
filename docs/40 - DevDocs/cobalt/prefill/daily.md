@@ -82,3 +82,17 @@ vault root, or a raised `VaultWriteError`/`RulesSourceError`/
 the vault's `1 - Trading/5 - Review/Rules.md` (via `regenerate_rules_config`,
 NOT the committed `rules.yaml` directly — that's now a generated cache),
 `configs/cobalt/templates/daily.md.j2`.
+
+---
+
+## 2026-09-25 — DRC D4-3: the daily note reads the daily-stop key (R95 / R102)
+
+The template's `Daily HARD Stop:` line no longer carries a number — it
+renders `{{ daily_stop }}`. `run_daily_prefill` fills it from the ONE
+reader, `cobalt.settings.drc.daily_risk_values()`, through
+`format_daily_stop(risk, error=None)`: `full $X · half $Y` per sheet, and
+`not given` for an absent key (never the old literal, never blank). A
+settings read that fails renders `FAILED: daily stop unreadable (…)` in the
+new note and logs the error type — the 05:15 run is not lost. The line only
+appears in a note the template CREATES; an existing note's line is his and
+is not touched. The rest of the template is unchanged.

@@ -71,6 +71,7 @@ def _stores():
     from cobalt.aset.store import AsetStore
     from cobalt.cards.store import CardStore
     from cobalt.daymode.store import DayModeStore
+    from cobalt.drc.store import DrcStore
     from cobalt.jobs.store import JobStore
     from cobalt.radar.store import RadarStore
     from cobalt.redact.store import RedactionStore
@@ -80,7 +81,7 @@ def _stores():
     from cobalt.vaultwrite.store import VaultWriteStore
 
     return [
-        BarStore, AsetStore, CardStore, DayModeStore, JobStore,
+        BarStore, AsetStore, CardStore, DayModeStore, DrcStore, JobStore,
         RadarStore, RedactionStore, SessionBlockStore,
         TraderSettingsStore, TradeDefStore, VaultWriteStore,
     ]
@@ -511,15 +512,17 @@ def test_down_to_0004_selects_0009_0008_0007_0006_then_0005_reverse():
 
     selected = [path.name for path in _rollback_paths("0004")]
     names = selected
-    assert selected[:8] == [
+    assert selected[:10] == [
+        "0020_drc_build_kinds.rollback.sql",  # DRC D3
+        "0019_drc_events.rollback.sql",  # DRC D2 fix r1
+        "0018_drc_stated_books.rollback.sql",  # DRC K1
         "0017_voice_turns.rollback.sql",  # voice V1
+        "0016_drc.rollback.sql",  # DRC D1
         "0015_shadow_agreement_stale.rollback.sql",  # the stale-score build (R40, X30 (A))
         "0014_radar_handicap.rollback.sql",  # the float handicap H1
         "0013_tunables_slug_nullable.rollback.sql",  # the setups one build (R2-3 = B)
         "0011_archive_incidents.rollback.sql",
         "0010_archive_progress.rollback.sql",
-        "0009_picks_missed.rollback.sql",
-        "0008_radar_value_movers.rollback.sql",
     ]
     assert selected[-3:] == [
         "0007_radar_cards.rollback.sql",

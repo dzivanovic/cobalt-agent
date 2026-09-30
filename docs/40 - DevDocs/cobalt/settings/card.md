@@ -17,7 +17,7 @@ The trader's radar-card settings: five `"user".trader_settings` keys with typed 
 1. The sha256 is taken over the file's bytes and verified before anything parses. `--apply` requires it.
 2. The file must have the shape `card_settings: {<key>: <value>, …}` and is the WHOLE card-settings set: a key it omits is deleted.
 3. A per-key diff is printed.
-4. One `TraderSettingsStore.put(rows, delete=…)`, a single transaction.
+4. `settings.cli.apply_settings(rows, source="card:<file>@sha256:<hash>", actor="settings.load.card", store=…, delete=…)` — the ONE apply every settings load uses (2026-09-25, D4 fix r1 F-1; before it the card path called `store.put` itself): refused inside `market_reset`, one `put` (a single transaction, deletes included), a read-back, one log line of keys and source kind.
 5. A round-trip read (`CardSettings.from_rows(db) == file`) runs before success is printed.
 
 A trader-run apply is exempt from the HITL token (L28 amended 2026-09-15).

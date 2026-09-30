@@ -122,7 +122,7 @@ def _launchctl_loaded(label: str) -> bool:
 
 def _drc_note_path(day: date) -> Path:
     """`prefill.yaml` review_dir + drc_filename_pattern in the resolved
-    vault — the same two values prefill-drc and the replay miss line use."""
+    vault — the same two values the DRC build and the replay miss line use."""
     from cobalt.prefill.config import load_prefill_paths
     from cobalt.vault import resolve_vault_path
 
@@ -347,7 +347,7 @@ def _job_sql(check: JobRowCheck) -> str:
     return JOB_ROW_SQL.format(label=sql_literal(check.label))
 
 
-def _relation_sql(check: SqlCheck) -> str:
+def _relation_sql(check: SqlCheck | VaultUnitCheck) -> str:
     return RELATION_SQL.format(relation=sql_literal(check.requires_relation))
 
 
@@ -378,10 +378,14 @@ def command_for(check, ctx: SmokeContext, *, note_path: Optional[Path] = None) -
     if isinstance(check, VaultUnitCheck):
         day = getattr(ctx, check.day)
         target = shlex.quote(str(note_path)) if note_path else f"<{check.note} note for {day:%Y-%m-%d}>"
-        return (
+        main = (
             f"grep -n -F -e {shlex.quote(f'<!-- cobalt:section {check.section} -->')} "
             f"-e {shlex.quote(f'<!-- cobalt:unit {check.unit} -->')} {target}"
         )
+        if check.requires_relation:
+            # The DRC branch reads its event on the USER side (`_drc_event`).
+            return hand_command(_relation_sql(check), side="user", prod=ctx.prod) + " && " + main
+        return main
     if isinstance(check, CliCheck):
         return "uv run " + " ".join(shlex.quote(render_text(a, ctx)) for a in check.argv)
     if isinstance(check, CompareCheck):
@@ -454,16 +458,28 @@ def _one_row(result: QueryRows) -> Optional[dict[str, Any]]:
     return dict(zip(result.columns, result.rows[0])) if result.rows else None
 
 
+def _relation_absent(check: SqlCheck | VaultUnitCheck, side: str, command: str, deps: SmokeDeps,
+                     raw_parts: list[str]) -> Optional[CheckOutcome]:
+    """`requires_relation`, checked first with `to_regclass`: absent →
+    FAIL naming it, and the caller runs nothing else. `None` = present
+    (or no relation declared)."""
+    if not check.requires_relation:
+        return None
+    present = deps.read_rows(_relation_sql(check), side)
+    raw_parts.append(_raw_rows(present))
+    row = _one_row(present)
+    if not row or row.get("present") is not True:
+        return _out(check, Verdict.FAIL, f"relation {check.requires_relation} does not exist",
+                    command, "\n".join(raw_parts))
+    return None
+
+
 def _sql(check: SqlCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
     command = command_for(check, ctx)
     raw_parts = []
-    if check.requires_relation:
-        present = deps.read_rows(_relation_sql(check), check.side)
-        raw_parts.append(_raw_rows(present))
-        row = _one_row(present)
-        if not row or row.get("present") is not True:
-            return _out(check, Verdict.FAIL, f"relation {check.requires_relation} does not exist",
-                        command, "\n".join(raw_parts))
+    absent = _relation_absent(check, check.side, command, deps, raw_parts)
+    if absent is not None:
+        return absent
     result = deps.read_rows(render_sql(check.query, ctx), check.side)
     raw_parts.append(_raw_rows(result))
     raw = "\n".join(raw_parts)
@@ -569,8 +585,50 @@ def _log_grep(check: LogGrepCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckO
     return _out(check, Verdict.FAIL, detail, command, raw)
 
 
+#: DRC D3-6 (`[F-25]`, R103 O18): the day's DRC event — the event of its
+#: CURRENT trading-log import, else of its current `no_trade` statement
+#: (`DrcStore.event_for`'s rule) — read-only, USER side. No row = no event.
+DRC_EVENT_SQL = (
+    "SELECT e.state AS event_state, e.error AS event_error FROM drc_events e "
+    "WHERE e.day = {day} AND ("
+    "e.import_id = (SELECT max(i.id) FROM drc_imports i WHERE i.import_date = {day} "
+    "AND i.kind = 'trading_log' AND i.id NOT IN "
+    "(SELECT supersedes FROM drc_imports WHERE supersedes IS NOT NULL)) "
+    "OR (NOT EXISTS (SELECT 1 FROM drc_imports i WHERE i.import_date = {day} AND i.kind = 'trading_log' "
+    "AND i.id NOT IN (SELECT supersedes FROM drc_imports WHERE supersedes IS NOT NULL)) "
+    "AND e.stated_book_id = (SELECT max(s.id) FROM drc_stated_books s WHERE s.day = {day} "
+    "AND s.kind = 'no_trade' AND s.id NOT IN "
+    "(SELECT supersedes FROM drc_stated_books WHERE supersedes IS NOT NULL))))"
+)
+
+
+def _drc_event(day: date, deps: SmokeDeps) -> tuple[Optional[dict[str, Any]], str]:
+    statement = DRC_EVENT_SQL.format(day=sql_literal(day))
+    result = deps.read_rows(statement, "user")
+    return _one_row(result), _raw_rows(result)
+
+
 def _vault_unit(check: VaultUnitCheck, ctx: SmokeContext, deps: SmokeDeps) -> CheckOutcome:
+    """A marked unit in a vault note. For the DRC note (D3-6): the day's DRC
+    event decides first — none → KNOWN `pending` (no DRC is his lawful
+    choice, R66); `failed`, or a build left `pending` / `running` → FAIL;
+    `done` → the note and the unit's markers must both be there. Nothing
+    requires the note at 15:41 (R103 O18). A declared `requires_relation`
+    is checked FIRST, on the USER side the event read uses (D3-9): absent
+    → FAIL naming it, the event never read, the note never asked."""
     day = getattr(ctx, check.day)
+    if check.note == "drc":
+        absent = _relation_absent(check, "user", command_for(check, ctx), deps, [])
+        if absent is not None:
+            return absent
+        event, event_raw = _drc_event(day, deps)
+        event_command = hand_command(DRC_EVENT_SQL.format(day=sql_literal(day)), side="user", prod=ctx.prod)
+        if event is None:
+            return _out(check, Verdict.KNOWN, f"pending — no DRC event for {day:%Y-%m-%d}",
+                        event_command, event_raw)
+        if event["event_state"] != "done":
+            why = f" — {event['event_error']}" if event.get("event_error") else ""
+            return _out(check, Verdict.FAIL, f"DRC event {event['event_state']}{why}", event_command, event_raw)
     path = deps.drc_note_path(day)
     command = command_for(check, ctx, note_path=path)
     if not Path(path).is_file():

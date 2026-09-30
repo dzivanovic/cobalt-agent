@@ -156,10 +156,10 @@ def _predicates():
 def test_0015_is_registered_after_0013_and_its_rollback_first():
     from cobalt.db_migrations import FORWARD, MIGRATIONS_DIR, REVERSE
 
-    assert FORWARD[-2] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.sql"
-    assert REVERSE[1] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.rollback.sql"
-    assert FORWARD[-4].name == "0013_tunables_slug_nullable.sql"
-    assert REVERSE[3].name == "0013_tunables_slug_nullable.rollback.sql"
+    assert FORWARD[-6] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.sql"
+    assert REVERSE[5] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.rollback.sql"
+    assert FORWARD[-8].name == "0013_tunables_slug_nullable.sql"
+    assert REVERSE[7].name == "0013_tunables_slug_nullable.rollback.sql"
 
 
 def test_0015_applies_twice_and_its_rollback_restores_0007s_view_inside_one_rolled_back_transaction():

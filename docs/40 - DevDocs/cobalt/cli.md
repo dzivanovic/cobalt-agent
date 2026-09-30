@@ -92,3 +92,9 @@ One registration pair: `from cobalt.voice import cli as voice_cli` and
 its neighbours) mounts `cobalt voice turn --text | --audio | --confirm
 [--dry-run] [--session]` — the voice turn function's CLI caller
 (`voice/cli.md`). `--confirm` refuses in production.
+
+## 2026-09-24 — DRC K1: the `drc` group
+
+`drc_cli.add_parser(sub)` mounts `cobalt drc state-book`. It dry-runs by
+default and writes only with `--apply --sha256` (`drc/cli.md`). This is
+the ONE `drc` group: D3's `cobalt drc build` joins it later (L3).

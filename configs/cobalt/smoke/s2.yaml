@@ -486,6 +486,11 @@ checks:
       name partial (zero bars on the day, a fetch failure) = FAIL; either
       operand ERRORed = ERROR, never a quiet PASS
 
+  # DRC D3-6 ([F-25], R103 O18): the DRC rows follow the day's DRC event —
+  # pending (KNOWN) when no event exists for the date (no DRC is his lawful
+  # choice, R66); FAIL when the event is failed, or done without the note
+  # and its drc-misses markers; PASS when done and both are present.
+  # Nothing requires the note at 15:41.
   - id: K10.1
     title: miss line unit in the DRC note
     kind: vault_unit
@@ -493,19 +498,51 @@ checks:
     day: last_trading_day
     section: drc-misses
     unit: miss_line
-    expect_text: "both marker lines present: `<!-- cobalt:section drc-misses -->` and `<!-- cobalt:unit miss_line -->` inside it"
+    requires_relation: user.drc_events
+    expect_text: >-
+      user.drc_events exists (absent = the DRC migrations not applied = FAIL);
+      no DRC event for the day = KNOWN pending; the event failed (or left
+      pending / running) = FAIL; the event done = both marker lines present:
+      `<!-- cobalt:section drc-misses -->` and `<!-- cobalt:unit miss_line -->` inside it
 
   - id: K10.2
     title: miss line vault_writes row
     kind: sql
     side: user
+    requires_relation: user.drc_events
     query: >-
-      SELECT count(*) AS writes FROM vault_writes
+      SELECT (SELECT e.state FROM drc_events e WHERE e.day = {last_trading_day} AND (
+      e.import_id = (SELECT max(i.id) FROM drc_imports i WHERE i.import_date = {last_trading_day}
+      AND i.kind = 'trading_log' AND i.id NOT IN
+      (SELECT supersedes FROM drc_imports WHERE supersedes IS NOT NULL))
+      OR (NOT EXISTS (SELECT 1 FROM drc_imports i WHERE i.import_date = {last_trading_day}
+      AND i.kind = 'trading_log' AND i.id NOT IN
+      (SELECT supersedes FROM drc_imports WHERE supersedes IS NOT NULL))
+      AND e.stated_book_id = (SELECT max(s.id) FROM drc_stated_books s WHERE s.day = {last_trading_day}
+      AND s.kind = 'no_trade' AND s.id NOT IN
+      (SELECT supersedes FROM drc_stated_books WHERE supersedes IS NOT NULL))))) AS event_state,
+      (SELECT count(*) FROM vault_writes
       WHERE section = 'drc-misses' AND unit = 'miss_line'
-      AND (ts AT TIME ZONE 'America/New_York')::date = {last_trading_day}
+      AND note = (SELECT e.note_path FROM drc_events e WHERE e.day = {last_trading_day} AND (
+      e.import_id = (SELECT max(i.id) FROM drc_imports i WHERE i.import_date = {last_trading_day}
+      AND i.kind = 'trading_log' AND i.id NOT IN
+      (SELECT supersedes FROM drc_imports WHERE supersedes IS NOT NULL))
+      OR (NOT EXISTS (SELECT 1 FROM drc_imports i WHERE i.import_date = {last_trading_day}
+      AND i.kind = 'trading_log' AND i.id NOT IN
+      (SELECT supersedes FROM drc_imports WHERE supersedes IS NOT NULL))
+      AND e.stated_book_id = (SELECT max(s.id) FROM drc_stated_books s WHERE s.day = {last_trading_day}
+      AND s.kind = 'no_trade' AND s.id NOT IN
+      (SELECT supersedes FROM drc_stated_books WHERE supersedes IS NOT NULL)))))) AS writes
     expect:
+      - {column: event_state, op: eq, value: done}
       - {column: writes, op: ge, value: 1}
-    expect_text: "writes >= 1 on the last trading day (ET)"
+    known_if:
+      - {column: event_state, op: is_null}
+    known_text: "pending — no DRC event for the last trading day"
+    expect_text: >-
+      user.drc_events exists (absent = the DRC migrations not applied = FAIL);
+      no DRC event for the day = KNOWN pending; otherwise event_state = done
+      and writes >= 1 for the day's DRC note (any clock time)
 
   - id: K11.1
     title: heartbeat — last beat age
@@ -536,15 +573,6 @@ checks:
     title: prefill-daily last run
     kind: job_row
     label: com.cobalt.prefill-daily
-    state: done
-    exit_code: 0
-    not_missed: true
-    expect_text: "state done, exit_code 0, not missed against its cadence"
-
-  - id: K12.2
-    title: prefill-drc last run
-    kind: job_row
-    label: com.cobalt.prefill-drc
     state: done
     exit_code: 0
     not_missed: true

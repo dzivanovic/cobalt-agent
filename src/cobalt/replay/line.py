@@ -28,7 +28,9 @@ a silent zero.
 L28, through the one write path. `VaultWriter.upsert_unit` — versioned,
 diffed, human-wins, sync-revert aware, mtime-guarded — into an EXISTING
 note only: replay never calls `create_if_absent`. The DRC note belongs to
-prefill-drc; absent -> `DrcNoteAbsent`, loud, nothing created. The first
+the DRC build (D3); absent at 21:10 -> nothing created, the run stores the
+exact `render_line` arguments (`stored_line_inputs`) and the build, once
+`drc-rules` exists, writes the line from them (`render_stored`, D3-3). The first
 write places the section ZERO-WIDTH right after the `drc-rules` section's
 closing marker, touching no human line; a note without that anchor takes
 the writer's own safe fallback (appended at the end, noted in the result).
@@ -63,11 +65,54 @@ MINUS = "−"
 
 
 class DrcNoteAbsent(ReplayError):
-    """The day's DRC note does not exist. prefill-drc creates it; replay never does."""
+    """The day's DRC note does not exist. The DRC build creates it; replay never does."""
 
     def __init__(self, path: Path):
-        super().__init__(f"DRC note absent — prefill-drc owns creation ({path})")
+        super().__init__(f"DRC note absent — the DRC build owns creation ({path})")
         self.path = path
+
+
+#: DRC D3-3 (`[F-24]`): the 21:10 run's `line_action` when the note is
+#: absent — nothing created, the arguments stored, the run green.
+LINE_PENDING = "pending (no DRC)"
+
+
+def stored_line_inputs(trade_date: date, args: dict[str, Any]) -> dict[str, Any]:
+    """The EXACT `render_line` arguments as JSON (the replay run's
+    `line_inputs`, stored in `job.result` — no new column, no migration)."""
+    from pydantic_core import to_jsonable_python
+
+    cut = args.get("formation_cut")
+    settings = args.get("settings")
+    return {
+        "trade_date": trade_date.isoformat(),
+        "card_rows": to_jsonable_python(list(args["card_rows"])),
+        "mover_rows": to_jsonable_python(list(args["mover_rows"])),
+        "settings": None if settings is None else settings.model_dump(mode="json"),
+        "formation_replay": args["formation_replay"],
+        "input_stale": args["input_stale"],
+        "formation_rows": to_jsonable_python(list(args.get("formation_rows") or [])),
+        "formation_suppressed": args.get("formation_suppressed", 0),
+        "formation_input_stale": args.get("formation_input_stale", 0),
+        "formation_cut": None if cut is None else cut.model_dump(mode="json"),
+    }
+
+
+def render_stored(blob: dict[str, Any]) -> str:
+    """`render_line` from a stored blob ONLY (E6: the same bytes as the run's
+    in-memory render). The DRC build's one call for a pending line."""
+    return render_line(
+        date.fromisoformat(blob["trade_date"]),
+        card_rows=blob["card_rows"],
+        mover_rows=blob["mover_rows"],
+        settings=None if blob["settings"] is None else BenchmarkSettings.model_validate(blob["settings"]),
+        formation_replay=blob["formation_replay"],
+        input_stale=blob["input_stale"],
+        formation_rows=blob["formation_rows"],
+        formation_suppressed=blob["formation_suppressed"],
+        formation_input_stale=blob["formation_input_stale"],
+        formation_cut=None if blob["formation_cut"] is None else FormationCut.model_validate(blob["formation_cut"]),
+    )
 
 
 def _signed(value: Decimal, places: str, suffix: str) -> str:
@@ -179,6 +224,7 @@ def write_miss_line(path: Path, body: str, *, writer: VaultWriter) -> WriteResul
 
 
 __all__ = [
-    "ANCHOR_SECTION", "DrcNoteAbsent", "MIN_N_FOR_AVERAGE", "MOVERS_SHOWN", "SECTION", "UNIT", "WRITER",
-    "after_drc_rules", "drc_note_path", "render_line", "write_miss_line",
+    "ANCHOR_SECTION", "DrcNoteAbsent", "LINE_PENDING", "MIN_N_FOR_AVERAGE", "MOVERS_SHOWN", "SECTION", "UNIT",
+    "WRITER", "after_drc_rules", "drc_note_path", "render_line", "render_stored", "stored_line_inputs",
+    "write_miss_line",
 ]

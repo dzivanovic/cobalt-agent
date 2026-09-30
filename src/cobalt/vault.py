@@ -117,6 +117,16 @@ PROD_VAULT_PATH_REFERENCE = "/Users/cobalt/Vault/Think"
 #: a diff.
 REPO_OWNED_ROOTS: tuple[str, ...] = ("docs/40 - DevDocs/reports",)
 
+#: The vault's Cobalt-owned `_imports/` location (R3 above; R92, 09-22:
+#: "the _imports should be a subdirectory of 1 - Trading/5 - Review"),
+#: relative to the vault root. Nothing in it is a note: it holds the bytes
+#: of files he drops, written ONLY by `VaultWriter.write_import_bytes`
+#: (create-if-absent, versioned, never overwritten — L28).
+IMPORTS_REL = "1 - Trading/5 - Review/_imports"
+#: DRC D2: his daily files, one `YYYY-MM-DD` folder per import date
+#: (09-23 R17 (3)); `_reference/` beside them is never an input.
+DRC_IMPORTS_REL = f"{IMPORTS_REL}/drc"
+
 
 class VaultConfigError(RuntimeError):
     """Vault path unset, misconfigured, or missing on disk — crash loudly."""

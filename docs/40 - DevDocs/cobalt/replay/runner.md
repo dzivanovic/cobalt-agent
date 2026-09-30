@@ -114,3 +114,19 @@ formation seams. The `formations` step builds its `FormationContext` from
 the deps it already holds — the SYSTEM bar read it uses for cards and the
 USER `missed.radar_cards(trade_date)` read — and both are callables, so
 nothing is read when S2-P2 is absent.
+
+## 2026-09-29 — DRC D3-3: no DRC note at 21:10
+The `line` step no longer fails when the day's DRC note is absent (R66:
+no DRC is his lawful choice; `[F-24]`). `deps.drc_path` raising
+`DrcNoteAbsent`, or returning a path that is not a file, now: creates
+nothing and writes nothing; stores the EXACT `render_line` arguments on the
+result (`ReplayResult.line_inputs`, via `line.stored_line_inputs` —
+`card_rows`, `mover_rows`, `settings`, `formation_replay`, `input_stale`,
+`formation_rows`, `formation_suppressed`, `formation_input_stale`,
+`formation_cut`), which the CLI stores in `job.result` (the existing
+`cobalt_jobs.last_result` JSON — no migration); sets `line_action` to
+`pending (no DRC)`; prints `line: pending (no DRC) — <the line>`; and the
+step ends green. The DRC build, once `drc-rules` exists, is the only later
+writer of that line, from the stored blob (`line.render_stored`); E6
+proves the re-render is byte-identical. A note present at 21:10 is written
+exactly as before.

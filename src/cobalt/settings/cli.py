@@ -7,6 +7,14 @@ own settings (ADR-0008 D3.4).
     cobalt settings load --optional <file> [--sha256 <hash>] --dry-run | --apply
     cobalt settings show
 
+Every apply of `cobalt settings load` (--from, --from-git, --optional,
+--card) and the ASET change line (DRC D4-4) goes through `apply_settings`
+— the one write function for his settings (L3; D4 fix r1 F-1 routed
+--card through it). The radar's vault-note mirror (`radar/notes.py`
+`mirror_sources`, the `radar.note.*` keys) is the one other writer of
+`trader_settings` rows: a machine mirror with its own market-reset
+refusal, not a settings load.
+
 `--card` (S2-P2, `.card`) and `--optional` (S2-P4) each load their own
 reviewed file — the card settings (`radar.cards_enabled`, `card.*`) and
 the optional keys (`radar.benchmark`) — whose bytes must hash to
@@ -32,15 +40,19 @@ import argparse
 import hashlib
 import json
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Iterable
 
 import yaml
+from loguru import logger
 
 from cobalt.session import assert_writable
 
 from .models import (
     ASET_FILENAME,
     DAYMODE_FILENAME,
+    DRC_SETTING_KEYS,
     OPTIONAL_SETTING_KEYS,
     OPTIONAL_SETTING_MODELS,
     SETTING_KEYS,
@@ -50,6 +62,60 @@ from .models import (
 from .store import TraderSettingsStore
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+TARGET = '"user".trader_settings'
+
+
+def payload_sha256(rows: dict[str, Any]) -> str:
+    """sha256 of a settings payload's canonical JSON — what the change
+    line shows for review and what its Apply must carry back."""
+    body = json.dumps(rows, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+def apply_settings(
+    rows: dict[str, Any],
+    *,
+    source: str,
+    actor: str = "settings.load",
+    store: TraderSettingsStore | None = None,
+    delete: Iterable[str] = (),
+) -> dict[str, str]:
+    """THE ONE APPLY (L3 / L40, DRC D4-4). Every `cobalt settings load
+    --apply` form (--card included, D4 fix r1 F-1) and the ASET change line
+    write `"user".trader_settings` through this function and nothing else.
+
+    In order: refused inside `market_reset` (L66 — `assert_writable`
+    raises `SessionBlocked` naming the window before anything is written);
+    ONE `put` (one transaction: every key lands or none does); a
+    round-trip read — the caller may only say "saved" once what the
+    database returns equals the payload; ONE log line naming the keys,
+    the deleted keys, the source KIND (the source label up to `@sha256:`)
+    and the time — never a value and never a digest of one (a digest of a
+    small-value payload is the value, L32; D4 fix r1 F-8). The store's
+    own trace is each written row's `source` (the reviewed payload hash
+    for the change line, the loader's own label for the CLI) and its
+    `updated_at`.
+    """
+    assert_writable(actor, target=TARGET)
+    store = store or TraderSettingsStore()
+    delete = list(delete)
+    extra = {"delete": delete} if delete else {}
+    outcome = store.put(rows, source=source, **extra)
+    reloaded = store.values()
+    drift = sorted(key for key in rows if reloaded.get(key) != rows[key])
+    lingering = sorted(key for key in delete if key in reloaded)
+    if drift or lingering:
+        raise TraderSettingsError(
+            f"FAILED: what {TARGET} now returns differs from what was applied — "
+            f"differs: {drift or 'none'}; still present after delete: {lingering or 'none'}"
+        )
+    logger.info(
+        "settings applied: keys {} · deleted {} · source {} · at {}",
+        sorted(rows), delete, source.split("@sha256:", 1)[0],
+        datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    )
+    return outcome
 
 
 def _require_mode(args: argparse.Namespace) -> bool:
@@ -167,13 +233,14 @@ def cmd_load_optional(args: argparse.Namespace) -> None:
         print(f"\nDRY RUN — {len(changed)} setting(s) would change. Nothing written.")
         return
 
-    assert_writable("settings.load", target='"user".trader_settings')
-    outcome = store.put({key: rows[key] for key in changed}, source=source_label)
+    try:
+        outcome = apply_settings(
+            {key: rows[key] for key in changed}, source=source_label, store=store
+        )
+    except TraderSettingsError as e:
+        raise SystemExit(str(e)) from e
     print(f"\napplied: {outcome} (sha256 {args.sha256})")
     reloaded = store.values()
-    drift = [key for key in rows if reloaded.get(key) != rows[key]]
-    if drift:
-        raise SystemExit(f"FAILED: what the database now returns differs from the file: {drift}")
     for key in rows:
         OPTIONAL_SETTING_MODELS[key].from_rows(reloaded)
     print("round trip: database == file, every optional key re-validates.")
@@ -246,8 +313,10 @@ def cmd_load(args: argparse.Namespace) -> None:
         print(f"\nDRY RUN — {changed} setting(s) would change. Nothing written.")
         return
 
-    assert_writable("settings.load", target='"user".trader_settings')
-    outcome = store.put(rows, source=source_label)
+    try:
+        outcome = apply_settings(rows, source=source_label, store=store)
+    except TraderSettingsError as e:
+        raise SystemExit(str(e)) from e
     print(f"\napplied: {outcome}")
     # Prove the round trip before claiming success: what the runtime will
     # read must equal what the seed said.
@@ -284,6 +353,13 @@ def cmd_show(args: argparse.Namespace) -> None:
         f"ladder {' < '.join(settings.daymode.modes)}; "
         f"enabled {settings.daymode.enabled_modes}."
     )
+    # DRC D4-5: the dry-run of the DRC family. Every key is OPTIONAL, so an
+    # absent one is printed as `not given` — never a default (L1).
+    values = {row["key"]: row["value"] for row in rows}
+    print("\nDRC keys (optional; absent = not given):")
+    for key in DRC_SETTING_KEYS:
+        shown = json.dumps(values[key], sort_keys=True) if key in values else "not given"
+        print(f"  {key:<36} {shown}")
 
 
 def add_parser(sub) -> None:
@@ -308,7 +384,7 @@ def add_parser(sub) -> None:
     load.add_argument(
         "--optional",
         metavar="FILE",
-        help="The reviewed optional-settings file (radar.benchmark; S2-P4).",
+        help="The reviewed optional-settings file (radar.benchmark; S2-P4; the DRC keys, D4).",
     )
     load.add_argument(
         "--sha256",
@@ -323,4 +399,4 @@ def add_parser(sub) -> None:
     show.set_defaults(func=cmd_show)
 
 
-__all__ = ["add_parser", "cmd_load", "cmd_show"]
+__all__ = ["add_parser", "apply_settings", "cmd_load", "cmd_show", "payload_sha256"]

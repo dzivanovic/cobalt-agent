@@ -44,6 +44,7 @@ What the law buys, mechanically:
 """
 
 import functools
+import hashlib
 import os
 import re
 import tempfile
@@ -65,6 +66,7 @@ from cobalt.session import (
 )
 from cobalt.session import clock as session_clock_mod
 from cobalt.vault import (
+    DRC_IMPORTS_REL,
     PROD_VAULT_PATH_REFERENCE,
     VaultWriteRefused,
     assert_within_vault,
@@ -90,6 +92,7 @@ from .store import VaultWriteStore, sha256_text
 
 __all__ = [
     "AT_END",
+    "ImportWrite",
     "NoteChangedOnDisk",
     "Placement",
     "VaultWriteError",
@@ -289,6 +292,32 @@ class WriteResult:
             parts.append(f"  OVERRIDE: {ov.describe()}")
         parts.append(self.diff if self.diff else "  (no diff — nothing changed)")
         return "\n".join(parts)
+
+
+@dataclass
+class ImportWrite:
+    """One imported file's bytes, written by `write_import_bytes`. `name`
+    is the name it was stored under — his own, or `<stem>.<n><ext>` when
+    that name was taken (the old bytes are never touched)."""
+
+    path: Path
+    name: str
+    sha256: str
+    action: str  # created
+    dry_run: bool = False
+    write_id: Optional[int] = None
+    errors: list[str] = field(default_factory=list)
+
+
+def _free_name(folder: Path, name: str) -> str:
+    """`name`, or the first `<stem>.<n><ext>` (n = 1, 2, …) not on disk."""
+    if not (folder / name).exists():
+        return name
+    stem, ext = (name[: -len(Path(name).suffix)], Path(name).suffix) if Path(name).suffix else (name, "")
+    n = 1
+    while (folder / f"{stem}.{n}{ext}").exists():
+        n += 1
+    return f"{stem}.{n}{ext}"
 
 
 # ---------------------------------------------------------------------------
@@ -995,6 +1024,99 @@ class VaultWriter:
             baseline_missing=state.get("baseline_missing", False),
             notes=[n for n in [state.get("sync_note")] if n],
         )
+
+    # -- imported bytes (DRC D2, v2 `[F-06]`) --------------------------
+
+    @staticmethod
+    def _import_target(vault_root: Path, rel_path: str) -> tuple[Path, str]:
+        """`rel_path` confined to `<DRC_IMPORTS_REL>/<YYYY-MM-DD>/<name>`,
+        or refused: an absolute name, a `..` / `.`, a sub-folder, a date
+        that is not a date (D1's ONE date rule, `import_folder_date`, L3)
+        or a hidden name. Returns the date folder and the name."""
+        from cobalt.drc.detect import import_folder_date
+
+        rel = str(rel_path)
+        parts = rel.split("/")
+        prefix = DRC_IMPORTS_REL.split("/")
+        refused = (
+            rel.startswith("/")
+            or "\\" in rel
+            or "\x00" in rel
+            or len(parts) != len(prefix) + 2
+            or parts[: len(prefix)] != prefix
+            or import_folder_date(parts[-2]) is None
+            or parts[-1] in ("", ".", "..")
+            or parts[-1].startswith(".")
+        )
+        if refused:
+            raise VaultWriteError(
+                f"REFUSED: {rel!r} is not {DRC_IMPORTS_REL}/<YYYY-MM-DD>/<name> — imported bytes "
+                "land only in a dated drc imports folder (L28, R92)."
+            )
+        root = Path(vault_root).expanduser().resolve()
+        review = root / prefix[0] / prefix[1]
+        if not review.is_dir():
+            raise VaultWriteError(
+                f"Target directory missing: {review} — refusing to create vault structure "
+                "(folder policy is a Vault Session decision); only `_imports/` below it is Cobalt's."
+            )
+        folder = root.joinpath(*parts[:-1])
+        if folder.resolve().parent != root.joinpath(*prefix).resolve():
+            raise VaultWriteError(f"REFUSED: {folder} resolves outside {DRC_IMPORTS_REL} (a link?)")
+        return folder, parts[-1]
+
+    def write_import_bytes(self, vault_root: Path, rel_path: str, data: bytes) -> ImportWrite:
+        """L28 for a file he drops, as BYTES (v2 `[F-06]`): the one bytes
+        path, inside the one writer. The text `_commit` is not used — it
+        stays text-only (FC5).
+
+        CREATE-IF-ABSENT ONLY: his name is kept; a name already on disk
+        gets the next free `<stem>.<n><ext>` and the old bytes are never
+        overwritten, renamed or deleted. ATOMIC: the bytes land in a
+        temp file in the same folder, fsynced, then `os.link`ed to the
+        name — the link refuses an existing name at the instant of the
+        write (the create-if-absent guard), so a concurrent writer can
+        never be overwritten; the temp file is always removed. AUDITED:
+        one `vault_writes` row per file, `hash_after` = the sha256 of the
+        bytes, committed only if the link succeeded. GATED: refused
+        inside `market_reset` by the SAME `_session_gate` as a note."""
+        folder, wanted = self._import_target(vault_root, rel_path)
+        assert_write_target(folder / wanted)
+        session = self._session_gate("write_import_bytes", folder / wanted)
+        self._purge_once()
+        sha = hashlib.sha256(data).hexdigest()
+        if self.dry_run:
+            name = _free_name(folder, wanted) if folder.is_dir() else wanted
+            return ImportWrite(path=folder / name, name=name, sha256=sha, action="created", dry_run=True)
+        store = self._require_store()
+        folder.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(dir=str(folder), prefix=f".{wanted}.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+            for _attempt in range(100):
+                name = _free_name(folder, wanted)
+                path = folder / name
+                if self._precommit_hook is not None:
+                    self._precommit_hook(path)
+                try:
+                    with store.pending_write(
+                        note=str(path), section=None, unit=None, before=None, after=None,
+                        hash_before=None, hash_after=sha, writer=self.writer, run_id=self.run_id,
+                        session=session.value,
+                    ) as write_id:
+                        os.link(tmp_name, path)
+                except FileExistsError:
+                    logger.error(f"{path} appeared between the name check and the write — next name")
+                    continue
+                result = ImportWrite(path=path, name=name, sha256=sha, action="created", write_id=write_id)
+                self._annotate_sync(result)
+                return result
+            raise VaultWriteError(f"REFUSED: no free name for {wanted} in {folder} after 100 tries")
+        finally:
+            Path(tmp_name).unlink(missing_ok=True)
 
     # -- rollback ----------------------------------------------------
 
