@@ -342,7 +342,7 @@ def _merge_frontmatter_lines(path: Path, existing: str, fm: Mapping, fresh: dict
             out.extend(entry)
             continue
         # his comment / blank lines under the entry stay; the value's own lines go
-        tail = [line for line in entry[1:] if line.strip() == "" or line.startswith("#")]
+        tail = [line for line in entry[1:] if line.strip() == "" or line.lstrip().startswith("#")]
         out.extend([rendered, *tail])
     out.extend(_render_value(key, fresh[key]) for key in FIELD_ORDER
                if key in COBALT_OWNED_FIELDS and key not in keys)
