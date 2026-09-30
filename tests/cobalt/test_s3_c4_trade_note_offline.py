@@ -546,3 +546,12 @@ def test_a_hash_inside_quotes_is_his_value_and_never_a_comment(vault):
     _close(store, card(stop=Decimal("5.1000")))
     assert _line(path, "stop_price") == 'stop_price: "5.1000"'
     assert _line(path, "profit_loss") == "profit_loss: 'a # b'  # his note"
+
+
+def test_a_hash_inside_quotes_after_a_tag_is_never_taken_as_a_comment(vault):
+    store = MemoryWriteStore()
+    path, _ = write(card(), [leg()], store, create_only=True)
+    _set_line(path, 'stop_price: "5.2000"\n', 'stop_price: !!str "5.2000 # not a comment"\n')
+    assert fm(path)["stop_price"] == "5.2000 # not a comment"
+    _close(store, card(stop=Decimal("5.1000")))
+    assert _line(path, "stop_price") == 'stop_price: "5.1000"'
