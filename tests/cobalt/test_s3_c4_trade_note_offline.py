@@ -515,3 +515,43 @@ def test_a_value_line_he_typed_that_starts_with_a_hash_stays_as_a_line(vault):
     _close(store)
     assert _block(path)[3:5] == ["symbol: ZZPB", "  #ZZPB"]
     assert fm(path)["symbol"] == "ZZPB"
+
+
+# ---------------------------------------------------------------------
+# E1 follow-up (09-30 R74) — a comment he types at the END of the line of
+# an entry Cobalt replaces or fills is his and is kept after the new value,
+# spacing as he typed it. A `#` inside quotes is his value, never a comment.
+# ---------------------------------------------------------------------
+
+
+def test_an_inline_comment_on_a_replaced_entrys_line_is_kept(vault):
+    store = MemoryWriteStore()
+    path, _ = write(card(), [leg()], store, create_only=True)
+    _set_line(path, 'stop_price: "5.2000"\n', 'stop_price: "5.2000"  # typed by him\n')
+    _set_line(path, "exit_time:\n", "exit_time:   # typed by him\n")   # a blank key Cobalt fills
+    _close(store, card(stop=Decimal("5.1000")))
+    assert _line(path, "stop_price") == 'stop_price: "5.1000"  # typed by him'
+    assert _line(path, "exit_time") == 'exit_time: "2026-09-03 10:31"   # typed by him'
+    assert fm(path)["stop_price"] == "5.1000"
+
+
+def test_a_hash_inside_quotes_is_his_value_and_never_a_comment(vault):
+    """The negative control: the ` #` inside his quotes is text, so the
+    replaced line gains no comment and his own quoted value keeps every byte."""
+    store = MemoryWriteStore()
+    path, _ = write(card(), [leg()], store, create_only=True)
+    _set_line(path, 'stop_price: "5.2000"\n', 'stop_price: "5.2000 # not a comment"\n')
+    _set_line(path, "profit_loss:\n", "profit_loss: 'a # b'  # his note\n")
+    assert fm(path)["stop_price"] == "5.2000 # not a comment"
+    _close(store, card(stop=Decimal("5.1000")))
+    assert _line(path, "stop_price") == 'stop_price: "5.1000"'
+    assert _line(path, "profit_loss") == "profit_loss: 'a # b'  # his note"
+
+
+def test_a_hash_inside_quotes_after_a_tag_is_never_taken_as_a_comment(vault):
+    store = MemoryWriteStore()
+    path, _ = write(card(), [leg()], store, create_only=True)
+    _set_line(path, 'stop_price: "5.2000"\n', 'stop_price: !!str "5.2000 # not a comment"\n')
+    assert fm(path)["stop_price"] == "5.2000 # not a comment"
+    _close(store, card(stop=Decimal("5.1000")))
+    assert _line(path, "stop_price") == 'stop_price: "5.1000"'
