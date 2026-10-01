@@ -394,3 +394,23 @@ def test_after_an_arm_a_tap_records_the_arm_rows_transition_id(world):
     rec = records_of(cards, card_id)[-1]
     assert rec["kind"] == "tap" and rec["transition_id"] == arm_id
     assert transition_ids(cards, card_id)[-1] == (arm_id, "WATCH", "ARMED")
+
+
+def test_x6a_the_taps_moved_refresh_records_the_dots_as_the_row_holds_them_with_the_tap():
+    world = _dev_world("ZZF15X", "f15_x6a_dots")
+    card_id = sds.scored_pre_c1_card(world)
+    run_id = world.radar.latest_run_id("f15_x6a_dots")
+    later = sds.SCAN0 + timedelta(minutes=10)
+    world.feed(later)
+    update = sds.update_for(world, card_id, later, sds.bars_before(later))
+    stage_grade = next(d.trader_grade for d in update.dots if d.factor == "trail_fit")
+    assert stage_grade != 3, "the stage's read must differ from the tap for this test to discriminate"
+    world.tap(card_id, "trail_fit", 3, later + timedelta(seconds=1))
+    assert world.cards.refresh_radar_card(update, run_id=run_id, now=later + timedelta(seconds=2)) is False
+    rec = records_of(world.cards, card_id)[-1]
+    assert rec["kind"] == "refresh" and rec["inputs"]["taps_moved"] is True
+    with world.cards._connect() as conn:
+        row_dots = world.cards._dots_for(conn, [card_id])[card_id]
+    assert [(d["factor"], d["trader_grade"]) for d in rec["output"]["dots"]] == [
+        (d.factor, d.trader_grade) for d in row_dots]
+    assert next(d["trader_grade"] for d in rec["output"]["dots"] if d["factor"] == "trail_fit") == 3
