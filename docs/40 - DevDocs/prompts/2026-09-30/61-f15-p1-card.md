@@ -3,9 +3,9 @@ LADDER: S3-P4 · F15
 BRANCH: f15/p1-records
 WORKTREE: f15-p1-0930
 BASE: 97720c92
-TIP:
+TIP: 28d9364f
 REPORT: /Users/cobalt/cobalt-wt/f15-p1-0930/docs/40 - DevDocs/reports/f15-p1-build-2026-09-30.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f15-p1-check-2026-09-30.md
 HOUSE B:
 TREE STATE: row T1
 RULINGS: 2026-09-30 R63, 2026-09-30 R69
@@ -53,7 +53,14 @@ The RUN rows go first and are run at E2, before any `src/` edit. Each one runs a
 - `src/cobalt/db_migrations/0007_radar_cards.sql` `refuse_row_update` `:105-113`; `0021_legs.sql` (FK `:42`, owner `:68`, grant `:69`, trigger `:83`) and `0021_legs.rollback.sql`; `0006_radar_score.sql` `:76-79`, `:199`; `src/cobalt/cards/migrations/0001_card_transitions.sql` `:9`, `:13`, `:37`.
 - `tests/cobalt/test_radar_cards_db.py` `world` `:44-93` and the receipt test `:97-132` (L45); `tests/cobalt/legs_db_support.py` `apply_0021` `:65` (the in-transaction migration precedent).
 
+## CHECK ASKS
+- X1 Is every `INSERT INTO "user".prediction_records` in `src/` the one writer's (L3)? Re-derive with `grep`, not from the report.
+- X2 Does each grade-write hook (create, refresh, tap) write its record inside the existing row lock `work` body, with `seq` and `transition_id` taken under that lock, and no commit or rollback of its own?
+- X3 The build's attempt 2 hit `DeadlockDetected` in pass 1 while applying `0002`; it did not reproduce alone. Pass 1 of THIS check, run under the lock with no other job, must be free of `DeadlockDetected`; any recurrence is red (the judge's DECISION 11).
+- X4 Run the halves the card leaves to the check: X5 with records present, X6 (b), X12 (i)/(ii) through the real writer (`## RECORDS`).
+
 ## RECORDS
+- The build ended `BUILT` tip `28d9364f`, decisions 13; the judgment seat answered 13 of 13, none for Dejan (`reports/f15-p1-decisions-2026-09-30.md`, the desk, 20:35 ET). The desk's own record of the first launch: the build waited ≈75 min on the dev-DB lock held by the e1-inline check.
 - The design this card builds is approved by his 2026-09-29 R145 (R2-1 (c) `transition_id`, R2-2 trigger B) and R151 (the FINAL at `c3c93c7c`); those rows are not in `RULINGS` because they do not carry the `HIS RULING` literal the gate greps. The FINAL in `## READ` carries both (the desk, 16:58 ET).
 - BASE `97720c92` is `main`'s tip. Since the live commit `7b8a559f` it carries docs only: `git -C /Users/cobalt/cobalt log --oneline 7b8a559f..main -- src tests configs` prints nothing. The same range shows the fixed hub files installed at `54ec029d` (the drafter, 16:52 ET).
 - BASE carries S3 C1–C4 and the E1 fix. `git -C /Users/cobalt/cobalt log --oneline 97720c92..6785c7d5` prints nothing, so the C4 fix r2 code tip is in BASE. `main..s3/exits-c4` is one docs commit (`0a64bd75`), and `main..s3/e1-fix-0930` is empty. DRC D3 `b8ac291b` is in BASE, merged by `8af84cff`. `realized_r` is at `cards/legs.py:677` (the drafter, 16:52 ET).
