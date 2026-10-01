@@ -5,7 +5,7 @@ WORKTREE: deploy-0930-4
 BASE: main
 TIP: 1d70cf72 fb48997e
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-2026-09-30-4.md
-RULINGS: none
+RULINGS: 2026-10-01 R1
 TAG: deploy-2026-09-30-4
 MIGRATIONS: 0022 · production at 0021 · creates: table "user".prediction_records (with its trigger prediction_records_immutable and its identity sequence) and column "user".aset_sizings.last_price_bar_ts · old code on the new schema: main's src names neither object except placement.py:135, which already places prediction_records on Side.USER; it reads aset_sizings by column name (aset/models.py:135 from_card, aset/store.py:276) and inserts with a column list (aset/store.py:129, cards/store.py:1097); and no DELETE of aset_sizings exists in src, ops or dev_utils, so the new FK and trigger are never hit — a code revert alone runs on 0022
 SET: f15e1
@@ -18,7 +18,7 @@ SET: f15e1
 | 2 | `s3/e1-inline-0930` | `fb48997e` | `fb48997e` | `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/e1-inline-check-2026-09-30.md` | `held unfixed: 0` and `ready: YES` |
 
 ## RECORDS
-- THE WINDOW: `date` → `Wed Sep 30 22:39:02 EDT 2026` (the drafter). This is a trading day. The window is `DEPLOY-HUB.md` P1 (ii), L43's overnight idle, after 21:00 ET. The deploy finishes before 04:00 ET Thursday 2026-10-01. No override row applies, so `RULINGS: none`.
+- THE WINDOW (desk, 05:59 ET Thursday 2026-10-01): the overnight idle (`DEPLOY-HUB.md` P1 (ii)) closed at 04:00 ET. Thursday is a trading day. His per-case override of the window for THIS deploy is `cto-2026-10-01.md` R1 (`HIS RULING`, `APPROVED`), cited in `RULINGS`; P1 records it as the window.
 - THE RESTART SET, as both checks' stop lines give it: `RESTARTS: com.cobalt.aset com.cobalt.radar` (`f15-p1-check-2026-09-30.md:335`, `e1-inline-check-2026-09-30.md` last line). The hub derives its own at STEP-R (L42).
 - THE CHECKS: f15-p1 pass 1 `CHECK DONE · job: f15-p1 · pass: 1 · tip: 1d70cf72 … held unfixed: 0 … ready: YES · decisions: 2 · for Dejan: 0`. Its 2 decisions were answered by `f15-p1-check-decisions-2026-09-30.md:13` (`answered: 2 of 2 · for Dejan: 0`). e1-inline pass 2 `CHECK DONE · job: e1-inline · pass: 2 · tip: fb48997e … held unfixed: 0 … ready: YES · decisions: 0 · for Dejan: 0`. Each head equals its code tip: `git -C /Users/cobalt/cobalt log -1` (short hash) of `f15/p1-records` → `1d70cf72`, and of `s3/e1-inline-0930` → `fb48997e` (the drafter, 22:41 ET). f15's head `1d70cf72` (`wip(f15-p1): check red — O4 …`) is the check's FIX commit, a test only: `tests/cobalt/test_f15_p1_records_db.py | 20 +` (`f15-p1-check-2026-09-30.md:223`, `:230`, `:271`). It is green on the tip: W (c3) `171 passed` (`:250`).
 - MERGE ORDER `1d70cf72` then `fb48997e`. The two branches share no file. `git -C /Users/cobalt/cobalt log --oneline main..s3/e1-inline-0930 --` over F15's eleven `src/` paths, `tests/cobalt/test_f15_p1_records_db.py` and the two hub files → EMPTY. `git -C /Users/cobalt/cobalt log --oneline main..f15/p1-records -- src/cobalt/prefill tests/cobalt/test_s3_c4_trade_note_offline.py "docs/40 - DevDocs/cobalt/prefill"` → EMPTY. Since either branch, `main` moved in reports and dated prompts only: `git -C /Users/cobalt/cobalt log --oneline <branch>..main -- . ":(exclude)docs/40 - DevDocs/reports" ":(exclude)docs/40 - DevDocs/prompts/2026-09-30"` → EMPTY for both. The `merge-tree` half is the hub's own gate, at STEP-T (L68) (the drafter, 22:41 ET).
