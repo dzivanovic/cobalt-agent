@@ -169,6 +169,7 @@ none
 - `--proof-only` prints no level number. `0013` is read off the tables of `0014`–`0022` showing `-`, as at `f15-p1-build-2026-09-30.md:76`.
 - The L74 block is recorded under `## L74`. No commit carries a `Claude-Session:` line.
 - No `REFUSED, not needed` line and no `CONTINUED` line.
+- CLOSE's last lock check, after the report commit `3f67947a`: `ls -la /Users/cobalt/cobalt-wt/*/.env` → `-rw-------  1 cobalt  staff  2186 Oct  1 09:10 /Users/cobalt/cobalt-wt/devdb-lock-1001/.env`. That is another worktree's take at 09:10, after this build released at 09:08:07; it is not this build's file. `ls /Users/cobalt/cobalt-wt/voice-peers-1001/.env` → `No such file or directory`.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
 BUILT · job: voice-peers · tip: de483933 | on 446ff64d | migration: none | offline 3777/0 | with-DB 4547/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset | rows: 2 of 2 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0
