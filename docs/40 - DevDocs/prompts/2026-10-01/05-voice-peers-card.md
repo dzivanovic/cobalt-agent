@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — cto-2026-09-28.md 2026-09-28 R95
 BRANCH: ops/voice-peers-1001
 WORKTREE: voice-peers-1001
 BASE: 446ff64d
-TIP:
+TIP: de483933
 REPORT: /Users/cobalt/cobalt-wt/voice-peers-1001/docs/40 - DevDocs/reports/voice-peers-build-2026-10-01.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/voice-peers-check-2026-10-01.md
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-01 R14
 

@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — cto-2026-10-01.md 2026-10-01 R13
 BRANCH: s3/aset-interim-close-1001
 WORKTREE: aset-interim-close-1001
 BASE: bce3cfa8
-TIP:
+TIP: 5ed7c3fd
 REPORT: /Users/cobalt/cobalt-wt/aset-interim-close-1001/docs/40 - DevDocs/reports/aset-interim-close-build-2026-10-01.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/aset-interim-close-check-2026-10-01.md
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-01 R13
 

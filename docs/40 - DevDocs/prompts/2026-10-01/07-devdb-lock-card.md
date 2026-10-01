@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — cto-2026-10-01.md 2026-10-01 R20
 BRANCH: ops/devdb-lock-1001
 WORKTREE: devdb-lock-1001
 BASE: 093028d0
-TIP:
+TIP: a9339f0a
 REPORT: /Users/cobalt/cobalt-wt/devdb-lock-1001/docs/40 - DevDocs/reports/devdb-lock-build-2026-10-01.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/devdb-lock-check-2026-10-01.md
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-01 R20
 
