@@ -1,0 +1,13 @@
+MODEL: Opus 5.5 (`claude-opus-5-5`) · SEAT: `brain` for Dejan, opened by the CTO desk on his order (2026-10-01 09:2x ET, "launch brain", after the desk could not close his cards). Launch, one bare command: `sh /Users/cobalt/.claude/ops/desk-launch.sh prompt "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-01/08-brain-close-cards-now.md"` · its line:
+
+# WHAT DEJAN WANTS
+He trades in minutes and is furious. Three FILLED cards on the ASET sheet (`/`) must be CLOSED NOW. The screenshot case: card 498 HPE, C, long, 12 sh, premarket, ACCOUNT LIVE, filled before C1, so it has NO entry leg. Every button refuses: HOLDING answers "REFUSED card 498: filled before C1, it has no entry leg for the held count to correct (running is read from shares). Nothing written."; CLOSE always refuses (`web.py` ~1382-1391); `cobalt cards move … CLOSED` refuses on purpose (`cards/cli.py:88-95`). The other two cards' ids are unknown to the desk: find them (read-only).
+
+# WHAT TO ANSWER (short, plain words, for a man about to trade)
+1. The SMALLEST SAFE way to close all three today, as ONE paste-ready command he runs himself in his own terminal on the Cobalt machine. Hand-close through `CardStore().transition(card, CLOSED, actor=YOU, evidence=…, allow_prod=True)` was tried: it died on `DbConfigError: Missing Postgres settings for the APP credential: POSTGRES_HOST, COBALT_DB_USER, COBALT_DB_PASSWORD`; his shell has `COBALT_ENV=production` exported but not those. Find, from code and `cobalt.sh` / the launchd plists, HOW the running app gets them (do not print any secret value; name variables and the loader only) and give the exact command line that supplies them. Check `legs.py` / `models.py` for anything a no-entry-leg FILLED→CLOSED leaves inconsistent (realized R, estimated leg, daily totals, `legs_current_v`) and say so in one line.
+2. A READ-ONLY command that lists his open FILLED cards (ids, tickers) so he can pick the three.
+3. A check he can run afterwards that proves the three are closed.
+Do NOT write to production, do NOT run his commands, do NOT print credentials. Read only. If something is refused by the classifier, say so and stop; never route around it.
+
+# WHAT TO PRODUCE
+ONE report at `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/brain-close-cards-2026-10-01.md`: `## §0 Headline` (≤5 lines: the commands, in order) → `## COMMANDS` (each in a code block, one line of purpose) → `## RISKS` (≤5 lines). No other sections. Last line of the file, nothing after it: `BRAIN DONE — report <path>` or `FAILED: <reason>`.
