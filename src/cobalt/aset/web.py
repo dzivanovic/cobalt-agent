@@ -232,7 +232,11 @@ JS = """
    hint.style.display = 'block';
  }
 
+ // aset-interim-close S4 (his R13): emptying #banner / #resultCard, which
+ // sit ABOVE the form, moved the form up under him. Measure the form's
+ // place first, empty, then scroll by what it moved, so it stays put.
  function clearForNewCard(){
+   const formTop = $('sizeForm').getBoundingClientRect().top;
    $('grade').value = 'B';
    setDir('long');
    $('orig_timestamp').value = '';
@@ -244,6 +248,8 @@ JS = """
    $('last_price').value = '';
    $('price_source').value = '';
    updateModeHint();
+   const moved = $('sizeForm').getBoundingClientRect().top - formTop;
+   if (moved) window.scrollBy(0, moved);
  }
 
  async function doFetch(ticker){
@@ -299,6 +305,17 @@ JS = """
    $('ticker').addEventListener('input', () => {
      const t = $('ticker').value.trim().toUpperCase();
      if (t !== currentTicker) clearForNewCard();
+   });
+   // aset-interim-close S4 (his R13): Enter in a field submitted the whole
+   // form (a full-page POST; the new page opens at the top). Enter now
+   // moves to the next field; only "Compute & persist" submits. The D1
+   // entry_ticker guard stays on the server either way.
+   $('sizeForm').addEventListener('keydown', e => {
+     if (e.key !== 'Enter' || e.target.tagName === 'BUTTON') return;
+     e.preventDefault();
+     const fields = Array.from($('sizeForm').querySelectorAll('input:not([type=hidden]):not([readonly]), select'));
+     const next = fields[fields.indexOf(e.target) + 1];
+     if (next) next.focus();
    });
    $('fetchBtn').addEventListener('click', () => refetchLastPrice($('ticker').value));
    $('grade').addEventListener('change', updateModeHint);
@@ -390,6 +407,9 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
     dm = _daymode_state()
     daymode_html = _daymode_banner(dm)
     sheet_mode = dm["cfg"].sheet_for(dm["mode"]) if dm["cfg"] else sheet_mode
+    # aset-interim-close S2 (his R13, 2026-10-01): "I don't want any cards
+    # to ever be above the form". The open-cards block renders BELOW the
+    # /size form; {banner} and {result} stay above it.
     open_cards_html = _open_cards_section()
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -402,8 +422,7 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
 {daymode_html}
 <div id="banner">{banner}</div>
 <div id="resultCard">{result}</div>
-{open_cards_html}
-<form class="card" method="post" action="/size">
+<form class="card" method="post" action="/size" id="sizeForm">
  <div class="row"><div>
   <label>Ticker <span class="muted">(tab out to fetch)</span></label>
   <input name="ticker" id="ticker" required autocomplete="off" value="{e(form.get("ticker", ""))}">
@@ -439,6 +458,7 @@ def _render(banner: str = "", result: str = "", form: dict | None = None) -> str
  <input type="hidden" name="sheet_mode" id="sheet_mode" value="{e(sheet_mode)}">
  <button class="primary" type="submit">Compute &amp; persist</button>
 </form>
+{open_cards_html}
 <div class="muted">Every computed sizing persists to Postgres ({e(env.resolve_db_name())} — chosen by COBALT_ENV alone, RULING 7: production writes cobalt_brain, dev writes cobalt_dev) and appends to today's daily note in the same action. Missing data = FAILED, never guessed.</div>
 <script>
 window.SHEET_MODE_DOLLARS = {json.dumps(mode_dollars)};
@@ -1380,15 +1400,12 @@ async def card_move(card_id: int, request: Request) -> str:
                 "the broker filled)."
             )
         if to_state is CardState.CLOSED:
-            # CLOSED ONLY BY THE ZERO-RUNNING LEG (S3 C2 fix r1, v3 §2):
-            # FILLED -> CLOSED is written by the leg writer whose exit,
-            # correction or held count brings running to 0 (`cards.legs`).
-            # A CLOSED from here would close a card still holding shares.
-            raise CardStateError(
-                f"REFUSED card {card_id}: {CardState.CLOSED.value} — this route never closes. "
-                "A card closes only when an exit leg, a correction or a held count brings "
-                "running to 0."
-            )
+            # CLOSED ONLY BY THE ZERO-RUNNING LEG (S3 C2 fix r1, v3 §2) still
+            # holds: this route never writes CLOSED. Since aset-interim-close
+            # S3 (his R13) the sheet's CLOSE writes ONE flat exit leg at the
+            # entry price through the one leg writer, whose `_close_if_zero`
+            # writes FILLED -> CLOSED.
+            return _render(banner=_sheet_close_at_entry(card_id))
         store = CardStore()
         store.ensure_schema()
         before = store.state_of(card_id)
@@ -1419,6 +1436,56 @@ async def card_move(card_id: int, request: Request) -> str:
         f'{", ".join(str(i) for i in tids)}){extra}</div>'
         + (_pick_banner(card_id, filled) if filled is not None else "")
     )
+
+
+def _sheet_close_at_entry(card_id: int) -> str:
+    """aset-interim-close S3 (his R13: "close the card and just mark it as
+    closed with a flat number of shares at the same price as entry price if
+    one is not filled in"). The sheet's CLOSE takes no input: ONE flat exit
+    leg for every running share, at the card's entry-leg price, `estimated`
+    (he did not say the price; it is listed for correction), `source =
+    'sheet'`, through `legs.record_exit` — whose `_close_if_zero` writes
+    FILLED -> CLOSED, actor YOU, on the leg's transaction. The price source
+    is the entry leg's own (`legs.price_source` CHECK, 0021: no new string
+    without a migration; DECISION S-A). Returns the banner; every refusal is
+    raised by name before anything is written (L1)."""
+    from cobalt.cards import legs
+
+    store = CardStore()
+    store.ensure_schema()
+    state = store.state_of(card_id)
+    if CardState(state) is not CardState.FILLED:
+        raise CardStateError(
+            f"REFUSED card {card_id}: CLOSE needs a FILLED card — it is {CardState(state).value}. "
+            "Nothing written."
+        )
+    position = legs.read_position(card_id)
+    running = position.running.shares
+    if running <= 0:
+        raise CardStateError(
+            f"REFUSED card {card_id}: nothing is running ({running} shares) — there is no share "
+            "to close. Nothing written."
+        )
+    entry = next((leg for leg in position.legs if leg["kind"] == "entry"), None)
+    if entry is None:
+        raise CardStateError(
+            f"REFUSED card {card_id}: no entry leg (filled before the legs table) — there is no "
+            "entry price to close at. Use the exit form with the price you took. Nothing written."
+        )
+    price = Decimal(entry["price"])
+    result = legs.record_exit(
+        card_id, preset="flat", shares=None, price=price, price_source=entry["price_source"],
+        price_asof=None, flag="estimated", source="sheet", running_before=running, now=now_utc(),
+    )
+    banner = (f"card {card_id}: flat exit {result.shares} sh @ {price} — the entry price, "
+              f"estimated (no price typed; listed for correction) · leg {result.leg_id} · running "
+              f"{result.running_before} → {result.running_after}")
+    if result.closed:
+        banner += f" · CLOSED (card_transitions id {result.transition_id})"
+    unit_failed = _leg_note(card_id, result.leg_id, closed=result.closed)
+    if unit_failed:
+        banner += f" · {unit_failed}"
+    return f'<div class="saved">{html.escape(banner)}</div>'
 
 
 @app.post("/card/{card_id}/stop", response_class=HTMLResponse)
