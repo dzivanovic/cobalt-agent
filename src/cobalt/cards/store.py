@@ -1083,11 +1083,37 @@ class CardStore:
             ).fetchone()
         return row is not None
 
-    def create_radar_card(self, spec, *, now: Optional[datetime] = None, before_commit=None) -> Optional[int]:
+    @staticmethod
+    def _record_output(card_id: int, *, proximity, conviction, card_score, score_suppressed, proposed_key, dots,
+                       proposed_key_reason) -> dict[str, Any]:
+        """A prediction record's `output` (F15 P1, FINAL §3): the numbers the
+        card write wrote, as `published_numbers` writes them, plus the
+        proposed key's reason."""
+        from cobalt.radar.evaluate import CardUpdate, published_numbers
+
+        numbers = published_numbers(CardUpdate(
+            card_id=card_id, proximity=proximity, conviction=conviction, card_score=card_score,
+            score_suppressed=score_suppressed, proposed_key=proposed_key, dots=dots, health=None,
+            radar_score_id=None,
+        ))
+        return {**numbers, "proposed_key_reason": proposed_key_reason}
+
+    def create_radar_card(self, spec, *, proposed_key_reason: Optional[str], now: Optional[datetime] = None,
+                          before_commit=None) -> Optional[int]:
         """Create an unsized WATCH radar card. Returns its id, or None when
         the database already holds an OPEN card for (member, def, direction)
-        — the partial unique index decides, not a check-then-insert."""
+        — the partial unique index decides, not a check-then-insert.
+
+        F15 P1 (`[F-32]` create line): after the genesis row and the dots,
+        in the same transaction, the card's `create` prediction record
+        (`cards.predictions.write_record`; `seq` 1 on the genesis
+        transition). `proposed_key_reason` is the scorer's (`score_card`)
+        for the numbers in `spec`; the stage passes it. No record when the
+        INSERT conflicts."""
         from cobalt.aset.account_mode import resolve
+        from cobalt.radar.evaluate import EVALUATOR_VERSION
+
+        from .predictions import write_record
 
         def work(conn, ts):
             session = session_clock().session(ts)
@@ -1130,54 +1156,104 @@ class CardStore:
             with conn.cursor() as cur:
                 for dot in spec.dots:
                     cur.execute(_DOT_INSERT, self._dot_params(card_id, dot))
+            run_id = spec.evidence.get("run_id")
+            if run_id is None:
+                raise CardStateError(f"radar card {card_id}: the genesis evidence names no run_id — "
+                                     "its create record has no run to name ([F-32])")
+            write_record(
+                conn, card_id=card_id, kind="create", at=ts, run_id=int(run_id), scorer_version=EVALUATOR_VERSION,
+                formula_sha256=spec.formula_sha256, settings_sha256=spec.settings_sha256,
+                inputs={"taps_moved": False, "locked": None},
+                output=self._record_output(
+                    card_id, proximity=spec.proximity, conviction=spec.conviction, card_score=spec.card_score,
+                    score_suppressed=spec.score_suppressed, proposed_key=spec.proposed_key, dots=spec.dots,
+                    proposed_key_reason=proposed_key_reason,
+                ),
+            )
             return card_id
 
         return self._write_tx("radar.card", spec.ticker, now, work, before_commit)
 
-    def refresh_radar_card(self, update, *, now: Optional[datetime] = None, before_commit=None) -> bool:
+    def refresh_radar_card(self, update, *, run_id: int, now: Optional[datetime] = None, before_commit=None) -> bool:
         """This scan's numbers on an open card, under its row lock. Taps
         are never overwritten: a tap that landed after the stage read the
         card keeps its conviction and proposed key (the tap route's), and
         the score is recomputed from THAT conviction on THIS scan's
         proximity through `card_score()` — never an old-price score beside a
         new proximity (R45, Fable (i)); a NULL proximity nulls it with the
-        stale reason."""
+        stale reason.
+
+        F15 P1 (`[F-32]` refresh line): `run_id` is REQUIRED — the scan's
+        run, whose row names the scorer version and the two hashes. After
+        the UPDATE and the dot upsert, in the same transaction, the card's
+        `refresh` prediction record: `output` is what the UPDATE wrote, with
+        the dots re-read by `_dots_for`; `inputs.locked` is the locked
+        `{conviction, score_suppressed, proposed_key}` when taps moved
+        (`[F-05]`), else null. `last_price_bar_ts` (the bar START of
+        `last_price`, `[F-37]`) rides the same COALESCE pair."""
+        from .predictions import write_record
         from .scoring import card_score
+
+        if run_id is None:
+            raise CardStateError(f"card {update.card_id}: refresh_radar_card needs the scan's run_id — its "
+                                 "refresh record names that run ([F-32]); got None")
 
         def work(conn, ts):
             locked = conn.execute(
                 "SELECT state, (SELECT coalesce(max(id), 0) FROM card_dot_taps WHERE card_id = %s), "
-                "conviction, score_suppressed "
+                "conviction, score_suppressed, proposed_key "
                 "FROM aset_sizings WHERE id = %s AND origin = 'radar' FOR UPDATE",
                 (update.card_id, update.card_id),
             ).fetchone()
             if locked is None:
                 raise CardStateError(f"no radar card with id {update.card_id}")
+            run = conn.execute(
+                "SELECT evaluator_version, formula_sha256, settings_sha256 FROM system.radar_score_run WHERE id = %s",
+                (run_id,),
+            ).fetchone()
+            if run is None:
+                raise CardStateError(f"card {update.card_id}: no system.radar_score_run {run_id} — the refresh "
+                                     "record cannot name its scorer (L1)")
             taps_moved = int(locked[1]) != update.tap_version
             if taps_moved:
                 suppressed = update.score_suppressed if update.proximity is None else locked[3]
                 score = card_score(locked[2], update.proximity, suppressed)
                 conn.execute(
                     "UPDATE aset_sizings SET proximity = %s, last_price = COALESCE(%s, last_price), "
+                    "last_price_bar_ts = COALESCE(%s, last_price_bar_ts), "
                     "card_score = %s, score_suppressed = %s, "
                     "health = %s::jsonb, radar_score_id = %s WHERE id = %s",
-                    (update.proximity, update.last_price, score, suppressed,
+                    (update.proximity, update.last_price, update.last_price_bar_ts, score, suppressed,
                      json.dumps(update.health, default=str) if update.health else None,
                      update.radar_score_id, update.card_id),
                 )
+                wrote = dict(conviction=locked[2], card_score=score, score_suppressed=suppressed,
+                             proposed_key=locked[4], proposed_key_reason=None)
+                held = {"conviction": locked[2], "score_suppressed": locked[3], "proposed_key": locked[4]}
             else:
                 conn.execute(
                     "UPDATE aset_sizings SET proximity = %s, last_price = COALESCE(%s, last_price), "
+                    "last_price_bar_ts = COALESCE(%s, last_price_bar_ts), "
                     "conviction = %s, card_score = %s, score_suppressed = %s, proposed_key = %s, "
                     "health = %s::jsonb, radar_score_id = %s WHERE id = %s",
-                    (update.proximity, update.last_price, update.conviction, update.card_score,
-                     update.score_suppressed, update.proposed_key,
+                    (update.proximity, update.last_price, update.last_price_bar_ts, update.conviction,
+                     update.card_score, update.score_suppressed, update.proposed_key,
                      json.dumps(update.health, default=str) if update.health else None,
                      update.radar_score_id, update.card_id),
                 )
+                wrote = dict(conviction=update.conviction, card_score=update.card_score,
+                             score_suppressed=update.score_suppressed, proposed_key=update.proposed_key,
+                             proposed_key_reason=update.proposed_key_reason)
+                held = None
             with conn.cursor() as cur:
                 for dot in update.dots:
                     cur.execute(_DOT_UPSERT_ENGINE, self._dot_params(update.card_id, dot))
+            write_record(
+                conn, card_id=update.card_id, kind="refresh", at=ts, run_id=run_id, scorer_version=run[0],
+                formula_sha256=run[1], settings_sha256=run[2], inputs={"taps_moved": taps_moved, "locked": held},
+                output=self._record_output(update.card_id, proximity=update.proximity,
+                                           dots=self._dots_for(conn, [update.card_id])[update.card_id], **wrote),
+            )
             return not taps_moved
 
         return self._write_tx("radar.card", str(update.card_id), now, work, before_commit)
@@ -1309,16 +1385,34 @@ class CardStore:
 
         return self._write_tx("radar.card.key", str(card_id), now, work)
 
-    def tap_dot(self, card_id: int, factor: str, grade: int, *, bands, enabled,
+    def tap_dot(self, card_id: int, factor: str, grade: int, *, settings, enabled,
                 now: Optional[datetime] = None) -> dict[str, Any]:
         """Append the tap, set the dot's trader grade and recompute
         conviction / card_score / proposed key from the locked dots and the
         card's stored proximity — one transaction under the row lock. While
         that proximity is NULL (bars stale) the score stays NULL and the
         stored reason is kept, or `PROXIMITY_UNKNOWN` written: a tap never
-        erases the helper's sentence ([F-06])."""
+        erases the helper's sentence ([F-06]).
+
+        F15 P1 (`[F-32]` tap line, `[F-05]`): `settings` is the
+        `CardSettings` the tap is scored under — the bands are
+        `settings.proposed_key`, never a second argument — and `enabled`
+        today's enabled keys; either missing raises before any write. After
+        the UPDATE, in the same transaction, the card's `tap` prediction
+        record: self-contained `inputs` (the tap id, the locked dots after
+        the trader-grade update, the stored proximity and reason, the bands,
+        the enabled keys), `output` = what the UPDATE wrote."""
+        from cobalt.aset.models import Grade
+        from cobalt.radar.evaluate import EVALUATOR_VERSION, formula_sha256
+
+        from .predictions import write_record
         from .scoring import ASSUMED_FORMATION, PROXIMITY_UNKNOWN, card_score, conviction, proposed_key, suppression
 
+        if settings is None or enabled is None:
+            raise CardStateError(f"REFUSED card {card_id}: a dot tap needs its card settings and today's enabled "
+                                 f"keys (settings={settings!r}, enabled={enabled!r}) — nothing written ([F-05])")
+        bands = settings.proposed_key
+        enabled = [Grade(g) for g in enabled]
         if not 1 <= int(grade) <= 10:
             raise CardStateError(f"a dot grade is 1-10, got {grade}")
 
@@ -1342,11 +1436,11 @@ class CardStore:
                     "an assumed default is ruled on the settings surface"
                 )
             session = session_clock().session(ts)
-            conn.execute(
+            tap_id = conn.execute(
                 "INSERT INTO card_dot_taps (card_id, factor, grade, engine_grade_at_tap, at, session) "
-                "VALUES (%s, %s, %s, %s, %s, %s)",
+                "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
                 (card_id, factor, int(grade), dot[0], ts, session.value),
-            )
+            ).fetchone()[0]
             conn.execute(
                 "UPDATE card_dots SET trader_grade = %s, tapped_at = %s WHERE card_id = %s AND factor = %s",
                 (int(grade), ts, card_id, factor),
@@ -1364,6 +1458,22 @@ class CardStore:
                 "UPDATE aset_sizings SET conviction = %s, card_score = %s, score_suppressed = %s, "
                 "proposed_key = %s WHERE id = %s",
                 (conv, score, suppressed, key.value if key else None, card_id),
+            )
+            write_record(
+                conn, card_id=card_id, kind="tap", at=ts, run_id=None, scorer_version=EVALUATOR_VERSION,
+                formula_sha256=formula_sha256(), settings_sha256=settings.sha256(),
+                inputs={
+                    "tap_id": int(tap_id),
+                    "dots": [{"factor": d.factor, "source": d.source, "tier": d.tier, "na_reason": d.na_reason,
+                              "engine_grade": d.engine_grade, "trader_grade": d.trader_grade} for d in dots],
+                    "proximity": prox, "score_suppressed_before": locked[3],
+                    "bands": None if bands is None else bands.model_dump(mode="json"),
+                    "enabled": [g.value for g in enabled],
+                },
+                output=self._record_output(
+                    card_id, proximity=prox, conviction=conv, card_score=score, score_suppressed=suppressed,
+                    proposed_key=key.value if key else None, dots=dots, proposed_key_reason=key_reason,
+                ),
             )
             return {"card_id": card_id, "factor": factor, "grade": int(grade),
                     "conviction": None if conv is None else str(conv), "card_score": score,

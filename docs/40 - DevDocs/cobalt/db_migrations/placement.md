@@ -71,3 +71,7 @@ It holds his own statements (L32).
 
 `CREATED_TABLES` gains `drc_events`, on the USER side, from `0019`. It
 holds the state of his own DRC runs (L32).
+
+## 2026-09-30 — f15-p1
+
+`prediction_records` leaves `DECLARED_TABLES` for `CREATED_TABLES` (USER, from `0022`): one trader's card-grade records (L32).

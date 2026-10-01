@@ -367,3 +367,6 @@ for the same reason: without it the migrate's own content proof would read
 the populated membership table CHANGED after `0014` and roll the migration
 back. Per table, because `handicap` is too generic a name to drop from
 every table's digest.
+
+## 2026-09-30 — f15-p1
+`TABLE_DIGEST_EXCLUDED_COLUMNS["aset_sizings"]` gains `last_price_bar_ts` (`0022`, F15 `[F-38]`). X13 measured the need: after `ADD COLUMN last_price_bar_ts` the `aset_sizings` digest through `_row_json` differs with BASE's tuple and equals the pre-column digest with the entry.

@@ -1305,6 +1305,13 @@ class CardUpdate(BaseModel):
     tap_version: int = 0
     #: The scan's last closed i1 close ("updates proximity/last", STEP-4).
     last_price: Decimal | None = None
+    #: F15 P1 `[F-37]`: the START of the i1 bar `last_price` closed (the
+    #: evaluation's `last_bar_ts`), written beside it in the same COALESCE.
+    last_price_bar_ts: AwareDatetime | None = None
+    #: F15 P1: the scorer's reason for `proposed_key` (`score_card`), for
+    #: the refresh record's `output`. Not a published number — the receipt
+    #: (`published_numbers`) is unchanged.
+    proposed_key_reason: str | None = None
 
 
 #: The TradeDef fields the catalyst-review workflow may edit under an open
@@ -1368,7 +1375,7 @@ def refresh_card(
         card_score=score.card_score, score_suppressed=score.score_suppressed,
         proposed_key=score.proposed_key.value if score.proposed_key else None, dots=dots,
         health=health, radar_score_id=None, tap_version=max((int(t["id"]) for t in card.taps), default=0),
-        last_price=ev.last_price,
+        last_price=ev.last_price, last_price_bar_ts=ev.last_bar_ts, proposed_key_reason=score.proposed_key_reason,
     )
 
 
@@ -1923,7 +1930,8 @@ class EvaluateStage:
                 update = refresh_card(card, ev, ld, settings, enabled, at=instant, thresholds=thresholds,
                                       run_id=run_id)
                 update = update.model_copy(update={"radar_score_id": score_ids[(ev.membership_id, ev.md5)]})
-                self.card_store.refresh_radar_card(update, now=instant, before_commit=gate("evaluate:card"))
+                self.card_store.refresh_radar_card(update, run_id=run_id, now=instant,
+                                                   before_commit=gate("evaluate:card"))
                 outcome.refreshed.append(card.card_id)
                 if expiry is not None:
                     moved = self.card_store.expire_radar_card(
@@ -1981,7 +1989,10 @@ class EvaluateStage:
                     },
                 )
                 try:
-                    card_id = self.card_store.create_radar_card(spec, now=instant, before_commit=gate("evaluate:create"))
+                    card_id = self.card_store.create_radar_card(
+                        spec, proposed_key_reason=score.proposed_key_reason, now=instant,
+                        before_commit=gate("evaluate:create"),
+                    )
                 except Exception as e:
                     from .runner import StageDropped
 

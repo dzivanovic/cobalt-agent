@@ -245,7 +245,7 @@ class FakeCardStore:
             for c in self.cards.values()
         )
 
-    def create_radar_card(self, spec, *, now, before_commit):
+    def create_radar_card(self, spec, *, proposed_key_reason, now, before_commit):
         if self.fail_on == "create":
             raise RuntimeError("synthetic account mode unresolved")
         for c in self.cards.values():
@@ -263,7 +263,7 @@ class FakeCardStore:
                                  "evidence": spec.evidence})
         return card_id
 
-    def refresh_radar_card(self, update, *, now, before_commit):
+    def refresh_radar_card(self, update, *, run_id, now, before_commit):
         before_commit()
         card = self.cards[update.card_id]
         card.update(proximity=update.proximity, conviction=update.conviction, card_score=update.card_score,

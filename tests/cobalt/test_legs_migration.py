@@ -26,7 +26,8 @@ def _code(path) -> str:
 
 def test_the_pair_is_registered_last_and_reversed_first():
     assert SQL.exists() and ROLLBACK.exists()
-    assert FORWARD[-1] == SQL and REVERSE[0] == ROLLBACK
+    # F15 P1's 0022 now follows it (second-last forward, second reversed).
+    assert FORWARD[-2] == SQL and REVERSE[1] == ROLLBACK
 
 
 def test_legs_and_its_view_are_user_side_and_fills_stays_declared():

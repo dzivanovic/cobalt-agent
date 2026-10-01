@@ -112,6 +112,11 @@ TABLE_DIGEST_EXCLUDED_COLUMNS: dict[str, tuple[str, ...]] = {
         "tunables_sha256", "settings_sha256", "health", "promoted_at",
         # 0021_legs.sql — the trade-note path and the drift P at the fill.
         "trade_note_path", "drift_warning_pct", "drift_warned",
+        # 0022_prediction_records.sql — F15 P1: the i1 bar start of
+        # last_price (R2-3, [F-38]); a nullable column added to a populated
+        # table is not content corruption, and dropping it on rollback must
+        # not read as CHANGED (X13).
+        "last_price_bar_ts",
     ),
     # 0014_radar_handicap.sql — the float handicap's shadow record: three
     # nullable columns on a populated table are not content corruption, and

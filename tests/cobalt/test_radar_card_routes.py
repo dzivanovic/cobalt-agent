@@ -46,8 +46,8 @@ class FakeCards:
         self.calls.append(("transition", to_state.value, kw["actor"].value))
         return 77
 
-    def tap_dot(self, card_id, factor, grade, *, bands, enabled, now=None):
-        self.calls.append(("tap_dot", factor, grade, bands, [g.value for g in enabled]))
+    def tap_dot(self, card_id, factor, grade, *, settings, enabled, now=None):
+        self.calls.append(("tap_dot", factor, grade, settings, [g.value for g in enabled]))
         return {"card_id": card_id, "factor": factor, "grade": grade, "card_score": 40}
 
     def set_promoted(self, card_id, promoted, now=None):
@@ -132,8 +132,10 @@ def test_a_bad_key_is_refused(cards):
 def test_dot_tap_recomputes_with_the_bands_and_todays_enabled_grades(cards):
     response = client.post("/radar/card/1/dot/trail_fit", data={"grade": "7"})
     assert response.status_code == 200 and response.json()["card_score"] == 40
-    _, factor, grade, bands, enabled = cards.calls[0]
-    assert (factor, grade) == ("trail_fit", 7) and bands.a_min == Decimal("0.8") and enabled == ["A", "B", "C"]
+    _, factor, grade, settings, enabled = cards.calls[0]
+    # F15 P1 [F-05]: the route passes the whole CardSettings; the bands are its proposed_key
+    assert (factor, grade) == ("trail_fit", 7) and settings.proposed_key.a_min == Decimal("0.8")
+    assert enabled == ["A", "B", "C"]
     assert client.post("/radar/card/1/dot/trail_fit", data={"grade": "11"}).status_code == 422
 
 

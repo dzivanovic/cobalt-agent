@@ -82,6 +82,7 @@ def test_rollback_drops_exactly_the_three_and_nothing_else():
 def test_down_to_0013_selects_only_this_rollback():
     # every rollback newer than 0013, newest first — 0014 is the oldest (the stack seam)
     assert [p.name for p in _rollback_paths("0013")] == [
+        "0022_prediction_records.rollback.sql",  # F15 P1 (M1)
         "0021_legs.rollback.sql",  # S3 exits C1 (M1)
         "0020_drc_build_kinds.rollback.sql", "0019_drc_events.rollback.sql",
         "0018_drc_stated_books.rollback.sql", "0017_voice_turns.rollback.sql",

@@ -106,6 +106,10 @@ CREATED_TABLES: dict[str, Side] = {
     # db_migrations/0021_legs.sql — S3 exits M1: his fills and exits (L32).
     # Declared USER by ADR-0008 D2; it leaves DECLARED now that it is built.
     "legs": Side.USER,
+    # db_migrations/0022_prediction_records.sql — F15 P1: one trader's card
+    # grade records (L32). Declared USER by ADR-0008 D2; it leaves DECLARED
+    # now that it is built.
+    "prediction_records": Side.USER,
 }
 
 #: VIEWS created by database-wide migrations. On a side like any table
@@ -128,11 +132,10 @@ CREATED_VIEWS: dict[str, Side] = {
 DECLARED_TABLES: dict[str, Side] = {
     # S3 — named now so the placement test knows them on sight. `missed`
     # left this list when S2-P4's 0009 built it, `drc_rows` when DRC D1's
-    # 0016 did, `legs` when S3's 0021 did. `fills` stays declared and
-    # unbuilt (DRC D1 stores its executions in `drc_fills`, v2 [F-35];
-    # S3 exits v3 O16, default).
+    # 0016 did, `legs` when S3's 0021 did, `prediction_records` when F15
+    # P1's 0022 did. `fills` stays declared and unbuilt (DRC D1 stores its
+    # executions in `drc_fills`, v2 [F-35]; S3 exits v3 O16, default).
     "fills": Side.USER,
-    "prediction_records": Side.USER,
     # S2-P2 — taxonomy anatomy instances (regime, range, gap, extension,
     # leg, session clock). The anatomy IS the system.
     "anatomy_instances": Side.SYSTEM,

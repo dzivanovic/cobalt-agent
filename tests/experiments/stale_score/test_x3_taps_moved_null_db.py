@@ -19,7 +19,8 @@ def test_x3_taps_moved_with_a_null_update_proximity():
     stale_at = sds.stale_as_of(kept)
     update = sds.update_for(world, card_id, stale_at, kept)
     world.tap(card_id, "trail_fit", 9, stale_at + timedelta(seconds=1))
-    wrote_all = world.cards.refresh_radar_card(update, now=stale_at + timedelta(seconds=2))
+    wrote_all = world.cards.refresh_radar_card(update, run_id=world.radar.latest_run_id("stale_x3"),
+                                               now=stale_at + timedelta(seconds=2))
     row = world.row(card_id)
     print(f"X3: s2_built={sds.s2_built()} taps_moved={not wrote_all} update_proximity_null={update.proximity is None} "
           f"row_proximity_null={row['proximity'] is None} row_score_null={row['card_score'] is None} "

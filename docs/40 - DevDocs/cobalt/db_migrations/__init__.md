@@ -272,3 +272,6 @@ this merge. `placement.py`: `CREATED_TABLES` carries DRC's entries, then
 `legs`; `DECLARED_TABLES` carries neither `legs` nor `drc_rows`. The
 registry pins in the suite sit one place further out on the DRC side and
 name `0021_legs.rollback.sql` first in every rollback list.
+
+## 2026-09-30 — f15-p1
+`FORWARD` gains `0022_prediction_records.sql` (last) and `REVERSE` its rollback (first). The forward is the F15 FINAL's `[F-40]` DDL: `"user".prediction_records` (USER, the 0007 tenancy shape; `card_id` FK with no `ON DELETE`; `UNIQUE (card_id, seq)`; `transition_id BIGINT NOT NULL`, no FK; `CHECK ((kind = 'tap') = (run_id IS NULL))`; trigger `prediction_records_immutable BEFORE UPDATE OR DELETE` → 0007's `refuse_row_update()`, R2-2 B, in a `DO` guard) and `aset_sizings.last_price_bar_ts`. The rollback drops the table, then the column. The registry pins in the suite gain the one 0022 entry each.
