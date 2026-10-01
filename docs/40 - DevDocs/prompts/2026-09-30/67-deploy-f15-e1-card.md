@@ -1,10 +1,10 @@
 JOB: f15-e1-0930
 LADDER: S3-P4 · F15
-BRANCH: deploy/f15-e1-0930
-WORKTREE: deploy-0930-4
+BRANCH: deploy/f15-e1-0930b
+WORKTREE: deploy-0930-5
 BASE: main
 TIP: 1d70cf72 fb48997e
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-2026-09-30-4.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-2026-09-30-4b.md
 RULINGS: 2026-10-01 R1
 TAG: deploy-2026-09-30-4
 MIGRATIONS: 0022 · production at 0021 · creates: table "user".prediction_records (with its trigger prediction_records_immutable and its identity sequence) and column "user".aset_sizings.last_price_bar_ts · old code on the new schema: main's src names neither object except placement.py:135, which already places prediction_records on Side.USER; it reads aset_sizings by column name (aset/models.py:135 from_card, aset/store.py:276) and inserts with a column list (aset/store.py:129, cards/store.py:1097); and no DELETE of aset_sizings exists in src, ops or dev_utils, so the new FK and trigger are never hit — a code revert alone runs on 0022
@@ -26,7 +26,8 @@ SET: f15e1
 - P7 (desk reading, 22:46 ET): the `db_migrations` diff stat of head `1d70cf72` prints exactly the five paths above — they ARE the files of this card's `MIGRATIONS` (the pair plus the three registry files the migration edits, as STEP-T admits); any other path under `src/cobalt/db_migrations` is a refusal.
 - PRODUCTION AT 0021: deploy 2 applied it (`deploy-2026-09-30-2.md` stop line `migrations: 0021`; `<RB>` after `5 · 1 · 2 · 4`, `:235`). Deploy 3 applied none (`deploy-2026-09-30-3.md:108`, `migrations applied: none`). `0022` is free on `main`: `ls /Users/cobalt/cobalt/src/cobalt/db_migrations/0022_prediction_records.sql` → No such file.
 - THE TREE STATE ROW: F15's row T1 edits `DEPLOY-HUB.md` STEP-G on its branch. It adds `tests/cobalt/test_f15_p1_records_offline.py` to (a0), and adds the four 0022 files and one `--deselect` to (c3), in commits `8747dc75` and `28d9364f`. That edit reaches `main` only with this deploy, so the hub runs STEP-G's lines as `main` has them (`DEPLOY-HUB.md:98`).
-- NAMES ARE FREE: `ls -d /Users/cobalt/cobalt-wt/deploy-0930-4` → No such file. `git -C /Users/cobalt/cobalt log -1 deploy/f15-e1-0930 --` → `bad revision`. The same for `refs/tags/deploy-2026-09-30-4` and `refs/tags/pre-f15-e1-0930` → `bad revision` (the drafter, 22:42 ET).
+- ATTEMPT 2 (desk, 06:05 ET): attempt 1 (`deploy-2026-09-30-4.md`, branch `deploy/f15-e1-0930`, gate `deploy-0930-4`) ended `FAILED PREFLIGHT P2` before any step touched anything: the two check reports were untracked on `main`; they are committed now (`git log -1 -- <each>` non-empty). Its gate worktree is clean and unused; this launch uses fresh names (`deploy/f15-e1-0930b`, `deploy-0930-5`, report `-4b`). Tag names `deploy-2026-09-30-4` and `pre-f15-e1-0930` are still free.
+- NAMES ARE FREE (attempt 1; attempt 2 re-checks them): `ls -d /Users/cobalt/cobalt-wt/deploy-0930-4` → No such file. `git -C /Users/cobalt/cobalt log -1 deploy/f15-e1-0930 --` → `bad revision`. The same for `refs/tags/deploy-2026-09-30-4` and `refs/tags/pre-f15-e1-0930` → `bad revision` (the drafter, 22:42 ET).
 
 ## MARKERS
 - `ls /Users/cobalt/cobalt/src/cobalt/db_migrations/0022_prediction_records.sql` · before `No such file or directory` · after listed
