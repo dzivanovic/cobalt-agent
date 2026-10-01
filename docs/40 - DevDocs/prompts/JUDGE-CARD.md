@@ -1,0 +1,5 @@
+JOB: (none yet — the desk overwrites this card before each judge launch)
+REPORT: (none)
+POINTS AT: (none)
+ANSWERS: (none)
+STOP: (none)
