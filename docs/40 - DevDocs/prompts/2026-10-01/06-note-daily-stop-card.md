@@ -29,5 +29,8 @@ RULINGS: 2026-10-01 R15
 - `src/cobalt/prefill/daily.py` lines 80-200 and 400-480; `src/cobalt/aset/web.py` `/attest` (~1202-1300) and the daily-note write it makes; `src/cobalt/settings/drc.py`; `src/cobalt/settings/models.py` lines 90-180.
 - L28 and L3 in `/Users/cobalt/Vault/Think/6 - Permanent/Memory/LAWS.md` (`grep -n "^### L28 "`).
 
+## RECORDS
+- The desk's production read (`COBALT_ENV=production uv run cobalt settings show`, 2026-10-01, his R20 permission): `account.daily_stop_full` = `"210"` and `account.daily_stop_half` = `"420"`, BOTH written once, together, by source `aset.change_line@sha256:355929c957ac390ff726be387234987602726a6fbd75e5e89c0dc36957308ce1`, `updated_at` 2026-09-30 13:25:09 (zone not proven; 09:25 ET if UTC). `aset.sheet_modes` full A 135 / B 60, half A 70 / B 30, so full is the larger sheet. `propose_daily_change` (`src/cobalt/settings/drc.py:~172`) maps each form field to its own key by name, so the swap entered through the form's submitted values. Row D1 finds who or what submitted that form (a deploy or scratch smoke on production, a test, a hand entry): look for a caller of `/settings/daily` or `/settings/daily/apply` in tests, smokes and scripts that posts these two values.
+
 ## DECISIONS ASKED
 - DECISION D-A: the exact text of the attested line (`Daily HARD Stop: full $420`, or with a trailing `(attested)`); the card ships the shorter form and the builder names the one marker-bounded unit that holds the line.
