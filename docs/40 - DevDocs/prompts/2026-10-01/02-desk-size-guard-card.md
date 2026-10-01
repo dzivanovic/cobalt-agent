@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — cto-2026-10-01.md 2026-10-01 R8
 BRANCH: ops/desk-size-guard-1001
 WORKTREE: desk-size-guard-1001
 BASE: 36bed6ed
-TIP:
+TIP: e5d6238b
 REPORT: /Users/cobalt/cobalt-wt/desk-size-guard-1001/docs/40 - DevDocs/reports/desk-size-guard-build-2026-10-01.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/desk-size-guard-check-2026-10-01.md
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-01 R8
 
