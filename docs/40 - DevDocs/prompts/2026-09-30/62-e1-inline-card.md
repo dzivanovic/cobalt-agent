@@ -3,7 +3,7 @@ LADDER: S3-P2 · F22
 BRANCH: s3/e1-inline-0930
 WORKTREE: e1-inline-0930
 BASE: 1a8827e0
-TIP: 7e6f8e85
+TIP: fb48997e
 REPORT: /Users/cobalt/cobalt-wt/e1-inline-0930/docs/40 - DevDocs/reports/e1-inline-build-2026-09-30.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/e1-inline-check-2026-09-30.md
 HOUSE B: mandatory — vault notes
