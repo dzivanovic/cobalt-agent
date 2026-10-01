@@ -6,7 +6,7 @@ BASE: 97720c92
 TIP: 28d9364f
 REPORT: /Users/cobalt/cobalt-wt/f15-p1-0930/docs/40 - DevDocs/reports/f15-p1-build-2026-09-30.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f15-p1-check-2026-09-30.md
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: row T1
 RULINGS: 2026-09-30 R63, 2026-09-30 R69
 
