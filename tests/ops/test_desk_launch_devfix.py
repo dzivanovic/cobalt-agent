@@ -191,7 +191,7 @@ def test_the_trees_devfix_hub_line_is_printed_with_its_tokens_filled(tmp_path):
 @pytest.mark.parametrize(
     "bad",
     ["x_table", "public.x_table", "user.", "user.X_table", "user.x-table", "user.x;drop",
-     "system.x table", "user.x.y", "users.x_table"],
+     "system.x table", "user.x.y", "users.x_table", "user.x_tablé"],
 )
 def test_a_table_outside_system_or_user_names_is_refused(desk, bad):
     desk.write_card(TABLE=bad)
@@ -205,7 +205,7 @@ def test_a_table_outside_system_or_user_names_is_refused(desk, bad):
     ["tests/ops/test_x.py", "tests/cobalt/test_x.txt", "tests/cobalt/sub/test_x.py",
      "tests/cobalt/../test_x.py", "tests/cobalt/.py", "tests/cobalt/test_x.py::a b",
      "tests/cobalt/test_x.py::a$b", "tests/cobalt/test_x.py::", "/tmp/tests/cobalt/test_x.py",
-     "tests/cobalt/test_x.py::a|b"],
+     "tests/cobalt/test_x.py::a|b", "tests/cobalt/test_é.py", "tests/cobalt/test_x.py::test_é"],
 )
 def test_a_proof_test_outside_tests_cobalt_is_refused(desk, bad):
     desk.write_card(**{"PROOF TEST": bad})

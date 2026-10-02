@@ -1,6 +1,6 @@
 # CARD — the job card (FIXED FORMAT · INSTALLED 2026-09-30 · R60)
 
-One format for every kind (`build`, `check`, `deploy`). A card holds the job's VALUES and nothing else: the fixed file of its kind (`BUILD-HUB.md`, `CHECK-HUB.md`, `DEPLOY-HUB.md`) holds the launch line, the procedure, the authorization steps and the stop line. A card carries no launch line, no procedure, no authorization block and no read of a words file.
+One format for every kind (`build`, `check`, `deploy`, `devfix`). A card holds the job's VALUES and nothing else: the fixed file of its kind (`BUILD-HUB.md`, `CHECK-HUB.md`, `DEPLOY-HUB.md`, `DEVFIX-HUB.md`) holds the launch line, the procedure, the authorization steps and the stop line. A card carries no launch line, no procedure, no authorization block and no read of a words file.
 
 WHERE: `/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/<date>/<nn>-<job>-card.md`, committed on `main` before the launch. ONE card per job: the build launches on it; the desk then fills `TIP`, `CHECK REPORT` and `HOUSE B`, commits, and the check launches on the same file (its second pass, `PASS-2`, too). A deploy has its own card. A relaunch, a `CONTINUE` and a second pass need no card edit: the hub proves only that the card is committed and unchanged; the desk still writes its own §4 row for every launch (L34).
 
@@ -8,22 +8,24 @@ WHO FILLS IT: the desk (or a drafter it launches). A card that builds a check's 
 
 ## THE HEADER — one `KEY: value` per line, from column 0, plain text (no backtick, no bold); read by `desk-launch.sh` and by the hub
 
-| key | build | check | deploy | value |
-|---|---|---|---|---|
-| `JOB` | required | required | required | short name, `[a-z0-9-]` only. The session is named `<JOB>-build`, `<JOB>-check` or `deploy-hub-<JOB>` |
-| `LADDER` | required | required | required | the ladder line (`S3-P2 · F22`) or `OFF-LADDER — <report> <date> R<n>` |
-| `BRANCH` | required | required | required | build / check: the job's branch. deploy: the gate branch |
-| `WORKTREE` | required | required | required | ONE directory name under `/Users/cobalt/cobalt-wt/` (`[A-Za-z0-9._-]`, no `/`). build: where the builder works. check: the build's worktree (read only). deploy: the gate worktree |
-| `BASE` | required | required | `main` | build / check: the 8-hex commit the branch stood at before this job's first commit. deploy: the literal `main` (the hub records the cut itself) |
-| `TIP` | empty | required | required | check: the 8-hex code tip the suites ran on. deploy: every branch HEAD the gate merges (8-hex, space-separated, in merge order); `## SHIPS` gives each head's code tip |
-| `REPORT` | required | required | required | build / check: the BUILD report, absolute path inside the worktree. deploy: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-<…>.md` |
-| `CHECK REPORT` | empty | required | — | absolute path under `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/` |
-| `HOUSE B` | empty | required | — | `as needed`, or `mandatory — vault notes` / `mandatory — sizing` for a build that writes his vault notes or changes sizing (his 2026-09-30 R38): the check then runs its second pass even when nothing is open. His per-case overrule of the wait is appended: ` · overruled <date> R<n>` |
-| `TREE STATE` | required | required | — | `unchanged`, or `row <id>` when the build adds a with-DB test or a migration: that row of `## ROWS` edits the pass-1 / pass-2 commands, the allowed-skip list and the level in `docs/40 - DevDocs/prompts/BUILD-HUB.md` and `DEPLOY-HUB.md`, and names both files in its `files` |
-| `RULINGS` | required | required | required | his rulings that bind the job: `<date> R<n>`, comma-separated (`2026-09-30 R3, 2026-09-30 R9`). Row numbers only; never his words. deploy: `none` when no held defect is carried and he has not overruled the window for this one deploy (L73; the deploy's approval is the standing rule, `DEPLOY-HUB.md` `## AUTHORIZATION`) |
-| `TAG` | — | — | required | the deploy tag; the rollback tag is `pre-<JOB>` |
-| `MIGRATIONS` | — | — | required | `none`, or the numbers in `FORWARD` order, then ` · production at <level> · creates: <objects> · old code on the new schema: <why a code revert alone is safe>` |
-| `SET` | — | — | required | one word naming the set in the stop line |
+| key | build | check | deploy | devfix | value |
+|---|---|---|---|---|---|
+| `JOB` | required | required | required | required | short name, `[a-z0-9-]` only. The session is named `<JOB>-build`, `<JOB>-check`, `deploy-hub-<JOB>` or `<JOB>-devfix` |
+| `LADDER` | required | required | required | required | the ladder line (`S3-P2 · F22`) or `OFF-LADDER — <report> <date> R<n>` |
+| `BRANCH` | required | required | required | required | build / check: the job's branch. deploy: the gate branch. devfix: the branch of its worktree (no commit is made on it) |
+| `WORKTREE` | required | required | required | required | ONE directory name under `/Users/cobalt/cobalt-wt/` (`[A-Za-z0-9._-]`, no `/`). build: where the builder works. check: the build's worktree (read only). deploy: the gate worktree. devfix: the tree its dev commands run from |
+| `BASE` | required | required | `main` | required | build / check: the 8-hex commit the branch stood at before this job's first commit. deploy: the literal `main` (the hub records the cut itself). devfix: the 8-hex commit on `main` whose code runs |
+| `TIP` | empty | required | required | — | check: the 8-hex code tip the suites ran on. deploy: every branch HEAD the gate merges (8-hex, space-separated, in merge order); `## SHIPS` gives each head's code tip |
+| `REPORT` | required | required | required | required | build / check: the BUILD report, absolute path inside the worktree. deploy: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-<…>.md`. devfix: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/devfix-<…>.md`, absent at the first launch |
+| `CHECK REPORT` | empty | required | — | — | absolute path under `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/` |
+| `HOUSE B` | empty | required | — | — | `as needed`, or `mandatory — vault notes` / `mandatory — sizing` for a build that writes his vault notes or changes sizing (his 2026-09-30 R38): the check then runs its second pass even when nothing is open. His per-case overrule of the wait is appended: ` · overruled <date> R<n>` |
+| `TREE STATE` | required | required | — | — | `unchanged`, or `row <id>` when the build adds a with-DB test or a migration: that row of `## ROWS` edits the pass-1 / pass-2 commands, the allowed-skip list and the level in `docs/40 - DevDocs/prompts/BUILD-HUB.md` and `DEPLOY-HUB.md`, and names both files in its `files` |
+| `RULINGS` | required | required | required | required | his rulings that bind the job: `<date> R<n>`, comma-separated (`2026-09-30 R3, 2026-09-30 R9`). Row numbers only; never his words. deploy: `none` when no held defect is carried and he has not overruled the window for this one deploy (L73; the deploy's approval is the standing rule, `DEPLOY-HUB.md` `## AUTHORIZATION`) |
+| `TAG` | — | — | required | — | the deploy tag; the rollback tag is `pre-<JOB>` |
+| `MIGRATIONS` | — | — | required | — | `none`, or the numbers in `FORWARD` order, then ` · production at <level> · creates: <objects> · old code on the new schema: <why a code revert alone is safe>` |
+| `SET` | — | — | required | — | one word naming the set in the stop line |
+| `TABLE` | — | — | — | required | the one table the devfix rebuilds: `system.<name>` or `user.<name>`, `<name>` in `[a-z0-9_]` |
+| `PROOF TEST` | — | — | — | required | the with-DB test that proves the table after the rebuild: `tests/cobalt/<file>.py`, optionally `::<name>` in `[A-Za-z0-9_:.]` |
 
 ## THE BODY — sections in this order; a section with nothing to say is left out
 
@@ -131,3 +133,6 @@ RULINGS: 2026-09-30 R3, 2026-09-30 R9
 
 ## A DEPLOY CARD, IN SHORT (the values `DEPLOY-HUB.md` reads; no example is filled here)
 Header: `JOB`, `LADDER`, `BRANCH` (gate branch), `WORKTREE` (gate worktree), `BASE: main`, `TIP` (the code tips), `REPORT`, `RULINGS`, `TAG`, `MIGRATIONS`, `SET`. Body: `## SHIPS`, `## MARKERS`, `## READ-BACK` (with a migration), `## SMOKE READS`, `## RECORDS` (facts the hub copies into its report's `## RECORDS`).
+
+## A DEVFIX CARD, IN SHORT (the values `DEVFIX-HUB.md` reads; launched by `desk-launch.sh devfix "<card>"`)
+One dev-maintenance run on `cobalt_dev`: `cobalt db dev-rebuild <TABLE>` dry, then real, then `<PROOF TEST>`, under the one lock; no git write, no schema level change, no row deleted. Header: `JOB`, `LADDER`, `BRANCH`, `WORKTREE`, `BASE` (8 hex, on `main`), `REPORT` (`reports/devfix-<…>.md`), `RULINGS`, `TABLE`, `PROOF TEST`. Body: no `## ROWS`; `## RECORDS` optional. `desk-launch.sh` refuses a bad `TABLE`, `PROOF TEST` or `REPORT`, a report already present on a first launch, a held lock, a card or fixed file uncommitted or changed, and a worktree on another branch.
