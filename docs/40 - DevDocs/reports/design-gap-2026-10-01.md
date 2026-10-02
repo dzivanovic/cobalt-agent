@@ -11,6 +11,7 @@ Sources read: `brain-workflow-review-2026-10-01.md` (§0, FOLLOWED, CLASSIFIER, 
 | # | piece | state on disk | what lands it |
 |---|---|---|---|
 | G1 | worker step scripts (one script per fixed-file step: stage, lock take/release, suites, house start) | never designed; one exists since 20:35: `ops/desk/stage-copy.sh` (R37, R39) | a design card, then a build, check, deploy; each fixed file's list shrinks to its scripts |
+| G1a | one bare command per call, enforced (his R44) | not built | tomorrow's G1 card carries the brain's 3 parts (`cto-2026-10-01-words.md` `## R45`): guard with NOT A REFUSAL message, the resend law line, `--append-system-prompt` on the desk and worker launch lines; proof `ls && ls` |
 | G2 | the lock scripts + amended L76 (brain parallel-builds A, his R17–R20) | built `ad114188` (tip `a9339f0a`), check not run, not installed; L76 "in force at install" | `07` check, then the desk installs the two symlinks |
 | G3 | desk-size guard (launch refused at ≥300,000) | check pass 1 `ready: NO`, house B owed | PASS-2, then deploy |
 | G4 | the nightly close (`CLOSE-HUB.md`, installed 09-30) | never run: no `close-*` report exists; main is 85 commits ahead of origin | `desk-launch.sh close <date>` each night |
