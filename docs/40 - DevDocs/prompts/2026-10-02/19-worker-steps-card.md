@@ -3,11 +3,11 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/worker-steps-1002
 WORKTREE: worker-steps-1002
 BASE: 9fa18f14
-TIP:
+TIP: 8f3c4876
 REPORT: /Users/cobalt/cobalt-wt/worker-steps-1002/docs/40 - DevDocs/reports/worker-steps-build-2026-10-02.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/worker-steps-check-2026-10-02.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-02 R47
 
@@ -49,3 +49,4 @@ WHY: a worker types every step of its fixed file as single commands, one full tu
 - The suites of W run `tests/cobalt` and `tests/taxonomy`; your tests run by name in E2 and E3. No with-DB test is added: `TREE STATE: unchanged`.
 - The lock scripts are not on your base (card `16` ports them); S3 tests both branches of its lock choice with stub files.
 - His order sets aside the outside house for this card (`reports/brain-direction-2026-10-02.md` row 10).
+- The judge seat's answers to the build's DECISIONS 1–3 (2026-10-02 R41): (1) `gate.sh` has no machine read of the level today; that is a known follow-up (a `LEVEL` line in `migrate --proof-only`, the 2026-10-03 adoption card) and not a finding, but any OTHER way `gate.sh` could run pass 1 on a `cobalt_dev` it should have refused is one; (2) the build report staged from HEAD and the card from the repo's HEAD are right; (3) `authorize.sh`'s extra at-HEAD proof is kept.
