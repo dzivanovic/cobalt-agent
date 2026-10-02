@@ -5,9 +5,9 @@ WORKTREE: launcher-checks-1002
 BASE: 63649058
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/launcher-checks-1002/docs/40 - DevDocs/reports/launcher-checks-build-2026-10-02.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-checks-check-2026-10-02.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-02 R47, 2026-10-02 R39
 
@@ -49,3 +49,4 @@ WHY: three launches of 10-01 started a worker that failed in its first minute on
 - The three launches this card would have refused: 10-01 R9 (build launched before his row was approved), 10-01 R6 (deploy with uncommitted check reports), `deploy-2026-10-01-1.md` DECISIONS 1 (a check `tip:` that was the docs-only head).
 - The classes are his 2026-10-02 R39. `sh` is not on your line: the launcher runs only through its tests.
 - His order sets aside the outside house for this card (`reports/brain-direction-2026-10-02.md` row 10).
+- The judge seat's answers to the build's DECISIONS (2026-10-02 R41): (1) the dry-run `WATCH:` line on stderr is kept; (2) the at-HEAD proof of a ruling row is kept; (3) on the judge's answer the build added two refusals to row L3 — a deploy card with no `## SHIPS` row, and a head of `TIP` that is no row's branch head — and pinned that `desk` and `prompt` print no `WATCH:` line. Those are inside row L3 and row L4 and are not `WIDENED`. A deploy that can still launch with a head no check covers is a finding.
