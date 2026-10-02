@@ -259,8 +259,8 @@ class World:
 
         esc = str(root).replace("/", "\\/") + "\\/"
         self.launch = stage(tmp_path, "desk-launch.sh", {
-            "REPO=/Users/cobalt/cobalt\n": f"REPO={self.repo}\n",
-            "WT=/Users/cobalt/cobalt-wt\n": f"WT={self.wt}\n",
+            "REPO=${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}\n": f"REPO={self.repo}\n",
+            "WT=${COBALT_WT_ROOT:-/Users/cobalt/cobalt-wt}\n": f"WT={self.wt}\n",
             "\\/Users\\/cobalt\\/": esc,
         })
         self.calls = tmp_path / "claude-calls"

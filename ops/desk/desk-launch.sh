@@ -30,6 +30,8 @@
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh close <YYYY-MM-DD> [<step>]            (the nightly close
 #        of that day: after the 21:00 ET pause on the day itself, or any time later for a missed
 #        night — the morning desk's first act; <step> = a NEW worker at that CONTINUE step)
+#   sh /Users/cobalt/.claude/ops/desk-launch.sh install-ops                            (links the ops
+#        scripts into /Users/cobalt/.claude/ops; the desk runs it after a deploy; launches nothing)
 # The desk types no `cd`, no `git worktree add` and no `claude --bg`: its own `claude --bg`
 # allow goes (DESK-LINE.md), so a launch outside this script has no listed string. Before the
 # command the desk writes its own §4 launch row (L34) — no hub reads it; after it the desk
@@ -51,13 +53,24 @@
 #           tab. READ-ONLY LINES ONLY: every write-path launch is a fixed file.
 #   close : `cd /Users/cobalt/cobalt`; CLOSE-HUB.md's `claude --bg` line, `<date>` and `<mmdd>`
 #           filled (a resume: its message starting `CONTINUE: <step>. `).
+#   install-ops: no launch. Every regular file ops/desk/*.sh and ops/desk/*.py of the repo
+#           (/Users/cobalt/cobalt) is linked into the link folder (/Users/cobalt/.claude/ops, or
+#           $COBALT_OPS_LINK_DIR in tests/ops/test_install_ops.py) as <link folder>/<name> ->
+#           <repo>/ops/desk/<name>, printing `LINKED <name>`; a name that already exists there,
+#           as a link or as a plain file, is left untouched and printed `KEPT <name>` — nothing
+#           there is ever replaced, removed or re-pointed. Last line
+#           `install-ops: <n> linked, <m> kept`, exit 0. No argument (one more is REFUSED).
 # It prints each command on stderr as `RUN: <command>` before it runs it, and exits with the
 # status of the last one. DESK_LAUNCH_DRY=1 in the environment prints the three commands on
 # stdout and runs nothing (for the scratch test; the desk's line has no string for it).
 #
+# FIRST, every kind but `desk` runs the desk-size guard (`desk-context.sh --guard`, cto-2026-10-01
+# R8): at 300,000 tokens or more it prints "REFUSED: desk at <n> tokens — REFRESH first" on
+# stdout and this script exits 3, nothing run.
+#
 # IT REFUSES (exit 1, "REFUSED: <reason>" on stderr, nothing run):
 #   - to run at all from a path that holds a space (install under /Users/cobalt/.claude/ops/);
-#   - a kind that is none of build, check, deploy, desk, prompt, close; a fixed file, a wake-up
+#   - a kind that is none of build, check, deploy, desk, prompt, close, install-ops; a fixed file, a wake-up
 #     file or a prompt file still a draft, not committed on main, or changed since its commit;
 #   - kind `close`: a date not YYYY-MM-DD, a date after today (ET), today's date before 21:00 ET,
 #     a first launch whose close report already exists, a resume without it, or ANY live
@@ -76,10 +89,13 @@
 #     anywhere, a body section its kind needs is missing, the card is not committed on main
 #     or differs from its commit (this is the whole of the card gate: no launch row is read);
 #   - a worktree outside the approved pattern /Users/cobalt/cobalt-wt/<one directory name>;
-#   - a with-DB launch (build, check, deploy) while any /Users/cobalt/cobalt-wt/*/.env exists
-#     (L76; the check session takes the lock). ONE EXCEPTION (scratch D1): a launch that names a
-#     resume step (a NEW worker at a CONTINUE step; a deploy's STEP-D0) skips the job's OWN
-#     worktree's .env — the fixed file's RECOVERY clears it first — and still refuses any other;
+#   - a deploy while the cobalt_dev lock is held: any /Users/cobalt/cobalt-wt/*/.env, or the lock
+#     directory /Users/cobalt/cobalt-wt/.cobalt_dev.lock (L76). A build or check LAUNCHES while
+#     another session holds the lock (L76 as amended, his 2026-10-01 R20, card 07 devdb-lock): it
+#     takes the lock at its with-DB steps through take-devdb-lock.sh, and waits for it there;
+#   - a resume (a NEW worker at a CONTINUE step; a deploy's STEP-D0) while another worktree's .env
+#     exists. ONE EXCEPTION (scratch D1): the job's OWN worktree's .env, and for a deploy its own
+#     lock directory, are skipped — the fixed file's RECOVERY clears them first;
 #   - a launch line in which an absolute path sits under no --add-dir (the 09-30 outage);
 #   - a production db query string in a deploy card that contains "%".
 #
@@ -91,8 +107,9 @@
 
 set -u
 
-REPO=/Users/cobalt/cobalt
-WT=/Users/cobalt/cobalt-wt
+# COBALT_REPO_ROOT and COBALT_WT_ROOT stand in for these two in tests/ops/test_devdb_lock.py only
+REPO=${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}
+WT=${COBALT_WT_ROOT:-/Users/cobalt/cobalt-wt}
 PROMPTS="$REPO/docs/40 - DevDocs/prompts"
 REPORTS="$REPO/docs/40 - DevDocs/reports"
 
@@ -154,8 +171,16 @@ run_launch() {
     exit "$status"
 }
 
-[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | close <YYYY-MM-DD> [<resume step>]"
+[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | close <YYYY-MM-DD> [<resume step>] | install-ops"
 kind=$1
+
+# ---- the desk-size guard (cto-2026-10-01 R8): every kind but `desk`, before anything else -----
+# desk-context.sh --guard, installed beside this script, refuses while the desk measures
+# 300,000 tokens or more; this script then exits with its status and its line unchanged. The
+# successor launch (`desk`) is never guarded, so a REFRESH can always complete.
+if [ "$kind" != "desk" ]; then
+    sh "$(dirname "$0")/desk-context.sh" --guard || exit $?
+fi
 
 # ---- kind close: the nightly close of one day (RULED — THE NIGHTLY CLOSE) -----------------------
 if [ "$kind" = "close" ]; then
@@ -316,6 +341,31 @@ if [ "$kind" = "prompt" ]; then
     run_launch "$dir" "$line" "reminder: one Grok hub at a time (L15); the tab and the §5 row are the desk's"
 fi
 
+# ---- kind install-ops: link the ops scripts into the link folder; launches nothing (card 16) --
+# ln -s without -f never replaces a name that exists; an existing name, a link (even a dangling
+# one) or a plain file, is KEPT untouched.
+if [ "$kind" = "install-ops" ]; then
+    [ "$#" -eq 1 ] || refuse "usage: desk-launch.sh install-ops"
+    links=${COBALT_OPS_LINK_DIR:-/Users/cobalt/.claude/ops}
+    [ -d "$links" ] || refuse "install-ops: no link folder $links"
+    linked=0
+    kept=0
+    for src in "$REPO"/ops/desk/*.sh "$REPO"/ops/desk/*.py; do
+        [ -f "$src" ] && [ ! -L "$src" ] || continue
+        name=$(basename "$src")
+        if [ -e "$links/$name" ] || [ -L "$links/$name" ]; then
+            printf 'KEPT %s\n' "$name"
+            kept=$((kept + 1))
+        else
+            ln -s "$src" "$links/$name" || refuse "install-ops: the link failed: $links/$name"
+            printf 'LINKED %s\n' "$name"
+            linked=$((linked + 1))
+        fi
+    done
+    printf 'install-ops: %s linked, %s kept\n' "$linked" "$kept"
+    exit 0
+fi
+
 [ "$#" -ge 2 ] && [ "$#" -le 4 ] || refuse "usage: desk-launch.sh <build|check|deploy> <absolute card path> [PASS-2] [<resume step>]"
 card=$2
 step=""
@@ -335,7 +385,7 @@ case "$kind" in
     build)  fixed="$PROMPTS/BUILD-HUB.md" ;;
     check)  fixed="$PROMPTS/CHECK-HUB.md" ;;
     deploy) fixed="$PROMPTS/DEPLOY-HUB.md" ;;
-    *) refuse "kind '$kind' is none of build, check, deploy, desk, prompt, close" ;;
+    *) refuse "kind '$kind' is none of build, check, deploy, desk, prompt, close, install-ops" ;;
 esac
 [ -f "$fixed" ] || refuse "the fixed file is not installed: $fixed"
 if grep -q '«INSTALL' "$fixed"; then
@@ -433,6 +483,15 @@ lock_free() {
         [ ! -e "$f" ] || refuse "with-DB launch refused: the cobalt_dev lock is held ($f) (L76)"
     done
 }
+# the lock directory take-devdb-lock.sh makes (deploy only); a STEP-D0 resume skips its own gate's
+lock_dir_free() {
+    [ -e "$WT/.cobalt_dev.lock" ] || return 0
+    holder=$(cat "$WT/.cobalt_dev.lock/owner" 2>/dev/null)
+    if [ -n "$step" ] && [ "$holder" = "$wt" ]; then
+        return 0
+    fi
+    refuse "with-DB launch refused: the cobalt_dev lock is held by ${holder:-unknown} ($WT/.cobalt_dev.lock) (L76)"
+}
 
 merges=""
 prod=""
@@ -454,7 +513,8 @@ build)
     else
         git -C "$REPO" show-ref --verify --quiet "refs/heads/$branch" && refuse "branch '$branch' exists but its worktree $WT/$wt does not"
     fi
-    lock_free
+    # a build launches while the lock is held (R20); a resume still refuses another worktree's .env
+    [ -z "$step" ] || lock_free
     ;;
 check)
     [ -z "$tag" ] || refuse "this is a deploy card (TAG is set); kind 'check' needs a job card"
@@ -492,7 +552,8 @@ check)
     head=$(git -C "$WT/$wt" rev-parse --abbrev-ref HEAD) || refuse "$WT/$wt is not a git worktree"
     [ "$head" = "$branch" ] || refuse "$WT/$wt is on '$head', the card says '$branch'"
     [ -z "$(git -C "$WT/$wt" status --porcelain)" ] || refuse "$WT/$wt is not clean (the check session commits there)"
-    lock_free
+    # a check launches while the lock is held (R20); a resume still refuses another worktree's .env
+    [ -z "$step" ] || lock_free
     ;;
 deploy)
     need TIP TAG MIGRATIONS SET
@@ -532,6 +593,7 @@ deploy)
         [ ! -e "$report" ] || refuse "the deploy report already exists: $report"
     fi
     lock_free
+    lock_dir_free
     ;;
 esac
 
@@ -568,16 +630,16 @@ case "$kind" in
 build)
     [ -d "$WT/$wt" ] || add="git -C $REPO worktree add -b $branch $WT/$wt $base"
     dir="$WT/$wt"
-    note="reminder: no other with-DB launch until this build's stop line (L76)"
+    note="reminder: the build takes the cobalt_dev lock only at its with-DB steps and waits for it there (L76, R20); no deploy launch while it holds it"
     ;;
 check)
     dir="$WT/$wt"
-    note="reminder: one Grok hub at a time (L15); no other house hub running; no other with-DB launch until the stop line (the check takes the lock); measure the session at its stop line (desk-context.sh)"
+    note="reminder: one Grok hub at a time (L15); no other house hub running; the check takes the cobalt_dev lock only at its with-DB steps and waits for it there (L76, R20); measure the session at its stop line (desk-context.sh)"
     ;;
 deploy)
     [ -n "$step" ] || add="git -C $REPO worktree add -b $branch $WT/$wt main"
     dir="$REPO"
-    note="reminder: no desk commit on main and no with-DB launch until the stop line; a hub hung after its first bootout: stop it and at once run this script again with STEP-D0"
+    note="reminder: no desk commit on main until the stop line; builds and checks may launch, their with-DB steps wait for the lock the gate holds to its stop line (L76, R20); a hub hung after its first bootout: stop it and at once run this script again with STEP-D0"
     ;;
 esac
 

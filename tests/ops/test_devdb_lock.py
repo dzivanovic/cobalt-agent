@@ -226,7 +226,10 @@ def desk(roots, tmp_path):
     stub = tmp_path / "bin"
     stub.mkdir()
     calls = tmp_path / "claude-calls"
-    (stub / "claude").write_text(f'#!/bin/sh\nprintf "%s\\n" "$PWD" >> "{calls}"\nexit 0\n')
+    (stub / "claude").write_text(
+        '#!/bin/sh\nif [ "$1" = "agents" ]; then echo "[]"; exit 0; fi\n'
+        f'printf "%s\\n" "$PWD" >> "{calls}"\nexit 0\n'
+    )
     (stub / "claude").chmod(0o755)
     env = dict(env, PATH=f"{stub}:{os.environ['PATH']}", **GIT_ENV)
     return wt, card, deploy, env, calls
