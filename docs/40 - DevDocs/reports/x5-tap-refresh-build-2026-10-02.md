@@ -72,6 +72,15 @@ The card's `## RECORDS`, copied and re-read:
 - Written: `tests/cobalt/test_x5_tap_refresh_db.py` — `test_x5_a_tap_committed_while_the_refresh_waits_keeps_its_numbers` (X5) and `test_x5n_a_refresh_that_waits_on_a_lock_with_no_tap_writes_the_stage_numbers` (X5n, the negative control). No `src/` edit.
 - Offline: `uv run pytest -q -rs -p no:cacheprovider --color=no tests/cobalt/test_x5_tap_refresh_db.py` → `2 skipped in 0.02s` (`:277`, `:319`: `Postgres env settings not available`).
 - With-DB (top level, R41 shape): lock (a) at 08:25 EDT, `ls -la /Users/cobalt/cobalt-wt/*/.env` → `-rw------- 1 cobalt staff 2186 Oct 2 08:25 /Users/cobalt/cobalt-wt/ops-glob-1002/.env`. THE LOCK IS HELD by `ops-glob-1002`; nothing taken, nothing run on `cobalt_dev`. Stopped here under UNATTENDED RULES (b).
+- CONTINUED 09:03 EDT. E2 with-DB take (R41, the top level): lock (a) `no matches found`; (b) one line, this worktree's (09:03); `<F0>` = cols `664` · rels `35` · views_md5 `272c95bbb12241e3611e4b36326ccf87`; `--proof-only` → `0013` (no 0014+ table), `NOTHING WAS APPLIED`; `COBALT_ENV=dev uv run cobalt db migrate` (foreground) → `0001`…`0013`, `0014`…`0022` applied, `content UNCHANGED on every table` — **dev forward: APPLIED 09:04 EDT**.
+- Run 1, `COBALT_ENV=dev uv run pytest -q -rA -p no:cacheprovider --color=no --tb=line tests/cobalt/test_x5_tap_refresh_db.py` → `2 failed in 10.48s`:
+  - X5: `:305: AssertionError: the refresh did not see the tap that committed while it waited` / `assert True is False` — the row's reason.
+  - X5n: `:341: AssertionError: B never waited` / `{'b_waited': False, 'b_wrote_all': True}` — NOT the row's reason: the factory's connection autocommits, so the holder's `FOR UPDATE` lock ended with its SELECT. **Rewritten** (the holder takes `autocommit = False` before the SELECT).
+- Run 2 (same command, same take) → `1 failed, 1 passed in 0.29s`:
+  - `FAILED …::test_x5_a_tap_committed_while_the_refresh_waits_keeps_its_numbers` — `:305: AssertionError: the refresh did not see the tap that committed while it waited` / `assert True is False`. RED on BASE for the row's reason: B waited (the `B never waited` assert above it passed) and returned `True`.
+  - `PASSED …::test_x5n_a_refresh_that_waits_on_a_lock_with_no_tap_writes_the_stage_numbers` — the negative control is green on BASE.
+- (c3r): `COBALT_ENV=dev uv run cobalt db query --side user "SELECT ticker, count(*) FROM aset_sizings WHERE ticker IN ('ZZX5R') GROUP BY ticker"` → header only, no rows.
+- `COBALT_ENV=dev uv run cobalt db migrate --rollback --down-to 0013` (foreground) → `0022` … `0014` reversed, newest first, `content UNCHANGED on every table`. `<F2>` = 664 / 35 / `272c95bbb12241e3611e4b36326ccf87` = `<F0>` → **cobalt_dev: 0013 — F2 = F0**. Lock (d): `rm`, `ls` → `No such file or directory`; `.env: removed, proven gone (E2)` 09:05 EDT.
 
 ## E3 THE ROWS
 
@@ -84,12 +93,14 @@ The card's `## RECORDS`, copied and re-read:
 ## FOR THE CHECK
 
 ## CONTINUE
-next: E2 — the with-DB red (lock take at the top level: lock (a)–(b), `<FP>` → `<F0>`, `--proof-only` → `0013`, forward, the file alone, (c3r) for `ZZX5R`, rollback to `0013`, `<FP>` = `<F0>`, lock (d)); then the `wip(x5-tap-refresh): red` commit if the reds are the rows'.
+next: E3
 
 ## DECISIONS
 none so far.
 
 ## RECORDS
-- Stopped at E2, 08:25 EDT: `cobalt_dev` lock held by `/Users/cobalt/cobalt-wt/ops-glob-1002/.env`. `.env` of this worktree: never copied at E2. No migration applied by this build. Wip commit holds the test file and this report.
+- Stopped at E2, 08:25 EDT: `cobalt_dev` lock held by `/Users/cobalt/cobalt-wt/ops-glob-1002/.env`. `.env` of this worktree: never copied at E2. No migration applied by this build. Wip commit holds the test file and this report (`e074e73a`).
+- CONTINUED at E2 09:03 EDT — the desk (`cto-desk`) said the lock is free; verified: `ls -la /Users/cobalt/cobalt-wt/*/.env` → `no matches found`. (The desk's message named the holder as dev-rebuild; the file I saw at 08:25 was `ops-glob-1002`'s — either way none is left.) Its pointer to the card's R41 record (`c858b0c8`) is the card I read at start; nothing widened.
+- E2 lock take (R41, top level): `.env` copied 09:03 EDT; `<F0>` = 664 / 35 / `272c95bbb12241e3611e4b36326ccf87`; `--proof-only` at `0013`. **dev forward: APPLIED 09:04 EDT** (0014-0022, `content UNCHANGED on every table`); rolled back 09:05, `cobalt_dev: 0013 — F2 = F0`; `.env: removed, proven gone (E2)`. (Lock take 1 of the R41 extra takes.)
 
-FAILED: E2 — cobalt_dev lock held — /Users/cobalt/cobalt-wt/ops-glob-1002/.env
+(run in progress — next step under ## CONTINUE)

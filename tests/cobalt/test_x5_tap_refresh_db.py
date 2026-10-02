@@ -329,6 +329,8 @@ def test_x5n_a_refresh_that_waits_on_a_lock_with_no_tap_writes_the_stage_numbers
         _route(monkeypatch, b_thread, b_pid)
         holder = _real(_db.Side.USER)  # session A: the lock, no tap
         try:
+            holder.commit()
+            holder.autocommit = False  # the factory's connection autocommits: the lock would end with the SELECT
             holder.execute("SELECT id FROM aset_sizings WHERE id = %s FOR UPDATE", (card_id,))
             b_thread.start()
             out["b_waited"] = _b_waits_on_a_lock(b_pid)
