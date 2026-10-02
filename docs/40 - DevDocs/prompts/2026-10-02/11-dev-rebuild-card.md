@@ -6,9 +6,10 @@ BASE: 6ae3f133
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/dev-rebuild-1002/docs/40 - DevDocs/reports/dev-rebuild-build-2026-10-02.md
 CHECK REPORT:
+HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B:
 TREE STATE: row T
-RULINGS: 2026-10-02 R14, 2026-10-02 R18
+RULINGS: 2026-10-02 R14, 2026-10-02 R18, 2026-10-02 R47
 
 ## ROWS
 
