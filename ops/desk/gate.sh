@@ -47,6 +47,8 @@
 
 set -u
 set -f
+# every environment prefix a command carries is the hub's own spelling: none comes from the caller
+unset COBALT_ENV COBALT_LIVE_VAULT_ROOT
 
 REPO=${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}
 WT=${COBALT_WT_ROOT:-/Users/cobalt/cobalt-wt}
@@ -253,13 +255,16 @@ take() {
     note "no matches found"
     if [ -f "$HERE/take-devdb-lock.sh" ] && [ -f "$HERE/release-devdb-lock.sh" ]; then
         lockway=script
+        # taken BEFORE the take: a signal while it waits is handled after it returns, and the
+        # release gives back only a lock that names this worktree (release-devdb-lock.sh)
+        taken=1
         note "\$ sh $HERE/take-devdb-lock.sh $name 90"
         sh "$HERE/take-devdb-lock.sh" "$name" 90 >> "$log" 2>&1
         rc=$?
         note "[exit $rc]"
+        [ "$rc" -eq 0 ] || taken=""
         [ "$rc" -ne 4 ] || { say "cobalt_dev lock not free (take-devdb-lock.sh exit 4)"; exit 4; }
         [ "$rc" -eq 0 ] || { say "the lock take failed (take-devdb-lock.sh exit $rc)"; exit 1; }
-        taken=1
     else
         lockway=cp
         taken=1
@@ -292,11 +297,13 @@ release() {
 }
 
 # fingerprint: <FP> into FPV (its value row, fields blank-separated); the query's exit. Never in a
-# subshell: a failed query must reach its caller, and nothing it says may land in the value.
+# subshell: a failed query must reach its caller, and nothing it says may land in the value. The
+# value row is the line after the `cols rels views_md5` header, never a line number: stderr shares
+# the segment, and a warning above the header must not make the header the value (check O1).
 fingerprint() {
     run "$FP"
     frc=$?
-    FPV=$(plain | sed -n '2p' | tr '\t' ' ')
+    FPV=$(plain | awk -F '\t' 'h { print; exit } $1 == "cols" && $2 == "rels" && $3 == "views_md5" { h = 1 }' | tr '\t' ' ')
     [ "$frc" -eq 0 ] && [ -n "$FPV" ] || { FPV="(the fingerprint query failed, exit $frc)"; return 1; }
 }
 
