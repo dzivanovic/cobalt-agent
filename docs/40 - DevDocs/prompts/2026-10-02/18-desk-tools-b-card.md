@@ -3,11 +3,11 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/desk-tools-b-1002
 WORKTREE: desk-tools-b-1002
 BASE: 9fa18f14
-TIP:
+TIP: f2a0217c
 REPORT: /Users/cobalt/cobalt-wt/desk-tools-b-1002/docs/40 - DevDocs/reports/desk-tools-b-build-2026-10-02.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/desk-tools-b-check-2026-10-02.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-02 R47
 
@@ -48,3 +48,4 @@ EVERY SCRIPT OF THIS CARD: a NEW file under `ops/desk/`, POSIX `sh` (inline `pyt
 - The suites of W run `tests/cobalt` and `tests/taxonomy`; your tests run by name in E2 and E3. No with-DB test is added: `TREE STATE: unchanged`.
 - `house-probe.sh` (card `19`) and `desk-context.sh --guard` (card `16`) are not on your base; B3 and B4 only test for the file beside them.
 - His order sets aside the outside house for this card (`reports/brain-direction-2026-10-02.md` row 10).
+- The judge seat's answers to the build's DECISIONS 1–7 (2026-10-02 R41): 2–6 are kept as built and are not findings; 1 is a follow-up outside this card. For 7: run each refusal branch the build lists as untested (`deploy-card.sh`: a bad `--rulings`, a missing `--out` folder, a bad `--set` or `--tag`, a bad `BRANCH` or empty `LADDER` on a job card, a check line with no `tip:`, a failing `git merge-tree`; `gate-clean.sh`: a bad `TAG`, a missing card; `job-clean.sh`: `BRANCH: main`; `desk-handover.sh`: a bad `DESK_HANDOVER_WAIT`, a missing `wait-desk-idle.sh`, no desk report, a row gone after the timeout) and quote each result. One that does NOT refuse, or that changes anything before it refuses, is a finding; fix it and keep its test.
