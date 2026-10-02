@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/launcher-checks-1002
 WORKTREE: launcher-checks-1002
 BASE: 63649058
-TIP:
+TIP: 039ccab9
 REPORT: /Users/cobalt/cobalt-wt/launcher-checks-1002/docs/40 - DevDocs/reports/launcher-checks-build-2026-10-02.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-checks-check-2026-10-02.md
 HOUSE A: none — overruled 2026-10-02 R47
