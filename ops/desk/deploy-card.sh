@@ -139,7 +139,8 @@ for card in "$@"; do
     heads="${heads:+$heads }$head"
     ships="$ships| $n | \`$branch\` | \`$ctip\` | \`$head\` | \`$creport\` | \`held unfixed: 0\` and \`ready: YES\` |$nl"
     records="$records- $job: check \`$creport\` last line: $last$nl- $job: head \`git -C $REPO rev-parse --short=8 $branch\` → \`$head\`; code tip \`$ctip\`$nl"
-    changed=$(git -C "$REPO" diff --name-only main "$head" -- src/cobalt/db_migrations)
+    # what the head changes since it left main (three dots): a migration main gained is not the head's
+    changed=$(git -C "$REPO" diff --name-only "main...$head" -- src/cobalt/db_migrations)
     [ -z "$changed" ] || migs="${migs:+$migs }$(printf '%s' "$changed" | tr '\n' ' ' | sed 's/ $//')"
 
     # ## DEPLOY PROOF: its non-blank lines up to the next "## " heading

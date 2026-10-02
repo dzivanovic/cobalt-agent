@@ -71,7 +71,7 @@ if mode == "s0":
 elif mode == "s4":
     s4 = next((l for l in lines if l.startswith("## §4")), None)
     rows = [l for l in block(s4, lambda l: l.startswith("## ")) if re.match(r"^\| R[0-9]+ \|", l)] if s4 else []
-    hand = [m.group(1) for m in (re.match(r"^HANDOVER: .* at ([0-9]{2}:[0-9]{2}) ET", l) for l in lines) if m]
+    hand = [m.group(1) for m in (re.match(r"^HANDOVER: .* at ([0-9]{2}:[0-9]{2})", l) for l in lines) if m]
     if not hand:
         print("== §4 ROWS (no HANDOVER line: every row) ==")
         print("\n".join(rows))

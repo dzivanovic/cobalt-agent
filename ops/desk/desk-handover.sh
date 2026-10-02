@@ -6,7 +6,9 @@
 #      (DESK_HANDOVER_WAIT=<seconds> shortens the wait).
 #   3. The wait returns (exit 0: the turn ended, the state is no longer `working`, or the row is
 #      gone) → `claude stop <predecessor>`, then `claude rm <predecessor>`, each printed first as
-#      `RUN: …`, each alone. The wait times out (exit 2) → it stops only when `claude agents
+#      `RUN: …`, each alone. An exit 0 that is not `turn ended REFRESHED` is re-read first
+#      (the wait returns 0 when its own list read fails): still `working`, no state or an
+#      unreadable list → REFUSED, nothing stopped. The wait times out (exit 2) → it stops only when `claude agents
 #      --json` now shows the predecessor's state is not `working`; still `working` → `REFUSED:
 #      predecessor still working`, exit 1. Any other exit of the wait, a row gone at that read,
 #      or an unreadable list → REFUSED, nothing stopped.
@@ -62,10 +64,28 @@ esac
 name=${info%%"$tab"*}
 [ "$name" = "cto-desk" ] || refuse "session $pred is named '$name', not cto-desk"
 
-sh "$here/wait-desk-idle.sh" "$pred" "$REPORTS/$newest" "$wait_for"
+waited=$(sh "$here/wait-desk-idle.sh" "$pred" "$REPORTS/$newest" "$wait_for")
 rc=$?
+printf '%s\n' "$waited"
 case "$rc" in
-    0) ;;
+    0)
+        # the wait also returns 0 when its own list read failed (it prints "<id>: " with no
+        # state, check O1): only a REFRESHED turn end stands alone; any other return is re-read
+        said=$(printf '%s\n' "$waited" | sed -n '1p')
+        if [ "$said" != "$pred: turn ended REFRESHED" ]; then
+            info=$(row)
+            case "$info" in
+                UNREADABLE|"") refuse "the wait returned '$said' and the session list is unreadable; nothing stopped" ;;
+                ABSENT) ;;
+                *)
+                    state=${info#*"$tab"}
+                    case "$state" in
+                        working|"") refuse "the wait returned '$said' but $pred is still ${state:-of no state}; nothing stopped" ;;
+                    esac
+                    ;;
+            esac
+        fi
+        ;;
     2)
         info=$(row)
         case "$info" in
