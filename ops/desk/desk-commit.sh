@@ -26,7 +26,8 @@ if not full.startswith(root + os.sep):
     sys.exit(1)
 rel = os.path.relpath(full, root)
 top = rel.split(os.sep, 1)[0]
-if top in ("src", "configs", "ops", "tests"):
+# the volume is case-insensitive: SRC/x.py is src/x.py
+if top.lower() in ("src", "configs", "ops", "tests"):
     sys.stderr.write("REFUSED: a code path is not the desk's to commit: %s\n" % rel)
     sys.exit(1)
 print(rel)
