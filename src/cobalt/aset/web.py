@@ -1478,7 +1478,7 @@ def _sheet_close_at_entry(card_id: int) -> str:
         price_asof=None, flag="estimated", source="sheet", running_before=running, now=now_utc(),
     )
     banner = (f"card {card_id}: flat exit {result.shares} sh @ {price} — the entry price, "
-              f"estimated (no price typed; listed for correction) · leg {result.leg_id} · running "
+              f"estimated (no price typed; {_sheet_listing(store, card_id)}) · leg {result.leg_id} · running "
               f"{result.running_before} → {result.running_after}")
     if result.closed:
         banner += f" · CLOSED (card_transitions id {result.transition_id})"
@@ -1486,6 +1486,21 @@ def _sheet_close_at_entry(card_id: int) -> str:
     if unit_failed:
         banner += f" · {unit_failed}"
     return f'<div class="saved">{html.escape(banner)}</div>'
+
+
+def _sheet_listing(store, card_id: int) -> str:
+    """Where the CLOSE's estimated leg is listed for correction, said only
+    when true (L35; check of aset-interim-close, house A F2). The sheet
+    lists a MANUAL card whose FILLED transition is today
+    (`_sheet_closed_estimated`, the same read); any other card is said
+    not to be. Never raises — the leg IS saved."""
+    try:
+        rows = store.filled_with_picks(_today_et())
+    except Exception as e:  # noqa: BLE001 — said in the banner
+        return f"the correction list is unreadable: {type(e).__name__}: {e}"
+    if any(r["card_id"] == card_id and r.get("origin") == Origin.MANUAL.value for r in rows):
+        return "listed for correction under the form"
+    return "not listed on this sheet: it lists only manual cards filled today"
 
 
 @app.post("/card/{card_id}/stop", response_class=HTMLResponse)
