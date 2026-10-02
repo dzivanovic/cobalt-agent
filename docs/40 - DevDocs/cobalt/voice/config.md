@@ -39,3 +39,6 @@ restart (L42) — the resident caches the voice config at its first load
 older than `scratch_max_age_s`, and a file younger than one transcribe is
 never "old". (Under R2-1 side B the sweep runs only at process start, so
 no in-process sweep can fire mid-transcribe.)
+
+## 2026-10-01 — voice-peers
+The committed `allowed_peers` in `configs/cobalt/voice.yaml` is localhost plus the five tailnet devices' IP literals (cobalt, badass, dejans-s25, fedora, msi), per his ruling 2026-09-28 R95, re-stated 2026-10-01 R14; no code changed, and the resident `com.cobalt.aset` re-reads it only at a restart.

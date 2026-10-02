@@ -80,6 +80,22 @@ def test_any_other_peer_is_a_named_403(seen, peer):
     assert seen == []
 
 
+@pytest.mark.parametrize("host", ["100.104.48.21", "100.70.206.126", "100.73.178.42", "100.66.219.53",
+                                  "100.82.85.27"])
+def test_v1_every_tailnet_device_is_an_allowed_socket_peer(seen, host):
+    """voice-peers V1 (2026-09-28 R95, 2026-10-01 R14): the committed config
+    admits each tailnet device's socket peer; fedora (100.104.48.21) first."""
+    r = _client((host, 51000)).get("/voice/status")
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.parametrize("host", ["192.168.1.5", "100.70.206.127"])
+def test_v1_a_near_miss_or_lan_peer_is_still_refused(seen, host):
+    """V1's negative control: a LAN peer and a one-off tailnet neighbour stay 403."""
+    r = _client((host, 51000)).get("/voice/status")
+    assert r.status_code == 403 and "not an allowed peer" in r.json()["detail"]
+
+
 def test_a_spoofed_forwarded_header_is_never_the_allow_key(seen):
     r = _client(LAN).post("/voice/turn", data={"session": "sess-web1", "text": "x"},
                           headers={"X-Forwarded-For": "127.0.0.1", "X-Real-IP": "127.0.0.1",

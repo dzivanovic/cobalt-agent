@@ -18,8 +18,9 @@ gate, the start-up sweep, the status lines and the widget partial.
   not on disk.
 
 ## The peer gate (W11 [F-03])
-Allowed only when the SOCKET PEER is in `allowed_peers` (loopback in dev;
-the `tailscale serve` peer is added by the device session, E8). Any other
+Allowed only when the SOCKET PEER is in `allowed_peers` (localhost plus the
+five tailnet devices' IP literals, `configs/cobalt/voice.yaml`; the
+`tailscale serve` peer is added by the device session, E8). Any other
 peer — a LAN address included — is a named 403. No header is read, so a
 spoofed `X-Forwarded-For` changes nothing.
 
@@ -46,3 +47,6 @@ microphone on this device") lives in a separate `device` list that
 `banner()` always draws and the status callbacks never assign, so neither
 a refused nor an OK status answer wipes it (fix r2). It sends no card id; the widget
 session id is random per page load. No reply audio exists on the server.
+
+## 2026-10-01 — voice-peers (check)
+The peer-gate paragraph now names the committed list: localhost plus the five tailnet devices (his ruling 2026-09-28 R95, re-stated 2026-10-01 R14), where it said loopback only; the gate's code is unchanged.

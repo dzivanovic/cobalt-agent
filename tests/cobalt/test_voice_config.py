@@ -51,8 +51,34 @@ def test_committed_voice_config_loads_with_the_dev_defaults(monkeypatch):
     assert cfg.model_dir == Path("/Users/cobalt/.cobalt-dev/voice-models")
     assert cfg.stt_engine == "faster-whisper"
     assert cfg.plan_route == "local.plan"
-    assert cfg.allowed_peers == ["127.0.0.1", "::1"]
+    assert cfg.allowed_peers == RULED_PEERS
     assert cfg.scratch_max_age_s > cfg.stt_timeout_s
+
+
+#: 2026-09-28 R95 ("yes change it as well as fedor. all tailscale machines
+#: included"), re-stated 2026-10-01 R14: localhost plus the five tailnet
+#: devices — cobalt, badass, dejans-s25, fedora, msi (card 05 RECORDS).
+RULED_PEERS = ["127.0.0.1", "::1", "100.70.206.126", "100.73.178.42", "100.66.219.53",
+               "100.104.48.21", "100.82.85.27"]
+
+
+def test_v1_allowed_peers_are_localhost_and_the_five_tailnet_devices(monkeypatch):
+    """voice-peers V1 (R95 / R14): the committed `allowed_peers` is exactly
+    the seven ruled literals, each a parseable IP literal (the validator at
+    `voice/config.py` `_ip_literals`), and its source comment names R95."""
+    import ipaddress
+
+    monkeypatch.delenv(vc.SCRATCH_ENV, raising=False)
+    monkeypatch.delenv(vc.MODEL_ENV, raising=False)
+    cfg = vc.load_voice_config()
+    for peer in RULED_PEERS:
+        assert peer in cfg.allowed_peers, peer
+    assert cfg.allowed_peers == RULED_PEERS
+    for peer in cfg.allowed_peers:
+        ipaddress.ip_address(peer)
+    lines = vc.CONFIG_PATH.read_text().splitlines()
+    (at,) = [i for i, l in enumerate(lines) if l.startswith("  allowed_peers:")]
+    assert "R95" in lines[at - 1] and "# source:" in lines[at - 1]
 
 
 def test_committed_files_sit_outside_the_old_loader_glob():
