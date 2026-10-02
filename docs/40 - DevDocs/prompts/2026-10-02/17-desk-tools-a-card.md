@@ -3,11 +3,11 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/desk-tools-a-1002
 WORKTREE: desk-tools-a-1002
 BASE: 9fa18f14
-TIP:
+TIP: d4bad986
 REPORT: /Users/cobalt/cobalt-wt/desk-tools-a-1002/docs/40 - DevDocs/reports/desk-tools-a-build-2026-10-02.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/desk-tools-a-check-2026-10-02.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-02 R47, 2026-10-02 R38
 
@@ -47,3 +47,4 @@ EVERY SCRIPT OF THIS CARD: a NEW file under `ops/desk/`, POSIX `sh` (inline `pyt
 - `tests/ops/` is not on your base; you create it with your first test file. It needs no `conftest.py` (the two checked ops branches have none).
 - The suites of W run `tests/cobalt` and `tests/taxonomy`; your tests run by name in E2 and E3 (`uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/<file>`). No with-DB test is added: `TREE STATE: unchanged`.
 - His order sets aside the outside house for this card (`reports/brain-direction-2026-10-02.md` row 10).
+- The judge seat's answer to the build's DECISION 1 (2026-10-02 R41): the new scripts are mode 0644 and stay so; every `ops/desk/` script is run as `sh <path>` or `python3 <path>`, never executed directly (the checked lock scripts at `aeefb6df` are 0644 as well). The file mode is not a finding; a header or a test that runs a script WITHOUT its interpreter is.
