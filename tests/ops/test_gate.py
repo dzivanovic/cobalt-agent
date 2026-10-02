@@ -62,6 +62,10 @@ if is_pytest(argv):
 if is_fp(argv):
     fps = script.get("fp", [])
     k = nth(is_fp)
+    rcs = script.get("fp_rc", [])
+    if k < len(rcs) and rcs[k]:
+        print("stub uv: the query failed", file=sys.stderr)
+        sys.exit(rcs[k])
     sys.stdout.write(fps[k] if k < len(fps) else fps[-1])
     sys.exit(0)
 if "query" in argv:
@@ -247,6 +251,25 @@ def test_a_fingerprint_that_differs_after_the_rollback_exits_6(gate):
     done = run_gate(env, "withdb")
     assert done.returncode == 6, done.stdout + done.stderr
     assert "cobalt_dev NOT back at 0013" in done.stdout
+    assert not (job / ".env").exists()
+
+
+def test_a_failed_fingerprint_at_the_start_stops_and_releases(gate):
+    wt, repo, job, env, calls, script = gate
+    set_script(script, fp_rc=[1])
+    done = run_gate(env, "withdb")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert [kind(c) for c in read_calls(calls)] == ["fp"]
+    assert "the fingerprint query failed" in done.stdout
+    assert not (job / ".env").exists()
+
+
+def test_a_failed_fingerprint_after_the_forward_still_rolls_back(gate):
+    wt, repo, job, env, calls, script = gate
+    set_script(script, fp_rc=[0, 1])
+    done = run_gate(env, "withdb")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert [kind(c) for c in read_calls(calls)] == ["fp", "proof", "pytest", "forward", "fp", "rollback", "fp"]
     assert not (job / ".env").exists()
 
 
