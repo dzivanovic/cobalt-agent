@@ -1,0 +1,56 @@
+JOB: adoption-hubs
+LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
+BRANCH: ops/adoption-hubs-1003
+WORKTREE: adoption-hubs-1003
+BASE: «FILL: card 03 adoption-scripts' BUILT tip»
+TIP:
+REPORT: /Users/cobalt/cobalt-wt/adoption-hubs-1003/docs/40 - DevDocs/reports/adoption-hubs-build-2026-10-03.md
+CHECK REPORT:
+HOUSE A: none — overruled 2026-10-02 R47
+HOUSE B:
+TREE STATE: unchanged
+DB: none
+RULINGS: 2026-10-02 R47, 2026-10-02 R154, 2026-10-02 R157, 2026-10-02 R38, 2026-10-02 R39, 2026-10-02 R45, 2026-10-02 R46
+
+## ROWS
+
+WHY: the fixed files make a worker type every step as single commands, one full turn each (AUTHORIZATION 6–8, PREFLIGHT 15–25, W about 30, deploy STEP-0 about 45). The scripts for those steps are on `main` (`17`, `18`, `19`) and card `03` lands what they still needed. This card makes the four fixed files call them, puts his four 10-02 rulings into their text (the bare-command fix's lines, the class strings, the equal-tree clause, the any-hour clause) and removes `TREE STATE`. Every file here is under `docs/`: the job takes no lock (`DB: none`). The text of a step that a script now does is replaced by the call and what its output must read; the judgment sentences around it stay word for word. THE RULE OF THIS CARD: a sentence is changed only when a row names it; a sentence you think wrong goes under `## DECISIONS`.
+
+| row | what | red first | files |
+|---|---|---|---|
+| A1 | `BUILD-HUB.md`: `## AUTHORIZATION` = `sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "<card>"`, quote WHOLE, last line `AUTHORIZED` or stop; the mechanical rows of `## PREFLIGHT` = `sh /Users/cobalt/cobalt/ops/desk/preflight.sh build "<card>"`, quote WHOLE (the card's symbol greps, the lock probe and the records stay as typed steps); `## W` = `sh /Users/cobalt/cobalt/ops/desk/gate.sh <WORKTREE> all [--deselect <id>]… [--tickers <A,B,…>] [--migration]` (`run_in_background`, timeout 7200000), the verdict lines quoted WHOLE and the log path recorded; a `DB: none` card runs `gate.sh <WORKTREE> offline` and `livenote` and the `tests/ops` run as `01` wrote it. THE LOCK section keeps its text as the rule `gate.sh` enforces and says so in its first sentence. The pass commands leave the file: W (c) and (c3) say `the PASS 1 and PASS 2 commands of ops/desk/gate-lists.md`; TREE STATE's paragraph becomes two sentences: a build that adds a with-DB test needing a level above `0013` edits `ops/desk/gate-lists.md` (`--deselect` in PASS 1, the id in PASS 2) and names it in the row's `files`; the check reads the diff of that file. `## STOP LINE` unchanged. SLOTS SELF-HEAL: in THE LOCK, after the probe: `A slot-guard exit (the guard of card 13) → in the SAME lock take, COBALT_ENV=dev uv run cobalt db dev-rebuild <the table the guard names> --dry-run, then without --dry-run, LEVEL 0013 again; record SELF-HEAL under ## RECORDS and go on; a second guard exit in one job → FAILED.` | no test: hub text. Proof per changed sentence: `grep -n -F` of a distinctive fixed string → one hit, quoted; and `grep -c -F "COBALT_ENV=dev uv run pytest" docs/40 - DevDocs/prompts/BUILD-HUB.md` → `0` | `docs/40 - DevDocs/prompts/BUILD-HUB.md` |
+| A2 | `CHECK-HUB.md`: AUTHORIZATION = `authorize.sh check "<card>"`; PREFLIGHT's mechanical rows = `preflight.sh check "<card>"`; the house probes = `sh /Users/cobalt/cobalt/ops/desk/house-probe.sh` (all three; the `UP` / `OUT` lines decide house A and B as the text decides them today); `## 1` (1)–(3) staging for a confined house = `sh /Users/cobalt/cobalt/ops/desk/stage-set.sh "<card>" "<dest>"` plus `stage-copy.sh` for the `## READ` symbols as today; `## 6` after a commit = `gate.sh <WORKTREE> all …` as A1 (a `DB: none` card as `01` wrote it); `## 7` (vi) reads `gate-lists.md`'s diff instead of the two hub files | hub text; the same proof shape; `grep -c -F "COBALT_ENV=dev uv run pytest" docs/40 - DevDocs/prompts/CHECK-HUB.md` → `0` | `docs/40 - DevDocs/prompts/CHECK-HUB.md` |
+| A3 | `DEPLOY-HUB.md`: AUTHORIZATION = `authorize.sh deploy "<card>"`; STEP-G = `gate.sh <GATE worktree> all` with the set's `--tickers` and `--migration` as the card gives them (the hub keeps STEP-G's gate sentence: three suites, `0 failed`, `0 errors`, before the merge). P1 gains `(v) a set whose MIGRATIONS is none and whose derived restart set is empty: any hour (his 2026-10-02 ruling, row 9; L43 and L66 bind a set that restarts a resident)`. STEP-G gains THE EQUAL-TREE CLAUSE before (a): `ONE branch in TIP, and git diff --stat <its check's code tip> <m1> -- . ":(exclude)docs" prints nothing → the check's three suite lines are this gate's (his 2026-10-02 ruling, row 8): quote them from the check report with its path and skip (a)–(f); otherwise the gate runs whole.` RECUT: STEP-5's failed-gate text names `desk-launch.sh recut "<card>"` as the desk's next step and says the hub itself does nothing more. `deploy-step0.sh`, `deploy-outage.sh`, `deploy-smoke.sh` are NOT called here (card `20`, after its dry run) | hub text; the same proof shape | `docs/40 - DevDocs/prompts/DEPLOY-HUB.md` |
+| A4 | THE LINES. On the launch line of `BUILD-HUB.md`, `CHECK-HUB.md`, `DEVFIX-HUB.md` and `DEPLOY-HUB.md`: (a) `"Bash(sh /Users/cobalt/cobalt/ops/desk/*)"` replaces every per-script `sh …` string (the `.claude/ops` lock strings included: the scripts are called at the repo path, precedent `stage-copy.sh`); (b) `"Bash(COBALT_ENV=dev uv run cobalt db *)"` replaces the per-verb dev `db` strings on all four, and `"Bash(COBALT_ENV=production*)"` is in `--disallowedTools` of build, check and devfix; (c) each kind's own report glob in its `Edit(…)` string as it stands. THE FLAG, on all four lines and on the desk's line in `CTO-DESK-WAKEUP.md` if that file carries one: `--append-system-prompt "ONE bare command per Bash call: no &&, ;, |, redirect, newline or $(…) outside quotes. A call the hook blocks is NOT A REFUSAL: resend it as single calls."` — the words of his 10-01 R45 part 2 as `cto-2026-10-01-words.md` `## R45` gives them, if they differ. `STANDING-LIST.md`: the `## CLASSES` section of card `21` lists the three classes with their rows; §1–§6 tables show the class string in place of the strings it replaced, each marked `CLASS (a)` / `(b)`; THE LIST counts in each hub's header are re-counted. No other string is added or removed; `desk-launch.sh` builds the line from the hub file and is not edited | `tests/ops/test_hub_lines.py` (new): reads the four hub files' launch lines, asserts each carries the two class strings once, the production deny on build/check/devfix, the flag once, and no `sh /Users/cobalt/.claude/ops/` string; a `DESK_LAUNCH_DRY=1` launch of each kind on a tmp card prints a line holding the flag (stub `claude`). RED on `BASE`: the per-script strings | the four hub files, `docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md` (the flag only, if a line is there), `docs/40 - DevDocs/prompts/STANDING-LIST.md`, `tests/ops/test_hub_lines.py` |
+| A5 | `CARD.md`: `TREE STATE` row removed from THE HEADER table and both examples; the `DB` row (card `01`) stays; one sentence under THE BODY: a with-DB test needing a level above `0013` is named in its row's `files` through `ops/desk/gate-lists.md`. `desk-launch.sh` is not edited: RUN `grep -n -F "TREE STATE" ops/desk/desk-launch.sh` → quote; a launcher rule that requires the key → `DECISION A5` | fixed-file text; `grep -c -F "TREE STATE" docs/40 - DevDocs/prompts/CARD.md` → `0` | `docs/40 - DevDocs/prompts/CARD.md` |
+
+## NOT IN THIS JOB
+- Any file outside `docs/40 - DevDocs/prompts/` and `tests/ops/`: no script, no `src/`, no `configs/`. A script that does not do what a hub sentence needs → `DECISION <row>`, never a script edit here.
+- `desk-launch.sh` (reads the lines from the hub files; its own checks are card `21`'s).
+- The deploy step scripts' adoption (card `20` and its dry run); `job-run.sh`; the close timer; `BRAIN-HUB.md`; `JUDGE-HUB.md`, `JUDGE-CARD.md`, `CLOSE-HUB.md` (unchanged this weekend unless a row above names them: none does).
+- A second dev database; `--db-only`; the `DB: none` class text of card `01` (stands as written).
+- The STRIKE OR MERGE table (the desk applies it from the close list, not a card).
+- His installs: the settings hook entry, the deny strings, the timer.
+
+## READ
+- `reports/brain-direction-2026-10-02.md`: `## ROWS FOR THE DESK TO RECORD` rows 1, 2, 8, 9; `## TOMORROW` whole; `## RULED 17:25 ET`.
+- `reports/brain-unattended-2026-10-02.md` A 4, A 6, A 7, E 11–E 14; `## THE STANDARD` 6.
+- `reports/cto-2026-10-01-words.md` `## R45` (the flag's words); `reports/x5-fix-decisions-2026-10-02.md` and `21`'s decisions file for what a check may ask of a hub sentence.
+- The five scripts' header comments at `BASE`: `ops/desk/authorize.sh`, `preflight.sh`, `gate.sh`, `stage-set.sh`, `house-probe.sh`; their exit codes are the hub's stop conditions.
+- The four hub files whole, `CARD.md`, `STANDING-LIST.md` at `BASE` (card `03`'s tip).
+- `prompts/2026-10-03/01-lock-relief-card.md` `## ROWS` H1, H2 (the `DB: none` text you keep).
+
+## CHECK ASKS
+- X1 Walk each fixed file as a worker would, top to bottom: is there a step whose output the next sentence needs and the called script does not print? Name the sentence.
+- X2 Does any sentence still tell a worker to type a `pytest`, `migrate`, `cp .env` or `rm .env` command outside `gate.sh`? Is the lock's judgment text (what a held lock means, the stop) still there?
+- X3 Are the two class strings exactly those of his ruling (direction row 2), and does any line still carry a string the class covers or a string outside every class and §1–§6?
+- X4 P1 (v): can a set that restarts a resident read as "empty restart set" (a `restarts.py` class miss, a RESTARTS line not derived)? The equal-tree clause: can a two-branch set or a docs-only difference that is not docs-only pass it?
+- X5 The flag: does `desk-launch.sh` pass it through unchanged (quotes, the `$(…)` literal) in a dry run of all four kinds?
+- X6 Is `TREE STATE` still demanded anywhere (a hub sentence, `CARD.md`, `desk-launch.sh`, `preflight.sh`)?
+
+## RECORDS
+- `DB: none`: every file of every row is under `docs/` or `tests/ops/`; the build proves it at W (a0) by `git diff --name-only <BASE>`.
+- The `DEPLOY-HUB.md` part is read by one other house after the check (L67): a read-only prompt in the shape of `reports/deploy-hub-other-house-read-2026-09-30.md`, launched by the desk; Grok, after card `20`'s check or before it, one Grok hub at a time (L15). The set does not deploy before that read is on file.
+- Stacking: this card stacks on `03`'s BUILT tip; the two ship in one set. A finding here about a script is a `DECISION` for the judge seat, which routes it to `03`'s check or a follow-up.
+- `install-fixed.sh` (`17`) is for a fixed file waiting on his row; the strings here are already approved (direction rows 1, 2, 8, 9), so the hub titles keep their `INSTALL` row and the `## CLASSES` section cites row 2's number.
+- His order sets aside the outside house for the check of this card (direction row 10, R47; R156).
