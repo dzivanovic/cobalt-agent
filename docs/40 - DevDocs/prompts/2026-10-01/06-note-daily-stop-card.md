@@ -3,9 +3,9 @@ LADDER: OFF-LADDER — cto-2026-10-01.md 2026-10-01 R15
 BRANCH: s3/note-daily-stop-1001
 WORKTREE: note-daily-stop-1001
 BASE: 5ed7c3fd
-TIP:
+TIP: 0b678bd0
 REPORT: /Users/cobalt/cobalt-wt/note-daily-stop-1001/docs/40 - DevDocs/reports/note-daily-stop-build-2026-10-01.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/note-daily-stop-check-2026-10-01.md
 HOUSE B: mandatory — vault notes
 TREE STATE: unchanged
 RULINGS: 2026-10-01 R15
