@@ -25,6 +25,7 @@ SEAT ORDER, by the meter at launch (PREFLIGHT): OpenAI (Sol, `gpt-5.6-sol`) · G
 - OpenAI out → A = Grok, B = Gemini.
 - OpenAI and Grok both out → A = Gemini, NO house B. A `mandatory` build then WAITS for a meter: `FAILED PREFLIGHT: house B — mandatory and no second house is up (<each house and its line>)`, unless the card's `HOUSE B` line ends `· overruled <date> R<n>` (his per-case ruling, proved like a row of `RULINGS`).
 - Gemini never sits ahead of a house that is up. No outside house up → `FAILED PREFLIGHT: no house A`.
+- NO OUTSIDE HOUSE, HIS PER-CASE OVERRULE: a card whose header carries the line "HOUSE A: none — overruled <date> R<n>" (proved like a row of RULINGS) is checked by you alone. PREFLIGHT runs no house gate and no probe and records "house A: none (overruled <date> R<n>)". "## 1" and "## 3" are not run; "## 2" is your read; "## 4" to "## 8" bind as written. When "open" is above 0, "house B:" reads "none available" and the open items go under "## DECISIONS". The stop line reads "house A: none (overruled <date> R<n>)".
 A house that ends in METER, HARNESS, TIMEOUT or without its closing line produced nothing: the next house in the order takes its seat, ONE attempt each, recorded. You are never replaced by another model.
 
 ## LAWS — the laws that bind you, one line each; open a full entry (`grep -n "^### L<n> "` in `/Users/cobalt/Vault/Think/6 - Permanent/Memory/LAWS.md`) only when you act on that law
