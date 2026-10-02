@@ -1,0 +1,50 @@
+JOB: ops-seam
+LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
+BRANCH: ops/ops-seam-1002
+WORKTREE: ops-seam-1002
+BASE: «FILL: the 8-hex BUILT tip of card 15 (ops-glob)»
+TIP:
+REPORT: /Users/cobalt/cobalt-wt/ops-seam-1002/docs/40 - DevDocs/reports/ops-seam-build-2026-10-02.md
+CHECK REPORT:
+HOUSE A: none — overruled 2026-10-02 R47
+HOUSE B:
+TREE STATE: unchanged
+RULINGS: 2026-10-02 R47, 2026-10-01 R8, 2026-10-01 R20, 2026-10-02 R8, 2026-10-02 R9
+
+## ROWS
+
+THE JOB IN ONE LINE: two checked branches cannot merge (no build line runs `git merge`; they conflict with each other and with `main`), so this build PORTS both onto its base by Edit and Write, changes nothing they built, and proves each ported file against its checked tip. `<A>` = `ee667f3c` (desk-size-guard, checked; its range is `36bed6ed..ee667f3c`). `<B>` = `aeefb6df` (devdb-lock, checked; its range is `093028d0..aeefb6df`). Read a file of either with `git show <A>:<path>` and a change with `git diff 36bed6ed <A> -- <path>` or `git diff 093028d0 <B> -- <path>`. A new file is written whole with the Write tool from the `git show` output; a changed file is edited hunk by hunk with the Edit tool.
+
+| row | what | red first | files |
+|---|---|---|---|
+| P1 | The files only `<A>` changed come in byte-equal to `<A>`: `ops/desk/desk-context.sh`, `ops/desk/wait-stop-line.sh`, `tests/ops/test_desk_size_guard.py` (new, 445 lines). Proof, quoted: `git diff --stat ee667f3c HEAD -- ops/desk/desk-context.sh ops/desk/wait-stop-line.sh tests/ops/test_desk_size_guard.py` prints NOTHING | `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/test_desk_size_guard.py`: RED on `BASE` (no such file); after the port every test of it passes, the summary quoted | the three files named |
+| P2 | The files only `<B>` changed come in byte-equal to `<B>`: `ops/desk/take-devdb-lock.sh`, `ops/desk/release-devdb-lock.sh` (both new), `tests/ops/test_devdb_lock.py` (new, 303 lines), `docs/40 - DevDocs/prompts/BUILD-HUB.md`, `docs/40 - DevDocs/prompts/DEPLOY-HUB.md`. First prove `main` left the two hub files alone: `git diff --stat 093028d0 HEAD -- "docs/40 - DevDocs/prompts/BUILD-HUB.md" "docs/40 - DevDocs/prompts/DEPLOY-HUB.md"` prints NOTHING on `BASE` (a line there → that file moves to row P3's rule and is named under `## DECISIONS`). Proof after the port: `git diff --stat aeefb6df HEAD --` those five paths prints NOTHING | `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/test_devdb_lock.py`: RED on `BASE` (no such file); after P2 and P3 every test of it passes (one test waits about 60 s by design), the summary quoted | the five files named |
+| P3 | The files more than one side changed carry EVERY hunk of every side and nothing else. `ops/desk/desk-launch.sh`: the hunks of `<A>` (the desk-size guard: header comment and the guard block after `kind=$1`) and of `<B>` (the lock: header comment, `COBALT_REPO_ROOT` / `COBALT_WT_ROOT`, `lock_dir_free`, the three `lock_free` call sites, the three notes); proof: `git diff ee667f3c HEAD -- ops/desk/desk-launch.sh` shows exactly `<B>`'s hunks and row P4's, and `git diff aeefb6df HEAD -- ops/desk/desk-launch.sh` shows exactly `<A>`'s hunks and row P4's, both quoted. `docs/40 - DevDocs/prompts/CHECK-HUB.md` and `docs/40 - DevDocs/prompts/STANDING-LIST.md`: the base's text (it holds the staging string of 2026-10-01 R37 and, in `CHECK-HUB.md`, the NO OUTSIDE HOUSE line of 2026-10-02 R49 if the base has it) plus every hunk of `git diff 093028d0 aeefb6df` on that file; where both changed one line (the `CHECK-HUB.md` launch line and the line that counts its strings; the standing list's §2 title line) the result holds every string of both sides, and the counts written in prose are the counts of the line as it now stands (`grep -o` each string once, quoted). NOT ported: both sides' `OPS_TOOLS` hunk in `src/cobalt/jobs/restarts.py` and their tests in `tests/cobalt/test_jobs_restarts.py` (the `ops/desk/` rule of card 15 on your base covers every one of those paths), and the `OPS_TOOLS` sentences of `docs/40 - DevDocs/cobalt/jobs/restarts.md`; from `<A>`'s 9 lines of that page keep only what does not speak of `OPS_TOOLS` | RUN — asserts nothing new of its own: after P1–P3, `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `0 failed`; `uv run cobalt jobs restarts <BASE>..HEAD` → every `ops/desk/` path reads `operator script; no Cobalt reader`, no `UNCLASSIFIED` row, and `src/cobalt/jobs/restarts.py` is NOT in the table; all quoted. A ported test that fails ONLY because it reads the `OPS_TOOLS` literal has that one assertion pointed at the `ops/desk/` rule: named under `## DECISIONS`, and that file is then listed as not byte-equal with its diff quoted | `ops/desk/desk-launch.sh`, `docs/40 - DevDocs/prompts/CHECK-HUB.md`, `docs/40 - DevDocs/prompts/STANDING-LIST.md`, `docs/40 - DevDocs/cobalt/jobs/restarts.md` |
+| P4 | A launcher kind `install-ops`: `sh desk-launch.sh install-ops` links every regular file `ops/desk/*.sh` and `ops/desk/*.py` of the repo root (`$REPO`) into the link folder (`/Users/cobalt/.claude/ops`, or `$COBALT_OPS_LINK_DIR` in tests) as `<link folder>/<name>` → `<repo>/ops/desk/<name>`. A name that already exists there, as a link or as a plain file, is left untouched and printed `KEPT <name>`; a new link prints `LINKED <name>`; the last line is `install-ops: <n> linked, <m> kept`; exit 0. It takes no argument (one more → `REFUSED`, exit 1), launches nothing, and runs after the desk-size guard like every kind but `desk`. The header comment and the usage line name the kind | a new `tests/ops/test_install_ops.py`, in the shape of `tests/ops/test_devdb_lock.py` (a tmp `COBALT_REPO_ROOT` with three files under `ops/desk/`, a tmp `COBALT_OPS_LINK_DIR` that already holds one of the names as a plain file): the run links the two missing names, keeps the third byte for byte, prints the three lines and the count; a second run links nothing and prints `0 linked, 3 kept`; one extra argument exits 1 with `REFUSED`. RED on `BASE`: `REFUSED: kind 'install-ops' is none of …`. The desk-size guard is stubbed as `test_desk_size_guard.py` stubs it | `ops/desk/desk-launch.sh`, `tests/ops/test_install_ops.py` |
+
+## NOT IN THIS JOB
+- Any change of behaviour, wording or string to what `<A>` or `<B>` built, beyond the two seams this card names (the `ops/desk/` rule instead of `OPS_TOOLS`; every string of both sides on a shared line).
+- `src/cobalt/jobs/restarts.py`; any entry of `OPS_TOOLS`.
+- Creating any link under `/Users/cobalt/.claude/` (the desk runs `install-ops` after the deploy); `.claude/settings.json`.
+- The `devfix` kind (card `12`), the launcher pre-checks (card `21`), any new script of cards `17`–`19`.
+- The build reports of `<A>` and `<B>` (`reports/desk-size-guard-build-2026-10-01.md`, `reports/devdb-lock-build-2026-10-01.md`): not ported; they stay on their branches.
+
+## READ
+- By `git show`, not by path (they are not in your tree): `git show ee667f3c:tests/ops/test_desk_size_guard.py`, `git show ee667f3c:ops/desk/desk-context.sh`, `git show aeefb6df:tests/ops/test_devdb_lock.py`, `git show aeefb6df:ops/desk/take-devdb-lock.sh`, `git show aeefb6df:ops/desk/release-devdb-lock.sh`.
+- `git diff --stat 36bed6ed ee667f3c` and `git diff --stat 093028d0 aeefb6df`: the two file lists this card ports; quote both.
+- `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/desk-size-guard-check-2026-10-01.md` and `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/devdb-lock-check-2026-10-01.md`: the two checks whose result this port carries.
+- `ops/desk/desk-launch.sh`: the kind blocks (`close`, `desk`, `prompt`) that end before `# ---- the kind is a fixed file`, for where `install-ops` sits.
+
+## CHECK ASKS
+- X1 Re-run every equality proof of P1 and P2 yourself and quote it. One byte of difference in a ported file is a finding.
+- X2 Is any hunk of `git diff 36bed6ed ee667f3c` or `git diff 093028d0 aeefb6df` (code, tests, hub files, standing list) missing from this branch, other than the `OPS_TOOLS` hunks, their two tests and the two build reports? Write the `git diff` commands that show the answer.
+- X3 Does the `CHECK-HUB.md` launch line hold every allow string of the base's line and of `<B>`'s line, each once, and `--add-dir /Users/cobalt/.claude/ops` (2026-10-02 R9)? Does every count the hub files and the standing list state in prose equal the line it describes?
+- X4 Can `install-ops` replace, remove or re-point anything that already exists in the link folder?
+
+## RECORDS
+- RESTARTS class homes: every `ops/desk/*` path → the `ops/desk/` rule of card 15 on your base (`operator script; no Cobalt reader`); `tests/ops/*` → test/documentation (`restarts.py:239`); `docs/…` → DOCS (`:219`). No `src/` path is in this job. (the brain, 08:35 ET)
+- Both parents are checked: desk-size-guard `ready: YES` at `ee667f3c` (2026-10-01 R52); devdb-lock ready at `aeefb6df` on his G1 and D2 = A (2026-10-02 R8, R9). Their `OPS_TOOLS` lifts were the fence items of both checks; this port drops both lifts.
+- Known overlaps, read by the brain at 08:20 ET: `<A>` × `<B>` on `src/cobalt/jobs/restarts.py` and `tests/cobalt/test_jobs_restarts.py` (same lines); `<B>` × `main` on `CHECK-HUB.md` (4 lines) and `STANDING-LIST.md` (1 line), changed on `main` by `01bfe67f`; `desk-launch.sh` is changed by both in separate regions. `main` since `093028d0` left `BUILD-HUB.md` and `DEPLOY-HUB.md` untouched.
+- PREFLIGHT symbols: the names this card gives from the two branches (`lock_dir_free`, `COBALT_REPO_ROOT`, `COBALT_WT_ROOT`, `--guard`, the three new test files, the two lock scripts) are NOT on `BASE` by design; they arrive with the port. Prove each with `git show <A>:<path>` or `git show <B>:<path>`, not with a `grep` of your tree; a miss there is not a `FAILED PREFLIGHT`.
+- `sh` is not on your line: run a script only through its tests (`uv run pytest tests/ops/<file>`).
+- His order sets aside the outside house for this card (`reports/brain-direction-2026-10-02.md` row 10).
