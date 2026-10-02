@@ -22,6 +22,8 @@
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh check  "<absolute card path>" PASS-2   (house B + the second Opus)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh deploy "<absolute card path>"
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh deploy "<absolute card path>" STEP-D0  (the one resume)
+#   sh /Users/cobalt/.claude/ops/desk-launch.sh devfix "<absolute card path>"          (one dev-maintenance
+#        job on cobalt_dev: DEVFIX-HUB.md, card 12 devfix-route; a resume names its step as build)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh build|check "<card>" [PASS-2] <step>   (a NEW worker at
 #        that CONTINUE step — only when the launch line must change, the session died, the
 #        judgment seat finds a misread, or the worker measures above 250,000 tokens)
@@ -45,6 +47,9 @@
 #           line, its message starting `PASS-2. `).
 #   deploy: `git -C /Users/cobalt/cobalt worktree add -b <BRANCH> <worktree> main` (not on a
 #           STEP-D0 resume); `cd /Users/cobalt/cobalt`; the fixed file's `claude --bg` line.
+#   devfix: as build — `git -C /Users/cobalt/cobalt worktree add -b <BRANCH> <worktree> <BASE>`
+#           when the worktree does not exist yet; `cd <worktree>`; DEVFIX-HUB.md's `claude --bg`
+#           line with <card>, <job>, <worktree>, <table>, <proof test> filled.
 #   desk  : `cd /Users/cobalt/cobalt`; the wake-up's own launch line — the ONE backticked
 #           `claude --bg …` span on the `- LAUNCH` line of prompts/CTO-DESK-WAKEUP.md.
 #   prompt: `cd <the cwd the prompt names>`; the prompt's own launch line — the ONE
@@ -70,7 +75,7 @@
 #
 # IT REFUSES (exit 1, "REFUSED: <reason>" on stderr, nothing run):
 #   - to run at all from a path that holds a space (install under /Users/cobalt/.claude/ops/);
-#   - a kind that is none of build, check, deploy, desk, prompt, close, install-ops; a fixed file, a wake-up
+#   - a kind that is none of build, check, deploy, devfix, desk, prompt, close, install-ops; a fixed file, a wake-up
 #     file or a prompt file still a draft, not committed on main, or changed since its commit;
 #   - kind `close`: a date not YYYY-MM-DD, a date after today (ET), today's date before 21:00 ET,
 #     a first launch whose close report already exists, a resume without it, or ANY live
@@ -93,6 +98,11 @@
 #     directory /Users/cobalt/cobalt-wt/.cobalt_dev.lock (L76). A build or check LAUNCHES while
 #     another session holds the lock (L76 as amended, his 2026-10-01 R20, card 07 devdb-lock): it
 #     takes the lock at its with-DB steps through take-devdb-lock.sh, and waits for it there;
+#   - kind `devfix`: TABLE not system.<name> or user.<name> (<name> in [a-z0-9_]); PROOF TEST not
+#     tests/cobalt/<file>.py with an optional ::<name> in [A-Za-z0-9_:.]; REPORT not
+#     $REPORTS/devfix-<name>.md, or already present on a first launch; BASE not a commit on main;
+#     the cobalt_dev lock held (any worktree's .env, or the lock directory); a worktree on
+#     another branch than the card's;
 #   - a resume (a NEW worker at a CONTINUE step; a deploy's STEP-D0) while another worktree's .env
 #     exists. ONE EXCEPTION (scratch D1): the job's OWN worktree's .env, and for a deploy its own
 #     lock directory, are skipped — the fixed file's RECOVERY clears them first;
@@ -171,7 +181,7 @@ run_launch() {
     exit "$status"
 }
 
-[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | close <YYYY-MM-DD> [<resume step>] | install-ops"
+[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | close <YYYY-MM-DD> [<resume step>] | install-ops"
 kind=$1
 
 # ---- the desk-size guard (cto-2026-10-01 R8): every kind but `desk`, before anything else -----
@@ -366,7 +376,7 @@ if [ "$kind" = "install-ops" ]; then
     exit 0
 fi
 
-[ "$#" -ge 2 ] && [ "$#" -le 4 ] || refuse "usage: desk-launch.sh <build|check|deploy> <absolute card path> [PASS-2] [<resume step>]"
+[ "$#" -ge 2 ] && [ "$#" -le 4 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <absolute card path> [PASS-2] [<resume step>]"
 card=$2
 step=""
 pass2=""
@@ -385,7 +395,8 @@ case "$kind" in
     build)  fixed="$PROMPTS/BUILD-HUB.md" ;;
     check)  fixed="$PROMPTS/CHECK-HUB.md" ;;
     deploy) fixed="$PROMPTS/DEPLOY-HUB.md" ;;
-    *) refuse "kind '$kind' is none of build, check, deploy, desk, prompt, close, install-ops" ;;
+    devfix) fixed="$PROMPTS/DEVFIX-HUB.md" ;;
+    *) refuse "kind '$kind' is none of build, check, deploy, devfix, desk, prompt, close, install-ops" ;;
 esac
 [ -f "$fixed" ] || refuse "the fixed file is not installed: $fixed"
 if grep -q '«INSTALL' "$fixed"; then
@@ -495,6 +506,8 @@ lock_dir_free() {
 
 merges=""
 prod=""
+table=""
+proof=""
 case "$kind" in
 build)
     [ -z "$tag" ] || refuse "this is a deploy card (TAG is set); kind 'build' needs a job card"
@@ -595,6 +608,58 @@ deploy)
     lock_free
     lock_dir_free
     ;;
+devfix)
+    need TABLE "PROOF TEST"
+    table=$(field TABLE)
+    proof=$(field "PROOF TEST")
+    table_bad=""
+    case "$table" in
+        system.*|user.*) ;;
+        *) table_bad=1 ;;
+    esac
+    # the letters spelled out: under a UTF-8 locale a range a-z also matches capitals
+    case "${table#*.}" in
+        ""|*[!abcdefghijklmnopqrstuvwxyz0123456789_]*) table_bad=1 ;;
+    esac
+    [ -z "$table_bad" ] || refuse "incomplete card: TABLE '$table' is not system.<name> or user.<name> with <name> in [a-z0-9_]"
+    proof_bad=""
+    rest=${proof#tests/cobalt/}
+    [ "$rest" != "$proof" ] || proof_bad=1
+    pfile=${rest%%::*}
+    case "$pfile" in
+        *.py) ;;
+        *) proof_bad=1 ;;
+    esac
+    case "${pfile%.py}" in
+        ""|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_]*) proof_bad=1 ;;
+    esac
+    if [ "$pfile" != "$rest" ]; then
+        case "${rest#*::}" in
+            ""|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_:.]*) proof_bad=1 ;;
+        esac
+    fi
+    [ -z "$proof_bad" ] || refuse "incomplete card: PROOF TEST '$proof' is not tests/cobalt/<file>.py with an optional ::<name> in [A-Za-z0-9_:.]"
+    report_bad=""
+    case "$report" in
+        "$REPORTS"/devfix-*.md) ;;
+        *) report_bad=1 ;;
+    esac
+    case "${report#"$REPORTS"/}" in
+        */*|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-]*) report_bad=1 ;;
+    esac
+    [ -z "$report_bad" ] || refuse "incomplete card: a devfix REPORT must be $REPORTS/devfix-<name>.md"
+    [ -n "$step" ] || [ ! -e "$report" ] || refuse "the devfix report already exists: $report (a new worker names its CONTINUE step)"
+    hex8 BASE "$base"
+    commit_exists BASE "$base"
+    git -C "$REPO" merge-base --is-ancestor "$base" main || refuse "BASE '$base' is not a commit on main"
+    if [ -d "$WT/$wt" ]; then
+        head=$(git -C "$WT/$wt" rev-parse --abbrev-ref HEAD) || refuse "$WT/$wt is not a git worktree"
+        [ "$head" = "$branch" ] || refuse "$WT/$wt is on '$head', the card says '$branch'"
+    fi
+    # the devfix holds the lock from its first step to its stop line: never launched beside a holder
+    lock_free
+    lock_dir_free
+    ;;
 esac
 
 # ---- the launch line: copied from the fixed file, tokens filled from the card ---------------
@@ -606,6 +671,8 @@ line=$(grep '^claude --bg ' "$fixed" | sed \
     -e "s|<tag>|$tag|g" \
     -e "s|<worktree>|$wt|g" \
     -e "s|<branch>|$branch|g" \
+    -e "s|<table>|$table|g" \
+    -e "s|<proof test>|$proof|g" \
     -e "s|<tip merges>|$merges|" \
     -e "s|<prod migrate strings>|$prod|")
 if [ -n "$step" ]; then
@@ -641,6 +708,11 @@ deploy)
     dir="$REPO"
     note="reminder: no desk commit on main until the stop line; builds and checks may launch, their with-DB steps wait for the lock the gate holds to its stop line (L76, R20); a hub hung after its first bootout: stop it and at once run this script again with STEP-D0"
     ;;
+devfix)
+    [ -d "$WT/$wt" ] || add="git -C $REPO worktree add -b $branch $WT/$wt $base"
+    dir="$WT/$wt"
+    note="reminder: the devfix holds the cobalt_dev lock from its first step to its stop line (L76); no deploy launch until then; watch: wait-stop-line.sh <its REPORT> '^(REBUILT|FAILED)'; the report is the desk's to commit"
+    ;;
 esac
 
 if [ "${DESK_LAUNCH_DRY:-0}" = "1" ]; then
@@ -650,7 +722,7 @@ fi
 
 if [ -n "$add" ]; then
     printf 'RUN: %s\n' "$add" >&2
-    if [ "$kind" = "build" ]; then
+    if [ "$kind" = "build" ] || [ "$kind" = "devfix" ]; then
         git -C "$REPO" worktree add -b "$branch" "$WT/$wt" "$base" || refuse "worktree add failed; nothing launched"
     else
         git -C "$REPO" worktree add -b "$branch" "$WT/$wt" main || refuse "worktree add failed; nothing launched"

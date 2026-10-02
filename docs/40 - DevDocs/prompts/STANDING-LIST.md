@@ -26,7 +26,7 @@ Section 4 (the desk line) flags five deny strings **NEW** (three since loop 2, t
 - `git reset --hard`, `git checkout`, `git restore`, `git stash`, `git rebase`, `git rm`; `git merge` on a build line.
 - A `settings load`, a `trader_settings` write, a `jobs register`.
 - A hub launching a hub (L36): `claude --bg` and `claude -p` are on no fixed file's line. A check starts ONE outside house per pass and nothing else.
-- A write-path launch from a one-off prompt: `desk-launch.sh prompt` refuses a line in a write-path mode (`acceptEdits`, `dontAsk`) or with a write string (`git add`, `git commit`, `git merge`, `uv run`, `launchctl`, `COBALT_ENV=`).
+- A write-path launch from a one-off prompt: `desk-launch.sh prompt` refuses a line in a write-path mode (`acceptEdits`, `dontAsk`) or with a write string (`git add`, `git commit`, `git merge`, `uv run`, `launchctl`, `COBALT_ENV=`). A dev-maintenance run on `cobalt_dev` is never a one-off prompt: its route is `desk-launch.sh devfix "<card>"` on `DEVFIX-HUB.md` (§6).
 
 ## THE `.env` PATTERN (L76: the `cobalt_dev` lock) — approved once for any worktree
 `Bash(cp /Users/cobalt/cobalt/.env /Users/cobalt/cobalt-wt/<worktree>/.env)` and `Bash(rm /Users/cobalt/cobalt-wt/<worktree>/.env)`, where `<worktree>` is the card's `WORKTREE`: ONE directory name, `[A-Za-z0-9._-]`, no `/`, never `agy-trial` (`desk-launch.sh` refuses anything else and writes the exact pair into the launch line it runs; the hub's line carries the two exact strings, never a wildcard).
@@ -186,3 +186,22 @@ Every Bash string but the push stands on the launch line of `prompts/2026-09-27/
 | `Bash(git push origin main)` | **NEW** on a launch line: the STANDING NIGHTLY PUSH after the one commit (L55 as amended) | `origin/main`, fast-forward only | never forced, never another branch, never a tag |
 
 Deny: `AskUserQuestion`, `EnterWorktree`, and the nine push denies of `~/cobalt/.claude/settings.local.json`: `Bash(git push*--force*)`, `Bash(git push* -f*)`, `Bash(git push*+*)`, `Bash(git push*:*)`, `Bash(git push*--delete*)`, `Bash(git push* -d*)`, `Bash(git push*--mirror*)`, `Bash(git push*--all*)`, `Bash(git push*--tags*)` (NEW on a launch line; proven as that file's denies). `desk-launch.sh close` refuses today's close before 21:00 ET and any close while a `deploy-hub-` session is live.
+
+## 6. `DEVFIX-HUB.md` — ONE dev-maintenance job on `cobalt_dev` from a card (card `12-devfix-route-card.md`; his `cto-2026-10-02.md` R26 for the three NEW strings): 22 allow, 4 deny · `--model claude-opus-5-5` · `--permission-mode dontAsk` · launched from the job's worktree · `--add-dir /Users/cobalt/Vault /Users/cobalt/cobalt /Users/cobalt/cobalt-wt /Users/cobalt/.claude/ops`
+
+No git write string, no launch string, no migrate string but `--proof-only`, no production string. The two lock-script strings stand in for the `.env` pair (THE LOCK SCRIPTS: the scripts copy and remove `.env`; the hub types no `cp` and no `rm`).
+
+| string | status | for | can touch | never touches |
+|---|---|---|---|---|
+| `Read` · `Grep` · `Glob` | standing (§1) | reading the card, the laws, the hub | read only, any file | writes nothing |
+| `Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/reports/devfix-*)` | **NEW** (R26) | the Edit and Write tools on the devfix report in the main tree (the desk commits it) | `reports/devfix-*` files only | code, configs, the prompts, `cto-<date>.md`, a worktree, the vault |
+| `Bash(cd *)` · `Bash(ls *)` · `Bash(grep *)` · `Bash(tail *)` · `Bash(wc *)` · `Bash(date*)` | standing (§1) | the worktree, the lock and file proofs, the authorization rows, the clock | read only | never `.env`'s contents |
+| `Bash(git status*)` · `Bash(git log*)` · `Bash(git show*)` · `Bash(git diff *)` | standing (§1); `git show*`, `git diff *` the desk's R26 read set | the clean tree at `BASE` | read only | — |
+| `Bash(git -C /Users/cobalt/cobalt log*)` · `Bash(git -C * diff*)` | standing (§1) | the authorization proofs (row + commit; the card unchanged) | read only | — |
+| `Bash(sh /Users/cobalt/.claude/ops/take-devdb-lock.sh *)` · `Bash(sh /Users/cobalt/.claude/ops/release-devdb-lock.sh *)` | standing (THE LOCK SCRIPTS, 2026-10-01 R20) | the one take at S1 and the release at every ending | the lock directory, this worktree's `.env` | a lock another worktree holds |
+| `Bash(COBALT_ENV=dev uv run cobalt db query *)` | standing (§1) | the fingerprint `<FP>`, F0 and F1 | reads `cobalt_dev` | production (no `--prod`) |
+| `Bash(COBALT_ENV=dev uv run cobalt db migrate --proof-only)` | standing (§1) | `cobalt_dev` at `0013`, before and after | read only | applies nothing |
+| `Bash(COBALT_ENV=dev uv run cobalt db dev-rebuild *)` | **NEW** (R26) | the dry run and the rebuild of the card's ONE `TABLE` | `cobalt_dev`: that table, in one transaction, committed only when every row and catalog property is equal after (card 11) | production (the subcommand has no `--allow-prod`; it refuses `COBALT_ENV` not `dev` and a database not `cobalt_dev`); any other table; the schema level |
+| `Bash(COBALT_ENV=dev uv run pytest *)` | standing (§1) | the card's `PROOF TEST` | `cobalt_dev`, inside the test's own transaction | production; a vault |
+
+Deny: `AskUserQuestion`, `EnterWorktree`, `Bash(git push*)` (standing), and **NEW** (R26) `Bash(COBALT_ENV=production*)` — no production string can match on this line.
