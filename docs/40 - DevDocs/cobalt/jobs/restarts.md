@@ -35,6 +35,14 @@ Import reach is deliberately not the test. `com.cobalt.radar` enters
 through `cobalt.cli`, which mounts every command module, so a change to
 smoke's code still derives that restart by the ordinary `src/` rule.
 
+## 2026-10-01 — desk-size-guard
+
+- `ops/desk/desk-context.sh`
+- `ops/desk/desk-launch.sh`
+- `ops/desk/wait-stop-line.sh`
+
+They are classified `operator script; no Cobalt reader` and derive no restart.
+
 ## 2026-10-02 — ops-glob
 
 Every path under `ops/desk/` (`OPS_DESK_PREFIX`) classifies as `operator script; no Cobalt reader` and derives no restart, by rule instead of an `OPS_TOOLS` entry. The folder holds the desk's and the hubs' shell tools and a git hook, and no plist executes a file in it. `OPS_TOOLS` stays an explicit list for the rest of `ops/`, and the trailing slash keeps `ops/desktop.sh` out (`test_every_path_under_ops_desk_is_an_operator_script`).

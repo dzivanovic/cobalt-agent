@@ -6,6 +6,10 @@
 # was already there -- so an append-style report whose previous run left its own stop line
 # last does not fire immediately. Prints the new line, exits 0. Exits 2 on timeout.
 # Writes nothing.
+# First the desk-size guard (cto-2026-10-01 R8): desk-context.sh --guard, installed beside this
+# script; at 300,000 tokens or more it prints its REFUSED line and this script exits 3 before
+# its loop.
+sh "$(dirname "$0")/desk-context.sh" --guard || exit $?
 f="$1"; re="$2"; max="${3:-3600}"; waited=0
 lastline() { grep -v '^[[:space:]]*$' "$1" 2>/dev/null | tail -1; }
 initial=$(lastline "$f")

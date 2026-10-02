@@ -1,4 +1,4 @@
-# STANDING-LIST — for his ONE approval (APPROVED ONCE 2026-09-30 R60 (+ R62 string changes) · INSTALLED)
+# STANDING-LIST — for his ONE approval (APPROVED ONCE 2026-09-30 R60 (+ R62 string changes; + 2026-10-01 R20 the two lock-script strings) · INSTALLED)
 
 WHAT HE APPROVES, ONCE: the allow list of each fixed file below, as written, for every job launched on that file through `desk-launch.sh`; the `.env` copy / remove as a PATTERN for any `/Users/cobalt/cobalt-wt/<worktree>`; and the NEVER block. After it, each fixed file's title cites this approval's row and no list is brought to him again (L62 STANDING STRINGS). A string that is not in this file is NEW and is asked for by itself. This is the list AFTER THE FOURTH PASS (his 2026-09-30 R45: the check is one fresh Opus session; the brain's READ OF THE SCRATCH TEST F1: the three hub files launch under `--permission-mode dontAsk`; RULED — THE NIGHTLY CLOSE: `CLOSE-HUB.md`, §5): the ONE approval belongs on it.
 
@@ -34,8 +34,15 @@ Section 4 (the desk line) flags five deny strings **NEW** (three since loop 2, t
 - Can touch: that one file in the job's own worktree. The copy is by name; the file is never read, printed or grepped (L4, L41).
 - Never touches: `/Users/cobalt/cobalt/.env` itself (read as the source only), any other worktree, any other file.
 - Refused while any `/Users/cobalt/cobalt-wt/*/.env` exists (another run holds the lock).
+- From 2026-10-01 R20 the hubs take and release the lock through THE LOCK SCRIPTS below, never by these two strings typed; the strings stay on the lines (card 07 changed no other string).
 
-## 1. `BUILD-HUB.md` — 28 allow, 3 deny (4 file-tool strings + the 24 Bash strings as run today, plus the one proven read `git -C * diff*`; the same 28 are the check's build list, §2) · `--permission-mode dontAsk` · `--add-dir /Users/cobalt/Vault /Users/cobalt/cobalt /Users/cobalt/cobalt-wt`
+## THE LOCK SCRIPTS (L76 as amended: his 2026-10-01 R20 approves these two strings only) — on the build, check and deploy lines
+`Bash(sh /Users/cobalt/.claude/ops/take-devdb-lock.sh *)` and `Bash(sh /Users/cobalt/.claude/ops/release-devdb-lock.sh *)`. The scripts are `ops/desk/take-devdb-lock.sh` and `ops/desk/release-devdb-lock.sh`, installed by the desk as symlinks under `/Users/cobalt/.claude/ops/`; each line gains `--add-dir /Users/cobalt/.claude/ops` so the listed path sits under a root.
+- For: the take — `mkdir /Users/cobalt/cobalt-wt/.cobalt_dev.lock` (atomic: two takes at once never both win), the worktree's name into it, the `.env` copy by name; a held lock is tried every 60 s up to `<minutes>` (the hubs pass 90), then exit 4 naming the holder. The release — that worktree's `.env` and the lock directory removed and proven gone, only when the lock names that worktree (exit 3 otherwise, nothing touched).
+- Can touch: the lock directory and the one `.env` of the named worktree. A worktree name outside `[A-Za-z0-9._-]`, or with a `/`, exits 2 with nothing touched.
+- Never touches: `/Users/cobalt/cobalt/.env` itself (read as the copy's source only), another worktree's `.env`, a lock another worktree holds.
+
+## 1. `BUILD-HUB.md` — 30 allow, 3 deny (4 file-tool strings + the 24 Bash strings as run today, plus the one proven read `git -C * diff*`, plus the two lock-script strings of R20; the same 30 are the check's build list, §2) · `--permission-mode dontAsk` · `--add-dir /Users/cobalt/Vault /Users/cobalt/cobalt /Users/cobalt/cobalt-wt /Users/cobalt/.claude/ops`
 
 | string | for | can touch | never touches |
 |---|---|---|---|
@@ -60,6 +67,8 @@ Section 4 (the desk line) flags five deny strings **NEW** (three since loop 2, t
 | `Bash(COBALT_ENV=dev uv run pytest *)` | the with-DB suite, two passes | `cobalt_dev`, inside the suite's own transaction | production; a vault |
 | `Bash(cp /Users/cobalt/cobalt/.env /Users/cobalt/cobalt-wt/<worktree>/.env)` | THE PATTERN: take the lock | that one file | see the pattern |
 | `Bash(rm /Users/cobalt/cobalt-wt/<worktree>/.env)` | THE PATTERN: release the lock | that one file | anything else |
+| `Bash(sh /Users/cobalt/.claude/ops/take-devdb-lock.sh *)` | R20: THE LOCK SCRIPTS — take the lock at a with-DB step, waiting | the lock directory, this worktree's `.env` | see THE LOCK SCRIPTS |
+| `Bash(sh /Users/cobalt/.claude/ops/release-devdb-lock.sh *)` | R20: THE LOCK SCRIPTS — release it at the step's end | the lock directory, this worktree's `.env` | a lock another worktree holds |
 | `Bash(COBALT_LIVE_VAULT_ROOT=/Users/cobalt/Vault/Think uv run pytest *)` | the live-note suite (L68) | READS his real notes | writes nothing to any vault (L28) |
 | `Bash(COBALT_ENV=dev uv run cobalt db migrate)` | the forward walk on `cobalt_dev` for pass 2 | `cobalt_dev`'s schema | production (no `--allow-prod`) |
 | `Bash(COBALT_ENV=dev uv run cobalt db migrate --proof-only)` | reading `cobalt_dev`'s level | read only | applies nothing |
@@ -68,11 +77,11 @@ Section 4 (the desk line) flags five deny strings **NEW** (three since loop 2, t
 
 Deny: `AskUserQuestion`, `EnterWorktree`, `Bash(git push*)`. Dropped from the proven line: `Bash(mkdir -p *)` (carried unused since 09-25).
 
-## 2. `CHECK-HUB.md` — REBUILT IN THE THIRD PASS (the check IS the fresh Opus): 33 allow, 3 deny (+1 staging string `Bash(sh /Users/cobalt/cobalt/ops/desk/stage-copy.sh *)`, his 2026-10-01 R37, R39: copies one file into `agy-trial/scratch/` for a house, cmp-proven; never a `.env`) · `--model claude-opus-5-5` · `--permission-mode dontAsk` · launched from the job's worktree · the same three `--add-dir` roots
+## 2. `CHECK-HUB.md` — REBUILT IN THE THIRD PASS (the check IS the fresh Opus): 35 allow, 3 deny (+1 staging string `Bash(sh /Users/cobalt/cobalt/ops/desk/stage-copy.sh *)`, his 2026-10-01 R37, R39: copies one file into `agy-trial/scratch/` for a house, cmp-proven; never a `.env`) · `--model claude-opus-5-5` · `--permission-mode dontAsk` · launched from the job's worktree · the same four `--add-dir` roots
 
 ONE LINE, for pass 1 and for pass 2 (`desk-launch.sh check <card> PASS-2` runs the same line; only its message starts `PASS-2. `). It is a VISIBLE `--bg` session named `<job>-check`, with remote control. No Sonnet hub and no headless seat stand between the desk and the session that writes.
 
-THE BUILD LIST — 28 strings, the rows of §1 byte for byte, with the same purpose and the same limits: the check runs a finding's test, fixes what holds inside the card's rows, commits on the job's branch, and after a commit runs the three suites under the `cobalt_dev` lock. `<worktree>` = the card's `WORKTREE`; the two `.env` strings are THE `.env` PATTERN. The worktree glob also covers the houses' copies under `agy-trial/scratch/…`.
+THE BUILD LIST — 30 strings, the rows of §1 byte for byte, with the same purpose and the same limits: the check runs a finding's test, fixes what holds inside the card's rows, commits on the job's branch, and after a commit runs the three suites under the `cobalt_dev` lock. `<worktree>` = the card's `WORKTREE`; the two `.env` strings are THE `.env` PATTERN, the two lock-script strings THE LOCK SCRIPTS. The worktree glob also covers the houses' copies under `agy-trial/scratch/…`.
 
 THE REPORT STRING — 1, **NEW** (F1): `Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/reports/**)` — the Edit and Write tools on the check report in the main tree (the desk commits it) | can touch: files under that one folder | never: code, configs, the prompts, the vault.
 
@@ -90,9 +99,9 @@ THE METER PROBES (they decide the seat order; nothing else does): Sol `codex exe
 
 THE SEAT ORDER AND THE SECOND PASS change no string: pass 2 starts house B with the same three strings.
 
-THE TOKEN TOTAL of a check is not the session's to report: the desk measures it at the stop line (`sh /Users/cobalt/.claude/ops/desk-context.sh <id>`, a command already on the desk's side) and writes it beside the stop line's `files opened`. `desk-launch.sh` refuses a check while the lock is held.
+THE TOKEN TOTAL of a check is not the session's to report: the desk measures it at the stop line (`sh /Users/cobalt/.claude/ops/desk-context.sh <id>`, a command already on the desk's side) and writes it beside the stop line's `files opened`. `desk-launch.sh` launches a check while the lock is held (R20); the check takes the lock at its with-DB step and waits there.
 
-## 3. `DEPLOY-HUB.md` — 58 allow with one head and a migration (55 without a migration; +1 per extra head), 7 deny · `--permission-mode dontAsk` · `--add-dir /Users/cobalt/Vault /Users/cobalt/cobalt /Users/cobalt/cobalt-wt /Users/cobalt/Library/LaunchAgents`
+## 3. `DEPLOY-HUB.md` — 60 allow with one head and a migration (57 without a migration; +1 per extra head), 7 deny · `--permission-mode dontAsk` · `--add-dir /Users/cobalt/Vault /Users/cobalt/cobalt /Users/cobalt/cobalt-wt /Users/cobalt/Library/LaunchAgents /Users/cobalt/.claude/ops`
 
 PREFIX NOTE (probe G, R62 session): an allow with no `*` matches by PREFIX — `Bash(echo hi)` ran `echo hi there`. Every 'exact' string in this table therefore also admits trailing arguments to the same command; none admits another command. The two production `migrate` dangers (`--rollback`, `--down-to`) are denied above; the rest is accepted as the same command (desk reading).
 
@@ -118,6 +127,7 @@ THE FILE-TOOL STRINGS — 4 (F1): `Read` · `Grep` · `Glob` (proven) and **NEW*
 | `Bash(COBALT_ENV=dev uv run pytest *)` | the with-DB suite, two passes | `cobalt_dev`, in the suite's transaction | production |
 | `Bash(COBALT_LIVE_VAULT_ROOT=/Users/cobalt/Vault/Think uv run pytest *)` | the live-note suite | READS his notes | writes nothing to a vault |
 | `Bash(cp /Users/cobalt/cobalt/.env /Users/cobalt/cobalt-wt/<worktree>/.env)` · `Bash(rm /Users/cobalt/cobalt-wt/<worktree>/.env)` | THE `.env` PATTERN, for the gate worktree | that one file | see the pattern |
+| `Bash(sh /Users/cobalt/.claude/ops/take-devdb-lock.sh *)` · `Bash(sh /Users/cobalt/.claude/ops/release-devdb-lock.sh *)` | R20: THE LOCK SCRIPTS — the gate takes the lock at G (b) and holds it to its stop line | the lock directory, the gate's `.env` | see THE LOCK SCRIPTS |
 | `Bash(COBALT_ENV=dev uv run cobalt db migrate)` | the gate's forward walk on `cobalt_dev` | `cobalt_dev`'s schema | production |
 | `Bash(COBALT_ENV=dev uv run cobalt db migrate --proof-only)` | `cobalt_dev`'s level | read only | — |
 | `Bash(COBALT_ENV=dev uv run cobalt db migrate --rollback --down-to 0013)` | the L76 release | `cobalt_dev`, down to `0013` exactly | production |
@@ -141,7 +151,7 @@ THE FILE-TOOL STRINGS — 4 (F1): `Read` · `Grep` · `Glob` (proven) and **NEW*
 | `Bash(curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/*)` | the sheet and radar `200` reads | GETs on the local sheet; the body goes to `/dev/null` | no POST; no other host |
 | `Bash(grep *)` · `Bash(tail *)` · `Bash(ls *)` · `Bash(date*)` | logs, markers, last lines, the lock, the clock | read only | never `.env`'s contents; never `ls` of `/Users/cobalt/Library/LaunchAgents` |
 
-Deny (7; R62): `AskUserQuestion`, `EnterWorktree`, `Bash(git push*)`, and NEW `Bash(git -C * commit*--no-verify*)` · `Bash(git -C * commit* -n*)` (the pre-commit guard cannot be skipped) · `Bash(COBALT_ENV=production uv run cobalt db migrate*--rollback*)` · `Bash(COBALT_ENV=production uv run cobalt db migrate*--down-to*)` (a production schema rollback is his). PATHS: every absolute path above sits under one of the four roots; `/Users/cobalt/Library/LaunchAgents` is on the line for the radar bootstrap string alone. `/dev/null` (curl's sink) is a device, under no root, and ran green in both deploys of 2026-09-30. NOT ON THIS LIST, by design: retiring or installing a launchd job (a `bootout` of any other label, an `rm` of a plist); a production schema rollback; `git worktree add` (run by `desk-launch.sh`, on no hub line and no longer on the desk's).
+Deny (7; R62): `AskUserQuestion`, `EnterWorktree`, `Bash(git push*)`, and NEW `Bash(git -C * commit*--no-verify*)` · `Bash(git -C * commit* -n*)` (the pre-commit guard cannot be skipped) · `Bash(COBALT_ENV=production uv run cobalt db migrate*--rollback*)` · `Bash(COBALT_ENV=production uv run cobalt db migrate*--down-to*)` (a production schema rollback is his). PATHS: every absolute path above sits under one of the five roots (`/Users/cobalt/.claude/ops` for the two lock scripts); `/Users/cobalt/Library/LaunchAgents` is on the line for the radar bootstrap string alone. `/dev/null` (curl's sink) is a device, under no root, and ran green in both deploys of 2026-09-30. NOT ON THIS LIST, by design: retiring or installing a launchd job (a `bootout` of any other label, an `rm` of a plist); a production schema rollback; `git worktree add` (run by `desk-launch.sh`, on no hub line and no longer on the desk's).
 
 ## 4. THE DESK'S OWN LINE — proposed in `DESK-LINE.md`; approved with this list or struck from it
 Strings the narrower desk line would carry. Proven = the string already stands in tracked `.claude/settings.json` or on a proven hub line. **NEW** = on no proven line; each with its reason.
