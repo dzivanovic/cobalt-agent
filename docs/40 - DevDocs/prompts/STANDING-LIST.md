@@ -68,7 +68,7 @@ Section 4 (the desk line) flags five deny strings **NEW** (three since loop 2, t
 
 Deny: `AskUserQuestion`, `EnterWorktree`, `Bash(git push*)`. Dropped from the proven line: `Bash(mkdir -p *)` (carried unused since 09-25).
 
-## 2. `CHECK-HUB.md` — REBUILT IN THE THIRD PASS (the check IS the fresh Opus): 32 allow, 3 deny · `--model claude-opus-5-5` · `--permission-mode dontAsk` · launched from the job's worktree · the same three `--add-dir` roots
+## 2. `CHECK-HUB.md` — REBUILT IN THE THIRD PASS (the check IS the fresh Opus): 33 allow, 3 deny (+1 staging string `Bash(sh /Users/cobalt/cobalt/ops/desk/stage-copy.sh *)`, his 2026-10-01 R37, R39: copies one file into `agy-trial/scratch/` for a house, cmp-proven; never a `.env`) · `--model claude-opus-5-5` · `--permission-mode dontAsk` · launched from the job's worktree · the same three `--add-dir` roots
 
 ONE LINE, for pass 1 and for pass 2 (`desk-launch.sh check <card> PASS-2` runs the same line; only its message starts `PASS-2. `). It is a VISIBLE `--bg` session named `<job>-check`, with remote control. No Sonnet hub and no headless seat stand between the desk and the session that writes.
 
