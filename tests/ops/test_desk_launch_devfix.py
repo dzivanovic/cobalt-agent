@@ -241,6 +241,14 @@ def test_a_report_outside_reports_devfix_is_refused(desk):
                 f"incomplete card: a devfix REPORT must be {desk.reports}/devfix-<name>.md")
 
 
+def test_a_report_name_outside_its_spelled_set_is_refused(desk):
+    bad = desk.reports / "devfix-x_tablé.md"
+    desk.write_card(REPORT=str(bad))
+    desk.commit("card")
+    refused(desk.launch("devfix", str(desk.card)),
+            f"incomplete card: a devfix REPORT must be {desk.reports}/devfix-<name>.md")
+
+
 def test_a_report_already_present_is_refused_on_a_first_launch(desk):
     (desk.reports / "devfix-x-fix-2026-01-02.md").write_text("(run in progress)\n")
     refused(desk.launch("devfix", str(desk.card)), "the devfix report already exists")
