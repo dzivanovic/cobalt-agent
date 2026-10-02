@@ -84,6 +84,9 @@ class Desk:
             shutil.copy(HUBS / hub, self.prompts / hub)
         (self.prompts / "DEVFIX-HUB.md").write_text("# DEVFIX-HUB (constructed, installed)\n\n" + DEVFIX_LINE + "\n")
         (self.prompts / "CLOSE-HUB.md").write_text("# CLOSE-HUB (constructed, installed)\n\n" + CLOSE_LINE + "\n")
+        (self.prompts / "CTO-DESK-WAKEUP.md").write_text(
+            "# wake-up (constructed)\n- LAUNCH (successor): `claude --bg \"Read wake\" --permission-mode "
+            "dontAsk --remote-control cto-desk --name cto-desk`\n")
         self.rulings = self.reports / "cto-2026-01-02.md"
         self.rulings.write_text(RULINGS_HEAD + APPROVED_R1 + "\n")
         (self.repo / ".gitignore").write_text(".env\n")
@@ -158,16 +161,17 @@ class Desk:
         )
 
     def write_deploy(self, rulings: str = "none", code_tip: str | None = None,
-                     head: str | None = None, carry: str = "`held unfixed: 0` and `ready: YES`") -> None:
+                     head: str | None = None, carry: str = "`held unfixed: 0` and `ready: YES`",
+                     tips: str | None = None, row: bool = True) -> None:
         code_tip = code_tip or self.tip
         head = head or self.head
+        ship = f"| 1 | `ops/x-job` | `{code_tip}` | `{head}` | `{self.check_report}` | {carry} |\n" if row else ""
         self.deploy.write_text(
             "JOB: x-deploy\nLADDER: OFF-LADDER\nBRANCH: deploy/x-deploy\nWORKTREE: x-gate\n"
-            f"BASE: main\nTIP: {head}\nREPORT: {self.reports / 'deploy-x.md'}\nRULINGS: {rulings}\n"
+            f"BASE: main\nTIP: {tips or head}\nREPORT: {self.reports / 'deploy-x.md'}\nRULINGS: {rulings}\n"
             "TAG: x-tag\nMIGRATIONS: none\nSET: x-job\n\n## SHIPS\n\n"
             "| # | branch | code tip | branch head | check report | its stop line must carry |\n"
-            "|---|---|---|---|---|---|\n"
-            f"| 1 | `ops/x-job` | `{code_tip}` | `{head}` | `{self.check_report}` | {carry} |\n\n"
+            f"|---|---|---|---|---|---|\n{ship}\n"
             "## MARKERS\n## SMOKE READS\n"
         )
 
@@ -465,6 +469,36 @@ def test_l3_an_old_shape_check_line_with_its_own_literals_launches(desk):
     assert done.returncode == 0, done.stderr
 
 
+def test_l3_a_deploy_card_whose_ships_table_has_no_row_refuses(desk):
+    """The R41 answer to DECISION 3 (i): a head no check was proven for is never merged."""
+    desk.ship()
+    desk.write_deploy(row=False)
+    desk.commit("card")
+    refused(desk, desk.launch("deploy", str(desk.deploy)),
+            f"deploy: ## SHIPS has no row; TIP head {desk.head} is checked by no row — "
+            "add its ## SHIPS row and commit its check report")
+    assert not desk.gate_left()
+
+
+def test_l3_a_tip_head_that_is_the_head_of_no_ships_row_refuses(desk):
+    """The R41 answer to DECISION 3 (ii): the second TIP head has no row."""
+    desk.ship()
+    desk.write_deploy(tips=f"{desk.head} {desk.base}")
+    desk.commit("card")
+    refused(desk, desk.launch("deploy", str(desk.deploy)),
+            f"deploy: TIP head {desk.base} is the branch head of no ## SHIPS row — "
+            "add its ## SHIPS row and commit its check report")
+    assert not desk.gate_left()
+
+
+def test_l3_a_step_d0_resume_with_no_ships_row_is_not_re_checked(desk):
+    desk.write_deploy(row=False, tips=f"{desk.head} {desk.base}")
+    desk.commit("card")
+    (desk.wt / "x-gate").mkdir()
+    done = desk.launch("deploy", str(desk.deploy), "STEP-D0")
+    assert done.returncode == 0, done.stderr
+
+
 def test_l3_a_step_d0_resume_is_not_re_checked(desk):
     desk.ship(check_line(desk.tip, ready="NO"))
     (desk.wt / "x-gate").mkdir()
@@ -515,6 +549,34 @@ def test_l4_a_refused_or_failed_launch_prints_no_watch_line(desk):
     done = desk.launch("build", str(desk.card), CLAUDE_STUB_EXIT="1")
     assert done.returncode == 1
     assert desk.called() == [str(desk.job_wt)]
+    assert "WATCH:" not in done.stdout + done.stderr
+
+
+def test_l4_a_real_desk_launch_prints_no_watch_line(desk):
+    """The R41 answer to DECISION 3, gap (a): `desk` is no kind L4 names."""
+    done = desk.launch("desk")
+    assert done.returncode == 0, done.stderr
+    assert desk.called() == [str(desk.repo)]
+    assert "WATCH:" not in done.stdout + done.stderr
+
+
+def test_l4_a_real_prompt_launch_prints_no_watch_line(desk, tmp_path):
+    """The R41 answer to DECISION 3, gap (a): `prompt` is no kind L4 names. The prompt kind reads
+    its cwd only as a `cd /Users/cobalt/…` string, so it runs from a copy whose path pattern is
+    re-pointed at tmp_path (the staging of tests/ops/test_desk_size_guard.py), guard stubbed."""
+    staged = tmp_path / "ops" / "desk-launch.sh"
+    staged.parent.mkdir()
+    staged.write_text(LAUNCH.read_text().replace("\\/Users\\/cobalt\\/", str(tmp_path).replace("/", "\\/") + "\\/"))
+    (tmp_path / "ops" / "desk-context.sh").write_text("#!/bin/sh\nexit 0\n")
+    pfile = desk.prompts / "2026-01-02" / "04-x-prompt.md"
+    pfile.write_text(
+        f"cd {desk.repo}\n\nclaude --bg \"Read '{pfile}' and follow it exactly.\" --permission-mode auto "
+        "--remote-control x-prompt --name x-prompt --disallowedTools \"AskUserQuestion\" \"EnterWorktree\"\n")
+    desk.commit("prompt")
+    done = subprocess.run(["sh", str(staged), "prompt", str(pfile)], env=desk.env,
+                          capture_output=True, text=True, timeout=120)
+    assert done.returncode == 0, done.stderr
+    assert desk.called() == [str(desk.repo)]
     assert "WATCH:" not in done.stdout + done.stderr
 
 
