@@ -3,11 +3,11 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/ops-glob-1002
 WORKTREE: ops-glob-1002
 BASE: a0188b69
-TIP:
+TIP: 9fa18f14
 REPORT: /Users/cobalt/cobalt-wt/ops-glob-1002/docs/40 - DevDocs/reports/ops-glob-build-2026-10-02.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/ops-glob-check-2026-10-02.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-02 R47
 

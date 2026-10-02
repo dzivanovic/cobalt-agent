@@ -2,7 +2,7 @@ JOB: worker-steps
 LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/worker-steps-1002
 WORKTREE: worker-steps-1002
-BASE: «FILL: the 8-hex BUILT tip of card 15 (ops-glob)»
+BASE: 9fa18f14
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/worker-steps-1002/docs/40 - DevDocs/reports/worker-steps-build-2026-10-02.md
 CHECK REPORT:

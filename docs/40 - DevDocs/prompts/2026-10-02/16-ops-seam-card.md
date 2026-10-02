@@ -2,7 +2,7 @@ JOB: ops-seam
 LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/ops-seam-1002
 WORKTREE: ops-seam-1002
-BASE: «FILL: the 8-hex BUILT tip of card 15 (ops-glob)»
+BASE: 9fa18f14
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/ops-seam-1002/docs/40 - DevDocs/reports/ops-seam-build-2026-10-02.md
 CHECK REPORT:
