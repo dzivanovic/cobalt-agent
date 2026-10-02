@@ -34,6 +34,8 @@ REPO_META = frozenset({".gitignore", ".gitattributes", ".gitmodules"})
 #: `ops/start_mainframe.sh` ARE read — they are what their residents' plists
 #: execute. Living in ops/ says nothing about who reads a file.
 OPS_TOOLS = frozenset({"ops/cto-desk.sh"})
+#: Safe to match whole: the desk's and hubs' shell tools and a git hook; no plist executes one.
+OPS_DESK_PREFIX = "ops/desk/"
 
 
 class RestartError(RuntimeError):
@@ -221,7 +223,7 @@ def classify(git_range: str, registry: JobRegistry | None = None) -> list[Classi
             # no restart, not even the conservative set.
             output.append(Classification(path, item.change, "DOCS", ()))
             continue
-        if not rule and path in OPS_TOOLS:
+        if not rule and (path in OPS_TOOLS or path.startswith(OPS_DESK_PREFIX)):
             output.append(
                 Classification(path, item.change, "operator script; no Cobalt reader", ())
             )
