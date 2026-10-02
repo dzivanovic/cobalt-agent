@@ -427,6 +427,57 @@ def test_a_lock_script_that_says_not_free_exits_4(gate, tmp_path):
     assert not (job / ".env").exists()
 
 
+def test_check_o1_a_warning_line_before_the_fingerprint_does_not_hide_a_changed_f2(gate):
+    wt, repo, job, env, calls, script = gate
+    warn = "warning: `VIRTUAL_ENV=/x` does not match the project environment path `.venv` and will be ignored\n"
+    set_script(script, fp=[warn + FP_ROW, warn + FP_ROW, warn + FP_OTHER])
+    done = run_gate(env, "withdb")
+    assert done.returncode == 6, done.stdout + done.stderr
+    assert "cobalt_dev NOT back at 0013" in done.stdout
+    assert not (job / ".env").exists()
+
+
+def test_check_o2_a_term_during_the_lock_take_still_releases(gate, tmp_path):
+    wt, repo, job, env, calls, script = gate
+    ops = tmp_path / "ops"
+    ops.mkdir()
+    shutil.copy(GATE, ops / "gate.sh")
+    rec = tmp_path / "lock-calls"
+    marker = tmp_path / "take-started"
+    (ops / "take-devdb-lock.sh").write_text(
+        f'printf "take %s\\n" "$*" >> "{rec}"\n'
+        f': > "{marker}"\n'
+        'sleep 2\n'
+        'cp "$COBALT_REPO_ROOT/.env" "$COBALT_WT_ROOT/$1/.env"\n'
+    )
+    (ops / "release-devdb-lock.sh").write_text(
+        f'printf "release %s\\n" "$*" >> "{rec}"\nrm -f "$COBALT_WT_ROOT/$1/.env"\n'
+    )
+    proc = subprocess.Popen(["sh", str(ops / "gate.sh"), NAME, "withdb"], env=env,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    for _ in range(600):
+        if marker.exists():
+            break
+        time.sleep(0.1)
+    assert marker.exists()
+    proc.send_signal(signal.SIGTERM)
+    out, err = proc.communicate(timeout=120)
+    assert proc.returncode != 0, out + err
+    assert read_calls(calls) == []
+    assert not (job / ".env").exists(), out + err
+    assert rec.read_text().splitlines() == [f"take {NAME} 90", f"release {NAME}"]
+
+
+def test_check_o3_offline_runs_with_no_cobalt_env_even_when_the_caller_has_one(gate):
+    wt, repo, job, env, calls, script = gate
+    env = dict(env, COBALT_ENV="dev", COBALT_LIVE_VAULT_ROOT="/nowhere")
+    done = run_gate(env, "offline")
+    assert done.returncode == 0, done.stdout + done.stderr
+    (call,) = read_calls(calls)
+    assert call["COBALT_ENV"] is None
+    assert call["COBALT_LIVE_VAULT_ROOT"] is None
+
+
 @pytest.mark.parametrize("args", [
     [], ["withdb"], [NAME, "nope"], [NAME, "withdb", "--deselect"], [NAME, "withdb", "--deselect", "a;b"],
     [NAME, "withdb", "--tickers", "a'b"], [NAME, "offline", "--migration"], ["../x", "offline"],
