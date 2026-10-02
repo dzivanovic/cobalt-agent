@@ -236,7 +236,10 @@ class World:
             f"REPORT: {self.wt}/fx-wt/docs/40 - DevDocs/reports/fx-build.md\nCHECK REPORT:\nHOUSE B:\n"
             "TREE STATE: unchanged\nRULINGS: 2026-01-02 R1\n\n## ROWS\n")
         self.build_report = tmp_path / "fy-build.md"
-        self.build_report.write_text("BUILT · fixture\n")
+        self.build_report.write_text(f"BUILT · job: fy · tip: {base}\n")  # card 21 L2's line
+        # the approved, committed row the cards' RULINGS cite (desk-launch.sh, card 21 L1)
+        (self.reports / "cto-2026-01-02.md").write_text(
+            "| R1 | 07:00 ET | HIS RULING (constructed). | HIS RULING · APPROVED |\n")
         self.check_report = self.reports / "fy-check.md"
         self.check_card = day / "02-fy-card.md"
         self.check_card.write_text(

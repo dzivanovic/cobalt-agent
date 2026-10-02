@@ -1,8 +1,5 @@
 #!/bin/sh
-# DRAFT — NOT INSTALLED — TESTED IN PART: the third-pass copy ran in the 09-30 scratch test (item 1:
-# every kind and every refusal run passed; defects D1, D2). The fourth-pass changes — the `close`
-# kind, the write-path-mode refusal, the own-`.env` resume (D1), the spaced-path refusal — are NOT
-# TESTED.
+# The installed launcher (installed 2026-09-30, his R63); its kinds are tested in tests/ops/.
 #
 # desk-launch.sh <kind> [<card or prompt>] [PASS-2] [<resume step>] — the one way the CTO desk
 # launches ANY session. His rulings: cto-2026-09-30.md R34 (the brain's RULED PROCESS, item 4),
@@ -68,6 +65,9 @@
 # It prints each command on stderr as `RUN: <command>` before it runs it, and exits with the
 # status of the last one. DESK_LAUNCH_DRY=1 in the environment prints the three commands on
 # stdout and runs nothing (for the scratch test; the desk's line has no string for it).
+# A build, check, deploy, devfix or close launch that exits 0 ends its stdout with
+# `WATCH: sh <this script's folder>/desk-watch.sh <kind> "<card or close report>"` (card 21 L4);
+# under DESK_LAUNCH_DRY=1 that line follows the dry lines on stderr.
 #
 # FIRST, every kind but `desk` runs the desk-size guard (`desk-context.sh --guard`, cto-2026-10-01
 # R8): at 300,000 tokens or more it prints "REFUSED: desk at <n> tokens — REFRESH first" on
@@ -107,7 +107,15 @@
 #     exists. ONE EXCEPTION (scratch D1): the job's OWN worktree's .env, and for a deploy its own
 #     lock directory, are skipped — the fixed file's RECOVERY clears them first;
 #   - a launch line in which an absolute path sits under no --add-dir (the 09-30 outage);
-#   - a production db query string in a deploy card that contains "%".
+#   - a production db query string in a deploy card that contains "%";
+#   - kinds build, check, deploy, devfix (card 21 L1): a `<date> R<n>` of RULINGS, or the row a
+#     HOUSE A / HOUSE B line names after `overruled`, that is not ONE line of
+#     $REPORTS/cto-<date>.md starting `| R<n> |` with HIS RULING and APPROVED, committed so;
+#   - kind check, not PASS-2 (L2): a build report whose last non-blank line does not start
+#     `BUILT · job: <JOB> · tip: <TIP>`;
+#   - kind deploy, not STEP-D0 (L3): a `## SHIPS` row whose check report is absent, uncommitted or
+#     changed, whose last line lacks a literal of the row or names another tip, whose branch head
+#     moved, whose code tip is not its ancestor, or whose head adds more than docs past it.
 #
 # THE LAUNCH LINE HAS ONE HOME: the fixed file's single line beginning "claude --bg " (the
 # wake-up's LAUNCH line for `desk`; the prompt's own line for `prompt`). This script copies
@@ -164,11 +172,17 @@ check_paths() {
     [ -z "$bad" ] || refuse "a listed path sits under no --add-dir: $bad"
 }
 
-# run_launch <dir> <line> <note>: the cd and the line; DESK_LAUNCH_DRY=1 prints both, runs nothing
+# the folder this script was called from (the WATCH line names desk-watch.sh beside it)
+here=$(cd "$(dirname "$0")" && pwd)
+
+# run_launch <dir> <line> <note> [<watch>]: the cd and the line; DESK_LAUNCH_DRY=1 prints both, runs
+# nothing. <watch> (card 21 L4) is printed as the last stdout line of a launch that exits 0; under
+# DESK_LAUNCH_DRY=1 it follows the dry lines on stderr, so the dry stdout stays the cd and the line
 run_launch() {
     if [ "${DESK_LAUNCH_DRY:-0}" = "1" ]; then
         printf '%s\n' "cd $1"
         printf '%s\n' "$2"
+        [ -z "${4:-}" ] || printf '%s\n' "$4" >&2
         exit 0
     fi
     [ -d "$1" ] || refuse "no such directory: $1"
@@ -178,7 +192,12 @@ run_launch() {
     eval "$2"
     status=$?
     printf '%s\n' "$3" >&2
+    [ "$status" -ne 0 ] || [ -z "${4:-}" ] || printf '%s\n' "$4"
     exit "$status"
+}
+# watch_line <kind> <card or close report>: the line the desk runs in the background
+watch_line() {
+    printf 'WATCH: sh %s/desk-watch.sh %s "%s"' "$here" "$1" "$2"
 }
 
 [ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | close <YYYY-MM-DD> [<resume step>] | install-ops"
@@ -256,7 +275,7 @@ if not hit:
         *"<"*|*">"*) refuse "the launch line still holds an unfilled token" ;;
     esac
     check_paths "$line"
-    run_launch "$REPO" "$line" "reminder: no desk commit on main and no deploy launch until the close's stop line; the close pushes main itself (L55 as amended)"
+    run_launch "$REPO" "$line" "reminder: no desk commit on main and no deploy launch until the close's stop line; the close pushes main itself (L55 as amended)" "$(watch_line close "$creport")"
 fi
 
 # ---- kind desk: the wake-up's own launch line (the successor at REFRESH, L64) ----------------
@@ -483,6 +502,61 @@ esac
 git -C "$REPO" diff --quiet -- "$card" || refuse "the card differs from its commit: $card"
 git -C "$REPO" diff --cached --quiet -- "$card" || refuse "the card is staged, not committed: $card"
 
+# ---- the ruling rows (card 21 L1): build, check, deploy, devfix ------------------------------
+# every `<date> R<n>` of RULINGS (`none` needs no row) and the row a HOUSE A / HOUSE B line names
+# after `overruled` is ONE line of $REPORTS/cto-<date>.md that starts `| R<n> |`, holds HIS RULING
+# and APPROVED, and stands so in the committed file (BUILD-HUB.md `## AUTHORIZATION`)
+ruling_row() {
+    rdate=${1%% *}
+    rn=${1#* }
+    case "$rdate" in
+        20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+        *) refuse "incomplete card: RULINGS item '$1' is not '<date> R<n>'" ;;
+    esac
+    case "$rn" in
+        R*) ;;
+        *) refuse "incomplete card: RULINGS item '$1' is not '<date> R<n>'" ;;
+    esac
+    case "${rn#R}" in
+        ""|*[!0123456789]*) refuse "incomplete card: RULINGS item '$1' is not '<date> R<n>'" ;;
+    esac
+    rfile="$REPORTS/cto-$rdate.md"
+    n=0
+    [ ! -f "$rfile" ] || n=$(grep -c "^| $rn |" "$rfile")
+    [ "$n" -ne 0 ] || refuse "ruling $1: no such row in $rfile — the desk writes his row and commits it before the launch"
+    [ "$n" -eq 1 ] || refuse "ruling $1: not one row ($n lines start '| $rn |' in $rfile) — keep one row per number"
+    row=$(grep "^| $rn |" "$rfile")
+    case "$row" in
+        *"HIS RULING"*APPROVED*|*APPROVED*"HIS RULING"*) ;;
+        *) refuse "ruling $1: not HIS RULING + APPROVED: $row — launch after his word is recorded" ;;
+    esac
+    [ -n "$(git -C "$REPO" log -1 --format=%H -S"| $rn |" -- "$rfile")" ] \
+        && git -C "$REPO" show "HEAD:docs/40 - DevDocs/reports/cto-$rdate.md" 2>/dev/null | grep -q -x -F -- "$row" \
+        || refuse "ruling $1: not committed — commit $rfile"
+}
+ruling_rows() {
+    if [ "$rulings" != "none" ]; then
+        rest=$rulings
+        while [ -n "$rest" ]; do
+            item=${rest%%,*}
+            if [ "$item" = "$rest" ]; then rest=""; else rest=${rest#*,}; fi
+            item=$(printf '%s' "$item" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+            ruling_row "$item"
+        done
+    fi
+    for k in "HOUSE A" "HOUSE B"; do
+        v=$(field "$k")
+        case "$v" in
+            *overruled*) ;;
+            *) continue ;;
+        esac
+        over=$(printf '%s\n' "$v" | sed -n 's/.*overruled \(20[0-9-]* R[0-9]*\).*/\1/p')
+        [ -n "$over" ] || refuse "incomplete card: $k '$v' names no '<date> R<n>' after 'overruled'"
+        ruling_row "$over"
+    done
+}
+ruling_rows
+
 # ---- per kind: the rest of the card, the tree, the lock -------------------------------------
 # with a resume step the job's OWN worktree's .env is skipped (its RECOVERY clears it first, scratch
 # D1); a .env in any other worktree is still refused
@@ -502,6 +576,64 @@ lock_dir_free() {
         return 0
     fi
     refuse "with-DB launch refused: the cobalt_dev lock is held by ${holder:-unknown} ($WT/.cobalt_dev.lock) (L76)"
+}
+
+# every check committed and clean (card 21 L3; DEPLOY-HUB.md STEP-0 P2 and P3), for each row of
+# `## SHIPS`: | # | branch | code tip | branch head | check report | its stop line must carry |
+ships_checked() {
+    rows=$(awk '/^## /{insec = ($0 ~ /^## SHIPS/)} insec && /^\| *[0-9]+ *\|/' "$card")
+    while IFS= read -r srow; do
+        [ -n "$srow" ] || continue
+        sbranch=$(ship_cell "$srow" 3)
+        ctip=$(ship_cell "$srow" 4)
+        shead=$(ship_cell "$srow" 5)
+        crep=$(ship_cell "$srow" 6)
+        carry=$(printf '%s\n' "$srow" | awk -F'|' '{print $7}')
+        case "$sbranch" in
+            ""|*[!A-Za-z0-9._/-]*|-*|*..*) refuse "incomplete card: SHIPS branch '$sbranch' is not a plain branch name" ;;
+        esac
+        hex8 "SHIPS code tip" "$ctip"
+        hex8 "SHIPS branch head" "$shead"
+        case "$crep" in
+            "$REPORTS"/*.md) ;;
+            *) refuse "incomplete card: SHIPS check report '$crep' is not $REPORTS/<name>.md" ;;
+        esac
+        lits=$(printf '%s\n' "$carry" | grep -o '`[^`]*`' | tr -d '`')
+        [ -n "$lits" ] || refuse "incomplete card: SHIPS row of $sbranch names no backticked literal its stop line must carry"
+        # P2: the check report exists, is committed and unmodified, and its last line is clean
+        [ -f "$crep" ] || refuse "deploy $sbranch: no check report — commit $crep"
+        { [ -n "$(git -C "$REPO" log -1 --format=%H -- "$crep")" ] \
+            && git -C "$REPO" diff --quiet -- "$crep" \
+            && git -C "$REPO" diff --cached --quiet -- "$crep"; } \
+            || refuse "deploy $sbranch: the check report is not committed or differs from its commit — commit $crep"
+        clast=$(grep -v '^[[:space:]]*$' "$crep" | tail -n 1)
+        while IFS= read -r lit; do
+            case "$clast" in
+                *"$lit"|*"$lit "*) ;;
+                *) refuse "deploy $sbranch: its stop line lacks '$lit' — the check is not clean: $clast" ;;
+            esac
+        done <<LITS
+$lits
+LITS
+        ltip=$(printf '%s\n' "$clast" | sed -n 's/.* tip: \([0-9a-f]*\).*/\1/p')
+        [ -n "$ltip" ] && { [ "$ltip" = "$ctip" ] || [ "$ltip" = "$shead" ]; } \
+            || refuse "deploy $sbranch: the check's tip '$ltip' is neither the code tip $ctip nor the branch head $shead — the check is not clean: $clast"
+        # P3: the branch head is the row's, the code tip its ancestor, and the head adds docs only
+        bhead=$(git -C "$REPO" rev-parse --short=8 "$sbranch" 2>&1)
+        [ "$bhead" = "$shead" ] \
+            || refuse "deploy $sbranch: the branch head is $bhead, the row says $shead — the head moved: $bhead"
+        git -C "$REPO" merge-base --is-ancestor "$ctip" "$shead" 2>/dev/null \
+            || refuse "deploy $sbranch: the code tip $ctip is not an ancestor of $shead — the head moved: $shead"
+        moved=$(git -C "$REPO" diff --stat "$ctip" "$shead" -- . ':(exclude)docs' 2>&1)
+        [ -z "$moved" ] \
+            || refuse "deploy $sbranch: the head adds more than docs past $ctip — the head moved: $(printf '%s' "$moved" | tr '\n' ' ')"
+    done <<ROWS
+$rows
+ROWS
+}
+# ship_cell <row> <n>: the n-th '|' field of a SHIPS row, blanks and backticks cut
+ship_cell() {
+    printf '%s\n' "$1" | awk -F'|' -v i="$2" '{print $i}' | tr -d '`' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
 }
 
 merges=""
@@ -559,6 +691,16 @@ check)
     elif [ -z "$pass2" ] && [ -z "$step" ]; then
         [ ! -e "$creport" ] || refuse "the check report already exists: a second pass is PASS-2, a new worker names its CONTINUE step"
     fi
+    # the build is built (card 21 L2): the build report's last non-blank line starts
+    # `BUILT · job: <JOB> · tip: <TIP>`; a PASS-2 launch keeps the test it has (above)
+    if [ -z "$pass2" ]; then
+        [ -f "$report" ] || refuse "not built — no build report: $report"
+        last=$(grep -v '^[[:space:]]*$' "$report" | tail -n 1)
+        case "$last" in
+            "BUILT · job: $job · tip: $tip"|"BUILT · job: $job · tip: $tip "*) ;;
+            *) refuse "not built — $last" ;;
+        esac
+    fi
     [ -d "$WT/$wt" ] || refuse "the build's worktree $WT/$wt does not exist"
     [ -n "$step" ] || [ ! -e "$WT/$wt/.env" ] || refuse "$WT/$wt/.env exists: the build did not release the lock (L76)"
     [ -f "$report" ] || refuse "the build report does not exist: $report"
@@ -604,6 +746,8 @@ deploy)
     else
         [ ! -e "$WT/$wt" ] || refuse "the gate worktree $WT/$wt already exists: a relaunch is 'desk-launch.sh deploy <card> STEP-D0'"
         [ ! -e "$report" ] || refuse "the deploy report already exists: $report"
+        # not on a STEP-D0 resume: P2 and P3, before the gate worktree is added
+        ships_checked
     fi
     lock_free
     lock_dir_free
@@ -715,9 +859,10 @@ devfix)
     ;;
 esac
 
+watch=$(watch_line "$kind" "$card")
 if [ "${DESK_LAUNCH_DRY:-0}" = "1" ]; then
     [ -z "$add" ] || printf '%s\n' "$add"
-    run_launch "$dir" "$line" "$note"
+    run_launch "$dir" "$line" "$note" "$watch"
 fi
 
 if [ -n "$add" ]; then
@@ -728,4 +873,4 @@ if [ -n "$add" ]; then
         git -C "$REPO" worktree add -b "$branch" "$WT/$wt" main || refuse "worktree add failed; nothing launched"
     fi
 fi
-run_launch "$dir" "$line" "$note"
+run_launch "$dir" "$line" "$note" "$watch"

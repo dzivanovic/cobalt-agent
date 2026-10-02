@@ -192,6 +192,9 @@ def desk(roots, tmp_path):
     reports.mkdir(parents=True)
     for hub in ("BUILD-HUB.md", "CHECK-HUB.md", "DEPLOY-HUB.md"):
         shutil.copy(HUBS / hub, prompts / hub)
+    # the approved, committed row the cards' RULINGS cite (desk-launch.sh, card 21 L1)
+    (reports / "cto-2026-01-02.md").write_text(
+        "| R1 | 07:00 ET | HIS RULING (constructed). | HIS RULING · APPROVED |\n")
     (repo / ".gitignore").write_text(".env\n")
     git(repo, "init", "-q", "-b", "main")
     git(repo, "add", "-A")
@@ -206,6 +209,10 @@ def desk(roots, tmp_path):
     git(job_wt, "add", "-A")
     git(job_wt, "commit", "-q", "-m", "build")
     tip = git(job_wt, "rev-parse", "--short=8", "HEAD")
+    # the BUILT line a check launch needs (desk-launch.sh, card 21 L2)
+    build_report.write_text(f"BUILT · job: x-job · tip: {tip}\n")
+    git(job_wt, "add", "-A")
+    git(job_wt, "commit", "-q", "-m", "build report")
 
     card = prompts / "2026-01-02" / "01-x-job-card.md"
     card.write_text(
