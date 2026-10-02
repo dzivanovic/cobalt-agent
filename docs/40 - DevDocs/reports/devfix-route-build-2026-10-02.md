@@ -191,6 +191,7 @@ next: CLOSE (done at the stop line below).
 - `cobalt_redactions` read 227 rows at PREFLIGHT, 229 at W (b) and 230 at the forward proof: rows other sessions or the suite wrote between reads; the fingerprint does not count rows, and no string here deletes any.
 - Two lock takes in all (PREFLIGHT probe, W); no extra take.
 - The card's records as re-read at PREFLIGHT: above, `## PREFLIGHT`.
+- CLOSE: `ls -la /Users/cobalt/cobalt-wt/*/.env` → `-rw-------  1 cobalt  staff  2186 Oct  2 11:43 /Users/cobalt/cobalt-wt/slot-guard-1002/.env`: another job's take at 11:43, after my release at 11:42:17; this worktree's `.env` is absent (`ls …/devfix-route-1002/.env` → `No such file or directory`).
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
 BUILT · job: devfix-route · tip: 63649058 | on 551f07e0 | migration: none | offline 3784/0 | with-DB 4554/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: none | rows: 4 of 4 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0
