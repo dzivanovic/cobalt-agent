@@ -87,6 +87,9 @@ class Desk:
         self.reports.mkdir(parents=True)
         shutil.copy(HUBS / "BUILD-HUB.md", self.prompts / "BUILD-HUB.md")
         (self.prompts / "DEVFIX-HUB.md").write_text(hub_text)
+        # the approved, committed row the cards' RULINGS cite (desk-launch.sh, card 21 L1)
+        (self.reports / "cto-2026-01-02.md").write_text(
+            "| R1 | 07:00 ET | HIS RULING (constructed). | HIS RULING · APPROVED |\n")
         (self.repo / ".gitignore").write_text(".env\n")
         git(self.repo, "init", "-q", "-b", "main")
         git(self.repo, "add", "-A")

@@ -236,7 +236,10 @@ class World:
             f"REPORT: {self.wt}/fx-wt/docs/40 - DevDocs/reports/fx-build.md\nCHECK REPORT:\nHOUSE B:\n"
             "TREE STATE: unchanged\nRULINGS: 2026-01-02 R1\n\n## ROWS\n")
         self.build_report = tmp_path / "fy-build.md"
-        self.build_report.write_text("BUILT · fixture\n")
+        self.build_report.write_text(f"BUILT · job: fy · tip: {base}\n")  # card 21 L2's line
+        # the approved, committed row the cards' RULINGS cite (desk-launch.sh, card 21 L1)
+        (self.reports / "cto-2026-01-02.md").write_text(
+            "| R1 | 07:00 ET | HIS RULING (constructed). | HIS RULING · APPROVED |\n")
         self.check_report = self.reports / "fy-check.md"
         self.check_card = day / "02-fy-card.md"
         self.check_card.write_text(
@@ -247,7 +250,12 @@ class World:
         self.deploy_card.write_text(
             f"JOB: fz\nLADDER: OFF-LADDER\nBRANCH: deploy-fz\nWORKTREE: fz-gate\nBASE: main\n"
             f"TIP: {base}\nTAG: deploy-fz-1\nMIGRATIONS: none\nSET: fx\n"
-            f"REPORT: {self.reports}/deploy-fz.md\nRULINGS: none\n\n## SHIPS\n## MARKERS\n## SMOKE READS\n")
+            f"REPORT: {self.reports}/deploy-fz.md\nRULINGS: none\n\n## SHIPS\n"
+            f"| 1 | `fy-build` | `{base}` | `{base}` | `{self.reports}/fy-ship-check.md` | `held unfixed: 0` and `ready: YES` |\n"
+            "## MARKERS\n## SMOKE READS\n")
+        # the SHIPS row's committed check report (desk-launch.sh, card 21 L3, R41)
+        (self.reports / "fy-ship-check.md").write_text(
+            f"CHECK DONE · job: fy · tip: {base} · held unfixed: 0 · ready: YES\n")
         self.prompt = day / "04-brain-prompt.md"
         self.prompt.write_text(
             f"cd {self.repo}\n\nclaude --bg \"Read '{self.prompt}' and follow it exactly.\" "

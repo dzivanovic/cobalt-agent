@@ -28,6 +28,15 @@ Section 4 (the desk line) flags five deny strings **NEW** (three since loop 2, t
 - A hub launching a hub (L36): `claude --bg` and `claude -p` are on no fixed file's line. A check starts ONE outside house per pass and nothing else.
 - A write-path launch from a one-off prompt: `desk-launch.sh prompt` refuses a line in a write-path mode (`acceptEdits`, `dontAsk`) or with a write string (`git add`, `git commit`, `git merge`, `uv run`, `launchctl`, `COBALT_ENV=`). A dev-maintenance run on `cobalt_dev` is never a one-off prompt: its route is `desk-launch.sh devfix "<card>"` on `DEVFIX-HUB.md` (§6).
 
+## CLASSES — approved once, 2026-10-02 R39
+His permission by class. A string inside a class is used and recorded and is not brought to him; a string outside every class is NEW and is asked for by itself. NO launch line changes with this section: the lines take the classes in the adoption card.
+
+| string | for | can touch | never touches |
+|---|---|---|---|
+| (a) `Bash(sh /Users/cobalt/cobalt/ops/desk/*)` and its installed spelling `Bash(sh /Users/cobalt/.claude/ops/*)` | any script under `ops/desk/` that reached `main` through a build, a check and a deploy; on his settings and on every fixed file's line | what that script's own header and tests say it touches | a script that did not come through a build, a check and a deploy |
+| (b) `Bash(COBALT_ENV=dev uv run cobalt db *)` | any dev-only `cobalt db` verb, on the build, check, devfix and deploy lines | `cobalt_dev`, as the verb allows | production: `Bash(COBALT_ENV=production*)` is DENIED on the build, check and devfix lines |
+| (c) each kind's own report glob under `docs/40 - DevDocs/reports/` | the Edit and Write tools on that kind's own report | the files of that one glob | another kind's reports, `cto-<date>.md`, code, configs, the prompts |
+
 ## THE `.env` PATTERN (L76: the `cobalt_dev` lock) — approved once for any worktree
 `Bash(cp /Users/cobalt/cobalt/.env /Users/cobalt/cobalt-wt/<worktree>/.env)` and `Bash(rm /Users/cobalt/cobalt-wt/<worktree>/.env)`, where `<worktree>` is the card's `WORKTREE`: ONE directory name, `[A-Za-z0-9._-]`, no `/`, never `agy-trial` (`desk-launch.sh` refuses anything else and writes the exact pair into the launch line it runs; the hub's line carries the two exact strings, never a wildcard).
 - For: taking and releasing the one lock on `cobalt_dev` for a with-DB run.
