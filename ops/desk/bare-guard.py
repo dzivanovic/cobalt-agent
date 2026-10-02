@@ -2,7 +2,7 @@
 # bare-guard.py — a Claude Code PreToolUse hook (his 2026-10-01 R45 part 1; card 17 A1).
 # Reads the hook's JSON on stdin. A tool other than Bash -> exit 0. For Bash it scans
 # tool_input.command with a quote-aware scanner (single quotes, double quotes, $'…' ANSI-C
-# quotes, backslash escapes) and BLOCKS (exit 2, one line on stderr) when, OUTSIDE quotes, the command holds
+# quotes, backslash escapes; a `#` comment runs to the newline) and BLOCKS (exit 2, one line on stderr) when, OUTSIDE quotes, the command holds
 # `&&`, `||`, a pipe `|`, `;`, a lone `&`, a newline, a `>` or `<` redirect, or -- outside
 # quotes OR inside double quotes -- a backtick or `$(`. ONE exception: a command that ends
 # with the exact text ` < /dev/null` (the house-probe shape) passes that redirect. Leading
@@ -51,6 +51,12 @@ def scan(command):
                 see("a backtick")
             elif c == "$" and nxt == "(":
                 see("`$(`")
+        elif c == "#" and (i == 0 or command[i - 1] in " \t\n"):
+            # a comment runs to the newline: a quote or backslash in it is not one,
+            # and the newline that ends it is still seen
+            end = command.find("\n", i)
+            i = n if end < 0 else end
+            continue
         elif c == "\\":
             i += 2
             continue
