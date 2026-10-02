@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R52
 BRANCH: s3/x5-tap-refresh-1002
 WORKTREE: x5-tap-refresh-1002
 BASE: 53a85f27
-TIP:
+TIP: 2a5fa102
 REPORT: /Users/cobalt/cobalt-wt/x5-tap-refresh-1002/docs/40 - DevDocs/reports/x5-tap-refresh-build-2026-10-02.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/x5-tap-refresh-check-2026-10-02.md
+HOUSE B: as needed
 TREE STATE: row T1
 RULINGS: 2026-10-02 R52, 2026-10-02 R41
 
