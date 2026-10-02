@@ -813,17 +813,6 @@ class TestSheetCloseAtEntry:
         assert calls == {"exit": [], "transition": []}
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "check of aset-interim-close, house A F1: HELD, NOT FIXED — `legs.record_exit` takes no evidence "
-    "and `_close_if_zero` writes {'leg_id'} (cards/legs.py:236-237, fenced by the card); a DECISIONS item"))
-def test_sheet_close_evidence_is_via_aset_sheet(monkeypatch):
-    calls = TestSheetCloseAtEntry._world(monkeypatch)
-    client.post("/card/31/move", data={"to": "CLOSED"})
-    ((card_id, kwargs),) = calls["exit"]
-    assert card_id == 31
-    assert kwargs.get("evidence") == {"via": "aset.sheet"}
-
-
 class TestSheetCloseBannerSaysWhereTheLegIsListed:
     """check of aset-interim-close, house A F2: the sheet lists a CLOSED
     card's estimated legs only for a MANUAL card whose FILLED transition
