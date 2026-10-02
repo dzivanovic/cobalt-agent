@@ -3,7 +3,8 @@
 # Installs a fixed file whose title still carries the install token (card 17 A6).
 # It proves the row first: the lines of $REPORTS/cto-<date>.md that start "| R<n> |" are
 # exactly ONE, holding "HIS RULING" and "APPROVED", and
-# `git -C $REPO log -1 --format=%H -S"| R<n> |" -- <that file>` is non-empty; else
+# `git -C $REPO log -1 --format=%H -S"| R<n> |" -- <that file>` is non-empty, and the
+# same row line stands in that file at HEAD (an uncommitted edit of the row is no proof); else
 # "REFUSED: no approved, committed row". It accepts only a file directly under
 # $REPO/docs/40 - DevDocs/prompts/ whose FIRST line holds the token («INSTALL); it replaces,
 # in line 1 only, the span from that guillemet to its closing guillemet with
@@ -28,6 +29,8 @@ case "$row" in *"HIS RULING"*) ;; *) refuse "no approved, committed row: R$n hol
 case "$row" in *APPROVED*) ;; *) refuse "no approved, committed row: R$n holds no APPROVED" ;; esac
 commit=$(git -C "$REPO" log -1 --format=%H -S"| R$n |" -- "docs/40 - DevDocs/reports/cto-$date.md")
 [ -n "$commit" ] || refuse "no approved, committed row: R$n of cto-$date.md is not committed"
+git -C "$REPO" show "HEAD:docs/40 - DevDocs/reports/cto-$date.md" 2>/dev/null | grep -qxF -- "$row" \
+  || refuse "no approved, committed row: R$n of cto-$date.md differs from its line at HEAD"
 python3 - "$file" "$REPO/docs/40 - DevDocs/prompts" "INSTALL: $date R$n of his approval of STANDING-LIST.md" <<'PY'
 import os, sys
 
