@@ -108,6 +108,26 @@ def test_an_operator_script_with_no_cobalt_reader_derives_no_restart(monkeypatch
     assert "no Cobalt reader" in row.rule
 
 
+def test_every_path_under_ops_desk_is_an_operator_script(monkeypatch):
+    # 2026-10-02 ops-glob G1: `ops/desk/` holds the desk's and the hubs' shell
+    # tools and a git hook; no plist executes a file in it. Every path under
+    # it is an operator script by rule, so a new tool needs no OPS_TOOLS line.
+    monkeypatch.setattr(restarts, "changes", lambda _range: [
+        Change("ops/desk/any-new-tool.sh", "A"),
+        Change("ops/desk/pre-commit", "M"),
+        Change("ops/desk/sub/x.py", "A"),
+        Change("ops/desktop.sh", "A"),
+    ])
+    by_path = {row.path: row for row in classify("HEAD...HEAD")}
+    for path in ("ops/desk/any-new-tool.sh", "ops/desk/pre-commit", "ops/desk/sub/x.py"):
+        assert by_path[path].rule == "operator script; no Cobalt reader"
+        assert by_path[path].restarts == ()
+        assert by_path[path].escalate is False
+    # Negative control: the prefix without its slash is not the folder.
+    assert by_path["ops/desktop.sh"].rule != "operator script; no Cobalt reader"
+    assert by_path["ops/desktop.sh"].escalate is True
+
+
 def test_a_resident_wrapper_script_is_not_an_operator_script(monkeypatch):
     # The reason OPS_TOOLS is an explicit list and not `ops/*.sh`:
     # `start_aset.sh` IS read — it is what com.cobalt.aset's plist executes.
