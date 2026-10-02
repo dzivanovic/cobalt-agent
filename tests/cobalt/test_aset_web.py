@@ -636,6 +636,244 @@ class TestPickNotRecordedBanner:
         assert "the move route must never fill" not in r.text
 
 
+def _sheet_card(card_id: int, state: str, origin: str = "manual") -> dict:
+    """One open card as `CardStore.open_cards()` returns it. Constructed
+    values only (L32)."""
+    from decimal import Decimal
+
+    return {
+        "id": card_id, "ticker": f"ZZQ{card_id}", "grade": "B", "direction": "long",
+        "shares": 12, "stop": Decimal("63.2000"), "session": "rth", "state": state,
+        "origin": origin, "account_mode": "sim",
+    }
+
+
+class TestNoCardAboveTheForm:
+    """aset-interim-close S2 (his R13, 2026-10-01): "I don't want any cards
+    to ever be above the form". The open-cards block renders BELOW the
+    `/size` form on every response that renders `/`; `{banner}` and
+    `{result}` stay above it."""
+
+    @staticmethod
+    def _stub_cards(monkeypatch):
+        from cobalt.cards.models import CardState
+
+        class Cards:
+            def ensure_schema(self):
+                pass
+
+            def open_cards(self):
+                return [_sheet_card(41, "WATCH"), _sheet_card(42, "FILLED")]
+
+            def filled_with_picks(self, day):
+                return []
+
+            def state_of(self, card_id):
+                return CardState.WATCH
+
+            def transition(self, card_id, to_state, **kwargs):
+                return 9001
+
+        monkeypatch.setattr(web_module, "CardStore", Cards)
+        monkeypatch.setattr(
+            web_module, "_sheet_in_trade",
+            lambda card: '<div class="intrade-stub"></div>' if card["state"] == "FILLED" else "",
+        )
+
+    @staticmethod
+    def _assert_the_form_comes_first(text: str):
+        form_at = text.index('action="/size"')
+        cards_at = text.index("Open cards (F7)")
+        assert form_at < cards_at, "the open-cards label renders above the new-card form"
+        assert form_at < text.index('class="intrade-stub"'), "a FILLED card's in-trade block is above the form"
+        assert text.index('id="banner"') < form_at and text.index('id="resultCard"') < form_at, (
+            "{banner} and {result} stay above the form"
+        )
+
+    def test_get_renders_every_card_below_the_form(self, monkeypatch):
+        self._stub_cards(monkeypatch)
+        r = client.get("/")
+        assert r.status_code == 200
+        assert "ZZQ41" in r.text and "ZZQ42" in r.text, "both cards are on the page"
+        self._assert_the_form_comes_first(r.text)
+
+    def test_a_move_result_renders_every_card_below_the_form(self, monkeypatch):
+        self._stub_cards(monkeypatch)
+        r = client.post("/card/41/move", data={"to": "ARMED"})
+        assert "→ ARMED (card_transitions id(s) 9001)" in r.text, r.text[:400]
+        self._assert_the_form_comes_first(r.text)
+
+
+class TestSheetCloseAtEntry:
+    """aset-interim-close S3 (his R13): CLOSE on `/` closes a FILLED card
+    with nothing typed — ONE flat exit leg for every running share at the
+    entry fill price, `estimated`, through the one leg writer
+    (`legs.record_exit`, whose `_close_if_zero` writes FILLED -> CLOSED).
+    The route never writes CLOSED itself. Constructed values only (L32)."""
+
+    @staticmethod
+    def _world(monkeypatch, *, state="FILLED", running=12, entry=True, price_source="typed", filled_today=()):
+        from decimal import Decimal
+
+        from cobalt.cards import legs
+        from cobalt.cards.models import CardState
+
+        calls = {"exit": [], "transition": []}
+
+        class Cards:
+            def ensure_schema(self):
+                pass
+
+            def state_of(self, card_id):
+                return CardState(state)
+
+            def filled_with_picks(self, day):
+                return [{"card_id": cid, "origin": origin, "state": "CLOSED"} for cid, origin in filled_today]
+
+            def transition(self, *a, **k):
+                calls["transition"].append((a, k))
+                raise AssertionError("the move route must never write CLOSED itself")
+
+        entry_leg = {"id": 501, "card_id": 31, "seq": 0, "kind": "entry", "shares": 12,
+                     "price": Decimal("64.1000"), "flag": "confirmed", "price_source": price_source,
+                     "stop_in_force": Decimal("63.2000")}
+        position = legs.Position(
+            card={"id": 31, "ticker": "ZZQX", "direction": "long", "state": state,
+                  "stop": Decimal("63.2000"), "structural_stop": None},
+            legs=[entry_leg] if entry else [],
+            running=legs.Running(
+                shares=running, basis=legs.BASIS_LEGS if entry else legs.BASIS_SHARES, base_shares=12,
+                exit_shares=12 - running, entry_leg_id=501 if entry else None,
+                entry_price=Decimal("64.1000") if entry else None, state=state,
+            ),
+            realized=legs.RealizedR(legs.REALIZED_R_ID, None, False, None, "not computed — constructed"),
+        )
+
+        def record_exit(card_id, **kwargs):
+            calls["exit"].append((card_id, kwargs))
+            return legs.ExitResult(leg_id=502, shares=kwargs["running_before"],
+                                   running_before=kwargs["running_before"], running_after=0,
+                                   closed=True, transition_id=77)
+
+        monkeypatch.setattr(legs, "read_position", lambda card_id: position)
+        monkeypatch.setattr(legs, "record_exit", record_exit)
+        monkeypatch.setattr(web_module, "CardStore", Cards)
+        monkeypatch.setattr(web_module, "_leg_note", lambda *a, **k: None)
+        monkeypatch.setattr(web_module, "_render", lambda banner="", result="", form=None: banner + result)
+        return calls
+
+    @staticmethod
+    def _the_one_flat_leg(calls, *, price_source):
+        from decimal import Decimal
+
+        assert not calls["transition"], "CLOSED is written by the leg writer, never by the route"
+        ((card_id, kwargs),) = calls["exit"]
+        assert kwargs.pop("now") is not None
+        assert (card_id, kwargs) == (31, {
+            "preset": "flat", "shares": None, "price": Decimal("64.1000"), "price_source": price_source,
+            "price_asof": None, "flag": "estimated", "source": "sheet", "running_before": 12,
+        })
+
+    def test_a_filled_manual_card_closes_flat_at_entry_with_nothing_typed(self, monkeypatch):
+        calls = self._world(monkeypatch)
+        r = client.post("/card/31/move", data={"to": "CLOSED"})
+        assert "never closes" not in r.text, r.text
+        self._the_one_flat_leg(calls, price_source="typed")
+        assert "FAILED" not in r.text and 'class="failed"' not in r.text
+        assert "CLOSED" in r.text and "12 sh @ 64.1000" in r.text and "estimated" in r.text
+
+    def test_a_filled_radar_card_closes_the_same_way(self, monkeypatch):
+        """A radar card listed on `/` gets the same CLOSE (drawn from the
+        edge table) and the same leg; its entry leg's source rides along."""
+        assert ">CLOSE<" in web_module._card_controls(_sheet_card(31, "FILLED", origin="radar"))
+        calls = self._world(monkeypatch, price_source="last_poll")
+        r = client.post("/card/31/move", data={"to": "CLOSED"})
+        assert "never closes" not in r.text, r.text
+        self._the_one_flat_leg(calls, price_source="last_poll")
+        assert "FAILED" not in r.text
+
+    @pytest.mark.parametrize("state, running", [("FILLED", 0), ("WATCH", 0)])
+    def test_nothing_running_or_not_filled_is_refused_and_nothing_is_written(self, monkeypatch, state, running):
+        calls = self._world(monkeypatch, state=state, running=running)
+        r = client.post("/card/31/move", data={"to": "CLOSED"})
+        assert "FAILED" in r.text and "REFUSED card 31" in r.text and "Nothing written" in r.text
+        assert calls == {"exit": [], "transition": []}
+
+    def test_a_card_with_no_entry_leg_is_refused_and_nothing_is_written(self, monkeypatch):
+        calls = self._world(monkeypatch, entry=False)
+        r = client.post("/card/31/move", data={"to": "CLOSED"})
+        assert "FAILED" in r.text and "REFUSED card 31" in r.text and "no entry leg" in r.text
+        assert calls == {"exit": [], "transition": []}
+
+    @pytest.mark.parametrize("to, says", [("FILLED", "this route never fills"), ("BOGUS", "ValueError")])
+    def test_the_other_refusals_are_unchanged(self, monkeypatch, to, says):
+        calls = self._world(monkeypatch)
+        r = client.post("/card/31/move", data={"to": to})
+        assert "FAILED" in r.text and says in r.text
+        assert calls == {"exit": [], "transition": []}
+
+
+class TestSheetCloseBannerSaysWhereTheLegIsListed:
+    """check of aset-interim-close, house A F2: the sheet lists a CLOSED
+    card's estimated legs only for a MANUAL card whose FILLED transition
+    is today (`_sheet_closed_estimated` → `filled_with_picks(_today_et())`).
+    The CLOSE banner says "listed for correction" only when that is so
+    (L35). Constructed values only (L32)."""
+
+    def test_a_card_filled_before_today_is_not_called_listed(self, monkeypatch):
+        TestSheetCloseAtEntry._world(monkeypatch, filled_today=())
+        r = client.post("/card/31/move", data={"to": "CLOSED"})
+        assert "CLOSED" in r.text and "estimated" in r.text, r.text
+        assert "listed for correction" not in r.text, "the banner says listed; the sheet will not list it"
+        assert "not listed on this sheet" in r.text
+
+    def test_a_manual_card_filled_today_is_called_listed(self, monkeypatch):
+        TestSheetCloseAtEntry._world(monkeypatch, filled_today=((31, "manual"),))
+        r = client.post("/card/31/move", data={"to": "CLOSED"})
+        assert "listed for correction" in r.text and "not listed" not in r.text, r.text
+
+    def test_a_radar_card_filled_today_is_not_called_listed_on_the_sheet(self, monkeypatch):
+        TestSheetCloseAtEntry._world(monkeypatch, filled_today=((31, "radar"),))
+        r = client.post("/card/31/move", data={"to": "CLOSED"})
+        assert "listed for correction" not in r.text and "not listed on this sheet" in r.text, r.text
+
+
+class TestTheFormStaysUnderHim:
+    """aset-interim-close S4 (his R13: "anytime I refresh it because I jump
+    from one field to another, it will move the page all the way to the
+    top"). S1 found two paths in the page script: Enter in a field submits
+    the `/size` form (a full-page POST; the new page opens at the top), and
+    the ticker reset empties `#banner` / `#resultCard` above the form (the
+    form moves up). Structural tests on the served source, as Defect 3's:
+    no browser harness exists in this repo."""
+
+    def test_enter_in_a_sizing_field_moves_to_the_next_field_and_never_submits(self):
+        assert 'action="/size" id="sizeForm"' in web_module._render()
+        marker = "$('sizeForm').addEventListener('keydown'"
+        assert marker in web_module.JS, "no Enter guard on the sizing form"
+        handler = web_module.JS.split(marker)[1].split("\n   });")[0]
+        assert "e.key !== 'Enter'" in handler
+        assert "e.preventDefault()" in handler
+        assert ".focus()" in handler
+
+    def test_the_ticker_reset_keeps_the_form_where_it_was(self):
+        clear_fn = web_module.JS.split("function clearForNewCard(){")[1].split("\n }")[0]
+        assert "$('sizeForm').getBoundingClientRect().top" in clear_fn, "the reset does not measure the form"
+        assert "window.scrollBy(0," in clear_fn
+        assert clear_fn.index("getBoundingClientRect") < clear_fn.index("$('resultCard').innerHTML = ''"), (
+            "the form's place is measured before anything above it is emptied"
+        )
+        # check of aset-interim-close, house A F3: the delta is new − old (the
+        # form moved up → negative → scroll up by as much), measured after
+        # BOTH boxes above the form are emptied, and that delta is scrolled.
+        moved = "const moved = $('sizeForm').getBoundingClientRect().top - formTop;"
+        assert moved in clear_fn, "the delta is not new top − old top"
+        assert clear_fn.index(moved) > clear_fn.index("$('banner').innerHTML = ''"), (
+            "the delta is measured before everything above the form is emptied"
+        )
+        assert "if (moved) window.scrollBy(0, moved);" in clear_fn, "the delta is not what is scrolled"
+
+
 class TestDayModeBannerStage:
     """The stage LABEL and the MODE must come from one rule. Otherwise the
     banner can read "stage 2 (decided)" while showing the stage-1 floor —
