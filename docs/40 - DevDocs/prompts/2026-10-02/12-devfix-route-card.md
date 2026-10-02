@@ -3,11 +3,11 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R18
 BRANCH: ops/devfix-route-1002
 WORKTREE: devfix-route-1002
 BASE: 551f07e0
-TIP:
+TIP: 63649058
 REPORT: /Users/cobalt/cobalt-wt/devfix-route-1002/docs/40 - DevDocs/reports/devfix-route-build-2026-10-02.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/devfix-route-check-2026-10-02.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-02 R14, 2026-10-02 R18, 2026-10-02 R47
 
@@ -39,3 +39,4 @@ RULINGS: 2026-10-02 R14, 2026-10-02 R18, 2026-10-02 R47
 - NEW strings on that line, for his ONE approval: allow `Bash(COBALT_ENV=dev uv run cobalt db dev-rebuild *)`; allow `Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/reports/devfix-*)`; deny `Bash(COBALT_ENV=production*)` — APPROVED, his `cto-2026-10-02.md` R26. Every other string stands on `BUILD-HUB.md`'s or `CHECK-HUB.md`'s line (STANDING-LIST §1–§2); `wc *`, `git show*`, `git diff *` added by the desk at R26 as the basic read set every hub carries.
 - RESTARTS class homes: `ops/desk/desk-launch.sh` → `OPS_TOOLS` in `src/cobalt/jobs/restarts.py` (`:36`) as 02 / 07 lift it ("operator script; no Cobalt reader"); if `BASE` does not carry that lift, the row's `files` gains `src/cobalt/jobs/restarts.py` for the one-line lift (2026-10-02 R8's shape). `tests/ops/*` → "test/documentation" (`:239`). `docs/…` → DOCS (`:219`). (the drafter, 06:27 ET)
 - At 06:27 ET `tests/ops/` is not on `main`: it lands with 02 / 07.
+- The judge seat's answers to the build's DECISIONS (2026-10-02 R41): (1) the older bracket-range checks of `desk-launch.sh` are a follow-up, outside this card; (F4) `wait-stop-line.sh` is unchanged by design; (2) the `DEVFIX-HUB.md` launch line as built — the two lock-script strings in place of the `cp` / `rm` pair, and `--add-dir /Users/cobalt/.claude/ops` — is approved by 2026-10-02 R26, 2026-10-01 R20, 2026-10-02 R9 and R39; it holds no new string, and that is not a finding. A string on that line that none of those four rows names is one.
