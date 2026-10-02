@@ -2,7 +2,7 @@ JOB: slot-guard
 LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R18
 BRANCH: ops/slot-guard-1002
 WORKTREE: slot-guard-1002
-BASE: «FILL: the 8-hex BUILT tip of card 11 (dev-rebuild) — this job stacks on it (both edit src/cobalt/db_migrations/cli.py)»
+BASE: 1df251b9
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/slot-guard-1002/docs/40 - DevDocs/reports/slot-guard-build-2026-10-02.md
 CHECK REPORT:

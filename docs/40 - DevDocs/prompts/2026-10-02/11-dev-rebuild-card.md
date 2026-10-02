@@ -3,11 +3,11 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R18
 BRANCH: ops/dev-rebuild-1002
 WORKTREE: dev-rebuild-1002
 BASE: 6ae3f133
-TIP:
+TIP: 1df251b9
 REPORT: /Users/cobalt/cobalt-wt/dev-rebuild-1002/docs/40 - DevDocs/reports/dev-rebuild-build-2026-10-02.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/dev-rebuild-check-2026-10-02.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: row T
 RULINGS: 2026-10-02 R14, 2026-10-02 R18, 2026-10-02 R47
 
