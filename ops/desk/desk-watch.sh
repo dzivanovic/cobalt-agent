@@ -1,0 +1,52 @@
+#!/bin/sh
+# desk-watch.sh <build|check|deploy|devfix|close> "<card or close report>" [max-seconds]
+# Read-only. The desk's ONE watch command (card 17 A2). Derives the report from the card
+# (build: REPORT; check: CHECK REPORT; deploy and devfix: REPORT; close: the path given)
+# and the stop regex from the kind (build: BUILT|FAILED; check: CHECK DONE|FAILED; deploy:
+# DEPLOYED|FAILED; devfix: REBUILT|FAILED; close: CLOSE PUSHED|FAILED; at line start).
+# FIRST it reads the report's last non-blank line: already a stop line of that kind ->
+# prints it, exit 0, no wait. Else it waits as wait-stop-line.sh does (the last non-blank
+# line changed AND matching; a missing file is waited for), polling every DESK_WATCH_POLL
+# seconds (default 20). max-seconds defaults to 7000; more is refused (the harness's
+# background limit is two hours). On the limit: prints
+# "STILL RUNNING after <n>s — last line: <line>", exit 2. A refusal: "REFUSED: <reason>"
+# on stderr, exit 1. Writes nothing.
+refuse() { echo "REFUSED: $1" >&2; exit 1; }
+kind="$1"; src="$2"; max="${3:-7000}"; poll="${DESK_WATCH_POLL:-20}"
+[ -n "$src" ] || refuse "usage: desk-watch.sh <build|check|deploy|devfix|close> <card or close report> [max-seconds]"
+case "$max" in ''|*[!0-9]*) refuse "max-seconds is not a whole number: $max" ;; esac
+[ "$max" -le 7000 ] || refuse "max-seconds $max is over 7000 (the background limit is two hours)"
+case "$poll" in ''|0|*[!0-9]*) refuse "DESK_WATCH_POLL is not a whole number above 0: $poll" ;; esac
+header() {
+  [ -f "$src" ] || refuse "no card: $src"
+  v=$(grep -m 1 "^$1: " "$src" | sed "s/^$1: //")
+  [ -n "$v" ] || refuse "the card has no $1 value: $src"
+  printf '%s\n' "$v"
+}
+case "$kind" in
+  build)  report=$(header REPORT) || exit 1; re='^(BUILT|FAILED)' ;;
+  check)  report=$(header 'CHECK REPORT') || exit 1; re='^(CHECK DONE|FAILED)' ;;
+  deploy) report=$(header REPORT) || exit 1; re='^(DEPLOYED|FAILED)' ;;
+  devfix) report=$(header REPORT) || exit 1; re='^(REBUILT|FAILED)' ;;
+  close)  report="$src"; re='^(CLOSE PUSHED|FAILED)' ;;
+  *) refuse "unknown kind: $kind" ;;
+esac
+lastline() { grep -v '^[[:space:]]*$' "$1" 2>/dev/null | tail -1; }
+matches() { printf '%s\n' "$1" | grep -qE "$re"; }
+initial=$(lastline "$report")
+if matches "$initial"; then
+  printf '%s\n' "$initial"
+  exit 0
+fi
+waited=0
+while [ "$waited" -lt "$max" ]; do
+  sleep "$poll"
+  waited=$((waited + poll))
+  cur=$(lastline "$report")
+  if [ "$cur" != "$initial" ] && matches "$cur"; then
+    printf '%s\n' "$cur"
+    exit 0
+  fi
+done
+echo "STILL RUNNING after ${max}s — last line: $(lastline "$report")"
+exit 2

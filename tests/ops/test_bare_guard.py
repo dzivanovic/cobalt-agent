@@ -43,6 +43,8 @@ PASS = [
     'git commit -m "first line\nsecond line"',
     "grep -n -F 'a | b && c' file",
     "echo it\\'s",
+    "echo $'a\\'b; c'",
+    'echo "a \\" ; b"',
 ]
 
 
@@ -67,6 +69,10 @@ BLOCK = [
     ("echo `date`", "a backtick"),
     ('echo "`date`"', "a backtick"),
     ("ls < /dev/null && ls", "`&&`"),
+    ('ls && codex exec "x" < /dev/null', "`&&`"),
+    ('cat f | codex exec "x" < /dev/null', "a pipe `|`"),
+    ("echo $'\\''; ls", "`;`"),
+    ('echo "a \\" ; b" ; ls', "`;`"),
 ]
 
 
