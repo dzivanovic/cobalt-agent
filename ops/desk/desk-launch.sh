@@ -113,7 +113,8 @@
 #     $REPORTS/cto-<date>.md starting `| R<n> |` with HIS RULING and APPROVED, committed so;
 #   - kind check, not PASS-2 (L2): a build report whose last non-blank line does not start
 #     `BUILT · job: <JOB> · tip: <TIP>`;
-#   - kind deploy, not STEP-D0 (L3): a `## SHIPS` row whose check report is absent, uncommitted or
+#   - kind deploy, not STEP-D0 (L3): a `## SHIPS` table with no row, or a TIP head that is the
+#     branch head of no row (R41); a `## SHIPS` row whose check report is absent, uncommitted or
 #     changed, whose last line lacks a literal of the row or names another tip, whose branch head
 #     moved, whose code tip is not its ancestor, or whose head adds more than docs past it.
 #
@@ -582,6 +583,13 @@ lock_dir_free() {
 # `## SHIPS`: | # | branch | code tip | branch head | check report | its stop line must carry |
 ships_checked() {
     rows=$(awk '/^## /{insec = ($0 ~ /^## SHIPS/)} insec && /^\| *[0-9]+ *\|/' "$card")
+    # every head TIP merges is the branch head of a row: a head with no row is merged with no
+    # check proven by anyone (2026-10-02 R41, the judge seat's answer to this build's DECISION 3)
+    [ -n "$rows" ] || refuse "deploy: ## SHIPS has no row; TIP head ${tip%% *} is checked by no row — add its ## SHIPS row and commit its check report"
+    for h in $tip; do
+        printf '%s\n' "$rows" | awk -F'|' -v h="$h" '{gsub(/[` \t]/, "", $5); if ($5 == h) found = 1} END {exit !found}' \
+            || refuse "deploy: TIP head $h is the branch head of no ## SHIPS row — add its ## SHIPS row and commit its check report"
+    done
     while IFS= read -r srow; do
         [ -n "$srow" ] || continue
         sbranch=$(ship_cell "$srow" 3)

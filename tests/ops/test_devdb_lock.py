@@ -213,6 +213,10 @@ def desk(roots, tmp_path):
     build_report.write_text(f"BUILT · job: x-job · tip: {tip}\n")
     git(job_wt, "add", "-A")
     git(job_wt, "commit", "-q", "-m", "build report")
+    head = git(job_wt, "rev-parse", "--short=8", "HEAD")
+    # the deploy card's one SHIPS row and its committed check report (desk-launch.sh, card 21 L3, R41)
+    (reports / "x-job-ship-check.md").write_text(
+        f"CHECK DONE · job: x-job · tip: {tip} · held unfixed: 0 · ready: YES\n")
 
     card = prompts / "2026-01-02" / "01-x-job-card.md"
     card.write_text(
@@ -224,8 +228,10 @@ def desk(roots, tmp_path):
     deploy = prompts / "2026-01-02" / "02-x-deploy-card.md"
     deploy.write_text(
         "JOB: x-deploy\nLADDER: OFF-LADDER\nBRANCH: deploy/x-deploy\nWORKTREE: x-gate\n"
-        f"BASE: main\nTIP: {tip}\nREPORT: {reports / 'deploy-x.md'}\nRULINGS: none\n"
-        "TAG: x-tag\nMIGRATIONS: none\nSET: x-job\n\n## SHIPS\n## MARKERS\n## SMOKE READS\n"
+        f"BASE: main\nTIP: {head}\nREPORT: {reports / 'deploy-x.md'}\nRULINGS: none\n"
+        "TAG: x-tag\nMIGRATIONS: none\nSET: x-job\n\n## SHIPS\n"
+        f"| 1 | `ops/x-job` | `{tip}` | `{head}` | `{reports / 'x-job-ship-check.md'}` | `held unfixed: 0` and `ready: YES` |\n"
+        "## MARKERS\n## SMOKE READS\n"
     )
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "cards")
