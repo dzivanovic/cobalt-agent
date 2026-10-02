@@ -65,6 +65,7 @@ def desk(tmp_path):
     repo.mkdir()
     wt.mkdir()
     (repo / "a.txt").write_text("a\n")
+    (repo / "b.txt").write_text("b\n")
     (repo / ".gitignore").write_text(".env\n")
     git(repo, "init", "-q", "-b", "main")
     git(repo, "add", "-A")
@@ -88,6 +89,10 @@ def desk(tmp_path):
     (wt / LOCK_NAME / "owner").write_text("open-wt\n")
     # a tracked change on main's tree
     (repo / "a.txt").write_text("a edited\n")
+    # b.txt unchanged but stat-stale: a `git status` free to take its optional lock would
+    # refresh and rewrite .git/index, which the read-only test would see
+    later = (repo / "b.txt").stat().st_mtime + 3600
+    os.utime(repo / "b.txt", (later, later))
 
     stub = root / "bin"
     stub.mkdir()

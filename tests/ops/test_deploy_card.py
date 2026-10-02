@@ -31,7 +31,8 @@ GIT_ENV = {
 def git(cwd: Path, *args: str) -> str:
     done = subprocess.run(
         ["git", "-c", "core.hooksPath=/dev/null", *args], cwd=cwd,
-        env=dict(os.environ, **GIT_ENV), capture_output=True, text=True, check=True,
+        env=dict(os.environ, GIT_OPTIONAL_LOCKS="0", **GIT_ENV),  # the test's own reads write no index
+        capture_output=True, text=True, check=True,
     )
     return done.stdout.strip()
 
@@ -115,7 +116,8 @@ class Desk:
             "--out", str(self.out), *extra, *(str(self.card[c]) for c in cards),
         ]
         return subprocess.run(
-            ["sh", str(SCRIPT), *args], env=self.env, capture_output=True, text=True, timeout=120
+            ["sh", str(SCRIPT), *args], env=self.env, capture_output=True, text=True,
+            errors="replace", timeout=120,
         )
 
     def state(self) -> dict[str, str]:
@@ -152,6 +154,12 @@ def header(text: str) -> dict[str, str]:
 
 def test_two_clean_checks_write_the_card_and_change_nothing_else(tmp_path):
     desk = Desk(tmp_path)
+    # the check reports stat-stale: a `git diff` free to take its optional lock would refresh
+    # and rewrite .git/index (X4: the script writes no file but --out)
+    for check in desk.check.values():
+        later = check.stat().st_mtime + 3600
+        os.utime(check, (later, later))
+    index = (desk.repo / ".git" / "index").read_bytes()
     before = desk.state()
     done = desk.run()
     assert done.returncode == 0, done.stderr
@@ -189,6 +197,7 @@ def test_two_clean_checks_write_the_card_and_change_nothing_else(tmp_path):
     assert {k: v for k, v in after.items() if k != "status"} == {
         k: v for k, v in before.items() if k != "status"
     }
+    assert (desk.repo / ".git" / "index").read_bytes() == index
 
 
 def test_rulings_are_written_when_given(tmp_path):
@@ -238,6 +247,15 @@ def test_an_uncommitted_check_report_is_refused(tmp_path):
     desk = Desk(tmp_path)
     desk.check["alpha"].write_text(desk.check["alpha"].read_text() + "\nedited after commit\n" + check_line(desk.tip["alpha"]))
     _refused(desk, desk.run(), "alpha")
+
+
+def test_a_staged_check_report_is_refused(tmp_path):
+    desk = Desk(tmp_path)
+    committed = desk.check["beta"].read_text()
+    desk.check["beta"].write_text("# check, restaged\n\n" + check_line(desk.tip["beta"]))
+    git(desk.repo, "add", str(desk.check["beta"]))
+    desk.check["beta"].write_text(committed)  # the file is the commit's again; only the index differs
+    _refused(desk, desk.run(), "beta")
 
 
 def test_a_check_report_never_committed_is_refused(tmp_path):
@@ -318,6 +336,19 @@ def test_a_migration_on_a_head_leaves_the_placeholder(tmp_path):
     migrations = header(desk.out.read_text())["MIGRATIONS"]
     assert migrations.startswith("«FILL")
     assert "src/cobalt/db_migrations/0099_x.sql" in migrations
+
+
+@pytest.mark.parametrize("bad", ["X-Set", "x_set", "-x", "x;rm"])
+def test_a_job_name_outside_lowercase_is_refused(tmp_path, bad):
+    desk = Desk(tmp_path)
+    args = [
+        "--job", bad, "--set", "xset", "--worktree", "x-gate", "--tag", "x-tag",
+        "--out", str(desk.out), str(desk.card["alpha"]),
+    ]
+    done = subprocess.run(["sh", str(SCRIPT), *args], env=desk.env, capture_output=True, text=True)
+    assert done.returncode == 1
+    assert "REFUSED" in done.stderr
+    assert not desk.out.exists()
 
 
 @pytest.mark.parametrize("bad", ["../x-gate", "/abs/x-gate", "a/b", ".hidden", "agy-trial", ""])
