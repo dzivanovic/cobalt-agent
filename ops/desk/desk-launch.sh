@@ -645,7 +645,7 @@ devfix)
         *) report_bad=1 ;;
     esac
     case "${report#"$REPORTS"/}" in
-        */*|*[!A-Za-z0-9._-]*) report_bad=1 ;;
+        */*|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-]*) report_bad=1 ;;
     esac
     [ -z "$report_bad" ] || refuse "incomplete card: a devfix REPORT must be $REPORTS/devfix-<name>.md"
     [ -n "$step" ] || [ ! -e "$report" ] || refuse "the devfix report already exists: $report (a new worker names its CONTINUE step)"
