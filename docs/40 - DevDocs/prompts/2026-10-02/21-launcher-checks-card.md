@@ -2,7 +2,7 @@ JOB: launcher-checks
 LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/launcher-checks-1002
 WORKTREE: launcher-checks-1002
-BASE: «FILL: the 8-hex BUILT tip of card 12 (devfix-route), which stands on card 16's tip»
+BASE: 63649058
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/launcher-checks-1002/docs/40 - DevDocs/reports/launcher-checks-build-2026-10-02.md
 CHECK REPORT:
