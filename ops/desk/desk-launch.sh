@@ -112,10 +112,11 @@
 #     HOUSE A / HOUSE B line names after `overruled`, that is not ONE line of
 #     $REPORTS/cto-<date>.md starting `| R<n> |` with HIS RULING and APPROVED, committed so;
 #   - kind check, not PASS-2 (L2): a build report whose last non-blank line does not start
-#     `BUILT · job: <JOB> · tip: <TIP>`;
+#     `BUILT · job: <JOB> · tip: <TIP>`; on a first pass-1 launch, a branch head that TIP is not
+#     an ancestor of, or that adds more than docs past TIP (check O2);
 #   - kind deploy, not STEP-D0 (L3): a `## SHIPS` table with no row, or a TIP head that is the
-#     branch head of no row (R41); a `## SHIPS` row whose check report is absent, uncommitted or
-#     changed, whose last line lacks a literal of the row or names another tip, whose branch head
+#     branch head of no row (R41); a `## SHIPS` row whose branch head TIP does not list (check O1),
+#     whose check report is absent, uncommitted or changed, whose last line lacks a literal of the row or names another tip, whose branch head
 #     moved, whose code tip is not its ancestor, or whose head adds more than docs past it.
 #
 # THE LAUNCH LINE HAS ONE HOME: the fixed file's single line beginning "claude --bg " (the
@@ -602,6 +603,11 @@ ships_checked() {
         esac
         hex8 "SHIPS code tip" "$ctip"
         hex8 "SHIPS branch head" "$shead"
+        # P3: the row's branch head is the same value TIP lists (check O1)
+        case " $tip " in
+            *" $shead "*) ;;
+            *) refuse "deploy $sbranch: the branch head $shead is no head TIP lists — add it to TIP, or drop its ## SHIPS row" ;;
+        esac
         case "$crep" in
             "$REPORTS"/*.md) ;;
             *) refuse "incomplete card: SHIPS check report '$crep' is not $REPORTS/<name>.md" ;;
@@ -715,6 +721,14 @@ check)
     head=$(git -C "$WT/$wt" rev-parse --abbrev-ref HEAD) || refuse "$WT/$wt is not a git worktree"
     [ "$head" = "$branch" ] || refuse "$WT/$wt is on '$head', the card says '$branch'"
     [ -z "$(git -C "$WT/$wt" status --porcelain)" ] || refuse "$WT/$wt is not clean (the check session commits there)"
+    # a first pass-1 launch: the branch head is TIP or adds docs only past it (CHECK-HUB.md
+    # PREFLIGHT; check O2). A resume or a PASS-2 sits on the check's own commits and is not re-read
+    if [ -z "$pass2" ] && [ -z "$step" ]; then
+        git -C "$WT/$wt" merge-base --is-ancestor "$tip" HEAD \
+            || refuse "the tip is not the code tip — TIP $tip is not an ancestor of the branch head; set TIP to the branch's code tip"
+        past=$(git -C "$WT/$wt" log --format= --name-only "$tip..HEAD" -- . ':(exclude)docs' | sed '/^$/d' | sort -u | tr '\n' ' ')
+        [ -z "$past" ] || refuse "the tip is not the code tip — the branch adds ${past}past TIP $tip; set TIP to the branch's code tip"
+    fi
     # a check launches while the lock is held (R20); a resume still refuses another worktree's .env
     [ -z "$step" ] || lock_free
     ;;

@@ -372,6 +372,24 @@ def test_x1_a_check_whose_branch_adds_code_past_its_tip_refuses(desk):
     refused(desk, desk.launch("check", str(desk.card)), "the tip is not the code tip")
 
 
+def test_x1_a_check_whose_tip_is_not_on_the_branch_head_refuses(desk):
+    """The branch rewound below TIP (check O2)."""
+    git(desk.job_wt, "reset", "-q", "--hard", desk.base)
+    desk.write_build_report(desk.built_line())
+    refused(desk, desk.launch("check", str(desk.card)), "the tip is not the code tip")
+
+
+@pytest.mark.parametrize("extra", [("E3",), ("PASS-2",)])
+def test_x1_a_check_resume_or_pass_2_on_its_own_code_commits_launches(desk, extra):
+    """Negative control for check O2: a resume or a second pass sits on the check's own fixes."""
+    (desk.job_wt / "src" / "y.py").write_text("Y = 1\n")
+    desk.commit_job("the check's own fix")
+    desk.check_report.write_text("# check\n\nCHECK DONE · job: x-job · pass: 1 · house B: needed\n")
+    done = desk.launch("check", str(desk.card), *extra)
+    assert done.returncode == 0, done.stderr
+    assert desk.called() == [str(desk.job_wt)]
+
+
 # ---- L3: every check committed and clean (kind deploy)---------------------------------------
 
 
