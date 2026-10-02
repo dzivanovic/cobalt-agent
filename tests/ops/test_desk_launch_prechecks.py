@@ -365,7 +365,14 @@ def test_l2_a_pass_2_launch_keeps_the_test_it_has(desk):
     assert desk.called() == [str(desk.job_wt)]
 
 
-# ---- L3: every check committed and clean (kind deploy) ---------------------------------------
+def test_x1_a_check_whose_branch_adds_code_past_its_tip_refuses(desk):
+    """CHECK-HUB.md PREFLIGHT: HEAD is TIP or a docs-only commit above it (check O2)."""
+    (desk.job_wt / "src" / "y.py").write_text("Y = 1\n")
+    desk.commit_job("src past the tip")
+    refused(desk, desk.launch("check", str(desk.card)), "the tip is not the code tip")
+
+
+# ---- L3: every check committed and clean (kind deploy)---------------------------------------
 
 
 def test_l3_a_deploy_on_a_committed_clean_check_launches(desk):
@@ -488,6 +495,20 @@ def test_l3_a_tip_head_that_is_the_head_of_no_ships_row_refuses(desk):
     refused(desk, desk.launch("deploy", str(desk.deploy)),
             f"deploy: TIP head {desk.base} is the branch head of no ## SHIPS row — "
             "add its ## SHIPS row and commit its check report")
+    assert not desk.gate_left()
+
+
+def test_x1_a_ships_row_whose_head_tip_does_not_list_refuses(desk):
+    """DEPLOY-HUB.md P3: each row's branch head is 'the same value TIP lists' (check O1)."""
+    git(desk.repo, "branch", "ops/y-job", desk.tip)
+    other = desk.reports / "y-job-check.md"
+    other.write_text(f"# y-job check\n\n{check_line(desk.tip)}\n\n")
+    desk.deploy.write_text(desk.deploy.read_text().replace(
+        "|\n\n## MARKERS",
+        f"|\n| 2 | `ops/y-job` | `{desk.tip}` | `{desk.tip}` | `{other}` | `held unfixed: 0` and `ready: YES` |\n\n## MARKERS"))
+    desk.ship()
+    refused(desk, desk.launch("deploy", str(desk.deploy)),
+            f"deploy ops/y-job: the branch head {desk.tip} is no head TIP lists")
     assert not desk.gate_left()
 
 
