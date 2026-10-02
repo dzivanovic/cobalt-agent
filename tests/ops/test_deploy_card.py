@@ -351,6 +351,18 @@ def test_a_job_name_outside_lowercase_is_refused(tmp_path, bad):
     assert not desk.out.exists()
 
 
+def test_check_o2_a_migration_only_main_has_leaves_migrations_none(tmp_path):
+    desk = Desk(tmp_path)
+    mig = desk.repo / "src" / "cobalt" / "db_migrations"
+    mig.mkdir(parents=True)
+    (mig / "0098_main.sql").write_text("SELECT 1;\n")
+    git(desk.repo, "add", "-A")
+    git(desk.repo, "commit", "-q", "-m", "main gains a migration after the branches were cut")
+    done = desk.run()
+    assert done.returncode == 0, done.stderr
+    assert header(desk.out.read_text())["MIGRATIONS"] == "none"
+
+
 @pytest.mark.parametrize("bad", ["../x-gate", "/abs/x-gate", "a/b", ".hidden", "agy-trial", ""])
 def test_a_worktree_outside_the_pattern_is_refused(tmp_path, bad):
     desk = Desk(tmp_path)

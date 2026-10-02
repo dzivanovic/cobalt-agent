@@ -333,3 +333,48 @@ def test_a_bad_id_is_refused_before_any_call(tmp_path, bad):
     assert done.returncode == 1
     assert "REFUSED" in done.stderr
     assert desk.call_lines() == []
+
+
+# ---- the check (card 18 X3, RECORDS item 7) -------------------------------------------
+
+
+def _stub_agents_from(desk: Desk, n: int, later: str) -> None:
+    """`agents` calls before the n-th answer the sessions file; from the n-th on, `later`."""
+    (desk.root / "bin" / "claude").write_text(
+        "#!/bin/sh\n"
+        f'printf "%s\\n" "$*" >> "{desk.calls}"\n'
+        'if [ "$1" = agents ]; then\n'
+        f'    k=$(grep -c "^agents" "{desk.calls}")\n'
+        f'    if [ "$k" -ge {n} ]; then printf "%s" \'{later}\'; else cat "{desk.sessions}"; fi\n'
+        "fi\n"
+        "exit 0\n"
+    )
+
+
+def _working(desk: Desk) -> None:
+    rows = json.loads(desk.sessions.read_text())
+    rows[0]["state"] = "working"
+    desk.set_sessions(rows)
+
+
+def _nothing_stopped(desk: Desk, done: subprocess.CompletedProcess) -> None:
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED" in done.stderr
+    assert not [line for line in desk.call_lines() if not line.startswith("agents")]
+
+
+def test_check_o1_a_list_read_that_fails_during_the_wait_never_stops_a_working_desk(tmp_path):
+    desk = Desk(tmp_path)
+    _working(desk)
+    _stub_agents_from(desk, 2, "")
+    _nothing_stopped(desk, handover(desk, DESK_HANDOVER_WAIT="30"))
+
+
+def test_check_o3_a_handover_line_without_et_still_cuts_the_rows(tmp_path):
+    desk = Desk(tmp_path)
+    desk.today.write_text(TODAY_REPORT.replace("at 08:30 ET\n", "at 08:30\n"))
+    done = desk.run(WAKE)
+    assert done.returncode == 0, done.stderr
+    rows = heading_block(done.stdout, "§4")
+    assert "row four text" in rows
+    assert "row three text" not in rows
