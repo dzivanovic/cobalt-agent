@@ -42,38 +42,54 @@ One `HIS RULING · APPROVED` row each, words to the words file from `## HIS WORD
 8. A classifier refusal of step 2 → one bare retry; a second refusal → he says one line in the desk chat.
 
 ## THE BUILD LIST — today
-Cards `15`–`18` are written by the brain into `prompts/2026-10-02/` next; the desk commits them. Card `12` is taken into `16`. Card `13` is cut to its rows S0–S2 by the brain; its hub-text row moves to tomorrow. The `files` of `16`, `17`, `18` are disjoint by construction, so the stacked gate merges clean.
+REVISED 08:25 ET, after the brain read the two finished branches. This section replaces the first card map; the card numbers changed.
+- No build line may run `git merge`, and `02` × `07` conflict (`OPS_TOOLS`, `test_jobs_restarts.py`), as do `07` × `main` (`CHECK-HUB.md` line 10, `STANDING-LIST.md`). So the seam is a PORT: a build that re-applies both checked diffs onto `main` by Edit and Write and proves each ported file byte-equal to its checked tip. `02` and `07` do not ship as branches; `16` carries them.
+- `15` is a small card that lands the `ops/desk/**` rule first, so no later card touches `restarts.py`.
+- Card `12` stays as drafted; `21` stacks on it. The number `20` is kept for tomorrow's deploy-steps card (R47 names it).
+- `13` is cut to its rows S0–S2 by the brain; its hub-text row moves to tomorrow.
+- The `files` of `16`–`19` are disjoint by construction, so the stacked gate merges clean.
 
 | card | job | base | builds | touches | check |
 |---|---|---|---|---|---|
-| `11` (drafted) | dev-rebuild | `6ae3f133` | E 4: `cobalt db dev-rebuild` | `src/cobalt/db_migrations/`, tests, docs | Opus only |
-| `13` (rows S0–S2) | slot-guard | `11`'s checked tip | E 6 without hub text: the SLOTS line and the suite's early exit | the same module, `tests/cobalt/conftest.py` | Opus only |
-| `15` | ops-seam | `main`; merges `02` `ee667f3c` and `07` `aeefb6df` | E 2, E 3; ONE glob rule classifies `ops/desk/**` as operator scripts and replaces both `OPS_TOOLS` lifts; `CHECK-HUB.md` line 10 keeps every string of both sides (10-01 R57) | `ops/desk/`, `src/cobalt/jobs/restarts.py`, the lock text of the hubs as `07` built it | Opus only; both parents are checked |
-| `16` | launcher | `15`'s checked tip | E 5: the `devfix` kind, `DEVFIX-HUB.md`, verbs `dev-rebuild`, `dev-clean`, `dev-level`; E 7: pre-checks, `RECUT`, the watch line printed, the header fixed; the CLASSES section of the standing list | `ops/desk/desk-launch.sh`, `prompts/DEVFIX-HUB.md`, `prompts/CARD.md`, `prompts/STANDING-LIST.md` | Opus only |
-| `17` | desk-tools | `15`'s checked tip | E 1 guard script, E 8 watch, E 15 card-fill, E 16 deploy-card, E 17 row and commit, E 18 done, E 19 gate-clean and job-clean, E 20 install-fixed, E 23 order-open, desk-wake, desk-handover | new files under `ops/desk/`, `tests/ops/`, docs | Opus only |
-| `18` | worker-steps | `15`'s checked tip | E 9 stage-set, E 11 gate, E 12 authorize, E 13 preflight, E 14 house-probe; no hub file calls them yet | new files under `ops/desk/`, `tests/ops/`, docs | Opus only |
+| `11` (launched 07:58) | dev-rebuild | `6ae3f133` | E 4: `cobalt db dev-rebuild` | `src/cobalt/db_migrations/`, tests, docs | Opus only |
+| `13` (rows S0–S2) | slot-guard | `11`'s BUILT tip | E 6 without hub text | the same module, `tests/cobalt/conftest.py` | Opus only |
+| `15` | ops-glob | `a0188b69` | the `ops/desk/` rule in `restarts.py` | `src/cobalt/jobs/restarts.py`, its test, its doc page | Opus only |
+| `16` | ops-seam | `15`'s BUILT tip | E 2, E 3: the port of `02` `ee667f3c` and `07` `aeefb6df`; the `install-ops` kind of the launcher | `ops/desk/`, `tests/ops/`, the three hub files and the standing list as `07` built them | Opus only; every ported file proven equal to a checked tip |
+| `17` | desk-tools-a | `15`'s BUILT tip | E 1 guard, E 8 watch, E 15 card-fill, E 17 row and commit, E 18 done, E 20 install-fixed | new files only | Opus only |
+| `18` | desk-tools-b | `15`'s BUILT tip | E 16 deploy-card, E 19 gate-clean and job-clean, E 23 order-open, desk-wake, desk-handover | new files only | Opus only |
+| `19` | worker-steps | `15`'s BUILT tip | E 9 stage-set, E 11 gate, E 12 authorize, E 13 preflight, E 14 house-probe; no hub file calls them yet | new files only | Opus only |
+| `12` (drafted) | devfix-route | `16`'s BUILT tip | E 5: the `devfix` kind, `DEVFIX-HUB.md` | `desk-launch.sh`, `CARD.md`, `STANDING-LIST.md` | Opus only |
+| `21` | launcher-checks | `12`'s BUILT tip | E 7: the pre-checks, the watch line, the header; the CLASSES section | `desk-launch.sh`, `STANDING-LIST.md` | Opus only |
 
-Order and clock: `11` and `15` build first, side by side. `16`, `17`, `18` build side by side on `15`'s tip; `13` on `11`'s. Until `07` is on `main` the launcher refuses a launch while a lock is held, so the desk launches when `ls /Users/cobalt/cobalt-wt/*/.env` is empty; a `FAILED: W` on a held lock is a `CONTINUE: W` when it frees.
+Order: `15` now, beside `11`. At `15` BUILT: `16`, `17`, `18`, `19` side by side (a stacked card starts at its base's BUILT line and does not wait for that base's check). At `16` BUILT: `12`. At `12` BUILT: `21`. At `11` BUILT: `13`. Until `07` is on `main` the launcher refuses a launch while a lock is held, so launch when `ls /Users/cobalt/cobalt-wt/*/.env` is empty; a `FAILED: W` on a held lock is a `CONTINUE: W` when it frees.
+
+Not built today, moved to tomorrow: `RECUT` (today a failed gate is `gate-clean.sh` plus new card values), `dev-clean`, `dev-level`.
+
+Expected decision: card `11` says `TREE STATE: row T`, and row T writes no hub line when no deselect is owed; if its check flags `TREE STATE NOT CARRIED` for that reason, the brain answers it.
 
 ## TONIGHT'S DEPLOY
-- ONE set (L43): `05` voice-peers `76f7f7d5`, `15` (it carries `02` and `07`), `16`, `17`, `18`, the `13` head (it carries `11`), and `06` if its check is done.
+- ONE set (L43): `05` voice-peers `76f7f7d5`, `15`, `16`, `17`, `18`, `19`, the `21` head (it carries `12`), the `13` head (it carries `11`), `06` if its check is done, the X5 fix if READY.
+- `16` changes the lock steps of the three hub files to `sh /Users/cobalt/.claude/ops/take-devdb-lock.sh`. Right after DEPLOYED the desk runs `sh /Users/cobalt/.claude/ops/desk-launch.sh install-ops` (built in `16`): it links every `ops/desk/` script into `/Users/cobalt/.claude/ops/`. Until it has run, no build or check is launched. It also makes every new desk script callable under the desk's present allow, with no settings edit.
 - Window: the 20:00–21:00 pause, or after 21:00 with the outage begun before 04:00.
-- A card not READY by 01:00 is dropped from the set, named, and ships tomorrow.
-- After DEPLOYED his one install unlocks the desk tools: in `.claude/settings.json`, the allow `Bash(sh /Users/cobalt/cobalt/ops/desk/*)` and the hook entry for the guard. The brain hands him the exact text when `17` is checked.
+- A card not READY by 01:00 is dropped from the set, named, and ships tomorrow. `12` and `21` ship only with `16`.
+- His one install after DEPLOYED: the hook entry for `bare-guard.py` in `.claude/settings.json`. The brain hands him the exact text when `17` is checked.
 
 ## TOMORROW — Saturday 10-03, any hour
 | card | builds | check |
 |---|---|---|
-| `19` adoption | the hub files call the step scripts; the SLOTS lines and the self-heal; TREE STATE leaves; the class strings and the system-prompt flag on the four lines; P1 any-hour clause (row 9); the equal-tree clause (row 8) | Opus only; the `DEPLOY-HUB.md` part is read by one other house (L67) |
+| adoption | the hub files call the step scripts; the SLOTS lines and the self-heal; `dev-clean`, `dev-level`; TREE STATE leaves; the class strings and the system-prompt flag on the lines; P1 any-hour clause (row 9); the equal-tree clause (row 8); `RECUT` | Opus only; the `DEPLOY-HUB.md` part is read by one other house (L67) |
 | `20` deploy steps | E 22: `deploy-step0.sh`, `deploy-outage.sh`, `deploy-smoke.sh` | house A = Grok (his word), plus a dry run before its first real use |
-| `21` runner | E 21: `job-run.sh`, tried on one real card | Opus only |
-| `22` close timer | E 10: the plist and its jobs registry entry | Opus only |
+| runner | E 21: `job-run.sh`, tried on one real card | Opus only |
+| close timer | E 10: the plist and its jobs registry entry | Opus only |
+| standing brain file | `BRAIN-HUB.md`, so a brain opens on a message (his A, below) | Opus only |
 | his installs | the timer loaded; the desk deny strings (row 3) | — |
 | the desk | applies the STRIKE OR MERGE table from tonight's close list | — |
 
-## PENDING HIS WORD — nothing here waits for them
-- FOR DEJAN 11: X5 (a tap overwritten by a waiting refresh, live): a fix card now, or backlog.
-- FOR DEJAN 13: a standing `BRAIN-HUB.md`.
+## RULED AFTER THE FIRST WRITE — two more rows for the desk
+His words, brain session, about 07:55 ET, answering FOR DEJAN 11, 12, 13: "A, A, A and let's finish what can be today, and then tomorrow what needs tomorrow then give me the exact wording for the desk ask"
+- FOR DEJAN 11 = A: X5 gets a fix card now. The desk launches a card drafter on DECISION 4 of `f15-p1-decisions-2026-09-30.md` (the race in `refresh_radar_card`; the red is `test_x5_tap_vs_refresh_db.py`). It is product code: the normal check flow, with a house. It rides tonight's set if READY, else tomorrow.
+- FOR DEJAN 13 = A: a standing `BRAIN-HUB.md`, tomorrow's list.
+- FOR DEJAN 12 = A: the script cards run beside the ladder; his one-day order already says it.
 
 ## HIS WORDS — for `cto-2026-10-02-words.md`, verbatim, brain session 2026-10-02
 Answering the brain's "do it here or with the desk, and can it be done today":
@@ -82,4 +98,4 @@ Answering the brain's ten items (FOR DEJAN 1–10 of `brain-unattended-2026-10-0
 "1) a 2) a 3) a 4) a 5) a 6) a 7) a 8) a 9) a 10) a"
 "We should run an outside Grok check for only one that touches production as well"
 
-DIRECTION WRITTEN — cards `15`–`18` and the cut `13` follow from the brain
+DIRECTION WRITTEN, REVISED 08:25 ET — cards `15`–`19`, `21` and the cut `13` are in `prompts/2026-10-02/` as the brain names them
