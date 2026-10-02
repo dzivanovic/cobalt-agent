@@ -712,7 +712,7 @@ class TestSheetCloseAtEntry:
     The route never writes CLOSED itself. Constructed values only (L32)."""
 
     @staticmethod
-    def _world(monkeypatch, *, state="FILLED", running=12, entry=True, price_source="typed"):
+    def _world(monkeypatch, *, state="FILLED", running=12, entry=True, price_source="typed", filled_today=()):
         from decimal import Decimal
 
         from cobalt.cards import legs
@@ -726,6 +726,9 @@ class TestSheetCloseAtEntry:
 
             def state_of(self, card_id):
                 return CardState(state)
+
+            def filled_with_picks(self, day):
+                return [{"card_id": cid, "origin": origin, "state": "CLOSED"} for cid, origin in filled_today]
 
             def transition(self, *a, **k):
                 calls["transition"].append((a, k))
@@ -810,6 +813,39 @@ class TestSheetCloseAtEntry:
         assert calls == {"exit": [], "transition": []}
 
 
+def test_sheet_close_evidence_is_via_aset_sheet(monkeypatch):
+    calls = TestSheetCloseAtEntry._world(monkeypatch)
+    client.post("/card/31/move", data={"to": "CLOSED"})
+    ((card_id, kwargs),) = calls["exit"]
+    assert card_id == 31
+    assert kwargs.get("evidence") == {"via": "aset.sheet"}
+
+
+class TestSheetCloseBannerSaysWhereTheLegIsListed:
+    """check of aset-interim-close, house A F2: the sheet lists a CLOSED
+    card's estimated legs only for a MANUAL card whose FILLED transition
+    is today (`_sheet_closed_estimated` → `filled_with_picks(_today_et())`).
+    The CLOSE banner says "listed for correction" only when that is so
+    (L35). Constructed values only (L32)."""
+
+    def test_a_card_filled_before_today_is_not_called_listed(self, monkeypatch):
+        TestSheetCloseAtEntry._world(monkeypatch, filled_today=())
+        r = client.post("/card/31/move", data={"to": "CLOSED"})
+        assert "CLOSED" in r.text and "estimated" in r.text, r.text
+        assert "listed for correction" not in r.text, "the banner says listed; the sheet will not list it"
+        assert "not listed on this sheet" in r.text
+
+    def test_a_manual_card_filled_today_is_called_listed(self, monkeypatch):
+        TestSheetCloseAtEntry._world(monkeypatch, filled_today=((31, "manual"),))
+        r = client.post("/card/31/move", data={"to": "CLOSED"})
+        assert "listed for correction" in r.text and "not listed" not in r.text, r.text
+
+    def test_a_radar_card_filled_today_is_not_called_listed_on_the_sheet(self, monkeypatch):
+        TestSheetCloseAtEntry._world(monkeypatch, filled_today=((31, "radar"),))
+        r = client.post("/card/31/move", data={"to": "CLOSED"})
+        assert "listed for correction" not in r.text and "not listed on this sheet" in r.text, r.text
+
+
 class TestTheFormStaysUnderHim:
     """aset-interim-close S4 (his R13: "anytime I refresh it because I jump
     from one field to another, it will move the page all the way to the
@@ -835,6 +871,15 @@ class TestTheFormStaysUnderHim:
         assert clear_fn.index("getBoundingClientRect") < clear_fn.index("$('resultCard').innerHTML = ''"), (
             "the form's place is measured before anything above it is emptied"
         )
+        # check of aset-interim-close, house A F3: the delta is new − old (the
+        # form moved up → negative → scroll up by as much), measured after
+        # BOTH boxes above the form are emptied, and that delta is scrolled.
+        moved = "const moved = $('sizeForm').getBoundingClientRect().top - formTop;"
+        assert moved in clear_fn, "the delta is not new top − old top"
+        assert clear_fn.index(moved) > clear_fn.index("$('banner').innerHTML = ''"), (
+            "the delta is measured before everything above the form is emptied"
+        )
+        assert "if (moved) window.scrollBy(0, moved);" in clear_fn, "the delta is not what is scrolled"
 
 
 class TestDayModeBannerStage:
