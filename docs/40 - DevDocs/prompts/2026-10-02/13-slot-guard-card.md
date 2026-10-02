@@ -5,9 +5,9 @@ WORKTREE: slot-guard-1002
 BASE: 1df251b9
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/slot-guard-1002/docs/40 - DevDocs/reports/slot-guard-build-2026-10-02.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/slot-guard-check-2026-10-02.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: row S1
 RULINGS: 2026-10-02 R18, 2026-10-02 R47
 
@@ -38,3 +38,4 @@ RULINGS: 2026-10-02 R18, 2026-10-02 R47
 - THE CAUSE, READ FROM CODE AND UNPROVEN (L70) — S0 measures it. Two committed paths free no slot and add new ones on `aset_sizings`: (1) `TestMigrationRoundTrip` (pass 2 of every build, check and deploy) runs `db migrate --rollback --down-to 0001` then `db migrate` in a subprocess that commits (`test_tenancy.py:697`–`710`): it drops and re-adds `0004`'s 2, `0007`'s 25, `0021`'s 3 and `0022`'s 1 columns = 31 slots a run; (2) W / G (c2) forward and (f) rollback commit `0021` + `0022`: 4 slots a run. The rolled-back test that failed (`test_radar_score_migration.py:497`–`506`) frees its slots at rollback, but needs about 33 free inside its transaction. `1527` dropped ÷ ~35 a gate ≈ 44 with-DB pass-2 runs. (the drafter, 06:27 ET)
 - RESTARTS class homes: `src/cobalt/db_migrations/*.py` → "static import reach" (`src/cobalt/jobs/restarts.py:210`); `tests/cobalt/*` → "test/documentation" (`:239`); `docs/…` → DOCS (`:219`). No `configs/` path. (the drafter, 06:27 ET)
 - Cut by the brain 09:20 ET (`reports/brain-direction-2026-10-02.md`): rows S0–S2 only; the base is card 11's BUILT tip; the check is the fresh Opus session alone (2026-10-02 R47).
+- The judge seat's answers to the build's DECISIONS (2026-10-02 R41): (1) a failed slot read is printed `SLOTS UNKNOWN` under a savepoint and never aborts the migrate run: kept; (2) `SLOT_FAIL_HEADROOM` stays 64 (33 must fit after the read in pass 1, 32 in pass 2); (3) the hook's exit and warn branches are pinned by a test the build added on the judge's answer. `TREE STATE: row S1` writes no hub line (this card's NOT IN THIS JOB); that is not `TREE STATE NOT CARRIED`.
