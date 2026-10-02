@@ -2,13 +2,14 @@ JOB: devfix-route
 LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R18
 BRANCH: ops/devfix-route-1002
 WORKTREE: devfix-route-1002
-BASE: «FILL: main's 8-hex once devdb-lock (07) and desk-size-guard (02) have landed — both edit ops/desk/desk-launch.sh and the hub files»
+BASE: 551f07e0
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/devfix-route-1002/docs/40 - DevDocs/reports/devfix-route-build-2026-10-02.md
 CHECK REPORT:
+HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B:
 TREE STATE: unchanged
-RULINGS: 2026-10-02 R14, 2026-10-02 R18
+RULINGS: 2026-10-02 R14, 2026-10-02 R18, 2026-10-02 R47
 
 ## ROWS
 

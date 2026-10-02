@@ -3,11 +3,11 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/ops-seam-1002
 WORKTREE: ops-seam-1002
 BASE: 9fa18f14
-TIP:
+TIP: 551f07e0
 REPORT: /Users/cobalt/cobalt-wt/ops-seam-1002/docs/40 - DevDocs/reports/ops-seam-build-2026-10-02.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/ops-seam-check-2026-10-02.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-02 R47, 2026-10-01 R8, 2026-10-01 R20, 2026-10-02 R8, 2026-10-02 R9
 
@@ -48,3 +48,4 @@ THE JOB IN ONE LINE: two checked branches cannot merge (no build line runs `git 
 - PREFLIGHT symbols: the names this card gives from the two branches (`lock_dir_free`, `COBALT_REPO_ROOT`, `COBALT_WT_ROOT`, `--guard`, the three new test files, the two lock scripts) are NOT on `BASE` by design; they arrive with the port. Prove each with `git show <A>:<path>` or `git show <B>:<path>`, not with a `grep` of your tree; a miss there is not a `FAILED PREFLIGHT`.
 - `sh` is not on your line: run a script only through its tests (`uv run pytest tests/ops/<file>`).
 - His order sets aside the outside house for this card (`reports/brain-direction-2026-10-02.md` row 10).
+- The judge seat's answers to the build's DECISIONS 1–3 (2026-10-02 R41, `reports/ops-seam-decisions-2026-10-02.md`): the two-line edits of `tests/ops/test_desk_size_guard.py` (the two substitution keys) and `tests/ops/test_devdb_lock.py` (the stub answers `agents` with an empty list) are KEPT; those two files are therefore not byte-equal to `ee667f3c` / `aeefb6df`, by exactly the diffs the build report quotes under `## DECISIONS`, and that is not a finding. Any OTHER difference in a ported file is one.
