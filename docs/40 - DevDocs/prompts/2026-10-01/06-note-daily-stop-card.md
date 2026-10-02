@@ -2,7 +2,7 @@ JOB: note-daily-stop
 LADDER: OFF-LADDER — cto-2026-10-01.md 2026-10-01 R15
 BRANCH: s3/note-daily-stop-1001
 WORKTREE: note-daily-stop-1001
-BASE: 986e34c2
+BASE: 5ed7c3fd
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/note-daily-stop-1001/docs/40 - DevDocs/reports/note-daily-stop-build-2026-10-01.md
 CHECK REPORT:
@@ -20,7 +20,7 @@ RULINGS: 2026-10-01 R15
 
 ## NOT IN THIS JOB
 - The stored settings values: if D1 shows them swapped, the build says so and writes nothing (his settings change line, or his word, fixes them).
-- `/radar`, the card forms, the CLOSE button and form order of `aset-interim-close` (`04-aset-interim-close-card.md`): a different job on the same file `src/cobalt/aset/web.py`; this build rebases on its merge, never edits its rows.
+- `/radar`, the card forms, the CLOSE button and form order of `aset-interim-close` (`04-aset-interim-close-card.md`): a different job on the same file `src/cobalt/aset/web.py`; this build starts from that job's built tip `5ed7c3fd` (BASE; desk record R42, so both land in tonight's one deploy, his R41) and never edits its rows.
 - His vault: every test writes to a `tmp_path` vault; his notes are read only.
 - Any other line of the daily note or the unit markers.
 
@@ -31,6 +31,7 @@ RULINGS: 2026-10-01 R15
 
 ## RECORDS
 - The desk's production read (`COBALT_ENV=production uv run cobalt settings show`, 2026-10-01, his R20 permission): `account.daily_stop_full` = `"210"` and `account.daily_stop_half` = `"420"`, BOTH written once, together, by source `aset.change_line@sha256:355929c957ac390ff726be387234987602726a6fbd75e5e89c0dc36957308ce1`, `updated_at` 2026-09-30 13:25:09 (zone not proven; 09:25 ET if UTC). `aset.sheet_modes` full A 135 / B 60, half A 70 / B 30, so full is the larger sheet. `propose_daily_change` (`src/cobalt/settings/drc.py:~172`) maps each form field to its own key by name, so the swap entered through the form's submitted values. Row D1 finds who or what submitted that form (a deploy or scratch smoke on production, a test, a hand entry): look for a caller of `/settings/daily` or `/settings/daily/apply` in tests, smokes and scripts that posts these two values.
+- RESTARTS homes (desk, `uv run cobalt jobs restarts`, 10-01): `src/cobalt/aset/web.py`, `src/cobalt/prefill/daily.py`, `src/cobalt/settings/drc.py`, `src/cobalt/settings/models.py` → `com.cobalt.aset`, `com.cobalt.radar` (static import reach).
 
 ## DECISIONS ASKED
 - DECISION D-A: the exact text of the attested line (`Daily HARD Stop: full $420`, or with a trailing `(attested)`); the card ships the shorter form and the builder names the one marker-bounded unit that holds the line.
