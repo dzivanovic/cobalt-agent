@@ -66,12 +66,40 @@ Authorization: complete.
 
 Card `## RECORDS` copied: class homes (ops/desk → `ops/desk/` rule, re-read at `restarts.py:38`, `:226`; tests/ops → `:242`; docs → `:221`); both parents checked (re-read above); known overlaps (re-read: main since `093028d0` changed CHECK-HUB 2 lines (`4 ++--`) and STANDING-LIST 1 line; BUILD-HUB / DEPLOY-HUB untouched); PREFLIGHT symbols proven by `git diff` of A / B; `sh` not on the line; outside house set aside (R47, verified).
 
+LOCK PROBE, take 0 (after CONTINUE, 09:08):
+| step | command | exit | output |
+|---|---|---|---|
+| (a) | `ls -la /Users/cobalt/cobalt-wt/*/.env` | 1 | `no matches found` |
+| (b) | `cp /Users/cobalt/cobalt/.env /Users/cobalt/cobalt-wt/ops-seam-1002/.env` | 0 | (nothing) |
+| (b) | `ls -la /Users/cobalt/cobalt-wt/*/.env` | 0 | `-rw-------  1 cobalt  staff  2186 Oct  2 09:08 /Users/cobalt/cobalt-wt/ops-seam-1002/.env` (exactly one, this worktree's) |
+| `<FP>` → `<Fp>` | (below) | 0 | `cols 664 · rels 35 · views_md5 272c95bbb12241e3611e4b36326ccf87` |
+| level | `COBALT_ENV=dev uv run cobalt db migrate --proof-only` | 0 | `36 table(s) probed on cobalt_dev`; `drc_events`, `drc_fills`, `drc_imports`, `drc_rows`, `drc_stated_books`, `legs`, `prediction_records`, `voice_turns` read `-` (absent — the tables of the migrations above `0013`); no `CHANGED`; `NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.`; `code: d7cb5f30 (DIRTY: 1 path(s))` (this report). The output prints no level number; `0013` is read from the absent above-`0013` tables. |
+| (d) | `rm /Users/cobalt/cobalt-wt/ops-seam-1002/.env` | 0 | (nothing) |
+| (d) | `ls /Users/cobalt/cobalt-wt/ops-seam-1002/.env` | 1 | `No such file or directory` |
+
+`.env: removed, proven gone (PREFLIGHT)`.
+
 `<FP>` as typed (copied whole before any run):
 `COBALT_ENV=dev uv run cobalt db query --side user "SELECT (SELECT count(*) FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid = a.attrelid JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN ('system', 'user') AND a.attnum > 0 AND NOT a.attisdropped) AS cols, (SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN ('system', 'user') AND c.relkind IN ('r', 'p', 'v')) AS rels, (SELECT md5(string_agg(schemaname || '.' || viewname || ':' || definition, ',' ORDER BY schemaname, viewname)) FROM pg_catalog.pg_views WHERE schemaname IN ('system', 'user')) AS views_md5"`
 
 ## E0 BASELINE
+On `d7cb5f30` (= `9fa18f14` + this report).
+- Offline: `uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy` → `3784 passed, 673 skipped, 1 xfailed, 25 warnings in 601.81s (0:10:01)`; exit 0; 0 failed, 0 errors.
+- Live-note: `COBALT_LIVE_VAULT_ROOT=/Users/cobalt/Vault/Think uv run pytest -q -rs -p no:cacheprovider tests/cobalt/test_radar_evaluate.py tests/cobalt/test_replay_line.py tests/taxonomy/test_catalyst.py tests/taxonomy/test_predicate.py` → `146 passed, 1 skipped, 15 warnings in 26.72s`; the one skip: `tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set` (no skip names `COBALT_LIVE_VAULT_ROOT`).
 
 ## E2 RED
+Test files written, no `src/` or `ops/` edit:
+- `tests/ops/test_desk_size_guard.py` — Write from `git show ee667f3c:…`; `git add`, then `git diff --stat ee667f3c -- tests/ops/test_desk_size_guard.py` → (nothing): byte-equal.
+- `tests/ops/test_devdb_lock.py` — Write from `git show aeefb6df:…`; `git add`, then `git diff --stat aeefb6df -- tests/ops/test_devdb_lock.py` → (nothing): byte-equal.
+- `tests/ops/test_install_ops.py` — new (P4), six tests: the link run (2 linked, gamma kept byte for byte, guard called with `--guard`); the second run `0 linked, 3 kept`, links unchanged; an existing link to elsewhere never re-pointed; only regular `*.sh` / `*.py` linked (a `pre-commit`, a `.md`, a directory `folder.sh` are not); one extra argument → exit 1, `REFUSED: usage: desk-launch.sh install-ops`, nothing linked; a refusing guard → exit 3 before any link.
+
+First run of the P4 file alone: the extra-argument test PASSED on base (it asserted only `"REFUSED" in stderr`, which the base's kind refusal also prints) — rewritten to assert the exact usage refusal; its red is now the row's.
+
+`uv run pytest -q -rs -p no:cacheprovider --color=no --tb=line tests/ops/test_install_ops.py tests/ops/test_desk_size_guard.py tests/ops/test_devdb_lock.py` → `49 failed, 17 passed, 1 xfailed, 15 warnings in 8.79s`. The reds, by first line:
+- P4: the four link tests → `REFUSED: usage: desk-launch.sh <build|check|deploy> <absolute card path> [PASS-2] [<resume step>]` (base, `desk-launch.sh:319`: with one argument the generic usage refusal comes before the kind check at `:338`); the extra-argument test → `- REFUSED: usage: desk-launch.sh install-ops` / `+ REFUSED: kind 'install-ops' is none of build, check, deploy, desk, prompt, close` (the row's named red); the guard test → `assert (1, '') == (3, 'REFUSED:...RESH first\n')` (the base has no guard).
+- P1 (A's tests on base code): G1 → `assert (2, 'no trans...-guard\n', '') == (0, '', '')` (base `desk-context.sh` has no `--guard`); G2 refusing-guard → `build reached claude: --bg Read '…/01-fx-card.md' …` (base `desk-launch.sh` runs no guard), and the same for all 10 guarded forms; real-guard → `assert (0, 'HEAD is ...6799f base\n') == (3, 'REFUSED:...RESH first\n')`; G3 → `AssertionError: the loop ran` (base `wait-stop-line.sh` runs no guard).
+- P2 (B's tests on base code): every L1 test → `sh: /Users/cobalt/cobalt-wt/ops-seam-1002/ops/desk/take-devdb-lock.sh: No such file or directory` (exit 127); `test_release_does_not_remove_a_lock_taken_after_it_saw_none` → `FileNotFoundError: … .cobalt_dev.lock/owner`; every L2 test → `REFUSED: the card must be /Users/cobalt/cobalt/docs/40 - DevDocs/prompts/<date>/<nn>-<job>-card.md` (base `REPO=` takes no `COBALT_REPO_ROOT`).
+- Passed on base (negative controls): A's `test_g1_the_plain_call_is_unchanged_and_never_reads_the_list`, the 10 `test_g2_a_passing_guard_lets_every_kind_reach_its_launch`, `test_g2_desk_never_calls_the_guard_and_reaches_its_launch`, `test_g3_a_passing_guard_keeps_the_match_path`, `…_timeout_path`, `test_g3_wait_desk_idle_is_not_guarded`, `test_g4_run_…` (RUN, asserts nothing); xfailed: A's strict-xfail H2 probe. No with-DB red: no lock take at E2.
 
 ## E3 THE ROWS
 
@@ -84,7 +112,7 @@ Card `## RECORDS` copied: class homes (ops/desk → `ops/desk/` rule, re-read at
 ## FOR THE CHECK
 
 ## CONTINUE
-next: PREFLIGHT — THE LOCK PROBE (take 0), once no `/Users/cobalt/cobalt-wt/*/.env` exists
+next: E2
 
 ## DECISIONS
 none
@@ -92,4 +120,7 @@ none
 ## RECORDS
 - REFUSED, not needed: `grep -n -F "kind=$1" ops/desk/desk-launch.sh` — "Permission to use Bash has been denied because Claude Code is running in don't ask mode." (a `$` in a double-quoted argument; re-read with the Grep tool instead).
 
-FAILED: PREFLIGHT — cobalt_dev lock held — /Users/cobalt/cobalt-wt/x5-tap-refresh-1002/.env
+- STOPPED at PREFLIGHT 09:07: lock held by `/Users/cobalt/cobalt-wt/x5-tap-refresh-1002/.env` (wip `d7cb5f30`).
+- CONTINUED at PREFLIGHT 09:08:04 EDT (desk message from `cto-desk`; fact verified: `ls -la /Users/cobalt/cobalt-wt/*/.env` → `no matches found`).
+
+(run in progress — next step under ## CONTINUE)
