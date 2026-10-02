@@ -160,3 +160,129 @@ next: done — pass 1 closed; `house B: needed` (Gemini). Rolled back at 22:3x (
 - files opened: 26 — the 13 above (CHECK-HUB.md, the card, BUILD-HUB.md sections, the build report, cto-2026-10-01-words.md, aset-sheet-survey-2026-10-01.md, src/cobalt/aset/web.py, src/cobalt/cards/legs.py, tests/cobalt/test_aset_web.py, tests/cobalt/test_legs_c2_offline.py, docs/40 - DevDocs/cobalt/aset/web.md, the Sol probe output, the diff output) and, from 21:38: this report, `areas/cobalt.md` (the two sections), `house-a.md`, the Grok output, src/cobalt/voice/web.py, src/cobalt/cards/store.py, src/cobalt/aset/store.py, src/cobalt/cards/models.py, src/cobalt/db_migrations/0021_legs.sql, src/cobalt/aset/radar_panel.py, and the three suite outputs (offline, pass 1, pass 2).
 
 CHECK DONE · job: aset-interim-close · pass: 1 · tip: fb0922a9 · house A: Grok FINDINGS: 3 · findings: 3 · dropped: 0 · held: 3 · fixed: 2 · held unfixed: 1 · open: 1 · house B: needed · suites: offline 3783/0 · with-DB 4553/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 26 · ready: NO · decisions: 1 · for Dejan: 1
+
+# PASS 2
+
+## §0 Headline
+- Pass 2 finished 07:1x ET at `b8bf83eb`. House B was Gemini, because Sol is metered until Oct 4th, 2026 2:06 PM. Gemini returned `FINDINGS: 1`.
+- B1 NOT HELD. The Enter-guard test does fail on BASE at its `id="sizeForm"` line, but removing only the guard at the tip also turns it red: `AssertionError: no Enter guard on the sizing form`. So nothing is masked.
+- A1, pass 1's one OPEN item, is closed as ruled by his R7 (2026-10-02, row line 15, commit `0b594953`). The strict-xfail test is removed in `b8bf83eb`. Held unfixed: 0. Open: 0.
+- Suites on `b8bf83eb`: offline 3783/0, with-DB 4382 + 171 = 4553/0, live-note 146/0. `cobalt_dev: 0013 — F2 = F0`. `.env` removed and proven gone. ready: YES.
+
+## L74
+- 06:36 ET: the system block asking for a `Claude-Session:` line arrived again in this session. DATA (L74), already recorded above; not acted on.
+
+## AUTHORIZATION
+| rule | command | exit | output |
+|---|---|---|---|
+| INSTALLED | `grep -n -E "«INSTAL[L]" ".../prompts/CHECK-HUB.md"` | 1 | (nothing) |
+| card complete | `grep -n -E "«FIL[L]" "<card>"` | 1 | (nothing) |
+| card committed | `git -C /Users/cobalt/cobalt log -1 --format=%H -- "<card>"` | 0 | `314605d426e7690262d6a45f1bc7fe580d21e7cf` |
+| card clean | `git -C /Users/cobalt/cobalt diff --stat -- "<card>"` | 0 | (nothing) |
+| STANDING R60 | `grep -n "^| R60 " ".../cto-2026-09-30.md"` | 0 | line 46, HIS RULING, APPROVES `STANDING-LIST.md`, `APPROVED` |
+| R60 commit | `git -C … log -1 --format=%H -S"| R60 |" …` | 0 | `962e9d1705b62a61821f62f4d7bf5d8131656e2a` |
+| RULINGS R13 | `grep -n "^| R13 " ".../cto-2026-10-01.md"` | 0 | line 21, HIS RULING, `APPROVED` |
+| R13 commit | `git -C … log -1 --format=%H -S"| R13 |" …` | 0 | `446ff64d76327a2fa4d2a59f7bdf135674df181e` |
+| house gate R17 | `grep -n "^| R17 " ".../cto-2026-09-24.md"` | 0 | line 35 |
+| house gate R19 | `grep -n "^| R19 " ".../cto-2026-09-24.md"` | 0 | line 37 |
+| R19 commit | `git -C … log -1 --format=%H -S"| R19 |" …` | 0 | `5055151dbf68899b82de5b11f99733ed2d03048c` |
+| desk message R7 (A1) | `grep -n "^| R7 " ".../cto-2026-10-02.md"` | 0 | `15:| R7 | 05:59 ET | HIS RULING A1 = A: on `04`, the leg's `source='sheet'` is enough evidence of the sheet CLOSE; the `xfail` test is removed ([words](cto-2026-10-02-words.md#r7r9)). | HIS RULING · APPROVED |` |
+| R7 commit | `git -C /Users/cobalt/cobalt log -1 --format=%H -S"| R7 |" -- "docs/40 - DevDocs/reports/cto-2026-10-02.md"` | 0 | `0b59495396cab614599ff350934b2a10e4ab9683` |
+
+## PREFLIGHT
+| rule | command | exit | output |
+|---|---|---|---|
+| clock | `date` | 0 | `Fri Oct  2 06:36:03 EDT 2026` |
+| branch | `git status --short --branch` | 0 | `## s3/aset-interim-close-1001` |
+| tip | `git log --oneline -1` | 0 | `fb0922a9 fix(aset-interim-close): CLOSE banner says listed for correction only when the sheet lists it (check A2; A3 pinned; A1 xfail held unfixed)` |
+| pass 1 | `tail -n 3 "<CHECK REPORT>"` | 0 | `CHECK DONE · job: aset-interim-close · pass: 1 · tip: fb0922a9 · house A: Grok FINDINGS: 3 · … · house B: needed · … · ready: NO · decisions: 1 · for Dejan: 1` |
+| BUILT | `tail -n 3 "<REPORT>"` | 0 | `BUILT · job: aset-interim-close · tip: 5ed7c3fd | … | self-check: 3 of 3 | decisions: 4 · for Dejan: 1` |
+| above tip | `git log --stat --format=%h fb0922a9..HEAD` | 0 | (nothing) |
+| lock: own .env | `ls <WT>/.env` | 1 | `No such file or directory` |
+| lock: any .env | `ls -la /Users/cobalt/cobalt-wt/*/.env` | 1 | `no matches found` |
+| scratch | `ls <S>` | 0 | `diff.md files house-a.md HOUSE-INSTRUCTIONS.md opus-1.md rulings.md` |
+| Grok CLI | `grok --version` | 0 | `grok 1.0.25 (f7e67d6988e2) [stable]` |
+| Gemini CLI | `agy --version` | 0 | `1.2.14` |
+| Sol probe | `codex exec … "Reply with only the word OK." < /dev/null` | 1 | `ERROR: You've hit your usage limit. … try again at Oct 4th, 2026 2:06 PM.` → METER |
+
+SEATS: pass 1's house A = Grok; Sol METER (until Oct 4th, 2026 2:06 PM) → **house B: Gemini**.
+
+## Files copied
+| file | original bytes | copy bytes | result |
+|---|---|---|---|
+| `diff-b.md` (`git log -p bce3cfa8..b8bf83eb -- . ":(exclude)docs"`, Read → Write without the harness's `[exited with code 0]`) | — | 30573 | `grep -c "^commit "` → `5` = `git log --oneline bce3cfa8..b8bf83eb -- . ":(exclude)docs"` (5 lines) |
+| `files/wt/src/cobalt/aset/web.py` | 102150 | 102150 | `stage-copy.sh` → `COPIED 102150 …` |
+| `files/wt/tests/cobalt/test_aset_web.py` | 40887 | 40887 | `stage-copy.sh` → `COPIED 40887 …` |
+| `files/wt/docs/40 - DevDocs/cobalt/aset/web.md` | 29235 | 29235 | `stage-copy.sh` → `COPIED 29235 …` |
+| `HOUSE-B-INSTRUCTIONS.md` | — | 8905 | HOUSE TEXT + HOUSE B paragraph + the card's sections + Files (names `diff-b.md`, `house-a.md`, `opus-1.md`; states R7 closed A1) |
+
+## OWN FINDINGS
+Pass 2 has no own read (`## PASS 2` P2.3).
+
+## Findings
+House B Gemini, notice 06:43 ET (`date` → `Fri Oct  2 06:43:16 EDT 2026`). It printed its list (exit 0); I wrote it byte for byte, without the harness's `[exited with code 0]`, to `<S>/house-b.md`. Last line `FINDINGS: 1`.
+| id | house | row | claim | form |
+|---|---|---|---|---|
+| B1 | Gemini | S4 | the Enter-guard test fails on BASE at its first assertion (`id="sizeForm"` missing, `test_aset_web.py:851`), not for the row's reason, masking whether the guard's absence would fail it | COMMAND |
+
+## Dropped
+none (`grep -n -F "RUN:"` → `4:RUN: COMMAND`, followed by one `grep` line).
+
+## RUNS
+| id | source | run | output | verdict |
+|---|---|---|---|---|
+| B1 | Gemini | form repaired once (fixed string; the house's escaped double quotes are not a listed spelling): `grep -n -F 'id="sizeForm"' tests/cobalt/test_aset_web.py` → `851:        assert 'action="/size" id="sizeForm"' in web_module._render()`. That BASE lacked the id is shown by `diff-b.md` (`-<form class="card" method="post" action="/size">`). Then the stated concern run: the guard alone removed at the tip (`web.py:313-319`, Edit), id kept → `uv run pytest … test_aset_web.py::TestTheFormStaysUnderHim::test_enter_in_a_sizing_field_moves_to_the_next_field_and_never_submits` → `1 failed in 0.39s` · `tests/cobalt/test_aset_web.py:853: AssertionError: no Enter guard on the sizing form`; undone with Edit, `git diff --stat` → (nothing) | **NOT HELD** — the line is there, but its stated reason is not: the test does go red on the guard's absence alone, so nothing is masked. No test added, nothing to remove |
+| A1 (pass 1 OPEN) | Grok | his R7 (cto-2026-10-02.md line 15, commit `0b594953`): "the leg's `source='sheet'` is enough evidence … the `xfail` test is removed" | test removed, `b8bf83eb`; row files → `54 passed in 0.74s` | **CLOSED AS RULED (R7)** — not open (L77) |
+No HELD finding in pass 2 → no `check red` commit.
+
+## FIXES
+| id | change | proof |
+|---|---|---|
+| A1 | `tests/cobalt/test_aset_web.py`: `test_sheet_close_evidence_is_via_aset_sheet` (strict xfail) removed, as his R7 orders. Test-only: no module changed, so no DevDocs line | `54 passed in 0.74s`; commit `b8bf83eb fix(aset-interim-close): A1 closed as ruled …` |
+
+## Suites
+On `<tip now>` = `b8bf83eb`. RESTARTS before the suites: `uv run cobalt jobs restarts bce3cfa8..HEAD` → `web.md DOCS -` · `aset-interim-close-build-2026-10-01.md DOCS -` · `src/cobalt/aset/web.py M static import reach com.cobalt.aset,com.cobalt.radar` · `test_aset_web.py`, `test_legs_c2_offline.py` `test/documentation; no resident -` · **`RESTARTS: com.cobalt.aset com.cobalt.radar`**. No UNCLASSIFIED.
+- (a) OFFLINE `uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy` → `3783 passed, 673 skipped, 1 xfailed, 25 warnings in 574.04s (0:09:34)`. 0 failed, 0 errors. `<p>` = 3783. The one xfail fewer than pass 1 is the removed A1 test. This pass adds no test. (An earlier offline run started 06:40 overlapped the B1 mutation window, 06:44-06:46, so it does not count. It printed `3783 passed, 673 skipped, 1 xfailed … 577.08s`. The counted run started after `git diff --stat` printed nothing.)
+- (b) THE LOCK, one take: `ls -la /Users/cobalt/cobalt-wt/*/.env` → `no matches found`; `cp …` 06:54:45; `ls -la …/*/.env` → one line, this worktree's. `<F0>` = 664 · 35 · 272c95bbb12241e3611e4b36326ccf87. `--proof-only` → 36 tables; `drc_*`, `legs`, `prediction_records`, `voice_turns` `-`; `NOTHING WAS APPLIED`; `code: b8bf83eb (clean)`. Level 0013.
+- (c) PASS 1, the hub's command byte for byte, no additions → `4382 passed, 7 skipped, 65 deselected, 3 xfailed, 31 warnings in 703.10s (0:11:43)`. 0 failed. Skips: `test_cards_picks.py:388` (card_score present), `:401` (0007 applied), `test_radar_evaluate.py:695`, `test_s3_c4_experiments.py:95`, `test_catalyst.py:365`, `test_predicate.py:262` (COBALT_LIVE_VAULT_ROOT not set — the hub runs the live proof), `test_replay_line.py:266` (COBALT_TEST_LIVE_DRC). The same seven as pass 1. `<d1>` = 4382.
+- (c2) FORWARD `COBALT_ENV=dev uv run cobalt db migrate` → `0001` … `0022`; 8 tables CREATED (`drc_events`, `drc_fills`, `drc_imports`, `drc_rows`, `drc_stated_books`, `legs`, `prediction_records`, `voice_turns`), every other `OK`, `content UNCHANGED on every table.` **dev forward: APPLIED 07:07 ET.** `<F1>` = 893 · 44 · 126f2d6983fa59f9d0eaaff7da7dd29c.
+- (c3) PASS 2, the hub's command byte for byte → `171 passed, 1 deselected, 5 warnings in 218.54s (0:03:38)`. 0 failed. `<d2>` = 171; `<d>` = 4382 + 171 = **4553**.
+- (c3r) This check adds no with-DB test, so there is no `IN (…)` list.
+- (f) ROLLBACK `COBALT_ENV=dev uv run cobalt db migrate --rollback --down-to 0013` → `0022` … `0014`, newest first; the 8 tables DROPPED, every other `OK`, `content UNCHANGED`. `<F2>` = 664 · 35 · 272c95bbb12241e3611e4b36326ccf87 = `<F0>` → **`cobalt_dev: 0013 — F2 = F0`**. `rm …/.env`; `ls …/.env` → `No such file or directory`; `ls -la /Users/cobalt/cobalt-wt/*/.env` → `no matches found` (07:11:36). **`.env: removed, proven gone (W)`.**
+- (e) LIVE-NOTE (`.env` absent, 06:46, tree at `b8bf83eb`) → `146 passed, 1 skipped, 15 warnings in 25.87s`. The skip is `test_replay_line.py:266` (COBALT_TEST_LIVE_DRC), not the vault root. `<l>` = 146.
+
+## Scope
+Pass 1's tip `fb0922a9` → `b8bf83eb`: one commit, `tests/cobalt/test_aset_web.py` only (the row S2-S4 test file). Nothing else.
+
+## Checked against the branch
+- (i) `git log --oneline fb0922a9..HEAD -- . ":(exclude)docs"` → `b8bf83eb fix(aset-interim-close): A1 closed as ruled — the leg's source='sheet' is the sheet CLOSE evidence; xfail test removed (check A1, his R7 2026-10-02)`. `<tip now>` = `b8bf83eb`.
+- (ii) `git log --stat --format=%h fb0922a9..HEAD` → `b8bf83eb`: `tests/cobalt/test_aset_web.py | 11 -----------`. A test file. No WIDENED.
+- (iii) `git log --oneline bce3cfa8..HEAD -- src/cobalt/radar src/cobalt/aset/radar_panel.py configs/cobalt/voice.yaml src/cobalt/cards/legs.py` → empty.
+- (iv) No HELD finding in pass 2, so there is no red/fix pair. A1's test is gone by ruling: `grep -n -F "def test_sheet_close_evidence_is_via_aset_sheet" tests/cobalt/test_aset_web.py` → no line (exit 1).
+- (v) `ls <WT>/.env` → "No such file or directory"; `ls -la /Users/cobalt/cobalt-wt/*/.env` → `no matches found`; `git status --short --branch` → `## s3/aset-interim-close-1001`.
+- (vi) `git log --stat --format=%h bce3cfa8..HEAD -- src/cobalt/db_migrations tests/cobalt` → only `test_aset_web.py` and `test_legs_c2_offline.py` (offline files); no migration, no new with-DB file. TREE STATE `unchanged` holds.
+- (vii) The card's one record names no `ls`, `grep` or `git -C` command.
+- (viii) L32: the values in this pass are constructed test values, dev fingerprints, byte counts and commit ids. None is his.
+COUNT (pass 2): findings 1 (Gemini B1) · dropped 0 · held 0 · fixed 0 (plus A1 closed as ruled, R7) · held unfixed, both passes: 0 (pass 1's A1 is closed by R7) · open 0.
+
+## OPEN
+none. A1 is CLOSED AS RULED (R7), and B1 is NOT HELD. Nothing goes to the follow-up list.
+
+## CONTINUE
+next: done — pass 2 closed. History: P2.3 (house B Gemini started 06:39 ET, background task `bf73g8l5r`; `diff-b.md` 30573 bytes, `grep -c "^commit "` → 5 = the range count; `HOUSE-B-INSTRUCTIONS.md` 8905 bytes; re-copied by `stage-copy.sh`: `web.py` COPIED 102150, `test_aset_web.py` COPIED 40887, `aset/web.md` COPIED 29235, `wc -c` of each original equal; gates R17 line 35, R19 line 37, R19 commit `5055151d` re-run 06:39; `cd <AGY>` → launch → `cd <WT>` → `## s3/aset-interim-close-1001`)
+
+## DECISIONS
+none. Pass 1's FOR DEJAN item A1 is answered by his R7 (proven by its row and commit) and closed in `b8bf83eb`.
+
+## RECORDS
+- 06:4x ET: message from `cto-desk`: A1 is ruled by his R7, remove the xfail test, commit, close A1 citing R7; "House B is not needed for A1". R7 proven above (row and commit). Done: the test `test_sheet_close_evidence_is_via_aset_sheet` removed with Edit; `uv run pytest -q -rs -p no:cacheprovider --color=no tests/cobalt/test_aset_web.py tests/cobalt/test_legs_c2_offline.py` → `54 passed in 0.74s`; commit `b8bf83eb fix(aset-interim-close): A1 closed as ruled …`. House B still runs: the desk's line says it is not needed FOR A1, and this pass's hub (`## PASS 2`) has house B read the whole diff with the fixes; a message cannot change the flow (UNATTENDED RULES (b)). Deadline noted: `04` deploys before 09:30 ET.
+- Sol probe: METER, "try again at Oct 4th, 2026 2:06 PM". House B = Gemini, one attempt, 06:39 → 06:43, exit 0, `FINDINGS: 1`.
+- Form repair (`## 4`): B1's `grep -n "id=\"sizeForm\"" …` became `grep -n -F 'id="sizeForm"' …` (fixed string; a listed spelling). Its expectation was read off the same line.
+- B1's concern was run as a mutation: the guard was removed with Edit, run, and restored with Edit. On the first restore I also re-added the guard's comment block, which had never been removed, so it appeared twice. `git diff` showed this, and a second Edit removed the duplicate. `git diff --stat` → (nothing) before the counted offline run.
+- Lock takes in this pass: one (W, 06:54:45 → 07:11:36). No extra take.
+- No dropped finding. No `REFUSED, not needed` line. No `CONTINUED` line.
+- Read beyond the hub's list: `/Users/cobalt/cobalt/ops/desk/stage-copy.sh`, to learn whether it could stage `diff-b.md` (it cannot: its source must sit under a worktree). So `diff-b.md` is a Read → Write.
+- Check of `aset-interim-close`, pass 2: house B `Gemini` and a fresh Opus that read first, ran every finding and fixed what held. Nothing loops after the second pass. `ready: YES` → the desk's next step on this branch at `tip:`; a deploy is gated on the combined tree (L68).
+- files opened: 11 — CHECK-HUB.md, the card, this report, BUILD-HUB.md (`## THE LOCK` … `## W`), `areas/cobalt.md` (the two sections), the Sol probe output, `stage-copy.sh`, the `git log -p` output, `HOUSE-INSTRUCTIONS.md` (pass 1's, the template for house B's), `tests/cobalt/test_aset_web.py` (lines 795-839), the Gemini output. The build report and the suite outputs were read by `tail` / `grep` only.
+
+CHECK DONE · job: aset-interim-close · pass: 2 · tip: b8bf83eb · house B: Gemini FINDINGS: 1 · findings: 1 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 0 · suites: offline 3783/0 · with-DB 4553/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 11 · ready: YES · decisions: 0 · for Dejan: 0
