@@ -116,6 +116,26 @@ def test_only_regular_sh_and_py_files_are_linked(world):
     assert done.stdout.splitlines()[-1] == "install-ops: 2 linked, 1 kept"
 
 
+def test_a_symlink_under_ops_desk_is_not_linked(world):
+    repo, links, launch, env = world
+    (repo / "ops" / "desk" / "delta.sh").symlink_to(repo / "ops" / "desk" / "alpha.sh")
+    done = run(launch, env)
+    assert done.returncode == 0, done.stderr
+    assert sorted(p.name for p in links.iterdir()) == ["alpha.sh", "beta.py", "gamma.sh"]
+    assert "delta.sh" not in done.stdout
+
+
+def test_a_missing_link_folder_is_refused_and_never_made(world):
+    repo, links, launch, env = world
+    links.joinpath("gamma.sh").unlink()
+    links.rmdir()
+    done = run(launch, env)
+    assert done.returncode == 1
+    assert done.stderr == f"REFUSED: install-ops: no link folder {links}\n"
+    assert done.stdout == ""
+    assert not links.exists()
+
+
 def test_one_extra_argument_is_refused_and_nothing_is_linked(world):
     repo, links, launch, env = world
     done = run(launch, env, "extra")
