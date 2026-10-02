@@ -201,6 +201,17 @@ def test_a_code_path_or_a_path_outside_the_repo_is_refused_and_nothing_is_staged
     assert git(repo, "rev-parse", "HEAD") == head
 
 
+def test_check_o3_a_code_path_in_another_letter_case_is_refused_and_nothing_is_staged(desk):
+    repo, today, env = desk
+    (repo / "src" / "x.py").write_text("x = 2\n")
+    head = git(repo, "rev-parse", "HEAD")
+    done = run(COMMIT, "docs(desk): x", "SRC/x.py", env=env)
+    assert done.returncode == 1
+    assert done.stderr.startswith("REFUSED: "), done.stderr
+    assert staged(repo) == []
+    assert git(repo, "rev-parse", "HEAD") == head
+
+
 def test_commit_with_no_path_is_refused(desk):
     repo, today, env = desk
     done = run(COMMIT, "docs(desk): x", env=env)

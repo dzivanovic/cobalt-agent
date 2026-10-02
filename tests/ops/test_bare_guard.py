@@ -86,6 +86,13 @@ def test_a_compound_command_is_blocked_naming_what_was_found(command, found):
     assert found in line[len(BLOCK_HEAD) : -len(BLOCK_TAIL)], line
 
 
+@pytest.mark.parametrize("command", ["ls # it's\nls", 'ls # say "hi\nls', "ls # x\\\nls"])
+def test_check_o1_a_comment_does_not_hide_the_newline_after_it(command):
+    done = guard(bash(command))
+    assert done.returncode == 2, done.stderr
+    assert "a newline" in done.stderr
+
+
 def test_the_block_line_is_exactly_the_ruled_text():
     done = guard(bash("ls && ls"))
     assert done.stderr == BLOCK_HEAD + "`&&`" + BLOCK_TAIL + "\n"

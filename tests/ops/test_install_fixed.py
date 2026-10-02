@@ -116,6 +116,15 @@ def test_an_uncommitted_row_is_refused(desk):
     assert install(str(fixed), "2026-01-02", "R7", env=env).returncode == 0
 
 
+def test_check_o2_an_uncommitted_approval_of_a_committed_row_is_refused(desk):
+    repo, fixed, day, env = desk
+    day.write_text(DESK.replace("HIS RULING · HELD |", "HIS RULING · APPROVED |"))
+    before = fixed.read_bytes()
+    done = install(str(fixed), "2026-01-02", "R2", env=env)
+    refused(done, fixed, before)
+    assert "no approved, committed row" in done.stderr
+
+
 def test_two_rows_with_one_number_are_refused(desk):
     repo, fixed, day, env = desk
     day.write_text(DESK + "| R1 | 02:00 ET | HIS RULING: again. | HIS RULING · APPROVED |\n")
