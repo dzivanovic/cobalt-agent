@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R18
 BRANCH: ops/slot-guard-1002
 WORKTREE: slot-guard-1002
 BASE: 1df251b9
-TIP:
+TIP: 05c8b7fa
 REPORT: /Users/cobalt/cobalt-wt/slot-guard-1002/docs/40 - DevDocs/reports/slot-guard-build-2026-10-02.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/slot-guard-check-2026-10-02.md
 HOUSE A: none — overruled 2026-10-02 R47
