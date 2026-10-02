@@ -1200,13 +1200,18 @@ class CardStore:
 
         def work(conn, ts):
             locked = conn.execute(
-                "SELECT state, (SELECT coalesce(max(id), 0) FROM card_dot_taps WHERE card_id = %s), "
-                "conviction, score_suppressed, proposed_key "
+                "SELECT state, conviction, score_suppressed, proposed_key "
                 "FROM aset_sizings WHERE id = %s AND origin = 'radar' FOR UPDATE",
-                (update.card_id, update.card_id),
+                (update.card_id,),
             ).fetchone()
             if locked is None:
                 raise CardStateError(f"no radar card with id {update.card_id}")
+            # Its own statement, after the lock: READ COMMITTED gives it a fresh
+            # snapshot, so a tap that committed while we waited is seen (X5).
+            # A subquery inside the locking SELECT keeps the pre-wait snapshot.
+            tap_version = conn.execute(
+                "SELECT coalesce(max(id), 0) FROM card_dot_taps WHERE card_id = %s", (update.card_id,)
+            ).fetchone()[0]
             run = conn.execute(
                 "SELECT evaluator_version, formula_sha256, settings_sha256 FROM system.radar_score_run WHERE id = %s",
                 (run_id,),
@@ -1214,10 +1219,10 @@ class CardStore:
             if run is None:
                 raise CardStateError(f"card {update.card_id}: no system.radar_score_run {run_id} — the refresh "
                                      "record cannot name its scorer (L1)")
-            taps_moved = int(locked[1]) != update.tap_version
+            taps_moved = int(tap_version) != update.tap_version
             if taps_moved:
-                suppressed = update.score_suppressed if update.proximity is None else locked[3]
-                score = card_score(locked[2], update.proximity, suppressed)
+                suppressed = update.score_suppressed if update.proximity is None else locked[2]
+                score = card_score(locked[1], update.proximity, suppressed)
                 conn.execute(
                     "UPDATE aset_sizings SET proximity = %s, last_price = COALESCE(%s, last_price), "
                     "last_price_bar_ts = COALESCE(%s, last_price_bar_ts), "
@@ -1227,9 +1232,9 @@ class CardStore:
                      json.dumps(update.health, default=str) if update.health else None,
                      update.radar_score_id, update.card_id),
                 )
-                wrote = dict(conviction=locked[2], card_score=score, score_suppressed=suppressed,
-                             proposed_key=locked[4], proposed_key_reason=None)
-                held = {"conviction": locked[2], "score_suppressed": locked[3], "proposed_key": locked[4]}
+                wrote = dict(conviction=locked[1], card_score=score, score_suppressed=suppressed,
+                             proposed_key=locked[3], proposed_key_reason=None)
+                held = {"conviction": locked[1], "score_suppressed": locked[2], "proposed_key": locked[3]}
             else:
                 conn.execute(
                     "UPDATE aset_sizings SET proximity = %s, last_price = COALESCE(%s, last_price), "
