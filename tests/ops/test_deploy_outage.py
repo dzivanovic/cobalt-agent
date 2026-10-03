@@ -473,3 +473,20 @@ elif verb == "status":
     assert box.launchd()["agent"] not in (None, 503)
     assert "RESIDENTS UP (trap)" in done.stdout
     assert last_line(done).endswith(f"· residents: up: {AGENT} · down: none")
+
+
+# ---- check (deploy-steps, pass 2): finding S3 (Sol) -------------------------------------------
+
+
+def test_a_later_bootstrap_cannot_leave_an_earlier_label_down_on_success(box):
+    body = LAUNCHCTL.replace(
+        '    st["labels"][label] = {"pid": st["next"], "path": plist}\n',
+        f'    if label == "{RADAR}":\n'
+        f'        st["labels"].pop("{ASET}", None)\n'
+        '    st["labels"][label] = {"pid": st["next"], "path": plist}\n',
+    )
+    stub(box.bin / "launchctl", "launchctl", body)
+    done = box.run()
+    st = box.launchd()["labels"]
+    assert ASET in st and RADAR in st, (st, done.stdout, done.stderr)
+    assert done.returncode == 0, done.stdout + done.stderr

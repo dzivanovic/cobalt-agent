@@ -446,3 +446,98 @@ def test_dry_run_names_the_p2_and_p3_commands_the_script_runs(desk):
     assert "grep -v" in would, would
     assert "rev-parse --verify" in would
     assert "tail -n 3" not in would
+
+
+# ---- check (deploy-steps, pass 2): findings S4, S5, S6, S8, S10, S11 (Sol) ---------------------
+
+
+def test_p7_rejects_a_number_prefixed_file_that_is_not_a_migration(desk):
+    mig = desk.repo / "src" / "cobalt" / "db_migrations"
+    git(desk.repo, "checkout", "-q", "-B", "ops/beta", "main")
+    (desk.repo / "src" / "beta.py").write_text("beta = 2\n")
+    (mig / "0002_beta.txt").write_text("not a migration\n")
+    git(desk.repo, "add", "-A")
+    git(desk.repo, "commit", "-q", "-m", "beta adds a non-migration file")
+    desk.tip["beta"] = git(desk.repo, "rev-parse", "--short=8", "HEAD")
+    desk.head["beta"] = desk.tip["beta"]
+    git(desk.repo, "checkout", "-q", "main")
+    desk.check["beta"].write_text(f"# check beta\n\n{check_line(desk.tip['beta'])}\n")
+    desk.recard(
+        migrations="0002 · production at 0001 · creates: nothing · old code on the new schema: none"
+    )
+    done = desk.run()
+    assert done.returncode == 1, done.stdout
+    assert last_line(done).startswith("FAILED STEP-0: P7 migrations — "), done.stdout
+
+
+def test_a_ruling_that_affirms_l66_does_not_open_the_window(desk):
+    desk.write_rulings(
+        "| R2 | 09:05 ET | HIS RULING: the set ships. | HIS RULING · APPROVED |\n"
+        "| R3 | 09:10 ET | HIS RULING: deploy x-set follows L66; there is no window override. | HIS RULING · APPROVED |\n"
+    )
+    desk.commit("affirm L66 for x-set")
+    desk.recard(rulings="2026-01-02 R2, R3")
+    done = desk.run("--window", now=THURSDAY_1400)
+    assert done.returncode == 1, done.stdout
+    assert last_line(done).startswith("FAILED STEP-0: window — "), done.stdout
+
+
+def test_an_uncommitted_override_rewrite_does_not_open_the_window(desk):
+    desk.write_rulings(
+        "| R2 | 09:05 ET | HIS RULING: the set ships. | HIS RULING · APPROVED |\n"
+        "| R3 | 09:10 ET | HIS RULING: deploy x-set follows the ordinary schedule. | HIS RULING · APPROVED |\n"
+    )
+    desk.commit("committed non-override R3")
+    desk.recard(rulings="2026-01-02 R2, R3")
+    desk.write_rulings(
+        "| R2 | 09:05 ET | HIS RULING: the set ships. | HIS RULING · APPROVED |\n"
+        "| R3 | 09:10 ET | HIS RULING: overrules L66 for deploy x-set at 14:00. | HIS RULING · APPROVED |\n"
+    )
+    done = desk.run("--window", now=THURSDAY_1400)
+    assert done.returncode == 1, done.stdout
+    assert last_line(done).startswith("FAILED STEP-0: window — "), done.stdout
+
+
+def test_a_ships_row_cannot_erase_the_mandatory_clean_check_statuses(desk):
+    desk.check["beta"].write_text(
+        f"# check beta\n\n{check_line(desk.tip['beta'], ready='NO')}\n"
+    )
+    card = desk.card_text().replace(
+        " | `held unfixed: 0` and `ready: YES` |\n",
+        " | nothing required |\n",
+    )
+    desk.card.write_text(card)
+    desk.commit("malformed SHIPS requirements and beta not ready")
+    done = desk.run()
+    assert done.returncode == 1, done.stdout
+    assert last_line(done).startswith("FAILED STEP-0: P2 check 2 — "), done.stdout
+
+
+def test_dry_run_prints_each_rev_parse_as_its_own_command(desk):
+    for name in ("git", "curl", "uv"):
+        stub(desk.bin, name, PLAIN)
+    done = desk.run("--dry-run")
+    would = [
+        line.removeprefix("WOULD RUN: ")
+        for line in done.stdout.splitlines()
+        if line.startswith("WOULD RUN: ")
+    ]
+    rev_parses = [line for line in would if "rev-parse --verify --quiet --short=8" in line]
+    assert len(rev_parses) == 4, rev_parses
+    assert all(";" not in line for line in rev_parses), rev_parses
+
+
+def test_dry_run_prints_the_main_migration_listing_in_real_execution_order(desk):
+    for name in ("git", "curl", "uv"):
+        stub(desk.bin, name, PLAIN)
+    done = desk.run("--dry-run")
+    would = [
+        line.removeprefix("WOULD RUN: ")
+        for line in done.stdout.splitlines()
+        if line.startswith("WOULD RUN: ")
+    ]
+    main_show = f"git -C {desk.repo} show main:src/cobalt/db_migrations/"
+    first_head_show = (
+        f"git -C {desk.repo} show {desk.head['alpha']}:src/cobalt/db_migrations/"
+    )
+    assert would.index(main_show) < would.index(first_head_show), would

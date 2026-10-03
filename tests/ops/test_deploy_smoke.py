@@ -248,3 +248,16 @@ def test_d4_dry_run_on_the_10_02_deploy_card(box):
     print(done.stdout + done.stderr)
     assert box.calls_list() == []
     assert done.returncode == 0
+
+
+# ---- check (deploy-steps, pass 2): finding S2 (Sol) -------------------------------------------
+
+
+def test_a_malformed_smoke_row_is_red_instead_of_silently_ignored(box):
+    box.write(
+        smoke_extra=f"- malformed · ls {box.files}/missing.txt · exit 0, listed\n"
+    )
+    done = box.run()
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "malformed · " in done.stdout
+    assert last_line(done) == "SMOKE RED: malformed"
