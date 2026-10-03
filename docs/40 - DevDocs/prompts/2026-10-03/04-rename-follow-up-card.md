@@ -2,7 +2,7 @@ JOB: rename-follow-up
 LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R77
 BRANCH: ops/rename-follow-up-1003
 WORKTREE: rename-follow-up-1003
-BASE: «FILL: the 8-hex head of main after card 01 lock-relief is DEPLOYED»
+BASE: a09f0862
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/rename-follow-up-1003/docs/40 - DevDocs/reports/rename-follow-up-build-2026-10-03.md
 CHECK REPORT:

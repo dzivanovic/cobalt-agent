@@ -2,7 +2,7 @@ JOB: close-timer
 LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/close-timer-1003
 WORKTREE: close-timer-1003
-BASE: «FILL: the 8-hex head of main after card 01 lock-relief is DEPLOYED»
+BASE: a09f0862
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/close-timer-1003/docs/40 - DevDocs/reports/close-timer-build-2026-10-03.md
 CHECK REPORT:
