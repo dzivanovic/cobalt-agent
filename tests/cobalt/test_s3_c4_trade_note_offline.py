@@ -242,6 +242,7 @@ def test_the_sizing_note_is_written_by_the_same_writer_from_the_card(vault):
     assert "cobalt:section" not in text
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_size_route_passes_the_card_to_the_one_writer(monkeypatch, vault):
     """POST /size → `upsert_trade_note(card, when, paths, entry_price=…)`."""
     from fastapi.testclient import TestClient
@@ -288,6 +289,7 @@ def test_size_route_passes_the_card_to_the_one_writer(monkeypatch, vault):
     assert not seen.get("fills") and not seen.get("legs_section")
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_market_reset_refuses_the_note_write(vault):
     store = MemoryWriteStore()
     with pytest.raises(SessionBlocked):

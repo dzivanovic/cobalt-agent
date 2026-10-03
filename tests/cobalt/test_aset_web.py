@@ -109,6 +109,7 @@ class TestEntryTickerGuard:
     before the JS blur handler ever runs, carrying the previous ticker's
     entry/stop verbatim. entry_ticker is the server-side backstop."""
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_mismatched_entry_ticker_refused(self):
         form = dict(BASE_SIZE_FORM, entry_ticker="INTC")  # stale — ticker is NVDA
         r = client.post("/size", data=form)
@@ -116,12 +117,14 @@ class TestEntryTickerGuard:
         assert "FAILED" in r.text
         assert "stale carry-over" in r.text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_blank_entry_ticker_refused(self):
         form = dict(BASE_SIZE_FORM, entry_ticker="")
         r = client.post("/size", data=form)
         assert "FAILED" in r.text
         assert "stale carry-over" in r.text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_replay_d1_nvda_carried_intc_numbers(self):
         # Real 2026-08-31 09:58:45 card: ticker changed to NVDA but entry
         # (90.72)/stop (90.25) were INTC's, carried verbatim.
@@ -138,6 +141,7 @@ class TestEntryTickerGuard:
         assert "FAILED" in r.text
         assert "stale carry-over" in r.text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_matching_entry_ticker_proceeds_past_the_guard(self):
         # Not asserting success (AsetStore is stubbed to raise on
         # instantiation) — asserting the guard itself doesn't fire: the
@@ -149,12 +153,14 @@ class TestEntryTickerGuard:
 
 
 class TestStopSideAndDistanceRejectAtWebLayer:
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_wrong_side_stop_refused_no_persist(self):
         form = dict(BASE_SIZE_FORM, stop="219.50")  # long stop above entry
         r = client.post("/size", data=form)
         assert "FAILED" in r.text
         assert "Long stop" in r.text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_pcg_impossible_stop_refused_no_persist(self):
         # Real 2026-08-31 09:40:06 card: SHORT, entry 13.379, stop 17.72
         # (~32% away) — correct side, absurd distance.
@@ -171,6 +177,7 @@ class TestStopSideAndDistanceRejectAtWebLayer:
         assert "FAILED" in r.text
         assert "typo guard" in r.text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_empty_entry_refused(self):
         form = dict(BASE_SIZE_FORM, entry="")
         r = client.post("/size", data=form)
@@ -178,6 +185,7 @@ class TestStopSideAndDistanceRejectAtWebLayer:
 
 
 class TestAbsurdFillRejectAtWebLayer:
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_replay_d2_absurd_fill_refused_no_note_write(self, monkeypatch):
         # Real 2026-08-31 10:00:xx cards: a 2518.91 fill against an NVDA
         # card with entry 218.595 was persisted twice before the real
@@ -222,6 +230,7 @@ class TestAbsurdFillRejectAtWebLayer:
         assert "FAILED" in r.text
         assert "typo guard" in r.text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_corrected_fill_passes_the_guard(self):
         # The real corrected fill that followed (218.91) — not asserting
         # a full success page, just that the typo guard itself doesn't
@@ -241,6 +250,7 @@ class TestAbsurdFillRejectAtWebLayer:
         assert "never reach save_fill_update" not in r.text
         assert "never reach AsetStore" not in r.text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_fill_with_a_card_row_id_reaches_the_store(self):
         """The fill recompute must persist. With a row id present the
         handler goes on to the store (stubbed here to prove it is
@@ -301,6 +311,7 @@ class TestDefect3TwoDistinctHandlers:
         # sheet_mode is a day setting, not a card setting — must survive
         assert "sheet_mode" not in clear_fn
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_entry_dirty_machinery_fully_removed(self):
         # Dead once both paths are unconditional — no flag left to rot
         # (the phrase still appears in an explanatory comment above).
@@ -324,6 +335,7 @@ class TestDevEntryFence:
         assert r.status_code == 403
         assert "DEV instance" in r.json()["error"]
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_size_refused_when_not_production_and_not_allowed(self, monkeypatch):
         monkeypatch.setenv("COBALT_ENV", "dev")  # RULING 7: dev is declared, not inferred
         monkeypatch.delenv("COBALT_ALLOW_DEV_ENTRY", raising=False)
@@ -332,6 +344,7 @@ class TestDevEntryFence:
         assert "DEV instance" in r.text
         assert "never reach AsetStore" not in r.text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_fill_refused_when_not_production_and_not_allowed(self, monkeypatch):
         monkeypatch.setenv("COBALT_ENV", "dev")  # RULING 7: dev is declared, not inferred
         monkeypatch.delenv("COBALT_ALLOW_DEV_ENTRY", raising=False)
@@ -345,6 +358,7 @@ class TestDevEntryFence:
         assert "DEV instance" in r.text
         assert "never reach save_fill_update" not in r.text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_size_allowed_when_explicitly_opted_in(self, monkeypatch):
         monkeypatch.setenv("COBALT_ENV", "dev")  # RULING 7: dev is declared, not inferred
         monkeypatch.setenv("COBALT_ALLOW_DEV_ENTRY", "1")
@@ -370,6 +384,7 @@ class TestDevEntryFence:
         monkeypatch.setattr(web_module, "load_sheet_modes_config", _offline_sheet_modes_config)
         monkeypatch.setattr(web_module, "load_daymode_config", _offline_daymode_config)
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_size_allowed_when_production(self, monkeypatch):
         self._settings_stay_on_dev(monkeypatch)
         monkeypatch.setenv("COBALT_ENV", "production")
@@ -378,12 +393,14 @@ class TestDevEntryFence:
         assert "DEV instance" not in r.text
         assert "never reach AsetStore" in r.text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_header_shows_dev_label_and_red_banner_when_not_production(self, monkeypatch):
         monkeypatch.setenv("COBALT_ENV", "dev")  # RULING 7: dev is declared, not inferred
         text = web_module._render()
         assert "pre-beta slice 1 · DEV" in text
         assert "DEV INSTANCE" in text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_header_shows_production_label_and_no_banner_when_production(self, monkeypatch):
         self._settings_stay_on_dev(monkeypatch)
         monkeypatch.setenv("COBALT_ENV", "production")
@@ -411,6 +428,7 @@ class TestMatchCheckAtTheSheet:
             },
         )
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_full_sheet_attested_on_a_reduced_day_refuses_the_card(self, monkeypatch):
         """'He loads the full sheet on a half day -> card refused with
         the reason' (Charter §3 F6)."""
@@ -421,6 +439,7 @@ class TestMatchCheckAtTheSheet:
         assert "reload half.htk or overrule" in r.text
         assert "never reach AsetStore" not in r.text, "no card was written"
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_nothing_attested_refuses_too(self, monkeypatch):
         self._stub_daymode(monkeypatch, attested=None)
         r = client.post("/size", data=BASE_SIZE_FORM)
@@ -428,6 +447,7 @@ class TestMatchCheckAtTheSheet:
         assert "No hotkey file attested" in r.text
         assert "never reach AsetStore" not in r.text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_a_key_outside_the_rung_is_refused(self, monkeypatch):
         """A+ on the reduced rung — the grade restriction, not the sheet."""
         self._stub_daymode(monkeypatch, attested="half.htk")
@@ -435,11 +455,13 @@ class TestMatchCheckAtTheSheet:
         assert "FAILED" in r.text
         assert "never reach AsetStore" not in r.text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_the_matching_sheet_lets_the_card_through(self, monkeypatch):
         self._stub_daymode(monkeypatch, attested="half.htk")
         r = client.post("/size", data=BASE_SIZE_FORM)
         assert "never reach AsetStore" in r.text, "reached persistence"
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_an_unresolved_day_mode_refuses_every_card(self, monkeypatch):
         monkeypatch.setattr(
             web_module,
@@ -452,6 +474,7 @@ class TestMatchCheckAtTheSheet:
         assert "Day mode unresolved" in r.text
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_real_checkbox_shape_preserves_account_mode_and_renders_both_fields(
     tmp_path, monkeypatch
 ):
@@ -603,6 +626,7 @@ class TestPickNotRecordedBanner:
         monkeypatch.setattr(web_module, "_open_cards_section", lambda: "")
 
     @pytest.mark.parametrize("recorded", [True, False])
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_fill_form_route(self, monkeypatch, recorded):
         self._stub_fill_route(monkeypatch, recorded)
         r = client.post("/fill", data=self._fill_form())
@@ -612,6 +636,7 @@ class TestPickNotRecordedBanner:
             assert 'class="failed"' in r.text and "UndefinedTable" in r.text
             assert "cobalt cards picks" in r.text
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_card_move_no_longer_fills(self, monkeypatch):
         """S3 C1 (v3 §2 [F-22]): the move route never fills — a FILLED
         with no price is the radar fill that recorded no price (F8). The
@@ -690,6 +715,7 @@ class TestNoCardAboveTheForm:
             "{banner} and {result} stay above the form"
         )
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_get_renders_every_card_below_the_form(self, monkeypatch):
         self._stub_cards(monkeypatch)
         r = client.get("/")
@@ -697,6 +723,7 @@ class TestNoCardAboveTheForm:
         assert "ZZQ41" in r.text and "ZZQ42" in r.text, "both cards are on the page"
         self._assert_the_form_comes_first(r.text)
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_a_move_result_renders_every_card_below_the_form(self, monkeypatch):
         self._stub_cards(monkeypatch)
         r = client.post("/card/41/move", data={"to": "ARMED"})
@@ -847,6 +874,7 @@ class TestTheFormStaysUnderHim:
     form moves up). Structural tests on the served source, as Defect 3's:
     no browser harness exists in this repo."""
 
+    @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_enter_in_a_sizing_field_moves_to_the_next_field_and_never_submits(self):
         assert 'action="/size" id="sizeForm"' in web_module._render()
         marker = "$('sizeForm').addEventListener('keydown'"

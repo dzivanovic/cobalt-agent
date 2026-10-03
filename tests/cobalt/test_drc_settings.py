@@ -414,6 +414,7 @@ def _sha(payload):
     return payload_sha256(payload)
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_the_page_shows_the_change_line_with_the_attestation_form(page, world):
     world.data["account.daily_stop_full"] = "250"
     r = page.get("/")
@@ -423,6 +424,7 @@ def test_the_page_shows_the_change_line_with_the_attestation_form(page, world):
     assert 'value="250"' in r.text
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_review_shows_the_per_key_diff_and_the_payload_sha(page, world):
     r = page.post("/settings/daily", data=_form(**{"account.daily_stop_full": "31337",
                                                    "aset.sheet_modes.full.B": "61"}))
@@ -439,6 +441,7 @@ def test_review_shows_the_per_key_diff_and_the_payload_sha(page, world):
     assert world.puts == [], "a review writes nothing"
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_apply_with_a_wrong_sha_is_refused_and_writes_nothing(page, world):
     form = _form(**{"account.daily_stop_full": "31337"})
     r = page.post("/settings/daily/apply", data=dict(form, sha256="0" * 64))
@@ -446,6 +449,7 @@ def test_apply_with_a_wrong_sha_is_refused_and_writes_nothing(page, world):
     assert world.puts == []
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_apply_inside_market_reset_is_refused_with_the_reason(page, world, monkeypatch):
     from cobalt.session import clock as clock_mod
 
@@ -467,6 +471,7 @@ def test_apply_inside_market_reset_is_refused_with_the_reason(page, world, monke
         ("aset.sheet_modes.half.D", "5", "aset.sheet_modes.half.D"),
     ],
 )
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_bad_field_is_refused_naming_it_and_nothing_is_written(page, world, field, value, match):
     form = _form(**{field: value})
     for route in ("/settings/daily", "/settings/daily/apply"):
@@ -476,6 +481,7 @@ def test_a_bad_field_is_refused_naming_it_and_nothing_is_written(page, world, fi
     assert world.puts == []
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_good_apply_writes_through_the_one_apply_function_then_reads_back(
     page, world, monkeypatch, tmp_path
 ):
@@ -512,6 +518,7 @@ def test_a_good_apply_writes_through_the_one_apply_function_then_reads_back(
     assert world.data["account.daily_stop_half"] == "4242"
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_saved_only_after_the_read_back_equals_the_payload(page, world):
     world.lose = "account.daily_stop_full"
     form = _form(**{"account.daily_stop_full": "31337"})
@@ -538,6 +545,7 @@ def _leaks(message: str, figures: tuple[str, ...]) -> list[str]:
     return found
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_no_log_line_carries_a_value(page, world):
     """D4 fix r1 F-8 (drc-d4-check-2026-09-25.md:131, :178; L32): the one
     log line names the keys, never a value and never a digest of one."""

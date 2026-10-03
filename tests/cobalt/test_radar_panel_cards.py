@@ -199,6 +199,7 @@ def _ladder(rows, *, rung="reduced", now=SCAN0 + timedelta(seconds=200)):
 # ---------------------------------------------------------------------
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_ladder_reads_radar_cards_v_rows_and_the_contract_adapter_is_gone(evaluated):
     assert not hasattr(panel.CardView, "from_contract")
     store = RowStore(evaluated["rows"])

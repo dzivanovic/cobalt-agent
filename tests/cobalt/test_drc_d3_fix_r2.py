@@ -89,6 +89,7 @@ def test_f1r2_pin_the_build_command_has_exactly_two_flags():
 # ---------------------------------------------------------------------
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_run4_a_dry_run_with_the_real_risk_parameters_opens_nothing_for_write(tmp_path, capsys, monkeypatch):
     """RUN-4 (`drc-d3-fix-r1-check-2026-09-29.md:123`, NOT CHECKABLE): fix r1
     F-1's harness with the REAL `prefill.drc.risk_parameters_line` — every

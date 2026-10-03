@@ -170,6 +170,7 @@ def test_a_response_schema_rides_in_the_system_message_otherwise(server):
 SECRET = "sk-" + "Q" * 32  # constructed secret-shaped value (redact.yaml openai_style_key)
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_secret_shaped_message_is_refused_with_zero_calls(server):
     server.reply("{}")
     with pytest.raises(ModelCallError) as e:
@@ -179,6 +180,7 @@ def test_a_secret_shaped_message_is_refused_with_zero_calls(server):
     assert server.requests == []
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_secret_in_the_system_message_is_refused_too(server):
     server.reply("{}")
     req = _req()
