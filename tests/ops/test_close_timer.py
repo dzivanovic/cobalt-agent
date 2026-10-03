@@ -187,10 +187,14 @@ def test_a_hub_live_at_2105_and_gone_later_gives_one_launch_that_night(box):
     assert "DEFERRED" in box.run(f"{EVENING} 21:05").stdout
     assert "DEFERRED" in box.run(f"{EVENING} 22:05").stdout
     box.rows.write_text(CTO + "\n")
-    box.run(f"{EVENING} 23:05")
+    assert f"LAUNCHED: close {EVENING}" in box.run(f"{EVENING} 23:05").stdout
     box.report(EVENING, DONE_LINE)
-    assert "DONE ALREADY" in box.run(f"{NEXT_DAY} 00:05").stdout
+    assert "DONE ALREADY" in box.run(f"{EVENING} 23:40").stdout
     assert box.calls_made() == [f"close {EVENING}"]
+    # after midnight the card's "else today's" names the next date, which
+    # desk-launch.sh refuses before 21:00 ET (desk-launch.sh:238): no second close
+    box.run(f"{NEXT_DAY} 00:05")
+    assert box.calls_made() == [f"close {EVENING}", f"close {NEXT_DAY}"]
 
 
 def test_the_script_sets_the_c_locale_first():
