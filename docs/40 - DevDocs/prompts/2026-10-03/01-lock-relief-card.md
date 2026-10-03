@@ -7,7 +7,7 @@ TIP: 77d19438
 REPORT: /Users/cobalt/cobalt-wt/lock-relief-1003/docs/40 - DevDocs/reports/lock-relief-build-2026-10-03.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/lock-relief-check-2026-10-03.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: row P2
 RULINGS: 2026-10-02 R47, 2026-10-02 R154
 
