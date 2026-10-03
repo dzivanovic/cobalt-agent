@@ -34,6 +34,15 @@ for a in "$@"; do fmt=$a; done
 exec /bin/date -j -f "%Y-%m-%d %H:%M" "$FAKE_NOW" "$fmt"
 """
 
+# the clock answers FAKE_NOW only when read in ET; any other zone reads a constructed 04:05
+DATE_STUB_ET_ONLY = """#!/bin/sh
+if [ "$1" = "-j" ]; then exec /bin/date "$@"; fi
+for a in "$@"; do fmt=$a; done
+now="2031-05-15 04:05"
+[ "$TZ" != "America/New_York" ] || now=$FAKE_NOW
+exec /bin/date -j -f "%Y-%m-%d %H:%M" "$now" "$fmt"
+"""
+
 LAUNCH_STUB = """#!/bin/sh
 printf '%s\\n' "$*" >> "$CALLS"
 echo "stub launched: $*"
@@ -186,6 +195,15 @@ def test_from_0400_the_date_is_todays(box):
     # row T1: "else today's" — the 04:00 ET line, with yesterday's close still open
     box.run(f"{NEXT_DAY} 04:05")
     assert box.calls_made() == [f"close {NEXT_DAY}"]
+
+
+def test_the_date_is_read_on_the_et_clock(box):
+    # row T1: "(ET, by TZ=America/New_York date +%F)" — 00:05 ET is the evening's fire; the
+    # same instant read in another zone (04:05) would close the next date
+    (box.wt.parent / "bin" / "date").write_text(DATE_STUB_ET_ONLY)
+    done = box.run(f"{NEXT_DAY} 00:05")
+    assert done.returncode == 0, done.stderr
+    assert box.calls_made() == [f"close {EVENING}"]
 
 
 def test_a_hub_live_at_2105_and_gone_later_gives_one_launch_that_night(box):
