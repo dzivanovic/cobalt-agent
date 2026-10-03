@@ -46,3 +46,7 @@ They are classified `operator script; no Cobalt reader` and derive no restart.
 ## 2026-10-02 — ops-glob
 
 Every path under `ops/desk/` (`OPS_DESK_PREFIX`) classifies as `operator script; no Cobalt reader` and derives no restart, by rule instead of an `OPS_TOOLS` entry. The folder holds the desk's and the hubs' shell tools and a git hook, and no plist executes a file in it. `OPS_TOOLS` stays an explicit list for the rest of `ops/`, and the trailing slash keeps `ops/desktop.sh` out (`test_every_path_under_ops_desk_is_an_operator_script`).
+
+## 2026-10-03 — rename-follow-up
+
+`changes()` now also emits the old path of a `git diff --name-status` rename (`R<nn>\told\tnew`) or copy (`C<nn>\told\tnew`) line, as a `D`, beside the new path (which keeps its `R`/`C` letter). Both paths are then classified by the existing rules, so a renamed file that a resident read still derives its restart or escalates (O3; `test_check_o3_a_rename_out_of_a_read_path_into_ops_desk_still_restarts_or_escalates`, `test_changes_emits_the_old_path_of_a_rename_or_copy_as_a_delete`).

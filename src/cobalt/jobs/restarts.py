@@ -76,6 +76,10 @@ def changes(git_range: str) -> list[Change]:
                 continue
             parts = line.split("\t")
             status = parts[0]
+            if status[0] in {"R", "C"} and len(parts) == 3:
+                # The old side of a rename/copy is a change too: a reader or
+                # plist that named it still derives its restart (O3).
+                rows[parts[1]] = "D"
             path = parts[-1]
             rows[path] = status[0]
 
