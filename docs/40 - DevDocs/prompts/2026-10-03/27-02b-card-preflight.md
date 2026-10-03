@@ -3,12 +3,12 @@ MODEL: Sonnet 5.5 (`claude-sonnet-5-5`) — card preflight (his 2026-10-03 R115,
 # Card 02b deploy-hub-text — preflight (read-only)
 
 CARD: `/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-03/02b-deploy-hub-text-card.md`
-REPORT: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/02b-card-preflight-2026-10-03.md`
+REPORT: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/02b-card-preflight-2026-10-03-r2.md` (round 2: the card's places for T2, T4, T5 were fixed after round 1, `reports/02b-card-preflight-2026-10-03.md`)
 
 Check every fact the card states against git and the files, before its build launches. Run each check yourself and quote its output.
 1. BASE `44b29c63` is on `main` (`merge-base --is-ancestor 44b29c63 main`) and `DEPLOY-HUB.md` is unchanged between it and main's head (`git -C /Users/cobalt/cobalt diff --stat 44b29c63 main -- "docs/40 - DevDocs/prompts/DEPLOY-HUB.md"` empty).
 2. BRANCH `ops/deploy-hub-text-1003` does not exist yet (`rev-parse --verify` fails) and `/Users/cobalt/cobalt-wt/deploy-hub-text-1003` does not exist (`ls`).
-3. Every place a row names exists on `main`'s `DEPLOY-HUB.md`: P1 (v), P7, STEP-G with its FAILED paths, STEP-R, STEP-T with its FORWARD check, STEP-C, line 41's outage rule, line 166. Quote the line number and the first 80 characters of each. A row whose place is missing or moved = FAIL, naming the row.
+3. Every place a row names for `main`'s text exists on `main`'s `DEPLOY-HUB.md`: P1 (line 59, (i)–(iv)), P7, STEP-G's red path "A red anywhere" (line 115), STEP-R, STEP-T with its FORWARD check, STEP-C, the outage rule "INSIDE THE OUTAGE" (line 43). Quote the line number and the first 80 characters of each. A row whose place is missing or moved = FAIL, naming the row.
 4. The chain's version at `9694a679` exists (`git show 9694a679:"docs/40 - DevDocs/prompts/DEPLOY-HUB.md"`); quote the STEP-G exit-5 / exit-6 bullet, the equal-tree clause and the deploy launch line's flag text that T2, T3 and T5 refer to. Missing = FAIL.
 5. Each `## READ` file exists: `reports/deploy-set2-1003.md` (has `## DECISIONS`), `reports/deploy-hub-other-house-read-2026-10-03.md` (findings 1–5), `reports/adoption-hubs-decisions-2026-10-03.md` (items 5, 6, 7).
 6. T1's pattern against the tree: list `src/cobalt/db_migrations/` at main (`git ls-tree` via `git show main:src/cobalt/db_migrations/`); every `.sql` file matches `[0-9][0-9][0-9][0-9]_*.sql` or is its `.rollback.sql` twin; name any that does not (that is a FAIL for X1).
