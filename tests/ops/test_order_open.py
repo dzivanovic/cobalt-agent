@@ -20,6 +20,7 @@ REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "ops" / "desk" / "order-open.sh"
 LOCK_NAME = ".cobalt_dev.lock"
 CONSTRUCTED_ENV = "COBALT_TEST_CONSTRUCTED=1\n"
+STUB_HOUSES = ["sol: UP", "grok: OUT — usage", "gemini: OUT — TIMEOUT"]
 
 GIT_ENV = {
     "GIT_AUTHOR_NAME": "test",
@@ -130,8 +131,15 @@ def block(out: str, name: str) -> str:
 
 def test_every_block_carries_its_facts_and_nothing_changes(desk):
     repo, wt, env, root = desk
+    # a test never touches a house: a tmp copy of the script with a stub probe beside it
+    ops = root / "ops-copy"
+    ops.mkdir()
+    shutil.copy(SCRIPT, ops / "order-open.sh")
+    (ops / "house-probe.sh").write_text(
+        "#!/bin/sh\nprintf '%s\\n' " + " ".join(f"'{line}'" for line in STUB_HOUSES) + "\n"
+    )
     before = tree_hash(repo, wt)
-    done = run(env, ORDER_OPEN_NOW="2026-01-05T12:00:00")
+    done = run(env, script=ops / "order-open.sh", ORDER_OPEN_NOW="2026-01-05T12:00:00")
     assert done.returncode == 0, done.stderr
     out = done.stdout
     names = [line for line in out.splitlines() if line in ("LOCK", "SESSIONS", "WINDOW", "MAIN", "WORKTREES", "HOUSES")]
@@ -158,7 +166,7 @@ def test_every_block_carries_its_facts_and_nothing_changes(desk):
     assert "ops/open-job" in opened and "unmerged" in opened
     assert "0 days" in merged and "0 days" in opened
 
-    assert block(out, "HOUSES").strip() == "not probed"
+    assert block(out, "HOUSES").splitlines() == STUB_HOUSES
     assert tree_hash(repo, wt) == before
 
 
