@@ -141,6 +141,41 @@ def test_a_resident_wrapper_script_is_not_an_operator_script(monkeypatch):
     assert "com.cobalt.aset" in row.restarts
 
 
+def test_check_o3_a_rename_out_of_a_read_path_into_ops_desk_still_restarts_or_escalates(monkeypatch):
+    def fake_git(*args):
+        if args[:2] == ("diff", "--name-status") and len(args) == 3:
+            return "R100\tops/start_aset.sh\tops/desk/start_aset.sh\n"
+        return ""
+    monkeypatch.setattr(restarts, "_git", fake_git)
+    rows = classify("BASE..TIP")
+    assert any(row.escalate or "com.cobalt.aset" in row.restarts for row in rows), rows
+
+
+def test_changes_emits_the_old_path_of_a_rename_or_copy_as_a_delete(monkeypatch):
+    # 2026-10-03 rename-follow-up O3: the old side of an R/C line is a change
+    # too — a plist or reader that named it must still derive its restart.
+    def fake_git(*args):
+        if args[:2] == ("diff", "--name-status") and len(args) == 3:
+            return (
+                "R100\tops/start_aset.sh\tops/desk/start_aset.sh\n"
+                "C075\tconfigs/cobalt/radar.yaml\tconfigs/cobalt/radar-copy.yaml\n"
+                "M\tsrc/cobalt/cli.py\n"
+                "A\tdocs/new.md\n"
+                "D\tops/old.sh\n"
+            )
+        return ""
+    monkeypatch.setattr(restarts, "_git", fake_git)
+    assert restarts.changes("BASE..TIP") == [
+        Change("configs/cobalt/radar-copy.yaml", "C"),
+        Change("configs/cobalt/radar.yaml", "D"),
+        Change("docs/new.md", "A"),
+        Change("ops/desk/start_aset.sh", "R"),
+        Change("ops/old.sh", "D"),
+        Change("ops/start_aset.sh", "D"),
+        Change("src/cobalt/cli.py", "M"),
+    ]
+
+
 def test_an_unknown_dotfile_still_escalates(monkeypatch):
     # The rule is an EXPLICIT LIST, never a glob on dotfiles: a new dotfile
     # nobody has classified is exactly the case ESCALATE exists for (L42).
