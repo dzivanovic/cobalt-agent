@@ -3,7 +3,8 @@
 Every run points the script at a tmp repo standing in for /Users/cobalt/cobalt
 (COBALT_REPO_ROOT) and a tmp directory standing in for /Users/cobalt/cobalt-wt
 (COBALT_WT_ROOT). `claude` is a stub on PATH answering two live sessions and one
-dead row. The clock is overridden by ORDER_OPEN_NOW for the window cases.
+dead row. The clock is overridden by ORDER_OPEN_NOW for the window cases. A test that reads
+HOUSES runs a tmp copy of the script with a stub house-probe.sh beside it: no house is called.
 """
 
 from __future__ import annotations
