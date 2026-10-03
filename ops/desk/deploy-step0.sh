@@ -27,7 +27,10 @@
 #                        ancestor of the head, nothing outside docs/ between them
 #   P7 migrations        the migration numbers in `git show <head>:src/cobalt/db_migrations/` and not in
 #                        `git show main:src/cobalt/db_migrations/`, over every head, EQUAL the 4-digit
-#                        numbers before the first `·` of MIGRATIONS (none for `none`)
+#                        numbers before the first `·` of MIGRATIONS (none for `none`), and the hub's
+#                        `git diff main <head> -- src/cobalt/db_migrations` holds nothing else: on a
+#                        `none` card NOTHING; otherwise only added `NNNN_` files and the registry
+#                        `__init__.py` (an edited or removed migration fails)
 #   P8 census <label>    `launchctl print gui/501/<label>` for aset, radar, agent: pid and state,
 #                        RECORDED, never a gate
 #   disk                 `df -k <repo>`, recorded
@@ -174,7 +177,9 @@ find_override() {
                 case "$line" in *APPROVED*) ;; *) continue ;; esac
                 case "$line" in *L66*|*L43*) ;; *) continue ;; esac
                 [ -n "$job" ] || continue
-                case "$line" in *"$job"*) ;; *) continue ;; esac
+                # the JOB as a whole name: `x-set` is not named by `x-set-2`
+                words=" $(printf '%s' "$line" | tr -c 'abcdefghijklmnopqrstuvwxyz0123456789-' ' ') "
+                case "$words" in *" $job "*) ;; *) continue ;; esac
                 c=$(git -C "$REPO" log -1 --format=%H -S"| $t |" -- "$REPORTS_REL/cto-$d.md" 2>/dev/null)
                 [ -n "$c" ] || continue
                 override="$d $t"
@@ -308,6 +313,7 @@ window
 
 # ---- P2, P3 and the migration listings, per ship ---------------------------------------------
 newnums=""
+stray=""
 mainlist=""
 if [ "$mode" = dry ]; then
     :
@@ -325,15 +331,16 @@ while IFS= read -r line; do
     report=$(printf '%s\n' "$line" | awk -F'|' '{print $6}' | tr -d '`' | sed -e 's/^ *//' -e 's/ *$//')
     lits=$(printf '%s\n' "$line" | awk -F'|' '{print $7}' | grep -o '`[^`]*`' | tr -d '`')
     rrel=$(rel "$report")
-    c_tail="tail -n 3 \"$report\""
+    c_tail="grep -v '^[[:space:]]*\$' \"$report\" | tail -n 1"
     c_log="git -C $REPO log -1 --format=%H -- \"$rrel\""
     c_diff="git -C $REPO diff --stat -- \"$rrel\""
-    c_rp="git -C $REPO rev-parse --short=8 $ctip $branch"
+    c_rp="git -C $REPO rev-parse --verify --quiet --short=8 $ctip^{commit}; git -C $REPO rev-parse --verify --quiet --short=8 refs/heads/$branch^{commit}"
     c_anc="git -C $REPO merge-base --is-ancestor $ctip $head"
     c_past="git -C $REPO diff --stat $ctip $head -- . ':(exclude)docs'"
     c_mig="git -C $REPO show $head:src/cobalt/db_migrations/"
+    c_md="git -C $REPO diff --name-status --no-renames main $head -- src/cobalt/db_migrations"
     if [ "$mode" = dry ]; then
-        for c in "$c_tail" "$c_log" "$c_diff" "$c_rp" "$c_anc" "$c_past" "$c_mig"; do
+        for c in "$c_tail" "$c_log" "$c_diff" "$c_rp" "$c_anc" "$c_past" "$c_mig" "$c_md"; do
             would "$c"
         done
         continue
@@ -416,6 +423,25 @@ EOF
     nums=$(printf '%s\n' "$added" | sed -n 's/^\([0-9][0-9][0-9][0-9]\)_.*/\1/p' | sort -u | tr '\n' ' ' | sed 's/ *$//')
     newnums="$newnums $nums"
     row "P7 listing $n" "$c_mig" 0 "new against main: ${nums:-none}" 0
+
+    # the hub's P7 diff: on a `none` card it prints NOTHING; otherwise only added NNNN_ files
+    # (their numbers compared above) and the registry. An edited or removed migration is stray.
+    mdiff=$(git -C "$REPO" diff --name-status --no-renames main "$head" -- src/cobalt/db_migrations 2>&1)
+    mdrc=$?
+    if [ "$mdrc" -ne 0 ]; then
+        stray="$stray $(printf '%s\n' "$mdiff" | sed -n '1p')"
+        continue
+    fi
+    isnone=""
+    [ "$migrations" != none ] || isnone=1
+    s=$(printf '%s\n' "$mdiff" | awk -F'\t' -v none="$isnone" '
+        NF >= 2 {
+            b = $2; sub(/.*\//, "", b)
+            if (none == "" && $1 == "A" && b ~ /^[0-9][0-9][0-9][0-9]_/) next
+            if (none == "" && b == "__init__.py") next
+            print $1 " " $2
+        }' | tr '\n' ' ' | sed 's/ *$//')
+    [ -z "$s" ] || stray="$stray $s"
 done <<EOF
 $ships
 EOF
@@ -428,9 +454,10 @@ else
         none) want="" ;;
         *) want=$(printf '%s\n' "$migrations" | sed 's/·.*//' | grep -o '[0-9][0-9][0-9][0-9]' | sort -u | tr '\n' ' ' | sed 's/ *$//') ;;
     esac
+    stray=$(printf '%s' "$stray" | sed -e 's/^ *//' -e 's/ *$//')
     ok=1
-    [ "$got" = "$want" ] && ok=0
-    row "P7 migrations" "git -C $REPO show <head>:src/cobalt/db_migrations/ against main" 0 "heads add: ${got:-none}; MIGRATIONS names: ${want:-none}" "$ok" "the heads add '${got:-none}', MIGRATIONS names '${want:-none}'"
+    [ "$got" = "$want" ] && [ -z "$stray" ] && ok=0
+    row "P7 migrations" "git -C $REPO show <head>:src/cobalt/db_migrations/ against main; git -C $REPO diff --name-status --no-renames main <head> -- src/cobalt/db_migrations" 0 "heads add: ${got:-none}; MIGRATIONS names: ${want:-none}; other migration changes: ${stray:-none}" "$ok" "the heads add '${got:-none}', MIGRATIONS names '${want:-none}', other migration changes '${stray:-none}'"
 fi
 
 # ---- RECORDED, never a gate: the census, the disk, main ---------------------------------------

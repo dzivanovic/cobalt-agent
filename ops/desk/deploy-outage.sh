@@ -20,10 +20,12 @@
 #      one retry), then `launchctl print` → `state = running` with a pid ≠ the pid before (loaded
 #      but not running → `launchctl kickstart -k gui/501/<label>` once); the agent
 #      `launchctl kickstart gui/501/com.cobalt.agent`, then `cobalt.sh status` ONLINE, a new pid.
-#   3. `cobalt.sh status` → ONLINE.
-# THE TRAP, on EXIT, INT, TERM and HUP: every label booted out (or whose bootout began) and not yet
-# up is brought up by step 2's calls (a label found running counts as up); the trap ignores further
-# INT, TERM and HUP while it restores. When it brought every one up it prints `RESIDENTS UP (trap)`.
+#   3. `cobalt.sh status` → ONLINE (the agent in the set and not ONLINE here is down again: the
+#      trap kickstarts it).
+# THE TRAP, on EXIT, INT, TERM, HUP, QUIT, USR1, USR2 and ALRM: every label booted out (or whose
+# bootout began) and not yet up is brought up by step 2's calls (a label found running counts as
+# up); the trap ignores those signals while it restores. When it brought every one up it prints
+# `RESIDENTS UP (trap)`.
 # A SIGKILL cannot be trapped: that one ending is the hub's (THE ONE RESUME, STEP-5 (3)).
 # Output: one line per label `<label> · pid before <n> · pid after <n|down>`, then the last line
 # `OUTAGE DONE <seconds>s` (exit 0) or `FAILED OUTAGE: <label> — <reason> · residents: up: <labels>
@@ -66,6 +68,11 @@ card=$1
 set_arg=$2
 state=$3
 [ -f "$card" ] || refuse "no such card: $card"
+# the script enters $REPO below: a card given relative to the caller is read from the caller's dir
+case "$card" in
+    /*) ;;
+    *) card="$(pwd)/$card" ;;
+esac
 case "$state" in
     MERGED) ;;
     "NOT MERGED") refuse "the state is NOT MERGED: the outage runs only after the hub's merge; nothing is down" ;;
@@ -312,7 +319,7 @@ lines() {
 
 on_exit() {
     xrc=$?
-    trap '' INT TERM HUP
+    trap '' INT TERM HUP QUIT USR1 USR2 ALRM
     trap - EXIT
     [ -z "$done_ok" ] || exit "$xrc"
     restored=""
@@ -356,6 +363,12 @@ trap on_exit EXIT
 trap 'on_signal INT' INT
 trap 'on_signal TERM' TERM
 trap 'on_signal HUP' HUP
+# every other signal whose default ends the shell, so the EXIT trap still runs (QUIT kills sh
+# without it)
+trap 'on_signal QUIT' QUIT
+trap 'on_signal USR1' USR1
+trap 'on_signal USR2' USR2
+trap 'on_signal ALRM' ALRM
 
 t0=$(date +%s)
 
@@ -395,7 +408,13 @@ done
 t1=$(date +%s)
 cur=com.cobalt.agent
 agent_pid
-[ -n "$apid" ] || fail com.cobalt.agent "cobalt.sh status is not ONLINE: $(first "$out")"
+if [ -z "$apid" ]; then
+    # the agent of the set dropped after its start: down again, so the trap kickstarts it
+    case " $labels " in
+        *" com.cobalt.agent "*) down="${down:+$down }com.cobalt.agent" ;;
+    esac
+    fail com.cobalt.agent "cobalt.sh status is not ONLINE: $(first "$out")"
+fi
 
 done_ok=1
 lines

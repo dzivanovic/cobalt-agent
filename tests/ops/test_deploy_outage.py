@@ -299,7 +299,9 @@ def test_a_bootout_that_leaves_the_label_loaded_fails_and_residents_stay_up(box)
     assert last_line(done).startswith(f"FAILED OUTAGE: {ASET} — ")
     st = box.launchd()["labels"]
     assert ASET in st
-    assert ("bootstrap", RADAR) not in acts(box) or RADAR in st
+    # G3 (check): RADAR was never taken down, so it still runs its first pid
+    assert ("bootout", RADAR) not in acts(box)
+    assert RADAR in st and st[RADAR]["pid"] == 502
 
 
 def test_launchctl_gone_after_the_first_bootout_reports_the_residents_down(box):
