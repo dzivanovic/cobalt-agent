@@ -38,5 +38,6 @@ WHY: `DEPLOY-HUB.md` on `main` is the text every deploy runs under until a new t
 - X2 Does each of T2–T5 say the same thing as the chain's version will, so the port is a copy?
 
 ## RECORDS
+- Judge, 10-03 19:12 (JUDGE ASK 15, build decision T6): T6 keeps main's ADDED or MODIFIED for a plist under ops/<label>.plist or a jobs.yaml label; only a plist under ops/desk/ passes STEP-C as a tree file.
 - Judge, 10-03 (deploy set 2 FAILED PREFLIGHT; Grok read): this card ships alone, docs-only, before the `03c` chain and the ports; its other-house read (L67) is Grok on this one file, after the check.
 - The `03c` chain (`9694a679`) is then PORTED onto this card's `main` by the brain's `03d` card (the chain's files re-applied; `DEPLOY-HUB.md` = this card's text plus the chain's adoption sentences).
