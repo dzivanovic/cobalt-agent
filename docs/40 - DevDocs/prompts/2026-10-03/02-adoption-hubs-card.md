@@ -68,3 +68,4 @@ WHY: the fixed files make a worker type every step as single commands, one full 
 - RE-ISSUE 10-03 R104: resume at E3 on the checked tip `44c5bd6d`; rows A9 and A10 new; then a re-check of this card.
 - FOR THE CHECK (judge, desk row 2026-10-03 R108): Re-issue 2 decisions 14–15: KEEP line 79's pointer; CHECK-HUB.md:61's sibling sentence is a follow-up line, the script already reads a sibling as information.
 - RE-CHECK 10-03 R108: TIP `6251baeb`; pass 1's report is `reports/adoption-hubs-check-2026-10-03.md` (ready NO, D1 D2 now rows A9 A10).
+- FOR THE CHECK (judge, desk row 2026-10-03 R113): Re-check r2 held items O1, O2 are settled on the stacked card 03c (rows M2, M6); 02 ships only with 03c (R95, R103); no defect carried.
