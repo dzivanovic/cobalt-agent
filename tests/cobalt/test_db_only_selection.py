@@ -638,3 +638,26 @@ def test_an_unmarked_reach_through_the_suite_factory_fails_with_the_guard_messag
     assert str(through.value) == GUARD_MESSAGE + item.nodeid
     assert record == [GUARD_MESSAGE + item.nodeid]
     record.clear()
+
+
+@requires_db
+def test_x1_an_unmarked_migration_connection_fails_with_the_guard_message(request):
+    """X1 (check): `db.connect_migration` opens psycopg itself, past
+    `fake_connect` and `_open`; an unmarked test that reaches it is refused
+    like any other reach, before any connection opens."""
+    from cobalt import db, env
+
+    record = request.getfixturevalue("offline_skip_guard")
+    item = request.node
+    item.iter_markers = lambda name=None: iter(())
+    opened = None
+    try:
+        with pytest.raises(AssertionError) as through:
+            opened = db.connect_migration(env.DEV_DB_NAME)
+    finally:
+        del item.iter_markers
+        if opened is not None:
+            opened.close()
+    assert str(through.value) == GUARD_MESSAGE + item.nodeid
+    assert record == [GUARD_MESSAGE + item.nodeid]
+    record.clear()
