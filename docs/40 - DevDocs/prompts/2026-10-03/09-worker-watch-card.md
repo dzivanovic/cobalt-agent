@@ -5,7 +5,7 @@ WORKTREE: worker-watch-1003
 BASE: a09f0862
 TIP: 1bfd26e3
 REPORT: /Users/cobalt/cobalt-wt/worker-watch-1003/docs/40 - DevDocs/reports/worker-watch-build-2026-10-03.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/worker-watch-check-2026-10-03.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/worker-watch-check-2026-10-03-r2.md
 HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B: as needed
 TREE STATE: unchanged
