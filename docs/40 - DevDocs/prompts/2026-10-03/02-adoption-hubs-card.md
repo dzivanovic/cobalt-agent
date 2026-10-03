@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/adoption-hubs-1003
 WORKTREE: adoption-hubs-1003
 BASE: 0a4a7743
-TIP: e9aff772
+TIP:
 REPORT: /Users/cobalt/cobalt-wt/adoption-hubs-1003/docs/40 - DevDocs/reports/adoption-hubs-build-2026-10-03.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/adoption-hubs-check-2026-10-03.md
 HOUSE A: none — overruled 2026-10-02 R47
@@ -26,9 +26,11 @@ WHY: the fixed files make a worker type every step as single commands, one full 
 | A6 | GROK MODEL (his 2026-10-03 R3: every Grok seat runs `grok-4.7`). In `CHECK-HUB.md` `## 1` (5), the Grok launch line carries `-m grok-4.7` explicitly, directly after the `grok` command word, and the sentence says the model is pinned by his row; no other word of the line changes. `house-probe.sh`'s own `grok` lines are card `03`'s row L7, not this card's | `tests/ops/test_hub_lines.py` (row A4's file) gains one assertion: the Grok launch line of `CHECK-HUB.md` holds `-m grok-4.7` once. RED on `BASE`: no `-m` | `docs/40 - DevDocs/prompts/CHECK-HUB.md`, `tests/ops/test_hub_lines.py` |
 | A7 | NO HOLD TO THE STOP LINE (judge 10-03, on his veto list): in `DEPLOY-HUB.md`, the LAUNCH and P8 sentences that hold the `cobalt_dev` lock to the stop line are removed; THE RELEASE records the gate's `.env: removed` at the gate's end (the lock protects `cobalt_dev`, which the deploy does not touch after STEP-G) | hub text; the same proof shape; `grep -n -F` of each removed sentence → no hit, quoted | `docs/40 - DevDocs/prompts/DEPLOY-HUB.md` |
 | A8 | P1 (v) RE-READ AT STEP-R (judge 10-03): in `DEPLOY-HUB.md`, P1 (v) is `provisional` at STEP-0 and re-read at STEP-R once the restart set is derived: a non-empty set outside (i)–(iv) → `FAILED: STEP-R — window (v) does not hold: <labels> · rollback: not used` | hub text; the same proof shape | `docs/40 - DevDocs/prompts/DEPLOY-HUB.md` |
+| A9 | preflight.sh:155-167 "env anywhere": a sibling worktree's .env is INFORMATION, not this job's failure (LAUNCH; his 10-01 R20: the take waits): the row prints "siblings holding .env: <list or none>" and fails only on a .env in THIS worktree | tests/ops/test_preflight.py: a sibling .env → PREFLIGHT OK with the list; this worktree's .env → FAILED PREFLIGHT naming it. RED on BASE: the sibling fails the row | ops/desk/preflight.sh, tests/ops/test_preflight.py |
+| A10 | STANDING-LIST.md:48: the "## THE LOCK SCRIPTS" heading and its lines name the class string (a) in place of the removed .claude/ops strings | grep -c of the old strings → 0 | docs/40 - DevDocs/prompts/STANDING-LIST.md |
 
 ## NOT IN THIS JOB
-- Any file outside `docs/40 - DevDocs/prompts/` and `tests/ops/`: no script, no `src/`, no `configs/`. A script that does not do what a hub sentence needs → `DECISION <row>`, never a script edit here.
+- Any file outside `docs/40 - DevDocs/prompts/` and `tests/ops/`, except row A9's preflight.sh: no script, no `src/`, no `configs/`. A script that does not do what a hub sentence needs → `DECISION <row>`, never a script edit here.
 - `desk-launch.sh` (reads the lines from the hub files; its own checks are card `21`'s).
 - The deploy step scripts' adoption (card `20` and its dry run); `job-run.sh`; the close timer; `BRAIN-HUB.md`; `JUDGE-HUB.md`, `JUDGE-CARD.md`, `CLOSE-HUB.md` (unchanged this weekend unless a row above names them: none does).
 - A second dev database; `--db-only`; the `DB: none` class text of card `01` (stands as written).
@@ -52,7 +54,7 @@ WHY: the fixed files make a worker type every step as single commands, one full 
 - X6 Is `TREE STATE` still demanded anywhere (a hub sentence, `CARD.md`, `desk-launch.sh`, `preflight.sh`)?
 
 ## RECORDS
-- `DB: none`: every file of every row is under `docs/` or `tests/ops/`; the build proves it at W (a0) by `git diff --name-only <BASE>`.
+- `DB: none`: every file of every row is under `docs/` or `tests/ops/`, plus row A9's `ops/desk/preflight.sh` (judge R104: inside the `DB: none` class); the build proves it at W (a0) by `git diff --name-only <BASE>`.
 - The `DEPLOY-HUB.md` part is read by one other house after the check (L67): a read-only prompt in the shape of `reports/deploy-hub-other-house-read-2026-09-30.md`, launched by the desk; Grok, after card `20`'s check or before it, one Grok hub at a time (L15). The set does not deploy before that read is on file.
 - Stacking: this card stacks on `03`'s BUILT tip; the two ship in one set. A finding here about a script is a `DECISION` for the judge seat, which routes it to `03`'s check or a follow-up.
 - `install-fixed.sh` (`17`) is for a fixed file waiting on his row; the strings here are already approved (direction rows 1, 2, 8, 9), so the hub titles keep their `INSTALL` row and the `## CLASSES` section cites row 2's number.
@@ -62,3 +64,5 @@ WHY: the fixed files make a worker type every step as single commands, one full 
 - FOR THE CHECK (judge, desk row 2026-10-03 R95): Build decisions 1–11 answered (reports/adoption-hubs-decisions-2026-10-03.md): 2, 3, 4, 9 are card 03c's rows; A3 amended (--deploy call; the equal-tree clause only with a with-DB count above 0); rows A7 (no hold to the stop line) and A8 (P1 (v) re-read at STEP-R) added; 1, 8, 10, 11 KEEP; 7 is not his.
 - RE-ISSUE 10-03 R95: resume at E3 on the built tip `1c349c49`; A3 amended, A7 and A8 new; card `03c` (beside this card, BASE `0a4a7743`) carries `gate.sh --deploy` and `TREE STATE` optional; the two ship in set 2 together, both or neither.
 - FOR THE CHECK (judge, desk row 2026-10-03 R99): Re-issue decisions 12–13 KEEP: A7 removed P4's hold clause and LAUNCH's L76 wait sentence; STEP-G's --deploy flag is card 03c M3's, bound by the ship-together record (R95); 02 and 03c ship in set 2 together or not at all.
+- FOR THE CHECK (judge, desk row 2026-10-03 R104): Check decisions 1–2 answered by the judge: D1 fixed on this card by row A9 (a sibling .env is information, this worktree's .env fails); D2 fixed by row A10 (the STANDING-LIST heading names class (a)); 03c stacks on this card's checked tip.
+- RE-ISSUE 10-03 R104: resume at E3 on the checked tip `44c5bd6d`; rows A9 and A10 new; then a re-check of this card.
