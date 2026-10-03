@@ -2,12 +2,12 @@ JOB: adoption-hubs
 LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/adoption-hubs-1003
 WORKTREE: adoption-hubs-1003
-BASE: «FILL: card 03 adoption-scripts' BUILT tip»
+BASE: 0a4a7743
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/adoption-hubs-1003/docs/40 - DevDocs/reports/adoption-hubs-build-2026-10-03.md
 CHECK REPORT:
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 DB: none
 RULINGS: 2026-10-02 R47, 2026-10-02 R154, 2026-10-02 R157, 2026-10-03 R3, 2026-10-02 R38, 2026-10-02 R39, 2026-10-02 R45, 2026-10-02 R46

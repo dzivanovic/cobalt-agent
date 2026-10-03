@@ -3,11 +3,11 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/adoption-scripts-1003
 WORKTREE: adoption-scripts-1003
 BASE: a09f0862
-TIP:
+TIP: 0a4a7743
 REPORT: /Users/cobalt/cobalt-wt/adoption-scripts-1003/docs/40 - DevDocs/reports/adoption-scripts-build-2026-10-03.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/adoption-scripts-check-2026-10-03.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-02 R47, 2026-10-02 R157, 2026-10-03 R3, 2026-10-02 R39, 2026-10-02 R42
 
@@ -55,3 +55,4 @@ WHY: the step scripts of cards `17`, `18`, `19` are on `main` but no fixed file 
 - FOR THE CHECK: Build DECISIONS 1–2 at PREFLIGHT were answered by the judge as card changes: L6 moved to card 03b; L1 computes the level from the proof-only marks and the migrations' CREATE statements (ALTER-only migrations take the level below them).
 - FOR THE CHECK: DECISION 3 at PREFLIGHT answered by the judge: the level is TABLES (from CREATED_TABLES) plus the FINGERPRINT; LEVEL 0013 is the gate's comparison against gate-lists.md, not a word src/ prints. The L1 rule in the line above is superseded by this one. Desk reading: L2's old `LEVEL` stub cases are replaced by the judge's `TABLES`/`FINGERPRINT` cases.
 - JUDGE ANSWERS 10-03 (desk row 2026-10-03 R82) to ASK DESK 4–13 at `8aad8b2e`: 4–11 KEEP; 12 is the install step (the desk, after set 2 DEPLOYED); 13 CHANGE: row L5 amended, resume at E3, then W again.
+- D5 (brain, desk rows 2026-10-03 R53, R82): `03` adds `recut` to the kind list at `tests/ops/test_desk_launch_devfix.py:383` (KEEP); `07` does not touch that text; `brain` and `run` join it on the follow-up line after set 2.
