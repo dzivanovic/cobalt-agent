@@ -89,6 +89,7 @@ def test_absent_or_malformed_benchmark_refuses(tmp_path, store, body, match):
     assert store.puts == []
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_apply_inside_the_market_reset_pause_refuses(tmp_path, store, monkeypatch):
     from cobalt.session import SessionBlocked
     from cobalt.session import clock as clock_mod

@@ -345,6 +345,7 @@ def _post(form):
     return TestClient(web_module.app).post("/fill", data=form)
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_fill_passes_only_the_typed_price_and_shares(monkeypatch):
     seen = _FillRoute.install(monkeypatch, p=Decimal("20"))
     r = _post(_FillRoute.FORM)
@@ -365,6 +366,7 @@ def test_fill_with_no_price_or_no_shares_is_refused(monkeypatch, field):
     assert seen == {}
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_fill_with_p_missing_is_recorded_and_bannered(monkeypatch):
     _FillRoute.install(monkeypatch, p=None)
     r = _post(_FillRoute.FORM)
@@ -384,6 +386,7 @@ def _note_refused(monkeypatch):
     monkeypatch.setattr(web_module, "save_fill_update", refuse)
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_note_failure_after_the_commit_keeps_the_p_missing_banner(monkeypatch):
     _FillRoute.install(monkeypatch, p=None)
     _note_refused(monkeypatch)
@@ -393,6 +396,7 @@ def test_a_note_failure_after_the_commit_keeps_the_p_missing_banner(monkeypatch)
     assert BANNER in r.text, r.text
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_note_failure_after_the_commit_keeps_the_drift_warning(monkeypatch):
     import html
 

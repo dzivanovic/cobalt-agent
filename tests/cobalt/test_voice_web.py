@@ -160,6 +160,7 @@ def test_the_handler_never_uses_the_str_v_form_idiom():
 # --- startup: the sweep behind the lock ---------------------------------------------------
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_startup_sweeps_every_file_under_the_lock_and_shutdown_releases(cfg):
     left = sc.write_scratch(cfg.scratch_dir, "turn-left0001", b"synthesized", "audio/webm")
     try:

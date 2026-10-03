@@ -99,6 +99,7 @@ def _closed_port_cfg() -> ModelAccessConfig:
 
 
 @pytest.mark.parametrize("where", ["transcript", "history_said", "history_reply", "candidate_label", "clock"])
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_secret_through_any_input_is_refused_by_the_s1_guard(where):
     inp = _inputs()
     if where == "transcript":

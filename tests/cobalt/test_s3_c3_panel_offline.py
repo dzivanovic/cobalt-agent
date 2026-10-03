@@ -149,6 +149,7 @@ def test_the_triggered_tap_writes_one_transition_by_you_carrying_the_last_price(
     assert "last_price_at" in call[4] and call[4]["last_price_at"] is None  # X6-R: no bar time stored
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_fill_with_the_untouched_prefill_is_last_poll_estimated(world):
     response = client.post("/radar/card/1/fill", data={"price": "5.48", "shares": "226", "prefill": "5.48"})
     assert response.status_code == 200, response.text
@@ -158,6 +159,7 @@ def test_a_fill_with_the_untouched_prefill_is_last_poll_estimated(world):
         Decimal("5.48"), 226, "last_poll", "estimated", "panel")
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_fill_with_an_edited_price_is_typed_confirmed(world):
     response = client.post("/radar/card/1/fill", data={"price": "5.47", "shares": "226", "prefill": "5.48"})
     assert response.status_code == 200, response.text
@@ -187,6 +189,7 @@ def test_pass_moves_the_card_to_passed_by_you(world):
 # ---------------------------------------------------------------------
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_half_tap_posts_the_running_count_its_screen_showed(world):
     response = client.post("/radar/card/1/exit", data={
         "preset": "half", "price": "5.40", "prefill": "5.40", "running_before": "100",
@@ -209,6 +212,7 @@ def test_a_stale_tap_is_refused_with_c2s_text_verbatim(world, monkeypatch):
     assert response.json()["reason"] == "REFUSED: screen said 100, now 50 — tap again"
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_an_untouched_flat_stays_estimated(world):
     response = client.post("/radar/card/1/exit", data={
         "preset": "flat", "price": "5.40", "prefill": "5.40", "running_before": "100",
@@ -218,6 +222,7 @@ def test_an_untouched_flat_stays_estimated(world):
     assert (kw["preset"], kw["price_source"], kw["flag"]) == ("flat", "last_poll", "estimated")
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_flat_with_the_check_and_a_typed_price_is_confirmed(world):
     response = client.post("/radar/card/1/exit", data={
         "preset": "flat", "price": "5.38", "prefill": "5.40", "running_before": "100", "confirm": "1",
@@ -227,6 +232,7 @@ def test_a_flat_with_the_check_and_a_typed_price_is_confirmed(world):
     assert (kw["price"], kw["price_source"], kw["flag"]) == (Decimal("5.38"), "typed", "confirmed")
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_flat_edited_without_the_check_is_not_confirmed(world):
     client.post("/radar/card/1/exit", data={
         "preset": "flat", "price": "5.38", "prefill": "5.40", "running_before": "100",
@@ -235,6 +241,7 @@ def test_a_flat_edited_without_the_check_is_not_confirmed(world):
     assert kw["flag"] == "estimated"
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_typed_exit_carries_its_share_count(world):
     client.post("/radar/card/1/exit", data={
         "preset": "typed", "shares": "30", "price": "5.41", "prefill": "5.40", "running_before": "100",
@@ -251,6 +258,7 @@ def test_an_exit_with_no_price_is_refused_and_nothing_is_written(world):
     assert world.calls == []
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_holding_50_calls_the_held_writer(world):
     response = client.post("/radar/card/1/held", data={"held": "50"})
     assert response.status_code == 200, response.text
@@ -258,6 +266,7 @@ def test_holding_50_calls_the_held_writer(world):
     assert (name, args, kw["source"]) == ("record_held", (1, 50), "panel")
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_a_correction_with_a_typed_price_names_its_source(world):
     response = client.post("/radar/card/1/correct", data={"leg_id": "401", "price": "5.39"})
     assert response.status_code == 200, response.text

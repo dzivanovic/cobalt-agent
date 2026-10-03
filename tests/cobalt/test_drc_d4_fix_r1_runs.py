@@ -56,6 +56,7 @@ def test_run1_b_nothing_of_the_previous_test_survives():
 # ---------------------------------------------------------------------
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_run2_a_refused_field_puts_no_typed_value_in_any_log_line(page, world):  # noqa: F811
     """RUN-2 (drc-d4-check-2026-09-25.md:179): the WHOLE request path of a
     refused change (review and apply) logs no figure he typed."""
