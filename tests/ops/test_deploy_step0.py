@@ -387,8 +387,9 @@ def test_d4_dry_run_on_the_10_02_deploy_card(desk):
     """RUN row D4: the --dry-run of the real 10-02 night deploy card (the worktree copy, read only)."""
     for name in ("git", "curl", "uv"):
         stub(desk.bin, name, PLAIN)
+    env = {k: v for k, v in desk.env.items() if k != "COBALT_REPO_ROOT"}  # the real paths, printed only
     done = subprocess.run(
-        ["sh", str(SCRIPT), "--dry-run", str(REAL_CARD)], env=desk.env, capture_output=True,
+        ["sh", str(SCRIPT), "--dry-run", str(REAL_CARD)], env=env, capture_output=True,
         text=True, errors="replace", timeout=120,
     )
     print(done.stdout + done.stderr)

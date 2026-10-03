@@ -61,7 +61,9 @@ if verb == "bootout":
         open(os.environ["STUB_MARK"], "w").write("down")
         time.sleep(float(os.environ.get("STUB_HOLD", "2")))
     if os.environ.get("STUB_VANISH_AFTER") == label:
-        os.remove(sys.argv[0])
+        # a missing launchctl, without removing the stub: /bin/launchctl must never answer a test
+        with open(sys.argv[0], "w") as gone:
+            gone.write('#!/bin/sh\\necho "launchctl: command not found" >&2\\nexit 127\\n')
     sys.exit(0)
 if verb == "bootstrap":
     plist = args[2]
@@ -302,6 +304,9 @@ def test_a_bootout_that_leaves_the_label_loaded_fails_and_residents_stay_up(box)
 
 def test_launchctl_gone_after_the_first_bootout_reports_the_residents_down(box):
     done = box.run(STUB_VANISH_AFTER=ASET)
+    assert "command not found" in done.stdout + (box.wt / ".deploy-logs").joinpath(
+        next(p.name for p in (box.wt / ".deploy-logs").glob("*.log"))
+    ).read_text()
     assert done.returncode == 1
     last = last_line(done)
     assert last.startswith(f"FAILED OUTAGE: {ASET} — ")

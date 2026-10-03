@@ -139,7 +139,7 @@ def test_a_marker_whose_after_differs_is_smoke_red(box):
     (box.files / "c.txt").write_text("no such line\n")
     done = box.run()
     assert done.returncode == 1
-    assert row(done, "marker 2").endswith(" · 0 · RED")
+    assert row(done, "marker 2").endswith(" · 0 (still the before value) · RED")
     assert last_line(done) == "SMOKE RED: marker 2"
 
 
