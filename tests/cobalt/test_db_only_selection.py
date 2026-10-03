@@ -108,7 +108,11 @@ def _short(item) -> str:
 
 @pytest.fixture
 def constructed_items(pytester):
-    return pytester.getitems(FUNCTION_AND_CLASS) + pytester.getmodulecol(MODULE_MARK).collect()
+    pytester.makepyfile(test_function_and_class=FUNCTION_AND_CLASS, test_module_mark=MODULE_MARK)
+    return pytester.genitems([
+        pytester.getpathnode(pytester.path / "test_function_and_class.py"),
+        pytester.getpathnode(pytester.path / "test_module_mark.py"),
+    ])
 
 
 def test_the_mark_finder_sees_a_skipif_on_the_function_the_class_and_the_module(request, constructed_items):
@@ -133,6 +137,28 @@ def test_db_only_keeps_marked_three_ways_and_drops_unmarked(request, constructed
     assert len(kept) + len(dropped) == len(constructed_items)
 
 
+def _inner_run(request, pytester, *args):
+    """An inner collection of the two constructed modules with THIS conftest
+    as its plugin: (collected names, deselected names)."""
+    pytester.makepyfile(test_function_and_class=FUNCTION_AND_CLASS, test_module_mark=MODULE_MARK)
+    rec = pytester.inline_run("--collect-only", *args, plugins=[_conftest(request.config)])
+    items = rec.getcalls("pytest_collection_finish")[0].session.items
+    deselected = [item for call in rec.getcalls("pytest_deselected") for item in call.items]
+    return {_short(item) for item in items}, {_short(item) for item in deselected}
+
+
+def test_with_db_only_a_run_deselects_every_unmarked_item(request, pytester):
+    collected, deselected = _inner_run(request, pytester, "--db-only")
+    assert collected == KEPT
+    assert deselected == DROPPED
+
+
+def test_without_db_only_a_run_keeps_every_item(request, pytester):
+    collected, deselected = _inner_run(request, pytester)
+    assert collected == KEPT | DROPPED
+    assert deselected == set()
+
+
 def test_the_db_only_option_is_registered_and_off_by_default(request):
     """P1: `--db-only` is an option of this run; without it nothing changes."""
     assert request.config.getoption("--db-only") is False
@@ -145,6 +171,37 @@ def test_the_guard_refuses_an_unmarked_item_and_passes_a_marked_one(request, con
     with pytest.raises(AssertionError) as refused:
         require(by_name["test_unmarked"])
     assert str(refused.value) == GUARD_MESSAGE + by_name["test_unmarked"].nodeid
+
+
+def test_a_reach_a_store_swallowed_still_fails_the_test_at_teardown(request, pytester):
+    """G1: the guard's record outlives a caught AssertionError — an inner
+    test that only leaves a recorded reach behind fails at teardown."""
+    pytester.makepyfile(test_swallowed=(
+        "def test_swallows_the_refusal(offline_skip_guard):\n"
+        "    offline_skip_guard.append('with-DB test without an offline skip mark: constructed')\n"
+    ))
+    rec = pytester.inline_run("-p", "no:cacheprovider", plugins=[_conftest(request.config)])
+    reports = rec.getreports("pytest_runtest_logreport")
+    assert [r.outcome for r in reports if r.when == "call"] == ["passed"]
+    teardown = [r for r in reports if r.when == "teardown"]
+    assert teardown[0].failed
+    assert GUARD_MESSAGE + "constructed" in str(teardown[0].longrepr)
+
+
+def test_an_unmarked_open_through_real_connect_is_refused_before_any_connection(request, pytester):
+    """G1 at `real_connect`'s `_open`: the guard runs before `REAL_CONNECT`,
+    so an unmarked inner test is refused with the message and nothing is
+    opened (with or without a database)."""
+    pytester.makepyfile(test_opens=(
+        "from cobalt import db\n"
+        "\n"
+        "def test_opens_unmarked(real_connect):\n"
+        "    real_connect(side=db.Side.SYSTEM)\n"
+    ))
+    rec = pytester.inline_run("-p", "no:cacheprovider", plugins=[_conftest(request.config)])
+    calls = [r for r in rec.getreports("pytest_runtest_logreport") if r.when == "call"]
+    assert [r.outcome for r in calls] == ["failed"]
+    assert GUARD_MESSAGE + "test_opens.py::test_opens_unmarked" in str(calls[0].longrepr)
 
 
 # ---------------------------------------------------------------------

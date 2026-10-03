@@ -57,6 +57,81 @@ from cobalt.session import clock as session_clock_module
 REAL_CONNECT = db.connect
 
 
+# ---------------------------------------------------------------------
+# lock-relief G1 / P1: "skipped offline" means "needs the database"
+# ---------------------------------------------------------------------
+
+#: G1: a test reached `cobalt_dev` and carries no offline skip.
+UNMARKED_REACH = "with-DB test without an offline skip mark: {nodeid}"
+
+
+def offline_skip_marks(item) -> list:
+    """Every `skipif` mark on `item`: its own, its class's and its module's
+    `pytestmark` (pytest's node chain). The ONE reading of "this test skips
+    offline": the G1 guard and the `--db-only` selection both stand on it."""
+    return list(item.iter_markers(name="skipif"))
+
+
+def require_offline_skip(item) -> None:
+    """G1: a database reach from a test with no `skipif` mark is refused."""
+    if not offline_skip_marks(item):
+        raise AssertionError(UNMARKED_REACH.format(nodeid=item.nodeid))
+
+
+def db_only_split(items) -> tuple[list, list]:
+    """P1's keep rule: (kept, dropped); kept carries at least one `skipif`
+    mark. Wider than the database (a vault-path skip is kept), never narrower:
+    a test that reaches the database unmarked fails G1's guard."""
+    kept, dropped = [], []
+    for item in items:
+        (kept if offline_skip_marks(item) else dropped).append(item)
+    return kept, dropped
+
+
+def pytest_addoption(parser):
+    """P1. Registered here, beside the guard it stands on: the pass-1 command
+    names `tests/cobalt`, so this conftest is loaded before the arguments are
+    parsed; a run that names no `tests/cobalt` path refuses `--db-only` as an
+    unknown argument rather than ignoring it (L1)."""
+    parser.addoption(
+        "--db-only", action="store_true", default=False,
+        help="lock-relief P1: keep only the tests that carry a skipif mark (the with-DB pass 1); "
+             "deselect every other test",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    """P1: with `--db-only`, deselect every item that carries no `skipif`
+    mark — under `tests/cobalt` and `tests/taxonomy` alike (this hook sees
+    the whole session's items). Without it nothing changes."""
+    if not config.getoption("--db-only"):
+        return
+    kept, dropped = db_only_split(items)
+    if dropped:
+        config.hook.pytest_deselected(items=dropped)
+        items[:] = kept
+
+
+@pytest.fixture(autouse=True)
+def offline_skip_guard():
+    """G1: the record of database reaches by unmarked tests. A store may
+    swallow the guard's AssertionError, so the teardown fails the test on any
+    recorded reach. Yields the record (a test that trips the guard on
+    purpose clears it)."""
+    tripped: list = []
+    yield tripped
+    if tripped:
+        pytest.fail("\n".join(tripped))
+
+
+def _guarded_reach(item, tripped: list) -> None:
+    try:
+        require_offline_skip(item)
+    except AssertionError as refused:
+        tripped.append(str(refused))
+        raise
+
+
 @pytest.fixture(autouse=True)
 def mock_postgres_memory():
     """Neutralise the repo-root psycopg mock for new-core tests."""
@@ -131,7 +206,7 @@ class _SavepointConnection:
 
 
 @pytest.fixture(autouse=True)
-def dev_db_tx(monkeypatch):
+def dev_db_tx(monkeypatch, request, offline_skip_guard):
     """Run every new-core test inside one `cobalt_dev` transaction and
     roll it back.
 
@@ -150,6 +225,9 @@ def dev_db_tx(monkeypatch):
 
     When Postgres is unavailable this is a no-op rather than a skip, so
     the pure-unit tests still run on a machine with no database.
+
+    lock-relief G1: every call of `fake_connect` is a reach, refused for a
+    test with no `skipif` mark; this fixture's own autouse open is not.
     """
     if not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")):
         yield None
@@ -160,6 +238,7 @@ def dev_db_tx(monkeypatch):
     counter = itertools.count()
 
     def fake_connect(dbname: str, *, side: db.Side, allow_prod: bool = False):
+        _guarded_reach(request.node, offline_skip_guard)
         if dbname != env.DEV_DB_NAME:
             raise AssertionError(
                 f"RULING 7.1d: a test asked for database {dbname!r}. The suite "
@@ -194,7 +273,7 @@ def dev_db_tx(monkeypatch):
 
 
 @pytest.fixture
-def real_connect():
+def real_connect(request, offline_skip_guard):
     """A REAL `db.connect` — outside the suite's rollback transaction.
 
     ADR-0008's tenancy tests need connections the fixture has not
@@ -207,6 +286,7 @@ def real_connect():
     opened = []
 
     def _open(dbname: str = env.DEV_DB_NAME, *, side: db.Side):
+        _guarded_reach(request.node, offline_skip_guard)  # lock-relief G1
         if dbname != env.DEV_DB_NAME:
             raise AssertionError(
                 f"RULING 7.1d: a test asked for database {dbname!r}. The suite "
