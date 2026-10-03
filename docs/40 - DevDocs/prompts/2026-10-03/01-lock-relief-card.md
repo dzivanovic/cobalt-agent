@@ -3,9 +3,9 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R154
 BRANCH: ops/lock-relief-1003
 WORKTREE: lock-relief-1003
 BASE: bb816d45
-TIP:
+TIP: 77d19438
 REPORT: /Users/cobalt/cobalt-wt/lock-relief-1003/docs/40 - DevDocs/reports/lock-relief-build-2026-10-03.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/lock-relief-check-2026-10-03.md
 HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B:
 TREE STATE: row P2
@@ -57,3 +57,4 @@ YOU RUN UNDER THE HUB FILE ON `main`, not under your own edits: your PREFLIGHT, 
 - 57 files under `tests/cobalt/` carry the skip `not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))`; `tests/taxonomy` carries none (`grep -rn -E "POSTGRES_HOST" tests/cobalt tests/taxonomy`, the brain, 17:28 ET).
 - His order sets aside the outside house for this card (`reports/brain-direction-2026-10-02.md` row 10): process tooling, no `src/` file.
 - After DEPLOYED: every later card of 10-03 whose rows sit under `ops/`, `tests/ops/` and `docs/` carries `DB: none`.
+- Decisions 1–6 of the build are answered (reports/lock-relief-decisions-2026-10-03.md): none holds; X1 covers connect_migration; the tests/ops red on BASE is card 01b's, stacked on this tip, not this check's failure.
