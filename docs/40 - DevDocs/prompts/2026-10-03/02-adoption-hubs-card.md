@@ -3,9 +3,9 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/adoption-hubs-1003
 WORKTREE: adoption-hubs-1003
 BASE: 0a4a7743
-TIP:
+TIP: 6251baeb
 REPORT: /Users/cobalt/cobalt-wt/adoption-hubs-1003/docs/40 - DevDocs/reports/adoption-hubs-build-2026-10-03.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/adoption-hubs-check-2026-10-03.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/adoption-hubs-check-2026-10-03-r2.md
 HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B: as needed
 TREE STATE: unchanged
@@ -66,3 +66,5 @@ WHY: the fixed files make a worker type every step as single commands, one full 
 - FOR THE CHECK (judge, desk row 2026-10-03 R99): Re-issue decisions 12–13 KEEP: A7 removed P4's hold clause and LAUNCH's L76 wait sentence; STEP-G's --deploy flag is card 03c M3's, bound by the ship-together record (R95); 02 and 03c ship in set 2 together or not at all.
 - FOR THE CHECK (judge, desk row 2026-10-03 R104): Check decisions 1–2 answered by the judge: D1 fixed on this card by row A9 (a sibling .env is information, this worktree's .env fails); D2 fixed by row A10 (the STANDING-LIST heading names class (a)); 03c stacks on this card's checked tip.
 - RE-ISSUE 10-03 R104: resume at E3 on the checked tip `44c5bd6d`; rows A9 and A10 new; then a re-check of this card.
+- FOR THE CHECK (judge, desk row 2026-10-03 R108): Re-issue 2 decisions 14–15: KEEP line 79's pointer; CHECK-HUB.md:61's sibling sentence is a follow-up line, the script already reads a sibling as information.
+- RE-CHECK 10-03 R108: TIP `6251baeb`; pass 1's report is `reports/adoption-hubs-check-2026-10-03.md` (ready NO, D1 D2 now rows A9 A10).
