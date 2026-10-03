@@ -55,3 +55,4 @@ WHY: the fixed files make a worker type every step as single commands, one full 
 - Stacking: this card stacks on `03`'s BUILT tip; the two ship in one set. A finding here about a script is a `DECISION` for the judge seat, which routes it to `03`'s check or a follow-up.
 - `install-fixed.sh` (`17`) is for a fixed file waiting on his row; the strings here are already approved (direction rows 1, 2, 8, 9), so the hub titles keep their `INSTALL` row and the `## CLASSES` section cites row 2's number.
 - His order sets aside the outside house for the check of this card (direction row 10, R47; R156).
+- From `03` (judge, desk row 2026-10-03 R82): a pass-1 skip OUTSIDE the allowed set stays a quoted mark in BUILD W (c), never a red there; only the deploy gate judges skips. The FINGERPRINT gate-lists value stays `272c95bbb12241e3611e4b36326ccf87` (`03` sets `search_path` to `"user"`); schema-qualified hashing is a follow-up row, not this card's.
