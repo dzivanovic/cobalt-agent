@@ -3,9 +3,9 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/adoption-hubs-1003
 WORKTREE: adoption-hubs-1003
 BASE: 0a4a7743
-TIP:
+TIP: e9aff772
 REPORT: /Users/cobalt/cobalt-wt/adoption-hubs-1003/docs/40 - DevDocs/reports/adoption-hubs-build-2026-10-03.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/adoption-hubs-check-2026-10-03.md
 HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B: as needed
 TREE STATE: unchanged
@@ -61,3 +61,4 @@ WHY: the fixed files make a worker type every step as single commands, one full 
 - FOR THE CHECK (judge, desk row 2026-10-03 R88): Check 03 O5: allowed-skip items match by path and reason words, not line; the mark stays advisory. Check 03 O1 is a known limit of the level read, carried as a follow-up, not a defect of 02.
 - FOR THE CHECK (judge, desk row 2026-10-03 R95): Build decisions 1–11 answered (reports/adoption-hubs-decisions-2026-10-03.md): 2, 3, 4, 9 are card 03c's rows; A3 amended (--deploy call; the equal-tree clause only with a with-DB count above 0); rows A7 (no hold to the stop line) and A8 (P1 (v) re-read at STEP-R) added; 1, 8, 10, 11 KEEP; 7 is not his.
 - RE-ISSUE 10-03 R95: resume at E3 on the built tip `1c349c49`; A3 amended, A7 and A8 new; card `03c` (beside this card, BASE `0a4a7743`) carries `gate.sh --deploy` and `TREE STATE` optional; the two ship in set 2 together, both or neither.
+- FOR THE CHECK (judge, desk row 2026-10-03 R99): Re-issue decisions 12–13 KEEP: A7 removed P4's hold clause and LAUNCH's L76 wait sentence; STEP-G's --deploy flag is card 03c M3's, bound by the ship-together record (R95); 02 and 03c ship in set 2 together or not at all.
