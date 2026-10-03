@@ -57,3 +57,4 @@ One row per desk wake-up, appended by the waking desk (READ 7 of `prompts/CTO-DE
 | 2026-10-03 | 12:30 | 560465f7 | 66,560 | 74,470 | −10.6% | 50,899 | +30.8% | Tenth Opus 5.5 desk (REFRESH from ee8b11e0, R68); reconcile 0 applied (8 rows R3, R6–R12 fold at the close; none pending from 10-02). Growth over the mark: woke before the HANDOVER line again (duplicate-desk reply + LIST + second LIST + checklist `## handover` + stop/rm/attach), the same cause as 11:32; `cut -c1-24` was used this time and step 6 read headings + stop lines only. Tuning (repeat, not yet applied): REFRESH HOW step (6) writes the HANDOVER line before step (4) LAUNCH. Mark stays. |
 | 2026-10-03 | 13:54 | b456ebbf | 65,136 | 66,560 | −2.1% | 50,899 | +28.0% | — |
 | 2026-10-03 | 16:15 | d78e4549 | 65,691 | 65,136 | +0.9% | 50,899 | +29.1% | — |
+| 2026-10-03 | 17:29 | 95c9c899 | 61,391 | 65,691 | -6.5% | 50,899 | +20.6% | — |
