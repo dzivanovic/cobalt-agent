@@ -9,7 +9,7 @@ CHECK REPORT:
 HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B:
 TREE STATE: unchanged
-RULINGS: 2026-10-02 R47, 2026-10-02 R77, 2026-10-02 R157
+RULINGS: 2026-10-02 R47, 2026-10-02 R157
 
 ## ROWS
 
@@ -34,3 +34,4 @@ WHY: the check of card `15` (`reports/ops-glob-check-2026-10-02.md` O3) showed t
 ## RECORDS
 - Judge answer, 10:0x ET 10-02 (R77): follow-up, not a fix before the 10-02 deploy; `reports/brain-direction-2026-10-02.md` `## TOMORROW` row "rename follow-up".
 - This job touches `src/`: it takes the lock as `BUILD-HUB.md` says (pass 1 with `--db-only` after card `01`). The restart set is derived by the build (L42); `restarts.py` itself is in a class — the RESTARTS line says which.
+- Origin: desk row 2026-10-02 R77 (brain: the `changes()` rename card on the TOMORROW table); a desk record, so cited here, not in `RULINGS` (desk 2026-10-03).
