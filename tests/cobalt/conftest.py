@@ -124,6 +124,11 @@ def offline_skip_guard():
         pytest.fail("\n".join(tripped))
 
 
+#: True only while `dev_db_tx` opens its own connection: the one open
+#: that is not a reach (check X1, the guarded `psycopg.connect`).
+_opening_the_suite_connection = False
+
+
 def _guarded_reach(item, tripped: list) -> None:
     try:
         require_offline_skip(item)
@@ -228,12 +233,22 @@ def dev_db_tx(monkeypatch, request, offline_skip_guard):
 
     lock-relief G1: every call of `fake_connect` is a reach, refused for a
     test with no `skipif` mark; this fixture's own autouse open is not.
+    So is every `psycopg.connect` after that open (check X1): the
+    connections that bypass `db.connect` — `db.connect_migration`, the
+    migration CLI, `db._open` — all end there.
     """
     if not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")):
         yield None
         return
 
-    real = REAL_CONNECT(env.DEV_DB_NAME, side=db.Side.SYSTEM)
+    # An inner pytester run's `dev_db_tx` opens under the OUTER test's
+    # guarded `psycopg.connect`; that open is still not a reach.
+    global _opening_the_suite_connection
+    _opening_the_suite_connection = True
+    try:
+        real = REAL_CONNECT(env.DEV_DB_NAME, side=db.Side.SYSTEM)
+    finally:
+        _opening_the_suite_connection = False
     real.autocommit = False
     counter = itertools.count()
 
@@ -264,7 +279,15 @@ def dev_db_tx(monkeypatch, request, offline_skip_guard):
         db.apply_side(proxy, side)
         return proxy
 
+    real_psycopg_connect = db.psycopg.connect
+
+    def guarded_psycopg_connect(*args, **kwargs):
+        if not _opening_the_suite_connection:
+            _guarded_reach(request.node, offline_skip_guard)  # lock-relief G1, check X1
+        return real_psycopg_connect(*args, **kwargs)
+
     monkeypatch.setattr(db, "connect", fake_connect)
+    monkeypatch.setattr(db.psycopg, "connect", guarded_psycopg_connect)
     try:
         yield real
     finally:
