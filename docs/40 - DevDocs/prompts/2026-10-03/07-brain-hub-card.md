@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/brain-hub-1003
 WORKTREE: brain-hub-1003
 BASE: a09f0862
-TIP: dc9b06c4
+TIP: bb930cac
 REPORT: /Users/cobalt/cobalt-wt/brain-hub-1003/docs/40 - DevDocs/reports/brain-hub-build-2026-10-03.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/brain-hub-check-2026-10-03.md
 HOUSE A: none — overruled 2026-10-02 R47
