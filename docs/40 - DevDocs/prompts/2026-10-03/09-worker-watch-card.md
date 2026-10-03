@@ -3,11 +3,11 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/worker-watch-1003
 WORKTREE: worker-watch-1003
 BASE: a09f0862
-TIP:
+TIP: 264e58f7
 REPORT: /Users/cobalt/cobalt-wt/worker-watch-1003/docs/40 - DevDocs/reports/worker-watch-build-2026-10-03.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/worker-watch-check-2026-10-03.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 DB: none
 RULINGS: 2026-10-02 R47, 2026-10-02 R157, 2026-10-03 R24
@@ -46,3 +46,4 @@ WHY: the desk's watch waits for a changed stop line and nothing else, so a worke
 - His words, brain session 10-03 (the desk's clock, about 10:1x ET): "As far as your hooks, yes, I want them installed as soon as possible because this is one of the biggest issues that we're having. The things are waiting for each other and both sides are waiting and not knowing what's going on."
 - Mods and hooks are Anthropic process tuning: no outside house (his 10-03 word, desk row 2026-10-03 R12).
 - Base: `main` after set 1; ships in set 2 with `03`, `02`, `06`. His install follows set 2's DEPLOYED line.
+- FOR THE CHECK: Build decisions 1–4 answered by the judge: all KEEP; the idle_prompt field is proven at his install by the first real WAKE line; the devfix watch reminder is the desk-launch.sh follow-up card's (desk row 2026-10-03 R69).
