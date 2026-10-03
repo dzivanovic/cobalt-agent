@@ -2,9 +2,9 @@
 
 ## §0 Headline
 
-The close timer is built and tested at tip `47f47e02`. The script is `ops/desk/close-timer.sh` (T1), the plist is `ops/desk/com.cobalt.close-timer.plist` (T2's plist half), and his install text is in the script's header (T3).
-I did not build T2's registry half. `jobs.yaml` has no class for an operator timer, so the label is not registered (DECISIONS 1, FOR DEJAN). The derivation still gives the timer's files no restart and no escalation.
-Suites: offline 3737/0, `tests/ops` 485/0, with-DB 846/0, live-note 146/0. `cobalt_dev` is back at 0013 (F2 = F0) and `.env` is removed.
+The close timer is built to the re-issued card (`8aa68984`) at tip `e4c0c4dd`. All three rows are built.
+T1: before 04:00 ET the timer uses the evening's date. A fire after a finished close prints `DONE ALREADY` and calls nothing. T2: the plist, with no registry row; the `OPS_DESK_PREFIX` rule classes it. T3: his install now starts with `mkdir -p /Users/cobalt/cobalt-wt/.timer-logs`.
+Suites at `e4c0c4dd` (`DB: none`): offline 3737/0, `tests/ops` 486/0, live-note 146/0; with-DB not run. `.env` is absent. No decision is open.
 
 ## L74
 
@@ -88,12 +88,31 @@ Card `## RECORDS` copied: (1) "This job touches `configs/`: it takes the lock as
   After the undo: `13 passed, 15 warnings in 3.19s`; `git diff --stat` → only the X1 test edit (staged with the fix).
 - DevDocs: no `src/` module changed, and `docs/40 - DevDocs/cobalt/` has no page for `ops/desk/` scripts (`ls` above); no dated line written.
 - Commit `47f47e02 feat(close-timer): the nightly close started by a launchd timer (T1, T2 plist, T3 header; L1, L28, L32)`.
-- T2's registry half (`configs/cobalt/jobs.yaml` gains `com.cobalt.close-timer`) is NOT built: DECISIONS 1.
+- T2's registry half (`configs/cobalt/jobs.yaml` gains `com.cobalt.close-timer`) is NOT built: DECISIONS 1 (answered: the re-issued card drops it).
 
-### T3 RUN — the header, quoted whole (`ops/desk/close-timer.sh:6-12`)
+### E3 resumed on the re-issued card `8aa68984` (12:20 EDT)
+
+The re-issued card drops T2's registry half (no registry row; the `OPS_DESK_PREFIX` rule) and amends T1 and T3. Built:
+- T1: the date is the evening's. `ops/desk/close-timer.sh:67` `if [ "$hour" -lt 4 ]; then` → yesterday's ET date, else today's; the old rule (before 21:00, the previous date unless it was closed) is gone. Tests: `test_at_0105_with_yesterdays_close_absent_the_close_is_yesterdays` (→ `close 2031-05-14`), `test_at_0105_with_yesterdays_close_done_it_is_done_already` (→ `DONE ALREADY: close 2031-05-14`, no call), `test_from_0400_the_date_is_todays` (the 04:00 line, else today's); the X1 test now ends with the 00:05, 01:05, 02:05 and 03:05 fires each `DONE ALREADY: close 2031-05-14` and one call in all. The two old after-midnight tests are replaced.
+- T3: the header's first install line is `mkdir -p /Users/cobalt/cobalt-wt/.timer-logs` (`:7`), with the reason (`:8-9`).
+- Green: `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/test_close_timer.py` → `14 passed, 15 warnings in 2.90s`. Beside: `... tests/ops/test_close_timer.py tests/cobalt/test_jobs_restarts.py tests/cobalt/test_jobs.py tests/cobalt/test_jobs_reads.py` → `96 passed, 18 skipped, 15 warnings in 18.65s`.
+- THE MUTATIONS (Edit tool, run alone with `--tb=line`, undone):
+
+| # | mutation | result | first failing line |
+|---|---|---|---|
+| M8 | the fix undone: the old rule back (`-lt 21`, previous date unless closed) | 3 failed, 11 passed | `test_at_0105_with_yesterdays_close_done_it_is_done_already`: `assert 'DONE ALREADY: close 2031-05-14' in 'LAUNCHED: close 2031-05-15 — exit 0 — log …'` (also `test_from_0400_the_date_is_todays`: `assert ['close 2031-05-14'] == ['close 2031-05-15']`; the X1 test) |
+| M9 | never yesterday (`-lt 0`) | 3 failed, 11 passed | `test_at_0105_with_yesterdays_close_absent_the_close_is_yesterdays`: `assert ['close 2031-05-15'] == ['close 2031-05-14']` (also the 01:05 done test and the X1 test) |
+
+  After the undo: `git diff --stat` → `ops/desk/close-timer.sh`, `tests/ops/test_close_timer.py` (the fix) and this report; `git diff ops/desk/close-timer.sh` shows `-lt 4` and the header lines only.
+- Commit `e4c0c4dd fix(close-timer): the evening's date before 04:00 ET; his install makes the log folder first (T1, T3 as re-issued; L1, L72)`.
+
+### T3 RUN — the header, quoted whole (`ops/desk/close-timer.sh:6-15`, at `e4c0c4dd`)
 
 ```
 # HIS INSTALL — typed once, at the Mac, by him (nothing else installs it):
+#   mkdir -p /Users/cobalt/cobalt-wt/.timer-logs
+#     (first: launchd's own log paths, StandardOutPath / StandardErrorPath, need the folder
+#     before the first fire)
 #   cp /Users/cobalt/cobalt/ops/desk/com.cobalt.close-timer.plist ~/Library/LaunchAgents/
 #   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.cobalt.close-timer.plist
 # The one read that proves it:
@@ -104,7 +123,18 @@ Card `## RECORDS` copied: (1) "This job touches `configs/`: it takes the lock as
 
 ## RESTARTS
 
-`uv run cobalt jobs restarts a09f0862..HEAD` →
+At `e4c0c4dd`, `uv run cobalt jobs restarts a09f0862..HEAD` →
+```
+path	change	rule	restart
+docs/40 - DevDocs/reports/close-timer-build-2026-10-03.md	M	DOCS	-
+ops/desk/close-timer.sh	A	operator script; no Cobalt reader	-
+ops/desk/com.cobalt.close-timer.plist	A	operator script; no Cobalt reader	-
+tests/ops/test_close_timer.py	A	test/documentation; no resident	-
+RESTARTS: none
+```
+No UNCLASSIFIED row.
+
+The first run, at `47f47e02`:
 ```
 path	change	rule	restart
 docs/40 - DevDocs/reports/close-timer-build-2026-10-03.md	A	DOCS	-
@@ -116,6 +146,24 @@ RESTARTS: none
 No UNCLASSIFIED row.
 
 ## W THE THREE SUITES
+
+### W at `e4c0c4dd` (the re-issued card, `DB: none`) — this is the gate of record
+
+`<tip>` = `e4c0c4dd`.
+- (a0) `git diff --name-only --no-renames a09f0862` → WHOLE:
+  ```
+  docs/40 - DevDocs/reports/close-timer-build-2026-10-03.md
+  ops/desk/close-timer.sh
+  ops/desk/com.cobalt.close-timer.plist
+  tests/ops/test_close_timer.py
+  ```
+  Every path starts with `ops/`, `tests/ops/` or `docs/`. **`cobalt_dev: not taken (DB: none — 4 paths)`**.
+- (a) OFFLINE `uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy` → `3737 passed, 745 skipped, 1 xfailed, 36 warnings in 643.04s (0:10:43)`, exit 0 → `<p>` = 3737. This build adds no test under `tests/cobalt` or `tests/taxonomy`.
+- `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `486 passed, 1 xfailed, 15 warnings in 205.50s (0:03:25)`, exit 0 (472 at E0 + the 14 tests of `tests/ops/test_close_timer.py`).
+- (e) LIVE-NOTE, `.env` absent: `COBALT_LIVE_VAULT_ROOT=/Users/cobalt/Vault/Think uv run pytest -q -rs -p no:cacheprovider --color=no tests/cobalt/test_radar_evaluate.py tests/cobalt/test_replay_line.py tests/taxonomy/test_catalyst.py tests/taxonomy/test_predicate.py` → `146 passed, 1 skipped, 15 warnings in 28.99s`; the skip: `SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set` (does not name `COBALT_LIVE_VAULT_ROOT`) → `<l>` = 146.
+- (b)–(d), (f): not run (DB: none). `ls /Users/cobalt/cobalt-wt/close-timer-1003/.env` → `No such file or directory` (12:33:35 EDT).
+
+### The first W, at `47f47e02` (the first card, with the lock), kept for the file
 
 `<tip>` = `47f47e02`.
 
@@ -135,12 +183,27 @@ No UNCLASSIFIED row.
 
 ## PRE-STOP SELF-CHECK
 
+At `e4c0c4dd`, the resumed E3:
+1. Every added or changed test red for its named reason: the three new tests and the X1 test red under M8 (the fix undone) or M9 (never yesterday), quoted in the E3 table; `test_at_0105_with_yesterdays_close_absent_the_close_is_yesterdays` stays green under M8 (the old rule also picks yesterday when it is open) and is red under M9; `test_from_0400_the_date_is_todays` red under M8. No test stayed green under every mutation.
+2. Entry paths: the one caller is still the plist (no source reader, `grep` at the first close below); the date rule's states are pinned at 21:05 / 22:05 / 23:05 / 23:40 (today), 00:05–03:05 with the evening closed (DONE ALREADY), 01:05 with it open (yesterday), 04:05 (today).
+3. Re-read at the tip: `grep -n -F "mkdir -p /Users/cobalt/cobalt-wt/.timer-logs" ops/desk/close-timer.sh` → `7:`; the Grep tool for `-lt 4 ]` → `67:if [ "$hour" -lt 4 ]; then`; `git show --stat e4c0c4dd` → 2 files, `25 insertions(+), 17 deletions(-)`; `git log --oneline a09f0862..HEAD` (four commits, under FOR THE CHECK); the header lines 1–18 read whole (Read tool).
+
+At `47f47e02`, the first close (kept):
 1. 3 of 3 — every added test red for its named reason: all 13 red at E2 (no file on BASE, quoted under E2); the behaviour tests also red under M1–M7 (E3 table), the two negative controls (M2 name field, M3 only `CLOSE PUSHED` is done) red. No test stayed green under its mutation; one test was rewritten for a reason other than a mutation (the X1 test, E3, DECISIONS 2).
 2. 3 of 3 — entry paths: the script's one caller is the plist (`ProgramArguments`, pinned by `test_the_plist_fires_at_2105_and_hourly_to_0305_and_runs_the_script`); `grep -rn -F "close-timer" src configs ops/desk/desk-launch.sh ops/desk/desk-context.sh` → only compiled `.pyc` files (`Binary file … matches`, the worktree path `close-timer-1003` inside them), no source reader. States pinned: free evening, live hub, look-alike row, done report, failed report, no launcher, unreadable list, after midnight with the evening open, after midnight with it closed, the X1 night. The derivation's two paths (`ops/desk/close-timer.sh`, the plist) pinned by `test_the_timer_derives_no_restart_and_never_escalates` and by the RESTARTS table.
 3. 3 of 3 — re-read at the tip: `grep -n -F "export LC_ALL=C" ops/desk/close-timer.sh` → `31:export LC_ALL=C`; `grep -n -F "today's close launches after the 21:00 ET pause" ops/desk/desk-launch.sh` → `239:` (the `if` at `:238`); `git show --stat 47f47e02` (3 files, `152 insertions(+), 2 deletions(-)`); `git log --oneline a09f0862..HEAD` (two commits below).
 
 ## FOR THE CHECK
 
+The gate of record is `a09f0862..e4c0c4dd`, on the re-issued card `8aa68984`:
+- Commits: `a1ac978b wip(close-timer): red — T1 T2 tests, no script, no plist on BASE`; `47f47e02 feat(close-timer): the nightly close started by a launchd timer (T1, T2 plist, T3 header; L1, L28, L32)`; `f3fa0de0 docs(close-timer): build report — 47f47e02`; `e4c0c4dd fix(close-timer): the evening's date before 04:00 ET; his install makes the log folder first (T1, T3 as re-issued; L1, L72)`.
+- T1 (re-issued): the 01:05 tests, the 04:05 line and X1's after-midnight fires; reds M8, M9; green `14 passed`. T2: the plist and the classifier test, unchanged since `47f47e02` (red E2, M7); no registry row, as the card now says. T3: the header with its first `mkdir -p` line, quoted whole under E3.
+- X1: deferred at 21:05 and 22:05, one launch at 23:05, `DONE ALREADY: close 2031-05-14` at 23:40 and at 00:05, 01:05, 02:05, 03:05; one launcher call in all (`test_a_hub_live_at_2105_and_gone_later_gives_one_launch_that_night`). Done by hand: `test_a_finished_close_report_is_done_already`, no call.
+- X2: before 04:00 ET the date is yesterday's ET date, else today's (`close-timer.sh:67`); the tests are the three named under E3. This replaces the first build's rule and closes its DECISIONS 2.
+- X3: the RESTARTS table at `e4c0c4dd`: both files `operator script; no Cobalt reader`, `RESTARTS: none`; `test_the_timer_derives_no_restart_and_never_escalates`.
+- Suites at `e4c0c4dd`: offline 3737/0, `tests/ops` 486/0, live-note 146/0, with-DB `not run (DB: none)`. `<F0>` / `<F1>` / `<F2>` and lock times: `not run (DB: none)`. They are given under the first W for `47f47e02` only.
+
+The first close, `a09f0862..47f47e02` (kept):
 - Range `a09f0862..47f47e02`: `a1ac978b wip(close-timer): red — T1 T2 tests, no script, no plist on BASE`; `47f47e02 feat(close-timer): the nightly close started by a launchd timer (T1, T2 plist, T3 header; L1, L28, L32)`.
 - Per row: T1 — reds E2, mutations M1–M6, green `13 passed`. T2 plist — red E2, mutation M7, green. T2 registry — not built (DECISIONS 1). T3 — RUN, the header quoted whole under E3.
 - Engineering choices inside the rows' files, not named by the card: the plist carries `EnvironmentVariables` PATH (as `com.cobalt.prefill-daily` does; launchd's own PATH holds no `claude`, which `desk-launch.sh` runs) and `WorkingDirectory /Users/cobalt/cobalt`; the calendar entries carry no `Weekday` (every day, the card names none); the clock is read once (`date '+%Y-%m-%d %H'`) so the date and the hour cannot straddle midnight; "after midnight" is any hour before 21 (the same line `desk-launch.sh:238` draws); an unreadable session list is REFUSED (exit 1), not deferred; the tests stub `date` on PATH (a clock read answers `FAKE_NOW`; `date -j …` runs `/bin/date`), and three env names (`COBALT_REPO_ROOT`, `COBALT_WT_ROOT`, `COBALT_DESK_LIST`) stand in for the paths, as in `desk-launch.sh:130-132`.
@@ -153,15 +216,17 @@ No UNCLASSIFIED row.
 
 ## CONTINUE
 
-next: none — the build is closed (the check reads this report)
+next: none — the build is closed at `e4c0c4dd` (the check reads this report)
 
 ## DECISIONS
 
-1. **ASK DESK · FOR DEJAN — T2's registry half is not built.** The card says `configs/cobalt/jobs.yaml` gains `com.cobalt.close-timer` "in the class that restarts nothing (… the class name as `restarts.py` has it)". The registry has no such class: every `jobs:` row is an F17-watched launchd job, and the shape cannot be mapped without breaking it (L1). `JobSpec.plist_path` is `ops/<label>.plist` (`config.py:354-355`), but the card puts the plist in `ops/desk/`, so `test_every_registered_job_has_a_plist_in_ops` (`test_jobs.py:70`) and `cobalt validate` (`cli.py:323-330`) fail. A one-shot needs a `schedule` (`config.py:330`): `at` is one time (`:109-117`; `test_jobs.py:99-104` checks every plist entry against it) and a window that wraps midnight is refused (`:54-59`), so seven fires from 21:05 to 03:05 cannot be written. A registered job is also probed by the heartbeat watchdog, which this timer never stamps. The no-restart class `restarts.py` has is the path rule `OPS_DESK_PREFIX` (`:38`, `:226-229`), and the timer's two files already fall under it (X3 holds without a registry row). Safe default taken: no edit to `jobs.yaml`. A row for operator timers would mean a registry or schema change, and that is his to rule.
-2. **ASK DESK — after midnight, "else today's" calls the launcher for a date it refuses.** I built the card's RECORDS X2 as written. Once the evening's close is done, every fire from 00:05 to 03:05 runs `desk-launch.sh close <today>`, and that script refuses it (`:238-239`, before 21:00 ET), with the refusal appended to `close-<today>.log`. No close launches. The other reading, DONE ALREADY for the previous date, would change the card's seam (L72), so I did not build it. Safe default: as the card says.
-3. **ASK DESK — T3's proving read is unverified.** The card says `launchctl print gui/$(id -u)/com.cobalt.close-timer` shows the next fire time. `launchctl` is not on this build's list, so the header says the job is listed with its calendar triggers and that the field was not confirmed here. Safe default: honest header text, nothing typed.
-4. **ASK DESK — the plist's log folder.** `StandardOutPath` and `StandardErrorPath` sit in `/Users/cobalt/cobalt-wt/.timer-logs/`, as the card says. The script creates that folder (`mkdir -p`) on its first launch only. Whether launchd opens these paths before the folder exists was not verified. The per-date log the script writes does not depend on it. Safe default: none taken. If the desk wants it, his install text gains a `mkdir -p /Users/cobalt/cobalt-wt/.timer-logs`.
-5. **ASK DESK — which `desk-list.sh`.** At BASE no `desk-list.sh` sits beside the script (`ls`, PREFLIGHT). The timer reads `/Users/cobalt/.claude/ops/desk-list.sh`, the path `desk-context.sh:18` also reads. When card `03` lands `ops/desk/desk-list.sh`, the timer still reads the installed copy. Safe default: the installed path, the same one the desk-size guard uses.
+None open. The first close's five items below were answered by the judge (card RECORDS at `8aa68984`; desk `cto-2026-10-03.md:69` R63). D1, D3 and D5 were KEEP. D2 and D4 were fixed by the re-issued T1 and T3, which this resume built. They stay below for the file.
+
+1. **(answered: KEEP) ASK DESK · FOR DEJAN — T2's registry half is not built.** The card says `configs/cobalt/jobs.yaml` gains `com.cobalt.close-timer` "in the class that restarts nothing (… the class name as `restarts.py` has it)". The registry has no such class: every `jobs:` row is an F17-watched launchd job, and the shape cannot be mapped without breaking it (L1). `JobSpec.plist_path` is `ops/<label>.plist` (`config.py:354-355`), but the card puts the plist in `ops/desk/`, so `test_every_registered_job_has_a_plist_in_ops` (`test_jobs.py:70`) and `cobalt validate` (`cli.py:323-330`) fail. A one-shot needs a `schedule` (`config.py:330`): `at` is one time (`:109-117`; `test_jobs.py:99-104` checks every plist entry against it) and a window that wraps midnight is refused (`:54-59`), so seven fires from 21:05 to 03:05 cannot be written. A registered job is also probed by the heartbeat watchdog, which this timer never stamps. The no-restart class `restarts.py` has is the path rule `OPS_DESK_PREFIX` (`:38`, `:226-229`), and the timer's two files already fall under it (X3 holds without a registry row). Safe default taken: no edit to `jobs.yaml`. A row for operator timers would mean a registry or schema change, and that is his to rule.
+2. **(answered: fixed by T1 re-issued, built at `e4c0c4dd`) ASK DESK — after midnight, "else today's" calls the launcher for a date it refuses.** I built the card's RECORDS X2 as written. Once the evening's close is done, every fire from 00:05 to 03:05 runs `desk-launch.sh close <today>`, and that script refuses it (`:238-239`, before 21:00 ET), with the refusal appended to `close-<today>.log`. No close launches. The other reading, DONE ALREADY for the previous date, would change the card's seam (L72), so I did not build it. Safe default: as the card says.
+3. **(answered: KEEP) ASK DESK — T3's proving read is unverified.** The card says `launchctl print gui/$(id -u)/com.cobalt.close-timer` shows the next fire time. `launchctl` is not on this build's list, so the header says the job is listed with its calendar triggers and that the field was not confirmed here. Safe default: honest header text, nothing typed.
+4. **(answered: fixed by T3 re-issued, built at `e4c0c4dd`) ASK DESK — the plist's log folder.** `StandardOutPath` and `StandardErrorPath` sit in `/Users/cobalt/cobalt-wt/.timer-logs/`, as the card says. The script creates that folder (`mkdir -p`) on its first launch only. Whether launchd opens these paths before the folder exists was not verified. The per-date log the script writes does not depend on it. Safe default: none taken. If the desk wants it, his install text gains a `mkdir -p /Users/cobalt/cobalt-wt/.timer-logs`.
+5. **(answered: KEEP) ASK DESK — which `desk-list.sh`.** At BASE no `desk-list.sh` sits beside the script (`ls`, PREFLIGHT). The timer reads `/Users/cobalt/.claude/ops/desk-list.sh`, the path `desk-context.sh:18` also reads. When card `03` lands `ops/desk/desk-list.sh`, the timer still reads the installed copy. Safe default: the installed path, the same one the desk-size guard uses.
 
 ## RECORDS
 
@@ -173,6 +238,18 @@ next: none — the build is closed (the check reads this report)
 - No DevDocs dated line: no `src/` module changed and `docs/40 - DevDocs/cobalt/` has no page for `ops/desk/` scripts.
 - Cleanup owed: none. His install (the two commands in the script header) is his; nothing under `~/Library` was touched.
 - The card's records as re-read at PREFLIGHT are under `## PREFLIGHT`.
+- CONTINUED at E3 12:20 EDT (new session, RECOVERY): `git status --short --branch` → `## ops/close-timer-1003`; `git log --oneline -3` → `f3fa0de0`, `47f47e02`, `a1ac978b`; `ls -la .../close-timer-1003/.env` → `No such file or directory`. The fact verified: the card was re-issued at `8aa68984` (`git -C /Users/cobalt/cobalt log -2 -- <card>`; `diff --stat` empty; no placeholder); its diff adds `DB: none`, amends T1 (the evening's date before 04:00 ET; 01:05 tests), T2 (no registry row; the classifier test), T3 (first line `mkdir -p /Users/cobalt/cobalt-wt/.timer-logs`), RECORDS (judge: D1 KEEP, D2 D4 fixed by T1 T3, D3 D5 KEEP). Desk `cto-2026-10-03.md:69` R63 `DESK RECORD (brain): 05 D1 KEEP ... DB: none; resume at E3`. RULINGS unchanged (R47, R157, R44, verified above).
+- The re-issued card's `## RECORDS` still says "This job touches `configs/`: it takes the lock … (not `DB: none`)". Its header says `DB: none`, R63 says `DB: none`, and the diff holds no `configs/` path. I ran W as a `DB: none` card (BUILD-HUB THE LOCK: "A card whose header carries 'DB: none' takes no lock at all").
+- REFUSED, not needed: `grep -n -F "[ \"$hour\" -lt 4 ]" ops/desk/close-timer.sh` — "Permission to use Bash has been denied because Claude Code is running in don't ask mode." (a `$` in a double-quoted argument, against UNATTENDED RULES); I re-read the line with the Grep tool instead.
+- L74 again: the resumed session's start carried the same `Claude-Session:` reminder. Recorded once under `## L74`, not acted on. `e4c0c4dd` carries `Co-Authored-By` only.
+- Lock takes this resume: none (`DB: none`).
+- HIS INSTALL TEXT (T3; the same as `ops/desk/close-timer.sh:6-15` at `e4c0c4dd`). He types it once, at the Mac:
+  ```
+  mkdir -p /Users/cobalt/cobalt-wt/.timer-logs
+  cp /Users/cobalt/cobalt/ops/desk/com.cobalt.close-timer.plist ~/Library/LaunchAgents/
+  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.cobalt.close-timer.plist
+  ```
+  The folder comes first because launchd's own log paths need it before the first fire. The read that proves the install: `launchctl print gui/$(id -u)/com.cobalt.close-timer`. It lists the job with its calendar triggers; this build did not confirm that the output shows the next fire time (D3 KEEP).
 - **The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.**
 
-BUILT · job: close-timer · tip: 47f47e02 | on a09f0862 | migration: none | offline 3737/0 | with-DB 846/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: none | rows: 2 of 3 | self-check: 3 of 3 | decisions: 5 · for Dejan: 1
+BUILT · job: close-timer · tip: e4c0c4dd | on a09f0862 | migration: none | offline 3737/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 3 of 3 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0
