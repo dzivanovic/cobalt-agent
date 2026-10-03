@@ -706,6 +706,30 @@ OFF-LADDER work of 2026-09-25 and 2026-09-27 (ruled, not on a ladder line; each 
 | Sittings (Second Chance REDESIGN first, VWAP Continuation; V1 device session) | PENDING, day 7 | 09-25 R44 (after trading) → cancelled that day by 09-25 R83; V1 device session after the meter reset (09-25 R86). Nothing held; see BACKLOG PENDING SITTINGS. |
 | The 17 off-ladder lanes of the side-lanes survey | see `reports/side-lanes-2026-09-27.md` | Not copied here; its ESCALATE 3 (JEV house question; bars chunks 1a / 2 unmerged past L46's 3-day cap; the H1 doc timestamp) is carried to BACKLOG. |
 
+### Status 2026-10-02
+S3 status block (ruled 09-19 R14); S3's third; the `### Status 2026-09-24` and `### Status 2026-09-27` blocks above stay as written. Written by close hub `close-1002` — ONE close for 09-28 → 10-02 (no closes ran 09-28 to 10-01) — from `reports/cto-2026-09-28.md` (R1–R182), `cto-2026-09-29.md` (R1–R174), `cto-2026-09-30.md` (R1–R85), `cto-2026-10-01.md` (R1–R59), `cto-2026-10-02.md` (R1–R161); re-verified against the tree (L35): `git tag --list "deploy-2026-09-30*"` = `deploy-2026-09-30-1`, `-2`, `-3`, `-4`; `git tag --list "deploy-2026-10-0*"` = `deploy-2026-10-02-1`, `-2`. Status only — scope, dates and order change by his ruling alone. Legend: DONE-LIVE · DONE-DARK · BUILT-NOT-MERGED · BUILDING · NOT STARTED.
+
+| S3 feature | Status | Evidence |
+|---|---|---|
+| F11 Fill recompute + fill/exit capture | DONE-LIVE | S3 exits C1–C4 deployed as deploy 2 of 2 on 09-30: tag `deploy-2026-09-30-2`, migration 0021, smoke GREEN (09-30 R30). Builds/checks: C1 fix r2 check `ready for C2: YES` (09-28 R88); C2 fix r1 check `ready for C3: YES` (09-28 R175); C3 fix r1 check `ready for C4: YES` (09-29 R37); C4 fix r2 check round 3, E1 held (09-30 R1) → E1 fix deployed as `deploy-2026-09-30-3` (09-30 R41). First live-morning proof not yet recorded. |
+| F22 Trade-note auto-creation | DONE-LIVE | Same set (`S3-P2 · F22` is C4: `S3 EXITS C4 BUILT d05ae72d`, 09-29 R71; fix r2 `6785c7d5`, 09-29 R166); `deploy-2026-09-30-2` and E1 fix `deploy-2026-09-30-3`. E1 follow-up (inline comment on a replaced entry's own line) built and deployed in `deploy-2026-09-30-4` (e1-inline `fb48997e`, 10-01 R6). |
+| F14 DRC prefill / reconcile / DRC→mode | BUILDING | D1–D3 (with K1/K2 in the stack) deployed as deploy 1 of 2 on 09-30: tag `deploy-2026-09-30-1`, migrations 0016 0018 0019 0020, smoke GREEN (09-30 R24); D3 check `DRC D3 FIX R2 CHECK DONE · round: 3 · defects that HOLD: 0 · ready for K3: YES` (09-29 R125). K3 build drafted (`DRC K3 BUILD DRAFTED · base: 985cca3b`, 09-29 R149), NOT launched (held for the fixed-file flow, 09-30 R63). D5 NOT STARTED. |
+| F15 Prediction records | BUILDING | Design FINAL approved (`F15-PREDICTION-RECORDS-FINAL-2026-09-29.md` at `c3c93c7c`, 09-29 R151). P1 BUILT (`28d9364f`) and checked (`ready: YES`, tip `1d70cf72`, 09-30 R82); deployed in `deploy-2026-09-30-4`, migration 0022 (10-01 R6). P2 NOT STARTED. |
+
+**Stop date: 2026-10-07. S3: AT RISK — day 9 of 14.** Reason: F11, F22, the F14 D1–D3 stack and F15 P1 are live (four deploys 09-30 / 10-01), but K3, D5 and F15 P2 are not built and the S3 smoke (a live morning from tap through DRC and replay) has not run; five calendar days remain (10-03 and 10-04 are not trading days, R149). The 09-27 ALL STOP gate ended with the startup shrink (09-28 R19); since then the days went to the shrink, the fixed-file process (installed 09-30 R66) and the script program (10-02) rather than S3 features. Watch items (not a ruling): the dev-DB lock (L76) caused seven lock FAILs on 10-02 (10-02 R89); `11` dev-rebuild and `13` slot-guard are READY but not shipped (10-02 R147).
+
+OFF-LADDER work of 2026-09-28 → 2026-10-02 (ruled, not on a ladder line; each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Startup shrink (wake-up file 13,102 → 7,430 B) | DONE-LIVE | 09-28 R2 / R12 / R18 (his words); applied R19, pre-apply sha `8432810232a0b0972dcb298d808021b10772cccd`; pushed `26ca2530..f1c0386c` (R25). |
+| Voice peers (all tailnet devices) | DONE-LIVE | 09-28 R95; 10-01 R14 (never shipped until then); `05` check `ready: YES` tip `76f7f7d5` (10-01 R47); shipped in `deploy-2026-10-02-2` (10-02 R159). |
+| Radar stop record (`radar_score.detail` stores formation stop + trigger) | BUILT-NOT-MERGED | 09-28 R107 / R108 / R111; `RADAR STOP RECORD FIX R1 BUILT 4c1f4911`, check `ready for deploy: YES` (09-28 R164); no deploy row since. |
+| Fixed-files process (BUILD/CHECK/DEPLOY/CLOSE hubs, standing list) | DONE-LIVE | 09-30 R34 / R38 / R45 / R60 / R62 / R63; installed 09-30 R66 (`«INSTALL` count 0), pushed `54ec029d`; CLOSE-HUB approved with `STANDING-LIST.md` (R60). |
+| Interim close (`04`), desk-size guard (`02`), ops-glob, ops-seam, desk-tools a/b, worker-steps, launcher-checks, X5 tap refresh | DONE-LIVE | 10-01 R13 / R10 / R20; 10-02 R37 (his direction); shipped in `deploy-2026-10-02-1` (`04`, main `0f154bb5`) and `deploy-2026-10-02-2` (nine ships, main `35acb29d`). |
+| Dev-DB rebuild (`aset_sizings` slot fix) | DONE (dev only) | 10-02 R14 / R24: `max_attnum` 1581 → 54. The `11` dev-rebuild card and `13` slot-guard are READY, not shipped (10-02 R147). |
+| Note daily stop (`06`) | BUILT-NOT-MERGED | 10-01 R15 / R16 / R23; 10-02 R150: check `ready NO`, house B needed → PASS-2 on 10-03. |
+| Brain (standing reviewer/judge seat) | DONE (open) | 09-30 R23; 10-02 R30 / R131 (restart ordered by him or the brain is approved). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

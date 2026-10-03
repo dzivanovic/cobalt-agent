@@ -2261,3 +2261,686 @@ Source: `docs/40 - DevDocs/reports/cto-2026-09-27.md` §0, §4 (rows R1–R33), 
 - SMOKE LOOK moved (R31 / R32): Mon 2026-09-28 ≥21:41; no Sunday replay (`ops/com.cobalt.replay.plist` `StartCalendarInterval` Weekday 1–5 at 21:10; `logs/replay.err` last written 09-25 21:39 `DeadlineExceeded` on the pre-deploy code).
 - HELPER RULINGS (R28–R30): every helper a `--bg` session with rc + tab (L61 / L64 unchanged); Sonnet a separate meter; desk practice, not law.
 - `side-lanes-2026-09-27.md`: 17 off-ladder lanes listed; ESCALATE 3 — JEV house question open 3+ days, bars chunks 1a / 2 unmerged past L46's 3-day cap, the H1 doc timestamp (`FLOAT-HANDICAP-v3-2026-09-21.md:75`).
+
+### 2026-09-28 — Startup shrink derived, approved and applied; wake-up 13,102 → 7,430 B; S3 C1/C2 and DRC F14 fix rounds; radar stop-record built; smoke look RED
+Source: `cto-2026-09-28.md` §4 R1–R182. Bare "R<n>" = `09-28 R<n>`. Dated record only.
+- R1 00:00 DESK RECORD: startup derive `431481c6` done; one A/B list + the one approval go to him.
+- R2 04:58 HIS: shrink the startup further; one tribunal round, then one approval and apply.
+- R3 05:00 DESK RECORD: proposer `d7972cfd` launched.
+- R4 05:0x HIS: lean writing is the bar for every startup file; relayed to the drafter.
+- R5 05:13 HIS: desk on Cobalt; amend L64 now (not L68).
+- R6 05:16 HIS: "Yes, apply the text now"; L64 first paragraph rewritten (`H-L64-rc`).
+- R7 05:2x HIS: operator + brain desk later, not now; recorded as design input.
+- R8 05:26 DESK RECORD: round-1 tribunal hub `63dd5e1e` launched (Astra + Grok).
+- R9 05:26 DESK RECORD: blind Anthropic seat `cf27776f` launched.
+- R10 06:38 DESK RECORD: round-1 derive `c6f3425a` launched.
+- R11 07:00 DESK RECORD: derive done (19 files, 42 apply steps, wake-up read 45,270 B, commit `a2561203`); list sent to his phone.
+- R12 07:0x HIS: "A, I already ruled…" = every recommended side + the one approval; new L77 (only he reopens his rulings).
+- R13 07:1x DESK RECORD: prechecks hub `72efecc9` launched.
+- R14 07:1x DESK RECORD: X10 passed; context 45,459 → 40,347 tokens; flags added to the wake-up file.
+- R15 07:27 HIS: every wake-up logs its size against the previous one; `desk-wakeup-log.md` built.
+- R16 07:3x HIS: ">10%" check runs against the previous wake-up and the low-water mark.
+- R17 07:41 DESK RECORD: prechecks done (P1 7/10, X3b FAIL); five forced changes go to him.
+- R18 08:04 HIS: approved; boundaries line = DAS Trader Pro + TradeStation only.
+- R19 08:05 DESK RECORD: startup apply done (pre-apply sha `8432810232a0b0972dcb298d808021b10772cccd`, 18 backups); wake-up file 13,102 → 7,430 B.
+- R20 08:11 DESK RECORD: wake-up `7a86cd02`; measure 63,833 (−47.5%).
+- R21 08:2x HIS: the handover did not close the old desk in the app nor name this one `cto-desk`.
+- R22 08:29 HIS: "yes" to the `claude rm` test; `--name` kept the name.
+- R23 08:3x HIS: `--name` proven in the app; launch line += `--name cto-desk`.
+- R24 08:3x HIS: "yes"; `claude rm` proven to remove a session from the app list.
+- R25 08:4x HIS: push now — `git push origin main` `26ca2530..f1c0386c`.
+- R26 08:5x HIS: "A for now"; refresh line 250,000; development resumes in parallel.
+- R27 09:0x DESK RECORD: DRC re-issue drafter `4b37692e` launched.
+- R28 09:0x DESK RECORD: S3 exits build drafter `05ac4982` launched.
+- R29 09:0x DESK RECORD: Astra read drafter `de62776d` launched.
+- R30 08:5x DESK RECORD: Astra read hub `53b7d199` launched.
+- R31 08:53 DESK RECORD: hub `53b7d199` stopped `FAILED: astra — PARTIAL 0 of 19 — METER`.
+- R32 09:1x DESK RECORD: `20`–`27` drafted; five owner items open to him.
+- R33 09:2x DESK RECORD: `08`–`11` reissued; merge `main` into `drc/d1-trading-log` first.
+- R34 09:19 DESK RECORD: wake-up `6f5275b5`; measure 61,406 (−3.8%).
+- R35 09:27 HIS: "Approved as recomended" on R32 (1)–(5).
+- R36 09:3x DESK RECORD: C1 build `0b30ab5d` launched.
+- R37 09:3x DESK RECORD: merge drafter `4a998eea` launched.
+- R38 09:44 DESK RECORD: merge drafted; two new git-merge strings open to him.
+- R39 10:11 HIS: "approved" — `git merge --no-ff --no-edit main` and `git merge --abort` for `15`.
+- R40 10:1x HIS: "approved and push" — pushed `f1c0386c..dc2d0052` 10:25.
+- R41 10:29 DESK RECORD: merge build `4fe559b6` launched.
+- R42 10:32 DESK RECORD: Astra read relaunched as `d111fb02`.
+- R43 10:39 DESK RECORD: C1 build `0b30ab5d` BUILT `5164f867`.
+- R44 10:40 DESK RECORD: wake-up `0081a582`; measure 79,939 (+30.2%), wrong file read first.
+- R45 10:42 DESK RECORD: Astra read done (19 items, 17 hold, 0 fail).
+- R46 10:56 DESK RECORD: merge build `4fe559b6` `FAILED: O — offline red on 5bb1f4b5`; fix drafter next.
+- R47 10:59 DESK RECORD: C1 check `21` launched.
+- R48 11:02 HIS: rebuilt `CTO-DESK-WAKEUP.md`, restart the desk on it.
+- R49 11:00 HIS: replies ≤5 sentences.
+- R50 11:05 DESK RECORD: wake-up `9dcba8e3`; measure 76,806.
+- R51 11:09 DESK RECORD: F14 fix drafter `669e38b3` done.
+- R52 11:15 HIS: push main — `dc2d0052..6232ea59` 11:16.
+- R53 11:2x HIS: question only (is the growth verbosity); answered.
+- R54 11:23 HIS: two questions before any ruling; answered (53 rows, avg 892 chars).
+- R55 11:26 HIS: both fixed — one silent WAIT-DESK; short §4/§5/HANDOVER rows.
+- R56 11:37 HIS: "Trim it to live once only".
+- R57 11:38 DESK RECORD: C1 check `b58d8f3b` done (HOLD 2); fix drafter `07fd85b9` launched.
+- R58 11:48 DESK RECORD: fix drafter done; unsent pane text is not his word.
+- R59 11:49 DESK RECORD: C1 fix build `5642d589` launched.
+- R60 11:52 HIS: "A" — push main now.
+- R61 12:29 DESK RECORD: C1 fix build BUILT `3ceb3b11`.
+- R62 12:29 DESK RECORD: F14 build `fba35b56` launched.
+- R63 12:30 DESK RECORD: refresh (198,736 of 250,000).
+- R64 12:3x HIS: stop the old desk once its writing is done; `9dcba8e3` stopped + removed.
+- R65 12:39 DESK RECORD: wake-up `77617fd6`; 60,237 (−21.6%).
+- R66 12:55 DESK RECORD: F14 build `fba35b56` `FAILED at W (c1)`, 3 with-DB reds.
+- R67 12:56 DESK RECORD: C1 fix check `30` launched.
+- R68 12:57 DESK RECORD: F14 r2 drafter launched.
+- R69 13:08 DESK RECORD: F14 r2 drafter `1a0898e5` done (FIX 3).
+- R70 13:08 DESK RECORD: F14 r2 build `32` launched.
+- R71 13:28 HIS: "B" — no refresh now.
+- R72 13:35 DESK RECORD: C1 fix check `bdf0d307` done, `ready for C2: NO`.
+- R73 13:35 DESK RECORD: C1 fix r2 drafter `34` launched.
+- R74 13:40 DESK RECORD: F14 r2 build `cf7fa786` BUILT `7cdc5774`.
+- R75 13:40 DESK RECORD: F14 check `33` launched.
+- R76 13:41 DESK RECORD: refresh; successor `ec06d2a8`.
+- R77 13:45 DESK RECORD: wake-up `ec06d2a8` (+18.4%); drafter `33179f5f` done.
+- R78 13:46 DESK RECORD: C1 fix r2 build `be680fb3` launched.
+- R79 14:17 DESK RECORD: F14 check `943c70bb` done, `ready for 08: NO`.
+- R80 14:18 DESK RECORD: F14 r3 drafter `cc73bee8` launched.
+- R81 14:25 DESK RECORD: C1 fix r2 build BUILT `944f632e`.
+- R82 14:26 DESK RECORD: C1 fix r2 check `cc8ab270` launched.
+- R83 14:30 HIS: "A" — wake-up tuning (VIEW takes the pane id from §5).
+- R84 14:32 DESK RECORD: F14 r3 drafter done.
+- R85 14:34 DESK RECORD: F14 r3 build `e0dda789` launched.
+- R86 14:49 DESK RECORD: F14 r3 build BUILT report-only, head `84827649`.
+- R87 14:50 DESK RECORD: refresh; successor `61252298`.
+- R88 15:52 DESK RECORD: wake-up `61252298`; `cc8ab270` done, `ready for C2: YES`.
+- R89 15:53 DESK RECORD: C2 build `22` launched.
+- R90 15:55 DESK RECORD: F14 check `39` launched.
+- R91 16:07 HIS: "A" — a WAIT-DESK timeout with HANDOVER committed is safe; successor stops the predecessor.
+- R92 16:16 HIS: no cards today; voice widget refused.
+- R93 16:21 HIS: "A" — radar no-cards read `40` launched.
+- R94 16:23 HIS: voice works from every Tailscale device.
+- R95 16:25 HIS: `voice.yaml` `allowed_peers` = localhost + five tailnet devices.
+- R96 16:26 DESK RECORD: refresh; successor `0b30eb13`.
+- R97 16:26 HIS: voice widget shows which device it runs on.
+- R98 16:30 DESK RECORD: wake-up `0b30eb13`; 76,449 (+6.7%).
+- R99 16:30 DESK RECORD: `40` done, cause open (2 readings).
+- R100 16:35 DESK RECORD: F14 check `a701e06f` `ready for 08: NO`, HOLD 2.
+- R101 16:35 DESK RECORD: F14 r4 drafter `41` launched.
+- R102 16:39 HIS: "A" — radar no-cards read 2 (`44`) launched.
+- R103 16:45 DESK RECORD: `41` `c286eb28` done; `42` launches next.
+- R104 16:46 DESK RECORD: refresh; successor `b8ae1122`.
+- R105 16:48 DESK RECORD: wake-up `b8ae1122` (61,078, −20.1%).
+- R106 17:13 HIS: "A" — the desk runs `44`'s two ASK DESK reads.
+- R107 17:15 DESK RECORD: `radar_score.detail` stores no formation stop (L57 gap); next read refused by the classifier.
+- R108 17:22 HIS: "A" — radar stop-record drafter `a02ca444` launched.
+- R109 17:25 HIS: "a" — stop leftover `b63d56a0`; stop refused by the classifier.
+- R110 17:29 DESK RECORD: he is out a few hours; pre-approvals put to him.
+- R111 17:32 HIS: "A for both" — launch `46`/`47`; tonight's window carries radar + voice config.
+- R112 17:33 DESK RECORD: F14 r4 build `c729fd72` launched.
+- R113 17:33 DESK RECORD: `45` done; two new `.env` strings open to him.
+- R114 17:35 HIS: "Approved" — two `radar-stop-record` cp/rm strings.
+- R115 17:36 DESK RECORD: radar build `46` launched.
+- R116 17:37 DESK RECORD: refresh; successor `9cc3824f`.
+- R117 17:47 HIS: "you can do A" — `wait-desk-idle.sh` ends on `REFRESHED`.
+- R118 17:47 HIS: new Sonnet sessions on `claude-sonnet-5-5`; each family runs its highest model.
+- R119 17:50 DESK RECORD: F14 check `43` launched after `42` BUILT `e64b1dac`.
+- R120 17:51 DESK RECORD: `43` `1fb914fd` `FAILED: authorization mismatch` (desk miss); relaunched.
+- R121 17:54 HIS: outgoing desk MESSAGEs the successor `HANDOVER DONE <commit>`; desk stays Opus 5.5.
+- R122 18:01 DESK RECORD: `46` `2b1b387a` `FAILED: W — offline red`, 9 byte-identity pins.
+- R123 18:03 HIS: "A" — `46` re-issued with SR-4.
+- R124 18:11 DESK RECORD: `43` `ready for 08: YES`.
+- R125 18:12 DESK RECORD: refresh; successor `6568f449`.
+- R126 18:14 DESK RECORD: `6568f449` took the desk; `claude stop 9cc3824f` denied.
+- R127 18:18 HIS: "Try to stop it now on your own" — `9cc3824f` stopped + removed.
+- R128 18:21 HIS: "Go ahead" — DRC re-point drafter `48` launched.
+- R129 18:35 DESK RECORD: `48` `DRC CHAIN REPOINTED · pins carried: 12 of 12`.
+- R130 18:36 DESK RECORD: `46` BUILT `b9598574`; desk stop denied.
+- R131 18:42 HIS: verbal allow for `claude stop`/`claude rm`; `be3df087` stopped + removed.
+- R132 18:52 HIS: "A" — he deletes the desk's H7 line.
+- R133 18:53 DESK RECORD: radar check `47` launched.
+- R134 18:53 HIS: "Stop I want B" — permanent allow rules.
+- R135 18:55 HIS: "Don't ask me… Launch everything you need. Keep working."
+- R136 18:57 DESK RECORD: refresh; successor `cf658169`.
+- R137 19:00 DESK RECORD: `08` launched.
+- R138 19:22 DESK RECORD: `47` `ready for deploy: NO`, SR-T4.
+- R139 19:22 DESK RECORD: refresh.
+- R140 19:26 DESK RECORD: `1daa3de7` took the desk; bare `claude rm` denied.
+- R141 19:26 DESK RECORD: radar fix r1 drafter `49` launched.
+- R142 19:37 DESK RECORD: `49` done; `51` seated Astra (desk miss), re-issued.
+- R143 19:37 DESK RECORD: re-issue drafter `52` launched.
+- R144 19:40 DESK RECORD: `52` done; `51` = Opus · Sol · Grok.
+- R145 19:47 DESK RECORD: radar fix build `50` launched.
+- R146 19:47 DESK RECORD: `08` BUILT `b86271f9` (with-DB 4089/0).
+- R147 19:48 DESK RECORD: C2 check `23` launched.
+- R148 20:16 DESK RECORD: `50` BUILT `4c1f4911`.
+- R149 20:18 DESK RECORD: refresh; successor `930cb1a8`.
+- R150 20:20 DESK RECORD: `930cb1a8` took the desk.
+- R151 20:28 DESK RECORD: `23` `ready for C3: NO`, HOLD 3.
+- R152 20:28 DESK RECORD: `09` launched.
+- R153 20:49 HIS: "Just leav it" — `5e0b927a` stays.
+- R154 20:51 DESK RECORD: `09` `FAILED: packet — 302,408 B`; ceiling 400,000 B.
+- R155 20:51 DESK RECORD: `09` relaunched.
+- R156 21:14 DESK RECORD: `09` `0bc1aa9c` HOLD 6, `ready for D3: NO`.
+- R157 21:14 DESK RECORD: refresh.
+- R158 21:17 DESK RECORD: wake-up `58abb167`.
+- R159 21:18 DESK RECORD: radar check `51` launched.
+- R160 21:21 DESK RECORD: C2 fix r1 drafter `53` launched.
+- R161 21:21 DESK RECORD: D2 fix r2 drafter `56` launched.
+- R162 21:31 DESK RECORD: `53` done (FIX 3).
+- R163 21:31 DESK RECORD: refresh; successor `f030d47a`.
+- R164 21:34 DESK RECORD: wake-up `f030d47a`; `51` `ready for deploy: YES`.
+- R165 21:36 DESK RECORD: C2 fix build `54` launched.
+- R166 21:37 DESK RECORD: `56` done (FIX 7).
+- R167 21:38 DESK RECORD: smoke-look re-point drafter `59` launched.
+- R168 21:41 DESK RECORD: `60-s2-smoke-look.md` launched.
+- R169 21:42 DESK RECORD: `60` launched as `4f4de1a5`; watch denied.
+- R170 21:52 HIS: "A" — `60` runs unwatched.
+- R171 21:52 DESK RECORD: `60` `S2 SMOKE LOOK DONE · replay: PROVEN · smoke: RED` (K8.1 `input_stale = 1`, card 433).
+- R172 22:16 DESK RECORD: `54` BUILT `5e77800f`; `55` launched.
+- R173 22:17 DESK RECORD: D2 fix r2 build `57` launched.
+- R174 22:18 DESK RECORD: `55` first run `FAILED PREFLIGHT: stagger`; relaunched.
+- R175 22:37 DESK RECORD: `55` `ready for C3: YES`.
+- R176 22:38 DESK RECORD: refresh; successor `e41f7813`.
+- R177 22:41 DESK RECORD: wake-up `e41f7813`.
+- R178 22:55 DESK RECORD: `57` BUILT `6ebfe634`; `58` launched.
+- R179 22:56 DESK RECORD: C3 re-point drafter `61` launched.
+- R180 23:01 DESK RECORD: C3 build `24` launched.
+- R181 23:27 DESK RECORD: `58` HOLD 4, last round; A/B open to him.
+- R182 23:49 DESK RECORD: `24` `FAILED: W (c)`, stray card 11822 on `cobalt_dev`; A/B open to him.
+- PUSHES (L55): R25 `26ca2530..f1c0386c`; R40 `f1c0386c..dc2d0052`; R52 `dc2d0052..6232ea59`; R60 pushed (range not recorded).
+- NO DEPLOY on 09-28: `git tag --list "deploy-2026-09-2*"` lists no `deploy-2026-09-28`.
+
+### 2026-09-29 — C3 and C4 exits builds checked, DRC D3 checked (round 3), F15 design FINAL and approved; trading-day builds on Opus/Fable desk; no deploy
+Source: `cto-2026-09-29.md` §4 R1–R174. Bare "R<n>" = `09-29 R<n>`. Dated record only.
+- R1 05:25 HIS: "A,A" — D2's 4 HOLDs carried into `10`; the desk deletes stray card 11822.
+- R2 05:26 DESK RECORD: card 11822 and 3 transitions deleted on `cobalt_dev`.
+- R3 05:27 DESK RECORD: `24` resumed `CONTINUE: W`.
+- R4 05:28 DESK RECORD: refresh; successor `77a6d272`.
+- R5 05:30 DESK RECORD: wake-up `77a6d272` 61,166 (−7.6%).
+- R6 05:32 DESK RECORD: D3 re-point drafter launched.
+- R7 05:35 DESK RECORD: Qwen day-open GREEN; batch tab close denied.
+- R8 05:40 HIS: "A" — 39 dead hub tabs closed.
+- R9 05:43 HIS: close a hub's tab in the same turn the job is checked (W8).
+- R10 05:44 DESK RECORD: `24` C3 BUILT (`78549817`).
+- R11 05:45 DESK RECORD: C3 check `25` launched.
+- R12 05:46 DESK RECORD: D3 re-point done (tip `f52ed883`).
+- R13 05:47 DESK RECORD: refresh; successor `b50d5fd5`.
+- R14 05:52 DESK RECORD: D3 build `10` launched.
+- R15 05:47 DESK RECORD: wake-up `b50d5fd5` 56,730.
+- R16 05:57 HIS: refused command retried once another way; desk next restarts as Fable 5.1; H7 done in `.claude/settings.json:19`–`:20`.
+- R17 06:0x HIS: plan every task from the approved allow list first.
+- R18 06:14 DESK RECORD: his settings edit adds the desk's routine shapes.
+- R19 06:19 DESK RECORD: `10` `78cdf446` sat on a dialog (outside `--add-dir`); relaunch line fixed.
+- R20 06:19 DESK RECORD: `25` `S3 EXITS C3 CHECK DONE`, 4 HOLDs, `ready for C4: NO`.
+- R21 06:31 HIS: "A" — plate carries all of NOW; refresh to Fable 5.1.
+- R22 06:36 DESK RECORD: wake-up `f49308e6` (Fable 5.1) 80,151 (+41.3%).
+- R23 06:41 DESK RECORD: C3 fix r1 drafter launched.
+- R24 06:52 DESK RECORD: `02` drafted (FIX 4).
+- R25 06:53 DESK RECORD: C3 fix r1 build `03` launched; lock conflict with `10` named.
+- R26 07:19 DESK RECORD: `10` `FAILED: E7 — cobalt_dev lock held`.
+- R27 07:58 DESK RECORD: `03` C3 fix r1 BUILT `78e9df82`.
+- R28 07:58 DESK RECORD: `10` resumed `CONTINUE: E7`.
+- R29 08:01 DESK RECORD: refresh; successor `626c5d24`.
+- R30 08:03 DESK RECORD: wake-up `626c5d24` 67,865.
+- R31 08:05 DESK RECORD: C3 fix r1 check `04` launched.
+- R32 08:11 DESK RECORD: `10` `FAILED: E7 — with-DB suite red` (1 of 4,151, D3-6 query).
+- R33 08:13 DESK RECORD: E7 fix drafter `05` launched.
+- R34 08:24 DESK RECORD: `05` drafted (row D3-9).
+- R35 08:24 DESK RECORD: `10` relaunched from `## CONTINUE`.
+- R36 08:52 DESK RECORD: `10` `DRC D3 BUILT a8c622ca` (offline 3616/0, with-DB 4157/0).
+- R37 08:52 DESK RECORD: `04` `ready for C4: YES`.
+- R38 08:53 DESK RECORD: refresh; successor `5f3d5664`.
+- R39 08:55 DESK RECORD: wake-up `5f3d5664` 63,225; day-open GREEN.
+- R40 08:58 DESK RECORD: D3 ASK DESK 5/6/8/9 desk readings; open.
+- R41 08:58 DESK RECORD: D3 check `11` launched.
+- R42 09:02 DESK RECORD: `11` `FAILED: packet` over ceiling; no round spent.
+- R43 09:02 DESK RECORD: `11` relaunched, ceiling 642,924 B.
+- R44 09:03 DESK RECORD: C4 re-issue drafter `06` launched.
+- R45 09:11 DESK RECORD: `06` `S3 C4 REISSUED` (base `78e9df82`).
+- R46 09:11 DESK RECORD: `06` ESCALATE 1–5 desk readings; open.
+- R47 09:12 DESK RECORD: refresh; successor `f109d2c0`.
+- R48 09:15 DESK RECORD: wake-up `f109d2c0` 59,831.
+- R49 09:17 DESK RECORD: C4 build `26` launched.
+- R50 09:20 DESK RECORD: `11` relaunched again, ceiling 678,318 B.
+- R51 09:47 DESK RECORD: `11` `DRC D3 CHECK DONE · round: 1 · defects that HOLD: 10 · ready for K3: NO`.
+- R52 09:47 DESK RECORD: `26` `FAILED: W — cobalt_dev carries 3 stray cards`; open to him.
+- R53 09:48 DESK RECORD: D3 fix r1 drafter `07` launched.
+- R54 10:06 DESK RECORD: `07` drafted (FIX 8); O-1 open to him.
+- R55 10:08 DESK RECORD: refresh; successor `b0db3d62`.
+- R56 10:11 DESK RECORD: wake-up `b0db3d62` 63,422.
+- R57 11:33 DESK RECORD: "proceed with whatever builds are necessary" — F15 design lane starts.
+- R58 11:37 DESK RECORD: F15 proposer `10` launched.
+- R59 11:47 DESK RECORD: `F15 PREDICTION RECORDS PROPOSED`.
+- R60 11:48 DESK RECORD: F15 tribunal drafter `11` launched.
+- R61 11:57 DESK RECORD: `F15 TRIBUNAL DRAFTED`.
+- R62 11:58 DESK RECORD: refresh; successor `43aa5880`.
+- R63 12:03 DESK RECORD: wake-up `43aa5880` 61,984.
+- R64 12:03 DESK RECORD: F15 round-1 hub `12` + Anthropic seat `13` launched.
+- R65 12:08 HIS: R52 → A — C4's 3 stray cards deleted by the desk (done 12:13).
+- R66 12:08 HIS: O-1 → A — one byte-write string for the D3 fixture.
+- R67 12:08 HIS: `profit_loss` stays blank until he names its unit.
+- R68 12:08 HIS: desk refresh never below 220,000 tokens.
+- R69 12:13 DESK RECORD: D3 re-issue drafter `15` launched.
+- R70 12:14 DESK RECORD: `13` `F15 ANTHROPIC R1 DONE`.
+- R71 12:38 DESK RECORD: `26` `S3 EXITS C4 BUILT d05ae72d`.
+- R72 13:20 DESK RECORD: `15` `FAILED: 08 edit` (harness isolation guard).
+- R73 13:23 DESK RECORD: `12` `F15 TRIBUNAL DONE · round: 1 · astra: TIMEOUT`.
+- R74 13:23 DESK RECORD: F15 derive `14` launched.
+- R75 13:24 DESK RECORD: C4 check `27` launched.
+- R76 13:28 DESK RECORD: `15` `FAILED: 08 edit` again (classifier); string designed.
+- R77 13:33 DESK RECORD: `14` `F15 DERIVED · DRAFT FINAL`.
+- R78 13:34 DESK RECORD: refresh; successor `9ae345c8`.
+- R79 13:37 DESK RECORD: wake-up `9ae345c8` 60,966.
+- R80 13:39 HIS: R76 → A — `08`'s one byte-write string approved.
+- R81 13:45 DESK RECORD: D3 fix r1 build `08` launched (`4c5d6970`).
+- R82 13:50 DESK RECORD: `09` re-issued whole.
+- R83 14:26 DESK RECORD: `08` `DRC D3 FIX R1 BUILT 15c23748`.
+- R84 14:40 DESK RECORD: `27` watch TIMEOUT; staging stopped by a classifier.
+- R85 14:51 HIS: R84 → B — `27` closed FAILED at staging; `09` launches now.
+- R86 14:52 DESK RECORD: D3 fix r1 check `09` launched.
+- R87 14:53 DESK RECORD: `27` closed; four `cp` strings designed.
+- R88 14:55 HIS: four `cp` strings approved for `27`.
+- R89 14:56 DESK RECORD: refresh.
+- R90 15:00 DESK RECORD: wake-up `de332914` 60,709.
+- R91 15:03 DESK RECORD: `27` re-issued whole.
+- R92 15:05 DESK RECORD: F15 round-2 drafter `16` launched.
+- R93 15:19 DESK RECORD: `16` `F15 R2 PROMPTS DRAFTED`.
+- R94 15:26 DESK RECORD: `09` `DRC D3 FIX R1 CHECK DONE · round: 2 · defects that HOLD: 2 · ready for K3: NO`.
+- R95 15:26 DESK RECORD: `27` relaunched.
+- R96 15:28 DESK RECORD: D3 fix r2 drafter `20` launched.
+- R97 15:46 DESK RECORD: `20` `DRC D3 FIX R2 DRAFTED` (FIX 2).
+- R98 15:47 DESK RECORD: D3 fix r2 build `21` launched.
+- R99 15:51 DESK RECORD: `27` `S3 EXITS C4 CHECK DONE · round: 1 · defects that HOLD: 1 · ready for the deploy set: NO`.
+- R100 15:52 DESK RECORD: Astra METER, back 17:04.
+- R101 15:53 DESK RECORD: C4 fix r1 drafter `23` launched.
+- R102 15:54 DESK RECORD: refresh (228,573).
+- R103 15:58 DESK RECORD: wake-up `6650d4e2` 69,823.
+- R104 16:06 DESK RECORD: `23` `S3 EXITS C4 FIX R1 DRAFTED`.
+- R105 16:25 DESK RECORD: C4 fix r1 build `24` launched.
+- R106 16:25 DESK RECORD: `21` `DRC D3 FIX R2 BUILT b8ac291b`.
+- R107 17:06 DESK RECORD: F15 round 2 hub `17` + seat `18` launched.
+- R108 17:08 DESK RECORD: `24` on a dialog at PREFLIGHT (outside `--add-dir`).
+- R109 17:09 DESK RECORD: `24` relaunched.
+- R110 17:18 DESK RECORD: F15 hub `FAILED: packet`; relaunch refused by the classifier.
+- R111 17:19 DESK RECORD: seat `18` `F15 ANTHROPIC R2 DONE`.
+- R112 17:21 HIS: "A" — relaunch hub `17`.
+- R113 17:44 DESK RECORD: hub `FAILED: astra TIMEOUT`.
+- R114 17:44 DESK RECORD: refresh.
+- R115 17:47 DESK RECORD: desk `cf198313` took over; 62,641.
+- R116 17:51 DESK RECORD: hub `17` relaunched (`55b6037c`).
+- R117 17:52 HIS: "A" — wake-up low-water reset to 62,641.
+- R118 17:54 DESK RECORD: hub `FAILED: astra METER`, return Oct 4 2:06 PM.
+- R119 17:56 HIS: "A" — F15 round 2 without Astra.
+- R120 17:58 DESK RECORD: no-Astra re-issue drafter `26` launched.
+- R121 18:00 DESK RECORD: `24` `S3 EXITS C4 FIX R1 BUILT 01d0fbb9`; D3 fix r2 check `22` launched.
+- R122 18:05 DESK RECORD: `26` re-issued `17`/`19`.
+- R123 18:06 DESK RECORD: refresh (237,581).
+- R124 18:08 DESK RECORD: desk `f1c1880a` took over; 70,073.
+- R125 18:31 DESK RECORD: `22` `DRC D3 FIX R2 CHECK DONE · round: 3 · defects that HOLD: 0 · ready for K3: YES`.
+- R126 18:34 HIS: "Read the checklist".
+- R127 18:34 HIS: "A" — he rules only scope, dates, deploys, money; refresh ≤2 a day.
+- R128 19:12 HIS: OpenAI meter out; checks seat Opus 5.5 + Grok.
+- R129 19:21 HIS: better first builds; the desk runs the project itself.
+- R130 19:22 DESK RECORD: F15 round-2 hub relaunched `1eb45b9b`.
+- R131 19:23 DESK RECORD: build-defect survey helper launched.
+- R132 19:25 DESK RECORD: `.git/hooks/pre-commit` refuses §4 rows over 300 chars.
+- R133 19:35 DESK RECORD: survey done (FIX rows 202); checklist K25.
+- R134 19:34 DESK RECORD: 09-28 rows cleanup launched.
+- R135 19:43 DESK RECORD: `17` `F15 TRIBUNAL R2 DONE · round: 2`.
+- R136 19:42 DESK RECORD: F15 derive `19` launched.
+- R137 19:50 DESK RECORD: cleanup done (rows cut 142), commit `95c88164`.
+- R138 19:51 DESK RECORD: refresh 1 of 2.
+- R139 19:54 DESK RECORD: wake-up `8b10fd57` 59,018.
+- R140 19:57 DESK RECORD: `19` `F15 DERIVED · FINAL`.
+- R141 19:57 DESK RECORD: F15 R2-4 settled (P1/P2 from `s3/exits-c4`).
+- R142 20:00 DESK RECORD: C4 fix r1 check `25` launched.
+- R143 20:00 DESK RECORD: hook also counts a LAUNCHED row's gate literals.
+- R144 20:03 DESK RECORD: K3 drafter `29` launched.
+- R145 20:14 HIS: F15 R2-1 (c) = B; R2-2 = B.
+- R146 20:14 DESK RECORD: F15 R2-5 settled.
+- R147 20:15 DESK RECORD: F15 FINAL fold `32` launched.
+- R148 20:19 DESK RECORD: `32` `F15 FINAL FOLDED`.
+- R149 20:22 DESK RECORD: `29` `DRC K3 BUILD DRAFTED`.
+- R150 20:22 DESK RECORD: K3 ASK DESK 1–3 as written.
+- R151 20:24 HIS: F15 FINAL approved (`c3c93c7c`).
+- R152 20:26 DESK RECORD: F15 P1 drafter `33` launched.
+- R153 20:37 DESK RECORD: `25` `S3 EXITS C4 FIX R1 CHECK DONE · round: 2`, HOLD 0.
+- R154 20:37 DESK RECORD: U2 changes his bytes; fix r2 and round 3.
+- R155 20:38 DESK RECORD: C4 fix r2 classifier `36` launched.
+- R156 20:39 DESK RECORD: refresh 2 of 2.
+- R157 20:43 DESK RECORD: wake-up `0469677f`; `claude rm` refused.
+- R158 20:43 DESK RECORD: `33` `F15 P1 BUILD DRAFTED`.
+- R159 20:43 DESK RECORD: `33` ASK DESK readings.
+- R160 20:50 HIS: no compound commands; no A/B on an ordered step.
+- R161 20:50 DESK RECORD: restarts tonight 17:44, 18:06, 19:51, 20:39.
+- R162 20:52 DESK RECORD: `36` `S3 EXITS C4 FIX R2 DRAFTED`.
+- R163 20:53 DESK RECORD: C4 fix r2 build `37` launched.
+- R164 20:58 DESK RECORD: R161 tuning withdrawn; launch turn +33K measured.
+- R165 21:02 DESK RECORD: launch reads cut (checklist L6).
+- R166 21:35 DESK RECORD: `37` `S3 EXITS C4 FIX R2 BUILT 6785c7d5`.
+- R167 21:35 DESK RECORD: his credits message; `38` not launched; open.
+- R168 21:41 DESK RECORD: C4 fix r2 check `38` launched (failed at AUTHORIZATION 21:42).
+- R169 21:49 HIS: the C4 check and the DRC D3 + S3 exits C1–C4 deploy run tonight.
+- R170 21:51 DESK RECORD: stacked deploy drafter `39` launched.
+- R171 21:55 HIS: next desk on Sonnet 5.5; Fable/Opus `brain` tab on ask.
+- R172 22:05 DESK RECORD: `39` `STACKED DEPLOY 0929 DRAFTED`; DRC × C1 conflict in 12 paths.
+- R173 22:05 DESK RECORD: tonight's set A/B open to him.
+- R174 23:41 DESK RECORD: `38` relaunched with its gate literals.
+- NO DEPLOY on 09-29: `git tag --list "deploy-2026-09-2*"` lists no `deploy-2026-09-29`. No push row on 09-29.
+
+### 2026-09-30 — Three deploys land (DRC D3, S3 exits C1–C4 + seam, E1 fix); fixed-files process drafted, tested, approved and installed; first card builds; deploy 4 card refused
+Source: `cto-2026-09-30.md` §4 R1–R85. Bare "R<n>" = `09-30 R<n>`. Dated record only.
+- R1 00:09 DESK RECORD: `38` `S3 EXITS C4 FIX R2 CHECK DONE · round: 3`, HOLD 1 (E1).
+- R2 00:09 DESK RECORD: E1 deploy A/B open to him.
+- R3 06:08 HIS: "A" — S3 exits C1–C4 deploy as they stand; E1 a one-line follow-up.
+- R4 06:09 HIS: DRC D3 and S3 C1–C4 both deployed this morning before 09:30 ET.
+- R5 06:11 DESK RECORD: deploy re-issue drafter `01` launched.
+- R6 06:14 DESK RECORD: refresh; successor `3adfd15c` on Sonnet 5.5.
+- R7 06:17 DESK RECORD: wake-up `3adfd15c` 53,100 (−16.1%).
+- R8 06:27 DESK RECORD: `01` re-issued `41`; two allow strings open to him.
+- R9 06:40 HIS: two deploys one by one, existing list; 09:30 block cancelled.
+- R10 06:43 HIS: "run it" — standing until prod is usable for trading.
+- R11 06:45 DESK RECORD: seam build `42` launched.
+- R12 06:52 DESK RECORD: deploy split drafter `43` launched.
+- R13 06:55 HIS: two gates in series and a resident restart accepted.
+- R14 06:56 DESK RECORD: deploy 1 `44` launched.
+- R15 07:03 DESK RECORD: deploy 1 attempt 1 FAILED at T, nothing touched.
+- R16 07:10 DESK RECORD: seam build attempt 1 FAILED at commit (hook); relaunched.
+- R17 07:16 DESK RECORD: deploy 1 attempt 2 FAILED at gate G(a), nothing touched.
+- R18 07:46 DESK RECORD: deploy 1 attempt 3 FAILED at RESTARTS, nothing touched.
+- R19 08:17 DESK RECORD: attempt 4 gate GREEN (`149f1368`); read-outside-dir dialog dismissed.
+- R20 08:40 DESK RECORD: attempt 4 FAILED at D1; attempt 5 resumes at D0.
+- R21 08:55 DESK RECORD: attempt 5 stopped at 4.2b (outside `--add-dir`); attempt 6 `0c1f2c08`.
+- R22 09:03 DESK RECORD: attempt 5 took residents down ≈08:44; prod down ≈11 min; attempt 6 restored; attempt 7 launched.
+- R23 09:12 DESK RECORD: `brain` Opus 5.5 `e079c3f6` launched on his ask.
+- R24 09:17 DESK RECORD: DEPLOYED deploy 1 of 2 (attempt 8 `457cb535`): tag `deploy-2026-09-30-1`, migrations 0016 0018 0019 0020, outage 288 s, smoke GREEN.
+- R25 09:16 DESK RECORD: `main` merged into `seam/drc-s3-0930` (`98f86fdf`).
+- R26 09:18 DESK RECORD: deploy 2 `45` launched (migration 0021).
+- R27 09:24 DESK RECORD: deploy 2 attempt 1 FAILED at STEP-T.
+- R28 09:56 DESK RECORD: attempt 2 gate GREEN (`686f6d57`); stopped at D1 on radar RED.
+- R29 09:59 DESK RECORD: attempt 3 stopped at D1 again; attempt 4.
+- R30 10:20 DESK RECORD: DEPLOYED deploy 2 of 2 (attempt 4): tag `deploy-2026-09-30-2`, migration 0021, outage 287 s, smoke GREEN; radar probe RED before and after (OWED).
+- R31 10:25 DESK RECORD: E1 fix build `47` launched.
+- R32 10:40 DESK RECORD: E1 built `5c92b589`; check/deploy-3 drafter launched.
+- R33 10:45 DESK RECORD: E1 fix check `50` launched.
+- R34 10:44 HIS: "I want all this" — brain's ten recommendations; one Opus drafter, nine files.
+- R35 10:46 DESK RECORD: fixed-files drafter `52` launched.
+- R36 11:08 DESK RECORD: deploy 3 `51` launched.
+- R37 11:21 DESK RECORD: fixed-files drafter `5c0d479e` done (9 files).
+- R38 11:30 HIS: new check flow + seat order; deploys self-launch on clean checks.
+- R39 11:32 DESK RECORD: loop-2 drafter `53` launched.
+- R40 11:38 DESK RECORD: NOW carries the fixed-file ruling (8,566 → 8,155 B).
+- R41 11:44 DESK RECORD: DEPLOYED deploy 3 (E1 fix): tag `deploy-2026-09-30-3`, no migration, outage 20 s, smoke GREEN.
+- R42 11:43 HIS: apply the brain's RULED WORKER ENDINGS to the three hub files.
+- R43 11:53 DESK RECORD: loop-2 drafter `6c51dd83` done (9 files).
+- R44 11:53 HIS: production is usable; 09:30 override ended.
+- R45 12:15 HIS: agrees with all the brain's recommendations.
+- R46 12:18 DESK RECORD: loop-3 drafter `54` launched.
+- R47 12:33 HIS: "push" — `git push origin main` `6a8c21e1..3f914ca3`, 505 commits.
+- R48 13:05 DESK RECORD: loop-3 drafter `267a34f1` done.
+- R49 14:06 HIS: run the 14 UNTESTED items on a scratch session; nothing installed.
+- R50 14:10 DESK RECORD: scratch test hub `55` launched.
+- R51 14:20 DESK RECORD: desk probes done; refresh 2 of 2.
+- R52 14:3x DESK RECORD: scratch hub `f9cd8480` done 9/9 PASS; main pushed to `c6ef5f25`.
+- R53 14:4x DESK RECORD: brain's F3 probe PASS.
+- R54 14:4x DESK RECORD: 9:30 override ended; nightly close ruled.
+- R55 14:4x DESK RECORD: fourth drafter `56` launched.
+- R56 14:48 HIS: no daily refresh limit; never below 220,000.
+- R57 14:59 DESK RECORD: loop-4 drafter `cd0e926a` done (13 files, 54 rule rows, 16 NEW strings).
+- R58 15:02 DESK RECORD: test-2 hub `57` launched; DF-1–DF-3 applied (`4999d017`).
+- R59 15:15 DESK RECORD: D4–D6 applied (`4be06af0`); close worker `close-0930` launched in sandbox.
+- R60 15:15 HIS: approves `STANDING-LIST.md` once (`4be06af0`).
+- R61 15:33 DESK RECORD: close test PASS; 7 string changes → him alone.
+- R62 15:40 HIS: approves the 7 deploy-line string changes; install; push main.
+- R63 15:52 HIS: "Yes on all" — run INSTALL now and push main.
+- R64 15:55 DESK RECORD: fold rows 1–4 applied; batched dry-run refused `[Instruction Poisoning]`.
+- R65 16:30 DESK RECORD: fold rows 1–60 done; brain `58` launched.
+- R66 16:50 DESK RECORD: six fixed files installed to `prompts/`; `«INSTALL` count 0.
+- R67 16:36 HIS: commit his `.claude/settings.json` edits; desk-line cut ≥196 B (A).
+- R68 16:55 DESK RECORD: scratch proof PASS; desk line narrowed (10,094 B vs 10,146).
+- R69 16:50 HIS: run the real job (F15 P1) now on the fixed files.
+- R70 16:51 DESK RECORD: F15 P1 card drafter `60` launched.
+- R71 16:57 HIS: no new worker models or vendors until the process is healthy.
+- R72 16:59 DESK RECORD: F15 P1 build `59e11e4d` launched on card `61`.
+- R73 17:01 HIS: model-by-complexity tribunal waits at least a week; record per-job stats.
+- R74 17:08 HIS: run the E1 follow-up beside the F15 P1 build.
+- R75 17:09 DESK RECORD: e1-inline build `79f9dc68` launched on card `62`.
+- R76 17:11 HIS: a `brain` he asked for is stopped only on his word.
+- R77 17:33 DESK RECORD: e1-inline BUILT `7e6f8e85`.
+- R78 17:36 DESK RECORD: e1-inline check `f8997752` launched.
+- R79 18:33 DESK RECORD: e1-inline pass 1 `CHECK DONE`; F15 build `FAILED: W` (lock), `CONTINUE: W`.
+- R80 20:32 DESK RECORD: F15 P1 BUILT `28d9364f`; e1-inline PASS-2 and judge launched.
+- R81 20:39 DESK RECORD: e1-inline pass 2 `ready: YES` (`fb48997e`); F15 P1 check `d716d827` launched.
+- R82 22:37 DESK RECORD: F15 P1 check pass 1 `ready: YES` (`1d70cf72`).
+- R83 22:40 DESK RECORD: deploy card drafter `1ce0d171` launched.
+- R84 22:45 DESK RECORD: `desk-launch.sh deploy` on card `67` (tag `deploy-2026-09-30-4`, migration 0022).
+- R85 22:48 DESK RECORD: that launch refused by the classifier `[Production Deploy]`; nothing launched.
+- DEPLOY (L35): `git tag --list "deploy-2026-09-30*"` = `deploy-2026-09-30-1`, `-2`, `-3`, `-4`; -1 (R24), -2 (R30), -3 (R41) as quoted above. `deploy-2026-09-30-4` carries a later landing; see the 10-01 block.
+- PUSHES (L55): R47 `6a8c21e1..3f914ca3`; R52 main pushed to `c6ef5f25`; INSTALL pushed `54ec029d` (§5 CURRENT).
+
+### 2026-10-01 — Deploy f15e1 lands (tag `deploy-2026-09-30-4`, migration 0022); desk-size guard, voice peers, interim close, dev-DB lock and note-daily-stop built; checks run to 23:59; nothing else deployed
+Source: `cto-2026-10-01.md` §4 R1–R59. Bare "R<n>" = `10-01 R<n>`. Dated record only.
+- R1 05:58 HIS: deploy set f15e1 (card `67`, migration 0022) now, after the 04:00 window (L73).
+- R2 06:06 HIS: a deploy of clean checks launches unattended; classifier refusal → one retry citing this row.
+- R3 06:14 HIS: launch a `brain` to review the workflow.
+- R4 06:19 HIS: fixed judge file (`JUDGE-HUB.md` + `JUDGE-CARD.md`).
+- R5 06:33 HIS: brain becomes a standing prompt later; this one one-off.
+- R6 06:48 DESK RECORD: `DEPLOYED deploy-2026-09-30-4` main `fe1b6ccd` (e1-inline `fb48997e` + f15-p1 `1d70cf72`, migration 0022, smoke GREEN); push awaits his word.
+- R7 06:49 DESK RECORD: brain `f80eab82` and judge `e8910f22` launched.
+- R8 07:30 HIS: refresh from 250,000 at a quiet moment, 300,000+ at the next turn boundary.
+- R9 07:33 DESK RECORD: desk-size-guard build `ee26d4c9` launched.
+- R10 07:36 HIS: "launch" — build the desk-size guard as shown.
+- R11 07:58 DESK RECORD: build `ee26d4c9` RESTARTS decision answered YES.
+- R12 08:00 DESK RECORD: ASET sheet survey `e292c64e` launched; 09-28 R95 voice peers never shipped.
+- R13 08:20 HIS: old sheet `/` stays until `/radar` is proven; CLOSE closes a card with no input.
+- R14 08:25 HIS: voice open to all tailnet devices; build + deploy.
+- R15 08:40 HIS: note's `Daily HARD Stop:` swapped; card `06`.
+- R16 08:16 HIS: find what in the morning process writes the swapped stops.
+- R17 08:21 HIS: ask `brain` to review scratch DB per build and idle workers.
+- R18 08:30 DESK RECORD: aset-interim-close build `29ab43d3` launched.
+- R19 08:26 DESK RECORD: desk-size-guard BUILT `e5d6238b`; check `9fa489ae` and voice-peers build `9dc071fd` launched.
+- R20 08:31 HIS: yes on brain's four (L76 middle step, lock-script strings, checklist L7a, production read).
+- R21 08:31 DESK RECORD: devdb-lock build `ad114188` launched.
+- R22 08:50 DESK RECORD: prod read — daily_stop full 210 / half 420 written together 09-30 13:25:09.
+- R23 08:58 HIS: apply daily stops full 420 / half 210; settings write refused by the classifier.
+- R24 09:30 HIS: close FILLED cards 498, 499, 500; brain wrote the commands; he ran them.
+- R25 09:30 DESK RECORD: desk ran nothing; wrong-page steps given 3 times.
+- R26 09:30 HIS: how the desk obeys his explicit direct order; open.
+- R27 17:22 DESK RECORD: `04` BUILT (`5ed7c3fd`); cards 04/05/07 filled.
+- R28 17:22 DESK RECORD: `04` check `df76d51b` launched; guard check pass 1 `ready NO`.
+- R29 18:55 HIS: "A" — `04` check FAILED 1; relaunch.
+- R30 18:55 DESK RECORD: `04` check `6ee3fdff` launched.
+- R31 20:19 HIS: refresh as an Opus 5.5 desk; resolve the stuck `04` check itself.
+- R32 20:19 DESK RECORD: wake-up MODEL now `claude-opus-5-5`.
+- R33 20:24 DESK RECORD: handover to `c8c12f50`; 7 stale folds applied.
+- R34 20:25 HIS: every desk successor starts as Opus 5.5, standing.
+- R35 20:28 DESK RECORD: voice-peers check `a48d028f` launched.
+- R36 20:28 DESK RECORD: `04` check FAILED again: no house A; A/B to him.
+- R37 20:30 HIS: "A" — one copy permission in the check fixed file.
+- R38 20:32 DESK RECORD: `stage-copy.sh` written; `CHECK-HUB.md` edit refused `[Self-Modification]`.
+- R39 20:34 HIS: the desk may edit `CHECK-HUB.md`; staging string added.
+- R40 20:40 HIS: what the redesigned workflow still misses; `design-gap-2026-10-01.md`.
+- R41 20:43 HIS: "A" — G1 step-script card tomorrow; checks 04, 05, 07, 02 (+06) tonight.
+- R42 20:48 HIS: why not all five in one deploy; card `06` base moved.
+- R43 20:50 DESK RECORD: note-daily-stop build `00e284ce` launched.
+- R44 20:56 HIS: approved — tonight's deploy by the bare launch, one retry citing R2.
+- R45 21:00 DESK RECORD: brain tab closed; its 3-part fix UNRULED.
+- R46 21:18 DESK RECORD: `06` build `FAILED: W (b)` (lock held); kept.
+- R47 21:19 DESK RECORD: `05` check `ready: YES` (`76f7f7d5`).
+- R48 21:38 DESK RECORD: `06` BUILT `0b678bd0`.
+- R49 21:38 DESK RECORD: `04` check `5c30c211` launched.
+- R50 22:38 DESK RECORD: `04` pass 1 `ready: NO` (`fb0922a9`); A1 held.
+- R51 22:38 DESK RECORD: desk-size-guard PASS-2 `3405db1e` launched.
+- R52 22:48 DESK RECORD: `02` PASS-2 `ready: YES` (`ee667f3c`).
+- R53 22:48 DESK RECORD: devdb-lock check `6a9281f7` launched.
+- R54 22:50 DESK RECORD: refresh.
+- R55 22:52 DESK RECORD: desk `54b9449c` took over; 63,149.
+- R56 23:48 DESK RECORD: `07` pass 1 `ready: NO` (`aeefb6df`).
+- R57 23:48 DESK RECORD: `07` G1 settled by desk reading.
+- R58 23:49 DESK RECORD: `07` PASS-2 `c40d77f9` launched.
+- R59 23:56 DESK RECORD: `07` PASS-2 `ready: NO` on G1; needs his ruling.
+- DEPLOY (L35): `git tag --list "deploy-2026-09-30*"` lists `deploy-2026-09-30-4`, landed 10-01 06:48 per R6; no `deploy-2026-10-01*` tag exists (`git tag --list "deploy-2026-10-0*"` = `deploy-2026-10-02-1`, `-2` only).
+
+### 2026-10-02 — Dev-DB rebuilt; A1/G1/D2 ruled; two deploys land (`deploy-2026-10-02-1` interim close, `-2` nine ships); ten script cards built and checked; 10-03 cards written
+Source: `cto-2026-10-02.md` §4 R1–R161 (no R13). Bare "R<n>" = `10-02 R<n>`. Dated record only.
+- R1 01:57 DESK RECORD: 02:00 cutoff reached with no word on A1/D2/G1; tonight's deploy carries `05` + `02`.
+- R2 01:57 DESK RECORD: deploy card drafter `1b98962c` launched.
+- R3 01:59 DESK RECORD: card drafted, `RULINGS: none`.
+- R4 01:59 DESK RECORD: deploy `c0ccdede` voice-guard launched.
+- R5 02:26 DESK RECORD: deploy FAILED at gate G (c): `cobalt_dev` `aset_sizings` out of column slots; prod untouched.
+- R6 02:27 DESK RECORD: no second deploy tonight; dev rebuild first.
+- R7 05:59 HIS: A1 = A — `source='sheet'` is enough evidence; `xfail` removed.
+- R8 05:59 HIS: G1 = A — the `OPS_TOOLS` lift stands.
+- R9 05:59 HIS: D2 = A — `--add-dir /Users/cobalt/.claude/ops` on the launch lines.
+- R10 05:59 HIS: one deploy before 09:30 ET Friday; supersedes R6.
+- R11 06:06 DESK RECORD: no approved command writes DDL on `cobalt_dev`; asked him A/B.
+- R12 06:09 DESK RECORD: classifier refused writing the rebuild prompt; desk error named.
+- R14 06:18 HIS: approves the dev-rebuild command; `04` ships before 09:30.
+- R15 06:20 DESK RECORD: prompt `01` runs `auto` with the same allow list.
+- R16 06:21 DESK RECORD: `desk-launch.sh prompt` refused `01` twice.
+- R17 06:21 DESK RECORD: orphan tab closed; `07` build stopped + removed.
+- R18 06:23 HIS: the desk hand-types prompt `01`'s launch line once.
+- R19 06:23 DESK RECORD: hub `cf75cbe2` devdb-rebuild launched by hand.
+- R20 06:24 DESK RECORD: standard-scripts drafter `eaf4f8f9` launched.
+- R21 06:25 DESK RECORD: refresh (228,025).
+- R22 06:26 DESK RECORD: wake-up `30eca1db` 58,834.
+- R23 06:32 DESK RECORD: drafter DRAFTED cards `11` `12` `13`.
+- R24 06:35 DESK RECORD: hub `cf75cbe2` REBUILT `aset_sizings` (`max_attnum` 1581 → 54).
+- R25 06:36 DESK RECORD: `04` check PASS-2 `f0147e00` launched.
+- R26 06:43 HIS: card `12`'s devfix line approved.
+- R27 06:43 HIS: no low-water reset.
+- R28 06:45 HIS: one order, one ask — LAWS L78.
+- R29 06:46 HIS: L78 only unblocks.
+- R30 06:50 HIS: open `brain` on one standard for unattended work.
+- R31 06:56 DESK RECORD: `brain` `776c834d` launched.
+- R32 07:15 HIS: L73 override for JOB `aset-interim-close-1002`.
+- R33 07:15 DESK RECORD: `04` PASS-2 `ready YES` (`b8bf83eb`).
+- R34 07:15 DESK RECORD: deploy `571bd691` launched.
+- R35 07:15 DESK RECORD: `brain` DONE (24 scripts in six cards, 26 strike-or-merge rows).
+- R36 07:50 DESK RECORD: DEPLOYED `deploy-2026-10-02-1` main `0f154bb5`, `04` live, smoke GREEN.
+- R37 07:57 HIS: apply `brain-direction-2026-10-02.md` exactly from DO NOW.
+- R38 07:57 HIS: direction row 1 — the bare-command fix, three parts.
+- R39 07:57 HIS: direction row 2 — permission by class.
+- R40 07:57 HIS: direction row 3 — desk deny strings.
+- R41 07:57 HIS: direction row 4 — judge seat answers held findings under an order.
+- R42 07:57 HIS: direction row 5 — STRIKE OR MERGE table, one yes for the set.
+- R43 07:57 HIS: direction row 6 — folds at the nightly close only.
+- R44 07:57 HIS: direction row 7 — the close started by a timer.
+- R45 07:57 HIS: direction row 8 — equal-tree suites (L68).
+- R46 07:57 HIS: direction row 9 — empty restart set deploys at any hour.
+- R47 07:57 HIS: direction row 10 — script program by Anthropic seats only.
+- R48 07:57 HIS: direction row 11 — the brain may write more than one file.
+- R49 07:58 DESK RECORD: `CHECK-HUB.md` gains the NO OUTSIDE HOUSE line.
+- R50 07:58 DESK RECORD: build `11` dev-rebuild `c065da86` launched.
+- R51 08:00 DESK RECORD: build `15` ops-glob `1c5e487d` launched.
+- R52 08:00 HIS: FOR DEJAN 11 = A — X5 fix card now.
+- R53 08:00 HIS: FOR DEJAN 12 = A — script cards beside the ladder.
+- R54 08:00 HIS: FOR DEJAN 13 = A — a standing `BRAIN-HUB.md`.
+- R55 08:01 DESK RECORD: X5 drafter `c8547d89` launched.
+- R56 08:07 DESK RECORD: X5 drafter DRAFTED card `22`.
+- R57 08:07 DESK RECORD: refresh (220,192).
+- R58 08:10 DESK RECORD: wake-up `85f601c7` 69,175.
+- R59 08:10 DESK RECORD: brain answered `22`'s 3 decisions.
+- R60 08:11 DESK RECORD: build `22` x5-tap-refresh `47d04201` launched.
+- R61 08:26 DESK RECORD: `22` FAILED at E2 (lock held; desk error).
+- R62 08:32 DESK RECORD: `11` FAILED at W (b), same lock.
+- R63 08:44 DESK RECORD: `15` ops-glob BUILT `9fa18f14`.
+- R64 08:44 DESK RECORD: lock rules for starts.
+- R65 09:03 DESK RECORD: `11` dev-rebuild BUILT `1df251b9`.
+- R66 09:03 DESK RECORD: parallel launches (L72 over R64).
+- R67 09:05 DESK RECORD: launcher refused `16` while the lock is held.
+- R68 09:05 DESK RECORD: build `16` ops-seam `fa19bbe1` launched.
+- R69 09:07 DESK RECORD: `16` FAILED PREFLIGHT (lock); CONTINUEd 09:08.
+- R70 09:37 DESK RECORD: `22` X5 BUILT `2a5fa102`.
+- R71 09:37 DESK RECORD: check `22` pass 1 `05665611` launched.
+- R72 09:54 DESK RECORD: `22` check `ready YES`.
+- R73 10:00 DESK RECORD: check `15` pass 1 `05a3ebe0` launched.
+- R74 10:03 DESK RECORD: build `17` desk-tools-a launched.
+- R75 10:04 DESK RECORD: `15` check `ready YES`, open 1.
+- R76 10:05 DESK RECORD: build `18` desk-tools-b launched.
+- R77 10:05 DESK RECORD: brain rules `15` O3 ships to the follow-up list.
+- R78 10:07 DESK RECORD: build `19` worker-steps launched.
+- R79 10:10 DESK RECORD: build `13` slot-guard launched.
+- R80 10:14 DESK RECORD: `13` FAILED PREFLIGHT (lock); CONTINUEd.
+- R81 10:31 DESK RECORD: check `11` pass 1 launched.
+- R82 10:32 DESK RECORD: `16` ops-seam BUILT `551f07e0`.
+- R83 10:33 DESK RECORD: brain answered `16`'s 3 decisions.
+- R84 10:34 DESK RECORD: build `12` devfix-route launched.
+- R85 10:36 DESK RECORD: check `16` pass 1 launched.
+- R86 10:36 DESK RECORD: `17` FAILED at W (lock).
+- R87 10:37 DESK RECORD: check `16` FAILED PREFLIGHT (lock).
+- R88 10:39 DESK RECORD: check `11` FAILED at step 5 (lock).
+- R89 10:43 DESK RECORD: `13` FAILED at E2 (lock); seven lock FAILs today.
+- R90 10:47 DESK RECORD: `18` FAILED at W (lock).
+- R91 10:50 DESK RECORD: `19` FAILED at W (b) (lock).
+- R92 10:50 DESK RECORD: refresh (238,169).
+- R93 10:52 DESK RECORD: wake-up `1c388055` 72,670.
+- R94 10:55 DESK RECORD: lock free; check `11` CONTINUEd.
+- R95 10:56 DESK RECORD: check `16` CONTINUEd.
+- R96 10:57 DESK RECORD: `17` desk-tools-a BUILT `d4bad986`.
+- R97 10:58 DESK RECORD: brain rules `17` DECISION 1 does not hold.
+- R98 11:01 DESK RECORD: `16` check `ready YES`.
+- R99 11:01 DESK RECORD: `13` CONTINUEd.
+- R100 11:09 DESK RECORD: `12` FAILED at W (lock); R95 "released" was wrong.
+- R101 11:16 DESK RECORD: `13` FAILED at W (b) (lock).
+- R102 11:24 DESK RECORD: `12` CONTINUEd.
+- R103 11:26 DESK RECORD: `11` check `ready YES` (`68dddee3`).
+- R104 11:43 DESK RECORD: `12` left W; `13` CONTINUEd.
+- R105 11:45 DESK RECORD: `12` BUILT `63649058`.
+- R106 11:45 DESK RECORD: brain on `12`'s 3 decisions.
+- R107 12:03 DESK RECORD: build `21` launcher-checks launched.
+- R108 12:04 DESK RECORD: `13` BUILT `7eafd308`.
+- R109 12:05 DESK RECORD: brain on `13`; D3 pinned now.
+- R110 12:07 DESK RECORD: `18` CONTINUEd.
+- R111 12:18 DESK RECORD: `13` BUILT `05c8b7fa`, self-check 3 of 3.
+- R112 12:26 DESK RECORD: `19` CONTINUEd.
+- R113 12:27 DESK RECORD: `18` BUILT `f2a0217c`.
+- R114 12:27 DESK RECORD: brain on `18`'s 7 decisions.
+- R115 12:44 DESK RECORD: `21` FAILED at W (b) (lock).
+- R116 12:46 DESK RECORD: `21` CONTINUEd.
+- R117 12:46 DESK RECORD: `19` worker-steps BUILT `8f3c4876`.
+- R118 12:47 DESK RECORD: brain on `19`.
+- R119 13:05 DESK RECORD: check `17` pass 1 launched.
+- R120 13:05 DESK RECORD: `21` BUILT `a2dd9400`.
+- R121 13:06 DESK RECORD: brain on `21`; D3 fixed now.
+- R122 13:24 DESK RECORD: `21` E3 fix done, FAILED at W (b).
+- R123 13:24 DESK RECORD: refresh (241,275).
+- R124 13:27 DESK RECORD: desk `9853f972` woke 63,809.
+- R125 13:39 DESK RECORD: lock free; `21` CONTINUEd.
+- R126 13:39 DESK RECORD: check `17` `ready YES` (`30452b64`).
+- R127 14:11 DESK RECORD: `21` BUILT `039ccab9`.
+- R128 14:11 DESK RECORD: check `12` launched.
+- R129 14:11 DESK RECORD: brain on `21`; `DeadlockDetected` flake, 2nd sighting.
+- R130 14:24 DESK RECORD: brain `776c834d` relays an order to replace it.
+- R131 14:26 HIS: replace brain `776c834d` now; R76 amended — a brain restart ordered by him or the brain is approved.
+- R132 14:27 DESK RECORD: brain `6ff9bb1d` (Fable 5.1) launched by `23-brain-judge.md`.
+- R133 14:44 DESK RECORD: check `13` launched.
+- R134 14:44 DESK RECORD: check `12` `ready YES` (`46712ab4`).
+- R135 14:45 HIS: tonight's one deploy launches as soon as every queued check is READY.
+- R136 14:49 DESK RECORD: check `13` `ready YES`.
+- R137 14:49 DESK RECORD: check `18` launched.
+- R138 15:24 DESK RECORD: check `19` launched.
+- R139 15:25 DESK RECORD: check `18` `ready YES` (`8914827e`).
+- R140 15:57 DESK RECORD: check `19` `ready YES` (`e416589c`).
+- R141 15:57 DESK RECORD: check `21` launched.
+- R142 16:27 DESK RECORD: check `21` `ready YES` (`1ad4c546`).
+- R143 16:27 DESK RECORD: check `06` launched.
+- R144 16:28 DESK RECORD: deploy-scripts drafter `128d466f` launched.
+- R145 16:29 DESK RECORD: refresh (231,466).
+- R146 16:31 DESK RECORD: desk `15fed5c2` took the seat; 60,373.
+- R147 16:35 DESK RECORD: deploy card `25` drafted (9 ships); `11` + `13` out.
+- R148 16:35 HIS: L73 override for JOB `scripts-1002`.
+- R149 17:03 HIS: Saturday 10-03 is not a trading day; deploys any time.
+- R150 17:13 DESK RECORD: check `06` `ready NO`; out of tonight.
+- R151 17:13 DESK RECORD: deploy hub `7edf938c` launched on card `25`.
+- R152 17:13 HIS: no desk dev-DB survey; question sent to the brain.
+- R153 17:18 DESK RECORD: brain answered R152 (at most two fixed dev DBs, not yet).
+- R154 17:29 HIS: a card with no `src/`, test, config or migration path takes no dev-DB lock.
+- R155 17:29 DESK RECORD: lock-relief card launches first 10-03.
+- R156 17:32 HIS: lock-relief card Anthropic seats only.
+- R157 17:40 HIS: "B" — the brain's full process list for 10-03 runs this week.
+- R158 17:51 DESK RECORD: brain wrote 10-03 cards `01`–`07`, `20`.
+- R159 17:51 DESK RECORD: DEPLOYED `deploy-2026-10-02-2` main `35acb29d`, 9 ships, smoke GREEN, RESTARTS aset + radar.
+- R160 17:51 DESK RECORD: `install-ops`: 21 linked, 4 kept.
+- R161 21:01 DESK RECORD: close `706efa20` (`close-1002`) launched by `desk-launch.sh close 2026-10-02`.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-0*"` = `deploy-2026-10-02-1`, `deploy-2026-10-02-2`; main `0f154bb5` (R36) and `35acb29d` (R159) as quoted from the desk rows.
+- PUSHES (L55): none recorded on 10-02 before this close.
