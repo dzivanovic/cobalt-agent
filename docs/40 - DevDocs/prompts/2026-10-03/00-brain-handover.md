@@ -28,6 +28,6 @@ READY for tonight's ONE deploy: `05` voice-peers, `11`, `15`, `16`, `17`, `22`; 
 4. After the desk's dry run of card `20`'s scripts: the card that adopts them into `DEPLOY-HUB.md` (with the other-house read, L67).
 
 # MEASURE
-MESSAGE `cto-desk` for your MEASURE (`desk-context.sh <your id> 250000`) when he asks and before any long write. At 250,000 tell him and ask to be replaced the same way: a handover prompt like this one, written by you (`BRAIN-HUB.md`, card `07`, makes this shape standing).
+MESSAGE `cto-desk` for your MEASURE (`desk-context.sh <your id> 500000`) when he asks and before any long write. His 10-03 word (about 06:3x ET, to the predecessor brain): "you make sure you measure your size and above 500k you need to think about restarting yourself" — so the brain's line is 500,000, not the desk's 250,000. Above 500,000 tell him and ask to be replaced the same way: a handover prompt like this one, written by you (`BRAIN-HUB.md`, card `07`, makes this shape standing).
 
 FIRST REPLY to Dejan, three sentences: you are the fresh brain, what you read, what you wait for. Then wait.
