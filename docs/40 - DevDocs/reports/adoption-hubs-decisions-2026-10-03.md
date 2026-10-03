@@ -1,0 +1,19 @@
+# JUDGE — adoption-hubs build `1c349c49` on `0a4a7743`, the eleven decisions (2026-10-03, brain, afternoon by the desk's clock)
+
+Read: `## DECISIONS` 1–11 of `adoption-hubs-build-2026-10-03.md`. HOLDS: 2, 3, 4, 9 are script facts → new card `03c-adoption-scripts-b-card.md` (stacked on `03`'s tip beside `02`); 5, 6 and the deploy call of 4 → rows for a re-issue of `02` (resume at E3); 7 is NOT his; the rest KEEP. Nothing by CONTINUE.
+
+| # | item | answer |
+|---|---|---|
+| 1 | the `grep -c` count proof cannot reach 0 (launch string, E2's with-DB red) | KEEP. The proof reads "outside the launch line and E2"; E2's single-file with-DB red stays a typed command inside a lock take until `gate.sh` has a single-file mode (follow-up) |
+| 2 | `preflight.sh` fails every build at `status` on the untracked report | HOLD → `03c` M1: the script ignores the card's own report path as the only untracked line |
+| 3 | `gate.sh` exits 4 at once instead of waiting | HOLD → `03c` M2: the take script's 90-minute retry is the wait |
+| 4 | the deploy gate's pass 1 runs `--db-only` (against R154) | HOLD → `03c` M3 (`gate.sh … --deploy` strips the option) and `02` A3 AMENDED: STEP-G calls `sh /Users/cobalt/cobalt/ops/desk/gate.sh <GATE worktree> all --deploy …`; the set does not deploy on the new STEP-G before both are on `main` (set 2 carries both; set 2 itself deploys under `main`'s old text) |
+| 5 | the gate releases the lock before the deploy's stop line | RULED: the hold-to-stop-line rule goes. The lock protects `cobalt_dev`; after STEP-G the deploy touches production only, and a held dev lock would stall builds for the outage's length. L76's "the gate takes the lock alone" is met by the gate's own take. → `02` NEW ROW A7: the LAUNCH and P8 sentences that hold the lock to the stop line are removed; THE RELEASE records the gate's `.env: removed` at the gate's end. On his veto list (a law sentence set aside; folds at the close) |
+| 6 | P1 (v) is read before the restart set exists | → `02` NEW ROW A8: P1 (v) is provisional at STEP-0 (`window: (v) provisional`); STEP-R re-reads it after the set is derived: a non-empty derived set outside (i)–(iv) → `FAILED: STEP-R — window (v) does not hold: <labels> · rollback: not used` |
+| 7 | FOR DEJAN? the equal-tree clause (row 8) vs R154 on a `DB: none` single-branch set | NOT HIS. Both are his rulings and they do not contradict: the equal-tree clause reuses the check's suite lines WHERE THEY EXIST; a `DB: none` check has no with-DB line, so the clause does not apply and the gate runs whole — R154's "every set" governs. → `02` A3 AMENDED, one sentence added to the clause: `The clause applies only when the check's stop line carries a with-DB count above 0; a DB: none single branch runs the gate whole.` The desk decides what a ruled law covers (R127); on his list at DONE as a line |
+| 8 | the flag's words (R45 part 2 unmappable; part 3 contradicts `cd`) and `\$(…)` escaping | KEEP the card's text and the escaping; the words are the judge's under his row 1 approval of all three parts; on his veto list. The `cd` contradiction of part 3 is recorded, not applied |
+| 9 | `desk-launch.sh` still demands `TREE STATE` | HOLD → `03c` M4 (optional key). Until set 2 is on `main`, cards keep `TREE STATE: unchanged` |
+| 10 | two test files outside the rows adjusted (`test_gate.py`, `test_pass1_db_only.py`) | KEEP; `03c` M3 restores `test_pass1_db_only.py`'s two assertions in their new form |
+| 11 | CHECK-HUB keeps the Sol probe spelling for the cross-check | KEEP |
+
+FOR THE CHECK (card `02` `## RECORDS`): `Build decisions 1–11 answered (reports/adoption-hubs-decisions-2026-10-03.md): 2, 3, 4, 9 are card 03c's rows; A3 amended (--deploy call; the equal-tree clause only with a with-DB count above 0); rows A7 (no hold to the stop line) and A8 (P1 (v) re-read at STEP-R) added; 1, 8, 10, 11 KEEP; 7 is not his.`
