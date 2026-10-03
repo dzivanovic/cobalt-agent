@@ -20,6 +20,8 @@
 # its expectation up to the first `;`: `exit 0, listed` · `exit 0, \`<v>\`` · `exit 0, a count of
 # 1 or more` · `exit 0, one integer`; a row labelled `census`, or whose expectation says
 # `recorded`, is a census: its output is recorded, never a gate. Any other expectation is RED.
+# A `- ` line of either section not in its row form is RED (`not a marker row` / `not a smoke read
+# row`) and not run; lines not starting `- ` are prose and skipped.
 # One line per row `<label> · <command> · <output> · GREEN|RED|census|SKIPPED` (a marker's label
 # is `marker <n>`); the last line `SMOKE GREEN` (exit 0) or `SMOKE RED: <labels>` (exit 1).
 # Every call and its whole output also go to the log $WT/.deploy-logs/<JOB>-smoke-<timestamp>.log.
@@ -228,9 +230,19 @@ red() {
 # ---- MARKERS ---------------------------------------------------------------------------------
 n=0
 while IFS= read -r line; do
-    case "$line" in "- \`"*) ;; *) continue ;; esac
+    case "$line" in "- "*) ;; *) continue ;; esac
     n=$((n + 1))
     label="marker $n"
+    case "$line" in
+        "- \`"*) ;;
+        *)
+            # a row not in the marker form is RED and said, never skipped
+            if [ -n "$dry" ]; then printf 'WOULD REFUSE: %s — not a marker row\n' "$label"; continue; fi
+            say "$label · ${line#- } · not a marker row (- \`<cmd>\` · before <v> · after <v>) · RED"
+            red "$label"
+            continue
+            ;;
+    esac
     after_tick=${line#- \`}
     cmd=${after_tick%%\`*}
     tail_=${after_tick#*\`}
@@ -279,8 +291,19 @@ EOF
 
 # ---- SMOKE READS -----------------------------------------------------------------------------
 while IFS= read -r line; do
-    case "$line" in "- "*" · \`"*) ;; *) continue ;; esac
+    case "$line" in "- "*) ;; *) continue ;; esac
     rest=${line#- }
+    case "$line" in
+        "- "*" · \`"*) ;;
+        *)
+            # a row not in the smoke-read form is RED and said, never skipped
+            label=${rest%% · *}
+            if [ -n "$dry" ]; then printf 'WOULD REFUSE: %s — not a smoke read row\n' "$label"; continue; fi
+            say "$label · $rest · not a smoke read row (- <label> · \`<cmd>\` · <expectation>) · RED"
+            red "$label"
+            continue
+            ;;
+    esac
     label=${rest%% · \`*}
     after_tick=${rest#*\`}
     cmd=${after_tick%%\`*}

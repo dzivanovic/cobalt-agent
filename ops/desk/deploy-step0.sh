@@ -10,16 +10,20 @@
 #   SHIPS                ## SHIPS has rows; their heads are TIP, in order
 #   P0 authorization     `authorize.sh deploy "<card>"` (the installed hub, the card committed and
 #                        unchanged, the standing list and every RULINGS row proved as it proves them);
-#                        its own rows are printed above it, prefixed `P0 `
+#                        its own rows are printed above it, prefixed `P0 `; it runs with
+#                        LC_ALL=en_US.UTF-8 (it reads `«` and `·` as characters), while this script
+#                        runs in LC_ALL=C, exported first
 #   P1 window            `date` in ET; the first of P1 (i)–(v) that holds is named:
 #                        (i) 20:00–20:59 ET of a trading day · (ii) 21:00 ET of a trading day to 04:00
 #                        ET the next morning · (iii) a Saturday, a Sunday, Monday before 04:00 ET, or a
 #                        market holiday: a `## RECORDS` line holding the word `holiday` and the day's
-#                        date (YYYY-MM-DD) · (iv) a RULINGS row, committed, holding `HIS RULING`,
-#                        `APPROVED`, `L66` or `L43`, and this card's JOB. A trading day is Monday to
+#                        date (YYYY-MM-DD) · (iv) a RULINGS row, committed and so at HEAD, holding
+#                        `HIS RULING`, `APPROVED`, `L66` or `L43`, the word `overrules` (or
+#                        `overruled`), and this card's JOB as a whole name. A trading day is Monday to
 #                        Friday and not a holiday so named.
-#   P2 check <n>         the ship's check report: its last non-blank line carries every backticked
-#                        literal of the row's last column, a `tip:` equal to the row's code tip, and
+#   P2 check <n>         the ship's check report: its last non-blank line carries `held unfixed: 0`,
+#                        `ready: YES` and every backticked literal of the row's last column, a `tip:`
+#                        equal to the row's code tip, and
 #                        neither starts `(run in progress` nor `FAILED`. A held defect carried by a
 #                        ruling is not read here: such a line FAILS and the hub reads it (P2's text).
 #   P2 committed <n>     `git log -1 --format=%H -- <report>` non-empty and `git diff --stat -- <report>` empty
@@ -29,8 +33,8 @@
 #                        `git show main:src/cobalt/db_migrations/`, over every head, EQUAL the 4-digit
 #                        numbers before the first `·` of MIGRATIONS (none for `none`), and the hub's
 #                        `git diff main <head> -- src/cobalt/db_migrations` holds nothing else: on a
-#                        `none` card NOTHING; otherwise only added `NNNN_` files and the registry
-#                        `__init__.py` (an edited or removed migration fails)
+#                        `none` card NOTHING; otherwise only added `NNNN_*.sql` files and the registry
+#                        `__init__.py` (an edited or removed migration, or any other file, fails)
 #   P8 census <label>    `launchctl print gui/501/<label>` for aset, radar, agent: pid and state,
 #                        RECORDED, never a gate
 #   disk                 `df -k <repo>`, recorded
@@ -44,7 +48,8 @@
 #
 # --window: the P1 row alone; last line `WINDOW <(i)…(iv)>` (exit 0) or `FAILED STEP-0: window —
 # <time>` (exit 1). deploy-outage.sh reads the window through it (one implementation). No log.
-# --dry-run: prints every command it WOULD run, in order (`WOULD RUN: …`), runs none (`launchctl`,
+# --dry-run: prints every command it WOULD run, one per line, in the order a run makes them
+# (`WOULD RUN: …`), runs none (`launchctl`,
 # `git`, `date` never called), writes no log; last line `DRY RUN — nothing run: <n> commands`.
 # THE DESK'S DRY RUN, typed once before the first real use:
 #   sh /Users/cobalt/cobalt/ops/desk/deploy-step0.sh --dry-run "<deploy card>"
@@ -52,8 +57,6 @@
 # COBALT_REPO_ROOT and COBALT_WT_ROOT stand in for /Users/cobalt/cobalt and /Users/cobalt/cobalt-wt
 # in tests/ops/test_deploy_step0.py only.
 
-CALLER_LC_ALL=${LC_ALL-}
-CALLER_LC_SET=${LC_ALL+set}
 export LC_ALL=C
 set -u
 set -f
@@ -176,12 +179,16 @@ find_override() {
                 case "$line" in *"HIS RULING"*) ;; *) continue ;; esac
                 case "$line" in *APPROVED*) ;; *) continue ;; esac
                 case "$line" in *L66*|*L43*) ;; *) continue ;; esac
+                # the hub's (iv): a row that OVERRULES the window, not one that names or affirms it
+                case "$line" in *[Oo]verrul*) ;; *) continue ;; esac
                 [ -n "$job" ] || continue
                 # the JOB as a whole name: `x-set` is not named by `x-set-2`
                 words=" $(printf '%s' "$line" | tr -c 'abcdefghijklmnopqrstuvwxyz0123456789-' ' ') "
                 case "$words" in *" $job "*) ;; *) continue ;; esac
                 c=$(git -C "$REPO" log -1 --format=%H -S"| $t |" -- "$REPORTS_REL/cto-$d.md" 2>/dev/null)
                 [ -n "$c" ] || continue
+                # the row as read, at HEAD (authorize.sh's proof): a working-tree rewrite is not his
+                git -C "$REPO" show "HEAD:$REPORTS_REL/cto-$d.md" 2>/dev/null | grep -q -x -F -e "$line" || continue
                 override="$d $t"
                 return 0
                 ;;
@@ -291,15 +298,13 @@ else
 fi
 
 # ---- P0 AUTHORIZATION ------------------------------------------------------------------------
-acmd="sh $HERE/authorize.sh deploy \"$card\""
+acmd="LC_ALL=en_US.UTF-8 sh $HERE/authorize.sh deploy \"$card\""
 if [ "$mode" = dry ]; then
     would "$acmd"
 else
-    # authorize.sh reads the hub title's `«` and `·` as characters: it runs in the caller's locale
-    aout=$(
-        if [ -n "$CALLER_LC_SET" ]; then LC_ALL=$CALLER_LC_ALL; export LC_ALL; else unset LC_ALL; fi
-        sh "$HERE/authorize.sh" deploy "$card" 2>&1
-    )
+    # authorize.sh reads the hub title's `«` and `·` as characters: it runs in a UTF-8 locale
+    # (LC_ALL=C stays first in this script; the caller's locale is not read)
+    aout=$(LC_ALL=en_US.UTF-8 sh "$HERE/authorize.sh" deploy "$card" 2>&1)
     arc=$?
     printf '%s\n' "$aout" | while IFS= read -r l; do say "P0 $l"; done
     alast=$(printf '%s\n' "$aout" | sed '/^[[:space:]]*$/d' | tail -n 1)
@@ -316,7 +321,7 @@ newnums=""
 stray=""
 mainlist=""
 if [ "$mode" = dry ]; then
-    :
+    would "git -C $REPO show main:src/cobalt/db_migrations/"
 else
     mainlist=$(git -C "$REPO" show "main:src/cobalt/db_migrations/" 2>&1)
     mainrc=$?
@@ -330,17 +335,21 @@ while IFS= read -r line; do
     head=$(printf '%s\n' "$line" | awk -F'|' '{print $5}' | tr -d '` ')
     report=$(printf '%s\n' "$line" | awk -F'|' '{print $6}' | tr -d '`' | sed -e 's/^ *//' -e 's/ *$//')
     lits=$(printf '%s\n' "$line" | awk -F'|' '{print $7}' | grep -o '`[^`]*`' | tr -d '`')
+    # the card's D1 and the hub's P2: a clean check always carries these two, whatever the row names
+    lits=$(printf 'held unfixed: 0\nready: YES\n%s\n' "$lits")
     rrel=$(rel "$report")
     c_tail="grep -v '^[[:space:]]*\$' \"$report\" | tail -n 1"
     c_log="git -C $REPO log -1 --format=%H -- \"$rrel\""
     c_diff="git -C $REPO diff --stat -- \"$rrel\""
-    c_rp="git -C $REPO rev-parse --verify --quiet --short=8 $ctip^{commit}; git -C $REPO rev-parse --verify --quiet --short=8 refs/heads/$branch^{commit}"
+    c_rp1="git -C $REPO rev-parse --verify --quiet --short=8 $ctip^{commit}"
+    c_rp2="git -C $REPO rev-parse --verify --quiet --short=8 refs/heads/$branch^{commit}"
+    c_rp="$c_rp1; $c_rp2"
     c_anc="git -C $REPO merge-base --is-ancestor $ctip $head"
     c_past="git -C $REPO diff --stat $ctip $head -- . ':(exclude)docs'"
     c_mig="git -C $REPO show $head:src/cobalt/db_migrations/"
     c_md="git -C $REPO diff --name-status --no-renames main $head -- src/cobalt/db_migrations"
     if [ "$mode" = dry ]; then
-        for c in "$c_tail" "$c_log" "$c_diff" "$c_rp" "$c_anc" "$c_past" "$c_mig" "$c_md"; do
+        for c in "$c_tail" "$c_log" "$c_diff" "$c_rp1" "$c_rp2" "$c_anc" "$c_past" "$c_mig" "$c_md"; do
             would "$c"
         done
         continue
@@ -420,7 +429,7 @@ EOF
     added=$(printf '%s\n' "$hlist" | sed '1,2d' | while IFS= read -r f; do
         printf '%s\n' "$mainlist" | sed '1,2d' | grep -q -x -F -e "$f" || printf '%s\n' "$f"
     done)
-    nums=$(printf '%s\n' "$added" | sed -n 's/^\([0-9][0-9][0-9][0-9]\)_.*/\1/p' | sort -u | tr '\n' ' ' | sed 's/ *$//')
+    nums=$(printf '%s\n' "$added" | sed -n 's/^\([0-9][0-9][0-9][0-9]\)_.*\.sql$/\1/p' | sort -u | tr '\n' ' ' | sed 's/ *$//')
     newnums="$newnums $nums"
     row "P7 listing $n" "$c_mig" 0 "new against main: ${nums:-none}" 0
 
@@ -437,7 +446,7 @@ EOF
     s=$(printf '%s\n' "$mdiff" | awk -F'\t' -v none="$isnone" '
         NF >= 2 {
             b = $2; sub(/.*\//, "", b)
-            if (none == "" && $1 == "A" && b ~ /^[0-9][0-9][0-9][0-9]_/) next
+            if (none == "" && $1 == "A" && b ~ /^[0-9][0-9][0-9][0-9]_.*\.sql$/) next
             if (none == "" && b == "__init__.py") next
             print $1 " " $2
         }' | tr '\n' ' ' | sed 's/ *$//')
@@ -446,9 +455,7 @@ done <<EOF
 $ships
 EOF
 
-if [ "$mode" = dry ]; then
-    would "git -C $REPO show main:src/cobalt/db_migrations/"
-else
+if [ "$mode" != dry ]; then
     got=$(printf '%s\n' $newnums | sed '/^$/d' | sort -u | tr '\n' ' ' | sed 's/ *$//')
     case "$migrations" in
         none) want="" ;;

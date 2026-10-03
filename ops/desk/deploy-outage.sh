@@ -20,7 +20,10 @@
 #      one retry), then `launchctl print` → `state = running` with a pid ≠ the pid before (loaded
 #      but not running → `launchctl kickstart -k gui/501/<label>` once); the agent
 #      `launchctl kickstart gui/501/com.cobalt.agent`, then `cobalt.sh status` ONLINE, a new pid.
-#   3. `cobalt.sh status` → ONLINE (the agent in the set and not ONLINE here is down again: the
+#   3. each aset / radar of the set re-read by `launchctl print`: one not running here (it dropped
+#      while a later label came up) is brought up again by step 2's calls, with the line
+#      `<label> · not running at the final read (<state>): brought up again`; then
+#      `cobalt.sh status` → ONLINE (the agent in the set and not ONLINE here is down again: the
 #      trap kickstarts it).
 # THE TRAP, on EXIT, INT, TERM, HUP, QUIT, USR1, USR2 and ALRM: every label booted out (or whose
 # bootout began) and not yet up is brought up by step 2's calls (a label found running counts as
@@ -138,6 +141,9 @@ if [ -n "$dry" ]; then
         esac
     done
     would "date +%s"
+    for l in $labels; do
+        [ "$l" = com.cobalt.agent ] || would "launchctl print gui/501/$l"
+    done
     would "$COBALT_SH status"
     printf 'DRY RUN — nothing run: %s commands\n' "$n"
     exit 0
@@ -404,8 +410,21 @@ for l in $labels; do
     remove_down "$l"
 done
 
-# ---- 3. the agent ONLINE ---------------------------------------------------------------------
+# ---- 3. every label still up, the agent ONLINE -------------------------------------------------
 t1=$(date +%s)
+# a label that dropped after its own bootstrap (while a later one came up) is down again: it is
+# brought up once more by its own way, said on a line; a failure there is the trap's
+for l in $labels; do
+    [ "$l" != com.cobalt.agent ] || continue
+    read_label "$l"
+    [ "$pstate" != running ] || continue
+    say "$l · not running at the final read ($pstate): brought up again"
+    cur=$l
+    down="${down:+$down }$l"
+    bout=""
+    up_one "$l" main || fail "$l" "$why"
+    remove_down "$l"
+done
 cur=com.cobalt.agent
 agent_pid
 if [ -z "$apid" ]; then
