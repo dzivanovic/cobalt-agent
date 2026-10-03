@@ -3,8 +3,9 @@
 Every run points the script at a tmp repo standing in for /Users/cobalt/cobalt
 (COBALT_REPO_ROOT) and a tmp directory standing in for /Users/cobalt/cobalt-wt
 (COBALT_WT_ROOT). `claude` is a stub on PATH answering two live sessions and one
-dead row. The clock is overridden by ORDER_OPEN_NOW for the window cases. A test that reads
-HOUSES runs a tmp copy of the script with a stub house-probe.sh beside it: no house is called.
+dead row. The clock is overridden by ORDER_OPEN_NOW for the window cases. Every test runs a
+tmp copy of the script (the `script` fixture) with a stub house-probe.sh beside it, or with
+none beside it for the `not probed` case: no house is called.
 """
 
 from __future__ import annotations
@@ -113,7 +114,24 @@ def desk(tmp_path):
     return repo, wt, env, root
 
 
-def run(env: dict, script: Path = SCRIPT, **extra: str) -> subprocess.CompletedProcess:
+def copy_script(root: Path, name: str) -> Path:
+    ops = root / name
+    ops.mkdir()
+    shutil.copy(SCRIPT, ops / "order-open.sh")
+    return ops / "order-open.sh"
+
+
+@pytest.fixture
+def script(desk):
+    # a test never touches a house: a tmp copy of the script with a stub probe beside it
+    copy = copy_script(desk[3], "ops-stub")
+    (copy.parent / "house-probe.sh").write_text(
+        "#!/bin/sh\nprintf '%s\\n' " + " ".join(f"'{line}'" for line in STUB_HOUSES) + "\n"
+    )
+    return copy
+
+
+def run(env: dict, script: Path, **extra: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["sh", str(script)], env=dict(env, **extra), capture_output=True, text=True, timeout=120
     )
@@ -130,17 +148,10 @@ def block(out: str, name: str) -> str:
     return "\n".join(body)
 
 
-def test_every_block_carries_its_facts_and_nothing_changes(desk):
+def test_every_block_carries_its_facts_and_nothing_changes(desk, script):
     repo, wt, env, root = desk
-    # a test never touches a house: a tmp copy of the script with a stub probe beside it
-    ops = root / "ops-copy"
-    ops.mkdir()
-    shutil.copy(SCRIPT, ops / "order-open.sh")
-    (ops / "house-probe.sh").write_text(
-        "#!/bin/sh\nprintf '%s\\n' " + " ".join(f"'{line}'" for line in STUB_HOUSES) + "\n"
-    )
     before = tree_hash(repo, wt)
-    done = run(env, script=ops / "order-open.sh", ORDER_OPEN_NOW="2026-01-05T12:00:00")
+    done = run(env, script, ORDER_OPEN_NOW="2026-01-05T12:00:00")
     assert done.returncode == 0, done.stderr
     out = done.stdout
     names = [line for line in out.splitlines() if line in ("LOCK", "SESSIONS", "WINDOW", "MAIN", "WORKTREES", "HOUSES")]
@@ -171,12 +182,12 @@ def test_every_block_carries_its_facts_and_nothing_changes(desk):
     assert tree_hash(repo, wt) == before
 
 
-def test_a_free_lock_and_a_clean_main_say_so(desk):
+def test_a_free_lock_and_a_clean_main_say_so(desk, script):
     repo, wt, env, root = desk
     (wt / "open-wt" / ".env").unlink()
     shutil.rmtree(wt / LOCK_NAME)
     (repo / "a.txt").write_text("a\n")
-    done = run(env, ORDER_OPEN_NOW="2026-01-05T12:00:00")
+    done = run(env, script, ORDER_OPEN_NOW="2026-01-05T12:00:00")
     assert done.returncode == 0, done.stderr
     assert block(done.stdout, "LOCK").strip() == "free"
     assert "uncommitted tracked changes: no" in block(done.stdout, "MAIN")
@@ -196,18 +207,18 @@ def test_a_free_lock_and_a_clean_main_say_so(desk):
         ("2026-01-05T04:00:00", "closed — a deploy needs his dated order"),  # Monday 04:00
     ],
 )
-def test_the_window_for_each_clock(desk, now, window):
+def test_the_window_for_each_clock(desk, script, now, window):
     repo, wt, env, root = desk
-    done = run(env, ORDER_OPEN_NOW=now)
+    done = run(env, script, ORDER_OPEN_NOW=now)
     assert done.returncode == 0, done.stderr
     lines = block(done.stdout, "WINDOW").splitlines()
     assert lines[0] == f"window: {window}"
     assert any("holidays are not known" in line for line in lines)
 
 
-def test_a_utc_clock_is_read_in_new_york(desk):
+def test_a_utc_clock_is_read_in_new_york(desk, script):
     repo, wt, env, root = desk
-    done = run(env, ORDER_OPEN_NOW="2026-01-06T01:30:00+00:00")  # Monday 20:30 ET
+    done = run(env, script, ORDER_OPEN_NOW="2026-01-06T01:30:00+00:00")  # Monday 20:30 ET
     assert done.returncode == 0, done.stderr
     assert block(done.stdout, "WINDOW").splitlines()[0] == "window: pause"
 
@@ -223,9 +234,17 @@ def test_house_probe_beside_it_is_run(desk, tmp_path):
     assert block(done.stdout, "HOUSES").strip() == "house grok: ready"
 
 
-def test_an_unreadable_session_list_still_exits_0(desk):
+def test_an_unreadable_session_list_still_exits_0(desk, script):
     repo, wt, env, root = desk
     (root / "sessions.json").write_text("not json")
-    done = run(env, ORDER_OPEN_NOW="2026-01-05T12:00:00")
+    done = run(env, script, ORDER_OPEN_NOW="2026-01-05T12:00:00")
     assert done.returncode == 0, done.stderr
     assert "unreadable" in block(done.stdout, "SESSIONS")
+
+
+def test_no_house_probe_beside_it_says_not_probed(desk):
+    repo, wt, env, root = desk
+    bare = copy_script(root, "ops-bare")
+    done = run(env, bare, ORDER_OPEN_NOW="2026-01-05T12:00:00")
+    assert done.returncode == 0, done.stderr
+    assert block(done.stdout, "HOUSES").strip() == "not probed"
