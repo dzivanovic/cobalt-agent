@@ -3,9 +3,9 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/deploy-steps-1003
 WORKTREE: deploy-steps-1003
 BASE: a09f0862
-TIP:
+TIP: 735f5ed8
 REPORT: /Users/cobalt/cobalt-wt/deploy-steps-1003/docs/40 - DevDocs/reports/deploy-steps-build-2026-10-03.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-steps-check-2026-10-03.md
 HOUSE A: Grok
 HOUSE B: as needed
 TREE STATE: unchanged
