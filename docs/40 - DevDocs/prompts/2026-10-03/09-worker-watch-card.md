@@ -47,3 +47,4 @@ WHY: the desk's watch waits for a changed stop line and nothing else, so a worke
 - Mods and hooks are Anthropic process tuning: no outside house (his 10-03 word, desk row 2026-10-03 R12).
 - Base: `main` after set 1; ships in set 2 with `03`, `02`, `06`. His install follows set 2's DEPLOYED line.
 - FOR THE CHECK: Build decisions 1–4 answered by the judge: all KEEP; the idle_prompt field is proven at his install by the first real WAKE line; the devfix watch reminder is the desk-launch.sh follow-up card's (desk row 2026-10-03 R69).
+- INSTALL TARGET: the hook entries go in user settings `~/.claude/settings.json`, not `main`'s tracked `.claude/settings.json` (his ruling, desk row 2026-10-03 R77; check O2).
