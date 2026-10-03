@@ -18,6 +18,7 @@ WHY: `tests/ops/test_order_open.py::test_every_block_carries_its_facts_and_nothi
 | row | what | red first | files |
 |---|---|---|---|
 | Q1 | The test stubs `house-probe.sh`: a tmp copy of `order-open.sh` with a stub `house-probe.sh` beside it (or on `PATH`, whichever `order-open.sh` resolves) printing canned `sol: UP` / `grok: OUT — usage` / `gemini: OUT — TIMEOUT` lines; the assertion reads those lines in the block and that nothing else changed. If `order-open.sh` resolves the probe by an absolute path, that one line becomes `$(dirname "$0")/house-probe.sh`, so the stub can stand in; no other change to the script | the test itself, run alone on `BASE`: red with the real probe's line (quote it), green with the stub. `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `0 failed` at the tip | `tests/ops/test_order_open.py`; `ops/desk/order-open.sh` (one line, only if the path is fixed) |
+| Q2 | Q1's rule covers every test in the file: the stub `house-probe.sh` becomes a module-level fixture, so all 13 tests run a tmp copy of `order-open.sh` with the stub beside it and none reaches a real house; no assertion of the other 12 changes. One more test pins the `not probed` branch (`order-open.sh:134-135`): a tmp copy with NO `house-probe.sh` beside it prints `not probed` (build decisions 1–2 at `ccb70d7e`, held by the judge) | the file's run time on `ccb70d7e` (183.08 s, real houses) against the tip; the new test red with the probe beside the copy, green without. `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `0 failed` at the tip | `tests/ops/test_order_open.py` |
 
 ## NOT IN THIS JOB
 - Any behaviour of `order-open.sh` but how it finds the probe; `house-probe.sh`; any other `tests/ops` file.
@@ -28,3 +29,4 @@ WHY: `tests/ops/test_order_open.py::test_every_block_carries_its_facts_and_nothi
 ## RECORDS
 - Stacked on card `01`'s tip `77d19438` (judge, `reports/lock-relief-decisions-2026-10-03.md` item 1); ships in set 1 with `01`.
 - No `DB` key: under `main`'s hub text this card takes the lock as every card does; its own proof is the `tests/ops` run in E2 / E3.
+- Q2 added 2026-10-03 after Q1 was BUILT at `ccb70d7e` (judge, desk `cto-2026-10-03.md` R22–R23); a new worker resumes at E3 for Q2 only, Q1 stands.
