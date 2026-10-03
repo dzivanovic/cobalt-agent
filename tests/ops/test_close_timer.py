@@ -166,18 +166,25 @@ def test_an_unreadable_session_list_is_refused(box):
     assert box.calls_made() == []
 
 
-def test_after_midnight_the_evenings_close_is_the_previous_date(box):
-    # card RECORDS (X2): a fire after midnight ET uses the PREVIOUS date while
-    # its close report does not end in its stop line
-    done = box.run(f"{NEXT_DAY} 00:05")
+def test_at_0105_with_yesterdays_close_absent_the_close_is_yesterdays(box):
+    # row T1 (X2): before 04:00 ET the date is the evening's, yesterday's ET date
+    done = box.run(f"{NEXT_DAY} 01:05")
     assert done.returncode == 0, done.stderr
     assert box.calls_made() == [f"close {EVENING}"]
 
 
-def test_after_midnight_with_the_evening_closed_the_date_is_today(box):
-    # card RECORDS (X2): "else today's" (desk-launch.sh then refuses it before 21:00 ET)
+def test_at_0105_with_yesterdays_close_done_it_is_done_already(box):
+    # row T1: the 00:05–03:05 fires after a finished close launch nothing
     box.report(EVENING, DONE_LINE)
-    box.run(f"{NEXT_DAY} 01:05")
+    done = box.run(f"{NEXT_DAY} 01:05")
+    assert done.returncode == 0, done.stderr
+    assert f"DONE ALREADY: close {EVENING}" in done.stdout
+    assert box.calls_made() == []
+
+
+def test_from_0400_the_date_is_todays(box):
+    # row T1: "else today's" — the 04:00 ET line, with yesterday's close still open
+    box.run(f"{NEXT_DAY} 04:05")
     assert box.calls_made() == [f"close {NEXT_DAY}"]
 
 
@@ -190,11 +197,10 @@ def test_a_hub_live_at_2105_and_gone_later_gives_one_launch_that_night(box):
     assert f"LAUNCHED: close {EVENING}" in box.run(f"{EVENING} 23:05").stdout
     box.report(EVENING, DONE_LINE)
     assert "DONE ALREADY" in box.run(f"{EVENING} 23:40").stdout
+    # after midnight the date is still the evening's: done already, no second call
+    for hour in ("00", "01", "02", "03"):
+        assert f"DONE ALREADY: close {EVENING}" in box.run(f"{NEXT_DAY} {hour}:05").stdout
     assert box.calls_made() == [f"close {EVENING}"]
-    # after midnight the card's "else today's" names the next date, which
-    # desk-launch.sh refuses before 21:00 ET (desk-launch.sh:238): no second close
-    box.run(f"{NEXT_DAY} 00:05")
-    assert box.calls_made() == [f"close {EVENING}", f"close {NEXT_DAY}"]
 
 
 def test_the_script_sets_the_c_locale_first():

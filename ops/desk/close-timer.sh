@@ -4,6 +4,9 @@
 # ops/desk/com.cobalt.close-timer.plist at 21:05 ET and hourly 22:05 … 03:05 ET.
 #
 # HIS INSTALL — typed once, at the Mac, by him (nothing else installs it):
+#   mkdir -p /Users/cobalt/cobalt-wt/.timer-logs
+#     (first: launchd's own log paths, StandardOutPath / StandardErrorPath, need the folder
+#     before the first fire)
 #   cp /Users/cobalt/cobalt/ops/desk/com.cobalt.close-timer.plist ~/Library/LaunchAgents/
 #   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.cobalt.close-timer.plist
 # The one read that proves it:
@@ -12,9 +15,9 @@
 #     this build could not run launchctl to confirm the field).
 #
 # WHAT ONE FIRE DOES, in order (each line on stdout, which the plist logs):
-#   1. <date> = the ET date (TZ=America/New_York). Before 21:00 ET (a fire after midnight) the
-#      evening's close is the PREVIOUS date while reports/close-<previous date>.md does not end
-#      in its stop line; else today's (card RECORDS, X2).
+#   1. <date> = the EVENING's ET date (TZ=America/New_York): before 04:00 ET (a fire after
+#      midnight) it is yesterday's ET date, else today's (card row T1, X2). So the 00:05–03:05
+#      fires after a finished close stop at 4. as DONE ALREADY, one line each.
 #   2. desk-launch.sh absent → "REFUSED: …", exit 1.
 #   3. a live `deploy-hub-*` session in desk-list.sh's rows (the name field) →
 #      "DEFERRED: deploy live — <name>", exit 0; launchd fires again on the hour.
@@ -61,9 +64,8 @@ case "$today" in
     *) refuse "the ET clock read '$now' is not a date" ;;
 esac
 cday=$today
-if [ "$hour" -lt 21 ]; then
-    prev=$(date -j -v-1d -f %Y-%m-%d "$today" +%Y-%m-%d) || refuse "the previous date of $today is unreadable"
-    closed "$prev" || cday=$prev
+if [ "$hour" -lt 4 ]; then
+    cday=$(date -j -v-1d -f %Y-%m-%d "$today" +%Y-%m-%d) || refuse "the previous date of $today is unreadable"
 fi
 
 # 2. the launcher
