@@ -324,6 +324,51 @@ def test_the_agent_goes_down_by_cobalt_sh_and_up_by_kickstart(box):
     assert all(a[0] in ("print", "kickstart") for a in box.launchctl_calls())
 
 
+def downs_and_ups(box: Box) -> list[tuple[str, str]]:
+    """Every call that takes a label down or brings it up, in order, as (verb, label)."""
+    out = []
+    for c in box.calls_list():
+        if c["name"] == "cobalt.sh" and c["argv"] == ["stop"]:
+            out.append(("stop", AGENT))
+        elif c["name"] == "launchctl" and c["argv"][0] in ("bootout", "bootstrap", "kickstart"):
+            target = c["argv"][-1]
+            label = os.path.basename(target)[: -len(".plist")] if target.endswith(".plist") else target.split("/")[-1]
+            out.append((c["argv"][0], label))
+    return out
+
+
+def test_a_set_holding_the_agent_takes_each_label_down_and_up_its_own_way_in_order(box):
+    done = box.run(labels=f"{ASET},{AGENT},{RADAR}")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert downs_and_ups(box) == [
+        ("bootout", ASET), ("stop", AGENT), ("bootout", RADAR),
+        ("bootstrap", ASET), ("kickstart", AGENT), ("bootstrap", RADAR),
+    ]
+    assert box.launchd()["agent"] not in (None, 503)
+    assert last_line(done) == "OUTAGE DONE 0s"
+
+
+def test_a_signal_with_the_agent_down_brings_it_back_by_kickstart_and_the_rest_by_bootstrap(box):
+    proc = subprocess.Popen(
+        box.args(f"{ASET},{AGENT},{RADAR}"), env=dict(box.env, STUB_MARK_ON=RADAR, STUB_HOLD="2"),
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace",
+    )
+    deadline = time.monotonic() + 30
+    while not box.mark.exists():
+        assert time.monotonic() < deadline, "the bootout never ran"
+        time.sleep(0.05)
+    proc.send_signal(signal.SIGTERM)
+    out, err = proc.communicate(timeout=60)
+    assert "RESIDENTS UP (trap)" in out, out + err
+    moves = downs_and_ups(box)
+    assert moves[:3] == [("bootout", ASET), ("stop", AGENT), ("bootout", RADAR)]
+    # the trap: each label by its own way, none by another's
+    assert sorted(moves[3:]) == [("bootstrap", ASET), ("bootstrap", RADAR), ("kickstart", AGENT)]
+    assert box.launchd()["agent"] not in (None, 503)
+    st = box.launchd()["labels"]
+    assert ASET in st and RADAR in st
+
+
 def test_dry_run_calls_nothing_and_prints_every_would_run_line_in_order(box):
     for name in ("git", "curl", "uv"):
         stub(box.bin / name, name, PLAIN)
