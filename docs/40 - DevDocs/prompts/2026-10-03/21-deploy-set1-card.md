@@ -5,7 +5,7 @@ WORKTREE: deploy-1003-1
 BASE: main
 TIP: a50ec4c8 6d9fde8c
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-set1-1003.md
-RULINGS: 2026-10-02 R149, 2026-10-02 R155, 2026-10-03 R18
+RULINGS: 2026-10-02 R149, 2026-10-03 R18, 2026-10-03 R29
 TAG: deploy-2026-10-03-1
 MIGRATIONS: none
 SET: set1
