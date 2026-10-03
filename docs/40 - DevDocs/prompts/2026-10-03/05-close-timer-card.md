@@ -3,11 +3,11 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/close-timer-1003
 WORKTREE: close-timer-1003
 BASE: a09f0862
-TIP:
+TIP: e4c0c4dd
 REPORT: /Users/cobalt/cobalt-wt/close-timer-1003/docs/40 - DevDocs/reports/close-timer-build-2026-10-03.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/close-timer-check-2026-10-03.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 DB: none
 RULINGS: 2026-10-02 R47, 2026-10-02 R157, 2026-10-02 R44
