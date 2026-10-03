@@ -3,11 +3,11 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/order-open-test-1003
 WORKTREE: order-open-test-1003
 BASE: 77d19438
-TIP:
+TIP: 4b4b9f4a
 REPORT: /Users/cobalt/cobalt-wt/order-open-test-1003/docs/40 - DevDocs/reports/order-open-test-build-2026-10-03.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/order-open-test-check-2026-10-03.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-02 R47, 2026-10-02 R154, 2026-10-02 R157
 
@@ -30,3 +30,6 @@ WHY: `tests/ops/test_order_open.py::test_every_block_carries_its_facts_and_nothi
 - Stacked on card `01`'s tip `77d19438` (judge, `reports/lock-relief-decisions-2026-10-03.md` item 1); ships in set 1 with `01`.
 - No `DB` key: under `main`'s hub text this card takes the lock as every card does; its own proof is the `tests/ops` run in E2 / E3.
 - Q2 added 2026-10-03 after Q1 was BUILT at `ccb70d7e` (judge, desk `cto-2026-10-03.md` R22–R23); a new worker resumes at E3 for Q2 only, Q1 stands.
+- Ships in set 1 with lock-relief at a50ec4c8; TIP order a50ec4c8 then this tip; the deadlock flake rule of R41/R129 applies to any pass-1 red of that shape.
+- Build decisions 1 and 2 were fixed by CONTINUE at E3 (judge): the whole file runs with the stubbed probe and the not-probed branch is pinned; the check verifies that no test in tests/ops reaches a real house (grep for the probe's real path and for codex, grok, agy on PATH without a stub).
+- His ruling 2026-10-03 R18 (A): `tests/ops/` is in the `DB: none` no-lock class; 2026-10-02 R154's "test" reads as `tests/cobalt` and `tests/taxonomy`.
