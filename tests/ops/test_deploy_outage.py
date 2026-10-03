@@ -407,3 +407,67 @@ def test_d4_dry_run_on_the_10_02_deploy_card(box):
     print(done.stdout + done.stderr)
     assert box.calls_list() == []
     assert done.returncode == 0
+
+
+# ---- check (deploy-steps, pass 1): findings O1, O4 (Opus), G1 (Grok, pinned by the check) -----
+
+
+@pytest.mark.parametrize("sig", [signal.SIGQUIT, signal.SIGUSR1, signal.SIGUSR2, signal.SIGALRM])
+def test_o1_any_ending_signal_between_bootout_and_bootstrap_brings_every_label_up(box, sig):
+    proc = subprocess.Popen(
+        box.args(f"{ASET},{RADAR}"), env=dict(box.env, STUB_MARK_ON=RADAR, STUB_HOLD="2"),
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace",
+    )
+    deadline = time.monotonic() + 30
+    while not box.mark.exists():
+        assert time.monotonic() < deadline, "the bootout never ran"
+        time.sleep(0.05)
+    proc.send_signal(sig)
+    out, err = proc.communicate(timeout=60)
+    assert proc.returncode != 0, out + err
+    st = box.launchd()["labels"]
+    assert ASET in st and RADAR in st, (out, err)
+    assert "RESIDENTS UP (trap)" in out, out + err
+
+
+def test_o4_a_card_given_by_a_relative_path_runs_the_outage(box):
+    done = subprocess.run(
+        ["sh", str(SCRIPT), box.card.name, f"{ASET},{RADAR}", "MERGED"], cwd=box.root,
+        env=box.env, capture_output=True, text=True, errors="replace", timeout=120,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "OUTAGE DONE 0s"
+
+
+def test_g1_an_agent_offline_at_the_final_status_is_kickstarted_by_the_trap(box):
+    """G1, pinned with a stub that can come back: the agent drops once, at step 3's read only."""
+    count = box.root / "status-n"
+    count.write_text("0")
+    stub(box.repo / "cobalt.sh", "cobalt.sh", """
+path = os.environ["LAUNCHD_STATE"]
+st = json.load(open(path))
+verb = sys.argv[1] if len(sys.argv) > 1 else ""
+if verb == "stop":
+    st["agent"] = None
+    json.dump(st, open(path, "w"))
+    print("  Cobalt stopped safely.")
+elif verb == "status":
+    if not st.get("agent"):
+        print("  Cobalt is OFFLINE.")
+        sys.exit(0)
+    n = int(open(os.environ["STATUS_N"]).read()) + 1
+    open(os.environ["STATUS_N"], "w").write(str(n))
+    if n == 3:
+        st["agent"] = None
+        json.dump(st, open(path, "w"))
+        print("  Cobalt is OFFLINE.")
+    else:
+        print(f"  Cobalt is ONLINE (PID: {st['agent']}).")
+""")
+    done = box.run(labels=AGENT, STATUS_N=str(count))
+    assert done.returncode == 1
+    starts = [a for a in box.launchctl_calls() if a[0] == "kickstart"]
+    assert starts == [["kickstart", f"gui/501/{AGENT}"]] * 2, (starts, done.stdout)
+    assert box.launchd()["agent"] not in (None, 503)
+    assert "RESIDENTS UP (trap)" in done.stdout
+    assert last_line(done).endswith(f"· residents: up: {AGENT} · down: none")

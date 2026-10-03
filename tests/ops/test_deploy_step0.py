@@ -405,3 +405,44 @@ def test_a_bad_call_is_refused(desk, args):
     )
     assert done.returncode == 1
     assert done.stderr.startswith("REFUSED: ")
+
+
+# ---- check (deploy-steps, pass 1): findings O2, O3 (Opus), G2 (Grok) --------------------------
+
+
+def test_o2_a_head_that_edits_an_existing_migration_fails_p7_on_a_none_card(desk):
+    mig = desk.repo / "src" / "cobalt" / "db_migrations"
+    git(desk.repo, "checkout", "-q", "-B", "ops/beta", "main")
+    (desk.repo / "src" / "beta.py").write_text("beta = 2\n")
+    (mig / "0001_base.sql").write_text("-- base, edited by beta\n")
+    git(desk.repo, "add", "-A")
+    git(desk.repo, "commit", "-q", "-m", "beta code edits a migration")
+    desk.tip["beta"] = git(desk.repo, "rev-parse", "--short=8", "HEAD")
+    desk.head["beta"] = desk.tip["beta"]
+    git(desk.repo, "checkout", "-q", "main")
+    desk.check["beta"].write_text(f"# check beta\n\n{check_line(desk.tip['beta'])}\n")
+    desk.recard()
+    done = desk.run()
+    assert done.returncode == 1, done.stdout
+    assert last_line(done).startswith("FAILED STEP-0: P7 migrations — "), done.stdout
+
+
+def test_o3_an_override_for_a_job_that_only_contains_this_job_does_not_open_the_window(desk):
+    desk.write_rulings(
+        "| R2 | 09:05 ET | HIS RULING: the set ships. | HIS RULING · APPROVED |\n"
+        "| R3 | 09:10 ET | HIS RULING: overrules L66 for deploy x-set-2 at 14:00. | HIS RULING · APPROVED |\n"
+    )
+    desk.commit("override for x-set-2")
+    desk.recard(rulings="2026-01-02 R2, R3")
+    done = desk.run("--window", now=THURSDAY_1400)
+    assert done.returncode == 1, done.stdout
+
+
+def test_dry_run_names_the_p2_and_p3_commands_the_script_runs(desk):
+    for name in ("git", "curl", "uv"):
+        stub(desk.bin, name, PLAIN)
+    done = desk.run("--dry-run")
+    would = "\n".join(ln for ln in done.stdout.splitlines() if ln.startswith("WOULD RUN: "))
+    assert "grep -v" in would, would
+    assert "rev-parse --verify" in would
+    assert "tail -n 3" not in would
