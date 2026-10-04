@@ -8,8 +8,10 @@ and its stderr is the one line the session reads.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -20,6 +22,20 @@ BLOCK_TAIL = (
     ". Resend the SAME commands now, one per call, in order. "
     "Do not report this to Dejan as a failure."
 )
+
+
+@pytest.fixture(autouse=True)
+def roots(tmp_path, monkeypatch) -> SimpleNamespace:
+    """COBALT_WT_ROOT and COBALT_REPO_ROOT stand in for /Users/cobalt/cobalt-wt and
+    /Users/cobalt/cobalt (the take-devdb-lock.sh shape), so the ledger, the lock dir and the
+    cards of every case live under tmp_path."""
+    wt = tmp_path / "wt"
+    repo = tmp_path / "repo"
+    wt.mkdir()
+    repo.mkdir()
+    monkeypatch.setenv("COBALT_WT_ROOT", str(wt))
+    monkeypatch.setenv("COBALT_REPO_ROOT", str(repo))
+    return SimpleNamespace(wt=wt, repo=repo, tmp=tmp_path)
 
 
 def guard(stdin: str) -> subprocess.CompletedProcess:
@@ -120,3 +136,635 @@ def test_the_dev_null_exception_is_only_the_exact_ending():
 def test_another_tool_or_a_broken_input_passes(stdin):
     done = guard(stdin)
     assert done.returncode == 0, done.stderr
+
+
+# ---- card 10 cobalt-guard (his 2026-10-03 R32, R33): the seat, rows G1–G8 ----------------
+
+G2_ROUTE = "route: production is the deploy hub's; a dev read uses COBALT_ENV=dev"
+G3_ROUTE = (
+    "route: .env is never read; `ls -la <path>/.env` shows it is there, "
+    "and the lock scripts copy and remove it"
+)
+G4_ROUTE = "route: git add <paths> then commit -m … -- <paths>; a merge is the deploy hub's"
+G5_FIXED = "route: a fixed file changes by a card row"
+G5_FENCE = (
+    "route: this seat writes only inside its fence (a worker: its worktree and its report; "
+    "the brain: reports/ and prompts/20*/; nothing under /Users/cobalt/Vault); "
+    "a fixed file changes by a card row"
+)
+G6_ROUTE = "route: release the lock (W (f)), then the stop line"
+G7_ROUTE = "route: the desk launches"
+
+JOB_WT = "job-0101"
+DEFAULT_FILES = "`ops/desk/x.py`, `tests/ops/test_x.py`"
+
+
+def prompts(roots) -> Path:
+    return roots.repo / "docs" / "40 - DevDocs" / "prompts"
+
+
+def card_text(roots, files: str) -> str:
+    report = roots.wt / JOB_WT / "docs" / "40 - DevDocs" / "reports" / "job-build-2026-01-01.md"
+    check = roots.repo / "docs" / "40 - DevDocs" / "reports" / "job-check-2026-01-01.md"
+    return (
+        "JOB: job\n"
+        "BRANCH: ops/job-0101\n"
+        f"WORKTREE: {JOB_WT}\n"
+        "BASE: 0000000a\n"
+        f"REPORT: {report}\n"
+        f"CHECK REPORT: {check}\n"
+        "DB: none\n"
+        "\n"
+        "## ROWS\n"
+        "\n"
+        "| row | what | red first | files |\n"
+        "|---|---|---|---|\n"
+        f"| X1 | a constructed row with a `\\|` in it | tests | {files} |\n"
+        "\n"
+        "## NOT IN THIS JOB\n"
+        "- `docs/40 - DevDocs/prompts/CHECK-HUB.md`\n"
+    )
+
+
+def transcript(roots, name: str, first: str | list) -> Path:
+    """The real shape of a Claude Code transcript: one JSON record per line, the launch
+    message the first `user` record; a non-user record before it."""
+    p = roots.tmp / f"{name}.jsonl"
+    records = [
+        {"type": "queue-operation", "operation": "enqueue", "sessionId": "sess-test-1"},
+        {
+            "parentUuid": None,
+            "isSidechain": False,
+            "userType": "external",
+            "cwd": "/constructed",
+            "sessionId": "sess-test-1",
+            "type": "user",
+            "message": {"role": "user", "content": first},
+            "uuid": "00000000-0000-0000-0000-000000000001",
+            "timestamp": "2026-01-01T13:00:00.000Z",
+        },
+        {
+            "type": "user",
+            "message": {"role": "user", "content": "CONTINUE: W. a later message"},
+        },
+    ]
+    p.write_text("".join(json.dumps(r) + "\n" for r in records))
+    return p
+
+
+HUB_FILE = {
+    "build": "BUILD-HUB.md",
+    "check": "CHECK-HUB.md",
+    "deploy": "DEPLOY-HUB.md",
+    "devfix": "DEVFIX-HUB.md",
+}
+
+
+def make_seat(roots, kind, *, cwd=None, files=DEFAULT_FILES, first=None) -> dict:
+    """A constructed seat: cwd + transcript. kind None = no transcript, cwd outside both roots."""
+    p = prompts(roots)
+    if kind in HUB_FILE:
+        card = p / "2026-01-01" / f"01-{kind}-card.md"
+        card.parent.mkdir(parents=True, exist_ok=True)
+        card.write_text(card_text(roots, files))
+        hub = p / HUB_FILE[kind]
+        text = f"Read '{hub}' and follow it exactly. CARD: '{card}'"
+        default_cwd = roots.repo if kind == "deploy" else roots.wt / JOB_WT
+    elif kind == "desk":
+        text = "Read 'docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md' and follow it exactly."
+        default_cwd = roots.repo
+    elif kind == "brain":
+        text = f"Read '{p / '2026-01-01' / '23-brain-judge.md'}' and follow it exactly."
+        default_cwd = roots.repo
+    else:
+        text = None
+        default_cwd = roots.tmp / "elsewhere"
+    if first is not None:
+        text = first
+    where = Path(cwd) if cwd is not None else default_cwd
+    where.mkdir(parents=True, exist_ok=True)
+    path = transcript(roots, f"t-{kind}", text) if text is not None else ""
+    return {"cwd": str(where), "transcript": str(path)}
+
+
+def call(tool: str, tool_input: dict, seat: dict | None = None, session: str = "sess-test-1"):
+    event = {
+        "session_id": session,
+        "transcript_path": seat["transcript"] if seat else "",
+        "cwd": seat["cwd"] if seat else "",
+        "permission_mode": "dontAsk",
+        "hook_event_name": "PreToolUse",
+        "tool_name": tool,
+        "tool_input": tool_input,
+    }
+    return guard(json.dumps(event))
+
+
+def run(command: str, seat: dict | None = None, **kw):
+    return call("Bash", {"command": command, "description": "x"}, seat, **kw)
+
+
+def assert_denied(done, route: str):
+    assert done.returncode == 2, (done.returncode, done.stderr)
+    assert done.stderr == route + "\n", done.stderr
+
+
+def assert_allowed(done):
+    assert done.returncode == 0, done.stderr
+    assert done.stderr == ""
+
+
+KINDS = ["build", "check", "devfix", "deploy", "desk", "brain", None]
+WORKERS = ["build", "check", "devfix"]
+
+
+# ---- G1 READ-ONLY PIPES ------------------------------------------------------------------
+
+PIPES_ALLOWED = [
+    "grep -n X f | cut -f2",
+    'grep -n "^| R154 " f | cut -c1-80',
+    "grep -n X f | sort | uniq -c | head -5",
+    "sed -n '/^## PREFLIGHT/,$p' f | head -3",
+    "sed -n -e 's/a/b/gp' f | wc -l",
+    "awk '{print $1}' f | sort -u",
+    "tail -n 5 f | cut -d: -f1 | grep -o 'y'",
+    "grep -c x f | head -1 < /dev/null",
+]
+
+
+@pytest.mark.parametrize("kind", [None, "build"])
+@pytest.mark.parametrize("command", PIPES_ALLOWED)
+def test_g1_a_read_only_pipe_is_allowed(roots, kind, command):
+    assert_allowed(run(command, make_seat(roots, kind)))
+
+
+PIPES_DENIED = [
+    # today's denied call (cto-2026-10-03.md REFUSALS 10:25): the `;`
+    ('grep "^| R154 " f | cut -c1-80; grep "^| R149 " f | grep -o "x"', "`;`"),
+    ("grep X f | rm -rf /", "`rm`"),
+    ("grep X f | sed -i s/a/b/ f", "`sed -i`"),
+    ("grep X f | sed -n -i.bak p", "`sed -i`"),
+    ("grep X f | sed --in-place -n p", "`sed -i`"),
+    ("grep X f | sed 's/a/b/'", "`sed` without `-n`"),
+    ("grep X f | sed -n 's/a/b/w out'", "`sed` with a `w` or `e` command or flag"),
+    ("grep X f | sed -n 's/a/b/e'", "`sed` with a `w` or `e` command or flag"),
+    ("grep X f | sed -n '1e date'", "`sed` with a `w` or `e` command or flag"),
+    ("grep X f | sed -n 'w out'", "`sed` with a `w` or `e` command or flag"),
+    ("grep X f | sed -n -e '/a/{p' -e 'w out' -e '}'", "`sed` with a `w` or `e` command or flag"),
+    ("grep X f | sed -n '/a/{p;w out\n}'", "`sed` with a `w` or `e` command or flag"),
+    ("grep X f | sed -n -f script.sed", "`sed -f`"),
+    ("ls && ls", "`&&`"),
+    ("ls | head", "`ls`"),
+    ("grep X f | sh", "`sh`"),
+    ("grep X f || head f", "`||`"),
+    ("grep X f | head > out", "a redirect `>`"),
+    ("grep X f | head >> out", "a redirect `>`"),
+    ("grep X f | head < in", "a redirect `<`"),
+    ("grep X f | head\nls", "a newline"),
+    ("grep X f | head $(ls)", "`$(`"),
+    ("grep X f | head `ls`", "a backtick"),
+    ("grep X f | LC_ALL=C sort", "`LC_ALL=C`"),
+    ("grep X f |", "an empty pipe segment"),
+]
+
+
+@pytest.mark.parametrize("command,found", PIPES_DENIED)
+def test_g1_anything_else_compound_is_denied_with_the_resend_sentence(command, found):
+    done = run(command)
+    assert done.returncode == 2, done.stderr
+    line = done.stderr.strip()
+    assert line.startswith(BLOCK_HEAD), line
+    assert line.endswith(BLOCK_TAIL), line
+    assert found in line[len(BLOCK_HEAD) : -len(BLOCK_TAIL)], line
+
+
+def test_g1_one_command_stays_allowed_whatever_its_verb(roots):
+    # sed -i as ONE command is not a pipe: the allow strings judge it, not G1
+    assert_allowed(run("sed -i s/a/b/ f", make_seat(roots, "build")))
+
+
+# ---- G2 PRODUCTION FROM A NON-DEPLOY SEAT ------------------------------------------------
+
+PROD_CALLS = [
+    "COBALT_ENV=production uv run cobalt validate",
+    "uv run cobalt db migrate --prod",
+    "uv run cobalt db query --prod=1 x",
+    "psql cobalt_brain",
+]
+
+
+@pytest.mark.parametrize("command", PROD_CALLS)
+@pytest.mark.parametrize("kind", ["build", "check", "devfix", "desk", "brain"])
+def test_g2_production_from_a_non_deploy_seat_is_denied(roots, kind, command):
+    assert_denied(run(command, make_seat(roots, kind)), G2_ROUTE)
+
+
+@pytest.mark.parametrize("command", PROD_CALLS)
+@pytest.mark.parametrize("kind", ["deploy", None])
+def test_g2_the_deploy_hub_and_an_unknown_seat_are_allowed(roots, kind, command):
+    assert_allowed(run(command, make_seat(roots, kind)))
+
+
+@pytest.mark.parametrize(
+    "command", ["COBALT_ENV=dev uv run pytest -q", "uv run cobalt --products", "ls cobalt_dev"]
+)
+def test_g2_a_dev_call_from_a_build_is_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+# ---- G3 .env NEVER READ ------------------------------------------------------------------
+
+ENV_READS = [
+    "cat /x/wt/job/.env",
+    "grep KEY /x/wt/job/.env",
+    "sed -n 1p /x/wt/job/.env",
+    "head -1 /x/wt/job/.env",
+    "tail -n 1 /x/wt/job/.env",
+    "less /x/wt/job/.env",
+    'cat "/x/wt/my job/.env"',
+    "cat .env",
+    "grep -n KEY /x/wt/job/.env | head -1",
+]
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize("command", ENV_READS)
+def test_g3_a_read_of_env_is_denied_from_every_seat(roots, kind, command):
+    assert_denied(run(command, make_seat(roots, kind)), G3_ROUTE)
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_g3_the_read_tool_on_env_is_denied(roots, kind):
+    done = call("Read", {"file_path": "/x/wt/job/.env"}, make_seat(roots, kind))
+    assert_denied(done, G3_ROUTE)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "ls -la /x/wt/job/.env",
+        "ls /x/wt/job/.env",
+        "cp /x/repo/.env /x/wt/job/.env",
+        "rm /x/wt/job/.env",
+        "cat /x/wt/job/.env.example",
+        "grep -n X /x/wt/job/env",
+    ],
+)
+def test_g3_the_lock_steps_on_env_are_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+def test_g3_the_read_tool_on_another_file_is_allowed(roots):
+    assert_allowed(call("Read", {"file_path": "/x/wt/job/.env.example"}, make_seat(roots, "build")))
+
+
+# ---- G4 GIT SHAPE FROM A WORKER ----------------------------------------------------------
+
+GIT_DENIED = [
+    "git add -A",
+    "git add --all",
+    "git add .",
+    'git commit -m "x"',
+    'git commit -m "a -- b"',
+    "git push",
+    "git -C /x/wt/job push origin x",
+    "git merge main",
+    "git rebase main",
+    "git reset --hard",
+    "git checkout x",
+    "git stash push -u -m t",
+    "git cherry-pick 0000000a",
+    "git log --output=/x/out",
+    "git diff --output /x/out",
+]
+
+
+@pytest.mark.parametrize("kind", WORKERS)
+@pytest.mark.parametrize("command", GIT_DENIED)
+def test_g4_a_git_shape_from_a_worker_is_denied(roots, kind, command):
+    assert_denied(run(command, make_seat(roots, kind)), G4_ROUTE)
+
+
+GIT_ALLOWED = [
+    'git add "docs/40 - DevDocs/reports/x.md" tests/ops/test_x.py',
+    'git commit -m "fix(x): y" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- a b',
+    "git status --short --branch",
+    "git -C /x/repo log --oneline -1 x",
+    "git diff --stat 0000000a",
+]
+
+
+@pytest.mark.parametrize("command", GIT_ALLOWED)
+def test_g4_the_listed_git_shape_from_a_worker_is_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+def test_g4_the_desks_commit_with_paths_is_allowed(roots):
+    done = run('git -C /Users/cobalt/cobalt commit -m "docs(desk): x" -- a', make_seat(roots, "desk"))
+    assert_allowed(done)
+
+
+@pytest.mark.parametrize("command", ["git -C /x/repo merge --ff-only x", "git -C /x/repo reset --soft HEAD~1"])
+def test_g4_a_merge_is_the_deploy_hubs(roots, command):
+    assert_allowed(run(command, make_seat(roots, "deploy")))
+
+
+def test_g4_an_unknown_seat_is_allowed(roots):
+    assert_allowed(run("git push", make_seat(roots, None)))
+
+
+# ---- G5 THE WRITE FENCE ------------------------------------------------------------------
+
+
+def write(path, seat, content="x\n"):
+    return call("Write", {"file_path": str(path), "content": content}, seat)
+
+
+def edit(path, seat, new="y"):
+    return call("Edit", {"file_path": str(path), "old_string": "x", "new_string": new}, seat)
+
+
+@pytest.mark.parametrize("kind", WORKERS)
+def test_g5_a_worker_writes_inside_its_worktree(roots, kind):
+    seat = make_seat(roots, kind)
+    assert_allowed(write(roots.wt / JOB_WT / "ops" / "desk" / "x.py", seat))
+    assert_allowed(edit(roots.wt / JOB_WT / "tests" / "ops" / "test_x.py", seat))
+
+
+@pytest.mark.parametrize("kind", WORKERS + ["deploy"])
+@pytest.mark.parametrize(
+    "target",
+    [
+        lambda r: r.wt / "other-0101" / "x.py",
+        lambda r: r.repo / "src" / "x.py",
+        lambda r: r.wt / JOB_WT / ".." / "other-0101" / "x.py",
+        lambda r: Path("/Users/cobalt/Vault/Think/x.md"),
+    ],
+)
+def test_g5_a_worker_outside_its_worktree_is_denied(roots, kind, target):
+    seat = make_seat(roots, kind)
+    assert_denied(write(target(roots), seat), G5_FENCE)
+    assert_denied(edit(target(roots), seat), G5_FENCE)
+
+
+def test_g5_the_check_writes_its_check_report_on_main(roots):
+    seat = make_seat(roots, "check")
+    own = roots.repo / "docs" / "40 - DevDocs" / "reports" / "job-check-2026-01-01.md"
+    other = roots.repo / "docs" / "40 - DevDocs" / "reports" / "other-check-2026-01-01.md"
+    assert_allowed(write(own, seat))
+    assert_denied(write(other, seat), G5_FENCE)
+
+
+def test_g5_the_worktree_comes_from_the_card_when_the_cwd_moves(roots):
+    # the check enters <AGY> for its house launch; its fence stays its card's worktree
+    seat = make_seat(roots, "check", cwd=roots.wt / "agy-trial")
+    assert_allowed(write(roots.wt / JOB_WT / "x.md", seat))
+    assert_denied(write(roots.wt / "agy-trial" / "x.md", seat), G5_FENCE)
+
+
+@pytest.mark.parametrize("kind", KINDS[:-1])
+@pytest.mark.parametrize(
+    "target",
+    [
+        lambda r: prompts(r) / "BUILD-HUB.md",
+        lambda r: r.wt / JOB_WT / "docs" / "40 - DevDocs" / "prompts" / "CHECK-HUB.md",
+        lambda r: r.wt / JOB_WT / "x" / "LAWS.md",
+        lambda r: r.repo / "docs" / "40 - DevDocs" / "prompts" / "CTO-DESK-WAKEUP.md",
+    ],
+)
+def test_g5_a_fixed_file_is_denied_from_any_seat(roots, kind, target):
+    assert_denied(write(target(roots), make_seat(roots, kind)), G5_FIXED)
+
+
+def test_g5_a_build_whose_card_names_the_fixed_file_writes_it(roots):
+    files = "`docs/40 - DevDocs/prompts/BUILD-HUB.md`, `tests/ops/test_x.py`"
+    seat = make_seat(roots, "build", files=files)
+    hub = roots.wt / JOB_WT / "docs" / "40 - DevDocs" / "prompts" / "BUILD-HUB.md"
+    assert_allowed(write(hub, seat))
+    # the card names BUILD-HUB.md only, and only in `files`: CHECK-HUB.md stays fixed
+    other = roots.wt / JOB_WT / "docs" / "40 - DevDocs" / "prompts" / "CHECK-HUB.md"
+    assert_denied(write(other, seat), G5_FIXED)
+
+
+def test_g5_a_check_whose_card_names_the_fixed_file_is_still_denied(roots):
+    files = "`docs/40 - DevDocs/prompts/BUILD-HUB.md`"
+    seat = make_seat(roots, "check", files=files)
+    hub = roots.wt / JOB_WT / "docs" / "40 - DevDocs" / "prompts" / "BUILD-HUB.md"
+    assert_denied(write(hub, seat), G5_FIXED)
+
+
+def test_g5_the_brain_writes_reports_and_dated_prompts_only(roots):
+    seat = make_seat(roots, "brain")
+    docs = roots.repo / "docs" / "40 - DevDocs"
+    assert_allowed(write(docs / "reports" / "brain-x.md", seat))
+    assert_allowed(write(docs / "prompts" / "2026-01-01" / "10-x-card.md", seat))
+    assert_denied(write(docs / "prompts" / "BUILD-HUB.md", seat), G5_FIXED)
+    assert_denied(write(roots.repo / "src" / "x.py", seat), G5_FENCE)
+    assert_denied(write(docs / "prompts" / "x.txt" / ".." / "CARD.md", seat), G5_FIXED)
+    assert_denied(write(Path("/Users/cobalt/Vault/Think/x.md"), seat), G5_FENCE)
+
+
+def test_g5_the_desk_has_no_fence_but_the_fixed_files(roots):
+    seat = make_seat(roots, "desk")
+    assert_allowed(write(roots.repo / "docs" / "40 - DevDocs" / "reports" / "cto-x.md", seat))
+    assert_allowed(write(Path("/Users/cobalt/Vault/Think/x.md"), seat))
+
+
+def test_g5_an_unknown_seat_is_allowed_everywhere(roots):
+    seat = make_seat(roots, None)
+    assert_allowed(write(prompts(roots) / "BUILD-HUB.md", seat))
+    assert_allowed(write(Path("/Users/cobalt/Vault/Think/x.md"), seat))
+
+
+# ---- G6 STOP LINE WHILE DIRTY ------------------------------------------------------------
+
+STOP_LINES = [
+    "BUILT · job: x · tip: 0000000a | on 0000000b",
+    "CHECK DONE · job: x",
+    "DEPLOYED · job: x",
+]
+
+
+def report(roots) -> Path:
+    return roots.wt / JOB_WT / "docs" / "40 - DevDocs" / "reports" / "job-build-2026-01-01.md"
+
+
+@pytest.mark.parametrize("stop", STOP_LINES)
+def test_g6_a_stop_line_while_env_is_on_disk_is_denied(roots, stop):
+    seat = make_seat(roots, "build")
+    (roots.wt / JOB_WT / ".env").write_text("CONSTRUCTED=1\n")
+    assert_denied(write(report(roots), seat, f"# r\n\n## RECORDS\n{stop}\n\n"), G6_ROUTE)
+    assert_denied(edit(report(roots), seat, f"x\n{stop}\n"), G6_ROUTE)
+
+
+@pytest.mark.parametrize("stop", STOP_LINES)
+def test_g6_a_stop_line_while_the_lock_names_this_worktree_is_denied(roots, stop):
+    seat = make_seat(roots, "build")
+    lock = roots.wt / ".cobalt_dev.lock"
+    lock.mkdir()
+    (lock / "owner").write_text(JOB_WT + "\n")
+    assert_denied(write(report(roots), seat, f"# r\n{stop}\n"), G6_ROUTE)
+
+
+def test_g6_a_stop_line_while_the_lock_names_another_worktree_is_allowed(roots):
+    seat = make_seat(roots, "build")
+    lock = roots.wt / ".cobalt_dev.lock"
+    lock.mkdir()
+    (lock / "owner").write_text("other-0101\n")
+    assert_allowed(write(report(roots), seat, f"# r\n{STOP_LINES[0]}\n"))
+
+
+def test_g6_a_clean_stop_line_and_a_dirty_running_line_are_allowed(roots):
+    seat = make_seat(roots, "build")
+    assert_allowed(write(report(roots), seat, f"# r\n{STOP_LINES[0]}\n"))
+    (roots.wt / JOB_WT / ".env").write_text("CONSTRUCTED=1\n")
+    running = "# r\n(run in progress — next step under ## CONTINUE)\n"
+    assert_allowed(write(report(roots), seat, running))
+    assert_allowed(write(report(roots), seat, f"{STOP_LINES[0]}\nmore\n"))
+
+
+def test_g6_is_kind_free(roots):
+    seat = make_seat(roots, None)
+    Path(seat["cwd"], ".env").write_text("CONSTRUCTED=1\n")
+    target = Path(seat["cwd"]) / "r.md"
+    assert_denied(write(target, seat, f"{STOP_LINES[0]}\n"), G6_ROUTE)
+
+
+# ---- G7 NO SECOND SESSION FROM A WORKER --------------------------------------------------
+
+LAUNCHES = [
+    'claude --bg "Read x"',
+    'codex exec -s read-only "x"',
+    'grok -p "x"',
+    "agy x",
+    "/usr/local/bin/claude -p x",
+    "FOO=1 claude -p x",
+    "grep -n X f | claude -p x",
+]
+
+
+@pytest.mark.parametrize("kind", WORKERS + ["deploy"])
+@pytest.mark.parametrize("command", LAUNCHES[:-1])
+def test_g7_a_second_session_from_a_worker_is_denied(roots, kind, command):
+    assert_denied(run(command, make_seat(roots, kind)), G7_ROUTE)
+
+
+def test_g7_a_launch_at_the_end_of_a_pipe_is_denied(roots):
+    assert_denied(run(LAUNCHES[-1], make_seat(roots, "build")), G7_ROUTE)
+
+
+@pytest.mark.parametrize("kind", ["desk", "brain", None])
+@pytest.mark.parametrize("command", LAUNCHES[:-1])
+def test_g7_the_desk_the_brain_and_an_unknown_seat_launch(roots, kind, command):
+    assert_allowed(run(command, make_seat(roots, kind)))
+
+
+@pytest.mark.parametrize("command", ["ls claude", "grep -n codex f", "sh /x/desk-launch.sh build x"])
+def test_g7_the_word_elsewhere_is_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+# ---- the seat's kind (X2) ----------------------------------------------------------------
+
+
+def test_kind_a_build_whose_cwd_is_the_repo_is_still_a_build(roots):
+    seat = make_seat(roots, "build", cwd=roots.repo)
+    assert_denied(run("claude -p x", seat), G7_ROUTE)
+    assert_denied(write(roots.repo / "src" / "x.py", seat), G5_FENCE)
+    assert_allowed(write(roots.wt / JOB_WT / "x.py", seat))
+
+
+def test_kind_a_desk_launch_in_a_worktree_is_a_worker(roots):
+    seat = make_seat(roots, "desk", cwd=roots.wt / "some-0101")
+    assert_denied(run("claude -p x", seat), G7_ROUTE)
+    assert_denied(run("git push", seat), G4_ROUTE)
+    assert_allowed(write(roots.wt / "some-0101" / "x.md", seat))
+    assert_denied(write(roots.wt / "other-0101" / "x.md", seat), G5_FENCE)
+
+
+def test_kind_a_worktree_without_a_transcript_is_a_worker(roots):
+    seat = {"cwd": str(roots.wt / "some-0101"), "transcript": ""}
+    assert_denied(run("claude -p x", seat), G7_ROUTE)
+
+
+@pytest.mark.parametrize(
+    "first",
+    [
+        "Read '/x/docs/40 - DevDocs/prompts/CLOSE-HUB.md' and follow it exactly.",
+        "hello",
+        [{"type": "text", "text": "no path here"}],
+    ],
+)
+def test_kind_the_repo_with_no_desk_or_brain_prompt_is_unknown(roots, first):
+    seat = make_seat(roots, "desk", first=first)
+    # unknown: G2, G4, G5, G7 allow; G1, G3, G6 still deny
+    assert_allowed(run("claude -p x", seat))
+    assert_allowed(run("COBALT_ENV=production uv run cobalt validate", seat))
+    assert_allowed(write(prompts(roots) / "BUILD-HUB.md", seat))
+    assert run("ls && ls", seat).returncode == 2
+    assert_denied(run("cat /x/.env", seat), G3_ROUTE)
+
+
+def test_kind_the_launch_message_as_text_parts_is_read(roots):
+    seat = make_seat(roots, "build")
+    hub = prompts(roots) / "BUILD-HUB.md"
+    card = prompts(roots) / "2026-01-01" / "01-build-card.md"
+    parts = [{"type": "text", "text": f"CONTINUE: W. Read '{hub}' and follow it exactly. CARD: '{card}'"}]
+    seat = make_seat(roots, "build", first=parts)
+    assert_denied(run("claude -p x", seat), G7_ROUTE)
+
+
+def test_kind_a_missing_transcript_file_in_the_repo_is_unknown(roots):
+    seat = {"cwd": str(roots.repo), "transcript": str(roots.tmp / "nope.jsonl")}
+    assert_allowed(run("claude -p x", seat))
+
+
+# ---- G8 THE LEDGER -----------------------------------------------------------------------
+
+
+def ledger_lines(roots, session="sess-test-1"):
+    p = roots.wt / ".ledger" / f"{session}.jsonl"
+    return [json.loads(x) for x in p.read_text().splitlines()] if p.exists() else []
+
+
+def test_g8_every_deny_appends_one_line(roots):
+    seat = make_seat(roots, "build")
+    long = "claude -p " + "y" * 300
+    assert_denied(run(long, seat), G7_ROUTE)
+    assert run("ls && ls", seat).returncode == 2
+    lines = ledger_lines(roots)
+    assert [x["rule"] for x in lines] == ["G7", "G1"]
+    first = lines[0]
+    assert set(first) == {"time", "cwd", "rule", "command"}
+    assert first["cwd"] == seat["cwd"]
+    assert first["command"] == long.encode()[:200].decode()
+    assert len(first["command"].encode()) == 200
+    assert first["time"][:2] == "20" and "T" in first["time"]
+    assert lines[1]["command"] == "ls && ls"
+
+
+def test_g8_a_write_deny_records_the_path(roots):
+    seat = make_seat(roots, "brain")
+    target = roots.repo / "src" / "x.py"
+    assert_denied(write(target, seat), G5_FENCE)
+    assert ledger_lines(roots) == [
+        {**ledger_lines(roots)[0], "rule": "G5", "command": str(target), "cwd": seat["cwd"]}
+    ]
+
+
+def test_g8_an_allowed_call_writes_nothing(roots):
+    assert_allowed(run("ls -la", make_seat(roots, "build")))
+    assert not (roots.wt / ".ledger").exists()
+
+
+def test_g8_the_session_id_never_leaves_the_ledger_dir(roots):
+    assert run("ls && ls", make_seat(roots, "build"), session="../../escape").returncode == 2
+    names = os.listdir(roots.wt / ".ledger")
+    assert len(names) == 1 and "/" not in names[0] and not names[0].startswith(".")
+    assert not (roots.tmp / "escape.jsonl").exists()
+
+
+def test_g8_an_unwritable_ledger_still_denies(roots):
+    (roots.wt / ".ledger").write_text("a file where the dir should be\n")
+    done = run("claude -p x", make_seat(roots, "build"))
+    assert_denied(done, G7_ROUTE)
