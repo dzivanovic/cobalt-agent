@@ -36,6 +36,9 @@ FLAG = ("ONE bare command per Bash call: no &&, ;, |, redirect, newline or $(…
         "A call the hook blocks is NOT A REFUSAL: resend it as single calls.")
 # the flag as the line spells it: desk-launch.sh evals the line, so `$` is escaped inside "…"
 FLAG_SRC = '--append-system-prompt "' + FLAG.replace("$", "\\$") + '"'
+# the deploy line's flag is FLAG_SRC plus one sentence (card 03d P2 (8))
+DEPLOY_FLAG_SRC = FLAG_SRC[:-1] + ' Inside the outage (4.1–4.6) a blocked call is resent once as single calls; still blocked → STEP-5."'
+FLAG_SRC_OF = {name: DEPLOY_FLAG_SRC if name == "DEPLOY-HUB.md" else FLAG_SRC for name in KINDS.values()}
 
 GIT_ENV = {
     "GIT_AUTHOR_NAME": "test",
@@ -92,7 +95,7 @@ def test_build_check_and_devfix_deny_every_production_string(name):
 def test_each_line_carries_the_flag_once(name):
     line = hub_line(name)
     assert line.count("--append-system-prompt") == 1
-    assert line.count(FLAG_SRC) == 1, line
+    assert line.count(FLAG_SRC_OF[name]) == 1, line
 
 
 def test_the_desk_line_of_the_wakeup_carries_the_flag_once():
@@ -225,7 +228,7 @@ def test_a_dry_launch_of_each_kind_prints_a_line_holding_the_flag(desk, kind):
     done = desk.launch(kind, dry=True)
     assert done.returncode == 0, done.stderr
     (line,) = [ln for ln in done.stdout.splitlines() if ln.startswith("claude --bg ")]
-    assert line.count(FLAG_SRC) == 1, line
+    assert line.count(FLAG_SRC_OF[KINDS[kind]]) == 1, line
 
 
 def test_a_real_launch_hands_the_session_the_flag_byte_for_byte(desk):
