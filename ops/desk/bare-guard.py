@@ -23,8 +23,11 @@
 # G1 one command or a read-only pipe (G11: an `awk` program with `system(`, `>` or `|` is not
 # read-only; card 06 B2–B4: nor `sort -o`/`--output`/`--compress-program`, a second `uniq`
 # operand or `awk -f`, in a pipe segment or as one command; B1: `sort cut uniq awk` are G3
-# readers too). Read: G3. Write / Edit: G6 stop line while dirty · G5 the fence (G10: a check's
-# fence adds its own <S>, the card's JOB naming it).
+# readers too; B9: an awk program with `getline`, `ARGV`, `ARGC`, `@include` or `@load` is G3;
+# B10: a command led by `time nice env command nohup timeout stdbuf xargs` is judged by every
+# rule as the command it runs, and a wrapper whose command cannot be found is denied). Read: G3.
+# Write / Edit: G6 stop line while dirty · G5 the fence (G10: a check's fence adds its own <S>,
+# the card's JOB naming it).
 # G8: every deny appends one JSON line to <worktree root>/.ledger/<session_id>.jsonl; a ledger
 # error never blocks the deny. Any other error inside the guard -> exit 0: it never blocks work
 # because it broke.
@@ -75,6 +78,27 @@ GIT_SHAPED = ("build", "check", "devfix", "worker")
 READ_FILTERS = ("grep", "sed", "cut", "sort", "uniq", "head", "tail", "wc", "awk")
 ENV_READERS = ("cat", "grep", "sed", "head", "tail", "less", "sort", "cut", "uniq", "awk")
 LAUNCHERS = ("claude", "codex", "grok", "agy")
+# B10: a wrapper runs the command that follows its options and operands; per wrapper, the
+# options that stand alone and those that take a value (the next word, `=value` or attached)
+WRAPPERS = ("time", "nice", "env", "command", "nohup", "timeout", "stdbuf", "xargs")
+WRAP_FLAGS = {
+    "time": ("-p",),
+    "env": ("-", "-i", "--ignore-environment"),
+    "command": ("-p", "-v", "-V"),
+    "timeout": ("--preserve-status", "--foreground", "-v", "--verbose"),
+    "xargs": ("-0", "-r", "-t", "-x", "--null", "--no-run-if-empty", "--verbose", "--exit"),
+}
+WRAP_VALUES = {
+    "nice": ("-n", "--adjustment"),
+    "env": ("-u", "--unset"),
+    "timeout": ("-s", "--signal", "-k", "--kill-after"),
+    "stdbuf": ("-i", "-o", "-e", "--input", "--output", "--error"),
+    "xargs": (
+        "-d", "--delimiter", "-E", "-I", "-L", "--max-lines", "-n", "--max-args",
+        "-P", "--max-procs", "-s", "--max-chars",
+    ),
+}
+WRAPPED = "a wrapper whose command the guard cannot find"
 GIT_DENIED = ("push", "merge", "rebase", "reset", "checkout", "stash", "cherry-pick")
 STOP_HEADS = ("BUILT ·", "CHECK DONE ·", "DEPLOYED")
 PROD = re.compile(r"COBALT_ENV=production|(?<![\w-])--prod(?![\w-])|cobalt_brain")
@@ -85,6 +109,7 @@ AWK_WRITES = "`awk` with `system(`, `>` or `|` in its program"
 AWK_FILE = "`awk -f`, a program the guard cannot read"
 SORT_WRITES = "`sort` with `-o`, `--output` or `--compress-program`"
 UNIQ_WRITES = "`uniq` with a second operand, a file it writes"
+AWK_READS = ("getline", "ARGV", "ARGC", "@include", "@load")
 # G9: the three house strings of CHECK-HUB.md line 10, as prefixes of the whole command
 HOUSE = re.compile(r"grok |codex exec --skip-git-repo-check -m [A-Za-z0-9._-]+ -s read-only |agy ")
 # G10: <S> = <AGY>/scratch/tribunal-bars-0920/<JOB>-check (CHECK-HUB.md line 5)
@@ -195,6 +220,43 @@ def verb(ws):
         if not ASSIGN.match(w):
             return os.path.basename(w)
     return ""
+
+
+def unwrap(ws):
+    """B10: the words of the command a wrapper runs, past every wrapper's options and operands
+    (NAME=value words too; timeout's duration); ws itself, past NAME=value words, when no
+    wrapper leads it; None when a wrapper's command cannot be found (an option it does not know,
+    or no word left)."""
+    i, wrapped = 0, False
+    while True:
+        while i < len(ws) and ASSIGN.match(ws[i]):
+            i += 1
+        if i >= len(ws):
+            return None if wrapped else []
+        name = os.path.basename(ws[i])
+        if name not in WRAPPERS:
+            return ws[i:]
+        wrapped, flags, values = True, WRAP_FLAGS.get(name, ()), WRAP_VALUES.get(name, ())
+        i += 1
+        while i < len(ws):
+            a = ws[i]
+            if a == "--":
+                i += 1
+                break
+            if not a.startswith("-") or (a == "-" and name != "env"):
+                break
+            if a in flags or (name == "nice" and a[1:].isdigit()):
+                i += 1
+            elif a in values:
+                i += 2
+            elif a.startswith("--") and "=" in a and a.partition("=")[0] in values:
+                i += 1
+            elif not a.startswith("--") and a[:2] in values:
+                i += 1  # its value attached: -n5, -oL, -sKILL
+            else:
+                return None
+        if name == "timeout":
+            i += 1  # its duration
 
 
 # ---- G1: sed in a pipe is `sed -n`, never -i, never a w / e command or flag ----------------
@@ -374,10 +436,10 @@ def sed_problem(args):
     return None
 
 
-def awk_writes(args):
-    """G11: True when a word that can be awk program text holds `system(`, `>` or `|`. The
-    values of -F and -v and the file of -f are not program text; every other word is read."""
-    i, done = 0, False
+def awk_program(args):
+    """The words that can be awk program text: the values of -F and -v and the file of -f are
+    not; every other word is."""
+    out, i, done = [], 0, False
     while i < len(args):
         a = args[i]
         if not done and a == "--":
@@ -385,10 +447,21 @@ def awk_writes(args):
         elif not done and a[:2] in ("-F", "-v", "-f"):
             if len(a) == 2:
                 i += 1
-        elif "system(" in a or ">" in a or "|" in a:
-            return True
+        else:
+            out.append(a)
         i += 1
-    return False
+    return out
+
+
+def awk_writes(args):
+    """G11: True when a word that can be awk program text holds `system(`, `>` or `|`."""
+    return any("system(" in a or ">" in a or "|" in a for a in awk_program(args))
+
+
+def awk_reads(args):
+    """B9: True when a word that can be awk program text holds a construct that reads a file
+    the program names (`getline`, `ARGV`, `ARGC`, `@include`, `@load`)."""
+    return any(r in a for a in awk_program(args) for r in AWK_READS)
 
 
 def awk_file(args):
@@ -483,10 +556,11 @@ def g1(command):
         found, quote, cuts = scan(command)
     if not found:
         # B4: a lone sort, uniq or awk meets the checks of a pipe segment; its verb is read past
-        # NAME=value words and a path, as G3 reads it (a pipe segment of either shape is denied)
-        ws = words(text)
-        while ws and ASSIGN.match(ws[0]):
-            ws = ws[1:]
+        # NAME=value words and a path, as G3 reads it (a pipe segment of either shape is denied);
+        # B10: and past every wrapper, whose command must be found
+        ws = unwrap(words(text))
+        if ws is None:
+            return BLOCK.format(found=WRAPPED)
         p = filter_problem([os.path.basename(ws[0])] + ws[1:]) if ws else None
         return BLOCK.format(found=p) if p else None
     if found == ["a pipe `|`"]:
@@ -629,6 +703,9 @@ def g3_bash(segs):
     for ws in segs:
         if verb(ws) in ENV_READERS and any(is_env(w) for w in env_words(ws[1:])):
             return ROUTE["G3"]
+        if verb(ws) == "awk" and awk_reads(ws[1:]) and not awk_writes(ws[1:]):
+            # B9: a file the program itself names; a program G11 denies keeps G11's sentence
+            return ROUTE["G3"]
     return None
 
 
@@ -667,6 +744,9 @@ def git_problem(ws):
 def bash_rules(command, s):
     found, quote, cuts = scan(command)
     segs = [words(x) for x in segments(command, cuts)]
+    # B10: each rule also judges the command a wrapper runs (G1: `g1`; a wrapper in a pipe stays
+    # a segment that is not a read-only filter)
+    segs += [u for u in (unwrap(ws) for ws in segs if verb(ws) in WRAPPERS) if u]
     kind = s["kind"]
     deny = g3_bash(segs)
     if deny:
