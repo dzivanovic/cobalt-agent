@@ -5,14 +5,18 @@
 # Prints one row per rule, `rule · command · exit · output`; an output of more than one line follows
 # its row, each line indented four spaces:
 #   clock         date
-#   status        `git status --short --branch` is exactly `## <BRANCH>`
+#   status        `git status --short --branch` is exactly `## <BRANCH>`, or that line and ONE
+#                 `?? <path>` line whose path is the card's REPORT (a check: REPORT or CHECK
+#                 REPORT) inside this worktree, printing `status: clean but the report
+#                 (untracked, expected)` (card 2026-10-03/03c M1); any other line fails
 #   head          `git log --oneline -1`: build — BASE, or a `wip(<JOB>):` commit; check — TIP, or
 #                 docs-only commits above it (`git log --stat --format=%h <TIP>..HEAD`, its paths read
 #                 with --name-only, every one under docs/)
 #   diff          build: `git diff --stat <BASE>` (empty while HEAD is BASE)
 #   main repo     build: `git -C $REPO log --oneline -1 <BRANCH>` is HEAD
 #   env here      no .env in this worktree
-#   env anywhere  no .env under $WT/*/
+#   env anywhere  information only: `siblings holding .env: <paths, or none>` (another worktree's
+#                 .env is a held lock, which the take waits for); never fails the PREFLIGHT
 #   report        check: the build REPORT's last non-blank line starts
 #                 `BUILT · job: <JOB> · tip: <TIP>` and carries `self-check: 3 of 3`
 #   range         check: `git log --oneline <BASE>..<TIP>` (quoted)
@@ -23,6 +27,7 @@
 # COBALT_REPO_ROOT and COBALT_WT_ROOT stand in for /Users/cobalt/cobalt and /Users/cobalt/cobalt-wt
 # in tests/ops/test_preflight.py only.
 
+export LC_ALL=C
 set -u
 set -f
 
@@ -92,8 +97,33 @@ row clock "date" $? "$out" 0
 out=$(git status --short --branch 2>&1)
 rc=$?
 ok=1
+expected=""
 [ "$rc" -eq 0 ] && [ "$out" = "## $branch" ] && ok=0
+# card 03c M1: the card's own report (a check's: REPORT or CHECK REPORT), untracked, as the ONE
+# line under the branch line — the hub's first Write makes it before PREFLIGHT. Nothing else.
+if [ "$ok" -ne 0 ] && [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | sed -n '1p')" = "## $branch" ] \
+    && [ "$(printf '%s\n' "$out" | grep -c '')" -eq 2 ]; then
+    other=$(printf '%s\n' "$out" | sed -n '2p')
+    own="$report"
+    [ "$kind" != check ] || own="$own
+$(field "CHECK REPORT")"
+    while IFS= read -r r; do
+        rel=""
+        case "$r" in
+            "$dir"/*) rel=${r#"$dir"/} ;;
+            "$REPO"/*) rel=${r#"$REPO"/} ;;
+        esac
+        [ -n "$rel" ] || continue
+        if [ "$other" = "?? $rel" ] || [ "$other" = "?? \"$rel\"" ]; then
+            ok=0
+            expected=1
+        fi
+    done <<OWN
+$own
+OWN
+fi
 row status "git status --short --branch" "$rc" "$out" "$ok"
+[ -z "$expected" ] || printf 'status: clean but the report (untracked, expected)\n'
 
 head=$(git rev-parse --verify -q HEAD)
 out=$(git log --oneline -1 2>&1)
@@ -151,18 +181,19 @@ else
     row "env here" "ls $dir/.env" 1 "No such file or directory" 0
 fi
 
+# A sibling's .env is information, never this job's failure (card 02 A9; his 10-01 R20: the take waits).
 found=""
 set +f
 for f in "$WT"/*/.env; do
-    [ -e "$f" ] && found="$found$f
-"
+    [ -e "$f" ] || continue
+    [ "$f" = "$dir/.env" ] && continue
+    found="${found:+$found, }$f"
 done
 set -f
-found=$(printf '%s' "$found" | sed '/^$/d')
 if [ -n "$found" ]; then
-    row "env anywhere" "ls -la $WT/*/.env" 0 "$found" 1
+    row "env anywhere" "ls -la $WT/*/.env" 0 "siblings holding .env: $found" 0
 else
-    row "env anywhere" "ls -la $WT/*/.env" 1 "no matches found" 0
+    row "env anywhere" "ls -la $WT/*/.env" 1 "siblings holding .env: none" 0
 fi
 
 if [ "$kind" = check ]; then

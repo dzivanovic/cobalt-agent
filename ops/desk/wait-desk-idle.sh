@@ -6,6 +6,7 @@
 # "REFRESHED" (watch shells keep LIST `state: working` after the turn ends, so state
 # alone cannot decide — R117), or LIST state is no longer "working", or the row is gone.
 # Exits 2 on timeout. Writes nothing.
+export LC_ALL=C
 id="$1"; f="$2"; max="${3:-600}"; waited=0
 check() { claude agents --json 2>/dev/null | python3 -c "
 import json,sys,os

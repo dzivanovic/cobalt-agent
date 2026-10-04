@@ -60,6 +60,15 @@ resident outage to discover: this is the command a deploy preflights
 while everything is still up. It is refused together with `--rollback` /
 `--down-to`, which exist to apply things.
 
+`--proof-only` ENDS WITH TWO MORE LINES (2026-10-03, adoption-scripts L1),
+facts only, for the gate to compare: `FINGERPRINT cols <c> · rels <r> ·
+views_md5 <m>`, the three reads of BUILD-HUB.md THE LOCK's `<FP>` query in
+this same READ ONLY transaction; then `TABLES <nnnn>` — the highest
+table-creating migration whose `CREATED_TABLES` tables are all present,
+every lower creator's present and every higher one's absent — or `TABLES
+MIXED — present above: … · absent below: …`. Which level a database must be
+at is the gate's word (ops/desk/gate-lists.md), never this module's.
+
 `--allow-prod` reaches `cobalt_brain` without flipping the process into
 production mode (RULING 7's one-off-tooling seam). Without it the target
 is whatever `COBALT_ENV` resolves. `--proof-only` is under the same gate:
@@ -70,6 +79,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 import time
 from pathlib import Path
 from typing import Iterable, Iterator, Optional
@@ -150,7 +160,9 @@ CODE_ROOT = Path(__file__).resolve().parents[3]
 def _code_line() -> str:
     """`code: <short sha> (clean|DIRTY: n path(s)) · <repo root>`.
 
-    The LAST line of both the proof-only and the forward output, so a
+    The line after the proof table in both the proof-only and the forward
+    output (the last line of the forward one; the proof-only's two level
+    lines follow it, adoption-scripts L1), so a
     proof report carries the code that produced it as a FIELD. Until
     2026-09-19 the deploy could only bind a report to a commit by git
     history — which proves when the report was COMMITTED, not which code
@@ -358,6 +370,103 @@ def _probe(conn, table: str) -> dict:
 def _probe_all(conn) -> dict[str, dict]:
     tables = {**MOVED_TABLES, **SEEDED_TABLES, **CREATED_TABLES}
     return {t: _probe(conn, t) for t in sorted(tables)}
+
+
+#: `--proof-only`'s FINGERPRINT read: byte for byte the three reads of
+#: BUILD-HUB.md THE LOCK's `<FP>` query (adoption-scripts L1), so the line
+#: and the hub's own query are one question asked twice.
+FINGERPRINT_SQL = (
+    "SELECT (SELECT count(*) FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c "
+    "ON c.oid = a.attrelid JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace "
+    "WHERE n.nspname IN ('system', 'user') AND a.attnum > 0 AND NOT a.attisdropped) AS cols, "
+    "(SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n "
+    "ON n.oid = c.relnamespace WHERE n.nspname IN ('system', 'user') "
+    "AND c.relkind IN ('r', 'p', 'v')) AS rels, "
+    "(SELECT md5(string_agg(schemaname || '.' || viewname || ':' || definition, ',' "
+    "ORDER BY schemaname, viewname)) FROM pg_catalog.pg_views "
+    "WHERE schemaname IN ('system', 'user')) AS views_md5"
+)
+
+#: The statement a forward file creates a `CREATED_TABLES` table with.
+_CREATE_TABLE = re.compile(
+    r'^CREATE TABLE IF NOT EXISTS (?:system|"user")\.([a-z0-9_]+) \(', re.MULTILINE
+)
+
+
+def _table_creators() -> dict[str, str]:
+    """Each `CREATED_TABLES` table -> the migration (`NNNN`) that creates it.
+
+    `placement.CREATED_TABLES` maps a table to its SIDE; the migration is
+    read from the `FORWARD` files' own `CREATE TABLE` statements, so no
+    second, hand-kept map can drift from them. A table that no forward
+    file creates, or that two do, is refused, never guessed (L1).
+    """
+    found: dict[str, list[str]] = {}
+    for path in FORWARD:
+        for name in _CREATE_TABLE.findall(path.read_text()):
+            found.setdefault(name, []).append(f"{_migration_version(path):04d}")
+    creators: dict[str, str] = {}
+    for table in CREATED_TABLES:
+        hits = found.get(table, [])
+        if len(hits) != 1:
+            raise MigrationError(
+                f"CREATED_TABLES table {table!r} is created by {len(hits)} forward "
+                f"migration(s) ({', '.join(hits) or 'none'}), not one: the TABLES "
+                "line cannot be computed"
+            )
+        creators[table] = hits[0]
+    return creators
+
+
+def _tables_line(creators: dict[str, str], present: dict[str, bool]) -> str:
+    """`TABLES <nnnn>`, `TABLES none` or `TABLES MIXED — …`, from the marks.
+
+    `<nnnn>` is the highest creator whose tables are all present when every
+    lower creator's tables are present and every higher one's absent. Any
+    other picture is MIXED: `present above` names each creator with a table
+    present at or above the lowest creator with one absent, `absent below`
+    each creator with a table absent at or below the highest with one
+    present. No creator present at all is `none`.
+    """
+    by: dict[str, list[bool]] = {}
+    for table, creator in creators.items():
+        by.setdefault(creator, []).append(present[table])
+    some = sorted(m for m, marks in by.items() if any(marks))
+    short = sorted(m for m, marks in by.items() if not all(marks))
+    if not some:
+        return "TABLES none"
+    if not short or short[0] > some[-1]:
+        return f"TABLES {some[-1]}"
+    above = [m for m in some if m >= short[0]]
+    below = [m for m in short if m <= some[-1]]
+    return (
+        f"TABLES MIXED — present above: {', '.join(above)} · "
+        f"absent below: {', '.join(below)}"
+    )
+
+
+def _fingerprint_line(conn) -> str:
+    """The FINGERPRINT line, read under the `<FP>` query's own search_path.
+
+    The hub's `<FP>` runs on a `--side user` connection (search_path
+    `"user"`, `db.apply_side`); this one is the harness's (search_path
+    `public`, `db.connect_migration`). `pg_views.definition` names each
+    relation relative to the search_path, so the same SQL under `public`
+    hashes other text (measured on cobalt_dev 2026-10-03: views_md5
+    `4a65acf1…` against the hub's `272c95bb…`, cols and rels equal). `SET
+    LOCAL` ends with this READ ONLY transaction and writes nothing.
+    """
+    conn.execute(
+        sql.SQL("SET LOCAL search_path TO {}").format(sql.Identifier(db.Side.USER.schema))
+    )
+    cols, rels, views_md5 = conn.execute(FINGERPRINT_SQL).fetchone()
+    return f"FINGERPRINT cols {cols} · rels {rels} · views_md5 {views_md5}"
+
+
+def _level_lines(conn, probe: dict[str, dict]) -> list[str]:
+    """`--proof-only`'s two last lines, read on its own READ ONLY connection."""
+    present = {t: probe[t]["schema"] is not None for t in CREATED_TABLES}
+    return [_fingerprint_line(conn), _tables_line(_table_creators(), present)]
 
 
 def _total_seconds(probe: dict[str, dict]) -> float:
@@ -682,12 +791,15 @@ def cmd_migrate(args: argparse.Namespace) -> None:
         conn = _connect(dbname, allow_prod=args.allow_prod, read_only=True)
         try:
             probe = _probe_all(conn)
+            level = _level_lines(conn, probe)
         finally:
             conn.rollback()
             conn.close()
         print()
         _print_probe(probe, dbname=dbname)
         print(_code_line())
+        for line in level:
+            print(line)
         return
 
     print(f"cobalt db migrate — {direction} on {dbname}")
@@ -843,6 +955,7 @@ __all__ = [
     "CODE_ROOT",
     "DEFAULT_LOCK_TIMEOUT_S",
     "DIGEST_EXCLUDED_COLUMNS",
+    "FINGERPRINT_SQL",
     "PROBE_BATCH_SIZE",
     "MigrationError",
     "TABLE_DIGEST_EXCLUDED_COLUMNS",

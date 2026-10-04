@@ -133,6 +133,22 @@ def test_a_bad_name_exits_2_and_touches_nothing(roots, bad):
     assert sorted(p.name for p in wt.iterdir()) == ["alpha", "beta"]
 
 
+def test_l3_an_accented_name_exits_2_under_a_utf8_locale(roots):
+    """Card 03 L3, take- and release-devdb-lock.sh: `[!A-Za-z0-9._-]` admits `é` under
+    en_US.UTF-8 unless the script runs LC_ALL=C. The directory exists: only the name is refused."""
+    wt, repo, env = roots
+    (wt / "alphé").mkdir()
+    env = dict(env, LC_ALL="en_US.UTF-8", LANG="en_US.UTF-8")
+    take = run(TAKE, "alphé", "0", env=env)
+    assert take.returncode == 2, take.stdout + take.stderr
+    assert "REFUSED: worktree 'alphé' is not one directory name" in take.stderr
+    release = run(RELEASE, "alphé", env=env)
+    assert release.returncode == 2, release.stdout + release.stderr
+    assert "REFUSED: worktree 'alphé' is not one directory name" in release.stderr
+    assert not (wt / LOCK_NAME).exists()
+    assert not (wt / "alphé" / ".env").exists()
+
+
 def test_bad_minutes_exit_2(roots):
     wt, repo, env = roots
     for bad in ("", "x", "-1", "1.5"):

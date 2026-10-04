@@ -10,6 +10,7 @@
 # forced), each printed first as `RUN: …`; the last line `job-clean: <worktree> and <branch> removed`.
 # Roots: COBALT_REPO_ROOT (default /Users/cobalt/cobalt), COBALT_WT_ROOT (default /Users/cobalt/cobalt-wt).
 
+export LC_ALL=C
 set -u
 
 REPO=${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}

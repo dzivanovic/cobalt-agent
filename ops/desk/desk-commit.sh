@@ -6,6 +6,7 @@
 # The exit status and output of the add and the commit are passed through (the pre-commit
 # hook still decides). A refusal: "REFUSED: <reason>" on stderr, exit 1, nothing staged.
 # REPO = ${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}
+export LC_ALL=C
 REPO=${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}
 refuse() { echo "REFUSED: $1" >&2; exit 1; }
 [ $# -ge 1 ] && [ -n "$1" ] || refuse 'usage: desk-commit.sh "<message>" <path> …'

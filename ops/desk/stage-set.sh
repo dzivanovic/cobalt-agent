@@ -24,6 +24,7 @@
 # COBALT_REPO_ROOT and COBALT_WT_ROOT stand in for /Users/cobalt/cobalt and /Users/cobalt/cobalt-wt
 # in tests/ops/test_stage_set.py only.
 
+export LC_ALL=C
 set -u
 set -f
 

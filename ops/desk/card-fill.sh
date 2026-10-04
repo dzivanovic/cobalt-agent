@@ -12,6 +12,7 @@
 # ("nothing changed" when none). Commits nothing; a second run changes nothing.
 # A refusal: "REFUSED: <reason>" on stderr, exit 1, the card untouched.
 # REPORTS = ${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}/docs/40 - DevDocs/reports
+export LC_ALL=C
 REPO=${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}
 REPORTS="$REPO/docs/40 - DevDocs/reports"
 refuse() { echo "REFUSED: $1" >&2; exit 1; }

@@ -1,11 +1,10 @@
-"""lock-relief P2 — the build gate's pass 1 runs the with-DB tests only.
+"""lock-relief P2, in its form after card 2026-10-03/03 (adoption-scripts L2) and card 03c M3.
 
-THIS tree's `BUILD-HUB.md` is read the way `ops/desk/gate.sh` reads it: in
-`## W`, the one backticked line right after the `- (c) ` item that begins
-`COBALT_ENV=dev uv run pytest`. It holds ` --db-only` once, directly after
-`tests/cobalt tests/taxonomy`. `DEPLOY-HUB.md` STEP-G's pass 1 (read the same
-way under `## STEP-G`) runs without it, on purpose: the deploy gate keeps
-pass 1 whole on the merged tree, and the two commands differ by nothing else.
+The build gate's pass 1 runs the with-DB tests only: `ops/desk/gate-lists.md` `## PASS 1`,
+the one command `ops/desk/gate.sh` runs, holds ` --db-only` once, directly after
+`tests/cobalt tests/taxonomy`. The deploy gate runs pass 1 whole (his 2026-10-02 R154):
+`DEPLOY-HUB.md` STEP-G calls `gate.sh … all --deploy`, which strips that one token
+(tests/ops/test_gate.py pins the strip).
 """
 
 from __future__ import annotations
@@ -14,6 +13,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 PROMPTS = REPO / "docs" / "40 - DevDocs" / "prompts"
+LISTS = REPO / "ops" / "desk" / "gate-lists.md"
 OPTION = " --db-only"
 
 
@@ -28,33 +28,15 @@ def section(path: Path, title: str) -> list[str]:
     return body
 
 
-def pass1(path: Path, title: str) -> str:
-    """gate.sh `after("c")`: the next non-blank line after `- (c) `, one backticked span."""
-    lines = section(path, title)
-    found = []
-    for i, line in enumerate(lines):
-        if line.startswith("- (c) "):
-            for nxt in lines[i + 1:]:
-                s = nxt.strip()
-                if s:
-                    if s.startswith("`COBALT_ENV=dev uv run pytest ") and s.endswith("`") and s.count("`") == 2:
-                        found.append(s[1:-1])
-                    break
-    assert len(found) == 1, f"{path.name} {title}: {len(found)} pass-1 commands"
-    return found[0]
-
-
-def test_the_build_gate_pass1_holds_db_only_once_after_the_two_suites():
-    command = pass1(PROMPTS / "BUILD-HUB.md", "W ")
+def test_the_gate_lists_pass1_holds_db_only_once_after_the_two_suites():
+    (command,) = [ln.strip() for ln in section(LISTS, "PASS 1") if ln.strip()]
+    assert command.startswith("`COBALT_ENV=dev uv run pytest ") and command.endswith("`")
+    assert command.split(" ").count("--db-only") == 1
     assert command.count(OPTION) == 1
     assert " tests/cobalt tests/taxonomy --db-only " in command
 
 
-def test_the_deploy_gate_pass1_runs_without_db_only():
-    assert "--db-only" not in pass1(PROMPTS / "DEPLOY-HUB.md", "STEP-G")
-
-
-def test_the_two_pass1_commands_differ_by_the_option_alone():
-    build = pass1(PROMPTS / "BUILD-HUB.md", "W ")
-    deploy = pass1(PROMPTS / "DEPLOY-HUB.md", "STEP-G")
-    assert build.replace(OPTION, "", 1) == deploy
+def test_the_deploy_hub_step_g_calls_the_gate_with_deploy():
+    calls = [ln for ln in section(PROMPTS / "DEPLOY-HUB.md", "STEP-G") if "ops/desk/gate.sh " in ln]
+    assert calls
+    assert all(" all --deploy" in ln for ln in calls)

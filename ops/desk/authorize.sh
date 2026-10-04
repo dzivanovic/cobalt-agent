@@ -25,6 +25,7 @@
 # COBALT_REPO_ROOT and COBALT_WT_ROOT stand in for /Users/cobalt/cobalt and /Users/cobalt/cobalt-wt
 # in tests/ops/test_authorize.py only.
 
+export LC_ALL=C
 set -u
 set -f
 
@@ -169,7 +170,15 @@ ok=1
 row "CARD UNCHANGED" "git -C $REPO diff --stat -- \"$card_rel\"" "$rc" "$out" "$ok"
 
 title=$(sed -n '1p' "$fixed")
-sl=$(printf '%s\n' "$title" | sed -n 's/^[^«]*INSTALL: \(20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]\) \(R[0-9][0-9]*\)[^0-9].*$/\1 \2/p')
+# the first `INSTALL: <date> R<n>` with no `«` before it; read by byte (LC_ALL=C: a bracket
+# `[^«]` would be two one-byte members, and the `·` before INSTALL shares one of them)
+sl=$(printf '%s\n' "$title" | awk '{
+    i = index($0, "INSTALL: ")
+    if (i == 0 || index(substr($0, 1, i - 1), "«") > 0) exit
+    rest = substr($0, i + 9)
+    if (match(rest, /^20[0-9][0-9]-[0-9][0-9]-[0-9][0-9] R[0-9]+[^0-9]/))
+        print substr(rest, 1, 10) " " substr(rest, 12, RLENGTH - 12)
+}')
 if [ -z "$sl" ]; then
     row "STANDING LIST" "sed -n 1p \"$fixed\"" 1 "the title names no INSTALL: <date> R<n>: $title" 1
 else

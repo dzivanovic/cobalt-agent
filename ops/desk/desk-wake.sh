@@ -18,6 +18,7 @@
 # writes nothing. REFUSED (exit 1): an id outside [0-9a-f-] or shorter than 8; no desk report.
 # Roots: COBALT_REPO_ROOT (default /Users/cobalt/cobalt), COBALT_WT_ROOT (default /Users/cobalt/cobalt-wt).
 
+export LC_ALL=C
 set -u
 
 REPO=${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}

@@ -1,11 +1,12 @@
-"""ops/desk/gate.sh — BUILD-HUB.md `## W`'s three suites in one call (card 19 worker-steps S3).
+"""ops/desk/gate.sh — BUILD-HUB.md `## W`'s three suites in one call (card 19 worker-steps S3;
+card 2026-10-03/03 adoption-scripts L2: the commands and the level from ops/desk/gate-lists.md).
 
 No run here touches cobalt_dev. A stub `uv` on PATH appends its argument list and the
 COBALT_ENV / COBALT_LIVE_VAULT_ROOT it saw to a call log and answers from a per-test
 script (canned pytest summaries, a canned fingerprint row, a canned proof-only output).
 A tmp directory stands in for /Users/cobalt/cobalt-wt (COBALT_WT_ROOT) and holds the job
-worktree with a copy of THIS tree's BUILD-HUB.md; a tmp repo stands in for
-/Users/cobalt/cobalt (COBALT_REPO_ROOT) and holds a constructed `.env`.
+worktree with a copy of THIS tree's ops/desk/gate-lists.md and NO hub file; a tmp repo
+stands in for /Users/cobalt/cobalt (COBALT_REPO_ROOT) and holds a constructed `.env`.
 """
 
 from __future__ import annotations
@@ -24,18 +25,25 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 GATE = REPO / "ops" / "desk" / "gate.sh"
+LISTS = REPO / "ops" / "desk" / "gate-lists.md"
 HUB = REPO / "docs" / "40 - DevDocs" / "prompts" / "BUILD-HUB.md"
+DEPLOY_HUB = REPO / "docs" / "40 - DevDocs" / "prompts" / "DEPLOY-HUB.md"
 CONSTRUCTED_ENV = "COBALT_TEST_CONSTRUCTED=1\n"
 NAME = "x-job"
 
 FP_ROW = "cols\trels\tviews_md5\n664\t35\t0123456789abcdef0123456789abcdef\n"
 FP_OTHER = "cols\trels\tviews_md5\n670\t36\tfedcba9876543210fedcba9876543210\n"
-PROOF = (
+# the two level lines of gate-lists.md `## LEVEL 0013` (L1 prints them last on --proof-only)
+TABLES_LINE = "TABLES 0011"
+FINGERPRINT_LINE = "FINGERPRINT cols 664 · rels 35 · views_md5 272c95bbb12241e3611e4b36326ccf87"
+PROOF_HEAD = (
     "cobalt db migrate — PROOF ONLY on cobalt_dev (READ ONLY, nothing applied)\n\n"
     "table  side  schema  rows  digest  secs\n"
     "legs   user  -       -     -       0.00\n"
     "NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.\n"
+    "code: 0000000 (clean) · /constructed\n"
 )
+PROOF = PROOF_HEAD + FINGERPRINT_LINE + "\n" + TABLES_LINE + "\n"
 
 UV_STUB = r'''#!/usr/bin/env python3
 import json, os, sys, time
@@ -72,7 +80,9 @@ if "query" in argv:
     sys.stdout.write(script.get("tickers", "ticker\tcount\n"))
     sys.exit(0)
 if "--proof-only" in argv:
-    sys.stdout.write(script.get("proof", ""))
+    proofs = script.get("proofs") or [script.get("proof", "")]
+    k = nth(lambda a: "--proof-only" in a)
+    sys.stdout.write(proofs[k] if k < len(proofs) else proofs[-1])
     sys.exit(script.get("proof_rc", 0))
 if "--rollback" in argv:
     print("cobalt db migrate — ROLLBACK on cobalt_dev")
@@ -85,28 +95,65 @@ sys.exit(97)
 '''
 
 
+#: gate-lists.md section → the key both readers use
+LIST_KEYS = {
+    "OFFLINE": "offline", "PROOF ONLY": "proof", "PASS 1": "pass1", "FORWARD": "forward",
+    "PASS 2": "pass2", "STRAY ROWS": "tickers", "LIVE-NOTE": "livenote", "ROLLBACK": "rollback",
+    "FINGERPRINT": "fp", "ALLOWED SKIPS": "skips", "LEVEL 0013": "level",
+}
+
+
+def list_commands(path: Path = LISTS) -> dict[str, str]:
+    """The ONE backticked line under each `## <name>` of gate-lists.md, read here
+    independently of gate.sh so the two can be compared."""
+    out: dict[str, str] = {}
+    title = None
+    for line in path.read_text().splitlines():
+        if line.startswith("## "):
+            title = line[3:].strip()
+            continue
+        if title in LIST_KEYS and line.strip():
+            assert LIST_KEYS[title] not in out, f"## {title} holds more than one line"
+            spans = re.findall(r"`([^`]*)`", line)
+            assert len(spans) == 1 and line.strip() == f"`{spans[0]}`", line
+            out[LIST_KEYS[title]] = spans[0]
+    assert set(out) == set(LIST_KEYS.values()), sorted(set(LIST_KEYS.values()) - set(out))
+    return out
+
+
 def hub_commands() -> dict[str, str]:
     """The commands BUILD-HUB.md `## W` and `## THE LOCK` tell a worker to type, read here
     independently of gate.sh so the two can be compared."""
     text = HUB.read_text().splitlines()
     out: dict[str, str] = {}
+
+    def put(key: str, found: list[str]) -> None:
+        if found:
+            out[key] = found[0]
+
+    def spans(line: str) -> list[str]:
+        return re.findall(r"`([^`]*)`", line)
+
     for i, line in enumerate(text):
+        nxt = text[i + 1] if i + 1 < len(text) else ""
         if line.startswith("- (c) PASS 1"):
-            out["pass1"] = text[i + 1].strip("`")
+            put("pass1", [nxt.strip("`")] if nxt.startswith("`COBALT_ENV=dev uv run pytest ") else [])
         if line.startswith("- (c3) PASS 2"):
-            out["pass2"] = text[i + 1].strip("`")
-        if line.startswith("- (a) OFFLINE:"):
-            out["offline"] = re.findall(r"`([^`]*)`", line)[0]
+            put("pass2", [nxt.strip("`")] if nxt.startswith("`COBALT_ENV=dev uv run pytest ") else [])
+        if line.startswith("- (a) OFFLINE"):
+            put("offline", [s for s in spans(line) if s.startswith("uv run pytest ")])
         if line.startswith("- (e) LIVE-NOTE"):
-            out["livenote"] = [s for s in re.findall(r"`([^`]*)`", line) if s.startswith("COBALT_LIVE")][0]
+            put("livenote", [s for s in spans(line) if s.startswith("COBALT_LIVE") and " uv run pytest " in s])
         if line.startswith("- (f) ALWAYS"):
-            out["rollback"] = re.findall(r"`([^`]*)`", line)[0]
-        if line.startswith("- (c2) FORWARD:"):
-            out["forward"] = re.findall(r"`([^`]*)`", line)[0]
+            put("rollback", [s for s in spans(line) if s.startswith("COBALT_ENV=dev uv run cobalt db migrate --rollback")])
+        if line.startswith("- (c2) FORWARD"):
+            put("forward", [s for s in spans(line) if s == "COBALT_ENV=dev uv run cobalt db migrate"])
         if line.startswith("- (b) THE LOCK"):
-            out["proof"] = [s for s in re.findall(r"`([^`]*)`", line) if "--proof-only" in s][0]
+            put("proof", [s for s in spans(line) if "--proof-only" in s])
         if line.startswith("`COBALT_ENV=dev uv run cobalt db query --side user \"SELECT (SELECT"):
             out["fp"] = line.strip("`")
+        if line.startswith("- (c3r) "):
+            put("tickers", [s for s in spans(line) if "SELECT ticker" in s])
     return out
 
 
@@ -126,8 +173,8 @@ def gate(tmp_path):
     wt = tmp_path / "wt"
     repo = tmp_path / "repo"
     job = wt / NAME
-    (job / "docs" / "40 - DevDocs" / "prompts").mkdir(parents=True)
-    shutil.copy(HUB, job / "docs" / "40 - DevDocs" / "prompts" / "BUILD-HUB.md")
+    (job / "ops" / "desk").mkdir(parents=True)
+    shutil.copy(LISTS, job / "ops" / "desk" / "gate-lists.md")
     (wt / "beta").mkdir()
     repo.mkdir()
     (repo / ".env").write_text(CONSTRUCTED_ENV)
@@ -181,24 +228,107 @@ def kind(call: dict) -> str:
     return "?"
 
 
-def test_withdb_green_runs_the_hub_commands_byte_for_byte_in_order(gate):
+WITHDB_KINDS = ["fp", "proof", "pytest", "forward", "fp", "pytest", "rollback", "fp", "proof"]
+
+
+def test_withdb_green_runs_the_lists_commands_byte_for_byte_in_order(gate):
     wt, repo, job, env, calls, script = gate
     done = run_gate(env, "withdb")
     assert done.returncode == 0, done.stdout + done.stderr
     log = read_calls(calls)
-    assert [kind(c) for c in log] == ["fp", "proof", "pytest", "forward", "fp", "pytest", "rollback", "fp"]
-    hub = hub_commands()
-    expect = [hub["fp"], hub["proof"], hub["pass1"], hub["forward"], hub["fp"], hub["pass2"], hub["rollback"], hub["fp"]]
+    assert [kind(c) for c in log] == WITHDB_KINDS
+    lists = list_commands()
+    expect = [lists["fp"], lists["proof"], lists["pass1"], lists["forward"], lists["fp"], lists["pass2"],
+              lists["rollback"], lists["fp"], lists["proof"]]
     for call, command in zip(log, expect):
         cenv, argv = argv_of(command)
         assert call["argv"] == argv, (call["argv"], command)
         assert call["COBALT_ENV"] == cenv.get("COBALT_ENV") == "dev"
     assert not (job / ".env").exists()
     out = done.stdout.splitlines()
+    assert "LEVEL 0013" in out
     assert "with-DB 10/0" in out
     assert "cobalt_dev: 0013 — F2 = F0" in out
     assert ".env: removed" in out
     assert any(line.startswith(f"log: {wt / '.gate-logs' / NAME}-withdb-") for line in out)
+
+
+def test_the_hub_holds_no_gate_command_and_points_at_the_lists_file():
+    """Card 2026-10-03/02 adoption-hubs A1 replaced the hub lines with a reference to
+    gate-lists.md: BUILD-HUB.md `## W` types none of the commands gate.sh runs and names the
+    PASS 1 and PASS 2 commands of ops/desk/gate-lists.md. THE LOCK keeps `<FP>` for a step that
+    takes the lock by hand (E2's with-DB red): that one stays byte-equal to the lists file. The
+    allowed-skip set is DEPLOY-HUB.md's."""
+    lists, hub = list_commands(), hub_commands()
+    assert sorted(hub) == ["fp"], sorted(hub)
+    assert lists["fp"] == hub["fp"]
+    w = HUB.read_text().split("\n## W ", 1)[1].split("\n## ", 1)[0]
+    assert "sh /Users/cobalt/cobalt/ops/desk/gate.sh <WORKTREE> all" in w
+    assert "the PASS 1 and PASS 2 commands of `ops/desk/gate-lists.md`" in w
+    for key in ("pass1", "pass2"):
+        assert lists[key] not in HUB.read_text(), key
+    (gate_line,) = [ln for ln in DEPLOY_HUB.read_text().splitlines() if "every SKIPPED line inside the allowed set" in ln]
+    for item in lists["skips"].split(" · "):
+        for word in item.split():
+            # DEPLOY-HUB.md writes a second line of one file as `:401`
+            for part in word.split(":"):
+                assert part in gate_line, (item, part)
+    assert lists["level"] == f"{TABLES_LINE} · {FINGERPRINT_LINE}"
+
+
+def test_the_hub_file_is_no_longer_read_a_moved_pass_1_is_what_runs(gate):
+    wt, repo, job, env, calls, script = gate
+    assert not (job / "docs").exists()
+    path = job / "ops" / "desk" / "gate-lists.md"
+    moved = list_commands()["pass1"] + " --deselect tests/cobalt/test_moved.py"
+    path.write_text(path.read_text().replace(f"`{list_commands()['pass1']}`", f"`{moved}`"))
+    done = run_gate(env, "withdb")
+    assert done.returncode == 0, done.stdout + done.stderr
+    pytests = [c["argv"] for c in read_calls(calls) if kind(c) == "pytest"]
+    assert pytests[0] == argv_of(moved)[1]
+
+
+@pytest.mark.parametrize("proof, read", [
+    (PROOF_HEAD + FINGERPRINT_LINE + "\nTABLES 0016\n", "TABLES 0016"),
+    (PROOF_HEAD + FINGERPRINT_LINE + "\nTABLES MIXED — present above: 0017 · absent below: 0016\n",
+     "TABLES MIXED — present above: 0017 · absent below: 0016"),
+    (PROOF_HEAD + FINGERPRINT_LINE.replace("rels 35", "rels 36") + "\n" + TABLES_LINE + "\n",
+     FINGERPRINT_LINE.replace("rels 35", "rels 36")),
+    (PROOF_HEAD + TABLES_LINE + "\n", "(no FINGERPRINT line)"),
+])
+def test_level_lines_other_than_the_lists_exit_5_and_no_pass_runs(gate, proof, read):
+    wt, repo, job, env, calls, script = gate
+    set_script(script, proof=proof)
+    done = run_gate(env, "withdb")
+    assert done.returncode == 5, done.stdout + done.stderr
+    assert [kind(c) for c in read_calls(calls)] == ["fp", "proof"]
+    assert read in done.stdout
+    assert "LEVEL 0013" not in done.stdout.splitlines()
+    assert not (job / ".env").exists()
+
+
+def test_level_lines_that_differ_after_the_rollback_exit_6(gate):
+    wt, repo, job, env, calls, script = gate
+    set_script(script, proofs=[PROOF, PROOF_HEAD + FINGERPRINT_LINE + "\nTABLES 0016\n"])
+    done = run_gate(env, "withdb")
+    assert done.returncode == 6, done.stdout + done.stderr
+    assert [kind(c) for c in read_calls(calls)] == WITHDB_KINDS
+    assert "cobalt_dev NOT back at 0013" in done.stdout
+    assert "TABLES 0016" in done.stdout
+    assert not (job / ".env").exists()
+
+
+def test_a_pass_1_skip_outside_the_allowed_set_is_marked(gate):
+    wt, repo, job, env, calls, script = gate
+    set_script(script, pytest=[
+        {"out": "SKIPPED [1] tests/cobalt/test_cards_picks.py:388: constructed\n"
+                "SKIPPED [1] tests/cobalt/test_other.py:7: constructed\n4 passed, 2 skipped in 0.1s", "rc": 0},
+    ])
+    done = run_gate(env, "withdb")
+    assert done.returncode == 0, done.stdout + done.stderr
+    out = done.stdout.splitlines()
+    assert "SKIPPED [1] tests/cobalt/test_cards_picks.py:388: constructed" in out
+    assert "OUTSIDE the allowed set: SKIPPED [1] tests/cobalt/test_other.py:7: constructed" in out
 
 
 def test_a_deselect_goes_into_pass_1_and_its_id_at_the_end_of_pass_2(gate):
@@ -206,9 +336,9 @@ def test_a_deselect_goes_into_pass_1_and_its_id_at_the_end_of_pass_2(gate):
     done = run_gate(env, "withdb", "--deselect", "x::y")
     assert done.returncode == 0, done.stdout + done.stderr
     pytests = [c["argv"] for c in read_calls(calls) if kind(c) == "pytest"]
-    hub = hub_commands()
-    assert pytests[0] == argv_of(hub["pass1"])[1] + ["--deselect", "x::y"]
-    assert pytests[1] == argv_of(hub["pass2"])[1] + ["x::y"]
+    lists = list_commands()
+    assert pytests[0] == argv_of(lists["pass1"])[1] + ["--deselect", "x::y"]
+    assert pytests[1] == argv_of(lists["pass2"])[1] + ["x::y"]
 
 
 def test_pass_2_red_still_rolls_back_and_releases(gate):
@@ -220,7 +350,7 @@ def test_pass_2_red_still_rolls_back_and_releases(gate):
     done = run_gate(env, "withdb")
     assert done.returncode == 1, done.stdout + done.stderr
     kinds = [kind(c) for c in read_calls(calls)]
-    assert kinds == ["fp", "proof", "pytest", "forward", "fp", "pytest", "rollback", "fp"]
+    assert kinds == WITHDB_KINDS
     assert not (job / ".env").exists()
     assert "FAILED tests/cobalt/test_legs_db.py::test_x - assert 1 == 2" in done.stdout
     assert ".env: removed" in done.stdout
@@ -269,7 +399,7 @@ def test_a_failed_fingerprint_after_the_forward_still_rolls_back(gate):
     set_script(script, fp_rc=[0, 1])
     done = run_gate(env, "withdb")
     assert done.returncode == 1, done.stdout + done.stderr
-    assert [kind(c) for c in read_calls(calls)] == ["fp", "proof", "pytest", "forward", "fp", "rollback", "fp"]
+    assert [kind(c) for c in read_calls(calls)] == ["fp", "proof", "pytest", "forward", "fp", "rollback", "fp", "proof"]
     assert not (job / ".env").exists()
 
 
@@ -297,7 +427,7 @@ def test_livenote_runs_the_hub_command_and_reads_its_skips(gate):
     done = run_gate(env, "livenote")
     assert done.returncode == 0, done.stdout + done.stderr
     (call,) = read_calls(calls)
-    cenv, argv = argv_of(hub_commands()["livenote"])
+    cenv, argv = argv_of(list_commands()["livenote"])
     assert call["argv"] == argv
     assert call["COBALT_LIVE_VAULT_ROOT"] == cenv["COBALT_LIVE_VAULT_ROOT"]
     assert call["COBALT_ENV"] is None
@@ -313,7 +443,7 @@ def test_offline_makes_one_pytest_call_with_no_cobalt_env(gate):
     done = run_gate(env, "offline")
     assert done.returncode == 0, done.stdout + done.stderr
     (call,) = read_calls(calls)
-    assert call["argv"] == argv_of(hub_commands()["offline"])[1]
+    assert call["argv"] == argv_of(list_commands()["offline"])[1]
     assert call["COBALT_ENV"] is None
     assert "offline 5/0" in done.stdout.splitlines()
 
@@ -343,7 +473,7 @@ def test_tickers_left_behind_are_a_decision_and_the_rollback_still_runs(gate):
     log = read_calls(calls)
     (q,) = [c for c in log if kind(c) == "tickers"]
     assert "WHERE ticker IN ('ZZTA','ZZTB') GROUP BY ticker" in q["argv"][-1]
-    assert [kind(c) for c in log][-2:] == ["rollback", "fp"]
+    assert [kind(c) for c in log][-3:] == ["rollback", "fp", "proof"]
     assert "DECISION 0: the suite left ZZTA rows on cobalt_dev" in done.stdout
     assert not (job / ".env").exists()
 
@@ -375,7 +505,7 @@ def test_a_term_mid_pass_2_still_rolls_back_and_releases(gate, tmp_path):
     proc.send_signal(signal.SIGTERM)
     out, err = proc.communicate(timeout=120)
     assert proc.returncode != 0, out + err
-    assert [kind(c) for c in read_calls(calls)][-2:] == ["rollback", "fp"]
+    assert [kind(c) for c in read_calls(calls)][-3:] == ["rollback", "fp", "proof"]
     assert not (job / ".env").exists()
 
 
@@ -427,6 +557,143 @@ def test_a_lock_script_that_says_not_free_exits_4(gate, tmp_path):
     assert not (job / ".env").exists()
 
 
+# ---- card 03c M2: the gate WAITS — the take script's retry is the wait -------------------------
+
+
+def waiting_lock_scripts(tmp_path: Path, calls: Path, free_on_try: int, budget: int) -> Path:
+    """gate.sh beside a stub take script that retries like take-devdb-lock.sh: while the
+    sibling `beta/.env` exists it records `try <n> held`; on try `free_on_try` the holder has
+    let go (the sibling .env is gone); after `budget` held tries it exits 4. It records
+    `uv before the lock` when any uv call was logged before it started."""
+    ops = tmp_path / "ops"
+    ops.mkdir()
+    shutil.copy(GATE, ops / "gate.sh")
+    rec = tmp_path / "lock-calls"
+    sibling = '"$COBALT_WT_ROOT/beta/.env"'
+    (ops / "take-devdb-lock.sh").write_text(
+        f'printf "take %s\\n" "$*" >> "{rec}"\n'
+        f'[ ! -e "{calls}" ] || printf "uv before the lock\\n" >> "{rec}"\n'
+        'n=1\n'
+        'while :; do\n'
+        f'    [ "$n" -lt {free_on_try} ] || rm -f {sibling}\n'
+        f'    [ -e {sibling} ] || break\n'
+        f'    printf "try %s held\\n" "$n" >> "{rec}"\n'
+        f'    [ "$n" -lt {budget} ] || {{ printf "cobalt_dev lock not free in 0 min (held by beta)\\n" >&2; exit 4; }}\n'
+        '    n=$((n + 1))\n'
+        'done\n'
+        'cp "$COBALT_REPO_ROOT/.env" "$COBALT_WT_ROOT/$1/.env"\n'
+        'printf "lock taken: %s\\n" "$1"\n'
+    )
+    (ops / "release-devdb-lock.sh").write_text(
+        f'printf "release %s\\n" "$*" >> "{rec}"\nrm -f "$COBALT_WT_ROOT/$1/.env"\nprintf "lock released\\n"\n'
+    )
+    return ops
+
+
+def test_m2_a_sibling_env_that_goes_on_the_second_try_is_waited_for(gate, tmp_path):
+    wt, repo, job, env, calls, script = gate
+    (wt / "beta" / ".env").write_text(CONSTRUCTED_ENV)
+    ops = waiting_lock_scripts(tmp_path, calls, free_on_try=2, budget=90)
+    done = run_gate(env, "withdb", gate=ops / "gate.sh")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert (tmp_path / "lock-calls").read_text().splitlines() == [
+        f"take {NAME} 90", "try 1 held", f"release {NAME}"]
+    assert [kind(c) for c in read_calls(calls)] == WITHDB_KINDS
+    out = done.stdout.splitlines()
+    assert "lock: waited 0 min" in out
+    assert "with-DB 10/0" in out
+    assert not (job / ".env").exists()
+
+
+def test_m2_a_lock_never_free_exits_4_after_the_take_scripts_budget_and_runs_no_uv(gate, tmp_path):
+    wt, repo, job, env, calls, script = gate
+    (wt / "beta" / ".env").write_text(CONSTRUCTED_ENV)
+    ops = waiting_lock_scripts(tmp_path, calls, free_on_try=99, budget=3)
+    done = run_gate(env, "withdb", gate=ops / "gate.sh")
+    assert done.returncode == 4, done.stdout + done.stderr
+    rec = tmp_path / "lock-calls"
+    assert (rec.read_text().splitlines() if rec.exists() else []) == [
+        f"take {NAME} 90", "try 1 held", "try 2 held", "try 3 held"], done.stdout
+    assert read_calls(calls) == []
+    assert "cobalt_dev lock not free (take-devdb-lock.sh exit 4)" in done.stdout
+    assert not (job / ".env").exists()
+    assert (wt / "beta" / ".env").read_text() == CONSTRUCTED_ENV
+
+
+def test_m2_no_lock_scripts_beside_the_gate_is_refused_before_any_uv_call(gate, tmp_path):
+    """The lock is taken ONLY by take-devdb-lock.sh: no `cp .env` way is left (CHECK ASK X1)."""
+    wt, repo, job, env, calls, script = gate
+    ops = tmp_path / "ops"
+    ops.mkdir()
+    shutil.copy(GATE, ops / "gate.sh")
+    for mode in ("withdb", "all", "probe"):
+        done = run_gate(env, mode, gate=ops / "gate.sh")
+        assert done.returncode == 1, done.stdout + done.stderr
+        assert done.stderr.startswith("REFUSED: "), done.stderr
+        assert read_calls(calls) == []
+        assert not (job / ".env").exists()
+
+
+# ---- card 03c M3: the deploy's whole pass 1 ---------------------------------------------------
+
+
+def without_db_only(command: str) -> str:
+    assert command.split(" ").count("--db-only") == 1
+    return command.replace(" --db-only", "", 1)
+
+
+def test_m3_deploy_runs_pass_1_without_db_only(gate):
+    wt, repo, job, env, calls, script = gate
+    done = run_gate(env, "all", "--deploy")
+    assert done.returncode == 0, done.stdout + done.stderr
+    pytests = [c["argv"] for c in read_calls(calls) if kind(c) == "pytest"]
+    lists = list_commands()
+    assert pytests[1] == argv_of(without_db_only(lists["pass1"]))[1]
+    assert "--db-only" not in pytests[1]
+    assert pytests[2] == argv_of(lists["pass2"])[1]
+    assert "pass 1: whole (deploy)" in done.stdout.splitlines()
+
+
+def test_m3_without_deploy_pass_1_keeps_db_only(gate):
+    """Negative control: a build's or a check's gate never loses the option."""
+    wt, repo, job, env, calls, script = gate
+    done = run_gate(env, "all")
+    assert done.returncode == 0, done.stdout + done.stderr
+    pytests = [c["argv"] for c in read_calls(calls) if kind(c) == "pytest"]
+    assert pytests[1] == argv_of(list_commands()["pass1"])[1]
+    assert "--db-only" in pytests[1]
+    assert "pass 1: whole (deploy)" not in done.stdout
+
+
+def test_m3_deploy_with_a_deselect_strips_only_the_option(gate):
+    wt, repo, job, env, calls, script = gate
+    done = run_gate(env, "withdb", "--deploy", "--deselect", "x::y")
+    assert done.returncode == 0, done.stdout + done.stderr
+    pytests = [c["argv"] for c in read_calls(calls) if kind(c) == "pytest"]
+    assert pytests[0] == argv_of(without_db_only(list_commands()["pass1"]))[1] + ["--deselect", "x::y"]
+
+
+@pytest.mark.parametrize("mode", ["offline", "livenote", "probe"])
+def test_m3_deploy_outside_withdb_and_all_is_refused(gate, mode):
+    wt, repo, job, env, calls, script = gate
+    done = run_gate(env, mode, "--deploy")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr.startswith("REFUSED: ")
+    assert read_calls(calls) == []
+
+
+def test_m3_deploy_on_a_pass_1_without_db_only_is_refused_before_any_uv_call(gate):
+    """L1: the one token to strip is missing — refused loud, never run as it stands."""
+    wt, repo, job, env, calls, script = gate
+    path = job / "ops" / "desk" / "gate-lists.md"
+    pass1 = list_commands()["pass1"]
+    path.write_text(path.read_text().replace(f"`{pass1}`", f"`{without_db_only(pass1)}`"))
+    done = run_gate(env, "all", "--deploy")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr.startswith("REFUSED: ")
+    assert read_calls(calls) == []
+
+
 def test_check_o1_a_warning_line_before_the_fingerprint_does_not_hide_a_changed_f2(gate):
     wt, repo, job, env, calls, script = gate
     warn = "warning: `VIRTUAL_ENV=/x` does not match the project environment path `.venv` and will be ignored\n"
@@ -476,6 +743,18 @@ def test_check_o3_offline_runs_with_no_cobalt_env_even_when_the_caller_has_one(g
     (call,) = read_calls(calls)
     assert call["COBALT_ENV"] is None
     assert call["COBALT_LIVE_VAULT_ROOT"] is None
+
+
+def test_l3_an_accented_worktree_name_is_refused_under_a_utf8_locale(gate):
+    """Card 03 L3: `[!A-Za-z0-9._-]` admits `é` under en_US.UTF-8 unless the script runs LC_ALL=C."""
+    wt, repo, job, env, calls, script = gate
+    (wt / "x-jobé" / "ops" / "desk").mkdir(parents=True)
+    shutil.copy(LISTS, wt / "x-jobé" / "ops" / "desk" / "gate-lists.md")
+    env = dict(env, LC_ALL="en_US.UTF-8", LANG="en_US.UTF-8")
+    done = subprocess.run(["sh", str(GATE), "x-jobé", "offline"], env=env, capture_output=True, text=True, timeout=60)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: worktree 'x-jobé' is not one directory name" in done.stderr
+    assert read_calls(calls) == []
 
 
 @pytest.mark.parametrize("args", [

@@ -10,8 +10,9 @@
 # THE SPELLINGS:
 #   sol     CHECK-HUB.md PREFLIGHT's Sol probe, exactly:
 #           codex exec --skip-git-repo-check -m gpt-5.6-sol -s read-only -c model_reasoning_effort="high" "Reply with only the word OK." < /dev/null
-#   grok    CHECK-HUB.md `## 1` (5)'s Grok launch with the probe prompt, run from $WT/agy-trial:
-#           grok --sandbox cobalt-job --allow "Write($WT/agy-trial/scratch/tribunal-bars-0920/**)" -p "Reply with only the word OK."
+#   grok    CHECK-HUB.md `## 1` (5)'s Grok launch with the probe prompt, run from $WT/agy-trial, the
+#           model pinned (his 2026-10-03 R3: every Grok seat runs grok-4.7; card 2026-10-03/03 L7):
+#           grok -m grok-4.7 --sandbox cobalt-job --allow "Write($WT/agy-trial/scratch/tribunal-bars-0920/**)" -p "Reply with only the word OK."
 #   gemini  CHECK-HUB.md `## 1` (5)'s Gemini launch with the probe prompt and a 3-minute print
 #           timeout, run from $WT/agy-trial:
 #           agy --model gemini-3.1-pro-high --mode accept-edits --sandbox --print-timeout 3m --add-dir $WT/agy-trial --print="Reply with only the word OK."
@@ -20,6 +21,7 @@
 # COBALT_WT_ROOT stands in for /Users/cobalt/cobalt-wt, and HOUSE_PROBE_LIMIT (whole seconds) for
 # the 180-second limit, in tests/ops/test_house_probe.py only.
 
+export LC_ALL=C
 set -u
 set -f
 
@@ -58,7 +60,7 @@ start() {
                 > "$tmp/sol.out" 2> "$tmp/sol.err" &
             ;;
         grok)
-            (cd "$WT/agy-trial" && exec grok --sandbox cobalt-job --allow "Write($WT/agy-trial/scratch/tribunal-bars-0920/**)" -p "$PROMPT") \
+            (cd "$WT/agy-trial" && exec grok -m grok-4.7 --sandbox cobalt-job --allow "Write($WT/agy-trial/scratch/tribunal-bars-0920/**)" -p "$PROMPT") \
                 < /dev/null > "$tmp/grok.out" 2> "$tmp/grok.err" &
             ;;
         gemini)

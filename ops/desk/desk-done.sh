@@ -13,6 +13,7 @@
 # REFUSED (his 2026-09-30 R76: a brain is stopped only on his word); so is a session not
 # in that list, or a list that cannot be read. A refusal: "REFUSED: <reason>" on stderr,
 # exit 1, no stop, no rm, no tab close.
+export LC_ALL=C
 refuse() { echo "REFUSED: $1" >&2; exit 1; }
 id="$1"; report="$2"; kind="$3"; tab="$4"
 [ -n "$id" ] && [ -n "$report" ] && [ -n "$kind" ] && [ $# -le 4 ] \

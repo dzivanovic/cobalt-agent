@@ -370,3 +370,6 @@ every table's digest.
 
 ## 2026-09-30 — f15-p1
 `TABLE_DIGEST_EXCLUDED_COLUMNS["aset_sizings"]` gains `last_price_bar_ts` (`0022`, F15 `[F-38]`). X13 measured the need: after `ADD COLUMN last_price_bar_ts` the `aset_sizings` digest through `_row_json` differs with BASE's tuple and equals the pre-column digest with the entry.
+
+## 2026-10-03 — adoption-scripts
+`--proof-only` ends with two more lines, after the code line: `FINGERPRINT cols <c> · rels <r> · views_md5 <m>` (`FINGERPRINT_SQL`, BUILD-HUB.md THE LOCK's `<FP>` reads byte for byte, in the same READ ONLY transaction, after `SET LOCAL search_path TO "user"` — the `<FP>` query's own `--side user` search_path, since `pg_views.definition` is rendered relative to it) and `TABLES <nnnn>` / `TABLES MIXED — present above: … · absent below: …` / `TABLES none` (`_tables_line` over `CREATED_TABLES`' present marks; each table's creator read from the `FORWARD` files' `CREATE TABLE` by `_table_creators`, a table with no creator or two refused). Facts only: the level a database must sit at is `ops/desk/gate-lists.md`'s, read by `gate.sh`.

@@ -5,6 +5,7 @@
 # Dest: a path under /Users/cobalt/cobalt-wt/agy-trial/scratch/; its parent folders are made.
 # Prints `COPIED <bytes> <dest>` after cmp proves the copy byte-identical; anything else exits 1.
 
+export LC_ALL=C
 refuse() {
     printf 'REFUSED: %s\n' "$*" >&2
     exit 1

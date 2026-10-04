@@ -1,14 +1,15 @@
 #!/bin/sh
-# gate.sh <worktree name> <probe|offline|withdb|livenote|all> [--deselect <test id>]… [--tickers <A,B,…>] [--migration]
+# gate.sh <worktree name> <probe|offline|withdb|livenote|all> [--deselect <test id>]… [--tickers <A,B,…>] [--migration] [--deploy]
 # — BUILD-HUB.md `## W`, the three suites, in ONE call, run from $WT/<worktree name> (card 19
 # worker-steps S3).
 #
 # THE COMMANDS HAVE ONE HOME: every command this script runs is read from THAT WORKTREE's
-# docs/40 - DevDocs/prompts/BUILD-HUB.md and run as written (eval): W (a) the offline run; W (b) the
-# proof-only; the two backticked lines under W (c) and W (c3) that begin `COBALT_ENV=dev uv run
-# pytest` (pass 1, pass 2); W (c2) the forward; W (c3r) the stray-row query; W (e) the live-note
-# run; W (f) the rollback (its `--down-to` level is the level this script expects); and `<FP>`,
-# the fingerprint query of `## THE LOCK`. A hub file that lacks one is refused. Every
+# ops/desk/gate-lists.md and run as written (eval) — never from a hub file (card 2026-10-03/03
+# adoption-scripts L2): `## OFFLINE` W (a); `## PROOF ONLY` W (b); `## PASS 1` W (c); `## FORWARD`
+# W (c2); `## PASS 2` W (c3); `## STRAY ROWS` W (c3r); `## LIVE-NOTE` W (e); `## ROLLBACK` W (f),
+# whose `--down-to` must be the `## LEVEL <nnnn>` level; `## FINGERPRINT` `<FP>`; `## ALLOWED
+# SKIPS`; and `## LEVEL <nnnn>`, the TABLES and FINGERPRINT lines the proof-only must print. Each
+# section holds ONE backticked line; a lists file that lacks one is refused. Every
 # `--deselect <id>` is added to pass 1 as `--deselect <id>` and appended to pass 2 as `<id>`.
 #
 # MODES
@@ -21,18 +22,26 @@
 #   livenote  W (e); refused while this worktree's .env is present; a SKIPPED line naming
 #             COBALT_LIVE_VAULT_ROOT is a red.
 #   all       offline, withdb, livenote, in that order; it stops at the first that is not green.
+#   --deploy  (withdb, all; card 2026-10-03/03c M3, his 2026-10-02 R154) THE DEPLOY'S WHOLE PASS 1:
+#             `## PASS 1` with its one ` --db-only` token removed, everything else byte-equal,
+#             printing `pass 1: whole (deploy)`; a PASS 1 that does not hold that token exactly
+#             once is refused before anything runs. Without it pass 1 is `## PASS 1` as written.
 #
-# THE LOCK: `ls -la $WT/*/.env` first — any .env is a held lock (exit 4, nothing run). Then
-# take-devdb-lock.sh <worktree> 90 and release-devdb-lock.sh <worktree> when BOTH sit beside this
-# script; else BUILD-HUB.md THE LOCK's pair, `cp $REPO/.env $WT/<worktree>/.env` and `rm` of it,
-# each followed by its `ls` proof. A trap on EVERY exit (a red, an error, INT, TERM, HUP) runs the
+# THE LOCK (card 2026-10-03/03c M2): taken ONLY by take-devdb-lock.sh <worktree> 90 and given back
+# by release-devdb-lock.sh <worktree>, both beside this script (probe, withdb and all are refused
+# before anything runs when either is missing). The take's own retry — every 60 s for 90 min — is
+# the wait: a held lock is waited for, never refused at once; exit 4 only when the take exits 4.
+# After it `lock: waited <n> min` (the take's start and end `date`), then `ls -la $WT/*/.env` must
+# show this worktree's alone. A trap on EVERY exit (a red, an error, INT, TERM, HUP) runs the
 # rollback when the forward was started and not yet rolled back, then ALWAYS the release, and
 # proves .env gone.
 #
-# THE LEVEL: `migrate --proof-only` prints no level number (src/cobalt/db_migrations/cli.py
-# cmd_migrate, _print_probe). This script holds it to what it can read: exit 0, `on cobalt_dev`,
-# and no `CHANGED`; else exit 5. The table itself is in the log, for the worker to read as W (b)
-# says.
+# THE LEVEL: `migrate --proof-only` ends with a `TABLES …` and a `FINGERPRINT …` line (L1). This
+# script prints `LEVEL <nnnn>` only when both equal the two halves of `## LEVEL <nnnn>`, with exit 0,
+# `on cobalt_dev` and no `CHANGED`; else exit 5, printing both lines as read. After the rollback
+# it requires the same two lines again, and <F2> = <F0>; else exit 6. A pass-1 SKIPPED line that
+# no `## ALLOWED SKIPS` item covers is printed `OUTSIDE the allowed set: <line>` (the exit does
+# not change: the builder quotes every skip, the deploy gate judges them).
 #
 # OUTPUT: everything to $WT/.gate-logs/<worktree>-<mode>-<timestamp>.log. Stdout is the verdict
 # only: `offline <p>/0`, `with-DB <d>/0` (pass 1 + pass 2), `live-note <l>/0`, every SKIPPED line
@@ -45,6 +54,7 @@
 # COBALT_REPO_ROOT and COBALT_WT_ROOT stand in for /Users/cobalt/cobalt and /Users/cobalt/cobalt-wt
 # in tests/ops/test_gate.py only.
 
+export LC_ALL=C
 set -u
 set -f
 # every environment prefix a command carries is the hub's own spelling: none comes from the caller
@@ -59,7 +69,7 @@ refuse() {
     exit 1
 }
 
-[ "$#" -ge 2 ] || refuse "usage: gate.sh <worktree name> <probe|offline|withdb|livenote|all> [--deselect <test id>]… [--tickers <A,B,…>] [--migration]"
+[ "$#" -ge 2 ] || refuse "usage: gate.sh <worktree name> <probe|offline|withdb|livenote|all> [--deselect <test id>]… [--tickers <A,B,…>] [--migration] [--deploy]"
 name=$1
 mode=$2
 shift 2
@@ -73,6 +83,7 @@ esac
 deselects=""
 tickers=""
 migration=""
+deploy=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --deselect)
@@ -92,76 +103,80 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
         --migration) migration=1; shift ;;
+        --deploy) deploy=1; shift ;;
         *) refuse "unknown argument '$1'" ;;
     esac
 done
 case "$mode" in
     withdb|all) ;;
-    *) [ -z "$deselects$tickers$migration" ] || refuse "--deselect, --tickers and --migration belong to withdb and all" ;;
+    *) [ -z "$deselects$tickers$migration$deploy" ] || refuse "--deselect, --tickers, --migration and --deploy belong to withdb and all" ;;
+esac
+# the lock is taken by the two lock scripts beside this script and by nothing else (03c M2)
+case "$mode" in
+    probe|withdb|all)
+        [ -f "$HERE/take-devdb-lock.sh" ] && [ -f "$HERE/release-devdb-lock.sh" ] \
+            || refuse "the lock scripts are not beside gate.sh: $HERE/take-devdb-lock.sh, $HERE/release-devdb-lock.sh"
+        ;;
 esac
 
 dir="$WT/$name"
-hub="$dir/docs/40 - DevDocs/prompts/BUILD-HUB.md"
+lists="$dir/ops/desk/gate-lists.md"
 [ -d "$dir" ] || refuse "no such worktree: $dir"
-[ -f "$hub" ] || refuse "no hub file in the worktree: $hub"
+[ -f "$lists" ] || refuse "no lists file in the worktree: $lists"
 
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/gate.XXXXXX") || refuse "mktemp failed"
 
-# ---- the commands, read from the hub file (each to $tmp/<key>) ----------------------------------
-python3 - "$hub" "$tmp" <<'PY' || { rm -rf "$tmp"; refuse "the hub file does not hold every command gate.sh runs: $hub"; }
+# ---- the commands and the level, read from the lists file (each to $tmp/<key>) ------------------
+python3 - "$lists" "$tmp" <<'PY' || { rm -rf "$tmp"; refuse "the lists file does not hold every command gate.sh runs: $lists"; }
 import re, sys
 lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
 out = sys.argv[2]
 
-def section(title):
-    body, inside = [], False
-    for line in lines:
-        if line.startswith("## "):
-            inside = line.startswith("## " + title)
-            continue
-        if inside:
-            body.append(line)
-    return body
+sections, title = {}, None
+for line in lines:
+    if line.startswith("## "):
+        title = line[3:].strip()
+        if title in sections:
+            sys.exit("## %s: twice" % title)
+        sections[title] = []
+    elif title is not None and line.strip():
+        sections[title].append(line.strip())
 
-def spans(line):
-    return re.findall(r"`([^`]*)`", line)
+def one(title):
+    body = sections.get(title)
+    if body is None:
+        sys.exit("no ## %s" % title)
+    if len(body) != 1 or not re.fullmatch(r"`[^`]+`", body[0]):
+        sys.exit("## %s: not ONE backticked line" % title)
+    return body[0][1:-1]
 
-def one(key, found):
-    if len(found) != 1:
-        sys.exit("%s: %d matches" % (key, len(found)))
-    open("%s/%s" % (out, key), "w", encoding="utf-8").write(found[0])
+def put(key, value):
+    open("%s/%s" % (out, key), "w", encoding="utf-8").write(value)
 
-w, lock = section("W "), section("THE LOCK")
-
-def item(tag):
-    return [l for l in w if l.startswith("- (%s) " % tag)]
-
-def after(tag):
-    found = []
-    for i, l in enumerate(w):
-        if l.startswith("- (%s) " % tag):
-            for nxt in w[i + 1:]:
-                s = nxt.strip()
-                if s:
-                    if s.startswith("`COBALT_ENV=dev uv run pytest ") and s.endswith("`") and s.count("`") == 2:
-                        found.append(s[1:-1])
-                    break
-    return found
-
-one("offline", [s for l in item("a") for s in spans(l) if s.startswith("uv run pytest ")])
-one("proof", [s for l in item("b") for s in spans(l) if s == "COBALT_ENV=dev uv run cobalt db migrate --proof-only"])
-one("pass1", after("c"))
-one("forward", [s for l in item("c2") for s in spans(l) if s == "COBALT_ENV=dev uv run cobalt db migrate"])
-one("pass2", after("c3"))
-q = [s for l in item("c3r") for s in spans(l) if s.startswith("COBALT_ENV=dev uv run cobalt db query ")]
-if len(q) == 1:
-    q = [re.sub(r"\(<[^>]*>\)", "(__TICKERS__)", q[0])]
-    if "(__TICKERS__)" not in q[0]:
-        sys.exit("c3r: no (<…>) ticker list")
-one("tickers", q)
-one("livenote", [s for l in item("e") for s in spans(l) if s.startswith("COBALT_LIVE_VAULT_ROOT=")])
-one("rollback", [s for l in item("f") for s in spans(l) if s.startswith("COBALT_ENV=dev uv run cobalt db migrate --rollback --down-to ")])
-one("fp", [s for l in lock for s in spans(l) if s.startswith('COBALT_ENV=dev uv run cobalt db query --side user "SELECT (SELECT count(*)')])
+for title, key in (("OFFLINE", "offline"), ("PROOF ONLY", "proof"), ("PASS 1", "pass1"), ("FORWARD", "forward"),
+                   ("PASS 2", "pass2"), ("LIVE-NOTE", "livenote"), ("ROLLBACK", "rollback"),
+                   ("FINGERPRINT", "fp"), ("ALLOWED SKIPS", "skips")):
+    put(key, one(title))
+q = re.sub(r"\(<[^>]*>\)", "(__TICKERS__)", one("STRAY ROWS"))
+if "(__TICKERS__)" not in q:
+    sys.exit("## STRAY ROWS: no (<…>) ticker list")
+put("tickers", q)
+levels = [t for t in sections if t.startswith("LEVEL")]
+if len(levels) != 1 or not re.fullmatch(r"LEVEL [0-9]{4}", levels[0]):
+    sys.exit("not ONE ## LEVEL <nnnn>: %s" % levels)
+level = levels[0][len("LEVEL "):]
+m = re.fullmatch(r"(TABLES [0-9]{4}) · (FINGERPRINT cols [0-9]+ · rels [0-9]+ · views_md5 [0-9a-f]{32})", one(levels[0]))
+if not m:
+    sys.exit("## %s: not `TABLES <nnnn> · FINGERPRINT cols <c> · rels <r> · views_md5 <m>`" % levels[0])
+if not one("ROLLBACK").endswith(" --down-to " + level):
+    sys.exit("## ROLLBACK does not go --down-to %s" % level)
+put("level", level)
+put("tables", m.group(1))
+put("fingerprint", m.group(2))
+# the deploy's whole pass 1 (03c M3): the ONE ` --db-only` token removed, nothing else; empty
+# when PASS 1 does not hold that token exactly once (a --deploy run is then refused)
+whole, n = re.subn(r" --db-only(?= |$)", "", one("PASS 1"))
+put("pass1_deploy", whole if n == 1 else "")
 PY
 
 OFFLINE=$(cat "$tmp/offline")
@@ -173,7 +188,11 @@ TICKERS_Q=$(cat "$tmp/tickers")
 LIVENOTE=$(cat "$tmp/livenote")
 ROLLBACK=$(cat "$tmp/rollback")
 FP=$(cat "$tmp/fp")
-level=${ROLLBACK##* }
+level=$(cat "$tmp/level")
+TABLES_AT=$(cat "$tmp/tables")
+FINGERPRINT_AT=$(cat "$tmp/fingerprint")
+PASS1_DEPLOY=$(cat "$tmp/pass1_deploy")
+[ -z "$deploy" ] || [ -n "$PASS1_DEPLOY" ] || { rm -rf "$tmp"; refuse "--deploy: ## PASS 1 does not hold ' --db-only' exactly once: $lists"; }
 
 logdir="$WT/.gate-logs"
 mkdir -p "$logdir" || { rm -rf "$tmp"; refuse "mkdir failed: $logdir"; }
@@ -243,34 +262,26 @@ held_env() {
     held=${held# }
 }
 
+# the take WAITS (03c M2): no pre-check of its own; take-devdb-lock.sh retries a held lock every
+# 60 s for 90 min, and only its exit 4 is "not free"
 take() {
+    lockway=script
+    # taken BEFORE the take: a signal while it waits is handled after it returns, and the
+    # release gives back only a lock that names this worktree (release-devdb-lock.sh)
+    taken=1
     note ""
-    note "\$ ls -la $WT/*/.env"
-    held_env
-    if [ -n "$held" ]; then
-        note "$held"
-        say "cobalt_dev lock held — $held"
-        exit 4
-    fi
-    note "no matches found"
-    if [ -f "$HERE/take-devdb-lock.sh" ] && [ -f "$HERE/release-devdb-lock.sh" ]; then
-        lockway=script
-        # taken BEFORE the take: a signal while it waits is handled after it returns, and the
-        # release gives back only a lock that names this worktree (release-devdb-lock.sh)
-        taken=1
-        note "\$ sh $HERE/take-devdb-lock.sh $name 90"
-        sh "$HERE/take-devdb-lock.sh" "$name" 90 >> "$log" 2>&1
-        rc=$?
-        note "[exit $rc]"
-        [ "$rc" -eq 0 ] || taken=""
-        [ "$rc" -ne 4 ] || { say "cobalt_dev lock not free (take-devdb-lock.sh exit 4)"; exit 4; }
-        [ "$rc" -eq 0 ] || { say "the lock take failed (take-devdb-lock.sh exit $rc)"; exit 1; }
-    else
-        lockway=cp
-        taken=1
-        note "\$ cp $REPO/.env $dir/.env"
-        cp "$REPO/.env" "$dir/.env" >> "$log" 2>&1 || { say "the lock take failed (cp)"; exit 1; }
-    fi
+    note "\$ date"
+    t0=$(date +%s)
+    note "\$ sh $HERE/take-devdb-lock.sh $name 90"
+    sh "$HERE/take-devdb-lock.sh" "$name" 90 >> "$log" 2>&1
+    rc=$?
+    note "[exit $rc]"
+    note "\$ date"
+    t1=$(date +%s)
+    say "lock: waited $(( (t1 - t0) / 60 )) min"
+    [ "$rc" -eq 0 ] || taken=""
+    [ "$rc" -ne 4 ] || { say "cobalt_dev lock not free (take-devdb-lock.sh exit 4)"; exit 4; }
+    [ "$rc" -eq 0 ] || { say "the lock take failed (take-devdb-lock.sh exit $rc)"; exit 1; }
     note "\$ ls -la $WT/*/.env"
     held_env
     note "$held"
@@ -278,14 +289,9 @@ take() {
 }
 
 release() {
-    if [ "$lockway" = script ]; then
-        note "\$ sh $HERE/release-devdb-lock.sh $name"
-        sh "$HERE/release-devdb-lock.sh" "$name" >> "$log" 2>&1
-        note "[exit $?]"
-    else
-        note "\$ rm $dir/.env"
-        rm -f "$dir/.env"
-    fi
+    note "\$ sh $HERE/release-devdb-lock.sh $name"
+    sh "$HERE/release-devdb-lock.sh" "$name" >> "$log" 2>&1
+    note "[exit $?]"
     taken=""
     note "\$ ls $dir/.env"
     if [ -e "$dir/.env" ]; then
@@ -307,7 +313,21 @@ fingerprint() {
     [ "$frc" -eq 0 ] && [ -n "$FPV" ] || { FPV="(the fingerprint query failed, exit $frc)"; return 1; }
 }
 
-# rollback_and_prove: W (f); 0 when <F2> = <F0>, else 6. It never exits: the trap calls it.
+# level_read: the last TABLES and FINGERPRINT lines of the proof-only just run, into TL and FL;
+# 0 when both equal the two halves of gate-lists.md `## LEVEL <nnnn>`
+level_read() {
+    TL=$(plain | grep '^TABLES ' | tail -n 1)
+    FL=$(plain | grep '^FINGERPRINT ' | tail -n 1)
+    [ "$TL" = "$TABLES_AT" ] && [ "$FL" = "$FINGERPRINT_AT" ]
+}
+
+level_said() {
+    say "read: ${TL:-(no TABLES line)}"
+    say "read: ${FL:-(no FINGERPRINT line)}"
+}
+
+# rollback_and_prove: W (f); 0 when <F2> = <F0> and the proof-only's level lines are
+# `## LEVEL <nnnn>`'s again, else 6. It never exits: the trap calls it.
 rollback_and_prove() {
     applied=""
     run "$ROLLBACK"
@@ -317,7 +337,12 @@ rollback_and_prove() {
     note "F2: $fp2"
     if [ "$fp2" = "$fp0" ]; then
         [ "$rrc" -eq 0 ] || say "the rollback exited $rrc; F2 = F0 (log)"
-        return 0
+        run "$PROOF"
+        level_read && return 0
+        say "cobalt_dev NOT back at $level — F2 = F0, but the proof-only's level lines after the rollback are not gate-lists.md ## LEVEL $level"
+        level_said
+        say "DECISION 0: cobalt_dev NOT back at $level"
+        return 6
     fi
     say "cobalt_dev NOT back at $level — F0 $fp0 · F2 $fp2 (rollback exit $rrc)"
     say "DECISION 0: cobalt_dev NOT back at $level"
@@ -359,7 +384,13 @@ proof_clean() {
         say "cobalt_dev not at $level at the start: the proof-only exited $rc or shows CHANGED (log)"
         exit 5
     fi
+    if ! level_read; then
+        say "cobalt_dev not at $level at the start: the proof-only's level lines are not gate-lists.md ## LEVEL $level"
+        level_said
+        exit 5
+    fi
     say "proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))"
+    say "LEVEL $level"
 }
 
 # ---- the modes --------------------------------------------------------------------------------
@@ -395,6 +426,10 @@ do_withdb() {
     note "F0: $fp0"
     proof_clean
     p1cmd=$PASS1
+    if [ -n "$deploy" ]; then
+        p1cmd=$PASS1_DEPLOY
+        say "pass 1: whole (deploy)"
+    fi
     p2cmd=$PASS2
     for id in $deselects; do
         p1cmd="$p1cmd --deselect $id"
@@ -402,7 +437,17 @@ do_withdb() {
     done
     suite "$p1cmd" || exit 1
     p1=$P
-    skips=$(plain | grep '^SKIPPED')
+    # each pass-1 skip, marked when no `## ALLOWED SKIPS` item covers it: an item's path (with its
+    # `:<line>`) is followed by `:` on the line, and every other word but a `test_…` label is on it
+    skips=$(plain | grep '^SKIPPED' | python3 -c '
+import sys
+items = [i.split() for i in open(sys.argv[1], encoding="utf-8").read().split(" · ") if i.strip()]
+def covered(line):
+    return any(line.find(w[0] + ":") >= 0 and all(x in line for x in w[1:] if not x.startswith("test_"))
+               for w in items)
+for line in sys.stdin.read().splitlines():
+    print(line if covered(line) else "OUTSIDE the allowed set: " + line)
+' "$tmp/skips")
     applied=1
     note "dev forward: APPLIED $(date +%H:%M:%S)"
     run "$FORWARD" || { say "RED: the forward migrate failed (log)"; exit 1; }

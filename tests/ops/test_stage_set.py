@@ -165,6 +165,18 @@ def test_an_env_path_in_the_diff_is_refused_with_the_dest_left_empty(job):
     assert not dest.exists() or list(dest.iterdir()) == []
 
 
+def test_l3_an_accented_worktree_is_refused_under_a_utf8_locale(job):
+    """Card 03 L3: `[!A-Za-z0-9._-]` admits `é` under en_US.UTF-8 unless the script runs LC_ALL=C."""
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    card.write_text(card.read_text().replace("WORKTREE: x-job", "WORKTREE: x-jobé"))
+    commit(repo, "card with an accented worktree")
+    env = dict(env, LC_ALL="en_US.UTF-8", LANG="en_US.UTF-8")
+    done = stage(env, card, dest)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: WORKTREE 'x-jobé' is not one directory name" in done.stderr
+    assert not dest.exists() or list(dest.iterdir()) == []
+
+
 @pytest.mark.parametrize("args", [[], ["one"], ["/no/such/card.md", "/tmp/x"]])
 def test_a_bad_call_is_refused(job, args):
     wt, repo, job_wt, base, tip, card, env, dest = job
