@@ -422,6 +422,7 @@ def _run_the_hook(request, monkeypatch, max_attnum):
     conftest = _suite_conftest(request)
     monkeypatch.setenv("POSTGRES_HOST", "constructed-host")
     monkeypatch.setenv("POSTGRES_USER", "constructed-user")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
     monkeypatch.setattr(conftest, "REAL_CONNECT", lambda *a, **k: _Closable())
     rows = [("user", "aset_sizings", max_attnum, max_attnum - 54, 54), ("system", "bars", 12, 0, 12)]
     monkeypatch.setattr(dev_rebuild, "slot_report", lambda conn: rows)
