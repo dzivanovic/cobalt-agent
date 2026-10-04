@@ -920,3 +920,50 @@ def test_g8_an_unwritable_ledger_still_denies(roots):
     (roots.wt / ".ledger").write_text("a file where the dir should be\n")
     done = run("claude -p x", make_seat(roots, "build"))
     assert_denied(done, G7_ROUTE)
+
+
+# ---- the check of card 10 (cobalt-guard-check-2026-10-04.md, held findings O1, O2, O3, O6) --
+
+
+def test_check_guard_o1_the_repos_own_env_does_not_make_a_seat_dirty(roots):
+    # the deploy seat sits in the repo (desk-launch.sh:46); the repo's .env is the lock's source
+    seat = make_seat(roots, "deploy")
+    (roots.repo / ".env").write_text("CONSTRUCTED=1\n")
+    assert_allowed(write(report(roots), seat, "# r\nDEPLOYED · job: x\n"))
+    # its gate worktree's copy still makes it dirty
+    (roots.wt / JOB_WT).mkdir(parents=True, exist_ok=True)
+    (roots.wt / JOB_WT / ".env").write_text("CONSTRUCTED=1\n")
+    assert_denied(write(report(roots), seat, "# r\nDEPLOYED · job: x\n"), G6_ROUTE)
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["cat /x/wt/job/.en?", "cat /x/wt/job/.env*", "cat /x/wt/job/{.env,x}", "head -1 /x/wt/job/.ENV"],
+)
+def test_check_guard_o2_a_word_that_names_env_after_expansion_is_denied(roots, command):
+    assert_denied(run(command, make_seat(roots, "build")), G3_ROUTE)
+
+
+def test_check_guard_o2_the_read_tool_on_env_in_another_case_is_denied(roots):
+    assert_denied(call("Read", {"file_path": "/x/wt/job/.ENV"}, make_seat(roots, "build")), G3_ROUTE)
+
+
+@pytest.mark.parametrize("command", ["cat /x/wt/job/.env.*", "grep -n X *", "cat /x/wt/job/{.env.example,x}"])
+def test_check_guard_o2_a_pattern_that_cannot_name_env_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+@pytest.mark.parametrize(
+    "command", ["git add ./", "git add -- ./", "git add :/", "git add --no-ignore-removal"]
+)
+def test_check_guard_o3_a_whole_tree_add_by_another_spelling_is_denied(roots, command):
+    assert_denied(run(command, make_seat(roots, "build")), G4_ROUTE)
+
+
+@pytest.mark.parametrize("kind", ["desk", "build"])
+def test_check_guard_o6_a_fixed_file_in_another_case_is_denied(roots, kind):
+    seat = make_seat(roots, kind)
+    base = roots.repo if kind == "desk" else roots.wt / JOB_WT
+    assert_denied(write(base / "docs" / "40 - DevDocs" / "prompts" / "build-hub.md", seat), G5_FIXED)
+    assert_denied(write(base / "docs" / "40 - devdocs" / "PROMPTS" / "BUILD-HUB.md", seat), G5_FIXED)
+    assert_denied(write(base / "x" / "laws.md", seat), G5_FIXED)
