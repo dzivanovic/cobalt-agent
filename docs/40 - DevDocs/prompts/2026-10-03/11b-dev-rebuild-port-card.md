@@ -3,9 +3,9 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/dev-rebuild-port-1003
 WORKTREE: dev-rebuild-port-1003
 BASE: 5ff16b1f
-TIP:
+TIP: f5689418
 REPORT: /Users/cobalt/cobalt-wt/dev-rebuild-port-1003/docs/40 - DevDocs/reports/dev-rebuild-port-build-2026-10-03.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/dev-rebuild-port-check-2026-10-03.md
 HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B: as needed
 TREE STATE: unchanged
