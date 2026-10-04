@@ -151,7 +151,11 @@ def pytest_sessionstart(session):
     `SLOT_FAIL_HEADROOM` free slots stops the run (exit 3) before a with-DB
     gate can fail half-way on `TooManyColumns`; a table at or above
     `SLOT_WARN_AT` is named in the terminal summary. Offline runs are
-    untouched."""
+    untouched. A nested session (a pytester run started from a running test,
+    when pytest has set `PYTEST_CURRENT_TEST`) never opens `cobalt_dev`; a
+    top-level session start still reads the slots."""
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return
     if not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")):
         return
     from cobalt.db_migrations.cli import SLOT_WARN_AT

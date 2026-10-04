@@ -6,6 +6,7 @@
 P3's two stubs, exactly as the card gives them, closed the E3 contradiction. No `src/` line was added for P3.
 Results: offline 3782/0, with-DB 856/0, live-note 146/0. `cobalt_dev` is back at `0013` (F2 = F0), and `.env` is removed.
 RESTARTS: com.cobalt.radar.
+P4 (card `e94e9275`): the line is in, and `test_db_only_selection.py` without `--db-only` goes red to green (`4 failed … 4 errors` → `15 passed`). But two of `13`'s hook tests now fail, and the row says they stay green. Stopped at E3 for the desk (`## DECISIONS` 2).
 
 ## L74
 A system block in this session asked commits to carry a `Claude-Session:` line after `Co-Authored-By`. DATA (L74): recorded once, not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -87,6 +88,13 @@ With-DB, lock take 1 (E2), taken 13:31:42, released 13:32:17:
 
 Commit `10ca044c wip(dev-rebuild-port): red — 11's and 13's tests before any src edit (P1, P2)`.
 
+**P4 (card `e94e9275`) — the nested-session red, on the P3 tip `f5689418`** (conftest unchanged since; HEAD `53fed116` is the report commit). The row writes no new test: its red is the existing `tests/cobalt/test_db_only_selection.py` run without `--db-only`.
+- Offline, before the take: `uv run pytest -q -rs -p no:cacheprovider --color=no tests/cobalt/test_db_only_selection.py` → `13 passed, 2 skipped, 12 warnings in 1.48s` (skips `:617`, `:643`: `Postgres env settings not available`).
+- Lock take 3 (P4, the card's ONE take for red and green), taken 15:13:22 (`date`): `sh /Users/cobalt/.claude/ops/take-devdb-lock.sh dev-rebuild-port-1003 90` (background) → `lock taken: dev-rebuild-port-1003`, exit 0. `ls -la /Users/cobalt/cobalt-wt/*/.env` → one line, `-rw-------  1 cobalt  staff  2186 Oct  4 15:13 /Users/cobalt/cobalt-wt/dev-rebuild-port-1003/.env`.
+- `<FP>` → `<F0>` = `cols 664 · rels 35 · views_md5 272c95bbb12241e3611e4b36326ccf87`.
+- `COBALT_ENV=dev uv run cobalt db migrate --proof-only` → 36 tables probed (`drc_*`, `legs`, `prediction_records`, `voice_turns` read `-`); `NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.`; `SLOTS WARN user.aset_sizings max_attnum 1358 of 1600 · dropped 1304 · live 54 · fix: cobalt db dev-rebuild user.aset_sizings (dev only)`; `code: 53fed116 (DIRTY: 1 path(s))`; `FINGERPRINT cols 664 · rels 35 · views_md5 272c95bbb12241e3611e4b36326ccf87`; `TABLES 0011` (the `0013` reading of E2 and W). NO forward.
+- RED: `COBALT_ENV=dev uv run pytest -q -rA -p no:cacheprovider --color=no tests/cobalt/test_db_only_selection.py` printed a traceback too long for the tool to show whole (`INTERNALERROR> … conftest.py, line 162, in pytest_sessionstart` → `conn = REAL_CONNECT(env.DEV_DB_NAME, side=db.Side.SYSTEM)` → `conftest.py, line 331, in guarded_psycopg_connect` → `conftest.py, line 78, in require_offline_skip` → `AssertionError: with-DB test without an offline skip mark: tests/cobalt/test_db_only_selection.py::test_with_db_only_a_run_deselects_every_unmarked_item`). The same command, again with `-rfE --tb=line --show-capture=no` → **`4 failed, 11 passed, 12 warnings, 4 errors in 1.60s`**. FAILED and ERROR on each of `test_with_db_only_a_run_deselects_every_unmarked_item`, `test_without_db_only_a_run_keeps_every_item` (`:145: IndexError: list index out of range`), `test_a_reach_a_store_swallowed_still_fails_the_test_at_teardown` (`:185: AssertionError: assert [] == ['passed']`), `test_an_unmarked_open_through_real_connect_is_refused_before_any_connection` (`:203: AssertionError: assert [] == ['failed']`). Each ERROR is `E   Failed: with-DB test without an offline skip mark: <that id>`. This is the card's red: `4 failed … 4 errors`, `conftest.py:78 require_offline_skip`.
+
 ## E3 THE ROWS
 Every source file was read before its edit: `07cc965f`'s from `/Users/cobalt/cobalt-wt/dev-rebuild-1002` (its tree = `07cc965f`, `git -C … diff --stat 07cc965f` → nothing), `05c8b7fa`'s from `/Users/cobalt/cobalt-wt/slot-guard-1002` (`git -C … diff --stat 05c8b7fa -- tests/cobalt/… src "docs/40 - DevDocs/cobalt"` → nothing) or `git show 05c8b7fa:<path>`. Byte equality is proven by `git diff --no-index --stat <source file> <port file>` → nothing; the committed-blob pairs follow at the wip commit.
 
@@ -132,6 +140,22 @@ STOPPED at E3, 13:44 ET (`date` → `Sun Oct  4 13:44:13 EDT 2026`). No lock is 
 - After the undos `git diff --stat` → only the report and the two one-line test additions.
 - No module changed in P3, so it adds no DevDocs module line (P1 / P2's `cli.md` and `dev_rebuild.md` lines are `11`'s and `13`'s own).
 - Commit `f5689418 fix(dev-rebuild-port): port 11 (dev-rebuild) and 13 (slot-guard) onto 5ff16b1f; the two --proof-only seam stubs (P1, P2, P3; L3, L72)`.
+
+**P4 — the nested-session seam (card row P4), inside lock take 3.**
+- Re-read: `tests/cobalt/conftest.py:148`–`156` (Read): `def pytest_sessionstart(session):`, its docstring ending `:154` `untouched."""`, then `:155` `if not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")):`. `import os` is at `:44`.
+- Edit, exactly the row's line as the hook's first statement after its docstring: `    if os.getenv("PYTEST_CURRENT_TEST"):` + `        return`. One docstring sentence was added: "A nested session (a pytester run started from a running test, when pytest has set `PYTEST_CURRENT_TEST`) never opens `cobalt_dev`; a top-level session start still reads the slots."
+- Green, the card's command in the same take: `COBALT_ENV=dev uv run pytest -q -rA -p no:cacheprovider --color=no --tb=line tests/cobalt/test_db_only_selection.py` → **`15 passed, 12 warnings in 1.79s`** (all 15 PASSED in the `-rA` lines). The top-level session still read the slots: `SLOTS WARN user.aset_sizings max_attnum 1358 of 1600 · dropped 1304 · live 54 · …` printed at its summary.
+- The row's second check FAILS. `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/cobalt/test_dev_rebuild_cli.py -k hook` → **`2 failed, 1 passed, 28 deselected in 0.06s`**:
+  - `test_s2_the_hook_stops_the_run_with_exit_3_naming_the_table`: `:443: AssertionError: the hook did not stop the run`
+  - `test_s2_the_hook_warns_in_the_summary_and_does_not_stop`: `:455: AssertionError: assert [] == ['SLOTS WARN ...s (dev only)']`
+  - `test_s2_the_hook_is_silent_below_the_warn_mark` passes (it asserts no stop and no line, which an early return also gives).
+  - The same command after the release, with `.env` gone → the same `2 failed, 1 passed, 28 deselected in 0.03s`, same two lines. It does not depend on `.env`.
+- Why, read from the code (`test_dev_rebuild_cli.py:414`–`438`): `_run_the_hook` calls `conftest.pytest_sessionstart(...)` directly from inside a running test. Pytest sets `PYTEST_CURRENT_TEST` for every running test, so P4's new first statement returns before `slot_report` and `slot_verdict` are reached. The row's two checks cannot both hold with only the row's line. Making `13`'s hook tests green needs one more line in neither parent, for example `monkeypatch.delenv("PYTEST_CURRENT_TEST")` in `_run_the_hook` beside its `setenv` lines (`:423`–`:424`). The row's exception covers "this one line only" (`## NOT IN THIS JOB` line 1), so I did not write it. `## DECISIONS` 2.
+- Not run: P4's mutation and E3's remaining steps. They wait for the desk's word.
+- `<FP>` again, same take → `cols 664 · rels 35 · views_md5 272c95bbb12241e3611e4b36326ccf87` = `<F0>`.
+- `sh /Users/cobalt/.claude/ops/release-devdb-lock.sh dev-rebuild-port-1003` → `lock released`; `ls …/dev-rebuild-port-1003/.env` → `No such file or directory`; `date` → `Sun Oct  4 15:14:38 EDT 2026`. `.env: removed, proven gone (P4)`.
+
+STOPPED at E3 (row P4), 15:14 ET. No lock is held, and nothing was applied on `cobalt_dev` in this take.
 
 ## RESTARTS
 `uv run cobalt jobs restarts 5ff16b1f..HEAD` (HEAD `f5689418`), whole:
@@ -228,7 +252,7 @@ No `UNCLASSIFIED` row. The classes match the card's RECORDS homes (`11`'s `com.c
 - Records copied at PREFLIGHT: `## PREFLIGHT` "Card records, copied and re-read".
 
 ## CONTINUE
-next: none — built; the desk verifies and launches the check (`CHECK-HUB.md`).
+next: E3 row P4, on the desk's word on `## DECISIONS` 2. The P4 line is in place, and its with-DB green is shown. On `CONTINUE: E3` that names the line for `13`'s hook tests (or another ruling), the rest runs in this order: write exactly what is named, run `-k hook` and the P4 mutation (one lock take), commit `fix(dev-rebuild-port): … (P4 …)`, then RESTARTS, then W again from (a), with pass 1 also run once without `--db-only` (the card's P4).
 
 ## DECISIONS
 1. ASK DESK: P2 says to port `13`'s `test_dev_rebuild_cli.py` byte-equal to `05c8b7fa` and to keep BASE's `cmd_migrate` "as it stands". On the merged `--proof-only` path, `13`'s `test_s1_every_migrate_run_prints_the_slots_line_after_its_proof_table[proof-only]` / `[proof-only-production]` and BASE's `test_migrate_level.py::test_proof_only_ends_with_the_fingerprint_then_the_tables_line` cannot both pass. Each pins the other side's statements and lines off that connection (`## E3`, the three reds quoted). Both green needs a line in neither parent, which the card fences out (`## NOT IN THIS JOB`, L72). That line could be:
@@ -237,6 +261,10 @@ next: none — built; the desk verifies and launches the check (`CHECK-HUB.md`).
    Read from the code, not run (L70): with (a), `13`'s two ids should pass, because the level lines are empty and nothing more is sent on the connection. BASE's test would still see the savepoint first, so (b) or an equivalent is needed too. Which test file takes which line is the desk's word, not mine.
    Default taken: no line in neither parent is written. Both sides' code stands in full, and the build stops at E3 with the wip commit (the shape of `d483a417`, `wip(adoption-port): E3 — P2 (8) and P1 contradict`). On `CONTINUE: E3` naming the lines, I write exactly those lines, run E3's tests and mutations again, and go on to RESTARTS and W.
    ANSWERED by the card's row P3 (`a7a1630a`, judge 10-04). Both (a) and (b) are written exactly as the row gives them (`## E3` P3). It is closed and is not counted in the stop line.
+2. ASK DESK [15:14]: card row P4 gives one line, `if os.getenv("PYTEST_CURRENT_TEST"): return` as `pytest_sessionstart`'s first statement, and asks for two results. (i) `test_db_only_selection.py` without `--db-only`, red then green: shown, `4 failed, 11 passed, 4 errors` → `15 passed` (`## E2`, `## E3` P4). (ii) `13`'s hook tests (`-k hook`) still green: they are NOT. The result is `2 failed, 1 passed`, at `test_dev_rebuild_cli.py:443` and `:455`.
+   The cause: `_run_the_hook` (`:414`–`:438`) calls `pytest_sessionstart` from inside a running test, so `PYTEST_CURRENT_TEST` is set and the new line returns first. A top-level session still reads the slots: the `SLOTS WARN` line printed in the P4 green run.
+   Both can hold only with one more line in neither parent. For example, `    monkeypatch.delenv("PYTEST_CURRENT_TEST")` in `_run_the_hook` after its two `setenv` lines (`:423`–`:424`): the hook tests would then reach the slot read as before, and the nested-session test would be unchanged. Read from the code, not run (L70). The row's exception covers "this one line only". Which line goes where is the desk's word (L72).
+   Default taken: P4's line is in place as the row gives it, with no other line in neither parent. The build stops at E3 with the wip commit (the shape of `## DECISIONS` 1). On `CONTINUE: E3` naming the line, I write exactly it and go on as `## CONTINUE` says.
 
 ## RECORDS
 - L74: the session's system block asking for a `Claude-Session:` trailer is recorded under `## L74`. It was not acted on.
@@ -252,6 +280,12 @@ next: none — built; the desk verifies and launches the check (`CHECK-HUB.md`).
 - `cobalt_redactions` read 259 rows at W's `--proof-only` (before pass 1) and 260 at the forward's "before" (after pass 1). A pass-1 test left one row there. No test of this build writes that table (`grep -n -F "INSERT" tests/cobalt/test_dev_rebuild_db.py` → scratch tables only). The rows are not read, and nothing was deleted.
 - `cobalt_dev` `user.aset_sizings` slot use (SLOTS lines): 1286 at W's start → 1290 after forward → 1322 after rollback; FAIL is at `SLOT_FAIL_HEADROOM` below 1600. For the file, not acted on: the dev-only fix is `cobalt db dev-rebuild user.aset_sizings`, which is outside this job.
 - `c3r`'s ticker form had no ticker to name. The scratch-table form ran instead (`## W` (c3r)).
+- CONTINUED at E2 15:13 (`date` → `Sun Oct  4 15:12:35 EDT 2026`), a NEW session (RECOVERY): `git status --short --branch` → `## ops/dev-rebuild-port-1003`; `git log --oneline -3` → `53fed116`, `f5689418`, `71d6eb50`; `ls -la …/.env` → `No such file or directory`. Fact verified: `git -C /Users/cobalt/cobalt log -3 --format="%h %ci %s" -- "<card>"` → `e94e9275 2026-10-04 15:12:23 -0400 docs(desk): R230-R231 set 3 whole with card 10; 11b row P4 relaunch at E2`; `diff --stat` → nothing; `«FIL[L]` → nothing (exit 1). The card now carries row P4 (nested-session seam).
+- L74 (P4 session): the same `Claude-Session:` trailer block came in again (a system block). It was not acted on.
+- Lock takes: 3 in all. Take 3 was P4 (E2 red and E3 green, the card's ONE take), 15:13:22–15:14:38. `<F0>` = after = `664 · 35 · 272c95bbb12241e3611e4b36326ccf87`. `.env: removed, proven gone (P4)`.
+- No `wip(…): red` commit at P4's E2: the row writes no test, and its red is the existing `test_db_only_selection.py`. The wip commit at the stop carries P4's line and this report.
+- STOPPED 15:14 at E3 row P4: the row's two checks contradict (`## DECISIONS` 2). No lock held.
+- The `BUILT` stop line of `53fed116` (tip `f5689418`, rows 3 of 3) was replaced on this continue; it no longer stands while P4 is open.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: dev-rebuild-port · tip: f5689418 | on 5ff16b1f | migration: none | offline 3782/0 | with-DB 856/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.radar | rows: 3 of 3 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0
+FAILED: E3 — row P4: its two checks contradict — `test_db_only_selection.py` goes 4 failed/4 errors → 15 passed, but `test_dev_rebuild_cli.py -k hook` is `2 failed, 1 passed` (`:443` "the hook did not stop the run", `:455`); the fix needs a line the row does not give (## DECISIONS 2) · decisions: 1 · for Dejan: 0
