@@ -8,7 +8,7 @@ REPORT: /Users/cobalt/cobalt-wt/drc-k3-1004/docs/40 - DevDocs/reports/drc-k3-bui
 CHECK REPORT:
 HOUSE B:
 TREE STATE: unchanged
-RULINGS: 2026-09-24 R51, 2026-09-24 R52, 2026-10-03 R219
+RULINGS: 2026-10-03 R219
 
 ## ROWS
 
