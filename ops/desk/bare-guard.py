@@ -21,7 +21,9 @@
 # (build, check, devfix, worker) · G7 a second session (any worker kind, deploy too; G9: the
 # check's house call, a whole command opening with a CHECK-HUB.md line 10 house string, passes) ·
 # G1 one command or a read-only pipe (G11: an `awk` program with `system(`, `>` or `|` is not
-# read-only). Read: G3. Write / Edit: G6 stop line while dirty · G5 the fence (G10: a check's
+# read-only; card 06 B2–B4: nor `sort -o`/`--output`/`--compress-program`, a second `uniq`
+# operand or `awk -f`, in a pipe segment or as one command; B1: `sort cut uniq awk` are G3
+# readers too). Read: G3. Write / Edit: G6 stop line while dirty · G5 the fence (G10: a check's
 # fence adds its own <S>, the card's JOB naming it).
 # G8: every deny appends one JSON line to <worktree root>/.ledger/<session_id>.jsonl; a ledger
 # error never blocks the deny. Any other error inside the guard -> exit 0: it never blocks work
@@ -71,7 +73,7 @@ HUBS = {
 WORKERS = ("build", "check", "devfix", "deploy", "worker")
 GIT_SHAPED = ("build", "check", "devfix", "worker")
 READ_FILTERS = ("grep", "sed", "cut", "sort", "uniq", "head", "tail", "wc", "awk")
-ENV_READERS = ("cat", "grep", "sed", "head", "tail", "less")
+ENV_READERS = ("cat", "grep", "sed", "head", "tail", "less", "sort", "cut", "uniq", "awk")
 LAUNCHERS = ("claude", "codex", "grok", "agy")
 GIT_DENIED = ("push", "merge", "rebase", "reset", "checkout", "stash", "cherry-pick")
 STOP_HEADS = ("BUILT ·", "CHECK DONE ·", "DEPLOYED")
@@ -80,6 +82,9 @@ ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 DOCS = os.path.join("docs", "40 - DevDocs")
 SED_WRITES = "`sed` with a `w` or `e` command or flag"
 AWK_WRITES = "`awk` with `system(`, `>` or `|` in its program"
+AWK_FILE = "`awk -f`, a program the guard cannot read"
+SORT_WRITES = "`sort` with `-o`, `--output` or `--compress-program`"
+UNIQ_WRITES = "`uniq` with a second operand, a file it writes"
 # G9: the three house strings of CHECK-HUB.md line 10, as prefixes of the whole command
 HOUSE = re.compile(r"grok |codex exec --skip-git-repo-check -m [A-Za-z0-9._-]+ -s read-only |agy ")
 # G10: <S> = <AGY>/scratch/tribunal-bars-0920/<JOB>-check (CHECK-HUB.md line 5)
@@ -386,6 +391,67 @@ def awk_writes(args):
     return False
 
 
+def awk_file(args):
+    """B3: True when the program comes from a file (`-f`, `--file`), which G11 cannot read."""
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--":
+            return False
+        if a[:2] == "-f" or a == "--file" or a.startswith("--file="):
+            return True
+        if a in ("-F", "-v"):
+            i += 1
+        i += 1
+    return False
+
+
+def sort_writes(args):
+    """B2, by form: a short-option word holding `o` (`-o out`, `-oout`, `-uo out`), or a long
+    option whose name is a prefix of `output`, or begins `com` and is a prefix of
+    `compress-program`."""
+    for a in args:
+        if a.startswith("--"):
+            name = a[2:].partition("=")[0]
+            if name and "output".startswith(name):
+                return True
+            if name.startswith("com") and "compress-program".startswith(name):
+                return True
+        elif a.startswith("-") and "o" in a[1:]:
+            return True
+    return False
+
+
+def uniq_writes(args):
+    """B2: True when uniq has a second operand, its output file. The word after -f, -s or -w,
+    and the digits attached in -f1, -s2 or -w3, are values, not operands."""
+    operands, i, done = 0, 0, False
+    while i < len(args):
+        a = args[i]
+        if done or a == "-" or not a.startswith("-"):
+            operands += 1
+        elif a == "--":
+            done = True
+        elif not a.startswith("--") and a[-1] in "fsw":
+            i += 1
+        i += 1
+    return operands > 1
+
+
+def filter_problem(ws):
+    """B2, B3, G11: what makes a `sort`, `uniq` or `awk` command more than a read, or None."""
+    if ws[0] == "sort" and sort_writes(ws[1:]):
+        return SORT_WRITES
+    if ws[0] == "uniq" and uniq_writes(ws[1:]):
+        return UNIQ_WRITES
+    if ws[0] == "awk":
+        if awk_file(ws[1:]):
+            return AWK_FILE
+        if awk_writes(ws[1:]):
+            return AWK_WRITES
+    return None
+
+
 def pipe_problems(command, cuts):
     problems = []
     for seg in segments(command, cuts):
@@ -400,8 +466,9 @@ def pipe_problems(command, cuts):
             p = sed_problem(ws[1:])
             if p:
                 problems.append(p)
-        if ws[0] == "awk" and awk_writes(ws[1:]):
-            problems.append(AWK_WRITES)
+        p = filter_problem(ws)
+        if p:
+            problems.append(p)
     return problems
 
 
@@ -415,7 +482,10 @@ def g1(command):
         text = command
         found, quote, cuts = scan(command)
     if not found:
-        return None
+        # B4: a lone sort, uniq or awk meets the checks of a pipe segment
+        ws = words(text)
+        p = filter_problem(ws) if ws else None
+        return BLOCK.format(found=p) if p else None
     if found == ["a pipe `|`"]:
         problems = pipe_problems(text, cuts)
         if not problems:
