@@ -2,7 +2,7 @@ JOB: cobalt-guard-b
 LADDER: OFF-LADDER — cto-2026-10-03.md R248
 BRANCH: ops/cobalt-guard-b-1004
 WORKTREE: cobalt-guard-b-1004
-BASE: «FILL: main after set 3 DEPLOYED, 8 hex»
+BASE: 979ec797
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/cobalt-guard-b-1004/docs/40 - DevDocs/reports/cobalt-guard-b-build-2026-10-04.md
 CHECK REPORT:
@@ -10,7 +10,7 @@ HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B:
 TREE STATE: unchanged
 DB: none
-RULINGS: «FILL: 2026-10-03 R33 and the desk row R248 (cto-2026-10-03.md), as <date> R<n> pairs»
+RULINGS: 2026-10-02 R47, 2026-10-03 R33
 
 ## ROWS
 

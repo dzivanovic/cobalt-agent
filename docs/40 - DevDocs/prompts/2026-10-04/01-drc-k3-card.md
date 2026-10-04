@@ -2,13 +2,13 @@ JOB: drc-k3
 LADDER: S3-P3 · F14
 BRANCH: drc/k3-surfaces-1004
 WORKTREE: drc-k3-1004
-BASE: «FILL: main after set 3 DEPLOYED (deploy 4693097d), 8 hex»
+BASE: 979ec797
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/drc-k3-1004/docs/40 - DevDocs/reports/drc-k3-build-2026-10-04.md
 CHECK REPORT:
 HOUSE B:
 TREE STATE: unchanged
-RULINGS: «FILL: 2026-09-24 R51, 2026-09-24 R52 (the v3 lane's final input), plus his S3 build approval row (10-04 R219 if it carries it)»
+RULINGS: 2026-09-24 R51, 2026-09-24 R52, 2026-10-03 R219
 
 ## ROWS
 
