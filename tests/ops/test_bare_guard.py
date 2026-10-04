@@ -1080,3 +1080,28 @@ def test_b4_a_lone_sort_or_awk_that_only_reads_stays_allowed(roots, command):
 )
 def test_check_b_o1_a_lone_filter_by_path_or_behind_an_assignment_that_writes_is_denied(roots, command, found):
     assert_resend(run(command, make_seat(roots, "build")), found)
+
+
+@pytest.mark.parametrize("command", ["sort --co=sh f", "sort --co sh f", "sort --compress=sh f"])
+def test_b7_a_two_letter_prefix_of_compress_program_is_denied(roots, command):
+    done = run(command, make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, SORT_FOUND)
+
+
+@pytest.mark.parametrize("command", ["sort --check f", "sort -c f"])
+def test_b7_sort_check_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["sort --files0-from=.env", "sort --files0-from .env", "sort --files0-from=/x/wt/job/.env"],
+)
+def test_b8_an_option_value_naming_env_is_denied(roots, command):
+    assert_denied(run(command, make_seat(roots, "build")), G3_ROUTE)
+
+
+@pytest.mark.parametrize("command", ["sort --key=2 f", "grep -n --include=*.py X ."])
+def test_b8_an_option_value_not_naming_env_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
