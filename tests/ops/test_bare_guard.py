@@ -1054,6 +1054,8 @@ def test_b3_an_awk_program_in_the_command_stays_allowed(roots):
         ("uniq f out", UNIQ_FOUND),
         ("awk -f p.awk f", AWK_FILE_FOUND),
         ("awk '{print > \"x\"}' f", AWK_FOUND),
+        # the house-probe ending passes its redirect, not the lone command's check
+        ("sort -o out f < /dev/null", SORT_FOUND),
     ],
 )
 def test_b4_a_lone_sort_uniq_or_awk_that_writes_is_denied(roots, command, found):
