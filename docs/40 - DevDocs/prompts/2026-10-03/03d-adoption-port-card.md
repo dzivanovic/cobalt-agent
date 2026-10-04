@@ -13,7 +13,7 @@ RULINGS: 2026-10-02 R47, 2026-10-02 R154, 2026-10-02 R157, 2026-10-03 R3
 
 ## ROWS
 
-WHY: the adoption chain (`03` + `02` + `03c`, head `9694a679`, all checked `ready: YES` on the combined tree) could not merge onto `main` beside `11`, `07`, `09`, and `main` has since taken `02b` (`DEPLOY-HUB.md` P7 / STEP-T / STEP-C text, `a8d8a848`). This card PORTS the chain onto `a8d8a848` in the shape of card `16` / `13b`: every file re-applied from `git show 9694a679:<path>` and proven byte-equal by hash where `main` did not change it; the files `main` changed (`DEPLOY-HUB.md` only, by `02b`) settled by hand with both sides. With-DB job (`cli.py`, `conftest.py` are in the chain): it takes the lock.
+WHY: the adoption chain (`03` + `02` + `03c`, head `9694a679`, all checked `ready: YES` on the combined tree) could not merge onto `main` beside `11`, `07`, `09`, and `main` has since taken `02b` (`DEPLOY-HUB.md` P7 / STEP-T / STEP-C text, `a8d8a848`). This card PORTS the chain onto `a8d8a848` in the shape of card `16` / `13b`: every file re-applied from `git show 9694a679:<path>` and proven byte-equal by hash where `main` did not change it; the files `main` changed (`DEPLOY-HUB.md` only, by `02b`) settled by hand with both sides. With-DB job (`cli.py` is in the chain): it takes the lock.
 
 | row | what | red first | files |
 |---|---|---|---|
@@ -37,5 +37,5 @@ WHY: the adoption chain (`03` + `02` + `03c`, head `9694a679`, all checked `read
 ## RECORDS
 - Judge, 10-03 21:39 ET: set 3 = `03d`, `11b`, `07b`, `05` (`47a689a1`, checked), `10`; Sunday after 13:00. The `DEPLOY-HUB.md` part gets one Grok read after the check (L67), F1-style fail-loud findings are not holds.
 - The three checks of the chain stand for the byte-equal files; this card's check reads `DEPLOY-HUB.md` whole and the suites.
-- RESTARTS class homes (L7a): `ops/desk/*` → `OPS_DESK_PREFIX` (operator script, no reader; `restarts.py:38`); `tests/ops/*`, `tests/cobalt/*` → test/documentation (`:239`); `docs/**` → DOCS (`:219`); `src/cobalt/db_migrations/cli.py` → the class `03`'s build report `## RESTARTS` derived for it (quote that line at PREFLIGHT; the build derives again, L42).
+- RESTARTS class homes (L7a): `ops/desk/*` → `OPS_DESK_PREFIX` (operator script, no reader; `restarts.py:38`); `tests/ops/*`, `tests/cobalt/*` → test/documentation (`:245`); `docs/**` → DOCS (`:225`); `src/cobalt/db_migrations/cli.py` → the class `03`'s build report `## RESTARTS` derived for it (quote that line at PREFLIGHT; the build derives again, L42).
 - Preflight 10-03 (desk, `03d-card-preflight-2026-10-03.md`): issues 3, 4, 5, 8, 9 answered by the edits above (row P3; P1's red; P2 as the one source; the homes line; HOUSE B).
