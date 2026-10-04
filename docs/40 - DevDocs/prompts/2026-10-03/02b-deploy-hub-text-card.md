@@ -5,7 +5,7 @@ WORKTREE: deploy-hub-text-1003
 BASE: 44b29c63
 TIP: 2cc6330e
 REPORT: /Users/cobalt/cobalt-wt/deploy-hub-text-1003/docs/40 - DevDocs/reports/deploy-hub-text-build-2026-10-03.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-hub-text-check-2026-10-03-r3.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-hub-text-check-2026-10-03-r4.md
 HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B: as needed
 TREE STATE: unchanged
@@ -18,7 +18,7 @@ WHY: `DEPLOY-HUB.md` on `main` is the text every deploy runs under until a new t
 
 | row | what | red first | files |
 |---|---|---|---|
-| T1 | P7: "a MIGRATION is any file ending .sql under src/cobalt/db_migrations/ (whatever its name), or a changed line inside FORWARD = (…) of src/cobalt/db_migrations/__init__.py that adds, removes or reorders an entry; every .py under that folder (cli.py, placement.py, dev_rebuild.py), tests and docs are CODE and pass MIGRATIONS: none" (replaces the first build's `[0-9][0-9][0-9][0-9]_*.sql` sentence). STEP-T's FORWARD check: `grep -n -F 'MIGRATIONS_DIR / "' <GATE>/src/cobalt/db_migrations/__init__.py` (the `00` dropped) | no test: hub text; `grep -c -F "whatever its name"` → 1; `grep -c -F "[0-9][0-9][0-9][0-9]_*.sql"` → 0; `grep -c -F 'MIGRATIONS_DIR / \"00'` → 0 | `docs/40 - DevDocs/prompts/DEPLOY-HUB.md` |
+| T1 | P7: "a MIGRATION is any file ending .sql under src/cobalt/db_migrations/ (whatever its name), or a changed line inside FORWARD = (…) or REVERSE = (…) of src/cobalt/db_migrations/__init__.py that adds, removes or reorders an entry; every other change under that folder (cli.py, placement.py, dev_rebuild.py, tests, docs, and any other line of __init__.py) is CODE and passes MIGRATIONS: none" (RE-ISSUE 3, JUDGE ASK 18: replaces the r3 sentence "inside FORWARD = (…) of … every .py under that folder …"; STEP-T's "a changed line inside `FORWARD = (…)`" reads "inside `FORWARD = (…)` or `REVERSE = (…)`" to match). STEP-T's FORWARD check: `grep -n -F 'MIGRATIONS_DIR / "' <GATE>/src/cobalt/db_migrations/__init__.py` (the `00` dropped) | no test: hub text; `grep -c -F "whatever its name"` → 1; `grep -c -F "[0-9][0-9][0-9][0-9]_*.sql"` → 0; `grep -c -F 'MIGRATIONS_DIR / \"00'` → 0 | `docs/40 - DevDocs/prompts/DEPLOY-HUB.md` |
 | T6 | STEP-C: "a plist ADDED or MODIFIED anywhere under ops/ is refused, except one under ops/desk/ whose Label string (the <string> value on the <key>Label</key> line or the line after it) is not the label: value of any entry in configs/cobalt/jobs.yaml and whose path is not ops/<label>.plist; a Label the read cannot find is refused" (RE-ISSUE 2, JUDGE ASK 17: replaces the r2 sentence "whose Label (the line after <key>Label</key>, read by grep -A1 -F) is not a key of …") | hub text; `grep -c -F "a Label the read cannot find is refused"` → 1; `grep -c -F "is not a key of configs"` → 0 | the same file |
 | C1 | CUT: remove every sentence the first build wrote for the old T2, T3, T4, T5 (STEP-G "trap on every exit" / "leftover lock after a FAILED gate"; "THE EQUAL-TREE CLAUSE, the rule for when it lands"; P1 "The rule for (v) when it lands"; the outage rule's "never a resend"); those places read as at BASE | hub text; `grep -c -F` of each of "trap on every exit", "leftover lock after a FAILED gate", "THE EQUAL-TREE CLAUSE", "The rule for (v) when it lands", "never a resend" → 0; `git diff 44b29c63 -- <file>` touches only P7, STEP-T and STEP-C | the same file |
 
@@ -37,6 +37,7 @@ WHY: `DEPLOY-HUB.md` on `main` is the text every deploy runs under until a new t
 - X3 Is `git diff 44b29c63` of the file limited to P7, STEP-T and STEP-C?
 
 ## RECORDS
+- Judge, 10-03 20:26 (JUDGE ASK 18, Grok re-read `reports/deploy-hub-02b-grok-reread-2026-10-03.md`): Grok r2 F2 fixed: REVERSE edits are migrations; F1 dropped as fail-loud by design. No third Grok read. Check r3 ready YES at `2cc6330e`; only T1's sentence changes in this re-issue; r4 writes `opus-1-r4.md`.
 - Judge, 10-03 20:04 (JUDGE ASK 17, check r2 O1/O2 HOLD): T6 as checked r2 O1/O2: labels are label: values in jobs.yaml, the Label string is read on its key line or the next, an unreadable Label is refused.
 - Check r2 (`reports/deploy-hub-text-check-2026-10-03-r2.md`) at `69bf6082`: T1 and C1 as written, diff limited to P7, STEP-T, STEP-C; only T6 changes in this re-issue. Its sections sit at `<S>/opus-1-r2.md` (ASK DESK 3, kept); r3 writes `opus-1-r3.md`.
 - Judge, 10-03 ~19:50 (JUDGE ASK 16): Grok's 8 findings answered (reports/deploy-hub-text-decisions-2026-10-03.md): 1–4 fixed in the P7, STEP-T and STEP-C sentences; T2–T5 cut from this card and carried to 03d; the card is the P7/T/C fix only.
