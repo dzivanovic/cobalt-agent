@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # bare-guard.py — a Claude Code PreToolUse hook (his 2026-10-01 R45 part 1; card 17 A1), extended
-# in place as `cobalt-guard` (his 2026-10-03 R32, R33; card 10 rows G1–G8), so the one hook entry
+# in place as `cobalt-guard` (his 2026-10-03 R32, R33; card 10 rows G1–G11), so the one hook entry
 # covers it. Reads the hook's JSON on stdin; exit 0 lets the call through, exit 2 denies it with
 # ONE line on stderr naming the route. It never runs a command.
 #
@@ -18,8 +18,11 @@
 # kind-free rules G1, G3, G6.
 #
 # THE RULES, first hit wins. Bash: G3 .env read · G2 production (not deploy) · G4 git shape
-# (build, check, devfix, worker) · G7 a second session (any worker kind, deploy too) · G1 one
-# command or a read-only pipe. Read: G3. Write / Edit: G6 stop line while dirty · G5 the fence.
+# (build, check, devfix, worker) · G7 a second session (any worker kind, deploy too; G9: the
+# check's house call, a whole command opening with a CHECK-HUB.md line 10 house string, passes) ·
+# G1 one command or a read-only pipe (G11: an `awk` program with `system(`, `>` or `|` is not
+# read-only). Read: G3. Write / Edit: G6 stop line while dirty · G5 the fence (G10: a check's
+# fence adds its own <S>, the card's JOB naming it).
 # G8: every deny appends one JSON line to <worktree root>/.ledger/<session_id>.jsonl; a ledger
 # error never blocks the deny. Any other error inside the guard -> exit 0: it never blocks work
 # because it broke.
@@ -75,6 +78,11 @@ PROD = re.compile(r"COBALT_ENV=production|(?<![\w-])--prod(?![\w-])|cobalt_brain
 ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 DOCS = os.path.join("docs", "40 - DevDocs")
 SED_WRITES = "`sed` with a `w` or `e` command or flag"
+AWK_WRITES = "`awk` with `system(`, `>` or `|` in its program"
+# G9: the three house strings of CHECK-HUB.md line 10, as prefixes of the whole command
+HOUSE = re.compile(r"grok |codex exec --skip-git-repo-check -m [A-Za-z0-9._-]+ -s read-only |agy ")
+# G10: <S> = <AGY>/scratch/tribunal-bars-0920/<JOB>-check (CHECK-HUB.md line 5)
+SCRATCH = os.path.join("agy-trial", "scratch", "tribunal-bars-0920")
 
 
 def scan(command):
@@ -360,6 +368,23 @@ def sed_problem(args):
     return None
 
 
+def awk_writes(args):
+    """G11: True when a word that can be awk program text holds `system(`, `>` or `|`. The
+    values of -F and -v and the file of -f are not program text; every other word is read."""
+    i, done = 0, False
+    while i < len(args):
+        a = args[i]
+        if not done and a == "--":
+            done = True
+        elif not done and a[:2] in ("-F", "-v", "-f"):
+            if len(a) == 2:
+                i += 1
+        elif "system(" in a or ">" in a or "|" in a:
+            return True
+        i += 1
+    return False
+
+
 def pipe_problems(command, cuts):
     problems = []
     for seg in segments(command, cuts):
@@ -374,6 +399,8 @@ def pipe_problems(command, cuts):
             p = sed_problem(ws[1:])
             if p:
                 problems.append(p)
+        if ws[0] == "awk" and awk_writes(ws[1:]):
+            problems.append(AWK_WRITES)
     return problems
 
 
@@ -442,15 +469,16 @@ def first_message(transcript):
 
 
 def read_card(path):
-    card = {"worktree": None, "report": None, "check report": None, "files": []}
+    card = {"job": None, "worktree": None, "report": None, "check report": None, "files": []}
     try:
         with open(path, encoding="utf-8") as f:
             text = f.read()
     except (OSError, TypeError):
         return card
-    m = re.search(r"^WORKTREE:[ \t]*([A-Za-z0-9._-]+)[ \t]*$", text, re.M)
-    if m and not m.group(1).startswith("."):
-        card["worktree"] = m.group(1)
+    for key in ("job", "worktree"):
+        m = re.search(r"^%s:[ \t]*([A-Za-z0-9._-]+)[ \t]*$" % key.upper(), text, re.M)
+        if m and not m.group(1).startswith("."):
+            card[key] = m.group(1)
     for key in ("report", "check report"):
         m = re.search(r"^%s:[ \t]*(\S.*?)[ \t]*$" % key.upper(), text, re.M)
         if m and os.path.isabs(m.group(1)):
@@ -541,7 +569,10 @@ def bash_rules(command, s):
         return "G2", ROUTE["G2"]
     if kind in GIT_SHAPED and any(git_problem(ws) for ws in segs):
         return "G4", ROUTE["G4"]
-    if kind in WORKERS and any(verb(ws) in LAUNCHERS for ws in segs):
+    launches = [k for k, ws in enumerate(segs) if verb(ws) in LAUNCHERS]
+    if kind == "check" and launches == [0] and HOUSE.match(command):
+        launches = []  # G9: the check's one house call, typed as CHECK-HUB.md line 10 lists it
+    if kind in WORKERS and launches:
         return "G7", ROUTE["G7"]
     deny = g1(command)
     if deny:
@@ -598,6 +629,9 @@ def g5(s, path):
         report = s["card"]["check report" if kind == "check" else "report"]
         if report and path == report:
             return None
+        job = s["card"]["job"]
+        if kind == "check" and job and under(path, os.path.join(WT_ROOT, SCRATCH, job + "-check")):
+            return None  # G10: the check's own <S>
         return ROUTE["G5 fence"]
     if kind == "brain":
         docs = os.path.join(REPO_ROOT, DOCS)
