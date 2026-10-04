@@ -368,6 +368,12 @@ the populated membership table CHANGED after `0014` and roll the migration
 back. Per table, because `handicap` is too generic a name to drop from
 every table's digest.
 
+## 2026-10-02 — dev-rebuild
+New subcommand `cobalt db dev-rebuild <schema>.<table> [--dry-run] [--lock-timeout-s N]` (`cmd_dev_rebuild`, row D2). It refuses with exit 2 before any connection when `COBALT_ENV` is not `dev`, when the schema is not `system` / `user`, when the table name falls outside `[a-z0-9_]`, or when `--lock-timeout-s` is below 1. It also refuses with exit 2 after connecting when `current_database()` is not `cobalt_dev`, and that read is the only statement sent. There is no `--allow-prod`. Then, in one transaction, it runs `SET LOCAL lock_timeout` and `dev_rebuild.rebuild_table`, and commits only for `REBUILT`. It prints `BEFORE` / `AFTER` lines, then one of `REBUILT …`, `DRY RUN — ROLLED BACK · …` or `FAILED: <fields> — ROLLED BACK` (exit 1). Three helpers were extracted so that each lives in one place (L3): `_content_digest` (the per-table row digest `_probe` now calls), `_checked_lock_timeout` (shared with `migrate`), and `_open` (the one `connect_migration` call line, which `_connect` now uses).
+
+## 2026-10-02 — slot-guard
+Every `cobalt db migrate` run (forward, `--rollback`, `--proof-only`, production included) now reads `dev_rebuild.slot_report` inside its own transaction, under the savepoint `cobalt_slots`. It prints the `SLOTS` line(s) after the proof table and before the `code:` line (S1). `SLOT_WARN_AT = 1200` sits beside `DEFAULT_LOCK_TIMEOUT_S`. If the read fails, it is rolled back to its savepoint and the line reads `SLOTS UNKNOWN — <reason>`; it never fails a migration (`_slot_lines`).
+
 ## 2026-09-30 — f15-p1
 `TABLE_DIGEST_EXCLUDED_COLUMNS["aset_sizings"]` gains `last_price_bar_ts` (`0022`, F15 `[F-38]`). X13 measured the need: after `ADD COLUMN last_price_bar_ts` the `aset_sizings` digest through `_row_json` differs with BASE's tuple and equals the pre-column digest with the entry.
 

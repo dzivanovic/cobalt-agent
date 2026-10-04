@@ -80,9 +80,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
+import sys
 import time
 from pathlib import Path
-from typing import Iterable, Iterator, Optional
+from typing import Iterable, Iterator, NoReturn, Optional
 
 import psycopg
 from psycopg import IsolationLevel, sql
@@ -149,6 +150,11 @@ TABLE_DIGEST_EXCLUDED_COLUMNS: dict[str, tuple[str, ...]] = {
 #: ESCALATE 3). An ENGINE TUNABLE, not an L53 ceiling: it decides how
 #: long to wait for a lock, never what the system may do.
 DEFAULT_LOCK_TIMEOUT_S = 30
+
+#: `max(attnum)` at which every migrate run prints a `SLOTS WARN` line for a
+#: table (slot-guard S1). Postgres never reuses a dropped column's slot,
+#: and on 2026-10-01 `"user".aset_sizings` reached 1581 of 1600.
+SLOT_WARN_AT = 1200
 
 #: The checkout the RUNNING `cobalt` package was imported from — derived
 #: from THIS module's own file, never from the current directory. A
@@ -330,6 +336,28 @@ def _stream_row_texts(conn, table: str, query) -> Iterator[str]:
             yield row_text
 
 
+def _content_digest(conn, schema: str, table: str, row_json) -> tuple[int, str]:
+    """`(rows, digest)` of `schema.table`, rows as `row_json`, PK order.
+
+    THE per-table digest — `_probe` and `cobalt db dev-rebuild` both take
+    it here (L3). `_probe` passes `_row_json(table)` (the migrations' added
+    columns excluded); the rebuild passes the whole `to_jsonb(t)`, because
+    a rebuild must keep every column.
+    """
+    pk = _pk_columns(conn, schema, table)
+    stream = sql.SQL(
+        "SELECT ({row_json})::text FROM {rel} AS t ORDER BY {order}"
+    ).format(
+        row_json=row_json,
+        rel=sql.Identifier(schema, table),
+        order=sql.SQL(", ").join(sql.Identifier("t", c) for c in pk),
+    )
+    # ONE statement for both numbers: the count is the rows the cursor
+    # yields, so no concurrent write can put the count and the digest on
+    # different snapshots — and an 8.4M-row table is read once, not twice.
+    return _digest_rows(_stream_row_texts(conn, table, stream))
+
+
 def _probe(conn, table: str) -> dict:
     """(schema, rows, digest, seconds) for `table`, wherever it lives.
 
@@ -346,19 +374,7 @@ def _probe(conn, table: str) -> dict:
             "digest": None,
             "seconds": time.perf_counter() - started,
         }
-    pk = _pk_columns(conn, schema, table)
-    rel = sql.Identifier(schema, table)
-    stream = sql.SQL(
-        "SELECT ({row_json})::text FROM {rel} AS t ORDER BY {order}"
-    ).format(
-        row_json=_row_json(table),
-        rel=rel,
-        order=sql.SQL(", ").join(sql.Identifier("t", c) for c in pk),
-    )
-    # ONE statement for both numbers: the count is the rows the cursor
-    # yields, so no concurrent write can put the count and the digest on
-    # different snapshots — and an 8.4M-row table is read once, not twice.
-    rows, digest = _digest_rows(_stream_row_texts(conn, table, stream))
+    rows, digest = _content_digest(conn, schema, table, _row_json(table))
     return {
         "schema": schema,
         "rows": rows,
@@ -591,6 +607,27 @@ def _print_probe(probe: dict[str, dict], *, dbname: str) -> None:
     print("NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.")
 
 
+def _slot_lines(conn) -> list[str]:
+    """The `SLOTS` lines, read in the run's own transaction (slot-guard S1).
+
+    A catalog read only, under its own savepoint: a read that fails is
+    rolled back to it — so the migration's transaction is not left aborted
+    — and the line reads `SLOTS UNKNOWN — <reason>`, explicit and not a
+    plausible value (L1), as `_code_line` does. A diagnostic never fails a
+    migration or a proof.
+    """
+    from . import dev_rebuild  # function-local: dev_rebuild imports this module
+
+    conn.execute("SAVEPOINT cobalt_slots")
+    try:
+        rows = dev_rebuild.slot_report(conn)
+    except Exception as e:  # noqa: BLE001 — never fatal; see the docstring
+        conn.execute("ROLLBACK TO SAVEPOINT cobalt_slots")
+        return [f"SLOTS UNKNOWN — {type(e).__name__}: {e}"]
+    conn.execute("RELEASE SAVEPOINT cobalt_slots")
+    return dev_rebuild.slot_lines(rows, SLOT_WARN_AT)
+
+
 def _apply(conn, paths) -> None:
     """Run whole .sql files, one transaction for the lot.
 
@@ -622,6 +659,13 @@ def _assert_utf8(conn) -> None:
             "database it would not equal the value the proof has always "
             "printed. Fix the encoding or the fold, not the comparison."
         )
+
+
+def _open(dbname: str, *, allow_prod: bool):
+    """The ONE `db` migration-connection call outside `db.py` (ADR-0008 D1;
+    `test_tenancy`'s one-caller lint). `migrate` and `dev-rebuild` both open
+    here."""
+    return db.connect_migration(dbname, allow_prod=allow_prod)
 
 
 def _connect(dbname: str, *, allow_prod: bool, read_only: bool):
@@ -665,7 +709,7 @@ def _connect(dbname: str, *, allow_prod: bool, read_only: bool):
     hands back an AUTOCOMMIT connection whose `SET search_path` /
     `set_config` have already committed, so nothing is open yet.
     """
-    conn = db.connect_migration(dbname, allow_prod=allow_prod)
+    conn = _open(dbname, allow_prod=allow_prod)
     try:
         # ASSIGNED ON BOTH PATHS. The migrate transaction's read-write
         # state is a property of this harness, not of whatever default
@@ -679,6 +723,21 @@ def _connect(dbname: str, *, allow_prod: bool, read_only: bool):
         conn.close()
         raise
     return conn
+
+
+def _checked_lock_timeout(lock_timeout_s) -> int:
+    """`--lock-timeout-s`, validated once for `migrate` and `dev-rebuild`."""
+    if (
+        isinstance(lock_timeout_s, bool)
+        or not isinstance(lock_timeout_s, int)
+        or lock_timeout_s < 1
+    ):
+        raise MigrationError(
+            f"--lock-timeout-s must be a whole number of seconds >= 1, got "
+            f"{lock_timeout_s!r}. 0 means wait forever — that is the defect "
+            "this flag closes."
+        )
+    return lock_timeout_s
 
 
 def cmd_migrate(args: argparse.Namespace) -> None:
@@ -759,17 +818,9 @@ def cmd_migrate(args: argparse.Namespace) -> None:
     # Namespaces built by hand (tests, and any future in-process caller)
     # need not carry the flag; the parser always sets it. The DEFAULT is
     # the module constant either way, so there is one number, named once.
-    lock_timeout_s = getattr(args, "lock_timeout_s", DEFAULT_LOCK_TIMEOUT_S)
-    if (
-        isinstance(lock_timeout_s, bool)
-        or not isinstance(lock_timeout_s, int)
-        or lock_timeout_s < 1
-    ):
-        raise MigrationError(
-            f"--lock-timeout-s must be a whole number of seconds >= 1, got "
-            f"{lock_timeout_s!r}. 0 means wait forever — that is the defect "
-            "this flag closes."
-        )
+    lock_timeout_s = _checked_lock_timeout(
+        getattr(args, "lock_timeout_s", DEFAULT_LOCK_TIMEOUT_S)
+    )
     if proof_only and (args.rollback or args.down_to):
         raise MigrationError(
             "--proof-only takes the proof and applies NOTHING, so it cannot be "
@@ -791,12 +842,15 @@ def cmd_migrate(args: argparse.Namespace) -> None:
         conn = _connect(dbname, allow_prod=args.allow_prod, read_only=True)
         try:
             probe = _probe_all(conn)
+            slots = _slot_lines(conn)
             level = _level_lines(conn, probe)
         finally:
             conn.rollback()
             conn.close()
         print()
         _print_probe(probe, dbname=dbname)
+        for line in slots:
+            print(line)
         print(_code_line())
         for line in level:
             print(line)
@@ -815,6 +869,7 @@ def cmd_migrate(args: argparse.Namespace) -> None:
         before = _probe_all(conn)
         _apply(conn, paths)
         after = _probe_all(conn)
+        slots = _slot_lines(conn)
         verdicts = _proof_verdicts(before, after, direction=direction)
         if "CHANGED" in verdicts.values():
             conn.rollback()
@@ -876,6 +931,8 @@ def cmd_migrate(args: argparse.Namespace) -> None:
 
     print()
     changed = _print_proof(before, after, direction=direction)
+    for line in slots:
+        print(line)
     # Printed BEFORE the CHANGED refusal below: a run that rolled back is
     # exactly the run whose code an operator most needs named.
     print(_code_line())
@@ -904,6 +961,109 @@ def _rollback_paths(down_to: str | None):
     if not paths:
         raise MigrationError(f"no registered migrations are newer than {down_to}")
     return paths
+
+
+#: `dev-rebuild`'s table name: lower-case letters, digits, underscore. A
+#: name outside it is refused before anything is opened, never quoted
+#: into something it was not.
+_DEV_REBUILD_NAME = re.compile(r"[a-z0-9_]+")
+
+
+def _refuse(message: str) -> NoReturn:
+    print(f"REFUSED: {message}", file=sys.stderr)
+    raise SystemExit(2)
+
+
+def cmd_dev_rebuild(args: argparse.Namespace) -> None:
+    """`cobalt db dev-rebuild <schema>.<table>` — `dev_rebuild.rebuild_table`
+    on `cobalt_dev`, and nowhere else.
+
+    REFUSED WITH EXIT 2 AND NOTHING OPENED: `COBALT_ENV` not `dev` (unset
+    included), a schema other than `system` / `user`, a table name outside
+    `[a-z0-9_]`, `--lock-timeout-s` below 1. The connection is the one
+    factory's, through `_open` with `env.DEV_DB_NAME` and `allow_prod=False`
+    written as literals: the database name is the constant, never
+    `resolve_db_name()` and never an argument, and there is no
+    `--allow-prod` on this subcommand, so no argument, environment or
+    fallback names `cobalt_brain`. After connecting, `current_database()` is
+    read FIRST; anything but `cobalt_dev` is refused with exit 2 and that
+    read is the only statement sent.
+
+    Then ONE transaction: `SET LOCAL lock_timeout` (the migrate path's
+    ceiling), the rebuild under its savepoint, and a commit only for a
+    REBUILT result that is not a dry run. Everything else rolls back.
+    """
+    from . import dev_rebuild  # function-local: dev_rebuild imports this module
+
+    try:
+        mode = env.resolve_env()
+    except env.EnvConfigError as e:
+        _refuse(f"{e} — nothing opened.")
+    if mode != env.DEV:
+        _refuse(
+            f"{env.ENV_VAR} is {mode!r}: dev-rebuild runs on {env.DEV_DB_NAME} only "
+            "— nothing opened."
+        )
+    parts = args.target.split(".")
+    if (
+        len(parts) != 2
+        or parts[0] not in dev_rebuild.SCHEMAS
+        or not _DEV_REBUILD_NAME.fullmatch(parts[1])
+    ):
+        _refuse(
+            f"target {args.target!r} is not <schema>.<table> with schema one of "
+            f"{', '.join(dev_rebuild.SCHEMAS)} and a table name of [a-z0-9_] — nothing opened."
+        )
+    schema, table = parts
+    try:
+        lock_timeout_s = _checked_lock_timeout(args.lock_timeout_s)
+    except MigrationError as e:
+        _refuse(f"{e} — nothing opened.")
+    env.assert_destructive_target(env.DEV_DB_NAME)
+
+    print(
+        f"cobalt db dev-rebuild — {schema}.{table} on {env.DEV_DB_NAME} "
+        f"({'DRY RUN' if args.dry_run else 'COMMIT IF EQUAL'})"
+    )
+    conn = _open(env.DEV_DB_NAME, allow_prod=False)
+    try:
+        current =conn.execute("SELECT current_database()").fetchone()[0]
+        if current != env.DEV_DB_NAME:
+            _refuse(
+                f"connected to {current!r}, not {env.DEV_DB_NAME} — nothing sent "
+                "but that read."
+            )
+        conn.autocommit = False
+        # `lock_timeout_s` is a validated int, interpolated as in cmd_migrate.
+        conn.execute(f"SET LOCAL lock_timeout = '{lock_timeout_s}s'")
+        try:
+            result = dev_rebuild.rebuild_table(conn, schema, table, dry_run=args.dry_run)
+        except dev_rebuild.RebuildMismatch as e:
+            conn.rollback()
+            print(f"BEFORE {e.before.line()}")
+            print(f"AFTER  {e.after.line()}")
+            for line in e.detail_lines():
+                print(f"DIFF {line}")
+            print(f"FAILED: {', '.join(e.fields)} — ROLLED BACK")
+            raise SystemExit(1) from e
+        before, after = result.before, result.after
+        print(f"BEFORE {before.line()}")
+        print(f"AFTER  {after.line()}")
+        fields = (
+            f"max_attnum {before.max_attnum} → {after.max_attnum} · "
+            f"rows {before.rows} = {after.rows} · catalog digest equal"
+        )
+        if args.dry_run:
+            conn.rollback()
+            print(f"DRY RUN — ROLLED BACK · {fields}")
+        else:
+            conn.commit()
+            print(f"REBUILT {schema}.{table} · {fields}")
+    finally:
+        # A no-op after the commit; on every other path it is what undoes
+        # the transaction before the connection goes.
+        conn.rollback()
+        conn.close()
 
 
 def add_parser(sub) -> None:
@@ -946,6 +1106,27 @@ def add_parser(sub) -> None:
     )
     migrate.set_defaults(func=cmd_migrate)
 
+    rebuild = gsub.add_parser(
+        "dev-rebuild",
+        help="Rebuild one cobalt_dev table so its dropped column slots are freed "
+             "(kept only if rows and catalog compare equal).",
+    )
+    rebuild.add_argument("target", metavar="<schema>.<table>", help="The schema (system or user), a dot, then the table name.")
+    rebuild.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Rebuild and compare, then roll back whatever the compare shows.",
+    )
+    rebuild.add_argument(
+        "--lock-timeout-s",
+        type=int,
+        default=DEFAULT_LOCK_TIMEOUT_S,
+        metavar="N",
+        help=f"Seconds to wait for any one lock (default {DEFAULT_LOCK_TIMEOUT_S}). "
+             "0 is refused: it means wait forever.",
+    )
+    rebuild.set_defaults(func=cmd_dev_rebuild)
+
     from cobalt.db_query import add_query_parser
 
     add_query_parser(gsub)
@@ -957,8 +1138,10 @@ __all__ = [
     "DIGEST_EXCLUDED_COLUMNS",
     "FINGERPRINT_SQL",
     "PROBE_BATCH_SIZE",
+    "SLOT_WARN_AT",
     "MigrationError",
     "TABLE_DIGEST_EXCLUDED_COLUMNS",
     "add_parser",
+    "cmd_dev_rebuild",
     "cmd_migrate",
 ]
