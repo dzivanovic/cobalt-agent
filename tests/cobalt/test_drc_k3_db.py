@@ -141,3 +141,46 @@ def test_inside_market_reset_the_page_writes_no_row(k3_lane, migrated):
     assert imports.state_book(D, [], now=RESET_ET).refused == imports.RESET_REFUSAL
     assert imports.resolve(D, "DDD-long-x", now=RESET_ET).refused == imports.RESET_REFUSAL
     assert _stated(migrated) == []
+
+
+@requires_db
+def test_check_o4_superseded_stated_ids_names_the_superseding_rows_day(migrated, weekday_calendar):
+    """Check O4 (K3-4, card R278 D1): for each superseded id, the day of the
+    row that supersedes it — here a restatement dated EARLIER than its row;
+    a current id and an unknown id are not in it. A READ: no row written."""
+    first = _state(D_NEXT, kind="resolve", positions=[{"trade_id": "DDD-long-x"}])
+    second = _state(D, kind="resolve", positions=[{"trade_id": "DDD-long-x"}], supersedes=first.id)
+    before = _stated(migrated)
+    assert DrcStore().superseded_stated_ids([first.id, second.id, 999_999]) == {first.id: D}
+    assert _stated(migrated) == before
+
+
+@requires_db
+def test_a_stale_resolve_names_the_earlier_restatement_effect_day(
+    migrated, weekday_calendar
+):
+    """Check S1 (house A, Sol; K3-4 / D1): the stale line names K2's effect
+    day when the restatement is dated earlier than the row it supersedes."""
+    from cobalt.drc import build
+
+    first = _state(
+        D_NEXT,
+        kind="resolve",
+        positions=[{"trade_id": "DDD-long-x"}],
+    )
+    _state(
+        D,
+        kind="resolve",
+        positions=[{"trade_id": "DDD-long-x"}],
+        supersedes=first.id,
+    )
+    stored = [
+        {
+            "kind": "trade",
+            "inputs": {"resolve_id": first.id},
+        }
+    ]
+
+    assert build._stale_resolves(stored, {}, DrcStore()) == [
+        {"resolve_id": first.id, "effect_day": D.isoformat()}
+    ]

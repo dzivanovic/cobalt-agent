@@ -955,3 +955,119 @@ def test_k3_9_an_exception_is_the_failed_page(page):
     client, _ = page
     response = client.post("/drc/resolve", data={"date": D_NEXT.isoformat(), "trade_id": "x", "supersedes": "99"})
     assert '<div class="failed">FAILED' in response.text and "RuntimeError: constructed" in response.text
+
+
+# ---------------------------------------------------------------------
+# the check (CHECK-HUB pass 1): its own findings O<n>, house A's S<n>
+# ---------------------------------------------------------------------
+
+
+def _earlier_restatement():
+    """Resolve #7 is dated D_NEXT; the row that supersedes it is dated D,
+    EARLIER (card R278 D1). The double answers `superseded_stated_ids` with
+    the judge's shape, {id: the superseding row's day}, and `effect_day`
+    with the store's rule."""
+
+    class _Earlier(_K3Store):
+        def superseded_stated_ids(self, ids):
+            ids = sorted(ids)
+            self.asked.append(ids)
+            return {i: D for i in ids if i in self.superseded}
+
+        def effect_day(self, day, supersedes):
+            return day if supersedes is None else min(day, self.stated_day(supersedes))
+
+    store = _Earlier(superseded={7}, stated_days={7: D_NEXT})
+    _record(store, D, trading=DAY1.read_bytes())
+    tid = _ddd(store)
+    seed = _carried(store, resolves=[ResolveInput(id=7, resolve=StatedResolve(trade_id=tid))])
+    return store, _day(store, D_NEXT, EEE_ROUND, seed)
+
+
+EARLIER_STALE = "STALE — resolve #7 was restated; rebuild 2001-01-02 once 2001-01-02's input is recorded"
+
+
+def test_check_o1_the_note_stale_line_names_the_effect_day_of_an_earlier_restatement(tmp_path, weekday_calendar):
+    """Check O1 (K3-4, card R278 D1): the note's STALE line names
+    `effect_day(<superseding row's day>, 7)` = 2001-01-02, never #7's own
+    day."""
+    store, event = _earlier_restatement()
+    root, _ = _built(tmp_path, store, event)
+    assert _unit_body(_note(root, D_NEXT), "drc-trades", "open_positions")[0] == EARLIER_STALE
+
+
+def test_check_o2_the_page_stale_line_names_the_effect_day_of_an_earlier_restatement(
+        tmp_path, weekday_calendar, monkeypatch):
+    """Check O2 (K3-4 / K3-7, card R278 D1): the page's STALE line, the same
+    wording and the same day as the note's."""
+    from cobalt.drc import imports
+
+    store, _ = _earlier_restatement()
+    monkeypatch.setattr(imports, "DrcStore", lambda: store)
+    assert EARLIER_STALE in imports.day_view(D_NEXT, vault_root=tmp_path).resolves
+
+
+def test_check_o3_a_calendar_gap_names_the_year_and_no_path_reaches_his_note(tmp_path):
+    """Check O3 (K3-1, card R278 D7): no `weekday_calendar` — the shipped
+    NYSE calendar holds no 2001. The unit line and the A31 line read `day not
+    computed — no NYSE calendar for 2001` and hold no `/`; the calendar's
+    directory is nowhere in his note."""
+    from cobalt.session.calendar import CALENDAR_DIR
+
+    store = _K3Store()
+    root, _ = _built(tmp_path, store, _record(store, D, trading=DAY1.read_bytes()))
+    line = _unit_body(_note(root), "drc-trades", "open_positions")[1]
+    a31 = _unit_body(_note(root), "drc-open-items", "open_positions")[1]
+    assert "· day not computed — no NYSE calendar for 2001 · " in line
+    assert a31.endswith("· day not computed — no NYSE calendar for 2001")
+    assert "/" not in line and "/" not in a31
+    assert str(CALENDAR_DIR) not in _note(root).read_text()
+
+
+def test_k3_1_a_calendar_gap_names_only_the_year_and_no_absolute_path(tmp_path):
+    """Check S2 (house A, Sol; K3-1 / D7): a missing calendar year is loud
+    without writing a host path into his note."""
+    store = _K3Store()
+    root, _ = _built(
+        tmp_path,
+        store,
+        _record(store, D, trading=DAY1.read_bytes()),
+    )
+    line = _unit_body(
+        _note(root), "drc-trades", "open_positions"
+    )[1]
+
+    assert "day not computed — no NYSE calendar for 2001" in line
+    assert "/" not in line
+
+
+def test_k3_6_the_flat_button_can_restate_an_opening():
+    """Check S3 (house A, Sol; K3-6): every opening-book shape, including
+    flat, can carry the current statement id when it is a restatement."""
+    from cobalt.aset import drc_page
+
+    page = drc_page._state_book_form(D.isoformat())
+    flat_form = page.split("</form>", 1)[0]
+
+    assert 'name="flat" value="1"' in flat_form
+    assert 'name="supersedes"' in flat_form
+
+
+def test_k3_4_a_the_page_names_the_earlier_restatement_effect_day(
+    tmp_path, weekday_calendar, monkeypatch
+):
+    """Check S4 (house A, Sol; K3-4 / D1): the page uses the superseding
+    row's day returned by superseded_stated_ids, not the superseded row's own
+    day."""
+    from cobalt.drc import imports
+
+    store, _, _ = _resolved_day()
+    store.superseded_stated_ids = lambda ids: {7: D}
+    monkeypatch.setattr(imports, "DrcStore", lambda: store)
+
+    view = imports.day_view(D_NEXT, vault_root=tmp_path)
+
+    assert (
+        "STALE — resolve #7 was restated; rebuild 2001-01-02 "
+        "once 2001-01-02's input is recorded"
+    ) in view.resolves
