@@ -37,9 +37,18 @@ EXIT_NOT_IN_ANY_EXPORT = "not computed — exit not in any export"
 def k3_lane(migrated, weekday_calendar, tmp_path, monkeypatch):
     """A `tmp_path` vault; D3's build with `_deps` over the real store (its
     cards, settings and replay reads constructed); the session block store
-    quiet. Returns the vault root."""
-    from cobalt.drc import build
+    quiet. Returns the vault root.
+
+    The build module is taken from `sys.modules` (`importlib.import_module`):
+    `test_drc_imports_db.py`'s `lane` puts `None` there and its teardown can
+    drop the key, after which `from cobalt.drc import build` returns the OLD
+    module object while `imports` re-imports a NEW one — the patch must land
+    on the module `imports` will call."""
+    import importlib
+
     from cobalt.session.store import SessionBlockStore
+
+    build = importlib.import_module("cobalt.drc.build")
     from cobalt.vault import DRC_IMPORTS_REL
 
     from test_drc_build import _vault
