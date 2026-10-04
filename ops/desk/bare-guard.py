@@ -408,14 +408,14 @@ def awk_file(args):
 
 def sort_writes(args):
     """B2, by form: a short-option word holding `o` (`-o out`, `-oout`, `-uo out`), or a long
-    option whose name is a prefix of `output`, or begins `com` and is a prefix of
-    `compress-program`."""
+    option whose name is a prefix of `output`, or (B7) a prefix of `compress-program` at least
+    two letters long (`--c` alone is ambiguous with `--check`)."""
     for a in args:
         if a.startswith("--"):
             name = a[2:].partition("=")[0]
             if name and "output".startswith(name):
                 return True
-            if name.startswith("com") and "compress-program".startswith(name):
+            if len(name) >= 2 and "compress-program".startswith(name):
                 return True
         elif a.startswith("-") and "o" in a[1:]:
             return True
@@ -613,9 +613,21 @@ def is_env(path):
     return False
 
 
+def env_words(args):
+    """G3's words to test: each operand, and (B8) each option value — the text after the first
+    `=` of a `--name=value` word, and the word after `--files0-from` given without `=`."""
+    out = list(args)
+    for k, a in enumerate(args):
+        if a.startswith("--") and "=" in a:
+            out.append(a.partition("=")[2])
+        elif a == "--files0-from" and k + 1 < len(args):
+            out.append(args[k + 1])
+    return out
+
+
 def g3_bash(segs):
     for ws in segs:
-        if verb(ws) in ENV_READERS and any(is_env(w) for w in ws[1:]):
+        if verb(ws) in ENV_READERS and any(is_env(w) for w in env_words(ws[1:])):
             return ROUTE["G3"]
     return None
 
