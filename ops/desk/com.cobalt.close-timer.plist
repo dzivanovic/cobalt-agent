@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.close-timer</string>
+    <!-- The nightly close by timer (his ruling cto-2026-10-02 R44; card 2026-10-03 05
+         close-timer). An operator timer: it runs a desk script, no Cobalt code reads it, and
+         it lives under ops/desk/ (restarts.py OPS_DESK_PREFIX: no restart). His install is the
+         header of ops/desk/close-timer.sh. launchd uses the Mac's local clock (ET). -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- launchd's own PATH holds neither `claude` nor python3; desk-launch.sh runs both -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <string>sh</string>
+        <string>/Users/cobalt/cobalt/ops/desk/close-timer.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/cobalt/cobalt</string>
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>5</integer></dict>
+        <dict><key>Hour</key><integer>22</integer><key>Minute</key><integer>5</integer></dict>
+        <dict><key>Hour</key><integer>23</integer><key>Minute</key><integer>5</integer></dict>
+        <dict><key>Hour</key><integer>0</integer><key>Minute</key><integer>5</integer></dict>
+        <dict><key>Hour</key><integer>1</integer><key>Minute</key><integer>5</integer></dict>
+        <dict><key>Hour</key><integer>2</integer><key>Minute</key><integer>5</integer></dict>
+        <dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>5</integer></dict>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/cobalt-wt/.timer-logs/close-timer.out</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/cobalt-wt/.timer-logs/close-timer.err</string>
+</dict>
+</plist>
