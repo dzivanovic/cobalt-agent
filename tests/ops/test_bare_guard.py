@@ -338,6 +338,46 @@ def test_g1_anything_else_compound_is_denied_with_the_resend_sentence(command, f
     assert found in line[len(BLOCK_HEAD) : -len(BLOCK_TAIL)], line
 
 
+AWK_FOUND = "`awk` with `system(`, `>` or `|` in its program"
+AWK_DENIED = [
+    "grep X f | awk '{print > \"f\"}'",
+    "grep X f | awk '{system(\"x\")}'",
+    "grep X f | awk '{print | \"sh\"}'",
+    "grep X f | awk '{print >> \"f\"}'",
+    "grep X f | awk '{ \"date\" | getline d; print d }'",
+    "grep X f | awk -F: '{print $1 > \"f\"}'",
+    "grep X f | awk -F : -v n=1 '{system(\"x\")}'",
+    "grep X f | awk -- '{print > \"f\"}'",
+    "awk '{print $1 > \"f\"}' f | head -1",
+]
+
+
+@pytest.mark.parametrize("command", AWK_DENIED)
+def test_g11_an_awk_segment_that_can_write_is_denied(roots, command):
+    done = run(command, make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    line = done.stderr.strip()
+    assert line.startswith(BLOCK_HEAD), line
+    assert line.endswith(BLOCK_TAIL), line
+    assert AWK_FOUND in line[len(BLOCK_HEAD) : -len(BLOCK_TAIL)], line
+
+
+AWK_ALLOWED = [
+    "grep X f | awk '{print $2}'",
+    "grep X f | awk -F'|' '{print $2}'",
+    "grep X f | awk -F '|' '{print $2}'",
+    "grep X f | awk -v 'x=>' '{print x, $1}'",
+    "grep X f | awk -vx='|' '{print x}'",
+    "grep X f | awk 'NR == 2 {print toupper($0)}' | head -1",
+]
+
+
+@pytest.mark.parametrize("kind", [None, "build"])
+@pytest.mark.parametrize("command", AWK_ALLOWED)
+def test_g11_any_other_awk_segment_stays_allowed(roots, kind, command):
+    assert_allowed(run(command, make_seat(roots, kind)))
+
+
 def test_g1_one_command_stays_allowed_whatever_its_verb(roots):
     # sed -i as ONE command is not a pipe: the allow strings judge it, not G1
     assert_allowed(run("sed -i s/a/b/ f", make_seat(roots, "build")))
@@ -584,6 +624,55 @@ def test_g5_an_unknown_seat_is_allowed_everywhere(roots):
     assert_allowed(write(Path("/Users/cobalt/Vault/Think/x.md"), seat))
 
 
+# ---- G10 CHECK SCRATCH FENCE (<S>, CHECK-HUB.md line 5; the card's JOB is `job`) ---------
+
+
+def scratch(roots, job="job") -> Path:
+    return roots.wt / "agy-trial" / "scratch" / "tribunal-bars-0920" / f"{job}-check"
+
+
+@pytest.mark.parametrize("cwd", [None, "agy"])
+def test_g10_the_check_writes_under_its_own_scratch(roots, cwd):
+    seat = make_seat(roots, "check", cwd=roots.wt / "agy-trial" if cwd else None)
+    s = scratch(roots)
+    assert_allowed(write(s / "diff.md", seat))
+    assert_allowed(write(s / "files" / "wt" / "ops" / "desk" / "x.py", seat))
+    assert_allowed(edit(s / "HOUSE-INSTRUCTIONS.md", seat))
+    # its own worktree and report stay inside the fence
+    assert_allowed(write(roots.wt / JOB_WT / "x.md", seat))
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        lambda r: scratch(r, "other"),
+        lambda r: scratch(r, "other") / "diff.md",
+        lambda r: scratch(r, "jobx") / "diff.md",
+        lambda r: scratch(r) / ".." / "other-check" / "diff.md",
+        lambda r: r.wt / "agy-trial" / "scratch" / "tribunal-bars-0920" / "job-check-x" / "diff.md",
+        lambda r: r.wt / "agy-trial" / "scratch" / "tribunal-bars-0920" / "diff.md",
+    ],
+)
+def test_g10_the_check_under_another_jobs_scratch_is_denied(roots, target):
+    assert_denied(write(target(roots), make_seat(roots, "check")), G5_FENCE)
+
+
+@pytest.mark.parametrize("kind", ["build", "devfix", "deploy", "brain"])
+def test_g10_another_kind_under_the_scratch_is_denied(roots, kind):
+    seat = make_seat(roots, kind)
+    assert_denied(write(scratch(roots) / "diff.md", seat), G5_FENCE)
+    assert_denied(edit(scratch(roots) / "diff.md", seat), G5_FENCE)
+
+
+def test_g10_a_check_card_with_no_job_has_no_scratch(roots):
+    seat = make_seat(roots, "check")
+    card = prompts(roots) / "2026-01-01" / "01-check-card.md"
+    card.write_text(card.read_text().replace("JOB: job\n", ""))
+    assert_denied(write(scratch(roots) / "diff.md", seat), G5_FENCE)
+    assert_denied(write(roots.wt / "agy-trial" / "scratch" / "tribunal-bars-0920" / "-check" / "x", seat), G5_FENCE)
+    assert_allowed(write(roots.wt / JOB_WT / "x.md", seat))
+
+
 # ---- G6 STOP LINE WHILE DIRTY ------------------------------------------------------------
 
 STOP_LINES = [
@@ -651,7 +740,7 @@ LAUNCHES = [
 ]
 
 
-@pytest.mark.parametrize("kind", WORKERS + ["deploy"])
+@pytest.mark.parametrize("kind", ["build", "devfix", "deploy"])
 @pytest.mark.parametrize("command", LAUNCHES[:-1])
 def test_g7_a_second_session_from_a_worker_is_denied(roots, kind, command):
     assert_denied(run(command, make_seat(roots, kind)), G7_ROUTE)
@@ -670,6 +759,61 @@ def test_g7_the_desk_the_brain_and_an_unknown_seat_launch(roots, kind, command):
 @pytest.mark.parametrize("command", ["ls claude", "grep -n codex f", "sh /x/desk-launch.sh build x"])
 def test_g7_the_word_elsewhere_is_allowed(roots, command):
     assert_allowed(run(command, make_seat(roots, "build")))
+
+
+# ---- G9 CHECK HOUSE CALLS (CHECK-HUB.md line 10's three house strings) ------------------
+
+HOUSE_CALLS = [
+    "grok --version",
+    "agy --version",
+    'codex exec --skip-git-repo-check -m model-x -s read-only -c model_reasoning_effort="high" '
+    '"Reply with only the word OK." < /dev/null',
+    'grok --sandbox cobalt-job --allow "Write(/x/agy-trial/scratch/tribunal-bars-0920/**)" -p "x"',
+    'agy --model model-y --mode accept-edits --sandbox --print="x"',
+]
+
+
+@pytest.mark.parametrize("command", HOUSE_CALLS)
+def test_g9_the_check_types_each_house_string(roots, command):
+    assert_allowed(run(command, make_seat(roots, "check")))
+    # the check enters <AGY> right before the house launch (CHECK-HUB.md line 49)
+    assert_allowed(run(command, make_seat(roots, "check", cwd=roots.wt / "agy-trial")))
+
+
+CHECK_LAUNCHES_DENIED = [
+    'codex exec -s read-only "x"',
+    'codex exec --skip-git-repo-check -m model-x "x"',
+    'codex exec --skip-git-repo-check -m model-x -s workspace-write "x"',
+    'codex exec --skip-git-repo-check -m model-x -s read-only-x "x"',
+    'codex --skip-git-repo-check -m model-x -s read-only "x"',
+    'claude --bg "Read x"',
+    "claude -p x",
+    "/usr/local/bin/claude -p x",
+    "FOO=1 claude -p x",
+    "/usr/local/bin/grok -p x",
+    "FOO=1 grok -p x",
+    "FOO=1 agy x",
+    "grok",
+    "grep -n X f | grok -p x",
+    "grok -p x | claude -p y",
+    "agy x | agy y",
+]
+
+
+@pytest.mark.parametrize("command", CHECK_LAUNCHES_DENIED)
+def test_g9_any_other_launch_from_the_check_stays_denied(roots, command):
+    assert_denied(run(command, make_seat(roots, "check")), G7_ROUTE)
+
+
+@pytest.mark.parametrize("kind", ["build", "devfix", "deploy"])
+@pytest.mark.parametrize("command", HOUSE_CALLS)
+def test_g9_another_worker_kind_typing_a_house_string_is_denied(roots, kind, command):
+    assert_denied(run(command, make_seat(roots, kind)), G7_ROUTE)
+
+
+def test_g9_a_worker_with_no_hub_typing_a_house_string_is_denied(roots):
+    seat = {"cwd": str(roots.wt / "some-0101"), "transcript": ""}
+    assert_denied(run("grok --version", seat), G7_ROUTE)
 
 
 # ---- the seat's kind (X2) ----------------------------------------------------------------
