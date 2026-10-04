@@ -28,8 +28,9 @@
 #        judgment seat finds a misread, or the worker measures above 250,000 tokens)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh desk                                   (its successor)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh prompt "<absolute prompt path>"        (a one-off prompt)
-#   sh /Users/cobalt/.claude/ops/desk-launch.sh brain "<absolute handover path>"       (the standing
-#        brain seat on BRAIN-HUB.md, card 07 brain-hub; after he has stopped the brain before it)
+#   sh /Users/cobalt/.claude/ops/desk-launch.sh brain "<absolute handover path>" [--fable]  (the
+#        standing brain seat on BRAIN-HUB.md, card 07 brain-hub; after he has stopped the brain
+#        before it; Opus by default, `--fable` for a design or high-effort session, card 07b P5)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh close <YYYY-MM-DD> [<step>]            (the nightly close
 #        of that day: after the 21:00 ET pause on the day itself, or any time later for a missed
 #        night — the morning desk's first act; <step> = a NEW worker at that CONTINUE step)
@@ -66,7 +67,8 @@
 #           `claude --bg "Read '<that prompt file>' and follow it exactly." …` it holds (a line
 #           of its own, or a backticked span), for a drafter, a tribunal and its seats.
 #           READ-ONLY LINES ONLY: every write-path launch is a fixed file.
-#   brain : `cd /Users/cobalt/cobalt`; BRAIN-HUB.md's `claude --bg` line with <handover> filled.
+#   brain : `cd /Users/cobalt/cobalt`; BRAIN-HUB.md's `claude --bg` line with <handover> filled;
+#           with `--fable`, its one ` --model claude-opus-5-5 ` becomes ` --model claude-fable-5-1 `.
 #   close : `cd /Users/cobalt/cobalt`; CLOSE-HUB.md's `claude --bg` line, `<date>` and `<mmdd>`
 #           filled (a resume: its message starting `CONTINUE: <step>. `).
 #   install-ops: no launch. Every regular file ops/desk/*.sh and ops/desk/*.py of the repo
@@ -108,7 +110,8 @@
 #   - kind `brain`: a handover that is not a .md file directly under $PROMPTS/<YYYY-MM-DD>/, holds
 #     a character outside [A-Za-z0-9 ._/-] or '..', does not exist, or still holds a «FILL token;
 #     a BRAIN-HUB.md not installed, not committed or changed, without exactly one launch line, or
-#     whose line does not name the seat `brain`; and ANY live session named `brain` (read from
+#     whose line does not name the seat `brain` or does not hold ` --model claude-opus-5-5 ` exactly
+#     once; a third argument other than `--fable`; and ANY live session named `brain` (read from
 #     desk-list.sh beside this script; unreadable = refused): a brain is stopped only on his word
 #     (2026-09-30 R76), so its successor launches after he has stopped it;
 #   - PASS-2 on anything but a check whose report's last line is pass 1's `CHECK DONE` with
@@ -226,7 +229,7 @@ watch_line() {
     printf 'WATCH: sh %s/desk-watch.sh %s "%s"' "$here" "$1" "$2"
 }
 
-[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> | close <YYYY-MM-DD> [<resume step>] | install-ops"
+[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> [--fable] | close <YYYY-MM-DD> [<resume step>] | install-ops"
 kind=$1
 # recut takes the card and nothing else, refused before anything runs (card 03 L5, AMENDED
 # 10-03, ASK DESK 13: an ignored argument is a guess)
@@ -411,7 +414,10 @@ fi
 
 # ---- kind brain: the standing brain seat on its handover file (card 07 brain-hub) -------------
 if [ "$kind" = "brain" ]; then
-    [ "$#" -eq 2 ] || refuse "usage: desk-launch.sh brain <absolute handover path>"
+    # card 07b P5 (his 10-04 R189): the line's Opus by default; `--fable` puts Fable on it instead,
+    # for a design or high-effort session the brain itself asks for; any other value is refused
+    { [ "$#" -eq 2 ] || { [ "$#" -eq 3 ] && [ "$3" = "--fable" ]; }; } \
+        || refuse "usage: desk-launch.sh brain <absolute handover path> [--fable]"
     handover=$2
     case "$handover" in
         *..*) refuse "the handover path holds '..': $handover" ;;
@@ -452,6 +458,14 @@ if [ "$kind" = "brain" ]; then
     case "$line" in
         *bypassPermissions*) refuse "the brain line carries bypassPermissions (L55)" ;;
     esac
+    # exactly one Opus word on the hub's line; `--fable` replaces that word and nothing else
+    opus=" --model claude-opus-5-5 "
+    after=${line#*"$opus"}
+    # the blank the first word ends on may open a second: look again from that blank
+    case " $after" in
+        " $line"|*"$opus"*) refuse "the brain line does not default to --model claude-opus-5-5" ;;
+    esac
+    [ "$#" -eq 2 ] || line="${line%%"$opus"*} --model claude-fable-5-1 $after"
     case "$line" in
         *"<"*|*">"*) refuse "the launch line still holds an unfilled token" ;;
     esac

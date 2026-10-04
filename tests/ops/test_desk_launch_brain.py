@@ -455,11 +455,15 @@ def test_p5_a_flag_after_fable_is_refused(desk):
     refused(done, "usage: desk-launch.sh brain <absolute handover path> [--fable]")
 
 
+@pytest.mark.parametrize("hub_line", [
+    STANDIN_LINE.replace(OPUS, FABLE),                                   # no Opus word
+    STANDIN_LINE.replace("--permission-mode", f"{OPUS} --permission-mode"),  # the Opus word twice
+], ids=["no-opus", "opus-twice"])
 @pytest.mark.parametrize("flag", [[], ["--fable"]])
-def test_p5_a_hub_line_that_does_not_default_to_opus_is_refused(desk, flag):
+def test_p5_a_hub_line_that_does_not_default_to_opus_is_refused(desk, flag, hub_line):
     """`--fable` replaces the Opus word; a line without exactly one Opus word is refused, never
     launched on whatever model it names."""
-    desk.hub.write_text("# BRAIN-HUB\n\n" + STANDIN_LINE.replace(OPUS, FABLE) + "\n")
+    desk.hub.write_text("# BRAIN-HUB\n\n" + hub_line + "\n")
     desk.commit("fable default")
     done = desk.launch_run("brain", str(desk.handover), *flag)
     refused(done, f"the brain line does not default to {OPUS}")
