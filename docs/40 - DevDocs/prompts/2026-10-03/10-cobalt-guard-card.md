@@ -2,15 +2,15 @@ JOB: cobalt-guard
 LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/cobalt-guard-1004
 WORKTREE: cobalt-guard-1004
-BASE: «FILL: main's head on Sunday 10-04 after 13:00 ET (set 3 DEPLOYED if it is; else a8d8a848)»
+BASE: a8d8a848
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/cobalt-guard-1004/docs/40 - DevDocs/reports/cobalt-guard-build-2026-10-04.md
 CHECK REPORT:
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 DB: none
-RULINGS: 2026-10-02 R47, 2026-10-03 «FILL: R<n> "Make it Sunday."», 2026-10-03 «FILL: R<n> "Allow read-only pipes."», 2026-10-03 «FILL: R<n> mods and hooks need no outside house»
+RULINGS: 2026-10-02 R47, 2026-10-03 R32, 2026-10-03 R33, 2026-10-03 R12
 
 ## ROWS
 
