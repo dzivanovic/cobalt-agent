@@ -28,6 +28,8 @@
 #        judgment seat finds a misread, or the worker measures above 250,000 tokens)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh desk                                   (its successor)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh prompt "<absolute prompt path>"        (a one-off prompt)
+#   sh /Users/cobalt/.claude/ops/desk-launch.sh brain "<absolute handover path>"       (the standing
+#        brain seat on BRAIN-HUB.md, card 07 brain-hub; after he has stopped the brain before it)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh close <YYYY-MM-DD> [<step>]            (the nightly close
 #        of that day: after the 21:00 ET pause on the day itself, or any time later for a missed
 #        night — the morning desk's first act; <step> = a NEW worker at that CONTINUE step)
@@ -62,8 +64,9 @@
 #           `claude --bg …` span on the `- LAUNCH` line of prompts/CTO-DESK-WAKEUP.md.
 #   prompt: `cd <the cwd the prompt names>`; the prompt's own launch line — the ONE
 #           `claude --bg "Read '<that prompt file>' and follow it exactly." …` it holds (a line
-#           of its own, or a backticked span), for a drafter, a tribunal and its seats, a brain
-#           tab. READ-ONLY LINES ONLY: every write-path launch is a fixed file.
+#           of its own, or a backticked span), for a drafter, a tribunal and its seats.
+#           READ-ONLY LINES ONLY: every write-path launch is a fixed file.
+#   brain : `cd /Users/cobalt/cobalt`; BRAIN-HUB.md's `claude --bg` line with <handover> filled.
 #   close : `cd /Users/cobalt/cobalt`; CLOSE-HUB.md's `claude --bg` line, `<date>` and `<mmdd>`
 #           filled (a resume: its message starting `CONTINUE: <step>. `).
 #   install-ops: no launch. Every regular file ops/desk/*.sh and ops/desk/*.py of the repo
@@ -86,7 +89,7 @@
 #
 # IT REFUSES (exit 1, "REFUSED: <reason>" on stderr, nothing run):
 #   - to run at all from a path that holds a space (install under /Users/cobalt/.claude/ops/);
-#   - a kind that is none of build, check, deploy, devfix, recut, desk, prompt, close, install-ops; a fixed file, a wake-up
+#   - a kind that is none of build, check, deploy, devfix, recut, desk, prompt, brain, close, install-ops; a fixed file, a wake-up
 #     file or a prompt file still a draft, not committed on main, or changed since its commit;
 #   - kind `recut`: any argument after the card ("recut takes one argument, the card"), before
 #     the desk-size guard;
@@ -99,8 +102,15 @@
 #     in their `git -C <path>` spelling, and the whole-git `Bash(git *)`), `uv run`,
 #     `launchctl`, `COBALT_ENV=`; a line without the two dialog denies (L63), without
 #     `--remote-control` and `--name`, or that reads another file than the one named; a card
-#     or a fixed file handed over as a prompt; a prompt that names no cwd;
+#     or a fixed file handed over as a prompt; a prompt that names no cwd; a line that names
+#     `--name brain` or `--remote-control brain` (the brain seat launches by the kind `brain` only);
 #   - kind `desk`: a wake-up line that does not name `cto-desk`;
+#   - kind `brain`: a handover that is not a .md file directly under $PROMPTS/<YYYY-MM-DD>/, holds
+#     a character outside [A-Za-z0-9 ._/-] or '..', does not exist, or still holds a «FILL token;
+#     a BRAIN-HUB.md not installed, not committed or changed, without exactly one launch line, or
+#     whose line does not name the seat `brain`; and ANY live session named `brain` (read from
+#     desk-list.sh beside this script; unreadable = refused): a brain is stopped only on his word
+#     (2026-09-30 R76), so its successor launches after he has stopped it;
 #   - PASS-2 on anything but a check whose report's last line is pass 1's `CHECK DONE` with
 #     `house B: needed`; a first check launch whose report already exists;
 #   - an incomplete card: a header key its kind needs is empty, a «FILL token stands
@@ -216,7 +226,7 @@ watch_line() {
     printf 'WATCH: sh %s/desk-watch.sh %s "%s"' "$here" "$1" "$2"
 }
 
-[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | close <YYYY-MM-DD> [<resume step>] | install-ops"
+[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> | close <YYYY-MM-DD> [<resume step>] | install-ops"
 kind=$1
 # recut takes the card and nothing else, refused before anything runs (card 03 L5, AMENDED
 # 10-03, ASK DESK 13: an ignored argument is a guess)
@@ -339,6 +349,16 @@ if [ "$kind" = "prompt" ]; then
     line=$(sed -n 's/^\(claude --bg "Read .*\)$/\1/p' "$pfile")
     [ -n "$line" ] || line=$(sed -n 's/^.*`\(claude --bg "Read [^`]*\)`.*$/\1/p' "$pfile")
     [ -n "$line" ] || refuse "the launch line is neither a line of its own nor a backticked span: $pfile"
+    # the brain seat has one path, the kind `brain` (card 07 B5, check O1; L3): each value of
+    # --name and --remote-control as eval hands it to claude, blanks and quotes stripped (check r2 O1)
+    seats=$(printf '%s\n' "$line" | grep -o -e '--name[ =]*[^ ]*' -e '--remote-control[ =]*[^ ]*' | sed -e 's/^--[a-z-]*[ =]*//' | tr -d "\"'")
+    case "
+$seats
+" in
+        *"
+brain
+"*) refuse "a brain seat launches by desk-launch.sh brain <handover>" ;;
+    esac
     case "$line" in
         *"Read '$pfile' and follow it exactly."*) ;;
         *) refuse "the launch line does not read this prompt file by its absolute path" ;;
@@ -389,6 +409,67 @@ if [ "$kind" = "prompt" ]; then
     run_launch "$dir" "$line" "reminder: one Grok hub at a time (L15); the tab and the §5 row are the desk's"
 fi
 
+# ---- kind brain: the standing brain seat on its handover file (card 07 brain-hub) -------------
+if [ "$kind" = "brain" ]; then
+    [ "$#" -eq 2 ] || refuse "usage: desk-launch.sh brain <absolute handover path>"
+    handover=$2
+    case "$handover" in
+        *..*) refuse "the handover path holds '..': $handover" ;;
+        *[!A-Za-z0-9\ ._/-]*) refuse "the handover path holds a character outside [A-Za-z0-9 ._/-]: $handover" ;;
+    esac
+    # a .md file directly under $PROMPTS/<YYYY-MM-DD>/
+    hrest=${handover#"$PROMPTS"/}
+    hday=${hrest%%/*}
+    hname=${hrest#*/}
+    case "$handover" in
+        "$PROMPTS"/*/*.md) ;;
+        *) refuse "a brain handover lives under $PROMPTS/<YYYY-MM-DD>/: $handover" ;;
+    esac
+    case "$hday" in
+        20[0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]) ;;
+        *) refuse "a brain handover lives under $PROMPTS/<YYYY-MM-DD>/, not '$hday': $handover" ;;
+    esac
+    case "$hname" in
+        */*) refuse "a brain handover lives directly under $PROMPTS/$hday/: $handover" ;;
+    esac
+    [ -f "$handover" ] || refuse "no such handover: $handover"
+    if grep -n '«FILL' "$handover" >&2; then
+        refuse "the handover still holds a fill token (the lines above): $handover"
+    fi
+    fixed="$PROMPTS/BRAIN-HUB.md"
+    [ -f "$fixed" ] || refuse "the fixed file is not installed: $fixed"
+    if grep -q '«INSTALL' "$fixed"; then
+        refuse "the fixed file still carries its «INSTALL token (his approval row is not filled): $fixed"
+    fi
+    committed "the fixed file" "$fixed"
+    n=$(grep -c '^claude --bg ' "$fixed")
+    [ "$n" -eq 1 ] || refuse "the fixed file must hold exactly one launch line; found $n in $fixed"
+    line=$(grep '^claude --bg ' "$fixed" | sed -e "s|<handover>|$handover|g")
+    case "$line" in
+        *"--remote-control brain --name brain"*) ;;
+        *) refuse "the brain line does not name the seat brain (--remote-control brain --name brain)" ;;
+    esac
+    case "$line" in
+        *bypassPermissions*) refuse "the brain line carries bypassPermissions (L55)" ;;
+    esac
+    case "$line" in
+        *"<"*|*">"*) refuse "the launch line still holds an unfilled token" ;;
+    esac
+    check_paths "$line"
+    # never beside a live brain (his 2026-09-30 R76: a brain is stopped only on his word); the
+    # session list is desk-list.sh beside this script, rows "id · name · cwd · status · state"
+    list="$(dirname "$0")/desk-list.sh"
+    rows=$(sh "$list" 2>/dev/null) || refuse "the session list is unreadable ($list); a brain never launches beside a brain it cannot rule out"
+    live=$(printf '%s\n' "$rows" | while IFS= read -r row; do
+        rest=${row#* · }
+        if [ "$rest" != "$row" ] && [ "${rest%% · *}" = "brain" ]; then
+            printf '%s ' "${row%% · *}"
+        fi
+    done)
+    [ -z "$live" ] || refuse "a session named brain is live (${live% }): a brain is stopped only on his word (2026-09-30 R76); launch its successor after he has stopped it"
+    run_launch "$REPO" "$line" "reminder: the tab and the §5 row are the desk's; the brain is stopped only on his word (R76)"
+fi
+
 # ---- kind install-ops: link the ops scripts into the link folder; launches nothing (card 16) --
 # ln -s without -f never replaces a name that exists; an existing name, a link (even a dangling
 # one) or a plain file, is KEPT untouched.
@@ -434,7 +515,7 @@ case "$kind" in
     check)  fixed="$PROMPTS/CHECK-HUB.md" ;;
     deploy|recut) fixed="$PROMPTS/DEPLOY-HUB.md" ;;
     devfix) fixed="$PROMPTS/DEVFIX-HUB.md" ;;
-    *) refuse "kind '$kind' is none of build, check, deploy, devfix, recut, desk, prompt, close, install-ops" ;;
+    *) refuse "kind '$kind' is none of build, check, deploy, devfix, recut, desk, prompt, brain, close, install-ops" ;;
 esac
 [ -f "$fixed" ] || refuse "the fixed file is not installed: $fixed"
 if grep -q '«INSTALL' "$fixed"; then

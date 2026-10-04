@@ -205,3 +205,16 @@ No git write string, no launch string, no migrate string but `--proof-only`, no 
 | `Bash(COBALT_ENV=dev uv run pytest *)` | standing (§1) | the card's `PROOF TEST` | `cobalt_dev`, inside the test's own transaction | production; a vault |
 
 Deny: `AskUserQuestion`, `EnterWorktree`, `Bash(git push*)` (standing), and **NEW** (R26) `Bash(COBALT_ENV=production*)` — no production string can match on this line.
+
+## 7. `BRAIN-HUB.md` — THE STANDING BRAIN SEAT, launched on a handover file (card `prompts/2026-10-03/07-brain-hub-card.md`; his 2026-10-02 R54, FOR DEJAN 13 = A): 13 allow, 3 deny · `--model claude-fable-5-1` · `--permission-mode auto` · launched from `/Users/cobalt/cobalt` by `desk-launch.sh brain "<handover>"` · `--add-dir /Users/cobalt/Vault /Users/cobalt/cobalt /Users/cobalt/cobalt-wt`
+
+NONE NEW: every string stands, in the same order, on the line of `prompts/2026-10-02/23-brain-judge.md`, the approved shape and line (his 2026-10-02 R131), but for one pair: `23`'s bare `"Write"` and `"Edit"` are REPLACED by `"Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/reports/**)"` and `"Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/prompts/20*/**)"` (a narrowing: judge 10-03, brain-hub build DECISION 3, card `07` row B4; on his veto list). An Edit rule governs the Write tool on the same glob (`BUILD-HUB.md` line 14); the fixed files at `prompts/` root sit outside the second glob by construction. `tests/ops/test_desk_launch_brain.py` compares the two lines from `--model` to the end, the pair replaced. It is a read-only seat by its file (`## THE STANDARD` 13 of `reports/brain-unattended-2026-10-02.md`).
+
+| string | status | for | can touch | never touches (by the hub's fence) |
+|---|---|---|---|---|
+| `Read` | standing (`23`) | the handover, the direction, the design report, a named section | read only | — |
+| `Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/reports/**)` · `Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/prompts/20*/**)` | REPLACES `23`'s bare `Write` · `Edit` (judge 10-03, brain-hub build DECISION 3, row B4; his veto list) | the Edit and Write tools on answer files and the direction file under `reports/`, cards, read-only prompts and the handover under `prompts/<date>/` | files under `reports/` (the desk report among them: the hub's fence forbids it) and under the dated `prompts/20*/` folders | memory, LAWS, the fixed files at `prompts/` root, scripts, code, configs, settings, a worktree, the vault |
+| `Bash(ls *)` · `Bash(grep *)` · `Bash(tail *)` · `Bash(sed -n *)` · `Bash(wc *)` · `Bash(date*)` | standing (`23`) | reads, the desk report's tail, the clock | read only | never `.env` |
+| `Bash(git -C /Users/cobalt/cobalt log*)` · `… show*` · `… diff*` · `… ls-tree*` | standing (`23`) | a ruling row's commit, a file at a commit, a branch's tree | read only | — |
+
+Deny: `AskUserQuestion`, `EnterWorktree`, `Bash(git push*)` (standing). `desk-launch.sh brain` refuses a handover outside `prompts/<YYYY-MM-DD>/` or holding a fill token, a hub still carrying its install token, and any live session named `brain` (his 2026-09-30 R76: a brain is stopped only on his word, so the successor launches after he has stopped it).

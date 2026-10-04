@@ -257,10 +257,10 @@ class World:
         # the SHIPS row's committed check report (desk-launch.sh, card 21 L3, R41)
         (self.reports / "fy-ship-check.md").write_text(
             f"CHECK DONE · job: fy · tip: {base} · held unfixed: 0 · ready: YES\n")
-        self.prompt = day / "04-brain-prompt.md"
+        self.prompt = day / "04-survey-prompt.md"
         self.prompt.write_text(
             f"cd {self.repo}\n\nclaude --bg \"Read '{self.prompt}' and follow it exactly.\" "
-            "--permission-mode auto --remote-control brain --name brain "
+            "--permission-mode auto --remote-control survey --name survey "
             '--disallowedTools "AskUserQuestion" "EnterWorktree"\n')
         git(self.repo, "add", "docs")
         git(self.repo, "commit", "-q", "-m", "fixture files")
