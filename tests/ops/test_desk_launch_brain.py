@@ -23,6 +23,9 @@ LAUNCH = REPO / "ops" / "desk" / "desk-launch.sh"
 HUBS = REPO / "docs" / "40 - DevDocs" / "prompts"
 FILL = "«FILL"  # the fill token, built so this file never spells it
 INSTALL = "«INSTALL"
+# `07b` P5 (his 10-04 R189): the brain's line defaults to Opus; `--fable` puts Fable on it instead
+OPUS = "--model claude-opus-5-5"
+FABLE = "--model claude-fable-5-1"
 
 GIT_ENV = {
     "GIT_AUTHOR_NAME": "test",
@@ -36,7 +39,7 @@ GIT_ENV = {
 # a constructed fixed file: its one line carries the one token `brain` fills
 STANDIN_LINE = (
     "claude --bg \"Read '/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/BRAIN-HUB.md' and "
-    "follow it exactly. HANDOVER: '<handover>'\" --model claude-fable-5-1 --permission-mode auto "
+    "follow it exactly. HANDOVER: '<handover>'\" --model claude-opus-5-5 --permission-mode auto "
     "--remote-control brain --name brain --allowedTools \"Read\" "
     "\"Bash(git -C /Users/cobalt/cobalt log*)\" --disallowedTools \"AskUserQuestion\" "
     "\"EnterWorktree\" \"Bash(git push*)\" --add-dir /Users/cobalt/cobalt"
@@ -286,16 +289,17 @@ def test_the_trees_brain_hub_line_is_printed_with_its_handover_filled(tmp_path):
     out = done.stdout.splitlines()
     assert out == [f"cd {desk.repo}", desk.filled(lines[0])]
     assert "<" not in out[-1] and ">" not in out[-1]
-    assert "--model claude-fable-5-1 --permission-mode auto --remote-control brain --name brain" in out[-1]
+    assert "--model claude-opus-5-5 --permission-mode auto --remote-control brain --name brain" in out[-1]
 
 
 def test_the_trees_brain_hub_allow_list_is_23s_byte_for_byte_but_the_write_pair():
     """NOT IN THIS JOB: the brain's allow list is `23`'s line, no string added or dropped; B4
-    replaces `23`'s bare `"Write" "Edit"` by the two scoped Edit strings, in the same place."""
+    replaces `23`'s bare `"Write" "Edit"` by the two scoped Edit strings, in the same place.
+    `07b` P5: the model word is the one variable — `23`'s Fable, the hub's Opus default."""
     hub = launch_line((HUBS / "BRAIN-HUB.md").read_text())
     judge = launch_line((HUBS / "2026-10-02" / "23-brain-judge.md").read_text())
     assert hub[hub.index(" --model "):hub.index(" --allowedTools ")] == \
-        judge[judge.index(" --model "):judge.index(" --allowedTools ")]
+        judge[judge.index(" --model "):judge.index(" --allowedTools ")].replace(FABLE, OPUS)
     allow = judge[judge.index(" --allowedTools "):]
     assert allow.count(f" {BARE_PAIR} ") == 1
     assert hub[hub.index(" --allowedTools "):] == allow.replace(f" {BARE_PAIR} ", f" {SCOPED_PAIR} ")
@@ -410,3 +414,84 @@ def test_a_hub_with_the_bare_pair_fails_the_scope_check(tmp_path):
     assert f" {BARE_PAIR} " in line
     with pytest.raises(AssertionError):
         assert_writes_scoped(line)
+
+
+# ---- 07b P5: the brain's model — Opus by default, `--fable` on the brain's own ask -------------
+
+
+def test_p5_the_default_line_holds_opus(desk):
+    done = desk.launch_run("brain", str(desk.handover))
+    assert done.returncode == 0, done.stderr
+    line = done.stdout.splitlines()[-1]
+    assert f" {OPUS} " in line and "claude-fable-5-1" not in line, line
+
+
+@pytest.mark.parametrize("dry", [True, False])
+def test_p5_fable_puts_fable_on_the_line_instead(desk, dry):
+    done = desk.launch_run("brain", str(desk.handover), "--fable", dry=dry)
+    assert done.returncode == 0, done.stderr
+    if dry:
+        assert done.stdout.splitlines() == [
+            f"cd {desk.repo}", desk.filled(STANDIN_LINE).replace(OPUS, FABLE)]
+        return
+    calls = desk.calls.read_text().splitlines()
+    assert len(calls) == 1
+    args = calls[0].split(" | ", 1)[1]
+    assert f" {FABLE} " in args and "claude-opus-5-5" not in args, args
+
+
+@pytest.mark.parametrize("value", [
+    "--opus", "fable", "--Fable", "--fable=1", "--model", "claude-fable-5-1", "-f", "",
+])
+@pytest.mark.parametrize("dry", [True, False])
+def test_p5_any_other_value_is_refused(desk, value, dry):
+    done = desk.launch_run("brain", str(desk.handover), value, dry=dry)
+    refused(done, "usage: desk-launch.sh brain <absolute handover path> [--fable]")
+    assert not desk.calls.exists()
+
+
+def test_p5_a_flag_after_fable_is_refused(desk):
+    done = desk.launch_run("brain", str(desk.handover), "--fable", "--fable")
+    refused(done, "usage: desk-launch.sh brain <absolute handover path> [--fable]")
+
+
+@pytest.mark.parametrize("flag", [[], ["--fable"]])
+def test_p5_a_hub_line_that_does_not_default_to_opus_is_refused(desk, flag):
+    """`--fable` replaces the Opus word; a line without exactly one Opus word is refused, never
+    launched on whatever model it names."""
+    desk.hub.write_text("# BRAIN-HUB\n\n" + STANDIN_LINE.replace(OPUS, FABLE) + "\n")
+    desk.commit("fable default")
+    done = desk.launch_run("brain", str(desk.handover), *flag)
+    refused(done, f"the brain line does not default to {OPUS}")
+
+
+def test_p5_the_trees_hub_line_takes_fable_on_the_flag(tmp_path):
+    text = (HUBS / "BRAIN-HUB.md").read_text()
+    desk = Desk(tmp_path, text.replace(INSTALL, "INSTALLED-IN-TEST"))
+    done = desk.launch_run("brain", str(desk.handover), "--fable")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines()[-1] == desk.filled(launch_line(text)).replace(OPUS, FABLE)
+
+
+def section(text: str, head: str) -> str:
+    body = text.split(f"\n{head}\n", 1)[1]
+    return body.split("\n## ", 1)[0]
+
+
+def test_p5_the_hubs_measure_asks_the_desk_for_a_successor_and_names_its_model():
+    """His 10-04 R188, R189, R191: at 500,000 the brain messages `cto-desk` for its own
+    replacement, naming the next seat's model; it measures every ten answers."""
+    text = (HUBS / "BRAIN-HUB.md").read_text()
+    measure = section(text, "## MEASURE")
+    assert "every ten answers" in measure
+    assert "500,000" in measure
+    assert "MESSAGE `cto-desk`" in measure and "replacement" in measure
+    assert "`--fable`" in measure and "design task is open" in measure
+    assert "MODEL: Opus 5.5 (`claude-opus-5-5`)" in text
+
+
+def test_p5_the_standing_list_names_the_two_model_words_as_the_only_variable():
+    text = (HUBS / "STANDING-LIST.md").read_text()
+    seven = text.split("\n## 7. `BRAIN-HUB.md`", 1)[1]
+    assert f"`{OPUS}`" in seven and f"`{FABLE}`" in seven
+    assert "the only variable" in seven
