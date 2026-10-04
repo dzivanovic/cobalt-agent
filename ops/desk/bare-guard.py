@@ -482,9 +482,12 @@ def g1(command):
         text = command
         found, quote, cuts = scan(command)
     if not found:
-        # B4: a lone sort, uniq or awk meets the checks of a pipe segment
+        # B4: a lone sort, uniq or awk meets the checks of a pipe segment; its verb is read past
+        # NAME=value words and a path, as G3 reads it (a pipe segment of either shape is denied)
         ws = words(text)
-        p = filter_problem(ws) if ws else None
+        while ws and ASSIGN.match(ws[0]):
+            ws = ws[1:]
+        p = filter_problem([os.path.basename(ws[0])] + ws[1:]) if ws else None
         return BLOCK.format(found=p) if p else None
     if found == ["a pipe `|`"]:
         problems = pipe_problems(text, cuts)
