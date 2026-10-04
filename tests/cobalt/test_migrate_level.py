@@ -156,6 +156,7 @@ def test_proof_only_ends_with_the_fingerprint_then_the_tables_line(monkeypatch, 
     monkeypatch.setattr(cli, "_probe_all", lambda c: {
         t: {"schema": "system" if creators[t] <= "0011" else None} for t in CREATED_TABLES
     })
+    monkeypatch.setattr(cli, "_slot_lines", lambda conn: [])
     monkeypatch.setattr(cli, "_print_probe", lambda *a, **k: print("<proof table>"))
     monkeypatch.setattr(cli, "_code_line", lambda: "code: constructed")
     cli.cmd_migrate(argparse.Namespace(

@@ -137,6 +137,55 @@ def _guarded_reach(item, tripped: list) -> None:
         raise
 
 
+# ---------------------------------------------------------------------
+# slot-guard S2: the with-DB suite checks column-slot headroom first
+# ---------------------------------------------------------------------
+
+#: The `SLOTS WARN` lines a with-DB run prints in its terminal summary.
+_SLOTS_WARN = pytest.StashKey[list]()
+
+
+def pytest_sessionstart(session):
+    """Before any test, when the Postgres settings are present: read
+    `cobalt_dev`'s column slots. A table with fewer than
+    `SLOT_FAIL_HEADROOM` free slots stops the run (exit 3) before a with-DB
+    gate can fail half-way on `TooManyColumns`; a table at or above
+    `SLOT_WARN_AT` is named in the terminal summary. Offline runs are
+    untouched. A nested session (a pytester run started from a running test,
+    when pytest has set `PYTEST_CURRENT_TEST`) never opens `cobalt_dev`; a
+    top-level session start still reads the slots."""
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return
+    if not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")):
+        return
+    from cobalt.db_migrations.cli import SLOT_WARN_AT
+    from cobalt.db_migrations.dev_rebuild import (
+        SLOT_FAIL_HEADROOM, SLOT_LIMIT, slot_lines, slot_report, slot_verdict,
+    )
+
+    conn = REAL_CONNECT(env.DEV_DB_NAME, side=db.Side.SYSTEM)
+    try:
+        rows = slot_report(conn)
+    finally:
+        conn.rollback()
+        conn.close()
+    verdict = slot_verdict(rows, SLOT_WARN_AT, SLOT_FAIL_HEADROOM)
+    if verdict == "fail":
+        schema, table, max_attnum = max(rows, key=lambda r: r[2])[:3]
+        pytest.exit(
+            f"cobalt_dev column slots: {schema}.{table} {max_attnum} of {SLOT_LIMIT} — run a "
+            f"devfix (cobalt db dev-rebuild {schema}.{table}) before any with-DB gate",
+            returncode=3,
+        )
+    if verdict == "warn":
+        session.config.stash[_SLOTS_WARN] = slot_lines(rows, SLOT_WARN_AT)
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    for line in config.stash.get(_SLOTS_WARN, []):
+        terminalreporter.write_line(line)
+
+
 @pytest.fixture(autouse=True)
 def mock_postgres_memory():
     """Neutralise the repo-root psycopg mock for new-core tests."""
