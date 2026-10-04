@@ -998,8 +998,11 @@ def _stored_lines(store: DrcStore, day: date, view: dict, out: DayView) -> None:
     outcomes = view["day"]["derived"].get("resolves") or []
     resolved = [r for r in stored if r["kind"] == "trade" and r["inputs"].get("resolve_id")]
     named = {o["resolve_id"] for o in outcomes} | {r["inputs"]["resolve_id"] for r in resolved}
-    superseded = store.superseded_stated_ids(named) if named else set()
-    out.resolves = [units.stale_resolve(i, store.stated_day(i).isoformat()) for i in sorted(superseded)]
+    superseded = store.superseded_stated_ids(named) if named else {}
+    # K2's effect day of the restatement (judge R278 D1), as the note's line.
+    out.resolves = [
+        units.stale_resolve(i, store.effect_day(superseded[i], i).isoformat()) for i in sorted(superseded)
+    ]
     out.resolves += [
         f"resolve #{o['resolve_id']} {o['trade_id']}: {o['reason']}"
         for o in outcomes if o["resolve_id"] not in superseded

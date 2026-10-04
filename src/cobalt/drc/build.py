@@ -52,6 +52,7 @@ from __future__ import annotations
 import functools
 import json
 import re
+import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
@@ -343,6 +344,13 @@ def _days_held(opened: date, day: date) -> int:
         held += 1
 
 
+def _calendar_gap(error: CalendarError) -> str:
+    """K3-1's `day` figure when the calendar does not cover the span: the
+    uncovered year, never the error's text (it carries a path, D7)."""
+    year = re.search(r"no NYSE calendar for (\d{4})", str(error))
+    return f"not computed — no NYSE calendar for {year.group(1)}" if year else "not computed — no NYSE calendar"
+
+
 def _last_execution(*rows: Optional[dict]) -> Optional[str]:
     """The latest stored execution date of a position: its trade's legs and
     its lots, as stored; `None` when no stored row holds one."""
@@ -386,8 +394,11 @@ def _open_book(day: date, stored: list[dict], derived_day: dict, pairing_nc: Opt
                 held = _days_held(date.fromisoformat(p["opened_on"]), day)
             except CalendarError as e:
                 # The calendar does not cover the span: the figure says why,
-                # never a weekday guess, and the build goes on (L1).
-                held = f"not computed — {e}"
+                # never a weekday guess, and the build goes on (L1). His note
+                # gets the year only; the calendar's own text (it names a
+                # file path) goes to the build log (judge R278 D7).
+                held = _calendar_gap(e)
+                print(f"drc build {day}: {tid}: days held not computed — {e}", file=sys.stderr)
         listed.append({
             "trade_id": tid,
             "symbol": p["symbol"],
@@ -407,15 +418,16 @@ def _open_book(day: date, stored: list[dict], derived_day: dict, pairing_nc: Opt
 def _stale_resolves(stored: list[dict], derived_day: dict, store) -> list[dict]:
     """K3-4 (a): every resolve id a stored row names (a trade's
     `inputs.resolve_id`, the day's `derived.resolves`) that is no longer
-    current — read by `DrcStore.superseded_stated_ids`; its effect day the
-    superseded row's day (`stated_day`)."""
+    current — read by `DrcStore.superseded_stated_ids`; its effect day K2's,
+    `effect_day(<the superseding row's day>, <id>)` (judge R278 D1)."""
     ids = {r["inputs"]["resolve_id"] for r in stored if r["kind"] == "trade" and r["inputs"].get("resolve_id")}
     ids |= {o["resolve_id"] for o in derived_day.get("resolves") or []}
     if not ids:
         return []
+    superseded = store.superseded_stated_ids(ids)
     return [
-        {"resolve_id": i, "effect_day": store.stated_day(i).isoformat()}
-        for i in sorted(store.superseded_stated_ids(ids))
+        {"resolve_id": i, "effect_day": store.effect_day(superseded[i], i).isoformat()}
+        for i in sorted(superseded)
     ]
 
 

@@ -74,8 +74,8 @@ def test_superseded_stated_ids_reads_the_current_predicate(migrated, weekday_cal
     first = _state(D, kind="resolve", positions=[{"trade_id": "DDD-long-x"}])
     second = _state(D_NEXT, kind="resolve", positions=[{"trade_id": "DDD-long-x"}], supersedes=first.id)
     before = _stated(migrated)
-    assert DrcStore().superseded_stated_ids([first.id, second.id, 999_999]) == {first.id}
-    assert DrcStore().superseded_stated_ids([]) == set()
+    assert DrcStore().superseded_stated_ids([first.id, second.id, 999_999]) == {first.id: D_NEXT}
+    assert DrcStore().superseded_stated_ids([]) == {}
     assert _stated(migrated) == before
 
 

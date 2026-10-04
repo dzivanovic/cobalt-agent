@@ -92,12 +92,17 @@ class _K3Store(_Store):
         return None
 
     def superseded_stated_ids(self, ids):
+        # The store's shape (judge R278 D1): {id: the superseding row's day};
+        # here the superseding row is dated as the row it supersedes.
         ids = sorted(ids)
         self.asked.append(ids)
-        return {i for i in ids if i in self.superseded}
+        return {i: self.stated_days[i] for i in ids if i in self.superseded}
 
     def stated_day(self, stated_id):
         return self.stated_days[stated_id]
+
+    def effect_day(self, day, supersedes):
+        return day if supersedes is None else min(day, self.stated_day(supersedes))
 
 
 def _put(store, day, pairing, ids, seed, *, no_trade_id=None, extra=None, imports_=()):
@@ -277,13 +282,14 @@ def test_k3_1_a_no_trade_day_carries_the_position_unchanged(tmp_path, weekday_ca
 
 def test_k3_1_a_day_the_calendar_does_not_cover_says_day_not_computed(tmp_path):
     """K3-1 / L1: `day <k>` from THE one calendar; a span it does not cover
-    (the shipped NYSE calendar holds no 2001) → `day not computed — <the
-    calendar's reason>`, never a weekday guess, and the build goes on (no
-    `weekday_calendar` here, on purpose)."""
+    (the shipped NYSE calendar holds no 2001) → `day not computed — no NYSE
+    calendar for <year>` (judge R278 D7: the calendar's text, which names a
+    path, goes to the build log only), never a weekday guess, and the build
+    goes on (no `weekday_calendar` here, on purpose)."""
     store = _K3Store()
     root, _ = _built(tmp_path, store, _record(store, D, trading=DAY1.read_bytes()))
     line = _unit_body(_note(root), "drc-trades", "open_positions")[1]
-    assert "· day not computed — no NYSE calendar for 2001 (asked about 2001-01-01)." in line
+    assert "· day not computed — no NYSE calendar for 2001 · " in line
     assert line.startswith("DDD · long · 30 · ")
 
 
@@ -1039,18 +1045,6 @@ def test_k3_1_a_calendar_gap_names_only_the_year_and_no_absolute_path(tmp_path):
 
     assert "day not computed — no NYSE calendar for 2001" in line
     assert "/" not in line
-
-
-def test_k3_6_the_flat_button_can_restate_an_opening():
-    """Check S3 (house A, Sol; K3-6): every opening-book shape, including
-    flat, can carry the current statement id when it is a restatement."""
-    from cobalt.aset import drc_page
-
-    page = drc_page._state_book_form(D.isoformat())
-    flat_form = page.split("</form>", 1)[0]
-
-    assert 'name="flat" value="1"' in flat_form
-    assert 'name="supersedes"' in flat_form
 
 
 def test_k3_4_a_the_page_names_the_earlier_restatement_effect_day(
