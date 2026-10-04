@@ -967,3 +967,101 @@ def test_check_guard_o6_a_fixed_file_in_another_case_is_denied(roots, kind):
     assert_denied(write(base / "docs" / "40 - DevDocs" / "prompts" / "build-hub.md", seat), G5_FIXED)
     assert_denied(write(base / "docs" / "40 - devdocs" / "PROMPTS" / "BUILD-HUB.md", seat), G5_FIXED)
     assert_denied(write(base / "x" / "laws.md", seat), G5_FIXED)
+
+
+# ---- card 06 cobalt-guard-b (check O4, O5; build DECISIONS 1): rows B1–B4 -----------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "sort /x/wt/job/.env",
+        "cut -c1- /x/wt/job/.env",
+        "uniq /x/wt/job/.env",
+        "awk 1 /x/wt/job/.env",
+        "grep -n X f | sort /x/wt/job/.env",
+    ],
+)
+def test_check_guard_o5_the_four_new_read_verbs_on_env_are_denied(roots, command):
+    assert_denied(run(command, make_seat(roots, "build")), G3_ROUTE)
+
+
+SORT_FOUND = "`sort` with `-o`, `--output` or `--compress-program`"
+UNIQ_FOUND = "`uniq` with a second operand, a file it writes"
+AWK_FILE_FOUND = "`awk -f`, a program the guard cannot read"
+
+
+def assert_resend(done, found: str):
+    assert done.returncode == 2, done.stderr
+    line = done.stderr.strip()
+    assert line.startswith(BLOCK_HEAD), line
+    assert line.endswith(BLOCK_TAIL), line
+    assert found in line[len(BLOCK_HEAD) : -len(BLOCK_TAIL)], line
+
+
+@pytest.mark.parametrize(
+    "command,found",
+    [
+        ("grep X f | sort -o out", SORT_FOUND),
+        ("grep X f | sort --output=out", SORT_FOUND),
+        ("grep X f | sort --compress-program=sh", SORT_FOUND),
+        ("grep X f | uniq - out", UNIQ_FOUND),
+        ("grep X f | sort -uo out", SORT_FOUND),
+        ("grep X f | sort -oout", SORT_FOUND),
+        ("grep X f | sort --out=x", SORT_FOUND),
+        ("grep X f | sort --compress=sh", SORT_FOUND),
+    ],
+)
+def test_check_guard_o4_a_filter_that_writes_or_runs_is_denied(roots, command, found):
+    done = run(command, make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, found)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "grep X f | sort -u",
+        "sort -k2,2n f",
+        "sort --unique f",
+        "grep X f | uniq -c",
+        "grep X f | uniq -f 1 -",
+        "uniq -f 1 f",
+        "uniq -s2 -w3 f",
+    ],
+)
+def test_b2_a_sort_or_uniq_that_only_reads_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+def test_b3_an_awk_program_from_a_file_in_a_pipe_is_denied(roots):
+    done = run("grep X f | awk -f p.awk", make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, AWK_FILE_FOUND)
+    for command in ("grep X f | awk -fp.awk", "grep X f | awk --file=p.awk", "grep X f | awk --file p.awk"):
+        assert_resend(run(command, make_seat(roots, "build")), AWK_FILE_FOUND)
+
+
+def test_b3_an_awk_program_in_the_command_stays_allowed(roots):
+    assert_allowed(run("grep X f | awk '{print $1}'", make_seat(roots, "build")))
+    assert_allowed(run("grep X f | awk -F f '{print $1}'", make_seat(roots, "build")))
+
+
+@pytest.mark.parametrize(
+    "command,found",
+    [
+        ("sort -o out f", SORT_FOUND),
+        ("uniq f out", UNIQ_FOUND),
+        ("awk -f p.awk f", AWK_FILE_FOUND),
+        ("awk '{print > \"x\"}' f", AWK_FOUND),
+    ],
+)
+def test_b4_a_lone_sort_uniq_or_awk_that_writes_is_denied(roots, command, found):
+    done = run(command, make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, found)
+
+
+@pytest.mark.parametrize("command", ["sort f", "awk '{print $1}' f"])
+def test_b4_a_lone_sort_or_awk_that_only_reads_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
