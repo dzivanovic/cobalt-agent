@@ -464,6 +464,12 @@ def test_g4_the_desks_commit_with_paths_is_allowed(roots):
     assert_allowed(done)
 
 
+@pytest.mark.parametrize("kind", ["desk", "brain"])
+def test_g4_is_a_workers_rule_the_desk_and_the_brain_are_not_shaped(roots, kind):
+    # G4 reads "from a worker": a desk or brain git call meets its own allow strings only
+    assert_allowed(run('git -C /Users/cobalt/cobalt commit -m "x"', make_seat(roots, kind)))
+
+
 @pytest.mark.parametrize("command", ["git -C /x/repo merge --ff-only x", "git -C /x/repo reset --soft HEAD~1"])
 def test_g4_a_merge_is_the_deploy_hubs(roots, command):
     assert_allowed(run(command, make_seat(roots, "deploy")))
@@ -544,6 +550,8 @@ def test_g5_a_build_whose_card_names_the_fixed_file_writes_it(roots):
     # the card names BUILD-HUB.md only, and only in `files`: CHECK-HUB.md stays fixed
     other = roots.wt / JOB_WT / "docs" / "40 - DevDocs" / "prompts" / "CHECK-HUB.md"
     assert_denied(write(other, seat), G5_FIXED)
+    # the named file on main is outside the build's worktree: the fence still holds
+    assert_denied(write(prompts(roots) / "BUILD-HUB.md", seat), G5_FENCE)
 
 
 def test_g5_a_check_whose_card_names_the_fixed_file_is_still_denied(roots):
