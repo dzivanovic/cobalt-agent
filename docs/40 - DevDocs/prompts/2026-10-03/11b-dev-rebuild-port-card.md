@@ -7,7 +7,7 @@ TIP:
 REPORT: /Users/cobalt/cobalt-wt/dev-rebuild-port-1003/docs/40 - DevDocs/reports/dev-rebuild-port-build-2026-10-03.md
 CHECK REPORT:
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-02 R47, 2026-10-02 R157
 
@@ -30,4 +30,5 @@ WHY: cards `11` dev-rebuild (checked, head `07cc965f`) and `13` slot-guard (chec
 - X1 Hash pairs for every non-settled file. X2 In the three settled files, is any line of `07cc965f` or `05c8b7fa` lost or weakened? X3 Do `13`'s guard tests still assert against the ported module?
 
 ## RECORDS
+- RESTARTS class homes (L7a): `src/cobalt/db_migrations/*.py` → the class `11`'s build report `## RESTARTS` derived (`com.cobalt.radar` restart, its line quoted at PREFLIGHT); `tests/cobalt/*` → test/documentation (`restarts.py:239`); `docs/**` → DOCS (`:219`).
 - Judge, 10-03 21:39 ET: replaces `13b`; set 3, Sunday after 13:00. `11` restarts `com.cobalt.radar` (its RESTARTS line): set 3's window is Sunday (iii).

@@ -7,7 +7,7 @@ TIP:
 REPORT: /Users/cobalt/cobalt-wt/desk-tools-port-1003/docs/40 - DevDocs/reports/desk-tools-port-build-2026-10-03.md
 CHECK REPORT:
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 DB: none
 RULINGS: 2026-10-02 R47, 2026-10-02 R157, 2026-10-02 R154
@@ -32,4 +32,5 @@ WHY: cards `07` brain-hub (checked, with row B5) and `09` worker-watch (checked,
 - X1 Hash pairs. X2 In `desk-launch.sh`: do `recut`, `brain`, `run`-less kinds list, the `prompt` refusal and the optional `TREE STATE` all work in one dry run each? X3 Does the stop hook still exempt `cwd` under `/Users/cobalt/cobalt`?
 
 ## RECORDS
+- RESTARTS class homes (L7a): `ops/desk/*` → `OPS_DESK_PREFIX` (`restarts.py:38`); `tests/ops/*` → test/documentation (`:239`); `docs/**` → DOCS (`:219`); no `src/`, no `configs/`.
 - Judge, 10-03 21:39 ET: set 3, Sunday after 13:00; his install follows set 3's DEPLOYED line. After `07` lands, the brain's handover launches by `desk-launch.sh brain` (the brain edits `00-brain-handover.md`'s line then).
