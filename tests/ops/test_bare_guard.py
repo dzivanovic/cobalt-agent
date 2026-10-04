@@ -1105,3 +1105,83 @@ def test_b8_an_option_value_naming_env_is_denied(roots, command):
 @pytest.mark.parametrize("command", ["sort --key=2 f", "grep -n --include=*.py X ."])
 def test_b8_an_option_value_not_naming_env_stays_allowed(roots, command):
     assert_allowed(run(command, make_seat(roots, "build")))
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "awk 'BEGIN{while(getline l < \".env\") print l}'",
+        "awk 'BEGIN{ARGV[1]=\".e\" \"nv\"; ARGC=2} {print}'",
+        "awk '@include \"x\"'",
+        "awk '@load \"x\"'",
+        "awk 'BEGIN{ARGC=1} {print}' f",
+        "grep X f | awk '{getline l < \"y\"; print l}'",
+    ],
+)
+def test_b9_an_awk_program_that_reads_a_file_it_names_is_denied(roots, command):
+    assert_denied(run(command, make_seat(roots, "build")), G3_ROUTE)
+
+
+@pytest.mark.parametrize("command", ["awk '{print $1}' f", "grep X f | awk '{print $1}'"])
+def test_b9_an_awk_program_that_reads_only_its_operands_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+WRAPPED_FOUND = "a wrapper whose command the guard cannot find"
+
+
+@pytest.mark.parametrize(
+    "command,found",
+    [
+        ("time sort -o out f", SORT_FOUND),
+        ("nice -n 5 sort -o out f", SORT_FOUND),
+        ("env A=1 sort -o out f", SORT_FOUND),
+        ("command sort -o out f", SORT_FOUND),
+        ("xargs awk -f p.awk", AWK_FILE_FOUND),
+        ("time nice sort -o out f", SORT_FOUND),
+        ("timeout 5 sort -o out f", SORT_FOUND),
+        ("timeout -s KILL 5 uniq f out", UNIQ_FOUND),
+        ("stdbuf -oL sort -o out f", SORT_FOUND),
+        ("nohup uniq f out", UNIQ_FOUND),
+        ("/usr/bin/env -i A=1 /usr/bin/sort -o out f", SORT_FOUND),
+        ("xargs -0 -n 1 awk '{print > \"x\"}'", AWK_FOUND),
+        ("time", WRAPPED_FOUND),
+        ("xargs", WRAPPED_FOUND),
+        ("timeout 5", WRAPPED_FOUND),
+        ("env A=1", WRAPPED_FOUND),
+        ("env -S 'sort -o out f'", WRAPPED_FOUND),
+        ("nice --foo sort f", WRAPPED_FOUND),
+    ],
+)
+def test_b10_a_wrapped_command_is_judged_as_the_command_it_runs(roots, command, found):
+    done = run(command, make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, found)
+
+
+@pytest.mark.parametrize(
+    "command,route",
+    [
+        ("time cat /x/wt/job/.env", G3_ROUTE),
+        ("xargs sort --files0-from=.env", G3_ROUTE),
+        ("env A=1 awk 'BEGIN{getline l < \"y\"}'", G3_ROUTE),
+        ("time git push", G4_ROUTE),
+        ("nohup claude -p x", G7_ROUTE),
+    ],
+)
+def test_b10_every_guard_rule_judges_the_wrapped_command(roots, command, route):
+    assert_denied(run(command, make_seat(roots, "build")), route)
+
+
+@pytest.mark.parametrize(
+    "command", ["time sort f", "nice -n 5 sort f", "env A=1 sort -u f", "timeout 5 grep -n X f", "time -p wc -l f"]
+)
+def test_b10_a_wrapped_read_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+@pytest.mark.parametrize("command", ["grep X f | time sort", "grep -l X f | xargs grep -n Y"])
+def test_b10_a_wrapper_in_a_pipe_stays_denied(roots, command):
+    done = run(command, make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, "not a read-only filter")
