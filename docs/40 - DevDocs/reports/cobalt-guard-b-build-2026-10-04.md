@@ -2,14 +2,14 @@
 
 ## §0 Headline
 
-- Built B1–B4 in `ops/desk/bare-guard.py`. `sort`, `cut`, `uniq` and `awk` can no longer read `.env`. `sort -o`/`--output`/`--compress-program`, a second `uniq` operand, and `awk -f` are now denied, both in a pipe and as a lone command.
-- Tip `3c451126` on `979ec797`. Offline 3782/0, `tests/ops` 1277/0, live-note 146/0. DB: none, so `cobalt_dev` was not taken. RESTARTS: none.
-- Every new test failed on BASE for its row's reason and failed again when its fix was undone. A second fix commit pinned the ` < /dev/null` ending on a lone command.
-- Decisions: none. One carried read sits in `## RECORDS`: B4 keys on the first word as typed.
+- B1–B4 were built first (tip `3c451126`). On CONTINUE: E2 (19:27 ET), B7 and B8 were added on top of the check's O1 fix `1f2c19a9`. `sort --co…` is now read as `--compress-program`, and G3 now tests option values (`--x=.env`, `--files0-from .env`).
+- Tip `8e68decd` on `979ec797`. Offline 3782/0, `tests/ops` 1291/0, live-note 146/0. DB: none, so `cobalt_dev` was not taken. RESTARTS: none.
+- Every B7/B8 test is red under a mutation, and each control is red under one where it can be reached. Three ids the card called red on `1f2c19a9` were already green there.
+- Decisions: 1, the three ids that were already green (not for Dejan).
 
 ## L74
 
-A system reminder in this session (not a tool result) asked that commits end with a `Claude-Session:` line beside `Co-Authored-By`. Recorded once as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
+A system reminder in this session (not a tool result) asked that commits end with a `Claude-Session:` line beside `Co-Authored-By`. Recorded once as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74). The same request came again at the CONTINUE: E2 resume. It was handled the same way.
 
 ## AUTHORIZATION
 
@@ -96,6 +96,16 @@ Tests written in `tests/ops/test_bare_guard.py` (no `src/` or `ops/` edit), comm
 
 No RUN row. No with-DB red (DB: none).
 
+### E2, second pass: B7 B8 (CONTINUE: E2, 19:27 ET)
+
+The card, re-authorized at `14dbcd51` (`authorize.sh` → `AUTHORIZED`), now carries B7 and B8 (judge 19:27, desk row R273). HEAD was `1f2c19a9` (the check's O1 fix). Tests added at the end of `tests/ops/test_bare_guard.py`, committed `1218375f wip(cobalt-guard-b): red — B7 B8 tests on 1f2c19a9`.
+
+`uv run pytest -q -rA -p no:cacheprovider --color=no --tb=no tests/ops/test_bare_guard.py -k "b7_ or b8_"` → `3 failed, 7 passed, 476 deselected`:
+- FAILED `test_b7_a_two_letter_prefix_of_compress_program_is_denied[sort --co=sh f]` and `[sort --co sh f]`: `test_bare_guard.py:1088` `assert 0 == 2`. That is the row's reason (allowed on 1f2c19a9).
+- FAILED `test_b8_an_option_value_naming_env_is_denied[sort --files0-from=.env]`: `test_bare_guard.py:268: AssertionError: (0, '')` `assert 0 == 2`. That is the row's reason.
+- PASSED, contrary to the card's "each allowed on 1f2c19a9": `test_b7_…[sort --compress=sh f]` (B2(b)'s `com` rule already denies it), `test_b8_…[sort --files0-from .env]` (`.env` is a plain word, which G3 already tests), `test_b8_…[sort --files0-from=/x/wt/job/.env]` (`is_env` takes the basename of the whole word, `.env`). The ids are kept as the card writes them. Each is shown red under a mutation in E3. See `## DECISIONS` 1.
+- Controls PASS: `test_b7_sort_check_stays_allowed[sort --check f]`, `[sort -c f]`; `test_b8_an_option_value_not_naming_env_stays_allowed[sort --key=2 f]`, `[grep -n --include=*.py X .]`.
+
 ## E3 THE ROWS
 
 All in `ops/desk/bare-guard.py`. The rows were built in order, each followed by a run of `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/ops/test_bare_guard.py`:
@@ -114,6 +124,22 @@ After the mutations: the line wrapped and the header comment given B1–B4; `471
 
 SECOND FIX COMMIT (self-check 2 found an entry path no test pinned: a lone command ending ` < /dev/null`, which `g1` strips before the B4 path). Added the id `sort -o out f < /dev/null` to the B4 test. Under M4 → `5 failed, 2 passed`, the new id among them (`test_bare_guard.py:1063` `assert 0 == 2`); undone, `git diff --stat` → `tests/ops/test_bare_guard.py | 2 ++`; `472 passed`. Committed `3c451126 fix(cobalt-guard-b): pin the house-probe ending on a lone sort (B4, K25 2)`. RESTARTS and W ran again on it (one more gate pair, `## RECORDS`).
 
+### E3, second pass: B7 B8
+
+Both rows are in `ops/desk/bare-guard.py`.
+- B7: in `sort_writes`, `name.startswith("com") and …` became `len(name) >= 2 and "compress-program".startswith(name)`. Then `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/ops/test_bare_guard.py` → `1 failed, 485 passed`, and the one red is B8's `[sort --files0-from=.env]`.
+- B8: new `env_words(args)` returns the operands plus the text after the first `=` of each `--name=value` word, plus the word after a bare `--files0-from`. `g3_bash` tests `is_env` over `env_words(ws[1:])`. The same run → `486 passed`.
+
+THE MUTATIONS (Edit tool, each undone):
+- M7 (undoes B7): back to `name.startswith("com")`. `-k b7_` → `2 failed, 3 passed`: `[sort --co=sh f]` and `[sort --co sh f]`, first `test_bare_guard.py:1088` `assert 0 == 2`.
+- M7b (the compress clause off, `if False and …`): `-k b7_` → `3 failed, 2 passed`. `[sort --compress=sh f]` is now red too (`:1088`).
+- M7c (control: any long name starting `c`): `-k b7_` → `1 failed, 4 passed`. FAILED `test_b7_sort_check_stays_allowed[sort --check f]` at `test_bare_guard.py:273`: `NOT A REFUSAL. … contains `sort` with `-o`, `--output` or `--compress-program`. …` `assert 2 == 0`. `[sort -c f]` cannot go red under a long-option mutation, because B2(a) (a short option holding `o`) governs it.
+- M8 (undoes B8: both `env_words` branches `if False and …`): `-k b8_` → `1 failed, 4 passed`. Only `[sort --files0-from=.env]` fails (`:268` `assert 0 == 2`).
+- M8b (B8 on, the plain-word test off: `out = []`): `-k b8_` → `5 passed`. B8 alone denies all three ids.
+- M8c (both off: `out = []` and both branches `if False and …`): `-k b8_` → `3 failed, 2 passed`. All three ids are red (`:268` `assert 0 == 2`).
+- M8d (control: every `--name=value` taken as `.env`): `-k b8_` → `2 failed, 3 passed`. FAILED `[sort --key=2 f]` and `[grep -n --include=*.py X .]` at `:273` with `route: .env is never read; …` `assert 2 == 0`.
+After the mutations, `git diff` showed only the fix, and `tests/ops/test_bare_guard.py` → `486 passed`. Committed `8e68decd fix(cobalt-guard-b): --co is compress-program; G3 reads option values (B7 B8, L1 L72)`.
+
 DevDocs line: `ops/desk/bare-guard.py` has no page under `docs/40 - DevDocs/cobalt/` (`Grep bare-guard` over `docs/40 - DevDocs` → reports and prompts only), and the card fences every file but its two (`## NOT IN THIS JOB`). No line written; see `## RECORDS`.
 
 ## RESTARTS
@@ -128,6 +154,15 @@ RESTARTS: none
 ```
 No UNCLASSIFIED row. The same table at `87576deb`. Matches the card's class home.
 
+At `8e68decd` (second pass), `uv run cobalt jobs restarts 979ec797..HEAD`, whole:
+```
+path	change	rule	restart
+docs/40 - DevDocs/reports/cobalt-guard-b-build-2026-10-04.md	M	DOCS	-
+ops/desk/bare-guard.py	M	operator script; no Cobalt reader	-
+tests/ops/test_bare_guard.py	M	test/documentation; no resident	-
+RESTARTS: none
+```
+
 ## W THE THREE SUITES
 
 `<tip>` = `3c451126`. (a0) `git diff --name-only --no-renames 979ec797` → `ops/desk/bare-guard.py` · `tests/ops/test_bare_guard.py`. Every path starts with `ops/` or `tests/ops/`. **`cobalt_dev: not taken (DB: none — 2 paths)`**.
@@ -137,15 +172,31 @@ No UNCLASSIFIED row. The same table at `87576deb`. Matches the card's class home
 - `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `1277 passed, 1 xfailed, 15 warnings in 347.65s (0:05:47)`, exit 0. The tests this build adds, all in this run: `test_check_guard_o5_the_four_new_read_verbs_on_env_are_denied` (5), `test_check_guard_o4_a_filter_that_writes_or_runs_is_denied` (8), `test_b2_a_sort_or_uniq_that_only_reads_stays_allowed` (7), `test_b3_an_awk_program_from_a_file_in_a_pipe_is_denied`, `test_b3_an_awk_program_in_the_command_stays_allowed`, `test_b4_a_lone_sort_uniq_or_awk_that_writes_is_denied` (5), `test_b4_a_lone_sort_or_awk_that_only_reads_stays_allowed` (2).
 - With-DB: not run (DB: none). `ls /Users/cobalt/cobalt-wt/cobalt-guard-b-1004/.env` → `No such file or directory` (19:10 ET).
 
+SECOND PASS, `<tip>` = `8e68decd`. (a0) `git diff --name-only --no-renames 979ec797` → `docs/40 - DevDocs/reports/cobalt-guard-b-build-2026-10-04.md` · `ops/desk/bare-guard.py` · `tests/ops/test_bare_guard.py`. Every path starts with `docs/`, `ops/` or `tests/ops/`. **`cobalt_dev: not taken (DB: none — 3 paths)`**.
+- (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh cobalt-guard-b-1004 offline` → exit 0, `offline 3782/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/cobalt-guard-b-1004-offline-20261004-193005.log`. Log line 828: `3782 passed, 755 skipped, 1 xfailed, 36 warnings in 602.83s (0:10:02)`.
+- (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh cobalt-guard-b-1004 livenote` → exit 0, `live-note 146/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/cobalt-guard-b-1004-livenote-20261004-193006.log`. Line 57: `146 passed, 1 skipped, 15 warnings in 28.49s`. Its only skip is line 56, `tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC … not set`, and no skip names `COBALT_LIVE_VAULT_ROOT`.
+- `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `1291 passed, 1 xfailed, 15 warnings in 347.66s (0:05:47)`, exit 0. Added in this pass: `test_b7_a_two_letter_prefix_of_compress_program_is_denied` (3), `test_b7_sort_check_stays_allowed` (2), `test_b8_an_option_value_naming_env_is_denied` (3), `test_b8_an_option_value_not_naming_env_stays_allowed` (2).
+- With-DB: not run (DB: none). `ls /Users/cobalt/cobalt-wt/cobalt-guard-b-1004/.env` → `No such file or directory` (19:40 ET).
+
 ## PRE-STOP SELF-CHECK
 
 (1) "Every added or changed test shown RED for its named reason against a mutation or negative control; any test that stayed green was rewritten." Evidence: o5 red at E2 (`:268` `assert 0 == 2`) and under M1; o4 red at E2 (`:1017`) and under M2; the b2 controls red under M2c (4 of 7; `uniq -s2 -w3 f` is not reachable by that mutation, named above); b3 red at E2 (`:1039`) and under M3, its control green throughout; b4 red at E2 (`:1061`) and under M4, including the added probe-ending id (`:1063`); b4 controls green. No test stayed green under its row's mutation.
 (2) "Every entry path of each rule pinned by a test." Callers at tip: `grep -n -F "filter_problem(" ops/desk/bare-guard.py` → `441:def filter_problem(ws):` · `469:        p = filter_problem(ws)` (pipe_problems: pinned by o4, b3) · `487:        p = filter_problem(ws) if ws else None` (g1 lone: pinned by b4, including the ` < /dev/null` ending). `grep -n -F "ENV_READERS"` → `76:` · `615:        if verb(ws) in ENV_READERS …` (g3_bash: pinned by o5 as a single command and as a pipe segment). `grep -n -F "awk_file("` → `394:` def · `448:` (pinned by b3 `-f`, `-fp.awk`, `--file=p.awk`, `--file p.awk`, and b4 lone). `grep -n -F "_writes("` → `409:def sort_writes` · `425:def uniq_writes` · `443:` / `445:` / `450:` the calls in `filter_problem`. Flag combinations pinned: clustered `-uo`, attached `-oout`, abbreviated `--out=x` / `--compress=sh`, uniq values `-f 1`, `-s2 -w3`, `-` as an operand. Seat kinds: the new rules are kind-free like G1/G3, and the tests use the build seat, as the check's O4/O5 tests do.
 (3) "Every `file:line`, count and quote in the report re-read from tool output at the tip." The greps above were re-run at the tip; RESTARTS ran at `3c451126`; the commit list is from `git log --oneline 979ec797..HEAD`. The E2/E3 test-file lines (`:268`, `:1017`, `:1039`, `:1061`, `:1063`) are quoted from the runs that printed them.
 
+SECOND PASS (B7 B8, tip `8e68decd`):
+(1) b7 `--co=sh` and `--co sh` red at E2 (`:1088` `assert 0 == 2`) and under M7. b7 `--compress=sh` was green at E2 (see `## DECISIONS` 1) and red under M7b. Control `--check` red under M7c; control `-c` cannot be reached by a long-option mutation (named in E3). b8 `=.env` red at E2 (`:268`) and under M8. b8 `--files0-from .env` and `=/x/wt/job/.env` were green at E2 and red under M8c, and M8b shows B8 alone denies them. Both b8 controls red under M8d.
+(2) Callers at tip: `grep -n -F "env_words(" ops/desk/bare-guard.py` → `616:def env_words(args):` · `630:` inside `g3_bash`. `grep -n -F "g3_bash(" …` → `628:` def · `671:    deny = g3_bash(segs)` (bash_rules; pinned by the b8 single-command ids; the pipe-segment path is the same loop at `:630`, pinned by o5's `grep -n X f | sort /x/wt/job/.env`). `grep -n -F "sort_writes(" …` → `409:` def · `443:` in `filter_problem` (lone path: the b7 ids; pipe path: o4's `grep X f | sort --compress=sh`). `ENV_READERS` at `:76` holds `sort cut uniq awk`. `grep -n -F "is_env(" …` → `606:` def · `630:` · `792:` (the Read tool's G3, whose input is a path, not words: B8 does not apply).
+(3) The greps above were re-run at `8e68decd`. RESTARTS ran at `8e68decd`. The suite lines were read from the gate logs with `grep -n -F`. The commit list is from `git log --oneline 979ec797..HEAD`.
+
 ## FOR THE CHECK
 
-`979ec797..3c451126`:
+SECOND PASS, `979ec797..8e68decd` adds (after the report commit `a9fe5090` and the check's `f5815a0e wip(cobalt-guard-b): check red — O1` and `1f2c19a9 fix(cobalt-guard-b): a lone sort uniq awk by path or behind NAME= meets B4 (check O1)`):
+- `1218375f wip(cobalt-guard-b): red — B7 B8 tests on 1f2c19a9`
+- `8e68decd fix(cobalt-guard-b): --co is compress-program; G3 reads option values (B7 B8, L1 L72)`
+The reds, mutations and greens are in `### E2, second pass` and `### E3, second pass`. Suites: `offline 3782/0`, `tests/ops 1291 passed, 1 xfailed`, `live-note 146/0`. With-DB, F0/F1/F2 and the lock: not run (DB: none).
+
+First pass, `979ec797..3c451126`:
 - `82c5c7a2 wip(cobalt-guard-b): red — B1–B4 tests on BASE`
 - `87576deb fix(cobalt-guard-b): read-only filters stay read-only; sort cut uniq awk read no .env (B1-B4, L1 L3 L72)`
 - `3c451126 fix(cobalt-guard-b): pin the house-probe ending on a lone sort (B4, K25 2)`
@@ -156,11 +207,11 @@ Points for the check to weigh (the card's own words, not decisions): B2's `o`-in
 
 ## CONTINUE
 
-next: none (built). The desk verifies the artifact and launches the check (`CHECK-HUB.md`).
+next: none (built, second pass B7 B8 at `8e68decd`). The desk verifies the artifact and launches the check (`CHECK-HUB.md`).
 
 ## DECISIONS
 
-none
+1. ASK DESK: the card says B7's `sort --compress=sh f` and B8's `sort --files0-from .env` and `sort --files0-from=/x/wt/job/.env` are "each allowed on 1f2c19a9". They PASSED there (`-rA` at E2): B2(b)'s `com` rule, G3's plain-word test and `is_env`'s basename of the whole word already denied them. E2 says to rewrite such a test until its red is the row's reason. But these commands are the card's own, and no rewrite of them can fail on `1f2c19a9`. Safe default taken: the ids are kept as the card writes them, as pins. Each is shown red under a mutation (M7b, M8c), and M8b shows B8 alone denies the two B8 ids. Not for Dejan.
 
 ## RECORDS
 - L74: a system reminder asked for a `Claude-Session:` line in commits; recorded once under `## L74`, not acted on.
@@ -169,6 +220,10 @@ none
 - No DevDocs line: `ops/desk/bare-guard.py` has no module page under `docs/40 - DevDocs/cobalt/`, and the card fences every file but its two.
 - Carried read, not a rule of this card (like the check's `$VAR` and `grep -r` reads, which stay open): B4 keys on the first word as typed, as a pipe segment does, so a lone `sort`/`uniq`/`awk` written by path or behind `NAME=` does not meet it. The allow strings waiting for him (`Bash(sort *)` and the rest) match only the bare verb.
 - Card records as re-read at PREFLIGHT: see `## PREFLIGHT`.
+- CONTINUED at E2 19:27 ET. The desk's `CONTINUE: E2.` named no fact. Verified: `authorize.sh` on the amended card → `AUTHORIZED` (card commit `14dbcd51`, unchanged); `git status --short --branch` → `## ops/cobalt-guard-b-1004` and the report only; HEAD `1f2c19a9`; `.env` → No such file. The card's new rows B7 and B8 (judge 19:27, desk row R273) were built. The message itself added nothing.
+- L74, second time: this session's system reminder again asked for a `Claude-Session:` line in commits. Not acted on. `1218375f` and `8e68decd` carry `Co-Authored-By` only.
+- Second-pass card record (judge 19:27, R273), re-read: B7 and B8 go on his veto list. FOR THE CHECK: the B7/B8 reds are green at `8e68decd`. Every earlier guard-b and card 10 test stays green (`tests/ops` 1291 passed, 1 xfailed).
+- Another gate pair, the third: offline and live-note on `8e68decd` (logs in `## W`).
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: cobalt-guard-b · tip: 3c451126 | on 979ec797 | migration: none | offline 3782/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 4 of 4 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0
+BUILT · job: cobalt-guard-b · tip: 8e68decd | on 979ec797 | migration: none | offline 3782/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 6 of 6 | self-check: 3 of 3 | decisions: 1 · for Dejan: 0
