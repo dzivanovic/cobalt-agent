@@ -18,8 +18,9 @@ WHY: cards `07` brain-hub (checked, with row B5) and `09` worker-watch (checked,
 
 | row | what | red first | files |
 |---|---|---|---|
-| P1 | `07`: every file of its checked diff from `git show <07 tip>:<path>`, hash-proven, except `ops/desk/desk-launch.sh`, settled by Edit so `03c`'s `recut` kind and `TREE STATE`-optional rule, and `07`'s `brain` kind and `prompt` refusal (B2, B5) all stand; the unknown-kind refusal text now lists `recut` and `brain` (the follow-up line lands here) | `07`'s tests (`test_desk_launch_brain.py`) red on `BASE`, green at the tip; `tests/ops` green | `07`'s files |
-| P2 | `09`: every file of its checked diff from `git show <09 tip>:<path>`, hash-proven, except `ops/desk/desk-watch.sh` and `wait-stop-line.sh` where `03c`/`18` changed lines too — settled with both sides (the idle exit of `09`, the `03c` changes) | `09`'s tests red on `BASE`, green at the tip | `09`'s files |
+| P1 | `07` (checked head `b5eb3530`, which carries the check's fixes; its range `a09f0862..b5eb3530`): every file from `git show b5eb3530:<path>`, hash-proven, except `ops/desk/desk-launch.sh`, settled by Edit so `03c`'s `recut` kind and `TREE STATE`-optional rule, and `07`'s `brain` kind and `prompt` refusal (B2, B5) all stand; the unknown-kind refusal text now lists `recut` and `brain` (the follow-up line lands here) | `07`'s tests (`test_desk_launch_brain.py`) red on `BASE`, green at the tip; `tests/ops` green | `07`'s files |
+| P3 | SHARED WITH BASE, hand-merged with BOTH sides (quote the two one-sided diffs as `03d` P3 does): `docs/40 - DevDocs/prompts/STANDING-LIST.md` (`07`'s `## 7. BRAIN-HUB.md` and B4's two strings onto BASE's text) and `tests/ops/test_desk_size_guard.py` (`07`'s brain-prompt fixture change onto BASE's `desk-list.sh`-beside staging) | each file's tests green at the tip; `grep -c -F "## 7. BRAIN-HUB.md"` → 1 | the two files |
+| P2 | `09` (checked head `a6bef8cb`, which carries the O1/O6 fixes; range `a09f0862..a6bef8cb`): every file from `git show a6bef8cb:<path>`, hash-proven, except `ops/desk/desk-watch.sh` and `wait-stop-line.sh` where `03c`/`18` changed lines too — settled with both sides (the idle exit of `09`, the `03c` changes) | `09`'s tests red on `BASE`, green at the tip | `09`'s files |
 | P3 | HIS INSTALL TEXT, in the report's `## RECORDS`: the `hooks` object for `~/.claude/settings.json` (his word, 10-03): PreToolUse/Bash → `python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py`; Stop → `python3 /Users/cobalt/cobalt/ops/desk/stop-guard.py`; Notification matcher `idle_prompt` → `python3 /Users/cobalt/cobalt/ops/desk/idle-wake.py`; valid JSON proved | RUN — quote it | none |
 
 ## NOT IN THIS JOB
@@ -32,5 +33,6 @@ WHY: cards `07` brain-hub (checked, with row B5) and `09` worker-watch (checked,
 - X1 Hash pairs. X2 In `desk-launch.sh`: do `recut`, `brain`, `run`-less kinds list, the `prompt` refusal and the optional `TREE STATE` all work in one dry run each? X3 Does the stop hook still exempt `cwd` under `/Users/cobalt/cobalt`?
 
 ## RECORDS
-- RESTARTS class homes (L7a): `ops/desk/*` → `OPS_DESK_PREFIX` (`restarts.py:38`); `tests/ops/*` → test/documentation (`:239`); `docs/**` → DOCS (`:219`); no `src/`, no `configs/`.
+- RESTARTS class homes (L7a, at BASE `5ff16b1f`): `ops/desk/*` → `OPS_DESK_PREFIX` (`restarts.py:38`); `tests/ops/*` → tests (`:246`); `docs/**` → DOCS (`:228`); no `src/`, no `configs/`.
+- Preflight (desk, `07b-card-preflight-2026-10-03.md`): source heads named (`b5eb3530`, `a6bef8cb`); row P3 for the two shared paths; the cites corrected.
 - Judge, 10-03 21:39 ET: set 3, Sunday after 13:00; his install follows set 3's DEPLOYED line. After `07` lands, the brain's handover launches by `desk-launch.sh brain` (the brain edits `00-brain-handover.md`'s line then).
