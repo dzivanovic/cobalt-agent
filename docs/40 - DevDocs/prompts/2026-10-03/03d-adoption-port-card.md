@@ -5,7 +5,7 @@ WORKTREE: adoption-port-1003
 BASE: a8d8a848
 TIP: 5ff16b1f
 REPORT: /Users/cobalt/cobalt-wt/adoption-port-1003/docs/40 - DevDocs/reports/adoption-port-build-2026-10-03.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/adoption-port-check-2026-10-03.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/adoption-port-check-2026-10-03-r2.md
 HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B: as needed
 TREE STATE: unchanged
@@ -38,5 +38,7 @@ WHY: the adoption chain (`03` + `02` + `03c`, head `9694a679`, all checked `read
 - Judge, 10-03 21:39 ET: set 3 = `03d`, `11b`, `07b`, `05` (`47a689a1`, checked), `10`; Sunday after 13:00. The `DEPLOY-HUB.md` part gets one Grok read after the check (L67), F1-style fail-loud findings are not holds.
 - The three checks of the chain stand for the byte-equal files; this card's check reads `DEPLOY-HUB.md` whole and the suites.
 - RESTARTS class homes (L7a): `ops/desk/*` → `OPS_DESK_PREFIX` (operator script, no reader; `restarts.py:38`); `tests/ops/*`, `tests/cobalt/*` → test/documentation (`:245`); `docs/**` → DOCS (`:225`); `src/cobalt/db_migrations/cli.py` → the class `03`'s build report `## RESTARTS` derived for it (quote that line at PREFLIGHT; the build derives again, L42).
+- TREE STATE (judge, check pass 1, decision 1): `unchanged` HOLDS by the standing precedent (`11`, `13`, `01`, `03` — R41 answers, `03` READY at R88): `tests/cobalt/test_migrate_level.py` runs inside the pass-1 command as written at `0013`, needs no `--deselect` and no pass-2 id, so the pass lists are unchanged; `CHECK-HUB.md` `## 7` (vi) is met by this line, and the chain's own text (`02` A5) removes the key. No edit row is invented.
+- STEP-G exit 4 (judge, check pass 1, decision 2 / O1): sentence (5)'s "lock dir absent" reads, on exit 4, as "this worktree holds no lock" — the dir is the other holder's and stays; fail-loud, not a hold; carried to the Grok read as written.
 - Preflight 10-03 (desk, `03d-card-preflight-2026-10-03.md`): issues 3, 4, 5, 8, 9 answered by the edits above (row P3; P1's red; P2 as the one source; the homes line; HOUSE B).
 - Desk, 10-03 22:18 ET (R167): build DECISION E3 → (A), `test_hub_lines.py` joins P2; ASK DESK 1 (the listed `git diff 9694a679 -- <path>` empty as the hash proof) and 2 (the glue `When the clause holds: `, `Under (v) `) → the build's defaults stand.

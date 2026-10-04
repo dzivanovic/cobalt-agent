@@ -2,7 +2,7 @@ JOB: desk-tools-port
 LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/desk-tools-port-1003
 WORKTREE: desk-tools-port-1003
-BASE: «FILL: 03d's checked tip (07 and 09 edit desk-launch.sh and the watch scripts, which 03c also edits)»
+BASE: 5ff16b1f
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/desk-tools-port-1003/docs/40 - DevDocs/reports/desk-tools-port-build-2026-10-03.md
 CHECK REPORT:
