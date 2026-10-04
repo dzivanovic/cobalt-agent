@@ -5,11 +5,11 @@ WORKTREE: adoption-port-1003
 BASE: a8d8a848
 TIP: 5ff16b1f
 REPORT: /Users/cobalt/cobalt-wt/adoption-port-1003/docs/40 - DevDocs/reports/adoption-port-build-2026-10-03.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/adoption-port-check-2026-10-03-r2.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/adoption-port-check-2026-10-03-r3.md
 HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B: as needed
 TREE STATE: unchanged
-RULINGS: 2026-10-02 R47, 2026-10-02 R154, 2026-10-02 R157, 2026-10-03 R3
+RULINGS: 2026-10-02 R47, 2026-10-02 R154, 2026-10-02 R157, 2026-10-03 R3, 2026-10-03 R197
 
 ## ROWS
 
