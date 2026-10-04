@@ -619,6 +619,55 @@ def test_l4_a_real_prompt_launch_prints_no_watch_line(desk, tmp_path):
     assert "WATCH:" not in done.stdout + done.stderr
 
 
+# ---- card 03c M4: TREE STATE is optional on build and check cards -----------------------------
+
+
+def set_tree_state(desk: Desk, line: str | None) -> None:
+    """The job card with its `TREE STATE: unchanged` line replaced by `line` (None: no line)."""
+    text = desk.card.read_text()
+    assert "TREE STATE: unchanged\n" in text
+    new = text.replace("TREE STATE: unchanged\n", "" if line is None else line + "\n")
+    if new != text:
+        desk.card.write_text(new)
+        desk.commit("card: tree state")
+
+
+@pytest.mark.parametrize("kind", ["build", "check"])
+def test_m4_a_card_without_tree_state_launches(desk, kind):
+    set_tree_state(desk, None)
+    assert "TREE STATE" not in desk.card.read_text()
+    done = desk.launch(kind, str(desk.card))
+    assert done.returncode == 0, done.stderr
+    assert desk.called() == [str(desk.job_wt)]
+
+
+@pytest.mark.parametrize("kind", ["build", "check"])
+@pytest.mark.parametrize("line", ["TREE STATE: unchanged", "TREE STATE: row A3"])
+def test_m4_a_card_with_a_valid_tree_state_still_launches(desk, kind, line):
+    """Negative control: yesterday's cards launch unchanged."""
+    set_tree_state(desk, line)
+    done = desk.launch(kind, str(desk.card))
+    assert done.returncode == 0, done.stderr
+    assert desk.called() == [str(desk.job_wt)]
+
+
+@pytest.mark.parametrize("kind", ["build", "check"])
+@pytest.mark.parametrize("line", ["TREE STATE: nonsense", "TREE STATE:", "TREE STATE: row"])
+def test_m4_a_card_with_a_tree_state_of_another_shape_is_refused(desk, kind, line):
+    set_tree_state(desk, line)
+    refused(desk, desk.launch(kind, str(desk.card)),
+            "incomplete card: TREE STATE must be 'unchanged' or 'row <id>'")
+
+
+def test_card03_l3_an_uppercase_job_is_refused_under_a_utf8_locale(desk):
+    """Card 2026-10-03/03 L3: `[!a-z0-9-]` admits a capital under en_US.UTF-8 unless the
+    script runs LC_ALL=C."""
+    desk.card.write_text(desk.card.read_text().replace("JOB: x-job", "JOB: X-job"))
+    desk.commit("card with an uppercase job")
+    done = desk.launch("build", str(desk.card), LC_ALL="en_US.UTF-8", LANG="en_US.UTF-8")
+    refused(desk, done, "incomplete card: JOB 'X-job' must be [a-z0-9-]")
+
+
 def test_l4_the_header_says_installed_and_tested(desk):
     text = LAUNCH.read_text()
     assert "NOT INSTALLED" not in text

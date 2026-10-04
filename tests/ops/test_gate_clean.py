@@ -221,6 +221,17 @@ def test_a_worktree_on_another_branch_is_refused(tmp_path):
     assert desk.job_stands()
 
 
+def test_l3_an_accented_tag_is_refused_under_a_utf8_locale(tmp_path):
+    """Card 03 L3: `[!A-Za-z0-9._-]` admits `é` under en_US.UTF-8 unless the script runs LC_ALL=C."""
+    desk = Desk(tmp_path)
+    desk.card.write_text(desk.card.read_text().replace("TAG: x-tag", "TAG: x-tagé"))
+    desk.env = dict(desk.env, LC_ALL="en_US.UTF-8", LANG="en_US.UTF-8")
+    done = desk.run(GATE_CLEAN, desk.card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: TAG 'x-tagé' is not a plain tag name" in done.stderr
+    assert desk.gate_stands()
+
+
 def test_a_non_deploy_branch_is_refused(tmp_path):
     desk = Desk(tmp_path)
     desk.card.write_text(
@@ -282,6 +293,18 @@ def test_a_job_worktree_outside_the_pattern_is_refused(tmp_path, bad):
     git(desk.repo, "merge", "-q", "--no-ff", "--no-edit", "ops/x-job")
     desk.job_card.write_text(desk.job_card.read_text().replace("WORKTREE: x-job", f"WORKTREE: {bad}"))
     _job_refused(desk)
+
+
+def test_l3_an_accented_job_worktree_is_refused_under_a_utf8_locale(tmp_path):
+    """Card 03 L3, job-clean.sh: `[!A-Za-z0-9._-]` admits `é` under en_US.UTF-8 unless LC_ALL=C."""
+    desk = Desk(tmp_path)
+    git(desk.repo, "merge", "-q", "--no-ff", "--no-edit", "ops/x-job")
+    desk.job_card.write_text(desk.job_card.read_text().replace("WORKTREE: x-job", "WORKTREE: x-jobé"))
+    desk.env = dict(desk.env, LC_ALL="en_US.UTF-8", LANG="en_US.UTF-8")
+    done = desk.run(JOB_CLEAN, desk.job_card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: worktree 'x-jobé' is outside the approved pattern" in done.stderr
+    assert desk.job_stands()
 
 
 def test_a_symlinked_job_worktree_is_refused(tmp_path):

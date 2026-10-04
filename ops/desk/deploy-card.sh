@@ -23,6 +23,7 @@
 # report's commit is proven by blob ids, never by `git diff`, which refreshes the index).
 # Roots: COBALT_REPO_ROOT (default /Users/cobalt/cobalt), COBALT_WT_ROOT (default /Users/cobalt/cobalt-wt).
 
+export LC_ALL=C
 set -u
 
 REPO=${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}

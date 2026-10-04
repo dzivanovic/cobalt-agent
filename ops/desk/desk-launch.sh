@@ -19,6 +19,8 @@
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh check  "<absolute card path>" PASS-2   (house B + the second Opus)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh deploy "<absolute card path>"
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh deploy "<absolute card path>" STEP-D0  (the one resume)
+#   sh /Users/cobalt/.claude/ops/desk-launch.sh recut "<absolute deploy card path>"    (a deploy whose
+#        gate FAILED, recut and relaunched in ONE call: card 2026-10-03/03 adoption-scripts L5)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh devfix "<absolute card path>"          (one dev-maintenance
 #        job on cobalt_dev: DEVFIX-HUB.md, card 12 devfix-route; a resume names its step as build)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh build|check "<card>" [PASS-2] <step>   (a NEW worker at
@@ -47,6 +49,15 @@
 #   devfix: as build — `git -C /Users/cobalt/cobalt worktree add -b <BRANCH> <worktree> <BASE>`
 #           when the worktree does not exist yet; `cd <worktree>`; DEVFIX-HUB.md's `claude --bg`
 #           line with <card>, <job>, <worktree>, <table>, <proof test> filled.
+#   recut : for a deploy card whose REPORT's last line starts `FAILED` and names no `rollback:
+#           used`: `gate-clean.sh <card>` (beside this script; its refusals stand); the card's
+#           BRANCH, WORKTREE and TAG get `-attempt<n>` (n = the highest attempt present on those
+#           values, on a branch, tag, worktree or report of the same names, + 1; the first gate is
+#           attempt 1) and REPORT `<its name>-attempt<n>.md`, each printed `KEY: old -> new` after
+#           `RECUT: <job> attempt <n>`; `desk-commit.sh` commits the card; `desk-row.sh RECORD
+#           "RECUT <job> attempt <n> — <the failed last line>"`; then this script's `deploy` kind on
+#           the recut card (its own checks, its worktree add, its line, its WATCH line).
+#           DESK_LAUNCH_DRY=1 makes that last launch dry; the recut's own steps run.
 #   desk  : `cd /Users/cobalt/cobalt`; the wake-up's own launch line — the ONE backticked
 #           `claude --bg …` span on the `- LAUNCH` line of prompts/CTO-DESK-WAKEUP.md.
 #   prompt: `cd <the cwd the prompt names>`; the prompt's own launch line — the ONE
@@ -75,8 +86,10 @@
 #
 # IT REFUSES (exit 1, "REFUSED: <reason>" on stderr, nothing run):
 #   - to run at all from a path that holds a space (install under /Users/cobalt/.claude/ops/);
-#   - a kind that is none of build, check, deploy, devfix, desk, prompt, close, install-ops; a fixed file, a wake-up
+#   - a kind that is none of build, check, deploy, devfix, recut, desk, prompt, close, install-ops; a fixed file, a wake-up
 #     file or a prompt file still a draft, not committed on main, or changed since its commit;
+#   - kind `recut`: any argument after the card ("recut takes one argument, the card"), before
+#     the desk-size guard;
 #   - kind `close`: a date not YYYY-MM-DD, a date after today (ET), today's date before 21:00 ET,
 #     a first launch whose close report already exists, a resume without it, or ANY live
 #     `deploy-hub-` session (read from `claude agents --json`; unreadable = refused);
@@ -125,6 +138,7 @@
 # checked against a closed character set first. It holds no allow string of its own except
 # the two patterns the deploy line's tokens expand to (DEPLOY-HUB.md).
 
+export LC_ALL=C
 set -u
 
 # COBALT_REPO_ROOT and COBALT_WT_ROOT stand in for these two in tests/ops/test_devdb_lock.py only
@@ -204,6 +218,9 @@ watch_line() {
 
 [ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | close <YYYY-MM-DD> [<resume step>] | install-ops"
 kind=$1
+# recut takes the card and nothing else, refused before anything runs (card 03 L5, AMENDED
+# 10-03, ASK DESK 13: an ignored argument is a guess)
+[ "$kind" != "recut" ] || [ "$#" -le 2 ] || refuse "recut takes one argument, the card"
 
 # ---- the desk-size guard (cto-2026-10-01 R8): every kind but `desk`, before anything else -----
 # desk-context.sh --guard, installed beside this script, refuses while the desk measures
@@ -397,7 +414,7 @@ if [ "$kind" = "install-ops" ]; then
     exit 0
 fi
 
-[ "$#" -ge 2 ] && [ "$#" -le 4 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <absolute card path> [PASS-2] [<resume step>]"
+[ "$#" -ge 2 ] && [ "$#" -le 4 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix|recut> <absolute card path> [PASS-2] [<resume step>]"
 card=$2
 step=""
 pass2=""
@@ -415,9 +432,9 @@ done
 case "$kind" in
     build)  fixed="$PROMPTS/BUILD-HUB.md" ;;
     check)  fixed="$PROMPTS/CHECK-HUB.md" ;;
-    deploy) fixed="$PROMPTS/DEPLOY-HUB.md" ;;
+    deploy|recut) fixed="$PROMPTS/DEPLOY-HUB.md" ;;
     devfix) fixed="$PROMPTS/DEVFIX-HUB.md" ;;
-    *) refuse "kind '$kind' is none of build, check, deploy, devfix, desk, prompt, close, install-ops" ;;
+    *) refuse "kind '$kind' is none of build, check, deploy, devfix, recut, desk, prompt, close, install-ops" ;;
 esac
 [ -f "$fixed" ] || refuse "the fixed file is not installed: $fixed"
 if grep -q '«INSTALL' "$fixed"; then
@@ -482,11 +499,13 @@ case "$branch" in
 esac
 case "$rulings" in
     20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]\ R[0-9]*) ;;
-    none) [ "$kind" = "deploy" ] || refuse "incomplete card: RULINGS is 'none' only on a deploy card" ;;
+    none) [ "$kind" = "deploy" ] || [ "$kind" = "recut" ] || refuse "incomplete card: RULINGS is 'none' only on a deploy card" ;;
     *) refuse "incomplete card: RULINGS must start '<date> R<n>' (a deploy card with nothing carried: 'none')" ;;
 esac
-# the tree-state owner (build, check): 'unchanged' or 'row <id>'
+# the tree-state owner (build, check): optional (card 2026-10-03/03c M4); a card that carries the
+# key still says 'unchanged' or 'row <id>'
 tree_state() {
+    grep -q '^TREE STATE:' "$card" || return 0
     case "$(field "TREE STATE")" in
         unchanged|row\ ?*) ;;
         *) refuse "incomplete card: TREE STATE must be 'unchanged' or 'row <id>'" ;;
@@ -825,6 +844,80 @@ devfix)
     # the devfix holds the lock from its first step to its stop line: never launched beside a holder
     lock_free
     lock_dir_free
+    ;;
+recut)
+    # RECUT (card 2026-10-03/03 adoption-scripts L5): a deploy whose gate FAILED, in ONE call
+    need TAG
+    [ "$base" = "main" ] || refuse "recut: '$card' is no deploy card (its BASE is not the literal 'main')"
+    case "$report" in
+        "$REPORTS"/deploy-*.md) ;;
+        *) refuse "recut: REPORT is not $REPORTS/deploy-<name>.md: $report" ;;
+    esac
+    case "$tag" in
+        *[!A-Za-z0-9._-]*) refuse "incomplete card: TAG '$tag' is not a plain tag name" ;;
+    esac
+    [ -f "$report" ] || refuse "recut: no deploy report: $report"
+    last=$(grep -v '^[[:space:]]*$' "$report" | tail -n 1)
+    case "$last" in
+        FAILED*) ;;
+        *) refuse "recut: the deploy report does not end FAILED: $last" ;;
+    esac
+    case "$last" in
+        *"rollback: used"*) refuse "recut: the failed deploy names 'rollback: used' — its STEP-5 ran; a recut is not the desk's: $last" ;;
+        *"|"*) refuse "recut: the failed line holds a table bar, which desk-row.sh refuses: $last" ;;
+    esac
+    # the attempt: the highest -attempt<k> on the card's four values, a branch, a tag, a worktree
+    # or a report of the same base names, + 1 (the first gate is attempt 1); never a name in use
+    strip() { printf '%s\n' "$1" | sed 's/-attempt[0-9][0-9]*$//'; }
+    attempt_of() { printf '%s\n' "$1" | sed -n 's/.*-attempt\([0-9][0-9]*\)$/\1/p'; }
+    bb=$(strip "$branch")
+    bw=$(strip "$wt")
+    bt=$(strip "$tag")
+    br=$(strip "${report%.md}")
+    n=1
+    seen() {
+        k=$(attempt_of "$1")
+        [ -z "$k" ] || [ "$k" -le "$n" ] || n=$k
+    }
+    for v in "$branch" "$wt" "$tag" "${report%.md}"; do
+        seen "$v"
+    done
+    for v in $(git -C "$REPO" for-each-ref --format='%(refname:short)' "refs/heads/$bb-attempt*" "refs/tags/$bt-attempt*"); do
+        seen "$v"
+    done
+    for v in "$WT/$bw"-attempt* "$br"-attempt*.md; do
+        [ -e "$v" ] && seen "${v%.md}"
+    done
+    n=$((n + 1))
+    nb="$bb-attempt$n"
+    nw="$bw-attempt$n"
+    nt="$bt-attempt$n"
+    nr="$br-attempt$n.md"
+    ! git -C "$REPO" show-ref --verify --quiet "refs/heads/$nb" || refuse "recut: branch $nb exists"
+    ! git -C "$REPO" show-ref --verify --quiet "refs/tags/$nt" || refuse "recut: tag $nt exists"
+    [ ! -e "$WT/$nw" ] || refuse "recut: $WT/$nw exists"
+    [ ! -e "$nr" ] || refuse "recut: $nr exists"
+    text="RECUT $job attempt $n — $last"
+    rlen=$(python3 -c 'import sys; print(len("| R0000 | 00:00 ET | %s | RECORD |" % sys.argv[1]))' "$text")
+    [ "$rlen" -le 300 ] || refuse "recut: the desk row would be $rlen characters, over desk-row.sh's 300: $text"
+    # 1. the failed gate, by gate-clean.sh (it refuses when anything of the gate landed)
+    printf 'RUN: sh %s/gate-clean.sh "%s"\n' "$here" "$card"
+    sh "$here/gate-clean.sh" "$card" || exit 1
+    # 2. the card's four values
+    sed -e "s|^BRANCH: .*|BRANCH: $nb|" -e "s|^WORKTREE: .*|WORKTREE: $nw|" \
+        -e "s|^TAG: .*|TAG: $nt|" -e "s|^REPORT: .*|REPORT: $nr|" "$card" > "$card.recut" \
+        && mv "$card.recut" "$card" || refuse "recut: the card edit failed; the gate is cleaned: $card"
+    printf 'RECUT: %s attempt %s\n' "$job" "$n"
+    printf 'BRANCH: %s -> %s\n' "$branch" "$nb"
+    printf 'WORKTREE: %s -> %s\n' "$wt" "$nw"
+    printf 'TAG: %s -> %s\n' "$tag" "$nt"
+    printf 'REPORT: %s -> %s\n' "$report" "$nr"
+    # 3. the commit, 4. the desk row
+    sh "$here/desk-commit.sh" "docs(desk): RECUT $job attempt $n" "$card" \
+        || refuse "recut: desk-commit.sh failed; the gate is cleaned, the card edited and not committed: $card"
+    sh "$here/desk-row.sh" RECORD "$text" || refuse "recut: desk-row.sh failed; the card is committed: $card"
+    # 5. the deploy kind's launch on the recut card (DESK_LAUNCH_DRY=1 makes it dry)
+    exec sh "$0" deploy "$card"
     ;;
 esac
 

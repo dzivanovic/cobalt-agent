@@ -19,8 +19,7 @@ WHO FILLS IT: the desk (or a drafter it launches). A card that builds a check's 
 | `REPORT` | required | required | required | required | build / check: the BUILD report, absolute path inside the worktree. deploy: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-<…>.md`. devfix: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/devfix-<…>.md`, absent at the first launch |
 | `CHECK REPORT` | empty | required | — | — | absolute path under `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/` |
 | `HOUSE B` | empty | required | — | — | `as needed`, or `mandatory — vault notes` / `mandatory — sizing` for a build that writes his vault notes or changes sizing (his 2026-09-30 R38): the check then runs its second pass even when nothing is open. His per-case overrule of the wait is appended: ` · overruled <date> R<n>` |
-| `TREE STATE` | required | required | — | — | `unchanged`, or `row <id>` when the build adds a with-DB test or a migration: that row of `## ROWS` edits the pass-1 / pass-2 commands, the allowed-skip list and the level in `docs/40 - DevDocs/prompts/BUILD-HUB.md` and `DEPLOY-HUB.md`, and names both files in its `files` |
-| `DB` | optional | optional | — | — | `none` when every file of every row sits under `ops/`, `tests/ops/` or `docs/`: the job takes no `cobalt_dev` lock (`BUILD-HUB.md` W (a0)); the key is left out otherwise. `TREE STATE` is then `unchanged`. |
+| `DB` | optional | optional | — | — | `none` when every file of every row sits under `ops/`, `tests/ops/` or `docs/`: the job takes no `cobalt_dev` lock (`BUILD-HUB.md` W (a0)); the key is left out otherwise. |
 | `RULINGS` | required | required | required | required | his rulings that bind the job: `<date> R<n>`, comma-separated (`2026-09-30 R3, 2026-09-30 R9`). Row numbers only; never his words. deploy: `none` when no held defect is carried and he has not overruled the window for this one deploy (L73; the deploy's approval is the standing rule, `DEPLOY-HUB.md` `## AUTHORIZATION`) |
 | `TAG` | — | — | required | — | the deploy tag; the rollback tag is `pre-<JOB>` |
 | `MIGRATIONS` | — | — | required | — | `none`, or the numbers in `FORWARD` order, then ` · production at <level> · creates: <objects> · old code on the new schema: <why a code revert alone is safe>` |
@@ -37,6 +36,8 @@ A HEADING IS A BARE LINE: `## <name>` from column 0, no backtick, no bold, nothi
 | row | what | red first | files |
 |---|---|---|---|
 | `<id>` | the rule the row builds, with the `file:line` and the report row that backs it (a fix row is backed by a check `## RUNS` row that is `HELD`) | the test that fails on `BASE` for this row's reason, named, with the assertion it fails on. A row that only runs something (L70) says `RUN — asserts nothing` and names the command's output to quote | every file the row may touch |
+
+A with-DB test that needs a level above `0013` is named in its row's `files` through `ops/desk/gate-lists.md`: the row adds its `--deselect <id>` at the end of PASS 1 and its id at the end of PASS 2 of that file.
 
 `## SHIPS` (deploy) — one row per branch of the set:
 
@@ -80,7 +81,6 @@ TIP:
 REPORT: /Users/cobalt/cobalt-wt/e1-fix-0930/docs/40 - DevDocs/reports/e1-fix-build-2026-09-30.md
 CHECK REPORT:
 HOUSE B:
-TREE STATE: unchanged
 RULINGS: 2026-09-30 R3, 2026-09-30 R9
 ```
 
@@ -117,7 +117,6 @@ TIP: 5c92b589
 REPORT: /Users/cobalt/cobalt-wt/e1-fix-0930/docs/40 - DevDocs/reports/e1-fix-build-2026-09-30.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/e1-fix-check-2026-09-30.md
 HOUSE B: mandatory — vault notes
-TREE STATE: unchanged
 RULINGS: 2026-09-30 R3, 2026-09-30 R9
 ```
 

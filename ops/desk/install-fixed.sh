@@ -12,6 +12,7 @@
 # left to the build that wrote the file), proves no token is left in the file, and prints
 # the old and the new line 1. Commits nothing. A refusal: "REFUSED: <reason>" on stderr,
 # exit 1, the file untouched. REPO = ${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}
+export LC_ALL=C
 REPO=${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}
 REPORTS="$REPO/docs/40 - DevDocs/reports"
 refuse() { echo "REFUSED: $1" >&2; exit 1; }

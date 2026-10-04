@@ -16,6 +16,7 @@
 # report cto-<date>.md; wait-desk-idle.sh not beside this script.
 # Roots: COBALT_REPO_ROOT (default /Users/cobalt/cobalt).
 
+export LC_ALL=C
 set -u
 
 REPO=${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}

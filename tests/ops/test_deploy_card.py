@@ -363,6 +363,20 @@ def test_check_o2_a_migration_only_main_has_leaves_migrations_none(tmp_path):
     assert header(desk.out.read_text())["MIGRATIONS"] == "none"
 
 
+def test_l3_an_accented_tag_is_refused_under_a_utf8_locale(tmp_path):
+    """Card 03 L3: `[!A-Za-z0-9._-]` admits `é` under en_US.UTF-8 unless the script runs LC_ALL=C."""
+    desk = Desk(tmp_path)
+    args = [
+        "--job", "x-set", "--set", "xset", "--worktree", "x-gate", "--tag", "x-tagé",
+        "--out", str(desk.out), str(desk.card["alpha"]),
+    ]
+    env = dict(desk.env, LC_ALL="en_US.UTF-8", LANG="en_US.UTF-8")
+    done = subprocess.run(["sh", str(SCRIPT), *args], env=env, capture_output=True, text=True)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: --tag 'x-tagé' is not a plain tag name" in done.stderr
+    assert not desk.out.exists()
+
+
 @pytest.mark.parametrize("bad", ["../x-gate", "/abs/x-gate", "a/b", ".hidden", "agy-trial", ""])
 def test_a_worktree_outside_the_pattern_is_refused(tmp_path, bad):
     desk = Desk(tmp_path)

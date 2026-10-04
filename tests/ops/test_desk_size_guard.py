@@ -82,16 +82,17 @@ def transcript(projects: Path, sid8: str, tokens: int | None) -> Path:
 
 
 def desk_list(tmp_path: Path, rows: list[tuple[str, str]], status: int = 0) -> Path:
-    """A desk-list.sh stub printing LIST rows `id · name · cwd · status · state`; it logs each call."""
+    """A desk-list.sh stub printing LIST rows `id · name · cwd · status · state`; it logs each call.
+    It sits beside the staged desk-context.sh, which reads its sibling (card 2026-10-03/03 L4)."""
     out = "".join(f"printf '%s\\n' '{i} · {n} · ~/cobalt · idle · working'\n" for i, n in rows)
-    return write_exe(tmp_path / "list" / "desk-list.sh",
+    return write_exe(tmp_path / "ops" / "desk-list.sh",
                      f'echo list >> "{tmp_path}/list-calls"\n{out}exit {status}\n')
 
 
 def staged_context(tmp_path: Path, list_stub: Path) -> Path:
+    assert list_stub == tmp_path / "ops" / "desk-list.sh"
     return stage(tmp_path, "desk-context.sh", {
         "/Users/cobalt/.claude/projects": str(tmp_path / "projects"),
-        "/Users/cobalt/.claude/ops/desk-list.sh": str(list_stub),
     })
 
 

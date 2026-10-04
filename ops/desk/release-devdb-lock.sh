@@ -17,6 +17,7 @@
 # 1 something is still there after the removal.
 # COBALT_WT_ROOT stands in for /Users/cobalt/cobalt-wt in tests/ops/test_devdb_lock.py only.
 
+export LC_ALL=C
 set -u
 
 WT=${COBALT_WT_ROOT:-/Users/cobalt/cobalt-wt}

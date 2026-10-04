@@ -51,6 +51,9 @@ def job(tmp_path):
     (repo / "src" / "a.py").write_text("A = 1\n")
     (repo / "docs" / "x.md").write_text("doc\n")
     (repo / ".gitignore").write_text(".env\n")
+    # the reports folder is tracked, as in the real tree: an untracked report shows as its own path
+    (repo / "docs" / "40 - DevDocs" / "reports").mkdir(parents=True)
+    (repo / "docs" / "40 - DevDocs" / "reports" / "x-earlier.md").write_text("# earlier\n")
     git(repo, "init", "-q", "-b", "main")
     base = commit(repo, "base")
     job_wt = wt / "x-job"
@@ -62,10 +65,10 @@ def job(tmp_path):
     return wt, repo, job_wt, base, card, env
 
 
-def write_card(card: Path, job_wt: Path, base: str, tip: str = "") -> None:
+def write_card(card: Path, job_wt: Path, base: str, tip: str = "", check_report: str = "") -> None:
     card.write_text(
         "JOB: x-job\nLADDER: OFF-LADDER\nBRANCH: ops/x-job\nWORKTREE: x-job\n"
-        f"BASE: {base}\nTIP: {tip}\nREPORT: {job_wt / REPORT_REL}\n"
+        f"BASE: {base}\nTIP: {tip}\nREPORT: {job_wt / REPORT_REL}\nCHECK REPORT: {check_report}\n"
         "TREE STATE: unchanged\nRULINGS: 2026-01-02 R1\n\n## ROWS\n| row | what |\n"
     )
 
@@ -147,22 +150,44 @@ def test_a_build_on_a_foreign_commit_fails(job):
     assert last_line(done) == "FAILED PREFLIGHT: head"
 
 
-def test_an_env_in_this_worktree_fails(job):
+def env_row(done: subprocess.CompletedProcess, rule: str) -> str:
+    return next(ln for ln in done.stdout.splitlines() if ln.startswith(f"{rule} · "))
+
+
+def test_an_env_in_this_worktree_fails_naming_it(job):
+    """Card 02 A9: this worktree's .env is this job's failure; it is not listed as a sibling."""
     wt, repo, job_wt, base, card, env = job
     write_card(card, job_wt, base)
     (job_wt / ".env").write_text("COBALT_TEST_CONSTRUCTED=1\n")
     done = preflight(env, "build", card)
     assert done.returncode == 1
     assert last_line(done) == "FAILED PREFLIGHT: env here"
+    assert env_row(done, "env here").endswith(f" · {job_wt / '.env'}")
+    assert env_row(done, "env anywhere").endswith(" · siblings holding .env: none")
 
 
-def test_an_env_in_a_sibling_worktree_fails(job):
+@pytest.mark.parametrize("kind", ["build", "check"])
+def test_an_env_in_a_sibling_worktree_is_information_and_the_preflight_passes(job, kind):
+    """Card 02 A9 (his 10-01 R20: the take waits): a sibling's .env is listed, never this job's failure."""
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, GOOD_LAST) if kind == "check" else ""
+    write_card(card, job_wt, base, tip)
+    (wt / "beta" / ".env").write_text("COBALT_TEST_CONSTRUCTED=1\n")
+    (wt / "gamma").mkdir()
+    (wt / "gamma" / ".env").write_text("COBALT_TEST_CONSTRUCTED=1\n")
+    done = preflight(env, kind, card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "PREFLIGHT OK"
+    siblings = f"{wt / 'beta' / '.env'}, {wt / 'gamma' / '.env'}"
+    assert env_row(done, "env anywhere").endswith(f" · siblings holding .env: {siblings}")
+
+
+def test_no_env_anywhere_reads_none(job):
     wt, repo, job_wt, base, card, env = job
     write_card(card, job_wt, base)
-    (wt / "beta" / ".env").write_text("COBALT_TEST_CONSTRUCTED=1\n")
     done = preflight(env, "build", card)
-    assert done.returncode == 1
-    assert last_line(done) == "FAILED PREFLIGHT: env anywhere"
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert env_row(done, "env anywhere").endswith(" · siblings holding .env: none")
 
 
 def test_a_check_on_a_built_branch_passes_with_a_docs_only_commit_above_tip(job):
@@ -203,6 +228,109 @@ def test_a_check_with_a_src_commit_above_tip_fails(job):
     done = preflight(env, "check", card)
     assert done.returncode == 1
     assert last_line(done) == "FAILED PREFLIGHT: head"
+
+
+# ---- card 03c M1: the card's own report, untracked and alone, is expected ---------------------
+CHECK_REL = "docs/40 - DevDocs/reports/x-job-check.md"
+EXPECTED = "status: clean but the report (untracked, expected)"
+
+
+def untracked(job_wt: Path, rel: str) -> None:
+    path = job_wt / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# report\n\n(run in progress — next step under ## CONTINUE)\n")
+
+
+def test_m1_a_build_with_its_untracked_report_alone_passes(job):
+    """BUILD-HUB `## REPORT`: the first Write creates the report before PREFLIGHT runs."""
+    wt, repo, job_wt, base, card, env = job
+    write_card(card, job_wt, base)
+    untracked(job_wt, REPORT_REL)
+    done = preflight(env, "build", card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "PREFLIGHT OK"
+    assert EXPECTED in done.stdout.splitlines()
+    assert REPORT_REL in done.stdout  # the status output, quoted in the row
+
+
+def test_m1_the_report_and_one_more_untracked_file_fail_naming_the_other(job):
+    wt, repo, job_wt, base, card, env = job
+    write_card(card, job_wt, base)
+    untracked(job_wt, REPORT_REL)
+    (job_wt / "src" / "b.py").write_text("B = 1\n")
+    done = preflight(env, "build", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert last_line(done) == "FAILED PREFLIGHT: status"
+    assert "?? src/b.py" in done.stdout
+    assert EXPECTED not in done.stdout
+
+
+def test_m1_a_modified_tracked_report_is_not_the_expected_line(job):
+    wt, repo, job_wt, base, card, env = job
+    write_card(card, job_wt, base)
+    untracked(job_wt, REPORT_REL)
+    commit(job_wt, "wip(x-job): red")
+    (job_wt / REPORT_REL).write_text("# report\n\nchanged\n")
+    done = preflight(env, "build", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert last_line(done) == "FAILED PREFLIGHT: status"
+    assert EXPECTED not in done.stdout
+
+
+def test_m1_another_untracked_file_alone_still_fails(job):
+    """Negative control: the one ignored line is the card's report path, nothing else."""
+    wt, repo, job_wt, base, card, env = job
+    write_card(card, job_wt, base)
+    untracked(job_wt, "docs/40 - DevDocs/reports/x-other-build.md")
+    done = preflight(env, "build", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert last_line(done) == "FAILED PREFLIGHT: status"
+    assert EXPECTED not in done.stdout
+
+
+def test_m1_a_build_does_not_ignore_the_check_report(job):
+    wt, repo, job_wt, base, card, env = job
+    write_card(card, job_wt, base, check_report=str(repo / CHECK_REL))
+    untracked(job_wt, CHECK_REL)
+    done = preflight(env, "build", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert last_line(done) == "FAILED PREFLIGHT: status"
+
+
+def test_m1_a_check_with_its_untracked_check_report_alone_passes(job):
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, GOOD_LAST)
+    write_card(card, job_wt, base, tip, check_report=str(repo / CHECK_REL))
+    untracked(job_wt, CHECK_REL)
+    done = preflight(env, "check", card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "PREFLIGHT OK"
+    assert EXPECTED in done.stdout.splitlines()
+
+
+def test_m1_a_check_with_its_check_report_and_one_more_untracked_file_fails(job):
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, GOOD_LAST)
+    write_card(card, job_wt, base, tip, check_report=str(repo / CHECK_REL))
+    untracked(job_wt, CHECK_REL)
+    (job_wt / "src" / "b.py").write_text("B = 1\n")
+    done = preflight(env, "check", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert last_line(done) == "FAILED PREFLIGHT: status"
+    assert "?? src/b.py" in done.stdout
+
+
+def test_l3_an_accented_worktree_is_refused_under_a_utf8_locale(job):
+    """Card 03 L3: `[!A-Za-z0-9._-]` admits `é` under en_US.UTF-8 unless the script runs LC_ALL=C.
+    The directory exists: only the name is refused."""
+    wt, repo, job_wt, base, card, env = job
+    (wt / "x-jobé").mkdir()
+    write_card(card, job_wt, base)
+    card.write_text(card.read_text().replace("WORKTREE: x-job", "WORKTREE: x-jobé"))
+    env = dict(env, LC_ALL="en_US.UTF-8", LANG="en_US.UTF-8")
+    done = preflight(env, "build", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: WORKTREE 'x-jobé' is not one directory name" in done.stderr
 
 
 @pytest.mark.parametrize("args", [[], ["build"], ["deploy", "x"], ["build", "/no/such/card.md"]])

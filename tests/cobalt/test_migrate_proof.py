@@ -1538,6 +1538,7 @@ def test_proof_only_sends_no_lock_timeout(monkeypatch):
     monkeypatch.setenv(env.ENV_VAR, env.DEV)
     monkeypatch.setattr(cli, "_connect", lambda *a, **k: recorder)
     monkeypatch.setattr(cli, "_probe_all", lambda conn: {})
+    monkeypatch.setattr(cli, "_level_lines", lambda conn, probe: [])
     monkeypatch.setattr(cli, "_print_probe", lambda *a, **k: None)
     args = argparse.Namespace(
         proof_only=True, rollback=False, down_to=None, allow_prod=False,
@@ -1760,6 +1761,8 @@ def _proof_only_output(monkeypatch, capsys) -> list[str]:
     monkeypatch.setenv(env.ENV_VAR, env.DEV)
     monkeypatch.setattr(cli, "_connect", lambda *a, **k: recorder)
     monkeypatch.setattr(cli, "_probe_all", lambda conn: {})
+    # the two level lines after the code line are pinned in test_migrate_level.py
+    monkeypatch.setattr(cli, "_level_lines", lambda conn, probe: [])
     monkeypatch.setattr(cli, "_print_probe", lambda *a, **k: print("<proof table>"))
     args = argparse.Namespace(
         proof_only=True, rollback=False, down_to=None, allow_prod=False,

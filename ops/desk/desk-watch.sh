@@ -11,6 +11,7 @@
 # background limit is two hours). On the limit: prints
 # "STILL RUNNING after <n>s — last line: <line>", exit 2. A refusal: "REFUSED: <reason>"
 # on stderr, exit 1. Writes nothing.
+export LC_ALL=C
 refuse() { echo "REFUSED: $1" >&2; exit 1; }
 kind="$1"; src="$2"; max="${3:-7000}"; poll="${DESK_WATCH_POLL:-20}"
 [ -n "$src" ] || refuse "usage: desk-watch.sh <build|check|deploy|devfix|close> <card or close report> [max-seconds]"

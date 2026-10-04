@@ -19,6 +19,7 @@
 # COBALT_WT_ROOT and COBALT_REPO_ROOT stand in for /Users/cobalt/cobalt-wt and /Users/cobalt/cobalt
 # in tests/ops/test_devdb_lock.py only; the hubs never set them.
 
+export LC_ALL=C
 set -u
 
 WT=${COBALT_WT_ROOT:-/Users/cobalt/cobalt-wt}

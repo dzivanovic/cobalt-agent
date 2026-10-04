@@ -14,8 +14,11 @@
 # "REFUSED: desk at <n> tokens — REFRESH first" and exits 3. No `cto-desk` row, or a measure
 # that fails: "WARNING: desk size unread — guard skipped" on stderr, exit 0 — the guard never
 # blocks on its own failure (DECISION G-A). Writes nothing.
+# The LIST it reads is the desk-list.sh BESIDE this script (card 2026-10-03/03 adoption-scripts
+# L4, the hermetic guard): a tracked copy, never a path under the home folder.
+export LC_ALL=C
 PROJECTS=/Users/cobalt/.claude/projects
-DESK_LIST=/Users/cobalt/.claude/ops/desk-list.sh
+DESK_LIST="$(dirname "$0")/desk-list.sh"
 GUARD_AT=300000
 
 # measure <id>: prints the size in tokens; status 2 when the id has no transcript

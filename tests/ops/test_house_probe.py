@@ -87,10 +87,23 @@ def test_naming_grok_alone_calls_only_grok_from_agy_trial(houses):
     (call,) = calls_of(calls, "grok")
     assert Path(call["cwd"]).resolve() == (wt / "agy-trial").resolve()
     assert call["argv"] == [
+        "-m", "grok-4.7",
         "--sandbox", "cobalt-job",
         "--allow", f"Write({wt}/agy-trial/scratch/tribunal-bars-0920/**)",
         "-p", "Reply with only the word OK.",
     ]
+
+
+def test_card03_l7_both_grok_spellings_pin_the_model_first():
+    """His 2026-10-03 R3: every Grok seat runs grok-4.7 — `-m grok-4.7` directly after the
+    command word, in the probe and in the usage line of the header."""
+    lines = PROBE.read_text().splitlines()
+    spelled = [ln for ln in lines if re.search(r"^#\s+grok -|\bexec grok -", ln)]
+    assert len(spelled) == 2, spelled
+    for line in spelled:
+        words = line.split("grok", 1)[1].split()
+        assert words[:2] == ["-m", "grok-4.7"], line
+    assert any("R3" in ln and "grok-4.7" in ln for ln in lines if ln.startswith("#")), "the header names no row"
 
 
 def test_the_sol_stub_sees_the_hub_files_probe_exactly(houses):
