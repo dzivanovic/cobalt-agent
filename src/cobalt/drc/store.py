@@ -382,6 +382,23 @@ class DrcStore:
             raise ValueError(f"supersedes #{stated_id} names no stated row — nothing assumed")
         return row[0]
 
+    def superseded_stated_ids(self, ids: Iterable[int]) -> set[int]:
+        """K3-4 (a) (K2 fix r2 `## FOR K3`): which of `ids` (`drc_stated_books`
+        ids) are no longer current — each another row's `supersedes`, the
+        complement of the `_CURRENT` predicate. A READ: no write, no lock.
+        An unknown id is not in the result. The DRC build renders a stored
+        row naming such an id STALE, never a current close."""
+        wanted = sorted({int(i) for i in ids})
+        if not wanted:
+            return set()
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT id FROM drc_stated_books WHERE user_id = {_TENANT} AND id = ANY(%s) "
+                f"AND id NOT IN (SELECT id FROM drc_stated_books WHERE {_CURRENT})",
+                (wanted,),
+            ).fetchall()
+        return {int(r[0]) for r in rows}
+
     def effect_day(self, day: date, supersedes: Optional[int]) -> date:
         """The day a statement's rebuild starts from (K2 fix r1 F-1): `day`,
         or — for a restatement — the earlier of `day` and the superseded

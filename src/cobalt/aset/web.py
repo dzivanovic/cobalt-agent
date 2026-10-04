@@ -2066,7 +2066,8 @@ def _sheet_closed_estimated(store) -> str:
 # ---------------------------------------------------------------------------
 # DRC D2-4: the `/drc` import page (v2 §2–§3; v3 §2b, §5). THE SEAM WITH D4
 # (L72): this block — `GET /drc`, `POST /drc/import`, `POST /drc/no-trade`,
-# `POST /drc/scan` and the `_drc_*` helpers they alone use — sits at the END
+# `POST /drc/scan`, K3's `POST /drc/state-book` / `POST /drc/resolve` and
+# the `_drc_*` helpers they alone use — sits at the END
 # of the file, after every existing route, and shares nothing with D4's
 # settings block after `/attest`. The routes own no side effect (L40): each
 # calls `cobalt.drc.imports` (place / scan_folder / no_trade / day_view) and
@@ -2158,3 +2159,73 @@ async def drc_scan(date: str = Form(...)) -> str:
     if result.date is None:
         return drc_page.failed_page(result.refused or f"date {date!r}", CSS)
     return _drc_render(result.date, result)
+
+
+# DRC K3-9: his statements from the page — the state-your-book form and
+# RESOLVE, in `drc_no_trade`'s shape: parse, call the ONE `imports` action,
+# render; any exception → the failed page. They write nothing themselves.
+
+
+def _drc_int(text: str | None) -> int | None:
+    return None if not text else int(text)
+
+
+def _drc_text(text: str | None) -> str | None:
+    return text if text else None
+
+
+@app.post("/drc/state-book", response_class=HTMLResponse)
+async def drc_state_book(
+    date: str = Form(...),
+    flat: str | None = Form(None),
+    symbol: list[str] = Form([]),
+    direction: list[str] = Form([]),
+    shares: list[str] = Form([]),
+    avg_cost: list[str] = Form([]),
+    supersedes: str | None = Form(None),
+    sha256: str | None = Form(None),
+) -> str:
+    """K3-6: `[I was flat]` (one tap) or a listed book (preview → confirm)."""
+    try:
+        day = _drc_day(date)
+    except ValueError as exc:
+        return drc_page.failed_page(f"date {date!r}: {exc}", CSS)
+    try:
+        positions = [] if flat else [
+            {"symbol": s, "direction": d, "shares": n, "avg_cost": _drc_text(c)}
+            for s, d, n, c in zip(symbol, direction, shares, avg_cost)
+            if s.strip()
+        ]
+        if not flat and not positions:
+            return _drc_render(day, drc_imports.PlaceResult(
+                date=day, refused="refused: no position listed — [I was flat] states a flat book"))
+        result = drc_imports.state_book(
+            day, positions, supersedes=_drc_int(supersedes), expected_sha256=_drc_text(sha256)
+        )
+    except Exception as exc:  # noqa: BLE001
+        return drc_page.failed_page(f"DRC {day}: {type(exc).__name__}: {exc}", CSS)
+    return _drc_render(day, result)
+
+
+@app.post("/drc/resolve", response_class=HTMLResponse)
+async def drc_resolve(
+    date: str = Form(...),
+    trade_id: str = Form(...),
+    exit_price: str | None = Form(None),
+    exit_time: str | None = Form(None),
+    supersedes: str | None = Form(None),
+    sha256: str | None = Form(None),
+) -> str:
+    """K3-7: RESOLVE `closed outside the export` (preview → confirm)."""
+    try:
+        day = _drc_day(date)
+    except ValueError as exc:
+        return drc_page.failed_page(f"date {date!r}: {exc}", CSS)
+    try:
+        result = drc_imports.resolve(
+            day, trade_id, exit_price=_drc_text(exit_price), exit_time=_drc_text(exit_time),
+            supersedes=_drc_int(supersedes), expected_sha256=_drc_text(sha256),
+        )
+    except Exception as exc:  # noqa: BLE001
+        return drc_page.failed_page(f"DRC {day}: {type(exc).__name__}: {exc}", CSS)
+    return _drc_render(day, result)

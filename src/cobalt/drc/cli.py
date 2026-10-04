@@ -140,25 +140,12 @@ def _print_row(row: StatedBook) -> None:
 
 
 def _rebuilds(store, req: StateBookRequest) -> bool:
-    """K2: whether `--apply` re-pairs the day — any statement for a day
-    that already has its trading log, and a no-trade DRC or a resolve for
-    a day that joins a recorded chain (a `day` row on or before it). With
-    neither there is nothing to re-pair yet: the statement waits for the
-    day's import (AMENDED C7). K2 fix r1 F-1: the day tested is
-    `effect_day` — a restatement's rebuild starts at the earlier of its
-    day and the superseded row's day. K2 fix r2 F-1r2: the day (b) tests
-    for a recorded chain is the SUPERSEDED row's day for a restatement
-    (`DrcStore.stated_day`) — a restatement whose superseded row's day
-    joins a recorded chain rebuilds from `effect_day`, because the
-    superseded effect may be stored there (L1; v3 `[F-06]` `:190`;
-    AMENDED C7 (r2))."""
-    from .models import Kind
+    """K2: whether `--apply` re-pairs the day. K3-6: the decision's body
+    MOVED to `imports.statement_rebuilds` — the CLI's and the page's ONE
+    decision (L3); its docstring carries the K2 rule."""
+    from .imports import statement_rebuilds
 
-    effect = store.effect_day(req.day, req.supersedes)
-    if store.has_current_import(effect, Kind.TRADING_LOG):
-        return True
-    tested = req.day if req.supersedes is None else store.stated_day(req.supersedes)
-    return req.kind in ("no_trade", "resolve") and store.has_chain_through(tested)
+    return statement_rebuilds(store, req.day, req.kind, req.supersedes)
 
 
 def cmd_state_book(args: argparse.Namespace) -> None:

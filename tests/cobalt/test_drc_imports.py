@@ -202,6 +202,11 @@ class _Drc:
     def stated_difference(self, day):
         return None
 
+    def rows_for(self, day):
+        # DRC K3 (`day_view` reads the day's stored rows, K3-4 / K3-5 / K3-7):
+        # this double stores no `drc_rows`, so it has none to return.
+        return []
+
     def record_stated_book(self, day, kind, positions, *, via, now=None, **kw):
         from cobalt.session import assert_writable
 
@@ -778,8 +783,9 @@ def test_get_drc_writes_nothing(page, world):
 
 
 def test_get_drc_shows_the_morning_line_state_your_book_when_none_is_stated(page, world):
+    # DRC K3-5 (a) NAMED REVERSAL: the form ships; the line names it, the CLI kept beside it.
     text = page.get("/drc", params={"date": D.isoformat()}).text
-    assert "state your opening book for 2001-01-02 — until the form ships: cobalt drc state-book --opening 2001-01-02" in text
+    assert "state your opening book for 2001-01-02 — the form below (or cobalt drc state-book --opening 2001-01-02" in text
 
 
 def test_get_drc_shows_a_seed_raise_verbatim_with_the_remedy(page, world):

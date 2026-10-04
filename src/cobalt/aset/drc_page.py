@@ -9,6 +9,12 @@ string is escaped. No kind picker (R114), no rule checker (R101), no PDF.
 The per-trade drop zones follow the trade-reporter PATTERN (drop, click
 or paste an image onto a trade) — its interaction only, none of its
 fields.
+
+K3 (v3 §5): beside STARTING BOOK, the state-your-book form (`[I was
+flat]`, one tap; `[List positions]`, a preview first) and RESOLVE for each
+trade carried into the day; after a preview, the `Confirm` form sends the
+previewed rows and their `book_sha256` back (L7). The after-drop line and
+the day's resolve outcomes come from the `DayView`.
 """
 
 from __future__ import annotations
@@ -16,7 +22,7 @@ from __future__ import annotations
 import html
 from typing import Optional
 
-from cobalt.drc.imports import DayView, PlaceResult
+from cobalt.drc.imports import DayView, PlaceResult, StatementPreview
 
 _CSS = """
  .drc h2{font-size:14px;letter-spacing:.06em;color:#9fafca;margin:14px 0 6px}
@@ -68,6 +74,64 @@ def _file_class(text: str) -> str:
     return "line"
 
 
+#: Rows the `[List positions]` form offers (empty rows are ignored).
+LIST_ROWS = 3
+
+
+def _hidden(name: str, value: object) -> str:
+    return f'<input type="hidden" name="{_e(name)}" value="{_e("" if value is None else value)}">'
+
+
+def _confirm(day: str, p: StatementPreview) -> str:
+    """K3-6 / K3-7: the previewed row's fields sent back with its sha (L7)."""
+    if p.action == "state-book":
+        fields = "".join(
+            _hidden("symbol", r["symbol"]) + _hidden("direction", r["direction"]) + _hidden("shares", r["shares"])
+            + _hidden("avg_cost", r["avg_cost"])
+            for r in p.positions
+        )
+    else:
+        (r,) = p.positions
+        fields = _hidden("trade_id", r["trade_id"]) + _hidden("exit_price", r["exit_price"]) + _hidden(
+            "exit_time", r["exit_time"])
+    return (
+        f'<form method="post" action="/drc/{_e(p.action)}">{_hidden("date", day)}{fields}'
+        f'{_hidden("supersedes", p.supersedes)}{_hidden("sha256", p.sha256)}'
+        f'<button class="primary" type="submit">Confirm — write book_sha256 {_t(p.sha256[:12])}</button></form>'
+    )
+
+
+def _state_book_form(day: str) -> str:
+    """K3-6 (v3 §2c row A, §5): `[I was flat]` one tap; `[List positions]`."""
+    rows = "".join(
+        '<div class="line"><input name="symbol" placeholder="symbol">'
+        '<select name="direction"><option value="long">long</option><option value="short">short</option></select>'
+        '<input name="shares" placeholder="shares"><input name="avg_cost" placeholder="avg cost (optional)"></div>'
+        for _ in range(LIST_ROWS)
+    )
+    return (
+        '<div class="card"><h2>STATE YOUR BOOK</h2>'
+        f'<form method="post" action="/drc/state-book">{_hidden("date", day)}'
+        '<input type="hidden" name="flat" value="1"><button type="submit">I was flat</button></form>'
+        f'<form method="post" action="/drc/state-book">{_hidden("date", day)}{rows}'
+        '<input name="supersedes" placeholder="restates statement # (optional)">'
+        '<button type="submit">List positions</button></form></div>'
+    )
+
+
+def _resolve_forms(day: str, carried: list[str]) -> str:
+    """K3-7: RESOLVE `closed outside the export`, one form per carried trade."""
+    forms = "".join(
+        f'<form method="post" action="/drc/resolve">{_hidden("date", day)}{_hidden("trade_id", t)}'
+        f'<div class="line">{_t(t)}</div><input name="exit_price" placeholder="exit price (optional)">'
+        '<input name="exit_time" placeholder="exit time, ISO with offset (optional)">'
+        '<input name="supersedes" placeholder="restates resolve # (optional)">'
+        '<button type="submit">Resolve — closed outside the export</button></form>'
+        for t in carried
+    )
+    return '<div class="card"><h2>RESOLVE</h2>' + (forms or _lines(["no position carried into this day"])) + "</div>"
+
+
 def failed_page(message: str, css: str = "") -> str:
     return _page(f'<div class="failed">FAILED\n{_t(message)}</div>', css)
 
@@ -102,14 +166,20 @@ def render(view: DayView, result: Optional[PlaceResult] = None, *, cards_error: 
         if result.status_line:
             action.append(result.status_line)
         parts.append('<div class="card"><h2>THIS ACTION</h2>'
-                     + "".join(f'<div class="{_file_class(a)}">{_t(a)}</div>' for a in action) + "</div>")
+                     + "".join(f'<div class="{_file_class(a)}">{_t(a)}</div>' for a in action)
+                     + (_confirm(day, result.preview) if result.preview is not None else "") + "</div>")
 
     parts.append(f'<div class="status">{_t(view.status_line)}</div>')
     if view.event_line:
         parts.append(_lines([view.event_line]))
 
     morning = view.morning + ([view.stated_difference] if view.stated_difference else [])
-    parts.append('<div class="card"><h2>STARTING BOOK</h2>' + _lines(morning, "line loud") + "</div>")
+    parts.append('<div class="card"><h2>STARTING BOOK</h2>' + _lines(morning, "line loud")
+                 + (_lines([view.after_drop]) if view.after_drop else "") + "</div>")
+    parts.append(_state_book_form(day))
+    parts.append(_resolve_forms(day, view.carried))
+    if view.resolves:
+        parts.append('<div class="card"><h2>RESOLVES</h2>' + _lines(view.resolves, "line loud") + "</div>")
     notes = ([view.unpaired] if view.unpaired else []) + view.notes
     if notes:
         parts.append('<div class="card">' + _lines(notes, "line loud") + "</div>")

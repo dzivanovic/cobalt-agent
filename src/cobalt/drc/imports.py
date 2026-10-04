@@ -49,6 +49,15 @@ day re-fires.
 MARKET RESET (R102): every door refuses 20:00–21:00 ET before anything
 is read or written, with the reason.
 
+K3 — HIS STATEMENTS FROM THE PAGE (v3 §2b–§2c, §5; R52): `state_book`
+(his opening book: `[I was flat]` one tap, a listed book preview →
+confirm with its `book_sha256`) and `resolve` (`closed outside the
+export`, only for a trade of `seed_for(day)`, preview → confirm) write
+through the ONE writer, `record_stated_book(…, via="drc_page")`. Their
+effect is the CLI's decision, moved here (`statement_rebuilds`, L3):
+`rebuild(effect_day(day, supersedes))`, then D3's `rebuild_notes` over
+every date it returned. A refused rebuild is shown, the statement kept.
+
 `DrcStore` is the one writer of every `drc_*` row (L40); nothing here
 writes SQL.
 """
@@ -96,6 +105,10 @@ UNPAIRED = "not computed — opening book not stated · state your opening book 
 BUILD_NOT_BUILT = "build not built (D3)"
 #: D2 fix r2 F-10: `done` needs a note path (seam §1, `0019_drc_events.sql`).
 NO_NOTE_PATH = "the build returned no note path ({note!r}) — never done (L1)"
+#: K3: the page's caller name on every statement it writes (R52 (a)).
+VIA = "drc_page"
+#: The statement table's name, for the line naming the row written (L40).
+_STATED_TABLE = DrcStore.STATED_TABLE
 
 _PLACED = (Outcome.PARSED.value, Outcome.PARTIAL.value)
 _PNG = b"\x89PNG\r\n\x1a\n"
@@ -190,6 +203,19 @@ class DrcInputsPlaced(BaseModel):
         return self
 
 
+class StatementPreview(BaseModel):
+    """K3: the row a statement WOULD write (`preview_stated_book`), shown
+    before `Confirm`: its canonical positions (what the confirm sends
+    back) and its `book_sha256` (the confirm's `expected_sha256`, L7)."""
+
+    action: Literal["state-book", "resolve"]
+    kind: str
+    positions: list[dict]
+    sha256: str
+    reason: str
+    supersedes: Optional[int] = None
+
+
 class PlaceResult(BaseModel):
     """What one action did: the per-file lines, the day's state after it,
     the status line, the event it fired (if any)."""
@@ -203,6 +229,7 @@ class PlaceResult(BaseModel):
     event: Optional[DrcInputsPlaced] = None
     orphaned: list[str] = Field(default_factory=list)
     note_path: Optional[str] = None
+    preview: Optional[StatementPreview] = None
 
 
 class DayView(BaseModel):
@@ -222,6 +249,12 @@ class DayView(BaseModel):
     state: str = ""
     status_line: str = ""
     event_line: Optional[str] = None
+    #: K3-5 (b): `<k> carried closed · <m> still open → tonight's DRC`.
+    after_drop: Optional[str] = None
+    #: K3-7: the trade ids carried into the day (`seed_for`), RESOLVE's offer.
+    carried: list[str] = Field(default_factory=list)
+    #: K3-7: the day's resolve outcomes and resolved trades, as stored.
+    resolves: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------
@@ -732,6 +765,165 @@ def no_trade_event(day: date, stated_book_id: int, *, now: Optional[datetime] = 
 
 
 # ---------------------------------------------------------------------
+# K3-6 / K3-7 — his statements from the page (one writer, one effect)
+# ---------------------------------------------------------------------
+
+
+def statement_rebuilds(store, day: date, kind: str, supersedes: Optional[int]) -> bool:
+    """K2: whether a written statement re-pairs the day — any statement for a
+    day that already has its trading log, and a no-trade DRC or a resolve for
+    a day that joins a recorded chain (a `day` row on or before it). With
+    neither there is nothing to re-pair yet: the statement waits for the
+    day's import (AMENDED C7). K2 fix r1 F-1: the day tested is
+    `effect_day` — a restatement's rebuild starts at the earlier of its day
+    and the superseded row's day. K2 fix r2 F-1r2: the day (b) tests for a
+    recorded chain is the SUPERSEDED row's day for a restatement
+    (`DrcStore.stated_day`) — a restatement whose superseded row's day joins
+    a recorded chain rebuilds from `effect_day`, because the superseded
+    effect may be stored there (L1; v3 `[F-06]` `:190`; AMENDED C7 (r2)).
+
+    THE one decision (K3-6, L3): `cli._rebuilds`' body, MOVED here — the
+    CLI's `state-book --apply` and the page's statements call it."""
+    effect = store.effect_day(day, supersedes)
+    if store.has_current_import(effect, Kind.TRADING_LOG):
+        return True
+    tested = day if supersedes is None else store.stated_day(supersedes)
+    return kind in ("no_trade", "resolve") and store.has_chain_through(tested)
+
+
+def _rebuild_notes(dates: list[date]):
+    """D3's ONE notes loop (K3-8), imported when called (build imports this
+    module)."""
+    from cobalt.drc.build import rebuild_notes
+
+    return rebuild_notes(dates)
+
+
+def _preview(day: date, kind: str, positions: list[dict], supersedes: Optional[int], action) -> PlaceResult:
+    """The exact row the confirm would write, nothing written (L7)."""
+    try:
+        row = DrcStore().preview_stated_book(day, kind, positions, via=VIA, supersedes=supersedes)
+    except (PairingError, ValueError) as e:
+        return PlaceResult(date=day, refused=str(e))  # the store's words, verbatim
+    return PlaceResult(
+        date=day,
+        message=(
+            f"preview — nothing written: {day} {kind} · {len(row.positions)} position(s) · "
+            f"book_sha256 {row.book_sha256} · confirm to write"
+        ),
+        preview=StatementPreview(
+            action=action, kind=kind, positions=row.positions, sha256=row.book_sha256, reason=row.reason,
+            supersedes=supersedes,
+        ),
+    )
+
+
+def _statement(
+    day: date, kind: str, positions: list[dict], supersedes: Optional[int], expected_sha256: Optional[str],
+    now: Optional[datetime],
+) -> PlaceResult:
+    """Write ONE statement through `record_stated_book` (`via = drc_page`),
+    then its effect: `statement_rebuilds` → `rebuild(effect_day(day,
+    supersedes))` → `rebuild_notes` of every date it returned. The store's
+    refusals verbatim; a refused rebuild or a failed note loud, the
+    statement kept (K2 fix r2 `## FOR K3`). A statement fires no event."""
+    store = DrcStore()
+    try:
+        effect = store.effect_day(day, supersedes)
+        rebuilds = statement_rebuilds(store, day, kind, supersedes)
+        row = store.record_stated_book(
+            day, kind, positions, via=VIA, supersedes=supersedes, expected_sha256=expected_sha256, now=now
+        )
+    except SessionBlocked:
+        return PlaceResult(date=day, refused=RESET_REFUSAL)
+    except (PairingError, ValueError) as e:
+        return PlaceResult(date=day, refused=str(e))  # the store's words, verbatim
+    result = PlaceResult(
+        date=day, message=f"written: {_STATED_TABLE} #{row.id} ({kind}, book_sha256 {row.book_sha256})"
+    )
+    if not rebuilds:
+        result.status_line = f"stated; {effect} has no import yet"
+        return result
+    try:
+        dates = store.rebuild(effect)
+    except (PairingError, ValueError) as e:
+        result.status_line = f"not rebuilt: {e}"
+        return result
+    rebuilt = ", ".join(d.isoformat() for d in dates)
+    try:
+        notes = _rebuild_notes(dates)
+    except Exception as e:  # noqa: BLE001 — the database is committed; the note failure is shown (L1)
+        result.status_line = f"rebuilt: {rebuilt} · notes FAILED: {e}"
+        return result
+    result.note_path = str(notes[0]) if notes else None
+    result.status_line = f"rebuilt: {rebuilt}"
+    return result
+
+
+def state_book(
+    day: date,
+    positions: Iterable[dict],
+    *,
+    supersedes: Optional[int] = None,
+    expected_sha256: Optional[str] = None,
+    now: Optional[datetime] = None,
+) -> PlaceResult:
+    """K3-6 — his opening book for `day` (v3 §2c row A, §5): `[I was flat]`
+    (no positions) is ONE tap; a listed book is first a preview, then
+    written only with the previewed `book_sha256` (`expected_sha256`, L7).
+    Kind `opening` only (`no_trade` is D2's button). Refused inside
+    `market_reset` before anything is read or written (R102)."""
+    try:
+        assert_writable("drc.state_book", target=day.isoformat(), now=now)
+    except SessionBlocked:
+        return PlaceResult(date=day, refused=RESET_REFUSAL)
+    positions = list(positions)
+    if positions and expected_sha256 is None:
+        return _preview(day, "opening", positions, supersedes, "state-book")
+    return _statement(day, "opening", positions, supersedes, expected_sha256, now)
+
+
+def resolve(
+    day: date,
+    trade_id: str,
+    *,
+    exit_price: Optional[str] = None,
+    exit_time: Optional[str] = None,
+    supersedes: Optional[int] = None,
+    expected_sha256: Optional[str] = None,
+    now: Optional[datetime] = None,
+) -> PlaceResult:
+    """K3-7 — RESOLVE `closed outside the export` (v3 §2b, `[F-06]`, R90):
+    offered only for a trade of `day`'s stored starting book
+    (`seed_for(day)`); any other id is refused and nothing written. A
+    preview first, then written only with its `book_sha256` (L7). An exit
+    time must carry its UTC offset (the CLI's rule)."""
+    try:
+        assert_writable("drc.resolve", target=day.isoformat(), now=now)
+    except SessionBlocked:
+        return PlaceResult(date=day, refused=RESET_REFUSAL)
+    if exit_time is not None:
+        try:
+            naive = datetime.fromisoformat(str(exit_time)).tzinfo is None
+        except ValueError:
+            return PlaceResult(date=day, refused=f"refused: exit time {str(exit_time)!r} is not an ISO-8601 time")
+        if naive:
+            return PlaceResult(
+                date=day, refused=f"refused: exit time {str(exit_time)!r} has no UTC offset — a naive time is refused"
+            )
+    try:
+        book = DrcStore().seed_for(day)
+    except PairingError as e:
+        return PlaceResult(date=day, refused=str(e))
+    if trade_id not in {p.trade_id for p in (book.positions if book is not None else [])}:
+        return PlaceResult(date=day, refused=f"refused: {trade_id} is not carried into {day}")
+    positions = [{"trade_id": trade_id, "exit_price": exit_price, "exit_time": exit_time}]
+    if expected_sha256 is None:
+        return _preview(day, "resolve", positions, supersedes, "resolve")
+    return _statement(day, "resolve", positions, supersedes, expected_sha256, now)
+
+
+# ---------------------------------------------------------------------
 # D2-4 — what the page shows (reads only)
 # ---------------------------------------------------------------------
 
@@ -750,8 +942,8 @@ def _morning(store: DrcStore, day: date) -> list[str]:
         return lines
     if book is None:
         return [
-            f"state your opening book for {day} — until the form ships: "
-            f"cobalt drc state-book --opening {day} …"
+            f"state your opening book for {day} — the form below "
+            f"(or cobalt drc state-book --opening {day} …)"
         ]
     symbols = ", ".join(p.symbol for p in book.positions) or "flat"
     n = len(book.positions)
@@ -784,6 +976,40 @@ def folder_pending(day: date, view: dict, root: Path) -> list[str]:
 def _symbol(trade_id: str) -> str:
     m = _TRADE_ID.match(trade_id)
     return m.group(1) if m else trade_id
+
+
+def _stored_lines(store: DrcStore, day: date, view: dict, out: DayView) -> None:
+    """K3's page lines, from the day's STORED rows only (never the note):
+    the note-stale mark (K3-4 (c)), the after-drop line (K3-5 (b)), the
+    resolve outcomes and resolved trades (K3-7; a restated resolve STALE,
+    K3-4 (a))."""
+    from . import units
+
+    stored = store.rows_for(day)
+    build_day_row = next((r for r in stored if r["kind"] == "build_day"), None)
+    stale = (build_day_row or {}).get("derived", {}).get("note_stale")
+    if stale:
+        out.notes.append(f"note stale: {stale['note']} — {stale['error']} · the book above is the database's")
+    if _computed(view):
+        seed = next((r for r in stored if r["kind"] == "seed"), None)
+        carried = set(seed["derived"].get("trade_ids") or []) if seed else set()
+        still = {r["ref"] for r in stored if r["kind"] == "open_position"}
+        out.after_drop = f"{len(carried - still)} carried closed · {len(still)} still open → tonight's DRC"
+    outcomes = view["day"]["derived"].get("resolves") or []
+    resolved = [r for r in stored if r["kind"] == "trade" and r["inputs"].get("resolve_id")]
+    named = {o["resolve_id"] for o in outcomes} | {r["inputs"]["resolve_id"] for r in resolved}
+    superseded = store.superseded_stated_ids(named) if named else set()
+    out.resolves = [units.stale_resolve(i, store.stated_day(i).isoformat()) for i in sorted(superseded)]
+    out.resolves += [
+        f"resolve #{o['resolve_id']} {o['trade_id']}: {o['reason']}"
+        for o in outcomes if o["resolve_id"] not in superseded
+    ]
+    for r in resolved:
+        if r["inputs"]["resolve_id"] in superseded:
+            continue
+        gross = r["derived"].get("gross_pnl")
+        realized = gross if isinstance(gross, str) and gross.startswith("not computed") else units.money(gross)
+        out.resolves.append(f"{r['ref']}: CLOSED · realized {realized} (resolve #{r['inputs']['resolve_id']})")
 
 
 def day_view(day: date, *, cards: Optional[list[dict]] = None, vault_root: Optional[Path] = None) -> DayView:
@@ -821,6 +1047,13 @@ def day_view(day: date, *, cards: Optional[list[dict]] = None, vault_root: Optio
         )
     out.orphaned = _orphans(view)
     out.trades = list(view["trades"])
+    try:
+        book = store.seed_for(day)
+    except PairingError:
+        book = None  # `_morning` shows the raise
+    out.carried = [p.trade_id for p in (book.positions if book is not None else [])]
+    if view["day"] is not None:
+        _stored_lines(store, day, view, out)
     try:
         out.folder_pending = folder_pending(day, view, _root(vault_root))
     except Exception as e:  # noqa: BLE001 — an unresolved vault is shown, never hidden
@@ -881,6 +1114,8 @@ __all__ = [
     "DrcInputsPlaced",
     "FileLine",
     "PlaceResult",
+    "StatementPreview",
+    "VIA",
     "day_view",
     "folder_pending",
     "is_trading_day",
@@ -888,5 +1123,8 @@ __all__ = [
     "no_trade_event",
     "place",
     "render_status",
+    "resolve",
     "scan_folder",
+    "state_book",
+    "statement_rebuilds",
 ]

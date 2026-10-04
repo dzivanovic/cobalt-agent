@@ -275,6 +275,18 @@ def test_k3_1_a_no_trade_day_carries_the_position_unchanged(tmp_path, weekday_ca
     )
 
 
+def test_k3_1_a_day_the_calendar_does_not_cover_says_day_not_computed(tmp_path):
+    """K3-1 / L1: `day <k>` from THE one calendar; a span it does not cover
+    (the shipped NYSE calendar holds no 2001) → `day not computed — <the
+    calendar's reason>`, never a weekday guess, and the build goes on (no
+    `weekday_calendar` here, on purpose)."""
+    store = _K3Store()
+    root, _ = _built(tmp_path, store, _record(store, D, trading=DAY1.read_bytes()))
+    line = _unit_body(_note(root), "drc-trades", "open_positions")[1]
+    assert "· day not computed — no NYSE calendar for 2001 (asked about 2001-01-01)." in line
+    assert line.startswith("DDD · long · 30 · ")
+
+
 def test_k3_1_two_positions_are_sorted_by_trade_id(tmp_path, weekday_calendar):
     store = _K3Store()
     root, _ = _built(tmp_path, store, _record(store, D, trading=TWO_OPEN))
@@ -739,8 +751,12 @@ def test_k3_6_statement_rebuilds_equals_the_old_cli_decision(kind, restated, has
     what the old body returned; `cli._rebuilds` calls it (L3)."""
     from cobalt.drc import cli, imports
 
-    store = _Statements(imports={D_NEXT} if has_import else (), chain={D} if chain else ())
-    store.rows.append(StatedBook(id=1, day=D_NEXT, kind=kind, positions=[], book_sha256="c" * 64, via="cli",
+    # The superseded row is dated D, the statement D_NEXT, the chain starts
+    # at D_NEXT: the day a restatement tests (`stated_day`) differs from the
+    # statement's own day, so a body that tests the wrong day returns another
+    # answer (K2 fix r2 F-1r2).
+    store = _Statements(imports={D} if has_import else (), chain={D_NEXT} if chain else ())
+    store.rows.append(StatedBook(id=1, day=D, kind=kind, positions=[], book_sha256="c" * 64, via="cli",
                                  reason="x"))
     supersedes = 1 if restated else None
     day = D_NEXT

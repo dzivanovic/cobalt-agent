@@ -20,9 +20,16 @@ THE UNITS, by section, each under HIS heading (v2 §6 table; unit ids stable):
     drc-trades  / tickers          the trade count line
     drc-trades  / trade-<id>       one block per stored trade (B-rows)
     drc-trades  / voice-<id>       HIS unit next to it, created once (R99)
+    drc-trades  / open_positions   the book the day left (K3-1, v3 §2a / §5)
     drc-trades  / reconcile        the diff only (R90 / R67)
+    drc-open-items / open_positions  A31 `open items carried forward` (K3-3),
+                                   directly after the drc-trades section
     drc-rules   / rules_check      existing scaffold (checkboxes + cards
                                    with no trade) — `prefill.drc`'s helpers
+
+K3: the open-position unit, the summary's `open overnight` and the A31
+line render ONE stored list, `build_day.derived["open_positions"]`, which
+`build.plan_note` computes once (`[F-11]`, L3, L57).
 
 A SECTION IS ONE BLOCK (`vaultwrite.markers`: a duplicate section is
 refused), so `facts` is the unit of its OWN section `drc-risk-facts`
@@ -53,6 +60,8 @@ FACTS = ("drc-risk-facts", "facts")
 RISK_PARAMETERS = ("drc-risk", "risk_parameters")
 TICKERS = ("drc-trades", "tickers")
 RECONCILE = ("drc-trades", "reconcile")
+OPEN_POSITIONS = ("drc-trades", "open_positions")
+OPEN_ITEMS = ("drc-open-items", "open_positions")
 RULES_CHECK = ("drc-rules", "rules_check")
 TRADE_PREFIX = "trade-"
 VOICE_PREFIX = "voice-"
@@ -96,6 +105,9 @@ PNL_PLACEMENT = after_pattern(re.compile(r"^###\s*PnL on the day"), "under '### 
 #: paragraph (v2 §13 A9; D3 fix r1 F-4). Its own section: a section is one
 #: block, and `drc-risk` stays under `### PnL on the day:`.
 RISK_FACTS_PLACEMENT = after_pattern(re.compile(r"^###\s*How I managed risk"), "under '### How I managed risk:'")
+#: `drc-open-items` (A31, K3-3): directly after the drc-trades section, so
+#: no line lands outside a section.
+OPEN_ITEMS_PLACEMENT = Placement("after the drc-trades section", _after_section(OPEN_POSITIONS[0]))
 
 
 # ---------------------------------------------------------------------
@@ -133,6 +145,7 @@ def summary(day_row: dict) -> str:
         lines.append("miss line: pending (replay inputs not stored)")
     lines.append(f"P&L: {d['pnl_text']}")
     lines.append(f"W/L: {d['wl_text']}")
+    lines.append(f"open overnight: {d['open_overnight']}")
     lines.append(f"cards written: {d['cards_written']} · taken: {d['cards_taken']}")
     lines.append(f"screenshots bound / trades: {d['screenshots_text']}")
     unmapped = f"unmapped playbooks: {d['unmapped_playbooks']}"
@@ -193,14 +206,78 @@ def reconcile(day_row: dict) -> str:
     return "\n".join(["legs: not built", "adjustment pending (legs writer not built)"])
 
 
+def stale_resolve(resolve_id: int, effect_day: str) -> str:
+    """K3-4 (a) (K2 fix r2 `## FOR K3`): a stored row names a resolve that
+    was restated — the one wording, the note's and the page's."""
+    return f"STALE — resolve #{resolve_id} was restated; rebuild {effect_day} once {effect_day}'s input is recorded"
+
+
+def _stale_resolves(d: dict) -> list[str]:
+    return [stale_resolve(s["resolve_id"], s["effect_day"]) for s in d.get("stale_resolves") or []]
+
+
+def _position_line(p: dict) -> str:
+    return " · ".join([
+        p["symbol"],
+        p["direction"],
+        str(p["held_shares"]),
+        f"avg cost {NOT_GIVEN if p['avg_cost'] is None else money(p['avg_cost'])}",
+        f"opened {p['opened_on'] or 'not stated'}",
+        f"day {'not stated' if p['days_held'] is None else p['days_held']}",
+        p["status"],
+        f"carried from {p['carried_from'] or '—'}",
+        f"last execution {p['last_execution'] or 'not stored'}",
+        p["trade_id"],
+    ])
+
+
+def open_positions(day_row: dict) -> str:
+    """K3-1 (v3 §2a, §5): the book the day left — a header and one line per
+    position, or ONE loud line (pairing not computed, a stale book, no
+    `book_close` row); never `left open: 0` for an unknown book (L1)."""
+    d = day_row["derived"]
+    lines = _stale_resolves(d)
+    listed = d["open_positions"]
+    if listed is None:
+        return "\n".join([*lines, d["open_positions_state"]])
+    if not listed:
+        lines.append("left open: 0 — tomorrow starts flat (stated by this DRC)")
+    else:
+        lines.append(
+            f"left open: {len(listed)} — tomorrow's import starts from these · "
+            f"book: {d['open_positions_book'][:12]}"
+        )
+        lines.extend(_position_line(p) for p in listed)
+    return "\n".join(lines)
+
+
+def open_items(day_row: dict) -> str:
+    """K3-3 (v3 §5 A31, `[F-11]`): the open positions under `open items
+    carried forward`, from the SAME list."""
+    d = day_row["derived"]
+    head = "open items carried forward — "
+    listed = d["open_positions"]
+    if listed is None:
+        return head + d["open_positions_state"]
+    if not listed:
+        return head + "open positions: none"
+    return "\n".join([f"{head}open positions: {len(listed)}"] + [
+        f"{p['symbol']} {p['direction']} {p['held_shares']} · {p['trade_id']} · "
+        f"day {'not stated' if p['days_held'] is None else p['days_held']}"
+        for p in listed
+    ])
+
+
 def build_rows_by_ref(rows: Iterable[dict]) -> dict[str, dict]:
     return {r["ref"]: r for r in rows if r["kind"] == "build_trade"}
 
 
 __all__ = [
-    "DAY_PLACEMENT", "FACTS", "NOT_GIVEN", "NO_TRADE", "PNL", "PNL_PLACEMENT", "PREMARKET", "RECONCILE",
+    "DAY_PLACEMENT", "FACTS", "NOT_GIVEN", "NO_TRADE", "OPEN_ITEMS", "OPEN_ITEMS_PLACEMENT", "OPEN_POSITIONS", "PNL",
+    "PNL_PLACEMENT", "PREMARKET", "RECONCILE",
     "RISK_FACTS_PLACEMENT", "RISK_PARAMETERS", "RULES_CHECK", "SUMMARY", "TICKERS", "TRADE_PREFIX", "VOICE_NO_TRADES", "VOICE_PREFIX",
     "WHY_NO_TRADES", "build_rows_by_ref", "date_line_placement", "facts", "given", "money", "no_trade",
-    "orphaned", "pnl", "premarket", "reconcile", "summary", "tickers", "trade_block",
-    "trade_unit", "voice_unit",
+    "open_items", "open_positions", "orphaned", "pnl", "premarket", "reconcile", "stale_resolve", "summary",
+    "tickers",
+    "trade_block", "trade_unit", "voice_unit",
 ]

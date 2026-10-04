@@ -28,7 +28,9 @@ TREE = ast.parse(SOURCE)
 BODY = TREE.body
 
 D4_NAMES = {"_settings_daily_form", "_settings_daily_review", "settings_daily", "settings_daily_apply"}
-D2_ROUTES = {("get", "/drc"), ("post", "/drc/import"), ("post", "/drc/no-trade"), ("post", "/drc/scan")}
+#: DRC K3-9: the state-your-book form and RESOLVE are appended INSIDE D2's block.
+D2_ROUTES = {("get", "/drc"), ("post", "/drc/import"), ("post", "/drc/no-trade"), ("post", "/drc/scan"),
+             ("post", "/drc/state-book"), ("post", "/drc/resolve")}
 
 #: The last top-level def before D2's block. Until the 2026-09-30 seam it was
 #: `radar_card_release`; S3 exits C3's trade-tap block sits directly after
