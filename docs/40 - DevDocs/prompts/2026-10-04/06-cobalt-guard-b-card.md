@@ -10,7 +10,7 @@ HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B: as needed
 TREE STATE: unchanged
 DB: none
-RULINGS: 2026-10-02 R47, 2026-10-03 R33
+RULINGS: 2026-10-02 R47, 2026-10-03 R33, 2026-10-03 R283
 
 ## ROWS
 
@@ -24,6 +24,7 @@ RULINGS: 2026-10-02 R47, 2026-10-03 R33
 | B8 | O3: G3's `.env` test also reads option values, for every command in `ENV_READERS`: the text after the first `=` of a `--name=value` word, and the word after `--files0-from` given without `=`, are each tested by `is_env` like an operand; a match → deny with G3's route | red: `sort --files0-from=.env`, `sort --files0-from .env` and `sort --files0-from=/x/wt/job/.env` each allowed on 1f2c19a9; controls `sort --key=2 f` and `grep -n --include=*.py X .` stay allowed | `ops/desk/bare-guard.py`, `tests/ops/test_bare_guard.py` |
 | B9 | an `awk` command (lone or a pipe segment) whose program text holds `getline`, `ARGV`, `ARGC`, `@include` or `@load` → deny with G3's route | red: `awk 'BEGIN{while(getline l < ".env") print l}'`, `awk 'BEGIN{ARGV[1]=".e" "nv"; ARGC=2} {print}'` and `awk '@include "x"'` each allowed on 8e68decd; control `awk '{print $1}' f` stays allowed | `ops/desk/bare-guard.py`, `tests/ops/test_bare_guard.py` |
 | B10 | a command (lone or a pipe segment) whose first word is `time`, `nice`, `env`, `command`, `nohup`, `timeout`, `stdbuf` or `xargs` is judged by every guard rule as the command that follows its options and operands (`env` also skips `NAME=value` words; `timeout` its duration); when the wrapped command cannot be found → deny with the resend sentence | red: `time sort -o out f`, `nice -n 5 sort -o out f`, `env A=1 sort -o out f`, `command sort -o out f` and `xargs awk -f p.awk` each allowed on 8e68decd; control `time sort f` stays allowed | both files |
+| B11 | his ruling 10-04 (awk dropped): G1's pipe first-word list loses `awk` (`grep sed cut sort uniq head tail wc`); an `awk` pipe segment → deny with the resend sentence. G11, B3 and B9 stay as defence | red: `grep X f \| awk '{print $1}'` allowed on 8e68decd, denied after; control `grep X f \| cut -f2` stays allowed | `ops/desk/bare-guard.py`, `tests/ops/test_bare_guard.py` |
 
 ## NOT IN THIS JOB
 - Any hub text, launch line or allow string. The four read strings (`Bash(cut *)`, `Bash(sort *)`, `Bash(uniq *)`, `Bash(awk *)`) are his and are not put on any line by this job; they wait for this card to ship, then for the next hub-text card.
