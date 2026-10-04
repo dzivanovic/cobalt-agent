@@ -50,4 +50,4 @@ WHY: re-cut of `prompts/2026-09-29/30-drc-k3-build.md` (drafted on `drc/d1-tradi
 - TREE STATE `unchanged` holds while every new with-DB test uses `tests/cobalt/test_drc_store.py`'s `migrated` fixture (DRC migrations inside the suite's rollback; DRC's with-DB tests run in pass 1 at `0013`). A test that needs a real forward → `## DECISIONS`, not a hub edit.
 - HOUSE B at the check: `mandatory — vault notes` (K3 writes his DRC note's units).
 - RESTARTS: derived (`drc/*`, `aset/web.py` → `com.cobalt.aset` expected; quote `cobalt jobs restarts`).
-- Seams with the other two cards of 10-04: `02` (F15 P2) shares no file; `03` (D5) is cut from `main` after this card ships (it edits `build.py`, `units.py` and the A31 section after this card).
+- Seams with the other two cards of 10-04 (desk R233, one deploy): the chain is `01` this card (on `main`) → `03` D5 (on this card's CHECKED tip; it edits `build.py`, `units.py` and the A31 section after this card) → `02` F15 P2 (on D5's BUILT tip; it shares no file with this card). TIP order 01, 03, 02.

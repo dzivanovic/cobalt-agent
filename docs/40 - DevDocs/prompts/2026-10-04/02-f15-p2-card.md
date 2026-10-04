@@ -2,7 +2,7 @@ JOB: f15-p2
 LADDER: S3-P3 · F15
 BRANCH: f15/p2-replay-1004
 WORKTREE: f15-p2-1004
-BASE: «FILL: main after set 3 DEPLOYED (deploy 4693097d), 8 hex»
+BASE: «FILL: card 03 (D5) BUILT tip, read from its build stop line, 8 hex»
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/f15-p2-1004/docs/40 - DevDocs/reports/f15-p2-build-2026-10-04.md
 CHECK REPORT:
@@ -39,6 +39,6 @@ WHY: F15 P2 of `docs/30 - Design/F15-PREDICTION-RECORDS-FINAL-2026-09-29.md` (`#
 - X3 Is `realized_r` called and its provisional flag used as returned, with no arithmetic restated?
 
 ## RECORDS
-- Seams with the other two cards of 10-04: `01` (K3) shares no file. `03` (D5) also adds pass-2 ids to the same two hub lines, so `03` is cut from `main` after this card ships (two branches editing one hub line cannot both merge).
+- STACKED (desk R233): BASE is `03` D5's BUILT tip (a stacked card starts at its base's BUILT line). The chain is `01` K3 → `03` D5 → `02` this card, ONE deploy, TIP order 01, 03, 02. This card shares no source file with `01` or `03`; row T writes its ids into the pass-1 / pass-2 lines AS THEY READ AT BASE (D5's ids already in), so the hub-line edits never meet in a merge. BASE carries K3's and D5's diffs: the check reads `<BASE>..<TIP>` only.
 - HOUSE B at the check: `as needed` (reads only; no vault note, no sizing).
 - RESTARTS: derived (`cards/*.py`; quote `cobalt jobs restarts`).

@@ -1,10 +1,10 @@
 JOB: drc-d5
 LADDER: S3-P3 · F14
-BRANCH: drc/d5-reconcile-1005
-WORKTREE: drc-d5-1005
-BASE: «FILL: main after the set that ships card 01 (K3) and card 02 (F15 P2) DEPLOYED, 8 hex»
+BRANCH: drc/d5-reconcile-1004
+WORKTREE: drc-d5-1004
+BASE: «FILL: card 01 (K3) CHECKED tip, read from its check stop line once it reads ready YES, 8 hex»
 TIP:
-REPORT: /Users/cobalt/cobalt-wt/drc-d5-1005/docs/40 - DevDocs/reports/drc-d5-build-2026-10-05.md
+REPORT: /Users/cobalt/cobalt-wt/drc-d5-1004/docs/40 - DevDocs/reports/drc-d5-build-2026-10-04.md
 CHECK REPORT:
 HOUSE B:
 TREE STATE: row T
@@ -41,6 +41,7 @@ WHY: D5 of `docs/30 - Design/DRC-AUTOMATION-v2-2026-09-22.md` (§9 row D5, `:179
 
 ## RECORDS
 - Judge, 10-04: R90's "RESOLVE action for that line (his choice recorded on the trade, versioned)" is read as K3-7's RESOLVE `closed outside the export` on that trade (a `drc_stated_books` row, versioned by `supersedes`): one resolve path (L3). The other choice R90 names, "leave it opened", is the default and needs no action. On his veto list at DONE.
-- BASE is `main` after `01` and `02` ship, not `01`'s BUILT tip: D5 edits `build.py`, `units.py` and K3's A31 section, and its row T adds ids to the same pass-1 / pass-2 lines as `02`'s row T; a branch cut from neither cannot merge both.
+- STACKED (desk R233, his "S3 deploys Monday night"; 03c precedent: ONE parent, a checked tip, no merge). The chain is `01` K3 (on `main`) → `03` D5 (on K3's CHECKED tip: D5 edits K3's `build.py`, `units.py` and A31 section, so it needs K3's check fixes) → `02` F15 P2 (on D5's BUILT tip: P2 shares no source file with either, and its row T then writes its pass-1 / pass-2 ids on top of D5's, so the two hub-line edits never meet in a merge). The deploy TIP order is 01, 03, 02. A fix commit from D5's check touches D5's files only, so P2's head still merges clean; a D5 check fix to the hub lines → the desk names it before the deploy.
+- DOC row date: the paragraph carries the date the build runs.
 - HOUSE B at the check: `mandatory — vault notes` (the DRC note's units).
 - RESTARTS: derived (`drc/*`, `aset/*` → `com.cobalt.aset` per v2 `[F-27]`; quote `cobalt jobs restarts`).
