@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/deploy-hub-text-1003
 WORKTREE: deploy-hub-text-1003
 BASE: 44b29c63
-TIP: 2cc6330e
+TIP: 3395ef68
 REPORT: /Users/cobalt/cobalt-wt/deploy-hub-text-1003/docs/40 - DevDocs/reports/deploy-hub-text-build-2026-10-03.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-hub-text-check-2026-10-03-r4.md
 HOUSE A: none — overruled 2026-10-02 R47
@@ -37,6 +37,7 @@ WHY: `DEPLOY-HUB.md` on `main` is the text every deploy runs under until a new t
 - X3 Is `git diff 44b29c63` of the file limited to P7, STEP-T and STEP-C?
 
 ## RECORDS
+- Desk, 10-03 20:50 (build ASK DESK 1 at `3395ef68`): KEEP — STEP-T's "every other change under that folder is CODE and passes" matches T1's P7 sentence (JUDGE ASK 18); the old "every `.py` … is CODE" would still pass a REVERSE edit.
 - Judge, 10-03 20:26 (JUDGE ASK 18, Grok re-read `reports/deploy-hub-02b-grok-reread-2026-10-03.md`): Grok r2 F2 fixed: REVERSE edits are migrations; F1 dropped as fail-loud by design. No third Grok read. Check r3 ready YES at `2cc6330e`; only T1's sentence changes in this re-issue; r4 writes `opus-1-r4.md`.
 - Judge, 10-03 20:04 (JUDGE ASK 17, check r2 O1/O2 HOLD): T6 as checked r2 O1/O2: labels are label: values in jobs.yaml, the Label string is read on its key line or the next, an unreadable Label is refused.
 - Check r2 (`reports/deploy-hub-text-check-2026-10-03-r2.md`) at `69bf6082`: T1 and C1 as written, diff limited to P7, STEP-T, STEP-C; only T6 changes in this re-issue. Its sections sit at `<S>/opus-1-r2.md` (ASK DESK 3, kept); r3 writes `opus-1-r3.md`.
