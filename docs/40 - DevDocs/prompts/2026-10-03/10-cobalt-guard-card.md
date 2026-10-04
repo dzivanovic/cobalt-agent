@@ -32,7 +32,7 @@ WHY: his words 10-03 (11:03, 11:08 ET): the full guard hook builds Sunday after 
 - A rule that needs judgment (whether a finding holds, whether a diff is docs-only in meaning).
 
 ## READ
-- `ops/desk/bare-guard.py` at `BASE` whole; `tests/ops/test_bare_guard.py`; `reports/harness-mods-review-2026-10-03.md` `## OPERATIONS A HOOK CAN TAKE`; `reports/cto-2026-10-03.md` the REFUSALS list (R31 and after); `BUILD-HUB.md` line 14 and 29, `CHECK-HUB.md` 32 and 50 (the sentences this hook makes deterministic).
+- `ops/desk/bare-guard.py` at `BASE` whole; `tests/ops/test_bare_guard.py`; `reports/harness-mods-review-2026-10-03.md` `## OPERATIONS A HOOK CAN TAKE`; `reports/cto-2026-10-03.md` the REFUSALS list (R31 and after); `BUILD-HUB.md` line 29 and `CHECK-HUB.md` line 48 (the one-command sentence G1 makes deterministic), `CHECK-HUB.md` line 50 (the git-write shape G4 enforces).
 
 ## CHECK ASKS
 - X1 For each rule: a call that should pass and is denied (a false deny costs a resend), and a call that should be denied and passes. Write both per rule.
