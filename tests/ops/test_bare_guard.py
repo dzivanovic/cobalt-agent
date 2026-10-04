@@ -1067,3 +1067,16 @@ def test_b4_a_lone_sort_uniq_or_awk_that_writes_is_denied(roots, command, found)
 @pytest.mark.parametrize("command", ["sort f", "awk '{print $1}' f"])
 def test_b4_a_lone_sort_or_awk_that_only_reads_stays_allowed(roots, command):
     assert_allowed(run(command, make_seat(roots, "build")))
+
+
+@pytest.mark.parametrize(
+    "command,found",
+    [
+        ("LC_ALL=C sort -o out f", SORT_FOUND),
+        ("/usr/bin/sort -o out f", SORT_FOUND),
+        ("LC_ALL=C uniq f out", UNIQ_FOUND),
+        ("/usr/bin/awk -f p.awk f", AWK_FILE_FOUND),
+    ],
+)
+def test_check_b_o1_a_lone_filter_by_path_or_behind_an_assignment_that_writes_is_denied(roots, command, found):
+    assert_resend(run(command, make_seat(roots, "build")), found)
