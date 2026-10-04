@@ -3,10 +3,10 @@ LADDER: S3-P3 · F14
 BRANCH: drc/k3-surfaces-1004
 WORKTREE: drc-k3-1004
 BASE: 979ec797
-TIP:
+TIP: 50b93bd5
 REPORT: /Users/cobalt/cobalt-wt/drc-k3-1004/docs/40 - DevDocs/reports/drc-k3-build-2026-10-04.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/drc-k3-check-2026-10-04.md
+HOUSE B: mandatory — vault notes
 TREE STATE: unchanged
 RULINGS: 2026-10-03 R219
 
@@ -51,3 +51,5 @@ WHY: re-cut of `prompts/2026-09-29/30-drc-k3-build.md` (drafted on `drc/d1-tradi
 - HOUSE B at the check: `mandatory — vault notes` (K3 writes his DRC note's units).
 - RESTARTS: derived (`drc/*`, `aset/web.py`, `aset/drc_page.py` → `com.cobalt.aset` expected; quote `cobalt jobs restarts`).
 - Seams with the other two cards of 10-04 (desk R233, one deploy): the chain is `01` this card (on `main`) → `03` D5 (on this card's CHECKED tip; it edits `build.py`, `units.py` and the A31 section after this card) → `02` F15 P2 (on D5's BUILT tip; it shares no file with this card). TIP order 01, 03, 02.
+- judge 2026-10-04 19:45 (desk row R278): build DECISIONS 2, 3, 4, 5, 6, 8 KEEP; 1 and 7 CHANGE, fixed by the check inside K3's own rows; none is his. D1: the STALE line must name K2's effect day, not the superseded row's own day. `superseded_stated_ids` returns, for each superseded id, the day of the row that supersedes it, and the line names `effect_day(<that day>, <id>)`. Red: a restatement dated EARLIER than the row it supersedes → the STALE line names the restatement's day. D7: no absolute path in his note. K3-1's line reads `day not computed — no NYSE calendar for <year>`, and the CalendarError text goes only to the build log. Red: a position spanning a year with no calendar file → the unit line names the year and holds no `/`.
+- FOR THE CHECK (judge, byte for byte): D1 and D7 are judged CHANGE inside rows K3-4 and K3-1: write each red named above, fix within those rows' files, and confirm the STALE line equals K2's effect_day for a restatement dated earlier than its superseded row, and that no unit line written to his note holds an absolute path. D8: confirm that removing `_drc_text` on exit_price/exit_time changes no observable output.
