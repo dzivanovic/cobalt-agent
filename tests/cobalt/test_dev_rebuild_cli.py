@@ -328,6 +328,7 @@ def _migrate_output(monkeypatch, capsys, conn, **namespace) -> list[str]:
     monkeypatch.setenv("COBALT_ENV", "dev")
     monkeypatch.setattr(cli, "_connect", lambda *a, **k: conn)
     monkeypatch.setattr(cli, "_probe_all", lambda c: {})
+    monkeypatch.setattr(cli, "_level_lines", lambda conn, probe: [])
     monkeypatch.setattr(cli, "_apply", lambda c, paths: None)
     monkeypatch.setattr(cli, "_print_probe", lambda *a, **k: print("<proof table>"))
     monkeypatch.setattr(cli, "_print_proof", lambda *a, **k: print("<proof table>") or 0)
