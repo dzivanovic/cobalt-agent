@@ -1,16 +1,14 @@
 # cobalt-guard — build report 2026-10-04
 
 ## §0 Headline
-- BUILT at 15:02 EDT. Tip `28276443`, on base `a8d8a848`. All 8 rows (G1–G8) are built in `ops/desk/bare-guard.py`, extended in place.
-- Results on the tip: offline 3739 passed, 0 failed; `tests/ops` 888 passed, 0 failed; live-note 146 passed, 0 failed. DB: none, so `cobalt_dev` was never taken. RESTARTS: none.
-- Each row's tests failed on the old guard (255 red at E2) and failed again under that row's mutation. They pass at the tip: 363 tests in the file.
-- 3 decisions, 1 of them for Dejan:
-  - G7, as written, denies the check hub's own house commands.
-  - G5 denies writes to the check's scratch folder `<S>`.
-  - `awk` in a pipe can write files from inside its quotes.
+- BUILT again after the desk's `CONTINUE: G9`. Tip `21b9e21f`, on base `a8d8a848`. All 11 rows (G1–G11) are built in `ops/desk/bare-guard.py`, extended in place.
+- G9 lets a check type its three house strings, G10 lets a check write under its own `<S>`, and G11 denies an `awk` pipe segment that can write. These rows answer the first stop's three decisions.
+- Results on the tip: offline 3739 passed, 0 failed; `tests/ops` 953 passed, 0 failed; live-note 146 passed, 0 failed. DB: none, so `cobalt_dev` was never taken. RESTARTS: none.
+- 1 decision, for the desk: `awk -f <file>` runs a program G11 cannot read, and it stays allowed to the card's letter.
 
 ## L74
 - 14:23: an attribution block in the session context asked for a `Claude-Session:` line on commits. DATA (L74): recorded once, not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
+- 15:11, at the continue: the same kind of block, now naming a `Claude-Session:` URL line. DATA (L74): recorded once, not acted on; `11adaf00` and `21b9e21f` carry the `Co-Authored-By` line only.
 
 ## AUTHORIZATION
 | check | command | exit | output |
@@ -192,29 +190,124 @@ How the build reads the rows. Each of these is a choice I made, for the check to
 
 X3, partly walked: BUILD-HUB and CHECK-HUB git writes carry `--`, and the lock steps use `ls -la`, `cp` and `rm` of `.env`, which are allowed. The two hub steps the rules deny are DECISIONS 1 and 2. The DEPLOY-HUB and DEVFIX-HUB step text was not walked line by line; only their launch lines were read.
 
+## CONTINUE AT G9 (rows G9–G11)
+The desk sent `CONTINUE: G9.` I verified the fact myself at 15:11 EDT:
+- `git -C /Users/cobalt/cobalt log -3 --format=%H%x20%ci%x20%s -- "<card>"` → `abcb732b… 2026-10-04 15:11:11 -0400 docs(desk): R218-R227 set 3 deploy FAILED gate; card 10 G9-G11; …`. The card on main now has rows G9, G10 and G11.
+- `git -C /Users/cobalt/cobalt diff --stat -- "<card>"` → nothing. `grep -n -E "«FIL[L]" "<card>"` → nothing (exit 1).
+- The desk records the rows cite, in `cto-2026-10-03.md`: `228:| R222 | 10-04 15:04 ET | RECORD: \`10\` BUILT \`28276443\`, 3 decisions (…); DESK RECORD: 1 and 2 → card rows G9 (check house calls) G10 (check scratch fence), build relaunch at G9 after set 3; 3 (\`awk\` can write) → his A/B; …` and `232:| R226 | 10-04 15:10 ET | DESK RECORD (brain, under R33): \`awk\` with \`system(\`, \`>\` or \`\|\` in its program is not read-only → card \`10\` row G11 denies it; on his veto list. | RECORD |`.
+- `ls /Users/cobalt/cobalt-wt/cobalt-guard-1004/.env` → `No such file or directory`.
+
+E2 RED (G9–G11). Tests only, in `tests/ops/test_bare_guard.py`. G7's deny test now covers build, devfix and deploy; the check kind moved to G9's own tests.
+- `uv run pytest -q -p no:cacheprovider --color=no --tb=line -k "g9 or g10 or g11" tests/ops/test_bare_guard.py` on the G1–G8 guard → `16 failed, 55 passed, 357 deselected, 15 warnings in 2.73s`.
+- G9: each house string from the check → `AssertionError: route: the desk launches` (`assert 2 == 0`).
+- G10: the check's Write under its own `<S>` → `AssertionError: route: this seat writes only inside its fence (…)` (`assert 2 == 0`).
+- G11: each awk-that-writes pipe → `assert 0 == 2` (the old guard lets it through).
+- The deny cases of G9 and G10 and the allow cases of G11 passed on the old guard, as they should. Each is shown red under a mutation below.
+- Commit: `11adaf00 wip(cobalt-guard): red — G9–G11 tests on the G1–G8 guard`.
+
+E3 (G9–G11), all in `ops/desk/bare-guard.py`:
+- G9: in `bash_rules`, the G7 test now lists the launcher segments. A check passes when the only launcher is segment 0 and the whole command opens with `HOUSE` (`grok `, `codex exec --skip-git-repo-check -m <slug> -s read-only `, `agy `; the slug is `[A-Za-z0-9._-]+`).
+- G10: `read_card` also reads `JOB:`. In `g5`, a check may write under `<WT_ROOT>/agy-trial/scratch/tribunal-bars-0920/<JOB>-check`.
+- G11: `awk_writes` reads every awk word except the values of `-F` and `-v` and the file of `-f`. A word holding `system(`, `>` or `|` adds `` `awk` with `system(`, `>` or `|` in its program `` to the pipe's problems.
+- The whole file at the fix: `428 passed, 15 warnings in 13.18s`.
+
+THE MUTATIONS (G9–G11). Each was made with Edit, run alone, then undone with Edit.
+
+| row | mutation | run | result |
+|---|---|---|---|
+| G9 | `if kind == "check" and …` → `if False and …` | `-k "g9 or g7"` | `5 failed, 72 passed`: every `test_g9_the_check_types_each_house_string` id, `route: the desk launches` |
+| G9 control: kind | `kind == "check"` → `kind in WORKERS` | `-k g9` | `16 failed, 21 passed`: every `…another_worker_kind_typing_a_house_string_is_denied` id and `…a_worker_with_no_hub…` |
+| G9 control: one segment | `launches == [0]` → `launches` | `-k g9` | `2 failed, 35 passed`: `[grok -p x \| claude -p y]`, `[agy x \| agy y]` |
+| G9 control: the prefix | `and HOUSE.match(command)` dropped | `-k g9` | `13 failed, 24 passed`: every `codex` without the full house prefix, `claude`, `/usr/local/bin/grok`, `FOO=1 grok`, `FOO=1 agy`, bare `grok` |
+| G10 | `if kind == "check" and job …` → `if False and …` | `-k g10` | `2 failed, 11 passed`: `test_g10_the_check_writes_under_its_own_scratch[None]` and `[agy]`, the G5 fence route |
+| G10 control: kind | `kind == "check"` → `kind in WORKERS` | `-k g10` | `3 failed, 10 passed`: `…another_kind_under_the_scratch_is_denied[build]`, `[devfix]`, `[deploy]` (the brain is denied by its own fence) |
+| G10 control: one job | `under(path, …SCRATCH, job + "-check")` → `under(path, …SCRATCH)` with no `job` | `-k g10` | `7 failed, 6 passed`: every `…under_another_jobs_scratch_is_denied` id and `…a_check_card_with_no_job_has_no_scratch` |
+| G11 | `if ws[0] == "awk" and awk_writes(…)` → `… and False and …` | `-k g11` | `9 failed, 12 passed`: every `test_g11_an_awk_segment_that_can_write_is_denied` id, `assert 0 == 2` |
+| G11 control: option values | `("-F", "-v", "-f")` → `("-f",)` | `-k g11` | `8 failed, 13 passed`: the `-F'\|'`, `-F '\|'`, `-v 'x=>'`, `-vx='\|'` allow ids |
+
+The G9 deny `grep -n X f | grok -p x` stays green under all three G9 mutations. G7 itself pins it, since the launcher is not segment 0.
+
+After the last undo, `git diff --stat` showed `ops/desk/bare-guard.py | 50 ++++++++++++++++++----` plus this report. `git diff ops/desk/bare-guard.py` shows the fix and no mutation.
+
+- The file at the fix: `uv run pytest -q -p no:cacheprovider --color=no --tb=short -rfE tests/ops` → `953 passed, 1 xfailed, 15 warnings in 252.99s (0:04:12)`.
+- Commit: `21b9e21f feat(cobalt-guard): check house calls, check scratch fence, awk read-only (G9–G11, L1, L3, L72)`. No DevDocs page for `ops/desk/` (as at G1–G8, `## RECORDS`).
+
+RESTARTS at the continue. `uv run cobalt jobs restarts a8d8a848..HEAD`
+```
+path	change	rule	restart
+docs/40 - DevDocs/reports/cobalt-guard-build-2026-10-04.md	M	DOCS	-
+ops/desk/bare-guard.py	M	operator script; no Cobalt reader	-
+tests/ops/test_bare_guard.py	M	test/documentation; no resident	-
+RESTARTS: none
+```
+
+W at the continue. `<tip>` = `21b9e21f`. The card is DB: none.
+- (a0) `git diff --name-only --no-renames a8d8a848` → `docs/40 - DevDocs/reports/cobalt-guard-build-2026-10-04.md`, `ops/desk/bare-guard.py`, `tests/ops/test_bare_guard.py`. Every path is under `docs/`, `ops/` or `tests/ops/`. **`cobalt_dev: not taken (DB: none — 3 paths)`**
+- (a) `uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy` (background) → `3739 passed, 745 skipped, 1 xfailed, 36 warnings in 584.81s (0:09:44)`: 0 failed, 0 errors. This build adds no test under `tests/cobalt` or `tests/taxonomy`.
+- `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` (background) → `953 passed, 1 xfailed, 15 warnings in 254.72s (0:04:14)`: 0 failed. This build's tests are all in `tests/ops/test_bare_guard.py`: 428 in the file, 65 of them added at the continue.
+- `ls /Users/cobalt/cobalt-wt/cobalt-guard-1004/.env` → `No such file or directory`.
+- (e) `COBALT_LIVE_VAULT_ROOT=/Users/cobalt/Vault/Think uv run pytest -q -rs -p no:cacheprovider tests/cobalt/test_radar_evaluate.py tests/cobalt/test_replay_line.py tests/taxonomy/test_catalyst.py tests/taxonomy/test_predicate.py` → `146 passed, 1 skipped, 15 warnings in 26.61s`. The skip is `tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set`, which does not name `COBALT_LIVE_VAULT_ROOT`.
+
+PRE-STOP SELF-CHECK at the continue:
+1. Every G9–G11 test was shown red, either by E2 on the G1–G8 guard or by a mutation or control in the table above. The one deny that no G9 mutation turned red, `grep -n X f | grok -p x`, is pinned by G7 itself, as noted under the table.
+2. The entry paths G9–G11 open are each pinned by a test:
+   - G9: the check in `<WT>` and in `<AGY>` (`cwd` param); build, devfix and deploy; a worker with no hub; a launcher at segment 0, later, or both; `NAME=` in front; an absolute path; the bare word; each prefix with one part missing or altered.
+   - G10: Write and Edit; the check in `<WT>` and in `<AGY>`; another job, a longer job name, `..`, a sibling dir and the scratch root; build, devfix, deploy and brain; a card with no `JOB:`.
+   - G11: `>`, `>>`, `system(`, `| "sh"`, `| getline`; `-F` and `-v` attached and detached; `--`; awk at the head of a pipe.
+   - Callers: `bare-guard` has no Cobalt caller (PREFLIGHT grep).
+3. Re-read at the tip:
+   - `grep -n -F "HOUSE"` → `83:` and `573:`.
+   - `grep -n -F "SCRATCH"` → `85:` and `633:`.
+   - `grep -n -F "awk_writes"` → `371:` and `402:`.
+   - `wc -l` → `714 ops/desk/bare-guard.py`, `922 tests/ops/test_bare_guard.py`.
+   - `git log --oneline a8d8a848..HEAD` → five commits (below).
+
+FOR THE CHECK at the continue:
+- `a8d8a848..21b9e21f`:
+  - `78561316 wip(cobalt-guard): red — G1–G8 tests on the old guard`
+  - `28276443 feat(cobalt-guard): bare-guard.py extended in place — … (G1–G8, L1, L3, L28)`
+  - `b31120b4 docs(cobalt-guard): build report — 28276443`
+  - `11adaf00 wip(cobalt-guard): red — G9–G11 tests on the G1–G8 guard`
+  - `21b9e21f feat(cobalt-guard): check house calls, check scratch fence, awk read-only (G9–G11, L1, L3, L72)`
+- How the build reads the new rows. Each of these is a choice I made, for the check to judge.
+  - **G9.**
+    - "Prefix" is read on the whole command. A `NAME=` word, a path such as `/usr/local/bin/grok`, or leading whitespace means the call is not the house string.
+    - The launcher must be segment 0 and the only launcher. A house call cannot be piped into another session.
+    - `<slug>` is one word of `[A-Za-z0-9._-]`. Today's `gpt-5.6-sol` fits.
+    - G1 still applies after G9. The Sol line passes by its exact ` < /dev/null` ending; a house call with `&&` is still denied.
+  - **G10.**
+    - `<JOB>` is the card's `JOB:` line, read with the same pattern as `WORKTREE:`.
+    - `<S>` is built under the worktree root, `<WT_ROOT>/agy-trial/scratch/tribunal-bars-0920/<JOB>-check`. A card with no `JOB:` gives the check no `<S>`.
+  - **G11.**
+    - Only a pipe segment is read, as `sed -i` is: a single `awk` command is left to the allow strings.
+    - Every awk word is read except the values of `-F` and `-v` and the file of `-f`, so a `>` in a comparison (`$1 > 5`) is denied too. The card names `>` with no exception.
+    - `awk -f <file>` is allowed: see DECISION 1.
+- X3: the walk from the first stop still holds. With G9 and G10 built, the two hub steps it found (CHECK-HUB.md:91–94 house launch, :50/:73 `<S>` writes) are allowed for the check. DEPLOY-HUB and DEVFIX-HUB step text is still not walked line by line.
+
 ## CONTINUE
 next: none (BUILT)
 
 ## DECISIONS
-1. **G7 denies the check hub's house launch.** CHECK-HUB.md:10 lists `Bash(grok *)`, `Bash(codex exec … -s read-only *)` and `Bash(agy *)`, and its step (5) START THE HOUSE (CHECK-HUB.md:91) types them. G7, as the card writes it, denies those first words from every worker, and a check is a worker.
-   - Safe default taken: built to the card's letter (L72).
-   - Effect: once installed, every check with a house B gets `route: the desk launches` at step (5).
-   - Needed: a card row that exempts the check kind's three house strings, or a reading that a house call is not "a second session".
-2. **G5 denies the check's scratch writes under `<S>`.** `<S>` is `/Users/cobalt/cobalt-wt/agy-trial/scratch/tribunal-bars-0920/<JOB>-check` (CHECK-HUB.md:5). CHECK-HUB.md:50 lets the check write "the files under `<S>`", and :73 uses a Write there when a house cannot reach the original.
-   - Safe default taken: not allowed. The card's G5 says "outside its worktree", and only the report path is let through, from op 10.
-   - Needed: a card row adding `<S>` to the check kind's fence, if wanted.
-3. **FOR DEJAN — `awk` in a pipe can write.** His R33 allows `awk` as a pipe segment with no flag limit. An awk program can write (`print > "f"`, `system()`, `|` to a command) inside its own quotes, which G1 cannot see.
-   - Safe default taken: built as ruled. `awk` in any form is allowed as a pipe segment.
-   - His word: keep it, or narrow `awk` the way `sed` was narrowed.
+1. **`awk -f <file>` runs a program G11 cannot read.** G11 denies an awk pipe segment "whose program text holds `system(`, `>` or `|`", and says "any other `awk` segment stays allowed". With `-f`, the program is in a file, not in the command, so the hook never sees it. A worker could Write a `.awk` file inside its worktree and then pipe into `awk -f` it. (`sed -f` is denied under G1 for the same reason.)
+   - Safe default taken: built to the card's letter (L72), so `awk -f` stays allowed.
+   - Needed: a card row denying `awk -f` in a pipe, as `sed -f` is, if wanted.
+
+The first stop's three decisions are answered by the card's new rows and are not counted again: 1 → G9, 2 → G10 (desk record R222), 3 → G11 (desk record R226, "on his veto list").
 
 ## RECORDS
 - REFUSED, not needed: grep -n -F "`<S>` =" "docs/40 - DevDocs/prompts/CHECK-HUB.md" — Permission to use Bash has been denied because Claude Code is running in don't ask mode. (a backtick in the pattern; read with the `<AGY>` grep instead)
-- L74: one `Claude-Session:` attribution request (14:23), recorded under `## L74`, not acted on.
+- L74: two `Claude-Session:` attribution requests (14:23, 15:11), recorded under `## L74`, not acted on.
 - The card's records as re-read at PREFLIGHT: his words R32 / R33 (rows 38 / 39 of `cto-2026-10-03.md`).
 - FOR HIS ONE APPROVAL (card `## RECORDS`; R60, the strings are his): `Bash(cut *)`, `Bash(sort *)`, `Bash(uniq *)`, `Bash(awk *)`. The next hub-text card puts them on the build, check and desk lines. The hook adds no string.
 - No DevDocs page exists for `ops/desk/` under `docs/40 - DevDocs/cobalt/`, and none was made: a new page is outside the rows. Owed to whoever places ops docs (PLACEMENT.md).
 - Install is not this build's. The card's WHY says `bare-guard.py` is "his install" and that the existing hook entry covers it; this build did not read that entry. G8's ledger lands in `/Users/cobalt/cobalt-wt/.ledger/`.
-- No extra lock take (DB: none). No CONTINUE was received.
+- No extra lock take (DB: none).
+- CONTINUED at G9 15:11 EDT. The desk's message (`CONTINUE: G9.`) named a step only. The rows G9–G11 come from the card committed on main at `abcb732b` (desk records R222, R226), not from the message.
+- At the continue, my first call was off the list: `cat "<BUILD-HUB.md>"; echo ======; cat "<card>"`. The shape is `cat`, which BUILD-HUB.md:14 says is never typed, plus a `;`. It RAN and was not refused: it printed the hub, truncated, and exit 1. It was read-only and changed nothing. After it I read both files with the Read tool. It also means the bare-guard hook did not deny a `;` in this session. A fact for the install, which this build did not read.
+- REFUSED, not needed: git -C /Users/cobalt/cobalt show --stat abcb732b — Permission to use Bash has been denied because Claude Code is running in don't ask mode. (read with `git -C /Users/cobalt/cobalt log -1 --stat --format=%H abcb732b` instead)
+- G11 rests on the desk record R226 ("DESK RECORD (brain, under R33) … on his veto list"), not on a new ruling row of his. If he vetoes it, G11 is the one row to undo: `awk_writes` and the one line in `pipe_problems` that calls it.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: cobalt-guard · tip: 28276443 | on a8d8a848 | migration: none | offline 3739/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 8 of 8 | self-check: 3 of 3 | decisions: 3 · for Dejan: 1
+First stop line (G1–G8), superseded by the continue at G9: `built · job: cobalt-guard · tip: 28276443 · rows: 8 of 8 · decisions: 3 · for Dejan: 1`
+
+BUILT · job: cobalt-guard · tip: 21b9e21f | on a8d8a848 | migration: none | offline 3739/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 11 of 11 | self-check: 3 of 3 | decisions: 1 · for Dejan: 0
