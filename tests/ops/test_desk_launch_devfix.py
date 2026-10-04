@@ -380,4 +380,4 @@ def test_prompt_still_prints_its_cd_and_line(desk):
 
 def test_an_unknown_kind_names_devfix_among_the_kinds(desk):
     refused(desk.launch("nokind", str(desk.card)),
-            "kind 'nokind' is none of build, check, deploy, devfix, recut, desk, prompt, close, install-ops")
+            "kind 'nokind' is none of build, check, deploy, devfix, recut, desk, prompt, brain, close, install-ops")
