@@ -29,6 +29,7 @@
 # COBALT_WT_ROOT and COBALT_REPO_ROOT stand in for /Users/cobalt/cobalt-wt and /Users/cobalt/cobalt
 # in tests/ops/test_bare_guard.py only; the hook entry never sets them.
 import datetime
+import fnmatch
 import json
 import os
 import re
@@ -521,8 +522,22 @@ def seat(event):
 # ---- the Bash rules ------------------------------------------------------------------------
 
 
+def braces(word):
+    """The word's `{a,b}` alternatives, as the shell expands them."""
+    m = re.search(r"\{([^{}]*,[^{}]*)\}", word)
+    if not m:
+        return [word]
+    return [x for alt in m.group(1).split(",") for x in braces(word[: m.start()] + alt + word[m.end():])]
+
+
 def is_env(path):
-    return path == ".env" or path.endswith("/.env")
+    """A path that names .env: after brace and glob expansion (a leading dot is matched only by
+    a literal one), in any case (the filesystem here is case-insensitive)."""
+    for alt in braces(path):
+        base = os.path.basename(alt).lower()
+        if base.startswith(".") and fnmatch.fnmatchcase(".env", base):
+            return True
+    return False
 
 
 def g3_bash(segs):
@@ -552,7 +567,13 @@ def git_problem(ws):
     if sub in GIT_DENIED:
         return True
     if sub == "add":
-        return any(a in (".", "--all") or (a.startswith("-") and not a.startswith("--") and "A" in a) for a in args)
+        # the whole tree by any spelling: `.`, `./`, `:/`, `-A`, `--all`, `--no-ignore-removal`
+        return any(
+            a in (":/", "--all", "--no-ignore-removal")
+            or os.path.normpath(a) == "."
+            or (a.startswith("-") and not a.startswith("--") and "A" in a)
+            for a in args
+        )
     if sub == "commit":
         return "--" not in args
     return False
@@ -590,7 +611,8 @@ def g6(s, content):
     if not lines or not lines[-1].startswith(STOP_HEADS):
         return None
     names = {x for x in (s["wt"], s["cwd wt"]) if x}
-    if s["cwd"] and os.path.exists(os.path.join(s["cwd"], ".env")):
+    # the repo's own .env is the lock's source, never its copy: the deploy seat sits there
+    if s["cwd"] and s["cwd"] != REPO_ROOT and os.path.exists(os.path.join(s["cwd"], ".env")):
         return ROUTE["G6"]
     if any(os.path.exists(os.path.join(WT_ROOT, x, ".env")) for x in names):
         return ROUTE["G6"]
@@ -605,8 +627,9 @@ def g6(s, content):
 
 
 def is_fixed(path):
-    return os.path.basename(path) == "LAWS.md" or os.path.dirname(path).endswith(
-        "/" + os.path.join(DOCS, "prompts")
+    # in any case: the filesystem here is case-insensitive
+    return os.path.basename(path).lower() == "laws.md" or os.path.dirname(path).lower().endswith(
+        ("/" + os.path.join(DOCS, "prompts")).lower()
     )
 
 
