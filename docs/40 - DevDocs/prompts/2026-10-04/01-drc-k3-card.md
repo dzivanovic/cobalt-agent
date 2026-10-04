@@ -25,8 +25,8 @@ WHY: re-cut of `prompts/2026-09-29/30-drc-k3-build.md` (drafted on `drc/d1-tradi
 | K3-6 | the state-your-book form: `imports.state_book`, `[I was flat]` one tap, a listed book preview → confirm with `expected_sha256`; `cli._rebuilds`' body MOVED to `imports.statement_rebuilds` (`30` K3-6) | red: no `state_book`; every CLI state-book test green unchanged | `src/cobalt/drc/imports.py`, `src/cobalt/drc/cli.py` (`_rebuilds`' body moved only), `src/cobalt/aset/web.py`, `src/cobalt/aset/drc_page.py`, tests |
 | K3-7 | RESOLVE `closed outside the export`, offered only for `seed_for(day)` trade ids, preview → confirm (`30` K3-7) | red: no `resolve`; an id outside the seed refused, nothing written | `src/cobalt/drc/imports.py`, `src/cobalt/aset/web.py`, `src/cobalt/aset/drc_page.py`, tests |
 | K3-8 | the notes after a statement: `build.rebuild_notes(dates)` factored out of `run_drc_build`'s loop, two callers (`30` K3-8) | red: no `rebuild_notes`; `run_drc_build`'s tests unchanged | `src/cobalt/drc/build.py`, `src/cobalt/drc/imports.py`, tests |
-| K3-9 | the routes `POST /drc/state-book`, `POST /drc/resolve` inside D2's `/drc` block, `drc_no_trade`'s shape (`30` K3-9) | red: 404 on both | `src/cobalt/aset/web.py`, tests |
-| DOC | one dated `2026-10-04 — DRC K3` paragraph in each DevDocs page of a `drc/` module K3 edits (`build.md`, `units.md`, `imports.md`, `store.md`, `cli.md`) | — | `docs/40 - DevDocs/cobalt/drc/` |
+| K3-9 | the routes `POST /drc/state-book`, `POST /drc/resolve` inside D2's `/drc` block, `drc_no_trade`'s shape (`30` K3-9; `30`'s `:1517`–`:1610` were read at `985cca3b` — on `main` the block opens at `web.py:2067`, `drc_no_trade` `:2138`, `drc_scan` `:2152`) | red: 404 on both | `src/cobalt/aset/web.py`, tests |
+| DOC | one paragraph dated the day the build runs, `<date> — DRC K3`, in each DevDocs page of a `drc/` module K3 edits (`build.md`, `units.md`, `imports.md`, `store.md`, `cli.md`) | — | `docs/40 - DevDocs/cobalt/drc/` |
 
 ## NOT IN THIS JOB
 - The voice caller (K4); every other A31 item and the reconcile writes (D5, card `03`); a migration (a need → `FAILED: <step> — migration needed`, next free number `0023`).
@@ -49,5 +49,5 @@ WHY: re-cut of `prompts/2026-09-29/30-drc-k3-build.md` (drafted on `drc/d1-tradi
 - Judge, 10-04: X13 and X15 run in `tmp_path` vaults (BUILD-HUB: the dev vault is read only). The dev-vault proof of the whole build (v3 X15's dev-vault half; the 09-29 drafter's item 10) is the desk's step after the check, before the deploy.
 - TREE STATE `unchanged` holds while every new with-DB test uses `tests/cobalt/test_drc_store.py`'s `migrated` fixture (DRC migrations inside the suite's rollback; DRC's with-DB tests run in pass 1 at `0013`). A test that needs a real forward → `## DECISIONS`, not a hub edit.
 - HOUSE B at the check: `mandatory — vault notes` (K3 writes his DRC note's units).
-- RESTARTS: derived (`drc/*`, `aset/web.py` → `com.cobalt.aset` expected; quote `cobalt jobs restarts`).
+- RESTARTS: derived (`drc/*`, `aset/web.py`, `aset/drc_page.py` → `com.cobalt.aset` expected; quote `cobalt jobs restarts`).
 - Seams with the other two cards of 10-04 (desk R233, one deploy): the chain is `01` this card (on `main`) → `03` D5 (on this card's CHECKED tip; it edits `build.py`, `units.py` and the A31 section after this card) → `02` F15 P2 (on D5's BUILT tip; it shares no file with this card). TIP order 01, 03, 02.
