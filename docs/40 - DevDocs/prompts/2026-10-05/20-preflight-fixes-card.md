@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — cto-2026-10-05.md R387
 BRANCH: ops/preflight-fixes-1005
 WORKTREE: preflight-fixes-1005
 BASE: b56622fa
-TIP: 08cfc80e
+TIP: 0af97be7
 REPORT: /Users/cobalt/cobalt-wt/preflight-fixes-1005/docs/40 - DevDocs/reports/preflight-fixes-build-2026-10-05.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/preflight-fixes-check-2026-10-05.md
 HOUSE A: none — overruled 2026-10-05 R412
