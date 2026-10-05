@@ -21,7 +21,9 @@ THE UNITS, by section, each under HIS heading (v2 §6 table; unit ids stable):
     drc-trades  / trade-<id>       one block per stored trade (B-rows)
     drc-trades  / voice-<id>       HIS unit next to it, created once (R99)
     drc-trades  / open_positions   the book the day left (K3-1, v3 §2a / §5)
-    drc-trades  / reconcile        the diff only (R90 / R67)
+    drc-trades  / reconcile        the export vs the card's legs, what D5
+                                   wrote or why not, the unresolved items
+                                   (v2 §6 `:140`, R67 / R90)
     drc-open-items / open_positions  A31 `open items carried forward` (K3-3),
                                    directly after the drc-trades section
     drc-rules   / rules_check      existing scaffold (checkboxes + cards
@@ -199,11 +201,77 @@ def orphaned(trade_id: str) -> str:
     return f"orphaned — trade {trade_id} is not in the current trading log"
 
 
-def reconcile(day_row: dict) -> str:
+def unresolved_line(item: dict) -> str:
+    """D5-3 (R90): the one wording of an unresolved item — the note's two
+    units and the page."""
+    return f"unresolved: card {item['card_id']} — {item['refusal']}"
+
+
+def _unresolved(d: dict) -> list[str]:
+    return [unresolved_line(i) for i in d.get("unresolved") or []]
+
+
+def _leg_text(shares: Any, price: Any, at: Optional[str]) -> str:
+    return f"{shares}@{given(price)} {_clock(at)}"
+
+
+_STATES = {"match": "match", "das_only": "DAS exit with no Cobalt leg",
+           "cobalt_only": "Cobalt leg with no DAS execution", "entry_not_written": "no Cobalt entry leg"}
+
+
+def _diff_line(row: dict) -> str:
+    das, cob = row["das"], row["cobalt"]
+    das_text = "none" if das is None else _leg_text(das["shares"], das["price"], das["time"])
+    cob_text = "none" if cob is None else (
+        f"{_leg_text(cob['shares'], cob['price'], cob['at'])} (leg #{cob['leg_id']}, {cob['flag']}, {cob['source']})"
+    )
+    fields = row["fields"]
+    state = (f"{', '.join(fields)} differ{'s' if len(fields) == 1 else ''}" if row["state"] == "mismatch"
+             else _STATES[row["state"]])
+    held = (f" · held after: DAS {'—' if das is None else das['held_after']} · "
+            f"Cobalt {'—' if cob is None else cob['held_after']}")
+    return f"  seq {row['seq']} {row['kind']}: DAS {das_text} · Cobalt {cob_text} — {state}{held}"
+
+
+def _history_line(h: dict) -> str:
+    text = f"  history: leg #{h['leg_id']} seq {h['seq']} {h['kind']} {_leg_text(h['shares'], h['price'], h['at'])} " \
+           f"{h['source']} ({h['flag']})"
+    if h.get("held_stated") is not None:
+        text += f" · held stated {h['held_stated']}"
+    if h.get("corrects") is not None:
+        text += f" · corrects #{h['corrects']}"
+    return text
+
+
+def reconcile(day_row: dict, builds: Iterable[dict]) -> str:
+    """D5 (v2 §6 `:140`, R67 / R90): per matched trade, the export against
+    the card's legs as found (the "before"), his taps and held statements as
+    history, then what was written (`adjusted to DAS: <k> rows (<ids>)`) or
+    why nothing was; then every unresolved item. From the stored
+    `build_trade.derived["reconcile"]` and `build_day.derived["unresolved"]`
+    only."""
     d = day_row["derived"]
     if d.get("pairing"):
-        return f"reconcile: {d['pairing']}"
-    return "\n".join(["legs: not built", "adjustment pending (legs writer not built)"])
+        return "\n".join([f"reconcile: {d['pairing']}"] + _unresolved(d))
+    lines: list[str] = []
+    for b in builds:
+        r = b["derived"].get("reconcile")
+        if r is None:
+            continue
+        basis = f" · running read from {r['basis']}" if r.get("basis") else ""
+        lines.append(f"{b['derived']['label']} · card #{r['card_id']}{basis}")
+        if r.get("read_refused"):
+            lines.append(f"  legs: not read — {r['read_refused']}")
+        if r.get("entry_leg"):
+            lines.append(f"  {r['entry_leg']}")
+        lines.extend(_diff_line(row) for row in r["before"])
+        lines.extend(_history_line(h) for h in r["history"])
+        lines.append(f"  {r['status']}")
+        if r.get("running_after") is not None:
+            lines.append(f"  running after: {r['running_after']} · DAS position: {r['das_held']}")
+    if not lines:
+        lines.append("no trade matched a card — nothing to reconcile")
+    return "\n".join(lines + _unresolved(d))
 
 
 def stale_resolve(resolve_id: int, effect_day: str) -> str:
@@ -253,19 +321,22 @@ def open_positions(day_row: dict) -> str:
 
 def open_items(day_row: dict) -> str:
     """K3-3 (v3 §5 A31, `[F-11]`): the open positions under `open items
-    carried forward`, from the SAME list."""
+    carried forward`, from the SAME list; then D5-3's unresolved items."""
     d = day_row["derived"]
     head = "open items carried forward — "
     listed = d["open_positions"]
     if listed is None:
-        return head + d["open_positions_state"]
-    if not listed:
-        return head + "open positions: none"
-    return "\n".join([f"{head}open positions: {len(listed)}"] + [
-        f"{p['symbol']} {p['direction']} {p['held_shares']} · {p['trade_id']} · "
-        f"day {'not stated' if p['days_held'] is None else p['days_held']}"
-        for p in listed
-    ])
+        lines = [head + d["open_positions_state"]]
+    elif not listed:
+        lines = [head + "open positions: none"]
+    else:
+        lines = [f"{head}open positions: {len(listed)}"] + [
+            f"{p['symbol']} {p['direction']} {p['held_shares']} · {p['trade_id']} · "
+            f"day {'not stated' if p['days_held'] is None else p['days_held']}"
+            for p in listed
+        ]
+    # D5-3 (R90): every unresolved item, carried until resolved.
+    return "\n".join(lines + _unresolved(d))
 
 
 def build_rows_by_ref(rows: Iterable[dict]) -> dict[str, dict]:
@@ -278,6 +349,6 @@ __all__ = [
     "RISK_FACTS_PLACEMENT", "RISK_PARAMETERS", "RULES_CHECK", "SUMMARY", "TICKERS", "TRADE_PREFIX", "VOICE_NO_TRADES", "VOICE_PREFIX",
     "WHY_NO_TRADES", "build_rows_by_ref", "date_line_placement", "facts", "given", "money", "no_trade",
     "open_items", "open_positions", "orphaned", "pnl", "premarket", "reconcile", "stale_resolve", "summary",
-    "tickers",
+    "tickers", "unresolved_line",
     "trade_block", "trade_unit", "voice_unit",
 ]

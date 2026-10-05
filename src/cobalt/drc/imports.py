@@ -232,6 +232,15 @@ class PlaceResult(BaseModel):
     preview: Optional[StatementPreview] = None
 
 
+class UnresolvedLine(BaseModel):
+    """D5-3 (R90): one unresolved item as the page shows it, and whether
+    K3-7's RESOLVE is offered beside it (the trade is carried into the day)."""
+
+    line: str
+    trade_id: str
+    resolve: bool = False
+
+
 class DayView(BaseModel):
     """Everything `GET /drc` shows for a date — READ ONLY (it writes
     nothing: every value is a store read or a folder listing)."""
@@ -255,6 +264,8 @@ class DayView(BaseModel):
     carried: list[str] = Field(default_factory=list)
     #: K3-7: the day's resolve outcomes and resolved trades, as stored.
     resolves: list[str] = Field(default_factory=list)
+    #: D5-3: the unresolved items the day's DRC carries, RESOLVE offered beside them.
+    unresolved: list[UnresolvedLine] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------
@@ -1015,6 +1026,23 @@ def _stored_lines(store: DrcStore, day: date, view: dict, out: DayView) -> None:
         out.resolves.append(f"{r['ref']}: CLOSED · realized {realized} (resolve #{r['inputs']['resolve_id']})")
 
 
+def _unresolved_lines(store: DrcStore, day: date, book, carried: list[str]) -> list[UnresolvedLine]:
+    """D5-3 (R90): the unresolved items of the day's stored `build_day` — or,
+    before the day is built, of the DRC its book starts from — each with
+    K3-7's RESOLVE offered when its trade is carried into the day (`resolve`
+    refuses any other id; ONE resolve path, L3). A read."""
+    from . import units
+
+    rows = [r for r in store.rows_for(day) if r["kind"] == "build_day"]
+    if not rows and book is not None and book.from_day is not None:
+        rows = [r for r in store.rows_for(book.from_day) if r["kind"] == "build_day"]
+    items = (rows[0]["derived"].get("unresolved") or []) if rows else []
+    return [
+        UnresolvedLine(line=units.unresolved_line(i), trade_id=i["trade_id"], resolve=i["trade_id"] in carried)
+        for i in items
+    ]
+
+
 def day_view(day: date, *, cards: Optional[list[dict]] = None, vault_root: Optional[Path] = None) -> DayView:
     """The page's content for `day`. READS ONLY."""
     store = DrcStore()
@@ -1055,6 +1083,7 @@ def day_view(day: date, *, cards: Optional[list[dict]] = None, vault_root: Optio
     except PairingError:
         book = None  # `_morning` shows the raise
     out.carried = [p.trade_id for p in (book.positions if book is not None else [])]
+    out.unresolved = _unresolved_lines(store, day, book, out.carried)
     if view["day"] is not None:
         _stored_lines(store, day, view, out)
     try:

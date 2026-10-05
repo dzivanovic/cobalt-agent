@@ -15,6 +15,9 @@ flat]`, one tap; `[List positions]`, a preview first) and RESOLVE for each
 trade carried into the day; after a preview, the `Confirm` form sends the
 previewed rows and their `book_sha256` back (L7). The after-drop line and
 the day's resolve outcomes come from the `DayView`.
+
+D5-3 (R90): UNRESOLVED lists each unresolved reconcile item with the same
+RESOLVE form beside it when its trade is carried into the day.
 """
 
 from __future__ import annotations
@@ -119,17 +122,37 @@ def _state_book_form(day: str) -> str:
     )
 
 
-def _resolve_forms(day: str, carried: list[str]) -> str:
-    """K3-7: RESOLVE `closed outside the export`, one form per carried trade."""
-    forms = "".join(
-        f'<form method="post" action="/drc/resolve">{_hidden("date", day)}{_hidden("trade_id", t)}'
-        f'<div class="line">{_t(t)}</div><input name="exit_price" placeholder="exit price (optional)">'
+def _resolve_form(day: str, trade_id: str) -> str:
+    """K3-7: RESOLVE `closed outside the export` for one carried trade — the
+    ONE resolve form (L3), here and beside an unresolved line (D5-3)."""
+    return (
+        f'<form method="post" action="/drc/resolve">{_hidden("date", day)}{_hidden("trade_id", trade_id)}'
+        f'<div class="line">{_t(trade_id)}</div><input name="exit_price" placeholder="exit price (optional)">'
         '<input name="exit_time" placeholder="exit time, ISO with offset (optional)">'
         '<input name="supersedes" placeholder="restates resolve # (optional)">'
         '<button type="submit">Resolve — closed outside the export</button></form>'
-        for t in carried
     )
+
+
+def _resolve_forms(day: str, carried: list[str]) -> str:
+    """K3-7: RESOLVE `closed outside the export`, one form per carried trade."""
+    forms = "".join(_resolve_form(day, t) for t in carried)
     return '<div class="card"><h2>RESOLVE</h2>' + (forms or _lines(["no position carried into this day"])) + "</div>"
+
+
+def _unresolved(day: str, items) -> str:
+    """D5-3 (R90): each unresolved line, K3-7's RESOLVE beside it when its
+    trade is carried into the day; otherwise where it will be offered."""
+    if not items:
+        return ""
+    body = "".join(
+        _lines([i.line], "line bad") + (
+            _resolve_form(day, i.trade_id) if i.resolve
+            else _lines([f"RESOLVE is offered on the DRC {i.trade_id} is carried into"])
+        )
+        for i in items
+    )
+    return '<div class="card"><h2>UNRESOLVED</h2>' + body + "</div>"
 
 
 def failed_page(message: str, css: str = "") -> str:
@@ -178,6 +201,8 @@ def render(view: DayView, result: Optional[PlaceResult] = None, *, cards_error: 
                  + (_lines([view.after_drop]) if view.after_drop else "") + "</div>")
     parts.append(_state_book_form(day))
     parts.append(_resolve_forms(day, view.carried))
+    if view.unresolved:
+        parts.append(_unresolved(day, view.unresolved))
     if view.resolves:
         parts.append('<div class="card"><h2>RESOLVES</h2>' + _lines(view.resolves, "line loud") + "</div>")
     notes = ([view.unpaired] if view.unpaired else []) + view.notes

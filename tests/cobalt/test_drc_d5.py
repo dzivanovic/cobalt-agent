@@ -81,6 +81,10 @@ class _Legs:
         return [cur[s] for s in sorted(cur)]
 
     def position(self, card_id):
+        if card_id not in self.cards:
+            from cobalt.cards.store import CardStateError
+
+            raise CardStateError(f"no aset_sizings row with id {card_id}")  # `running_shares`' words
         card = self.cards[card_id]
         cur = self._current(card_id)
         entry = next((r for r in cur if r["kind"] == "entry"), None)
@@ -474,6 +478,21 @@ def test_d5_3_a_cobalt_leg_with_no_das_execution_is_unresolved_no_writer_removes
     assert legs.calls == []
     (item,) = _day_build(store)["derived"]["unresolved"]
     assert item["code"] == "no_writer"
+
+
+def test_d5_3_a_matched_card_the_legs_read_cannot_find_is_unresolved_and_the_drc_is_built(tmp_path):
+    """D5-3 / L1 (found at E3, `test_drc_build_db.py`'s constructed card): the
+    card D3 matched has no `aset_sizings` row for the legs read → no write,
+    an unresolved item with the read's words; the build is not failed."""
+    store = _Store()
+    legs = _Legs([], [])
+    root, _ = _built(tmp_path, store, _record(store, D, trading=DAY1.read_bytes()), legs, [_eee_card()])
+    line = "unresolved: card 41 — no aset_sizings row with id 41"
+    assert line in _reconcile(root), _reconcile(root)
+    assert "  legs: not read — no aset_sizings row with id 41" in _reconcile(root)
+    assert legs.calls == []
+    (item,) = _day_build(store)["derived"]["unresolved"]
+    assert item["code"] == "card_state"
 
 
 def test_d5_3_the_page_offers_resolve_beside_the_unresolved_line():

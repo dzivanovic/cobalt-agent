@@ -26,3 +26,6 @@ css)` is the loud FAILED page. It reads, computes and writes nothing.
 
 Attribute values are escaped with quotes (`_e`); text nodes escape `<`,
 `>`, `&` only (`_t`), so a line reads exactly as the store returned it.
+
+## 2026-10-04 — DRC D5
+UNRESOLVED (after RESOLVE, only when `view.unresolved` holds items): each unresolved reconcile line, marked loud. Beside it sits K3-7's RESOLVE form for its trade when the trade is carried into the day (`_resolve_form`, now the one form builder `_resolve_forms` also uses). Otherwise it reads `RESOLVE is offered on the DRC <trade> is carried into`. Rendering only.

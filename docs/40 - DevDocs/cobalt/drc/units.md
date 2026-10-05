@@ -25,3 +25,15 @@ A line beginning `Grade:` or `Goal:` (the 09:00 reader's regexes, `[F-23]`); a r
 
 ## 2026-10-04 — DRC K3
 New: `OPEN_POSITIONS` (`drc-trades/open_positions`, v3 §2a / §5) and `OPEN_ITEMS` (`drc-open-items/open_positions`, A31 `open items carried forward`), placed by `OPEN_ITEMS_PLACEMENT`, directly after the drc-trades section. `open_positions(day_row)` renders `left open: <n> — tomorrow's import starts from these · book: <first 12 of the close hash>` and one line per position (`<symbol> · <long|short> · <shares> · avg cost … · opened … · day … · <new today|continuing open position> · carried from … · last execution … · <trade_id>`). A flat close reads `left open: 0 — tomorrow starts flat (stated by this DRC)`, and the loud states render as one line. `open_items(day_row)` renders the same list, `none` at 0. `summary` gains ONE line, `open overnight: <n>` (or the loud state). `stale_resolve(id, effect_day)` is the one STALE wording, shared with the page. Every value is a key of `build_day.derived`. This supersedes the `never writes … the open_positions unit (K3)` clause above.
+
+## 2026-10-04 — DRC D5
+`reconcile(day_row, builds)` (it took the day row alone before) renders from the stored keys only.
+
+Per matched trade:
+- `<label> · card #<id> · running read from <basis>`, then `entry leg: not written — …` when the card has no entry leg (D5-a).
+- One line per leg seq: `seq <k> <kind>: DAS <shares>@<price> <time> · Cobalt … (leg #<id>, <flag>, <source>) — <match | fields differ | DAS exit with no Cobalt leg | Cobalt leg with no DAS execution> · held after: DAS <n> · Cobalt <n>`.
+- His rows as `history: leg #…`.
+- The status: `adjusted to DAS: <k> rows (<ids>)`, `legs match the export — nothing to adjust`, `adjustment not written — <carried trade | re-paired date | dry run (plan only)>` or `nothing written — <refusal>`.
+- `running after: <n> · DAS position: <n>` after a write.
+
+`no trade matched a card — nothing to reconcile` when none matched. Every unresolved item (`unresolved_line(item)`: `unresolved: card <id> — <refusal>`) follows, here and at the end of `open_items` (A31). This supersedes the table's `legs: not built` row.
