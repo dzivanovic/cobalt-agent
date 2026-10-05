@@ -4,7 +4,7 @@ BRANCH: deploy/deploy-03d-1005
 WORKTREE: deploy-03d-1005
 BASE: main
 TIP: 36fa02ad
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-03d-1005.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-03d-1005-attempt2.md
 RULINGS: 2026-10-05 R391, 2026-10-05 R392
 TAG: deploy-2026-10-05-03d
 MIGRATIONS: none
