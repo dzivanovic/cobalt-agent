@@ -286,7 +286,6 @@ PIPES_ALLOWED = [
     "grep -n X f | sort | uniq -c | head -5",
     "sed -n '/^## PREFLIGHT/,$p' f | head -3",
     "sed -n -e 's/a/b/gp' f | wc -l",
-    "awk '{print $1}' f | sort -u",
     "tail -n 5 f | cut -d: -f1 | grep -o 'y'",
     "grep -c x f | head -1 < /dev/null",
 ]
@@ -1196,6 +1195,8 @@ def test_b10_a_wrapper_in_a_pipe_stays_denied(roots, command):
         "grep X f | awk '{print $1}'",
         "awk '{print $1}' f | head -1",
         "grep X f | sort | awk 'NF > 1'",
+        # card 10's G1 control until his ruling 10-04 R283 (B11)
+        "awk '{print $1}' f | sort -u",
     ],
 )
 def test_b11_an_awk_pipe_segment_is_denied(roots, command):

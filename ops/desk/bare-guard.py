@@ -25,7 +25,8 @@
 # operand or `awk -f`, in a pipe segment or as one command; B1: `sort cut uniq awk` are G3
 # readers too; B9: an awk program with `getline`, `ARGV`, `ARGC`, `@include` or `@load` is G3;
 # B10: a command led by `time nice env command nohup timeout stdbuf xargs` is judged by every
-# rule as the command it runs, and a wrapper whose command cannot be found is denied). Read: G3.
+# rule as the command it runs, and a wrapper whose command cannot be found is denied; B11: an
+# `awk` pipe segment is not a read-only filter, G11, B3 and B9 stay as defence). Read: G3.
 # Write / Edit: G6 stop line while dirty · G5 the fence (G10: a check's fence adds its own <S>,
 # the card's JOB naming it).
 # G8: every deny appends one JSON line to <worktree root>/.ledger/<session_id>.jsonl; a ledger
@@ -75,7 +76,7 @@ HUBS = {
 }
 WORKERS = ("build", "check", "devfix", "deploy", "worker")
 GIT_SHAPED = ("build", "check", "devfix", "worker")
-READ_FILTERS = ("grep", "sed", "cut", "sort", "uniq", "head", "tail", "wc", "awk")
+READ_FILTERS = ("grep", "sed", "cut", "sort", "uniq", "head", "tail", "wc")
 ENV_READERS = ("cat", "grep", "sed", "head", "tail", "less", "sort", "cut", "uniq", "awk")
 LAUNCHERS = ("claude", "codex", "grok", "agy")
 # B10: a wrapper runs the command that follows its options and operands; per wrapper, the
@@ -534,7 +535,9 @@ def pipe_problems(command, cuts):
             continue
         if ws[0] not in READ_FILTERS:
             problems.append("a pipe `|` with `%s`, not a read-only filter" % ws[0])
-            continue
+            # B11: awk left the list (his ruling 10-04 R283); G11 and B3 still name what it does
+            if ws[0] != "awk":
+                continue
         if ws[0] == "sed":
             p = sed_problem(ws[1:])
             if p:
