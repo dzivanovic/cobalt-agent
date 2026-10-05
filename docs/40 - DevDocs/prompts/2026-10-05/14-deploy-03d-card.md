@@ -5,7 +5,7 @@ WORKTREE: deploy-03d-1005
 BASE: main
 TIP: 07655b9b
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-03d-1005-attempt2.md
-RULINGS: 2026-10-05 R391, 2026-10-05 R392
+RULINGS: 2026-10-05 R391, 2026-10-05 R392, 2026-10-05 R389, 2026-10-05 R407
 TAG: deploy-2026-10-05-03d
 MIGRATIONS: none
 SET: workflow1
