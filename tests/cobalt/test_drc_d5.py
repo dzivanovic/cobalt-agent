@@ -570,3 +570,125 @@ def test_d5_4_a_refused_reconcile_is_not_computed(tmp_path, weekday_calendar):
     store, _, root, _ = _x11(tmp_path)
     line = _r_line(_trade_block(root, store, "DDD"))
     assert line.endswith("· realized not computed — the reconcile was refused (card 42)"), line
+
+
+# ---------------------------------------------------------------------
+# the check (`reports/drc-d5-check-2026-10-04.md`)
+# ---------------------------------------------------------------------
+
+
+def test_check_o1_a_re_paired_date_keeps_its_stored_unresolved_item(tmp_path, weekday_calendar):
+    """Check O1 (D5-3 / X3; build DECISION 4): K2's re-pair deletes every
+    `drc_rows` kind of the day (`store.py:935`), the build rows with them;
+    the re-paired build (`check=False`) writes nothing, so it cannot
+    re-derive the refusal. The item must survive the re-pair."""
+    from cobalt.drc import build
+
+    store, legs, root, deps = _x11(tmp_path)
+    store.build.pop(D)  # K2's re-pair: the day's rows deleted, then re-recorded
+    _record(store, D, trading=DAY1.read_bytes())
+    build.rebuild_notes([D], deps=deps)
+    assert f"unresolved: card 42 — {CLOSED_OFF_ZERO}" in _reconcile(root), _reconcile(root)
+
+
+def test_check_o2_two_unresolved_items_of_one_card_are_both_carried(tmp_path, weekday_calendar):
+    """Check O2 (D5-3 / X3): two Cobalt legs with no DAS execution on one card
+    are two unresolved items (D5-c); the next day's build carries both."""
+    from cobalt.drc import build
+
+    store = _K3Store(stated_days={7: D_NEXT})
+    rows = [
+        _leg(201, DDD_CARD, 0, "entry", 50, "30.1000", _at(10, 0), stop="29.90"),
+        _leg(202, DDD_CARD, 1, "exit", 20, "30.5000", _at(10, 30), stop="29.90"),
+        _leg(203, DDD_CARD, 2, "exit", 5, "30.6000", _at(10, 40), source="panel", flag="estimated", stop="29.90"),
+        _leg(204, DDD_CARD, 3, "exit", 5, "30.7000", _at(10, 50), source="panel", flag="estimated", stop="29.90"),
+    ]
+    legs = _Legs([_ddd_card()], rows)
+    root, deps = _built(tmp_path, store, _record(store, D, trading=DAY1.read_bytes()), legs, [_ddd_card()])
+    lines = [l for l in _reconcile(root) if l.startswith("unresolved:")]
+    assert len(lines) == 2, lines
+    build.run_drc_build(_day(store, D_NEXT, EEE_ROUND, _carried(store)), deps=deps)
+    carried = [l for l in _reconcile(root, D_NEXT) if l.startswith("unresolved:")]
+    assert carried == lines, carried
+
+
+def test_d5_3_second_refusal_does_not_clear_prior_unresolved():
+    from datetime import date
+
+    from cobalt.drc import reconcile
+
+    first = {
+        "card_id": 41,
+        "trade_id": "T-1",
+        "since": "2001-01-02",
+        "code": "first",
+        "refusal": "first refusal",
+        "leg_ids": [101],
+        "export_rows": [],
+    }
+    second = {
+        "card_id": 41,
+        "trade_id": "T-1",
+        "since": "2001-01-03",
+        "code": "second",
+        "refusal": "second refusal",
+        "leg_ids": [101],
+        "export_rows": [],
+    }
+    applied = {
+        "T-1": {
+            "card_id": 41,
+            "trade_id": "T-1",
+            "written": [],
+            "refused": {"code": "second", "text": "second refusal"},
+            "items": [second],
+        }
+    }
+
+    got = reconcile.unresolved(
+        date(2001, 1, 3),
+        carried_in=[first],
+        same_day=[],
+        applied=applied,
+        resolved_trades=set(),
+    )
+
+    assert [(item["code"], item["since"]) for item in got] == [
+        ("second", "2001-01-03"),
+        ("first", "2001-01-02"),
+    ]
+
+
+def test_d5_3_current_resolve_clears_current_build_refusal():
+    from datetime import date
+
+    from cobalt.drc import reconcile
+
+    item = {
+        "card_id": 41,
+        "trade_id": "T-1",
+        "since": "2001-01-03",
+        "code": "refused",
+        "refusal": "writer refused",
+        "leg_ids": [101],
+        "export_rows": [],
+    }
+    applied = {
+        "T-1": {
+            "card_id": 41,
+            "trade_id": "T-1",
+            "written": [],
+            "refused": {"code": "refused", "text": "writer refused"},
+            "items": [item],
+        }
+    }
+
+    got = reconcile.unresolved(
+        date(2001, 1, 3),
+        carried_in=[],
+        same_day=[],
+        applied=applied,
+        resolved_trades={"T-1"},
+    )
+
+    assert got == []
