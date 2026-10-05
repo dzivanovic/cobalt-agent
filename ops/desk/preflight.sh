@@ -228,9 +228,15 @@ if [ "$kind" = check ]; then
         ok=1
         case "$last" in
             "BUILT · job: $job · tip: $tip"*"self-check: "[0-3]" of 3"*)
-                ok=0
-                k=${last#*self-check: }
-                k=${k%% of 3*}
+                # the stop line's field is its last `self-check: ` (BUILD-HUB.md:106); k is read there
+                # and only that field passes (check O5)
+                k=${last##*self-check: }
+                case "$k" in
+                    [0-3]" of 3"*)
+                        ok=0
+                        k=${k%%" of 3"*}
+                        ;;
+                esac
                 ;;
         esac
         row report "tail -n 3 \"$report\"" 0 "$last" "$ok"
