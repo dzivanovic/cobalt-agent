@@ -97,6 +97,7 @@ class FakeReads:
         return self._pick
 
     def corpus_card_ids(self, since):
+        self.since_asked = since
         return list(self._corpus_ids if self._corpus_ids is not None else self.cards)
 
 
@@ -441,3 +442,30 @@ def test_the_replay_command_exits_with_the_reports_code(monkeypatch, capsys):
         cli.cmd_replay(argparse.Namespace(card_id=4242, json=False))
     assert stop.value.code == 1
     assert "ROW: holds numbers no record stores" in capsys.readouterr().out
+
+
+def test_the_replay_command_refuses_a_card_that_does_not_exist_with_exit_2(monkeypatch, capsys):
+    from cobalt.cards import cli, predictions
+
+    reads = FakeReads(_card(), [_record(1)])
+    monkeypatch.setattr(predictions, "CardReads", lambda *a, **k: reads)
+    with pytest.raises(SystemExit) as stop:
+        cli.cmd_replay(argparse.Namespace(card_id=4243, json=False))
+    assert stop.value.code == 2
+    assert capsys.readouterr().out.strip() == "REFUSED card 4243: no card 4243"
+
+
+def test_the_corpus_command_json_and_since(monkeypatch, capsys):
+    import json
+    from datetime import date
+
+    from cobalt.cards import cli, predictions
+
+    reads = FakeReads(_card(state="EXPIRED"), [_record(1)])
+    monkeypatch.setattr(predictions, "CardReads", lambda *a, **k: reads)
+    cli.cmd_corpus(argparse.Namespace(since="2026-01-06", json=True))
+    obj = json.loads(capsys.readouterr().out)
+    assert reads.since_asked == date(2026, 1, 6)
+    assert list(obj) == ["counts", "rows"]
+    assert obj["counts"] == {"open": 0, "provisional": 0, "final": 0, "awaiting nightly replay": 1}
+    assert [r["card_id"] for r in obj["rows"]] == [4242] and obj["rows"][0]["missed"] is None
