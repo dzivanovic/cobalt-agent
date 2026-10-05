@@ -11,14 +11,17 @@
 #                 (untracked, expected)` (card 2026-10-03/03c M1); any other line fails
 #   head          `git log --oneline -1`: build — BASE, or a `wip(<JOB>):` commit; check — TIP, or
 #                 docs-only commits above it (`git log --stat --format=%h <TIP>..HEAD`, its paths read
-#                 with --name-only, every one under docs/)
+#                 with --name-only, every one under docs/); a PASS-2 check (CHECK REPORT's last
+#                 non-blank line starts `CHECK DONE · job: <JOB> · pass: 1` and carries
+#                 `house B: needed`) reads that line's `tip:` in place of TIP (card 20 F2)
 #   diff          build: `git diff --stat <BASE>` (empty while HEAD is BASE)
 #   main repo     build: `git -C $REPO log --oneline -1 <BRANCH>` is HEAD
 #   env here      no .env in this worktree
 #   env anywhere  information only: `siblings holding .env: <paths, or none>` (another worktree's
 #                 .env is a held lock, which the take waits for); never fails the PREFLIGHT
 #   report        check: the build REPORT's last non-blank line starts
-#                 `BUILT · job: <JOB> · tip: <TIP>` and carries `self-check: 3 of 3`
+#                 `BUILT · job: <JOB> · tip: <TIP>` and carries `self-check: <k> of 3` (k 0-3);
+#                 k below 3 also prints `report: self-check <k> of 3 (recorded)` (card 20 F1)
 #   range         check: `git log --oneline <BASE>..<TIP>` (quoted)
 # NOT here: the card's symbol greps, the lock probe, the house probes (judgment, gate.sh probe,
 # house-probe.sh). Last line: `PREFLIGHT OK` (exit 0) or `FAILED PREFLIGHT: <the first rule that
@@ -141,18 +144,41 @@ if [ "$kind" = build ]; then
     fi
     row head "git log --oneline -1" "$rc" "$out" "$ok"
 else
-    tip_full=$(git rev-parse --verify -q "$tip^{commit}")
+    # card 20 F2 (CHECK-HUB.md:120): on a PASS-2 launch the head reference is pass 1's `tip:`, read
+    # from CHECK REPORT's last non-blank line when it starts `CHECK DONE · job: <JOB> · pass: 1` and
+    # carries `house B: needed`; any other state keeps the card's TIP.
+    ref=$tip
+    check_report=$(field "CHECK REPORT")
+    if [ -n "$check_report" ] && [ -f "$check_report" ]; then
+        pass1=$(grep -v '^[[:space:]]*$' "$check_report" | tail -n 1)
+        case "$pass1" in
+            "CHECK DONE · job: $job · pass: 1 ·"*"house B: needed"*)
+                ref=""
+                case "$pass1" in
+                    *"· tip: "*)
+                        ref=${pass1#*· tip: }
+                        ref=${ref%% ·*}
+                        ;;
+                esac
+                case "$ref" in
+                    ""|*[!0-9a-f]*) ref="" ;;
+                esac
+                ;;
+        esac
+    fi
+    tip_full=""
+    [ -z "$ref" ] || tip_full=$(git rev-parse --verify -q "$ref^{commit}")
     if [ -n "$tip_full" ] && [ "$head" = "$tip_full" ]; then
         ok=0
         row head "git log --oneline -1" "$rc" "$out" "$ok"
     else
-        above=$(git log --stat --format=%h "$tip..HEAD" 2>&1)
+        above=$(git log --stat --format=%h "$ref..HEAD" 2>&1)
         arc=$?
         if [ -n "$tip_full" ] && [ "$arc" -eq 0 ] && git merge-base --is-ancestor "$tip_full" HEAD; then
-            others=$(git log --format= --name-only "$tip..HEAD" | grep -v '^$' | grep -v '^docs/')
-            [ -n "$(git log --format=%h "$tip..HEAD")" ] && [ -z "$others" ] && ok=0
+            others=$(git log --format= --name-only "$ref..HEAD" | grep -v '^$' | grep -v '^docs/')
+            [ -n "$(git log --format=%h "$ref..HEAD")" ] && [ -z "$others" ] && ok=0
         fi
-        row head "git log --oneline -1; git log --stat --format=%h $tip..HEAD" "$arc" "$out
+        row head "git log --oneline -1; git log --stat --format=%h $ref..HEAD" "$arc" "$out
 $above" "$ok"
     fi
 fi
@@ -201,9 +227,15 @@ if [ "$kind" = check ]; then
         last=$(grep -v '^[[:space:]]*$' "$report" | tail -n 1)
         ok=1
         case "$last" in
-            "BUILT · job: $job · tip: $tip"*"self-check: 3 of 3"*) ok=0 ;;
+            "BUILT · job: $job · tip: $tip"*"self-check: "[0-3]" of 3"*)
+                ok=0
+                k=${last#*self-check: }
+                k=${k%% of 3*}
+                ;;
         esac
         row report "tail -n 3 \"$report\"" 0 "$last" "$ok"
+        # card 20 F1 (BUILD-HUB.md:97, CHECK-HUB.md:61): a lower self-check count is recorded, not failed.
+        [ "$ok" -ne 0 ] || [ "$k" = 3 ] || printf 'report: self-check %s of 3 (recorded)\n' "$k"
     else
         row report "tail -n 3 \"$report\"" 1 "no such file: $report" 1
     fi
