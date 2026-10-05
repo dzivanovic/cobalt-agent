@@ -5,7 +5,7 @@ WORKTREE: deploy-k3-1005
 BASE: main
 TIP: 3e40359a
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-k3-1005.md
-RULINGS: 2026-10-03 R326, 2026-10-03 R327, 2026-10-05 R368, 2026-10-05 R376, 2026-10-05 R390, 2026-10-05 R412
+RULINGS: 2026-10-05 R412
 TAG: deploy-2026-10-05-k3
 MIGRATIONS: none
 SET: s3
@@ -33,7 +33,7 @@ Files it ships (`git -C /Users/cobalt/cobalt diff --stat main...drc/k3-surfaces-
 - G (d2): per the sibling cards' RECORDS wording on its state at deploy time; no Grok read (R412).
 - K3/D5 seam: D5 is NOT in this deploy. K3-6's tests reach the DB offline only when D5 is stacked (his R376; card `03` is D5's seam-fix build). Nothing of D5 ships here, so the seam does not appear in this gate.
 - Open item carried by the check, not part of this deploy: S3 (a flat restatement from the page) stays REJECTED by row K3-6 and goes to follow-up; the flat restatement stays CLI-only.
-- S3 card preconditions for K3, as `02-deploy-s3-card.md` words them: MARKERS read on the main checkout before and in the job tree after; the trial merge `main 3e40359a` → clean `6fdc7001` (git objects only, at main `57c7502c`). Lock and residents-down-before-the-merge (L66) are the hub's and R327's: the S3 card records the window as his R327 deploy-any-hour instruction, and every check of K3 derives RESTARTS `com.cobalt.aset com.cobalt.radar`.
+- S3 card preconditions for K3, as `02-deploy-s3-card.md` words them: MARKERS read on the main checkout before and in the job tree after; the trial merge `main 3e40359a` → clean `6fdc7001` (git objects only, at main `57c7502c`). Window: a feature deploys when READY at any hour (LAWS L43; his R389, the NOW line). Production has been down since R327; K3's restart of `com.cobalt.aset` and `com.cobalt.radar` is a start. Residents are down before the merge (L66), as the S3 card words it. Every check of K3 derives RESTARTS `com.cobalt.aset com.cobalt.radar`.
 - S3 smoke reads this deploy needs: the drc-k3 tests line above (the only K3 line of the S3 card's `## SMOKE READS`); the other two S3 lines (f15-p2, cobalt-guard-b) belong to their own deploys.
 - one feature per deploy (his R390): S3 on resume = K3 first, then P2, then D5 after card `03`. Production is DOWN by his R327 until S3 resumes.
 - written by the drafter `k3-deploy-draft` on 2026-10-05, 19:07 EDT (`date`), from `02-deploy-s3-card.md` row 1 and the K3 check report, in the form main's `CARD.md` and `ops/desk/deploy-card.sh` take (seven columns, the `fix report` cell empty).
