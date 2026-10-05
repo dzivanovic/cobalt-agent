@@ -282,7 +282,7 @@ def test_the_trees_brain_hub_line_is_printed_with_its_handover_filled(tmp_path):
     text = (HUBS / "BRAIN-HUB.md").read_text()
     lines = [ln for ln in text.splitlines() if ln.startswith("claude --bg ")]
     assert len(lines) == 1
-    assert INSTALL in text  # the title token stands until his approval row
+    assert INSTALL not in text  # filled on his approval row (R358)
     desk = Desk(tmp_path, text.replace(INSTALL, "INSTALLED-IN-TEST"))
     done = desk.launch_run("brain", str(desk.handover))
     assert done.returncode == 0, done.stderr
