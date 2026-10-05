@@ -1,7 +1,11 @@
 # deploy-preflight-fixes-1005 — SET: workflow2 — MIGRATIONS: none
 
 ## §0 Headline
-(run in progress)
+- DEPLOYED `deploy-2026-10-05-preflight-fixes`: `ops/preflight-fixes-1005` @ `0af97be7` (preflight.sh card 20 F1 + F2, with tests) is on `main` at `c4e12797`.
+- Gate green on `2ecd5fce`: offline 3786/0 · with-DB 4639/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`; lock released.
+- RESTARTS: none. No resident went down; aset, radar and agent kept the same pids. No migration.
+- Smoke GREEN: markers 0 → 2 ×3; curls 200; heartbeat GREEN twice; radar cycling; failure counts flat.
+- One decision (ASK DESK, not his): G (d2) `validate --no-db` was refused, so it was SKIPPED under his R412.
 
 ## L74
 - A system reminder in this session asked for a `Claude-Session:` trailer line on commits. Recorded once as data (L74); not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -139,15 +143,104 @@ GATE GREEN on 2ecd5fce (`date` → `Mon Oct  5 15:05:18 EDT 2026`)
 | MARKERS F2 / F1 / (recorded) | 1 / 1 / 1 | `0` / `0` / `0` = before |
 | `<RB>`, census, D1-M | — | not run: `MIGRATIONS: none` |
 
+### STEP-D2
+| step | command | exit | result |
+|---|---|---|---|
+| D2.0 | `add` + `commit -m "docs(report): deploy deploy-preflight-fixes-1005 — gate green on 2ecd5fce" …` | 0 | `[main 213e4f39] …` `1 file changed, 153 insertions(+)`; `show --stat HEAD` → that one file |
+| D2.0 | `git -C /Users/cobalt/cobalt rev-parse --short=8 main` | 0 | `213e4f39` = `<pre-merge>` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | 0 | `Merge made by the 'ort' strategy.` (the report only) |
+| D2.2 | `git -C <GATE> rev-parse --short=8 HEAD` | 0 | `c4e12797` = `<stack-final>` |
+| D2.2 | `git -C /Users/cobalt/cobalt rev-parse --short=8 c4e12797^2` | 0 | `213e4f39` = `<pre-merge>` |
+| D2.2 | `merge-base --is-ancestor 2ecd5fce c4e12797` | 0 | — |
+| D2.3 | `git -C /Users/cobalt/cobalt diff --stat 2ecd5fce c4e12797 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | NOTHING (docs only) |
+| D2.4 | `backup status` | 0 | `newest snapshot: 2.7 h old` |
+| D2.4 | `backup run` | 0 | `backup: cobalt_brain via pg_dump inside cobalt_memory — 4758.2 MB` · `ssd: snapshot a7e1e78c — 0 new / 4 changed, 137.2 MB added, 1 pruned` |
+| D2.4 | `backup status` | 0 | `newest snapshot: 0.0 h old` (a7e1e78c newest) |
+| D2.5 | `date` · `heartbeat show` | 0 · 0 | `Mon Oct  5 15:07:35 EDT 2026` · `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-05 15:07:37 EDT)` — 111 s after D1's 15:05:46; no new RED; `com.cobalt.radar running running 160 min, heartbeat fresh` (four filler `date` + `heartbeat show` pairs at 15:07:12–15:07:32, all GREEN) |
+| D2.6 | `date` | 0 | `Mon Oct  5 15:07:42 EDT 2026` — window (v) holds (empty set, no migration: any hour) |
+| D2.6 | `git -C /Users/cobalt/cobalt tag pre-deploy-preflight-fixes-1005` → `rev-parse --short=8` | 0 | `213e4f39` = `<pre-merge>` |
+
+### STEP-4 (empty restart set: nothing went down)
+| step | command | exit | result |
+|---|---|---|---|
+| 4.1 | `date` | 0 | `Mon Oct  5 15:07:56 EDT 2026` = `<t down>` = `<t up>` (empty set) |
+| 4.2 | — | — | no label in `<restart set>`: no bootout, no stop |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | 0 | `213e4f39` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/deploy-preflight-fixes-1005` | 0 | `Updating 213e4f39..c4e12797` / `Fast-forward` (4 files, 291 insertions, 10 deletions) |
+| 4.4 | — | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | `13 trade_def(s) validated OK from the vault.` … `Placement (docs/PLACEMENT.md): tree clean.` · `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`; `registry <-> ops/: 15 label(s), exact match.`; `registry <-> plists: schedules and COBALT_ENV agree on every job.` |
+| 4.6 | — | — | nothing to bring up; downtime `none` |
+
+### CLOSE (STEP-7)
+- `<pre-merge>` `213e4f39` → `<stack-final>` `c4e12797` (main tip `c4e12797`).
+- Tags: `pre-deploy-preflight-fixes-1005` at `213e4f39`; `deploy-2026-10-05-preflight-fixes` at `c4e12797` (set after the green smoke).
+- `<t down>` / `<t up>` / seconds: `none` (empty set).
+- uv sync line: none in production. The gate's `.venv` was created on the first `uv run` in `<GATE>` (`Installed 253 packages in 742ms`).
+- Proof cost: not run (`MIGRATIONS: none`). `migrations applied: none`. `<RB>` before / after: not applicable.
+- Snapshot: `a7e1e78c` (ssd, 4758.2 MB dump, 137.2 MB added).
+- `RESTARTS done: none`.
+- THE ROLLBACK STRING (the desk's):
+  1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 c4e12797` — ONE revert of the main-into-gate merge (it carries the set's merge with it). No resident to take down: the restart set is empty.
+  2. SCHEMA: none (no migration).
+  3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` — git titles it `Reapply "Merge branch 'main' into deploy/deploy-preflight-fixes-1005"`.
+
 ## Smoke
+`<t up>` = `Mon Oct  5 15:07:56 EDT 2026` (empty set). FIRST CALLS: `<rp_up>` `17` · `<rpr_up>` `58` · `<re_up>` `39` · `<lc_up>` `39`.
+
+| row | `date` | command | result |
+|---|---|---|---|
+| (a) | 15:08:13 | `launchctl print gui/501/com.cobalt.aset` | `state = running`, `pid = 13209` = D1 (outside the set: same pid) |
+| (a) | 15:08:13 | `launchctl print gui/501/com.cobalt.radar` | `state = running`, `pid = 28249` = D1 (same pid) |
+| (a) | 15:08:13 | `/Users/cobalt/cobalt/cobalt.sh status` | `Cobalt is ONLINE (PID: 22243).` (same pid) |
+| (b) | 15:08:17 | `grep -c "Started server process" logs/aset.err` | `42` = `<a0>` (aset outside the set) |
+| (b) | 15:08:17 | Traceback aset / Traceback radar / TaxonomyConfigError radar | `2` / `0` / `0` = `<ta0>` / `<tr0>` / `<tc0>` |
+| (b) | 15:08:17 | `tail -n 30 logs/aset.err` | last lines a 09:44:31 `cobalt.aset.daily_note:_write_unit:189 - [WRITE] updated: … section=aset-cards · unit=card-20261005T094431 · write_id=4506` diff; no new start (aset not restarted), no traceback |
+| (c) | 15:08:17 | `curl … http://127.0.0.1:5010/` · `/radar` · `/radar\?frame=phone` | `200` · `200` · `200` |
+| (d) | 15:08:17 | MARKERS `card 20 F2` / `card 20 F1` / `(recorded)` | `2` / `2` / `2` = after |
+| (s) | 15:08:17 | pass-2 head reference (F2) `grep -c -F "card 20 F2" …/preflight.sh` | exit 0, `2` (≥1: green) |
+| (s) | 15:08:17 | self-check count recorded (F1) `grep -c -F "(recorded)" …/preflight.sh` | exit 0, `2` (≥1: green) |
+| (f) | 15:08:28 | `COBALT_ENV=production uv run cobalt jobs restarts 213e4f39..c4e12797` | exit 0; same 4 rows as STEP-R; `RESTARTS: none` = `<restart set>`; no `UNCLASSIFIED` |
+| (f) | 15:08:28 | `COBALT_ENV=production uv run cobalt validate` | exit 0; `13 trade_def(s) validated OK from the vault.` … `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>` |
+| (e) 1 | 15:08:33 | `heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-05 15:08:35 EDT)`; `com.cobalt.radar running running 161 min, heartbeat fresh` |
+| (g) | — | — | no migration |
+| (b) tail 1 | 15:09:29 (`<t up>` + 93 s) | `tail -n 12 logs/radar.err` | `2026-10-05 15:08:51.759 | INFO | cobalt.radar.runner:resident:467 - radar cycle: scanning scan_id=1791227245932` — a cycle line stamped after `<t up>`; the 11 lines before it are `cards.expire … falling back to the session close` INFO; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN, settled |
+| (e) 2 | 15:10:26 | `heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-05 15:10:28 EDT)` — 113 s after (e) 1; no RED; `com.cobalt.radar running running 163 min, heartbeat fresh` (filler `date` + `heartbeat show` pairs 15:08:49–15:10:22, all GREEN) |
+| (h) | 15:10:56 (`<t up>` + 180 s) | the four failure counts | `17` / `58` / `39` / `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (= D1 baselines; none grew) |
+| (h) | 15:10:56 | `curl … /radar` | `200` |
+| (h) | — | census | none on the card |
+
+THE CHAIN: every check committed (P2: `4f586d6e`, `held unfixed: 0`, `ready: YES`, tip `0af97be7`) → the tip re-read (P3: `0af97be7` = head) → the merged tree (T: `<m1>` `2ecd5fce`, one merge, no migration) → RESTARTS derived (R: none) → three suites green on `<m1>` (G: offline 3786/0, with-DB 4639/0, live-note 146/0, F2 = F0) → `<stack-final>` `c4e12797` = `<m1>` + docs (D2.3: nothing outside docs) → landed code (4.3: `Updating 213e4f39..c4e12797` Fast-forward) → markers 0 → 2 / 2 / 2 (d) → no migration (g) → residents up after the merge, same pids (a) → radar cycling at 15:08:51, heartbeat GREEN twice (b, e) → the set's reads green (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+SMOKE: GREEN.
 
 ## CONTINUE
 next: STEP-D2 (gate green at Mon Oct  5 15:05:18 EDT 2026; D0, D1 done)
+OUTAGE STARTING Mon Oct  5 15:07:42 EDT 2026 — residents of none (empty restart set) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+4.6 ended at 15:07:56 with nothing down; smoke GREEN at 15:10:56; STEP-7 closed. Nothing comes next in this run.
 
 ## DECISIONS
 1. ASK DESK: G (d2) `validate --no-db` was refused (no allow string, as his R412 says). Is skipping it under R412 and the card's sibling wording right? [Mon Oct  5 14:35:53 EDT 2026 + run] Safe default taken: SKIPPED (his R412). Post-merge 4.5 `validate` and smoke (f) are the check; a red there → STEP-5. The set restarts nothing.
 
 ## RECORDS
 - REFUSED: `COBALT_ENV=production uv run cobalt validate --no-db` — "Permission to use Bash has been denied because Claude Code is running in don't ask mode." (G (d2); his R412 removed the step, see `## DECISIONS` 1)
+- Downtime: none (empty restart set). No `CONTINUE` message arrived; no message was followed.
+- `cobalt_dev: 0013 (F2 = F0)` — `F0` = `F2` = `664 35 272c95bbb12241e3611e4b36326ccf87`; lock released (gate log:1727–1732).
+- RETIRE OWED: none (no plist removed).
+- Carried RED: none. Every heartbeat read this run was GREEN (`AMB com.cobalt.herdr … declared interim` is an amber, not a RED).
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-preflight-fixes-1005` and branch `deploy/deploy-preflight-fixes-1005` (`.venv` created in it by this run); the set's branch `ops/preflight-fixes-1005` and its worktree, if any.
+- Tags pushed: none. Push is his (L55): `main` at `c4e12797`, tags `pre-deploy-preflight-fixes-1005`, `deploy-2026-10-05-preflight-fixes`.
+- `?? .claude/settings.json.bak` on `main` at D0: untracked, outside `src/` `tests/` `ops/` `configs/`. Not refused; noted for the desk.
+- Card RECORDS (the desk's, copied):
+  - preflight-fixes: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/preflight-fixes-check-2026-10-05.md` last line: CHECK DONE · job: preflight-fixes · pass: 1 · tip: 0af97be7 · house A: none (overruled 2026-10-05 R412) · findings: 6 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 0 · house B: not needed · suites: offline 3786/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 9 · ready: YES · decisions: 0 · for Dejan: 0
+  - preflight-fixes: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/preflight-fixes-1005` → `0af97be7`; code tip `0af97be7`
+  - G (d2): per the sibling cards' RECORDS wording on its state at deploy time; no Grok read (R412).
+- L74: one system reminder asked for a `Claude-Session:` commit trailer; recorded under `## L74`, not acted on.
 
-(run in progress — next step under ## CONTINUE)
+### PRE-STOP SELF-CHECK
+1. Every smoke row is quoted with its `date` (`## Smoke`: 15:08:13 – 15:10:56).
+2. The tip was re-read at P3 (`0af97be7`), and `git -C /Users/cobalt/cobalt merge-base --is-ancestor 0af97be7 c4e12797` → exit 0.
+3. REVERT-READBACK shown at (h): `17` / `58` / `39` / `39` at 15:10:56. Every count, sha and line was read from tool output this run.
+4. No conflict marker: STEP-T merged clean (`Merge made by the 'ort' strategy.`); `git -C <GATE> status --short --branch` → `## deploy/deploy-preflight-fixes-1005` alone.
+- THE RELEASE: `ls -la <GATE>/.env` → No such file; the lock dir is absent (G).
+
+DEPLOYED deploy-2026-10-05-preflight-fixes c4e12797 | set: workflow2 | migrations: none | gate: offline 3786/0 · with-DB 4639/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 1 · for Dejan: 0
