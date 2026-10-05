@@ -149,6 +149,19 @@ His words, brain session: "You're not to make a new card for a feature that has 
 - ROW D, THE DEPLOY RULE ALREADY EXISTED: 10-02 row 4 ("work goes on; he reads the list at DONE") already let the judge ship D5 with O1 pinned on the night of 10-04. The brain's A/B to him instead was an error; the 10-05 standing row ("a deploy never waits") restates it.
 - ORDER, his: these rows recorded and the memory written (ROW C) → his installs done → the desk restarts fresh → the brain restarts fresh.
 
+## RULED 2026-10-05 mid-morning — S3 ships now, (d2) skipped for this run (one row for the desk)
+His words, brain session: "Yes, skip the check and no external review. It is uh, built that it's already done with three small changes that we know about will go on separate cards. I want it running immediately."
+- S3 is recut now with what it already had (K3, D5, P2, guard-b). The pre-merge (d2) is skipped for this run only, and the post-merge D2.4 `validate` is the check (it rolls back on red). There is no outside-house review. `03d` leaves S3 and ships on a later deploy. No `.env` goes in the gate (L41, L76).
+- The three known small items (D5 O1 store + B2 wording, P2 `no_trigger`, the `preflight.sh` fixes) go on separate cards by his word. This overrides ROW A for these three only.
+- Why: the probe (`s3-d2-probe-2026-10-05.md` step 4c) found the validate chain and dependencies unchanged since set 3b's (d2) exit 0, and the 03d cycle had held a ready deploy (the 10-05 standing row).
+- Also his, the same session: a drafter is launched at once for the gain-measure survey ("the surveyor"). The brain sent the questions.
+
+## RULED 2026-10-05 mid-morning — the desk runs Sonnet 5.5 (one row for the desk)
+His words, brain session: "Next, next desk needs to restart as Sonnet. Five point five. If we already have a brain running Opus five point five, I see no need in both of you being Opus. It's an overkill. And also, I don't see Opus doing any better job at not forgetting or missing the rules as Sonnet would do."
+- The desk's next REFRESH successor runs `claude-sonnet-5-5`. The brain stays on Opus 5.5. Relayed to the desk; the desk records it.
+- Recorded as desk R371 (07:18) and applied 07:19. The restart is the REFRESH after the S3 recut's stop line (deploy `3e0755b2`, R370, on his direct word R368).
+- The brain also asked the desk to fill the wake-up log's cause column again. The desk refused, rightly: his 10-03 R78 keeps that column empty, and only he reopens it (L77).
+
 ## HIS WORDS — for `cto-2026-10-02-words.md`, verbatim, brain session 2026-10-02
 Answering the brain's "do it here or with the desk, and can it be done today":
 "First, you, you may run a separate file for the direction. I allow you more than one file. Second, for the build, of the scripts these are internal scripts that we're working through in Anthropic specific issue where the harness from Anthropic is stopping Anthropic from working so no we don't need another houses to check I want this build as soon as possible and I want them built only by Anthropic seat and we don't need to wait for any checks and houses to be uh, invoked I don't want to four day build this 24 scripts need to be built within one day and deployed within one day if they can't be done today they need to be done tomorrow And they don't need to wait for me to rule on every single step of the process. We create a list now we build the list we check the list and that's it."

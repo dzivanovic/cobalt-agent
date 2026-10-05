@@ -3,11 +3,11 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/adoption-port-1005
 WORKTREE: adoption-port-1005
 BASE: e6ba65e6
-TIP:
+TIP: 74370e5d
 REPORT: /Users/cobalt/cobalt-wt/adoption-port-1005/docs/40 - DevDocs/reports/adoption-port-build-2026-10-05.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/adoption-port-check-2026-10-05.md
 HOUSE A: none — overruled 2026-10-02 R47
-HOUSE B:
+HOUSE B: as needed
 TREE STATE: unchanged
 RULINGS: 2026-10-03 R327, 2026-10-05 R347
 

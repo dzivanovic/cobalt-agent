@@ -1,0 +1,36 @@
+# 03d card preflight — rows P5–P6 (2026-10-05)
+
+Card: `prompts/2026-10-03/03d-adoption-port-card.md` · BASE `e6ba65e6` · read-only; no test was run (static trace only).
+
+## CHECKS
+
+| # | command | output | OK/FAIL |
+|---|---|---|---|
+| 1 | `git -C /Users/cobalt/cobalt merge-base --is-ancestor e6ba65e6 main` | exit 0, no output | OK |
+| 2 | `git -C /Users/cobalt/cobalt rev-parse --verify ops/adoption-port-1005` | `fatal: Needed a single revision` (exit 128): branch is new | OK |
+| 3 | `ls /Users/cobalt/cobalt-wt/adoption-port-1005` | `No such file or directory`: worktree is new | OK |
+| 4 | header read: `TIP:` and `CHECK REPORT:` | both empty; `HOUSE B:` empty; BRANCH/WORKTREE/BASE/REPORT/RULINGS present | OK |
+| 5 | `DB` line (CARD.md: key is left out unless every file is under `ops/`, `tests/ops/`, `docs/`) | no `DB` key; card `## RECORDS` says so (cli.py, tests/cobalt are outside those); correct | OK |
+| 6 | `grep -n "^| R327 " …/cto-2026-10-03.md` | `333:\| R327 \| 10-05 06:19 ET \| HIS RULING, standing: no deploy waits on a ruling a small later card can resolve … \| HIS RULING · APPROVED · APPLIED: LAWS.md L43 at 06:45 \|` (the header calls it `2026-10-03 R327`; the row sits in the 10-03 file, stamped 10-05) | OK |
+| 7 | `grep -n "^| R347 " …/cto-2026-10-05.md` | `20:\| R347 \| 10-05 06:47 ET \| HIS RULING (brain relay, … ROW A): a feature's small findings go as rows on THE SAME card … \| HIS RULING · APPROVED \|` | OK |
+| 8 | `git log -1 --format=%h -S"\| R347 \|" -- …/cto-2026-10-05.md` · same for R327 in `cto-2026-10-03.md` | `e89ef63a` · `b1337431` (both committed) | OK |
+| 9 | `git show e6ba65e6:<path>` for `src/cobalt/cli.py`, `docs/40 - DevDocs/prompts/DEPLOY-HUB.md`, `docs/40 - DevDocs/cobalt/cli.md`; `tests/cobalt/test_validate_no_db.py` | first three exist; the test is `does not exist in 'e6ba65e6'` and the card names it NEW | OK |
+| 10 | `git diff --stat e6ba65e6 -- src/cobalt/cli.py db.py aset/config.py daymode/config.py settings/models.py settings/store.py redact/secrets.py DEPLOY-HUB.md cobalt/cli.md` · `git log --oneline e6ba65e6..main -- src tests` | both empty: the working tree equals BASE, and `main` has no src/tests change since BASE, so line cites read from the tree are BASE's | OK |
+| 11 | `cli.py` cites vs `Read` of the file | `:178-182` sheets (`178 sheets = load_sheet_modes_config()`); `:194-205` coupling; `:207-226` `dm = load_daymode_config(sheets)` + Hotkey + Step-downs; `:144-161`, `:228-246` band (`242-246` `validate_band`), `:248-261`, `:273-293`, `:298-438`, `:440-446`, `:452-455`, `:460-469` all match; parser `516 validate = sub.add_parser(` … `519 validate.set_defaults(func=_cmd_validate)` | OK |
+| 12 | other cites: `aset/config.py:267`, `daymode/config.py:324`, `settings/models.py:319`, `settings/store.py:35`, `db.py:136/160/183`, `redact/secrets.py:129-134`, `test_daymode.py:872` | `267 return TraderSettings.from_db().sheet_modes` · `324 return TraderSettings.from_db().daymode` · `319 def from_db` · `35 return db.connect(self.db_name, side=self.SIDE)` · `136 class DbConfigError` · `160 def _open` · `183 raise DbConfigError(… Missing Postgres settings for the {credential.name} credential` · `129 key = os.getenv(MASTER_KEY_ENV)` / `131 return _empty(` · `872 def test_cobalt_validate_calls_the_same_validator` (asserts `validate_band` in source at `883`) | OK |
+| 13 | X4 pre-read: DB reach of every other `_cmd_validate` call (`grep` for `from_db`, `cobalt.db`, `db.connect`, `store` imports in taxonomy/validate, session/calendar+clock, jobs/config, notify/config, redact/config, archiver/settings, placement/check, taxonomy/loader) | no hit in any of them (`heartbeat/runner.py:53` imports `JobStore` only; no connect in `interval_min`/`summary_at` per grep); only the three listed calls reach `db._open` | OK |
+| 14 | P5 red on BASE: `grep -n -E "no.db" cli.py` and parser lines | no `no_db`/`--no-db` anywhere in `cli.py`; parser is exactly `516-519` quoted in #11 (`validate` has no `add_argument`), so `argparse.Namespace(no_db=True)` is ignored and `load_sheet_modes_config()` runs → `from_db` → `store.values()` → `_open` → `DbConfigError` (RuntimeError, not caught by `except TraderSettingsError`). Static trace; test not run | OK |
+| 15 | P5 control (c): the check the flag does not skip | `validate_band` / `BandError` at `cli.py:242-246` prints `FAILED:` and `sys.exit(1)`; not among the three skipped | OK |
+| 16 | P6 line: `grep -n -F "cobalt validate" DEPLOY-HUB.md` | `101:- (d2) VALIDATE, right before the gate call (seconds): \`COBALT_ENV=production uv run cobalt validate\` → exit 0; record \`Jobs (F17):\` as \`<jobsG>\`. A \`registry <-> plists\` line naming ONLY a label STEP-C recorded as \`RETIRE OWED\` is recorded, not a stop; any other violation → \`FAILED: G (d2) — <line> · rollback: not used\`.` The card quotes only the command, which is byte-exact inside line 101; it does not quote the whole line | OK |
+| 17 | P6 cites: 4.5, smoke (f), D1, allow string | `141:4.5 \`COBALT_ENV=production uv run cobalt validate\` → exit 0 …` · `151:- (f) \`COBALT_ENV=production uv run cobalt validate\` → as 4.5 …` · `121:- \`COBALT_ENV=production uv run cobalt validate\` → \`<val0>\`` · `:11` carries `"Bash(COBALT_ENV=production uv run cobalt validate)"` unstarred | OK |
+| 18 | P6 red: `grep -n -F "COBALT_ENV=production uv run cobalt validate --no-db"` on BASE | the `grep -n -F "cobalt validate"` list in #16 shows no `--no-db` at lines 11, 101, 121, 141, 151 → no hit; `test_hub_lines.py` has no `validate` string, so it stays green | OK |
+| 19 | P6's `:74`'s note (unstarred allow admits trailing arguments by prefix) | `:74` is a table row: `\| \`validate\`, \`jobs restarts *\`, … \| G (d2), STEP-R, D1, D2.4 \|`. The prefix note is at `:77`: `strings with no wildcard (an unstarred allow matches by PREFIX — probe G, scratch test 2 part 5: trailing arguments to the SAME command are admitted …; desk reading, accepted)` | FAIL |
+| 20 | P5/P6 RESTARTS homes in `## RECORDS` (K10) | `cli.py` → `static import reach com.cobalt.radar` at `deploy-2026-09-30-1.md:180` (`180:src/cobalt/cli.py	M	static import reach	com.cobalt.radar`); tests → `restarts.py:245` `path.startswith("tests/")`; docs → `:225` `path.startswith("docs/")`; `OPS_DESK_PREFIX` `:38`. All match. (`db_migrations/cli.py`'s class belongs to P1, shipped, not this round) | OK |
+| 21 | other cites: `s3-d2-probe-2026-10-05.md` `## §0` `## CAUSE` `## FIX` `## STEPS` (3a, 3b); R343; `brain-direction-2026-10-02.md` `## RULED 2026-10-05 morning` ROW A | `3:## §0` · `29:## CAUSE` · `32:## FIX` · `10:## STEPS` with rows 3a, 3b · `cto-2026-10-05.md:16 \| R343 … probe (a) — card validate --no-db + DEPLOY-HUB.md (d2) runs it` · `144:## RULED 2026-10-05 morning …` / `146:- ROW A, SAME CARD` | OK |
+| 22 | `grep -c -F "«FILL" <card>` | `0` | OK |
+| 23 | `git diff --stat -- <card>` · `git log -1 --format=%h -- <card>` | empty · `cd22ea7c` (committed on main, clean) | OK |
+
+## ISSUES
+- #19 P6 cites `:74`'s note for "an unstarred allow admits trailing arguments by prefix"; the note is at `DEPLOY-HUB.md:77`. Cosmetic (the claim and the allow string `:11` are right); the build should read `:77`.
+
+PREFLIGHT DONE · card: 03d · checks: 23 · fails: 1 · ready: YES
