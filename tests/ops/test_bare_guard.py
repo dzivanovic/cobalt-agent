@@ -1215,3 +1215,41 @@ def test_b11_g11_and_b3_stay_as_defence_on_an_awk_segment(roots, command):
 @pytest.mark.parametrize("command", ["grep X f | cut -f2", "grep X f | sort -u | head -3"])
 def test_b11_a_pipe_without_awk_stays_allowed(roots, command):
     assert_allowed(run(command, make_seat(roots, "build")))
+
+
+# ---- check r3 of cobalt-guard-b ------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command,found",
+    [
+        ("sort {-o,out} f", SORT_FOUND),
+        ("grep X f | sort {-o,out}", SORT_FOUND),
+        ("uniq {f,out}", UNIQ_FOUND),
+        ("grep X f | uniq {-,out}", UNIQ_FOUND),
+    ],
+)
+def test_check_b_r3_o1_a_brace_word_that_expands_to_a_write_is_denied(roots, command, found):
+    assert_resend(run(command, make_seat(roots, "build")), found)
+
+
+@pytest.mark.parametrize(
+    "command,found",
+    [
+        # bash: `-{n..p}` is `-n -o -p`, `{1..2}` is `1 2`
+        ("sort -{n..p} f", SORT_FOUND),
+        ("uniq {1..2}", UNIQ_FOUND),
+    ],
+)
+def test_check_b_r3_o1_a_brace_sequence_that_expands_to_a_write_is_denied(roots, command, found):
+    assert_resend(run(command, make_seat(roots, "build")), found)
+
+
+def test_check_b_r3_o1_a_brace_sequence_naming_env_is_denied(roots):
+    # bash: `.{d..f}nv` is `.denv .eenv .fenv`
+    assert_denied(run("sort /x/wt/job/.{d..f}nv", make_seat(roots, "build")), G3_ROUTE)
+
+
+@pytest.mark.parametrize("command", ["sort $'-o' out f", "grep X f | sort $'\\x2do' out"])
+def test_check_b_r3_o2_an_ansi_c_quoted_sort_output_is_denied(roots, command):
+    assert_resend(run(command, make_seat(roots, "build")), SORT_FOUND)
