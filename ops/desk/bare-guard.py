@@ -717,6 +717,39 @@ def decide(event):
     return None
 
 
+# THE ALLOW HALF (his 2026-10-05 order, brain session): a Bash call no rule denies, made only of
+# standard reads, is allowed outright, so no seat waits on the auto-mode classifier for a read.
+# `sed` passes only as `sed -n` without a write command (G1's own test); awk, sort and uniq stay
+# out (his 10-04 awk ruling; sort -o and a uniq output file write).
+READS = ("ls", "grep", "sed", "head", "tail", "wc", "cut", "date")
+ALLOW = {
+    "hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "allow",
+        "permissionDecisionReason": "cobalt-guard: standard read",
+    }
+}
+
+
+def standard_read(event):
+    if event.get("tool_name") != "Bash":
+        return False
+    ti = event.get("tool_input")
+    command = ti.get("command") if isinstance(ti, dict) else None
+    if not isinstance(command, str) or not command.strip():
+        return False
+    found, quote, cuts = scan(command)
+    if quote is not None or found not in ([], ["a pipe `|`"]):
+        return False
+    for seg in segments(command, cuts):
+        ws = words(seg)
+        if not ws or ws[0] not in READS:
+            return False
+        if ws[0] == "sed" and sed_problem(ws[1:]):
+            return False
+    return True
+
+
 def main():
     try:
         event = json.loads(sys.stdin.read())
@@ -724,6 +757,8 @@ def main():
             return 0
         hit = decide(event)
         if not hit:
+            if standard_read(event):
+                sys.stdout.write(json.dumps(ALLOW) + "\n")
             return 0
         rule, line, what = hit
         ledger(event, rule, what)
