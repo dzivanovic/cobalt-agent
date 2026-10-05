@@ -335,6 +335,7 @@ while IFS= read -r line; do
     head=$(printf '%s\n' "$line" | awk -F'|' '{print $5}' | tr -d '` ')
     report=$(printf '%s\n' "$line" | awk -F'|' '{print $6}' | tr -d '`' | sed -e 's/^ *//' -e 's/ *$//')
     lits=$(printf '%s\n' "$line" | awk -F'|' '{print $7}' | grep -o '`[^`]*`' | tr -d '`')
+    frep=$(printf '%s\n' "$line" | awk -F'|' '{print $8}' | tr -d '`' | sed -e 's/^ *//' -e 's/ *$//')
     # the card's D1 and the hub's P2: a clean check always carries these two, whatever the row names
     lits=$(printf 'held unfixed: 0\nready: YES\n%s\n' "$lits")
     rrel=$(rel "$report")
@@ -381,6 +382,21 @@ EOF
                 "$ctip"*) ;;
                 *) case "$ctip" in "$t"*) ;; *) why="its tip $t is not the row's code tip $ctip" ;; esac ;;
             esac
+            # a fix round (his R376, L75): the row's `fix report` ends `BUILT · … tip: <code tip>` and
+            # the check's tip is an ancestor of the code tip; the literals above stay the check's
+            if [ -n "$why" ] && [ -n "$t" ] && [ -n "$frep" ]; then
+                flast=""
+                [ -f "$frep" ] && flast=$(grep -v '^[[:space:]]*$' "$frep" | tail -n 1)
+                case "$flast" in
+                    "BUILT ·"*"tip: $ctip"*)
+                        if git -C "$REPO" merge-base --is-ancestor "$t" "$ctip" 2>/dev/null; then
+                            why=""
+                        else
+                            why="$why, nor its ancestor (fix report $frep)"
+                        fi ;;
+                    *) why="$why; the fix report $frep does not end 'BUILT · … tip: $ctip': ${flast:-absent}" ;;
+                esac
+            fi
         fi
         ok=0
         [ -z "$why" ] || ok=1

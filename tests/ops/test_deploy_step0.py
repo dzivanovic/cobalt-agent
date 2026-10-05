@@ -606,7 +606,7 @@ def test_f2_a_fix_round_row_passes_p2_and_step0(desk):
     assert done.returncode == 0, done.stdout
     assert last_line(done) == "STEP-0 OK — window: (iii)"
     p2 = [ln for ln in done.stdout.splitlines() if ln.startswith("P2 check 1 ")]
-    assert p2 and p2[0].split(" · ")[-1].startswith("CHECK DONE"), done.stdout
+    assert p2 and " · 0 · CHECK DONE " in p2[0], done.stdout
 
 
 @pytest.mark.parametrize(
