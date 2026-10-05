@@ -26,7 +26,8 @@
 # readers too; B9: an awk program with `getline`, `ARGV`, `ARGC`, `@include` or `@load` is G3;
 # B10: a command led by `time nice env command nohup timeout stdbuf xargs` is judged by every
 # rule as the command it runs, and a wrapper whose command cannot be found is denied; B11: an
-# `awk` pipe segment is not a read-only filter, G11, B3 and B9 stay as defence). Read: G3.
+# `awk` pipe segment is not a read-only filter, G11, B3 and B9 stay as defence; check r3: words are
+# read with `$'…'` decoded, and B2–B4 read them brace-expanded, `{a..b}` too). Read: G3.
 # Write / Edit: G6 stop line while dirty · G5 the fence (G10: a check's fence adds its own <S>,
 # the card's JOB naming it).
 # G8: every deny appends one JSON line to <worktree root>/.ledger/<session_id>.jsonl; a ledger
@@ -208,7 +209,79 @@ def segments(command, cuts):
     return out
 
 
+ANSI_C = {
+    "a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b", "f": "\f", "n": "\n", "r": "\r",
+    "t": "\t", "v": "\v", "\\": "\\", "'": "'", '"': '"', "?": "?",
+}
+
+
+def ansi_c(body):
+    """The text bash makes of the body of a $'…' quote."""
+    out, i, n = [], 0, len(body)
+    while i < n:
+        c = body[i]
+        if c != "\\" or i + 1 >= n:
+            out.append(c)
+            i += 1
+            continue
+        e = body[i + 1]
+        octal = re.match(r"[0-7]{1,3}", body[i + 1:])
+        digits = {"x": 2, "u": 4, "U": 8}.get(e)
+        hexa = re.match(r"[0-9A-Fa-f]{1,%d}" % digits, body[i + 2:]) if digits else None
+        if e in ANSI_C:
+            out.append(ANSI_C[e])
+            i += 2
+        elif octal:
+            out.append(chr(int(octal.group(), 8) & 0xFF))
+            i += 1 + len(octal.group())
+        elif hexa:
+            out.append(chr(min(int(hexa.group(), 16), 0x10FFFF)))
+            i += 2 + len(hexa.group())
+        elif e == "c" and i + 2 < n:
+            out.append(chr(ord(body[i + 2]) & 0x1F))
+            i += 3
+        else:
+            out.append(c + e)
+            i += 2
+    return "".join(out)
+
+
+def unquote_ansi_c(segment):
+    """check r3 O2: each $'…' outside quotes rewritten as the single-quoted text bash makes of
+    it, so shlex reads the word the shell runs (shlex alone reads `$'-o'` as `$-o`)."""
+    out, i, n, quote = [], 0, len(segment), None
+    while i < n:
+        c = segment[i]
+        if quote == "'":
+            if c == "'":
+                quote = None
+        elif quote == '"':
+            if c == "\\":
+                out.append(segment[i:i + 2])
+                i += 2
+                continue
+            if c == '"':
+                quote = None
+        elif c == "\\":
+            out.append(segment[i:i + 2])
+            i += 2
+            continue
+        elif c == "$" and segment[i + 1:i + 2] == "'":
+            j = i + 2
+            while j < n and segment[j] != "'":
+                j += 2 if segment[j] == "\\" else 1
+            out.append("'" + ansi_c(segment[i + 2:j]).replace("'", "'\"'\"'") + "'")
+            i = j + 1
+            continue
+        elif c in "'\"":
+            quote = c
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def words(segment):
+    segment = unquote_ansi_c(segment)
     try:
         return shlex.split(segment, comments=True)
     except ValueError:
@@ -514,12 +587,14 @@ def uniq_writes(args):
 
 def filter_problem(ws):
     """B2, B3, G11: what makes a `sort`, `uniq` or `awk` command more than a read, or None."""
-    if ws[0] == "sort" and sort_writes(ws[1:]):
+    # check r3 O1: the words as the shell brace-expands them, as G3 reads them (`{-o,out}`)
+    args = [x for a in ws[1:] for x in braces(a) if x]
+    if ws[0] == "sort" and sort_writes(args):
         return SORT_WRITES
-    if ws[0] == "uniq" and uniq_writes(ws[1:]):
+    if ws[0] == "uniq" and uniq_writes(args):
         return UNIQ_WRITES
     if ws[0] == "awk":
-        if awk_file(ws[1:]):
+        if awk_file(args):
             return AWK_FILE
         if awk_writes(ws[1:]):
             return AWK_WRITES
@@ -672,12 +747,36 @@ def seat(event):
 # ---- the Bash rules ------------------------------------------------------------------------
 
 
+SEQUENCE = re.compile(r"\{(-?\d+|[A-Za-z])\.\.(-?\d+|[A-Za-z])(?:\.\.(-?\d+))?\}")
+
+
+def sequence(a, b, step):
+    """The items of a `{a..b[..step]}` brace sequence, as bash makes them; [] when it is not one.
+    At most 256: two are enough to count operands, and a digit never spells a letter."""
+    step = abs(int(step or 1)) or 1
+    if a.lstrip("-").isdigit() and b.lstrip("-").isdigit():
+        x, y = int(a), int(b)
+        items = range(x, y + 1, step) if x <= y else range(x, y - 1, -step)
+        return [str(k) for k in items[:256]]
+    if len(a) == 1 and len(b) == 1 and not a.isdigit() and not b.isdigit():
+        x, y = ord(a), ord(b)
+        items = range(x, y + 1, step) if x <= y else range(x, y - 1, -step)
+        return [chr(k) for k in items[:256]]
+    return []
+
+
 def braces(word):
-    """The word's `{a,b}` alternatives, as the shell expands them."""
+    """The word's `{a,b}` alternatives and (check r3 O1) `{a..b}` sequences, as the shell
+    expands them."""
     m = re.search(r"\{([^{}]*,[^{}]*)\}", word)
-    if not m:
+    if m:
+        alts = m.group(1).split(",")
+    else:
+        m = SEQUENCE.search(word)
+        alts = sequence(*m.groups()) if m else []
+    if not alts:
         return [word]
-    return [x for alt in m.group(1).split(",") for x in braces(word[: m.start()] + alt + word[m.end():])]
+    return [x for alt in alts for x in braces(word[: m.start()] + alt + word[m.end():])]
 
 
 def is_env(path):

@@ -1253,3 +1253,10 @@ def test_check_b_r3_o1_a_brace_sequence_naming_env_is_denied(roots):
 @pytest.mark.parametrize("command", ["sort $'-o' out f", "grep X f | sort $'\\x2do' out"])
 def test_check_b_r3_o2_an_ansi_c_quoted_sort_output_is_denied(roots, command):
     assert_resend(run(command, make_seat(roots, "build")), SORT_FOUND)
+
+
+@pytest.mark.parametrize(
+    "command", ["sort {a,b}", "sort -{n,u} f", "sort $'-u' f", "grep X f | uniq $'-c'", "uniq {f,}"]
+)
+def test_check_b_r3_a_brace_or_ansi_c_read_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
