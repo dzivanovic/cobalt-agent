@@ -54,9 +54,12 @@ def test_no_db_skips_the_db_checks_and_exits_clean(capsys):
 
 @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_without_the_flag_validate_still_reads_the_db(capsys):
-    with pytest.raises(DbConfigError):
-        cli._cmd_validate(argparse.Namespace(no_db=False))
-    assert _skipped_lines(capsys.readouterr().out) == []
+    assert cli._cmd_validate(argparse.Namespace(no_db=False)) is None
+
+    out = capsys.readouterr().out
+    assert any(line.startswith("Sheets:") for line in out.splitlines())
+    assert any(line.startswith("Day modes:") for line in out.splitlines())
+    assert _skipped_lines(out) == []
 
 
 def test_no_db_still_fails_a_config_error_it_does_not_skip(monkeypatch, capsys):
