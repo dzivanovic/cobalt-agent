@@ -755,6 +755,25 @@ OFF-LADDER work of 2026-10-03 (ruled, not on a ladder line; each with the ruling
 | Adoption hubs `02`, scripts `03`, `03b` devfix verbs | `02`, `03` shipped inside `03d`; `03b` NOT STARTED | 10-03 R44 (`03b` after `11`, `12`, `13` on main). |
 | Meter | stop 22:54 ET 10-03, weekly limit; reset 10-04 13:00 ET | 10-03 R106, R107 (his: keep going on the full plan); R177 resumed. |
 
+### Status 2026-10-04
+S3 status block (ruled 09-19 R14); S3's fifth; the earlier `### Status` blocks above stay as written. Written by close hub `close-1004` for 10-04 alone from `reports/cto-2026-10-03.md` rows R292–R335 (10-04 21:07 ET → 10-05 06:35 ET; no `cto-2026-10-04.md` was opened, per cto-desk's CONTINUE of 10-05 06:4x, desk ee876c19, R341); re-verified against the tree (L35): `git tag --list "deploy-2026-10-04*"` = `deploy-2026-10-04-2`; `git tag --list "deploy-2026-10-05*"` = none; `reports/deploy-s3-1005.md` last line `FAILED: gate — G (d2) — validate exit 1: DbConfigError … · rollback: not used`. Status only — scope, dates and order change by his ruling alone. Legend: DONE-LIVE · DONE-DARK · BUILT-NOT-MERGED · BUILDING · NOT STARTED.
+
+| S3 feature | Status | Evidence |
+|---|---|---|
+| F11 Fill recompute + fill/exit capture | DONE-LIVE | Unchanged (`deploy-2026-09-30-2`, `-3`). First live-morning proof not recorded. |
+| F22 Trade-note auto-creation | DONE-LIVE | Unchanged (`deploy-2026-09-30-2`, `-3`, `-4`). |
+| F14 DRC prefill / reconcile / DRC→mode | BUILT-NOT-MERGED | K3 READY at `3e40359a` (PASS-2 `ea556255`, R298). D5 BUILT `3c1f75b8` (R304); check pass 1 FAILED W then ready NO (R313, R322); PASS-2 `c14efcf8` ready NO at `c96b5118`, O1 held unfixed (R324); his A: D5 ships at `c96b5118` with O1 pinned, follow-up card for items' store + B2 wording (R325, R326). Rides the S3 deploy, which has not landed. |
+| F15 Prediction records | BUILT-NOT-MERGED | P1 live (unchanged). P2 BUILT `437c7299` (R318), check ready YES at `437c7299` (R323), READY; X11 route → follow-up card (R326). Rides the S3 deploy. |
+
+**Stop date: 2026-10-07. S3: AT RISK — day 11 of 14 (10-04), rows to 10-05 06:35 ET.** Reason: K3, D5 and F15 P2 are all built and checked READY, and his R327 / R331 rulings let the S3 deploy go at any hour, but the first run `79d23096` (card `02-deploy-s3-card.md`, K3 → D5 → P2 → guard-b) FAILED gate G (d2) at 06:35 ET 10-05 (R335): `validate` exit 1, `DbConfigError`; production untouched; cause unproven. The S3 smoke (a live morning from tap through DRC and replay) has not run. Three calendar days remain (10-05, 10-06, 10-07). Watch items (not a ruling): the desk's §5 plan names the (d2) cause as the first act; the follow-up cards (O1 items' store + B2 wording, X11, `preflight.sh` self-check, `supersedes` on the flat form) are owed.
+
+OFF-LADDER work of 2026-10-04 (ruled, not on a ladder line; each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Cobalt-guard-b `06` (B1–B4, B7–B11) | BUILT-NOT-MERGED | 10-04 R248 / R283. READY at `47ec01c5` (R289); rides the S3 deploy `79d23096`, which FAILED at (d2) (R335). |
+| Second-writer survey (read-only, Sonnet) | DRAFTED, launch owed | Drafter `eef43e54` (R315, R316) → `prompts/2026-10-05/01-second-writer-survey.md`; his A on the 5 read strings, this seat only (R326). Launch Mon 10-05 17:5x. |
+| Standing: no deploy waits on a ruling a later card can resolve | RULED | 10-05 R327, R331 (his words; both `APPROVED — pending fold`): S3 deploys now, any hour; only harm to production may hold a deploy. |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

@@ -3240,3 +3240,54 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - R291 10-04 21:01 DESK RECORD: nightly close `close-1003` `6bbbaa08` launched.
 - DEPLOY (L35): `git tag --list "deploy-2026-10-03*"` = `deploy-2026-10-03-1`, `deploy-2026-10-03-2`, `deploy-2026-10-03-3`; mains `3fbe64fb` (R34), `44b29c63` (R138), `a8d8a848` (R158) and `979ec797` (R261, tag `deploy-2026-10-04-2`) as quoted from the desk rows.
 - PUSHES (L55): none recorded in the desk rows before this close.
+
+### 2026-10-04 — Close of 10-03 pushed; K3, D5, F15 P2 checked READY; his A on D5/O1 and S3 now; S3 deploy FAILED gate (d2)
+- (Desk file: `cto-2026-10-03.md` rows R292–R335; no `cto-2026-10-04.md` was opened — cto-desk, R341, ee876c19.)
+- R292 10-04 21:07 DESK RECORD: close `CLOSE PUSHED 80a6fbec`, laws pending 20; `6bbbaa08` removed.
+- R293 10-04 21:08 DESK RECORD: desk `600c7400` took the seat; `ac71da64` removed.
+- R294 10-04 21:12 DESK RECORD: 20 folds of `close-2026-10-03.md` applied (L67, L77, checklist, contract).
+- R295 10-04 21:20 DESK RECORD: K3 check `e59c16aa` pass 1 ready NO (S3 open); decisions 2 → brain.
+- R296 10-04 21:20 DESK RECORD: K3 check PASS-2 `ea556255` launched.
+- R297 10-04 21:21 DESK RECORD: judge on K3 pass 1: D1 KEEP; `supersedes` follow-up own card.
+- R298 10-04 22:09 DESK RECORD: K3 PASS-2 ready YES tip `3e40359a`; K3 READY.
+- R299 10-04 22:09 DESK RECORD: judge K3 P2-1 KEEP, joined to `preflight.sh` follow-up card.
+- R300 10-04 22:09 DESK RECORD: card `03` D5 header filled BASE `3e40359a`; preflight prompt written.
+- R301 10-04 22:10 DESK RECORD: card `03` preflight `7b3323a1` launched.
+- R302 10-04 22:11 DESK RECORD: D5 preflight 8 checks, 1 fail (desk's own); card stands.
+- R303 10-04 22:11 DESK RECORD: D5 build `7b4f2c10` launched on BASE `3e40359a`.
+- R304 10-04 23:09 DESK RECORD: D5 BUILT `3c1f75b8`, 7 of 7, decisions 7 none BLOCKING.
+- R305 10-04 23:09 DESK RECORD: D5 check `cc41a9d4` launched.
+- R306 10-04 23:10 DESK RECORD: judge D5 D1–D7 KEEP; card `02` row T pasted.
+- R307 10-04 23:10 DESK RECORD: card `02` F15 P2 header filled BASE `3c1f75b8`.
+- R308 10-04 23:10 DESK RECORD: card `02` preflight `d9372340` launched.
+- R309 10-04 23:12 DESK RECORD: card `02` preflight ready NO, 2 fails (row T); JUDGE ASK.
+- R310 10-04 23:12 DESK RECORD: judge's row T text pasted byte for byte.
+- R311 10-04 23:12 DESK RECORD: F15 P2 build `0c378304` launched.
+- R312 10-04 23:16 DESK RECORD: desk `8dabc7a6` woke; `600c7400` removed; MEASURE 84,663.
+- R313 10-05 00:03 DESK RECORD: D5 check `cc41a9d4` FAILED W (`cobalt_dev` deadlock); decisions 6 → brain.
+- R314 10-05 00:04 DESK RECORD: judge D5 check: `CONTINUE: 6` when quiet; O1 to Dejan via brain.
+- R315 10-05 00:05 DESK RECORD: second-writer drafter `eef43e54` launched.
+- R316 10-05 00:11 DESK RECORD: drafter DRAFTED `01-second-writer-survey.md`; decisions 6 → brain.
+- R317 10-05 00:11 DESK RECORD: judge second-writer D3/D5/D6 KEEP, D4 reversed; D1+D2 to Dejan.
+- R318 10-05 00:19 DESK RECORD: F15 P2 BUILT `437c7299`, 6 of 6, decisions 5.
+- R319 10-05 00:19 DESK RECORD: `CONTINUE: 6` sent to D5 check `cc41a9d4`.
+- R320 10-05 00:19 DESK RECORD: F15 P2 check `ac3df9a0` launched.
+- R321 10-05 00:19 DESK RECORD: judge F15 P2 D1–D5 KEEP; D3 X11 route to Dejan.
+- R322 10-05 00:38 DESK RECORD: D5 pass 1 ready NO, house B needed; PASS-2 `c14efcf8` launched.
+- R323 10-05 00:40 DESK RECORD: F15 P2 check ready YES at `437c7299`; `02` READY.
+- R324 10-05 01:30 DESK RECORD: D5 PASS-2 ready NO at `c96b5118` (B1 fixed, O1 unfixed); for Dejan 3.
+- R325 10-05 01:30 DESK RECORD: judge D5 pass 2: D3 O1 his A → D5 READY `c96b5118`.
+- R326 10-05 06:19 HIS: A on all three — D5 ships with O1 pinned; survey gets 5 read strings; X11 → follow-up card.
+- R327 10-05 06:19 HIS: standing — no deploy waits on a ruling a later card can resolve; S3 deploys now, any hour.
+- R328 10-05 06:20 DESK RECORD: `deploy-card.sh` refuses D5 (`held unfixed: 1`); card to a drafter.
+- R329 10-05 06:22 DESK RECORD: S3 deploy card drafter `370cae57` launched.
+- R330 10-05 06:27 DESK RECORD: drafter DRAFTED with 8 FILLs, 4 asks answered.
+- R331 10-05 06:27 HIS: only harm to production may hold a deploy (brain relay of R326–R327).
+- R332 10-05 06:28 DESK RECORD: S3 deploy card preflight `67d06a09` launched.
+- R333 10-05 06:29 DESK RECORD: S3 preflight 9 checks, 1 fail (desk prompt's date spelling); card stands.
+- R334 10-05 06:30 DESK RECORD: S3 deploy `79d23096` (`deploy-hub-deploy-s3-1005`) launched.
+- R335 10-05 06:35 DESK RECORD: S3 deploy FAILED STEP-G (d2), `validate` exit 1; production untouched.
+- STOP LINE (L35), `reports/deploy-s3-1005.md`: `FAILED: gate — G (d2) — validate exit 1: DbConfigError: Missing Postgres settings for the APP credential (from <GATE>, no .env) · rollback: not used · decisions: 1 · for Dejan: 0`.
+- STOP LINE (L35), `reports/close-2026-10-03.md`: `CLOSE PUSHED 80a6fbec · days: 1 · … · push: verified`.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-04*"` = `deploy-2026-10-04-2` (set 3b, R261); `git tag --list "deploy-2026-10-05*"` = none (S3 not deployed).
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-04.md` `## 8`.

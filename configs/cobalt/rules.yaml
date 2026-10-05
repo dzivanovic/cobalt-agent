@@ -6,69 +6,74 @@
 
 generated:
   source: /Users/cobalt/Vault/Think/1 - Trading/5 - Review/Rules.md
-  source_sha256: e995dd183b3b666296df109623312df9dd53827cca909b06eb763275caf18d24
-  generated_at: '2026-10-02T09:15:00+00:00'
+  source_sha256: d3d0004aa2fb8c78fa0428598647fa219b17839417c2bd55cb14461158ea4543
+  generated_at: '2026-10-05T09:15:00+00:00'
 rules:
 - id: rule_01
   category: process
   text: 'Card first: grade → $ risk → shares **written before every entry**. No card,
-    no trade. Any re-entry carries a **"what''s new"** line.'
+    no trade. When the sheet is down, the stop click + grade key is the card. Any
+    re-entry carries a **"what''s new"** line.'
 - id: rule_02
   category: sizing
-  text: 'Grades: **B = $30, A = $70, C = $11.** Nothing bigger. **At grade: 9 EMA
-    continuation/rejection and Rubberband/overextension only.** Every other family
-    trades at **C** until 10 instances at C show positive net R and ≥70% sniper tags.'
+  text: 'Grades: **B = $30, A = $70, C = $11.** Families at grade: **9 EMA, Rubberband,
+    VWAP continuation, Second Chance** — A after 9:40, B in the first 10 minutes.
+    **All other families C** until 10 instances at C show positive net R and ≥70%
+    sniper. **ORB = C always.** Risk may be raised to A only while the position is
+    in profit; total risk, adds included, **never exceeds one A unit.**'
 - id: rule_03
   category: process
   text: Stop at **structure**, never a default distance. If R:R < 2:1, pass.
 - id: rule_04
   category: time_window
-  text: 'Prime window only: **9:30–11:00.** Nothing before, nothing after. **First
-    15 minutes (to 9:45): C key, every trade.**'
+  text: 'Windows: **9:30–9:40** opening window (B for the four families, C for the
+    rest). **9:40–11:00** prime. **11:00–4:00** afternoon: max **3 additional trades**,
+    not cumulative with the morning, **B max** until a Sunday ruling lifts it. No
+    premarket entries.'
 - id: rule_05
   category: sizing
-  text: '**Max 5 trades, counted from 9:45.** First-15 C entries don''t count toward
-    the five; they count in every other metric.'
+  text: '**Max 5 trades before 11:00.** C trades don''t count toward the cap.'
 - id: rule_06
   category: process
   text: 'Reversion entry needs all three: **my level + exhaustion printed + trigger.**
     Approaching ≠ rejecting.'
 - id: rule_07
   category: re_entry
-  text: 'Re-entry #2 same thesis: write **what''s new** — blank or "better price"
-    = no trade.'
+  text: 'Re-entry: write **what''s new** — blank or "better price" = no trade.'
 - id: rule_08
   category: re_entry
-  text: 'Entry #3 same thesis: **stand down.** Ticker done for the day.'
+  text: '**Three losses on a ticker = ticker done for the day.** Setup sheets may
+    set tighter limits.'
 - id: rule_09
   category: circuit_breaker
-  text: Two straight losses → **10-min cooldown.**
+  text: Two straight losses → **10-min cooldown.** C trades don't count toward the
+    two.
 - id: rule_10
   category: circuit_breaker
-  text: Max two open positions. Never correlated. Both bracketed. Second seat closes
-    when the day's _realized_ P&L is strictly below −1R ($30 on the half sheet); reopens
-    when it recovers. Open positions with their stop at the card's level count for
-    nothing. Rule 9 cooldown takes precedence.
+  text: Max two open positions, C trades included. Never correlated. Both bracketed.
+    Second seat closes when the day's _realized_ P&L is strictly below −1R ($30 half);
+    reopens when it recovers. Open positions with their stop at the card's level count
+    for nothing. Rule 9 takes precedence.
 - id: rule_11
   category: process
-  text: '**Exits follow the setup''s written ladder.** No first profit-take before
-    1R. **9 EMA:** 2–3 portions, each into strength or on a 9 EMA breach; last piece
-    on invalidation — a 2-min close through the 9 EMA followed by continuation or
-    a failed reclaim. **Rubberband:** per the sheet, VWAP is the target; last piece
-    may hold through VWAP while VWAP holds. **Tuition (C) families:** once in profit,
-    never let the trade invalidate the prior consolidation. Every stop on a winner
-    is a positive-P&L stop. Stop moves logged by structure, not conviction. B/E-on-first-pullback
-    is not a ladder step. Leaving the screen: flat, or a resting stop under a positive-R
-    higher low — never break-even.'
+  text: '**Exits follow the setup''s written ladder.** At entry: structural stop resting,
+    sheet target resting. **The hand moves only for a ladder step that needs a read**
+    — 9 EMA invalidation close, VWAP loss. No first take before 1R. **9 EMA:** 2–3
+    portions, into strength or on a 9 EMA breach; last on invalidation. **Rubberband:**
+    VWAP target; last piece holds while VWAP holds. **C families:** once in profit,
+    never invalidate the prior consolidation. Every stop on a winner is a positive-P&L
+    stop. Stop moves logged by structure. **P&L hidden during holds.** Leaving the
+    screen: flat, or a resting stop under a positive-R higher low.'
 - id: rule_12
   category: hard_stop
-  text: Daily stop hit ($215 live) → **done trading.** Watch only.
+  text: Daily stop hit ($215 live) → **done trading.** Watch only. Sleep under 5h
+    → **B max** that day.
 mantras:
 - id: primary_goal
-  text: 'Primary goal: Exits per the ladder — clean exits ÷ total exits, target 70–75%.
-    Sniper entries in maintenance (60% floor, still tagged).'
+  text: 'Primary goal: Exits per the ladder — clean exits ÷ total exits, target 70–75%;
+    exit efficiency (realized ÷ MFE) target 60%.'
 - id: tape_check
   text: 'Tape check: In because criteria met — or because it excites me?'
 - id: identity
-  text: 'Identity: My sizing is arithmetic, not habit. Stand-down gives me back my
-    eyes. The ladder decides the exit, not the pullback.'
+  text: 'Identity: My sizing is arithmetic, not habit. The ladder decides the exit,
+    not the flicker. Rules change on Sunday.'
