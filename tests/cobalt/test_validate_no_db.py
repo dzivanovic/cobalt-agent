@@ -91,3 +91,46 @@ def test_the_parser_carries_the_flag(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["cobalt", "validate"])
     cli.main()
     assert seen[0].no_db is False
+
+
+def test_without_the_flag_the_three_checks_still_run_in_order(monkeypatch, capsys):
+    # check O2: (b) is satisfied by the FIRST DB read alone; this pins the
+    # SheetMode coupling and Day modes on the no-flag path, in order.
+    import types
+
+    import cobalt.aset.config as aset_config
+    import cobalt.daymode.config as daymode_config
+
+    calls: list[object] = []
+    sheets = types.SimpleNamespace(order=["full", "constructed_sheet"])
+
+    class _Stop(Exception):
+        pass
+
+    def _sheets():
+        calls.append("sheets")
+        return sheets
+
+    def _daymode(arg):
+        calls.append(("daymode", arg))
+        raise _Stop
+
+    monkeypatch.setattr(aset_config, "load_sheet_modes_config", _sheets)
+    monkeypatch.setattr(daymode_config, "load_daymode_config", _daymode)
+
+    # the coupling check still runs: an unmodelled sheet exits 1 before Day modes
+    with pytest.raises(SystemExit) as exc:
+        cli._cmd_validate(argparse.Namespace(no_db=False))
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Sheets: 2 declared, low to high full < constructed_sheet" in out
+    assert "no SheetMode enum member" in out
+    assert calls == ["sheets"]
+
+    # Day modes still runs, after the coupling, on the same sheets object
+    sheets.order = ["full", "half"]
+    calls.clear()
+    with pytest.raises(_Stop):
+        cli._cmd_validate(argparse.Namespace(no_db=False))
+    assert calls == ["sheets", ("daymode", sheets)]
+    assert _skipped_lines(capsys.readouterr().out) == []
