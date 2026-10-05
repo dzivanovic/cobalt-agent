@@ -389,7 +389,13 @@ EOF
                 [ -f "$frep" ] && flast=$(grep -v '^[[:space:]]*$' "$frep" | tail -n 1)
                 case "$flast" in
                     "BUILT ·"*"tip: $ctip"*)
-                        if git -C "$REPO" merge-base --is-ancestor "$t" "$ctip" 2>/dev/null; then
+                        # the hub's P2 fix-round line: the fix report committed and unmodified
+                        frel=$(rel "$frep")
+                        flog=$(git -C "$REPO" log -1 --format=%H -- "$frel" 2>/dev/null)
+                        fdiff=$(git -C "$REPO" diff --stat -- "$frel" 2>&1)
+                        if [ -z "$flog" ] || [ -n "$fdiff" ]; then
+                            why="$why; the fix report $frep is not committed and unmodified (commit '${flog:-none}')"
+                        elif git -C "$REPO" merge-base --is-ancestor "$t" "$ctip" 2>/dev/null; then
                             why=""
                         else
                             why="$why, nor its ancestor (fix report $frep)"
