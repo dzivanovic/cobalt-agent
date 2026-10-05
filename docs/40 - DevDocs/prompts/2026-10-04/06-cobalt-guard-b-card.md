@@ -3,9 +3,9 @@ LADDER: OFF-LADDER — cto-2026-10-03.md R248
 BRANCH: ops/cobalt-guard-b-1004
 WORKTREE: cobalt-guard-b-1004
 BASE: 979ec797
-TIP: c74edcd3
+TIP: 3ecdd3dc
 REPORT: /Users/cobalt/cobalt-wt/cobalt-guard-b-1004/docs/40 - DevDocs/reports/cobalt-guard-b-build-2026-10-04.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cobalt-guard-b-check-2026-10-04-r2.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cobalt-guard-b-check-2026-10-04-r3.md
 HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B: as needed
 TREE STATE: unchanged
