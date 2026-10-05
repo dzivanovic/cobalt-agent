@@ -50,6 +50,7 @@ PRICE_PLACES = Decimal("0.0001")
 
 ENTRY_NOT_WRITTEN = "entry leg: not written — the entry writer carries no import id"  # D5-a
 NO_WRITER = "no writer removes a leg"  # D5-c
+NO_WRITER_CODE = "no_writer"  # D5-c: an unresolved item, not a refused reconcile
 NOT_WRITTEN_CARRIED = "adjustment not written — carried trade"  # D5-d
 NOT_WRITTEN_REPAIRED = "adjustment not written — re-paired date"  # D5-d
 NOT_WRITTEN_DRY = "adjustment not written — dry run (plan only)"
@@ -293,7 +294,7 @@ def apply(work: dict, *, legs, now: datetime) -> dict:
     for r in work["diff"]["rows"]:
         if r["state"] == "cobalt_only":
             c = r["cobalt"]
-            items.append(_item(work, "no_writer", f"{NO_WRITER} — Cobalt leg #{c['leg_id']} (seq {r['seq']}) "
+            items.append(_item(work, NO_WRITER_CODE, f"{NO_WRITER} — Cobalt leg #{c['leg_id']} (seq {r['seq']}) "
                                                   "has no DAS execution"))
     return {"card_id": work["card_id"], "trade_id": work["trade_id"], "before": work["diff"]["rows"],
             "written": written, "refused": refused, "items": items}
@@ -430,6 +431,13 @@ def reconciled_cards(applied: dict[str, dict]) -> set[int]:
     return {a["card_id"] for a in applied.values() if a["refused"] is None}
 
 
+def refused_cards(items: list[dict]) -> set[int]:
+    """The cards whose reconcile was REFUSED (D5-4's `not computed`): an
+    open item other than D5-c's — a Cobalt leg with no export execution
+    stops no write, so realized R is still computed over the current legs."""
+    return {i["card_id"] for i in items if i["code"] != NO_WRITER_CODE}
+
+
 def unresolved(day: date, *, carried_in: list[dict], same_day: list[dict], applied: dict[str, dict],
                resolved_trades: set[str]) -> list[dict]:
     """The items open after this build: this build's (its writes' refusals
@@ -455,6 +463,6 @@ def unresolved(day: date, *, carried_in: list[dict], same_day: list[dict], appli
 
 __all__ = [
     "ENTRY_NOT_WRITTEN", "LegsGateway", "MATCHED", "NOTHING_MATCHED", "NOT_WRITTEN_CARRIED", "NOT_WRITTEN_DRY",
-    "NOT_WRITTEN_REPAIRED", "NO_READER", "NO_WRITER", "TRADING_LOG", "apply", "diff", "differs", "for_trade",
-    "realized", "realized_text", "reconciled_cards", "unresolved", "writes_for",
+    "NOT_WRITTEN_REPAIRED", "NO_READER", "NO_WRITER", "NO_WRITER_CODE", "TRADING_LOG", "apply", "diff", "differs",
+    "for_trade", "realized", "realized_text", "reconciled_cards", "refused_cards", "unresolved", "writes_for",
 ]

@@ -59,3 +59,6 @@ This supersedes "no leg write (D5)" under `## What it never does`.
 
 ## 2026-10-04 — drc-d5 check
 `_unresolved`'s stored read names `reconciled_cards` as `reconcile.reconciled_cards(applied)`: the cards whose reconcile succeeded (no refusal). Only those clear a carried item (check A4).
+
+## 2026-10-05 — drc-d5 check, pass 2
+The trade blocks' refused cards are `reconcile.refused_cards(unresolved)`: a D5-c item alone no longer makes realized R `not computed` (check B1).

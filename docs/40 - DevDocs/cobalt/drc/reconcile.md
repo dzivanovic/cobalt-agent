@@ -37,10 +37,13 @@ unresolved(day, ...)                   the day's open items
 
 ## Realized R (D5-4)
 - `cards.legs.realized_r` as `read_position` returns it, over the legs read after the writes. It is provisional while any current leg is estimated, and stored with `realized_r.1` and its legs.
-- It reads `not computed — <reason>` when no card matched, the card has no legs, or the card has an unresolved item.
+- It reads `not computed — <reason>` when no card matched, the card has no legs, or the card's reconcile was refused (an open item other than D5-c's `no_writer`; `refused_cards`).
 
 ## 2026-10-04 — DRC D5
 New module (card `prompts/2026-10-04/03-drc-d5-card.md`, rows D5-1 … D5-4). Tests: `tests/cobalt/test_drc_d5.py` (offline, through an in-memory legs door), `tests/cobalt/test_drc_d5_db.py` (the real writer, `migrated`), `tests/cobalt/test_drc_d5_experiments_db.py` (X11, RUN).
 
 ## 2026-10-04 — drc-d5 check
 `unresolved` clears a carried item only on a SUCCESSFUL reconcile of its card (`reconciled_cards`: applied with no refusal), drops this build's own items for a resolved trade too, and folds items by (card, trade, code, refusal), so two D5-c items of one card are both carried. The diff keys are `export`, `export_only` and `export_held`, with no vendor name (L31). Check O2, A2, A4, A5.
+
+## 2026-10-05 — drc-d5 check, pass 2
+`refused_cards(items)` names the cards D5-4 reads as refused: every open item except D5-c's (`NO_WRITER_CODE`). A Cobalt leg with no export execution stops no write, so its card's realized R is computed over the current legs, not `not computed — the reconcile was refused`. Check B1.

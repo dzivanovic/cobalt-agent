@@ -622,7 +622,7 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True,
     # and this day's earlier build's, less what is resolved (R90).
     unresolved, unresolved_read = _unresolved(day, view, stored, derived_day, stale_resolves, deps.store,
                                               applied or {})
-    refused_cards = {i["card_id"] for i in unresolved}
+    refused_cards = reconcile.refused_cards(unresolved)
     for t, row, derived, card, stats, resolutions, rec in pending:
         tid = t["trade_id"]
         realized, realized_inputs = reconcile.realized(card, rec, refused_cards)
