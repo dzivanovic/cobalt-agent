@@ -5,7 +5,7 @@ WORKTREE: deploy-preflight-fixes-1005
 BASE: main
 TIP: 0af97be7
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-preflight-fixes-1005.md
-RULINGS: 2026-10-05 R376, 2026-10-05 R387, 2026-10-05 R390, 2026-10-05 R412
+RULINGS: 2026-10-05 R412
 TAG: deploy-2026-10-05-preflight-fixes
 MIGRATIONS: none
 SET: workflow2
