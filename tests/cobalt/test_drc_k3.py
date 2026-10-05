@@ -56,7 +56,7 @@ from test_drc_build import (
     _vault,
 )
 from test_drc_k2_experiments import DDD_COVER, EEE_ROUND, _log
-from test_drc_store import D, D_NEXT, DAY1, STATS, weekday_calendar  # noqa: F401 — fixture used by name
+from test_drc_store import D, D_NEXT, DAY1, STATS, requires_db, weekday_calendar  # noqa: F401 — fixture used by name
 
 RESET_ET = datetime(2026, 9, 4, 0, 15, tzinfo=timezone.utc)  # 20:15 ET
 D_THIRD = date(2001, 1, 4)
@@ -627,9 +627,18 @@ class _Statements:
 @pytest.fixture
 def statements(monkeypatch):
     """`imports.DrcStore` → a `_Statements`; `build.rebuild_notes` → a spy
-    (K3-8's function, its own tests below); the session block store quiet."""
-    from cobalt.drc import build, imports
+    (K3-8's function, its own tests below); the session block store quiet.
+
+    The build module is taken from `sys.modules` (`importlib.import_module`),
+    as `test_drc_k3_db.py`'s `k3_lane`: a with-DB test before this one can
+    leave `cobalt.drc.build` on the package a different object than the one
+    `imports._rebuild_notes` imports — the spy must land on the latter."""
+    import importlib
+
+    from cobalt.drc import imports
     from cobalt.session.store import SessionBlockStore
+
+    build = importlib.import_module("cobalt.drc.build")
 
     monkeypatch.setattr(SessionBlockStore, "record", lambda self, **kw: None)
     holder: dict = {"store": _Statements(), "notes": []}
@@ -704,6 +713,7 @@ def test_k3_6_inside_market_reset_is_refused_and_nothing_written(statements):
     assert imports.resolve(D, "DDD-long-x", now=RESET_ET).refused == imports.RESET_REFUSAL
 
 
+@requires_db
 def test_k3_6_a_day_with_its_import_rebuilds_from_the_effect_day_and_rewrites_every_note(statements):
     """K3-6 + K3-8: `statement_rebuilds` true → `rebuild(effect_day(day,
     supersedes))` → the notes of EVERY date it returned."""
@@ -725,6 +735,7 @@ def test_k3_6_a_refused_rebuild_is_loud_and_the_statement_kept(statements):
     assert len(statements["store"].rows) == 1 and statements["notes"] == []
 
 
+@requires_db
 def test_k3_6_a_notes_failure_is_loud_the_database_committed(statements):
     from cobalt.drc import imports
 
