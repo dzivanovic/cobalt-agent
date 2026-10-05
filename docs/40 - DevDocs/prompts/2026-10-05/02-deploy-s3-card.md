@@ -5,7 +5,7 @@ WORKTREE: deploy-1005-1
 BASE: main
 TIP: 3e40359a c96b5118 6269f05e 47ec01c5
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-s3-1005.md
-RULINGS: 2026-10-03 R326, 2026-10-03 R327
+RULINGS: 2026-10-03 R326, 2026-10-03 R327, 2026-10-05 R368
 TAG: deploy-2026-10-05-1
 MIGRATIONS: none
 SET: s3
@@ -32,6 +32,7 @@ SET: s3
 - cobalt-guard-b awk fence · `grep -c -F "@include" /Users/cobalt/cobalt/ops/desk/bare-guard.py` · exit 0, a count of 1 or more
 
 ## RECORDS
+- G (d2): SKIPPED for this JOB only, by his 2026-10-05 R368 (`cto-2026-10-05.md`; L73 his direct instruction is the override): record `G (d2) — SKIPPED (his R368)` and go on to the gate call; the post-merge D2.4 validate is the check and rolls back on red. No `.env` in the gate (L41, L76). `03d` is not in this deploy.
 - drc-k3: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/drc-k3-check-2026-10-04.md` last line: CHECK DONE · job: drc-k3 · pass: 2 · tip: 3e40359a · house B: Grok FINDINGS: 4 · findings: 4 · dropped: 0 · held: 3 · fixed: 3 · held unfixed: 0 · open: 1 · suites: offline 3871/0 · with-DB 863/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 21 · ready: YES · decisions: 1 · for Dejan: 0
 - drc-k3: head `git -C /Users/cobalt/cobalt rev-parse --short=8 drc/k3-surfaces-1004` → `3e40359a`; code tip `3e40359a`
 - drc-d5: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/drc-d5-check-2026-10-04.md` last line: CHECK DONE · job: drc-d5 · pass: 2 · tip: c96b5118 · house B: Grok FINDINGS: 4 · findings: 4 · dropped: 0 · held: 2 · fixed: 1 · held unfixed: 1 · open: 3 · suites: offline 3898/0 · with-DB 867/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 18 · ready: NO · decisions: 5 · for Dejan: 3
