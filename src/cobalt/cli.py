@@ -27,7 +27,7 @@ Two command groups:
     cobalt smoke <suite> --cutoff ISO8601 [--prod] [--json]   (read-only)
     cobalt stop / cobalt resume        (F17d kill phrase)
 
-    cobalt validate
+    cobalt validate [--no-db]
 
 `restore` puts a section back to the before-state recorded in
 `vault_writes` id N, and it does so THROUGH THE SAME WRITER — same
@@ -175,55 +175,69 @@ def _cmd_validate(args: argparse.Namespace) -> None:
         validate_band,
     )
 
-    sheets = load_sheet_modes_config()
-    print(
-        f"\nSheets: {len(sheets.order)} declared, low to high "
-        f"{' < '.join(sheets.order)} (ordered list, not a hardcoded pair)."
-    )
-
-    # KNOWN COUPLING, made loud here rather than discovered live.
-    # `sheet_modes` is now an ordered config list, but `SizingInput.
-    # sheet_mode` is still the `SheetMode` enum (full/half) — it is on
-    # the live sizing path and was not reshaped this sprint. So a sheet
-    # declared in config with no enum member would pass every day-mode
-    # check and then fail at card-creation time, at 09:31 on a live
-    # morning. This turns that into a config-gate failure.
-    # TODO (whenever the quarter sheet lands): either add its enum member
-    # in the same change as its config row, or retire the enum in favour
-    # of a config-validated string on SizingInput.
-    from cobalt.aset.models import SheetMode
-
-    unmodelled = [s for s in sheets.order if s not in {m.value for m in SheetMode}]
-    if unmodelled:
+    # 03d P5: `--no-db`. These three checks read `"user".trader_settings`
+    # (`TraderSettings.from_db()` -> `db._open`); DEPLOY-HUB STEP-G (d2)
+    # runs validate from a gate with no `.env`. The flag skips them and
+    # says so, one line each (L1: loud, never a silent pass); it checks
+    # nothing in their place. Without it this block is unchanged.
+    if args.no_db:
+        print()
+        for check in (
+            "Sheets (sheet_modes, read from \"user\".trader_settings)",
+            "the SheetMode coupling (reads the Sheets order)",
+            "Day modes, Hotkey files, Step-downs (daymode, read from \"user\".trader_settings)",
+        ):
+            print(f"SKIPPED (--no-db): {check}")
+    else:
+        sheets = load_sheet_modes_config()
         print(
-            f"FAILED: sheet(s) {unmodelled} are declared in configs/cobalt/aset.yaml "
-            f"but have no SheetMode enum member (have: "
-            f"{sorted(m.value for m in SheetMode)}). A card sized on one would be "
-            "refused by Pydantic at creation time. Add the member in the same change "
-            "as the config row."
+            f"\nSheets: {len(sheets.order)} declared, low to high "
+            f"{' < '.join(sheets.order)} (ordered list, not a hardcoded pair)."
         )
-        sys.exit(1)
 
-    dm = load_daymode_config(sheets)
-    print(
-        f"Day modes: ladder {' < '.join(dm.modes)}; enabled {dm.enabled_modes}; "
-        f"stage-1 floor {dm.lowest_enabled} -> {dm.sheet_for(dm.lowest_enabled)} sheet, "
-        f"keys {[g.value for g in dm.enabled_grades_for(dm.lowest_enabled)]}."
-    )
-    print(
-        f"Hotkey files (derived from the sheets via "
-        f"daymode.hotkey_file_template={dm.hotkey_file_template!r}): "
-        f"{', '.join(f'{dm.hotkey_file_for_sheet(s)}={s}' for s in dm.sheet_order)} "
-        "(attested, never read — Cobalt does not touch DAS)."
-    )
-    print(
-        "Step-downs: "
-        + "; ".join(
-            f"{r.signal}={r.effect}" + (f"({r.rungs})" if r.effect == "down" else "")
-            for r in dm.stepdowns
+        # KNOWN COUPLING, made loud here rather than discovered live.
+        # `sheet_modes` is now an ordered config list, but `SizingInput.
+        # sheet_mode` is still the `SheetMode` enum (full/half) — it is on
+        # the live sizing path and was not reshaped this sprint. So a sheet
+        # declared in config with no enum member would pass every day-mode
+        # check and then fail at card-creation time, at 09:31 on a live
+        # morning. This turns that into a config-gate failure.
+        # TODO (whenever the quarter sheet lands): either add its enum member
+        # in the same change as its config row, or retire the enum in favour
+        # of a config-validated string on SizingInput.
+        from cobalt.aset.models import SheetMode
+
+        unmodelled = [s for s in sheets.order if s not in {m.value for m in SheetMode}]
+        if unmodelled:
+            print(
+                f"FAILED: sheet(s) {unmodelled} are declared in configs/cobalt/aset.yaml "
+                f"but have no SheetMode enum member (have: "
+                f"{sorted(m.value for m in SheetMode)}). A card sized on one would be "
+                "refused by Pydantic at creation time. Add the member in the same change "
+                "as the config row."
+            )
+            sys.exit(1)
+
+        dm = load_daymode_config(sheets)
+        print(
+            f"Day modes: ladder {' < '.join(dm.modes)}; enabled {dm.enabled_modes}; "
+            f"stage-1 floor {dm.lowest_enabled} -> {dm.sheet_for(dm.lowest_enabled)} sheet, "
+            f"keys {[g.value for g in dm.enabled_grades_for(dm.lowest_enabled)]}."
         )
-        + f" — {len(dm.stepdowns)} row(s), every computable signal ruled."
-    )
+        print(
+            f"Hotkey files (derived from the sheets via "
+            f"daymode.hotkey_file_template={dm.hotkey_file_template!r}): "
+            f"{', '.join(f'{dm.hotkey_file_for_sheet(s)}={s}' for s in dm.sheet_order)} "
+            "(attested, never read — Cobalt does not touch DAS)."
+        )
+        print(
+            "Step-downs: "
+            + "; ".join(
+                f"{r.signal}={r.effect}" + (f"({r.rungs})" if r.effect == "down" else "")
+                for r in dm.stepdowns
+            )
+            + f" — {len(dm.stepdowns)} row(s), every computable signal ruled."
+        )
 
     registry = load_tunables().by_key
     band: list[object] = []
@@ -515,6 +529,12 @@ def main() -> None:
 
     validate = sub.add_parser(
         "validate", help="Validate every config family (F16 sweep gate)."
+    )
+    validate.add_argument(
+        "--no-db",
+        action="store_true",
+        help="Skip the checks that read the database (Sheets, the SheetMode "
+        "coupling, Day modes); each prints a SKIPPED (--no-db): line.",
     )
     validate.set_defaults(func=_cmd_validate)
 

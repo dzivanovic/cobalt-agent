@@ -98,3 +98,19 @@ its neighbours) mounts `cobalt voice turn --text | --audio | --confirm
 `drc_cli.add_parser(sub)` mounts `cobalt drc state-book`. It dry-runs by
 default and writes only with `--apply --sha256` (`drc/cli.md`). This is
 the ONE `drc` group: D3's `cobalt drc build` joins it later (L3).
+
+## 2026-10-05 — adoption-port
+
+`cobalt validate --no-db` skips the three checks that read
+`"user".trader_settings` (Sheets, the SheetMode coupling, Day modes with
+their Hotkey files and Step-downs lines) and prints one
+`SKIPPED (--no-db):` line for each. Every other check runs unchanged.
+Without the flag, `validate` makes the same calls in the same order.
+DEPLOY-HUB STEP-G (d2) runs it from the gate, which has no `.env`
+(`reports/s3-d2-probe-2026-10-05.md`). Tests:
+`tests/cobalt/test_validate_no_db.py`.
+
+2026-10-05 (check, O2): `test_without_the_flag_the_three_checks_still_run_in_order`
+pins the no-flag path. The SheetMode coupling still exits 1 on an
+unmodelled sheet, and Day modes still runs after it on the same sheets
+object. The first no-flag test passed on the first DB read alone.
