@@ -3,10 +3,10 @@ LADDER: S3-P3 · F15
 BRANCH: f15/p2-replay-1004
 WORKTREE: f15-p2-1004
 BASE: 3c1f75b8
-TIP:
+TIP: 437c7299
 REPORT: /Users/cobalt/cobalt-wt/f15-p2-1004/docs/40 - DevDocs/reports/f15-p2-build-2026-10-04.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f15-p2-check-2026-10-05.md
+HOUSE B: as needed
 TREE STATE: row T
 RULINGS: 2026-10-03 R219
 
