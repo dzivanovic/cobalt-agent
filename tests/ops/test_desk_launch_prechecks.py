@@ -162,16 +162,18 @@ class Desk:
 
     def write_deploy(self, rulings: str = "none", code_tip: str | None = None,
                      head: str | None = None, carry: str = "`held unfixed: 0` and `ready: YES`",
-                     tips: str | None = None, row: bool = True) -> None:
+                     tips: str | None = None, row: bool = True, fix: str | None = None) -> None:
+        """`fix` None: today's six columns; a string: the `fix report` column with that cell."""
         code_tip = code_tip or self.tip
         head = head or self.head
-        ship = f"| 1 | `ops/x-job` | `{code_tip}` | `{head}` | `{self.check_report}` | {carry} |\n" if row else ""
+        fix_col, fix_sep, fix_cell = ("", "", "") if fix is None else (" fix report |", "---|", f" {fix} |")
+        ship = f"| 1 | `ops/x-job` | `{code_tip}` | `{head}` | `{self.check_report}` | {carry} |{fix_cell}\n" if row else ""
         self.deploy.write_text(
             "JOB: x-deploy\nLADDER: OFF-LADDER\nBRANCH: deploy/x-deploy\nWORKTREE: x-gate\n"
             f"BASE: main\nTIP: {tips or head}\nREPORT: {self.reports / 'deploy-x.md'}\nRULINGS: {rulings}\n"
             "TAG: x-tag\nMIGRATIONS: none\nSET: x-job\n\n## SHIPS\n\n"
-            "| # | branch | code tip | branch head | check report | its stop line must carry |\n"
-            f"|---|---|---|---|---|---|\n{ship}\n"
+            f"| # | branch | code tip | branch head | check report | its stop line must carry |{fix_col}\n"
+            f"|---|---|---|---|---|---|{fix_sep}\n{ship}\n"
             "## MARKERS\n## SMOKE READS\n"
         )
 
@@ -544,6 +546,127 @@ def test_l3_a_step_d0_resume_is_not_re_checked(desk):
     done = desk.launch("deploy", str(desk.deploy), "STEP-D0")
     assert done.returncode == 0, done.stderr
     assert desk.called() == [str(desk.repo)]
+
+
+# ---- F1: the small-fix tip (his R376, LAWS L75; deploy of 03d, cto-2026-10-05.md R405) ---------
+
+DEPLOY_CARD = REPO / "ops" / "desk" / "deploy-card.sh"
+
+
+def fix_round(desk: Desk, *, cell: bool = True, last: str | None = None,
+              commit_report: bool = True, checked: str | None = None) -> tuple[str, str]:
+    """The check ran on `checked` (default the build's tip); a small fix by the original builder
+    then moved the code tip past it, and its fix-round report ends `BUILT · … tip: <code tip>`.
+    `last` may carry FIXED / CHECKED for the two tips. Returns (checked, fixed)."""
+    checked = checked or desk.tip
+    (desk.job_wt / "src" / "x.py").write_text("X = 2\n")
+    desk.commit_job("small fix after the check")
+    fixed = short(desk.job_wt)
+    report = desk.reports / "x-job-fix-build.md"
+    desk.write_deploy(code_tip=fixed, head=fixed, fix=str(report) if cell else "")
+    desk.ship(check_line(checked))
+    line = (last or desk.built_line(fixed)).replace("FIXED", fixed).replace("CHECKED", checked)
+    report.write_text(f"# x-job fix round\n\n## RECORDS\n- constructed\n\n{line}\n\n")
+    if commit_report:
+        desk.commit("fix report")
+    return checked, fixed
+
+
+def neither(checked: str, fixed: str) -> str:
+    return (f"deploy ops/x-job: the check's tip '{checked}' is neither the code tip {fixed} "
+            f"nor the branch head {fixed} — the check is not clean")
+
+
+def test_f1_a_fix_round_past_the_checked_tip_launches(desk):
+    """RED on BASE: refused with `neither the code tip`."""
+    fix_round(desk)
+    done = desk.launch("deploy", str(desk.deploy))
+    assert done.returncode == 0, done.stderr
+    assert (desk.wt / "x-gate").is_dir()
+    assert desk.called() == [str(desk.repo)]
+
+
+@pytest.mark.parametrize("case", ["(a) empty cell", "(b) BUILT for the checked tip",
+                                  "(b) FAILED line naming the code tip", "(c) report uncommitted",
+                                  "(d) checked tip not an ancestor"])
+def test_f1_a_fix_round_missing_one_proof_still_refuses(desk, case):
+    """Negative controls: each refuses on BASE already, and still refuses on the fixed script."""
+    if case == "(a) empty cell":
+        checked, fixed = fix_round(desk, cell=False)
+    elif case == "(b) BUILT for the checked tip":
+        checked, fixed = fix_round(desk, last=desk.built_line("CHECKED"))
+    elif case == "(b) FAILED line naming the code tip":
+        checked, fixed = fix_round(desk, last="FAILED: W — x · tip: FIXED")
+    elif case == "(c) report uncommitted":
+        checked, fixed = fix_round(desk, commit_report=False)
+    else:
+        checked, fixed = fix_round(desk, checked=short(desk.repo))  # main's cards commit
+    refused(desk, desk.launch("deploy", str(desk.deploy)), neither(checked, fixed))
+    assert not desk.gate_left()
+
+
+def test_f1_a_fix_report_edited_after_its_commit_still_refuses(desk):
+    checked, fixed = fix_round(desk)
+    report = desk.reports / "x-job-fix-build.md"
+    report.write_text(report.read_text() + "an edit after the commit\n" + desk.built_line(fixed) + "\n")
+    refused(desk, desk.launch("deploy", str(desk.deploy)), neither(checked, fixed))
+    assert not desk.gate_left()
+
+
+def test_f1_a_fix_report_outside_the_reports_folder_still_refuses(desk):
+    checked, fixed = fix_round(desk)
+    stray = desk.prompts / "x-job-fix-build.md"
+    stray.write_text((desk.reports / "x-job-fix-build.md").read_text())
+    desk.write_deploy(code_tip=fixed, head=fixed, fix=str(stray))
+    desk.commit("fix report outside reports")
+    refused(desk, desk.launch("deploy", str(desk.deploy)), neither(checked, fixed))
+    assert not desk.gate_left()
+
+
+@pytest.mark.parametrize("line_tip", ["code tip", "head"])
+def test_f1_a_card_of_todays_shape_passes_as_today(desk, line_tip):
+    """No fix round: six columns, or the fix column with its cell empty (deploy-card.sh's rows)."""
+    (desk.job_wt / "docs" / "late.md").write_text("late\n")
+    desk.commit_job("docs past the code tip")
+    new_head = short(desk.job_wt)
+    for fix in (None, ""):
+        desk.write_deploy(head=new_head, fix=fix)
+        desk.ship(check_line(new_head if line_tip == "head" else desk.tip))
+        done = desk.launch("deploy", str(desk.deploy))
+        assert done.returncode == 0, done.stderr
+        assert (desk.wt / "x-gate").is_dir()
+        git(desk.repo, "worktree", "remove", "--force", str(desk.wt / "x-gate"))
+        git(desk.repo, "branch", "-D", "deploy/x-deploy")
+
+
+def ships_lines(text: str) -> list[str]:
+    """The SHIPS header, its separator and its rows: the table lines under `## SHIPS`."""
+    body = text.split("## SHIPS", 1)[1].split("\n## ", 1)[0]
+    return [ln for ln in body.splitlines() if ln.startswith("|")]
+
+
+def test_f1_deploy_card_writes_the_fix_report_column_and_its_empty_cell(desk):
+    desk.ship()
+    out = desk.prompts / "2026-01-02" / "05-x-set-deploy-card.md"
+    done = subprocess.run(
+        ["sh", str(DEPLOY_CARD), "--job", "x-set", "--set", "xset", "--worktree", "x-gate",
+         "--tag", "x-tag", "--out", str(out), str(desk.card)],
+        env=desk.env, capture_output=True, text=True, timeout=120,
+    )
+    assert done.returncode == 0, done.stderr
+    header, sep, row = ships_lines(out.read_text())
+    assert header.endswith("| fix report |"), header
+    assert row.startswith("| 1 |") and row.endswith("| |"), row
+    assert header.count("|") == sep.count("|") == row.count("|")
+
+
+def test_f1_card_md_ships_header_has_the_fix_report_column_and_a_matching_separator():
+    lines = (HUBS / "CARD.md").read_text().splitlines()
+    i = next(n for n, ln in enumerate(lines) if ln.startswith("| # | branch | code tip |"))
+    header, sep = lines[i], lines[i + 1]
+    assert header.endswith("| fix report |"), header
+    assert set(sep) <= set("|-")
+    assert header.count("|") == sep.count("|")
 
 
 # ---- L4: the WATCH line and the header ---------------------------------------------------------

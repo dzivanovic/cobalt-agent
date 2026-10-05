@@ -138,7 +138,7 @@ for card in "$@"; do
     [ -z "$past" ] || refuse "$job: the head $head adds paths outside docs/ past the code tip $ctip: $(printf '%s' "$past" | tr '\n' ' ')"
 
     heads="${heads:+$heads }$head"
-    ships="$ships| $n | \`$branch\` | \`$ctip\` | \`$head\` | \`$creport\` | \`held unfixed: 0\` and \`ready: YES\` |$nl"
+    ships="$ships| $n | \`$branch\` | \`$ctip\` | \`$head\` | \`$creport\` | \`held unfixed: 0\` and \`ready: YES\` | |$nl"
     records="$records- $job: check \`$creport\` last line: $last$nl- $job: head \`git -C $REPO rev-parse --short=8 $branch\` → \`$head\`; code tip \`$ctip\`$nl"
     # what the head changes since it left main (three dots): a migration main gained is not the head's
     changed=$(git -C "$REPO" diff --name-only "main...$head" -- src/cobalt/db_migrations)
@@ -204,8 +204,8 @@ SET: $set
 
 ## SHIPS
 
-| # | branch | code tip | branch head | check report | its stop line must carry |
-|---|---|---|---|---|---|
+| # | branch | code tip | branch head | check report | its stop line must carry | fix report |
+|---|---|---|---|---|---|---|
 $ships
 ## MARKERS
 $markers

@@ -41,10 +41,10 @@ A with-DB test that needs a level above `0013` is named in its row's `files` thr
 
 `## SHIPS` (deploy) — one row per branch of the set:
 
-| # | branch | code tip | branch head | check report | its stop line must carry |
-|---|---|---|---|---|---|
+| # | branch | code tip | branch head | check report | its stop line must carry | fix report |
+|---|---|---|---|---|---|---|
 
-The code tip is the `tip:` of the check's stop line (a fresh Opus pass may have moved it past the build's). The last column is `held unfixed: 0` and `ready: YES` for a check run on `CHECK-HUB.md`; a report of the old shape keeps its own literals.
+On a row with no fix report the code tip is the `tip:` of the check's stop line (a fresh Opus pass may have moved it past the build's). On a fix-round row (a small fix after the check, his R376, L75) the check's `tip:` is an ancestor of the code tip, the literals `held unfixed: 0` and `ready: YES` are read from the CHECK report's last line, and `tip: <code tip>` is read from the fix report's `BUILT ·` stop line. The literals column is `its stop line must carry`, the one before `fix report`: `held unfixed: 0` and `ready: YES` for a check run on `CHECK-HUB.md`; a report of the old shape keeps its own literals. The `fix report` cell names the fix round's build report and is empty on a row with no fix round.
 
 `## NOT IN THIS JOB` — the fence: what the job must not build, touch or re-decide (seams settled elsewhere, rulings that stand, files out of bounds). One line each.
 
