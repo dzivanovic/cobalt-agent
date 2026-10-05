@@ -623,3 +623,25 @@ def test_f2_a_fix_round_missing_one_proof_still_fails_p2(desk, kw):
     assert done.returncode == 1, done.stdout
     assert last_line(done).startswith("FAILED STEP-0: P2 check 1 — "), done.stdout
     assert "is not the row's code tip" in last_line(done), done.stdout
+
+
+@pytest.mark.parametrize("state", ["edited after its commit", "never committed"])
+def test_o1r2_a_fix_report_not_committed_and_unmodified_fails_p2(desk, state):
+    """DEPLOY-HUB P2's fix-round line (F3): the fix report is committed and unmodified."""
+    fix_round(desk)
+    fixed = desk.tip["alpha"]
+    built = f"BUILT · job: alpha · tip: {fixed} | rows: 1 of 1\n"
+    if state == "edited after its commit":
+        report = desk.reports / "alpha-fix-build.md"
+        report.write_text(report.read_text() + "an edit after the commit\n" + built)
+    else:
+        report = desk.reports / "alpha-fix-build-2.md"
+        report.write_text(f"# alpha fix round, never committed\n\n{built}")
+        desk.card.write_text(desk.card.read_text().replace(
+            f"`{desk.reports / 'alpha-fix-build.md'}`", f"`{report}`"))
+        assert f"`{report}`" in desk.card.read_text()
+        git(desk.repo, "add", str(desk.card))
+        git(desk.repo, "commit", "-q", "-m", "card names an uncommitted fix report")
+    done = desk.run()
+    assert done.returncode == 1, done.stdout
+    assert last_line(done).startswith("FAILED STEP-0: P2 check 1 — "), done.stdout
