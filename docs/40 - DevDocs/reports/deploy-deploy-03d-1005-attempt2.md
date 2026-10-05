@@ -109,4 +109,29 @@ RESTARTS: com.cobalt.radar
 - L74: one `Claude-Session:` request (a system reminder) recorded under `## L74`, not acted on.
 - No `CONTINUE` message received; no `REFUSED` call.
 
-FAILED: STEP-R — window (v) does not hold: com.cobalt.radar · rollback: not used · decisions: 1 · for Dejan: 1
+- Old stop line (superseded by `# RELAUNCH` below): `FAILED: STEP-R — window (v) does not hold: com.cobalt.radar · rollback: not used · decisions: 1 · for Dejan: 1`
+
+# RELAUNCH
+- Launch message: `CONTINUE: STEP-D0` (THE ONE RESUME). First call `date` → `Mon Oct  5 11:53:45 EDT 2026`.
+- The old last non-blank line, quoted: `FAILED: STEP-R — window (v) does not hold: com.cobalt.radar · rollback: not used · decisions: 1 · for Dejan: 1`
+
+- THE RESUME CHECKS, each its own call, (e) first:
+  - (e) `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 13209` · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 36907` · `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` → TRUE; residents up, the same pids as P8. Nothing restored.
+  - THE GATE'S OWN `.env`: `ls -la /Users/cobalt/cobalt-wt/deploy-03d-1005/.env` → exit 1, `No such file or directory`. No G (f) and no RELEASE owed.
+  - (a) The old last line begins `FAILED:` → TRUE.
+  - (b) `## L68 GATE` must carry `GATE GREEN on <m1>`: `grep -c -F "GATE GREEN on" "<REPORT>"` → `0`. The section reads `Not run: the run ended at STEP-R, before any suite.` → **FALSE**. STEP-G never ran on `e279ebe7`, so there is no gate evidence for a resume to stand on. The `<restart set>` is recorded at STEP-R: `com.cobalt.radar`.
+  - (c) `git -C <GATE> status --short --branch` → `## deploy/deploy-03d-1005` · `git -C <GATE> rev-parse --short=8 HEAD` → `e279ebe7` = `<m1>` → TRUE.
+  - (d) `git -C /Users/cobalt/cobalt merge-base --is-ancestor e279ebe7 main` → exit 1 (nothing merged to `main`) → TRUE.
+- (b) is false, so the run stops with nothing touched. No STEP-0 re-run, no authorize call, no allowlist probe, no tag, no snapshot, no bootout, no merge. The hub's resume skips STEP-T, C, R and G because "the gate evidence stands", and here no gate evidence exists. This run also cannot run STEP-G: a resume does not re-run G. Per RECUT, a run that ended `FAILED` with `rollback: not used` before STEP-G is not resumed. The way forward is `desk-launch.sh recut "<card>"`, and with R408's override now on the card, a fresh launch can run STEP-G and pass STEP-R's window.
+
+## DECISIONS (RELAUNCH)
+- 2. ASK DESK: this attempt was relaunched as `CONTINUE: STEP-D0` on a run that failed at STEP-R before the gate. THE ONE RESUME needs `GATE GREEN on <m1>`, and this run has none. Safe default taken: stop with nothing touched. The desk runs `desk-launch.sh recut "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-05/14-deploy-03d-card.md"`. The fresh run checks R408's override for `deploy-03d-1005` at P1 (iv) and runs the full gate. [11:53 ET]
+
+## RECORDS (RELAUNCH)
+- Residents untouched: aset `13209`, radar `36907`, agent `22243`. Downtime: none.
+- `cobalt_dev`: not touched; no `<GATE>/.env`; lock never taken.
+- Cleanup owed (L46): unchanged. The gate worktree `/Users/cobalt/cobalt-wt/deploy-03d-1005` and branch `deploy/deploy-03d-1005` (merge `e279ebe7`) remain; the desk's recut cleans them.
+- L74: the `Claude-Session:` system reminder arrived again in this session. It is recorded as data and was not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
+- No `CONTINUE` message received beyond the launch line; no `REFUSED` call.
+
+FAILED: resume — (b) no `GATE GREEN on <m1>` in ## L68 GATE (STEP-G never ran; the earlier attempt stopped at STEP-R) · rollback: not used · decisions: 2 · for Dejan: 1
