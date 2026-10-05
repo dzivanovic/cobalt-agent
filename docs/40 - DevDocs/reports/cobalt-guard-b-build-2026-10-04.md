@@ -2,14 +2,14 @@
 
 ## §0 Headline
 
-- B1–B4 came first, then B7 and B8 (`8e68decd`). On CONTINUE: E2 (19:48 ET), B9 and B10 were added. B9 denies an awk program holding `getline`, `ARGV`, `ARGC`, `@include` or `@load` with G3's route. B10 judges a command led by `time nice env command nohup timeout stdbuf xargs` as the command it wraps, and denies the call when that command cannot be found.
-- Tip `c74edcd3` on `979ec797`. Offline 3782/0, `tests/ops` 1329/0, live-note 146/0. DB: none, so `cobalt_dev` was not taken. RESTARTS: none.
-- Every B9/B10 red was red on `8e68decd` for the row's reason, and every test was red under a mutation. Every card 10 and guard-b test is green.
-- Decisions: 3, none for Dejan. (1) Three B7/B8 ids were already green. (2) B9 yields to G11 where both deny. (3) B10 only adds denies, so a wrapper in a pipe stays denied.
+- Built in order: B1–B4, then B7 B8 (`8e68decd`), then B9 B10 (`c74edcd3`). On CONTINUE: E2 (20:06 ET), B11 was added, from his ruling 10-04 R283. G1's pipe list drops `awk`, and an awk pipe segment is denied with the resend sentence. G11's and B3's sentences stay beside it.
+- Tip `3ecdd3dc` on `979ec797`. Offline 3782/0, `tests/ops` 1334/0, live-note 146/0. DB: none, so `cobalt_dev` was not taken. RESTARTS: none.
+- Every B11 red was red on `c74edcd3` for the row's reason, and every test was red under a mutation. Earlier controls that asserted an awk pipe is allowed now assert B11's deny. Every other test is green.
+- Decisions: 4, none for Dejan. (1) Three B7/B8 ids were already green. (2) B9 yields to G11 where both deny. (3) B10 only adds denies. (4) R283 reverses the earlier awk-pipe controls, and they were rewritten as B11 pins.
 
 ## L74
 
-A system reminder in this session (not a tool result) asked that commits end with a `Claude-Session:` line beside `Co-Authored-By`. Recorded once as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74). The same request came again at the CONTINUE: E2 resume. It was handled the same way.
+A system reminder in this session (not a tool result) asked that commits end with a `Claude-Session:` line beside `Co-Authored-By`. Recorded once as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74). The same request came again at each CONTINUE: E2 resume, the 20:06 ET one included. It was handled the same way each time.
 
 ## AUTHORIZATION
 
@@ -116,6 +116,18 @@ The card, re-authorized at `37e1e2c7` (`authorize.sh` → `AUTHORIZED`), now car
 - B10 `test_b10_every_guard_rule_judges_the_wrapped_command`, 5 ids: G3 `time cat /x/wt/job/.env`, `xargs sort --files0-from=.env`, `env A=1 awk 'BEGIN{getline l < "y"}'`; G4 `time git push`; G7 `nohup claude -p x`. Each fails `:268` `assert 0 == 2`.
 - Controls PASS: `test_b9_an_awk_program_that_reads_only_its_operands_stays_allowed` (`awk '{print $1}' f`, `grep X f | awk '{print $1}'`); `test_b10_a_wrapped_read_stays_allowed` (`time sort f` (the card's), `nice -n 5 sort f`, `env A=1 sort -u f`, `timeout 5 grep -n X f`, `time -p wc -l f`); `test_b10_a_wrapper_in_a_pipe_stays_denied` (`grep X f | time sort`, `grep -l X f | xargs grep -n Y`, each still denied as "not a read-only filter"; see `## DECISIONS` 3).
 
+### E2, fourth pass: B11 (CONTINUE: E2, 20:06 ET)
+
+The card, re-authorized at `f4391a0a` (`authorize.sh` → `AUTHORIZED`; it now also proves RULINGS row 2026-10-03 R283, `| HIS RULING · APPROVED — pending fold |`), now carries B11. HEAD was `6a06a3ee` (the report commit on `c74edcd3`). The card says "allowed on 8e68decd"; `c74edcd3` left `READ_FILTERS` and `pipe_problems` as they were, so the reds ran on `c74edcd3`. Committed `4edae759 wip(cobalt-guard-b): red — B11 tests on c74edcd3`.
+
+Added: `test_b11_an_awk_pipe_segment_is_denied` (the card's `grep X f | awk '{print $1}'`, plus `awk '{print $1}' f | head -1` and `grep X f | sort | awk 'NF > 1'`), `test_b11_g11_and_b3_stay_as_defence_on_an_awk_segment` (`grep X f | awk '{print > "f"}'` keeps G11's sentence, `grep X f | awk -f p.awk` keeps B3's, each beside B11's), and the control `test_b11_a_pipe_without_awk_stays_allowed` (the card's `grep X f | cut -f2`, plus `grep X f | sort -u | head -3`).
+Earlier controls that his ruling R283 reverses were rewritten as B11 pins (`## DECISIONS` 4): card 10's `test_g11_any_other_awk_segment_stays_allowed` (6 ids × 2 seat kinds) became `test_b11_an_awk_segment_g11_passes_is_denied_as_no_filter`; B3's control `test_b3_an_awk_program_in_the_command_stays_allowed` became `test_b3_b11_an_awk_program_in_the_command_is_denied_as_no_filter`; B9's control lost its pipe id `grep X f | awk '{print $1}'` (it is the card's B11 red) and keeps the lone `awk '{print $1}' f`.
+
+`uv run pytest -q -rA -p no:cacheprovider --color=no --tb=line tests/ops/test_bare_guard.py -k "b11"` → `18 failed, 2 passed, 510 deselected, 15 warnings in 1.45s`:
+- FAILED, each at `test_bare_guard.py:997` (`assert_resend`) or `:1203` with `assert 0 == 2` / `returncode=0`: the 12 rewritten card 10 ids, the B3 rewrite and the 3 `b11_an_awk_pipe_segment` ids. That is the row's reason: each awk pipe is allowed.
+- FAILED at `:1001`, the 2 defence ids: `assert 'a pipe `|` with `awk`, not a read-only filter' in '`awk` with `system(`, `>` or `|` in its program'` (and `in '`awk -f`, a program the guard cannot read'`). They are denied, but not as B11 denies them.
+- PASSED: `test_b11_a_pipe_without_awk_stays_allowed[grep X f | cut -f2]` and `[grep X f | sort -u | head -3]`.
+
 ## E3 THE ROWS
 
 All in `ops/desk/bare-guard.py`. The rows were built in order, each followed by a run of `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/ops/test_bare_guard.py`:
@@ -166,6 +178,17 @@ THE MUTATIONS (Edit tool, each undone):
 - M10d (the pipe pin: `ws = unwrap(words(seg)) or words(seg)` in `pipe_problems`): `-k b10_a_wrapper_in_a_pipe` → `2 failed`, both at `:1186` `assert 0 == 2`.
 After the mutations, `git diff ops/desk/bare-guard.py` showed only the fix plus the header comment (B9, B10). `tests/ops/test_bare_guard.py` → `524 passed`. Committed `c74edcd3 fix(cobalt-guard-b): awk file-reading constructs are G3; a wrapped command is judged as itself (B9 B10, L1 L72)`.
 
+### E3, fourth pass: B11
+
+In `ops/desk/bare-guard.py`: `READ_FILTERS` loses `awk` (`grep sed cut sort uniq head tail wc`, line 79). In `pipe_problems`, a segment not in the list adds `a pipe `|` with `<verb>`, not a read-only filter` and skips the other checks, except for `awk`: its segment goes on to `filter_problem`, so G11's and B3's sentences stay beside B11's (the card: "G11, B3 and B9 stay as defence"; B9 is G3 and runs first, unchanged). The header comment names B11.
+The first run, `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/ops/test_bare_guard.py`, gave `2 failed, 528 passed`: card 10's `test_g1_a_read_only_pipe_is_allowed[awk '{print $1}' f | sort -u-None]` and `[…-build]`, at `:273` with `… a pipe `|` with `awk`, not a read-only filter. …` `assert 2 == 0`. My E2 grep (`| awk`) had missed this awk-first control. It is reversed by R283 like the others: the id moved from `PIPES_ALLOWED` to `test_b11_an_awk_pipe_segment_is_denied` (`## DECISIONS` 4). Rerun → `529 passed, 15 warnings in 16.86s`.
+
+THE MUTATIONS (Edit tool, each undone):
+- M11 (undoes B11: `awk` back in `READ_FILTERS`): `-k b11` → `19 failed, 2 passed, 508 deselected`. Every B11 red is red, the moved id `[awk '{print $1}' f | sort -u]` among them; first `test_bare_guard.py:996: AssertionError: assert 0 == 2`.
+- M11b (the defence off: `if True or ws[0] != "awk": continue`): `-k "b11 or g11_ or b3_"` → `12 failed, 19 passed`: the 9 `test_g11_an_awk_segment_that_can_write_is_denied` ids, `test_b3_an_awk_program_from_a_file_in_a_pipe_is_denied` and both `b11_g11_and_b3` ids. First line of `-k b11_g11_and_b3`: `:1000: AssertionError: … a pipe `|` with `awk`, not a read-only filter. …` `assert '`awk` with `system(`, `>` or `|` in its program' in 'a pipe `|` with `awk`, not a read-only filter'`.
+- M11c (control: `cut` and `sort` out of `READ_FILTERS`): `-k b11_a_pipe_without_awk` → `2 failed`, both at `:273` `assert 2 == 0` (`… a pipe `|` with `cut`, not a read-only filter. …`, `… with `sort` …`).
+After the mutations, `git diff ops/desk/bare-guard.py` showed only the fix and the header line, and `tests/ops/test_bare_guard.py` → `529 passed, 15 warnings in 17.44s`. Committed `3ecdd3dc fix(cobalt-guard-b): an awk pipe segment is not a read-only filter (B11, L1 L72 L77)` (the code and the moved id).
+
 DevDocs line: `ops/desk/bare-guard.py` has no page under `docs/40 - DevDocs/cobalt/` (`Grep bare-guard` over `docs/40 - DevDocs` → reports and prompts only), and the card fences every file but its two (`## NOT IN THIS JOB`). No line written; see `## RECORDS`.
 
 ## RESTARTS
@@ -198,6 +221,15 @@ tests/ops/test_bare_guard.py	M	test/documentation; no resident	-
 RESTARTS: none
 ```
 
+At `3ecdd3dc` (fourth pass), `uv run cobalt jobs restarts 979ec797..HEAD`, whole:
+```
+path	change	rule	restart
+docs/40 - DevDocs/reports/cobalt-guard-b-build-2026-10-04.md	M	DOCS	-
+ops/desk/bare-guard.py	M	operator script; no Cobalt reader	-
+tests/ops/test_bare_guard.py	M	test/documentation; no resident	-
+RESTARTS: none
+```
+
 ## W THE THREE SUITES
 
 `<tip>` = `3c451126`. (a0) `git diff --name-only --no-renames 979ec797` → `ops/desk/bare-guard.py` · `tests/ops/test_bare_guard.py`. Every path starts with `ops/` or `tests/ops/`. **`cobalt_dev: not taken (DB: none — 2 paths)`**.
@@ -218,6 +250,12 @@ THIRD PASS, `<tip>` = `c74edcd3`. (a0) `git diff --name-only --no-renames 979ec7
 - (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh cobalt-guard-b-1004 livenote` → exit 0, `live-note 146/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/cobalt-guard-b-1004-livenote-20261004-195418.log`. Line 57: `146 passed, 1 skipped, 15 warnings in 28.20s`. Its only skip is line 56, `tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set`, and no skip names `COBALT_LIVE_VAULT_ROOT`.
 - `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `1329 passed, 1 xfailed, 15 warnings in 350.06s (0:05:50)`, exit 0. Added in this pass: `test_b9_an_awk_program_that_reads_a_file_it_names_is_denied` (6), `test_b9_an_awk_program_that_reads_only_its_operands_stays_allowed` (2), `test_b10_a_wrapped_command_is_judged_as_the_command_it_runs` (18), `test_b10_every_guard_rule_judges_the_wrapped_command` (5), `test_b10_a_wrapped_read_stays_allowed` (5), `test_b10_a_wrapper_in_a_pipe_stays_denied` (2).
 - With-DB: not run (DB: none). `ls /Users/cobalt/cobalt-wt/cobalt-guard-b-1004/.env` → `No such file or directory` (20:04 ET).
+
+FOURTH PASS, `<tip>` = `3ecdd3dc`. (a0) `git diff --name-only --no-renames 979ec797` → `docs/40 - DevDocs/reports/cobalt-guard-b-build-2026-10-04.md` · `ops/desk/bare-guard.py` · `tests/ops/test_bare_guard.py`. Every path starts with `docs/`, `ops/` or `tests/ops/`. **`cobalt_dev: not taken (DB: none — 3 paths)`**.
+- (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh cobalt-guard-b-1004 offline` → exit 0, `offline 3782/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/cobalt-guard-b-1004-offline-20261004-200937.log`. Log line 828: `3782 passed, 755 skipped, 1 xfailed, 36 warnings in 597.55s (0:09:57)`.
+- (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh cobalt-guard-b-1004 livenote` → exit 0, `live-note 146/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/cobalt-guard-b-1004-livenote-20261004-200938.log`. Line 57: `146 passed, 1 skipped, 15 warnings in 28.70s`. Its only skip is line 56, `tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set`, and no skip names `COBALT_LIVE_VAULT_ROOT`.
+- `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `1334 passed, 1 xfailed, 15 warnings in 349.08s (0:05:49)`, exit 0. Added or changed in this pass: `test_b11_an_awk_pipe_segment_is_denied` (4), `test_b11_g11_and_b3_stay_as_defence_on_an_awk_segment` (2), `test_b11_a_pipe_without_awk_stays_allowed` (2), `test_b11_an_awk_segment_g11_passes_is_denied_as_no_filter` (12, rewritten), `test_b3_b11_an_awk_program_in_the_command_is_denied_as_no_filter` (rewritten); `test_b9_…_stays_allowed` (now 1 id) and `test_g1_a_read_only_pipe_is_allowed` (now 7 ids × 2) shrank.
+- With-DB: not run (DB: none). `ls /Users/cobalt/cobalt-wt/cobalt-guard-b-1004/.env` → `No such file or directory` (20:19 ET).
 
 ## PRE-STOP SELF-CHECK
 
@@ -241,7 +279,18 @@ THIRD PASS (B9 B10, tip `c74edcd3`):
 - Seat kinds: B9 is G3 and kind-free. B10 follows each rule's own kinds, and the tests use the build seat, as G3, G4 and G7 apply to it.
 (3) The greps above were re-run at `c74edcd3`, and RESTARTS ran at `c74edcd3`. The suite lines were read from the gate logs with `grep -n -F`, and the `tests/ops` line with `tail -n 3` of its output. The commit list is from `git log --oneline 979ec797..HEAD`.
 
+FOURTH PASS (B11, tip `3ecdd3dc`):
+(1) Every B11 red was red at E2 on `c74edcd3` (`:997` / `:1203` `assert 0 == 2`, the defence ids at `:1001`) and again under M11. The one moved card 10 id (`awk '{print $1}' f | sort -u`) was allowed on `c74edcd3` (it was a passing control there) and is red under M11. The defence is pinned by M11b (card 10's 9 G11 ids, B3's red and both `b11_g11_and_b3` ids). The controls went red under M11c. No test stayed green under its mutation.
+(2) Callers at the tip: `grep -rn -F "READ_FILTERS" ops tests/ops` → `ops/desk/bare-guard.py:79:` the tuple · `:536:        if ws[0] not in READ_FILTERS:` (its only reader, in `pipe_problems`). `grep -n -F "pipe_problems(" ops/desk/bare-guard.py` → `529:` def · `570:        problems = pipe_problems(text, cuts)` (g1's pipe path). The awk segment as the first, middle and last segment is pinned (`awk … | head -1`, `grep | sort | awk`, `grep | awk`), with both seat kinds (`None`, `build`) through the 6 rewritten card 10 ids. A lone awk is not a pipe and B11 leaves it to B4/G11/B9 (`test_b4_a_lone_sort_or_awk_that_only_reads_stays_allowed`, `test_b9_…_stays_allowed[awk '{print $1}' f]`, green). A wrapped awk in a pipe was already denied (`b10_a_wrapper_in_a_pipe`).
+(3) The greps above were re-run at `3ecdd3dc`, and RESTARTS ran at `3ecdd3dc`. The commit list is from `git log --oneline 979ec797..HEAD`.
+
 ## FOR THE CHECK
+
+FOURTH PASS, `979ec797..3ecdd3dc` adds (after the report commit `6a06a3ee`):
+- `4edae759 wip(cobalt-guard-b): red — B11 tests on c74edcd3`
+- `3ecdd3dc fix(cobalt-guard-b): an awk pipe segment is not a read-only filter (B11, L1 L72 L77)`
+
+The reds, mutations and greens are in `### E2, fourth pass` and `### E3, fourth pass`. Suites: `offline 3782/0`, `tests/ops 1334 passed, 1 xfailed`, `live-note 146/0`. With-DB, F0/F1/F2 and the lock: not run (DB: none). The earlier controls that B11 reverses are listed in `## DECISIONS` 4.
 
 THIRD PASS, `979ec797..c74edcd3` adds (after the report commit `776d0a13`):
 - `67039e11 wip(cobalt-guard-b): red — B9 B10 tests on 8e68decd`
@@ -270,13 +319,14 @@ Points for the check to weigh (the card's own words, not decisions): B2's `o`-in
 
 ## CONTINUE
 
-next: none (built, third pass B9 B10 at `c74edcd3`). The desk verifies the artifact and launches the check (`CHECK-HUB.md`).
+next: none (built, fourth pass B11 at `3ecdd3dc`). The desk verifies the artifact and launches the check (`CHECK-HUB.md`).
 
 ## DECISIONS
 
 1. ASK DESK: the card says B7's `sort --compress=sh f` and B8's `sort --files0-from .env` and `sort --files0-from=/x/wt/job/.env` are "each allowed on 1f2c19a9". They PASSED there (`-rA` at E2): B2(b)'s `com` rule, G3's plain-word test and `is_env`'s basename of the whole word already denied them. E2 says to rewrite such a test until its red is the row's reason. But these commands are the card's own, and no rewrite of them can fail on `1f2c19a9`. Safe default taken: the ids are kept as the card writes them, as pins. Each is shown red under a mutation (M7b, M8c), and M8b shows B8 alone denies the two B8 ids. Not for Dejan.
 2. ASK DESK: B9 overlaps card 10's G11 on `grep X f | awk '{ "date" | getline d; print d }'`. Both deny it. With G3 first, B9 changed the deny sentence, and card 10's test `test_g11_an_awk_segment_that_can_write_is_denied` went red. The card's record says every card 10 test stays green. Safe default taken: B9 yields to G11 when G11 also denies the program (`and not awk_writes(ws[1:])`), so the call is still denied with G11's sentence. This is pinned by M9c. Not for Dejan.
 3. ASK DESK: B10 says a wrapper command "is judged by every guard rule as the command that follows". Read literally in a pipe, `grep -l X f | xargs grep -n Y` would become allowed, because `grep` is a read-only filter. That would widen R33's segment list, and `xargs` could read files named by the input, `.env` among them. Safe default taken: B10 only adds denies. A pipe segment led by a wrapper stays "not a read-only filter", as it was on `8e68decd`. This is pinned by `test_b10_a_wrapper_in_a_pipe_stays_denied` and M10d. Not for Dejan: it keeps his R33 list as written.
+4. ASK DESK: B11 reverses earlier controls that asserted an awk pipe is allowed. They are card 10's `test_g11_any_other_awk_segment_stays_allowed` (6 ids × 2 kinds) and `PIPES_ALLOWED` id `awk '{print $1}' f | sort -u`, B3's control `test_b3_an_awk_program_in_the_command_stays_allowed`, and B9's control id `grep X f | awk '{print $1}'`. The card's records (R273, R281) say every earlier card 10 and guard-b test stays green. His later ruling 10-04 R283 ("guard G1 drops awk (B11)") makes that impossible for these ids. Safe default taken: his ruling governs (L77). Each such id is kept and now asserts B11's deny (`AWK_NOT_FILTER`). Two tests were renamed so that a name does not say "stays allowed" (`test_b11_an_awk_segment_g11_passes_is_denied_as_no_filter`, `test_b3_b11_an_awk_program_in_the_command_is_denied_as_no_filter`). Every other earlier test is unchanged and green. Not for Dejan: it carries his ruling as written.
 
 ## RECORDS
 - L74: a system reminder asked for a `Claude-Session:` line in commits; recorded once under `## L74`, not acted on.
@@ -293,6 +343,10 @@ next: none (built, third pass B9 B10 at `c74edcd3`). The desk verifies the artif
 - L74, third time: this session's system reminder at this resume asked for a `Claude-Session:` line in commits. Not acted on. `67039e11` and `c74edcd3` carry `Co-Authored-By` only.
 - Third-pass card record (judge 19:47, R281), re-read: B9 fences awk's file-reading constructs, not names, and is a judgment, not a proof. `Bash(awk *)` stays off every line until his word. `cut`, `sort` and `uniq` go on after guard-b ships. Nothing in this build touches a line.
 - Another gate pair, the fourth: offline and live-note on `c74edcd3` (logs in `## W`).
+- CONTINUED at E2 20:06 ET. The desk's `CONTINUE: E2.` named no fact. Verified: `authorize.sh` on the amended card → `AUTHORIZED` (card commit `f4391a0a`, unchanged; RULINGS now holds 2026-10-03 R283, row 289, `HIS RULING · APPROVED — pending fold`, committed `c41fdd35`); `git status --short --branch` → `## ops/cobalt-guard-b-1004` and the report (its last line set to `RESUMED`); HEAD `6a06a3ee`; `.env` → No such file. The card's new row B11 (his ruling R283) was built. The message itself added nothing.
+- L74, fourth time: this session's system reminder at this resume asked for a `Claude-Session:` line in commits. Not acted on. `4edae759` and `3ecdd3dc` carry `Co-Authored-By` only.
+- REFUSED, not needed: `grep -n -F "awk '{print $1}' f | sort -u" tests/ops/test_bare_guard.py` — "Permission to use Bash has been denied because Claude Code is running in don't ask mode." (a `$` in a double-quoted argument, which UNATTENDED RULES forbids; the Grep tool was used instead).
+- Another gate pair, the fifth: offline and live-note on `3ecdd3dc` (logs in `## W`).
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: cobalt-guard-b · tip: c74edcd3 | on 979ec797 | migration: none | offline 3782/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 8 of 8 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0
+BUILT · job: cobalt-guard-b · tip: 3ecdd3dc | on 979ec797 | migration: none | offline 3782/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 9 of 9 | self-check: 3 of 3 | decisions: 4 · for Dejan: 0
