@@ -210,9 +210,21 @@ def test_a_check_whose_report_ends_failed_fails(job):
     assert last_line(done) == "FAILED PREFLIGHT: report"
 
 
-def test_a_check_whose_report_is_short_of_three_self_checks_fails(job):
+def test_a_check_whose_report_is_below_three_self_checks_passes_and_records_it(job):
+    """Card 20 F1 (BUILD-HUB.md:97, CHECK-HUB.md:61): a lower self-check count is recorded, not failed."""
     wt, repo, job_wt, base, card, env = job
     tip = built(job_wt, GOOD_LAST.replace("self-check: 3 of 3", "self-check: 2 of 3"))
+    write_card(card, job_wt, base, tip)
+    done = preflight(env, "check", card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "PREFLIGHT OK"
+    assert "report: self-check 2 of 3 (recorded)" in done.stdout.splitlines()
+
+
+def test_a_check_whose_report_has_no_self_check_field_fails(job):
+    """Card 20 F1, negative control: no `self-check: <k> of 3` field still fails `report`."""
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, GOOD_LAST.replace(" | self-check: 3 of 3", ""))
     write_card(card, job_wt, base, tip)
     done = preflight(env, "check", card)
     assert done.returncode == 1
@@ -318,6 +330,60 @@ def test_m1_a_check_with_its_check_report_and_one_more_untracked_file_fails(job)
     assert done.returncode == 1, done.stdout + done.stderr
     assert last_line(done) == "FAILED PREFLIGHT: status"
     assert "?? src/b.py" in done.stdout
+
+
+# ---- card 20 F2: a PASS-2 check reads the head at pass 1's `tip:` (CHECK-HUB.md:120) ----------
+PASS1_LAST = (
+    "CHECK DONE · job: x-job · pass: 1 · tip: {fix} · house A: h1 FINDINGS 1 · findings: 1 · dropped: 0"
+    " · held: 1 · fixed: 1 · held unfixed: 0 · open: 1 · house B: {house_b} · suites: offline 1/0"
+    " · with-DB 0/0 · live-note 1/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: none"
+    " · files opened: 1 · ready: NO · decisions: 0 · for Dejan: 0"
+)
+
+
+def checked(job_wt: Path, house_b: str) -> str:
+    """Pass 1's fix (a src commit above the card's TIP), then its CHECK REPORT as a docs-only commit."""
+    (job_wt / "src" / "a.py").write_text("A = 5\n")
+    fix = commit(job_wt, "fix(x-job): pass 1")
+    path = job_wt / CHECK_REL
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"# check\n\n{PASS1_LAST.format(fix=fix, house_b=house_b)}\n\n")
+    commit(job_wt, "docs(x-job): check report pass 1")
+    return fix
+
+
+def test_a_pass_2_check_with_the_pass_1_tip_above_the_card_tip_passes(job):
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, GOOD_LAST)
+    checked(job_wt, "needed")
+    write_card(card, job_wt, base, tip, check_report=str(job_wt / CHECK_REL))
+    done = preflight(env, "check", card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "PREFLIGHT OK"
+
+
+def test_a_pass_1_report_that_says_house_b_not_needed_keeps_the_card_tip(job):
+    """Negative control: only `house B: needed` moves the head reference."""
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, GOOD_LAST)
+    checked(job_wt, "not needed")
+    write_card(card, job_wt, base, tip, check_report=str(job_wt / CHECK_REL))
+    done = preflight(env, "check", card)
+    assert done.returncode == 1
+    assert last_line(done) == "FAILED PREFLIGHT: head"
+
+
+def test_a_pass_2_check_with_a_src_commit_above_the_pass_1_tip_fails(job):
+    """Negative control: above pass 1's tip, only docs-only commits pass."""
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, GOOD_LAST)
+    checked(job_wt, "needed")
+    (job_wt / "src" / "a.py").write_text("A = 6\n")
+    commit(job_wt, "fix(x-job): after pass 1")
+    write_card(card, job_wt, base, tip, check_report=str(job_wt / CHECK_REL))
+    done = preflight(env, "check", card)
+    assert done.returncode == 1
+    assert last_line(done) == "FAILED PREFLIGHT: head"
 
 
 def test_l3_an_accented_worktree_is_refused_under_a_utf8_locale(job):
