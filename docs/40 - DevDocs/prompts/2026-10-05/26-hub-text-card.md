@@ -3,11 +3,11 @@ LADDER: OFF-LADDER — cto-2026-10-05.md R387
 BRANCH: ops/hub-text-1005
 WORKTREE: hub-text-1005
 BASE: a09ee1f0
-TIP:
+TIP: 6b939b00
 REPORT: /Users/cobalt/cobalt-wt/hub-text-1005/docs/40 - DevDocs/reports/hub-text-build-2026-10-05.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/hub-text-check-2026-10-05.md
 HOUSE A: none — overruled 2026-10-05 R412
-HOUSE B:
+HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-05 R412
 
