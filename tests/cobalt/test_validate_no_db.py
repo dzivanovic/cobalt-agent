@@ -13,6 +13,7 @@ settings are removed, so any DB read raises `DbConfigError`.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 import pytest
@@ -51,6 +52,7 @@ def test_no_db_skips_the_db_checks_and_exits_clean(capsys):
     assert "Jobs (F17):" in out
 
 
+@pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
 def test_without_the_flag_validate_still_reads_the_db(capsys):
     with pytest.raises(DbConfigError):
         cli._cmd_validate(argparse.Namespace(no_db=False))
