@@ -1,12 +1,12 @@
 JOB: deploy-03d-1005
 LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
-BRANCH: deploy/deploy-03d-1005
-WORKTREE: deploy-03d-1005
+BRANCH: deploy/deploy-03d-1005-attempt3
+WORKTREE: deploy-03d-1005-attempt3
 BASE: main
 TIP: 07655b9b
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-03d-1005-attempt2.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-03d-1005-attempt3.md
 RULINGS: 2026-10-05 R391, 2026-10-05 R392, 2026-10-05 R408
-TAG: deploy-2026-10-05-03d
+TAG: deploy-2026-10-05-03d-attempt3
 MIGRATIONS: none
 SET: workflow1
 
