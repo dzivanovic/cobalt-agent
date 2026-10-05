@@ -333,6 +333,11 @@ class _Stats:
         return _dec(self.row.get(field_name))
 
 
+#: K3-1 (L57, check G1): the calendar `_days_held` counts by, named on
+#: `build_day.inputs["open_positions"]`.
+CALENDAR_INPUT = "NYSE trading days — daymode.propose.prior_trading_day (imports._prior)"
+
+
 def _days_held(opened: date, day: date) -> int:
     """NYSE trading days from `opened` through `day`, inclusive (opened
     today → 1), by THE one calendar (`imports._prior`, L3)."""
@@ -415,20 +420,35 @@ def _open_book(day: date, stored: list[dict], derived_day: dict, pairing_nc: Opt
             "open_positions_book": close["derived"]["book_sha256"]}
 
 
-def _stale_resolves(stored: list[dict], derived_day: dict, store) -> list[dict]:
+def _stale_read(stored: list[dict], derived_day: dict, store) -> tuple[list[dict], dict]:
     """K3-4 (a): every resolve id a stored row names (a trade's
     `inputs.resolve_id`, the day's `derived.resolves`) that is no longer
     current — read by `DrcStore.superseded_stated_ids`; its effect day K2's,
-    `effect_day(<the superseding row's day>, <id>)` (judge R278 D1)."""
+    `effect_day(<the superseding row's day>, <id>)` (judge R278 D1). Returns
+    the figures and their inputs (L57, check G4): the ids named, and for each
+    superseded id the superseding row's day and its own day."""
     ids = {r["inputs"]["resolve_id"] for r in stored if r["kind"] == "trade" and r["inputs"].get("resolve_id")}
     ids |= {o["resolve_id"] for o in derived_day.get("resolves") or []}
     if not ids:
-        return []
+        return [], {"named": [], "superseded": {}}
     superseded = store.superseded_stated_ids(ids)
-    return [
+    figures = [
         {"resolve_id": i, "effect_day": store.effect_day(superseded[i], i).isoformat()}
         for i in sorted(superseded)
     ]
+    read = {
+        "named": sorted(ids),
+        "superseded": {
+            str(i): {"superseding_day": superseded[i].isoformat(), "own_day": store.stated_day(i).isoformat()}
+            for i in sorted(superseded)
+        },
+    }
+    return figures, read
+
+
+def _stale_resolves(stored: list[dict], derived_day: dict, store) -> list[dict]:
+    """K3-4 (a): the stale resolve figures of `_stale_read`."""
+    return _stale_read(stored, derived_day, store)[0]
 
 
 def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> BuildPlan:
@@ -447,6 +467,7 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
     day_row = view["day"]
     derived_day = day_row["derived"]
     pairing_nc = (derived_day.get("not_computed") or {}).get("pairing")
+    stale_resolves, stale_read = _stale_read(stored, derived_day, deps.store)
 
     # the event's files: partial ones, names, screenshots (D2's event, L3)
     by_id = {r["id"]: r for r in view["imports"]}
@@ -615,7 +636,7 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
         "card_reconcile": format_card_reconcile_block(cards_without),
         "orphaned": [],
         **_open_book(day, stored, derived_day, pairing_nc),
-        "stale_resolves": _stale_resolves(stored, derived_day, deps.store),
+        "stale_resolves": stale_resolves,
     }
     existing = note_path.read_text(encoding="utf-8") if note_path.is_file() else None
     current_ids = {t["trade_id"] for t in trades}
@@ -640,8 +661,12 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
             "strategy_titles": strategies.listing() if strategies.readable else None,
             "screenshots": shots,
             "replay": {k: replay.get(k) for k in ("replay_run_id", "trade_date", "line_action")},
-            # K3-1 (L57): what the open-position list is computed from.
-            "open_positions": {"day": day.isoformat(), "kinds": ["book_close", "open_position", "seed", "trade"]},
+            # K3-1 (L57): what the open-position list is computed from — the
+            # stored row kinds and the calendar `day <k>` counts by (check G1).
+            "open_positions": {"day": day.isoformat(), "kinds": ["book_close", "open_position", "seed", "trade"],
+                               "calendar": CALENDAR_INPUT},
+            # K3-4 (a) (L57, check G4): the read the stale lines come from.
+            "stale_resolves": stale_read,
         }),
         derived=_json(day_derived),
     )

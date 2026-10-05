@@ -132,6 +132,20 @@ def test_x13_run_an_older_unit_after_put_back_is_a_sync_revert(tmp_path, weekday
     build.run_drc_build(event, deps=deps)
     second = note.read_text()
     note.write_text(old)
+    # v3 X13 "the seed hash still matches the database rows" (check G2): the
+    # next day's carried seed hash (`seed_for`'s `from_book_sha256`, built
+    # from the stored `open_position` rows) against the stored `book_close`
+    # hash, while the older unit sits on disk.
+    from cobalt.drc.models import OpenPosition
+    from cobalt.drc.pairing import book_sha256
+
+    stored = s.krows[D]
+    positions = sorted((OpenPosition.model_validate(r["derived"]) for r in stored if r["kind"] == "open_position"),
+                       key=lambda p: p.trade_id)
+    from_book_sha256 = book_sha256(positions)
+    close = next(r for r in stored if r["kind"] == "book_close")["derived"]["book_sha256"]
+    _say("X13 pass", from_book_sha256=from_book_sha256[:12], book_close=close[:12],
+         seed_hash_matches_rows=from_book_sha256 == close, old_unit_on_disk=note.read_text() == old)
     build.run_drc_build(event, deps=deps)
     rows = [r for r in deps.write_store.rows if r["unit"] == "open_positions" and r["section"] == "drc-trades"]
     lines = note.read_text().split("\n")
