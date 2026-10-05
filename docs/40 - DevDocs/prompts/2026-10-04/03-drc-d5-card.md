@@ -3,10 +3,10 @@ LADDER: S3-P3 · F14
 BRANCH: drc/d5-reconcile-1004
 WORKTREE: drc-d5-1004
 BASE: 3e40359a
-TIP:
+TIP: 3c1f75b8
 REPORT: /Users/cobalt/cobalt-wt/drc-d5-1004/docs/40 - DevDocs/reports/drc-d5-build-2026-10-04.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/drc-d5-check-2026-10-04.md
+HOUSE B: as needed
 TREE STATE: row T
 RULINGS: 2026-10-03 R219
 
