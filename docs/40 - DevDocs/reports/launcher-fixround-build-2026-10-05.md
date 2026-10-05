@@ -1,12 +1,14 @@
 # launcher-checks — fix round build (card 21, row F1) — 2026-10-05
 
 ## §0 Headline
+- FIX ROUND (F2–F4), stopped at F3: F2 built at `7c33d97b` (`deploy-step0.sh` P2 accepts a fix-round row; the check's O1 test passes, 0 xfailed). F3 needs `main` merged into this branch first, and `git merge` is a command this builder may not type. F4 waits behind F3 (card order).
 - Row F1 built at `c1746720` on `5fb0ddf5`: a deploy now accepts a check tip below the code tip when the row's `fix report` is committed under reports and ends `BUILT · … tip: <code tip>`. Every other mismatch is refused as before.
 - `deploy-card.sh` and `CARD.md` carry the `fix report` column; written rows get the empty 7th cell.
 - Gate green: offline 3786/0, with-DB 857/0, live-note 146/0; `cobalt_dev` back at 0013 (F2 = F0); `.env` removed; RESTARTS: none.
 - 1 decision: a `tests/ops` brain-hub test was already red on BASE, outside this card.
 
 ## L74
+- 16:57 ET (fix round): this session's harness attribution reminder again asks commits to end with a `Claude-Session:` line. Recorded; not acted on.
 - 13:54 ET: the harness attribution reminder of this session asks commits to end with a `Claude-Session:` line. Recorded once; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (BUILD-HUB L74).
 
 ## AUTHORIZATION
@@ -108,6 +110,31 @@ THE MUTATIONS (Edit tool, each undone, F1 tests run alone with `-k f1` or the na
 `git diff --stat` after the undo → `CARD.md 4 ++--`, `deploy-card.sh 6 +++---`, `desk-launch.sh 22 +++++++++++++++++++++-` (the fix only). No test stayed green under its mutation; none rewritten.
 Commit `c1746720 fix(launcher-checks): a deploy accepts a check tip below the code tip when the SHIPS row's fix report is committed and BUILT on the code tip; deploy-card.sh and CARD.md carry the fix report column (F1, R376, L75)`.
 
+### FIX ROUND (rows F2–F4), resumed at E3 16:57 ET on the desk's `CONTINUE: E3`
+Verified first (L35): `git status --short --branch` → `## ops/launcher-fixround-1005` plus this report; `git log --oneline -6` → `7e7803d5` (the check's F1 fix) on `553f8c7b` (the check's O1 strict xfail) on `36b98d61` (this report) on `c1746720`; `ls -la …/.env` → `No such file or directory`. `sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "<card>"` re-run, since the card gained rows F2–F4 → `AUTHORIZED`, exit 0; `CARD COMMITTED … b2a903d5c2a5dc145836b56c194a55874db75a8e`, `CARD UNCHANGED … nothing`; R60, R412, R47 rows as at the first AUTHORIZATION.
+`git -C /Users/cobalt/cobalt diff --stat 5fb0ddf5 main -- "docs/40 - DevDocs/prompts/CARD.md" ops/desk/deploy-step0.sh tests/ops/test_deploy_step0.py` → nothing (those three files are the same on `main` as on BASE). `git -C /Users/cobalt/cobalt diff --stat 7e7803d5 main -- … "docs/40 - DevDocs/prompts/DEPLOY-HUB.md" …` → `DEPLOY-HUB.md | 16 +++++++---------` (card 26, deployed): on `main`, line 57 (`**P1 DATE**`) has changed; line 58 (`**P2 EVERY CHECK, COMMITTED**`) is the same on `main` and here.
+
+**Row F2** (`ops/desk/deploy-step0.sh`, `tests/ops/test_deploy_step0.py`).
+- RED (tests only, no script edit): the strict-xfail mark removed from `test_o1_a_fix_round_row_the_launcher_accepts_passes_p2`, assertion unchanged. Added `fix_round(desk, …)`, `test_f2_a_fix_round_row_passes_p2_and_step0` and `test_f2_a_fix_round_missing_one_proof_still_fails_p2[(a) fix report cell empty | (b) fix report BUILT for the checked tip | (c) checked tip not an ancestor]`. `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/test_deploy_step0.py -k "o1 or f2 or not_the_row_s_code_tip"` on the unchanged script → `2 failed, 4 passed, 36 deselected`; both reds end `FAILED STEP-0: P2 check 1 — …/alpha-check.md — its tip db231e71 is not the row's code tip dc7d9471` (the row's reason). Green there, as the card says: the three negative controls and `test_a_check_report_whose_tip_is_not_the_row_s_code_tip_fails`. Commit `4e8296fc wip(launcher-checks): red — F2 fix-round row passes STEP-0 P2 (O1 xfail mark removed; negative controls a-c)`.
+- FIX: after `lits=` (:337) `frep=` reads column 8; inside the P2 tip test (after :384), when the tip is not the code tip and `frep` is non-empty, `why` is cleared only if the fix report's last non-blank line matches `"BUILT ·"*"tip: $ctip"*` and `git -C "$REPO" merge-base --is-ancestor "$t" "$ctip"` holds. Otherwise today's refusal, with the reason added. The literals stay the check report's. A row with no fix report takes today's path.
+- One test rewritten: my own last assertion of `test_f2_a_fix_round_row_passes_p2_and_step0` split the P2 row on ` · `, which the check line itself contains. It failed on the fixed script with `STEP-0 OK` printed. Rewritten to `" · 0 · CHECK DONE " in p2[0]`.
+- GREEN: `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/test_deploy_step0.py` → `42 passed, 15 warnings in 23.97s` (0 xfailed). With the F1 files: `… tests/ops/test_deploy_step0.py tests/ops/test_desk_launch_prechecks.py tests/ops/test_deploy_card.py` → `149 passed, 15 warnings in 63.45s`.
+- MUTATIONS (Edit tool, each undone):
+
+| # | mutation | result (summary · first failing line) |
+|---|---|---|
+| M10 | `why=""` on the accepting path → `:` (the fix undone) | `2 failed, 4 passed` · `test_o1_a_fix_round_row_the_launcher_accepts_passes_p2`, `test_f2_a_fix_round_row_passes_p2_and_step0` — `FAILED STEP-0: P2 check 1 — … its tip 7f7e1cf0 is not the row's code tip 4a756527` |
+| M11 | the `merge-base --is-ancestor` test → `true` | `1 failed, 5 passed` · `[(c) checked tip not an ancestor]` |
+| M12 | the `"BUILT ·"*"tip: $ctip"*` pattern → `*` | `1 failed, 5 passed` · `[(b) fix report BUILT for the checked tip]` |
+| M13a | only the `[ -n "$frep" ]` guard removed | `42 passed`. The guard is redundant: an empty cell has no file, so `flast` is empty and the BUILT test refuses it anyway. Not a test gap. |
+| M13 | an empty cell read as a fix round (`[ -n "$frep" ] \|\| flast="BUILT · tip: $ctip"`) | `1 failed, 41 passed` · `[(a) fix report cell empty]` |
+
+`git diff 4e8296fc -- ops/desk/deploy-step0.sh` after the undo → the fix only (+16 lines at :338 and :385-399). DevDocs page: `Grep "deploy-step0"` under `docs/40 - DevDocs/cobalt` → none; none invented.
+Commit `7c33d97b fix(launcher-checks): STEP-0 P2 accepts a fix-round row: the check tip an ancestor of the code tip and the fix report BUILT on it; check O1 test passes (F2, R376, L75)`.
+
+**Row F3** — STOPPED before any edit. The card: "BEFORE writing this row the builder merges `main` into its branch, then re-reads line 58". `git merge` is on BUILD-HUB's never-typed list (`## THE LIST`: "Never typed: … `git merge` …") and matches no allow string of the launch line. I did not type it. BASE read for the RUN row: Grep (count, fixed text ``the check's `tip:` is an ancestor of the code tip``) over `docs/40 - DevDocs/prompts` → `0` (both `DEPLOY-HUB.md` and `CARD.md`); `DEPLOY-HUB.md:58` is the `**P2 EVERY CHECK, COMMITTED**` line.
+**Row F4** — not started (card order, behind F3). BASE read: `grep -n -F "The last column is" CARD.md` (Grep tool) → `47:The code tip is the \`tip:\` of the check's stop line (a fresh Opus pass may have moved it past the build's). The last column is \`held unfixed: 0\` and \`ready: YES\` for a check run on \`CHECK-HUB.md\`; a report of the old shape keeps its own literals.`
+
 ## RESTARTS
 `uv run cobalt jobs restarts 5fb0ddf5..HEAD` →
 ```
@@ -171,10 +198,11 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/launcher-fixround-1005-all-20261005-1414
 - Seam as the card states it (L72): the `fix report` must sit under `$REPORTS` (the main repo's reports folder) and be committed there, as the check report; a fix report committed only on the job branch is refused.
 
 ## CONTINUE
-next: CLOSE (done at the stop line)
+next: E3 row F3, once `main` is merged into `ops/launcher-fixround-1005` (by the desk; this builder may not type `git merge`). Then re-read `DEPLOY-HUB.md:58`, then F3, F4, RESTARTS, W (the gate, for tip ≥ `7c33d97b`), PRE-STOP SELF-CHECK, CLOSE. F2 is built and committed (`7c33d97b`).
 
 ## DECISIONS
 1. `tests/ops/test_desk_launch_brain.py::test_the_trees_brain_hub_line_is_printed_with_its_handover_filled` is red on BASE `5fb0ddf5` and at the tip (`assert INSTALL in text` — BRAIN-HUB.md now carries `installed 2026-10-05 …`, commit `4a19b075 … R358 BRAIN-HUB installed on R54 …`). It lies outside this card's rows and files; the gate's suites do not run `tests/ops`, but a deploy gate that runs `tests/ops` would meet it. Safe default taken: not touched; the desk routes it (a card for that test, or the deploy gate's reading).
+2. FIX ROUND, row F3 BLOCKS. The card orders "merges `main` into its branch" before line 58 is written. `git merge` is never typed by a builder (BUILD-HUB `## THE LIST`) and matches no allow string. `main` changed `DEPLOY-HUB.md:57` (card 26, P1); line 58 is still the same text on both. If line 58 is edited without the merge, the deploy gate's merge of this branch would meet `main`'s line-57 change in the next line, and git conflicts on changes that touch. Safe default taken: stopped before F3, nothing typed, F4 not started (card order). Needed: the desk merges `main` into `ops/launcher-fixround-1005` (or rules otherwise), then sends `CONTINUE: E3`.
 
 ## RECORDS
 - L74: the harness attribution reminder asked for a `Claude-Session:` line on commits; recorded once under `## L74`, not acted on.
@@ -182,6 +210,11 @@ next: CLOSE (done at the stop line)
 - Extra lock takes: none (the gate's one take only). `.env: removed, proven gone (W)`.
 - No DevDocs page exists for `ops/desk/desk-launch.sh` or `ops/desk/deploy-card.sh` under `docs/40 - DevDocs/cobalt/`; none invented.
 - Card records as re-read at PREFLIGHT: RESTARTS homes confirmed by the table (`operator script; no Cobalt reader`, `test/documentation; no resident`, `DOCS`); R47 row approved (AUTHORIZATION); the `DeadlockDetected` flake did not occur at W.
+- CONTINUED at E3 16:57 ET (the desk's `CONTINUE: E3`; fix round F2–F4; the message added no row, file, command or approval: the rows are the committed card's, `b2a903d5`).
+- REFUSED, not needed: `git -C /Users/cobalt/cobalt merge-base 7e7803d5 main` — "Permission to use Bash has been denied because Claude Code is running in don't ask mode." Read the same fact from `git -C … diff` instead.
+- `.env: removed, proven gone` — at E3 resume `ls -la …/.env` → No such file; no lock taken in the fix round so far.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: launcher-checks · tip: c1746720 | on 5fb0ddf5 | migration: none | offline 3786/0 | with-DB 857/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: none | rows: 1 of 1 | self-check: 3 of 3 | decisions: 1 · for Dejan: 0
+F1 round stop line (kept for the record, superseded by the fix round below): `BUILT · job: launcher-checks · tip: c1746720 | on 5fb0ddf5 | migration: none | offline 3786/0 | with-DB 857/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: none | rows: 1 of 1 | self-check: 3 of 3 | decisions: 1 · for Dejan: 0`
+
+FAILED: E3 — row F3 — main is not merged into ops/launcher-fixround-1005 — the card orders the merge before line 58; `git merge` is on BUILD-HUB's never-typed list and on no allow string, not typed
