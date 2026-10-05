@@ -1065,3 +1065,29 @@ def test_k3_4_a_the_page_names_the_earlier_restatement_effect_day(
         "STALE — resolve #7 was restated; rebuild 2001-01-02 "
         "once 2001-01-02's input is recorded"
     ) in view.resolves
+
+
+# ---------------------------------------------------------------------
+# the check, pass 2: house B's (Grok) findings G<n>
+# ---------------------------------------------------------------------
+
+
+def test_x1_days_held_names_the_calendar_among_the_lists_inputs(tmp_path, weekday_calendar):
+    """X1 / L57: the NYSE calendar `_days_held` reads is an input of the
+    open-position list, not only the stored row kinds."""
+    store = _K3Store()
+    _built(tmp_path, store, _record(store, D, trading=DAY1.read_bytes()))
+    named = _build_day_row(store)["inputs"]["open_positions"]
+
+    assert "calendar" in named
+
+
+def test_x1_the_stale_effect_day_names_its_inputs(tmp_path, weekday_calendar):
+    """X1 / L57: a stale resolve's effect day is a stored figure, and the
+    read that produced it is named on build_day.inputs."""
+    store, _, event = _resolved_day(superseded={7})
+    _built(tmp_path, store, event)
+    row = _build_day_row(store, D_NEXT)
+
+    assert row["derived"]["stale_resolves"]
+    assert "stale_resolves" in row["inputs"]
