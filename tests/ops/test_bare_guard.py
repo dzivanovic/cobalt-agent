@@ -286,7 +286,6 @@ PIPES_ALLOWED = [
     "grep -n X f | sort | uniq -c | head -5",
     "sed -n '/^## PREFLIGHT/,$p' f | head -3",
     "sed -n -e 's/a/b/gp' f | wc -l",
-    "awk '{print $1}' f | sort -u",
     "tail -n 5 f | cut -d: -f1 | grep -o 'y'",
     "grep -c x f | head -1 < /dev/null",
 ]
@@ -339,6 +338,7 @@ def test_g1_anything_else_compound_is_denied_with_the_resend_sentence(command, f
 
 
 AWK_FOUND = "`awk` with `system(`, `>` or `|` in its program"
+AWK_NOT_FILTER = "a pipe `|` with `awk`, not a read-only filter"
 AWK_DENIED = [
     "grep X f | awk '{print > \"f\"}'",
     "grep X f | awk '{system(\"x\")}'",
@@ -374,8 +374,9 @@ AWK_ALLOWED = [
 
 @pytest.mark.parametrize("kind", [None, "build"])
 @pytest.mark.parametrize("command", AWK_ALLOWED)
-def test_g11_any_other_awk_segment_stays_allowed(roots, kind, command):
-    assert_allowed(run(command, make_seat(roots, kind)))
+def test_b11_an_awk_segment_g11_passes_is_denied_as_no_filter(roots, kind, command):
+    # his ruling 10-04 R283 (card 06 B11): awk left G1's pipe list; these were card 10's controls
+    assert_resend(run(command, make_seat(roots, kind)), AWK_NOT_FILTER)
 
 
 def test_g1_one_command_stays_allowed_whatever_its_verb(roots):
@@ -967,3 +968,295 @@ def test_check_guard_o6_a_fixed_file_in_another_case_is_denied(roots, kind):
     assert_denied(write(base / "docs" / "40 - DevDocs" / "prompts" / "build-hub.md", seat), G5_FIXED)
     assert_denied(write(base / "docs" / "40 - devdocs" / "PROMPTS" / "BUILD-HUB.md", seat), G5_FIXED)
     assert_denied(write(base / "x" / "laws.md", seat), G5_FIXED)
+
+
+# ---- card 06 cobalt-guard-b (check O4, O5; build DECISIONS 1): rows B1–B4 -----------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "sort /x/wt/job/.env",
+        "cut -c1- /x/wt/job/.env",
+        "uniq /x/wt/job/.env",
+        "awk 1 /x/wt/job/.env",
+        "grep -n X f | sort /x/wt/job/.env",
+    ],
+)
+def test_check_guard_o5_the_four_new_read_verbs_on_env_are_denied(roots, command):
+    assert_denied(run(command, make_seat(roots, "build")), G3_ROUTE)
+
+
+SORT_FOUND = "`sort` with `-o`, `--output` or `--compress-program`"
+UNIQ_FOUND = "`uniq` with a second operand, a file it writes"
+AWK_FILE_FOUND = "`awk -f`, a program the guard cannot read"
+
+
+def assert_resend(done, found: str):
+    assert done.returncode == 2, done.stderr
+    line = done.stderr.strip()
+    assert line.startswith(BLOCK_HEAD), line
+    assert line.endswith(BLOCK_TAIL), line
+    assert found in line[len(BLOCK_HEAD) : -len(BLOCK_TAIL)], line
+
+
+@pytest.mark.parametrize(
+    "command,found",
+    [
+        ("grep X f | sort -o out", SORT_FOUND),
+        ("grep X f | sort --output=out", SORT_FOUND),
+        ("grep X f | sort --compress-program=sh", SORT_FOUND),
+        ("grep X f | uniq - out", UNIQ_FOUND),
+        ("grep X f | sort -uo out", SORT_FOUND),
+        ("grep X f | sort -oout", SORT_FOUND),
+        ("grep X f | sort --out=x", SORT_FOUND),
+        ("grep X f | sort --compress=sh", SORT_FOUND),
+    ],
+)
+def test_check_guard_o4_a_filter_that_writes_or_runs_is_denied(roots, command, found):
+    done = run(command, make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, found)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "grep X f | sort -u",
+        "sort -k2,2n f",
+        "sort --unique f",
+        "grep X f | uniq -c",
+        "grep X f | uniq -f 1 -",
+        "uniq -f 1 f",
+        "uniq -s2 -w3 f",
+    ],
+)
+def test_b2_a_sort_or_uniq_that_only_reads_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+def test_b3_an_awk_program_from_a_file_in_a_pipe_is_denied(roots):
+    done = run("grep X f | awk -f p.awk", make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, AWK_FILE_FOUND)
+    for command in ("grep X f | awk -fp.awk", "grep X f | awk --file=p.awk", "grep X f | awk --file p.awk"):
+        assert_resend(run(command, make_seat(roots, "build")), AWK_FILE_FOUND)
+
+
+def test_b3_b11_an_awk_program_in_the_command_is_denied_as_no_filter(roots):
+    # B3's control until his ruling 10-04 R283 (B11): an awk pipe segment is not a read-only filter
+    assert_resend(run("grep X f | awk '{print $1}'", make_seat(roots, "build")), AWK_NOT_FILTER)
+    assert_resend(run("grep X f | awk -F f '{print $1}'", make_seat(roots, "build")), AWK_NOT_FILTER)
+
+
+@pytest.mark.parametrize(
+    "command,found",
+    [
+        ("sort -o out f", SORT_FOUND),
+        ("uniq f out", UNIQ_FOUND),
+        ("awk -f p.awk f", AWK_FILE_FOUND),
+        ("awk '{print > \"x\"}' f", AWK_FOUND),
+        # the house-probe ending passes its redirect, not the lone command's check
+        ("sort -o out f < /dev/null", SORT_FOUND),
+    ],
+)
+def test_b4_a_lone_sort_uniq_or_awk_that_writes_is_denied(roots, command, found):
+    done = run(command, make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, found)
+
+
+@pytest.mark.parametrize("command", ["sort f", "awk '{print $1}' f"])
+def test_b4_a_lone_sort_or_awk_that_only_reads_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+@pytest.mark.parametrize(
+    "command,found",
+    [
+        ("LC_ALL=C sort -o out f", SORT_FOUND),
+        ("/usr/bin/sort -o out f", SORT_FOUND),
+        ("LC_ALL=C uniq f out", UNIQ_FOUND),
+        ("/usr/bin/awk -f p.awk f", AWK_FILE_FOUND),
+    ],
+)
+def test_check_b_o1_a_lone_filter_by_path_or_behind_an_assignment_that_writes_is_denied(roots, command, found):
+    assert_resend(run(command, make_seat(roots, "build")), found)
+
+
+@pytest.mark.parametrize("command", ["sort --co=sh f", "sort --co sh f", "sort --compress=sh f"])
+def test_b7_a_two_letter_prefix_of_compress_program_is_denied(roots, command):
+    done = run(command, make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, SORT_FOUND)
+
+
+@pytest.mark.parametrize("command", ["sort --check f", "sort -c f"])
+def test_b7_sort_check_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["sort --files0-from=.env", "sort --files0-from .env", "sort --files0-from=/x/wt/job/.env"],
+)
+def test_b8_an_option_value_naming_env_is_denied(roots, command):
+    assert_denied(run(command, make_seat(roots, "build")), G3_ROUTE)
+
+
+@pytest.mark.parametrize("command", ["sort --key=2 f", "grep -n --include=*.py X ."])
+def test_b8_an_option_value_not_naming_env_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "awk 'BEGIN{while(getline l < \".env\") print l}'",
+        "awk 'BEGIN{ARGV[1]=\".e\" \"nv\"; ARGC=2} {print}'",
+        "awk '@include \"x\"'",
+        "awk '@load \"x\"'",
+        "awk 'BEGIN{ARGC=1} {print}' f",
+        "grep X f | awk '{getline l < \"y\"; print l}'",
+    ],
+)
+def test_b9_an_awk_program_that_reads_a_file_it_names_is_denied(roots, command):
+    assert_denied(run(command, make_seat(roots, "build")), G3_ROUTE)
+
+
+@pytest.mark.parametrize("command", ["awk '{print $1}' f"])
+def test_b9_an_awk_program_that_reads_only_its_operands_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+WRAPPED_FOUND = "a wrapper whose command the guard cannot find"
+
+
+@pytest.mark.parametrize(
+    "command,found",
+    [
+        ("time sort -o out f", SORT_FOUND),
+        ("nice -n 5 sort -o out f", SORT_FOUND),
+        ("env A=1 sort -o out f", SORT_FOUND),
+        ("command sort -o out f", SORT_FOUND),
+        ("xargs awk -f p.awk", AWK_FILE_FOUND),
+        ("time nice sort -o out f", SORT_FOUND),
+        ("timeout 5 sort -o out f", SORT_FOUND),
+        ("timeout -s KILL 5 uniq f out", UNIQ_FOUND),
+        ("stdbuf -oL sort -o out f", SORT_FOUND),
+        ("nohup uniq f out", UNIQ_FOUND),
+        ("/usr/bin/env -i A=1 /usr/bin/sort -o out f", SORT_FOUND),
+        ("xargs -0 -n 1 awk '{print > \"x\"}'", AWK_FOUND),
+        ("time", WRAPPED_FOUND),
+        ("xargs", WRAPPED_FOUND),
+        ("timeout 5", WRAPPED_FOUND),
+        ("env A=1", WRAPPED_FOUND),
+        ("env -S 'sort -o out f'", WRAPPED_FOUND),
+        ("nice --foo sort f", WRAPPED_FOUND),
+    ],
+)
+def test_b10_a_wrapped_command_is_judged_as_the_command_it_runs(roots, command, found):
+    done = run(command, make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, found)
+
+
+@pytest.mark.parametrize(
+    "command,route",
+    [
+        ("time cat /x/wt/job/.env", G3_ROUTE),
+        ("xargs sort --files0-from=.env", G3_ROUTE),
+        ("env A=1 awk 'BEGIN{getline l < \"y\"}'", G3_ROUTE),
+        ("time git push", G4_ROUTE),
+        ("nohup claude -p x", G7_ROUTE),
+    ],
+)
+def test_b10_every_guard_rule_judges_the_wrapped_command(roots, command, route):
+    assert_denied(run(command, make_seat(roots, "build")), route)
+
+
+@pytest.mark.parametrize(
+    "command", ["time sort f", "nice -n 5 sort f", "env A=1 sort -u f", "timeout 5 grep -n X f", "time -p wc -l f"]
+)
+def test_b10_a_wrapped_read_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+@pytest.mark.parametrize("command", ["grep X f | time sort", "grep -l X f | xargs grep -n Y"])
+def test_b10_a_wrapper_in_a_pipe_stays_denied(roots, command):
+    done = run(command, make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, "not a read-only filter")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "grep X f | awk '{print $1}'",
+        "awk '{print $1}' f | head -1",
+        "grep X f | sort | awk 'NF > 1'",
+        # card 10's G1 control until his ruling 10-04 R283 (B11)
+        "awk '{print $1}' f | sort -u",
+    ],
+)
+def test_b11_an_awk_pipe_segment_is_denied(roots, command):
+    done = run(command, make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, AWK_NOT_FILTER)
+
+
+@pytest.mark.parametrize("command", ["grep X f | awk '{print > \"f\"}'", "grep X f | awk -f p.awk"])
+def test_b11_g11_and_b3_stay_as_defence_on_an_awk_segment(roots, command):
+    done = run(command, make_seat(roots, "build"))
+    assert_resend(done, AWK_NOT_FILTER)
+    assert_resend(done, AWK_FOUND if "-f" not in command else AWK_FILE_FOUND)
+
+
+@pytest.mark.parametrize("command", ["grep X f | cut -f2", "grep X f | sort -u | head -3"])
+def test_b11_a_pipe_without_awk_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
+
+
+# ---- check r3 of cobalt-guard-b ------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command,found",
+    [
+        ("sort {-o,out} f", SORT_FOUND),
+        ("grep X f | sort {-o,out}", SORT_FOUND),
+        ("uniq {f,out}", UNIQ_FOUND),
+        ("grep X f | uniq {-,out}", UNIQ_FOUND),
+    ],
+)
+def test_check_b_r3_o1_a_brace_word_that_expands_to_a_write_is_denied(roots, command, found):
+    assert_resend(run(command, make_seat(roots, "build")), found)
+
+
+@pytest.mark.parametrize(
+    "command,found",
+    [
+        # bash: `-{n..p}` is `-n -o -p`, `{1..2}` is `1 2`
+        ("sort -{n..p} f", SORT_FOUND),
+        ("uniq {1..2}", UNIQ_FOUND),
+    ],
+)
+def test_check_b_r3_o1_a_brace_sequence_that_expands_to_a_write_is_denied(roots, command, found):
+    assert_resend(run(command, make_seat(roots, "build")), found)
+
+
+def test_check_b_r3_o1_a_brace_sequence_naming_env_is_denied(roots):
+    # bash: `.{d..f}nv` is `.denv .eenv .fenv`
+    assert_denied(run("sort /x/wt/job/.{d..f}nv", make_seat(roots, "build")), G3_ROUTE)
+
+
+@pytest.mark.parametrize("command", ["sort $'-o' out f", "grep X f | sort $'\\x2do' out"])
+def test_check_b_r3_o2_an_ansi_c_quoted_sort_output_is_denied(roots, command):
+    assert_resend(run(command, make_seat(roots, "build")), SORT_FOUND)
+
+
+@pytest.mark.parametrize(
+    "command", ["sort {a,b}", "sort -{n,u} f", "sort $'-u' f", "grep X f | uniq $'-c'", "uniq {f,}"]
+)
+def test_check_b_r3_a_brace_or_ansi_c_read_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))

@@ -21,8 +21,15 @@
 # (build, check, devfix, worker) · G7 a second session (any worker kind, deploy too; G9: the
 # check's house call, a whole command opening with a CHECK-HUB.md line 10 house string, passes) ·
 # G1 one command or a read-only pipe (G11: an `awk` program with `system(`, `>` or `|` is not
-# read-only). Read: G3. Write / Edit: G6 stop line while dirty · G5 the fence (G10: a check's
-# fence adds its own <S>, the card's JOB naming it).
+# read-only; card 06 B2–B4: nor `sort -o`/`--output`/`--compress-program`, a second `uniq`
+# operand or `awk -f`, in a pipe segment or as one command; B1: `sort cut uniq awk` are G3
+# readers too; B9: an awk program with `getline`, `ARGV`, `ARGC`, `@include` or `@load` is G3;
+# B10: a command led by `time nice env command nohup timeout stdbuf xargs` is judged by every
+# rule as the command it runs, and a wrapper whose command cannot be found is denied; B11: an
+# `awk` pipe segment is not a read-only filter, G11, B3 and B9 stay as defence; check r3: words are
+# read with `$'…'` decoded, and B2–B4 read them brace-expanded, `{a..b}` too). Read: G3.
+# Write / Edit: G6 stop line while dirty · G5 the fence (G10: a check's fence adds its own <S>,
+# the card's JOB naming it).
 # G8: every deny appends one JSON line to <worktree root>/.ledger/<session_id>.jsonl; a ledger
 # error never blocks the deny. Any other error inside the guard -> exit 0: it never blocks work
 # because it broke.
@@ -70,9 +77,30 @@ HUBS = {
 }
 WORKERS = ("build", "check", "devfix", "deploy", "worker")
 GIT_SHAPED = ("build", "check", "devfix", "worker")
-READ_FILTERS = ("grep", "sed", "cut", "sort", "uniq", "head", "tail", "wc", "awk")
-ENV_READERS = ("cat", "grep", "sed", "head", "tail", "less")
+READ_FILTERS = ("grep", "sed", "cut", "sort", "uniq", "head", "tail", "wc")
+ENV_READERS = ("cat", "grep", "sed", "head", "tail", "less", "sort", "cut", "uniq", "awk")
 LAUNCHERS = ("claude", "codex", "grok", "agy")
+# B10: a wrapper runs the command that follows its options and operands; per wrapper, the
+# options that stand alone and those that take a value (the next word, `=value` or attached)
+WRAPPERS = ("time", "nice", "env", "command", "nohup", "timeout", "stdbuf", "xargs")
+WRAP_FLAGS = {
+    "time": ("-p",),
+    "env": ("-", "-i", "--ignore-environment"),
+    "command": ("-p", "-v", "-V"),
+    "timeout": ("--preserve-status", "--foreground", "-v", "--verbose"),
+    "xargs": ("-0", "-r", "-t", "-x", "--null", "--no-run-if-empty", "--verbose", "--exit"),
+}
+WRAP_VALUES = {
+    "nice": ("-n", "--adjustment"),
+    "env": ("-u", "--unset"),
+    "timeout": ("-s", "--signal", "-k", "--kill-after"),
+    "stdbuf": ("-i", "-o", "-e", "--input", "--output", "--error"),
+    "xargs": (
+        "-d", "--delimiter", "-E", "-I", "-L", "--max-lines", "-n", "--max-args",
+        "-P", "--max-procs", "-s", "--max-chars",
+    ),
+}
+WRAPPED = "a wrapper whose command the guard cannot find"
 GIT_DENIED = ("push", "merge", "rebase", "reset", "checkout", "stash", "cherry-pick")
 STOP_HEADS = ("BUILT ·", "CHECK DONE ·", "DEPLOYED")
 PROD = re.compile(r"COBALT_ENV=production|(?<![\w-])--prod(?![\w-])|cobalt_brain")
@@ -80,6 +108,10 @@ ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 DOCS = os.path.join("docs", "40 - DevDocs")
 SED_WRITES = "`sed` with a `w` or `e` command or flag"
 AWK_WRITES = "`awk` with `system(`, `>` or `|` in its program"
+AWK_FILE = "`awk -f`, a program the guard cannot read"
+SORT_WRITES = "`sort` with `-o`, `--output` or `--compress-program`"
+UNIQ_WRITES = "`uniq` with a second operand, a file it writes"
+AWK_READS = ("getline", "ARGV", "ARGC", "@include", "@load")
 # G9: the three house strings of CHECK-HUB.md line 10, as prefixes of the whole command
 HOUSE = re.compile(r"grok |codex exec --skip-git-repo-check -m [A-Za-z0-9._-]+ -s read-only |agy ")
 # G10: <S> = <AGY>/scratch/tribunal-bars-0920/<JOB>-check (CHECK-HUB.md line 5)
@@ -177,7 +209,79 @@ def segments(command, cuts):
     return out
 
 
+ANSI_C = {
+    "a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b", "f": "\f", "n": "\n", "r": "\r",
+    "t": "\t", "v": "\v", "\\": "\\", "'": "'", '"': '"', "?": "?",
+}
+
+
+def ansi_c(body):
+    """The text bash makes of the body of a $'…' quote."""
+    out, i, n = [], 0, len(body)
+    while i < n:
+        c = body[i]
+        if c != "\\" or i + 1 >= n:
+            out.append(c)
+            i += 1
+            continue
+        e = body[i + 1]
+        octal = re.match(r"[0-7]{1,3}", body[i + 1:])
+        digits = {"x": 2, "u": 4, "U": 8}.get(e)
+        hexa = re.match(r"[0-9A-Fa-f]{1,%d}" % digits, body[i + 2:]) if digits else None
+        if e in ANSI_C:
+            out.append(ANSI_C[e])
+            i += 2
+        elif octal:
+            out.append(chr(int(octal.group(), 8) & 0xFF))
+            i += 1 + len(octal.group())
+        elif hexa:
+            out.append(chr(min(int(hexa.group(), 16), 0x10FFFF)))
+            i += 2 + len(hexa.group())
+        elif e == "c" and i + 2 < n:
+            out.append(chr(ord(body[i + 2]) & 0x1F))
+            i += 3
+        else:
+            out.append(c + e)
+            i += 2
+    return "".join(out)
+
+
+def unquote_ansi_c(segment):
+    """check r3 O2: each $'…' outside quotes rewritten as the single-quoted text bash makes of
+    it, so shlex reads the word the shell runs (shlex alone reads `$'-o'` as `$-o`)."""
+    out, i, n, quote = [], 0, len(segment), None
+    while i < n:
+        c = segment[i]
+        if quote == "'":
+            if c == "'":
+                quote = None
+        elif quote == '"':
+            if c == "\\":
+                out.append(segment[i:i + 2])
+                i += 2
+                continue
+            if c == '"':
+                quote = None
+        elif c == "\\":
+            out.append(segment[i:i + 2])
+            i += 2
+            continue
+        elif c == "$" and segment[i + 1:i + 2] == "'":
+            j = i + 2
+            while j < n and segment[j] != "'":
+                j += 2 if segment[j] == "\\" else 1
+            out.append("'" + ansi_c(segment[i + 2:j]).replace("'", "'\"'\"'") + "'")
+            i = j + 1
+            continue
+        elif c in "'\"":
+            quote = c
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def words(segment):
+    segment = unquote_ansi_c(segment)
     try:
         return shlex.split(segment, comments=True)
     except ValueError:
@@ -190,6 +294,43 @@ def verb(ws):
         if not ASSIGN.match(w):
             return os.path.basename(w)
     return ""
+
+
+def unwrap(ws):
+    """B10: the words of the command a wrapper runs, past every wrapper's options and operands
+    (NAME=value words too; timeout's duration); ws itself, past NAME=value words, when no
+    wrapper leads it; None when a wrapper's command cannot be found (an option it does not know,
+    or no word left)."""
+    i, wrapped = 0, False
+    while True:
+        while i < len(ws) and ASSIGN.match(ws[i]):
+            i += 1
+        if i >= len(ws):
+            return None if wrapped else []
+        name = os.path.basename(ws[i])
+        if name not in WRAPPERS:
+            return ws[i:]
+        wrapped, flags, values = True, WRAP_FLAGS.get(name, ()), WRAP_VALUES.get(name, ())
+        i += 1
+        while i < len(ws):
+            a = ws[i]
+            if a == "--":
+                i += 1
+                break
+            if not a.startswith("-") or (a == "-" and name != "env"):
+                break
+            if a in flags or (name == "nice" and a[1:].isdigit()):
+                i += 1
+            elif a in values:
+                i += 2
+            elif a.startswith("--") and "=" in a and a.partition("=")[0] in values:
+                i += 1
+            elif not a.startswith("--") and a[:2] in values:
+                i += 1  # its value attached: -n5, -oL, -sKILL
+            else:
+                return None
+        if name == "timeout":
+            i += 1  # its duration
 
 
 # ---- G1: sed in a pipe is `sed -n`, never -i, never a w / e command or flag ----------------
@@ -369,10 +510,10 @@ def sed_problem(args):
     return None
 
 
-def awk_writes(args):
-    """G11: True when a word that can be awk program text holds `system(`, `>` or `|`. The
-    values of -F and -v and the file of -f are not program text; every other word is read."""
-    i, done = 0, False
+def awk_program(args):
+    """The words that can be awk program text: the values of -F and -v and the file of -f are
+    not; every other word is."""
+    out, i, done = [], 0, False
     while i < len(args):
         a = args[i]
         if not done and a == "--":
@@ -380,10 +521,84 @@ def awk_writes(args):
         elif not done and a[:2] in ("-F", "-v", "-f"):
             if len(a) == 2:
                 i += 1
-        elif "system(" in a or ">" in a or "|" in a:
+        else:
+            out.append(a)
+        i += 1
+    return out
+
+
+def awk_writes(args):
+    """G11: True when a word that can be awk program text holds `system(`, `>` or `|`."""
+    return any("system(" in a or ">" in a or "|" in a for a in awk_program(args))
+
+
+def awk_reads(args):
+    """B9: True when a word that can be awk program text holds a construct that reads a file
+    the program names (`getline`, `ARGV`, `ARGC`, `@include`, `@load`)."""
+    return any(r in a for a in awk_program(args) for r in AWK_READS)
+
+
+def awk_file(args):
+    """B3: True when the program comes from a file (`-f`, `--file`), which G11 cannot read."""
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--":
+            return False
+        if a[:2] == "-f" or a == "--file" or a.startswith("--file="):
             return True
+        if a in ("-F", "-v"):
+            i += 1
         i += 1
     return False
+
+
+def sort_writes(args):
+    """B2, by form: a short-option word holding `o` (`-o out`, `-oout`, `-uo out`), or a long
+    option whose name is a prefix of `output`, or (B7) a prefix of `compress-program` at least
+    two letters long (`--c` alone is ambiguous with `--check`)."""
+    for a in args:
+        if a.startswith("--"):
+            name = a[2:].partition("=")[0]
+            if name and "output".startswith(name):
+                return True
+            if len(name) >= 2 and "compress-program".startswith(name):
+                return True
+        elif a.startswith("-") and "o" in a[1:]:
+            return True
+    return False
+
+
+def uniq_writes(args):
+    """B2: True when uniq has a second operand, its output file. The word after -f, -s or -w,
+    and the digits attached in -f1, -s2 or -w3, are values, not operands."""
+    operands, i, done = 0, 0, False
+    while i < len(args):
+        a = args[i]
+        if done or a == "-" or not a.startswith("-"):
+            operands += 1
+        elif a == "--":
+            done = True
+        elif not a.startswith("--") and a[-1] in "fsw":
+            i += 1
+        i += 1
+    return operands > 1
+
+
+def filter_problem(ws):
+    """B2, B3, G11: what makes a `sort`, `uniq` or `awk` command more than a read, or None."""
+    # check r3 O1: the words as the shell brace-expands them, as G3 reads them (`{-o,out}`)
+    args = [x for a in ws[1:] for x in braces(a) if x]
+    if ws[0] == "sort" and sort_writes(args):
+        return SORT_WRITES
+    if ws[0] == "uniq" and uniq_writes(args):
+        return UNIQ_WRITES
+    if ws[0] == "awk":
+        if awk_file(args):
+            return AWK_FILE
+        if awk_writes(ws[1:]):
+            return AWK_WRITES
+    return None
 
 
 def pipe_problems(command, cuts):
@@ -395,13 +610,16 @@ def pipe_problems(command, cuts):
             continue
         if ws[0] not in READ_FILTERS:
             problems.append("a pipe `|` with `%s`, not a read-only filter" % ws[0])
-            continue
+            # B11: awk left the list (his ruling 10-04 R283); G11 and B3 still name what it does
+            if ws[0] != "awk":
+                continue
         if ws[0] == "sed":
             p = sed_problem(ws[1:])
             if p:
                 problems.append(p)
-        if ws[0] == "awk" and awk_writes(ws[1:]):
-            problems.append(AWK_WRITES)
+        p = filter_problem(ws)
+        if p:
+            problems.append(p)
     return problems
 
 
@@ -415,7 +633,14 @@ def g1(command):
         text = command
         found, quote, cuts = scan(command)
     if not found:
-        return None
+        # B4: a lone sort, uniq or awk meets the checks of a pipe segment; its verb is read past
+        # NAME=value words and a path, as G3 reads it (a pipe segment of either shape is denied);
+        # B10: and past every wrapper, whose command must be found
+        ws = unwrap(words(text))
+        if ws is None:
+            return BLOCK.format(found=WRAPPED)
+        p = filter_problem([os.path.basename(ws[0])] + ws[1:]) if ws else None
+        return BLOCK.format(found=p) if p else None
     if found == ["a pipe `|`"]:
         problems = pipe_problems(text, cuts)
         if not problems:
@@ -522,12 +747,36 @@ def seat(event):
 # ---- the Bash rules ------------------------------------------------------------------------
 
 
+SEQUENCE = re.compile(r"\{(-?\d+|[A-Za-z])\.\.(-?\d+|[A-Za-z])(?:\.\.(-?\d+))?\}")
+
+
+def sequence(a, b, step):
+    """The items of a `{a..b[..step]}` brace sequence, as bash makes them; [] when it is not one.
+    At most 256: two are enough to count operands, and a digit never spells a letter."""
+    step = abs(int(step or 1)) or 1
+    if a.lstrip("-").isdigit() and b.lstrip("-").isdigit():
+        x, y = int(a), int(b)
+        items = range(x, y + 1, step) if x <= y else range(x, y - 1, -step)
+        return [str(k) for k in items[:256]]
+    if len(a) == 1 and len(b) == 1 and not a.isdigit() and not b.isdigit():
+        x, y = ord(a), ord(b)
+        items = range(x, y + 1, step) if x <= y else range(x, y - 1, -step)
+        return [chr(k) for k in items[:256]]
+    return []
+
+
 def braces(word):
-    """The word's `{a,b}` alternatives, as the shell expands them."""
+    """The word's `{a,b}` alternatives and (check r3 O1) `{a..b}` sequences, as the shell
+    expands them."""
     m = re.search(r"\{([^{}]*,[^{}]*)\}", word)
-    if not m:
+    if m:
+        alts = m.group(1).split(",")
+    else:
+        m = SEQUENCE.search(word)
+        alts = sequence(*m.groups()) if m else []
+    if not alts:
         return [word]
-    return [x for alt in m.group(1).split(",") for x in braces(word[: m.start()] + alt + word[m.end():])]
+    return [x for alt in alts for x in braces(word[: m.start()] + alt + word[m.end():])]
 
 
 def is_env(path):
@@ -540,9 +789,24 @@ def is_env(path):
     return False
 
 
+def env_words(args):
+    """G3's words to test: each operand, and (B8) each option value — the text after the first
+    `=` of a `--name=value` word, and the word after `--files0-from` given without `=`."""
+    out = list(args)
+    for k, a in enumerate(args):
+        if a.startswith("--") and "=" in a:
+            out.append(a.partition("=")[2])
+        elif a == "--files0-from" and k + 1 < len(args):
+            out.append(args[k + 1])
+    return out
+
+
 def g3_bash(segs):
     for ws in segs:
-        if verb(ws) in ENV_READERS and any(is_env(w) for w in ws[1:]):
+        if verb(ws) in ENV_READERS and any(is_env(w) for w in env_words(ws[1:])):
+            return ROUTE["G3"]
+        if verb(ws) == "awk" and awk_reads(ws[1:]) and not awk_writes(ws[1:]):
+            # B9: a file the program itself names; a program G11 denies keeps G11's sentence
             return ROUTE["G3"]
     return None
 
@@ -582,6 +846,9 @@ def git_problem(ws):
 def bash_rules(command, s):
     found, quote, cuts = scan(command)
     segs = [words(x) for x in segments(command, cuts)]
+    # B10: each rule also judges the command a wrapper runs (G1: `g1`; a wrapper in a pipe stays
+    # a segment that is not a read-only filter)
+    segs += [u for u in (unwrap(ws) for ws in segs if verb(ws) in WRAPPERS) if u]
     kind = s["kind"]
     deny = g3_bash(segs)
     if deny:
