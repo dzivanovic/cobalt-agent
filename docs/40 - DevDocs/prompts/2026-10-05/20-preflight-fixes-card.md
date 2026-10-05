@@ -8,7 +8,7 @@ REPORT: /Users/cobalt/cobalt-wt/preflight-fixes-1005/docs/40 - DevDocs/reports/p
 CHECK REPORT:
 HOUSE B:
 DB: none
-RULINGS: 2026-10-05 R387, 2026-10-05 R412
+RULINGS: 2026-10-05 R412
 
 ## ROWS
 
