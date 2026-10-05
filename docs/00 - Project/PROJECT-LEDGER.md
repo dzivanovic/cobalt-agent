@@ -2944,3 +2944,299 @@ Source: `cto-2026-10-02.md` §4 R1–R161 (no R13). Bare "R<n>" = `10-02 R<n>`. 
 - R161 21:01 DESK RECORD: close `706efa20` (`close-1002`) launched by `desk-launch.sh close 2026-10-02`.
 - DEPLOY (L35): `git tag --list "deploy-2026-10-0*"` = `deploy-2026-10-02-1`, `deploy-2026-10-02-2`; main `0f154bb5` (R36) and `35acb29d` (R159) as quoted from the desk rows.
 - PUSHES (L55): none recorded on 10-02 before this close.
+
+### 2026-10-03 — Sets 1, 2c, 2d, 3b DEPLOYED (`deploy-2026-10-03-1`..`-3`, `deploy-2026-10-04-2`); script cards built and checked; meter stop 22:54, resumed 10-04 13:14; S3 K3 and guard-b built
+Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows; no close ran 10-03). Bare "R<n>" = `10-03 R<n>`. Dated record only.
+- R1 06:02 DESK RECORD: day-open GREEN 6/6; no `cobalt_dev` lock held.
+- R2 06:02 DESK RECORD: build `01` lock-relief `815811b6` launched.
+- R3 06:09 HIS: every Grok seat runs `grok-4.7`.
+- R4 06:10 DESK RECORD: brain pinned `-m grok-4.7` in cards `02` A6 and `03` L7.
+- R5 06:14 DESK RECORD: highest model per family listed (Opus 5.5, Fable 5.1, Sonnet 5.5; Astra, Sol, Terra; `grok-4.7`).
+- R6 06:19 HIS: Gemini house serves `claude-opus-5-5-high`; its own highest `gemini-3.8-flash-high`.
+- R7 06:22 HIS: brain's replacement line is 500,000 tokens.
+- R8 07:08 HIS: model router waits for the complexity tribunal and JEV shadow run to 80% agreement.
+- R9 07:08 HIS: auto-handoff mod trialled on the brain seat first.
+- R10 07:08 HIS: no-burn mods get an install card after the weekend measure.
+- R11 07:27 HIS: desk stays Opus 5.5 through the weekend; Sonnet 5.5 on Monday 10-05.
+- R12 07:32 HIS: every mod and hook card is checked by an Anthropic seat alone.
+- R13 07:36 DESK RECORD: build `01` BUILT tip `77d19438`, decisions 6, for Dejan 1.
+- R14 07:36 DESK RECORD: desk REFRESH (237k tokens).
+- R15 07:39 DESK RECORD: brain answered `01`; card `01b` stacked on `77d19438`.
+- R16 07:40 DESK RECORD: check `01` `57a3a186` launched.
+- R17 07:40 DESK RECORD: build `01b` order-open-test `90c7e909` launched.
+- R18 07:41 HIS: `tests/ops/` stays in the `DB: none` no-lock class.
+- R19 08:26 DESK RECORD: check `01` CHECK DONE ready YES, tip `a50ec4c8`.
+- R20 08:27 DESK RECORD: brain: `01` decisions hold nothing; deploy `a50ec4c8` then `01b`'s tip.
+- R21 08:42 DESK RECORD: build `01b` BUILT tip `ccb70d7e`, decisions 2.
+- R22 08:43 DESK RECORD: brain: `01b` decisions hold; CONTINUE at E3 sent.
+- R23 09:44 DESK RECORD: build `01b` relaunched at E3 `539c3083`; `90c7e909` refused the CONTINUE; about 1 h lost.
+- R24 10:10 HIS: worker-watch hooks ASAP, card `09`, ships in set 2.
+- R25 10:17 DESK RECORD: build `01b` BUILT tip `4b4b9f4a`, decisions 0.
+- R26 10:18 DESK RECORD: check `01b` `565643f1` launched.
+- R27 10:23 HIS: install Telemetry + Flight Recorder by his `/plugin` step.
+- R28 10:25 DESK RECORD: check `01b` ready YES; deploy launch refused (RULINGS cited a desk row), then classifier denied the read.
+- R29 10:48 HIS: deploy set 1 (`01` + `01b`), TIP `a50ec4c8 6d9fde8c`.
+- R30 10:48 DESK RECORD: deploy set 1 `d2b31f86` launched.
+- R31 10:53 DESK RECORD: REFUSALS list for 10-03 under §5 CURRENT.
+- R32 11:03 HIS: full guard hook `cobalt-guard` built Sunday 10-04 after 13:00 ET.
+- R33 11:08 HIS: read-only pipes allowed (`grep`, `sed -n`, `cut`, `sort`, `uniq`, `head`, `tail`, `wc`, `awk`).
+- R34 11:28 DESK RECORD: DEPLOYED `deploy-2026-10-03-1` at `3fbe64fb`, smoke GREEN.
+- R35 11:30 DESK RECORD: build `03` adoption-scripts `6a470e01` launched.
+- R36 11:30 DESK RECORD: build `04` rename-follow-up `ac94c5ed` launched.
+- R37 11:30 DESK RECORD: build `05` close-timer `0d4da959` launched.
+- R38 11:30 DESK RECORD: build `07` brain-hub `59d597b0` launched.
+- R39 11:30 DESK RECORD: build `09` worker-watch `632f83a0` launched.
+- R40 11:30 DESK RECORD: build `20` deploy-steps `14b492df` launched.
+- R41 11:30 DESK RECORD: desk REFRESH (233k tokens); successor `ee8b11e0`.
+- R42 11:32 DESK RECORD: desk `ee8b11e0` took over; wake-up 74,470 tokens.
+- R43 11:33 DESK RECORD: build `03` FAILED PREFLIGHT (`cmd_dev_rebuild` absent at BASE).
+- R44 11:35 DESK RECORD: brain: `03` decisions hold as card changes; card re-issued.
+- R45 11:36 DESK RECORD: build `03` resumed at PREFLIGHT `8b757b2a`.
+- R46 11:37 DESK RECORD: set 2 TIP order ruled by the brain (`11` first).
+- R47 11:37 DESK RECORD: trial merge `13` onto `11` CONFLICT; `13` to set 3.
+- R48 11:38 DESK RECORD: PORT card `13b-slot-guard-port-card.md` written.
+- R49 11:38 DESK RECORD: build `03` FAILED PREFLIGHT again (L1 level rule cannot yield `0013`).
+- R50 11:40 DESK RECORD: brain: `03` L1 prints `TABLES` + `FINGERPRINT`.
+- R51 11:40 DESK RECORD: build `03` resumed at PREFLIGHT `26dcdeea`.
+- R52 12:05 DESK RECORD: build `07` BUILT tip `390da6b1`, decisions 6.
+- R53 12:06 DESK RECORD: brain: `07` D3 held as new row B4; others KEEP.
+- R54 12:07 DESK RECORD: build `07` resumed at E3 `c0aec405`.
+- R55 12:07 DESK RECORD: build `04` BUILT tip `393f3ad5`, RESTARTS `com.cobalt.radar`.
+- R56 12:08 DESK RECORD: brain: `04` decisions both KEEP.
+- R57 12:08 DESK RECORD: check `04` `a9f3ebb0` launched.
+- R58 12:13 DESK RECORD: check `04` ready YES, tip `393f3ad5`.
+- R59 12:18 DESK RECORD: build `20` BUILT tip `775aedfd`; a test hit real `launchctl`, `com.cobalt.aset` unaffected.
+- R60 12:18 DESK RECORD: build `05` BUILT tip `47f47e02`, rows 2 of 3.
+- R61 12:19 DESK RECORD: brain: `20` holds D5, D2 amended; resume at E3.
+- R62 12:20 DESK RECORD: build `20` resumed at E3 `304300e2`.
+- R63 12:20 DESK RECORD: brain: `05` D2, D4 hold as T1, T3; T2 drops `jobs.yaml`.
+- R64 12:20 DESK RECORD: build `05` resumed at E3 `c02171c8`.
+- R65 12:21 DESK RECORD: build `07` BUILT tip `dc9b06c4`, rows 4 of 4.
+- R66 12:22 DESK RECORD: check `07` `cdb4569d` launched.
+- R67 12:28 DESK RECORD: build `09` BUILT tip `264e58f7`, decisions 4.
+- R68 12:29 DESK RECORD: desk REFRESH (230k tokens); successor `560465f7`.
+- R69 12:29 DESK RECORD: brain: `09` decisions 1–4 KEEP; check owed.
+- R70 12:31 DESK RECORD: check `09` `9fd500bb` launched; predecessor removed.
+- R71 12:35 DESK RECORD: build `05` BUILT `e4c0c4dd`; check `05` `c1e5637e` launched.
+- R72 12:38 DESK RECORD: build `03` BUILT tip `8aad8b2e`, decisions 10.
+- R73 12:38 DESK RECORD: check `09` ready YES, tip `264e58f7`; O2 to him.
+- R74 12:39 DESK RECORD: check `07` ready NO, tip `18c26c70`.
+- R75 12:39 DESK RECORD: build `20` BUILT `735f5ed8`; check `20` `ea1da259` launched.
+- R76 12:50 DESK RECORD: check `05` ready YES, tip `47a689a1`.
+- R77 13:05 HIS: `09` hook install goes in `~/.claude/settings.json`, not `main`'s tracked file.
+- R78 13:13 HIS: wake-up measure is a record only; applied in `CTO-DESK-WAKEUP.md` READ 7, contract, checklist H8.
+- R79 13:13 DESK RECORD: wake-up STEP 0.2 gains the early-successor case.
+- R80 13:19 DESK RECORD: STEP 0.2 early wait gets its timeout path.
+- R81 13:28 DESK RECORD: check `20` pass 1 ready NO; PASS-2 `a98f344d` launched.
+- R82 13:30 DESK RECORD: brain: `03` ASK DESK 4–11 KEEP; resume E3 `2e351510`.
+- R83 13:30 DESK RECORD: brain: `09` O1, O6 fixed as row S2; build `09` resumed E3 `26c3de38`.
+- R84 13:30 DESK RECORD: brain: `07` O1 route (a) row B5; build `07` resumed E3 `07c7225b`.
+- R85 13:44 DESK RECORD: build `03` BUILT `0a4a7743`; check `03` and build `02` `7402db31` launched.
+- R86 13:45 DESK RECORD: builds `09`, `07` BUILT; re-checks `a2d25b02`, `71c08a87` launched.
+- R87 13:52 DESK RECORD: check `03` ready NO at `0a4a7743`, O1, O5 to the brain.
+- R88 13:52 DESK RECORD: brain: `03` READY at `0a4a7743`; O1, O5 KEEP.
+- R89 13:52 DESK RECORD: desk REFRESH (229,526 tokens).
+- R90 13:54 DESK RECORD: desk `b456ebbf` woke (65,136 tokens).
+- R91 14:01 DESK RECORD: re-check `07` ready YES, tip `b5eb3530`.
+- R92 14:03 DESK RECORD: re-check `09` ready YES, tip `a6bef8cb`.
+- R93 14:06 DESK RECORD: check `20` PASS-2 ready YES, tip `f04a1d56`.
+- R94 14:32 DESK RECORD: build `02` BUILT tip `1c349c49`, decisions 11.
+- R95 14:35 DESK RECORD: brain: `02` items 2, 3, 4, 9 to card `03c`; `02` re-issued.
+- R96 14:36 DESK RECORD: build `03c` `0a4d2e9b` launched.
+- R97 14:36 DESK RECORD: build `02` resumed at E3 `36310057`.
+- R98 14:52 DESK RECORD: build `02` BUILT tip `e9aff772`, decisions 12, 13.
+- R99 14:53 DESK RECORD: brain: `02` decisions 12, 13 KEEP.
+- R100 14:53 DESK RECORD: check `02` `4563811a` launched.
+- R101 15:10 DESK RECORD: build `03c` BUILT tip `44d3f246`; decision 1 to the brain.
+- R102 15:10 DESK RECORD: check `02` ready NO, tip `44c5bd6d`; O1 held, O8 open.
+- R103 15:10 DESK RECORD: brain: `03c` re-issued as a STACK on `02`'s checked tip.
+- R104 15:12 DESK RECORD: brain: check `02` D1 → row A9, D2 → row A10.
+- R105 15:12 DESK RECORD: build `02` resumed at E3 `11903d32`.
+- R106 15:26 DESK RECORD: build `02` BUILT tip `6251baeb`; held on his A/B (96% weekly meter).
+- R107 15:30 HIS: A — keep going on the full plan; asks why each card takes five or six touches.
+- R108 15:30 DESK RECORD: brain: `02` decisions 14 KEEP, 15 follow-up line.
+- R109 15:31 DESK RECORD: re-check `02` `721d7440` launched.
+- R110 15:32 DESK RECORD: his R107 question sent to the brain.
+- R111 15:33 DESK RECORD: brain's three-point answer (preflight, one card per seam, check at once).
+- R112 15:37 DESK RECORD: re-check `02` ready NO at `6251baeb`; O1, O2 to the brain.
+- R113 15:38 DESK RECORD: brain: O1 settled by `03c` M2, O2 → row M6; `03c` re-issued stacked.
+- R114 15:38 DESK RECORD: build `03c` stacked `d0c22dbd` launched.
+- R115 15:41 HIS: R111 standing for every card.
+- R116 15:50 HIS: A — card preflight stays a separate Sonnet session.
+- R117 15:58 HIS: every seat answers short.
+- R118 16:13 DESK RECORD: build `03c` BUILT tip `b7eeb80c`, 6 of 6.
+- R119 16:14 DESK RECORD: check `03c` `52c83baf` launched.
+- R120 16:14 DESK RECORD: brain: `03c` build decisions 1, 2 KEEP.
+- R121 16:14 DESK RECORD: desk REFRESH (238,696 tokens).
+- R122 16:15 DESK RECORD: desk `d78e4549` woke; startup 65,691.
+- R123 16:20 DESK RECORD: check `03c` ready YES at `b7eeb80c`.
+- R124 16:20 DESK RECORD: DEPLOY-HUB other-house read launched (Grok); stopped after one line.
+- R125 16:22 DESK RECORD: Grok read relaunched in the CHECK-HUB shape.
+- R126 16:36 DESK RECORD: Grok read on file, 9 findings; to the brain.
+- R127 16:37 DESK RECORD: brain: Grok 1–5 HOLD → card `02b`; 6–9 DROP.
+- R128 16:39 DESK RECORD: set 2 trial merge: `11`, `09`, `07` CONFLICT with the chain.
+- R129 16:41 DESK RECORD: brain: set 2 = `03c`, `04`, `05`, `20`; ports `11b`, `07b` after.
+- R130 16:41 DESK RECORD: set 2 deploy card `23` and its preflight launched.
+- R131 16:42 DESK RECORD: preflight `6192798a` ready YES, 38 checks.
+- R132 16:42 DESK RECORD: deploy `set2-1003` launched, tag `deploy-2026-10-03-2`.
+- R133 16:46 DESK RECORD: deploy `set2-1003` FAILED PREFLIGHT (P7 on `cli.py`); nothing moved.
+- R134 16:46 DESK RECORD: deploy re-cut `set2b-1003` (`04`, `05`, `20`) launched.
+- R135 16:46 DESK RECORD: brain: card `02b` written; set 3 = `03d`, `11b`, `07b`.
+- R136 16:49 DESK RECORD: deploy `set2b-1003` FAILED STEP-C (`05` plist); `05` rides set 3.
+- R137 16:49 DESK RECORD: deploy re-cut `set2c-1003` (`04`, `20`) launched.
+- R138 17:27 DESK RECORD: DEPLOYED `deploy-2026-10-03-2` at `44b29c63` (`04`, `20`), smoke GREEN.
+- R139 17:27 DESK RECORD: desk REFRESH (223,758 tokens).
+- R140 18:42 DESK RECORD: `install-ops`: 3 linked, 25 kept; rm of `desk-list.sh` HELD.
+- R141 18:42 DESK RECORD: `02b` card BASE filled `44b29c63`; preflight launched.
+- R142 18:44 DESK RECORD: `02b` preflight NO, 3 wrong places; card fixed.
+- R143 18:44 DESK RECORD: `02b` preflight round 2 launched.
+- R144 18:45 DESK RECORD: `02b` preflight r2 ready YES; build `bffd3c00` launched.
+- R145 19:10 DESK RECORD: `02b` BUILT `50bd02d8`, 6/6; check launched.
+- R146 19:11 DESK RECORD: brain: T6 KEEP; check `1b3d4356`; `gate-clean.sh` refused by classifier.
+- R147 19:26 DESK RECORD: `02b` check ready YES tip `59ef8d48`; Grok read launched.
+- R148 19:44 DESK RECORD: Grok read finished, 8 findings to the brain.
+- R149 19:45 DESK RECORD: brain: all 8 HOLD; `02b` re-issued.
+- R150 19:58 DESK RECORD: `02b` re-build BUILT tip `69bf6082`; check r2 launched.
+- R151 20:03 DESK RECORD: `02b` check r2 ready YES, open 2 to the brain.
+- R152 20:03 DESK RECORD: brain: O1, O2 HOLD; build resumed at E3.
+- R153 20:15 DESK RECORD: `02b` T6 BUILT `2cc6330e`; check r3 launched.
+- R154 20:20 DESK RECORD: `02b` check r3 ready YES `2cc6330e`; Grok re-read launched.
+- R155 20:44 DESK RECORD: Grok re-read 2 findings: F2 HOLD, F1 DROP; build resumed at E3.
+- R156 20:56 DESK RECORD: `02b` T1 BUILT `3395ef68`; check r4 launched.
+- R157 21:01 DESK RECORD: `02b` check r4 ready YES `3395ef68`; deploy set 2d launched.
+- R158 21:39 DESK RECORD: DEPLOYED `deploy-2026-10-03-3` at `a8d8a848` (`02b`), smoke GREEN.
+- R159 21:39 DESK RECORD: brain told to write set 3 cards `03d`, `11b`, `07b`.
+- R160 21:40 DESK RECORD: desk REFRESH (233,735 tokens).
+- R161 21:41 DESK RECORD: wake-up `7be549a1`; startup 62,252; set 3 cards committed.
+- R162 21:42 DESK RECORD: `03d` card preflight launched.
+- R163 21:43 DESK RECORD: `03d` preflight NO, 5 fails.
+- R164 21:45 DESK RECORD: `03d` preflight r2 launched.
+- R165 21:46 DESK RECORD: `03d` preflight r2 NO, 2 text fails; desk fixed the card.
+- R166 21:47 DESK RECORD: build `03d` `6b8a158e` launched.
+- R167 22:18 DESK RECORD: `03d` build FAILED E3; card amended.
+- R168 22:18 DESK RECORD: build `03d` relaunched at E3 `20e6e91e`.
+- R169 22:45 DESK RECORD: `03d` BUILT tip `5ff16b1f`, RESTARTS radar.
+- R170 22:45 DESK RECORD: `03d` check `940d2e2c` launched.
+- R171 22:51 DESK RECORD: `03d` check pass 1 ready NO; TREE STATE and O1 to the brain.
+- R172 22:52 DESK RECORD: judge: TREE STATE `unchanged` holds; O1 keep (a).
+- R173 22:52 DESK RECORD: `03d` check r2 `88520aa9` launched.
+- R174 22:52 DESK RECORD: preflights `11b` `2e2c08ac`, `07b` `c5b32877` launched.
+- R175 22:54 DESK RECORD: `07b` preflight NO, 3 fails.
+- R176 22:54 DESK RECORD: `11b` preflight NO, 7 fails.
+- R177 10-04 13:14 DESK RECORD: METER STOP ~22:54; resumed; `11b` preflight r2 launched.
+- R178 10-04 13:15 DESK RECORD: `07b` preflight r2 NO, 2 text fails; desk fixed the card.
+- R179 10-04 13:16 DESK RECORD: `11b` preflight r2 YES; `03d` check r2 ready YES, tip `5ff16b1f`.
+- R180 10-04 13:16 DESK RECORD: builds `11b` `7d8feb43`, `07b` `de5eda2d` launched.
+- R181 10-04 13:17 DESK RECORD: Grok read of `03d`'s `DEPLOY-HUB.md` launched; `cp` into scratch denied.
+- R182 10-04 13:18 DESK RECORD: Grok read 1 stopped; one retry.
+- R183 10-04 13:18 DESK RECORD: Grok retry refused by the CLI; third run launched.
+- R184 10-04 13:35 DESK RECORD: Grok read of `03d` done, 4 findings.
+- R185 10-04 13:35 DESK RECORD: judge: all four HOLD → row P4; three narrow his sentences, open to him.
+- R186 10-04 13:36 HIS: the brain is a standing seat.
+- R187 10-04 13:36 HIS: short answers for all sessions, standing.
+- R188 10-04 13:36 HIS: at 500,000 tokens the brain asks the desk for its restart.
+- R189 10-04 13:36 HIS: brain starts on Opus 5.5; Fable 5.1 only for design.
+- R190 10-04 13:36 HIS: worktree cleanup is the desk's, never his ad-hoc command.
+- R191 10-04 13:41 HIS: past 500,000 every brain asks the desk for its restart, no word of his.
+- R192 10-04 13:42 DESK RECORD: brain successor `3d0c8427` launched.
+- R193 10-04 13:45 DESK RECORD: `11b` build `7d8feb43` FAILED E3.
+- R194 10-04 13:47 DESK RECORD: judge: `11b` row P3; build relaunched at E3.
+- R195 10-04 13:47 DESK RECORD: `11b` relaunched at E3 `f5b3f864`.
+- R196 10-04 13:53 HIS: standing — the judge may narrow his ruled wording on a gap a check names.
+- R197 10-04 13:53 HIS: `03d` P4 approved, all four clauses.
+- R198 10-04 13:53 DESK RECORD: `03d` build for row P4 `6c7b3472` launched.
+- R199 10-04 14:03 DESK RECORD: `07b` BUILT `1c702713`; P5 relaunch refused by the script (lock).
+- R200 10-04 14:03 DESK RECORD: desk REFRESH (≈241,000 tokens).
+- R201 10-04 14:04 DESK RECORD: desk `95966c9c` woke (65,745 tokens).
+- R202 10-04 14:10 DESK RECORD: `11b` BUILT `f5689418`.
+- R203 10-04 14:10 DESK RECORD: `11b` check `d84779d1` launched.
+- R204 10-04 14:10 DESK RECORD: `07b` build P5 `bd9ed1ed` launched.
+- R205 10-04 14:15 DESK RECORD: `11b` check ready YES at `f5689418`.
+- R206 10-04 14:21 DESK RECORD: `03d` BUILT `685b88d6` (P4).
+- R207 10-04 14:21 DESK RECORD: `03d` check r3 `b1be3572` launched.
+- R208 10-04 14:22 DESK RECORD: card `10` preflight `5b2ba923` launched.
+- R209 10-04 14:23 DESK RECORD: card `10` preflight NO, one FAIL; fixed.
+- R210 10-04 14:23 DESK RECORD: card `10` build `c4018248` launched.
+- R211 10-04 14:26 DESK RECORD: `03d` check r3 ready YES at `685b88d6`.
+- R212 10-04 14:32 DESK RECORD: `07b` BUILT `5c1d629f` (P5).
+- R213 10-04 14:32 DESK RECORD: `07b` check `52c3d43f` launched.
+- R214 10-04 14:38 DESK RECORD: `07b` check ready YES at `5c1d629f`.
+- R215 10-04 14:39 DESK RECORD: set 3 trial merge clean; TIP `15ba4b75 53fed116 525b5ae1 47a689a1`.
+- R216 10-04 14:40 HIS: deploy set 3 whenever the desk is ready, Sunday.
+- R217 10-04 14:41 DESK RECORD: set 3 card `39` and its preflight launched.
+- R218 10-04 14:43 DESK RECORD: set 3 deploy `4693097d` launched.
+- R219 10-04 15:01 HIS: S3's K3, F15 P2, D5 run on the new workflow.
+- R220 10-04 15:01 DESK RECORD: brain asked for S3 cards K3, F15 P2, D5.
+- R221 10-04 15:03 HIS: S3 builds launch only on set 3's main, after DEPLOYED.
+- R222 10-04 15:04 DESK RECORD: `10` BUILT `28276443`, 3 decisions; build relaunched at G9.
+- R223 10-04 15:06 DESK RECORD: brain wrote S3 cards `01`, `02`, `03`.
+- R224 10-04 15:09 HIS: asks why the awk and four-string A/B re-asks a ruled plan; A/B withdrawn.
+- R225 10-04 15:10 DESK RECORD: brain: `cut` `sort` `uniq` `awk` strings approved by R33.
+- R226 10-04 15:10 DESK RECORD: brain: `awk` with `system(`, `>` or `|` denied (row G11).
+- R227 10-04 15:11 DESK RECORD: set 3 deploy FAILED at gate G (c); nothing merged.
+- R228 10-04 15:11 DESK RECORD: card `10` build relaunch at G9 `5ac8ab17`.
+- R229 10-04 15:11 DESK RECORD: brain asked to judge set 3 gate DECISIONS 1–2.
+- R230 10-04 15:12 HIS: set 3 re-deploys whole with card `10` added.
+- R231 10-04 15:12 DESK RECORD: judge: owner `11b`, row P4, relaunch at E2.
+- R232 10-04 15:12 DESK RECORD: `11b` relaunch at E2 `4383cb11`.
+- R233 10-04 15:13 HIS: question on D5; D5 card re-cut stacked so S3 ships in one deploy.
+- R234 10-04 15:15 DESK RECORD: brain: S3 one chain `01`→`03`→`02`.
+- R235 10-04 15:16 DESK RECORD: `11b` FAILED E3; row P4b; relaunch at E3.
+- R236 10-04 15:26 HIS: only drafters write cards and prompts; brain judges only.
+- R237 10-04 15:27 DESK RECORD: desk REFRESH (≈221,000 tokens).
+- R238 10-04 15:28 DESK RECORD: desk `f66e0855` woke (66,853 tokens).
+- R239 10-04 15:30 HIS: S3 deploys when the chain is READY; drafter re-reads each S3 card.
+- R240 10-04 15:32 DESK RECORD: drafter `449cd4d7` launched.
+- R241 10-04 15:35 DESK RECORD: `10` BUILT `21b9e21f`, 11/11; check launched.
+- R242 10-04 15:35 DESK RECORD: `10` check `ed8e1d84` launched.
+- R243 10-04 15:38 DESK RECORD: S3 cards re-read, 10 rows fixed, 4 ASK DESK on D5.
+- R244 10-04 15:39 DESK RECORD: judge: D5-a..d KEEP.
+- R245 10-04 15:51 DESK RECORD: `11b` BUILT `396edb5a`, 6/6.
+- R246 10-04 15:52 DESK RECORD: `11b` check r2 `9bb8cbaa` launched.
+- R247 10-04 15:54 DESK RECORD: `10` check ready YES at `a2e19ceb`, 1 for him (O5).
+- R248 10-04 15:55 DESK RECORD: judge: `10` O1 KEEP; O4, O5, `awk -f` → card guard-b.
+- R249 10-04 15:56 DESK RECORD: drafter `cobalt-guard-b-draft` `19a83047` launched.
+- R250 10-04 15:57 DESK RECORD: `11b` check r2 ready YES at `396edb5a`, 1 ASK DESK.
+- R251 10-04 15:56 DESK RECORD: judge: `11b` r2 D1 KEEP; set 3 re-cut proceeds.
+- R252 10-04 15:58 DESK RECORD: guard-b card `06` DRAFTED, 4 ASK DESK.
+- R253 10-04 15:58 DESK RECORD: set 3 re-cut `07-deploy-set3b-card.md`, 5 jobs, tag `deploy-2026-10-04-2`.
+- R254 10-04 15:59 DESK RECORD: judge: guard-b D1, D2 CHANGE, D3 KEEP.
+- R255 10-04 15:59 DESK RECORD: drafter `set3b-proof-draft` `9f67dba7` launched.
+- R256 10-04 15:59 DESK RECORD: drafter `guard-b-judge-draft` `4a7fd23a` launched.
+- R257 10-04 16:01 DESK RECORD: guard-b judge text applied; set 3b proof filled, MIGRATIONS none.
+- R258 10-04 16:01 DESK RECORD: `set3b-preflight` `774f7956` launched.
+- R259 10-04 16:03 DESK RECORD: set 3b preflight ready YES, 9 checks.
+- R260 10-04 16:04 DESK RECORD: deploy `set3b-1004` `e8141896` launched.
+- R261 10-04 18:23 DESK RECORD: DEPLOYED `deploy-2026-10-04-2` `979ec797`, smoke GREEN; his word: retry bare, never chain.
+- R262 10-04 18:25 DESK RECORD: `k3-preflight` `537b62f0` launched.
+- R263 10-04 18:27 DESK RECORD: `01` preflight 1 fail void (K25 lives in `BUILD-HUB.md`).
+- R264 10-04 18:27 DESK RECORD: `01` K3 build `9a4156f3` launched.
+- R265 10-04 18:28 DESK RECORD: desk REFRESH (≈238,000 tokens); successor `ac71da64`.
+- R266 10-04 18:30 DESK RECORD: desk `ac71da64` up (87,406 tokens).
+- R267 10-04 18:31 DESK RECORD: `guard-b-preflight` `2b1194df` launched.
+- R268 10-04 18:32 DESK RECORD: `06` preflight 8 checks, 0 fails, ready YES.
+- R269 10-04 18:32 DESK RECORD: `06` guard-b build `2f34c108` launched.
+- R270 10-04 19:10 DESK RECORD: `06` BUILT tip `3c451126`, 4 of 4.
+- R271 10-04 19:11 DESK RECORD: `06` check `3c508a67` launched.
+- R272 10-04 19:26 DESK RECORD: `06` check ready YES tip `1f2c19a9`, decisions 2 to the brain.
+- R273 10-04 19:27 DESK RECORD: judge: guard-b O2 → B7, O3 → B8.
+- R274 10-04 19:27 DESK RECORD: `06` build B7 B8 `7f54515f` launched.
+- R275 10-04 19:41 DESK RECORD: guard-b BUILT `8e68decd`, 6 of 6.
+- R276 10-04 19:41 DESK RECORD: `06` check r2 `5ee21c23` launched.
+- R277 10-04 19:42 DESK RECORD: `01` K3 BUILT `50b93bd5`, 10 of 10, decisions 8.
+- R278 10-04 19:43 DESK RECORD: judge: K3 D1–D8 KEEP or fixed in the check.
+- R279 10-04 19:43 DESK RECORD: `01` K3 check `e59c16aa` launched.
+- R280 10-04 19:46 DESK RECORD: `06` check r2 ready YES tip `8e68decd`, decisions 2.
+- R281 10-04 19:47 DESK RECORD: judge: guard-b r2 O1 → B9, O2 → B10.
+- R282 10-04 19:47 DESK RECORD: `06` build B9 B10 `eaa958bd` launched.
+- R283 10-04 19:55 HIS: drop `awk` for good; amends R33.
+- R284 10-04 20:05 DESK RECORD: guard-b BUILT `c74edcd3`; ASK DESK 2, 3 accepted.
+- R285 10-04 20:06 DESK RECORD: `06` build B11 `4f8ae70c` launched.
+- R286 10-04 20:20 DESK RECORD: guard-b BUILT `3ecdd3dc`, 9 of 9.
+- R287 10-04 20:20 DESK RECORD: `06` check r3 `fd99983e` launched.
+- R288 10-04 20:27 DESK RECORD: K3 check `e59c16aa` FAILED W (archiver deadlock on `system.bars`); CONTINUE at 21:01.
+- R289 10-04 20:39 DESK RECORD: guard-b check r3 ready YES tip `47ec01c5`.
+- R290 10-04 21:01 DESK RECORD: `CONTINUE: W` sent to K3 check `e59c16aa`.
+- R291 10-04 21:01 DESK RECORD: nightly close `close-1003` `6bbbaa08` launched.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-03*"` = `deploy-2026-10-03-1`, `deploy-2026-10-03-2`, `deploy-2026-10-03-3`; mains `3fbe64fb` (R34), `44b29c63` (R138), `a8d8a848` (R158) and `979ec797` (R261, tag `deploy-2026-10-04-2`) as quoted from the desk rows.
+- PUSHES (L55): none recorded in the desk rows before this close.

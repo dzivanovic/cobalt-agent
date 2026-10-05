@@ -730,6 +730,31 @@ OFF-LADDER work of 2026-09-28 → 2026-10-02 (ruled, not on a ladder line; each 
 | Note daily stop (`06`) | BUILT-NOT-MERGED | 10-01 R15 / R16 / R23; 10-02 R150: check `ready NO`, house B needed → PASS-2 on 10-03. |
 | Brain (standing reviewer/judge seat) | DONE (open) | 09-30 R23; 10-02 R30 / R131 (restart ordered by him or the brain is approved). |
 
+### Status 2026-10-03
+S3 status block (ruled 09-19 R14); S3's fourth; the earlier `### Status` blocks above stay as written. Written by close hub `close-1003` for 10-03 alone from `reports/cto-2026-10-03.md` (§4 R1–R291; the file also holds the 10-04 rows through 21:01 ET, because no close ran 10-03); re-verified against the tree (L35): `git tag --list "deploy-2026-10-03*"` = `deploy-2026-10-03-1`, `-2`, `-3`; `git tag --list "deploy-2026-10-04*"` = `deploy-2026-10-04-2` (the set 3 deploy that failed gate G (c), R227, made no tag); `main` = `e3202c78`, 358 commits ahead of `origin/main`. Status only — scope, dates and order change by his ruling alone. Legend: DONE-LIVE · DONE-DARK · BUILT-NOT-MERGED · BUILDING · NOT STARTED.
+
+| S3 feature | Status | Evidence |
+|---|---|---|
+| F11 Fill recompute + fill/exit capture | DONE-LIVE | Unchanged since the 10-02 block (`deploy-2026-09-30-2`, `-3`). First live-morning proof not recorded. |
+| F22 Trade-note auto-creation | DONE-LIVE | Unchanged (`deploy-2026-09-30-2`, `-3`, `-4`). |
+| F14 DRC prefill / reconcile / DRC→mode | BUILDING | K3 (`01-drc-k3-card.md`) BUILT `50b93bd5`, 10 of 10 rows, decisions 8 judged KEEP/fixed in the check (10-04 R277, R278); check `e59c16aa` FAILED W: DeadlockDetected on `system.bars` in migration tests outside the diff, both runs in the 20:00–21:00 archiver window, KEPT, `CONTINUE: W` sent 21:01 (R288, R290); check report `drc-k3-check-2026-10-04.md` not yet DONE. D5 (`03-drc-d5-card.md`) NOT STARTED: card re-cut stacked on K3's checked tip, D5-a..d KEEP (R233, R234, R244); D5 build waits on the K3 check. |
+| F15 Prediction records | BUILDING | P1 live (unchanged). P2 (`02-f15-p2-card.md`) NOT STARTED: stacked on D5's BUILT tip (R234); cards re-read by a drafter, 10 rows fixed (R243). |
+
+**Stop date: 2026-10-07. S3: AT RISK — day 10 of 14 (10-03); the rows run to day 11, 10-04 21:01 ET.** Reason: K3 is built but its check has not passed (a transient archiver-window deadlock, R288); D5 and F15 P2 are not built and the chain `01`→`03`→`02` ships as one deploy, tonight before 04:00 or Monday 10-05 after the trading window, first wins (10-04 R239); the S3 smoke (a live morning from tap through DRC and replay) has not run and the first trading morning left is Monday 10-05. Three calendar days remain. The two days went to the script program and the S3 cards, not to S3 builds, by his rulings (10-04 R219, R221, R230). Watch items (not a ruling): the dev-DB lock (L76) still serialises with-DB builds; the 20:00–21:00 ET archiver window reds migration tests that touch `system.bars` (R288).
+
+OFF-LADDER work of 2026-10-03 (ruled, not on a ladder line; each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Lock-relief `01` + order-open-test `01b` (set 1) | DONE-LIVE | 10-02 R154 / R155 / R156; 10-03 R18, R29 (his deploy word). `deploy-2026-10-03-1` main `3fbe64fb`, smoke GREEN, RESTARTS none (R34). |
+| Rename-follow-up `04` + deploy-steps `20` (set 2c) | DONE-LIVE | 10-03 R29 chain; re-cut after `set2-1003` FAILED P7 (R133) and `set2b-1003` FAILED STEP-C (R136). `deploy-2026-10-03-2` main `44b29c63`, gate 3739/0 · 4581/0 · 146/0, RESTARTS radar, smoke GREEN (R138). |
+| Deploy-hub text `02b` (set 2d) | DONE-LIVE | 10-03 R135, R136, R149, R152, R155 (judge rows). `deploy-2026-10-03-3` main `a8d8a848`, docs only, smoke GREEN (R158). |
+| Adoption chain `03`/`02`/`03c` ported as `03d`, dev-rebuild `11b`, desk-tools `07b`, close-timer `05`, cobalt-guard `10` (set 3b) | DONE-LIVE | 10-03 R129 / R135; 10-04 R216, R230 (his: re-deploy whole with `10`). Set 3 first run FAILED gate G (c) (10-04 R227); re-cut `07-deploy-set3b-card.md` DEPLOYED `deploy-2026-10-04-2` main `979ec797`, smoke GREEN (10-04 R261). |
+| Cobalt-guard-b `06` (B1–B4, B7–B11) | BUILT-NOT-MERGED | 10-04 R248 / R283 (his: `awk` dropped). Check r3 ready YES tip `47ec01c5`, open 0 (R289); rides the S3 deploy. |
+| Worker-watch `09` and brain-hub `07` hooks | DONE-LIVE (code, in `07b`) | 10-03 R24, R77 (his: hook install in `~/.claude/settings.json`, at his install). The install itself is his and is not recorded as done. |
+| Harness mods (Telemetry, Flight Recorder; auto-handoff trial) | HIS STEP OWED | 10-03 R9 / R10 / R27: `claude plugin install` found nothing; his `/plugin` install, then the desk validates. |
+| Adoption hubs `02`, scripts `03`, `03b` devfix verbs | `02`, `03` shipped inside `03d`; `03b` NOT STARTED | 10-03 R44 (`03b` after `11`, `12`, `13` on main). |
+| Meter | stop 22:54 ET 10-03, weekly limit; reset 10-04 13:00 ET | 10-03 R106, R107 (his: keep going on the full plan); R177 resumed. |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)
