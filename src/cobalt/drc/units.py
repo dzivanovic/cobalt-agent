@@ -215,22 +215,22 @@ def _leg_text(shares: Any, price: Any, at: Optional[str]) -> str:
     return f"{shares}@{given(price)} {_clock(at)}"
 
 
-_STATES = {"match": "match", "das_only": "DAS exit with no Cobalt leg",
+_STATES = {"match": "match", "export_only": "DAS exit with no Cobalt leg",
            "cobalt_only": "Cobalt leg with no DAS execution", "entry_not_written": "no Cobalt entry leg"}
 
 
 def _diff_line(row: dict) -> str:
-    das, cob = row["das"], row["cobalt"]
-    das_text = "none" if das is None else _leg_text(das["shares"], das["price"], das["time"])
+    exp, cob = row["export"], row["cobalt"]
+    exp_text = "none" if exp is None else _leg_text(exp["shares"], exp["price"], exp["time"])
     cob_text = "none" if cob is None else (
         f"{_leg_text(cob['shares'], cob['price'], cob['at'])} (leg #{cob['leg_id']}, {cob['flag']}, {cob['source']})"
     )
     fields = row["fields"]
     state = (f"{', '.join(fields)} differ{'s' if len(fields) == 1 else ''}" if row["state"] == "mismatch"
              else _STATES[row["state"]])
-    held = (f" · held after: DAS {'—' if das is None else das['held_after']} · "
+    held = (f" · held after: DAS {'—' if exp is None else exp['held_after']} · "
             f"Cobalt {'—' if cob is None else cob['held_after']}")
-    return f"  seq {row['seq']} {row['kind']}: DAS {das_text} · Cobalt {cob_text} — {state}{held}"
+    return f"  seq {row['seq']} {row['kind']}: DAS {exp_text} · Cobalt {cob_text} — {state}{held}"
 
 
 def _history_line(h: dict) -> str:
@@ -268,7 +268,7 @@ def reconcile(day_row: dict, builds: Iterable[dict]) -> str:
         lines.extend(_history_line(h) for h in r["history"])
         lines.append(f"  {r['status']}")
         if r.get("running_after") is not None:
-            lines.append(f"  running after: {r['running_after']} · DAS position: {r['das_held']}")
+            lines.append(f"  running after: {r['running_after']} · DAS position: {r['export_held']}")
     if not lines:
         lines.append("no trade matched a card — nothing to reconcile")
     return "\n".join(lines + _unresolved(d))

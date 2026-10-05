@@ -56,3 +56,6 @@ What `plan_note` stores (L57):
 The writes: `build_date(check=True)` runs the plan's leg writes (`reconcile.apply`, at `deps.now()` or the session clock) between the plan and `record_build`, then plans the date again over the adjusted legs. `rebuild_notes` (`check=False`) and the dry run write no leg.
 
 This supersedes "no leg write (D5)" under `## What it never does`.
+
+## 2026-10-04 — drc-d5 check
+`_unresolved`'s stored read names `reconciled_cards` as `reconcile.reconciled_cards(applied)`: the cards whose reconcile succeeded (no refusal). Only those clear a carried item (check A4).

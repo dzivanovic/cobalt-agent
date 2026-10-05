@@ -16,7 +16,7 @@ unresolved(day, ...)                   the day's open items
 ## The diff (D5-1)
 - seq 0: the export's entries together (shares, the average entry at 4 places, the first entry's time) against the card's current entry leg.
 - seq k: the k-th export exit execution against Cobalt's exit leg of seq k.
-- Fields compared: shares, price, time (to the second). Each row has a state: `match`, `mismatch` (with its fields), `das_only` (an export exit with no Cobalt leg), `cobalt_only` (a Cobalt leg with no export execution) or `entry_not_written` (a card with no entry leg).
+- Fields compared: shares, price, time (to the second). Each row has a state: `match`, `mismatch` (with its fields), `export_only` (an export exit with no Cobalt leg), `cobalt_only` (a Cobalt leg with no export execution) or `entry_not_written` (a card with no entry leg).
 - Held after each leg, on both sides.
 - His rows (every leg not from the trading log) are listed as history.
 - Stored once as `build_trade.derived["reconcile"]`, with `inputs["reconcile"]` naming the trading-log `drc_imports` id and the leg ids read.
@@ -33,7 +33,7 @@ unresolved(day, ...)                   the day's open items
 - An item holds the card id, trade id, leg ids, the export rows, the refusal text and `code` verbatim, and `since`.
 - The items live on `build_day.derived["unresolved"]`. The note shows each as `unresolved: card <id> — <refusal>` in `drc-trades/reconcile` and in A31. The page shows it with K3-7's RESOLVE beside it.
 - Items are carried from the DRC the day's book starts from (its seed's `from_day`) and kept from the day's earlier build.
-- An item is cleared when this build reconciles its card, or when a current `resolve` row of the day names its trade (a restated resolve is not current).
+- An item is cleared when this build's reconcile of its card succeeds (no refusal), or when a current `resolve` row of the day names its trade (a restated resolve is not current). One item per card, trade, code and refusal text.
 
 ## Realized R (D5-4)
 - `cards.legs.realized_r` as `read_position` returns it, over the legs read after the writes. It is provisional while any current leg is estimated, and stored with `realized_r.1` and its legs.
@@ -41,3 +41,6 @@ unresolved(day, ...)                   the day's open items
 
 ## 2026-10-04 — DRC D5
 New module (card `prompts/2026-10-04/03-drc-d5-card.md`, rows D5-1 … D5-4). Tests: `tests/cobalt/test_drc_d5.py` (offline, through an in-memory legs door), `tests/cobalt/test_drc_d5_db.py` (the real writer, `migrated`), `tests/cobalt/test_drc_d5_experiments_db.py` (X11, RUN).
+
+## 2026-10-04 — drc-d5 check
+`unresolved` clears a carried item only on a SUCCESSFUL reconcile of its card (`reconciled_cards`: applied with no refusal), drops this build's own items for a resolved trade too, and folds items by (card, trade, code, refusal), so two D5-c items of one card are both carried. The diff keys are `export`, `export_only` and `export_held`, with no vendor name (L31). Check O2, A2, A4, A5.

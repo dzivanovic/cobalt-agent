@@ -37,3 +37,6 @@ Per matched trade:
 - `running after: <n> · DAS position: <n>` after a write.
 
 `no trade matched a card — nothing to reconcile` when none matched. Every unresolved item (`unresolved_line(item)`: `unresolved: card <id> — <refusal>`) follows, here and at the end of `open_items` (A31). This supersedes the table's `legs: not built` row.
+
+## 2026-10-04 — drc-d5 check
+`_diff_line` reads the stored keys `export` / `export_only` and `reconcile` reads `export_held` (no vendor name in an identifier, L31; check A2). The rendered words are unchanged.

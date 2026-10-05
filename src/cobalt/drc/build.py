@@ -472,7 +472,7 @@ def _unresolved(day: date, view: dict, stored: list[dict], derived_day: dict, st
     """D5-3 (R90): the day's open unresolved items and the read they come
     from (L57). Carried in from the DRC the day's book starts from (its
     stored `seed` row's `from_day`); kept from this day's earlier build;
-    cleared by this build's reconcile of the card or by a CURRENT `resolve`
+    cleared by this build's successful reconcile of the card or by a CURRENT `resolve`
     row of this day naming the trade (a restated one is not current —
     K3-4 (a)'s read)."""
     prior = (view.get("seed") or {}).get("from_day")
@@ -494,7 +494,7 @@ def _unresolved(day: date, view: dict, stored: list[dict], derived_day: dict, st
     items = reconcile.unresolved(day, carried_in=carried_in, same_day=same_day, applied=applied,
                                  resolved_trades=resolved)
     read = {"from_day": prior, "carried_in": len(carried_in), "same_day": len(same_day),
-            "resolved_trades": sorted(resolved), "reconciled_cards": sorted({a["card_id"] for a in applied.values()})}
+            "resolved_trades": sorted(resolved), "reconciled_cards": sorted(reconcile.reconciled_cards(applied))}
     return items, read
 
 

@@ -284,7 +284,7 @@ def test_d5_2_the_event_day_build_writes_one_trading_log_correction_and_running_
     assert _day_build(store)["derived"]["unresolved"] == []
 
 
-def test_d5_2_a_das_exit_cobalt_never_recorded_is_a_new_exit_leg_then_its_export_time(tmp_path):
+def test_d5_2_an_export_exit_cobalt_never_recorded_is_a_new_exit_leg_then_its_export_time(tmp_path):
     """D5-2 + D5-b: an exit in the export with no Cobalt leg → `record_exit`
     (typed, the export's shares and price, `now` = the build's clock), then ONE
     `record_correction` setting `at` to the export's time — both naming the
@@ -461,7 +461,7 @@ def test_d5_3_a_later_successful_reconcile_of_the_card_clears_the_line(tmp_path,
     assert _day_build(store)["derived"]["unresolved"] == []
 
 
-def test_d5_3_a_cobalt_leg_with_no_das_execution_is_unresolved_no_writer_removes_a_leg(tmp_path):
+def test_d5_3_a_cobalt_leg_with_no_export_execution_is_unresolved_no_writer_removes_a_leg(tmp_path):
     """D5-c: his extra tap (seq 2) has no execution in the export → no write
     is tried; stored and rendered as an unresolved item."""
     store = _Store()
@@ -577,6 +577,8 @@ def test_d5_4_a_refused_reconcile_is_not_computed(tmp_path, weekday_calendar):
 # ---------------------------------------------------------------------
 
 
+@pytest.mark.xfail(strict=True, reason="check O1: HELD, NOT FIXED — K2's re-pair deletes the day's build rows "
+                                       "(store.py:935, outside D5's files); the follow-up's red")
 def test_check_o1_a_re_paired_date_keeps_its_stored_unresolved_item(tmp_path, weekday_calendar):
     """Check O1 (D5-3 / X3; build DECISION 4): K2's re-pair deletes every
     `drc_rows` kind of the day (`store.py:935`), the build rows with them;

@@ -156,14 +156,14 @@ def _cobalt_rows(position: Optional[card_legs.Position]) -> list[dict]:
     return rows
 
 
-def _fields(das: dict, cob: dict) -> list[str]:
+def _fields(exp: dict, cob: dict) -> list[str]:
     out = []
-    if das["shares"] != cob["shares"]:
+    if exp["shares"] != cob["shares"]:
         out.append("shares")
-    if das["price"] is not None and _dec(das["price"]) != _dec(cob["price"]):
+    if exp["price"] is not None and _dec(exp["price"]) != _dec(cob["price"]):
         out.append("price")
-    das_at, cob_at = _when(das["time"]), _when(cob["at"])
-    if das_at is not None and das_at.replace(microsecond=0) != cob_at.replace(microsecond=0):
+    exp_at, cob_at = _when(exp["time"]), _when(cob["at"])
+    if exp_at is not None and exp_at.replace(microsecond=0) != cob_at.replace(microsecond=0):
         out.append("time")
     return out
 
@@ -184,23 +184,24 @@ def diff(trade: dict, position: Optional[card_legs.Position]) -> dict:
     current legs — shares, price, time; export exits with no Cobalt leg;
     Cobalt legs with no export execution; the held count after each leg on
     both sides. Pure; JSON-safe."""
-    das = {r["seq"]: r for r in _export_rows(trade)}
+    exp = {r["seq"]: r for r in _export_rows(trade)}
     cob = {r["seq"]: r for r in _cobalt_rows(position)}
     rows = []
-    for seq in sorted(set(das) | set(cob)):
-        d, c = das.get(seq), cob.get(seq)
+    for seq in sorted(set(exp) | set(cob)):
+        d, c = exp.get(seq), cob.get(seq)
         if d is not None and c is not None:
             fields = _fields(d, c)
             state = "mismatch" if fields else "match"
         elif d is not None:
-            fields, state = [], "entry_not_written" if d["kind"] == "entry" else "das_only"
+            fields, state = [], "entry_not_written" if d["kind"] == "entry" else "export_only"
         else:
             fields, state = [], "cobalt_only"
-        rows.append({"seq": seq, "kind": (d or c)["kind"], "state": state, "fields": fields, "das": d, "cobalt": c})
+        rows.append({"seq": seq, "kind": (d or c)["kind"], "state": state, "fields": fields, "export": d,
+                     "cobalt": c})
     return {
         "basis": None if position is None else position.running.basis,
         "running": None if position is None else position.running.shares,
-        "das_held": int(trade.get("held_shares") or 0),
+        "export_held": int(trade.get("held_shares") or 0),
         "rows": rows,
     }
 
@@ -216,19 +217,19 @@ def writes_for(d: dict) -> list[dict]:
     with no export execution (D5-c)."""
     out = []
     for r in d["rows"]:
-        das, cob = r["das"], r["cobalt"]
+        exp, cob = r["export"], r["cobalt"]
         if r["state"] == "mismatch":
             w: dict[str, Any] = {"op": "correction", "seq": r["seq"], "leg_id": cob["leg_id"]}
             if "shares" in r["fields"]:
-                w["shares"] = das["shares"]
+                w["shares"] = exp["shares"]
             if "price" in r["fields"]:
-                w["price"] = das["price"]
+                w["price"] = exp["price"]
             if "time" in r["fields"]:
-                w["at"] = das["time"]
+                w["at"] = exp["time"]
             out.append(w)
-        elif r["state"] == "das_only":
-            out.append({"op": "exit", "seq": r["seq"], "shares": das["shares"], "price": das["price"],
-                        "at": das["time"]})
+        elif r["state"] == "export_only":
+            out.append({"op": "exit", "seq": r["seq"], "shares": exp["shares"], "price": exp["price"],
+                        "at": exp["time"]})
     return out
 
 
@@ -243,7 +244,7 @@ def _item(work: dict, code: str, refusal: str) -> dict:
     return {
         "card_id": work["card_id"], "trade_id": work["trade_id"], "since": work["day"], "code": code,
         "refusal": refusal, "leg_ids": list(work["leg_ids"]),
-        "export_rows": [r["das"] for r in work["diff"]["rows"] if r["das"] is not None],
+        "export_rows": [r["export"] for r in work["diff"]["rows"] if r["export"] is not None],
     }
 
 
@@ -358,7 +359,7 @@ def for_trade(trade: dict, inputs: dict, card: Optional[dict], *, legs, check: b
         "written": [] if applied is None else applied["written"],
         "refused": None if applied is None else applied["refused"],
         "running_after": None if applied is None else d["running"],
-        "das_held": d["das_held"],
+        "export_held": d["export_held"],
     }
     work = None
     if check and not carried:
@@ -419,21 +420,32 @@ def realized_text(r: dict) -> str:
 # ---------------------------------------------------------------------
 
 
+def _key(item: dict) -> tuple:
+    return item["card_id"], item["trade_id"], item["code"], item["refusal"]
+
+
+def reconciled_cards(applied: dict[str, dict]) -> set[int]:
+    """The cards this build's reconcile SUCCEEDED for: applied with no
+    refusal (D5-3: a refused reconcile resolves nothing)."""
+    return {a["card_id"] for a in applied.values() if a["refused"] is None}
+
+
 def unresolved(day: date, *, carried_in: list[dict], same_day: list[dict], applied: dict[str, dict],
                resolved_trades: set[str]) -> list[dict]:
     """The items open after this build: this build's (its writes' refusals
     and D5-c) first; then the ones the prior DRC carried in and the ones this
-    day's earlier build stored — each dropped when this build reconciled its
-    card (a later reconcile replaces it) or a current `resolve` row of this
-    day names its trade. One item per (card, trade, code); the earliest
-    `since` kept."""
-    reconciled = {a["card_id"] for a in applied.values()}
-    out: list[dict] = [i for a in applied.values() for i in a["items"]]
+    day's earlier build stored — each dropped when this build's reconcile
+    of its card SUCCEEDED (no refusal: a later reconcile replaces it) or a
+    current `resolve` row of this day names its trade (this build's items
+    too). One item per (card, trade, code, refusal); the earliest `since`
+    kept."""
+    reconciled = reconciled_cards(applied)
+    out: list[dict] = [i for a in applied.values() for i in a["items"] if i["trade_id"] not in resolved_trades]
     for item in [*carried_in, *same_day]:
         if item["card_id"] in reconciled or item["trade_id"] in resolved_trades:
             continue
-        key = (item["card_id"], item["trade_id"], item["code"])
-        known = next((o for o in out if (o["card_id"], o["trade_id"], o["code"]) == key), None)
+        key = _key(item)
+        known = next((o for o in out if _key(o) == key), None)
         if known is None:
             out.append(dict(item))
         elif item["since"] < known["since"]:
@@ -444,5 +456,5 @@ def unresolved(day: date, *, carried_in: list[dict], same_day: list[dict], appli
 __all__ = [
     "ENTRY_NOT_WRITTEN", "LegsGateway", "MATCHED", "NOTHING_MATCHED", "NOT_WRITTEN_CARRIED", "NOT_WRITTEN_DRY",
     "NOT_WRITTEN_REPAIRED", "NO_READER", "NO_WRITER", "TRADING_LOG", "apply", "diff", "differs", "for_trade",
-    "realized", "realized_text", "unresolved", "writes_for",
+    "realized", "realized_text", "reconciled_cards", "unresolved", "writes_for",
 ]
