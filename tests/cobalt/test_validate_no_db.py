@@ -76,12 +76,16 @@ def test_no_db_still_fails_a_config_error_it_does_not_skip(monkeypatch, capsys):
 
 def test_the_parser_carries_the_flag(monkeypatch):
     seen: list[argparse.Namespace] = []
-    monkeypatch.setattr(cli, "_cmd_validate", seen.append)
+
+    def _fake_validate(args):
+        seen.append(args)
+
+    monkeypatch.setattr(cli, "_cmd_validate", _fake_validate)
     monkeypatch.setattr(sys, "argv", ["cobalt", "validate", "--no-db"])
     cli.main()
     assert len(seen) == 1
     assert seen[0].no_db is True
-    assert seen[0].func is seen.append
+    assert seen[0].func is _fake_validate
 
     seen.clear()
     monkeypatch.setattr(sys, "argv", ["cobalt", "validate"])
