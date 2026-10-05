@@ -543,8 +543,6 @@ def test_dry_run_prints_the_main_migration_listing_in_real_execution_order(desk)
     assert would.index(main_show) < would.index(first_head_show), would
 
 
-@pytest.mark.xfail(strict=True, reason="check O1 of card 21 F1, HELD, NOT FIXED: P2 still demands "
-                   "the check tip equal the code tip; the fix lies outside card 21's rows")
 def test_o1_a_fix_round_row_the_launcher_accepts_passes_p2(desk):
     # the check ran on alpha's code tip; a small fix then moved the code tip past it (R376, L75)
     checked = desk.tip["alpha"]
@@ -567,3 +565,61 @@ def test_o1_a_fix_round_row_the_launcher_accepts_passes_p2(desk):
     desk.commit("fix round")
     done = desk.run()
     assert "is not the row's code tip" not in last_line(done), done.stdout
+
+
+# ---- card 21 F2: the fix-round tip in P2 (check O1) ---------------------------------------------
+
+
+def fix_round(desk, *, cell: bool = True, fix_names: str = "fixed", checked: str = "alpha") -> None:
+    """Alpha's code tip moved past its check by a small fix (R376, L75); the SHIPS row carries a
+    `fix report` column. `cell` False leaves that cell empty; `fix_names` is the tip the fix
+    report's BUILT line names (`fixed` or `checked`); `checked` is the branch whose code tip the
+    check's stop line names (`alpha`: an ancestor of the fix; `beta`: not one)."""
+    checked_tip = desk.tip[checked]
+    old = desk.tip["alpha"]
+    git(desk.repo, "checkout", "-q", "ops/alpha")
+    (desk.repo / "src" / "alpha.py").write_text("alpha = 2\n")
+    git(desk.repo, "add", "-A")
+    git(desk.repo, "commit", "-q", "-m", "alpha small fix")
+    fixed = git(desk.repo, "rev-parse", "--short=8", "HEAD")
+    git(desk.repo, "checkout", "-q", "main")
+    fix_report = desk.reports / "alpha-fix-build.md"
+    named = fixed if fix_names == "fixed" else old
+    fix_report.write_text(f"# alpha fix round\n\nBUILT · job: alpha · tip: {named} | rows: 1 of 1\n")
+    desk.tip["alpha"], desk.head["alpha"] = fixed, fixed
+    text = desk.card_text()
+    text = text.replace("its stop line must carry |\n|---|---|---|---|---|---|\n",
+                        "its stop line must carry | fix report |\n|---|---|---|---|---|---|---|\n")
+    text = text.replace(f"`{fixed}` | `{desk.check['alpha']}` | `held unfixed: 0` and `ready: YES` |\n",
+                        f"`{fixed}` | `{desk.check['alpha']}` | `held unfixed: 0` and `ready: YES` | "
+                        + (f"`{fix_report}`" if cell else "") + " |\n")
+    text = text.replace(f"`{desk.check['beta']}` | `held unfixed: 0` and `ready: YES` |\n",
+                        f"`{desk.check['beta']}` | `held unfixed: 0` and `ready: YES` | |\n")
+    desk.card.write_text(text)
+    desk.check["alpha"].write_text(f"# check alpha\n\n{check_line(checked_tip)}\n")
+    desk.commit("fix round")
+
+
+def test_f2_a_fix_round_row_passes_p2_and_step0(desk):
+    fix_round(desk)
+    done = desk.run()
+    assert done.returncode == 0, done.stdout
+    assert last_line(done) == "STEP-0 OK — window: (iii)"
+    p2 = [ln for ln in done.stdout.splitlines() if ln.startswith("P2 check 1 ")]
+    assert p2 and p2[0].split(" · ")[-1].startswith("CHECK DONE"), done.stdout
+
+
+@pytest.mark.parametrize(
+    "kw",
+    [
+        pytest.param({"cell": False}, id="(a) fix report cell empty"),
+        pytest.param({"fix_names": "checked"}, id="(b) fix report BUILT for the checked tip"),
+        pytest.param({"checked": "beta"}, id="(c) checked tip not an ancestor"),
+    ],
+)
+def test_f2_a_fix_round_missing_one_proof_still_fails_p2(desk, kw):
+    fix_round(desk, **kw)
+    done = desk.run()
+    assert done.returncode == 1, done.stdout
+    assert last_line(done).startswith("FAILED STEP-0: P2 check 1 — "), done.stdout
+    assert "is not the row's code tip" in last_line(done), done.stdout
