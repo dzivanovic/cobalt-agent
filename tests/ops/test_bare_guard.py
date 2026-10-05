@@ -339,6 +339,7 @@ def test_g1_anything_else_compound_is_denied_with_the_resend_sentence(command, f
 
 
 AWK_FOUND = "`awk` with `system(`, `>` or `|` in its program"
+AWK_NOT_FILTER = "a pipe `|` with `awk`, not a read-only filter"
 AWK_DENIED = [
     "grep X f | awk '{print > \"f\"}'",
     "grep X f | awk '{system(\"x\")}'",
@@ -374,8 +375,9 @@ AWK_ALLOWED = [
 
 @pytest.mark.parametrize("kind", [None, "build"])
 @pytest.mark.parametrize("command", AWK_ALLOWED)
-def test_g11_any_other_awk_segment_stays_allowed(roots, kind, command):
-    assert_allowed(run(command, make_seat(roots, kind)))
+def test_b11_an_awk_segment_g11_passes_is_denied_as_no_filter(roots, kind, command):
+    # his ruling 10-04 R283 (card 06 B11): awk left G1's pipe list; these were card 10's controls
+    assert_resend(run(command, make_seat(roots, kind)), AWK_NOT_FILTER)
 
 
 def test_g1_one_command_stays_allowed_whatever_its_verb(roots):
@@ -1042,9 +1044,10 @@ def test_b3_an_awk_program_from_a_file_in_a_pipe_is_denied(roots):
         assert_resend(run(command, make_seat(roots, "build")), AWK_FILE_FOUND)
 
 
-def test_b3_an_awk_program_in_the_command_stays_allowed(roots):
-    assert_allowed(run("grep X f | awk '{print $1}'", make_seat(roots, "build")))
-    assert_allowed(run("grep X f | awk -F f '{print $1}'", make_seat(roots, "build")))
+def test_b3_b11_an_awk_program_in_the_command_is_denied_as_no_filter(roots):
+    # B3's control until his ruling 10-04 R283 (B11): an awk pipe segment is not a read-only filter
+    assert_resend(run("grep X f | awk '{print $1}'", make_seat(roots, "build")), AWK_NOT_FILTER)
+    assert_resend(run("grep X f | awk -F f '{print $1}'", make_seat(roots, "build")), AWK_NOT_FILTER)
 
 
 @pytest.mark.parametrize(
@@ -1122,7 +1125,7 @@ def test_b9_an_awk_program_that_reads_a_file_it_names_is_denied(roots, command):
     assert_denied(run(command, make_seat(roots, "build")), G3_ROUTE)
 
 
-@pytest.mark.parametrize("command", ["awk '{print $1}' f", "grep X f | awk '{print $1}'"])
+@pytest.mark.parametrize("command", ["awk '{print $1}' f"])
 def test_b9_an_awk_program_that_reads_only_its_operands_stays_allowed(roots, command):
     assert_allowed(run(command, make_seat(roots, "build")))
 
@@ -1185,3 +1188,29 @@ def test_b10_a_wrapper_in_a_pipe_stays_denied(roots, command):
     done = run(command, make_seat(roots, "build"))
     assert done.returncode == 2, done.stderr
     assert_resend(done, "not a read-only filter")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "grep X f | awk '{print $1}'",
+        "awk '{print $1}' f | head -1",
+        "grep X f | sort | awk 'NF > 1'",
+    ],
+)
+def test_b11_an_awk_pipe_segment_is_denied(roots, command):
+    done = run(command, make_seat(roots, "build"))
+    assert done.returncode == 2, done.stderr
+    assert_resend(done, AWK_NOT_FILTER)
+
+
+@pytest.mark.parametrize("command", ["grep X f | awk '{print > \"f\"}'", "grep X f | awk -f p.awk"])
+def test_b11_g11_and_b3_stay_as_defence_on_an_awk_segment(roots, command):
+    done = run(command, make_seat(roots, "build"))
+    assert_resend(done, AWK_NOT_FILTER)
+    assert_resend(done, AWK_FOUND if "-f" not in command else AWK_FILE_FOUND)
+
+
+@pytest.mark.parametrize("command", ["grep X f | cut -f2", "grep X f | sort -u | head -3"])
+def test_b11_a_pipe_without_awk_stays_allowed(roots, command):
+    assert_allowed(run(command, make_seat(roots, "build")))
