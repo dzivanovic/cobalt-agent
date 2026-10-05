@@ -3,9 +3,9 @@ LADDER: OFF-LADDER — cto-2026-10-02.md 2026-10-02 R47
 BRANCH: ops/launcher-fixround-1005
 WORKTREE: launcher-fixround-1005
 BASE: 5fb0ddf5
-TIP: c1746720
+TIP: dc2a80b4
 REPORT: /Users/cobalt/cobalt-wt/launcher-fixround-1005/docs/40 - DevDocs/reports/launcher-fixround-build-2026-10-05.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-checks-check-2026-10-05.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-checks-check-2026-10-05-r2.md
 HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B: as needed
 TREE STATE: unchanged
