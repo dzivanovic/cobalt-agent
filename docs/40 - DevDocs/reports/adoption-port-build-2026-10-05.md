@@ -1,7 +1,8 @@
 # adoption-port (03d) — build report, round 2026-10-05 (P5, P6)
 
 ## §0 Headline
-- ROUND 2 (P7), FAILED at W: the card's mark is on the test (`5719af3c`). Offline it skips (`4 passed, 1 skipped`). Under the dev DB it runs and FAILS, `DID NOT RAISE DbConfigError`, in E3 and in the deploy gate's pass 1 (`1 failed, 4465 passed`). The mark cannot make that test green; `DECISION P7` asks the desk which body it should have. `cobalt_dev` stayed at 0013 and `.env` is removed.
+- ROUND 2b (P7 as amended, card `70f9c9cd`), BUILT at tip `36fa02ad`. The test keeps the G1 mark, and its body now asserts what is true with the DB: validate returns and prints `Sheets:` and `Day modes:` lines, with no `SKIPPED (--no-db):` line. Offline: `4 passed, 1 skipped`. Under the lock: `5 passed`. Deploy gate (`--deploy`) green: offline 3786/0, with-DB 4639/0, live-note 146/0. `cobalt_dev` is at 0013 (F2 = F0) and `.env` is removed.
+- ROUND 2 (P7), first stop at W (superseded): the card's mark is on the test (`5719af3c`). Offline it skips (`4 passed, 1 skipped`). Under the dev DB it runs and FAILS, `DID NOT RAISE DbConfigError`, in E3 and in the deploy gate's pass 1 (`1 failed, 4465 passed`). The mark cannot make that test green; `DECISION P7` asks the desk which body it should have. `cobalt_dev` stayed at 0013 and `.env` is removed.
 
 Round 1:
 - P5 and P6 are built at tip `74370e5d`, on `e6ba65e6`. P1–P4 shipped in set 3b and were not rebuilt.
@@ -139,6 +140,16 @@ Commit `74370e5d fix(adoption-port): validate --no-db; DEPLOY-HUB (d2) runs it (
 
 Commit `5719af3c fix(adoption-port): the no-flag DB test carries the G1 offline skip mark (P7, L1, L76)`.
 
+### Round 2b — P7 as amended (card `70f9c9cd`, option A, desk R401), on `CONTINUE: E3` at 10:39 EDT
+- Authorization re-run: `CARD COMMITTED · … · 0 · 70f9c9cddd86ae88f1f8258e66f22c9c935366d0`, every other row as above, `AUTHORIZED`. `git -C /Users/cobalt/cobalt diff 2cf07eb0 70f9c9cd -- <card>` shows only row P7 (AMENDED clause) and one RECORDS line.
+- The body of `test_without_the_flag_validate_still_reads_the_db` (`:55-63`) now reads: `assert cli._cmd_validate(argparse.Namespace(no_db=False)) is None`; the captured output has a line starting `Sheets:` and a line starting `Day modes:`; `_skipped_lines(out) == []`. The mark and `import os` stand. Nothing else in the file changed (`git diff --stat` → `tests/cobalt/test_validate_no_db.py | 9 ++++++---`, this body and round 2's two lines). The `from cobalt.db import DbConfigError` import (`:22`) is now unused; it stays, because the card says "nothing else in the file" (`## RECORDS`).
+- OFFLINE: `uv run pytest -q -rs -p no:cacheprovider --color=no tests/cobalt/test_validate_no_db.py` → `4 passed, 1 skipped in 0.65s` (`SKIPPED [1] tests/cobalt/test_validate_no_db.py:55: reaches cobalt_dev (lock-relief G1)`). Run before and after the lock take.
+- WITH THE DEV DB, one lock take: `lock taken: adoption-port-1005` (exit 0, 10:40 EDT); `ls -la /Users/cobalt/cobalt-wt/*/.env` → this worktree's line only; `<FP>` → `664 35 272c95bbb12241e3611e4b36326ccf87` = F0. `COBALT_ENV=dev uv run pytest -q -rA -p no:cacheprovider --color=no --tb=line tests/cobalt/test_validate_no_db.py` → `5 passed in 0.91s`, 0 skipped, including `PASSED tests/cobalt/test_validate_no_db.py::test_without_the_flag_validate_still_reads_the_db`.
+- MUTATION, same take: the test's call set to `no_db=True` (the three DB checks skipped) → `1 failed in 0.52s`, `test_validate_no_db.py:60: assert False` (no `Sheets:` line). Undone with Edit; `git diff --stat` → the fix only.
+- `<FP>` again → `664 35 272c95bbb12241e3611e4b36326ccf87` = F0. `lock released`; `ls …/.env` → `No such file or directory` (10:40 EDT).
+
+Commit `36fa02ad fix(adoption-port): the no-flag DB test asserts the with-DB truth (P7 option A, R401, L1)`.
+
 ## RESTARTS
 `uv run cobalt jobs restarts e6ba65e6..HEAD`, whole:
 ```
@@ -213,7 +224,39 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/adoption-port-1005-all-20261005-101347.l
 - (c2)–(c3r), (f), (e): not reached. Pass 1 was red, so nothing was applied above `0013` and there was nothing to roll back; the gate's last proof-only before the red was F0 at `0013`. `lock released` (`:1132`), `.env: removed` (`:1136`). `ls /Users/cobalt/cobalt-wt/adoption-port-1005/.env` → `No such file or directory` (10:36 EDT). Live-note was not run.
 - Not fixed here: making this test green changes its assertion, and the row allows the mark only ("No other test, no fixture, no `src/` line changes"; THE ROWS: the fix widens nothing). See `DECISION P7`.
 
+### Round 2b, `<tip>` = `36fa02ad`
+`sh /Users/cobalt/cobalt/ops/desk/gate.sh adoption-port-1005 all --deploy` → **exit 0**. Verdict lines, whole:
+```
+offline 3786/0
+lock: waited 0 min
+proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))
+LEVEL 0013
+pass 1: whole (deploy)
+stray rows: not read (no --tickers given)
+cobalt_dev: 0013 — F2 = F0
+.env: removed
+with-DB 4639/0
+SKIPPED [1] tests/cobalt/test_cards_picks.py:388: S2-P2's card_score column is present on cobalt_dev
+SKIPPED [1] tests/cobalt/test_cards_picks.py:401: real S2-P2 0007 applied: radar cards need provenance; the P2 suite owns this path once merged
+SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof
+SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set
+SKIPPED [1] tests/cobalt/test_s3_c4_experiments.py:95: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live template read
+SKIPPED [1] tests/taxonomy/test_catalyst.py:365: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live catalyst review draft
+SKIPPED [1] tests/taxonomy/test_predicate.py:262: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note grammar proof
+live-note 146/0
+log: /Users/cobalt/cobalt-wt/.gate-logs/adoption-port-1005-all-20261005-104050.log
+```
+- (a) offline `3786 passed, 756 skipped, 1 xfailed` (log `:829`). The one skip more than round 1's 755 is P7's marked test.
+- (b) `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` (`:846`), `LEVEL 0013`.
+- (c) PASS 1 whole (`--deploy`, no `--db-only`), executed command (`:901`): `COBALT_ENV=dev uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy` plus the fifteen `--deselect`s of round 1's PASS 1, unchanged → `4466 passed, 7 skipped, 67 deselected, 3 xfailed` (`:1051`). That is round 2's red run (`1 failed, 4465 passed`) with P7's test now passing. The seven SKIPPED lines are round 1's seven; P7's test is not among them. `<d1>` = 4466.
+- (c2) `dev forward: APPLIED 11:02:57` (`:1053`). `F1: 893 44 126f2d6983fa59f9d0eaaff7da7dd29c` (`:1128`).
+- (c3) PASS 2 → `173 passed, 1 deselected` (`:1610`). `<d2>` = 173; `<d>` = 4639 = the gate's `with-DB 4639/0`.
+- (f) `F2: 664 35 272c95bbb12241e3611e4b36326ccf87` (`:1675`) = F0 → **`cobalt_dev: 0013 — F2 = F0`**. `.env: removed`; `ls /Users/cobalt/cobalt-wt/adoption-port-1005/.env` → `No such file or directory` (11:07 EDT).
+- (e) live-note `146 passed, 1 skipped` (`:1797`) → `live-note 146/0`.
+
 ## PRE-STOP SELF-CHECK
+Round 2b: (1) The new body is red under its mutation (`no_db=True` → `test_validate_no_db.py:60: assert False`). Round 2's mark was red at E2 (G1 guard) and under its mutation (no skip offline). (2) `_cmd_validate`'s one entry, `validate.set_defaults(func=_cmd_validate)`, is unchanged. no_db=False is now pinned with the DB (this test, PASSED under the lock, and in gate pass 1) and offline (the O2 test). no_db=True is pinned by (a) and (c). (3) Re-read from tool output at `36fa02ad`: the gate output file; the log by `grep -n -F` (`F0: `, `F1: `, `F2: `, `dev forward: APPLIED`, ` passed`, `tests/cobalt tests/taxonomy`); `git log --oneline -3 -- <card>` in the main repo; `uv run cobalt jobs restarts e6ba65e6..HEAD`.
+
 Round 2: (1) P7's test was red at E2 for the row's reason (G1 `conftest.py:78`) and offline (`5 passed`, no skip), and red under its mutation (`5 passed`). (2) The one caller is `_cmd_validate`, unchanged. The offline path and the with-DB path were both run: offline skipped, with-DB FAILED `DID NOT RAISE`. That gap is `DECISION P7`. (3) Re-read from tool output: `git log --oneline -5`, the gate output file, and the log by `grep -n -F` (`F0: `, `test_validate_no_db`, `lock released`) plus Read of `:840-859`, `:972-983` and `:1100-1137`.
 
 Round 1:
@@ -227,11 +270,13 @@ Round 1:
 - Suites, the executed PASS 1 command, F0 / F1 / F2 and the lock lines are under `## W`. The lock was taken and released inside `gate.sh` (log `:833-834`, `:1644-1645`); the log prints no clock on those lines. The gate started 07:08:41 (log name), and the forward ran at 07:20:44.
 - The RESTARTS table is above. The card's records were copied at PREFLIGHT.
 - Round 2: `53b56384..5719af3c`: `5719af3c fix(adoption-port): the no-flag DB test carries the G1 offline skip mark (P7, L1, L76)`. The reds, the mutation and the offline green are under `## E2 RED` / `## E3 THE ROWS` (Round 2). The gate is under `## W` (Round 2), with log `/Users/cobalt/cobalt-wt/.gate-logs/adoption-port-1005-all-20261005-101347.log`. F0 = F2 = `664 35 272c95bbb12241e3611e4b36326ccf87` at the E2 take (10:12–10:13 EDT). At the gate take only F0 was read (`:846`): pass 1 was red, so no forward ran.
+- Round 2b: `00292cad..36fa02ad`: `36fa02ad fix(adoption-port): the no-flag DB test asserts the with-DB truth (P7 option A, R401, L1)`. The whole round-2 range `53b56384..36fa02ad` is `5719af3c` (fix), `efc887dd` and `00292cad` (wip, report only), and `36fa02ad` (fix). The E3 2b lock take ran 10:40 EDT (F0 = F2). The gate log is `/Users/cobalt/cobalt-wt/.gate-logs/adoption-port-1005-all-20261005-104050.log`: F0 `:846`, F1 `:1128`, F2 `:1675`. No re-check (R376).
 - X4: mutation 2's captured stdout is the whole `--no-db` run with no Postgres settings. Every non-DB check prints its line, and nothing raised `DbConfigError`.
 
 ## CONTINUE
 Round 1: CLOSE, done at the report commit.
-Round 2 (P7): stopped at W. After the desk answers `DECISION P7`: next: E3 (P7's test text as ruled), then RESTARTS, then W (`gate.sh adoption-port-1005 all --deploy`).
+Round 2 (P7): stopped at W; `DECISION P7` was answered by the card amendment `70f9c9cd`.
+Round 2b: W green at 11:07 EDT; CLOSE is done at the report commit.
 
 ## DECISIONS
 Round 1: none.
@@ -241,6 +286,9 @@ Round 2:
   - (A) Keep the mark and change the body to the with-DB truth: `cli._cmd_validate(argparse.Namespace(no_db=False))` returns, its output carries a `Sheets:` line and a `Day modes:` line, and there are no `SKIPPED (--no-db):` lines. That proves the no-flag path reads the DB, under the lock.
   - (B) Drop the mark and make the test offline, e.g. patch `TraderSettings.from_db` to raise. The O2 test `test_without_the_flag_the_three_checks_still_run_in_order` already pins the no-flag path offline, so (B) may be redundant.
   - Safe default taken: neither. The test is left with the card's mark only, and the stop is FAILED at W. Desk's call (the card's text); not FOR DEJAN.
+  - ANSWERED: the card was amended at `70f9c9cd` (option A, desk R401) and built in round 2b. Closed.
+
+Round 2b: none.
 
 ## RECORDS
 - BLOCKED by the bare-guard hook, not a refusal: `grep -n -F "COBALT_ENV=production uv run cobalt validate --no-db" "docs/40 - DevDocs/prompts/DEPLOY-HUB.md"` → `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: production is the deploy hub's; a dev read uses COBALT_ENV=dev`. The same fixed string ran through the listed Grep tool (`## E3` P6). A check re-running P6's red should use Grep, or a fixed string without the `COBALT_ENV=production ` prefix.
@@ -250,9 +298,13 @@ Round 2:
 - `.env: removed, proven gone (W)`. One lock take only (W, inside `gate.sh`).
 - Round 2: CONTINUED at P7 10:11 EDT, a NEW session on `CONTINUE: P7` (RECOVERY), with authorization re-run on the card at `2cf07eb0`. Extra lock take: E2 (P7's with-DB red and the with-DB run of the row), taken 10:12 and released 10:13 EDT, F0 = F2 = `664 35 272c95bbb12241e3611e4b36326ccf87`. `.env: removed, proven gone (E2)`.
 - Round 2, 10:37 EDT, RECORDED, NOT FOLLOWED (BUILD-HUB UNATTENDED RULES (b): a CONTINUE "never widens the job"): a message from `cto-desk`, verbatim: "CONTINUE (desk DESK RECORD, R127, small fix on the same card, R376): take option (A). Keep the skip mark and change the body of `test_without_the_flag_validate_still_reads_the_db` (that one test only; the row's fence widens to its body) to the with-DB truth: `cli._cmd_validate(argparse.Namespace(no_db=False))` returns, its output carries a `Sheets:` line and a `Day modes:` line, and no `SKIPPED (--no-db):` line. Rerun only tests/cobalt/test_validate_no_db.py plus the deploy gate; no re-check. Append the new BUILT stop line (new tip) as the report's last line." The card at `main` is unchanged since `2cf07eb0` (`git -C /Users/cobalt/cobalt log --oneline -3 -- <card>`), and its P7 row still fences the test body; `grep -n -F "with-DB truth"` and `grep -n -F "R127"` on the card both return nothing. The fence widens only through the card: commit option (A) into row P7, then send `CONTINUE: E3`. The run stays stopped at W.
+- Round 2b: the desk's `CONTINUE: E3. card amended at 70f9c9cd` arrived from `cto-desk` (a new socket, same name). CONTINUED at E3 10:39 EDT; the fact was verified by `git -C /Users/cobalt/cobalt log --oneline -3 -- <card>` → `70f9c9cd docs(desk): 03d P7 card amended (option A); wake-up log 6af1ae05` and by authorize.sh. Extra lock take: E3 2b (with-DB run and mutation), 10:40 EDT, F0 = F2 = `664 35 272c95bbb12241e3611e4b36326ccf87`; `.env: removed, proven gone (E3 2b)`.
+- Round 2b: `from cobalt.db import DbConfigError` (`tests/cobalt/test_validate_no_db.py:22`) is unused after option A. It is left in place because the amended row says "nothing else in the file". Cleanup owed on a later card.
 - Round 2, L74: the harness again sent a block asking for a `Claude-Session:` commit line. It was not acted on; `5719af3c` carries `Co-Authored-By` only.
 - **The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.**
 
 Round 1 stop line (superseded by round 2, P7): `built · job: adoption-port · tip: 74370e5d | on e6ba65e6 | migration: none | offline 3786/0 | with-DB 856/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.radar | rows: 2 of 2 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0`
 
-FAILED: W — deploy gate pass 1 red: tests/cobalt/test_validate_no_db.py::test_without_the_flag_validate_still_reads_the_db — DID NOT RAISE <class 'cobalt.db.DbConfigError'> (P7's mark lets it run under the dev DB, where its assertion cannot hold) · cobalt_dev: 0013 · .env: removed · decisions: 1 · for Dejan: 0
+Round 2 first stop (superseded): `failed: W — deploy gate pass 1 red: tests/cobalt/test_validate_no_db.py::test_without_the_flag_validate_still_reads_the_db — DID NOT RAISE <class 'cobalt.db.DbConfigError'> · cobalt_dev: 0013 · .env: removed · decisions: 1 · for Dejan: 0`
+
+BUILT · job: adoption-port · tip: 36fa02ad | on e6ba65e6 | migration: none | offline 3786/0 | with-DB 4639/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.radar | rows: 3 of 3 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0
