@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — workflow set, cto-2026-10-05.md 2026-10-05 R387
 BRANCH: deploy/deploy-hub-text-1005
 WORKTREE: deploy-hub-text-1005
 BASE: main
-TIP: 6b939b00
+TIP: 2abb7d99
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-hub-text-1005.md
 RULINGS: 2026-10-05 R412
 TAG: deploy-2026-10-05-hub-text
