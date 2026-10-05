@@ -109,3 +109,8 @@ Without the flag, `validate` makes the same calls in the same order.
 DEPLOY-HUB STEP-G (d2) runs it from the gate, which has no `.env`
 (`reports/s3-d2-probe-2026-10-05.md`). Tests:
 `tests/cobalt/test_validate_no_db.py`.
+
+2026-10-05 (check, O2): `test_without_the_flag_the_three_checks_still_run_in_order`
+pins the no-flag path. The SheetMode coupling still exits 1 on an
+unmodelled sheet, and Day modes still runs after it on the same sheets
+object. The first no-flag test passed on the first DB read alone.
