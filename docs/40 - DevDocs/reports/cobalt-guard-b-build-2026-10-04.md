@@ -2,10 +2,10 @@
 
 ## §0 Headline
 
-- B1–B4 were built first (tip `3c451126`). On CONTINUE: E2 (19:27 ET), B7 and B8 were added on top of the check's O1 fix `1f2c19a9`. `sort --co…` is now read as `--compress-program`, and G3 now tests option values (`--x=.env`, `--files0-from .env`).
-- Tip `8e68decd` on `979ec797`. Offline 3782/0, `tests/ops` 1291/0, live-note 146/0. DB: none, so `cobalt_dev` was not taken. RESTARTS: none.
-- Every B7/B8 test is red under a mutation, and each control is red under one where it can be reached. Three ids the card called red on `1f2c19a9` were already green there.
-- Decisions: 1, the three ids that were already green (not for Dejan).
+- B1–B4 came first, then B7 and B8 (`8e68decd`). On CONTINUE: E2 (19:48 ET), B9 and B10 were added. B9 denies an awk program holding `getline`, `ARGV`, `ARGC`, `@include` or `@load` with G3's route. B10 judges a command led by `time nice env command nohup timeout stdbuf xargs` as the command it wraps, and denies the call when that command cannot be found.
+- Tip `c74edcd3` on `979ec797`. Offline 3782/0, `tests/ops` 1329/0, live-note 146/0. DB: none, so `cobalt_dev` was not taken. RESTARTS: none.
+- Every B9/B10 red was red on `8e68decd` for the row's reason, and every test was red under a mutation. Every card 10 and guard-b test is green.
+- Decisions: 3, none for Dejan. (1) Three B7/B8 ids were already green. (2) B9 yields to G11 where both deny. (3) B10 only adds denies, so a wrapper in a pipe stays denied.
 
 ## L74
 
@@ -106,6 +106,16 @@ The card, re-authorized at `14dbcd51` (`authorize.sh` → `AUTHORIZED`), now car
 - PASSED, contrary to the card's "each allowed on 1f2c19a9": `test_b7_…[sort --compress=sh f]` (B2(b)'s `com` rule already denies it), `test_b8_…[sort --files0-from .env]` (`.env` is a plain word, which G3 already tests), `test_b8_…[sort --files0-from=/x/wt/job/.env]` (`is_env` takes the basename of the whole word, `.env`). The ids are kept as the card writes them. Each is shown red under a mutation in E3. See `## DECISIONS` 1.
 - Controls PASS: `test_b7_sort_check_stays_allowed[sort --check f]`, `[sort -c f]`; `test_b8_an_option_value_not_naming_env_stays_allowed[sort --key=2 f]`, `[grep -n --include=*.py X .]`.
 
+### E2, third pass: B9 B10 (CONTINUE: E2, 19:48 ET)
+
+The card, re-authorized at `37e1e2c7` (`authorize.sh` → `AUTHORIZED`), now carries B9 and B10 (judge 19:47, desk row R281). HEAD was `776d0a13` (the report commit on `8e68decd`). Tests added at the end of `tests/ops/test_bare_guard.py`, committed `67039e11 wip(cobalt-guard-b): red — B9 B10 tests on 8e68decd`.
+
+`uv run pytest -q -rA -p no:cacheprovider --color=no --tb=line tests/ops/test_bare_guard.py -k "b9_ or b10_"` → `29 failed, 9 passed, 486 deselected`:
+- B9 `test_b9_an_awk_program_that_reads_a_file_it_names_is_denied`, 6 ids: the card's 3 (`awk 'BEGIN{while(getline l < ".env") print l}'`, `awk 'BEGIN{ARGV[1]=".e" "nv"; ARGC=2} {print}'`, `awk '@include "x"'`), plus `awk '@load "x"'`, `awk 'BEGIN{ARGC=1} {print}' f` and the pipe segment `grep X f | awk '{getline l < "y"; print l}'`. Each fails `test_bare_guard.py:268: AssertionError: (0, '')` `assert 0 == 2`. That is the row's reason: each is allowed on `8e68decd`.
+- B10 `test_b10_a_wrapped_command_is_judged_as_the_command_it_runs`, 18 ids: the card's 5 (`time sort -o out f`, `nice -n 5 sort -o out f`, `env A=1 sort -o out f`, `command sort -o out f`, `xargs awk -f p.awk`), plus `time nice sort -o out f`, `timeout 5 sort -o out f`, `timeout -s KILL 5 uniq f out`, `stdbuf -oL sort -o out f`, `nohup uniq f out`, `/usr/bin/env -i A=1 /usr/bin/sort -o out f`, `xargs -0 -n 1 awk '{print > "x"}'`, and six where the command cannot be found (`time`, `xargs`, `timeout 5`, `env A=1`, `env -S 'sort -o out f'`, `nice --foo sort f`). Each fails `test_bare_guard.py:1158` `assert 0 == 2`.
+- B10 `test_b10_every_guard_rule_judges_the_wrapped_command`, 5 ids: G3 `time cat /x/wt/job/.env`, `xargs sort --files0-from=.env`, `env A=1 awk 'BEGIN{getline l < "y"}'`; G4 `time git push`; G7 `nohup claude -p x`. Each fails `:268` `assert 0 == 2`.
+- Controls PASS: `test_b9_an_awk_program_that_reads_only_its_operands_stays_allowed` (`awk '{print $1}' f`, `grep X f | awk '{print $1}'`); `test_b10_a_wrapped_read_stays_allowed` (`time sort f` (the card's), `nice -n 5 sort f`, `env A=1 sort -u f`, `timeout 5 grep -n X f`, `time -p wc -l f`); `test_b10_a_wrapper_in_a_pipe_stays_denied` (`grep X f | time sort`, `grep -l X f | xargs grep -n Y`, each still denied as "not a read-only filter"; see `## DECISIONS` 3).
+
 ## E3 THE ROWS
 
 All in `ops/desk/bare-guard.py`. The rows were built in order, each followed by a run of `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/ops/test_bare_guard.py`:
@@ -140,6 +150,22 @@ THE MUTATIONS (Edit tool, each undone):
 - M8d (control: every `--name=value` taken as `.env`): `-k b8_` → `2 failed, 3 passed`. FAILED `[sort --key=2 f]` and `[grep -n --include=*.py X .]` at `:273` with `route: .env is never read; …` `assert 2 == 0`.
 After the mutations, `git diff` showed only the fix, and `tests/ops/test_bare_guard.py` → `486 passed`. Committed `8e68decd fix(cobalt-guard-b): --co is compress-program; G3 reads option values (B7 B8, L1 L72)`.
 
+### E3, third pass: B9 B10
+
+Both rows are in `ops/desk/bare-guard.py`.
+- B9: `awk_writes`' word walk became `awk_program(args)` (the words that can be program text), used by `awk_writes` and by a new `awk_reads` (`AWK_READS = ("getline", "ARGV", "ARGC", "@include", "@load")`). `g3_bash` denies with `ROUTE["G3"]` when `verb(ws) == "awk" and awk_reads(ws[1:])`. The first run, `uv run pytest -q -p no:cacheprovider --color=no --tb=no tests/ops/test_bare_guard.py`, gave `24 failed, 500 passed`: the 23 B10 reds plus card 10's `test_g11_an_awk_segment_that_can_write_is_denied[grep X f | awk '{ "date" | getline d; print d }']`, which now got G3's route instead of G11's sentence. Both deny. So B9 now yields when G11 also denies (`and not awk_writes(ws[1:])`; `## DECISIONS` 2). Rerun → `23 failed, 501 passed`, all of them B10.
+- B10: `WRAPPERS`, `WRAP_FLAGS`, `WRAP_VALUES` and `unwrap(ws)`. `unwrap` returns the words of the command a wrapper runs, past every wrapper's known options (a value option takes the next word, `=value`, or an attached value), `--`, NAME=value words and timeout's duration. Wrappers can nest. It returns None when an option is not known or no word is left. `g1`'s lone path now reads `ws = unwrap(words(text))`, replacing the NAME= strip loop, and None gives the resend sentence with `a wrapper whose command the guard cannot find`. `bash_rules` adds each wrapper segment's unwrapped words to `segs`, so G3, G4 and G7 judge them too. `pipe_problems` is unchanged. → `524 passed`.
+
+THE MUTATIONS (Edit tool, each undone):
+- M9 (undoes B9: `if False and …` in `g3_bash`): `-k "b9_ or g11_ or b10_every"` → `7 failed, 27 passed`. The 6 b9 ids and `env A=1 awk 'BEGIN{getline l < "y"}'` are red, first at `:268` `AssertionError: (0, '')` `assert 0 == 2`.
+- M9c (B9 without the G11 yield): `-k "b9_ or g11_"` → `1 failed, 28 passed`. FAILED `test_g11_…[grep X f | awk '{ "date" | getline d; print d }']` at `:360`: `AssertionError: route: .env is never read; …`. This pins the yield.
+- M9b (control: `"print"` added to `AWK_READS`): `-k b9_` → `2 failed, 6 passed`. Both b9 controls are red at `:273`, `assert 2 == 0`, with G3's route.
+- M10 (undoes B10: `if True or name not in WRAPPERS:` in `unwrap`): `-k b10_` → `23 failed, 7 passed`. Every B10 red id is red; first `:1158` `assert 0 == 2`.
+- M10b (the `bash_rules` addition off: `if u and False`): `-k b10_` → `5 failed, 25 passed`. Exactly the 5 `b10_every` ids are red, while the lone-command ids stay green through `g1`.
+- M10c (control: `return None` right after a wrapper is seen): `-k b10_a_wrapped_read` → `5 failed`. All 5 controls are red at `:273` with `… contains a wrapper whose command the guard cannot find. …` `assert 2 == 0`.
+- M10d (the pipe pin: `ws = unwrap(words(seg)) or words(seg)` in `pipe_problems`): `-k b10_a_wrapper_in_a_pipe` → `2 failed`, both at `:1186` `assert 0 == 2`.
+After the mutations, `git diff ops/desk/bare-guard.py` showed only the fix plus the header comment (B9, B10). `tests/ops/test_bare_guard.py` → `524 passed`. Committed `c74edcd3 fix(cobalt-guard-b): awk file-reading constructs are G3; a wrapped command is judged as itself (B9 B10, L1 L72)`.
+
 DevDocs line: `ops/desk/bare-guard.py` has no page under `docs/40 - DevDocs/cobalt/` (`Grep bare-guard` over `docs/40 - DevDocs` → reports and prompts only), and the card fences every file but its two (`## NOT IN THIS JOB`). No line written; see `## RECORDS`.
 
 ## RESTARTS
@@ -163,6 +189,15 @@ tests/ops/test_bare_guard.py	M	test/documentation; no resident	-
 RESTARTS: none
 ```
 
+At `c74edcd3` (third pass), `uv run cobalt jobs restarts 979ec797..HEAD`, whole:
+```
+path	change	rule	restart
+docs/40 - DevDocs/reports/cobalt-guard-b-build-2026-10-04.md	M	DOCS	-
+ops/desk/bare-guard.py	M	operator script; no Cobalt reader	-
+tests/ops/test_bare_guard.py	M	test/documentation; no resident	-
+RESTARTS: none
+```
+
 ## W THE THREE SUITES
 
 `<tip>` = `3c451126`. (a0) `git diff --name-only --no-renames 979ec797` → `ops/desk/bare-guard.py` · `tests/ops/test_bare_guard.py`. Every path starts with `ops/` or `tests/ops/`. **`cobalt_dev: not taken (DB: none — 2 paths)`**.
@@ -178,6 +213,12 @@ SECOND PASS, `<tip>` = `8e68decd`. (a0) `git diff --name-only --no-renames 979ec
 - `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `1291 passed, 1 xfailed, 15 warnings in 347.66s (0:05:47)`, exit 0. Added in this pass: `test_b7_a_two_letter_prefix_of_compress_program_is_denied` (3), `test_b7_sort_check_stays_allowed` (2), `test_b8_an_option_value_naming_env_is_denied` (3), `test_b8_an_option_value_not_naming_env_stays_allowed` (2).
 - With-DB: not run (DB: none). `ls /Users/cobalt/cobalt-wt/cobalt-guard-b-1004/.env` → `No such file or directory` (19:40 ET).
 
+THIRD PASS, `<tip>` = `c74edcd3`. (a0) `git diff --name-only --no-renames 979ec797` → `docs/40 - DevDocs/reports/cobalt-guard-b-build-2026-10-04.md` · `ops/desk/bare-guard.py` · `tests/ops/test_bare_guard.py`. Every path starts with `docs/`, `ops/` or `tests/ops/`. **`cobalt_dev: not taken (DB: none — 3 paths)`**.
+- (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh cobalt-guard-b-1004 offline` → exit 0, `offline 3782/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/cobalt-guard-b-1004-offline-20261004-195417.log`. Log line 828: `3782 passed, 755 skipped, 1 xfailed, 36 warnings in 596.81s (0:09:56)`.
+- (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh cobalt-guard-b-1004 livenote` → exit 0, `live-note 146/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/cobalt-guard-b-1004-livenote-20261004-195418.log`. Line 57: `146 passed, 1 skipped, 15 warnings in 28.20s`. Its only skip is line 56, `tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set`, and no skip names `COBALT_LIVE_VAULT_ROOT`.
+- `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `1329 passed, 1 xfailed, 15 warnings in 350.06s (0:05:50)`, exit 0. Added in this pass: `test_b9_an_awk_program_that_reads_a_file_it_names_is_denied` (6), `test_b9_an_awk_program_that_reads_only_its_operands_stays_allowed` (2), `test_b10_a_wrapped_command_is_judged_as_the_command_it_runs` (18), `test_b10_every_guard_rule_judges_the_wrapped_command` (5), `test_b10_a_wrapped_read_stays_allowed` (5), `test_b10_a_wrapper_in_a_pipe_stays_denied` (2).
+- With-DB: not run (DB: none). `ls /Users/cobalt/cobalt-wt/cobalt-guard-b-1004/.env` → `No such file or directory` (20:04 ET).
+
 ## PRE-STOP SELF-CHECK
 
 (1) "Every added or changed test shown RED for its named reason against a mutation or negative control; any test that stayed green was rewritten." Evidence: o5 red at E2 (`:268` `assert 0 == 2`) and under M1; o4 red at E2 (`:1017`) and under M2; the b2 controls red under M2c (4 of 7; `uniq -s2 -w3 f` is not reachable by that mutation, named above); b3 red at E2 (`:1039`) and under M3, its control green throughout; b4 red at E2 (`:1061`) and under M4, including the added probe-ending id (`:1063`); b4 controls green. No test stayed green under its row's mutation.
@@ -189,7 +230,29 @@ SECOND PASS (B7 B8, tip `8e68decd`):
 (2) Callers at tip: `grep -n -F "env_words(" ops/desk/bare-guard.py` → `616:def env_words(args):` · `630:` inside `g3_bash`. `grep -n -F "g3_bash(" …` → `628:` def · `671:    deny = g3_bash(segs)` (bash_rules; pinned by the b8 single-command ids; the pipe-segment path is the same loop at `:630`, pinned by o5's `grep -n X f | sort /x/wt/job/.env`). `grep -n -F "sort_writes(" …` → `409:` def · `443:` in `filter_problem` (lone path: the b7 ids; pipe path: o4's `grep X f | sort --compress=sh`). `ENV_READERS` at `:76` holds `sort cut uniq awk`. `grep -n -F "is_env(" …` → `606:` def · `630:` · `792:` (the Read tool's G3, whose input is a path, not words: B8 does not apply).
 (3) The greps above were re-run at `8e68decd`. RESTARTS ran at `8e68decd`. The suite lines were read from the gate logs with `grep -n -F`. The commit list is from `git log --oneline 979ec797..HEAD`.
 
+THIRD PASS (B9 B10, tip `c74edcd3`):
+(1) Every b9 id was red at E2 (`:268`) and again under M9. The b9 controls went red under M9b. The G11 yield is pinned by card 10's own test, red under M9c. Every b10 id of the first two B10 tests was red at E2 (`:1158` / `:268`) and again under M10. The 5 `b10_every` ids were red under M10b. The 5 b10 controls went red under M10c, and the 2 pipe pins went red under M10d. No test stayed green under its mutation.
+(2) Callers at the tip:
+- `grep -n -F "unwrap(" ops/desk/bare-guard.py` → `225:def unwrap(ws):` · `561:        ws = unwrap(words(text))` (g1's lone path, pinned by `b10_a_wrapped_command_…`: every wrapper, nesting, a path, NAME=, `=`/attached/next-word values, and six cannot-find shapes) · `749:    segs += [u for u in (unwrap(ws) for ws in segs if verb(ws) in WRAPPERS) if u]` (bash_rules → G3, G4, G7, pinned by `b10_every`).
+- A wrapped command inside a pipe goes through the same line 749, and its pipe segment is still denied by `pipe_problems` (pinned by `b10_a_wrapper_in_a_pipe`).
+- `grep -n -F "awk_reads(" …` → `461:` def · `706:` in `g3_bash` (lone, pipe segment and wrapped, pinned by b9 and `b10_every`).
+- `grep -n -F "awk_program(" …` → `439:` def · `458:` (`awk_writes`, pinned by every G11 test, all green) · `464:` (`awk_reads`).
+- `grep -n -F "WRAPPERS" …` → `83:` · `237:` · `749:`.
+- Seat kinds: B9 is G3 and kind-free. B10 follows each rule's own kinds, and the tests use the build seat, as G3, G4 and G7 apply to it.
+(3) The greps above were re-run at `c74edcd3`, and RESTARTS ran at `c74edcd3`. The suite lines were read from the gate logs with `grep -n -F`, and the `tests/ops` line with `tail -n 3` of its output. The commit list is from `git log --oneline 979ec797..HEAD`.
+
 ## FOR THE CHECK
+
+THIRD PASS, `979ec797..c74edcd3` adds (after the report commit `776d0a13`):
+- `67039e11 wip(cobalt-guard-b): red — B9 B10 tests on 8e68decd`
+- `c74edcd3 fix(cobalt-guard-b): awk file-reading constructs are G3; a wrapped command is judged as itself (B9 B10, L1 L72)`
+
+The reds, mutations and greens are in `### E2, third pass` and `### E3, third pass`. Suites: `offline 3782/0`, `tests/ops 1329 passed, 1 xfailed`, `live-note 146/0`. With-DB, F0/F1/F2 and the lock: not run (DB: none). The card's FOR THE CHECK: the B9 and B10 reds are green, and every earlier card 10 and guard-b test is green (`tests/ops/test_bare_guard.py` `524 passed`).
+
+Points for the check to weigh (not decisions):
+- B9 matches the five names as substrings of any program word, so `awk '{print "ARGV"}'` is over-denied.
+- B10's option lists are closed. An option outside them means the command cannot be found, and the call is denied: `xargs -a FILE` (it reads a file), `time -o FILE` (GNU time, it writes), `env -S` / `env -C`, and clustered flags such as `xargs -0r`.
+- `command -v` / `-V` are read as flags, so `command -v sort -o x` is judged as `sort -o x`.
 
 SECOND PASS, `979ec797..8e68decd` adds (after the report commit `a9fe5090` and the check's `f5815a0e wip(cobalt-guard-b): check red — O1` and `1f2c19a9 fix(cobalt-guard-b): a lone sort uniq awk by path or behind NAME= meets B4 (check O1)`):
 - `1218375f wip(cobalt-guard-b): red — B7 B8 tests on 1f2c19a9`
@@ -207,11 +270,13 @@ Points for the check to weigh (the card's own words, not decisions): B2's `o`-in
 
 ## CONTINUE
 
-next: none (built, second pass B7 B8 at `8e68decd`). The desk verifies the artifact and launches the check (`CHECK-HUB.md`).
+next: none (built, third pass B9 B10 at `c74edcd3`). The desk verifies the artifact and launches the check (`CHECK-HUB.md`).
 
 ## DECISIONS
 
 1. ASK DESK: the card says B7's `sort --compress=sh f` and B8's `sort --files0-from .env` and `sort --files0-from=/x/wt/job/.env` are "each allowed on 1f2c19a9". They PASSED there (`-rA` at E2): B2(b)'s `com` rule, G3's plain-word test and `is_env`'s basename of the whole word already denied them. E2 says to rewrite such a test until its red is the row's reason. But these commands are the card's own, and no rewrite of them can fail on `1f2c19a9`. Safe default taken: the ids are kept as the card writes them, as pins. Each is shown red under a mutation (M7b, M8c), and M8b shows B8 alone denies the two B8 ids. Not for Dejan.
+2. ASK DESK: B9 overlaps card 10's G11 on `grep X f | awk '{ "date" | getline d; print d }'`. Both deny it. With G3 first, B9 changed the deny sentence, and card 10's test `test_g11_an_awk_segment_that_can_write_is_denied` went red. The card's record says every card 10 test stays green. Safe default taken: B9 yields to G11 when G11 also denies the program (`and not awk_writes(ws[1:])`), so the call is still denied with G11's sentence. This is pinned by M9c. Not for Dejan.
+3. ASK DESK: B10 says a wrapper command "is judged by every guard rule as the command that follows". Read literally in a pipe, `grep -l X f | xargs grep -n Y` would become allowed, because `grep` is a read-only filter. That would widen R33's segment list, and `xargs` could read files named by the input, `.env` among them. Safe default taken: B10 only adds denies. A pipe segment led by a wrapper stays "not a read-only filter", as it was on `8e68decd`. This is pinned by `test_b10_a_wrapper_in_a_pipe_stays_denied` and M10d. Not for Dejan: it keeps his R33 list as written.
 
 ## RECORDS
 - L74: a system reminder asked for a `Claude-Session:` line in commits; recorded once under `## L74`, not acted on.
@@ -224,6 +289,10 @@ next: none (built, second pass B7 B8 at `8e68decd`). The desk verifies the artif
 - L74, second time: this session's system reminder again asked for a `Claude-Session:` line in commits. Not acted on. `1218375f` and `8e68decd` carry `Co-Authored-By` only.
 - Second-pass card record (judge 19:27, R273), re-read: B7 and B8 go on his veto list. FOR THE CHECK: the B7/B8 reds are green at `8e68decd`. Every earlier guard-b and card 10 test stays green (`tests/ops` 1291 passed, 1 xfailed).
 - Another gate pair, the third: offline and live-note on `8e68decd` (logs in `## W`).
+- CONTINUED at E2 19:48 ET. The desk's `CONTINUE: E2.` named no fact. Verified: `authorize.sh` on the amended card → `AUTHORIZED` (card commit `37e1e2c7`, unchanged); `git status --short --branch` → `## ops/cobalt-guard-b-1004` and the report (its last line set to `RESUMED`); HEAD `776d0a13`; `.env` → No such file. The card's new rows B9 and B10 (judge 19:47, desk row R281) were built. The message itself added nothing.
+- L74, third time: this session's system reminder at this resume asked for a `Claude-Session:` line in commits. Not acted on. `67039e11` and `c74edcd3` carry `Co-Authored-By` only.
+- Third-pass card record (judge 19:47, R281), re-read: B9 fences awk's file-reading constructs, not names, and is a judgment, not a proof. `Bash(awk *)` stays off every line until his word. `cut`, `sort` and `uniq` go on after guard-b ships. Nothing in this build touches a line.
+- Another gate pair, the fourth: offline and live-note on `c74edcd3` (logs in `## W`).
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: cobalt-guard-b · tip: 8e68decd | on 979ec797 | migration: none | offline 3782/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 6 of 6 | self-check: 3 of 3 | decisions: 1 · for Dejan: 0
+BUILT · job: cobalt-guard-b · tip: c74edcd3 | on 979ec797 | migration: none | offline 3782/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 8 of 8 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0
