@@ -541,3 +541,29 @@ def test_dry_run_prints_the_main_migration_listing_in_real_execution_order(desk)
         f"git -C {desk.repo} show {desk.head['alpha']}:src/cobalt/db_migrations/"
     )
     assert would.index(main_show) < would.index(first_head_show), would
+
+
+@pytest.mark.xfail(strict=True, reason="check O1 of card 21 F1, HELD, NOT FIXED: P2 still demands "
+                   "the check tip equal the code tip; the fix lies outside card 21's rows")
+def test_o1_a_fix_round_row_the_launcher_accepts_passes_p2(desk):
+    # the check ran on alpha's code tip; a small fix then moved the code tip past it (R376, L75)
+    checked = desk.tip["alpha"]
+    git(desk.repo, "checkout", "-q", "ops/alpha")
+    (desk.repo / "src" / "alpha.py").write_text("alpha = 2\n")
+    git(desk.repo, "add", "-A")
+    git(desk.repo, "commit", "-q", "-m", "alpha small fix")
+    fixed = git(desk.repo, "rev-parse", "--short=8", "HEAD")
+    git(desk.repo, "checkout", "-q", "main")
+    fix_report = desk.reports / "alpha-fix-build.md"
+    fix_report.write_text(f"# alpha fix round\n\nBUILT · job: alpha · tip: {fixed} | rows: 1 of 1\n")
+    desk.tip["alpha"], desk.head["alpha"] = fixed, fixed
+    text = desk.card_text()
+    text = text.replace("its stop line must carry |\n|---|---|---|---|---|---|\n",
+                        "its stop line must carry | fix report |\n|---|---|---|---|---|---|---|\n")
+    text = text.replace(f"`{fixed}` | `{desk.check['alpha']}` | `held unfixed: 0` and `ready: YES` |\n",
+                        f"`{fixed}` | `{desk.check['alpha']}` | `held unfixed: 0` and `ready: YES` | `{fix_report}` |\n")
+    desk.card.write_text(text)
+    desk.check["alpha"].write_text(f"# check alpha\n\n{check_line(checked)}\n")
+    desk.commit("fix round")
+    done = desk.run()
+    assert "is not the row's code tip" not in last_line(done), done.stdout
