@@ -386,6 +386,16 @@ def test_a_pass_2_check_with_a_src_commit_above_the_pass_1_tip_fails(job):
     assert last_line(done) == "FAILED PREFLIGHT: head"
 
 
+def test_f1_the_recorded_count_is_the_field_the_pattern_matched(job):
+    wt, repo, job_wt, base, card, env = job
+    last = GOOD_LAST.replace("rows: 1 of 1", "rows: 1 of 1 | note self-check: pending")
+    tip = built(job_wt, last.replace("self-check: 3 of 3", "self-check: 2 of 3"))
+    write_card(card, job_wt, base, tip)
+    done = preflight(env, "check", card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "report: self-check 2 of 3 (recorded)" in done.stdout.splitlines()
+
+
 def test_l3_an_accented_worktree_is_refused_under_a_utf8_locale(job):
     """Card 03 L3: `[!A-Za-z0-9._-]` admits `é` under en_US.UTF-8 unless the script runs LC_ALL=C.
     The directory exists: only the name is refused."""
