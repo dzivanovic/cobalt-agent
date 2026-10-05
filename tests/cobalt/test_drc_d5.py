@@ -694,3 +694,20 @@ def test_d5_3_current_resolve_clears_current_build_refusal():
     )
 
     assert got == []
+
+
+def test_d5_4_a_no_export_leg_is_realized_over_the_current_legs_not_called_refused(tmp_path):
+    """D5-4: D5-c stores an unresolved item and does not set `refused`.
+    R is `realized_r` over the post-reconcile legs (provisional while the
+    extra leg is estimated), not `the reconcile was refused`."""
+    store = _Store()
+    rows = [
+        _leg(201, DDD_CARD, 0, "entry", 50, "30.1000", _at(10, 0), stop="29.90"),
+        _leg(202, DDD_CARD, 1, "exit", 20, "30.5000", _at(10, 30), stop="29.90"),
+        _leg(203, DDD_CARD, 2, "exit", 10, "30.6000", _at(10, 40), source="panel", flag="estimated",
+             stop="29.90"),
+    ]
+    legs = _Legs([_ddd_card()], rows)
+    root, _ = _built(tmp_path, store, _record(store, D, trading=DAY1.read_bytes()), legs, [_ddd_card()])
+    line = _r_line(_trade_block(root, store, "DDD"))
+    assert line.endswith("· realized 1.30R (realized_r.1, provisional)"), line
