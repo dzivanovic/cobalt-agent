@@ -2,13 +2,13 @@ JOB: drc-d5
 LADDER: S3-P3 · F14
 BRANCH: drc/d5-reconcile-1004
 WORKTREE: drc-d5-1004
-BASE: «FILL: card 01 (K3) CHECKED tip, read from its check stop line once it reads ready YES, 8 hex»
+BASE: 3e40359a
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/drc-d5-1004/docs/40 - DevDocs/reports/drc-d5-build-2026-10-04.md
 CHECK REPORT:
 HOUSE B:
 TREE STATE: row T
-RULINGS: «FILL: 2026-09-22 R67 (DAS = reconcile truth, C2's one writer), 2026-09-22 R90 (R2-1 settled: B plus a resolve control), plus his S3 build approval row (10-04 R219 if it carries it)»
+RULINGS: 2026-10-03 R219
 
 ## ROWS
 
