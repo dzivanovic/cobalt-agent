@@ -605,6 +605,24 @@ def test_f1_a_fix_round_missing_one_proof_still_refuses(desk, case):
     assert not desk.gate_left()
 
 
+def test_f1_a_fix_report_edited_after_its_commit_still_refuses(desk):
+    checked, fixed = fix_round(desk)
+    report = desk.reports / "x-job-fix-build.md"
+    report.write_text(report.read_text() + "an edit after the commit\n" + desk.built_line(fixed) + "\n")
+    refused(desk, desk.launch("deploy", str(desk.deploy)), neither(checked, fixed))
+    assert not desk.gate_left()
+
+
+def test_f1_a_fix_report_outside_the_reports_folder_still_refuses(desk):
+    checked, fixed = fix_round(desk)
+    stray = desk.prompts / "x-job-fix-build.md"
+    stray.write_text((desk.reports / "x-job-fix-build.md").read_text())
+    desk.write_deploy(code_tip=fixed, head=fixed, fix=str(stray))
+    desk.commit("fix report outside reports")
+    refused(desk, desk.launch("deploy", str(desk.deploy)), neither(checked, fixed))
+    assert not desk.gate_left()
+
+
 @pytest.mark.parametrize("line_tip", ["code tip", "head"])
 def test_f1_a_card_of_todays_shape_passes_as_today(desk, line_tip):
     """No fix round: six columns, or the fix column with its cell empty (deploy-card.sh's rows)."""
