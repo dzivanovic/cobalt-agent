@@ -2,13 +2,13 @@ JOB: f15-p2
 LADDER: S3-P3 · F15
 BRANCH: f15/p2-replay-1004
 WORKTREE: f15-p2-1004
-BASE: «FILL: card 03 (D5) BUILT tip, read from its build stop line, 8 hex»
+BASE: 3c1f75b8
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/f15-p2-1004/docs/40 - DevDocs/reports/f15-p2-build-2026-10-04.md
 CHECK REPORT:
 HOUSE B:
 TREE STATE: row T
-RULINGS: «FILL: 2026-09-29 R145 (R2-1 (c) B, the decision grade), 2026-09-29 R146 (R2-5, the --json schema), plus his ONE L39 approval of P2 (10-04 R219 if it carries it)»
+RULINGS: 2026-10-03 R219
 
 ## ROWS
 
@@ -20,7 +20,7 @@ WHY: F15 P2 of `docs/30 - Design/F15-PREDICTION-RECORDS-FINAL-2026-09-29.md` (`#
 | P2-1 | `cobalt cards replay <card_id> [--json]`: per record by `seq`, MATCH / DIFF / NOT REPLAYABLE per FINAL §5 (`[F-08]` as amended by `[F-33]`, `[F-35]`; `replay_receipt` against the RECORDED scorer, `ReplayError` caught, the `formula_sha256` NOTE); the decision grade per R2-1 (c) B (the last record by `seq` whose `transition_id` < the id of the card's first `card_transitions` row with `from_state = 'WATCH'`; none while WATCH; derived, never stored); the ROW line against the last record by `seq`; exit 0 / 1 / 2 as §5; a manual card and a pre-F15 card (the audit-export line, `--run` = `system.radar_score.run_id` of its `radar_score_id`) exit 2 | the CHUNKS pass list, one test each: MATCH on create → tap → refresh → fill → exit → CLOSED; a tampered `output` → DIFF, exit 1; another version → NOT REPLAYABLE, exit 2; pre-F15 → exit 2 with the line; no receipt → NOT REPLAYABLE; manual → exit 2; arm-then-disarm picks the record before the ARM; ROW against the last record by `seq` (a card row whose numbers no record stores → `ROW: holds numbers no record stores`, exit 1); no decision grade while WATCH | `src/cobalt/cards/predictions.py`, `src/cobalt/cards/cli.py`, tests |
 | P2-2 | `--json`: the ONE object of `[F-44]` (R2-5 (5)), numbers as `published_numbers` strings, compare on `Decimal` | red: the object's keys and a DIFF record's `diff` list | `src/cobalt/cards/predictions.py`, `src/cobalt/cards/cli.py`, tests |
 | P2-3 | `predictions.corpus(since) -> list[CorpusRow]` and `cobalt cards corpus [--since YYYY-MM-DD] [--json]` per FINAL §6 `[F-09]` and the ONE read (`:337`–`:342`): one row per card — decision record, final record, record count; state; `realized_r` called, never restated (L3), with its provisional flag; the current `missed` row (`is_current`, `kind = 'card'`: `cf_r`, `mfe_r`, `excluded_by`); the `picks` row; `outcome_status` ∈ open / provisional / final / awaiting nightly replay; n per status printed first; no EV, no aggregate; `replay`'s OUTCOME line calls `corpus` for its one card | red: a CLOSED card with an estimated leg → provisional; an EXPIRED card with no missed row → `awaiting nightly replay`, never `missed: none`; the n-per-status line printed before the first row | `src/cobalt/cards/predictions.py`, `src/cobalt/cards/cli.py`, tests |
-| T | the tree state: every with-DB test of this build that needs `0021` / `0022` gets a `--deselect` in the pass-1 commands and its id in the pass-2 commands, in `BUILD-HUB.md` (c), (c3) and `DEPLOY-HUB.md` STEP-G, EXACTLY as (c) and (c3) executed (precedent: P1's `tests/cobalt/test_f15_p1_records_db.py` in pass 2) | `git diff <BASE> -- <both hub files>` shows only these ids added | `docs/40 - DevDocs/prompts/BUILD-HUB.md`, `docs/40 - DevDocs/prompts/DEPLOY-HUB.md` |
+| T | the tree state: every with-DB test of this build that needs `0021` / `0022` gets a `--deselect` in the pass-1 commands and its id in the pass-2 commands, in `BUILD-HUB.md` (c), (c3) and `DEPLOY-HUB.md` STEP-G, EXACTLY as (c) and (c3) executed (precedent: P1's `tests/cobalt/test_f15_p1_records_db.py` in pass 2) | `git diff <BASE> -- <both hub files>` shows only these ids added | `ops/desk/gate-lists.md` (PASS 1 and PASS 2 lists, as BUILD-HUB `## W` says; the hub files hold no id list) |
 | DOC | a paragraph dated the day the build runs, `<date> — F15 P2`, in the DevDocs pages of `cards/predictions.py` and `cards/cli.py` | — | `docs/40 - DevDocs/cobalt/cards/` |
 
 ## NOT IN THIS JOB
