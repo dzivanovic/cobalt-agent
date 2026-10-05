@@ -14,7 +14,7 @@ SET: workflow1
 
 | # | branch | code tip | branch head | check report | its stop line must carry |
 |---|---|---|---|---|---|
-| 1 | `ops/adoption-port-1005` | `36fa02ad` | `07655b9b` | `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/adoption-port-check-2026-10-05.md` | `held unfixed: 0` and `ready: YES` |
+| 1 | `ops/adoption-port-1005` | `36fa02ad` | `07655b9b` | `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/adoption-port-check-2026-10-05-r2.md` | `held unfixed: 0` and `ready: YES` |
 
 ## MARKERS
 - `grep -c -F "args.no_db" /Users/cobalt/cobalt/src/cobalt/cli.py` · before `0` · after `1`
