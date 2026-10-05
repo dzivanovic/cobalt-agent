@@ -41,8 +41,8 @@ A with-DB test that needs a level above `0013` is named in its row's `files` thr
 
 `## SHIPS` (deploy) — one row per branch of the set:
 
-| # | branch | code tip | branch head | check report | its stop line must carry |
-|---|---|---|---|---|---|
+| # | branch | code tip | branch head | check report | its stop line must carry | fix report |
+|---|---|---|---|---|---|---|
 
 The code tip is the `tip:` of the check's stop line (a fresh Opus pass may have moved it past the build's). The last column is `held unfixed: 0` and `ready: YES` for a check run on `CHECK-HUB.md`; a report of the old shape keeps its own literals.
 

@@ -712,6 +712,7 @@ ships_checked() {
         shead=$(ship_cell "$srow" 5)
         crep=$(ship_cell "$srow" 6)
         carry=$(printf '%s\n' "$srow" | awk -F'|' '{print $7}')
+        frep=$(ship_cell "$srow" 8)
         case "$sbranch" in
             ""|*[!A-Za-z0-9._/-]*|-*|*..*) refuse "incomplete card: SHIPS branch '$sbranch' is not a plain branch name" ;;
         esac
@@ -744,7 +745,26 @@ ships_checked() {
 $lits
 LITS
         ltip=$(printf '%s\n' "$clast" | sed -n 's/.* tip: \([0-9a-f]*\).*/\1/p')
-        [ -n "$ltip" ] && { [ "$ltip" = "$ctip" ] || [ "$ltip" = "$shead" ]; } \
+        # a small fix after the check (his R376, LAWS L75): the check's tip is an ancestor of the
+        # code tip, and the row's `fix report` is committed and ends `BUILT · … tip: <code tip>`
+        fixed_ok() {
+            [ -n "$frep" ] || return 1
+            case "$frep" in
+                "$REPORTS"/*.md) ;;
+                *) return 1 ;;
+            esac
+            [ -f "$frep" ] || return 1
+            [ -n "$(git -C "$REPO" log -1 --format=%H -- "$frep")" ] \
+                && git -C "$REPO" diff --quiet -- "$frep" \
+                && git -C "$REPO" diff --cached --quiet -- "$frep" || return 1
+            git -C "$REPO" merge-base --is-ancestor "$ltip" "$ctip" 2>/dev/null || return 1
+            flast=$(grep -v '^[[:space:]]*$' "$frep" | tail -n 1)
+            case "$flast" in
+                "BUILT ·"*"tip: $ctip"*) return 0 ;;
+            esac
+            return 1
+        }
+        [ -n "$ltip" ] && { [ "$ltip" = "$ctip" ] || [ "$ltip" = "$shead" ] || fixed_ok; } \
             || refuse "deploy $sbranch: the check's tip '$ltip' is neither the code tip $ctip nor the branch head $shead — the check is not clean: $clast"
         # P3: the branch head is the row's, the code tip its ancestor, and the head adds docs only
         bhead=$(git -C "$REPO" rev-parse --short=8 "$sbranch" 2>&1)
