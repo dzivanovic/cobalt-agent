@@ -63,3 +63,20 @@ line per unit, then `trade_note_path: <relative path>`. `market_reset` →
 nothing touched). Any other failure → `FAILED card <id>: trade note NOT
 written: <reason> — trade_note_path NULL` (exit non-zero). That includes a
 card not FILLED / CLOSED and a path another card holds.
+
+## 2026-10-04 — F15 P2: `cobalt cards replay <id> [--json]`, `cobalt cards corpus [--since YYYY-MM-DD] [--json]`
+
+Two read-only commands (FINAL §5, §6), no schema call, nothing written:
+- `replay` prints the header (`card <id> <ticker> <direction> · <origin> ·
+  <state> · scorer card_grade <versions> · <n> records`), one line per record
+  (`#k kind HH:MM:SS ET  MATCH | DIFF <field> recorded … → replayed … |
+  NOT REPLAYABLE — <reason>`, the decision grade marked `← decision grade
+  (last record before <state>)`, or `decision grade: none — the card is
+  still WATCH`), the formula NOTE when the source changed, `ROW: matches
+  record #k` or `ROW: holds numbers no record stores (…)`, `OUTCOME: …` (the
+  corpus row) and the count line. Exit 0 / 1 / 2 as §5; a card that does not
+  exist prints `REFUSED card <id>: no card <id>` and exits 2. `--json` prints
+  `ReplayReport.as_json()` (the `[F-44]` object) with the same exit.
+- `corpus` prints `corpus: n=<N> · open … · provisional … · final … ·
+  awaiting nightly replay …` first, then one line per card; `--json` prints
+  `{"counts": …, "rows": […]}`.

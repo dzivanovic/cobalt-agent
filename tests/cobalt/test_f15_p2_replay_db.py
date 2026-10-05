@@ -66,6 +66,13 @@ def _reads(world):
     return CardReads(world["cards"])
 
 
+def _tables(store):
+    """`0021` (legs: the corpus calls `realized_r` on `legs_current_v`) and
+    `0022` (records), inside the suite's rollback only (L76)."""
+    apply_0021(store)
+    apply_0022(store)
+
+
 def _write(world, card_id, *, like, **over):
     """A record through THE writer, on a copy of `like` (a stored record)."""
     from cobalt.cards.predictions import write_record
@@ -98,8 +105,7 @@ def test_create_tap_refresh_fill_exit_closed_replays_match_and_exits_0(world, mo
     from cobalt.cards.predictions import render_replay, replay
 
     cards = world["cards"]
-    apply_0021(cards)
-    apply_0022(cards)
+    _tables(cards)
     card_id = world["scan"](SCAN0).created[0]
     cards.tap_dot(card_id, "trail_fit", 8, settings=_settings(), enabled=_enabled(),
                   now=SCAN0 + timedelta(seconds=30))
@@ -134,7 +140,7 @@ def test_a_tampered_output_is_a_diff_and_exits_1(world):
     from cobalt.cards.predictions import replay
 
     cards = world["cards"]
-    apply_0022(cards)
+    _tables(cards)
     card_id = world["scan"](SCAN0).created[0]
     world["scan"](SCAN0 + timedelta(seconds=100))
     last = records_of(cards, card_id)[-1]
@@ -149,7 +155,7 @@ def test_a_record_at_another_scorer_version_is_not_replayable_and_exits_2(world)
     from cobalt.cards.predictions import replay
 
     cards = world["cards"]
-    apply_0022(cards)
+    _tables(cards)
     card_id = world["scan"](SCAN0).created[0]
     last = records_of(cards, card_id)[-1]
     _write(world, card_id, like=last, scorer_version="s0.9")
@@ -165,7 +171,7 @@ def test_a_record_whose_run_has_no_receipt_is_not_replayable(world):
     from test_radar_cards_db import POOL
 
     cards, radar = world["cards"], world["radar"]
-    apply_0022(cards)
+    _tables(cards)
     card_id = world["scan"](SCAN0).created[0]
     original = cards.write_receipt
 
@@ -188,7 +194,7 @@ def test_a_pre_f15_card_exits_2_with_the_audit_export_line(world, monkeypatch):
     from cobalt.cards.predictions import render_replay, replay
 
     cards = world["cards"]
-    apply_0022(cards)
+    _tables(cards)
     with monkeypatch.context() as before_f15:  # the code before F15's hook wrote no record
         before_f15.setattr(predictions, "write_record", lambda conn, **kw: None)
         first = world["scan"](SCAN0)
@@ -210,7 +216,7 @@ def test_a_manual_card_exits_2(world, monkeypatch):
     from cobalt.aset.store import AsetStore
     from cobalt.cards.predictions import render_replay, replay
 
-    apply_0022(world["cards"])
+    _tables(world["cards"])
     patch_daymode(monkeypatch)
     card_id = AsetStore("cobalt_dev").save(sizing())
     report = replay(card_id, reads=_reads(world))
@@ -223,7 +229,7 @@ def test_arm_then_disarm_picks_the_record_before_the_arm(world):
     from cobalt.cards.predictions import replay
 
     cards = world["cards"]
-    apply_0022(cards)
+    _tables(cards)
     card_id = world["scan"](SCAN0).created[0]
     cards.tap_dot(card_id, "trail_fit", 8, settings=_settings(), enabled=_enabled(),
                   now=SCAN0 + timedelta(seconds=30))
@@ -243,7 +249,7 @@ def test_row_against_the_last_record_by_seq_holds_numbers_no_record_stores(world
     from cobalt.cards.predictions import render_replay, replay
 
     cards = world["cards"]
-    apply_0022(cards)
+    _tables(cards)
     card_id = world["scan"](SCAN0).created[0]
     world["scan"](SCAN0 + timedelta(seconds=100))
     clean = replay(card_id, reads=_reads(world))
@@ -259,7 +265,7 @@ def test_no_decision_grade_while_watch(world):
     from cobalt.cards.predictions import render_replay, replay
 
     cards = world["cards"]
-    apply_0022(cards)
+    _tables(cards)
     card_id = world["scan"](SCAN0).created[0]
     report = replay(card_id, reads=_reads(world))
     assert report.decision_seq is None and report.outcome.decision_seq is None
@@ -278,7 +284,7 @@ def test_the_json_command_prints_the_one_object(world, capsys):
     from cobalt.cards import cli
 
     cards = world["cards"]
-    apply_0022(cards)
+    _tables(cards)
     card_id = world["scan"](SCAN0).created[0]
     cli.cmd_replay(argparse.Namespace(card_id=card_id, json=True))
     obj = json.loads(capsys.readouterr().out)
@@ -297,8 +303,7 @@ def test_the_corpus_lists_cards_with_records_status_first(world, capsys):
     from cobalt.cards.predictions import corpus
 
     cards = world["cards"]
-    apply_0021(cards)
-    apply_0022(cards)
+    _tables(cards)
     card_id = world["scan"](SCAN0).created[0]
     cards.transition(card_id, CardState.EXPIRED, actor=Actor.COBALT, reason="p2 expiry",
                      now=SCAN0 + timedelta(seconds=300))

@@ -9,6 +9,8 @@
     cobalt cards expire [--at ISO8601] [--dry-run]
     cobalt cards edges
     cobalt cards picks [--date YYYY-MM-DD] [--cutoff ISO8601]
+    cobalt cards replay <id> [--json]
+    cobalt cards corpus [--since YYYY-MM-DD] [--json]
 
 `edges` prints the edge table straight from `models.ALLOWED` — the
 DevDocs page is generated from it, so the wiki cannot drift from what the
@@ -184,6 +186,44 @@ def cmd_picks(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+def cmd_replay(args: argparse.Namespace) -> None:
+    """F15 P2 (FINAL §5): every prediction record of one card recomputed
+    against its recorded scorer, the decision grade, the ROW line and the
+    outcome. READ ONLY: no schema call, nothing written. Exit 0 / 1 / 2 as
+    §5; `--json` prints the ONE object of `[F-44]` with the same exit."""
+    import json
+
+    from . import predictions
+
+    try:
+        report = predictions.replay(args.card_id)
+    except predictions.ReplayRefused as refused:
+        print(f"REFUSED card {args.card_id}: {refused}")
+        raise SystemExit(2)
+    if args.json:
+        print(json.dumps(report.as_json(), indent=2, default=str))
+    else:
+        print(predictions.render_replay(report))
+    if report.exit:
+        raise SystemExit(report.exit)
+
+
+def cmd_corpus(args: argparse.Namespace) -> None:
+    """F15 P2 (FINAL §6): one row per card with prediction records, n per
+    outcome status printed first. READ ONLY; no EV, no aggregate."""
+    import json
+
+    from . import predictions
+
+    since = date.fromisoformat(args.since) if args.since else None
+    rows = predictions.corpus(since)
+    if args.json:
+        print(json.dumps({"counts": predictions.status_counts(rows),
+                          "rows": [r.model_dump(mode="json") for r in rows]}, indent=2, default=str))
+    else:
+        print(predictions.render_corpus(rows))
+
+
 def cmd_backfill(args: argparse.Namespace) -> None:
     # NOT `_store()`: that applies every migration including
     # `state SET NOT NULL`, which fails on precisely the un-backfilled
@@ -292,6 +332,20 @@ def add_parser(sub) -> None:
         help="ISO 8601 instant WITH offset; gaps before it print but do not fail (K6).",
     )
     picks.set_defaults(func=cmd_picks)
+
+    replay = csub.add_parser(
+        "replay", help="F15: recompute every prediction record of one card from stored inputs and diff. Read only."
+    )
+    replay.add_argument("card_id", type=int)
+    replay.add_argument("--json", action="store_true", help="The one [F-44] JSON object.")
+    replay.set_defaults(func=cmd_replay)
+
+    corpus = csub.add_parser(
+        "corpus", help="F15: one row per card with records — decision, final, realized R, missed, pick. Read only."
+    )
+    corpus.add_argument("--since", help="First ET creation date to include (YYYY-MM-DD).")
+    corpus.add_argument("--json", action="store_true", help="n per status and every row as JSON.")
+    corpus.set_defaults(func=cmd_corpus)
 
     trail = csub.add_parser(
         "trail-fit-draft",

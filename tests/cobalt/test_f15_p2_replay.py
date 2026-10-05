@@ -134,6 +134,20 @@ def test_numbers_compare_as_decimal_values_never_as_strings():
     assert output_diff(stored, None, _tap_output(conviction="0.71")) == ["conviction"]
 
 
+def test_an_engine_value_compares_at_its_columns_scale():
+    """`card_dots.engine_value NUMERIC(18, 6)`: a refresh record's dots are
+    re-read from it, so the full-precision recompute is compared at 6 dp —
+    and a difference at that scale is still a DIFF."""
+    from cobalt.cards.predictions import output_diff
+
+    dot = {"factor": "rvol", "engine_grade": 7, "na_reason": None, "trader_grade": None}
+    stored = {**_tap_output(), "dots": [{**dot, "engine_value": "5.240310"}]}
+    full = {**_tap_output(), "dots": [{**dot, "engine_value": "5.240309641446676554619604065"}]}
+    off = {**_tap_output(), "dots": [{**dot, "engine_value": "5.240311"}]}
+    assert output_diff(stored, None, full) == []
+    assert output_diff(stored, None, off) == ["dots"]
+
+
 def test_another_scorer_version_is_not_replayable_and_exits_2():
     from cobalt.cards.predictions import render_replay, replay
     from cobalt.radar.evaluate import EVALUATOR_VERSION
