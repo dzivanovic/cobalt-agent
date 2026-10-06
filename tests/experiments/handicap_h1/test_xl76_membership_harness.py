@@ -148,11 +148,12 @@ def test_xl76_2_3_harness_shape_at_step_1(monkeypatch):
         def close(self):
             return
 
-    started = time.monotonic()
-    conn = open_migrated(_apply, FORWARD)
-    apply_ms = int((time.monotonic() - started) * 1000)
+    conn = None
     applies = False
     try:
+        started = time.monotonic()
+        conn = open_migrated(_apply, FORWARD)
+        apply_ms = int((time.monotonic() - started) * 1000)
         counter = iter(range(10_000))
 
         def _connect(dbname, *, side, allow_prod=False):
@@ -166,8 +167,9 @@ def test_xl76_2_3_harness_shape_at_step_1(monkeypatch):
         applies = rows == []
         print(f"XL76: apply_ms={apply_ms}")
     finally:
-        conn.rollback()
-        conn.close()
+        if conn is not None:
+            conn.rollback()
+            conn.close()
         print(f"XL76: harness_applies={applies}")
     assert applies
 

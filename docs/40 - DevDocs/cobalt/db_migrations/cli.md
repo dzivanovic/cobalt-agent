@@ -382,3 +382,6 @@ Every `cobalt db migrate` run (forward, `--rollback`, `--proof-only`, production
 
 ## 2026-10-06 — flake-fix-2
 Test side only. Every with-DB test that runs `_apply` on its own `db.connect_migration` connection now opens it through `tests/cobalt/migration_retry.py` `open_migrated(apply, paths)`: open, `autocommit = False`, the FIRST apply, retried at most twice on `psycopg.errors.DeadlockDetected` (an autovacuum worker, `reports/second-writer-survey-2026-10-05.md`), each attempt a fresh connection, a failed one always closed, `migration retry <n>: DeadlockDetected` printed per retry. Later applies on the returned connection are not retried. Callers: `test_drc_store.py` `migrated`, `radar_migrated_support.py` `migrated_radar`, `test_radar_score_migration.py`, `test_p4_migrations.py`, `test_voice_store.py`, `test_archiver_migrations.py`, `test_stale_score_db.py`, `test_tenancy.py`, `test_radar_handicap_store.py`, `tests/experiments/handicap_h1/test_xl76_membership_harness.py`. `cli.py` is unchanged; `connect_migration` keeps its one `src/` caller.
+
+## 2026-10-06 — flake-fix-2 check (A2)
+`test_xl76_membership_harness.py` calls `open_migrated` inside its `try`, so a failed migration step still prints `XL76: harness_applies=False` (`test_migration_retry.py::test_xl76_reports_false_when_the_migration_step_fails`).
