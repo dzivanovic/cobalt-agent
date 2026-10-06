@@ -17,7 +17,8 @@
 # under the worktree root = worker; anything else is UNKNOWN, and an unknown seat meets only the
 # kind-free rules G1, G3, G6.
 #
-# THE RULES, first hit wins. Bash: G3 .env read · G2 production (not deploy) · G4 git shape
+# THE RULES, first hit wins. Bash: G3 .env read · G2 production (not deploy), but a marked db
+# query (R511) · G4 git shape
 # (build, check, devfix, worker) · G7 a second session (any worker kind, deploy too; G9: the
 # check's house call, a whole command opening with a CHECK-HUB.md line 10 house string, passes) ·
 # G1 one command or a read-only pipe (G11: an `awk` program with `system(`, `>` or `|` is not
@@ -741,7 +742,7 @@ def seat(event):
     else:
         kind = None
     card = read_card(card_path) if kind in HUBS.values() and card_path else read_card(None)
-    return {"kind": kind, "cwd": cwd, "wt": card["worktree"] or wt, "cwd wt": wt, "card": card}
+    return {"kind": kind, "cwd": cwd, "wt": card["worktree"] or wt, "cwd wt": wt, "card": card, "first": text}
 
 
 # ---- the Bash rules ------------------------------------------------------------------------
@@ -843,6 +844,53 @@ def git_problem(ws):
     return False
 
 
+# G2's one pass (his 2026-10-06 R511; card 21 guard-g2 R2): the stamp desk-launch.sh appends to a
+# prompt's launch message when its RULINGS row is proven, and the one production read it allows
+MARKER = re.compile(r" PROD-READ: 20\d\d-\d\d-\d\d R\d+")
+PROD_READ = ["COBALT_ENV=production", "uv", "run", "cobalt", "db", "query"]
+SIDES = ("user", "system")
+
+
+def marked_read(command, s):
+    """R2: True when (i) the seat's first user record holds the stamp and (ii) the command, read
+    by words(), opens `COBALT_ENV=production uv run cobalt db query`, its later words hold exactly
+    one `--prod` and no `--prod=`, every --side value (an argparse prefix of it too) is user or
+    system, and PROD matches no other word. The working tree is never read for this proof.
+    The words are the ones bash runs (check O1-O3, B1, B2): no backslash-newline (bash joins
+    it, words() keeps it), no `#` that words() reads as a comment (bash starts none inside a
+    word), no brace word that expands to an option or a PROD word, no option that names prod
+    but `--prod` itself (`--allow-prod`)."""
+    if not MARKER.search(s["first"]):
+        return False
+    if "\\\n" in command:
+        return False
+    ws = words(command)
+    try:
+        if shlex.split(unquote_ansi_c(command)) != ws:
+            return False
+    except ValueError:
+        return False
+    if ws[: len(PROD_READ)] != PROD_READ:
+        return False
+    rest = ws[len(PROD_READ):]
+    if rest.count("--prod") != 1 or any(w.startswith("--prod=") for w in rest):
+        return False
+    for k, w in enumerate(rest):
+        name, eq, value = w.partition("=")
+        if len(name) >= 3 and "--side".startswith(name):
+            if not eq:
+                value = rest[k + 1] if k + 1 < len(rest) else ""
+            if value not in SIDES:
+                return False
+    for w in rest:
+        alts = braces(w)
+        if alts != [w] and any(x.startswith("-") or PROD.search(x) for x in alts):
+            return False
+        if w != "--prod" and w.startswith("-") and "prod" in w.lower():
+            return False
+    return not any(PROD.search(w) for w in rest if w != "--prod")
+
+
 def bash_rules(command, s):
     found, quote, cuts = scan(command)
     segs = [words(x) for x in segments(command, cuts)]
@@ -853,7 +901,7 @@ def bash_rules(command, s):
     deny = g3_bash(segs)
     if deny:
         return "G3", deny
-    if kind is not None and kind != "deploy" and PROD.search(command):
+    if kind is not None and kind != "deploy" and PROD.search(command) and not marked_read(command, s):
         return "G2", ROUTE["G2"]
     if kind in GIT_SHAPED and any(git_problem(ws) for ws in segs):
         return "G4", ROUTE["G4"]
