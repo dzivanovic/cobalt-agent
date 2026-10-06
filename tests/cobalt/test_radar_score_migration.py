@@ -508,3 +508,24 @@ def test_card_checks_index_and_receipt_immutability_on_cobalt_dev():
     finally:
         conn.rollback()
         conn.close()
+
+
+@requires_db
+def test_the_migration_step_retries_a_first_deadlock(monkeypatch, capsys):
+    """flake-fix-2 F1: an autovacuum deadlock on the first `_apply` of the
+    test above (its own migration connection) is retried on a fresh
+    connection, not raised. The module's `_apply` is patched; the test
+    above is called here, so its raise is this test's own failure."""
+    real = globals()["_apply"]
+    seen = []
+
+    def fake(conn, paths):
+        seen.append(conn)
+        if len(seen) == 1:
+            raise psycopg.errors.DeadlockDetected("constructed by flake-fix-2 F1")
+        return real(conn, paths)
+
+    monkeypatch.setitem(globals(), "_apply", fake)
+    test_card_checks_index_and_receipt_immutability_on_cobalt_dev()
+    assert "migration retry 1: DeadlockDetected" in capsys.readouterr().out
+    assert seen[0] is not seen[1] and seen[0].closed
