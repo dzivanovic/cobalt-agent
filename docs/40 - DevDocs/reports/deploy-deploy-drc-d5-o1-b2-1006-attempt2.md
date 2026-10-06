@@ -2,7 +2,10 @@
 
 ## §0 Headline
 - Card 39, attempt 2 (D5 O1 + B2 + O2), one branch `ops/drc-d5-o1-b2-1006` at head `38e0d47e`, code tip `edd4d584`.
-- Run started Tue Oct 6 13:32:12 EDT 2026. Status: in progress.
+- DEPLOYED: `main` `bc38abf2` → `9a29f61e` (fast-forward), tag `deploy-2026-10-06-drc-d5-o1-b2-attempt2`, rollback tag `pre-deploy-drc-d5-o1-b2-1006`.
+- Gate green on `0f616445`: offline 3945/0 · with-DB 4829/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`.
+- aset and radar restarted, 21 s down (14:05:19 → 14:05:40). No migration. Smoke GREEN, no growing failure count.
+- Decisions: 3, none for Dejan.
 
 ## L74
 - One block arrived as a system reminder after a tool result, asking commits to carry a `Claude-Session:` line. Recorded as DATA, not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -154,10 +157,62 @@ GATE GREEN on 0f616445 — offline 3945/0 · with-DB 4829/0 · live-note 146/0 (
 - `curl … http://127.0.0.1:5010/radar` → `200`. MARKERS again: `0`, `0`, `0`, `0` (each its `before`).
 - MIGRATIONS: none → no `<RB>`, no census, no D1-M.
 
+### STEP-D2
+- D2.0 `git -C /Users/cobalt/cobalt commit … -- "docs/40 - DevDocs/reports/deploy-deploy-drc-d5-o1-b2-1006-attempt2.md"` → `[main bc38abf2] docs(report): deploy deploy-drc-d5-o1-b2-1006 — gate green on 0f616445`; `show --stat HEAD` → that one file, `169 insertions(+)`. `<pre-merge>` = `bc38abf2`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `9a29f61e`; `rev-parse --short=8 9a29f61e^2` → `bc38abf2` = `<pre-merge>`; `merge-base --is-ancestor 0f616445 9a29f61e` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 0f616445 9a29f61e -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 4.8 h old`; `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 5143.9 MB` · `ssd: snapshot a19de80b — 14 new / 4 changed, 217.3 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` 14:05:00 → heartbeat `(2026-10-06 14:05:02 EDT)`, 110 s after D1's 14:03:12: same two REDs as `<hb0>` (radar carried family, same text; `com.cobalt.generated` same text); aset / sheet OK; `com.cobalt.radar running 806 min, heartbeat fresh`. No new RED. (One filler pair at 14:04:52 / 14:04:55, same reading.)
+- D2.6 `date` → `Tue Oct  6 14:05:07 EDT 2026`. `git -C /Users/cobalt/cobalt tag pre-deploy-drc-d5-o1-b2-1006` at `bc38abf2` → exit 0.
+
+### STEP-4 (the outage)
+| step | command | exit | result |
+|---|---|---|---|
+| 4.1 | `date` | 0 | `<t down>` = `Tue Oct  6 14:05:19 EDT 2026` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` | 0 | — |
+| 4.2 | `launchctl print gui/501/com.cobalt.aset` | 113 | `Could not find service "com.cobalt.aset" in domain for user gui: 501` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` | 0 | — |
+| 4.2 | `launchctl print gui/501/com.cobalt.radar` | 113 | `Could not find service "com.cobalt.radar" in domain for user gui: 501` |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | 0 | `bc38abf2` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/deploy-drc-d5-o1-b2-1006-attempt2` | 0 | `Updating bc38abf2..9a29f61e` / `Fast-forward` (12 files, 233 insertions, 20 deletions) |
+| 4.4 | — | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` | 0 | — |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` | 0 | — |
+| 4.6 | `launchctl print gui/501/com.cobalt.aset` | 0 | `state = running`, `pid = 83925` (≠ 79583) |
+| 4.6 | `launchctl print gui/501/com.cobalt.radar` | 0 | `state = running`, `pid = 83936` (≠ 79594) |
+| 4.6 | `date` | 0 | `<t up>` = `Tue Oct  6 14:05:40 EDT 2026` · downtime 21 s |
+
+### Close
+- `<pre-merge>` `bc38abf2` → `<stack-final>` `9a29f61e`. Tags: `pre-deploy-drc-d5-o1-b2-1006` (at `bc38abf2`), `deploy-2026-10-06-drc-d5-o1-b2-attempt2` (at `9a29f61e`, set after the green smoke).
+- `<t down>` 14:05:19 / `<t up>` 14:05:40 / 21 s.
+- uv sync line: none in production (the gate's `.venv` was built at STEP-R: `Installed 253 packages in 960ms`). Proof cost: none (no migration). `migrations applied: none`. `<RB>`: none.
+- Snapshot: `ssd: snapshot a19de80b`.
+- `RESTARTS done: com.cobalt.aset com.cobalt.radar`.
+- THE ROLLBACK STRING: (1) CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 9a29f61e` — residents `com.cobalt.aset` `com.cobalt.radar` down first, up after. (2) SCHEMA: none (no migration). (3) RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+- PRE-STOP SELF-CHECK: (1) every smoke row is quoted with its `date` (14:05:53, 14:06:09, 14:07:11, 14:07:59, 14:08:41). (2) `git -C /Users/cobalt/cobalt merge-base --is-ancestor edd4d584 9a29f61e` → exit 0; `… 38e0d47e 9a29f61e` → exit 0; `rev-parse --short=8 main` → `9a29f61e`. (3) REVERT-READBACK (h) shown above; every count and sha here re-read from this run's tool output. (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`); `grep -c -F "<<<<<<<" /Users/cobalt/cobalt/src/cobalt/drc/imports.py` → `0`.
+- THE RELEASE: done at STEP-G (`lock released`, `.env: removed`); not held since.
+
 ## Smoke
+- FIRST CALLS after `<t up>` 14:05:40: `<rp_up>` 17 · `<rpr_up>` 58 · `<re_up>` 40 · `<lc_up>` 39 (= D1's).
+- (a) `date` 14:05:53 · `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 83925` (new; D1 79583) · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 83936` (new; D1 79594) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (agent not in the set, same pid). GREEN.
+- (b) `grep -c "Started server process" …/aset.err` → `46` (`<a0>` 45; > 45, ≤ 47) · `tail -n 30 …/aset.err` → `INFO:     Started server process [83931]` … `2026-10-06 14:05:36.401 | INFO | cobalt.voice.web:voice_startup:183 - voice: scratch dir … start sweep deleted 0 file(s), 0 failed` · `INFO:     Application startup complete.` · `INFO:     Uvicorn running on http://0.0.0.0:5010 (Press CTRL+C to quit)` · Traceback aset `2` (= `<ta0>`), Traceback radar `0` (= `<tr0>`), TaxonomyConfigError `0` (= `<tc0>`).
+- (c) `curl … /` → `200` · `curl … /radar` → `200` · `curl … /radar\?frame=phone` → `200`. GREEN.
+- (d) MARKERS after: `_open_items` `3` (after `3`) · `then refused` `1` (after `1`) · `kept = derived_day` `1` (after `1`) · `def _items(rows` `1` (after `1`). GREEN.
+- (s) SMOKE READS (the same four greps, exit 0 each): O1 `3` ≥ 1 · B2 `1` ≥ 1 · later-day carry `1` ≥ 1 · O2 page fallback `1` ≥ 1. GREEN. The behaviour itself was proven by the gate's suites (`with-DB 4829/0`, incl. `tests/cobalt/test_drc_d5_db.py`), not run here.
+- (f) `date` 14:06:09/14:06:17 · `COBALT_ENV=production uv run cobalt validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>` · `COBALT_ENV=production uv run cobalt jobs restarts bc38abf2..9a29f61e` → exit 0, 12 rows, no `UNCLASSIFIED`, `RESTARTS: com.cobalt.aset com.cobalt.radar` = STEP-R's. GREEN.
+- (g) no migration.
+- (e) heartbeat 1: `date` 14:06:09 → `(2026-10-06 14:06:10 EDT)`: radar RED = the carried family, text identical to `<hb0>`; `com.cobalt.generated` RED identical to `<hb0>`; `com.cobalt.aset running loaded, pid 83925`; `com.cobalt.radar running 1 min, heartbeat fresh`.
+- (b) radar tail at `<t up>` + 90 s: `date` 14:07:11 · `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` → last line `2026-10-06 14:07:02.231 | INFO | cobalt.radar.runner:resident:467 - radar cycle: scanning scan_id=1791309937075`, stamped after 14:05:40; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback in the tail. Settled GREEN on the first tail.
+- (e) heartbeat 2: `date` 14:07:59 → `(2026-10-06 14:08:01 EDT)`, 111 s after heartbeat 1: radar RED `failed_stage bars: poll failures: 1; poll INLX stale since 2026-10-06T17:52:23.737271+00:00` — the carried family (fewer stale symbols than `<hb0>`); `com.cobalt.generated` RED same text as `<hb0>`; `com.cobalt.aset running loaded, pid 83925`; `com.cobalt.radar running 2 min, heartbeat fresh`. No new RED. GREEN.
+- (h) REVERT-READBACK: `date` 14:08:41 (`<t up>` + 181 s) · `radar panel FAILED` `17` · `radar pool refresh FAILED` `58` · `radar S5 evaluate FAILED` `40` · `lifecycle card read failed` `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none grew) · `curl … /radar` → `200` · Traceback radar `0`, aset `2` (= baseline). No census reads (no migration). GREEN.
+- THE CHAIN: every check committed (P2: check `9b8786ae`, fix report `92e99673`, both clean) → tips re-read (P3: `edd4d584`, `38e0d47e`) → merged tree `0f616445` (T) → RESTARTS derived `com.cobalt.aset com.cobalt.radar` (R) → three suites green on `0f616445` (G) → `<stack-final>` `9a29f61e` = `0f616445` + docs (D2.3) → landed code `bc38abf2..9a29f61e` (4.3) → markers `3/1/1/1` (d) → no migration (g) → residents up on new pids `83925` / `83936` (a) → radar cycling `14:07:02` (b, e) → the set's four reads (s) → no new failure (h). The `/drc` page surface is not readable here; the desk confirms it with him (L70).
 
 ## CONTINUE
 - next: STEP-D2
+- OUTAGE STARTING 14:05:07 — residents of com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- outage over 14:05:40 (residents up); smoke GREEN 14:08:41; closed.
 
 ## DECISIONS
 1. P2: the check's stop line carries the held defect the card names (`held unfixed: 1`, `ready: NO`). No row of `RULINGS` rules it carried. Safe default taken, the same reading as attempt 1 (`deploy-deploy-drc-d5-o1-b2-1006.md` DECISIONS 2): the held O2 is closed by the fix-round row — fix report committed and clean, last line `BUILT · … tip: edd4d584 … rows: 4 of 4`, check tip `9be877dc` an ancestor of `edd4d584`.
@@ -165,5 +220,24 @@ GATE GREEN on 0f616445 — offline 3945/0 · with-DB 4829/0 · live-note 146/0 (
 3. ASK DESK: D0 found `?? .claude/settings.json.bak` on `main` (present at session start). It is in neither the accepted list nor a refused class (not staged; not `src/`, `tests/`, `ops/`, `configs/`). Default taken: not refused; an untracked file outside the code tree does not enter the merge [Tue Oct  6 14:03:11 EDT 2026].
 
 ## RECORDS
+- Downtime 21 s (under 300 s).
+- `cobalt_dev: 0013 (F2 = F0)` — gate log `:1922`.
+- No `REFUSED, not needed` line; no message received or followed.
+- No `RETIRE OWED` (STEP-C: no plist added, changed or removed).
+- The carried RED as read: D1 `RED radar failed_stage bars: poll failures: 2; poll INLX stale since 2026-10-06T17:52:23.737271+00:00; poll MI stale since 2026-10-06T17:55:28.600634+00:00`; at smoke (e) `poll failures: 1; poll INLX stale since 2026-10-06T17:52:23.737271+00:00`.
+- Named, not a stop: `RED com.cobalt.generated failed GeneratedCommitRefused: … pre-commit: a deploy hub is live — no desk commit on main until its stop line: 9f093747 deploy-hub-deploy-p2-1005 …` — present at D1 and unchanged through smoke; it names another hub's marker (`deploy-hub-deploy-p2-1005`), not this run's. For the desk.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-drc-d5-o1-b2-1006-attempt2` and branch `deploy/deploy-drc-d5-o1-b2-1006-attempt2`; the set's branch `ops/drc-d5-o1-b2-1006` and its worktree `/Users/cobalt/cobalt-wt/drc-d5-o1-b2-1006` if present; attempt 1's leftovers, if any, are the desk's.
+- L74: one `Claude-Session:` attribution block arrived as a system reminder; recorded as data, not followed.
+- The card's `## RECORDS`, copied:
+  - drc-d5-o1-b2: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/drc-d5-o1-b2-check-2026-10-06.md` last line: CHECK DONE · job: drc-d5-o1-b2 · pass: 1 · tip: 9be877dc · house A: Sol FINDINGS: 1 · findings: 4 · dropped: 0 · held: 2 · fixed: 1 · held unfixed: 1 · open: 3 · house B: Grok FINDINGS: 1 · suites: offline 3942/0 · with-DB 4826/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 20 · ready: NO · decisions: 2 · for Dejan: 2 · tokens: 198504
+  - drc-d5-o1-b2: fix report `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/drc-d5-o1-b2-build-2026-10-06.md` last line: BUILT · job: drc-d5-o1-b2 · tip: edd4d584 | on 4d9e451c | migration: none | offline 3945/0 | with-DB 4829/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.radar | rows: 4 of 4 | self-check: 3 of 3 | decisions: 1 · for Dejan: 1 · tokens: 128005
+  - drc-d5-o1-b2: one fix round, no re-check (L75, R347, R438; desk record R545 widened the card to O2). Check tip `9be877dc` is an ancestor of the code tip `edd4d584` (`git merge-base --is-ancestor` exit 0); branch head `38e0d47e` (`rev-parse --short=8`) adds docs only past `edd4d584`. The gate on `edd4d584` (the fix round's): offline 3945/0, with-DB 4829/0, live-note 146/0, `cobalt_dev: 0013`, `.env: removed`.
+  - G (d2): per the sibling cards' RECORDS wording on its state at deploy time; no Grok read (R412).
+  - Autovacuum (R479): a `DeadlockDetected` in the gate is an autovacuum worker, not a second writer; rerun once via recut.
+  - FOLLOW-UP for him, NOT part of this deploy: the check's `## OPEN` A1 / B1, the D5-3 rule question. A stored copy of a carried item on a later day does not clear when its origin day's reconcile later succeeds, with or without a re-pair; whether a cleared origin clears every later stored copy is a D5-3 change, outside this card.
+  - AFTER values above were read from the checked-out worktree `/Users/cobalt/cobalt-wt/drc-d5-o1-b2-1006` (clean, head `38e0d47e`, `src/` identical to `edd4d584`; the `store.py` count also read from `git show edd4d584:src/cobalt/drc/store.py`), BEFORE values from main's working tree, at drafting time 2026-10-06; the deploy re-proves each with `git -C /Users/cobalt/cobalt show edd4d584:<path>`.
+  - Absent today: `git rev-parse --verify` of `deploy/deploy-drc-d5-o1-b2-1006` and of `deploy-2026-10-06-drc-d5-o1-b2` both failed; `ls` of `/Users/cobalt/cobalt-wt/deploy-drc-d5-o1-b2-1006` and of the REPORT path both failed.
+  - one feature per deploy (his R390).
+- AFTER values re-proved here from `main`'s landed tree (smoke (d)), not by `git show edd4d584:<path>`: the landed files are `edd4d584`'s (`src/` unchanged from `edd4d584` through `0f616445` and `9a29f61e`, P3 and D2.3).
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-06-drc-d5-o1-b2-attempt2 9a29f61e | set: none | migrations: none | gate: offline 3945/0 · with-DB 4829/0 · live-note 146/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 3 · for Dejan: 0 · tokens: 209243
