@@ -1109,7 +1109,7 @@ def test_refresh_javascript_preserves_ladder_state_and_cursor_on_failure():
 # ---------------------------------------------------------------------
 
 TICK_HEAD = "async function tickLadder(){"
-TICK_GUARDS = (".tap-strip:not([hidden])", "details.terminal[open]", "activeElement", "defaultValue", "defaultChecked")
+TICK_GUARDS = (".tap-strip:not([hidden])", "details.terminal[open]", "activeElement", "tagName==='INPUT'", "defaultValue", "defaultChecked")
 TICK_KEEP = "const keep=items().filter(x=>x.classList.contains('open')).map(x=>x.dataset.cardId);"
 #: `refreshLadder` as BASE has it, byte for byte: the tick leaves it alone.
 REFRESH_LADDER_BODY = """
@@ -1141,6 +1141,8 @@ def _tick_stretches() -> tuple[str, str, str]:
 def test_tick_refreshes_the_ladder_on_the_pool_timer_without_reload():
     source = panel.PANEL_JS
     assert "window.setInterval(tickLadder,interval)" in source
+    assert source.count("window.setInterval(tickLadder,interval);") == 1
+    assert source.count("function tickLadder(") == 1
     body = _js_body(TICK_HEAD)
     for needed in ("fetch('/radar',{headers:{accept:'text/html'}})", "if(!response.ok){throw new Error('HTTP '+response.status);}",
                    "new DOMParser().parseFromString(await response.text(),'text/html')",
@@ -1182,7 +1184,7 @@ def test_a_failed_tick_is_said_on_the_ladder():
     assert "catch(error)" not in body
     caught = body[body.index("catch(failure){") :]
     caught = caught[: caught.index("finally{")]
-    for needed in ("classList.add('refresh-failed','stale-data')", "ladder-refresh-status", "prepend(",
+    for needed in ("classList.add('refresh-failed','stale-data')", "box.id='ladder-refresh-status'", "prepend(",
                    '<div class="refresh-failure"><b>REFRESH FAILED</b> · retained data is stale · ', "String(failure)"):
         assert needed in caught, needed
     assert "mirrorDegraded" not in body and "cursor=" not in body
@@ -1195,6 +1197,10 @@ def test_one_ladder_fetch_in_flight_and_none_while_a_post_sends():
     assert "finally{ladderInFlight=false;}" in body
     before, after, _ = _tick_stretches()
     assert "ladderInFlight" in before and "sending>0" in before and "sending>0" in after
+    # the first guard itself skips while a fetch is in flight, not only the assignment below it
+    first_return = before.index("{return;}")
+    assert "ladderInFlight" in before[before.rindex("if(", 0, first_return) : first_return]
+    assert " let sending=0;\n" in panel.PANEL_JS and " let ladderInFlight=false;\n" in panel.PANEL_JS
     post = _js_body("async function post(cardId,path,body){")
     assert post.index("status(cardId,'sending','pending'); sending+=1;") < post.index("try{")
     assert post.rstrip().endswith("finally{sending-=1;}")

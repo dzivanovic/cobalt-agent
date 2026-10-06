@@ -1526,8 +1526,9 @@ PANEL_JS = r"""
    items().forEach(x=>x.classList.toggle('open',keep.indexOf(x.dataset.cardId)>=0));
  }
  let sending=0;
+ let sendGeneration=0;
  async function post(cardId,path,body){
-   status(cardId,'sending','pending'); sending+=1;
+   status(cardId,'sending','pending'); sending+=1; sendGeneration+=1;
    try{
      const response=await fetch('/radar/card/'+cardId+path,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams(body||{})});
      const payload=await response.json().catch(()=>({}));
@@ -1578,6 +1579,7 @@ PANEL_JS = r"""
    const layer=document.getElementById('ladder-layer');
    const focused=document.activeElement;
    if(ladderInFlight||sending>0||layer.querySelector('.tap-strip:not([hidden])')||layer.querySelector('details.terminal[open]')||(focused&&focused.tagName==='INPUT'&&layer.contains(focused))||Array.from(layer.querySelectorAll('input')).some(x=>x.type==='checkbox'?x.checked!==x.defaultChecked:x.value!==x.defaultValue)){return;}
+   const seen=sendGeneration;
    ladderInFlight=true;
    try{
      const response=await fetch('/radar',{headers:{accept:'text/html'}});
@@ -1587,7 +1589,7 @@ PANEL_JS = r"""
      if(!next){throw new Error('the /radar page returned no ladder');}
      const now=document.getElementById('ladder-layer');
      const active=document.activeElement;
-     if(sending>0||now.querySelector('.tap-strip:not([hidden])')||now.querySelector('details.terminal[open]')||(active&&active.tagName==='INPUT'&&now.contains(active))||Array.from(now.querySelectorAll('input')).some(x=>x.type==='checkbox'?x.checked!==x.defaultChecked:x.value!==x.defaultValue)){return;}
+     if(sending>0||sendGeneration!==seen||now.querySelector('.tap-strip:not([hidden])')||now.querySelector('details.terminal[open]')||(active&&active.tagName==='INPUT'&&now.contains(active))||Array.from(now.querySelectorAll('input')).some(x=>x.type==='checkbox'?x.checked!==x.defaultChecked:x.value!==x.defaultValue)){return;}
      const keep=items().filter(x=>x.classList.contains('open')).map(x=>x.dataset.cardId);
      now.replaceWith(next);
      items().forEach(x=>x.classList.toggle('open',keep.indexOf(x.dataset.cardId)>=0));
