@@ -239,6 +239,8 @@ ONE read-only method, `superseded_stated_ids(ids) -> set[int]`: the ids among `i
 ## 2026-10-06 — flake-fix
 The `migrated` fixture in `tests/cobalt/test_drc_store.py` now retries its migration step (open `connect_migration`, `autocommit = False`, `_apply(conn, FORWARD)`) on `psycopg.errors.DeadlockDetected`. It retries at most twice, each time on a fresh connection, after rolling back and closing the failed one. Each retry prints `migration retry <n>: DeadlockDetected`. Any other error, or a third deadlock, is raised as before. The cause is an autovacuum worker on `cobalt_dev`. No `src/` change.
 
+**2026-10-06 — flake-fix check (H2, H3).** The open (`connect_migration`) now sits inside the retried step too, so a deadlock while opening is retried as well. A failed attempt's connection is closed even when its `rollback()` raises.
+
 ## Tests
 `tests/cobalt/test_drc_store.py` has an offline half (the SQL, the
 registry, the placement map, the one-writer grep). Its with-DB half
