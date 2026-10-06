@@ -425,6 +425,61 @@ def test_the_migrated_fixture_does_not_retry_another_error(undefined_table_first
 
 
 @requires_db
+def test_the_migrated_fixture_retries_when_opening_the_first_attempt_deadlocks(
+    monkeypatch, request, capsys
+):
+    real_connect_migration = db.connect_migration
+    calls = 0
+
+    def deadlock_first_open(dbname, *, allow_prod=False):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise psycopg.errors.DeadlockDetected(
+                "constructed while opening the first migration attempt"
+            )
+        return real_connect_migration(dbname, allow_prod=allow_prod)
+
+    monkeypatch.setattr(db, "connect_migration", deadlock_first_open)
+    conn = request.getfixturevalue("migrated")
+
+    assert calls == 2
+    assert "migration retry 1: DeadlockDetected" in capsys.readouterr().out
+    assert conn.execute(
+        "SELECT to_regclass(%s)", (f'"user".{TABLES[0]}',)
+    ).fetchone()[0]
+
+
+@requires_db
+def test_the_migrated_fixture_closes_a_failed_attempt_when_rollback_fails(
+    monkeypatch, request
+):
+    class RollbackFailingConnection:
+        def __init__(self):
+            self.autocommit = True
+            self.closed = False
+
+        def rollback(self):
+            raise RuntimeError("constructed rollback failure")
+
+        def close(self):
+            self.closed = True
+
+    conn = RollbackFailingConnection()
+
+    def deadlock(_conn, _paths):
+        raise psycopg.errors.DeadlockDetected("constructed migration deadlock")
+
+    monkeypatch.setattr(db, "connect_migration", lambda _dbname: conn)
+    monkeypatch.setitem(globals(), "_apply", deadlock)
+
+    with pytest.raises(RuntimeError, match="constructed rollback failure"):
+        request.getfixturevalue("migrated")
+
+    assert conn.closed is True
+
+
+@requires_db
 def test_a_parsed_trading_log_stores_one_import_row_and_every_fill(migrated):
     store = DrcStore()
     store.ensure_schema()
