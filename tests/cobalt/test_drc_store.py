@@ -230,12 +230,28 @@ class _Proxy:
 
 @pytest.fixture
 def migrated(monkeypatch):
-    conn = db.connect_migration(env.DEV_DB_NAME)
-    conn.autocommit = False
+    # flake-fix F1: an autovacuum worker can deadlock the migration step;
+    # the whole step (open, autocommit off, apply) is retried at most twice,
+    # each on a fresh connection; a failed attempt's connection is always
+    # closed, even when its rollback raises (check H2, H3).
+    for attempt in range(1, 4):
+        conn = None
+        try:
+            conn = db.connect_migration(env.DEV_DB_NAME)
+            conn.autocommit = False
+            _apply(conn, FORWARD)
+            break
+        except BaseException as exc:
+            if conn is not None:
+                try:
+                    conn.rollback()
+                finally:
+                    conn.close()
+            if not isinstance(exc, psycopg.errors.DeadlockDetected) or attempt == 3:
+                raise
+            print(f"migration retry {attempt}: DeadlockDetected")
     counter = iter(range(10_000))
     try:
-        _apply(conn, FORWARD)
-
         def _connect(dbname, *, side, allow_prod=False):
             assert dbname == env.DEV_DB_NAME
             proxy = _Proxy(conn, f"drc_sp_{next(counter)}")
@@ -328,6 +344,141 @@ def test_the_rollback_drops_them_and_forward_brings_them_back(migrated):
     _apply(migrated, FORWARD)
     for table in TABLES:
         assert migrated.execute("SELECT to_regclass(%s)", (f'"user".{table}',)).fetchone()[0]
+
+
+# flake-fix F1: the `migrated` fixture retries its migration step on an
+# autovacuum deadlock. The module's `_apply` is patched; `migrated` is
+# fetched inside the test, so its raise is the test's own failure.
+
+
+def _patch_apply(fail_with, fail_times):
+    """A stand-in for this module's `_apply`: the first `fail_times` calls
+    raise `fail_with`, later calls run the real one. Returns the list of
+    connections it was handed."""
+    real = globals()["_apply"]
+    seen = []
+
+    def _fake(conn, paths):
+        seen.append(conn)
+        if len(seen) <= fail_times:
+            raise fail_with("constructed by flake-fix F1")
+        return real(conn, paths)
+
+    return _fake, seen
+
+
+@pytest.fixture
+def deadlock_first(monkeypatch):
+    fake, seen = _patch_apply(psycopg.errors.DeadlockDetected, 1)
+    monkeypatch.setitem(globals(), "_apply", fake)
+    return seen
+
+
+@pytest.fixture
+def deadlock_always(monkeypatch):
+    fake, seen = _patch_apply(psycopg.errors.DeadlockDetected, 10)
+    monkeypatch.setitem(globals(), "_apply", fake)
+    return seen
+
+
+@pytest.fixture
+def undefined_table_first(monkeypatch):
+    fake, seen = _patch_apply(psycopg.errors.UndefinedTable, 1)
+    monkeypatch.setitem(globals(), "_apply", fake)
+    return seen
+
+
+@requires_db
+def test_the_migrated_fixture_retries_once_when_the_first_migration_attempt_deadlocks(
+    deadlock_first, request, capsys
+):
+    conn = request.getfixturevalue("migrated")
+    out = capsys.readouterr().out
+    assert "migration retry 1: DeadlockDetected" in out
+    assert "migration retry 2" not in out
+    assert conn.execute("SELECT to_regclass(%s)", (f'"user".{TABLES[0]}',)).fetchone()[0]
+    # Two attempts, two connections: the failed one closed, the second one live.
+    assert len(deadlock_first) == 2
+    assert deadlock_first[0] is not deadlock_first[1] and deadlock_first[1] is conn
+    assert deadlock_first[0].closed and not conn.closed
+
+
+@requires_db
+def test_the_migrated_fixture_fails_on_a_third_deadlock_after_two_retries(
+    deadlock_always, request, capsys
+):
+    with pytest.raises(psycopg.errors.DeadlockDetected):
+        request.getfixturevalue("migrated")
+    out = capsys.readouterr().out
+    assert "migration retry 1: DeadlockDetected" in out
+    assert "migration retry 2: DeadlockDetected" in out
+    assert "migration retry 3" not in out
+    assert len(deadlock_always) == 3
+    assert len({id(c) for c in deadlock_always}) == 3
+    assert all(c.closed for c in deadlock_always)
+
+
+@requires_db
+def test_the_migrated_fixture_does_not_retry_another_error(undefined_table_first, request, capsys):
+    with pytest.raises(psycopg.errors.UndefinedTable):
+        request.getfixturevalue("migrated")
+    assert "migration retry" not in capsys.readouterr().out
+    assert len(undefined_table_first) == 1
+
+
+@requires_db
+def test_the_migrated_fixture_retries_when_opening_the_first_attempt_deadlocks(
+    monkeypatch, request, capsys
+):
+    real_connect_migration = db.connect_migration
+    calls = 0
+
+    def deadlock_first_open(dbname, *, allow_prod=False):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise psycopg.errors.DeadlockDetected(
+                "constructed while opening the first migration attempt"
+            )
+        return real_connect_migration(dbname, allow_prod=allow_prod)
+
+    monkeypatch.setattr(db, "connect_migration", deadlock_first_open)
+    conn = request.getfixturevalue("migrated")
+
+    assert calls == 2
+    assert "migration retry 1: DeadlockDetected" in capsys.readouterr().out
+    assert conn.execute(
+        "SELECT to_regclass(%s)", (f'"user".{TABLES[0]}',)
+    ).fetchone()[0]
+
+
+@requires_db
+def test_the_migrated_fixture_closes_a_failed_attempt_when_rollback_fails(
+    monkeypatch, request
+):
+    class RollbackFailingConnection:
+        def __init__(self):
+            self.autocommit = True
+            self.closed = False
+
+        def rollback(self):
+            raise RuntimeError("constructed rollback failure")
+
+        def close(self):
+            self.closed = True
+
+    conn = RollbackFailingConnection()
+
+    def deadlock(_conn, _paths):
+        raise psycopg.errors.DeadlockDetected("constructed migration deadlock")
+
+    monkeypatch.setattr(db, "connect_migration", lambda _dbname: conn)
+    monkeypatch.setitem(globals(), "_apply", deadlock)
+
+    with pytest.raises(RuntimeError, match="constructed rollback failure"):
+        request.getfixturevalue("migrated")
+
+    assert conn.closed is True
 
 
 @requires_db
