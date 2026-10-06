@@ -158,3 +158,5 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/deploy-k3-1005-attempt2-all-20261005-202
   - Drafted by `k3-deploy-draft` 2026-10-05 19:07 EDT; re-pointed by `k3-deploy-fixround`.
 
 FAILED: gate — G (c) — tests/cobalt/test_drc_k2_experiments.py::test_x9_gate_a_superseding_import_keeps_both_files_fills_and_is_current setup ERROR psycopg.errors.DeadlockDetected (migrated fixture, ALTER TABLE "user".vault_writes OWNER TO cobalt_user) · rollback: not used · decisions: 3 · for Dejan: 0 · tokens: 126412
+
+FAILED: gate — G (c) — test_x9 in tests/cobalt/test_drc_k2_experiments.py, setup ERROR DeadlockDetected, the known flake in an untouched test (migrated fixture, 0002 DDL; hub stop line above) · rollback: not used · decisions: 3 · for Dejan: 0
