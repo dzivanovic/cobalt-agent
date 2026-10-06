@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/radar-screen-trace-2026-10-06.md 2026-10-06 R556
 BRANCH: ops/radar-ladder-refresh-1006
 WORKTREE: radar-ladder-refresh-1006
 BASE: 8c554d77
-TIP:
+TIP: d2330003
 REPORT: /Users/cobalt/cobalt-wt/radar-ladder-refresh-1006/docs/40 - DevDocs/reports/radar-ladder-refresh-build-2026-10-06.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-ladder-refresh-check-2026-10-06.md
+HOUSE B: as needed
 RULINGS: 2026-10-06 R556
 
 ## ROWS
