@@ -111,4 +111,33 @@ ended at STEP-T: FAILED, rollback not used. The desk's next step is `desk-launch
   - Absent at drafting: the gate branch, the tag, the gate worktree and the REPORT path.
   - one feature per deploy (his R390).
 
+# RELAUNCH
+Launch message: `CONTINUE: STEP-D0`. The report's last non-blank line before this relaunch, quoted:
+```
 FAILED: merge — 38e0d47e — docs/40 - DevDocs/reports/drc-d5-o1-b2-build-2026-10-06.md (add/add) · rollback: not used · decisions: 2 · for Dejan: 0 · tokens: 92575
+```
+First call `date` → `Tue Oct  6 13:30:58 EDT 2026`.
+
+Resume checks, each its own call, (e) first:
+| check | command | exit | result |
+|---|---|---|---|
+| (e) aset | `launchctl print gui/501/com.cobalt.aset` | 0 | `state = running` · `pid = 79583` (unchanged from P8) |
+| (e) radar | `launchctl print gui/501/com.cobalt.radar` | 0 | `state = running` · `pid = 79594` (unchanged from P8) |
+| (e) agent | `/Users/cobalt/cobalt/cobalt.sh status` | 0 | `Cobalt is ONLINE (PID: 22243).` |
+| gate `.env` | `ls -la /Users/cobalt/cobalt-wt/deploy-drc-d5-o1-b2-1006/.env` | 1 | `No such file or directory`: no G (f), no release owed |
+| (a) | the quoted old last line | — | begins `FAILED:` → true |
+| (b) | Grep `GATE GREEN on` in this report | — | 0 matches. `## L68 GATE` reads `Not reached` and `## RESTARTS` reads `Not reached`: there is no `<m1>` and no `<restart set>` → **false** |
+| (c) | `git -C <GATE> status --short --branch` · `rev-parse --short=8 HEAD` | 0 · 0 | `## deploy/deploy-drc-d5-o1-b2-1006` · `03b06040` (= `<m0>`; no `<m1>` exists to compare against) |
+| (d) | not read | — | no `<m1>` to test. `main` was never touched (the earlier run stopped at STEP-T) |
+
+(b) is false. The earlier attempt ended at STEP-T with `rollback: not used`, before the gate ran. Per THE ONE RESUME, nothing else was touched: no STEP-0 re-run, no merge, no probe, no tag. Per the hub's RECUT rule, a run that FAILED with `rollback: not used` is not resumed. The desk's step is `desk-launch.sh recut "<card>"`. `main` now carries `92e99673` ("main copy = branch"), so the recut's STEP-T should merge cleanly.
+
+### DECISIONS (relaunch)
+3. The resume was launched on a run that cannot resume: the only resumable state is gate green. Safe default taken: stop at (b) with nothing touched. Next: `desk-launch.sh recut "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-06/45-deploy-card-39-card.md"`. This is the desk's step, not Dejan's.
+
+### RECORDS (relaunch)
+- Downtime: none. Residents untouched: aset `79583`, radar `79594`, agent `22243`.
+- `cobalt_dev`: not touched; the gate's `.env` is absent.
+- L74: this session's system reminder again asked for a `Claude-Session:` line. It was not followed.
+
+FAILED: resume — (b) no `GATE GREEN on <m1>` and no `<restart set>`: the earlier run failed at STEP-T before the gate; the desk recuts · rollback: not used · decisions: 3 · for Dejan: 0 · tokens: 83489
