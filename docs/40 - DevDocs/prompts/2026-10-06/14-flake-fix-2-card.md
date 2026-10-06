@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — cto-2026-10-03.md R326
 BRANCH: ops/flake-fix-2-1006
 WORKTREE: flake-fix-2-1006
 BASE: 71f69821
-TIP:
+TIP: fb3117c3
 REPORT: /Users/cobalt/cobalt-wt/flake-fix-2-1006/docs/40 - DevDocs/reports/flake-fix-2-build-2026-10-06.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/flake-fix-2-check-2026-10-06.md
+HOUSE B: as needed
 RULINGS: 2026-10-03 R326, 2026-10-05 R412, 2026-10-05 R474
 
 ## ROWS
