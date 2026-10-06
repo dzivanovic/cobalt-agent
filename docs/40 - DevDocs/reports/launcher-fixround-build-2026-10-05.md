@@ -1,12 +1,14 @@
 # launcher-checks — fix round build (card 21, rows F1, then F2–F4) — 2026-10-05
 
 ## §0 Headline
+- ROW F5 built at `8d79d7c9`: the `prompt` kind of `desk-launch.sh` never counts a `--disallowedTools` string as a write string; a write string in `--allowedTools` passes only on the prompt's one `RULINGS:` line whose rows are HIS RULING + APPROVED and committed (the cards' `ruling_row`, moved up, L3). Gate green: offline 3786/0, with-DB 857/0, live-note 146/0; F2 = F0; RESTARTS: none. 1 new decision (4: the RULINGS line format), 0 for Dejan.
 - FIX ROUND built at `dc2a80b4`. F2: `deploy-step0.sh` STEP-0 P2 accepts a fix-round row (the check tip an ancestor of the code tip, the fix report `BUILT · … tip: <code tip>`); the check's O1 test passes, 0 xfailed. F3: one line in `DEPLOY-HUB.md` after P2 (re-anchored by the desk, no merge). F4: `CARD.md:47` rewritten.
 - Gate 2 green: offline 3786/0, with-DB 857/0, live-note 146/0; F2 = F0; `.env` removed; RESTARTS: none. Gate 1 had gone red on the known tenancy `DeadlockDetected` flake (R41).
 - 3 decisions, 0 for Dejan: the BASE brain-hub red (1); the F3 stop, now answered (2); the hub says "committed and unmodified" for the fix report but the step-0 script does not test it (3).
 - Earlier, row F1 at `c1746720` (checked; its sections are kept below): the launcher accepts a fix-round tip; `deploy-card.sh` and `CARD.md` carry the `fix report` column.
 
 ## L74
+- 21:28 ET (row F5): the harness attribution reminder again asks for a `Claude-Session:` line. Recorded; not acted on.
 - 16:57 ET (fix round): this session's harness attribution reminder again asks commits to end with a `Claude-Session:` line. Recorded; not acted on.
 - 13:54 ET: the harness attribution reminder of this session asks commits to end with a `Claude-Session:` line. Recorded once; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (BUILD-HUB L74).
 
@@ -149,8 +151,29 @@ Commit `7c33d97b fix(launcher-checks): STEP-0 P2 accepts a fix-round row: the ch
 Earlier text of this round (the stop at 17:04, kept): **Row F3** — STOPPED before any edit. The card: "BEFORE writing this row the builder merges `main` into its branch, then re-reads line 58". `git merge` is on BUILD-HUB's never-typed list (`## THE LIST`: "Never typed: … `git merge` …") and matches no allow string of the launch line. I did not type it. BASE read for the RUN row: Grep (count, fixed text ``the check's `tip:` is an ancestor of the code tip``) over `docs/40 - DevDocs/prompts` → `0` (both `DEPLOY-HUB.md` and `CARD.md`); `DEPLOY-HUB.md:58` is the `**P2 EVERY CHECK, COMMITTED**` line.
 **Row F4** — not started (card order, behind F3). BASE read: `grep -n -F "The last column is" CARD.md` (Grep tool) → `47:The code tip is the \`tip:\` of the check's stop line (a fresh Opus pass may have moved it past the build's). The last column is \`held unfixed: 0\` and \`ready: YES\` for a check run on \`CHECK-HUB.md\`; a report of the old shape keeps its own literals.`
 
+### ROW F5, resumed 21:28 ET on the desk's `CONTINUE: F5` (a new session)
+Verified first (RECOVERY): `git status --short --branch` → `## ops/launcher-fixround-1005`; `git log --oneline -3` → `a545a4d8` (the check's O1r2 fix), `59bd4bf8`, `a42be127`; `ls -la …/.env` → `No such file or directory`. `sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "<card>"` → `AUTHORIZED`, exit 0: `CARD COMMITTED … 6fce2ccb422b86f1fd7bc42a1324a2c6f49fe104`, `CARD UNCHANGED … nothing`; R60, R412, R47 as at the first AUTHORIZATION. `git -C /Users/cobalt/cobalt log --oneline -4 -- <card>` → `6fce2ccb docs(desk): R471 K3 DEPLOYED 07a4b8fe; card 21 row F5 (brain, byte for byte)`. `git -C /Users/cobalt/cobalt diff --stat ops/launcher-fixround-1005 main -- ops/desk/desk-launch.sh tests/ops/test_desk_launch_prechecks.py` → nothing (the same on `main`).
+Read: `desk-launch.sh` prompt kind (:334-413 at `a545a4d8`; the write-string loop :382-389), `ruling_row` / `ruling_rows` (:621-674); the real prompt `prompts/2026-10-05/01-second-writer-survey.md` (no `RULINGS:` line; `git commit` in `--disallowedTools`; `Bash(COBALT_ENV=dev uv run cobalt db query --side system *)` in `--allowedTools`).
+- RED (tests only): `SURVEY_LINE` (the survey's launch line verbatim, its path filled per test), `staged_launcher` (the L4 prompt test's staging), `survey_prompt`, `launch_prompt`; four tests. `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/test_desk_launch_prechecks.py -k f5` on the unchanged script → `2 failed, 7 passed, 80 deselected`. Both reds: `AssertionError: REFUSED: write string 'git commit' on a prompt line: a write-path launch is a fixed file` (`test_f5_the_survey_prompt_launches_on_its_rulings_row`, `test_f5_a_write_string_in_the_deny_list_is_never_a_write_string`) — the row's reason. Green there: the refusal controls `[no RULINGS line | RULINGS none | row absent | row not HIS RULING | row approved uncommitted | write string outside both lists]` and `test_f5_a_ruled_write_line_still_runs_auto_or_plan_only`. Commit `82e05c87 wip(launcher-checks): red — F5 …`.
+- FIX: `ruling_row` moved above the kinds unchanged; its comma loop became `ruling_items <list>` (called by `ruling_rows` and the prompt kind). New `tool_list <line> <allow|deny|rest>` (awk; a `"…"` span is one word; a list ends at the next unquoted `--flag`). Prompt kind: the write strings are scanned in allow + rest only; one in rest refuses as before; one in allow passes only when the prompt holds exactly one `RULINGS:` line, not `none`, and `ruling_items` succeeds on it (in a subshell); else today's refusal text, unchanged. The same for the `git -C` pattern. Header comment :101-108 gains the F5 clause.
+- One case added after the red commit: `[git -C write string outside both lists]` (a `Bash(git -C … commit …)` span in `--append-system-prompt`), so the git -C rest test has a pin (M18).
+- GREEN: `… tests/ops/test_desk_launch_prechecks.py` → `89 passed`; `… tests/ops/test_desk_launch_prechecks.py tests/ops/test_desk_launch_devfix.py tests/ops/test_desk_launch_brain.py tests/ops/test_desk_size_guard.py tests/ops/test_devdb_lock.py tests/ops/test_deploy_card.py tests/ops/test_deploy_step0.py` → `1 failed, 335 passed, 1 xfailed`; the red is BASE's (DECISIONS 1).
+- MUTATIONS (Edit tool, each undone; `-k f5`):
+
+| # | mutation | result |
+|---|---|---|
+| M14 | `scan=$line` (the deny list counted again) | `1 failed, 8 passed` · `test_f5_a_write_string_in_the_deny_list_is_never_a_write_string` — `REFUSED: write string 'git commit' …` |
+| M15 | the `ruling_items` result ignored (`\|\| :; ruled=1`) | `3 failed, 6 passed` · `[row absent]`, `[row not HIS RULING]`, `[row approved uncommitted]` (launched) |
+| M16 | `ruled=1` before the RULINGS-line test | `2 failed, 7 passed` · `[no RULINGS line]`, `[RULINGS none]` |
+| M17 | a plain write string outside the lists no longer resets `ruled` | `1 failed, 8 passed` · `[write string outside both lists]` |
+| M18 | a git -C write string outside the lists no longer resets `ruled` | `1 failed, 9 passed` · `[git -C write string outside both lists]` |
+
+Under M14 the survey test stays green (its RULINGS row allows the deny-list `git commit` too); (a) is pinned by the deny-only test. DevDocs page: none for `desk-launch.sh` (as above); none invented. Commit `8d79d7c9 fix(launcher-checks): prompt kind — a deny-list string is never a write string; an allow-list write string passes only on the prompt's RULINGS rows, HIS RULING + APPROVED and committed (F5, L7a, L3)`.
+
 ## RESTARTS
-`uv run cobalt jobs restarts 5fb0ddf5..HEAD` →
+ROW F5, at `8d79d7c9`: `uv run cobalt jobs restarts 5fb0ddf5..HEAD` → `CARD.md M DOCS -` · `DEPLOY-HUB.md M DOCS -` · `launcher-fixround-build-2026-10-05.md M DOCS -` · `deploy-card.sh M operator script; no Cobalt reader -` · `deploy-step0.sh M operator script; no Cobalt reader -` · `desk-launch.sh M operator script; no Cobalt reader -` · `test_deploy_step0.py M test/documentation; no resident -` · `test_desk_launch_prechecks.py M test/documentation; no resident -` · `RESTARTS: none`. No UNCLASSIFIED row.
+
+F1 round: `uv run cobalt jobs restarts 5fb0ddf5..HEAD` →
 ```
 path	change	rule	restart
 docs/40 - DevDocs/prompts/CARD.md	M	DOCS	-
@@ -163,6 +186,30 @@ RESTARTS: none
 No UNCLASSIFIED row.
 
 ## W THE THREE SUITES
+
+### ROW F5, `<tip>` = `8d79d7c9`
+`sh /Users/cobalt/cobalt/ops/desk/gate.sh launcher-fixround-1005 all` (21:38 ET) → exit 0. Verdict lines, whole:
+```
+offline 3786/0
+lock: waited 0 min
+proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))
+LEVEL 0013
+stray rows: not read (no --tickers given)
+cobalt_dev: 0013 — F2 = F0
+.env: removed
+with-DB 857/0
+SKIPPED [1] tests/cobalt/test_cards_picks.py:388: S2-P2's card_score column is present on cobalt_dev
+SKIPPED [1] tests/cobalt/test_cards_picks.py:401: real S2-P2 0007 applied: radar cards need provenance; the P2 suite owns this path once merged
+SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof
+SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set
+SKIPPED [1] tests/cobalt/test_s3_c4_experiments.py:95: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live template read
+SKIPPED [1] tests/taxonomy/test_catalyst.py:365: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live catalyst review draft
+SKIPPED [1] tests/taxonomy/test_predicate.py:262: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note grammar proof
+live-note 146/0
+log: /Users/cobalt/cobalt-wt/.gate-logs/launcher-fixround-1005-all-20261005-213825.log
+```
+- From the log: (a) :829 `3786 passed, 756 skipped, 1 xfailed, 36 warnings in 569.48s`; `lock taken: launcher-fixround-1005` (:835); `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` (:846); (c) PASS 1 :969 `684 passed, 7 skipped, 3850 deselected, 2 xfailed, 12 warnings in 120.56s` (the same command as the F1 round's W (c)) → `<d1>` 684; (c2) `dev forward: APPLIED 21:50:12` (:971), `F1: 893 44 126f2d6983fa59f9d0eaaff7da7dd29c` (:1046); (c3) PASS 2 :1528 `173 passed, 1 deselected, 5 warnings in 219.17s` → `<d2>` 173, `<d>` 857; (f) `F2: 664 35 272c95bbb12241e3611e4b36326ccf87` (:1593) = F0; `lock released` (:1646); (e) :1715 `146 passed, 1 skipped, 15 warnings in 24.82s`. `ls /Users/cobalt/cobalt-wt/launcher-fixround-1005/.env` (21:54 ET) → `No such file or directory`.
+- F5 adds no test under `tests/cobalt` or `tests/taxonomy`; its four test functions (10 ids) are in `tests/ops`, run at E3.
 
 ### FIX ROUND, `<tip>` = `dc2a80b4`
 GATE 1 (17:23 ET): `sh /Users/cobalt/cobalt/ops/desk/gate.sh launcher-fixround-1005 all` → exit 1. Verdict lines, whole:
@@ -246,6 +293,11 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/launcher-fixround-1005-all-20261005-1414
 - `tests/ops` at the tip (the row's suite; the gate does not run it): `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `1 failed, 1357 passed, 1 xfailed, 15 warnings in 349.83s`. The one red is the BASE red of E0, `test_the_trees_brain_hub_line_is_printed_with_its_handover_filled` (DECISIONS 1); BASE had `1347 passed`, +10 = this build's ten test ids (1 + 5 + 2 + 1 + 1).
 
 ## PRE-STOP SELF-CHECK
+ROW F5:
+(1) YES. `test_f5_the_survey_prompt_launches_on_its_rulings_row` and `test_f5_a_write_string_in_the_deny_list_is_never_a_write_string` red on the unchanged script (`REFUSED: write string 'git commit' …`); the deny-only test red under M14. The refusal controls red under M15 (absent, not HIS RULING, uncommitted), M16 (no line, `none`), M17 (outside), M18 (git -C outside). `test_f5_a_ruled_write_line_still_runs_auto_or_plan_only` pins the unchanged mode check; it was not mutated (the mode lines are not this row's).
+(2) YES. Callers: `grep -rn -F "desk-launch.sh prompt" ops tests/ops` → `desk-launch.sh:30` (usage comment), `:405` (the usage refusal); the prompt kind is reached only through argv `prompt`, pinned by the F5 tests and the existing prompt tests (`test_l4_a_real_prompt_launch_prints_no_watch_line`, `test_prompt_still_prints_its_cd_and_line`, the brain B5 prompt tests, all green). `ruling_row` moved: its card callers are pinned by the L1 tests (`89 passed`).
+(3) YES: `grep -n -F "tool_list" ops/desk/desk-launch.sh` → :277, :279, :454, :455; `grep -n -F "def test_f5_"` → :792, :800, :812, :847; `git diff --stat a545a4d8 8d79d7c9` → `desk-launch.sh 139`, `test_desk_launch_prechecks.py 109` (+203 −45); the gate log lines above by Grep.
+
 FIX ROUND (F2–F4):
 (1) Every added or changed test shown RED for its named reason — YES. `test_o1_a_fix_round_row_the_launcher_accepts_passes_p2` (xfail removed) and `test_f2_a_fix_round_row_passes_p2_and_step0` were red on the unchanged script (`its tip db231e71 is not the row's code tip dc7d9471`) and red under M10. The three `test_f2_a_fix_round_missing_one_proof_still_fails_p2[…]` controls were red under their mutations: (c) under M11, (b) under M12, (a) under M13. F3 and F4 are RUN rows: `0` before, `1` after. One assertion of my own was rewritten (E3).
 (2) Every entry path pinned — YES. Callers: Grep `deploy-step0\.sh` over `ops/` and `tests/` → `ops/desk/deploy-outage.sh:123,174,175` (only `--window`, which runs P1 and never reaches P2) and `tests/ops/test_deploy_step0.py:22` (`SCRIPT`). The full-mode P2 path is pinned by the F2 tests. Row shapes: six columns, the seven-column fix-round row, and seven columns with an empty cell (beta in `fix_round`, and control (a)). Both other rows still pass: `test_a_check_report_whose_tip_is_not_the_row_s_code_tip_fails` (no fix column) and the 42 green. The dry-run path is unchanged: the `test_dry_run_*` tests are green.
@@ -257,6 +309,11 @@ F1 ROUND:
 (3) Every `file:line`, count and quote re-read at the tip — YES: `grep -n -F "frep" ops/desk/desk-launch.sh` (→ :715, :751-761), `grep -n -F "fix report |" ops/desk/deploy-card.sh "docs/40 - DevDocs/prompts/CARD.md"` (→ `deploy-card.sh:207`, `CARD.md:44`), `grep -n -F "def test_f1_" tests/ops/test_desk_launch_prechecks.py` (→ :580, :592, :609, :630, :645), `git diff --stat 5fb0ddf5 c1746720` (4 files, +135 −10), the gate log greps above.
 
 ## FOR THE CHECK
+ROW F5 (R376 / L75: touched tests + the deploy gate, no re-check):
+- Range `a545a4d8..8d79d7c9`: `82e05c87 wip(launcher-checks): red — F5 the survey prompt launches on its RULINGS row; a deny-list string is never a write string` · `8d79d7c9 fix(launcher-checks): prompt kind — a deny-list string is never a write string; an allow-list write string passes only on the prompt's RULINGS rows, HIS RULING + APPROVED and committed (F5, L7a, L3)`.
+- Reds, mutations M14–M18, greens: `## E3 THE ROWS`, ROW F5. Suites: gate `…-20261005-213825.log`, offline 3786/0, with-DB 684 + 173 = 857/0, live-note 146/0; one lock take (the gate's), F0 / F1 / F2 = `664 35 272c95bb…` / `893 44 126f2d69…` / `664 35 272c95bb…`, forward 21:50:12, released (:1646). RESTARTS: none.
+- Seam (L72): the prompt's RULINGS line is read in the cards' format, `RULINGS: <date> R<n>[, …]` → `cto-<date>.md` (DECISIONS 4). A write string allowed by his row passes only when no write string sits outside both lists.
+
 FIX ROUND (rows F2–F4; R376 / L75: touched tests + the deploy gate, no re-check):
 - Range `7e7803d5..dc2a80b4` (on top of the check's commits): `4e8296fc wip(launcher-checks): red — F2 fix-round row passes STEP-0 P2 (O1 xfail mark removed; negative controls a-c)` · `7c33d97b fix(launcher-checks): STEP-0 P2 accepts a fix-round row: the check tip an ancestor of the code tip and the fix report BUILT on it; check O1 test passes (F2, R376, L75)` · `4b8289cb wip(launcher-checks): E3 F3 — main not merged into the branch; git merge is not a builder command (F2 built at 7c33d97b)` (report only) · `1cd4601c docs(launcher-checks): DEPLOY-HUB P2 states the fix-round row rule, one new line after P2 (F3, R376, L75)` · `dc2a80b4 docs(launcher-checks): CARD.md SHIPS text states the fix-round row rule and the literals column (F4, check O4, R376, L75)`.
 - Reds, mutations and greens per row: `## E3 THE ROWS`, FIX ROUND. Touched tests: `tests/ops/test_deploy_step0.py` `42 passed`, 0 xfailed; with `test_desk_launch_prechecks.py` + `test_deploy_card.py` `149 passed`; `tests/ops` `1364 passed` + BASE's one red.
@@ -277,14 +334,18 @@ F1 ROUND:
 - Seam as the card states it (L72): the `fix report` must sit under `$REPORTS` (the main repo's reports folder) and be committed there, as the check report; a fix report committed only on the job branch is refused.
 
 ## CONTINUE
-next: CLOSE (done at the stop line). Fix round: F2 `7c33d97b`, F3 `1cd4601c`, F4 `dc2a80b4` built; RESTARTS: none; gate 2 green on `dc2a80b4`.
+next: CLOSE (done at the stop line). Row F5: red `82e05c87`, fix `8d79d7c9`, RESTARTS: none, gate green on `8d79d7c9`.
+Earlier: next: CLOSE (done at the stop line). Fix round: F2 `7c33d97b`, F3 `1cd4601c`, F4 `dc2a80b4` built; RESTARTS: none; gate 2 green on `dc2a80b4`.
 
 ## DECISIONS
 1. `tests/ops/test_desk_launch_brain.py::test_the_trees_brain_hub_line_is_printed_with_its_handover_filled` is red on BASE `5fb0ddf5` and at the tip (`assert INSTALL in text` — BRAIN-HUB.md now carries `installed 2026-10-05 …`, commit `4a19b075 … R358 BRAIN-HUB installed on R54 …`). It lies outside this card's rows and files; the gate's suites do not run `tests/ops`, but a deploy gate that runs `tests/ops` would meet it. Safe default taken: not touched; the desk routes it (a card for that test, or the deploy gate's reading).
 2. FIX ROUND, row F3 BLOCKS. The card orders "merges `main` into its branch" before line 58 is written. `git merge` is never typed by a builder (BUILD-HUB `## THE LIST`) and matches no allow string. `main` changed `DEPLOY-HUB.md:57` (card 26, P1); line 58 is still the same text on both. If line 58 is edited without the merge, the deploy gate's merge of this branch would meet `main`'s line-57 change in the next line, and git conflicts on changes that touch. Safe default taken: stopped before F3, nothing typed, F4 not started (card order). Needed: the desk merges `main` into `ops/launcher-fixround-1005` (or rules otherwise), then sends `CONTINUE: E3`. ANSWERED by the desk at 17:20 ET: the card re-anchored F3 (`c04ba59d`) to a new line after P2, no merge; built.
-3. The F3 hub line (the card's text, verbatim) says the fix report is "committed and unmodified". The F2 script (`deploy-step0.sh` P2) does not test that for the fix report, because the card's F2 row does not ask for it. The launcher (F1, `desk-launch.sh`) does test it before a deploy session starts, and it also requires the fix report to sit under `reports/`. So the hub's hand-run P2 and the script's P2 differ on this one clause. Safe default taken: F2 not widened past its row. If the desk wants the script to match the hub text, that is a two-line row (the `git log -1` / `git diff --stat` pair of P2 committed, run for `$frep`).
+3. The F3 hub line (the card's text, verbatim) says the fix report is "committed and unmodified". The F2 script (`deploy-step0.sh` P2) does not test that for the fix report, because the card's F2 row does not ask for it. The launcher (F1, `desk-launch.sh`) does test it before a deploy session starts, and it also requires the fix report to sit under `reports/`. So the hub's hand-run P2 and the script's P2 differ on this one clause. Safe default taken: F2 not widened past its row. If the desk wants the script to match the hub text, that is a two-line row (the `git log -1` / `git diff --stat` pair of P2 committed, run for `$frep`). CLOSED by the check's commit `a545a4d8` (O1r2: STEP-0 P2 accepts a fix-round row only when its fix report is committed and unmodified). Open at F5: items 1 and 4.
+
+4. ASK DESK: row F5 says the prompt's RULINGS line "cites `cto-<date>.md R<n>`" and gives no line format [21:55 ET]. Safe default taken: the cards' format and check (`RULINGS: <date> R<n>[, …]` → `$REPORTS/cto-<date>.md`, one row, HIS RULING + APPROVED, committed and at HEAD — `ruling_row`, L3). Exactly one `RULINGS:` line; `none` grants nothing. The real survey prompt (`01-second-writer-survey.md`) holds no `RULINGS:` line yet: the desk adds e.g. `RULINGS: <date> R326` before its launch.
 
 ## RECORDS
+- ROW F5: CONTINUED at F5 21:28 ET (a new session; `CONTINUE: F5`; the card's row F5 is committed at `6fce2ccb`; the message added no row, file, command or approval). `.env: removed, proven gone (W, 21:54 ET)`. One lock take, the gate's. `REFUSED, not needed`: none. The stop hook asked for a stop line while the gate ran; the last line was the hub's in-progress line until W ended.
 - L74: the harness attribution reminder asked for a `Claude-Session:` line on commits; recorded once under `## L74`, not acted on.
 - `REFUSED`, not needed: none. Bare-guard block once at PREFLIGHT (`$(` inside a grep pattern), resent as a single plain call; not a refusal.
 - Extra lock takes: none (the gate's one take only). `.env: removed, proven gone (W)`.
@@ -302,4 +363,6 @@ F1 round stop line (kept for the record, superseded by the fix round below): `BU
 
 Stopped 17:04 ET (superseded): `E3 — row F3 — main is not merged into ops/launcher-fixround-1005 — the card orders the merge before line 58; git merge is on BUILD-HUB's never-typed list and on no allow string, not typed`
 
-BUILT · job: launcher-checks · tip: dc2a80b4 | on 5fb0ddf5 | migration: none | offline 3786/0 | with-DB 857/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: none | rows: 3 of 3 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0 · tokens: 235315
+Fix round F2–F4 stop line (kept for the record, superseded by row F5): `BUILT · job: launcher-checks · tip: dc2a80b4 | on 5fb0ddf5 | migration: none | offline 3786/0 | with-DB 857/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: none | rows: 3 of 3 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0 · tokens: 235315`
+
+BUILT · job: launcher-checks · tip: 8d79d7c9 | on 5fb0ddf5 | migration: none | offline 3786/0 | with-DB 857/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: none | rows: 1 of 1 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 179659
