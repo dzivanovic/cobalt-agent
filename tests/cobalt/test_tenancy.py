@@ -35,6 +35,7 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from migration_retry import open_migrated
 
 from cobalt import db, env, tenant
 from cobalt.db import Side
@@ -543,10 +544,8 @@ def test_populated_job_row_digest_is_unchanged_by_heartbeat_migration():
     PostgreSQL DDL is transactional, so the inserted proof row and both shape
     changes disappear together at the end of this test.
     """
-    conn = db.connect_migration(env.DEV_DB_NAME)
-    conn.autocommit = False
+    conn = open_migrated(_apply, [FWD_0003])
     try:
-        _apply(conn, [FWD_0003])
         conn.execute(
             "INSERT INTO system.cobalt_jobs "
             "(label, kind, timeout_s, heartbeat_source, last_result) "
@@ -570,11 +569,9 @@ def test_populated_job_row_digest_is_unchanged_by_heartbeat_migration():
 @requires_db
 def test_0005_preserves_the_full_job_row_and_round_trips_its_bounded_domain():
     """Explicit row/domain proof; outcome/reason are not digest-excluded here."""
-    conn = db.connect_migration(env.DEV_DB_NAME)
-    conn.autocommit = False
+    conn = open_migrated(_apply, FORWARD)
     label = "com.cobalt.0005-proof"
     try:
-        _apply(conn, FORWARD)
         # A development beat may already have exercised the new value. Move
         # those rows temporarily inside this transaction so the bounded reverse
         # can establish the real 0004 starting point; rollback restores all of it.

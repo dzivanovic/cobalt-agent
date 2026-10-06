@@ -17,6 +17,7 @@ import itertools
 import os
 
 import pytest
+from migration_retry import open_migrated
 
 from cobalt import db, env
 from cobalt.db_migrations import FORWARD
@@ -75,12 +76,9 @@ def migrated_radar(monkeypatch, dev_db_tx):
     transaction; rolled back at teardown. Skips without `cobalt_dev`."""
     if not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER")):
         pytest.skip("requires_db: Postgres env settings not available")
-    conn = db.connect_migration(env.DEV_DB_NAME)
-    conn.autocommit = False
+    conn = open_migrated(_apply, FORWARD)
     counter = itertools.count()
     try:
-        _apply(conn, FORWARD)
-
         def _connect(dbname, *, side, allow_prod=False):
             if dbname != env.DEV_DB_NAME:
                 raise AssertionError(f"RULING 7.1d: a test asked for database {dbname!r}")

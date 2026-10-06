@@ -23,6 +23,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from migration_retry import open_migrated
 
 from cobalt import db, env
 from cobalt.db import Side
@@ -162,12 +163,6 @@ def test_reap_limits_follow_the_state_machine():
 # --- requires_db ---------------------------------------------------------------------------
 
 
-def _migration_conn():
-    conn = db.connect_migration(env.DEV_DB_NAME)
-    conn.autocommit = False
-    return conn
-
-
 NO_BYTES_SQL_INFO = """
     SELECT column_name, data_type FROM information_schema.columns
      WHERE table_schema = 'user' AND table_name = 'voice_turns'
@@ -184,9 +179,8 @@ NO_BYTES_SQL_CATALOG = """
 
 @requires_db
 def test_forward_creates_the_table_user_side_and_rollback_drops_it_cleanly():
-    conn = _migration_conn()
+    conn = open_migrated(_apply, FORWARD)
     try:
-        _apply(conn, FORWARD)
         assert conn.execute("SELECT to_regclass('\"user\".voice_turns')").fetchone()[0]
         assert conn.execute("SELECT to_regclass('system.voice_turns')").fetchone()[0] is None
         _apply(conn, FORWARD)  # idempotent
@@ -200,9 +194,8 @@ def test_forward_creates_the_table_user_side_and_rollback_drops_it_cleanly():
 
 @requires_db
 def test_no_bytes_column_in_either_catalog():
-    conn = _migration_conn()
+    conn = open_migrated(_apply, FORWARD)
     try:
-        _apply(conn, FORWARD)
         assert conn.execute(NO_BYTES_SQL_INFO).fetchall() == []
         types = conn.execute(NO_BYTES_SQL_CATALOG).fetchall()
         assert types, "pg_catalog sees no columns — the unscoped read must see the table"

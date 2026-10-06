@@ -22,8 +22,8 @@ import re
 
 import psycopg
 import pytest
+from migration_retry import open_migrated
 
-from cobalt import db, env
 from cobalt.db import Side
 from cobalt.db_migrations import FORWARD, MIGRATIONS_DIR, REVERSE
 from cobalt.db_migrations.cli import (
@@ -296,17 +296,10 @@ def test_digest_excludes_every_column_0007_adds_to_aset_sizings():
 # ---------------------------------------------------------------------
 
 
-def _migration_conn():
-    conn = db.connect_migration(env.DEV_DB_NAME)
-    conn.autocommit = False
-    return conn
-
-
 @requires_db
 def test_migrate_twice_is_idempotent_on_cobalt_dev():
-    conn = _migration_conn()
+    conn = open_migrated(_apply, FORWARD)
     try:
-        _apply(conn, FORWARD)
         _apply(conn, FORWARD)
         for name, side in CREATED_TABLES.items():
             schema = '"user"' if side is Side.USER else "system"
@@ -415,9 +408,8 @@ def test_card_checks_index_and_receipt_immutability_on_cobalt_dev():
     second open radar card for the same (member, def, direction) is
     refused, a receipt cannot be updated, and the bounded reverse +
     reapply leaves manual rows intact."""
-    conn = _migration_conn()
+    conn = open_migrated(_apply, FORWARD)
     try:
-        _apply(conn, FORWARD)
         conn.execute("SELECT set_config('cobalt.trader_id', '1', true)")
         conn.execute(
             "INSERT INTO system.radar_pool (pool_key, state, session, members) "
@@ -508,3 +500,24 @@ def test_card_checks_index_and_receipt_immutability_on_cobalt_dev():
     finally:
         conn.rollback()
         conn.close()
+
+
+@requires_db
+def test_the_migration_step_retries_a_first_deadlock(monkeypatch, capsys):
+    """flake-fix-2 F1: an autovacuum deadlock on the first `_apply` of the
+    test above (its own migration connection) is retried on a fresh
+    connection, not raised. The module's `_apply` is patched; the test
+    above is called here, so its raise is this test's own failure."""
+    real = globals()["_apply"]
+    seen = []
+
+    def fake(conn, paths):
+        seen.append(conn)
+        if len(seen) == 1:
+            raise psycopg.errors.DeadlockDetected("constructed by flake-fix-2 F1")
+        return real(conn, paths)
+
+    monkeypatch.setitem(globals(), "_apply", fake)
+    test_card_checks_index_and_receipt_immutability_on_cobalt_dev()
+    assert "migration retry 1: DeadlockDetected" in capsys.readouterr().out
+    assert seen[0] is not seen[1] and seen[0].closed

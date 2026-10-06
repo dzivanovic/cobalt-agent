@@ -19,6 +19,7 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from migration_retry import open_migrated
 
 from cobalt import db, env
 from cobalt.db import Side
@@ -231,25 +232,8 @@ class _Proxy:
 @pytest.fixture
 def migrated(monkeypatch):
     # flake-fix F1: an autovacuum worker can deadlock the migration step;
-    # the whole step (open, autocommit off, apply) is retried at most twice,
-    # each on a fresh connection; a failed attempt's connection is always
-    # closed, even when its rollback raises (check H2, H3).
-    for attempt in range(1, 4):
-        conn = None
-        try:
-            conn = db.connect_migration(env.DEV_DB_NAME)
-            conn.autocommit = False
-            _apply(conn, FORWARD)
-            break
-        except BaseException as exc:
-            if conn is not None:
-                try:
-                    conn.rollback()
-                finally:
-                    conn.close()
-            if not isinstance(exc, psycopg.errors.DeadlockDetected) or attempt == 3:
-                raise
-            print(f"migration retry {attempt}: DeadlockDetected")
+    # `open_migrated` retries it (flake-fix-2 F1: the loop lives there now).
+    conn = open_migrated(_apply, FORWARD)
     counter = iter(range(10_000))
     try:
         def _connect(dbname, *, side, allow_prod=False):
