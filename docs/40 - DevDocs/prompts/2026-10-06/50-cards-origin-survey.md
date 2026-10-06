@@ -29,7 +29,7 @@ Grep, do not infer. Known to the drafter (verify each line, cite it in RECORDS):
 - Today (2026-10-06 ET): the count by origin and setup, or `0 rows for 2026-10-06`.
 
 ## REPORT
-`/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cards-origin-survey-2026-10-06.md`, per `/Users/cobalt/Vault/Think/6 - Permanent/Memory/topics/writing-rules.md`:
+`/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cards-origin-survey-2026-10-06-r2.md` (absent today: `ls`; the first run's `cards-origin-survey-2026-10-06.md` ended FAILED on a guard refusal, the seat was not stamped; do not read or reuse it), per `/Users/cobalt/Vault/Think/6 - Permanent/Memory/topics/writing-rules.md`:
 - `## §0 Headline` (≤5 lines): the first zero day, per setup, and whether it matches the hold day.
 - `## TABLE` — one row per day: date · origin · setup · count · total (read 1).
 - `## DECISIONS` — `ASK DESK: … [<time>]` with the default taken.
