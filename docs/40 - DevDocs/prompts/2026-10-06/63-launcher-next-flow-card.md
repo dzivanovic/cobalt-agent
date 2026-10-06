@@ -2,12 +2,12 @@ JOB: launcher-next-flow
 LADDER: OFF-LADDER — reports/next-flow-answer-2026-10-05.md 2026-10-05 R438
 BRANCH: ops/launcher-next-flow-1006
 WORKTREE: launcher-next-flow-1006
-BASE: «FILL: main HEAD at launch, 8 hex»
+BASE: 8e33fdc4
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/launcher-next-flow-1006/docs/40 - DevDocs/reports/launcher-next-flow-build-2026-10-06.md
 CHECK REPORT:
 HOUSE B:
-RULINGS: 2026-10-05 R438
+RULINGS: 2026-10-06 R588
 DB: none
 
 ## ROWS
