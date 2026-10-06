@@ -57,6 +57,7 @@ BASE_ROUTES = [
     "/card/{card_id}/move", "/card/{card_id}/stop", "/radar/card/{card_id}/key",
     "/radar/card/{card_id}/dot/{factor}", "/radar/card/{card_id}/promote", "/radar/card/{card_id}/release",
     "/drc", "/drc/import", "/drc/no-trade", "/drc/scan",  # DRC D2's block, last in the file (S-4)
+    "/drc/state-book", "/drc/resolve",  # DRC K3-9, appended inside D2's block
 ]
 
 

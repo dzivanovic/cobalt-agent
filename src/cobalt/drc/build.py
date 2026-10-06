@@ -36,6 +36,15 @@ the rows recorded → the note written → for EACH date of the day row's
 re-upserts run after the commit, in date order"). A note failure on a
 re-paired date raises naming the note and the date, the later dates named
 `not rebuilt: <dates>` — the database stays as K2 committed it.
+
+K3 (v3 §2a, §5, `[F-03]`, `[F-11]`): `plan_note` computes ONE list, the
+day's open positions from its stored `book_close` / `open_position` /
+`seed` / `trade` rows, into `build_day.derived["open_positions"]`; the
+`drc-trades/open_positions` unit, the summary's `open overnight` and the
+A31 unit render it. A note that fails after `record_build` marks that
+date's `build_day` with `derived["note_stale"]` and raises.
+`rebuild_notes(dates)` is the ONE notes loop: `run_drc_build`'s re-paired
+dates and a page statement's rebuilt dates (L3).
 """
 
 from __future__ import annotations
@@ -43,6 +52,7 @@ from __future__ import annotations
 import functools
 import json
 import re
+import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
@@ -55,13 +65,15 @@ from cobalt.prefill.drc import (
     format_card_reconcile_block,
     format_rules_check_block,
 )
+from cobalt.session.calendar import CalendarError
 from cobalt.session.clock import ET
 from cobalt.vault import resolve_vault_path
 from cobalt.vaultwrite import VaultWriter
 from cobalt.vaultwrite.markers import find_section, unit_open
 
 from . import imports, template, units
-from .models import Kind, Outcome, missing_of
+from .models import Kind, OpenPosition, Outcome, missing_of
+from .pairing import _avg
 from .playbooks import Strategies, read_strategies, resolve
 from .stats_log import MATCH_INPUTS, PLAYBOOK, _DECIMALS as STATS_COLUMNS
 from .store import DrcStore
@@ -321,6 +333,124 @@ class _Stats:
         return _dec(self.row.get(field_name))
 
 
+#: K3-1 (L57, check G1): the calendar `_days_held` counts by, named on
+#: `build_day.inputs["open_positions"]`.
+CALENDAR_INPUT = "NYSE trading days — daymode.propose.prior_trading_day (imports._prior)"
+
+
+def _days_held(opened: date, day: date) -> int:
+    """NYSE trading days from `opened` through `day`, inclusive (opened
+    today → 1), by THE one calendar (`imports._prior`, L3)."""
+    held, probe = 1, day
+    while True:
+        probe = imports._prior(probe)
+        if probe < opened:
+            return held
+        held += 1
+
+
+def _calendar_gap(error: CalendarError) -> str:
+    """K3-1's `day` figure when the calendar does not cover the span: the
+    uncovered year, never the error's text (it carries a path, D7)."""
+    year = re.search(r"no NYSE calendar for (\d{4})", str(error))
+    return f"not computed — no NYSE calendar for {year.group(1)}" if year else "not computed — no NYSE calendar"
+
+
+def _last_execution(*rows: Optional[dict]) -> Optional[str]:
+    """The latest stored execution date of a position: its trade's legs and
+    its lots, as stored; `None` when no stored row holds one."""
+    times = [
+        leg.get("time")
+        for row in rows if row is not None
+        for leg in [*(row.get("entries") or []), *(row.get("legs") or []), *(row.get("lots") or [])]
+    ]
+    times = [t for t in times if t]
+    return max(times)[:10] if times else None
+
+
+def _open_book(day: date, stored: list[dict], derived_day: dict, pairing_nc: Optional[str]) -> dict:
+    """K3-1: THE one list (`[F-11]`, L3, L57) — the day's open positions from
+    its stored rows, or the loud state that replaces it (L1)."""
+    stale = derived_day.get("book_stale")
+    close = next((r for r in stored if r["kind"] == "book_close"), None)
+    loud = None
+    if pairing_nc:
+        loud = (f"open positions: {pairing_nc}", pairing_nc)
+    elif stale:
+        loud = (f"STALE — {stale['reason']}", f"STALE — {stale['reason']}")
+    elif close is None:
+        why = f"not computed — no book_close row for {day.isoformat()} (L1)"
+        loud = (f"open positions: {why}", why)
+    if loud is not None:
+        return {"open_positions": None, "open_positions_state": loud[0], "open_overnight": loud[1],
+                "open_positions_book": None}
+    seed = next((r for r in stored if r["kind"] == "seed"), None)
+    carried = set((seed["derived"].get("trade_ids") or []) if seed else [])
+    trades = {r["ref"]: r["derived"] for r in stored if r["kind"] == "trade"}
+    listed = []
+    for row in sorted((r for r in stored if r["kind"] == "open_position"), key=lambda r: r["ref"]):
+        p = row["derived"]
+        tid = p["trade_id"]
+        avg = _avg(OpenPosition.model_validate(p).lots)
+        link = row["inputs"].get("carried_from") if tid in carried else None
+        held: Any = None
+        if p.get("opened_on"):
+            try:
+                held = _days_held(date.fromisoformat(p["opened_on"]), day)
+            except CalendarError as e:
+                # The calendar does not cover the span: the figure says why,
+                # never a weekday guess, and the build goes on (L1). His note
+                # gets the year only; the calendar's own text (it names a
+                # file path) goes to the build log (judge R278 D7).
+                held = _calendar_gap(e)
+                print(f"drc build {day}: {tid}: days held not computed — {e}", file=sys.stderr)
+        listed.append({
+            "trade_id": tid,
+            "symbol": p["symbol"],
+            "direction": p["direction"],
+            "held_shares": p["held_shares"],
+            "avg_cost": None if avg is None else str(avg),
+            "opened_on": p.get("opened_on"),
+            "days_held": held,
+            "status": "continuing open position" if tid in carried else "new today",
+            "carried_from": None if not link else (link.get("day") or f"stated #{link.get('stated_book_id')}"),
+            "last_execution": _last_execution(trades.get(tid), p),
+        })
+    return {"open_positions": listed, "open_positions_state": None, "open_overnight": len(listed),
+            "open_positions_book": close["derived"]["book_sha256"]}
+
+
+def _stale_read(stored: list[dict], derived_day: dict, store) -> tuple[list[dict], dict]:
+    """K3-4 (a): every resolve id a stored row names (a trade's
+    `inputs.resolve_id`, the day's `derived.resolves`) that is no longer
+    current — read by `DrcStore.superseded_stated_ids`; its effect day K2's,
+    `effect_day(<the superseding row's day>, <id>)` (judge R278 D1). Returns
+    the figures and their inputs (L57, check G4): the ids named, and for each
+    superseded id the superseding row's day and its own day."""
+    ids = {r["inputs"]["resolve_id"] for r in stored if r["kind"] == "trade" and r["inputs"].get("resolve_id")}
+    ids |= {o["resolve_id"] for o in derived_day.get("resolves") or []}
+    if not ids:
+        return [], {"named": [], "superseded": {}}
+    superseded = store.superseded_stated_ids(ids)
+    figures = [
+        {"resolve_id": i, "effect_day": store.effect_day(superseded[i], i).isoformat()}
+        for i in sorted(superseded)
+    ]
+    read = {
+        "named": sorted(ids),
+        "superseded": {
+            str(i): {"superseding_day": superseded[i].isoformat(), "own_day": store.stated_day(i).isoformat()}
+            for i in sorted(superseded)
+        },
+    }
+    return figures, read
+
+
+def _stale_resolves(stored: list[dict], derived_day: dict, store) -> list[dict]:
+    """K3-4 (a): the stale resolve figures of `_stale_read`."""
+    return _stale_read(stored, derived_day, store)[0]
+
+
 def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> BuildPlan:
     """Everything the build would record and write for `day`, computed from
     the stored rows; nothing written."""
@@ -337,6 +467,7 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
     day_row = view["day"]
     derived_day = day_row["derived"]
     pairing_nc = (derived_day.get("not_computed") or {}).get("pairing")
+    stale_resolves, stale_read = _stale_read(stored, derived_day, deps.store)
 
     # the event's files: partial ones, names, screenshots (D2's event, L3)
     by_id = {r["id"]: r for r in view["imports"]}
@@ -504,6 +635,8 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
         "daily_stop_text": _daily_stop_text(stops, sheets, None if literal or pairing_nc else gross),
         "card_reconcile": format_card_reconcile_block(cards_without),
         "orphaned": [],
+        **_open_book(day, stored, derived_day, pairing_nc),
+        "stale_resolves": stale_resolves,
     }
     existing = note_path.read_text(encoding="utf-8") if note_path.is_file() else None
     current_ids = {t["trade_id"] for t in trades}
@@ -528,6 +661,12 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
             "strategy_titles": strategies.listing() if strategies.readable else None,
             "screenshots": shots,
             "replay": {k: replay.get(k) for k in ("replay_run_id", "trade_date", "line_action")},
+            # K3-1 (L57): what the open-position list is computed from — the
+            # stored row kinds and the calendar `day <k>` counts by (check G1).
+            "open_positions": {"day": day.isoformat(), "kinds": ["book_close", "open_position", "seed", "trade"],
+                               "calendar": CALENDAR_INPUT},
+            # K3-4 (a) (L57, check G4): the read the stale lines come from.
+            "stale_resolves": stale_read,
         }),
         derived=_json(day_derived),
     )
@@ -551,7 +690,9 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
         add(UnitWrite(*units.voice_unit(t["trade_id"]), "", TRADES_PLACEMENT, create_once=True))
     for tid in day_derived["orphaned"]:
         add(UnitWrite(*units.trade_unit(tid), units.orphaned(tid), TRADES_PLACEMENT))
+    add(UnitWrite(*units.OPEN_POSITIONS, units.open_positions(day_build), TRADES_PLACEMENT))
     add(UnitWrite(*units.RECONCILE, units.reconcile(day_build), TRADES_PLACEMENT))
+    add(UnitWrite(*units.OPEN_ITEMS, units.open_items(day_build), units.OPEN_ITEMS_PLACEMENT))
     add(UnitWrite(*units.RULES_CHECK, format_rules_check_block({
         "rules_checkbox_block": deps.rules_block(),
         "card_reconcile_block": day_build["derived"]["card_reconcile"],
@@ -688,32 +829,57 @@ def write_note(plan: BuildPlan, *, deps: BuildDeps) -> Path:
 
 def build_date(day: date, *, deps: BuildDeps, event, check: bool) -> Path:
     """ONE date: plan (the first check when `check`), record the rows, write
-    the note."""
+    the note. K3-4 (c), v3 `[F-03]` note half: a note that fails AFTER the
+    rows are recorded re-records the date's `build_day` through the same
+    `record_build` with `derived["note_stale"] = {note, error}`, then
+    raises; the next clean build records it without the key."""
     plan = plan_note(day, deps=deps, event=event, check=check)
     deps.store.record_build(day, plan.rows)
-    return write_note(plan, deps=deps)
+    try:
+        return write_note(plan, deps=deps)
+    except Exception as e:
+        rows = json.loads(json.dumps(plan.rows))
+        stale = next(r for r in rows if r["kind"] == "build_day")
+        stale["derived"]["note_stale"] = {"note": str(plan.note_path), "error": f"{type(e).__name__}: {e}"}
+        deps.store.record_build(day, rows)
+        raise
 
 
-def run_drc_build(event, *, deps: Optional[BuildDeps] = None) -> Path:
-    """D2's ONE entry: the event's day, then every re-paired date in date
-    order (D3-2r). Returns the event day's note path — never empty (F-10)."""
+def rebuild_notes(dates, *, deps: Optional[BuildDeps] = None) -> list[Path]:
+    """THE one notes loop (K3-8, v3 `[F-03]` "Note re-upserts run after the
+    commit, in date order"): each date through `build_date` with its stored
+    event, in order. A failure raises naming the note and the date, the
+    later dates `not rebuilt: <dates>`. Callers: `run_drc_build`'s re-paired
+    dates, and the page's statement (`imports.state_book` / `resolve`)."""
     deps = deps if deps is not None else default_deps()
-    note = build_date(event.date, deps=deps, event=event, check=True)
-    day_row = deps.store.event_for(event.date)["day"]
-    repaired = sorted(date.fromisoformat(d) for d in (day_row["derived"].get("repaired") or []))
-    for i, d in enumerate(repaired):
+    dates = list(dates)
+    notes: list[Path] = []
+    for i, d in enumerate(dates):
         try:
-            build_date(d, deps=deps, event=event_of(d, deps.store), check=False)
+            notes.append(build_date(d, deps=deps, event=event_of(d, deps.store), check=False))
         except Exception as e:  # noqa: BLE001 — named, the later dates named, never done (L1)
-            later = ", ".join(x.isoformat() for x in repaired[i + 1:]) or "none"
+            later = ", ".join(x.isoformat() for x in dates[i + 1:]) or "none"
             raise BuildError(
                 f"re-paired {d}: note {template.note_path(Path(deps.vault_root), d)} failed — "
                 f"{type(e).__name__}: {e} · not rebuilt: {later}"
             ) from e
+    return notes
+
+
+def run_drc_build(event, *, deps: Optional[BuildDeps] = None) -> Path:
+    """D2's ONE entry: the event's day, then every re-paired date in date
+    order (D3-2r, through `rebuild_notes`). Returns the event day's note
+    path — never empty (F-10)."""
+    deps = deps if deps is not None else default_deps()
+    note = build_date(event.date, deps=deps, event=event, check=True)
+    day_row = deps.store.event_for(event.date)["day"]
+    repaired = sorted(date.fromisoformat(d) for d in (day_row["derived"].get("repaired") or []))
+    if repaired:
+        rebuild_notes(repaired, deps=deps)
     return note
 
 
 __all__ = [
     "FN_VERSION", "WRITER", "BuildDeps", "BuildError", "BuildPlan", "UnitWrite", "build_date", "default_deps",
-    "default_vault_root", "event_of", "plan_note", "run_drc_build", "write_note",
+    "default_vault_root", "event_of", "plan_note", "rebuild_notes", "run_drc_build", "write_note",
 ]

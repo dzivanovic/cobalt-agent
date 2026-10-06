@@ -689,6 +689,7 @@ POST_ALLOWLIST = {
     "/radar/card/{card_id}/promote", "/radar/card/{card_id}/release",
     "/settings/daily", "/settings/daily/apply",
     "/drc/import", "/drc/no-trade", "/drc/scan",  # DRC D2-4 (the /drc import page)
+    "/drc/state-book", "/drc/resolve",  # DRC K3-9 (his statements, inside D2's block)
     # voice V1 (FINAL §9): the widget's turn and its Confirm / Cancel taps
     "/voice/turn", "/voice/confirm", "/voice/cancel",
     # S3 exits C3 (v3 §2 / §3 / §5): the trade taps, one block after /release

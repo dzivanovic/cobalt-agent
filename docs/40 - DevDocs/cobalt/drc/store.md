@@ -231,6 +231,11 @@ EVERY kind of a day they re-pair — the build rows with them — and the DRC
 build re-builds them for each re-paired date (D3-2r). Both methods sit at
 the class's end, so no seam line above them moved.
 
+## 2026-10-04 — DRC K3
+ONE read-only method, `superseded_stated_ids(ids) -> set[int]`: the ids among `ids` that are no longer current (another row's `supersedes`, the complement of `_CURRENT`). No write, no lock; an empty input reads nothing. The DRC build and `/drc` use it to render a stored row naming a restated resolve STALE. No writer changed.
+
+**2026-10-04 — DRC K3 check (O1–O4, judge R278 D1).** `superseded_stated_ids(ids)` now returns `dict[int, date]`: each superseded id mapped to the day of the row that supersedes it. The STALE line names `effect_day(<that day>, <id>)`, K2's effect day; before, it named the superseded row's own day, which is wrong for a restatement dated earlier.
+
 ## Tests
 `tests/cobalt/test_drc_store.py` has an offline half (the SQL, the
 registry, the placement map, the one-writer grep). Its with-DB half
