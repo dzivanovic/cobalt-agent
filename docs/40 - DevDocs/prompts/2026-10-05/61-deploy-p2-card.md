@@ -1,12 +1,12 @@
 JOB: deploy-p2-1005
 LADDER: S3-P3 · F14
-BRANCH: deploy/deploy-p2-1005
-WORKTREE: deploy-p2-1005
+BRANCH: deploy/deploy-p2-1005-attempt2
+WORKTREE: deploy-p2-1005-attempt2
 BASE: main
 TIP: 6269f05e
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-p2-1005.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-p2-1005-attempt2.md
 RULINGS: 2026-10-03 R326, 2026-10-05 R412
-TAG: deploy-2026-10-05-p2
+TAG: deploy-2026-10-05-p2-attempt2
 MIGRATIONS: none
 SET: s3
 
