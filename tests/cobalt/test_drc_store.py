@@ -330,6 +330,86 @@ def test_the_rollback_drops_them_and_forward_brings_them_back(migrated):
         assert migrated.execute("SELECT to_regclass(%s)", (f'"user".{table}',)).fetchone()[0]
 
 
+# flake-fix F1: the `migrated` fixture retries its migration step on an
+# autovacuum deadlock. The module's `_apply` is patched; `migrated` is
+# fetched inside the test, so its raise is the test's own failure.
+
+
+def _patch_apply(fail_with, fail_times):
+    """A stand-in for this module's `_apply`: the first `fail_times` calls
+    raise `fail_with`, later calls run the real one. Returns the list of
+    connections it was handed."""
+    real = globals()["_apply"]
+    seen = []
+
+    def _fake(conn, paths):
+        seen.append(conn)
+        if len(seen) <= fail_times:
+            raise fail_with("constructed by flake-fix F1")
+        return real(conn, paths)
+
+    return _fake, seen
+
+
+@pytest.fixture
+def deadlock_first(monkeypatch):
+    fake, seen = _patch_apply(psycopg.errors.DeadlockDetected, 1)
+    monkeypatch.setitem(globals(), "_apply", fake)
+    return seen
+
+
+@pytest.fixture
+def deadlock_always(monkeypatch):
+    fake, seen = _patch_apply(psycopg.errors.DeadlockDetected, 10)
+    monkeypatch.setitem(globals(), "_apply", fake)
+    return seen
+
+
+@pytest.fixture
+def undefined_table_first(monkeypatch):
+    fake, seen = _patch_apply(psycopg.errors.UndefinedTable, 1)
+    monkeypatch.setitem(globals(), "_apply", fake)
+    return seen
+
+
+@requires_db
+def test_the_migrated_fixture_retries_once_when_the_first_migration_attempt_deadlocks(
+    deadlock_first, request, capsys
+):
+    conn = request.getfixturevalue("migrated")
+    out = capsys.readouterr().out
+    assert "migration retry 1: DeadlockDetected" in out
+    assert "migration retry 2" not in out
+    assert conn.execute("SELECT to_regclass(%s)", (f'"user".{TABLES[0]}',)).fetchone()[0]
+    # Two attempts, two connections: the failed one closed, the second one live.
+    assert len(deadlock_first) == 2
+    assert deadlock_first[0] is not deadlock_first[1] and deadlock_first[1] is conn
+    assert deadlock_first[0].closed and not conn.closed
+
+
+@requires_db
+def test_the_migrated_fixture_fails_on_a_third_deadlock_after_two_retries(
+    deadlock_always, request, capsys
+):
+    with pytest.raises(psycopg.errors.DeadlockDetected):
+        request.getfixturevalue("migrated")
+    out = capsys.readouterr().out
+    assert "migration retry 1: DeadlockDetected" in out
+    assert "migration retry 2: DeadlockDetected" in out
+    assert "migration retry 3" not in out
+    assert len(deadlock_always) == 3
+    assert len({id(c) for c in deadlock_always}) == 3
+    assert all(c.closed for c in deadlock_always)
+
+
+@requires_db
+def test_the_migrated_fixture_does_not_retry_another_error(undefined_table_first, request, capsys):
+    with pytest.raises(psycopg.errors.UndefinedTable):
+        request.getfixturevalue("migrated")
+    assert "migration retry" not in capsys.readouterr().out
+    assert len(undefined_table_first) == 1
+
+
 @requires_db
 def test_a_parsed_trading_log_stores_one_import_row_and_every_fill(migrated):
     store = DrcStore()
