@@ -6,6 +6,7 @@ BASE: 1f4a8598
 TIP: e249bd83
 REPORT: /Users/cobalt/cobalt-wt/next-flow-1006/docs/40 - DevDocs/reports/next-flow-build-2026-10-06.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/next-flow-check-2026-10-06.md
+HOUSE A: none — overruled 2026-10-02 R47
 HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-05 R438, 2026-10-05 R412
