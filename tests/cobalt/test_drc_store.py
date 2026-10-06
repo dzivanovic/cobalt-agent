@@ -230,12 +230,26 @@ class _Proxy:
 
 @pytest.fixture
 def migrated(monkeypatch):
-    conn = db.connect_migration(env.DEV_DB_NAME)
-    conn.autocommit = False
+    # flake-fix F1: an autovacuum worker can deadlock the migration step;
+    # the whole step is retried at most twice, each on a fresh connection.
+    for attempt in range(1, 4):
+        conn = db.connect_migration(env.DEV_DB_NAME)
+        conn.autocommit = False
+        try:
+            _apply(conn, FORWARD)
+            break
+        except psycopg.errors.DeadlockDetected:
+            conn.rollback()
+            conn.close()
+            if attempt == 3:
+                raise
+            print(f"migration retry {attempt}: DeadlockDetected")
+        except BaseException:
+            conn.rollback()
+            conn.close()
+            raise
     counter = iter(range(10_000))
     try:
-        _apply(conn, FORWARD)
-
         def _connect(dbname, *, side, allow_prod=False):
             assert dbname == env.DEV_DB_NAME
             proxy = _Proxy(conn, f"drc_sp_{next(counter)}")
