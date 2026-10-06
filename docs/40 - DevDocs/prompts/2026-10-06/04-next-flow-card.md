@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — cto-2026-10-05.md R438
 BRANCH: ops/next-flow-1006
 WORKTREE: next-flow-1006
 BASE: 1f4a8598
-TIP:
+TIP: e249bd83
 REPORT: /Users/cobalt/cobalt-wt/next-flow-1006/docs/40 - DevDocs/reports/next-flow-build-2026-10-06.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/next-flow-check-2026-10-06.md
+HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-05 R438, 2026-10-05 R412
 
