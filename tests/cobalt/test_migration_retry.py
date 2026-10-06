@@ -112,3 +112,34 @@ def test_failed_attempt_is_closed_when_its_rollback_raises(monkeypatch, capsys):
 
     assert len(opened) == 1 and opened[0].closed is True
     assert len(seen) == 1
+
+
+def test_xl76_reports_false_when_the_migration_step_fails(monkeypatch, capsys):
+    import importlib.util
+    from pathlib import Path
+
+    import migration_retry
+
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "experiments"
+        / "handicap_h1"
+        / "test_xl76_membership_harness.py"
+    )
+    spec = importlib.util.spec_from_file_location("xl76_failure_probe", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    def fail(_apply, _paths):
+        raise psycopg.errors.UndefinedTable("constructed XL76 migration failure")
+
+    monkeypatch.setattr(migration_retry, "open_migrated", fail)
+    with pytest.raises(
+        psycopg.errors.UndefinedTable,
+        match="constructed XL76 migration failure",
+    ):
+        module.test_xl76_2_3_harness_shape_at_step_1(monkeypatch)
+
+    out = capsys.readouterr().out
+    assert "XL76: harness_applies=False" in out
