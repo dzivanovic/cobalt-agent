@@ -40,3 +40,6 @@ Per matched trade:
 
 ## 2026-10-04 — drc-d5 check
 `_diff_line` reads the stored keys `export` / `export_only` and `reconcile` reads `export_held` (no vendor name in an identifier, L31; check A2). The rendered words are unchanged.
+
+## 2026-10-06 — drc-d5 O1 + B2
+The `reconcile` docstring names the new status form, `adjusted to DAS: <k> rows (<ids>) — then refused: <refusal>`, which `reconcile._status` stores. The renderer is unchanged.

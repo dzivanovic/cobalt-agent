@@ -471,8 +471,9 @@ def _unresolved(day: date, view: dict, stored: list[dict], derived_day: dict, st
                 applied: dict[str, dict]) -> tuple[list[dict], dict]:
     """D5-3 (R90): the day's open unresolved items and the read they come
     from (L57). Carried in from the DRC the day's book starts from (its
-    stored `seed` row's `from_day`); kept from this day's earlier build;
-    cleared by this build's successful reconcile of the card or by a CURRENT `resolve`
+    stored `seed` row's `from_day`); kept from this day's earlier build (or,
+    after a re-pair deleted it, from the list the store kept on the `day`
+    row — drc-d5 O1); cleared by this build's successful reconcile of the card or by a CURRENT `resolve`
     row of this day naming the trade (a restated one is not current —
     K3-4 (a)'s read)."""
     prior = (view.get("seed") or {}).get("from_day")
@@ -481,7 +482,10 @@ def _unresolved(day: date, view: dict, stored: list[dict], derived_day: dict, st
         before = next((r for r in store.rows_for(date.fromisoformat(prior)) if r["kind"] == "build_day"), None)
         carried_in = list(((before or {}).get("derived") or {}).get("unresolved") or [])
     earlier = next((r for r in stored if r["kind"] == "build_day"), None)
-    same_day = list(((earlier or {}).get("derived") or {}).get("unresolved") or [])
+    # drc-d5 O1: no `build_day` stored (a re-pair deleted it) → the items the
+    # store kept on the day's `day` row; once recorded again, `build_day` only.
+    kept = derived_day if earlier is None else earlier.get("derived")
+    same_day = list((kept or {}).get("unresolved") or [])
     stale = {s["resolve_id"] for s in stale_resolves}
     resolved = {
         r["ref"] for r in stored

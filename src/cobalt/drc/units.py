@@ -246,7 +246,8 @@ def _history_line(h: dict) -> str:
 def reconcile(day_row: dict, builds: Iterable[dict]) -> str:
     """D5 (v2 §6 `:140`, R67 / R90): per matched trade, the export against
     the card's legs as found (the "before"), his taps and held statements as
-    history, then what was written (`adjusted to DAS: <k> rows (<ids>)`) or
+    history, then what was written (`adjusted to DAS: <k> rows (<ids>)`, and
+    `… — then refused: <refusal>` when a later write was refused) or
     why nothing was; then every unresolved item. From the stored
     `build_trade.derived["reconcile"]` and `build_day.derived["unresolved"]`
     only."""

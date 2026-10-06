@@ -62,3 +62,6 @@ This supersedes "no leg write (D5)" under `## What it never does`.
 
 ## 2026-10-05 — drc-d5 check, pass 2
 The trade blocks' refused cards are `reconcile.refused_cards(unresolved)`: a D5-c item alone no longer makes realized R `not computed` (check B1).
+
+## 2026-10-06 — drc-d5 O1 + B2
+`_unresolved` reads this day's own items from its stored `build_day`. When no `build_day` is stored, because a K2 re-pair deleted it, it reads the list the store kept on the day's `day` row (`derived.unresolved`). Once the day's `build_day` is recorded again, only that row is read. The kept items clear the way this day's items do: by a successful reconcile of the card, or by a current `resolve` row naming the trade. So a re-paired date (`check=False`) keeps its refusal in the reconcile unit and in A31 (check O1 / B3, R326).
