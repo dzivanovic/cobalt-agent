@@ -3291,3 +3291,145 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - STOP LINE (L35), `reports/close-2026-10-03.md`: `CLOSE PUSHED 80a6fbec · days: 1 · … · push: verified`.
 - DEPLOY (L35): `git tag --list "deploy-2026-10-04*"` = `deploy-2026-10-04-2` (set 3b, R261); `git tag --list "deploy-2026-10-05*"` = none (S3 not deployed).
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-04.md` `## 8`.
+
+### 2026-10-05 — Workflow set deployed (guard-b, 03d, preflight-fixes, hub-text, launcher fix-round); K3 deployed after two failed attempts; S3 resumes
+- R336 10-05 06:37 RECORD: desk `ee876c19` woke; `8dabc7a6` removed.
+- R337 10-05 06:39 DESK RECORD: `desk-launch.sh` refused `uv run` on a prompt line; S3 (d2) probe re-scoped read-only.
+- R338 10-05 06:39 LAUNCHED: S3 (d2) probe `b05424b9`.
+- R339 10-05 06:40 LAUNCHED: missed 10-04 close `4c9177c4`.
+- R340 10-05 06:41 DESK RECORD: close timer (set 3b) not installed; first on his installs-owed.
+- R341 10-05 06:42 DESK RECORD: close `4c9177c4` FAILED AUTHORIZATION; `CONTINUE: AUTHORIZATION` sent.
+- R342 10-05 06:42 RECORD: probe PROBE DONE: `d483a417` moved (d2) outside the lock; probe removed.
+- R343 10-05 06:42 DESK RECORD: (a) `validate --no-db` card + DEPLOY-HUB (d2) change; (b) drop (d2) refused.
+- R344 10-05 06:43 RECORD: close `4c9177c4` CLOSE PUSHED `aba43a8c`.
+- R345 10-05 06:44 LAUNCHED: validate-no-db drafter `b77d9c61`.
+- R346 10-05 06:45 DESK RECORD: R327 standing half + R331 folded into L43; both APPLIED.
+- R347 10-05 06:47 HIS: small findings go as rows on the same card; no new card (brain relay A).
+- R348 10-05 06:47 HIS: nightly close is a standing MUST, by 21:30 ET (brain relay B).
+- R349 10-05 06:47 HIS: a ruling is written into vault memory in the cycle it is recorded (brain relay C).
+- R350 10-05 06:47 HIS: D5 may ship with O1 pinned; order rows+memory, installs, desk restart, brain restart (brain relay D).
+- R351 10-05 06:48 DESK RECORD: (d2) fix = rows P5–P6 on card `03d`; drafter `b77d9c61` removed.
+- R352 10-05 06:48 LAUNCHED: 03d rows drafter `764405d3`.
+- R353 10-05 06:49 DESK RECORD: memory written (L75, L58, contract lines R236, R347–R349).
+- R354 10-05 06:51 RECORD: 03D ROWS DRAFTED P5–P6, decisions 4 KEEP; BASE `e6ba65e6`.
+- R355 10-05 06:52 LAUNCHED: 03d card preflight `d42cf990`.
+- R356 10-05 06:54 LAUNCHED: 03d build `9cdc46bb`; preflight ready YES; his installs done.
+- R357 10-05 06:56 RECORD: desk `ecc18b72` woke; `ee876c19` removed.
+- R358 10-05 06:58 DESK RECORD: brain `3d0c8427` stopped; handover committed `ee238541`.
+- R359 10-05 06:59 LAUNCHED: brain `aa94b309`.
+- R360 10-05 07:07 RECORD: his question on the new cycle relayed to the brain.
+- R361 10-05 07:08 DESK RECORD: brain answered him; skipping pre-merge (d2) once is his call (OPEN TO HIM).
+- R362 10-05 07:09 HIS: read-only gain-measure survey prompt, Sonnet preflight, launch beside the 03d build.
+- R363 10-05 07:10 LAUNCHED: gain-survey drafter `bb53d3d4`.
+- R364 10-05 07:11 DESK RECORD: survey prompt DRAFTED `09`; preflight prompt `10`.
+- R365 10-05 07:12 LAUNCHED: gain-survey preflight `dfba1fc2`.
+- R366 10-05 07:13 DESK RECORD: preflight ready YES; script refused survey line (`git commit` string); re-issue `11`.
+- R367 10-05 07:14 LAUNCHED: gain-measure survey `e40d2817`.
+- R368 10-05 07:15 HIS: recut S3 now; (d2) skipped this run only; `03d` off S3; three small items on separate cards.
+- R369 10-05 07:17 RECORD: S3 recut attempt 2 FAILED gate G (d2), validate exit 1.
+- R370 10-05 07:17 LAUNCHED: S3 recut `3e0755b2`.
+- R371 10-05 07:18 HIS: next desk runs Sonnet 5.5; brain stays Opus. APPLIED.
+- R372 10-05 07:21 RECORD: survey `e40d2817` SURVEY DONE (43 jobs, 52 cells not recorded).
+- R373 10-05 07:22 DESK RECORD: survey judged; four recommendations to him.
+- R374 10-05 07:27 RECORD: `03d` build `9cdc46bb` BUILT `74370e5d`.
+- R375 10-05 07:29 HIS: brain R1–R4 approved (deploy when READY; hub text first; no second dev DB; MEASURE at stop lines). APPLIED.
+- R376 10-05 07:29 HIS: a small fix after its check is the original builder's on the same card. APPLIED (L75).
+- R377 10-05 07:45 RECORD: S3 recut `3e0755b2` FAILED gate G (c): 2 K3-6 tests red; production untouched.
+- R378 10-05 07:45 DESK RECORD: D5 off S3; recut ships K3, P2, guard-b.
+- R379 10-05 07:46 LAUNCHED: S3 card drafter `d663c22a`; `03d` check `78c470f9`.
+- R380 10-05 07:50 RECORD: desk `baa42ae9` took over; `ecc18b72` removed.
+- R381 10-05 07:59 DESK RECORD: three small items go on their original cards (R376 over R368).
+- R382 10-05 08:08 RECORD: `03d` check DONE tip `53b56384`, ready YES.
+- R383 10-05 08:39 OPEN: brain relay "Dejan said" not recorded as a ruling. SUPERSEDED by R384.
+- R384 10-05 08:44 HIS: a brain-desk message starting "Dejan said" is his own word. APPLIED (L79).
+- R385 10-05 08:50 HIS: apply everything the brain relayed; R381 done.
+- R386 10-05 08:50 LAUNCHED: S3 card preflight `c92537b4`; card `02` committed `4133427e`.
+- R387 10-05 08:53 HIS: workflow set deploys first; S3/K3/P2/D5 wait. APPLIED.
+- R388 10-05 08:53 RECORD: S3 card preflight DONE, ready NO; moot (S3 waits).
+- R389 10-05 08:57 HIS: one deploy per night dropped; deploys run any hour. APPLIED (L43).
+- R390 10-05 08:54 HIS: one feature per deploy, in sequence. APPLIED (L68).
+- R391 10-05 09:00 HIS: commit R389/R390; (d2) skipped for the workflow deploy.
+- R392 10-05 09:03 HIS: no Grok read for 03d; deploy 03d now.
+- R393 10-05 09:07 LAUNCHED: 03d deploy hub `1fb41be9`.
+- R394 10-05 09:31 RECORD: 03d deploy `1fb41be9` FAILED gate G (c); production untouched.
+- R395 10-05 09:42 RECORD: guard-b card drafted (`15`) by `b8b0c07a`.
+- R396 10-05 09:47 LAUNCHED: guard-b preflight `8cc6c1cf`; 03d P7 drafter `4cfc41c4`.
+- R397 10-05 09:33 RECORD: guard-b preflight ready YES; P7 drafter DONE.
+- R398 10-05 09:34 LAUNCHED: guard-b deploy hub `0437421e`.
+- R399 10-05 10:10 RECORD: guard-b DEPLOYED `deploy-2026-10-05-guard-b` main `69920ad3`, smoke GREEN.
+- R400 10-05 10:11 LAUNCHED: 03d P7 fix, builder CONTINUE `e0df37c6`.
+- R401 10-05 10:37 DESK RECORD: P7 build FAILED W; `CONTINUE` option A sent.
+- R402 10-05 10:41 LAUNCHED: P7 card-amend drafter `d665dfa1`.
+- R403 10-05 10:39 DESK RECORD: desk `6af1ae05` took over; P7 card amended `70f9c9cd`.
+- R404 10-05 11:08 LAUNCHED: 03d deploy on card 14, tip `36fa02ad` (launch refused, see R405).
+- R405 10-05 11:10 DESK RECORD: deploy launch refused (check tip `53b56384` ≠ `36fa02ad`); re-check queued.
+- R406 10-05 11:16 LAUNCHED: 03d deploy, head `07655b9b`; re-check `aa53dfd4` ready YES.
+- R407 10-05 11:20 DESK RECORD: deploy `6f2eef96` FAILED STEP-R, nothing touched (radar window text).
+- R408 10-05 11:53 HIS: per-case window override for `deploy-03d-1005`; deploy now.
+- R409 10-05 11:54 RECORD: 03d recut attempt 3 FAILED resume (b): no `GATE GREEN` in `## L68 GATE`.
+- R410 10-05 12:31 RECORD: 03d DEPLOYED `deploy-2026-10-05-03d-attempt3` main `93dcc1f7`, smoke GREEN.
+- R411 10-05 13:14 HIS: every draft uses only existing `ops/desk/` scripts. APPLIED (L62).
+- R412 10-05 13:16 HIS: drop pre-merge (d2) from DEPLOY-HUB; no outside-house reads; production HOLD. APPROVED.
+- R413 10-05 13:25 LAUNCHED: preflight.sh two-fix card drafter.
+- R414 10-05 13:19 RECORD: drafter `7c6353ec` DRAFTED card 20.
+- R415 10-05 13:20 LAUNCHED: cite-fix drafter (card 20 preflight NO).
+- R416 10-05 13:21 LAUNCHED: card 20 preflight round 2.
+- R417 10-05 13:22 LAUNCHED: build `preflight-fixes` on card 20.
+- R418 10-05 13:40 LAUNCHED: launcher fix-round drafter (card 21).
+- R419 10-05 13:41 LAUNCHED: hub-text drafter (card 26).
+- R420 10-05 13:44 LAUNCHED: card 21 preflight; drafter `1742071a` DRAFTED.
+- R421 10-05 13:43 LAUNCHED: card 21 amend drafter (`fix report` column).
+- R422 10-05 13:45 LAUNCHED: hub-text preflight and launcher amend 2.
+- R423 10-05 13:46 LAUNCHED: launcher amend 3.
+- R424 10-05 13:49 DESK RECORD: desk `799a133f` took over; amend 3 `1dfec222`.
+- R425 10-05 13:49 DESK RECORD: brain ruled row F3 on card 20; card 26 rows to two amend drafters.
+- R426 10-05 13:52 LAUNCHED: amend drafters `9980dd18`, `34021038` DONE; preflights 34/35/36.
+- R427 10-05 13:54 LAUNCHED: builds `325a5828` (launcher), `ccc04360` (hub-text); card 20 preflight r3 NO.
+- R428 10-05 13:56 LAUNCHED: card 20 new worker `16afe77c` at CONTINUE E3.
+- R429 10-05 14:09 LAUNCHED: card 20 BUILT `08cfc80e`; check `1c5121f5`.
+- R430 10-05 14:24 LAUNCHED: card 26 BUILT `6b939b00`; check `fb16a942`.
+- R431 10-05 14:30 DESK RECORD: card 26 check ready YES; brain ruled DECISION 1 (b).
+- R432 10-05 14:32 LAUNCHED: card 20 CHECK DONE ready YES `0af97be7`; deploy-card drafter.
+- R433 10-05 14:33 LAUNCHED: deploy card 39 drafted (`aedf6bac`); preflight `dd409d50`.
+- R434 10-05 14:35 LAUNCHED: deploy card 39 (tip `0af97be7`).
+- R435 10-05 15:12 RECORD: preflight-fixes DEPLOYED main `c4e12797`, tag `deploy-2026-10-05-preflight-fixes`.
+- R436 10-05 15:14 LAUNCHED: launcher check `ffc90660` (card 21).
+- R437 10-05 15:33 HIS: no-outside-house reads cover cards 20, 21, 26 only. APPLIED.
+- R438 10-05 15:42 HIS: next flow only after K3, P2, D5 DEPLOYED. APPLIED.
+- R439 10-05 15:44 DESK RECORD: card 21 check ready NO; rows F2–F4 on card 21; card 26 deploys first.
+- R440 10-05 15:46 LAUNCHED: hub-text deploy preflight `ae331260`; card 21 preflight r3.
+- R441 10-05 15:48 LAUNCHED: hub-text deploy card 41.
+- R442 10-05 16:24 RECORD: hub-text DEPLOYED main `1ff72b72`, tag `deploy-2026-10-05-hub-text`.
+- R443 10-05 16:30 LAUNCHED: desk REFRESH at ~292,000; launcher amend 5 DONE.
+- R444 10-05 16:56 LAUNCHED: desk `3508d3bf` took over; card 21 preflight r4 `385c6318`.
+- R445 10-05 16:58 LAUNCHED: preflight r4 ready YES; builder `cff31e58`.
+- R446 10-05 17:21 DESK RECORD: builder `cff31e58` FAILED E3 (no `git merge`); row F3 pasted.
+- R447 10-05 17:58 RECORD: builder BUILT `dc2a80b4`; one check pass.
+- R448 10-05 18:25 LAUNCHED: card 21 check `314e4c27` ready YES; deploy-card drafter.
+- R449 10-05 18:27 LAUNCHED: deploy card 47 drafted (1 decision); preflight prompt 48.
+- R450 10-05 18:26 LAUNCHED: card 47 preflight `240c711c` NO (3 fails); amend drafter.
+- R451 10-05 18:40 LAUNCHED: amend drafter `08c85969` DONE; preflight r2.
+- R452 10-05 18:28 LAUNCHED: card 47 preflight r2 `fc2709d2` ready YES.
+- R453 10-05 18:30 LAUNCHED: deploy hub `09038999` (card 47).
+- R454 10-05 19:05 DESK RECORD: launcher card 21 DEPLOYED main `21a06ce3`, tag `deploy-2026-10-05-launcher-fixround`; workflow set complete.
+- R455 10-05 19:10 LAUNCHED: S3 resumes, K3 first; deploy-card drafter.
+- R456 10-05 19:08 LAUNCHED: K3 deploy-card drafter `883a6d5a` DONE (card 51).
+- R457 10-05 19:10 LAUNCHED: K3 preflight `91b7a36f` NO (3 fails); amend drafter.
+- R458 10-05 19:11 LAUNCHED: K3 amend drafter `f2b9d404` DONE.
+- R459 10-05 19:12 LAUNCHED: K3 preflight r2 `1cd54069` ready YES.
+- R460 10-05 19:15 LAUNCHED: K3 deploy hub `fdd8b3e7` (card 51).
+- R461 10-05 19:39 DESK RECORD: K3 deploy `fdd8b3e7` FAILED STEP-G (c); nothing landed.
+- R462 10-05 19:45 LAUNCHED: K3 builder CONTINUE K3-F1; row pasted on K3's card.
+- R463 10-05 20:14 LAUNCHED: K3 BUILT `0ebdf95e`, gate green; drafter re-points card 51.
+- R464 10-05 20:16 LAUNCHED: re-point drafter `7e8755fb` DONE; preflight prompt 56.
+- R465 10-05 20:17 LAUNCHED: K3 preflight r3 `c0d6eee2` ready YES; recut next.
+- R466 10-05 20:18 RECORD: recut deploy-k3-1005 attempt 2 FAILED gate G (c) pass 1.
+- R467 10-05 20:19 LAUNCHED: K3 deploy attempt 2 hub `c4bb31f1`.
+- R468 10-05 20:46 RECORD: K3 deploy attempt 2 FAILED STEP-G pass 1 (DeadlockDetected flake).
+- R469 10-05 20:45 RECORD: recut attempt 3 FAILED gate G (c) (test_x9 DeadlockDetected flake).
+- R470 10-05 20:46 LAUNCHED: K3 deploy attempt 3 hub `cb42fe13`.
+- R471 10-05 21:23 RECORD: K3 DEPLOYED main `07a4b8fe` (attempt 3), smoke GREEN; row F5 pasted on card 21.
+- HANDOVERS (L35, `cto-2026-10-05.md` §5 HISTORY): `ee876c19`→`ecc18b72` 06:55, →`baa42ae9` 07:46, →`6af1ae05` 10:42, →`799a133f` 13:47, →`3508d3bf` 16:25, →`2ad47a8b` 21:24.
+- STOP LINE (L35), `reports/close-2026-10-04.md`: `CLOSE PUSHED aba43a8c · days: 1 · … · push: verified`.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-05*"` = `deploy-2026-10-05-03d-attempt3`, `deploy-2026-10-05-guard-b`, `deploy-2026-10-05-hub-text`, `deploy-2026-10-05-k3-attempt3`, `deploy-2026-10-05-launcher-fixround`, `deploy-2026-10-05-preflight-fixes`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-05.md` `## 8`.

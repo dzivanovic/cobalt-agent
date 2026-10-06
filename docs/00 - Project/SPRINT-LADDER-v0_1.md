@@ -774,6 +774,31 @@ OFF-LADDER work of 2026-10-04 (ruled, not on a ladder line; each with the ruling
 | Second-writer survey (read-only, Sonnet) | DRAFTED, launch owed | Drafter `eef43e54` (R315, R316) → `prompts/2026-10-05/01-second-writer-survey.md`; his A on the 5 read strings, this seat only (R326). Launch Mon 10-05 17:5x. |
 | Standing: no deploy waits on a ruling a later card can resolve | RULED | 10-05 R327, R331 (his words; both `APPROVED — pending fold`): S3 deploys now, any hour; only harm to production may hold a deploy. |
 
+### Status 2026-10-05
+S3 status block (ruled 09-19 R14); S3's sixth; the earlier `### Status` blocks above stay as written. Written by close hub `close-1005` for 10-05 alone from `reports/cto-2026-10-05.md` rows R336–R471 (06:37 → 21:23 ET); re-verified against the tree (L35): `git tag --list "deploy-2026-10-05*"` = `deploy-2026-10-05-03d-attempt3`, `-guard-b`, `-hub-text`, `-k3-attempt3`, `-launcher-fixround`, `-preflight-fixes`. Status only — scope, dates and order change by his ruling alone. Legend: DONE-LIVE · DONE-DARK · BUILT-NOT-MERGED · BUILDING · NOT STARTED.
+
+| S3 feature | Status | Evidence |
+|---|---|---|
+| F11 Fill recompute + fill/exit capture | DONE-LIVE | Unchanged (`deploy-2026-09-30-2`, `-3`). First live-morning proof not recorded. |
+| F22 Trade-note auto-creation | DONE-LIVE | Unchanged (`deploy-2026-09-30-2`, `-3`, `-4`). |
+| F14 DRC prefill / reconcile / DRC→mode | BUILDING | K3 DONE-LIVE: `deploy-2026-10-05-k3-attempt3` main `07a4b8fe`, smoke GREEN, restarts aset + radar (R471); attempts 1–2 FAILED gate G (R461, R468), K3-F1 fix `0ebdf95e` (R463). D5 BUILT-NOT-MERGED at `c96b5118`, off the S3 deploy (R378); its K3/D5 seam fix is card `03`, not yet built (§5 PLAN 4). |
+| F15 Prediction records | BUILT-NOT-MERGED | P1 live (unchanged). P2 BUILT `437c7299` READY (R323; R378 names `6269f05e`); next feature after K3 (§5 PLAN 3); deploy card not yet drafted. |
+
+**Stop date: 2026-10-07. S3: AT RISK — day 12 of 14 (10-05).** Reason: K3 is live (R471), but P2 and D5 are not deployed and the card-`03` seam fix is not built; one feature per deploy in sequence (R390) with the deploy gate flake DeadlockDetected (R468, R469) leaves two calendar days (10-06, 10-07). The S3 smoke (a live morning from tap through DRC and replay) has not run. The day went to the workflow set (R387) that R387 put ahead of S3. Watch items (not a ruling): the DeadlockDetected flake in `test_x9` (migrated fixture) failed K3 attempts 2 and 3; the flake-fix card is queued by the brain, not built.
+
+OFF-LADDER work of 2026-10-05 (ruled, not on a ladder line; each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Guard-b `06` | DONE-LIVE | 10-05 R387, R390. `deploy-2026-10-05-guard-b` main `69920ad3`, gate green, smoke GREEN, RESTARTS none (R399). |
+| Adoption port `03d` (P5–P7 validate rows) | DONE-LIVE | 10-05 R351, R368, R376, R408 (his window override). `deploy-2026-10-05-03d-attempt3` main `93dcc1f7`, smoke GREEN, radar down 12 s (R410); earlier runs FAILED gate G (c) (R394), STEP-R (R407), resume (R409). |
+| Preflight.sh two fixes (card 20) | DONE-LIVE | 10-05 R412, R417. `deploy-2026-10-05-preflight-fixes` main `c4e12797`, smoke GREEN (R435). |
+| Hub text R375/R376/R389/R390 + drop pre-merge (d2) (card 26) | DONE-LIVE | 10-05 R412 (his), R419. `deploy-2026-10-05-hub-text` main `1ff72b72`, smoke GREEN (R442). |
+| Launcher fix-round (card 21 F1–F4) | DONE-LIVE | 10-05 R376, R418. `deploy-2026-10-05-launcher-fixround` main `21a06ce3`, gate 3786/4639/146 (R454). Row F5 pasted `6fce2ccb`, builder not launched (R471, §5 PLAN 2). |
+| Gain-measure survey | DONE (read-only) | 10-05 R362 (his). Survey `e40d2817` (R372); desk answer `gain-measure-answer-2026-10-05.md` (R373). |
+| Second-writer survey | DRAFTED, launch owed | 10-05 R326 (his A); launch needs a drafter pass for its five read strings (R470). |
+| Next-flow changes 1–4 | QUEUED | 10-05 R438 (his): only after K3, P2, D5 DEPLOYED. |
+| Standing rules of the day | RULED | 10-05 R347–R350, R368, R375, R376, R384, R387, R389, R390, R412, R437 (his; applied in LAWS / contract / hubs, R346, R353). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)
