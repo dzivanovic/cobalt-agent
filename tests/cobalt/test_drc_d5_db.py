@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -54,6 +54,9 @@ TEST_ROUND = _log(
     "09:50:00,TEST,S,10.25,50,ROUTE1,BRK1,ACCT1,Margin,H0000000000602,",
     "09:40:00,TEST,B,10.1,100,ROUTE2,BRK2,ACCT1,Margin,H0000000000601,",
 )
+#: The prior weekday of `D` (`weekday_calendar`'s rule), constructed: its
+#: first file re-pairs `D` (row O1).
+D_PREV = date(2001, 1, 1)
 #: TEST long 100 @ 10.1, out 60 @ 10.25 — 40 held at file end (X11's export).
 TEST_OPEN = _log(
     "09:50:00,TEST,S,10.25,60,ROUTE1,BRK1,ACCT1,Margin,H0000000000605,",
@@ -222,3 +225,38 @@ def test_d5_3_with_db_x11_refused_built_carried_offered_and_cleared_by_resolve(d
     assert not any(l.startswith("unresolved:") for l in _reconcile(root, D_NEXT)), _reconcile(root, D_NEXT)
     assert not any(l.startswith("unresolved:") for l in _a31(root, D_NEXT))
     assert any(l.startswith(prefix) for l in _reconcile(root))  # D's own note keeps its record
+
+
+@requires_db
+def test_check_o1_with_db_a_re_paired_date_keeps_its_unresolved_item(d5_lane, migrated):
+    """Row O1 (check O1 / B3; card `prompts/2026-10-06/39-drc-d5-o1-b2-card.md`):
+    X11's shape on D, then the prior weekday's first file → K2's `record_day`
+    re-pairs D (deleting every kind of D's rows, `build_day` with them) and
+    `rebuild_notes` re-builds D with `check=False`. The refusal is still in
+    D's reconcile unit and A31, kept on D's `day` row; no leg is written."""
+    from cobalt.drc import imports
+
+    root, aset, cards = d5_lane
+    card = _filled(aset)
+    _tap(card, "flat", 100, "10.20")
+    _listed(aset, cards, card)
+    imports.state_book(D, [], now=TEN_ET)
+    result = _drop(D, TEST_OPEN, STATS.read_bytes())
+    assert result.status_line.startswith("READY → DRC built"), result
+    prefix = f"unresolved: card {card} — REFUSED card {card}: CLOSED has no way back"
+    assert any(l.startswith(prefix) for l in _reconcile(root)), _reconcile(root)
+    legs_before = legs_of(aset, card)
+
+    imports.state_book(D_PREV, [], now=TEN_ET)
+    prev = _drop(D_PREV, EEE_ROUND, STATS.read_bytes())
+    assert prev.status_line.startswith("READY → DRC built"), prev
+    ((derived,),) = migrated.execute(
+        "SELECT derived FROM \"user\".drc_rows WHERE day = %s AND kind = 'day'", (D_PREV,)).fetchall()
+    assert derived["repaired"] == [D.isoformat()]  # D was re-paired through record_day
+    assert "  adjustment not written — re-paired date" in _reconcile(root), _reconcile(root)
+    assert any(l.startswith(prefix) for l in _reconcile(root)), _reconcile(root)
+    assert any(l.startswith(prefix) for l in _a31(root)), _a31(root)
+    ((kept,),) = migrated.execute(
+        "SELECT derived->'unresolved' FROM \"user\".drc_rows WHERE day = %s AND kind = 'day'", (D,)).fetchall()
+    assert [i["card_id"] for i in kept] == [card]
+    assert legs_of(aset, card) == legs_before  # never forced (D5-3)

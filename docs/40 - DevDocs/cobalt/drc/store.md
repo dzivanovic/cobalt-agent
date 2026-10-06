@@ -244,6 +244,9 @@ The `migrated` fixture in `tests/cobalt/test_drc_store.py` now retries its migra
 ## 2026-10-06 — flake-fix-2
 The retry loop moved out of the `migrated` fixture, unchanged in behaviour, into ONE test helper, `tests/cobalt/migration_retry.py` `open_migrated(apply, paths)`; the fixture now calls `open_migrated(_apply, FORWARD)` (its module's `_apply`, resolved at the call, so the retry tests that patch it still reach the step). Every other with-DB test that applies migrations on its own migration connection calls the same helper (`db_migrations/cli.md`). No `src/` change.
 
+## 2026-10-06 — drc-d5 O1 + B2
+`_commit` (shared by `record_day` and `rebuild`) still deletes every kind of each day it writes, the build rows with them. Before each delete, a new `_open_items(conn, day)` reads that day's open unresolved items: its `build_day.derived.unresolved`, or, when no `build_day` is stored, the list an earlier re-pair kept on its `day` row. A non-empty list goes back on the re-written `day` row as `derived.unresolved`, through one `derived || …` `UPDATE`, the same way the stale mark is written. Nothing else is kept. There is no new table, migration or kind, and `record_build` is unchanged (check O1 / B3, R326).
+
 ## Tests
 `tests/cobalt/test_drc_store.py` has an offline half (the SQL, the
 registry, the placement map, the one-writer grep). Its with-DB half

@@ -309,7 +309,11 @@ def _status(d: dict, *, writes: Optional[str], applied: Optional[dict]) -> str:
     if applied is not None:
         if applied["written"]:
             ids = ", ".join(f"#{i}" for i in applied["written"])
-            return f"adjusted to DAS: {len(applied['written'])} rows ({ids})"
+            adjusted = f"adjusted to DAS: {len(applied['written'])} rows ({ids})"
+            if applied["refused"] is not None:
+                # drc-d5 B2: a later write refused — said on the status line too.
+                return f"{adjusted} — then refused: {applied['refused']['text']}"
+            return adjusted
         if applied["refused"] is not None:
             return f"nothing written — {applied['refused']['text']}"
         if applied["items"]:

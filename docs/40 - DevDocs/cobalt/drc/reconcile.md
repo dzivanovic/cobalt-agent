@@ -47,3 +47,6 @@ New module (card `prompts/2026-10-04/03-drc-d5-card.md`, rows D5-1 … D5-4). Te
 
 ## 2026-10-05 — drc-d5 check, pass 2
 `refused_cards(items)` names the cards D5-4 reads as refused: every open item except D5-c's (`NO_WRITER_CODE`). A Cobalt leg with no export execution stops no write, so its card's realized R is computed over the current legs, not `not computed — the reconcile was refused`. Check B1.
+
+## 2026-10-06 — drc-d5 O1 + B2
+`_status`: when a write landed and a later write was refused, the status reads `adjusted to DAS: <k> rows (<ids>) — then refused: <refusal>` (check B2, R326). Every other status is unchanged. `running after` is still the count after the refusal; it is never forced (D5-3). Card `prompts/2026-10-06/39-drc-d5-o1-b2-card.md`.

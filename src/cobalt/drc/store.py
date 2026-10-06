@@ -889,7 +889,14 @@ class DrcStore:
         else of that day is touched. `_carried` refuses a marked prior. A
         re-pair that reaches a marked day rewrites its rows whole through
         `_rows`, so the mark leaves with the stale book; nothing else
-        clears it."""
+        clears it.
+
+        drc-d5 O1 (D5-3, R326): every day this deletes keeps its open
+        unresolved items, and only those — `_open_items`, read before the
+        delete, put back on the re-written `day` row as
+        `derived.unresolved` (the same `||` as the stale mark). The DRC
+        build reads them as the day's own items until it records the day's
+        `build_day` again; every build row is still deleted (D3-2r)."""
         later = [
             r[0]
             for r in conn.execute(
@@ -932,6 +939,7 @@ class DrcStore:
                 extra["not_repaired"] = not_repaired
         rows = self._rows(pairing, import_ids, seed, no_trade_id, extra)
         for d, out in [(pairing.day, rows), *writes]:
+            kept = self._open_items(conn, d)
             conn.execute(f"DELETE FROM drc_rows WHERE user_id = {_TENANT} AND day = %s", (d,))
             with conn.cursor() as cur:
                 cur.executemany(
@@ -941,6 +949,12 @@ class DrcStore:
                     """,
                     [(d, kind, ref, Jsonb(i), Jsonb(dv), FN_VERSION) for kind, ref, i, dv in out],
                 )
+            if kept:
+                conn.execute(
+                    f"UPDATE drc_rows SET derived = derived || %s WHERE user_id = {_TENANT} "
+                    "AND day = %s AND kind = 'day'",
+                    (Jsonb({"unresolved": kept}), d),
+                )
         for d in stale:
             conn.execute(
                 f"UPDATE drc_rows SET derived = derived || %s WHERE user_id = {_TENANT} "
@@ -948,6 +962,21 @@ class DrcStore:
                 (Jsonb({"book_stale": stale_mark}), d),
             )
         return len(rows), dates
+
+    @staticmethod
+    def _open_items(conn, day: date) -> list:
+        """drc-d5 O1: the open unresolved items `day` holds before a re-pair
+        deletes its rows — its `build_day.derived.unresolved` when that row
+        is stored, else the list a previous re-pair kept on its `day` row
+        (one home: the `build_day` first). `[]` when neither holds one."""
+        for kind in ("build_day", "day"):
+            row = conn.execute(
+                f"SELECT derived FROM drc_rows WHERE user_id = {_TENANT} AND day = %s AND kind = %s",
+                (day, kind),
+            ).fetchone()
+            if row is not None:
+                return list((row[0] or {}).get("unresolved") or [])
+        return []
 
     @staticmethod
     def _rows(

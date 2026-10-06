@@ -577,20 +577,123 @@ def test_d5_4_a_refused_reconcile_is_not_computed(tmp_path, weekday_calendar):
 # ---------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="check O1: HELD, NOT FIXED — K2's re-pair deletes the day's build rows "
-                                       "(store.py:935, outside D5's files); the follow-up's red")
 def test_check_o1_a_re_paired_date_keeps_its_stored_unresolved_item(tmp_path, weekday_calendar):
-    """Check O1 (D5-3 / X3; build DECISION 4): K2's re-pair deletes every
-    `drc_rows` kind of the day (`store.py:935`), the build rows with them;
-    the re-paired build (`check=False`) writes nothing, so it cannot
-    re-derive the refusal. The item must survive the re-pair."""
+    """Check O1 (D5-3 / X3; build DECISION 4; card 39 row O1): K2's re-pair
+    deletes every `drc_rows` kind of the day (`store.py:935`), the build rows
+    with them; the re-paired build (`check=False`) writes nothing, so it
+    cannot re-derive the refusal. The fixed store keeps the day's open items
+    on the re-written `day` row (`derived["unresolved"]`); the re-paired
+    build reads them as this day's (`same_day`)."""
     from cobalt.drc import build
 
     store, legs, root, deps = _x11(tmp_path)
+    kept = _day_build(store)["derived"]["unresolved"]
     store.build.pop(D)  # K2's re-pair: the day's rows deleted, then re-recorded
-    _record(store, D, trading=DAY1.read_bytes())
+    _record(store, D, trading=DAY1.read_bytes(), extra={"unresolved": kept})  # what the fixed store keeps
     build.rebuild_notes([D], deps=deps)
+    line = f"unresolved: card 42 — {CLOSED_OFF_ZERO}"
+    assert line in _reconcile(root), _reconcile(root)
+    assert line in _a31(root), _a31(root)
+    assert "  adjustment not written — re-paired date" in _reconcile(root)
+    assert _day_build(store)["derived"]["unresolved"] == kept
+    assert len([c for c in legs.calls if c[0] == "correction"]) == 1  # the re-paired build wrote nothing
+
+
+def test_check_o1_the_kept_item_clears_by_a_later_successful_reconcile_of_the_card(tmp_path, weekday_calendar):
+    """Row O1 (X2): a kept item clears only as an item of the day does — here
+    by the event's build of the card succeeding once the writer accepts."""
+    from cobalt.drc import build
+
+    store, legs, root, deps = _x11(tmp_path)
+    kept = _day_build(store)["derived"]["unresolved"]
+    store.build.pop(D)
+    _record(store, D, trading=DAY1.read_bytes(), extra={"unresolved": kept})
+    legs.refuse.clear()
+    build.run_drc_build(build.event_of(D, store), deps=deps)
+    assert not any(l.startswith("unresolved:") for l in _reconcile(root)), _reconcile(root)
+    assert _day_build(store)["derived"]["unresolved"] == []
+
+
+def test_check_o1_a_stored_build_day_is_read_before_the_day_rows_kept_list(tmp_path, weekday_calendar):
+    """Row O1, one home: once the day's `build_day` is recorded again, the
+    build reads that row, never the `day` row's kept list."""
+    from cobalt.drc import build
+
+    store, legs, root, deps = _x11(tmp_path)
+    stale = [dict(_day_build(store)["derived"]["unresolved"][0], refusal="constructed stale item")]
+    _record(store, D, trading=DAY1.read_bytes(), extra={"unresolved": stale})  # build_day still stored
+    build.rebuild_notes([D], deps=deps)
+    assert not any("constructed stale item" in l for l in _reconcile(root)), _reconcile(root)
     assert f"unresolved: card 42 — {CLOSED_OFF_ZERO}" in _reconcile(root), _reconcile(root)
+
+
+def test_check_b2_a_write_then_a_refusal_says_both_on_the_status_line(tmp_path):
+    """Row B2 (check B2's second half; `## OPEN` B2 wording): the entry
+    correction lands (#900), then leg #102's correction is refused → the
+    status reads `adjusted to DAS: 1 rows (#900) — then refused: <text>`.
+    Nothing here asserts running = the export (that would be forcing, D5-3)."""
+    store = _Store()
+    rows = [_leg(101, EEE_CARD, 0, "entry", 15, "40.0500", _at(9, 45)), _eee_tapped()[1]]
+    legs = _Legs([_eee_card()], rows,
+                 refuse={102: legs_mod.LegRefused("stopped", "REFUSED card 41: exit correction stopped")})
+    root, _ = _built(tmp_path, store, _record(store, D, trading=DAY1.read_bytes()), legs, [_eee_card()])
+    body = _reconcile(root)
+    assert "  adjusted to DAS: 1 rows (#900) — then refused: REFUSED card 41: exit correction stopped" in body, body
+    assert [c[1] for c in legs.calls] == [101, 102]
+
+
+def test_check_own_o1_a_later_day_carries_the_item_a_re_paired_unrebuilt_prior_kept(tmp_path, weekday_calendar):
+    """Check (drc-d5-o1-b2) O1, row O1 / D5-3: a re-paired D whose rebuild has
+    not run holds its item on its `day` row only; the first build of D_NEXT
+    still carries it (`_unresolved`'s `carried_in`)."""
+    from cobalt.drc import build
+
+    store, legs, root, deps = _x11(tmp_path)
+    kept = _day_build(store)["derived"]["unresolved"]
+    store.build.pop(D)  # K2's re-pair deleted D's build rows; D's rebuild has not run
+    _record(store, D, trading=DAY1.read_bytes(), extra={"unresolved": kept})  # what the fixed store keeps
+    build.run_drc_build(_day(store, D_NEXT, EEE_ROUND, _carried(store)), deps=deps)
+    line = f"unresolved: card 42 — {CLOSED_OFF_ZERO}"
+    assert line in _reconcile(root, D_NEXT), _reconcile(root, D_NEXT)
+
+
+def test_check_own_o2_the_page_lists_the_item_a_re_paired_unrebuilt_day_kept(tmp_path, weekday_calendar):
+    """Check (drc-d5-o1-b2) O2, row O1 / D5-3: while a re-paired D is not
+    rebuilt, the `/drc` page lists the item the store kept on D's `day` row."""
+    from cobalt.drc import imports
+
+    store, legs, root, deps = _x11(tmp_path)
+    kept = _day_build(store)["derived"]["unresolved"]
+    store.build.pop(D)
+    _record(store, D, trading=DAY1.read_bytes(), extra={"unresolved": kept})
+    lines = [u.line for u in imports._unresolved_lines(store, D, None, [])]
+    assert lines == [f"unresolved: card 42 — {CLOSED_OFF_ZERO}"], lines
+
+
+def test_o2_an_unbuilt_day_lists_the_item_its_re_paired_unrebuilt_prior_kept(tmp_path, weekday_calendar):
+    """Row O2, the prior's fallback: D_NEXT not built, its book starts from D;
+    D re-paired and not rebuilt → the page lists D's kept item on D_NEXT,
+    RESOLVE offered when the trade is carried in."""
+    from cobalt.drc import imports
+
+    store, legs, root, deps = _x11(tmp_path)
+    kept = _day_build(store)["derived"]["unresolved"]
+    store.build.pop(D)
+    _record(store, D, trading=DAY1.read_bytes(), extra={"unresolved": kept})
+    got = imports._unresolved_lines(store, D_NEXT, argparse.Namespace(from_day=D), [kept[0]["trade_id"]])
+    assert [(u.line, u.resolve) for u in got] == [(f"unresolved: card 42 — {CLOSED_OFF_ZERO}", True)], got
+
+
+def test_o2_the_page_reads_a_stored_build_day_before_the_day_rows_kept_list(tmp_path, weekday_calendar):
+    """Row O2, one home: with D's `build_day` stored, the page never reads a
+    list on D's `day` row."""
+    from cobalt.drc import imports
+
+    store, legs, root, deps = _x11(tmp_path)
+    stale = [dict(_day_build(store)["derived"]["unresolved"][0], refusal="constructed stale item")]
+    _record(store, D, trading=DAY1.read_bytes(), extra={"unresolved": stale})  # build_day still stored
+    lines = [u.line for u in imports._unresolved_lines(store, D, None, [])]
+    assert lines == [f"unresolved: card 42 — {CLOSED_OFF_ZERO}"], lines
 
 
 def test_check_o2_two_unresolved_items_of_one_card_are_both_carried(tmp_path, weekday_calendar):
