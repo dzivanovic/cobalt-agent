@@ -642,6 +642,36 @@ def test_check_b2_a_write_then_a_refusal_says_both_on_the_status_line(tmp_path):
     assert [c[1] for c in legs.calls] == [101, 102]
 
 
+def test_check_own_o1_a_later_day_carries_the_item_a_re_paired_unrebuilt_prior_kept(tmp_path, weekday_calendar):
+    """Check (drc-d5-o1-b2) O1, row O1 / D5-3: a re-paired D whose rebuild has
+    not run holds its item on its `day` row only; the first build of D_NEXT
+    still carries it (`_unresolved`'s `carried_in`)."""
+    from cobalt.drc import build
+
+    store, legs, root, deps = _x11(tmp_path)
+    kept = _day_build(store)["derived"]["unresolved"]
+    store.build.pop(D)  # K2's re-pair deleted D's build rows; D's rebuild has not run
+    _record(store, D, trading=DAY1.read_bytes(), extra={"unresolved": kept})  # what the fixed store keeps
+    build.run_drc_build(_day(store, D_NEXT, EEE_ROUND, _carried(store)), deps=deps)
+    line = f"unresolved: card 42 — {CLOSED_OFF_ZERO}"
+    assert line in _reconcile(root, D_NEXT), _reconcile(root, D_NEXT)
+
+
+@pytest.mark.xfail(strict=True, reason="check (drc-d5-o1-b2) O2: HELD, NOT FIXED — the page reads `build_day` "
+                                       "only (imports.py:1036, outside the card's files); the follow-up's red")
+def test_check_own_o2_the_page_lists_the_item_a_re_paired_unrebuilt_day_kept(tmp_path, weekday_calendar):
+    """Check (drc-d5-o1-b2) O2, row O1 / D5-3: while a re-paired D is not
+    rebuilt, the `/drc` page lists the item the store kept on D's `day` row."""
+    from cobalt.drc import imports
+
+    store, legs, root, deps = _x11(tmp_path)
+    kept = _day_build(store)["derived"]["unresolved"]
+    store.build.pop(D)
+    _record(store, D, trading=DAY1.read_bytes(), extra={"unresolved": kept})
+    lines = [u.line for u in imports._unresolved_lines(store, D, None, [])]
+    assert lines == [f"unresolved: card 42 — {CLOSED_OFF_ZERO}"], lines
+
+
 def test_check_o2_two_unresolved_items_of_one_card_are_both_carried(tmp_path, weekday_calendar):
     """Check O2 (D5-3 / X3): two Cobalt legs with no DAS execution on one card
     are two unresolved items (D5-c); the next day's build carries both."""
