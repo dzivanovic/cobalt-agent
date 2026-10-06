@@ -502,7 +502,8 @@ brain
     # clean, and names production reads launches with ` PROD-READ: <date> R<n>` after `follow it
     # exactly.` — the marker bare-guard.py G2 reads in the seat's first message. A line that
     # already types `PROD-READ:` is refused unless it holds exactly that stamp, once, in that place;
-    # it is then not stamped twice
+    # it is then not stamped twice. The row's status cell starts APPROVED (not DISAPPROVED) and it
+    # names a production read as words (not `production ready`) (check A1, B4)
     stamp=""
     if [ "$(grep -c '^RULINGS:' "$pfile")" -eq 1 ]; then
         case "$prulings" in
@@ -510,7 +511,8 @@ brain
             *)
                 if ( ruling_row "$prulings" ) 2>/dev/null \
                     && git -C "$REPO" diff --quiet -- "$REPORTS/cto-${prulings%% *}.md" \
-                    && grep "^| ${prulings#* } |" "$REPORTS/cto-${prulings%% *}.md" | grep -q -i -F "production read"; then
+                    && grep "^| ${prulings#* } |" "$REPORTS/cto-${prulings%% *}.md" | grep -q -F "| APPROVED" \
+                    && grep "^| ${prulings#* } |" "$REPORTS/cto-${prulings%% *}.md" | grep -q -i -E "production reads?([^[:alpha:]]|$)"; then
                     stamp=" PROD-READ: $prulings"
                 fi ;;
         esac
@@ -521,13 +523,19 @@ brain
             [ -n "$stamp" ] || refuse "the launch line types PROD-READ: but its RULINGS row proves no production read (one row, HIS RULING + APPROVED, committed, naming production reads; his 2026-10-06 R511)"
             pr_n=$(printf '%s\n' "$line" | grep -o -F 'PROD-READ:' | wc -l | tr -d ' ')
             case "$line" in
-                *"$pre$stamp"[0-9]*) pr_n=0 ;;
-                *"$pre$stamp"*) ;;
+                *"$pre$stamp\" "*) ;;
                 *) pr_n=0 ;;
             esac
             [ "$pr_n" -eq 1 ] || refuse "the launch line types a PROD-READ: marker other than the launcher's stamp '$stamp', once, after 'follow it exactly.' (his 2026-10-06 R511)" ;;
         *)
             [ -z "$stamp" ] || line="${line%%"$pre"*}$pre$stamp${line#*"$pre"}" ;;
+    esac
+    # check O5, A5: the message eval hands to claude is the Read sentence and, when proven, the
+    # stamp, closed there; text after it could join into a marker (`PROD""-READ:`, an empty
+    # expansion) that the literal test above never sees
+    case "$line" in
+        "claude --bg \"$pre$stamp\" "*) ;;
+        *) refuse "the launch line types text after 'follow it exactly.' other than the launcher's stamp '$stamp' (his 2026-10-06 R511)" ;;
     esac
     check_paths "$line"
     run_launch "$dir" "$line" "reminder: one Grok hub at a time (L15); the tab and the §5 row are the desk's"

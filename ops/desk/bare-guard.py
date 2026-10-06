@@ -855,10 +855,21 @@ def marked_read(command, s):
     """R2: True when (i) the seat's first user record holds the stamp and (ii) the command, read
     by words(), opens `COBALT_ENV=production uv run cobalt db query`, its later words hold exactly
     one `--prod` and no `--prod=`, every --side value (an argparse prefix of it too) is user or
-    system, and PROD matches no other word. The working tree is never read for this proof."""
+    system, and PROD matches no other word. The working tree is never read for this proof.
+    The words are the ones bash runs (check O1-O3, B1, B2): no backslash-newline (bash joins
+    it, words() keeps it), no `#` that words() reads as a comment (bash starts none inside a
+    word), no brace word that expands to an option or a PROD word, no option that names prod
+    but `--prod` itself (`--allow-prod`)."""
     if not MARKER.search(s["first"]):
         return False
+    if "\\\n" in command:
+        return False
     ws = words(command)
+    try:
+        if shlex.split(unquote_ansi_c(command)) != ws:
+            return False
+    except ValueError:
+        return False
     if ws[: len(PROD_READ)] != PROD_READ:
         return False
     rest = ws[len(PROD_READ):]
@@ -871,6 +882,12 @@ def marked_read(command, s):
                 value = rest[k + 1] if k + 1 < len(rest) else ""
             if value not in SIDES:
                 return False
+    for w in rest:
+        alts = braces(w)
+        if alts != [w] and any(x.startswith("-") or PROD.search(x) for x in alts):
+            return False
+        if w != "--prod" and w.startswith("-") and "prod" in w.lower():
+            return False
     return not any(PROD.search(w) for w in rest if w != "--prod")
 
 
