@@ -1103,6 +1103,280 @@ def test_refresh_javascript_preserves_ladder_state_and_cursor_on_failure():
     assert "cursor=" not in source[source.index("catch(error)") :]
 
 
+# ---------------------------------------------------------------------
+# R556: the timer also refreshes the ladder (`tickLadder`). Static reads of
+# the script text, the way X29 reads it; no test runs the script.
+# ---------------------------------------------------------------------
+
+TICK_HEAD = "async function tickLadder(){"
+TICK_GUARDS = (".tap-strip:not([hidden])", "details.terminal[open]", "activeElement", "tagName==='INPUT'", "defaultValue", "defaultChecked")
+TICK_KEEP = "const keep=items().filter(x=>x.classList.contains('open')).map(x=>x.dataset.cardId);"
+#: `refreshLadder` as BASE has it, byte for byte: the tick leaves it alone.
+REFRESH_LADDER_BODY = """
+   const keep=openIds();
+   const response=await fetch('/radar',{headers:{accept:'text/html'}});
+   if(!response.ok){throw new Error('HTTP '+response.status);}
+   const doc=new DOMParser().parseFromString(await response.text(),'text/html');
+   const next=doc.getElementById('ladder-layer');
+   if(!next){throw new Error('the /radar page returned no ladder');}
+   document.getElementById('ladder-layer').replaceWith(next);
+   items().forEach(x=>x.classList.toggle('open',keep.indexOf(x.dataset.cardId)>=0));"""
+
+
+def _js_body(head: str) -> str:
+    source = panel.PANEL_JS
+    assert head in source, f"{head} absent from PANEL_JS"
+    return source.split(head, 1)[1].split("\n }\n", 1)[0]
+
+
+def _tick_stretches() -> tuple[str, str, str]:
+    """(before the fetch, between the last `await` and the swap, after the swap)."""
+    body = _js_body(TICK_HEAD)
+    fetch_at = body.index("fetch('/radar'")
+    swap_at = body.index("replaceWith(")
+    last_await = body.rindex("await ", 0, swap_at)
+    return body[:fetch_at], body[last_await:swap_at], body[swap_at:]
+
+
+def test_tick_refreshes_the_ladder_on_the_pool_timer_without_reload():
+    source = panel.PANEL_JS
+    assert "window.setInterval(tickLadder,interval)" in source
+    assert source.count("window.setInterval(tickLadder,interval);") == 1
+    assert source.count("function tickLadder(") == 1
+    body = _js_body(TICK_HEAD)
+    for needed in ("fetch('/radar',{headers:{accept:'text/html'}})", "if(!response.ok){throw new Error('HTTP '+response.status);}",
+                   "new DOMParser().parseFromString(await response.text(),'text/html')",
+                   "getElementById('ladder-layer')", "throw new Error('the /radar page returned no ladder')", "replaceWith("):
+        assert needed in body, needed
+    assert "refreshLadder" not in body
+    assert "location.reload" not in body
+    assert "await refreshLadder()" in _js_body("async function post(cardId,path,body){")
+    assert _js_body("async function refreshLadder(){") == REFRESH_LADDER_BODY
+    # placed after refreshPool's close and before window.COBALT_RADAR; the pool timer stays as it was
+    refresh_pool_end = source.index("\n }\n", source.index("async function refreshPool(){"))
+    assert refresh_pool_end < source.index(TICK_HEAD) < source.index("window.COBALT_RADAR=")
+    assert source.count("window.setInterval(refreshPool,interval);") == 1
+
+
+def test_tick_never_swaps_over_work_in_progress():
+    before, after, _ = _tick_stretches()
+    for guard in (*TICK_GUARDS, "sending>0"):
+        assert guard in before, f"{guard} not checked before the fetch"
+        assert guard in after, f"{guard} not checked again before the swap"
+    body = _js_body(TICK_HEAD)
+    assert ".ladder-item.open" not in body and "openIds" not in body
+
+
+def test_an_expanded_card_does_not_pause_the_tick():
+    body = _js_body(TICK_HEAD)
+    assert ".ladder-item.open" not in body and "openIds" not in body
+    before, after, swapped = _tick_stretches()
+    assert body.count(TICK_KEEP) == 1 and TICK_KEEP in after
+    assert "classList.contains('open')" not in before
+    assert "classList.contains('open')" not in after.replace(TICK_KEEP, "")
+    # the keep read comes after the second guard check's `return`
+    assert after.index("{return;}") < after.index(TICK_KEEP)
+    assert "classList.toggle('open',keep.indexOf(" in swapped
+
+
+def test_a_failed_tick_is_said_on_the_ladder():
+    body = _js_body(TICK_HEAD)
+    assert "catch(error)" not in body
+    caught = body[body.index("catch(failure){") :]
+    caught = caught[: caught.index("finally{")]
+    for needed in ("classList.add('refresh-failed','stale-data')", "box.id='ladder-refresh-status'", "prepend(",
+                   '<div class="refresh-failure"><b>REFRESH FAILED</b> · retained data is stale · ', "String(failure)"):
+        assert needed in caught, needed
+    assert "mirrorDegraded" not in body and "cursor=" not in body
+
+
+def test_one_ladder_fetch_in_flight_and_none_while_a_post_sends():
+    body = _js_body(TICK_HEAD)
+    first_await = body.index("await ")
+    assert body.index("ladderInFlight=true;") < first_await
+    assert "finally{ladderInFlight=false;}" in body
+    before, after, _ = _tick_stretches()
+    assert "ladderInFlight" in before and "sending>0" in before and "sending>0" in after
+    # the first guard itself skips while a fetch is in flight, not only the assignment below it
+    first_return = before.index("{return;}")
+    assert "ladderInFlight" in before[before.rindex("if(", 0, first_return) : first_return]
+    assert " let sending=0;\n" in panel.PANEL_JS and " let ladderInFlight=false;\n" in panel.PANEL_JS
+    post = _js_body("async function post(cardId,path,body){")
+    assert post.index("status(cardId,'sending','pending'); sending+=1;") < post.index("try{")
+    assert post.rstrip().endswith("finally{sending-=1;}")
+
+
+def test_tick_uses_the_pool_interval():
+    source = panel.PANEL_JS
+    assert source.count("refreshSeconds") == 1
+    assert "window.setInterval(tickLadder,interval);" in source
+
+
+def test_radar_route_serves_a_card_formed_after_an_empty_load(monkeypatch):
+    """The page the tick fetches: an empty ladder first, then the card it gained."""
+    import test_radar_panel_cards as tpc
+    from radar_p2_support import FakeCardStore as P2Cards
+    from radar_p2_support import FakeRadarStore as P2Radar
+    from radar_p2_support import fixture_bars, members
+
+    empty, _ = _build()
+    assert empty.ladder.empty_message == "No radar cards today"
+    radar = P2Radar(members("FTFT"), {"FTFT": fixture_bars("FTFT")})
+    cards = P2Cards()
+    instant = [tpc.SCAN0]
+    tpc._scan(tpc._stage(radar, cards, instant), radar, instant, tpc.SCAN0)
+    row = tpc._view_row({**cards.cards[1], "id": 1, "state": "WATCH"}, radar, run_id=max(radar.runs), state_at=tpc.SCAN0)
+    one = panel.RadarPanelView(pool=empty.pool, ladder=tpc._ladder([row]))
+    views = iter([empty, one])
+    monkeypatch.setattr(web_module, "build_radar_panel", lambda **_kwargs: next(views))
+    client = TestClient(web_module.app)
+    layers = []
+    for _ in range(2):
+        response = client.get("/radar", headers={"accept": "text/html"})
+        assert response.status_code == 200
+        start = response.text.index('<section id="ladder-layer">')
+        layers.append(response.text[start : response.text.index('id="pool-layer"', start)])
+    assert "No radar cards today" in layers[0] and "data-card-id" not in layers[0]
+    assert 'data-card-id="1"' in layers[1] and "No radar cards today" not in layers[1]
+
+
+def test_a_post_that_begins_and_ends_inside_one_tick_drops_its_result():
+    post = _js_body("async function post(cardId,path,body){")
+    assert "sendGeneration+=1;" in post
+    before, after, _ = _tick_stretches()
+    assert "const seen=sendGeneration;" in before
+    assert "sendGeneration!==seen" in after
+
+
+def test_the_wip_test_fails_when_the_focus_guard_is_undone(monkeypatch):
+    broken = panel.PANEL_JS.replace("(focused&&focused.tagName==='INPUT'&&layer.contains(focused))||", "", 1)
+    broken = broken.replace("(active&&active.tagName==='INPUT'&&now.contains(active))||", "", 1)
+    assert broken.count("tagName==='INPUT'") == 0
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_tick_never_swaps_over_work_in_progress()
+
+
+def test_the_single_flight_test_fails_when_the_in_flight_skip_is_undone(monkeypatch):
+    broken = panel.PANEL_JS.replace("if(ladderInFlight||", "if(", 1)
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_one_ladder_fetch_in_flight_and_none_while_a_post_sends()
+
+
+def test_tick_drops_a_response_when_a_post_completes_during_the_fetch():
+    source = panel.PANEL_JS
+    before, after, _ = _tick_stretches()
+    post = _js_body("async function post(cardId,path,body){")
+
+    monotonic = [
+        name
+        for name in re.findall(
+            r"\blet\s+([A-Za-z_$][\w$]*)\s*=\s*0\s*;", source
+        )
+        if f"{name}+=1;" in post and f"{name}-=1;" not in post
+    ]
+    assert monotonic, (
+        "no monotonic post sequence records a post that starts and "
+        "finishes during the tick fetch"
+    )
+
+    for name in monotonic:
+        snapshots = re.findall(
+            rf"\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*"
+            rf"{re.escape(name)}\s*;",
+            before,
+        )
+        if (
+            post.index(f"{name}+=1;") < post.index("await ")
+            and any(
+                f"{name}!=={snapshot}" in after
+                or f"{snapshot}!=={name}" in after
+                for snapshot in snapshots
+            )
+        ):
+            return
+    pytest.fail(
+        "tick does not drop a response when the post sequence changed "
+        "during its fetch"
+    )
+
+
+def test_failed_tick_test_rejects_a_created_status_without_its_required_id(
+    monkeypatch,
+):
+    broken = panel.PANEL_JS.replace(
+        "box=document.createElement('div'); "
+        "box.id='ladder-refresh-status'; current.prepend(box);",
+        "box=document.createElement('div'); current.prepend(box);",
+        1,
+    )
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_a_failed_tick_is_said_on_the_ladder()
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    (" let sending=0;\n", " let ladderInFlight=false;\n"),
+)
+def test_single_flight_test_requires_its_state_declarations(
+    monkeypatch, declaration
+):
+    broken = panel.PANEL_JS.replace(declaration, "", 1)
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_one_ladder_fetch_in_flight_and_none_while_a_post_sends()
+
+
+def test_tick_timer_test_rejects_a_duplicate_interval(monkeypatch):
+    timer = " window.setInterval(tickLadder,interval);\n"
+    broken = panel.PANEL_JS.replace(timer, timer + timer, 1)
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_tick_refreshes_the_ladder_on_the_pool_timer_without_reload()
+
+
+def test_tick_test_rejects_a_later_duplicate_function(monkeypatch):
+    broken = panel.PANEL_JS.replace(
+        " window.COBALT_RADAR=",
+        " async function tickLadder(){}\n window.COBALT_RADAR=",
+        1,
+    )
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_tick_refreshes_the_ladder_on_the_pool_timer_without_reload()
+
+
+def test_x1_a_post_that_finishes_during_the_fetch_still_drops_the_tick():
+    body = _js_body(TICK_HEAD)
+    swap_at = body.index("replaceWith(")
+    last_await = body.rindex("await ", 0, swap_at)
+    gate = body[last_await:swap_at]
+    post = _js_body("async function post(cardId,path,body){")
+    assert "finally{sending-=1;}" in post
+    assert "sending>0" in gate
+    assert "sendGeneration" in gate or "sentDuring" in gate or "sending!==" in gate
+
+
+def test_undoing_the_focus_guard_turns_the_wip_test_red():
+    body = _js_body(TICK_HEAD)
+    mutant = body.replace("(focused&&focused.tagName==='INPUT'&&layer.contains(focused))||", "")
+    mutant = mutant.replace("(active&&active.tagName==='INPUT'&&now.contains(active))||", "")
+    assert mutant != body
+    fetch_at = mutant.index("fetch('/radar'")
+    swap_at = mutant.index("replaceWith(")
+    last_await = mutant.rindex("await ", 0, swap_at)
+    before, after = mutant[:fetch_at], mutant[last_await:swap_at]
+    missed = [guard for guard in (*TICK_GUARDS, "sending>0") if guard not in before or guard not in after]
+    assert missed, "shipped rule (2) stays green after the focus clause is deleted"
+
+
 @pytest.fixture
 def route_view():
     return _build()[0]
