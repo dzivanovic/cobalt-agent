@@ -742,6 +742,108 @@ def test_l4_a_real_prompt_launch_prints_no_watch_line(desk, tmp_path):
     assert "WATCH:" not in done.stdout + done.stderr
 
 
+# ---- F5: the prompt kind's write strings (deny list never counts; allow list on his row) -------
+
+# the second-writer survey's launch line (prompts/2026-10-05/01-second-writer-survey.md), its
+# prompt path filled per test: `git commit` sits in its deny list, the `COBALT_ENV=dev` db query
+# string in its allow list
+SURVEY_LINE = (
+    "claude --bg \"Read '{pfile}' and follow it exactly.\" --model claude-sonnet-5-5 --permission-mode auto "
+    "--remote-control second-writer-survey --name second-writer-survey --allowedTools \"Read\" \"Write\" "
+    "\"Edit\" \"Bash(COBALT_ENV=dev uv run cobalt db query --side system *)\" \"Bash(lsof -nP -iTCP:5432*)\" "
+    "\"Bash(lsof -a -p *)\" \"Bash(ps -o *)\" \"Bash(sleep *)\" \"Bash(git -C /Users/cobalt/cobalt show*)\" "
+    "\"Bash(git -C /Users/cobalt/cobalt log*)\" \"Bash(ls *)\" \"Bash(grep *)\" \"Bash(tail *)\" \"Bash(wc *)\" "
+    "\"Bash(date*)\" --disallowedTools \"AskUserQuestion\" \"EnterWorktree\" \"Bash(git push*)\" "
+    "\"Bash(git commit*)\" \"Bash(COBALT_ENV=dev uv run pytest*)\" \"Bash(COBALT_ENV=dev uv run cobalt db migrate*)\" "
+    "\"Bash(COBALT_ENV=dev uv run cobalt db query --side system --prod*)\" "
+    "\"Bash(sh /Users/cobalt/.claude/ops/take-devdb-lock.sh*)\" \"Bash(ps e*)\" \"Bash(ps -E*)\" "
+    "--add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt --add-dir /Users/cobalt/cobalt-wt"
+)
+WRITE_REFUSAL = "on a prompt line: a write-path launch is a fixed file"
+
+
+def staged_launcher(tmp_path: Path) -> Path:
+    """The staging of test_l4_a_real_prompt_launch_prints_no_watch_line: the cwd pattern re-pointed
+    at tmp_path, the desk-size guard stubbed."""
+    staged = tmp_path / "ops" / "desk-launch.sh"
+    staged.parent.mkdir()
+    staged.write_text(LAUNCH.read_text().replace("\\/Users\\/cobalt\\/", str(tmp_path).replace("/", "\\/") + "\\/"))
+    (tmp_path / "ops" / "desk-context.sh").write_text("#!/bin/sh\nexit 0\n")
+    return staged
+
+
+def survey_prompt(desk: Desk, rulings: str | None, line: str = SURVEY_LINE) -> Path:
+    """A committed prompt in the survey's shape: the cwd, an optional RULINGS line, the launch line
+    in a backticked span of the header (as the real prompt holds it)."""
+    pfile = desk.prompts / "2026-01-02" / "05-second-writer-survey.md"
+    head = "" if rulings is None else f"RULINGS: {rulings}\n"
+    pfile.write_text(
+        f"MODEL: Sonnet 5.5 · its line: `cd {desk.repo}`, then `{line.format(pfile=pfile)}` · SESSION: fresh\n"
+        f"{head}\n# SURVEY (constructed)\n")
+    desk.commit("prompt")
+    return pfile
+
+
+def launch_prompt(desk: Desk, tmp_path: Path, pfile: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(["sh", str(staged_launcher(tmp_path)), "prompt", str(pfile)], env=desk.env,
+                          capture_output=True, text=True, timeout=120)
+
+
+def test_f5_the_survey_prompt_launches_on_its_rulings_row(desk, tmp_path):
+    """RED on BASE: refused on `git commit` (its deny list), then on the `COBALT_ENV=dev` db query
+    string (its allow list)."""
+    done = launch_prompt(desk, tmp_path, survey_prompt(desk, "2026-01-02 R1"))
+    assert done.returncode == 0, done.stderr
+    assert desk.called() == [str(desk.repo)]
+
+
+def test_f5_a_write_string_in_the_deny_list_is_never_a_write_string(desk, tmp_path):
+    """(a) alone: no RULINGS line, no write string allowed; `git commit` and `COBALT_ENV=` only denied."""
+    line = SURVEY_LINE.replace("\"Bash(COBALT_ENV=dev uv run cobalt db query --side system *)\" ", "")
+    done = launch_prompt(desk, tmp_path, survey_prompt(desk, None, line))
+    assert done.returncode == 0, done.stderr
+    assert desk.called() == [str(desk.repo)]
+
+
+@pytest.mark.parametrize("case", [
+    "no RULINGS line", "RULINGS none", "row absent", "row not HIS RULING", "row approved uncommitted",
+    "write string outside both lists",
+])
+def test_f5_a_write_string_allowed_without_his_row_is_refused_as_today(desk, tmp_path, case):
+    """Each refuses with today's write-string refusal, `claude` never called. Green on BASE too
+    (refused there on `git commit`): the negative controls of the row."""
+    rulings, line = "2026-01-02 R1", SURVEY_LINE
+    if case == "no RULINGS line":
+        rulings = None
+    elif case == "RULINGS none":
+        rulings = "none"
+    elif case == "row absent":
+        rulings = "2026-01-02 R2"
+    elif case == "row not HIS RULING":
+        desk.write_rulings(APPROVED_R1.replace("HIS RULING", "RECORD"))
+    elif case == "write string outside both lists":
+        line = SURVEY_LINE.replace(" --add-dir /Users/cobalt/Vault",
+                                   " --append-system-prompt \"git add your report\" --add-dir /Users/cobalt/Vault")
+    if case == "row approved uncommitted":
+        desk.write_rulings(APPROVED_R1.replace("HIS RULING · APPROVED", "RECORD"))
+        pfile = survey_prompt(desk, rulings)
+        desk.write_rulings(APPROVED_R1, commit=False)
+    else:
+        pfile = survey_prompt(desk, rulings, line)
+    done = launch_prompt(desk, tmp_path, pfile)
+    refused(desk, done, "write string '")
+    assert WRITE_REFUSAL in done.stderr, done.stderr
+    if case == "write string outside both lists":
+        assert "REFUSED: write string 'git add' " in done.stderr, done.stderr
+
+
+def test_f5_a_ruled_write_line_still_runs_auto_or_plan_only(desk, tmp_path):
+    """His row widens the write strings only; the permission-mode refusal stands."""
+    line = SURVEY_LINE.replace("--permission-mode auto", "--permission-mode dontAsk")
+    refused(desk, launch_prompt(desk, tmp_path, survey_prompt(desk, "2026-01-02 R1", line)),
+            "permission mode 'dontAsk'")
+
+
 # ---- card 03c M4: TREE STATE is optional on build and check cards -----------------------------
 
 
