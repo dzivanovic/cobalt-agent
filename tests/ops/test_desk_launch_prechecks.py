@@ -807,7 +807,7 @@ def test_f5_a_write_string_in_the_deny_list_is_never_a_write_string(desk, tmp_pa
 
 @pytest.mark.parametrize("case", [
     "no RULINGS line", "RULINGS none", "row absent", "row not HIS RULING", "row approved uncommitted",
-    "write string outside both lists",
+    "write string outside both lists", "git -C write string outside both lists",
 ])
 def test_f5_a_write_string_allowed_without_his_row_is_refused_as_today(desk, tmp_path, case):
     """Each refuses with today's write-string refusal, `claude` never called. Green on BASE too
@@ -824,6 +824,10 @@ def test_f5_a_write_string_allowed_without_his_row_is_refused_as_today(desk, tmp
     elif case == "write string outside both lists":
         line = SURVEY_LINE.replace(" --add-dir /Users/cobalt/Vault",
                                    " --append-system-prompt \"git add your report\" --add-dir /Users/cobalt/Vault")
+    elif case == "git -C write string outside both lists":
+        line = SURVEY_LINE.replace(
+            " --add-dir /Users/cobalt/Vault",
+            " --append-system-prompt \"Bash(git -C /Users/cobalt/cobalt commit -m x)\" --add-dir /Users/cobalt/Vault")
     if case == "row approved uncommitted":
         desk.write_rulings(APPROVED_R1.replace("HIS RULING · APPROVED", "RECORD"))
         pfile = survey_prompt(desk, rulings)
@@ -831,6 +835,9 @@ def test_f5_a_write_string_allowed_without_his_row_is_refused_as_today(desk, tmp
     else:
         pfile = survey_prompt(desk, rulings, line)
     done = launch_prompt(desk, tmp_path, pfile)
+    if case == "git -C write string outside both lists":
+        refused(desk, done, "a git -C write string " + WRITE_REFUSAL)
+        return
     refused(desk, done, "write string '")
     assert WRITE_REFUSAL in done.stderr, done.stderr
     if case == "write string outside both lists":

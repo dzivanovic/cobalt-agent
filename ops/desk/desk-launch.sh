@@ -102,7 +102,9 @@
 #     `dontAsk` (the fixed files' mode) — or `bypassPermissions`, or not stated; the close file
 #     handed over as a prompt; a line that carries a write string — `git add`, `git commit`, `git merge` (also
 #     in their `git -C <path>` spelling, and the whole-git `Bash(git *)`), `uv run`,
-#     `launchctl`, `COBALT_ENV=`; a line without the two dialog denies (L63), without
+#     `launchctl`, `COBALT_ENV=` (card 21 F5: a string in --disallowedTools is never one; one in
+#     --allowedTools passes when the prompt's one `RULINGS:` line cites rows that are HIS RULING +
+#     APPROVED and committed, L7a); a line without the two dialog denies (L63), without
 #     `--remote-control` and `--name`, or that reads another file than the one named; a card
 #     or a fixed file handed over as a prompt; a prompt that names no cwd; a line that names
 #     `--name brain` or `--remote-control brain` (the brain seat launches by the kind `brain` only);
@@ -227,6 +229,73 @@ run_launch() {
 # watch_line <kind> <card or close report>: the line the desk runs in the background
 watch_line() {
     printf 'WATCH: sh %s/desk-watch.sh %s "%s"' "$here" "$1" "$2"
+}
+
+# the ruling rows (card 21 L1): every `<date> R<n>` of RULINGS (`none` needs no row) and the row
+# a HOUSE A / HOUSE B line names after `overruled` is ONE line of $REPORTS/cto-<date>.md that starts
+# `| R<n> |`, holds HIS RULING and APPROVED, and stands so in the committed file (BUILD-HUB.md
+# `## AUTHORIZATION`); the prompt kind's RULINGS line is read the same way (F5)
+ruling_row() {
+    rdate=${1%% *}
+    rn=${1#* }
+    case "$rdate" in
+        20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+        *) refuse "incomplete card: RULINGS item '$1' is not '<date> R<n>'" ;;
+    esac
+    case "$rn" in
+        R*) ;;
+        *) refuse "incomplete card: RULINGS item '$1' is not '<date> R<n>'" ;;
+    esac
+    case "${rn#R}" in
+        ""|*[!0123456789]*) refuse "incomplete card: RULINGS item '$1' is not '<date> R<n>'" ;;
+    esac
+    rfile="$REPORTS/cto-$rdate.md"
+    n=0
+    [ ! -f "$rfile" ] || n=$(grep -c "^| $rn |" "$rfile")
+    [ "$n" -ne 0 ] || refuse "ruling $1: no such row in $rfile — the desk writes his row and commits it before the launch"
+    [ "$n" -eq 1 ] || refuse "ruling $1: not one row ($n lines start '| $rn |' in $rfile) — keep one row per number"
+    row=$(grep "^| $rn |" "$rfile")
+    case "$row" in
+        *"HIS RULING"*APPROVED*|*APPROVED*"HIS RULING"*) ;;
+        *) refuse "ruling $1: not HIS RULING + APPROVED: $row — launch after his word is recorded" ;;
+    esac
+    [ -n "$(git -C "$REPO" log -1 --format=%H -S"| $rn |" -- "$rfile")" ] \
+        && git -C "$REPO" show "HEAD:docs/40 - DevDocs/reports/cto-$rdate.md" 2>/dev/null | grep -q -x -F -- "$row" \
+        || refuse "ruling $1: not committed — commit $rfile"
+}
+# ruling_items <list>: ruling_row for each comma-separated `<date> R<n>`
+ruling_items() {
+    rest=$1
+    while [ -n "$rest" ]; do
+        item=${rest%%,*}
+        if [ "$item" = "$rest" ]; then rest=""; else rest=${rest#*,}; fi
+        item=$(printf '%s' "$item" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+        ruling_row "$item"
+    done
+}
+
+# tool_list <line> <allow|deny|rest>: the words of a launch line in its --allowedTools list, its
+# --disallowedTools list, or neither; a "…" span is one word, a list ends at the next unquoted --flag
+tool_list() {
+    printf '%s\n' "$1" | awk -v want="$2" '
+{
+    s = $0; n = length(s); tok = ""; inq = 0; mode = "rest"; out = ""
+    for (i = 1; i <= n + 1; i++) {
+        c = (i <= n) ? substr(s, i, 1) : " "
+        if (c == "\\" && i < n) { tok = tok c substr(s, i + 1, 1); i++; continue }
+        if (c == "\"") inq = !inq
+        if (c == " " && !inq) {
+            if (tok != "") {
+                if (tok == "--allowedTools") mode = "allow"
+                else if (tok == "--disallowedTools") mode = "deny"
+                else if (substr(tok, 1, 2) == "--") mode = "rest"
+                if (mode == want) out = out " " tok
+            }
+            tok = ""
+        } else tok = tok c
+    }
+    print out
+}'
 }
 
 [ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> [--fable] | close <YYYY-MM-DD> [<resume step>] | install-ops"
@@ -379,13 +448,31 @@ brain
         auto|plan) ;;
         *) refuse "permission mode '$pm': a one-off prompt runs auto or plan; every write-path launch is a fixed file (build, check, deploy, close)" ;;
     esac
+    # card 21 F5: a string in --disallowedTools is never a write string; one in --allowedTools passes
+    # only when the prompt's one RULINGS line cites rows that are HIS RULING + APPROVED and committed
+    # (L7a, ruling_row); one anywhere else on the line, or without such a line, is refused as before
+    scan="$(tool_list "$line" allow) $(tool_list "$line" rest)"
+    outside=$(tool_list "$line" rest)
+    ruled=0
+    prulings=$(sed -n 's/^RULINGS:[[:space:]]*//p' "$pfile")
+    if [ "$(grep -c '^RULINGS:' "$pfile")" -eq 1 ] && [ -n "$prulings" ] && [ "$prulings" != "none" ]; then
+        ( ruling_items "$prulings" ) 2>/dev/null && ruled=1
+    fi
     for w in "git add" "git commit" "git merge" "Bash(git *)" "uv run" "launchctl" "COBALT_ENV="; do
-        case "$line" in
-            *"$w"*) refuse "write string '$w' on a prompt line: a write-path launch is a fixed file" ;;
+        case "$scan" in
+            *"$w"*)
+                case "$outside" in
+                    *"$w"*) ruled=0 ;;
+                esac
+                [ "$ruled" -eq 1 ] || refuse "write string '$w' on a prompt line: a write-path launch is a fixed file" ;;
         esac
     done
-    case "$line" in
-        *"Bash(git -C "*" add "*|*"Bash(git -C "*" commit "*|*"Bash(git -C "*" merge "*) refuse "a git -C write string on a prompt line: a write-path launch is a fixed file" ;;
+    case "$outside" in
+        *"Bash(git -C "*" add "*|*"Bash(git -C "*" commit "*|*"Bash(git -C "*" merge "*) ruled=0 ;;
+    esac
+    case "$scan" in
+        *"Bash(git -C "*" add "*|*"Bash(git -C "*" commit "*|*"Bash(git -C "*" merge "*)
+            [ "$ruled" -eq 1 ] || refuse "a git -C write string on a prompt line: a write-path launch is a fixed file" ;;
     esac
     case "$line" in
         *'"AskUserQuestion"'*'"EnterWorktree"'*) ;;
@@ -619,47 +706,9 @@ git -C "$REPO" diff --quiet -- "$card" || refuse "the card differs from its comm
 git -C "$REPO" diff --cached --quiet -- "$card" || refuse "the card is staged, not committed: $card"
 
 # ---- the ruling rows (card 21 L1): build, check, deploy, devfix ------------------------------
-# every `<date> R<n>` of RULINGS (`none` needs no row) and the row a HOUSE A / HOUSE B line names
-# after `overruled` is ONE line of $REPORTS/cto-<date>.md that starts `| R<n> |`, holds HIS RULING
-# and APPROVED, and stands so in the committed file (BUILD-HUB.md `## AUTHORIZATION`)
-ruling_row() {
-    rdate=${1%% *}
-    rn=${1#* }
-    case "$rdate" in
-        20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
-        *) refuse "incomplete card: RULINGS item '$1' is not '<date> R<n>'" ;;
-    esac
-    case "$rn" in
-        R*) ;;
-        *) refuse "incomplete card: RULINGS item '$1' is not '<date> R<n>'" ;;
-    esac
-    case "${rn#R}" in
-        ""|*[!0123456789]*) refuse "incomplete card: RULINGS item '$1' is not '<date> R<n>'" ;;
-    esac
-    rfile="$REPORTS/cto-$rdate.md"
-    n=0
-    [ ! -f "$rfile" ] || n=$(grep -c "^| $rn |" "$rfile")
-    [ "$n" -ne 0 ] || refuse "ruling $1: no such row in $rfile — the desk writes his row and commits it before the launch"
-    [ "$n" -eq 1 ] || refuse "ruling $1: not one row ($n lines start '| $rn |' in $rfile) — keep one row per number"
-    row=$(grep "^| $rn |" "$rfile")
-    case "$row" in
-        *"HIS RULING"*APPROVED*|*APPROVED*"HIS RULING"*) ;;
-        *) refuse "ruling $1: not HIS RULING + APPROVED: $row — launch after his word is recorded" ;;
-    esac
-    [ -n "$(git -C "$REPO" log -1 --format=%H -S"| $rn |" -- "$rfile")" ] \
-        && git -C "$REPO" show "HEAD:docs/40 - DevDocs/reports/cto-$rdate.md" 2>/dev/null | grep -q -x -F -- "$row" \
-        || refuse "ruling $1: not committed — commit $rfile"
-}
+# (ruling_row and ruling_items sit above the kinds: the prompt kind reads them too, card 21 F5)
 ruling_rows() {
-    if [ "$rulings" != "none" ]; then
-        rest=$rulings
-        while [ -n "$rest" ]; do
-            item=${rest%%,*}
-            if [ "$item" = "$rest" ]; then rest=""; else rest=${rest#*,}; fi
-            item=$(printf '%s' "$item" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-            ruling_row "$item"
-        done
-    fi
+    [ "$rulings" = "none" ] || ruling_items "$rulings"
     for k in "HOUSE A" "HOUSE B"; do
         v=$(field "$k")
         case "$v" in
