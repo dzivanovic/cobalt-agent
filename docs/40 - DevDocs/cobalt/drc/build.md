@@ -65,3 +65,6 @@ The trade blocks' refused cards are `reconcile.refused_cards(unresolved)`: a D5-
 
 ## 2026-10-06 — drc-d5 O1 + B2
 `_unresolved` reads this day's own items from its stored `build_day`. When no `build_day` is stored, because a K2 re-pair deleted it, it reads the list the store kept on the day's `day` row (`derived.unresolved`). Once the day's `build_day` is recorded again, only that row is read. The kept items clear the way this day's items do: by a successful reconcile of the card, or by a current `resolve` row naming the trade. So a re-paired date (`check=False`) keeps its refusal in the reconcile unit and in A31 (check O1 / B3, R326).
+
+## 2026-10-06 — drc-d5-o1-b2 check
+The items carried in from the prior DRC are read from the prior's `build_day`; when a re-pair deleted it and the prior is not rebuilt yet, from the list the store kept on the prior's `day` row. So the next day's first build still carries them (check O1).

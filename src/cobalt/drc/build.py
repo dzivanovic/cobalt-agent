@@ -479,7 +479,12 @@ def _unresolved(day: date, view: dict, stored: list[dict], derived_day: dict, st
     prior = (view.get("seed") or {}).get("from_day")
     carried_in: list[dict] = []
     if prior:
-        before = next((r for r in store.rows_for(date.fromisoformat(prior)) if r["kind"] == "build_day"), None)
+        prior_rows = store.rows_for(date.fromisoformat(prior))
+        before = next((r for r in prior_rows if r["kind"] == "build_day"), None)
+        if before is None:
+            # drc-d5 O1 (check O1): a re-paired prior not rebuilt yet holds its
+            # items on its `day` row; once rebuilt, its `build_day` only.
+            before = next((r for r in prior_rows if r["kind"] == "day"), None)
         carried_in = list(((before or {}).get("derived") or {}).get("unresolved") or [])
     earlier = next((r for r in stored if r["kind"] == "build_day"), None)
     # drc-d5 O1: no `build_day` stored (a re-pair deleted it) → the items the
