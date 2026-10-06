@@ -241,6 +241,9 @@ The `migrated` fixture in `tests/cobalt/test_drc_store.py` now retries its migra
 
 **2026-10-06 — flake-fix check (H2, H3).** The open (`connect_migration`) now sits inside the retried step too, so a deadlock while opening is retried as well. A failed attempt's connection is closed even when its `rollback()` raises.
 
+## 2026-10-06 — flake-fix-2
+The retry loop moved out of the `migrated` fixture, unchanged in behaviour, into ONE test helper, `tests/cobalt/migration_retry.py` `open_migrated(apply, paths)`; the fixture now calls `open_migrated(_apply, FORWARD)` (its module's `_apply`, resolved at the call, so the retry tests that patch it still reach the step). Every other with-DB test that applies migrations on its own migration connection calls the same helper (`db_migrations/cli.md`). No `src/` change.
+
 ## Tests
 `tests/cobalt/test_drc_store.py` has an offline half (the SQL, the
 registry, the placement map, the one-writer grep). Its with-DB half

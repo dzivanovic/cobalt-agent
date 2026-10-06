@@ -31,8 +31,9 @@ import re
 
 import psycopg
 import pytest
+from migration_retry import open_migrated
 
-from cobalt import db, env, tenant
+from cobalt import db, tenant
 from cobalt.db import Side
 from cobalt.db_migrations import FORWARD, MIGRATIONS_DIR, REVERSE
 from cobalt.db_migrations.cli import (
@@ -301,12 +302,6 @@ def test_rollbacks_drop_only_their_own_objects():
 # ---------------------------------------------------------------------
 
 
-def _migration_conn():
-    conn = db.connect_migration(env.DEV_DB_NAME)
-    conn.autocommit = False
-    return conn
-
-
 def _named(paths, prefix: str):
     return [p for p in paths if p.name.startswith(prefix)]
 
@@ -440,10 +435,9 @@ def test_0008_0009_apply_twice_reverse_and_reapply_on_populated_membership(order
     is seeded with no value — so the equalities below really are about
     rows that predate the migration.
     """
-    conn = _migration_conn()
+    base, p2_after = _merge_order_bases(order)
+    conn = open_migrated(_apply, base)
     try:
-        base, p2_after = _merge_order_bases(order)
-        _apply(conn, base)
         if order == "p2_before_p4":
             _simulate_p2_card_columns(conn)
         # PRE-EXISTING: seeded before 0008 exists, so without its columns.
@@ -482,9 +476,8 @@ def test_0008_0009_apply_twice_reverse_and_reapply_on_populated_membership(order
 @requires_db
 def test_side_roles_ownership_identity_guc_and_wrong_side_through_real_roles():
     """R1-2 through the side roles themselves (`db.apply_side`)."""
-    conn = _migration_conn()
+    conn = open_migrated(_apply, FORWARD)
     try:
-        _apply(conn, FORWARD)
         owners = dict(conn.execute(
             "SELECT n.nspname || '.' || c.relname, pg_get_userbyid(c.relowner) FROM pg_class c "
             "JOIN pg_namespace n ON n.oid = c.relnamespace "
@@ -545,9 +538,8 @@ def test_side_roles_ownership_identity_guc_and_wrong_side_through_real_roles():
 def test_missed_rerun_reconciles_in_the_ruled_order_against_the_live_unique_index():
     """R2-1/R3-1: (1) retire, (2) insert, (3) link — and the naive
     insert-first order collides with the partial unique index."""
-    conn = _migration_conn()
+    conn = open_migrated(_apply, FORWARD)
     try:
-        _apply(conn, FORWARD)
         db.apply_side(conn, Side.SYSTEM)
         mover_id = conn.execute(
             "INSERT INTO system.movers_daily (trade_date,side,rank,ticker,change_pct,"

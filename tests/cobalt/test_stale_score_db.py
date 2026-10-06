@@ -131,14 +131,6 @@ def test_r45_a_tap_racing_a_fresh_scan_scores_the_taps_conviction_on_this_scans_
 # ---------------------------------------------------------------------
 
 
-def _migration_conn():
-    from cobalt import db, env
-
-    conn = db.connect_migration(env.DEV_DB_NAME)
-    conn.autocommit = False
-    return conn
-
-
 def _viewdef(conn) -> str:
     return conn.execute("SELECT pg_get_viewdef('\"user\".shadow_agreement_v'::regclass)").fetchone()[0]
 
@@ -168,10 +160,10 @@ def test_0015_is_registered_after_0013_and_its_rollback_first():
 def test_0015_applies_twice_and_its_rollback_restores_0007s_view_inside_one_rolled_back_transaction():
     from cobalt.db_migrations import FORWARD
     from cobalt.db_migrations.cli import _apply, _rollback_paths
+    from migration_retry import open_migrated
 
-    conn = _migration_conn()
+    conn = open_migrated(_apply, [p for p in FORWARD if p.name < "0015"])
     try:
-        _apply(conn, [p for p in FORWARD if p.name < "0015"])
         at_0013 = _viewdef(conn)
         assert "evaluator_version" not in at_0013  # 0007's view
         _apply(conn, FORWARD)

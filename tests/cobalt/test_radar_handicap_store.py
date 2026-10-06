@@ -14,10 +14,10 @@ import re
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from migration_retry import open_migrated
 from radar_migrated_support import migrated_radar, requires_db  # noqa: F401  (fixture)
 from test_radar_store import RecordingConn
 
-from cobalt import db, env
 from cobalt.db import Side
 from cobalt.db_migrations import FORWARD, MIGRATIONS_DIR, REVERSE
 from cobalt.db_migrations.cli import (
@@ -142,12 +142,6 @@ def test_members_for_day_selects_the_three_and_open_members_does_not():
 # ---------------------------------------------------------------------
 
 
-def _conn():
-    conn = db.connect_migration(env.DEV_DB_NAME)
-    conn.autocommit = False
-    return conn
-
-
 def _columns(conn) -> set[str]:
     return {row[0] for row in conn.execute(
         "SELECT a.attname FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid "
@@ -172,9 +166,8 @@ def _seed(conn, ticker: str, scan_id: int) -> int:
 
 @requires_db
 def test_forward_twice_on_a_populated_table_then_bounded_rollback_then_reapply():
-    conn = _conn()
+    conn = open_migrated(_apply, [p for p in FORWARD if _migration_version(p) < 14])
     try:
-        _apply(conn, [p for p in FORWARD if _migration_version(p) < 14])
         before_cols = _columns(conn)
         assert not (before_cols & set(COLUMNS))                   # cobalt_dev holds no 0014
         row = _seed(conn, "H1PRE", 9700001)                       # seeded BEFORE 0014

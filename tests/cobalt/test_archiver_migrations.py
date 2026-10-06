@@ -25,8 +25,8 @@ import os
 import re
 
 import pytest
+from migration_retry import open_migrated
 
-from cobalt import db, env
 from cobalt.db import Side
 from cobalt.db_migrations import FORWARD, MIGRATIONS_DIR, REVERSE
 from cobalt.db_migrations.cli import _apply, _rollback_paths
@@ -443,17 +443,10 @@ def test_neither_migration_touches_bars_or_any_existing_object(path):
 # ---------------------------------------------------------------------
 
 
-def _migration_conn():
-    conn = db.connect_migration(env.DEV_DB_NAME)
-    conn.autocommit = False
-    return conn
-
-
 @requires_db
 def test_forward_creates_both_tables_on_the_system_side():
-    conn = _migration_conn()
+    conn = open_migrated(_apply, FORWARD)
     try:
-        _apply(conn, FORWARD)
         for table in NEW_TABLES:
             assert conn.execute(
                 "SELECT to_regclass(%s)", (f"system.{table}",)
@@ -468,9 +461,8 @@ def test_forward_creates_both_tables_on_the_system_side():
 
 @requires_db
 def test_migrate_twice_is_idempotent_for_the_two_new_tables():
-    conn = _migration_conn()
+    conn = open_migrated(_apply, FORWARD)
     try:
-        _apply(conn, FORWARD)
         _apply(conn, FORWARD)
         for table in NEW_TABLES:
             assert conn.execute(
@@ -501,9 +493,8 @@ def test_rollback_down_to_0009_drops_this_branch_alone_and_0007_also_reaches_p4(
     `archive_progress` and `archive_incidents` and leaves P4's tables
     standing.
     """
-    conn = _migration_conn()
+    conn = open_migrated(_apply, FORWARD)
     try:
-        _apply(conn, FORWARD)
         # DRC D1's 0016 and K1's 0018 sit ABOVE both bounds, so each bound reverses them
         # too (`_rollback_paths` selects by number); its tables are owned
         # by both rollbacks, never survivors.

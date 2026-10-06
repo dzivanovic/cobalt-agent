@@ -109,6 +109,7 @@ def test_xl76_2_3_harness_shape_at_step_1(monkeypatch):
     from cobalt.db_migrations import FORWARD
     from cobalt.db_migrations.cli import _apply
     from cobalt.radar.store import RadarStore
+    from migration_retry import open_migrated
 
     class Proxy:
         def __init__(self, conn, name):
@@ -147,13 +148,11 @@ def test_xl76_2_3_harness_shape_at_step_1(monkeypatch):
         def close(self):
             return
 
-    conn = db.connect_migration(env.DEV_DB_NAME)
-    conn.autocommit = False
+    started = time.monotonic()
+    conn = open_migrated(_apply, FORWARD)
+    apply_ms = int((time.monotonic() - started) * 1000)
     applies = False
     try:
-        started = time.monotonic()
-        _apply(conn, FORWARD)
-        apply_ms = int((time.monotonic() - started) * 1000)
         counter = iter(range(10_000))
 
         def _connect(dbname, *, side, allow_prod=False):

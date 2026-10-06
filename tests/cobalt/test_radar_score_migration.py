@@ -22,8 +22,8 @@ import re
 
 import psycopg
 import pytest
+from migration_retry import open_migrated
 
-from cobalt import db, env
 from cobalt.db import Side
 from cobalt.db_migrations import FORWARD, MIGRATIONS_DIR, REVERSE
 from cobalt.db_migrations.cli import (
@@ -296,17 +296,10 @@ def test_digest_excludes_every_column_0007_adds_to_aset_sizings():
 # ---------------------------------------------------------------------
 
 
-def _migration_conn():
-    conn = db.connect_migration(env.DEV_DB_NAME)
-    conn.autocommit = False
-    return conn
-
-
 @requires_db
 def test_migrate_twice_is_idempotent_on_cobalt_dev():
-    conn = _migration_conn()
+    conn = open_migrated(_apply, FORWARD)
     try:
-        _apply(conn, FORWARD)
         _apply(conn, FORWARD)
         for name, side in CREATED_TABLES.items():
             schema = '"user"' if side is Side.USER else "system"
@@ -415,9 +408,8 @@ def test_card_checks_index_and_receipt_immutability_on_cobalt_dev():
     second open radar card for the same (member, def, direction) is
     refused, a receipt cannot be updated, and the bounded reverse +
     reapply leaves manual rows intact."""
-    conn = _migration_conn()
+    conn = open_migrated(_apply, FORWARD)
     try:
-        _apply(conn, FORWARD)
         conn.execute("SELECT set_config('cobalt.trader_id', '1', true)")
         conn.execute(
             "INSERT INTO system.radar_pool (pool_key, state, session, members) "
