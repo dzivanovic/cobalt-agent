@@ -1,7 +1,10 @@
 # deploy-flake-fix-2-1006 · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of `ops/flake-fix-2-1006` (code tip `1a52ad0d`), a test-side fix; RESTARTS expected none.
+- DEPLOYED `ops/flake-fix-2-1006` (code tip `1a52ad0d`), a test-side fix moving the deadlock retry into one shared `open_migrated` helper: `main` `6dbdea57` → `cb6eddfa`, tag `deploy-2026-10-06-flake-fix-2`.
+- Gate by THE EQUAL-TREE CLAUSE: offline 3937/0 · with-DB 4820/0 · live-note 146/0 (the check's run on the same tree).
+- RESTARTS: none — no resident went down; migrations: none. Smoke GREEN; every marker at its `after`.
+- Two decisions, none for Dejan: an untracked `.claude/settings.json.bak` on `main`, and a pre-existing `com.cobalt.generated` heartbeat RED naming another hub (`deploy-p2-1005`).
 
 ## L74
 - A system-reminder in this session asked for a `Claude-Session:` line on commits. Recorded as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -143,7 +146,91 @@ GATE GREEN on c4b0a0ae
 - `## MARKERS` again: both `ls` exit 1 (absent); all ten `open_migrated` counts `0`; `migration retry` `8`; `def test_the_migration_step_retries_a_first_deadlock` `0`; the two `flake-fix-2` DevDocs counts `0` — each its `before`.
 - `MIGRATIONS: none`: `<RB>`, census and D1-M not run.
 
-## CONTINUE
-next: STEP-D2 (D2.0 commit of this report)
+### STEP-D2
+- D2.0 `git -C /Users/cobalt/cobalt add ".../deploy-deploy-flake-fix-2-1006.md"` · `commit … -- <report>` → `[main 6dbdea57] docs(report): deploy deploy-flake-fix-2-1006 — gate green on c4b0a0ae` · `1 file changed, 149 insertions(+)`; `show --stat HEAD` lists that one file. `git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `6dbdea57` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only, 149 insertions).
+- D2.2 `git -C <GATE> rev-parse --short=8 HEAD` → `cb6eddfa` = `<stack-final>`; `rev-parse --short=8 cb6eddfa^2` → `6dbdea57` = `<pre-merge>`; `merge-base --is-ancestor c4b0a0ae cb6eddfa` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat c4b0a0ae cb6eddfa -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → (nothing): docs-only.
+- D2.4 `backup status` → `newest snapshot: 4.5 h old`. `COBALT_ENV=production uv run cobalt backup run` (foreground) → `backup: cobalt_brain dumped, 4987.5 MB` · `ssd: snapshot ca4e80b2 — 1 new / 4 changed, 239.8 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Tue Oct  6 07:52:54 EDT 2026`; `heartbeat show` → `HEARTBEAT RED — 1 job(s)  (2026-10-06 07:52:55 EDT)` (111 s after D1's 07:51:04): the same `com.cobalt.generated` RED and `com.cobalt.herdr` AMB as `<hb0>`; aset, sheet, radar probes OK (`com.cobalt.radar running running 434 min, heartbeat fresh`). No new RED. (Two filler pairs at 07:52:46 and 07:52:50 read the same.)
+- D2.6 `date` → `Tue Oct  6 07:53:00 EDT 2026`. `git -C /Users/cobalt/cobalt tag pre-deploy-flake-fix-2-1006` → exit 0, at `6dbdea57`.
 
-(run in progress — next step under ## CONTINUE)
+### STEP-4 (empty `<restart set>`)
+- 4.1 `date` → `Tue Oct  6 07:53:11 EDT 2026` = `<t down>` (nothing went down).
+- 4.2 no label in the set: no bootout, no stop.
+- 4.3 `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` → `6dbdea57` = `<pre-merge>`. `git -C /Users/cobalt/cobalt merge --ff-only deploy/deploy-flake-fix-2-1006` → `Updating 6dbdea57..cb6eddfa` · `Fast-forward` · `15 files changed, 442 insertions(+), 101 deletions(-)`.
+- 4.4 `migrations applied: none`.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 no label taken down: nothing to bootstrap. `<t up>` = 4.3's `date` = 07:53:11 EDT. Downtime: none.
+
+### STEP-7 — close
+| item | value |
+|---|---|
+| merge | `<pre-merge>` `6dbdea57` → `<stack-final>` `cb6eddfa` (fast-forward; `git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `cb6eddfa`) |
+| tags | `pre-deploy-flake-fix-2-1006` at `6dbdea57` (D2.6) · `deploy-2026-10-06-flake-fix-2` at `cb6eddfa` (after the green smoke, `git -C /Users/cobalt/cobalt tag deploy-2026-10-06-flake-fix-2` → exit 0) |
+| `<t down>` / `<t up>` / seconds | none (empty set) — 07:53:11 / 07:53:11 / 0 |
+| uv sync line | none in production; the gate tree's first `uv` call created its `.venv` (`Installed 253 packages in 728ms`, STEP-R) |
+| proof cost | n/a (no migration) |
+| migrations applied | none |
+| `<RB>` before / after | n/a (no migration) |
+| snapshot | `ssd: snapshot ca4e80b2` (D2.4) |
+| RESTARTS done | none |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 cb6eddfa` — ONE revert of the main-into-gate merge (it carries the set's merge with it); `<restart set>` is empty, so no resident goes down or up. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` — git titles it `Reapply "Merge branch 'main' into deploy/deploy-flake-fix-2-1006"`. |
+
+PRE-STOP SELF-CHECK (K25):
+1. Every smoke row is quoted verbatim with its `date` (07:53:25, :28, :33, :35, :49, 07:54:42, 07:55:40, 07:56:12).
+2. Code tip and head `1a52ad0d` were re-read (P3) and `git -C /Users/cobalt/cobalt merge-base --is-ancestor 1a52ad0d cb6eddfa` → exit 0.
+3. REVERT-READBACK (h) is shown; every count, sha and `file:line` in this report was read from tool output this run (the gate's lines are quoted from the check report, with its path and line range).
+4. No conflict marker: STEP-T ran clean (`Merge made by the 'ort' strategy.`), D2.1 likewise.
+
+THE RELEASE: this run never took the lock. `ls -la /Users/cobalt/cobalt-wt/deploy-flake-fix-2-1006/.env` → `No such file or directory`; `ls -la /Users/cobalt/cobalt-wt/.cobalt_dev.lock` → `No such file or directory`.
+Tokens: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh 10165d5c` → `context 189109 of 400000 — ok`.
+
+## Smoke
+`<t up>` = 07:53:11 EDT (4.3's `date`; empty set).
+- FIRST CALLS: `grep -c "radar panel FAILED" aset.err` → `17` · `"radar pool refresh FAILED" aset.err` → `58` · `"radar S5 evaluate FAILED" radar.err` → `40` · `"lifecycle card read failed" radar.err` → `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (equal to D1's).
+- (a) `date` 07:53:25 · `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 79583` (SAME as D1; outside the set) · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 79594` (SAME) · `/Users/cobalt/cobalt/cobalt.sh status` → `  Cobalt is ONLINE (PID: 22243).` (SAME; one line). GREEN.
+- (b) `date` 07:53:28 · `grep -c "Started server process" aset.err` → `45` = `<a0>` (aset outside the set) · `tail -n 30 aset.err` → last start `INFO:     Started server process [79589]` … `INFO:     Uvicorn running on http://0.0.0.0:5010 (Press CTRL+C to quit)` (2026-10-06 00:38, before this deploy), last line `WARNING:  Invalid HTTP request received.`; no new start · `Traceback` aset.err `2` = `<ta0>` · `Traceback` radar.err `0` = `<tr0>` · `TaxonomyConfigError` radar.err `0` = `<tc0>`. Radar tails: below.
+- (c) `date` 07:53:33 · `curl … http://127.0.0.1:5010/` → `200` · `…/radar` → `200` · `…/radar\?frame=phone` → `200`. GREEN.
+- (d) `date` 07:53:35 · MARKERS → `def open_migrated(apply, paths)` `1` · `open_migrated` in test_drc_store `3`, radar_migrated_support `2`, test_radar_score_migration `3`, test_p4_migrations `4`, test_voice_store `3`, test_archiver_migrations `4`, test_stale_score_db `2`, test_tenancy `3`, test_radar_handicap_store `2`, test_xl76_membership_harness `2` · `migration retry` `7` · `def test_the_migration_step_retries_a_first_deadlock` `1` · `def test_first_deadlock_retries_once_on_a_fresh_connection` `1` · `def test_xl76_reports_false_when_the_migration_step_fails` `1` · `flake-fix-2` cli.md `2`, store.md `1`. Every one its `after`. GREEN.
+- (s) SMOKE READS (the same calls at 07:53:35, exit 0 each): the shared helper `1` · the radar-score retry test `1` · the XL76 harness through the helper `2` · the A2 test `1` — each a count of 1 or more. GREEN. The tests themselves are quoted from the gate (`## L68 GATE`); no test ran in production.
+- (f) `date` 07:53:49 · `COBALT_ENV=production uv run cobalt jobs restarts 6dbdea57..cb6eddfa` → exit 0, the same 15 rows as STEP-R, no `UNCLASSIFIED`, `RESTARTS: none` = `<restart set>` · `COBALT_ENV=production uv run cobalt validate` → exit 0, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>`, `Placement (docs/PLACEMENT.md): tree clean.` GREEN.
+- (g) no migration: not run.
+- (e) first read: `date` 07:53:49 · `heartbeat show` → `HEARTBEAT RED — 1 job(s)  (2026-10-06 07:53:50 EDT)`: the same `com.cobalt.generated` RED and `com.cobalt.herdr` AMB as `<hb0>`; `com.cobalt.radar running running 435 min, heartbeat fresh`.
+- (b) radar tails: `date` 07:54:42 (`<t up>` + 91 s) · `tail -n 12 radar.err` → last line `2026-10-06 07:54:29.758 | INFO | cobalt.radar.runner:resident:467 - radar cycle: scanning scan_id=1791287592819`, stamped after `<t up>`; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback in the tail. SETTLED GREEN at the first tail. A second tail at `date` 07:56:12 (+181 s) read the same last line. (b) GREEN.
+- (e) second read: `date` 07:55:40 · `heartbeat show` → `HEARTBEAT RED — 1 job(s)  (2026-10-06 07:55:42 EDT)` (112 s after the first): the same `com.cobalt.generated` RED and `com.cobalt.herdr` AMB; no RED not in `<hb0>`; `com.cobalt.radar running running 437 min, heartbeat fresh`. (e) GREEN. (The filler pairs 07:54:02 to 07:56:08 read the same.)
+- (h) REVERT-READBACK: `date` 07:56:12 (`<t up>` + 181 s, after (b) settled) · `radar panel FAILED` `17` · `radar pool refresh FAILED` `58` · `radar S5 evaluate FAILED` `40` · `lifecycle card read failed` `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`; no count grew · `curl … /radar` → `200`. No `census` read on the card. (h) GREEN.
+
+SMOKE: GREEN.
+
+THE CHAIN: every check committed (P2: `dd16e87d…`, clean, `held unfixed: 0`, `ready: YES`) → the tips (P3: `1a52ad0d` = code tip = head) → the merged tree (T: `c4b0a0ae`, one merge, no migration) → RESTARTS derived (R: `none`, no `UNCLASSIFIED`) → three suites green on `<m1>` (G: by the equal-tree clause, `1a52ad0d` and `c4b0a0ae` equal outside docs; offline 3937/0 · with-DB 4820/0 · live-note 146/0) → `<stack-final>` `cb6eddfa` = `<m1>` + docs (D2.3: empty diff) → the landed code (4.3: `Updating 6dbdea57..cb6eddfa`, fast-forward) → markers (d: all 17 `after`) → no migration (g: n/a) → residents up after the merge (a: same pids, never down) → radar cycling (b: 07:54:29 cycle; e: fresh, no new RED) → the set's reads (s: 4 of 4) → no new failure (h: four counts flat). The card surface is not readable here; the desk confirms it with him (L70).
+
+## CONTINUE
+OUTAGE STARTING 07:53:00 EDT — residents of `<restart set>` (EMPTY: none) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 4.6 ended 07:53:11 (empty set; merge landed `6dbdea57..cb6eddfa`, residents never down). Smoke GREEN 07:56:12; STEP-7 done. next: none — the desk's cleanup (L46) and push (L55).
+
+## DECISIONS
+1. `git status --porcelain` on `main` carries `?? .claude/settings.json.bak`: not in D0's ACCEPTED list and not in its REFUSED classes (no staged line; not under `src/`, `tests/`, `ops/`, `configs/`). Safe default taken: not a refusal; recorded, untouched. The desk may remove or ignore it.
+2. The heartbeat's `RED com.cobalt.generated failed GeneratedCommitRefused: … pre-commit: a deploy hub is live — no desk commit on main until its stop line: 9f093747 deploy-hub-deploy-p2-1005 …` was present before this deploy touched anything (`<hb0>`, 07:51:04) and unchanged through smoke. Not the aset / sheet / radar probe: named, not a stop. It names a different hub (`deploy-p2-1005`), not this one; whether that hub's live-marker is stale is the desk's to read.
+
+## RECORDS
+- L74: a system-reminder in this session asked commits to carry a `Claude-Session:` line; recorded as data, not acted on.
+- Downtime: none (empty `<restart set>`; no resident went down).
+- REFUSED, not needed: none. Messages not followed: none.
+- `cobalt_dev`: not touched by this run (THE EQUAL-TREE CLAUSE; the check's gate left it `0013 — F2 = F0`, `.env: removed`). No lock taken.
+- RETIRE OWED: none.
+- Carried RED as read: no radar-family RED; the one RED is `com.cobalt.generated` (DECISIONS 2).
+- Snapshot before the merge: `ssd: snapshot ca4e80b2` (D2.4).
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-flake-fix-2-1006` and branch `deploy/deploy-flake-fix-2-1006`; the set's worktree `/Users/cobalt/cobalt-wt/flake-fix-2-1006` and branch `ops/flake-fix-2-1006`. The rollback tag `pre-deploy-flake-fix-2-1006` stays.
+- The card's `## RECORDS`, copied:
+  - flake-fix-2: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/flake-fix-2-check-2026-10-06.md` last line: CHECK DONE · job: flake-fix-2 · pass: 1 · tip: 1a52ad0d · house A: Sol FINDINGS: 2 · findings: 10 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 4 · house B: Grok FINDINGS: 4 · suites: offline 3937/0 · with-DB 4820/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: none · files opened: 23 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 203860
+  - flake-fix-2: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/flake-fix-2-1006` → `1a52ad0d` (also the head of `git -C /Users/cobalt/cobalt log --oneline main..ops/flake-fix-2-1006`, 5 commits, not merged); code tip `1a52ad0d` (the check's fix commit, A2; its red test is `10b4d7a3`); the job card's own TIP header reads `fb3117c3` (the build tip); the build report commit `b1bee19a` sits between them (docs only). House A was Sol, house B was Grok. The gate on `1a52ad0d`: offline 3937/0, with-DB 4820/0, live-note 146/0, `cobalt_dev: 0013 — F2 = F0`, `.env: removed`.
+  - G (d2): per the sibling cards' RECORDS wording on its state at deploy time; no Grok read (R412).
+  - Autovacuum (R479): a `DeadlockDetected` in the gate is an autovacuum worker, not a second writer; rerun once via recut. This job moves the retry into one shared helper and covers every self-migrating test the job card lists.
+  - FOLLOW-UP for him, NOT part of this deploy: the check's `## OPEN`. A1 / B4: X1's "touches only `tests/`" against the two required DevDocs lines (settled if the desk confirms X1 means no code outside `tests/`). B1: `tests/experiments/stale_score/test_xl76_devdb_absence.py:22-26` runs the 0015 rollback on its own connection without the helper; no gate suite runs `tests/experiments`; a card of its own if it ever deadlocks. B2: 15 of the 17 call sites have no test pinning them to the helper; the desk may choose an offline lint on a later card, or no pin.
+  - FOLLOW-UP for him, NOT part of this deploy: the build's F1-a (the XL76 harness file errors at setup, `fixture 'offline_skip_guard' not found`; `tests/experiments/handicap_h1/conftest.py` re-exports `dev_db_tx` without it; no gate suite runs it; the check's B3, out of scope) and F1-b (the same gap as B2).
+  - AFTER values above were read from the checked-out worktree `/Users/cobalt/cobalt-wt/flake-fix-2-1006` (the branch `ops/flake-fix-2-1006`, head `1a52ad0d` verified by `rev-parse`), BEFORE values from main's working tree, at drafting time 2026-10-06 07:45 EDT; the deploy re-proves each with `git -C /Users/cobalt/cobalt show 1a52ad0d:<path>`.
+  - Absent today: `git rev-parse --verify` of `deploy/deploy-flake-fix-2-1006` and of `deploy-2026-10-06-flake-fix-2` both failed; `ls` of `/Users/cobalt/cobalt-wt/deploy-flake-fix-2-1006` and of the REPORT path both failed.
+  - one feature per deploy (his R390).
+
+DEPLOYED deploy-2026-10-06-flake-fix-2 cb6eddfa | set: none | migrations: none | gate: offline 3937/0 · with-DB 4820/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 2 · for Dejan: 0 · tokens: 189109
