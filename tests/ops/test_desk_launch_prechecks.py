@@ -1000,6 +1000,68 @@ def test_r1_a_typed_marker_elsewhere_on_the_line_is_refused(desk, tmp_path):
     refused(desk, dry_prompt(desk, tmp_path, pfile), "the launch line types")
 
 
+@pytest.mark.parametrize("typed", [' PROD""-READ: 2026-01-02 R2', " PROD-RE${X}AD: 2026-01-02 R2"])
+def test_r1_a_marker_spelled_across_shell_quoting_without_its_row_is_refused(desk, tmp_path, typed):
+    """check O5: eval makes the marker of `PROD""-READ:` or an empty expansion; with no proving
+    row the line does not launch."""
+    pfile = read_prompt(desk, no_proof(desk, "row absent"), typed=typed)
+    done = dry_prompt(desk, tmp_path, pfile)
+    assert done.returncode == 1, done.stdout
+    assert done.stdout == ""
+
+
+def test_r1_a_disapproved_row_stamps_nothing(desk, tmp_path):
+    desk.write_rulings(
+        APPROVED_R1,
+        PROD_ROW.replace("| APPROVED |", "| DISAPPROVED |"),
+    )
+    pfile = read_prompt(desk)
+    done = dry_prompt(desk, tmp_path, pfile)
+    assert done.returncode == 0, done.stderr
+    assert "PROD-READ:" not in done.stdout + done.stderr, done.stdout
+
+
+def test_r1_a_typed_marker_with_a_suffix_is_refused(desk, tmp_path):
+    desk.write_rulings(APPROVED_R1, PROD_ROW)
+    pfile = read_prompt(desk, typed=STAMP + "x")
+    done = dry_prompt(desk, tmp_path, pfile)
+    refused(desk, done, "the launch line types")
+    assert done.stdout == ""
+
+
+def test_r1_an_obfuscated_typed_marker_without_proof_is_refused(desk, tmp_path):
+    seen = tmp_path / "claude-message"
+    stub = Path(desk.env["PATH"].split(os.pathsep)[0]) / "claude"
+    stub.write_text(f'#!/bin/sh\nprintf "%s\\n" "$2" > "{seen}"\n')
+    stub.chmod(0o755)
+
+    pfile = read_prompt(
+        desk,
+        rulings=None,
+        typed=' PROD-"READ:" 2026-01-02 R2',
+    )
+    done = launch_prompt(desk, tmp_path, pfile)
+    observed = seen.read_text() if seen.exists() else ""
+    assert done.returncode == 1, (done.stdout, done.stderr, observed)
+    assert not seen.exists(), observed
+
+
+def test_r1_production_ready_is_not_a_production_read(desk, tmp_path):
+    """X3: the row must name a production read, not a longer word that contains those letters."""
+    desk.write_rulings(APPROVED_R1, PROD_ROW.replace("production read", "production ready"))
+    done = dry_prompt(desk, tmp_path, read_prompt(desk))
+    assert done.returncode == 0, done.stderr
+    assert "PROD-READ" not in done.stdout + done.stderr, done.stdout
+
+
+def test_r1_a_typed_marker_with_a_non_digit_suffix_is_refused(desk, tmp_path):
+    """Control (h): the typed marker must be the stamp, not the stamp plus a letter."""
+    desk.write_rulings(APPROVED_R1, PROD_ROW)
+    done = dry_prompt(desk, tmp_path, read_prompt(desk, typed=STAMP + "x"))
+    refused(desk, done, "the launch line types")
+    assert done.stdout == ""
+
+
 # ---- card 03c M4: TREE STATE is optional on build and check cards -----------------------------
 
 

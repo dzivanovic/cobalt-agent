@@ -504,6 +504,51 @@ def test_g2_a_marked_query_with_a_separator_is_g1s_to_deny(roots, tail):
     assert line.endswith(BLOCK_TAIL), line
 
 
+@pytest.mark.parametrize("command", [
+    'COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT 1" --pr\\\nod',
+    'COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT cobalt_br\\\nain"',
+])
+def test_g2_a_marked_seat_is_denied_a_production_word_split_by_a_line_continuation(roots, command):
+    """check O1: bash joins `\\<newline>`; the second --prod or cobalt_brain is still there."""
+    assert_denied(run(command, marked_seat(roots)), G2_ROUTE)
+
+
+@pytest.mark.parametrize("command", [
+    'COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT 1"#cobalt_brain',
+    'COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT 1" x# --prod',
+])
+def test_g2_a_marked_seat_is_denied_a_production_word_behind_a_mid_word_hash(roots, command):
+    """check O2: to bash a `#` inside a word starts no comment; what follows it is run."""
+    assert_denied(run(command, marked_seat(roots)), G2_ROUTE)
+
+
+@pytest.mark.parametrize("command", [
+    'COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT 1" --pro{d,}',
+    'COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT 1" cobalt_b{r,}ain',
+])
+def test_g2_a_marked_seat_is_denied_a_production_word_in_a_brace_word(roots, command):
+    """check O3: the shell brace-expands the word into a second --prod or cobalt_brain."""
+    assert_denied(run(command, marked_seat(roots)), G2_ROUTE)
+
+
+def test_g2_allow_prod_does_not_pass_for_a_marked_seat(roots):
+    """X1 / fence: `--allow-prod` is not the one `--prod` of R2(ii)."""
+    command = (
+        'COBALT_ENV=production uv run cobalt db query --prod --allow-prod '
+        '--side user "SELECT 1"'
+    )
+    assert_denied(run(command, marked_seat(roots)), G2_ROUTE)
+
+
+def test_g2_a_brace_word_cannot_hide_a_side_value(roots):
+    """X1: a brace word is not the words() the side check reads."""
+    command = (
+        'COBALT_ENV=production uv run cobalt db query --prod --side user '
+        '"SELECT 1" {--side,admin}'
+    )
+    assert_denied(run(command, marked_seat(roots)), G2_ROUTE)
+
+
 # ---- G3 .env NEVER READ ------------------------------------------------------------------
 
 ENV_READS = [
