@@ -3,10 +3,10 @@ LADDER: S3 — card 03 (D5 O1 + B2)
 BRANCH: ops/drc-d5-o1-b2-1006
 WORKTREE: drc-d5-o1-b2-1006
 BASE: 4d9e451c
-TIP:
+TIP: 74f5674c
 REPORT: /Users/cobalt/cobalt-wt/drc-d5-o1-b2-1006/docs/40 - DevDocs/reports/drc-d5-o1-b2-build-2026-10-06.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/drc-d5-o1-b2-check-2026-10-06.md
+HOUSE B: as needed
 RULINGS: 2026-10-03 R326
 
 ## ROWS
