@@ -551,15 +551,20 @@ def test_o1_a_fix_round_row_the_launcher_accepts_passes_p2(desk):
     git(desk.repo, "add", "-A")
     git(desk.repo, "commit", "-q", "-m", "alpha small fix")
     fixed = git(desk.repo, "rev-parse", "--short=8", "HEAD")
-    git(desk.repo, "checkout", "-q", "main")
+    # card 63 N6: the fix report is committed on the branch head only, never copied to main
     fix_report = desk.reports / "alpha-fix-build.md"
     fix_report.write_text(f"# alpha fix round\n\nBUILT · job: alpha · tip: {fixed} | rows: 1 of 1\n")
-    desk.tip["alpha"], desk.head["alpha"] = fixed, fixed
+    git(desk.repo, "add", "-A")
+    git(desk.repo, "commit", "-q", "-m", "alpha fix report")
+    head = git(desk.repo, "rev-parse", "--short=8", "HEAD")
+    git(desk.repo, "checkout", "-q", "main")
+    assert not fix_report.exists()
+    desk.tip["alpha"], desk.head["alpha"] = fixed, head
     text = desk.card_text()
     text = text.replace("its stop line must carry |\n|---|---|---|---|---|---|\n",
                         "its stop line must carry | fix report |\n|---|---|---|---|---|---|---|\n")
-    text = text.replace(f"`{fixed}` | `{desk.check['alpha']}` | `held unfixed: 0` and `ready: YES` |\n",
-                        f"`{fixed}` | `{desk.check['alpha']}` | `held unfixed: 0` and `ready: YES` | `{fix_report}` |\n")
+    text = text.replace(f"`{head}` | `{desk.check['alpha']}` | `held unfixed: 0` and `ready: YES` |\n",
+                        f"`{head}` | `{desk.check['alpha']}` | `held unfixed: 0` and `ready: YES` | `{fix_report}` |\n")
     desk.card.write_text(text)
     desk.check["alpha"].write_text(f"# check alpha\n\n{check_line(checked)}\n")
     desk.commit("fix round")
@@ -570,11 +575,14 @@ def test_o1_a_fix_round_row_the_launcher_accepts_passes_p2(desk):
 # ---- card 21 F2: the fix-round tip in P2 (check O1) ---------------------------------------------
 
 
-def fix_round(desk, *, cell: bool = True, fix_names: str = "fixed", checked: str = "alpha") -> None:
+def fix_round(desk, *, cell: bool = True, fix_names: str = "fixed", checked: str = "alpha",
+              on_branch: bool = True) -> None:
     """Alpha's code tip moved past its check by a small fix (R376, L75); the SHIPS row carries a
     `fix report` column. `cell` False leaves that cell empty; `fix_names` is the tip the fix
     report's BUILT line names (`fixed` or `checked`); `checked` is the branch whose code tip the
-    check's stop line names (`alpha`: an ancestor of the fix; `beta`: not one)."""
+    check's stop line names (`alpha`: an ancestor of the fix; `beta`: not one). Card 63 N6: the
+    fix report is committed on alpha's branch head only (main holds no copy); `on_branch` False
+    leaves it written in the main tree, in no commit, and the head is the fix."""
     checked_tip = desk.tip[checked]
     old = desk.tip["alpha"]
     git(desk.repo, "checkout", "-q", "ops/alpha")
@@ -582,22 +590,30 @@ def fix_round(desk, *, cell: bool = True, fix_names: str = "fixed", checked: str
     git(desk.repo, "add", "-A")
     git(desk.repo, "commit", "-q", "-m", "alpha small fix")
     fixed = git(desk.repo, "rev-parse", "--short=8", "HEAD")
-    git(desk.repo, "checkout", "-q", "main")
     fix_report = desk.reports / "alpha-fix-build.md"
     named = fixed if fix_names == "fixed" else old
-    fix_report.write_text(f"# alpha fix round\n\nBUILT · job: alpha · tip: {named} | rows: 1 of 1\n")
-    desk.tip["alpha"], desk.head["alpha"] = fixed, fixed
+    report_text = f"# alpha fix round\n\nBUILT · job: alpha · tip: {named} | rows: 1 of 1\n"
+    if on_branch:
+        fix_report.write_text(report_text)
+        git(desk.repo, "add", "-A")
+        git(desk.repo, "commit", "-q", "-m", "alpha fix report")
+    head = git(desk.repo, "rev-parse", "--short=8", "HEAD")
+    git(desk.repo, "checkout", "-q", "main")
+    assert not fix_report.exists()
+    desk.tip["alpha"], desk.head["alpha"] = fixed, head
     text = desk.card_text()
     text = text.replace("its stop line must carry |\n|---|---|---|---|---|---|\n",
                         "its stop line must carry | fix report |\n|---|---|---|---|---|---|---|\n")
-    text = text.replace(f"`{fixed}` | `{desk.check['alpha']}` | `held unfixed: 0` and `ready: YES` |\n",
-                        f"`{fixed}` | `{desk.check['alpha']}` | `held unfixed: 0` and `ready: YES` | "
+    text = text.replace(f"`{head}` | `{desk.check['alpha']}` | `held unfixed: 0` and `ready: YES` |\n",
+                        f"`{head}` | `{desk.check['alpha']}` | `held unfixed: 0` and `ready: YES` | "
                         + (f"`{fix_report}`" if cell else "") + " |\n")
     text = text.replace(f"`{desk.check['beta']}` | `held unfixed: 0` and `ready: YES` |\n",
                         f"`{desk.check['beta']}` | `held unfixed: 0` and `ready: YES` | |\n")
     desk.card.write_text(text)
     desk.check["alpha"].write_text(f"# check alpha\n\n{check_line(checked_tip)}\n")
     desk.commit("fix round")
+    if not on_branch:
+        fix_report.write_text(report_text)  # after the commit: in the tree, in no commit
 
 
 def test_f2_a_fix_round_row_passes_p2_and_step0(desk):
@@ -614,7 +630,8 @@ def test_f2_a_fix_round_row_passes_p2_and_step0(desk):
     [
         pytest.param({"cell": False}, id="(a) fix report cell empty"),
         pytest.param({"fix_names": "checked"}, id="(b) fix report BUILT for the checked tip"),
-        pytest.param({"checked": "beta"}, id="(c) checked tip not an ancestor"),
+        pytest.param({"on_branch": False}, id="(c) fix report not at the branch head"),
+        pytest.param({"checked": "beta"}, id="(d) checked tip not an ancestor"),
     ],
 )
 def test_f2_a_fix_round_missing_one_proof_still_fails_p2(desk, kw):
@@ -625,23 +642,46 @@ def test_f2_a_fix_round_missing_one_proof_still_fails_p2(desk, kw):
     assert "is not the row's code tip" in last_line(done), done.stdout
 
 
-@pytest.mark.parametrize("state", ["edited after its commit", "never committed"])
-def test_o1r2_a_fix_report_not_committed_and_unmodified_fails_p2(desk, state):
-    """DEPLOY-HUB P2's fix-round line (F3): the fix report is committed and unmodified."""
-    fix_round(desk)
-    fixed = desk.tip["alpha"]
+@pytest.mark.parametrize("state", ["absent at the branch head", "cell path never committed"])
+def test_o1r2_a_fix_report_absent_at_the_branch_head_fails_p2(desk, state):
+    """Card 63 N6: the fix report is read at the row's branch head; one that is not there
+    fails P2 naming it, whatever the main tree holds."""
+    fix_round(desk, on_branch=state == "absent at the branch head")
+    fixed, head = desk.tip["alpha"], desk.head["alpha"]
     built = f"BUILT · job: alpha · tip: {fixed} | rows: 1 of 1\n"
-    if state == "edited after its commit":
-        report = desk.reports / "alpha-fix-build.md"
-        report.write_text(report.read_text() + "an edit after the commit\n" + built)
-    else:
+    if state == "absent at the branch head":
         report = desk.reports / "alpha-fix-build-2.md"
         report.write_text(f"# alpha fix round, never committed\n\n{built}")
         desk.card.write_text(desk.card.read_text().replace(
             f"`{desk.reports / 'alpha-fix-build.md'}`", f"`{report}`"))
         assert f"`{report}`" in desk.card.read_text()
         git(desk.repo, "add", str(desk.card))
-        git(desk.repo, "commit", "-q", "-m", "card names an uncommitted fix report")
+        git(desk.repo, "commit", "-q", "-m", "card names a fix report not at the head")
+    else:
+        report = desk.reports / "alpha-fix-build.md"
     done = desk.run()
     assert done.returncode == 1, done.stdout
     assert last_line(done).startswith("FAILED STEP-0: P2 check 1 — "), done.stdout
+    assert f"the fix report {report} is absent at the branch head {head}" in last_line(done), done.stdout
+
+
+@pytest.mark.parametrize("main_copy", ["wrong last line", "right last line"])
+def test_n6_the_branch_heads_copy_decides_never_a_copy_on_main(desk, main_copy):
+    """Card 63 N6: a stray copy committed on main at the cell's path is never read. Its last line
+    wrong while the branch's is right → P2 passes; its last line right while the branch head
+    holds no copy → P2 fails (RED on BASE both ways: P2 read the main copy)."""
+    fix_round(desk, on_branch=main_copy == "wrong last line")
+    fixed, other = desk.tip["alpha"], desk.tip["beta"]
+    report = desk.reports / "alpha-fix-build.md"
+    named = other if main_copy == "wrong last line" else fixed
+    report.write_text(f"# alpha fix round, a stray copy on main\n\nBUILT · job: alpha · tip: {named} | rows: 1 of 1\n")
+    desk.commit("a stray copy of the fix report on main")
+    done = desk.run()
+    p2 = [ln for ln in done.stdout.splitlines() if ln.startswith("P2 check 1 ")]
+    if main_copy == "wrong last line":
+        assert done.returncode == 0, done.stdout
+        assert p2 and " · 0 · CHECK DONE " in p2[0], done.stdout
+    else:
+        assert done.returncode == 1, done.stdout
+        assert last_line(done).startswith("FAILED STEP-0: P2 check 1 — "), done.stdout
+        assert "is absent at the branch head" in last_line(done), done.stdout

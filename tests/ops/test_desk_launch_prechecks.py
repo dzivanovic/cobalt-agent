@@ -553,32 +553,42 @@ def test_l3_a_step_d0_resume_is_not_re_checked(desk):
 DEPLOY_CARD = REPO / "ops" / "desk" / "deploy-card.sh"
 
 
+FIX_REL = Path("docs") / "40 - DevDocs" / "reports" / "x-job-fix-build.md"
+
+
 def fix_round(desk: Desk, *, cell: bool = True, last: str | None = None,
               commit_report: bool = True, checked: str | None = None) -> tuple[str, str]:
     """The check ran on `checked` (default the build's tip); a small fix by the original builder
     then moved the code tip past it, and its fix-round report ends `BUILT · … tip: <code tip>`.
-    `last` may carry FIXED / CHECKED for the two tips. Returns (checked, fixed)."""
+    The report is written in the job worktree and committed on the branch: the row's head is
+    that docs-only commit, and `main` holds no copy (card 63 N6). `commit_report` False leaves
+    it uncommitted in the worktree (the head is the fix). The row's cell names the path under
+    `$REPORTS`. `last` may carry FIXED / CHECKED for the two tips. Returns (checked, fixed)."""
     checked = checked or desk.tip
     (desk.job_wt / "src" / "x.py").write_text("X = 2\n")
     desk.commit_job("small fix after the check")
     fixed = short(desk.job_wt)
-    report = desk.reports / "x-job-fix-build.md"
-    desk.write_deploy(code_tip=fixed, head=fixed, fix=str(report) if cell else "")
-    desk.ship(check_line(checked))
     line = (last or desk.built_line(fixed)).replace("FIXED", fixed).replace("CHECKED", checked)
-    report.write_text(f"# x-job fix round\n\n## RECORDS\n- constructed\n\n{line}\n\n")
+    branch_copy = desk.job_wt / FIX_REL
+    branch_copy.write_text(f"# x-job fix round\n\n## RECORDS\n- constructed\n\n{line}\n\n")
     if commit_report:
-        desk.commit("fix report")
+        desk.commit_job("fix report")
+    head = desk.fix_head = short(desk.job_wt)
+    desk.write_deploy(code_tip=fixed, head=head, fix=str(desk.repo / FIX_REL) if cell else "")
+    desk.ship(check_line(checked))
+    assert not (desk.repo / FIX_REL).exists()
     return checked, fixed
 
 
-def neither(checked: str, fixed: str) -> str:
+def neither(desk: Desk, checked: str, fixed: str) -> str:
+    """The refusal; the row's branch head is the one `fix_round` wrote (card 63 N6)."""
     return (f"deploy ops/x-job: the check's tip '{checked}' is neither the code tip {fixed} "
-            f"nor the branch head {fixed} — the check is not clean")
+            f"nor the branch head {desk.fix_head} — the check is not clean")
 
 
 def test_f1_a_fix_round_past_the_checked_tip_launches(desk):
-    """RED on BASE: refused with `neither the code tip`."""
+    """Card 63 N6: the fix report exists only at the branch head. RED on BASE: refused with
+    `neither the code tip` (the launcher read the cell's file on `main`, where it is absent)."""
     fix_round(desk)
     done = desk.launch("deploy", str(desk.deploy))
     assert done.returncode == 0, done.stderr
@@ -587,7 +597,8 @@ def test_f1_a_fix_round_past_the_checked_tip_launches(desk):
 
 
 @pytest.mark.parametrize("case", ["(a) empty cell", "(b) BUILT for the checked tip",
-                                  "(b) FAILED line naming the code tip", "(c) report uncommitted",
+                                  "(b) FAILED line naming the code tip",
+                                  "(c) report not at the branch head",
                                   "(d) checked tip not an ancestor"])
 def test_f1_a_fix_round_missing_one_proof_still_refuses(desk, case):
     """Negative controls: each refuses on BASE already, and still refuses on the fixed script."""
@@ -597,29 +608,44 @@ def test_f1_a_fix_round_missing_one_proof_still_refuses(desk, case):
         checked, fixed = fix_round(desk, last=desk.built_line("CHECKED"))
     elif case == "(b) FAILED line naming the code tip":
         checked, fixed = fix_round(desk, last="FAILED: W — x · tip: FIXED")
-    elif case == "(c) report uncommitted":
+    elif case == "(c) report not at the branch head":
         checked, fixed = fix_round(desk, commit_report=False)
     else:
         checked, fixed = fix_round(desk, checked=short(desk.repo))  # main's cards commit
-    refused(desk, desk.launch("deploy", str(desk.deploy)), neither(checked, fixed))
+    refused(desk, desk.launch("deploy", str(desk.deploy)), neither(desk, checked, fixed))
     assert not desk.gate_left()
 
 
-def test_f1_a_fix_report_edited_after_its_commit_still_refuses(desk):
-    checked, fixed = fix_round(desk)
-    report = desk.reports / "x-job-fix-build.md"
-    report.write_text(report.read_text() + "an edit after the commit\n" + desk.built_line(fixed) + "\n")
-    refused(desk, desk.launch("deploy", str(desk.deploy)), neither(checked, fixed))
-    assert not desk.gate_left()
+@pytest.mark.parametrize("main_copy", ["wrong last line", "right last line"])
+def test_n6_the_branch_heads_copy_decides_never_a_copy_on_main(desk, main_copy):
+    """Card 63 N6: a stray copy committed on `main` at the cell's path is never read. Its last
+    line wrong while the branch's is right → launches; its last line right while the branch
+    head holds no copy → refused (RED on BASE: the main copy launched it)."""
+    if main_copy == "wrong last line":
+        checked, fixed = fix_round(desk)
+        last = desk.built_line(checked)
+    else:
+        checked, fixed = fix_round(desk, commit_report=False)
+        (desk.job_wt / FIX_REL).unlink()
+        last = desk.built_line(fixed)
+    (desk.repo / FIX_REL).write_text(f"# x-job fix round, a stray copy on main\n\n{last}\n")
+    desk.commit("a stray copy of the fix report on main")
+    done = desk.launch("deploy", str(desk.deploy))
+    if main_copy == "wrong last line":
+        assert done.returncode == 0, done.stderr
+        assert (desk.wt / "x-gate").is_dir()
+    else:
+        refused(desk, done, neither(desk, checked, fixed))
+        assert not desk.gate_left()
 
 
 def test_f1_a_fix_report_outside_the_reports_folder_still_refuses(desk):
     checked, fixed = fix_round(desk)
     stray = desk.prompts / "x-job-fix-build.md"
-    stray.write_text((desk.reports / "x-job-fix-build.md").read_text())
-    desk.write_deploy(code_tip=fixed, head=fixed, fix=str(stray))
+    stray.write_text((desk.job_wt / FIX_REL).read_text())
+    desk.write_deploy(code_tip=fixed, head=desk.fix_head, fix=str(stray))
     desk.commit("fix report outside reports")
-    refused(desk, desk.launch("deploy", str(desk.deploy)), neither(checked, fixed))
+    refused(desk, desk.launch("deploy", str(desk.deploy)), neither(desk, checked, fixed))
     assert not desk.gate_left()
 
 
