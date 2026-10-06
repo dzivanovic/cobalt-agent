@@ -1,12 +1,12 @@
 JOB: deploy-k3-1005
 LADDER: S3-P3 · F14
-BRANCH: deploy/deploy-k3-1005-attempt2
-WORKTREE: deploy-k3-1005-attempt2
+BRANCH: deploy/deploy-k3-1005-attempt3
+WORKTREE: deploy-k3-1005-attempt3
 BASE: main
 TIP: 44e8de82
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-k3-1005-attempt2.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-k3-1005-attempt3.md
 RULINGS: 2026-10-05 R412
-TAG: deploy-2026-10-05-k3-attempt2
+TAG: deploy-2026-10-05-k3-attempt3
 MIGRATIONS: none
 SET: s3
 
