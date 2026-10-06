@@ -657,8 +657,6 @@ def test_check_own_o1_a_later_day_carries_the_item_a_re_paired_unrebuilt_prior_k
     assert line in _reconcile(root, D_NEXT), _reconcile(root, D_NEXT)
 
 
-@pytest.mark.xfail(strict=True, reason="check (drc-d5-o1-b2) O2: HELD, NOT FIXED — the page reads `build_day` "
-                                       "only (imports.py:1036, outside the card's files); the follow-up's red")
 def test_check_own_o2_the_page_lists_the_item_a_re_paired_unrebuilt_day_kept(tmp_path, weekday_calendar):
     """Check (drc-d5-o1-b2) O2, row O1 / D5-3: while a re-paired D is not
     rebuilt, the `/drc` page lists the item the store kept on D's `day` row."""
@@ -668,6 +666,32 @@ def test_check_own_o2_the_page_lists_the_item_a_re_paired_unrebuilt_day_kept(tmp
     kept = _day_build(store)["derived"]["unresolved"]
     store.build.pop(D)
     _record(store, D, trading=DAY1.read_bytes(), extra={"unresolved": kept})
+    lines = [u.line for u in imports._unresolved_lines(store, D, None, [])]
+    assert lines == [f"unresolved: card 42 — {CLOSED_OFF_ZERO}"], lines
+
+
+def test_o2_an_unbuilt_day_lists_the_item_its_re_paired_unrebuilt_prior_kept(tmp_path, weekday_calendar):
+    """Row O2, the prior's fallback: D_NEXT not built, its book starts from D;
+    D re-paired and not rebuilt → the page lists D's kept item on D_NEXT,
+    RESOLVE offered when the trade is carried in."""
+    from cobalt.drc import imports
+
+    store, legs, root, deps = _x11(tmp_path)
+    kept = _day_build(store)["derived"]["unresolved"]
+    store.build.pop(D)
+    _record(store, D, trading=DAY1.read_bytes(), extra={"unresolved": kept})
+    got = imports._unresolved_lines(store, D_NEXT, argparse.Namespace(from_day=D), [kept[0]["trade_id"]])
+    assert [(u.line, u.resolve) for u in got] == [(f"unresolved: card 42 — {CLOSED_OFF_ZERO}", True)], got
+
+
+def test_o2_the_page_reads_a_stored_build_day_before_the_day_rows_kept_list(tmp_path, weekday_calendar):
+    """Row O2, one home: with D's `build_day` stored, the page never reads a
+    list on D's `day` row."""
+    from cobalt.drc import imports
+
+    store, legs, root, deps = _x11(tmp_path)
+    stale = [dict(_day_build(store)["derived"]["unresolved"][0], refusal="constructed stale item")]
+    _record(store, D, trading=DAY1.read_bytes(), extra={"unresolved": stale})  # build_day still stored
     lines = [u.line for u in imports._unresolved_lines(store, D, None, [])]
     assert lines == [f"unresolved: card 42 — {CLOSED_OFF_ZERO}"], lines
 

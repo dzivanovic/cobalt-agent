@@ -138,6 +138,9 @@ His statements from the page. `state_book(day, positions, *, supersedes, expecte
 ## 2026-10-04 — DRC D5
 `day_view` gains `unresolved`: one `UnresolvedLine(line, trade_id, resolve)` per unresolved reconcile item (D5-3, R90). The items come from the day's stored `build_day`, or, before the day is built, from the `build_day` of the DRC its book starts from (`seed_for(day).from_day`). `line` is `units.unresolved_line`, the note's wording. `resolve` is true when the trade is carried into the day: K3-7's `resolve` is the one path, and it refuses any other id. A read; nothing else changed.
 
+## 2026-10-06 — drc-d5 O1 + B2 (fix round, row O2)
+`_unresolved_lines`: a day with no stored `build_day` (a re-pair deleted it and the day is not rebuilt yet) lists the items the store kept on its `day` row (`derived.unresolved`, drc-d5 O1). With neither, the DRC its book starts from is read the same way: its `build_day`, else its `day` row's kept list. A stored `build_day` is always read first (one home). A read; nothing else in `imports.py` changed.
+
 ## Tests
 `tests/cobalt/test_drc_imports.py` (offline, an in-memory `DrcStore`
 double), `tests/cobalt/test_drc_imports_db.py` (with-DB, inside

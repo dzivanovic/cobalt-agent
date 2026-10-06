@@ -1030,13 +1030,24 @@ def _unresolved_lines(store: DrcStore, day: date, book, carried: list[str]) -> l
     """D5-3 (R90): the unresolved items of the day's stored `build_day` — or,
     before the day is built, of the DRC its book starts from — each with
     K3-7's RESOLVE offered when its trade is carried into the day (`resolve`
-    refuses any other id; ONE resolve path, L3). A read."""
+    refuses any other id; ONE resolve path, L3). A read. drc-d5 O2: a day
+    whose `build_day` a re-pair deleted (not rebuilt yet) holds its items on
+    its `day` row — read there; once rebuilt, its `build_day` only."""
     from . import units
 
-    rows = [r for r in store.rows_for(day) if r["kind"] == "build_day"]
-    if not rows and book is not None and book.from_day is not None:
-        rows = [r for r in store.rows_for(book.from_day) if r["kind"] == "build_day"]
-    items = (rows[0]["derived"].get("unresolved") or []) if rows else []
+    def _items(rows: list[dict]) -> Optional[list]:
+        built = next((r for r in rows if r["kind"] == "build_day"), None)
+        if built is not None:
+            return built["derived"].get("unresolved") or []
+        kept = next((r for r in rows if r["kind"] == "day"), None)
+        if kept is not None and "unresolved" in (kept["derived"] or {}):
+            return kept["derived"]["unresolved"] or []
+        return None
+
+    items = _items(store.rows_for(day))
+    if items is None and book is not None and book.from_day is not None:
+        items = _items(store.rows_for(book.from_day))
+    items = items or []
     return [
         UnresolvedLine(line=units.unresolved_line(i), trade_id=i["trade_id"], resolve=i["trade_id"] in carried)
         for i in items
