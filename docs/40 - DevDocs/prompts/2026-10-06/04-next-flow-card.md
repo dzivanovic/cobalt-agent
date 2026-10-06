@@ -2,7 +2,7 @@ JOB: next-flow
 LADDER: OFF-LADDER — cto-2026-10-05.md R438
 BRANCH: ops/next-flow-1006
 WORKTREE: next-flow-1006
-BASE: «FILL: the 8-hex head of main when the build launches»
+BASE: 1f4a8598
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/next-flow-1006/docs/40 - DevDocs/reports/next-flow-build-2026-10-06.md
 CHECK REPORT:
