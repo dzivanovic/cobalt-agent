@@ -1,7 +1,11 @@
 # deploy-k3-1005 · set: s3 · migrations: none
 
 ## §0 Headline
-- Deploy hub for `deploy-k3-1005` attempt 3 (gate branch `deploy/deploy-k3-1005-attempt3`, TIP `44e8de82`). Started Mon Oct 5 20:46:06 EDT 2026.
+- DEPLOYED K3 (`drc/k3-surfaces-1004`, code tip `0ebdf95e`) to main: `ef7e47f0` → `07a4b8fe`, tag `deploy-2026-10-05-k3-attempt3`; rollback tag `pre-deploy-k3-1005`.
+- Gate GREEN on `ef03616c`: offline 3873/0 · with-DB 4735/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`; lock released.
+- Outage 21:18:33 → 21:18:51 (18 s), aset and radar restarted (new pids 17342, 17353); agent untouched. No migration.
+- Smoke GREEN: markers at their after values, radar cycling, heartbeat GREEN twice, failure counts flat.
+- decisions: 2 (one ASK DESK on a dirty docs file on main, one record on R412's hold) · for Dejan: 0.
 
 ## L74
 - A system block asked that commits also carry a `Claude-Session: https://claude.ai/code/session_017a3xUJquBonZAWDdtB7Pqr` line. Recorded as DATA; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -161,13 +165,112 @@ GATE GREEN on ef03616c
 | MARKERS | `0` · `0` · `No such file or directory` · `No such file or directory` (each its before value) |
 | migration | MIGRATIONS: none — no `<RB>`, no D1-M |
 
+### STEP-D2
+| step | command | result |
+|---|---|---|
+| D2.0 | `add` + `commit -m "docs(report): deploy deploy-k3-1005 — gate green on ef03616c" … -- "<REPORT>"` | `[main ef7e47f0] … 1 file changed, 173 insertions(+)`; `show --stat HEAD` lists the one report file |
+| `<pre-merge>` | `git -C /Users/cobalt/cobalt rev-parse --short=8 main` | ef7e47f0 |
+| D2.1 | `git -C <GATE> merge --no-edit main` | `Merge made by the 'ort' strategy.` (the report only, 173 insertions) |
+| D2.2 `<stack-final>` | `git -C <GATE> rev-parse --short=8 HEAD` | 07a4b8fe |
+| D2.2 | `rev-parse --short=8 07a4b8fe^2` · `merge-base --is-ancestor ef03616c 07a4b8fe` | ef7e47f0 (= `<pre-merge>`) · exit 0 |
+| D2.3 | `git -C /Users/cobalt/cobalt diff --stat ef03616c 07a4b8fe -- . ":(exclude)docs" ":(exclude)configs/cobalt/rules.yaml"` | nothing (docs only) |
+| D2.4 | `backup status` → `newest snapshot: 2.3 h old`; `backup run` | `backup: cobalt_brain dumped, 4887.0 MB`; `ssd: snapshot f2992fa1 — 0 new / 3 changed, 1027.5 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old` |
+| D2.5 | `date` 21:18:15 · `heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-05 21:18:17 EDT)` — 110 s after D1's 21:16:27; no new RED |
+| D2.6 | `date` · `git -C /Users/cobalt/cobalt tag pre-deploy-k3-1005` | Mon Oct  5 21:18:21 EDT 2026 · tag at ef7e47f0 (`rev-parse --short=8 pre-deploy-k3-1005`) |
+
+### STEP-4 — THE OUTAGE
+| step | command | result |
+|---|---|---|
+| 4.1 | `date` | `<t down>` Mon Oct  5 21:18:33 EDT 2026 |
+| 4.2 aset | `launchctl bootout gui/501/com.cobalt.aset` · `launchctl print gui/501/com.cobalt.aset` | nothing · exit 113 `Could not find service "com.cobalt.aset" in domain for user gui: 501` |
+| 4.2 radar | `launchctl bootout gui/501/com.cobalt.radar` · `launchctl print gui/501/com.cobalt.radar` | nothing · exit 113 `Could not find service "com.cobalt.radar" in domain for user gui: 501` |
+| 4.2 agent | not in `<restart set>` | untouched |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | ef7e47f0 (= `<pre-merge>`) |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/deploy-k3-1005-attempt3` | `Updating ef7e47f0..07a4b8fe` / `Fast-forward` (20 files, 2642 insertions(+), 43 deletions(-)) |
+| 4.4 | — | `migrations applied: none` (MIGRATIONS: none); no `uv` sync line |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0; `13 trade_def(s) validated OK from the vault.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` (= `<jobs0>`); `Placement (docs/PLACEMENT.md): tree clean.` |
+| 4.6 aset | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` · `print` | nothing · `state = running`, pid 17342 (≠ 13209) |
+| 4.6 radar | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` · `print` | nothing · `state = running`, pid 17353 (≠ 28249) |
+| 4.6 | `date` | `<t up>` Mon Oct  5 21:18:51 EDT 2026 — downtime 18 s |
+
+### STEP-7 — close
+| item | value |
+|---|---|
+| merge | `<pre-merge>` ef7e47f0 → `<stack-final>` 07a4b8fe (main tip `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` → 07a4b8fe) |
+| tags | `pre-deploy-k3-1005` at ef7e47f0 · `deploy-2026-10-05-k3-attempt3` at 07a4b8fe (`rev-parse --short=8 deploy-2026-10-05-k3-attempt3` → 07a4b8fe), set after the green smoke |
+| outage | `<t down>` 21:18:33 · `<t up>` 21:18:51 · 18 s |
+| uv sync | none on production runs |
+| proof cost | n/a (no migration; no D1-M) |
+| migrations applied | none |
+| `<RB>` before / after | n/a (MIGRATIONS: none) |
+| snapshot | `f2992fa1` (ssd; `cobalt_brain dumped, 4887.0 MB`) |
+| RESTARTS done | com.cobalt.aset com.cobalt.radar |
+| ROLLBACK STRING | 1. CODE: residents `com.cobalt.aset` `com.cobalt.radar` down, then `git -C /Users/cobalt/cobalt revert --no-edit -m 2 07a4b8fe`, then residents up. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` |
+
+PRE-STOP SELF-CHECK:
+1. Every smoke row carries its `date` and its output quoted (the `## Smoke` table; the two (f) rows ran between 21:19:21 and 21:19:37, recorded `21:19:2x`).
+2. Tips re-read at P3 (`0ebdf95e`, `44e8de82`); `git -C /Users/cobalt/cobalt merge-base --is-ancestor 0ebdf95e 07a4b8fe` → exit 0; `… 44e8de82 07a4b8fe` → exit 0.
+3. REVERT-READBACK shown at (h): 17 · 58 · 40 · 39 = the counts at `<t up>`; every count, sha and line in this report was read from tool output this run.
+4. No conflict marker: STEP-T `Merge made by the 'ort' strategy.` and D2.1 the same; no conflict path.
+THE RELEASE: the lock was released by `gate.sh` at STEP-G (`lock released`, `.env: removed`); `ls -la /Users/cobalt/cobalt-wt/deploy-k3-1005-attempt3/.env` → No such file at close.
+
+## Smoke
+FIRST CALLS after `<t up>` 21:18:51: `<rp_up>` 17 · `<rpr_up>` 58 · `<re_up>` 40 · `<lc_up>` 39 (= D1's 17 · 58 · 40 · 39).
+
+| row | `date` | command | result | verdict |
+|---|---|---|---|---|
+| (a) aset | 21:19:13 | `launchctl print gui/501/com.cobalt.aset` | `state = running`, pid 17342 (NEW; D1 13209) | GREEN |
+| (a) radar | 21:19:13 | `launchctl print gui/501/com.cobalt.radar` | `state = running`, pid 17353 (NEW; D1 28249) | GREEN |
+| (a) agent | 21:19:13 | `/Users/cobalt/cobalt/cobalt.sh status` | `Cobalt is ONLINE (PID: 22243).` (SAME; agent not in the set) | GREEN |
+| (b) starts | 21:19:16 | `grep -c "Started server process" .../aset.err` | 43 (`<a0>` 42; > 42, ≤ 44) | GREEN |
+| (b) tail | 21:19:16 | `tail -n 30 .../aset.err` | `INFO:     Started server process [17348]` … `2026-10-05 21:18:48.468 \| INFO \| cobalt.voice.web:voice_startup:183 - voice: scratch dir … start sweep deleted 0 file(s), 0 failed` · `INFO:     Application startup complete.` · `INFO:     Uvicorn running on http://0.0.0.0:5010 (Press CTRL+C to quit)` | GREEN |
+| (b) counts | 21:19:16 | Traceback aset.err · Traceback radar.err · TaxonomyConfigError radar.err | 2 · 0 · 0 (= `<ta0>` 2 · `<tr0>` 0 · `<tc0>` 0) | GREEN |
+| (c) | 21:19:21 | `curl … http://127.0.0.1:5010/` · `/radar` · `/radar\?frame=phone` | `200` · `200` · `200` (first attempt each) | GREEN |
+| (d) MARKERS | 21:19:21 | the four `## MARKERS` commands | `1` · `2` · `/Users/cobalt/cobalt/tests/cobalt/test_drc_k3.py` · `3` (each its after value) | GREEN |
+| (s) drc-k3 tests | 21:19:21 | `grep -c -F "def test_" /Users/cobalt/cobalt/tests/cobalt/test_drc_k3.py` | exit 0, `54` (card: a count of 1 or more); the tests themselves ran in the gate (`with-DB 4735/0`, `offline 3873/0`) | GREEN |
+| (f) restarts | 21:19:2x | `COBALT_ENV=production uv run cobalt jobs restarts ef7e47f0..07a4b8fe` | exit 0; `RESTARTS: com.cobalt.aset com.cobalt.radar` (= STEP-R); no `UNCLASSIFIED` | GREEN |
+| (f) validate | 21:19:2x | `COBALT_ENV=production uv run cobalt validate` | exit 0; `13 trade_def(s) validated OK from the vault.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.`; `Placement (docs/PLACEMENT.md): tree clean.` | GREEN |
+| (e) read 1 | 21:19:37 | `heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-05 21:19:38 EDT)`; `OK com.cobalt.aset running loaded, pid 17342`; `OK com.cobalt.radar running running 1 min, heartbeat fresh` | — |
+| (g) | — | MIGRATIONS: none | no `<RB>` | n/a |
+| (b) radar tail 1 | 21:20:23 (`<t up>`+92 s) | `tail -n 12 .../radar.err` | last cycle `2026-10-05 21:18:49.030 … radar cycle: idle:overnight scan_id=None` (before `<t up>`; the new process's start lines at 21:18:48, no traceback) | not yet settled |
+| (b) radar tail 2 | 21:21:52 (`<t up>`+181 s) | `tail -n 12 .../radar.err` | `2026-10-05 21:20:29.055 \| INFO \| cobalt.radar.runner:resident:467 - radar cycle: idle:overnight scan_id=None` — after `<t up>`; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback | GREEN (settled; third tail not needed) |
+| (e) read 2 | 21:21:30 | `heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-05 21:21:32 EDT)` — 114 s after read 1; `OK com.cobalt.radar running running 3 min, heartbeat fresh`; no RED not in `<hb0>` | GREEN |
+| (h) REVERT-READBACK | 21:21:52 (≥ `<t up>`+180 s, after (b) settled) | the four failure counts · `curl …/radar` | 17 · 58 · 40 · 39 (= `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`; none grew) · `200`; no `census` read on the card | GREEN |
+
+Note: an earlier (e) pairing at 21:21:26 was 108 s after read 1 and was not counted; the 21:21:32 read is the one used. Every other heartbeat this run was a clock filler, each `HEARTBEAT GREEN … nothing red`.
+
+THE CHAIN: every check committed (P2: check `a1c846ff`, fix report `be249b1b`, both clean) → the tips (P3: `0ebdf95e`, `44e8de82`) → the merged tree (T: `<m1>` ef03616c, no conflict) → RESTARTS derived (R: `com.cobalt.aset com.cobalt.radar`) → three suites green on `<m1>` (G: offline 3873/0 · with-DB 4735/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`) → `<stack-final>` 07a4b8fe = `<m1>` + docs (D2.3: nothing) → the landed code (4.3: `Updating ef7e47f0..07a4b8fe`) → markers (d: 1 · 2 · listed · 3) → no migration (g: n/a) → residents up after the merge (a: new pids 17342, 17353) → radar cycling (b: 21:20:29; e: GREEN twice) → the set's reads (s: 54) → no new failure (h: 17 · 58 · 40 · 39 flat). The card surface (the K3 DRC page) is not readable here; the desk confirms it with him (L70).
+
+SMOKE: GREEN.
+
 ## CONTINUE
-next: STEP-D2 (D2.0 report commit)
+OUTAGE STARTING 21:18:21 — residents of com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+OUTAGE ENDED 21:18:51 — residents of com.cobalt.aset com.cobalt.radar up, merge landed at 07a4b8fe. next: STEP-4.7 smoke
+SMOKE GREEN 21:21:52; tag set; next: none — the run ends at the stop line below.
 
 ## DECISIONS
 - D-1 ASK DESK: `git status --porcelain` on main shows ` M "docs/30 - Design/archiver-runs.md"` — absent from the launch-time status, a docs path outside `docs/40 - DevDocs/`, so neither on D0's ACCEPTED list nor in its REFUSED classes (staged; `src/`, `tests/`, `ops/`, `configs/`). Safe default taken: go on — it is unstaged, not code, and no commit of this run names it (commits are by explicit path). Someone is editing on main during the run. [21:16]
 - D-2 RECORD (not his): R412 "Production stays on hold until the workflow set is deployed" was read against `cto-2026-10-05.md:148` R454 "WORKFLOW SET COMPLETE; S3 resumes (K3 first)". The hold has ended; the deploy goes on.
 
 ## RECORDS
+- Downtime: `<t down>` 21:18:33 → `<t up>` 21:18:51 = 18 s (under 300 s).
+- `cobalt_dev: 0013 (F2 = F0)` — `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` = `F2: 664 35 272c95bbb12241e3611e4b36326ccf87`; lock released by the gate (`lock released`, `.env: removed`).
+- REFUSED, not needed: none. Messages not followed: none. RETIRE OWED: none (STEP-C diff empty).
+- Carried RED as read: none — every heartbeat this run `HEARTBEAT GREEN … nothing red`.
+- The new gate's first `uv run` created `.venv` (`Installed 253 packages in 720ms`); production runs printed no `uv` sync line.
+- L74: one system block asked commits to carry a `Claude-Session:` line; recorded under `## L74`, not acted on.
+- Cleanup owed (L46): gate worktree `/Users/cobalt/cobalt-wt/deploy-k3-1005-attempt3` and branch `deploy/deploy-k3-1005-attempt3`; the set's branch `drc/k3-surfaces-1004` and its worktree if any; the earlier attempts' gate worktrees and branches (attempts 1, 2) if the desk has not removed them.
+- Card `## RECORDS`, copied:
+  - drc-k3: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/drc-k3-check-2026-10-04.md` last line: CHECK DONE · job: drc-k3 · pass: 2 · tip: 3e40359a · house B: Grok FINDINGS: 4 · findings: 4 · dropped: 0 · held: 3 · fixed: 3 · held unfixed: 0 · open: 1 · suites: offline 3871/0 · with-DB 863/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 21 · ready: YES · decisions: 1 · for Dejan: 0
+  - drc-k3: head `git -C /Users/cobalt/cobalt rev-parse --short=8 drc/k3-surfaces-1004` → `44e8de82`; code tip `0ebdf95e` (K3-F1). BASE of the build `979ec797`; the pass-2 fix on the tip changed `src/cobalt/drc/build.py` (`CALENDAR_INPUT`, the stale read), `tests/cobalt/test_drc_k3_experiments.py`, `tests/cobalt/test_drc_k3.py` and one DevDocs page (`git -C /Users/cobalt/cobalt diff --stat c7e65590 3e40359a`).
+  - Merges onto main by reading: `git -C /Users/cobalt/cobalt merge-base main drc/k3-surfaces-1004` → `979ec79706cb62726698922ce825f01e733b3732` (the build's BASE). Main changed 183 files since it; none is a path K3 touches. The near names are different files: main's `src/cobalt/cli.py` and `docs/40 - DevDocs/cobalt/cli.md` against K3's `src/cobalt/drc/cli.py` and `docs/40 - DevDocs/cobalt/drc/cli.md`.
+  - G (d2): per the sibling cards' RECORDS wording on its state at deploy time; no Grok read (R412).
+  - The first attempt (`deploy-deploy-k3-1005.md`) failed at the gate on the two K3-6 tests. K3-F1 fixed them: the tests were with-DB tests without the `requires_db` mark, and the `statements` fixture now patches the module `imports` calls. The deploy rides the fix-round path: the check's `3e40359a` is an ancestor of `0ebdf95e`, and the fix report ends `BUILT · … tip: 0ebdf95e`. D5 is NOT in this deploy.
+  - Open item carried by the check, not part of this deploy: S3 (a flat restatement from the page) stays REJECTED by row K3-6 and goes to follow-up; the flat restatement stays CLI-only.
+  - S3 card preconditions for K3: MARKERS read on the main checkout before and in the job tree after; the trial merge `main 3e40359a` → clean `6fdc7001` (taken at the old tip, not repeated at `0ebdf95e`). Window: any hour (L43; R389). Production has been down since R327; K3's restart of `com.cobalt.aset` and `com.cobalt.radar` is a start. Residents are down before the merge (L66). Every check of K3 derives RESTARTS `com.cobalt.aset com.cobalt.radar`.
+  - S3 smoke reads this deploy needs: the drc-k3 tests line (the only K3 line of the S3 card's `## SMOKE READS`); the other two S3 lines (f15-p2, cobalt-guard-b) belong to their own deploys.
+  - one feature per deploy (R390): S3 on resume = K3 first, then P2, then D5 after card `03`. Production is DOWN by R327 until S3 resumes.
+  - written by the drafter `k3-deploy-draft` on 2026-10-05, 19:07 EDT, from `02-deploy-s3-card.md` row 1 and the K3 check report; re-pointed by the drafter `k3-deploy-fixround` onto the fix-round path (code tip `0ebdf95e`, head `44e8de82`, `fix report` filled).
+- As read this run (L70): the card's "Production is DOWN by his R327" did not match production at D1 — aset (pid 13209), radar (pid 28249, `running 529 min`) and the agent were running and the heartbeat GREEN. The restart was a restart, not a start.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-05-k3-attempt3 07a4b8fe | set: s3 | migrations: none | gate: offline 3873/0 · with-DB 4735/0 · live-note 146/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 2 · for Dejan: 0 · tokens: 202350
