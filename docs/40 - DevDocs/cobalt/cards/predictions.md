@@ -41,3 +41,32 @@ inside the suite's rollback (`tests/cobalt/predictions_db_support.py`).
 
 ## 2026-09-30 — f15-p1
 Created (card 61 rows W1, H1–H3).
+
+## 2026-10-04 — F15 P2
+The read half (card 2026-10-04/02 rows P2-1, P2-2, P2-3; FINAL §5, §6). Pure
+reads through `CardReads` (USER side, SELECTs only, no lock, no current
+settings, no market data):
+- `replay(card_id) -> ReplayReport` — every record by `seq`: a record of
+  another `scorer_version` is NOT REPLAYABLE; a `tap` is recomputed from its
+  own inputs (`recompute_tap`); a `create` / `refresh` through
+  `replay_receipt` on its run's receipt chain (`scan_recompute`; taps-moved
+  per `[F-08]` / `[F-44]`), with the receipt's settings for
+  `proposed_key_reason`; `ReplayError`, a missing receipt or a receipt with
+  no slice of the card → NOT REPLAYABLE with its reason. `output_diff`
+  compares as `Decimal` values (X7) and re-derives `why` with `grade_why`.
+  The decision grade (`decision_seq`, R2-1 (c) B) and the ROW check (the
+  card row vs the last record by `seq`) are derived, never stored. Exit
+  0 / 1 / 2 as §5; a manual card and a radar card with no records (the
+  audit-export line, `--run` = `system.radar_score.run_id` of its
+  `radar_score_id`) exit 2. `ReplayReport.as_json()` is the ONE `[F-44]`
+  object; a card with no records has `row = {verdict: null, record_seq:
+  null, diff: []}`. A tap's recomputed dots carry the fields its inputs
+  hold (no `engine_value`), and the dot compare covers those fields.
+- `corpus(since, *, card_id=None) -> list[CorpusRow]` — one row per card
+  with records (created on or after `since`, ET), or the one card asked:
+  decision / final record, count, state, `legs.realized_r` on
+  `legs_current_v` with its provisional flag as returned, the current
+  `missed` row (two refuse loud), the `picks` row, `outcome_status` per
+  `[F-09]` (`awaiting nightly replay` until a current `missed` row exists).
+  `render_corpus` prints n per status first; no EV, no aggregate.
+`replay`'s OUTCOME line is `corpus(None, card_id=…)` for its card.
