@@ -108,6 +108,8 @@
 #     `--remote-control` and `--name`, or that reads another file than the one named; a card
 #     or a fixed file handed over as a prompt; a prompt that names no cwd; a line that names
 #     `--name brain` or `--remote-control brain` (the brain seat launches by the kind `brain` only);
+#     a line that types `PROD-READ:` other than the stamp this script appends after `follow it
+#     exactly.` for a proven production-read RULINGS row (card 21 guard-g2 R1, his 2026-10-06 R511);
 #   - kind `desk`: a wake-up line that does not name `cto-desk`;
 #   - kind `brain`: a handover that is not a .md file directly under $PROMPTS/<YYYY-MM-DD>/, holds
 #     a character outside [A-Za-z0-9 ._/-] or '..', does not exist, or still holds a «FILL token;
@@ -494,6 +496,38 @@ brain
     esac
     case "$dir" in
         *[!A-Za-z0-9._/-]*|*..*) refuse "the prompt's cwd holds a character outside [A-Za-z0-9._/-]" ;;
+    esac
+    # card 21 guard-g2 R1 (his 2026-10-06 R511): a committed, clean prompt whose one RULINGS line
+    # cites ONE `<date> R<n>` whose row is HIS RULING + APPROVED and committed (ruling_row), its file
+    # clean, and names production reads launches with ` PROD-READ: <date> R<n>` after `follow it
+    # exactly.` — the marker bare-guard.py G2 reads in the seat's first message. A line that
+    # already types `PROD-READ:` is refused unless it holds exactly that stamp, once, in that place;
+    # it is then not stamped twice
+    stamp=""
+    if [ "$(grep -c '^RULINGS:' "$pfile")" -eq 1 ]; then
+        case "$prulings" in
+            *,*|"") ;;
+            *)
+                if ( ruling_row "$prulings" ) 2>/dev/null \
+                    && git -C "$REPO" diff --quiet -- "$REPORTS/cto-${prulings%% *}.md" \
+                    && grep "^| ${prulings#* } |" "$REPORTS/cto-${prulings%% *}.md" | grep -q -i -F "production read"; then
+                    stamp=" PROD-READ: $prulings"
+                fi ;;
+        esac
+    fi
+    pre="Read '$pfile' and follow it exactly."
+    case "$line" in
+        *PROD-READ:*)
+            [ -n "$stamp" ] || refuse "the launch line types PROD-READ: but its RULINGS row proves no production read (one row, HIS RULING + APPROVED, committed, naming production reads; his 2026-10-06 R511)"
+            pr_n=$(printf '%s\n' "$line" | grep -o -F 'PROD-READ:' | wc -l | tr -d ' ')
+            case "$line" in
+                *"$pre$stamp"[0-9]*) pr_n=0 ;;
+                *"$pre$stamp"*) ;;
+                *) pr_n=0 ;;
+            esac
+            [ "$pr_n" -eq 1 ] || refuse "the launch line types a PROD-READ: marker other than the launcher's stamp '$stamp', once, after 'follow it exactly.' (his 2026-10-06 R511)" ;;
+        *)
+            [ -z "$stamp" ] || line="${line%%"$pre"*}$pre$stamp${line#*"$pre"}" ;;
     esac
     check_paths "$line"
     run_launch "$dir" "$line" "reminder: one Grok hub at a time (L15); the tab and the §5 row are the desk's"

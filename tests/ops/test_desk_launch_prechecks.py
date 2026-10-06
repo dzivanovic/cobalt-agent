@@ -925,16 +925,20 @@ NO_PROOF = [
 ]
 
 
+def proof_prompt(desk: Desk, case: str, rulings: str | None, typed: str = "") -> Path:
+    """The prompt of a NO_PROOF case, committed; an uncommitted row stays out of that commit."""
+    if not case.endswith("uncommitted"):
+        return read_prompt(desk, rulings, typed=typed)
+    pfile = read_prompt(desk, rulings, typed=typed, commit=False)
+    git(desk.repo, "add", "--", str(pfile))
+    git(desk.repo, "commit", "-q", "-m", "prompt", "--", str(pfile))
+    return pfile
+
+
 @pytest.mark.parametrize("case", NO_PROOF)
 def test_r1_a_row_that_proves_nothing_stamps_nothing(desk, tmp_path, case):
     """Controls, green on BASE: the line launches as today, unstamped."""
-    rulings = no_proof(desk, case)
-    if case == "row uncommitted":
-        pfile = read_prompt(desk, rulings, commit=False)
-        git(desk.repo, "add", "--", str(pfile))
-        git(desk.repo, "commit", "-q", "-m", "prompt", "--", str(pfile))
-    else:
-        pfile = read_prompt(desk, rulings)
+    pfile = proof_prompt(desk, case, no_proof(desk, case))
     done = dry_prompt(desk, tmp_path, pfile)
     assert done.returncode == 0, done.stderr
     assert "PROD-READ" not in done.stdout + done.stderr, done.stdout
@@ -953,16 +957,10 @@ def test_r1_an_uncommitted_prompt_is_refused(desk, tmp_path, case):
     assert done.stdout == ""
 
 
-@pytest.mark.parametrize("case", [c for c in NO_PROOF if c != "row uncommitted"] + ["row uncommitted"])
+@pytest.mark.parametrize("case", NO_PROOF)
 def test_r1_a_typed_marker_without_its_proving_row_is_refused(desk, tmp_path, case):
     """RED (g) on BASE: the typed marker launched."""
-    rulings = no_proof(desk, case)
-    if case == "row uncommitted":
-        pfile = read_prompt(desk, rulings, typed=STAMP, commit=False)
-        git(desk.repo, "add", "--", str(pfile))
-        git(desk.repo, "commit", "-q", "-m", "prompt", "--", str(pfile))
-    else:
-        pfile = read_prompt(desk, rulings, typed=STAMP)
+    pfile = proof_prompt(desk, case, no_proof(desk, case), typed=STAMP)
     done = dry_prompt(desk, tmp_path, pfile)
     refused(desk, done, "the launch line types PROD-READ:")
     assert done.stdout == ""
