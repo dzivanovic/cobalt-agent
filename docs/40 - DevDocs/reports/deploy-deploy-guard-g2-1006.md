@@ -1,7 +1,10 @@
 # deploy-guard-g2-1006 · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of `ops/guard-g2-1006` (code tip `19f75dc6`) on DEPLOY-HUB; card `prompts/2026-10-06/34-deploy-guard-g2-card.md`.
+- DEPLOYED guard-g2 (`ops/guard-g2-1006`, code tip `19f75dc6`): main `700ba695` → `577b2c01`, tag `deploy-2026-10-06-guard-g2`, rollback tag `pre-deploy-guard-g2-1006`.
+- Gate green on `b7e58980`: offline 3937/0 · with-DB 4820/0 · live-note 146/0; `cobalt_dev` 0013, F2 = F0.
+- RESTARTS: none. No resident went down. No migration. Smoke GREEN, and all eight markers are at `after`.
+- Desk follow-ups (card RECORDS): check OPEN A3, A4, B3 and DECISIONS 3, 4, each a card of its own.
 
 ## L74
 - A system-turn attribution reminder asked for a `Claude-Session:` line on commits. Recorded as data; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -131,13 +134,111 @@ STEP-D1 (baseline, `date` → Tue Oct  6 09:12:08 EDT 2026):
 - `curl … /radar` → `200`. The eight `## MARKERS` again → `0` each (= before).
 - No migration: `<RB>`, census and D1-M are not run.
 
+STEP-D2:
+- D2.0 commit `700ba695 docs(report): deploy deploy-guard-g2-1006 — gate green on b7e58980`. `show --stat HEAD` → one file, 143 insertions. `<pre-merge>` = `700ba695`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `577b2c01` · `rev-parse --short=8 577b2c01^2` → `700ba695` = `<pre-merge>` · `merge-base --is-ancestor b7e58980 577b2c01` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat b7e58980 577b2c01 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` before → `newest snapshot: 1.3 h old`. `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 5015.7 MB` · `ssd: snapshot b839df9a — 0 new / 3 changed, 61.2 MB added, 1 pruned`. `backup status` after → `newest snapshot: 0.0 h old`.
+- D2.5 `date` 09:13:59 · `heartbeat show` → `(2026-10-06 09:14:01 EDT)`, 112 s after D1's 09:12:09. Same probes as `<hb0>`: only `RED com.cobalt.generated` (the same text) and `AMB com.cobalt.herdr`. aset pid 79583, radar `running 515 min, heartbeat fresh`. No new RED.
+- D2.6 `date` → Tue Oct  6 09:14:06 EDT 2026 · `git -C /Users/cobalt/cobalt tag pre-deploy-guard-g2-1006` at `700ba695`.
+
+STEP-4 (`<restart set>` empty):
+- 4.1 `date` → Tue Oct  6 09:14:17 EDT 2026 = `<t down>` = `<t up>` (empty set).
+- 4.2 nothing goes down.
+- 4.3 `rev-parse --short=8 HEAD` → `700ba695` = `<pre-merge>`. `git -C /Users/cobalt/cobalt merge --ff-only deploy/deploy-guard-g2-1006` → `Updating 700ba695..577b2c01` / `Fast-forward` (5 files changed, 624 insertions(+), 3 deletions(-)).
+- 4.4 `migrations applied: none`.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.` · `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>`.
+- 4.6 nothing to restore. Downtime: none.
+
+STEP-7 summary:
+| field | value |
+|---|---|
+| main | `700ba695` (`<pre-merge>`) → `577b2c01` (`<stack-final>`) |
+| tags | `pre-deploy-guard-g2-1006` at `700ba695` · `deploy-2026-10-06-guard-g2` at `577b2c01` (after green smoke) |
+| `<t down>` / `<t up>` / seconds | none (empty set; merge at 09:14:17) |
+| uv sync line | gate worktree only: `Installed 253 packages in 797ms` (main's env unchanged; no `uv` sync line in production calls) |
+| proof cost | n/a (no migration; no D1-M) |
+| migrations applied | none |
+| `<RB>` before / after | n/a (MIGRATIONS: none) |
+| snapshot | `b839df9a` (ssd, 09:13:35) |
+| RESTARTS done | none |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 577b2c01` (no resident to take down: RESTARTS none). 2. SCHEMA: none. 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` |
+
 ## Smoke
+- FIRST CALLS after `<t up>` (09:14:17): `<rp_up>` 17 · `<rpr_up>` 58 · `<re_up>` 40 · `<lc_up>` 39 (= D1 baselines).
+- (a) 09:14:27 · aset `state = running`, `pid = 79583` (SAME, outside the set) · radar `state = running`, `pid = 79594` (SAME) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (same).
+- (b) 09:14:31 · `Started server process` 45 = `<a0>` (aset outside the set) · Traceback aset 2 = `<ta0>` · Traceback radar 0 = `<tr0>` · TaxonomyConfigError 0 = `<tc0>`.
+- (c) 09:14:31 · `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`.
+- (d) 09:14:37 · markers: `def marked_read(command, s)` 1 · `MARKER = re.compile` 1 · `and not marked_read(command, s)` 1 · `PROD-READ:` 8 · `production reads?([^[:alpha:]]|\$)` 1 · `MARKED_KINDS` 3 · `def test_g2_a_marked_seat_is_denied_a_production_word_in_a_brace_word` 1 · `def test_r1_a_disapproved_row_stamps_nothing` 1. Each = its `after`.
+- (f) `validate` as 4.5 (exit 0) · `COBALT_ENV=production uv run cobalt jobs restarts 700ba695..577b2c01` → exit 0, the same five rows (DOCS / operator script; no Cobalt reader ×2 / test/documentation; no resident ×2), `RESTARTS: none` = STEP-R's set, no UNCLASSIFIED.
+- (e) read 1 at 09:14:49: `HEARTBEAT RED — 1 job(s)`, the same probe set as `<hb0>` (only `RED com.cobalt.generated`, same text; `AMB com.cobalt.herdr`). `com.cobalt.radar running running 516 min, heartbeat fresh`.
+- (s) 09:15:08 · each exit 0:
+  - the G2 pass (R2): `def marked_read(command, s)` → `1`
+  - the G2 row in the rule: `and not marked_read(command, s)` → `1`
+  - the launcher stamp (R1): `PROD-READ:` → `8`
+  - the check's A1 fix: `production reads?([^[:alpha:]]|\$)` → `1`
+  
+  Each is a count of 1 or more = GREEN. The tests behind them ran in the gate (`tests/ops` inside offline 3937/0).
+- (b) radar tails:
+  - 09:15:52 (+95 s): last line `09:14:03.202 radar cycle: scanning`, none after `<t up>` yet.
+  - 09:17:17 (+180 s): `2026-10-06 09:17:00.182 | INFO | cobalt.radar.runner:resident:467 - radar cycle: scanning scan_id=1791292543219`. This is after `<t up>`, with no `radar S5 evaluate FAILED`, no `lifecycle card read failed` and no traceback in the 12 lines. Settled GREEN, so no third tail is needed.
+- (e) read 2 at 09:16:42, 113 s after read 1: the same probe set as `<hb0>` (only `RED com.cobalt.generated`, unchanged; `AMB com.cobalt.herdr`). `com.cobalt.radar running running 518 min, heartbeat fresh`. No new RED.
+- (g) no migration.
+- (h) 09:17:21 (+184 s): `radar panel FAILED` 17 · `radar pool refresh FAILED` 58 · `radar S5 evaluate FAILED` 40 · `lifecycle card read failed` 39, each = its `<…_up>`. `/radar` → `200`. No census read on the card. Traceback radar 0, aset 2 (= baseline).
+
+THE CHAIN:
+- every check committed (P2: `21733a37…`, clean)
+- the tips re-read (P3: `19f75dc6` = head)
+- the merged tree (T: `b7e58980`, one merge, no migration)
+- RESTARTS derived (R: none)
+- three suites green on `b7e58980` (G: 3937/0 · 4820/0 · 146/0)
+- `577b2c01` = `b7e58980` + docs (D2.3: nothing outside docs)
+- the landed code (4.3: `Updating 700ba695..577b2c01`)
+- markers at `after` (d: 1, 1, 1, 8, 1, 3, 1, 1)
+- no migration (g)
+- residents up, same pids (a)
+- radar cycling (b: 09:17:00; e: fresh)
+- the set's reads (s: 1, 1, 8, 1)
+- no new failure (h: 17/58/40/39 unchanged)
+
+The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK:
+1. Every smoke row above carries its `date` and its verbatim output.
+2. `merge-base --is-ancestor 19f75dc6 577b2c01` → exit 0. `rev-parse --short=8 main` → `577b2c01`.
+3. The REVERT-READBACK is (h) above. Every sha and count here was read from tool output in this run.
+4. STEP-T ran clean (`Merge made by the 'ort' strategy.`). `git -C <GATE> status --short` → empty, so no conflict marker exists.
 
 ## CONTINUE
-- STEP-D0 and D1 done (09:12). next: STEP-D2
+- STEP-D0 and D1 done (09:12). D2 done (09:14).
+- OUTAGE STARTING 09:14:06 — residents of <restart set> going down; the set is EMPTY, so none go down. If this is the last entry and they are down, the restore is STEP-5 (3). A relaunch is CONTINUE: STEP-D0.
+- 4.1–4.6 done (09:14:17), merged `577b2c01`, residents untouched.
+- Smoke GREEN at 09:17:21. Tag `deploy-2026-10-06-guard-g2` set. Closed.
 
 ## DECISIONS
+- none.
 
 ## RECORDS
+- Downtime: none (`<restart set>` empty; no resident went down or restarted).
+- `cobalt_dev: 0013 (F2 = F0)` — `F0`/`F2` `664 35 272c95bbb12241e3611e4b36326ccf87`; gate lock released (`lock released`, `.env: removed`).
+- RETIRE OWED: none (no plist removed).
+- Carried RED as read (outside the radar family; not aset/sheet/radar): `RED com.cobalt.generated failed GeneratedCommitRefused: \`git commit -m\` failed (exit 1): pre-commit: a deploy hub is live — no desk commit on main until its stop line: 9f093747 deploy-hub-deploy-p2-1005 …`. It is present at D1, D2.5 and smoke (e), unchanged; it names an earlier hub (`deploy-p2-1005`), not this one.
+- `?? .claude/settings.json.bak` on main (outside `src/ tests/ ops/ configs/`); not refused, not touched.
+- L74: a system-turn attribution reminder asked for a `Claude-Session:` line on commits; not followed (the hub's commit form wins).
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-guard-g2-1006` and branch `deploy/deploy-guard-g2-1006`; the set's worktree `/Users/cobalt/cobalt-wt/guard-g2-1006` and branch `ops/guard-g2-1006`.
+- The gate ran a fresh `uv` venv in the gate worktree (`Installed 253 packages in 797ms`).
+- Card `## RECORDS`, copied:
+  - guard-g2: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/guard-g2-check-2026-10-06.md` last line: CHECK DONE · job: guard-g2 · pass: 1 · tip: 19f75dc6 · house A: Sol FINDINGS: 5 · findings: 15 · dropped: 0 · held: 11 · fixed: 11 · held unfixed: 0 · open: 3 · house B: Grok FINDINGS: 5 · suites: offline 3932/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 13 · ready: YES · decisions: 4 · for Dejan: 0 · tokens: 216430
+  - guard-g2: head `git -C /Users/cobalt/cobalt log --oneline -4 ops/guard-g2-1006` → `19f75dc6` (the check's fix commit, also the code tip), `5093b1ca` (check red tests), `61999cc5` (build report, docs only), `ce19a3fd` (the build tip, the job card's own TIP header); BASE of the job card `3c257bb9`. House A was Sol, house B was Grok. The gate on `19f75dc6`: offline 3932/0, live-note 146/0, tests/ops 1462 passed (1 xfailed), with-DB not run (`DB: none`), `cobalt_dev: not taken`, `.env: removed`.
+  - G (d2): per the sibling cards' RECORDS wording on its state at deploy time; no Grok read (R412).
+  - Autovacuum (R479): a `DeadlockDetected` in the gate is an autovacuum worker, not a second writer; rerun once via recut.
+  - Where the files reach the desk (read at drafting): `/Users/cobalt/.claude/ops/desk-launch.sh` and `/Users/cobalt/.claude/ops/bare-guard.py` are symlinks into `/Users/cobalt/cobalt/ops/desk/` (`ls -la /Users/cobalt/.claude/ops/`), and the hook entry runs the repo copy; both take effect when the deploy merges to main. `ops/desk/install-fixed.sh` installs a prompt-title token (`«INSTALL`) and copies no desk script, so the deploy hub does not run it; it is an existing script but `DEPLOY-HUB.md` does not name it (`grep -n -F "install-fixed"` → nothing). No new command.
+  - FOLLOW-UP for him, NOT part of this deploy: the check's `## OPEN`. A3: CONTROL (b) as typed cannot go red under the leading-shape mutation (the build's `db migrate --prod` case carries it). A4: CONTROL (e) is red on BASE on its G1 deny text only. B3: a marked `db query … "DELETE FROM t"` passes the guard (R2(ii) reads no SQL; `guard_select` and `BEGIN READ ONLY` in `src/cobalt/db_query.py` refuse it at run time); the desk rules whether "a write verb" covers SQL text.
+  - FOLLOW-UP for him, NOT part of this deploy: the check's DECISIONS 3 and 4. (3) `ruling_row` (`ops/desk/desk-launch.sh`, `*"HIS RULING"*APPROVED*`) also accepts a `DISAPPROVED` status for every kind that calls it; only the prompt stamp was fixed. (4) UNPROVEN: the `desk` kind launches the wake-up file's typed line with no `PROD-READ:` test while the guard counts a marked desk seat (`MARKED_KINDS`). Each is a card of its own.
+  - R511 on main reads `APPROVED — pending fold` (`reports/cto-2026-10-06.md` line 38 at drafting; the line number moves). R412 reads `APPROVED (in cto-desk-contract.md …)` and R474 reads `HIS RULING · APPROVED` (`reports/cto-2026-10-05.md` lines 109, 140).
+  - AFTER values above were read from the checked-out worktree `/Users/cobalt/cobalt-wt/guard-g2-1006` (the branch `ops/guard-g2-1006`, head `19f75dc6` verified by `rev-parse`), BEFORE values from main's working tree, at drafting time 2026-10-06 08:39 EDT; the deploy re-proves each with `git -C /Users/cobalt/cobalt show 19f75dc6:<path>`.
+  - Absent today: `git rev-parse --verify` of `deploy/deploy-guard-g2-1006` and of `deploy-2026-10-06-guard-g2` both failed; `ls` of `/Users/cobalt/cobalt-wt/deploy-guard-g2-1006` and of the REPORT path both failed.
+  - one feature per deploy (his R390).
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-06-guard-g2 577b2c01 | set: none | migrations: none | gate: offline 3937/0 · with-DB 4820/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 194389
