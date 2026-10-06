@@ -1234,6 +1234,143 @@ def test_radar_route_serves_a_card_formed_after_an_empty_load(monkeypatch):
     assert 'data-card-id="1"' in layers[1] and "No radar cards today" not in layers[1]
 
 
+def test_a_post_that_begins_and_ends_inside_one_tick_drops_its_result():
+    post = _js_body("async function post(cardId,path,body){")
+    assert "sendGeneration+=1;" in post
+    before, after, _ = _tick_stretches()
+    assert "const seen=sendGeneration;" in before
+    assert "sendGeneration!==seen" in after
+
+
+def test_the_wip_test_fails_when_the_focus_guard_is_undone(monkeypatch):
+    broken = panel.PANEL_JS.replace("(focused&&focused.tagName==='INPUT'&&layer.contains(focused))||", "", 1)
+    broken = broken.replace("(active&&active.tagName==='INPUT'&&now.contains(active))||", "", 1)
+    assert broken.count("tagName==='INPUT'") == 0
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_tick_never_swaps_over_work_in_progress()
+
+
+def test_the_single_flight_test_fails_when_the_in_flight_skip_is_undone(monkeypatch):
+    broken = panel.PANEL_JS.replace("if(ladderInFlight||", "if(", 1)
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_one_ladder_fetch_in_flight_and_none_while_a_post_sends()
+
+
+def test_tick_drops_a_response_when_a_post_completes_during_the_fetch():
+    source = panel.PANEL_JS
+    before, after, _ = _tick_stretches()
+    post = _js_body("async function post(cardId,path,body){")
+
+    monotonic = [
+        name
+        for name in re.findall(
+            r"\blet\s+([A-Za-z_$][\w$]*)\s*=\s*0\s*;", source
+        )
+        if f"{name}+=1;" in post and f"{name}-=1;" not in post
+    ]
+    assert monotonic, (
+        "no monotonic post sequence records a post that starts and "
+        "finishes during the tick fetch"
+    )
+
+    for name in monotonic:
+        snapshots = re.findall(
+            rf"\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*"
+            rf"{re.escape(name)}\s*;",
+            before,
+        )
+        if (
+            post.index(f"{name}+=1;") < post.index("await ")
+            and any(
+                f"{name}!=={snapshot}" in after
+                or f"{snapshot}!=={name}" in after
+                for snapshot in snapshots
+            )
+        ):
+            return
+    pytest.fail(
+        "tick does not drop a response when the post sequence changed "
+        "during its fetch"
+    )
+
+
+def test_failed_tick_test_rejects_a_created_status_without_its_required_id(
+    monkeypatch,
+):
+    broken = panel.PANEL_JS.replace(
+        "box=document.createElement('div'); "
+        "box.id='ladder-refresh-status'; current.prepend(box);",
+        "box=document.createElement('div'); current.prepend(box);",
+        1,
+    )
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_a_failed_tick_is_said_on_the_ladder()
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    (" let sending=0;\n", " let ladderInFlight=false;\n"),
+)
+def test_single_flight_test_requires_its_state_declarations(
+    monkeypatch, declaration
+):
+    broken = panel.PANEL_JS.replace(declaration, "", 1)
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_one_ladder_fetch_in_flight_and_none_while_a_post_sends()
+
+
+def test_tick_timer_test_rejects_a_duplicate_interval(monkeypatch):
+    timer = " window.setInterval(tickLadder,interval);\n"
+    broken = panel.PANEL_JS.replace(timer, timer + timer, 1)
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_tick_refreshes_the_ladder_on_the_pool_timer_without_reload()
+
+
+def test_tick_test_rejects_a_later_duplicate_function(monkeypatch):
+    broken = panel.PANEL_JS.replace(
+        " window.COBALT_RADAR=",
+        " async function tickLadder(){}\n window.COBALT_RADAR=",
+        1,
+    )
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_tick_refreshes_the_ladder_on_the_pool_timer_without_reload()
+
+
+def test_x1_a_post_that_finishes_during_the_fetch_still_drops_the_tick():
+    body = _js_body(TICK_HEAD)
+    swap_at = body.index("replaceWith(")
+    last_await = body.rindex("await ", 0, swap_at)
+    gate = body[last_await:swap_at]
+    post = _js_body("async function post(cardId,path,body){")
+    assert "finally{sending-=1;}" in post
+    assert "sending>0" in gate
+    assert "sendGeneration" in gate or "sentDuring" in gate or "sending!==" in gate
+
+
+def test_undoing_the_focus_guard_turns_the_wip_test_red():
+    body = _js_body(TICK_HEAD)
+    mutant = body.replace("(focused&&focused.tagName==='INPUT'&&layer.contains(focused))||", "")
+    mutant = mutant.replace("(active&&active.tagName==='INPUT'&&now.contains(active))||", "")
+    assert mutant != body
+    fetch_at = mutant.index("fetch('/radar'")
+    swap_at = mutant.index("replaceWith(")
+    last_await = mutant.rindex("await ", 0, swap_at)
+    before, after = mutant[:fetch_at], mutant[last_await:swap_at]
+    missed = [guard for guard in (*TICK_GUARDS, "sending>0") if guard not in before or guard not in after]
+    assert missed, "shipped rule (2) stays green after the focus clause is deleted"
+
+
 @pytest.fixture
 def route_view():
     return _build()[0]
