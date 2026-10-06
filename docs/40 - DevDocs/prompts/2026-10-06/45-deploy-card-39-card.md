@@ -1,12 +1,12 @@
 JOB: deploy-drc-d5-o1-b2-1006
 LADDER: OFF-LADDER — cto-2026-10-03.md R326
-BRANCH: deploy/deploy-drc-d5-o1-b2-1006
-WORKTREE: deploy-drc-d5-o1-b2-1006
+BRANCH: deploy/deploy-drc-d5-o1-b2-1006-attempt2
+WORKTREE: deploy-drc-d5-o1-b2-1006-attempt2
 BASE: main
 TIP: 38e0d47e
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-drc-d5-o1-b2-1006.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-deploy-drc-d5-o1-b2-1006-attempt2.md
 RULINGS: 2026-10-03 R326, 2026-10-05 R412, 2026-10-05 R474
-TAG: deploy-2026-10-06-drc-d5-o1-b2
+TAG: deploy-2026-10-06-drc-d5-o1-b2-attempt2
 MIGRATIONS: none
 SET: none
 
