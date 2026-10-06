@@ -135,6 +135,9 @@ His statements from the page. `state_book(day, positions, *, supersedes, expecte
 
 **2026-10-04 — DRC K3 check (O2, judge R278 D1).** `day_view`'s STALE resolve line now names `effect_day(<the superseding row's day>, <id>)`, the same day as the note's line; before, it named the superseded row's own day.
 
+## 2026-10-04 — DRC D5
+`day_view` gains `unresolved`: one `UnresolvedLine(line, trade_id, resolve)` per unresolved reconcile item (D5-3, R90). The items come from the day's stored `build_day`, or, before the day is built, from the `build_day` of the DRC its book starts from (`seed_for(day).from_day`). `line` is `units.unresolved_line`, the note's wording. `resolve` is true when the trade is carried into the day: K3-7's `resolve` is the one path, and it refuses any other id. A read; nothing else changed.
+
 ## Tests
 `tests/cobalt/test_drc_imports.py` (offline, an in-memory `DrcStore`
 double), `tests/cobalt/test_drc_imports_db.py` (with-DB, inside

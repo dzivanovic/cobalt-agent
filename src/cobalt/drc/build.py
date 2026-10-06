@@ -45,6 +45,16 @@ A31 unit render it. A note that fails after `record_build` marks that
 date's `build_day` with `derived["note_stale"]` and raises.
 `rebuild_notes(dates)` is the ONE notes loop: `run_drc_build`'s re-paired
 dates and a page statement's rebuilt dates (L3).
+
+D5 (v2 §3 `:80`, R90; `drc.reconcile`): `plan_note` stores, per matched
+trade, the diff of the export against the card's current legs
+(`build_trade.derived["reconcile"]`) and realized R over them
+(`["realized_r"]`), and the day's unresolved refusals
+(`build_day.derived["unresolved"]`). The `legs` WRITES run in `build_date`
+on the event day's build only (`check=True`), between the plan and
+`record_build`, through `deps.legs` (C2's writer); the date is then planned
+again so the stored rows hold the adjusted legs. `plan_note` writes nothing
+— the dry run calls it alone.
 """
 
 from __future__ import annotations
@@ -65,13 +75,14 @@ from cobalt.prefill.drc import (
     format_card_reconcile_block,
     format_rules_check_block,
 )
+from cobalt.session import clock as session_clock
 from cobalt.session.calendar import CalendarError
 from cobalt.session.clock import ET
 from cobalt.vault import resolve_vault_path
 from cobalt.vaultwrite import VaultWriter
 from cobalt.vaultwrite.markers import find_section, unit_open
 
-from . import imports, template, units
+from . import imports, reconcile, template, units
 from .models import Kind, OpenPosition, Outcome, missing_of
 from .pairing import _avg
 from .playbooks import Strategies, read_strategies, resolve
@@ -113,6 +124,8 @@ class BuildDeps:
     replay_result: Callable[[], Optional[dict]]
     write_store: Any
     now: Optional[Callable[[], datetime]] = None
+    #: D5: the legs door (`reconcile.LegsGateway`) — `None` reads no legs.
+    legs: Any = None
 
 
 def default_vault_root() -> Path:
@@ -171,6 +184,7 @@ def default_deps(vault_root: Optional[Path] = None, **over) -> BuildDeps:
         drc_settings=_drc_settings, daily_stop=_daily_stop, risk_parameters=risk_parameters_line,
         rules_block=rules_checkbox_block, daily_note=functools.partial(_daily_note, root),
         replay_result=_replay_result, write_store=VaultWriteStore(), now=None,
+        legs=reconcile.LegsGateway(),
     )
     values.update(over)
     return BuildDeps(**values)
@@ -198,6 +212,8 @@ class BuildPlan:
     rows: list[dict]
     units: list[UnitWrite] = field(default_factory=list)
     miss_line: Optional[str] = None
+    #: D5: the event day's leg writes this plan asks for (`reconcile.apply`'s work).
+    reconcile: list[dict] = field(default_factory=list)
 
     def report(self) -> str:
         out = [f"cobalt drc build {self.day} — DRY RUN: nothing written", f"note: {self.note_path}", ""]
@@ -451,9 +467,43 @@ def _stale_resolves(stored: list[dict], derived_day: dict, store) -> list[dict]:
     return _stale_read(stored, derived_day, store)[0]
 
 
-def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> BuildPlan:
+def _unresolved(day: date, view: dict, stored: list[dict], derived_day: dict, stale_resolves: list[dict], store,
+                applied: dict[str, dict]) -> tuple[list[dict], dict]:
+    """D5-3 (R90): the day's open unresolved items and the read they come
+    from (L57). Carried in from the DRC the day's book starts from (its
+    stored `seed` row's `from_day`); kept from this day's earlier build;
+    cleared by this build's successful reconcile of the card or by a CURRENT `resolve`
+    row of this day naming the trade (a restated one is not current —
+    K3-4 (a)'s read)."""
+    prior = (view.get("seed") or {}).get("from_day")
+    carried_in: list[dict] = []
+    if prior:
+        before = next((r for r in store.rows_for(date.fromisoformat(prior)) if r["kind"] == "build_day"), None)
+        carried_in = list(((before or {}).get("derived") or {}).get("unresolved") or [])
+    earlier = next((r for r in stored if r["kind"] == "build_day"), None)
+    same_day = list(((earlier or {}).get("derived") or {}).get("unresolved") or [])
+    stale = {s["resolve_id"] for s in stale_resolves}
+    resolved = {
+        r["ref"] for r in stored
+        if r["kind"] == "trade" and r["inputs"].get("resolve_id") and r["inputs"]["resolve_id"] not in stale
+    }
+    resolved |= {
+        o["trade_id"] for o in derived_day.get("resolves") or []
+        if o.get("status") == "applied" and o["resolve_id"] not in stale
+    }
+    items = reconcile.unresolved(day, carried_in=carried_in, same_day=same_day, applied=applied,
+                                 resolved_trades=resolved)
+    read = {"from_day": prior, "carried_in": len(carried_in), "same_day": len(same_day),
+            "resolved_trades": sorted(resolved), "reconciled_cards": sorted(reconcile.reconciled_cards(applied))}
+    return items, read
+
+
+def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True,
+              applied: Optional[dict[str, dict]] = None) -> BuildPlan:
     """Everything the build would record and write for `day`, computed from
-    the stored rows; nothing written."""
+    the stored rows; nothing written. `applied` (D5, `build_date` only): the
+    event day's leg writes just made, by trade id — their "before" diff and
+    the rows written or the refusal."""
     root = Path(deps.vault_root)
     view = deps.store.event_for(day)
     if check:
@@ -493,6 +543,8 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
     ordered = sorted(trades, key=lambda t: (entry_at[t["trade_id"]] is None, entry_at[t["trade_id"]] or datetime.min.replace(tzinfo=ET)))
     matched: dict[str, dict] = {}
     builds: list[dict] = []
+    pending: list[tuple] = []
+    plan_work: list[dict] = []
     losses_run, last_loss_at = 0, None
     closed_sorted = sorted(
         (t for t in trades if t.get("exit_time")), key=lambda t: _at(t["exit_time"])
@@ -559,6 +611,24 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
                                       ("risk overrun", overrun is not None and overrun > 0)) if on],
         }
         derived["risk_text"] = _risk_text(card, window, derived)
+        # D5-1: the export against the matched card's current legs (L57).
+        rec = reconcile.for_trade(t, row["inputs"], card, legs=deps.legs, check=check,
+                                  applied=(applied or {}).get(tid), day=day)
+        if rec is not None and rec["work"] is not None:
+            plan_work.append(rec["work"])
+        pending.append((t, row, derived, card, stats, resolutions, rec))
+
+    # D5-3: the day's unresolved refusals — this build's, the prior DRC's
+    # and this day's earlier build's, less what is resolved (R90).
+    unresolved, unresolved_read = _unresolved(day, view, stored, derived_day, stale_resolves, deps.store,
+                                              applied or {})
+    refused_cards = reconcile.refused_cards(unresolved)
+    for t, row, derived, card, stats, resolutions, rec in pending:
+        tid = t["trade_id"]
+        realized, realized_inputs = reconcile.realized(card, rec, refused_cards)
+        if rec is not None:
+            derived["reconcile"] = rec["derived"]
+        derived["realized_r"] = realized
         derived["lines"] = _trade_lines(t, row["inputs"], derived, card, window, windows, stats, resolutions,
                                         shots.get(tid), day)
         builds.append(dict(
@@ -571,6 +641,8 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
                 "window_bounds": [[n, s.isoformat(), e.isoformat()] for n, s, e in windows],
                 "strategy_titles": strategies.listing() if strategies.readable else None,
                 "screenshot": shots.get(tid),
+                "reconcile": None if rec is None else rec["inputs"],
+                "realized_r": realized_inputs,
             }),
             derived=_json(derived),
         ))
@@ -637,6 +709,7 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
         "orphaned": [],
         **_open_book(day, stored, derived_day, pairing_nc),
         "stale_resolves": stale_resolves,
+        "unresolved": unresolved,
     }
     existing = note_path.read_text(encoding="utf-8") if note_path.is_file() else None
     current_ids = {t["trade_id"] for t in trades}
@@ -667,13 +740,15 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
                                "calendar": CALENDAR_INPUT},
             # K3-4 (a) (L57, check G4): the read the stale lines come from.
             "stale_resolves": stale_read,
+            # D5-3 (L57): what the unresolved items are read from.
+            "unresolved": unresolved_read,
         }),
         derived=_json(day_derived),
     )
     rows = [*builds, day_build]
 
     # --- the units, rendered from the rows ----------------------------
-    plan = BuildPlan(day=day, note_path=note_path, note_text=note_text, rows=rows)
+    plan = BuildPlan(day=day, note_path=note_path, note_text=note_text, rows=rows, reconcile=plan_work)
     add = plan.units.append
     add(UnitWrite(*units.SUMMARY, units.summary(day_build), units.date_line_placement(day.isoformat())))
     if no_trade_day and not pairing_nc:
@@ -691,7 +766,7 @@ def plan_note(day: date, *, deps: BuildDeps, event, check: bool = True) -> Build
     for tid in day_derived["orphaned"]:
         add(UnitWrite(*units.trade_unit(tid), units.orphaned(tid), TRADES_PLACEMENT))
     add(UnitWrite(*units.OPEN_POSITIONS, units.open_positions(day_build), TRADES_PLACEMENT))
-    add(UnitWrite(*units.RECONCILE, units.reconcile(day_build), TRADES_PLACEMENT))
+    add(UnitWrite(*units.RECONCILE, units.reconcile(day_build, builds), TRADES_PLACEMENT))
     add(UnitWrite(*units.OPEN_ITEMS, units.open_items(day_build), units.OPEN_ITEMS_PLACEMENT))
     add(UnitWrite(*units.RULES_CHECK, format_rules_check_block({
         "rules_checkbox_block": deps.rules_block(),
@@ -765,7 +840,8 @@ def _trade_lines(t: dict, inputs: dict, d: dict, card: Optional[dict], window: O
         )
         lines.append(f"fill: card entry {units.money(card['entry'])} vs avg entry {units.given(t.get('avg_entry'))}")
     lines.append(d["risk_text"])
-    lines.append(f"R: planned {stats.text('assumed_rr')} (stats log) · realized not computed (D5)")
+    lines.append(f"R: planned {stats.text('assumed_rr')} (stats log) · "
+                 f"realized {reconcile.realized_text(d['realized_r'])}")
     lines.append(
         f"target: {stats.text('target')} · MAE {stats.text('price_mae')} · MFE {stats.text('price_mfe')} · "
         f"best exit {stats.text('best_exit_price')}"
@@ -832,8 +908,18 @@ def build_date(day: date, *, deps: BuildDeps, event, check: bool) -> Path:
     the note. K3-4 (c), v3 `[F-03]` note half: a note that fails AFTER the
     rows are recorded re-records the date's `build_day` through the same
     `record_build` with `derived["note_stale"] = {note, error}`, then
-    raises; the next clean build records it without the key."""
+    raises; the next clean build records it without the key.
+
+    D5-2 (v2 `:80` steps 4–6; `## RECORDS` D5-d): on the event day's build
+    (`check`) only, the plan's leg writes run through `deps.legs` (C2's
+    writer) at the build's clock — a refusal comes back as an unresolved
+    item, never raised (R90) — and the date is planned again over the
+    adjusted legs before anything is recorded."""
     plan = plan_note(day, deps=deps, event=event, check=check)
+    if check and plan.reconcile:
+        now = deps.now() if deps.now is not None else session_clock.now_utc()
+        applied = {w["trade_id"]: reconcile.apply(w, legs=deps.legs, now=now) for w in plan.reconcile}
+        plan = plan_note(day, deps=deps, event=event, check=check, applied=applied)
     deps.store.record_build(day, plan.rows)
     try:
         return write_note(plan, deps=deps)

@@ -44,3 +44,21 @@ F-3: the trade block's `stop:` line renders `_Stats.text("stop")`, like every ot
 **2026-10-04 — DRC K3 check (O1, O3, judge R278 D1 and D7).** A `stale_resolves` entry's `effect_day` is now `effect_day(<the superseding row's day>, <id>)`, read through `superseded_stated_ids`; before, it was the superseded row's own day. When the calendar does not cover the span, `days_held` reads `not computed — no NYSE calendar for <year>`. The `CalendarError` text, which names the calendar file's path, now goes only to the build log (stderr), so no path reaches his note.
 
 **2026-10-04 — DRC K3 check, pass 2 (G1, G4, L57).** `build_day.inputs["open_positions"]` now names the calendar `days_held` counts by (`CALENDAR_INPUT`). `build_day.inputs["stale_resolves"]` holds the read the stale lines come from: the resolve ids the stored rows name and, for each superseded id, the day of the row that supersedes it and its own day (`_stale_read`, one `superseded_stated_ids` call; `_stale_resolves` returns its figures).
+
+## 2026-10-04 — DRC D5
+`BuildDeps.legs` is the legs door: `reconcile.LegsGateway()` in `default_deps`, and `None` reads no legs.
+
+What `plan_note` stores (L57):
+- The matched trade's diff as `build_trade.derived["reconcile"]`, with `inputs["reconcile"]` naming the import id and the leg ids read.
+- Realized R as `derived["realized_r"]` (`realized_r.1`, inputs `inputs["realized_r"]`). The trade block's `R:` line renders it instead of `realized not computed (D5)`.
+- The day's unresolved items as `build_day.derived["unresolved"]`; `inputs["unresolved"]` names the read.
+
+The writes: `build_date(check=True)` runs the plan's leg writes (`reconcile.apply`, at `deps.now()` or the session clock) between the plan and `record_build`, then plans the date again over the adjusted legs. `rebuild_notes` (`check=False`) and the dry run write no leg.
+
+This supersedes "no leg write (D5)" under `## What it never does`.
+
+## 2026-10-04 — drc-d5 check
+`_unresolved`'s stored read names `reconciled_cards` as `reconcile.reconciled_cards(applied)`: the cards whose reconcile succeeded (no refusal). Only those clear a carried item (check A4).
+
+## 2026-10-05 — drc-d5 check, pass 2
+The trade blocks' refused cards are `reconcile.refused_cards(unresolved)`: a D5-c item alone no longer makes realized R `not computed` (check B1).
