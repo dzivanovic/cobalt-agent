@@ -11,7 +11,7 @@ RULINGS: 2026-10-03 R326, 2026-10-05 R412
 
 ## ROWS
 
-WHY: four with-DB runs failed on `psycopg.errors.DeadlockDetected` at the migration step; each blocker is a Postgres autovacuum worker, not a second writer (`reports/second-writer-survey-2026-10-05.md` lines 5, 35-38, judged by the brain, R326). The fix is test-side only: no production code, no migration file, no server setting. The last failure: `test_x9_gate_a_superseding_import_keeps_both_files_fills_and_is_current`, setup ERROR in the `migrated` fixture at `tests/cobalt/test_drc_store.py:237` `_apply(conn, FORWARD)` (`reports/deploy-deploy-k3-1005-attempt2.md` lines 6 and 160).
+WHY: four with-DB runs failed on `psycopg.errors.DeadlockDetected` at the migration step; each blocker is a Postgres autovacuum worker, not a second writer (`reports/second-writer-survey-2026-10-05.md` lines 5, 35-38; the survey ran under R326, and the brain's judgment of it is R479, a desk record). The fix is test-side only: no production code, no migration file, no server setting. The last failure: `test_x9_gate_a_superseding_import_keeps_both_files_fills_and_is_current`, setup ERROR in the `migrated` fixture at `tests/cobalt/test_drc_store.py:237` `_apply(conn, FORWARD)` (`reports/deploy-deploy-k3-1005-attempt2.md` lines 6 and 160).
 
 | row | what | red first | files |
 |---|---|---|---|
@@ -21,7 +21,7 @@ Deploy gate: the row ends with the gate, not a smoke of its own. The job's tip d
 
 ## NOT IN THIS JOB
 - Any `src/` file; any file under `src/cobalt/db_migrations/` (migrations `0002` and `0007` are production DDL and stay as they are); `tests/cobalt/conftest.py` (it holds no migration step).
-- Disabling autovacuum or any server setting (the server may also host production; his R326 rejected it).
+- Disabling autovacuum or any server setting (the server may also host production; the brain's judgment (R479, a desk record) puts the fix test-side: a retry in the migration fixture).
 - The other tests that open `db.connect_migration` and run `_apply(conn, FORWARD)` themselves (`test_p4_migrations.py`, `test_voice_store.py`, `test_archiver_migrations.py`, `radar_migrated_support.py`, `test_drc_d2_fix_r1_db.py` and others): not changed here; a card of their own if one deadlocks.
 - A new command, script or `ops/desk/` change: the build seat uses only its allow line (R412).
 - A red outside this row: a `## DECISIONS` item, UNPROVEN (L70), with the output; never fixed here.
