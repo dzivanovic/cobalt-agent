@@ -1,8 +1,11 @@
 # deploy-launcher-f5-1005 — SET: workflow2 — MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of `ops/launcher-fixround-1005` (F5: `ops/desk/desk-launch.sh`, `tests/ops/test_desk_launch_prechecks.py`) on DEPLOY-HUB.md, card `prompts/2026-10-05/57-deploy-launcher-f5-card.md`.
-- Run in progress.
+- DEPLOYED `deploy-2026-10-05-launcher-f5` at `5ec48566`. F5 is on main: `ops/desk/desk-launch.sh` and `tests/ops/test_desk_launch_prechecks.py`, from `ops/launcher-fixround-1005` `fb2d95a2`.
+- Gate green on `68d3c749`: offline 3873/0 · with-DB 4735/0 · live-note 146/0. `cobalt_dev` is back at 0013, F2 = F0.
+- RESTARTS: none, so no resident went down and there was no downtime. Smoke GREEN: markers 1/1/1/1, heartbeat GREEN, radar cycling, failure counts flat.
+- Snapshot `7fa24f68`; rollback tag `pre-deploy-launcher-f5-1005` at `68811ed8`. Push is his, through the desk (L55).
+- Decisions: 1 (the untracked `.claude/settings.json.bak` on main), not his.
 
 ## L74
 - The session's harness reminder asked that commits also carry a `Claude-Session:` line. Recorded once as data. Not acted on: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
@@ -130,15 +133,103 @@ GATE GREEN on 68d3c749
 | D1 | `curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/radar` | 0 | `200` |
 | D1 markers | the four `## MARKERS` greps | 1 ×4 | `0` `0` `0` `0` = before |
 | D1-M | — | — | not run: MIGRATIONS none |
+| D2.0 | `git -C /Users/cobalt/cobalt add "docs/…/deploy-deploy-launcher-f5-1005.md"` · `commit -m "docs(report): deploy deploy-launcher-f5-1005 — gate green on 68d3c749" …` | 0 · 0 | `[main 68811ed8] …` · `show --stat HEAD` → 1 file, `.../reports/deploy-deploy-launcher-f5-1005.md \| 144 +++` |
+| D2.0 | `git -C /Users/cobalt/cobalt rev-parse --short=8 main` | 0 | `<pre-merge>` = `68811ed8` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | 0 | `Merge made by the 'ort' strategy.` (the report, 1 file) |
+| D2.2 | `git -C <GATE> rev-parse --short=8 HEAD` · `rev-parse --short=8 5ec48566^2` · `merge-base --is-ancestor 68d3c749 5ec48566` | 0 · 0 · 0 | `<stack-final>` = `5ec48566` · `68811ed8` = `<pre-merge>` · ancestor |
+| D2.3 | `git -C /Users/cobalt/cobalt diff --stat 68d3c749 5ec48566 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | nothing — docs only |
+| D2.4 | `backup status` | 0 | `newest snapshot: 0.8 h old` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup run` | 0 | `backup: cobalt_brain dumped, 4889.4 MB` · `ssd: snapshot 7fa24f68 — 0 new / 3 changed, 12.8 MB added, 1 pruned` |
+| D2.4 | `backup status` | 0 | `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` (pairs 22:31:53 → 22:32:14) | 0 | the read at `22:32:14 EDT` (110 s after D1's 22:30:24) is `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red`. No new RED; radar `running 73 min, heartbeat fresh`. |
+| D2.6 | `date` · `git -C /Users/cobalt/cobalt tag pre-deploy-launcher-f5-1005` · `rev-parse --short=8 pre-deploy-launcher-f5-1005` | 0 · 0 · 0 | 22:32:18 · tag set · `68811ed8` |
+| 4.1 | `date` | 0 | `<t down>` 22:32:33 (empty set: no resident goes down) |
+| 4.2 | — | — | nothing: `<restart set>` empty |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | 0 | `68811ed8` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/deploy-launcher-f5-1005` | 0 | `Updating 68811ed8..5ec48566` / `Fast-forward` — 3 files, 270+ 49− |
+| 4.3 | `date` | 0 | 22:32:37 = `<t up>` (empty set) |
+| 4.4 | — | — | migrations applied: none |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | OK, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>` |
+| 4.6 | — | — | nothing: no label taken down. Downtime: none |
+| STEP-7 | `git -C /Users/cobalt/cobalt tag deploy-2026-10-05-launcher-f5` · `rev-parse --short=8 deploy-2026-10-05-launcher-f5` | 0 · 0 | `5ec48566` |
+
+CLOSE:
+- `<pre-merge>` `68811ed8` → `<stack-final>` `5ec48566` (main tip).
+- Tags: `pre-deploy-launcher-f5-1005` at `68811ed8`; `deploy-2026-10-05-launcher-f5` at `5ec48566`.
+- `<t down>` 22:32:33 / `<t up>` 22:32:37 / downtime: none (empty set; no resident stopped).
+- uv sync line in production: none. Proof cost: n/a (no migration). Migrations applied: none. `<RB>` before / after: n/a.
+- Snapshot: `7fa24f68` (ssd).
+- RESTARTS done: none.
+
+THE ROLLBACK STRING (the desk's, never this session's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 5ec48566` — ONE revert of the main-into-gate merge. `<restart set>` is empty, so no resident needs to go down or come back up.
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
 
 ## Smoke
+| row | date | command | result | verdict |
+|---|---|---|---|---|
+| first calls | after 22:32:37 | the four failure counts | `<rp_up>` 17 · `<rpr_up>` 58 · `<re_up>` 40 · `<lc_up>` 39 (= D1) | — |
+| (a) | 22:32:44 | `launchctl print gui/501/com.cobalt.aset` · `…/com.cobalt.radar` · `cobalt.sh status` | aset `state = running` pid 17342 (same; outside the set) · radar `state = running` pid 17353 (same) · `Cobalt is ONLINE (PID: 22243).` (same) | GREEN |
+| (b) | 22:32:48 | `grep -c "Started server process" …/aset.err` | 43 = `<a0>` (aset outside the set) | GREEN |
+| (b) | 22:32:48 | `tail -n 30 …/aset.err` | last `INFO:     Started server process [17348]` (21:18:48 startup) then `INFO:     Uvicorn running on http://0.0.0.0:5010 (Press CTRL+C to quit)`; no new start | GREEN |
+| (b) | 22:32:48 | Traceback aset · Traceback radar · TaxonomyConfigError radar | 2 · 0 · 0 = baseline | GREEN |
+| (c) | 22:32:48 | `curl … http://127.0.0.1:5010/` · `/radar` · `/radar\?frame=phone` | `200` · `200` · `200` (first attempt each) | GREEN |
+| (d) | 22:32:48 | the four `## MARKERS` greps | `1` `1` `1` `1` = after | GREEN |
+| (f) | 22:32:37 / 22:32:48 | 4.5 validate · `COBALT_ENV=production uv run cobalt jobs restarts 68811ed8..5ec48566` | validate exit 0 as 4.5 · exit 0, same 3 rows (DOCS / operator script / test), `RESTARTS: none` = STEP-R, no `UNCLASSIFIED` | GREEN |
+| (e) 1 | 22:33:03 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-05 22:33:04 EDT)`; `com.cobalt.radar running 74 min, heartbeat fresh` | — |
+| (g) | — | — | no migration | n/a |
+| (s) | 22:33:09 | `ruling_items` helper · `tool_list` helper · F5 comment · F5 test (`grep -c -F` each, the card's strings) | `1` · `1` · `1` · `1`, exit 0 each | GREEN |
+| (b) tail 1 | 22:34:07 (`<t up>` + 90 s) | `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` | last `2026-10-05 22:33:50.269 \| INFO \| cobalt.radar.runner:resident:467 - radar cycle: idle:overnight scan_id=None`, after `<t up>`. No `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback. | GREEN (settled) |
+| (e) 2 | 22:34:56 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-05 22:34:58 EDT)`, 114 s after (e) 1; `com.cobalt.radar running 76 min, heartbeat fresh`. No RED anywhere. | GREEN |
+| (h) | 22:35:37 (`<t up>` + 180 s) | the four failure counts · `curl … /radar` · `tail -n 12 …/radar.err` | 17 · 58 · 40 · 39 = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none grew) · `200` · newest `22:35:30.293 … radar cycle: idle:overnight scan_id=None`. No `census` read on the card. | GREEN |
+
+THE CHAIN, each link tied to its evidence:
+- (P2) every check is committed: `6bf0b815`, plus fix report `44c22cfa`.
+- (P3) the tips: `8d79d7c9` / `fb2d95a2`.
+- (T) the merged tree: `68d3c749`.
+- (R) RESTARTS derived: none.
+- (G) three suites green on `68d3c749`: offline 3873/0 · with-DB 4735/0 · live-note 146/0.
+- (D2.3) `<stack-final>` `5ec48566` = `<m1>` + docs.
+- (4.3) the code landed: `68811ed8..5ec48566` fast-forward.
+- (d) the markers: 1/1/1/1.
+- (g) migration read back: n/a.
+- (a) residents up after the merge, same pids, set empty.
+- (b, e) radar cycling: 22:33:50, 22:35:30.
+- (s) the set's reads: 1/1/1/1.
+- (h) no new failure: counts flat.
+
+The card surface is not readable here; the desk confirms it with him (L70).
+
+SMOKE: GREEN
+
+PRE-STOP SELF-CHECK (K25):
+1. Every smoke row above quotes its output verbatim with its `date`.
+2. Every tip was re-read at P3: `8d79d7c9`, `fb2d95a2`. Both are ancestors of `<stack-final>`: `git -C /Users/cobalt/cobalt merge-base --is-ancestor fb2d95a2 5ec48566` → exit 0; `… 8d79d7c9 5ec48566` → exit 0.
+3. REVERT-READBACK is shown at (h). Every count, sha and `file:line` in this report was read from tool output this run.
+4. No conflict marker exists: STEP-T ran clean (`Merge made by the 'ort' strategy.`), and so did D2.1.
 
 ## CONTINUE
-next: STEP-D2 (D2.0 report commit)
+OUTAGE STARTING 22:32:18 — residents of none going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 4.6 ended 22:32:37 with nothing down. Smoke GREEN at 22:35:37. STEP-7 closed: next: none — the run is complete.
 
 ## DECISIONS
 1. `?? .claude/settings.json.bak` is on main at D0. It is not on the ACCEPTED list (that has ` M .claude/settings.json`, not the `.bak`), and it is not a REFUSED class (no staged line, not under `src/`, `tests/`, `ops/` or `configs/`). Default taken: go on. It is untracked, so it never enters a commit or the merge. ASK DESK: whether the `.bak` stays [22:30:23].
 
 ## RECORDS
+- Downtime: none. `<restart set>` was empty, so no resident went down. `<t down>` 22:32:33, `<t up>` 22:32:37 (the merge only).
+- `cobalt_dev: 0013 (F2 = F0)` — `F0`/`F2` `664 35 272c95bbb12241e3611e4b36326ccf87` (gate log :856, :1686). The lock was released by `gate.sh`; `<GATE>/.env` is absent and the lock dir is absent.
+- No `REFUSED, not needed` line. No `CONTINUE` message arrived. No `RETIRE OWED`: STEP-C found no plist.
+- Carried RED: none. Every heartbeat read was `HEARTBEAT GREEN … nothing red`, and radar was `idle (overnight)`.
+- L74: one harness reminder asked for a `Claude-Session:` line in commits. It is recorded under `## L74` and was not acted on.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-launcher-f5-1005` and branch `deploy/deploy-launcher-f5-1005`, and the set's branch `ops/launcher-fixround-1005` with its worktree if one exists. Not touched here; they are the desk's.
+- The gate's `uv` created a fresh `.venv` in `<GATE>` at STEP-R (`Installed 253 packages in 857ms`). There was no `uv` sync line in production.
+- The card's `## RECORDS`, copied:
+  - launcher-f5: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-checks-check-2026-10-05-r2.md` last line: CHECK DONE · job: launcher-checks · pass: 1 · tip: a545a4d8 · house A: none (overruled 2026-10-02 R47) · findings: 5 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 0 · house B: not needed · suites: offline 3786/0 · with-DB 857/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: none · files opened: 11 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 152813
+  - launcher-f5: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/launcher-fixround-1005` → `fb2d95a2`; code tip `8d79d7c9` (F5, row committed `6fce2ccb`; BASE `5fb0ddf5`). The F1-F4 part of the branch is already on main (deploy `21a06ce3`); the ship is F5's two code files and the builder's report.
+  - fix report: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-f5-fixround-2026-10-05.md`, a pointer record whose last non-blank line is the branch report's `BUILT · … tip: 8d79d7c9` stop line. It must be committed on main and unmodified before the launch.
+  - G (d2): per the sibling cards' RECORDS wording on its state at deploy time; no Grok read (R412).
+  - The builder's DECISIONS item 1: `tests/ops/test_desk_launch_brain.py::test_the_trees_brain_hub_line_is_printed_with_its_handover_filled` is red on the old BASE `5fb0ddf5` only. The brain ruled 10-05: ignore; already fixed on main by `c4e12797`, 66 passed; the deploy merges main. A record, not a defect.
+- This run's gate is consistent with that: offline 3873/0 on `68d3c749`, which carries main.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-05-launcher-f5 5ec48566 | set: workflow2 | migrations: none | gate: offline 3873/0 · with-DB 4735/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 178075
