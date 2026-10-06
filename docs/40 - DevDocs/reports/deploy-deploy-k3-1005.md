@@ -148,3 +148,5 @@ Run ended FAILED at STEP-G (19:38:23 EDT). Not resumable here: the desk's next s
 - PRE-STOP SELF-CHECK: (1) no smoke was run (not reached); (2) P3 re-read `3e40359a` for tip and head, and `merge-base --is-ancestor 3e40359a deploy/deploy-k3-1005` → exit 0 (no `<stack-final>` exists); (3) no revert-readback is owed (nothing merged); every count and `file:line` above was read from this run's tool output; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), no conflict marker.
 
 FAILED: gate — G (c) pass 1 — tests/cobalt/test_drc_k3.py::test_k3_6_a_day_with_its_import_rebuilds_from_the_effect_day_and_rewrites_every_note, tests/cobalt/test_drc_k3.py::test_k3_6_a_notes_failure_is_loud_the_database_committed (2 failed + 2 teardown errors: with-DB test without an offline skip mark) · rollback: not used · decisions: 2 · for Dejan: 0 · tokens: 126686
+
+FAILED: gate — G (c) pass 1 — 2 K3-6 tests in tests/cobalt/test_drc_k3.py reach cobalt_dev unmarked (full ids and the hub's own stop line above, ## L68 GATE) · rollback: not used · decisions: 2 · for Dejan: 0
