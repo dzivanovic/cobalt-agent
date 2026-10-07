@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-07-words.md 2026-10-07 R613
 BRANCH: ops/worktree-salvage-1007
 WORKTREE: worktree-salvage-1007
 BASE: c4e52f4e
-TIP:
+TIP: df4cd805
 REPORT: /Users/cobalt/cobalt-wt/worktree-salvage-1007/docs/40 - DevDocs/reports/worktree-salvage-build-2026-10-07.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/worktree-salvage-check-2026-10-07.md
+HOUSE B: as needed
 RULINGS: 2026-10-07 R613
 DB: none
 
