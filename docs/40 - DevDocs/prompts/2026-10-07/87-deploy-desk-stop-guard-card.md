@@ -5,7 +5,7 @@ WORKTREE: deploy-desk-stop-guard-1007
 BASE: main
 TIP: b133afb5
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-desk-stop-guard-1007.md
-RULINGS: 2026-10-06 R590, 2026-10-06 R596, 2026-10-06 R608
+RULINGS: 2026-10-06 R596
 TAG: deploy-2026-10-07-desk-stop-guard
 MIGRATIONS: none
 SET: none
