@@ -677,3 +677,69 @@ def test_job_clean_is_never_forced():
     """W7: no force form anywhere in the file, comments included."""
     text = JOB_CLEAN.read_text()
     assert [form for form in FORCE_FORMS if form in text] == []
+
+
+def test_salvage_saves_an_untracked_file_when_status_hides_untracked(tmp_path):
+    """X1: an untracked file is saved even when the repo config hides untracked files."""
+    desk = Desk(tmp_path)
+    git(desk.repo, "config", "status.showUntrackedFiles", "no")
+    (desk.job_wt / "new.txt").write_text("new\n")
+    done = _salvage(desk, "salvage", "x-job")
+    saved = [b for b in _wip_branches(desk) if git(desk.repo, "ls-tree", "--name-only", b, "new.txt")]
+    assert (desk.job_wt / "new.txt").exists() or saved, done.stdout + done.stderr
+
+
+def test_salvage_saves_an_edit_hidden_by_skip_worktree(tmp_path):
+    """X1: an edit to a skip-worktree file is not lost by the removal."""
+    desk = Desk(tmp_path)
+    git(desk.job_wt, "update-index", "--skip-worktree", "job.txt")
+    (desk.job_wt / "job.txt").write_text("edited\n")
+    done = _salvage(desk, "salvage", "x-job")
+    saved = [b for b in _wip_branches(desk) if git(desk.repo, "show", f"{b}:job.txt") == "edited"]
+    assert (desk.job_wt / "job.txt").exists() or saved, done.stdout + done.stderr
+
+
+def test_salvage_a_branch_delete_failure_reports_the_original_branch_kept(tmp_path):
+    desk = Desk(tmp_path)
+    _merge_job(desk)
+    lock = desk.repo / ".git" / "refs" / "heads" / "ops" / "x-job.lock"
+    lock.write_text("blocked\n")
+
+    done = _salvage(desk, "salvage", "x-job")
+
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert not desk.job_wt.exists()
+    assert has_branch(desk.repo, "ops/x-job")
+    assert done.stdout.splitlines()[-1] == (
+        f"job-clean salvage: removed {desk.job_wt}; deleted none; kept ops/x-job"
+    )
+
+
+def test_salvage_prints_the_exact_switch_command_it_runs(tmp_path):
+    import shlex
+    import shutil
+
+    desk = Desk(tmp_path)
+    _dirty(desk)
+    calls = tmp_path / "git-calls"
+    real_git = shutil.which("git", path=os.environ["PATH"])
+    assert real_git is not None
+    stub_dir = Path(desk.env["PATH"].split(os.pathsep)[0])
+    git_stub = stub_dir / "git"
+    git_stub.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$*\" >> {shlex.quote(str(calls))}\n"
+        f"exec {shlex.quote(real_git)} \"$@\"\n"
+    )
+    git_stub.chmod(0o755)
+
+    done = _salvage(desk, "salvage", "x-job")
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    reported = next(
+        line.removeprefix("RUN: git ")
+        for line in done.stdout.splitlines()
+        if " switch " in line
+    )
+    actual = next(line for line in calls.read_text().splitlines() if " switch " in line)
+    assert actual == reported
