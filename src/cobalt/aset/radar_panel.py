@@ -1386,8 +1386,9 @@ _DIRECTION_UNKNOWN = ("dir-unknown", "direction ?")
 
 def _direction_mark(card: CardView) -> tuple[str, str]:
     """The card's direction class and its arrow span, read by the strip and the title."""
-    css, arrow = _DIRECTION_MARK.get(card.direction, _DIRECTION_UNKNOWN)
-    word = card.direction if card.direction in _DIRECTION_MARK else "unknown"
+    known = isinstance(card.direction, str) and card.direction in _DIRECTION_MARK
+    css, arrow = _DIRECTION_MARK[card.direction] if known else _DIRECTION_UNKNOWN
+    word = card.direction if known else "unknown"
     return css, f'<span class="direction {word}">{arrow}</span>'
 
 
