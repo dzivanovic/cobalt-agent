@@ -392,8 +392,9 @@ def test_card_panel_escapes_why_and_notices(evaluated):
 # GOLDEN PINS captured on main's code (`5b208a0`), GREEN there — from then on a GUARD.
 # LADDER pin re-captured 2026-09-23 on setups/seven-0921 (b007ce2e): the setups ladder change adds the assumed_formation dot (R2-2 = B); healthy bars still add nothing (seam-fix-build-2026-09-23.md D3).
 # LADDER pin re-captured 2026-09-28 on s3/exits-c3 (was 0ac9b5d0…): C3 adds the TRIGGERED tap (ARMED), the FILLED @ / PASS taps (TRIGGERED) and the IN-TRADE block over the constructed POSITION; healthy bars still add nothing (s3-exits-c3-build-2026-09-28.md E3).
+# LADDER pin re-captured 2026-10-07 on ops/radar-direction-color-1007 (was b018e70e…): R625 adds the strip and title direction class and the strip arrow; healthy bars still add nothing.
 PIN_HEALTHY_POOL_SHA256 = "f2e79add6bc4d4286b381154b071b04ec9e7887467ffd15b0f499e9d62181552"
-PIN_HEALTHY_LADDER_SHA256 = "b018e70e9e221ce2ada3bc608103a9e8de3013f101e86c90d49010f79f4d9183"
+PIN_HEALTHY_LADDER_SHA256 = "b3174d308594f6325c225260d988fa563093a70db4387057fd63101a1b53c92e"
 PIN_HEALTHY_API_SHA256 = "450b3415c2346c8b13b53932c5175f56ee6af78877ca9fc8086ca824601c5462"
 
 # Tonight's `mirrorDegraded` line, byte for byte as main has it (`radar_panel.py:1127`).
@@ -789,7 +790,9 @@ def _expanded_without_direction(body):
         block,
     )
     block, running = re.subn(r'(<div class="running"><b>[^<]*</b> · )(?:long|short)( · )', r"\1\2", block)
-    assert (titles, levels, fields) == (1, 2, 1) and running in (0, 1)
+    # The same 1R / 2R targets (`:908`, by the sign) print again in the IN-TRADE head (`:1351`).
+    block, exits = re.subn(r"(<b>IN-TRADE</b> · stop [^<]* · next exits )[^<]* / [^<]*(</div>)", r"\1\2", block)
+    assert (titles, levels, fields) == (1, 2, 1) and running in (0, 1) and exits == running
     return block, running
 
 
