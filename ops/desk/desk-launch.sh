@@ -837,19 +837,17 @@ $lits
 LITS
         ltip=$(printf '%s\n' "$clast" | sed -n 's/.* tip: \([0-9a-f]*\).*/\1/p')
         # a small fix after the check (his R376, LAWS L75): the check's tip is an ancestor of the
-        # code tip, and the row's `fix report` is committed and ends `BUILT · … tip: <code tip>`
+        # code tip, and the row's `fix report`, read at the row's branch head (`git show`, card 63
+        # N6: never a copy on main), ends `BUILT · … tip: <code tip>`
         fixed_ok() {
             [ -n "$frep" ] || return 1
             case "$frep" in
                 "$REPORTS"/*.md) ;;
                 *) return 1 ;;
             esac
-            [ -f "$frep" ] || return 1
-            [ -n "$(git -C "$REPO" log -1 --format=%H -- "$frep")" ] \
-                && git -C "$REPO" diff --quiet -- "$frep" \
-                && git -C "$REPO" diff --cached --quiet -- "$frep" || return 1
+            fblob=$(git -C "$REPO" show "$shead:${frep#"$REPO"/}" 2>/dev/null) || return 1
             git -C "$REPO" merge-base --is-ancestor "$ltip" "$ctip" 2>/dev/null || return 1
-            flast=$(grep -v '^[[:space:]]*$' "$frep" | tail -n 1)
+            flast=$(printf '%s\n' "$fblob" | grep -v '^[[:space:]]*$' | tail -n 1)
             case "$flast" in
                 "BUILT ·"*"tip: $ctip"*) return 0 ;;
             esac
@@ -1103,6 +1101,21 @@ recut)
     ! git -C "$REPO" show-ref --verify --quiet "refs/tags/$nt" || refuse "recut: tag $nt exists"
     [ ! -e "$WT/$nw" ] || refuse "recut: $WT/$nw exists"
     [ ! -e "$nr" ] || refuse "recut: $nr exists"
+    # card 63 N7: a failed line too long for desk-row.sh's 300 keeps its head through the first
+    # ` — ` and its tail from the last ` · rollback:`, the middle cut to fit and marked `…`; a line
+    # that fits, lacks either mark, or cannot fit even so is left as it is (refused below)
+    last=$(python3 -c '
+import sys
+pre, last = sys.argv[1:3]
+def size(t): return len("| R0000 | 00:00 ET | %s | RECORD |" % (pre + t))
+i, j = last.find(" — "), last.rfind(" · rollback:")
+if size(last) > 300 and i >= 0 and j >= i + 3:
+    head, mid, tail = last[:i + 3], last[i + 3:j], last[j:]
+    room = 300 - size(head + "…" + tail)
+    if room >= 0:
+        last = head + mid[:room] + "…" + tail
+print(last)' "RECUT $job attempt $n — " "$last") && [ -n "$last" ] \
+        || refuse "recut: the failed line could not be fitted to desk-row.sh's 300 (python3)"
     text="RECUT $job attempt $n — $last"
     rlen=$(python3 -c 'import sys; print(len("| R0000 | 00:00 ET | %s | RECORD |" % sys.argv[1]))' "$text")
     [ "$rlen" -le 300 ] || refuse "recut: the desk row would be $rlen characters, over desk-row.sh's 300: $text"
