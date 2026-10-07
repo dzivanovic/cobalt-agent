@@ -372,6 +372,7 @@ def _salvage_refused_after_report(desk: Desk, name: str = "x-job") -> subprocess
     assert done.returncode == 1, done.stdout + done.stderr
     assert "REFUSED" in done.stderr
     assert done.stdout.startswith(f"INSPECT: worktree {tree}\n")
+    assert "RUN:" not in done.stdout
     assert tree.is_dir()
     assert git(tree, "status", "--porcelain") == status
     assert git(tree, "rev-parse", "--abbrev-ref", "HEAD") == head
@@ -651,7 +652,8 @@ def test_salvage_an_existing_wip_branch_is_refused_after_the_report(tmp_path):
     (desk.job_wt / "job.txt").write_text("edited\n")
     premade = f"wip/x-job-salvage-{_today()}"
     git(desk.repo, "branch", premade, "main")
-    _salvage_refused_after_report(desk)
+    done = _salvage_refused_after_report(desk)
+    assert f"REFUSED: {premade} already exists" in done.stderr
     assert _wip_branches(desk) == [premade]
     assert git(desk.repo, "rev-parse", premade) == desk.main
     assert (desk.job_wt / "job.txt").read_text() == "edited\n"
@@ -664,7 +666,8 @@ def test_salvage_a_wip_name_git_refuses_is_refused_after_the_report(tmp_path):
     tree = desk.wt / "a..b"
     git(desk.repo, "worktree", "add", "-q", "-b", "ops/ab", str(tree), "main")
     (tree / "a.txt").write_text("edited\n")
-    _salvage_refused_after_report(desk, "a..b")
+    done = _salvage_refused_after_report(desk, "a..b")
+    assert "is not a valid branch name" in done.stderr
     assert _wip_branches(desk) == []
     assert (tree / "a.txt").read_text() == "edited\n"
     assert has_branch(desk.repo, "ops/ab")
