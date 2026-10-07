@@ -1,5 +1,5 @@
 #!/bin/sh
-# deploy-card.sh --job <name> --set <word> --worktree <dir> --tag <tag> --out "<new card path>"
+# deploy-card.sh --job <name> --set <word> --worktree <dir> --tag <tag> --out "<new card path>" [--tickers "<A,B,…>"]
 #                [--rulings "<list>"] "<job card>" …
 # Writes ONE new file, the deploy card at --out, in the format of prompts/CARD.md, from checked
 # job cards, in the order given (card 18 desk-tools-b, row B1; DEPLOY-HUB.md STEP-0 P2 and P3).
@@ -40,8 +40,8 @@ refuse() {
     exit 1
 }
 
-usage="usage: deploy-card.sh --job <name> --set <word> --worktree <dir> --tag <tag> --out \"<new card path>\" [--rulings \"<list>\"] \"<job card>\" …"
-name="" set="" wt="" tag="" out="" rulings="none"
+usage="usage: deploy-card.sh --job <name> --set <word> --worktree <dir> --tag <tag> --out \"<new card path>\" [--rulings \"<list>\"] [--tickers \"<A,B,…>\"] \"<job card>\" …"
+name="" set="" wt="" tag="" out="" rulings="none" tickers="none"
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --job) [ "$#" -ge 2 ] || refuse "$usage"; name=$2; shift 2 ;;
@@ -50,6 +50,7 @@ while [ "$#" -gt 0 ]; do
         --tag) [ "$#" -ge 2 ] || refuse "$usage"; tag=$2; shift 2 ;;
         --out) [ "$#" -ge 2 ] || refuse "$usage"; out=$2; shift 2 ;;
         --rulings) [ "$#" -ge 2 ] || refuse "$usage"; rulings=$2; shift 2 ;;
+        --tickers) [ "$#" -ge 2 ] || refuse "$usage"; tickers=$2; shift 2 ;;
         --) shift; break ;;
         -*) refuse "unknown option '$1'; $usage" ;;
         *) break ;;
@@ -78,6 +79,11 @@ case "$rulings" in
 esac
 case "$rulings" in
     *"$nl"*) refuse "--rulings holds a line break" ;;
+esac
+# card 63 N8: the build's --tickers for the gate's stray-row read, gate.sh's own pattern (:100)
+case "$tickers" in
+    none) ;;
+    ""|,*|*,|*,,*|*[!A-Z0-9.,]*) refuse "--tickers '$tickers' must be none or A,B,… of [A-Z0-9.]" ;;
 esac
 { [ -e "$out" ] || [ -L "$out" ]; } && refuse "--out exists: $out (this script writes a new card only)"
 [ -d "$(dirname "$out")" ] || refuse "--out's folder does not exist: $(dirname "$out")"
@@ -201,6 +207,7 @@ RULINGS: $rulings
 TAG: $tag
 MIGRATIONS: $migrations
 SET: $set
+TICKERS: $tickers
 
 ## SHIPS
 

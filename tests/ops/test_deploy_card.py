@@ -377,6 +377,63 @@ def test_l3_an_accented_tag_is_refused_under_a_utf8_locale(tmp_path):
     assert not desk.out.exists()
 
 
+# ---- card 63 N8: the deploy card carries the build's --tickers ---------------------------------
+
+PROMPTS = REPO / "docs" / "40 - DevDocs" / "prompts"
+CARD_MD_ROW = (
+    "| `TICKERS` | — | — | optional | — | the build's `--tickers`, `A,B,…` of `[A-Z0-9.]`, or `none`; "
+    "written by `deploy-card.sh`; the gate call takes it as `--tickers` (omitted when `none`) |"
+)
+HUB_OLD = "the set's `--tickers` and `--migration` as the card gives them"
+HUB_NEW = ("the card's `TICKERS` as `--tickers` (omitted when `none`) and the set's `--migration` "
+           "as the card gives it")
+
+
+def grep_c(path: Path, fixed: str) -> int:
+    """`grep -c -F <fixed> <path>`: the number of lines holding the string."""
+    return sum(fixed in line for line in path.read_text().splitlines())
+
+
+def test_n8_tickers_are_written_directly_after_set(tmp_path):
+    desk = Desk(tmp_path)
+    done = desk.run("--tickers", "ZZPB,TEST")
+    assert done.returncode == 0, done.stderr
+    text = desk.out.read_text()
+    assert header(text)["TICKERS"] == "ZZPB,TEST"
+    lines = text.splitlines()
+    assert lines[lines.index("SET: xset") + 1] == "TICKERS: ZZPB,TEST"
+
+
+def test_n8_no_tickers_given_writes_none(tmp_path):
+    desk = Desk(tmp_path)
+    done = desk.run()
+    assert done.returncode == 0, done.stderr
+    lines = desk.out.read_text().splitlines()
+    assert header(desk.out.read_text())["TICKERS"] == "none"
+    assert lines[lines.index("SET: xset") + 1] == "TICKERS: none"
+
+
+@pytest.mark.parametrize("bad", ["zz", "A,,B", "A,B,", "A'B"])
+def test_n8_tickers_outside_the_gates_pattern_are_refused(tmp_path, bad):
+    """Negative controls, green on BASE (an unknown option there) and after (the pattern)."""
+    desk = Desk(tmp_path)
+    done = desk.run("--tickers", bad)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: " in done.stderr and "--tickers" in done.stderr, done.stderr
+    assert not desk.out.exists()
+
+
+def test_n8_card_md_row_and_deploy_hub_phrase():
+    card_md = PROMPTS / "CARD.md"
+    hub = PROMPTS / "DEPLOY-HUB.md"
+    assert grep_c(card_md, CARD_MD_ROW) == 1
+    lines = card_md.read_text().splitlines()
+    assert lines[lines.index(CARD_MD_ROW) - 1].startswith("| `SET` |")
+    assert grep_c(card_md, "`MIGRATIONS`, `SET`, `TICKERS`. Body:") == 1
+    assert grep_c(hub, HUB_NEW) == 1
+    assert grep_c(hub, HUB_OLD) == 0
+
+
 @pytest.mark.parametrize("bad", ["../x-gate", "/abs/x-gate", "a/b", ".hidden", "agy-trial", ""])
 def test_a_worktree_outside_the_pattern_is_refused(tmp_path, bad):
     desk = Desk(tmp_path)

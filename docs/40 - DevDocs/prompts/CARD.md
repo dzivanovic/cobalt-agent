@@ -24,6 +24,7 @@ WHO FILLS IT: the desk (or a drafter it launches). A card that builds a check's 
 | `TAG` | — | — | required | — | the deploy tag; the rollback tag is `pre-<JOB>` |
 | `MIGRATIONS` | — | — | required | — | `none`, or the numbers in `FORWARD` order, then ` · production at <level> · creates: <objects> · old code on the new schema: <why a code revert alone is safe>` |
 | `SET` | — | — | required | — | one word naming the set in the stop line |
+| `TICKERS` | — | — | optional | — | the build's `--tickers`, `A,B,…` of `[A-Z0-9.]`, or `none`; written by `deploy-card.sh`; the gate call takes it as `--tickers` (omitted when `none`) |
 | `TABLE` | — | — | — | required | the one table the devfix rebuilds: `system.<name>` or `user.<name>`, `<name>` in `[a-z0-9_]` |
 | `PROOF TEST` | — | — | — | required | the with-DB test that proves the table after the rebuild: `tests/cobalt/<file>.py`, optionally `::<name>` in `[A-Za-z0-9_:.]` |
 
@@ -132,7 +133,7 @@ RULINGS: 2026-09-30 R3, 2026-09-30 R9
 - The build's `## DECISIONS` item 1 was answered KEEP: a `#` line of a multi-line value he retyped stays under the refreshed entry as a comment; none of his text is deleted (2026-09-30 R32).
 
 ## A DEPLOY CARD, IN SHORT (the values `DEPLOY-HUB.md` reads; no example is filled here)
-Header: `JOB`, `LADDER`, `BRANCH` (gate branch), `WORKTREE` (gate worktree), `BASE: main`, `TIP` (the code tips), `REPORT`, `RULINGS`, `TAG`, `MIGRATIONS`, `SET`. Body: `## SHIPS`, `## MARKERS`, `## READ-BACK` (with a migration), `## SMOKE READS`, `## RECORDS` (facts the hub copies into its report's `## RECORDS`).
+Header: `JOB`, `LADDER`, `BRANCH` (gate branch), `WORKTREE` (gate worktree), `BASE: main`, `TIP` (the code tips), `REPORT`, `RULINGS`, `TAG`, `MIGRATIONS`, `SET`, `TICKERS`. Body: `## SHIPS`, `## MARKERS`, `## READ-BACK` (with a migration), `## SMOKE READS`, `## RECORDS` (facts the hub copies into its report's `## RECORDS`).
 
 ## A DEVFIX CARD, IN SHORT (the values `DEVFIX-HUB.md` reads; launched by `desk-launch.sh devfix "<card>"`)
 One dev-maintenance run on `cobalt_dev`: `cobalt db dev-rebuild <TABLE>` dry, then real, then `<PROOF TEST>`, under the one lock; no git write, no schema level change, no row deleted. Header: `JOB`, `LADDER`, `BRANCH`, `WORKTREE`, `BASE` (8 hex, on `main`), `REPORT` (`reports/devfix-<…>.md`), `RULINGS`, `TABLE`, `PROOF TEST`. Body: no `## ROWS`; `## RECORDS` optional. `desk-launch.sh` refuses a bad `TABLE`, `PROOF TEST` or `REPORT`, a report already present on a first launch, a held lock, a card or fixed file uncommitted or changed, and a worktree on another branch.

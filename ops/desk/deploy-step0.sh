@@ -382,26 +382,26 @@ EOF
                 "$ctip"*) ;;
                 *) case "$ctip" in "$t"*) ;; *) why="its tip $t is not the row's code tip $ctip" ;; esac ;;
             esac
-            # a fix round (his R376, L75): the row's `fix report` ends `BUILT · … tip: <code tip>` and
-            # the check's tip is an ancestor of the code tip; the literals above stay the check's
+            # a fix round (his R376, L75): the row's `fix report`, read at the row's branch head
+            # (card 63 N6: `git show <head>:<path>`, never a copy on main), ends
+            # `BUILT · … tip: <code tip>` and the check's tip is an ancestor of the code tip; the
+            # literals above stay the check's
             if [ -n "$why" ] && [ -n "$t" ] && [ -n "$frep" ]; then
                 flast=""
-                [ -f "$frep" ] && flast=$(grep -v '^[[:space:]]*$' "$frep" | tail -n 1)
-                case "$flast" in
-                    "BUILT ·"*"tip: $ctip"*)
-                        # the hub's P2 fix-round line: the fix report committed and unmodified
-                        frel=$(rel "$frep")
-                        flog=$(git -C "$REPO" log -1 --format=%H -- "$frel" 2>/dev/null)
-                        fdiff=$(git -C "$REPO" diff --stat -- "$frel" 2>&1)
-                        if [ -z "$flog" ] || [ -n "$fdiff" ]; then
-                            why="$why; the fix report $frep is not committed and unmodified (commit '${flog:-none}')"
-                        elif git -C "$REPO" merge-base --is-ancestor "$t" "$ctip" 2>/dev/null; then
-                            why=""
-                        else
-                            why="$why, nor its ancestor (fix report $frep)"
-                        fi ;;
-                    *) why="$why; the fix report $frep does not end 'BUILT · … tip: $ctip': ${flast:-absent}" ;;
-                esac
+                if fblob=$(git -C "$REPO" show "$head:$(rel "$frep")" 2>/dev/null); then
+                    flast=$(printf '%s\n' "$fblob" | grep -v '^[[:space:]]*$' | tail -n 1)
+                    case "$flast" in
+                        "BUILT ·"*"tip: $ctip"*)
+                            if git -C "$REPO" merge-base --is-ancestor "$t" "$ctip" 2>/dev/null; then
+                                why=""
+                            else
+                                why="$why, nor its ancestor (fix report $frep)"
+                            fi ;;
+                        *) why="$why; the fix report $frep does not end 'BUILT · … tip: $ctip': ${flast:-absent}" ;;
+                    esac
+                else
+                    why="$why; the fix report $frep is absent at the branch head $head"
+                fi
             fi
         fi
         ok=0

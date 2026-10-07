@@ -269,6 +269,59 @@ def test_a_recut_of_a_recut_counts_from_the_cards_own_attempt(desk):
     assert header["REPORT"] == str(desk.reports / "deploy-2026-01-02-1-attempt3.md")
 
 
+LONG_MIDDLE = "tests/cobalt/test_x.py::test_y " * 13 + "y" * 3  # 406 characters
+LONG_LINE = "FAILED: gate — G (c) — " + LONG_MIDDLE + " · rollback: not used"
+
+
+def desk_row_size(row: str) -> int:
+    """desk-row.sh's own count (`size(row)`, :36-40): a LAUNCHED row without its backticked spans."""
+    if row.rstrip().endswith("| LAUNCHED |"):
+        row = re.sub(r"`[^`]*`", "", row)
+    return len(row)
+
+
+def test_n7_a_long_failed_line_is_cut_to_fit_the_desk_row(desk):
+    """Card 63 N7. RED on BASE: exit 1, `recut: the desk row would be … over desk-row.sh's 300`."""
+    assert len(LONG_MIDDLE) > 400
+    desk.write_report(LONG_LINE)
+    done = desk.recut()
+    assert done.returncode == 0, done.stdout + done.stderr
+    rows = [ln for ln in desk.today.read_text().splitlines() if "RECUT x-deploy attempt 2" in ln]
+    assert len(rows) == 1, rows
+    row = rows[0]
+    assert desk_row_size(row) <= 300, (desk_row_size(row), row)
+    text = row.split(" ET | ", 1)[1]
+    assert text.startswith("RECUT x-deploy attempt 2 — FAILED: gate — "), row
+    assert row.endswith(" · rollback: not used | RECORD |"), row
+    assert "…" in text, row
+    # the cut keeps the middle's start, in order, and drops its end
+    cut = text.removeprefix("RECUT x-deploy attempt 2 — FAILED: gate — ").removesuffix(
+        " · rollback: not used | RECORD |")
+    middle_kept = cut.removesuffix("…")
+    assert cut.endswith("…") and ("G (c) — " + LONG_MIDDLE).startswith(middle_kept), cut
+    # the row desk-row.sh printed is the row written
+    assert row in done.stdout.splitlines(), done.stdout
+    assert desk.header()["BRANCH"] == "deploy/x-deploy-attempt2"
+
+
+@pytest.mark.parametrize("line", [
+    pytest.param("FAILED: gate — G (c) — " + LONG_MIDDLE, id="(b) no rollback field"),
+    pytest.param("FAILED: gate — G (c) — " + LONG_MIDDLE + " · rollback: used", id="(c) rollback used"),
+])
+def test_n7_a_long_line_the_cut_does_not_reach_still_refuses(desk, line):
+    """Negative controls, green on BASE and after: no ` · rollback:` → refused for its size;
+    `rollback: used` → refused as today, before any size is read."""
+    desk.write_report(line)
+    old = desk.card.read_text()
+    done = desk.recut()
+    if "rollback: used" in line:
+        refused(desk, done, "recut: the failed deploy names 'rollback: used'", old)
+    else:
+        refused(desk, done, "recut: the desk row would be ", old)
+        assert "characters, over desk-row.sh's 300" in done.stderr, done.stderr
+    assert desk.gate.is_dir()
+
+
 @pytest.mark.parametrize("extra", [("E3",), ("PASS-2",), ("E3", "PASS-2")])
 def test_card03_l5_a_third_argument_is_refused_before_anything_runs(desk, extra):
     """AMENDED 10-03 (judge, ASK DESK 13): an ignored argument is a guess (L1)."""
