@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-07-words.md 2026-10-07 R625
 BRANCH: ops/radar-direction-color-1007
 WORKTREE: radar-direction-color-1007
 BASE: d2b53d6d
-TIP:
+TIP: 6370ea6a
 REPORT: /Users/cobalt/cobalt-wt/radar-direction-color-1007/docs/40 - DevDocs/reports/radar-direction-color-build-2026-10-07.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-direction-color-check-2026-10-07.md
+HOUSE B: as needed
 RULINGS: 2026-10-07 R625
 
 ## ROWS
