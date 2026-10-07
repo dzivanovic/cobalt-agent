@@ -2,7 +2,7 @@ JOB: worktree-salvage
 LADDER: OFF-LADDER — reports/cto-2026-10-07-words.md 2026-10-07 R613
 BRANCH: ops/worktree-salvage-1007
 WORKTREE: worktree-salvage-1007
-BASE: «FILL: main HEAD at launch, 8 hex»
+BASE: c4e52f4e
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/worktree-salvage-1007/docs/40 - DevDocs/reports/worktree-salvage-build-2026-10-07.md
 CHECK REPORT:
