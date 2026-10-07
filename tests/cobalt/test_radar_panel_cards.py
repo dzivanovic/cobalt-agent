@@ -857,6 +857,101 @@ def test_radar_any_other_direction_is_marked_never_guessed(evaluated, direction)
 
 
 # ---------------------------------------------------------------------
+# R627 — the ARM tap (WATCH) and the DISARM tap with its reason (ARMED)
+# ---------------------------------------------------------------------
+
+ARM_KEY_CSS = ".s3-form button.arm-key{min-height:44px;padding:0 14px}"
+ARM_TAP = (
+    '<input type="hidden" name="source" value="panel">'
+    '<button type="button" data-tap="1" class="arm-key">ARM</button>'
+)
+DISARM_TAP = (
+    '<input type="hidden" name="source" value="panel">'
+    '<input name="reason" type="text" maxlength="80" placeholder="disarm reason (required)" value="">'
+    '<button type="button" data-tap="1" class="arm-key danger">DISARM</button>'
+)
+#: BASE's (`f6350cc4`) render of what R627 does not touch, sha256 of each fragment of
+#: `_ladder(evaluated["rows"])` — the TRIGGERED and FILLED articles and the terminal section.
+BASE_TRIGGERED_ARTICLE_SHA256 = "194886823f9810a554de693cc3e8a8ab128aa503ceee773028cc35cbf79a6e7f"
+BASE_FILLED_ARTICLE_SHA256 = "5a522d9c06df4f3fbac199e82b6a111e6a9c38d882bcea786b784b326fc42a87"
+BASE_TERMINAL_SHA256 = "c1021a1b3e63e2fd680fb9723d4879f3d579e9bc977ef4cf2552fa3385ed1906"
+
+
+def _tap_blocks(fragment, path):
+    return re.findall(
+        rf'<div class="s3-form" data-card-id="(\d+)" data-path="{re.escape(path)}" data-card-tap="1">(.*?)</div>',
+        fragment, re.S,
+    )
+
+
+@pytest.mark.parametrize("phone_frame", [False, True])
+def test_radar_arm_and_disarm_taps_render_on_watch_and_armed_only(evaluated, phone_frame):
+    healthy, _ = pool_tests._build()
+    ladder_view = _ladder(evaluated["rows"])
+    page = _page(healthy.pool, ladder_view, phone_frame)
+    articles = _ladder_articles(page)
+    ids = {card.state: str(card.id) for card in ladder_view.active}
+    watch, armed = ids[CardState.WATCH], ids[CardState.ARMED]
+    assert _tap_blocks(articles[watch], "/arm") == [(watch, ARM_TAP)]
+    assert _tap_blocks(articles[armed], "/disarm") == [(armed, DISARM_TAP)]
+    assert 'data-path="/disarm"' not in articles[watch] and 'data-path="/arm"' not in articles[armed]
+    for card_id, body in articles.items():
+        if card_id not in (watch, armed):
+            assert '"/arm"' not in body and '"/disarm"' not in body, card_id
+    ladder = page[page.index('id="ladder-layer"') : page.index('id="pool-layer"')]
+    assert ladder.count('data-path="/arm"') == 1 and ladder.count('data-path="/disarm"') == 1
+    terminal = ladder[ladder.index('class="terminal"') :]
+    assert "/arm" not in terminal and "/disarm" not in terminal
+    for tap in (ARM_TAP, DISARM_TAP):
+        assert "data-key" not in tap  # the [data-key] handler runs before [data-tap]
+    lines = panel.PANEL_CSS.splitlines()
+    assert ARM_KEY_CSS in lines
+    assert lines[lines.index(ARM_KEY_CSS) - 1].startswith(".s3-form{display:inline-flex;")
+
+
+def _articles_by_state(view, articles):
+    return {card.state: articles[str(card.id)] for card in view.active}
+
+
+@pytest.mark.parametrize("phone_frame", [False, True])
+def test_radar_arm_disarm_leaves_keys_sheet_and_other_states_unchanged(evaluated, phone_frame):
+    healthy, _ = pool_tests._build()
+    ladder_view = _ladder(evaluated["rows"])
+    page = _page(healthy.pool, ladder_view, phone_frame)
+    by_state = _articles_by_state(ladder_view, _ladder_articles(page))
+    watch_card = next(card for card in ladder_view.active if card.state is CardState.WATCH)
+    key_row = panel._key_row(watch_card)
+    assert key_row in by_state[CardState.WATCH]
+    assert len(watch_card.keys) == 4 and key_row.count('data-key="') == 5 and 'data-key="pass"' in key_row
+    assert _sha(by_state[CardState.TRIGGERED]) == BASE_TRIGGERED_ARTICLE_SHA256, _sha(by_state[CardState.TRIGGERED])
+    assert _sha(by_state[CardState.FILLED]) == BASE_FILLED_ARTICLE_SHA256, _sha(by_state[CardState.FILLED])
+    ladder = page[page.index('id="ladder-layer"') : page.index('id="pool-layer"')]
+    terminal = ladder[ladder.index('<details class="terminal"') :]
+    assert _sha(terminal) == BASE_TERMINAL_SHA256, _sha(terminal)
+
+
+def _sheet_card(state):
+    return {"id": 9, "state": state, "ticker": "TEST", "grade": "A", "direction": "long", "shares": 100,
+            "session": "RTH", "stop": Decimal("9.90"), "origin": "radar", "account_mode": "live"}
+
+
+def test_the_sheet_keeps_its_arm_and_disarm_buttons():
+    watch = web_module._card_controls(_sheet_card("WATCH"))
+    assert (
+        '<form method="post" action="/card/9/move" style="display:inline">'
+        '<input type="hidden" name="to" value="ARMED"><input type="hidden" name="reason" value="">'
+        '<button type="submit">ARM</button></form>'
+    ) in watch
+    armed = web_module._card_controls(_sheet_card("ARMED"))
+    assert (
+        '<form method="post" action="/card/9/move" style="display:inline">'
+        '<input type="hidden" name="to" value="WATCH"><input type="hidden" name="reason" value="">'
+        '<button type="submit" class="danger" onclick="return askReason(this,\'DISARM\')">DISARM</button></form>'
+    ) in armed
+    assert "/radar/card/" not in watch + armed
+
+
+# ---------------------------------------------------------------------
 # JavaScript: fetch POST only, focus law
 # ---------------------------------------------------------------------
 
@@ -895,6 +990,7 @@ POST_ALLOWLIST = {
     "/radar/card/{card_id}/triggered", "/radar/card/{card_id}/fill", "/radar/card/{card_id}/pass",
     "/radar/card/{card_id}/exit", "/radar/card/{card_id}/held", "/radar/card/{card_id}/correct",
     "/radar/card/{card_id}/stop", "/radar/card/{card_id}/stop/reset",
+    "/radar/card/{card_id}/arm", "/radar/card/{card_id}/disarm",  # R627: ARM / DISARM, after /stop/reset
 }
 GET_ONLY = {"/", "/radar", "/api/radar/pool", "/api/health", "/api/prefill", "/drc"}
 

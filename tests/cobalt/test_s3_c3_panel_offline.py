@@ -29,7 +29,8 @@ from cobalt.aset import web as web_module
 from cobalt.cards import CardStateError
 from cobalt.cards import legs as legs_module
 from cobalt.cards.legs import LegRefused
-from cobalt.cards.models import CardState
+from cobalt.cards.models import CardState, assert_edge
+from cobalt.cards.store import CardStore
 from cobalt.session import clock as session_clock_module
 from test_radar_panel_cards import SCAN0, SETTINGS_ROWS, RowStore, Settings, _tunables, evaluated  # noqa: F401
 
@@ -48,6 +49,8 @@ NEW_ROUTES = [
     "/radar/card/{card_id}/correct",
     "/radar/card/{card_id}/stop",
     "/radar/card/{card_id}/stop/reset",
+    "/radar/card/{card_id}/arm",  # R627: ARM / DISARM, appended after /stop/reset
+    "/radar/card/{card_id}/disarm",
 ]
 
 #: Every route of `web.py` at `<base>` (`5e77800f`), in file order.
@@ -94,6 +97,25 @@ class Cards:
     def record_stop_edit(self, card_id, **kw):
         self.calls.append(("record_stop_edit", card_id, kw))
         return 91
+
+
+class GatedCards(Cards):
+    """`Cards` whose `transition` first runs the store's OWN gates — the
+    edge (`assert_edge`) and the reasons (`CardStore._assert_reason`) — on
+    the recorded state, then records and moves (R627). Never a copy of
+    either rule."""
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.reasons = []
+
+    def transition(self, card_id, to_state, **kw):
+        assert_edge(CardState(self.state), to_state, card_id=card_id)
+        CardStore._assert_reason(CardState(self.state), to_state, kw.get("reason"))
+        self.calls.append(("transition", card_id, to_state.value, kw["actor"].value, kw.get("evidence")))
+        self.reasons.append(kw.get("reason"))
+        self.state = to_state.value
+        return 77
 
 
 class Aset:
@@ -183,6 +205,94 @@ def test_pass_moves_the_card_to_passed_by_you(world):
     response = client.post("/radar/card/1/pass")
     assert response.status_code == 200, response.text
     assert world.calls[0][:4] == ("transition", 1, "PASSED", "you")
+
+
+# ---------------------------------------------------------------------
+# R627 — ARM and DISARM on the radar card; every gate is the store's
+# ---------------------------------------------------------------------
+
+#: The store's UNSIZED refusal (`cards/store.py:315`–`:317`) for card 1 from WATCH.
+UNSIZED = (
+    "REFUSED card 1: WATCH -> ARMED on an UNSIZED card (grade, risk_budget, shares, used_risk empty). "
+    "Tap a key first — ARM commits risk, and a card with no size has none to commit."
+)
+
+
+@pytest.fixture
+def gated(world, monkeypatch):
+    def _make(state):
+        cards = GatedCards(state=state)
+        monkeypatch.setattr(web_module, "CardStore", lambda *a, **k: cards)
+        return cards
+    return _make
+
+
+def test_arm_moves_a_watch_card_to_armed_by_you(gated):
+    cards = gated("WATCH")
+    response = client.post("/radar/card/1/arm")
+    assert response.status_code == 200, response.text
+    assert response.json()["state"] == "ARMED"
+    assert cards.calls == [("transition", 1, "ARMED", "you", {"via": "panel.arm"})]
+
+
+def test_a_second_arm_tap_is_refused_by_the_edge(gated):
+    cards = gated("WATCH")
+    assert client.post("/radar/card/1/arm").status_code == 200
+    second = client.post("/radar/card/1/arm")
+    assert second.status_code == 409, second.text
+    assert second.json()["reason"].startswith("REFUSED card 1: ARMED -> ARMED is not a legal card transition.")
+    assert len(cards.calls) == 1
+
+
+def test_arm_on_an_unsized_card_shows_the_store_refusal(world, monkeypatch):
+    world.state = "WATCH"
+    monkeypatch.setattr(world, "transition", _raise(CardStateError(UNSIZED)))
+    response = client.post("/radar/card/1/arm")
+    assert response.status_code == 409, response.text
+    assert response.json()["reason"] == UNSIZED
+    assert world.calls == []
+
+
+@pytest.mark.parametrize("data", [{}, {"reason": "   "}])
+def test_disarm_without_a_reason_is_refused_by_the_store(gated, data):
+    cards = gated("ARMED")
+    response = client.post("/radar/card/1/disarm", data=data)
+    assert response.status_code == 409, response.text
+    assert response.json()["reason"].startswith("REFUSED ARMED -> WATCH: a reason is required.")
+    assert cards.calls == []
+
+
+def test_disarm_with_a_reason_moves_the_card_to_watch(gated):
+    cards = gated("ARMED")
+    response = client.post("/radar/card/1/disarm", data={"reason": "spread blew out"})
+    assert response.status_code == 200, response.text
+    assert response.json()["state"] == "WATCH"
+    assert cards.calls == [("transition", 1, "WATCH", "you", {"via": "panel.disarm"})]
+    assert cards.reasons == ["spread blew out"]
+
+
+def test_a_disarm_reason_over_80_characters_is_refused(gated):
+    cards = gated("ARMED")
+    too_long = client.post("/radar/card/1/disarm", data={"reason": "x" * 81})
+    assert too_long.status_code == 422, too_long.text
+    assert too_long.json()["reason"] == "REFUSED: a DISARM reason is at most 80 characters, got 81. Nothing written."
+    assert cards.calls == []
+    at_cap = client.post("/radar/card/1/disarm", data={"reason": "x" * 80})
+    assert at_cap.status_code == 200, at_cap.text
+    assert cards.reasons == ["x" * 80]
+
+
+@pytest.mark.parametrize("state,path,data", [
+    ("WATCH", "/radar/card/1/disarm", {"reason": "spread blew out"}),
+    ("TRIGGERED", "/radar/card/1/arm", {}),
+])
+def test_a_disarm_on_watch_and_an_arm_on_triggered_are_refused_by_the_edge(gated, state, path, data):
+    cards = gated(state)
+    response = client.post(path, data=data)
+    assert response.status_code == 409, response.text
+    assert response.json()["reason"].startswith(f"REFUSED card 1: {state} -> ")
+    assert "is not a legal card transition." in response.json()["reason"]
+    assert cards.calls == []
 
 
 # ---------------------------------------------------------------------
@@ -355,6 +465,8 @@ def test_a_reset_on_a_card_with_no_structural_stop_shows_the_writers_refusal(wor
     ("/radar/card/1/correct", {"leg_id": "401", "price": "5.39"}),
     ("/radar/card/1/stop", {"to_stop": "5.70"}),
     ("/radar/card/1/stop/reset", {}),
+    ("/radar/card/1/arm", {}),
+    ("/radar/card/1/disarm", {"reason": "spread blew out"}),
 ])
 def test_market_reset_refuses_every_post_and_writes_nothing(world, monkeypatch, path, data):
     from cobalt.session import store as session_store
