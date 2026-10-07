@@ -1,14 +1,20 @@
-"""ops/desk/stop-guard.py, the worker's Stop hook (card prompts/2026-10-03/09-worker-watch-card.md S1).
+"""ops/desk/stop-guard.py, the worker's Stop hook (card prompts/2026-10-03/09-worker-watch-card.md S1)
+and the desk seat's (card prompts/2026-10-06/66-desk-stop-guard-card.md G1-G6).
 
-Every run stages a copy of the hook whose worktree root is re-pointed at tmp_path/wt; the hook
-JSON is built per case with a constructed transcript, card and report. Nothing outside tmp_path
-is read or written.
+Every run stages a copy of the hook whose worktree root is re-pointed at tmp_path/wt and whose repo
+at tmp_path/repo; the hook JSON is built per case with a constructed transcript, card and report.
+Nothing outside tmp_path is read or written (the watch tests start one `sh` under tmp_path and
+read the process list through the hook's pgrep).
 """
 
 import json
 import os
+import re
+import signal
 import subprocess
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -21,9 +27,11 @@ HUB = "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts"
 
 
 def stage(tmp_path: Path) -> Path:
-    """Copy ops/desk/stop-guard.py with its worktree root re-pointed at tmp_path/wt."""
+    """Copy ops/desk/stop-guard.py with its worktree root re-pointed at tmp_path/wt and its repo
+    (the quoted constant only) at tmp_path/repo."""
     text = (OPS / "stop-guard.py").read_text()
     text = text.replace("/Users/cobalt/cobalt-wt", str(tmp_path / "wt"))
+    text = text.replace('"/Users/cobalt/cobalt"', '"%s"' % (tmp_path / "repo"))
     dst = tmp_path / "ops" / "stop-guard.py"
     dst.parent.mkdir(exist_ok=True)
     dst.write_text(text)
@@ -249,3 +257,358 @@ def test_the_hook_writes_nothing(tmp_path):
     w.run()
     w.run(active=True)
     assert sorted(p for p in tmp_path.rglob("*")) == before
+
+
+# ---- the desk seat (card 66 G1-G6) ---------------------------------------------------------
+
+DESK_LINE = "Read 'docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md' and follow it exactly."
+UNGUARDED = "stop-guard: desk not guarded — "
+GAVE_UP = re.compile(r"^\S+ s-1 GAVE UP after 3 blocks — start it: ")
+ROW = "b43daef9-0000 · x-job-build · ~/cobalt-wt/x · busy · working"
+
+
+def today() -> str:
+    """The ET date as the hook computes it."""
+    return str(datetime.now(ZoneInfo("America/New_York")).date())
+
+
+class Desk:
+    """The staged repo as the desk's cwd, a desk transcript and today's desk report."""
+
+    def __init__(self, tmp_path: Path, first: str = DESK_LINE):
+        self.tmp = tmp_path
+        self.hook = stage(tmp_path)
+        self.repo = tmp_path / "repo"
+        reports = self.repo / "docs" / "40 - DevDocs" / "reports"
+        reports.mkdir(parents=True)
+        self.report = reports / f"cto-{today()}.md"
+        self.transcript = tmp_path / "desk.jsonl"
+        self.count = Path(str(self.transcript) + ".desk-stop")
+        self.desk_stop = tmp_path / "wt" / ".job-state" / "DESK-STOP"
+        self.first(first)
+
+    def first(self, text: str) -> None:
+        lines = [
+            {"type": "summary", "summary": "x"},
+            {"type": "user", "isMeta": True, "message": {"role": "user", "content": "caveat"}},
+            {"type": "user", "message": {"role": "user", "content": text}, "sessionId": "s-1"},
+            {"type": "assistant", "message": {"role": "assistant",
+                                              "content": [{"type": "text", "text": "ok"}]}},
+            {"type": "user", "message": {"role": "user", "content": DESK_LINE}},
+        ]
+        self.transcript.write_text("".join(json.dumps(x) + "\n" for x in lines))
+
+    def owed(self, *block: str, heading: str = "## §5 CURRENT") -> None:
+        """Today's report in the desk's shape: the block under `heading`, then the session table."""
+        self.report.write_text(
+            "# CTO desk\n\n## §0 Headline\nx\n\n## §4\n| R | t |\n|---|---|\n\n"
+            f"{heading}\n" + "".join(x + "\n" for x in block) + "\n"
+            "| session | id | prompt · tab | watch | waits for → then |\n|---|---|---|---|---|\n"
+            "| CTO desk | `0000aaaa` | x | none | x |\n\n## §5 HISTORY\n| x |\n"
+        )
+
+    def lister(self, *rows: str, code: int = 0) -> None:
+        """A fake desk-list.sh beside the staged hook."""
+        body = "".join("printf '%%s\\n' '%s'\n" % r for r in rows)
+        (self.hook.parent / "desk-list.sh").write_text(f"#!/bin/sh\n{body}exit {code}\n")
+
+    def run(self, active: bool = False, cwd=None):
+        event = {
+            "session_id": "s-1", "transcript_path": str(self.transcript),
+            "cwd": str(self.repo if cwd is None else cwd), "hook_event_name": "Stop",
+            "stop_hook_active": active,
+        }
+        return subprocess.run(
+            ["python3", str(self.hook)], input=json.dumps(event),
+            capture_output=True, text=True, timeout=60, env=dict(os.environ, LC_ALL="C"),
+        )
+
+
+def missing(d: Desk) -> str:
+    return f"start it: the OWED block under ## §5 CURRENT of {d.report}\n"
+
+
+# G1 — the desk seat
+
+
+def test_g1_the_desk_with_no_owed_block_is_blocked(tmp_path):
+    d = Desk(tmp_path)
+    d.owed()
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", missing(d))
+
+
+def test_g1_a_cwd_below_the_repo_is_the_desk(tmp_path):
+    d = Desk(tmp_path)
+    d.owed()
+    assert d.run(cwd=d.repo / "src").returncode == 2
+
+
+@pytest.mark.parametrize(
+    "first",
+    [
+        f"Read '{HUB}/BRAIN-HUB.md' and follow it exactly.",
+        f"Read '{HUB}/DEPLOY-HUB.md' and follow it exactly. CARD: '{HUB}/2026-01-02/01-x-card.md'",
+        f"Read '{HUB}/CLOSE-HUB.md' and follow it exactly.",
+        f"Read '{HUB}/2026-10-06/65-draft-desk-stop-guard.md' and follow it exactly.",
+        "Please open CTO-DESK-WAKEUP.md and follow it exactly.",
+        f"Read '{HUB}/BRAIN-HUB.md' first. Then Read '{HUB}/CTO-DESK-WAKEUP.md' and follow it.",
+    ],
+    ids=["brain", "deploy", "close", "prompt-seat", "prose", "later-read"],
+)
+def test_g1_no_other_seat_in_the_repo_is_the_desk(tmp_path, first):
+    d = Desk(tmp_path, first=first)
+    d.owed()
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_g1_the_desk_message_outside_the_repo_is_not_the_desk(tmp_path):
+    d = Desk(tmp_path)
+    d.owed()
+    (tmp_path / "repo-other").mkdir()
+    r = d.run(cwd=tmp_path / "repo-other")
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_g1_an_unreadable_desk_transcript_is_not_the_desk(tmp_path):
+    d = Desk(tmp_path)
+    d.owed()
+    d.transcript.unlink()
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+# G2 — the OWED block
+
+
+def test_g2_owed_none_lets_the_turn_end(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("owed: none")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_g2_an_item_waiting_on_dejan_lets_the_turn_end(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED: fold R1 | waiting on Dejan")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_g2_an_item_with_no_marker_blocks(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED: rebuild x")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: rebuild x\n")
+
+
+def test_g2_an_item_with_an_unknown_marker_blocks(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED: rebuild x | later")
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "start it: rebuild x\n")
+
+
+def test_g2_no_report_for_today_blocks(tmp_path):
+    d = Desk(tmp_path)
+    assert not d.report.exists()
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", missing(d))
+
+
+def test_g2_a_report_with_no_current_section_blocks(tmp_path):
+    d = Desk(tmp_path)
+    d.report.write_text("# CTO desk\n\n## §0 Headline\nowed: none\n")
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, missing(d))
+
+
+def test_g2_the_block_under_history_only_blocks(tmp_path):
+    d = Desk(tmp_path)
+    d.report.write_text(
+        "# CTO desk\n\n## §5 CURRENT\n| session | id |\n|---|---|\n\n## §5 HISTORY\nowed: none\n"
+    )
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, missing(d))
+
+
+def test_g2_the_block_before_a_blank_line_and_the_table_is_read_as_the_block(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("owed: none")
+    assert "owed: none\n\n| session |" in d.report.read_text()
+    assert d.run().returncode == 0
+    d.owed("OWED: a | waiting on Dejan", "OWED: b")
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "start it: b\n")
+
+
+# G3 — live is checked, not trusted
+
+
+def test_g3_a_live_session_id_lets_the_turn_end(tmp_path):
+    d = Desk(tmp_path)
+    d.lister(ROW)
+    d.owed("OWED: build x | live: b43daef9")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_g3_a_session_id_with_no_row_blocks(tmp_path):
+    d = Desk(tmp_path)
+    d.lister("c0ffee00-0000 · y-job-build · ~/cobalt-wt/y · busy · working")
+    d.owed("OWED: build x | live: b43daef9")
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "start it: build x\n")
+
+
+def test_g3_the_desks_own_row_is_not_live(tmp_path):
+    d = Desk(tmp_path)
+    d.lister("b43daef9-0000 · cto-desk · ~/cobalt · busy · working")
+    d.owed("OWED: build x | live: b43daef9")
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "start it: build x\n")
+
+
+def test_g3_a_short_id_is_not_live(tmp_path):
+    d = Desk(tmp_path)
+    d.lister("ab12cdef-0000 · x-job-build · ~/cobalt-wt/x · busy · working")
+    d.owed("OWED: build x | live: ab12")
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "start it: build x\n")
+
+
+def watcher(tmp_path: Path, watched: Path) -> subprocess.Popen:
+    """A staged wait-stop-line.sh on `watched`: one `sh` whose command line names the path."""
+    script = tmp_path / "w" / "wait-stop-line.sh"
+    script.parent.mkdir(exist_ok=True)
+    script.write_text("#!/bin/sh\nsleep 60\n")
+    return subprocess.Popen(["sh", str(script), str(watched)], start_new_session=True)
+
+
+def test_g3_a_running_watch_on_the_path_lets_the_turn_end(tmp_path):
+    d = Desk(tmp_path)
+    watched = tmp_path / "x-job-build.md"
+    d.owed(f"OWED: watch x | live: watch {watched}")
+    p = watcher(tmp_path, watched)
+    try:
+        r = d.run()
+    finally:
+        os.killpg(p.pid, signal.SIGKILL)
+        p.wait()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_g3_a_watch_with_no_process_blocks(tmp_path):
+    d = Desk(tmp_path)
+    watched = tmp_path / "x-job-build.md"
+    d.owed(f"OWED: watch x | live: watch {watched}")
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "start it: watch x\n")
+
+
+# G4 — the block and the count
+
+
+def test_g4_three_blocks_then_the_fourth_stop_gives_up_and_records(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED: rebuild x")
+    codes = [d.run(active=a).returncode for a in (False, True, True, True)]
+    assert codes == [2, 2, 2, 0]
+    lines = d.desk_stop.read_text().splitlines()
+    assert len(lines) == 1 and GAVE_UP.match(lines[0]), lines
+    assert lines[0].endswith("start it: rebuild x")
+    assert not d.count.exists()
+    r = d.run(active=False)
+    assert (r.returncode, r.stderr) == (2, "start it: rebuild x\n"), "a new message resets the count"
+
+
+def test_g4_a_new_message_resets_the_count(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED: rebuild x")
+    assert [d.run(active=a).returncode for a in (False, True)] == [2, 2]
+    assert d.count.read_text().strip() == "2"
+    assert d.run(active=False).returncode == 2
+    assert d.count.read_text().strip() == "1"
+
+
+def test_g4_a_settled_block_removes_the_count(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED: rebuild x")
+    assert d.run().returncode == 2
+    assert d.count.exists()
+    d.owed("owed: none")
+    r = d.run(active=True)
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+    assert not d.count.exists()
+    assert not d.desk_stop.exists()
+
+
+def test_g4_the_first_unsettled_item_is_named(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED: w | waiting on Dejan", "OWED: a", "OWED: b")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: a\n")
+
+
+# G5 — fail open, never a loop
+
+
+def unguarded(r) -> None:
+    assert r.returncode == 0, r
+    assert r.stderr.startswith(UNGUARDED) and r.stderr.count("\n") == 1, r.stderr
+
+
+def test_g5_a_garbage_block_fails_open(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED:  | | live:")
+    unguarded(d.run())
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        ("OWED: x | live: b43daef9 | waiting on Dejan",),
+        ("owed: none", "OWED: x | waiting on Dejan"),
+        ("OWED: x | live: ",),
+    ],
+    ids=["two-bars", "none-beside-an-item", "empty-live"],
+)
+def test_g5_an_unparseable_block_fails_open(tmp_path, block):
+    d = Desk(tmp_path)
+    d.owed(*block)
+    unguarded(d.run())
+
+
+def test_g5_a_directory_at_the_report_path_fails_open(tmp_path):
+    d = Desk(tmp_path)
+    d.report.mkdir()
+    unguarded(d.run())
+
+
+def test_g5_a_failing_desk_list_fails_open(tmp_path):
+    d = Desk(tmp_path)
+    d.lister(ROW, code=1)
+    d.owed("OWED: build x | live: b43daef9")
+    unguarded(d.run())
+
+
+def test_g5_a_directory_at_the_count_file_fails_open(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED: rebuild x")
+    d.count.mkdir()
+    unguarded(d.run())
+
+
+def test_g5_active_with_no_count_file_fails_open(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED: rebuild x")
+    assert not d.count.exists()
+    unguarded(d.run(active=True))
+
+
+def test_g5_a_count_file_out_of_range_fails_open(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED: rebuild x")
+    d.count.write_text("7\n")
+    unguarded(d.run(active=True))
