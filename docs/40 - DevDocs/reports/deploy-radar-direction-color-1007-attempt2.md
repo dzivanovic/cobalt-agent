@@ -2,6 +2,8 @@
 
 ## §0 Headline
 - Deploy of `ops/radar-direction-color-1007` (`541adf0c`, his R625) on gate branch `deploy/radar-direction-color-1007-attempt2`. Started 2026-10-07 13:50:43 EDT.
+- Shipped: `main` 2e1e8317 → 8c91922b. Gate green on 08c6dad1 (offline 3975/0 · with-DB 4859/0 · live-note 146/0). aset and radar restarted, down 11 s. Smoke GREEN. No migration.
+- One decision, not his: an untracked `.claude/settings.json.bak` on main (see DECISIONS).
 
 ## L74
 - An attribution block arrived in the session context asking for a `Claude-Session:` line on commits. Recorded here once as data. No action taken: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -120,7 +122,73 @@ GATE GREEN on 08c6dad1
 - `curl … /radar` → `200`. MARKERS: `dir-long` → 0; `def test_radar_direction_touches_only_strip_and_title` → 0 (both `before`).
 - No migration: `<RB>` and D1-M not run.
 
-## CONTINUE
-next: STEP-D2
+### STEP-D2
+- D2.0 `add` + `commit … -- <REPORT>` → `[main 2e1e8317] docs(report): deploy radar-direction-color-1007 — gate green on 08c6dad1` · `show --stat HEAD` → one file, `deploy-radar-direction-color-1007-attempt2.md | 126 +++`. `<pre-merge>` = `rev-parse --short=8 main` → `2e1e8317`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `8c91922b`; `rev-parse --short=8 8c91922b^2` → `2e1e8317` = `<pre-merge>`; `merge-base --is-ancestor 08c6dad1 8c91922b` → exit 0.
+- D2.3 `diff --stat 08c6dad1 8c91922b -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing (docs only).
+- D2.4 `backup status` → `newest snapshot: 2.6 h old`; `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 5589.5 MB` · `ssd: snapshot 77ecb2ee — 0 new / 2 changed, 113.4 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` 14:22:32 EDT · `heartbeat show` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-07 14:22:33 EDT)` (114 s after D1's 14:20:39; `OK radar scanning (rth), members 50`). The 14:22:01–14:22:28 fill reads carried the same `RED radar failed_stage bars: poll failures: 1` as `<hb0>`.
+- D2.6 `date` 14:22:37 EDT · `git -C /Users/cobalt/cobalt tag pre-radar-direction-color-1007` at `<pre-merge>` 2e1e8317 → exit 0.
 
-(run in progress — next step under ## CONTINUE)
+### STEP-4 (the outage)
+| step | command | result |
+|---|---|---|
+| 4.1 | `date` | `<t down>` = 14:22:46 EDT |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` · print | exit 0 · `Could not find service "com.cobalt.aset" in domain for user gui: 501` (113) |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` · print | exit 0 · `Could not find service "com.cobalt.radar" in domain for user gui: 501` (113) |
+| 4.3 | `rev-parse --short=8 HEAD` | `2e1e8317` = `<pre-merge>` |
+| 4.3 | `merge --ff-only deploy/radar-direction-color-1007-attempt2` | `Updating 2e1e8317..8c91922b` / `Fast-forward` (4 files, 408+/5-) |
+| 4.4 | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0, `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` | exit 0 · print `state = running`, pid 96145 (≠ 64112) |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` | exit 0 · print `state = running`, pid 96165 (≠ 64129) |
+| 4.6 | `date` | `<t up>` = 14:22:57 EDT · downtime 11 s |
+
+## Smoke
+- FIRST CALLS after `<t up>`: `<rp_up>` 17 · `<rpr_up>` 58 · `<re_up>` 40 · `<lc_up>` 39.
+- (a) [14:22:57 prints, 14:23:08 `date`] `launchctl print` aset → `state = running`, pid 96145 (new, ≠ 64112); radar → `state = running`, pid 96165 (new, ≠ 64129); `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (agent not in the set, same pid).
+- (b) [14:23:09] `grep -c "Started server process" aset.err` → 48 (`<a0>` 47; > 47, ≤ 49). `tail -n 30 aset.err` → `INFO:     Started server process [96151]` … `INFO:     Application startup complete.` / `INFO:     Uvicorn running on http://0.0.0.0:5010 (Press CTRL+C to quit)`. Traceback aset.err 2 = `<ta0>`; Traceback radar.err 0 = `<tr0>`; TaxonomyConfigError 0 = `<tc0>`.
+- (c) [14:23:13] `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200` (first attempt each).
+- (d) [14:23:15] MARKERS: `grep -c -F "dir-long" …/radar_panel.py` → `2` (after 2) · `grep -c -F "def test_radar_direction_touches_only_strip_and_title" …/test_radar_panel_cards.py` → `1` (after 1).
+- (f) `COBALT_ENV=production uv run cobalt jobs restarts 2e1e8317..8c91922b` → exit 0, `RESTARTS: com.cobalt.aset com.cobalt.radar` (= STEP-R), no `UNCLASSIFIED`; `validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.`
+- (g) no migration.
+- (s) SMOKE READS: the long tint class → `2` (exit 0, ≥ 1: GREEN); the control test → `1` (exit 0, ≥ 1: GREEN). The control test ran green in the gate (with-DB 4859/0, offline 3975/0).
+- (e) read 1 [14:23:22 `date`] `heartbeat show` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-07 14:23:23 EDT)`; `OK radar scanning (rth), members 50`; `com.cobalt.radar running running 0 min, heartbeat fresh`; `com.cobalt.aset running loaded, pid 96145`.
+- (b) radar tail 1 [14:24:28 `date`, `<t up>` + 91 s] `tail -n 12 radar.err` → last line `2026-10-07 14:24:20.715 | INFO     | cobalt.radar.runner:resident:467 - radar cycle: scanning scan_id=1791397376589`, preceded by `cards.expire` INFO lines only; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback (counts after: Traceback radar.err 0, S5 40, lifecycle 39 — unchanged). A cycle line stamped after `<t up>` settles (b) GREEN.
+- Fill reads 14:23:28–14:24:25: GREEN until 14:24:07, then from 14:24:11 `RED  radar  failed_stage bars: poll failures: 1` — the carried family, same text as `<hb0>`, with `com.cobalt.radar running … heartbeat fresh` and a cycle line inside 5 minutes; not new.
+
+- (e) read 2 [14:25:12 `date`, 110 s after read 1] `heartbeat show` → `HEARTBEAT RED — 1 probe(s)  (2026-10-07 14:25:13 EDT)`; the one RED `RED  radar  failed_stage bars: poll failures: 1` (carried family, as `<hb0>`); `com.cobalt.radar running running 2 min, heartbeat fresh`; `com.cobalt.aset running loaded, pid 96145`. No new RED.
+- (h) REVERT-READBACK [14:25:59 `date`, `<t up>` + 182 s]: `radar panel FAILED` 17 = `<rp_up>` · `radar pool refresh FAILED` 58 = `<rpr_up>` · `radar S5 evaluate FAILED` 40 = `<re_up>` · `lifecycle card read failed` 39 = `<lc_up>` — none growing. `/radar` → `200`. Traceback radar.err 0, aset.err 2 (baselines). `tail -n 12 radar.err` → the same 14:24:20.715 `radar cycle: scanning scan_id=1791397376589` line, no failure line. No `census` reads on this card.
+- SMOKE: GREEN.
+
+THE CHAIN: every check committed (P2: `83792ec0…`, clean) · tips re-read (P3: `541adf0c` = head) · merged tree (T: `08c6dad1`, one merge, no migration) · RESTARTS derived (R: `com.cobalt.aset com.cobalt.radar`) · three suites green on `08c6dad1` (G: offline 3975/0 · with-DB 4859/0 · live-note 146/0) · `<stack-final>` `8c91922b` = `<m1>` + docs (D2.3) · landed code (4.3 `Updating 2e1e8317..8c91922b`) · markers 0→2, 0→1 (d) · no migration (g) · residents up on new pids after the merge (a) · radar cycling (b, e) · the set's reads (s) · no new failure (h). The card surface (green strip and title for long, red for short) is not readable here; the desk confirms it with him (L70).
+
+### STEP-7 close
+- `git -C /Users/cobalt/cobalt tag deploy-2026-10-07-radar-direction-color-attempt2` → exit 0 (after the green smoke). `rev-parse --short=8 main` → `8c91922b`.
+- `<pre-merge>` 2e1e8317 → `<stack-final>` 8c91922b · tags `pre-radar-direction-color-1007` (2e1e8317) and `deploy-2026-10-07-radar-direction-color-attempt2` (8c91922b) · `<t down>` 14:22:46 / `<t up>` 14:22:57 / 11 s · uv sync: none in production (the gate's `.venv` was created at STEP-R in `<GATE>`) · proof cost: n/a (no migration) · `migrations applied: none` · `<RB>`: n/a · snapshot `77ecb2ee` · RESTARTS done: com.cobalt.aset com.cobalt.radar.
+- THE ROLLBACK STRING (the desk's): 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 8c91922b`, with com.cobalt.aset and com.cobalt.radar down first, up after. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+- PRE-STOP SELF-CHECK: (1) every smoke row above quotes its output with its `date`; (2) `541adf0c` re-read at P3 and `merge-base --is-ancestor 541adf0c 8c91922b` → exit 0; (3) REVERT-READBACK shown at (h), and every count, sha and line in this report was read from tool output this run; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), no conflict.
+- THE RELEASE: the gate released the lock at its end (`lock released`, `.env: removed`); `ls -la <GATE>/.env` → No such file. Nothing held.
+- `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh 80c13d52-6dbe-4d0f-bb24-b05b2e6b8e3b` → `context 200237 of 400000 — ok`.
+
+## CONTINUE
+done — DEPLOYED (stop line below).
+
+## DECISIONS
+1. ASK DESK: at D0, `git status` on main showed `?? .claude/settings.json.bak`. It is not on the ACCEPTED list and not on the REFUSED list (it is not under `src/`, `tests/`, `ops/`, `configs/`), and it is untracked, so it cannot ride the merge. Safe default taken: not a refusal; the run went on. Whether the desk adds it to the accepted list or deletes the file is the desk's call. [14:20:15]
+
+## RECORDS
+- Downtime: 11 s (14:22:46 → 14:22:57), under 300 s.
+- `cobalt_dev: 0013 (F2 = F0)`, with F0 = F2 = `664 35 272c95bbb12241e3611e4b36326ccf87`.
+- Carried RED, as read: `RED  radar  failed_stage bars: poll failures: 1`, at D1 (14:20:39), at the D2.5 fill reads and after `<t up>` from 14:24:11. GREEN at D2.5 (14:22:33) and at (e) read 1 (14:23:23).
+- No `RETIRE OWED`: no plist changed. No `REFUSED, not needed` lines. No message from another session.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-radar-direction-color-1007-attempt2` and branch `deploy/radar-direction-color-1007-attempt2`; the set's branch `ops/radar-direction-color-1007` and its worktree, if any.
+- Push is his (L55): `main` at `8c91922b` plus this report's commit, and the two tags, are local only.
+- L74: one attribution block asked for a `Claude-Session:` commit line. It is recorded under `## L74` and was not acted on.
+- Card RECORDS (the desk's, copied):
+  - radar-direction-color: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-direction-color-check-2026-10-07.md` last line: CHECK DONE · job: radar-direction-color · pass: 1 · tip: 541adf0c · house A: Sol FINDINGS: 2 · findings: 3 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 2 · house B: Grok FINDINGS: 1 · suites: offline 3975/0 · with-DB 4859/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 13 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 148149
+  - radar-direction-color: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/radar-direction-color-1007` → `541adf0c`; code tip `541adf0c`
+  - written by deploy-card.sh at 2026-10-07 12:30 ET (`date`); trial merge of the heads onto main in order: clean
+
+DEPLOYED deploy-2026-10-07-radar-direction-color-attempt2 8c91922b | set: none | migrations: none | gate: offline 3975/0 · with-DB 4859/0 · live-note 146/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 200237
