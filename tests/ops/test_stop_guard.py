@@ -612,3 +612,35 @@ def test_g5_a_count_file_out_of_range_fails_open(tmp_path):
     d.owed("OWED: rebuild x")
     d.count.write_text("7\n")
     unguarded(d.run(active=True))
+
+
+@pytest.mark.parametrize(
+    "block",
+    [("OWED: ",), ("OWED: a | waiting on Dejan", "OWED: ")],
+    ids=["alone", "after-an-item"],
+)
+def test_check_o1_an_empty_item_line_fails_open(tmp_path, block):
+    d = Desk(tmp_path)
+    d.owed(*block)
+    unguarded(d.run())
+
+
+def test_g3_a_relative_path_cannot_match_an_unrelated_watch(tmp_path):
+    d = Desk(tmp_path)
+    watched = tmp_path / "elsewhere" / "x-job-build.md"
+    d.owed("OWED: watch x | live: watch x-job-build.md")
+    p = watcher(tmp_path, watched)
+    try:
+        r = d.run()
+    finally:
+        os.killpg(p.pid, signal.SIGKILL)
+        p.wait()
+    assert (r.returncode, r.stderr) == (2, "start it: watch x\n")
+
+
+def test_g5_a_bare_empty_item_fails_open(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED: ")
+    r = d.run()
+    assert r.returncode == 0, r
+    assert r.stderr.startswith(UNGUARDED) and r.stderr.count("\n") == 1, r.stderr
