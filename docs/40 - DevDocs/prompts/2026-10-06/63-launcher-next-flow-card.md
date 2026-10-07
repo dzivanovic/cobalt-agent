@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/next-flow-answer-2026-10-05.md 2026-10-05 R438
 BRANCH: ops/launcher-next-flow-1006
 WORKTREE: launcher-next-flow-1006
 BASE: 8e33fdc4
-TIP:
+TIP: 055018c0
 REPORT: /Users/cobalt/cobalt-wt/launcher-next-flow-1006/docs/40 - DevDocs/reports/launcher-next-flow-build-2026-10-06.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-next-flow-check-2026-10-06.md
+HOUSE B: as needed
 RULINGS: 2026-10-06 R588
 DB: none
 
