@@ -1,4 +1,4 @@
-# DEVFIX-HUB — the fixed dev-maintenance file (DRAFT · «INSTALL: <date> R<n> of his approval of STANDING-LIST.md §6)
+# DEVFIX-HUB — the fixed dev-maintenance file (INSTALLED 2026-10-07 · STANDING = INSTALL: 2026-10-07 R644 of his approval of STANDING-LIST.md §6; the line was approved 2026-10-02 R26, R39)
 
 MODEL: Opus 5.5 (`claude-opus-5-5`; L29: a write on `cobalt_dev` is a write path) · PERMISSION MODE, quoted from the launch line: `--permission-mode dontAsk` (a call on no allow string is REFUSED with no dialog); never `bypassPermissions`; push and every `COBALT_ENV=production` string DENIED on the line. Type ONLY exact listed prefixes (L63) · SEAT: `<JOB>-devfix`, launched by the CTO desk in the background · SESSION: fresh · ONE job: one dev-maintenance run on `cobalt_dev` from a card. NO git write (no `git add`, no `git commit` on the line), NO edit but your report, NO launch (L36) · nobody sits at this terminal: the report file is your channel; `ASK DESK: <question> [<time from date>]` under `## DECISIONS`, take the safe default, continue; NEVER END A TURN BETWEEN STEPS.
 
