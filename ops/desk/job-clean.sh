@@ -15,8 +15,9 @@
 #     (or detached), merged into main, ahead of main (and each commit), status lines, .env, locked,
 #     git operation in progress, ignored paths (ignored files are not saved).
 #   - Then REFUSED (exit 1, nothing changed) when: .env is there (the cobalt_dev lock, L76); the tree is
-#     locked; a rebase, merge, cherry-pick, revert or bisect is in progress; the wip branch below already
-#     exists or is not a valid branch name.
+#     locked; a rebase, merge, cherry-pick, revert or bisect is in progress; an index entry is marked
+#     skip-worktree or assume-unchanged (status cannot see its edits); the wip branch below already
+#     exists or is not a valid branch name. Untracked files count even when the config hides them.
 #   - A dirty tree, or a detached HEAD not on main: `switch -c wip/<worktree>-salvage-<YYYYMMDD>` (it carries
 #     the changes), then `add -A` and `commit` when the tree is dirty; then `SALVAGED: <wip> <n> files <m>
 #     commits ahead`. A clean tree on an unmerged branch prints `SALVAGED: <branch> 0 files <m> commits ahead`.
@@ -75,11 +76,15 @@ salvage() {
     esac
     ahead=$(git -C "$path" rev-list --count main..HEAD) || refuse "rev-list failed for $path"
     commits=$(git -C "$path" log --format='%H %s' main..HEAD) || refuse "log failed for $path"
-    status=$(git -C "$path" status --porcelain) || refuse "status failed for $path"
+    # -unormal: a status.showUntrackedFiles=no config must not hide an untracked file (check O1)
+    status=$(git -C "$path" status --porcelain -unormal) || refuse "status failed for $path"
     n=0
     [ -z "$status" ] || n=$(printf '%s\n' "$status" | wc -l | tr -d ' ')
     ignored=$(git -C "$path" status --porcelain --ignored) || refuse "status --ignored failed for $path"
     ignored=$(printf '%s\n' "$ignored" | awk '/^!! / { k++ } END { print k + 0 }')
+    # index entries status never shows: skip-worktree (S) or assume-unchanged (lower case) (check O2)
+    hidden=$(git -C "$path" ls-files -v) || refuse "ls-files failed for $path"
+    hidden=$(printf '%s\n' "$hidden" | awk '/^(S|[a-z]) / { k++ } END { print k + 0 }')
     env=no
     if [ -e "$path/.env" ] || [ -L "$path/.env" ]; then env=yes; fi
     ops=""
@@ -109,6 +114,7 @@ salvage() {
     [ "$env" = no ] || refuse "$path/.env exists: the job holds the cobalt_dev lock (L76)"
     [ "$locked" = no ] || refuse "$path is locked (git worktree lock)"
     [ -z "$ops" ] || refuse "$path has a git operation in progress: $ops"
+    [ "$hidden" -eq 0 ] || refuse "$path has $hidden index entries hidden from status (skip-worktree or assume-unchanged)"
     wip=""
     if [ "$n" -gt 0 ] || { [ "$detached" = yes ] && [ "$merged" = no ]; }; then
         D=$(date +%Y%m%d)
@@ -121,7 +127,7 @@ salvage() {
     if [ -n "$wip" ]; then
         if [ "$detached" = yes ]; then on="(detached at $(printf '%.8s' "$head"))"; else on=$b; fi
         printf 'RUN: git -C %s switch -c %s\n' "$path" "$wip"
-        git -C "$path" switch -q -c "$wip" || refuse "salvage stopped at switch; nothing removed; the tree is on $on"
+        git -C "$path" switch -c "$wip" || refuse "salvage stopped at switch; nothing removed; the tree is on $on"
         if [ "$n" -gt 0 ]; then
             printf 'RUN: git -C %s add -A\n' "$path"
             git -C "$path" add -A || refuse "salvage stopped at add; nothing removed; the tree is on $wip"
@@ -139,14 +145,19 @@ salvage() {
     git -C "$REPO" worktree remove "$path" || refuse "worktree remove failed; every branch is kept"
     deleted=none
     kept=""
+    failed=no
     if [ -n "$b" ]; then
         if git -C "$REPO" merge-base --is-ancestor "refs/heads/$b" main; then
             printf 'RUN: git -C %s branch -d %s\n' "$REPO" "$b"
-            git -C "$REPO" branch -d "$b" >&2 || {
-                printf 'job-clean salvage: removed %s; branch -d %s FAILED; kept %s\n' "$path" "$b" "${wip:-none}"
-                exit 1
-            }
-            deleted=$b
+            if git -C "$REPO" branch -d "$b" >&2; then
+                deleted=$b
+            else
+                # the last line still names every branch kept (check A1)
+                printf 'kept: %s (branch -d failed)\n' "$b"
+                printf 'job-clean salvage: branch -d %s failed; it is kept\n' "$b" >&2
+                kept=$b
+                failed=yes
+            fi
         else
             printf 'kept: %s (not merged)\n' "$b"
             kept=$b
@@ -157,6 +168,7 @@ salvage() {
         kept="${kept:+$kept }$wip"
     fi
     printf 'job-clean salvage: removed %s; deleted %s; kept %s\n' "$path" "$deleted" "${kept:-none}"
+    [ "$failed" = no ] || exit 1
     exit 0
 }
 
