@@ -1378,6 +1378,20 @@ def _terminal_legs(card: CardView) -> str:
             f'the price</span>{rows}<div class="card-status" data-card-id="{card.id}"></div></div>')
 
 
+#: R625: the strip and the title say long or short by colour. Any other value is
+#: marked unknown, never guessed (a row with no direction already fails loud).
+_DIRECTION_MARK = {"long": ("dir-long", "↑"), "short": ("dir-short", "↓")}
+_DIRECTION_UNKNOWN = ("dir-unknown", "direction ?")
+
+
+def _direction_mark(card: CardView) -> tuple[str, str]:
+    """The card's direction class and its arrow span, read by the strip and the title."""
+    known = isinstance(card.direction, str) and card.direction in _DIRECTION_MARK
+    css, arrow = _DIRECTION_MARK[card.direction] if known else _DIRECTION_UNKNOWN
+    word = card.direction if known else "unknown"
+    return css, f'<span class="direction {word}">{arrow}</span>'
+
+
 def _card_detail(card: CardView, *, stale: str | None = None) -> str:
     e = html.escape
     stale_badge = _bars_stale_badge(stale)
@@ -1417,10 +1431,11 @@ def _card_detail(card: CardView, *, stale: str | None = None) -> str:
     outside = '<span class="outside-pool">OUTSIDE POOL</span>' if card.outside_pool else ""
     chip = "—" if card.card_score is None else str(card.card_score)
     rank = "—" if card.rank_chip is None else f"#{card.rank_chip}"
+    dir_class, dir_arrow = _direction_mark(card)
     return f'''<div class="expanded" data-state="{e(card.display_state)}">
 <div class="card-pane">
- <div class="card-title"><span class="rank-chip">{rank} · {chip}</span><strong>{e(card.ticker)}</strong>
- <span class="direction {card.direction}">{"↑" if card.direction == "long" else "↓"}</span>
+ <div class="card-title {dir_class}"><span class="rank-chip">{rank} · {chip}</span><strong>{e(card.ticker)}</strong>
+ {dir_arrow}
  <span>{e(card.setup)} → {e(card.trade)}</span>{outside}</div>
  <p class="why-line">{_field(card, "why", "why", card.why)}</p>
  <div class="semaphore">{dots}</div>
@@ -1462,10 +1477,11 @@ def render_ladder(view: LadderView, *, bars_stale: dict[str, str] | None = None)
                 )
             score = "—" if card.card_score is None else str(card.card_score)
             stale = bars_stale.get(card.ticker)
+            dir_class, dir_arrow = _direction_mark(card)
             rows.append(
                 f'<article class="ladder-item{open_class}" data-card-id="{card.id}">'
-                f'<button class="strip" type="button" data-toggle-card="{card.id}"><span>#{index} · {score}</span>'
-                f"<b>{e(card.ticker)}{_bars_stale_badge(stale)}</b><span>{e(card.setup)} → {e(card.trade)}</span>"
+                f'<button class="strip {dir_class}" type="button" data-toggle-card="{card.id}"><span>#{index} · {score}</span>'
+                f"<b>{e(card.ticker)}{_bars_stale_badge(stale)}</b><span>{dir_arrow} {e(card.setup)} → {e(card.trade)}</span>"
                 f"<span>{e(card.display_state)} · {e(card.grade or 'no key')} · "
                 f"{card.shares if card.shares is not None else '—'} sh · stop {e(str(card.stop))}</span></button>"
                 f"{_card_detail(card, stale=stale)}{promote}</article>"
@@ -1495,6 +1511,7 @@ def render_ladder(view: LadderView, *, bars_stale: dict[str, str] | None = None)
 PANEL_CSS = r"""
 :root{color-scheme:dark;--surface:#0d1117;--card:#11151c;--border:#1f2531;--text:#e6e9ef;--muted:#7d8595;--blue:#4f8dff;--amber:#d9a24a;--green:#35c77a;--red:#ef5b6b}
 *{box-sizing:border-box}body{margin:0;background:var(--surface);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.radar-wrap{max-width:1440px;margin:auto;padding:20px}a{color:var(--blue)}h2{margin:3px 0}.eyebrow,.mono,.rank-chip,.ticker,button,th{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em}.eyebrow,.muted,.pool-meta,.override-line{color:var(--muted);font-size:12px}.layer-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:18px 0}.pool-stats{text-align:right}.panel-banner,.refresh-failure{padding:10px 12px;border:1px solid var(--red);background:#351019;color:#ffd0d6;border-radius:7px;margin:7px 0}.retained{border-color:var(--amber);background:#2d2412}.stale-data{outline:2px solid var(--red);outline-offset:5px}.refresh-failed{opacity:.65}table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--border)}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--border);font-size:12px}.ticker{font-weight:800;font-size:15px}.count,.churn-in{color:var(--green)}.churn-out{color:var(--red)}details{margin:12px 0}summary{cursor:pointer;color:#aeb5c2}.ladder-actions button,.strip,.promote,.dot,.key,.tap{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:7px}.ladder-actions button{padding:8px;margin-left:7px}.ladder-item{position:relative;margin:8px 0}.strip{width:100%;height:52px;padding:0 18px;display:grid;grid-template-columns:110px 90px 1fr auto;gap:12px;align-items:center;text-align:left}.expanded{display:none;grid-template-columns:minmax(520px,1fr) minmax(360px,1fr);gap:18px;border:1px solid var(--blue);border-top:0;padding:12px;background:#0b0f15}.ladder-item.open .expanded{display:grid}.card-pane,.detail-pane{background:var(--card);border:1px solid var(--border);padding:18px}.card-title{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.card-title strong{font:800 28px ui-monospace,SFMono-Regular,Menlo,monospace}.direction.long{color:var(--green)}.direction.short{color:var(--red)}.rank-chip{border:1px solid var(--border);padding:4px}.badge{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--blue);padding:1px 3px;color:var(--blue);border-radius:3px}.badge-you{color:var(--amber);border-color:var(--amber)}.badge-ledger{color:var(--muted);border-color:var(--muted)}.why-line{color:#aeb5c2}.semaphore,.health-line{display:flex;gap:7px;align-items:flex-start;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--border)}.dot-cell{display:flex;flex-direction:column;gap:4px;max-width:260px}.dot{min-height:34px}.dot.hollow{background:transparent;border-style:dashed}.dot.filled.colour-0{background:#3a1119;border-color:var(--red)}.dot.filled.colour-1{background:#2d2412;border-color:var(--amber)}.dot.filled.colour-2{background:#0f2a1c;border-color:var(--green)}.dot.hollow.colour-0{border-color:var(--red)}.dot.hollow.colour-1{border-color:var(--amber)}.dot.hollow.colour-2{border-color:var(--green)}.dot-why{font-size:11px;color:var(--muted)}.tap-strip{display:grid;grid-template-columns:repeat(10,1fr);gap:3px}.tap-strip[hidden]{display:none}.tap{min-height:36px;min-width:30px}.key-row{display:flex;gap:6px;flex-wrap:wrap;padding:10px 0}.key{min-height:44px;padding:0 12px}.key-disabled{opacity:.45}.key-proposed{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue)}.key-sized{border-color:var(--green)}.key-row.frozen{color:var(--muted)}.snap-notice{border:1px solid var(--amber);background:#2d2412;color:#ffe2b0;padding:8px;border-radius:6px;font-weight:700}.suppressed{color:var(--muted);font-size:12px;padding:4px 0}.card-status{font-size:12px;min-height:16px}.card-status.refused{color:var(--red);font-weight:700}.card-status.ok{color:var(--green)}.outside-pool{border:1px solid var(--amber);color:var(--amber);padding:2px 6px;font:11px ui-monospace,SFMono-Regular,Menlo,monospace}.rung-line{font-size:12px;color:var(--muted)}.fields{display:grid;grid-template-columns:1fr;gap:4px}.field{font-size:12px;color:var(--muted)}.field b{color:var(--text)}.health{padding:4px 7px;border-radius:10px;font-size:11px}.health.ok{color:var(--green);border:1px solid var(--green)}.health.warn{color:var(--amber);border:1px solid var(--amber)}.health.bad{color:var(--red);border:1px solid var(--red)}.health.n-a{color:var(--muted);border:1px dashed var(--red)}.state-block{padding:14px 0}.trigger-distance{font:700 24px ui-monospace,SFMono-Regular,Menlo,monospace;padding:12px 0}.triggered-state{border:1px solid var(--green);padding:18px}.strike-numbers{display:flex;gap:24px;font:800 24px ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:12px}.detail-pane h4,.terminal h4{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);letter-spacing:.12em}.promote{position:absolute;right:-2px;top:55px;min-height:44px}.terminal{margin-top:24px}.terminal-row{height:52px;opacity:.55;border:1px solid var(--border);background:var(--card);display:grid;grid-template-columns:100px 100px 1fr auto;align-items:center;padding:0 18px;margin:6px 0}.empty-state{border:1px dashed var(--border);padding:28px;color:var(--muted)}
+.strip.dir-long{background:#0f2a1c;border-color:var(--green)}.strip.dir-short{background:#3a1119;border-color:var(--red)}.card-title.dir-long{color:var(--green)}.card-title.dir-short{color:var(--red)}
 @media (max-width:1149px){.expanded{grid-template-columns:1fr}.detail-pane{grid-row:2}}
 @media (max-width:700px){.strip{grid-template-columns:75px 70px 1fr}.strip span:nth-child(4){display:none}.radar-wrap{padding:10px}.pool-stats{text-align:left}.layer-head{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto}}
 @media (max-width:430px){body,.phone-frame{width:100%}.radar-wrap{width:366px;max-width:100%;padding:8px}.expanded{padding:5px}.card-pane,.detail-pane{padding:11px}.card-title strong{font-size:24px}.strip{padding:0 8px}.terminal-row{grid-template-columns:75px 65px 1fr}.terminal-row time{display:none}}

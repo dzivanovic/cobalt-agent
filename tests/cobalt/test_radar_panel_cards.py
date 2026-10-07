@@ -392,8 +392,9 @@ def test_card_panel_escapes_why_and_notices(evaluated):
 # GOLDEN PINS captured on main's code (`5b208a0`), GREEN there — from then on a GUARD.
 # LADDER pin re-captured 2026-09-23 on setups/seven-0921 (b007ce2e): the setups ladder change adds the assumed_formation dot (R2-2 = B); healthy bars still add nothing (seam-fix-build-2026-09-23.md D3).
 # LADDER pin re-captured 2026-09-28 on s3/exits-c3 (was 0ac9b5d0…): C3 adds the TRIGGERED tap (ARMED), the FILLED @ / PASS taps (TRIGGERED) and the IN-TRADE block over the constructed POSITION; healthy bars still add nothing (s3-exits-c3-build-2026-09-28.md E3).
+# LADDER pin re-captured 2026-10-07 on ops/radar-direction-color-1007 (was b018e70e…): R625 adds the strip and title direction class and the strip arrow; healthy bars still add nothing.
 PIN_HEALTHY_POOL_SHA256 = "f2e79add6bc4d4286b381154b071b04ec9e7887467ffd15b0f499e9d62181552"
-PIN_HEALTHY_LADDER_SHA256 = "b018e70e9e221ce2ada3bc608103a9e8de3013f101e86c90d49010f79f4d9183"
+PIN_HEALTHY_LADDER_SHA256 = "b3174d308594f6325c225260d988fa563093a70db4387057fd63101a1b53c92e"
 PIN_HEALTHY_API_SHA256 = "450b3415c2346c8b13b53932c5175f56ee6af78877ca9fc8086ca824601c5462"
 
 # Tonight's `mirrorDegraded` line, byte for byte as main has it (`radar_panel.py:1127`).
@@ -655,6 +656,204 @@ def test_bars_stale_follows_the_refreshed_pool_fragment_and_never_moves_the_ladd
         assert forbidden not in body, forbidden
     assert "window.setInterval(refreshPool,interval)" in js
     assert MIRROR_DEGRADED_LINE in js
+
+
+# ---------------------------------------------------------------------
+# R625 2026-10-07: the strip and the title say long or short by colour
+# ---------------------------------------------------------------------
+
+ARROW = {"long": "↑", "short": "↓"}
+
+#: Card 89 row B, byte for byte: the existing tokens and the dots' existing fills.
+DIRECTION_CSS = (
+    ".strip.dir-long{background:#0f2a1c;border-color:var(--green)}"
+    ".strip.dir-short{background:#3a1119;border-color:var(--red)}"
+    ".card-title.dir-long{color:var(--green)}"
+    ".card-title.dir-short{color:var(--red)}"
+)
+#: `PANEL_CSS` lines at BASE d2b53d6d (`radar_panel.py:1496`, `:1498`–`:1501`), quoted.
+BASE_ROOT_LINE = (
+    ":root{color-scheme:dark;--surface:#0d1117;--card:#11151c;--border:#1f2531;--text:#e6e9ef;--muted:#7d8595;"
+    "--blue:#4f8dff;--amber:#d9a24a;--green:#35c77a;--red:#ef5b6b}"
+)
+BASE_MEDIA_LINES = (
+    "@media (max-width:1149px){.expanded{grid-template-columns:1fr}.detail-pane{grid-row:2}}",
+    "@media (max-width:700px){.strip{grid-template-columns:75px 70px 1fr}.strip span:nth-child(4){display:none}"
+    ".radar-wrap{padding:10px}.pool-stats{text-align:left}.layer-head{align-items:flex-start;flex-direction:column}"
+    "table{display:block;overflow-x:auto}}",
+    "@media (max-width:430px){body,.phone-frame{width:100%}.radar-wrap{width:366px;max-width:100%;padding:8px}"
+    ".expanded{padding:5px}.card-pane,.detail-pane{padding:11px}.card-title strong{font-size:24px}"
+    ".strip{padding:0 8px}.terminal-row{grid-template-columns:75px 65px 1fr}.terminal-row time{display:none}}",
+)
+BASE_PHONE_LINE = (
+    ".phone-frame{width:390px;margin:auto;border:12px solid #05070a;border-radius:26px}"
+    ".phone-frame .radar-wrap{width:366px;padding:8px}"
+)
+
+
+def _directed(rows, direction):
+    rows = copy.deepcopy(rows)
+    for row in rows:
+        row["direction"] = direction
+    return rows
+
+
+def _ladder_articles(page):
+    ladder = page[page.index('id="ladder-layer"') : page.index('id="pool-layer"')]
+    return dict(re.findall(r'<article class="ladder-item[^"]*" data-card-id="(\d+)">(.*?)</article>', ladder, re.S))
+
+
+def _strip_and_title(body):
+    strip = re.search(r'<button class="strip[^"]*".*?</button>', body, re.S).group(0)
+    title = re.search(r'<div class="card-title[^"]*">.*?</div>', body, re.S).group(0)
+    return strip, title
+
+
+@pytest.mark.parametrize("phone_frame", [False, True])
+@pytest.mark.parametrize("direction", ["long", "short"])
+def test_radar_direction_strip_and_title_carry_the_direction_class_and_arrow(evaluated, direction, phone_frame):
+    ladder_view = _ladder(_directed(evaluated["rows"], direction))
+    healthy, _ = pool_tests._build()
+    page = _page(healthy.pool, ladder_view, phone_frame)
+    articles = _ladder_articles(page)
+    assert len(ladder_view.active) == 4 and sorted(articles) == sorted(str(c.id) for c in ladder_view.active)
+    arrow = ARROW[direction]
+    for card in ladder_view.active:
+        assert card.direction == direction
+        strip, title = _strip_and_title(articles[str(card.id)])
+        assert strip.startswith(f'<button class="strip dir-{direction}" type="button"'), strip
+        # mirrorStale reads `.strip b`'s first text node: the ticker stays the `<b>`'s first child;
+        # the arrow opens the THIRD span, and the strip keeps its four children.
+        assert re.match(
+            rf'<button class="strip dir-{direction}" type="button" data-toggle-card="{card.id}">'
+            rf"<span>#\d+ · [^<]*</span><b>{re.escape(card.ticker)}</b>"
+            rf'<span><span class="direction {direction}">{arrow}</span> '
+            rf"{re.escape(html.escape(card.setup))} → {re.escape(html.escape(card.trade))}</span>"
+            r"<span>[^<]*</span></button>$",
+            strip,
+        ), strip
+        assert title.startswith(f'<div class="card-title dir-{direction}">'), title
+        assert f'<span class="direction {direction}">{arrow}</span>' in title
+        assert ARROW["short" if direction == "long" else "long"] not in strip + title
+
+
+def test_radar_unknown_direction_is_marked_never_guessed(evaluated):
+    card = _ladder(evaluated["rows"]).active[0].model_copy(update={"direction": None})
+    assert card.direction is None
+    rendered = panel.render_ladder(panel.LadderView(active=[card], terminal=[], empty_message=None))
+    body = re.search(r'<article class="ladder-item[^"]*" data-card-id="\d+">(.*?)</article>', rendered, re.S).group(1)
+    strip, title = _strip_and_title(body)
+    for part in (title, strip):
+        assert "↑" not in part and "↓" not in part, part  # never a guessed direction
+        assert "dir-long" not in part and "dir-short" not in part, part
+        assert "dir-unknown" in part and "direction ?" in part, part
+    assert strip.startswith('<button class="strip dir-unknown" type="button"'), strip
+    assert '<span><span class="direction unknown">direction ?</span> ' in strip
+    assert title.startswith('<div class="card-title dir-unknown">'), title
+    assert '<span class="direction unknown">direction ?</span>' in title
+
+
+@pytest.mark.parametrize("direction", [None, "sideways"])
+def test_radar_row_without_a_valid_direction_still_fails_loud(evaluated, direction):
+    """CONTROL (card 89 row A): no neutral card is ever built from a row; the row still fails loud."""
+    rows = copy.deepcopy(evaluated["rows"])
+    rows[0]["direction"] = direction
+    with pytest.raises(panel.RadarPanelError, match="FAILED: invalid radar card row"):
+        _ladder(rows)
+
+
+def test_radar_direction_tint_reuses_existing_colours():
+    lines = panel.PANEL_CSS.splitlines()
+    assert DIRECTION_CSS in lines
+    at = lines.index(DIRECTION_CSS)
+    assert lines[at - 1].startswith("*{box-sizing:border-box}") and lines[at + 1] == BASE_MEDIA_LINES[0]
+    rest = "\n".join(lines[:at] + lines[at + 1 :])
+    colours = re.findall(r"#[0-9a-fA-F]{6}\b", DIRECTION_CSS)
+    assert colours == ["#0f2a1c", "#3a1119"]
+    for colour in colours:
+        assert colour in rest, colour
+    assert "dir-unknown" not in panel.PANEL_CSS
+    assert BASE_ROOT_LINE in lines and BASE_PHONE_LINE in lines
+    for line in BASE_MEDIA_LINES:
+        assert line in lines, line
+
+
+def _expanded_without_direction(body):
+    """The `expanded` block minus its title and the three fields that differ by direction by design."""
+    block = body[body.index('<div class="expanded"') : body.index("</aside></div>") + len("</aside></div>")]
+    block, titles = re.subn(r'<div class="card-title[^"]*">.*?</div>', "", block, count=1, flags=re.S)
+    block, levels = re.subn(r'<span class="field">[12]R <b>[^<]*</b></span>', "", block)
+    block, fields = re.subn(
+        r'<span class="field" data-field="direction">direction <span class="badge[^"]*">[^<]*</span> '
+        r"<b>(?:long|short)</b></span>",
+        "",
+        block,
+    )
+    block, running = re.subn(r'(<div class="running"><b>[^<]*</b> · )(?:long|short)( · )', r"\1\2", block)
+    # The same 1R / 2R targets (`:908`, by the sign) print again in the IN-TRADE head (`:1351`).
+    block, exits = re.subn(r"(<b>IN-TRADE</b> · stop [^<]* · next exits )[^<]* / [^<]*(</div>)", r"\1\2", block)
+    assert (titles, levels, fields) == (1, 2, 1) and running in (0, 1) and exits == running
+    return block, running
+
+
+@pytest.mark.parametrize("phone_frame", [False, True])
+def test_radar_direction_touches_only_strip_and_title(evaluated, phone_frame):
+    healthy, _ = pool_tests._build()
+    ladder_view = _ladder(evaluated["rows"])
+    page = _page(healthy.pool, ladder_view, phone_frame)
+    articles = _ladder_articles(page)
+    for body in articles.values():
+        assert body.count("dir-") == 2, body.count("dir-")
+        assert re.findall(r'class="([^"]*)dir-', body) == ["strip ", "card-title "]
+    ladder = page[page.index('id="ladder-layer"') : page.index('id="pool-layer"')]
+    assert ladder.count("dir-") == 2 * len(ladder_view.active)
+    assert "dir-" not in ladder[ladder.index('class="terminal"') :]
+
+    renders = {}
+    for direction in ("long", "short"):
+        view = _ladder(_directed(evaluated["rows"], direction))
+        assert {c.state for c in view.active} == {CardState.WATCH, CardState.ARMED, CardState.TRIGGERED,
+                                                  CardState.FILLED}
+        renders[direction] = (view, _ladder_articles(_page(healthy.pool, view, phone_frame)))
+    (long_view, long_articles), (short_view, short_articles) = renders["long"], renders["short"]
+    assert sorted(long_articles) == sorted(short_articles)
+    fills = 0
+    for card_id in long_articles:
+        long_block, long_running = _expanded_without_direction(long_articles[card_id])
+        short_block, short_running = _expanded_without_direction(short_articles[card_id])
+        assert long_block == short_block, card_id
+        assert long_running == short_running
+        fills += long_running
+    assert fills == 1  # the FILLED card's IN-TRADE running line
+    watch = [c for c in long_view.active if c.state is CardState.WATCH]
+    assert len(watch) == 1
+    for articles_by_id in (long_articles, short_articles):
+        block = re.search(r'<div class="state-block watch-state">.*?</div>', articles_by_id[str(watch[0].id)]).group(0)
+        assert re.fullmatch(
+            r'<div class="state-block watch-state"><b>WATCH</b> · proposed key [^<]+ · trigger [^<]+ · stop [^<]+</div>',
+            block,
+        ), block
+
+
+@pytest.mark.parametrize("direction", [[], {}])
+def test_radar_any_other_direction_is_marked_never_guessed(evaluated, direction):
+    card = _ladder(evaluated["rows"]).active[0].model_copy(
+        update={"direction": direction}
+    )
+    rendered = panel.render_ladder(
+        panel.LadderView(active=[card], terminal=[], empty_message=None)
+    )
+    body = re.search(
+        r'<article class="ladder-item[^"]*" data-card-id="\d+">(.*?)</article>',
+        rendered,
+        re.S,
+    ).group(1)
+    strip, title = _strip_and_title(body)
+    for part in (strip, title):
+        assert "dir-unknown" in part
+        assert "direction ?" in part
+        assert "dir-long" not in part and "dir-short" not in part
+        assert "↑" not in part and "↓" not in part
 
 
 # ---------------------------------------------------------------------
