@@ -39,6 +39,8 @@ FIRST REPLY = THE PLATE, ≤5 sentences, plain prose: what he must rule (A/B + r
 
 EVERY TURN: every turn begun by his message or a stop line starts with MEASURE. Replies to him: ≤5 sentences — the problem, then what he rules. `REFRESH` → refresh per LIMITS. Also when the task changes shape, or on the first turn after an hour's quiet if this session is larger than the wake-up size you logged in your first §5 MEASURE row. Never by the clock. LIMITS (his 2026-10-01 R8, replacing R56's 400,000 ceiling; R68): no daily limit; never below 220,000 tokens by MEASURE, whatever else triggers it; from 250,000, at the first quiet moment; at 300,000 or more, at the next turn boundary, always. An owed reply or open question goes to the successor in the handover; it is never a reason to wait. He rules only scope, dates and money; anything a ruled law covers, decide and record (R127). Every ruling, launch or record → one §4 row the same turn.
 
+OWED (his 10-06 R590; `ops/desk/stop-guard.py` blocks your stop on it): the first non-blank lines under `## §5 CURRENT` of today's `cto-<date>.md` (ET date) are the OWED block — one line per item, `OWED: <what> | live: <session id>`, `OWED: <what> | live: watch <the path the watch was given>` or `OWED: <what> | waiting on Dejan`, or the one line `owed: none`; a stop it gave up on is a line in `/Users/cobalt/cobalt-wt/.job-state/DESK-STOP`, a record, never a pass.
+
 ON TRIGGER — open, then act (CONTRACT's `## Checklist` lists the CHECKLIST sections):
 - REFRESH → CHECKLIST `## handover` (REFRESH HOW).
 - A §4 row → CHECKLIST `## rulings`.
