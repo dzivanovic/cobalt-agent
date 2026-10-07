@@ -799,6 +799,34 @@ OFF-LADDER work of 2026-10-05 (ruled, not on a ladder line; each with the ruling
 | Next-flow changes 1–4 | QUEUED | 10-05 R438 (his): only after K3, P2, D5 DEPLOYED. |
 | Standing rules of the day | RULED | 10-05 R347–R350, R368, R375, R376, R384, R387, R389, R390, R412, R437 (his; applied in LAWS / contract / hubs, R346, R353). |
 
+### Status 2026-10-06
+S3 status block (ruled 09-19 R14); S3's seventh; the earlier `### Status` blocks above stay as written. Written by close hub `close-1006` for 10-06 alone from `reports/cto-2026-10-06.md` rows R481–R609 (10-06 00:08 → 21:36 ET); re-verified against the tree (L35): `git tag --list "deploy-2026-10-06*"` = `-drc-d5-o1-b2-attempt2`, `-flake-fix`, `-flake-fix-2`, `-guard-g2`, `-launcher-next-flow`, `-next-flow`, `-radar-ladder-refresh`; `deploy-2026-10-05-d5` and `deploy-2026-10-05-p2-attempt2` exist (the P2 deploy `1b1d298e` ran 00:42 ET 10-06, R482). Status only — scope, dates and order change by his ruling alone. Legend: DONE-LIVE · DONE-DARK · BUILT-NOT-MERGED · BUILDING · NOT STARTED.
+
+| S3 feature | Status | Evidence |
+|---|---|---|
+| F11 Fill recompute + fill/exit capture | DONE-LIVE | Unchanged (`deploy-2026-09-30-2`, `-3`). First live-morning proof not recorded. |
+| F22 Trade-note auto-creation | DONE-LIVE | Unchanged (`deploy-2026-09-30-2`, `-3`, `-4`). |
+| F14 DRC prefill / reconcile / DRC→mode | DONE-LIVE | K3 `07a4b8fe` (10-05, R471); D5 `c8503415` (tag `deploy-2026-10-05-d5`, R482); card 39 (D5 O1 + B2 + O2) `9a29f61e`, tag `deploy-2026-10-06-drc-d5-o1-b2-attempt2`, smoke GREEN (R555); first deploy try FAILED at the merge (R553), recut attempt FAILED resume (R554). Open to him: D5-3 rule question (A1/B1, R544, R547). |
+| F15 Prediction records | DONE-LIVE | P1 live. P2 DEPLOYED main `1b1d298e`, tag `deploy-2026-10-05-p2-attempt2`, smoke GREEN (R482); attempt 1 FAILED PREFLIGHT. |
+| S3 smoke (live morning, tap through DRC and replay) | NOT STARTED | His, tomorrow morning with one live look at `/radar` (R483, R556). |
+
+**Stop date: 2026-10-07. S3: AT RISK — day 13 of 14 (10-06).** Reason: K3, D5 (with O1, B2, O2) and P2 are all DEPLOYED and R327's "production DOWN until S3 deploys" is met (R483), but the S3 smoke has not run and is his to run in the morning of the last day; no smoke card was written (R483). One calendar day remains (10-07). Watch items (not a ruling): radar showed no ladder card to him (R559, R566, R570); the ladder-refresh fix is live (R582) and its live proof is his morning look; the X29 fixture error (`offline_skip_guard`) is UNPROVEN and owed a card of its own (R578, R579).
+
+OFF-LADDER work of 2026-10-06 (ruled, not on a ladder line; each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Next-flow (card 04) | DONE-LIVE | 10-05 R438 (his), R484. `deploy-2026-10-06-next-flow` `b52b6ff2`, smoke GREEN (R500); folded into L67 and the contract. |
+| Flake-fix (self-migrating-test deadlock) | DONE-LIVE | brain R474 order, R489. `deploy-2026-10-06-flake-fix` `433e1c7e`, smoke GREEN (R498). |
+| Flake-fix-2 (shared tests/ helper) | DONE-LIVE | R501. `deploy-2026-10-06-flake-fix-2` `cb6eddfa`, smoke GREEN (R527). |
+| Guard-g2 (`bare-guard.py` production read-only row) | DONE-LIVE | His R511 (APPLIED L62). `deploy-2026-10-06-guard-g2` `577b2c01`, smoke GREEN (R534). |
+| Radar-drought surveys r1–r3, cards-origin, page-read, screen trace | DONE (read-only) | His R508, R560, R567. Findings: production holds radar cards every day (R538); board lists today's cards only (R559); page lists them (R570). |
+| Radar ladder refresh (card 54) | DONE-LIVE | His R556. `deploy-2026-10-06-radar-ladder-refresh` `9e70c702`, smoke GREEN (R582). Live proof: his morning look. |
+| Launcher next-flow changes 6–8 (card 63) | DONE-LIVE | His R588 (L79). `deploy-2026-10-06-launcher-next-flow` `7954657a`, offline 3963/0, with-DB 4847/0, RESTARTS none, smoke GREEN (R609). |
+| Desk stop-guard (card 66) | BUILT-NOT-MERGED | His R590, R596. Build `26332d93` BUILT tip `96dad934` (R604), tree unclean after a stop before the CLOSE commit (R606); fresh build under `…-1006b` after the close (R608), then check and deploy. |
+| S4-P1 card `72`, S4-P2 card `73` | NOT STARTED (cards drafted, preflight r2 ready YES) | His R598 (draft tonight, build after the S3 smoke is green). Builds wait for his S3 smoke and D2 (Finviz rate) (R602). |
+| Desk routing by script (`desk-next.sh`) | NOT STARTED | His R596: draft after card 66 deploys. |
+| Standing rules of the day | RULED | 10-06 R587 (single-feature deploy cards by `deploy-card.sh`, APPLIED), R590 (stop-guard, APPLIED), R608 (the close runs at the first safe moment, APPLIED). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

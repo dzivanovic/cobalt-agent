@@ -3433,3 +3433,138 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - STOP LINE (L35), `reports/close-2026-10-04.md`: `CLOSE PUSHED aba43a8c · days: 1 · … · push: verified`.
 - DEPLOY (L35): `git tag --list "deploy-2026-10-05*"` = `deploy-2026-10-05-03d-attempt3`, `deploy-2026-10-05-guard-b`, `deploy-2026-10-05-hub-text`, `deploy-2026-10-05-k3-attempt3`, `deploy-2026-10-05-launcher-fixround`, `deploy-2026-10-05-preflight-fixes`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-05.md` `## 8`.
+
+### 2026-10-06 — S3 features K3, D5, P2 all deployed; next-flow, flake-fix, flake-fix-2, guard-g2, card 39, radar-ladder-refresh, launcher next-flow deployed
+- R481 10-06 00:08 DESK RECORD: day file opened; P2 deploy recut attempt 2 then launch.
+- R482 10-06 00:42 DESK RECORD: P2 DEPLOYED main `1b1d298e` (attempt 2; attempt 1 FAILED PREFLIGHT), smoke GREEN; K3, D5, P2 all DEPLOYED.
+- R483 10-06 00:43 DESK RECORD (brain): R327 "production DOWN until S3 deploys" MET; proof P2 smoke GREEN `1b1d298e`.
+- R484 10-06 00:52 DESK RECORD (brain): R438 status restored per L7a; next-flow card 04 rules (`--deploy` only on with-DB cards).
+- R485 10-06 01:27 LAUNCHED: next-flow build `88049c28` BUILT `e249bd83`; check launching; flake-fix build `c960a1ce` running.
+- R486 10-06 01:29 RECORD: desk REFRESH at 302,171 tokens; successor `b1968ff3` launched.
+- R487 10-06 01:38 RECORD: `b1968ff3` woke; `2ad47a8b` removed; NEXT-FLOW CHECK `80190ad6` launched on card 04.
+- R488 10-06 01:50 DESK RECORD (brain, R474): check `80190ad6` FAILED 1 (card 04 docs-only); relaunch `HOUSE A: none` (R47).
+- R489 10-06 02:00 RECORD: flake-fix BUILT `d1fee872`; check launched; build DECISION W open to him.
+- R490 10-06 01:55 RECORD: next-flow CHECK DONE tip `987ab80d`, ready YES; deploy-card drafter prompt `09`.
+- R491 10-06 01:58 RECORD: next-flow deploy card `09` drafted; Sonnet preflight launched.
+- R492 10-06 01:58 RECORD: next-flow deploy card preflight 20 checks, 0 fails, ready YES; waits for flake-fix deploy.
+- R493 10-06 02:16 RECORD: flake-fix check pass 1 DONE tip `f520debb`, ready NO; PASS-2 `d0965a83` launched.
+- R494 10-06 02:39 RECORD: flake-fix check pass 2 DONE `f520debb`, ready YES; deploy-card drafter prompt `11`.
+- R495 10-06 02:39 RECORD: flake-fix deploy card `11` drafted (decisions 1); preflight prompt `12`.
+- R496 10-06 02:41 RECORD: flake-fix deploy card preflight 20/0, ready YES.
+- R497 10-06 02:42 LAUNCHED: flake-fix deploy hub `077bc28a`, tag `deploy-2026-10-06-flake-fix`.
+- R498 10-06 02:50 RECORD: flake-fix DEPLOYED `433e1c7e`, smoke GREEN, no restarts; R412 hold lifted.
+- R499 10-06 02:50 LAUNCHED: next-flow deploy hub `47898867`, tag `deploy-2026-10-06-next-flow`.
+- R500 10-06 03:30 APPLIED: next-flow DEPLOYED `b52b6ff2`, smoke GREEN; R438 folded into L67 and the contract; 9 worktrees cleaned.
+- R501 10-06 06:06 DESK RECORD (brain, R474): fix the self-migrating-test deadlock; own card `flake-fix-2`.
+- R502 10-06 06:07 RECORD: flake-fix-2 build card `14` drafted (BASE `71f69821`); preflight prompt `15`.
+- R503 10-06 06:09 LAUNCHED: flake-fix-2 build on card `14` (preflight 24/0).
+- R504 10-06 06:21 RECORD: desk REFRESH at 253,127 tokens; his words 06:15: finish card 03 today, radar shows no card for a week.
+- R505 10-06 06:22 LAUNCHED: radar-drought survey drafter `radar-survey-draft`; desk `23d9137a` woke.
+- R506 10-06 06:3x LAUNCHED: radar-drought survey `radar-survey` (dev-DB read only).
+- R507 10-06 06:27 RECORD: radar-drought survey DONE, cause not found; 4 DB reads owed, open to him.
+- R508 10-06 06:29 HIS RULING: radar-drought survey may run its four read-only DB queries, production read included. APPROVED.
+- R509 10-06 06:33 RECORD: survey round 2 DONE, cause not found; guard `bare-guard.py` refuses every prod read.
+- R510 10-06 06:36 RECORD: brain: no admitted route to prod reads; a guard row needs his word. Open to him.
+- R511 10-06 06:37 HIS RULING: add G2 row to `bare-guard.py` (production read-only `db query` for a seat citing an APPROVED HIS RULING row). APPROVED; APPLIED L62 09:25.
+- R512 10-06 06:39 RECORD: guard-g2 card `21` drafted (decisions 2), BASE `3c257bb9`; preflight prompt `22`.
+- R513 10-06 06:42 RECORD: guard-g2 preflight 25 checks, 3 fails, ready NO; brain asked for one proof design.
+- R514 10-06 06:43 DESK RECORD (brain, under R511): proof design (a), launcher stamps `PROD-READ: <date> R<n>`.
+- R515 10-06 06:45 RECORD: guard-g2 card amended; its R2 refuses the `--prod` the query needs.
+- R516 10-06 06:57 LAUNCHED: flake-fix-2 check (both houses) after BUILT tip `fb3117c3`.
+- R517 10-06 06:59 DESK RECORD (brain, under R511): guard-g2 R2(ii) allows exactly one production flag.
+- R518 10-06 07:00 RECORD: guard-g2 card amended twice (decisions 3).
+- R519 10-06 07:04 RECORD: guard-g2 preflight 2: 34 checks, 5 fails, ready NO.
+- R520 10-06 07:06 RECORD: guard-g2 card amended a third time (decisions 2).
+- R521 10-06 07:08 RECORD: guard-g2 preflight 3: 27 checks, 1 fail, ready NO.
+- R522 10-06 07:11 RECORD: guard-g2 card amended a fourth time (4h fix); preflight 4 prompt `29`.
+- R523 10-06 07:12 LAUNCHED: guard-g2 build on card `21` (preflight 4: 9/0), branch `ops/guard-g2-1006`, BASE `3c257bb9`.
+- R524 10-06 07:44 RECORD: flake-fix-2 CHECK DONE tip `1a52ad0d`, ready YES; deploy-card drafter prompt `30`.
+- R525 10-06 07:46 RECORD: flake-fix-2 deploy card `31` drafted (decisions 0); preflight prompt `32`.
+- R526 10-06 07:47 LAUNCHED: flake-fix-2 deploy hub, tag `deploy-2026-10-06-flake-fix-2`, tip `1a52ad0d` (preflight 29/0).
+- R527 10-06 07:58 RECORD: flake-fix-2 DEPLOYED `cb6eddfa`, smoke GREEN; heartbeat RED `GeneratedCommitRefused` to recheck.
+- R528 10-06 08:02 LAUNCHED: guard-g2 check after BUILT tip `ce19a3fd`.
+- R529 10-06 08:39 RECORD: guard-g2 CHECK DONE `19f75dc6`, ready YES; deploy-card drafter prompt `33`.
+- R530 10-06 08:42 LAUNCHED: guard-g2 deploy-card drafter `629a599d`.
+- R531 10-06 08:45 RECORD: guard-g2 deploy card `34` drafted (decisions 1); preflight prompt `35`.
+- R532 10-06 08:47 LAUNCHED: guard-g2 deploy-card preflight `c1743dd3`.
+- R533 10-06 08:50 LAUNCHED: guard-g2 deploy hub `608e3b6d`, tag `deploy-2026-10-06-guard-g2`, tip `19f75dc6`.
+- R534 10-06 09:25 RECORD: guard-g2 DEPLOYED `577b2c01`, smoke GREEN; R511 folded into L62.
+- R535 10-06 09:27 LAUNCHED: radar-survey round 3 drafter `radar-survey-draft3`.
+- R536 10-06 09:34 LAUNCHED: radar-survey r3 `radar-survey3` (RULINGS R508).
+- R537 10-06 09:40 LAUNCHED: card 03 O1+B2 drafter `card03-draft` (prompt `38`), beside survey r3.
+- R538 10-06 09:42 RECORD: radar survey r3 DONE, cause not found; production has radar cards every day.
+- R539 10-06 09:50 RECORD: card 03 follow-up `39-drc-d5-o1-b2-card.md` drafted; preflight prompt `40`.
+- R540 10-06 09:57 RECORD: card 39 preflight 30 checks, 2 fails, ready NO; amend drafter prompt `41`.
+- R541 10-06 10:03 RECORD: card 39 amended (decisions 2); preflight 2 prompt `42`.
+- R542 10-06 10:10 LAUNCHED: card 39 build `3ad1829c`, branch `ops/drc-d5-o1-b2-1006`, BASE `4d9e451c` (preflight 2: 25/0).
+- R543 10-06 10:22 LAUNCHED: card 39 check after BUILT tip `74f5674c`.
+- R544 10-06 11:15 RECORD: card 39 CHECK DONE `9be877dc`, ready NO, held unfixed 1 (O2), open A1/B1; both asked to the brain.
+- R545 10-06 11:25 DESK RECORD (brain): O2 widens card 39 to `imports.py`; one builder fix round, then deploy.
+- R546 10-06 11:35 LAUNCHED: card 39 fix round `7af349a3` on row O2.
+- R547 10-06 11:50 RECORD: card 39 fix round BUILT `edd4d584`; A1/B1 on his DONE list.
+- R548 10-06 11:57 RECORD: desk `4bf466d0` woke; fix report copied to `reports/drc-d5-o1-b2-build-2026-10-06.md`.
+- R549 10-06 12:05 LAUNCHED: card 39 deploy-card drafter `card39-deploy-draft` on prompt `44`.
+- R550 10-06 12:25 RECORD: card 39 deploy card `45` drafted (decisions 2); preflight prompt `46`.
+- R551 10-06 12:28 LAUNCHED: card 39 deploy preflight `9c1f9069`.
+- R552 10-06 12:30 LAUNCHED: card 39 deploy hub `ef7725f7`, tag `deploy-2026-10-06-drc-d5-o1-b2`.
+- R553 10-06 12:50 RECORD: card 39 deploy `ef7725f7` FAILED at the merge (add/add on the build report); nothing deployed.
+- R554 10-06 13:32 RECORD: RECUT deploy-drc-d5-o1-b2-1006 attempt 2 FAILED resume (b); the desk recuts.
+- R555 10-06 14:10 RECORD: card 39 DEPLOYED `9a29f61e` (tag `-attempt2`), smoke GREEN; aset + radar restarted.
+- R556 10-06 14:20 HIS RULING: fix the empty radar screen if the brain says GO. APPROVED.
+- R557 10-06 14:40 LAUNCHED: radar-screen trace drafter `radar-screen-draft`; brain GO.
+- R558 10-06 14:55 LAUNCHED: radar-screen trace survey `radar-screen-trace` (code only).
+- R559 10-06 15:00 RECORD: radar trace DONE, BY DESIGN: board lists today's cards only (`store.py:1054-1055`); question to him.
+- R560 10-06 15:01 HIS RULING: ONE read-only production read, cards per day by origin since 09-20. APPROVED.
+- R561 10-06 15:08 RECORD: drafter prompt `49` written for R560's read; NOT launched (see R562).
+- R562 10-06 15:15 RECORD: R561 drafter NOT launched; R560's read stays unused.
+- R563 10-06 15:25 LAUNCHED: cards-origin drafter `0ee81210` on `49`, reversing R562.
+- R564 10-06 15:40 LAUNCHED: cards-origin survey `cards-origin-survey` (one prod read, RULINGS R560).
+- R565 10-06 15:55 RECORD: survey `47e8b8f1` FAILED, guard refused the production read (status cell format); relaunch `-r2`.
+- R566 10-06 16:05 RECORD: survey DONE: 31 cards created today yet `/radar` lists none: a page bug.
+- R567 10-06 15:33 HIS RULING: ONE more read-only production read, today's radar cards by state. APPROVED.
+- R568 10-06 15:36 LAUNCHED: radar-page-read drafter `radar-page-draft`; survey prompt `52`.
+- R569 10-06 15:35 LAUNCHED: radar-page-read survey `radar-page-read` (RULINGS R567 alone).
+- R570 10-06 15:37 RECORD: page-read DONE: table 26 = view 26 radar cards today; page lists 4 on the ladder + `TERMINAL · 22`.
+- R571 10-06 16:45 LAUNCHED: ladder-refresh card drafter `ladder-refresh-draft`; card `54`.
+- R572 10-06 16:49 LAUNCHED: card `54` amend drafter `ladder-refresh-amend` (decisions 4).
+- R573 10-06 16:52 RECORD: card `54` amend DONE (decisions 1); BASE `8c554d77`.
+- R574 10-06 16:53 LAUNCHED: card `54` preflight `214fd0e4`.
+- R575 10-06 16:55 LAUNCHED: card `54` amend 2 drafter `ladder-refresh-amend2`; preflight 26 checks, 1 FAIL.
+- R576 10-06 16:58 LAUNCHED: card `54` preflight r2 `ladder-refresh-preflight2`; amend2 DONE (decisions 1).
+- R577 10-06 16:59 LAUNCHED: card `54` BUILD radar-ladder-refresh (RULINGS R556); preflight r2 31/0.
+- R578 10-06 17:43 LAUNCHED: card `54` CHECK (both houses) on TIP `d2330003`; build DONE 3952/0, 4836/0.
+- R579 10-06 18:36 LAUNCHED: card `54` deploy-card drafter on `59`; CHECK DONE ready YES, tip `ed19060f`.
+- R580 10-06 18:37 LAUNCHED: deploy-card `60` preflight `ladder-refresh-deploy-preflight` on `61`.
+- R581 10-06 18:39 LAUNCHED: DEPLOY `deploy-radar-ladder-refresh-1006` (card `60`, tip `ed19060f`); preflight 29/0.
+- R582 10-06 18:50 RECORD: card 54 DEPLOYED `9e70c702` (tag `-radar-ladder-refresh`), smoke GREEN, down 20 s.
+- R583 10-06 19:22 LAUNCHED: launcher next-flow card drafter `launcher-next-flow-draft` on `62` (changes 6-8); card `63`.
+- R584 10-06 19:22 RECORD: brain asked to drop the deploy-card drafter and preflight; NOT applied (R236, L77); asked him.
+- R585 10-06 19:26 LAUNCHED: card `63` preflight `launcher-next-flow-preflight` on `64`; build waits for his row on 6-8.
+- R586 10-06 19:27 RECORD: card `63` preflight DONE 15/0, ready YES; build NOT launched (no row of his covers 6-8). Asked him.
+- R587 10-06 19:28 HIS RULING: desk writes single-feature deploy cards with `deploy-card.sh`, no drafter, no preflight. APPLIED (contract, L61, K10a).
+- R588 10-06 19:30 HIS RULING (L79, via brain): build next-flow changes 6, 7, 8 tonight as card `63`. APPROVED.
+- R589 10-06 19:32 LAUNCHED: card `63` BUILD `b43daef9`, BASE `8e33fdc4`, RULINGS R588.
+- R590 10-06 19:35 HIS ORDER: extend `stop-guard.py` to the desk (OWED block). APPLIED contract 19:36; card drafted.
+- R591 10-06 19:36 LAUNCHED: desk stop-guard card drafter `desk-stop-guard-draft`; card `66`.
+- R592 10-06 19:41 DESK RECORD (R127): drafter `c71e3177` DRAFTED card `66` (8 decisions at defaults); preflight launched.
+- R593 10-06 19:43 RECORD: card `66` preflight 19 checks, 1 cosmetic FAIL, ready NO; amend drafter launched.
+- R594 10-06 19:45 RECORD: card `66` AMENDED (`0ea47414`); preflight r2 launched.
+- R595 10-06 19:50 OPEN TO HIM: card `66` preflight r2 ready YES (9/0); build NOT launched, R590 is a HIS ORDER; build word asked.
+- R596 10-06 19:54 HIS RULING: build card `66` now; after its deploy, draft a second card (desk routing by script). APPROVED.
+- R597 10-06 19:55 LAUNCHED: card `66` BUILD `26332d93`, BASE `18d9da5b`, worktree `desk-stop-guard-1006`.
+- R598 10-06 19:59 HIS RULING: draft S4-P1 and S4-P2 tonight; build after tomorrow's S3 smoke is green. APPROVED; drafter `s4-cards-draft` launched.
+- R599 10-06 20:10 DESK RECORD: S4 drafter DRAFTED cards `72`, `73` (14 decisions); preflights launched.
+- R600 10-06 20:12 RECORD: preflights: card `72` 3 FAILs, card `73` 4 FAILs, both ready NO; amend drafter `s4-amend` launched.
+- R601 10-06 20:21 DESK RECORD: amend drafter AMENDED cards `72`, `73`; preflights r2 launched.
+- R602 10-06 20:22 RECORD: S4 cards `72`, `73` preflight r2 ready YES, 0 fails; builds wait for his S3 smoke and D2.
+- R603 10-06 20:23 LAUNCHED: card `63` BUILT tip `055018c0` on `8e33fdc4`, offline 3963/0; check launching.
+- R604 10-06 20:25 LAUNCHED: card `66` BUILT tip `96dad934` on `18d9da5b`, rows 6 of 6; check next.
+- R605 10-06 20:55 RECORD: card `63` CHECK DONE ready YES; card `66` check refused (unclean tree).
+- R606 10-06 20:57 DESK RECORD: builder `26332d93` stopped before its CLOSE commit, tree unclean; fresh build under `…-1006b`.
+- R607 10-06 20:58 LAUNCHED: card `63` DEPLOY (his R587), deploy card `80` by `deploy-card.sh`, head `66e20fc2`.
+- R608 10-06 21:34 HIS ORDER (chat): tonight finish card `63` deploy, the close, card `66`; morning fresh for S3 smoke. APPLIED: checklist `## close`, `## handover`.
+- R609 10-06 21:36 RECORD: card `63` DEPLOYED `7954657a`, tag `deploy-2026-10-06-launcher-next-flow`, smoke GREEN, RESTARTS none.
+- HANDOVERS (L35, `cto-2026-10-06.md` §5 HISTORY): `2ad47a8b`→`b1968ff3` 01:29, →`23d9137a` 06:22, →`8638bffe` 08:03, →`4bf466d0` 11:46, →`cba361c6` 16:50, →`9149c1a1` 19:36.
+- STOP LINE (L35), `reports/close-2026-10-05.md`: `CLOSE PUSHED 768dd986 · days: 1 · … · push: verified`.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-06*"` = `deploy-2026-10-06-drc-d5-o1-b2-attempt2`, `deploy-2026-10-06-flake-fix`, `deploy-2026-10-06-flake-fix-2`, `deploy-2026-10-06-guard-g2`, `deploy-2026-10-06-launcher-next-flow`, `deploy-2026-10-06-next-flow`, `deploy-2026-10-06-radar-ladder-refresh`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-06.md` `## 8`.
