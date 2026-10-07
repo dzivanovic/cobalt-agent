@@ -3,10 +3,10 @@ LADDER: S3 smoke blocker (F7, SPRINT-LADDER-v0_1.md:65; his R627)
 BRANCH: ops/radar-arm-disarm-1007
 WORKTREE: radar-arm-disarm-1007
 BASE: f6350cc4
-TIP:
+TIP: 0544f91d
 REPORT: /Users/cobalt/cobalt-wt/radar-arm-disarm-1007/docs/40 - DevDocs/reports/radar-arm-disarm-build-2026-10-07.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-arm-disarm-check-2026-10-07.md
+HOUSE B: as needed
 RULINGS: 2026-10-07 R627
 
 ## ROWS
